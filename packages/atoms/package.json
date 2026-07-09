@@ -21,7 +21,6 @@
     "@monad/ui": "workspace:*",
     "@xyflow/react": "^12.11.2",
     "ai": "^7.0.17",
-    "e2b": "^2.31.0",
     "react": "^19.2.7",
     "shiki": "^4.3.1",
     "zod": "^4.4.3",
@@ -48,9 +47,6 @@
     "./channels/telegram": "./src/channels/telegram.ts",
     "./commands/builtins": "./src/commands/builtins.ts",
     "./providers/registry": "./src/providers/registry.ts",
-    "./sandbox/bwrap": "./src/sandbox/bwrap.ts",
-    "./sandbox/landlock": "./src/sandbox/landlock.ts",
-    "./sandbox/seatbelt": "./src/sandbox/seatbelt.ts",
     "./workspace-experiences": "./src/workspace-experiences/ui.tsx",
     "./workspace-experiences/host-context": "./src/workspace-experiences/host-context.tsx"
   },

@@ -12,6 +12,9 @@
 import type { SandboxLauncher, SandboxPolicy, SandboxProcess, SandboxSpawnOptions } from '@monad/sdk-atom';
 
 import { realpathSync } from 'node:fs';
+import { sandboxBackendOptions } from '@monad/sandbox';
+
+const DEFAULT_IMAGE = 'ubuntu:22.04';
 
 export type ContainerRuntime = 'docker' | 'podman';
 
@@ -40,12 +43,6 @@ export function dockerRuntimeAvailable(): boolean {
   return _runtime !== null && _runtime !== undefined;
 }
 
-let _image = 'ubuntu:22.04';
-/** Override the container image (e.g. from config.agent.sandbox.dockerImage). */
-export function configureDockerImage(image: string): void {
-  _image = image;
-}
-
 function canonical(path: string): string {
   try {
     return realpathSync(path);
@@ -59,6 +56,11 @@ export const dockerLauncher: SandboxLauncher = {
   platforms: undefined,
   enforces: { writeConfine: true, readDeny: true, net: ['none', 'unrestricted'] },
   isAvailable: () => dockerRuntimeAvailable(),
+  // Probe the container runtime when this launcher is the SELECTED backend, so the boot path pays the
+  // detection cost only on opt-in — not unconditionally at startup.
+  prepare: async () => {
+    await detectDockerRuntime();
+  },
   spawn(argv: string[], options: SandboxSpawnOptions, policy: SandboxPolicy): SandboxProcess {
     if (!_runtime) throw new Error('docker launcher: no container runtime available (install Docker or Podman)');
 
@@ -104,7 +106,7 @@ export const dockerLauncher: SandboxLauncher = {
       }
     }
 
-    args.push(_image, ...argv);
+    args.push(sandboxBackendOptions().dockerImage ?? DEFAULT_IMAGE, ...argv);
 
     const proc = Bun.spawn(args, { stdout: 'pipe', stderr: 'pipe', stdin: 'pipe' });
     return {

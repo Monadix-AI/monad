@@ -10,12 +10,11 @@ import type { Tool, ToolContext } from '../types.ts';
 
 import { lookup } from 'node:dns/promises';
 import { httpUrlSchema } from '@monad/protocol';
+import { assertUrlAllowed, isBlockedIp, normalizeHost, ToolSecurityError } from '@monad/sandbox';
 import { z } from 'zod';
 
 import { defaultApprovalPolicy } from '../approval/policy.ts';
 import { approvalDeniedMessage, requestNetworkAccess } from '../approval/resource-approval.ts';
-import { normalizeHost } from '../sandbox/egress-policy.ts';
-import { assertUrlAllowed, isBlockedIp, ToolSecurityError } from '../security.ts';
 import { toolResult } from '../types.ts';
 
 const MAX_BODY_BYTES = 5 * 1024 * 1024; // 5 MiB cap on the response body

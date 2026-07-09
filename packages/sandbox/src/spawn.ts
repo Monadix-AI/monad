@@ -14,8 +14,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { noneLauncher, sandboxCredential } from '@monad/sdk-atom';
 
-import { daemonChildProcesses, killDaemonProcessTree } from '#/infra/daemon-child-processes.ts';
-
 // The launcher contract (SandboxLauncher / SandboxPolicy) and the passthrough noneLauncher live in
 // @monad/sdk-atom — the `sandbox` atom kind — so launchers in @monad/atoms and third-party packs
 // share one definition. Re-exported here so the daemon's many sandbox consumers keep importing from
@@ -60,12 +58,23 @@ interface TrackableSandboxProcess {
   kill(signal?: number | string): void;
 }
 
+// Process-tree tracking is a daemon concern (shutdown reaping); @monad/sandbox stays daemon-agnostic so
+// it can also back a standalone `msr`. The daemon injects its tracker at boot via
+// configureSandboxProcessTracker; unset → tracking is a no-op and the spawned child is simply untracked.
+export interface SandboxProcessTracker {
+  track(pid: number | undefined, label: string, fallbackKill: () => void): void;
+  untrack(pid: number | undefined): void;
+}
+
+let processTracker: SandboxProcessTracker | undefined;
+
+export function configureSandboxProcessTracker(tracker: SandboxProcessTracker | undefined): void {
+  processTracker = tracker;
+}
+
 function trackSandboxProcess(process: TrackableSandboxProcess, label = 'sandboxed-spawn'): void {
-  daemonChildProcesses.track(process.pid, label, () => {
-    if (process.pid) killDaemonProcessTree(process.pid);
-    else process.kill('SIGTERM');
-  });
-  void process.exited.then(() => daemonChildProcesses.untrack(process.pid));
+  processTracker?.track(process.pid, label, () => process.kill('SIGTERM'));
+  void process.exited.then(() => processTracker?.untrack(process.pid));
 }
 
 // Network policy is daemon-wide config; writable roots are per-call. buildSandboxPolicy() unifies
@@ -89,6 +98,15 @@ let readDenyDefault: string[] = [];
 /** Wire the daemon-wide read-deny roots at boot (credential/secret dirs). */
 export function configureSandboxReadDeny(roots: string[]): void {
   readDenyDefault = roots;
+}
+
+// Masked credential files (real→fake binds) applied to every confined spawn. Daemon-wide, built
+// once at boot from a MaskedFileStore — see configureSandboxMaskedFiles.
+let maskedFilesDefault: { real: string; fake: string }[] = [];
+
+/** Wire the daemon-wide masked credential files at boot (real→fake read-only binds). */
+export function configureSandboxMaskedFiles(files: { real: string; fake: string }[]): void {
+  maskedFilesDefault = files;
 }
 
 // Env injected into every confined child (e.g. HTTP(S)_PROXY pointing at the local filtering proxy)
@@ -143,6 +161,7 @@ export function buildSandboxPolicy(
   return {
     writableRoots: writableRoots ? [...writableRoots, tmpdir(), ...extraWritable] : undefined,
     readDenyRoots: readDenyDefault,
+    maskedFiles: maskedFilesDefault.length > 0 ? maskedFilesDefault : undefined,
     net: netDefault,
     sessionId
   };

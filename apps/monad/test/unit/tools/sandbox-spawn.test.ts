@@ -2,6 +2,7 @@ import type { SandboxLauncher } from '@monad/sdk-atom';
 
 import { afterEach, expect, test } from 'bun:test';
 import { tmpdir } from 'node:os';
+import { isActiveLocalOsSandbox } from '@monad/sandbox';
 import { configureSandboxCredential } from '@monad/sdk-atom';
 
 import {
@@ -14,7 +15,6 @@ import {
   sandboxedSpawn,
   sandboxLauncher
 } from '#/capabilities/tools';
-import { isActiveLocalOsSandbox } from '#/capabilities/tools/sandbox/active-local.ts';
 
 afterEach(() => {
   configureSandboxLauncher(noneLauncher);

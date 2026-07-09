@@ -7,11 +7,11 @@ import type { ToolModule } from './contract.ts';
 
 import { realpathSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
+import { ToolSecurityError } from '@monad/sandbox';
 import { z } from 'zod';
 
 import { gatePathAccess, type PathAccessOperation } from '../approval/path-gate.ts';
 import { createSandboxBackends, resolveReal } from '../backends.ts';
-import { ToolSecurityError } from '../security.ts';
 import { toolResult } from '../types.ts';
 
 const DEFAULT_READ_LINES = 2000;

@@ -8,6 +8,7 @@ export interface MonadPaths {
   configs: string; // config directory (single-tree: home/configs; XDG: $XDG_CONFIG_HOME/monad)
   config: string; // <configs>/config.json
   profile: string; // <configs>/profile.json
+  sandbox: string; // <configs>/sandbox.json — sandbox POLICY block (cfg.sandbox); versionless
   approvals: string; // <configs>/approvals.json — daemon-written runtime approval rules (agent+global)
   credentials: string; // ~/.monad/credentials — secrets; agent access always requires user approval
   auth: string; // <configs>/auth.json
@@ -53,6 +54,7 @@ export function pathsForHome(home: string): MonadPaths {
     configs,
     config: join(configs, 'config.json'),
     profile: join(configs, 'profile.json'),
+    sandbox: join(configs, 'sandbox.json'),
     approvals: join(configs, 'approvals.json'),
     credentials,
     auth: join(credentials, 'auth.json'),
@@ -99,6 +101,7 @@ export function xdgPaths(): MonadPaths {
     configs: configRoot,
     config: join(configRoot, 'config.json'),
     profile: join(configRoot, 'profile.json'),
+    sandbox: join(configRoot, 'sandbox.json'),
     approvals: join(configRoot, 'approvals.json'),
     credentials,
     auth: join(configRoot, 'auth.json'),

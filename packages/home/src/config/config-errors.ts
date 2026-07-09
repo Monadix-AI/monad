@@ -1,7 +1,7 @@
 import { ZodError } from 'zod';
 
 export function friendlySchemaError(
-  fileLabel: 'config.json' | 'profile.json' | 'auth.json',
+  fileLabel: 'config.json' | 'profile.json' | 'sandbox.json' | 'auth.json',
   filePath: string,
   err: unknown
 ): Error {

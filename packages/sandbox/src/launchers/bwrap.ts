@@ -106,6 +106,15 @@ export function buildBwrapArgs(policy: SandboxPolicy): string[] {
     }
   }
 
+  // Masked credential files: bind the fake (sentinel) file read-only over the real path so the
+  // child reads the sentinel. Emitted for BOTH confined and unrestricted-write modes — in
+  // unrestricted mode the whole host is rw-bound above, and this --ro-bind shadows the real file
+  // afterwards so the child still can't reach the cleartext secret. The egress proxy swaps the
+  // sentinel back to the real value for the credential's injectHosts.
+  for (const m of policy.maskedFiles ?? []) {
+    args.push('--ro-bind', m.fake, m.real);
+  }
+
   // Overlay special filesystems last so they take precedence over any bind above.
   args.push('--dev', '/dev', '--proc', '/proc', '--tmpfs', '/run');
 

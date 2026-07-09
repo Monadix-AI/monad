@@ -6,7 +6,8 @@ import type {
 } from '@monad/protocol';
 import type { ToolContext, ToolGateOutcome } from '../types.ts';
 
-import { normalizeHost } from '../sandbox/egress-policy.ts';
+import { normalizeHost } from '@monad/sandbox';
+
 import { defaultApprovalPolicy } from './policy.ts';
 
 export const RESOURCE_APPROVAL_TOOLS = {

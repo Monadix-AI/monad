@@ -12,7 +12,7 @@ import { afterAll, beforeAll, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { bwrapLauncher } from '@monad/atoms/sandbox/bwrap';
+import { bwrapLauncher } from '@monad/sandbox/launchers/bwrap';
 
 import {
   clearSandboxLaunchers,

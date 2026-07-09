@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { buildAppContainerArgs, win32AppContainerLauncher } from '../../src/sandbox/win32-appcontainer.ts';
+import { buildAppContainerArgs, win32AppContainerLauncher } from '../../src/launchers/win32-appcontainer.ts';
 
 // buildAppContainerArgs is the pure arg-building function (no binary lookup).
 // win32AppContainerLauncher metadata tests don't need a binary on PATH.
@@ -72,6 +72,18 @@ describe('arg structure', () => {
   test('readDenyRoots → one --deny-read per path', () => {
     const a = args({ writableRoots: [], readDenyRoots: ['C:\\Users\\u\\.ssh', 'C:\\Users\\u\\.aws'], net: 'none' });
     expect(a.filter((v) => v === '--deny-read').length).toBe(2);
+  });
+
+  test('maskedFiles degrade to deny — each real path becomes a --deny-read', () => {
+    const a = args({
+      writableRoots: [],
+      maskedFiles: [{ real: 'C:\\Users\\u\\.netrc', fake: 'C:\\Temp\\mask\\0.fake' }],
+      net: 'none'
+    });
+    const denyIdx = a.findIndex((v, i) => v === '--deny-read' && a[i + 1] === 'C:\\Users\\u\\.netrc');
+    expect(denyIdx).toBeGreaterThanOrEqual(0);
+    // AppContainer can't redirect a read, so the fake path is never passed to the launcher.
+    expect(a.includes('C:\\Temp\\mask\\0.fake')).toBe(false);
   });
 });
 

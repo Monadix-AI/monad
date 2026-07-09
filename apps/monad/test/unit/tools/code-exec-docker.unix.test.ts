@@ -2,7 +2,7 @@ import { afterEach, expect, test } from 'bun:test';
 import { realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { detectDockerRuntime, dockerLauncher, dockerRuntimeAvailable } from '@monad/atoms';
+import { detectDockerRuntime, dockerLauncher, dockerRuntimeAvailable } from '@monad/monad-power-pack';
 
 import { configureSandboxLauncher, noneLauncher, sandboxedSpawn } from '#/capabilities/tools';
 

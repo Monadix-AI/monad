@@ -2,8 +2,8 @@ import type { MonadPaths } from '@monad/home';
 import type { InitDockerResponse, SetToolBackendsRequest, ToolBackendsResponse } from '@monad/protocol';
 import type { ConfigBus } from '#/services/config-bus.ts';
 
-import { detectDockerRuntime, dockerRuntimeAvailable } from '@monad/atoms';
 import { loadAll, loadAuth, saveProfile } from '@monad/home';
+import { detectDockerRuntime, dockerRuntimeAvailable } from '@monad/monad-power-pack';
 
 export function createToolBackendsModule(paths: MonadPaths, configBus?: ConfigBus) {
   // Probe docker availability once at module creation time (cached in dockerRuntimeAvailable()).

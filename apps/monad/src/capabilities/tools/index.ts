@@ -2,6 +2,42 @@
 // whether it is high-risk. Resource-specific guards live in the tool run() bodies —
 // see security.ts and docs/security-guidelines.md §4.
 
+// Sandbox launchers (seatbelt/landlock/win32/bwrap) are the `sandbox` atom kind — they live in
+export {
+  assertPathWithinRoots,
+  assertUrlAllowed,
+  buildSandboxPolicy,
+  clearSandboxLaunchers,
+  configureSandboxBackendOptions,
+  configureSandboxExtraEnv,
+  configureSandboxLauncher,
+  configureSandboxMaskedFiles,
+  configureSandboxNet,
+  configureSandboxProxyEnv,
+  configureSandboxReadDeny,
+  createSessionSandbox,
+  disposeSandboxSession,
+  disposeSessionSandbox,
+  domainMatches,
+  type EgressPolicy,
+  isBlockedIp,
+  isEgressAllowed,
+  noneLauncher,
+  normalizeHost,
+  registerSandboxLauncher,
+  type SandboxLauncher,
+  type SandboxPolicy,
+  sandboxBackendOptions,
+  sandboxDirName,
+  sandboxedSpawn,
+  sandboxHomeEnv,
+  sandboxLauncher,
+  selectSandboxLauncher,
+  sessionSandboxPath,
+  sweepOrphanSandboxes,
+  ToolSecurityError
+} from '@monad/sandbox';
+
 export { configureShell, createSandboxBackends, isDelegableTool } from './backends.ts';
 export {
   CodeExecError,
@@ -56,38 +92,3 @@ export {
   selectProvider,
   WebSearchError
 } from './registry/web-search.ts';
-// Sandbox launchers (seatbelt/landlock/win32/bwrap) are the `sandbox` atom kind — they live in
-export {
-  domainMatches,
-  type EgressPolicy,
-  isEgressAllowed,
-  normalizeHost
-} from './sandbox/egress-policy.ts';
-export {
-  clearSandboxLaunchers,
-  disposeSandboxSession,
-  registerSandboxLauncher,
-  selectSandboxLauncher
-} from './sandbox/registry.ts';
-export {
-  createSessionSandbox,
-  disposeSessionSandbox,
-  sandboxDirName,
-  sessionSandboxPath,
-  sweepOrphanSandboxes
-} from './sandbox/session-root.ts';
-export {
-  buildSandboxPolicy,
-  configureSandboxExtraEnv,
-  configureSandboxLauncher,
-  configureSandboxNet,
-  configureSandboxProxyEnv,
-  configureSandboxReadDeny,
-  noneLauncher,
-  type SandboxLauncher,
-  type SandboxPolicy,
-  sandboxedSpawn,
-  sandboxHomeEnv,
-  sandboxLauncher
-} from './sandbox/spawn.ts';
-export { assertPathWithinRoots, assertUrlAllowed, isBlockedIp, ToolSecurityError } from './security.ts';

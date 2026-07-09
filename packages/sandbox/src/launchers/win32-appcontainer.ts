@@ -65,6 +65,10 @@ export function buildAppContainerArgs(argv: string[], policy: SandboxPolicy): st
 
   for (const p of policy.writableRoots ?? []) args.push('--writable', p);
   for (const p of policy.readDenyRoots ?? []) args.push('--deny-read', p);
+  // Masked files degrade to deny: an AppContainer DENY ACE can only block a read, not redirect it
+  // to the fake file (only bwrap's mount namespace can). Add each real path to the deny-read set so
+  // the child cannot read the cleartext secret — contained, not masked.
+  for (const m of policy.maskedFiles ?? []) args.push('--deny-read', m.real);
 
   // Grant network capabilities for filtered/unrestricted modes.
   if (policy.net !== 'none') args.push('--net-client');

@@ -44,3 +44,14 @@ test('SSRF/loopback denials are absolute — even under *', () => {
 test('a private IP literal is denied even if someone lists it', () => {
   expect(isEgressAllowed('192.168.1.10', allow(['192.168.1.10']))).toBe(false);
 });
+
+test('deniedDomains win over the allowlist — including over *', () => {
+  // Broad allow, one carved-out deny (with subdomains).
+  const p: EgressPolicy = { allowedDomains: ['*'], deniedDomains: ['evil.com'] };
+  expect(isEgressAllowed('good.example', p)).toBe(true);
+  expect(isEgressAllowed('evil.com', p)).toBe(false);
+  expect(isEgressAllowed('api.evil.com', p)).toBe(false); // subdomain denied too
+  // A deny beats an explicit allow of the same host.
+  const q: EgressPolicy = { allowedDomains: ['pypi.org'], deniedDomains: ['pypi.org'] };
+  expect(isEgressAllowed('pypi.org', q)).toBe(false);
+});

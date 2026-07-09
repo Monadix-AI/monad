@@ -1,7 +1,7 @@
 import type { ApprovalScope } from '@monad/protocol';
 import type { ToolContext } from '../types.ts';
 
-import { sandboxNetMode } from '../sandbox/spawn.ts';
+import { sandboxNetMode } from '@monad/sandbox';
 
 type ResourceApprovalKind = 'network' | 'path';
 

@@ -43,7 +43,7 @@ export async function parseCodex(inputPath: string): Promise<ParsedImport> {
       addItem(items, {
         category: 'sandbox',
         source: `${cfg.path}:sandbox_mode`,
-        target: 'agent.sandbox.mode',
+        target: 'sandbox.mode',
         action: 'add',
         reason: `Codex sandbox_mode can be mapped to monad sandbox mode "${mode}"`,
         payload: { kind: 'sandbox', mode },

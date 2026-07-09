@@ -22,6 +22,7 @@ function pathsFor(dir: string): MonadPaths {
     configs: join(dir, 'configs'),
     config: join(dir, 'configs', 'config.json'),
     profile: join(dir, 'configs', 'profile.json'),
+    sandbox: join(dir, 'configs', 'sandbox.json'),
     credentials: join(dir, 'credentials'),
     auth: join(dir, 'credentials', 'auth.json'),
     tls: join(dir, 'credentials', 'tls'),
@@ -509,11 +510,11 @@ test('allSafe applies only low-risk add items', async () => {
     expect(result.applied).toContain('modelProfiles:codex-gpt-4.1');
     expect(result.applied).toContain('mcpServers:remote');
     expect(result.applied).not.toContain('mcpServers:local_shell');
-    expect(result.applied).not.toContain('sandbox:agent.sandbox.mode');
+    expect(result.applied).not.toContain('sandbox:sandbox.mode');
     const cfg = await loadAll(paths.config, paths.profile);
     expect(cfg?.mcpServers.some((s) => s.name === 'remote')).toBe(true);
     expect(cfg?.mcpServers.some((s) => s.name === 'local_shell')).toBe(false);
-    expect(cfg?.agent.sandbox.mode).not.toBe('unrestricted');
+    expect(cfg?.sandbox.mode).not.toBe('unrestricted');
   } finally {
     await cleanup();
   }
@@ -624,13 +625,13 @@ test('apply publishes config bus for system-only sandbox updates', async () => {
       from: 'codex',
       path: codex,
       replace: false,
-      select: ['sandbox:agent.sandbox.mode'],
+      select: ['sandbox:sandbox.mode'],
       allSafe: false,
       hashes: hashesFor(preview.items)
     });
     expect(events).toEqual(['system']);
     const cfg = await loadAll(paths.config, paths.profile);
-    expect(cfg?.agent.sandbox.mode).toBe('unrestricted');
+    expect(cfg?.sandbox.mode).toBe('unrestricted');
   } finally {
     await cleanup();
   }

@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { buildSeatbeltProfile } from '@monad/atoms/sandbox/seatbelt';
+import { buildSeatbeltProfile } from '@monad/sandbox/launchers/seatbelt';
 
 // Pure profile generation — runs on any platform.
 
@@ -30,3 +30,27 @@ test('readDenyRoots emits a file-read deny after allow-default so it wins', () =
 });
 
 test('no readDenyRoots emits no file-read rule', () => {});
+
+test('maskedFiles degrade to deny — the real path joins the file-read deny set', () => {
+  const p = buildSeatbeltProfile({
+    writableRoots: ['/tmp'],
+    net: 'unrestricted',
+    maskedFiles: [{ real: '/home/u/.netrc', fake: '/tmp/mask/0.fake' }]
+  });
+  // SBPL can't redirect a read, so the masked file's REAL path is denied (literal, one file).
+  expect(p).toMatch(/\(deny file-read\* [^)]*\(literal "[^"]*\.netrc"\)/);
+  // The fake path is never named in the profile (the child simply can't read the real one).
+  expect(p.includes('0.fake')).toBe(false);
+  expect(p.indexOf('(deny file-read*')).toBeGreaterThan(p.indexOf('(allow default)'));
+});
+
+test('maskedFiles and readDenyRoots share one file-read deny rule', () => {
+  const p = buildSeatbeltProfile({
+    writableRoots: ['/tmp'],
+    net: 'unrestricted',
+    readDenyRoots: ['/tmp/secrets'],
+    maskedFiles: [{ real: '/home/u/.netrc', fake: '/f' }]
+  });
+  expect(p).toMatch(/\(subpath "[^"]*secrets"\)/);
+  expect(p).toMatch(/\(literal "[^"]*\.netrc"\)/);
+});

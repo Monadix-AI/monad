@@ -259,28 +259,59 @@ Low Integrity launcher (`monad-sandbox-launcher.exe`) — fallback when AppConta
 - Child launched under a Low IL token (`S-1-16-4096`) via `DuplicateTokenEx` + `SetTokenInformation`.
 - Prevents writes to Medium/High integrity objects. Does NOT enforce readDeny or net isolation.
 
-**Egress filtering (all platforms)**
-- `apps/monad/src/services/egress-proxy.ts`: raw-TCP local proxy on `127.0.0.1:0`
-  (port auto-assigned). Handles `CONNECT` tunneling and HTTP forwarding.
-- Domain allowlist: `isEgressAllowed(host, policy)` in `egress-policy.ts`; subdomain
-  matching; loopback/private/link-local always blocked (SSRF guard) even with `'*'`.
-- DNS rebinding protection: all resolved addresses checked with `isBlockedIp`.
-- When `net: 'filtered'`, the proxy port is the only allowed egress; `HTTP(S)_PROXY` env
-  vars injected into child so `curl`/`pip`/`npm`/`git clone` route through it transparently.
+**Egress filtering (all platforms)** — the sandbox package is `@monad/sandbox` (extracted from the
+daemon; the daemon and the standalone `msr` CLI both consume it).
+- `@monad/sandbox/src/egress-proxy.ts`: raw-TCP local proxy on `127.0.0.1:0` (port auto-assigned). One
+  **muxed** port: the first connection byte selects the handler — `CONNECT`/HTTP forward (HTTP) or
+  **SOCKS5** (`0x05`), so non-HTTP TCP (SSH/DB/git-ssh) is gated too via `ALL_PROXY=socks5h://…`.
+- Domain allow/deny: `isEgressAllowed(host, policy)` in `egress-policy.ts` — `allowedDomains` plus
+  `deniedDomains` (deny wins, even over `'*'`); subdomain matching; loopback/private/link-local always
+  blocked (SSRF guard). SOCKS5 CONNECT runs the SAME gate before any upstream connect.
+- DNS rebinding protection: all resolved addresses re-checked with `isBlockedIp`.
+- When `net: 'filtered'`, the proxy port is the only allowed egress; `HTTP(S)_PROXY` + `ALL_PROXY` env
+  injected into the child so `curl`/`pip`/`npm`/`git` route through it transparently.
+- **TLS-terminating MITM (opt-in, `tlsTerminate.enabled`)** — `@monad/sandbox/src/mitm/`: an
+  **ephemeral** RSA-2048 CA (temp dir, key `0o600`, disposed on exit; or an operator-supplied
+  `caCertPath`/`caKeyPath`) mints per-host leaf certs; the proxy terminates the child's HTTPS (child
+  trusts the CA via injected `NODE_EXTRA_CA_CERTS`/`SSL_CERT_FILE`/… — child-scoped, never the host
+  store) and re-issues upstream with **real cert validation** (`rejectUnauthorized` left default). This
+  is what earlier docs listed as out-of-scope; it is now shipped, opt-in, and gated behind
+  `net:'filtered'`. Off → HTTPS stays an opaque `CONNECT` tunnel (unchanged).
+- **Credential-sentinel injection (opt-in, requires MITM)** — `credential-sentinel.ts` +
+  `credential-mask-files.ts`: the confined child sees `fake_value_<uuid>` for a configured credential
+  (env var, or a masked file — `--ro-bind` fake-over-real on bwrap; **degrade to deny** on
+  Seatbelt/AppContainer; warn on Landlock/Low-IL); the terminating proxy swaps sentinel→real on the
+  proxy→server leg ONLY for that credential's `injectHosts`. Exfil to any other host carries only the
+  fake. Real values live in an in-memory registry, never logged. Substitution covers request **headers
+  AND a bounded (≤1 MB, non-chunked, UTF-8) request body** — chunked/oversized/binary bodies pass through
+  untouched (the sentinel reaches upstream, so that credential just doesn't authenticate; the request is
+  never mangled). **Fail-closed:** a credential file that can't be masked is added to the read-deny set,
+  never left readable.
 - **Enforcement tier differs by net mode + platform.** `net:'none'` is OS-enforced on macOS
   (Seatbelt `deny network*`) **and Linux** (seccomp `socket(AF_INET/6)` block); on Windows it is
-  advisory. `net:'filtered'` is **application-layer on every platform** — the proxy + `HTTP(S)_PROXY`
-  env. A child that opens a raw socket instead of honouring the proxy env bypasses *filtered* on
-  Linux/Windows (macOS Seatbelt still confines it to the proxy port). See Known gaps.
+  advisory. `net:'filtered'` is **application-layer on every platform** — the proxy + `HTTP(S)_PROXY`/
+  `ALL_PROXY` env. A child that opens a raw socket instead of honouring the proxy env bypasses *filtered*
+  on Linux/Windows (macOS Seatbelt still confines it to the proxy port). See Known gaps.
+
+**Opt-in heavy backends** — the light OS launchers (Seatbelt/bwrap/Landlock/AppContainer) are a
+**closed built-in set** in `@monad/sandbox` and the always-on default. The **heavy** backends
+(docker/e2b/vm) are **not** in the built-in atom pack: they live in `@monad/monad-power-pack` and are
+used only when the pack is enabled AND `agent.sandbox.backend` names one — otherwise selection stays on
+the light default (a named-but-unavailable heavy backend falls back to light with a warning). Installing
+the pack registers its launchers through the same atom-kind gate as any third-party pack; a dev build
+can stage it via the `debug:monad-power-pack` source (NODE_ENV≠production only).
+
+**Violation monitoring (macOS)** — `@monad/sandbox/src/violation-monitor.ts`: `startViolationMonitor`
+tails Seatbelt deny events (`log stream`) and parses each into `{ operation, target, process }` for
+debugging a too-tight policy. Opt-in (nothing spawned unless started); a no-op off macOS.
 
 ### Known gaps / pending
 
 | Gap | Severity | Notes |
 |---|---|---|
-| **Linux: `net:'filtered'` is app-layer (raw-socket bypass)** | Medium | `net:'none'` is now kernel-enforced on Linux (seccomp blocks `socket(AF_INET/6)`), so a no-egress sandbox is real. But `net:'filtered'` still relies on the application-layer proxy + `HTTP(S)_PROXY` env: seccomp can't allow-by-destination-IP, so a child that opens a raw socket instead of honouring the proxy bypasses the domain allowlist. True per-destination filtering requires a network namespace (`unshare --net` + veth/nft, needs `bubblewrap` or unprivileged userns). Deferred — `net:'none'` covers the "no exfil at all" case; filtered covers the cooperative-tooling case (package managers / curl). |
-| **Linux: `net:'filtered'` is app-layer (raw-socket bypass)** | Medium | `net:'none'` is kernel-enforced on Linux (seccomp blocks `socket(AF_INET/6)`). `net:'filtered'` relies on the proxy + `HTTP(S)_PROXY` env; a raw socket from the child bypasses it. True per-destination filtering requires a network namespace (bubblewrap/userns). Deferred. |
+| **Linux: `net:'filtered'` is app-layer (raw-socket bypass)** | Medium | `net:'none'` is kernel-enforced on Linux (seccomp blocks `socket(AF_INET/6)`), so a no-egress sandbox is real. But `net:'filtered'` (HTTP proxy AND the muxed SOCKS5 path) relies on the application-layer proxy + `HTTP(S)_PROXY`/`ALL_PROXY` env: seccomp can't allow-by-destination-IP, so a child that opens a raw socket instead of honouring the proxy env bypasses the domain allowlist. True per-destination filtering requires a network namespace (`unshare --net` + veth/nft, needs `bubblewrap` or unprivileged userns). Deferred — `net:'none'` covers the "no exfil at all" case; filtered covers the cooperative-tooling case (package managers / curl). |
 | **Windows: `net:'filtered'` is app-layer** | Low | AppContainer `net:'none'` removes all network capabilities — enforced. `net:'filtered'` still grants `INTERNET_CLIENT` capabilities and relies on the egress proxy; a raw socket can bypass the domain allowlist. WFP filters would close this. Deferred. |
-| **Linux: credential read-deny enforced only when bwrap is installed** | Low | When `bwrap` is on PATH, `bwrapLauncher` is auto-selected and enforces readDeny: confined mode simply never binds credential dirs; unrestricted-write mode overlays `--tmpfs` over each deny path. When `bwrap` is absent (minimal containers, Alpine) `landlockLauncher` takes over; Landlock is an additive read-allowlist and cannot express deny — the gap remains on those hosts and the daemon warns at boot. |
+| **Linux: credential read-deny enforced only when bwrap is installed** | Low | When `bwrap` is on PATH, `bwrapLauncher` is auto-selected and enforces readDeny: confined mode simply never binds credential dirs; unrestricted-write mode overlays `--tmpfs` over each deny path. When `bwrap` is absent (minimal containers, Alpine) `landlockLauncher` takes over; Landlock is an additive read-allowlist and cannot express deny — the gap remains on those hosts and the daemon warns at boot. **Credential-sentinel FILE masking has the same limit**: bwrap `--ro-bind`s the fake over the real file, Seatbelt/AppContainer degrade to deny, but Landlock/Low-IL can neither redirect nor deny a specific path — so a masked credential file is readable in cleartext there. The launcher logs a one-time warning; env-based credentials (and `net`-level containment) are unaffected. |
 | **macOS: seccomp equivalent missing** | Low | Seatbelt's `(deny process*)` can prevent fork/exec but there is no fine-grained syscall filter equivalent to seccomp-bpf. Filed as future work if cross-process injection becomes a realistic threat model item. |
 | **Windows: AppContainer DLL path grants** | Low | `bun.exe` loads runtime DLLs from its install directory. `System32` has `ALL_APPLICATION_PACKAGES` ACE so system DLLs load correctly. If bun's install dir lacks this ACE, the AppContainer child may fail to start; the launcher falls back to unconfined in that case. True fix: grant `ALL_APP_PACKAGES` on the bun install dir during install. Pending real-machine validation. |
 | **Windows: named pipes / COM not protected by AppContainer** | Low | Some legacy COM objects and named pipes with default DACLs may be accessible even from AppContainer. Not a primary threat in the local agent model. |

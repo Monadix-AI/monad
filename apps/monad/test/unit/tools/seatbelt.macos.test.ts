@@ -7,7 +7,7 @@ import { existsSync } from 'node:fs';
 import { mkdtemp, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { seatbeltLauncher } from '@monad/atoms/sandbox/seatbelt';
+import { seatbeltLauncher } from '@monad/sandbox/launchers/seatbelt';
 
 import { configureSandboxLauncher, noneLauncher, sandboxedSpawn } from '#/capabilities/tools';
 
@@ -89,6 +89,28 @@ test('readDenyRoots blocks reading a credential-like directory', async () => {
     readDenyRoots: [secrets]
   });
   expect(denied.exitCode).not.toBe(0);
+});
+
+test('maskedFiles degrade to deny — the real credential file is unreadable in-kernel', async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'sb-mask-')));
+  const secrets = await realpath(await mkdtemp(join(tmpdir(), 'sb-msec-')));
+  const credPath = join(secrets, '.netrc');
+  await Bun.write(credPath, 'machine api.example.com password SUPER_SECRET');
+
+  // Without masking: the file is readable.
+  const open = await runConfined(`cat "${credPath}"`, { writableRoots: [root], net: 'unrestricted' });
+  expect(open.exitCode).toBe(0);
+  expect(open.stdout.includes('SUPER_SECRET')).toBe(true);
+
+  // With a maskedFiles entry: Seatbelt can't redirect, so it degrades to DENY — the read fails and
+  // the secret never reaches the child.
+  const denied = await runConfined(`cat "${credPath}" 2>&1`, {
+    writableRoots: [root],
+    net: 'unrestricted',
+    maskedFiles: [{ real: credPath, fake: join(root, 'unused.fake') }]
+  });
+  expect(denied.exitCode).not.toBe(0);
+  expect(denied.stdout.includes('SUPER_SECRET')).toBe(false);
 });
 
 test('net:none blocks an outbound connection to a local server', async () => {

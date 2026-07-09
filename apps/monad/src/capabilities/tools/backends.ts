@@ -9,9 +9,7 @@ import type { TerminalExecResult, ToolBackends } from './types.ts';
 import { existsSync } from 'node:fs';
 import { lstat, mkdir, realpath, rename, unlink } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
-
-import { buildSandboxPolicy, sandboxedSpawn } from './sandbox/spawn.ts';
-import { assertPathWithinRoots, ToolSecurityError } from './security.ts';
+import { assertPathWithinRoots, buildSandboxPolicy, sandboxedSpawn, ToolSecurityError } from '@monad/sandbox';
 
 const MAX_READ_BYTES = 5 * 1024 * 1024; // 5 MiB per file
 const MAX_OUTPUT_BYTES = 1024 * 1024; // 1 MiB per stream

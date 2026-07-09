@@ -1,5 +1,5 @@
-// Sandbox launcher registry: platform filtering, availability gating, third-party-over-built-in
-// precedence, and the noneLauncher fallback. Pure (no spawning), runs on any platform.
+// Sandbox launcher registry: the split between the closed LIGHT set (auto) and opt-in HEAVY atom
+// launchers (explicit backend). Pure (no spawning), runs on any platform.
 
 import type { SandboxLauncher } from '@monad/sdk-atom';
 
@@ -7,8 +7,10 @@ import { afterEach, expect, test } from 'bun:test';
 
 import {
   clearSandboxLaunchers,
+  configureSandboxBackendOptions,
   disposeSandboxSession,
   registerSandboxLauncher,
+  sandboxBackendOptions,
   selectSandboxLauncher
 } from '#/capabilities/tools';
 
@@ -18,63 +20,70 @@ function launcher(kind: string, over: Partial<SandboxLauncher> = {}): SandboxLau
   return { kind, wrap: (argv) => argv, ...over };
 }
 
-test('empty registry falls back to noneLauncher', () => {
-  expect(selectSandboxLauncher('linux').kind).toBe('none');
+test('auto selects the light launcher for the platform (macOS → seatbelt)', () => {
+  expect(selectSandboxLauncher('darwin', 'auto').kind).toBe('seatbelt');
 });
 
-test('selects the launcher matching the platform', () => {
-  registerSandboxLauncher(launcher('seatbelt', { platforms: ['darwin'] }), 'builtin');
-  registerSandboxLauncher(launcher('landlock', { platforms: ['linux'] }), 'builtin');
-  expect(selectSandboxLauncher('darwin').kind).toBe('seatbelt');
-  expect(selectSandboxLauncher('linux').kind).toBe('landlock');
+test('auto ignores registered heavy launchers — never auto-selects them', () => {
+  registerSandboxLauncher(launcher('docker', { platforms: undefined }), 'atom');
+  // Even with docker registered, auto stays on the light OS launcher.
+  expect(selectSandboxLauncher('darwin', 'auto').kind).toBe('seatbelt');
 });
 
-test('platforms undefined matches any platform (e.g. a cloud launcher)', () => {
-  registerSandboxLauncher(launcher('e2b', { platforms: undefined }), 'atom');
-  expect(selectSandboxLauncher('win32').kind).toBe('e2b');
+test('auto falls back to none when no light launcher is a candidate for the platform', () => {
+  // On a macOS test host, the Linux light launchers (bwrap/landlock) are not available, so a linux
+  // selection has no candidate → none.
+  const chosen = selectSandboxLauncher('linux', 'auto');
+  if (chosen.kind !== 'none') {
+    // A Linux host with bwrap/landlock available resolves to one of them — still not 'none'.
+    expect(['bwrap', 'landlock']).toContain(chosen.kind);
+  } else {
+    expect(chosen.kind).toBe('none');
+  }
 });
 
-test('an unavailable launcher is skipped', () => {
-  registerSandboxLauncher(launcher('landlock', { platforms: ['linux'], isAvailable: () => false }), 'builtin');
-  // No other candidate → none.
-  expect(selectSandboxLauncher('linux').kind).toBe('none');
+test('explicit backend with no registered heavy launcher falls back to the light default', () => {
+  expect(selectSandboxLauncher('darwin', 'docker').kind).toBe('seatbelt');
 });
 
-test('a third-party (atom) launcher is preferred over a built-in on the same platform', () => {
-  registerSandboxLauncher(launcher('seatbelt', { platforms: ['darwin'] }), 'builtin');
-  registerSandboxLauncher(launcher('cloud', { platforms: ['darwin'] }), 'atom');
-  expect(selectSandboxLauncher('darwin').kind).toBe('cloud');
+test('explicit backend selects a registered heavy launcher of that kind', () => {
+  registerSandboxLauncher(launcher('docker', { platforms: undefined }), 'atom');
+  expect(selectSandboxLauncher('darwin', 'docker').kind).toBe('docker');
 });
 
-test('with two atom launchers for one platform, the first registered wins (loser shadowed)', () => {
-  registerSandboxLauncher(launcher('cloud-a', { platforms: ['darwin'] }), 'atom');
-  registerSandboxLauncher(launcher('cloud-b', { platforms: ['darwin'] }), 'atom');
-  expect(selectSandboxLauncher('darwin').kind).toBe('cloud-a');
+test('explicit backend returns a heavy launcher even when it is currently unavailable', () => {
+  // Its prepare()/finalize re-check decides availability; selection must not drop it here.
+  registerSandboxLauncher(launcher('docker', { platforms: undefined, isAvailable: () => false }), 'atom');
+  expect(selectSandboxLauncher('darwin', 'docker').kind).toBe('docker');
 });
 
-test('falls back to a built-in when the only atom launcher is unavailable', () => {
-  registerSandboxLauncher(launcher('seatbelt', { platforms: ['darwin'] }), 'builtin');
-  registerSandboxLauncher(launcher('cloud', { platforms: ['darwin'], isAvailable: () => false }), 'atom');
-  expect(selectSandboxLauncher('darwin').kind).toBe('seatbelt');
+test('clearSandboxLaunchers wipes heavy launchers but never the closed light set', () => {
+  registerSandboxLauncher(launcher('docker', { platforms: undefined }), 'atom');
+  clearSandboxLaunchers();
+  // heavy gone → explicit docker falls back to light
+  expect(selectSandboxLauncher('darwin', 'docker').kind).toBe('seatbelt');
+  // light still present
+  expect(selectSandboxLauncher('darwin', 'auto').kind).toBe('seatbelt');
 });
 
-test('disposeSandboxSession tells every launcher to release the session', () => {
+test('disposeSandboxSession tells every heavy launcher to release the session', () => {
   const disposed: string[] = [];
   registerSandboxLauncher(
-    launcher('cloud', {
+    launcher('e2b', {
+      platforms: undefined,
       disposeSession: (s) => {
         disposed.push(s);
       }
     }),
     'atom'
   );
-  registerSandboxLauncher(launcher('seatbelt', { platforms: ['darwin'] }), 'builtin'); // no disposeSession → no-op
   disposeSandboxSession('sess-9');
   expect(disposed).toEqual(['sess-9']);
 });
 
-test('clearSandboxLaunchers empties the registry', () => {
-  registerSandboxLauncher(launcher('seatbelt', { platforms: ['darwin'] }), 'builtin');
-  clearSandboxLaunchers();
-  expect(selectSandboxLauncher('darwin').kind).toBe('none');
+test('backend options round-trip through the seam', () => {
+  configureSandboxBackendOptions({ dockerImage: 'alpine:3.20' });
+  expect(sandboxBackendOptions().dockerImage).toBe('alpine:3.20');
+  configureSandboxBackendOptions({});
+  expect(sandboxBackendOptions().dockerImage).toBeUndefined();
 });

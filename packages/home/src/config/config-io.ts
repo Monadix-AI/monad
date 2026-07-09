@@ -14,7 +14,9 @@ import {
   type MonadSystemConfig,
   monadConfigSchema,
   monadProfileSchema,
-  monadSystemConfigSchema
+  monadSystemConfigSchema,
+  type SandboxConfig,
+  sandboxConfigSchema
 } from './index.ts';
 
 const CONFIG_MIGRATIONS_DIR = join(import.meta.dir, '..', 'migrations', 'config');
@@ -52,7 +54,7 @@ async function migrateProfile(raw: unknown): Promise<MonadProfile> {
   return runMigrations(raw, CURRENT_PROFILE_VERSION, PROFILE_MIGRATIONS_DIR, (data) => monadProfileSchema.parse(data));
 }
 
-function mergeConfigs(system: MonadSystemConfig, profile: MonadProfile): MonadConfig {
+function mergeConfigs(system: MonadSystemConfig, profile: MonadProfile, sandbox: SandboxConfig): MonadConfig {
   return {
     version: system.version,
     principal: system.principal,
@@ -65,6 +67,7 @@ function mergeConfigs(system: MonadSystemConfig, profile: MonadProfile): MonadCo
       agents: profile.agent.agents,
       defaultAgentId: profile.agent.defaultAgentId
     },
+    sandbox,
     mcpServers: system.mcpServers,
     acpAgents: system.acpAgents,
     externalAgents: system.externalAgents,
@@ -94,7 +97,6 @@ function extractSystemConfig(cfg: MonadConfig): MonadSystemConfig {
     principal: cfg.principal,
     network: cfg.network,
     agent: {
-      sandbox: cfg.agent.sandbox,
       globalSandbox: cfg.agent.globalSandbox,
       tools: cfg.agent.tools,
       // Round-trip the operator approval policy; omitting it lets the schema default ({}) silently
@@ -148,8 +150,12 @@ function extractProfile(cfg: MonadConfig): MonadProfile {
  * into a single MonadConfig. If profile.json is missing but config.json contains
  * profile fields (first boot after upgrade), profile.json is bootstrapped from it.
  */
-export async function loadAll(configPath: string, profilePath: string): Promise<MonadConfig | null> {
-  const [rawSystem, rawProfile] = await Promise.all([
+export async function loadAll(
+  configPath: string,
+  profilePath: string,
+  sandboxPath: string = join(dirname(configPath), 'sandbox.json')
+): Promise<MonadConfig | null> {
+  const [rawSystem, rawProfile, rawSandbox] = await Promise.all([
     Bun.file(configPath)
       .text()
       .catch((err: unknown) => {
@@ -158,6 +164,14 @@ export async function loadAll(configPath: string, profilePath: string): Promise<
       }),
     // initMonadHome always writes both files together; an absent profile.json falls back to defaults.
     Bun.file(profilePath)
+      .text()
+      .catch((err: unknown) => {
+        if (isMissingFile(err)) return null;
+        throw err;
+      }),
+    // sandbox.json is authoritative and versionless; an absent file falls back to schema defaults
+    // (fail-safe: confine=true). A present-but-malformed file THROWS below — never silently defaults.
+    Bun.file(sandboxPath)
       .text()
       .catch((err: unknown) => {
         if (isMissingFile(err)) return null;
@@ -197,7 +211,25 @@ export async function loadAll(configPath: string, profilePath: string): Promise<
     profile = monadProfileSchema.parse({ version: CURRENT_PROFILE_VERSION, model: { default: '' } });
   }
 
-  return mergeConfigs(system, profile);
+  let sandbox: SandboxConfig;
+  if (rawSandbox !== null) {
+    let parsedSandbox: unknown;
+    try {
+      parsedSandbox = JSON.parse(rawSandbox);
+    } catch {
+      throw new Error(`monad: sandbox.json is not valid JSON at ${sandboxPath}. Fix the file and retry.`);
+    }
+    try {
+      sandbox = sandboxConfigSchema.parse(parsedSandbox);
+    } catch (err) {
+      // A present-but-invalid policy must fail closed, never silently degrade to an unconfined default.
+      throw friendlySchemaError('sandbox.json', sandboxPath, err);
+    }
+  } else {
+    sandbox = sandboxConfigSchema.parse({});
+  }
+
+  return mergeConfigs(system, profile, sandbox);
 }
 
 export async function saveSystemConfig(configPath: string, cfg: MonadConfig): Promise<void> {
@@ -222,11 +254,31 @@ export async function saveProfile(profilePath: string, cfg: MonadConfig): Promis
   await setSecurePermissions(profilePath);
 }
 
-// Write config.json then profile.json in sequence so a file-watcher that fires
-// between writes always reads a consistent state (system is stable before profile lands).
-export async function saveAll(configPath: string, profilePath: string, cfg: MonadConfig): Promise<void> {
+// sandbox.json holds the sandbox POLICY block (cfg.sandbox). Versionless — every field defaults, so
+// an absent file is a valid fail-safe policy and there's nothing to migrate. Locked 0o600 because a
+// `credential` secret-ref may live here.
+export async function saveSandbox(sandboxPath: string, cfg: MonadConfig): Promise<void> {
+  let sandbox: SandboxConfig;
+  try {
+    sandbox = sandboxConfigSchema.parse(cfg.sandbox);
+  } catch (err) {
+    throw friendlySchemaError('sandbox.json', sandboxPath, err);
+  }
+  await atomicWrite(sandboxPath, `${JSON.stringify(sandbox, null, 2)}\n`);
+  await setSecurePermissions(sandboxPath);
+}
+
+// Write config.json, then profile.json, then sandbox.json in sequence so a file-watcher that fires
+// between writes always reads a consistent state (system is stable before profile/sandbox land).
+export async function saveAll(
+  configPath: string,
+  profilePath: string,
+  cfg: MonadConfig,
+  sandboxPath: string = join(dirname(configPath), 'sandbox.json')
+): Promise<void> {
   await saveSystemConfig(configPath, cfg);
   await saveProfile(profilePath, cfg);
+  await saveSandbox(sandboxPath, cfg);
 }
 
 export async function tryParseAuth(raw: unknown): Promise<MonadAuth | null> {

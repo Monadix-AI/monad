@@ -65,10 +65,16 @@ export function buildSeatbeltProfile(policy: SandboxPolicy): string {
   }
 
   // Read-deny comes last so it overrides allow-default. Canonicalize so a denied ~/.ssh still
-  // matches the child's real read of the /Users/... realpath.
-  if (policy.readDenyRoots?.length) {
-    const denied = policy.readDenyRoots.map(canonical).map((p) => `(subpath ${sbpl(p)})`);
-    lines.push(`(deny file-read* ${denied.join(' ')})`);
+  // matches the child's real read of the /Users/... realpath. Masked files degrade to deny here:
+  // SBPL cannot REDIRECT a read to the fake file (only bwrap's mount namespace can), so the safe
+  // fallback is to make the real path unreadable — the secret is contained, just not usable. Use
+  // (literal) not (subpath): a masked file is a single file, and a subpath rule on a file path is
+  // harmless but overbroad if that path is later a dir.
+  const maskDeny = (policy.maskedFiles ?? []).map((m) => `(literal ${sbpl(canonical(m.real))})`);
+  const rootDeny = (policy.readDenyRoots ?? []).map((p) => `(subpath ${sbpl(canonical(p))})`);
+  const allDeny = [...rootDeny, ...maskDeny];
+  if (allDeny.length) {
+    lines.push(`(deny file-read* ${allDeny.join(' ')})`);
   }
 
   return lines.join('\n');

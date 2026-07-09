@@ -22,6 +22,7 @@ const paths: MonadPaths = {
   db: '/dev/null',
   config: '/dev/null/config.json',
   profile: '/dev/null/profile.json',
+  sandbox: '/dev/null/sandbox.json',
   approvals: '/dev/null/approvals.json',
   credentials: '/dev/null',
   auth: '/dev/null/auth.json',

@@ -3,13 +3,13 @@ import type { SkillInstallReviewer } from '#/capabilities/skills/install/index.t
 import { lstat, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { buildSandboxPolicy, sandboxedSpawn, sandboxLauncher } from '@monad/sandbox';
 import { z } from 'zod';
 
 import { upsertSkillsLock } from '#/capabilities/skills/install/clawhub.ts';
 import { assertStagingCompatibility } from '#/capabilities/skills/install/compat.ts';
 import { warningModelRequestFailed, warningsToStrings } from '#/capabilities/skills/install/review.ts';
 import { scanSkillDir } from '#/capabilities/skills/install/scan.ts';
-import { buildSandboxPolicy, sandboxedSpawn, sandboxLauncher } from '#/capabilities/tools/sandbox/spawn.ts';
 import { findSkillDirs, installSkillFromDir, parseSkillMd } from '#/store/home/skills.ts';
 
 const gitSkillRecordSchema = z

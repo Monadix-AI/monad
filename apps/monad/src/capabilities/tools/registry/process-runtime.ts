@@ -1,9 +1,9 @@
 import type { ToolContext } from '../types.ts';
 
+import { buildSandboxPolicy, sandboxedPtySpawn, sandboxedSpawn, ToolSecurityError } from '@monad/sandbox';
+
 import { daemonChildProcesses } from '#/infra/daemon-child-processes.ts';
 import { shellArgv, signalProcessTree } from '../backends.ts';
-import { buildSandboxPolicy, sandboxedPtySpawn, sandboxedSpawn } from '../sandbox/spawn.ts';
-import { ToolSecurityError } from '../security.ts';
 
 const MAX_BUFFER = 256 * 1024;
 const ANSI_PATTERN_SOURCE =

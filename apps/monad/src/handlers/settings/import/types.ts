@@ -11,7 +11,7 @@ type Payload =
   | { kind: 'modelRoles'; roles: ModelRoles }
   | { kind: 'credential'; providerId: string; label: string; accessToken: string; authType?: 'api_key' | 'oauth' }
   | { kind: 'skill'; dir: string; name: string }
-  | { kind: 'sandbox'; mode: MonadConfig['agent']['sandbox']['mode'] }
+  | { kind: 'sandbox'; mode: MonadConfig['sandbox']['mode'] }
   | { kind: 'approval'; approvalPolicy: string }
   | {
       kind: 'agent';

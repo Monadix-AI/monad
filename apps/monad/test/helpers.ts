@@ -82,6 +82,7 @@ export function makeTestPaths(base: string, overrides?: Partial<MonadPaths>): Mo
     configs: base,
     config: join(base, 'config.json'),
     profile: join(base, 'profile.json'),
+    sandbox: join(base, 'sandbox.json'),
     approvals: join(base, 'approvals.json'),
     credentials: join(base, 'credentials'),
     auth: join(base, 'credentials', 'auth.json'),
@@ -139,6 +140,7 @@ export function stubModelDeps(): ModelDeps {
     // No real config paths — lifecycle handler treats missing config as "no agents yet"
     config: '/dev/null/config.json',
     profile: '/dev/null/profile.json',
+    sandbox: '/dev/null/sandbox.json',
     approvals: '/dev/null/approvals.json',
     credentials: '/dev/null/credentials',
     auth: '/dev/null/credentials/auth.json',

@@ -16,6 +16,7 @@
     "@monad/i18n": "workspace:*",
     "@monad/logger": "workspace:*",
     "@monad/protocol": "workspace:*",
+    "@monad/sandbox": "workspace:*",
     "@monad/sdk-atom": "workspace:*",
     "@monad/utils": "workspace:*",
     "@opentelemetry/api": "^1.9.1",

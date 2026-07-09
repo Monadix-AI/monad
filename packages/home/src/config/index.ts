@@ -165,6 +165,107 @@ function defaultDeveloperMode(): boolean {
   return Bun.env.NODE_ENV === 'development';
 }
 
+// Sandbox POLICY block. Lives in its own file (sandbox.json) and is exposed at the top level as
+// `cfg.sandbox`. Every field defaults, so an absent sandbox.json parses to a fail-safe policy
+// (confine=true, net='unrestricted', backend='auto'). The org ceiling (`agent.globalSandbox`) is a
+// separate concern and stays in config.json.
+export const sandboxConfigSchema = z.object({
+  // Defaulted to the safe 'workspace' jail so an absent sandbox.json yields a complete fail-safe
+  // policy (matches createDefaultConfig + globalSandbox's default mode). The original nested schema
+  // left this required because config.json always carried it; a standalone file must self-default.
+  mode: sandboxModeSchema.default('workspace'),
+  // OS-level confinement (Seatbelt/Landlock/AppContainer) for the children spawned by
+  // code_execute / shell_exec / process_start. Writes are confined to the session's sandbox
+  // roots; reads are not. Off → today's bare host child (no kernel fence). Additive default so
+  // existing configs parse. Unsupported platforms (no native launcher yet) degrade to no-op.
+  confine: z.boolean().default(true),
+  // Network for confined children:
+  //   'none'         → no egress
+  //   'unrestricted' → open (default — keeps npm/pip/curl working out of the box)
+  //   'filtered'     → only a local proxy is reachable; the child's curl/pip/npm/git egress is
+  //                    allowed only to `allowedDomains` (subdomains included)
+  net: z.enum(['none', 'unrestricted', 'filtered']).default('unrestricted'),
+  // Egress allowlist for net:'filtered' (domains; subdomains match). Empty → deny all egress.
+  allowedDomains: z.array(z.string()).default([]),
+  // Egress denylist for net:'filtered' — a deny match wins over allowedDomains (even over '*').
+  deniedDomains: z.array(z.string()).default([]),
+  // net:'filtered' TLS termination. Off (default) → HTTPS through the proxy stays an opaque CONNECT
+  // tunnel. On → the proxy decrypts, inspects, and re-issues HTTPS with a MITM CA (the child trusts
+  // it via injected trust env; the proxy→server leg keeps real cert validation). Foundation for
+  // path-level filtering and credential-sentinel substitution. caCertPath/caKeyPath supply a
+  // persistent CA (must be given together); absent → an ephemeral per-run CA is generated.
+  tlsTerminate: z
+    .object({
+      enabled: z.boolean().default(false),
+      caCertPath: z.string().optional(),
+      caKeyPath: z.string().optional()
+    })
+    .default({ enabled: false }),
+  // Credential-sentinel injection. Each entry masks a secret so the confined child sees a fake
+  // `fake_value_…` sentinel, and the TLS-terminating proxy swaps sentinel→real on the outbound
+  // request ONLY when the destination host matches that credential's `injectHosts` (exact or
+  // subdomain). An exfil to any other host carries the useless fake. An entry is EITHER:
+  //   • env  — `value` set: the child gets `name=<sentinel>` in its environment. `value` is a raw
+  //            value or a `${secret:NAME}` / `${env:NAME}` ref (resolved daemon-side).
+  //   • file — `file` set: the credential lives in a file on disk; the child reads a sentinel from
+  //            the file (via a read-only bind over it) instead of the real content. `extract` (a
+  //            regex whose capture group 1 is the credential value) masks only the matched span(s)
+  //            so JSON/YAML/.netrc stays valid; without it the whole file is masked. Enforced only
+  //            on launchers that can redirect a read (Linux + bwrap); Seatbelt/AppContainer degrade
+  //            to DENY (file unreadable); Landlock/Low-IL cannot enforce and warn.
+  // REQUIRES net:'filtered' AND tlsTerminate.enabled — without MITM the proxy cannot see HTTPS
+  // headers, so sentinels never apply to HTTPS. Empty (default) → no masking.
+  credentials: z
+    .array(
+      z
+        .object({
+          name: z.string(),
+          injectHosts: z.array(z.string()),
+          value: z.string().optional(),
+          file: z.string().optional(),
+          extract: z.string().optional()
+        })
+        .refine((c) => (c.value === undefined) !== (c.file === undefined), {
+          message: 'each sandbox credential must set exactly one of `value` (env) or `file` (masked file)'
+        })
+    )
+    .default([]),
+  // code_execute target:'host' (run unconfined on the real machine): 'deny' refuses it, 'ask'
+  // allows it with human approval (default), 'allow' permits it (still approved — host runs are
+  // always gated). Sandbox-target runs are unaffected.
+  hostExec: z.enum(['deny', 'ask', 'allow']).default('ask'),
+  // Static env vars injected into every confined child (API base URLs, locale overrides, etc.).
+  // Applied before proxy env so HTTP(S)_PROXY can always override. Additive; empty = none.
+  env: z.record(z.string(), z.string()).default({}),
+  // Ephemeral-mode only: a local directory whose contents are copied into every fresh session
+  // root on creation — pre-seeded scaffold, requirements.txt, data files, etc.
+  seedTemplate: z.string().optional(),
+  // Ephemeral-mode only: a shell command run inside the session root after seeding completes
+  // (e.g. 'python -m venv .venv && pip install -r requirements.txt'). Runs confined.
+  initScript: z.string().optional(),
+  // Override path to the monad-sandbox-launcher native binary. Absent → binary next to the
+  // monad executable (standard install). Useful when testing a custom build or running in an
+  // environment where the binary is installed to a non-standard location.
+  launcherPath: z.string().optional(),
+  // Credential for a cloud sandbox launcher (e.g. an e2b API key), passed to the active
+  // launcher's spawn()/isAvailable(). A `${secret:NAME}` / `${env:NAME}` ref (keeps the key out
+  // of config.json) or a raw value. Only used when a remote (cloud) launcher is selected.
+  credential: z.string().optional(),
+  // Container image for the docker/podman launcher. Default: ubuntu:22.04.
+  dockerImage: z.string().optional(),
+  // Heavy sandbox backend selector. 'auto' (default) uses the light OS launcher (Seatbelt /
+  // bwrap / Landlock / AppContainer). 'docker'/'e2b'/'vm' select a heavy launcher, which must be
+  // provided by an enabled atom pack (e.g. @monad/monad-power-pack); if unavailable it falls back
+  // to the light default.
+  backend: z.enum(['auto', 'docker', 'e2b', 'vm']).default('auto'),
+  // DANGER: when confine=true but no launcher is available, allow children to run unconfined on
+  // the host rather than refusing to start. Default is fail-closed. Set to true only when you
+  // have intentionally deployed without a sandbox launcher and understand that agent-spawned
+  // processes run with full host privileges.
+  allowUnconfinedExec: z.boolean().default(false)
+});
+export type SandboxConfig = z.infer<typeof sandboxConfigSchema>;
+
 const monadConfigSchema = z.object({
   version: z.literal(CURRENT_CONFIG_VERSION),
   principal: z.object({
@@ -205,50 +306,6 @@ const monadConfigSchema = z.object({
     agents: z.array(agentConfigSchema).default([]),
     /** ID of the agent used when sessions.create omits agentId. */
     defaultAgentId: z.string().optional(),
-    sandbox: z.object({
-      mode: sandboxModeSchema,
-      // OS-level confinement (Seatbelt/Landlock/AppContainer) for the children spawned by
-      // code_execute / shell_exec / process_start. Writes are confined to the session's sandbox
-      // roots; reads are not. Off → today's bare host child (no kernel fence). Additive default so
-      // existing configs parse. Unsupported platforms (no native launcher yet) degrade to no-op.
-      confine: z.boolean().default(true),
-      // Network for confined children:
-      //   'none'         → no egress
-      //   'unrestricted' → open (default — keeps npm/pip/curl working out of the box)
-      //   'filtered'     → only a local proxy is reachable; the child's curl/pip/npm/git egress is
-      //                    allowed only to `allowedDomains` (subdomains included)
-      net: z.enum(['none', 'unrestricted', 'filtered']).default('unrestricted'),
-      // Egress allowlist for net:'filtered' (domains; subdomains match). Empty → deny all egress.
-      allowedDomains: z.array(z.string()).default([]),
-      // code_execute target:'host' (run unconfined on the real machine): 'deny' refuses it, 'ask'
-      // allows it with human approval (default), 'allow' permits it (still approved — host runs are
-      // always gated). Sandbox-target runs are unaffected.
-      hostExec: z.enum(['deny', 'ask', 'allow']).default('ask'),
-      // Static env vars injected into every confined child (API base URLs, locale overrides, etc.).
-      // Applied before proxy env so HTTP(S)_PROXY can always override. Additive; empty = none.
-      env: z.record(z.string(), z.string()).default({}),
-      // Ephemeral-mode only: a local directory whose contents are copied into every fresh session
-      // root on creation — pre-seeded scaffold, requirements.txt, data files, etc.
-      seedTemplate: z.string().optional(),
-      // Ephemeral-mode only: a shell command run inside the session root after seeding completes
-      // (e.g. 'python -m venv .venv && pip install -r requirements.txt'). Runs confined.
-      initScript: z.string().optional(),
-      // Override path to the monad-sandbox-launcher native binary. Absent → binary next to the
-      // monad executable (standard install). Useful when testing a custom build or running in an
-      // environment where the binary is installed to a non-standard location.
-      launcherPath: z.string().optional(),
-      // Credential for a cloud sandbox launcher (e.g. an e2b API key), passed to the active
-      // launcher's spawn()/isAvailable(). A `${secret:NAME}` / `${env:NAME}` ref (keeps the key out
-      // of config.json) or a raw value. Only used when a remote (cloud) launcher is selected.
-      credential: z.string().optional(),
-      // Container image for the docker/podman launcher. Default: ubuntu:22.04.
-      dockerImage: z.string().optional(),
-      // DANGER: when confine=true but no launcher is available, allow children to run unconfined on
-      // the host rather than refusing to start. Default is fail-closed. Set to true only when you
-      // have intentionally deployed without a sandbox launcher and understand that agent-spawned
-      // processes run with full host privileges.
-      allowUnconfinedExec: z.boolean().default(false)
-    }),
     // When enabled, EVERY agent is forced to `mode`; per-agent sandbox is ignored.
     globalSandbox: z
       .object({
@@ -318,6 +375,10 @@ const monadConfigSchema = z.object({
     // engine as immutable source:'operator' rules; deny always wins over runtime allows.
     approvals: agentApprovalsSchema
   }),
+  // Sandbox POLICY block — its own file (sandbox.json), top-level in memory. Absent file → schema
+  // defaults (fail-safe). Defaulted here so an in-memory parse (migrateConfig) that never sees
+  // sandbox.json still fills the fail-safe policy. The org ceiling stays at `agent.globalSandbox`.
+  sandbox: sandboxConfigSchema.default(() => sandboxConfigSchema.parse({})),
   // Skill switches keyed by skill instance id: `autoload` is the global master (off → no skill
   // descriptions auto-load anywhere). `disabled` fully disables a skill; `autoloadDisabled` keeps
   // it manually invocable only.
@@ -386,17 +447,6 @@ export const monadSystemConfigSchema = z.object({
   developerMode: z.boolean().default(defaultDeveloperMode),
   network: networkConfigSchema,
   agent: z.object({
-    sandbox: z.object({
-      mode: sandboxModeSchema,
-      confine: z.boolean().default(true),
-      net: z.enum(['none', 'unrestricted', 'filtered']).default('unrestricted'),
-      allowedDomains: z.array(z.string()).default([]),
-      hostExec: z.enum(['deny', 'ask', 'allow']).default('ask'),
-      env: z.record(z.string(), z.string()).default({}),
-      seedTemplate: z.string().optional(),
-      initScript: z.string().optional(),
-      allowUnconfinedExec: z.boolean().default(false)
-    }),
     globalSandbox: z
       .object({ enabled: z.boolean(), mode: sandboxModeSchema })
       .default({ enabled: false, mode: 'workspace' }),
@@ -547,18 +597,22 @@ export function createDefaultConfig(principalId: PrincipalId, displayName: strin
     },
     agent: {
       agents: [],
-      sandbox: {
-        mode: 'workspace',
-        confine: true,
-        net: 'unrestricted',
-        allowedDomains: [],
-        hostExec: 'ask',
-        env: {},
-        allowUnconfinedExec: false
-      },
       globalSandbox: { enabled: false, mode: 'workspace' },
       tools: { codeExecBackend: 'follow-system', webSearch: { provider: 'auto' }, email: { backend: 'auto' } },
       approvals: { deny: [], ask: [], allow: [] }
+    },
+    sandbox: {
+      mode: 'workspace',
+      confine: true,
+      net: 'unrestricted',
+      allowedDomains: [],
+      deniedDomains: [],
+      tlsTerminate: { enabled: false },
+      credentials: [],
+      hostExec: 'ask',
+      env: {},
+      allowUnconfinedExec: false,
+      backend: 'auto'
     },
     skills: { autoload: true, disabled: [], autoloadDisabled: [], installReview: false },
     network: {

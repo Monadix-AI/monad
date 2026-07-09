@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { configureSandboxCredential } from '@monad/sdk-atom';
 
-import { __setE2bLoaderForTest, configureE2bApiKey, e2bLauncher } from '../../src/sandbox/e2b.ts';
+import { __setE2bLoaderForTest, configureE2bApiKey, e2bLauncher } from '../../src/e2b.ts';
 
 interface FakeCalls {
   created: { apiKey?: string }[];

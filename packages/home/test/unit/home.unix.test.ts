@@ -18,6 +18,7 @@ function makePaths(base: string): MonadPaths {
     configs: join(base, 'configs'),
     config: join(base, 'configs', 'config.json'),
     profile: join(base, 'configs', 'profile.json'),
+    sandbox: join(base, 'configs', 'sandbox.json'),
     approvals: join(base, 'configs', 'approvals.json'),
     credentials,
     auth: join(credentials, 'auth.json'),

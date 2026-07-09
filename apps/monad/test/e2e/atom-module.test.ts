@@ -25,6 +25,7 @@ function paths(): MonadPaths {
     runtime: base,
     configs: base,
     profile: join(base, 'profile.json'),
+    sandbox: join(base, 'sandbox.json'),
     approvals: join(base, 'approvals.json'),
     config: join(base, 'config.json'),
     credentials: join(base, 'credentials'),

@@ -12,7 +12,7 @@ import type { ParsedImport, PlannedItem, SettingsImportDeps } from './types.ts';
 import { createHash } from 'node:crypto';
 import { lstat, mkdir, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { loadAll, loadAuth, saveAll, saveAuth, saveSystemConfig } from '@monad/home';
+import { loadAll, loadAuth, saveAll, saveAuth, saveSandbox, saveSystemConfig } from '@monad/home';
 import { newId } from '@monad/protocol';
 
 import { toAgentDir, writeAgentBody } from '#/store/home/agent-def.ts';
@@ -259,6 +259,7 @@ export function createSettingsImportModule({ paths, configBus, mcpReconnect }: S
     let wroteSystem = false;
     let wroteProfile = false;
     let wroteAuth = false;
+    let wroteSandbox = false;
     const takenAgentDirs = new Set(cfg.agent.agents.map((a) => a.dir ?? toAgentDir(a.name)));
 
     for (const item of selected) {
@@ -332,8 +333,8 @@ export function createSettingsImportModule({ paths, configBus, mcpReconnect }: S
             await installSkillFromDir(paths.skills, payload.dir, { overwrite: req.replace });
             break;
           case 'sandbox':
-            cfg.agent.sandbox.mode = payload.mode;
-            wroteSystem = true;
+            cfg.sandbox.mode = payload.mode;
+            wroteSandbox = true;
             break;
           case 'agent': {
             const existingIndex = cfg.agent.agents.findIndex((a) => a.name === payload.name);
@@ -390,11 +391,12 @@ export function createSettingsImportModule({ paths, configBus, mcpReconnect }: S
     if (wroteSystem && wroteProfile) await saveAll(paths.config, paths.profile, cfg);
     else if (wroteSystem) await saveSystemConfig(paths.config, cfg);
     else if (wroteProfile) await saveAll(paths.config, paths.profile, cfg);
+    if (wroteSandbox) await saveSandbox(paths.sandbox, cfg);
     if (wroteAuth) {
       auth.updatedAt = new Date().toISOString();
       await saveAuth(paths.auth, auth);
     }
-    if (configBus && (wroteProfile || wroteAuth || wroteSystem)) await configBus.publish({ cfg, auth });
+    if (configBus && (wroteProfile || wroteAuth || wroteSystem || wroteSandbox)) await configBus.publish({ cfg, auth });
     for (const name of reconnectMcp) await mcpReconnect?.(name);
 
     return {

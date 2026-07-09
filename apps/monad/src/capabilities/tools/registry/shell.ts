@@ -9,12 +9,11 @@
 import type { Tool, ToolContext } from '../types.ts';
 
 import { isAbsolute, resolve } from 'node:path';
+import { assertPathWithinRoots, canSkipHighRiskApprovalInLocalSandbox } from '@monad/sandbox';
 import { z } from 'zod';
 
 import { gatePathAccess } from '../approval/path-gate.ts';
 import { createSandboxBackends } from '../backends.ts';
-import { canSkipHighRiskApprovalInLocalSandbox } from '../sandbox/active-local.ts';
-import { assertPathWithinRoots } from '../security.ts';
 import { toolResult } from '../types.ts';
 import { startBackgroundProcess } from './process.ts';
 

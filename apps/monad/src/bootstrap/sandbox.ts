@@ -8,19 +8,27 @@ import type { SessionSandboxService } from '../services/session-sandbox.ts';
 
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import {
-  configureDockerImage,
-  configureNativeLauncherPath,
-  detectDockerRuntime,
-  sweepOrphanAppContainerProfiles
-} from '@monad/atoms';
 import { logger } from '@monad/logger';
+import {
+  caTrustEnv,
+  configureNativeLauncherPath,
+  configureSandboxProcessTracker,
+  createMitmCA,
+  disposeMitmCA,
+  MaskedFileStore,
+  type MitmCA,
+  SentinelRegistry,
+  startEgressProxy,
+  sweepOrphanAppContainerProfiles
+} from '@monad/sandbox';
 import { configureSandboxCredential } from '@monad/sdk-atom';
 
 import {
   configureHostExec,
+  configureSandboxBackendOptions,
   configureSandboxExtraEnv,
   configureSandboxLauncher,
+  configureSandboxMaskedFiles,
   configureSandboxNet,
   configureSandboxProxyEnv,
   configureSandboxReadDeny,
@@ -29,7 +37,7 @@ import {
 } from '#/capabilities/tools';
 import { resolveEffectiveSandboxMode } from '#/config/resolve.ts';
 import { resolveSecretRef } from '#/config/secrets.ts';
-import { startEgressProxy } from '../services/egress-proxy.ts';
+import { daemonChildProcesses, killDaemonProcessTree } from '#/infra/daemon-child-processes.ts';
 import { createSessionSandboxService } from '../services/session-sandbox.ts';
 
 export interface SandboxSetup {
@@ -44,72 +52,160 @@ export async function createSandbox(
   store: Store,
   auth?: MonadAuth
 ): Promise<SandboxSetup> {
-  const effectiveSandboxMode = resolveEffectiveSandboxMode(cfg.agent.sandbox, cfg.agent.globalSandbox);
+  const effectiveSandboxMode = resolveEffectiveSandboxMode(cfg.sandbox, cfg.agent.globalSandbox);
   const sandboxRoots = resolveSandboxRoots(effectiveSandboxMode, paths.workspace);
+
+  // @monad/sandbox is daemon-agnostic; inject the daemon's process-tree reaper so confined children are
+  // tracked for shutdown. Tree-kill by pid is the daemon's concern; the sandbox supplies a SIGTERM
+  // fallback for the untracked/standalone case.
+  configureSandboxProcessTracker({
+    track: (pid, label, fallbackKill) =>
+      daemonChildProcesses.track(pid, label, () => (pid ? killDaemonProcessTree(pid) : fallbackKill())),
+    untrack: (pid) => daemonChildProcesses.untrack(pid)
+  });
 
   // A cloud (remote) launcher's credential — resolved from a secret ref so the key never lives in
   // config.json. Set unconditionally; only a selected remote launcher reads it.
-  configureSandboxCredential(
-    cfg.agent.sandbox.credential ? resolveSecretRef(cfg.agent.sandbox.credential, auth) : undefined
-  );
+  configureSandboxCredential(cfg.sandbox.credential ? resolveSecretRef(cfg.sandbox.credential, auth) : undefined);
 
-  // Docker runtime detection: async probe, cached for the process lifetime. Must run before
-  // finalizeSandboxLauncher() so dockerLauncher.isAvailable() returns correctly at selection time.
-  await detectDockerRuntime();
-  if (cfg.agent.sandbox.dockerImage) configureDockerImage(cfg.agent.sandbox.dockerImage);
+  // Backend options for a heavy launcher (docker/e2b), passed via the seam so the daemon never
+  // imports the opt-in launcher package. The heavy launcher reads these at spawn time; the docker
+  // runtime probe now runs via the SELECTED launcher's prepare() in finalizeSandboxLauncher().
+  configureSandboxBackendOptions({ dockerImage: cfg.sandbox.dockerImage });
 
   // Reclaim AppContainer profiles orphaned by a prior crash on Windows. Best-effort, and
   // unconditional: a run that flips confine true→false would otherwise strand the profiles the
   // previous confined run created, leaking them on the host forever. No-op off Windows.
   void sweepOrphanAppContainerProfiles();
 
-  if (cfg.agent.sandbox.confine) {
+  if (cfg.sandbox.confine) {
     // The override path for the native Linux/Windows launcher binary (config.agent.sandbox.launcherPath)
     // must reach the launcher atoms before selection probes their isAvailable(); push it now (the
     // launchers are static atom objects that read it lazily). The actual launcher is selected after
     // the atom packs load — see finalizeSandboxLauncher().
-    configureNativeLauncherPath(cfg.agent.sandbox.launcherPath);
+    configureNativeLauncherPath(cfg.sandbox.launcherPath);
     // Deny confined children read access to credential stores even under open egress, so a
     // prompt-injected snippet can't read-then-exfiltrate secrets. The profile is allow-read by
     // default (interpreters must start); only these roots are blocked.
     const home = homedir();
-    configureSandboxReadDeny([
+    const readDenyRoots = [
       paths.credentials,
       join(home, '.ssh'),
       join(home, '.aws'),
       join(home, '.gnupg'),
       join(home, '.config', 'gcloud')
-    ]);
-    if (cfg.agent.sandbox.net === 'filtered') {
+    ];
+    configureSandboxReadDeny(readDenyRoots);
+    if (cfg.sandbox.net === 'filtered') {
       // Start the local filtering proxy and make it the child's only egress: the policy permits
       // just the proxy port and HTTP(S)_PROXY routes the child's curl/pip/npm/git through it.
+      // When tlsTerminate is enabled, the proxy also decrypts HTTPS with an ephemeral (or supplied)
+      // MITM CA; the child trusts it via the injected caTrustEnv, and the proxy→server leg keeps
+      // real cert validation. Off → HTTPS stays an opaque CONNECT tunnel (unchanged behavior).
+      let mitm: MitmCA | undefined;
+      if (cfg.sandbox.tlsTerminate.enabled) {
+        const ca = createMitmCA({
+          caCertPath: cfg.sandbox.tlsTerminate.caCertPath,
+          caKeyPath: cfg.sandbox.tlsTerminate.caKeyPath
+        });
+        mitm = ca;
+        process.on('exit', () => void disposeMitmCA(ca));
+      }
+
+      // Credential-sentinel injection: the child sees a fake sentinel for each credential; the
+      // terminating proxy swaps sentinel→real on the outbound leg only for a matching injectHost.
+      // Two flavours share ONE registry: env credentials (`value`) inject `name=<sentinel>` into the
+      // child env; file credentials (`file`) mask an on-disk file (child reads the sentinel via a
+      // read-only bind, degraded to deny on launchers that can't redirect). Requires MITM — without
+      // it the proxy can't see HTTPS headers, so warn and skip.
+      let sentinels: SentinelRegistry | undefined;
+      let sentinelEnv: Record<string, string> | undefined;
+      if (cfg.sandbox.credentials.length > 0) {
+        if (!mitm) {
+          logger.warn(
+            'monad: agent.sandbox.credentials set but tlsTerminate is off — sentinels will NOT apply to HTTPS ' +
+              '(the proxy cannot see encrypted headers). Enable agent.sandbox.tlsTerminate to inject credentials.'
+          );
+        } else {
+          const registry = new SentinelRegistry();
+          const envCreds = cfg.sandbox.credentials.filter((c) => c.value !== undefined);
+          const fileCreds = cfg.sandbox.credentials.filter((c) => c.file !== undefined);
+          for (const cred of envCreds) {
+            const real = resolveSecretRef(cred.value as string, auth);
+            registry.register(cred.name, real, cred.injectHosts);
+          }
+          if (fileCreds.length > 0) {
+            const store = new MaskedFileStore();
+            for (const cred of fileCreds) {
+              store.add(registry, {
+                name: cred.name,
+                realPath: cred.file as string,
+                injectHosts: cred.injectHosts,
+                extract: cred.extract
+              });
+            }
+            configureSandboxMaskedFiles([...store.list]);
+            // Fail-closed: any declared credential file that couldn't be masked is denied outright, so
+            // it's never readable in cleartext on a launcher that redirects (or that couldn't mask it).
+            if (store.denyPaths.length > 0) {
+              configureSandboxReadDeny([...readDenyRoots, ...store.denyPaths]);
+            }
+            process.on('exit', () => store.dispose());
+          }
+          sentinels = registry;
+          sentinelEnv = registry.childEnv();
+          logger.info(
+            `monad: credential sentinels active for ${cfg.sandbox.credentials.map((c) => c.name).join(', ')} ` +
+              '(child sees fake values; proxy injects real values on matching hosts)'
+          );
+        }
+      }
+
       const proxy = startEgressProxy({
-        policy: { allowedDomains: cfg.agent.sandbox.allowedDomains },
+        policy: {
+          allowedDomains: cfg.sandbox.allowedDomains,
+          deniedDomains: cfg.sandbox.deniedDomains
+        },
+        mitm,
+        rewriteRequest: sentinels ? (host, block) => sentinels.substitute(host, block) : undefined,
+        rewriteBody: sentinels ? (host, body) => sentinels.substitute(host, body) : undefined,
         log: (m) => logger.info(`monad: ${m}`)
       });
       process.on('exit', () => proxy.stop());
       configureSandboxNet({ allowProxyPort: proxy.port });
+      // SOCKS5 shares the SAME muxed proxy port; the child's non-HTTP TCP tools (ssh, git-ssh, db
+      // clients) that honour ALL_PROXY route through the same egress filter. socks5h = the proxy
+      // resolves DNS, so the child's hostname reaches our allowlist, not a pre-resolved IP.
+      const socksUrl = `socks5h://127.0.0.1:${proxy.port}`;
       configureSandboxProxyEnv({
         HTTP_PROXY: proxy.url,
         HTTPS_PROXY: proxy.url,
         http_proxy: proxy.url,
-        https_proxy: proxy.url
+        https_proxy: proxy.url,
+        ALL_PROXY: socksUrl,
+        all_proxy: socksUrl,
+        // Trust env applies to the CONFINED CHILD only (this map is injected into child spawns via
+        // configureSandboxProxyEnv); the daemon/host trust store is never touched.
+        ...(mitm ? caTrustEnv(mitm.caCertPath) : {}),
+        // Sentinel values (name→fake) reach the child here — the real value never leaves the registry.
+        ...(sentinelEnv ?? {})
       });
       logger.info(
-        `monad: egress filtered via local proxy :${proxy.port} (${cfg.agent.sandbox.allowedDomains.length} domain(s) allowed)`
+        `monad: egress filtered via local proxy :${proxy.port} (${cfg.sandbox.allowedDomains.length} domain(s) allowed)` +
+          (mitm ? ' — TLS termination on' : '')
       );
     } else {
-      configureSandboxNet(cfg.agent.sandbox.net);
+      configureSandboxNet(cfg.sandbox.net);
       configureSandboxProxyEnv(undefined);
     }
   } else {
     configureSandboxLauncher(noneLauncher);
     configureSandboxProxyEnv(undefined);
   }
-  configureHostExec(cfg.agent.sandbox.hostExec);
-  if (Object.keys(cfg.agent.sandbox.env).length > 0) {
-    configureSandboxExtraEnv(cfg.agent.sandbox.env);
-    logger.info(`monad: sandbox extra env: ${Object.keys(cfg.agent.sandbox.env).join(', ')}`);
+  configureHostExec(cfg.sandbox.hostExec);
+  if (Object.keys(cfg.sandbox.env).length > 0) {
+    configureSandboxExtraEnv(cfg.sandbox.env);
+    logger.info(`monad: sandbox extra env: ${Object.keys(cfg.sandbox.env).join(', ')}`);
   }
 
   // Ephemeral sandbox mode: each session gets a fresh disposable root. Reclaim any left by a prior
@@ -117,8 +213,8 @@ export async function createSandbox(
   const sessionSandbox = createSessionSandboxService({
     enabled: effectiveSandboxMode === 'ephemeral',
     baseDir: join(paths.cache, 'sandboxes'),
-    seedTemplate: cfg.agent.sandbox.seedTemplate,
-    initScript: cfg.agent.sandbox.initScript,
+    seedTemplate: cfg.sandbox.seedTemplate,
+    initScript: cfg.sandbox.initScript,
     log: (m) => logger.info(`monad: ${m}`)
   });
   if (sessionSandbox.enabled) {
@@ -139,22 +235,37 @@ export async function createSandbox(
  * a discovered third-party/cloud launcher must be a candidate too. The launcher is consumed lazily
  * by sandboxedSpawn at tool-run time, so configuring it here (post atom-load, pre-serving) is in time.
  */
-export function finalizeSandboxLauncher(cfg: MonadConfig): void {
-  if (!cfg.agent.sandbox.confine) return; // createSandbox already set noneLauncher
+export async function finalizeSandboxLauncher(
+  cfg: MonadConfig,
+  platform: NodeJS.Platform = process.platform
+): Promise<void> {
+  if (!cfg.sandbox.confine) return; // createSandbox already set noneLauncher
 
-  const launcher = selectSandboxLauncher();
+  const backend = cfg.sandbox.backend;
+  let launcher = selectSandboxLauncher(platform, backend);
+  // Warm up the selected launcher (e.g. the docker runtime probe) before wiring it, so the heavy
+  // path pays detection cost only on opt-in.
+  await launcher.prepare?.();
+  // A heavy backend that turned out unavailable after its probe → fall back to the light OS sandbox
+  // rather than running a backend that can't spawn.
+  if (backend !== 'auto' && launcher.kind === backend && launcher.isAvailable?.() === false) {
+    logger.warn(
+      `monad: agent.sandbox.backend="${backend}" launcher is not available — falling back to the light OS sandbox.`
+    );
+    launcher = selectSandboxLauncher(platform, 'auto');
+  }
   configureSandboxLauncher(launcher);
-  const net = cfg.agent.sandbox.net;
+  const net = cfg.sandbox.net;
 
   if (launcher.kind === 'none') {
     // Fail closed: running unconfined under confine=true is a silent privilege-escalation path —
     // tool approval gates "whether to run" but not "as whom". Refuse to start unless the operator
     // has explicitly acknowledged this by setting agent.sandbox.allowUnconfinedExec=true.
-    if (!cfg.agent.sandbox.allowUnconfinedExec) {
+    if (!cfg.sandbox.allowUnconfinedExec) {
       throw new Error(
-        `monad: agent.sandbox.confine=true but no sandbox launcher is available for ${process.platform}.\n` +
-          'Install a sandbox launcher atom (e.g. monad-sandbox-seatbelt on macOS) or set\n' +
-          '  agent.sandbox.launcherPath in config.json to point at a custom launcher.\n' +
+        `monad: agent.sandbox.confine=true but no sandbox launcher confines ${process.platform}.\n` +
+          '  On Linux this usually means the native launcher binary is missing — install bubblewrap\n' +
+          '  (bwrap) or point agent.sandbox.launcherPath at the monad-sandbox-launcher build.\n' +
           'If you intentionally want children to run unconfined on the host, set\n' +
           '  agent.sandbox.allowUnconfinedExec=true in config.json.'
       );
@@ -162,7 +273,7 @@ export function finalizeSandboxLauncher(cfg: MonadConfig): void {
     logger.warn(
       `monad: sandbox confinement enabled but no launcher available for ${process.platform} — ` +
         'children run UNCONFINED on the host (allowUnconfinedExec=true). ' +
-        'Install a launcher atom to restore confinement.'
+        'Install bubblewrap or supply agent.sandbox.launcherPath to restore confinement.'
     );
     return;
   }

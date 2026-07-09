@@ -6,8 +6,8 @@ import type { ToolContext } from '../types.ts';
 
 import { realpath } from 'node:fs/promises';
 import { dirname, isAbsolute, resolve, win32 } from 'node:path';
+import { ToolSecurityError } from '@monad/sandbox';
 
-import { ToolSecurityError } from '../security.ts';
 import { approvalDeniedMessage, requestPathAccess } from './resource-approval.ts';
 
 export type PathAccessOperation = 'read' | 'write' | 'execute' | 'cwd';

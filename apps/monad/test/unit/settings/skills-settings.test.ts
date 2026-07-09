@@ -20,6 +20,7 @@ beforeEach(async () => {
     configs: dir,
     config: join(dir, 'config.json'),
     profile: join(dir, 'profile.json'),
+    sandbox: join(dir, 'sandbox.json'),
     approvals: join(dir, 'approvals.json'),
     credentials: join(dir, 'credentials'),
     auth: join(dir, 'credentials', 'auth.json'),

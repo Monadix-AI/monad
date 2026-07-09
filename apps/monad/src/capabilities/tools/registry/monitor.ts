@@ -2,11 +2,11 @@ import type { Tool, ToolContext } from '../types.ts';
 import type { ToolModule } from './contract.ts';
 
 import { stat } from 'node:fs/promises';
+import { assertPathWithinRoots, ToolSecurityError } from '@monad/sandbox';
 import { z } from 'zod';
 
 import { gatePathAccess } from '../approval/path-gate.ts';
 import { createSandboxBackends, resolveReal } from '../backends.ts';
-import { assertPathWithinRoots, ToolSecurityError } from '../security.ts';
 import { toolResult } from '../types.ts';
 import { watchBackgroundProcess } from './process.ts';
 

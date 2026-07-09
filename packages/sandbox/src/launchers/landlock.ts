@@ -10,11 +10,27 @@
 
 import type { SandboxLauncher } from '@monad/sdk-atom';
 
+import { logger } from '@monad/logger';
 import { defineLocalLauncher } from '@monad/sdk-atom';
 
 import { findNativeLauncherBin } from './native-path.ts';
 
 const LAUNCHER_BIN = 'monad-sandbox-launcher';
+
+// Landlock is an additive read-ALLOWLIST: it cannot redirect a read to a fake file (only bwrap's
+// mount namespace can) nor express "deny this one file, allow the rest". So a masked-file policy is
+// NOT enforced here — the real file stays readable in cleartext. Warn once rather than pretend it
+// is masked; the honest fix on this host is to install bwrap (auto-selected when present).
+let maskedFilesWarned = false;
+function warnMaskedFilesUnenforced(count: number): void {
+  if (maskedFilesWarned) return;
+  maskedFilesWarned = true;
+  logger.warn(
+    `monad: ${count} masked credential file(s) are NOT enforced under the Landlock launcher — ` +
+      'Landlock cannot redirect or deny a single file, so the file is readable in cleartext by the ' +
+      'sandboxed child. Install bwrap (auto-selected when on PATH) to enforce credential file masking.'
+  );
+}
 
 export const landlockLauncher: SandboxLauncher = defineLocalLauncher({
   kind: 'landlock',
@@ -27,6 +43,7 @@ export const landlockLauncher: SandboxLauncher = defineLocalLauncher({
   wrap(argv, policy) {
     const bin = findNativeLauncherBin(LAUNCHER_BIN);
     if (!bin) throw new Error(`${LAUNCHER_BIN} not found — cannot apply Linux (Landlock) sandbox`);
+    if (policy.maskedFiles?.length) warnMaskedFilesUnenforced(policy.maskedFiles.length);
     const args: string[] = [bin];
     for (const p of policy.writableRoots ?? []) args.push('--writable', p);
     // net:'none' is enforced in-kernel — the launcher's seccomp filter denies AF_INET/AF_INET6

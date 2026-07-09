@@ -52,11 +52,11 @@ function preview() {
         risk: 'low' as const
       },
       {
-        id: 'sandbox:agent.sandbox.mode',
+        id: 'sandbox:sandbox.mode',
         hash: 'hash-sandbox',
         category: 'sandbox' as const,
         source: 'config.toml:sandbox_mode',
-        target: 'agent.sandbox.mode',
+        target: 'sandbox.mode',
         action: 'add' as const,
         reason: 'maps sandbox',
         risk: 'high' as const
@@ -179,7 +179,7 @@ test('import settings --apply --all-safe sends allSafe without selected ids', as
     replace: false,
     select: [],
     allSafe: true,
-    hashes: { 'mcpServers:remote': 'hash-remote', 'sandbox:agent.sandbox.mode': 'hash-sandbox' }
+    hashes: { 'mcpServers:remote': 'hash-remote', 'sandbox:sandbox.mode': 'hash-sandbox' }
   });
 });
 

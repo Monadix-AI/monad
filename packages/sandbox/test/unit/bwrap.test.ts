@@ -2,7 +2,7 @@ import type { SandboxPolicy } from '@monad/sdk-atom';
 
 import { describe, expect, test } from 'bun:test';
 
-import { buildBwrapArgs } from '../../src/sandbox/bwrap.ts';
+import { buildBwrapArgs } from '../../src/launchers/bwrap.ts';
 
 function args(policy: Partial<SandboxPolicy>): string[] {
   return buildBwrapArgs(policy as SandboxPolicy);
@@ -107,5 +107,40 @@ describe('readDenyRoots', () => {
     const a = args({ readDenyRoots: [] });
     const permIdx = a.indexOf('000');
     expect(permIdx).toBe(-1);
+  });
+});
+
+// ── maskedFiles ──────────────────────────────────────────────────────────────
+
+describe('maskedFiles', () => {
+  test('each masked file emits --ro-bind <fake> <real>', () => {
+    const a = args({
+      writableRoots: ['/work'],
+      maskedFiles: [{ real: '/home/user/.netrc', fake: '/tmp/mask/0.fake' }]
+    });
+    const idx = a.findIndex((v, i) => v === '--ro-bind' && a[i + 1] === '/tmp/mask/0.fake');
+    expect(idx).toBeGreaterThanOrEqual(0);
+    expect(a[idx + 2]).toBe('/home/user/.netrc');
+  });
+
+  test('bind applies in unrestricted-write mode (fake shadows the catch-all --bind / /)', () => {
+    const a = args({
+      writableRoots: undefined,
+      maskedFiles: [{ real: '/home/user/.netrc', fake: '/tmp/mask/0.fake' }]
+    });
+    const bindIdx = a.findIndex((v, i) => v === '--bind' && a[i + 1] === '/' && a[i + 2] === '/');
+    const roIdx = a.findIndex((v, i) => v === '--ro-bind' && a[i + 1] === '/tmp/mask/0.fake');
+    expect(bindIdx).toBeGreaterThanOrEqual(0);
+    expect(roIdx).toBeGreaterThanOrEqual(0);
+    // The masking ro-bind must come AFTER the catch-all rw bind so it shadows the real file.
+    expect(roIdx).toBeGreaterThan(bindIdx);
+  });
+
+  test('masked-file bind precedes the /dev overlay (before --)', () => {
+    const a = args({ maskedFiles: [{ real: '/r', fake: '/f' }] });
+    const roIdx = a.findIndex((v, i) => v === '--ro-bind' && a[i + 1] === '/f');
+    const devIdx = a.indexOf('--dev');
+    expect(roIdx).toBeGreaterThanOrEqual(0);
+    expect(devIdx).toBeGreaterThan(roIdx);
   });
 });

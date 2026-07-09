@@ -1,7 +1,7 @@
 import type { MonadPaths } from '../../src/paths.ts';
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { readFile, rm } from 'node:fs/promises';
+import { mkdir, readFile, rm } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ModelProviderType } from '@monad/protocol';
@@ -19,6 +19,7 @@ import {
   monadSystemConfigSchema,
   PROFILE_SCHEMA_CONTENT,
   SCHEMA_CONTENT,
+  saveAll,
   saveAuth,
   saveProfile,
   saveSystemConfig,
@@ -41,6 +42,7 @@ function makePaths(base: string): MonadPaths {
     configs: join(base, 'configs'),
     config: join(base, 'configs', 'config.json'),
     profile: join(base, 'configs', 'profile.json'),
+    sandbox: join(base, 'configs', 'sandbox.json'),
     approvals: join(base, 'configs', 'approvals.json'),
     credentials,
     auth: join(credentials, 'auth.json'),
@@ -102,7 +104,7 @@ describe('initMonadHome', () => {
     const cfg = await loadAll(paths.config, paths.profile);
     expect(String(cfg?.principal.id)).toBe(result.principalId);
     expect(cfg?.principal.displayName).toBe('test-user');
-    expect(cfg?.agent.sandbox.mode).toBe('workspace');
+    expect(cfg?.sandbox.mode).toBe('workspace');
   });
 
   test('external agents are stored in system config and merged into loadAll', async () => {
@@ -375,7 +377,7 @@ describe('migrateConfig', () => {
     expect(cfg.version).toBe(1);
     expect(cfg.principal.id).toBe('prn_01TESTID0000');
     expect(cfg.model.default).toBe('anthropic/claude-sonnet-4-6');
-    expect(cfg.agent.sandbox.mode).toBe('workspace');
+    expect(cfg.sandbox.mode).toBe('workspace');
     // globalSandbox is additive — a pre-field config gets the default-filled value.
     expect(cfg.agent.globalSandbox).toEqual({ enabled: false, mode: 'workspace' });
   });
@@ -427,6 +429,51 @@ describe('migrateConfig', () => {
   //   expect(cfg.version).toBe(2);
   //   expect(cfg.model.primary).toBe('anthropic/claude-sonnet-4-6'); // renamed field
   // });
+});
+
+describe('sandbox.json decoupling', () => {
+  test('a non-default sandbox policy round-trips through its own file, out of config.json', async () => {
+    await mkdir(paths.configs, { recursive: true });
+    const cfg = createDefaultConfig('prn_test00000000', 'Tester');
+    cfg.sandbox.net = 'filtered';
+    cfg.sandbox.backend = 'docker';
+    cfg.sandbox.allowedDomains = ['example.com'];
+    cfg.agent.globalSandbox = { enabled: true, mode: 'home' };
+
+    await saveAll(paths.config, paths.profile, cfg);
+
+    // sandbox.json exists and holds the policy; config.json under `agent` has ONLY globalSandbox.
+    const onDiskSandbox = JSON.parse(await readFile(paths.sandbox, 'utf8'));
+    expect(onDiskSandbox.net).toBe('filtered');
+    expect(onDiskSandbox.backend).toBe('docker');
+
+    const onDiskConfig = JSON.parse(await readFile(paths.config, 'utf8'));
+    expect(onDiskConfig.agent.sandbox).toBeUndefined();
+    expect(onDiskConfig.sandbox).toBeUndefined();
+    expect(onDiskConfig.agent.globalSandbox).toEqual({ enabled: true, mode: 'home' });
+
+    const reloaded = await loadAll(paths.config, paths.profile);
+    expect(reloaded?.sandbox.net).toBe('filtered');
+    expect(reloaded?.sandbox.backend).toBe('docker');
+    expect(reloaded?.sandbox.allowedDomains).toEqual(['example.com']);
+    expect(reloaded?.agent.globalSandbox).toEqual({ enabled: true, mode: 'home' });
+  });
+
+  test('absent sandbox.json falls back to fail-safe schema defaults', async () => {
+    await initMonadHome(paths);
+    await rm(paths.sandbox, { force: true });
+    const cfg = await loadAll(paths.config, paths.profile);
+    expect(cfg?.sandbox.confine).toBe(true);
+    expect(cfg?.sandbox.net).toBe('unrestricted');
+    expect(cfg?.sandbox.backend).toBe('auto');
+  });
+
+  test('a present-but-malformed sandbox.json throws instead of silently defaulting', async () => {
+    await initMonadHome(paths);
+    // net must be one of none|unrestricted|filtered — an invalid value must fail closed.
+    await Bun.write(paths.sandbox, JSON.stringify({ mode: 'workspace', net: 'wide-open' }));
+    await expect(loadAll(paths.config, paths.profile)).rejects.toThrow(/sandbox\.json/);
+  });
 });
 
 describe('loadConfig', () => {

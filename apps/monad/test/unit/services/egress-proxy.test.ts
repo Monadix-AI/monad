@@ -1,6 +1,5 @@
 import { afterEach, expect, test } from 'bun:test';
-
-import { startEgressProxy } from '#/services/egress-proxy.ts';
+import { startEgressProxy } from '@monad/sandbox';
 
 // Raw sockets throughout: Bun's fetch bypasses the proxy for loopback (NO_PROXY), so it can't
 // exercise the proxy against a local origin. Driving the proxy directly is also deterministic.

@@ -1,6 +1,6 @@
 // e2e: the system-level sandbox-defaults REST surface over a real temp ~/.monad, exercised over BOTH
-// transports (TCP loopback + Unix socket). Sandbox lives in the SYSTEM slice, so edits persist to
-// config.json (via saveSystemConfig), like acp-agents — NOT profile.json.
+// transports (TCP loopback + Unix socket). The sandbox POLICY block persists to its own sandbox.json
+// (via saveSandbox); the global ceiling persists to config.json (via saveSystemConfig).
 
 import type { MonadPaths } from '@monad/home';
 import type { SandboxSettingsResponse } from '@monad/protocol';
@@ -71,10 +71,10 @@ async function run(t: TransportHandle, paths: MonadPaths): Promise<void> {
   });
   expect(body.globalSandbox).toEqual({ enabled: true, mode: 'workspace' });
 
-  // 3. persisted to config.json (SYSTEM slice), reflected on a fresh GET
+  // 3. policy persisted to sandbox.json, ceiling to config.json — both reflected on a fresh load
   const sys = await loadConfig(paths.config);
-  expect(sys?.agent.sandbox.mode).toBe('home');
-  expect(sys?.agent.sandbox.allowedDomains).toEqual(['example.com']);
+  expect(sys?.sandbox.mode).toBe('home');
+  expect(sys?.sandbox.allowedDomains).toEqual(['example.com']);
   expect(sys?.agent.globalSandbox).toEqual({ enabled: true, mode: 'workspace' });
   res = await t.fetch('/v1/settings/sandbox');
   expect(((await res.json()) as SandboxSettingsResponse).sandbox.hostExec).toBe('deny');
@@ -89,7 +89,7 @@ async function run(t: TransportHandle, paths: MonadPaths): Promise<void> {
 
 for (const kind of TRANSPORTS) {
   describe(`sandbox settings over ${kind}`, () => {
-    test('get/set persists to config.json', async () => {
+    test('get/set persists policy to sandbox.json and ceiling to config.json', async () => {
       const { dir, paths, app } = await setup();
       const t = serveTransport(kind, app);
       try {

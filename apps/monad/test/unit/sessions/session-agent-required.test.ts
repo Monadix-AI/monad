@@ -19,6 +19,7 @@ function makeTempPaths() {
     runtime: dir,
     configs: dir,
     profile: join(dir, 'profile.json'),
+    sandbox: join(dir, 'sandbox.json'),
     approvals: join(dir, 'approvals.json'),
     dbDir: dir,
     db: join(dir, 'db'),

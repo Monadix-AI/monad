@@ -7,10 +7,10 @@ import type { Tool, ToolContext } from '../types.ts';
 
 import { isAbsolute, resolve } from 'node:path';
 import { createLogger } from '@monad/logger';
+import { assertPathWithinRoots, ToolSecurityError } from '@monad/sandbox';
 import { z } from 'zod';
 
 import { gatePathAccess } from '../approval/path-gate.ts';
-import { assertPathWithinRoots, ToolSecurityError } from '../security.ts';
 import { toolResult } from '../types.ts';
 import {
   appendOutput,

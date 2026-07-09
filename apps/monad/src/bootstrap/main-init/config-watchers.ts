@@ -68,7 +68,11 @@ export async function createConfigWatchers(deps: {
   reloadService.register({
     name: 'settings',
     path: paths.home,
-    filter: (filename) => filename === 'config.json' || filename === 'profile.json' || filename === 'auth.json',
+    filter: (filename) =>
+      filename === 'config.json' ||
+      filename === 'profile.json' ||
+      filename === 'sandbox.json' ||
+      filename === 'auth.json',
     onChange: async () => {
       const [freshCfg, freshAuth] = await Promise.all([loadAll(paths.config, paths.profile), loadAuth(paths.auth)]);
       if (!freshCfg) return; // mid-write or temporarily absent — skip this tick

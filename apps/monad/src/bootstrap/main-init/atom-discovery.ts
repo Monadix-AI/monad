@@ -105,9 +105,9 @@ export async function createAtomDiscovery(deps: {
   void refreshWorkspaceExperienceSnapshot().catch((err) =>
     logger.warn(`monad: workspace experience warmup failed: ${err instanceof Error ? err.message : String(err)}`)
   );
-  // The sandbox launcher atoms have now registered (built-in pack + any discovered pack) — select
-  // the one that confines spawned children for this platform and wire it into the spawn seam.
-  finalizeSandboxLauncher(cfg);
+  // The sandbox launcher atoms have now registered (any discovered heavy pack) — select the light OS
+  // launcher (default) or the configured heavy backend and wire it into the spawn seam.
+  await finalizeSandboxLauncher(cfg);
 
   return {
     channelRegistry,

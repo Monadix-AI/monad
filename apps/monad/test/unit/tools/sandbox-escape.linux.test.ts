@@ -13,7 +13,7 @@ import { existsSync } from 'node:fs';
 import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { landlockLauncher } from '@monad/atoms/sandbox/landlock';
+import { landlockLauncher } from '@monad/sandbox/launchers/landlock';
 
 import { configureSandboxLauncher, noneLauncher, sandboxedSpawn } from '#/capabilities/tools';
 

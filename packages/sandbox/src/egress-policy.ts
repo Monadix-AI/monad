@@ -3,7 +3,7 @@
 // child's curl/pip/npm/git may actually reach. Centralizing the decision here means the proxy and
 // net_fetch share one notion of "allowed", layered on the existing SSRF guards (isBlockedIp).
 
-import { isBlockedIp } from '../security.ts';
+import { isBlockedIp } from './security.ts';
 
 export interface EgressPolicy {
   /**
@@ -12,6 +12,11 @@ export interface EgressPolicy {
    * passes the SSRF checks. An empty list denies everything.
    */
   allowedDomains: string[];
+  /**
+   * Denied destination domains, checked BEFORE the allowlist — a deny match wins even under `'*'`.
+   * Same subdomain-matching as `allowedDomains`. Use to carve exceptions out of a broad allow.
+   */
+  deniedDomains?: string[];
 }
 
 const IPV4 = /^\d+\.\d+\.\d+\.\d+$/;
@@ -40,6 +45,8 @@ export function isEgressAllowed(host: string, policy: EgressPolicy): boolean {
   if (h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.local')) return false;
   const isIpLiteral = IPV4.test(h) || h.includes(':');
   if (isIpLiteral && isBlockedIp(h)) return false;
+  // Deny wins over allow, even over '*': a broad allowlist can still be narrowed by an explicit deny.
+  if (policy.deniedDomains?.some((d) => domainMatches(h, d))) return false;
   if (policy.allowedDomains.includes('*')) return true;
   return policy.allowedDomains.some((d) => domainMatches(h, d));
 }

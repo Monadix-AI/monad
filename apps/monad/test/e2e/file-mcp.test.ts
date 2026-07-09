@@ -39,6 +39,7 @@ function makePaths(): MonadPaths {
     db: dev,
     config: dev,
     profile: dev,
+    sandbox: dev,
     approvals: dev,
     credentials: dev,
     auth: dev,

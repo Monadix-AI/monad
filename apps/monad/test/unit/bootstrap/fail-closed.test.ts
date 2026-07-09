@@ -14,12 +14,7 @@ import { createDefaultConfig, pathsForHome } from '@monad/home';
 
 import { createSandbox, finalizeSandboxLauncher } from '#/bootstrap/sandbox.ts';
 import { createTlsCert } from '#/bootstrap/tls.ts';
-import {
-  clearSandboxLaunchers,
-  configureSandboxLauncher,
-  noneLauncher,
-  registerSandboxLauncher
-} from '#/capabilities/tools';
+import { clearSandboxLaunchers, configureSandboxLauncher, noneLauncher } from '#/capabilities/tools';
 
 let tlsDir: string;
 beforeEach(async () => {
@@ -81,38 +76,42 @@ test('createTlsCert throws when cert generation fails (fail-closed)', async () =
 // ── sandbox fail-closed ──────────────────────────────────────────────────────────
 function sandboxConfig(over: { confine: boolean; allowUnconfinedExec?: boolean }): MonadConfig {
   const cfg = createDefaultConfig('prn_test00000000', 'Test');
-  cfg.agent.sandbox.confine = over.confine;
-  cfg.agent.sandbox.allowUnconfinedExec = over.allowUnconfinedExec ?? false;
+  cfg.sandbox.confine = over.confine;
+  cfg.sandbox.allowUnconfinedExec = over.allowUnconfinedExec ?? false;
   return cfg;
 }
 
-test('finalizeSandboxLauncher throws when confine=true but no launcher is available', () => {
-  // Registry is empty (cleared in beforeEach) → selectSandboxLauncher returns the none launcher.
-  expect(() => finalizeSandboxLauncher(sandboxConfig({ confine: true }))).toThrow(/no sandbox launcher is available/);
-});
+// 'freebsd' is not targeted by any light launcher, so auto resolves to noneLauncher deterministically
+// on every CI host (macOS/Linux/Windows) — the "no launcher available for this platform" case.
+const NO_LAUNCHER_PLATFORM = 'freebsd' as NodeJS.Platform;
 
-test('finalizeSandboxLauncher allows unconfined exec only when explicitly opted in', () => {
-  expect(() => finalizeSandboxLauncher(sandboxConfig({ confine: true, allowUnconfinedExec: true }))).not.toThrow();
-});
-
-test('finalizeSandboxLauncher does not throw when confinement is off', () => {
-  expect(() => finalizeSandboxLauncher(sandboxConfig({ confine: false }))).not.toThrow();
-});
-
-test('finalizeSandboxLauncher accepts an available launcher without opt-in', () => {
-  registerSandboxLauncher(
-    { kind: 'test-seatbelt', enforces: { readDeny: true, net: ['none', 'filtered', 'unrestricted'] } },
-    'builtin'
+test('finalizeSandboxLauncher throws when confine=true but no launcher is available', async () => {
+  await expect(finalizeSandboxLauncher(sandboxConfig({ confine: true }), NO_LAUNCHER_PLATFORM)).rejects.toThrow(
+    /no sandbox launcher confines/
   );
-  expect(() => finalizeSandboxLauncher(sandboxConfig({ confine: true }))).not.toThrow();
+});
+
+test('finalizeSandboxLauncher allows unconfined exec only when explicitly opted in', async () => {
+  await expect(
+    finalizeSandboxLauncher(sandboxConfig({ confine: true, allowUnconfinedExec: true }), NO_LAUNCHER_PLATFORM)
+  ).resolves.toBeUndefined();
+});
+
+test('finalizeSandboxLauncher does not throw when confinement is off', async () => {
+  await expect(finalizeSandboxLauncher(sandboxConfig({ confine: false }))).resolves.toBeUndefined();
+});
+
+test('finalizeSandboxLauncher accepts the light launcher on a supported platform without opt-in', async () => {
+  // macOS always has Seatbelt in the closed light set — auto selects it, no atom registration needed.
+  await expect(finalizeSandboxLauncher(sandboxConfig({ confine: true }), 'darwin')).resolves.toBeUndefined();
 });
 
 test('createSandbox boot sweep keeps Workplace Project sandbox roots alive', async () => {
   const home = await mkdtemp(join(tmpdir(), 'monad-sandbox-bootstrap-'));
   const paths = pathsForHome(home);
   const cfg = createDefaultConfig('prn_test00000000', 'Test');
-  cfg.agent.sandbox.mode = 'ephemeral';
-  cfg.agent.sandbox.confine = false;
+  cfg.sandbox.mode = 'ephemeral';
+  cfg.sandbox.confine = false;
 
   const sandboxDir = join(paths.cache, 'sandboxes');
   await mkdir(join(sandboxDir, 'ses_live00000000'), { recursive: true });

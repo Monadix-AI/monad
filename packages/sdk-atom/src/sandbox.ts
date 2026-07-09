@@ -24,6 +24,13 @@ export interface SandboxPolicy {
   /** Paths the child may NOT read even under allow-default — credential stores, SSH/cloud keys.
    *  Blocks the read-then-exfiltrate chain regardless of net mode. */
   readDenyRoots?: string[];
+  /** Masked credential files: bind `fake` read-only over `real` so the child reads a sentinel
+   *  instead of the secret, which the TLS-terminating egress proxy swaps back to the real value
+   *  only for the credential's injectHosts. A launcher that can REDIRECT a read (bwrap `--ro-bind`)
+   *  applies the bind; one that can only DENY (Seatbelt, AppContainer) degrades by adding `real` to
+   *  its read-deny set (file unreadable, not masked); one that can do neither (Landlock, Low-IL)
+   *  cannot enforce it and must warn — the file stays readable in cleartext. */
+  maskedFiles?: { real: string; fake: string }[];
   /** 'none' = no egress; { allowProxyPort } = only the local filtering proxy; 'unrestricted' = open. */
   net?: 'none' | { allowProxyPort: number } | 'unrestricted';
   /** The session this run belongs to. Local launchers that create per-session OS artifacts
@@ -100,6 +107,8 @@ export interface SandboxLauncher {
    *  remote instance per `SandboxSpawnOptions.sessionId` and reuses it across calls disposes it here.
    *  Optional: local launchers keep no per-session state. */
   disposeSession?(sessionId: string): void | Promise<void>;
+  /** Optional async warm-up run once for the SELECTED launcher before it is wired (e.g. a docker runtime probe). */
+  prepare?(): Promise<void>;
 }
 
 // The host's configured sandbox credential (a cloud launcher's API key), resolved from config at

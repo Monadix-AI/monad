@@ -15,17 +15,11 @@ import type { Tool } from '../types.ts';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import {
-  configureDockerImage,
-  detectDockerRuntime,
-  dockerLauncher,
-  dockerRuntimeAvailable,
-  e2bLauncher
-} from '@monad/atoms';
+import { detectDockerRuntime, dockerLauncher, dockerRuntimeAvailable, e2bLauncher } from '@monad/monad-power-pack';
+import { buildSandboxPolicy, configureSandboxBackendOptions, sandboxedSpawn, sandboxLauncher } from '@monad/sandbox';
 import { z } from 'zod';
 
 import { findGitBash } from '../backends.ts';
-import { buildSandboxPolicy, sandboxedSpawn, sandboxLauncher } from '../sandbox/spawn.ts';
 import { toolResult } from '../types.ts';
 
 const MAX_OUTPUT_BYTES = 1024 * 1024; // 1 MiB per stream
@@ -253,7 +247,9 @@ export function configureCodeExec(cfg: string | CodeExecConfig): void {
   }
   _codeExecBackend = cfg.backend;
   _e2bApiKey = cfg.e2bApiKey;
-  if (cfg.dockerImage) configureDockerImage(cfg.dockerImage);
+  // agent.tools.codeExecDocker.image is a code-exec-backend-specific override of the container image;
+  // when set it wins over agent.sandbox.dockerImage on the shared backend-options seam.
+  if (cfg.dockerImage) configureSandboxBackendOptions({ dockerImage: cfg.dockerImage });
 }
 
 /** Call once after config load to set the host-execution policy (agent.sandbox.hostExec). */
