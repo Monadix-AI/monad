@@ -1,11 +1,19 @@
 import type { ToolContext } from '../types.ts';
 
+import { createLogger } from '@monad/logger';
 import { buildSandboxPolicy, sandboxedPtySpawn, sandboxedSpawn, ToolSecurityError } from '@monad/sandbox';
 
 import { daemonChildProcesses } from '#/infra/daemon-child-processes.ts';
+import {
+  daemonTrackedSpawnOptions,
+  type SpawnSupervision,
+  supervisedSpawn,
+  timeoutWithEscalation
+} from '#/infra/spawn-supervisor.ts';
 import { shellArgv, signalProcessTree } from '../backends.ts';
 
 const MAX_BUFFER = 256 * 1024;
+const log = createLogger('tool:process');
 const ANSI_PATTERN_SOURCE =
   '[\\u001B\\u009B]' + '[[\\]()#;?]*' + '(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?' + '[0-9A-ORZcf-nqry=><~]';
 const ANSI_PATTERN = new RegExp(ANSI_PATTERN_SOURCE, 'g');
@@ -30,7 +38,8 @@ export interface ProcessHandle {
   exited: Promise<number>;
   stdout?: ReadableStream<Uint8Array>;
   stderr?: ReadableStream<Uint8Array>;
-  kill(): void;
+  supervision?: SpawnSupervision;
+  kill(reason?: 'manual' | 'shutdown'): void;
   signal(signal: ProcessSignal): void;
   write(input: string): void;
   resize?(cols: number, rows: number): void;
@@ -52,7 +61,6 @@ export interface ProcEntry {
   idleTimeoutMs?: number;
   idleTimer?: ReturnType<typeof setTimeout>;
   maxRuntimeMs?: number;
-  runtimeTimer?: ReturnType<typeof setTimeout>;
   status: 'running' | 'exited' | 'killed';
   exitCode: number | null;
   startedAt: string;
@@ -85,6 +93,13 @@ export interface ProcessSnapshotOptions {
 export interface PtyStartOptions {
   cols?: number;
   rows?: number;
+  maxRuntimeMs?: number;
+  signal?: AbortSignal;
+}
+
+export interface ProcessStartOptions {
+  maxRuntimeMs?: number;
+  signal?: AbortSignal;
 }
 
 // Background shell_exec spawns detached, making the child a process-group leader; the cross-platform
@@ -116,14 +131,8 @@ function clearIdleTimer(entry: ProcEntry): void {
   entry.idleTimer = undefined;
 }
 
-function clearRuntimeTimer(entry: ProcEntry): void {
-  if (entry.runtimeTimer) clearTimeout(entry.runtimeTimer);
-  entry.runtimeTimer = undefined;
-}
-
 export function clearTimers(entry: ProcEntry): void {
   clearIdleTimer(entry);
-  clearRuntimeTimer(entry);
 }
 
 export function resetIdleTimer(entry: ProcEntry): void {
@@ -132,24 +141,11 @@ export function resetIdleTimer(entry: ProcEntry): void {
   entry.idleTimer = setTimeout(() => {
     if (entry.status !== 'running') return;
     appendOutput(entry, 'stderr', `process killed after ${entry.idleTimeoutMs}ms idle timeout\n`);
-    entry.proc.kill();
+    entry.proc.kill('manual');
     entry.status = 'killed';
     entry.endedAt = new Date().toISOString();
     clearIdleTimer(entry);
   }, entry.idleTimeoutMs);
-}
-
-export function startRuntimeTimer(entry: ProcEntry): void {
-  if (!entry.maxRuntimeMs || entry.status !== 'running') return;
-  clearRuntimeTimer(entry);
-  entry.runtimeTimer = setTimeout(() => {
-    if (entry.status !== 'running') return;
-    appendOutput(entry, 'stderr', `process killed after ${entry.maxRuntimeMs}ms max runtime\n`);
-    entry.proc.kill();
-    entry.status = 'killed';
-    entry.endedAt = new Date().toISOString();
-    clearTimers(entry);
-  }, entry.maxRuntimeMs);
 }
 
 function sliceOutput(
@@ -228,23 +224,38 @@ export async function drain(stream: ReadableStream<Uint8Array>, append: (chunk: 
 }
 
 export function attachExit(entry: ProcEntry): void {
-  void entry.proc.exited.then((code) => {
+  void entry.proc.exited.then(async (code) => {
     clearTimers(entry);
     if (entry.status === 'running') {
-      entry.status = 'exited';
+      const result = await entry.proc.supervision?.result;
+      if (result?.exitReason === 'timeout') {
+        appendOutput(entry, 'stderr', `process killed after ${entry.maxRuntimeMs}ms max runtime\n`);
+        entry.status = 'killed';
+      } else if (result?.exitReason === 'abort') {
+        appendOutput(entry, 'stderr', 'process killed after session abort\n');
+        entry.status = 'killed';
+      } else if (result?.exitReason === 'manual' || result?.exitReason === 'shutdown') {
+        entry.status = 'killed';
+      } else {
+        entry.status = 'exited';
+      }
       entry.exitCode = code;
       entry.endedAt = new Date().toISOString();
     }
   });
 }
 
-function pipeHandle(proc: Sub): ProcessHandle {
+function pipeHandle(proc: Sub & { supervision?: SpawnSupervision }): ProcessHandle {
   return {
     pid: proc.pid,
     exited: proc.exited,
     stdout: proc.stdout as ReadableStream<Uint8Array>,
     stderr: proc.stderr as ReadableStream<Uint8Array>,
-    kill: () => killTree(proc),
+    supervision: proc.supervision,
+    kill: (reason = 'manual') => {
+      if (proc.supervision) proc.supervision.stop(reason, 'SIGTERM');
+      else killTree(proc);
+    },
     signal: (signal) => signalTree(proc, signal),
     write(input) {
       const stdin = proc.stdin;
@@ -256,15 +267,37 @@ function pipeHandle(proc: Sub): ProcessHandle {
   };
 }
 
-export function startPipeProcess(command: string, dir: string, ctx: ToolContext): ProcessHandle {
-  const proc = sandboxedSpawn(
+function processTimeout(maxRuntimeMs: number | undefined) {
+  return maxRuntimeMs === undefined ? undefined : timeoutWithEscalation(maxRuntimeMs);
+}
+
+export function startPipeProcess(
+  command: string,
+  dir: string,
+  ctx: ToolContext,
+  options: ProcessStartOptions = {}
+): ProcessHandle {
+  const policy = buildSandboxPolicy(ctx.sandboxRoots, [], ctx.sessionId);
+  const proc = supervisedSpawn(
     shellArgv(command),
     { cwd: dir, stdin: 'pipe', stdout: 'pipe', stderr: 'pipe', detached: true },
-    buildSandboxPolicy(ctx.sandboxRoots, [], ctx.sessionId),
-    { sessionId: ctx.sessionId }
+    {
+      ...daemonTrackedSpawnOptions({
+        event: 'tool.process_spawn',
+        log,
+        context: { sessionId: ctx.sessionId, mode: 'pipe' },
+        kill: (child, signal) => signalTree(child as Sub, signal as ProcessSignal),
+        trackLabel: 'tool:shell_exec:background',
+        tracker: daemonChildProcesses,
+        timeout: processTimeout(options.maxRuntimeMs),
+        abortSignal: options.signal,
+        abortKillSignal: 'SIGTERM'
+      }),
+      successLogLevel: 'trace',
+      spawn: ((argv, spawnOptions) =>
+        sandboxedSpawn(argv, spawnOptions, policy, { sessionId: ctx.sessionId })) as typeof Bun.spawn
+    }
   );
-  daemonChildProcesses.track(proc.pid, 'tool:shell_exec:background', () => killTree(proc));
-  void proc.exited.then(() => daemonChildProcesses.untrack(proc.pid));
   return pipeHandle(proc);
 }
 
@@ -277,7 +310,8 @@ export function startPtyProcess(
 ): ProcessHandle {
   const decoder = new TextDecoder();
   let pendingCR = false;
-  const proc = sandboxedPtySpawn(
+  const policy = buildSandboxPolicy(ctx.sandboxRoots, [], ctx.sessionId);
+  const proc = supervisedSpawn(
     shellArgv(command),
     {
       cwd: dir,
@@ -295,11 +329,25 @@ export function startPtyProcess(
         }
       }
     },
-    buildSandboxPolicy(ctx.sandboxRoots, [], ctx.sessionId),
-    { sessionId: ctx.sessionId }
+    {
+      ...daemonTrackedSpawnOptions({
+        event: 'tool.process_spawn',
+        log,
+        context: { sessionId: ctx.sessionId, mode: 'pty' },
+        kill: (child, signal) => signalTree(child as Sub, signal as ProcessSignal),
+        trackLabel: 'tool:shell_exec:background',
+        tracker: daemonChildProcesses,
+        timeout: processTimeout(options.maxRuntimeMs),
+        abortSignal: options.signal,
+        abortKillSignal: 'SIGTERM'
+      }),
+      successLogLevel: 'trace',
+      spawn: ((argv, options) =>
+        sandboxedPtySpawn(argv, options as Parameters<typeof sandboxedPtySpawn>[1], policy, {
+          sessionId: ctx.sessionId
+        })) as typeof Bun.spawn
+    }
   );
-  daemonChildProcesses.track(proc.pid, 'tool:shell_exec:background', () => killTree(proc));
-  void proc.exited.then(() => daemonChildProcesses.untrack(proc.pid));
   if (!proc.terminal) throw new ToolSecurityError('failed to start pty terminal');
   void proc.exited.then(() => {
     if (pendingCR) onData('\n');
@@ -307,13 +355,15 @@ export function startPtyProcess(
   return {
     pid: proc.pid,
     exited: proc.exited,
-    kill: () => {
+    supervision: proc.supervision,
+    kill: (reason = 'manual') => {
       try {
         proc.terminal?.close();
       } catch {
         /* already gone */
       }
-      killTree(proc);
+      if (proc.supervision) proc.supervision.stop(reason, 'SIGTERM');
+      else killTree(proc);
     },
     signal: (signal) => signalTree(proc, signal),
     write(input) {

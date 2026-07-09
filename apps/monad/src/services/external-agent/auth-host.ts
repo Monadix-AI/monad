@@ -19,6 +19,12 @@ import { newId } from '@monad/protocol';
 
 import { daemonChildProcesses } from '#/infra/daemon-child-processes.ts';
 import {
+  daemonTrackedSpawnOptions,
+  redactedSpawnArgv,
+  supervisedSpawn,
+  timeoutWithEscalation
+} from '#/infra/spawn-supervisor.ts';
+import {
   AUTH_RUNNING_TTL_MS,
   AUTH_STATUS_TIMEOUT_MS,
   AUTH_TERMINAL_TTL_MS,
@@ -197,32 +203,48 @@ export class ExternalAgentAuthHost {
     const decoder = createStreamingTextDecoder();
     let pendingCR = false;
     let proc: ExternalAgentProcess;
-    proc = Bun.spawn(launch.argv, {
-      cwd: launch.cwd,
-      env: await this.buildSpawnEnv(launch.env),
-      detached: true,
-      stdout: 'ignore',
-      stderr: 'ignore',
-      stdin: 'ignore',
-      terminal: {
-        cols: 100,
-        rows: 30,
-        data: (_terminal: ExternalAgentTerminal, data: Uint8Array) => {
-          const live = this.liveAuth.get(id);
-          if (!live) return;
-          let text = decoder.decode(data);
-          if (pendingCR) text = `\r${text}`;
-          pendingCR = text.endsWith('\r');
-          if (pendingCR) text = text.slice(0, -1);
-          text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-          if (!text) return;
-          live.outputSnapshot = appendBounded(live.outputSnapshot, text, MAX_OUTPUT_SNAPSHOT);
-          live.updatedAt = new Date().toISOString();
-          live.updatedAtMs = Date.now();
-          this.publishAuth(live);
+    proc = supervisedSpawn(
+      launch.argv,
+      {
+        cwd: launch.cwd,
+        env: await this.buildSpawnEnv(launch.env),
+        detached: true,
+        stdout: 'ignore',
+        stderr: 'ignore',
+        stdin: 'ignore',
+        terminal: {
+          cols: 100,
+          rows: 30,
+          data: (_terminal: ExternalAgentTerminal, data: Uint8Array) => {
+            const live = this.liveAuth.get(id);
+            if (!live) return;
+            let text = decoder.decode(data);
+            if (pendingCR) text = `\r${text}`;
+            pendingCR = text.endsWith('\r');
+            if (pendingCR) text = text.slice(0, -1);
+            text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+            if (!text) return;
+            live.outputSnapshot = appendBounded(live.outputSnapshot, text, MAX_OUTPUT_SNAPSHOT);
+            live.updatedAt = new Date().toISOString();
+            live.updatedAtMs = Date.now();
+            this.publishAuth(live);
+          }
         }
+      } as Bun.SpawnOptions.OptionsObject<'ignore', 'ignore', 'ignore'>,
+      {
+        ...daemonTrackedSpawnOptions({
+          event: 'external_agent.auth_spawn',
+          log: this.log,
+          context: { externalAgentAuthSessionId: id, agentName: agent.name, provider: agent.provider },
+          kill: (child, signal) => killExternalAgentProcess(child.pid, signal),
+          trackLabel: 'external-agent-auth',
+          tracker: {
+            track: (pid) => this.trackAuthProcess(pid),
+            untrack: (pid) => this.untrackAuthProcess(pid)
+          }
+        })
       }
-    } as Bun.SpawnOptions.OptionsObject<'ignore', 'ignore', 'ignore'>) as ExternalAgentProcess;
+    ) as ExternalAgentProcess;
 
     const live: LiveExternalAgentAuthSession = {
       id,
@@ -248,7 +270,7 @@ export class ExternalAgentAuthHost {
     this.liveAuth.set(id, live);
     // Awaited so the durable process registry is on disk before reporting the auth session as
     // started (crash-safety: a daemon restart right after this point can still find and reap it).
-    await this.trackAuthProcess(proc.pid);
+    await proc.supervision?.tracked;
     void proc.exited.then((code) => {
       const current = this.liveAuth.get(id);
       if (!current) return;
@@ -266,7 +288,6 @@ export class ExternalAgentAuthHost {
       current.updatedAt = new Date().toISOString();
       current.updatedAtMs = Date.now();
       current.exitedAt = current.updatedAt;
-      this.untrackAuthProcess(current.pid);
       this.publishAuth(current);
     });
     return authToView(live);
@@ -333,13 +354,13 @@ export class ExternalAgentAuthHost {
     } catch {
       /* already closed */
     }
-    live.kill('SIGTERM');
+    if (live.proc?.supervision) live.proc.supervision.stop('manual', 'SIGTERM');
+    else live.kill('SIGTERM');
     live.state = 'stopped';
     live.exitCode = null;
     live.updatedAt = new Date().toISOString();
     live.updatedAtMs = Date.now();
     live.exitedAt = live.updatedAt;
-    this.untrackAuthProcess(live.pid);
     this.publishAuth(live);
   }
 
@@ -354,19 +375,33 @@ export class ExternalAgentAuthHost {
         event: 'external_agent.auth_status',
         agentName: agent.name,
         provider: agent.provider,
-        argv: launch.argv,
+        argv: redactedSpawnArgv(launch.argv),
         cwd: launch.cwd
       },
       'native cli auth status probe'
     );
-    const proc = Bun.spawn(launch.argv, {
-      cwd: launch.cwd,
-      env: await this.buildSpawnEnv(launch.env),
-      detached: true,
-      stdin: 'ignore',
-      stdout: 'pipe',
-      stderr: 'pipe'
-    });
+    const proc = supervisedSpawn(
+      launch.argv,
+      {
+        cwd: launch.cwd,
+        env: await this.buildSpawnEnv(launch.env),
+        detached: true,
+        stdin: 'ignore',
+        stdout: 'pipe',
+        stderr: 'pipe'
+      },
+      {
+        ...daemonTrackedSpawnOptions({
+          event: 'external_agent.auth_status_spawn',
+          log: this.log,
+          context: { agentName: agent.name, provider: agent.provider },
+          timeout: timeoutWithEscalation(this.authStatusTimeoutMs),
+          kill: (child, signal) => killExternalAgentProcess(child.pid, signal),
+          trackLabel: 'external-agent-probe',
+          tracker: daemonChildProcesses
+        })
+      }
+    );
     const result = await collectProbeResult(proc, this.authStatusTimeoutMs, MAX_OUTPUT_SNAPSHOT);
     if (result.timedOut) {
       this.log.warn(
@@ -374,7 +409,7 @@ export class ExternalAgentAuthHost {
           event: 'external_agent.auth_status_timeout',
           agentName: agent.name,
           provider: agent.provider,
-          argv: launch.argv,
+          argv: redactedSpawnArgv(launch.argv),
           cwd: launch.cwd,
           timeoutMs: this.authStatusTimeoutMs,
           output: result.output
@@ -423,19 +458,33 @@ export class ExternalAgentAuthHost {
         event: 'external_agent.usage',
         agentName: agent.name,
         provider: agent.provider,
-        argv: launch.argv,
+        argv: redactedSpawnArgv(launch.argv),
         cwd: launch.cwd
       },
       'native cli usage probe'
     );
-    const proc = Bun.spawn(launch.argv, {
-      cwd: launch.cwd,
-      env: await this.buildSpawnEnv(launch.env),
-      detached: true,
-      stdin: 'ignore',
-      stdout: 'pipe',
-      stderr: 'pipe'
-    });
+    const proc = supervisedSpawn(
+      launch.argv,
+      {
+        cwd: launch.cwd,
+        env: await this.buildSpawnEnv(launch.env),
+        detached: true,
+        stdin: 'ignore',
+        stdout: 'pipe',
+        stderr: 'pipe'
+      },
+      {
+        ...daemonTrackedSpawnOptions({
+          event: 'external_agent.usage_spawn',
+          log: this.log,
+          context: { agentName: agent.name, provider: agent.provider },
+          timeout: timeoutWithEscalation(this.authStatusTimeoutMs),
+          kill: (child, signal) => killExternalAgentProcess(child.pid, signal),
+          trackLabel: 'external-agent-probe',
+          tracker: daemonChildProcesses
+        })
+      }
+    );
     const result = await collectProbeResult(proc, this.authStatusTimeoutMs, MAX_OUTPUT_SNAPSHOT);
     if (result.timedOut) {
       this.log.warn(
@@ -443,7 +492,7 @@ export class ExternalAgentAuthHost {
           event: 'external_agent.usage_timeout',
           agentName: agent.name,
           provider: agent.provider,
-          argv: launch.argv,
+          argv: redactedSpawnArgv(launch.argv),
           cwd: launch.cwd,
           timeoutMs: this.authStatusTimeoutMs,
           output: result.output

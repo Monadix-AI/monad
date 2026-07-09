@@ -1,4 +1,5 @@
-import { daemonChildProcesses } from '#/infra/daemon-child-processes.ts';
+import type { SpawnSupervision } from '#/infra/spawn-supervisor.ts';
+
 import { killExternalAgentProcess } from '#/services/external-agent/process.ts';
 import { createStreamingTextDecoder } from '#/services/external-agent/stream-decoder.ts';
 
@@ -28,11 +29,11 @@ export async function collectProbeResult(
     stdout: ReadableStream<Uint8Array> | undefined;
     stderr: ReadableStream<Uint8Array> | undefined;
     exited: Promise<number>;
+    supervision?: SpawnSupervision;
   },
   timeoutMs: number,
   maxBytes: number
 ): Promise<{ timedOut: boolean; code: number | null; output: string }> {
-  daemonChildProcesses.track(proc.pid, 'external-agent-probe', () => killExternalAgentProcess(proc.pid));
   const outputPromise = Promise.all([collectText(proc.stdout, maxBytes), collectText(proc.stderr, maxBytes)]).then(
     ([stdout, stderr]) => appendBounded(stdout, stderr, maxBytes)
   );
@@ -41,13 +42,18 @@ export async function collectProbeResult(
     done = true;
     return { timedOut: false as const, code };
   });
-  const timeout = Bun.sleep(timeoutMs).then(() => {
-    if (done) return { timedOut: false as const, code: null };
-    done = true;
-    killExternalAgentProcess(proc.pid, 'SIGTERM');
-    return { timedOut: true as const, code: null };
-  });
+  const timeout =
+    proc.supervision?.timeoutElapsed?.then(() => {
+      if (done) return { timedOut: false as const, code: null };
+      done = true;
+      return { timedOut: true as const, code: null };
+    }) ??
+    Bun.sleep(timeoutMs).then(() => {
+      if (done) return { timedOut: false as const, code: null };
+      done = true;
+      killExternalAgentProcess(proc.pid, 'SIGTERM');
+      return { timedOut: true as const, code: null };
+    });
   const result = await Promise.race([exited, timeout]);
-  daemonChildProcesses.untrack(proc.pid);
   return { ...result, output: await outputPromise.catch(() => '') };
 }

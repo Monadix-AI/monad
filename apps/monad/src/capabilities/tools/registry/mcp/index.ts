@@ -10,7 +10,8 @@ import type { Tool, ToolInputSchema, ToolResultPart } from '../../types.ts';
 import { createLogger } from '@monad/logger';
 import { z } from 'zod';
 
-import { daemonChildProcesses, killDaemonProcessTree } from '#/infra/daemon-child-processes.ts';
+import { daemonChildProcesses } from '#/infra/daemon-child-processes.ts';
+import { daemonTrackedProcessTreeSpawnOptions, supervisedSpawn } from '#/infra/spawn-supervisor.ts';
 import { toolResult } from '../../types.ts';
 
 const log = createLogger('mcp');
@@ -210,18 +211,28 @@ interface RpcChannel {
 
 function createStdioChannel(spec: McpStdioSpec): RpcChannel {
   const timeoutMs = spec.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
-  const proc = Bun.spawn([spec.command, ...(spec.args ?? [])], {
-    cwd: spec.cwd,
-    // Inherit the daemon env and layer spec.env on top — a trimmed env breaks node/npx
-    // resolution and Windows processes that need SystemRoot/PATHEXT.
-    env: { ...Bun.env, ...spec.env },
-    detached: true,
-    stdin: 'pipe',
-    stdout: 'pipe',
-    stderr: 'pipe'
-  });
-  daemonChildProcesses.track(proc.pid, 'mcp:stdio');
-  void proc.exited.then(() => daemonChildProcesses.untrack(proc.pid));
+  const proc = supervisedSpawn(
+    [spec.command, ...(spec.args ?? [])],
+    {
+      cwd: spec.cwd,
+      // Inherit the daemon env and layer spec.env on top — a trimmed env breaks node/npx
+      // resolution and Windows processes that need SystemRoot/PATHEXT.
+      env: { ...Bun.env, ...spec.env },
+      detached: true,
+      stdin: 'pipe',
+      stdout: 'pipe',
+      stderr: 'pipe'
+    },
+    {
+      ...daemonTrackedProcessTreeSpawnOptions({
+        event: 'mcp.stdio_spawn',
+        log,
+        context: { serverName: spec.name },
+        trackLabel: 'mcp:stdio',
+        tracker: daemonChildProcesses
+      })
+    }
+  );
 
   let nextId = 1;
   const pending = new Map<
@@ -295,9 +306,8 @@ function createStdioChannel(spec: McpStdioSpec): RpcChannel {
         w.reject(new McpError('connection closed'));
       }
       pending.clear();
-      killDaemonProcessTree(proc.pid);
+      proc.supervision.stop('manual', 'SIGTERM');
       await proc.exited;
-      daemonChildProcesses.untrack(proc.pid);
     }
   };
 }

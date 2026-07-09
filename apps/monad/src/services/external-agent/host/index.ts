@@ -553,8 +553,11 @@ export class ExternalAgentHost {
     live.adapter.stop(live);
     // cli-oneshot has no persistent proc; kill any in-flight per-turn process instead.
     if (live.oneshotTurnProc) {
-      killExternalAgentProcess(live.oneshotTurnProc.pid);
-      this.processLifecycle.untrack(live.oneshotTurnProc.pid);
+      if (live.oneshotTurnProc.supervision) live.oneshotTurnProc.supervision.stop('manual', 'SIGTERM');
+      else {
+        killExternalAgentProcess(live.oneshotTurnProc.pid);
+        this.processLifecycle.untrack(live.oneshotTurnProc.pid);
+      }
       live.oneshotTurnProc = undefined;
     }
     this.outputPipeline.flushSnapshot(id);
@@ -563,8 +566,11 @@ export class ExternalAgentHost {
     if (row?.runtimeRole === 'managed-project-agent')
       cleanupManagedProjectRuntimeToken(this.managedRuntimeWorkspace(row));
     if (live.proc) {
-      killExternalAgentProcess(live.proc.pid);
-      this.processLifecycle.untrack(live.proc.pid);
+      if (live.proc.supervision) live.proc.supervision.stop('manual', 'SIGTERM');
+      else {
+        killExternalAgentProcess(live.proc.pid);
+        this.processLifecycle.untrack(live.proc.pid);
+      }
     }
     this.outputPipeline.dropStructuredBuffer(id);
     this.appServerConnections.unlinkSocket(live.appServerSocketPath);

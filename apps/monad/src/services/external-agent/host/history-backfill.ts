@@ -3,7 +3,10 @@ import type { ExternalAgentProcess } from '#/services/external-agent/runtime-typ
 import type { ExternalAgentProviderAdapter } from '#/services/external-agent/types.ts';
 import type { ExternalAgentSessionRow } from '#/store/db/index.ts';
 
+import { createLogger } from '@monad/logger';
+
 import { daemonChildProcesses } from '#/infra/daemon-child-processes.ts';
+import { daemonTrackedSpawnOptions, supervisedSpawn, timeoutWithEscalation } from '#/infra/spawn-supervisor.ts';
 import { connectAppServerStdio } from '#/services/external-agent/app-server-stdio.ts';
 import { MAX_OUTPUT_SNAPSHOT } from '#/services/external-agent/constants.ts';
 import { HISTORY_BACKFILL_TIMEOUT_MS } from '#/services/external-agent/host/host-constants.ts';
@@ -11,6 +14,8 @@ import { buildExternalAgentLaunch, resolveExternalAgentLaunchCommand } from '#/s
 import { killExternalAgentProcess } from '#/services/external-agent/process.ts';
 import { createStreamingTextDecoder } from '#/services/external-agent/stream-decoder.ts';
 import { externalAgentOutputEventSchema } from '#/services/external-agent/types.ts';
+
+const log = createLogger('external-agent');
 
 export async function providerHistoryOutputFromLocal(
   row: ExternalAgentSessionRow,
@@ -55,16 +60,33 @@ export async function providerHistoryOutputViaCli(
   );
   if (launch.launchMode !== 'app-server') return null;
   const spawnEnv = await helpers.buildSpawnEnv(launch.env);
-  const proc = Bun.spawn(launch.argv, {
-    cwd: launch.cwd,
-    env: spawnEnv,
-    detached: true,
-    stdin: 'pipe',
-    stdout: 'pipe',
-    stderr: 'pipe'
-  }) as ExternalAgentProcess;
-  daemonChildProcesses.track(proc.pid, 'external-agent-history', () => killExternalAgentProcess(proc.pid));
-  void proc.exited.then(() => daemonChildProcesses.untrack(proc.pid));
+  const proc = supervisedSpawn(
+    launch.argv,
+    {
+      cwd: launch.cwd,
+      env: spawnEnv,
+      detached: true,
+      stdin: 'pipe',
+      stdout: 'pipe',
+      stderr: 'pipe'
+    },
+    {
+      ...daemonTrackedSpawnOptions({
+        event: 'external_agent.history_spawn',
+        log,
+        context: {
+          sessionId: row.transcriptTargetId,
+          externalAgentSessionId: row.id,
+          agentName: row.agentName,
+          provider: row.provider
+        },
+        timeout: timeoutWithEscalation(HISTORY_BACKFILL_TIMEOUT_MS),
+        kill: (child, signal) => killExternalAgentProcess(child.pid, signal),
+        trackLabel: 'external-agent-history',
+        tracker: daemonChildProcesses
+      })
+    }
+  ) as ExternalAgentProcess;
   let requestSeq = 0;
   let settled = false;
   let expectedResponseId: string | null = null;
@@ -82,16 +104,14 @@ export async function providerHistoryOutputViaCli(
     const finish = (output: string | null): void => {
       if (settled) return;
       settled = true;
-      clearTimeout(timeout);
       helpers.dropStructuredBuffer(historyId);
       try {
         void proc.stdin?.end?.();
       } catch {}
-      killExternalAgentProcess(proc.pid);
-      daemonChildProcesses.untrack(proc.pid);
+      proc.supervision?.stop('manual', 'SIGTERM');
       resolve(output);
     };
-    const timeout = setTimeout(() => finish(null), HISTORY_BACKFILL_TIMEOUT_MS);
+    void proc.supervision?.timeoutElapsed?.then(() => finish(null));
     void (async () => {
       try {
         for await (const data of proc.stdout ?? []) {

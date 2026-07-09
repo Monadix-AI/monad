@@ -6,6 +6,9 @@ import type { ExternalAgentLaunchSpec, ExternalAgentProviderAdapter } from '#/se
 import type { ExternalAgentTargetId } from '#/store/db/external-agent-sessions.ts';
 import type { ExternalAgentSessionRow, Store } from '#/store/db/index.ts';
 
+import { createLogger } from '@monad/logger';
+
+import { daemonTrackedSpawnOptions, supervisedSpawn } from '#/infra/spawn-supervisor.ts';
 import { BoundedOutputBuffer } from '#/services/external-agent/bounded-output-buffer.ts';
 import { MAX_OUTPUT_SNAPSHOT } from '#/services/external-agent/constants.ts';
 import { ExternalAgentEventLog } from '#/services/external-agent/host/event-log.ts';
@@ -13,6 +16,8 @@ import { toView } from '#/services/external-agent/host/host-helpers.ts';
 import { ExternalAgentOutputPipeline } from '#/services/external-agent/host/output-pipeline.ts';
 import { killExternalAgentProcess } from '#/services/external-agent/process.ts';
 import { createStreamingTextDecoder } from '#/services/external-agent/stream-decoder.ts';
+
+const log = createLogger('external-agent');
 
 export interface ExternalAgentOneshotRunnerContext {
   live: Map<string, LiveExternalAgentSession>;
@@ -91,7 +96,9 @@ export class ExternalAgentOneshotRunner {
       nextRequestId: () => 0,
       kill: (signal) => {
         const l = this.ctx.live.get(id);
-        if (l?.oneshotTurnProc) killExternalAgentProcess(l.oneshotTurnProc.pid, signal);
+        if (!l?.oneshotTurnProc) return;
+        if (l.oneshotTurnProc.supervision) l.oneshotTurnProc.supervision.stop('manual', signal ?? 'SIGTERM');
+        else killExternalAgentProcess(l.oneshotTurnProc.pid, signal);
       }
     };
     this.ctx.live.set(id, live);
@@ -122,14 +129,35 @@ export class ExternalAgentOneshotRunner {
     const spawnEnv = await this.ctx.buildSpawnEnv(spec.env);
     let proc: ExternalAgentProcess;
     try {
-      proc = Bun.spawn([...spec.argv, ...turnArgs], {
-        cwd: spec.cwd,
-        env: spawnEnv,
-        detached: true,
-        stdin: 'ignore',
-        stdout: 'pipe',
-        stderr: 'pipe'
-      }) as ExternalAgentProcess;
+      proc = supervisedSpawn(
+        [...spec.argv, ...turnArgs],
+        {
+          cwd: spec.cwd,
+          env: spawnEnv,
+          detached: true,
+          stdin: 'ignore',
+          stdout: 'pipe',
+          stderr: 'pipe'
+        },
+        {
+          ...daemonTrackedSpawnOptions({
+            event: 'external_agent.oneshot_spawn',
+            log,
+            context: {
+              sessionId: live.transcriptTargetId,
+              externalAgentSessionId: live.id,
+              agentName: live.agentName,
+              provider: live.provider
+            },
+            kill: (child, signal) => killExternalAgentProcess(child.pid, signal),
+            trackLabel: 'external-agent',
+            tracker: {
+              track: (pid) => this.ctx.trackProcess(pid),
+              untrack: (pid) => this.ctx.untrackProcess(pid)
+            }
+          })
+        }
+      ) as ExternalAgentProcess;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.ctx.outputPipeline.output(live.transcriptTargetId, live.id, message, 'stderr', live.adapter);
@@ -137,7 +165,7 @@ export class ExternalAgentOneshotRunner {
       return;
     }
     live.oneshotTurnProc = proc;
-    this.ctx.trackProcess(proc.pid);
+    await proc.supervision?.tracked;
     // Surface BOTH streams into the transcript (stderr carries a provider's real errors), and await both
     // drains so all output is emitted before the turn is considered done.
     const pump = (stream: ReadableStream<Uint8Array> | undefined, name: 'stdout' | 'stderr'): Promise<void> => {
@@ -155,7 +183,6 @@ export class ExternalAgentOneshotRunner {
     const drains = Promise.all([pump(proc.stdout, 'stdout'), pump(proc.stderr, 'stderr')]);
     const code = await proc.exited;
     await drains;
-    this.ctx.untrackProcess(proc.pid);
     if (live.oneshotTurnProc === proc) live.oneshotTurnProc = undefined;
     this.ctx.outputPipeline.flushSnapshot(live.id);
     if (code !== 0) {

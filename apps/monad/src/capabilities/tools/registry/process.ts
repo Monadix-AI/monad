@@ -26,7 +26,6 @@ import {
   snapshot,
   startPipeProcess,
   startPtyProcess,
-  startRuntimeTimer,
   stripAnsi,
   type TerminalMode
 } from './process-runtime.ts';
@@ -73,7 +72,7 @@ type BackgroundProcessWatchResult = ProcessSnapshot & {
 };
 
 process.on('exit', () => {
-  for (const entry of registry.values()) entry.proc.kill();
+  for (const entry of registry.values()) entry.proc.kill('shutdown');
 });
 
 // Owner mismatch returns the SAME error as a missing id: a session must not be able to
@@ -167,7 +166,7 @@ export async function startBackgroundProcess(
           stdoutChunks.push(chunk);
         }
       },
-      { cols, rows }
+      { cols, rows, maxRuntimeMs, signal: runCtx.signal }
     );
   let started: ProcessHandle;
   if (mode === 'pty') {
@@ -181,10 +180,10 @@ export async function startBackgroundProcess(
         'pty terminal unavailable — falling back to pipe mode'
       );
       mode = 'pipe';
-      started = startPipeProcess(command, dir, runCtx);
+      started = startPipeProcess(command, dir, runCtx, { maxRuntimeMs, signal: runCtx.signal });
     }
   } else {
-    started = startPipeProcess(command, dir, runCtx);
+    started = startPipeProcess(command, dir, runCtx, { maxRuntimeMs, signal: runCtx.signal });
   }
   const id = `proc_${crypto.randomUUID()}`;
   entry = {
@@ -225,7 +224,6 @@ export async function startBackgroundProcess(
     });
   }
   resetIdleTimer(entry);
-  startRuntimeTimer(entry);
   attachExit(entry);
 
   return {
@@ -251,7 +249,7 @@ export function clearProcessesForSession(sessionId: string): void {
   for (const [id, e] of registry) {
     if (e.ownerSessionId !== sessionId) continue;
     clearTimers(e);
-    e.proc.kill();
+    e.proc.kill('shutdown');
     registry.delete(id);
   }
 }
@@ -260,7 +258,7 @@ export function clearProcessesForSession(sessionId: string): void {
 export function clearProcesses(): void {
   for (const e of registry.values()) {
     clearTimers(e);
-    e.proc.kill();
+    e.proc.kill('shutdown');
   }
   registry.clear();
 }
@@ -365,7 +363,7 @@ function listProcesses(ctx: ToolContext, status?: ProcEntry['status']): ProcessL
 function stopProcess(id: string, ctx: ToolContext): void {
   const e = getEntry(id, ctx);
   if (e.status !== 'running') return;
-  e.proc.kill();
+  e.proc.kill('manual');
   e.status = 'killed';
   e.endedAt = new Date().toISOString();
   clearTimers(e);

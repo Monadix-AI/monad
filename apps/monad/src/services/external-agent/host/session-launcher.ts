@@ -17,6 +17,7 @@ import { dirname, isAbsolute } from 'node:path';
 import { resolveDaemonUrl } from '@monad/home';
 import { newId } from '@monad/protocol';
 
+import { daemonTrackedSpawnOptions, redactedSpawnArgv, supervisedSpawn } from '#/infra/spawn-supervisor.ts';
 import { connectAppServerStdio } from '#/services/external-agent/app-server-stdio.ts';
 import { connectAppServerUnix } from '#/services/external-agent/app-server-unix.ts';
 import {
@@ -253,7 +254,7 @@ export class ExternalAgentSessionLauncher {
         externalAgentSessionId: id,
         agentName: runtimeAgentName,
         provider: agent.provider,
-        argv: launch.argv,
+        argv: redactedSpawnArgv(launch.argv),
         cwd: launch.cwd,
         launchMode: launch.launchMode,
         providerSessionRef: args.providerSessionRef ?? null
@@ -284,38 +285,78 @@ export class ExternalAgentSessionLauncher {
     let isAppServerWs = launch.launchMode === 'app-server' && launch.appServerTransport === 'ws';
     let isAppServerUnix = launch.launchMode === 'app-server' && launch.appServerTransport === 'unix';
     let isAppServerSocket = isAppServerWs || isAppServerUnix;
+    const spawnLogContext = () => ({
+      sessionId: args.transcriptTargetId,
+      externalAgentSessionId: id,
+      agentName: runtimeAgentName,
+      provider: agent.provider,
+      launchMode: launch.launchMode,
+      appServerTransport: launch.appServerTransport ?? null
+    });
     const spawnPipeMode = (): ExternalAgentProcess =>
-      Bun.spawn(launch.argv, {
-        cwd: launch.cwd,
-        env: spawnEnv,
-        detached: true,
-        stdin: isAppServerSocket ? 'ignore' : 'pipe',
-        stdout: 'pipe',
-        stderr: 'pipe'
-      }) as ExternalAgentProcess;
+      supervisedSpawn(
+        launch.argv,
+        {
+          cwd: launch.cwd,
+          env: spawnEnv,
+          detached: true,
+          stdin: isAppServerSocket ? 'ignore' : 'pipe',
+          stdout: 'pipe',
+          stderr: 'pipe'
+        },
+        {
+          ...daemonTrackedSpawnOptions({
+            event: 'external_agent.spawn',
+            log: this.ctx.log,
+            context: spawnLogContext(),
+            kill: (child, signal) => killExternalAgentProcess(child.pid, signal),
+            trackLabel: 'external-agent',
+            tracker: {
+              track: (pid) => this.ctx.trackProcess(pid),
+              untrack: (pid) => this.ctx.untrackProcess(pid)
+            }
+          })
+        }
+      ) as ExternalAgentProcess;
     try {
       if (launch.launchMode === 'pty') {
         try {
-          proc = Bun.spawn(launch.argv, {
-            cwd: launch.cwd,
-            env: spawnEnv,
-            detached: true,
-            stdout: 'ignore',
-            stderr: 'ignore',
-            stdin: 'ignore',
-            terminal: {
-              cols: 100,
-              rows: 30,
-              data: (_terminal: ExternalAgentTerminal, data: Uint8Array) => {
-                let text = decoder.decode(data);
-                if (pendingCR) text = `\r${text}`;
-                pendingCR = text.endsWith('\r');
-                if (pendingCR) text = text.slice(0, -1);
-                text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-                if (text) this.ctx.outputPipeline.output(args.transcriptTargetId, id, text, 'pty', adapter);
+          proc = supervisedSpawn(
+            launch.argv,
+            {
+              cwd: launch.cwd,
+              env: spawnEnv,
+              detached: true,
+              stdout: 'ignore',
+              stderr: 'ignore',
+              stdin: 'ignore',
+              terminal: {
+                cols: 100,
+                rows: 30,
+                data: (_terminal: ExternalAgentTerminal, data: Uint8Array) => {
+                  let text = decoder.decode(data);
+                  if (pendingCR) text = `\r${text}`;
+                  pendingCR = text.endsWith('\r');
+                  if (pendingCR) text = text.slice(0, -1);
+                  text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+                  if (text) this.ctx.outputPipeline.output(args.transcriptTargetId, id, text, 'pty', adapter);
+                }
               }
+            } as Bun.SpawnOptions.OptionsObject<'ignore', 'ignore', 'ignore'>,
+            {
+              ...daemonTrackedSpawnOptions({
+                event: 'external_agent.spawn',
+                log: this.ctx.log,
+                context: spawnLogContext(),
+                kill: (child, signal) => killExternalAgentProcess(child.pid, signal),
+                trackLabel: 'external-agent',
+                tracker: {
+                  track: (pid) => this.ctx.trackProcess(pid),
+                  untrack: (pid) => this.ctx.untrackProcess(pid)
+                }
+              })
             }
-          } as Bun.SpawnOptions.OptionsObject<'ignore', 'ignore', 'ignore'>) as ExternalAgentProcess;
+          ) as ExternalAgentProcess;
         } catch (ptyError) {
           // Bun's pty (`terminal:`) needs a working POSIX pty or ConPTY; hosts where that's
           // unavailable (older Windows, some sandboxes) throw here. Degrade to a non-interactive
@@ -445,13 +486,15 @@ export class ExternalAgentSessionLauncher {
       snapshotFlushTimer: null,
       nextRequestId: () => requestSeq++,
       kill: (signal) => {
-        if (live.proc) killExternalAgentProcess(live.proc.pid, signal);
+        if (!live.proc) return;
+        if (live.proc.supervision) live.proc.supervision.stop('manual', signal ?? 'SIGTERM');
+        else killExternalAgentProcess(live.proc.pid, signal);
       }
     };
     this.ctx.live.set(id, live);
     // Awaited so the durable process registry is on disk before the caller reports the session as
     // started (crash-safety: a daemon restart right after this point can still find and reap it).
-    await this.ctx.trackProcess(proc.pid);
+    await proc.supervision?.tracked;
     const waitForAppServerStartup =
       launch.launchMode === 'app-server'
         ? new Promise<string>((resolve, reject) => {
@@ -593,7 +636,6 @@ export class ExternalAgentSessionLauncher {
         this.ctx.outputPipeline.flushSnapshot(id);
         this.ctx.live.delete(id);
         if (runtimeRole === 'managed-project-agent' && managed) cleanupManagedProjectRuntimeToken(managed.workspace);
-        this.ctx.untrackProcess(runtimeProc.pid);
         this.ctx.outputPipeline.dropStructuredBuffer(id);
         this.ctx.appServerConnections.unlinkSocket(appServerSocketPath);
         const exitedAt = new Date().toISOString();
@@ -638,13 +680,12 @@ export class ExternalAgentSessionLauncher {
           isAppServerUnix = launch.launchMode === 'app-server' && launch.appServerTransport === 'unix';
           isAppServerSocket = isAppServerWs || isAppServerUnix;
           const nextProc = spawnPipeMode();
-          await this.ctx.trackProcess(nextProc.pid);
+          await nextProc.supervision?.tracked;
           attachExitHandler(nextProc);
           try {
             await attachRuntimeStreams(nextProc);
           } catch (error) {
-            this.ctx.untrackProcess(nextProc.pid);
-            killExternalAgentProcess(nextProc.pid);
+            nextProc.supervision?.stop('manual', 'SIGTERM');
             throw error;
           }
           live.suspended = false;
@@ -670,10 +711,9 @@ export class ExternalAgentSessionLauncher {
         live.startup = undefined;
         if (runtimeRole === 'managed-project-agent' && managed) cleanupManagedProjectRuntimeToken(managed.workspace);
         this.ctx.live.delete(id);
-        this.ctx.untrackProcess(proc.pid);
         this.ctx.outputPipeline.dropStructuredBuffer(id);
         this.ctx.appServerConnections.unlinkSocket(appServerSocketPath);
-        killExternalAgentProcess(proc.pid);
+        proc.supervision?.stop('manual', 'SIGTERM');
         const failedAt = new Date().toISOString();
         this.ctx.deps.store.upsertExternalAgentSession({
           ...row,

@@ -311,6 +311,24 @@ test('max runtime kills a long-running process', async () => {
   );
   const r = await waitProcess({ id, timeoutMs: 1000 }, ctx);
   expect(r.status).toBe('killed');
+  expect(r.stderr).toContain('max runtime');
+});
+
+test('session abort kills a background process', async () => {
+  const controller = new AbortController();
+  const abortCtx: ToolContext = { ...ctx, signal: controller.signal };
+  const { id } = await startProcess(
+    {
+      command: 'bun -e "setInterval(() => console.log(Date.now()), 10)"',
+      terminalMode: 'pipe'
+    },
+    abortCtx
+  );
+
+  controller.abort();
+  const r = await waitProcess({ id, timeoutMs: 1000 }, ctx);
+  expect(r.status).toBe('killed');
+  expect(r.stderr).toContain('session abort');
 });
 
 test.skipIf(process.platform === 'win32')('start can set initial pty size and resize can change it', async () => {
