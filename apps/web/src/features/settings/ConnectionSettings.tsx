@@ -20,7 +20,21 @@ function sleep(ms: number): Promise<void> {
 async function waitForHttpsReady(settings: NetworkSettings, target: URL): Promise<void> {
   const fallback = localHttpFallbackUrl(settings);
   if (!fallback) {
-    await sleep(750);
+    // No HTTP endpoint to health-poll. Best-effort poll the HTTPS target itself (only
+    // succeeds once its listener is up AND the self-signed cert is already trusted), then
+    // redirect regardless after a grace window so a slow openssl cert-gen doesn't strand the
+    // user on a refused connection. The redirect itself surfaces the cert prompt.
+    const targetHealth = new URL('/health', target).toString();
+    const deadline = Date.now() + 4000;
+    while (Date.now() < deadline) {
+      try {
+        const res = await fetch(targetHealth, { cache: 'no-store' });
+        if (res.ok) return;
+      } catch {
+        // listener not up yet, or cert not yet trusted — keep waiting
+      }
+      await sleep(300);
+    }
     return;
   }
 

@@ -20,6 +20,7 @@ import {
   validateDaemonNetworkSecurity
 } from '@monad/home';
 
+import { resolveTlsSetupForNetwork } from '#/bootstrap/tls.ts';
 import { HandlerError } from '#/handlers/handler-error.ts';
 
 type ProbeFetch = (input: Request | URL | string, init?: RequestInit) => Promise<Response>;
@@ -120,6 +121,17 @@ export function createNetworkModule(paths: MonadPaths, configBus?: ConfigBus, de
       });
     } catch (err) {
       throw new HandlerError('invalid', err instanceof Error ? err.message : String(err));
+    }
+
+    // Validate TLS can actually be set up BEFORE persisting https.enabled=true. Otherwise the
+    // config saves as HTTPS-enabled but the hot-reload apply (and next boot) fails to make a
+    // cert, leaving the daemon in a broken/fail-closed state with no rollback.
+    if (req.https?.enabled === true) {
+      try {
+        await resolveTlsSetupForNetwork({ https: cfg.network.https, tlsDir: paths.tls });
+      } catch (err) {
+        throw new HandlerError('invalid', `HTTPS unavailable: ${err instanceof Error ? err.message : String(err)}`);
+      }
     }
 
     await saveSystemConfig(paths.config, cfg);
