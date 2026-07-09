@@ -40,6 +40,22 @@ describe('SSRF: isBlockedIp / assertUrlAllowed — cloud-metadata and loopback o
     expect(() => assertUrlAllowed('http://nas.local/')).toThrow(ToolSecurityError);
   });
 
+  test('non-canonical IPv6 loopback/mapped literals are blocked (expansion must not dodge isBlockedIp)', () => {
+    // Expanded ::1 — the SOCKS5 ATYP_IPV6 handler builds exactly this string from the 16 bytes.
+    expect(isBlockedIp('0:0:0:0:0:0:0:1')).toBe(true);
+    // IPv4-compatible embedded loopback (::127.0.0.1) and its expanded form.
+    expect(isBlockedIp('::127.0.0.1')).toBe(true);
+    // Expanded IPv4-mapped loopback (the ^::ffff: regexes never matched this form).
+    expect(isBlockedIp('0:0:0:0:0:ffff:127.0.0.1')).toBe(true);
+    // Expanded IPv4-mapped cloud metadata.
+    expect(isBlockedIp('0:0:0:0:0:ffff:169.254.169.254')).toBe(true);
+    // Unspecified, expanded.
+    expect(isBlockedIp('0:0:0:0:0:0:0:0')).toBe(true);
+    // A genuinely public IPv6 (and mapped-public) stays allowed — guard not overbroad.
+    expect(isBlockedIp('2001:4860:4860::8888')).toBe(false);
+    expect(isBlockedIp('::ffff:8.8.8.8')).toBe(false);
+  });
+
   test('scheme smuggling: file:// and gopher:// are rejected, only http(s) is ever dialed', () => {
     expect(() => assertUrlAllowed('file:///etc/passwd')).toThrow(ToolSecurityError);
     expect(() => assertUrlAllowed('gopher://169.254.169.254/')).toThrow(ToolSecurityError);
