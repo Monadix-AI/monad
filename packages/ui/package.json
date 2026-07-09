@@ -52,7 +52,7 @@
   "private": true,
   "scripts": {
     "lint": "biome check .",
-    "typecheck": "tsgo --noEmit"
+    "typecheck": "tsc --noEmit"
   },
   "type": "module"
 }

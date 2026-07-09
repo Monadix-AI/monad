@@ -13,7 +13,7 @@
     "lint": "biome check .",
     "test": "bun ../../scripts/bun-test.ts test/ --only-failures",
     "test:loud": "bun ../../scripts/bun-test.ts test/ --loud",
-    "typecheck": "tsgo --noEmit"
+    "typecheck": "tsc --noEmit"
   },
   "type": "module"
 }

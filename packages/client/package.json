@@ -20,7 +20,7 @@
     "test:loud": "bun ../../scripts/bun-test.ts test/ --loud",
     "test:unit": "bun ../../scripts/bun-test.ts test/unit/ --only-failures",
     "test:unit:loud": "bun ../../scripts/bun-test.ts test/unit/ --loud",
-    "typecheck": "tsgo --noEmit"
+    "typecheck": "tsc --noEmit"
   },
   "type": "module"
 }

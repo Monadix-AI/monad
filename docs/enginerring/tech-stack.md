@@ -9,8 +9,7 @@ A quick-reference map of every tool and library in the repo, organized by concer
 | Tool | Role |
 |------|------|
 | **[Bun](https://bun.sh)** | JS runtime, package manager, bundler, test runner — replaces Node/npm/jest/webpack entirely |
-| **TypeScript 6** | Language; strict mode throughout |
-| **tsgo** (`@typescript/native-preview`) | Fast native TS type-checker used in CI and pre-commit; no transpilation, just types |
+| **TypeScript 7** | Language and fast native type-checker; strict mode throughout |
 
 ## Monorepo
 

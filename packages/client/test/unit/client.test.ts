@@ -25,7 +25,7 @@ test('client.treaty posts to the control API and returns the id', async () => {
   const id = result.data?.sessionId;
 
   expect(id).toBe('ses_TEST00000000');
-  // cast resets tsgo's closure-narrowing (the assignment happens inside an async mock)
+  // cast resets tsc's closure-narrowing (the assignment happens inside an async mock)
   const cap = captured as { url: string; init?: RequestInit } | null;
   if (!cap) throw new Error('fetch was not called');
   expect(cap.url).toBe('http://127.0.0.1:52749/v1/sessions');

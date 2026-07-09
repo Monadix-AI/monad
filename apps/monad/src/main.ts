@@ -78,7 +78,7 @@ import { createHttpTransport } from './transports/http.ts';
 
 // Eden type-safe client inference (compile-time only). Derived from the transport factory
 // so it stays valid without a module-level app instance.
-// NOTE: this import intentionally uses a relative path so tsgo emits a resolvable path in
+// NOTE: this import intentionally uses a relative path so tsc emits a resolvable path in
 // dist/main.d.ts — the @/ alias is internal to @monad/monad and would not resolve for
 // consumers (e.g. @monad/client) reading the generated d.ts.
 type HttpTransport = ReturnType<typeof createHttpTransport>;

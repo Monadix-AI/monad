@@ -20,7 +20,7 @@ loop degrades.
    deliberately shared, like the Bun transpiler cache). A feature that only works in
    one checkout at a time breaks the [parallel-agents](../parallel-agents.md) workflow.
 3. **Fast feedback beats complete feedback.** The inner loop uses the cheapest signal
-   that can catch the mistake: hot reload before restart, `tsgo` before a build,
+   that can catch the mistake: hot reload before restart, `tsc` before a build,
    a scoped `bun-test.ts` run before the full suite. Full verification happens once,
    at the gate — not on every keystroke.
 4. **Failures must be self-explanatory.** When a loop breaks, the error should name the
@@ -40,7 +40,7 @@ mistake; escalate only when it can't.
 | Loop | Command | Budget | Catches |
 |---|---|---|---|
 | Hot reload | save the file (`bun run dev` running) | seconds | daemon config/skill/atom changes, Next.js UI edits |
-| Typecheck | `bun run typecheck` (tsgo) | tens of seconds | type errors across the workspace |
+| Typecheck | `bun run typecheck` (TypeScript 7 `tsc`) | tens of seconds | type errors across the workspace |
 | Scoped tests | `bun scripts/bun-test.ts <dir> --only-failures` | seconds–minutes | the package you're editing |
 | Lint | `bun run lint` (Biome, auto-fixes) | seconds | style, correctness lints |
 | Full gate | `typecheck` + `lint` + `bun run test` | minutes | everything, pre-merge only |

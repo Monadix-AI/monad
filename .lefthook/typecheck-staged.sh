@@ -115,8 +115,8 @@ EOF
         # Capture output and filter errors from files outside this workspace
         # (e.g. project references pulling in ../monad/* when checking apps/web)
         # Also filter indented continuation lines that belong to a filtered error.
-        tsgo_output=$(bunx tsgo --noEmit --project "./$staged_config" 2>&1) || true
-        filtered_output=$(echo "$tsgo_output" | awk '
+        tsc_output=$(bunx tsc --noEmit --project "./$staged_config" 2>&1) || true
+        filtered_output=$(echo "$tsc_output" | awk '
           /^\.\.\// { skip=1; next }
           /^[[:space:]]/ { if (skip) next; print; next }
           { skip=0; print }
@@ -133,7 +133,7 @@ EOF
       else
         # If no tsconfig.json, type check the files directly
         files=$(cat "$tmp_file" | tr '\n' ' ')
-        bunx tsgo --noEmit --skipLibCheck $files
+        bunx tsc --noEmit --skipLibCheck $files
       fi
 
       cd ../..
