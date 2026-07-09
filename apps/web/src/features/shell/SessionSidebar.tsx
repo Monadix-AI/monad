@@ -151,7 +151,6 @@ export function SessionSidebar({
   const trackpadFeedbackAnimationRef = useRef<{ stop: () => void } | null>(null);
   const panelScrollAnimationRef = useRef<{ stop: () => void } | null>(null);
   const previousShowSettingsRef = useRef(showSettings);
-  const routeDrivenScrollRef = useRef(false);
   const routeDrivenScrollClearTimerRef = useRef(0);
   const autoRevealCloseTimerRef = useRef(0);
   const resizingRef = useRef(false);
@@ -358,7 +357,6 @@ export function SessionSidebar({
       window.clearTimeout(routeDrivenScrollClearTimerRef.current);
       onCloseSettings();
     };
-    routeDrivenScrollRef.current = true;
     currentSidebarSurfaceRef.current = settingsReturnSurface;
     if (prefersReducedMotion || Math.abs(host.scrollLeft - target) <= 1) {
       host.scrollLeft = target;
@@ -393,7 +391,6 @@ export function SessionSidebar({
     if (enteringSettings) host.scrollTo({ behavior: 'instant' as ScrollBehavior, left: 0 });
     const target = activeSidebarPageIndex * host.clientWidth;
     if (leavingSettings) {
-      routeDrivenScrollRef.current = false;
       window.clearTimeout(routeDrivenScrollClearTimerRef.current);
       panelScrollAnimationRef.current?.stop();
       host.scrollTo({ behavior: 'instant' as ScrollBehavior, left: target });
@@ -402,37 +399,23 @@ export function SessionSidebar({
     }
     if (Math.abs(host.scrollLeft - target) <= 1) {
       host.dataset.snapReady = 'true';
-      routeDrivenScrollRef.current = false;
       window.clearTimeout(routeDrivenScrollClearTimerRef.current);
       return;
     }
-    routeDrivenScrollRef.current = true;
     window.clearTimeout(routeDrivenScrollClearTimerRef.current);
     panelScrollAnimationRef.current?.stop();
     if (host.dataset.snapReady !== 'true' || prefersReducedMotion) {
       host.scrollTo({ behavior: 'instant' as ScrollBehavior, left: target });
-      routeDrivenScrollClearTimerRef.current = window.setTimeout(() => {
-        routeDrivenScrollRef.current = false;
-      }, 80);
     } else {
       // Browser smooth scrolling has a fixed, sluggish pace; drive scrollLeft
       // with a short ease-out tween so programmatic page turns feel crisp.
       panelScrollAnimationRef.current = animate(host.scrollLeft, target, {
         duration: PANEL_SNAP_SCROLL_DURATION_S,
         ease: PANEL_SNAP_SCROLL_EASE,
-        onComplete: () => {
-          routeDrivenScrollRef.current = false;
-        },
         onUpdate: (value) => {
           host.scrollLeft = value;
         }
       });
-      routeDrivenScrollClearTimerRef.current = window.setTimeout(
-        () => {
-          routeDrivenScrollRef.current = false;
-        },
-        PANEL_SNAP_SCROLL_DURATION_S * 1000 + 80
-      );
     }
     host.dataset.snapReady = 'true';
   }, [activeSidebarPageIndex, activeSidebarSurface, prefersReducedMotion, showSettings]);

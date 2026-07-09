@@ -123,7 +123,6 @@ export const useWorkspaceShellStore = create<WorkspaceShellState>()((set) => ({
   lastWorkspacePath: readStoredLastWorkspacePath(),
   lastMonadSessionId: null,
   settingsReturnPathState: null,
-  activeProjectId: null,
   activeProjectSession: null,
   sidebarCollapsed: readStoredSidebarCollapsed(),
   sidebarAutoReveal: false,
