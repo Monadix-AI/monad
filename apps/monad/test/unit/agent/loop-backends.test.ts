@@ -71,7 +71,7 @@ test('file_write routes through an injected delegating backend, not the daemon d
     tools: [fileWriteTool as Tool],
     backends
   });
-  await loop.runBlock('ses_1' as SessionId, 'write a file');
+  await loop.runBlock('ses_100000000000' as SessionId, 'write a file');
   expect(writes).toEqual([{ path: '/outside/x.txt', content: 'hi' }]);
 });
 
@@ -87,7 +87,7 @@ test('extraTools (e.g. per-session MCP tools) are available and callable this ru
     }
   };
   const { loop, events } = run([{ tool: 'mcp.echo' }, 'done'], { tools: [], extraTools: [mcpTool] });
-  await loop.runBlock('ses_1' as SessionId, 'use the mcp tool');
+  await loop.runBlock('ses_100000000000' as SessionId, 'use the mcp tool');
   expect(ran).toBe(1);
   const result = events.find((e) => e.type === 'tool.result');
   expect(result?.payload).toMatchObject({ tool: 'mcp.echo', ok: true });
@@ -100,7 +100,7 @@ test('toolFilter hides a tool from execution (model gets unknown-tool)', async (
     tools: [fileWriteTool as Tool, fileGlobTool as Tool],
     toolFilter: (n) => n !== 'file_glob'
   });
-  await loop.runBlock('ses_1' as SessionId, 'list files');
+  await loop.runBlock('ses_100000000000' as SessionId, 'list files');
   const result = events.find((e) => e.type === 'tool.result');
   expect(result?.payload).toMatchObject({ tool: 'file_glob', ok: false });
 });

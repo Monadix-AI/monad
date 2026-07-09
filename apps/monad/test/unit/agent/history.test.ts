@@ -94,7 +94,7 @@ async function settle(eng: DurableSummarizer, sid: string): Promise<void> {
 
 const msg = (id: string, role: ChatMessage['role'], text: string): ChatMessage => ({
   id,
-  sessionId: 'ses_x',
+  sessionId: 'ses_x00000000000',
   role,
   text,
   createdAt: ''
@@ -111,7 +111,7 @@ test('below threshold: no summary, returns full window unchanged', async () => {
     summaryModel: 'mock',
     softThresholdTokens: 100_000
   });
-  const out = await eng.assemble('ses_x');
+  const out = await eng.assemble('ses_x00000000000');
   expect(out.messages).toHaveLength(2);
   expect(calls()).toBe(0);
 });
@@ -152,13 +152,13 @@ test('manual compact() folds the full loaded window even below the soft threshol
 
   // Forced compaction ignores the threshold and the keepRecent tail: it summarizes the whole
   // currently loaded window, including the final message.
-  const res = await eng.compact('ses_x');
+  const res = await eng.compact('ses_x00000000000');
   expect(res.compacted).toBe(4);
   expect(store.rec()?.uptoMessageId).toBe('m4');
   expect(store.rec()?.summary).toBe('DENSE');
 
   // A second compact finds no loaded rows left (since the boundary advanced to the last row) → no-op.
-  const again = await eng.compact('ses_x');
+  const again = await eng.compact('ses_x00000000000');
   expect(again.compacted).toBe(0);
 });
 
@@ -192,7 +192,7 @@ test('PreCompact: preserve instructions are folded into the summarization system
     }
   });
 
-  await eng.assemble('ses_x');
+  await eng.assemble('ses_x00000000000');
   expect(calls).toHaveLength(1);
   expect(calls[0]?.trigger).toBe('soft');
   expect(calls[0]?.tokens).toBeGreaterThan(0);
@@ -216,7 +216,7 @@ test('over threshold: compacts older rows, advances the durable boundary, keeps 
     keepRecent: 1
   });
 
-  const out = await eng.assemble('ses_x');
+  const out = await eng.assemble('ses_x00000000000');
   expect(calls()).toBe(1);
   expect(out.summary).toBe('DENSE');
   // Older folded into summary; only the recent tail (keepRecent=1) returned.
@@ -248,7 +248,7 @@ test('reflector condenses the rolling summary once it exceeds the reflect thresh
     reflectThresholdTokens: 10
   });
 
-  const out = await eng.assemble('ses_x');
+  const out = await eng.assemble('ses_x00000000000');
   expect(n).toBe(2); // summarize, then a reflect/GC pass
   expect(out.summary).toBe('CONDENSED');
   expect(store.rec()?.summary).toBe('CONDENSED'); // the condensed form is what's persisted
@@ -263,7 +263,7 @@ test('next turn loads only since the boundary (bounded), folding the prior summa
     msg('m5', 'user', 'next question') // arrived after the boundary
   ];
   const store = memStore();
-  store.save('ses_x', { summary: 'PRIOR', uptoMessageId: 'm3' });
+  store.save('ses_x00000000000', { summary: 'PRIOR', uptoMessageId: 'm3' });
   const { model, calls } = summaryModel('UNUSED');
   const eng = new DurableSummarizer({
     messages: source(rows),
@@ -274,7 +274,7 @@ test('next turn loads only since the boundary (bounded), folding the prior summa
     keepRecent: 1
   });
 
-  const out = await eng.assemble('ses_x');
+  const out = await eng.assemble('ses_x00000000000');
   expect(calls()).toBe(0); // no recompaction
   expect(out.summary).toBe('PRIOR'); // prior summary carried forward
   // Only m4, m5 (since boundary m3) loaded — not the full transcript.
@@ -292,7 +292,7 @@ test('the loop keeps durable summary out of the cached system prompt', async () 
   };
   const rows = [msg('m1', 'user', 'q'), msg('m2', 'assistant', 'a')];
   const store = memStore();
-  store.save('ses_x', { summary: 'EARLIER STUFF', uptoMessageId: 'm0' });
+  store.save('ses_x00000000000', { summary: 'EARLIER STUFF', uptoMessageId: 'm0' });
   const history = new DurableSummarizer({
     messages: source(rows),
     summaryStore: store,
@@ -322,7 +322,7 @@ test('re-compaction folds the prior summary into the new one (priorBlock in summ
   // The prior summary must be prepended to the summarize prompt so nothing is lost.
   const rows = [msg('m4', 'user', big('D')), msg('m5', 'assistant', big('E')), msg('m6', 'user', 'recent')];
   const store = memStore();
-  store.save('ses_x', { summary: 'TURN1_SUMMARY', uptoMessageId: 'm3' });
+  store.save('ses_x00000000000', { summary: 'TURN1_SUMMARY', uptoMessageId: 'm3' });
 
   const { model } = capturingModel('TURN2_SUMMARY');
   const eng = new DurableSummarizer({
@@ -334,7 +334,7 @@ test('re-compaction folds the prior summary into the new one (priorBlock in summ
     keepRecent: 1
   });
 
-  const out = await eng.assemble('ses_x');
+  const out = await eng.assemble('ses_x00000000000');
   expect(out.summary).toBe('TURN2_SUMMARY');
   // Prior summary is prepended to the user turn so the model receives accumulated context.
   // Boundary advances to m5 (the last older row).
@@ -358,19 +358,19 @@ test('background: soft threshold compacts WITHOUT blocking; the result lands on 
   });
 
   // Non-blocking: the turn returns the FULL window with nothing compacted yet.
-  const out = await eng.assemble('ses_x');
+  const out = await eng.assemble('ses_x00000000000');
   expect(out.messages).toHaveLength(3);
-  expect(eng.pendingCompaction('ses_x')).toBe(true);
+  expect(eng.pendingCompaction('ses_x00000000000')).toBe(true);
 
   // Let the background compaction finish; it persists durably.
   g.release();
-  await settle(eng, 'ses_x');
-  expect(eng.pendingCompaction('ses_x')).toBe(false);
+  await settle(eng, 'ses_x00000000000');
+  expect(eng.pendingCompaction('ses_x00000000000')).toBe(false);
   expect(store.rec()?.summary).toBe('BG_SUMMARY');
   expect(store.rec()?.uptoMessageId).toBe('m2'); // older = [m1, m2]
 
   // A later turn picks up the durable summary + the bounded (since-boundary) window.
-  const out2 = await eng.assemble('ses_x');
+  const out2 = await eng.assemble('ses_x00000000000');
   expect(out2.summary).toBe('BG_SUMMARY');
   expect(out2.messages.map((m) => m.content)).toEqual(['recent']);
 });
@@ -388,12 +388,12 @@ test('background: a second turn does not start a duplicate compaction while one 
     background: true
   });
 
-  await eng.assemble('ses_x'); // kicks a background compaction (gated)
-  await eng.assemble('ses_x'); // soft again, but inFlight → no second kick
+  await eng.assemble('ses_x00000000000'); // kicks a background compaction (gated)
+  await eng.assemble('ses_x00000000000'); // soft again, but inFlight → no second kick
   expect(g.started()).toBe(1);
 
   g.release();
-  await settle(eng, 'ses_x');
+  await settle(eng, 'ses_x00000000000');
   expect(g.started()).toBe(1); // exactly one compaction total
 });
 
@@ -417,20 +417,20 @@ test('background: a hard-threshold turn waits for the in-flight compaction inste
   });
 
   // Turn 1: window well under hard → background kicked (gated, not committed).
-  await eng.assemble('ses_x');
-  expect(eng.pendingCompaction('ses_x')).toBe(true);
+  await eng.assemble('ses_x00000000000');
+  expect(eng.pendingCompaction('ses_x00000000000')).toBe(true);
 
   // Huge rows arrive, pushing the window over the hard threshold before the background finished.
   rows.push(msg('m4', 'user', huge('D')), msg('m5', 'assistant', huge('E')));
 
   // Turn 2 is at/over hard with a compaction in flight → it must WAIT, not launch a duplicate.
-  const p = eng.assemble('ses_x');
+  const p = eng.assemble('ses_x00000000000');
   await new Promise((r) => setTimeout(r, 0));
   expect(g.started()).toBe(1); // no second compaction started concurrently — turn 2 is parked on inFlight
 
   g.release();
   const out2 = await p;
-  await settle(eng, 'ses_x');
+  await settle(eng, 'ses_x00000000000');
   expect(out2.summary).toBe('BG'); // turn 2 proceeds off the advanced boundary + durable summary
 });
 
@@ -449,10 +449,10 @@ test('background: a hard-threshold turn with no in-flight compaction compacts sy
     background: true
   });
 
-  const out = await eng.assemble('ses_x');
+  const out = await eng.assemble('ses_x00000000000');
   expect(calls()).toBe(1); // compacted inline this turn (no background needed)
   expect(out.summary).toBe('SYNC');
   expect(out.messages.map((m) => m.content)).toEqual(['recent']);
   expect(store.rec()?.uptoMessageId).toBe('m2');
-  expect(eng.pendingCompaction('ses_x')).toBe(false);
+  expect(eng.pendingCompaction('ses_x00000000000')).toBe(false);
 });

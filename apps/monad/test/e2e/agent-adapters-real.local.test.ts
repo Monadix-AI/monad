@@ -68,7 +68,7 @@ async function runTurn(args: {
       }
     ]
   });
-  const projectId = 'ses_01KWLIVEADAPTERS000000000001';
+  const projectId = 'ses_01KWLIVEQJ21';
   const observed = (id: string): string => {
     const obs = host.observe(id);
     return obs && 'output' in obs ? (obs.output ?? '') : '';

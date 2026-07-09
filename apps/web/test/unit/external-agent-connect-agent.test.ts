@@ -17,7 +17,7 @@ const agent: ExternalAgentView = {
 };
 
 const authSession = (authState: ExternalAgentAuthSessionView['authState']): ExternalAgentAuthSessionView => ({
-  id: 'ncliauth_01KWAUTH000000000000000',
+  id: 'ncliauth_01KWAUTHGSVp',
   controlToken: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
   agentName: agent.name,
   provider: agent.provider,

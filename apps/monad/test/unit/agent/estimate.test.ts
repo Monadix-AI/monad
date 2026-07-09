@@ -39,12 +39,14 @@ test('ratio is clamped against absurd samples', () => {
 });
 
 test('estimateTokensCached caches char length, keyed by id (stable across differing text)', () => {
-  const first = estimateTokensCached('msg_cache', 'the original text here');
+  const first = estimateTokensCached('msg_cache0000000', 'the original text here');
   // Same key, different text → returns the cached char-length result, not recomputed.
-  const stale = estimateTokensCached('msg_cache', 'COMPLETELY different much much longer text body');
+  const stale = estimateTokensCached('msg_cache0000000', 'COMPLETELY different much much longer text body');
   expect(stale).toBe(first);
   // A fresh key reflects its own (longer) text.
-  expect(estimateTokensCached('msg_other', 'COMPLETELY different much much longer text body')).toBeGreaterThan(first);
+  expect(estimateTokensCached('msg_other0000000', 'COMPLETELY different much much longer text body')).toBeGreaterThan(
+    first
+  );
 });
 
 test('estimateTokens matches the global estimator on first computation', () => {

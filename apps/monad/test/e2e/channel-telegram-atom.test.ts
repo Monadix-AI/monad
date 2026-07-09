@@ -95,7 +95,7 @@ test('atom-pack-loaded telegram delivers an agent reply end-to-end (mock Bot API
   const tg = startMockTelegram();
   const handlers = buildHandlers(mockModel());
   const registry = await builtinChannelAdapters(); // factory comes from the ATOM PACK path
-  const channelId = 'chn_DOGFOOD';
+  const channelId = 'chn_DOGFOOD00000';
 
   const service = new ChannelService(
     {
@@ -107,7 +107,7 @@ test('atom-pack-loaded telegram delivers an agent reply end-to-end (mock Bot API
       log: { info: () => {}, warn: () => {}, error: () => {} }
     },
     {
-      ...(await import('@monad/home')).createDefaultConfig('prn_OWNER', 'owner'),
+      ...(await import('@monad/home')).createDefaultConfig('prn_OWNER0000000', 'owner'),
       channels: [
         {
           id: channelId,

@@ -8,7 +8,7 @@ import { EVICTED_MARKER, TokenEstimator, ToolResultEvictionContext } from '#/age
 // global one, which other tests move. Trigger is gated via lastRealInputTokens for determinism.
 const est = () => new TokenEstimator();
 const ctx = (lastRealInputTokens?: number): ContextPrepareCtx => ({
-  sessionId: 'ses_x',
+  sessionId: 'ses_x00000000000',
   emit: () => {},
   estimator: est(),
   ...(lastRealInputTokens !== undefined ? { lastRealInputTokens } : {})

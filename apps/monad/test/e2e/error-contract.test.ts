@@ -33,7 +33,7 @@ test(
   'business error (HandlerError) → 400 + httpErrorSchema body',
   withApp(async (base) => {
     // Valid id format that passes params validation but does not exist → HandlerError.
-    const res = await fetch(`${base}/v1/sessions/ses_NONEXISTENT`);
+    const res = await fetch(`${base}/v1/sessions/undefined`);
     expect(res.status).toBe(400);
     await expectErrorEnvelope(res);
   })

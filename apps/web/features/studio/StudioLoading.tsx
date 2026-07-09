@@ -5,7 +5,7 @@ import type { StudioSectionId } from './sections';
 
 import { Card, Skeleton } from '@monad/ui';
 
-import { studioSectionFromPathname } from '#/features/routes/route-paths';
+import { studioSectionFromPathname } from '#/features/shell/routing/paths';
 import { useShellPathname } from '#/hooks/use-shell-location';
 
 const keys = (prefix: string, count: number) => Array.from({ length: count }, (_, index) => `${prefix}-${index}`);

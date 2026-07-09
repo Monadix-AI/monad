@@ -106,7 +106,7 @@ test('web_search requests network_access for the selected local provider host', 
     tool?.run?.(
       { query: 'monad sandbox', count: 1 },
       {
-        sessionId: 'ses_1',
+        sessionId: 'ses_100000000000',
         log: () => {},
         gate: async (req) => {
           calls.push({ tool: req.tool, key: req.key, input: req.input });

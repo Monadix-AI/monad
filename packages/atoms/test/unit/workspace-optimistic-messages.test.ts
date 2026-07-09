@@ -42,7 +42,7 @@ test('optimistic user messages render immediately until the server echo arrives'
 
   const serverEcho = {
     ...optimistic,
-    id: 'msg_server',
+    id: 'msg_server000000',
     localStatus: undefined,
     retrySend: undefined
   };
@@ -68,7 +68,7 @@ test('server echoes keep the optimistic render key to avoid remount flicker', ()
   });
   const serverEcho = {
     ...optimistic,
-    id: 'msg_server',
+    id: 'msg_server000000',
     localStatus: undefined,
     orderKey: '2026-07-06T12:00:01.000Z',
     retrySend: undefined
@@ -108,8 +108,8 @@ test('server echoes consume optimistic render keys one-to-one', () => {
     status: 'sending',
     text: 'same text'
   });
-  const firstEcho = { ...first, id: 'msg_1', localStatus: undefined, retrySend: undefined };
-  const secondEcho = { ...second, id: 'msg_2', localStatus: undefined, retrySend: undefined };
+  const firstEcho = { ...first, id: 'msg_100000000000', localStatus: undefined, retrySend: undefined };
+  const secondEcho = { ...second, id: 'msg_200000000000', localStatus: undefined, retrySend: undefined };
 
   expect(mergeOptimisticMessages([firstEcho, secondEcho], [first, second]).map((message) => message.renderKey)).toEqual(
     ['optimistic-1', 'optimistic-2']

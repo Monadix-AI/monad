@@ -19,7 +19,7 @@ export const command: CommandDef = {
   flags: {
     label: { type: 'string', description: 'display label (channel add)' },
     agent: { type: 'string', description: 'agent id this channel uses (channel add)' },
-    id: { type: 'string', description: 'explicit channel id (channel add; default chn_<ulid>)' },
+    id: { type: 'string', description: 'explicit channel id (channel add; default chn_<12-char-nanoid>)' },
     policy: { type: 'string', description: 'access policy: allowlist|pairing|open|disabled (channel add)' }
   },
   async run({ positionals: args, flags, client }) {

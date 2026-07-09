@@ -115,14 +115,14 @@ test('subscribeUi keeps managed external agent joins after newer transcript mess
   const messageAt = '2026-07-02T00:01:00.000Z';
 
   handlers.store.upsertExternalAgentSession({
-    id: 'exa_managed_stopped',
+    id: 'exa_managedsL5l3',
     transcriptTargetId: project,
     agentName: 'pmem_codex_test',
     provider: 'codex',
     workingPath: process.cwd(),
     launchMode: 'app-server',
     runtimeRole: 'managed-project-agent',
-    agentRuntimeId: 'exa_managed_stopped',
+    agentRuntimeId: 'exa_managedsL5l3',
     agentRuntimeTokenHash: null,
     lastDeliveredSeq: 0,
     lastVisibleSeq: 0,
@@ -148,7 +148,7 @@ test('subscribeUi keeps managed external agent joins after newer transcript mess
     expect.arrayContaining([
       expect.objectContaining({
         kind: 'tool',
-        id: 'exa_managed_stopped',
+        id: 'exa_managedsL5l3',
         tool: 'external-agent:codex',
         status: 'ok'
       })

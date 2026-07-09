@@ -1,6 +1,6 @@
 'use client';
 
-import type { NetworkRuntimeStatus } from '@monad/protocol';
+import type { NetworkRuntimeStatus, SessionId } from '@monad/protocol';
 import type { SettingsSectionId } from '#/features/settings/sections';
 import type { StudioSectionId } from '#/features/studio/sections';
 import type { RemoteDaemonConnection } from '#/lib/daemon-connections';
@@ -30,7 +30,7 @@ import {
   SidebarHeader,
   StudioSidebarItems,
   WorkspaceSidebarItems
-} from './SessionSidebarNav';
+} from './sidebar';
 import {
   createSidebarPagerGesture,
   resolveSidebarPagerTarget,
@@ -49,6 +49,7 @@ interface Props {
   monadChatActive: boolean;
   runtimeReady: boolean;
   activeProjectId: string | null;
+  activeProjectSessionId: string | null;
   daemonBaseUrl: string;
   daemonStatus: 'checking' | 'online' | 'offline';
   daemonVersion?: string;
@@ -61,6 +62,8 @@ interface Props {
   onOpenWorkspace: () => void;
   onOpenMonadChat: () => void;
   onOpenProject: (id: string) => void;
+  onOpenProjectSettings: (id: string) => void;
+  onOpenProjectSession: (projectId: string, sessionId: SessionId) => void;
   onOpenSettingsSection: (section: SettingsSectionId) => void;
   onOpenStudio: () => void;
   onOpenStudioSection: (section: StudioSectionId) => void;
@@ -99,6 +102,7 @@ export function SessionSidebar({
   monadChatActive,
   runtimeReady,
   activeProjectId,
+  activeProjectSessionId,
   daemonBaseUrl,
   daemonStatus,
   daemonVersion,
@@ -111,6 +115,8 @@ export function SessionSidebar({
   onOpenWorkspace,
   onOpenMonadChat,
   onOpenProject,
+  onOpenProjectSettings,
+  onOpenProjectSession,
   onOpenSettingsSection,
   onOpenStudio,
   onOpenStudioSection,
@@ -666,9 +672,12 @@ export function SessionSidebar({
                 ) : (
                   <WorkspaceSidebarItems
                     activeProjectId={activeProjectId}
+                    activeSessionId={activeProjectSessionId}
                     monadChatActive={monadChatActive}
                     onOpenMonadChat={onOpenMonadChat}
                     onOpenProject={onOpenProject}
+                    onOpenProjectSession={onOpenProjectSession}
+                    onOpenProjectSettings={onOpenProjectSettings}
                     onToggleProjectPinned={toggleProjectPinned}
                     projects={projects}
                     shortcutModifierLabel={shortcutModifierLabel}

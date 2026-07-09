@@ -58,11 +58,13 @@ describe('createLogger', () => {
     setLogLevel('debug');
     const log = createLogger('subscriber-test');
 
-    log.debug({ sessionId: 'ses_LOGTEST', event: 'test.event' }, 'subscriber event');
+    log.debug({ sessionId: 'ses_LOGTEST00000', event: 'test.event' }, 'subscriber event');
     await Bun.sleep(20);
     dispose();
 
-    expect(records.some((record) => record.sessionId === 'ses_LOGTEST' && record.event === 'test.event')).toBe(true);
+    expect(records.some((record) => record.sessionId === 'ses_LOGTEST00000' && record.event === 'test.event')).toBe(
+      true
+    );
   });
 
   test('custom destinations receive records at their own level', async () => {

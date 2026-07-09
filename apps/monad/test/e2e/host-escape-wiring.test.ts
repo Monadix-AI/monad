@@ -48,7 +48,7 @@ const paths: MonadPaths = {
 };
 
 test('hostEscape server: non-read-only tools get the host-control gate key; read-only stays ungated', async () => {
-  const cfg = createDefaultConfig('prn_t', 't');
+  const cfg = createDefaultConfig('prn_t00000000000', 't');
   // A hostEscape server (stand-in for the computer-use preset) with screenshot auto-approved.
   cfg.mcpServers = [
     {

@@ -167,7 +167,7 @@ test('removeAtomPack rejects path-traversal names', async () => {
 test('disable hides an atom pack from discovery; enable restores it', async () => {
   const { discoverChannelAdapters } = await import('#/channels/discover.ts');
   const p = paths();
-  await saveAll(p.config, p.profile, createDefaultConfig('prn_test', 'Test User'));
+  await saveAll(p.config, p.profile, createDefaultConfig('prn_test00000000', 'Test User'));
   await mod.installAtomPack({ source: `local:${stagedDir}`, consent: true });
   await mkdir(join(atomsDir, 'packs', 'wa', 'skills', 'summarize-changes'), { recursive: true });
   await writeFile(

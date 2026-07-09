@@ -20,8 +20,8 @@ afterEach(() => {
 });
 
 const row: ExternalAgentSessionRow = {
-  id: 'exa_1',
-  transcriptTargetId: 'ses_project',
+  id: 'exa_100000000000',
+  transcriptTargetId: 'ses_project00000',
   agentName: 'codex',
   provider: 'codex' as const,
   workingPath: '/tmp/project',
@@ -43,11 +43,11 @@ const row: ExternalAgentSessionRow = {
 
 test('external agent session lifecycle stores output snapshots and exit status', () => {
   store.upsertExternalAgentSession(row);
-  store.appendExternalAgentOutput('exa_1', 'hello', 32);
-  store.updateExternalAgentSessionRef('exa_1', 'provider-session-1');
-  store.closeExternalAgentSession('exa_1', '2026-06-28T00:00:01.000Z', 0);
+  store.appendExternalAgentOutput('exa_100000000000', 'hello', 32);
+  store.updateExternalAgentSessionRef('exa_100000000000', 'provider-session-1');
+  store.closeExternalAgentSession('exa_100000000000', '2026-06-28T00:00:01.000Z', 0);
 
-  const rows = store.listExternalAgentSessionsForTranscriptTarget('ses_project');
+  const rows = store.listExternalAgentSessionsForTranscriptTarget('ses_project00000');
   expect(rows).toHaveLength(1);
   expect(rows[0]?.outputSnapshot).toBe('hello');
   expect(rows[0]?.providerSessionRef).toBe('provider-session-1');
@@ -57,33 +57,39 @@ test('external agent session lifecycle stores output snapshots and exit status',
 
 test('closeExternalAgentSession does not overwrite terminal external agent session state', () => {
   store.upsertExternalAgentSession(row);
-  store.closeExternalAgentSession('exa_1', '2026-06-28T00:00:01.000Z', null, 'stopped');
-  store.closeExternalAgentSession('exa_1', '2026-06-28T00:00:02.000Z', 0, 'exited');
+  store.closeExternalAgentSession('exa_100000000000', '2026-06-28T00:00:01.000Z', null, 'stopped');
+  store.closeExternalAgentSession('exa_100000000000', '2026-06-28T00:00:02.000Z', 0, 'exited');
 
-  const closed = store.getExternalAgentSession('exa_1');
+  const closed = store.getExternalAgentSession('exa_100000000000');
   expect(closed?.state).toBe('stopped');
   expect(closed?.exitedAt).toBe('2026-06-28T00:00:01.000Z');
 });
 
 test('reconcileOrphanedExternalAgentSessions marks live external agent rows stopped on daemon restart', () => {
   store.upsertExternalAgentSession(row);
-  store.upsertExternalAgentSession({ ...row, id: 'exa_starting', state: 'starting', pid: null });
-  store.upsertExternalAgentSession({ ...row, id: 'exa_done', state: 'exited', pid: 456, exitedAt: row.updatedAt });
+  store.upsertExternalAgentSession({ ...row, id: 'exa_starting0000', state: 'starting', pid: null });
+  store.upsertExternalAgentSession({
+    ...row,
+    id: 'exa_done00000000',
+    state: 'exited',
+    pid: 456,
+    exitedAt: row.updatedAt
+  });
 
   const reconciled = store.reconcileOrphanedExternalAgentSessions(() => {});
 
   expect(reconciled).toBe(2);
-  expect(store.getExternalAgentSession('exa_1')?.state).toBe('stopped');
-  expect(store.getExternalAgentSession('exa_starting')?.state).toBe('stopped');
-  expect(store.getExternalAgentSession('exa_done')?.state).toBe('exited');
+  expect(store.getExternalAgentSession('exa_100000000000')?.state).toBe('stopped');
+  expect(store.getExternalAgentSession('exa_starting0000')?.state).toBe('stopped');
+  expect(store.getExternalAgentSession('exa_done00000000')?.state).toBe('exited');
 });
 
 test('reconcileOrphanedExternalAgentSessions preserves managed provider refs for later cold resume', () => {
   store.upsertExternalAgentSession({
     ...row,
-    id: 'exa_managed_running',
+    id: 'exa_managedruAQ3',
     runtimeRole: 'managed-project-agent',
-    agentRuntimeId: 'exa_managed_running',
+    agentRuntimeId: 'exa_managedruAQ3',
     agentRuntimeTokenHash: 'token-hash',
     providerSessionRef: 'provider-thread-1',
     lastDeliveredSeq: 10,
@@ -92,7 +98,7 @@ test('reconcileOrphanedExternalAgentSessions preserves managed provider refs for
 
   expect(store.reconcileOrphanedExternalAgentSessions(() => {})).toBe(1);
 
-  expect(store.getExternalAgentSession('exa_managed_running')).toMatchObject({
+  expect(store.getExternalAgentSession('exa_managedruAQ3')).toMatchObject({
     state: 'stopped',
     providerSessionRef: 'provider-thread-1',
     lastDeliveredSeq: 10,
@@ -101,10 +107,10 @@ test('reconcileOrphanedExternalAgentSessions preserves managed provider refs for
 });
 
 test('failOrphanedStreamingMessages retires empty managed external agent thinking placeholders', () => {
-  store.insertMessage('msg_thinking', 'ses_project', '', '2026-06-28T00:00:01.000Z', 'assistant', {
+  store.insertMessage('msg_thinking0000', 'ses_project00000', '', '2026-06-28T00:00:01.000Z', 'assistant', {
     data: {
       agentName: 'codex',
-      externalAgentSessionId: 'exa_1',
+      externalAgentSessionId: 'exa_100000000000',
       reasoning: 'Thinking',
       source: 'managed-external-agent'
     },
@@ -116,63 +122,63 @@ test('failOrphanedStreamingMessages retires empty managed external agent thinkin
 });
 
 test('external agent inbox diagnostics count pending visible messages', () => {
-  store.insertMessage('msg_1', 'ses_project', 'seen', '2026-06-28T00:00:01.000Z', 'user');
-  store.insertMessage('msg_2', 'ses_project', 'pending one', '2026-06-28T00:00:02.000Z', 'user');
-  store.insertMessage('msg_3', 'ses_project', 'pending two', '2026-06-28T00:00:03.000Z', 'user');
-  store.upsertExternalAgentSession({ ...row, id: 'exa_inbox_diag', lastVisibleSeq: 1, lastDeliveredSeq: 3 });
-  store.enqueueExternalAgentInboxItem('exa_inbox_diag', 2);
-  store.enqueueExternalAgentInboxItem('exa_inbox_diag', 3);
+  store.insertMessage('msg_100000000000', 'ses_project00000', 'seen', '2026-06-28T00:00:01.000Z', 'user');
+  store.insertMessage('msg_200000000000', 'ses_project00000', 'pending one', '2026-06-28T00:00:02.000Z', 'user');
+  store.insertMessage('msg_300000000000', 'ses_project00000', 'pending two', '2026-06-28T00:00:03.000Z', 'user');
+  store.upsertExternalAgentSession({ ...row, id: 'exa_inboxdiag000', lastVisibleSeq: 1, lastDeliveredSeq: 3 });
+  store.enqueueExternalAgentInboxItem('exa_inboxdiag000', 2);
+  store.enqueueExternalAgentInboxItem('exa_inboxdiag000', 3);
 
-  expect(store.countExternalAgentInbox('exa_inbox_diag')).toBe(2);
+  expect(store.countExternalAgentInbox('exa_inboxdiag000')).toBe(2);
 });
 
 test('external agent inbox diagnostics ignore inactive messages', () => {
-  store.insertMessage('msg_1', 'ses_project', 'pending one', '2026-06-28T00:00:01.000Z', 'user');
-  store.insertMessage('msg_2', 'ses_project', 'pending two', '2026-06-28T00:00:02.000Z', 'user');
-  store.upsertExternalAgentSession({ ...row, id: 'exa_inbox_diag', lastVisibleSeq: 0, lastDeliveredSeq: 2 });
-  store.enqueueExternalAgentInboxItem('exa_inbox_diag', 1);
-  store.enqueueExternalAgentInboxItem('exa_inbox_diag', 2);
-  store.restoreMessages('ses_project', 'msg_2');
+  store.insertMessage('msg_100000000000', 'ses_project00000', 'pending one', '2026-06-28T00:00:01.000Z', 'user');
+  store.insertMessage('msg_200000000000', 'ses_project00000', 'pending two', '2026-06-28T00:00:02.000Z', 'user');
+  store.upsertExternalAgentSession({ ...row, id: 'exa_inboxdiag000', lastVisibleSeq: 0, lastDeliveredSeq: 2 });
+  store.enqueueExternalAgentInboxItem('exa_inboxdiag000', 1);
+  store.enqueueExternalAgentInboxItem('exa_inboxdiag000', 2);
+  store.restoreMessages('ses_project00000', 'msg_200000000000');
 
-  expect(store.countExternalAgentInbox('exa_inbox_diag')).toBe(1);
+  expect(store.countExternalAgentInbox('exa_inboxdiag000')).toBe(1);
 });
 
 test('external agent inbox only exposes messages explicitly queued for that runtime', () => {
-  store.insertMessage('msg_1', 'ses_project', 'unqueued', '2026-06-28T00:00:01.000Z', 'user');
-  store.insertMessage('msg_2', 'ses_project', 'queued', '2026-06-28T00:00:02.000Z', 'user');
-  store.upsertExternalAgentSession({ ...row, id: 'exa_inbox_diag', lastVisibleSeq: 0, lastDeliveredSeq: 0 });
+  store.insertMessage('msg_100000000000', 'ses_project00000', 'unqueued', '2026-06-28T00:00:01.000Z', 'user');
+  store.insertMessage('msg_200000000000', 'ses_project00000', 'queued', '2026-06-28T00:00:02.000Z', 'user');
+  store.upsertExternalAgentSession({ ...row, id: 'exa_inboxdiag000', lastVisibleSeq: 0, lastDeliveredSeq: 0 });
 
-  store.enqueueExternalAgentInboxItem('exa_inbox_diag', 2);
+  store.enqueueExternalAgentInboxItem('exa_inboxdiag000', 2);
 
-  expect(store.listExternalAgentInbox('exa_inbox_diag')).toEqual([
+  expect(store.listExternalAgentInbox('exa_inboxdiag000')).toEqual([
     expect.objectContaining({
       seq: 2,
       deliveryState: 'queued',
-      message: expect.objectContaining({ id: 'msg_2', text: 'queued' })
+      message: expect.objectContaining({ id: 'msg_200000000000', text: 'queued' })
     })
   ]);
 });
 
 test('external agent inbox delivery and visible cursors update queued item state', () => {
-  store.insertMessage('msg_1', 'ses_project', 'queued', '2026-06-28T00:00:01.000Z', 'user');
-  store.upsertExternalAgentSession({ ...row, id: 'exa_inbox_diag', lastVisibleSeq: 0, lastDeliveredSeq: 0 });
-  store.enqueueExternalAgentInboxItem('exa_inbox_diag', 1);
+  store.insertMessage('msg_100000000000', 'ses_project00000', 'queued', '2026-06-28T00:00:01.000Z', 'user');
+  store.upsertExternalAgentSession({ ...row, id: 'exa_inboxdiag000', lastVisibleSeq: 0, lastDeliveredSeq: 0 });
+  store.enqueueExternalAgentInboxItem('exa_inboxdiag000', 1);
 
-  store.markExternalAgentInboxDelivered('exa_inbox_diag', 1);
-  expect(store.listExternalAgentInbox('exa_inbox_diag')[0]?.deliveryState).toBe('delivered');
+  store.markExternalAgentInboxDelivered('exa_inboxdiag000', 1);
+  expect(store.listExternalAgentInbox('exa_inboxdiag000')[0]?.deliveryState).toBe('delivered');
 
-  store.markExternalAgentInboxVisible('exa_inbox_diag', 1);
-  expect(store.getExternalAgentSession('exa_inbox_diag')).toMatchObject({ lastDeliveredSeq: 1, lastVisibleSeq: 1 });
-  expect(store.hasUnconsumedExternalAgentInbox('exa_inbox_diag')).toBe(true);
+  store.markExternalAgentInboxVisible('exa_inboxdiag000', 1);
+  expect(store.getExternalAgentSession('exa_inboxdiag000')).toMatchObject({ lastDeliveredSeq: 1, lastVisibleSeq: 1 });
+  expect(store.hasUnconsumedExternalAgentInbox('exa_inboxdiag000')).toBe(true);
 
-  store.markExternalAgentInboxConsumed('exa_inbox_diag', 1);
-  expect(store.hasUnconsumedExternalAgentInbox('exa_inbox_diag')).toBe(false);
+  store.markExternalAgentInboxConsumed('exa_inboxdiag000', 1);
+  expect(store.hasUnconsumedExternalAgentInbox('exa_inboxdiag000')).toBe(false);
 });
 
 test('message attachments register a file reference snapshot, not content', () => {
   const ref = store.registerMessageAttachment({
-    id: 'att_1',
-    projectId: 'ses_project',
+    id: 'att_100000000000',
+    projectId: 'ses_project00000',
     path: '/tmp/project/report.md',
     name: 'report.md',
     mime: 'text/markdown',
@@ -182,7 +188,7 @@ test('message attachments register a file reference snapshot, not content', () =
     createdAt: '2026-06-28T00:00:01.000Z'
   });
   expect(ref).toEqual({
-    id: 'att_1',
+    id: 'att_100000000000',
     path: '/tmp/project/report.md',
     name: 'report.md',
     mime: 'text/markdown',
@@ -190,8 +196,12 @@ test('message attachments register a file reference snapshot, not content', () =
     createdAt: '2026-06-28T00:00:01.000Z'
   });
 
-  const fetched = store.getMessageAttachment('att_1');
-  expect(fetched).toMatchObject({ id: 'att_1', projectId: 'ses_project', path: '/tmp/project/report.md' });
+  const fetched = store.getMessageAttachment('att_100000000000');
+  expect(fetched).toMatchObject({
+    id: 'att_100000000000',
+    projectId: 'ses_project00000',
+    path: '/tmp/project/report.md'
+  });
 });
 
 test('message attachment reader rejects paths that changed after registration', async () => {
@@ -204,8 +214,8 @@ test('message attachment reader rejects paths that changed after registration', 
     await writeFile(outside, 'outside secret');
     await writeFile(file, 'inside report');
     store.registerMessageAttachment({
-      id: 'att_1',
-      projectId: 'ses_project',
+      id: 'att_100000000000',
+      projectId: 'ses_project00000',
       path: file,
       name: 'report.md',
       mime: 'text/markdown',
@@ -219,7 +229,7 @@ test('message attachment reader rejects paths that changed after registration', 
 
     await expect(
       createNativeAgentAttachmentReader(store, ({ workingPath }) => (workingPath ? [workingPath] : [])).read(
-        'att_1',
+        'att_100000000000',
         false
       )
     ).rejects.toThrow('attachment path changed after registration');
@@ -229,10 +239,10 @@ test('message attachment reader rejects paths that changed after registration', 
 });
 
 test('native agent direct messages round-trip an attachment reference', () => {
-  store.upsertExternalAgentSession({ ...row, id: 'exa_direct' });
+  store.upsertExternalAgentSession({ ...row, id: 'exa_direct000000' });
   const ref = store.registerMessageAttachment({
-    id: 'att_1',
-    projectId: 'ses_project',
+    id: 'att_100000000000',
+    projectId: 'ses_project00000',
     path: '/tmp/project/report.md',
     name: 'report.md',
     mime: 'text/markdown',
@@ -241,9 +251,9 @@ test('native agent direct messages round-trip an attachment reference', () => {
     createdAt: '2026-06-28T00:00:00.000Z'
   });
   store.insertNativeAgentDirectMessage({
-    id: 'msg_D1',
-    sessionId: 'ses_project',
-    externalAgentSessionId: 'exa_direct',
+    id: 'msg_D10000000000',
+    sessionId: 'ses_project00000',
+    externalAgentSessionId: 'exa_direct000000',
     fromAgent: 'codex',
     peer: 'human',
     text: 'preview…',
@@ -251,45 +261,45 @@ test('native agent direct messages round-trip an attachment reference', () => {
     createdAt: '2026-06-28T00:00:01.000Z'
   });
   store.insertNativeAgentDirectMessage({
-    id: 'msg_D2',
-    sessionId: 'ses_project',
-    externalAgentSessionId: 'exa_direct',
+    id: 'msg_D20000000000',
+    sessionId: 'ses_project00000',
+    externalAgentSessionId: 'exa_direct000000',
     fromAgent: 'codex',
     peer: 'human',
     text: 'inline',
     createdAt: '2026-06-28T00:00:02.000Z'
   });
 
-  const messages = store.listNativeAgentDirectMessages('exa_direct', 'human');
+  const messages = store.listNativeAgentDirectMessages('exa_direct000000', 'human');
   expect(messages[0]?.attachments).toEqual([ref]);
 });
 
 test('provider session refs are unique per project session and provider when present', () => {
-  store.upsertExternalAgentSession({ ...row, id: 'exa_1', providerSessionRef: 'provider-thread-1' });
-  store.upsertExternalAgentSession({ ...row, id: 'exa_2', providerSessionRef: null });
-  store.upsertExternalAgentSession({ ...row, id: 'exa_3', providerSessionRef: null });
+  store.upsertExternalAgentSession({ ...row, id: 'exa_100000000000', providerSessionRef: 'provider-thread-1' });
+  store.upsertExternalAgentSession({ ...row, id: 'exa_200000000000', providerSessionRef: null });
+  store.upsertExternalAgentSession({ ...row, id: 'exa_300000000000', providerSessionRef: null });
   store.upsertExternalAgentSession({
     ...row,
-    id: 'exa_other_project',
-    transcriptTargetId: 'ses_other',
+    id: 'exa_otherproject',
+    transcriptTargetId: 'ses_other0000000',
     providerSessionRef: 'provider-thread-1'
   });
   store.upsertExternalAgentSession({
     ...row,
-    id: 'exa_other_provider',
+    id: 'exa_otherproUZGI',
     provider: 'claude-code',
     providerSessionRef: 'provider-thread-1'
   });
 
   expect(() =>
-    store.upsertExternalAgentSession({ ...row, id: 'exa_duplicate', providerSessionRef: 'provider-thread-1' })
+    store.upsertExternalAgentSession({ ...row, id: 'exa_duplicate000', providerSessionRef: 'provider-thread-1' })
   ).toThrow();
 });
 
 test('clearing a terminal external agent provider session ref allows a managed resume to claim it', () => {
   store.upsertExternalAgentSession({
     ...row,
-    id: 'exa_old',
+    id: 'exa_old000000000',
     runtimeRole: 'managed-project-agent',
     state: 'stopped',
     pid: null,
@@ -297,51 +307,45 @@ test('clearing a terminal external agent provider session ref allows a managed r
     exitedAt: '2026-06-28T00:00:01.000Z'
   });
 
-  expect(store.clearExternalAgentSessionRef('exa_old')).toBe(true);
-  store.upsertExternalAgentSession({ ...row, id: 'exa_new', providerSessionRef: 'provider-thread-1' });
+  expect(store.clearExternalAgentSessionRef('exa_old000000000')).toBe(true);
+  store.upsertExternalAgentSession({ ...row, id: 'exa_new000000000', providerSessionRef: 'provider-thread-1' });
 
-  expect(store.getExternalAgentSession('exa_new')?.providerSessionRef).toBe('provider-thread-1');
+  expect(store.getExternalAgentSession('exa_new000000000')?.providerSessionRef).toBe('provider-thread-1');
 });
 
 test('external agent inbox items expose delivery pointers without raw provider output', () => {
   store.upsertExternalAgentSession({
     ...row,
-    transcriptTargetId: 'ses_01KPROJECTDELIVERY000000000',
+    transcriptTargetId: 'ses_01KPROJEIdZ2',
     runtimeRole: 'managed-project-agent',
-    agentRuntimeId: 'exa_1',
+    agentRuntimeId: 'exa_100000000000',
     providerSessionRef: 'provider-session-1',
     outputSnapshot: '{"raw":"provider output"}'
   });
-  store.insertMessage(
-    'msg_01KDELIVERYTRIGGER00000000',
-    'ses_01KPROJECTDELIVERY000000000',
-    'hi',
-    '2026-06-28T00:00:01.000Z',
-    'user'
-  );
+  store.insertMessage('msg_01KDELIVumHr', 'ses_01KPROJEIdZ2', 'hi', '2026-06-28T00:00:01.000Z', 'user');
 
   expect(
-    store.enqueueExternalAgentInboxItem('exa_1', 1, {
-      deliveryId: 'deliv_01KDELIVERYTEST0000000000',
-      projectId: 'ses_01KPROJECTDELIVERY000000000' as ProjectId,
+    store.enqueueExternalAgentInboxItem('exa_100000000000', 1, {
+      deliveryId: 'deliv_01KDELIV8OEg',
+      projectId: 'ses_01KPROJEIdZ2' as ProjectId,
       memberInstanceId: 'pmem_codex_1',
-      triggerMessageId: 'msg_01KDELIVERYTRIGGER00000000',
+      triggerMessageId: 'msg_01KDELIVumHr',
       providerSessionRef: 'provider-session-1',
       providerTurnId: 'turn-1',
       createdAt: '2026-06-28T00:00:02.000Z'
     })
   ).toBe(true);
 
-  const [item] = store.listExternalAgentInbox('exa_1');
-  const delivery = store.getNativeAgentDelivery('deliv_01KDELIVERYTEST0000000000');
+  const [item] = store.listExternalAgentInbox('exa_100000000000');
+  const delivery = store.getNativeAgentDelivery('deliv_01KDELIV8OEg');
 
-  expect(item?.deliveryId).toBe('deliv_01KDELIVERYTEST0000000000');
+  expect(item?.deliveryId).toBe('deliv_01KDELIV8OEg');
   expect(delivery).toMatchObject({
-    id: 'deliv_01KDELIVERYTEST0000000000',
-    sessionId: 'ses_01KPROJECTDELIVERY000000000',
+    id: 'deliv_01KDELIV8OEg',
+    sessionId: 'ses_01KPROJEIdZ2',
     memberInstanceId: 'pmem_codex_1',
-    externalAgentSessionId: 'exa_1',
-    triggerMessageId: 'msg_01KDELIVERYTRIGGER00000000',
+    externalAgentSessionId: 'exa_100000000000',
+    triggerMessageId: 'msg_01KDELIVumHr',
     triggerMessageSeq: 1,
     state: 'queued',
     turn: { providerSessionRef: 'provider-session-1', providerTurnId: 'turn-1' }
@@ -350,21 +354,21 @@ test('external agent inbox items expose delivery pointers without raw provider o
 
 test('deleteSession cleans up external agent session rows', () => {
   store.upsertExternalAgentSession(row);
-  store.insertMessage('msg_cleanup', 'ses_project', 'cleanup', '2026-06-28T00:00:01.000Z', 'user');
-  expect(store.enqueueExternalAgentInboxItem('exa_1', 1)).toBe(true);
+  store.insertMessage('msg_cleanup00000', 'ses_project00000', 'cleanup', '2026-06-28T00:00:01.000Z', 'user');
+  expect(store.enqueueExternalAgentInboxItem('exa_100000000000', 1)).toBe(true);
   store.insertNativeAgentDirectMessage({
-    id: 'msg_direct_cleanup',
-    sessionId: 'ses_project',
-    externalAgentSessionId: 'exa_1',
+    id: 'msg_directclJJjb',
+    sessionId: 'ses_project00000',
+    externalAgentSessionId: 'exa_100000000000',
     fromAgent: 'codex',
     peer: 'claude',
     text: 'private',
     createdAt: '2026-06-28T00:00:02.000Z'
   });
-  expect(store.listNativeAgentDirectMessages('exa_1', 'claude')).toHaveLength(1);
+  expect(store.listNativeAgentDirectMessages('exa_100000000000', 'claude')).toHaveLength(1);
 
-  store.deleteWorkplaceProject('ses_project');
+  store.deleteWorkplaceProject('ses_project00000');
 
   store.upsertExternalAgentSession(row);
-  expect(store.enqueueExternalAgentInboxItem('exa_1', 1)).toBe(true);
+  expect(store.enqueueExternalAgentInboxItem('exa_100000000000', 1)).toBe(true);
 });

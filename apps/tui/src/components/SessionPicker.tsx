@@ -71,7 +71,7 @@ export function SessionPicker() {
       const session: Session = {
         id,
         title,
-        ownerPrincipalId: 'prn_unknown' as Session['ownerPrincipalId'],
+        ownerPrincipalId: 'prn_unknown00000' as Session['ownerPrincipalId'],
         state: 'active',
         agentIds: [],
         parentSessionId: null,

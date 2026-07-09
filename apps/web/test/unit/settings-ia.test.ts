@@ -4,9 +4,17 @@ import { join } from 'node:path';
 
 const settingsSource = readFileSync(join(import.meta.dir, '../../features/settings/Settings.tsx'), 'utf8');
 const settingsSectionsSource = readFileSync(join(import.meta.dir, '../../features/settings/sections.ts'), 'utf8');
-const appShellSource = readFileSync(join(import.meta.dir, '../../features/shell/AppShell.tsx'), 'utf8');
+const shellProviderSource = readFileSync(
+  join(import.meta.dir, '../../features/shell/page-shell/ShellRouteProvider.tsx'),
+  'utf8'
+);
+const shellNavigationSource = readFileSync(join(import.meta.dir, '../../features/shell/routing/navigation.ts'), 'utf8');
+const shellRouteSource = readFileSync(join(import.meta.dir, '../../features/shell/routing/use-shell-route.ts'), 'utf8');
 const sidebarSource = readFileSync(join(import.meta.dir, '../../features/shell/SessionSidebar.tsx'), 'utf8');
-const sidebarNavSource = readFileSync(join(import.meta.dir, '../../features/shell/SessionSidebarNav.tsx'), 'utf8');
+const settingsSidebarSource = readFileSync(
+  join(import.meta.dir, '../../features/shell/sidebar/settings-items.tsx'),
+  'utf8'
+);
 
 test('settings navigation folds language and composer into experience and removes global import', () => {
   const sectionType = settingsSectionsSource.match(/export type SettingsSectionId = ([^;]+);/)?.[1] ?? '';
@@ -21,17 +29,17 @@ test('settings navigation folds language and composer into experience and remove
 });
 
 test('settings route keeps the active section in the pathname', () => {
-  expect(appShellSource).toContain('settingsPath(normalizeSettingsSection(section))');
-  expect(appShellSource).toContain('setSettingsReturnPathState');
-  expect(appShellSource).toContain('settingsSectionFromPathname(pathname)');
-  expect(appShellSource).not.toContain("useShellSearchParam('returnTo')");
-  expect(appShellSource).not.toContain('buildNavigableModalUrl');
+  expect(shellNavigationSource).toContain('settingsPath(normalizeSettingsSection(section))');
+  expect(shellNavigationSource).toContain('setSettingsReturnPathState');
+  expect(shellRouteSource).toContain('settingsSectionFromPathname(pathname)');
+  expect(shellProviderSource).not.toContain("useShellSearchParam('returnTo')");
+  expect(shellProviderSource).not.toContain('buildNavigableModalUrl');
 });
 
 test('settings mode swaps the shell sidebar list instead of rendering an inner settings nav', () => {
   expect(sidebarSource).toContain('showSettings ?');
   expect(sidebarSource).toContain('<SettingsSidebarItems');
-  expect(sidebarNavSource).toContain('function SettingsSidebarItems');
-  expect(sidebarNavSource).toContain("label={t('web.common.back')}");
+  expect(settingsSidebarSource).toContain('function SettingsSidebarItems');
+  expect(settingsSidebarSource).toContain("label={t('web.common.back')}");
   expect(settingsSource).not.toContain('SettingsNavList');
 });

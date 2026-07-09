@@ -27,7 +27,7 @@ function capture(run: () => void): Record<string, unknown>[] {
 describe('browser sink developer records', () => {
   test('emit a numeric level + time that satisfy the developer-log wire schema', () => {
     const log = createLogger('web');
-    const records = capture(() => log.info({ sessionId: 'ses_1' }, 'hello'));
+    const records = capture(() => log.info({ sessionId: 'ses_100000000000' }, 'hello'));
     expect(records).toHaveLength(1);
     const rec = records[0];
     expect(typeof rec?.level).toBe('number'); // NOT the string 'info'
@@ -39,7 +39,7 @@ describe('browser sink developer records', () => {
 
   test('preserve an Error object message/stack instead of spreading to {}', () => {
     // sessionId binding so the record is fanned out; the point is the Error's fields survive.
-    const log = createLogger('web', { sessionId: 'ses_1' });
+    const log = createLogger('web', { sessionId: 'ses_100000000000' });
     const records = capture(() => log.error(new Error('boom')));
     expect(records).toHaveLength(1);
     const rec = records[0] as { msg?: string; err?: { message?: string; stack?: string; type?: string } };
@@ -51,14 +51,14 @@ describe('browser sink developer records', () => {
 
   test('fan out debug records to subscribers even when the console threshold is info', () => {
     const log = createLogger('web'); // default threshold = info (30)
-    const debugRecords = capture(() => log.debug({ sessionId: 'ses_1' }, 'below console threshold'));
+    const debugRecords = capture(() => log.debug({ sessionId: 'ses_100000000000' }, 'below console threshold'));
     expect(debugRecords).toHaveLength(1); // reaches subscribers despite being below info
     expect(debugRecords[0]?.level).toBe(20);
   });
 
   test('do NOT fan out trace records (below the debug developer floor, matching node)', () => {
     const log = createLogger('web');
-    const _traceRecords = capture(() => log.trace({ sessionId: 'ses_1' }, 'too low'));
+    const _traceRecords = capture(() => log.trace({ sessionId: 'ses_100000000000' }, 'too low'));
   });
 
   test('only records carrying a channelId/sessionId are fanned out', () => {

@@ -21,7 +21,7 @@ test('network settings probe checks a daemon health endpoint over HTTP', async (
   try {
     const paths = makeTestPaths(dir);
     await initMonadHome(paths);
-    const cfg = (await import('@monad/home')).createDefaultConfig('prn_test', 'Test');
+    const cfg = (await import('@monad/home')).createDefaultConfig('prn_test00000000', 'Test');
     const modelDeps = {
       paths,
       modelService: new ModelService(paths.auth, cfg, null, seededProviderRegistry()),

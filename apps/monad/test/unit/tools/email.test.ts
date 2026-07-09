@@ -174,12 +174,12 @@ test('resendBackend POSTs to the Resend API and returns the message id', async (
   const captured: Array<{ url: string; body: unknown }> = [];
   const fakeFetch = (async (url: string | URL | Request, init?: RequestInit) => {
     captured.push({ url: String(url), body: JSON.parse(String(init?.body)) });
-    return new Response(JSON.stringify({ id: 'msg_123' }), { status: 200 });
+    return new Response(JSON.stringify({ id: 'msg_123000000000' }), { status: 200 });
   }) as unknown as typeof fetch;
 
   const backend = resendBackend('rk_test', fakeFetch);
   const res = await backend.send(baseMsg);
-  expect(res).toEqual({ id: 'msg_123', backend: 'resend' });
+  expect(res).toEqual({ id: 'msg_123000000000', backend: 'resend' });
   expect(captured[0]?.url).toBe('https://api.resend.com/emails');
   expect(captured[0]?.body).toMatchObject({ from: 'me@example.com', to: ['you@example.org'], subject: 'Hi' });
 });

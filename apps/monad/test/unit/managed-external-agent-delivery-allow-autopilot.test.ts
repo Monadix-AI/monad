@@ -38,7 +38,7 @@ function buildHarness() {
     // Track B: managed members are now read from session_members, not origin.ext.
     listSessionMembers: () => [
       {
-        sessionId: 'ses_delegated',
+        sessionId: 'ses_delegated000',
         memberId: 'codex',
         templateId: null,
         type: 'external-agent',
@@ -69,7 +69,7 @@ const externalAgents: ExternalAgentConfig[] = [
 
 function sessionWithDelegatedCodexMember(): Session {
   return {
-    id: 'ses_delegated',
+    id: 'ses_delegated000',
     cwd: '/tmp/prj',
     origin: { client: 'workplace' }
   } as unknown as Session;

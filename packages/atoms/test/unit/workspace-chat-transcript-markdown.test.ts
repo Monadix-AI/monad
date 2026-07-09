@@ -5,7 +5,7 @@ import { expect, test } from 'bun:test';
 import { markdownTextWithMentionCapsules } from '../../src/workspace-experiences/chat-room/components/message-row.tsx';
 
 const message = (text: string, overrides: Partial<Message> = {}): Message => ({
-  id: 'msg_1',
+  id: 'msg_100000000000',
   authorId: 'agent_1',
   authorName: 'Agent',
   av: 'AG',

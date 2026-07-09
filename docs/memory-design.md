@@ -246,7 +246,7 @@ and ephemeral. Nothing it produces survives it. The read-path leak risk is close
 
 ```
 # mem_fact_events rows (append-only):
-{op: fact_added,      id: f_01, scope: global, content: "User uses Bun, not Node", source: evt_88, confidence: 0.9, ts: ...}
+{op: fact_added,      id: f_01, scope: global, content: "User uses Bun, not Node", source: evt_880000000000, confidence: 0.9, ts: ...}
 {op: fact_added,      id: f_02, scope: global, content: "User dislikes emoji-heavy text", source: user, confidence: 1.0, ts: ...}
 {op: fact_tombstoned, id: f_01, reason: user, ts: ...}
 ```
@@ -633,7 +633,7 @@ free-string `relation` + JSON `props` — new relation types / property keys nee
 | D22 | observe write contract | `observe(turn, WriteCtx{sessionId, scope, otr})` — explicit in the signature, not inferred from `Turn`; tags L1 facts with `otr` (L1 written even under OTR). (F-4) |
 | D23 | Storage schema | authoritative tables pinned in §13.1 (`mem_fact_events` w/ `seq`+`eventId`, `mem_facts`, `mem_nodes`, `mem_edges` w/ `provenanceClass`, `mem_laws`, `mem_cursors`, `otr` on sessions/tasks/messages). |
 | D24 | Job gating | gate checked *inside* each job. **Forward jobs (consolidate/catch-up/infer) run in any state ≠ `off`**; **backfill runs only in `backfilling`**. `off` ⇒ no graph/laws ever. OTR excludes `otr=true`. (§13.2, Point 1; F-3) |
-| D25 | Event/cursor/support IDs | cursor axis = `mem_fact_events.seq` (monotonic, not task-based); `eventId` stable ULID; `support` = set of `{factId,eventId,taskId}`; **tombstone propagates by `factId`** (same factId, new eventId) so dependents are found. (§13.3, Point 2; F-2) |
+| D25 | Event/cursor/support IDs | cursor axis = `mem_fact_events.seq` (monotonic, not task-based); `eventId` stable `evt_` nanoid; `support` = set of `{factId,eventId,taskId}`; **tombstone propagates by `factId`** (same factId, new eventId) so dependents are found. (§13.3, Point 2; F-2) |
 | D26 | Promotion policy | L3 **decides**, a store/daemon promotion job **applies**. One step at a time; ≥N distinct sessions; `→global` needs `user` provenance or (machine ∧ ≥N sessions ∧ confidence≥τ); otr never eligible; reversible. (§13.4, Point 5) |
 | D-P3 | L2 edge provenance | `provenanceClass` is part of the edge unique key — `user` and `machine` edges for the same relation/window never merge. (§4 / §13.1, Point 3) |
 | D27 | L3 write boundary | L3 mutates **only `mem_laws`**; never the L2 graph, fact events, or MD. Promotion/demotion are decisions applied by a separate job. (§5.3, F-4) |
@@ -750,7 +750,7 @@ event/cursor/support IDs, promotion policy**.
 
 ### 13.1 Storage schema (authoritative DDL intent)
 
-All `bun:sqlite`; only L1.1 is files. `id` columns are ULIDs (`@monad/protocol`).
+All `bun:sqlite`; only L1.1 is files. Branded `id` columns use `prefix_` plus a 12-character alphanumeric nanoid (`@monad/protocol`).
 
 ```
 -- L1.1: files (SOUL/AGENTS/USER/MEMORY .md per scope) — not in DB.
@@ -758,7 +758,7 @@ All `bun:sqlite`; only L1.1 is files. `id` columns are ULIDs (`@monad/protocol`)
 -- L1.2 truth: append-only event log
 mem_fact_events
   seq         INTEGER PRIMARY KEY AUTOINCREMENT   -- the ONE monotonic cursor axis (§13.3)
-  eventId     TEXT NOT NULL UNIQUE                -- stable ULID, assigned at observe()
+  eventId     TEXT NOT NULL UNIQUE                -- stable evt_ nanoid, assigned at observe()
   op          TEXT NOT NULL                       -- 'fact_added' | 'fact_edited' | 'fact_tombstoned'
   factId      TEXT NOT NULL                       -- stable across edits/tombstone of the same fact
   scopeKind   TEXT NOT NULL                       -- 'session'|'agent'|'global'  (+'org' future)
@@ -825,7 +825,7 @@ is not.
 
 Pinned definitions, no ambiguity:
 
-- **`eventId`** — stable ULID, assigned once at `observe()` per event row; never reused.
+- **`eventId`** — stable `evt_` nanoid, assigned once at `observe()` per event row; never reused.
 - **Cursor axis is `mem_fact_events.seq`** (monotonic autoincrement), **not** task-based. L2 and
   L3 each store `throughSeq`; "process new" = `WHERE seq > throughSeq`.
 - **`support`** is a set of `{factId, eventId, taskId}` (resolves F-2). **`factId` is the

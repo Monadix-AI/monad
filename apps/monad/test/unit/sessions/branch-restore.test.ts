@@ -54,7 +54,9 @@ test('restore rejects a non-user target message', async () => {
 test('restore rejects an unknown message id', async () => {
   const d = buildHandlers(mockModel(['A']));
   const { sessionId } = await d.session.create({ title: 't' });
-  await expect(d.session.restore({ id: sessionId, toMessageId: 'msg_nope' })).rejects.toBeInstanceOf(HandlerError);
+  await expect(d.session.restore({ id: sessionId, toMessageId: 'msg_nope00000000' })).rejects.toBeInstanceOf(
+    HandlerError
+  );
 });
 
 test('messages(includeAncestors) replays parent history truncated at the branch point', async () => {

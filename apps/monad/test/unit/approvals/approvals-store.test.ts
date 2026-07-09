@@ -35,11 +35,11 @@ test('persists global + agent rules across a reload', async () => {
   const file = tmpFile();
   const store = await ApprovalStore.load(file);
   await store.add(rule('g1', { scope: 'global' }));
-  await store.add(rule('a1', { scope: 'agent', agentId: 'agt_1' }));
+  await store.add(rule('a1', { scope: 'agent', agentId: 'agt_100000000000' }));
 
   const reloaded = await ApprovalStore.load(file);
   expect(reloaded.global().map((r) => r.id)).toEqual(['g1']);
-  expect(reloaded.forAgent('agt_1').map((r) => r.id)).toEqual(['a1']);
+  expect(reloaded.forAgent('agt_100000000000').map((r) => r.id)).toEqual(['a1']);
   expect(reloaded.all()).toHaveLength(2);
 });
 
@@ -58,7 +58,7 @@ test('a schema-mismatched file loads as empty (fail-closed)', async () => {
 test('remove deletes by id and prunes empty agent buckets', async () => {
   const file = tmpFile();
   const store = await ApprovalStore.load(file);
-  await store.add(rule('a1', { scope: 'agent', agentId: 'agt_1' }));
+  await store.add(rule('a1', { scope: 'agent', agentId: 'agt_100000000000' }));
   expect(await store.remove('a1')).toBe(true);
   expect(await store.remove('a1')).toBe(false);
   const _reloaded = await ApprovalStore.load(file);
@@ -68,11 +68,11 @@ test('clear filters by scope/agent', async () => {
   const file = tmpFile();
   const store = await ApprovalStore.load(file);
   await store.add(rule('g1', { scope: 'global' }));
-  await store.add(rule('a1', { scope: 'agent', agentId: 'agt_1' }));
-  await store.add(rule('a2', { scope: 'agent', agentId: 'agt_2' }));
+  await store.add(rule('a1', { scope: 'agent', agentId: 'agt_100000000000' }));
+  await store.add(rule('a2', { scope: 'agent', agentId: 'agt_200000000000' }));
 
-  expect(await store.clear({ scope: 'agent', agentId: 'agt_1' })).toBe(1);
-  expect(store.forAgent('agt_2')).toHaveLength(1);
+  expect(await store.clear({ scope: 'agent', agentId: 'agt_100000000000' })).toBe(1);
+  expect(store.forAgent('agt_200000000000')).toHaveLength(1);
   expect(store.global()).toHaveLength(1);
 
   expect(await store.clear()).toBe(2);

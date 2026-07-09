@@ -21,8 +21,8 @@ function ok<T>(data: T) {
 
 function makeAgent(overrides: Partial<{ id: string; name: string }> = {}) {
   return {
-    id: overrides.id ?? 'agt_test1',
-    principalId: 'prn_test1',
+    id: overrides.id ?? 'agt_test10000000',
+    principalId: 'prn_test10000000',
     name: overrides.name ?? 'Test Agent',
     capabilities: [] as string[],
     declaredScopes: [] as unknown[],

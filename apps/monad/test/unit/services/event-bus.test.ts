@@ -19,8 +19,8 @@ test('control subscriber sees list-level events from sessions it never subscribe
   const control: EventType[] = [];
   bus.subscribeControl((e) => control.push(e.type));
 
-  bus.publish(ev('session.created', 'ses_brand_new'));
-  bus.publish(ev('task.completed', 'ses_other'));
+  bus.publish(ev('session.created', 'ses_brandnew0000'));
+  bus.publish(ev('task.completed', 'ses_other0000000'));
 
   expect(control).toEqual(['session.created', 'task.completed']);
 });
@@ -30,9 +30,9 @@ test('external-agent lifecycle fans out to control so the session list stays liv
   const control: EventType[] = [];
   bus.subscribeControl((e) => control.push(e.type));
 
-  bus.publish(ev('external_agent.started', 'prj_a'));
-  bus.publish(ev('external_agent.output', 'prj_a'));
-  bus.publish(ev('external_agent.exited', 'prj_a'));
+  bus.publish(ev('external_agent.started', 'prj_a00000000000'));
+  bus.publish(ev('external_agent.output', 'prj_a00000000000'));
+  bus.publish(ev('external_agent.exited', 'prj_a00000000000'));
 
   // started/exited are list-level (a session appeared/ended); per-token output stays session-scoped.
   expect(control).toEqual(['external_agent.started', 'external_agent.exited']);
@@ -43,11 +43,11 @@ test('in-session detail does not fan out to the control stream', () => {
   const control: EventType[] = [];
   const session: EventType[] = [];
   bus.subscribeControl((e) => control.push(e.type));
-  bus.subscribe('ses_a' as SessionId, (e) => session.push(e.type));
+  bus.subscribe('ses_a00000000000' as SessionId, (e) => session.push(e.type));
 
-  bus.publish(ev('agent.token', 'ses_a'));
-  bus.publish(ev('tool.called', 'ses_a'));
-  bus.publish(ev('session.updated', 'ses_a'));
+  bus.publish(ev('agent.token', 'ses_a00000000000'));
+  bus.publish(ev('tool.called', 'ses_a00000000000'));
+  bus.publish(ev('session.updated', 'ses_a00000000000'));
 
   // The session subscriber sees everything for its session...
   expect(session).toEqual(['agent.token', 'tool.called', 'session.updated']);
@@ -58,11 +58,11 @@ test('in-session detail does not fan out to the control stream', () => {
 test('disposing a subscription stops delivery and frees the topic', () => {
   const bus = new EventBus();
   const seen: EventType[] = [];
-  const dispose = bus.subscribe('ses_a' as SessionId, (e) => seen.push(e.type));
+  const dispose = bus.subscribe('ses_a00000000000' as SessionId, (e) => seen.push(e.type));
 
-  bus.publish(ev('session.updated', 'ses_a'));
+  bus.publish(ev('session.updated', 'ses_a00000000000'));
   dispose();
-  bus.publish(ev('session.updated', 'ses_a'));
+  bus.publish(ev('session.updated', 'ses_a00000000000'));
 
   expect(seen).toEqual(['session.updated']);
 });

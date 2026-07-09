@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { sessionIdSchema } from '../ids.ts';
+import { externalAgentAuthSessionIdSchema, externalAgentSessionIdSchema, sessionIdSchema } from '../ids.ts';
 import { cursorPaginationQuerySchema, cursorPaginationResponseSchema } from '../pagination.ts';
 import {
   externalAgentApprovalOwnershipSchema,
@@ -38,7 +38,7 @@ export const externalAgentUsageResponseSchema = z.object({
 export type ExternalAgentUsageResponse = z.infer<typeof externalAgentUsageResponseSchema>;
 
 export const externalAgentAuthSessionViewSchema = z.object({
-  id: z.string().regex(/^ncliauth_/),
+  id: externalAgentAuthSessionIdSchema,
   controlToken: z.string().min(32),
   agentName: z.string(),
   provider: externalAgentProviderSchema,
@@ -56,7 +56,7 @@ export const externalAgentAuthSessionViewSchema = z.object({
 export type ExternalAgentAuthSessionView = z.infer<typeof externalAgentAuthSessionViewSchema>;
 
 export const externalAgentSessionViewSchema = z.object({
-  id: z.string().regex(/^exa_/),
+  id: externalAgentSessionIdSchema,
   sessionId: sessionIdSchema,
   agentName: z.string(),
   provider: externalAgentProviderSchema,
@@ -89,7 +89,7 @@ export const nativeAgentSessionPointerSchema = z.object({
 export type NativeAgentSessionPointer = z.infer<typeof nativeAgentSessionPointerSchema>;
 
 export const nativeAgentRuntimeSchema = z.object({
-  id: z.string().regex(/^exa_/),
+  id: externalAgentSessionIdSchema,
   sessionId: sessionIdSchema,
   agentName: z.string(),
   provider: externalAgentProviderSchema,

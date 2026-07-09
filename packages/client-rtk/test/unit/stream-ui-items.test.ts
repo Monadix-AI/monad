@@ -71,25 +71,25 @@ test('snapshot captures oldestCursor and hasMore from the bounded window', () =>
   const snap: SessionUiEvent = {
     kind: 'snapshot',
     items: [item('message', 'a')],
-    oldestCursor: 'msg_a',
+    oldestCursor: 'msg_a00000000000',
     hasMore: true
   } as SessionUiEvent;
   applyUiEvent(draft, snap, index);
-  expect(draft.oldestCursor).toBe('msg_a');
+  expect(draft.oldestCursor).toBe('msg_a00000000000');
   expect(draft.hasMore).toBe(true);
 });
 
 test('upsert and remove leave the snapshot cursors untouched', () => {
   const draft: { items: UIItem[]; oldestCursor?: string; hasMore?: boolean } = {
     items: [item('message', 'a')],
-    oldestCursor: 'msg_a',
+    oldestCursor: 'msg_a00000000000',
     hasMore: true
   };
   const index = buildIndex(draft.items);
   applyUiEvent(draft, upsert(item('message', 'b')), index);
-  expect(draft.oldestCursor).toBe('msg_a');
+  expect(draft.oldestCursor).toBe('msg_a00000000000');
   expect(draft.hasMore).toBe(true);
   applyUiEvent(draft, remove('message', 'b'), index);
-  expect(draft.oldestCursor).toBe('msg_a');
+  expect(draft.oldestCursor).toBe('msg_a00000000000');
   expect(draft.hasMore).toBe(true);
 });

@@ -4,9 +4,13 @@ import {
   type SkillMarketplaceSource
 } from '@monad/protocol';
 
+import { normalizeSettingsSection, type SettingsSectionId } from '#/features/settings/sections';
+import { isStudioSectionId, type StudioSectionId } from '#/features/studio/sections';
 import { safeDecode } from '#/lib/workspace-sessions';
-import { normalizeSettingsSection, type SettingsSectionId } from '../settings/sections';
-import { isStudioSectionId, type StudioSectionId } from '../studio/sections';
+
+const NANOID_PATTERN = '[0-9A-Za-z_-]{12}';
+const PROJECT_ROUTE_ID_PATTERN = `prj_${NANOID_PATTERN}`;
+const SESSION_ROUTE_ID_PATTERN = `ses_${NANOID_PATTERN}`;
 
 export function isStudioPath(pathname: string): boolean {
   return pathname.startsWith('/studio/');
@@ -75,15 +79,46 @@ export function skillMarketplacePath(source: SkillMarketplaceSource = DEFAULT_SK
 }
 
 export function isWorkspacePath(pathname: string): boolean {
-  return pathname === '/' || pathname.startsWith('/workplace/projects/') || pathname.startsWith('/sessions/');
+  return (
+    pathname === '/' ||
+    new RegExp(`^/workspace/${PROJECT_ROUTE_ID_PATTERN}(?:[/?#]|$)`).test(pathname) ||
+    new RegExp(`^/workspace/${PROJECT_ROUTE_ID_PATTERN}/${SESSION_ROUTE_ID_PATTERN}(?:[/?#]|$)`).test(pathname) ||
+    pathname.startsWith('/sessions/')
+  );
 }
 
 export function sessionIdFromPathname(pathname: string): string | null {
   return pathname.match(/^\/sessions\/([^/?#]+)/)?.[1] ?? null;
 }
 
+export function projectRouteId(projectId: string): string {
+  return projectId;
+}
+
+export function sessionRouteId(sessionId: string): string {
+  return sessionId;
+}
+
+export function projectPath(projectId: string): string {
+  return `/workspace/${encodeURIComponent(projectRouteId(projectId))}`;
+}
+
+export function projectSessionPath(projectId: string, sessionId: string): string {
+  return `${projectPath(projectId)}/${encodeURIComponent(sessionRouteId(sessionId))}`;
+}
+
 export function projectIdFromPathname(pathname: string): string | null {
-  const raw = pathname.match(/^\/workplace\/projects\/([^/?#]+)/)?.[1];
+  const raw = pathname.match(
+    new RegExp(`^/workspace/(${PROJECT_ROUTE_ID_PATTERN})(?:/${SESSION_ROUTE_ID_PATTERN})?(?:[/?#]|$)`)
+  )?.[1];
+  if (!raw) return null;
+  return safeDecode(raw);
+}
+
+export function projectSessionIdFromPathname(pathname: string): string | null {
+  const raw = pathname.match(
+    new RegExp(`^/workspace/${PROJECT_ROUTE_ID_PATTERN}/(${SESSION_ROUTE_ID_PATTERN})(?:[/?#]|$)`)
+  )?.[1];
   if (!raw) return null;
   return safeDecode(raw);
 }

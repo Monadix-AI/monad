@@ -10,6 +10,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { listProjectExperiences, toProjectExperienceDefinitions } from '#/features/workplace/experiences/registry';
 import { Workplace } from '#/features/workplace/Workplace';
 import { useWorkplaceUiStore } from '#/features/workplace/workplace-ui-store';
+import { useWorkspaceShellStore } from '#/lib/workspace-shell-store';
 import { ProjectTopBar } from './ProjectTopBar';
 import { useProjectViewMode } from './use-project-view-mode';
 import { WorkspaceHome } from './WorkspaceHome';
@@ -44,11 +45,11 @@ interface CachedProjectWorkplaceProps {
 
 export interface WorkspaceRouteProps {
   activeProjectId: string | null;
+  activeProjectSessionId: SessionId | null;
   agentSession: Session | null;
   projects: { id: string; name: string; cwd?: string }[];
-  onNewAgentChat: () => void;
-  onNewProject: () => void;
-  onOpenAgentChat: () => void;
+  onNewMonadChat: () => void;
+  onOpenMonadChat: () => void;
   onOpenProject: (projectId: string) => void;
   onProjectDeleted: () => void;
   onOpenSettings: () => void;
@@ -73,32 +74,29 @@ function participantsSignature(participants: ProjectController['participants']):
 
 export function WorkspaceRoute({
   activeProjectId,
+  activeProjectSessionId,
   agentSession,
   projects,
-  onNewAgentChat,
-  onNewProject,
-  onOpenAgentChat,
+  onNewMonadChat,
+  onOpenMonadChat,
   onOpenProject,
   onProjectDeleted,
   onOpenSettings,
   onOpenStudio,
   voiceModelState = 'checking'
 }: WorkspaceRouteProps) {
-  const [preferredMode, setMode] = useProjectViewMode(activeProjectId);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [activeSessionTitle, setActiveSessionTitle] = useState<string | null>(null);
+  const [preferredMode, setMode] = useProjectViewMode(activeProjectId, activeSessionId);
   const [activeProjectParticipants, setActiveProjectParticipants] = useState<ActiveProjectParticipants>({
     participants: EMPTY_PROJECT_PARTICIPANTS,
     signature: ''
   });
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
-  const [activeProjectSessions, setActiveProjectSessions] = useState<Session[]>([]);
   const switchSessionRef = useRef<ProjectController['switchSession'] | null>(null);
-  const closeSessionRef = useRef<ProjectController['closeSession'] | null>(null);
   const switchSession = useCallback((id: SessionId) => switchSessionRef.current?.(id), []);
-  const closeSession = useCallback(async (id: SessionId) => {
-    await closeSessionRef.current?.(id);
-  }, []);
   const [cachedProjectEntries, setCachedProjectEntries] = useState<CachedProjectEntry[]>([]);
   const openProjectSettingsInStore = useWorkplaceUiStore((state) => state.openProjectSettings);
+  const setActiveProjectSession = useWorkspaceShellStore((state) => state.setActiveProjectSession);
   const { data: workspaceExperiences, isLoading: workspaceExperiencesLoading } = useListWorkspaceExperiencesQuery(
     undefined,
     { skip: !activeProjectId }
@@ -115,16 +113,29 @@ export function WorkspaceRoute({
   const openProjectSettings = useCallback(() => {
     if (activeProjectId) openProjectSettingsInStore(activeProjectId);
   }, [activeProjectId, openProjectSettingsInStore]);
-  const updateActiveProjectParticipants = useCallback((project: ProjectController) => {
-    const signature = participantsSignature(project.participants);
-    setActiveProjectParticipants((current) =>
-      current.signature === signature ? current : { participants: project.participants, signature }
-    );
-    setActiveSessionId((current) => (current === project.activeSessionId ? current : project.activeSessionId));
-    setActiveProjectSessions((current) => (current === project.projectSessions ? current : project.projectSessions));
-    switchSessionRef.current = project.switchSession;
-    closeSessionRef.current = project.closeSession;
-  }, []);
+  const updateActiveProjectParticipants = useCallback(
+    (project: ProjectController) => {
+      const signature = participantsSignature(project.participants);
+      setActiveProjectParticipants((current) =>
+        current.signature === signature ? current : { participants: project.participants, signature }
+      );
+      if (
+        activeProjectSessionId &&
+        project.activeSessionId !== activeProjectSessionId &&
+        project.projectSessions.some((session) => session.id === activeProjectSessionId)
+      ) {
+        project.switchSession(activeProjectSessionId);
+        return;
+      }
+      setActiveSessionId((current) => (current === project.activeSessionId ? current : project.activeSessionId));
+      setActiveSessionTitle((current) => {
+        const next = project.projectSessions.find((session) => session.id === project.activeSessionId)?.title ?? null;
+        return current === next ? current : next;
+      });
+      switchSessionRef.current = project.switchSession;
+    },
+    [activeProjectSessionId]
+  );
   const handleProjectDeleted = useCallback(
     (projectId: string) => {
       setCachedProjectEntries((entries) => entries.filter((entry) => entry.projectId !== projectId));
@@ -132,6 +143,19 @@ export function WorkspaceRoute({
     },
     [onProjectDeleted]
   );
+  useEffect(() => {
+    if (!activeProjectId) {
+      setActiveProjectSession(null);
+      return;
+    }
+    setActiveProjectSession({
+      activeSessionId: activeSessionId as SessionId | null,
+      projectId: activeProjectId,
+      switchSession
+    });
+  }, [activeProjectId, activeSessionId, setActiveProjectSession, switchSession]);
+
+  useEffect(() => () => setActiveProjectSession(null), [setActiveProjectSession]);
 
   // Resets transient active-project UI state on a real project switch only — deliberately keyed on
   // `activeProjectId` alone. `projects` must NOT be a dependency here: its array reference changes on
@@ -140,7 +164,7 @@ export function WorkspaceRoute({
   useEffect(() => {
     setActiveProjectParticipants({ participants: EMPTY_PROJECT_PARTICIPANTS, signature: '' });
     setActiveSessionId(null);
-    setActiveProjectSessions([]);
+    setActiveSessionTitle(null);
     if (!activeProjectId) setCachedProjectEntries([]);
   }, [activeProjectId]);
 
@@ -185,16 +209,14 @@ export function WorkspaceRoute({
           <ProjectTopBar
             experiences={experiences}
             mode={mode}
-            onCloseSession={closeSession}
             onModeChange={setMode}
             onOpenSettings={openProjectSettings}
-            onSwitchSession={switchSession}
             participants={activeProjectParticipants.participants}
             projectId={activeProjectId as ProjectId}
             projectName={projectName}
             projectWorkdir={activeProject?.cwd}
             sessionId={activeSessionId as SessionId | null}
-            sessions={activeProjectSessions}
+            sessionTitle={activeSessionTitle}
           />
           <div className="g1-workspace-canvas">
             {cachedProjectEntries.map((entry) => {
@@ -229,9 +251,8 @@ export function WorkspaceRoute({
     <WorkspaceHome
       activeProjectId={activeProjectId}
       agentSession={agentSession}
-      onNewAgentChat={onNewAgentChat}
-      onNewProject={onNewProject}
-      onOpenAgentChat={onOpenAgentChat}
+      onNewMonadChat={onNewMonadChat}
+      onOpenMonadChat={onOpenMonadChat}
       onOpenProject={onOpenProject}
       onOpenSettings={onOpenSettings}
       onOpenStudio={onOpenStudio}
@@ -250,7 +271,8 @@ const CachedProjectWorkplace = memo(function CachedProjectWorkplace({
   projectId,
   voiceModelState
 }: CachedProjectWorkplaceProps) {
-  const [preferredMode, setProjectMode] = useProjectViewMode(projectId);
+  const [activeSessionId, setActiveSessionId] = useState<SessionId | null>(null);
+  const [preferredMode, setProjectMode] = useProjectViewMode(projectId, activeSessionId);
   const mode = experiences.some((experience) => experience.id === preferredMode)
     ? (preferredMode as string)
     : (experiences[0]?.id ?? '');
@@ -261,6 +283,13 @@ const CachedProjectWorkplace = memo(function CachedProjectWorkplace({
     },
     [active, onModeChange, setProjectMode]
   );
+  const handleProjectControllerChange = useCallback(
+    (project: ProjectController) => {
+      setActiveSessionId((current) => (current === project.activeSessionId ? current : project.activeSessionId));
+      onProjectControllerChange?.(project);
+    },
+    [onProjectControllerChange]
+  );
 
   return (
     <Workplace
@@ -269,7 +298,7 @@ const CachedProjectWorkplace = memo(function CachedProjectWorkplace({
       experiencesLoading={experiencesLoading}
       mode={mode}
       onModeChange={setMode}
-      onProjectControllerChange={onProjectControllerChange}
+      onProjectControllerChange={handleProjectControllerChange}
       onProjectDeleted={onProjectDeleted}
       projectId={projectId}
       voiceModelState={voiceModelState}

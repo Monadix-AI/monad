@@ -14,7 +14,7 @@ test('registry resolves the claude-code adapter so a result parses to a card, no
     is_error: false,
     result: 'Both agents are now engaged and standing by.'
   });
-  const [item] = externalAgentStreamItems({ id: 'exa_x', provider: 'claude-code', output });
+  const [item] = externalAgentStreamItems({ id: 'exa_x00000000000', provider: 'claude-code', output });
 
   expect(item?.providerEventType).toBe('result');
   expect(item?.text).toBe('Both agents are now engaged and standing by.');
@@ -22,7 +22,7 @@ test('registry resolves the claude-code adapter so a result parses to a card, no
 
 test('registry resolves codex/gemini/qwen provider output structurally', () => {
   const codex = externalAgentStreamItems({
-    id: 'exa_c',
+    id: 'exa_c00000000000',
     provider: 'codex',
     output: '{"method":"item/reasoning/textDelta","params":{"delta":"Inspecting."}}'
   });

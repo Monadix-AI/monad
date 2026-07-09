@@ -4,13 +4,18 @@ import { experienceFanoutRequestSchema, experienceProjectionEventSchema } from '
 
 test('experience fanout request keeps project membership separate from transport details', () => {
   const parsed = experienceFanoutRequestSchema.parse({
-    projectId: 'prj_PROJECT',
+    projectId: 'prj_PROJECT00000',
     experienceId: 'chat-room',
-    triggerMessageId: 'msg_TRIGGER',
+    triggerMessageId: 'msg_TRIGGER00000',
     triggerMessageSeq: 12,
     recipients: [
       { participantId: 'monad', displayName: 'Monad', transport: 'monad' },
-      { participantId: 'external-agent:codex', displayName: 'Codex', transport: 'external-agent', runtimeId: 'exa_1' },
+      {
+        participantId: 'external-agent:codex',
+        displayName: 'Codex',
+        transport: 'external-agent',
+        runtimeId: 'exa_100000000000'
+      },
       { participantId: 'acp:reviewer', displayName: 'Reviewer', transport: 'acp' }
     ],
     createdAt: '2026-06-28T00:00:00.000Z'
@@ -23,12 +28,12 @@ test('experience fanout request keeps project membership separate from transport
 test('experience projection event is ordered projection state, not provider raw output', () => {
   const parsed = experienceProjectionEventSchema.parse({
     id: 'projection_1',
-    projectId: 'prj_PROJECT',
+    projectId: 'prj_PROJECT00000',
     experienceId: 'chat-room',
     kind: 'thinking',
     orderKey: 12,
     participantId: 'external-agent:codex',
-    sourceDeliveryId: 'deliv_ABC123',
+    sourceDeliveryId: 'deliv_ABC123000000',
     payload: {
       fanoutAgents: ['external-agent:codex', 'external-agent:claude-code'],
       text: 'Agents are working'
@@ -43,7 +48,7 @@ test('experience projection event is ordered projection state, not provider raw 
     text: 'Agents are working'
   });
   expect('output' in parsed).toBe(false);
-  expect(experienceProjectionEventSchema.safeParse({ ...parsed, sourceDeliveryId: 'msg_NOT_DELIVERY' }).success).toBe(
+  expect(experienceProjectionEventSchema.safeParse({ ...parsed, sourceDeliveryId: 'msg_NOTDELIVERY0' }).success).toBe(
     false
   );
 });

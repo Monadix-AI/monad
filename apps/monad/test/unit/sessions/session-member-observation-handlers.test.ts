@@ -124,8 +124,8 @@ describe('observeMemberUi', () => {
       const session = fixtureSession(store);
       insertMonadMember(store, session.id);
       store.appendEvents([
-        fixtureEvent(session.id, { type: 'user.message', payload: { messageId: 'msg_1', text: 'hi' } }),
-        fixtureEvent(session.id, { type: 'agent.message', payload: { messageId: 'msg_2', text: 'hello' } })
+        fixtureEvent(session.id, { type: 'user.message', payload: { messageId: 'msg_100000000000', text: 'hi' } }),
+        fixtureEvent(session.id, { type: 'agent.message', payload: { messageId: 'msg_200000000000', text: 'hello' } })
       ]);
       const { handlers } = buildHarness(store);
 
@@ -143,10 +143,10 @@ describe('observeMemberUi', () => {
       const session = fixtureSession(store);
       insertMonadMember(store, session.id);
       store.appendEvents([
-        fixtureEvent(session.id, { type: 'user.message', payload: { messageId: 'msg_1', text: 'hi' } }),
+        fixtureEvent(session.id, { type: 'user.message', payload: { messageId: 'msg_100000000000', text: 'hi' } }),
         fixtureEvent(session.id, {
           type: 'agent.message',
-          payload: { messageId: 'msg_2', text: 'from codex', externalAgentSessionId: 'exa_abc' }
+          payload: { messageId: 'msg_200000000000', text: 'from codex', externalAgentSessionId: 'exa_abc000000000' }
         })
       ]);
       const { handlers } = buildHarness(store);
@@ -168,7 +168,10 @@ describe('observeMemberUi', () => {
 
       aborts.set(session.id, new AbortController());
       cache.append(
-        fixtureEvent(session.id, { type: 'agent.token', payload: { messageId: 'msg_1', delta: 'Hi', index: 0 } })
+        fixtureEvent(session.id, {
+          type: 'agent.token',
+          payload: { messageId: 'msg_100000000000', delta: 'Hi', index: 0 }
+        })
       );
 
       const frame = handlers.observeMemberUi({ sessionId: session.id, memberId: 'monad' });
@@ -194,7 +197,9 @@ describe('subscribeMemberUiObservation', () => {
       );
       expect(frames).toHaveLength(1);
 
-      bus.publish(fixtureEvent(session.id, { type: 'user.message', payload: { messageId: 'msg_1', text: 'hi' } }));
+      bus.publish(
+        fixtureEvent(session.id, { type: 'user.message', payload: { messageId: 'msg_100000000000', text: 'hi' } })
+      );
       expect(frames).toHaveLength(2);
       expect(frames[1]).toMatchObject({ state: 'live', events: [{ kind: 'user-message' }] });
 
@@ -202,14 +207,17 @@ describe('subscribeMemberUiObservation', () => {
       bus.publish(
         fixtureEvent(session.id, {
           type: 'agent.message',
-          payload: { messageId: 'msg_2', text: 'other', externalAgentSessionId: 'exa_abc' }
+          payload: { messageId: 'msg_200000000000', text: 'other', externalAgentSessionId: 'exa_abc000000000' }
         })
       );
       expect(frames).toHaveLength(2);
 
       dispose();
       bus.publish(
-        fixtureEvent(session.id, { type: 'user.message', payload: { messageId: 'msg_3', text: 'after dispose' } })
+        fixtureEvent(session.id, {
+          type: 'user.message',
+          payload: { messageId: 'msg_300000000000', text: 'after dispose' }
+        })
       );
       expect(frames).toHaveLength(2);
     } finally {
@@ -229,7 +237,9 @@ describe('subscribeMemberUiObservation', () => {
         { state: 'unavailable', sessionId: session.id, memberId: 'nope', reason: expect.any(String) }
       ]);
 
-      bus.publish(fixtureEvent(session.id, { type: 'user.message', payload: { messageId: 'msg_1', text: 'hi' } }));
+      bus.publish(
+        fixtureEvent(session.id, { type: 'user.message', payload: { messageId: 'msg_100000000000', text: 'hi' } })
+      );
       expect(frames).toHaveLength(1);
     } finally {
       store.close();

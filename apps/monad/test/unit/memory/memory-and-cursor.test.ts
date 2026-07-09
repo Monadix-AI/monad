@@ -43,7 +43,11 @@ test('clearMessages drops the durable context summary', () => {
   const s = session();
   store.insertSession(s);
   store.insertMessage(newId('msg'), s.id, 'hello', new Date().toISOString(), 'user');
-  store.setMemory(s.id, 'ctx:summary', JSON.stringify({ summary: 'Earlier context.', uptoMessageId: 'msg_1' }));
+  store.setMemory(
+    s.id,
+    'ctx:summary',
+    JSON.stringify({ summary: 'Earlier context.', uptoMessageId: 'msg_100000000000' })
+  );
   store.setMemory(s.id, 'other', 'keep');
 
   expect(store.clearMessages(s.id)).toBe(1);
@@ -101,5 +105,5 @@ test('listMessages({ after }) returns only messages strictly after the cursor', 
   expect(after2).toEqual(['m3', 'm4']); // strictly after the 2nd message
 
   // Last message → empty; unknown cursor → everything (0 floor).
-  expect(store.listMessages(s.id, { after: 'msg_nonexistent' })).toHaveLength(4);
+  expect(store.listMessages(s.id, { after: 'msg_nonexistent0' })).toHaveLength(4);
 });

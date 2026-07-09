@@ -27,7 +27,7 @@ function scriptedModel(steps: Step[]): ModelRouter {
   };
 }
 
-const ctx: ToolContext = { sessionId: 'ses_test', sandboxRoots: undefined, log: () => {} };
+const ctx: ToolContext = { sessionId: 'ses_test00000000', sandboxRoots: undefined, log: () => {} };
 
 function flagTool(name: string, flag: { ran: boolean }): Tool<unknown, string> {
   return {

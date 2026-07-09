@@ -1,34 +1,20 @@
 'use client';
 
-import type { AnchorHTMLAttributes, MouseEvent, ReactElement } from 'react';
+import type { AnchorHTMLAttributes, ReactElement } from 'react';
 
-import { pushShellUrl, replaceShellUrl } from '#/hooks/use-shell-location';
+import Link from 'next/link';
 
-type ShellLinkProps = AnchorHTMLAttributes<HTMLAnchorElement> & {
+type ShellLinkProps = Omit<AnchorHTMLAttributes<HTMLAnchorElement>, 'href'> & {
+  href: string;
   replace?: boolean;
 };
 
-function shouldUseBrowserNavigation(event: MouseEvent<HTMLAnchorElement>): boolean {
+export function ShellLink({ href, replace = false, ...props }: ShellLinkProps): ReactElement {
   return (
-    event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey
-  );
-}
-
-export function ShellLink({ href, onClick, replace = false, target, ...props }: ShellLinkProps): ReactElement {
-  return (
-    <a
+    <Link
       {...props}
       href={href}
-      onClick={(event) => {
-        onClick?.(event);
-        if (!href || target || shouldUseBrowserNavigation(event)) return;
-        const nextUrl = new URL(href, window.location.href);
-        if (nextUrl.origin !== window.location.origin) return;
-        event.preventDefault();
-        if (replace) replaceShellUrl(href);
-        else pushShellUrl(href);
-      }}
-      target={target}
+      replace={replace}
     />
   );
 }

@@ -47,7 +47,7 @@ test('agent-facing MCP caches mutating tool results by requestId', async () => {
                   expect(body).toEqual({ text: 'hello' });
                   return ok({
                     ok: true,
-                    message: { id: 'msg_1', projectId: 'prj_1', text: 'hello', createdAt: 'now' }
+                    message: { id: 'msg_100000000000', projectId: 'prj_100000000000', text: 'hello', createdAt: 'now' }
                   });
                 }
               }

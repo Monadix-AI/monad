@@ -11,7 +11,7 @@ test('every EVENT_TABLE entry is a ZodType', () => {
 
 test('external agent connection required events carry provider reconnect guidance', () => {
   const payload = parseEventPayload('external_agent.connection_required', {
-    externalAgentSessionId: 'exa_1',
+    externalAgentSessionId: 'exa_100000000000',
     agentName: 'gemini',
     provider: 'gemini',
     reason: 'Gemini CLI is waiting for provider authentication to complete.',
@@ -19,7 +19,7 @@ test('external agent connection required events carry provider reconnect guidanc
   });
 
   expect(payload).toEqual({
-    externalAgentSessionId: 'exa_1',
+    externalAgentSessionId: 'exa_100000000000',
     agentName: 'gemini',
     provider: 'gemini',
     reason: 'Gemini CLI is waiting for provider authentication to complete.',

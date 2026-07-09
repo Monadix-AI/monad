@@ -1,4 +1,5 @@
 import type {
+  ExternalAgentSessionId,
   ExternalAgentSessionView,
   ListExternalAgentRuntimesQuery,
   ListExternalAgentRuntimesResponse
@@ -14,7 +15,8 @@ import { externalAgentSessionAdapter } from './list-external-agent-sessions.ts';
 type ListLiveExternalAgentSessionsResult = NormalizedCursorPaginateResponse<
   ExternalAgentSessionView,
   'sessions',
-  ListExternalAgentRuntimesResponse
+  ListExternalAgentRuntimesResponse,
+  ExternalAgentSessionId
 >;
 
 // Daemon-wide list of every LIVE (starting/running) external agent/agent-adapter runtime across all

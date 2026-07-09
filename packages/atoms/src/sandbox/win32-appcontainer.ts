@@ -26,7 +26,7 @@ import { findNativeLauncherBin } from './native-path.ts';
 const LAUNCHER_BIN = 'monad-sandbox-appcontainer.exe';
 
 /** Transform a session ID into a valid AppContainer profile name (max 64 chars,
- *  only alphanumeric, '.', '_'). Example: ses_abc-123 → monad.ses_abc123 */
+ *  only alphanumeric, '.', '_'). Example: undefined → monad.undefined */
 function profileName(sessionId: string): string {
   const sanitized = sessionId.replace(/[^a-zA-Z0-9_.]/g, '');
   return `monad.${sanitized}`.slice(0, 64);

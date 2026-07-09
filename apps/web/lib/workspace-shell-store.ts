@@ -5,9 +5,21 @@ import type { StudioSectionId } from '#/features/studio/sections';
 
 import { create } from 'zustand';
 
+import { isWorkspacePath } from '#/features/shell/routing/paths';
 import { isStudioSectionId } from '#/features/studio/sections';
 
 type WorkspaceSurface = 'workspace' | 'monadChat';
+
+type ActiveProjectSessionState = {
+  activeSessionId: SessionId | null;
+  projectId: string;
+  switchSession: (id: SessionId) => void;
+};
+
+type PendingProjectSessionState = {
+  projectId: string;
+  sessionId: SessionId;
+};
 
 export const SIDEBAR_COLLAPSED_STORAGE_KEY = 'monad:sidebarCollapsed';
 export const LAST_STUDIO_SECTION_STORAGE_KEY = 'monad:lastStudioSection';
@@ -48,13 +60,9 @@ export function writeStoredLastStudioSection(section: StudioSectionId): void {
   }
 }
 
-function isWorkspacePath(value: string | null | undefined): value is string {
-  return value === '/' || Boolean(value?.startsWith('/workplace/projects/') || value?.startsWith('/sessions/'));
-}
-
 export function readStoredLastWorkspacePath(): string {
   const value = shellStorage()?.getItem(LAST_WORKSPACE_PATH_STORAGE_KEY);
-  return isWorkspacePath(value) ? value : '/';
+  return value && isWorkspacePath(value) ? value : '/';
 }
 
 export function writeStoredLastWorkspacePath(path: string): void {
@@ -91,7 +99,10 @@ export interface WorkspaceShellState {
   lastStudioSection: StudioSectionId;
   lastWorkspacePath: string;
   lastMonadSessionId: SessionId | null;
+  settingsReturnPathState: string | null;
   activeProjectId: string | null;
+  activeProjectSession: ActiveProjectSessionState | null;
+  pendingProjectSession: PendingProjectSessionState | null;
   sidebarCollapsed: boolean;
   sidebarAutoReveal: boolean;
   pinnedProjectIds: string[];
@@ -101,9 +112,12 @@ export interface WorkspaceShellState {
   rememberStudioSection: (section: StudioSectionId) => void;
   rememberWorkspacePath: (path: string) => void;
   rememberMonadSession: (sessionId: SessionId | null) => void;
+  setSettingsReturnPathState: (path: string | null) => void;
   openWorkspace: () => void;
   openMonadChat: () => void;
   openProject: (projectId: string) => void;
+  setActiveProjectSession: (state: ActiveProjectSessionState | null) => void;
+  setPendingProjectSession: (state: PendingProjectSessionState | null) => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
   toggleSidebarCollapsed: () => void;
   revealSidebar: () => void;
@@ -119,7 +133,10 @@ export const useWorkspaceShellStore = create<WorkspaceShellState>()((set) => ({
   lastStudioSection: readStoredLastStudioSection(),
   lastWorkspacePath: readStoredLastWorkspacePath(),
   lastMonadSessionId: null,
+  settingsReturnPathState: null,
   activeProjectId: null,
+  activeProjectSession: null,
+  pendingProjectSession: null,
   sidebarCollapsed: readStoredSidebarCollapsed(),
   sidebarAutoReveal: false,
   pinnedProjectIds: readStoredPinnedProjectIds(),
@@ -136,9 +153,14 @@ export const useWorkspaceShellStore = create<WorkspaceShellState>()((set) => ({
     set({ lastWorkspacePath: path });
   },
   rememberMonadSession: (sessionId) => set({ lastMonadSessionId: sessionId }),
-  openWorkspace: () => set({ surface: 'workspace', activeProjectId: null }),
-  openMonadChat: () => set({ surface: 'monadChat' }),
+  setSettingsReturnPathState: (path) => set({ settingsReturnPathState: path }),
+  openWorkspace: () =>
+    set({ surface: 'workspace', activeProjectId: null, activeProjectSession: null, pendingProjectSession: null }),
+  openMonadChat: () =>
+    set({ surface: 'monadChat', activeProjectId: null, activeProjectSession: null, pendingProjectSession: null }),
   openProject: (projectId) => set({ surface: 'workspace', activeProjectId: projectId }),
+  setActiveProjectSession: (state) => set({ activeProjectSession: state }),
+  setPendingProjectSession: (state) => set({ pendingProjectSession: state }),
   setSidebarCollapsed: (collapsed) => {
     writeStoredSidebarCollapsed(collapsed);
     set({ sidebarCollapsed: collapsed, sidebarAutoReveal: false });

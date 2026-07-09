@@ -258,7 +258,7 @@ describe.skipIf(!KEY)(`live model approvals (${MODEL})`, () => {
           );
           // …but a different session still has to ask (no global/agent rule was created).
           expect(
-            engine.decide({ tool: 'protected_action', key: 'protected', sessionId: 'ses_OTHER', agentId: null })
+            engine.decide({ tool: 'protected_action', key: 'protected', sessionId: 'ses_OTHER0000000', agentId: null })
           ).toBe('ask');
         },
         { timeout: TIMEOUT, retry: 2 }

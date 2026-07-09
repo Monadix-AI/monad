@@ -175,16 +175,16 @@ test('inviting the same template into two different sessions produces two indepe
     // Each session's own session_members row — never shared. Simulate what a successful spawn would
     // persist for each (spawnIfManaged writes exactly this shape via store.updateSessionMember).
     store.updateSessionMember(sessionA.id, codexTemplate.id, {
-      externalAgentSessionId: 'exa_a',
+      externalAgentSessionId: 'exa_a00000000000',
       updatedAt: new Date().toISOString()
     });
     store.updateSessionMember(sessionB.id, codexTemplate.id, {
-      externalAgentSessionId: 'exa_b',
+      externalAgentSessionId: 'exa_b00000000000',
       updatedAt: new Date().toISOString()
     });
 
-    expect(store.getSessionMember(sessionA.id, codexTemplate.id)?.externalAgentSessionId).toBe('exa_a');
-    expect(store.getSessionMember(sessionB.id, codexTemplate.id)?.externalAgentSessionId).toBe('exa_b');
+    expect(store.getSessionMember(sessionA.id, codexTemplate.id)?.externalAgentSessionId).toBe('exa_a00000000000');
+    expect(store.getSessionMember(sessionB.id, codexTemplate.id)?.externalAgentSessionId).toBe('exa_b00000000000');
   } finally {
     store.close();
   }
@@ -221,14 +221,14 @@ test('removeSessionMember stops the runtime when bound and deletes the row', asy
 
     await handlers.inviteSessionMember({ sessionId: session.id, templateId: codexTemplate.id });
     store.updateSessionMember(session.id, codexTemplate.id, {
-      externalAgentSessionId: 'exa_running',
+      externalAgentSessionId: 'exa_running00000',
       updatedAt: new Date().toISOString()
     });
 
     const result = await handlers.removeSessionMember({ sessionId: session.id, memberId: codexTemplate.id });
 
     expect(result).toEqual({ deleted: true });
-    expect(stopCalls).toEqual(['exa_running']);
+    expect(stopCalls).toEqual(['exa_running00000']);
     expect(store.listSessionMembers(session.id)).toEqual([]);
   } finally {
     store.close();

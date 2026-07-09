@@ -19,7 +19,7 @@ import { useMemo, useState } from 'react';
 
 import { useT } from '#/components/I18nProvider';
 import { PanelShell, PanelShellBody } from '#/components/ui/panel-shell';
-import { studioDetailPath } from '#/features/routes/route-paths';
+import { studioDetailPath } from '#/features/shell/routing/paths';
 import { replaceShellUrl } from '#/hooks/use-shell-location';
 import { parseClaudeSubagent } from '#/lib/parse-agent-import';
 import { AgentEditor } from './agent-workshop/AgentEditor';

@@ -28,7 +28,7 @@ type RuntimeSourceOverrides = Partial<Omit<ProjectExperienceRuntimeSource, 'sour
 function runtimeSource(overrides: RuntimeSourceOverrides = {}): ProjectExperienceRuntimeSource {
   const base: ProjectExperienceRuntimeSource = {
     activeProjectId: null,
-    activeSessionId: 'ses_project1session0000000000',
+    activeSessionId: 'ses_project1PhWZ',
     ready: true,
     projectId: 'project-1',
     projects: [],

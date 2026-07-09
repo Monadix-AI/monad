@@ -5,7 +5,7 @@ import { expect, test } from 'bun:test';
 import { PromptReplayCache, replayHistory } from '#/agent/index.ts';
 
 function msg(id: string, text: string, role: ChatMessage['role'] = 'user'): ChatMessage {
-  return { id, sessionId: 'ses_1', role, text, createdAt: '2026-01-01T00:00:00Z' };
+  return { id, sessionId: 'ses_100000000000', role, text, createdAt: '2026-01-01T00:00:00Z' };
 }
 
 test('replayHistory excludes directive (slash-command) turns from the model prompt', () => {
@@ -25,8 +25,8 @@ test('returns the same array reference on a cache hit (identical history)', () =
   const cache = new PromptReplayCache();
   const history = [msg('m1', 'hello'), msg('m2', 'world', 'assistant')];
 
-  const first = cache.replay('ses_1', history);
-  const second = cache.replay('ses_1', history);
+  const first = cache.replay('ses_100000000000', history);
+  const second = cache.replay('ses_100000000000', history);
   expect(second).toBe(first); // reused → no re-replay, and ModelMessage identity preserved
   expect(first).toEqual(replayHistory(history)); // and correct
 });
@@ -34,10 +34,10 @@ test('returns the same array reference on a cache hit (identical history)', () =
 test('rebuilds when a message is appended (length + lastId change)', () => {
   const cache = new PromptReplayCache();
   const h1 = [msg('m1', 'hi')];
-  const a = cache.replay('ses_1', h1);
+  const a = cache.replay('ses_100000000000', h1);
 
   const h2 = [...h1, msg('m2', 'there', 'assistant')];
-  const b = cache.replay('ses_1', h2);
+  const b = cache.replay('ses_100000000000', h2);
   expect(b).not.toBe(a);
   expect(b.length).toBe(2);
   expect(b).toEqual(replayHistory(h2));
@@ -46,20 +46,20 @@ test('rebuilds when a message is appended (length + lastId change)', () => {
 test('rebuilds when history is rewound (shorter, different lastId)', () => {
   const cache = new PromptReplayCache();
   const full = [msg('m1', 'a'), msg('m2', 'b'), msg('m3', 'c')];
-  cache.replay('ses_1', full);
+  cache.replay('ses_100000000000', full);
 
   const rewound = [msg('m1', 'a'), msg('m2', 'b')]; // m3 deactivated → list() drops it
-  const out = cache.replay('ses_1', rewound);
+  const out = cache.replay('ses_100000000000', rewound);
   expect(out.length).toBe(1);
   expect(out).toEqual(replayHistory(rewound));
 });
 
 test('caches sessions independently', () => {
   const cache = new PromptReplayCache();
-  const a = cache.replay('ses_a', [msg('a1', 'x')]);
-  const b = cache.replay('ses_b', [msg('b1', 'y')]);
-  expect(cache.replay('ses_a', [msg('a1', 'x')])).toBe(a);
-  expect(cache.replay('ses_b', [msg('b1', 'y')])).toBe(b);
+  const a = cache.replay('ses_a00000000000', [msg('a1', 'x')]);
+  const b = cache.replay('ses_b00000000000', [msg('b1', 'y')]);
+  expect(cache.replay('ses_a00000000000', [msg('a1', 'x')])).toBe(a);
+  expect(cache.replay('ses_b00000000000', [msg('b1', 'y')])).toBe(b);
 });
 
 test('evicts the least-recently-used session past the cap', () => {

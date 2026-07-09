@@ -203,7 +203,7 @@ export const Message = memo(function Message({
         ) : (
           <MessageActions
             className={cn(
-              'message-actions opacity-0 focus-within:opacity-100 group-hover:opacity-100',
+              'message-actions opacity-0 focus-within:opacity-100 group-hover:opacity-100 [@media_(hover:none),_(pointer:coarse)]:opacity-100',
               isUser && 'justify-end'
             )}
           >

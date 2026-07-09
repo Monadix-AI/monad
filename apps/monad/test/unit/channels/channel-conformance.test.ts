@@ -76,10 +76,10 @@ function capturingAdapter(
 function msgEvent(text: string) {
   return {
     id: newId('evt'),
-    sessionId: 'ses_X' as SessionId,
+    sessionId: 'ses_X00000000000' as SessionId,
     type: 'agent.message' as const,
     actorAgentId: null,
-    payload: { messageId: 'msg_X' as MessageId, text },
+    payload: { messageId: 'msg_X00000000000' as MessageId, text },
     at: ''
   };
 }
@@ -100,10 +100,10 @@ test('B-render(streaming): an over-limit final is edited (first chunk) then over
   const r = createRenderer({ adapter, chatId: 'c1', log: () => {}, t });
   r.consume({
     id: newId('evt'),
-    sessionId: 'ses_X' as SessionId,
+    sessionId: 'ses_X00000000000' as SessionId,
     type: 'agent.token',
     actorAgentId: null,
-    payload: { messageId: 'msg_X' as MessageId, delta: 'start', index: 0 },
+    payload: { messageId: 'msg_X00000000000' as MessageId, delta: 'start', index: 0 },
     at: ''
   });
   const long = `${'word '.repeat(60)}`.trim();
@@ -123,10 +123,10 @@ test('B-render(streaming): finalize without agent.message flushes buf, chunking 
   for (const chunk of long.split(' ')) {
     r.consume({
       id: newId('evt'),
-      sessionId: 'ses_X' as SessionId,
+      sessionId: 'ses_X00000000000' as SessionId,
       type: 'agent.token',
       actorAgentId: null,
-      payload: { messageId: 'msg_X' as MessageId, delta: `${chunk} `, index: 0 },
+      payload: { messageId: 'msg_X00000000000' as MessageId, delta: `${chunk} `, index: 0 },
       at: ''
     });
   }
@@ -145,7 +145,7 @@ test('B-render(streaming): finalize without agent.message flushes buf, chunking 
 
 function chConfig(over: Partial<ChannelInstanceConfig> = {}): ChannelInstanceConfig {
   return {
-    id: 'chn_CONF',
+    id: 'chn_CONF00000000',
     type: 'telegram',
     label: 'Conf',
     enabled: true,
@@ -181,7 +181,7 @@ async function coreHarness(channel: ChannelInstanceConfig) {
       return { ref: String(sends.length), chatId };
     }
   };
-  const cfg: MonadConfig = { ...createDefaultConfig('prn_OWNER', 'owner'), channels: [channel] };
+  const cfg: MonadConfig = { ...createDefaultConfig('prn_OWNER0000000', 'owner'), channels: [channel] };
   const service = new ChannelService(
     {
       session: {

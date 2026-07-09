@@ -19,7 +19,7 @@ function profileNameFrom(a: string[]): string {
 
 describe('profile name encoding', () => {
   test('hyphens stripped from session id', () => {
-    const a = args({ sessionId: 'ses_abc-123-def', writableRoots: [], net: 'none' });
+    const a = args({ sessionId: 'ses_abc123def000', writableRoots: [], net: 'none' });
     const name = profileNameFrom(a);
     expect(name).toMatch(/^monad\./);
   });

@@ -100,7 +100,7 @@ describe('initMonadHome', () => {
     expect(result.principalId).toMatch(/^prn_/);
 
     const cfg = await loadAll(paths.config, paths.profile);
-    expect(cfg?.principal.id).toBe(result.principalId);
+    expect(String(cfg?.principal.id)).toBe(result.principalId);
     expect(cfg?.principal.displayName).toBe('test-user');
     expect(cfg?.agent.sandbox.mode).toBe('workspace');
   });
@@ -214,7 +214,7 @@ describe('initMonadHome', () => {
 
 describe('computeInitStatus', () => {
   test('reports the default profile provider when credentials are missing', () => {
-    const cfg = createDefaultConfig('prn_test', 'test-user');
+    const cfg = createDefaultConfig('prn_test00000000', 'test-user');
     cfg.model.default = 'writer';
     cfg.model.providers = [
       {
@@ -255,7 +255,7 @@ describe('computeInitStatus', () => {
   });
 
   test('reports replacement default profile provider when legacy sample profile is still selected', () => {
-    const cfg = createDefaultConfig('prn_test', 'test-user');
+    const cfg = createDefaultConfig('prn_test00000000', 'test-user');
     cfg.model.default = 'sample-compatible';
     cfg.model.providers.push({
       id: 'openrouter',
@@ -291,7 +291,7 @@ describe('computeInitStatus', () => {
   });
 
   test('uses the configured default profile alias instead of requiring alias "default"', () => {
-    const cfg = createDefaultConfig('prn_test', 'test-user');
+    const cfg = createDefaultConfig('prn_test00000000', 'test-user');
     cfg.model.default = 'writer';
     cfg.model.providers = [
       {
@@ -311,7 +311,7 @@ describe('computeInitStatus', () => {
     ];
     cfg.agent.agents = [
       {
-        id: 'agt_writer',
+        id: 'agt_writer000000',
         name: 'Writer',
         capabilities: [],
         declaredScopes: [],
@@ -320,7 +320,7 @@ describe('computeInitStatus', () => {
         a2a: { enabled: false }
       }
     ];
-    cfg.agent.defaultAgentId = 'agt_writer';
+    cfg.agent.defaultAgentId = 'agt_writer000000';
 
     expect(
       computeInitStatus(cfg, {
@@ -364,7 +364,7 @@ describe('computeInitStatus', () => {
 /** Canonical v1 fixture — frozen; never edit this once committed. */
 const CONFIG_V1_FIXTURE = {
   version: 1,
-  principal: { id: 'prn_01TESTID', displayName: 'Alice', verification: 'unverified' },
+  principal: { id: 'prn_01TESTID0000', displayName: 'Alice', verification: 'unverified' },
   model: { default: 'anthropic/claude-sonnet-4-6', provider: 'openrouter', fallbacks: [] },
   agent: { sandbox: { mode: 'workspace' } }
 } as const;
@@ -373,7 +373,7 @@ describe('migrateConfig', () => {
   test('migrates a valid v1 fixture to the current version', async () => {
     const cfg = await migrateConfig(CONFIG_V1_FIXTURE);
     expect(cfg.version).toBe(1);
-    expect(cfg.principal.id).toBe('prn_01TESTID');
+    expect(cfg.principal.id).toBe('prn_01TESTID0000');
     expect(cfg.model.default).toBe('anthropic/claude-sonnet-4-6');
     expect(cfg.agent.sandbox.mode).toBe('workspace');
     // globalSandbox is additive — a pre-field config gets the default-filled value.
@@ -547,7 +547,7 @@ describe('loadConfig', () => {
   });
 
   test('rejects invalid system URL boundary fields', () => {
-    const base = monadSystemConfigSchema.parse(createDefaultConfig('prn_test', 'Tester'));
+    const base = monadSystemConfigSchema.parse(createDefaultConfig('prn_test00000000', 'Tester'));
 
     expect(() =>
       monadSystemConfigSchema.parse({
@@ -622,7 +622,7 @@ describe('tryParseConfig', () => {
   test('returns MonadConfig for valid fixture', async () => {});
 
   test('openaiCompat inbound approval defaults to local (fail-closed, not auto-approve)', () => {
-    expect(createDefaultConfig('prn_x', 'tester').openaiCompat.approval).toBe('local');
+    expect(createDefaultConfig('prn_x00000000000', 'tester').openaiCompat.approval).toBe('local');
   });
 });
 
@@ -642,7 +642,7 @@ describe('mcpServers config', () => {
   test('createDefaultConfig starts with no MCP servers', () => {});
 
   test('a config written before the field still parses, defaulting to []', async () => {
-    const cfg = createDefaultConfig('prn_x', 'tester') as Record<string, unknown>;
+    const cfg = createDefaultConfig('prn_x00000000000', 'tester') as Record<string, unknown>;
     delete cfg.mcpServers; // simulate an older config on disk
     const _parsed = await tryParseConfig(cfg);
   });
@@ -685,11 +685,15 @@ describe('mcpServers config', () => {
 
 describe('browser config', () => {
   test('createDefaultConfig disables the browser by default', () => {
-    expect(createDefaultConfig('prn_x', 'tester').browser).toEqual({ enabled: false, vision: false, headless: true });
+    expect(createDefaultConfig('prn_x00000000000', 'tester').browser).toEqual({
+      enabled: false,
+      vision: false,
+      headless: true
+    });
   });
 
   test('a config written before the browser field still parses, defaulting it', async () => {
-    const cfg = createDefaultConfig('prn_x', 'tester') as Record<string, unknown>;
+    const cfg = createDefaultConfig('prn_x00000000000', 'tester') as Record<string, unknown>;
     delete cfg.browser;
     const parsed = await tryParseConfig(cfg);
     expect(parsed?.browser).toEqual({ enabled: false, vision: false, headless: true });
@@ -700,11 +704,11 @@ describe('browser config', () => {
 
 describe('network.transport', () => {
   test('createDefaultConfig stamps the OS default transport at init', () => {
-    expect(createDefaultConfig('prn_x', 'x').network.transport).toBe(DEFAULT_TRANSPORT);
+    expect(createDefaultConfig('prn_x00000000000', 'x').network.transport).toBe(DEFAULT_TRANSPORT);
   });
 
   test('createDefaultConfig stamps local HTTP fallback disabled on an independent default port', () => {
-    const cfg = createDefaultConfig('prn_x', 'x');
+    const cfg = createDefaultConfig('prn_x00000000000', 'x');
     expect(cfg.network.host).toBe('127.0.0.1');
     expect(cfg.network.https).toEqual({ enabled: true });
     expect(cfg.network.localHttpFallback).toEqual({ enabled: false, port: 52780 });
@@ -712,7 +716,7 @@ describe('network.transport', () => {
   });
 
   test('resolveDaemonNetwork derives bind/connect URLs from host, protocol, and ports', () => {
-    const cfg = createDefaultConfig('prn_x', 'x');
+    const cfg = createDefaultConfig('prn_x00000000000', 'x');
     cfg.network.remoteAccess.enabled = true;
     cfg.network.host = '192.168.1.20';
     cfg.network.port = 52801;
@@ -731,7 +735,7 @@ describe('network.transport', () => {
   });
 
   test('resolveDaemonNetwork keeps remote access wildcard bind locally dialable', () => {
-    const cfg = createDefaultConfig('prn_x', 'x');
+    const cfg = createDefaultConfig('prn_x00000000000', 'x');
     cfg.network.remoteAccess.enabled = true;
 
     expect(resolveDaemonNetwork({ network: cfg.network })).toMatchObject({
@@ -743,7 +747,7 @@ describe('network.transport', () => {
   });
 
   test('resolveDaemonNetwork honours env host and port overrides without scheme env', () => {
-    const cfg = createDefaultConfig('prn_x', 'x');
+    const cfg = createDefaultConfig('prn_x00000000000', 'x');
     cfg.network.remoteAccess.enabled = true;
     cfg.network.localHttpFallback = { enabled: true, port: 52780 };
 
@@ -762,7 +766,7 @@ describe('network.transport', () => {
   });
 
   test('resolveDaemonNetwork rejects non-loopback hosts unless remote access is enabled', () => {
-    const cfg = createDefaultConfig('prn_x', 'x');
+    const cfg = createDefaultConfig('prn_x00000000000', 'x');
     cfg.network.host = '0.0.0.0';
 
     expect(() => resolveDaemonNetwork({ network: cfg.network })).toThrow(/network\.host must be loopback/);
@@ -772,7 +776,7 @@ describe('network.transport', () => {
   });
 
   test('resolveDaemonNetwork rejects remote access when HTTPS is disabled', () => {
-    const cfg = createDefaultConfig('prn_x', 'x');
+    const cfg = createDefaultConfig('prn_x00000000000', 'x');
     cfg.network.remoteAccess.enabled = true;
     cfg.network.https.enabled = false;
 
@@ -780,7 +784,7 @@ describe('network.transport', () => {
   });
 
   test('resolveDaemonUrl keeps explicit MONAD_URL as the highest-priority escape hatch', () => {
-    const cfg = createDefaultConfig('prn_x', 'x');
+    const cfg = createDefaultConfig('prn_x00000000000', 'x');
     expect(resolveDaemonUrl({ network: cfg.network, env: { MONAD_URL: 'http://127.0.0.1:59999' } })).toBe(
       'http://127.0.0.1:59999'
     );

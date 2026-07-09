@@ -76,19 +76,19 @@ function sendStub() {
 
 test('send streams the reply by default', async () => {
   const { client, calls } = sendStub();
-  await silently(() => send.run(ctx(['ses_1', 'hello'], {}, client)));
+  await silently(() => send.run(ctx(['ses_100000000000', 'hello'], {}, client)));
   expect(calls).toEqual({ stream: 1, detach: 0, block: 0 });
 });
 
 test('send --no-stream uses the blocking endpoint', async () => {
   const { client, calls } = sendStub();
-  await silently(() => send.run(ctx(['ses_1', 'hello'], { stream: false }, client)));
+  await silently(() => send.run(ctx(['ses_100000000000', 'hello'], { stream: false }, client)));
   expect(calls).toEqual({ stream: 0, detach: 0, block: 1 });
 });
 
 test('send --detach posts without waiting for a reply', async () => {
   const { client, calls } = sendStub();
-  await silently(() => send.run(ctx(['ses_1', 'hello'], { detach: true }, client)));
+  await silently(() => send.run(ctx(['ses_100000000000', 'hello'], { detach: true }, client)));
   expect(calls).toEqual({ stream: 0, detach: 1, block: 0 });
 });
 

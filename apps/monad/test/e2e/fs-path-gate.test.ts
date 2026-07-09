@@ -40,7 +40,7 @@ async function setup(kind: TransportKind) {
 }
 
 const DESKTOP = '/tmp/monad-e2e-desktop';
-const SESSION_ID = 'ses_FSG';
+const SESSION_ID = 'ses_FSG000000000';
 const AGENT_ID = 'agent_FSG_test';
 const pathGateReq = {
   tool: 'path_access',

@@ -31,7 +31,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { hoverActionsClassName, hoverActionsVisibleClassName } from '#/components/HoverActions';
 import { useT } from '#/components/I18nProvider';
 import { toast } from '#/components/ToastProvider';
-import { skillMarketplacePath, skillMarketplaceSourceFromPathname } from '#/features/routes/route-paths';
+import { skillMarketplacePath, skillMarketplaceSourceFromPathname } from '#/features/shell/routing/paths';
 import { replaceShellUrl, useShellPathname } from '#/hooks/use-shell-location';
 import { ConsentPopover } from './ConsentPopover';
 import {

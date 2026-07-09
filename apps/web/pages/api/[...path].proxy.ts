@@ -1,15 +1,19 @@
+import type { NextApiRequest, NextApiResponse } from 'next';
+
 import { readFileSync } from 'node:fs';
 import { request as httpsRequest } from 'node:https';
 import { join, resolve } from 'node:path';
 import { Readable } from 'node:stream';
 import { resolveDaemonUrl } from '@monad/home/network-endpoints';
 
-import { proxyResponseBody } from '#/lib/proxy-stream';
-
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
+
+export const config = {
+  api: {
+    bodyParser: false,
+    externalResolver: true
+  }
+};
 
 function daemonUrlFromConfig(raw: string): string | null {
   const network = (JSON.parse(raw) as { network?: Parameters<typeof resolveDaemonUrl>[0]['network'] })?.network;
@@ -94,29 +98,71 @@ function fetchDaemon(
   return fetch(target, init);
 }
 
-async function proxy(req: Request, { params }: { params: Promise<{ path?: string[] }> }): Promise<Response> {
-  const { path = [] } = await params;
-  const daemon = readDaemonUrl().replace(/\/$/, '');
-  const url = new URL(req.url);
-  const target = `${daemon}/${path.join('/')}${url.search}`;
-  const headers = new Headers(req.headers);
-  headers.delete('host');
-  const body = req.method === 'GET' || req.method === 'HEAD' ? undefined : await req.arrayBuffer();
-
-  try {
-    const upstream = await fetchDaemon(target, { method: req.method, headers, body });
-    const resHeaders = new Headers(upstream.headers);
-    resHeaders.delete('transfer-encoding');
-    return new Response(proxyResponseBody(upstream), { status: upstream.status, headers: resHeaders });
-  } catch {
-    return new Response('Bad Gateway', { status: 502 });
-  }
+function requestBody(req: NextApiRequest): Promise<ArrayBuffer | undefined> {
+  if (req.method === 'GET' || req.method === 'HEAD') return Promise.resolve(undefined);
+  return new Promise((resolveBody, reject) => {
+    const chunks: Buffer[] = [];
+    req.on('data', (chunk: Buffer) => {
+      chunks.push(chunk);
+    });
+    req.on('end', () => {
+      const body = Buffer.concat(chunks);
+      resolveBody(body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength));
+    });
+    req.on('error', reject);
+  });
 }
 
-export const GET = proxy;
-export const POST = proxy;
-export const PUT = proxy;
-export const PATCH = proxy;
-export const DELETE = proxy;
-export const HEAD = proxy;
-export const OPTIONS = proxy;
+function requestHeaders(req: NextApiRequest): Headers {
+  const headers = new Headers();
+  for (const [key, value] of Object.entries(req.headers)) {
+    if (key === 'host' || value === undefined) continue;
+    if (Array.isArray(value)) {
+      for (const item of value) headers.append(key, item);
+    } else {
+      headers.set(key, value);
+    }
+  }
+  return headers;
+}
+
+function responseHeaders(upstream: Response): Record<string, string | string[]> {
+  const headers: Record<string, string | string[]> = {};
+  upstream.headers.forEach((value, key) => {
+    if (key.toLowerCase() !== 'transfer-encoding') headers[key] = value;
+  });
+  return headers;
+}
+
+async function writeResponse(upstream: Response, res: NextApiResponse): Promise<void> {
+  res.status(upstream.status);
+  for (const [key, value] of Object.entries(responseHeaders(upstream))) res.setHeader(key, value);
+  if (!upstream.body) {
+    res.end();
+    return;
+  }
+  await new Promise<void>((resolveWrite, reject) => {
+    const body = Readable.fromWeb(upstream.body as unknown as import('node:stream/web').ReadableStream<Uint8Array>);
+    body.on('error', reject);
+    body.on('end', resolveWrite);
+    body.pipe(res);
+  });
+}
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  const path = Array.isArray(req.query.path) ? req.query.path : [];
+  const daemon = readDaemonUrl().replace(/\/$/, '');
+  const search = req.url?.includes('?') ? `?${req.url.split('?').slice(1).join('?')}` : '';
+  const target = `${daemon}/${path.join('/')}${search}`;
+
+  try {
+    const upstream = await fetchDaemon(target, {
+      body: await requestBody(req),
+      headers: requestHeaders(req),
+      method: req.method ?? 'GET'
+    });
+    await writeResponse(upstream, res);
+  } catch {
+    res.status(502).send('Bad Gateway');
+  }
+}

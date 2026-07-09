@@ -89,7 +89,7 @@ export type MemoryConfigField = z.infer<typeof memoryConfigFieldSchema>;
 
 // A wire scope id is a real agent/session id or the global sentinel `*`. Derived from the canonical
 // id schemas (not a hand-rolled charset) so it stays in lockstep with the id format and inherits
-// their containment: prefixed Crockford base32 is a safe single path segment, so a crafted id can
+// their containment: prefixed alphanumeric nanoid is a safe single path segment, so a crafted id can
 // never traverse the on-disk memory root. MemoryDir re-checks this as a defense-in-depth backstop.
 const scopeIdSchema = z.union([agentIdSchema, sessionIdSchema, z.literal('*')]);
 

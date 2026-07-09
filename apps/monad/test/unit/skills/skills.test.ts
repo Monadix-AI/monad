@@ -180,7 +180,7 @@ test('allowed-tools: without a grant the gate still denies the high-risk tool', 
 
 // ── createSkillTool (L2 loader) ───────────────────────────────────────────────────
 
-const ctx = { sessionId: 'ses_x', log: () => {} };
+const ctx = { sessionId: 'ses_x00000000000', log: () => {} };
 
 test('createSkillTool returns the body for a known skill', async () => {
   const tool = createSkillTool(() => [skill({ name: 'alpha', body: 'ALPHA BODY' })]);
@@ -243,7 +243,7 @@ test('createSkillTool: a fork skill runs the subagent runner and returns its res
   const tool = createSkillTool(() => [skill({ name: 'research', body: 'do research', fork: true })], runFork);
   const _out = await tool.run({ name: 'research' }, ctx);
 
-  expect(seen).toEqual([{ body: 'do research', sessionId: 'ses_x' }]);
+  expect(seen).toEqual([{ body: 'do research', sessionId: 'ses_x00000000000' }]);
 });
 
 test('createSkillTool: a non-fork skill returns its body even when a runner is supplied', async () => {

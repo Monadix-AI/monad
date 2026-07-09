@@ -7,7 +7,7 @@ import {
 } from '@monad/atoms/workspace-experiences/host-context';
 import { useMemo } from 'react';
 
-import { studioPath } from '#/features/routes/route-paths';
+import { studioPath } from '#/features/shell/routing/paths';
 import { pushShellUrl } from '#/hooks/use-shell-location';
 
 export function BuiltinWorkspaceExperienceHost({

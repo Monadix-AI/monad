@@ -1084,7 +1084,7 @@ async function runAuthRelayRuntime(
     records: []
   });
 
-  expect(handlers.store.listExternalAgentSessionsForTranscriptTarget('ses_UNKNOWN')).toHaveLength(0);
+  expect(handlers.store.listExternalAgentSessionsForTranscriptTarget('ses_UNKNOWN00000')).toHaveLength(0);
 
   res = await call(
     'POST',
@@ -1279,7 +1279,7 @@ for (const kind of TRANSPORTS) {
         await runRuntime((m, p, b) => t.fetch(p, jsonInit(m, b)), projectDir, handlers);
       } finally {
         await t.stop();
-        for (const row of handlers.store.listExternalAgentSessionsForTranscriptTarget('ses_UNKNOWN')) {
+        for (const row of handlers.store.listExternalAgentSessionsForTranscriptTarget('ses_UNKNOWN00000')) {
           handlers.store.closeExternalAgentSession(row.id, new Date().toISOString(), null, 'stopped');
         }
         await rm(dir, { recursive: true, force: true });

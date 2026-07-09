@@ -132,7 +132,7 @@ test('unknown mention stays as ordinary project text', () => {
 test('channel context describes direct structured response contract', () => {
   const _context = buildChannelTurnContext({
     channelId: 'Control Room: design',
-    sessionId: 'ses_123',
+    sessionId: 'ses_123000000000',
     routeKind: 'forward-acp',
     targetName: 'reviewer',
     responseMode: 'direct_structured',
@@ -146,7 +146,7 @@ test('channel context describes direct structured response contract', () => {
 test('channel context gives project members a plain response mode', () => {
   const _context = buildChannelTurnContext({
     channelId: 'Control Room: design',
-    sessionId: 'ses_123',
+    sessionId: 'ses_123000000000',
     routeKind: 'forward-acp',
     targetName: 'reviewer',
     responseMode: 'worker_plain',

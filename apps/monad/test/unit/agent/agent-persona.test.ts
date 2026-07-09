@@ -74,15 +74,15 @@ describe('AgentPersonaService', () => {
 
   test('resolves a session to its agent AGENT.md body', async () => {
     await writeAgentBody(agentsDir, 'researcher', { name: 'Researcher' }, 'You are a careful researcher.');
-    const cfg = fakeConfig([{ id: 'agt_R', name: 'Researcher', dir: 'researcher' }]);
-    const svc = new AgentPersonaService(paths(), fakeStore({ ses_1: ['agt_R'] }));
+    const cfg = fakeConfig([{ id: 'agt_R00000000000', name: 'Researcher', dir: 'researcher' }]);
+    const svc = new AgentPersonaService(paths(), fakeStore({ ses_100000000000: ['agt_R00000000000'] }));
     await svc.reload(cfg);
-    expect(svc.resolve('ses_1')).toBe('You are a careful researcher.');
+    expect(svc.resolve('ses_100000000000')).toBe('You are a careful researcher.');
   });
 
   test('undefined for unknown session, no sessionId, or agent without an AGENT.md', async () => {
-    const cfg = fakeConfig([{ id: 'agt_X', name: 'No Prompt', dir: 'no-prompt' }]);
-    const svc = new AgentPersonaService(paths(), fakeStore({ ses_1: ['agt_X'] }));
+    const cfg = fakeConfig([{ id: 'agt_X00000000000', name: 'No Prompt', dir: 'no-prompt' }]);
+    const svc = new AgentPersonaService(paths(), fakeStore({ ses_100000000000: ['agt_X00000000000'] }));
     await svc.reload(cfg);
   });
 
@@ -91,8 +91,11 @@ describe('AgentPersonaService', () => {
   // denied/un-allowed pack tool, while built-ins and allow-listed sources stay visible.
   test('atomsFor + isToolExposed narrows a bound session to its allowlist', async () => {
     const atoms: AgentAtoms = { mode: 'allowlist', allow: ['playwright'], deny: ['shell_exec'] };
-    const cfg = fakeConfig([{ id: 'agt_A', name: 'Allowlisted', dir: 'allowlisted', atoms }]);
-    const svc = new AgentPersonaService(paths(), fakeStore({ ses_1: ['agt_A'], ses_free: [] }));
+    const cfg = fakeConfig([{ id: 'agt_A00000000000', name: 'Allowlisted', dir: 'allowlisted', atoms }]);
+    const svc = new AgentPersonaService(
+      paths(),
+      fakeStore({ ses_100000000000: ['agt_A00000000000'], ses_free00000000: [] })
+    );
     await svc.reload(cfg);
 
     const sourceOf: Record<string, string | undefined> = { click: 'playwright', query: 'notion', shell_exec: 'shell' };
@@ -101,7 +104,7 @@ describe('AgentPersonaService', () => {
       return a ? (name: string) => isToolExposed(a, name, sourceOf[name]) : undefined;
     };
 
-    const filter = filterFor('ses_1');
+    const filter = filterFor('ses_100000000000');
     expect(filter?.('file_read')).toBe(true); // built-in — ungated
     expect(filter?.('click')).toBe(true); // source 'playwright' allowed
     expect(filter?.('query')).toBe(false); // source 'notion' not allowed
@@ -113,40 +116,46 @@ describe('AgentPersonaService', () => {
   // home dir; ephemeral/unrestricted yield undefined (inherit the daemon default / defer to ephemeral).
   test('sandboxRootsFor maps the bound agent sandbox override to fs roots', async () => {
     const cfg = fakeConfig([
-      { id: 'agt_W', name: 'Workspaced', dir: 'workspaced', sandbox: { mode: 'workspace' } },
-      { id: 'agt_H', name: 'Homed', dir: 'homed', sandbox: { mode: 'home' } },
-      { id: 'agt_E', name: 'Ephem', dir: 'ephem', sandbox: { mode: 'ephemeral' } },
-      { id: 'agt_U', name: 'Unrest', dir: 'unrest', sandbox: { mode: 'unrestricted' } },
-      { id: 'agt_N', name: 'NoOverride', dir: 'noov' }
+      { id: 'agt_W00000000000', name: 'Workspaced', dir: 'workspaced', sandbox: { mode: 'workspace' } },
+      { id: 'agt_H00000000000', name: 'Homed', dir: 'homed', sandbox: { mode: 'home' } },
+      { id: 'agt_E00000000000', name: 'Ephem', dir: 'ephem', sandbox: { mode: 'ephemeral' } },
+      { id: 'agt_U00000000000', name: 'Unrest', dir: 'unrest', sandbox: { mode: 'unrestricted' } },
+      { id: 'agt_N00000000000', name: 'NoOverride', dir: 'noov' }
     ]);
     const svc = new AgentPersonaService(
       paths(),
-      fakeStore({ ses_w: ['agt_W'], ses_h: ['agt_H'], ses_e: ['agt_E'], ses_u: ['agt_U'], ses_n: ['agt_N'] })
+      fakeStore({
+        ses_w00000000000: ['agt_W00000000000'],
+        ses_h00000000000: ['agt_H00000000000'],
+        ses_e00000000000: ['agt_E00000000000'],
+        ses_u00000000000: ['agt_U00000000000'],
+        ses_n00000000000: ['agt_N00000000000']
+      })
     );
     await svc.reload(cfg);
 
-    expect(svc.sandboxRootsFor('ses_w')).toEqual([join(agentsDir, 'workspaced')]);
-    expect(svc.sandboxRootsFor('ses_h')).toEqual([homedir()]);
-    expect(svc.sandboxRootsFor('ses_n')).toEqual([join(agentsDir, 'noov')]);
+    expect(svc.sandboxRootsFor('ses_w00000000000')).toEqual([join(agentsDir, 'workspaced')]);
+    expect(svc.sandboxRootsFor('ses_h00000000000')).toEqual([homedir()]);
+    expect(svc.sandboxRootsFor('ses_n00000000000')).toEqual([join(agentsDir, 'noov')]);
   });
 
   test('global sandbox ceiling overrides a looser per-agent mode', async () => {
     // globalSandbox enabled with mode 'workspace' must clamp an agent that asked for 'home'.
-    const cfg = fakeConfig([{ id: 'agt_H', name: 'Homed', dir: 'homed', sandbox: { mode: 'home' } }], {
+    const cfg = fakeConfig([{ id: 'agt_H00000000000', name: 'Homed', dir: 'homed', sandbox: { mode: 'home' } }], {
       enabled: true,
       mode: 'workspace'
     });
-    const svc = new AgentPersonaService(paths(), fakeStore({ ses_h: ['agt_H'] }));
+    const svc = new AgentPersonaService(paths(), fakeStore({ ses_h00000000000: ['agt_H00000000000'] }));
     await svc.reload(cfg);
-    expect(svc.sandboxRootsFor('ses_h')).toEqual([join(agentsDir, 'homed')]);
+    expect(svc.sandboxRootsFor('ses_h00000000000')).toEqual([join(agentsDir, 'homed')]);
   });
 
   test('reload picks up a newly written prompt', async () => {
-    const cfg = fakeConfig([{ id: 'agt_R', name: 'Researcher', dir: 'researcher' }]);
-    const svc = new AgentPersonaService(paths(), fakeStore({ ses_1: ['agt_R'] }));
+    const cfg = fakeConfig([{ id: 'agt_R00000000000', name: 'Researcher', dir: 'researcher' }]);
+    const svc = new AgentPersonaService(paths(), fakeStore({ ses_100000000000: ['agt_R00000000000'] }));
     await svc.reload(cfg);
     await writeAgentBody(agentsDir, 'researcher', { name: 'Researcher' }, 'Now I have a persona.');
     await svc.reload();
-    expect(svc.resolve('ses_1')).toBe('Now I have a persona.');
+    expect(svc.resolve('ses_100000000000')).toBe('Now I have a persona.');
   });
 });

@@ -7,7 +7,12 @@ import {
   isStudioPath,
   isWorkspacePath,
   projectIdFromPathname,
+  projectPath,
+  projectRouteId,
+  projectSessionIdFromPathname,
+  projectSessionPath,
   sessionIdFromPathname,
+  sessionRouteId,
   settingsPath,
   settingsSectionFromPathname,
   skillMarketplacePath,
@@ -16,7 +21,7 @@ import {
   studioPath,
   studioSectionFromPathname,
   studioSubpathFromPathname
-} from '../../features/routes/route-paths.ts';
+} from '../../features/shell/routing/paths.ts';
 
 describe('canonical web route helpers', () => {
   test('keeps Studio sections and their internal breadcrumbs under /studio', () => {
@@ -49,9 +54,20 @@ describe('canonical web route helpers', () => {
 
   test('keeps workspace route parsing on canonical workspace and session paths', () => {
     expect(isWorkspacePath('/')).toBe(true);
-    expect(isWorkspacePath('/workplace/projects/project%201')).toBe(true);
+    expect(isWorkspacePath('/workspace/prj_ABCDEF123456/ses_UVWXYZ789012')).toBe(true);
     expect(isWorkspacePath('/sessions/session-1')).toBe(true);
-    expect(projectIdFromPathname('/workplace/projects/project%201')).toBe('project 1');
+    expect(isWorkspacePath('/workspace/ABCDEF123456/UVWXYZ789012')).toBe(false);
+    expect(isWorkspacePath('/workspace/prj_short/ses_UVWXYZ789012')).toBe(false);
+    expect(projectIdFromPathname('/workspace/prj_ABCDEF123456/ses_UVWXYZ789012')).toBe('prj_ABCDEF123456');
+    expect(projectSessionIdFromPathname('/workspace/prj_ABCDEF123456/ses_UVWXYZ789012')).toBe('ses_UVWXYZ789012');
+    expect(projectSessionIdFromPathname('/workspace/prj_ABCDEF123456')).toBeNull();
+    expect(isWorkspacePath('/workspace/prj_ABCDEF12345!/ses_UVWXYZ789012')).toBe(false);
+    expect(projectRouteId('prj_ABCDEF123456')).toBe('prj_ABCDEF123456');
+    expect(sessionRouteId('ses_UVWXYZ789012')).toBe('ses_UVWXYZ789012');
+    expect(projectPath('prj_ABCDEF123456')).toBe('/workspace/prj_ABCDEF123456');
+    expect(projectSessionPath('prj_ABCDEF123456', 'ses_UVWXYZ789012')).toBe(
+      '/workspace/prj_ABCDEF123456/ses_UVWXYZ789012'
+    );
     expect(sessionIdFromPathname('/sessions/session-1')).toBe('session-1');
   });
 

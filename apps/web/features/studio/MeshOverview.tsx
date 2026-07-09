@@ -27,7 +27,7 @@ import { Button, ProductIcon } from '@monad/ui';
 import { useT } from '#/components/I18nProvider';
 import { ShellLink } from '#/components/ShellLink';
 import { PanelShell, PanelShellBody } from '#/components/ui/panel-shell';
-import { studioPath } from '#/features/routes/route-paths';
+import { studioPath } from '#/features/shell/routing/paths';
 import { useExternalAgentSettings } from '#/hooks/use-external-agent-settings';
 import { OverviewIllustration } from './OverviewIllustration';
 import { StudioBreadcrumbHeader } from './StudioBreadcrumbHeader';

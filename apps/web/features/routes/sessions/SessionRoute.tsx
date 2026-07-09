@@ -1,6 +1,14 @@
 'use client';
 
-import type { ApprovalScope, ComposerSettings, Session, SessionId, UIApprovalDisplay, UIItem } from '@monad/protocol';
+import type {
+  ApprovalScope,
+  CommandItem,
+  ComposerSettings,
+  Session,
+  SessionId,
+  UIApprovalDisplay,
+  UIItem
+} from '@monad/protocol';
 import type { VirtualListHandle } from '@monad/ui/components/VirtualList';
 import type { ComponentProps, KeyboardEventHandler, Ref } from 'react';
 
@@ -19,7 +27,7 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { useProvenanceQuery } from '@monad/client-rtk';
 import { Button, cn, ScrollArea, Textarea } from '@monad/ui';
 import { VirtualList } from '@monad/ui/components/VirtualList';
-import { memo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 
 import { useT } from '#/components/I18nProvider';
 import { AgentLoopInspector } from '#/features/session/AgentLoopInspector';
@@ -37,7 +45,11 @@ import {
 import { MemorySummaryDivider } from '#/features/session/MemorySummaryDivider';
 import { useSessionUiStore } from '#/features/session/session-ui-store';
 import { ToolStepView } from '#/features/session/ToolStepView';
+import { SkillEditorDialog } from '#/features/studio/skills-settings/SkillEditorDialog';
+import { loadSkillContent } from '#/features/studio/skills-settings/utils';
+import { useMonadRuntime } from '#/lib/monad-runtime-provider';
 import { renderableIconText } from '#/lib/renderable-icon-text';
+import { activeSkillToken, skillCommandMeta } from './command-menu';
 
 export interface SessionCommandMenuItem {
   badge?: string;
@@ -71,7 +83,7 @@ interface PendingClarification {
 type ComposerProps = ComponentProps<typeof ComposerShell>;
 
 export interface SessionRouteProps {
-  activeInputSkillToken?: ComposerProps['skillToken'];
+  commands: CommandItem[];
   contextUsage?: ComposerProps['contextUsage'];
   currentSession: Session | null;
   currentSessionId: SessionId;
@@ -96,12 +108,10 @@ export interface SessionRouteProps {
   onRestore: (messageId: string) => void;
   onScrollToBottom: (behavior?: 'smooth' | 'auto') => void;
   onSelectSession: (sessionId: SessionId) => void;
-  onSkillPreview: (id: string) => void;
   onStop: () => void;
   onSubmit: () => void;
   onToggleInspector: () => void;
   onVoiceSettingsClick: () => void;
-  onVoiceText: (text: string) => void;
   onVoiceTranscribe: (audio: Blob) => Promise<string>;
   pendingApprovals: PendingApproval[];
   pendingClarifications: PendingClarification[];
@@ -113,7 +123,7 @@ export interface SessionRouteProps {
 }
 
 export function SessionRoute({
-  activeInputSkillToken,
+  commands,
   contextUsage,
   currentSession,
   currentSessionId,
@@ -138,12 +148,10 @@ export function SessionRoute({
   onRestore,
   onScrollToBottom,
   onSelectSession,
-  onSkillPreview,
   onStop,
   onSubmit,
   onToggleInspector,
   onVoiceSettingsClick,
-  onVoiceText,
   onVoiceTranscribe,
   pendingApprovals,
   pendingClarifications,
@@ -154,14 +162,41 @@ export function SessionRoute({
   viewMessages
 }: SessionRouteProps) {
   const t = useT();
+  const { client: monadClient } = useMonadRuntime();
   const accessMode = useSessionUiStore((state) => state.accessMode);
   const activeSkill = useSessionUiStore((state) => state.activeSkill);
   const atBottom = useSessionUiStore((state) => state.atBottom);
   const input = useSessionUiStore((state) => state.input);
+  const skillPreview = useSessionUiStore((state) => state.skillPreview);
+  const appendVoiceText = useSessionUiStore((state) => state.appendVoiceText);
   const setAccessMode = useSessionUiStore((state) => state.setAccessMode);
   const setActiveSkill = useSessionUiStore((state) => state.setActiveSkill);
   const setAtBottom = useSessionUiStore((state) => state.setAtBottom);
   const setComposerInput = useSessionUiStore((state) => state.setComposerInput);
+  const setSkillPreview = useSessionUiStore((state) => state.setSkillPreview);
+  const activeInputSkill = useMemo(() => activeSkillToken(input, commands, t), [commands, input, t]);
+  const openSkillPreview = useCallback(
+    async (id: string) => {
+      const command = commands.find((c) => c.type === 'skill' && c.id === id);
+      const meta = skillCommandMeta(command, t);
+      if (!command || !meta) return;
+      const content = await loadSkillContent({ id: command.id, name: command.name }, monadClient).catch(() => null);
+      if (content) setSkillPreview({ id: command.id, name: content.name, title: meta.label, content: content.content });
+    },
+    [commands, monadClient, setSkillPreview, t]
+  );
+  const activeInputSkillToken = activeInputSkill
+    ? {
+        label: activeInputSkill.label,
+        source: activeInputSkill.sourceLabel,
+        icon: activeInputSkill.icon,
+        version: activeInputSkill.version,
+        raw: activeInputSkill.raw,
+        start: activeInputSkill.start,
+        end: activeInputSkill.end,
+        onClick: () => void openSkillPreview(activeInputSkill.id)
+      }
+    : undefined;
 
   return (
     <>
@@ -255,7 +290,7 @@ export function SessionRoute({
                     msg={message}
                     onBranch={onBranch}
                     onRestore={onRestore}
-                    onSkillPreview={onSkillPreview}
+                    onSkillPreview={openSkillPreview}
                   />
                 )}
               </div>
@@ -340,7 +375,7 @@ export function SessionRoute({
                 onKeyDown={onKeyDown}
                 onStop={onStop}
                 onSubmit={onSubmit}
-                onVoiceText={onVoiceText}
+                onVoiceText={appendVoiceText}
                 placeholder={t('web.chat.placeholder')}
                 sendShortcut={composerSettings.sendShortcut}
                 skillToken={activeInputSkillToken}
@@ -355,6 +390,13 @@ export function SessionRoute({
           </div>
         </div>
       </div>
+      <SkillEditorDialog
+        editor={skillPreview}
+        initialView="preview"
+        lockedPreview
+        onClose={() => setSkillPreview(null)}
+        onSaved={() => setSkillPreview(null)}
+      />
     </>
   );
 }

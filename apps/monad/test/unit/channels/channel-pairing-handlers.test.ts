@@ -32,9 +32,9 @@ function fakeCtx(opts: {
 test('approveChannelPairing: valid code → user appended to allowlist + committed', async () => {
   const { ctx, committed } = fakeCtx({
     consume: () => 'newcomer',
-    channel: { id: 'chn_X', allowlist: { allowedUsers: [] } }
+    channel: { id: 'chn_X00000000000', allowlist: { allowedUsers: [] } }
   });
-  const res = await createPairingHandlers(ctx).approveChannelPairing({ id: 'chn_X', code: 'ABC123' });
+  const res = await createPairingHandlers(ctx).approveChannelPairing({ id: 'chn_X00000000000', code: 'ABC123' });
   expect(res.ok).toBe(true);
   expect(committed.length).toBe(1);
   const next = committed[0] as { channels: Array<{ id: string; allowlist: { allowedUsers: string[] } }> };
@@ -44,24 +44,26 @@ test('approveChannelPairing: valid code → user appended to allowlist + committ
 test('approveChannelPairing: invalid/expired code throws, nothing committed', async () => {
   const { ctx, committed } = fakeCtx({
     consume: () => null,
-    channel: { id: 'chn_X', allowlist: { allowedUsers: [] } }
+    channel: { id: 'chn_X00000000000', allowlist: { allowedUsers: [] } }
   });
-  await expect(createPairingHandlers(ctx).approveChannelPairing({ id: 'chn_X', code: 'BAD' })).rejects.toThrow();
+  await expect(
+    createPairingHandlers(ctx).approveChannelPairing({ id: 'chn_X00000000000', code: 'BAD' })
+  ).rejects.toThrow();
   expect(committed).toHaveLength(0);
 });
 
 test('approveChannelPairing: already-allowlisted user is a no-op commit', async () => {
   const { ctx } = fakeCtx({
     consume: () => 'existing',
-    channel: { id: 'chn_X', allowlist: { allowedUsers: ['existing'] } }
+    channel: { id: 'chn_X00000000000', allowlist: { allowedUsers: ['existing'] } }
   });
-  const res = await createPairingHandlers(ctx).approveChannelPairing({ id: 'chn_X', code: 'ABC123' });
+  const res = await createPairingHandlers(ctx).approveChannelPairing({ id: 'chn_X00000000000', code: 'ABC123' });
   expect(res.ok).toBe(true);
 });
 
 test('approveChannelPairing: unknown channel id throws', async () => {
   const { ctx } = fakeCtx({ consume: () => 'newcomer' }); // no channel in cfg
   await expect(
-    createPairingHandlers(ctx).approveChannelPairing({ id: 'chn_MISSING', code: 'ABC123' })
+    createPairingHandlers(ctx).approveChannelPairing({ id: 'chn_MISSING00000', code: 'ABC123' })
   ).rejects.toThrow();
 });

@@ -6,7 +6,7 @@ import { expect, test } from 'bun:test';
 import { isDelegableTool } from '#/capabilities/tools';
 import { createAcpFsBackend, createAcpTerminalBackend } from '#/transports/acp/backends.ts';
 
-const SID = 'ses_1' as SessionId;
+const SID = 'ses_100000000000' as SessionId;
 
 test('ACP fs backend delegates reads/writes to the client over reverse-RPC', async () => {
   const calls: Record<string, unknown>[] = [];

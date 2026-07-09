@@ -3,7 +3,7 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { readDaemonUrl } from '../../app/api/[...path]/route.proxy.ts';
+import { readDaemonUrl } from '../../pages/api/[...path].proxy.ts';
 
 test('readDaemonUrl uses HTTPS by default from network config', () => {
   const home = join(tmpdir(), `monad-route-proxy-${Date.now()}`);

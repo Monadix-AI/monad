@@ -174,15 +174,21 @@ test('a follow-up delegation REUSES the live (session, agent) delegate — same 
   const tool = createAcpDelegateTool({
     agents: [{ name: 'mock', command: 'bun', args: [fixture], enabled: true, osSandbox: false, forwardMcp: false }]
   });
-  const first = await tool.run({ agent: 'mock', instruction: 'count' }, fakeCtx(undefined, undefined, 'ses_reuse'));
-  const second = await tool.run({ agent: 'mock', instruction: 'count' }, fakeCtx(undefined, undefined, 'ses_reuse'));
+  const first = await tool.run(
+    { agent: 'mock', instruction: 'count' },
+    fakeCtx(undefined, undefined, 'ses_reuse0000000')
+  );
+  const second = await tool.run(
+    { agent: 'mock', instruction: 'count' },
+    fakeCtx(undefined, undefined, 'ses_reuse0000000')
+  );
   expect(first.metadata.text).toBe('count: 1');
   expect(second.metadata.text).toBe('count: 2'); // same adapter process + same ACP session carried over
   // …and crucially ONE session/new across all turns — proving true continuation, not a re-handshake per
   // prompt (which would also yield count 1→2 but discard the sub-agent's context).
   const sessions = await tool.run(
     { agent: 'mock', instruction: 'sessions' },
-    fakeCtx(undefined, undefined, 'ses_reuse')
+    fakeCtx(undefined, undefined, 'ses_reuse0000000')
   );
   expect(sessions.metadata.text).toBe('sessions: 1');
 });
@@ -191,8 +197,11 @@ test('a different session is an isolated delegate (no cross-session continuation
   const tool = createAcpDelegateTool({
     agents: [{ name: 'mock', command: 'bun', args: [fixture], enabled: true, osSandbox: false, forwardMcp: false }]
   });
-  await tool.run({ agent: 'mock', instruction: 'count' }, fakeCtx(undefined, undefined, 'ses_iso_a'));
-  const other = await tool.run({ agent: 'mock', instruction: 'count' }, fakeCtx(undefined, undefined, 'ses_iso_b'));
+  await tool.run({ agent: 'mock', instruction: 'count' }, fakeCtx(undefined, undefined, 'ses_isoa00000000'));
+  const other = await tool.run(
+    { agent: 'mock', instruction: 'count' },
+    fakeCtx(undefined, undefined, 'ses_isob00000000')
+  );
   expect(other.metadata.text).toBe('count: 1'); // a separate session spawned its own adapter, counter starts fresh
 });
 
@@ -200,10 +209,16 @@ test('clearing a session evicts its delegate — the next delegation re-spawns f
   const tool = createAcpDelegateTool({
     agents: [{ name: 'mock', command: 'bun', args: [fixture], enabled: true, osSandbox: false, forwardMcp: false }]
   });
-  const before = await tool.run({ agent: 'mock', instruction: 'count' }, fakeCtx(undefined, undefined, 'ses_evict'));
+  const before = await tool.run(
+    { agent: 'mock', instruction: 'count' },
+    fakeCtx(undefined, undefined, 'ses_evict0000000')
+  );
   expect(before.metadata.text).toBe('count: 1'); // fresh session → fresh adapter
-  clearAcpDelegatesForSession('ses_evict');
-  const after = await tool.run({ agent: 'mock', instruction: 'count' }, fakeCtx(undefined, undefined, 'ses_evict'));
+  clearAcpDelegatesForSession('ses_evict0000000');
+  const after = await tool.run(
+    { agent: 'mock', instruction: 'count' },
+    fakeCtx(undefined, undefined, 'ses_evict0000000')
+  );
   expect(after.metadata.text).toBe('count: 1'); // re-spawned after eviction → counter reset
 });
 
@@ -214,15 +229,15 @@ test('two CONCURRENT delegations to the same agent share one adapter and seriali
   // Fire both before either resolves: pendingSpawns must dedup to ONE adapter, and d.queue must
   // serialize the two prompts so the shared per-turn slot isn't clobbered.
   const [a, b] = await Promise.all([
-    tool.run({ agent: 'mock', instruction: 'count' }, fakeCtx(undefined, undefined, 'ses_conc')),
-    tool.run({ agent: 'mock', instruction: 'count' }, fakeCtx(undefined, undefined, 'ses_conc'))
+    tool.run({ agent: 'mock', instruction: 'count' }, fakeCtx(undefined, undefined, 'ses_conc00000000')),
+    tool.run({ agent: 'mock', instruction: 'count' }, fakeCtx(undefined, undefined, 'ses_conc00000000'))
   ]);
   // One shared process + serialized turns → the two answers are count 1 and 2 (order not guaranteed),
   // never two 1s (two adapters) or a mangled slot.
   expect([a.metadata.text, b.metadata.text].sort()).toEqual(['count: 1', 'count: 2']);
   const sessions = await tool.run(
     { agent: 'mock', instruction: 'sessions' },
-    fakeCtx(undefined, undefined, 'ses_conc')
+    fakeCtx(undefined, undefined, 'ses_conc00000000')
   );
   expect(sessions.metadata.text).toBe('sessions: 1'); // a single spawn was shared, not one-per-caller
 });
@@ -231,13 +246,16 @@ test('aborting a turn evicts the reused delegate — the next delegation re-spaw
   const tool = createAcpDelegateTool({
     agents: [{ name: 'mock', command: 'bun', args: [fixture], enabled: true, osSandbox: false, forwardMcp: false }]
   });
-  const first = await tool.run({ agent: 'mock', instruction: 'count' }, fakeCtx(undefined, undefined, 'ses_abort'));
+  const first = await tool.run(
+    { agent: 'mock', instruction: 'count' },
+    fakeCtx(undefined, undefined, 'ses_abort0000000')
+  );
   expect(first.metadata.text).toBe('count: 1');
   // A delegation whose signal is already aborted must kill the reused adapter, not drive it.
   const aborted = new AbortController();
   aborted.abort();
   const abortedCtx = {
-    sessionId: 'ses_abort' as SessionId,
+    sessionId: 'ses_abort0000000' as SessionId,
     toolCallId: 'tc_1',
     signal: aborted.signal,
     reportProgress: () => {},
@@ -245,7 +263,10 @@ test('aborting a turn evicts the reused delegate — the next delegation re-spaw
   } as unknown as ToolContext;
   await expect(tool.run({ agent: 'mock', instruction: 'count' }, abortedCtx)).rejects.toThrow(/aborted/);
   // The abort evicted the delegate, so the next (fresh-signal) call re-spawns → counter resets.
-  const after = await tool.run({ agent: 'mock', instruction: 'count' }, fakeCtx(undefined, undefined, 'ses_abort'));
+  const after = await tool.run(
+    { agent: 'mock', instruction: 'count' },
+    fakeCtx(undefined, undefined, 'ses_abort0000000')
+  );
   expect(after.metadata.text).toBe('count: 1');
 });
 

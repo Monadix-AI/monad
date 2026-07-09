@@ -24,7 +24,7 @@ test('falls back to the gzip shell for deep links', () => {
   const compressed = Bun.gzipSync(Buffer.from('<!doctype html><title>monad</title>'));
   const assets = buildAssetMap([new File([compressed], 'apps/web/out.gz/index.html.gz') as File & { name: string }]);
 
-  const res = serveAssetFromMap(assets, '/sessions/ses_123');
+  const res = serveAssetFromMap(assets, '/sessions/undefined');
 
   expect(res.status).toBe(200);
   expect(res.headers.get('content-encoding')).toBe('gzip');

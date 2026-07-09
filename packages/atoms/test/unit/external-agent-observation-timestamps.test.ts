@@ -18,7 +18,7 @@ test('structured observation events do not fall back to host observedAt', () => 
 
   expect(
     externalAgentStreamItems({
-      id: 'exa_codex',
+      id: 'exa_codex0000000',
       provider: 'codex',
       output,
       observedAt: '2026-07-05T09:00:00.000Z'
@@ -41,7 +41,7 @@ test('structured observation events preserve provider timestamps when present', 
     }
   });
 
-  expect(externalAgentStreamItems({ id: 'exa_claude', provider: 'claude-code', output })).toMatchObject([
+  expect(externalAgentStreamItems({ id: 'exa_claude000000', provider: 'claude-code', output })).toMatchObject([
     {
       text: 'Timestamped user message',
       createdAt: '2026-07-05T08:07:54.056Z'
@@ -80,7 +80,7 @@ test('Codex app-server item lifecycle uses millisecond timestamps from the provi
     })
   ].join('\n');
 
-  expect(externalAgentStreamItems({ id: 'exa_codex', provider: 'codex', output })).toMatchObject([
+  expect(externalAgentStreamItems({ id: 'exa_codex0000000', provider: 'codex', output })).toMatchObject([
     {
       providerEventType: 'function_call',
       createdAt: '2026-07-06T00:00:00.456Z'
@@ -112,7 +112,7 @@ test('Codex app-server turn lifecycle uses second timestamps from the provider c
     })
   ].join('\n');
 
-  expect(externalAgentStreamItems({ id: 'exa_codex', provider: 'codex', output })).toMatchObject([
+  expect(externalAgentStreamItems({ id: 'exa_codex0000000', provider: 'codex', output })).toMatchObject([
     {
       providerEventType: 'turn/started',
       createdAt: '2026-07-06T00:00:00.000Z'
@@ -136,7 +136,7 @@ test('provider-specific observation parsing does not run Codex app-server contra
     }
   });
 
-  expect(externalAgentStreamItems({ id: 'exa_claude', provider: 'claude-code', output })).toMatchObject([
+  expect(externalAgentStreamItems({ id: 'exa_claude000000', provider: 'claude-code', output })).toMatchObject([
     {
       providerEventType: 'raw_json',
       source: 'unknown'

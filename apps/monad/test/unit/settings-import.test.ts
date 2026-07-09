@@ -56,7 +56,7 @@ async function makeHome() {
     mkdir(paths.skills, { recursive: true }),
     mkdir(paths.agents, { recursive: true })
   ]);
-  const cfg = createDefaultConfig('prn_test', 'test');
+  const cfg = createDefaultConfig('prn_test00000000', 'test');
   cfg.model.default = '';
   cfg.model.providers = [];
   cfg.model.profiles = [];
@@ -453,7 +453,7 @@ test('dry-run preview does not mutate config files', async () => {
 });
 
 test('model role imports target the configured default profile alias', () => {
-  const cfg = createDefaultConfig('prn_test', 'test');
+  const cfg = createDefaultConfig('prn_test00000000', 'test');
   cfg.model.default = 'writer';
   cfg.model.providers = [{ id: 'oai', label: 'OpenAI', type: ModelProviderType.OpenAICompatible }];
   cfg.model.profiles = [
@@ -561,7 +561,7 @@ test('replace updates existing agent instead of adding duplicate', async () => {
   const { dir, paths, cfg, cleanup } = await makeHome();
   cfg.agent.agents = [
     {
-      id: 'agt_existing',
+      id: 'agt_existing0000',
       name: 'reviewer',
       dir: 'reviewer',
       description: 'old',
@@ -598,7 +598,7 @@ test('replace updates existing agent instead of adding duplicate', async () => {
     const next = await loadAll(paths.config, paths.profile);
     expect(next?.agent.agents).toHaveLength(1);
     const imported = next?.agent.agents[0];
-    expect(imported?.id).toBe('agt_existing');
+    expect(imported?.id).toBe('agt_existing0000');
     expect(imported?.description).toBe('updated');
     expect(imported?.model).toBe('claude-3');
     const _prompt = await Bun.file(join(paths.agents, 'reviewer', 'AGENT.md')).text();

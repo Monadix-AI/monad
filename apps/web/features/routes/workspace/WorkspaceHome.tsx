@@ -13,20 +13,23 @@ import {
   SlidersHorizontalIcon
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
+import { useCreateWorkplaceProjectMutation } from '@monad/client-rtk';
 import { Button } from '@monad/ui';
+import { useCallback } from 'react';
 
 import { useT } from '#/components/I18nProvider';
 import { ThemeToggle } from '#/components/ThemeToggle';
 import { PanelShellHeader } from '#/components/ui/panel-shell';
+import { NewProjectDialog } from '#/features/shell/NewProjectDialog';
+import { useWorkspaceShellStore } from '#/lib/workspace-shell-store';
 
 interface WorkspaceHomeProps {
   agentSession: Session | null;
   projects: { id: string; name: string }[];
   activeProjectId: string | null;
-  onOpenAgentChat: () => void;
-  onNewAgentChat: () => void;
+  onOpenMonadChat: () => void;
+  onNewMonadChat: () => void;
   onOpenProject: (projectId: string) => void;
-  onNewProject: () => void;
   onOpenSettings: () => void;
   onOpenStudio: () => void;
 }
@@ -40,14 +43,16 @@ export function WorkspaceHome({
   agentSession,
   projects,
   activeProjectId,
-  onOpenAgentChat,
-  onNewAgentChat,
+  onOpenMonadChat,
+  onNewMonadChat,
   onOpenProject,
-  onNewProject,
   onOpenSettings,
   onOpenStudio
 }: WorkspaceHomeProps) {
   const t = useT();
+  const [createWorkplaceProject] = useCreateWorkplaceProjectMutation();
+  const newProjectOpen = useWorkspaceShellStore((state) => state.newProjectOpen);
+  const setNewProjectOpen = useWorkspaceShellStore((state) => state.setNewProjectOpen);
   const latestTitle = agentSession?.title ?? t('web.workspace.noAgentSession');
   const homeStyle: WorkspaceHomeStyle = {
     '--workspace-home-spotlight-x': '58%',
@@ -64,6 +69,21 @@ export function WorkspaceHome({
     event.currentTarget.style.setProperty('--workspace-home-spotlight-x', '58%');
     event.currentTarget.style.setProperty('--workspace-home-spotlight-y', '24%');
   };
+  const handleCreateProject = useCallback(
+    ({ name, cwd }: { name: string; cwd?: string }) => {
+      setNewProjectOpen(false);
+      createWorkplaceProject({
+        title: name,
+        origin: { surface: 'web' },
+        ...(cwd ? { cwd } : {})
+      })
+        .unwrap()
+        .then((id) => onOpenProject(id))
+        .catch(() => {});
+    },
+    [createWorkplaceProject, onOpenProject, setNewProjectOpen]
+  );
+  const handleNewProject = useCallback(() => setNewProjectOpen(true), [setNewProjectOpen]);
 
   return (
     <div
@@ -120,7 +140,7 @@ export function WorkspaceHome({
                 {t('web.workspace.summary')}
               </p>
               <div className="flex flex-wrap gap-2">
-                <Button onClick={onOpenAgentChat}>
+                <Button onClick={onOpenMonadChat}>
                   <HugeiconsIcon
                     data-icon="inline-start"
                     icon={MessageSquareCodeIcon}
@@ -128,7 +148,7 @@ export function WorkspaceHome({
                   {t('web.workspace.openAgent')}
                 </Button>
                 <Button
-                  onClick={onNewAgentChat}
+                  onClick={onNewMonadChat}
                   variant="outline"
                 >
                   <HugeiconsIcon
@@ -138,7 +158,7 @@ export function WorkspaceHome({
                   {t('web.workspace.newAgentSession')}
                 </Button>
                 <Button
-                  onClick={onNewProject}
+                  onClick={handleNewProject}
                   variant="outline"
                 >
                   <HugeiconsIcon
@@ -187,7 +207,7 @@ export function WorkspaceHome({
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button
-                  onClick={onOpenAgentChat}
+                  onClick={onOpenMonadChat}
                   size="sm"
                 >
                   {t('web.workspace.openAgent')}
@@ -197,7 +217,7 @@ export function WorkspaceHome({
                   />
                 </Button>
                 <Button
-                  onClick={onNewAgentChat}
+                  onClick={onNewMonadChat}
                   size="sm"
                   variant="outline"
                 >
@@ -217,7 +237,7 @@ export function WorkspaceHome({
                   <p className="mt-1 text-muted-foreground text-sm">{t('web.workplace.projectsLabel')}</p>
                 </div>
                 <Button
-                  onClick={onNewProject}
+                  onClick={handleNewProject}
                   size="sm"
                   variant="outline"
                 >
@@ -309,6 +329,11 @@ export function WorkspaceHome({
           </section>
         </div>
       </div>
+      <NewProjectDialog
+        onClose={() => setNewProjectOpen(false)}
+        onCreate={handleCreateProject}
+        open={newProjectOpen}
+      />
     </div>
   );
 }

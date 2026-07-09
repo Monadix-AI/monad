@@ -40,7 +40,7 @@ async function setup(kind: TransportKind) {
 
 const gateReq = {
   tool: 'shell_exec',
-  sessionId: 'ses_E2E',
+  sessionId: 'ses_E2E000000000',
   highRisk: true,
   input: { command: 'git status' },
   key: 'git'
@@ -116,14 +116,14 @@ for (const kind of TRANSPORTS) {
       const { t, oversight, events } = await setup(kind);
       const click = {
         tool: 'computer__click_screen',
-        sessionId: 'ses_HC',
+        sessionId: 'ses_HC0000000000',
         highRisk: true,
         input: {},
         key: HOST_CONTROL_KEY
       };
       const type = {
         tool: 'computer__type_text',
-        sessionId: 'ses_HC',
+        sessionId: 'ses_HC0000000000',
         highRisk: true,
         input: {},
         key: HOST_CONTROL_KEY

@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { createTextareaKeyDownHandler } from '../../features/shell/app-shell/session-view';
+import { createTextareaKeyDownHandler } from '../../features/routes/sessions/session-view';
 
 function handler(overrides: Partial<Parameters<typeof createTextareaKeyDownHandler>[0]> = {}) {
   return createTextareaKeyDownHandler({

@@ -15,7 +15,7 @@ test('client.treaty posts to the control API and returns the id', async () => {
   let captured: { url: string; init?: RequestInit } | null = null;
   globalThis.fetch = (async (url: string, init?: RequestInit) => {
     captured = { url: String(url), init };
-    return new Response(JSON.stringify({ sessionId: 'ses_TEST' }), {
+    return new Response(JSON.stringify({ sessionId: 'ses_TEST00000000' }), {
       headers: { 'content-type': 'application/json' }
     });
   }) as typeof fetch;
@@ -24,7 +24,7 @@ test('client.treaty posts to the control API and returns the id', async () => {
   const result = await client.treaty.v1.sessions.post({ title: 'hi' });
   const id = result.data?.sessionId;
 
-  expect(id).toBe('ses_TEST');
+  expect(id).toBe('ses_TEST00000000');
   // cast resets tsgo's closure-narrowing (the assignment happens inside an async mock)
   const cap = captured as { url: string; init?: RequestInit } | null;
   if (!cap) throw new Error('fetch was not called');
@@ -58,14 +58,16 @@ test('unixSocket: requests are dialed over the unix socket', async () => {
   const attempts: Array<string | undefined> = [];
   globalThis.fetch = (async (_url: string, init?: { unix?: string }) => {
     attempts.push(init?.unix);
-    return new Response(JSON.stringify({ sessionId: 'ses_U' }), { headers: { 'content-type': 'application/json' } });
+    return new Response(JSON.stringify({ sessionId: 'ses_U00000000000' }), {
+      headers: { 'content-type': 'application/json' }
+    });
   }) as unknown as typeof fetch;
 
   const sock = join(tmpdir(), 'monad-x.sock');
   const client = new MonadClient({ baseUrl: 'http://127.0.0.1:52749', unixSocket: sock });
   const res = await client.treaty.v1.sessions.post({ title: 'hi' });
 
-  expect(res.data?.sessionId).toBe('ses_U');
+  expect(res.data?.sessionId).toBe('ses_U00000000000');
   expect(attempts.at(-1)).toBe(sock); // carried the unix option
 });
 
@@ -73,14 +75,16 @@ test('unixSocket: HTTPS TCP base URL is rewritten to HTTP only for the plain Uni
   const attempts: Array<{ unix?: string; url: string }> = [];
   globalThis.fetch = (async (url: string, init?: { unix?: string }) => {
     attempts.push({ unix: init?.unix, url: String(url) });
-    return new Response(JSON.stringify({ sessionId: 'ses_U' }), { headers: { 'content-type': 'application/json' } });
+    return new Response(JSON.stringify({ sessionId: 'ses_U00000000000' }), {
+      headers: { 'content-type': 'application/json' }
+    });
   }) as unknown as typeof fetch;
 
   const sock = join(tmpdir(), 'monad-https-base.sock');
   const client = new MonadClient({ baseUrl: 'https://127.0.0.1:52749', unixSocket: sock });
   const res = await client.treaty.v1.sessions.post({ title: 'hi' });
 
-  expect(res.data?.sessionId).toBe('ses_U');
+  expect(res.data?.sessionId).toBe('ses_U00000000000');
   expect(attempts).toEqual([{ unix: sock, url: 'http://127.0.0.1:52749/v1/sessions' }]);
 });
 
@@ -88,14 +92,16 @@ test('unixSocket: IPv6 loopback HTTPS URL is rewritten over the unix socket', as
   const attempts: Array<{ unix?: string; url: string }> = [];
   globalThis.fetch = (async (url: string, init?: { unix?: string }) => {
     attempts.push({ unix: init?.unix, url: String(url) });
-    return new Response(JSON.stringify({ sessionId: 'ses_U6' }), { headers: { 'content-type': 'application/json' } });
+    return new Response(JSON.stringify({ sessionId: 'ses_U60000000000' }), {
+      headers: { 'content-type': 'application/json' }
+    });
   }) as unknown as typeof fetch;
 
   const sock = join(tmpdir(), 'monad-https-ipv6-base.sock');
   const client = new MonadClient({ baseUrl: 'https://[::1]:52749', unixSocket: sock });
   const res = await client.treaty.v1.sessions.post({ title: 'hi' });
 
-  expect(res.data?.sessionId).toBe('ses_U6');
+  expect(res.data?.sessionId).toBe('ses_U60000000000');
   expect(attempts).toEqual([{ unix: sock, url: 'http://[::1]:52749/v1/sessions' }]);
 });
 
@@ -104,18 +110,20 @@ test('unixSocket: a dead socket falls back to TCP and sticks for later requests'
   globalThis.fetch = (async (_url: string, init?: { tls?: { rejectUnauthorized?: boolean }; unix?: string }) => {
     attempts.push({ tls: init?.tls, unix: init?.unix });
     if (init?.unix) throw new Error('connect ENOENT (no such socket)'); // simulate dead UDS
-    return new Response(JSON.stringify({ sessionId: 'ses_T' }), { headers: { 'content-type': 'application/json' } });
+    return new Response(JSON.stringify({ sessionId: 'ses_T00000000000' }), {
+      headers: { 'content-type': 'application/json' }
+    });
   }) as unknown as typeof fetch;
 
   const client = new MonadClient({ baseUrl: 'https://127.0.0.1:52749', unixSocket: join(tmpdir(), 'monad-dead.sock') });
 
   // 1st request: UDS connect throws → retried over TCP → still succeeds.
   const r1 = await client.treaty.v1.sessions.post({ title: 'a' });
-  expect(r1.data?.sessionId).toBe('ses_T');
+  expect(r1.data?.sessionId).toBe('ses_T00000000000');
 
   // 2nd request: should skip UDS entirely (sticky) and go straight to TCP.
   const r2 = await client.treaty.v1.sessions.post({ title: 'b' });
-  expect(r2.data?.sessionId).toBe('ses_T');
+  expect(r2.data?.sessionId).toBe('ses_T00000000000');
 
   expect(attempts.filter((attempt) => attempt.unix).length).toBe(1); // UDS probed only once
   const tcpAttempts = attempts.filter((attempt) => !attempt.unix);
@@ -127,13 +135,13 @@ test('streamEvents delivers live SSE events by draining the raw fetch Response b
   // streamEvents now runs on the generic stream<T> engine over a raw fetch (no Eden Treaty for the
   // SSE routes), so the body is a real `Response` whose reader we drain frame by frame. Guards the
   // live-token path that once silently degraded to block-style.
-  const sessionId = 'ses_STREAMTEST' as const;
+  const sessionId = 'ses_STREAMTEST00' as const;
   const mkEvent = (i: number, delta: string) => ({
-    id: `evt_TOK${i}`,
+    id: `evt_STREAMTEST0${i}`,
     sessionId,
     type: 'agent.token',
     actorAgentId: null,
-    payload: { messageId: 'msg_STREAMTEST', delta, index: i },
+    payload: { messageId: 'msg_STREAMTEST00', delta, index: i },
     at: '2026-01-01T00:00:00.000Z'
   });
   const frame = (e: ReturnType<typeof mkEvent>) => `id: ${e.id}\nevent: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`;
@@ -172,7 +180,7 @@ test('streamEvents surfaces a fatal error (and stops) instead of swallowing it',
   const client = new MonadClient({ baseUrl: 'http://127.0.0.1:52749' });
   const errors: StreamError[] = [];
   await new Promise<void>((resolve) => {
-    client.streamEvents('ses_GONE' as SessionId, () => {}, {
+    client.streamEvents('ses_GONE00000000' as SessionId, () => {}, {
       onError: (e) => {
         errors.push(e);
         resolve();
@@ -186,19 +194,19 @@ test('streamEvents surfaces a fatal error (and stops) instead of swallowing it',
 });
 
 test('streamUiEvents delivers projected UI SSE events', async () => {
-  const sessionId = 'ses_UISTREAM' as const;
+  const sessionId = 'ses_UISTREAM0000' as const;
   const mkEvent = (i: number): SessionUiEvent => {
-    if (i === 0) return { kind: 'snapshot', cursor: 'evt_UI0', items: [] };
+    if (i === 0) return { kind: 'snapshot', cursor: 'evt_UI0000000000', items: [] };
     return {
       kind: 'upsert',
-      cursor: 'evt_UI1',
+      cursor: 'evt_UI1000000000',
       item: {
         kind: 'message',
-        id: 'msg_UI',
+        id: 'msg_UI0000000000',
         role: 'assistant',
         parts: [{ type: 'text', text: 'hello' }],
         status: 'streaming',
-        seq: 'evt_UI1'
+        seq: 'evt_UI1000000000'
       }
     };
   };
@@ -231,8 +239,8 @@ test('streamUiEvents delivers projected UI SSE events', async () => {
 });
 
 test('streamUiEvents dispose stops consuming without surfacing a transient error', async () => {
-  const sessionId = 'ses_UIABORT' as const;
-  const event: SessionUiEvent = { kind: 'snapshot', cursor: 'evt_UIABORT0', items: [] };
+  const sessionId = 'ses_UIABORT00000' as const;
+  const event: SessionUiEvent = { kind: 'snapshot', cursor: 'evt_UIABORT00000', items: [] };
   const frame = `id: ${event.cursor}\nevent: ${event.kind}\ndata: ${JSON.stringify(event)}\n\n`;
   let capturedSignal: AbortSignal | undefined;
 
@@ -297,11 +305,11 @@ test('watchSession: opens SSE on stream_started, closes on stream_ended, de-dupe
     };
   };
 
-  const ev = (id: string, type: string, sessionId = 'ses_W'): Event =>
+  const ev = (id: string, type: string, sessionId = 'ses_W00000000000'): Event =>
     ({ id, sessionId, type, actorAgentId: null, payload: {}, at: '' }) as unknown as Event;
 
   const seen: string[] = [];
-  const dispose = client.watchSession('ses_W' as SessionId, (e) => seen.push(e.id));
+  const dispose = client.watchSession('ses_W00000000000' as SessionId, (e) => seen.push(e.id));
 
   expect(sseOpens).toBe(1); // opened up-front to catch an in-flight turn
 
@@ -313,7 +321,7 @@ test('watchSession: opens SSE on stream_started, closes on stream_ended, de-dupe
   sseHandler?.(ev('tok1', 'agent.token')); // generation over SSE
   controlHandler?.(ev('tok1', 'agent.token')); // overlap on the other plane → de-duped
   controlHandler?.(ev('upd', 'session.updated')); // lifecycle forwarded
-  controlHandler?.(ev('x', 'agent.token', 'ses_OTHER')); // other session → ignored
+  controlHandler?.(ev('x', 'agent.token', 'ses_OTHER0000000')); // other session → ignored
 
   // stream_ended is forwarded; stream_started is consumed internally (drives open, not surfaced).
   expect(seen).toEqual(['e1', 'tok1', 'upd']);

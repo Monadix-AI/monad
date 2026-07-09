@@ -1,4 +1,5 @@
 import type {
+  ExternalAgentSessionId,
   ExternalAgentSessionView,
   ListExternalAgentRuntimesQuery,
   ListExternalAgentRuntimesResponse
@@ -14,7 +15,8 @@ import { externalAgentSessionAdapter } from './list-external-agent-sessions.ts';
 type ListExternalAgentSessionSummariesResult = NormalizedCursorPaginateResponse<
   ExternalAgentSessionView,
   'sessions',
-  ListExternalAgentRuntimesResponse
+  ListExternalAgentRuntimesResponse,
+  ExternalAgentSessionId
 >;
 
 const listExternalAgentSessionSummariesApi = sessionsApi.injectEndpoints({

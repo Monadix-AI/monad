@@ -50,7 +50,7 @@ test('rejects path-traversal scope ids instead of escaping the root', () => {
     expect(() => md.appendFact(scope, { content: 'x' })).toThrow(/unsafe memory scope id/);
   }
   // A normal id works, and `..` embedded in a single segment (no separator) does not traverse.
-  expect(() => md.writeCore({ kind: 'agent', id: 'agt_ok' }, 'fine')).not.toThrow();
+  expect(() => md.writeCore({ kind: 'agent', id: 'agt_ok0000000000' }, 'fine')).not.toThrow();
   expect(() => md.writeCore({ kind: 'agent', id: 'a..b' }, 'fine')).not.toThrow();
 });
 
@@ -75,8 +75,8 @@ test('readCore/writeCore expose the raw markdown (human-editable source of truth
 
 test('scope isolation: session/agent/global write to separate files', () => {
   const md = freshDir();
-  const session = scopeOf('session', 'ses_AAA');
-  const agent = scopeOf('agent', 'agt_BBB');
+  const session = scopeOf('session', 'ses_AAA000000000');
+  const agent = scopeOf('agent', 'agt_BBB000000000');
   md.appendFact(session, { content: 'session secret' });
   md.appendFact(agent, { content: 'agent knowledge' });
   md.appendFact(GLOBAL, { content: 'global truth' });
@@ -87,7 +87,7 @@ test('scope isolation: session/agent/global write to separate files', () => {
 
 test('dropScope deletes a scope file (session ephemerality)', () => {
   const md = freshDir();
-  const session = scopeOf('session', 'ses_X');
+  const session = scopeOf('session', 'ses_X00000000000');
   md.appendFact(session, { content: 'ephemeral' });
   expect(md.listFacts(session).length).toBe(1);
   md.dropScope(session);

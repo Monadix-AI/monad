@@ -5,7 +5,7 @@
 
 import { z } from 'zod';
 
-import { channelIdSchema } from './ids.ts';
+import { agentIdSchema, channelIdSchema } from './ids.ts';
 import { okResponseSchema } from './rpc/control.ts';
 import { httpUrlSchema } from './url.ts';
 
@@ -112,7 +112,7 @@ export const channelResponseAttachmentSchema = z.object({
 export type ChannelResponseAttachment = z.infer<typeof channelResponseAttachmentSchema>;
 
 export const channelResponseNextTargetSchema = z.object({
-  agentId: z.string().regex(/^(agt_|acp:)/, 'next target agent id must start with agt_ or acp:'),
+  agentId: z.union([agentIdSchema, z.string().regex(/^acp:/, 'next target agent id must start with agt_ or acp:')]),
   title: z.string().optional(),
   prompt: z.string().min(1),
   context: z.string().optional()

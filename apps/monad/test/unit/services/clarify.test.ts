@@ -15,7 +15,7 @@ const resolved = (e: Event[]) => e.filter((x) => x.type === 'clarify.resolved');
 
 test('ask emits a request and blocks until answered', async () => {
   const { events, clarify } = capture();
-  const p = clarify.ask('ses_TEST', 'Which environment?', ['staging', 'prod']);
+  const p = clarify.ask('ses_TEST00000000', 'Which environment?', ['staging', 'prod']);
 
   expect(requested(events)).toHaveLength(1);
   expect(requested(events)[0]?.payload).toMatchObject({
@@ -33,7 +33,7 @@ test('ask emits a request and blocks until answered', async () => {
 
 test('askStructured emits selectable question metadata and resolves with the request id', async () => {
   const { events, clarify } = capture();
-  const p = clarify.askStructured('ses_TEST', {
+  const p = clarify.askStructured('ses_TEST00000000', {
     question: 'Pick reviewers',
     options: ['Lily', 'Steve'],
     mode: 'multiple',
@@ -62,9 +62,9 @@ test('respond on an unknown/expired id returns false', () => {
 
 test('caps concurrent pending questions — over the limit resolves empty', async () => {
   const clarify = new ClarifyService({ publish: () => {}, timeoutMs: 20, maxPending: 2 });
-  const p1 = clarify.ask('ses_TEST', 'q1');
-  const p2 = clarify.ask('ses_TEST', 'q2');
-  const p3 = clarify.ask('ses_TEST', 'q3'); // over the cap → immediate empty, no entry created
+  const p1 = clarify.ask('ses_TEST00000000', 'q1');
+  const p2 = clarify.ask('ses_TEST00000000', 'q2');
+  const p3 = clarify.ask('ses_TEST00000000', 'q3'); // over the cap → immediate empty, no entry created
 
   expect(await p3).toBe('');
   expect(clarify.pendingCount).toBe(2);
@@ -74,7 +74,7 @@ test('caps concurrent pending questions — over the limit resolves empty', asyn
 test('times out to an empty answer with no response', async () => {
   const events: Event[] = [];
   const clarify = new ClarifyService({ publish: (e) => events.push(e), timeoutMs: 10 });
-  expect(await clarify.ask('ses_TEST', 'still there?')).toBe('');
+  expect(await clarify.ask('ses_TEST00000000', 'still there?')).toBe('');
   expect(resolved(events)[0]?.payload).toMatchObject({ answer: '', reason: 'timeout' });
   expect(clarify.pendingCount).toBe(0);
 });
@@ -84,7 +84,7 @@ test('aborts pending structured questions', async () => {
   const clarify = new ClarifyService({ publish: (e) => events.push(e), timeoutMs: 1000 });
   const controller = new AbortController();
   const p = clarify.askStructured(
-    'ses_TEST',
+    'ses_TEST00000000',
     { question: 'Pick one?' },
     { signal: controller.signal, waitForever: true }
   );
@@ -103,7 +103,7 @@ test('aborts pending structured questions', async () => {
 test('createClarifyTool routes through ask and returns the answer', async () => {
   const { events, clarify } = capture();
   const tool = createClarifyTool(clarify.ask);
-  const p = tool.run({ question: 'Overwrite or merge?' }, { sessionId: 'ses_TEST', log: () => {} });
+  const p = tool.run({ question: 'Overwrite or merge?' }, { sessionId: 'ses_TEST00000000', log: () => {} });
 
   const requestId = requested(events)[0]?.payload.requestId as string;
   clarify.respond(requestId, 'merge');

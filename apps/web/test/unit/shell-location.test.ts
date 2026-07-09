@@ -72,9 +72,9 @@ describe('shell location navigation', () => {
       popstateCount += 1;
     });
 
-    navigateShellUrl('/workplace/projects/p1?view=members', 'replace');
+    navigateShellUrl('/workspace/prj_ABCDEF123456/ses_UVWXYZ789012?view=members', 'replace');
 
-    expect(calls).toEqual([{ mode: 'replace', url: '/workplace/projects/p1?view=members' }]);
+    expect(calls).toEqual([{ mode: 'replace', url: '/workspace/prj_ABCDEF123456/ses_UVWXYZ789012?view=members' }]);
     expect(eventCount).toBe(1);
     expect(popstateCount).toBe(1);
     expect(listeners.get('monad:shell-location')?.size).toBe(1);

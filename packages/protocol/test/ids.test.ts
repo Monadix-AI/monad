@@ -1,18 +1,16 @@
 import { expect, test } from 'bun:test';
 
-import { newId, ulid } from '../src/ids.ts';
+import { nanoid, newId, sessionIdSchema } from '../src/ids.ts';
 
-test('ulid is 26 uppercase Crockford base32 chars', () => {
-  expect(ulid()).toMatch(/^[0-9A-HJKMNP-TV-Z]{26}$/);
+test('nanoid is 12 alphanumeric chars', () => {
+  expect(nanoid()).toMatch(/^[0-9a-zA-Z]{12}$/);
 });
 
 test('newId prefixes correctly', () => {
-  expect(newId('ses')).toMatch(/^ses_[0-9A-HJKMNP-TV-Z]{26}$/);
+  expect(newId('ses')).toMatch(/^ses_[0-9a-zA-Z]{12}$/);
 });
 
-test('ulids are time-sortable (monotonic prefix)', async () => {
-  const a = ulid();
-  await Bun.sleep(2);
-  const b = ulid();
-  expect(a < b).toBe(true);
+test('newId emits parseable session ids', () => {
+  const id = newId('ses');
+  expect(sessionIdSchema.parse(id)).toBe(id);
 });

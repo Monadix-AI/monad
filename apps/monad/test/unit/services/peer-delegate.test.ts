@@ -50,7 +50,7 @@ function sse(frames: string[]): Response {
 
 function fakeCtx(progress?: string[]): ToolContext {
   return {
-    sessionId: 'ses_A' as SessionId,
+    sessionId: 'ses_A00000000000' as SessionId,
     toolCallId: 'tc_1',
     signal: new AbortController().signal,
     reportProgress: (output: string) => progress?.push(output),
@@ -59,7 +59,7 @@ function fakeCtx(progress?: string[]): ToolContext {
 }
 
 function target(over: Partial<PeerDelegateTarget> = {}): PeerDelegateTarget {
-  return { id: 'peer_B', label: 'B', baseUrl: BASE, defaultAgent: 'default', token: 'tok', ...over };
+  return { id: 'peer_B00000000000', label: 'B', baseUrl: BASE, defaultAgent: 'default', token: 'tok', ...over };
 }
 
 test('posts to /v1/chat/completions with bearer auth and a streaming user turn', async () => {
@@ -74,11 +74,11 @@ test('posts to /v1/chat/completions with bearer auth and a streaming user turn',
 });
 
 test('an explicit agent overrides the peer default; omitting it uses the default', async () => {
-  const tool = createPeerDelegateTool({ peers: [target({ defaultAgent: 'agt_main' })] });
-  await tool.run({ peer: 'B', agent: 'agt_special', instruction: 'x' }, fakeCtx());
-  expect(captured?.body.model).toBe('agt_special');
+  const tool = createPeerDelegateTool({ peers: [target({ defaultAgent: 'agt_main00000000' })] });
+  await tool.run({ peer: 'B', agent: 'agt_special00000', instruction: 'x' }, fakeCtx());
+  expect(captured?.body.model).toBe('agt_special00000');
   await tool.run({ peer: 'B', instruction: 'x' }, fakeCtx());
-  expect(captured?.body.model).toBe('agt_main');
+  expect(captured?.body.model).toBe('agt_main00000000');
 });
 
 test('a trailing slash on baseUrl does not double the path separator', async () => {

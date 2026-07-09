@@ -34,7 +34,7 @@ const after = (afterId: string | null): GraphMessage[] => {
 function deps(store: GraphStore, complete: () => Promise<string>, alive: Set<string>) {
   return {
     store,
-    sessions: () => [{ id: 'ses_1', agentId: 'a1', projectKey: null }],
+    sessions: () => [{ id: 'ses_100000000000', agentId: 'a1', projectKey: null }],
     messagesAfter: (_sid: string, afterId: string | null) => after(afterId),
     isAlive: (id: string) => alive.has(id),
     complete,
@@ -66,7 +66,7 @@ test('consolidate extracts a graph, advances the per-session cursor, and is idem
   expect(r1.nodes).toBe(2);
   expect(r1.edges).toBe(1);
   expect(r1.sessionsExtracted).toBe(1);
-  expect(store.getCursor('ses_1')).toBe('m4'); // watermark advanced to the last message
+  expect(store.getCursor('ses_100000000000')).toBe('m4'); // watermark advanced to the last message
 
   // second pass: no new messages past the cursor → nothing extracted (and the model isn't even called)
   let called = false;
@@ -89,7 +89,7 @@ test('a session with a projectKey writes its graph into both the agent and proje
   const alive = new Set(['m1', 'm2', 'm3', 'm4']);
   await consolidateGraph({
     ...deps(store, async () => GRAPH_JSON, alive),
-    sessions: () => [{ id: 'ses_1', agentId: 'a1', projectKey: 'monad-abc123' }]
+    sessions: () => [{ id: 'ses_100000000000', agentId: 'a1', projectKey: 'monad-abc123' }]
   });
   // one extraction, two subgraphs — the agent's and the workspace's
   expect(store.searchNodes(['agent:a1'], 'Zeke').length).toBe(1);
@@ -106,7 +106,7 @@ test('cost: tool/non-prose messages are excluded from the extraction prompt (cur
   let _prompt = '';
   await consolidateGraph({
     store,
-    sessions: () => [{ id: 'ses_t', agentId: 'a1', projectKey: null }],
+    sessions: () => [{ id: 'ses_t00000000000', agentId: 'a1', projectKey: null }],
     messagesAfter: () => span,
     isAlive: () => true,
     complete: async (_m, _s, user) => {
@@ -117,7 +117,7 @@ test('cost: tool/non-prose messages are excluded from the extraction prompt (cur
     minNewMessages: 1,
     log: silent
   });
-  expect(store.getCursor('ses_t')).toBe('p3'); // advanced to the last fed prose message
+  expect(store.getCursor('ses_t00000000000')).toBe('p3'); // advanced to the last fed prose message
 });
 
 test('cost: a long span is capped to the char budget; the tail is consolidated on the next pass', async () => {
@@ -130,7 +130,7 @@ test('cost: a long span is capped to the char budget; the tail is consolidated o
   let calls = 0;
   const mk = () => ({
     store,
-    sessions: () => [{ id: 'ses_b', agentId: 'a1', projectKey: null }],
+    sessions: () => [{ id: 'ses_b00000000000', agentId: 'a1', projectKey: null }],
     messagesAfter: (_s: string, afterId: string | null) =>
       afterId ? big.slice(big.findIndex((m) => m.id === afterId) + 1) : big,
     isAlive: () => true,
@@ -144,9 +144,9 @@ test('cost: a long span is capped to the char budget; the tail is consolidated o
     log: silent
   });
   await consolidateGraph(mk());
-  expect(store.getCursor('ses_b')).toBe('b1'); // budget truncated the batch to the first message
+  expect(store.getCursor('ses_b00000000000')).toBe('b1'); // budget truncated the batch to the first message
   await consolidateGraph(mk()); // next pass picks up the tail
-  expect(store.getCursor('ses_b')).toBe('b2');
+  expect(store.getCursor('ses_b00000000000')).toBe('b2');
   expect(calls).toBe(2);
 });
 
@@ -167,7 +167,7 @@ test('graph_explore and graph_node surface the consolidated graph, scope-isolate
   const store = new GraphStore(':memory:');
   await consolidateGraph(deps(store, async () => GRAPH_JSON, new Set(['m1', 'm2', 'm3', 'm4'])));
   const [explore, node] = createGraphQueryTools(store, () => ['agent:a1']);
-  const ctx = { sessionId: 'ses_1' } as unknown as ToolContext;
+  const ctx = { sessionId: 'ses_100000000000' } as unknown as ToolContext;
 
   // querying both entities surfaces the relation between them (edgesAmong needs both endpoints in the hits)
   const _ex = (await explore?.run({ query: 'zeke monad' }, ctx))?.modelContent as string;

@@ -59,7 +59,7 @@ async function startPeerDaemon(): Promise<PeerDaemon> {
 
 function fakeCtx(progress?: string[], signal?: AbortSignal): ToolContext {
   return {
-    sessionId: 'ses_A' as SessionId,
+    sessionId: 'ses_A00000000000' as SessionId,
     toolCallId: 'tc_1',
     signal: signal ?? new AbortController().signal,
     reportProgress: (output: string) => progress?.push(output),
@@ -68,7 +68,7 @@ function fakeCtx(progress?: string[], signal?: AbortSignal): ToolContext {
 }
 
 function target(baseUrl: string, token = TOKEN): PeerDelegateTarget {
-  return { id: 'peer_B', label: 'B', baseUrl, defaultAgent: 'default', token };
+  return { id: 'peer_B00000000000', label: 'B', baseUrl, defaultAgent: 'default', token };
 }
 
 let peer: PeerDaemon;
@@ -93,7 +93,7 @@ test('closed loop: A delegates to peer B, B answers, the result returns to A', a
 
 test('resolves the peer by id as well as label', async () => {
   const tool = createPeerDelegateTool({ peers: [target(peer.baseUrl)] });
-  const result = await tool.run({ peer: 'peer_B', instruction: 'hi' }, fakeCtx());
+  const result = await tool.run({ peer: 'peer_B00000000000', instruction: 'hi' }, fakeCtx());
   expect(result.metadata.text).toBe(MOCK_REPLY);
 });
 

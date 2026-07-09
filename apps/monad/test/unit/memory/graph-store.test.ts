@@ -113,12 +113,12 @@ test('reconcile prunes dead support and retracts edges with none left', () => {
 
 test('per-session cursors: get/set/drop + knownSessions', () => {
   const g = fresh();
-  g.setCursor('ses_1', 'msg_10');
-  g.setCursor('ses_2', 'msg_20');
-  expect(g.getCursor('ses_1')).toBe('msg_10');
-  g.setCursor('ses_1', 'msg_15'); // advance
-  expect(g.getCursor('ses_1')).toBe('msg_15');
-  expect(g.knownSessions().sort()).toEqual(['ses_1', 'ses_2']);
-  g.dropCursor('ses_1');
-  expect(g.knownSessions()).toEqual(['ses_2']);
+  g.setCursor('ses_100000000000', 'msg_100000000000');
+  g.setCursor('ses_200000000000', 'msg_200000000000');
+  expect(g.getCursor('ses_100000000000')).toBe('msg_100000000000');
+  g.setCursor('ses_100000000000', 'msg_150000000000'); // advance
+  expect(g.getCursor('ses_100000000000')).toBe('msg_150000000000');
+  expect(g.knownSessions().sort()).toEqual(['ses_100000000000', 'ses_200000000000']);
+  g.dropCursor('ses_100000000000');
+  expect(g.knownSessions()).toEqual(['ses_200000000000']);
 });

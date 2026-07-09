@@ -2,9 +2,11 @@ import {
   a2aAgentSettingsSchema,
   absoluteUriSchema,
   agentAtomsSchema,
+  agentIdSchema,
   agentVisibilitySchema,
   channelAllowlistSchema,
   channelGroupPolicySchema,
+  channelIdSchema,
   channelTypeSchema,
   externalAgentViewSchema,
   fallbackTargetViewSchema,
@@ -15,6 +17,7 @@ import {
   modelRoleSchema,
   modelRolesSchema,
   KNOWN_PROVIDER_TYPES as PROTOCOL_KNOWN_PROVIDER_TYPES,
+  peerIdSchema,
   sandboxModeSchema
 } from '@monad/protocol';
 import { z } from 'zod';
@@ -148,7 +151,7 @@ export const profileSchema = z.object({
 export type ModelProfile = z.infer<typeof profileSchema>;
 
 export const agentConfigSchema = z.object({
-  id: z.string().regex(/^agt_/, 'agent id must start with agt_'),
+  id: agentIdSchema,
   name: z.string().min(1).max(100),
   /** Model profile alias this agent uses by default. Falls back to the fixed "default" profile if unset. */
   modelAlias: z.string().optional(),
@@ -414,7 +417,7 @@ export function resolvePeerSecretRef(ref: string, auth: MonadAuth): string {
 // The model never sees the url/token — it names a peer; the tool resolves it here. Infra/security
 // concern (a delegation target + its credential), so it lives in system config like acpAgents.
 export const peerSchema = z.object({
-  id: z.string().regex(/^peer_/, 'peer id must start with peer_'),
+  id: peerIdSchema,
   label: z.string().min(1),
   /** Remote daemon's OpenAI-compat base, e.g. https://host:port/openai (no trailing /v1). */
   baseUrl: httpUrlSchema,
@@ -428,7 +431,7 @@ export const peerSchema = z.object({
 export type PeerConfig = z.infer<typeof peerSchema>;
 
 export const channelInstanceSchema = z.object({
-  id: z.string().regex(/^chn_/, 'channel id must start with chn_'),
+  id: channelIdSchema,
   type: channelTypeSchema,
   label: z.string().min(1),
   enabled: z.boolean().default(true),

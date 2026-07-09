@@ -32,7 +32,7 @@ test('MCP HTTP server URLs accept local HTTP but reject non-HTTP schemes', () =>
 test('peer base URLs accept HTTP for local/lan daemons but reject script schemes', () => {
   expect(
     peerViewSchema.parse({
-      id: 'peer_01KABCDEF0123456789ABCDEFF',
+      id: 'peer_01KABCDEF012',
       label: 'local',
       baseUrl: 'http://192.168.1.10:52749/openai',
       enabled: true
@@ -41,7 +41,7 @@ test('peer base URLs accept HTTP for local/lan daemons but reject script schemes
 
   expect(() =>
     peerViewSchema.parse({
-      id: 'peer_01KABCDEF0123456789ABCDEFG',
+      id: 'peer_01KABCDEF013',
       label: 'bad',
       baseUrl: 'javascript:alert(1)',
       enabled: true

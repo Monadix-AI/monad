@@ -36,7 +36,7 @@ import {
   DropdownMenuTrigger
 } from '#/components/ui/dropdown-menu';
 import { PanelShell, PanelShellBody } from '#/components/ui/panel-shell';
-import { isSkillMarketplacePath, skillMarketplacePath, studioPath } from '#/features/routes/route-paths';
+import { isSkillMarketplacePath, skillMarketplacePath, studioPath } from '#/features/shell/routing/paths';
 import { StudioBreadcrumbHeader } from '#/features/studio/StudioBreadcrumbHeader';
 import { replaceShellUrl, useShellPathname } from '#/hooks/use-shell-location';
 import { useMonadRuntime } from '#/lib/monad-runtime-provider';

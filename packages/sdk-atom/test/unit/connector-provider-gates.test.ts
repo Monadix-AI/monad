@@ -216,8 +216,8 @@ test('connector: start and stop are callable', async () => {
 
 test('connector host: ingest returns a sessionId', async () => {
   const host: ConnectorHost = {
-    ingest: async (_input) => ({ sessionId: 'ses_test' })
+    ingest: async (_input) => ({ sessionId: 'ses_test00000000' })
   };
-  const result = await host.ingest({ text: 'hello', sessionId: 'ses_existing' });
-  expect(result.sessionId).toBe('ses_test');
+  const result = await host.ingest({ text: 'hello', sessionId: 'ses_existing0000' });
+  expect(result.sessionId).toBe('ses_test00000000');
 });

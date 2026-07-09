@@ -1,4 +1,4 @@
-// Prefixed ULID identifiers (Crockford base32: 48-bit ms timestamp + 80 bits randomness) — sort by creation time.
+// Prefixed nanoid identifiers: prefix_ followed by 12 chars from 0-9a-zA-Z.
 // Template-literal types like `ses_${string}` can't be produced by z.infer, so the types are
 // hand-written and each schema is cast to match. Keep type + schema adjacent and in sync.
 
@@ -15,11 +15,19 @@ export type ChannelId = `chn_${string}`; // a configured channel instance (one b
 export type PeerId = `peer_${string}`; // a configured peer daemon (a delegation target)
 export type AttachmentId = `att_${string}`; // an out-of-band message body (spilled long content)
 export type NativeAgentDeliveryId = `deliv_${string}`;
+export type ExternalAgentSessionId = `exa_${string}`;
+export type ExternalAgentAuthSessionId = `ncliauth_${string}`;
 
 export type ISO8601 = string; // always UTC ISO-8601
 
+export const ID_BODY_LENGTH = 12;
+export const ID_BODY_ALPHABET = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+const ID_BODY_PATTERN = `[0-9a-zA-Z]{${ID_BODY_LENGTH}}`;
+const ID_BODY_MASK = (2 << Math.floor(Math.log2(ID_BODY_ALPHABET.length - 1))) - 1;
+const ID_BODY_STEP = Math.ceil((1.6 * ID_BODY_MASK * ID_BODY_LENGTH) / ID_BODY_ALPHABET.length);
+
 export function prefixedIdSchema<T extends string>(prefix: string): z.ZodType<T> {
-  return z.string().regex(new RegExp(`^${prefix}_[A-Z0-9]+$`)) as unknown as z.ZodType<T>;
+  return z.string().regex(new RegExp(`^${prefix}_${ID_BODY_PATTERN}$`)) as unknown as z.ZodType<T>;
 }
 
 export const principalIdSchema: z.ZodType<PrincipalId> = prefixedIdSchema<PrincipalId>('prn');
@@ -34,38 +42,30 @@ export const peerIdSchema: z.ZodType<PeerId> = prefixedIdSchema<PeerId>('peer');
 export const attachmentIdSchema: z.ZodType<AttachmentId> = prefixedIdSchema<AttachmentId>('att');
 export const nativeAgentDeliveryIdSchema: z.ZodType<NativeAgentDeliveryId> =
   prefixedIdSchema<NativeAgentDeliveryId>('deliv');
+export const externalAgentSessionIdSchema: z.ZodType<ExternalAgentSessionId> =
+  prefixedIdSchema<ExternalAgentSessionId>('exa');
+export const externalAgentAuthSessionIdSchema: z.ZodType<ExternalAgentAuthSessionId> =
+  prefixedIdSchema<ExternalAgentAuthSessionId>('ncliauth');
 
 export const iso8601Schema: z.ZodType<ISO8601> = z.union([
   z.string(),
   z.date().transform((d) => d.toISOString())
 ]) as z.ZodType<ISO8601>;
 
-const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
-
-function encodeTime(now: number): string {
+export function nanoid(): string {
   let out = '';
-  let t = now;
-  for (let i = 0; i < 10; i++) {
-    out = CROCKFORD[t % 32] + out;
-    t = Math.floor(t / 32);
+  while (out.length < ID_BODY_LENGTH) {
+    const bytes = crypto.getRandomValues(new Uint8Array(ID_BODY_STEP));
+    for (const byte of bytes) {
+      const index = byte & ID_BODY_MASK;
+      if (index >= ID_BODY_ALPHABET.length) continue;
+      out += ID_BODY_ALPHABET[index] ?? '';
+      if (out.length === ID_BODY_LENGTH) return out;
+    }
   }
   return out;
-}
-
-function encodeRandom(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(16));
-  let out = '';
-  for (let i = 0; i < 16; i++) {
-    const b = bytes[i] ?? 0;
-    out += CROCKFORD[b % 32];
-  }
-  return out;
-}
-
-export function ulid(): string {
-  return encodeTime(Date.now()) + encodeRandom();
 }
 
 export function newId<P extends string>(prefix: P): `${P}_${string}` {
-  return `${prefix}_${ulid()}`;
+  return `${prefix}_${nanoid()}`;
 }

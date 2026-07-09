@@ -17,19 +17,19 @@ const enT = createI18n({ locale: 'en', packs: [{ locale: 'en', name: 'English', 
 
 function fakeCtx(args: string, servicesOver: ServicesOver = {}): CommandRunContext {
   const sessions: CommandSessionInfo[] = [
-    { sessionId: 'ses_a', label: 'Alpha', active: true },
-    { sessionId: 'ses_b', label: 'Beta', active: false }
+    { sessionId: 'ses_a00000000000', label: 'Alpha', active: true },
+    { sessionId: 'ses_b00000000000', label: 'Beta', active: false }
   ];
   const models: CommandModelInfo[] = [
     { alias: 'fast', provider: 'p', modelId: 'm1', current: true },
     { alias: 'smart', provider: 'p', modelId: 'm2', current: false }
   ];
   return makeCommandRunContext({
-    sessionId: 'ses_a' as SessionId,
-    principalId: 'prn_x' as PrincipalId,
+    sessionId: 'ses_a00000000000' as SessionId,
+    principalId: 'prn_x00000000000' as PrincipalId,
     args,
     nav: {
-      newSession: async () => ({ sessionId: 'ses_new' }),
+      newSession: async () => ({ sessionId: 'ses_new000000000' }),
       listSessions: async () => sessions,
       switchSession: async (t) => sessions[Number(t) - 1] ?? sessions.find((s) => s.sessionId === t) ?? null
     },
@@ -44,7 +44,7 @@ function fakeCtx(args: string, servicesOver: ServicesOver = {}): CommandRunConte
       getWorkdir: async () => ({ path: undefined }),
       setWorkdir: async (_sid, path) => ({ path }),
       listCommands: async () => [] as CommandItem[],
-      handoff: async () => ({ sessionId: 'ses_new' as SessionId }),
+      handoff: async () => ({ sessionId: 'ses_new000000000' as SessionId }),
       t: enT,
       log: () => {},
       ...servicesOver
@@ -292,7 +292,7 @@ describe('dispatchCommand', () => {
   test('/new creates a session and emits a session-created effect', async () => {
     const r = seededCommandRegistry();
     const res = await dispatchCommand(r, '/new my label', (a) => fakeCtx(a));
-    expect(res?.effect).toEqual({ type: 'session-created', sessionId: 'ses_new' });
+    expect(res?.effect).toEqual({ type: 'session-created', sessionId: 'ses_new000000000' });
   });
 
   test('/reset clears history with the cleared count', async () => {
@@ -311,7 +311,7 @@ describe('dispatchCommand', () => {
   test('/switch by index resolves and emits session-switched', async () => {
     const r = seededCommandRegistry();
     const res = await dispatchCommand(r, '/switch 2', (a) => fakeCtx(a));
-    expect(res?.effect).toEqual({ type: 'session-switched', sessionId: 'ses_b' });
+    expect(res?.effect).toEqual({ type: 'session-switched', sessionId: 'ses_b00000000000' });
   });
 
   test('/model with no args lists profiles; with an alias switches', async () => {

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { agentObservationEventSchema } from '../agent-observation.ts';
-import { nativeAgentDeliveryIdSchema } from '../ids.ts';
+import { externalAgentSessionIdSchema, nativeAgentDeliveryIdSchema } from '../ids.ts';
 import { externalAgentProviderSchema } from './external-agent-config.ts';
 
 export const externalAgentObservationRoleSchema = z.enum(['agent', 'system', 'tool', 'user']);
@@ -51,7 +51,7 @@ export type NativeAgentTurnPointer = z.infer<typeof nativeAgentTurnPointerSchema
 export const nativeAgentObservationRequestSchema = z
   .object({
     deliveryId: nativeAgentDeliveryIdSchema.optional(),
-    externalAgentSessionId: z.string().regex(/^exa_/).optional()
+    externalAgentSessionId: externalAgentSessionIdSchema.optional()
   })
   .refine((request) => request.deliveryId !== undefined || request.externalAgentSessionId !== undefined, {
     message: 'deliveryId or externalAgentSessionId is required'
@@ -61,7 +61,7 @@ export type NativeAgentObservationRequest = z.infer<typeof nativeAgentObservatio
 export const nativeAgentObservationProjectionSchema = z.discriminatedUnion('state', [
   z.object({
     state: z.literal('live'),
-    externalAgentSessionId: z.string().regex(/^exa_/),
+    externalAgentSessionId: externalAgentSessionIdSchema,
     deliveryId: nativeAgentDeliveryIdSchema.optional(),
     turn: nativeAgentTurnPointerSchema.optional(),
     provider: externalAgentProviderSchema,
@@ -70,7 +70,7 @@ export const nativeAgentObservationProjectionSchema = z.discriminatedUnion('stat
   }),
   z.object({
     state: z.literal('history'),
-    externalAgentSessionId: z.string().regex(/^exa_/),
+    externalAgentSessionId: externalAgentSessionIdSchema,
     deliveryId: nativeAgentDeliveryIdSchema.optional(),
     turn: nativeAgentTurnPointerSchema.optional(),
     provider: externalAgentProviderSchema,
@@ -79,7 +79,7 @@ export const nativeAgentObservationProjectionSchema = z.discriminatedUnion('stat
   }),
   z.object({
     state: z.literal('unavailable'),
-    externalAgentSessionId: z.string().regex(/^exa_/).optional(),
+    externalAgentSessionId: externalAgentSessionIdSchema.optional(),
     deliveryId: nativeAgentDeliveryIdSchema.optional(),
     turn: nativeAgentTurnPointerSchema.optional(),
     provider: externalAgentProviderSchema.optional(),
@@ -101,7 +101,7 @@ export const externalAgentObservationAccessResponseSchema = z.discriminatedUnion
   // snapshot). This lets the stream push per-token deltas instead of the whole 256 KB buffer each tick.
   z.object({
     state: z.literal('live'),
-    externalAgentSessionId: z.string().regex(/^exa_/),
+    externalAgentSessionId: externalAgentSessionIdSchema,
     deliveryId: nativeAgentDeliveryIdSchema.optional(),
     turn: nativeAgentTurnPointerSchema.optional(),
     provider: externalAgentProviderSchema,
@@ -118,7 +118,7 @@ export const externalAgentObservationAccessResponseSchema = z.discriminatedUnion
   }),
   z.object({
     state: z.literal('history'),
-    externalAgentSessionId: z.string().regex(/^exa_/),
+    externalAgentSessionId: externalAgentSessionIdSchema,
     deliveryId: nativeAgentDeliveryIdSchema.optional(),
     turn: nativeAgentTurnPointerSchema.optional(),
     provider: externalAgentProviderSchema,
@@ -129,7 +129,7 @@ export const externalAgentObservationAccessResponseSchema = z.discriminatedUnion
   }),
   z.object({
     state: z.literal('unavailable'),
-    externalAgentSessionId: z.string().regex(/^exa_/),
+    externalAgentSessionId: externalAgentSessionIdSchema,
     deliveryId: nativeAgentDeliveryIdSchema.optional(),
     turn: nativeAgentTurnPointerSchema.optional(),
     provider: externalAgentProviderSchema.optional(),
@@ -145,7 +145,7 @@ export type ExternalAgentObservationAccessResponse = z.infer<typeof externalAgen
 export const externalAgentUiObservationFrameSchema = z.discriminatedUnion('state', [
   z.object({
     state: z.literal('live'),
-    externalAgentSessionId: z.string().regex(/^exa_/),
+    externalAgentSessionId: externalAgentSessionIdSchema,
     deliveryId: nativeAgentDeliveryIdSchema.optional(),
     turn: nativeAgentTurnPointerSchema.optional(),
     provider: externalAgentProviderSchema,
@@ -155,7 +155,7 @@ export const externalAgentUiObservationFrameSchema = z.discriminatedUnion('state
   }),
   z.object({
     state: z.literal('history'),
-    externalAgentSessionId: z.string().regex(/^exa_/),
+    externalAgentSessionId: externalAgentSessionIdSchema,
     deliveryId: nativeAgentDeliveryIdSchema.optional(),
     turn: nativeAgentTurnPointerSchema.optional(),
     provider: externalAgentProviderSchema,
@@ -164,7 +164,7 @@ export const externalAgentUiObservationFrameSchema = z.discriminatedUnion('state
   }),
   z.object({
     state: z.literal('unavailable'),
-    externalAgentSessionId: z.string().regex(/^exa_/),
+    externalAgentSessionId: externalAgentSessionIdSchema,
     deliveryId: nativeAgentDeliveryIdSchema.optional(),
     turn: nativeAgentTurnPointerSchema.optional(),
     provider: externalAgentProviderSchema.optional(),

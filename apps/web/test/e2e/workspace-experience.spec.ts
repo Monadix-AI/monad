@@ -1,6 +1,13 @@
+import type { Session } from '@monad/protocol';
+
 import { expect, type Page, test } from '@playwright/test';
 
-const projectId = 'prj_mock';
+const projectId = 'prj_ABCDEF123456';
+const projectRouteId = projectId;
+const alphaSessionId = 'ses_ALPHA1234567';
+const alphaSessionRouteId = alphaSessionId;
+const betaSessionId = 'ses_BETA12345678';
+const betaSessionRouteId = betaSessionId;
 
 function json(body: unknown, status = 200) {
   return {
@@ -90,10 +97,12 @@ async function mockWorkplaceApi(
   page: Page,
   experiences: unknown[] = [mockCanvasExperience],
   options: {
+    sessions?: Session[];
     sendProjectMessage?: (request: { text?: string; attempt: number }) => { status?: number; body?: unknown };
   } = {}
 ) {
   let sendProjectMessageAttempts = 0;
+  const sessions = options.sessions ?? [projectSession(alphaSessionId, 'Alpha session', '2026-07-04T00:00:00.000Z')];
 
   await page.route('**/v1/atoms/mock-experience/assets/dist/mock-canvas.js', (route) =>
     route.fulfill({
@@ -117,7 +126,7 @@ async function mockWorkplaceApi(
     if (method === 'GET' && path === '/v1/settings/locale') return route.fulfill(json({ locale: 'en' }));
     if (method === 'GET' && path === '/v1/i18n/catalog') return route.fulfill(json({ locale: 'en', messages: {} }));
     if (method === 'GET' && path === '/v1/sessions') {
-      return route.fulfill(json({ sessions: [], total: 0, hasMore: false }));
+      return route.fulfill(json({ sessions, total: sessions.length, hasMore: false }));
     }
     if (method === 'GET' && path === '/v1/workplace/projects') {
       return route.fulfill(
@@ -168,6 +177,16 @@ async function mockWorkplaceApi(
     if (method === 'GET' && path === `/v1/projects/${projectId}/external-agent-sessions`) {
       return route.fulfill(json({ sessions: [] }));
     }
+    if (method === 'GET' && path === `/v1/projects/${projectId}/sessions`) {
+      return route.fulfill(json({ sessions: sessions.filter((session) => session.projectId === projectId) }));
+    }
+    if (method === 'POST' && path === `/v1/projects/${projectId}/sessions`) {
+      return route.fulfill(json({ sessionId: alphaSessionId }, 201));
+    }
+    const sessionExternalAgentMatch = path.match(/^\/v1\/sessions\/([^/]+)\/external-agent-sessions$/);
+    if (method === 'GET' && sessionExternalAgentMatch) {
+      return route.fulfill(json({ sessions: [] }));
+    }
     if (method === 'GET' && path === `/v1/projects/${projectId}/ui-stream`) {
       return route.fulfill(sse({ kind: 'snapshot', items: [], hasMore: false }));
     }
@@ -189,11 +208,27 @@ async function mockWorkplaceApi(
   });
 }
 
+function projectSession(id: string, title: string, updatedAt: string): Session {
+  return {
+    id: id as Session['id'],
+    projectId: projectId as Session['projectId'],
+    title,
+    ownerPrincipalId: 'prn_mock00000000' as Session['ownerPrincipalId'],
+    state: 'active',
+    agentIds: [],
+    parentSessionId: null,
+    archived: false,
+    restoreCount: 0,
+    createdAt: updatedAt,
+    updatedAt
+  };
+}
+
 test.describe('workspace experience atoms', () => {
   test('mounts a mock experience as a whole workplace region and lets it call its API', async ({ page }) => {
     await mockWorkplaceApi(page);
 
-    await page.goto(`/workplace/projects/${projectId}`);
+    await page.goto(`/workspace/${projectRouteId}/${alphaSessionRouteId}`);
     await expect(page.locator('.project-topbar-name', { hasText: 'Mock Project' })).toBeVisible({ timeout: 20_000 });
 
     await page.getByRole('button', { name: 'Project view mode' }).click();
@@ -216,7 +251,7 @@ test.describe('workspace experience atoms', () => {
     // (public/experiences/graph-view.js) mounts on load, no mock module involved.
     await mockWorkplaceApi(page, [graphViewExperience, chatRoomExperience]);
 
-    await page.goto(`/workplace/projects/${projectId}`);
+    await page.goto(`/workspace/${projectRouteId}/${alphaSessionRouteId}`);
     await expect(page.locator('.project-topbar-name', { hasText: 'Mock Project' })).toBeVisible({ timeout: 20_000 });
 
     const graph = page.locator('monad-graph-view');
@@ -273,6 +308,39 @@ test.describe('workspace experience atoms', () => {
     await expect(page.locator('monad-graph-view')).toBeVisible();
   });
 
+  test('switches the active experience with the selected project session', async ({ page }) => {
+    await mockWorkplaceApi(page, [graphViewExperience, mockCanvasExperience], {
+      sessions: [
+        projectSession(alphaSessionId, 'Alpha session', '2026-07-04T00:00:00.000Z'),
+        projectSession(betaSessionId, 'Beta session', '2026-07-03T00:00:00.000Z')
+      ]
+    });
+
+    await page.goto(`/workspace/${projectRouteId}/${alphaSessionRouteId}`);
+    await expect(page.locator('.project-topbar-name', { hasText: 'Mock Project' })).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator('.project-topbar-name', { hasText: 'Alpha session' })).toBeVisible();
+    await expect(page).toHaveURL(new RegExp(`/workspace/${projectRouteId}/${alphaSessionRouteId}$`));
+    await expect(page.locator('monad-graph-view')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Project view mode' }).click();
+    await page.getByRole('menuitem', { name: 'Mock Canvas' }).click();
+    await expect(page.locator('mock-canvas')).toBeVisible();
+
+    await page.getByRole('treeitem', { name: 'Beta session' }).click();
+
+    await expect(page).toHaveURL(new RegExp(`/workspace/${projectRouteId}/${betaSessionRouteId}$`));
+    await expect(page.locator('.project-topbar-name', { hasText: 'Beta session' })).toBeVisible();
+    await expect(page.locator('monad-graph-view')).toBeVisible();
+    await expect(page.locator('mock-canvas')).toBeHidden();
+
+    await page.getByRole('treeitem', { name: 'Alpha session' }).click();
+
+    await expect(page).toHaveURL(new RegExp(`/workspace/${projectRouteId}/${alphaSessionRouteId}$`));
+    await expect(page.locator('.project-topbar-name', { hasText: 'Alpha session' })).toBeVisible();
+    await expect(page.locator('mock-canvas')).toBeVisible();
+    await expect(page.locator('monad-graph-view')).toBeHidden();
+  });
+
   test('shows retry affordance for failed optimistic project messages', async ({ page }) => {
     const attempts: Array<{ text?: string; attempt: number }> = [];
     await mockWorkplaceApi(page, [chatRoomExperience], {
@@ -282,7 +350,7 @@ test.describe('workspace experience atoms', () => {
       }
     });
 
-    await page.goto(`/workplace/projects/${projectId}`);
+    await page.goto(`/workspace/${projectRouteId}/${alphaSessionRouteId}`);
     await expect(page.locator('.project-topbar-name', { hasText: 'Mock Project' })).toBeVisible({ timeout: 20_000 });
 
     const editor = page.locator('[contenteditable][aria-label="Message agents"]');

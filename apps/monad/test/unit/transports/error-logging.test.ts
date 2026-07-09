@@ -33,7 +33,7 @@ test('HTTP transport logs HandlerError and validation failures with exception st
   const records = captureErrorLogs();
   const app = createHttpTransport(buildHandlers(mockModel()));
 
-  await app.handle(new Request('http://localhost/v1/sessions/ses_NONEXISTENT'));
+  await app.handle(new Request('http://localhost/v1/sessions/undefined'));
   await app.handle(new Request('http://localhost/v1/sessions/not-a-valid-id'));
 
   expect(records).toHaveLength(2);
@@ -46,7 +46,7 @@ test('JSON-RPC transport logs handler exceptions with exception stacks', async (
   const replies: unknown[] = [];
 
   await handleRpcMessage(
-    JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'sessions.get', params: { id: 'ses_NONEXISTENT' } }),
+    JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'sessions.get', params: { id: 'ses_NONEXISTENT0' } }),
     createConnectionState(),
     buildHandlers(mockModel()),
     (message) => replies.push(message),

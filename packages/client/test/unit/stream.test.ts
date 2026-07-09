@@ -32,18 +32,18 @@ test('stream threads last-event-id header and ?after= query when resuming', asyn
   let captured: { url: string; headers: Headers } | undefined;
   const c = clientWith(async (url, init) => {
     captured = { url: String(url), headers: new Headers(init?.headers) };
-    return sseBody([frame('evt_2', { n: -1 })]); // terminal so the loop stops after one connection
+    return sseBody([frame('evt_200000000000', { n: -1 })]); // terminal so the loop stops after one connection
   });
 
   await new Promise<void>((resolve) => {
     c.stream('/v1/things', numSchema, (v: { n: number }) => v.n < 0 && resolve(), {
       resume: true,
-      afterEventId: 'evt_1' as EventId,
+      afterEventId: 'evt_100000000000' as EventId,
       isTerminal: (v) => v.n < 0
     });
   });
 
-  expect(captured?.headers.get('last-event-id')).toBe('evt_1');
+  expect(captured?.headers.get('last-event-id')).toBe('evt_100000000000');
 });
 
 test('resume advances the cursor across a reconnect (backfill from the last delivered id)', async () => {
@@ -52,8 +52,10 @@ test('resume advances the cursor across a reconnect (backfill from the last deli
   const c = clientWith(async (_url, init) => {
     calls++;
     sentCursors.push(new Headers(init?.headers).get('last-event-id'));
-    // Connection 1 delivers evt_5 then closes (not terminal → reconnect); connection 2 is terminal.
-    return calls === 1 ? sseBody([frame('evt_5', { n: 1 })]) : sseBody([frame('evt_9', { n: -1 })]);
+    // Connection 1 delivers evt_500000000000 then closes (not terminal → reconnect); connection 2 is terminal.
+    return calls === 1
+      ? sseBody([frame('evt_500000000000', { n: 1 })])
+      : sseBody([frame('evt_900000000000', { n: -1 })]);
   });
 
   await new Promise<void>((resolve) => {
@@ -63,7 +65,7 @@ test('resume advances the cursor across a reconnect (backfill from the last deli
     });
   });
 
-  expect(sentCursors[1]).toBe('evt_5'); // reconnect resumes from the last id the first connect delivered
+  expect(sentCursors[1]).toBe('evt_500000000000'); // reconnect resumes from the last id the first connect delivered
   expect(calls).toBe(2);
 });
 

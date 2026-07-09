@@ -29,7 +29,7 @@ function buildHarness() {
   return { delivery: createManagedExternalAgentDelivery(ctx), starts, startRefs, inputs, externalAgentHost };
 }
 
-const session = { id: 'ses_race', cwd: '/tmp/prj' } as unknown as Session;
+const session = { id: 'ses_race00000000', cwd: '/tmp/prj' } as unknown as Session;
 const spec = { name: 'codex', provider: 'codex' } as unknown as ExternalAgentConfig;
 
 function startArgs(input: string, runtimeAgentName = 'codex') {

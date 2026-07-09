@@ -55,7 +55,7 @@ const server = (name: string): McpServerConfig => ({
 });
 
 test('reloadConfigMcpServers diffs: add connects, remove clears tools, unchanged keeps the same connection', async () => {
-  const cfg = createDefaultConfig('prn_t', 't');
+  const cfg = createDefaultConfig('prn_t00000000000', 't');
   cfg.mcpServers = [server('a'), server('b')];
   const registry = new AtomPackRegistry();
   const handle = await connectMcpServers(cfg, paths, registry);
@@ -67,7 +67,7 @@ test('reloadConfigMcpServers diffs: add connects, remove clears tools, unchanged
   const connA = handle.connections.get('a')?.conn;
 
   // Hot-reload: keep 'a' (identical spec), drop 'b', add 'c'.
-  const next = createDefaultConfig('prn_t', 't');
+  const next = createDefaultConfig('prn_t00000000000', 't');
   next.mcpServers = [server('a'), server('c')];
   const handle2 = await reloadConfigMcpServers(handle.connections, next, paths, registry);
 
@@ -84,7 +84,7 @@ test('reloadConfigMcpServers diffs: add connects, remove clears tools, unchanged
 });
 
 test('collectMcpStatus reports connected / disabled / failed across config servers', async () => {
-  const cfg = createDefaultConfig('prn_t', 't');
+  const cfg = createDefaultConfig('prn_t00000000000', 't');
   cfg.mcpServers = [
     server('ok'),
     { ...server('off'), enabled: false },
@@ -115,7 +115,7 @@ test('collectMcpStatus reports connected / disabled / failed across config serve
 });
 
 test('reloadConfigMcpServers reconnects a CHANGED server (new connection, tools re-registered)', async () => {
-  const cfg = createDefaultConfig('prn_t', 't');
+  const cfg = createDefaultConfig('prn_t00000000000', 't');
   cfg.mcpServers = [server('a')];
   const registry = new AtomPackRegistry();
   const handle = await connectMcpServers(cfg, paths, registry);
@@ -123,7 +123,7 @@ test('reloadConfigMcpServers reconnects a CHANGED server (new connection, tools 
   expect(registry.tools.has('a__echo')).toBe(true);
 
   // Edit 'a' (a content change → reconnect). requestTimeoutMs differs, so specEqual is false.
-  const next = createDefaultConfig('prn_t', 't');
+  const next = createDefaultConfig('prn_t00000000000', 't');
   next.mcpServers = [{ ...server('a'), requestTimeoutMs: 5000 }];
   const handle2 = await reloadConfigMcpServers(handle.connections, next, paths, registry);
 

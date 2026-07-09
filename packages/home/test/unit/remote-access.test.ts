@@ -19,7 +19,7 @@ beforeEach(async () => {
   tmpDir = join(tmpdir(), `remote-access-test-${Math.random().toString(36).slice(2)}`);
   await mkdir(tmpDir, { recursive: true });
   configPath = join(tmpDir, 'config.json');
-  const cfg = createDefaultConfig('prn_test', 'Test User');
+  const cfg = createDefaultConfig('prn_test00000000', 'Test User');
   await saveSystemConfig(configPath, cfg);
 });
 

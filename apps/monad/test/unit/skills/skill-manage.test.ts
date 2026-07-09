@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { createSkillManageTool } from '#/capabilities/tools/registry/skill-manage.ts';
 
 let dir: string;
-const ctx = { sessionId: 'ses_x', log: () => {} };
+const ctx = { sessionId: 'ses_x00000000000', log: () => {} };
 const md = (name: string, body = 'B') =>
   ['---', `name: ${name}`, `description: ${name} skill.`, '---', body].join('\n');
 

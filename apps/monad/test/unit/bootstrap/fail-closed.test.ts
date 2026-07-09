@@ -80,7 +80,7 @@ test('createTlsCert throws when cert generation fails (fail-closed)', async () =
 
 // ── sandbox fail-closed ──────────────────────────────────────────────────────────
 function sandboxConfig(over: { confine: boolean; allowUnconfinedExec?: boolean }): MonadConfig {
-  const cfg = createDefaultConfig('prn_test', 'Test');
+  const cfg = createDefaultConfig('prn_test00000000', 'Test');
   cfg.agent.sandbox.confine = over.confine;
   cfg.agent.sandbox.allowUnconfinedExec = over.allowUnconfinedExec ?? false;
   return cfg;
@@ -110,24 +110,24 @@ test('finalizeSandboxLauncher accepts an available launcher without opt-in', () 
 test('createSandbox boot sweep keeps Workplace Project sandbox roots alive', async () => {
   const home = await mkdtemp(join(tmpdir(), 'monad-sandbox-bootstrap-'));
   const paths = pathsForHome(home);
-  const cfg = createDefaultConfig('prn_test', 'Test');
+  const cfg = createDefaultConfig('prn_test00000000', 'Test');
   cfg.agent.sandbox.mode = 'ephemeral';
   cfg.agent.sandbox.confine = false;
 
   const sandboxDir = join(paths.cache, 'sandboxes');
-  await mkdir(join(sandboxDir, 'ses_live'), { recursive: true });
-  await mkdir(join(sandboxDir, 'ses_project'), { recursive: true });
-  await mkdir(join(sandboxDir, 'ses_dead'), { recursive: true });
+  await mkdir(join(sandboxDir, 'ses_live00000000'), { recursive: true });
+  await mkdir(join(sandboxDir, 'ses_project00000'), { recursive: true });
+  await mkdir(join(sandboxDir, 'ses_dead00000000'), { recursive: true });
 
   try {
     await createSandbox(cfg, paths, {
-      listSessions: () => [{ id: 'ses_live' }],
-      listWorkplaceProjects: () => [{ id: 'ses_project' }]
+      listSessions: () => [{ id: 'ses_live00000000' }],
+      listWorkplaceProjects: () => [{ id: 'ses_project00000' }]
     } as never);
 
-    expect(existsSync(join(sandboxDir, 'ses_live'))).toBe(true);
-    expect(existsSync(join(sandboxDir, 'ses_project'))).toBe(true);
-    expect(existsSync(join(sandboxDir, 'ses_dead'))).toBe(false);
+    expect(existsSync(join(sandboxDir, 'ses_live00000000'))).toBe(true);
+    expect(existsSync(join(sandboxDir, 'ses_project00000'))).toBe(true);
+    expect(existsSync(join(sandboxDir, 'ses_dead00000000'))).toBe(false);
   } finally {
     await rm(home, { recursive: true, force: true });
   }

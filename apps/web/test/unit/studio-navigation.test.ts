@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { resolveStudioNavigationPath } from '../../features/shell/app-shell/studio-navigation.ts';
+import { resolveStudioNavigationPath } from '../../features/shell/routing/studio-navigation.ts';
 import { resolveSidebarPagerTarget } from '../../features/shell/sidebar-trackpad-switch.ts';
 
 describe('Studio shell navigation', () => {

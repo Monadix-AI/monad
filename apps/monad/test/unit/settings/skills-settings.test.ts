@@ -45,7 +45,7 @@ beforeEach(async () => {
     pid: join(dir, 'monad.pid')
   };
   await mkdir(paths.credentials, { recursive: true });
-  await saveAll(paths.config, paths.profile, createDefaultConfig('prn_test', 'Test'));
+  await saveAll(paths.config, paths.profile, createDefaultConfig('prn_test00000000', 'Test'));
 });
 
 afterEach(async () => {

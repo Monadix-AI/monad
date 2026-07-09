@@ -13,7 +13,7 @@ function runner(config: HookConfig, atomHooks: Map<HookEvent, HookDefinition[]> 
 }
 
 function input(event: HookEvent, extra: Partial<HookInput> = {}): HookInput {
-  return { event, sessionId: 'ses_test', cwd: process.cwd(), timestamp: new Date().toISOString(), ...extra };
+  return { event, sessionId: 'ses_test00000000', cwd: process.cwd(), timestamp: new Date().toISOString(), ...extra };
 }
 
 test('no configured hooks → zero-cost pass-through', async () => {

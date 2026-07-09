@@ -77,7 +77,7 @@ describe('ensureDevProvider', () => {
         apiKey: 'sk-file',
         model: 'some/model',
         profileAlias: 'dev',
-        telegram: { channelId: 'chn_DEVTG', botToken: 'tok-123' }
+        telegram: { channelId: 'chn_DEVTG0000000', botToken: 'tok-123' }
       })
     );
 
@@ -92,8 +92,8 @@ describe('ensureDevProvider', () => {
     expect(cfg.agent.agents.find((agent) => agent.id === cfg.agent.defaultAgentId)?.modelAlias).toBe('dev');
     expect(cfg.model.providers.some((p) => p.id === 'custom')).toBe(true);
     expect(auth?.credentialPool.custom?.[0]?.accessToken).toBe('sk-file');
-    expect(cfg.channels.some((c) => c.id === 'chn_DEVTG' && c.type === 'telegram')).toBe(true);
-    expect(auth?.channelCredentials?.chn_DEVTG?.token).toBe('tok-123');
+    expect(cfg.channels.some((c) => c.id === 'chn_DEVTG0000000' && c.type === 'telegram')).toBe(true);
+    expect(auth?.channelCredentials?.chn_DEVTG0000000?.token).toBe('tok-123');
   });
 
   test('opts override the seed file', async () => {

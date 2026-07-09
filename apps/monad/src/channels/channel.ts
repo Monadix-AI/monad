@@ -6,6 +6,7 @@ import type { ChannelInstanceConfig, MonadAuth, MonadConfig } from '@monad/home'
 import type {
   AgentId,
   AgentMessagePayload,
+  ChannelId,
   ChannelInbound,
   ChannelPairingRequest,
   ChannelStatus,
@@ -38,7 +39,7 @@ import { daemonChildProcesses, killDaemonProcessTree } from '#/infra/daemon-chil
 export type { ChannelLogger, ChannelRoute, ChannelServiceDeps, Instance, SessionGateway } from '#/channels/types.ts';
 
 export class ChannelService {
-  private readonly instances = new Map<string, Instance>();
+  private readonly instances = new Map<ChannelId, Instance>();
   private cfg: MonadConfig;
   private auth: MonadAuth;
   /** Live type→factory map. Swappable so a freshly-installed atom pack's type is usable without a
@@ -239,7 +240,7 @@ export class ChannelService {
     subscribeMirror(this.mirrorContext(), channelId, conversationKey, sessionId, adapter);
   }
 
-  private async disconnectOne(id: string): Promise<void> {
+  private async disconnectOne(id: ChannelId): Promise<void> {
     const inst = this.instances.get(id);
     if (!inst) return;
     inst.abort.abort();

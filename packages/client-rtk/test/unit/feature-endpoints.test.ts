@@ -56,13 +56,13 @@ function fakeClient(overrides: Record<string, unknown>, calls: Calls): MonadClie
           branch: {
             post: async (body: { atMessageId?: string }) => {
               const fn = overrides.branch as ((sessionId: string, atMessageId?: string) => Promise<string>) | undefined;
-              return ok({ sessionId: fn ? await fn(id, body.atMessageId) : `ses_child_${id}` });
+              return ok({ sessionId: fn ? await fn(id, body.atMessageId) : `undefined${id}` });
             }
           },
           provenance: {
             get: async () => {
               const self = { id, title: 't', createdAt: '', updatedAt: '' };
-              return ok({ ancestors: [{ id: 'ses_parent', title: 'p' }], self, descendants: [] });
+              return ok({ ancestors: [{ id: 'ses_parent000000', title: 'p' }], self, descendants: [] });
             }
           },
           restore: {
@@ -166,7 +166,7 @@ test('branchSession returns the child id and passes the message checkpoint', asy
       {
         branch: async (_sid: string, atMessageId?: string) => {
           branchedAt = atMessageId;
-          return 'ses_child';
+          return 'ses_child0000000';
         }
       },
       calls
@@ -174,10 +174,13 @@ test('branchSession returns the child id and passes the message checkpoint', asy
   });
 
   const res = await store.dispatch(
-    branchSessionApi.endpoints.branchSession.initiate({ id: 'ses_1' as never, atMessageId: 'msg_5' as never })
+    branchSessionApi.endpoints.branchSession.initiate({
+      id: 'ses_100000000000' as never,
+      atMessageId: 'msg_500000000000' as never
+    })
   );
-  expect('data' in res && res.data?.sessionId).toBe('ses_child');
-  expect(branchedAt).toBe('msg_5');
+  expect('data' in res && res.data?.sessionId).toBe('ses_child0000000');
+  expect(branchedAt).toBe('msg_500000000000');
 });
 
 test('restoreSession returns the restored count and new head', async () => {
@@ -185,19 +188,22 @@ test('restoreSession returns the restored count and new head', async () => {
   const store = createMonadStore({ client: fakeClient({}, calls) });
 
   const res = await store.dispatch(
-    restoreSessionApi.endpoints.restoreSession.initiate({ id: 'ses_1' as never, toMessageId: 'msg_3' as never })
+    restoreSessionApi.endpoints.restoreSession.initiate({
+      id: 'ses_100000000000' as never,
+      toMessageId: 'msg_300000000000' as never
+    })
   );
   expect('data' in res && res.data?.restoredCount).toBe(1);
-  expect('data' in res && res.data?.newHeadMessageId).toBe('msg_3');
+  expect('data' in res && res.data?.newHeadMessageId).toBe('msg_300000000000');
 });
 
 test('provenance returns ancestors and descendants for the session', async () => {
   const calls: Calls = { usageGet: 0, atomsList: 0, workspaceExperiencesList: 0 };
   const store = createMonadStore({ client: fakeClient({}, calls) });
 
-  const res = await store.dispatch(provenanceApi.endpoints.provenance.initiate('ses_1' as never));
-  expect(res.data?.ancestors[0]?.id).toBe('ses_parent');
-  expect(res.data?.self.id).toBe('ses_1');
+  const res = await store.dispatch(provenanceApi.endpoints.provenance.initiate('ses_100000000000' as never));
+  expect(res.data?.ancestors[0]?.id).toBe('ses_parent000000');
+  expect(res.data?.self.id).toBe('ses_100000000000');
 });
 
 test('listAtomPacks caches by the Atoms tag', async () => {

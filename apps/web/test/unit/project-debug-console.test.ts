@@ -20,7 +20,7 @@ const entry = (overrides: Partial<ProjectDebugTraceEntry>): ProjectDebugTraceEnt
 
 test('project debug console filters trace entries by layer and label', () => {
   const entries = [
-    entry({ layer: 'http', label: 'POST /v1/projects/ses_1/messages' }),
+    entry({ layer: 'http', label: 'POST /v1/projects/undefined/messages' }),
     entry({ layer: 'sse', label: 'external_agent.output' }),
     entry({ layer: 'log', label: 'external-agent.input', direction: 'input' }),
     entry({ layer: 'sse', label: 'external_agent.approval_requested' }),
@@ -28,7 +28,7 @@ test('project debug console filters trace entries by layer and label', () => {
   ];
 
   expect(filterDebugTraceEntries(entries, 'http').map((item) => item.label)).toEqual([
-    'POST /v1/projects/ses_1/messages',
+    'POST /v1/projects/undefined/messages',
     'POST /x'
   ]);
   expect(filterDebugTraceEntries(entries, 'external-agent').map((item) => item.label)).toEqual([
@@ -54,8 +54,8 @@ test('project debug console maps logger records to log trace entries', () => {
     logRecordToDebugTrace({
       level: 20,
       event: 'external_agent.started',
-      sessionId: 'ses_1',
-      externalAgentSessionId: 'exa_1',
+      sessionId: 'ses_100000000000',
+      externalAgentSessionId: 'exa_100000000000',
       msg: 'native cli started'
     })
   ).toEqual({
@@ -64,8 +64,8 @@ test('project debug console maps logger records to log trace entries', () => {
     data: {
       level: 20,
       event: 'external_agent.started',
-      sessionId: 'ses_1',
-      externalAgentSessionId: 'exa_1',
+      sessionId: 'ses_100000000000',
+      externalAgentSessionId: 'exa_100000000000',
       msg: 'native cli started'
     }
   });

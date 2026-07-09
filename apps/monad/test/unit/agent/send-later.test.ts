@@ -20,7 +20,7 @@ function sendLaterTool(service: ScheduleService) {
   return tool;
 }
 
-const ctx = { sessionId: 'ses_wake', log: () => {} };
+const ctx = { sessionId: 'ses_wake00000000', log: () => {} };
 
 test('send_later creates a one-shot targeting the current session', async () => {
   const { service } = svc();
@@ -33,7 +33,7 @@ test('send_later creates a one-shot targeting the current session', async () => 
 
   const schedules = service.list();
   expect(schedules).toHaveLength(1);
-  expect(schedules[0]?.sessionId).toBe('ses_wake');
+  expect(schedules[0]?.sessionId).toBe('ses_wake00000000');
   expect(schedules[0]?.prompt).toBe('check CI');
   expect(schedules[0]?.kind).toBe('once');
   service.dispose();
@@ -54,7 +54,7 @@ test('send_later fires into the current session after the delay', async () => {
   const tool = sendLaterTool(service);
   await tool.run({ prompt: 'ping', delayMs: 5 }, ctx);
   await Bun.sleep(40);
-  expect(fired).toEqual([{ prompt: 'ping', sessionId: 'ses_wake' }]);
+  expect(fired).toEqual([{ prompt: 'ping', sessionId: 'ses_wake00000000' }]);
   service.dispose();
 });
 

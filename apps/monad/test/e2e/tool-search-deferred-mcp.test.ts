@@ -112,7 +112,7 @@ afterEach(async () => {
 });
 
 test('deferred mode activates when fat MCP server registers 50 tools', async () => {
-  const cfg = createDefaultConfig('prn_t', 't');
+  const cfg = createDefaultConfig('prn_t00000000000', 't');
   cfg.mcpServers = [fatServer()];
   const registry = new AtomPackRegistry();
   openHandle = await connectMcpServers(cfg, paths, registry);
@@ -184,7 +184,7 @@ test('deferred mode activates when fat MCP server registers 50 tools', async () 
 });
 
 test('tool_search returns matching MCP tool schemas when queried', async () => {
-  const cfg = createDefaultConfig('prn_t', 't');
+  const cfg = createDefaultConfig('prn_t00000000000', 't');
   cfg.mcpServers = [fatServer()];
   const registry = new AtomPackRegistry();
   openHandle = await connectMcpServers(cfg, paths, registry);
@@ -201,7 +201,7 @@ test('tool_search returns matching MCP tool schemas when queried', async () => {
     topK: 3
   });
 
-  const ctx = { sessionId: 'ses_1', toolCallId: 'tc_1', log: () => {} };
+  const ctx = { sessionId: 'ses_100000000000', toolCallId: 'tc_1', log: () => {} };
   const result = await (toolSearchTool.run as (...args: unknown[]) => Promise<unknown>)({ query: 'operation 5' }, ctx);
   const modelContent = (result as { modelContent?: unknown }).modelContent;
 
@@ -211,7 +211,7 @@ test('tool_search returns matching MCP tool schemas when queried', async () => {
 });
 
 test('tool_call executes a real MCP tool and returns its output', async () => {
-  const cfg = createDefaultConfig('prn_t', 't');
+  const cfg = createDefaultConfig('prn_t00000000000', 't');
   cfg.mcpServers = [fatServer()];
   const registry = new AtomPackRegistry();
   openHandle = await connectMcpServers(cfg, paths, registry);
@@ -219,7 +219,7 @@ test('tool_call executes a real MCP tool and returns its output', async () => {
   const getAllTools = () => [...registry.tools.values()];
   const toolCallTool = createToolCallTool(getAllTools);
 
-  const ctx = { sessionId: 'ses_1', toolCallId: 'tc_1', log: () => {}, gate: allowGate };
+  const ctx = { sessionId: 'ses_100000000000', toolCallId: 'tc_1', log: () => {}, gate: allowGate };
   const result = await (toolCallTool.run as (...args: unknown[]) => Promise<unknown>)(
     { name: 'fat__tool_0', args: { input: 'world' } },
     ctx

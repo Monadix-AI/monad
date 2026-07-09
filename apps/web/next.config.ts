@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path';
 
 const REPO_ROOT = resolve(import.meta.dirname, '../..');
 
-// Dev: /api/* is proxied to the daemon by the streaming Route Handler in app/api/[...path]/route.ts
+// Dev: /api/* is proxied to the daemon by the streaming Pages API handler in pages/api/[...path].proxy.ts
 // (a plain rewrite buffers the SSE event stream, killing live token streaming). The browser stays
 // same-origin with HMR intact either way.
 // Export (NEXT_OUTPUT=export): pure static SPA; the compiled binary's startWeb() does the proxy.
@@ -77,10 +77,10 @@ const nextConfig: NextConfig = {
   // Type checking is run in the dedicated CI `checks` job; skip it here to avoid
   // Next.js failing on @/ path aliases from workspace packages it doesn't own.
   typescript: { ignoreBuildErrors: true },
-  // The streaming /api proxy lives in app/api/[...path]/route.proxy.ts. It's dynamic, so it can't
+  // The streaming /api proxy lives in pages/api/[...path].proxy.ts. It's dynamic, so it can't
   // coexist with output: 'export' — gate its `.proxy.ts` extension to non-export builds so the
   // static export omits it (startWeb() proxies there instead).
-  pageExtensions: isExport ? ['tsx', 'ts', 'jsx', 'js'] : ['proxy.ts', 'tsx', 'ts', 'jsx', 'js'],
+  pageExtensions: isExport ? ['tsx', 'jsx', 'js'] : ['proxy.ts', 'tsx', 'jsx', 'js'],
   ...(isExport ? { output: 'export', images: { unoptimized: true } } : {}),
   // Expose the daemon's TCP port to the browser so the EventSocket can bypass the HTTP-only
   // /api proxy and connect to the daemon's WebSocket endpoint directly.

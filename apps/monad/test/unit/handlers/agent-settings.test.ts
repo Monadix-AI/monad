@@ -11,7 +11,7 @@ import { createAgentHandlers } from '#/handlers/settings/agent/handlers.ts';
 function makeHandlers() {
   const dir = mkdtempSync(join(tmpdir(), 'monad-agent-test-'));
   const configPath = join(dir, 'config.json');
-  const cfg = createDefaultConfig('prn_test', 'test');
+  const cfg = createDefaultConfig('prn_test00000000', 'test');
   // Write initial config synchronously via Bun for simplicity
   const ctx = createAgentContext({
     paths: {
@@ -83,7 +83,7 @@ test('getAgent: 404 for unknown id', async () => {
   const { handlers, cfg, configPath, profilePath, cleanup } = makeHandlers();
   await saveAll(configPath, profilePath, cfg);
   try {
-    await expect(handlers.getAgent({ agentId: 'agt_UNKNOWN' as never })).rejects.toThrow();
+    await expect(handlers.getAgent({ agentId: 'agt_UNKNOWN00000' as never })).rejects.toThrow();
   } finally {
     cleanup();
   }

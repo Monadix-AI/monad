@@ -75,32 +75,49 @@ test('operator deny cannot be overridden by a runtime global allow', async () =>
   const store = await ApprovalStore.load(tmpFile());
   const operator = buildOperatorRules({ deny: ['shell_exec'], allow: [] });
   const engine = new PolicyEngine(store, () => operator);
-  await engine.record({ tool: 'shell_exec', decision: 'allow', scope: 'global', sessionId: 'ses_X', agentId: null });
-  expect(engine.decide({ tool: 'shell_exec', sessionId: 'ses_X', agentId: null })).toBe('deny');
+  await engine.record({
+    tool: 'shell_exec',
+    decision: 'allow',
+    scope: 'global',
+    sessionId: 'ses_X00000000000',
+    agentId: null
+  });
+  expect(engine.decide({ tool: 'shell_exec', sessionId: 'ses_X00000000000', agentId: null })).toBe('deny');
 });
 
 test('scopes aggregate: agent rule applies only to its agent; session rule only to its session', async () => {
   const store = await ApprovalStore.load(tmpFile());
   const engine = new PolicyEngine(store, () => []);
-  await engine.record({ tool: 'shell_exec', decision: 'allow', scope: 'agent', sessionId: 's', agentId: 'agt_1' });
+  await engine.record({
+    tool: 'shell_exec',
+    decision: 'allow',
+    scope: 'agent',
+    sessionId: 's',
+    agentId: 'agt_100000000000'
+  });
   await engine.record({
     tool: 'process_start',
     decision: 'allow',
     scope: 'session',
-    sessionId: 'ses_A',
+    sessionId: 'ses_A00000000000',
     agentId: null
   });
 
-  expect(engine.decide({ tool: 'shell_exec', sessionId: 's', agentId: 'agt_1' })).toBe('allow');
-  expect(engine.decide({ tool: 'shell_exec', sessionId: 's', agentId: 'agt_2' })).toBe('ask');
-  expect(engine.decide({ tool: 'process_start', sessionId: 'ses_A', agentId: null })).toBe('allow');
-  expect(engine.decide({ tool: 'process_start', sessionId: 'ses_B', agentId: null })).toBe('ask');
+  expect(engine.decide({ tool: 'shell_exec', sessionId: 's', agentId: 'agt_100000000000' })).toBe('allow');
+  expect(engine.decide({ tool: 'shell_exec', sessionId: 's', agentId: 'agt_200000000000' })).toBe('ask');
+  expect(engine.decide({ tool: 'process_start', sessionId: 'ses_A00000000000', agentId: null })).toBe('allow');
+  expect(engine.decide({ tool: 'process_start', sessionId: 'ses_B00000000000', agentId: null })).toBe('ask');
 });
 
 test('host escape: persistent allow is refused, session allow is fine, deny may persist', async () => {
   const store = await ApprovalStore.load(tmpFile());
   const engine = new PolicyEngine(store, () => []);
-  const host = { tool: 'code_execute', key: 'target:host', sessionId: 'ses_X', agentId: 'agt_1' as string | null };
+  const host = {
+    tool: 'code_execute',
+    key: 'target:host',
+    sessionId: 'ses_X00000000000',
+    agentId: 'agt_100000000000' as string | null
+  };
 
   await expect(engine.record({ ...host, decision: 'allow', scope: 'global' })).rejects.toBeInstanceOf(
     HostEscapePersistError
@@ -110,9 +127,14 @@ test('host escape: persistent allow is refused, session allow is fine, deny may 
   );
   await engine.record({ ...host, decision: 'allow', scope: 'session' }); // ok
   await engine.record({ ...host, decision: 'deny', scope: 'global' }); // deny may persist
-  expect(engine.decide({ tool: 'code_execute', key: 'target:host', sessionId: 'ses_X', agentId: 'agt_1' })).toBe(
-    'deny'
-  );
+  expect(
+    engine.decide({
+      tool: 'code_execute',
+      key: 'target:host',
+      sessionId: 'ses_X00000000000',
+      agentId: 'agt_100000000000'
+    })
+  ).toBe('deny');
 });
 
 test('isHostEscape: host-control key (computer-use) and code_execute target:host both escape', () => {
@@ -135,7 +157,7 @@ test('host-control is a CLASS grant: one rule covers every mutating tool by key 
 test('host-control: session allow grants the whole class; global/agent allow is refused', async () => {
   const store = await ApprovalStore.load(tmpFile());
   const engine = new PolicyEngine(store, () => []);
-  const click = { tool: 'computer__click_screen', key: HOST_CONTROL_KEY, sessionId: 'ses_A', agentId: null };
+  const click = { tool: 'computer__click_screen', key: HOST_CONTROL_KEY, sessionId: 'ses_A00000000000', agentId: null };
 
   await expect(engine.record({ ...click, decision: 'allow', scope: 'global' })).rejects.toBeInstanceOf(
     HostEscapePersistError
@@ -143,12 +165,12 @@ test('host-control: session allow grants the whole class; global/agent allow is 
   await engine.record({ ...click, decision: 'allow', scope: 'session' }); // ok — session grant
 
   // The session grant covers a DIFFERENT mutating tool (class grant), but not other sessions.
-  expect(engine.decide({ tool: 'computer__type_text', key: HOST_CONTROL_KEY, sessionId: 'ses_A', agentId: null })).toBe(
-    'allow'
-  );
-  expect(engine.decide({ tool: 'computer__type_text', key: HOST_CONTROL_KEY, sessionId: 'ses_B', agentId: null })).toBe(
-    'ask'
-  );
+  expect(
+    engine.decide({ tool: 'computer__type_text', key: HOST_CONTROL_KEY, sessionId: 'ses_A00000000000', agentId: null })
+  ).toBe('allow');
+  expect(
+    engine.decide({ tool: 'computer__type_text', key: HOST_CONTROL_KEY, sessionId: 'ses_B00000000000', agentId: null })
+  ).toBe('ask');
 });
 
 test('host-control: an operator deny kills the whole desktop-control class', () => {
@@ -171,12 +193,12 @@ test('clearSession drops only that session; revoke removes a single rule', async
     tool: 'process_start',
     decision: 'allow',
     scope: 'session',
-    sessionId: 'ses_A',
+    sessionId: 'ses_A00000000000',
     agentId: null
   });
 
-  engine.clearSession('ses_A');
-  expect(engine.decide({ tool: 'process_start', sessionId: 'ses_A', agentId: null })).toBe('ask');
+  engine.clearSession('ses_A00000000000');
+  expect(engine.decide({ tool: 'process_start', sessionId: 'ses_A00000000000', agentId: null })).toBe('ask');
   expect(engine.decide({ tool: 'shell_exec', sessionId: 's', agentId: null })).toBe('allow');
 
   expect(await engine.revoke(g.id)).toBe(true);

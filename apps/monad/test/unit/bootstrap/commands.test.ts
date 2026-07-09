@@ -8,28 +8,28 @@ import { createStore } from '#/store/db/index.ts';
 
 test('command bundle model commands read and write a project-bound session', async () => {
   const store = createStore();
-  const cfg = createDefaultConfig('prn_1', 'tester');
+  const cfg = createDefaultConfig('prn_100000000000', 'tester');
   cfg.model.profiles = [
     { alias: 'fast', routes: { chat: { provider: 'test', modelId: 'fast-model' } }, params: {}, fallbacks: [] },
     { alias: 'smart', routes: { chat: { provider: 'test', modelId: 'smart-model' } }, params: {}, fallbacks: [] }
   ];
   cfg.model.default = 'fast';
   store.insertWorkplaceProject({
-    id: 'prj_project',
+    id: 'prj_project00000',
     title: 'project',
-    ownerPrincipalId: 'prn_1',
+    ownerPrincipalId: 'prn_100000000000',
     state: 'active',
     archived: false,
     memberTemplates: [],
     createdAt: new Date(0).toISOString(),
     updatedAt: new Date(0).toISOString()
   });
-  const sessionId = 'ses_project_session' as SessionId;
+  const sessionId = 'ses_projects1xer' as SessionId;
   store.insertSession({
     id: sessionId,
-    projectId: 'prj_project',
+    projectId: 'prj_project00000',
     title: 'project session',
-    ownerPrincipalId: 'prn_1',
+    ownerPrincipalId: 'prn_100000000000',
     state: 'active',
     agentIds: [],
     parentSessionId: null,

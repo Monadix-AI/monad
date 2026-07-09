@@ -75,7 +75,7 @@ test('listMessagesWithLineage({ after }) slices the FULL lineage — boundary ma
   // Boundary in the child (c1).
   expect(store.listMessagesWithLineage(child.id, { after: c1 }).map((m) => m.text)).toEqual(['c2']);
   // Unknown cursor → everything (matches listMessages after semantics).
-  expect(store.listMessagesWithLineage(child.id, { after: 'msg_nope' }).map((m) => m.text)).toEqual([
+  expect(store.listMessagesWithLineage(child.id, { after: 'msg_nope00000000' }).map((m) => m.text)).toEqual([
     'p1',
     'p2',
     'c1',

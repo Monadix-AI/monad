@@ -95,7 +95,7 @@ test('setGenStatus enforces the lifecycle and rejects illegal transitions', () =
   expect(store.setGenStatus(s.id, id, 'error', now)).toBe(false);
   // A finished row exposes no live source.
   // Missing row → false, not throw.
-  expect(store.setGenStatus(s.id, 'msg_missing', 'complete', now)).toBe(false);
+  expect(store.setGenStatus(s.id, 'msg_missing00000', 'complete', now)).toBe(false);
   store.close();
 });
 

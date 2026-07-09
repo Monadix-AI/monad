@@ -19,12 +19,12 @@ test('project debug trace stores bounded entries and notifies subscribers', () =
     direction: 'input',
     layer: 'web',
     label: 'send',
-    sessionId: 'ses_1',
+    sessionId: 'ses_100000000000',
     data: { text: 'hi' }
   });
 
   expect(projectDebugTraceSnapshot()).toMatchObject([
-    { direction: 'input', layer: 'web', label: 'send', sessionId: 'ses_1', data: { text: 'hi' } }
+    { direction: 'input', layer: 'web', label: 'send', sessionId: 'ses_100000000000', data: { text: 'hi' } }
   ]);
   expect(notified).toBe(1);
   unsubscribe();
@@ -46,7 +46,7 @@ test('traceProjectDebugOperation records input and output around an async call',
   clearProjectDebugTrace();
 
   const result = await traceProjectDebugOperation(
-    { layer: 'web', label: 'external-agent.input', sessionId: 'ses_1', data: { id: 'exa_1' } },
+    { layer: 'web', label: 'external-agent.input', sessionId: 'ses_100000000000', data: { id: 'exa_100000000000' } },
     async () => ({ ok: true })
   );
 

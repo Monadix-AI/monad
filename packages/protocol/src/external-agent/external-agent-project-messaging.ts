@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { clarifyChoiceModeSchema } from '../clarify.ts';
 import { chatMessageSchema } from '../domain.ts';
-import { messageIdSchema, nativeAgentDeliveryIdSchema, sessionIdSchema } from '../ids.ts';
+import { externalAgentSessionIdSchema, messageIdSchema, nativeAgentDeliveryIdSchema, sessionIdSchema } from '../ids.ts';
 import {
   attachmentInputsSchema,
   messageAttachmentRefSchema,
@@ -79,7 +79,7 @@ export const nativeAgentDeliverySchema = z.object({
   id: nativeAgentDeliveryIdSchema,
   sessionId: sessionIdSchema,
   memberInstanceId: z.string().min(1),
-  externalAgentSessionId: z.string().regex(/^exa_/),
+  externalAgentSessionId: externalAgentSessionIdSchema,
   triggerMessageId: messageIdSchema.optional(),
   triggerMessageSeq: z.number().int().nonnegative(),
   state: nativeAgentDeliveryStateSchema,

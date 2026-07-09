@@ -21,8 +21,8 @@ test('managed project runtime uses the current CLI entry without writing a wrapp
     monadHome,
     serverUrl: 'http://127.0.0.1:1234',
     agentName: 'codex',
-    projectId: 'prj_PROJECT',
-    externalAgentSessionId: 'exa_windows',
+    projectId: 'prj_PROJECT00000',
+    externalAgentSessionId: 'exa_windows00000',
     provider: 'codex',
     platform: 'win32'
   });
@@ -38,8 +38,8 @@ test('managed project runtime keeps base PATH when no wrapper bin is needed', ()
     monadHome: monadHomeWin,
     serverUrl: 'http://127.0.0.1:1234',
     agentName: 'codex',
-    projectId: 'prj_PROJECT',
-    externalAgentSessionId: 'exa_windows_path',
+    projectId: 'prj_PROJECT00000',
+    externalAgentSessionId: 'exa_windowspath0',
     provider: 'codex',
     platform: 'win32',
     baseEnvPath: 'C:\\Windows\\system32'
@@ -51,8 +51,8 @@ test('managed project runtime keeps base PATH when no wrapper bin is needed', ()
     monadHome: monadHomePosix,
     serverUrl: 'http://127.0.0.1:1234',
     agentName: 'codex',
-    projectId: 'prj_PROJECT',
-    externalAgentSessionId: 'exa_posix_path',
+    projectId: 'prj_PROJECT00000',
+    externalAgentSessionId: 'exa_posixpath000',
     provider: 'codex',
     platform: 'darwin',
     baseEnvPath: '/usr/bin:/bin'
@@ -66,8 +66,8 @@ test('managed project runtime does not blank PATH when no base PATH is supplied'
     monadHome,
     serverUrl: 'http://127.0.0.1:1234',
     agentName: 'codex',
-    projectId: 'prj_PROJECT',
-    externalAgentSessionId: 'exa_no_path',
+    projectId: 'prj_PROJECT00000',
+    externalAgentSessionId: 'exa_nopath000000',
     provider: 'codex'
   });
 });
@@ -78,16 +78,16 @@ test('managed project runtimes share the same current CLI entry per process', as
     monadHome,
     serverUrl: 'http://127.0.0.1:1234',
     agentName: 'codex',
-    projectId: 'prj_PROJECT',
-    externalAgentSessionId: 'exa_codex',
+    projectId: 'prj_PROJECT00000',
+    externalAgentSessionId: 'exa_codex0000000',
     provider: 'codex'
   });
   const second = prepareManagedProjectRuntime({
     monadHome,
     serverUrl: 'http://127.0.0.1:1234',
     agentName: 'claude',
-    projectId: 'prj_PROJECT',
-    externalAgentSessionId: 'exa_claude',
+    projectId: 'prj_PROJECT00000',
+    externalAgentSessionId: 'exa_claude000000',
     provider: 'claude-code'
   });
 
@@ -96,7 +96,7 @@ test('managed project runtimes share the same current CLI entry per process', as
 
 test('managed project runtime removes stale per-agent wrapper bins', async () => {
   const monadHome = join(tmpdir(), `monad-managed-runtime-${Date.now()}-${process.hrtime.bigint()}`);
-  const wrapperDir = join(monadHome, 'workplace-agents', 'prj_PROJECT', 'codex', 'bin');
+  const wrapperDir = join(monadHome, 'workplace-agents', 'prj_PROJECT00000', 'codex', 'bin');
   await mkdir(wrapperDir, { recursive: true });
   await writeFile(join(wrapperDir, 'monad'), '#!/bin/sh\necho stale\n');
 
@@ -104,8 +104,8 @@ test('managed project runtime removes stale per-agent wrapper bins', async () =>
     monadHome,
     serverUrl: 'http://127.0.0.1:1234',
     agentName: 'codex',
-    projectId: 'prj_PROJECT',
-    externalAgentSessionId: 'exa_codex',
+    projectId: 'prj_PROJECT00000',
+    externalAgentSessionId: 'exa_codex0000000',
     provider: 'codex'
   });
 
@@ -118,19 +118,19 @@ test('managed project runtimes share a project root memory index', async () => {
     monadHome,
     serverUrl: 'http://127.0.0.1:1234',
     agentName: 'codex',
-    projectId: 'prj_PROJECT',
-    externalAgentSessionId: 'exa_codex',
+    projectId: 'prj_PROJECT00000',
+    externalAgentSessionId: 'exa_codex0000000',
     provider: 'codex'
   });
   const _claude = prepareManagedProjectRuntime({
     monadHome,
     serverUrl: 'http://127.0.0.1:1234',
     agentName: 'claude',
-    projectId: 'prj_PROJECT',
-    externalAgentSessionId: 'exa_claude',
+    projectId: 'prj_PROJECT00000',
+    externalAgentSessionId: 'exa_claude000000',
     provider: 'claude-code'
   });
-  const projectRoot = join(monadHome, 'workplace-agents', 'prj_PROJECT');
+  const projectRoot = join(monadHome, 'workplace-agents', 'prj_PROJECT00000');
   const _sharedMemory = join(projectRoot, 'MEMORY.md');
 
   expect(await stat(join(projectRoot, 'memories'))).toMatchObject({ mode: expect.any(Number) });
@@ -144,8 +144,8 @@ test('managed project runtime uses non-interactive Codex launches', () => {
     monadHome,
     serverUrl: 'http://127.0.0.1:1234',
     agentName: 'codex',
-    projectId: 'prj_PROJECT',
-    externalAgentSessionId: 'exa_codex',
+    projectId: 'prj_PROJECT00000',
+    externalAgentSessionId: 'exa_codex0000000',
     provider: 'codex'
   });
 
@@ -158,8 +158,8 @@ test('managed project runtime uses MCP communication prompt for managed MCP brid
     monadHome,
     serverUrl: 'http://127.0.0.1:1234',
     agentName: 'codex',
-    projectId: 'prj_PROJECT',
-    externalAgentSessionId: 'exa_codex',
+    projectId: 'prj_PROJECT00000',
+    externalAgentSessionId: 'exa_codex0000000',
     provider: 'codex',
     baseEnvPath: '/usr/bin:/bin'
   });
@@ -167,8 +167,8 @@ test('managed project runtime uses MCP communication prompt for managed MCP brid
     monadHome,
     serverUrl: 'http://127.0.0.1:1234',
     agentName: 'claude',
-    projectId: 'prj_PROJECT',
-    externalAgentSessionId: 'exa_claude',
+    projectId: 'prj_PROJECT00000',
+    externalAgentSessionId: 'exa_claude000000',
     provider: 'claude-code'
   });
 
@@ -201,8 +201,8 @@ test('managed project runtime renders the current CLI entry in non-MCP communica
     monadHome,
     serverUrl: 'http://127.0.0.1:1234',
     agentName: 'gemini',
-    projectId: 'prj_PROJECT',
-    externalAgentSessionId: 'exa_gemini',
+    projectId: 'prj_PROJECT00000',
+    externalAgentSessionId: 'exa_gemini000000',
     provider: 'gemini'
   });
   const command = [prepared.monadCliEntry.command, ...prepared.monadCliEntry.args].join(' ');
@@ -228,8 +228,8 @@ test('managed project runtime rejects agent names that escape the project worksp
       monadHome,
       serverUrl: 'http://127.0.0.1:1234',
       agentName: '../../escaped-agent',
-      projectId: 'prj_PROJECT',
-      externalAgentSessionId: 'exa_escape',
+      projectId: 'prj_PROJECT00000',
+      externalAgentSessionId: 'exa_escape000000',
       provider: 'codex'
     })
   ).toThrow('managed external agent workspace must stay inside the project agent root');
@@ -241,8 +241,8 @@ test('managed project runtime rotates its agent token for each prepared external
     monadHome,
     serverUrl: 'http://127.0.0.1:1234',
     agentName: 'codex',
-    projectId: 'prj_PROJECT',
-    externalAgentSessionId: 'exa_first',
+    projectId: 'prj_PROJECT00000',
+    externalAgentSessionId: 'exa_first0000000',
     provider: 'codex'
   });
   const firstToken = await readFile(first.tokenFile, 'utf8');
@@ -250,8 +250,8 @@ test('managed project runtime rotates its agent token for each prepared external
     monadHome,
     serverUrl: 'http://127.0.0.1:1234',
     agentName: 'codex',
-    projectId: 'prj_PROJECT',
-    externalAgentSessionId: 'exa_second',
+    projectId: 'prj_PROJECT00000',
+    externalAgentSessionId: 'exa_second000000',
     provider: 'codex'
   });
 
@@ -266,8 +266,8 @@ test('managed project runtime writes the prompt file it returns', async () => {
     serverUrl: 'http://127.0.0.1:1234',
     agentName: 'codex',
     displayName: 'Reviewer',
-    projectId: 'prj_PROJECT',
-    externalAgentSessionId: 'exa_prompt',
+    projectId: 'prj_PROJECT00000',
+    externalAgentSessionId: 'exa_prompt000000',
     provider: 'codex',
     modelId: 'gpt-5.5',
     reasoningEffort: 'high',
@@ -279,7 +279,7 @@ test('managed project runtime writes the prompt file it returns', async () => {
 
 test('managed project runtime recreates token files with owner-only permissions', async () => {
   const monadHome = join(tmpdir(), `monad-managed-runtime-${Date.now()}-${process.hrtime.bigint()}`);
-  const workspace = join(monadHome, 'workplace-agents', 'prj_PROJECT', 'codex');
+  const workspace = join(monadHome, 'workplace-agents', 'prj_PROJECT00000', 'codex');
   await mkdir(workspace, { recursive: true });
   const tokenFile = join(workspace, '.monad-agent-token');
   await writeFile(tokenFile, 'stale-token');
@@ -289,8 +289,8 @@ test('managed project runtime recreates token files with owner-only permissions'
     monadHome,
     serverUrl: 'http://127.0.0.1:1234',
     agentName: 'codex',
-    projectId: 'prj_PROJECT',
-    externalAgentSessionId: 'exa_first',
+    projectId: 'prj_PROJECT00000',
+    externalAgentSessionId: 'exa_first0000000',
     provider: 'codex'
   });
 
@@ -301,7 +301,7 @@ test('managed project runtime recreates token files with owner-only permissions'
 
 test('managed project orphan token cleanup removes stale runtime tokens without deleting memory', async () => {
   const monadHome = join(tmpdir(), `monad-managed-runtime-${Date.now()}-${process.hrtime.bigint()}`);
-  const workspace = join(monadHome, 'workplace-agents', 'prj_PROJECT', 'codex');
+  const workspace = join(monadHome, 'workplace-agents', 'prj_PROJECT00000', 'codex');
   await mkdir(workspace, { recursive: true });
   await writeFile(join(workspace, '.monad-agent-token'), 'stale-token');
   await writeFile(join(workspace, 'MEMORY.md'), '# durable memory\n');

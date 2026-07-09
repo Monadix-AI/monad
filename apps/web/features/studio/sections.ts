@@ -43,7 +43,7 @@ export type StudioSectionId =
   | 'sandbox'
   | 'safety';
 
-export const STUDIO_SECTION_IDS = [
+const STUDIO_SECTION_IDS = [
   'runtime',
   'agents',
   'orchestration',

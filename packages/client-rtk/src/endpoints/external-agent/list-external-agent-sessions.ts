@@ -1,4 +1,4 @@
-import type { ExternalAgentSessionView, SessionId } from '@monad/protocol';
+import type { ExternalAgentSessionId, ExternalAgentSessionView, SessionId } from '@monad/protocol';
 
 import { externalAgentSessionViewSchema } from '@monad/protocol';
 import { createEntityAdapter, type EntityState } from '@reduxjs/toolkit';
@@ -6,13 +6,15 @@ import { createEntityAdapter, type EntityState } from '@reduxjs/toolkit';
 import { clientOf, runTreaty } from '../../endpoint-helpers.ts';
 import { sessionsApi } from '../sessions/index.ts';
 
-export const externalAgentSessionAdapter = createEntityAdapter<ExternalAgentSessionView>();
+export const externalAgentSessionAdapter = createEntityAdapter<ExternalAgentSessionView, ExternalAgentSessionId>({
+  selectId: (session) => session.id
+});
 export const externalAgentSessionSelectors = externalAgentSessionAdapter.getSelectors();
 
 export const listExternalAgentSessionsApi = sessionsApi.injectEndpoints({
   overrideExisting: true,
   endpoints: (builder) => ({
-    listExternalAgentSessions: builder.query<EntityState<ExternalAgentSessionView, string>, SessionId>({
+    listExternalAgentSessions: builder.query<EntityState<ExternalAgentSessionView, ExternalAgentSessionId>, SessionId>({
       queryFn: (sessionId, api: { extra: unknown }) =>
         runTreaty(
           () => clientOf(api).treaty.v1.sessions({ id: sessionId })['external-agent-sessions'].get(),

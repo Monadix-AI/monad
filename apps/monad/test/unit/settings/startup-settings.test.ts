@@ -212,7 +212,7 @@ test('Linux startup setting writes and removes an XDG autostart desktop file', a
 
   const desktop = await readFile(join(dir, '.config', 'autostart', 'monad.desktop'), 'utf8');
   expect(desktop).toContain('Name=Monad');
-  expect(desktop).toContain('monad-icon-vector-solid.svg');
+  expect(desktop).toContain('Icon=monad');
 
   const devMod = createStartupSettingsModule({
     platform: 'linux',
@@ -224,7 +224,7 @@ test('Linux startup setting writes and removes an XDG autostart desktop file', a
   expect(await devMod.setStartupSettings({ enabled: true })).toMatchObject({ enabled: true, supported: true });
   const devDesktop = await readFile(join(dir, 'dev-home', '.config', 'autostart', 'monad-dev.desktop'), 'utf8');
   expect(devDesktop).toContain('Name=Monad Dev');
-  expect(devDesktop).toContain('monad-icon-vector-solid.svg');
+  expect(devDesktop).toContain('Icon=monad');
 
   expect((await mod.setStartupSettings({ enabled: false })).enabled).toBe(false);
 });

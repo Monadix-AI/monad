@@ -5,5 +5,5 @@
   "model": "openrouter/free",
   "profileAlias": "default",
   "reasoningEffort": "low",
-  "telegram": { "channelId": "chn_DEVTELEGRAM", "botToken": "" }
+  "telegram": { "channelId": "chn_DEVTELEGRAM0", "botToken": "" }
 }

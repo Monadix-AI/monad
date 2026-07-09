@@ -12,6 +12,16 @@
 - User research artefacts that inform these decisions
 - Link to user journey maps or prototype source
 
+## Touch interactions
+
+- Functional controls must not depend on hover-only discovery. If a button or action
+  group is hidden until its container is hovered or focused, it must be visible by
+  default on touch and coarse-pointer devices.
+- In `apps/web`, prefer the shared `HoverActions` helpers for hover-revealed action
+  groups. If a local class is unavoidable, include the same
+  `[@media_(hover:none),_(pointer:coarse)]` fallback so touch users can see and tap
+  the controls without first discovering an invisible hit area.
+
 ## Internationalisation (i18n)
 
 Monad uses i18next (CLI/daemon) and react-i18next (web). Language packs live in

@@ -7,7 +7,7 @@ import type {
 
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import { NATIVE_AGENT_ATTACHMENTS_MAX, NATIVE_AGENT_INLINE_TEXT_MAX, ulid } from '@monad/protocol';
+import { NATIVE_AGENT_ATTACHMENTS_MAX, NATIVE_AGENT_INLINE_TEXT_MAX, nanoid } from '@monad/protocol';
 
 import { resolveText } from '../lib/chat.ts';
 import { json, out } from '../lib/output.ts';
@@ -71,7 +71,7 @@ async function resolveMessageBody(
   await mkdir(dir, { recursive: true });
   // Keep spill files out of the project's VCS — they are message payloads, not source.
   await writeFile(join(dir, '.gitignore'), '*\n', { flag: 'wx' }).catch(() => {});
-  const path = join(dir, `message-${ulid()}.md`);
+  const path = join(dir, `message-${nanoid()}.md`);
   await writeFile(path, text, 'utf8');
   return { attachments: [{ path, name: 'long-message.md', mime: 'text/markdown' }, ...attachments] };
 }

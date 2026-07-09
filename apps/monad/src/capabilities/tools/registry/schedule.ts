@@ -176,7 +176,7 @@ export function createScheduleTools(scheduler: Scheduler): Tool[] {
     inputExamples: [
       { prompt: 'Summarize today’s unread email', cron: '0 9 * * 1-5' },
       { prompt: 'Check the build status once', delayMs: 600_000 },
-      { prompt: 'Post the standup reminder', at: '2026-06-15T09:00:00Z', sessionId: 'ses_existing' }
+      { prompt: 'Post the standup reminder', at: '2026-06-15T09:00:00Z', sessionId: 'ses_existing0000' }
     ],
     run: async (input) => toolResult(scheduler.create(input))
   };

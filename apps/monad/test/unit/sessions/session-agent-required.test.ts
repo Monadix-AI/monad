@@ -52,7 +52,7 @@ test('POST /v1/sessions without agentId when no agents exist: session created wi
   // Blank config with no agents, no default — should still succeed (no agents configured means no requirement)
   const { paths, cleanup } = makeTempPaths();
   try {
-    const cfg = createDefaultConfig('prn_test', 'test');
+    const cfg = createDefaultConfig('prn_test00000000', 'test');
     await saveAll(paths.config, paths.profile, cfg);
     const modelService = new ModelService(paths.auth, cfg, null, seededProviderRegistry());
     const app = createHttpTransport(buildHandlers(mockModel(['hi']), { paths, modelService }));
@@ -74,10 +74,10 @@ test('POST /v1/sessions without agentId when no agents exist: session created wi
 test('POST /v1/sessions without agentId when agents exist but no default: 400 error', async () => {
   const { paths, cleanup } = makeTempPaths();
   try {
-    const cfg = createDefaultConfig('prn_test', 'test');
+    const cfg = createDefaultConfig('prn_test00000000', 'test');
     // Add an agent but no defaultAgentId
     cfg.agent.agents.push({
-      id: 'agt_TEST01',
+      id: 'agt_TEST01000000',
       name: 'My Agent',
       capabilities: [],
       declaredScopes: [],
@@ -104,9 +104,9 @@ test('POST /v1/sessions without agentId when agents exist but no default: 400 er
 test('POST /v1/sessions without agentId when default is set: resolves agent, agentIds populated', async () => {
   const { paths, cleanup } = makeTempPaths();
   try {
-    const cfg = createDefaultConfig('prn_test', 'test');
+    const cfg = createDefaultConfig('prn_test00000000', 'test');
     cfg.agent.agents.push({
-      id: 'agt_DEFAULT01',
+      id: 'agt_DEFAULT01000',
       name: 'Default',
       capabilities: [],
       declaredScopes: [],
@@ -114,7 +114,7 @@ test('POST /v1/sessions without agentId when default is set: resolves agent, age
       visibility: { subagentCallable: false, public: false },
       a2a: { enabled: false }
     });
-    cfg.agent.defaultAgentId = 'agt_DEFAULT01';
+    cfg.agent.defaultAgentId = 'agt_DEFAULT01000';
     await saveAll(paths.config, paths.profile, cfg);
     const modelService = new ModelService(paths.auth, cfg, null, seededProviderRegistry());
     const app = createHttpTransport(buildHandlers(mockModel(['hi']), { paths, modelService }));
@@ -136,9 +136,9 @@ test('POST /v1/sessions without agentId when default is set: resolves agent, age
 test('POST /v1/sessions with explicit agentId: resolves correctly', async () => {
   const { paths, cleanup } = makeTempPaths();
   try {
-    const cfg = createDefaultConfig('prn_test', 'test');
+    const cfg = createDefaultConfig('prn_test00000000', 'test');
     cfg.agent.agents.push({
-      id: 'agt_EXPLICIT01',
+      id: 'agt_EXPLICIT0100',
       name: 'Explicit',
       capabilities: [],
       declaredScopes: [],
@@ -153,7 +153,7 @@ test('POST /v1/sessions with explicit agentId: resolves correctly', async () => 
       new Request('http://localhost/v1/sessions', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ title: 'explicit', agentId: 'agt_EXPLICIT01' })
+        body: JSON.stringify({ title: 'explicit', agentId: 'agt_EXPLICIT0100' })
       })
     );
     expect(res.status).toBe(201);
@@ -165,9 +165,9 @@ test('POST /v1/sessions with explicit agentId: resolves correctly', async () => 
 test('POST /v1/sessions with unknown explicit agentId: 400 error', async () => {
   const { paths, cleanup } = makeTempPaths();
   try {
-    const cfg = createDefaultConfig('prn_test', 'test');
+    const cfg = createDefaultConfig('prn_test00000000', 'test');
     cfg.agent.agents.push({
-      id: 'agt_REAL01',
+      id: 'agt_REAL01000000',
       name: 'Real',
       capabilities: [],
       declaredScopes: [],
@@ -182,7 +182,7 @@ test('POST /v1/sessions with unknown explicit agentId: 400 error', async () => {
       new Request('http://localhost/v1/sessions', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ title: 'bad agent', agentId: 'agt_NOTFOUND' })
+        body: JSON.stringify({ title: 'bad agent', agentId: 'agt_NOTFOUND0000' })
       })
     );
     expect(res.status).toBe(400);

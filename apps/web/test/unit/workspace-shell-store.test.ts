@@ -79,12 +79,12 @@ test('last workspace path persists only canonical workspace routes', () => {
 
   expect(readStoredLastWorkspacePath()).toBe('/');
 
-  writeStoredLastWorkspacePath('/workplace/projects/project%201');
-  expect(values.get(LAST_WORKSPACE_PATH_STORAGE_KEY)).toBe('/workplace/projects/project%201');
-  expect(readStoredLastWorkspacePath()).toBe('/workplace/projects/project%201');
+  writeStoredLastWorkspacePath('/workspace/prj_ABCDEF123456/ses_UVWXYZ789012');
+  expect(values.get(LAST_WORKSPACE_PATH_STORAGE_KEY)).toBe('/workspace/prj_ABCDEF123456/ses_UVWXYZ789012');
+  expect(readStoredLastWorkspacePath()).toBe('/workspace/prj_ABCDEF123456/ses_UVWXYZ789012');
 
   writeStoredLastWorkspacePath('/studio/models');
-  expect(values.get(LAST_WORKSPACE_PATH_STORAGE_KEY)).toBe('/workplace/projects/project%201');
+  expect(values.get(LAST_WORKSPACE_PATH_STORAGE_KEY)).toBe('/workspace/prj_ABCDEF123456/ses_UVWXYZ789012');
 });
 
 test('shell store remembers Studio and workspace navigation preferences', () => {
@@ -112,4 +112,37 @@ test('temporary sidebar auto reveal does not overwrite stored collapsed preferen
   expect(useWorkspaceShellStore.getState().sidebarCollapsed).toBe(false);
   expect(useWorkspaceShellStore.getState().sidebarAutoReveal).toBe(true);
   expect(values.get(SIDEBAR_COLLAPSED_STORAGE_KEY)).toBe('true');
+});
+
+test('shell store keeps project session coordination as client-only state', () => {
+  const switchSession = () => {};
+  useWorkspaceShellStore.setState({
+    activeProjectSession: null,
+    pendingProjectSession: null
+  });
+
+  useWorkspaceShellStore.getState().setActiveProjectSession({
+    activeSessionId: 'ses_ACTIVE000000' as never,
+    projectId: 'prj_ACTIVE000000',
+    switchSession
+  });
+  useWorkspaceShellStore.getState().setPendingProjectSession({
+    projectId: 'prj_ACTIVE000000',
+    sessionId: 'ses_PENDING00000' as never
+  });
+
+  expect(useWorkspaceShellStore.getState().activeProjectSession).toEqual({
+    activeSessionId: 'ses_ACTIVE000000',
+    projectId: 'prj_ACTIVE000000',
+    switchSession
+  });
+  expect(useWorkspaceShellStore.getState().pendingProjectSession).toEqual({
+    projectId: 'prj_ACTIVE000000',
+    sessionId: 'ses_PENDING00000'
+  });
+
+  useWorkspaceShellStore.getState().openWorkspace();
+
+  expect(useWorkspaceShellStore.getState().activeProjectSession).toBeNull();
+  expect(useWorkspaceShellStore.getState().pendingProjectSession).toBeNull();
 });

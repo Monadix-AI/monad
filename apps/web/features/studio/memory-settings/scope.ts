@@ -4,7 +4,7 @@
 
 const PALETTE = ['#6366f1', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#a855f7', '#ec4899', '#14b8a6'];
 
-/** Drop the `<kind>:` prefix: `agent:agt_abc…` → `agt_abc…`, `project:repo-ab12cd` → `repo-ab12cd`;
+/** Drop the `<kind>:` prefix: `agent:undefined…` → `undefined…`, `project:repo-ab12cd` → `repo-ab12cd`;
  *  `global` (no prefix) stays as-is. */
 export function scopeLabel(scope: string): string {
   const i = scope.indexOf(':');

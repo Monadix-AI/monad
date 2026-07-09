@@ -23,13 +23,13 @@ async function setup() {
   const oversight = new OversightService({
     publish: (e) => events.push(e),
     engine,
-    originOf: () => 'agt_1',
+    originOf: () => 'agt_100000000000',
     timeoutMs: 1000
   });
   return { oversight, events, store };
 }
 
-const req = (tool: string, key?: string) => ({ tool, sessionId: 'ses_T', highRisk: true, input: {}, key });
+const req = (tool: string, key?: string) => ({ tool, sessionId: 'ses_T00000000000', highRisk: true, input: {}, key });
 const requested = (e: Event[]) => e.filter((x) => x.type === 'tool.approval_requested');
 
 test('allow-global: after approving once, the same (tool,key) is not prompted again', async () => {
@@ -67,12 +67,12 @@ test('session allow is cleared by cancelSession (re-prompts afterwards)', async 
   // Same session: no prompt.
   expect(await oversight.gate(req('shell_exec', 'ls'))).toEqual({ allow: true });
 
-  oversight.cancelSession('ses_T' as never, 'done');
+  oversight.cancelSession('ses_T00000000000' as never, 'done');
   // After clearing the session, a fresh call prompts again (parks pending).
   const before = requested(events).length;
   oversight.gate(req('shell_exec', 'ls'));
   expect(requested(events).length).toBe(before + 1);
-  oversight.cancelSession('ses_T' as never, 'cleanup');
+  oversight.cancelSession('ses_T00000000000' as never, 'cleanup');
 });
 
 test('host escape allow downgrades to session scope (never persisted)', async () => {
@@ -94,7 +94,7 @@ test('resource approval rememberScopes caps requested persistence scope', async 
   const p1 = oversight.gate({
     tool: 'path_access',
     key: 'write:/outside',
-    sessionId: 'ses_T',
+    sessionId: 'ses_T00000000000',
     highRisk: false,
     input: {
       path: '/outside/file.txt',

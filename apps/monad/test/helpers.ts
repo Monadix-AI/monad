@@ -161,7 +161,7 @@ export function stubModelDeps(): ModelDeps {
     pid: '/dev/null/monad.pid',
     logs: '/dev/null/daemon.log'
   };
-  const cfg = createDefaultConfig('prn_stub', 'stub');
+  const cfg = createDefaultConfig('prn_stub00000000', 'stub');
   return {
     paths,
     modelService: new ModelService('/dev/null/auth.json', cfg, null, seededProviderRegistry()),
@@ -268,7 +268,7 @@ export function buildHandlers(
       t: i18n.t,
       log: { info: () => {}, warn: () => {}, error: () => {} }
     },
-    createDefaultConfig('prn_stub', 'stub'),
+    createDefaultConfig('prn_stub00000000', 'stub'),
     { version: 1, activeProvider: null, updatedAt: '', credentialPool: {} }
   );
   // Wire the unified slash-command bundle so commands (/help, /reset, …) dispatch over every
@@ -283,7 +283,7 @@ export function buildHandlers(
     consolidate: async () => ({ level: 1, l1Scopes: 0, nodes: 0, edges: 0, prunedEdges: 0, laws: 0, lawScopes: 0 }),
     explainBelief: async () => ({ matches: [] }),
     checkMemory: async () => ({ flagged: 0 }),
-    handoff: async () => ({ sessionId: 'ses_new' as SessionId }),
+    handoff: async () => ({ sessionId: 'ses_new000000000' as SessionId }),
     t: i18n.t,
     log: () => {}
   };
@@ -474,7 +474,7 @@ export function liveModelDeps(
   modelId: string,
   opts?: { fallbacks?: Array<{ provider: string; modelId: string }> }
 ): { router: ModelRouter; deps: ModelDeps } {
-  const cfg = createDefaultConfig('prn_live', 'live');
+  const cfg = createDefaultConfig('prn_live00000000', 'live');
   cfg.model.providers = [{ id: 'openrouter', label: 'OpenRouter', type: ModelProviderType.OpenRouter }];
   // `modelId` may be a bogus id and `fallbacks` a working chain — that's how the routing-resilience
   // suite exercises GatewayModelRouter failover.

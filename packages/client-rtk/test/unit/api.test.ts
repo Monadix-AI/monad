@@ -75,7 +75,7 @@ function fakeClient(overrides: Record<string, unknown>): MonadClient {
                   const fn = overrides.generate as
                     | ((sessionId: string, text: string) => Promise<{ id: string; text: string }>)
                     | undefined;
-                  const message = fn ? await fn(id, text) : { id: 'msg_1', text };
+                  const message = fn ? await fn(id, text) : { id: 'msg_100000000000', text };
                   return ok({ message });
                 }
               }
@@ -157,7 +157,7 @@ function fakeClient(overrides: Record<string, unknown>): MonadClient {
                   ? await fn(id)
                   : {
                       state: 'unavailable',
-                      externalAgentSessionId: 'exa_1',
+                      externalAgentSessionId: 'exa_100000000000',
                       reason: 'provider history unavailable'
                     }
               );
@@ -171,9 +171,9 @@ function fakeClient(overrides: Record<string, unknown>): MonadClient {
                 : {
                     delivery: {
                       id,
-                      sessionId: 'ses_01KDEFAULTDELIVERY0000000',
+                      sessionId: 'ses_01KDEFAUObDk',
                       memberInstanceId: 'pmem_codex',
-                      externalAgentSessionId: 'exa_1',
+                      externalAgentSessionId: 'exa_100000000000',
                       triggerMessageSeq: 1,
                       state: 'queued',
                       turn: {},
@@ -344,9 +344,9 @@ test('getNativeAgentDelivery uses the typed native agent delivery treaty route',
       return {
         delivery: {
           id,
-          sessionId: 'ses_01KCLIENTDELIVERY00000000',
+          sessionId: 'ses_01KCLIENcYUg',
           memberInstanceId: 'pmem_codex_1',
-          externalAgentSessionId: 'exa_1',
+          externalAgentSessionId: 'exa_100000000000',
           triggerMessageSeq: 7,
           state: 'delivered',
           turn: { providerSessionRef: 'provider-session-1', providerTurnId: 'turn-1' },
@@ -367,12 +367,12 @@ test('getNativeAgentDelivery uses the typed native agent delivery treaty route',
         };
       }
     ).getNativeAgentDelivery.initiate({
-      id: 'deliv_01KCLIENTDELIVERY000000',
-      transcriptTargetId: 'ses_01KCLIENTDELIVERY00000000'
+      id: 'deliv_01KCLIENU7u7',
+      transcriptTargetId: 'ses_01KCLIENcYUg'
     })
   );
 
-  expect(seen).toEqual(['deliv_01KCLIENTDELIVERY000000']);
+  expect(seen).toEqual(['deliv_01KCLIENU7u7']);
   expect('data' in res && res.data?.delivery.state).toBe('delivered');
   expect('data' in res && res.data?.delivery.turn.providerTurnId).toBe('turn-1');
 });
@@ -384,7 +384,7 @@ test('getNativeAgentDeliveryObservation uses the typed delivery observation trea
       seen.push(id);
       return {
         state: 'history',
-        externalAgentSessionId: 'exa_from_delivery',
+        externalAgentSessionId: 'exa_fromdelivery',
         deliveryId: id,
         turn: { providerSessionRef: 'provider-session-1', providerTurnId: 'turn-1' },
         provider: 'codex',
@@ -403,16 +403,16 @@ test('getNativeAgentDeliveryObservation uses the typed delivery observation trea
         };
       }
     ).getNativeAgentDeliveryObservation.initiate({
-      id: 'deliv_01KCLIENTOBSERVATION0000',
-      transcriptTargetId: 'ses_01KCLIENTOBSERVE0000000'
+      id: 'deliv_01KCLIENp373',
+      transcriptTargetId: 'ses_01KCLIENNVUa'
     })
   );
 
-  expect(seen).toEqual(['deliv_01KCLIENTOBSERVATION0000']);
+  expect(seen).toEqual(['deliv_01KCLIENp373']);
   expect('data' in res && res.data?.state).toBe('history');
   if ('data' in res && res.data?.state === 'history') {
-    expect(res.data.externalAgentSessionId).toBe('exa_from_delivery');
-    expect(res.data.deliveryId).toBe('deliv_01KCLIENTOBSERVATION0000');
+    expect(res.data.externalAgentSessionId).toBe('exa_fromdelivery');
+    expect(res.data.deliveryId).toBe('deliv_01KCLIENp373');
     expect(res.data.turn?.providerTurnId).toBe('turn-1');
   }
 });
@@ -440,10 +440,10 @@ test('getExternalAgentObservation uses the typed external agent observation trea
           initiate: typeof getExternalAgentObservationApi.endpoints.getExternalAgentObservation.initiate;
         };
       }
-    ).getExternalAgentObservation.initiate({ id: 'exa_1', transcriptTargetId: 'ses_01KCLIENTOBSERVE0000000' })
+    ).getExternalAgentObservation.initiate({ id: 'exa_100000000000', transcriptTargetId: 'ses_01KCLIENNVUa' })
   );
 
-  expect(seen).toEqual(['exa_1']);
+  expect(seen).toEqual(['exa_100000000000']);
   expect('data' in res && res.data?.state).toBe('live');
 });
 
@@ -455,14 +455,14 @@ test('streamExternalAgentUiObservation caches full neutral frames verbatim (no d
     }
   });
   const store = createMonadStore({ client });
-  const arg = { id: 'exa_1', transcriptTargetId: 'ses_01KCLIENTOBSERVE0000000' as const };
+  const arg = { id: 'exa_100000000000', transcriptTargetId: 'ses_01KCLIENNVUa' as const };
 
   store.dispatch(streamExternalAgentUiObservationApi.endpoints.streamExternalAgentUiObservation.initiate(arg));
   await new Promise((r) => setTimeout(r, 0));
 
   push?.({
     state: 'live',
-    externalAgentSessionId: 'exa_1',
+    externalAgentSessionId: 'exa_100000000000',
     provider: 'codex',
     events: [{ id: 'e1', kind: 'assistant-message', streaming: true, text: 'hi' }],
     seq: 12,
@@ -484,9 +484,9 @@ test('a query delegates to the client and caches by tag', async () => {
       calls++;
       return [
         {
-          id: 'ses_1',
+          id: 'ses_100000000000',
           title: 't',
-          ownerPrincipalId: 'prn_TEST',
+          ownerPrincipalId: 'prn_TEST00000000',
           state: 'active',
           agentIds: [],
           parentSessionId: null,
@@ -501,7 +501,9 @@ test('a query delegates to the client and caches by tag', async () => {
   const store = createMonadStore({ client });
 
   const res = await store.dispatch(monadApi.endpoints.listSessions.initiate(undefined));
-  expect(sessionSelectors.selectAll(res.data?.sessions ?? sessionAdapter.getInitialState())[0]?.id).toBe('ses_1');
+  expect(sessionSelectors.selectAll(res.data?.sessions ?? sessionAdapter.getInitialState())[0]?.id).toBe(
+    'ses_100000000000'
+  );
   expect(calls).toBe(1);
 
   // Second subscriber hits the cache — no extra client call.
@@ -516,7 +518,7 @@ test('createSession invalidates Sessions, forcing a refetch', async () => {
       listCalls++;
       return [];
     },
-    createSession: async (title: string) => `ses_${title}`
+    createSession: async () => 'ses_x00000000000'
   });
   const store = createMonadStore({ client });
 
@@ -524,7 +526,7 @@ test('createSession invalidates Sessions, forcing a refetch', async () => {
   expect(listCalls).toBe(1);
 
   const created = await store.dispatch(monadApi.endpoints.createSession.initiate({ title: 'x' }));
-  expect('data' in created && created.data).toBe('ses_x');
+  expect('data' in created && created.data).toBe('ses_x00000000000');
 
   // The Sessions tag was invalidated; the still-subscribed query refetches.
   await Promise.resolve();
@@ -552,7 +554,7 @@ test('listExternalAgentSessions uses the typed session treaty route', async () =
       seen.push(sessionId);
       return [
         {
-          id: 'exa_1',
+          id: 'exa_100000000000',
           sessionId: sessionId,
           agentName: 'codex',
           provider: 'codex',
@@ -581,11 +583,11 @@ test('listExternalAgentSessions uses the typed session treaty route', async () =
           ) => ReturnType<typeof listExternalAgentSessionsApi.endpoints.listExternalAgentSessions.initiate>;
         };
       }
-    ).listExternalAgentSessions.initiate('ses_1')
+    ).listExternalAgentSessions.initiate('ses_100000000000')
   );
 
-  expect(seen).toEqual(['ses_1']);
-  expect('data' in res && res.data?.ids).toEqual(['exa_1']);
+  expect(seen).toEqual(['ses_100000000000']);
+  expect('data' in res && res.data?.ids).toEqual(['exa_100000000000']);
 });
 
 test('credential mutations invalidate that provider’s credential list', async () => {
@@ -630,12 +632,12 @@ test('resetSession invalidates Messages and Sessions, forcing refetches', async 
   });
   const store = createMonadStore({ client });
 
-  await store.dispatch(getMessagesApi.endpoints.getMessages.initiate('ses_abc'));
+  await store.dispatch(getMessagesApi.endpoints.getMessages.initiate('ses_abc000000000'));
   await store.dispatch(listSessionsApi.endpoints.listSessions.initiate(undefined));
   expect(msgCalls).toBe(1);
   expect(sessionCalls).toBe(1);
 
-  await store.dispatch(resetSessionApi.endpoints.resetSession.initiate('ses_abc'));
+  await store.dispatch(resetSessionApi.endpoints.resetSession.initiate('ses_abc000000000'));
   await new Promise((r) => setTimeout(r, 0));
   expect(msgCalls).toBe(2);
   expect(sessionCalls).toBe(2);
@@ -646,24 +648,24 @@ test('resetSession clears the live stream cache immediately', async () => {
   // clear the live stream cache optimistically; invalidatesTags('Messages') drops cached pages.
   const summaryItem = {
     kind: 'memory_summary',
-    id: 'memory-summary:msg_1',
+    id: 'memory-summary:undefined',
     summary: 'Earlier context.',
-    uptoMessageId: 'msg_1',
-    seq: 'msg_1'
+    uptoMessageId: 'msg_100000000000',
+    seq: 'msg_100000000000'
   } as const;
   const client = fakeClient({ resetSession: async () => ({ clearedCount: 1 }) });
   const store = createMonadStore({ client });
 
   await store.dispatch(
-    streamUiItemsApi.util.upsertQueryData('streamUiItems', 'ses_abc', { items: [summaryItem] }) as never
+    streamUiItemsApi.util.upsertQueryData('streamUiItems', 'ses_abc000000000', { items: [summaryItem] }) as never
   );
-  expect(streamUiItemsApi.endpoints.streamUiItems.select('ses_abc')(store.getState() as never).data?.items).toEqual([
-    summaryItem
-  ]);
+  expect(
+    streamUiItemsApi.endpoints.streamUiItems.select('ses_abc000000000')(store.getState() as never).data?.items
+  ).toEqual([summaryItem]);
 
-  await store.dispatch(resetSessionApi.endpoints.resetSession.initiate('ses_abc'));
+  await store.dispatch(resetSessionApi.endpoints.resetSession.initiate('ses_abc000000000'));
 
-  const uiStream = streamUiItemsApi.endpoints.streamUiItems.select('ses_abc')(store.getState() as never);
+  const uiStream = streamUiItemsApi.endpoints.streamUiItems.select('ses_abc000000000')(store.getState() as never);
   expect(uiStream.data?.items).toEqual([]);
 });
 
@@ -692,8 +694,8 @@ test('streamControl subscribes to the control stream and invalidates Sessions on
 
   // A SESSION_LIST_EVENT triggers a Sessions tag invalidation → listSessions refetches.
   controlHandler?.({
-    id: 'evt_1',
-    sessionId: 'ses_1',
+    id: 'evt_100000000000',
+    sessionId: 'ses_100000000000',
     type: 'session.created',
     actorAgentId: null,
     payload: {},
@@ -705,8 +707,8 @@ test('streamControl subscribes to the control stream and invalidates Sessions on
 
   // A non-list event must NOT trigger a refetch.
   controlHandler?.({
-    id: 'evt_2',
-    sessionId: 'ses_1',
+    id: 'evt_200000000000',
+    sessionId: 'ses_100000000000',
     type: 'tool.called',
     actorAgentId: null,
     payload: {},
@@ -727,7 +729,7 @@ test('streamControl invalidates external agent sessions when a managed external 
       externalAgentCalls++;
       return [
         {
-          id: 'exa_1',
+          id: 'exa_100000000000',
           sessionId: sessionId,
           agentName: 'pmem_codex_reviewer',
           provider: 'codex',
@@ -760,7 +762,7 @@ test('streamControl invalidates external agent sessions when a managed external 
           ) => ReturnType<typeof listExternalAgentSessionsApi.endpoints.listExternalAgentSessions.initiate>;
         };
       }
-    ).listExternalAgentSessions.initiate('ses_1')
+    ).listExternalAgentSessions.initiate('ses_100000000000')
   );
   expect(externalAgentCalls).toBe(1);
 
@@ -768,11 +770,11 @@ test('streamControl invalidates external agent sessions when a managed external 
   await new Promise((r) => setTimeout(r, 0));
 
   controlHandler?.({
-    id: 'evt_external_agent_started',
-    sessionId: 'ses_1',
+    id: 'evt_externals3NK',
+    sessionId: 'ses_100000000000',
     type: 'external_agent.started',
     actorAgentId: null,
-    payload: { externalAgentSessionId: 'exa_1' },
+    payload: { externalAgentSessionId: 'exa_100000000000' },
     at: ''
   });
   await Promise.resolve();
@@ -816,7 +818,7 @@ test('channel mutations all invalidate Channels, forcing a refetch', async () =>
   expect(listCalls).toBe(1);
 
   const channel = {
-    id: 'chn_1',
+    id: 'chn_100000000000',
     type: 'telegram',
     label: 'My Bot',
     enabled: true,
@@ -830,11 +832,11 @@ test('channel mutations all invalidate Channels, forcing a refetch', async () =>
   await new Promise((r) => setTimeout(r, 0));
   expect(listCalls).toBe(2);
 
-  await store.dispatch(channelsApi.endpoints.deleteChannel.initiate('chn_1'));
+  await store.dispatch(channelsApi.endpoints.deleteChannel.initiate('chn_100000000000'));
   await new Promise((r) => setTimeout(r, 0));
   expect(listCalls).toBe(3);
 
-  await store.dispatch(channelsApi.endpoints.setChannelCredential.initiate({ id: 'chn_1', token: 'tok_x' }));
+  await store.dispatch(channelsApi.endpoints.setChannelCredential.initiate({ id: 'chn_100000000000', token: 'tok_x' }));
   await new Promise((r) => setTimeout(r, 0));
   expect(listCalls).toBe(4);
 });

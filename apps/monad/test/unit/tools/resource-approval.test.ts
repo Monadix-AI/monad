@@ -21,7 +21,7 @@ test('RESOURCE_APPROVAL_TOOLS centralizes remembered approval tool names', () =>
 test('requestPathAccess emits a normalized path_access approval request', async () => {
   const calls: Array<{ tool: string; key?: string; highRisk: boolean; input: unknown }> = [];
   const ctx: ToolContext = {
-    sessionId: 'ses_1',
+    sessionId: 'ses_100000000000',
     sandboxRoots: ['/work'],
     log: () => {},
     gate: async (req) => {
@@ -91,7 +91,7 @@ test('path approval keys separate write/cwd/execute while read remains directory
 test('createApprovalGate exposes the normalized resource approval methods', async () => {
   const calls: Array<{ tool: string; key?: string }> = [];
   const gate = createApprovalGate({
-    sessionId: 'ses_1',
+    sessionId: 'ses_100000000000',
     sandboxRoots: ['/work'],
     log: () => {},
     gate: async (req) => {
@@ -108,7 +108,7 @@ test('createApprovalGate exposes the normalized resource approval methods', asyn
 test('requestNetworkAccess emits a normalized network_access approval request keyed by host', async () => {
   const calls: Array<{ tool: string; key?: string; highRisk: boolean; input: unknown }> = [];
   const ctx: ToolContext = {
-    sessionId: 'ses_1',
+    sessionId: 'ses_100000000000',
     log: () => {},
     gate: async (req) => {
       calls.push({ tool: req.tool, key: req.key, highRisk: req.highRisk, input: req.input });
@@ -177,10 +177,10 @@ test('buildResourceApprovalRequest is the single payload root for resource appro
 
 test('createApprovalPolicy centralizes resource gate decisions', () => {
   const policy = createApprovalPolicy();
-  expect(policy.shouldRequestNetworkApproval({ sessionId: 'ses_1', log: () => {} })).toBe(false);
-  expect(policy.shouldRequestNetworkApproval({ sessionId: 'ses_1', sandboxRoots: ['/sandbox'], log: () => {} })).toBe(
-    true
-  );
+  expect(policy.shouldRequestNetworkApproval({ sessionId: 'ses_100000000000', log: () => {} })).toBe(false);
+  expect(
+    policy.shouldRequestNetworkApproval({ sessionId: 'ses_100000000000', sandboxRoots: ['/sandbox'], log: () => {} })
+  ).toBe(true);
   expect(policy.resourceScopes('path')).toEqual({
     defaultScope: 'session',
     rememberScopes: ['once', 'session', 'agent', 'global']

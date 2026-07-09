@@ -14,13 +14,9 @@ export function deriveKey(c: ChannelInstanceConfig, m: ChannelInbound, agentId?:
 
 export function principalFor(channelId: string): PrincipalId {
   // Stable, low-privilege synthetic principal — derived from the channel's id suffix so it never
-  // collides with the daemon owner. verification stays implicitly unverified. The config schema
-  // permits any `chn_*` id, but PrincipalId must match `prn_[A-Z0-9]+` or session-list responses
-  // fail validation — so uppercase the suffix and strip non-alphanumerics (a no-op for ULID ids).
-  const suffix = channelId
-    .slice(4)
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, '');
+  // collides with the daemon owner. verification stays implicitly unverified. ChannelId and
+  // PrincipalId share the same 12-char alphanumeric body contract.
+  const suffix = channelId.slice(4);
   return `prn_${suffix}` as PrincipalId;
 }
 

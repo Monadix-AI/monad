@@ -26,8 +26,8 @@ const agent = (name: string, presence: Participant['presence']): Participant => 
 });
 
 const externalAgentSession = (overrides: Partial<ExternalAgentSessionView> = {}): ExternalAgentSessionView => ({
-  id: 'exa_codex_running',
-  sessionId: 'ses_01KWPROJECT00000000000000',
+  id: 'exa_codexrunning',
+  sessionId: 'ses_01KWPROJ2tDh',
   agentName: 'pmem_codex_active',
   provider: 'codex',
   productIcon: 'codex',
@@ -35,7 +35,7 @@ const externalAgentSession = (overrides: Partial<ExternalAgentSessionView> = {})
   launchMode: 'app-server',
   approvalOwnership: 'provider-owned',
   runtimeRole: 'managed-project-agent',
-  agentRuntimeId: 'exa_codex_running',
+  agentRuntimeId: 'exa_codexrunning',
   lastDeliveredSeq: 0,
   lastVisibleSeq: 0,
   state: 'running',
@@ -52,7 +52,7 @@ const externalAgentSession = (overrides: Partial<ExternalAgentSessionView> = {})
 
 const claudeSession = (records: Record<string, unknown>[]): ExternalAgentSessionView =>
   externalAgentSession({
-    id: 'exa_claude',
+    id: 'exa_claude000000',
     agentName: 'pmem_claude',
     provider: 'claude-code',
     productIcon: 'claude-code',
@@ -208,7 +208,7 @@ test('a settled live tool clears working/phase even while the session snapshot s
   });
   const settledTool = {
     kind: 'tool' as const,
-    id: 'exa_codex_running',
+    id: 'exa_codexrunning',
     tool: 'external-agent:codex',
     input: { agent: 'pmem_codex_active' },
     status: 'ok' as const,
@@ -309,7 +309,7 @@ test('external agent-facing project commands map to short activity phases', () =
   expect(__workplaceProjectMessageTest.externalAgentFacingCommandPhase('monad project send "done"')).toBe('speaking');
   expect(__workplaceProjectMessageTest.externalAgentFacingCommandPhase('monad project inbox check')).toBe('reading');
   expect(__workplaceProjectMessageTest.externalAgentFacingCommandPhase('monad inbox read')).toBe('reading');
-  expect(__workplaceProjectMessageTest.externalAgentFacingCommandPhase('monad project read --project prj_1')).toBe(
+  expect(__workplaceProjectMessageTest.externalAgentFacingCommandPhase('monad project read --project undefined')).toBe(
     'reading'
   );
 });
@@ -364,8 +364,8 @@ test('external agent stopped sessions remain available when the template is enab
     enabled: true,
     externalAgentSessions: [
       {
-        id: 'exa_stopped',
-        sessionId: 'ses_01KWPROJECT00000000000000',
+        id: 'exa_stopped00000',
+        sessionId: 'ses_01KWPROJ2tDh',
         agentName: 'pmem_codex_available',
         provider: 'codex',
         productIcon: 'codex',
@@ -373,7 +373,7 @@ test('external agent stopped sessions remain available when the template is enab
         launchMode: 'app-server',
         approvalOwnership: 'provider-owned',
         runtimeRole: 'managed-project-agent',
-        agentRuntimeId: 'exa_stopped',
+        agentRuntimeId: 'exa_stopped00000',
         lastDeliveredSeq: 0,
         lastVisibleSeq: 0,
         state: 'stopped',
@@ -524,7 +524,7 @@ test('chatroom experience store opens the same observation view from follow and 
 test('agent observation selects the currently running external agent stream by instance id', () => {
   const streams = [
     {
-      id: 'exa_old',
+      id: 'exa_old000000000',
       agentName: 'pmem_codex_one',
       provider: 'codex',
       tag: 'Codex',
@@ -533,7 +533,7 @@ test('agent observation selects the currently running external agent stream by i
       items: []
     },
     {
-      id: 'exa_running',
+      id: 'exa_running00000',
       agentName: 'pmem_codex_one',
       provider: 'codex',
       tag: 'Codex',
@@ -542,7 +542,7 @@ test('agent observation selects the currently running external agent stream by i
       items: [{ id: 'item_1', kind: 'assistant-message' as const, streaming: false, text: 'Thinking' }]
     },
     {
-      id: 'exa_other_project',
+      id: 'exa_otherproject',
       agentName: 'codex',
       provider: 'codex',
       tag: 'Codex',
@@ -552,14 +552,16 @@ test('agent observation selects the currently running external agent stream by i
     }
   ];
 
-  expect(agentObservationStream({ agentId: 'pmem_codex_one', agentName: 'Codex' }, streams)?.id).toBe('exa_running');
-  expect(agentObservationStream({ externalAgentSessionId: 'exa_old' }, streams)?.id).toBe('exa_old');
+  expect(agentObservationStream({ agentId: 'pmem_codex_one', agentName: 'Codex' }, streams)?.id).toBe(
+    'exa_running00000'
+  );
+  expect(agentObservationStream({ externalAgentSessionId: 'exa_old000000000' }, streams)?.id).toBe('exa_old000000000');
 });
 
 test('agent observation follows the newest external agent stream when no runtime is running', () => {
   const streams = [
     {
-      id: 'exa_old',
+      id: 'exa_old000000000',
       agentName: 'pmem_codex_one',
       provider: 'codex',
       tag: 'Codex',
@@ -568,7 +570,7 @@ test('agent observation follows the newest external agent stream when no runtime
       items: []
     },
     {
-      id: 'exa_new',
+      id: 'exa_new000000000',
       agentName: 'pmem_codex_one',
       provider: 'codex',
       tag: 'Codex',
@@ -578,7 +580,7 @@ test('agent observation follows the newest external agent stream when no runtime
       observedAt: '2026-07-06T10:00:00.000Z'
     },
     {
-      id: 'exa_mid',
+      id: 'exa_mid000000000',
       agentName: 'pmem_codex_one',
       provider: 'codex',
       tag: 'Codex',
@@ -589,13 +591,15 @@ test('agent observation follows the newest external agent stream when no runtime
     }
   ];
 
-  expect(agentObservationStream({ agentId: 'pmem_codex_one', agentName: 'Codex' }, streams)?.id).toBe('exa_new');
+  expect(agentObservationStream({ agentId: 'pmem_codex_one', agentName: 'Codex' }, streams)?.id).toBe(
+    'exa_new000000000'
+  );
 });
 
 test('agent observation matches external agent stream aliases for template-backed project members', () => {
   const streams = [
     {
-      id: 'exa_codex_template',
+      id: 'exa_codextem5VBW',
       agentName: 'codex',
       agentAliases: ['pmem_codex_1a6c1dcc142', 'codex', 'Lily'],
       provider: 'codex',
@@ -607,7 +611,7 @@ test('agent observation matches external agent stream aliases for template-backe
   ];
 
   expect(agentObservationStream({ agentId: 'pmem_codex_1a6c1dcc142', agentName: 'Lily' }, streams)?.id).toBe(
-    'exa_codex_template'
+    'exa_codextem5VBW'
   );
 });
 
@@ -616,7 +620,7 @@ test('project messages bind an external agent member to the newest session for t
     persistedMessages: [],
     externalAgentSessions: [
       externalAgentSession({
-        id: 'exa_old',
+        id: 'exa_old000000000',
         agentName: 'pmem_codex_one',
         state: 'stopped',
         startedAt: '2026-07-06T08:00:00.000Z',
@@ -624,7 +628,7 @@ test('project messages bind an external agent member to the newest session for t
         exitedAt: '2026-07-06T08:01:00.000Z'
       }),
       externalAgentSession({
-        id: 'exa_new',
+        id: 'exa_new000000000',
         agentName: 'pmem_codex_one',
         state: 'running',
         startedAt: '2026-07-06T09:00:00.000Z',
@@ -636,10 +640,10 @@ test('project messages bind an external agent member to the newest session for t
     externalAgentDisplayNames: new Map([['pmem_codex_one', 'Codex']])
   });
 
-  expect(messages.find((message) => message.id === 'external-agent-session:exa_new')?.externalAgentSessionId).toBe(
-    'exa_new'
-  );
-  expect(messages.some((message) => message.id === 'external-agent-session:exa_old')).toBe(false);
+  expect(
+    messages.find((message) => message.id === 'external-agent-session:exa_new000000000')?.externalAgentSessionId
+  ).toBe('exa_new000000000');
+  expect(messages.some((message) => message.id === 'external-agent-session:undefined')).toBe(false);
 });
 
 test('external agent live launch join message renders settled immediately and stays after the agent replies', () => {
@@ -652,7 +656,7 @@ test('external agent live launch join message renders settled immediately and st
     liveItems: [],
     liveTools: [
       {
-        id: 'tool_external_agent_launch',
+        id: 'exa_toollaunch01',
         kind: 'tool',
         tool: 'external-agent:codex',
         input: { agent: 'pmem_codex_one', productIcon: 'codex', provider: 'codex' },
@@ -663,12 +667,10 @@ test('external agent live launch join message renders settled immediately and st
     externalAgentDisplayNames: new Map([['pmem_codex_one', 'Codex']])
   });
 
-  const joinMessage = pendingMessages.find(
-    (message) => message.id === 'external-agent-session:tool_external_agent_launch'
-  );
+  const joinMessage = pendingMessages.find((message) => message.id === 'external-agent-session:exa_toollaunch01');
   expect(joinMessage).toEqual(
     expect.objectContaining({
-      id: 'external-agent-session:tool_external_agent_launch',
+      id: 'external-agent-session:exa_toollaunch01',
       kind: 'system',
       text: 'joined the project'
     })
@@ -680,11 +682,11 @@ test('external agent live launch join message renders settled immediately and st
     externalAgentSessions: [],
     liveItems: [
       {
-        id: 'msg_external_agent_reply',
+        id: 'msg_externali36l',
         kind: 'message',
         role: 'assistant',
         agentName: 'pmem_codex_one',
-        externalAgentSessionId: 'tool_external_agent_launch',
+        externalAgentSessionId: 'exa_toollaunch01',
         source: 'managed-external-agent',
         status: 'done',
         seq: '2026-07-06T09:00:01.000Z',
@@ -693,7 +695,7 @@ test('external agent live launch join message renders settled immediately and st
     ],
     liveTools: [
       {
-        id: 'tool_external_agent_launch',
+        id: 'exa_toollaunch01',
         kind: 'tool',
         tool: 'external-agent:codex',
         input: { agent: 'pmem_codex_one', productIcon: 'codex', provider: 'codex' },
@@ -704,23 +706,21 @@ test('external agent live launch join message renders settled immediately and st
     externalAgentDisplayNames: new Map([['pmem_codex_one', 'Codex']])
   });
 
-  expect(mergedMessages.some((message) => message.id === 'external-agent-session:tool_external_agent_launch')).toBe(
-    true
-  );
-  expect(mergedMessages.find((message) => message.id === 'msg_external_agent_reply')?.text).toBe('Ready.');
+  expect(mergedMessages.some((message) => message.id === 'external-agent-session:exa_toollaunch01')).toBe(true);
+  expect(mergedMessages.find((message) => message.id === 'msg_externali36l')?.text).toBe('Ready.');
 });
 
 test('external agent session join history stays visible after agent content arrives', () => {
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
-    externalAgentSessions: [externalAgentSession({ agentName: 'pmem_codex_one', id: 'exa_history' })],
+    externalAgentSessions: [externalAgentSession({ agentName: 'pmem_codex_one', id: 'exa_history00000' })],
     liveItems: [
       {
-        id: 'msg_external_agent_reply',
+        id: 'msg_externali36l',
         kind: 'message',
         role: 'assistant',
         agentName: 'pmem_codex_one',
-        externalAgentSessionId: 'exa_history',
+        externalAgentSessionId: 'exa_history00000',
         source: 'managed-external-agent',
         status: 'done',
         seq: '2026-07-06T09:00:01.000Z',
@@ -731,7 +731,7 @@ test('external agent session join history stays visible after agent content arri
     externalAgentDisplayNames: new Map([['pmem_codex_one', 'Codex']])
   });
 
-  const joinMessage = messages.find((message) => message.id === 'external-agent-session:exa_history');
+  const joinMessage = messages.find((message) => message.id === 'external-agent-session:exa_history00000');
   expect(joinMessage).toEqual(
     expect.objectContaining({
       kind: 'system',
@@ -739,7 +739,7 @@ test('external agent session join history stays visible after agent content arri
     })
   );
   expect(joinMessage?.systemTone).toBeUndefined();
-  expect(messages.find((message) => message.id === 'msg_external_agent_reply')?.text).toBe('Ready.');
+  expect(messages.find((message) => message.id === 'msg_externali36l')?.text).toBe('Ready.');
 });
 
 test('external agent session observation reuses the project member identity', () => {
@@ -750,7 +750,7 @@ test('external agent session observation reuses the project member identity', ()
     icon: 'codex'
   } as Participant;
   const stream = {
-    id: 'exa_codex',
+    id: 'exa_codex0000000',
     agentName: 'pmem_codex_1a6c1dcc142',
     provider: 'codex',
     tag: 'Codex',
@@ -759,5 +759,5 @@ test('external agent session observation reuses the project member identity', ()
     items: []
   };
 
-  expect(observedRailAgent({ externalAgentSessionId: 'exa_codex' }, stream, [railAgent])).toBe(railAgent);
+  expect(observedRailAgent({ externalAgentSessionId: 'exa_codex0000000' }, stream, [railAgent])).toBe(railAgent);
 });

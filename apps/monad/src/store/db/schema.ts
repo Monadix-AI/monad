@@ -214,7 +214,7 @@ const _channelConversationSessions = sqliteTable('channel_conversation_sessions'
   createdAt: text('created_at').notNull()
 });
 
-// `id` is a sortable evt_ ULID so ordering/resume-after-cursor is a string compare.
+// Event ids are random branded nanoids; durable replay order comes from SQLite rowid.
 const _events = sqliteTable('events', {
   id: text('id').primaryKey(),
   transcriptTargetId: text('transcript_target_id').notNull(),

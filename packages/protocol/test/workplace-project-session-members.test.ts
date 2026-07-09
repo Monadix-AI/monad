@@ -53,9 +53,9 @@ test('a running session member carries its bound external-agent session id', () 
     id: 'pmem_codex_a',
     type: 'external-agent',
     name: 'codex',
-    externalAgentSessionId: 'exa_01KWY0000000000000000000'
+    externalAgentSessionId: 'exa_01KWY0000000'
   });
-  expect(member.externalAgentSessionId).toBe('exa_01KWY0000000000000000000');
+  expect(member.externalAgentSessionId).toBe('exa_01KWY0000000');
 });
 
 test('a malformed external-agent session id is rejected', () => {
@@ -75,14 +75,14 @@ test('the same template invited into two session members yields two distinct mem
     templateId: 'tpl_codex_reviewer',
     type: 'external-agent',
     name: 'codex',
-    externalAgentSessionId: 'exa_01KWY1111111111111111111A'
+    externalAgentSessionId: 'exa_01KWY1111111'
   });
   const b = workplaceProjectSessionMemberSchema.parse({
     id: 'pmem_2',
     templateId: 'tpl_codex_reviewer',
     type: 'external-agent',
     name: 'codex',
-    externalAgentSessionId: 'exa_01KWY2222222222222222222B'
+    externalAgentSessionId: 'exa_01KWY2222222'
   });
   expect(a.id).not.toBe(b.id);
   expect(a.externalAgentSessionId).not.toBe(b.externalAgentSessionId);

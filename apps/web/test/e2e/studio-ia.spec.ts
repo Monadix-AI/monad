@@ -70,7 +70,7 @@ async function installStudioIaApiMock(page: Page) {
       return route.fulfill(json({ roles: {} }));
     }
     if (method === 'GET' && path === '/v1/agents') {
-      return route.fulfill(json({ agents: [{ id: 'agt_mock', name: 'Builder', hasPrompt: true }] }));
+      return route.fulfill(json({ agents: [{ id: 'agt_mock00000000', name: 'Builder', hasPrompt: true }] }));
     }
     if (method === 'GET' && path === '/v1/stats') {
       return route.fulfill(
@@ -147,8 +147,8 @@ async function installStudioIaApiMock(page: Page) {
               archived: false,
               createdAt: '2026-07-03T00:00:00.000Z',
               cwd: '/tmp/mock-workplace',
-              id: 'prj_mock',
-              ownerPrincipalId: 'prn_mock',
+              id: 'prj_mock00000000',
+              ownerPrincipalId: 'prn_mock00000000',
               state: 'ready',
               title: 'Mock Workplace',
               updatedAt: '2026-07-03T00:00:00.000Z'

@@ -44,7 +44,7 @@ test('getAttachment: fetches the JSON preview for an attachment', async () => {
     return new Response(
       JSON.stringify({
         attachment: {
-          id: 'att_1',
+          id: 'att_100000000000',
           path: '/tmp/notes.txt',
           name: 'notes.txt',
           mime: 'text/plain',
@@ -59,9 +59,9 @@ test('getAttachment: fetches the JSON preview for an attachment', async () => {
   });
   const store = createMonadStore({ client });
 
-  const res = await dispatchEndpoint(store, 'getAttachment', { id: 'att_1' });
+  const res = await dispatchEndpoint(store, 'getAttachment', { id: 'att_100000000000' });
 
-  expect(observedPath).toBe('/v1/attachments/att_1');
+  expect(observedPath).toBe('/v1/attachments/att_100000000000');
   expect((res.data as { text?: string } | undefined)?.text).toBe('hello');
 });
 
@@ -71,7 +71,7 @@ test('getAttachment: maps a non-ok response to an error', async () => {
   );
   const store = createMonadStore({ client });
 
-  const res = await dispatchEndpoint(store, 'getAttachment', { id: 'att_missing' });
+  const res = await dispatchEndpoint(store, 'getAttachment', { id: 'att_missing00000' });
 
   expect((res.error as { status?: number } | undefined)?.status).toBe(410);
 });
@@ -87,9 +87,9 @@ test('downloadAttachment: requests the binary variant and returns a Blob', async
   });
   const store = createMonadStore({ client });
 
-  const res = await dispatchEndpoint(store, 'downloadAttachment', { id: 'att_1' });
+  const res = await dispatchEndpoint(store, 'downloadAttachment', { id: 'att_100000000000' });
 
-  expect(observedPath).toBe('/v1/attachments/att_1?download=1');
+  expect(observedPath).toBe('/v1/attachments/att_100000000000?download=1');
   expect((res.data as { blob?: Blob } | undefined)?.blob).toBeInstanceOf(Blob);
 });
 

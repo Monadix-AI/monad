@@ -51,11 +51,11 @@ token never sits in `config.json`; it lives in `auth.json` behind a `${secret:pe
 // config.json
 "peers": [
   {
-    "id": "peer_HOME",
+    "id": "peer_HOME00000000",
     "label": "home-node",
     "baseUrl": "https://home.example:52749/openai",  // the peer's OpenAI-compat base (no /v1)
     "defaultAgent": "default",                        // target agent when the model names none
-    "tokenRef": "${secret:peer/peer_HOME/token}",
+    "tokenRef": "${secret:peer/peer_HOME00000000/token}",
     "enabled": true
   }
 ]
@@ -119,7 +119,7 @@ phase is **PeerLink**: a bidirectional JSON-RPC link over one WebSocket (`/v1/pe
   side can initiate a delegation once connected (connect direction ⟂ request direction).
 - **`forward` approval** — B's approval request streams back to A over the link (`peer.delegate.approve`
   reverse-RPC), so A's user decides — the same-owner default once it is expressible.
-- **`prn_PEER_*` isolation** — inbound delegations run under a synthetic low-privilege principal with a
+- **`prn_PEER00000000*` isolation** — inbound delegations run under a synthetic low-privilege principal with a
   per-peer handler facade and a `'peer'` session transport/surface.
 
 The `agent_peer_delegate` tool would then become transport-pluggable (`direct` = OpenAI-compat |

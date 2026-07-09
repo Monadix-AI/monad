@@ -4,7 +4,6 @@
   // kept out of the unused-file sweep pending that landing.
   "ignore": [
     "apps/monad/src/handlers/settings/mcp-server/catalog.ts",
-    "apps/web/app/api/[...path]/route.proxy.ts",
     "apps/web/components/ai-elements/context.tsx",
     "apps/web/components/ai-elements/prompt-input-actions.tsx",
     "apps/web/components/ai-elements/prompt-input.tsx",
@@ -33,37 +32,35 @@
   // Both "duplicates" are intentional schema aliases in @monad/protocol
   // (a request schema deliberately mirrors its response schema).
   "rules": { "duplicates": "off" },
-  // Root-level devDependency used via git hooks (lefthook.yml), not imported.
+  "typescript": true,
+  "bun": true,
+  "biome": true,
+  "lefthook": true,
+  "commitlint": true,
+  "syncpack": true,
+  // Root-level devDependencies invoked by generated i18n tooling or Git hook installation paths.
   "ignoreDependencies": ["@evilmartians/lefthook", "@inlang/paraglide-js"],
   // System binaries invoked from scripts; not npm-installed.
   "ignoreBinaries": ["codex", "icacls", "powershell", "shasum", "sha256sum"],
-  // Workspaces are auto-discovered from package.json "workspaces"; production
-  // entries (main/module/bin/exports) and the Next.js app are inferred per
-  // package.json. The only thing Knip can't infer is Bun's test layer: the bun
-  // plugin activates on a bare `bun test` script, but this repo runs tests via a
-  // wrapper (`bun scripts/bun-test.ts`), so the test files — and the helpers/
-  // fixtures they spawn by path string rather than import — must be declared as
-  // entries. Two universal patterns cover that everywhere:
-  //   test/**/*.{ts,tsx}    every file under a test/ dir (tests, helpers, fixtures)
-  //   **/*.test.{ts,tsx}    co-located tests outside test/ dirs
-  // The apps/* and packages/* globs apply them to every workspace, including ones
-  // added later, so new sub-packages need no edit here.
-  //
-  // Knip selects ONE workspace key per workspace (deepest glob match, no merge —
-  // ConfigurationChief#getConfigKeyForWorkspace), so the few workspaces with a
-  // genuine special case must restate the universal entries alongside it.
+  // Workspaces are auto-discovered from package.json "workspaces". Framework and tool
+  // entrypoints are handled by Knip plugins. The only repo-specific shape Knip can't infer is
+  // the Bun test wrapper (`bun ../../scripts/bun-test.ts ...`), so those test/fixture globs are
+  // attached to the bun plugin explicitly.
   "workspaces": {
-    ".": { "entry": ["scripts/**/*.ts", "test/**/*.ts"], "project": ["scripts/**/*.ts", "test/**/*.ts"] },
-    "apps/*": { "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"] },
-    "packages/*": { "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"] },
+    ".": {
+      "entry": ["scripts/**/*.ts", "test/**/*.ts"],
+      "project": ["scripts/**/*.ts", "test/**/*.ts"]
+    },
+    "apps/*": { "bun": { "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"] } },
+    "packages/*": { "bun": { "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"] } },
 
     // bin.ts is the release entrypoint (build-release.ts), not the package.json
     // `bin`; declaring it lets Knip see its dynamic @monad/web + @monad/monad imports.
-    "apps/cli": { "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}", "src/bin.ts"] },
+    "apps/cli": { "entry": ["src/bin.ts"], "bun": { "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"] } },
     // The debug power pack is loaded via a dynamic import() gated on NODE_ENV !== 'production'
     // (atom-pack-packs.ts), never a static import — knip can't trace it.
     "apps/monad": {
-      "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"],
+      "bun": { "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"] },
       "ignoreDependencies": ["@monad/monad-power-pack"]
     },
     // The React Compiler runtime is injected by next.config's reactCompiler flag;
@@ -71,20 +68,22 @@
     // web-component modules loaded by the browser via a runtime URL string (the atom-pack
     // registry), never a static import — same rationale as packages/atoms below.
     "apps/web": {
-      "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}", "public/experiences/*.js"],
+      "next": true,
+      "playwright": true,
+      "bun": { "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"] },
+      "entry": ["public/experiences/*.js"],
       "ignoreDependencies": ["cmdk", "react-compiler-runtime"]
     },
     "apps/mo": {},
-    "packages/logger": { "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"] },
     // Channel adapters and model providers are loaded dynamically via the atom-pack runtime
     // (not static imports), so knip can't trace them. Declare src/** as entries so their
     // exports are treated as public API and not flagged as unused.
-    "packages/atoms": { "entry": ["src/**/*.ts", "test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"] },
+    "packages/atoms": {
+      "entry": ["src/**/*.ts"],
+      "bun": { "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"] }
+    },
     "packages/config": {},
     "packages/ui": {},
-    // No test files in either package — the universal packages/* entry pattern matches
-    // nothing, so knip flags it as a useless override; state that explicitly instead.
-    "packages/sdk-atom-client-rtk": {},
     "packages/monad-power-pack": {}
   }
 }

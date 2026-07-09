@@ -16,7 +16,7 @@ function storeWith(client: string | undefined): Pick<Store, 'getSession'> {
 }
 
 function req(overrides?: Partial<ToolGateRequest>): ToolGateRequest {
-  return { tool: 'shell_exec', sessionId: 'ses_1', highRisk: true, input: {}, ...overrides };
+  return { tool: 'shell_exec', sessionId: 'ses_100000000000', highRisk: true, input: {}, ...overrides };
 }
 
 function gateOf(mode: InboundApprovalMode, client: string | undefined, fallback: ToolGate): ToolGate {

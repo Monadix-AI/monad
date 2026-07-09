@@ -7,7 +7,7 @@ import { invokeTool, ToolGateDeniedError } from '#/capabilities/tools/invoke.ts'
 import { toolResult } from '#/capabilities/tools/types.ts';
 import { OversightService } from '#/services/oversight.ts';
 
-const gateReq = { tool: 'email_send', sessionId: 'ses_TEST', highRisk: true, input: { to: ['a@b.c'] } };
+const gateReq = { tool: 'email_send', sessionId: 'ses_TEST00000000', highRisk: true, input: { to: ['a@b.c'] } };
 
 function capture() {
   const events: Event[] = [];
@@ -80,7 +80,7 @@ function probe(): Tool<{ x: number }, string> {
 
 test('invokeTool with the oversight gate runs the tool once approved', async () => {
   const { events, oversight } = capture();
-  const p = invokeTool(probe(), { x: 1 }, { sessionId: 'ses_TEST', log: () => {}, gate: oversight.gate });
+  const p = invokeTool(probe(), { x: 1 }, { sessionId: 'ses_TEST00000000', log: () => {}, gate: oversight.gate });
 
   const requestId = requested(events)[0]?.payload.requestId as string;
   oversight.respond(requestId, true);
@@ -89,7 +89,7 @@ test('invokeTool with the oversight gate runs the tool once approved', async () 
 
 test('invokeTool with the oversight gate rejects when denied', async () => {
   const { events, oversight } = capture();
-  const p = invokeTool(probe(), { x: 1 }, { sessionId: 'ses_TEST', log: () => {}, gate: oversight.gate });
+  const p = invokeTool(probe(), { x: 1 }, { sessionId: 'ses_TEST00000000', log: () => {}, gate: oversight.gate });
 
   const requestId = requested(events)[0]?.payload.requestId as string;
   oversight.respond(requestId, false, 'nope');
@@ -103,14 +103,14 @@ test('cancelSession immediately resolves all pending gates for that session', as
   const p1 = oversight.gate(gateReq);
   const p2 = oversight.gate(gateReq);
   // different session — must NOT be cancelled
-  const p3 = oversight.gate({ ...gateReq, sessionId: 'ses_OTHER' });
+  const p3 = oversight.gate({ ...gateReq, sessionId: 'ses_OTHER0000000' });
 
   expect(oversight.pendingCount).toBe(3);
-  oversight.cancelSession('ses_TEST' as never, 'session_aborted');
+  oversight.cancelSession('ses_TEST00000000' as never, 'session_aborted');
 
   expect(await p1).toEqual({ allow: false, reason: 'session_aborted' });
   expect(await p2).toEqual({ allow: false, reason: 'session_aborted' });
-  expect(oversight.pendingCount).toBe(1); // ses_OTHER still pending
+  expect(oversight.pendingCount).toBe(1); // undefined still pending
 
   // Both resolved events emitted with correct reason
   const res = resolved(events);
@@ -119,12 +119,12 @@ test('cancelSession immediately resolves all pending gates for that session', as
   expect(res.every((e) => e.payload.allow === false)).toBe(true);
 
   // Clean up the remaining timer
-  oversight.cancelSession('ses_OTHER' as never, 'cleanup');
+  oversight.cancelSession('ses_OTHER0000000' as never, 'cleanup');
   await p3;
 });
 
 test('cancelSession on a session with no pending gates is a no-op', () => {
   const { oversight } = capture();
-  expect(() => oversight.cancelSession('ses_EMPTY' as never, 'session_aborted')).not.toThrow();
+  expect(() => oversight.cancelSession('ses_EMPTY0000000' as never, 'session_aborted')).not.toThrow();
   expect(oversight.pendingCount).toBe(0);
 });

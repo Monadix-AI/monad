@@ -14,8 +14,8 @@ import {
 
 function evt(type: Event['type'], payload: Record<string, unknown>): Event {
   return {
-    id: 'evt_1',
-    sessionId: 'ses_1',
+    id: 'evt_100000000000',
+    sessionId: 'ses_100000000000',
     type,
     actorAgentId: null,
     payload,
@@ -70,20 +70,22 @@ test('toolKind maps monad tool names to ACP kinds', () => {
 });
 
 test('agent.token becomes an agent_message_chunk', () => {
-  const u = eventToSessionUpdate(evt('agent.token', { messageId: 'msg_1', delta: 'hi', index: 0 }));
+  const u = eventToSessionUpdate(evt('agent.token', { messageId: 'msg_100000000000', delta: 'hi', index: 0 }));
   expect(u).toEqual({
     sessionUpdate: 'agent_message_chunk',
     content: { type: 'text', text: 'hi' },
-    messageId: 'msg_1'
+    messageId: 'msg_100000000000'
   });
 });
 
 test('agent.reasoning becomes an agent_thought_chunk', () => {
-  const u = eventToSessionUpdate(evt('agent.reasoning', { messageId: 'msg_1', delta: 'pondering', index: 0 }));
+  const u = eventToSessionUpdate(
+    evt('agent.reasoning', { messageId: 'msg_100000000000', delta: 'pondering', index: 0 })
+  );
   expect(u).toEqual({
     sessionUpdate: 'agent_thought_chunk',
     content: { type: 'text', text: 'pondering' },
-    messageId: 'msg_1'
+    messageId: 'msg_100000000000'
   });
 });
 
@@ -138,7 +140,7 @@ test('tool.result becomes a tool_call_update with terminal status + content', ()
 test('agent.message surfaces usage_update only when usage present', () => {
   const u = eventToSessionUpdate(
     evt('agent.message', {
-      messageId: 'msg_ABC',
+      messageId: 'msg_ABC000000000',
       text: 'x',
       usage: { inputTokens: 3, outputTokens: 7, totalTokens: 10 }
     })
@@ -160,7 +162,7 @@ test('empty agent.reasoning delta yields no update', () => {});
 
 test('agent.message falls back to inputTokens + outputTokens when totalTokens is absent', () => {
   const u = eventToSessionUpdate(
-    evt('agent.message', { messageId: 'msg_ABC', text: 'x', usage: { inputTokens: 10, outputTokens: 5 } })
+    evt('agent.message', { messageId: 'msg_ABC000000000', text: 'x', usage: { inputTokens: 10, outputTokens: 5 } })
   );
   expect(u).toMatchObject({ sessionUpdate: 'usage_update', used: 15, size: 0 });
 });

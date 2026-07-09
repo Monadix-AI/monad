@@ -2,6 +2,7 @@
 
 import type { SessionId } from '@monad/protocol';
 import type { SetStateAction } from 'react';
+import type { SkillEditorState } from '#/features/studio/skills-settings/types';
 
 import { create } from 'zustand';
 
@@ -17,6 +18,7 @@ export interface SessionUiState {
   atBottom: boolean;
   activeSkill: number;
   hiddenViewItemKeysBySession: HiddenViewMap;
+  skillPreview: SkillEditorState | null;
   skillMenuDismissed: boolean;
   setComposerInput: (value: string) => void;
   clearComposerInput: () => void;
@@ -26,6 +28,7 @@ export interface SessionUiState {
   setAtBottom: (value: boolean) => void;
   setActiveSkill: (skill: SetStateAction<number>) => void;
   setHiddenViewItemKeysBySession: (updater: (prev: HiddenViewMap) => HiddenViewMap) => void;
+  setSkillPreview: (preview: SkillEditorState | null) => void;
   setSkillMenuDismissed: (dismissed: SetStateAction<boolean>) => void;
 }
 
@@ -35,6 +38,7 @@ export const useSessionUiStore = create<SessionUiState>()((set) => ({
   atBottom: true,
   activeSkill: 0,
   hiddenViewItemKeysBySession: {},
+  skillPreview: null,
   skillMenuDismissed: false,
   setComposerInput: (value) => set({ input: value }),
   clearComposerInput: () => set({ input: '' }),
@@ -56,6 +60,7 @@ export const useSessionUiStore = create<SessionUiState>()((set) => ({
     set((state) => ({
       hiddenViewItemKeysBySession: updater(state.hiddenViewItemKeysBySession)
     })),
+  setSkillPreview: (preview) => set({ skillPreview: preview }),
   setSkillMenuDismissed: (dismissed) =>
     set((state) => ({
       skillMenuDismissed: typeof dismissed === 'function' ? dismissed(state.skillMenuDismissed) : dismissed

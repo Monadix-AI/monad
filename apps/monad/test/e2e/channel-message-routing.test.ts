@@ -845,14 +845,14 @@ for (const kind of TRANSPORTS) {
       const projectId = await createWorkplaceProject(t, projectDir);
       const sessionId = await createProjectSession(t, projectId, projectDir);
       handlers.store.upsertExternalAgentSession({
-        id: 'exa_old_claude',
+        id: 'exa_oldclaude000',
         transcriptTargetId: sessionId,
         agentName: 'claude',
         provider: 'claude-code',
         workingPath: projectDir,
         launchMode: 'pty',
         runtimeRole: 'managed-project-agent',
-        agentRuntimeId: 'exa_old_claude',
+        agentRuntimeId: 'exa_oldclaude000',
         agentRuntimeTokenHash: tokenHash(),
         lastDeliveredSeq: 0,
         lastVisibleSeq: 0,
@@ -890,14 +890,14 @@ for (const kind of TRANSPORTS) {
       const projectId = await createWorkplaceProject(t, projectDir);
       const sessionId = await createProjectSession(t, projectId, projectDir);
       handlers.store.upsertExternalAgentSession({
-        id: 'exa_old_codex',
+        id: 'exa_oldcodex0000',
         transcriptTargetId: sessionId,
         agentName: 'codex-resume-failure',
         provider: 'codex',
         workingPath: projectDir,
         launchMode: 'app-server',
         runtimeRole: 'managed-project-agent',
-        agentRuntimeId: 'exa_old_codex',
+        agentRuntimeId: 'exa_oldcodex0000',
         agentRuntimeTokenHash: tokenHash(),
         lastDeliveredSeq: 0,
         lastVisibleSeq: 0,
@@ -940,7 +940,7 @@ for (const kind of TRANSPORTS) {
         .listExternalAgentSessionsForTranscriptTarget(sessionId)
         .find((candidate) => candidate.agentName === 'codex-resume-failure' && candidate.state === 'running');
       expect(coldStarted?.providerSessionRef).toBe('codex-thread-fresh');
-      expect(handlers.store.getExternalAgentSession('exa_old_codex')?.providerSessionRef).toBeNull();
+      expect(handlers.store.getExternalAgentSession('exa_oldcodex0000')?.providerSessionRef).toBeNull();
       if (coldStarted)
         await t.fetch(
           `/v1/external-agent-sessions/${coldStarted.id}/stop?transcriptTargetId=${sessionId}`,

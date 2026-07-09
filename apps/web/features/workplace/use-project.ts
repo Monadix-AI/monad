@@ -4,6 +4,7 @@
 // Experience-specific transcript, rail, and composer projections live in atoms.
 
 import type {
+  ExternalAgentSessionId,
   ExternalAgentSessionView,
   ProfileView,
   ProjectId,
@@ -30,6 +31,7 @@ import {
   workplaceProjectAdapter,
   workplaceProjectSelectors
 } from '@monad/client-rtk';
+import { externalAgentSessionIdSchema } from '@monad/protocol';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useAcpAgentSettings } from '#/hooks/use-acp-agent-settings';
@@ -194,20 +196,22 @@ export function useProject(
   // long turn's events push the launch record out of it. Refetch the durable session list the moment a
   // new external-agent session id shows up live, so the REST-backed join view takes over before that
   // happens. Tracked in a ref (not state) so this never re-renders on its own.
-  const refetchedExternalAgentSessionIds = useRef(new Set<string>());
+  const refetchedExternalAgentSessionIds = useRef(new Set<ExternalAgentSessionId>());
   useEffect(() => {
     refetchedExternalAgentSessionIds.current.clear();
   }, []);
   useEffect(() => {
     const knownIds = new Set(externalAgentSessions.map((session) => session.id));
-    const unseenLiveId = liveTools.find(
-      (tool) =>
-        tool.tool.startsWith('external-agent:') &&
-        !knownIds.has(tool.id) &&
-        !refetchedExternalAgentSessionIds.current.has(tool.id)
-    );
+    const unseenLiveId = liveTools.find((tool) => {
+      if (!tool.tool.startsWith('external-agent:')) return false;
+      const parsedId = externalAgentSessionIdSchema.safeParse(tool.id);
+      if (!parsedId.success) return false;
+      return !knownIds.has(parsedId.data) && !refetchedExternalAgentSessionIds.current.has(parsedId.data);
+    });
     if (!unseenLiveId) return;
-    refetchedExternalAgentSessionIds.current.add(unseenLiveId.id);
+    const parsedId = externalAgentSessionIdSchema.safeParse(unseenLiveId.id);
+    if (!parsedId.success) return;
+    refetchedExternalAgentSessionIds.current.add(parsedId.data);
     void externalAgentSessionsQ.refetch();
   }, [liveTools, externalAgentSessions, externalAgentSessionsQ]);
 

@@ -122,7 +122,7 @@ export function createChannelTestHarness(
   const abort = new AbortController();
 
   const config: ChannelAtomConfig = {
-    id: 'chn_TESTHARNESS',
+    id: 'chn_TESTHARNESS0',
     type: 'test',
     label: 'Test',
     options: {},

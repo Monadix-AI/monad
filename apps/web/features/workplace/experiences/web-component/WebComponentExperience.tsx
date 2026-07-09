@@ -8,7 +8,7 @@ import { WORKSPACE_EXPERIENCE_API_VERSION } from '@monad/sdk-experience';
 import { createElement, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useT } from '#/components/I18nProvider';
-import { studioPath } from '#/features/routes/route-paths';
+import { studioPath } from '#/features/shell/routing/paths';
 import { pushShellUrl } from '#/hooks/use-shell-location';
 
 type WorkspaceExperienceElement = HTMLElement & {

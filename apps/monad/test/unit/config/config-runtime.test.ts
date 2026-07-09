@@ -26,7 +26,7 @@ describe('resolveEffectiveSandboxMode', () => {
   });
 
   test('createDefaultConfig ships with the global restriction off', () => {
-    const cfg = createDefaultConfig('prn_x', 'tester');
+    const cfg = createDefaultConfig('prn_x00000000000', 'tester');
     expect(cfg.agent.globalSandbox).toEqual({ enabled: false, mode: 'workspace' });
     expect(cfg.agent.sandbox.mode).toBe('workspace');
   });

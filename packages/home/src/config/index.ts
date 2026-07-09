@@ -1,3 +1,5 @@
+import type { PrincipalId } from '@monad/protocol';
+
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
@@ -10,6 +12,7 @@ import {
   modelKindSchema,
   modelRolesSchema,
   KNOWN_PROVIDER_TYPES as PROTOCOL_KNOWN_PROVIDER_TYPES,
+  principalIdSchema,
   sandboxModeSchema,
   userAvatarDataUrlSchema
 } from '@monad/protocol';
@@ -165,7 +168,7 @@ function defaultDeveloperMode(): boolean {
 const monadConfigSchema = z.object({
   version: z.literal(CURRENT_CONFIG_VERSION),
   principal: z.object({
-    id: z.string().regex(/^prn_/, 'principal id must start with prn_'),
+    id: principalIdSchema,
     displayName: z.string(),
     verification: z.enum(['unverified', 'email', 'domain', 'attested'])
   }),
@@ -376,7 +379,7 @@ export type MonadConfig = z.infer<typeof monadConfigSchema>;
 export const monadSystemConfigSchema = z.object({
   version: z.literal(CURRENT_CONFIG_VERSION),
   principal: z.object({
-    id: z.string().regex(/^prn_/, 'principal id must start with prn_'),
+    id: principalIdSchema,
     displayName: z.string(),
     verification: z.enum(['unverified', 'email', 'domain', 'attested'])
   }),
@@ -514,7 +517,7 @@ export type MonadProfile = z.infer<typeof monadProfileSchema>;
 export const SCHEMA_CONTENT = toMonadJsonSchema(monadSystemConfigSchema);
 export const PROFILE_SCHEMA_CONTENT = toMonadJsonSchema(monadProfileSchema);
 
-export function createDefaultConfig(principalId: string, displayName: string): MonadConfig {
+export function createDefaultConfig(principalId: PrincipalId, displayName: string): MonadConfig {
   return {
     version: CURRENT_CONFIG_VERSION,
     principal: { id: principalId, displayName, verification: 'unverified' },

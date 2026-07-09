@@ -1,6 +1,6 @@
 'use client';
 
-import type { ProjectId, Session, SessionId, WorkspaceAction } from '@monad/protocol';
+import type { ProjectId, SessionId, WorkspaceAction } from '@monad/protocol';
 import type { ProjectExperienceDefinition } from '#/features/workplace/experiences/types';
 import type { ProjectController } from '#/features/workplace/use-project';
 
@@ -32,9 +32,9 @@ import { Avatar } from '@monad/ui/components/AgentAvatar';
 import { useState } from 'react';
 
 import { useT } from '#/components/I18nProvider';
+import { PanelShellBreadcrumbHeader } from '#/components/ui/panel-shell';
 import { getProjectExperience } from '#/features/workplace/experiences/registry';
 import { fileManagerLabel, terminalLabel, workdirLabel } from '#/features/workplace/project-shell/project-header-utils';
-import { ProjectSessionTabs } from './ProjectSessionTabs';
 
 interface ProjectTopBarProps {
   mode: string;
@@ -43,9 +43,7 @@ interface ProjectTopBarProps {
   projectWorkdir?: string;
   projectId: ProjectId | null;
   sessionId: SessionId | null;
-  sessions: Session[];
-  onSwitchSession: (id: SessionId) => void;
-  onCloseSession: (id: SessionId) => Promise<void>;
+  sessionTitle: string | null;
   experiences: ProjectExperienceDefinition[];
   onModeChange: (mode: string) => void;
   onOpenSettings: () => void;
@@ -58,6 +56,17 @@ const experienceIcon: Record<string, typeof MessageSquareCodeIcon> = {
 
 function iconForExperience(experience: ProjectExperienceDefinition): typeof MessageSquareCodeIcon {
   return experienceIcon[experience.icon ?? ''] ?? MessageSquareCodeIcon;
+}
+
+export function projectTopBarBreadcrumbItems({
+  projectName,
+  sessionTitle
+}: {
+  projectName: string;
+  sessionTitle: string | null;
+}): string[] {
+  const title = sessionTitle?.trim();
+  return title ? [projectName, title] : [projectName];
 }
 
 function ProjectTopBarWorkdir({
@@ -275,56 +284,18 @@ export function ProjectTopBar({
   projectWorkdir,
   projectId,
   sessionId,
-  sessions,
-  onSwitchSession,
-  onCloseSession,
+  sessionTitle,
   experiences,
   onModeChange,
   onOpenSettings
 }: ProjectTopBarProps) {
   const t = useT();
   const activeExperience = getProjectExperience(mode, experiences);
+  const breadcrumbItems = projectTopBarBreadcrumbItems({ projectName, sessionTitle });
 
   return (
     <>
       <style>{`
-        .project-topbar {
-          flex-shrink: 0;
-          height: 52px;
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          padding: 0 14px;
-          border-bottom: 1px solid rgb(var(--borderColor-secondary) / .12);
-          background: rgb(var(--backgroundColor-surface-container) / .78);
-          color: rgb(var(--textColor-primary));
-          z-index: 20;
-        }
-        .app-main-sidebar-collapsed .project-topbar {
-          padding-left: 8.5rem;
-        }
-        .project-topbar-main {
-          min-width: 0;
-          display: flex;
-          align-items: center;
-          gap: 10px;
-        }
-        .project-topbar-kicker {
-          font-family: var(--font-mono, ui-monospace, monospace);
-          font-size: 10px;
-          font-weight: 600;
-          color: rgb(var(--textColor-secondary) / .68);
-          text-transform: uppercase;
-        }
-        .project-topbar-name {
-          min-width: 0;
-          max-width: 32vw;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-          font-size: 13px;
-          font-weight: 500;
-        }
         .project-topbar-workdir,
         .project-topbar-workdir-input {
           height: 24px;
@@ -459,44 +430,49 @@ export function ProjectTopBar({
           color: rgb(var(--textColor-primary));
         }
       `}</style>
-      <div className="panel-shell-header project-topbar project-topbar-clean">
-        <div className="project-topbar-main">
-          <span className="project-topbar-name project-topbar-name-returned">{projectName}</span>
+      <PanelShellBreadcrumbHeader
+        actions={
+          <>
+            <ProjectTopBarParticipants participants={participants} />
+            <ProjectTopBarExperienceSwitch
+              activeExperience={activeExperience}
+              experiences={experiences}
+              onModeChange={onModeChange}
+            />
+            <button
+              aria-label={t('web.project.openSettings')}
+              className="project-topbar-settings"
+              onClick={onOpenSettings}
+              title={t('web.project.settings')}
+              type="button"
+            >
+              <HugeiconsIcon
+                icon={Settings02Icon}
+                size={14}
+              />
+            </button>
+          </>
+        }
+        badge={
           <ProjectTopBarWorkdir
             path={projectWorkdir}
             projectId={projectId}
             sessionId={sessionId}
           />
-        </div>
-        {projectId ? (
-          <ProjectSessionTabs
-            activeSessionId={sessionId}
-            onCloseSession={onCloseSession}
-            onSwitchSession={onSwitchSession}
-            projectId={projectId}
-            sessions={sessions}
-          />
-        ) : null}
-        <div className="project-topbar-spacer" />
-        <ProjectTopBarParticipants participants={participants} />
-        <ProjectTopBarExperienceSwitch
-          activeExperience={activeExperience}
-          experiences={experiences}
-          onModeChange={onModeChange}
-        />
-        <button
-          aria-label={t('web.project.openSettings')}
-          className="project-topbar-settings"
-          onClick={onOpenSettings}
-          title={t('web.project.settings')}
-          type="button"
-        >
-          <HugeiconsIcon
-            icon={Settings02Icon}
-            size={14}
-          />
-        </button>
-      </div>
+        }
+        className="project-topbar project-topbar-clean"
+        crumbs={breadcrumbItems.map((item, index) => ({
+          id: index === 0 ? 'project' : `session:${index}`,
+          label: (
+            <span
+              className="project-topbar-name"
+              title={item}
+            >
+              {item}
+            </span>
+          )
+        }))}
+      />
     </>
   );
 }

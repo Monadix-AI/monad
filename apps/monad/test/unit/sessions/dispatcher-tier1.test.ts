@@ -8,9 +8,9 @@ import { buildHandlers, mockModel } from '../../helpers.ts';
 
 test('sessionGet throws INVALID_PARAMS for an unknown session', async () => {
   const d = buildHandlers(mockModel(['hi']));
-  await expect(d.session.get({ id: 'ses_nope' as SessionId })).rejects.toBeInstanceOf(HandlerError);
+  await expect(d.session.get({ id: 'ses_nope00000000' as SessionId })).rejects.toBeInstanceOf(HandlerError);
   try {
-    await d.session.get({ id: 'ses_nope' as SessionId });
+    await d.session.get({ id: 'ses_nope00000000' as SessionId });
   } catch (e) {
     expect((e as HandlerError).kind).toBe('invalid');
   }

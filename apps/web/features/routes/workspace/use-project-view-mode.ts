@@ -8,45 +8,57 @@ import { create } from 'zustand';
 // registry instead of baking a built-in id into the host.
 export type ProjectViewMode = string;
 
-const storageKey = (projectId: string): string => `monad.projectViewMode:${projectId}`;
+export function projectViewModeStorageKey({
+  projectId,
+  sessionId
+}: {
+  projectId: string | null;
+  sessionId: string | null;
+}): string | null {
+  if (sessionId) return `monad.projectViewMode.session:${sessionId}`;
+  if (projectId) return `monad.projectViewMode:${projectId}`;
+  return null;
+}
 
-function loadMode(projectId: string): ProjectViewMode | null {
+function loadMode(key: string): ProjectViewMode | null {
   if (typeof window === 'undefined') return null;
-  return window.localStorage.getItem(storageKey(projectId));
+  return window.localStorage.getItem(key);
 }
 
 interface ViewModeStore {
   modes: Record<string, ProjectViewMode>;
-  set: (projectId: string, mode: ProjectViewMode) => void;
+  set: (key: string, mode: ProjectViewMode) => void;
 }
 
 const useViewModeStore = create<ViewModeStore>((set) => ({
   modes: {},
-  set: (projectId, mode) => {
-    if (typeof window !== 'undefined') window.localStorage.setItem(storageKey(projectId), mode);
-    set((state) => ({ modes: { ...state.modes, [projectId]: mode } }));
+  set: (key, mode) => {
+    if (typeof window !== 'undefined') window.localStorage.setItem(key, mode);
+    set((state) => ({ modes: { ...state.modes, [key]: mode } }));
   }
 }));
 
 export function useProjectViewMode(
-  projectId: string | null
+  projectId: string | null,
+  sessionId: string | null = null
 ): [ProjectViewMode | null, (mode: ProjectViewMode) => void] {
-  const stored = useViewModeStore((state) => (projectId ? state.modes[projectId] : undefined));
+  const key = projectViewModeStorageKey({ projectId, sessionId });
+  const stored = useViewModeStore((state) => (key ? state.modes[key] : undefined));
   const setInStore = useViewModeStore((state) => state.set);
 
   // Hydrate from localStorage after mount because the value belongs to the browser runtime.
   useEffect(() => {
-    if (projectId && useViewModeStore.getState().modes[projectId] === undefined) {
-      const savedMode = loadMode(projectId);
-      if (savedMode) setInStore(projectId, savedMode);
+    if (key && useViewModeStore.getState().modes[key] === undefined) {
+      const savedMode = loadMode(key);
+      if (savedMode) setInStore(key, savedMode);
     }
-  }, [projectId, setInStore]);
+  }, [key, setInStore]);
 
   const setMode = useCallback(
     (next: ProjectViewMode) => {
-      if (projectId) setInStore(projectId, next);
+      if (key) setInStore(key, next);
     },
-    [projectId, setInStore]
+    [key, setInStore]
   );
 
   return [stored ?? null, setMode];

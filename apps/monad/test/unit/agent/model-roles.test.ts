@@ -245,5 +245,5 @@ test('resolveAgentModelRole: per-agent override > profile role > fallback', () =
 
 test('the default config carries an empty manual model-kind override map', () => {
   // The override layer ("providerId:modelId" → kind) starts empty; operators opt in via config.
-  expect(createDefaultConfig('prn_x', 'x').model.kinds).toEqual({});
+  expect(createDefaultConfig('prn_x00000000000', 'x').model.kinds).toEqual({});
 });

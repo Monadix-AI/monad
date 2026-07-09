@@ -47,9 +47,9 @@ test('a one-shot fires with the prompt then retires itself', async () => {
   const { service } = svc(async (prompt, sessionId) => {
     fired.push({ prompt, sessionId });
   });
-  service.create({ prompt: 'ping', delayMs: 5, sessionId: 'ses_X' });
+  service.create({ prompt: 'ping', delayMs: 5, sessionId: 'ses_X00000000000' });
   await Bun.sleep(40);
-  expect(fired).toEqual([{ prompt: 'ping', sessionId: 'ses_X' }]);
+  expect(fired).toEqual([{ prompt: 'ping', sessionId: 'ses_X00000000000' }]);
   service.dispose();
 });
 
@@ -101,7 +101,7 @@ function toolByName(service: ScheduleService, name: string) {
 
 test('schedule tools create, list, and cancel through the service', async () => {
   const { service } = svc();
-  const ctx = { sessionId: 'ses_T', log: () => {} };
+  const ctx = { sessionId: 'ses_T00000000000', log: () => {} };
 
   const created = (await toolByName(service, 'schedule_create').run({ prompt: 'job', cron: '*/5 * * * *' }, ctx))
     .metadata as {

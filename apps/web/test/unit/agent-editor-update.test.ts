@@ -5,8 +5,8 @@ import { expect, test } from 'bun:test';
 import { buildAgentEditorUpdate } from '#/features/studio/agent-workshop/agent-editor-update';
 
 const agent = {
-  id: 'agt_1',
-  principalId: 'prn_1',
+  id: 'agt_100000000000',
+  principalId: 'prn_100000000000',
   name: 'Reviewer',
   capabilities: [],
   declaredScopes: [],

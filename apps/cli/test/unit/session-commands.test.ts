@@ -41,7 +41,7 @@ function ok<T>(data: T) {
 
 test('session new: creates session and prints id', async () => {
   const client = {
-    treaty: { v1: { sessions: { post: async () => ok({ sessionId: 'ses_abc' }) } } }
+    treaty: { v1: { sessions: { post: async () => ok({ sessionId: 'ses_abc000000000' }) } } }
   };
   await silently(() => newSession.run(ctx(['My session'], {}, client)));
 });
@@ -59,7 +59,7 @@ test('session new: throws when daemon returns null', async () => {
 // ── session list ────────────────────────────────────────────────────────────────
 
 test('session list: prints table when sessions exist', async () => {
-  const sessions = [{ id: 'ses_1', title: 'Test', state: 'active', archived: false }];
+  const sessions = [{ id: 'ses_100000000000', title: 'Test', state: 'active', archived: false }];
   const client = {
     treaty: {
       v1: {
@@ -105,7 +105,7 @@ test('session abort: aborts an in-flight run', async () => {
       }
     }
   };
-  await silently(() => abort.run(ctx(['ses_1'], {}, client)));
+  await silently(() => abort.run(ctx(['ses_100000000000'], {}, client)));
 });
 
 test('session abort: reports nothing to abort when session is idle', async () => {
@@ -116,7 +116,7 @@ test('session abort: reports nothing to abort when session is idle', async () =>
       }
     }
   };
-  await silently(() => abort.run(ctx(['ses_1'], {}, client)));
+  await silently(() => abort.run(ctx(['ses_100000000000'], {}, client)));
 });
 
 test('session abort: throws usage error when session id is missing', async () => {
@@ -130,11 +130,11 @@ test('session branch: forks a child session', async () => {
   const client = {
     treaty: {
       v1: {
-        sessions: (_: unknown) => ({ branch: { post: async () => ok({ sessionId: 'ses_child' }) } })
+        sessions: (_: unknown) => ({ branch: { post: async () => ok({ sessionId: 'ses_child0000000' }) } })
       }
     }
   };
-  await silently(() => branch.run(ctx(['ses_parent', 'fork title'], {}, client)));
+  await silently(() => branch.run(ctx(['ses_parent000000', 'fork title'], {}, client)));
 });
 
 test('session branch: throws usage error when session id is missing', async () => {
@@ -151,19 +151,19 @@ test('session restore: rewinds to a message checkpoint', async () => {
     treaty: {
       v1: {
         sessions: (_: unknown) => ({
-          restore: { post: async () => ok({ restoredCount: 3, newHeadMessageId: 'msg_x' }) }
+          restore: { post: async () => ok({ restoredCount: 3, newHeadMessageId: 'msg_x00000000000' }) }
         })
       }
     }
   };
-  await silently(() => restore.run(ctx(['ses_1', 'msg_x'], {}, client)));
+  await silently(() => restore.run(ctx(['ses_100000000000', 'msg_x00000000000'], {}, client)));
 });
 
 test('session restore: throws usage error when missing args', async () => {
   const client = {
     treaty: { v1: { sessions: (_: unknown) => ({ restore: { post: async () => ok({}) } }) } }
   };
-  await expect(silently(() => restore.run(ctx(['ses_1'], {}, client)))).rejects.toBeInstanceOf(CliError);
+  await expect(silently(() => restore.run(ctx(['ses_100000000000'], {}, client)))).rejects.toBeInstanceOf(CliError);
   await expect(silently(() => restore.run(ctx([], {}, client)))).rejects.toBeInstanceOf(CliError);
 });
 
@@ -177,7 +177,7 @@ test('session rm: deletes a session', async () => {
       }
     }
   };
-  await silently(() => rm.run(ctx(['ses_1'], {}, client)));
+  await silently(() => rm.run(ctx(['ses_100000000000'], {}, client)));
 });
 
 test('session rm: throws usage error when session id is missing', async () => {
@@ -197,7 +197,7 @@ test('session reset: clears messages and reports count', async () => {
       }
     }
   };
-  await silently(() => reset.run(ctx(['ses_1'], {}, client)));
+  await silently(() => reset.run(ctx(['ses_100000000000'], {}, client)));
 });
 
 test('session reset: handles zero messages cleared', async () => {
@@ -208,7 +208,7 @@ test('session reset: handles zero messages cleared', async () => {
       }
     }
   };
-  await silently(() => reset.run(ctx(['ses_1'], {}, client)));
+  await silently(() => reset.run(ctx(['ses_100000000000'], {}, client)));
 });
 
 test('session reset: throws usage error when session id is missing', async () => {
@@ -221,7 +221,7 @@ test('session reset: throws usage error when session id is missing', async () =>
 // ── session show ────────────────────────────────────────────────────────────────
 
 test('session show: prints session as JSON', async () => {
-  const session = { id: 'ses_1', title: 'Test', state: 'active', archived: false };
+  const session = { id: 'ses_100000000000', title: 'Test', state: 'active', archived: false };
   const client = {
     treaty: {
       v1: {
@@ -229,7 +229,7 @@ test('session show: prints session as JSON', async () => {
       }
     }
   };
-  await silently(() => show.run(ctx(['ses_1'], {}, client)));
+  await silently(() => show.run(ctx(['ses_100000000000'], {}, client)));
 });
 
 test('session show: throws usage error when session id is missing', async () => {
@@ -243,9 +243,9 @@ test('session show: throws usage error when session id is missing', async () => 
 
 test('session tree: shows lineage with ancestors and descendants', async () => {
   const result = {
-    ancestors: [{ id: 'ses_0', title: 'Root' }],
-    self: { id: 'ses_1', title: 'Current' },
-    descendants: [{ id: 'ses_2', title: 'Child' }]
+    ancestors: [{ id: 'ses_000000000000', title: 'Root' }],
+    self: { id: 'ses_100000000000', title: 'Current' },
+    descendants: [{ id: 'ses_200000000000', title: 'Child' }]
   };
   const client = {
     treaty: {
@@ -254,13 +254,13 @@ test('session tree: shows lineage with ancestors and descendants', async () => {
       }
     }
   };
-  await silently(() => tree.run(ctx(['ses_1'], {}, client)));
+  await silently(() => tree.run(ctx(['ses_100000000000'], {}, client)));
 });
 
 test('session tree: handles root session (no ancestors or descendants)', async () => {
   const result = {
     ancestors: [],
-    self: { id: 'ses_1', title: 'Root' },
+    self: { id: 'ses_100000000000', title: 'Root' },
     descendants: []
   };
   const client = {
@@ -270,7 +270,7 @@ test('session tree: handles root session (no ancestors or descendants)', async (
       }
     }
   };
-  await silently(() => tree.run(ctx(['ses_1'], {}, client)));
+  await silently(() => tree.run(ctx(['ses_100000000000'], {}, client)));
 });
 
 test('session tree: throws usage error when session id is missing', async () => {
@@ -285,7 +285,7 @@ test('session tree: throws usage error when session id is missing', async () => 
 test('session search: returns hits for keyword query', async () => {
   const hits = [
     {
-      transcriptTargetId: 'ses_1',
+      transcriptTargetId: 'ses_100000000000',
       transcriptTargetTitle: 'Test',
       matchedBy: 'keyword',
       score: 0.95,
@@ -364,7 +364,7 @@ test('usage errors always carry EXIT.USAGE code', async () => {
   expect(await check(() => abort.run(ctx([], {}, noClient)))).toBe(EXIT.USAGE);
   expect(await check(() => rm.run(ctx([], {}, noClient)))).toBe(EXIT.USAGE);
   expect(await check(() => reset.run(ctx([], {}, noClient)))).toBe(EXIT.USAGE);
-  expect(await check(() => restore.run(ctx(['ses_1'], {}, noClient)))).toBe(EXIT.USAGE);
+  expect(await check(() => restore.run(ctx(['ses_100000000000'], {}, noClient)))).toBe(EXIT.USAGE);
   expect(await check(() => show.run(ctx([], {}, noClient)))).toBe(EXIT.USAGE);
   expect(await check(() => tree.run(ctx([], {}, noClient)))).toBe(EXIT.USAGE);
   expect(await check(() => search.run(ctx([], {}, noClient)))).toBe(EXIT.USAGE);

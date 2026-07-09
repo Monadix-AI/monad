@@ -226,7 +226,8 @@ function fakeClient(handlers: Record<string, Handler> = {}): MonadClient {
                   },
                   arg
                 ),
-              post: (body: unknown) => resolve('createWorkplaceProject', '$raw', { projectId: 'ses_project' }, body)
+              post: (body: unknown) =>
+                resolve('createWorkplaceProject', '$raw', { projectId: 'ses_project00000' }, body)
             }
           )
         },
@@ -728,9 +729,9 @@ test('setInitHome: posts home config and invalidates InitStatus tag', async () =
 test('workplace projects: list/create/update/delete use the typed treaty project routes', async () => {
   const calls: unknown[] = [];
   const project = {
-    id: 'ses_project',
+    id: 'ses_project00000',
     title: 'Workplace: alpha',
-    ownerPrincipalId: 'prn_owner',
+    ownerPrincipalId: 'prn_owner0000000',
     state: 'active',
     archived: false,
     createdAt: '2026-07-02T00:00:00.000Z',

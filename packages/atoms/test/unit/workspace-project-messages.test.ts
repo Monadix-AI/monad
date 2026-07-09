@@ -13,8 +13,8 @@ configureExternalAgentObservationAdapterResolver((provider) =>
 );
 
 const externalAgentSession = (overrides: Partial<ExternalAgentSessionView> = {}): ExternalAgentSessionView => ({
-  id: 'exa_01KWGEMINI000000000000000',
-  sessionId: 'ses_01KWPROJECT00000000000000',
+  id: 'exa_01KWGEMIprD4',
+  sessionId: 'ses_01KWPROJ2tDh',
   agentName: 'gemini',
   provider: 'gemini',
   productIcon: 'gemini',
@@ -22,7 +22,7 @@ const externalAgentSession = (overrides: Partial<ExternalAgentSessionView> = {})
   launchMode: 'pty',
   approvalOwnership: 'provider-owned',
   runtimeRole: 'managed-project-agent',
-  agentRuntimeId: 'exa_01KWGEMINI000000000000000',
+  agentRuntimeId: 'exa_01KWGEMIprD4',
   lastDeliveredSeq: 0,
   lastVisibleSeq: 0,
   state: 'running',
@@ -51,7 +51,7 @@ test('external agent sessions project to durable chat messages', () => {
   const message = __workplaceProjectMessageTest.externalAgentSessionMessage(externalAgentSession());
 
   expect(message).toMatchObject({
-    id: 'external-agent-session:exa_01KWGEMINI000000000000000',
+    id: 'external-agent-session:exa_01KWGEMIprD4',
     authorName: 'gemini',
     icon: 'gemini',
     kind: 'system',
@@ -63,7 +63,7 @@ test('external agent sessions project to durable chat messages', () => {
       icon: 'gemini',
       tag: 'Gemini'
     },
-    externalAgentSessionId: 'exa_01KWGEMINI000000000000000',
+    externalAgentSessionId: 'exa_01KWGEMIprD4',
     streaming: false,
     orderKey: '2026-06-29T10:00:00.000Z'
   });
@@ -105,11 +105,11 @@ test('external agent developer messages expose only a follow entry', () => {
   const message = __workplaceProjectMessageTest.externalAgentSessionDeveloperMessage(externalAgentSession());
 
   expect(message).toMatchObject({
-    id: 'external-agent-session-developer:exa_01KWGEMINI000000000000000',
+    id: 'external-agent-session-developer:exa_01KWGEMIprD4',
     kind: 'developer',
     tag: 'DEV',
     text: 'CLI stream available',
-    externalAgentSessionId: 'exa_01KWGEMINI000000000000000',
+    externalAgentSessionId: 'exa_01KWGEMIprD4',
     developerOnly: true,
     orderKey: '2026-06-29T10:00:00.000Z:developer'
   });
@@ -125,7 +125,7 @@ test('external agent durable sessions keep timeline populated after live tool se
 
   expect(messages).toHaveLength(1);
   expect(messages[0]).toMatchObject({
-    id: 'external-agent-session:exa_01KWGEMINI000000000000000',
+    id: 'external-agent-session:exa_01KWGEMIprD4',
     authorName: 'gemini',
     kind: 'system',
     text: 'joined the project',
@@ -138,7 +138,7 @@ test('Claude server errors project as agent-scoped system messages', () => {
     persistedMessages: [],
     externalAgentSessions: [
       externalAgentSession({
-        id: 'exa_claude_error',
+        id: 'exa_claudeerror0',
         agentName: 'pmem_claude_1234',
         provider: 'claude-code',
         productIcon: 'claude-code',
@@ -159,15 +159,15 @@ test('Claude server errors project as agent-scoped system messages', () => {
   });
 
   expect(messages.map((message) => [message.id, message.text])).toEqual([
-    ['external-agent-session:exa_claude_error', 'joined the project'],
-    ['external-agent-session-error:exa_claude_error:exa_claude_error:result', 'encountered an error']
+    ['external-agent-session:exa_claudeerror0', 'joined the project'],
+    ['external-agent-session-error:exa_claudeerror0:exa_claudeerror0:result', 'encountered an error']
   ]);
   expect(messages[1]).toMatchObject({
     authorId: 'pmem_claude_1234',
     authorName: 'Steve',
     kind: 'system',
     tag: 'Claude',
-    externalAgentSessionId: 'exa_claude_error',
+    externalAgentSessionId: 'exa_claudeerror0',
     systemTone: 'error',
     systemDetail: 'API Error: overloaded_error. Claude Code is currently overloaded.',
     agentChip: {
@@ -186,7 +186,7 @@ test('external agent developer messages are projected only when explicitly enabl
     liveItems: [],
     liveTools: [
       {
-        id: 'exa_live',
+        id: 'exa_live00000000',
         kind: 'tool',
         tool: 'external-agent:codex',
         input: { agent: 'codex', provider: 'codex', productIcon: 'codex' },
@@ -202,7 +202,7 @@ test('external agent developer messages are projected only when explicitly enabl
     liveItems: [],
     liveTools: [
       {
-        id: 'exa_live',
+        id: 'exa_live00000000',
         kind: 'tool',
         tool: 'external-agent:codex',
         input: { agent: 'codex', provider: 'codex', productIcon: 'codex' },
@@ -215,7 +215,7 @@ test('external agent developer messages are projected only when explicitly enabl
   });
 
   expect(visible.find((message) => message.kind === 'developer')).toMatchObject({
-    id: 'external-agent-session-developer:exa_live',
+    id: 'external-agent-session-developer:exa_live00000000',
     text: 'CLI stream available'
   });
 });
@@ -225,7 +225,7 @@ test('external agent runtime lifecycle projects the current join per project mem
     persistedMessages: [],
     externalAgentSessions: [
       externalAgentSession({
-        id: 'exa_first',
+        id: 'exa_first0000000',
         agentName: 'codex',
         provider: 'codex',
         productIcon: 'codex',
@@ -235,7 +235,7 @@ test('external agent runtime lifecycle projects the current join per project mem
         exitedAt: '2026-06-29T10:01:00.000Z'
       }),
       externalAgentSession({
-        id: 'exa_second',
+        id: 'exa_second000000',
         agentName: 'codex',
         provider: 'codex',
         productIcon: 'codex',
@@ -251,7 +251,7 @@ test('external agent runtime lifecycle projects the current join per project mem
 
   expect(messages).toHaveLength(1);
   expect(messages[0]).toMatchObject({
-    id: 'external-agent-session:exa_second',
+    id: 'external-agent-session:exa_second000000',
     authorName: 'codex',
     text: 'joined the project'
   });
@@ -264,7 +264,7 @@ test('managed external agent timeline messages use display names instead of runt
     persistedMessages: [],
     externalAgentSessions: [
       externalAgentSession({
-        id: 'exa_display',
+        id: 'exa_display00000',
         agentName: 'pmem_codex_abcd1234',
         provider: 'codex',
         productIcon: 'codex'
@@ -273,7 +273,7 @@ test('managed external agent timeline messages use display names instead of runt
     liveItems: [
       {
         kind: 'message',
-        id: 'msg_cli_reply',
+        id: 'msg_clireply0000',
         role: 'assistant',
         agentName: 'pmem_codex_abcd1234',
         source: 'managed-external-agent',
@@ -300,7 +300,7 @@ test('managed external agent reasoning-only streaming messages stay off the tran
     liveItems: [
       {
         kind: 'message',
-        id: 'msg_codex_thinking',
+        id: 'msg_codexthi658B',
         role: 'assistant',
         agentName: 'pmem_codex_abcd1234',
         source: 'managed-external-agent',
@@ -321,7 +321,7 @@ test('managed external agent terminal reasoning-only messages stay off the trans
     liveItems: [
       {
         kind: 'message',
-        id: 'msg_codex_orphaned_thinking',
+        id: 'msg_codexorpsSFT',
         role: 'assistant',
         agentName: 'pmem_codex_abcd1234',
         source: 'managed-external-agent',
@@ -342,7 +342,7 @@ test('external agent live start projects joined without raw terminal output', ()
     liveItems: [],
     liveTools: [
       {
-        id: 'exa_live',
+        id: 'exa_live00000000',
         kind: 'tool',
         tool: 'external-agent:claude-code',
         input: { agent: 'claude-code', provider: 'claude-code', productIcon: 'claude-code' },
@@ -354,18 +354,18 @@ test('external agent live start projects joined without raw terminal output', ()
     showDeveloperOnlyMessages: true
   });
 
-  const joined = messages.find((message) => message.id === 'external-agent-session:exa_live');
+  const joined = messages.find((message) => message.id === 'external-agent-session:exa_live00000000');
   const developer = messages.find((message) => message.kind === 'developer');
   expect(joined).toMatchObject({
     kind: 'system',
     authorName: 'claude-code',
     text: 'joined the project',
-    externalAgentSessionId: 'exa_live'
+    externalAgentSessionId: 'exa_live00000000'
   });
   expect(developer).toMatchObject({
-    id: 'external-agent-session-developer:exa_live',
+    id: 'external-agent-session-developer:exa_live00000000',
     text: 'CLI stream available',
-    externalAgentSessionId: 'exa_live'
+    externalAgentSessionId: 'exa_live00000000'
   });
 });
 
@@ -376,7 +376,7 @@ test('external agent live starts project only one member join per agent', () => 
     liveItems: [],
     liveTools: [
       {
-        id: 'exa_first',
+        id: 'exa_first0000000',
         kind: 'tool',
         tool: 'external-agent:codex',
         input: { agent: 'pmem_codex_a', provider: 'codex', productIcon: 'codex' },
@@ -384,7 +384,7 @@ test('external agent live starts project only one member join per agent', () => 
         seq: '001'
       } as never,
       {
-        id: 'exa_second',
+        id: 'exa_second000000',
         kind: 'tool',
         tool: 'external-agent:codex',
         input: { agent: 'pmem_codex_a', provider: 'codex', productIcon: 'codex' },
@@ -397,10 +397,10 @@ test('external agent live starts project only one member join per agent', () => 
 
   expect(messages.filter((message) => message.text === 'joined the project')).toHaveLength(1);
   expect(messages.find((message) => message.text === 'joined the project')).toMatchObject({
-    id: 'external-agent-session:exa_first',
+    id: 'external-agent-session:exa_first0000000',
     authorId: 'pmem_codex_a',
     authorName: 'A',
-    externalAgentSessionId: 'exa_first'
+    externalAgentSessionId: 'exa_first0000000'
   });
 });
 
@@ -408,7 +408,7 @@ test('managed external agent reasoning-only fanout does not project a system div
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [
       {
-        id: 'msg_user',
+        id: 'msg_user00000000',
         authorId: 'me',
         authorName: 'Operator',
         av: 'ME',
@@ -423,7 +423,7 @@ test('managed external agent reasoning-only fanout does not project a system div
     liveItems: [
       {
         kind: 'message',
-        id: 'msg_codex_thinking',
+        id: 'msg_codexthi658B',
         role: 'assistant',
         agentName: 'codex',
         source: 'managed-external-agent',
@@ -433,7 +433,7 @@ test('managed external agent reasoning-only fanout does not project a system div
       },
       {
         kind: 'message',
-        id: 'msg_claude_thinking',
+        id: 'msg_claudethDTNA',
         role: 'assistant',
         agentName: 'claude-code',
         source: 'managed-external-agent',
@@ -446,14 +446,14 @@ test('managed external agent reasoning-only fanout does not project a system div
   });
 
   expect(messages).toHaveLength(1);
-  expect(messages.map((message) => message.id)).toEqual(['msg_user']);
+  expect(messages.map((message) => message.id)).toEqual(['msg_user00000000']);
 });
 
 test('managed external agent finished replies render without a thinking placeholder', () => {
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [
       {
-        id: 'msg_user',
+        id: 'msg_user00000000',
         authorId: 'me',
         authorName: 'Operator',
         av: 'ME',
@@ -468,7 +468,7 @@ test('managed external agent finished replies render without a thinking placehol
     liveItems: [
       {
         kind: 'message',
-        id: 'msg_codex_reply',
+        id: 'msg_codexreply00',
         role: 'assistant',
         agentName: 'codex',
         source: 'managed-external-agent',
@@ -478,7 +478,7 @@ test('managed external agent finished replies render without a thinking placehol
       },
       {
         kind: 'message',
-        id: 'msg_claude_thinking',
+        id: 'msg_claudethDTNA',
         role: 'assistant',
         agentName: 'claude-code',
         source: 'managed-external-agent',
@@ -490,7 +490,7 @@ test('managed external agent finished replies render without a thinking placehol
     liveTools: []
   });
 
-  expect(messages.map((message) => message.id)).toEqual(['msg_user', 'msg_codex_reply']);
+  expect(messages.map((message) => message.id)).toEqual(['msg_user00000000', 'msg_codexreply00']);
 });
 
 test('managed external agent finished replies retain delivery observation pointers', () => {
@@ -500,12 +500,12 @@ test('managed external agent finished replies retain delivery observation pointe
     liveItems: [
       {
         kind: 'message',
-        id: 'msg_codex_reply',
+        id: 'msg_codexreply00',
         role: 'assistant',
         agentName: 'pmem_codex_abcd1234',
         source: 'managed-external-agent',
-        externalAgentSessionId: 'exa_codex_delivery',
-        deliveryId: 'deliv_01KWEBDELIVERYOBSERVE000',
+        externalAgentSessionId: 'exa_codexdelTeTK',
+        deliveryId: 'deliv_01KWEBDErrBa',
         parts: [{ type: 'text', text: 'Done.' }],
         status: 'done',
         seq: '2026-06-29T10:00:01.000Z'
@@ -516,9 +516,9 @@ test('managed external agent finished replies retain delivery observation pointe
   });
 
   expect(messages[0]).toMatchObject({
-    id: 'msg_codex_reply',
-    externalAgentSessionId: 'exa_codex_delivery',
-    deliveryId: 'deliv_01KWEBDELIVERYOBSERVE000'
+    id: 'msg_codexreply00',
+    externalAgentSessionId: 'exa_codexdelTeTK',
+    deliveryId: 'deliv_01KWEBDErrBa'
   });
 });
 
@@ -529,7 +529,7 @@ test('managed external agent spawn projects joined without a thinking placeholde
     liveItems: [
       {
         kind: 'message',
-        id: 'msg_steve_thinking',
+        id: 'msg_stevethi6Vch',
         role: 'assistant',
         agentName: 'pmem_steve',
         source: 'managed-external-agent',
@@ -541,7 +541,7 @@ test('managed external agent spawn projects joined without a thinking placeholde
     liveTools: [
       {
         kind: 'tool',
-        id: 'exa_steve',
+        id: 'exa_steve0000000',
         tool: 'external-agent:codex',
         input: { agent: 'pmem_steve', provider: 'codex', productIcon: 'codex' },
         status: 'running',
@@ -552,7 +552,7 @@ test('managed external agent spawn projects joined without a thinking placeholde
   });
 
   expect(messages.map((message) => [message.id, message.text])).toEqual([
-    ['external-agent-session:exa_steve', 'joined the project']
+    ['external-agent-session:exa_steve0000000', 'joined the project']
   ]);
 });
 
@@ -560,7 +560,7 @@ test('managed external agent join stays before its first room message when live 
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [
       {
-        id: 'msg_agent_greeting',
+        id: 'msg_agentgreqina',
         authorId: 'pmem_codex_a',
         authorName: 'A',
         av: 'A',
@@ -577,19 +577,19 @@ test('managed external agent join stays before its first room message when live 
     liveTools: [
       {
         kind: 'tool',
-        id: 'exa_a',
+        id: 'exa_a00000000000',
         tool: 'external-agent:codex',
         input: { agent: 'pmem_codex_a', provider: 'codex', productIcon: 'codex' },
         status: 'running',
-        seq: 'evt_01KWHJOIN'
+        seq: 'evt_01KWHJOIN000'
       }
     ],
     externalAgentDisplayNames: new Map([['pmem_codex_a', 'A']])
   });
 
   expect(messages.map((message) => [message.id, message.text])).toEqual([
-    ['external-agent-session:exa_a', 'joined the project'],
-    ['msg_agent_greeting', 'A joined and is ready to take project work.']
+    ['external-agent-session:exa_a00000000000', 'joined the project'],
+    ['msg_agentgreqina', 'A joined and is ready to take project work.']
   ]);
 });
 
@@ -599,7 +599,7 @@ test('external agent streams prefer live activity output over persisted snapshot
       [externalAgentSession({ outputSnapshot: 'old snapshot' })],
       [
         {
-          id: 'exa_01KWGEMINI000000000000000',
+          id: 'exa_01KWGEMIprD4',
           av: 'GE',
           tool: 'external-agent:gemini',
           detail: 'native cli activity',
@@ -611,12 +611,12 @@ test('external agent streams prefer live activity output over persisted snapshot
   );
 
   expect(stream).toMatchObject({
-    id: 'exa_01KWGEMINI000000000000000',
+    id: 'exa_01KWGEMIprD4',
     agentName: 'gemini',
     provider: 'gemini',
     tag: 'Gemini',
     output: 'live output',
-    items: [{ id: 'exa_01KWGEMINI000000000000000:0', kind: 'assistant-message', text: 'live output' }],
+    items: [{ id: 'exa_01KWGEMIprD4:0', kind: 'assistant-message', text: 'live output' }],
     status: 'running'
   });
 });
@@ -630,11 +630,11 @@ test('external agent durable running sessions remain observable without marking 
   );
 
   expect(stream).toMatchObject({
-    id: 'exa_01KWGEMINI000000000000000',
+    id: 'exa_01KWGEMIprD4',
     agentName: 'gemini',
     output: 'previous turn output',
     status: 'ok',
-    items: [{ id: 'exa_01KWGEMINI000000000000000:0', kind: 'assistant-message', text: 'previous turn output' }]
+    items: [{ id: 'exa_01KWGEMIprD4:0', kind: 'assistant-message', text: 'previous turn output' }]
   });
 });
 
@@ -644,7 +644,7 @@ test('external agent live activity streams keep the managed agent identity', () 
       [],
       [
         {
-          id: 'exa_live_codex',
+          id: 'exa_livecodex000',
           av: 'CO',
           agentName: 'codex',
           tool: 'external-agent:codex',
@@ -657,10 +657,10 @@ test('external agent live activity streams keep the managed agent identity', () 
   );
 
   expect(stream).toMatchObject({
-    id: 'exa_live_codex',
+    id: 'exa_livecodex000',
     agentName: 'codex',
     status: 'running',
-    items: [{ id: 'exa_live_codex:0', kind: 'assistant-message', text: 'thinking about the project message' }]
+    items: [{ id: 'exa_livecodex000:0', kind: 'assistant-message', text: 'thinking about the project message' }]
   });
 });
 
@@ -669,7 +669,7 @@ test('managed external agent streams retain template agent names for host usage 
     __workplaceProjectMessageTest.buildExternalAgentStreams(
       [
         externalAgentSession({
-          id: 'exa_codex_reviewer',
+          id: 'exa_codexrev9zCF',
           agentName: 'pmem_codex_reviewer',
           provider: 'codex',
           productIcon: 'codex'
@@ -681,7 +681,7 @@ test('managed external agent streams retain template agent names for host usage 
   );
 
   expect(stream).toMatchObject({
-    id: 'exa_codex_reviewer',
+    id: 'exa_codexrev9zCF',
     agentName: 'pmem_codex_reviewer',
     templateAgentName: 'codex'
   });
@@ -693,7 +693,7 @@ test('external agent structured result output is projected as readable observati
       [],
       [
         {
-          id: 'exa_structured_codex',
+          id: 'exa_structuryOpn',
           av: 'CO',
           agentName: 'codex',
           tool: 'external-agent:codex',
@@ -719,8 +719,8 @@ test('external agent structured result output is projected as readable observati
   );
 
   expect(observationFields(stream.items)).toEqual([
-    { id: 'exa_structured_codex:result', text: '仍被拦截，无法发出。卡点未变：`monad project` 命令需要你批准。' },
-    { id: 'exa_structured_codex:denial:0', text: 'Permission blocked Bash: monad project post "你好！"' }
+    { id: 'exa_structuryOpn:result', text: '仍被拦截，无法发出。卡点未变：`monad project` 命令需要你批准。' },
+    { id: 'exa_structuryOpn:denial:0', text: 'Permission blocked Bash: monad project post "你好！"' }
   ]);
 });
 
@@ -748,7 +748,7 @@ test('external agent stream-json events are projected as readable observation it
       [],
       [
         {
-          id: 'exa_stream_events',
+          id: 'exa_streamevents',
           av: 'CO',
           agentName: 'claude-code',
           tool: 'external-agent:claude-code',
@@ -761,11 +761,11 @@ test('external agent stream-json events are projected as readable observation it
   );
 
   expect(observationFields(stream.items)).toEqual([
-    { id: 'exa_stream_events:json:0:message:0', text: 'I can help.' },
-    { id: 'exa_stream_events:json:0:tool:1', text: 'Tool call Bash' },
-    { id: 'exa_stream_events:json:1:delta', text: 'Streaming text.' },
-    { id: 'exa_stream_events:json:2:tool-result', text: 'command output' },
-    { id: 'exa_stream_events:json:3:result', text: 'Done.' }
+    { id: 'exa_streamevents:json:0:message:0', text: 'I can help.' },
+    { id: 'exa_streamevents:json:0:tool:1', text: 'Tool call Bash' },
+    { id: 'exa_streamevents:json:1:delta', text: 'Streaming text.' },
+    { id: 'exa_streamevents:json:2:tool-result', text: 'command output' },
+    { id: 'exa_streamevents:json:3:result', text: 'Done.' }
   ]);
 });
 
@@ -781,7 +781,7 @@ test('external agent projection ignores startup prose before stream-json objects
       [],
       [
         {
-          id: 'exa_mixed_claude',
+          id: 'exa_mixedclaude0',
           av: 'CL',
           agentName: 'claude-code',
           tool: 'external-agent:claude-code',
@@ -796,7 +796,7 @@ test('external agent projection ignores startup prose before stream-json objects
   // The `system` init notice has no neutral representation (no system kind) and is dropped; the result
   // survives as a turn-end that keeps its final text.
   expect(observationFields(stream.items)).toEqual([
-    { id: 'exa_mixed_claude:json:1:result', text: 'Need approval before posting.' }
+    { id: 'exa_mixedclaude0:json:1:result', text: 'Need approval before posting.' }
   ]);
 });
 
@@ -827,7 +827,7 @@ test('external agent app-server JSON-RPC output is projected as readable observa
       [],
       [
         {
-          id: 'exa_app_server_codex',
+          id: 'exa_appserveQWB9',
           av: 'CO',
           agentName: 'test',
           tool: 'external-agent:codex',
@@ -842,7 +842,7 @@ test('external agent app-server JSON-RPC output is projected as readable observa
   // The `thread/started` system notice has no neutral representation and is dropped; the mcp status is
   // a tool event and survives.
   expect(observationFields(stream.items)).toEqual([
-    { id: 'exa_app_server_codex:json:1:mcp-status', text: 'node_repl starting' }
+    { id: 'exa_appserveQWB9:json:1:mcp-status', text: 'node_repl starting' }
   ]);
 });
 
@@ -855,11 +855,11 @@ test('external agent follow streams restore persisted terminal snapshots', () =>
   );
 
   expect(stream).toMatchObject({
-    id: 'exa_01KWGEMINI000000000000000',
+    id: 'exa_01KWGEMIprD4',
     output: '\\x1b[38;2;255;193;7mraw terminal output',
     items: [
       {
-        id: 'exa_01KWGEMINI000000000000000:0',
+        id: 'exa_01KWGEMIprD4:0',
         kind: 'assistant-message',
         text: '\\x1b[38;2;255;193;7mraw terminal output'
       }
@@ -877,7 +877,7 @@ test('external agent resume failure is visible as a project system message', () 
         id: 'external-agent-resume-failed:codex',
         text: 'Codex resume failed for provider session codex-thread-stale; cold started a new runtime.',
         level: 'warn',
-        seq: 'evt_resume_failed'
+        seq: 'evt_resumefailed'
       }
     ],
     liveTools: [],
@@ -891,7 +891,7 @@ test('external agent resume failure is visible as a project system message', () 
       kind: 'system',
       tag: 'CLI',
       text: 'Codex resume failed for provider session codex-thread-stale; cold started a new runtime.',
-      orderKey: 'evt_resume_failed'
+      orderKey: 'evt_resumefailed'
     })
   ]);
 });
@@ -971,7 +971,7 @@ test('external agent project member presence treats lifecycle tools as stand-by 
       externalAgentSessions: [],
       liveTools: [
         {
-          id: 'exa_session',
+          id: 'exa_session00000',
           kind: 'tool',
           tool: 'external-agent:gemini',
           input: { agent: 'gemini' },
@@ -1148,7 +1148,7 @@ test('external agent system and assistant messages share the same instance avata
     ],
     liveItems: [
       {
-        id: 'msg_reply',
+        id: 'msg_reply0000000',
         kind: 'message',
         role: 'assistant',
         agentName: 'pmem_codex_reviewer',
@@ -1164,7 +1164,7 @@ test('external agent system and assistant messages share the same instance avata
   });
 
   const joined = messages.find((message) => message.id.startsWith('external-agent-session:'));
-  const reply = messages.find((message) => message.id === 'msg_reply');
+  const reply = messages.find((message) => message.id === 'msg_reply0000000');
 
   expect(joined?.avatarUrl).toBe(avatarUrl);
   expect(joined?.agentChip?.avatarUrl).toBe(avatarUrl);
@@ -1179,7 +1179,7 @@ test('external agent assistant messages keep provider icon when display name is 
     ],
     liveItems: [
       {
-        id: 'msg_reply',
+        id: 'msg_reply0000000',
         kind: 'message',
         role: 'assistant',
         agentName: 'pmem_codex_reviewer',
@@ -1195,7 +1195,7 @@ test('external agent assistant messages keep provider icon when display name is 
     externalAgentTags: new Map([['pmem_codex_reviewer', 'Codex']])
   });
 
-  expect(messages.find((message) => message.id === 'msg_reply')).toMatchObject({
+  expect(messages.find((message) => message.id === 'msg_reply0000000')).toMatchObject({
     authorName: 'Lily',
     icon: 'codex',
     tag: 'Codex'

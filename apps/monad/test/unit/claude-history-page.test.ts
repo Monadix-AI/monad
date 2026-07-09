@@ -12,7 +12,7 @@ const getSessionInfo = mock(async () => ({
 const getSessionMessages = mock(async () => [
   {
     type: 'assistant',
-    uuid: 'msg_1',
+    uuid: 'msg_100000000000',
     session_id: 'claude-session-1',
     parent_tool_use_id: null,
     message: {
@@ -25,7 +25,7 @@ const getSessionMessages = mock(async () => [
   },
   {
     type: 'user',
-    uuid: 'msg_2',
+    uuid: 'msg_200000000000',
     session_id: 'claude-session-1',
     parent_tool_use_id: null,
     message: {

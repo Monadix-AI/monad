@@ -48,7 +48,7 @@ test('sessions.get with empty params → INVALID_PARAMS with field detail', asyn
 });
 
 test('sessions.send with wrong-typed text → INVALID_PARAMS', async () => {
-  const { out } = await call(rpc('sessions.send', { id: 'ses_x', text: 42 }));
+  const { out } = await call(rpc('sessions.send', { id: 'ses_x00000000000', text: 42 }));
   expect((out[0] as JsonRpcResponse).error?.code).toBe(RPC_ERRORS.INVALID_PARAMS.code);
 });
 

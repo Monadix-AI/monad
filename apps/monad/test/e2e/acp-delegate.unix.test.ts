@@ -12,7 +12,7 @@ const fixture = resolve(import.meta.dir, '../fixtures/mock-acp-agent.ts');
 
 function fakeCtx(sandboxRoots?: string[], progress?: string[]): ToolContext {
   return {
-    sessionId: 'ses_1' as SessionId,
+    sessionId: 'ses_100000000000' as SessionId,
     toolCallId: 'tc_1',
     sandboxRoots,
     signal: new AbortController().signal,

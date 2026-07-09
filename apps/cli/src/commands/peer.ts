@@ -17,7 +17,7 @@ export const command: CommandDef = {
   flags: {
     label: { type: 'string', description: 'display label (peer add)' },
     agent: { type: 'string', description: 'default target agent on the peer (peer add)' },
-    id: { type: 'string', description: 'explicit peer id (peer add; default peer_<ulid>)' }
+    id: { type: 'string', description: 'explicit peer id (peer add; default peer_<12-char-nanoid>)' }
   },
   async run({ positionals: args, flags, client }) {
     const [action, ...rest] = args;

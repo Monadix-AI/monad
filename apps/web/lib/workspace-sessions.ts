@@ -1,5 +1,7 @@
 import type { ExternalAgentSessionView, Session, WorkplaceProject } from '@monad/protocol';
 
+type WorkspaceProjectSessionListItem = { id: Session['id']; title: string };
+
 export const safeDecode = (value: string): string => {
   let current = value;
   for (let i = 0; i < 3; i++) {
@@ -23,6 +25,7 @@ export interface WorkspaceProjectListItem {
   cwd?: string;
   hasRunningAgent: boolean;
   pinned: boolean;
+  sessions: WorkspaceProjectSessionListItem[];
   unreadCount: number;
 }
 
@@ -30,7 +33,7 @@ export interface BuildWorkspaceProjectsOptions {
   /** Every session (chat or project-bound) — used to resolve which project an external-agent
    *  session's sessionId belongs to, now that a project session's own id is distinct from its
    *  project's id (Track B). */
-  sessions?: readonly Pick<Session, 'id' | 'projectId'>[];
+  sessions?: readonly Pick<Session, 'id' | 'projectId' | 'title' | 'updatedAt'>[];
   liveExternalAgentSessions?: readonly ExternalAgentSessionView[];
   externalAgentSessions?: readonly ExternalAgentSessionView[];
   pinnedProjectIds?: ReadonlySet<string>;
@@ -41,6 +44,13 @@ export const buildWorkspaceProjects = (
   options: BuildWorkspaceProjectsOptions = {}
 ): WorkspaceProjectListItem[] => {
   const sessionProjectId = new Map((options.sessions ?? []).map((s) => [s.id, s.projectId]));
+  const sessionsByProjectId = new Map<string, (WorkspaceProjectSessionListItem & { updatedAt: string })[]>();
+  for (const session of options.sessions ?? []) {
+    if (!session.projectId) continue;
+    const sessions = sessionsByProjectId.get(session.projectId) ?? [];
+    sessions.push({ id: session.id, title: session.title, updatedAt: session.updatedAt });
+    sessionsByProjectId.set(session.projectId, sessions);
+  }
   const activityByProjectId = projectActivityById({
     sessionProjectId,
     liveExternalAgentSessions: options.liveExternalAgentSessions ?? [],
@@ -55,6 +65,9 @@ export const buildWorkspaceProjects = (
         cwd: project.cwd,
         hasRunningAgent: activity?.hasRunningAgent ?? false,
         pinned: options.pinnedProjectIds?.has(project.id) ?? false,
+        sessions: (sessionsByProjectId.get(project.id) ?? [])
+          .toSorted((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+          .map((session) => ({ id: session.id, title: session.title })),
         unreadCount: activity?.unreadCount ?? 0,
         index
       };
