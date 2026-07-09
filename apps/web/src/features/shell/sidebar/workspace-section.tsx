@@ -20,7 +20,7 @@ export function WorkspaceSection({
     <section className="flex flex-col gap-1">
       <button
         aria-expanded={!collapsed}
-        className="flex min-h-7 w-full cursor-pointer items-center gap-1.5 rounded-(--radius-sm) px-2.5 font-medium text-[11px] text-muted-foreground"
+        className="flex min-h-7 w-full items-center gap-1.5 rounded-(--radius-sm) px-2.5 font-medium text-[11px] text-muted-foreground"
         onClick={onToggle}
         title={title}
         type="button"

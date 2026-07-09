@@ -269,7 +269,7 @@ export function WorkspaceHome({
                       key={project.id}
                     >
                       <button
-                        className="flex w-full cursor-pointer items-center justify-between gap-4 px-5 py-4 text-left transition hover:bg-accent/70"
+                        className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition hover:bg-accent/70"
                         onClick={() => onOpenProject(project.id)}
                         type="button"
                       >

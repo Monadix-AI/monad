@@ -2,8 +2,6 @@
 
 import type { TFunction } from './types';
 
-import { FileInputIcon } from '@hugeicons/core-free-icons';
-
 import { runtimeSectionEnabled } from '#/features/init/init-readiness';
 import { studioPath } from '#/features/shell/routing/paths';
 import {
@@ -66,12 +64,6 @@ export function StudioSidebarItems({
       </div>
       <SidebarNavSection>
         <SidebarNavSectionLabel>{t('web.studio.system')}</SidebarNavSectionLabel>
-        <SidebarNavItem
-          href={studioPath('externalAgents')}
-          icon={FileInputIcon}
-          label={t('web.settings.import')}
-          onClick={() => onSelect('externalAgents')}
-        />
         {STUDIO_SYSTEM_SECTIONS.map(renderItem)}
       </SidebarNavSection>
     </>

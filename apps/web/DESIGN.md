@@ -16,6 +16,15 @@ Concise rules for building accessible, fast, delightful UIs. Use MUST/SHOULD/NEV
 - NEVER: Disable browser zoom (`user-scalable=no`, `maximum-scale=1`)
 - MUST: `touch-action: manipulation` to prevent double-tap zoom
 - SHOULD: Set `-webkit-tap-highlight-color` to match design
+- MUST: Follow the Settings cursor model globally: clickable controls do not use a
+  hand pointer by default. Use cursor overrides only for concrete manipulation
+  states such as resize, drag, disabled/not-allowed, or text insertion.
+- MUST: Text is not globally selectable. Enable selection only case by case on
+  copy-oriented surfaces with `.monad-selectable` or `data-selectable="true"`
+  (for example code, terminal output, logs, transcripts, and generated messages).
+- NEVER: Add `cursor-pointer`, `select-text`, or custom `user-select` to ordinary
+  chrome, labels, nav, rows, cards, or settings controls unless the surface has a
+  specific cursor/selection requirement.
 
 ### Forms
 

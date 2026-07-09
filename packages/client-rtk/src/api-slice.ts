@@ -76,6 +76,7 @@ export const apiSlice = createApi({
     'UserProfileSettings',
     'StartupSettings',
     'Hooks',
+    'CapabilityInventory',
     'Health',
     'SystemUpgrade'
   ],

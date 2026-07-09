@@ -5,6 +5,8 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { nativeOpenPathCommands, openNativePath } from '#/platform/open-native-path.ts';
+
 export interface WorkspaceActionCommand {
   argv: string[];
   env?: Record<string, string>;
@@ -25,9 +27,7 @@ export function workspaceActionCommands(
   platform: NodeJS.Platform = process.platform
 ): WorkspaceActionCommand[] {
   if (action === 'show-in-file-manager') {
-    if (platform === 'darwin') return [{ argv: ['open', '-R', cwd] }];
-    if (platform === 'win32') return [{ argv: ['explorer.exe', cwd] }];
-    return [{ argv: ['xdg-open', cwd] }];
+    return nativeOpenPathCommands(cwd, 'reveal', platform);
   }
 
   if (platform === 'darwin') return [{ argv: ['open', '-a', 'Terminal', cwd] }];
@@ -48,12 +48,6 @@ export function workspaceActionCommands(
   ];
 }
 
-function openPathCommands(path: string, platform: NodeJS.Platform = process.platform): WorkspaceActionCommand[] {
-  if (platform === 'darwin') return [{ argv: ['open', path] }];
-  if (platform === 'win32') return [{ argv: ['cmd', '/c', 'start', '', path] }];
-  return [{ argv: ['xdg-open', path] }];
-}
-
 function safeAttachmentName(name: string): string {
   const cleaned = Array.from(name)
     .map((char) => (char.charCodeAt(0) < 32 || '\\/:*?"<>|'.includes(char) ? '_' : char))
@@ -67,22 +61,7 @@ export async function openDraftAttachment({ data, name }: { data: Uint8Array; na
   await mkdir(dir, { recursive: true });
   const path = join(dir, `${randomUUID()}-${safeAttachmentName(name)}`);
   await writeFile(path, data);
-  let lastError: unknown;
-  for (const command of openPathCommands(path)) {
-    try {
-      const proc = Bun.spawn(command.argv, {
-        env: { ...Bun.env, ...(command.env ?? {}) },
-        stdout: 'ignore',
-        stderr: 'ignore',
-        stdin: 'ignore'
-      });
-      proc.unref();
-      return;
-    } catch (err) {
-      lastError = err;
-    }
-  }
-  throw lastError instanceof Error ? lastError : new Error('Open attachment failed');
+  await openNativePath(path);
 }
 
 export async function runWorkspaceAction(action: WorkspaceAction, cwd: string): Promise<void> {

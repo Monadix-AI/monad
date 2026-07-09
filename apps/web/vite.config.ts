@@ -6,13 +6,36 @@ import { defineConfig } from 'vite';
 
 const REPO_ROOT = resolve(import.meta.dirname, '../..');
 const APP_ROOT = import.meta.dirname;
+const REPO_ENV_PATH = resolve(REPO_ROOT, '.env.local');
 
-function readDaemonEndpoint(): { port: string; scheme: 'https' | 'http' } {
+function parsePort(value: string | undefined): number | undefined {
+  if (!value) return undefined;
+  const port = Number(value);
+  return Number.isInteger(port) && port > 0 ? port : undefined;
+}
+
+function readEnvValue(path: string, key: string): string | undefined {
+  if (!existsSync(path)) return undefined;
+  const line = readFileSync(path, 'utf-8')
+    .split(/\r?\n/)
+    .find((entry) => entry.trim().startsWith(`${key}=`));
+  if (!line) return undefined;
+  return line
+    .slice(line.indexOf('=') + 1)
+    .trim()
+    .replace(/^['"]|['"]$/g, '');
+}
+
+export function readDaemonEndpoint(
+  env: NodeJS.ProcessEnv | { MONAD_HOME?: string | undefined; MONAD_PORT?: string | undefined } = process.env,
+  envPath = REPO_ENV_PATH
+): { port: string; scheme: 'https' | 'http' } {
   let scheme: 'https' | 'http' = 'https';
-  const envPort = Number(process.env.MONAD_PORT);
+  const envPort = parsePort(env.MONAD_PORT) ?? parsePort(readEnvValue(envPath, 'MONAD_PORT'));
+  const envHome = env.MONAD_HOME ?? readEnvValue(envPath, 'MONAD_HOME');
 
   const configPaths = [
-    process.env.MONAD_HOME ? join(process.env.MONAD_HOME, 'configs', 'config.json') : undefined,
+    envHome ? join(envHome, 'configs', 'config.json') : undefined,
     resolve(REPO_ROOT, '.dev', '.monad', 'configs', 'config.json'),
     process.env.HOME ? join(process.env.HOME, '.monad', 'configs', 'config.json') : undefined
   ].filter((path): path is string => !!path);
@@ -23,12 +46,32 @@ function readDaemonEndpoint(): { port: string; scheme: 'https' | 'http' } {
       const raw = readFileSync(configPath, 'utf-8');
       const network = (JSON.parse(raw) as { network?: { https?: { enabled?: boolean }; port?: number } })?.network;
       if (network?.https?.enabled === false) scheme = 'http';
-      const port = envPort || network?.port;
+      const port = envPort ?? network?.port;
       if (port) return { port: String(port), scheme };
     } catch {}
   }
 
-  return { port: String(envPort || 52749), scheme };
+  return { port: String(envPort ?? 52749), scheme };
+}
+
+type DestroySoonSocket = {
+  destroy(): void;
+  destroySoon?: () => void;
+  end(): void;
+};
+
+export function ensureDestroySoon(socket: unknown): void {
+  const candidate = socket as Partial<DestroySoonSocket>;
+  if (typeof candidate.destroySoon === 'function') return;
+  if (typeof candidate.end !== 'function' || typeof candidate.destroy !== 'function') return;
+  candidate.destroySoon = function destroySoon(this: DestroySoonSocket) {
+    this.end();
+    this.destroy();
+  };
+}
+
+function configureBunWsProxyCompat(proxy: { on(event: string, handler: (...args: unknown[]) => void): void }): void {
+  proxy.on('proxyReqWs', (_proxyReq, _req, socket) => ensureDestroySoon(socket));
 }
 
 function daemonProxyTarget(): string {
@@ -67,6 +110,7 @@ export default defineConfig(({ command }) => ({
   },
   define: {
     __MONAD_DEV_TOOL_PORTS__: JSON.stringify(devToolPorts(command)),
+    __MONAD_WEB_PORT__: JSON.stringify(String(process.env.WEB_PORT ?? 3000)),
     'process.env.NODE_ENV': JSON.stringify(command === 'build' ? 'production' : 'development')
   },
   server: {
@@ -76,6 +120,7 @@ export default defineConfig(({ command }) => ({
     hmr: { overlay: true },
     proxy: {
       '/api': {
+        configure: configureBunWsProxyCompat,
         target: daemonProxyTarget(),
         changeOrigin: true,
         secure: false,
@@ -83,6 +128,7 @@ export default defineConfig(({ command }) => ({
         rewrite: (path) => (path === '/api' ? '/' : path.slice('/api'.length))
       },
       '/v1': {
+        configure: configureBunWsProxyCompat,
         target: daemonProxyTarget(),
         changeOrigin: true,
         secure: false,

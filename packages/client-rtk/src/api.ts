@@ -167,6 +167,10 @@ import {
 import { useGetAppearanceQuery, useSetAppearanceMutation } from './endpoints/settings/appearance/index.ts';
 import { useGetBrowserPresetQuery, useSetBrowserPresetMutation } from './endpoints/settings/browser-preset/index.ts';
 import {
+  useGetCapabilityInventoryQuery,
+  useOpenCapabilityInventoryLocationMutation
+} from './endpoints/settings/capability-inventory/index.ts';
+import {
   channelAdapter,
   channelPairingSelectors,
   channelSelectors,
@@ -184,15 +188,16 @@ import { useGetDeveloperQuery, useSetDeveloperMutation } from './endpoints/setti
 import {
   externalAgentAdapter,
   externalAgentSelectors,
-  useApplyExternalAgentSettingsImportMutation,
   useDeleteExternalAgentMutation,
   useListExternalAgentPresetsQuery,
-  useListExternalAgentSettingsImportCandidatesQuery,
   useListExternalAgentsQuery,
-  usePreviewExternalAgentSettingsImportMutation,
   useUpsertExternalAgentMutation
 } from './endpoints/settings/external-agents/index.ts';
 import { useGetHooksQuery, useSetHooksMutation } from './endpoints/settings/hooks/index.ts';
+import {
+  useApplySettingsImportMutation,
+  usePreviewSettingsImportMutation
+} from './endpoints/settings/import-settings/index.ts';
 import {
   localeAdapter,
   localeApi,
@@ -207,6 +212,7 @@ import {
   mcpServerSelectors,
   useAuthorizeMcpServerMutation,
   useDeleteMcpServerMutation,
+  useLazyListMcpServerStatusQuery,
   useLazySearchMcpRegistryQuery,
   useListMcpCatalogQuery,
   useListMcpServerStatusQuery,
@@ -337,7 +343,7 @@ export {
   useAbortSessionMutation,
   useAddCredentialMutation,
   useAddMemoryFactMutation,
-  useApplyExternalAgentSettingsImportMutation,
+  useApplySettingsImportMutation,
   useApproveChannelPairingMutation,
   useApproveExternalAgentSessionMutation,
   useApproveToolMutation,
@@ -376,6 +382,7 @@ export {
   useGetAppearanceQuery,
   useGetAttachmentQuery,
   useGetBrowserPresetQuery,
+  useGetCapabilityInventoryQuery,
   useGetCatalogQuery,
   useGetComputerPresetQuery,
   useGetDefaultAgentQuery,
@@ -434,6 +441,7 @@ export {
   useLazyGetSkillContentQuery,
   useLazyGetUiItemsWindowQuery,
   useLazyListCommandsQuery,
+  useLazyListMcpServerStatusQuery,
   useLazySearchMcpRegistryQuery,
   useLazySearchSkillsQuery,
   useListAcpAgentPresetsQuery,
@@ -449,7 +457,6 @@ export {
   useListExternalAgentPresetsQuery,
   useListExternalAgentSessionSummariesQuery,
   useListExternalAgentSessionsQuery,
-  useListExternalAgentSettingsImportCandidatesQuery,
   useListExternalAgentsQuery,
   useListInstalledMcpQuery,
   useListInstalledSkillsQuery,
@@ -470,9 +477,10 @@ export {
   useListSkillsQuery,
   useListWorkplaceProjectsQuery,
   useListWorkspaceExperiencesQuery,
+  useOpenCapabilityInventoryLocationMutation,
   useOpenDraftAttachmentMutation,
   usePickDirectoryMutation,
-  usePreviewExternalAgentSettingsImportMutation,
+  usePreviewSettingsImportMutation,
   useProbeNetworkMutation,
   useProvenanceQuery,
   useProviderCatalogQuery,

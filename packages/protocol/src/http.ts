@@ -89,6 +89,11 @@ import {
   updateSessionResponseSchema
 } from './rpc/control.ts';
 import { appearanceSettingsSchema, setAppearanceSettingsRequestSchema } from './settings/appearance-settings.ts';
+import {
+  capabilityInventoryOpenLocationRequestSchema,
+  capabilityInventoryOpenLocationResponseSchema,
+  capabilityInventoryResponseSchema
+} from './settings/capability-inventory.ts';
 import { developerSettingsSchema, setDeveloperSettingsRequestSchema } from './settings/developer-settings.ts';
 import { hooksSettingsResponseSchema, setHooksSettingsRequestSchema } from './settings/hooks-settings.ts';
 import {
@@ -425,6 +430,13 @@ export const daemonHttpContract = {
     apply: defineHttpEndpoint({
       body: importSettingsApplyRequestSchema,
       response: { 200: importSettingsApplyResultSchema }
+    })
+  },
+  capabilityInventory: {
+    list: defineHttpEndpoint({ response: { 200: capabilityInventoryResponseSchema } }),
+    openLocation: defineHttpEndpoint({
+      body: capabilityInventoryOpenLocationRequestSchema,
+      response: { 200: capabilityInventoryOpenLocationResponseSchema }
     })
   },
   hooksSettings: {

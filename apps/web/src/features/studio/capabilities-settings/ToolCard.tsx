@@ -29,7 +29,7 @@ export function ToolCard({
 }) {
   return (
     <Card
-      className={`flex flex-col gap-3 p-4 transition-colors${onConfigure ? 'cursor-pointer hover:bg-muted/20' : ''}`}
+      className={`flex flex-col gap-3 p-4 transition-colors${onConfigure ? 'hover:bg-muted/20' : ''}`}
       onClick={onConfigure}
     >
       <div className="flex items-start justify-between gap-2">

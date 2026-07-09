@@ -280,7 +280,7 @@ function VoiceDebugPanel({
 
   return (
     <details className="mx-3 mb-3 rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-[11px] text-muted-foreground">
-      <summary className="cursor-pointer font-medium text-foreground text-xs">Voice debug</summary>
+      <summary className="font-medium text-foreground text-xs">Voice debug</summary>
       <dl className="mt-2 grid grid-cols-[88px_1fr] gap-x-3 gap-y-1 font-mono">
         {rows.map(([label, value]) => (
           <div

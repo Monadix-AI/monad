@@ -84,6 +84,7 @@ import { createSessionsController } from '#/transports/http/sessions/controller.
 import { createAcpAgentSettingsController } from '#/transports/http/settings/acp-agent.ts';
 import { createAppearanceSettingsController } from '#/transports/http/settings/appearance.ts';
 import { createBrowserPresetSettingsController } from '#/transports/http/settings/browser-preset.ts';
+import { createCapabilityInventorySettingsController } from '#/transports/http/settings/capability-inventory.ts';
 import { createChannelSettingsController } from '#/transports/http/settings/channel.ts';
 import { createComputerPresetSettingsController } from '#/transports/http/settings/computer-preset.ts';
 import { createDeveloperSettingsController } from '#/transports/http/settings/developer.ts';
@@ -428,6 +429,7 @@ export function createHttpTransport(
             .use(createStartupSettingsController(handlers))
             .use(createHooksSettingsController(handlers))
             .use(createSettingsImportController(handlers))
+            .use(createCapabilityInventorySettingsController(handlers))
             .use(createLocaleSettingsController(handlers))
             .use(createSkillsSettingsController(handlers))
         )

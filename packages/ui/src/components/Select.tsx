@@ -92,7 +92,7 @@ function SelectItem({ className, children, ...props }: React.ComponentProps<type
   return (
     <SelectPrimitive.Item
       className={cn(
-        "relative flex w-full cursor-default select-none items-center gap-1.5 rounded-(--radius-sm) py-1.5 pr-8 pl-2 text-sm leading-control outline-hidden focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg:not([class*='size-'])]:size-4 [&_svg:not([class*='text-'])]:text-muted-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 *:[span]:last:flex *:[span]:last:items-center *:[span]:last:gap-1.5",
+        "relative flex w-full select-none items-center gap-1.5 rounded-(--radius-sm) py-1.5 pr-8 pl-2 text-sm leading-control outline-hidden focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg:not([class*='size-'])]:size-4 [&_svg:not([class*='text-'])]:text-muted-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 *:[span]:last:flex *:[span]:last:items-center *:[span]:last:gap-1.5",
         className
       )}
       data-slot="select-item"
@@ -114,7 +114,7 @@ function SelectItem({ className, children, ...props }: React.ComponentProps<type
 function SelectScrollUpButton({ className, ...props }: React.ComponentProps<typeof SelectPrimitive.ScrollUpButton>) {
   return (
     <SelectPrimitive.ScrollUpButton
-      className={cn('flex cursor-default items-center justify-center py-1', className)}
+      className={cn('flex items-center justify-center py-1', className)}
       data-slot="select-scroll-up-button"
       {...props}
     >
@@ -132,7 +132,7 @@ function SelectScrollDownButton({
 }: React.ComponentProps<typeof SelectPrimitive.ScrollDownButton>) {
   return (
     <SelectPrimitive.ScrollDownButton
-      className={cn('flex cursor-default items-center justify-center py-1', className)}
+      className={cn('flex items-center justify-center py-1', className)}
       data-slot="select-scroll-down-button"
       {...props}
     >

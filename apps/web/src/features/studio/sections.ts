@@ -5,6 +5,7 @@ import {
   BotIcon,
   BrainIcon,
   CpuIcon,
+  FileInputIcon,
   GeometricShapesIcon,
   Home01Icon,
   MessageSquareCodeIcon,
@@ -40,6 +41,7 @@ export type StudioSectionId =
   | 'mem0'
   | 'hooks'
   | 'mcpAtoms'
+  | 'import'
   | 'sandbox'
   | 'safety';
 
@@ -68,6 +70,7 @@ const STUDIO_SECTION_IDS = [
   'mem0',
   'hooks',
   'mcpAtoms',
+  'import',
   'sandbox',
   'safety'
 ] as const satisfies readonly StudioSectionId[];
@@ -102,6 +105,7 @@ export const STUDIO_MESH_SECTIONS: StudioSectionItem[] = [
 
 // System: host-level facilities that belong to neither the runtime nor the mesh.
 export const STUDIO_SYSTEM_SECTIONS: StudioSectionItem[] = [
+  { id: 'import', icon: FileInputIcon, i18nKey: 'web.settings.import' },
   { id: 'atoms', icon: PackageIcon, i18nKey: 'web.studio.atoms' }
 ];
 

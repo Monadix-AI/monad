@@ -1,24 +1,16 @@
 import type { ExternalAgentConfig, MonadConfig, MonadPaths } from '@monad/home';
 import type {
-  ExternalAgentSettingsImportApplyRequest,
-  ExternalAgentSettingsImportApplyResult,
-  ExternalAgentSettingsImportItem,
-  ExternalAgentSettingsImportPreview,
-  ExternalAgentSettingsImportPreviewRequest,
   ExternalAgentView,
   GetExternalAgentResponse,
   ListExternalAgentPresetsResponse,
-  ListExternalAgentSettingsImportCandidatesResponse,
   ListExternalAgentsResponse,
   OkResponse,
   UpsertExternalAgentRequest
 } from '@monad/protocol';
 
-import { createHash } from 'node:crypto';
 import { loadAll, saveSystemConfig } from '@monad/home';
 
 import { HandlerError } from '#/handlers/handler-error.ts';
-import { defaultBinProbes } from '#/infra/resolve-binary.ts';
 import {
   getExternalAgentProviderAdapter,
   listExternalAgentModelOptions,
@@ -102,45 +94,6 @@ const fromView = (v: ExternalAgentView, stored?: ExternalAgentConfig): ExternalA
   adapterSettings: v.adapterSettings
 });
 
-function stableJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
-  if (value && typeof value === 'object') {
-    return `{${Object.entries(value as Record<string, unknown>)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([key, child]) => `${JSON.stringify(key)}:${stableJson(child)}`)
-      .join(',')}}`;
-  }
-  return JSON.stringify(value);
-}
-
-function itemHash(item: Omit<ExternalAgentSettingsImportItem, 'hash'>): string {
-  return createHash('sha256').update(stableJson(item)).digest('hex');
-}
-
-function rehashItem(item: ExternalAgentSettingsImportItem): ExternalAgentSettingsImportItem {
-  const { hash: _hash, ...rest } = item;
-  return { ...rest, hash: itemHash(rest) };
-}
-
-function planExternalAgentSettingsImport(
-  preview: ExternalAgentSettingsImportPreview,
-  cfg: MonadConfig,
-  replace: boolean
-): ExternalAgentSettingsImportPreview {
-  const existing = new Set(cfg.externalAgents.map((agent) => agent.name));
-  return {
-    ...preview,
-    items: preview.items.map((item) => {
-      if (item.category !== 'externalAgents' || item.action !== 'add' || !existing.has(item.target)) return item;
-      return rehashItem({
-        ...item,
-        action: replace ? 'update' : 'conflict',
-        reason: replace ? `${item.target} exists and replace allows update` : `${item.target} already exists`
-      });
-    })
-  };
-}
-
 export function createExternalAgentSettingsModule({ paths, externalAgentSessions }: ExternalAgentSettingsDeps) {
   async function read(): Promise<MonadConfig> {
     const cfg = await loadAll(paths.config, paths.profile);
@@ -164,78 +117,6 @@ export function createExternalAgentSettingsModule({ paths, externalAgentSessions
 
     listExternalAgentPresets(): ListExternalAgentPresetsResponse {
       return { presets: listExternalAgentPresets() };
-    },
-
-    listExternalAgentSettingsImportCandidates({
-      name
-    }: {
-      name: string;
-    }): ListExternalAgentSettingsImportCandidatesResponse {
-      const adapter = getExternalAgentProviderAdapter(name);
-      return { candidates: adapter.settingsImport?.detect(defaultBinProbes) ?? [] };
-    },
-
-    async previewExternalAgentSettingsImport({
-      name,
-      request
-    }: {
-      name: string;
-      request: ExternalAgentSettingsImportPreviewRequest;
-    }): Promise<ExternalAgentSettingsImportPreview> {
-      const cfg = await read();
-      const adapter = getExternalAgentProviderAdapter(name);
-      if (!adapter.settingsImport) {
-        throw new HandlerError('invalid', `external agent provider "${name}" does not support settings import`);
-      }
-      return planExternalAgentSettingsImport(await adapter.settingsImport.preview(request), cfg, request.replace);
-    },
-
-    async applyExternalAgentSettingsImport({
-      name,
-      request
-    }: {
-      name: string;
-      request: ExternalAgentSettingsImportApplyRequest;
-    }): Promise<ExternalAgentSettingsImportApplyResult> {
-      const cfg = await read();
-      const adapter = getExternalAgentProviderAdapter(name);
-      if (!adapter.settingsImport) {
-        throw new HandlerError('invalid', `external agent provider "${name}" does not support settings import`);
-      }
-      const preview = planExternalAgentSettingsImport(
-        await adapter.settingsImport.preview(request),
-        cfg,
-        request.replace
-      );
-      const selected = new Set(request.select);
-      const applied: string[] = [];
-      const skipped: Array<{ id: string; reason: string }> = [];
-      let wrote = false;
-
-      for (const item of preview.items.filter((entry) => selected.has(entry.id))) {
-        if (request.hashes[item.id] !== item.hash) {
-          skipped.push({ id: item.id, reason: 'preview item changed since selection' });
-          continue;
-        }
-        if (item.category !== 'externalAgents' || !item.agent) {
-          skipped.push({ id: item.id, reason: 'item is not an external agent setting' });
-          continue;
-        }
-        if (item.action !== 'add' && item.action !== 'update') {
-          skipped.push({ id: item.id, reason: `item action is ${item.action}` });
-          continue;
-        }
-        const stored = cfg.externalAgents.find((agent) => agent.name === item.agent?.name);
-        cfg.externalAgents = [
-          ...cfg.externalAgents.filter((agent) => agent.name !== item.agent?.name),
-          fromView(item.agent, stored)
-        ];
-        applied.push(item.id);
-        wrote = true;
-      }
-
-      if (wrote) await commit(cfg);
-      return { preview, applied, skipped };
     },
 
     async upsertExternalAgent({ agent }: UpsertExternalAgentRequest): Promise<OkResponse> {

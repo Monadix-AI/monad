@@ -7,8 +7,8 @@ import {
   mcpServerSelectors,
   useAuthorizeMcpServerMutation,
   useDeleteMcpServerMutation,
+  useLazyListMcpServerStatusQuery,
   useListMcpCatalogQuery,
-  useListMcpServerStatusQuery,
   useListMcpServersQuery,
   useReconnectMcpServerMutation,
   useUpsertMcpServerMutation
@@ -22,6 +22,7 @@ export interface McpServerSettingsStore {
   /** Curated directory of popular MCP servers for one-click add. */
   catalog: McpCatalogEntry[];
   loading: boolean;
+  refreshing: boolean;
   error?: string;
   saveServer: (s: McpServerView) => Promise<void>;
   removeServer: (name: string) => Promise<void>;
@@ -35,9 +36,7 @@ export interface McpServerSettingsStore {
 
 export function useMcpServerSettings(): McpServerSettingsStore {
   const serversQ = useListMcpServersQuery(undefined);
-  // Poll: a save persists config.json, then the daemon reconnects after a debounce — poll so the
-  // status dots converge to the live state within a few seconds without a manual refresh.
-  const statusQ = useListMcpServerStatusQuery(undefined, { pollingInterval: 4000 });
+  const [loadStatus, statusQ] = useLazyListMcpServerStatusQuery();
   const catalogQ = useListMcpCatalogQuery(undefined);
   const [upsert] = useUpsertMcpServerMutation();
   const [del] = useDeleteMcpServerMutation();
@@ -80,6 +79,7 @@ export function useMcpServerSettings(): McpServerSettingsStore {
     statusByName: new Map((statusQ.data ?? []).map((s) => [s.name, s])),
     catalog: catalogQ.data ?? [],
     loading: serversQ.isLoading,
+    refreshing: serversQ.isFetching || statusQ.isFetching || catalogQ.isFetching,
     error: serversQ.error ? ((serversQ.error as { message?: string }).message ?? 'failed to load') : undefined,
     saveServer,
     removeServer,
@@ -88,7 +88,7 @@ export function useMcpServerSettings(): McpServerSettingsStore {
     reconnect,
     refetch: () => {
       void serversQ.refetch();
-      void statusQ.refetch();
+      void loadStatus(undefined, false);
     }
   };
 }

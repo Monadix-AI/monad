@@ -314,10 +314,10 @@
       [role="listbox"],
       [role="slider"],
       [role="listitem"],
-      [tabindex]:not([tabindex="-1"]),
-      .cursor-default,
-      .cursor-pointer
-    ):not(:disabled):not([aria-disabled="true"]):not([data-preserve-cursor="true"]) {
+      [tabindex]:not([tabindex="-1"])
+    ):not(:disabled):not([aria-disabled="true"]):not(.monad-selectable):not([data-selectable="true"]):not(
+      [data-preserve-cursor="true"]
+    ) {
     cursor: pointer;
   }
 
@@ -343,18 +343,11 @@
       [role="listbox"],
       [role="slider"],
       [role="listitem"],
-      [tabindex]:not([tabindex="-1"]),
-      .cursor-default,
-      .cursor-pointer
+      [tabindex]:not([tabindex="-1"])
     ):not(:disabled):not([aria-disabled="true"]):not(.monad-selectable):not([data-selectable="true"]):not(
       [data-preserve-cursor="true"]
     ) {
-    cursor: auto;
-  }
-
-  html:not(.monad-interactive-cursor) :where(.monad-selectable, [data-selectable="true"]) {
-    cursor: text;
-    user-select: text;
+    cursor: default;
   }
 
   html[data-sidebar-resizing="true"],

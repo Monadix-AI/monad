@@ -249,7 +249,7 @@ export function AgentForm({
       ) : null}
       {showAdvanced ? (
         <details className="group rounded-md border bg-muted/20">
-          <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 font-medium text-xs">
+          <summary className="flex list-none items-center justify-between px-3 py-2 font-medium text-xs">
             {t('web.externalAgent.advanced')}
           </summary>
           <div className="flex flex-col gap-3 border-t p-3">

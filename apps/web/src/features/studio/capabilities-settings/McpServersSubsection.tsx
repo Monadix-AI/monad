@@ -52,7 +52,7 @@ export function McpServersSubsection() {
     servers,
     statusByName,
     catalog,
-    loading,
+    refreshing,
     saveServer,
     removeServer,
     setEnabled,
@@ -90,7 +90,7 @@ export function McpServersSubsection() {
             variant="ghost"
           >
             <HugeiconsIcon
-              className={cn(loading && 'animate-spin')}
+              className={cn(refreshing && 'animate-spin')}
               icon={Refresh01Icon}
             />
           </Button>

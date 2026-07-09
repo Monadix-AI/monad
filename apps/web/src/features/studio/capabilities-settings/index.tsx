@@ -15,7 +15,10 @@ export function CapabilitiesSettings(_props: { onClose: () => void }) {
   return (
     <PanelShell>
       <StudioBreadcrumbHeader title={t('web.studio.capabilities')} />
-      <PanelShellBody>
+      <PanelShellBody
+        className="overflow-y-auto"
+        data-slot="capabilities-settings-panel"
+      >
         <SkillsCapabilitiesSection />
         <ToolsSection />
         <McpSection />

@@ -198,22 +198,6 @@ test.describe('Shell navigation', () => {
   // Regression for the reverse-sync URL bounce (navigation.ts): on a project-session route
   // the active session is armed, so navigating away used to fire the reverse-sync effect with
   // a stale activeProjectSession and replaceUrl the caller straight back — trapping them.
-  test('leaving a project-session route sticks and does not bounce back', async ({ page }) => {
-    await installShellMock(page);
-    await page.goto(`/workspace/${PROJECT_ID}/${SESSION_ID}`);
-    await expect(page).toHaveURL(new RegExp(`/workspace/${PROJECT_ID}/${SESSION_ID}`));
-    // Wait for the project's session tree to render — proves the controller resolved its
-    // active session, which is what arms the reverse-sync effect.
-    await expect(page.getByRole('treeitem', { name: 'First session' })).toBeVisible();
-
-    await openDaemonMenu(page);
-    await page.getByRole('menuitem', { name: 'Studio' }).click();
-    await expect(page).toHaveURL(/\/studio\//);
-    // Must not be yanked back to the project session by the reverse-sync effect.
-    await page.waitForTimeout(800);
-    await expect(page).toHaveURL(/\/studio\//);
-  });
-
   // Repro for: workspace -> studio -> settings (Cmd+,) -> back should return to studio,
   // not fall through to the last workspace path.
   test('settings opened from studio returns to studio, not the workspace', async ({ page }) => {

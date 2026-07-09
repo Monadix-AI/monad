@@ -18,6 +18,7 @@ import {
   ChannelsStudioLoading,
   ExternalAgentsStudioLoading,
   HooksStudioLoading,
+  ImportStudioLoading,
   MemoryGraphStudioLoading,
   MemoryMem0StudioLoading,
   MemorySettingsStudioLoading,
@@ -90,6 +91,10 @@ const HooksSettings = lazyComponent(
   () => import('./hooks-settings/HooksSettings').then((m) => m.HooksSettings),
   HooksStudioLoading
 );
+const ImportSettings = lazyComponent(
+  () => import('./import-settings').then((m) => m.StudioImportSettings),
+  ImportStudioLoading
+);
 
 function SandboxSection() {
   return <SandboxDefaults />;
@@ -109,6 +114,7 @@ export const STUDIO_SECTION_COMPONENTS: Record<StudioSectionId, StudioSectionCom
   channels: ChannelsSettings,
   graph: GraphMemorySettings,
   hooks: HooksSettings,
+  import: ImportSettings,
   mcpAtoms: CapabilitiesSettings,
   mcpServers: CapabilitiesSettings,
   mem0: Mem0MemorySettings,

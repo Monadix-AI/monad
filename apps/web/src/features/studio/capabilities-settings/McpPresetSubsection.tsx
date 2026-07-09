@@ -126,7 +126,7 @@ function BrowserPresetDialog({ open, onClose }: { open: boolean; onClose: () => 
           </DialogTitle>
         </DialogHeader>
         <div className="flex flex-col gap-4">
-          <label className="flex cursor-pointer items-center gap-2">
+          <label className="flex items-center gap-2">
             <input
               checked={headless}
               className="size-4"
@@ -135,7 +135,7 @@ function BrowserPresetDialog({ open, onClose }: { open: boolean; onClose: () => 
             />
             <span className="text-sm">{t('web.tools.browserHeadless')}</span>
           </label>
-          <label className="flex cursor-pointer items-center gap-2">
+          <label className="flex items-center gap-2">
             <input
               checked={vision}
               className="size-4"
@@ -406,7 +406,7 @@ function ObscuraDialog({ open, onClose }: { open: boolean; onClose: () => void }
               <div className="flex items-center gap-2">
                 <input
                   checked={status.stealth}
-                  className="size-4 cursor-pointer"
+                  className="size-4"
                   disabled={busy}
                   id="obscura-stealth"
                   onChange={(e) => run(() => set({ enabled: true, stealth: e.target.checked }))}
@@ -459,7 +459,7 @@ function ObscuraDialog({ open, onClose }: { open: boolean; onClose: () => void }
               <div className="flex items-center gap-2">
                 <input
                   checked={stealthLocal}
-                  className="size-4 cursor-pointer"
+                  className="size-4"
                   disabled={busy}
                   id="obscura-stealth-pre"
                   onChange={(e) => setStealthLocal(e.target.checked)}
@@ -517,7 +517,7 @@ function PresetCard({
 }) {
   return (
     <Card
-      className="flex cursor-pointer flex-col gap-3 p-4 transition-colors hover:bg-muted/20"
+      className="flex flex-col gap-3 p-4 transition-colors hover:bg-muted/20"
       onClick={onConfigure}
     >
       <div className="flex items-start justify-between gap-2">

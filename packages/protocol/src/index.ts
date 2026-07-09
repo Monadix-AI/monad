@@ -40,6 +40,7 @@ export * from './rpc/method-table.ts';
 export * from './rpc/rpc.ts';
 export * from './rpc/rpc-methods.ts';
 export * from './settings/appearance-settings.ts';
+export * from './settings/capability-inventory.ts';
 export * from './settings/developer-settings.ts';
 export * from './settings/hooks-settings.ts';
 export * from './settings/network-settings.ts';

@@ -1,14 +1,9 @@
 import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
 
 import {
-  externalAgentSettingsImportApplyRequestSchema,
-  externalAgentSettingsImportApplyResultSchema,
-  externalAgentSettingsImportPreviewRequestSchema,
-  externalAgentSettingsImportPreviewSchema,
   getExternalAgentResponseSchema,
   httpErrorSchema,
   listExternalAgentPresetsResponseSchema,
-  listExternalAgentSettingsImportCandidatesResponseSchema,
   listExternalAgentsResponseSchema,
   okResponseSchema,
   upsertExternalAgentRequestSchema
@@ -33,37 +28,6 @@ export function createExternalAgentSettingsController(handlers: ReturnType<typeo
       response: { 200: getExternalAgentResponseSchema, 404: httpErrorSchema },
       detail: { summary: 'Get external agent', description: 'Returns one configured agent by name.' }
     })
-    .get(
-      '/external-agents/:name/import/candidates',
-      ({ params }) => handlers.externalAgentSettings.listExternalAgentSettingsImportCandidates({ name: params.name }),
-      {
-        params: agentParams,
-        response: { 200: listExternalAgentSettingsImportCandidatesResponseSchema },
-        detail: { summary: 'List external agent settings import candidates' }
-      }
-    )
-    .post(
-      '/external-agents/:name/import/preview',
-      ({ params, body }) =>
-        handlers.externalAgentSettings.previewExternalAgentSettingsImport({ name: params.name, request: body }),
-      {
-        params: agentParams,
-        body: externalAgentSettingsImportPreviewRequestSchema,
-        response: { 200: externalAgentSettingsImportPreviewSchema },
-        detail: { summary: 'Preview external agent settings import' }
-      }
-    )
-    .post(
-      '/external-agents/:name/import/apply',
-      ({ params, body }) =>
-        handlers.externalAgentSettings.applyExternalAgentSettingsImport({ name: params.name, request: body }),
-      {
-        params: agentParams,
-        body: externalAgentSettingsImportApplyRequestSchema,
-        response: { 200: externalAgentSettingsImportApplyResultSchema },
-        detail: { summary: 'Apply external agent settings import' }
-      }
-    )
     .put('/external-agents/:name', async ({ body }) => handlers.externalAgentSettings.upsertExternalAgent(body), {
       params: agentParams,
       body: upsertExternalAgentRequestSchema,

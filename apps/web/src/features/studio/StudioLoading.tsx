@@ -338,6 +338,30 @@ export function CapabilitiesStudioLoading() {
   );
 }
 
+export function ImportStudioLoading() {
+  return (
+    <PanelFrame>
+      <StudioHeaderSkeleton actions={0} />
+      <div className="mx-auto grid w-full max-w-6xl gap-5 overflow-hidden p-5">
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <Skeleton className="h-5 w-40 rounded" />
+            <Skeleton className="h-8 w-20 rounded-md" />
+          </div>
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,18rem),1fr))] gap-3">
+            {keys('inventory-card', 6).map((key) => (
+              <ListCardSkeleton
+                accessory="badge"
+                key={key}
+              />
+            ))}
+          </div>
+        </section>
+      </div>
+    </PanelFrame>
+  );
+}
+
 export function ApprovalsStudioLoading() {
   return (
     <PanelFrame>
@@ -609,6 +633,7 @@ const STUDIO_LOADING_COMPONENTS: Partial<Record<StudioSectionId, ComponentType>>
   externalAgents: ExternalAgentsStudioLoading,
   graph: MemoryGraphStudioLoading,
   hooks: HooksStudioLoading,
+  import: ImportStudioLoading,
   mcpAtoms: CapabilitiesStudioLoading,
   mcpServers: CapabilitiesStudioLoading,
   mem0: MemoryMem0StudioLoading,

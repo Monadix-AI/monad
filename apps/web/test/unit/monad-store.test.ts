@@ -57,6 +57,42 @@ test('resolveConnection uses the Vite proxy path in development', () => {
   }
 });
 
+test('resolveConnection uses same-origin daemon API in development when not on the Vite port', () => {
+  const originalWindow = globalThis.window;
+  const originalLocalStorage = globalThis.localStorage;
+  const originalNodeEnv = process.env.NODE_ENV;
+
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { location: { origin: 'https://127.0.0.1:52285' } },
+    writable: true
+  });
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: { getItem: () => null },
+    writable: true
+  });
+  process.env.NODE_ENV = 'development';
+
+  try {
+    expect(resolveConnection()).toEqual({
+      baseUrl: 'https://127.0.0.1:52285'
+    });
+  } finally {
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: originalWindow,
+      writable: true
+    });
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: originalLocalStorage,
+      writable: true
+    });
+    process.env.NODE_ENV = originalNodeEnv;
+  }
+});
+
 test('resolveConnection uses same-origin daemon API outside development', () => {
   const originalWindow = globalThis.window;
   const originalLocalStorage = globalThis.localStorage;

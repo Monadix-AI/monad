@@ -197,7 +197,7 @@ export function RuntimeOverview() {
             </section>
 
             <details className="group rounded-xl border bg-card">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 rounded-xl px-4 py-3 outline-none transition-colors hover:bg-accent/35 focus-visible:ring-2 focus-visible:ring-ring/40">
+              <summary className="flex list-none items-center justify-between gap-4 rounded-xl px-4 py-3 outline-none transition-colors hover:bg-accent/35 focus-visible:ring-2 focus-visible:ring-ring/40">
                 <span>
                   <span className="block font-medium text-sm">{t('web.studio.advancedRuntimeSettings')}</span>
                   <span className="mt-0.5 block text-muted-foreground text-xs">

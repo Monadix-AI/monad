@@ -36,6 +36,7 @@ import { createAcpAgentModule } from '#/handlers/settings/acp-agent/index.ts';
 import { createAgentModule } from '#/handlers/settings/agent/index.ts';
 import { createAppearanceModule } from '#/handlers/settings/appearance/index.ts';
 import { createBrowserPresetModule } from '#/handlers/settings/browser-preset/index.ts';
+import { createCapabilityInventoryModule } from '#/handlers/settings/capability-inventory/index.ts';
 import { createChannelModule } from '#/handlers/settings/channel/index.ts';
 import { createComputerPresetModule } from '#/handlers/settings/computer-preset/index.ts';
 import { createDeveloperModule } from '#/handlers/settings/developer/index.ts';
@@ -346,6 +347,7 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
       configBus: deps.configBus,
       mcpReconnect: deps.mcpReconnect
     }),
+    capabilityInventory: createCapabilityInventoryModule(paths),
     atoms: createAtomPacksModule({
       paths,
       onChanged: deps.rediscoverAtomPacks,

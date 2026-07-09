@@ -499,7 +499,7 @@ export function InitWizard({ homePath }: { homePath?: string }) {
               </button>
             </div>
             <details className="rounded-md border bg-muted/20">
-              <summary className="cursor-pointer px-3 py-2 text-muted-foreground text-xs hover:text-foreground">
+              <summary className="px-3 py-2 text-muted-foreground text-xs hover:text-foreground">
                 {t('web.init.homeAdvanced')}
               </summary>
               <div className="flex flex-col gap-2 border-t px-3 py-3">

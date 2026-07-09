@@ -43,7 +43,7 @@ export function AppShellSidebarReveal({ onOpenWorkspace }: { onOpenWorkspace: ()
       >
         <button
           aria-label="Monad"
-          className="poster-heading flex min-w-0 cursor-pointer items-center text-foreground transition hover:text-foreground"
+          className="poster-heading flex min-w-0 items-center text-foreground transition hover:text-foreground"
           onClick={onOpenWorkspace}
           type="button"
         >

@@ -1,10 +1,5 @@
 import type { WebMessageIdWithoutParams } from '@monad/i18n/browser';
-import type {
-  ExternalAgentPresetView,
-  ExternalAgentProjectTemplate,
-  ExternalAgentSettingsImportItem,
-  ExternalAgentView
-} from '@monad/protocol';
+import type { ExternalAgentPresetView, ExternalAgentProjectTemplate, ExternalAgentView } from '@monad/protocol';
 
 export const argsToStr = (args?: string[]): string => (args ?? []).join(' ');
 export const strToArgs = (s: string): string[] => s.split(/\s+/).filter(Boolean);
@@ -29,18 +24,6 @@ export const strToEnv = (s: string): Record<string, string> => {
   }
   return out;
 };
-
-export function errorMessage(error: unknown): string {
-  if (error && typeof error === 'object' && 'message' in error) {
-    const message = (error as { message?: unknown }).message;
-    if (typeof message === 'string') return message;
-  }
-  return error instanceof Error ? error.message : String(error);
-}
-
-export function canApplyImportItem(item: ExternalAgentSettingsImportItem): boolean {
-  return item.category === 'externalAgents' && (item.action === 'add' || item.action === 'update');
-}
 
 export const nextTemplateId = (templates: readonly ExternalAgentProjectTemplate[]): string => {
   for (let index = templates.length + 1; index < 1000; index += 1) {

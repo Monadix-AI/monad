@@ -13,6 +13,8 @@ export interface MonadConnectionConfig {
   wsBaseUrl?: string;
 }
 
+declare const __MONAD_WEB_PORT__: string | undefined;
+
 const ERROR_DETAIL_LIMIT = 3000;
 const UPGRADE_RESTART_SUPPRESS_UNTIL_KEY = 'monad:upgradeRestartSuppressUntil';
 let upgradeReloadWatcher: number | null = null;
@@ -152,8 +154,19 @@ export function resolveConnection(): MonadConnectionConfig {
     return { baseUrl: remoteUrl.replace(/\/$/, ''), token: token || undefined };
   }
 
-  const localApiBase = process.env.NODE_ENV === 'development' ? '/api' : '';
+  const localApiBase = process.env.NODE_ENV === 'development' && isViteDevOrigin(window.location.origin) ? '/api' : '';
   return { baseUrl: `${window.location.origin}${localApiBase}` };
+}
+
+function isViteDevOrigin(origin: string): boolean {
+  const webPort = typeof __MONAD_WEB_PORT__ === 'string' && __MONAD_WEB_PORT__ ? __MONAD_WEB_PORT__ : '3000';
+  try {
+    const url = new URL(origin);
+    const port = url.port || (url.protocol === 'https:' ? '443' : '80');
+    return port === webPort;
+  } catch {
+    return false;
+  }
 }
 
 export function daemonApiUrl(baseUrl: string, path: `/${string}`): string {

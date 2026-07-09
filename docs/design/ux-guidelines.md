@@ -22,6 +22,22 @@
   `[@media_(hover:none),_(pointer:coarse)]` fallback so touch users can see and tap
   the controls without first discovering an invisible hit area.
 
+## Cursor and selection defaults
+
+- Do not use a hand pointer as the global interaction affordance. Monad follows the
+  Settings surface model: buttons, links, tabs, menu items, summaries, rows, and
+  other clickable controls should keep the platform/default cursor unless a specific
+  interaction requires a different cursor.
+- Do not make text globally selectable. Enable selection case by case only where
+  copying is part of the expected workflow, such as inputs, code blocks, terminal
+  output, logs, transcripts, generated messages, or explicit copy/reference surfaces.
+- In `apps/web`, use `.monad-selectable` or `data-selectable="true"` for those
+  explicit copy surfaces. Avoid scattering `select-text`, `select-auto`, or custom
+  `user-select` rules across ordinary layout, chrome, labels, nav, and cards.
+- Cursor exceptions should describe a concrete manipulation state, for example
+  resize, drag, disabled/not-allowed, or text insertion. They should not be used
+  simply to mark an element as clickable.
+
 ## Internationalisation (i18n)
 
 Monad uses i18next (CLI/daemon) and react-i18next (web). Language packs live in

@@ -30,7 +30,15 @@ export function resolvePlaywrightWebPort(
   return parsePort(env.WEB_PORT) ?? parsePort(readEnvValue(envPath, 'WEB_PORT')) ?? DEFAULT_WEB_PORT;
 }
 
+export function resolvePlaywrightDaemonPort(
+  env: NodeJS.ProcessEnv | { MONAD_PORT?: string | undefined } = process.env,
+  envPath = repoEnvPath
+): number | undefined {
+  return parsePort(env.MONAD_PORT) ?? parsePort(readEnvValue(envPath, 'MONAD_PORT'));
+}
+
 const port = resolvePlaywrightWebPort();
+const daemonPort = resolvePlaywrightDaemonPort();
 
 export default defineConfig({
   testDir: './test/e2e',
@@ -45,6 +53,7 @@ export default defineConfig({
   webServer: {
     command: `bunx --bun vite --host 0.0.0.0 --port ${port}`,
     env: {
+      ...(daemonPort ? { MONAD_PORT: String(daemonPort) } : {}),
       WEB_PORT: String(port)
     },
     url: `http://localhost:${port}`,

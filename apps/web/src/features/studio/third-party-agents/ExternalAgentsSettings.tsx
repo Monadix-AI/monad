@@ -17,7 +17,6 @@ import { useAsyncAction } from '#/hooks/use-async-action';
 import { useExternalAgentSettings } from '#/hooks/use-external-agent-settings';
 import { AgentForm } from './ExternalAgentForm';
 import { ExternalAgentPresetPanel } from './ExternalAgentPresetPanel';
-import { ExternalAgentSettingsImportDialog } from './ExternalAgentSettingsImportDialog';
 import { connectExternalAgent } from './external-agent-connect-agent';
 import { DETECTING_EXTERNAL_AGENT_PRESETS } from './external-agent-default-presets';
 import { BLANK_AGENT, presetForAgent } from './external-agent-settings-utils';
@@ -28,7 +27,6 @@ export function ExternalAgentsSettings({ embedded = false }: { onClose: () => vo
     useExternalAgentSettings();
   const [draft, setDraft] = useState<ExternalAgentView | null>(null);
   const [editingAgent, setEditingAgent] = useState<ExternalAgentView | null>(null);
-  const [importPreset, setImportPreset] = useState<ExternalAgentPresetView | null>(null);
   const [authSession, setAuthSession] = useState<{
     id: string;
     controlToken: string;
@@ -114,7 +112,6 @@ export function ExternalAgentsSettings({ embedded = false }: { onClose: () => vo
               presets={visiblePresets}
               removeAgent={removeAgent}
               setEditingAgent={setEditingAgent}
-              setImportPreset={setImportPreset}
             />
           ) : null}
 
@@ -177,22 +174,6 @@ export function ExternalAgentsSettings({ embedded = false }: { onClose: () => vo
               preset={presetForAgent(editingAgent, presets)}
               submitLabel={t('web.save')}
               variant="framed"
-            />
-          ) : null}
-        </DialogContent>
-      </Dialog>
-      <Dialog
-        onOpenChange={(open) => {
-          if (!open) setImportPreset(null);
-        }}
-        open={!!importPreset}
-      >
-        <DialogContent className="max-h-[min(42rem,calc(100vh-2rem))] overflow-hidden p-0 sm:max-w-2xl">
-          {importPreset ? (
-            <ExternalAgentSettingsImportDialog
-              onApplied={refetch}
-              onClose={() => setImportPreset(null)}
-              preset={importPreset}
             />
           ) : null}
         </DialogContent>

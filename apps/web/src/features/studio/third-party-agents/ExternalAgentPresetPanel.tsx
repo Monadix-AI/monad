@@ -3,7 +3,6 @@ import type { ExternalAgentPresetView, ExternalAgentView } from '@monad/protocol
 import {
   CircleCheckIcon,
   ExternalLinkIcon,
-  FileInputIcon,
   LoaderPinwheelIcon,
   Plug01Icon,
   Search01Icon,
@@ -25,8 +24,7 @@ export function ExternalAgentPresetPanel({
   detecting = false,
   openInstallPage,
   removeAgent,
-  setEditingAgent,
-  setImportPreset
+  setEditingAgent
 }: {
   agents: ExternalAgentView[];
   presets: ExternalAgentPresetView[];
@@ -38,7 +36,6 @@ export function ExternalAgentPresetPanel({
   openInstallPage: (preset: ExternalAgentPresetView) => void;
   removeAgent: (name: string) => Promise<void>;
   setEditingAgent?: (agent: ExternalAgentView) => void;
-  setImportPreset?: (preset: ExternalAgentPresetView) => void;
 }) {
   const t = useT();
 
@@ -189,7 +186,6 @@ export function ExternalAgentPresetPanel({
             preset={preset}
             removeAgent={removeAgent}
             setEditingAgent={setEditingAgent}
-            setImportPreset={setImportPreset}
             statusAuth={authStates[preset.id]}
           />
         ))}
@@ -209,8 +205,7 @@ function ExternalAgentPresetRow({
   detecting,
   openInstallPage,
   removeAgent,
-  setEditingAgent,
-  setImportPreset
+  setEditingAgent
 }: {
   preset: ExternalAgentPresetView;
   agent: ExternalAgentView;
@@ -223,7 +218,6 @@ function ExternalAgentPresetRow({
   openInstallPage: (preset: ExternalAgentPresetView) => void;
   removeAgent: (name: string) => Promise<void>;
   setEditingAgent?: (agent: ExternalAgentView) => void;
-  setImportPreset?: (preset: ExternalAgentPresetView) => void;
 }) {
   const t = useT();
   const isConnected = preset.installed && statusAuth === 'authenticated' && connectedAgent;
@@ -289,7 +283,6 @@ function ExternalAgentPresetRow({
                 {t('web.settings.title')}
               </Button>
             ) : null}
-            {setImportPreset ? <ImportButton onClick={() => setImportPreset(preset)} /> : null}
             <Button
               className="border-transparent"
               onClick={() => removeAgent(connectedAgent.name)}
@@ -326,7 +319,6 @@ function ExternalAgentPresetRow({
               )}
               {t('web.externalAgent.connect')}
             </Button>
-            {setImportPreset ? <ImportButton onClick={() => setImportPreset(preset)} /> : null}
           </>
         ) : (
           <>
@@ -335,7 +327,6 @@ function ExternalAgentPresetRow({
               label={t('web.externalAgent.notDetected')}
               tone="missing"
             />
-            {setImportPreset ? <ImportButton onClick={() => setImportPreset(preset)} /> : null}
             <Button
               className="border-transparent"
               onClick={() => openInstallPage(preset)}
@@ -372,22 +363,5 @@ function StatusPill({
       />
       {label}
     </span>
-  );
-}
-
-function ImportButton({ onClick }: { onClick: () => void }) {
-  const t = useT();
-
-  return (
-    <Button
-      className="border-transparent"
-      onClick={onClick}
-      size="sm"
-      type="button"
-      variant="ghost"
-    >
-      <HugeiconsIcon icon={FileInputIcon} />
-      {t('web.externalAgent.importSettings')}
-    </Button>
   );
 }

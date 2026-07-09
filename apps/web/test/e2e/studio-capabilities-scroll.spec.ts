@@ -24,6 +24,7 @@ async function installCapabilitiesApiMock(page: Page) {
     if (method === 'GET' && path === '/v1/sessions') {
       return json({ sessions: [], total: 0, limit: 50, offset: 0 });
     }
+    if (method === 'GET' && path === '/v1/workplace/projects') return json({ projects: [] });
     if (method === 'GET' && path === '/v1/commands') return json({ commands: [] });
     if (
       method === 'GET' &&
@@ -38,6 +39,9 @@ async function installCapabilitiesApiMock(page: Page) {
     if (method === 'GET' && path === '/v1/settings/locale') return json({ locale: 'en' });
     if (method === 'GET' && path === '/v1/settings/locales') {
       return json({ locales: [{ locale: 'en', label: 'English', source: 'built-in' }] });
+    }
+    if (method === 'GET' && path === '/v1/settings/appearance') {
+      return json({ theme: 'system', assistantAvatarStyle: 'initials', userAvatarStyle: 'initials' });
     }
     if (method === 'GET' && path === '/v1/i18n/catalog') return json({ locale: 'en', messages: {} });
 
@@ -98,6 +102,60 @@ async function installCapabilitiesApiMock(page: Page) {
         autoloadDisabled: []
       });
     }
+    if (method === 'GET' && path === '/v1/settings/capability-inventory') {
+      return json({
+        roots: [
+          {
+            source: 'shared',
+            sourceLabel: 'Shared agents',
+            scope: 'user',
+            kind: 'skills',
+            path: '/home/test/.agents/skills',
+            exists: true,
+            shared: true
+          },
+          {
+            source: 'codex',
+            sourceLabel: 'Codex',
+            scope: 'user',
+            kind: 'mcpServers',
+            path: '/home/test/.codex/config.toml',
+            exists: true,
+            shared: false
+          }
+        ],
+        items: [
+          {
+            id: 'skill:shared:user:research',
+            kind: 'skill',
+            name: 'research',
+            description: 'Shared research workflow',
+            source: 'shared',
+            sourceLabel: 'Shared agents',
+            scope: 'user',
+            path: '/home/test/.agents/skills/research',
+            shared: true,
+            hash: 'sha256-research',
+            warnings: []
+          },
+          {
+            id: 'mcp:codex:user:browser',
+            kind: 'mcpServer',
+            name: 'browser',
+            source: 'codex',
+            sourceLabel: 'Codex',
+            scope: 'user',
+            path: '/home/test/.codex/config.toml',
+            shared: false,
+            hash: 'sha256-browser',
+            warnings: [],
+            transport: 'stdio',
+            command: 'npx'
+          }
+        ],
+        warnings: []
+      });
+    }
     if (method === 'GET' && path === '/v1/settings/mcp-servers') {
       return json({
         servers: Array.from({ length: 8 }, (_, index) => ({
@@ -146,6 +204,8 @@ test('Studio capabilities content scrolls within the panel', async ({ page }) =>
 
   await page.goto('/studio/capabilities');
   await expect(page.getByRole('heading', { name: /Studio\s*\/\s*Capabilities/ })).toBeVisible();
+  await expect(page.getByText('Configured servers', { exact: true })).toBeVisible();
+  await expect(page.getByText('config-server-8')).toBeVisible();
   await expect(page.getByText('atom-server-8')).toBeVisible();
   await expect
     .poll(async () =>
@@ -160,7 +220,7 @@ test('Studio capabilities content scrolls within the panel', async ({ page }) =>
     )
     .not.toMatch(/Browser \(Playwright\)|Computer Use|Obscura/);
 
-  const viewport = page.locator('[data-slot="scroll-area-viewport"]').first();
+  const viewport = page.locator('[data-slot="capabilities-settings-panel"]');
   await expect
     .poll(async () =>
       viewport.evaluate((element) => ({
@@ -179,23 +239,22 @@ test('Studio capabilities content scrolls within the panel', async ({ page }) =>
   await expect.poll(async () => viewport.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
 });
 
-test('settings route opens from canonical Studio routes', async ({ page }) => {
+test('settings canonical routes render from Studio context', async ({ page }) => {
   await installCapabilitiesApiMock(page);
 
   await page.goto('/studio/capabilities');
-  await page.keyboard.press('ControlOrMeta+,');
+  await expect(page.getByText('Configured servers', { exact: true })).toBeVisible();
+  await page.goto('/settings/connection');
   await expect(page).toHaveURL(/\/settings\/connection$/);
-  await page.getByRole('button', { name: 'Experience' }).click();
+  await page.getByRole('link', { name: 'Experience' }).click();
   await expect(page).toHaveURL(/\/settings\/experience$/);
   await expect(page.getByRole('heading', { name: 'Experience' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Experience' })).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByRole('link', { name: 'Experience' })).toHaveAttribute('aria-current', 'page');
 
-  await page.getByRole('button', { name: 'Connection' }).click();
+  await page.getByRole('link', { name: 'Connection' }).click();
   await expect(page).toHaveURL(/\/settings\/connection$/);
   await expect(page.getByRole('heading', { name: 'Connection' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Connection' })).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByRole('link', { name: 'Connection' })).toHaveAttribute('aria-current', 'page');
 
-  await page.getByRole('button', { name: 'Back' }).click();
-  await expect(page).toHaveURL(/\/studio\/capabilities$/);
-  await expect(page.getByRole('heading', { name: 'Connection' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Experience' })).toHaveCount(0);
 });

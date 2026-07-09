@@ -83,7 +83,7 @@ export function ProjectList({
               <ShellLink
                 aria-current={active ? 'page' : undefined}
                 aria-expanded={expanded}
-                className="flex min-h-9 min-w-0 flex-1 cursor-pointer items-center gap-2 px-2.5 py-1.5 text-left"
+                className="flex min-h-9 min-w-0 flex-1 items-center gap-2 px-2.5 py-1.5 text-left"
                 href={projectHref}
                 onClick={(event) => {
                   event.preventDefault();
@@ -174,7 +174,7 @@ export function ProjectList({
                     <ShellLink
                       aria-current={sessionActive ? 'page' : undefined}
                       className={cn(
-                        'min-h-8 cursor-pointer rounded-(--radius-sm) px-2 py-1.5 text-left text-muted-foreground text-sm transition hover:bg-sidebar-accent hover:text-foreground',
+                        'min-h-8 rounded-(--radius-sm) px-2 py-1.5 text-left text-muted-foreground text-sm transition hover:bg-sidebar-accent hover:text-foreground',
                         sessionActive && 'bg-sidebar-selected/70 text-foreground'
                       )}
                       href={projectSessionPath(project.id, session.id)}
@@ -219,7 +219,7 @@ export function PinnedSessionList({
           <ShellLink
             aria-current={active ? 'page' : undefined}
             className={cn(
-              'flex min-h-8 cursor-pointer items-center gap-2 rounded-(--radius-sm) px-2.5 py-1.5 text-left text-muted-foreground text-sm transition hover:bg-sidebar-accent hover:text-foreground',
+              'flex min-h-8 items-center gap-2 rounded-(--radius-sm) px-2.5 py-1.5 text-left text-muted-foreground text-sm transition hover:bg-sidebar-accent hover:text-foreground',
               active && 'bg-sidebar-selected/70 text-foreground'
             )}
             href={projectSessionPath(projectId, session.id)}

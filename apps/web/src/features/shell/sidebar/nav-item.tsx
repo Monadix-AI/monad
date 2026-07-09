@@ -23,7 +23,7 @@ export function sidebarItemStateClass({ active, disabled }: { active?: boolean; 
 // Hover-revealed icon action buttons inside a project row (settings, pin).
 export function sidebarIconButtonClass({ active }: { active?: boolean } = {}): string {
   return cn(
-    'flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-(--radius-sm) text-muted-foreground opacity-0 transition hover:bg-sidebar-accent hover:text-foreground focus-visible:opacity-100 group-focus-within/project-tree:opacity-100 group-hover/project-tree:opacity-100 [@media_(hover:none),_(pointer:coarse)]:opacity-100',
+    'flex size-7 shrink-0 items-center justify-center rounded-(--radius-sm) text-muted-foreground opacity-0 transition hover:bg-sidebar-accent hover:text-foreground focus-visible:opacity-100 group-focus-within/project-tree:opacity-100 group-hover/project-tree:opacity-100 [@media_(hover:none),_(pointer:coarse)]:opacity-100',
     active && 'text-foreground opacity-100'
   );
 }
@@ -73,7 +73,7 @@ export function SidebarNavItem({
   shortcutValue?: number | string;
 }) {
   const className = cn(
-    'group/item relative flex min-h-9 w-full cursor-pointer items-center gap-2.5 rounded-(--radius-md) px-2.5 py-2 text-left',
+    'group/item relative flex min-h-9 w-full items-center gap-2.5 rounded-(--radius-md) px-2.5 py-2 text-left',
     sidebarItemStateClass({ active, disabled })
   );
   const content = (
