@@ -5,6 +5,7 @@
 
 import type { MonadConfig, MonadPaths } from '@monad/home';
 import type { NetworkRuntimeStatus } from '@monad/protocol';
+import type { TlsSetup } from '#/bootstrap/tls.ts';
 import type { ChannelService } from '#/channels/channel.ts';
 import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
 import type { ConfigBus } from '#/services/config-bus.ts';
@@ -75,7 +76,8 @@ export interface ServeDeps {
   setMoEnabled: (enabled: boolean) => Promise<void>;
   tlsCert?: { certPath: string; keyPath: string };
   tlsFingerprint?: string;
-  developerMode: boolean;
+  resolveTlsSetupForNetwork?: (https: MonadConfig['network']['https']) => Promise<TlsSetup>;
+  developerMode: boolean | (() => boolean);
   i18n: I18nService;
   channelService: ChannelService;
   configBus?: ConfigBus;
@@ -130,6 +132,10 @@ export function daemonWebUiUrl(opts: {
 
 export function shouldEnableDeveloperDocs(opts: { developerMode: boolean; stdoutRpc: boolean }): boolean {
   return opts.developerMode && !opts.stdoutRpc;
+}
+
+function resolveDeveloperMode(value: boolean | (() => boolean)): boolean {
+  return typeof value === 'function' ? value() : value;
 }
 
 export function resolveServeDeveloperMode(opts: {
@@ -318,13 +324,15 @@ export async function serveDaemon(deps: ServeDeps): Promise<void> {
   } = deps;
   const { devMode, devSilent, stdoutRpc, stdioMode, useMock } = flags;
 
-  const activeDeveloperMode = resolveServeDeveloperMode({ configured: developerMode, devMode, devSilent });
+  const liveDeveloperMode = () =>
+    resolveServeDeveloperMode({ configured: resolveDeveloperMode(developerMode), devMode, devSilent });
+  const activeDeveloperMode = liveDeveloperMode();
   const developerDocs = shouldEnableDeveloperDocs({ developerMode: activeDeveloperMode, stdoutRpc });
 
   const remoteAccessState = createRemoteAccessState(remoteAccess);
   const httpApp = createHttpTransport(handlers, {
     docs: developerDocs,
-    developerMode: activeDeveloperMode,
+    developerMode: liveDeveloperMode,
     remoteAccess: remoteAccessState,
     openaiCompatConfig
   });
@@ -377,6 +385,9 @@ export async function serveDaemon(deps: ServeDeps): Promise<void> {
   });
   configBus?.subscribe(async ({ cfg }) => {
     const endpoint = resolveDaemonNetwork({ network: cfg.network, env: Bun.env });
+    const nextTlsSetup = deps.resolveTlsSetupForNetwork
+      ? await deps.resolveTlsSetupForNetwork(cfg.network.https)
+      : { cert: tlsCert, warnings: [] };
     await tcpRuntime.apply({
       host: endpoint.bindHost,
       port: endpoint.port,
@@ -386,7 +397,7 @@ export async function serveDaemon(deps: ServeDeps): Promise<void> {
         enabled: cfg.network.localHttpFallback.enabled,
         port: endpoint.localHttpFallback?.port ?? cfg.network.localHttpFallback.port
       },
-      tlsCert
+      tlsCert: nextTlsSetup.cert
     });
   });
 

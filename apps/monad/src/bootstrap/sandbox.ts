@@ -79,7 +79,7 @@ export async function createSandbox(
   void sweepOrphanAppContainerProfiles();
 
   if (cfg.sandbox.confine) {
-    // The override path for the native Linux/Windows launcher binary (config.agent.sandbox.launcherPath)
+    // The override path for the native Linux/Windows launcher binary (config.sandbox.launcherPath)
     // must reach the launcher atoms before selection probes their isAvailable(); push it now (the
     // launchers are static atom objects that read it lazily). The actual launcher is selected after
     // the atom packs load — see finalizeSandboxLauncher().

@@ -114,37 +114,22 @@ test('temporary sidebar auto reveal does not overwrite stored collapsed preferen
   expect(values.get(SIDEBAR_COLLAPSED_STORAGE_KEY)).toBe('true');
 });
 
-test('shell store keeps project session coordination as client-only state', () => {
-  const switchSession = () => {};
-  useWorkspaceShellStore.setState({
-    activeProjectSession: null,
-    pendingProjectSession: null
-  });
+test('active project session holds reverse-sync data only (no callbacks) and clears on openWorkspace', () => {
+  useWorkspaceShellStore.setState({ activeProjectSession: null });
 
   useWorkspaceShellStore.getState().setActiveProjectSession({
     activeSessionId: 'ses_ACTIVE000000' as never,
-    projectId: 'prj_ACTIVE000000',
-    switchSession
-  });
-  useWorkspaceShellStore.getState().setPendingProjectSession({
-    projectId: 'prj_ACTIVE000000',
-    sessionId: 'ses_PENDING00000' as never
+    projectId: 'prj_ACTIVE000000'
   });
 
   expect(useWorkspaceShellStore.getState().activeProjectSession).toEqual({
     activeSessionId: 'ses_ACTIVE000000',
-    projectId: 'prj_ACTIVE000000',
-    switchSession
-  });
-  expect(useWorkspaceShellStore.getState().pendingProjectSession).toEqual({
-    projectId: 'prj_ACTIVE000000',
-    sessionId: 'ses_PENDING00000'
+    projectId: 'prj_ACTIVE000000'
   });
 
   useWorkspaceShellStore.getState().openWorkspace();
 
   expect(useWorkspaceShellStore.getState().activeProjectSession).toBeNull();
-  expect(useWorkspaceShellStore.getState().pendingProjectSession).toBeNull();
 });
 
 test('right panel open state toggles and resolves through explicit open/close', () => {

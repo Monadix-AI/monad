@@ -112,19 +112,11 @@ export function ProfileSettings() {
             <h3 className="font-semibold text-sm">{t('web.settings.profile.avatar')}</h3>
             <div className="flex items-center gap-4">
               <div className="relative flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-full border bg-muted font-semibold text-lg">
-                {avatarDataUrl ? (
-                  <img
-                    alt=""
-                    className="absolute inset-0 size-full object-cover"
-                    src={avatarDataUrl}
-                  />
-                ) : (
-                  <img
-                    alt=""
-                    className="absolute inset-0 size-full object-cover"
-                    src={generatedAvatarUrl}
-                  />
-                )}
+                <div
+                  aria-hidden="true"
+                  className="absolute inset-0 size-full bg-center bg-cover"
+                  style={{ backgroundImage: `url(${avatarDataUrl ?? generatedAvatarUrl})` }}
+                />
               </div>
               <div className="flex flex-wrap gap-2">
                 <input

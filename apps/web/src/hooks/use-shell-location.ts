@@ -11,7 +11,7 @@ export type ShellNavigateMode = 'push' | 'replace';
 // routing source instead of hand-rolled history.pushState + synthetic popstate events.
 let shellRouter: AnyRouter | null = null;
 
-export function setShellRouter(router: AnyRouter): void {
+export function setShellRouter(router: AnyRouter | null): void {
   shellRouter = router;
 }
 

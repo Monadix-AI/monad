@@ -15,8 +15,8 @@ import { cn } from '@monad/ui';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useEffect, useMemo, useState } from 'react';
 
+import { useShellRoute } from '#/features/shell/routing/use-shell-route';
 import { ProjectDebugConsole } from '#/features/workplace/debug/ProjectDebugConsole';
-import { useWorkspaceShellStore } from '#/lib/workspace-shell-store';
 
 declare const __MONAD_DEV_TOOL_PORTS__: {
   aiSdk?: string;
@@ -124,9 +124,8 @@ export function buildDevToolActions({
 }
 
 export function DevToolsWidget() {
-  const activeProjectId = useWorkspaceShellStore((state) =>
-    state.surface === 'workspace' ? state.activeProjectId : null
-  );
+  const { isWorkspaceRoute, routedProjectId } = useShellRoute();
+  const activeProjectId = isWorkspaceRoute ? routedProjectId : null;
   const prefersReducedMotion = useReducedMotion();
   const [developerModeOpen, setDeveloperModeOpen] = useState(false);
   const [open, setOpen] = useState(false);

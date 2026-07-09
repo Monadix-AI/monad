@@ -35,12 +35,10 @@ const capabilityIconSrc: Record<CapabilityIconId, string> = {
 
 export function CapabilityIcon({ className, icon }: { className?: string; icon: CapabilityIconId }) {
   return (
-    <img
-      alt=""
+    <span
       aria-hidden="true"
-      className={cn('block object-contain', className)}
-      draggable={false}
-      src={capabilityIconSrc[icon]}
+      className={cn('block bg-center bg-contain bg-no-repeat', className)}
+      style={{ backgroundImage: `url(${capabilityIconSrc[icon]})` }}
     />
   );
 }

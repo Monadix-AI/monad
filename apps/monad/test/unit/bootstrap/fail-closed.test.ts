@@ -13,7 +13,7 @@ import { join } from 'node:path';
 import { createDefaultConfig, pathsForHome } from '@monad/home';
 
 import { createSandbox, finalizeSandboxLauncher } from '#/bootstrap/sandbox.ts';
-import { createTlsCert } from '#/bootstrap/tls.ts';
+import { createTlsCert, resolveTlsSetupForNetwork } from '#/bootstrap/tls.ts';
 import { clearSandboxLaunchers, configureSandboxLauncher, noneLauncher } from '#/capabilities/tools';
 
 let tlsDir: string;
@@ -71,6 +71,61 @@ test('createTlsCert throws when cert generation fails (fail-closed)', async () =
       }
     )
   ).rejects.toThrow(/TLS certificate generation failed/);
+});
+
+test('resolveTlsSetupForNetwork skips provisioning while HTTPS is disabled', async () => {
+  let provisioned = false;
+  const out = await resolveTlsSetupForNetwork({
+    https: { enabled: false },
+    tlsDir,
+    provision: async () => {
+      provisioned = true;
+      return { cert: { certPath: 'cert.pem', keyPath: 'key.pem' }, warnings: [] };
+    }
+  });
+
+  expect(provisioned).toBe(false);
+  expect(out).toEqual({ warnings: ['tls:https-disabled'] });
+});
+
+test('resolveTlsSetupForNetwork reuses a current certificate when HTTPS stays enabled', async () => {
+  const current = {
+    cert: { certPath: 'cert.pem', keyPath: 'key.pem' },
+    fingerprint: 'sha256',
+    expiry: '2030-01-01T00:00:00.000Z',
+    warnings: []
+  };
+  let provisioned = false;
+
+  const out = await resolveTlsSetupForNetwork({
+    https: { enabled: true },
+    tlsDir,
+    current,
+    provision: async () => {
+      provisioned = true;
+      return { cert: { certPath: 'next-cert.pem', keyPath: 'next-key.pem' }, warnings: [] };
+    }
+  });
+
+  expect(provisioned).toBe(false);
+  expect(out).toBe(current);
+});
+
+test('resolveTlsSetupForNetwork provisions a certificate when HTTPS is enabled by hot reload', async () => {
+  const out = await resolveTlsSetupForNetwork({
+    https: { enabled: true },
+    tlsDir,
+    current: { warnings: ['tls:https-disabled'] },
+    provision: async ({ tlsDir: dir }) => ({
+      cert: { certPath: join(dir, 'cert.pem'), keyPath: join(dir, 'key.pem') },
+      fingerprint: 'sha256',
+      expiry: '2030-01-01T00:00:00.000Z',
+      warnings: []
+    })
+  });
+
+  expect(out.cert).toEqual({ certPath: join(tlsDir, 'cert.pem'), keyPath: join(tlsDir, 'key.pem') });
+  expect(out.fingerprint).toBe('sha256');
 });
 
 // ── sandbox fail-closed ──────────────────────────────────────────────────────────

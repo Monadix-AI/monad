@@ -25,7 +25,35 @@ test('network settings apply through config bus without requiring a daemon resta
     expect(result.remoteAccess.enabled).toBe(true);
     expect(result.remoteAccess.token).toBeString();
     expect(result.restartRequired).toBe(false);
+    expect(published).toEqual([]);
+
+    await Bun.sleep(75);
     expect(published).toEqual([true]);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('network HTTPS scheme changes publish after the settings response returns', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'monad-network-settings-'));
+  try {
+    const paths = makeTestPaths(dir);
+    await initMonadHome(paths);
+    const published: boolean[] = [];
+    const configBus = new ConfigBus();
+    configBus.subscribe(({ cfg }) => {
+      published.push(cfg.network.https.enabled);
+    });
+
+    const mod = createNetworkModule(paths, configBus);
+    const result = await mod.setNetworkSettings({ https: { enabled: false } });
+
+    expect(result.https.enabled).toBe(false);
+    expect(result.restartRequired).toBe(false);
+    expect(published).toEqual([]);
+
+    await Bun.sleep(75);
+    expect(published).toEqual([false]);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

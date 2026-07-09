@@ -5,7 +5,7 @@ import type { ProjectExperienceDefinition } from '#/features/workplace/experienc
 import type { ProjectController } from '#/features/workplace/use-project';
 
 import { useListWorkspaceExperiencesQuery } from '@monad/client-rtk';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { listProjectExperiences, toProjectExperienceDefinitions } from '#/features/workplace/experiences/registry';
 import { Workplace } from '#/features/workplace/Workplace';
@@ -93,8 +93,6 @@ export function WorkspaceRoute({
     participants: EMPTY_PROJECT_PARTICIPANTS,
     signature: ''
   });
-  const switchSessionRef = useRef<ProjectController['switchSession'] | null>(null);
-  const switchSession = useCallback((id: SessionId) => switchSessionRef.current?.(id), []);
   const [cachedProjectEntries, setCachedProjectEntries] = useState<CachedProjectEntry[]>([]);
   const openProjectSettingsInStore = useWorkplaceUiStore((state) => state.openProjectSettings);
   const setActiveProjectSession = useWorkspaceShellStore((state) => state.setActiveProjectSession);
@@ -131,8 +129,6 @@ export function WorkspaceRoute({
           const next = routedSession?.title ?? null;
           return current === next ? current : next;
         });
-        switchSessionRef.current = project.switchSession;
-        project.switchSession(activeProjectSessionId);
         return;
       }
       setActiveSessionId((current) => (current === project.activeSessionId ? current : project.activeSessionId));
@@ -140,7 +136,6 @@ export function WorkspaceRoute({
         const next = project.projectSessions.find((session) => session.id === project.activeSessionId)?.title ?? null;
         return current === next ? current : next;
       });
-      switchSessionRef.current = project.switchSession;
     },
     [activeProjectSessionId]
   );
@@ -158,10 +153,9 @@ export function WorkspaceRoute({
     }
     setActiveProjectSession({
       activeSessionId: activeSessionId as SessionId | null,
-      projectId: activeProjectId,
-      switchSession
+      projectId: activeProjectId
     });
-  }, [activeProjectId, activeSessionId, setActiveProjectSession, switchSession]);
+  }, [activeProjectId, activeSessionId, setActiveProjectSession]);
 
   useEffect(() => () => setActiveProjectSession(null), [setActiveProjectSession]);
 

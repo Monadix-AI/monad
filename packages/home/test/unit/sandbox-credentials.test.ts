@@ -8,10 +8,11 @@ import { sandboxConfigSchema } from '../../src/config/index.ts';
 
 describe('sandbox credentials env/file union', () => {
   test('back-compat: {name,value,injectHosts} (env) parses', () => {
+    const secretRef = '${' + 'secret:GH}';
     const cfg = sandboxConfigSchema.parse({
-      credentials: [{ name: 'GH_TOKEN', value: '${secret:GH}', injectHosts: ['api.github.com'] }]
+      credentials: [{ name: 'GH_TOKEN', value: secretRef, injectHosts: ['api.github.com'] }]
     });
-    expect(cfg.credentials[0]).toMatchObject({ name: 'GH_TOKEN', value: '${secret:GH}' });
+    expect(cfg.credentials[0]).toMatchObject({ name: 'GH_TOKEN', value: secretRef });
   });
 
   test('file entry with extract parses', () => {

@@ -70,6 +70,8 @@
     },
     "packages/config": {},
     "packages/ui": {},
-    "packages/monad-power-pack": {}
+    "packages/monad-power-pack": {
+      "bun": { "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"] }
+    }
   }
 }

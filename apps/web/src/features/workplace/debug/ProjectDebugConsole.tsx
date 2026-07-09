@@ -74,11 +74,13 @@ function logLevelName(level: unknown): ProjectDebugTraceEntry['direction'] {
 
 export function logRecordToDebugTrace(record: DeveloperLogRecord): {
   direction: ProjectDebugTraceEntry['direction'];
+  layer: ProjectDebugTraceEntry['layer'];
   label: string;
   data: DeveloperLogRecord;
 } {
   return {
     direction: logLevelName(record.level),
+    layer: record.name === 'transport:http' ? 'http' : 'log',
     label: typeof record.event === 'string' ? record.event : (record.msg ?? record.name ?? 'log'),
     data: record
   };
@@ -126,6 +128,21 @@ export function ProjectDebugConsole({
         label: eventLabel(event),
         sessionId: projectId,
         data: eventTraceData(event)
+      });
+    });
+  }, [client, projectId]);
+
+  useEffect(() => {
+    if (!projectId) return;
+    return client.streamSessionLogs(projectId, (record) => {
+      if (pausedRef.current) return;
+      const trace = logRecordToDebugTrace(record);
+      appendProjectDebugTrace({
+        direction: trace.direction,
+        layer: trace.layer,
+        label: trace.label,
+        sessionId: projectId,
+        data: trace.data
       });
     });
   }, [client, projectId]);

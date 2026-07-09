@@ -2,7 +2,7 @@
 // The daemon is HTTPS-first even for loopback TCP; a separate local-only HTTP fallback listener can
 // be enabled for compatibility, but certificate provisioning itself is fail-closed.
 
-import type { MonadPaths } from '@monad/home';
+import type { MonadConfig, MonadPaths } from '@monad/home';
 
 import { certExpiry, certFingerprint, ensureTlsCert, findOpenssl, renewTlsCert } from '@monad/home';
 
@@ -66,4 +66,15 @@ export async function createTlsCert(
         'Fix the openssl error and restart; the daemon primary TCP listener requires HTTPS.'
     );
   }
+}
+
+export async function resolveTlsSetupForNetwork(opts: {
+  https: MonadConfig['network']['https'];
+  tlsDir: MonadPaths['tls'];
+  current?: TlsSetup;
+  provision?: typeof createTlsCert;
+}): Promise<TlsSetup> {
+  if (!opts.https.enabled) return { warnings: ['tls:https-disabled'] };
+  if (opts.current?.cert) return opts.current;
+  return (opts.provision ?? createTlsCert)({ tlsDir: opts.tlsDir });
 }

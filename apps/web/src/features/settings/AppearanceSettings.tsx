@@ -253,13 +253,11 @@ export function AppearanceSettings() {
                   onClick={() => void handleAvatarStyle(style.slug)}
                   type="button"
                 >
-                  <div className="relative size-10 shrink-0 overflow-hidden rounded-full bg-muted">
-                    <img
-                      alt=""
-                      className="absolute inset-0 size-full object-cover"
-                      src={entityAvatarUrl(styleSwatchSeed, style.slug)}
-                    />
-                  </div>
+                  <div
+                    aria-hidden="true"
+                    className="relative size-10 shrink-0 overflow-hidden rounded-full bg-center bg-cover bg-muted"
+                    style={{ backgroundImage: `url(${entityAvatarUrl(styleSwatchSeed, style.slug)})` }}
+                  />
                   <span className="truncate text-xs">{style.label}</span>
                 </button>
               ))}

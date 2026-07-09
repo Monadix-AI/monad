@@ -15,7 +15,7 @@
  *                                                      bidirectional peer — see transports/acp/)
  */
 
-import type { MonadAuth } from '@monad/home';
+import type { MonadAuth, MonadConfig } from '@monad/home';
 import type { NetworkRuntimeStatus, PrincipalId, SessionId } from '@monad/protocol';
 import type { Tool } from '#/capabilities/tools/types.ts';
 import type { SessionGateway } from '#/channels/channel.ts';
@@ -70,7 +70,7 @@ import {
   seedDevProviderIfNeeded,
   startStartupHousekeeping
 } from './bootstrap/startup-housekeeping.ts';
-import { createTlsCert } from './bootstrap/tls.ts';
+import { resolveTlsSetupForNetwork, type TlsSetup } from './bootstrap/tls.ts';
 import { configureToolBackends } from './bootstrap/tool-backends.ts';
 import { withCredentialsProtection, withSandboxConstraints } from './bootstrap/tool-protection.ts';
 import { createUpgradeInfoMonitor } from './bootstrap/upgrade-info.ts';
@@ -498,12 +498,11 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
   });
 
   // Auto-generated self-signed TLS for the primary HTTPS listener (see ./bootstrap/tls.ts).
-  const {
-    cert: tlsCert,
-    fingerprint: tlsFingerprint,
-    expiry: tlsCertExpiry,
-    warnings: daemonWarnings
-  } = cfg.network.https.enabled ? await createTlsCert({ tlsDir: paths.tls }) : { warnings: ['tls:https-disabled'] };
+  let tlsSetup: TlsSetup = await resolveTlsSetupForNetwork({ https: cfg.network.https, tlsDir: paths.tls });
+  const resolveRuntimeTlsSetup = async (https: MonadConfig['network']['https']): Promise<TlsSetup> => {
+    tlsSetup = await resolveTlsSetupForNetwork({ https, tlsDir: paths.tls, current: tlsSetup });
+    return tlsSetup;
+  };
 
   const rediscoverAtomPacks = createAtomPackRediscoverer({
     paths,
@@ -596,10 +595,10 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     skills: skillList,
     skillInstances,
     discoverProjectSkills,
-    daemonWarnings,
+    getDaemonWarnings: () => tlsSetup.warnings,
     getNetworkRuntimeStatus: () => getNetworkRuntimeStatus?.(),
-    certFingerprint: tlsFingerprint,
-    certExpiry: tlsCertExpiry,
+    getCertFingerprint: () => tlsSetup.fingerprint,
+    getCertExpiry: () => tlsSetup.expiry,
     networkHttps: cfg.network.https,
     externalAgentServerUrl: endpoint.localUrl,
     getUpgradeInfo: upgradeInfo.getUpgradeInfo,
@@ -658,9 +657,10 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     moBinaryPath: liveCfg.mo.binaryPath,
     moEnabled: liveCfg.mo.enabled,
     setMoEnabled,
-    tlsCert,
-    tlsFingerprint,
-    developerMode: liveCfg.developerMode === true,
+    tlsCert: tlsSetup.cert,
+    tlsFingerprint: tlsSetup.fingerprint,
+    resolveTlsSetupForNetwork: resolveRuntimeTlsSetup,
+    developerMode: () => liveCfg.developerMode === true,
     i18n: i18nService,
     channelService,
     configBus,

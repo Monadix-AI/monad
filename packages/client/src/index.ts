@@ -290,7 +290,7 @@ export class MonadClient {
   }
 
   streamSessionLogs(
-    sessionId: SessionId,
+    sessionId: ProjectId | SessionId,
     onRecord: LogRecordHandler,
     opts?: { onError?: (err: StreamError) => void }
   ): () => void {

@@ -104,7 +104,7 @@ async function advanceGreeting(client: ClientSocket, data: Socks5Data, deps: Soc
     client.end();
     return;
   }
-  const nMethods = data.buf[1]!;
+  const nMethods = data.buf.readUInt8(1);
   if (data.buf.length < 2 + nMethods) return;
   const methods = data.buf.subarray(2, 2 + nMethods);
   const noAuthOffered = methods.includes(0x00);
@@ -128,8 +128,8 @@ async function advanceRequest(client: ClientSocket, data: Socks5Data, deps: Sock
     endWith(client, data, socks5Reply(REP_CMD_NOT_SUPPORTED));
     return;
   }
-  const cmd = data.buf[1]!;
-  const atyp = data.buf[3]!;
+  const cmd = data.buf.readUInt8(1);
+  const atyp = data.buf.readUInt8(3);
 
   let host: string;
   let addrEnd: number; // index of the first byte AFTER the address (i.e. start of PORT)
@@ -139,7 +139,7 @@ async function advanceRequest(client: ClientSocket, data: Socks5Data, deps: Sock
     addrEnd = 8;
   } else if (atyp === ATYP_DOMAIN) {
     if (data.buf.length < 5) return;
-    const len = data.buf[4]!;
+    const len = data.buf.readUInt8(4);
     if (data.buf.length < 5 + len) return;
     host = data.buf.subarray(5, 5 + len).toString('latin1');
     addrEnd = 5 + len;

@@ -1,6 +1,6 @@
 // Shared native-launcher binary resolution for the Linux (Landlock) and Windows (Low-Integrity)
 // launcher atoms. The binary ships alongside the monad executable (installed into bin/ by
-// build-release.ts). The daemon may override its path via config.agent.sandbox.launcherPath —
+// build-release.ts). The daemon may override its path via config.sandbox.launcherPath —
 // since a launcher atom is a static object (it can't take the config at construction), the daemon
 // pushes the override here once at boot through configureNativeLauncherPath().
 
@@ -9,7 +9,7 @@ import { dirname, join } from 'node:path';
 
 let overridePath: string | undefined;
 
-/** Set the explicit native-launcher path (config.agent.sandbox.launcherPath). Called once at boot. */
+/** Set the explicit native-launcher path (config.sandbox.launcherPath). Called once at boot. */
 export function configureNativeLauncherPath(path: string | undefined): void {
   overridePath = path;
 }

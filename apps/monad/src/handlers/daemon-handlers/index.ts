@@ -290,7 +290,9 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
       const upgradeInfo = deps.getUpgradeInfo?.();
       const cfg = await loadAll(paths.config, paths.profile);
       const httpsDisabled = cfg?.network.https.enabled === false;
-      const warnings = [...(deps.daemonWarnings ?? [])];
+      const certFingerprint = deps.getCertFingerprint?.() ?? deps.certFingerprint;
+      const certExpiry = deps.getCertExpiry?.() ?? deps.certExpiry;
+      const warnings = [...(deps.getDaemonWarnings?.() ?? deps.daemonWarnings ?? [])];
       if (httpsDisabled && !warnings.includes('tls:https-disabled')) warnings.push('tls:https-disabled');
       return {
         status: 'ok',
@@ -298,9 +300,9 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
         ...(warnings.length ? { warnings } : {}),
         ...(deps.getNetworkRuntimeStatus?.() ? { networkRuntime: deps.getNetworkRuntimeStatus() } : {}),
         ...(httpsDisabled ? { certStatus: 'disabled' as const } : {}),
-        ...(!httpsDisabled && (deps.certFingerprint || deps.certExpiry) ? { certStatus: 'active' as const } : {}),
-        ...(deps.certFingerprint ? { certFingerprint: deps.certFingerprint } : {}),
-        ...(deps.certExpiry ? { certExpiry: deps.certExpiry } : {}),
+        ...(!httpsDisabled && (certFingerprint || certExpiry) ? { certStatus: 'active' as const } : {}),
+        ...(certFingerprint ? { certFingerprint } : {}),
+        ...(certExpiry ? { certExpiry } : {}),
         ...(upgradeInfo
           ? { latestVersion: upgradeInfo.latestVersion, latestVersionCheckedAt: upgradeInfo.latestVersionCheckedAt }
           : {})

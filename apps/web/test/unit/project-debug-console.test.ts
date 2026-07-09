@@ -60,6 +60,7 @@ test('project debug console maps logger records to log trace entries', () => {
     })
   ).toEqual({
     direction: 'internal',
+    layer: 'log',
     label: 'external_agent.started',
     data: {
       level: 20,
@@ -68,5 +69,23 @@ test('project debug console maps logger records to log trace entries', () => {
       externalAgentSessionId: 'exa_100000000000',
       msg: 'native cli started'
     }
+  });
+});
+
+test('project debug console maps HTTP logger records to HTTP trace entries', () => {
+  expect(
+    logRecordToDebugTrace({
+      level: 20,
+      event: 'http.request',
+      method: 'POST',
+      name: 'transport:http',
+      path: '/v1/projects/ses_100000000000/messages',
+      sessionId: 'ses_100000000000',
+      status: 200
+    })
+  ).toMatchObject({
+    direction: 'internal',
+    layer: 'http',
+    label: 'http.request'
   });
 });

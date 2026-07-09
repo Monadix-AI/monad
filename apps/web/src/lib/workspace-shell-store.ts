@@ -8,17 +8,11 @@ import { create } from 'zustand';
 import { isWorkspacePath } from '#/features/shell/routing/paths';
 import { isStudioSectionId } from '#/features/studio/sections';
 
-type WorkspaceSurface = 'workspace' | 'monadChat';
-
+// Reverse-sync data only (URL follows a project's internal active-session change).
+// No callbacks live in the store; forward switching is URL-driven (routed session id).
 type ActiveProjectSessionState = {
   activeSessionId: SessionId | null;
   projectId: string;
-  switchSession: (id: SessionId) => void;
-};
-
-type PendingProjectSessionState = {
-  projectId: string;
-  sessionId: SessionId;
 };
 
 export const SIDEBAR_COLLAPSED_STORAGE_KEY = 'monad:sidebarCollapsed';
@@ -95,29 +89,23 @@ function writeStoredPinnedProjectIds(projectIds: readonly string[]): void {
 }
 
 export interface WorkspaceShellState {
-  surface: WorkspaceSurface;
   lastStudioSection: StudioSectionId;
   lastWorkspacePath: string;
   lastMonadSessionId: SessionId | null;
   settingsReturnPathState: string | null;
-  activeProjectId: string | null;
   activeProjectSession: ActiveProjectSessionState | null;
-  pendingProjectSession: PendingProjectSessionState | null;
   sidebarCollapsed: boolean;
   sidebarAutoReveal: boolean;
   pinnedProjectIds: string[];
   newProjectOpen: boolean;
   rightPanelOpen: boolean;
-  setSurface: (surface: WorkspaceSurface) => void;
   rememberStudioSection: (section: StudioSectionId) => void;
   rememberWorkspacePath: (path: string) => void;
   rememberMonadSession: (sessionId: SessionId | null) => void;
   setSettingsReturnPathState: (path: string | null) => void;
   openWorkspace: () => void;
   openMonadChat: () => void;
-  openProject: (projectId: string) => void;
   setActiveProjectSession: (state: ActiveProjectSessionState | null) => void;
-  setPendingProjectSession: (state: PendingProjectSessionState | null) => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
   toggleSidebarCollapsed: () => void;
   revealSidebar: () => void;
@@ -131,20 +119,17 @@ export interface WorkspaceShellState {
 }
 
 export const useWorkspaceShellStore = create<WorkspaceShellState>()((set) => ({
-  surface: 'workspace',
   lastStudioSection: readStoredLastStudioSection(),
   lastWorkspacePath: readStoredLastWorkspacePath(),
   lastMonadSessionId: null,
   settingsReturnPathState: null,
   activeProjectId: null,
   activeProjectSession: null,
-  pendingProjectSession: null,
   sidebarCollapsed: readStoredSidebarCollapsed(),
   sidebarAutoReveal: false,
   pinnedProjectIds: readStoredPinnedProjectIds(),
   newProjectOpen: false,
   rightPanelOpen: false,
-  setSurface: (surface) => set({ surface }),
   rememberStudioSection: (section) => {
     writeStoredLastStudioSection(section);
     set({ lastStudioSection: section });
@@ -156,13 +141,10 @@ export const useWorkspaceShellStore = create<WorkspaceShellState>()((set) => ({
   },
   rememberMonadSession: (sessionId) => set({ lastMonadSessionId: sessionId }),
   setSettingsReturnPathState: (path) => set({ settingsReturnPathState: path }),
-  openWorkspace: () =>
-    set({ surface: 'workspace', activeProjectId: null, activeProjectSession: null, pendingProjectSession: null }),
-  openMonadChat: () =>
-    set({ surface: 'monadChat', activeProjectId: null, activeProjectSession: null, pendingProjectSession: null }),
-  openProject: (projectId) => set({ surface: 'workspace', activeProjectId: projectId }),
+  // Clear the reverse-sync active-session data when leaving a project for the agent/workspace.
+  openWorkspace: () => set({ activeProjectSession: null }),
+  openMonadChat: () => set({ activeProjectSession: null }),
   setActiveProjectSession: (state) => set({ activeProjectSession: state }),
-  setPendingProjectSession: (state) => set({ pendingProjectSession: state }),
   setSidebarCollapsed: (collapsed) => {
     writeStoredSidebarCollapsed(collapsed);
     set({ sidebarCollapsed: collapsed, sidebarAutoReveal: false });

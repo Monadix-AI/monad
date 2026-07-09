@@ -38,7 +38,6 @@ import type {
 import type { ProductIconColors, ProductIconId, ProductIconProps } from './components/ProductIcon';
 import type { SwitchProps } from './components/Switch';
 
-import { Badge, badgeVariants } from './components/Badge';
 import {
   AiElementIcons,
   defaultToolStatusLabels,
@@ -57,6 +56,7 @@ import {
   ToolInput,
   ToolOutput
 } from './components/AIElements';
+import { Badge, badgeVariants } from './components/Badge';
 import { Button, buttonVariants } from './components/Button';
 import { ButtonGroup, ButtonGroupText } from './components/ButtonGroup';
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from './components/Card';
@@ -140,23 +140,6 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './comp
 import { cn } from './lib/utils';
 
 export type {
-  MessageActionProps,
-  MessageActionsProps,
-  MessageContentProps,
-  MessageProps,
-  MessageResponseProps,
-  ReasoningContentProps,
-  ReasoningLabels,
-  ReasoningProps,
-  ReasoningTriggerProps,
-  ShimmerProps,
-  ToolContentProps,
-  ToolHeaderProps,
-  ToolInputProps,
-  ToolOutputProps,
-  ToolPart,
-  ToolProps,
-  ToolStatusLabels,
   ComposerAccessMode,
   ComposerAskSheetProps,
   ComposerAskSheetQuestion,
@@ -173,10 +156,27 @@ export type {
   ComposerSurfaceProps,
   ComposerVoiceButtonProps,
   ImageZoomProps,
+  MessageActionProps,
+  MessageActionsProps,
+  MessageContentProps,
+  MessageProps,
+  MessageResponseProps,
   ProductIconColors,
   ProductIconId,
   ProductIconProps,
-  SwitchProps
+  ReasoningContentProps,
+  ReasoningLabels,
+  ReasoningProps,
+  ReasoningTriggerProps,
+  ShimmerProps,
+  SwitchProps,
+  ToolContentProps,
+  ToolHeaderProps,
+  ToolInputProps,
+  ToolOutputProps,
+  ToolPart,
+  ToolProps,
+  ToolStatusLabels
 };
 
 export {
@@ -197,7 +197,6 @@ export {
   ChatInputChrome,
   CodeBlock,
   CodeInline,
-  defaultToolStatusLabels,
   ComposerAccessSelect,
   ComposerAskSheet,
   ComposerContextUsageButton,
@@ -237,6 +236,7 @@ export {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
+  defaultToolStatusLabels,
   ImageZoom,
   Input,
   InputGroup,
@@ -280,13 +280,13 @@ export {
   TabsList,
   TabsTrigger,
   Textarea,
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
   Tool,
   ToolContent,
   ToolHeader,
   ToolInput,
-  ToolOutput
+  ToolOutput,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger
 };

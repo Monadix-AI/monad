@@ -11,13 +11,47 @@ import { HANDLER_ERROR_MAP, HandlerError } from '#/handlers/handler-error.ts';
 
 const log = createLogger('transport:http');
 const requestTimings = new WeakMap<Request, number>();
+type LiveFlag = boolean | (() => boolean);
 
-function logHttpCall(method: string, path: string, status: number, durationMs?: number, err?: unknown): void {
-  const record = { method, path, status, durationMs, ...(err ? { err } : {}) };
+function resolveLiveFlag(flag: LiveFlag | undefined): boolean {
+  return typeof flag === 'function' ? flag() : flag === true;
+}
+
+function httpLogScope(path: string): { sessionId?: string; channelId?: string } {
+  const sessionMatch = path.match(/^\/v1\/(?:sessions|projects)\/([^/?#]+)/);
+  if (sessionMatch?.[1]) return { sessionId: decodeURIComponent(sessionMatch[1]) };
+  const channelMatch = path.match(/^\/v1\/channels\/([^/?#]+)/);
+  if (channelMatch?.[1]) return { channelId: decodeURIComponent(channelMatch[1]) };
+  return {};
+}
+
+function logHttpCall(
+  method: string,
+  path: string,
+  status: number,
+  durationMs?: number,
+  err?: unknown,
+  accessLogToPrimary = false
+): void {
+  const record = {
+    event: 'http.request',
+    method,
+    path,
+    status,
+    durationMs,
+    ...httpLogScope(path),
+    ...(err ? { err } : {})
+  };
   // formatTransportCall allocates several ANSI-wrapped strings; skip it when the debug record
   // would be suppressed by the active level (the common case in production).
   if (status >= 500 || err) log.error(record, formatTransportCall(record));
+  else if (accessLogToPrimary) log.info(record, formatTransportCall(record));
   else if (log.isLevelEnabled('debug')) log.debug(record, formatTransportCall(record));
+}
+
+function responseStatus(responseValue: unknown, setStatus: unknown): number {
+  if (responseValue instanceof Response) return responseValue.status;
+  return typeof setStatus === 'number' ? setStatus : 200;
 }
 
 import { createA2aController } from '#/transports/a2a/index.ts';
@@ -92,7 +126,7 @@ export type RemoteAccessSource = RemoteAccessConfig | RemoteAccessState;
 
 export interface HttpTransportOptions {
   docs?: boolean;
-  developerMode?: boolean;
+  developerMode?: LiveFlag;
   remoteAccess?: RemoteAccessSource;
   openaiCompatConfig?: () => Promise<{ enabled: boolean; token?: string }>;
 }
@@ -185,20 +219,22 @@ export function createHttpTransport(
   const encoder = new TextEncoder();
 
   let app = new Elysia()
-    .use(serverTiming({ enabled: developerMode }))
+    .use(serverTiming({ enabled: resolveLiveFlag(developerMode) }))
     .onRequest(({ request }) => {
       requestTimings.set(request, performance.now());
     })
-    .onAfterHandle(({ request, responseValue }) => {
+    .onAfterHandle(({ request, responseValue, set }) => {
       const t0 = requestTimings.get(request);
       requestTimings.delete(request);
-      const status = responseValue instanceof Response ? responseValue.status : 200;
+      const status = responseStatus(responseValue, set.status);
       const url = new URL(request.url);
       logHttpCall(
         request.method,
         url.pathname,
         status,
-        t0 !== undefined ? Math.round(performance.now() - t0) : undefined
+        t0 !== undefined ? Math.round(performance.now() - t0) : undefined,
+        undefined,
+        resolveLiveFlag(developerMode)
       );
     })
     .onError(({ code, error, request }) => {
@@ -208,17 +244,24 @@ export function createHttpTransport(
       const durationMs = t0 !== undefined ? Math.round(performance.now() - t0) : undefined;
       if (error instanceof HandlerError) {
         const { httpStatus, httpCode } = HANDLER_ERROR_MAP[error.kind];
-        logHttpCall(request.method, url.pathname, httpStatus, durationMs, error);
+        logHttpCall(request.method, url.pathname, httpStatus, durationMs, error, resolveLiveFlag(developerMode));
         return jsonResponse(httpStatus, { error: error.message, code: error.code ?? httpCode }, request);
       }
       // Client-shaped errors: normalize to JSON so every failure has the same envelope.
       if (code === 'NOT_FOUND') {
-        logHttpCall(request.method, url.pathname, 404, durationMs);
+        logHttpCall(request.method, url.pathname, 404, durationMs, undefined, resolveLiveFlag(developerMode));
         return jsonResponse(404, { error: 'not found', code: 'NOT_FOUND' }, request);
       }
       if (code === 'VALIDATION' || code === 'PARSE') {
         const msg = error instanceof Error ? error.message : 'validation error';
-        logHttpCall(request.method, url.pathname, 400, durationMs, error instanceof Error ? error : new Error(msg));
+        logHttpCall(
+          request.method,
+          url.pathname,
+          400,
+          durationMs,
+          error instanceof Error ? error : new Error(msg),
+          resolveLiveFlag(developerMode)
+        );
         return jsonResponse(400, { error: msg, code: 'VALIDATION' }, request);
       }
       // Unhandled server fault — log with stack so nothing is silently swallowed.
@@ -227,7 +270,8 @@ export function createHttpTransport(
         url.pathname,
         500,
         durationMs,
-        error instanceof Error ? error : new Error(String(error))
+        error instanceof Error ? error : new Error(String(error)),
+        resolveLiveFlag(developerMode)
       );
       return jsonResponse(500, { error: 'internal server error', code: 'INTERNAL' }, request);
     });

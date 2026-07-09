@@ -71,7 +71,6 @@ export function ShellRouteProvider({ children }: { children: ReactNode }) {
   const primaryAgentSession = currentSession ?? sessions[0] ?? null;
   const activeProjectId = routedProjectId;
 
-  const shellSurface = useWorkspaceShellStore((state: WorkspaceShellState) => state.surface);
   const sidebarCollapsed = useWorkspaceShellStore((state: WorkspaceShellState) => state.sidebarCollapsed);
   const sidebarAutoReveal = useWorkspaceShellStore((state: WorkspaceShellState) => state.sidebarAutoReveal);
 
@@ -157,7 +156,7 @@ export function ShellRouteProvider({ children }: { children: ReactNode }) {
       daemonVersion,
       hasUpgrade,
       networkRuntime,
-      monadChatActive: currentId !== null || shellSurface === 'monadChat',
+      monadChatActive: currentId !== null,
       onCloseSettings: closeSettings,
       onOpenMonadChat: handleOpenMonadChat,
       onOpenProject: openProject,
@@ -210,7 +209,6 @@ export function ShellRouteProvider({ children }: { children: ReactNode }) {
       setWorkspaceUrl,
       settingsReturnSurface,
       settingsSection,
-      shellSurface,
       shortcutModifierLabel,
       showSidebarShortcutBadges,
       studioSection,

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 
-import { navigateShellUrl, toShellUrl } from '../../src/hooks/use-shell-location';
+import { navigateShellUrl, setShellRouter, toShellUrl } from '../../src/hooks/use-shell-location';
 
 const originalWindow = globalThis.window;
 
@@ -45,7 +45,31 @@ function installWindowMock(startUrl = 'http://localhost:3000/studio/runtime') {
   return { calls, listeners };
 }
 
+function installShellRouterMock(startUrl = '/studio/runtime') {
+  const calls: Array<{ mode: 'push' | 'replace'; url: string }> = [];
+  const router = {
+    history: {
+      push: (url: string) => {
+        router.state.location.href = url;
+        calls.push({ mode: 'push', url });
+      },
+      replace: (url: string) => {
+        router.state.location.href = url;
+        calls.push({ mode: 'replace', url });
+      }
+    },
+    state: {
+      location: {
+        href: startUrl
+      }
+    }
+  };
+  setShellRouter(router as never);
+  return { calls };
+}
+
 afterEach(() => {
+  setShellRouter(null);
   Object.defineProperty(globalThis, 'window', {
     configurable: true,
     value: originalWindow
@@ -61,27 +85,18 @@ describe('shell location navigation', () => {
     );
   });
 
-  test('updates browser history and emits a shell location event without document navigation', () => {
-    const { calls, listeners } = installWindowMock();
-    let eventCount = 0;
-    let popstateCount = 0;
-    window.addEventListener('monad:shell-location', () => {
-      eventCount += 1;
-    });
-    window.addEventListener('popstate', () => {
-      popstateCount += 1;
-    });
+  test('routes shell navigation through TanStack history', () => {
+    installWindowMock();
+    const { calls } = installShellRouterMock();
 
     navigateShellUrl('/workspace/prj_ABCDEF123456/ses_UVWXYZ789012?view=members', 'replace');
 
     expect(calls).toEqual([{ mode: 'replace', url: '/workspace/prj_ABCDEF123456/ses_UVWXYZ789012?view=members' }]);
-    expect(eventCount).toBe(1);
-    expect(popstateCount).toBe(1);
-    expect(listeners.get('monad:shell-location')?.size).toBe(1);
   });
 
   test('skips no-op navigation to the current URL', () => {
-    const { calls } = installWindowMock('http://localhost:3000/studio/runtime?view=overview');
+    installWindowMock('http://localhost:3000/studio/runtime?view=overview');
+    const { calls } = installShellRouterMock('/studio/runtime?view=overview');
 
     navigateShellUrl('/studio/runtime?view=overview', 'push');
 

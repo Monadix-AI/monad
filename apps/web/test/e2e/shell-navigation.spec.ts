@@ -139,7 +139,8 @@ async function installShellMock(page: Page) {
 }
 
 async function openDaemonMenu(page: Page) {
-  await page.getByTestId('daemon-menu-trigger').click();
+  // force: the bottom-left TanStack devtools trigger can overlap this and intercept.
+  await page.getByTestId('daemon-menu-trigger').click({ force: true });
   // The subsequent menuitem click auto-waits for the portal, so no separate
   // menu-visible gate is needed (it only added flakiness on the first cold compile).
 }

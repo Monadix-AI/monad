@@ -102,12 +102,12 @@ const TOKEN_RE =
   /((?:"(?:[^"\\]|\\.)*")(?=\s*:))|("(?:[^"\\]|\\.)*")|(true|false)|(null)|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g;
 
 const TOKEN_CLASSES: Record<TokenType, string> = {
-  key: 'text-sky-400',
-  string: 'text-emerald-400',
-  number: 'text-orange-400',
-  boolean: 'text-yellow-400',
-  null: 'italic text-zinc-500',
-  plain: 'text-zinc-500'
+  key: 'text-blue-700 dark:text-blue-300',
+  string: 'text-emerald-700 dark:text-emerald-300',
+  number: 'text-orange-700 dark:text-orange-300',
+  boolean: 'text-amber-700 dark:text-amber-300',
+  null: 'italic text-muted-foreground',
+  plain: 'text-muted-foreground'
 };
 
 function JsonHighlight({ value }: { value: unknown }) {
@@ -176,7 +176,7 @@ function CopyButton({ text }: { text: string }) {
 
   return (
     <button
-      className="absolute top-2 right-2 rounded p-1 text-zinc-400 transition-colors hover:bg-white/10 hover:text-zinc-200"
+      className="absolute top-2 right-2 rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
       onClick={handleCopy}
       title={t('web.copy')}
       type="button"
@@ -204,8 +204,8 @@ function DetailPanel({ detail }: { detail: unknown }) {
 
   return (
     <div className="relative mt-1.5">
-      <pre className="max-h-36 overflow-auto rounded-md bg-black/30 p-2.5 pr-8 font-mono text-[11px] leading-relaxed">
-        {isObj ? <JsonHighlight value={detail} /> : <span className="text-zinc-300">{text}</span>}
+      <pre className="max-h-36 overflow-auto rounded-md border border-border bg-popover p-2.5 pr-8 font-mono text-[11px] text-popover-foreground leading-relaxed shadow-xs">
+        {isObj ? <JsonHighlight value={detail} /> : <span className="text-popover-foreground">{text}</span>}
       </pre>
       <CopyButton text={text} />
     </div>

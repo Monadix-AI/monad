@@ -3,14 +3,13 @@
 import type { MotionProps } from 'motion/react';
 import type { ComponentProps, CSSProperties, ElementType, HTMLAttributes, JSX, ReactNode } from 'react';
 
-import * as React from 'react';
 import {
   BrainIcon,
   CancelCircleIcon,
   CheckmarkCircle02Icon,
   ChevronDownIcon,
-  Clock01Icon,
   CircleIcon,
+  Clock01Icon,
   Copy01Icon,
   ReloadIcon,
   Wrench01Icon
@@ -23,6 +22,7 @@ import { math } from '@streamdown/math';
 import { mermaid } from '@streamdown/mermaid';
 import { motion } from 'motion/react';
 import { Collapsible as CollapsiblePrimitive } from 'radix-ui';
+import * as React from 'react';
 import { isValidElement, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Streamdown } from 'streamdown';
 
@@ -360,35 +360,37 @@ function defaultThinkingMessage(labels: ReasoningLabels | undefined, isStreaming
   return <p>{resolved.thoughtSeconds(duration)}</p>;
 }
 
-export const ReasoningTrigger = memo(({ className, children, labels, getThinkingMessage, ...props }: ReasoningTriggerProps) => {
-  const { isStreaming, isOpen, duration } = useReasoning();
+export const ReasoningTrigger = memo(
+  ({ className, children, labels, getThinkingMessage, ...props }: ReasoningTriggerProps) => {
+    const { isStreaming, isOpen, duration } = useReasoning();
 
-  return (
-    <CollapsibleTrigger
-      className={cn(
-        'flex w-full items-center gap-2 text-muted-foreground text-sm transition-colors hover:text-foreground',
-        className
-      )}
-      {...props}
-    >
-      {children ?? (
-        <>
-          <HugeiconsIcon
-            className="size-4"
-            icon={BrainIcon}
-          />
-          {getThinkingMessage
-            ? getThinkingMessage(isStreaming, duration)
-            : defaultThinkingMessage(labels, isStreaming, duration)}
-          <HugeiconsIcon
-            className={cn('size-4 transition-transform', isOpen ? 'rotate-180' : 'rotate-0')}
-            icon={ChevronDownIcon}
-          />
-        </>
-      )}
-    </CollapsibleTrigger>
-  );
-});
+    return (
+      <CollapsibleTrigger
+        className={cn(
+          'flex w-full items-center gap-2 text-muted-foreground text-sm transition-colors hover:text-foreground',
+          className
+        )}
+        {...props}
+      >
+        {children ?? (
+          <>
+            <HugeiconsIcon
+              className="size-4"
+              icon={BrainIcon}
+            />
+            {getThinkingMessage
+              ? getThinkingMessage(isStreaming, duration)
+              : defaultThinkingMessage(labels, isStreaming, duration)}
+            <HugeiconsIcon
+              className={cn('size-4 transition-transform', isOpen ? 'rotate-180' : 'rotate-0')}
+              icon={ChevronDownIcon}
+            />
+          </>
+        )}
+      </CollapsibleTrigger>
+    );
+  }
+);
 
 export type ReasoningContentProps = ComponentProps<typeof CollapsibleContent> & {
   children: string;

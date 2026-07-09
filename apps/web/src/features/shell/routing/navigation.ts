@@ -61,14 +61,9 @@ export function useAppShellNavigation({
 }: UseAppShellNavigationParams) {
   const { currentId, isSettingsRoute, isStudioRoute, isWorkspaceRoute, pathname, routedStudioSection } =
     useShellRoute();
-  const activeProjectId = routedProjectId;
 
   const [createSession] = useCreateSessionMutation();
   const activeProjectSession = useWorkspaceShellStore((state: WorkspaceShellState) => state.activeProjectSession);
-  const pendingProjectSession = useWorkspaceShellStore((state: WorkspaceShellState) => state.pendingProjectSession);
-  const setPendingProjectSession = useWorkspaceShellStore(
-    (state: WorkspaceShellState) => state.setPendingProjectSession
-  );
   const lastMonadSessionId = useWorkspaceShellStore((state: WorkspaceShellState) => state.lastMonadSessionId);
   const lastStudioSection = useWorkspaceShellStore((state: WorkspaceShellState) => state.lastStudioSection);
   const lastWorkspacePath = useWorkspaceShellStore((state: WorkspaceShellState) => state.lastWorkspacePath);
@@ -81,7 +76,6 @@ export function useAppShellNavigation({
   const rememberMonadSession = useWorkspaceShellStore((state: WorkspaceShellState) => state.rememberMonadSession);
   const openWorkspaceSurface = useWorkspaceShellStore((state: WorkspaceShellState) => state.openWorkspace);
   const openMonadChatSurface = useWorkspaceShellStore((state: WorkspaceShellState) => state.openMonadChat);
-  const openProjectSurface = useWorkspaceShellStore((state: WorkspaceShellState) => state.openProject);
   const openProjectSettingsInStore = useWorkplaceUiStore((state) => state.openProjectSettings);
 
   const settingsFallbackReturnPath = isStudioRoute ? studioPath(lastStudioSection) : lastWorkspacePath;
@@ -122,54 +116,36 @@ export function useAppShellNavigation({
 
   const openProject = useCallback(
     (projectId: string, sessionId?: SessionId) => {
-      openProjectSurface(projectId);
       const fallbackSessionId = workspaceProjects.find((project) => project.id === projectId)?.sessions?.[0]?.id;
       const routeSessionId = sessionId ?? fallbackSessionId;
       replaceUrl(routeSessionId ? projectSessionPath(projectId, routeSessionId) : `/workspace/${projectId}`);
     },
-    [openProjectSurface, replaceUrl, workspaceProjects]
+    [replaceUrl, workspaceProjects]
   );
 
   useEffect(() => {
     const state = activeProjectSession;
-    const pending = pendingProjectSession;
     if (!state) return;
-    // Only mirror the active session into the URL while the route still points at this
-    // project. Without this guard, navigating away (studio/settings/another project) fires
-    // this effect with a stale `activeProjectSession` still in its closure — before
-    // WorkspaceRoute's unmount clears it — and it would replaceUrl the caller straight back
-    // to the project session, trapping them on the route and thrashing the page.
+    // Reverse sync: mirror a project's internal active-session change into the URL, but only
+    // while the route still points at this project — otherwise a stale closure would yank the
+    // caller back to the project session when navigating away (studio/settings/other project).
     if (routedProjectId !== state.projectId) return;
-    if (pending && pending.projectId === state.projectId) {
-      setPendingProjectSession(null);
-      state.switchSession(pending.sessionId);
-      return;
-    }
     if (!state.activeSessionId) return;
     if (routedProjectSessionId && routedProjectSessionId !== state.activeSessionId) return;
     const nextUrl = projectSessionPath(state.projectId, state.activeSessionId);
     if (pathname !== nextUrl) replaceUrl(nextUrl);
-  }, [
-    activeProjectSession,
-    pendingProjectSession,
-    pathname,
-    replaceUrl,
-    routedProjectId,
-    routedProjectSessionId,
-    setPendingProjectSession
-  ]);
+  }, [activeProjectSession, pathname, replaceUrl, routedProjectId, routedProjectSessionId]);
 
   const handleOpenProjectSession = useCallback(
     (projectId: string, sessionId: SessionId) => {
-      setPendingProjectSession({ projectId, sessionId });
+      // Forward switching is URL-driven: the routed session id flows into useProject.
       if (activeProjectSession?.projectId === projectId) {
-        setPendingProjectSession(null);
         replaceUrl(projectSessionPath(projectId, sessionId));
         return;
       }
       openProject(projectId, sessionId);
     },
-    [activeProjectSession, openProject, replaceUrl, setPendingProjectSession]
+    [activeProjectSession, openProject, replaceUrl]
   );
 
   const handleOpenProjectSettings = useCallback(
@@ -198,7 +174,6 @@ export function useAppShellNavigation({
     rememberStudioSection(routedStudioSection);
   }, [isStudioRoute, rememberStudioSection, routedStudioSection, runtimeReady]);
 
-
   useEffect(() => {
     if (!isWorkspaceRoute) return;
     if (routedProjectId && !projectsLoading && !routedProjectInList) return;
@@ -217,27 +192,9 @@ export function useAppShellNavigation({
   ]);
 
   useEffect(() => {
-    if (isStudioRoute || isSettingsRoute) return;
-    if (currentId) {
-      openMonadChatSurface();
-      rememberMonadSession(currentId);
-      return;
-    }
-    if (activeProjectId) {
-      openProjectSurface(activeProjectId);
-      return;
-    }
-    openWorkspaceSurface();
-  }, [
-    currentId,
-    openProjectSurface,
-    openMonadChatSurface,
-    openWorkspaceSurface,
-    rememberMonadSession,
-    isStudioRoute,
-    isSettingsRoute,
-    activeProjectId
-  ]);
+    if (isStudioRoute || isSettingsRoute || !currentId) return;
+    rememberMonadSession(currentId);
+  }, [currentId, isSettingsRoute, isStudioRoute, rememberMonadSession]);
 
   const handleNewSession = useCallback(async () => {
     const title = `chat ${new Date().toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}`;

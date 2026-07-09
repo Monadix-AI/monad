@@ -164,10 +164,6 @@ export function SessionSidebar({
   // so inertia can't turn a second page across the surface change it just triggered.
   const pageTurnConsumedRef = useRef(false);
   const pageTurnLockTimerRef = useRef(0);
-  // Timestamp window during which native `scrollend` is ignored. Independent of
-  // routeDrivenScrollRef (which the layout effect resets on the settings->route swap),
-  // so the trailing scrollend after a programmatic settings-close can't turn a page.
-  const scrollEndSuppressUntilRef = useRef(0);
   const suppressMouseResizeRef = useRef(false);
   const prefersReducedMotion = useReducedMotion();
   const trackpadFeedback = useMotionValue(0);
@@ -352,8 +348,6 @@ export function SessionSidebar({
       onCloseSettings();
       return;
     }
-    // Ignore the trailing scrollend from this close animation across the route swap.
-    scrollEndSuppressUntilRef.current = performance.now() + 400;
     panelScrollAnimationRef.current?.stop();
     window.clearTimeout(routeDrivenScrollClearTimerRef.current);
     const target = 0;
@@ -363,13 +357,6 @@ export function SessionSidebar({
       finished = true;
       window.clearTimeout(routeDrivenScrollClearTimerRef.current);
       onCloseSettings();
-      // Keep the route-driven guard up through the route swap and the trailing native
-      // `scrollend` (fired when the animation settled at scrollLeft 0). Otherwise that
-      // event lands on the rebuilt ['workspace','studio'] pager at page 0 = workspace and
-      // turns the page. The layout effect repositions + clears it too; this is the backstop.
-      routeDrivenScrollClearTimerRef.current = window.setTimeout(() => {
-        routeDrivenScrollRef.current = false;
-      }, 160);
     };
     routeDrivenScrollRef.current = true;
     currentSidebarSurfaceRef.current = settingsReturnSurface;
@@ -462,24 +449,6 @@ export function SessionSidebar({
   useEffect(() => {
     const host = panelScrollRef.current;
     if (!host) return;
-
-    const onScrollEnd = () => {
-      if (performance.now() < scrollEndSuppressUntilRef.current) return;
-      if (routeDrivenScrollRef.current) return;
-      if (resizingRef.current) return;
-      if (dragActiveRef.current) return;
-      const nextPage = Math.max(
-        0,
-        Math.min(pagerSurfaces.length - 1, Math.round(host.scrollLeft / (host.clientWidth || 1)))
-      );
-      const nextSurface = pagerSurfaces[nextPage] ?? 'workspace';
-      if (nextSurface === currentSidebarSurfaceRef.current) return;
-      currentSidebarSurfaceRef.current = nextSurface;
-      if (nextSurface === 'settings') onToggleSettings();
-      else if (showSettings) onCloseSettings();
-      else if (nextSurface === 'studio') onOpenStudio();
-      else onOpenWorkspace();
-    };
 
     // Native scroll-snap is off: the release timing of the browser's snap
     // animation is not tunable and momentum bleeds into it. The pager owns the
@@ -607,10 +576,8 @@ export function SessionSidebar({
       trackpadResetTimerRef.current = window.setTimeout(finishFromTimer, TRACKPAD_GESTURE_RELEASE_MS);
     };
 
-    host.addEventListener('scrollend', onScrollEnd);
     host.addEventListener('wheel', onWheel, { passive: false });
     return () => {
-      host.removeEventListener('scrollend', onScrollEnd);
       host.removeEventListener('wheel', onWheel);
     };
   }, [

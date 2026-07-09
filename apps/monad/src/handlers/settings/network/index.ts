@@ -78,7 +78,6 @@ export function createNetworkModule(paths: MonadPaths, configBus?: ConfigBus, de
   async function setNetworkSettings(req: SetNetworkSettingsRequest): Promise<NetworkSettings> {
     const cfg = await loadAll(paths.config, paths.profile);
     if (!cfg) throw new Error('network settings: config.json missing');
-
     if (req.host !== undefined) {
       cfg.network.host = req.host;
     }
@@ -125,7 +124,8 @@ export function createNetworkModule(paths: MonadPaths, configBus?: ConfigBus, de
 
     await saveSystemConfig(paths.config, cfg);
     if (configBus) {
-      await configBus.publish({ cfg, auth: await loadAuth(paths.auth) });
+      const event = { cfg, auth: await loadAuth(paths.auth) };
+      setTimeout(() => void configBus.publish(event), 25);
     }
     return toNetworkSettings(cfg, !configBus, deps);
   }

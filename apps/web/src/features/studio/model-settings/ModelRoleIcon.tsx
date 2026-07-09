@@ -27,12 +27,10 @@ const modelRoleIconSrc: Record<ModelRoleIconId, string> = {
 
 export function ModelRoleIcon({ className, role }: { className?: string; role: ModelRoleIconId }) {
   return (
-    <img
-      alt=""
+    <span
       aria-hidden="true"
-      className={cn('block object-contain', className)}
-      draggable={false}
-      src={modelRoleIconSrc[role]}
+      className={cn('block bg-center bg-contain bg-no-repeat', className)}
+      style={{ backgroundImage: `url(${modelRoleIconSrc[role]})` }}
     />
   );
 }

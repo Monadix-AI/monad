@@ -89,12 +89,18 @@ export interface DaemonHandlerDeps extends SessionDeps, ModelDeps {
   skillInstances?: SkillListInstance[];
   /** Daemon-level warnings surfaced through /health (e.g. TLS unavailable). */
   daemonWarnings?: string[];
+  /** Live daemon-level warnings surfaced through /health after hot reload changes. */
+  getDaemonWarnings?: () => string[];
   /** Live TCP listener state surfaced through /health for operator diagnostics. */
   getNetworkRuntimeStatus?: () => NetworkRuntimeStatus | undefined;
   /** SHA-256 fingerprint of the active TLS cert, surfaced through /health for TOFU verification. */
   certFingerprint?: string;
+  /** Live SHA-256 fingerprint of the active TLS cert after HTTPS is enabled by hot reload. */
+  getCertFingerprint?: () => string | undefined;
   /** ISO-8601 expiry of the active TLS cert, surfaced through /health so clients can warn before it expires. */
   certExpiry?: string;
+  /** Live ISO-8601 expiry of the active TLS cert after HTTPS is enabled by hot reload. */
+  getCertExpiry?: () => string | undefined;
   /** Test/runtime override for browser-attached external agent auth connect heartbeat pruning. */
   externalAgentAuthHeartbeatTimeoutMs?: number;
   /** Test/runtime override for one-shot external agent auth/usage probe timeout. */

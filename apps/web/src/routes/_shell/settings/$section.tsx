@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 
-import { normalizeSettingsSection } from '#/features/settings/sections';
 import { Settings } from '#/features/settings/Settings';
+import { normalizeSettingsSection } from '#/features/settings/sections';
 import { useShellRouteContext } from '#/features/shell/page-shell/ShellRouteProvider';
 
 export const Route = createFileRoute('/_shell/settings/$section')({

@@ -1,7 +1,7 @@
 // @monad/monad-power-pack — the opt-in heavy sandbox atom pack. The light OS launchers (Seatbelt /
 // bwrap / Landlock / AppContainer) are the always-on default in @monad/sandbox; the HEAVY docker/e2b
 // launchers live here and are used only when an operator enables this pack and selects the backend
-// via config.agent.sandbox.backend. Keeps docker/e2b (and the e2b npm dep) out of the always-on
+// via config.sandbox.backend. Keeps docker/e2b (and the e2b npm dep) out of the always-on
 // built-in atoms pack.
 
 import { vmLauncher } from '@monad/sandbox-vm';
@@ -22,7 +22,7 @@ export {
 
 /** The heavy-sandbox atom pack: declares the `sandbox` atom kind and contributes the docker + e2b
  *  launchers. An enabled pack registers these into the launcher registry (source 'atom'); the daemon
- *  selects one only when config.agent.sandbox.backend names it. */
+ *  selects one only when config.sandbox.backend names it. */
 export const monadPowerPack = defineAtomPack({
   manifest: {
     name: 'monad-power-pack',

@@ -5,7 +5,7 @@
 //     a candidate for the platform.
 //   • HEAVY — opt-in atom launchers (docker / e2b / a future vm backend), contributed by an atom pack
 //     (e.g. @monad/monad-power-pack) through the atom-pack loader's onSandbox sink. A heavy backend is
-//     used ONLY when explicitly selected via config.agent.sandbox.backend, never auto-selected.
+//     used ONLY when explicitly selected via config.sandbox.backend, never auto-selected.
 //
 // At boot the daemon calls selectSandboxLauncher(platform, backend) to pick which launcher confines
 // spawned children and wires it into the seam via configureSandboxLauncher — the LLM-facing tools
