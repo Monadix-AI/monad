@@ -34,6 +34,14 @@ function socks5ConnectIpv4(port: number): Uint8Array {
   return new Uint8Array([...greeting, ...request]);
 }
 
+/** Build a SOCKS5 no-auth CONNECT to a raw DOMAINNAME (ATYP 0x03), byte-for-byte — lets a test send
+ *  bytes (e.g. an embedded NUL) that a JS `string` literal for the host couldn't carry cleanly. */
+function socks5ConnectDomainRaw(hostBytes: number[], port: number): Uint8Array {
+  const greeting = [0x05, 0x01, 0x00];
+  const request = [0x05, 0x01, 0x00, 0x03, hostBytes.length, ...hostBytes, (port >> 8) & 0xff, port & 0xff];
+  return new Uint8Array([...greeting, ...request]);
+}
+
 /**
  * Connect to the mux `port`, run a caller-supplied script against the socket, and resolve with the
  * accumulated response bytes once `until` matches. The script gets (socket, latestText) on each data
@@ -140,6 +148,54 @@ test('SOCKS4: rejected cleanly (VN 0x00, CD 0x5b) without an upstream dial', asy
   expect(bytes[0]).toBe(0x00);
   expect(bytes[1]).toBe(0x5b); // request rejected/failed
 });
+
+test(
+  'attack: NUL-byte hostname smuggling (parser-differential SOCKS5 allowlist bypass) is refused, ' +
+    'never dialed — an attacker sends "evil.com\\x00.allowed.com" hoping a JS endsWith() check on ' +
+    'the truncated-at-write side sees ".allowed.com" while a libc-style resolver would truncate at ' +
+    'the NUL and dial "evil.com" (this exact allowlist bypass was reported against sandbox-runtime); ' +
+    'isValidHost must reject any control byte in the DOMAINNAME outright, before isAllowed ever runs',
+  async () => {
+    let upstreamHits = 0;
+    let isAllowedCalls = 0;
+    const echo = Bun.listen<undefined>({
+      hostname: '127.0.0.1',
+      port: 0,
+      socket: {
+        open: () => {
+          upstreamHits++;
+        },
+        data: () => {}
+      }
+    });
+    // isAllowed would (wrongly) approve on the suffix if it were ever reached — proves the rejection
+    // happens at host-validation time, not because the allowlist itself denied it.
+    const proxy = startEgressProxy({
+      policy: { allowedDomains: ['allowed.com'] },
+      isAllowed: (host) => {
+        isAllowedCalls++;
+        return host.endsWith('allowed.com');
+      }
+    });
+    cleanups.push(
+      () => echo.stop(true),
+      () => proxy.stop()
+    );
+
+    const hostBytes = [...Buffer.from('evil.com'), 0x00, ...Buffer.from('.allowed.com')];
+    const bytes = await driveRaw(
+      proxy.port,
+      (write) => write(socks5ConnectDomainRaw(hostBytes, echo.port)),
+      () => {},
+      (all) => all.length >= 12
+    );
+
+    expect(bytes[2]).toBe(0x05);
+    expect(bytes[3]).toBe(0x02); // REP: not allowed — rejected as malformed, not evaluated as a host
+    expect(upstreamHits).toBe(0); // "evil.com" was never dialed
+    expect(isAllowedCalls).toBe(0); // never reached the allowlist — killed at host validation
+  }
+);
 
 test('mux: a plain HTTP request on the same port still reaches the origin', async () => {
   const origin = Bun.serve({ port: 0, fetch: () => new Response('hello-from-origin') });

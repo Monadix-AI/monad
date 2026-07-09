@@ -24,9 +24,19 @@ const BLOCKED_HOSTNAMES = new Set(['localhost']);
 export function isBlockedIp(ip: string): boolean {
   const addr = ip.trim().toLowerCase();
 
-  // IPv4-mapped IPv6 (::ffff:127.0.0.1) — classify by the embedded v4 address.
+  // IPv4-mapped IPv6, dotted-decimal form (::ffff:127.0.0.1) — classify by the embedded v4 address.
   const mapped = addr.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
   if (mapped?.[1]) return isBlockedIp(mapped[1]);
+
+  // Same, but hex-group form (::ffff:a9fe:a9fe). RFC 5952 §5 requires this canonical form, and
+  // WHATWG URL parsing (`new URL(...)`) rewrites a dotted-decimal literal into it — so a caller that
+  // only screens the dotted form is bypassed by any URL parser normalizing the address first.
+  const mappedHex = addr.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+  if (mappedHex?.[1] && mappedHex?.[2]) {
+    const hi = Number.parseInt(mappedHex[1], 16);
+    const lo = Number.parseInt(mappedHex[2], 16);
+    return isBlockedIp(`${hi >> 8}.${hi & 0xff}.${lo >> 8}.${lo & 0xff}`);
+  }
 
   if (addr.includes(':')) {
     if (addr === '::1' || addr === '::') return true; // loopback / unspecified

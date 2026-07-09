@@ -108,6 +108,41 @@ describe('readDenyRoots', () => {
     const permIdx = a.indexOf('000');
     expect(permIdx).toBe(-1);
   });
+
+  // sandbox-runtime issue #193: a denyRead path INSIDE an allowRead/allowWrite directory was
+  // silently ignored — the parent dir's --bind exposed the whole subtree, and nothing punched a
+  // hole for the file, so "expose /work but hide /work/.env" leaked .env in cleartext. bwrap DOES
+  // support this (a later --tmpfs/--ro-bind at the same path shadows an earlier --bind), but only if
+  // the deny overlay is emitted AFTER the parent bind — get the order wrong and the same class of
+  // bug reappears here.
+  test(
+    'srt #193 pattern: a readDenyRoot NESTED inside a writableRoot is still shadowed — its deny ' +
+      'overlay is emitted strictly AFTER the writable bind for the parent directory',
+    () => {
+      const a = args({ writableRoots: ['/work'], readDenyRoots: ['/work/.env'] });
+      const bindIdx = a.findIndex((v, i) => v === '--bind' && a[i + 1] === '/work' && a[i + 2] === '/work');
+      const denyIdx = a.findIndex((v, i) => v === '--dir' && a[i + 1] === '/work/.env');
+      expect(bindIdx).toBeGreaterThanOrEqual(0);
+      expect(denyIdx).toBeGreaterThan(bindIdx);
+      // Full overlay triplet present for the nested path, not just the --dir marker.
+      expect(a[denyIdx + 2]).toBe('--perms');
+      expect(a[denyIdx + 3]).toBe('000');
+      expect(a[denyIdx + 4]).toBe('--tmpfs');
+      expect(a[denyIdx + 5]).toBe('/work/.env');
+    }
+  );
+
+  test(
+    'srt #193 pattern, readableRoots variant: a readDenyRoot nested inside a --ro-bind readableRoot ' +
+      'is still shadowed after it',
+    () => {
+      const a = args({ writableRoots: ['/work'], readableRoots: ['/data'], readDenyRoots: ['/data/secret'] });
+      const roIdx = a.findIndex((v, i) => v === '--ro-bind' && a[i + 1] === '/data' && a[i + 2] === '/data');
+      const denyIdx = a.findIndex((v, i) => v === '--dir' && a[i + 1] === '/data/secret');
+      expect(roIdx).toBeGreaterThanOrEqual(0);
+      expect(denyIdx).toBeGreaterThan(roIdx);
+    }
+  );
 });
 
 // ── maskedFiles ──────────────────────────────────────────────────────────────
