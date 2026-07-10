@@ -2,6 +2,11 @@ import { expect, test } from 'bun:test';
 
 import { createTextareaKeyDownHandler } from '../../src/features/session/session-view';
 
+const menuItems = [
+  { insert: '/one ', key: 'one', label: '/one' },
+  { insert: '/two ', key: 'two', label: '/two' }
+];
+
 function handler(overrides: Partial<Parameters<typeof createTextareaKeyDownHandler>[0]> = {}) {
   return createTextareaKeyDownHandler({
     activeSkill: 0,
@@ -62,4 +67,48 @@ test('createTextareaKeyDownHandler does not apply an empty loading command menu 
 
   expect(applied).toBe(false);
   expect(prevented).toBe(false);
+});
+
+test('createTextareaKeyDownHandler clamps command menu ArrowDown at the last item', () => {
+  let nextIndex = -1;
+  let prevented = false;
+  const onKeyDown = handler({
+    menuItems,
+    setActiveSkill: (update) => {
+      nextIndex = typeof update === 'function' ? update(1) : update;
+    },
+    skillMenuOpen: true
+  });
+
+  onKeyDown({
+    key: 'ArrowDown',
+    preventDefault: () => {
+      prevented = true;
+    }
+  } as KeyboardEvent);
+
+  expect(prevented).toBe(true);
+  expect(nextIndex).toBe(1);
+});
+
+test('createTextareaKeyDownHandler clamps command menu ArrowUp at the first item', () => {
+  let nextIndex = -1;
+  let prevented = false;
+  const onKeyDown = handler({
+    menuItems,
+    setActiveSkill: (update) => {
+      nextIndex = typeof update === 'function' ? update(0) : update;
+    },
+    skillMenuOpen: true
+  });
+
+  onKeyDown({
+    key: 'ArrowUp',
+    preventDefault: () => {
+      prevented = true;
+    }
+  } as KeyboardEvent);
+
+  expect(prevented).toBe(true);
+  expect(nextIndex).toBe(0);
 });

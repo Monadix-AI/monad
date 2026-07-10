@@ -6,7 +6,6 @@ import {
   ComputerTerminal01Icon,
   Copy01Icon,
   GitBranchIcon,
-  LoaderPinwheelIcon,
   RotateLeft01Icon
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
@@ -20,7 +19,8 @@ import {
   MessageResponse,
   Reasoning,
   ReasoningContent,
-  ReasoningTrigger
+  ReasoningTrigger,
+  Shimmer
 } from '@monad/ui';
 import { memo, useState } from 'react';
 
@@ -33,6 +33,7 @@ export interface Msg {
   text: string;
   reasoning?: string;
   pending?: boolean;
+  label?: string;
   error?: boolean;
   /** This assistant segment is still streaming — render a live cursor. */
   streaming?: boolean;
@@ -44,35 +45,37 @@ const ReasoningBubble = memo(function ReasoningBubble({ text, streaming }: { tex
   const t = useT();
   return (
     <Reasoning
-      className="panel-subtle mb-0 w-full px-4 py-3 text-xs"
+      className="mb-1 w-full px-1"
       isStreaming={streaming}
     >
       <ReasoningTrigger
-        className="text-xs"
-        getThinkingMessage={(isStreaming) => (
-          <span className="label-mono flex-1">{isStreaming ? t('web.chat.thinking') : t('web.chat.thinking')}</span>
-        )}
+        labels={{
+          thinking: t('web.reasoning.thinking'),
+          thoughtFew: t('web.reasoning.thoughtFew'),
+          thoughtSeconds: (seconds) => t('web.reasoning.thoughtSeconds', { seconds })
+        }}
       />
-      <ReasoningContent className="max-h-48 overflow-y-auto border-border/70 border-t pt-3 font-mono text-xs leading-relaxed">
-        {text}
-      </ReasoningContent>
+      <ReasoningContent className="max-h-48 overflow-y-auto">{text}</ReasoningContent>
     </Reasoning>
   );
 });
 
 export const Message = memo(function Message({
   msg,
+  assistantLabel,
   onBranch,
   onRestore,
   onSkillPreview
 }: {
   msg: Msg;
+  assistantLabel: string;
   onBranch?: (messageId: string) => void;
   onRestore?: (messageId: string) => void;
   onSkillPreview?: (id: string) => void;
 }) {
   const t = useT();
   const isUser = msg.role === 'user';
+  const label = msg.label ?? assistantLabel;
   const [copied, setCopied] = useState(false);
   const [confirmRestore, setConfirmRestore] = useState(false);
 
@@ -107,42 +110,60 @@ export const Message = memo(function Message({
       className={cn('gap-2', isUser ? 'max-w-[min(82%,42rem)] items-end self-end' : 'max-w-3xl items-start self-start')}
       from={msg.role}
     >
-      <span className={cn('label-mono px-1', isUser && 'text-right')}>
-        {isUser ? t('web.chat.you') : t('web.chat.assistant')}
+      <span
+        className={cn('label-mono px-1', isUser && 'text-right')}
+        data-message-pending={msg.pending ? 'true' : undefined}
+      >
+        {isUser ? (
+          t('web.chat.you')
+        ) : msg.pending ? (
+          <Shimmer
+            as="span"
+            duration={1.35}
+          >
+            {label}
+          </Shimmer>
+        ) : (
+          label
+        )}
       </span>
       {!isUser && msg.reasoning && (
         <ReasoningBubble
-          streaming={false}
+          streaming={Boolean(msg.streaming)}
           text={msg.reasoning}
         />
       )}
-      <MessageContent
-        className={cn(
-          'wrap-break-word text-[0.95rem] leading-7',
-          isUser
-            ? 'rounded-(--radius-xl) rounded-br-(--radius-xs) border border-primary/16 bg-accent px-4 py-3 text-foreground shadow-xs'
-            : 'w-full overflow-visible rounded-none bg-transparent px-1 py-0 text-foreground',
-          msg.pending &&
-            'min-h-10 items-center justify-center rounded-(--radius-lg) border border-border/70 bg-card px-4 py-3',
-          msg.type &&
-            msg.type !== 'text' &&
-            msg.type !== 'markdown' &&
-            !isUser &&
-            'rounded-(--radius-lg) border border-border/75 bg-card px-4 py-3 shadow-xs',
-          msg.error && 'rounded-(--radius-lg) border border-destructive/40 bg-destructive/10 px-4 py-3 text-destructive'
-        )}
-      >
-        {msg.pending ? (
-          <HugeiconsIcon
-            className="size-4 animate-spin text-muted-foreground"
-            icon={LoaderPinwheelIcon}
-          />
-        ) : msg.error ? (
-          <div className="flex items-start gap-2">
-            <HugeiconsIcon
-              className="mt-0.5 size-4 shrink-0"
-              icon={AlertCircleIcon}
-            />
+      {!msg.pending && (
+        <MessageContent
+          className={cn(
+            'wrap-break-word text-[0.95rem] leading-7',
+            isUser
+              ? 'rounded-(--radius-xl) rounded-br-(--radius-xs) border border-primary/16 bg-accent px-4 py-3 text-foreground shadow-xs'
+              : 'w-full overflow-visible rounded-none bg-transparent px-1 py-0 text-foreground',
+            msg.type &&
+              msg.type !== 'text' &&
+              msg.type !== 'markdown' &&
+              !isUser &&
+              'rounded-(--radius-lg) border border-border/75 bg-card px-4 py-3 shadow-xs',
+            msg.error &&
+              'rounded-(--radius-lg) border border-destructive/40 bg-destructive/10 px-4 py-3 text-destructive'
+          )}
+        >
+          {msg.error ? (
+            <div className="flex items-start gap-2">
+              <HugeiconsIcon
+                className="mt-0.5 size-4 shrink-0"
+                icon={AlertCircleIcon}
+              />
+              <MessageBody
+                data={msg.data}
+                isUser={isUser}
+                onSkillPreview={onSkillPreview}
+                text={msg.text}
+                type={msg.type}
+              />
+            </div>
+          ) : msg.type && msg.type !== 'text' && msg.type !== 'markdown' ? (
             <MessageBody
               data={msg.data}
               isUser={isUser}
@@ -150,34 +171,19 @@ export const Message = memo(function Message({
               text={msg.text}
               type={msg.type}
             />
-          </div>
-        ) : (
-          <>
-            {msg.type && msg.type !== 'text' && msg.type !== 'markdown' ? (
-              <MessageBody
-                data={msg.data}
-                isUser={isUser}
-                onSkillPreview={onSkillPreview}
-                text={msg.text}
-                type={msg.type}
-              />
-            ) : isUser ? (
-              <MessageBody
-                data={msg.data}
-                isUser={isUser}
-                onSkillPreview={onSkillPreview}
-                text={msg.text}
-                type={msg.type}
-              />
-            ) : (
-              <MessageResponse>{msg.text}</MessageResponse>
-            )}
-            {msg.streaming && (
-              <span className="ml-0.5 inline-block h-3.5 w-1.75 translate-y-0.5 animate-pulse rounded-[1px] bg-accent-blue align-text-bottom" />
-            )}
-          </>
-        )}
-      </MessageContent>
+          ) : isUser ? (
+            <MessageBody
+              data={msg.data}
+              isUser={isUser}
+              onSkillPreview={onSkillPreview}
+              text={msg.text}
+              type={msg.type}
+            />
+          ) : (
+            <MessageResponse>{msg.text}</MessageResponse>
+          )}
+        </MessageContent>
+      )}
       {!msg.pending &&
         msg.text &&
         (confirmRestore ? (

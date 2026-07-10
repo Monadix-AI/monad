@@ -33,14 +33,22 @@ test('sessionUpdate renames + archives and returns the new session', async () =>
   expect(session.archived).toBe(true);
 });
 
-test('sessionDelete removes the session', async () => {
-  const d = buildHandlers(mockModel(['hi']));
+test('sessionDelete queues deletion and hides the session from handler reads', async () => {
+  const store = createStore();
+  const d = buildHandlers(mockModel(['hi']), undefined, { store });
   const { sessionId } = await d.session.create({ title: 't' });
+  const { sessionId: otherSessionId } = await d.session.create({ title: 'other' });
   expect(await d.session.delete({ id: sessionId })).toEqual({ deleted: true });
   await expect(d.session.get({ id: sessionId })).rejects.toBeInstanceOf(HandlerError);
+  expect((await d.session.list({})).sessions.map((session) => session.id)).toEqual([otherSessionId]);
+  expect((await d.session.list({})).total).toBe(1);
+  expect(store.getSession(sessionId)).not.toBeNull();
+  expect(await d.session.undoDelete({ id: sessionId })).toEqual({ undone: true });
+  expect((await d.session.get({ id: sessionId })).session.title).toBe('t');
+  store.close();
 });
 
-test('sessionDelete cleans up orphaned session_members rows', async () => {
+test('sessionDelete undo preserves session_members rows', async () => {
   const store = createStore();
   const d = buildHandlers(mockModel(['hi']), undefined, { store });
   const { sessionId } = await d.session.create({ title: 't' });
@@ -55,7 +63,31 @@ test('sessionDelete cleans up orphaned session_members rows', async () => {
   });
   expect(store.listSessionMembers(sessionId)).toHaveLength(1);
   await d.session.delete({ id: sessionId });
-  expect(store.listSessionMembers(sessionId)).toEqual([]);
+  await d.session.undoDelete({ id: sessionId });
+  expect(store.listSessionMembers(sessionId)).toHaveLength(1);
+  store.close();
+});
+
+test('sessionDelete hides queued project sessions from project lists', async () => {
+  const store = createStore();
+  const d = buildHandlers(mockModel(['hi']), undefined, { store });
+  const { projectId } = await d.session.createProject({ title: 'p' });
+  const { sessionId } = await d.session.createProjectSession({ projectId, title: 'project session' });
+  expect(await d.session.listProjectSessions({ projectId })).toMatchObject({
+    total: 1
+  });
+
+  await d.session.delete({ id: sessionId });
+  expect(await d.session.listProjectSessions({ projectId })).toMatchObject({
+    sessions: [],
+    total: 0
+  });
+
+  await d.session.undoDelete({ id: sessionId });
+  expect((await d.session.listProjectSessions({ projectId })).sessions.map((session) => session.id)).toEqual([
+    sessionId
+  ]);
+  store.close();
 });
 
 test('sessionAbort reports false when nothing is in flight', async () => {

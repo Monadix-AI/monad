@@ -40,6 +40,7 @@ import {
 } from './external-agent/index.ts';
 import { getGraphResponseSchema } from './graph.ts';
 import { agentIdSchema, projectIdSchema, sessionIdSchema } from './ids.ts';
+import { listMentionInboxQuerySchema, listMentionInboxResponseSchema } from './inbox.ts';
 import { getLicensesResponseSchema } from './licenses.ts';
 import { getMem0DataResponseSchema } from './mem0-data.ts';
 import { getLawsResponseSchema } from './memory.ts';
@@ -84,6 +85,7 @@ import {
   setDefaultAgentRequestSchema,
   toolApproveRequestSchema,
   toolApproveResponseSchema,
+  undoDeleteSessionResponseSchema,
   updateAgentRequestSchema,
   updateSessionRequestSchema,
   updateSessionResponseSchema
@@ -122,6 +124,7 @@ import {
   createWorkplaceProjectResponseSchema,
   deleteWorkplaceProjectResponseSchema,
   getWorkplaceProjectResponseSchema,
+  listProjectSessionsQuerySchema,
   listProjectSessionsResponseSchema,
   listWorkplaceProjectsQuerySchema,
   listWorkplaceProjectsResponseSchema,
@@ -242,6 +245,10 @@ export const daemonHttpContract = {
       params: sessionParamsSchema,
       response: { 200: deleteSessionResponseSchema }
     }),
+    undoDelete: defineHttpEndpoint({
+      params: sessionParamsSchema,
+      response: { 200: undoDeleteSessionResponseSchema }
+    }),
     abort: defineHttpEndpoint({
       params: sessionParamsSchema,
       response: { 200: abortSessionResponseSchema }
@@ -329,6 +336,7 @@ export const daemonHttpContract = {
       sessions: {
         list: defineHttpEndpoint({
           params: projectParamsSchema,
+          query: coercifyQuery(listProjectSessionsQuerySchema),
           response: { 200: listProjectSessionsResponseSchema, 404: httpErrorSchema }
         }),
         create: defineHttpEndpoint({
@@ -338,6 +346,12 @@ export const daemonHttpContract = {
         })
       }
     }
+  },
+  inbox: {
+    mentions: defineHttpEndpoint({
+      query: coercifyQuery(listMentionInboxQuerySchema),
+      response: { 200: listMentionInboxResponseSchema }
+    })
   },
   agents: {
     list: defineHttpEndpoint({

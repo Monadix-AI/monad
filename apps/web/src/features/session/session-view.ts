@@ -1,6 +1,6 @@
-import type { UIItem, UIMessageItem } from '@monad/protocol';
+import type { UIItem } from '@monad/protocol';
 import type { Dispatch, KeyboardEvent as ReactKeyboardEvent, SetStateAction } from 'react';
-import type { SessionCommandMenuItem } from '#/features/session/SessionRoute';
+import type { SessionCommandMenuItem } from '#/features/session/command-menu';
 
 import {
   compactDividerItems,
@@ -74,28 +74,22 @@ export function buildViewMessages({
     }
   }
   const out = [...items.values()];
-  if (transcriptMode === 'live') {
-    const streamedUserText = new Set(
-      visibleLiveItems
-        .filter((item): item is UIMessageItem => item.kind === 'message' && item.role === 'user')
-        .map((item) => textFromParts(item.parts))
-    );
-    const historyUserTexts = new Set(
-      visibleHistory
-        .filter((item): item is UIMessageItem => item.kind === 'message' && item.role === 'user')
-        .map((item) => textFromParts(item.parts))
-    );
-    for (const message of optimistic) {
-      if (items.has(`message:${message.id}`)) continue;
-      if (
-        'role' in message &&
-        message.role === 'user' &&
-        (streamedUserText.has(message.text) || historyUserTexts.has(message.text))
-      ) {
+  const serverUserTextCounts = new Map<string, number>();
+  for (const item of [...visibleHistory, ...visibleLiveItems]) {
+    if (item.kind !== 'message' || item.role !== 'user') continue;
+    const text = textFromParts(item.parts);
+    serverUserTextCounts.set(text, (serverUserTextCounts.get(text) ?? 0) + 1);
+  }
+  for (const message of optimistic) {
+    if (items.has(`message:${message.id}`)) continue;
+    if ('role' in message && message.role === 'user') {
+      const count = serverUserTextCounts.get(message.text) ?? 0;
+      if (count > 0) {
+        serverUserTextCounts.set(message.text, count - 1);
         continue;
       }
-      out.push(message);
     }
+    out.push(message);
   }
   return groupToolCalls(compactDividerItems(out, commandPending));
 }
@@ -128,12 +122,12 @@ export function createTextareaKeyDownHandler({
     if (skillMenuOpen) {
       if (event.key === 'ArrowDown' && menuItems.length > 0) {
         event.preventDefault();
-        setActiveSkill((index) => (index + 1) % menuItems.length);
+        setActiveSkill((index) => Math.min(index + 1, menuItems.length - 1));
         return;
       }
       if (event.key === 'ArrowUp' && menuItems.length > 0) {
         event.preventDefault();
-        setActiveSkill((index) => (index - 1 + menuItems.length) % menuItems.length);
+        setActiveSkill((index) => Math.max(index - 1, 0));
         return;
       }
       if ((event.key === 'Enter' || event.key === 'Tab') && menuItems.length > 0) {

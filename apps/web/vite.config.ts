@@ -79,11 +79,17 @@ function daemonProxyTarget(): string {
   return `${scheme}://127.0.0.1:${port}`;
 }
 
-function devToolPorts(command: 'build' | 'serve') {
+export function devToolPorts(
+  command: 'build' | 'serve',
+  env:
+    | NodeJS.ProcessEnv
+    | { AI_SDK_DEVTOOLS_PORT?: string | undefined; MONAD_KV_UI_PORT?: string | undefined } = process.env,
+  envPath = REPO_ENV_PATH
+) {
   if (command === 'build') return {};
   return {
-    aiSdk: process.env.AI_SDK_DEVTOOLS_PORT || undefined,
-    kv: process.env.MONAD_KV_UI_PORT || undefined,
+    aiSdk: env.AI_SDK_DEVTOOLS_PORT || readEnvValue(envPath, 'AI_SDK_DEVTOOLS_PORT') || undefined,
+    kv: env.MONAD_KV_UI_PORT || readEnvValue(envPath, 'MONAD_KV_UI_PORT') || undefined,
     otel: '6006'
   };
 }

@@ -3,7 +3,12 @@ import type { MessageId, SessionId, UIItem } from '@monad/protocol';
 import { useLazyGetUiItemsWindowQuery } from '@monad/client-rtk';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-type TranscriptMode = 'live' | 'history';
+import {
+  activateTranscriptHistory,
+  createTranscriptHistoryState,
+  type TranscriptMode,
+  updateTranscriptHistory
+} from './transcript-history-state';
 
 interface Params {
   sessionId: SessionId | null;
@@ -41,8 +46,7 @@ function mergeUnique(a: UIItem[], b: UIItem[]): UIItem[] {
  * reaches the end, at which point it reconnects to `live`.
  */
 export function useTranscriptHistory({ sessionId, streamOldestCursor, streamHasMore }: Params): TranscriptHistory {
-  const [items, setItems] = useState<UIItem[]>([]);
-  const [mode, setMode] = useState<TranscriptMode>('live');
+  const [historyState, setHistoryState] = useState(() => createTranscriptHistoryState(sessionId));
   const [fetchWindow] = useLazyGetUiItemsWindowQuery();
 
   const olderCursor = useRef<string | undefined>(undefined);
@@ -51,18 +55,21 @@ export function useTranscriptHistory({ sessionId, streamOldestCursor, streamHasM
   const canNewer = useRef(false);
   const fetching = useRef(false);
   const seeded = useRef(false);
+  const activeSessionId = useRef(sessionId);
+  activeSessionId.current = sessionId;
+  const activeHistoryState = activateTranscriptHistory(historyState, sessionId);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reset the accumulator when the transcript target changes
-  useEffect(() => {
-    setItems([]);
-    setMode('live');
+  if (activeHistoryState !== historyState) {
     olderCursor.current = undefined;
     newerCursor.current = undefined;
     canOlder.current = false;
     canNewer.current = false;
     fetching.current = false;
     seeded.current = false;
-  }, [sessionId]);
+    setHistoryState(activeHistoryState);
+  }
+
+  const { items, mode } = activeHistoryState;
 
   // Seed the older-page cursor from the live snapshot once it arrives (live mode, nothing loaded).
   useEffect(() => {
@@ -81,7 +88,13 @@ export function useTranscriptHistory({ sessionId, streamOldestCursor, streamHasM
     fetchWindow({ sessionId: sessionId, before })
       .unwrap()
       .then((res) => {
-        setItems((prev) => mergeUnique(res.items, prev));
+        if (activeSessionId.current !== sessionId) return;
+        setHistoryState((state) =>
+          updateTranscriptHistory(state, sessionId, (current) => ({
+            ...current,
+            items: mergeUnique(res.items, current.items)
+          }))
+        );
         olderCursor.current = res.olderCursor;
         canOlder.current = res.olderCursor !== undefined;
       })
@@ -99,10 +112,16 @@ export function useTranscriptHistory({ sessionId, streamOldestCursor, streamHasM
     fetchWindow({ sessionId: sessionId, after })
       .unwrap()
       .then((res) => {
-        setItems((prev) => mergeUnique(prev, res.items));
+        if (activeSessionId.current !== sessionId) return;
+        setHistoryState((state) =>
+          updateTranscriptHistory(state, sessionId, (current) => ({
+            ...current,
+            items: mergeUnique(current.items, res.items),
+            mode: res.newerCursor === undefined ? 'live' : current.mode
+          }))
+        );
         newerCursor.current = res.newerCursor;
         canNewer.current = res.newerCursor !== undefined;
-        if (res.newerCursor === undefined) setMode('live'); // reached the tail → live takes over
       })
       .catch(() => {})
       .finally(() => {
@@ -113,18 +132,26 @@ export function useTranscriptHistory({ sessionId, streamOldestCursor, streamHasM
   const openAtMessage = useCallback(
     (messageId: MessageId) => {
       if (sessionId === null) return;
-      setMode('history');
+      setHistoryState((state) =>
+        updateTranscriptHistory(state, sessionId, (current) => ({ ...current, mode: 'history' }))
+      );
       seeded.current = true; // don't re-seed from the stream while detached
       fetching.current = true;
       fetchWindow({ sessionId: sessionId, around: messageId })
         .unwrap()
         .then((res) => {
-          setItems(res.items);
+          if (activeSessionId.current !== sessionId) return;
+          setHistoryState((state) =>
+            updateTranscriptHistory(state, sessionId, (current) => ({
+              ...current,
+              items: res.items,
+              mode: res.newerCursor === undefined ? 'live' : current.mode
+            }))
+          );
           olderCursor.current = res.olderCursor;
           newerCursor.current = res.newerCursor;
           canOlder.current = res.olderCursor !== undefined;
           canNewer.current = res.newerCursor !== undefined;
-          if (res.newerCursor === undefined) setMode('live');
         })
         .catch(() => {})
         .finally(() => {
@@ -135,14 +162,15 @@ export function useTranscriptHistory({ sessionId, streamOldestCursor, streamHasM
   );
 
   const jumpToLive = useCallback(() => {
-    setMode('live');
-    setItems([]);
+    setHistoryState((state) =>
+      updateTranscriptHistory(state, sessionId, (current) => ({ ...current, items: [], mode: 'live' }))
+    );
     olderCursor.current = streamOldestCursor;
     newerCursor.current = undefined;
     canOlder.current = streamHasMore;
     canNewer.current = false;
     seeded.current = true;
-  }, [streamOldestCursor, streamHasMore]);
+  }, [sessionId, streamOldestCursor, streamHasMore]);
 
   return { items, mode, loadOlder, loadNewer, openAtMessage, jumpToLive };
 }

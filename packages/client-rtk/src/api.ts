@@ -92,6 +92,7 @@ import {
   useStreamExternalAgentUiObservationQuery
 } from './endpoints/external-agent/index.ts';
 import { graphApi, useGetGraphQuery } from './endpoints/graph/index.ts';
+import { inboxApi, useListMentionInboxQuery } from './endpoints/inbox/index.ts';
 import { indexerApi, useGetIndexerStatusQuery } from './endpoints/indexer/get-indexer-status.ts';
 import { useInitStatusQuery, useSetInitHomeMutation } from './endpoints/init/index.ts';
 import { lawsApi, useGetLawsQuery } from './endpoints/laws/index.ts';
@@ -151,6 +152,7 @@ import {
   useStreamControlQuery,
   useStreamSessionQuery,
   useStreamUiItemsQuery,
+  useUndoDeleteSessionMutation,
   useUpdateSessionMutation,
   useWorkspaceActionMutation,
   useWorkspaceGitQuery,
@@ -315,6 +317,7 @@ export {
   externalAgentSessionSelectors,
   factSelectors,
   graphApi,
+  inboxApi,
   indexerApi,
   lawsApi,
   licensesApi,
@@ -467,6 +470,7 @@ export {
   useListMcpServerStatusQuery,
   useListMcpServersQuery,
   useListMemoryFactsQuery,
+  useListMentionInboxQuery,
   useListModelsQuery,
   useListPeersQuery,
   useListProfilesQuery,
@@ -548,6 +552,7 @@ export {
   useTestCredentialMutation,
   useTestPeerConnectionMutation,
   useTranscribeAudioMutation,
+  useUndoDeleteSessionMutation,
   useUpdateAgentMutation,
   useUpdateSessionMutation,
   useUpdateSkillContentMutation,

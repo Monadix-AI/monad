@@ -24,5 +24,6 @@ export { useSpawnSessionMemberMutation } from './spawn-session-member.ts';
 export { streamControlApi, useStreamControlQuery } from './stream-control.ts';
 export { streamSessionApi as sessionsApi, useStreamSessionQuery } from './stream-session.ts';
 export { streamUiItemsApi, useStreamUiItemsQuery } from './stream-ui-items.ts';
+export { useUndoDeleteSessionMutation } from './undo-delete-session.ts';
 export { useUpdateSessionMutation } from './update-session.ts';
 export { useWorkspaceActionMutation } from './workspace-action.ts';

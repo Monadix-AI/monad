@@ -1,11 +1,4 @@
-import type {
-  ChatMessage,
-  ComposerFollowUpBehavior,
-  MessageId,
-  SessionId,
-  UIItem,
-  UIMessageItem
-} from '@monad/protocol';
+import type { ChatMessage, ComposerFollowUpBehavior, MessageId, SessionId, UIItem } from '@monad/protocol';
 
 import {
   useAbortSessionMutation,
@@ -16,13 +9,20 @@ import {
   useSendMessageMutation
 } from '@monad/client-rtk';
 import { parseSlashCommand } from '@monad/protocol';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { type SetStateAction, useCallback, useEffect, useRef, useState } from 'react';
 
 import { type Msg } from '#/features/session/ChatMessage';
 import { textFromParts, viewItemKey } from '#/features/session/chat-view-items';
 import { useSessionUiStore } from '#/features/session/session-ui-store';
 
 type CommandEffect = { type: string; sessionId?: string; compacted?: number };
+
+const EMPTY_MESSAGES: Msg[] = [];
+const EMPTY_QUEUE: string[] = [];
+
+const isEmptyMessages = (value: Msg[]) => value.length === 0;
+const isEmptyQueue = (value: string[]) => value.length === 0;
+const isEmptyPendingCommand = (value: string | null) => value === null;
 
 interface UseChatComposerArgs {
   currentId: SessionId | null;
@@ -34,6 +34,37 @@ interface UseChatComposerArgs {
   jumpToLive: () => void;
   setSessionUrl: (id: SessionId | null) => void;
   followUpBehavior: ComposerFollowUpBehavior;
+  assistantLabel: string;
+}
+
+function useSessionScopedState<T>({
+  empty,
+  isEmpty,
+  sessionId
+}: {
+  empty: T;
+  isEmpty: (value: T) => boolean;
+  sessionId: SessionId | null;
+}): [T, (action: SetStateAction<T>) => void] {
+  const [bySession, setBySession] = useState<Record<string, T>>({});
+  const value = sessionId ? (bySession[sessionId] ?? empty) : empty;
+  const setValue = useCallback(
+    (action: SetStateAction<T>) => {
+      if (!sessionId) return;
+      setBySession((prev) => {
+        const current = prev[sessionId] ?? empty;
+        const next = typeof action === 'function' ? (action as (value: T) => T)(current) : action;
+        if (isEmpty(next)) {
+          const copy = { ...prev };
+          delete copy[sessionId];
+          return copy;
+        }
+        return { ...prev, [sessionId]: next };
+      });
+    },
+    [empty, isEmpty, sessionId]
+  );
+  return [value, setValue];
 }
 
 // Owns the send pipeline: optimistic echo, slash-command dispatch + structured effects, the
@@ -47,7 +78,8 @@ export function useChatComposer({
   scrollToBottom,
   jumpToLive,
   setSessionUrl,
-  followUpBehavior
+  followUpBehavior,
+  assistantLabel
 }: UseChatComposerArgs) {
   const [generate, { isLoading: generating }] = useGenerateMutation();
   const [sendMessage, { isLoading: sending }] = useSendMessageMutation();
@@ -56,11 +88,27 @@ export function useChatComposer({
   const [branchSession] = useBranchSessionMutation();
   const [restoreSession] = useRestoreSessionMutation();
 
-  const [optimistic, setOptimistic] = useState<Msg[]>([]);
-  const [commandPending, setCommandPending] = useState<string | null>(null);
-  const [messageQueue, setMessageQueue] = useState<string[]>([]);
+  const [optimistic, setOptimistic] = useSessionScopedState({
+    empty: EMPTY_MESSAGES,
+    isEmpty: isEmptyMessages,
+    sessionId: currentId
+  });
+  const [commandPending, setCommandPending] = useSessionScopedState({
+    empty: null as string | null,
+    isEmpty: isEmptyPendingCommand,
+    sessionId: currentId
+  });
+  const [messageQueue, setMessageQueue] = useSessionScopedState({
+    empty: EMPTY_QUEUE,
+    isEmpty: isEmptyQueue,
+    sessionId: currentId
+  });
   const input = useSessionUiStore((state) => state.input);
   const clearComposerInput = useSessionUiStore((state) => state.clearComposerInput);
+  const initialUserMessages = useSessionUiStore((state) =>
+    currentId ? (state.initialUserMessagesBySession[currentId] ?? EMPTY_QUEUE) : EMPTY_QUEUE
+  );
+  const clearInitialUserMessages = useSessionUiStore((state) => state.clearInitialUserMessages);
   const setHiddenViewItemKeysBySession = useSessionUiStore((state) => state.setHiddenViewItemKeysBySession);
   const messageQueueRef = useRef<string[]>([]);
   const prevBusyRef = useRef(false);
@@ -73,16 +121,39 @@ export function useChatComposer({
 
   const isBusy = sending || generating || commandPending !== null || liveStreaming;
 
-  // Drop an optimistic user message once the live stream echoes it back.
+  useEffect(() => {
+    if (!currentId || initialUserMessages.length === 0) return;
+    const messages = initialUserMessages.map((text) => ({
+      id: `local-home-${crypto.randomUUID()}`,
+      role: 'user' as const,
+      text
+    }));
+    setOptimistic((prev) => [...prev, ...messages]);
+    clearInitialUserMessages(currentId);
+    requestAnimationFrame(() => scrollToBottom('smooth'));
+  }, [currentId, initialUserMessages, clearInitialUserMessages, scrollToBottom, setOptimistic]);
+
+  // Drop optimistic user messages one-for-one as the live stream echoes them back. Text is the only
+  // correlation key available today, so counts matter: two identical submits must not both disappear
+  // when only one server echo has arrived.
   useEffect(() => {
     if (optimistic.length === 0) return;
-    const liveUserTexts = new Set(
-      liveItems
-        .filter((item): item is UIMessageItem => item.kind === 'message' && item.role === 'user')
-        .map((item) => textFromParts(item.parts))
+    const liveUserTextCounts = new Map<string, number>();
+    for (const item of liveItems) {
+      if (item.kind !== 'message' || item.role !== 'user') continue;
+      const text = textFromParts(item.parts);
+      liveUserTextCounts.set(text, (liveUserTextCounts.get(text) ?? 0) + 1);
+    }
+    setOptimistic((prev) =>
+      prev.filter((message) => {
+        if (message.role !== 'user') return true;
+        const count = liveUserTextCounts.get(message.text) ?? 0;
+        if (count <= 0) return true;
+        liveUserTextCounts.set(message.text, count - 1);
+        return false;
+      })
     );
-    setOptimistic((prev) => prev.filter((m) => !(m.role === 'user' && liveUserTexts.has(m.text))));
-  }, [liveItems, optimistic.length]);
+  }, [liveItems, optimistic.length, setOptimistic]);
 
   const handleStop = useCallback(() => {
     if (currentId) void abortSession(currentId);
@@ -98,7 +169,7 @@ export function useChatComposer({
     });
     setOptimistic([]);
     jumpToLive();
-  }, [currentId, isBusy, resetSession, jumpToLive, setHiddenViewItemKeysBySession]);
+  }, [currentId, isBusy, resetSession, jumpToLive, setHiddenViewItemKeysBySession, setOptimistic]);
 
   // Fork the conversation into a child session at this message, then jump to it.
   const handleBranch = useCallback(
@@ -112,7 +183,7 @@ export function useChatComposer({
         setSessionUrl(res.sessionId);
       }
     },
-    [currentId, branchSession, setSessionUrl]
+    [currentId, branchSession, setSessionUrl, setOptimistic]
   );
 
   // Rewind the conversation to this message, dropping everything after it.
@@ -125,7 +196,7 @@ export function useChatComposer({
       setOptimistic([]);
       jumpToLive();
     },
-    [currentId, isBusy, restoreSession, jumpToLive]
+    [currentId, isBusy, restoreSession, jumpToLive, setOptimistic]
   );
 
   // React to a host command's structured effect (rich-client behaviour; dumb clients just show text).
@@ -147,7 +218,7 @@ export function useChatComposer({
       }
       return effect.type;
     },
-    [setSessionUrl, jumpToLive, currentId, history, liveItems, setHiddenViewItemKeysBySession]
+    [setSessionUrl, jumpToLive, currentId, history, liveItems, setHiddenViewItemKeysBySession, setOptimistic]
   );
 
   const handleSend = useCallback(
@@ -185,8 +256,16 @@ export function useChatComposer({
         return;
       }
 
-      const userMsg: Msg = { id: `local-${crypto.randomUUID()}`, role: 'user', text };
-      setOptimistic((prev) => [...prev, userMsg]);
+      const localId = crypto.randomUUID();
+      const userMsg: Msg = { id: `local-${localId}`, role: 'user', text };
+      const assistantActivity: Msg = {
+        id: `local-assistant-${localId}`,
+        role: 'assistant',
+        text: '',
+        pending: true,
+        label: assistantLabel
+      };
+      setOptimistic((prev) => [...prev, userMsg, assistantActivity]);
       requestAnimationFrame(() => scrollToBottom('smooth'));
 
       try {
@@ -201,13 +280,31 @@ export function useChatComposer({
         // Wait for the assistant reply to land on the live stream so the turn always shows up.
         for (let i = 0; i < 40; i++) {
           await new Promise((r) => setTimeout(r, 750));
-          if (assistantCount() > beforeStreamMsgs) break;
+          if (assistantCount() > beforeStreamMsgs) {
+            setOptimistic((prev) => prev.filter((m) => m.id !== assistantActivity.id));
+            break;
+          }
         }
       } catch {
-        setOptimistic((prev) => prev.filter((m) => m.id !== userMsg.id));
+        setOptimistic((prev) =>
+          prev
+            .filter((m) => m.id !== assistantActivity.id)
+            .map((m) => (m.id === userMsg.id ? { ...m, error: true } : m))
+        );
       }
     },
-    [currentId, sendMessage, generate, scrollToBottom, handleReset, applyCommandEffect, jumpToLive]
+    [
+      currentId,
+      sendMessage,
+      generate,
+      scrollToBottom,
+      handleReset,
+      applyCommandEffect,
+      jumpToLive,
+      setOptimistic,
+      setCommandPending,
+      assistantLabel
+    ]
   );
 
   useEffect(() => {
@@ -229,7 +326,7 @@ export function useChatComposer({
       await new Promise((r) => setTimeout(r, 100));
       await handleSend(merged);
     },
-    [currentId, abortSession, clearComposerInput, handleSend]
+    [currentId, abortSession, clearComposerInput, handleSend, setMessageQueue]
   );
 
   // When generation ends (stream or block), drain the queue: merge all queued messages and send as one turn.
@@ -242,7 +339,7 @@ export function useChatComposer({
       messageQueueRef.current = [];
       void handleSendRef.current?.(text);
     }
-  }, [isBusy]);
+  }, [isBusy, setMessageQueue]);
 
   const handleSubmit = useCallback(async () => {
     const text = input.trim();
@@ -257,7 +354,16 @@ export function useChatComposer({
       return;
     }
     await handleSend(text);
-  }, [input, currentId, isBusy, followUpBehavior, handleSend, handleForceSteerText, clearComposerInput]);
+  }, [
+    input,
+    currentId,
+    isBusy,
+    followUpBehavior,
+    handleSend,
+    handleForceSteerText,
+    clearComposerInput,
+    setMessageQueue
+  ]);
 
   const handleQueueSubmit = useCallback(async () => {
     const text = input.trim();
@@ -268,7 +374,7 @@ export function useChatComposer({
       return;
     }
     await handleSend(text);
-  }, [input, currentId, isBusy, handleSend, clearComposerInput]);
+  }, [input, currentId, isBusy, handleSend, clearComposerInput, setMessageQueue]);
 
   const handleForceSteer = useCallback(async () => {
     if (!currentId) return;
@@ -276,9 +382,12 @@ export function useChatComposer({
     await handleForceSteerText(text);
   }, [currentId, input, handleForceSteerText]);
 
-  const removeQueuedMessage = useCallback((index: number) => {
-    setMessageQueue((queue) => queue.filter((_, itemIndex) => itemIndex !== index));
-  }, []);
+  const removeQueuedMessage = useCallback(
+    (index: number) => {
+      setMessageQueue((queue) => queue.filter((_, itemIndex) => itemIndex !== index));
+    },
+    [setMessageQueue]
+  );
 
   return {
     isBusy,

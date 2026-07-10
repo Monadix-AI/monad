@@ -189,7 +189,9 @@ test.describe('Shell navigation', () => {
     await installShellMock(page);
     await page.goto(`/workspace/${PROJECT_ID}`);
 
-    const sessionLink = page.getByRole('treeitem', { name: 'First session' });
+    const expandAll = page.getByRole('button', { name: 'Expand all projects' });
+    if (await expandAll.isVisible()) await expandAll.click();
+    const sessionLink = page.getByRole('link', { name: 'First session' });
     await expect(sessionLink).toBeVisible();
     await sessionLink.click();
     await expect(page).toHaveURL(new RegExp(`/workspace/${PROJECT_ID}/${SESSION_ID}`));

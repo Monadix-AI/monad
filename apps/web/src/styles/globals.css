@@ -629,11 +629,24 @@
   }
 
   .workspace-home-shell {
-    --workspace-home-spotlight-x: 58%;
-    --workspace-home-spotlight-y: 24%;
+    --workspace-home-glow-x: -62%;
+    --workspace-home-glow-scale: 0.96;
+    --workspace-home-ease: cubic-bezier(0.22, 1, 0.36, 1);
     position: relative;
     overflow: hidden;
     isolation: isolate;
+  }
+
+  .workspace-home-shell[data-target-mode="project"] {
+    --workspace-home-glow-x: -38%;
+  }
+
+  .workspace-home-shell:focus-within {
+    --workspace-home-glow-scale: 1.03;
+  }
+
+  .workspace-home-shell[data-launching="true"] {
+    --workspace-home-glow-scale: 1.08;
   }
 
   .workspace-home-background {
@@ -663,9 +676,9 @@
 
   .workspace-home-background::after {
     position: absolute;
-    top: var(--workspace-home-spotlight-y);
-    left: var(--workspace-home-spotlight-x);
-    width: min(54vw, 44rem);
+    top: 16%;
+    left: 50%;
+    width: min(64vw, 48rem);
     aspect-ratio: 1;
     content: "";
     background: radial-gradient(
@@ -675,13 +688,17 @@
       rgb(var(--backgroundColor-desktop) / 0.055) 46%,
       transparent 70%
     );
-    opacity: 0.9;
+    opacity: 0.76;
     filter: blur(18px);
-    transform: translate(-50%, -50%);
+    transform: translate3d(var(--workspace-home-glow-x), -44%, 0) scale(var(--workspace-home-glow-scale));
     transition:
-      left 90ms cubic-bezier(0.2, 0, 0, 1),
-      top 90ms cubic-bezier(0.2, 0, 0, 1),
-      opacity 180ms cubic-bezier(0.2, 0, 0, 1);
+      transform 160ms var(--workspace-home-ease),
+      opacity 160ms var(--workspace-home-ease);
+    will-change: transform;
+  }
+
+  .workspace-home-shell[data-launching="true"] .workspace-home-background::after {
+    opacity: 1;
   }
 
   .dark .workspace-home-background::before {
@@ -698,6 +715,330 @@
     );
     mix-blend-mode: screen;
     opacity: 0.68;
+  }
+
+  .workspace-home-content {
+    transform-origin: 50% 52%;
+    transition:
+      transform 160ms var(--workspace-home-ease),
+      opacity 160ms var(--workspace-home-ease);
+  }
+
+  .workspace-home-shell[data-launching="true"] .workspace-home-content {
+    opacity: 0.88;
+    transform: scale(0.994);
+  }
+
+  .workspace-home-status-dot {
+    width: 7px;
+    height: 7px;
+    background: var(--accent-blue);
+    border-radius: 999px;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-blue) 12%, transparent);
+  }
+
+  .workspace-home-intent,
+  .workspace-home-target-stage {
+    position: relative;
+  }
+
+  .workspace-home-prompt {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.22em;
+    align-items: baseline;
+    justify-content: center;
+    line-height: 1.14;
+    text-align: center;
+  }
+
+  .workspace-home-token {
+    display: inline-flex;
+    align-items: baseline;
+    max-width: min(100%, 22rem);
+    padding: 0 0.02em;
+    color: var(--foreground);
+    text-decoration-line: underline;
+    text-decoration-thickness: 0.04em;
+    text-decoration-color: color-mix(in srgb, var(--foreground) 34%, transparent);
+    text-underline-offset: 0.16em;
+    border-radius: 0.08em;
+    transition:
+      color 160ms var(--workspace-home-ease),
+      background-color 160ms var(--workspace-home-ease),
+      text-decoration-color 160ms var(--workspace-home-ease);
+  }
+
+  .workspace-home-token:hover:not(:disabled),
+  .workspace-home-token[aria-expanded="true"] {
+    color: var(--foreground);
+    text-decoration-color: color-mix(in srgb, var(--foreground) 70%, transparent);
+    background: color-mix(in srgb, var(--foreground) 7%, transparent);
+  }
+
+  .workspace-home-token:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 4px;
+  }
+
+  .workspace-home-token:disabled {
+    opacity: 0.62;
+  }
+
+  .workspace-home-token--target {
+    min-width: 0;
+  }
+
+  .workspace-home-composer {
+    --chat-input-border: color-mix(in srgb, var(--foreground) 14%, transparent);
+    --chat-input-surface: color-mix(in srgb, var(--card) 88%, transparent);
+    position: relative;
+    transition: transform 160ms var(--workspace-home-ease);
+  }
+
+  .workspace-home-composer:focus-within {
+    transform: translateY(-1px);
+  }
+
+  .workspace-home-state-line {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    justify-content: center;
+    min-height: 28px;
+    margin-top: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted-foreground);
+    white-space: nowrap;
+  }
+
+  .workspace-home-bridge {
+    display: grid;
+    grid-template-columns: minmax(1rem, 1fr) auto minmax(1rem, 1fr);
+    gap: 12px;
+    align-items: center;
+    min-height: 50px;
+    color: var(--muted-foreground);
+  }
+
+  .workspace-home-bridge-line {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--foreground) 12%, transparent));
+  }
+
+  .workspace-home-bridge-line:last-child {
+    background: linear-gradient(90deg, color-mix(in srgb, var(--foreground) 12%, transparent), transparent);
+  }
+
+  .workspace-home-bridge-label {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    max-width: min(18rem, 52vw);
+    min-height: 24px;
+    padding: 0 8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .workspace-home-mode-switch {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px;
+    padding: 4px;
+    background: color-mix(in srgb, var(--muted) 78%, transparent);
+    border-radius: 12px;
+  }
+
+  .workspace-home-mode-button {
+    display: flex;
+    gap: 7px;
+    align-items: center;
+    justify-content: center;
+    min-height: 40px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted-foreground);
+    border-radius: 9px;
+    transition:
+      color 160ms var(--workspace-home-ease),
+      background-color 160ms var(--workspace-home-ease),
+      transform 160ms var(--workspace-home-ease);
+  }
+
+  .workspace-home-mode-button:hover:not(:disabled) {
+    color: var(--foreground);
+  }
+
+  .workspace-home-mode-button:active:not(:disabled) {
+    transform: scale(0.985);
+  }
+
+  .workspace-home-mode-button[aria-pressed="true"] {
+    color: var(--foreground);
+    background: var(--card);
+    box-shadow: 0 1px 4px rgb(var(--backgroundColor-transparent) / 0.12);
+  }
+
+  .workspace-home-mode-button:focus-visible,
+  .workspace-home-target:focus-visible,
+  .workspace-home-empty-action:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  .workspace-home-mode-button:disabled,
+  .workspace-home-target:disabled {
+    opacity: 0.56;
+  }
+
+  .workspace-home-target-list {
+    max-height: min(30vh, 17rem);
+    padding: 4px;
+    margin-top: 10px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    background: color-mix(in srgb, var(--card) 58%, transparent);
+    border: 1px solid color-mix(in srgb, var(--foreground) 9%, transparent);
+    border-radius: 12px;
+  }
+
+  .workspace-home-target {
+    display: flex;
+    gap: 11px;
+    align-items: center;
+    width: 100%;
+    min-height: 54px;
+    padding: 7px 9px;
+    border-radius: 9px;
+    transition:
+      color 160ms var(--workspace-home-ease),
+      background-color 160ms var(--workspace-home-ease),
+      transform 160ms var(--workspace-home-ease);
+  }
+
+  .workspace-home-target:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--accent) 76%, transparent);
+  }
+
+  .workspace-home-target:active:not(:disabled) {
+    transform: scale(0.994);
+  }
+
+  .workspace-home-target--selected {
+    background: color-mix(in srgb, var(--accent-blue) 9%, var(--card));
+  }
+
+  .workspace-home-target-icon {
+    display: grid;
+    flex: 0 0 auto;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    color: var(--muted-foreground);
+    background: color-mix(in srgb, var(--background) 80%, transparent);
+    border-radius: 8px;
+    transition:
+      color 160ms var(--workspace-home-ease),
+      background-color 160ms var(--workspace-home-ease);
+  }
+
+  .workspace-home-target--selected .workspace-home-target-icon {
+    color: var(--accent-blue);
+    background: color-mix(in srgb, var(--accent-blue) 11%, var(--background));
+  }
+
+  .workspace-home-target-check {
+    display: grid;
+    flex: 0 0 auto;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    color: var(--accent-blue);
+    opacity: 0;
+    transform: scale(0.72);
+    transition:
+      transform 160ms var(--workspace-home-ease),
+      opacity 160ms var(--workspace-home-ease);
+  }
+
+  .workspace-home-target--selected .workspace-home-target-check {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  .workspace-home-empty {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 72px;
+    padding: 10px 12px;
+  }
+
+  .workspace-home-empty-action {
+    flex: 0 0 auto;
+    min-height: 36px;
+    padding: 0 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--foreground);
+    background: var(--accent);
+    border-radius: 8px;
+  }
+
+  .workspace-home-error {
+    padding: 9px 11px;
+    margin-top: 10px;
+    font-size: 13px;
+    color: var(--destructive);
+    background: color-mix(in srgb, var(--destructive) 8%, transparent);
+    border-radius: 8px;
+  }
+
+  @media (max-width: 639px) {
+    .workspace-home-background::after {
+      top: 22%;
+      width: 34rem;
+    }
+
+    .workspace-home-mode-button,
+    .workspace-home-empty-action {
+      min-height: 44px;
+    }
+
+    .workspace-home-target-list {
+      max-height: 15rem;
+    }
+
+    .workspace-home-target {
+      min-height: 58px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .workspace-home-background::after,
+    .workspace-home-content,
+    .workspace-home-composer,
+    .workspace-home-mode-button,
+    .workspace-home-target,
+    .workspace-home-target-icon,
+    .workspace-home-target-check {
+      transition-duration: 0.01ms;
+    }
+
+    .workspace-home-shell[data-launching="true"] .workspace-home-content,
+    .workspace-home-composer:focus-within,
+    .workspace-home-mode-button:active:not(:disabled),
+    .workspace-home-target:active:not(:disabled) {
+      transform: none;
+    }
   }
 
   .message-actions {

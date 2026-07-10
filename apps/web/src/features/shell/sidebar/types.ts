@@ -5,8 +5,7 @@ export interface ProjectItem {
   id: string;
   name: string;
   hasRunningAgent: boolean;
-  pinned: boolean;
-  sessions: { id: SessionId; title: string }[];
+  sessions: { id: SessionId; pinned: boolean; title: string }[];
   unreadCount: number;
 }
 

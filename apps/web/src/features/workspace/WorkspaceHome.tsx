@@ -1,339 +1,471 @@
 'use client';
 
-import type { Session } from '@monad/protocol';
-import type { CSSProperties, PointerEvent } from 'react';
+import type { Agent, AgentId, ProjectId, SessionId } from '@monad/protocol';
 
-import {
-  ArrowRight01Icon,
-  BoxesIcon,
-  MessageSquareCodeIcon,
-  PlusSignIcon,
-  Settings02Icon,
-  Shield01Icon,
-  SlidersHorizontalIcon
-} from '@hugeicons/core-free-icons';
+import { BotIcon, CheckIcon, Folder01Icon, LoaderPinwheelIcon, PlusSignIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { useCreateWorkplaceProjectMutation } from '@monad/client-rtk';
-import { Button } from '@monad/ui';
-import { useCallback } from 'react';
+import {
+  createIdempotencyKey,
+  useCreateProjectSessionMutation,
+  useCreateSessionMutation,
+  useSendMessageMutation,
+  useSendProjectMessageMutation
+} from '@monad/client-rtk';
+import { newId } from '@monad/protocol';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@monad/ui';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useT } from '#/components/I18nProvider';
-import { ThemeToggle } from '#/components/ThemeToggle';
-import { PanelShellHeader } from '#/components/ui/panel-shell';
-import { NewProjectDialog } from '#/features/shell/NewProjectDialog';
+import { ComposerShell } from '#/features/session/ComposerShell';
+import { useSessionUiStore } from '#/features/session/session-ui-store';
+import { projectSessionPath } from '#/features/shell/routing/paths';
+import { pushShellUrl, replaceShellUrl } from '#/hooks/use-shell-location';
 import { useWorkspaceShellStore } from '#/lib/workspace-shell-store';
+import {
+  resolveWorkspaceLaunchTarget,
+  workspaceLaunchErrorMessage,
+  workspaceSessionTitleFromDraft
+} from './workspace-home-model';
+
+type HomeProject = { id: string; name: string; sessions?: { id: SessionId }[] };
+type TargetMode = 'agent' | 'project';
 
 interface WorkspaceHomeProps {
-  agentSession: Session | null;
-  projects: { id: string; name: string }[];
+  agents: Agent[];
+  projects: HomeProject[];
   activeProjectId: string | null;
-  onOpenMonadChat: () => void;
-  onNewMonadChat: () => void;
-  onOpenProject: (projectId: string) => void;
   onOpenSettings: () => void;
   onOpenStudio: () => void;
 }
 
-type WorkspaceHomeStyle = CSSProperties & {
-  '--workspace-home-spotlight-x': string;
-  '--workspace-home-spotlight-y': string;
-};
-
-export function WorkspaceHome({
-  agentSession,
-  projects,
-  activeProjectId,
-  onOpenMonadChat,
-  onNewMonadChat,
-  onOpenProject,
-  onOpenSettings,
-  onOpenStudio
-}: WorkspaceHomeProps) {
+export function WorkspaceHome({ agents, projects, activeProjectId, onOpenStudio }: WorkspaceHomeProps) {
   const t = useT();
-  const [createWorkplaceProject] = useCreateWorkplaceProjectMutation();
-  const newProjectOpen = useWorkspaceShellStore((state) => state.newProjectOpen);
-  const setNewProjectOpen = useWorkspaceShellStore((state) => state.setNewProjectOpen);
-  const latestTitle = agentSession?.title ?? t('web.workspace.noAgentSession');
-  const homeStyle: WorkspaceHomeStyle = {
-    '--workspace-home-spotlight-x': '58%',
-    '--workspace-home-spotlight-y': '24%'
-  };
-
-  const handlePointerMove = (event: PointerEvent<HTMLDivElement>): void => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    event.currentTarget.style.setProperty('--workspace-home-spotlight-x', `${event.clientX - rect.left}px`);
-    event.currentTarget.style.setProperty('--workspace-home-spotlight-y', `${event.clientY - rect.top}px`);
-  };
-
-  const handlePointerLeave = (event: PointerEvent<HTMLDivElement>): void => {
-    event.currentTarget.style.setProperty('--workspace-home-spotlight-x', '58%');
-    event.currentTarget.style.setProperty('--workspace-home-spotlight-y', '24%');
-  };
-  const handleCreateProject = useCallback(
-    ({ name, cwd }: { name: string; cwd?: string }) => {
-      setNewProjectOpen(false);
-      createWorkplaceProject({
-        title: name,
-        origin: { surface: 'web' },
-        ...(cwd ? { cwd } : {})
-      })
-        .unwrap()
-        .then((id) => onOpenProject(id))
-        .catch(() => {});
-    },
-    [createWorkplaceProject, onOpenProject, setNewProjectOpen]
+  const [createSession] = useCreateSessionMutation();
+  const [createProjectSession] = useCreateProjectSessionMutation();
+  const [sendMessage] = useSendMessageMutation();
+  const [sendProjectMessage] = useSendProjectMessageMutation();
+  const clearComposerInput = useSessionUiStore((state) => state.clearComposerInput);
+  const enqueueInitialUserMessage = useSessionUiStore((state) => state.enqueueInitialUserMessage);
+  const addDraftChatSession = useWorkspaceShellStore((state) => state.addDraftChatSession);
+  const failDraftChatSession = useWorkspaceShellStore((state) => state.failDraftChatSession);
+  const removeDraftChatSession = useWorkspaceShellStore((state) => state.removeDraftChatSession);
+  const newChatPrefill = useWorkspaceShellStore((state) => state.newChatPrefill);
+  const setNewChatPrefill = useWorkspaceShellStore((state) => state.setNewChatPrefill);
+  const [intent, setIntent] = useState('');
+  const [targetMode, setTargetMode] = useState<TargetMode>('agent');
+  const [selectedAgentId, setSelectedAgentId] = useState<AgentId | null>(null);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(activeProjectId);
+  const [launching, setLaunching] = useState(false);
+  const [launchError, setLaunchError] = useState<string | null>(null);
+  const launchingRef = useRef(false);
+  const selectedProject = useMemo(
+    () => projects.find((project) => project.id === selectedProjectId) ?? null,
+    [projects, selectedProjectId]
   );
-  const handleNewProject = useCallback(() => setNewProjectOpen(true), [setNewProjectOpen]);
+  const selectedAgent = selectedAgentId ? (agents.find((agent) => agent.id === selectedAgentId) ?? null) : null;
+  const launchTarget = resolveWorkspaceLaunchTarget({
+    mode: targetMode,
+    selectedAgentSessionId: null,
+    selectedProjectId: selectedProject?.id ?? null
+  });
+  const selectedTargetLabel =
+    targetMode === 'project'
+      ? (selectedProject?.name ?? t('web.workspace.chooseProject'))
+      : (selectedAgent?.name ?? t('web.workspace.defaultAgent'));
+  const actionLabel = targetMode === 'project' ? t('web.workspace.build') : t('web.workspace.chat');
+
+  useEffect(() => {
+    if (!newChatPrefill) return;
+    if (newChatPrefill.mode === 'project') {
+      setTargetMode('project');
+      setSelectedProjectId(newChatPrefill.projectId);
+      setSelectedAgentId(null);
+    } else {
+      setTargetMode('agent');
+      setSelectedAgentId(null);
+    }
+    setNewChatPrefill(null);
+  }, [newChatPrefill, setNewChatPrefill]);
+
+  const selectMode = (mode: TargetMode): void => {
+    setTargetMode(mode);
+    setLaunchError(null);
+  };
+
+  const startDraftChatSession = (draft: string): void => {
+    const title = workspaceSessionTitleFromDraft(draft, t('web.workspace.newChat'));
+    const tempSessionId = newId('ses') as SessionId;
+    const createIdempotencyKeyValue = createIdempotencyKey();
+    const sendIdempotencyKeyValue = createIdempotencyKey();
+    const createdAt = new Date().toISOString();
+    addDraftChatSession({
+      id: tempSessionId,
+      title,
+      text: draft,
+      ...(selectedAgentId ? { agentId: selectedAgentId } : {}),
+      createIdempotencyKey: createIdempotencyKeyValue,
+      sendIdempotencyKey: sendIdempotencyKeyValue,
+      status: 'creating',
+      createdAt,
+      updatedAt: createdAt
+    });
+    clearComposerInput();
+    setIntent('');
+
+    window.setTimeout(() => {
+      replaceShellUrl(`/sessions/${encodeURIComponent(tempSessionId)}`);
+      window.setTimeout(() => {
+        void createSession({
+          title,
+          ...(selectedAgentId ? { agentId: selectedAgentId } : {}),
+          idempotencyKey: createIdempotencyKeyValue
+        })
+          .unwrap()
+          .then((realSessionId) => {
+            const stillViewingDraft =
+              typeof window !== 'undefined' && window.location.pathname === `/sessions/${tempSessionId}`;
+            if (stillViewingDraft) {
+              addDraftChatSession({
+                id: realSessionId,
+                title,
+                text: draft,
+                ...(selectedAgentId ? { agentId: selectedAgentId } : {}),
+                createIdempotencyKey: createIdempotencyKeyValue,
+                sendIdempotencyKey: sendIdempotencyKeyValue,
+                status: 'creating',
+                createdAt,
+                updatedAt: new Date().toISOString()
+              });
+              enqueueInitialUserMessage(realSessionId, draft);
+              replaceShellUrl(`/sessions/${encodeURIComponent(realSessionId)}`);
+              window.setTimeout(() => removeDraftChatSession(realSessionId), 2000);
+            }
+            removeDraftChatSession(tempSessionId);
+            void sendMessage({ sessionId: realSessionId, text: draft, idempotencyKey: sendIdempotencyKeyValue });
+          })
+          .catch((error) => {
+            failDraftChatSession(tempSessionId, workspaceLaunchErrorMessage(error) ?? t('web.workspace.launchError'));
+          });
+      }, 100);
+    });
+  };
+
+  const start = async (): Promise<void> => {
+    if (launchingRef.current) return;
+    const draft = intent.trim();
+    const target = resolveWorkspaceLaunchTarget({
+      mode: targetMode,
+      selectedAgentSessionId: null,
+      selectedProjectId: selectedProject?.id ?? null
+    });
+    if (!draft || !target) return;
+
+    if (target.kind === 'new-agent') {
+      startDraftChatSession(draft);
+      return;
+    }
+
+    launchingRef.current = true;
+    setLaunching(true);
+    setLaunchError(null);
+
+    try {
+      clearComposerInput();
+      if (target.kind === 'existing-agent') {
+        pushShellUrl(`/sessions/${encodeURIComponent(target.sessionId)}`);
+        return;
+      }
+      if (target.kind === 'project') {
+        const title = workspaceSessionTitleFromDraft(draft, selectedProject?.name ?? t('web.workspace.newChat'));
+        const sessionId = await createProjectSession({
+          projectId: target.projectId as ProjectId,
+          title,
+          idempotencyKey: createIdempotencyKey()
+        }).unwrap();
+        enqueueInitialUserMessage(sessionId, draft);
+        void sendProjectMessage({ sessionId, text: draft });
+        setIntent('');
+        pushShellUrl(projectSessionPath(target.projectId, sessionId));
+        return;
+      }
+    } catch (error) {
+      setLaunchError(workspaceLaunchErrorMessage(error) ?? t('web.workspace.launchError'));
+    } finally {
+      launchingRef.current = false;
+      setLaunching(false);
+    }
+  };
 
   return (
-    <div
-      className="workspace-home-shell flex min-h-0 flex-1 flex-col bg-background"
-      onPointerLeave={handlePointerLeave}
-      onPointerMove={handlePointerMove}
-      style={homeStyle}
+    <main
+      aria-busy={launching}
+      className="workspace-home-shell relative flex min-h-0 flex-1 overflow-y-auto bg-background"
+      data-launching={launching ? 'true' : 'false'}
+      data-target-mode={targetMode}
     >
       <div
         aria-hidden="true"
         className="workspace-home-background"
       />
-      <PanelShellHeader
-        actions={
-          <>
-            <Button
-              className="hidden sm:inline-flex"
-              onClick={onOpenStudio}
-              size="sm"
-              variant="ghost"
-            >
-              <HugeiconsIcon
-                data-icon="inline-start"
-                icon={SlidersHorizontalIcon}
-              />
-              {t('web.studio.title')}
-            </Button>
-            <Button
-              className="hidden sm:inline-flex"
-              onClick={onOpenSettings}
-              size="sm"
-              variant="ghost"
-            >
-              <HugeiconsIcon
-                data-icon="inline-start"
-                icon={Settings02Icon}
-              />
-              {t('web.sidebar.settings')}
-            </Button>
-            <ThemeToggle />
-          </>
-        }
-        title={t('web.workspace.title')}
-      />
+      <div className="workspace-home-content relative z-10 mx-auto flex min-h-full w-full max-w-[54rem] flex-col justify-center px-5 py-8 sm:px-8 sm:py-12">
+        <section
+          aria-labelledby="workspace-intent-title"
+          className="workspace-home-intent"
+        >
+          <h1
+            className="workspace-home-prompt text-balance font-normal text-4xl text-foreground tracking-normal sm:text-5xl"
+            id="workspace-intent-title"
+          >
+            <span>{t('web.workspace.iWantTo')}</span>
+            <ActionDropdown
+              disabled={launching}
+              onSelect={selectMode}
+              t={t}
+              targetMode={targetMode}
+              value={actionLabel}
+            />
+            <span>{t('web.workspace.withInline')}</span>
+            <TargetDropdown
+              agents={agents}
+              disabled={launching}
+              onOpenStudio={onOpenStudio}
+              onSelectAgent={(agentId) => {
+                setSelectedAgentId(agentId);
+                setLaunchError(null);
+              }}
+              onSelectProject={(projectId) => {
+                setSelectedProjectId(projectId);
+                setLaunchError(null);
+              }}
+              projects={projects}
+              selectedAgentId={selectedAgentId}
+              selectedProjectId={selectedProject?.id ?? null}
+              t={t}
+              targetMode={targetMode}
+              value={selectedTargetLabel}
+            />
+          </h1>
+          <div className="workspace-home-composer mt-4">
+            <ComposerShell
+              ariaLabel={t('web.workspace.iWantToDo')}
+              busy={launching}
+              controls={{
+                access: false,
+                context: false,
+                model: false,
+                submit: true,
+                voice: false
+              }}
+              disabled={!launchTarget || launching}
+              onChange={(value) => {
+                setIntent(value);
+                if (launchError) setLaunchError(null);
+              }}
+              onSubmit={() => void start()}
+              placeholder={t('web.workspace.newChatPlaceholder')}
+              value={intent}
+            />
+          </div>
 
-      <div className="relative z-10 min-h-0 flex-1 overflow-auto">
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-5 py-8 sm:px-8 lg:py-10">
-          <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-end">
-            <div className="flex flex-col gap-4">
-              <h1 className="max-w-3xl text-balance font-semibold text-4xl text-foreground tracking-normal sm:text-5xl">
-                {t('web.workspace.title')}
-              </h1>
-              <p className="max-w-2xl text-muted-foreground text-sm leading-6 sm:text-base">
-                {t('web.workspace.summary')}
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <Button onClick={onOpenMonadChat}>
-                  <HugeiconsIcon
-                    data-icon="inline-start"
-                    icon={MessageSquareCodeIcon}
-                  />
-                  {t('web.workspace.openAgent')}
-                </Button>
-                <Button
-                  onClick={onNewMonadChat}
-                  variant="outline"
-                >
-                  <HugeiconsIcon
-                    data-icon="inline-start"
-                    icon={PlusSignIcon}
-                  />
-                  {t('web.workspace.newAgentSession')}
-                </Button>
-                <Button
-                  onClick={handleNewProject}
-                  variant="outline"
-                >
-                  <HugeiconsIcon
-                    data-icon="inline-start"
-                    icon={PlusSignIcon}
-                  />
-                  {t('web.workplace.newProject')}
-                </Button>
-              </div>
-            </div>
-            <div className="rounded-lg border border-border bg-muted/40 px-4 py-4">
-              <div className="flex items-center gap-2 text-muted-foreground text-xs">
+          <div
+            aria-live="polite"
+            className="workspace-home-state-line"
+          >
+            {launching ? (
+              <>
                 <HugeiconsIcon
-                  className="size-4 text-link"
-                  icon={Shield01Icon}
+                  aria-hidden
+                  className="size-3.5 animate-spin motion-reduce:animate-none"
+                  icon={LoaderPinwheelIcon}
                 />
-                <span>{t('web.workspace.localDaemon')}</span>
-              </div>
-              <div className="mt-3 text-muted-foreground text-xs">{t('web.workspace.latestSession')}</div>
-              <div className="mt-1 line-clamp-2 font-medium text-foreground text-sm">{latestTitle}</div>
-            </div>
-          </section>
-
-          <section className="grid gap-4 lg:grid-cols-[minmax(20rem,0.8fr)_minmax(0,1.2fr)]">
-            <article className="flex flex-col justify-between gap-6 rounded-lg border border-border bg-card px-5 py-5">
-              <div className="flex flex-col gap-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <span className="grid size-9 place-items-center rounded-md border border-border bg-muted text-foreground">
-                      <HugeiconsIcon
-                        className="size-4"
-                        icon={MessageSquareCodeIcon}
-                      />
-                    </span>
-                    <h2 className="font-semibold text-base text-foreground">{t('web.workspace.agentTitle')}</h2>
-                  </div>
-                  <span className="rounded-full bg-accent px-2.5 py-1 font-medium text-accent-foreground text-xs">
-                    {t('web.workspace.agentLabel')}
-                  </span>
-                </div>
-                <p className="text-muted-foreground text-sm leading-6">{t('web.workspace.agentSummary')}</p>
-              </div>
-              <div className="rounded-md border border-border bg-muted/35 px-3 py-3">
-                <div className="text-muted-foreground text-xs">{t('web.workspace.latestSession')}</div>
-                <div className="mt-1 line-clamp-1 font-medium text-foreground text-sm">{latestTitle}</div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  onClick={onOpenMonadChat}
-                  size="sm"
-                >
-                  {t('web.workspace.openAgent')}
-                  <HugeiconsIcon
-                    data-icon="inline-end"
-                    icon={ArrowRight01Icon}
-                  />
-                </Button>
-                <Button
-                  onClick={onNewMonadChat}
-                  size="sm"
-                  variant="outline"
-                >
-                  <HugeiconsIcon
-                    data-icon="inline-start"
-                    icon={PlusSignIcon}
-                  />
-                  {t('web.workspace.newAgentSession')}
-                </Button>
-              </div>
-            </article>
-
-            <section className="rounded-lg border border-border bg-card">
-              <div className="flex items-center justify-between gap-3 border-border border-b px-5 py-4">
-                <div>
-                  <h2 className="font-semibold text-base text-foreground">{t('web.workplace.projectsTitle')}</h2>
-                  <p className="mt-1 text-muted-foreground text-sm">{t('web.workplace.projectsLabel')}</p>
-                </div>
-                <Button
-                  onClick={handleNewProject}
-                  size="sm"
-                  variant="outline"
-                >
-                  <HugeiconsIcon
-                    data-icon="inline-start"
-                    icon={PlusSignIcon}
-                  />
-                  {t('web.workplace.newProject')}
-                </Button>
-              </div>
-              {projects.length === 0 ? (
-                <div className="flex min-h-56 flex-col items-start justify-center gap-3 px-5 py-8">
-                  <span className="grid size-10 place-items-center rounded-md border border-border bg-muted text-muted-foreground">
-                    <HugeiconsIcon
-                      className="size-5"
-                      icon={BoxesIcon}
-                    />
-                  </span>
-                  <div>
-                    <div className="font-medium text-foreground text-sm">{t('web.workplace.noProjects')}</div>
-                    <p className="mt-1 text-muted-foreground text-sm">{t('web.workplace.noProjectsHint')}</p>
-                  </div>
-                </div>
-              ) : (
-                <ul className="divide-y divide-border">
-                  {projects.map((project) => (
-                    <li
-                      aria-current={activeProjectId === project.id ? 'page' : undefined}
-                      key={project.id}
-                    >
-                      <button
-                        className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition hover:bg-accent/70"
-                        onClick={() => onOpenProject(project.id)}
-                        type="button"
-                      >
-                        <div className="min-w-0">
-                          <div className="font-medium text-foreground text-sm">{project.name}</div>
-                          <p className="mt-1 line-clamp-1 text-muted-foreground text-sm">
-                            {t('web.workplace.projectSummary')}
-                          </p>
-                        </div>
-                        <HugeiconsIcon
-                          className="size-4 shrink-0 text-muted-foreground"
-                          icon={ArrowRight01Icon}
-                        />
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-          </section>
-
-          <section className="grid gap-3 md:grid-cols-3">
-            <button
-              className="rounded-lg border border-border bg-card px-4 py-4 text-left transition hover:bg-muted"
-              onClick={onOpenSettings}
-              type="button"
-            >
-              <HugeiconsIcon
-                className="size-4 text-muted-foreground"
-                icon={Settings02Icon}
-              />
-              <div className="mt-3 font-medium text-foreground text-sm">{t('web.sidebar.settings')}</div>
-              <p className="mt-1 text-muted-foreground text-sm">{t('web.workspace.settingsSummary')}</p>
-            </button>
-            <Button
-              className="h-auto justify-start rounded-lg border-border bg-card px-4 py-4 text-left text-foreground hover:bg-muted"
-              onClick={onOpenStudio}
-              variant="outline"
-            >
-              <span>
+                {t('web.workspace.launching')}
+              </>
+            ) : (
+              <>
                 <HugeiconsIcon
-                  className="size-4 text-muted-foreground"
-                  icon={SlidersHorizontalIcon}
+                  aria-hidden
+                  className="size-3.5"
+                  icon={CheckIcon}
                 />
-                <span className="mt-3 block font-medium text-sm">{t('web.studio.title')}</span>
-                <span className="mt-1 block text-muted-foreground text-sm">{t('web.workspace.studioSummary')}</span>
-              </span>
-            </Button>
-            <div className="rounded-lg border border-border bg-muted/35 px-4 py-4">
-              <HugeiconsIcon
-                className="size-4 text-link"
-                icon={Shield01Icon}
-              />
-              <div className="mt-3 font-medium text-foreground text-sm">{t('web.workspace.localDaemon')}</div>
-              <p className="mt-1 text-muted-foreground text-sm">{t('web.workspace.localDaemonSummary')}</p>
-            </div>
-          </section>
-        </div>
+                {selectedTargetLabel}
+              </>
+            )}
+          </div>
+          {launchError ? (
+            <p
+              className="workspace-home-error"
+              role="alert"
+            >
+              {launchError}
+            </p>
+          ) : null}
+        </section>
       </div>
-      <NewProjectDialog
-        onClose={() => setNewProjectOpen(false)}
-        onCreate={handleCreateProject}
-        open={newProjectOpen}
-      />
-    </div>
+    </main>
+  );
+}
+
+function ActionDropdown({
+  disabled,
+  onSelect,
+  targetMode,
+  t,
+  value
+}: {
+  disabled: boolean;
+  onSelect: (mode: TargetMode) => void;
+  targetMode: TargetMode;
+  t: ReturnType<typeof useT>;
+  value: string;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          className="workspace-home-token"
+          disabled={disabled}
+          type="button"
+        >
+          {value}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="center"
+        className="min-w-40"
+      >
+        <DropdownMenuItem
+          aria-checked={targetMode === 'agent'}
+          onSelect={() => onSelect('agent')}
+          role="menuitemradio"
+        >
+          <HugeiconsIcon icon={BotIcon} />
+          <span>{t('web.workspace.chat')}</span>
+          {targetMode === 'agent' ? <HugeiconsIcon icon={CheckIcon} /> : null}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          aria-checked={targetMode === 'project'}
+          onSelect={() => onSelect('project')}
+          role="menuitemradio"
+        >
+          <HugeiconsIcon icon={Folder01Icon} />
+          <span>{t('web.workspace.build')}</span>
+          {targetMode === 'project' ? <HugeiconsIcon icon={CheckIcon} /> : null}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function TargetDropdown({
+  agents,
+  disabled,
+  onOpenStudio,
+  onSelectAgent,
+  onSelectProject,
+  projects,
+  selectedAgentId,
+  selectedProjectId,
+  targetMode,
+  t,
+  value
+}: {
+  agents: Agent[];
+  disabled: boolean;
+  onOpenStudio: () => void;
+  onSelectAgent: (agentId: AgentId | null) => void;
+  onSelectProject: (projectId: string) => void;
+  projects: HomeProject[];
+  selectedAgentId: AgentId | null;
+  selectedProjectId: string | null;
+  targetMode: TargetMode;
+  t: ReturnType<typeof useT>;
+  value: string;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          className="workspace-home-token workspace-home-token--target"
+          disabled={disabled}
+          type="button"
+        >
+          {value}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="center"
+        className="w-72"
+      >
+        {targetMode === 'agent' ? (
+          <>
+            <WorkspaceOptionItem
+              description={t('web.workspace.defaultAgentHint')}
+              icon={PlusSignIcon}
+              onSelect={() => onSelectAgent(null)}
+              selected={!selectedAgentId}
+              title={t('web.workspace.defaultAgent')}
+            />
+            {agents.map((agent) => (
+              <WorkspaceOptionItem
+                description={agent.description ?? t('web.workspace.agentOptionHint')}
+                icon={BotIcon}
+                key={agent.id}
+                onSelect={() => onSelectAgent(agent.id)}
+                selected={selectedAgentId === agent.id}
+                title={agent.name}
+              />
+            ))}
+          </>
+        ) : projects.length > 0 ? (
+          projects.map((project) => (
+            <WorkspaceOptionItem
+              description={t('web.workspace.existingProject')}
+              icon={Folder01Icon}
+              key={project.id}
+              onSelect={() => onSelectProject(project.id)}
+              selected={selectedProjectId === project.id}
+              title={project.name}
+            />
+          ))
+        ) : (
+          <DropdownMenuItem onSelect={onOpenStudio}>
+            <HugeiconsIcon icon={Folder01Icon} />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate">{t('web.workplace.noProjects')}</span>
+              <span className="block truncate text-muted-foreground text-xs">{t('web.workspace.noProjectsHint')}</span>
+            </span>
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function WorkspaceOptionItem({
+  description,
+  icon,
+  onSelect,
+  selected,
+  title
+}: {
+  description: string;
+  icon: typeof BotIcon;
+  onSelect: () => void;
+  selected: boolean;
+  title: string;
+}) {
+  return (
+    <DropdownMenuItem
+      aria-checked={selected}
+      onSelect={onSelect}
+      role="menuitemradio"
+    >
+      <HugeiconsIcon icon={icon} />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate">{title}</span>
+        <span className="block truncate text-muted-foreground text-xs">{description}</span>
+      </span>
+      {selected ? <HugeiconsIcon icon={CheckIcon} /> : null}
+    </DropdownMenuItem>
   );
 }

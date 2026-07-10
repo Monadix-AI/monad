@@ -68,7 +68,12 @@ export type CreateProjectSessionRequest = z.infer<typeof createProjectSessionReq
 export const createProjectSessionResponseSchema = z.object({ sessionId: sessionSchema.shape.id });
 export type CreateProjectSessionResponse = z.infer<typeof createProjectSessionResponseSchema>;
 
-export const listProjectSessionsResponseSchema = z.object({ sessions: z.array(sessionSchema) });
+export const listProjectSessionsQuerySchema = offsetPaginationQuerySchema;
+export type ListProjectSessionsQuery = z.infer<typeof listProjectSessionsQuerySchema>;
+
+export const listProjectSessionsResponseSchema = offsetPaginationResponseSchema.extend({
+  sessions: z.array(sessionSchema)
+});
 export type ListProjectSessionsResponse = z.infer<typeof listProjectSessionsResponseSchema>;
 
 export const getWorkplaceProjectResponseSchema = z.object({ project: workplaceProjectSchema });

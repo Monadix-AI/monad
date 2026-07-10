@@ -1,12 +1,13 @@
 'use client';
 
-import type { NetworkRuntimeStatus, SessionId } from '@monad/protocol';
+import type { NetworkRuntimeStatus, Session, SessionId } from '@monad/protocol';
 import type { SettingsSectionId } from '#/features/settings/sections';
 import type { StudioSectionId } from '#/features/studio/sections';
 import type { RemoteDaemonConnection } from '#/lib/daemon-connections';
+import type { WorkspaceSidebarContextValue } from './sidebar/workspace-sidebar-context';
 
 import { cn } from '@monad/ui';
-import { animate, motion, useMotionValue, useReducedMotion, useTransform } from 'motion/react';
+import { animate, useMotionValue, useReducedMotion, useTransform } from 'motion/react';
 import {
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -21,16 +22,12 @@ import {
 } from 'react';
 
 import { useT } from '#/components/I18nProvider';
-import { ThemeToggle } from '#/components/ThemeToggle';
 import { useWorkspaceShellStore } from '#/lib/workspace-shell-store';
-import { DaemonMenu } from './SessionSidebarDaemonMenu';
-import {
-  type ProjectItem,
-  SettingsSidebarItems,
-  SidebarHeader,
-  StudioSidebarItems,
-  WorkspaceSidebarItems
-} from './sidebar';
+import { NewProjectDialog } from './NewProjectDialog';
+import { SessionSidebarPanels } from './SessionSidebarPanels';
+import { SessionSidebarResizeHandle } from './SessionSidebarResizeHandle';
+import { useSessionSidebarActions } from './session-sidebar-actions';
+import { type ProjectItem, SidebarHeader } from './sidebar';
 import {
   createSidebarPagerGesture,
   resolveSidebarPagerTarget,
@@ -39,39 +36,57 @@ import {
   sidebarTrackpadEdgeOffset
 } from './sidebar-trackpad-switch';
 
-interface Props {
+interface SidebarWorkspaceConfig {
   projects: ProjectItem[];
-  hasUpgrade?: boolean;
-  showSettings: boolean;
-  showStudio: boolean;
-  studioPileActive: boolean;
-  workspacePileActive: boolean;
-  monadChatActive: boolean;
-  runtimeReady: boolean;
+  chatSessions: Pick<Session, 'id' | 'projectId' | 'title'>[];
+  workspaceItemsLoading?: boolean;
+  inboxActive?: boolean;
+  activeChatSessionId: string | null;
   activeProjectId: string | null;
   activeProjectSessionId: string | null;
-  daemonBaseUrl: string;
-  daemonStatus: 'checking' | 'online' | 'offline';
-  daemonVersion?: string;
-  networkRuntime?: NetworkRuntimeStatus;
-  settingsReturnSurface: Exclude<SidebarPagerSurface, 'settings'>;
-  settingsSection: SettingsSectionId;
-  studioSection: StudioSectionId;
-  shortcutModifierLabel?: string;
-  showShortcutBadges?: boolean;
-  onOpenWorkspace: () => void;
-  onOpenMonadChat: () => void;
+  onOpenInbox: () => void;
+  onCreateChatSession: () => void;
+  onCreateProjectSession: (projectId: string) => void;
+  onOpenSession: (id: SessionId) => void;
   onOpenProject: (id: string) => void;
   onOpenProjectSettings: (id: string) => void;
   onOpenProjectSession: (projectId: string, sessionId: SessionId) => void;
+}
+
+interface SidebarSurfacesConfig {
+  onCloseSettings: () => void;
   onOpenSettingsSection: (section: SettingsSectionId) => void;
   onOpenStudio: () => void;
   onOpenStudioSection: (section: StudioSectionId) => void;
+  onOpenWorkspace: () => void;
+  onToggleSettings: () => void;
+  runtimeReady: boolean;
+  settingsReturnSurface: Exclude<SidebarPagerSurface, 'settings'>;
+  settingsSection: SettingsSectionId;
+  shortcutModifierLabel?: string;
+  showSettings: boolean;
+  showShortcutBadges?: boolean;
+  showStudio: boolean;
+  studioPileActive: boolean;
+  studioSection: StudioSectionId;
+  workspacePileActive: boolean;
+}
+
+interface SidebarDaemonConfig {
+  baseUrl: string;
+  hasUpgrade?: boolean;
+  networkRuntime?: NetworkRuntimeStatus;
+  status: 'checking' | 'online' | 'offline';
+  version?: string;
   onSwitchDaemonConnection: (
     request: { type: 'local' } | { connection: RemoteDaemonConnection; type: 'remote' }
   ) => void;
-  onCloseSettings: () => void;
-  onToggleSettings: () => void;
+}
+
+interface Props {
+  daemon: SidebarDaemonConfig;
+  surfaces: SidebarSurfacesConfig;
+  workspace: SidebarWorkspaceConfig;
 }
 
 const DEFAULT_SIDEBAR_WIDTH = 288;
@@ -96,50 +111,81 @@ function clampSidebarWidth(width: number): number {
   return Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, width));
 }
 
-export function SessionSidebar({
-  projects,
-  hasUpgrade,
-  showSettings,
-  showStudio,
-  studioPileActive,
-  workspacePileActive,
-  monadChatActive,
-  runtimeReady,
-  activeProjectId,
-  activeProjectSessionId,
-  daemonBaseUrl,
-  daemonStatus,
-  daemonVersion,
-  networkRuntime,
-  settingsReturnSurface,
-  settingsSection,
-  studioSection,
-  shortcutModifierLabel = '⌘',
-  showShortcutBadges,
-  onOpenWorkspace,
-  onOpenMonadChat,
-  onOpenProject,
-  onOpenProjectSettings,
-  onOpenProjectSession,
-  onOpenSettingsSection,
-  onOpenStudio,
-  onOpenStudioSection,
-  onSwitchDaemonConnection,
-  onCloseSettings,
-  onToggleSettings
-}: Props) {
+export function SessionSidebar({ daemon, surfaces, workspace }: Props) {
+  const {
+    activeChatSessionId,
+    activeProjectId,
+    activeProjectSessionId,
+    chatSessions,
+    inboxActive,
+    onCreateChatSession,
+    onCreateProjectSession,
+    onOpenInbox,
+    onOpenProject,
+    onOpenProjectSession,
+    onOpenProjectSettings,
+    onOpenSession,
+    projects,
+    workspaceItemsLoading
+  } = workspace;
+  const {
+    onCloseSettings,
+    onOpenSettingsSection,
+    onOpenStudio,
+    onOpenStudioSection,
+    onOpenWorkspace,
+    onToggleSettings,
+    runtimeReady,
+    settingsReturnSurface,
+    settingsSection,
+    shortcutModifierLabel = '⌘',
+    showSettings,
+    showShortcutBadges,
+    showStudio,
+    studioPileActive,
+    studioSection,
+    workspacePileActive
+  } = surfaces;
+  const {
+    baseUrl: daemonBaseUrl,
+    hasUpgrade,
+    networkRuntime,
+    onSwitchDaemonConnection,
+    status: daemonStatus,
+    version: daemonVersion
+  } = daemon;
   const t = useT();
   const collapsed = useWorkspaceShellStore((state) => state.sidebarCollapsed);
   const overlay = useWorkspaceShellStore((state) => state.sidebarAutoReveal);
   const collapseSidebar = useWorkspaceShellStore((state) => state.collapseSidebar);
   const revealSidebar = useWorkspaceShellStore((state) => state.revealSidebar);
-  const toggleProjectPinned = useWorkspaceShellStore((state) => state.toggleProjectPinned);
+  const toggleSessionPinned = useWorkspaceShellStore((state) => state.toggleSessionPinned);
   const toggleSidebarCollapsed = useWorkspaceShellStore((state) => state.toggleSidebarCollapsed);
   const autoCollapseOnPointerLeave = overlay;
   const [menuOpen, setMenuOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
   const [resizing, setResizing] = useState(false);
   const [autoRevealClosing, setAutoRevealClosing] = useState(false);
+  const [sidebarMotionReady, setSidebarMotionReady] = useState(false);
+  const {
+    createProject,
+    deleteChatSession,
+    deleteProject,
+    deleteProjectSession,
+    newProjectDialogOpen,
+    renameProject,
+    renameSession,
+    setNewProjectDialogOpen,
+    visibleChatSessions,
+    visibleProjects
+  } = useSessionSidebarActions({
+    activeProjectId,
+    chatSessions,
+    onOpenProject,
+    onOpenWorkspace,
+    projects,
+    t
+  });
   const currentSidebarSurfaceRef = useRef<SidebarPagerSurface>(showStudio ? 'studio' : 'workspace');
   const sidebarRef = useRef<HTMLElement | null>(null);
   const panelScrollRef = useRef<HTMLDivElement | null>(null);
@@ -164,6 +210,7 @@ export function SessionSidebar({
   const pageTurnConsumedRef = useRef(false);
   const pageTurnLockTimerRef = useRef(0);
   const suppressMouseResizeRef = useRef(false);
+
   const prefersReducedMotion = useReducedMotion();
   const trackpadFeedback = useMotionValue(0);
   // The edge bounce reuses the snap transition's doorway pose: the pushed
@@ -173,6 +220,10 @@ export function SessionSidebar({
     Math.max(-TRACKPAD_BOUNCE_MAX_DEG, Math.min(TRACKPAD_BOUNCE_MAX_DEG, value * TRACKPAD_BOUNCE_DEG_PER_PX))
   );
   const trackpadBounceOrigin = useTransform(trackpadFeedback, (value) => (value >= 0 ? '0% 50%' : '100% 50%'));
+
+  useEffect(() => {
+    setSidebarMotionReady(true);
+  }, []);
 
   useEffect(() => {
     const storedWidth = window.localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY);
@@ -581,7 +632,7 @@ export function SessionSidebar({
 
   const activeSidebarWidth = collapsed || overlay ? DEFAULT_SIDEBAR_WIDTH : sidebarWidth;
   const expandedStyle = { width: activeSidebarWidth } satisfies CSSProperties;
-  const animateSidebar = overlay || autoRevealClosing;
+  const animateSidebar = sidebarMotionReady && (overlay || autoRevealClosing);
   const daemonStatusText =
     daemonStatus === 'online'
       ? t('web.sidebar.daemonOnline')
@@ -590,143 +641,174 @@ export function SessionSidebar({
         : t('web.sidebar.daemonChecking');
   const daemonStatusClass =
     daemonStatus === 'online' ? 'bg-success' : daemonStatus === 'offline' ? 'bg-destructive' : 'bg-muted-foreground';
+  const workspacePanel = useMemo<WorkspaceSidebarContextValue>(
+    () => ({
+      state: {
+        activeChatSessionId,
+        activeProjectId,
+        activeProjectSessionId,
+        chatSessions: visibleChatSessions,
+        inboxActive,
+        loading: workspaceItemsLoading,
+        projects: visibleProjects
+      },
+      actions: {
+        createChatSession: onCreateChatSession,
+        createProject: () => setNewProjectDialogOpen(true),
+        createProjectSession: onCreateProjectSession,
+        deleteChatSession,
+        deleteProject,
+        deleteProjectSession,
+        openInbox: onOpenInbox,
+        openProject: onOpenProject,
+        openProjectSession: onOpenProjectSession,
+        openProjectSettings: onOpenProjectSettings,
+        openSession: onOpenSession,
+        renameProject,
+        renameSession,
+        toggleSessionPinned
+      },
+      meta: {
+        shortcutModifierLabel,
+        showShortcutBadges,
+        t
+      }
+    }),
+    [
+      activeChatSessionId,
+      activeProjectId,
+      activeProjectSessionId,
+      deleteChatSession,
+      deleteProject,
+      deleteProjectSession,
+      inboxActive,
+      onCreateChatSession,
+      onCreateProjectSession,
+      onOpenInbox,
+      onOpenProject,
+      onOpenProjectSession,
+      onOpenProjectSettings,
+      onOpenSession,
+      renameProject,
+      renameSession,
+      setNewProjectDialogOpen,
+      shortcutModifierLabel,
+      showShortcutBadges,
+      t,
+      toggleSessionPinned,
+      visibleChatSessions,
+      visibleProjects,
+      workspaceItemsLoading
+    ]
+  );
 
   return (
-    <aside
-      className={cn(
-        'panel-nav group/sidebar hidden h-full min-h-0 flex-col overflow-hidden text-foreground md:flex',
-        (collapsed || overlay) && 'panel-nav-overlay',
-        resizing
-          ? 'transition-none'
-          : animateSidebar
-            ? 'transition-[width,opacity,transform] duration-200 ease-out will-change-transform'
-            : 'transition-none',
-        overlay && !collapsed && 'translate-x-0 opacity-100',
-        collapsed && 'pointer-events-none -translate-x-6 opacity-0'
-      )}
-      data-resizing={resizing}
-      onPointerLeave={(event) => {
-        if (!autoCollapseOnPointerLeave || menuOpen) return;
-        const nextTarget = event.relatedTarget;
-        if (nextTarget instanceof Element && nextTarget.closest('[data-sidebar-chrome="true"]')) return;
-        window.clearTimeout(autoRevealCloseTimerRef.current);
-        setAutoRevealClosing(true);
-        autoRevealCloseTimerRef.current = window.setTimeout(() => {
-          autoRevealCloseTimerRef.current = 0;
-          setAutoRevealClosing(false);
-        }, AUTO_REVEAL_CLOSE_ANIMATION_MS);
-        collapseSidebar();
-      }}
-      ref={sidebarRef}
-      style={expandedStyle}
-    >
-      <div
-        className="flex h-full min-h-0 flex-col"
+    <>
+      <aside
+        className={cn(
+          'panel-nav group/sidebar hidden h-full min-h-0 flex-col overflow-hidden text-foreground md:flex',
+          (collapsed || overlay) && 'panel-nav-overlay',
+          resizing
+            ? 'transition-none'
+            : animateSidebar
+              ? 'transition-[width,opacity,transform] duration-200 ease-out will-change-transform'
+              : 'transition-none',
+          overlay && !collapsed && 'translate-x-0 opacity-100',
+          collapsed && 'pointer-events-none -translate-x-6 opacity-0'
+        )}
+        data-resizing={resizing}
+        onPointerLeave={(event) => {
+          if (!autoCollapseOnPointerLeave || menuOpen) return;
+          const nextTarget = event.relatedTarget;
+          if (nextTarget instanceof Element && nextTarget.closest('[data-sidebar-chrome="true"]')) return;
+          window.clearTimeout(autoRevealCloseTimerRef.current);
+          setAutoRevealClosing(true);
+          autoRevealCloseTimerRef.current = window.setTimeout(() => {
+            autoRevealCloseTimerRef.current = 0;
+            setAutoRevealClosing(false);
+          }, AUTO_REVEAL_CLOSE_ANIMATION_MS);
+          collapseSidebar();
+        }}
+        ref={sidebarRef}
         style={expandedStyle}
       >
-        <SidebarHeader
-          collapsed={collapsed}
-          onOpenWorkspace={onOpenWorkspace}
-          onToggleCollapsed={toggleSidebarCollapsed}
-          t={t}
-        />
+        <div
+          className="flex h-full min-h-0 flex-col"
+          style={expandedStyle}
+        >
+          <SidebarHeader
+            collapsed={collapsed}
+            onOpenWorkspace={onOpenWorkspace}
+            onToggleCollapsed={toggleSidebarCollapsed}
+          />
 
-        {!collapsed ? (
-          <motion.div
-            className="flex min-h-0 flex-1 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-            data-sidebar-trackpad-surface="true"
-            ref={panelScrollRef}
-            style={{
-              overscrollBehaviorX: 'contain',
-              rotateY: trackpadBounceRotateY,
-              transformOrigin: trackpadBounceOrigin,
-              transformPerspective: 1100,
-              x: trackpadBounceX
-            }}
-          >
-            {pagerSurfaces.map((surface) => (
-              <div
-                className="panel-nav-snap-item flex min-h-0 w-full flex-none flex-col"
-                key={surface}
-              >
-                {surface === 'settings' ? (
-                  <SettingsSidebarItems
-                    activeSection={settingsSection}
-                    onBack={closeSettingsWithPagerAnimation}
-                    onSelect={onOpenSettingsSection}
-                    t={t}
-                  />
-                ) : surface === 'studio' ? (
-                  <StudioSidebarItems
-                    activeSection={studioSection}
-                    onSelect={onOpenStudioSection}
-                    runtimeReady={runtimeReady}
-                    shortcutModifierLabel={shortcutModifierLabel}
-                    showShortcutBadges={showShortcutBadges}
-                    t={t}
-                  />
-                ) : (
-                  <WorkspaceSidebarItems
-                    activeProjectId={activeProjectId}
-                    activeSessionId={activeProjectSessionId}
-                    monadChatActive={monadChatActive}
-                    onOpenMonadChat={onOpenMonadChat}
-                    onOpenProject={onOpenProject}
-                    onOpenProjectSession={onOpenProjectSession}
-                    onOpenProjectSettings={onOpenProjectSettings}
-                    onToggleProjectPinned={toggleProjectPinned}
-                    projects={projects}
-                    shortcutModifierLabel={shortcutModifierLabel}
-                    showShortcutBadges={showShortcutBadges}
-                    t={t}
-                  />
-                )}
-              </div>
-            ))}
-          </motion.div>
-        ) : null}
-
-        {!collapsed ? (
-          <div className="relative flex items-center gap-1 px-2.5 py-2">
-            <DaemonMenu
-              daemonBaseUrl={daemonBaseUrl}
-              daemonStatus={daemonStatus}
-              daemonStatusClass={daemonStatusClass}
-              daemonStatusText={daemonStatusText}
-              daemonVersion={daemonStatus === 'online' ? daemonVersion : undefined}
-              hasUpgrade={hasUpgrade}
-              menuOpen={menuOpen}
-              networkRuntime={networkRuntime}
-              onOpenChange={onDaemonMenuOpenChange}
-              onOpenStudio={() => openMenuAction(onOpenStudio)}
-              onOpenWorkspace={() => openMenuAction(onOpenWorkspace)}
-              onSwitchDaemonConnection={onSwitchDaemonConnection}
-              onToggleSettings={() => openMenuAction(onToggleSettings)}
-              shortcutModifierLabel={shortcutModifierLabel}
-              showSettings={showSettings}
-              studioPileActive={studioPileActive}
+          {!collapsed ? (
+            <SessionSidebarPanels
+              footer={{
+                daemonBaseUrl,
+                daemonStatus,
+                daemonStatusClass,
+                daemonStatusText,
+                daemonVersion,
+                hasUpgrade,
+                menuOpen,
+                networkRuntime,
+                onOpenChange: onDaemonMenuOpenChange,
+                onOpenStudio,
+                onOpenWorkspace,
+                onRunMenuAction: openMenuAction,
+                onSwitchDaemonConnection,
+                onToggleSettings,
+                shortcutModifierLabel,
+                showSettings,
+                studioPileActive,
+                workspacePileActive
+              }}
+              pager={{
+                panelScrollRef,
+                style: {
+                  overscrollBehaviorX: 'contain',
+                  rotateY: trackpadBounceRotateY,
+                  transformOrigin: trackpadBounceOrigin,
+                  transformPerspective: 1100,
+                  x: trackpadBounceX
+                },
+                surfaces: pagerSurfaces
+              }}
+              settings={{
+                activeSection: settingsSection,
+                onBack: closeSettingsWithPagerAnimation,
+                onSelect: onOpenSettingsSection
+              }}
+              studio={{
+                activeSection: studioSection,
+                onSelect: onOpenStudioSection,
+                runtimeReady,
+                shortcutModifierLabel,
+                showShortcutBadges
+              }}
               t={t}
-              workspacePileActive={workspacePileActive}
+              workspace={workspacePanel}
             />
-            <ThemeToggle />
-          </div>
+          ) : null}
+        </div>
+        {!collapsed && !overlay ? (
+          <SessionSidebarResizeHandle
+            label={t('web.shell.resizeSidebar')}
+            max={MAX_SIDEBAR_WIDTH}
+            min={MIN_SIDEBAR_WIDTH}
+            onKeyDown={onResizeKeyDown}
+            onMouseDown={onResizeMouseDown}
+            onPointerDown={onResizePointerDown}
+            value={sidebarWidth}
+          />
         ) : null}
-      </div>
-      {!collapsed && !overlay ? (
-        <hr
-          aria-label={t('web.shell.resizeSidebar')}
-          aria-orientation="vertical"
-          aria-valuemax={MAX_SIDEBAR_WIDTH}
-          aria-valuemin={MIN_SIDEBAR_WIDTH}
-          aria-valuenow={sidebarWidth}
-          className="panel-nav-resize-handle"
-          data-preserve-cursor="true"
-          onKeyDown={onResizeKeyDown}
-          onMouseDown={onResizeMouseDown}
-          onPointerDown={onResizePointerDown}
-          tabIndex={0}
-        />
-      ) : null}
-    </aside>
+      </aside>
+      <NewProjectDialog
+        onClose={() => setNewProjectDialogOpen(false)}
+        onCreate={createProject}
+        open={newProjectDialogOpen}
+      />
+    </>
   );
 }

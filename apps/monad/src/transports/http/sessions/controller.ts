@@ -5,6 +5,7 @@ import type {
   SessionMemberUiObservationFrame
 } from '@monad/protocol';
 import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
+import type { IdempotencyStore } from '#/transports/http/idempotency.ts';
 
 import {
   configureRuntimeRequestSchema,
@@ -25,6 +26,7 @@ import { Elysia } from 'elysia';
 import { z } from 'zod';
 
 import { buildSessionOrigin } from '#/handlers/session/origin.ts';
+import { idempotentJsonHandler } from '#/transports/http/idempotency.ts';
 import { createPushSseResponse, encodeSseFrame } from '#/transports/http/sessions/sse.ts';
 import {
   createSessionEventsSseResponse,
@@ -93,7 +95,11 @@ function httpEnv(server: ReqServer, request: Request) {
   };
 }
 
-export function createSessionsController(handlers: ReturnType<typeof createDaemonHandlers>, encoder: TextEncoder) {
+export function createSessionsController(
+  handlers: ReturnType<typeof createDaemonHandlers>,
+  encoder: TextEncoder,
+  idempotencyStore: IdempotencyStore
+) {
   const contracts = daemonHttpContract.sessions;
 
   return (
@@ -108,28 +114,34 @@ export function createSessionsController(handlers: ReturnType<typeof createDaemo
       })
       .post(
         '/sessions',
-        async ({ body, server, request, status, set }) => {
-          // Identity (surface/client) is client-declared (a TUI sends surface:'tui'); transport and
-          // env are filled server-side and never trusted from the body. env is audit-only.
-          const origin = buildSessionOrigin({
-            transport: 'http',
-            surface: body.origin?.surface ?? 'web',
-            client: body.origin?.client ?? 'monad-web',
-            clientVersion: body.origin?.clientVersion,
-            writableBy: body.origin?.writableBy,
-            branchableBy: body.origin?.branchableBy,
-            ext: body.origin?.ext,
-            env: httpEnv(server, request)
-          });
-          const result = await handlers.session.create({
-            title: body.title,
-            agentId: body.agentId,
-            origin,
-            cwd: body.cwd
-          });
-          set.headers.location = `/v1/sessions/${result.sessionId}`;
-          return status(201, result);
-        },
+        idempotentJsonHandler({
+          route: () => '/v1/sessions',
+          store: idempotencyStore,
+          handler: async ({ body, server, request }) => {
+            // Identity (surface/client) is client-declared (a TUI sends surface:'tui'); transport and
+            // env are filled server-side and never trusted from the body. env is audit-only.
+            const origin = buildSessionOrigin({
+              transport: 'http',
+              surface: body.origin?.surface ?? 'web',
+              client: body.origin?.client ?? 'monad-web',
+              clientVersion: body.origin?.clientVersion,
+              writableBy: body.origin?.writableBy,
+              branchableBy: body.origin?.branchableBy,
+              ext: body.origin?.ext,
+              env: httpEnv(server, request)
+            });
+            const result = await handlers.session.create({
+              title: body.title,
+              agentId: body.agentId,
+              origin,
+              cwd: body.cwd
+            });
+            return Response.json(result, {
+              headers: { location: `/v1/sessions/${result.sessionId}` },
+              status: 201
+            });
+          }
+        }),
         {
           body: contracts.create.body,
           response: contracts.create.response,
@@ -187,7 +199,18 @@ export function createSessionsController(handlers: ReturnType<typeof createDaemo
       .delete('/sessions/:id', async ({ params }) => handlers.session.delete({ id: params.id }), {
         params: contracts.delete.params,
         response: contracts.delete.response,
-        detail: { summary: 'Delete session', description: 'Deletes the session and associated data.' }
+        detail: {
+          summary: 'Delete session',
+          description: 'Queues the session for deletion during the undo grace period.'
+        }
+      })
+      .post('/sessions/:id/undo-delete', async ({ params }) => handlers.session.undoDelete({ id: params.id }), {
+        params: contracts.undoDelete.params,
+        response: contracts.undoDelete.response,
+        detail: {
+          summary: 'Undo session delete',
+          description: 'Cancels a queued session deletion while the grace period is still open.'
+        }
       })
       .post('/sessions/:id/abort', async ({ params }) => handlers.session.abort({ id: params.id }), {
         params: contracts.abort.params,
@@ -353,14 +376,21 @@ export function createSessionsController(handlers: ReturnType<typeof createDaemo
       )
       .post(
         '/sessions/:id/messages',
-        async ({ params, body, headers }) => {
+        async ({ params, body, headers, request }) => {
           if (!wantsInlineSessionStream(headers.accept) || body.generate === false) {
-            return handlers.session.send({
-              sessionId: params.id,
-              text: body.text,
-              generate: body.generate,
-              ambientContext: body.ambientContext
-            });
+            return idempotentJsonHandler({
+              route: () => `/v1/sessions/${params.id}/messages`,
+              store: idempotencyStore,
+              handler: async () =>
+                Response.json(
+                  await handlers.session.send({
+                    sessionId: params.id,
+                    text: body.text,
+                    generate: body.generate,
+                    ambientContext: body.ambientContext
+                  })
+                )
+            })({ body, request });
           }
 
           return createSessionMessageSseResponse({

@@ -11,9 +11,9 @@ import {
   ComposerEditor,
   ComposerModelSelect,
   ComposerSubmitButton,
-  ComposerSurface,
   ComposerVoiceButton,
-  ComposerVoiceUnavailableContent
+  ComposerVoiceUnavailableContent,
+  UnifiedComposer
 } from '@monad/ui';
 
 import { useT } from '#/components/I18nProvider';
@@ -36,6 +36,10 @@ type ComposerShellProps = {
     used: number;
   };
   controls?: Partial<Record<'access' | 'context' | 'model' | 'submit' | 'voice', boolean>>;
+  commandToken?: {
+    label: string;
+    raw: string;
+  };
   disabled?: boolean;
   editorSlot?: ReactNode;
   mentionMenu?: ReactNode;
@@ -80,6 +84,7 @@ export function ComposerShell({
   busy = false,
   contextUsage,
   controls,
+  commandToken,
   disabled = false,
   editorSlot,
   mentionMenu,
@@ -138,15 +143,13 @@ export function ComposerShell({
     submit: controls?.submit ?? true,
     voice: controls?.voice ?? true
   };
-  const showLeftTools = enabledControls.access;
-  const showRightTools =
-    enabledControls.context || enabledControls.model || enabledControls.voice || enabledControls.submit;
 
   return (
-    <ComposerSurface
+    <UnifiedComposer
       ariaBusy={voiceBusy}
-      leftTools={
-        showLeftTools && enabledControls.access ? (
+      ariaLabel="Message composer"
+      controls={{
+        access: enabledControls.access ? (
           <ComposerAccessSelect
             ariaLabel="Permission mode"
             askLabel={t('web.chat.accessAsk')}
@@ -154,103 +157,99 @@ export function ComposerShell({
             mode={access.mode}
             onChange={access.onChange}
           />
+        ) : null,
+        context: enabledControls.context ? (
+          <ContextUsageButton
+            percent={budgetPercent}
+            usage={contextUsage}
+          />
+        ) : null,
+        model: enabledControls.model ? (
+          <ComposerModelSelect
+            ariaLabel="Model"
+            current={model?.current}
+            onChange={model?.onChange}
+            options={model?.options ?? []}
+          />
+        ) : null,
+        submit: enabledControls.submit ? (
+          <ComposerSubmitButton
+            ariaLabel={canStop ? 'Stop' : 'Send message'}
+            canSend={canSend}
+            canStop={Boolean(canStop)}
+            disabled={submitDisabled}
+            onClick={canStop ? onStop : onSubmit}
+          />
+        ) : null,
+        voice: enabledControls.voice ? (
+          <HoverCard
+            closeDelay={80}
+            openDelay={120}
+          >
+            <HoverCardTrigger asChild>
+              <ComposerVoiceButton
+                ariaDisabled={Boolean(voiceDisabledReason && !listening && !voiceBusy)}
+                ariaLabel={
+                  listening
+                    ? 'Recording voice input'
+                    : voiceBusy
+                      ? 'Transcribing audio'
+                      : voiceDisabledReason
+                        ? voiceDisabledReason
+                        : 'Voice input'
+                }
+                disabled={!onVoiceText}
+                onClick={() => void toggleVoice()}
+                state={voiceBusy ? 'busy' : listening ? 'listening' : 'idle'}
+              />
+            </HoverCardTrigger>
+            {voiceDisabledReason ? (
+              <HoverCardContent
+                align="end"
+                className="w-64 text-sm leading-relaxed"
+              >
+                <ComposerVoiceUnavailableContent
+                  onSettingsClick={voice?.onSettingsClick}
+                  reason={voiceDisabledReason}
+                  requiresModelSettings={!voiceModelConfigured}
+                  settingsLabel="model settings"
+                  setupPrefix="Voice input requires default and transcription models. Go to"
+                  setupSuffix="to set them up."
+                />
+              </HoverCardContent>
+            ) : null}
+          </HoverCard>
         ) : null
+      }}
+      editor={
+        editorSlot ?? (
+          <ComposerEditor
+            ariaLabel={ariaLabel}
+            commandToken={commandToken}
+            disabled={disabled || voiceActive}
+            editorRef={textareaRef}
+            onBlur={onBlur}
+            onChange={(nextValue) => onChange?.(nextValue)}
+            onKeyDown={(event) => {
+              onKeyDown?.(event as unknown as React.KeyboardEvent<HTMLElement>);
+              return event.defaultPrevented;
+            }}
+            onKeyUp={onKeyUp}
+            onSubmit={onSubmit}
+            placeholder={placeholder}
+            sendShortcut={sendShortcut}
+            skillToken={composerSkillToken}
+            value={value}
+          />
+        )
       }
       mentionMenu={mentionMenu}
       mentionPreview={mentionPreview}
-      rightTools={
-        showRightTools ? (
-          <>
-            {enabledControls.context ? (
-              <ContextUsageButton
-                percent={budgetPercent}
-                usage={contextUsage}
-              />
-            ) : null}
-            {enabledControls.model ? (
-              <ComposerModelSelect
-                ariaLabel="Model"
-                current={model?.current}
-                onChange={model?.onChange}
-                options={model?.options ?? []}
-              />
-            ) : null}
-            {enabledControls.voice ? (
-              <HoverCard
-                closeDelay={80}
-                openDelay={120}
-              >
-                <HoverCardTrigger asChild>
-                  <ComposerVoiceButton
-                    ariaDisabled={Boolean(voiceDisabledReason && !listening && !voiceBusy)}
-                    ariaLabel={
-                      listening
-                        ? 'Recording voice input'
-                        : voiceBusy
-                          ? 'Transcribing audio'
-                          : voiceDisabledReason
-                            ? voiceDisabledReason
-                            : 'Voice input'
-                    }
-                    disabled={!onVoiceText}
-                    onClick={() => void toggleVoice()}
-                    state={voiceBusy ? 'busy' : listening ? 'listening' : 'idle'}
-                  />
-                </HoverCardTrigger>
-                {voiceDisabledReason ? (
-                  <HoverCardContent
-                    align="end"
-                    className="w-64 text-sm leading-relaxed"
-                  >
-                    <ComposerVoiceUnavailableContent
-                      onSettingsClick={voice?.onSettingsClick}
-                      reason={voiceDisabledReason}
-                      requiresModelSettings={!voiceModelConfigured}
-                      settingsLabel="model settings"
-                      setupPrefix="Voice input requires default and transcription models. Go to"
-                      setupSuffix="to set them up."
-                    />
-                  </HoverCardContent>
-                ) : null}
-              </HoverCard>
-            ) : null}
-            {enabledControls.submit ? (
-              <ComposerSubmitButton
-                ariaLabel={canStop ? 'Stop' : 'Send message'}
-                canSend={canSend}
-                canStop={Boolean(canStop)}
-                disabled={submitDisabled}
-                onClick={canStop ? onStop : onSubmit}
-              />
-            ) : null}
-          </>
-        ) : null
-      }
+      voiceDebug={voiceDebug ? <VoiceDebugPanel debug={voiceDebug} /> : null}
       voiceLevel={voiceLevel}
       voiceSpectrum={voiceSpectrum}
       voiceState={voiceBusy ? 'busy' : listening ? 'listening' : 'idle'}
-    >
-      {editorSlot ?? (
-        <ComposerEditor
-          ariaLabel={ariaLabel}
-          disabled={disabled || voiceActive}
-          editorRef={textareaRef}
-          onBlur={onBlur}
-          onChange={(nextValue) => onChange?.(nextValue)}
-          onKeyDown={(event) => {
-            onKeyDown?.(event as unknown as React.KeyboardEvent<HTMLElement>);
-            return event.defaultPrevented;
-          }}
-          onKeyUp={onKeyUp}
-          onSubmit={onSubmit}
-          placeholder={placeholder}
-          sendShortcut={sendShortcut}
-          skillToken={composerSkillToken}
-          value={value}
-        />
-      )}
-      {voiceDebug ? <VoiceDebugPanel debug={voiceDebug} /> : null}
-    </ComposerSurface>
+    />
   );
 }
 

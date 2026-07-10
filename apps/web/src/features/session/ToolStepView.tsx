@@ -388,16 +388,15 @@ function SingleToolView({ step, sessionId }: { step: ToolItem; sessionId?: Sessi
 
   return (
     <Tool
-      className={cn('panel-subtle mb-0 w-full self-start text-xs', isError && 'border-destructive/40 bg-destructive/5')}
+      className={cn('mb-1 w-full self-start text-xs', isError && 'border-destructive/40')}
       defaultOpen
     >
       <ToolHeader
-        className="px-4 py-3"
         state={toolState(step.status)}
         title={step.input !== undefined ? `${step.tool} · ${summarizeArgs(step.input)}` : step.tool}
         type={`tool-${step.tool}` as `tool-${string}`}
       />
-      <ToolContent className="border-border/70 border-t px-4 py-3">
+      <ToolContent>
         <ToolDetails
           pendingLabel={t('web.tools.running')}
           sessionId={sessionId}
@@ -415,16 +414,15 @@ function ToolGroupView({ step, sessionId }: { step: ToolGroupItem; sessionId?: S
 
   return (
     <Tool
-      className={cn('panel-subtle mb-0 w-full self-start text-xs', isError && 'border-destructive/40 bg-destructive/5')}
+      className={cn('mb-1 w-full self-start text-xs', isError && 'border-destructive/40')}
       defaultOpen
     >
       <ToolHeader
-        className="px-4 py-3"
         state={toolState(status)}
         title={t('web.tools.concurrentCalls', { count: step.steps.length })}
         type="tool-parallel"
       />
-      <ToolContent className="border-border/70 border-t px-4 py-3">
+      <ToolContent>
         <div className="flex flex-col gap-3">
           {step.steps.map((child) => (
             <NestedToolView
@@ -451,19 +449,15 @@ function NestedToolView({
 }) {
   return (
     <Tool
-      className={cn(
-        'mb-0 rounded-md border-border/70 bg-background/55',
-        step.status === 'error' && 'border-destructive/30 bg-destructive/5'
-      )}
+      className={cn('mb-0 text-xs', step.status === 'error' && 'border-destructive/30')}
       defaultOpen={step.status !== 'ok'}
     >
       <ToolHeader
-        className="px-3 py-2"
         state={toolState(step.status)}
         title={step.input !== undefined ? `${step.tool} · ${summarizeArgs(step.input)}` : step.tool}
         type={`tool-${step.tool}` as `tool-${string}`}
       />
-      <ToolContent className="border-border/60 border-t px-3 py-2">
+      <ToolContent>
         <ToolDetails
           pendingLabel={pendingLabel}
           sessionId={sessionId}

@@ -12,18 +12,15 @@ export const Route = createFileRoute('/_shell/sessions/$sessionId')({
 });
 
 function SessionRouteComponent() {
-  const { currentSessionId, sessionRouteProps, workspaceRouteProps } = useShellRouteContext();
+  const { sessionRouteModel, workspaceRouteProps } = useShellRouteContext();
 
-  if (!currentSessionId) {
+  if (!sessionRouteModel) {
     return <WorkspaceRoute {...workspaceRouteProps} />;
   }
 
   return (
     <Suspense fallback={<PanelLoading />}>
-      <SessionRoute
-        {...sessionRouteProps}
-        currentSessionId={currentSessionId}
-      />
+      <SessionRoute model={sessionRouteModel} />
     </Suspense>
   );
 }

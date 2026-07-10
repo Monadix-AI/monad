@@ -1,6 +1,6 @@
 'use client';
 
-import type { ProjectId, Session, SessionId } from '@monad/protocol';
+import type { Agent, ProjectId, Session, SessionId } from '@monad/protocol';
 import type { ProjectExperienceDefinition } from '#/features/workplace/experiences/types';
 import type { ProjectController } from '#/features/workplace/use-project';
 
@@ -9,7 +9,6 @@ import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { listProjectExperiences, toProjectExperienceDefinitions } from '#/features/workplace/experiences/registry';
 import { Workplace } from '#/features/workplace/Workplace';
-import { useWorkplaceUiStore } from '#/features/workplace/workplace-ui-store';
 import { useWorkspaceShellStore } from '#/lib/workspace-shell-store';
 import { ProjectTopBar } from './ProjectTopBar';
 import { useProjectViewMode } from './use-project-view-mode';
@@ -35,6 +34,7 @@ interface ActiveProjectParticipants {
 interface CachedProjectWorkplaceProps {
   active: boolean;
   activeProjectSessionId: SessionId | null;
+  activeProjectSurface: 'workplace' | 'project-settings';
   experiences: ProjectExperienceDefinition[];
   experiencesLoading: boolean;
   onModeChange: (mode: string) => void;
@@ -47,11 +47,11 @@ interface CachedProjectWorkplaceProps {
 export interface WorkspaceRouteProps {
   activeProjectId: string | null;
   activeProjectSessionId: SessionId | null;
-  agentSession: Session | null;
-  projects: { id: string; name: string; cwd?: string }[];
-  onNewMonadChat: () => void;
-  onOpenMonadChat: () => void;
-  onOpenProject: (projectId: string) => void;
+  activeProjectSurface?: 'workplace' | 'project-settings';
+  agents: Agent[];
+  chatSessions: Pick<Session, 'id' | 'title'>[];
+  projects: { id: string; name: string; cwd?: string; sessions?: { id: SessionId }[] }[];
+  onOpenProjectSettings: (projectId: string) => void;
   onProjectDeleted: () => void;
   onOpenSettings: () => void;
   onOpenStudio: () => void;
@@ -76,11 +76,10 @@ function participantsSignature(participants: ProjectController['participants']):
 export function WorkspaceRoute({
   activeProjectId,
   activeProjectSessionId,
-  agentSession,
+  activeProjectSurface = 'workplace',
+  agents,
   projects,
-  onNewMonadChat,
-  onOpenMonadChat,
-  onOpenProject,
+  onOpenProjectSettings,
   onProjectDeleted,
   onOpenSettings,
   onOpenStudio,
@@ -94,7 +93,6 @@ export function WorkspaceRoute({
     signature: ''
   });
   const [cachedProjectEntries, setCachedProjectEntries] = useState<CachedProjectEntry[]>([]);
-  const openProjectSettingsInStore = useWorkplaceUiStore((state) => state.openProjectSettings);
   const setActiveProjectSession = useWorkspaceShellStore((state) => state.setActiveProjectSession);
   const { data: workspaceExperiences, isLoading: workspaceExperiencesLoading } = useListWorkspaceExperiencesQuery(
     undefined,
@@ -110,8 +108,8 @@ export function WorkspaceRoute({
   const activeProject = projects.find((p) => p.id === activeProjectId);
   const projectName = activeProject?.name ?? activeProjectId ?? 'Project';
   const openProjectSettings = useCallback(() => {
-    if (activeProjectId) openProjectSettingsInStore(activeProjectId);
-  }, [activeProjectId, openProjectSettingsInStore]);
+    if (activeProjectId) onOpenProjectSettings(activeProjectId);
+  }, [activeProjectId, onOpenProjectSettings]);
   const updateActiveProjectParticipants = useCallback(
     (project: ProjectController) => {
       const signature = participantsSignature(project.participants);
@@ -131,11 +129,8 @@ export function WorkspaceRoute({
         });
         return;
       }
-      setActiveSessionId((current) => (current === project.activeSessionId ? current : project.activeSessionId));
-      setActiveSessionTitle((current) => {
-        const next = project.projectSessions.find((session) => session.id === project.activeSessionId)?.title ?? null;
-        return current === next ? current : next;
-      });
+      setActiveSessionId((current) => (current === null ? current : null));
+      setActiveSessionTitle((current) => (current === null ? current : null));
     },
     [activeProjectSessionId]
   );
@@ -233,6 +228,7 @@ export function WorkspaceRoute({
                   <CachedProjectWorkplace
                     active={active}
                     activeProjectSessionId={active ? activeProjectSessionId : null}
+                    activeProjectSurface={active ? activeProjectSurface : 'workplace'}
                     experiences={experiences}
                     experiencesLoading={workspaceExperiencesLoading}
                     onModeChange={setMode}
@@ -253,10 +249,7 @@ export function WorkspaceRoute({
   return (
     <WorkspaceHome
       activeProjectId={activeProjectId}
-      agentSession={agentSession}
-      onNewMonadChat={onNewMonadChat}
-      onOpenMonadChat={onOpenMonadChat}
-      onOpenProject={onOpenProject}
+      agents={agents}
       onOpenSettings={onOpenSettings}
       onOpenStudio={onOpenStudio}
       projects={projects}
@@ -267,6 +260,7 @@ export function WorkspaceRoute({
 const CachedProjectWorkplace = memo(function CachedProjectWorkplace({
   active,
   activeProjectSessionId,
+  activeProjectSurface,
   experiences,
   experiencesLoading,
   onModeChange,
@@ -306,6 +300,7 @@ const CachedProjectWorkplace = memo(function CachedProjectWorkplace({
       onProjectDeleted={onProjectDeleted}
       projectId={projectId}
       routedSessionId={activeProjectSessionId}
+      surface={activeProjectSurface}
       voiceModelState={voiceModelState}
     />
   );
@@ -318,6 +313,7 @@ function areCachedProjectWorkplacePropsEqual(
   return (
     prev.active === next.active &&
     prev.activeProjectSessionId === next.activeProjectSessionId &&
+    prev.activeProjectSurface === next.activeProjectSurface &&
     prev.experiences === next.experiences &&
     prev.experiencesLoading === next.experiencesLoading &&
     prev.onModeChange === next.onModeChange &&

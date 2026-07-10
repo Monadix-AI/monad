@@ -1,5 +1,6 @@
 import type { SessionId } from '@monad/protocol';
 import type { ProjectController } from '../use-project';
+import type { ExternalAgentMemberDialogState } from './external-agent-member-dialog-model';
 
 import { MinusSignIcon, PlusSignIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
@@ -21,8 +22,11 @@ import { useState } from 'react';
 
 import { DestructiveConfirmPopover } from '#/components/DestructiveConfirmPopover';
 import { useT } from '#/components/I18nProvider';
+import { defaultReasoningEffort } from '#/components/ReasoningEffortControl';
+import { ExternalAgentMemberDialog } from './ExternalAgentMemberDialog';
 
 type ProjectMember = ProjectController['projectMembers'][number];
+type AvailableProjectMember = ProjectController['availableProjectMembers'][number];
 
 function MemberRow({
   index,
@@ -93,9 +97,13 @@ function MemberRow({
  *  binding starts its own runtime, never shared), or spawns an ad-hoc member with no template link. */
 export function SessionMembersSection({
   activeSessionId,
+  availableProjectMembers,
+  room,
   templates
 }: {
   activeSessionId: SessionId | null;
+  availableProjectMembers: AvailableProjectMember[];
+  room: ProjectController;
   templates: ProjectMember[];
 }): React.ReactElement {
   const t = useT();
@@ -106,17 +114,20 @@ export function SessionMembersSection({
   const [inviteSessionMember, inviteState] = useInviteSessionMemberMutation();
   const [spawnSessionMember, spawnState] = useSpawnSessionMemberMutation();
   const [removeSessionMember] = useRemoveSessionMemberMutation();
-  const [adHocName, setAdHocName] = useState('');
+  const [externalAgentInvite, setExternalAgentInvite] = useState<ExternalAgentMemberDialogState | null>(null);
 
   const invitedTemplateIds = new Set(members.map((member) => member.templateId).filter((id) => id !== undefined));
   const availableTemplates = templates.filter((template) => !invitedTemplateIds.has(template.id));
+  const externalAgentCandidates = availableProjectMembers.filter((candidate) => candidate.type === 'external-agent');
 
   return (
-    <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div style={sectionLabel}>{t('web.workplace.sessionMembersTitle')}</div>
-      <p style={{ margin: 0, fontFamily: sans, fontSize: 12, color: 'var(--muted-foreground)' }}>
-        {t('web.workplace.sessionMembersDescription')}
-      </p>
+    <section style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div style={sectionLabel}>{t('web.workplace.sessionMembersTitle')}</div>
+        <p style={{ margin: 0, fontFamily: sans, fontSize: 12, color: 'var(--muted-foreground)' }}>
+          {t('web.workplace.sessionMembersDescription')}
+        </p>
+      </div>
       {!activeSessionId ? (
         <p style={{ margin: 0, fontFamily: sans, fontSize: 13, color: 'var(--muted-foreground)' }}>
           {t('web.workplace.noActiveSession')}
@@ -140,10 +151,84 @@ export function SessionMembersSection({
           </div>
 
           {availableTemplates.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ ...sectionLabel, color: 'var(--muted-foreground)' }}>
+                {t('web.workplace.projectTemplates')}
+              </div>
+              <div style={{ border: `1px solid ${'var(--border)'}`, borderRadius: boxR, background: 'var(--card)' }}>
+                {availableTemplates.map((template, index) => (
+                  <div
+                    key={template.id}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '32px minmax(0, 1fr) auto',
+                      alignItems: 'center',
+                      gap: 10,
+                      padding: '10px 12px',
+                      borderTop: index === 0 ? 'none' : `1px solid ${'var(--border)'}`
+                    }}
+                  >
+                    <AgentInstanceAvatar
+                      agent={{ ...template, name: template.displayName ?? template.name }}
+                      bare
+                      size={30}
+                    />
+                    <div style={{ minWidth: 0 }}>
+                      <AgentIdentity
+                        name={template.displayName ?? template.name}
+                        nameStyle={{ fontFamily: sans, fontSize: 14, fontWeight: 600 }}
+                      />
+                    </div>
+                    <button
+                      aria-label={t('web.workplace.inviteIntoSessionAriaLabel', {
+                        name: template.displayName ?? template.name
+                      })}
+                      className="workplace-action"
+                      disabled={inviteState.isLoading}
+                      onClick={() => void inviteSessionMember({ sessionId: activeSessionId, templateId: template.id })}
+                      style={{
+                        minHeight: 28,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                        border: `1px solid ${'var(--accent-blue)'}`,
+                        borderRadius: 8,
+                        background: 'var(--accent-blue-soft)',
+                        color: 'var(--accent-blue)',
+                        fontFamily: mono,
+                        fontSize: 11,
+                        padding: '5px 9px',
+                        whiteSpace: 'nowrap'
+                      }}
+                      title={t('web.workplace.inviteIntoSession')}
+                      type="button"
+                    >
+                      <HugeiconsIcon
+                        icon={PlusSignIcon}
+                        size={14}
+                      />
+                      {t('web.workplace.inviteIntoSession')}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ ...sectionLabel, color: 'var(--muted-foreground)' }}>
+              {t('web.workplace.directSessionMembers')}
+            </div>
             <div style={{ border: `1px solid ${'var(--border)'}`, borderRadius: boxR, background: 'var(--card)' }}>
-              {availableTemplates.map((template, index) => (
+              {externalAgentCandidates.length === 0 ? (
+                <p style={{ margin: 0, padding: 12, fontFamily: sans, fontSize: 13, color: 'var(--muted-foreground)' }}>
+                  {t('web.workplace.noAvailableMembers')}
+                </p>
+              ) : null}
+              {externalAgentCandidates.map((candidate, index) => (
                 <div
-                  key={template.id}
+                  key={candidate.id}
                   style={{
                     display: 'grid',
                     gridTemplateColumns: '32px minmax(0, 1fr) auto',
@@ -154,98 +239,86 @@ export function SessionMembersSection({
                   }}
                 >
                   <AgentInstanceAvatar
-                    agent={{ ...template, name: template.displayName ?? template.name }}
+                    agent={{ ...candidate, name: candidate.label }}
                     bare
                     size={30}
                   />
                   <div style={{ minWidth: 0 }}>
                     <AgentIdentity
-                      name={template.displayName ?? template.name}
+                      name={candidate.label}
                       nameStyle={{ fontFamily: sans, fontSize: 14, fontWeight: 600 }}
                     />
                   </div>
                   <button
-                    aria-label={t('web.workplace.inviteIntoSessionAriaLabel', {
-                      name: template.displayName ?? template.name
-                    })}
                     className="workplace-action"
-                    disabled={inviteState.isLoading}
-                    onClick={() => void inviteSessionMember({ sessionId: activeSessionId, templateId: template.id })}
+                    disabled={!candidate.enabled || spawnState.isLoading}
+                    onClick={() =>
+                      setExternalAgentInvite({
+                        candidate,
+                        draft: {
+                          displayName: candidate.template?.displayName,
+                          projectTemplateId: candidate.template?.id,
+                          modelId: candidate.template?.modelId,
+                          reasoningEffort:
+                            candidate.template?.reasoningEffort ?? defaultReasoningEffort(candidate.reasoningEfforts),
+                          speed: candidate.template?.speed,
+                          customPrompt: candidate.template?.customPrompt
+                        }
+                      })
+                    }
                     style={{
                       minHeight: 28,
                       display: 'inline-flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       gap: 6,
-                      border: `1px solid ${'var(--accent-blue)'}`,
+                      border: `1px solid ${candidate.enabled ? 'var(--accent-blue)' : 'var(--border)'}`,
                       borderRadius: 8,
-                      background: 'var(--accent-blue-soft)',
-                      color: 'var(--accent-blue)',
+                      background: candidate.enabled ? 'var(--accent-blue-soft)' : 'var(--secondary)',
+                      color: candidate.enabled ? 'var(--accent-blue)' : 'var(--muted-foreground)',
                       fontFamily: mono,
                       fontSize: 11,
                       padding: '5px 9px',
                       whiteSpace: 'nowrap'
                     }}
-                    title={t('web.workplace.inviteIntoSession')}
+                    title={
+                      candidate.enabled
+                        ? t('web.workplace.configureAndInviteSessionMember')
+                        : t('web.workplace.enableAgentFirst')
+                    }
                     type="button"
                   >
                     <HugeiconsIcon
                       icon={PlusSignIcon}
                       size={14}
                     />
-                    {t('web.workplace.inviteIntoSession')}
+                    {t('web.workplace.configure')}
                   </button>
                 </div>
               ))}
             </div>
-          ) : null}
-
-          <div style={{ display: 'flex', gap: 8 }}>
-            <input
-              onChange={(event) => setAdHocName(event.target.value)}
-              placeholder={t('web.workplace.spawnAdHocPlaceholder')}
-              style={{
-                flex: 1,
-                minWidth: 0,
-                border: `1px solid ${'var(--border)'}`,
-                borderRadius: 8,
-                background: 'var(--card)',
-                color: 'var(--foreground)',
-                fontFamily: mono,
-                fontSize: 12,
-                padding: '6px 9px'
-              }}
-              value={adHocName}
-            />
-            <button
-              className="workplace-action"
-              disabled={!adHocName.trim() || spawnState.isLoading}
-              onClick={() => {
-                const name = adHocName.trim();
-                if (!name) return;
-                void spawnSessionMember({ sessionId: activeSessionId, type: 'external-agent', name });
-                setAdHocName('');
-              }}
-              style={{
-                minHeight: 30,
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 6,
-                border: `1px solid ${'var(--border)'}`,
-                borderRadius: 8,
-                background: 'var(--secondary)',
-                color: 'var(--foreground)',
-                fontFamily: mono,
-                fontSize: 11,
-                padding: '5px 10px',
-                whiteSpace: 'nowrap'
-              }}
-              type="button"
-            >
-              {t('web.workplace.spawnAdHoc')}
-            </button>
           </div>
+          <ExternalAgentMemberDialog
+            invite={externalAgentInvite}
+            onChange={setExternalAgentInvite}
+            onClose={() => setExternalAgentInvite(null)}
+            onSave={(invite) =>
+              spawnSessionMember({
+                sessionId: activeSessionId,
+                type: 'external-agent',
+                name: invite.candidate.name,
+                displayName: invite.draft.displayName,
+                settings: {
+                  ...(invite.draft.modelId ? { modelId: invite.draft.modelId } : {}),
+                  ...(invite.draft.reasoningEffort ? { reasoningEffort: invite.draft.reasoningEffort } : {}),
+                  ...(invite.draft.speed ? { speed: invite.draft.speed } : {}),
+                  ...(invite.draft.appServerTransport ? { appServerTransport: invite.draft.appServerTransport } : {}),
+                  ...(invite.draft.customPrompt ? { customPrompt: invite.draft.customPrompt } : {})
+                }
+              }).unwrap()
+            }
+            room={room}
+          />
         </>
       )}
     </section>

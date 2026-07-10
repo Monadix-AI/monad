@@ -24,7 +24,9 @@ import type {
   ComposerIconButtonProps,
   ComposerSubmitButtonProps,
   ComposerSurfaceProps,
-  ComposerVoiceButtonProps
+  ComposerVoiceButtonProps,
+  UnifiedComposerControls,
+  UnifiedComposerProps
 } from './components/Composer';
 import type { ComposerAskSheetProps, ComposerAskSheetQuestion } from './components/ComposerAskSheet';
 import type {
@@ -73,7 +75,8 @@ import {
   ComposerSurface,
   ComposerSwap,
   ComposerVoiceButton,
-  ComposerVoiceUnavailableContent
+  ComposerVoiceUnavailableContent,
+  UnifiedComposer
 } from './components/Composer';
 import { ComposerAskSheet } from './components/ComposerAskSheet';
 import { ComposerEditor, shouldSubmitComposerKey } from './components/ComposerEditor';
@@ -176,7 +179,9 @@ export type {
   ToolOutputProps,
   ToolPart,
   ToolProps,
-  ToolStatusLabels
+  ToolStatusLabels,
+  UnifiedComposerControls,
+  UnifiedComposerProps
 };
 
 export {
@@ -288,5 +293,6 @@ export {
   Tooltip,
   TooltipContent,
   TooltipProvider,
-  TooltipTrigger
+  TooltipTrigger,
+  UnifiedComposer
 };

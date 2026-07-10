@@ -36,6 +36,11 @@ export type ComposerSkillToken = {
   version?: string;
 };
 
+export type ComposerCommandToken = {
+  label: string;
+  raw: string;
+};
+
 export type ComposerSendShortcut = 'enter' | 'mod-enter-for-multiline' | 'mod-enter-always';
 
 export type ComposerEditorHandle = {
@@ -174,7 +179,61 @@ const SkillTokenNode = Node.create({
             },
             `v${HTMLAttributes.version}`
           ]
-        : ''
+        : '',
+      [
+        'span',
+        {
+          'aria-label': 'Remove skill',
+          class:
+            'ml-0.5 grid size-4 shrink-0 place-items-center rounded-full text-muted-foreground text-xs leading-none hover:bg-muted hover:text-foreground',
+          'data-composer-token-delete': 'skill',
+          role: 'button'
+        },
+        '×'
+      ]
+    ];
+  },
+
+  renderText({ node }) {
+    return String(node.attrs.raw ?? '');
+  }
+});
+
+const CommandTokenNode = Node.create({
+  name: 'composerCommandToken',
+  group: 'inline',
+  inline: true,
+  atom: true,
+  selectable: false,
+
+  addAttributes() {
+    return {
+      label: { default: '' },
+      raw: { default: '' }
+    };
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return [
+      'span',
+      mergeAttributes(HTMLAttributes, {
+        'data-command-token-raw': HTMLAttributes.raw,
+        class:
+          'mx-0.5 inline-flex max-w-full translate-y-[2px] items-center gap-1.5 rounded-(--radius-md) border border-border/70 bg-muted/60 px-2 py-0.5 text-left text-foreground text-sm shadow-xs transition hover:bg-accent/70'
+      }),
+      ['span', { 'aria-hidden': 'true', class: 'font-mono text-[12px] text-muted-foreground leading-none' }, '/'],
+      ['span', { class: 'truncate font-medium' }, HTMLAttributes.label],
+      [
+        'span',
+        {
+          'aria-label': 'Remove command',
+          class:
+            'ml-0.5 grid size-4 shrink-0 place-items-center rounded-full text-muted-foreground text-xs leading-none hover:bg-muted hover:text-foreground',
+          'data-composer-token-delete': 'command',
+          role: 'button'
+        },
+        '×'
+      ]
     ];
   },
 
@@ -186,6 +245,7 @@ const SkillTokenNode = Node.create({
 export const ComposerEditor = forwardRef(function ComposerEditor(
   {
     ariaLabel,
+    commandToken,
     disabled,
     editorRef,
     mention,
@@ -203,6 +263,7 @@ export const ComposerEditor = forwardRef(function ComposerEditor(
     value
   }: {
     ariaLabel: string;
+    commandToken?: ComposerCommandToken;
     disabled: boolean;
     editorRef?: React.Ref<HTMLDivElement>;
     mention?: boolean;
@@ -222,20 +283,25 @@ export const ComposerEditor = forwardRef(function ComposerEditor(
   ref: ForwardedRef<ComposerEditorHandle>
 ): ReactElement {
   const activeMentionRef = useRef<ActiveMentionRange | null>(null);
+  const commandTokenRef = useRef(commandToken);
   const onFilesRef = useRef(onFiles);
   const onKeyDownRef = useRef(onKeyDown);
   const onPasteTextRef = useRef(onPasteText);
   const skillTokenRef = useRef(skillToken);
   const valueRef = useRef(value);
+  commandTokenRef.current = commandToken;
   onFilesRef.current = onFiles;
   onKeyDownRef.current = onKeyDown;
   onPasteTextRef.current = onPasteText;
   skillTokenRef.current = skillToken;
 
-  const extensions = useMemo(() => [Document, Paragraph, Text, ChatMentionExtension, SkillTokenNode], []);
+  const extensions = useMemo(
+    () => [Document, Paragraph, Text, ChatMentionExtension, SkillTokenNode, CommandTokenNode],
+    []
+  );
   const editor = useEditor({
     extensions,
-    content: serializedTextToTiptapDoc(value, skillToken),
+    content: serializedTextToTiptapDoc(value, skillToken, commandToken),
     editable: !disabled,
     immediatelyRender: COMPOSER_EDITOR_IMMEDIATELY_RENDER,
     editorProps: {
@@ -247,6 +313,14 @@ export const ComposerEditor = forwardRef(function ComposerEditor(
       },
       handleClick(_view, _pos, event) {
         const target = event.target instanceof Element ? event.target : null;
+        const deleteTarget = target?.closest<HTMLElement>('[data-composer-token-delete]');
+        if (deleteTarget && editor) {
+          const token = deleteTarget.closest<HTMLElement>('[data-skill-token-raw], [data-command-token-raw]');
+          if (token && deleteComposerToken(editor, token)) {
+            event.preventDefault();
+            return true;
+          }
+        }
         const skill = target?.closest<HTMLElement>('[data-skill-token-raw]');
         const raw = skill?.dataset.skillTokenRaw;
         if (!raw || skillTokenRef.current?.raw !== raw) return false;
@@ -324,7 +398,9 @@ export const ComposerEditor = forwardRef(function ComposerEditor(
       clear(): void {
         if (!editor) return;
         valueRef.current = '';
-        editor.commands.setContent(serializedTextToTiptapDoc('', skillTokenRef.current), { emitUpdate: false });
+        editor.commands.setContent(serializedTextToTiptapDoc('', skillTokenRef.current, commandTokenRef.current), {
+          emitUpdate: false
+        });
         activeMentionRef.current = null;
         onMentionChange?.(null, null);
       },
@@ -358,10 +434,10 @@ export const ComposerEditor = forwardRef(function ComposerEditor(
   useEffect(() => {
     if (!editor || valueRef.current === value) return;
     valueRef.current = value;
-    editor.commands.setContent(serializedTextToTiptapDoc(value, skillToken), { emitUpdate: false });
+    editor.commands.setContent(serializedTextToTiptapDoc(value, skillToken, commandToken), { emitUpdate: false });
     activeMentionRef.current = null;
     onMentionChange?.(null, null);
-  }, [editor, onMentionChange, skillToken, value]);
+  }, [commandToken, editor, onMentionChange, skillToken, value]);
 
   useEffect(() => {
     if (!editorRef) return;
@@ -470,18 +546,42 @@ function mentionPosition(editor: Editor, from: number): ComposerMentionPosition 
   };
 }
 
-function serializedTextToTiptapDoc(text: string, skillToken?: ComposerSkillToken): JSONContent {
+function deleteComposerToken(editor: Editor, element: HTMLElement): boolean {
+  const position = editor.view.posAtDOM(element, 0);
+  for (const pos of [position, position - 1]) {
+    if (pos < 0) continue;
+    const node = editor.state.doc.nodeAt(pos);
+    if (node?.type.name !== 'composerSkillToken' && node?.type.name !== 'composerCommandToken') continue;
+    editor
+      .chain()
+      .focus()
+      .deleteRange({ from: pos, to: pos + node.nodeSize })
+      .run();
+    return true;
+  }
+  return false;
+}
+
+function serializedTextToTiptapDoc(
+  text: string,
+  skillToken?: ComposerSkillToken,
+  commandToken?: ComposerCommandToken
+): JSONContent {
   const paragraphs = text.split('\n');
   return {
     type: 'doc',
     content: paragraphs.map((paragraph) => ({
       type: 'paragraph',
-      content: serializedLineToContent(paragraph, skillToken)
+      content: serializedLineToContent(paragraph, skillToken, commandToken)
     }))
   };
 }
 
-function serializedLineToContent(text: string, skillToken?: ComposerSkillToken): JSONContent[] {
+function serializedLineToContent(
+  text: string,
+  skillToken?: ComposerSkillToken,
+  commandToken?: ComposerCommandToken
+): JSONContent[] {
   const content: JSONContent[] = [];
   let cursor = 0;
   const spans = [
@@ -496,6 +596,12 @@ function serializedLineToContent(text: string, skillToken?: ComposerSkillToken):
       start: token.start,
       end: token.end,
       token
+    })),
+    ...parseCommandTokens(text, commandToken).map((token) => ({
+      kind: 'command' as const,
+      start: token.start,
+      end: token.end,
+      token
     }))
   ].sort((a, b) => a.start - b.start);
 
@@ -504,8 +610,10 @@ function serializedLineToContent(text: string, skillToken?: ComposerSkillToken):
     if (span.start > cursor) content.push({ type: 'text', text: text.slice(cursor, span.start) });
     if (span.kind === 'mention') {
       content.push({ type: 'mention', attrs: { id: span.token.id, label: span.token.name } });
-    } else {
+    } else if (span.kind === 'skill') {
       content.push({ type: 'composerSkillToken', attrs: span.token.payload });
+    } else {
+      content.push({ type: 'composerCommandToken', attrs: span.token.payload });
     }
     cursor = span.end;
   }
@@ -537,6 +645,19 @@ function parseSkillTokens(
   });
 }
 
+function parseCommandTokens(
+  text: string,
+  commandToken?: ComposerCommandToken
+): { end: number; payload: ComposerCommandToken; start: number }[] {
+  if (!commandToken?.raw) return [];
+  const leading = /^\s*/.exec(text)?.[0].length ?? 0;
+  if (!text.startsWith(commandToken.raw, leading)) return [];
+  const end = leading + commandToken.raw.length;
+  const next = text[end];
+  if (next && !/\s/.test(next)) return [];
+  return [{ start: leading, end, payload: commandToken }];
+}
+
 function tiptapDocToSerializedText(doc: JSONContent): string {
   return (doc.content ?? []).map(tiptapBlockToSerializedText).join('\n');
 }
@@ -551,5 +672,6 @@ function tiptapNodeToSerializedText(node: JSONContent): string {
     return mentionToken({ id: String(node.attrs?.id ?? ''), name: String(node.attrs?.label ?? '') });
   }
   if (node.type === 'composerSkillToken') return String(node.attrs?.raw ?? '');
+  if (node.type === 'composerCommandToken') return String(node.attrs?.raw ?? '');
   return (node.content ?? []).map(tiptapNodeToSerializedText).join('');
 }

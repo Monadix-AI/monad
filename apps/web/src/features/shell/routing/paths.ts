@@ -20,6 +20,14 @@ export function isSettingsPath(pathname: string): boolean {
   return pathname === '/settings' || pathname.startsWith('/settings/');
 }
 
+export function inboxPath(): string {
+  return '/inbox';
+}
+
+export function isInboxPath(pathname: string): boolean {
+  return pathname === '/inbox';
+}
+
 export function settingsPath(section: SettingsSectionId = 'connection'): string {
   return `/settings/${encodeURIComponent(section)}`;
 }
@@ -81,7 +89,9 @@ export function skillMarketplacePath(source: SkillMarketplaceSource = DEFAULT_SK
 export function isWorkspacePath(pathname: string): boolean {
   return (
     pathname === '/' ||
+    isInboxPath(pathname) ||
     new RegExp(`^/workspace/${PROJECT_ROUTE_ID_PATTERN}(?:[/?#]|$)`).test(pathname) ||
+    new RegExp(`^/workspace/${PROJECT_ROUTE_ID_PATTERN}/settings(?:[/?#]|$)`).test(pathname) ||
     new RegExp(`^/workspace/${PROJECT_ROUTE_ID_PATTERN}/${SESSION_ROUTE_ID_PATTERN}(?:[/?#]|$)`).test(pathname) ||
     pathname.startsWith('/sessions/')
   );
@@ -103,16 +113,24 @@ export function projectPath(projectId: string): string {
   return `/workspace/${encodeURIComponent(projectRouteId(projectId))}`;
 }
 
+export function projectSettingsPath(projectId: string): string {
+  return `${projectPath(projectId)}/settings`;
+}
+
 export function projectSessionPath(projectId: string, sessionId: string): string {
   return `${projectPath(projectId)}/${encodeURIComponent(sessionRouteId(sessionId))}`;
 }
 
 export function projectIdFromPathname(pathname: string): string | null {
   const raw = pathname.match(
-    new RegExp(`^/workspace/(${PROJECT_ROUTE_ID_PATTERN})(?:/${SESSION_ROUTE_ID_PATTERN})?(?:[/?#]|$)`)
+    new RegExp(`^/workspace/(${PROJECT_ROUTE_ID_PATTERN})(?:/(?:settings|${SESSION_ROUTE_ID_PATTERN}))?(?:[/?#]|$)`)
   )?.[1];
   if (!raw) return null;
   return safeDecode(raw);
+}
+
+export function isProjectSettingsPath(pathname: string): boolean {
+  return new RegExp(`^/workspace/${PROJECT_ROUTE_ID_PATTERN}/settings(?:[/?#]|$)`).test(pathname);
 }
 
 export function projectSessionIdFromPathname(pathname: string): string | null {

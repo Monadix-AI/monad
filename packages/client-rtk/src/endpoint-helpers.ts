@@ -1,4 +1,7 @@
 import type { MonadClient } from '@monad/client';
+import type { IdempotencyKey } from '@monad/protocol';
+
+import { newId } from '@monad/protocol';
 
 export interface MonadExtra {
   client: MonadClient;
@@ -13,6 +16,19 @@ export function clientOf(api: { extra: unknown }): MonadClient {
     );
   }
   return extra.client;
+}
+
+export interface IdempotentMutationArgs {
+  idempotencyKey?: IdempotencyKey;
+}
+
+export function idempotencyOptions(args: IdempotentMutationArgs): { headers: Record<string, string> } | undefined {
+  if (!args.idempotencyKey) return undefined;
+  return { headers: { 'idempotency-key': args.idempotencyKey } };
+}
+
+export function createIdempotencyKey(): IdempotencyKey {
+  return newId('idem');
 }
 
 /**

@@ -14,10 +14,13 @@ import { memo, useCallback, useEffect } from 'react';
 
 import { MonadLoading } from '#/components/MonadLoading';
 import { ShellLink } from '#/components/ShellLink';
+import { projectPath, projectSettingsPath } from '#/features/shell/routing/paths';
+import { pushShellUrl, replaceShellUrl } from '#/hooks/use-shell-location';
 import { getProjectExperience } from './experiences/registry';
 import { ProjectHeader } from './project-shell/ProjectHeader';
 import { ProjectMemberDialog } from './project-shell/ProjectMemberDialog';
 import { ProjectSettings } from './project-shell/ProjectSettings';
+import { SessionSettings } from './project-shell/SessionSettings';
 import { useProject } from './use-project';
 import { useWorkplaceUiStore } from './workplace-ui-store';
 
@@ -33,6 +36,7 @@ export const Workplace = memo(function Workplace({
   onProjectControllerChange,
   onProjectDeleted,
   routedSessionId,
+  surface = 'workplace',
   voiceModelState = 'checking'
 }: {
   projectId: string;
@@ -44,22 +48,20 @@ export const Workplace = memo(function Workplace({
   onProjectControllerChange?: (project: ProjectController) => void;
   onProjectDeleted?: () => void;
   routedSessionId?: SessionId | null;
+  surface?: 'workplace' | 'project-settings';
   voiceModelState?: 'checking' | 'configured' | 'missing' | 'failed';
 }): React.ReactElement {
-  const projectSettings = useWorkplaceUiStore((state) =>
-    state.projectSettings?.projectId === projectId ? state.projectSettings : null
-  );
   const projectMemberSettings = useWorkplaceUiStore((state) =>
     state.projectMemberSettings?.projectId === projectId ? state.projectMemberSettings : null
   );
-  const openProjectSettingsInStore = useWorkplaceUiStore((state) => state.openProjectSettings);
-  const closeProjectSettingsInStore = useWorkplaceUiStore((state) => state.closeProjectSettings);
+  const sessionSettings = useWorkplaceUiStore((state) =>
+    state.sessionSettings?.projectId === projectId ? state.sessionSettings : null
+  );
+  const openSessionSettingsInStore = useWorkplaceUiStore((state) => state.openSessionSettings);
+  const closeSessionSettingsInStore = useWorkplaceUiStore((state) => state.closeSessionSettings);
   const openProjectMemberSettings = useWorkplaceUiStore((state) => state.openProjectMemberSettings);
   const closeProjectMemberSettings = useWorkplaceUiStore((state) => state.closeProjectMemberSettings);
-  const settingsOpen = projectSettings !== null;
-  const closeProjectSettings = useCallback(() => {
-    closeProjectSettingsInStore();
-  }, [closeProjectSettingsInStore]);
+  const sessionSettingsOpen = sessionSettings !== null;
   const openAgentCard = useCallback(
     (memberId: string) => {
       openProjectMemberSettings(projectId, memberId);
@@ -69,8 +71,13 @@ export const Workplace = memo(function Workplace({
   const requestProjectDialog = useCallback(
     (request: WorkspaceExperienceProjectDialogRequest) => {
       if (request.type === 'project-settings') {
-        if (request.open) openProjectSettingsInStore(projectId, request.intent);
-        else closeProjectSettingsInStore();
+        if (request.open) {
+          if (request.intent === 'spawn-agent') openSessionSettingsInStore(projectId);
+          else pushShellUrl(projectSettingsPath(projectId));
+        } else {
+          closeSessionSettingsInStore();
+          if (surface === 'project-settings') replaceShellUrl(projectPath(projectId));
+        }
         return;
       }
       if (!request.open) {
@@ -81,10 +88,11 @@ export const Workplace = memo(function Workplace({
     },
     [
       closeProjectMemberSettings,
-      closeProjectSettingsInStore,
+      closeSessionSettingsInStore,
       openProjectMemberSettings,
-      openProjectSettingsInStore,
-      projectId
+      openSessionSettingsInStore,
+      projectId,
+      surface
     ]
   );
   const project = useProject(projectId, {
@@ -192,7 +200,12 @@ export const Workplace = memo(function Workplace({
           }}
         >
           {!embedded ? <ProjectHeader project={project} /> : null}
-          {experience ? (
+          {surface === 'project-settings' ? (
+            <ProjectSettings
+              onDeleted={onProjectDeleted}
+              room={project}
+            />
+          ) : experience ? (
             experience.render({
               embedded,
               onProjectDialogRequest: requestProjectDialog,
@@ -203,11 +216,9 @@ export const Workplace = memo(function Workplace({
             <MonadLoading className="min-h-0 flex-1" />
           ) : null}
         </div>
-        {settingsOpen ? (
-          <ProjectSettings
-            initialIntent={projectSettings.intent}
-            onClose={closeProjectSettings}
-            onDeleted={onProjectDeleted}
+        {sessionSettingsOpen ? (
+          <SessionSettings
+            onClose={closeSessionSettingsInStore}
             room={project}
           />
         ) : null}

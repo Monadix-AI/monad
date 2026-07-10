@@ -26,11 +26,13 @@ export function ExternalAgentMemberDialog({
   invite,
   onChange,
   onClose,
+  onSave,
   room
 }: {
   invite: ExternalAgentMemberDialogState | null;
   onChange: (next: ExternalAgentMemberDialogState | null) => void;
   onClose: () => void;
+  onSave?: (invite: ExternalAgentMemberDialogState) => Promise<unknown>;
   room: ProjectController;
 }): React.ReactElement | null {
   const t = useT();
@@ -57,6 +59,12 @@ export function ExternalAgentMemberDialog({
   const save = () => {
     if (saving) return;
     setSaving(true);
+    if (onSave) {
+      void onSave(invite)
+        .then(onClose)
+        .catch(() => setSaving(false));
+      return;
+    }
     const editingMemberId = invite.editingMemberId;
     if (editingMemberId) {
       void Promise.all([

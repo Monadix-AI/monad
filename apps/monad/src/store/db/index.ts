@@ -4,6 +4,7 @@ import type {
   ExternalAgentInboxItem,
   GetStatsResponse,
   LedgerCategory,
+  MentionInboxItem,
   MessageAttachmentRef,
   MessageId,
   MessageType,
@@ -62,6 +63,7 @@ import {
   getNativeAgentDelivery,
   hasUnconsumedExternalAgentInbox,
   listExternalAgentInbox,
+  listMentionInbox,
   markExternalAgentInboxConsumed,
   markExternalAgentInboxDelivered,
   markExternalAgentInboxVisible
@@ -682,6 +684,10 @@ export class Store {
 
   listExternalAgentInbox(externalAgentSessionId: string, limit = 50): ExternalAgentInboxItem[] {
     return listExternalAgentInbox(this.sqlite, externalAgentSessionId, limit);
+  }
+
+  listMentionInbox(limit = 100): MentionInboxItem[] {
+    return listMentionInbox(this.sqlite, limit);
   }
 
   countExternalAgentInbox(externalAgentSessionId: string): number {

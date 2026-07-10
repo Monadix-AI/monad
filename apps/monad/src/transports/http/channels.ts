@@ -1,4 +1,5 @@
 import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
+import type { IdempotencyStore } from '#/transports/http/idempotency.ts';
 
 import {
   daemonHttpContract,
@@ -11,10 +12,14 @@ import { Elysia } from 'elysia';
 import { z } from 'zod';
 
 import { buildSessionOrigin } from '#/handlers/session/origin.ts';
+import { idempotentJsonHandler } from '#/transports/http/idempotency.ts';
 
 const channelParams = z.object({ id: sessionIdSchema });
 
-export function createChannelsController(handlers: ReturnType<typeof createDaemonHandlers>) {
+export function createChannelsController(
+  handlers: ReturnType<typeof createDaemonHandlers>,
+  idempotencyStore: IdempotencyStore
+) {
   const contracts = daemonHttpContract.workplace.projects;
   return new Elysia({ tags: ['http-only'] })
     .get('/workplace/projects', async ({ query }) => handlers.session.listProjects(query), {
@@ -27,22 +32,28 @@ export function createChannelsController(handlers: ReturnType<typeof createDaemo
     })
     .post(
       '/workplace/projects',
-      async ({ body, status, set }) => {
-        const origin = buildSessionOrigin({
-          transport: 'http',
-          surface: body.origin?.surface ?? 'web',
-          client: 'workplace',
-          clientVersion: body.origin?.clientVersion,
-          ext: body.origin?.ext
-        });
-        const result = await handlers.session.createProject({
-          title: body.title,
-          origin,
-          cwd: body.cwd
-        });
-        set.headers.location = `/v1/workplace/projects/${result.projectId}`;
-        return status(201, result);
-      },
+      idempotentJsonHandler({
+        route: () => '/v1/workplace/projects',
+        store: idempotencyStore,
+        handler: async ({ body }) => {
+          const origin = buildSessionOrigin({
+            transport: 'http',
+            surface: body.origin?.surface ?? 'web',
+            client: 'workplace',
+            clientVersion: body.origin?.clientVersion,
+            ext: body.origin?.ext
+          });
+          const result = await handlers.session.createProject({
+            title: body.title,
+            origin,
+            cwd: body.cwd
+          });
+          return Response.json(result, {
+            headers: { location: `/v1/workplace/projects/${result.projectId}` },
+            status: 201
+          });
+        }
+      }),
       {
         body: contracts.create.body,
         response: contracts.create.response,
@@ -95,9 +106,11 @@ export function createChannelsController(handlers: ReturnType<typeof createDaemo
     })
     .get(
       '/projects/:id/sessions',
-      async ({ params }) => handlers.session.listProjectSessions({ projectId: params.id }),
+      async ({ params, query }) =>
+        handlers.session.listProjectSessions({ projectId: params.id, limit: query.limit, offset: query.offset }),
       {
         params: contracts.sessions.list.params,
+        query: contracts.sessions.list.query,
         response: contracts.sessions.list.response,
         detail: {
           summary: 'List project sessions',
@@ -107,23 +120,29 @@ export function createChannelsController(handlers: ReturnType<typeof createDaemo
     )
     .post(
       '/projects/:id/sessions',
-      async ({ params, body, status, set }) => {
-        const origin = buildSessionOrigin({
-          transport: 'http',
-          surface: body.origin?.surface ?? 'web',
-          client: 'workplace',
-          clientVersion: body.origin?.clientVersion,
-          ext: body.origin?.ext
-        });
-        const result = await handlers.session.createProjectSession({
-          projectId: params.id,
-          title: body.title,
-          origin,
-          cwd: body.cwd
-        });
-        set.headers.location = `/v1/sessions/${result.sessionId}`;
-        return status(201, result);
-      },
+      idempotentJsonHandler({
+        route: ({ params }) => `/v1/projects/${params.id}/sessions`,
+        store: idempotencyStore,
+        handler: async ({ params, body }) => {
+          const origin = buildSessionOrigin({
+            transport: 'http',
+            surface: body.origin?.surface ?? 'web',
+            client: 'workplace',
+            clientVersion: body.origin?.clientVersion,
+            ext: body.origin?.ext
+          });
+          const result = await handlers.session.createProjectSession({
+            projectId: params.id,
+            title: body.title,
+            origin,
+            cwd: body.cwd
+          });
+          return Response.json(result, {
+            headers: { location: `/v1/sessions/${result.sessionId}` },
+            status: 201
+          });
+        }
+      }),
       {
         params: contracts.sessions.create.params,
         body: contracts.sessions.create.body,
@@ -136,8 +155,18 @@ export function createChannelsController(handlers: ReturnType<typeof createDaemo
     )
     .post(
       '/channels/:id/messages',
-      async ({ params, body }) =>
-        handlers.session.sendChannelMessage({ sessionId: params.id, text: body.text, attachments: body.attachments }),
+      idempotentJsonHandler({
+        route: ({ params }) => `/v1/channels/${params.id}/messages`,
+        store: idempotencyStore,
+        handler: async ({ params, body }) =>
+          Response.json(
+            await handlers.session.sendChannelMessage({
+              sessionId: params.id,
+              text: body.text,
+              attachments: body.attachments
+            })
+          )
+      }),
       {
         params: channelParams,
         body: sendMessageRequestSchema.pick({ attachments: true, text: true }),

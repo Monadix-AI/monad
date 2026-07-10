@@ -25,6 +25,10 @@ export function toShellUrl(url: string): string {
 function currentShellUrl(): string {
   const location = shellRouter?.state.location;
   if (location) return location.href;
+  return browserShellUrl();
+}
+
+function browserShellUrl(): string {
   if (typeof window === 'undefined') return '/';
   return `${window.location.pathname}${window.location.search}${window.location.hash}`;
 }
@@ -32,8 +36,15 @@ function currentShellUrl(): string {
 export function navigateShellUrl(url: string, mode: ShellNavigateMode = 'push'): void {
   const nextUrl = toShellUrl(url);
   if (nextUrl === currentShellUrl()) return;
-  if (mode === 'replace') shellRouter?.history.replace(nextUrl);
-  else shellRouter?.history.push(nextUrl);
+  if (shellRouter) {
+    if (mode === 'replace') shellRouter.history.replace(nextUrl);
+    else shellRouter.history.push(nextUrl);
+    if (typeof window === 'undefined' || nextUrl === browserShellUrl()) return;
+  }
+  if (typeof window === 'undefined') return;
+  if (mode === 'replace') window.history.replaceState(window.history.state, '', nextUrl);
+  else window.history.pushState(window.history.state, '', nextUrl);
+  window.dispatchEvent(typeof PopStateEvent === 'undefined' ? new Event('popstate') : new PopStateEvent('popstate'));
 }
 
 export function pushShellUrl(url: string): void {

@@ -1,4 +1,4 @@
-import type { ProjectId } from '@monad/protocol';
+import type { ProjectId, Session, WorkplaceProject } from '@monad/protocol';
 import type { ExternalAgentSessionRow } from '#/store/db/index.ts';
 
 import { afterEach, beforeEach, expect, test } from 'bun:test';
@@ -350,6 +350,93 @@ test('external agent inbox items expose delivery pointers without raw provider o
     state: 'queued',
     turn: { providerSessionRef: 'provider-session-1', providerTurnId: 'turn-1' }
   });
+});
+
+test('mention inbox aggregates project-routed messages across delivery states', () => {
+  const project: WorkplaceProject = {
+    id: 'prj_ABCDEF123456',
+    title: 'Inbox Project',
+    ownerPrincipalId: 'prn_ABCDEF123456',
+    state: 'active',
+    archived: false,
+    memberTemplates: [],
+    createdAt: '2026-06-28T00:00:00.000Z',
+    updatedAt: '2026-06-28T00:00:00.000Z'
+  };
+  const session: Session = {
+    id: 'ses_ABCDEF123456',
+    projectId: project.id,
+    title: 'Mention Thread',
+    ownerPrincipalId: 'prn_ABCDEF123456',
+    state: 'active',
+    agentIds: [],
+    parentSessionId: null,
+    archived: false,
+    restoreCount: 0,
+    usage: {
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      reasoningTokens: 0
+    },
+    costUsd: 0,
+    createdAt: '2026-06-28T00:00:00.000Z',
+    updatedAt: '2026-06-28T00:00:00.000Z'
+  };
+
+  store.insertWorkplaceProject(project);
+  store.insertSession(session);
+  store.upsertExternalAgentSession({
+    ...row,
+    id: 'exa_ABCDEF123456',
+    transcriptTargetId: session.id,
+    runtimeRole: 'managed-project-agent',
+    agentRuntimeId: 'exa_ABCDEF123456'
+  });
+  store.insertMessage('msg_ABCDEF123450', session.id, '@codex first', '2026-06-28T00:00:01.000Z', 'user');
+  store.insertMessage('msg_ABCDEF123451', session.id, '@codex second', '2026-06-28T00:00:02.000Z', 'user');
+  store.enqueueExternalAgentInboxItem('exa_ABCDEF123456', 1, {
+    deliveryId: 'deliv_ABCDEF123450',
+    projectId: project.id,
+    memberInstanceId: 'pmem_codex_1',
+    triggerMessageId: 'msg_ABCDEF123450',
+    createdAt: '2026-06-28T00:00:01.500Z'
+  });
+  store.enqueueExternalAgentInboxItem('exa_ABCDEF123456', 2, {
+    deliveryId: 'deliv_ABCDEF123451',
+    projectId: project.id,
+    memberInstanceId: 'pmem_codex_1',
+    triggerMessageId: 'msg_ABCDEF123451',
+    createdAt: '2026-06-28T00:00:02.500Z'
+  });
+  store.markExternalAgentInboxConsumed('exa_ABCDEF123456', 1);
+
+  expect(store.listMentionInbox()).toEqual([
+    expect.objectContaining({
+      id: 'deliv_ABCDEF123451',
+      deliveryState: 'queued',
+      projectId: project.id,
+      projectName: 'Inbox Project',
+      sessionId: session.id,
+      sessionTitle: 'Mention Thread',
+      memberInstanceId: 'pmem_codex_1',
+      triggerMessageId: 'msg_ABCDEF123451',
+      message: expect.objectContaining({ id: 'msg_ABCDEF123451', text: '@codex second' })
+    }),
+    expect.objectContaining({
+      id: 'deliv_ABCDEF123450',
+      deliveryState: 'consumed',
+      projectId: project.id,
+      projectName: 'Inbox Project',
+      sessionId: session.id,
+      sessionTitle: 'Mention Thread',
+      memberInstanceId: 'pmem_codex_1',
+      triggerMessageId: 'msg_ABCDEF123450',
+      message: expect.objectContaining({ id: 'msg_ABCDEF123450', text: '@codex first' })
+    })
+  ]);
 });
 
 test('deleteSession cleans up external agent session rows', () => {

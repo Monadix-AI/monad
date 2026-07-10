@@ -17,6 +17,7 @@ export type AttachmentId = `att_${string}`; // an out-of-band message body (spil
 export type NativeAgentDeliveryId = `deliv_${string}`;
 export type ExternalAgentSessionId = `exa_${string}`;
 export type ExternalAgentAuthSessionId = `ncliauth_${string}`;
+export type IdempotencyKey = `idem_${string}`;
 
 export type ISO8601 = string; // always UTC ISO-8601
 
@@ -46,6 +47,7 @@ export const externalAgentSessionIdSchema: z.ZodType<ExternalAgentSessionId> =
   prefixedIdSchema<ExternalAgentSessionId>('exa');
 export const externalAgentAuthSessionIdSchema: z.ZodType<ExternalAgentAuthSessionId> =
   prefixedIdSchema<ExternalAgentAuthSessionId>('ncliauth');
+export const idempotencyKeySchema: z.ZodType<IdempotencyKey> = prefixedIdSchema<IdempotencyKey>('idem');
 
 export const iso8601Schema: z.ZodType<ISO8601> = z.union([
   z.string(),

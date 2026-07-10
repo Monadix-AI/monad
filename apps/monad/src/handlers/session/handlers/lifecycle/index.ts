@@ -33,6 +33,8 @@ import { createWorkspaceHandlers, resolveWorkspaceDir } from './lifecycle-worksp
 
 const log = createLogger('session');
 
+const SESSION_DELETE_BACKEND_GRACE_MS = 8000;
+
 type SessionProcessControlRequest = {
   action: 'stop';
   processId: string;
@@ -87,6 +89,48 @@ export function createLifecycleHandlers(ctx: SessionContext) {
     ctx,
     { resolveWorkspaceDir }
   );
+  const pendingSessionDeletes = new Map<SessionId, ReturnType<typeof setTimeout>>();
+
+  const isPendingSessionDelete = (id: SessionId) => pendingSessionDeletes.has(id);
+
+  const listVisibleSessions = (
+    filter: { archived?: boolean; projectId?: ProjectId; state?: SessionState },
+    limit: number,
+    offset: number
+  ) => {
+    const sessions = store.listSessions(filter).filter((session) => !isPendingSessionDelete(session.id));
+    return {
+      limit,
+      offset,
+      sessions: sessions.slice(offset, offset + limit),
+      total: sessions.length
+    };
+  };
+
+  const hardDeleteSession = async (id: SessionId): Promise<boolean> => {
+    const timer = pendingSessionDeletes.get(id);
+    if (timer) clearTimeout(timer);
+    pendingSessionDeletes.delete(id);
+    const session = store.getSession(id);
+    if (!session) return false;
+    aborts.get(id)?.abort();
+    aborts.delete(id);
+    disposeRuntime(id);
+    clearProcessesForSession(id);
+    clearAcpDelegatesForSession(id); // kill any reused external ACP adapters held for this session
+    ctx.deps.externalAgentHost?.stopSession(id);
+    oversight?.cancelSession(id, 'session_deleted');
+    delegation?.cancelSession(id, 'session_deleted');
+    // SessionEnd fires before teardown (abort only pauses a turn, so it does not end the session).
+    await fireSessionHook('SessionEnd', id);
+    await sessionSandbox?.dispose(id);
+    // Release any remote launcher instance kept for this session (e.g. an e2b cloud sandbox).
+    disposeSandboxSession(id);
+    store.deleteSessionMembers(id);
+    store.deleteSession(id);
+    emitLifecycle(id, 'session.deleted', {});
+    return true;
+  };
 
   // SessionStart/SessionEnd are observe-only here: SessionStart's additionalContext is stashed by the
   // runner and injected into the session's first turn; session lifecycle never blocks on a hook.
@@ -127,12 +171,7 @@ export function createLifecycleHandlers(ctx: SessionContext) {
       const limit = params.limit ?? 50;
       const offset = params.offset ?? 0;
       const filter = { archived: params.archived, state: params.state };
-      return {
-        sessions: store.listSessions({ ...filter, limit, offset }),
-        total: store.countSessions(filter),
-        limit,
-        offset
-      };
+      return listVisibleSessions(filter, limit, offset);
     },
 
     listProjects,
@@ -149,6 +188,7 @@ export function createLifecycleHandlers(ctx: SessionContext) {
     subscribeMemberUiObservation,
 
     async get({ id }: { id: SessionId }) {
+      if (isPendingSessionDelete(id)) throw new HandlerError('not_found', `session not found: ${id}`);
       return { session: requireSession(id) };
     },
 
@@ -230,11 +270,13 @@ export function createLifecycleHandlers(ctx: SessionContext) {
       return { sessionId: session.id };
     },
 
-    async listProjectSessions({ projectId }: { projectId: ProjectId }) {
+    async listProjectSessions({ limit, offset, projectId }: { limit?: number; offset?: number; projectId: ProjectId }) {
       if (!store.getWorkplaceProject(projectId)) {
         throw new HandlerError('not_found', `workplace project not found: ${projectId}`);
       }
-      return { sessions: store.listSessions({ projectId }) };
+      const resolvedLimit = limit ?? 50;
+      const resolvedOffset = offset ?? 0;
+      return listVisibleSessions({ projectId }, resolvedLimit, resolvedOffset);
     },
 
     async update({ id, title, state, archived, agentId, origin, cwd }: { id: SessionId } & UpdateSessionRequest) {
@@ -289,23 +331,22 @@ export function createLifecycleHandlers(ctx: SessionContext) {
 
     async delete({ id }: { id: SessionId }) {
       requireSession(id);
-      aborts.get(id)?.abort();
-      aborts.delete(id);
-      disposeRuntime(id);
-      clearProcessesForSession(id);
-      clearAcpDelegatesForSession(id); // kill any reused external ACP adapters held for this session
-      ctx.deps.externalAgentHost?.stopSession(id);
-      oversight?.cancelSession(id, 'session_deleted');
-      delegation?.cancelSession(id, 'session_deleted');
-      // SessionEnd fires before teardown (abort only pauses a turn, so it does not end the session).
-      await fireSessionHook('SessionEnd', id);
-      await sessionSandbox?.dispose(id);
-      // Release any remote launcher instance kept for this session (e.g. an e2b cloud sandbox).
-      disposeSandboxSession(id);
-      store.deleteSessionMembers(id);
-      store.deleteSession(id);
-      emitLifecycle(id, 'session.deleted', {});
+      if (!pendingSessionDeletes.has(id)) {
+        const timer = setTimeout(() => {
+          void hardDeleteSession(id).catch((err) => log.warn({ err, sessionId: id }, 'pending session delete failed'));
+        }, SESSION_DELETE_BACKEND_GRACE_MS);
+        (timer as { unref?: () => void }).unref?.();
+        pendingSessionDeletes.set(id, timer);
+      }
       return { deleted: true as const };
+    },
+
+    async undoDelete({ id }: { id: SessionId }) {
+      const timer = pendingSessionDeletes.get(id);
+      if (!timer) return { undone: false };
+      clearTimeout(timer);
+      pendingSessionDeletes.delete(id);
+      return { undone: true };
     },
 
     configureRuntime,

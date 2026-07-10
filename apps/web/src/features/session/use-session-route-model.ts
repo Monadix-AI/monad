@@ -1,14 +1,16 @@
 'use client';
 
-import type { MessageId, ProfileView, Session, SessionId, UIItem } from '@monad/protocol';
+import type { Agent, MessageId, ProfileView, Session, SessionId, UIItem } from '@monad/protocol';
 import type { VirtualListHandle } from '@monad/ui/components/VirtualList';
-import type { SessionCommandMenuItem, SessionRouteProps } from './SessionRoute';
+import type { SessionRouteModel } from './session-route-contract';
 
 import {
   useApproveToolMutation,
   useClarifyRespondMutation,
+  useCreateSessionMutation,
   useGetAppearanceQuery,
   useLazyListCommandsQuery,
+  useSendMessageMutation,
   useStreamUiItemsQuery,
   useTranscribeAudioMutation
 } from '@monad/client-rtk';
@@ -17,16 +19,23 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import { useT } from '#/components/I18nProvider';
 import { type ViewItem, viewItemKey } from '#/features/session/chat-view-items';
-import { buildCommandMenuItems, shouldActivateSlashCommandDiscovery } from '#/features/session/command-menu';
+import {
+  buildCommandMenuItems,
+  type SessionCommandMenuItem,
+  shouldActivateSlashCommandDiscovery
+} from '#/features/session/command-menu';
 import { useSessionUiStore } from '#/features/session/session-ui-store';
 import { audioBlobToBase64 } from '#/features/session/voice-transcription';
 import { studioPath } from '#/features/shell/routing/paths';
 import { useShellRoute } from '#/features/shell/routing/use-shell-route';
+import { workspaceLaunchErrorMessage } from '#/features/workspace/workspace-home-model';
 import { useChatComposer } from '#/hooks/use-chat-composer';
 import { pushShellUrl, replaceShellUrl, useShellSearchParam } from '#/hooks/use-shell-location';
 import { useTranscriptHistory } from '#/hooks/use-transcript-history';
 import { normalizedComposerSettings } from '#/lib/composer-settings';
 import { useWorkspaceShellStore, type WorkspaceShellState } from '#/lib/workspace-shell-store';
+import { buildDraftSessionFeedback, resolveDraftAgentLabel } from './draft-session-feedback';
+import { sessionIsDraft } from './session-route-contract';
 import {
   buildSessionContextUsage,
   buildViewMessages,
@@ -36,6 +45,7 @@ import {
 } from './session-view';
 
 type UseSessionRouteModelParams = {
+  agents: Agent[];
   currentSession: Session | null;
   profiles: ProfileView[];
   sessions: Session[];
@@ -43,6 +53,7 @@ type UseSessionRouteModelParams = {
 };
 
 export function useSessionRouteModel({
+  agents,
   currentSession,
   profiles,
   sessions,
@@ -56,9 +67,17 @@ export function useSessionRouteModel({
   const [loadCommands, commandsQuery] = useLazyListCommandsQuery();
   const [approveTool] = useApproveToolMutation();
   const [clarifyRespond] = useClarifyRespondMutation();
+  const [createSession] = useCreateSessionMutation();
+  const [sendMessage] = useSendMessageMutation();
   const showInspector = useWorkspaceShellStore((state: WorkspaceShellState) => state.rightPanelOpen);
   const toggleSessionInspector = useWorkspaceShellStore((state: WorkspaceShellState) => state.toggleRightPanel);
+  const draftSession = useWorkspaceShellStore((state: WorkspaceShellState) =>
+    currentId ? (state.draftChatSessions.find((session) => session.id === currentId) ?? null) : null
+  );
+  const removeDraftChatSession = useWorkspaceShellStore((state: WorkspaceShellState) => state.removeDraftChatSession);
+  const failDraftChatSession = useWorkspaceShellStore((state: WorkspaceShellState) => state.failDraftChatSession);
   const hiddenViewItemKeysBySession = useSessionUiStore((state) => state.hiddenViewItemKeysBySession);
+  const enqueueInitialUserMessage = useSessionUiStore((state) => state.enqueueInitialUserMessage);
   const input = useSessionUiStore((state) => state.input);
   const activeSkill = useSessionUiStore((state) => state.activeSkill);
   const applyCommandInsert = useSessionUiStore((state) => state.applyCommandInsert);
@@ -100,13 +119,14 @@ export function useSessionRouteModel({
   const skillMenuOpen = (menuItems.length > 0 || commandMenuLoading) && !skillMenuDismissed;
   const writableBy = currentSession?.origin?.writableBy;
   const isReadOnly = writableBy != null && !writableBy.includes('http');
-  const stream = useStreamUiItemsQuery(currentId as SessionId, { skip: currentId === null });
+  const stream = useStreamUiItemsQuery(currentId as SessionId, { skip: currentId === null || draftSession !== null });
+  const streamData = draftSession ? undefined : stream.currentData;
   const transcript = useTranscriptHistory({
-    sessionId: currentId,
-    streamOldestCursor: stream.data?.oldestCursor,
-    streamHasMore: stream.data?.hasMore ?? false
+    sessionId: draftSession ? null : currentId,
+    streamOldestCursor: streamData?.oldestCursor,
+    streamHasMore: streamData?.hasMore ?? false
   });
-  const history = transcript.items;
+  const history = draftSession ? EMPTY_UI_ITEMS : transcript.items;
   const hiddenViewItemKeys = useMemo(
     () => new Set(currentId ? (hiddenViewItemKeysBySession[currentId] ?? []) : []),
     [currentId, hiddenViewItemKeysBySession]
@@ -115,11 +135,32 @@ export function useSessionRouteModel({
     () => history.filter((item) => !hiddenViewItemKeys.has(viewItemKey(item) ?? '')),
     [history, hiddenViewItemKeys]
   );
-  const liveItems = stream.data?.items ?? EMPTY_UI_ITEMS;
+  const liveItems = streamData?.items ?? EMPTY_UI_ITEMS;
   const visibleLiveItems = useMemo(
     () => liveItems.filter((item) => !hiddenViewItemKeys.has(viewItemKey(item) ?? '')),
     [liveItems, hiddenViewItemKeys]
   );
+  const draftAgentLabel = useMemo(
+    () =>
+      resolveDraftAgentLabel({
+        agentId: draftSession?.agentId,
+        agents,
+        defaultLabel: t('web.workspace.defaultAgent')
+      }),
+    [agents, draftSession?.agentId, t]
+  );
+  const draftMessages = useMemo<ViewItem[]>(
+    () => (draftSession ? buildDraftSessionFeedback({ agentLabel: draftAgentLabel, draft: draftSession }) : []),
+    [draftAgentLabel, draftSession]
+  );
+  const currentAgentId = currentSession?.agentIds?.[0];
+  const assistantLabel = useMemo(() => {
+    if (draftSession) return draftAgentLabel;
+    return (
+      (currentAgentId ? agents.find((agent) => agent.id === currentAgentId)?.name : undefined) ??
+      t('web.workspace.defaultAgent')
+    );
+  }, [agents, currentAgentId, draftAgentLabel, draftSession, t]);
   const inspectorItems = useMemo(() => {
     const map = new Map<string, UIItem>();
     for (const item of [...visibleHistory, ...visibleLiveItems]) map.set(`${item.kind}:${item.id}`, item);
@@ -183,26 +224,55 @@ export function useSessionRouteModel({
     handleForceSteer,
     removeQueuedMessage
   } = useChatComposer({
-    currentId,
+    currentId: draftSession ? null : currentId,
     liveStreaming,
     history,
     liveItems,
-    streamData: stream.data,
+    streamData,
     scrollToBottom,
     jumpToLive,
     setSessionUrl,
-    followUpBehavior: composerSettings.followUpBehavior
+    followUpBehavior: composerSettings.followUpBehavior,
+    assistantLabel
   });
+  const retryDraftSession = useCallback(async () => {
+    if (!draftSession) return;
+    try {
+      const realSessionId = await createSession({
+        title: draftSession.title,
+        ...(draftSession.agentId ? { agentId: draftSession.agentId } : {}),
+        idempotencyKey: draftSession.createIdempotencyKey
+      }).unwrap();
+      enqueueInitialUserMessage(realSessionId, draftSession.text);
+      removeDraftChatSession(draftSession.id);
+      replaceShellUrl(`/sessions/${realSessionId}`);
+      void sendMessage({
+        sessionId: realSessionId,
+        text: draftSession.text,
+        idempotencyKey: draftSession.sendIdempotencyKey
+      });
+    } catch (error) {
+      failDraftChatSession(draftSession.id, workspaceLaunchErrorMessage(error) ?? t('web.workspace.launchError'));
+    }
+  }, [
+    createSession,
+    draftSession,
+    enqueueInitialUserMessage,
+    failDraftChatSession,
+    removeDraftChatSession,
+    sendMessage,
+    t
+  ]);
   const viewMessages = useMemo<ViewItem[]>(
     () =>
       buildViewMessages({
         commandPending,
-        optimistic,
+        optimistic: [...draftMessages, ...optimistic],
         transcriptMode: transcript.mode,
         visibleHistory,
         visibleLiveItems
       }),
-    [visibleHistory, visibleLiveItems, optimistic, commandPending, transcript.mode]
+    [visibleHistory, visibleLiveItems, optimistic, draftMessages, commandPending, transcript.mode]
   );
   const firstItemIndex = useFirstItemIndex(viewMessages, viewMessageId);
   const deepLinkMsg = useShellSearchParam('msg');
@@ -260,54 +330,69 @@ export function useSessionRouteModel({
     [handleSend, isBusy, isReadOnly, modelOptions]
   );
 
-  const sessionRouteProps = useMemo<Omit<SessionRouteProps, 'currentSessionId'>>(
-    () => ({
-      commands,
-      contextUsage: sessionContextUsage,
-      currentSession,
-      disabled: isReadOnly,
-      firstItemIndex,
-      inspectorItems,
-      isBusy,
-      isReadOnly,
-      commandMenuLoading,
-      menuItems,
-      messageQueue,
-      composerSettings,
-      model: sessionModel,
-      onApproval: (approval, allow, scope, reason) => {
-        void approveTool({ requestId: approval.requestId, allow, scope, reason });
-      },
-      onBranch: handleBranch,
-      onClarifyAnswer: (requestId, answer) => void clarifyRespond({ requestId, answer }),
-      onRemoveQueuedMessage: removeQueuedMessage,
-      onCommandItemApply: applyItem,
-      onEndReached: transcript.loadNewer,
-      onKeyDown: handleTextareaKeyDown,
-      onRestore: handleRestore,
-      onScrollToBottom: scrollToBottom,
-      onSelectSession: (sessionId) => {
-        setOptimistic([]);
-        setSessionUrl(sessionId);
-      },
-      onStartReached: transcript.loadOlder,
-      onStop: handleStop,
-      onSubmit: () => void handleSubmit(),
-      onToggleInspector: toggleSessionInspector,
-      onVoiceSettingsClick: () => pushShellUrl(studioPath('models')),
-      onVoiceTranscribe: async (audio) => {
-        const body = await audioBlobToBase64(audio);
-        return (await transcribeAudio(body).unwrap()).text;
-      },
-      pendingApprovals,
-      pendingClarifications,
-      showInspector,
-      skillMenuOpen,
-      transcriptRef,
-      viewMessages,
-      voiceModelConfigured
-    }),
+  const sessionRouteModel = useMemo<SessionRouteModel | null>(
+    () =>
+      currentId
+        ? {
+            identity: {
+              assistantLabel,
+              currentSession,
+              currentSessionId: currentId,
+              isDraft: sessionIsDraft(currentSession),
+              isReadOnly,
+              onRetryDraftSession: draftSession?.status === 'failed' ? retryDraftSession : undefined,
+              onSelectSession: (sessionId) => {
+                setOptimistic([]);
+                setSessionUrl(sessionId);
+              }
+            },
+            transcript: {
+              firstItemIndex,
+              onApproval: (approval, allow, scope, reason) => {
+                void approveTool({ requestId: approval.requestId, allow, scope, reason });
+              },
+              onBranch: handleBranch,
+              onClarifyAnswer: (requestId, answer) => void clarifyRespond({ requestId, answer }),
+              onEndReached: transcript.loadNewer,
+              onRestore: handleRestore,
+              onScrollToBottom: scrollToBottom,
+              onStartReached: transcript.loadOlder,
+              pendingApprovals,
+              pendingClarifications,
+              transcriptRef,
+              viewMessages
+            },
+            composer: {
+              commandMenuLoading,
+              commands,
+              composerSettings,
+              contextUsage: sessionContextUsage,
+              isBusy,
+              menuItems,
+              messageQueue,
+              model: sessionModel,
+              onCommandItemApply: applyItem,
+              onKeyDown: handleTextareaKeyDown,
+              onRemoveQueuedMessage: removeQueuedMessage,
+              onStop: handleStop,
+              onSubmit: () => void handleSubmit(),
+              onVoiceSettingsClick: () => pushShellUrl(studioPath('models')),
+              onVoiceTranscribe: async (audio) => {
+                const body = await audioBlobToBase64(audio);
+                return (await transcribeAudio(body).unwrap()).text;
+              },
+              skillMenuOpen,
+              voiceModelConfigured
+            },
+            inspector: {
+              items: inspectorItems,
+              onToggle: toggleSessionInspector,
+              open: showInspector
+            }
+          }
+        : null,
     [
+      currentId,
       commands,
       sessionContextUsage,
       currentSession,
@@ -316,15 +401,18 @@ export function useSessionRouteModel({
       inspectorItems,
       isBusy,
       commandMenuLoading,
+      draftSession,
       menuItems,
       messageQueue,
       composerSettings,
       sessionModel,
+      assistantLabel,
       approveTool,
       handleBranch,
       clarifyRespond,
       removeQueuedMessage,
       applyItem,
+      retryDraftSession,
       transcript.loadNewer,
       handleTextareaKeyDown,
       handleRestore,
@@ -346,7 +434,7 @@ export function useSessionRouteModel({
   );
 
   return {
-    sessionRouteProps,
+    sessionRouteModel,
     setOptimistic,
     setSessionUrl
   };

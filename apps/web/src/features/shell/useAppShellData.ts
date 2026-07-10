@@ -1,14 +1,17 @@
 'use client';
 
-import type { ProfileView } from '@monad/protocol';
+import type { Agent, ProfileView, Session } from '@monad/protocol';
 
 import {
+  agentAdapter,
+  agentSelectors,
   externalAgentSessionSelectors,
   profileSelectors,
   sessionAdapter,
   sessionSelectors,
   useGetHealthQuery,
   useGetRolesQuery,
+  useListAgentsQuery,
   useListExternalAgentSessionSummariesQuery,
   useListLiveExternalAgentSessionsQuery,
   useListProfilesQuery,
@@ -24,9 +27,33 @@ import { buildWorkspaceProjects } from '#/lib/workspace-sessions';
 import { useWorkspaceShellStore, type WorkspaceShellState } from '#/lib/workspace-shell-store';
 
 const EMPTY_PROFILES: ProfileView[] = [];
+const EMPTY_AGENTS: Agent[] = [];
 
 type DaemonStatus = 'checking' | 'offline' | 'online';
 type VoiceModelState = 'checking' | 'configured' | 'failed' | 'missing';
+
+function draftChatSessionToSession(draft: WorkspaceShellState['draftChatSessions'][number]): Session {
+  return {
+    id: draft.id,
+    title: draft.title,
+    ownerPrincipalId: 'prn_000000000000',
+    state: 'active',
+    agentIds: draft.agentId ? [draft.agentId] : [],
+    parentSessionId: null,
+    archived: false,
+    restoreCount: 0,
+    origin: {
+      surface: 'web',
+      client: 'monad-web',
+      transport: 'http',
+      writableBy: ['http'],
+      branchableBy: ['http'],
+      ext: { draft: true, status: draft.status }
+    },
+    createdAt: draft.createdAt,
+    updatedAt: draft.updatedAt
+  };
+}
 
 export function useAppShellData({ loadModelData = true }: { loadModelData?: boolean } = {}) {
   const { data: health, isError: healthError } = useGetHealthQuery();
@@ -41,9 +68,18 @@ export function useAppShellData({ loadModelData = true }: { loadModelData?: bool
 
   const { data: sessionData, isLoading: sessionsLoading } = useListSessionsQuery(undefined);
   const { data: projectData, isLoading: projectsLoading } = useListWorkplaceProjectsQuery(undefined);
+  const { data: agentData } = useListAgentsQuery(undefined, { skip: !loadModelData });
   const { data: liveExternalAgentSessionData } = useListLiveExternalAgentSessionsQuery(undefined);
   const { data: externalAgentSessionSummaryData } = useListExternalAgentSessionSummariesQuery(undefined);
-  const sessions = sessionSelectors.selectAll(sessionData?.sessions ?? sessionAdapter.getInitialState());
+  const serverSessions = sessionSelectors.selectAll(sessionData?.sessions ?? sessionAdapter.getInitialState());
+  const draftChatSessions = useWorkspaceShellStore((state: WorkspaceShellState) => state.draftChatSessions);
+  const sessions = useMemo(() => {
+    const serverSessionIds = new Set(serverSessions.map((session) => session.id));
+    const pendingDraftSessions = draftChatSessions
+      .filter((draft) => !serverSessionIds.has(draft.id))
+      .map(draftChatSessionToSession);
+    return [...pendingDraftSessions, ...serverSessions];
+  }, [draftChatSessions, serverSessions]);
   const projectRows = useMemo(
     () => workplaceProjectSelectors.selectAll(projectData?.projects ?? workplaceProjectAdapter.getInitialState()),
     [projectData]
@@ -62,17 +98,17 @@ export function useAppShellData({ loadModelData = true }: { loadModelData?: bool
         : [],
     [externalAgentSessionSummaryData]
   );
-  const pinnedProjectIds = useWorkspaceShellStore((state: WorkspaceShellState) => state.pinnedProjectIds);
-  const pinnedProjectIdSet = useMemo(() => new Set(pinnedProjectIds), [pinnedProjectIds]);
+  const pinnedSessionIds = useWorkspaceShellStore((state: WorkspaceShellState) => state.pinnedSessionIds);
+  const pinnedSessionIdSet = useMemo(() => new Set(pinnedSessionIds), [pinnedSessionIds]);
   const workspaceProjects = useMemo(
     () =>
       buildWorkspaceProjects(projectRows, {
         sessions,
         liveExternalAgentSessions,
         externalAgentSessions: externalAgentSessionSummaries,
-        pinnedProjectIds: pinnedProjectIdSet
+        pinnedSessionIds: pinnedSessionIdSet
       }),
-    [sessions, liveExternalAgentSessions, externalAgentSessionSummaries, pinnedProjectIdSet, projectRows]
+    [sessions, liveExternalAgentSessions, externalAgentSessionSummaries, pinnedSessionIdSet, projectRows]
   );
 
   useStreamControlQuery(undefined);
@@ -83,6 +119,7 @@ export function useAppShellData({ loadModelData = true }: { loadModelData?: bool
     isLoading: profileDataLoading
   } = useListProfilesQuery(undefined, { skip: !loadModelData });
   const profiles = profileData ? profileSelectors.selectAll(profileData.profiles) : EMPTY_PROFILES;
+  const agents = agentData ? agentSelectors.selectAll(agentData ?? agentAdapter.getInitialState()) : EMPTY_AGENTS;
   const defaultProfile = profiles.find((profile) => profile.alias === profileData?.defaultAlias);
   const {
     data: modelRoles,
@@ -107,6 +144,7 @@ export function useAppShellData({ loadModelData = true }: { loadModelData?: bool
     daemonStatus,
     daemonVersion,
     hasUpgrade,
+    agents,
     networkRuntime,
     profiles,
     projectsLoading,

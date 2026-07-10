@@ -69,6 +69,8 @@ import { createDraftAttachmentsController } from '#/transports/http/draft-attach
 import { createExternalAgentController } from '#/transports/http/external-agent.ts';
 import { createGraphController } from '#/transports/http/graph/controller.ts';
 import { createHealthController } from '#/transports/http/health.ts';
+import { createInMemoryHttpIdempotencyStore } from '#/transports/http/idempotency.ts';
+import { createInboxController } from '#/transports/http/inbox.ts';
 import { createIndexerController } from '#/transports/http/indexer.ts';
 import { createInitController } from '#/transports/http/init.ts';
 import { createLawsController } from '#/transports/http/laws/controller.ts';
@@ -136,7 +138,7 @@ const LOCALHOST = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 const LOOPBACK_ORIGIN_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
 
 const CORS_METHODS = 'GET, POST, PUT, PATCH, DELETE, OPTIONS';
-const CORS_HEADERS_ALLOWED = 'content-type, authorization, x-monad-agent-id, x-monad-session-id';
+const CORS_HEADERS_ALLOWED = 'content-type, authorization, idempotency-key, x-monad-agent-id, x-monad-session-id';
 
 // Per-remote-IP request budget (remote access only): a 60-request burst, then a
 // sustained 30 req/s — generous for an API client, a backstop against a flood.
@@ -218,6 +220,7 @@ export function createHttpTransport(
 ) {
   const connections = new Map<string, ConnectionState>();
   const encoder = new TextEncoder();
+  const idempotencyStore = createInMemoryHttpIdempotencyStore();
 
   let app = new Elysia()
     .use(serverTiming({ enabled: resolveLiveFlag(developerMode) }))
@@ -386,8 +389,8 @@ export function createHttpTransport(
       v1
         .use(createInitController(handlers))
         .use(createAgentsController(handlers))
-        .use(createChannelsController(handlers))
-        .use(createSessionsController(handlers, encoder))
+        .use(createChannelsController(handlers, idempotencyStore))
+        .use(createSessionsController(handlers, encoder, idempotencyStore))
         .use(createUsageController(handlers))
         .use(createStatsController(handlers))
         .use(createIndexerController(handlers))
@@ -404,6 +407,7 @@ export function createHttpTransport(
         .use(createLawsController(handlers))
         .use(createMemoryController(handlers))
         .use(createAtomsController(handlers))
+        .use(createInboxController(handlers))
         .use(createNativeAgentController(handlers))
         .use(createExternalAgentController(handlers))
         .use(createLocaleCatalogController(handlers))

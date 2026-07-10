@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import { Cancel01Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Button, cn } from '@monad/ui';
-import { useEffect } from 'react';
+import { useId, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 
 import { useT } from '#/components/I18nProvider';
@@ -14,6 +14,7 @@ import { useWorkspaceShellStore } from '#/lib/workspace-shell-store';
 import { useRightPanel } from './right-panel-context';
 
 type RightPanelContentProps = {
+  ownerId: string;
   title: ReactNode;
   icon?: ReactNode;
   subtitle?: ReactNode;
@@ -27,8 +28,10 @@ type RightPanelContentProps = {
 
 // Renders route-owned content into the shared right-panel column, reusing the same
 // PanelShellHeader chrome as every other panel and wiring the close affordance to the
-// shell store. Registers itself so the column only claims width while mounted.
+// shell store. Its owner-scoped registration prevents a previous route from
+// rendering into the shared portal after the shell has switched owners.
 export function RightPanelContent({
+  ownerId,
   title,
   icon,
   subtitle,
@@ -38,15 +41,16 @@ export function RightPanelContent({
   scroll = true
 }: RightPanelContentProps) {
   const t = useT();
-  const { slot, registerContent } = useRightPanel();
+  const registrationId = useId();
+  const { canRenderContent, registerContent, slot } = useRightPanel();
   const closeRightPanel = useWorkspaceShellStore((state) => state.closeRightPanel);
 
-  useEffect(() => registerContent(), [registerContent]);
+  useLayoutEffect(() => registerContent(ownerId, registrationId), [ownerId, registerContent, registrationId]);
 
-  if (!slot) return null;
+  if (!(slot && canRenderContent(ownerId, registrationId))) return null;
 
   return createPortal(
-    <PanelShell>
+    <PanelShell data-right-panel-content-owner={ownerId}>
       <PanelShellHeader
         actions={
           <>

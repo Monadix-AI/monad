@@ -63,6 +63,7 @@ export const RPC_HANDLERS: RpcHandlerMap = {
     h.session.create({ title, agentId, origin: nativeOrigin(origin), cwd }),
   'sessions.update': ({ id, ...rest }, h: D) => h.session.update({ id, ...rest }),
   'sessions.delete': ({ id }, h: D) => h.session.delete({ id }),
+  'sessions.undoDelete': ({ id }, h: D) => h.session.undoDelete({ id }),
   'sessions.abort': ({ id }, h: D) => h.session.abort({ id }),
   'sessions.reset': ({ id }, h: D) => h.session.reset({ id }),
   'sessions.messages': ({ id, ...rest }, h: D) => h.session.messages({ id, ...rest }),

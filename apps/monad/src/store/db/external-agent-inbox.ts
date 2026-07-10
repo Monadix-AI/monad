@@ -6,6 +6,7 @@ import type { Database } from 'bun:sqlite';
 import type {
   ExternalAgentInboxDeliveryState,
   ExternalAgentInboxItem,
+  MentionInboxItem,
   MessageId,
   NativeAgentDelivery,
   NativeAgentDeliveryId,
@@ -204,6 +205,70 @@ export function countExternalAgentInbox(sqlite: Database, externalAgentSessionId
     )
     .get(externalAgentSessionId, session.lastVisibleSeq) as { count: number } | null;
   return row?.count ?? 0;
+}
+
+export function listMentionInbox(sqlite: Database, limit = 100): MentionInboxItem[] {
+  const rows = sqlite
+    .query(
+      `SELECT m.*,
+              i.message_seq AS _external_agent_seq,
+              i.delivery_id AS _external_agent_delivery_id,
+              i.state AS _external_agent_state,
+              i.external_agent_session_id AS _external_agent_session_id,
+              i.project_id AS _project_id,
+              i.member_instance_id AS _member_instance_id,
+              i.trigger_message_id AS _trigger_message_id,
+              i.created_at AS _inbox_created_at,
+              i.updated_at AS _inbox_updated_at,
+              eas.transcript_target_id AS _session_id,
+              s.title AS _session_title,
+              p.title AS _project_name
+       FROM external_agent_inbox_items i
+       JOIN messages m ON m.rowid = i.message_seq
+       JOIN external_agent_sessions eas ON eas.id = i.external_agent_session_id
+       LEFT JOIN sessions s ON s.id = eas.transcript_target_id
+       LEFT JOIN workplace_projects p ON p.id = i.project_id
+       WHERE i.project_id IS NOT NULL
+         AND m.active = 1
+       ORDER BY i.message_seq DESC
+       LIMIT ?`
+    )
+    .all(limit) as Array<Record<string, unknown>>;
+
+  return rows.map((row) => {
+    const message = rowToMessage({
+      id: row.id as string,
+      transcriptTargetId: row.transcript_target_id as string,
+      role: row.role as string,
+      text: row.text as string,
+      type: row.type as string,
+      data: (row.data ?? null) as string | null,
+      streamStatus: row.stream_status as string,
+      active: row.active as number,
+      includeInContext: (row.include_in_context ?? null) as number | null,
+      createdAt: row.created_at as string,
+      updatedAt: (row.updated_at ?? null) as string | null
+    } as MessageRow);
+    const deliveryId = (row._external_agent_delivery_id ?? undefined) as NativeAgentDeliveryId | undefined;
+    const externalAgentSessionId = row._external_agent_session_id as string;
+    const seq = row._external_agent_seq as number;
+    return {
+      id: deliveryId ?? `${externalAgentSessionId}:${seq}`,
+      seq,
+      deliveryId,
+      deliveryState: row._external_agent_state as ExternalAgentInboxDeliveryState,
+      externalAgentSessionId,
+      projectId: (row._project_id ?? undefined) as ProjectId | undefined,
+      projectName: (row._project_name ?? undefined) as string | undefined,
+      sessionId: row._session_id as string,
+      sessionTitle: (row._session_title ?? undefined) as string | undefined,
+      memberInstanceId: (row._member_instance_id ?? undefined) as string | undefined,
+      triggerMessageId: (row._trigger_message_id ?? undefined) as MessageId | undefined,
+      message,
+      createdAt: row._inbox_created_at as string,
+      updatedAt: (row._inbox_updated_at ?? undefined) as string | undefined
+    };
+  });
 }
 
 export function getNativeAgentDelivery(

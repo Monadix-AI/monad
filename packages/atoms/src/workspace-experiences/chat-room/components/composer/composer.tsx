@@ -8,7 +8,14 @@ import type { ProjectComposerSurface } from '../../utils/composer.ts';
 import { Attachment01Icon, Cancel01Icon, PlayIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { useOpenDraftAttachmentMutation, useTranscribeAudioMutation } from '@monad/sdk-experience/react';
-import { ComposerEditor, ComposerSubmitButton, ComposerSurface, ComposerSwap, ComposerVoiceButton } from '@monad/ui';
+import {
+  ComposerEditor,
+  ComposerIconButton,
+  ComposerSubmitButton,
+  ComposerSwap,
+  ComposerVoiceButton,
+  UnifiedComposer
+} from '@monad/ui';
 import { workspaceMono as mono, workspaceSans as sans } from '@monad/ui/components/AgentAvatar';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -554,79 +561,55 @@ function ChatRoomComposerShell({
             ? effectiveVoiceDisabledReason
             : 'Voice input';
   return (
-    <fieldset
-      aria-label="Message composer"
-      style={{
-        border: 0,
-        margin: 0,
-        minInlineSize: 0,
-        padding: 0
-      }}
-    >
-      <ComposerSurface
-        ariaBusy={voiceBusy}
-        leftTools={
-          <button
-            aria-label="Attach file"
-            className="workplace-action"
+    <UnifiedComposer
+      ariaBusy={voiceBusy}
+      ariaLabel="Message composer"
+      controls={{
+        attach: (
+          <ComposerIconButton
+            ariaLabel="Attach file"
             disabled={disabled}
             onClick={onAttachFile}
-            style={{
-              alignItems: 'center',
-              background: 'transparent',
-              border: 'none',
-              borderRadius: 999,
-              color: 'var(--muted-foreground)',
-              display: 'inline-flex',
-              height: 32,
-              justifyContent: 'center',
-              opacity: disabled ? 0.48 : 1,
-              padding: 0,
-              width: 32
-            }}
             title="Attach file"
-            type="button"
           >
             <HugeiconsIcon
               icon={Attachment01Icon}
               size={17}
             />
-          </button>
-        }
-        mentionMenu={mentionMenu}
-        rightTools={
-          <>
-            <ComposerVoiceButton
-              ariaDisabled={voiceUnavailable}
-              ariaLabel={voiceTitle}
-              disabled={!onVoiceText}
-              onClick={() => {
-                if (voiceUnavailable && !voiceModelConfigured && !voiceChecking && !voiceCheckFailed) {
-                  voice?.onSettingsClick?.();
-                  return;
-                }
-                void toggleVoice();
-              }}
-              state={voiceBusy || voiceChecking ? 'busy' : listening ? 'listening' : 'idle'}
-              style={{ background: 'transparent' }}
-            />
-            <ComposerSubmitButton
-              ariaLabel={canStop ? 'Stop' : ariaLabel}
-              canSend={canSend}
-              canStop={Boolean(canStop)}
-              disabled={submitDisabled}
-              onClick={canStop ? onStop : onSubmit}
-            />
-          </>
-        }
-        voiceLevel={voiceLevel}
-        voiceSpectrum={voiceSpectrum}
-        voiceState={voiceBusy || voiceChecking ? 'busy' : listening ? 'listening' : 'idle'}
-      >
-        {editorSlot}
-        {voiceDebug ? <VoiceDebugPanel debug={voiceDebug} /> : null}
-      </ComposerSurface>
-    </fieldset>
+          </ComposerIconButton>
+        ),
+        submit: (
+          <ComposerSubmitButton
+            ariaLabel={canStop ? 'Stop' : ariaLabel}
+            canSend={canSend}
+            canStop={Boolean(canStop)}
+            disabled={submitDisabled}
+            onClick={canStop ? onStop : onSubmit}
+          />
+        ),
+        voice: (
+          <ComposerVoiceButton
+            ariaDisabled={voiceUnavailable}
+            ariaLabel={voiceTitle}
+            disabled={!onVoiceText}
+            onClick={() => {
+              if (voiceUnavailable && !voiceModelConfigured && !voiceChecking && !voiceCheckFailed) {
+                voice?.onSettingsClick?.();
+                return;
+              }
+              void toggleVoice();
+            }}
+            state={voiceBusy || voiceChecking ? 'busy' : listening ? 'listening' : 'idle'}
+          />
+        )
+      }}
+      editor={editorSlot}
+      mentionMenu={mentionMenu}
+      voiceDebug={voiceDebug ? <VoiceDebugPanel debug={voiceDebug} /> : null}
+      voiceLevel={voiceLevel}
+      voiceSpectrum={voiceSpectrum}
+      voiceState={voiceBusy || voiceChecking ? 'busy' : listening ? 'listening' : 'idle'}
+    />
   );
 }
 

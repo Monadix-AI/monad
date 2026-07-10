@@ -45,6 +45,32 @@ test('command-name phase orders builtin actions by product group', () => {
   expect(items.map((i) => i.key)).toEqual(['sessions', 'reset', 'check-memory']);
 });
 
+test('command-name phase supports non-contiguous matches with highlighted characters', () => {
+  const commands = [
+    command({ id: 'check-memory', name: 'Check Memory', group: 'Memory' }),
+    command({ id: 'model', name: 'Model', argHint: '<alias>' })
+  ];
+  const items = buildCommandMenuItems('/cm', commands, [], [], t);
+  expect(items).toEqual([
+    expect.objectContaining({
+      key: 'check-memory',
+      label: '/Check Memory',
+      labelMatches: [1, 7]
+    })
+  ]);
+});
+
+test('command-name phase replaces the active slash token instead of appending to it', () => {
+  const commands = [command({ id: 'memory', name: 'Memory', group: 'Memory' })];
+  const items = buildCommandMenuItems('/me', commands, [], [], t);
+  expect(items).toEqual([
+    expect.objectContaining({
+      insert: '/memory ',
+      replace: { start: 0, end: 3 }
+    })
+  ]);
+});
+
 test('slash command discovery activates only for command entry phases', () => {
   expect(shouldActivateSlashCommandDiscovery('')).toBe(false);
   expect(shouldActivateSlashCommandDiscovery('hello')).toBe(false);
@@ -76,6 +102,7 @@ test('argument phase uses structured arg metadata for dynamic suggestions', () =
       key: 'smart',
       label: 'smart',
       insert: '/model smart',
+      replace: { start: 0, end: 9 },
       dismissAfter: true
     })
   ]);
@@ -104,7 +131,8 @@ test('subcommand phase suggests subcommands and then their args', () => {
       key: 'memory:consolidate',
       label: 'Consolidate',
       badge: '/consolidate',
-      insert: '/memory consolidate '
+      insert: '/memory consolidate ',
+      replace: { start: 0, end: 9 }
     })
   ]);
   const args = buildCommandMenuItems('/memory consolidate ', commands, [], [], t);
@@ -112,7 +140,8 @@ test('subcommand phase suggests subcommands and then their args', () => {
     expect.objectContaining({
       key: '1',
       label: 'L1',
-      insert: '/memory consolidate 1'
+      insert: '/memory consolidate 1',
+      replace: { start: 0, end: 20 }
     })
   ]);
 });

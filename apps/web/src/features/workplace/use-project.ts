@@ -19,7 +19,6 @@ import {
   externalAgentSessionSelectors,
   profileSelectors,
   projectSessionSelectors,
-  useCreateProjectSessionMutation,
   useDeleteSessionMutation,
   useGetAppearanceQuery,
   useGetProfileSettingsQuery,
@@ -76,19 +75,17 @@ export function useProject(
   const activeProjectId = currentProject?.id ?? null;
 
   // --- project session resolution (Track B: a project's own id is no longer a conversation id) ---
-  // No default session is auto-created when a project is made; this is the minimal owed UI —
-  // resolve to the project's most-recently-active session, or silently create one on first open so
-  // the existing single-conversation shell keeps working without a multi-session tab strip (P7).
-  const { data: projectSessionData } = useListProjectSessionsQuery(activeProjectId ?? ('prj_' as ProjectId), {
-    skip: activeProjectId === null
-  });
+  // Project sessions are explicit. Opening a project with no sessions leaves the active session empty
+  // instead of silently creating a project-name session.
+  const { data: projectSessionData } = useListProjectSessionsQuery(
+    { projectId: activeProjectId ?? ('prj_' as ProjectId) },
+    { skip: activeProjectId === null }
+  );
   const projectSessions: Session[] = useMemo(
-    () => (projectSessionData ? projectSessionSelectors.selectAll(projectSessionData) : []),
+    () => (projectSessionData ? projectSessionSelectors.selectAll(projectSessionData.sessions) : []),
     [projectSessionData]
   );
-  const [createProjectSession] = useCreateProjectSessionMutation();
   const [deleteSession] = useDeleteSessionMutation();
-  const creatingSessionForProject = useRef<ProjectId | null>(null);
   // Manual pick (tab click) wins over the default; forgotten when the project changes so a fresh
   // project always starts on its own default rather than a stale sibling's manual selection.
   const [sessionOverride, setSessionOverride] = useState<SessionId | null>(null);
@@ -109,19 +106,6 @@ export function useProject(
     (sessionOverride && projectSessions.some((session) => session.id === sessionOverride)
       ? sessionOverride
       : defaultSessionId);
-
-  useEffect(() => {
-    if (!activeProjectId || !currentProject) return;
-    if (!projectSessionData) return; // wait for the list query to settle before deciding it's empty
-    if (projectSessions.length > 0) return;
-    if (creatingSessionForProject.current === activeProjectId) return;
-    creatingSessionForProject.current = activeProjectId;
-    void createProjectSession({ projectId: activeProjectId, title: currentProject.title })
-      .unwrap()
-      .catch(() => {
-        creatingSessionForProject.current = null;
-      });
-  }, [activeProjectId, currentProject, projectSessionData, projectSessions, createProjectSession]);
 
   const switchSession = useMemo(() => (id: SessionId) => setSessionOverride(id), []);
   const closeSession = useMemo(

@@ -78,7 +78,8 @@ export const apiSlice = createApi({
     'Hooks',
     'CapabilityInventory',
     'Health',
-    'SystemUpgrade'
+    'SystemUpgrade',
+    'Inbox'
   ],
   endpoints: () => ({})
 });

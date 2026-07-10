@@ -34,6 +34,24 @@ export type ComposerSurfaceProps = {
   voiceState?: 'idle' | 'listening' | 'busy';
 };
 
+export type UnifiedComposerControls = {
+  access?: ReactNode;
+  attach?: ReactNode;
+  context?: ReactNode;
+  left?: ReactNode;
+  model?: ReactNode;
+  right?: ReactNode;
+  submit?: ReactNode;
+  voice?: ReactNode;
+};
+
+export type UnifiedComposerProps = Omit<ComposerSurfaceProps, 'children' | 'leftTools' | 'rightTools'> & {
+  ariaLabel?: string;
+  controls?: UnifiedComposerControls;
+  editor: ReactNode;
+  voiceDebug?: ReactNode;
+};
+
 type ComposerLiquidGlassState = {
   filterId: string;
   height: number;
@@ -47,6 +65,44 @@ const LIQUID_GLASS_MAX_WIDTH = 900;
 const LIQUID_GLASS_MAX_HEIGHT = 180;
 const COMPOSER_LIQUID_GLASS_DEFAULT_ENABLED = true;
 const liquidGlassMapCache = new Map<string, string>();
+
+function composeComposerTools(nodes: ReactNode[]): ReactNode {
+  const visible = nodes.filter((node) => node !== null && node !== undefined && node !== false);
+  return visible.length ? visible : null;
+}
+
+export function UnifiedComposer({
+  ariaLabel = 'Message composer',
+  controls,
+  editor,
+  voiceDebug,
+  ...surfaceProps
+}: UnifiedComposerProps): ReactElement {
+  const leftTools = controls?.left ?? composeComposerTools([controls?.attach, controls?.access]);
+  const rightTools =
+    controls?.right ?? composeComposerTools([controls?.context, controls?.model, controls?.voice, controls?.submit]);
+
+  return (
+    <fieldset
+      aria-label={ariaLabel}
+      style={{
+        border: 0,
+        margin: 0,
+        minInlineSize: 0,
+        padding: 0
+      }}
+    >
+      <ComposerSurface
+        {...surfaceProps}
+        leftTools={leftTools}
+        rightTools={rightTools}
+      >
+        {editor}
+        {voiceDebug}
+      </ComposerSurface>
+    </fieldset>
+  );
+}
 
 export function ComposerSurface({
   ariaBusy,
@@ -215,7 +271,8 @@ function ComposerLiquidGlassFilter({ state }: { state: ComposerLiquidGlassState 
 
 function useComposerLiquidGlass(
   ref: React.RefObject<HTMLElement | null>,
-  enabled: boolean
+  enabled: boolean,
+  refraction = 0.7
 ): ComposerLiquidGlassState | null {
   const reactId = useId();
   const filterId = useMemo(() => `composer-liquid-glass-${reactId.replaceAll(/[^a-zA-Z0-9_-]/g, '')}`, [reactId]);
@@ -253,14 +310,16 @@ function useComposerLiquidGlass(
     if (size.width * size.height > LIQUID_GLASS_MAX_AREA) return null;
     const mapUrl = composerLiquidGlassMap(size.width, size.height);
     if (!mapUrl) return null;
+    const baseScale = Math.max(10, Math.min(24, Math.round(size.height * 0.18)));
+    const normalizedRefraction = Number.isFinite(refraction) ? Math.max(0, Math.min(1.5, refraction)) : 1;
     return {
       filterId,
       height: size.height,
       mapUrl,
-      scale: Math.max(10, Math.min(24, Math.round(size.height * 0.18))),
+      scale: Math.max(0, Math.min(36, Math.round(baseScale * normalizedRefraction))),
       width: size.width
     };
-  }, [enabled, filterId, size]);
+  }, [enabled, filterId, refraction, size]);
 }
 
 function composerLiquidGlassMap(width: number, height: number): string | null {

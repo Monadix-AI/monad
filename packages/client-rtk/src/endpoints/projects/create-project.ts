@@ -1,18 +1,18 @@
 import type { CreateWorkplaceProjectRequest, CreateWorkplaceProjectResponse, ProjectId } from '@monad/protocol';
 
 import { apiSlice } from '../../api-slice.ts';
-import { clientOf, runTreaty } from '../../endpoint-helpers.ts';
+import { clientOf, type IdempotentMutationArgs, idempotencyOptions, runTreaty } from '../../endpoint-helpers.ts';
 
 const createWorkplaceProjectApi = apiSlice.injectEndpoints({
   overrideExisting: true,
   endpoints: (builder) => ({
     createWorkplaceProject: builder.mutation<
       CreateWorkplaceProjectResponse['projectId'],
-      CreateWorkplaceProjectRequest
+      CreateWorkplaceProjectRequest & IdempotentMutationArgs
     >({
-      queryFn: (body, api: { extra: unknown }) =>
+      queryFn: ({ idempotencyKey, ...body }, api: { extra: unknown }) =>
         runTreaty(
-          () => clientOf(api).treaty.v1.workplace.projects.post(body),
+          () => clientOf(api).treaty.v1.workplace.projects.post(body, idempotencyOptions({ idempotencyKey })),
           (raw) => raw.projectId as ProjectId
         ),
       invalidatesTags: ['Sessions']

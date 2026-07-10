@@ -24,8 +24,7 @@ export interface WorkspaceProjectListItem {
   name: string;
   cwd?: string;
   hasRunningAgent: boolean;
-  pinned: boolean;
-  sessions: WorkspaceProjectSessionListItem[];
+  sessions: (WorkspaceProjectSessionListItem & { pinned: boolean })[];
   unreadCount: number;
 }
 
@@ -36,7 +35,7 @@ export interface BuildWorkspaceProjectsOptions {
   sessions?: readonly Pick<Session, 'id' | 'projectId' | 'title' | 'updatedAt'>[];
   liveExternalAgentSessions?: readonly ExternalAgentSessionView[];
   externalAgentSessions?: readonly ExternalAgentSessionView[];
-  pinnedProjectIds?: ReadonlySet<string>;
+  pinnedSessionIds?: ReadonlySet<string>;
 }
 
 export const buildWorkspaceProjects = (
@@ -64,15 +63,18 @@ export const buildWorkspaceProjects = (
         name: getWorkplaceProjectName(project),
         cwd: project.cwd,
         hasRunningAgent: activity?.hasRunningAgent ?? false,
-        pinned: options.pinnedProjectIds?.has(project.id) ?? false,
         sessions: (sessionsByProjectId.get(project.id) ?? [])
           .toSorted((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-          .map((session) => ({ id: session.id, title: session.title })),
+          .map((session) => ({
+            id: session.id,
+            pinned: options.pinnedSessionIds?.has(session.id) ?? false,
+            title: session.title
+          })),
         unreadCount: activity?.unreadCount ?? 0,
         index
       };
     })
-    .sort((a, b) => Number(b.pinned) - Number(a.pinned) || a.index - b.index)
+    .sort((a, b) => a.index - b.index)
     .map(({ index: _index, ...project }) => project);
 };
 

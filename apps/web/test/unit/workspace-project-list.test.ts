@@ -25,7 +25,6 @@ test('workspace project list keeps duplicate project names as separate projects'
       name: 'demo',
       cwd: undefined,
       hasRunningAgent: false,
-      pinned: false,
       sessions: [],
       unreadCount: 0
     },
@@ -34,7 +33,6 @@ test('workspace project list keeps duplicate project names as separate projects'
       name: 'demo',
       cwd: undefined,
       hasRunningAgent: false,
-      pinned: false,
       sessions: [],
       unreadCount: 0
     }
@@ -88,8 +86,7 @@ test('workspace project list summarizes live runtime and unread native cli messa
       name: 'active',
       cwd: undefined,
       hasRunningAgent: true,
-      pinned: false,
-      sessions: [{ id: 'ses_ACTIVE000000', title: 'ses_ACTIVE000000' }],
+      sessions: [{ id: 'ses_ACTIVE000000', pinned: false, title: 'ses_ACTIVE000000' }],
       unreadCount: 3
     }
   ]);
@@ -113,14 +110,13 @@ test('workspace project list keeps unread messages from stopped native cli sessi
       name: 'stopped',
       cwd: undefined,
       hasRunningAgent: false,
-      pinned: false,
-      sessions: [{ id: 'ses_STOPPED00000', title: 'ses_STOPPED00000' }],
+      sessions: [{ id: 'ses_STOPPED00000', pinned: false, title: 'ses_STOPPED00000' }],
       unreadCount: 3
     }
   ]);
 });
 
-test('workspace project list keeps pinned projects first without changing order inside groups', () => {
+test('workspace project list marks pinned sessions without reordering projects', () => {
   expect(
     buildWorkspaceProjects(
       [
@@ -128,12 +124,19 @@ test('workspace project list keeps pinned projects first without changing order 
         project('prj_SECOND000000', 'second'),
         project('prj_THIRD0000000', 'third')
       ],
-      { pinnedProjectIds: new Set(['prj_THIRD0000000', 'prj_SECOND000000']) }
-    ).map((item) => ({ id: item.id, pinned: item.pinned }))
+      {
+        pinnedSessionIds: new Set(['ses_SECOND000000', 'ses_THIRD0000000']),
+        sessions: [
+          session('ses_FIRST0000000', 'prj_FIRST0000000', 'first session', '2026-07-02T00:00:00.000Z'),
+          session('ses_SECOND000000', 'prj_SECOND000000', 'second session', '2026-07-02T00:00:00.000Z'),
+          session('ses_THIRD0000000', 'prj_THIRD0000000', 'third session', '2026-07-02T00:00:00.000Z')
+        ]
+      }
+    ).map((item) => ({ id: item.id, sessions: item.sessions }))
   ).toEqual([
-    { id: 'prj_SECOND000000', pinned: true },
-    { id: 'prj_THIRD0000000', pinned: true },
-    { id: 'prj_FIRST0000000', pinned: false }
+    { id: 'prj_FIRST0000000', sessions: [{ id: 'ses_FIRST0000000', pinned: false, title: 'first session' }] },
+    { id: 'prj_SECOND000000', sessions: [{ id: 'ses_SECOND000000', pinned: true, title: 'second session' }] },
+    { id: 'prj_THIRD0000000', sessions: [{ id: 'ses_THIRD0000000', pinned: true, title: 'third session' }] }
   ]);
 });
 
@@ -164,13 +167,13 @@ test('workspace project list nests project sessions by recent activity', () => {
     {
       id: 'prj_FIRST0000000',
       sessions: [
-        { id: 'ses_NEW000000000', title: 'new session' },
-        { id: 'ses_OLD000000000', title: 'old session' }
+        { id: 'ses_NEW000000000', pinned: false, title: 'new session' },
+        { id: 'ses_OLD000000000', pinned: false, title: 'old session' }
       ]
     },
     {
       id: 'prj_SECOND000000',
-      sessions: [{ id: 'ses_OTHER0000000', title: 'other session' }]
+      sessions: [{ id: 'ses_OTHER0000000', pinned: false, title: 'other session' }]
     }
   ]);
 });

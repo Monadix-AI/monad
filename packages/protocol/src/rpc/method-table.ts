@@ -93,6 +93,7 @@ import {
   setDefaultAgentRequestSchema,
   toolApproveRequestSchema,
   toolApproveResponseSchema,
+  undoDeleteSessionResponseSchema,
   updateAgentRequestSchema,
   updateSessionRequestSchema,
   updateSessionResponseSchema
@@ -181,6 +182,11 @@ export const UNIVERSAL_METHODS = {
     http: { verb: 'DELETE', template: '/v1/sessions/:id' },
     path: idPath,
     result: deleteSessionResponseSchema
+  },
+  'sessions.undoDelete': {
+    http: { verb: 'POST', template: '/v1/sessions/:id/undo-delete' },
+    path: idPath,
+    result: undoDeleteSessionResponseSchema
   },
   'sessions.abort': {
     http: { verb: 'POST', template: '/v1/sessions/:id/abort' },

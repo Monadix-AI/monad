@@ -1,6 +1,6 @@
 'use client';
 
-import type { SessionId } from '@monad/protocol';
+import type { AgentId, IdempotencyKey, SessionId } from '@monad/protocol';
 import type { StudioSectionId } from '#/features/studio/sections';
 
 import { create } from 'zustand';
@@ -15,10 +15,30 @@ type ActiveProjectSessionState = {
   projectId: string;
 };
 
+type NewChatPrefill =
+  | { mode: 'agent' }
+  | {
+      mode: 'project';
+      projectId: string;
+    };
+
+export interface DraftChatSession {
+  agentId?: AgentId;
+  createdAt: string;
+  createIdempotencyKey: IdempotencyKey;
+  errorMessage?: string;
+  id: SessionId;
+  sendIdempotencyKey: IdempotencyKey;
+  status: 'creating' | 'failed';
+  text: string;
+  title: string;
+  updatedAt: string;
+}
+
 export const SIDEBAR_COLLAPSED_STORAGE_KEY = 'monad:sidebarCollapsed';
 export const LAST_STUDIO_SECTION_STORAGE_KEY = 'monad:lastStudioSection';
 export const LAST_WORKSPACE_PATH_STORAGE_KEY = 'monad:lastWorkspacePath';
-const PINNED_PROJECTS_STORAGE_KEY = 'monad:pinnedProjects';
+const PINNED_SESSIONS_STORAGE_KEY = 'monad:pinnedSessions';
 
 function shellStorage(): Storage | null {
   if (typeof window === 'undefined') return null;
@@ -68,8 +88,8 @@ export function writeStoredLastWorkspacePath(path: string): void {
   }
 }
 
-function readStoredPinnedProjectIds(): string[] {
-  const raw = shellStorage()?.getItem(PINNED_PROJECTS_STORAGE_KEY);
+function readStoredPinnedSessionIds(): string[] {
+  const raw = shellStorage()?.getItem(PINNED_SESSIONS_STORAGE_KEY);
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw);
@@ -80,9 +100,9 @@ function readStoredPinnedProjectIds(): string[] {
   }
 }
 
-function writeStoredPinnedProjectIds(projectIds: readonly string[]): void {
+function writeStoredPinnedSessionIds(sessionIds: readonly string[]): void {
   try {
-    shellStorage()?.setItem(PINNED_PROJECTS_STORAGE_KEY, JSON.stringify([...projectIds]));
+    shellStorage()?.setItem(PINNED_SESSIONS_STORAGE_KEY, JSON.stringify([...sessionIds]));
   } catch {
     // Local UI preference only; ignore private-mode/quota failures.
   }
@@ -96,7 +116,9 @@ export interface WorkspaceShellState {
   activeProjectSession: ActiveProjectSessionState | null;
   sidebarCollapsed: boolean;
   sidebarAutoReveal: boolean;
-  pinnedProjectIds: string[];
+  pinnedSessionIds: string[];
+  draftChatSessions: DraftChatSession[];
+  newChatPrefill: NewChatPrefill | null;
   newProjectOpen: boolean;
   rightPanelOpen: boolean;
   rememberStudioSection: (section: StudioSectionId) => void;
@@ -111,7 +133,11 @@ export interface WorkspaceShellState {
   revealSidebar: () => void;
   autoRevealSidebar: () => void;
   collapseSidebar: () => void;
-  toggleProjectPinned: (projectId: string) => void;
+  toggleSessionPinned: (sessionId: SessionId) => void;
+  addDraftChatSession: (draft: DraftChatSession) => void;
+  failDraftChatSession: (sessionId: SessionId, message: string) => void;
+  removeDraftChatSession: (sessionId: SessionId) => void;
+  setNewChatPrefill: (prefill: NewChatPrefill | null) => void;
   setNewProjectOpen: (open: boolean) => void;
   openRightPanel: () => void;
   closeRightPanel: () => void;
@@ -126,7 +152,9 @@ export const useWorkspaceShellStore = create<WorkspaceShellState>()((set) => ({
   activeProjectSession: null,
   sidebarCollapsed: readStoredSidebarCollapsed(),
   sidebarAutoReveal: false,
-  pinnedProjectIds: readStoredPinnedProjectIds(),
+  pinnedSessionIds: readStoredPinnedSessionIds(),
+  draftChatSessions: [],
+  newChatPrefill: null,
   newProjectOpen: false,
   rightPanelOpen: false,
   rememberStudioSection: (section) => {
@@ -163,15 +191,32 @@ export const useWorkspaceShellStore = create<WorkspaceShellState>()((set) => ({
     writeStoredSidebarCollapsed(true);
     set({ sidebarCollapsed: true, sidebarAutoReveal: false });
   },
-  toggleProjectPinned: (projectId) =>
+  toggleSessionPinned: (sessionId) =>
     set((state) => {
-      const pinned = new Set(state.pinnedProjectIds);
-      if (pinned.has(projectId)) pinned.delete(projectId);
-      else pinned.add(projectId);
-      const pinnedProjectIds = [...pinned];
-      writeStoredPinnedProjectIds(pinnedProjectIds);
-      return { pinnedProjectIds };
+      const pinned = new Set(state.pinnedSessionIds);
+      if (pinned.has(sessionId)) pinned.delete(sessionId);
+      else pinned.add(sessionId);
+      const pinnedSessionIds = [...pinned];
+      writeStoredPinnedSessionIds(pinnedSessionIds);
+      return { pinnedSessionIds };
     }),
+  addDraftChatSession: (draft) =>
+    set((state) => ({
+      draftChatSessions: [draft, ...state.draftChatSessions.filter((session) => session.id !== draft.id)]
+    })),
+  failDraftChatSession: (sessionId, message) =>
+    set((state) => ({
+      draftChatSessions: state.draftChatSessions.map((session) =>
+        session.id === sessionId
+          ? { ...session, status: 'failed', errorMessage: message, updatedAt: new Date().toISOString() }
+          : session
+      )
+    })),
+  removeDraftChatSession: (sessionId) =>
+    set((state) => ({
+      draftChatSessions: state.draftChatSessions.filter((session) => session.id !== sessionId)
+    })),
+  setNewChatPrefill: (prefill) => set({ newChatPrefill: prefill }),
   setNewProjectOpen: (open) => set({ newProjectOpen: open }),
   openRightPanel: () => set({ rightPanelOpen: true }),
   closeRightPanel: () => set({ rightPanelOpen: false }),

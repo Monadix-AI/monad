@@ -1,7 +1,7 @@
 import type { CreateProjectSessionRequest, ProjectId, SessionId } from '@monad/protocol';
 
 import { apiSlice } from '../../api-slice.ts';
-import { clientOf, runTreaty } from '../../endpoint-helpers.ts';
+import { clientOf, type IdempotentMutationArgs, idempotencyOptions, runTreaty } from '../../endpoint-helpers.ts';
 
 // The explicit "create a session under this project" entry point (Track B P6b, resolved decision
 // 3): no default session is auto-created when a project is made, so the project shell needs this
@@ -9,10 +9,16 @@ import { clientOf, runTreaty } from '../../endpoint-helpers.ts';
 const createProjectSessionApi = apiSlice.injectEndpoints({
   overrideExisting: true,
   endpoints: (builder) => ({
-    createProjectSession: builder.mutation<SessionId, { projectId: ProjectId } & CreateProjectSessionRequest>({
-      queryFn: ({ projectId, ...body }, api: { extra: unknown }) =>
+    createProjectSession: builder.mutation<
+      SessionId,
+      { projectId: ProjectId } & CreateProjectSessionRequest & IdempotentMutationArgs
+    >({
+      queryFn: ({ projectId, idempotencyKey, ...body }, api: { extra: unknown }) =>
         runTreaty(
-          () => clientOf(api).treaty.v1.projects({ id: projectId }).sessions.post(body),
+          () =>
+            clientOf(api)
+              .treaty.v1.projects({ id: projectId })
+              .sessions.post(body, idempotencyOptions({ idempotencyKey })),
           (raw) => raw.sessionId
         ),
       invalidatesTags: (_result, _error, { projectId }) => [{ type: 'Sessions', id: projectId }, 'Sessions']

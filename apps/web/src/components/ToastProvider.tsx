@@ -16,7 +16,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useT } from '#/components/I18nProvider';
 
-type ToastVariant = 'success' | 'error' | 'info';
+type ToastVariant = 'success' | 'error' | 'info' | 'undo';
 
 interface ToastInput {
   message: string;
@@ -28,6 +28,8 @@ interface ToastInput {
     label: string;
     onClick: () => boolean | undefined | Promise<boolean | undefined>;
   };
+  onPause?: () => void | Promise<void>;
+  onExpire?: () => void | Promise<void>;
 }
 
 interface ToastItem {
@@ -37,6 +39,8 @@ interface ToastItem {
   duration: number;
   detail?: ToastInput['detail'];
   action?: ToastInput['action'];
+  onPause?: ToastInput['onPause'];
+  onExpire?: ToastInput['onExpire'];
 }
 
 interface ToastRecord extends ToastItem {
@@ -62,7 +66,9 @@ function createToast(input: ToastInput): ToastItem {
     variant: input.variant ?? 'info',
     duration: input.duration ?? 4200,
     detail: input.detail,
-    action: input.action
+    action: input.action,
+    onPause: input.onPause,
+    onExpire: input.onExpire
   };
 }
 
@@ -91,6 +97,8 @@ export const toast = {
     publish({ ...options, message, variant: 'success' }),
   error: (message: string, options?: Omit<ToastInput, 'message' | 'variant'>) =>
     publish({ ...options, message, variant: 'error' }),
+  undo: (message: string, options: Omit<ToastInput, 'message' | 'variant'>) =>
+    publish({ ...options, message, variant: 'undo' }),
   dismiss
 };
 
@@ -301,6 +309,7 @@ function ToastCard({
   const [expanded, setExpanded] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const cardRef = useRef<HTMLDivElement | null>(null);
+  const undoSettledRef = useRef(false);
 
   useEffect(() => {
     const raf = requestAnimationFrame(() => setEntered(true));
@@ -309,11 +318,12 @@ function ToastCard({
 
   // Pause auto-dismiss while the detail panel is open.
   useEffect(() => {
+    if (item.variant === 'undo') return;
     if (item.state !== 'open' || expanded) return;
     if (!Number.isFinite(item.duration)) return;
     const timer = window.setTimeout(() => onClose(item.id), item.duration);
     return () => window.clearTimeout(timer);
-  }, [item.duration, item.id, item.state, onClose, expanded]);
+  }, [expanded, item.duration, item.id, item.state, item.variant, onClose]);
 
   // Initial measurement on mount.
   const measureRef = useCallback(
@@ -353,6 +363,7 @@ function ToastCard({
 
   const handleAction = async () => {
     if (!item.action || actionLoading) return;
+    undoSettledRef.current = true;
     setActionLoading(true);
     try {
       const shouldClose = await item.action.onClick();
@@ -361,6 +372,65 @@ function ToastCard({
       setActionLoading(false);
     }
   };
+
+  const expireUndo = useCallback(() => {
+    if (item.variant !== 'undo') return;
+    if (undoSettledRef.current) return;
+    undoSettledRef.current = true;
+    void item.onExpire?.();
+    onClose(item.id);
+  }, [item, onClose]);
+
+  useEffect(() => {
+    if (item.variant !== 'undo') return;
+    if (item.state !== 'open') return;
+    if (!Number.isFinite(item.duration)) return;
+    const timer = window.setTimeout(expireUndo, item.duration);
+    return () => window.clearTimeout(timer);
+  }, [expireUndo, item.duration, item.state, item.variant]);
+
+  if (item.variant === 'undo') {
+    return (
+      <div
+        aria-hidden={isHidden ? true : undefined}
+        className={cn(
+          'pointer-events-auto absolute right-0 left-0 origin-top overflow-hidden rounded-(--radius-lg) border border-border bg-popover text-popover-foreground shadow-lg',
+          'transition-[transform,opacity] ease-[cubic-bezier(0.32,0.72,0,1)]',
+          isClosing ? 'duration-[180ms]' : 'duration-300'
+        )}
+        ref={measureRef}
+        role="status"
+        style={{
+          transform,
+          opacity,
+          zIndex: 50 - fromFront,
+          pointerEvents: isHidden ? 'none' : undefined
+        }}
+      >
+        <div
+          aria-hidden="true"
+          className="absolute inset-y-0 left-0 w-full origin-left bg-info/14 dark:bg-info/18"
+          style={{
+            animation: `toast-undo-progress ${item.duration}ms linear forwards`
+          }}
+        />
+        <div className="relative flex min-h-10 items-center justify-between gap-2.5 px-2.5 py-1.5">
+          <p className="min-w-0 truncate font-medium text-[12px] leading-4">{item.message}</p>
+          {item.action ? (
+            <Button
+              className="h-6 shrink-0 px-1.5 text-[11px]"
+              disabled={actionLoading}
+              onClick={() => void handleAction()}
+              size="sm"
+              variant="ghost"
+            >
+              {item.action.label}
+            </Button>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -424,7 +494,8 @@ function ToastCard({
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const t = useT();
   const [toasts, setToasts] = useState<ToastRecord[]>([]);
-  const [hovered, setHovered] = useState(false);
+  const [normalHovered, setNormalHovered] = useState(false);
+  const [undoHovered, setUndoHovered] = useState(false);
   const [heights, setHeights] = useState<Record<string, number>>({});
 
   const removeToast = useCallback((id: string) => {
@@ -452,7 +523,17 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const listener: ToastListener = (item) => {
-      setToasts((current) => [...current, item].slice(-4));
+      setToasts((current) => {
+        if (item.variant === 'undo') {
+          for (const undo of current) {
+            if (undo.variant === 'undo' && undo.state === 'open') void undo.onExpire?.();
+          }
+          return [...current.filter((toastItem) => toastItem.variant !== 'undo'), item];
+        }
+
+        const normalToasts = [...current.filter((toastItem) => toastItem.variant !== 'undo'), item];
+        return [...normalToasts.slice(-4), ...current.filter((toastItem) => toastItem.variant === 'undo')];
+      });
     };
     listeners.add(listener);
     for (const item of queued.splice(0)) listener(item);
@@ -469,40 +550,80 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     };
   }, [closeToast]);
 
-  const expandedOffsets: number[] = new Array(toasts.length).fill(0);
-  let cumulative = 0;
-  for (let i = toasts.length - 1; i >= 0; i--) {
-    expandedOffsets[i] = cumulative;
-    cumulative += (heights[toasts[i].id] ?? CARD_HEIGHT_FALLBACK) + CARD_GAP;
-  }
+  const normalToasts = toasts.filter((item) => item.variant !== 'undo');
+  const undoToasts = toasts.filter((item) => item.variant === 'undo');
 
-  const frontToast = toasts[toasts.length - 1];
-  const frontHeight = frontToast ? (heights[frontToast.id] ?? CARD_HEIGHT_FALLBACK) : 0;
-  const visibleBehind = Math.min(Math.max(toasts.length - 1, 0), 2);
-  const stackedHeight = frontHeight + visibleBehind * 8;
-  const expandedHeight = cumulative > 0 ? cumulative - CARD_GAP : 0;
-  const containerHeight = toasts.length === 0 ? 0 : hovered ? expandedHeight : stackedHeight;
+  const buildStack = (items: ToastRecord[], hovered: boolean) => {
+    const expandedOffsets: number[] = new Array(items.length).fill(0);
+    let cumulative = 0;
+    for (let i = items.length - 1; i >= 0; i--) {
+      expandedOffsets[i] = cumulative;
+      cumulative += (heights[items[i].id] ?? CARD_HEIGHT_FALLBACK) + CARD_GAP;
+    }
+    const frontToast = items[items.length - 1];
+    const frontHeight = frontToast ? (heights[frontToast.id] ?? CARD_HEIGHT_FALLBACK) : 0;
+    const visibleBehind = Math.min(Math.max(items.length - 1, 0), 2);
+    const stackedHeight = frontHeight + visibleBehind * 8;
+    const expandedHeight = cumulative > 0 ? cumulative - CARD_GAP : 0;
+    return {
+      expandedOffsets,
+      height: items.length === 0 ? 0 : hovered ? expandedHeight : stackedHeight
+    };
+  };
+
+  const normalStack = buildStack(normalToasts, normalHovered);
+  const undoStack = buildStack(undoToasts, undoHovered);
 
   return (
     <>
       {children}
+      <style>{`
+        @keyframes toast-undo-progress {
+          from { transform: scaleX(1); }
+          to { transform: scaleX(0); }
+        }
+      `}</style>
       <section
         aria-label={t('web.toast.notifications')}
         aria-live="polite"
         aria-relevant="additions text"
         className="fixed top-4 left-1/2 z-50 w-[min(390px,calc(100vw-2rem))] -translate-x-1/2"
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
+        onMouseEnter={() => setNormalHovered(true)}
+        onMouseLeave={() => setNormalHovered(false)}
         style={{
-          height: containerHeight,
-          pointerEvents: toasts.length > 0 ? 'auto' : 'none'
+          height: normalStack.height,
+          pointerEvents: normalToasts.length > 0 ? 'auto' : 'none'
         }}
       >
-        {toasts.map((item, index) => (
+        {normalToasts.map((item, index) => (
           <ToastCard
-            expandedOffset={expandedOffsets[index]}
-            fromFront={toasts.length - 1 - index}
-            hovered={hovered}
+            expandedOffset={normalStack.expandedOffsets[index]}
+            fromFront={normalToasts.length - 1 - index}
+            hovered={normalHovered}
+            item={item}
+            key={item.id}
+            onClose={closeToast}
+            onMeasure={handleMeasure}
+          />
+        ))}
+      </section>
+      <section
+        aria-label={t('web.toast.notifications')}
+        aria-live="polite"
+        aria-relevant="additions text"
+        className="fixed bottom-4 left-4 z-50 w-[min(320px,calc(100vw-2rem))]"
+        onMouseEnter={() => setUndoHovered(true)}
+        onMouseLeave={() => setUndoHovered(false)}
+        style={{
+          height: undoStack.height,
+          pointerEvents: undoToasts.length > 0 ? 'auto' : 'none'
+        }}
+      >
+        {undoToasts.map((item, index) => (
+          <ToastCard
+            expandedOffset={undoStack.expandedOffsets[index]}
+            fromFront={undoToasts.length - 1 - index}
+            hovered={undoHovered}
             item={item}
             key={item.id}
             onClose={closeToast}

@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { ensureDestroySoon, readDaemonEndpoint } from '../../vite.config.ts';
+import { devToolPorts, ensureDestroySoon, readDaemonEndpoint } from '../../vite.config.ts';
 
 test('readDaemonEndpoint prefers repo env MONAD_PORT over config network port', () => {
   const dir = mkdtempSync(join(tmpdir(), 'monad-vite-config-'));
@@ -46,6 +46,48 @@ test('readDaemonEndpoint preserves config scheme when env supplies only the port
 
   try {
     expect(readDaemonEndpoint({}, envPath)).toEqual({ port: '52522', scheme: 'http' });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('devToolPorts reads devtools ports from repo env when shell env is absent', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'monad-vite-config-'));
+  const envPath = join(dir, '.env.local');
+  writeFileSync(envPath, 'MONAD_KV_UI_PORT=6707\nAI_SDK_DEVTOOLS_PORT=7707\n');
+
+  try {
+    expect(devToolPorts('serve', {}, envPath)).toEqual({
+      aiSdk: '7707',
+      kv: '6707',
+      otel: '6006'
+    });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('devToolPorts preserves explicit shell env over repo env and omits links in build', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'monad-vite-config-'));
+  const envPath = join(dir, '.env.local');
+  writeFileSync(envPath, 'MONAD_KV_UI_PORT=6707\nAI_SDK_DEVTOOLS_PORT=7707\n');
+
+  try {
+    expect(
+      devToolPorts(
+        'serve',
+        {
+          AI_SDK_DEVTOOLS_PORT: '7800',
+          MONAD_KV_UI_PORT: '6800'
+        },
+        envPath
+      )
+    ).toEqual({
+      aiSdk: '7800',
+      kv: '6800',
+      otel: '6006'
+    });
+    expect(devToolPorts('build', {}, envPath)).toEqual({});
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

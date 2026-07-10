@@ -9,11 +9,19 @@ import { useCallback, useEffect, useMemo } from 'react';
 
 import { runtimeSectionEnabled } from '#/features/init/init-readiness';
 import { normalizeSettingsSection } from '#/features/settings/sections';
-import { useWorkplaceUiStore } from '#/features/workplace/workplace-ui-store';
 import { pushShellUrl, replaceShellUrl, toShellUrl } from '#/hooks/use-shell-location';
 import { useSidebarShortcuts } from '#/hooks/use-sidebar-shortcuts';
 import { useWorkspaceShellStore, type WorkspaceShellState } from '#/lib/workspace-shell-store';
-import { isSettingsPath, isStudioPath, isWorkspacePath, projectSessionPath, settingsPath, studioPath } from './paths';
+import {
+  inboxPath,
+  isSettingsPath,
+  isStudioPath,
+  isWorkspacePath,
+  projectSessionPath,
+  projectSettingsPath,
+  settingsPath,
+  studioPath
+} from './paths';
 import { resolveStudioNavigationPath } from './studio-navigation';
 import { useShellRoute } from './use-shell-route';
 
@@ -59,8 +67,15 @@ export function useAppShellNavigation({
   setSessionUrl,
   workspaceProjects
 }: UseAppShellNavigationParams) {
-  const { currentId, isSettingsRoute, isStudioRoute, isWorkspaceRoute, pathname, routedStudioSection } =
-    useShellRoute();
+  const {
+    currentId,
+    isProjectSettingsRoute,
+    isSettingsRoute,
+    isStudioRoute,
+    isWorkspaceRoute,
+    pathname,
+    routedStudioSection
+  } = useShellRoute();
 
   const [createSession] = useCreateSessionMutation();
   const activeProjectSession = useWorkspaceShellStore((state: WorkspaceShellState) => state.activeProjectSession);
@@ -76,7 +91,12 @@ export function useAppShellNavigation({
   const rememberMonadSession = useWorkspaceShellStore((state: WorkspaceShellState) => state.rememberMonadSession);
   const openWorkspaceSurface = useWorkspaceShellStore((state: WorkspaceShellState) => state.openWorkspace);
   const openMonadChatSurface = useWorkspaceShellStore((state: WorkspaceShellState) => state.openMonadChat);
-  const openProjectSettingsInStore = useWorkplaceUiStore((state) => state.openProjectSettings);
+  const setNewChatPrefill = useWorkspaceShellStore((state: WorkspaceShellState) => state.setNewChatPrefill);
+  const draftChatSessions = useWorkspaceShellStore((state: WorkspaceShellState) => state.draftChatSessions);
+  const draftChatSessionIds = useMemo(
+    () => new Set(draftChatSessions.map((session) => session.id)),
+    [draftChatSessions]
+  );
 
   const settingsFallbackReturnPath = isStudioRoute ? studioPath(lastStudioSection) : lastWorkspacePath;
   const settingsReturnPath = normalizedSettingsReturnPath(settingsReturnPathState, settingsFallbackReturnPath);
@@ -107,6 +127,11 @@ export function useAppShellNavigation({
     replaceUrl('/');
   }, [openWorkspaceSurface, rememberWorkspacePath, replaceUrl]);
 
+  const openInbox = useCallback(() => {
+    openWorkspaceSurface();
+    replaceUrl(inboxPath());
+  }, [openWorkspaceSurface, replaceUrl]);
+
   const setStudioUrl = useCallback(
     (section?: StudioSectionId) => {
       replaceUrl(resolveStudioNavigationPath({ runtimeReady, section: section ?? lastStudioSection }));
@@ -116,11 +141,9 @@ export function useAppShellNavigation({
 
   const openProject = useCallback(
     (projectId: string, sessionId?: SessionId) => {
-      const fallbackSessionId = workspaceProjects.find((project) => project.id === projectId)?.sessions?.[0]?.id;
-      const routeSessionId = sessionId ?? fallbackSessionId;
-      replaceUrl(routeSessionId ? projectSessionPath(projectId, routeSessionId) : `/workspace/${projectId}`);
+      replaceUrl(sessionId ? projectSessionPath(projectId, sessionId) : `/workspace/${projectId}`);
     },
-    [replaceUrl, workspaceProjects]
+    [replaceUrl]
   );
 
   useEffect(() => {
@@ -130,11 +153,13 @@ export function useAppShellNavigation({
     // while the route still points at this project — otherwise a stale closure would yank the
     // caller back to the project session when navigating away (studio/settings/other project).
     if (routedProjectId !== state.projectId) return;
+    if (isProjectSettingsRoute) return;
     if (!state.activeSessionId) return;
+    if (!routedProjectSessionId) return;
     if (routedProjectSessionId && routedProjectSessionId !== state.activeSessionId) return;
     const nextUrl = projectSessionPath(state.projectId, state.activeSessionId);
     if (pathname !== nextUrl) replaceUrl(nextUrl);
-  }, [activeProjectSession, pathname, replaceUrl, routedProjectId, routedProjectSessionId]);
+  }, [activeProjectSession, isProjectSettingsRoute, pathname, replaceUrl, routedProjectId, routedProjectSessionId]);
 
   const handleOpenProjectSession = useCallback(
     (projectId: string, sessionId: SessionId) => {
@@ -150,16 +175,17 @@ export function useAppShellNavigation({
 
   const handleOpenProjectSettings = useCallback(
     (projectId: string) => {
-      openProject(projectId);
-      openProjectSettingsInStore(projectId);
+      openWorkspaceSurface();
+      pushUrl(projectSettingsPath(projectId));
     },
-    [openProject, openProjectSettingsInStore]
+    [openWorkspaceSurface, pushUrl]
   );
 
   useEffect(() => {
     if (sessionsLoading || !currentId) return;
+    if (draftChatSessionIds.has(currentId)) return;
     if (!sessions.find((s) => s.id === currentId)) setSessionUrl(null);
-  }, [sessions, sessionsLoading, currentId, setSessionUrl]);
+  }, [sessions, sessionsLoading, currentId, setSessionUrl, draftChatSessionIds]);
 
   useEffect(() => {
     if (!routedProjectId) return;
@@ -229,11 +255,19 @@ export function useAppShellNavigation({
   ]);
 
   const handleNewMonadChat = useCallback(() => {
-    void handleNewSession();
-  }, [handleNewSession]);
+    setNewChatPrefill({ mode: 'agent' });
+    resetWorkspaceUrl();
+  }, [resetWorkspaceUrl, setNewChatPrefill]);
   const handleOpenMonadChat = useCallback(() => {
     void openMonadChat();
   }, [openMonadChat]);
+  const handleOpenSession = useCallback(
+    (sessionId: SessionId) => {
+      openMonadChatSurface();
+      setSessionUrl(sessionId);
+    },
+    [openMonadChatSurface, setSessionUrl]
+  );
   const handleOpenStudio = useCallback(() => {
     setStudioUrl();
   }, [setStudioUrl]);
@@ -295,10 +329,12 @@ export function useAppShellNavigation({
     closeSettings,
     handleNewMonadChat,
     handleOpenMonadChat,
+    handleOpenSession,
     handleOpenProjectSession,
     handleOpenProjectSettings,
     handleOpenStudio,
     openProject,
+    openInbox,
     openSettings,
     resetWorkspaceUrl,
     setSettingsUrl: setSettingsUrl as (section: SettingsSectionId | string | null, mode?: 'push' | 'replace') => void,

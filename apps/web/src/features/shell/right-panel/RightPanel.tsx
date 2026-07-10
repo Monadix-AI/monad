@@ -11,9 +11,9 @@ const RIGHT_PANEL_WIDTH_CLASS = 'w-[min(440px,32vw)]';
 // scroll-capable body; routes fill the body through <RightPanelContent>. Kept as a
 // pure layout shell so any surface can reuse it without knowing what it contains.
 export function RightPanel() {
-  const { setSlot, hasContent } = useRightPanel();
+  const { activeOwnerId, setSlot } = useRightPanel();
   const open = useWorkspaceShellStore((state) => state.rightPanelOpen);
-  const visible = open && hasContent;
+  const visible = open && activeOwnerId !== null;
 
   return (
     <aside
@@ -23,6 +23,7 @@ export function RightPanel() {
         visible ? cn(RIGHT_PANEL_WIDTH_CLASS, 'border-border/70 border-l') : 'w-0 border-l-0'
       )}
       data-open={visible}
+      data-right-panel-owner={activeOwnerId ?? undefined}
       data-testid="right-panel"
     >
       <div

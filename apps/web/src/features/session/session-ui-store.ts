@@ -8,9 +8,11 @@ import { create } from 'zustand';
 
 type CommandInsertItem = {
   insert: string;
+  replace?: { start: number; end: number };
 };
 
 type HiddenViewMap = Record<SessionId, string[]>;
+type InitialUserMessageMap = Record<SessionId, string[]>;
 
 export interface SessionUiState {
   input: string;
@@ -18,12 +20,15 @@ export interface SessionUiState {
   atBottom: boolean;
   activeSkill: number;
   hiddenViewItemKeysBySession: HiddenViewMap;
+  initialUserMessagesBySession: InitialUserMessageMap;
   skillPreview: SkillEditorState | null;
   skillMenuDismissed: boolean;
   setComposerInput: (value: string) => void;
   clearComposerInput: () => void;
   appendVoiceText: (text: string) => void;
   applyCommandInsert: (item: CommandInsertItem) => void;
+  enqueueInitialUserMessage: (sessionId: SessionId, text: string) => void;
+  clearInitialUserMessages: (sessionId: SessionId) => void;
   setAccessMode: (mode: 'auto' | 'ask') => void;
   setAtBottom: (value: boolean) => void;
   setActiveSkill: (skill: SetStateAction<number>) => void;
@@ -38,6 +43,7 @@ export const useSessionUiStore = create<SessionUiState>()((set) => ({
   atBottom: true,
   activeSkill: 0,
   hiddenViewItemKeysBySession: {},
+  initialUserMessagesBySession: {},
   skillPreview: null,
   skillMenuDismissed: false,
   setComposerInput: (value) => set({ input: value }),
@@ -47,9 +53,29 @@ export const useSessionUiStore = create<SessionUiState>()((set) => ({
       input: state.input.length > 0 ? `${state.input} ${text}` : text
     })),
   applyCommandInsert: (item) =>
+    set((state) => {
+      if (item.replace) {
+        return {
+          input: `${state.input.slice(0, item.replace.start)}${item.insert}${state.input.slice(item.replace.end)}`
+        };
+      }
+      return {
+        input: state.input.length > 0 ? `${state.input}${item.insert}` : item.insert
+      };
+    }),
+  enqueueInitialUserMessage: (sessionId, text) =>
     set((state) => ({
-      input: state.input.length > 0 ? `${state.input}${item.insert}` : item.insert
+      initialUserMessagesBySession: {
+        ...state.initialUserMessagesBySession,
+        [sessionId]: [...(state.initialUserMessagesBySession[sessionId] ?? []), text]
+      }
     })),
+  clearInitialUserMessages: (sessionId) =>
+    set((state) => {
+      const next = { ...state.initialUserMessagesBySession };
+      delete next[sessionId];
+      return { initialUserMessagesBySession: next };
+    }),
   setAccessMode: (mode) => set({ accessMode: mode }),
   setAtBottom: (value) => set({ atBottom: value }),
   setActiveSkill: (skill) =>

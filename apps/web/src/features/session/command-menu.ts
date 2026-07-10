@@ -1,8 +1,26 @@
 import type { CommandItem, ProfileView, Session } from '@monad/protocol';
 import type { TFn } from '#/components/I18nProvider';
-import type { SessionCommandMenuItem } from './SessionRoute';
+
+import { bestCommandMatch, bestLabelMatch, type FuzzyMatch } from './command-fuzzy-match';
 
 export type CommandMenuProfile = ProfileView;
+type CommandReplaceRange = { start: number; end: number };
+
+export interface SessionCommandMenuItem {
+  badge?: string;
+  dismissAfter?: boolean;
+  executeOnSelect?: boolean;
+  hint?: string;
+  icon?: string;
+  insert: string;
+  key: string;
+  label: string;
+  labelMatches?: number[];
+  replace?: { start: number; end: number };
+  section?: string;
+  typeBadge?: string;
+  version?: string;
+}
 
 export function shouldActivateSlashCommandDiscovery(input: string): boolean {
   const commandNamePhase = /^\/[^\s/]*$/.test(input.trimStart());
@@ -74,6 +92,27 @@ export function activeSkillToken(
   return null;
 }
 
+export function activeCommandToken(
+  text: string,
+  commands: CommandItem[]
+): { id: string; label: string; start: number; end: number; raw: string } | null {
+  const trimmedStart = text.trimStart();
+  const leading = text.length - trimmedStart.length;
+  const match = /^\/([a-z0-9]+(?:-[a-z0-9]+)*)(?=\s|$)/.exec(trimmedStart);
+  if (!match) return null;
+  const id = match[1] as string;
+  const command = commands.find((item) => item.enabled && item.type === 'action' && item.id === id);
+  if (!command) return null;
+  const start = leading;
+  return {
+    id,
+    label: command.name,
+    start,
+    end: start + id.length + 1,
+    raw: `/${id}`
+  };
+}
+
 // Builds the `/` autocomplete menu: command-name phase, inline-skill phase, subcommand phase, then
 // positional argument suggestions from structured command metadata.
 export function buildCommandMenuItems(
@@ -83,101 +122,177 @@ export function buildCommandMenuItems(
   sessions: Session[],
   t: TFn
 ): SessionCommandMenuItem[] {
-  // Command-name phase: "/", "/re" … — suggest matching commands with their arg hint + source badge.
   const trimmedStart = input.trimStart();
+  const commandStart = input.length - trimmedStart.length;
+  const commandReplace = { start: commandStart, end: input.length };
   const nameM = /^\/([^\s]*)$/.exec(trimmedStart);
   if (nameM) {
-    const q = (nameM[1] ?? '').toLowerCase();
-    return commands
-      .filter((c) => {
-        if (!c.enabled) return false;
-        return c.id.toLowerCase().startsWith(q) || c.name.toLowerCase().startsWith(q);
-      })
-      .toSorted(compareCommandMenuItems)
-      .slice(0, 8)
-      .map((c) => {
-        const hint = commandHint(c);
-        return {
-          key: c.id,
-          label: `/${c.name}${hint}`,
-          hint: c.description,
-          typeBadge: c.type === 'skill' ? 'Skill' : 'Command',
-          icon: c.type === 'skill' ? c.icon : undefined,
-          version: c.type === 'skill' ? c.version : undefined,
-          badge: itemBadge(c, t),
-          insert: `/${c.id} `,
-          section: commandSection(c),
-          executeOnSelect: c.type === 'action' && c.source === 'builtin' && !hint && !c.subcommands?.length
-        };
-      });
+    return buildCommandNameSuggestions({ commands, query: nameM[1] ?? '', replace: commandReplace, t });
   }
   const inlineSkillM = /(^|\s)\/([^\s/]*)$/.exec(input);
   if (inlineSkillM) {
-    const q = (inlineSkillM[2] ?? '').toLowerCase();
-    const start = (inlineSkillM.index ?? 0) + (inlineSkillM[1]?.length ?? 0);
-    return commands
-      .filter((c) => {
-        if (!c.enabled || c.type !== 'skill') return false;
-        return c.id.toLowerCase().startsWith(q) || c.name.toLowerCase().startsWith(q);
-      })
-      .toSorted(compareCommandMenuItems)
-      .slice(0, 8)
-      .map((c) => {
-        return {
-          key: c.id,
-          label: `/${c.name}`,
-          hint: c.description,
-          typeBadge: 'Skill',
-          icon: c.icon,
-          version: c.version,
-          badge: itemBadge(c, t),
-          insert: `/${c.id} `,
-          section: 'Skills',
-          replace: { start, end: input.length }
-        };
-      });
+    return buildInlineSkillSuggestions({ commands, input, match: inlineSkillM, t });
   }
   const argM = /^\/([^\s]+)(?:\s+([\s\S]*))?$/.exec(trimmedStart);
   if (argM) {
-    const commandId = argM[1] ?? '';
-    const command = commands.find((c) => c.enabled && (c.id === commandId || c.aliases.includes(commandId)));
-    const rest = argM[2];
-    if (!command || rest === undefined) return [];
-
-    if (command.subcommands?.length) {
-      const trimmedRest = rest.trimStart();
-      const subToken = trimmedRest.split(/\s+/)[0] ?? '';
-      const hasSubcommandBoundary = /\s/.test(trimmedRest);
-      const sub = command.subcommands.find((s) => s.id === subToken || (s.aliases ?? []).includes(subToken));
-      if (sub && hasSubcommandBoundary) {
-        const subRest = trimmedRest.slice(subToken.length).trimStart();
-        return buildArgSuggestions({
-          args: sub.args,
-          baseInsert: `/${command.id} ${sub.id}`,
-          profiles,
-          rest: subRest,
-          sessions
-        });
-      }
-      return command.subcommands
-        .filter((subcommand) => {
-          const q = subToken.toLowerCase();
-          return subcommand.id.toLowerCase().startsWith(q) || subcommand.name.toLowerCase().startsWith(q);
-        })
-        .slice(0, 8)
-        .map((subcommand) => ({
-          key: `${command.id}:${subcommand.id}`,
-          label: subcommand.name,
-          hint: subcommand.description,
-          typeBadge: 'Subcommand',
-          badge: subcommand.shortcut ? `/${subcommand.shortcut}` : undefined,
-          insert: `/${command.id} ${subcommand.id} `
-        }));
-    }
-
-    return buildArgSuggestions({ args: command.args, baseInsert: `/${command.id}`, profiles, rest, sessions });
+    return buildCommandArgumentPhaseSuggestions({ commands, match: argM, profiles, replace: commandReplace, sessions });
   }
   return [];
+}
+
+function buildCommandNameSuggestions({
+  commands,
+  query,
+  replace,
+  t
+}: {
+  commands: CommandItem[];
+  query: string;
+  replace: CommandReplaceRange;
+  t: TFn;
+}): SessionCommandMenuItem[] {
+  const q = query.toLowerCase();
+  return commands
+    .map((c) => {
+      if (!c.enabled) return null;
+      const match = bestCommandMatch(c, q);
+      return match ? { command: c, match } : null;
+    })
+    .filter((item): item is { command: CommandItem; match: FuzzyMatch & { labelIndices: number[] } } => Boolean(item))
+    .toSorted((a, b) => a.match.rank - b.match.rank || compareCommandMenuItems(a.command, b.command))
+    .slice(0, 8)
+    .map(({ command: c, match }) => {
+      const hint = commandHint(c);
+      return {
+        key: c.id,
+        label: `/${c.name}${hint}`,
+        labelMatches: match.labelIndices.map((index) => index + 1),
+        hint: c.description,
+        typeBadge: c.type === 'skill' ? 'Skill' : 'Command',
+        icon: c.type === 'skill' ? c.icon : undefined,
+        version: c.type === 'skill' ? c.version : undefined,
+        badge: itemBadge(c, t),
+        insert: `/${c.id} `,
+        replace,
+        section: commandSection(c),
+        executeOnSelect: c.type === 'action' && c.source === 'builtin' && !hint && !c.subcommands?.length
+      };
+    });
+}
+
+function buildInlineSkillSuggestions({
+  commands,
+  input,
+  match,
+  t
+}: {
+  commands: CommandItem[];
+  input: string;
+  match: RegExpExecArray;
+  t: TFn;
+}): SessionCommandMenuItem[] {
+  const q = (match[2] ?? '').toLowerCase();
+  const start = (match.index ?? 0) + (match[1]?.length ?? 0);
+  return commands
+    .map((c) => {
+      if (!c.enabled || c.type !== 'skill') return null;
+      const commandMatch = bestCommandMatch(c, q);
+      return commandMatch ? { command: c, match: commandMatch } : null;
+    })
+    .filter((item): item is { command: CommandItem; match: FuzzyMatch & { labelIndices: number[] } } => Boolean(item))
+    .toSorted((a, b) => a.match.rank - b.match.rank || compareCommandMenuItems(a.command, b.command))
+    .slice(0, 8)
+    .map(({ command: c, match: commandMatch }) => ({
+      key: c.id,
+      label: `/${c.name}`,
+      labelMatches: commandMatch.labelIndices.map((index) => index + 1),
+      hint: c.description,
+      typeBadge: 'Skill',
+      icon: c.icon,
+      version: c.version,
+      badge: itemBadge(c, t),
+      insert: `/${c.id} `,
+      section: 'Skills',
+      replace: { start, end: input.length }
+    }));
+}
+
+function buildCommandArgumentPhaseSuggestions({
+  commands,
+  match,
+  profiles,
+  replace,
+  sessions
+}: {
+  commands: CommandItem[];
+  match: RegExpExecArray;
+  profiles: CommandMenuProfile[];
+  replace: CommandReplaceRange;
+  sessions: Session[];
+}): SessionCommandMenuItem[] {
+  const commandId = match[1] ?? '';
+  const command = commands.find((c) => c.enabled && (c.id === commandId || c.aliases.includes(commandId)));
+  const rest = match[2];
+  if (!command || rest === undefined) return [];
+
+  if (command.subcommands?.length) {
+    return buildSubcommandSuggestions({ command, profiles, replace, rest, sessions });
+  }
+
+  return buildArgSuggestions({ args: command.args, baseInsert: `/${command.id}`, profiles, replace, rest, sessions });
+}
+
+function buildSubcommandSuggestions({
+  command,
+  profiles,
+  replace,
+  rest,
+  sessions
+}: {
+  command: CommandItem;
+  profiles: CommandMenuProfile[];
+  replace: CommandReplaceRange;
+  rest: string;
+  sessions: Session[];
+}): SessionCommandMenuItem[] {
+  const trimmedRest = rest.trimStart();
+  const subToken = trimmedRest.split(/\s+/)[0] ?? '';
+  const hasSubcommandBoundary = /\s/.test(trimmedRest);
+  const sub = command.subcommands?.find((s) => s.id === subToken || (s.aliases ?? []).includes(subToken));
+  if (sub && hasSubcommandBoundary) {
+    const subRest = trimmedRest.slice(subToken.length).trimStart();
+    return buildArgSuggestions({
+      args: sub.args,
+      baseInsert: `/${command.id} ${sub.id}`,
+      profiles,
+      replace,
+      rest: subRest,
+      sessions
+    });
+  }
+  return (command.subcommands ?? [])
+    .map((subcommand) => {
+      const q = subToken.toLowerCase();
+      const nameMatch = bestLabelMatch(subcommand.name, q);
+      const idMatch = bestLabelMatch(subcommand.id, q);
+      const match = !idMatch || (nameMatch && nameMatch.rank <= idMatch.rank) ? nameMatch : idMatch;
+      return match ? { match, subcommand } : null;
+    })
+    .filter((item): item is { match: FuzzyMatch; subcommand: NonNullable<CommandItem['subcommands']>[number] } =>
+      Boolean(item)
+    )
+    .toSorted((a, b) => a.match.rank - b.match.rank || a.subcommand.name.localeCompare(b.subcommand.name))
+    .slice(0, 8)
+    .map(({ match, subcommand }) => ({
+      key: `${command.id}:${subcommand.id}`,
+      label: subcommand.name,
+      labelMatches: match.indices,
+      hint: subcommand.description,
+      typeBadge: 'Subcommand',
+      badge: subcommand.shortcut ? `/${subcommand.shortcut}` : undefined,
+      insert: `/${command.id} ${subcommand.id} `,
+      replace
+    }));
 }
 
 function positionalArgState(rest: string): { committed: string[]; hasBoundary: boolean; prefix: string } {
@@ -195,12 +310,14 @@ function buildArgSuggestions({
   args,
   baseInsert,
   profiles,
+  replace,
   rest,
   sessions
 }: {
   args: CommandItem['args'];
   baseInsert: string;
   profiles: CommandMenuProfile[];
+  replace: CommandReplaceRange;
   rest: string;
   sessions: Session[];
 }): SessionCommandMenuItem[] {
@@ -214,39 +331,69 @@ function buildArgSuggestions({
 
   if (arg.type === 'enum') {
     return (arg.values ?? [])
+      .map((value) => {
+        const label = value.name ?? value.id;
+        const labelMatch = bestLabelMatch(label, prefix);
+        const idMatch = bestLabelMatch(value.id, prefix);
+        const match = !idMatch || (labelMatch && labelMatch.rank <= idMatch.rank) ? labelMatch : idMatch;
+        return match ? { match, value } : null;
+      })
       .filter(
-        (value) => value.id.toLowerCase().startsWith(prefix) || (value.name ?? '').toLowerCase().startsWith(prefix)
+        (
+          item
+        ): item is {
+          match: FuzzyMatch;
+          value: NonNullable<NonNullable<CommandItem['args']>[number]['values']>[number];
+        } => Boolean(item)
+      )
+      .toSorted(
+        (a, b) => a.match.rank - b.match.rank || (a.value.name ?? a.value.id).localeCompare(b.value.name ?? b.value.id)
       )
       .slice(0, 8)
-      .map((value) => ({
+      .map(({ match, value }) => ({
         key: value.id,
         label: value.name ?? value.id,
+        labelMatches: match.indices,
         hint: value.description,
         insert: insertValue(value.id),
+        replace,
         dismissAfter: true
       }));
   }
   if (arg.type === 'model') {
     return profiles
-      .filter((profile) => profile.alias.toLowerCase().startsWith(prefix))
+      .map((profile) => {
+        const match = bestLabelMatch(profile.alias, prefix);
+        return match ? { match, profile } : null;
+      })
+      .filter((item): item is { match: FuzzyMatch; profile: CommandMenuProfile } => Boolean(item))
+      .toSorted((a, b) => a.match.rank - b.match.rank || a.profile.alias.localeCompare(b.profile.alias))
       .slice(0, 8)
-      .map((profile) => ({
+      .map(({ match, profile }) => ({
         key: profile.alias,
         label: profile.alias,
+        labelMatches: match.indices,
         hint: `${profile.routes.chat.provider}:${profile.routes.chat.modelId}`,
         insert: insertValue(profile.alias),
+        replace,
         dismissAfter: true
       }));
   }
   if (arg.type === 'session') {
     return sessions
-      .filter((session) => session.title.toLowerCase().includes(prefix))
+      .map((session) => {
+        const match = bestLabelMatch(session.title, prefix);
+        return match ? { match, session } : null;
+      })
+      .filter((item): item is { match: FuzzyMatch; session: Session } => Boolean(item))
+      .toSorted((a, b) => a.match.rank - b.match.rank || a.session.title.localeCompare(b.session.title))
       .slice(0, 8)
-      .map((session, index) => ({
+      .map(({ session }, index) => ({
         key: session.id,
         label: String(index + 1),
         hint: session.title,
         insert: insertValue(String(index + 1)),
+        replace,
         dismissAfter: true
       }));
   }

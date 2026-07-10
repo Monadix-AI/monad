@@ -8,6 +8,8 @@ import { useMemo } from 'react';
 
 import { useShellPathname } from '#/hooks/use-shell-location';
 import {
+  isInboxPath,
+  isProjectSettingsPath,
   isSettingsPath,
   isStudioPath,
   isWorkspacePath,
@@ -24,6 +26,8 @@ export type ShellRoute = {
   isStudioRoute: boolean;
   isWorkspaceRoute: boolean;
   isSettingsRoute: boolean;
+  isInboxRoute: boolean;
+  isProjectSettingsRoute: boolean;
   settingsSection: SettingsSectionId;
   routedStudioSection: StudioSectionId | null;
   studioSection: StudioSectionId;
@@ -41,6 +45,8 @@ export function useShellRoute(): ShellRoute {
       isStudioRoute: isStudioPath(pathname),
       isWorkspaceRoute: isWorkspacePath(pathname),
       isSettingsRoute: isSettingsPath(pathname),
+      isInboxRoute: isInboxPath(pathname),
+      isProjectSettingsRoute: isProjectSettingsPath(pathname),
       settingsSection: settingsSectionFromPathname(pathname) ?? 'connection',
       routedStudioSection,
       studioSection: routedStudioSection ?? 'runtime',
