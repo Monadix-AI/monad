@@ -27,7 +27,7 @@ import { $, Glob } from 'bun';
 
 import rootPkg from '../package.json' with { type: 'json' };
 import { createPlatformModulePlugin } from './lib/platform-modules.ts';
-import { sandboxPlatformModuleRule } from './lib/release-platform-modules.ts';
+import { releasePlatformModuleRules } from './lib/release-platform-modules.ts';
 
 const ROOT = resolve(import.meta.dir, '..');
 const DIST = join(ROOT, 'dist');
@@ -205,7 +205,7 @@ try {
     log(`Compiling ${artifact} (bun-${triple(t)})…`);
     const platformModules = createPlatformModulePlugin({
       platform: t.os,
-      rules: [sandboxPlatformModuleRule(ROOT)]
+      rules: releasePlatformModuleRules(ROOT)
     });
     const res = await Bun.build({
       entrypoints: [join(ROOT, 'apps/cli/src/bin.ts'), ...webFiles],
