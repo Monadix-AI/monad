@@ -1,9 +1,9 @@
 import type { MonadConfig, MonadPaths } from '@monad/home';
 import type { Logger } from '@monad/logger';
 import type { ChannelService } from '#/channels/channel.ts';
+import type { ConfigSnapshot } from '#/config/service.ts';
 import type { AtomPackRegistry } from '#/handlers/atom-pack/index.ts';
 import type { HookConfig } from '#/hooks/runner.ts';
-import type { ConfigBus } from '#/services/config-bus.ts';
 import type { EmbeddingIndexer } from '#/services/embedding-indexer.ts';
 import type { AgentPersonaService } from '#/services/generation/agent-persona.ts';
 import type { I18nService } from '#/services/i18n.ts';
@@ -16,10 +16,9 @@ import { configureDeveloperLogTransport } from '#/services/developer-log.ts';
 import { applyAcpDelegateTool } from './acp-delegate.ts';
 import { configureToolBackends } from './tool-backends.ts';
 
-// Wire the configBus hot-reload subscriber now that all services are in scope. The bus fires on both
+// Wire the configReloader hot-reload subscriber now that all services are in scope. The bus fires on both
 // file-watcher events (disk edits) and in-process commit() calls (settings API).
-export function registerHotReload(deps: {
-  configBus: ConfigBus;
+export function createHotReload(deps: {
   paths: MonadPaths;
   store: Store;
   agentPersona: AgentPersonaService;
@@ -33,9 +32,8 @@ export function registerHotReload(deps: {
   setInboundApprovalMode: (mode: MonadConfig['openaiCompat']['approval']) => void;
   setHooksConfig: (config: HookConfig) => void;
   setPolicyHooksConfig: (config: HookConfig) => void;
-}): void {
+}): (snapshot: ConfigSnapshot) => Promise<void> {
   const {
-    configBus,
     paths,
     store,
     agentPersona,
@@ -51,7 +49,7 @@ export function registerHotReload(deps: {
     setPolicyHooksConfig
   } = deps;
 
-  configBus.subscribe(async ({ cfg: freshCfg, auth: freshAuth }) => {
+  return async ({ cfg: freshCfg, auth: freshAuth }) => {
     configureDeveloperLogTransport(paths, freshCfg.developerMode === true);
     // Hot-apply the inbound-delegation approval policy (the agent gate reads this live).
     setInboundApprovalMode(freshCfg.openaiCompat.approval);
@@ -89,5 +87,5 @@ export function registerHotReload(deps: {
     setPolicyHooksConfig(freshCfg.policyHooks ?? {});
     i18nService.reload(freshCfg);
     await configureToolBackends(freshCfg, freshAuth ?? undefined);
-  });
+  };
 }

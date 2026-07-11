@@ -1,11 +1,11 @@
 import type { MonadPaths } from '@monad/home';
 import type { InitDockerResponse, SetToolBackendsRequest, ToolBackendsResponse } from '@monad/protocol';
-import type { ConfigBus } from '#/services/config-bus.ts';
+import type { ConfigReloader } from '#/config/reloader.ts';
 
 import { loadAll, loadAuth, saveProfile } from '@monad/home';
 import { detectDockerRuntime, dockerRuntimeAvailable } from '@monad/monad-power-pack';
 
-export function createToolBackendsModule(paths: MonadPaths, configBus?: ConfigBus) {
+export function createToolBackendsModule(paths: MonadPaths, configReloader?: ConfigReloader) {
   // Probe docker availability once at module creation time (cached in dockerRuntimeAvailable()).
   void detectDockerRuntime();
 
@@ -80,8 +80,8 @@ export function createToolBackendsModule(paths: MonadPaths, configBus?: ConfigBu
     }
 
     await saveProfile(paths.profile, cfg);
-    if (configBus) {
-      await configBus.publish({ cfg, auth: await loadAuth(paths.auth) });
+    if (configReloader) {
+      await configReloader.publish({ cfg, auth: await loadAuth(paths.auth) });
     }
 
     return getToolBackends();

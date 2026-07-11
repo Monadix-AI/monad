@@ -240,7 +240,7 @@ async function validateSkillDirForImport(root: string): Promise<void> {
   }
 }
 
-export function createSettingsImportModule({ paths, configBus, mcpReconnect }: SettingsImportDeps) {
+export function createSettingsImportModule({ paths, configReloader, mcpReconnect }: SettingsImportDeps) {
   async function preview(req: ImportSettingsRequest): Promise<ImportSettingsPreview> {
     const { cfg } = await loadCfg(paths);
     return previewSettingsImport(req, cfg);
@@ -396,7 +396,8 @@ export function createSettingsImportModule({ paths, configBus, mcpReconnect }: S
       auth.updatedAt = new Date().toISOString();
       await saveAuth(paths.auth, auth);
     }
-    if (configBus && (wroteProfile || wroteAuth || wroteSystem || wroteSandbox)) await configBus.publish({ cfg, auth });
+    if (configReloader && (wroteProfile || wroteAuth || wroteSystem || wroteSandbox))
+      await configReloader.publish({ cfg, auth });
     for (const name of reconnectMcp) await mcpReconnect?.(name);
 
     return {

@@ -28,11 +28,12 @@ import type { SandboxSetup } from '#/platform/sandbox/service.ts';
 import type { DataLayer } from '#/store/lifecycle.ts';
 
 import { join } from 'node:path';
-import { getPaths, initMonadHome, loadAll, loadAuth, resolveDaemonNetwork, saveProfile } from '@monad/home';
+import { getPaths, initMonadHome, loadAll, loadAuth, resolveDaemonNetwork } from '@monad/home';
 import { createLogger } from '@monad/logger';
 
 import { applyAcpDelegateTool } from '#/bootstrap/acp-delegate.ts';
 import { buildServiceTools } from '#/capabilities/tools';
+import { createConfigReloader } from '#/config/reloader.ts';
 import { createHomeConfigSource } from '#/config/source.ts';
 import { type CommandBundle } from '#/handlers/commands/index.ts';
 import { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
@@ -41,7 +42,6 @@ import { daemonChildProcesses, runDaemonChildSupervisorFromArgv } from '#/infra/
 import { initObservability, resolveObservabilityEndpoint } from '#/infra/observability.ts';
 import { ReloadService } from '#/reload/index.ts';
 import { createDaemonModules, createDaemonRuntime } from '#/runtime/create.ts';
-import { ConfigBus } from '#/services/config-bus.ts';
 import { DelegationService } from '#/services/delegation/delegation.ts';
 import { acpAgentCandidatesFromAdapters } from '#/services/delegation/presets.ts';
 import { configureDeveloperLogTransport } from '#/services/developer-log.ts';
@@ -57,7 +57,7 @@ import { createDaemonAgent } from './bootstrap/agent.ts';
 import { createAtomPackRediscoverer } from './bootstrap/atoms.ts';
 import { createChannelGateway } from './bootstrap/channel-gateway.ts';
 import { createCommandBundle } from './bootstrap/commands.ts';
-import { registerHotReload } from './bootstrap/hot-reload.ts';
+import { createHotReload } from './bootstrap/hot-reload.ts';
 import { createInterruptServices } from './bootstrap/interrupts.ts';
 import { createConfigWatchers } from './bootstrap/main-init/config-watchers.ts';
 import { warnIfNotInitialized } from './bootstrap/main-init/init-status.ts';
@@ -143,12 +143,11 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
   const reloadService = new ReloadService({ log: (level, message) => logger[level](message) });
   process.on('exit', () => reloadService.closeAll());
   let runtime: ReturnType<typeof createDaemonRuntime>;
-  const configBus = new ConfigBus(
-    (error) => logger.warn(`monad: config listener error: ${error}`),
-    async () => {
-      await runtime.config.refreshNow();
-    }
-  );
+  let applyApplicationConfig = async (_snapshot: { cfg: MonadConfig; auth: MonadAuth | null }): Promise<void> => {};
+  let applyNetworkConfig = async (_snapshot: { cfg: MonadConfig; auth: MonadAuth | null }): Promise<void> => {};
+  const configReloader = createConfigReloader(async () => {
+    await runtime.config.refreshNow();
+  });
   const configSource = createHomeConfigSource(paths, {
     watch: (onChange) => {
       reloadService.register({
@@ -179,7 +178,10 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     }),
     source: configSource,
     watchOnStart: false,
-    afterReload: (snapshot) => configBus.deliver(snapshot)
+    afterReload: async (snapshot) => {
+      await applyApplicationConfig(snapshot);
+      await applyNetworkConfig(snapshot);
+    }
   });
   await runtime.start();
 
@@ -244,7 +246,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
   });
 
   // Live config-derived state: skill auto-load predicate, hot-swappable command/policy hooks, the
-  // config/profile/auth file watcher (feeding the shared ConfigBus), workspace prompt slots, and
+  // config/profile/auth file watcher (feeding the shared ConfigReloader), workspace prompt slots, and
   // per-agent persona resolution (see ./bootstrap/main-init/config-watchers.ts).
   const {
     getHooksConfig,
@@ -259,7 +261,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     store,
     reloadService,
     logger,
-    configBus,
+    configReloader,
     watchSettings: false
   });
 
@@ -301,16 +303,6 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     log: (m) => logger.info(m)
   });
 
-  // Live config + auth holder. A hot-reload (settings edit, credential change, model swap) updates
-  // these in place via configBus; subsystems read them through getters so changes take effect without
-  // a rebuild. mem0 selects its LLM + embedder FROM this config (no env vars).
-  let liveCfg = cfg;
-  let liveAuth: MonadAuth | null = startupAuth ?? null;
-  configBus.subscribe(({ cfg: fresh, auth }) => {
-    liveCfg = fresh;
-    liveAuth = auth;
-  });
-
   // Memory subsystem: auto-memory note store, layered L1 memory service (mem0 + daemon-managed local
   // qdrant), L2 knowledge graph + background consolidation, the read-only mem0 explorer, and memory
   // settings write-back, with the lifecycle hooks registered (see ./bootstrap/memory.ts).
@@ -333,9 +325,9 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     port: PORT,
     router: agentModel,
     registry,
-    configBus,
-    liveCfg: () => liveCfg,
-    liveAuth: () => liveAuth
+    configReloader,
+    liveCfg: () => runtime.config.get().cfg,
+    liveAuth: () => runtime.config.get().auth
   });
 
   // Lifecycle hooks: config.json command hooks (shell) + any atom-pack-registered in-process hooks,
@@ -367,7 +359,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
 
   // monad-as-ACP-client: register `agent_acp_delegate` into the LIVE registry (not extraTools) so an
   // invite/edit/remove of an external ACP agent takes effect without a restart — re-applied on every
-  // configBus publish below. Mounted only when ≥1 agent is enabled (an empty roster advertises nothing).
+  // configReloader publish below. Mounted only when ≥1 agent is enabled (an empty roster advertises nothing).
   applyAcpDelegateTool({
     registry,
     agents: cfg.acpAgents,
@@ -413,7 +405,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     delegatableAgents: () => agentPersona.delegatableAgents(),
     toolSourceName: (name) => registry.sourceNameOf(name),
     hookRunner,
-    // Live so a profile.json/settings edit to the policy hot-applies (updated by the configBus subscriber).
+    // Live so a profile.json/settings edit to the policy hot-applies (updated by the configReloader subscriber).
     inboundApproval: () => inboundApprovalMode,
     workspacePromptSlots: (sessionId) => ({
       ...getWorkspacePromptSlots(),
@@ -455,8 +447,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     paths
   });
 
-  registerHotReload({
-    configBus,
+  applyApplicationConfig = createHotReload({
     paths,
     store,
     agentPersona,
@@ -473,7 +464,6 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     setHooksConfig,
     setPolicyHooksConfig
   });
-  runtime.startWatching();
 
   // Auto-generated self-signed TLS for the primary HTTPS listener (see ./bootstrap/tls.ts).
   let tlsSetup: TlsSetup = await resolveTlsSetupForNetwork({ https: cfg.network.https, tlsDir: paths.tls });
@@ -546,7 +536,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     clarify,
     channelService,
     localeService: i18nService,
-    configBus,
+    configReloader,
     commands: commandBundle,
     connectObscura,
     disconnectObscura,
@@ -611,11 +601,11 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
 
   // Persist Mo's on/off toggle (web/cli start-stop) so the choice survives a daemon restart.
   const setMoEnabled = async (enabled: boolean): Promise<void> => {
-    if (liveCfg.mo.enabled === enabled) return;
-    liveCfg.mo.enabled = enabled;
-    await saveProfile(paths.profile, liveCfg);
-    await configBus.publish({ cfg: liveCfg, auth: liveAuth });
+    if (runtime.config.get().cfg.mo.enabled === enabled) return;
+    await runtime.config.updateConfig((current) => ({ ...current, mo: { ...current.mo, enabled } }));
   };
+
+  const serveCfg = runtime.config.get().cfg;
 
   // Start listening (TCP + Unix socket, or stdio), print the ready banner, wire shutdown signals,
   // and connect channels (see ./bootstrap/serve.ts).
@@ -624,24 +614,26 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     paths,
     host: HOST,
     port: PORT,
-    https: liveCfg.network.https,
+    https: serveCfg.network.https,
     remoteAccess,
     localHttpFallback: {
-      enabled: liveCfg.network.localHttpFallback.enabled,
+      enabled: serveCfg.network.localHttpFallback.enabled,
       port:
-        resolveDaemonNetwork({ network: liveCfg.network, env: Bun.env }).localHttpFallback?.port ??
-        liveCfg.network.localHttpFallback.port
+        resolveDaemonNetwork({ network: serveCfg.network, env: Bun.env }).localHttpFallback?.port ??
+        serveCfg.network.localHttpFallback.port
     },
-    moBinaryPath: liveCfg.mo.binaryPath,
-    moEnabled: liveCfg.mo.enabled,
+    moBinaryPath: serveCfg.mo.binaryPath,
+    moEnabled: serveCfg.mo.enabled,
     setMoEnabled,
     tlsCert: tlsSetup.cert,
     tlsFingerprint: tlsSetup.fingerprint,
     resolveTlsSetupForNetwork: resolveRuntimeTlsSetup,
-    developerMode: () => liveCfg.developerMode === true,
+    developerMode: () => runtime.config.get().cfg.developerMode === true,
     i18n: i18nService,
     channelService,
-    configBus,
+    onNetworkReloadReady: (reload) => {
+      applyNetworkConfig = reload;
+    },
     onNetworkRuntimeStatusReady: (status) => {
       getNetworkRuntimeStatus = status;
     },
@@ -653,8 +645,15 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
       useMock: USE_MOCK
     },
     openaiCompatConfig: getOpenAiCompatConfig,
+    onShutdown: async () => {
+      schedule.dispose();
+      reloadService.closeAll();
+      await channelService.stop();
+      await runtime.stop();
+    },
     beforeListen: opts?.beforeListen
   });
+  runtime.startWatching();
 }
 
 if (import.meta.main) {

@@ -20,7 +20,7 @@ const ACP_DELEGATE_SOURCE = 'acp-delegate';
 const log = createLogger('acp-delegate');
 
 // Fingerprint of the last-applied state, keyed per registry (so fresh registries in tests are
-// independent). configBus fires on EVERY config/profile/auth write (model edits, approvals, hooks, …);
+// independent). configReloader fires on EVERY config/profile/auth write (model edits, approvals, hooks, …);
 // without this guard each unrelated write would re-resolve all MCP secrets and re-register the tool,
 // bumping toolRevision and forcing the model to re-receive its whole roster next turn. The fingerprint
 // includes the RESOLVED forwarded servers, so a rotated secret (same config, different resolved value)
@@ -47,7 +47,7 @@ export interface ApplyAcpDelegateDeps {
 
 /**
  * (Re)apply the delegate tool from the current acpAgents config. Call once at boot and again on every
- * configBus publish. With zero ENABLED agents the tool is cleared (an empty roster would advertise
+ * configReloader publish. With zero ENABLED agents the tool is cleared (an empty roster would advertise
  * nothing); otherwise it is (re)registered, overwriting any prior build so the description reflects the
  * current roster — and so the forwarded MCP server set reflects the current config.
  */

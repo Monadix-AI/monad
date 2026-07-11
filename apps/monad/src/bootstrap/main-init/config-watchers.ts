@@ -1,5 +1,5 @@
 // Live config-derived state: the skill auto-load predicate, hot-swappable command/policy hook
-// config, the config/profile/auth file watcher (feeding the shared ConfigBus), workspace prompt
+// config, the config/profile/auth file watcher (feeding the shared ConfigReloader), workspace prompt
 // slots (SOUL.md / AGENT.md / USER.md), and per-agent persona resolution. Everything here is a
 // `let` swapped in place on a settings hot-reload so the running agent picks up edits without a
 // restart — accessors are exposed as getters/setters rather than the raw bindings so callers in
@@ -7,13 +7,13 @@
 
 import type { MonadConfig, MonadPaths } from '@monad/home';
 import type { Logger } from '@monad/logger';
+import type { ConfigReloader } from '#/config/reloader.ts';
 import type { HookConfig } from '#/hooks/runner.ts';
 import type { ReloadService } from '#/reload/index.ts';
 import type { Store } from '#/store/db/index.ts';
 
 import { loadAll, loadAuth } from '@monad/home';
 
-import { ConfigBus } from '#/services/config-bus.ts';
 import { AgentPersonaService } from '#/services/generation/agent-persona.ts';
 import { resolveSkillState } from '#/store/home/skills.ts';
 import { loadWorkspacePromptSlots, WORKSPACE_CONTEXT_FILES } from '#/store/home/workspace-context.ts';
@@ -22,7 +22,7 @@ type SkillState = ReturnType<typeof resolveSkillState>;
 type WorkspacePromptSlots = Awaited<ReturnType<typeof loadWorkspacePromptSlots>>;
 
 export interface ConfigWatchers {
-  configBus: ConfigBus;
+  configReloader: ConfigReloader;
   computeSkillState: (c: MonadConfig) => SkillState;
   getSkillState: () => SkillState;
   setSkillState: (state: SkillState) => void;
@@ -40,7 +40,7 @@ export async function createConfigWatchers(deps: {
   store: Store;
   reloadService: ReloadService;
   logger: Logger;
-  configBus?: ConfigBus;
+  configReloader: ConfigReloader;
   watchSettings?: boolean;
 }): Promise<ConfigWatchers> {
   const { paths, cfg, store, reloadService, logger } = deps;
@@ -63,7 +63,7 @@ export async function createConfigWatchers(deps: {
 
   // In-process pub/sub for config/profile changes. Shared by the file-watcher and commit() paths
   // so both trigger the exact same set of reload callbacks.
-  const configBus = deps.configBus ?? new ConfigBus((err) => logger.warn(`monad: config-bus listener error: ${err}`));
+  const { configReloader } = deps;
 
   // Watch the home dir, not the files directly, so atomic rename-replace writes are caught.
   // Network/sandbox/principal settings are NOT hot-applied (wired at boot) — those need a restart.
@@ -79,7 +79,7 @@ export async function createConfigWatchers(deps: {
       onChange: async () => {
         const [freshCfg, freshAuth] = await Promise.all([loadAll(paths.config, paths.profile), loadAuth(paths.auth)]);
         if (!freshCfg) return;
-        await configBus.publish({ cfg: freshCfg, auth: freshAuth });
+        await configReloader.publish({ cfg: freshCfg, auth: freshAuth });
         logger.info('monad: hot-reloaded settings from disk');
       }
     });
@@ -100,7 +100,7 @@ export async function createConfigWatchers(deps: {
 
   // Per-agent persona (Studio): each session's bound agent contributes its own AGENT.md as the system
   // prompt, falling back to the global workspace identity. The cache is sync (the loop builds the
-  // prompt per turn) and hot-reloads on agents-dir edits; the configBus subscriber re-reads on agent
+  // prompt per turn) and hot-reloads on agents-dir edits; the configReloader subscriber re-reads on agent
   // create/rename/delete (an agent's row + dir may have changed).
   const agentPersona = new AgentPersonaService(paths, store);
   await agentPersona.reload(cfg);
@@ -115,7 +115,7 @@ export async function createConfigWatchers(deps: {
   });
 
   return {
-    configBus,
+    configReloader,
     computeSkillState,
     getSkillState: () => skillState,
     setSkillState: (state) => {

@@ -19,7 +19,7 @@ export interface AcpAgentDeps {
 }
 
 // External ACP agents are SYSTEM config (config.json). Writing here persists via saveSystemConfig,
-// which trips the config.json watcher → configBus → applyAcpDelegateTool, so an invite/edit/enable/
+// which trips the config.json watcher → configReloader → applyAcpDelegateTool, so an invite/edit/enable/
 // disable/remove re-applies the `agent_acp_delegate` tool LIVE (no restart — see bootstrap/acp-delegate.ts).
 // `env` values are `${env:NAME}` refs, not secrets, so the view is the full config — nothing to strip.
 const toView = (a: AcpAgentConfig): AcpAgentView => ({

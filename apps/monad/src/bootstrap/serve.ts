@@ -7,8 +7,8 @@ import type { MonadConfig, MonadPaths } from '@monad/home';
 import type { NetworkRuntimeStatus } from '@monad/protocol';
 import type { TlsSetup } from '#/bootstrap/tls.ts';
 import type { ChannelService } from '#/channels/channel.ts';
+import type { ConfigSnapshot } from '#/config/service.ts';
 import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
-import type { ConfigBus } from '#/services/config-bus.ts';
 import type { I18nService } from '#/services/i18n.ts';
 import type { MutableRemoteAccessState } from '#/transports/http.ts';
 
@@ -80,11 +80,12 @@ export interface ServeDeps {
   developerMode: boolean | (() => boolean);
   i18n: I18nService;
   channelService: ChannelService;
-  configBus?: ConfigBus;
+  onNetworkReloadReady?: (reload: (snapshot: ConfigSnapshot) => Promise<void>) => void;
   onNetworkRuntimeStatusReady?: (status: () => NetworkRuntimeStatus) => void;
   flags: { devMode: boolean; devSilent: boolean; stdoutRpc: boolean; stdioMode: boolean; useMock: boolean };
   beforeListen?: (app: ReturnType<typeof createHttpTransport>) => void;
   openaiCompatConfig?: () => Promise<{ enabled: boolean; token?: string }>;
+  onShutdown?: () => Promise<void>;
 }
 
 export type TcpListenerPlan = { scheme: 'https' | 'http'; host: string; port: number };
@@ -317,7 +318,6 @@ export async function serveDaemon(deps: ServeDeps): Promise<void> {
     developerMode,
     i18n,
     channelService,
-    configBus,
     onNetworkRuntimeStatusReady,
     flags,
     openaiCompatConfig
@@ -383,7 +383,7 @@ export async function serveDaemon(deps: ServeDeps): Promise<void> {
   process.on('exit', () => {
     tcpRuntime.stop();
   });
-  configBus?.subscribe(async ({ cfg }) => {
+  deps.onNetworkReloadReady?.(async ({ cfg }) => {
     const endpoint = resolveDaemonNetwork({ network: cfg.network, env: Bun.env });
     const nextTlsSetup = deps.resolveTlsSetupForNetwork
       ? await deps.resolveTlsSetupForNetwork(cfg.network.https)
@@ -446,6 +446,13 @@ export async function serveDaemon(deps: ServeDeps): Promise<void> {
     });
   }
 
+  if (!useMock) {
+    process.on('exit', () => void channelService.stop());
+    const hot = (import.meta as ImportMeta & { hot?: { dispose(cb: () => void): void } }).hot;
+    hot?.dispose(() => void channelService.stop());
+    await channelService.start();
+  }
+
   const mockTag = useMock ? ' (mock model)' : '';
   const primaryScheme = https.enabled ? 'https' : 'http';
   const daemonUrl = `${primaryScheme}://${hostForUrl(host)}:${port}`;
@@ -486,46 +493,31 @@ export async function serveDaemon(deps: ServeDeps): Promise<void> {
   // fires synchronously), stops the unix servers, and disposes timers. Idempotent: a second
   // signal during teardown is ignored.
   let shuttingDown = false;
-  const gracefulShutdown = (farewell: boolean): void => {
+  const gracefulShutdown = async (farewell: boolean): Promise<void> => {
     if (shuttingDown) return;
     shuttingDown = true;
     if (farewell) printGoodbye();
+    await deps.onShutdown?.();
     process.exit(0);
   };
   // Expose graceful shutdown to the HTTP layer (used by POST /v1/daemon/stop on Windows, where
   // SIGTERM cannot be caught on a detached process). Must be registered before the signal handlers
   // below so the HTTP route is ready the instant the daemon starts accepting connections.
-  shutdownBus.register(() => gracefulShutdown(false));
+  shutdownBus.register(() => void gracefulShutdown(false));
 
   // SIGINT (Ctrl-C in a terminal `monad daemon`, all platforms) prints the farewell banner.
-  process.once('SIGINT', () => gracefulShutdown(true));
+  process.once('SIGINT', () => void gracefulShutdown(true));
   // SIGTERM (`monad stop` on Unix) skips the banner — the CLI prints Goodbye on its TTY instead,
   // since the daemon runs detached without a TTY and its stdout has no reader. Per the Node docs
   // SIGTERM "is not supported on Windows" (never OS-generated; process.kill SIGTERM = hard kill),
   // so this handler only ever fires on Unix.
-  process.once('SIGTERM', () => gracefulShutdown(false));
+  process.once('SIGTERM', () => void gracefulShutdown(false));
   // Windows-relevant console signals (Node docs): SIGBREAK fires on Ctrl+Break, SIGHUP when the
   // console window is closed. These only reach the daemon when it owns an attached console (a
   // foreground `monad daemon`), NOT the detached `monad start` background process — there is no
   // way to send a catchable signal to a detached process on Windows. SIGHUP also covers a closed
   // controlling terminal on Unix; when supervised, ignore it so the launcher shell closing does not
   // stop the background daemon.
-  process.once('SIGBREAK', () => gracefulShutdown(false));
-  if (!isSupervisedDaemon()) process.once('SIGHUP', () => gracefulShutdown(false));
-
-  // Connect channels after the banner so startup noise doesn't precede the "ready" signal.
-  // Non-fatal per-channel (start() already swallows individual errors); run detached so a slow IM
-  // handshake never delays the daemon becoming usable.
-  if (!useMock) {
-    process.on('exit', () => void channelService.stop());
-    // `bun --hot` re-evaluates this module on every source change WITHOUT exiting the process, so
-    // process.on('exit') never fires and the previous evaluation's channel poll loops are never
-    // aborted. For Telegram that means a second getUpdates long-poll on the same token → permanent
-    // "Conflict: terminated by other getUpdates request". Abort the old channels before the module
-    // is swapped so exactly one poll loop runs at a time. (No-op in prod: the production `start`
-    // script runs without --hot, so import.meta.hot is undefined.)
-    const hot = (import.meta as ImportMeta & { hot?: { dispose(cb: () => void): void } }).hot;
-    hot?.dispose(() => void channelService.stop());
-    void channelService.start();
-  }
+  process.once('SIGBREAK', () => void gracefulShutdown(false));
+  if (!isSupervisedDaemon()) process.once('SIGHUP', () => void gracefulShutdown(false));
 }

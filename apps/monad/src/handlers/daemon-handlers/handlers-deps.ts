@@ -15,9 +15,9 @@ import type {
 import type { WorkspaceExperienceApiHandler } from '@monad/sdk-atom';
 import type { AtomConflict } from '#/atoms/resolve.ts';
 import type { ChannelService } from '#/channels/channel.ts';
+import type { ConfigReloader } from '#/config/reloader.ts';
 import type { SessionDeps } from '#/handlers/session/index.ts';
 import type { ModelDeps } from '#/handlers/settings/model/index.ts';
-import type { ConfigBus } from '#/services/config-bus.ts';
 import type { ClarifyService } from '#/services/generation/clarify.ts';
 import type { I18nService } from '#/services/i18n.ts';
 import type { KvService } from '#/services/kv.ts';
@@ -54,7 +54,7 @@ export interface DaemonHandlerDeps extends SessionDeps, ModelDeps {
   channelService: ChannelService;
   /** Locale gateway — backs /v1/settings/locale + the web catalog endpoint. */
   localeService: I18nService;
-  configBus?: ConfigBus;
+  configReloader?: ConfigReloader;
   connectObscura?: (config: ObscuraConfig, command: string) => Promise<{ connected: boolean; tools: string[] }>;
   disconnectObscura?: () => Promise<void>;
   getObscuraStatus?: () => { connected: boolean; tools: string[] };

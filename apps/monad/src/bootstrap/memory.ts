@@ -18,7 +18,7 @@ import type {
 import type { BeliefExplanation, ConsolidateSummary } from '@monad/sdk-atom';
 import type { ModelRouter } from '#/agent/index.ts';
 import type { NoteStore } from '#/capabilities/tools/registry/memory.ts';
-import type { ConfigBus } from '#/services/config-bus.ts';
+import type { ConfigReloader } from '#/config/reloader.ts';
 import type { MemoryHookRegistry } from '#/services/memory/hooks.ts';
 import type { MemoryService } from '#/services/memory/index.ts';
 import type { Mem0Data } from '#/services/memory/mem0-explorer.ts';
@@ -54,7 +54,7 @@ export interface MemorySubsystemDeps {
   router: ModelRouter;
   /** The daemon hook registry — memory lifecycle hooks register here. */
   registry: MemoryHookRegistry;
-  configBus: ConfigBus;
+  configReloader: ConfigReloader;
   /** Live config holder (owned by main.ts), so a settings hot-reload takes effect without rebuild. */
   liveCfg: () => MonadConfig;
   liveAuth: () => MonadAuth | null;
@@ -76,7 +76,7 @@ export interface MemorySubsystem {
 }
 
 export function createMemorySubsystem(deps: MemorySubsystemDeps): MemorySubsystem {
-  const { store, paths, port, router: agentModel, registry, configBus, liveCfg, liveAuth } = deps;
+  const { store, paths, port, router: agentModel, registry, configReloader, liveCfg, liveAuth } = deps;
 
   // Auto-memory dogfood: the agent saves session notes via the memory_* tools; a built-in
   // UserPromptSubmit hook re-surfaces them every turn (the capture/recall split hooks make clean).
@@ -386,7 +386,7 @@ export function createMemorySubsystem(deps: MemorySubsystemDeps): MemorySubsyste
   const persistMemory = async (mutate: (m: MonadConfig['memory']) => void): Promise<void> => {
     mutate(liveCfg().memory);
     await saveProfile(paths.profile, liveCfg());
-    await configBus.publish({ cfg: liveCfg(), auth: liveAuth() });
+    await configReloader.publish({ cfg: liveCfg(), auth: liveAuth() });
   };
   const memorySetBackend = async (backend: MemoryBackendId): Promise<void> => {
     await persistMemory((m) => {

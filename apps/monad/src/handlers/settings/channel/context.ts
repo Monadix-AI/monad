@@ -1,13 +1,13 @@
 import type { MonadAuth, MonadConfig, MonadPaths } from '@monad/home';
 import type { ChannelService } from '#/channels/channel.ts';
-import type { ConfigBus } from '#/services/config-bus.ts';
+import type { ConfigReloader } from '#/config/reloader.ts';
 
 import { loadAll, loadAuth, saveAuth, saveProfile } from '@monad/home';
 
 export interface ChannelDeps {
   paths: MonadPaths;
   channelService: ChannelService;
-  configBus?: ConfigBus;
+  configReloader?: ConfigReloader;
 }
 
 export interface ChannelSettingsContext {
@@ -22,7 +22,7 @@ function emptyAuth(): MonadAuth {
   return { version: 1, activeProvider: null, updatedAt: new Date().toISOString(), credentialPool: {} };
 }
 
-export function createChannelContext({ paths, channelService, configBus }: ChannelDeps): ChannelSettingsContext {
+export function createChannelContext({ paths, channelService, configReloader }: ChannelDeps): ChannelSettingsContext {
   async function read(): Promise<{ cfg: MonadConfig; auth: MonadAuth }> {
     const cfg = await loadAll(paths.config, paths.profile);
     if (!cfg) throw new Error('channel: config.json missing');
@@ -34,8 +34,8 @@ export function createChannelContext({ paths, channelService, configBus }: Chann
     await saveProfile(paths.profile, cfg);
     if (auth) await saveAuth(paths.auth, auth);
     const resolvedAuth = auth ?? (await loadAuth(paths.auth)) ?? emptyAuth();
-    if (configBus) {
-      await configBus.publish({ cfg, auth: resolvedAuth });
+    if (configReloader) {
+      await configReloader.publish({ cfg, auth: resolvedAuth });
     } else {
       await channelService.reload(cfg, resolvedAuth);
     }
@@ -44,8 +44,8 @@ export function createChannelContext({ paths, channelService, configBus }: Chann
   async function commitAuth(cfg: MonadConfig, auth: MonadAuth): Promise<void> {
     auth.updatedAt = new Date().toISOString();
     await saveAuth(paths.auth, auth);
-    if (configBus) {
-      await configBus.publish({ cfg, auth });
+    if (configReloader) {
+      await configReloader.publish({ cfg, auth });
     } else {
       await channelService.reload(cfg, auth);
     }
