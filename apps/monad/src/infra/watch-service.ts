@@ -8,14 +8,14 @@ export interface WatchHandle {
   close(): void;
 }
 
-/** The watch primitive ReloadService builds on. Defaults to `node:fs` watch. */
+/** The watch primitive WatchService builds on. Defaults to `node:fs` watch. */
 export type WatchFn = (
   path: string,
   options: { persistent: boolean; recursive?: boolean },
   listener: (event: string, filename: string | null) => void
 ) => WatchHandle;
 
-export interface ReloadSource {
+export interface WatchSource {
   /** Human label, used in logs and to key this source's debounce timer. */
   name: string;
   /** File or directory to watch. A missing path is logged and skipped (non-fatal). */
@@ -26,11 +26,11 @@ export interface ReloadSource {
   debounceMs?: number;
   /** Optional filter on the changed filename; return false to ignore the event. */
   filter?: (filename: string | null) => boolean;
-  /** Reload logic. Errors are caught and logged, never thrown. */
+  /** Handler invoked after matching filesystem events settle. Errors are caught and logged. */
   onChange: () => void | Promise<void>;
 }
 
-export interface ReloadServiceDeps {
+export interface WatchServiceDeps {
   log: (level: 'info' | 'warn', message: string) => void;
   /** Override the watch primitive (tests inject a fake). Defaults to `node:fs` watch. */
   watchFn?: WatchFn;
@@ -38,17 +38,17 @@ export interface ReloadServiceDeps {
 
 const DEFAULT_DEBOUNCE_MS = 150;
 
-export class ReloadService {
+export class WatchService {
   private readonly watchFn: WatchFn;
   private readonly handles: WatchHandle[] = [];
   private readonly timers = new Map<string, ReturnType<typeof setTimeout>>();
 
-  constructor(private readonly deps: ReloadServiceDeps) {
+  constructor(private readonly deps: WatchServiceDeps) {
     this.watchFn = deps.watchFn ?? (watch as unknown as WatchFn);
   }
 
   /** Returns true if the watcher started; a non-watchable path is logged and skipped. */
-  register(source: ReloadSource): boolean {
+  register(source: WatchSource): boolean {
     const debounceMs = source.debounceMs ?? DEFAULT_DEBOUNCE_MS;
     const listener = (_event: string, filename: string | null) => this._dispatch(source, debounceMs, filename);
     try {
@@ -62,7 +62,7 @@ export class ReloadService {
         handle = this.watchFn(source.path, { persistent: false, recursive: false }, listener);
         this.deps.log(
           'warn',
-          `reload watcher "${source.name}": recursive watch not supported on this platform — watching top-level only`
+          `watcher "${source.name}": recursive watch not supported on this platform — watching top-level only`
         );
       }
       this.handles.push(handle);
@@ -70,13 +70,13 @@ export class ReloadService {
     } catch (err) {
       this.deps.log(
         'warn',
-        `reload watcher "${source.name}" not started: ${err instanceof Error ? err.message : String(err)}`
+        `watcher "${source.name}" not started: ${err instanceof Error ? err.message : String(err)}`
       );
       return false;
     }
   }
 
-  private _dispatch(source: ReloadSource, debounceMs: number, filename: string | null): void {
+  private _dispatch(source: WatchSource, debounceMs: number, filename: string | null): void {
     if (source.filter && !source.filter(filename)) return;
     const pending = this.timers.get(source.name);
     if (pending) clearTimeout(pending);
@@ -87,7 +87,10 @@ export class ReloadService {
         void Promise.resolve()
           .then(source.onChange)
           .catch((err: unknown) =>
-            this.deps.log('warn', `reload "${source.name}" failed: ${err instanceof Error ? err.message : String(err)}`)
+            this.deps.log(
+              'warn',
+              `watch handler "${source.name}" failed: ${err instanceof Error ? err.message : String(err)}`
+            )
           );
       }, debounceMs)
     );

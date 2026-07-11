@@ -7,12 +7,9 @@
 
 import type { MonadConfig, MonadPaths } from '@monad/home';
 import type { Logger } from '@monad/logger';
-import type { ConfigReloader } from '#/config/reloader.ts';
 import type { HookConfig } from '#/hooks/runner.ts';
-import type { ReloadService } from '#/reload/index.ts';
+import type { WatchService } from '#/infra/watch-service.ts';
 import type { Store } from '#/store/db/index.ts';
-
-import { loadAll, loadAuth } from '@monad/home';
 
 import { AgentPersonaService } from '#/services/generation/agent-persona.ts';
 import { resolveSkillState } from '#/store/home/skills.ts';
@@ -22,7 +19,6 @@ type SkillState = ReturnType<typeof resolveSkillState>;
 type WorkspacePromptSlots = Awaited<ReturnType<typeof loadWorkspacePromptSlots>>;
 
 export interface ConfigWatchers {
-  configReloader: ConfigReloader;
   computeSkillState: (c: MonadConfig) => SkillState;
   getSkillState: () => SkillState;
   setSkillState: (state: SkillState) => void;
@@ -38,12 +34,10 @@ export async function createConfigWatchers(deps: {
   paths: MonadPaths;
   cfg: MonadConfig;
   store: Store;
-  reloadService: ReloadService;
+  watchService: WatchService;
   logger: Logger;
-  configReloader: ConfigReloader;
-  watchSettings?: boolean;
 }): Promise<ConfigWatchers> {
-  const { paths, cfg, store, reloadService, logger } = deps;
+  const { paths, cfg, store, watchService, logger } = deps;
 
   // Effective skill state resolver (global master + per-instance switches, overridden by the
   // active agent's switches). A `let` so a config.json edit can swap it in and re-map skills
@@ -61,34 +55,10 @@ export async function createConfigWatchers(deps: {
   // settings API never writes, so user edits can't remove an org-enforced rule.
   let policyHooksConfig: HookConfig = cfg.policyHooks ?? {};
 
-  // In-process pub/sub for config/profile changes. Shared by the file-watcher and commit() paths
-  // so both trigger the exact same set of reload callbacks.
-  const { configReloader } = deps;
-
-  // Watch the home dir, not the files directly, so atomic rename-replace writes are caught.
-  // Network/sandbox/principal settings are NOT hot-applied (wired at boot) — those need a restart.
-  if (deps.watchSettings !== false) {
-    reloadService.register({
-      name: 'settings',
-      path: paths.home,
-      filter: (filename) =>
-        filename === 'config.json' ||
-        filename === 'profile.json' ||
-        filename === 'sandbox.json' ||
-        filename === 'auth.json',
-      onChange: async () => {
-        const [freshCfg, freshAuth] = await Promise.all([loadAll(paths.config, paths.profile), loadAuth(paths.auth)]);
-        if (!freshCfg) return;
-        await configReloader.publish({ cfg: freshCfg, auth: freshAuth });
-        logger.info('monad: hot-reloaded settings from disk');
-      }
-    });
-  }
-
   // User-editable prompt slots from the workspace root — SOUL.md, AGENT.md/AGENTS.md, USER.md.
   // A `let` so an edit hot-reloads without rebuilding the agent.
   let workspacePromptSlots = await loadWorkspacePromptSlots(paths.workspace);
-  reloadService.register({
+  watchService.register({
     name: 'workspace-context',
     path: paths.workspace,
     filter: (filename) => Boolean(filename && WORKSPACE_CONTEXT_FILES.includes(filename)),
@@ -100,11 +70,11 @@ export async function createConfigWatchers(deps: {
 
   // Per-agent persona (Studio): each session's bound agent contributes its own AGENT.md as the system
   // prompt, falling back to the global workspace identity. The cache is sync (the loop builds the
-  // prompt per turn) and hot-reloads on agents-dir edits; the configReloader subscriber re-reads on agent
+  // prompt per turn) and hot-reloads on agents-dir edits; the config subscriber re-reads on agent
   // create/rename/delete (an agent's row + dir may have changed).
   const agentPersona = new AgentPersonaService(paths, store);
   await agentPersona.reload(cfg);
-  reloadService.register({
+  watchService.register({
     name: 'agent-persona',
     path: paths.agents,
     filter: (filename) => Boolean(filename?.endsWith('AGENT.md')),
@@ -115,7 +85,6 @@ export async function createConfigWatchers(deps: {
   });
 
   return {
-    configReloader,
     computeSkillState,
     getSkillState: () => skillState,
     setSkillState: (state) => {

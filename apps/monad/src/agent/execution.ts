@@ -296,7 +296,7 @@ export function createAgentExecutionService(deps: AgentDeps): AgentExecutionServ
   const agent = createAgent({
     model: agentModel,
     // skill_manage lets the agent author its own skills (procedural memory); it's high-risk,
-    // so writes route through the oversight gate. Edits land live via the ReloadService.
+    // so writes route through the oversight gate. Edits land live via the WatchService.
     // A getter (not a fixed array) so the LIVE base tools compose with the static model-derived
     // tools each turn — a hot-installed atom-pack/MCP tool appears without a daemon restart.
     tools: getAllTools,

@@ -51,7 +51,7 @@ import { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
 import { createHookRunner } from '#/hooks/runner.ts';
 import { daemonChildProcesses, runDaemonChildSupervisorFromArgv } from '#/infra/daemon-child-processes.ts';
 import { initObservability, resolveObservabilityEndpoint } from '#/infra/observability.ts';
-import { ReloadService } from '#/reload/index.ts';
+import { WatchService } from '#/infra/watch-service.ts';
 import { createDaemonModules, createDaemonRuntime } from '#/runtime/create.ts';
 import { configureDaemonLogging, readDaemonRuntimeFlags } from '#/runtime/flags.ts';
 import { acquireDaemonSingletonLock } from '#/runtime/singleton.ts';
@@ -140,8 +140,8 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     .json()
     .then((value: { version?: string }) => value.version ?? '0.0.0')
     .catch(() => '0.0.0');
-  const reloadService = new ReloadService({ log: (level, message) => logger[level](message) });
-  process.on('exit', () => reloadService.closeAll());
+  const watchService = new WatchService({ log: (level, message) => logger[level](message) });
+  process.on('exit', () => watchService.closeAll());
   let runtime: ReturnType<typeof createDaemonRuntime>;
   let applyApplicationConfig = async (_snapshot: { cfg: MonadConfig; auth: MonadAuth | null }): Promise<void> => {};
   let applyNetworkConfig = async (_snapshot: { cfg: MonadConfig; auth: MonadAuth | null }): Promise<void> => {};
@@ -150,7 +150,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
   });
   const configSource = createHomeConfigSource(paths, {
     watch: (onChange) => {
-      reloadService.register({
+      watchService.register({
         name: 'settings',
         path: paths.home,
         filter: (filename) =>
@@ -172,7 +172,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
       devMode: DEV_MODE || DEV_SILENT,
       useMock: USE_MOCK,
       monadVersion,
-      watcher: reloadService,
+      watcher: watchService,
       logger,
       startStore: async () => dataLayer
     }),
@@ -235,7 +235,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
   if (!USE_MOCK) {
     warnIfNotInitialized({ cfg, auth: startupAuth, host: HOST, port: PORT, logger });
   }
-  reloadService.register({
+  watchService.register({
     name: 'providers',
     path: paths.providers,
     filter: (filename) => Boolean(filename?.endsWith('.js')),
@@ -259,10 +259,8 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     paths,
     cfg,
     store,
-    reloadService,
-    logger,
-    configReloader,
-    watchSettings: false
+    watchService,
+    logger
   });
 
   const activeDeveloperMode = cfg.developerMode === true || DEV_MODE || DEV_SILENT;
@@ -573,7 +571,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
 
   // Watch the atoms directory for drop-in installs: a new atom pack folder (or a removed one)
   // triggers the same rediscovery path as API-driven install/remove, so no daemon restart needed.
-  reloadService.register({
+  watchService.register({
     name: 'atoms',
     path: paths.atoms,
     recursive: true,
@@ -643,7 +641,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     openaiCompatConfig: getOpenAiCompatConfig,
     onShutdown: async () => {
       schedule.dispose();
-      reloadService.closeAll();
+      watchService.closeAll();
       await channelService.stop();
       await runtime.stop();
     },

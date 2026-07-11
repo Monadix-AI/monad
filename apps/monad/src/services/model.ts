@@ -111,7 +111,7 @@ export class ModelService {
   }
 
   /** Scan `dir` for `.js` atom pack files and register any providers found. The daemon wires
-   *  live re-scan-on-change through the shared ReloadService (src/reload), not here. */
+   *  live re-scan-on-change through the shared WatchService, not here. */
   discoverProviders(dir: string): Promise<DiscoverResult> {
     return this.registry.discover(dir);
   }

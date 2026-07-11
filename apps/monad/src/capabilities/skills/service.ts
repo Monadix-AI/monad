@@ -6,7 +6,7 @@
 import type { MonadPaths } from '@monad/home';
 import type { AtomConflict, SkillListInstance, SkillListItem } from '@monad/protocol';
 import type { LoadedSkill } from '#/agent/index.ts';
-import type { ReloadSource } from '#/reload/index.ts';
+import type { WatchSource } from '#/infra/watch-service.ts';
 import type { ResolvedSkillState, Skill, SkillCollision, SkillStateRef } from '#/store/home/skills.ts';
 
 import { readdir } from 'node:fs/promises';
@@ -38,17 +38,17 @@ export interface SkillSubsystem {
 }
 
 export interface SkillWatchRegistrar {
-  register(source: ReloadSource): boolean;
+  register(source: WatchSource): boolean;
 }
 
 export async function createSkillSubsystem(deps: {
   paths: MonadPaths;
-  reloadService: SkillWatchRegistrar;
+  watchService: SkillWatchRegistrar;
   monadVersion: string;
   /** Live skill-state resolver. Passed as a function so config hot-reload reassignment is seen. */
   skillState: (skill: SkillStateRef) => ResolvedSkillState;
 }): Promise<SkillSubsystem> {
-  const { paths, reloadService, monadVersion, skillState } = deps;
+  const { paths, watchService, monadVersion, skillState } = deps;
 
   // Discovery order is stable for diagnostics and UI grouping only. Runtime dispatch does not let
   // later same-name skills shadow earlier ones; every instance is addressed by its source-qualified id.
@@ -239,8 +239,8 @@ export async function createSkillSubsystem(deps: {
     skillInstances.splice(0, skillInstances.length, ...next.instances);
     skillCollisions.splice(0, skillCollisions.length, ...toConflicts(res.collisions));
   };
-  reloadService.register({ name: 'skills', path: paths.skills, recursive: true, onChange: reloadSkills });
-  reloadService.register({
+  watchService.register({ name: 'skills', path: paths.skills, recursive: true, onChange: reloadSkills });
+  watchService.register({
     name: 'workspace-skills',
     path: workspaceSkillsDir,
     recursive: true,

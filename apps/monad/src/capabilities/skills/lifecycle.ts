@@ -37,7 +37,7 @@ export function createSkillsLifecycleModule(
     start: () =>
       start({
         paths: options.paths,
-        reloadService: options.watcher,
+        watchService: options.watcher,
         monadVersion: options.monadVersion,
         skillState
       }),

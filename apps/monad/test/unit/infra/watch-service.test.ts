@@ -1,8 +1,8 @@
-import type { WatchFn, WatchHandle } from '#/reload/index.ts';
+import type { WatchFn, WatchHandle } from '#/infra/watch-service.ts';
 
 import { beforeEach, expect, test } from 'bun:test';
 
-import { ReloadService } from '#/reload/index.ts';
+import { WatchService } from '#/infra/watch-service.ts';
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -38,7 +38,7 @@ function fakeWatch() {
 test('debounces a burst of events into a single onChange', async () => {
   const fw = fakeWatch();
   let calls = 0;
-  const svc = new ReloadService({ log, watchFn: fw.watchFn });
+  const svc = new WatchService({ log, watchFn: fw.watchFn });
   svc.register({ name: 's', path: '/p', debounceMs: 10, onChange: () => void calls++ });
 
   fw.fire();
@@ -52,7 +52,7 @@ test('debounces a burst of events into a single onChange', async () => {
 test('filter suppresses non-matching events', async () => {
   const fw = fakeWatch();
   let calls = 0;
-  const svc = new ReloadService({ log, watchFn: fw.watchFn });
+  const svc = new WatchService({ log, watchFn: fw.watchFn });
   svc.register({ name: 's', path: '/p', debounceMs: 5, filter: (f) => f === 'keep.js', onChange: () => void calls++ });
 
   fw.fire(0, 'skip.txt');
@@ -66,7 +66,7 @@ test('filter suppresses non-matching events', async () => {
 
 test('isolates and logs onChange errors (async too)', async () => {
   const fw = fakeWatch();
-  const svc = new ReloadService({ log, watchFn: fw.watchFn });
+  const svc = new WatchService({ log, watchFn: fw.watchFn });
   svc.register({
     name: 'boom',
     path: '/p',
@@ -83,7 +83,7 @@ test('isolates and logs onChange errors (async too)', async () => {
 test('closeAll closes watchers and cancels pending debounce timers', async () => {
   const fw = fakeWatch();
   let calls = 0;
-  const svc = new ReloadService({ log, watchFn: fw.watchFn });
+  const svc = new WatchService({ log, watchFn: fw.watchFn });
   svc.register({ name: 's', path: '/p', debounceMs: 20, onChange: () => void calls++ });
 
   fw.fire();
@@ -97,14 +97,14 @@ test('register returns false and logs when the watcher cannot start', () => {
   const watchFn: WatchFn = () => {
     throw new Error('ENOENT');
   };
-  const svc = new ReloadService({ log, watchFn });
+  const svc = new WatchService({ log, watchFn });
   const ok = svc.register({ name: 'missing', path: '/nope', onChange: () => {} });
   expect(ok).toBe(false);
 });
 
 test('passes path and recursive through to the watch primitive', () => {
   const fw = fakeWatch();
-  const svc = new ReloadService({ log, watchFn: fw.watchFn });
+  const svc = new WatchService({ log, watchFn: fw.watchFn });
   svc.register({ name: 's', path: '/dir', recursive: true, onChange: () => {} });
   expect(fw.calls[0]).toEqual({ path: '/dir', recursive: true });
 });
@@ -113,7 +113,7 @@ test('debounce is keyed per source — independent sources fire independently', 
   const fw = fakeWatch();
   let a = 0;
   let b = 0;
-  const svc = new ReloadService({ log, watchFn: fw.watchFn });
+  const svc = new WatchService({ log, watchFn: fw.watchFn });
   svc.register({ name: 'a', path: '/a', debounceMs: 10, onChange: () => void a++ });
   svc.register({ name: 'b', path: '/b', debounceMs: 10, onChange: () => void b++ });
 
@@ -133,7 +133,7 @@ test('recursive: true falls back to non-recursive when the platform throws, logs
     return { close: () => {} };
   };
   let calls = 0;
-  const svc = new ReloadService({ log, watchFn });
+  const svc = new WatchService({ log, watchFn });
   const ok = svc.register({
     name: 'atoms',
     path: '/atoms',
@@ -153,7 +153,7 @@ test('recursive: false does not fall back — throws immediately', () => {
   const watchFn: WatchFn = () => {
     throw new Error('ENOENT');
   };
-  const svc = new ReloadService({ log, watchFn });
+  const svc = new WatchService({ log, watchFn });
   const ok = svc.register({ name: 'missing', path: '/nope', recursive: false, onChange: () => {} });
   expect(ok).toBe(false);
 });
