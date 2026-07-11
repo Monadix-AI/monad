@@ -20,6 +20,7 @@ export interface McpLifecycleDeps {
 export interface McpRuntime {
   readonly config: ConfigMcpHandle;
   readonly files: readonly McpConnection[];
+  replaceConfig(handle: ConfigMcpHandle): void;
   reload(snapshot: ConfigSnapshot): Promise<void>;
   reconnectFiles(auth?: MonadAuth | null): Promise<void>;
   stop(): Promise<void>;
@@ -53,6 +54,10 @@ class LiveMcpRuntime implements McpRuntime {
 
   get files(): readonly McpConnection[] {
     return this.fileConnections;
+  }
+
+  replaceConfig(handle: ConfigMcpHandle): void {
+    this.configHandle = handle;
   }
 
   async reload(snapshot: ConfigSnapshot): Promise<void> {

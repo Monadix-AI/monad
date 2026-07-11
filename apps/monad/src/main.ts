@@ -17,53 +17,31 @@
 
 import type { MonadAuth, MonadConfig } from '@monad/home';
 import type { NetworkRuntimeStatus, PrincipalId, SessionId } from '@monad/protocol';
+import type { ModelSubsystem } from '#/agent/model/lifecycle.ts';
+import type { AtomDiscovery } from '#/atoms/lifecycle.ts';
+import type { CapabilitiesRuntime } from '#/capabilities/lifecycle.ts';
+import type { McpRuntime } from '#/capabilities/mcp/lifecycle.ts';
+import type { SkillSubsystem } from '#/capabilities/skills/service.ts';
 import type { Tool } from '#/capabilities/tools/types.ts';
 import type { SessionGateway } from '#/channels/channel.ts';
+import type { SandboxSetup } from '#/platform/sandbox/service.ts';
+import type { DataLayer } from '#/store/lifecycle.ts';
 
 import { join } from 'node:path';
 import { getPaths, initMonadHome, loadAll, loadAuth, resolveDaemonNetwork, saveProfile } from '@monad/home';
 import { createLogger } from '@monad/logger';
 
 import { applyAcpDelegateTool } from '#/bootstrap/acp-delegate.ts';
-import { createDaemonAgent } from '#/bootstrap/agent.ts';
-import { createAtomPackRediscoverer } from '#/bootstrap/atoms.ts';
-import { createChannelGateway } from '#/bootstrap/channel-gateway.ts';
-import { createCommandBundle } from '#/bootstrap/commands.ts';
-import { createDataLayer } from '#/bootstrap/data-layer.ts';
-import { registerHotReload } from '#/bootstrap/hot-reload.ts';
-import { createInterruptServices } from '#/bootstrap/interrupts.ts';
-import { createAtomDiscovery } from '#/bootstrap/main-init/atom-discovery.ts';
-import { createConfigWatchers } from '#/bootstrap/main-init/config-watchers.ts';
-import { warnIfNotInitialized } from '#/bootstrap/main-init/init-status.ts';
-import { createLocaleService } from '#/bootstrap/main-init/locale.ts';
-import { connectFileMcpServers, connectMcpServers } from '#/bootstrap/mcp.ts';
-import { createMcpControls } from '#/bootstrap/mcp-controls.ts';
-import { createMemorySubsystem } from '#/bootstrap/memory.ts';
-import { createModelSubsystem } from '#/bootstrap/model.ts';
-import { createObscuraController } from '#/bootstrap/obscura.ts';
-import { createPeerDelegateTools } from '#/bootstrap/peers.ts';
-import { configureDaemonLogging, readDaemonRuntimeFlags } from '#/bootstrap/runtime-flags.ts';
-import { createSandbox } from '#/bootstrap/sandbox.ts';
-import { serveDaemon } from '#/bootstrap/serve.ts';
-import { acquireDaemonSingletonLock } from '#/bootstrap/singleton.ts';
-import { createSkillSubsystem } from '#/bootstrap/skills.ts';
-import {
-  prependMonadBinToPath,
-  seedDevProviderIfNeeded,
-  startStartupHousekeeping
-} from '#/bootstrap/startup-housekeeping.ts';
-import { resolveTlsSetupForNetwork, type TlsSetup } from '#/bootstrap/tls.ts';
-import { configureToolBackends } from '#/bootstrap/tool-backends.ts';
-import { withCredentialsProtection, withSandboxConstraints } from '#/bootstrap/tool-protection.ts';
-import { createUpgradeInfoMonitor } from '#/bootstrap/upgrade-info.ts';
-import { buildServiceTools, builtinTools } from '#/capabilities/tools';
-import { AtomPackRegistry } from '#/handlers/atom-pack/index.ts';
-import { type CommandBundle, createCommandRegistry } from '#/handlers/commands/index.ts';
+import { buildServiceTools } from '#/capabilities/tools';
+import { createHomeConfigSource } from '#/config/source.ts';
+import { type CommandBundle } from '#/handlers/commands/index.ts';
 import { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
 import { createHookRunner } from '#/hooks/runner.ts';
 import { daemonChildProcesses, runDaemonChildSupervisorFromArgv } from '#/infra/daemon-child-processes.ts';
 import { initObservability, resolveObservabilityEndpoint } from '#/infra/observability.ts';
 import { ReloadService } from '#/reload/index.ts';
+import { createDaemonModules, createDaemonRuntime } from '#/runtime/create.ts';
+import { ConfigBus } from '#/services/config-bus.ts';
 import { DelegationService } from '#/services/delegation/delegation.ts';
 import { acpAgentCandidatesFromAdapters } from '#/services/delegation/presets.ts';
 import { configureDeveloperLogTransport } from '#/services/developer-log.ts';
@@ -73,8 +51,33 @@ import { createGraphQueryTools } from '#/services/memory/graph/query-tools.ts';
 import { createMemoryAgentTools } from '#/services/memory/tools.ts';
 import { RoundCache } from '#/services/round-cache.ts';
 import { ScheduleService } from '#/services/scheduling/schedule.ts';
+import { createDataLayer } from '#/store/lifecycle.ts';
 import { runAcpBridge } from '#/transports/acp/launch.ts';
-import { createHttpTransport } from '#/transports/http.ts';
+import { createDaemonAgent } from './bootstrap/agent.ts';
+import { createAtomPackRediscoverer } from './bootstrap/atoms.ts';
+import { createChannelGateway } from './bootstrap/channel-gateway.ts';
+import { createCommandBundle } from './bootstrap/commands.ts';
+import { registerHotReload } from './bootstrap/hot-reload.ts';
+import { createInterruptServices } from './bootstrap/interrupts.ts';
+import { createConfigWatchers } from './bootstrap/main-init/config-watchers.ts';
+import { warnIfNotInitialized } from './bootstrap/main-init/init-status.ts';
+import { createLocaleService } from './bootstrap/main-init/locale.ts';
+import { createMcpControls } from './bootstrap/mcp-controls.ts';
+import { createMemorySubsystem } from './bootstrap/memory.ts';
+import { createObscuraController } from './bootstrap/obscura.ts';
+import { createPeerDelegateTools } from './bootstrap/peers.ts';
+import { configureDaemonLogging, readDaemonRuntimeFlags } from './bootstrap/runtime-flags.ts';
+import { serveDaemon } from './bootstrap/serve.ts';
+import { acquireDaemonSingletonLock } from './bootstrap/singleton.ts';
+import {
+  prependMonadBinToPath,
+  seedDevProviderIfNeeded,
+  startStartupHousekeeping
+} from './bootstrap/startup-housekeeping.ts';
+import { resolveTlsSetupForNetwork, type TlsSetup } from './bootstrap/tls.ts';
+import { configureToolBackends } from './bootstrap/tool-backends.ts';
+import { createUpgradeInfoMonitor } from './bootstrap/upgrade-info.ts';
+import { createHttpTransport } from './transports/http.ts';
 
 // Eden type-safe client inference (compile-time only). Derived from the transport factory
 // so it stays valid without a module-level app instance.
@@ -125,13 +128,80 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     logger
   });
 
-  // KV server + SQLite store with a startup repair pass (see ./bootstrap/data-layer.ts).
-  const { kv, store } = await createDataLayer({ paths, devMode: DEV_MODE || DEV_SILENT });
-
-  const cfg = await loadAll(paths.config, paths.profile);
+  const dataLayer = await createDataLayer({ paths, devMode: DEV_MODE || DEV_SILENT });
+  const { kv, store } = dataLayer;
+  const [cfg, startupAuthValue] = await Promise.all([loadAll(paths.config, paths.profile), loadAuth(paths.auth)]);
   if (!cfg) throw new Error('monad: config.json missing after repair — aborting');
+  const startupAuth = startupAuthValue ?? undefined;
   configureDeveloperLogTransport(paths, cfg.developerMode === true);
   const ownerPrincipalId = cfg.principal.id as PrincipalId;
+
+  const monadVersion = await Bun.file(join(import.meta.dir, '..', 'package.json'))
+    .json()
+    .then((value: { version?: string }) => value.version ?? '0.0.0')
+    .catch(() => '0.0.0');
+  const reloadService = new ReloadService({ log: (level, message) => logger[level](message) });
+  process.on('exit', () => reloadService.closeAll());
+  let runtime: ReturnType<typeof createDaemonRuntime>;
+  const configBus = new ConfigBus(
+    (error) => logger.warn(`monad: config listener error: ${error}`),
+    async () => {
+      await runtime.config.refreshNow();
+    }
+  );
+  const configSource = createHomeConfigSource(paths, {
+    watch: (onChange) => {
+      reloadService.register({
+        name: 'settings',
+        path: paths.home,
+        filter: (filename) =>
+          filename === 'config.json' ||
+          filename === 'profile.json' ||
+          filename === 'sandbox.json' ||
+          filename === 'auth.json',
+        onChange
+      });
+      return () => {};
+    }
+  });
+  const initial = { cfg, auth: startupAuthValue };
+  runtime = createDaemonRuntime({
+    initial,
+    modules: createDaemonModules({
+      initial,
+      paths,
+      devMode: DEV_MODE || DEV_SILENT,
+      useMock: USE_MOCK,
+      monadVersion,
+      watcher: reloadService,
+      logger,
+      startStore: async () => dataLayer
+    }),
+    source: configSource,
+    watchOnStart: false,
+    afterReload: (snapshot) => configBus.deliver(snapshot)
+  });
+  await runtime.start();
+
+  const runtimeData = runtime.kernel.context.get<DataLayer>('store');
+  const sandbox = runtime.kernel.context.get<SandboxSetup>('platform.sandbox');
+  const model = runtime.kernel.context.get<ModelSubsystem>('agent.model');
+  const capabilities = runtime.kernel.context.get<CapabilitiesRuntime>('capabilities');
+  const atoms = runtime.kernel.context.get<AtomDiscovery>('atoms');
+  const skills = runtime.kernel.context.get<SkillSubsystem>('capabilities.skills');
+  const mcpRuntime = runtime.kernel.context.get<McpRuntime>('capabilities.mcp');
+  const { sandboxRoots, sessionSandbox } = sandbox;
+  const { modelService, modelCatalog, embeddingIndexer } = model;
+  const { registry, commandRegistry } = capabilities;
+  const { loadedSkills, skillList, skillInstances, discoverProjectSkills, reloadSkills } = skills;
+  const {
+    channelRegistry,
+    atomConflicts,
+    atomDetailsByPack,
+    refreshWorkspaceExperienceSnapshot,
+    getWorkspaceExperienceSnapshot
+  } = atoms;
+  if (runtimeData !== dataLayer) throw new Error('monad: runtime store output mismatch');
 
   // Bind address: config > default.
   // When remote access is enabled the daemon binds to 0.0.0.0 so other machines
@@ -151,14 +221,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
   const PORT = endpoint.port;
   const HOST = endpoint.bindHost;
 
-  // Load auth once at startup so ${secret:NAME} refs can be resolved during bootstrap (tool
-  // backends, MCP server headers). Hot-reload keeps a fresh copy via configBus; this copy is
-  // startup-only and intentionally not re-used after that point.
-  const startupAuth = (await loadAuth(paths.auth)) ?? undefined;
   await configureToolBackends(cfg, startupAuth);
-
-  // OS confinement + ephemeral session sandboxes (see ./bootstrap/sandbox.ts).
-  const { sandboxRoots, sessionSandbox } = await createSandbox(cfg, paths, store, startupAuth);
 
   const bus = new EventBus();
   const cache = new RoundCache();
@@ -167,52 +230,8 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
   // Reverse fs/terminal delegation for ACP-bridged sessions. Unlike oversight/clarify, its events are
   // ephemeral RPC — bus-only, NEVER persisted (replaying a delegation request on reconnect is wrong).
   const delegation = new DelegationService({ publish: (event) => bus.publish(event) });
-  // Connectors ride in `builtinAtomPack` and register through the atom-kind-gated loader (see
-  // buildChannelRegistry below). Tools are NOT atoms: they are always first-party and built into
-  // the daemon (@/capabilities/tools), so we wire `builtinTools` straight into the registry here — applying the
-  // runtime sandbox + credentials wrap (this is where sandboxRoots and the credentials path live).
-  const registry = new AtomPackRegistry();
-  for (const tool of builtinTools) {
-    registry.registerTool(withCredentialsProtection(withSandboxConstraints(tool, sandboxRoots), paths.credentials));
-  }
-
-  // Unified slash-command registry. Built-ins are NOT pre-seeded — they arrive via builtinAtomPack's
-  // `command` atoms through the gated loader below (onCommand → registerBuiltin, reserved). Atom-pack
-  // commands from third-party discovery route through the same registry (registerAtom).
-  const commandRegistry = createCommandRegistry((level, msg) => logger[level](msg));
-
-  // Connect configured + preset MCP servers and register their tools into the registry, so a remote
-  // tool rides the same gate + sandbox seam as a built-in (see ./bootstrap/mcp.ts). Held in a mutable
-  // handle so a settings hot-reload can diff-reconnect (connect added / disconnect removed / reconnect
-  // changed) without a daemon restart — the agent reads tools live from the registry.
-  let configMcp = await connectMcpServers(cfg, paths, registry, startupAuth);
-  let configMcpHttp = configMcp.seenHttp;
-  process.on('exit', () => {
-    for (const { conn } of configMcp.connections.values()) void conn.close();
-  });
-
   if (!USE_MOCK) {
     warnIfNotInitialized({ cfg, auth: startupAuth, host: HOST, port: PORT, logger });
-  }
-
-  // Model router/profiles + catalog (pricing/context limits) + background embedding indexer
-  // (see ./bootstrap/model.ts). Reuses startupAuth so bootstrap doesn't re-read auth.json.
-  const { modelService, modelCatalog, embeddingIndexer } = await createModelSubsystem({
-    cfg,
-    paths,
-    store,
-    useMock: USE_MOCK,
-    auth: startupAuth ?? null
-  });
-
-  const reloadService = new ReloadService({ log: (level, message) => logger[level](message) });
-  process.on('exit', () => reloadService.closeAll());
-
-  const discovered = await modelService.discoverProviders(paths.providers);
-  if (discovered.errors.length > 0) {
-    for (const e of discovered.errors) {
-      logger.warn(`monad: provider atom "${e.file}" failed to load: ${e.error}`);
-    }
   }
   reloadService.register({
     name: 'providers',
@@ -228,22 +247,22 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
   // config/profile/auth file watcher (feeding the shared ConfigBus), workspace prompt slots, and
   // per-agent persona resolution (see ./bootstrap/main-init/config-watchers.ts).
   const {
-    configBus,
-    computeSkillState,
-    getSkillState,
-    setSkillState,
     getHooksConfig,
     setHooksConfig,
     getPolicyHooksConfig,
     setPolicyHooksConfig,
     getWorkspacePromptSlots,
     agentPersona
-  } = await createConfigWatchers({ paths, cfg, store, reloadService, logger });
-  // TODO: maybe use `zustand` or other state store accross the app lifecycle? rx?
+  } = await createConfigWatchers({
+    paths,
+    cfg,
+    store,
+    reloadService,
+    logger,
+    configBus,
+    watchSettings: false
+  });
 
-  // Running monad version, for advisory skill `compatibility` checks. Best-effort: a bundled
-  // standalone binary may not ship package.json, so we fall back to '0.0.0' (which disables the
-  // semver warning — compatibility stays a surfaced advisory, never a hard gate).
   const monadVersion = await Bun.file(join(import.meta.dir, '..', 'package.json'))
     .json()
     .then((p: { version?: string }) => p.version ?? '0.0.0')
@@ -258,47 +277,14 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     logger.info('monad: OTel auto-enabled for dev — Phoenix UI at http://localhost:6006');
   }
 
-  // Skill discovery + L1/list views + hot-reload, encapsulated (see ./bootstrap/skills.ts). The
-  // arrays are mutated in place on reload so the live agent + skills.list reflect edits.
-  const { loadedSkills, skillList, skillInstances, discoverProjectSkills, reloadSkills } = await createSkillSubsystem({
-    paths,
-    reloadService,
-    monadVersion,
-    skillState: (skill) => getSkillState()(skill)
-  });
-
   const agentModel = USE_MOCK ? (await import('#/infra/mock-model.ts')).mockModel() : modelService.router;
-
-  // Discover atom packs (built-in + ~/.monad/atoms) through the atom-kind-gated loader BEFORE the
-  // agent snapshots its tools below — so a third-party atom pack's declared tools/connectors reach
-  // the agent. Channel factories are collected for the channel gateway (constructed later). An atom
-  // pack that registers an undeclared atom kind is rejected here (UndeclaredAtomError), per pack
-  // (see ./bootstrap/main-init/atom-discovery.ts).
   let sessionGateway: SessionGateway | null = null;
-  const {
-    channelRegistry,
-    atomConflicts,
-    atomDetailsByPack,
-    refreshWorkspaceExperienceSnapshot,
-    getWorkspaceExperienceSnapshot
-  } = await createAtomDiscovery({ paths, cfg, registry, commandRegistry, modelService, logger });
 
   // Locale gateway: file-scan loading from the builtin locale dir + any installed atom-pack locale
   // dirs (see ./bootstrap/main-init/locale.ts).
   const i18nService = await createLocaleService(paths, cfg.locale);
 
-  // File/pack MCP servers, in a mutable handle so rediscovery can close the previous round before
-  // reconnecting — an installed/removed atoms/mcp server takes effect hot (the agent reads its tools
-  // live from the registry, so re-registered MCP tools reach it on the next turn, no restart).
-  let fileMcpConnections = await connectFileMcpServers(paths, registry, startupAuth, configMcpHttp);
-  const reconnectFileMcp = async (): Promise<void> => {
-    for (const conn of fileMcpConnections) void conn.close();
-    registry.clearToolsFrom('file-mcp'); // drop the previous round so a removed server's tools vanish
-    fileMcpConnections = await connectFileMcpServers(paths, registry, startupAuth, configMcpHttp);
-  };
-  process.on('exit', () => {
-    for (const conn of fileMcpConnections) void conn.close();
-  });
+  const reconnectFileMcp = () => mcpRuntime.reconnectFiles(runtime.config.get().auth);
 
   // LIVE base tools: a getter (not a snapshot) so a hot-installed atom-pack/MCP tool — which
   // rediscovery re-registers into this same registry — reaches the running agent without a restart.
@@ -473,7 +459,6 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     configBus,
     paths,
     store,
-    modelService,
     agentPersona,
     embeddingIndexer,
     channelService,
@@ -481,23 +466,14 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     i18nService,
     logger,
     gate: oversight.gate,
-    computeSkillState,
-    reloadSkills,
     reloadApprovalPolicy,
     setInboundApprovalMode: (mode) => {
       inboundApprovalMode = mode;
     },
-    setSkillState,
     setHooksConfig,
-    setPolicyHooksConfig,
-    getConfigMcp: () => configMcp,
-    setConfigMcp: (v) => {
-      configMcp = v;
-    },
-    setConfigMcpHttp: (v) => {
-      configMcpHttp = v;
-    }
+    setPolicyHooksConfig
   });
+  runtime.startWatching();
 
   // Auto-generated self-signed TLS for the primary HTTPS listener (see ./bootstrap/tls.ts).
   let tlsSetup: TlsSetup = await resolveTlsSetupForNetwork({ https: cfg.network.https, tlsDir: paths.tls });
@@ -528,11 +504,11 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     cfg,
     registry,
     logger,
-    getConfigMcp: () => configMcp,
+    getConfigMcp: () => mcpRuntime.config,
     setConfigMcp: (v) => {
-      configMcp = v;
+      mcpRuntime.replaceConfig(v);
     },
-    fileMcpConnections: () => fileMcpConnections,
+    fileMcpConnections: () => [...mcpRuntime.files],
     obscuraStatus: () => getObscuraStatus()
   });
 

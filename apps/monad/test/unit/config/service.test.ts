@@ -88,6 +88,27 @@ test('skips an unchanged snapshot', async () => {
   expect(service.get().cfg.model.default).toBe('a');
 });
 
+test('refreshNow applies the latest disk snapshot before returning', async () => {
+  const clock = manualScheduler();
+  const source = fakeSource(snapshot('a'));
+  const applied: string[] = [];
+  const service = new ConfigService({
+    initial: snapshot('a'),
+    source,
+    scheduler: clock.scheduler,
+    apply: async (next) => void applied.push(next.cfg.model.default)
+  });
+  source.current = snapshot('b');
+
+  await service.refreshNow();
+
+  expect({ applied, model: service.get().cfg.model.default, pending: clock.pendingCount() }).toEqual({
+    applied: ['b'],
+    model: 'b',
+    pending: 0
+  });
+});
+
 test('retains the accepted snapshot when apply fails', async () => {
   const clock = manualScheduler();
   const source = fakeSource(snapshot('a'));

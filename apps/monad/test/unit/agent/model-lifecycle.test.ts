@@ -1,4 +1,4 @@
-import type { MonadPaths } from '@monad/home';
+import type { MonadConfig, MonadPaths } from '@monad/home';
 import type { PrincipalId } from '@monad/protocol';
 import type { ModelSubsystem } from '#/agent/model/lifecycle.ts';
 import type { ConfigSnapshot } from '#/config/service.ts';
@@ -30,7 +30,7 @@ function fakeSubsystem(events: string[]): ModelSubsystem {
         events.push('providers:discover');
         return { errors: [], loaded: [] };
       },
-      reload: (cfg) => void events.push(`model:reload:${cfg.model.default}`)
+      reload: (cfg: MonadConfig) => void events.push(`model:reload:${cfg.model.default}`)
     } as unknown as ModelService,
     modelCatalog: {} as ModelCatalogService,
     embeddingIndexer: {} as EmbeddingIndexer,

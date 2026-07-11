@@ -6,7 +6,8 @@ import type { RuntimeModule } from '#/runtime/types.ts';
 import { expect, test } from 'bun:test';
 import { createDefaultConfig } from '@monad/home';
 
-import { createDaemonRuntime } from '#/runtime/create.ts';
+import { createDaemonModules, createDaemonRuntime } from '#/runtime/create.ts';
+import { buildRuntimeGraph } from '#/runtime/graph.ts';
 import { manualScheduler } from '../config/helpers.ts';
 
 interface RecordingSource extends ConfigSource {
@@ -122,4 +123,51 @@ test('rolls back modules when watcher startup fails', async () => {
 
   await expect(runtime.start()).rejects.toThrow('watch failed');
   expect(events).toEqual(['module:start:a', 'module:stop']);
+});
+
+test('can defer watching and applies the post-reload bridge before accepting config', async () => {
+  const events: string[] = [];
+  const clock = manualScheduler();
+  const configSource = source(snapshot('a'), events);
+  const runtime = createDaemonRuntime({
+    initial: snapshot('a'),
+    modules: [recordingModule(events)],
+    scheduler: clock.scheduler,
+    source: configSource,
+    watchOnStart: false,
+    afterReload: async (next) => void events.push(`bridge:${next.cfg.model.default}`)
+  });
+
+  await runtime.start();
+  runtime.startWatching();
+  configSource.current = snapshot('b');
+  configSource.emit();
+  clock.runNext();
+  await runtime.config.whenIdle();
+
+  expect(events).toEqual(['module:start:a', 'config:watch', 'module:reload:b', 'bridge:b']);
+  await runtime.stop();
+});
+
+test('assembles production modules into explicit concurrent dependency layers', () => {
+  const initial = snapshot('a');
+  const modules = createDaemonModules({
+    initial,
+    paths: {} as never,
+    devMode: false,
+    useMock: true,
+    monadVersion: '1.0.0',
+    watcher: { register: () => true },
+    logger: { warn: () => {} }
+  });
+
+  const graph = buildRuntimeGraph(modules);
+
+  expect(graph.layers.map((layer) => layer.map((module) => module.id))).toEqual([
+    ['store'],
+    ['agent.model', 'platform.sandbox'],
+    ['capabilities'],
+    ['atoms'],
+    ['capabilities.mcp', 'capabilities.skills']
+  ]);
 });

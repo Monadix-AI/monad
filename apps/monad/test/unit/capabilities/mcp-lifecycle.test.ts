@@ -21,7 +21,7 @@ function connection(name: string, events: string[]): McpConnection {
     name,
     tools: [],
     close: async () => void events.push(`close:${name}`)
-  } as McpConnection;
+  } as unknown as McpConnection;
 }
 
 test('owns config and file MCP connections across reload and stop', async () => {

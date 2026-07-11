@@ -56,6 +56,12 @@ export class ConfigService {
     this.coordinator.request();
   }
 
+  async refreshNow(): Promise<ConfigSnapshot> {
+    this.refresh();
+    await this.coordinator.flush();
+    return this.current;
+  }
+
   whenIdle(): Promise<void> {
     return this.coordinator.whenIdle();
   }
@@ -67,16 +73,12 @@ export class ConfigService {
 
   async updateConfig(mutate: (cfg: MonadConfig) => MonadConfig): Promise<ConfigSnapshot> {
     await this.source.saveConfig(mutate(this.current.cfg));
-    this.refresh();
-    await this.coordinator.flush();
-    return this.current;
+    return this.refreshNow();
   }
 
   async updateAuth(mutate: (auth: MonadAuth | null) => MonadAuth): Promise<ConfigSnapshot> {
     await this.source.saveAuth(mutate(this.current.auth));
-    this.refresh();
-    await this.coordinator.flush();
-    return this.current;
+    return this.refreshNow();
   }
 
   async stop(): Promise<void> {

@@ -14,7 +14,10 @@ export class ConfigBus {
   private readonly listeners = new Set<Listener>();
   private readonly onError: (err: unknown) => void;
 
-  constructor(onError: (err: unknown) => void = () => {}) {
+  constructor(
+    onError: (err: unknown) => void = () => {},
+    private readonly requestReload?: (event: ConfigEvent) => Promise<void>
+  ) {
     this.onError = onError;
   }
 
@@ -24,6 +27,11 @@ export class ConfigBus {
   }
 
   async publish(event: ConfigEvent): Promise<void> {
+    if (this.requestReload) return this.requestReload(event);
+    await this.deliver(event);
+  }
+
+  async deliver(event: ConfigEvent): Promise<void> {
     await Promise.all([...this.listeners].map((fn) => Promise.resolve(fn(event)).catch((err) => this.onError(err))));
   }
 }

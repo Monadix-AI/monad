@@ -40,6 +40,8 @@ export async function createConfigWatchers(deps: {
   store: Store;
   reloadService: ReloadService;
   logger: Logger;
+  configBus?: ConfigBus;
+  watchSettings?: boolean;
 }): Promise<ConfigWatchers> {
   const { paths, cfg, store, reloadService, logger } = deps;
 
@@ -61,25 +63,27 @@ export async function createConfigWatchers(deps: {
 
   // In-process pub/sub for config/profile changes. Shared by the file-watcher and commit() paths
   // so both trigger the exact same set of reload callbacks.
-  const configBus = new ConfigBus((err) => logger.warn(`monad: config-bus listener error: ${err}`));
+  const configBus = deps.configBus ?? new ConfigBus((err) => logger.warn(`monad: config-bus listener error: ${err}`));
 
   // Watch the home dir, not the files directly, so atomic rename-replace writes are caught.
   // Network/sandbox/principal settings are NOT hot-applied (wired at boot) — those need a restart.
-  reloadService.register({
-    name: 'settings',
-    path: paths.home,
-    filter: (filename) =>
-      filename === 'config.json' ||
-      filename === 'profile.json' ||
-      filename === 'sandbox.json' ||
-      filename === 'auth.json',
-    onChange: async () => {
-      const [freshCfg, freshAuth] = await Promise.all([loadAll(paths.config, paths.profile), loadAuth(paths.auth)]);
-      if (!freshCfg) return; // mid-write or temporarily absent — skip this tick
-      await configBus.publish({ cfg: freshCfg, auth: freshAuth });
-      logger.info('monad: hot-reloaded settings from disk');
-    }
-  });
+  if (deps.watchSettings !== false) {
+    reloadService.register({
+      name: 'settings',
+      path: paths.home,
+      filter: (filename) =>
+        filename === 'config.json' ||
+        filename === 'profile.json' ||
+        filename === 'sandbox.json' ||
+        filename === 'auth.json',
+      onChange: async () => {
+        const [freshCfg, freshAuth] = await Promise.all([loadAll(paths.config, paths.profile), loadAuth(paths.auth)]);
+        if (!freshCfg) return;
+        await configBus.publish({ cfg: freshCfg, auth: freshAuth });
+        logger.info('monad: hot-reloaded settings from disk');
+      }
+    });
+  }
 
   // User-editable prompt slots from the workspace root — SOUL.md, AGENT.md/AGENTS.md, USER.md.
   // A `let` so an edit hot-reloads without rebuilding the agent.
