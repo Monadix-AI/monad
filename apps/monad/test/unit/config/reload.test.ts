@@ -52,6 +52,41 @@ test('runs one trailing follow-up when invalidated during apply', async () => {
   expect({ applies, maxActive }).toEqual({ applies: 2, maxActive: 1 });
 });
 
+test('coalesces invalidations from concurrent flush waiters', async () => {
+  const clock = manualScheduler();
+  const releases: Array<() => void> = [];
+  let active = 0;
+  let applies = 0;
+  let maxActive = 0;
+  const coordinator = new ReloadCoordinator({
+    scheduler: clock.scheduler,
+    apply: async () => {
+      applies++;
+      active++;
+      maxActive = Math.max(maxActive, active);
+      await new Promise<void>((resolve) => releases.push(resolve));
+      active--;
+    }
+  });
+
+  coordinator.request();
+  clock.runNext();
+  await Bun.sleep(0);
+  coordinator.request();
+  const firstWaiter = coordinator.flush();
+  const secondWaiter = coordinator.flush();
+  releases.shift()?.();
+  await Bun.sleep(0);
+  coordinator.request();
+  await Bun.sleep(0);
+  releases.shift()?.();
+  await Bun.sleep(0);
+  releases.shift()?.();
+  await Promise.all([firstWaiter, secondWaiter]);
+
+  expect({ applies, maxActive }).toEqual({ applies: 2, maxActive: 1 });
+});
+
 test('stop cancels a trailing timer and waits for an active apply', async () => {
   const clock = manualScheduler();
   let applies = 0;
