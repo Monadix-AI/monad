@@ -93,7 +93,12 @@ apps/monad/src/
 │   └── home/
 ├── agent/
 │   ├── execution.ts
+│   ├── hooks/
+│   │   ├── index.ts
+│   │   └── runner.ts
 │   ├── loop/
+│   │   └── internal/
+│   │       └── hook-orchestrator.ts
 │   ├── context/
 │   ├── history.ts
 │   ├── memory/
@@ -121,7 +126,6 @@ apps/monad/src/
 │   └── stdio.ts
 ├── handlers/
 ├── services/
-├── hooks/
 ├── infra/
 └── platform/
 ```
@@ -200,6 +204,16 @@ await execution.run(input, emit);
 `createTurn()` resolves the current model/profile, context limit, summarization thresholds, agent persona, budgets, tools, skills, prompt slots, sandbox roots, policy, and hooks. It then constructs the per-turn `AgentLoop` from the existing modules under `agent/`. This keeps invoke-time configuration live and avoids rebuilding daemon-wide services.
 
 `AgentExecutionService` may retain only state that must survive turns, such as prompt replay cache and durable history access. If it owns no resource requiring start, health, reload, or stop, it is a handler dependency rather than a lifecycle descriptor. There is no top-level `agent-runtime` startup module or duplicate `runtime/agent-loop` directory.
+
+### Hook ownership
+
+Hooks belong to the `agent/` domain because the current event surface governs agent sessions, turns, model calls, tools, compaction, and subagents. Move the daemon implementation from top-level `hooks/` to `agent/hooks/`.
+
+`agent/hooks/runner.ts` owns command-hook, policy-hook, and atom-hook matching, execution, timeout/error policy, and audit recording. It exposes the stable `Hooks` facade used by agent execution, session lifecycle, history compaction, and delegation.
+
+`agent/loop/internal/hook-orchestrator.ts` remains inside the loop because it owns only turn-scoped orchestration and state: model override, injected context, BeforeModel/AfterModel sequencing, and bounded stop continuation.
+
+Hook wire contracts remain in `@monad/protocol`, and atom hook authoring contracts remain in `@monad/sdk-atom`. The daemon runner must not redeclare either contract. The runner is not a lifecycle descriptor unless it later acquires a persistent resource requiring start or stop; live config and atom-hook getters are sufficient for current reload behavior.
 
 ## Dependency graph and startup
 
@@ -449,6 +463,7 @@ Do not add an environment variable for startup tracing. Use existing developer l
 - Add coarse lifecycle descriptors beside store, model, capabilities, atoms, channels, and transports.
 - Import those descriptors from `runtime/create.ts` and move dependency ordering from statement order into the assembled graph.
 - Move invoke-specific AgentLoop assembly into `AgentExecutionService.createTurn()`.
+- Move the daemon HookRunner into `agent/hooks/` while retaining turn-scoped HookOrchestrator code under `agent/loop/internal/`.
 - Preserve current outputs and handler contracts.
 
 ### Phase 4: transport and background services
@@ -501,6 +516,8 @@ Use fake clocks and injected watch/load/apply functions; tests must not rely on 
 - Verify daemon startup does not construct an `AgentLoop` or invoke a model.
 - Verify each turn resolves the current profile, context, tools, skills, persona, policy, and sandbox configuration.
 - Verify prompt replay and durable history state survive across turn-local AgentLoop instances.
+- Verify session, compaction, subagent, model, and tool hook events use the same live Agent-owned Hooks facade.
+- Verify per-turn hook state does not leak across AgentLoop instances.
 - Keep a healthy previous module instance after reload failure.
 - Reload model, skills, MCP, channels, policy, and locale through ConfigService.
 - Preserve behavior over TCP loopback and Unix socket.
@@ -541,6 +558,7 @@ Mitigation: ConfigService delegates schemas, paths, parsing, and persistence to 
 - Existing agent, capabilities, atoms, channels, store, services, and transports directories remain the code ownership boundaries.
 - Lifecycle adapters are colocated with their owning domains and imported by `runtime/create.ts`.
 - Skills and MCP remain under capabilities rather than becoming peers of transports.
+- The daemon HookRunner lives under `agent/hooks/`; only turn-scoped hook orchestration lives under `agent/loop/`.
 - Daemon startup creates only the stable agent execution facade; AgentLoop construction and invoke-specific configuration resolution happen per turn.
 - Module dependencies and required/optional criticality are declared and validated.
 - Independent startup layers run concurrently.
