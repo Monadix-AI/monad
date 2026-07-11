@@ -56,7 +56,11 @@ export function resolveExternalAgentManagedServerUrl(opts: {
       https: opts.networkHttps,
       ...(opts.port ? { port: Number(opts.port) } : {})
     },
-    env: { ...Bun.env, ...(opts.serverUrl ? { MONAD_URL: opts.serverUrl } : {}) }
+    env: {
+      ...Bun.env,
+      ...(opts.port === undefined ? {} : { MONAD_PORT: String(opts.port) }),
+      ...(opts.serverUrl ? { MONAD_URL: opts.serverUrl } : {})
+    }
   });
 }
 
