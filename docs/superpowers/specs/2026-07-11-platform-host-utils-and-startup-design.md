@@ -37,17 +37,17 @@ Release correctness continues to come from module resolution. Target-specific im
 
 ### Sandbox host lifecycle
 
-Replace the AppContainer-specific method on `LightSandboxPlatform` with a generic lifecycle:
+Replace the weight-based `LightSandboxPlatform` name and its AppContainer-specific method with the responsibility-based `HostSandboxPlatform` lifecycle:
 
 ```ts
-interface LightSandboxPlatform {
+interface HostSandboxPlatform {
   launchers: readonly SandboxLauncher[];
   prepareHost(): Promise<void>;
   disposeHost(): Promise<void>;
 }
 ```
 
-The Windows implementation runs `sweepOrphanAppContainerProfiles()` during `prepareHost()`. Darwin and Linux preparation are no-ops. All initial `disposeHost()` implementations are no-ops, establishing a symmetric lifecycle for future native helpers and host-level resources.
+The corresponding value is `hostSandboxPlatform`, and the stable seam files are renamed from `light-platform.*.ts` to `sandbox-platform.*.ts`. The Windows implementation runs `sweepOrphanAppContainerProfiles()` during `prepareHost()`. Darwin and Linux preparation are no-ops. All initial `disposeHost()` implementations are no-ops, establishing a symmetric lifecycle for future native helpers and host-level resources.
 
 The sandbox registry exposes `prepareSandboxHost()` and `disposeSandboxHost()`. Daemon bootstrap no longer imports an AppContainer-named function. Host preparation remains best-effort at the current call site, preserving startup behavior.
 
