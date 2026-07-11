@@ -102,7 +102,6 @@ export class RuntimeKernel<Snapshot = unknown> {
   }
 
   async reload(snapshot: Snapshot): Promise<RuntimeReloadReport> {
-    this.controller = new AbortController();
     this.setPhase('reloading');
     const reloaded: ModuleId[] = [];
     const degraded: ModuleId[] = [];

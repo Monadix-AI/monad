@@ -191,3 +191,29 @@ test('stops dependents before dependencies', async () => {
     modules: { agent: { status: 'stopped' }, store: { status: 'stopped' } }
   });
 });
+
+test('stop aborts the lifetime signal after a reload', async () => {
+  const events: string[] = [];
+  const kernel = new RuntimeKernel<{ value: string }>([
+    runtimeModule(
+      'channel',
+      async (_ctx, signal) => {
+        signal.addEventListener('abort', () => events.push('aborted'));
+        return 'channel';
+      },
+      {
+        reload: async () => {
+          events.push('reloaded');
+          return 'channel:new';
+        },
+        stop: () => void events.push('stopped')
+      }
+    )
+  ]);
+  await kernel.start();
+  await kernel.reload({ value: 'new' });
+
+  await kernel.stop();
+
+  expect(events).toEqual(['reloaded', 'aborted', 'stopped']);
+});
