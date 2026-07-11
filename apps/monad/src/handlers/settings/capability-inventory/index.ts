@@ -15,10 +15,9 @@ import { existsSync } from 'node:fs';
 import { readdir, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, dirname, extname, join, resolve } from 'node:path';
-import { loadAll } from '@monad/home';
+import { loadAll, openNativePath } from '@monad/home';
 
 import { defaultBinProbes } from '#/infra/resolve-binary.ts';
-import { openNativePath } from '#/platform/open-native-path.ts';
 import { listExternalAgentProviderAdapters } from '#/services/external-agent/index.ts';
 
 const MAX_CONFIG_BYTES = 5 * 1024 * 1024;
