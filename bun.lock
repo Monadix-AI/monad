@@ -84,6 +84,7 @@
         "mem0ai": "^3.0.13",
         "partial-json": "^0.1.7",
         "zod": "^4.4.3",
+        "zustand": "^5.0.14",
       },
       "devDependencies": {
         "@monad/config": "workspace:*",
