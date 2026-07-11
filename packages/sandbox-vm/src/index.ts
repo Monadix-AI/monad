@@ -7,8 +7,9 @@
 // Isolation model, per SandboxPolicy:
 //   • writableRoots / readableRoots → virtio-fs mounts at the same guest paths (argv unchanged);
 //     readDenyRoots simply aren't mounted (they don't exist in the guest).
-//   • net:'none' → no NIC at all; net:'filtered' → gvproxy + in-guest nftables to the host egress
-//     proxy (enforced by the kernel, not an env var the agent can unset); net:'unrestricted' → gvproxy.
+//   • gvproxy provides a host-only SSH control path in every mode; in-guest nftables blocks new
+//     outbound connections for net:'none', restricts filtered mode to the host proxy, and leaves
+//     unrestricted mode open (enforced by the kernel, not an env var the agent can unset).
 //
 // Reuse is per-agent (one VM across an agent's sessions); see pool.ts for the lifecycle state machine.
 
@@ -19,7 +20,7 @@ import { existsSync } from 'node:fs';
 
 import { destroyBundle, ensureBundle, type VmBundle } from './bundle.ts';
 import { configureVfkitBin, type VmHandle, vfkitDriver } from './driver/vfkit.ts';
-import { sshExec } from './exec/ssh.ts';
+import { bridgeAsyncProcess, sshExec, waitForSsh } from './exec/ssh.ts';
 import { serializeIgnition } from './ignition.ts';
 import { ensureBaseImage, type ImageConsent } from './image.ts';
 import { type GvproxyProcess, guestProxyEnv, spawnGvproxy } from './net/gvproxy.ts';
@@ -136,32 +137,36 @@ async function bootVm(key: string, policy: SandboxPolicy): Promise<RunningVm> {
   const ignition = serializeIgnition({ sshPublicKey: pubKey, mounts, egress, env: proxyEnv });
   await Bun.write(bundle.ignition, ignition);
 
-  // net:'none' → no gvproxy, no NIC. Otherwise start gvproxy first and WAIT for it to bind its
-  // datagram socket before booting vfkit — vfkit's virtio-net attaches to that socket path at boot,
-  // so a race where vfkit starts first leaves the guest with no network.
-  let gvproxy: GvproxyProcess | undefined;
-  if (egress.mode !== 'none') {
-    if (!resolvedGvproxy) throw new VmBackendNotReadyError('gvproxy not resolved (call prepare())');
-    gvproxy = spawnGvproxy({
-      gvproxyBin: resolvedGvproxy,
-      vfkitNetSock: bundle.gvproxySock,
-      sshForwardSock: bundle.sshSock
-    });
-    await waitForSocket(bundle.gvproxySock, 5000);
-  }
-
-  const vfkit = await vfkitDriver.boot({
-    cpus: config.cpus,
-    memoryMiB: config.memoryMiB,
-    bundle,
-    mounts,
-    gvproxyNetSock: egress.mode !== 'none' ? bundle.gvproxySock : undefined,
-    mac: macFor(key)
+  // gvproxy carries the host-initiated SSH control plane for every egress mode. Guest nftables
+  // enforces net:none/filtered independently, so retaining this NIC does not grant new outbound
+  // connections.
+  if (!resolvedGvproxy) throw new VmBackendNotReadyError('gvproxy not resolved (call prepare())');
+  const gvproxy = spawnGvproxy({
+    gvproxyBin: resolvedGvproxy,
+    vfkitNetSock: bundle.gvproxySock,
+    sshForwardSock: bundle.sshSock
   });
-
-  const vm: RunningVm = { bundle, vfkit, gvproxy };
-  liveVms.add(vm);
-  return vm;
+  let vfkit: VmHandle | undefined;
+  try {
+    await waitForSocket(bundle.gvproxySock, 5000);
+    vfkit = await vfkitDriver.boot({
+      cpus: config.cpus,
+      memoryMiB: config.memoryMiB,
+      bundle,
+      mounts,
+      gvproxyNetSock: bundle.gvproxySock,
+      mac: macFor(key)
+    });
+    await waitForSsh({ sshSock: bundle.sshSock, identity: bundle.sshKey, user: 'monad' });
+    const vm: RunningVm = { bundle, vfkit, gvproxy };
+    liveVms.add(vm);
+    return vm;
+  } catch (error) {
+    await vfkit?.stop().catch(() => {});
+    gvproxy.kill();
+    await destroyBundle(bundle.key).catch(() => {});
+    throw error;
+  }
 }
 
 /** Poll for a socket path to appear (gvproxy binds it asynchronously after fork). */
@@ -234,20 +239,12 @@ function bridgeAsyncExec(
   argv: string[],
   policy: SandboxPolicy
 ): SandboxProcess {
-  const stdoutTransform = new TransformStream<Uint8Array, Uint8Array>();
-  const stderrTransform = new TransformStream<Uint8Array, Uint8Array>();
-  let child: SandboxProcess | null = null;
-  // Distinguish "no kill requested" from "kill() called with no signal before the child spawned":
-  // a bare kill() must still terminate the run once the child exists.
-  let killRequested = false;
-  let killSignal: number | string | undefined;
-
-  const exited = (async (): Promise<number> => {
-    if (!pool) throw new VmBackendNotReadyError('not prepared');
-    const vm = await pool.acquire(key, reuse, options.agentId, () => bootVm(key, policy));
-    try {
+  return bridgeAsyncProcess(
+    async () => {
+      if (!pool) throw new VmBackendNotReadyError('not prepared');
+      const vm = await pool.acquire(key, reuse, options.agentId, () => bootVm(key, policy));
       const egress = egressFor(policy);
-      child = sshExec(argv, {
+      return sshExec(argv, {
         sshSock: vm.bundle.sshSock,
         identity: vm.bundle.sshKey,
         user: 'monad',
@@ -257,30 +254,9 @@ function bridgeAsyncExec(
           ...(egress.mode === 'filtered' && egress.proxyPort ? guestProxyEnv(egress.proxyPort) : {})
         }
       });
-      if (killRequested) child.kill(killSignal);
-      child.stdout?.pipeTo(stdoutTransform.writable).catch(() => {});
-      child.stderr?.pipeTo(stderrTransform.writable).catch(() => {});
-      return await child.exited;
-    } finally {
-      pool?.release(key);
-    }
-  })();
-
-  return {
-    stdout: stdoutTransform.readable,
-    stderr: stderrTransform.readable,
-    get exitCode() {
-      return child?.exitCode ?? null;
     },
-    exited,
-    kill(signal) {
-      if (child) child.kill(signal);
-      else {
-        killRequested = true;
-        killSignal = signal;
-      }
-    }
-  };
+    () => pool?.release(key)
+  );
 }
 
 // Kill every running VM's vfkit + gvproxy on daemon shutdown so they aren't orphaned across restarts.

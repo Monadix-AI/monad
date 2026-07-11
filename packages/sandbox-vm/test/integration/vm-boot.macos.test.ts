@@ -94,7 +94,7 @@ describe.skipIf(!ENABLED)('vm boot + confinement conformance (macOS, real VM)', 
     expect(r.stdout).not.toContain('PRIVATE KEY');
   }, 120_000);
 
-  test('net:none → no NIC, socket connect fails', async () => {
+  test('net:none → control NIC remains but outbound socket connect fails', async () => {
     const r = await runInVm(['sh', '-c', 'curl -sS --max-time 5 http://1.1.1.1 2>&1; echo RC=$?'], {
       writableRoots: [workspace],
       net: 'none'

@@ -32,9 +32,9 @@ test('base argv: EFI boot, rootfs blk, ignition, rng, restful-uri, pidfile', () 
   expect(joined).toContain('--pidfile ');
 });
 
-test('net:none → no virtio-net device', () => {
-  const argv = vfkitArgv('/bin/vfkit', spec({ gvproxyNetSock: undefined }));
-  expect(argv.join(' ')).not.toContain('virtio-net');
+test('net:none retains the control-plane virtio-net device', () => {
+  const argv = vfkitArgv('/bin/vfkit', spec({ gvproxyNetSock: '/tmp/gv.sock' }));
+  expect(argv.join(' ')).toContain('virtio-net,unixSocketPath=/tmp/gv.sock');
 });
 
 test('with gvproxy socket → virtio-net wired to the datagram socket + MAC', () => {

@@ -48,6 +48,10 @@ export function sshArgv(argv: string[], spec: SshExecSpec): string[] {
     '-o',
     'LogLevel=ERROR',
     '-o',
+    'ConnectTimeout=2',
+    '-o',
+    'ConnectionAttempts=1',
+    '-o',
     `ProxyCommand=nc -U ${spec.sshSock}`,
     '-i',
     spec.identity,
@@ -69,5 +73,71 @@ export function sshExec(argv: string[], spec: SshExecSpec): SandboxProcess {
     },
     exited: proc.exited,
     kill: (signal) => proc.kill(signal as number | undefined)
+  };
+}
+
+export interface SshReadinessOptions {
+  timeoutMs?: number;
+  intervalMs?: number;
+  probe?: () => Promise<boolean>;
+}
+
+/** Wait until the freshly booted guest accepts an SSH command. */
+export async function waitForSsh(spec: SshExecSpec, options: SshReadinessOptions = {}): Promise<void> {
+  const timeoutMs = options.timeoutMs ?? 60_000;
+  const intervalMs = options.intervalMs ?? 250;
+  const probe =
+    options.probe ??
+    (async () => {
+      const proc = Bun.spawn(sshArgv(['true'], spec), { stdout: 'ignore', stderr: 'ignore', stdin: 'ignore' });
+      return (await proc.exited) === 0;
+    });
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() <= deadline) {
+    if (await probe().catch(() => false)) return;
+    if (Date.now() >= deadline) break;
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+  throw new Error(`guest ssh was not ready within ${timeoutMs}ms`);
+}
+
+/** Adapt asynchronous setup onto the synchronous SandboxProcess contract without leaving output
+ * streams open when setup fails. */
+export function bridgeAsyncProcess(start: () => Promise<SandboxProcess>, onFinally?: () => void): SandboxProcess {
+  const stdoutTransform = new TransformStream<Uint8Array, Uint8Array>();
+  const stderrTransform = new TransformStream<Uint8Array, Uint8Array>();
+  let child: SandboxProcess | null = null;
+  let killRequested = false;
+  let killSignal: number | string | undefined;
+
+  const exited = (async (): Promise<number> => {
+    try {
+      child = await start();
+      if (killRequested) child.kill(killSignal);
+      child.stdout?.pipeTo(stdoutTransform.writable).catch(() => {});
+      child.stderr?.pipeTo(stderrTransform.writable).catch(() => {});
+      return await child.exited;
+    } catch (error) {
+      await Promise.allSettled([stdoutTransform.writable.close(), stderrTransform.writable.close()]);
+      throw error;
+    } finally {
+      onFinally?.();
+    }
+  })();
+
+  return {
+    stdout: stdoutTransform.readable,
+    stderr: stderrTransform.readable,
+    get exitCode() {
+      return child?.exitCode ?? null;
+    },
+    exited,
+    kill(signal) {
+      if (child) child.kill(signal);
+      else {
+        killRequested = true;
+        killSignal = signal;
+      }
+    }
   };
 }

@@ -12,8 +12,8 @@ export interface VmSpec {
   memoryMiB: number;
   bundle: VmBundle;
   mounts: MountSpec[];
-  /** When set, attach a virtio-net device wired to this gvproxy datagram socket. Omit for net:'none'
-   *  (no NIC at all — the strongest network isolation). */
+  /** Attach the control-plane virtio-net device wired to gvproxy. Guest nftables independently
+   *  enforces the requested egress mode, including net:'none'. */
   gvproxyNetSock?: string;
   /** Deterministic guest MAC (kept stable across a VM's restarts). */
   mac: string;
@@ -58,7 +58,7 @@ export function vfkitArgv(vfkitBin: string, spec: VmSpec): string[] {
     argv.push('--device', `virtio-fs,sharedDir=${m.path},mountTag=${m.tag}`);
   }
 
-  // net:'none' → no NIC device at all. Otherwise attach to gvproxy's datagram socket.
+  // The NIC carries the host-initiated SSH control channel. Egress is enforced inside the guest.
   if (spec.gvproxyNetSock) {
     argv.push('--device', `virtio-net,unixSocketPath=${spec.gvproxyNetSock},mac=${spec.mac}`);
   }

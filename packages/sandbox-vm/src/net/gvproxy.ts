@@ -86,6 +86,7 @@ export function guestNftables(rules: GuestEgressRules): string {
       '  chain output {',
       '    type filter hook output priority 0; policy drop;',
       '    oif "lo" accept',
+      '    ct state established,related accept',
       '    # net:none — nothing else may leave the VM',
       '  }',
       '}',

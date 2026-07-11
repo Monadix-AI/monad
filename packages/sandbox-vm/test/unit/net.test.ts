@@ -22,10 +22,11 @@ test('gvproxy argv wires the vfkit datagram socket and forwards ssh to the GUEST
   expect(j).toContain('-forward-user monad');
 });
 
-test('net:none nftables drops everything but loopback', () => {
+test('net:none nftables permits control replies but blocks new egress', () => {
   const rules = guestNftables({ mode: 'none' });
   expect(rules).toContain('policy drop;');
   expect(rules).toContain('oif "lo" accept');
+  expect(rules).toContain('ct state established,related accept');
   expect(rules).not.toContain('dport 53');
 });
 
