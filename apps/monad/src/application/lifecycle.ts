@@ -15,7 +15,7 @@
  *                                                      bidirectional peer — see transports/acp/)
  */
 
-import type { MonadAuth, MonadConfig } from '@monad/home';
+import type { MonadConfig } from '@monad/home';
 import type { NetworkRuntimeStatus, PrincipalId, SessionId } from '@monad/protocol';
 import type { ModelSubsystem } from '#/agent/model/lifecycle.ts';
 import type { AtomDiscovery } from '#/atoms/lifecycle.ts';
@@ -43,6 +43,7 @@ import { buildServiceTools } from '#/capabilities/tools';
 import { configureToolBackends } from '#/capabilities/tools/configure-backends.ts';
 import { createChannelGateway } from '#/channels/gateway.ts';
 import { createHotReload } from '#/config/application.ts';
+import { ConfigReloadTargets } from '#/config/reload-targets.ts';
 import { createConfigReloader } from '#/config/reloader.ts';
 import { createHomeConfigSource } from '#/config/source.ts';
 import { createCommandBundle } from '#/handlers/commands/bundle.ts';
@@ -143,8 +144,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
   const watchService = new WatchService({ log: (level, message) => logger[level](message) });
   process.on('exit', () => watchService.closeAll());
   let runtime: ReturnType<typeof createDaemonRuntime>;
-  let applyApplicationConfig = async (_snapshot: { cfg: MonadConfig; auth: MonadAuth | null }): Promise<void> => {};
-  let applyNetworkConfig = async (_snapshot: { cfg: MonadConfig; auth: MonadAuth | null }): Promise<void> => {};
+  const reloadTargets = new ConfigReloadTargets();
   const configReloader = createConfigReloader(async () => {
     await runtime.config.refreshNow();
   });
@@ -178,10 +178,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     }),
     source: configSource,
     watchOnStart: false,
-    afterReload: async (snapshot) => {
-      await applyApplicationConfig(snapshot);
-      await applyNetworkConfig(snapshot);
-    }
+    afterReload: (snapshot) => reloadTargets.apply(snapshot)
   });
   await runtime.start();
 
@@ -441,23 +438,25 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     paths
   });
 
-  applyApplicationConfig = createHotReload({
-    paths,
-    store,
-    agentPersona,
-    embeddingIndexer,
-    channelService,
-    registry,
-    i18nService,
-    logger,
-    gate: oversight.gate,
-    reloadApprovalPolicy,
-    setInboundApprovalMode: (mode) => {
-      inboundApprovalMode = mode;
-    },
-    setHooksConfig,
-    setPolicyHooksConfig
-  });
+  reloadTargets.setApplication(
+    createHotReload({
+      paths,
+      store,
+      agentPersona,
+      embeddingIndexer,
+      channelService,
+      registry,
+      i18nService,
+      logger,
+      gate: oversight.gate,
+      reloadApprovalPolicy,
+      setInboundApprovalMode: (mode) => {
+        inboundApprovalMode = mode;
+      },
+      setHooksConfig,
+      setPolicyHooksConfig
+    })
+  );
 
   // Auto-generated self-signed TLS for the primary HTTPS listener (see #/transports/tls.ts).
   let tlsSetup: TlsSetup = await resolveTlsSetupForNetwork({ https: cfg.network.https, tlsDir: paths.tls });
@@ -626,7 +625,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     i18n: i18nService,
     channelService,
     onNetworkReloadReady: (reload) => {
-      applyNetworkConfig = reload;
+      reloadTargets.setNetwork(reload);
     },
     onNetworkRuntimeStatusReady: (status) => {
       getNetworkRuntimeStatus = status;
