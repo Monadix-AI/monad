@@ -48,9 +48,9 @@ Use one `RuntimeKernel` for startup, configuration reload, health, and shutdown.
 
 Every runtime module declares hard dependencies and optional ordering constraints. No module discovers another module through global Zustand state.
 
-### Domain hierarchy is not a flat module list
+### Existing domain directories remain ownership boundaries
 
-Organize code by runtime subsystem. Skills and MCP are extension capabilities, not architectural peers of the transport or agent-loop subsystems. The global kernel schedules namespaced lifecycle descriptors exported by each subsystem; it does not require every internal component to live in one flat `runtime/modules` directory.
+Do not create a second hierarchy under `runtime/subsystems` or a flat adapter catalog under `runtime/modules`. The existing `agent`, `capabilities`, `atoms`, `channels`, `store`, `services`, and `transports` directories remain the canonical ownership boundaries. Lifecycle adapters live beside the behavior they manage; `runtime/create.ts` only imports and assembles their descriptors.
 
 ### State, objects, and events remain separate
 
@@ -74,63 +74,63 @@ Enabled channels are included in full-ready. A slow channel handshake therefore 
 apps/monad/src/
 ├── main.ts
 ├── runtime/
-│   ├── create-runtime.ts
-│   ├── kernel/
-│   │   ├── runtime-kernel.ts
-│   │   ├── runtime-context.ts
-│   │   ├── runtime-store.ts
-│   │   ├── module.ts
-│   │   └── graph.ts
-│   └── subsystems/
-│       ├── foundation/
-│       │   ├── data-module.ts
-│       │   ├── model-module.ts
-│       │   ├── sandbox-module.ts
-│       │   └── interrupts-module.ts
-│       ├── extensions/
-│       │   ├── atom-loader/
-│       │   └── capabilities/
-│       │       ├── skills/
-│       │       ├── mcp/
-│       │       ├── providers/
-│       │       ├── locales/
-│       │       ├── commands/
-│       │       └── channel-adapters/
-│       ├── agent-loop/
-│       │   ├── execution-service.ts
-│       │   ├── turn-runtime.ts
-│       │   ├── context/
-│       │   ├── history/
-│       │   ├── memory/
-│       │   ├── tools/
-│       │   ├── prompts/
-│       │   └── policy/
-│       ├── application/
-│       │   ├── handlers-module.ts
-│       │   ├── schedule-module.ts
-│       │   └── delegation/
-│       └── transports/
-│           ├── http/
-│           ├── tcp/
-│           ├── unix/
-│           ├── stdio/
-│           ├── acp/
-│           ├── channels/
-│           └── mo/
-└── services/
-    └── config/
-        ├── config-service.ts
-        ├── config-source.ts
-        ├── reload-coordinator.ts
-        ├── types.ts
-        └── index.ts
+│   ├── create.ts
+│   ├── kernel.ts
+│   ├── graph.ts
+│   ├── context.ts
+│   ├── state.ts
+│   └── types.ts
+├── config/
+│   ├── service.ts
+│   ├── reload.ts
+│   ├── resolve.ts
+│   ├── secrets.ts
+│   └── mcp-presets.ts
+├── store/
+│   ├── lifecycle.ts
+│   ├── db/
+│   ├── kv/
+│   └── home/
+├── agent/
+│   ├── execution.ts
+│   ├── loop/
+│   ├── context/
+│   ├── history.ts
+│   ├── memory/
+│   ├── model/
+│   │   └── lifecycle.ts
+│   ├── prompts/
+│   ├── approvals/
+│   └── session/
+├── capabilities/
+│   ├── lifecycle.ts
+│   ├── tools/
+│   ├── skills/
+│   └── mcp/
+├── atoms/
+│   ├── lifecycle.ts
+│   └── install/
+├── channels/
+│   └── lifecycle.ts
+├── transports/
+│   ├── lifecycle.ts
+│   ├── http/
+│   ├── jsonrpc/
+│   ├── acp/
+│   ├── a2a/
+│   └── stdio.ts
+├── handlers/
+├── services/
+├── hooks/
+├── infra/
+└── platform/
 ```
 
-`runtime/create-runtime.ts` is the thin composition root. A separate `bootstrap/` directory is unnecessary when it would contain only this file. `create-runtime.ts` creates the initial configuration source, collects subsystem descriptors, creates the kernel and ConfigService, starts the kernel, then starts configuration watching.
+`runtime/create.ts` is the thin composition root. A separate `bootstrap/` directory is unnecessary when it would contain only this file. `create.ts` creates the initial configuration source, imports lifecycle descriptors from their owning domains, creates the kernel and ConfigService, starts the kernel, then starts configuration watching.
 
-Each subsystem exports its public facade and any lifecycle descriptors that genuinely need independent scheduling, failure policy, reload, health, or shutdown. Descriptor IDs are namespaced, such as `foundation.model`, `extensions.mcp`, and `transports.unix`. Internal helpers and per-turn agent-loop components are not lifecycle modules.
+Lifecycle descriptors are named for their existing domain, such as `store`, `agent.model`, `capabilities`, `atoms`, `channels`, and `transports.unix`. Internal helpers and per-turn AgentLoop components are not lifecycle modules.
 
-Start with coarse subsystem adapters that wrap existing functions. Split an adapter only when its internal responsibilities need independent dependencies, failure policy, or reload behavior.
+Start with coarse co-located adapters that wrap existing functions. Split an adapter only when its internal responsibilities need independent dependencies, failure policy, or reload behavior. A domain may export several descriptors from one `lifecycle.ts`; it does not need one file per lifecycle node.
 
 ## Runtime module contract
 
@@ -176,13 +176,13 @@ interface RuntimeContext {
 
 Only the kernel mutates the output registry. Consumers receive dependencies through their module context or constructor. They do not call `runtimeStore.getState()` to locate services.
 
-Prefer stable service facades for reloadable dependencies. A stable MCP or channel service can replace its internal connection handle without forcing the agent execution or application subsystems to capture a new service object.
+Prefer stable service facades for reloadable dependencies. A stable MCP or channel service can replace its internal connection handle without forcing agent execution or handlers to capture a new service object.
 
-## Agent-loop subsystem
+## Agent execution
 
-The agent-loop subsystem owns everything required to execute a model turn, but it does not assemble an `AgentLoop` during daemon startup.
+The existing `agent/` domain owns everything required to execute a model turn, but it does not assemble an `AgentLoop` during daemon startup.
 
-Startup creates only a lightweight `AgentExecutionService` with stable references to repositories, the model router, extension registries, history storage, prompt replay cache, hooks, oversight, and other long-lived facades. Model availability and required provider configuration are validated by the foundation model module for truthful full-ready.
+Startup creates only a lightweight `AgentExecutionService` in `agent/execution.ts`, with stable references to repositories, the model router, capability registries, history storage, prompt replay cache, hooks, oversight, and other long-lived facades. Model availability and required provider configuration are validated by `agent/model/lifecycle.ts` for truthful full-ready.
 
 Every session send or generate operation asks the service to create a turn execution:
 
@@ -197,9 +197,9 @@ const execution = agentExecution.createTurn({
 await execution.run(input, emit);
 ```
 
-`createTurn()` resolves the current model/profile, context limit, summarization thresholds, agent persona, budgets, tools, skills, prompt slots, sandbox roots, policy, and hooks. It then constructs the per-turn `AgentLoop`. This keeps invoke-time configuration live and avoids rebuilding daemon-wide services.
+`createTurn()` resolves the current model/profile, context limit, summarization thresholds, agent persona, budgets, tools, skills, prompt slots, sandbox roots, policy, and hooks. It then constructs the per-turn `AgentLoop` from the existing modules under `agent/`. This keeps invoke-time configuration live and avoids rebuilding daemon-wide services.
 
-The subsystem may retain only state that must survive turns, such as prompt replay cache and durable history access. If `AgentExecutionService` owns no resource requiring start, health, reload, or stop, it is an application dependency rather than a lifecycle descriptor. There is no top-level `agent-runtime` startup module.
+`AgentExecutionService` may retain only state that must survive turns, such as prompt replay cache and durable history access. If it owns no resource requiring start, health, reload, or stop, it is a handler dependency rather than a lifecycle descriptor. There is no top-level `agent-runtime` startup module or duplicate `runtime/agent-loop` directory.
 
 ## Dependency graph and startup
 
@@ -212,7 +212,7 @@ The kernel validates the graph before starting:
 
 It then computes topological layers. Modules in one layer run through `Promise.allSettled()`; the next layer starts only after the current layer reaches terminal results.
 
-The intended subsystem topology is:
+The intended dependency stages are:
 
 ```text
 L0  mode branch → singleton lock → home initialization → development seed
@@ -220,15 +220,15 @@ L0  mode branch → singleton lock → home initialization → development seed
 L1  config/profile + auth    KV/SQLite    version/path metadata
      └────────────────────────── parallel ─────────────────────┘
 
-L2  foundation.data    foundation.sandbox    foundation.model    foundation.interrupts
-     └────────────────────────────── parallel ───────────────────────────────────────┘
+L2  store    platform/sandbox    agent/model    interrupt services
+     └────────────────────────── parallel ──────────────────────────┘
 
-L3  extensions: atom discovery → skills / MCP / providers / locales / commands / adapters
-                               └──────── internal parallelism where safe ───────────────┘
+L3  capabilities registry → atoms discovery/materialization → skills / MCP registration
+                           └──────── parallelism where shared registries permit ────────┘
 
-L4  agent-loop execution service → application handlers / schedule / delegation
+L4  agent execution service → handlers / schedule / delegation
 
-L5  transports: HTTP/TCP/Unix/stdio/ACP/channels/Mo
+L5  transports / channels / Mo
      └────────────── parallel where dependencies permit ──────────────┘
 ```
 
@@ -236,8 +236,8 @@ Constraints that remain sequential:
 
 - ACP bridge mode branches before the daemon singleton lock and runtime construction.
 - Development provider seeding precedes config and provider discovery because it may change their input files.
-- Extension discovery requires the base model and tool registries; atom-pack materialization then populates child capability managers.
-- Per-turn agent-loop construction requires foundation and extension facades but happens on session invocation, not cold start.
+- Atom discovery requires the base model and capability registries; atom-pack materialization then populates the existing capability managers.
+- Per-turn AgentLoop construction requires store, model, capability, memory, and policy facades but happens on session invocation, not cold start.
 - Application handlers require `AgentExecutionService`, not a preconstructed `AgentLoop`.
 - Schedule and channels require handlers but do not require each other.
 - Mo launch follows successful Unix socket binding.
@@ -443,11 +443,11 @@ Do not add an environment variable for startup tracing. Use existing developer l
 - Route settings writes and config/profile/auth watchers through ConfigService.
 - Temporarily adapt ConfigService to existing reload functions while consumers migrate.
 
-### Phase 3: subsystem adapters
+### Phase 3: co-located lifecycle adapters
 
-- Group existing functions under foundation, extensions, agent-loop, application, and transport subsystem ownership without rewriting their internals.
-- Export coarse, namespaced lifecycle descriptors from each subsystem.
-- Move dependency ordering from statement order into those descriptors.
+- Move each existing bootstrap function toward its current owning domain without rewriting its internals.
+- Add coarse lifecycle descriptors beside store, model, capabilities, atoms, channels, and transports.
+- Import those descriptors from `runtime/create.ts` and move dependency ordering from statement order into the assembled graph.
 - Move invoke-specific AgentLoop assembly into `AgentExecutionService.createTurn()`.
 - Preserve current outputs and handler contracts.
 
@@ -536,9 +536,11 @@ Mitigation: ConfigService delegates schemas, paths, parsing, and persistence to 
 ## Acceptance criteria
 
 - `startDaemon()` no longer encodes the main runtime dependency graph through statement order.
-- The target structure has no one-file `bootstrap/` directory; `runtime/create-runtime.ts` is the composition root.
-- Runtime code is organized by foundation, extensions, agent-loop, application, and transport subsystems rather than a flat module directory.
-- Skills, MCP, providers, locales, commands, and channel adapters are owned by the extensions subsystem.
+- The target structure has no one-file `bootstrap/` directory; `runtime/create.ts` is the composition root.
+- `runtime/` contains only lifecycle mechanisms and graph assembly, with no duplicate `subsystems/` or flat `modules/` hierarchy.
+- Existing agent, capabilities, atoms, channels, store, services, and transports directories remain the code ownership boundaries.
+- Lifecycle adapters are colocated with their owning domains and imported by `runtime/create.ts`.
+- Skills and MCP remain under capabilities rather than becoming peers of transports.
 - Daemon startup creates only the stable agent execution facade; AgentLoop construction and invoke-specific configuration resolution happen per turn.
 - Module dependencies and required/optional criticality are declared and validated.
 - Independent startup layers run concurrently.
