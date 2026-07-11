@@ -4,6 +4,7 @@ import type { AgentContext } from './context.ts';
 
 import { newId } from '@monad/protocol';
 
+import { disposeSandboxAgent } from '#/capabilities/tools';
 import { HandlerError } from '#/handlers/handler-error.ts';
 import { deleteAgentDir, loadAgentBody, toAgentDir, writeAgentBody } from '#/store/home/agent-def.ts';
 
@@ -108,13 +109,20 @@ export function createAgentHandlers(ctx: AgentContext, ownerPrincipalId: Princip
       if (patch.framework !== undefined) a.framework = patch.framework;
       if (patch.capabilities !== undefined) a.capabilities = patch.capabilities;
       if (patch.atoms !== undefined) a.atoms = patch.atoms;
-      if (patch.sandboxMode !== undefined) a.sandbox = { mode: patch.sandboxMode };
+      let sandboxChanged = false;
+      if (patch.sandboxMode !== undefined && a.sandbox?.mode !== patch.sandboxMode) {
+        a.sandbox = { mode: patch.sandboxMode };
+        sandboxChanged = true;
+      }
       if (patch.maxTurns !== undefined) a.maxTurns = patch.maxTurns;
       if (patch.maxThinkingTokens !== undefined) a.maxThinkingTokens = patch.maxThinkingTokens;
       if (patch.maxBudgetUsd !== undefined) a.maxBudgetUsd = patch.maxBudgetUsd;
       if (patch.visibility !== undefined) a.visibility = patch.visibility;
       if (patch.a2a !== undefined) a.a2a = patch.a2a;
       await ctx.commit(cfg);
+      // A per-agent sandbox-mode change alters the policy a running VM was built for; destroy the old
+      // VM so it never outlives its policy (same security constraint as deleteAgent).
+      if (sandboxChanged) disposeSandboxAgent(agentId);
       return { agent: await wire(a) };
     },
 
@@ -146,6 +154,10 @@ export function createAgentHandlers(ctx: AgentContext, ownerPrincipalId: Princip
       if (cfg.agent.defaultAgentId === agentId) cfg.agent.defaultAgentId = undefined;
       await ctx.commit(cfg);
       await deleteAgentDir(ctx.paths.agents, agentDirOf(found));
+      // A heavy launcher (the VM backend) may hold a per-agent instance built for this agent's
+      // now-deleted sandbox policy; destroy it so a stale VM never outlives the agent. Security
+      // constraint, not cleanup — see disposeSandboxAgent.
+      disposeSandboxAgent(agentId);
       return { ok: true as const };
     },
 

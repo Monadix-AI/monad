@@ -77,6 +77,15 @@ export function disposeSandboxSession(sessionId: string): void {
   for (const e of entries) void e.launcher.disposeSession?.(sessionId);
 }
 
+/** Tell every launcher to release an agent's per-agent resources when the agent is deleted or its
+ *  sandbox config changes. Only a launcher that keeps per-agent state (the VM backend's one VM per
+ *  agent) acts; the rest no-op. Destroying the instance here is a security constraint — a stale
+ *  instance must never outlive the policy it was built for. */
+export function disposeSandboxAgent(agentId: string): void {
+  for (const l of LIGHT) void l.disposeAgent?.(agentId);
+  for (const e of entries) void e.launcher.disposeAgent?.(agentId);
+}
+
 function isCandidate(launcher: SandboxLauncher, platform: NodeJS.Platform): boolean {
   if (launcher.platforms && !launcher.platforms.includes(platform)) return false;
   return launcher.isAvailable?.() ?? true;

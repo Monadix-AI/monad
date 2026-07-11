@@ -1,13 +1,25 @@
 import { expect, test } from 'bun:test';
 
-import { VmBackendNotImplementedError, vmLauncher } from '../../src/index.ts';
+import { vmLauncher } from '../../src/index.ts';
 
-test('vm launcher is a heavy skeleton: declared kind, unavailable, spawn throws', () => {
+test('vm launcher declares the macOS heavy backend contract', () => {
   expect(vmLauncher.kind).toBe('vm');
-  // Unavailable until the subsystem lands — this is what makes `backend:'vm'` fall back to light.
-  expect(vmLauncher.isAvailable?.()).toBe(false);
-  // REMOTE model with no wrap(); invoking spawn surfaces the not-implemented error rather than
-  // silently running unconfined.
+  expect(vmLauncher.platforms).toEqual(['darwin']);
+  // REMOTE model: runs the process (spawn), does not rewrite argv (wrap).
   expect(vmLauncher.wrap).toBeUndefined();
-  expect(() => vmLauncher.spawn?.([], {}, {})).toThrow(VmBackendNotImplementedError);
+  expect(typeof vmLauncher.spawn).toBe('function');
+  // Declares strong containment for honest boot logging.
+  expect(vmLauncher.enforces).toEqual({
+    writeConfine: true,
+    readDeny: true,
+    net: ['none', 'filtered', 'unrestricted']
+  });
+  // Per-agent lifecycle hooks are present.
+  expect(typeof vmLauncher.disposeSession).toBe('function');
+  expect(typeof vmLauncher.disposeAgent).toBe('function');
+});
+
+test('spawn before prepare throws rather than running unconfined', () => {
+  // isAvailable may be false on non-darwin CI; spawn must still fail closed (not silently host-run).
+  expect(() => vmLauncher.spawn?.(['echo', 'hi'], { sessionId: 's' }, {})).toThrow();
 });

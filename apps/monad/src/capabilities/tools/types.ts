@@ -215,6 +215,10 @@ interface ToolContextSkill {
 
 export interface ToolContext {
   sessionId: string;
+  /** The session's bound agent (`session.agentIds[0]`), when one is bound. Threaded to the sandbox
+   * seam so a per-agent launcher (the VM backend) reuses ONE instance across the agent's sessions.
+   * Absent → the seam keys on `sessionId` instead. */
+  agentId?: string;
   /** The id of this tool call, for correlation/logging. The loop always sets it. */
   toolCallId?: string;
   /**

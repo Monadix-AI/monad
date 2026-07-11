@@ -108,6 +108,9 @@ export interface Agent {
       extraTools?: Tool[];
       /** Per-run sandbox roots override (ACP trusts the client's cwd + additionalDirectories). */
       sandboxRoots?: string[];
+      /** The session's bound agent (`session.agentIds[0]`); threaded to the sandbox seam for
+       *  per-agent VM reuse. Absent → the seam keys on sessionId. */
+      agentId?: string;
       /** Per-run model override (resolved profile alias or "provider:model"). Set from a session's
        *  `/model` choice; falls back to the agent's defaultModel. */
       modelOverride?: string;
@@ -272,6 +275,7 @@ export function createAgent(config: AgentConfig): Agent {
         userId: config.userId,
         emit,
         sandboxRoots: opts?.sandboxRoots ?? config.sandboxRoots,
+        agentId: opts?.agentId,
         backends: opts?.backends,
         fileObservations: config.fileObservations,
         toolFilter: opts?.toolFilter,

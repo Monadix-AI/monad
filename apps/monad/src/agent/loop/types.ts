@@ -51,6 +51,9 @@ export interface AgentLoopDeps {
   userId?: string;
   emit(event: Event): void;
   sandboxRoots?: string[];
+  /** The session's bound agent (`session.agentIds[0]`), threaded to the sandbox seam so a per-agent
+   *  launcher (the VM backend) reuses one instance across the agent's sessions. Absent → per-session. */
+  agentId?: string;
   /** Execution backends for this run. ACP sessions supply delegating backends. */
   backends?: ToolBackends;
   /** Durable per-session file observations used by file tools. */

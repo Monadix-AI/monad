@@ -237,12 +237,19 @@ export async function createSandbox(
  */
 export async function finalizeSandboxLauncher(
   cfg: MonadConfig,
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform = process.platform,
+  paths?: MonadPaths
 ): Promise<void> {
   if (!cfg.sandbox.confine) return; // createSandbox already set noneLauncher
 
   const backend = cfg.sandbox.backend;
   let launcher = selectSandboxLauncher(platform, backend);
+  // The macOS VM backend needs its config (scope/ttl/memory/paths + the image-download consent gate)
+  // before prepare() resolves the toolchain. Dynamically imported so the heavy package never touches
+  // cold-start when backend:'vm' isn't selected.
+  if (backend === 'vm' && launcher.kind === 'vm') {
+    await configureVmBackendFromConfig(cfg, paths);
+  }
   // Warm up the selected launcher (e.g. the docker runtime probe) before wiring it, so the heavy
   // path pays detection cost only on opt-in.
   await launcher.prepare?.();
@@ -308,4 +315,36 @@ function resolveSandboxRoots(mode: SandboxMode, workspacePath: string): string[]
   // global fallback for anything not run inside a session.
   if (mode === 'ephemeral') return [workspacePath];
   return undefined; // unrestricted
+}
+
+// Map cfg.sandbox.vm → the VM backend's config, including the first-download consent gate. Dynamically
+// imports @monad/sandbox-vm so the heavy package stays off cold-start unless backend:'vm' is selected.
+async function configureVmBackendFromConfig(cfg: MonadConfig, paths?: MonadPaths): Promise<void> {
+  const vm = cfg.sandbox.vm;
+  const { configureVmBackend, configureVmToolchain } = await import('@monad/sandbox-vm');
+  // Root the VM cache under the daemon's resolved home (paths.home), not a re-derived env guess, so
+  // images/toolchain land in the same data tree that reset/backup manage.
+  configureVmToolchain({
+    vmDir: paths ? join(paths.home, 'vm') : undefined,
+    vfkitPath: vm?.vfkitPath,
+    gvproxyPath: vm?.gvproxyPath
+  });
+  configureVmBackend({
+    scope: vm?.scope ?? 'agent',
+    idleTtlMs: vm?.idleTtlMs ?? 600_000,
+    maxInstances: vm?.maxInstances ?? 8,
+    cpus: vm?.cpus ?? 2,
+    memoryMiB: vm?.memory ?? 2048,
+    // Explicit-observability gate: unlike Cowork's silent pull, announce source/sha/path. Selecting
+    // backend:'vm' IS the opt-in, so proceed — but loudly, so the multi-GB download is never a
+    // surprise. (P1: route this through the interactive approval channel for a per-download prompt.)
+    imageConsent: async ({ url, sha256, dest }) => {
+      logger.warn(
+        `monad: the VM backend needs its guest image (first use of backend:"vm").\n` +
+          `  source: ${url}\n  sha256: ${sha256}\n  dest:   ${dest}\n` +
+          '  Downloading now — set agent.sandbox.backend back to "auto" to skip.'
+      );
+      return true;
+    }
+  });
 }

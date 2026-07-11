@@ -277,7 +277,7 @@ export function startPipeProcess(
   ctx: ToolContext,
   options: ProcessStartOptions = {}
 ): ProcessHandle {
-  const policy = buildSandboxPolicy(ctx.sandboxRoots, [], ctx.sessionId);
+  const policy = buildSandboxPolicy(ctx.sandboxRoots, [], ctx.sessionId, ctx.agentId);
   const proc = supervisedSpawn(
     shellArgv(command),
     { cwd: dir, stdin: 'pipe', stdout: 'pipe', stderr: 'pipe', detached: true },
@@ -295,7 +295,10 @@ export function startPipeProcess(
       }),
       successLogLevel: 'trace',
       spawn: ((argv, spawnOptions) =>
-        sandboxedSpawn(argv, spawnOptions, policy, { sessionId: ctx.sessionId })) as typeof Bun.spawn
+        sandboxedSpawn(argv, spawnOptions, policy, {
+          sessionId: ctx.sessionId,
+          agentId: ctx.agentId
+        })) as typeof Bun.spawn
     }
   );
   return pipeHandle(proc);
@@ -310,7 +313,7 @@ export function startPtyProcess(
 ): ProcessHandle {
   const decoder = new TextDecoder();
   let pendingCR = false;
-  const policy = buildSandboxPolicy(ctx.sandboxRoots, [], ctx.sessionId);
+  const policy = buildSandboxPolicy(ctx.sandboxRoots, [], ctx.sessionId, ctx.agentId);
   const proc = supervisedSpawn(
     shellArgv(command),
     {
@@ -344,7 +347,8 @@ export function startPtyProcess(
       successLogLevel: 'trace',
       spawn: ((argv, options) =>
         sandboxedPtySpawn(argv, options as Parameters<typeof sandboxedPtySpawn>[1], policy, {
-          sessionId: ctx.sessionId
+          sessionId: ctx.sessionId,
+          agentId: ctx.agentId
         })) as typeof Bun.spawn
     }
   );

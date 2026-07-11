@@ -37,6 +37,11 @@ export interface SandboxPolicy {
    *  (e.g. AppContainer profiles) use this to name and reuse the artifact across calls.
    *  Undefined for non-session runs (a fixed default profile or no profile is used). */
   sessionId?: string;
+  /** The monad agent this run belongs to (the session's bound agent, `session.agentIds[0]`).
+   *  A heavy launcher that reuses ONE instance per AGENT (e.g. the VM backend keeps one VM per
+   *  agent across all that agent's sessions) keys on this instead of `sessionId`. Undefined for a
+   *  session with no bound agent — such a run degrades to per-session reuse. */
+  agentId?: string;
 }
 
 /** What a launcher declares it actually enforces, so the daemon can log honestly at boot WITHOUT
@@ -62,6 +67,10 @@ export interface SandboxSpawnOptions {
   /** The session this run belongs to, so a launcher can keep ONE remote instance per session and
    *  reuse it across calls (disposed when the session ends). Undefined for non-session runs. */
   sessionId?: string;
+  /** The monad agent this run belongs to, so a launcher can keep ONE instance per AGENT and reuse
+   *  it across all that agent's sessions (disposed via `disposeAgent` when the agent is deleted or
+   *  its sandbox config changes). Undefined → the launcher keys on `sessionId` instead. */
+  agentId?: string;
   [key: string]: unknown;
 }
 
@@ -107,6 +116,11 @@ export interface SandboxLauncher {
    *  remote instance per `SandboxSpawnOptions.sessionId` and reuses it across calls disposes it here.
    *  Optional: local launchers keep no per-session state. */
   disposeSession?(sessionId: string): void | Promise<void>;
+  /** Release any per-AGENT resources when the agent is deleted or its sandbox config changes — e.g.
+   *  the VM backend keeps ONE VM per agent and must destroy it here so a stale VM never outlives the
+   *  policy it was built for (a security constraint, not an optimization). Optional: launchers that
+   *  key only on session keep no per-agent state and no-op. */
+  disposeAgent?(agentId: string): void | Promise<void>;
   /** Optional async warm-up run once for the SELECTED launcher before it is wired (e.g. a docker runtime probe). */
   prepare?(): Promise<void>;
 }

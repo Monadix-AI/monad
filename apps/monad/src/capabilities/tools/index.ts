@@ -16,6 +16,7 @@ export {
   configureSandboxProxyEnv,
   configureSandboxReadDeny,
   createSessionSandbox,
+  disposeSandboxAgent,
   disposeSandboxSession,
   disposeSessionSandbox,
   domainMatches,

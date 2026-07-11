@@ -154,6 +154,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
       modelOverride: session.model,
       ambientContext,
       sandboxRoots: sandboxRootsFor(sessionId, session.cwd, rt),
+      agentId: session.agentIds[0],
       defaultCwd: session.cwd,
       extraTools: rt?.extraTools,
       extraSkills: rt?.extraSkills,
@@ -308,6 +309,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
       const loop = agent.loop(makeEmit(round), {
         modelOverride: session.model,
         sandboxRoots: sandboxRootsFor(sessionId, session.cwd, rt),
+        agentId: session.agentIds[0],
         defaultCwd: session.cwd,
         extraTools: rt?.extraTools,
         extraSkills: rt?.extraSkills,

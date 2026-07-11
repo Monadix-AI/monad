@@ -39,6 +39,8 @@ interface CodeExecRequest {
   confine?: boolean;
   /** The session this run belongs to, so a remote launcher can reuse one off-box instance per session. */
   sessionId?: string;
+  /** The session's bound agent, so a per-agent launcher (the VM backend) reuses one instance per agent. */
+  agentId?: string;
   /** Session cancellation — the backend should kill the running snippet when it aborts. */
   signal?: AbortSignal;
   /** Per-call e2b API key override (from config, resolved before reaching here). */
@@ -153,8 +155,8 @@ export const followSystemBackend: CodeExecBackend = {
         { cwd, stdout: 'pipe', stderr: 'pipe' },
         // Confine writes to the session roots plus the snippet temp dir; net comes from config.
         // When sandboxRoots is undefined (unrestricted) the policy applies no write confinement.
-        buildSandboxPolicy(req.sandboxRoots, [dir], req.sessionId),
-        { confine: req.confine ?? true, sessionId: req.sessionId }
+        buildSandboxPolicy(req.sandboxRoots, [dir], req.sessionId, req.agentId),
+        { confine: req.confine ?? true, sessionId: req.sessionId, agentId: req.agentId }
       );
       return await drainProcess(proc as unknown as SandboxProcess, req, 'follow-system');
     } finally {
@@ -182,7 +184,7 @@ const dockerCodeExecBackend: CodeExecBackend = {
       if (!dockerLauncher.spawn) throw new CodeExecError('docker backend: launcher does not support spawn');
       const proc = dockerLauncher.spawn(
         [containerInterpreter(req.language), file],
-        { cwd: dir, sessionId: req.sessionId },
+        { cwd: dir, sessionId: req.sessionId, agentId: req.agentId },
         policy
       );
       return await drainProcess(proc, req, 'docker');
@@ -208,7 +210,7 @@ const e2bCodeExecBackend: CodeExecBackend = {
       if (!e2bLauncher.spawn) throw new CodeExecError('e2b backend: launcher does not support spawn');
       const proc = e2bLauncher.spawn(
         [containerInterpreter(req.language), file],
-        { cwd: '/home/user', sessionId: req.sessionId, credential: apiKey },
+        { cwd: '/home/user', sessionId: req.sessionId, agentId: req.agentId, credential: apiKey },
         {}
       );
       return await drainProcess(proc, req, 'e2b');
@@ -338,6 +340,7 @@ export const codeExecTool: Tool<z.infer<typeof codeExecInput>, CodeExecResult> =
       sandboxRoots: ctx.sandboxRoots,
       confine: target !== 'host',
       sessionId: ctx.sessionId,
+      agentId: ctx.agentId,
       timeoutMs,
       e2bCredential: _e2bApiKey
     });

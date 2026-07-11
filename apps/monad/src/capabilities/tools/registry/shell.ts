@@ -49,7 +49,11 @@ export interface ShellResult {
 function terminalBackend(ctx: ToolContext) {
   return (
     ctx.backends?.terminal ??
-    createSandboxBackends(ctx.sandboxRoots, { defaultCwd: ctx.defaultCwd, sessionId: ctx.sessionId }).terminal
+    createSandboxBackends(ctx.sandboxRoots, {
+      defaultCwd: ctx.defaultCwd,
+      sessionId: ctx.sessionId,
+      agentId: ctx.agentId
+    }).terminal
   );
 }
 
@@ -124,7 +128,11 @@ export const shellExecTool: Tool<z.infer<typeof shellExecInput>, ShellResult> = 
         return toolResult(
           normalizeForeground(
             await exec(
-              createSandboxBackends(expanded, { defaultCwd: ctx.defaultCwd, sessionId: ctx.sessionId }).terminal
+              createSandboxBackends(expanded, {
+                defaultCwd: ctx.defaultCwd,
+                sessionId: ctx.sessionId,
+                agentId: ctx.agentId
+              }).terminal
             )
           )
         );

@@ -155,7 +155,8 @@ async function sandboxExec(
   },
   sandboxRoots: string[] | undefined,
   defaultCwd?: string,
-  sessionId?: string
+  sessionId?: string,
+  agentId?: string
 ): Promise<TerminalExecResult> {
   const dir = assertPathWithinRoots(opts.cwd ?? defaultCwd ?? sandboxRoots?.[0] ?? process.cwd(), sandboxRoots);
   const limit = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -168,8 +169,8 @@ async function sandboxExec(
   const proc = sandboxedSpawn(
     argv,
     { cwd: dir, stdout: 'pipe', stderr: 'pipe', env: spawnEnv },
-    buildSandboxPolicy(sandboxRoots, [], sessionId),
-    { sessionId }
+    buildSandboxPolicy(sandboxRoots, [], sessionId, agentId),
+    { sessionId, agentId }
   );
 
   // Enforce the timeout by racing a prompt rejection (mirrors the abort path below). Killing the
@@ -236,9 +237,9 @@ async function sandboxExec(
 /** The default fs/terminal backend: operates on the daemon host behind the sandbox guards. */
 export function createSandboxBackends(
   sandboxRoots?: string[],
-  opts?: { defaultCwd?: string; sessionId?: string }
+  opts?: { defaultCwd?: string; sessionId?: string; agentId?: string }
 ): ToolBackends {
-  const { defaultCwd, sessionId } = opts ?? {};
+  const { defaultCwd, sessionId, agentId } = opts ?? {};
   return {
     fs: {
       delegated: false,
@@ -290,7 +291,7 @@ export function createSandboxBackends(
     },
     terminal: {
       delegated: false,
-      exec: (opts) => sandboxExec(opts, sandboxRoots, defaultCwd, sessionId)
+      exec: (opts) => sandboxExec(opts, sandboxRoots, defaultCwd, sessionId, agentId)
     }
   };
 }

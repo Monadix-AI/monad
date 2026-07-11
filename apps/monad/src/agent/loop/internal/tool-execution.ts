@@ -171,6 +171,7 @@ export class ToolExecutor {
     try {
       const output = await invokeTool(tool, toolInput, {
         sessionId,
+        agentId: this.deps.agentId,
         toolCallId: call.toolCallId,
         sandboxRoots: this.deps.sandboxRoots,
         backends: this.deps.backends,

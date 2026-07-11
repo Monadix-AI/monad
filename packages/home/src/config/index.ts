@@ -253,6 +253,26 @@ export const sandboxConfigSchema = z.object({
   credential: z.string().optional(),
   // Container image for the docker/podman launcher. Default: ubuntu:22.04.
   dockerImage: z.string().optional(),
+  // macOS VM backend (backend:'vm') tuning. One Fedora CoreOS VM per agent (own kernel/fs/pids),
+  // reused across the agent's sessions; see docs. All fields optional (sensible defaults).
+  vm: z
+    .object({
+      // Reuse granularity: 'agent' (one VM shared across an agent's sessions) or 'session'.
+      scope: z.enum(['agent', 'session']).default('agent'),
+      // Keep an idle VM this long (ms) after its last session ends, for fast reuse. Default 10 min.
+      idleTtlMs: z.number().int().positive().default(600_000),
+      // Max concurrent VMs; over the cap the least-recently-used idle VM is evicted. Default 8.
+      maxInstances: z.number().int().positive().default(8),
+      // Per-VM memory (MiB) and vCPUs.
+      memory: z.number().int().positive().default(2048),
+      cpus: z.number().int().positive().default(2),
+      // Attach a memory-balloon device + host-pressure reclaim so idle VMs release pages. Default on.
+      balloon: z.boolean().default(true),
+      // Explicit vfkit / gvproxy binary paths (skip host detection + download).
+      vfkitPath: z.string().optional(),
+      gvproxyPath: z.string().optional()
+    })
+    .optional(),
   // Heavy sandbox backend selector. 'auto' (default) uses the light OS launcher (Seatbelt /
   // bwrap / Landlock / AppContainer). 'docker'/'e2b'/'vm' select a heavy launcher, which must be
   // provided by an enabled atom pack (e.g. @monad/monad-power-pack); if unavailable it falls back

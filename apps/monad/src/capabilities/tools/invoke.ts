@@ -52,6 +52,8 @@ function describeSchemaError(error: unknown): string {
 
 export interface InvokeToolOptions {
   sessionId: string;
+  /** The session's bound agent — forwarded into ToolContext.agentId for per-agent VM reuse. */
+  agentId?: string;
   sandboxRoots?: string[];
   log: ToolContext['log'];
   gate?: ToolGate;
@@ -93,6 +95,7 @@ export async function invokeTool<Input, Metadata>(
 
   const ctx: ToolContext = {
     sessionId: opts.sessionId,
+    agentId: opts.agentId,
     toolCallId: opts.toolCallId,
     sandboxRoots: opts.sandboxRoots,
     backends: opts.backends,

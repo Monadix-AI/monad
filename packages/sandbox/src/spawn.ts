@@ -153,7 +153,8 @@ export function sandboxHomeEnv(home: string): Record<string, string> {
 export function buildSandboxPolicy(
   writableRoots: string[] | undefined,
   extraWritable: string[] = [],
-  sessionId?: string
+  sessionId?: string,
+  agentId?: string
 ): SandboxPolicy {
   // The system temp dir is always writable when confined: git, compilers, package managers and
   // most tooling write scratch files to TMPDIR, so omitting it would break ordinary commands. It's
@@ -163,7 +164,8 @@ export function buildSandboxPolicy(
     readDenyRoots: readDenyDefault,
     maskedFiles: maskedFilesDefault.length > 0 ? maskedFilesDefault : undefined,
     net: netDefault,
-    sessionId
+    sessionId,
+    agentId
   };
 }
 
@@ -182,8 +184,9 @@ export function sandboxedSpawn<
   policy: SandboxPolicy = {},
   // confine:false escapes the sandbox entirely — no launcher wrap, no proxy env — for an explicit,
   // approval-gated host run (code_execute target:'host'). Spawns exactly like plain Bun.spawn.
-  // sessionId lets a remote launcher reuse ONE off-box instance per session across calls.
-  opts: { confine?: boolean; sessionId?: string } = {}
+  // sessionId lets a remote launcher reuse ONE off-box instance per session across calls; agentId
+  // lets a per-agent launcher (the VM backend) reuse ONE instance per agent across its sessions.
+  opts: { confine?: boolean; sessionId?: string; agentId?: string } = {}
 ): Bun.Subprocess<In, Out, Err> {
   if (opts.confine === false) {
     const proc = Bun.spawn<In, Out, Err>(argv, { ...options, detached: true });
@@ -214,7 +217,8 @@ export function sandboxedSpawn<
       cwd: finalOptions?.cwd ? String(finalOptions.cwd) : undefined,
       env: finalOptions?.env as Record<string, string | undefined> | undefined,
       credential: sandboxCredential(),
-      sessionId: opts.sessionId
+      sessionId: opts.sessionId,
+      agentId: opts.agentId ?? policy.agentId
     };
     return activeLauncher.spawn(argv, spawnOptions, policy) as unknown as Bun.Subprocess<In, Out, Err>;
   }
@@ -239,7 +243,7 @@ export function sandboxedPtySpawn(
   argv: string[],
   options: SandboxPtySpawnOptions,
   policy: SandboxPolicy = {},
-  opts: { confine?: boolean; sessionId?: string } = {}
+  opts: { confine?: boolean; sessionId?: string; agentId?: string } = {}
 ): SandboxPtyProcess {
   if (!activeLauncher.wrap && activeLauncher.spawn) {
     throw new Error(`Sandbox launcher (${activeLauncher.kind}) does not support PTY processes`);

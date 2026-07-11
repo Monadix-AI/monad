@@ -107,7 +107,7 @@ export async function createAtomDiscovery(deps: {
   );
   // The sandbox launcher atoms have now registered (any discovered heavy pack) — select the light OS
   // launcher (default) or the configured heavy backend and wire it into the spawn seam.
-  await finalizeSandboxLauncher(cfg);
+  await finalizeSandboxLauncher(cfg, process.platform, paths);
 
   return {
     channelRegistry,
