@@ -1,6 +1,9 @@
-import type { SandboxLauncher } from '@monad/sdk-atom';
+import type { LightSandboxPlatform } from './light-platform-contract.ts';
 
 import { bwrapLauncher } from './launchers/bwrap.ts';
 import { landlockLauncher } from './launchers/landlock.ts';
 
-export const lightSandboxLaunchers: readonly SandboxLauncher[] = [bwrapLauncher, landlockLauncher];
+export const lightSandboxPlatform: LightSandboxPlatform = {
+  launchers: [bwrapLauncher, landlockLauncher],
+  async sweepOrphanAppContainerProfiles() {}
+};

@@ -1,24 +1,30 @@
 import { expect, test } from 'bun:test';
 
-import { lightSandboxLaunchers as darwin } from '../../src/light-platform.darwin.ts';
-import { lightSandboxLaunchers as linux } from '../../src/light-platform.linux.ts';
-import { lightSandboxLaunchers as all } from '../../src/light-platform.ts';
-import { lightSandboxLaunchers as windows } from '../../src/light-platform.windows.ts';
+import { lightSandboxPlatform as darwinPlatform } from '../../src/light-platform.darwin.ts';
+import { lightSandboxPlatform as linuxPlatform } from '../../src/light-platform.linux.ts';
+import { lightSandboxPlatform as allPlatform } from '../../src/light-platform.ts';
+import { lightSandboxPlatform as windowsPlatform } from '../../src/light-platform.windows.ts';
 
-const kinds = (launchers: typeof all): string[] => launchers.map(({ kind }) => kind);
+const kinds = (launchers: typeof allPlatform.launchers): string[] => launchers.map(({ kind }) => kind);
 
 test('development includes every light launcher in selection order', () => {
-  expect(kinds(all)).toEqual(['seatbelt', 'bwrap', 'landlock', 'appcontainer', 'lowintegrity']);
+  expect(kinds(allPlatform.launchers)).toEqual(['seatbelt', 'bwrap', 'landlock', 'appcontainer', 'lowintegrity']);
 });
 
 test('Darwin includes only Seatbelt', () => {
-  expect(kinds(darwin)).toEqual(['seatbelt']);
+  expect(kinds(darwinPlatform.launchers)).toEqual(['seatbelt']);
 });
 
 test('Linux includes bwrap then Landlock', () => {
-  expect(kinds(linux)).toEqual(['bwrap', 'landlock']);
+  expect(kinds(linuxPlatform.launchers)).toEqual(['bwrap', 'landlock']);
 });
 
 test('Windows includes AppContainer then Low Integrity', () => {
-  expect(kinds(windows)).toEqual(['appcontainer', 'lowintegrity']);
+  expect(kinds(windowsPlatform.launchers)).toEqual(['appcontainer', 'lowintegrity']);
+});
+
+test('every platform seam exposes the shared cleanup contract', () => {
+  for (const platform of [allPlatform, darwinPlatform, linuxPlatform, windowsPlatform]) {
+    expect(platform.sweepOrphanAppContainerProfiles).toBeFunction();
+  }
 });

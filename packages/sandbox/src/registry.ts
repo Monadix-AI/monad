@@ -17,7 +17,7 @@ import type { SandboxLauncher } from '@monad/sdk-atom';
 import { logger } from '@monad/logger';
 import { noneLauncher } from '@monad/sdk-atom';
 
-import { lightSandboxLaunchers } from './light-platform.ts';
+import { lightSandboxPlatform } from './light-platform.ts';
 
 type Source = 'builtin' | 'atom';
 type Backend = 'auto' | 'docker' | 'e2b' | 'vm';
@@ -61,7 +61,7 @@ export function clearSandboxLaunchers(): void {
  *  Only a launcher that keeps per-session state (e.g. a cloud launcher's reused remote instance)
  *  acts; the rest no-op. */
 export function disposeSandboxSession(sessionId: string): void {
-  for (const l of lightSandboxLaunchers) void l.disposeSession?.(sessionId);
+  for (const l of lightSandboxPlatform.launchers) void l.disposeSession?.(sessionId);
   for (const e of entries) void e.launcher.disposeSession?.(sessionId);
 }
 
@@ -70,7 +70,7 @@ export function disposeSandboxSession(sessionId: string): void {
  *  agent) acts; the rest no-op. Destroying the instance here is a security constraint — a stale
  *  instance must never outlive the policy it was built for. */
 export function disposeSandboxAgent(agentId: string): void {
-  for (const l of lightSandboxLaunchers) void l.disposeAgent?.(agentId);
+  for (const l of lightSandboxPlatform.launchers) void l.disposeAgent?.(agentId);
   for (const e of entries) void e.launcher.disposeAgent?.(agentId);
 }
 
@@ -80,7 +80,11 @@ function isCandidate(launcher: SandboxLauncher, platform: NodeJS.Platform): bool
 }
 
 function selectAuto(platform: NodeJS.Platform): SandboxLauncher {
-  return lightSandboxLaunchers.find((l) => isCandidate(l, platform)) ?? noneLauncher;
+  return lightSandboxPlatform.launchers.find((l) => isCandidate(l, platform)) ?? noneLauncher;
+}
+
+export function sweepOrphanAppContainerProfiles(): Promise<void> {
+  return lightSandboxPlatform.sweepOrphanAppContainerProfiles();
 }
 
 /**

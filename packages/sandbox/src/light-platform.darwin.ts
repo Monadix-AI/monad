@@ -1,5 +1,8 @@
-import type { SandboxLauncher } from '@monad/sdk-atom';
+import type { LightSandboxPlatform } from './light-platform-contract.ts';
 
 import { seatbeltLauncher } from './launchers/seatbelt.ts';
 
-export const lightSandboxLaunchers: readonly SandboxLauncher[] = [seatbeltLauncher];
+export const lightSandboxPlatform: LightSandboxPlatform = {
+  launchers: [seatbeltLauncher],
+  async sweepOrphanAppContainerProfiles() {}
+};
