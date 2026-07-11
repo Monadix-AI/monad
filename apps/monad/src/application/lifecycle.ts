@@ -78,6 +78,7 @@ import { createDataLayer } from '#/store/lifecycle.ts';
 import { runAcpBridge } from '#/transports/acp/launch.ts';
 import { createHttpTransport } from '#/transports/http.ts';
 import { serveDaemon } from '#/transports/lifecycle.ts';
+import { createDaemonShutdown } from '#/transports/shutdown.ts';
 import { resolveTlsSetupForNetwork, type TlsSetup } from '#/transports/tls.ts';
 
 // Eden type-safe client inference (compile-time only). Derived from the transport factory
@@ -599,6 +600,12 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
   };
 
   const serveCfg = runtime.config.get().cfg;
+  const shutdown = createDaemonShutdown({
+    schedule,
+    watchers: watchService,
+    channels: channelService,
+    runtime
+  });
 
   // Start listening (TCP + Unix socket, or stdio), print the ready banner, wire shutdown signals,
   // and connect channels (see #/transports/lifecycle.ts).
@@ -638,12 +645,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
       useMock: USE_MOCK
     },
     openaiCompatConfig: getOpenAiCompatConfig,
-    onShutdown: async () => {
-      schedule.dispose();
-      watchService.closeAll();
-      await channelService.stop();
-      await runtime.stop();
-    },
+    onShutdown: shutdown,
     beforeListen: opts?.beforeListen
   });
   runtime.startWatching();
