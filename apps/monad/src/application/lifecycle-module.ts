@@ -2,7 +2,7 @@ import type { ConfigSnapshot } from '#/config/service.ts';
 import type { RuntimeContext } from '#/runtime/context.ts';
 import type { RuntimeModule } from '#/runtime/types.ts';
 
-export interface ApplicationCore {
+interface ApplicationCore {
   store: unknown;
   sandbox: unknown;
   model: unknown;
@@ -12,12 +12,12 @@ export interface ApplicationCore {
   mcp: unknown;
 }
 
-export interface DaemonApplicationLifecycle {
+interface DaemonApplicationLifecycle {
   reload(snapshot: ConfigSnapshot): Promise<void>;
   stop(): Promise<void>;
 }
 
-export interface ApplicationLifecycleOptions<T extends DaemonApplicationLifecycle> {
+interface ApplicationLifecycleOptions<T extends DaemonApplicationLifecycle> {
   start(core: ApplicationCore): Promise<T>;
 }
 
