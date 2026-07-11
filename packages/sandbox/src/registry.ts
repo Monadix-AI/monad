@@ -17,11 +17,7 @@ import type { SandboxLauncher } from '@monad/sdk-atom';
 import { logger } from '@monad/logger';
 import { noneLauncher } from '@monad/sdk-atom';
 
-import { bwrapLauncher } from './launchers/bwrap.ts';
-import { landlockLauncher } from './launchers/landlock.ts';
-import { seatbeltLauncher } from './launchers/seatbelt.ts';
-import { win32Launcher } from './launchers/win32.ts';
-import { win32AppContainerLauncher } from './launchers/win32-appcontainer.ts';
+import { lightSandboxLaunchers } from './light-platform.ts';
 
 type Source = 'builtin' | 'atom';
 type Backend = 'auto' | 'docker' | 'e2b' | 'vm';
@@ -33,14 +29,6 @@ interface Entry {
 
 // The closed set of light OS launchers, in priority order (first match wins on auto):
 //   macOS  → Seatbelt · Linux → bwrap → Landlock · Windows → AppContainer → Low-Integrity.
-const LIGHT: SandboxLauncher[] = [
-  seatbeltLauncher,
-  bwrapLauncher,
-  landlockLauncher,
-  win32AppContainerLauncher,
-  win32Launcher
-];
-
 // HEAVY atom launchers only (docker/e2b/vm). Registered via the atom gate; wiped on hot-reload.
 const entries: Entry[] = [];
 
@@ -73,7 +61,7 @@ export function clearSandboxLaunchers(): void {
  *  Only a launcher that keeps per-session state (e.g. a cloud launcher's reused remote instance)
  *  acts; the rest no-op. */
 export function disposeSandboxSession(sessionId: string): void {
-  for (const l of LIGHT) void l.disposeSession?.(sessionId);
+  for (const l of lightSandboxLaunchers) void l.disposeSession?.(sessionId);
   for (const e of entries) void e.launcher.disposeSession?.(sessionId);
 }
 
@@ -82,7 +70,7 @@ export function disposeSandboxSession(sessionId: string): void {
  *  agent) acts; the rest no-op. Destroying the instance here is a security constraint — a stale
  *  instance must never outlive the policy it was built for. */
 export function disposeSandboxAgent(agentId: string): void {
-  for (const l of LIGHT) void l.disposeAgent?.(agentId);
+  for (const l of lightSandboxLaunchers) void l.disposeAgent?.(agentId);
   for (const e of entries) void e.launcher.disposeAgent?.(agentId);
 }
 
@@ -92,7 +80,7 @@ function isCandidate(launcher: SandboxLauncher, platform: NodeJS.Platform): bool
 }
 
 function selectAuto(platform: NodeJS.Platform): SandboxLauncher {
-  return LIGHT.find((l) => isCandidate(l, platform)) ?? noneLauncher;
+  return lightSandboxLaunchers.find((l) => isCandidate(l, platform)) ?? noneLauncher;
 }
 
 /**
