@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { createSkillSubsystem } from '#/bootstrap/skills.ts';
+import { createSkillSubsystem } from '#/capabilities/skills/service.ts';
 import { ReloadService } from '#/reload/index.ts';
 import { makeTestPaths } from '../../helpers.ts';
 

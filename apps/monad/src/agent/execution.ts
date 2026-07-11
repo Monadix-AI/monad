@@ -1,9 +1,5 @@
-// Boot phase: assemble the agent — resolve the active model's context window, build the durable
-// summarizer + per-step token limiter, construct the model-derived tools (delegate, vision, image,
-// tts, clarify, skill_manage), and wire the session/message repositories + per-turn usage/cost
-// accounting onto the store. Returns the agent plus its history engine (the /compact command needs
-// the latter). Forward-referenced wiring (schedule.fire, hooks config) stays in the orchestrator and
-// is passed in: extra tools, the hook runner, and a live workspace prompt-slots getter.
+// Long-lived execution dependencies and repositories. The facade created here remains stable for
+// the daemon lifetime; each model invocation creates its AgentLoop through `agent.loop(...)`.
 
 import type { MonadConfig, MonadPaths } from '@monad/home';
 import type { LoadedSkill } from '#/agent/index.ts';
@@ -42,7 +38,7 @@ import { register as visionRegister } from '#/capabilities/tools/registry/vision
 import { register as agentDelegateRegister } from '#/services/delegation/agent-delegate.ts';
 import { createInboundApprovalGate, type InboundApprovalMode } from '#/services/inbound-approval.ts';
 
-const log = createLogger('bootstrap:agent');
+const log = createLogger('agent:execution');
 
 type CreateAgentOptions = Parameters<typeof createAgent>[0];
 type AgentModel = NonNullable<CreateAgentOptions['model']>;
@@ -84,13 +80,13 @@ export interface AgentDeps {
   workspacePromptSlots: (sessionId?: string) => UserPromptSlots;
 }
 
-export interface DaemonAgent {
+export interface AgentExecutionService {
   agent: ReturnType<typeof createAgent>;
   /** Durable summarizer used by /compact and by prompt assembly. */
   history: DurableSummarizer;
 }
 
-export function createDaemonAgent(deps: AgentDeps): DaemonAgent {
+export function createAgentExecutionService(deps: AgentDeps): AgentExecutionService {
   const {
     agentModel,
     modelService,
@@ -220,7 +216,7 @@ export function createDaemonAgent(deps: AgentDeps): DaemonAgent {
     : undefined;
 
   // Static (non-registry) tools — always visible to the model regardless of deferred mode. Each
-  // module exposes the uniform `register(deps) => Tool[]` entry; we compose them with bootstrap-local
+  // module exposes the uniform `register(deps) => Tool[]` entry; we compose them with execution-local
   // deps (model, gate, context, …). Order is preserved for the prompt-cache prefix.
   const staticTools: ToolList = [
     ...skillManageRegister({ skillsDir: paths.skills }),

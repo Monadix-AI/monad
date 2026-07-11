@@ -12,9 +12,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createDefaultConfig, pathsForHome } from '@monad/home';
 
-import { createSandbox, finalizeSandboxLauncher } from '#/bootstrap/sandbox.ts';
-import { createTlsCert, resolveTlsSetupForNetwork } from '#/bootstrap/tls.ts';
 import { clearSandboxLaunchers, configureSandboxLauncher, noneLauncher } from '#/capabilities/tools';
+import { createSandbox, finalizeSandboxLauncher } from '#/platform/sandbox/service.ts';
+import { createTlsCert, resolveTlsSetupForNetwork } from '#/transports/tls.ts';
 
 let tlsDir: string;
 beforeEach(async () => {
@@ -147,22 +147,20 @@ test('finalizeSandboxLauncher throws when confine=true but no launcher is availa
 });
 
 test('finalizeSandboxLauncher allows unconfined exec only when explicitly opted in', async () => {
-  await expect(
-    finalizeSandboxLauncher(sandboxConfig({ confine: true, allowUnconfinedExec: true }), NO_LAUNCHER_PLATFORM)
-  ).resolves.toBeUndefined();
+  await finalizeSandboxLauncher(sandboxConfig({ confine: true, allowUnconfinedExec: true }), NO_LAUNCHER_PLATFORM);
 });
 
 test('finalizeSandboxLauncher does not throw when confinement is off', async () => {
-  await expect(finalizeSandboxLauncher(sandboxConfig({ confine: false }))).resolves.toBeUndefined();
+  await finalizeSandboxLauncher(sandboxConfig({ confine: false }));
 });
 
 test('finalizeSandboxLauncher accepts the light launcher on a supported platform without opt-in', async () => {
   // macOS always has Seatbelt in the closed light set — auto selects it, no atom registration needed.
-  await expect(finalizeSandboxLauncher(sandboxConfig({ confine: true }), 'darwin')).resolves.toBeUndefined();
+  await finalizeSandboxLauncher(sandboxConfig({ confine: true }), 'darwin');
 });
 
 test('createSandbox boot sweep keeps Workplace Project sandbox roots alive', async () => {
-  const home = await mkdtemp(join(tmpdir(), 'monad-sandbox-bootstrap-'));
+  const home = await mkdtemp(join(tmpdir(), 'monad-sandbox-runtime-'));
   const paths = pathsForHome(home);
   const cfg = createDefaultConfig('prn_test00000000', 'Test');
   cfg.sandbox.mode = 'ephemeral';

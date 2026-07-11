@@ -2,7 +2,7 @@
 // inviting / editing / enabling / disabling / removing an external ACP agent takes effect without a
 // daemon restart. Registering (or clearing) the tool bumps registry.toolRevision, which is the agent's
 // per-turn memo key — so the fresh roster (and the tool's description) reaches the model on its next
-// turn. Same mechanism MCP config servers use (see bootstrap/mcp.ts reloadConfigMcpServers).
+// turn. Same mechanism MCP config servers use (see capabilities/mcp/service.ts reloadConfigMcpServers).
 
 import type { AcpAgentConfig, McpServerConfig, MonadAuth } from '@monad/home';
 import type { ToolGate } from '#/capabilities/tools/types.ts';
@@ -76,7 +76,7 @@ export function applyAcpDelegateTool({
     return;
   }
   // `mcpServers` is the raw config.json MCP list. Browser/computer PRESET MCP servers (added by
-  // bootstrap/mcp.ts's resolveConfigMcpSpecs) are deliberately NOT here: they grant host control and
+  // capabilities/mcp/service.ts's resolveConfigMcpSpecs) are deliberately NOT here: they grant host control and
   // are not "shared tools" to hand to a third-party adapter.
   const forwarded = toAcpMcpServers(mcpServers ?? [], auth);
   // Skip the re-register when nothing the tool depends on changed (see lastFingerprint).

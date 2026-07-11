@@ -6,7 +6,7 @@ import { BUILTIN_LOCALES_DIR } from '@monad/i18n/locale-dir';
 import { acquireSingletonLock } from '#/infra/singleton-lock.ts';
 
 export async function acquireDaemonSingletonLock(paths: MonadPaths): Promise<void> {
-  // Bootstrap a minimal i18n instance just for the singleton lock error — locale comes from a
+  // Create a minimal i18n instance just for the singleton lock error — locale comes from a
   // fast config peek so the error message is localized even before full config loading.
   const earlyLocale = await Bun.file(paths.config)
     .json()

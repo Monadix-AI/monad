@@ -1,4 +1,4 @@
-// Verifies the host-escape WIRING in bootstrap: connectMcpServers tags a hostEscape server's
+// Verifies the host-escape MCP wiring: connectMcpServers tags a hostEscape server's
 // NON-auto-approved tools with the host-control gate key, so the approval engine treats them as the
 // session-grantable desktop-control class (never a permanent global allow). Auto-approved read-only
 // tools are exempt and ungated. Pairs with approvals-engine.test.ts (which proves the SEMANTICS of
@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import { createDefaultConfig } from '@monad/home';
 
 import { HOST_CONTROL_KEY } from '#/agent/approvals/engine.ts';
-import { connectMcpServers } from '#/bootstrap/mcp.ts';
+import { connectMcpServers } from '#/capabilities/mcp/service.ts';
 import { AtomPackRegistry } from '#/handlers/atom-pack/index.ts';
 
 const fixture = join(import.meta.dir, '../unit/tools/fixtures/mock-mcp-server.ts');

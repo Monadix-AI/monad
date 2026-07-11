@@ -28,7 +28,7 @@ export async function checkAndRepair(paths: MonadPaths, store: Store): Promise<I
     }
 
     if (!profileExists) {
-      // loadAll bootstraps profile from config.json in memory but doesn't persist it.
+      // loadAll initializes profile from config.json in memory but doesn't persist it.
       // Re-load then save explicitly.
       const merged = await loadAll(paths.config, paths.profile).catch(() => null);
       if (merged) await saveProfile(paths.profile, merged);
@@ -36,7 +36,7 @@ export async function checkAndRepair(paths: MonadPaths, store: Store): Promise<I
     } else {
       const parsed = await tryParseProfile(paths.profile);
       if (parsed === null) {
-        // Remove corrupt file so loadAll can bootstrap a default profile.
+        // Remove corrupt file so loadAll can initialize a default profile.
         await unlink(paths.profile).catch(() => {});
         const merged = await loadAll(paths.config, paths.profile).catch(() => null);
         if (merged) await saveProfile(paths.profile, merged);

@@ -12,10 +12,10 @@ import { loadAll } from '@monad/home';
 import { defaultLocaleName, loadLocalePacksFromDir } from '@monad/i18n';
 import { BUILTIN_LOCALES_DIR } from '@monad/i18n/locale-dir';
 
+import { type BuiltinSinks, createChannelRegistry, type DiscoveredSinks } from '#/channels/discovery.ts';
 import { AtomPackRegistry } from '#/handlers/atom-pack/atom-pack-registry.ts';
 import { CommandRegistry } from '#/handlers/commands/registry.ts';
 import { I18nService, loadInstalledLocalePacks } from '#/services/i18n.ts';
-import { type BuiltinSinks, createChannelRegistry, type DiscoveredSinks } from './channels.ts';
 
 export type AtomPackRediscovererDeps = {
   paths: MonadPaths;

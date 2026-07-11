@@ -31,10 +31,21 @@ import { join } from 'node:path';
 import { getPaths, initMonadHome, loadAll, loadAuth, resolveDaemonNetwork } from '@monad/home';
 import { createLogger } from '@monad/logger';
 
-import { applyAcpDelegateTool } from '#/bootstrap/acp-delegate.ts';
+import { createInterruptServices } from '#/agent/approvals/interrupts.ts';
+import { createConfigWatchers } from '#/agent/config.ts';
+import { applyAcpDelegateTool } from '#/agent/delegation/acp-tool.ts';
+import { createAgentExecutionService } from '#/agent/execution.ts';
+import { createMemorySubsystem } from '#/agent/memory/subsystem.ts';
+import { createAtomPackRediscoverer } from '#/atoms/reload.ts';
+import { createMcpControls } from '#/capabilities/mcp/controls.ts';
+import { createObscuraController } from '#/capabilities/mcp/obscura.ts';
 import { buildServiceTools } from '#/capabilities/tools';
+import { configureToolBackends } from '#/capabilities/tools/configure-backends.ts';
+import { createChannelGateway } from '#/channels/gateway.ts';
+import { createHotReload } from '#/config/application.ts';
 import { createConfigReloader } from '#/config/reloader.ts';
 import { createHomeConfigSource } from '#/config/source.ts';
+import { createCommandBundle } from '#/handlers/commands/bundle.ts';
 import { type CommandBundle } from '#/handlers/commands/index.ts';
 import { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
 import { createHookRunner } from '#/hooks/runner.ts';
@@ -42,41 +53,30 @@ import { daemonChildProcesses, runDaemonChildSupervisorFromArgv } from '#/infra/
 import { initObservability, resolveObservabilityEndpoint } from '#/infra/observability.ts';
 import { ReloadService } from '#/reload/index.ts';
 import { createDaemonModules, createDaemonRuntime } from '#/runtime/create.ts';
+import { configureDaemonLogging, readDaemonRuntimeFlags } from '#/runtime/flags.ts';
+import { acquireDaemonSingletonLock } from '#/runtime/singleton.ts';
 import { DelegationService } from '#/services/delegation/delegation.ts';
+import { createPeerDelegateTools } from '#/services/delegation/peers.ts';
 import { acpAgentCandidatesFromAdapters } from '#/services/delegation/presets.ts';
 import { configureDeveloperLogTransport } from '#/services/developer-log.ts';
 import { EventBus } from '#/services/event-bus.ts';
 import { isToolExposed } from '#/services/generation/agent-persona.ts';
+import { createLocaleService } from '#/services/i18n-loader.ts';
 import { createGraphQueryTools } from '#/services/memory/graph/query-tools.ts';
 import { createMemoryAgentTools } from '#/services/memory/tools.ts';
 import { RoundCache } from '#/services/round-cache.ts';
 import { ScheduleService } from '#/services/scheduling/schedule.ts';
-import { createDataLayer } from '#/store/lifecycle.ts';
-import { runAcpBridge } from '#/transports/acp/launch.ts';
-import { createDaemonAgent } from './bootstrap/agent.ts';
-import { createAtomPackRediscoverer } from './bootstrap/atoms.ts';
-import { createChannelGateway } from './bootstrap/channel-gateway.ts';
-import { createCommandBundle } from './bootstrap/commands.ts';
-import { createHotReload } from './bootstrap/hot-reload.ts';
-import { createInterruptServices } from './bootstrap/interrupts.ts';
-import { createConfigWatchers } from './bootstrap/main-init/config-watchers.ts';
-import { warnIfNotInitialized } from './bootstrap/main-init/init-status.ts';
-import { createLocaleService } from './bootstrap/main-init/locale.ts';
-import { createMcpControls } from './bootstrap/mcp-controls.ts';
-import { createMemorySubsystem } from './bootstrap/memory.ts';
-import { createObscuraController } from './bootstrap/obscura.ts';
-import { createPeerDelegateTools } from './bootstrap/peers.ts';
-import { configureDaemonLogging, readDaemonRuntimeFlags } from './bootstrap/runtime-flags.ts';
-import { serveDaemon } from './bootstrap/serve.ts';
-import { acquireDaemonSingletonLock } from './bootstrap/singleton.ts';
+import { createUpgradeInfoMonitor } from '#/services/upgrade-info.ts';
+import { warnIfNotInitialized } from '#/store/home/init-status.ts';
 import {
   prependMonadBinToPath,
   seedDevProviderIfNeeded,
   startStartupHousekeeping
-} from './bootstrap/startup-housekeeping.ts';
-import { resolveTlsSetupForNetwork, type TlsSetup } from './bootstrap/tls.ts';
-import { configureToolBackends } from './bootstrap/tool-backends.ts';
-import { createUpgradeInfoMonitor } from './bootstrap/upgrade-info.ts';
+} from '#/store/home/startup-housekeeping.ts';
+import { createDataLayer } from '#/store/lifecycle.ts';
+import { runAcpBridge } from '#/transports/acp/launch.ts';
+import { serveDaemon } from '#/transports/lifecycle.ts';
+import { resolveTlsSetupForNetwork, type TlsSetup } from '#/transports/tls.ts';
 import { createHttpTransport } from './transports/http.ts';
 
 // Eden type-safe client inference (compile-time only). Derived from the transport factory
@@ -97,7 +97,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
 
   // ACP mode is a thin BRIDGE: it discovers (or auto-spawns) a shared daemon and proxies the
   // editor's connection to it, so it must NOT take the singleton lock or build a daemon in-process
-  // — that lock belongs to the daemon it bridges to. Branch out before any daemon bootstrap.
+  // — that lock belongs to the daemon it bridges to. Branch out before daemon startup.
   if (process.argv.includes('--acp')) {
     await runAcpBridge(paths);
     return;
@@ -247,7 +247,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
 
   // Live config-derived state: skill auto-load predicate, hot-swappable command/policy hooks, the
   // config/profile/auth file watcher (feeding the shared ConfigReloader), workspace prompt slots, and
-  // per-agent persona resolution (see ./bootstrap/main-init/config-watchers.ts).
+  // per-agent persona resolution (see #/agent/config.ts).
   const {
     getHooksConfig,
     setHooksConfig,
@@ -265,10 +265,6 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     watchSettings: false
   });
 
-  const monadVersion = await Bun.file(join(import.meta.dir, '..', 'package.json'))
-    .json()
-    .then((p: { version?: string }) => p.version ?? '0.0.0')
-    .catch(() => '0.0.0');
   const activeDeveloperMode = cfg.developerMode === true || DEV_MODE || DEV_SILENT;
   const otelEndpoint = resolveObservabilityEndpoint({
     endpoint: cfg.observability?.endpoint,
@@ -283,7 +279,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
   let sessionGateway: SessionGateway | null = null;
 
   // Locale gateway: file-scan loading from the builtin locale dir + any installed atom-pack locale
-  // dirs (see ./bootstrap/main-init/locale.ts).
+  // dirs (see #/services/i18n-loader.ts).
   const i18nService = await createLocaleService(paths, cfg.locale);
 
   const reconnectFileMcp = () => mcpRuntime.reconnectFiles(runtime.config.get().auth);
@@ -305,7 +301,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
 
   // Memory subsystem: auto-memory note store, layered L1 memory service (mem0 + daemon-managed local
   // qdrant), L2 knowledge graph + background consolidation, the read-only mem0 explorer, and memory
-  // settings write-back, with the lifecycle hooks registered (see ./bootstrap/memory.ts).
+  // settings write-back, with the lifecycle hooks registered (see #/agent/memory/subsystem.ts).
   const {
     noteStore,
     memoryService,
@@ -381,8 +377,8 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
   let inboundApprovalMode = cfg.openaiCompat.approval;
 
   // Agent assembly: context window + durable history + model-derived tools + repos (see
-  // ./bootstrap/agent.ts). Schedule/memory/acp-delegate tools are wired here and passed in.
-  const { agent, history } = createDaemonAgent({
+  // #/agent/execution.ts). Schedule/memory/acp-delegate tools are wired here and passed in.
+  const { agent, history } = createAgentExecutionService({
     agentModel,
     modelService,
     modelCatalog,
@@ -414,7 +410,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
   });
 
   // Backend for the unified slash commands — model list/switch, /compact, /handoff, memory + graph
-  // consolidation, and the highRisk approval gate (see ./bootstrap/commands.ts). sessionGateway is
+  // consolidation, and the highRisk approval gate (see #/handlers/commands/bundle.ts). sessionGateway is
   // late-bound (wired after handlers exist), so it is passed as a getter that /handoff guards on.
   const commandBundle: CommandBundle = createCommandBundle({
     commandRegistry,
@@ -465,7 +461,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     setPolicyHooksConfig
   });
 
-  // Auto-generated self-signed TLS for the primary HTTPS listener (see ./bootstrap/tls.ts).
+  // Auto-generated self-signed TLS for the primary HTTPS listener (see #/transports/tls.ts).
   let tlsSetup: TlsSetup = await resolveTlsSetupForNetwork({ https: cfg.network.https, tlsDir: paths.tls });
   const resolveRuntimeTlsSetup = async (https: MonadConfig['network']['https']): Promise<TlsSetup> => {
     tlsSetup = await resolveTlsSetupForNetwork({ https, tlsDir: paths.tls, current: tlsSetup });
@@ -486,7 +482,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
   });
 
   // Optional Obscura stdio MCP server: connect/disconnect/status behind a trust gate (pinned tool-set
-  // hash + per-tool auto-approve), one live connection (see ./bootstrap/obscura.ts).
+  // hash + per-tool auto-approve), one live connection (see #/capabilities/mcp/obscura.ts).
   const { connectObscura, disconnectObscura, getObscuraStatus } = createObscuraController({ registry, log: logger });
 
   const { getMcpStatus, mcpAuthorize, mcpReconnect } = createMcpControls({
@@ -608,7 +604,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
   const serveCfg = runtime.config.get().cfg;
 
   // Start listening (TCP + Unix socket, or stdio), print the ready banner, wire shutdown signals,
-  // and connect channels (see ./bootstrap/serve.ts).
+  // and connect channels (see #/transports/lifecycle.ts).
   await serveDaemon({
     handlers,
     paths,

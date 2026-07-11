@@ -11,10 +11,10 @@ import type { Store } from '#/store/db/index.ts';
 
 import { emptyAuth } from '@monad/home';
 
+import { applyAcpDelegateTool } from '#/agent/delegation/acp-tool.ts';
+import { configureToolBackends } from '#/capabilities/tools/configure-backends.ts';
 import { acpAgentCandidatesFromAdapters } from '#/services/delegation/presets.ts';
 import { configureDeveloperLogTransport } from '#/services/developer-log.ts';
-import { applyAcpDelegateTool } from './acp-delegate.ts';
-import { configureToolBackends } from './tool-backends.ts';
 
 // Wire the configReloader hot-reload subscriber now that all services are in scope. The bus fires on both
 // file-watcher events (disk edits) and in-process commit() calls (settings API).

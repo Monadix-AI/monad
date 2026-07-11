@@ -10,7 +10,7 @@ import type { McpConnection } from '#/capabilities/tools';
 import { connectMcpServer } from '#/capabilities/tools';
 import { buildObscuraMcpServer } from '#/config/mcp-presets.ts';
 import { AtomPackRegistry } from '#/handlers/atom-pack/index.ts';
-import { fingerprintToolset } from './mcp.ts';
+import { fingerprintToolset } from './service.ts';
 
 export interface ObscuraController {
   connectObscura: (config: ObscuraConfig, command: string) => Promise<{ connected: boolean; tools: string[] }>;

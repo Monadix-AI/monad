@@ -43,7 +43,7 @@ export interface McpServerDeps {
 
 // MCP servers are SYSTEM config (config.json). Edits persist via saveSystemConfig, which trips the
 // settings file-watcher → configReloader → diff-reconnect (connect added / disconnect removed / reconnect
-// changed) — so a change applies live, no restart (see bootstrap/mcp.ts reloadConfigMcpServers). The
+// changed) — so a change applies live, no restart (see capabilities/mcp/service.ts reloadConfigMcpServers). The
 // view mirrors @monad/home's mcpServerSchema field-for-field; secret-bearing values are `${env:NAME}`
 // refs by convention, so nothing is stripped. saveSystemConfig re-validates, so a bad shape is rejected.
 const toView = (s: McpServerConfig): McpServerView => s as McpServerView;

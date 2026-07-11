@@ -89,7 +89,7 @@ export class ModelService {
   }
 
   /** Wire in the model catalog so capability-based role fallback is enforced at runtime.
-   *  Called once after the catalog is ready (bootstrap/model.ts). */
+   *  Called once after the catalog is ready (agent/model/lifecycle.ts). */
   setCatalog(catalog: ModelCatalogService): void {
     this.catalog = catalog;
   }

@@ -20,8 +20,8 @@ import {
   validateDaemonNetworkSecurity
 } from '@monad/home';
 
-import { resolveTlsSetupForNetwork } from '#/bootstrap/tls.ts';
 import { HandlerError } from '#/handlers/handler-error.ts';
+import { resolveTlsSetupForNetwork } from '#/transports/tls.ts';
 
 type ProbeFetch = (input: Request | URL | string, init?: RequestInit) => Promise<Response>;
 

@@ -3,7 +3,7 @@ import type { SessionId } from '@monad/protocol';
 import { expect, test } from 'bun:test';
 import { createDefaultConfig } from '@monad/home';
 
-import { createCommandBundle } from '#/bootstrap/commands.ts';
+import { createCommandBundle } from '#/handlers/commands/bundle.ts';
 import { createStore } from '#/store/db/index.ts';
 
 test('command bundle model commands read and write a project-bound session', async () => {

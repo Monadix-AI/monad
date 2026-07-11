@@ -1,7 +1,7 @@
 // Skill subsystem: discover skills (personal + workspace), map them to the agent's L1 view + the
 // skills.list view, and keep both live across hot-reload. Encapsulates the closures and the two
 // in-place arrays (loadedSkills/skillList) that the live `skill` tool and skills.list RPC read, so
-// the bootstrap body just consumes the returned handles.
+// the runtime assembly just consumes the returned handles.
 
 import type { MonadPaths } from '@monad/home';
 import type { AtomConflict, SkillListInstance, SkillListItem } from '@monad/protocol';

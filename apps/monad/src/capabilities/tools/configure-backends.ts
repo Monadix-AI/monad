@@ -1,6 +1,6 @@
 // Boot phase: apply config to the process-wide tool backends (shell, code-exec, web search, email).
 // Pure side effects keyed off cfg — no outputs the rest of startDaemon consumes — so it lifts out of
-// the bootstrap body cleanly. Secret refs are resolved here, at the edge, before reaching a backend.
+// the runtime assembly cleanly. Secret refs are resolved here, at the edge, before reaching a backend.
 
 import type { MonadAuth, MonadConfig } from '@monad/home';
 

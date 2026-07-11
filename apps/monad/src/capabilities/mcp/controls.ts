@@ -6,7 +6,7 @@ import type { AtomPackRegistry } from '#/handlers/atom-pack/index.ts';
 import { loadAll, loadAuth } from '@monad/home';
 
 import { authorizeMcpOAuth } from '#/capabilities/mcp/oauth.ts';
-import { type ConfigMcpHandle, collectMcpStatus, reconnectOneMcpServer } from './mcp.ts';
+import { type ConfigMcpHandle, collectMcpStatus, reconnectOneMcpServer } from './service.ts';
 
 type CollectInput = Parameters<typeof collectMcpStatus>[0];
 

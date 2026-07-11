@@ -5,7 +5,7 @@ import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { createUpgradeInfoMonitor } from '#/bootstrap/upgrade-info.ts';
+import { createUpgradeInfoMonitor } from '#/services/upgrade-info.ts';
 import { makeTestPaths } from '../../helpers.ts';
 
 const originalFetch = globalThis.fetch;

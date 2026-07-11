@@ -9,7 +9,7 @@ import {
   planTcpListeners,
   resolveServeDeveloperMode,
   shouldEnableDeveloperDocs
-} from '#/bootstrap/serve.ts';
+} from '#/transports/lifecycle.ts';
 
 test('planTcpListeners uses HTTPS on the primary port by default', () => {
   expect(

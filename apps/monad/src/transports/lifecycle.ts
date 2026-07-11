@@ -5,12 +5,12 @@
 
 import type { MonadConfig, MonadPaths } from '@monad/home';
 import type { NetworkRuntimeStatus } from '@monad/protocol';
-import type { TlsSetup } from '#/bootstrap/tls.ts';
 import type { ChannelService } from '#/channels/channel.ts';
 import type { ConfigSnapshot } from '#/config/service.ts';
 import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
 import type { I18nService } from '#/services/i18n.ts';
 import type { MutableRemoteAccessState } from '#/transports/http.ts';
+import type { TlsSetup } from '#/transports/tls.ts';
 
 import { chmod, unlink } from 'node:fs/promises';
 import { resolveDaemonNetwork, validateDaemonNetworkSecurity } from '@monad/home';

@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { buildExternalAgentServerUrl } from '#/bootstrap/external-agent-url.ts';
+import { buildExternalAgentServerUrl } from '#/services/external-agent/url.ts';
 
 test('external agent server URL uses HTTPS by default', () => {
   expect(

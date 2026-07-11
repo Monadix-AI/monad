@@ -22,7 +22,7 @@ import { createToolSearchTool } from '#/capabilities/tools/registry/tool-search.
 
 const allowGate: ToolGate = async () => ({ allow: true });
 
-import { connectMcpServers } from '#/bootstrap/mcp.ts';
+import { connectMcpServers } from '#/capabilities/mcp/service.ts';
 import { AtomPackRegistry } from '#/handlers/atom-pack/index.ts';
 
 const fixture = join(import.meta.dir, '../unit/tools/fixtures/fat-mcp-server.ts');

@@ -5,7 +5,7 @@
 // instead of every tool sharing one god-bag:
 //   - static modules     → `ToolModule` (= ToolModule<ToolDeps>); they ignore deps
 //   - service modules     → `ToolModule` and destructure from the daemon ToolDeps
-//   - agent-runtime mods  → `ToolModule<ItsOwnDeps>` over bootstrap-local deps (model, gate, …)
+//   - agent-runtime mods  → `ToolModule<ItsOwnDeps>` over execution-local deps (model, gate, …)
 // Conditional modules `return []` when a needed dep is absent (the tool is simply not advertised);
 // reflexive modules read a `getTools` thunk for the live registry. One idiom, one assembly helper.
 //
