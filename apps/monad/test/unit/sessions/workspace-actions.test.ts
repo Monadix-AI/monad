@@ -12,7 +12,11 @@ test('file manager labels match the host platform vocabulary', () => {
 
 test('file manager commands are platform-specific', () => {
   expect(workspaceActionCommands('show-in-file-manager', cwd, 'darwin')[0]?.argv).toEqual(['open', '-R', cwd]);
-  expect(workspaceActionCommands('show-in-file-manager', cwd, 'win32')[0]?.argv).toEqual(['explorer.exe', cwd]);
+  expect(workspaceActionCommands('show-in-file-manager', cwd, 'win32')[0]?.argv).toEqual([
+    'explorer.exe',
+    '/select,',
+    cwd
+  ]);
   expect(workspaceActionCommands('show-in-file-manager', cwd, 'linux')[0]?.argv).toEqual(['xdg-open', cwd]);
 });
 

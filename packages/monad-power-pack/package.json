@@ -5,7 +5,7 @@
     "@monad/sandbox": "workspace:*",
     "@monad/sandbox-vm": "workspace:*",
     "@monad/sdk-atom": "workspace:*",
-    "e2b": "^2.31.0"
+    "e2b": "^2.32.0"
   },
   "devDependencies": {
     "@types/bun": "^1.3.14"

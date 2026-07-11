@@ -10,6 +10,7 @@ export function createCapabilityInventorySettingsController(handlers: ReturnType
     .get('/capability-inventory', async () => handlers.capabilityInventory.list(), {
       response: c.list.response,
       detail: {
+        tags: ['http-only'],
         summary: 'List discovered capabilities',
         description: 'Read-only inventory of skills and MCP servers discovered in Monad and external agent locations.'
       }
@@ -18,6 +19,7 @@ export function createCapabilityInventorySettingsController(handlers: ReturnType
       body: c.openLocation.body,
       response: c.openLocation.response,
       detail: {
+        tags: ['http-only'],
         summary: 'Open capability inventory location',
         description: 'Open the product-level local folder for a known capability inventory root.'
       }

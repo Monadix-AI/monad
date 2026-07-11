@@ -315,9 +315,14 @@ export interface ExternalAgentAuthStatusProbe {
   parse(output: string, exitCode: number | null): ExternalAgentAuthState;
 }
 
+export interface ExternalAgentModelOption {
+  value: string;
+  displayName?: string;
+}
+
 export interface ExternalAgentModelOptionsProbe {
   launch: ExternalAgentLaunchSpec;
-  parse(output: string, exitCode: number | null): string[];
+  parse(output: string, exitCode: number | null): ExternalAgentModelOption[];
 }
 
 export interface ExternalAgentUsageProbe {

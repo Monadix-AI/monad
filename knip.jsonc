@@ -46,11 +46,8 @@
     // bin.ts is the release entrypoint (build-release.ts), not the package.json
     // `bin`; declaring it lets Knip see its dynamic @monad/web + @monad/monad imports.
     "apps/cli": { "entry": ["src/bin.ts"], "bun": { "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"] } },
-    // The debug power pack is loaded via a dynamic import() gated on NODE_ENV !== 'production'
-    // (atom-pack-packs.ts), never a static import — knip can't trace it.
     "apps/monad": {
-      "bun": { "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"] },
-      "ignoreDependencies": ["@monad/monad-power-pack"]
+      "bun": { "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"] }
     },
     // public/experiences/*.js are workspace-experience web-component modules loaded by the
     // browser via a runtime URL string (the atom-pack registry), never a static import — same

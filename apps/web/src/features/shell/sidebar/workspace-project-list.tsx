@@ -1,5 +1,7 @@
 'use client';
 
+import { memo } from 'react';
+
 import { CollapsiblePresence } from './collapsible-presence';
 import {
   getPreviewLessTargetCount,
@@ -14,7 +16,7 @@ import {
 } from './workspace-project-rows';
 import { useWorkspaceSidebar } from './workspace-sidebar-context';
 
-export function ProjectList({
+export const ProjectList = memo(function ProjectList({
   expandedProjectIds,
   onToggleProjectExpanded,
   onProjectSessionOpened
@@ -89,9 +91,9 @@ export function ProjectList({
       )}
     </>
   );
-}
+});
 
-export function PinnedSessionList({
+export const PinnedSessionList = memo(function PinnedSessionList({
   onProjectSessionOpened,
   sessions
 }: {
@@ -118,4 +120,4 @@ export function PinnedSessionList({
       })}
     </>
   );
-}
+});

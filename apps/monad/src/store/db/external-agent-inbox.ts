@@ -13,7 +13,7 @@ import type {
   ProjectId
 } from '@monad/protocol';
 
-import { nativeAgentDeliverySchema, newId } from '@monad/protocol';
+import { externalAgentSessionIdSchema, nativeAgentDeliverySchema, newId, sessionIdSchema } from '@monad/protocol';
 
 import {
   getExternalAgentSession,
@@ -250,7 +250,7 @@ export function listMentionInbox(sqlite: Database, limit = 100): MentionInboxIte
       updatedAt: (row.updated_at ?? null) as string | null
     } as MessageRow);
     const deliveryId = (row._external_agent_delivery_id ?? undefined) as NativeAgentDeliveryId | undefined;
-    const externalAgentSessionId = row._external_agent_session_id as string;
+    const externalAgentSessionId = externalAgentSessionIdSchema.parse(row._external_agent_session_id);
     const seq = row._external_agent_seq as number;
     return {
       id: deliveryId ?? `${externalAgentSessionId}:${seq}`,
@@ -260,7 +260,7 @@ export function listMentionInbox(sqlite: Database, limit = 100): MentionInboxIte
       externalAgentSessionId,
       projectId: (row._project_id ?? undefined) as ProjectId | undefined,
       projectName: (row._project_name ?? undefined) as string | undefined,
-      sessionId: row._session_id as string,
+      sessionId: sessionIdSchema.parse(row._session_id),
       sessionTitle: (row._session_title ?? undefined) as string | undefined,
       memberInstanceId: (row._member_instance_id ?? undefined) as string | undefined,
       triggerMessageId: (row._trigger_message_id ?? undefined) as MessageId | undefined,

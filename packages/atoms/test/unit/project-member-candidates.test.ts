@@ -17,6 +17,7 @@ test('project member candidates include project templates defined on external ag
         allowAutopilot: false,
         approvalOwnership: 'provider-owned',
         modelOptions: ['gpt-5.5'],
+        modelOptionDisplayNames: { 'gpt-5.5': 'GPT-5.5' },
         reasoningEfforts: ['medium', 'high'],
         projectTemplates: [
           {
@@ -42,6 +43,7 @@ test('project member candidates include project templates defined on external ag
       enabled: true,
       provider: 'codex',
       modelOptions: ['gpt-5.5'],
+      modelOptionDisplayNames: { 'gpt-5.5': 'GPT-5.5' },
       reasoningEfforts: ['medium', 'high'],
       template: {
         id: 'reviewer',

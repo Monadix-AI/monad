@@ -182,7 +182,7 @@ export function ExternalAgentMemberDialog({
                     key={modelName}
                     value={modelName}
                   >
-                    {externalAgentModelDisplayName(modelName)}
+                    {invite.candidate.modelOptionDisplayNames?.[modelName] ?? externalAgentModelDisplayName(modelName)}
                   </option>
                 ))}
               </select>

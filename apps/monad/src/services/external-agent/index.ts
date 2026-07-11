@@ -5,6 +5,7 @@ import type {
   ExternalAgentArgumentSupport,
   ExternalAgentArgumentSupportProbe,
   ExternalAgentLaunchSpec,
+  ExternalAgentModelOption,
   ExternalAgentProviderAdapter
 } from '#/services/external-agent/types.ts';
 
@@ -119,16 +120,22 @@ export function listExternalAgentModelOptions(
   agent: ExternalAgentView,
   probes: BinProbes = defaultBinProbes
 ): string[] {
+  return resolveExternalAgentModelOptions(agent, probes).modelOptions ?? [];
+}
+
+export function resolveExternalAgentModelOptions(
+  agent: ExternalAgentView,
+  probes: BinProbes = defaultBinProbes
+): Pick<ExternalAgentView, 'modelOptions' | 'modelOptionDisplayNames'> {
   const adapter = adapterFor(agent.provider);
-  if (agent.modelOptions?.length) return agent.modelOptions;
   const fallback = adapter.listSupportedModels(agent);
   const probe = adapter.modelOptions?.(agent);
-  if (!probe) return fallback;
+  if (!probe) return { modelOptions: fallback };
   let launch: ExternalAgentLaunchSpec;
   try {
     launch = resolveExternalAgentLaunchCommand(adapter, probe.launch, probes);
   } catch {
-    return fallback;
+    return { modelOptions: fallback };
   }
   const result = spawnSync(launch.argv[0] as string, launch.argv.slice(1), {
     cwd: launch.cwd,
@@ -138,7 +145,26 @@ export function listExternalAgentModelOptions(
   });
   const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   const parsed = probe.parse(output, typeof result.status === 'number' ? result.status : null);
-  return parsed.length > 0 ? parsed : fallback;
+  if (parsed.length === 0) return { modelOptions: fallback };
+  return modelOptionsFromProbe(parsed);
+}
+
+function modelOptionsFromProbe(
+  options: ExternalAgentModelOption[]
+): Pick<ExternalAgentView, 'modelOptions' | 'modelOptionDisplayNames'> {
+  const modelOptions: string[] = [];
+  const modelOptionDisplayNames: Record<string, string> = {};
+  const seen = new Set<string>();
+  for (const option of options) {
+    if (!option.value || seen.has(option.value)) continue;
+    seen.add(option.value);
+    modelOptions.push(option.value);
+    if (option.displayName) modelOptionDisplayNames[option.value] = option.displayName;
+  }
+  return {
+    modelOptions,
+    ...(Object.keys(modelOptionDisplayNames).length > 0 ? { modelOptionDisplayNames } : {})
+  };
 }
 
 function probeExternalAgentArgumentSupport(
@@ -230,9 +256,10 @@ export function listExternalAgentPresets(probes: BinProbes = defaultBinProbes): 
       // listExternalAgentReasoningEfforts/listExternalAgentReasoningEffortsByModel call it
       // independently, which spawned the provider CLI twice per adapter for one settings-page load.
       const support = probeExternalAgentArgumentSupport(agentView, probes);
+      const modelOptions = resolveExternalAgentModelOptions(agentView, probes);
       return {
         ...preset,
-        modelOptions: listExternalAgentModelOptions(agentView, probes),
+        ...modelOptions,
         reasoningEfforts: support?.reasoningEfforts ?? [],
         reasoningEffortsByModel: support?.reasoningEffortsByModel
       };

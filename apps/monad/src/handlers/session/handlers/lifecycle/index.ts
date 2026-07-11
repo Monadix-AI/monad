@@ -33,7 +33,7 @@ import { createWorkspaceHandlers, resolveWorkspaceDir } from './lifecycle-worksp
 
 const log = createLogger('session');
 
-const SESSION_DELETE_BACKEND_GRACE_MS = 8000;
+export const SESSION_DELETE_BACKEND_GRACE_MS = 8000;
 
 type SessionProcessControlRequest = {
   action: 'stop';

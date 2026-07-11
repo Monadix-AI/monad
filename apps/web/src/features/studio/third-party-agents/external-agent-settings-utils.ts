@@ -74,6 +74,7 @@ export const presetToView = (p: ExternalAgentPresetView): ExternalAgentView => (
   command: p.command,
   args: p.args,
   modelOptions: p.modelOptions,
+  modelOptionDisplayNames: p.modelOptionDisplayNames,
   reasoningEfforts: p.reasoningEfforts,
   enabled: true,
   defaultLaunchMode: p.defaultLaunchMode,

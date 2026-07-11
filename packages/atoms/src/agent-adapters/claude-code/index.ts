@@ -12,6 +12,7 @@ import type {
   BuildExternalAgentLaunchOptions,
   ExternalAgentLaunchSpec,
   ExternalAgentManagedRuntimeContext,
+  ExternalAgentModelOption,
   ExternalAgentOutputEvent,
   ExternalAgentProviderAdapter,
   ExternalAgentProviderHistoryContext,
@@ -38,13 +39,11 @@ import { externalAgentAdapterSettings } from '../settings.ts';
 import { createClaudeCodeSettingsImport } from '../settings-import/index.ts';
 import { claudeCodeObservationProjection } from './observation.ts';
 
-// `claude --help` documents `--model` as accepting either a tier alias ("fable", "opus", "sonnet",
-// "haiku" — each resolves to that tier's latest release) or a pinned full model name. There is no
-// `claude models list`-style probe, so a hand-maintained list of exact dated model names would need
-// an edit every time a new point release ships and would silently go stale between edits. The alias
-// tier names never do — they're the CLI's own stable, permanent identifiers — so they're the fallback
-// used here instead of a version-pinned enum.
+// `claude --help` documents `--model` as accepting tier aliases (each resolves to that tier's latest
+// release) or a pinned full model name. There is no `claude models list`-style catalog probe, so the
+// fallback intentionally stays on the CLI's stable alias tier names instead of version-pinned enums.
 const CLAUDE_CODE_SUPPORTED_MODELS = ['fable', 'opus', 'sonnet', 'haiku'];
+const CLAUDE_CODE_SUPPORTED_MODEL_SET = new Set(CLAUDE_CODE_SUPPORTED_MODELS);
 
 // `-p`/`--print` (non-interactive/headless mode) + `--input-format`/`--output-format stream-json` —
 // confirmed against code.claude.com/docs/en/permission-modes and Anthropic's documented headless
@@ -166,6 +165,40 @@ function buildClaudeAuthLaunch(agent: ExternalAgentView, args: string[]): Extern
     approvalOwnership: 'provider-owned',
     capabilities: ['pty', 'provider-approval']
   };
+}
+
+function claudeModelDisplayName(model: string): string {
+  return model
+    .split('-')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+export function parseClaudeModelOptions(output: string): ExternalAgentModelOption[] {
+  const lines = output.split(/\r?\n/);
+  let modelWindow = '';
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? '';
+    if (!/^\s*--model\s+<model>(?:\s|$)/.test(line)) continue;
+    const windowLines = [line];
+    for (let next = index + 1; next < lines.length; next += 1) {
+      const candidate = lines[next] ?? '';
+      if (/^\s*-\w|^\s*--[a-z0-9-]+/i.test(candidate)) break;
+      windowLines.push(candidate);
+    }
+    modelWindow = windowLines.join('\n');
+    break;
+  }
+  if (!modelWindow) return [];
+  const aliases = [
+    ...new Set(
+      [...modelWindow.matchAll(/['"`]([a-z][a-z0-9_-]*)['"`]/gi)]
+        .map((match) => match[1] ?? '')
+        .filter((value) => CLAUDE_CODE_SUPPORTED_MODEL_SET.has(value))
+    )
+  ];
+  const values = [...aliases, ...CLAUDE_CODE_SUPPORTED_MODELS.filter((model) => !aliases.includes(model))];
+  return values.map((value) => ({ value, displayName: claudeModelDisplayName(value) }));
 }
 
 type ClaudeMessageContent = SDKAssistantMessage['message']['content'] | SDKUserMessage['message']['content'];
@@ -496,6 +529,12 @@ export const claudeCodeExternalAgentAdapter: ExternalAgentProviderAdapter = {
   },
   listSupportedModels(agent) {
     return agent?.modelOptions?.length ? agent.modelOptions : CLAUDE_CODE_SUPPORTED_MODELS;
+  },
+  modelOptions(agent) {
+    return {
+      launch: buildClaudeAuthLaunch(agent, ['--help']),
+      parse: (output) => parseClaudeModelOptions(output)
+    };
   },
   buildLaunch: buildClaudeLaunch,
   buildAuthLaunch(agent) {

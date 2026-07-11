@@ -20,7 +20,8 @@ import {
   listExternalAgentModelOptions,
   listExternalAgentPresets,
   registerAgentAdapterImpl,
-  resolveExternalAgentLaunchCommand
+  resolveExternalAgentLaunchCommand,
+  resolveExternalAgentModelOptions
 } from '#/services/external-agent/index.ts';
 import { killExternalAgentProcess, pickPtyFallbackLaunchMode } from '#/services/external-agent/process.ts';
 import { externalAgentOutputEventSchema } from '#/services/external-agent/types.ts';
@@ -1278,7 +1279,7 @@ test('external agent adapters expose supported model options with agent override
   ]);
 });
 
-test('external agent model option probes parse command output', () => {
+test('external agent model option probes parse command output with display names', () => {
   expect(
     codexExternalAgentAdapter.modelOptions?.(codexAgent).parse(
       JSON.stringify({
@@ -1290,7 +1291,33 @@ test('external agent model option probes parse command output', () => {
       }),
       0
     )
-  ).toEqual(['gpt-5.5', 'gpt-5.4-mini']);
+  ).toEqual([
+    { value: 'gpt-5.5', displayName: 'GPT-5.5' },
+    { value: 'gpt-5.4-mini', displayName: 'GPT-5.4-Mini' }
+  ]);
+});
+
+test('Claude Code model option probe parses model aliases from help output', () => {
+  expect(
+    claudeCodeExternalAgentAdapter.modelOptions?.(claudeAgent).parse(
+      `
+  --fallback-model <model>              Enable automatic fallback to specified
+                                        model(s) when the default model is
+                                        overloaded or not available.
+  --model <model>                       Model for the current session. Provide
+                                        an alias for the latest model (e.g.
+                                        'fable', 'opus', or 'sonnet') or a
+                                        model's full name (e.g.
+                                        'claude-fable-5').
+`,
+      0
+    )
+  ).toEqual([
+    { value: 'fable', displayName: 'Fable' },
+    { value: 'opus', displayName: 'Opus' },
+    { value: 'sonnet', displayName: 'Sonnet' },
+    { value: 'haiku', displayName: 'Haiku' }
+  ]);
 });
 
 test('external agent model options prefer command probe output before adapter fallback', () => {
@@ -1316,6 +1343,76 @@ test('external agent model options prefer command probe output before adapter fa
       { which: (name) => (name === 'fake-codex' ? command : undefined), exists: () => false }
     )
   ).toEqual(['gpt-5.5', 'gpt-5.4-mini']);
+});
+
+test('external agent model options prefer command probe output before configured options', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'monad-external-agent-configured-model-options-'));
+  const command = join(dir, process.platform === 'win32' ? 'fake-codex.cmd' : 'fake-codex');
+  const catalog = JSON.stringify({
+    models: [
+      { slug: 'gpt-5.6', display_name: 'GPT-5.6', visibility: 'list' },
+      { slug: 'gpt-5.5', display_name: 'GPT-5.5', visibility: 'list' }
+    ]
+  });
+  writeFileSync(
+    command,
+    process.platform === 'win32'
+      ? `@echo off\r\necho ${catalog}\r\n`
+      : `#!/usr/bin/env sh\nprintf '%s\\n' '${catalog}'\n`
+  );
+  chmodSync(command, 0o755);
+
+  expect(
+    listExternalAgentModelOptions(
+      { ...codexAgent, command: 'fake-codex', modelOptions: ['gpt-5.4'] },
+      { which: (name) => (name === 'fake-codex' ? command : undefined), exists: () => false }
+    )
+  ).toEqual(['gpt-5.6', 'gpt-5.5']);
+});
+
+test('external agent model option display names come from command probe output', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'monad-external-agent-model-option-labels-'));
+  const command = join(dir, process.platform === 'win32' ? 'fake-codex.cmd' : 'fake-codex');
+  const catalog = JSON.stringify({
+    models: [
+      { slug: 'gpt-5.6', display_name: 'GPT-5.6 Experimental', visibility: 'list' },
+      { slug: 'gpt-5.5', display_name: 'GPT-5.5', visibility: 'list' }
+    ]
+  });
+  writeFileSync(
+    command,
+    process.platform === 'win32'
+      ? `@echo off\r\necho ${catalog}\r\n`
+      : `#!/usr/bin/env sh\nprintf '%s\\n' '${catalog}'\n`
+  );
+  chmodSync(command, 0o755);
+
+  expect(
+    resolveExternalAgentModelOptions(
+      { ...codexAgent, command: 'fake-codex', modelOptions: ['gpt-5.4'] },
+      { which: (name) => (name === 'fake-codex' ? command : undefined), exists: () => false }
+    )
+  ).toEqual({
+    modelOptions: ['gpt-5.6', 'gpt-5.5'],
+    modelOptionDisplayNames: {
+      'gpt-5.6': 'GPT-5.6 Experimental',
+      'gpt-5.5': 'GPT-5.5'
+    }
+  });
+});
+
+test('external agent model options fall back to configured options when command probe is empty', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'monad-external-agent-empty-model-options-'));
+  const command = join(dir, process.platform === 'win32' ? 'fake-codex.cmd' : 'fake-codex');
+  writeFileSync(command, process.platform === 'win32' ? '@echo off\r\necho {}\r\n' : '#!/usr/bin/env sh\necho "{}"\n');
+  chmodSync(command, 0o755);
+
+  expect(
+    listExternalAgentModelOptions(
+      { ...codexAgent, command: 'fake-codex', modelOptions: ['gpt-5.4'] },
+      { which: (name) => (name === 'fake-codex' ? command : undefined), exists: () => false }
+    )
+  ).toEqual(['gpt-5.4']);
 });
 
 test('Codex model options ignore single o-series help examples and use adapter fallback', () => {

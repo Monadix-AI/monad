@@ -56,6 +56,7 @@ export function buildUsage(
         outputTokens?: number;
         totalTokens?: number;
         cacheReadTokens?: number;
+        cacheWriteTokens?: number;
         reasoningTokens?: number;
       }
     | undefined
@@ -64,7 +65,10 @@ export function buildUsage(
     input_tokens: usage?.inputTokens ?? 0,
     output_tokens: usage?.outputTokens ?? 0,
     total_tokens: usage?.totalTokens ?? (usage ? (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0) : 0),
-    input_tokens_details: { cached_tokens: usage?.cacheReadTokens ?? 0 },
+    input_tokens_details: {
+      cached_tokens: usage?.cacheReadTokens ?? 0,
+      cache_write_tokens: usage?.cacheWriteTokens ?? 0
+    },
     output_tokens_details: { reasoning_tokens: usage?.reasoningTokens ?? 0 }
   };
 }

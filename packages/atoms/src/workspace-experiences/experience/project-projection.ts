@@ -246,6 +246,7 @@ export function projectMemberCandidates(args: {
         enabled: agent.enabled,
         provider: agent.provider,
         modelOptions: agent.modelOptions ?? [],
+        modelOptionDisplayNames: agent.modelOptionDisplayNames,
         reasoningEfforts: agent.reasoningEfforts ?? [],
         supportedAppServerTransports: emptyTransports,
         icon: productIcon(agent.productIcon),
@@ -262,6 +263,7 @@ export function projectMemberCandidates(args: {
         enabled: agent.enabled,
         provider: agent.provider,
         modelOptions: agent.modelOptions ?? [],
+        modelOptionDisplayNames: agent.modelOptionDisplayNames,
         reasoningEfforts: agent.reasoningEfforts ?? [],
         supportedAppServerTransports: emptyTransports,
         icon: productIcon(agent.productIcon)

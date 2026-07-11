@@ -1,5 +1,9 @@
 import type { ExternalAgentView } from '@monad/protocol';
-import type { BuildExternalAgentLaunchOptions, ExternalAgentLaunchSpec } from '@monad/sdk-atom';
+import type {
+  BuildExternalAgentLaunchOptions,
+  ExternalAgentLaunchSpec,
+  ExternalAgentModelOption
+} from '@monad/sdk-atom';
 
 import { homedir } from 'node:os';
 import { ExternalAgentError } from '@monad/sdk-atom';
@@ -37,17 +41,26 @@ function codexNonInteractiveEnv(env?: Record<string, string>): Record<string, st
   return { ...(env ?? {}), ...CODEX_NON_INTERACTIVE_ENV };
 }
 
-export function parseCodexModelOptions(output: string): string[] {
+export function parseCodexModelOptions(output: string): ExternalAgentModelOption[] {
   const catalog = parseJsonObject(output);
   const models = Array.isArray(catalog?.models) ? catalog.models : [];
-  const names = models
+  const options = models
     .map((model) => {
       if (!model || typeof model !== 'object' || Array.isArray(model)) return undefined;
       const item = model as Record<string, unknown>;
-      return item.visibility === 'list' && typeof item.slug === 'string' ? item.slug : undefined;
+      if (item.visibility !== 'list' || typeof item.slug !== 'string') return undefined;
+      return {
+        value: item.slug,
+        ...(typeof item.display_name === 'string' && item.display_name ? { displayName: item.display_name } : {})
+      };
     })
-    .filter((name): name is string => !!name);
-  return uniqueModelNames(names);
+    .filter((option): option is ExternalAgentModelOption => !!option);
+  const seen = new Set<string>();
+  return options.filter((option) => {
+    if (seen.has(option.value)) return false;
+    seen.add(option.value);
+    return true;
+  });
 }
 
 export function parseCodexArgumentSupport(output: string): ReturnType<typeof parseExternalAgentArgumentSupport> {

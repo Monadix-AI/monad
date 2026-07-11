@@ -2,7 +2,7 @@
 
 import { ChatAdd01Icon, FolderAddIcon, InboxIcon, ListCollapse, ListTreeIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { useMemo } from 'react';
+import { memo, useMemo } from 'react';
 
 import { ShellLink } from '#/components/ShellLink';
 import { ChatSessionList } from './chat-session-list';
@@ -23,7 +23,7 @@ import {
   WorkspaceSidebarProvider
 } from './workspace-sidebar-context';
 
-function WorkspaceSectionList() {
+const WorkspaceSectionList = memo(function WorkspaceSectionList() {
   const { actions, meta, state } = useWorkspaceSidebar();
   const pinnedSessions = useMemo(
     () =>
@@ -150,7 +150,7 @@ function WorkspaceSectionList() {
       </div>
     </div>
   );
-}
+});
 
 export function WorkspaceSidebarItems({ value }: { value: WorkspaceSidebarContextValue }) {
   return (

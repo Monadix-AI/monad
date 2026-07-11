@@ -1,4 +1,4 @@
-import type { Event, SessionId, SessionUiEvent } from '@monad/protocol';
+import type { CreateSessionResponse, Event, SessionId, SessionUiEvent } from '@monad/protocol';
 
 import { afterEach, expect, test } from 'bun:test';
 import { tmpdir } from 'node:os';
@@ -11,6 +11,11 @@ afterEach(() => {
   globalThis.fetch = realFetch;
 });
 
+function createSessionResponse(data: CreateSessionResponse | Response | null | undefined): CreateSessionResponse {
+  if (!data || data instanceof Response || !('sessionId' in data)) throw new Error('expected create session response');
+  return data;
+}
+
 test('client.treaty posts to the control API and returns the id', async () => {
   let captured: { url: string; init?: RequestInit } | null = null;
   globalThis.fetch = (async (url: string, init?: RequestInit) => {
@@ -22,7 +27,7 @@ test('client.treaty posts to the control API and returns the id', async () => {
 
   const client = new MonadClient({ baseUrl: 'http://127.0.0.1:52749', token: 'secret' });
   const result = await client.treaty.v1.sessions.post({ title: 'hi' });
-  const id = result.data?.sessionId;
+  const id = createSessionResponse(result.data).sessionId;
 
   expect(id).toBe('ses_TEST00000000');
   // cast resets tsc's closure-narrowing (the assignment happens inside an async mock)
@@ -67,7 +72,7 @@ test('unixSocket: requests are dialed over the unix socket', async () => {
   const client = new MonadClient({ baseUrl: 'http://127.0.0.1:52749', unixSocket: sock });
   const res = await client.treaty.v1.sessions.post({ title: 'hi' });
 
-  expect(res.data?.sessionId).toBe('ses_U00000000000');
+  expect(createSessionResponse(res.data).sessionId).toBe('ses_U00000000000');
   expect(attempts.at(-1)).toBe(sock); // carried the unix option
 });
 
@@ -84,7 +89,7 @@ test('unixSocket: HTTPS TCP base URL is rewritten to HTTP only for the plain Uni
   const client = new MonadClient({ baseUrl: 'https://127.0.0.1:52749', unixSocket: sock });
   const res = await client.treaty.v1.sessions.post({ title: 'hi' });
 
-  expect(res.data?.sessionId).toBe('ses_U00000000000');
+  expect(createSessionResponse(res.data).sessionId).toBe('ses_U00000000000');
   expect(attempts).toEqual([{ unix: sock, url: 'http://127.0.0.1:52749/v1/sessions' }]);
 });
 
@@ -101,7 +106,7 @@ test('unixSocket: IPv6 loopback HTTPS URL is rewritten over the unix socket', as
   const client = new MonadClient({ baseUrl: 'https://[::1]:52749', unixSocket: sock });
   const res = await client.treaty.v1.sessions.post({ title: 'hi' });
 
-  expect(res.data?.sessionId).toBe('ses_U60000000000');
+  expect(createSessionResponse(res.data).sessionId).toBe('ses_U60000000000');
   expect(attempts).toEqual([{ unix: sock, url: 'http://[::1]:52749/v1/sessions' }]);
 });
 
@@ -119,11 +124,11 @@ test('unixSocket: a dead socket falls back to TCP and sticks for later requests'
 
   // 1st request: UDS connect throws → retried over TCP → still succeeds.
   const r1 = await client.treaty.v1.sessions.post({ title: 'a' });
-  expect(r1.data?.sessionId).toBe('ses_T00000000000');
+  expect(createSessionResponse(r1.data).sessionId).toBe('ses_T00000000000');
 
   // 2nd request: should skip UDS entirely (sticky) and go straight to TCP.
   const r2 = await client.treaty.v1.sessions.post({ title: 'b' });
-  expect(r2.data?.sessionId).toBe('ses_T00000000000');
+  expect(createSessionResponse(r2.data).sessionId).toBe('ses_T00000000000');
 
   expect(attempts.filter((attempt) => attempt.unix).length).toBe(1); // UDS probed only once
   const tcpAttempts = attempts.filter((attempt) => !attempt.unix);

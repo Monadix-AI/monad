@@ -8,6 +8,7 @@ export type {
   ExternalAgentArgumentSupportProbe,
   ExternalAgentInitializeContext,
   ExternalAgentLaunchSpec,
+  ExternalAgentModelOption,
   ExternalAgentOutputEvent,
   ExternalAgentProviderAdapter,
   ExternalAgentRuntimeHandle,

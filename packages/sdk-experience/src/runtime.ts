@@ -69,6 +69,7 @@ export interface WorkspaceExperienceMemberCandidate {
   tag: string;
   enabled: boolean;
   modelOptions: string[];
+  modelOptionDisplayNames?: Record<string, string>;
   reasoningEfforts: string[];
   icon?: WorkspaceExperienceIcon;
   provider?: ExternalAgentProvider;

@@ -31,6 +31,11 @@ export function createIdempotencyKey(): IdempotencyKey {
   return newId('idem');
 }
 
+export function treatyJson<T>(raw: T | Response): Exclude<T, Response> {
+  if (raw instanceof Response) throw new Error('request returned a raw Response instead of JSON data');
+  return raw as Exclude<T, Response>;
+}
+
 /**
  * The error shape every endpoint surfaces to the UI (the apiSlice baseQuery error type).
  * `message` is always present for inline display; `status` and `code` are present for

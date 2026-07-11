@@ -194,8 +194,12 @@ export function SessionSidebar({ daemon, surfaces, workspace }: Props) {
   const dragActiveRef = useRef(false);
   const dragOriginRef = useRef(0);
   const dragPxRef = useRef(0);
+  // clientWidth/scrollWidth read once per gesture, not per wheel tick: reading them
+  // after a same-tick scrollLeft write forces a synchronous layout (thrash) every
+  // event, which is what was showing up as a slow rAF handler during the scroll.
+  const gestureMetricsRef = useRef({ clientWidth: 0, scrollWidth: 0 });
   const trackpadFeedbackAnimationRef = useRef<{ stop: () => void } | null>(null);
-  const panelScrollAnimationRef = useRef<{ stop: () => void } | null>(null);
+  const panelScrollAnimationRef = useRef<{ stop: () => void; target: number } | null>(null);
   const previousShowSettingsRef = useRef(showSettings);
   const routeDrivenScrollClearTimerRef = useRef(0);
   const autoRevealCloseTimerRef = useRef(0);
@@ -258,6 +262,12 @@ export function SessionSidebar({ daemon, surfaces, workspace }: Props) {
     [autoCollapseOnPointerLeave, revealSidebar]
   );
 
+  // Synchronous localStorage writes are slow enough to blow the rAF budget when called
+  // every drag frame (Chrome flags it as a "Violation"); persist only once, on release.
+  const applySidebarWidth = useCallback((width: number) => {
+    setSidebarWidth(clampSidebarWidth(width));
+  }, []);
+
   const setMeasuredSidebarWidth = useCallback((width: number) => {
     const nextWidth = clampSidebarWidth(width);
     setSidebarWidth(nextWidth);
@@ -295,10 +305,19 @@ export function SessionSidebar({ daemon, surfaces, workspace }: Props) {
       document.body.style.userSelect = 'none';
       document.documentElement.dataset.sidebarResizing = 'true';
 
+      let resizeFrame = 0;
+      let latestClientX = clientX;
       const onResizeMove = (resizeEvent: MouseEvent | PointerEvent) => {
-        setMeasuredSidebarWidth(dragStartRef.current.width + resizeEvent.clientX - dragStartRef.current.pointerX);
+        latestClientX = resizeEvent.clientX;
+        if (resizeFrame) return;
+        resizeFrame = window.requestAnimationFrame(() => {
+          resizeFrame = 0;
+          applySidebarWidth(dragStartRef.current.width + latestClientX - dragStartRef.current.pointerX);
+        });
       };
       const onResizeEnd = () => {
+        if (resizeFrame) window.cancelAnimationFrame(resizeFrame);
+        resizeFrame = 0;
         resizingRef.current = false;
         setResizing(false);
         document.body.style.cursor = previousCursor;
@@ -307,13 +326,14 @@ export function SessionSidebar({ daemon, surfaces, workspace }: Props) {
         window.removeEventListener(moveEvent, onResizeMove);
         window.removeEventListener(upEvent, onResizeEnd);
         if (cancelEvent) window.removeEventListener(cancelEvent, onResizeEnd);
+        setMeasuredSidebarWidth(dragStartRef.current.width + latestClientX - dragStartRef.current.pointerX);
       };
 
       window.addEventListener(moveEvent, onResizeMove);
       window.addEventListener(upEvent, onResizeEnd);
       if (cancelEvent) window.addEventListener(cancelEvent, onResizeEnd);
     },
-    [setMeasuredSidebarWidth, sidebarWidth, trackpadFeedback]
+    [applySidebarWidth, setMeasuredSidebarWidth, sidebarWidth, trackpadFeedback]
   );
 
   const onResizePointerDown = useCallback(
@@ -414,7 +434,7 @@ export function SessionSidebar({ daemon, surfaces, workspace }: Props) {
       finish();
       return;
     }
-    panelScrollAnimationRef.current = animate(host.scrollLeft, target, {
+    const closeControls = animate(host.scrollLeft, target, {
       duration: PANEL_SNAP_SCROLL_DURATION_S,
       ease: PANEL_SNAP_SCROLL_EASE,
       onComplete: finish,
@@ -422,6 +442,7 @@ export function SessionSidebar({ daemon, surfaces, workspace }: Props) {
         host.scrollLeft = value;
       }
     });
+    panelScrollAnimationRef.current = { stop: () => closeControls.stop(), target };
     routeDrivenScrollClearTimerRef.current = window.setTimeout(finish, PANEL_SNAP_SCROLL_DURATION_S * 1000 + 120);
   }, [onCloseSettings, prefersReducedMotion, settingsReturnSurface, showSettings]);
 
@@ -453,6 +474,14 @@ export function SessionSidebar({ daemon, surfaces, workspace }: Props) {
       window.clearTimeout(routeDrivenScrollClearTimerRef.current);
       return;
     }
+    // A gesture-driven page turn (finishPageTurn) already has a tween running to this
+    // same target when its own surface-change setState re-renders us here. Restarting a
+    // fresh tween mid-flight resets the ease-out curve and shows as a stutter right at
+    // the settle — let the in-flight animation own the finish instead of pre-empting it.
+    if (panelScrollAnimationRef.current && Math.abs(panelScrollAnimationRef.current.target - target) <= 1) {
+      host.dataset.snapReady = 'true';
+      return;
+    }
     window.clearTimeout(routeDrivenScrollClearTimerRef.current);
     panelScrollAnimationRef.current?.stop();
     if (host.dataset.snapReady !== 'true' || prefersReducedMotion) {
@@ -460,13 +489,14 @@ export function SessionSidebar({ daemon, surfaces, workspace }: Props) {
     } else {
       // Browser smooth scrolling has a fixed, sluggish pace; drive scrollLeft
       // with a short ease-out tween so programmatic page turns feel crisp.
-      panelScrollAnimationRef.current = animate(host.scrollLeft, target, {
+      const controls = animate(host.scrollLeft, target, {
         duration: PANEL_SNAP_SCROLL_DURATION_S,
         ease: PANEL_SNAP_SCROLL_EASE,
         onUpdate: (value) => {
           host.scrollLeft = value;
         }
       });
+      panelScrollAnimationRef.current = { stop: () => controls.stop(), target };
     }
     host.dataset.snapReady = 'true';
   }, [activeSidebarPageIndex, activeSidebarSurface, prefersReducedMotion, showSettings]);
@@ -498,7 +528,7 @@ export function SessionSidebar({ daemon, surfaces, workspace }: Props) {
         releaseTrackpadGesture();
         return;
       }
-      const width = host.clientWidth || 1;
+      const width = gestureMetricsRef.current.clientWidth || host.clientWidth || 1;
       const targetSurface = resolveSidebarPagerTarget({
         clientWidth: width,
         dragOrigin: dragOriginRef.current,
@@ -530,7 +560,7 @@ export function SessionSidebar({ daemon, surfaces, workspace }: Props) {
           host.scrollLeft = target;
           finishSettingsClose();
         } else {
-          panelScrollAnimationRef.current = animate(host.scrollLeft, target, {
+          const controls = animate(host.scrollLeft, target, {
             duration: PANEL_SNAP_SCROLL_DURATION_S,
             ease: PANEL_SNAP_SCROLL_EASE,
             onComplete: finishSettingsClose,
@@ -538,6 +568,7 @@ export function SessionSidebar({ daemon, surfaces, workspace }: Props) {
               host.scrollLeft = value;
             }
           });
+          panelScrollAnimationRef.current = { stop: () => controls.stop(), target };
         }
       } else {
         finishSettingsClose();
@@ -565,7 +596,10 @@ export function SessionSidebar({ daemon, surfaces, workspace }: Props) {
       // The lock lifts on its own a short beat after the turn (armed in finishPageTurn), so
       // it never waits out the full multi-second momentum tail.
       if (pageTurnConsumedRef.current) return;
-      const edgeMaxPx = host.clientWidth + TRACKPAD_EDGE_MARGIN_PX;
+      if (!dragActiveRef.current) {
+        gestureMetricsRef.current = { clientWidth: host.clientWidth, scrollWidth: host.scrollWidth };
+      }
+      const edgeMaxPx = gestureMetricsRef.current.clientWidth + TRACKPAD_EDGE_MARGIN_PX;
       const seedPx = !dragActiveRef.current ? sidebarTrackpadEdgeAccum(trackpadFeedback.get(), edgeMaxPx) : 0;
       const result = pagerGestureRef.current.update({
         deltaX: event.deltaX,
@@ -588,7 +622,7 @@ export function SessionSidebar({ daemon, surfaces, workspace }: Props) {
       window.clearTimeout(trackpadResetTimerRef.current);
       stopTrackpadFeedbackAnimation();
 
-      const maxScroll = host.scrollWidth - host.clientWidth;
+      const maxScroll = gestureMetricsRef.current.scrollWidth - gestureMetricsRef.current.clientWidth;
       const desired = dragOriginRef.current + result.dragPx;
       const clamped = Math.max(0, Math.min(maxScroll, desired));
       host.scrollLeft = clamped;

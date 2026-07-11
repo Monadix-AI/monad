@@ -15,6 +15,7 @@ import { builtinAgentAdapters } from '@monad/atoms/agent-adapters';
 import { initMonadHome, loadAuth, loadConfig } from '@monad/home';
 import { setLogLevel } from '@monad/logger';
 
+import { SESSION_DELETE_BACKEND_GRACE_MS } from '#/handlers/session/handlers/lifecycle/index.ts';
 import { ModelService } from '#/handlers/settings/model/index.ts';
 import { registerAgentAdapterImpl } from '#/services/external-agent/index.ts';
 import { createHttpTransport } from '#/transports/http.ts';
@@ -208,6 +209,7 @@ const jsonInit = (method: string, body?: unknown): RequestInit => ({
   headers: { 'content-type': 'application/json' },
   body: body === undefined ? undefined : JSON.stringify(body)
 });
+const SESSION_DELETE_TEST_TIMEOUT_MS = SESSION_DELETE_BACKEND_GRACE_MS + 5_000;
 
 async function waitFor<T>(fn: () => T | undefined | Promise<T | undefined>, timeoutMs = 2_000): Promise<T> {
   const deadline = Date.now() + timeoutMs;
@@ -573,8 +575,10 @@ async function runRuntime(call: Call, projectDir: string, handlers: ReturnType<t
     return row?.state === 'stopped' ? row : undefined;
   });
   expect(stopped.exitCode).toBeNull();
-  await waitFor(async () =>
-    (await Bun.file(join(dirname(projectDir), 'external-agent-processes.json')).exists()) ? undefined : true
+  await waitFor(
+    async () =>
+      (await Bun.file(join(dirname(projectDir), 'external-agent-processes.json')).exists()) ? undefined : true,
+    SESSION_DELETE_BACKEND_GRACE_MS + 2_000
   );
 }
 
@@ -647,8 +651,10 @@ async function runSessionResetStopsExternalAgentRuntime(
     return row?.state === 'stopped' ? row : undefined;
   });
   expect(stopped.exitCode).toBeNull();
-  await waitFor(async () =>
-    (await Bun.file(join(dirname(projectDir), 'external-agent-processes.json')).exists()) ? undefined : true
+  await waitFor(
+    async () =>
+      (await Bun.file(join(dirname(projectDir), 'external-agent-processes.json')).exists()) ? undefined : true,
+    SESSION_DELETE_BACKEND_GRACE_MS + 2_000
   );
 }
 
@@ -666,8 +672,10 @@ async function runSessionDeleteStopsExternalAgentRuntime(
   const deleted = await call('DELETE', `/v1/sessions/${sessionId}`);
   expect(deleted.status).toBe(200);
 
-  await waitFor(async () =>
-    (await Bun.file(join(dirname(projectDir), 'external-agent-processes.json')).exists()) ? undefined : true
+  await waitFor(
+    async () =>
+      (await Bun.file(join(dirname(projectDir), 'external-agent-processes.json')).exists()) ? undefined : true,
+    SESSION_DELETE_BACKEND_GRACE_MS + 2_000
   );
   expect(handlers.store.getExternalAgentSession(nativeSession.id)).toBeNull();
 }
@@ -1308,16 +1316,24 @@ for (const kind of TRANSPORTS) {
       }
     });
 
-    test('stops active external agent sessions when a project session is deleted', async () => {
-      const { dir, projectDir, app, handlers } = await setup();
-      const t = serveTransport(kind, app);
-      try {
-        await runSessionDeleteStopsExternalAgentRuntime((m, p, b) => t.fetch(p, jsonInit(m, b)), projectDir, handlers);
-      } finally {
-        await t.stop();
-        await rm(dir, { recursive: true, force: true });
-      }
-    });
+    test(
+      'stops active external agent sessions when a project session is deleted',
+      async () => {
+        const { dir, projectDir, app, handlers } = await setup();
+        const t = serveTransport(kind, app);
+        try {
+          await runSessionDeleteStopsExternalAgentRuntime(
+            (m, p, b) => t.fetch(p, jsonInit(m, b)),
+            projectDir,
+            handlers
+          );
+        } finally {
+          await t.stop();
+          await rm(dir, { recursive: true, force: true });
+        }
+      },
+      SESSION_DELETE_TEST_TIMEOUT_MS
+    );
 
     test('normalizes external agent working paths through realpath', async () => {
       const { dir, projectDir, app } = await setup();

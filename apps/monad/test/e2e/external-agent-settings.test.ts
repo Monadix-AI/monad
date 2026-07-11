@@ -26,7 +26,7 @@ function makePaths(base: string): MonadPaths {
 const agentView = () => ({
   name: 'codex',
   provider: 'codex',
-  command: 'codex',
+  command: 'codex-settings-test',
   args: ['--ask-for-approval', 'on-request'],
   modelOptions: ['gpt-5.5', 'custom-codex'],
   projectTemplates: [

@@ -25,6 +25,37 @@ import { getPaths, initMonadHome, loadAll, loadAuth, resolveDaemonNetwork, saveP
 import { createLogger } from '@monad/logger';
 
 import { applyAcpDelegateTool } from '#/bootstrap/acp-delegate.ts';
+import { createDaemonAgent } from '#/bootstrap/agent.ts';
+import { createAtomPackRediscoverer } from '#/bootstrap/atoms.ts';
+import { createChannelGateway } from '#/bootstrap/channel-gateway.ts';
+import { createCommandBundle } from '#/bootstrap/commands.ts';
+import { createDataLayer } from '#/bootstrap/data-layer.ts';
+import { registerHotReload } from '#/bootstrap/hot-reload.ts';
+import { createInterruptServices } from '#/bootstrap/interrupts.ts';
+import { createAtomDiscovery } from '#/bootstrap/main-init/atom-discovery.ts';
+import { createConfigWatchers } from '#/bootstrap/main-init/config-watchers.ts';
+import { warnIfNotInitialized } from '#/bootstrap/main-init/init-status.ts';
+import { createLocaleService } from '#/bootstrap/main-init/locale.ts';
+import { connectFileMcpServers, connectMcpServers } from '#/bootstrap/mcp.ts';
+import { createMcpControls } from '#/bootstrap/mcp-controls.ts';
+import { createMemorySubsystem } from '#/bootstrap/memory.ts';
+import { createModelSubsystem } from '#/bootstrap/model.ts';
+import { createObscuraController } from '#/bootstrap/obscura.ts';
+import { createPeerDelegateTools } from '#/bootstrap/peers.ts';
+import { configureDaemonLogging, readDaemonRuntimeFlags } from '#/bootstrap/runtime-flags.ts';
+import { createSandbox } from '#/bootstrap/sandbox.ts';
+import { serveDaemon } from '#/bootstrap/serve.ts';
+import { acquireDaemonSingletonLock } from '#/bootstrap/singleton.ts';
+import { createSkillSubsystem } from '#/bootstrap/skills.ts';
+import {
+  prependMonadBinToPath,
+  seedDevProviderIfNeeded,
+  startStartupHousekeeping
+} from '#/bootstrap/startup-housekeeping.ts';
+import { resolveTlsSetupForNetwork, type TlsSetup } from '#/bootstrap/tls.ts';
+import { configureToolBackends } from '#/bootstrap/tool-backends.ts';
+import { withCredentialsProtection, withSandboxConstraints } from '#/bootstrap/tool-protection.ts';
+import { createUpgradeInfoMonitor } from '#/bootstrap/upgrade-info.ts';
 import { buildServiceTools, builtinTools } from '#/capabilities/tools';
 import { AtomPackRegistry } from '#/handlers/atom-pack/index.ts';
 import { type CommandBundle, createCommandRegistry } from '#/handlers/commands/index.ts';
@@ -43,38 +74,7 @@ import { createMemoryAgentTools } from '#/services/memory/tools.ts';
 import { RoundCache } from '#/services/round-cache.ts';
 import { ScheduleService } from '#/services/scheduling/schedule.ts';
 import { runAcpBridge } from '#/transports/acp/launch.ts';
-import { createDaemonAgent } from './bootstrap/agent.ts';
-import { createAtomPackRediscoverer } from './bootstrap/atoms.ts';
-import { createChannelGateway } from './bootstrap/channel-gateway.ts';
-import { createCommandBundle } from './bootstrap/commands.ts';
-import { createDataLayer } from './bootstrap/data-layer.ts';
-import { registerHotReload } from './bootstrap/hot-reload.ts';
-import { createInterruptServices } from './bootstrap/interrupts.ts';
-import { createAtomDiscovery } from './bootstrap/main-init/atom-discovery.ts';
-import { createConfigWatchers } from './bootstrap/main-init/config-watchers.ts';
-import { warnIfNotInitialized } from './bootstrap/main-init/init-status.ts';
-import { createLocaleService } from './bootstrap/main-init/locale.ts';
-import { connectFileMcpServers, connectMcpServers } from './bootstrap/mcp.ts';
-import { createMcpControls } from './bootstrap/mcp-controls.ts';
-import { createMemorySubsystem } from './bootstrap/memory.ts';
-import { createModelSubsystem } from './bootstrap/model.ts';
-import { createObscuraController } from './bootstrap/obscura.ts';
-import { createPeerDelegateTools } from './bootstrap/peers.ts';
-import { configureDaemonLogging, readDaemonRuntimeFlags } from './bootstrap/runtime-flags.ts';
-import { createSandbox } from './bootstrap/sandbox.ts';
-import { serveDaemon } from './bootstrap/serve.ts';
-import { acquireDaemonSingletonLock } from './bootstrap/singleton.ts';
-import { createSkillSubsystem } from './bootstrap/skills.ts';
-import {
-  prependMonadBinToPath,
-  seedDevProviderIfNeeded,
-  startStartupHousekeeping
-} from './bootstrap/startup-housekeeping.ts';
-import { resolveTlsSetupForNetwork, type TlsSetup } from './bootstrap/tls.ts';
-import { configureToolBackends } from './bootstrap/tool-backends.ts';
-import { withCredentialsProtection, withSandboxConstraints } from './bootstrap/tool-protection.ts';
-import { createUpgradeInfoMonitor } from './bootstrap/upgrade-info.ts';
-import { createHttpTransport } from './transports/http.ts';
+import { createHttpTransport } from '#/transports/http.ts';
 
 // Eden type-safe client inference (compile-time only). Derived from the transport factory
 // so it stays valid without a module-level app instance.
@@ -116,6 +116,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
   });
 
   prependMonadBinToPath(paths);
+  // TODO: for local dev? tree shake it
   await seedDevProviderIfNeeded({
     paths,
     useMock: USE_MOCK,
@@ -238,6 +239,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     getWorkspacePromptSlots,
     agentPersona
   } = await createConfigWatchers({ paths, cfg, store, reloadService, logger });
+  // TODO: maybe use `zustand` or other state store accross the app lifecycle? rx?
 
   // Running monad version, for advisory skill `compatibility` checks. Best-effort: a bundled
   // standalone binary may not ship package.json, so we fall back to '0.0.0' (which disables the

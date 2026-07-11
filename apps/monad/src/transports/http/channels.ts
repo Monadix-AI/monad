@@ -15,12 +15,24 @@ import { buildSessionOrigin } from '#/handlers/session/origin.ts';
 import { idempotentJsonHandler } from '#/transports/http/idempotency.ts';
 
 const channelParams = z.object({ id: sessionIdSchema });
+const sendChannelMessageBodySchema = sendMessageRequestSchema.pick({ attachments: true, text: true });
 
 export function createChannelsController(
   handlers: ReturnType<typeof createDaemonHandlers>,
   idempotencyStore: IdempotencyStore
 ) {
   const contracts = daemonHttpContract.workplace.projects;
+  type CreateProjectContext = { body: z.infer<typeof contracts.create.body>; request: Request };
+  type CreateProjectSessionContext = {
+    body: z.infer<typeof contracts.sessions.create.body>;
+    params: z.infer<typeof contracts.sessions.create.params>;
+    request: Request;
+  };
+  type SendChannelMessageContext = {
+    body: z.infer<typeof sendChannelMessageBodySchema>;
+    params: z.infer<typeof channelParams>;
+    request: Request;
+  };
   return new Elysia({ tags: ['http-only'] })
     .get('/workplace/projects', async ({ query }) => handlers.session.listProjects(query), {
       query: contracts.list.query,
@@ -32,7 +44,7 @@ export function createChannelsController(
     })
     .post(
       '/workplace/projects',
-      idempotentJsonHandler({
+      idempotentJsonHandler<CreateProjectContext>({
         route: () => '/v1/workplace/projects',
         store: idempotencyStore,
         handler: async ({ body }) => {
@@ -120,7 +132,7 @@ export function createChannelsController(
     )
     .post(
       '/projects/:id/sessions',
-      idempotentJsonHandler({
+      idempotentJsonHandler<CreateProjectSessionContext>({
         route: ({ params }) => `/v1/projects/${params.id}/sessions`,
         store: idempotencyStore,
         handler: async ({ params, body }) => {
@@ -155,7 +167,7 @@ export function createChannelsController(
     )
     .post(
       '/channels/:id/messages',
-      idempotentJsonHandler({
+      idempotentJsonHandler<SendChannelMessageContext>({
         route: ({ params }) => `/v1/channels/${params.id}/messages`,
         store: idempotencyStore,
         handler: async ({ params, body }) =>
@@ -169,7 +181,7 @@ export function createChannelsController(
       }),
       {
         params: channelParams,
-        body: sendMessageRequestSchema.pick({ attachments: true, text: true }),
+        body: sendChannelMessageBodySchema,
         response: { 200: sendMessageResponseSchema, 404: httpErrorSchema },
         detail: {
           summary: 'Send legacy channel message',

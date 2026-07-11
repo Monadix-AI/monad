@@ -13,10 +13,10 @@ import { loadAll, saveSystemConfig } from '@monad/home';
 import { HandlerError } from '#/handlers/handler-error.ts';
 import {
   getExternalAgentProviderAdapter,
-  listExternalAgentModelOptions,
   listExternalAgentPresets,
   listExternalAgentReasoningEfforts,
-  listExternalAgentReasoningEffortsByModel
+  listExternalAgentReasoningEffortsByModel,
+  resolveExternalAgentModelOptions
 } from '#/services/external-agent/index.ts';
 
 export interface ExternalAgentSettingsDeps {
@@ -57,6 +57,7 @@ function restoreRedactedEnv(
 
 const toView = (a: ExternalAgentConfig): ExternalAgentView => {
   const adapter = getExternalAgentProviderAdapter(a.provider);
+  const modelOptions = resolveExternalAgentModelOptions(a);
   const view: ExternalAgentView = {
     name: a.name,
     provider: a.provider,
@@ -64,7 +65,7 @@ const toView = (a: ExternalAgentConfig): ExternalAgentView => {
     command: a.command,
     args: a.args,
     env: redactEnvForView(a.env),
-    modelOptions: listExternalAgentModelOptions(a),
+    ...modelOptions,
     reasoningEfforts: listExternalAgentReasoningEfforts(a),
     reasoningEffortsByModel: listExternalAgentReasoningEffortsByModel(a),
     enabled: a.enabled,

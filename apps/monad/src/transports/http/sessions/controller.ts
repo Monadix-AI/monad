@@ -101,6 +101,11 @@ export function createSessionsController(
   idempotencyStore: IdempotencyStore
 ) {
   const contracts = daemonHttpContract.sessions;
+  type CreateSessionContext = {
+    body: z.infer<typeof contracts.create.body>;
+    request: Request;
+    server: ReqServer;
+  };
 
   return (
     new Elysia()
@@ -114,7 +119,7 @@ export function createSessionsController(
       })
       .post(
         '/sessions',
-        idempotentJsonHandler({
+        idempotentJsonHandler<CreateSessionContext>({
           route: () => '/v1/sessions',
           store: idempotencyStore,
           handler: async ({ body, server, request }) => {
