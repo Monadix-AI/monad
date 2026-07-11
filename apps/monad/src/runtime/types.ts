@@ -1,15 +1,7 @@
 export type ModuleId = string;
 export type ModuleCriticality = 'required' | 'optional';
 export type RuntimePhase = 'booting' | 'ready' | 'degraded' | 'reloading' | 'stopping' | 'failed';
-export type ModuleStatus =
-  | 'idle'
-  | 'starting'
-  | 'ready'
-  | 'reloading'
-  | 'degraded'
-  | 'blocked'
-  | 'failed'
-  | 'stopped';
+export type ModuleStatus = 'idle' | 'starting' | 'ready' | 'reloading' | 'degraded' | 'blocked' | 'failed' | 'stopped';
 
 export interface RuntimeContextReader {
   get<T>(id: ModuleId): T;
@@ -27,12 +19,7 @@ export interface RuntimeModule<Snapshot = unknown> {
   after?: readonly ModuleId[];
   criticality: ModuleCriticality;
   start(ctx: RuntimeContextReader, signal: AbortSignal): Promise<unknown>;
-  reload?(
-    current: unknown,
-    snapshot: Snapshot,
-    ctx: RuntimeContextReader,
-    signal: AbortSignal
-  ): Promise<unknown>;
+  reload?(current: unknown, snapshot: Snapshot, ctx: RuntimeContextReader, signal: AbortSignal): Promise<unknown>;
   stop?(current: unknown, ctx: RuntimeContextReader): void | Promise<void>;
   health?(current: unknown): Promise<ModuleHealth>;
 }

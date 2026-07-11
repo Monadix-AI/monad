@@ -5,7 +5,7 @@ import { createStore } from 'zustand/vanilla';
 
 export type RuntimeStateStore = StoreApi<RuntimeState>;
 
-export function createRuntimeStateStore(modules: readonly RuntimeModule[]): RuntimeStateStore {
+export function createRuntimeStateStore<Snapshot>(modules: readonly RuntimeModule<Snapshot>[]): RuntimeStateStore {
   const entries = [...modules]
     .sort((a, b) => a.id.localeCompare(b.id))
     .map((module) => [module.id, { criticality: module.criticality, generation: 0, status: 'idle' as const }]);

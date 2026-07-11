@@ -15,6 +15,7 @@
 - Do not create `runtime/modules/`, `runtime/subsystems/`, or a dependency-injection container.
 - Keep runtime service instances out of Zustand state.
 - Use TDD for every task and run focused tests through `scripts/bun-test.ts --only-failures`.
+- Do not use assertions whose only claim is that a value exists or does not exist unless presence or absence is the domain behavior under test; assert exact contracts, state transitions, and ordering instead.
 - Required startup failure rolls back already-started modules in reverse topological order.
 - Optional startup failure degrades the runtime; hard dependents become blocked.
 - Reload failures retain the previous healthy output.
