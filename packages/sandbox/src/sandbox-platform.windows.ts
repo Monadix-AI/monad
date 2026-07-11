@@ -1,9 +1,10 @@
-import type { LightSandboxPlatform } from './light-platform-contract.ts';
+import type { HostSandboxPlatform } from './sandbox-platform-contract.ts';
 
 import { win32Launcher } from './launchers/win32.ts';
 import { sweepOrphanAppContainerProfiles, win32AppContainerLauncher } from './launchers/win32-appcontainer.ts';
 
-export const lightSandboxPlatform: LightSandboxPlatform = {
+export const hostSandboxPlatform: HostSandboxPlatform = {
   launchers: [win32AppContainerLauncher, win32Launcher],
-  sweepOrphanAppContainerProfiles
+  prepareHost: sweepOrphanAppContainerProfiles,
+  async disposeHost() {}
 };

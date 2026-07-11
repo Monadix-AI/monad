@@ -1,13 +1,13 @@
 import { expect, test } from 'bun:test';
 
-import { lightSandboxPlatform as darwinPlatform } from '../../src/light-platform.darwin.ts';
-import { lightSandboxPlatform as linuxPlatform } from '../../src/light-platform.linux.ts';
-import { lightSandboxPlatform as allPlatform } from '../../src/light-platform.ts';
-import { lightSandboxPlatform as windowsPlatform } from '../../src/light-platform.windows.ts';
+import { hostSandboxPlatform as darwinPlatform } from '../../src/sandbox-platform.darwin.ts';
+import { hostSandboxPlatform as linuxPlatform } from '../../src/sandbox-platform.linux.ts';
+import { hostSandboxPlatform as allPlatform } from '../../src/sandbox-platform.ts';
+import { hostSandboxPlatform as windowsPlatform } from '../../src/sandbox-platform.windows.ts';
 
 const kinds = (launchers: typeof allPlatform.launchers): string[] => launchers.map(({ kind }) => kind);
 
-test('development includes every light launcher in selection order', () => {
+test('development includes every host launcher in selection order', () => {
   expect(kinds(allPlatform.launchers)).toEqual(['seatbelt', 'bwrap', 'landlock', 'appcontainer', 'lowintegrity']);
 });
 
@@ -23,8 +23,9 @@ test('Windows includes AppContainer then Low Integrity', () => {
   expect(kinds(windowsPlatform.launchers)).toEqual(['appcontainer', 'lowintegrity']);
 });
 
-test('every platform seam exposes the shared cleanup contract', () => {
+test('every platform seam exposes the shared host lifecycle contract', () => {
   for (const platform of [allPlatform, darwinPlatform, linuxPlatform, windowsPlatform]) {
-    expect(platform.sweepOrphanAppContainerProfiles).toBeFunction();
+    expect(platform.prepareHost).toBeFunction();
+    expect(platform.disposeHost).toBeFunction();
   }
 });

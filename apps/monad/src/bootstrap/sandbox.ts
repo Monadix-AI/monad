@@ -17,9 +17,9 @@ import {
   disposeMitmCA,
   MaskedFileStore,
   type MitmCA,
+  prepareSandboxHost,
   SentinelRegistry,
-  startEgressProxy,
-  sweepOrphanAppContainerProfiles
+  startEgressProxy
 } from '@monad/sandbox';
 import { configureSandboxCredential } from '@monad/sdk-atom';
 
@@ -73,10 +73,10 @@ export async function createSandbox(
   // runtime probe now runs via the SELECTED launcher's prepare() in finalizeSandboxLauncher().
   configureSandboxBackendOptions({ dockerImage: cfg.sandbox.dockerImage });
 
-  // Reclaim AppContainer profiles orphaned by a prior crash on Windows. Best-effort, and
-  // unconditional: a run that flips confine true→false would otherwise strand the profiles the
-  // previous confined run created, leaking them on the host forever. No-op off Windows.
-  void sweepOrphanAppContainerProfiles();
+  // Prepare host-level sandbox resources before selection. Best-effort and unconditional so a
+  // config change cannot strand resources from a prior confined run. Currently Windows reclaims
+  // orphaned AppContainer profiles; other host platforms no-op.
+  void prepareSandboxHost();
 
   if (cfg.sandbox.confine) {
     // The override path for the native Linux/Windows launcher binary (config.sandbox.launcherPath)
