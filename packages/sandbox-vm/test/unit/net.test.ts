@@ -2,31 +2,24 @@ import { expect, test } from 'bun:test';
 
 import {
   GVPROXY_GATEWAY_IP,
-  GVPROXY_GUEST_IP,
   GVPROXY_HOST_IP,
   guestNftables,
   guestProxyEnv,
   gvproxyArgv
 } from '../../src/net/gvproxy.ts';
 
-test('gvproxy argv wires the vfkit datagram socket and forwards ssh to the GUEST (not the gateway)', () => {
-  const argv = gvproxyArgv({ gvproxyBin: '/bin/gvproxy', vfkitNetSock: '/t/net.sock', sshForwardSock: '/t/ssh.sock' });
+test('gvproxy argv wires the vfkit datagram socket (egress netstack only; exec is vsock)', () => {
+  const argv = gvproxyArgv({ gvproxyBin: '/bin/gvproxy', vfkitNetSock: '/t/net.sock' });
   const j = argv.join(' ');
   expect(j).toContain('-listen-vfkit unixgram:///t/net.sock');
-  expect(j).toContain('-forward-sock /t/ssh.sock');
-  // forward-dst must be the guest DHCP address .2 — forwarding to the gateway .1 (gvproxy itself)
-  // reaches a host with no sshd, so nothing ever runs in the VM.
-  expect(GVPROXY_GUEST_IP).toBe('192.168.127.2');
-  expect(j).toContain(`-forward-dst ${GVPROXY_GUEST_IP}:22`);
-  expect(j).not.toContain(`-forward-dst ${GVPROXY_GATEWAY_IP}:`);
-  expect(j).toContain('-forward-user monad');
+  // gvproxy is only the egress netstack now — no ssh port forwarding (the exec channel is vsock).
+  expect(j).not.toContain('-ssh-port');
 });
 
-test('net:none nftables permits control replies but blocks new egress', () => {
+test('net:none nftables drops everything but loopback', () => {
   const rules = guestNftables({ mode: 'none' });
   expect(rules).toContain('policy drop;');
   expect(rules).toContain('oif "lo" accept');
-  expect(rules).toContain('ct state established,related accept');
   expect(rules).not.toContain('dport 53');
 });
 

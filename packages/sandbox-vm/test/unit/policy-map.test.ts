@@ -8,7 +8,7 @@ import { buildIgnition } from '../../src/ignition.ts';
 // pin the net-mode fail-closed default at the ignition layer.
 
 test('net:none produces a drop-all firewall (fail-closed egress)', () => {
-  const cfg = buildIgnition({ sshPublicKey: 'k', mounts: [], egress: { mode: 'none' } });
+  const cfg = buildIgnition({ agentBinaryB64: 'QQ==', mounts: [], egress: { mode: 'none' } });
   const nft = cfg.storage.files.find((f) => (f as { path?: string }).path === '/etc/monad/nftables.conf') as
     | { contents: { source: string } }
     | undefined;

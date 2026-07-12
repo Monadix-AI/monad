@@ -7,9 +7,9 @@
 // Isolation model, per SandboxPolicy:
 //   • writableRoots / readableRoots → virtio-fs mounts at the same guest paths (argv unchanged);
 //     readDenyRoots simply aren't mounted (they don't exist in the guest).
-//   • gvproxy provides a host-only SSH control path in every mode; in-guest nftables blocks new
-//     outbound connections for net:'none', restricts filtered mode to the host proxy, and leaves
-//     unrestricted mode open (enforced by the kernel, not an env var the agent can unset).
+//   • the guest always has a NIC (the exec channel is ssh over gvproxy); egress is enforced by an
+//     in-guest nftables ruleset — net:'none' drops all new outbound, net:'filtered' allows only the
+//     host egress proxy, net:'unrestricted' adds no rules. The agent (unprivileged) can't alter it.
 //
 // Reuse is per-agent (one VM across an agent's sessions); see pool.ts for the lifecycle state machine.
 
@@ -17,15 +17,27 @@ import type { SandboxLauncher, SandboxPolicy, SandboxProcess, SandboxSpawnOption
 import type { MountSpec } from './ignition.ts';
 
 import { existsSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 
 import { destroyBundle, ensureBundle, type VmBundle } from './bundle.ts';
 import { configureVfkitBin, type VmHandle, vfkitDriver } from './driver/vfkit.ts';
-import { bridgeAsyncProcess, sshExec, waitForSsh } from './exec/ssh.ts';
+import { bridgeAsyncProcess, vsockExec, waitForVsock } from './exec/vsock.ts';
 import { serializeIgnition } from './ignition.ts';
 import { ensureBaseImage, type ImageConsent } from './image.ts';
 import { type GvproxyProcess, guestProxyEnv, spawnGvproxy } from './net/gvproxy.ts';
 import { POOL_DEFAULTS, type PoolConfig, reuseKey, VmPool, vmKey } from './pool.ts';
 import { resolveVmToolchain, vmToolchainMaybeAvailable } from './toolchain.ts';
+
+// The guest vsock exec agent (Linux aarch64), vendored next to the package. Injected into every guest
+// via Ignition. Read once and cached as base64.
+const AGENT_PATH = join(dirname(import.meta.dir), 'vendor', 'vsock-agent-arm64');
+const VSOCK_EXEC_PORT = 1024;
+let agentB64: string | null = null;
+async function agentBinaryB64(): Promise<string> {
+  if (agentB64 === null) agentB64 = Buffer.from(await Bun.file(AGENT_PATH).bytes()).toString('base64');
+  return agentB64;
+}
 
 export class VmBackendNotReadyError extends Error {
   constructor(message: string) {
@@ -39,6 +51,8 @@ export class VmBackendNotReadyError extends Error {
 interface VmConfig extends PoolConfig {
   cpus: number;
   memoryMiB: number;
+  /** How long to wait for a freshly-booted guest to become exec-reachable (CoreOS boot + Ignition). */
+  bootTimeoutMs: number;
   /** Consent gate for the first image download. */
   imageConsent: ImageConsent;
 }
@@ -47,6 +61,7 @@ let config: VmConfig = {
   ...POOL_DEFAULTS,
   cpus: 2,
   memoryMiB: 2048,
+  bootTimeoutMs: 120_000,
   // Default-deny until the daemon wires a real prompt: never silently pull a multi-GB image.
   imageConsent: async () => false
 };
@@ -60,6 +75,7 @@ export function configureVmBackend(cfg: Partial<VmConfig>): void {
 interface RunningVm {
   bundle: VmBundle;
   vfkit: VmHandle;
+  /** Only present for net:'filtered'/'unrestricted' — net:'none' has no NIC and no gvproxy. */
   gvproxy?: GvproxyProcess;
 }
 
@@ -132,41 +148,44 @@ async function bootVm(key: string, policy: SandboxPolicy): Promise<RunningVm> {
   const egress = egressFor(policy);
   const proxyEnv = egress.mode === 'filtered' && egress.proxyPort ? guestProxyEnv(egress.proxyPort) : undefined;
 
-  // Ignition: inject the one-shot pubkey, the mounts, the egress firewall.
-  const pubKey = (await Bun.file(bundle.sshPubKey).text()).trim();
-  const ignition = serializeIgnition({ sshPublicKey: pubKey, mounts, egress, env: proxyEnv });
+  // Ignition: inject the vsock exec agent, the mounts, the egress firewall.
+  const ignition = serializeIgnition({ agentBinaryB64: await agentBinaryB64(), mounts, egress, env: proxyEnv });
   await Bun.write(bundle.ignition, ignition);
 
-  // gvproxy carries the host-initiated SSH control plane for every egress mode. Guest nftables
-  // enforces net:none/filtered independently, so retaining this NIC does not grant new outbound
-  // connections.
-  if (!resolvedGvproxy) throw new VmBackendNotReadyError('gvproxy not resolved (call prepare())');
-  const gvproxy = spawnGvproxy({
-    gvproxyBin: resolvedGvproxy,
-    vfkitNetSock: bundle.gvproxySock,
-    sshForwardSock: bundle.sshSock
-  });
-  let vfkit: VmHandle | undefined;
-  try {
+  // The exec channel is vsock (NIC-independent), so net:'none' runs with NO NIC and NO gvproxy — the
+  // strongest network isolation. Only 'filtered'/'unrestricted' attach a NIC to gvproxy's user-space
+  // netstack for egress. When there is a NIC, start gvproxy first and wait for its datagram socket so
+  // vfkit's virtio-net can attach at boot.
+  let gvproxy: GvproxyProcess | undefined;
+  let gvproxyNetSock: string | undefined;
+  if (egress.mode !== 'none') {
+    if (!resolvedGvproxy) throw new VmBackendNotReadyError('gvproxy not resolved (call prepare())');
+    // gvproxy fatally exits if its listen socket path already exists (stale socket from a prior boot).
+    await rm(bundle.gvproxySock, { force: true });
+    gvproxy = spawnGvproxy({ gvproxyBin: resolvedGvproxy, vfkitNetSock: bundle.gvproxySock });
     await waitForSocket(bundle.gvproxySock, 5000);
-    vfkit = await vfkitDriver.boot({
-      cpus: config.cpus,
-      memoryMiB: config.memoryMiB,
-      bundle,
-      mounts,
-      gvproxyNetSock: bundle.gvproxySock,
-      mac: macFor(key)
-    });
-    await waitForSsh({ sshSock: bundle.sshSock, identity: bundle.sshKey, user: 'monad' });
-    const vm: RunningVm = { bundle, vfkit, gvproxy };
-    liveVms.add(vm);
-    return vm;
-  } catch (error) {
-    await vfkit?.stop().catch(() => {});
-    gvproxy.kill();
-    await destroyBundle(bundle.key).catch(() => {});
-    throw error;
+    gvproxyNetSock = bundle.gvproxySock;
   }
+
+  await rm(bundle.vsockSock, { force: true });
+  const vfkit = await vfkitDriver.boot({
+    cpus: config.cpus,
+    memoryMiB: config.memoryMiB,
+    bundle,
+    mounts,
+    gvproxyNetSock,
+    mac: macFor(key),
+    vsockSock: bundle.vsockSock,
+    vsockPort: VSOCK_EXEC_PORT
+  });
+
+  const vm: RunningVm = { bundle, vfkit, gvproxy };
+  liveVms.add(vm);
+  // vfkitDriver.boot() returns as soon as the vfkit process is spawned, NOT when the guest is up.
+  // Fedora CoreOS takes ~30-60s to boot + apply Ignition + start the agent, so wait until the guest
+  // is exec-reachable before returning — otherwise the first command races an unbooted guest.
+  await waitForVsock({ socketPath: bundle.vsockSock }, { timeoutMs: config.bootTimeoutMs });
+  return vm;
 }
 
 /** Poll for a socket path to appear (gvproxy binds it asynchronously after fork). */
@@ -214,10 +233,23 @@ export const vmLauncher: SandboxLauncher = {
     if (!pool) throw new VmBackendNotReadyError('not prepared — prepare() must run before spawn()');
     const key = vmKey(config.scope, options.sessionId, options.agentId, policy);
     const reuse = reuseKey(config.scope, options.sessionId, options.agentId);
-    // acquire() is async (boot); the SandboxProcess must be returned synchronously, so we return a
-    // proxy whose streams are fed once the VM is up and the ssh channel opens. The policy is captured
-    // in the boot thunk (no module-level side table to leak).
-    return bridgeAsyncExec(key, reuse, options, argv, policy);
+    // acquire() is async (boot); the SandboxProcess must be returned synchronously, so bridge the
+    // async acquire + vsock exec. The policy is captured in the boot thunk (no module-level side table).
+    return bridgeAsyncProcess(
+      async () => {
+        const vm = await pool!.acquire(key, reuse, options.agentId, () => bootVm(key, policy));
+        const egress = egressFor(policy);
+        return vsockExec(argv, {
+          socketPath: vm.bundle.vsockSock,
+          cwd: options.cwd,
+          env: {
+            ...options.env,
+            ...(egress.mode === 'filtered' && egress.proxyPort ? guestProxyEnv(egress.proxyPort) : {})
+          }
+        });
+      },
+      () => pool?.release(key)
+    );
   },
 
   async disposeSession(sessionId: string): Promise<void> {
@@ -228,36 +260,6 @@ export const vmLauncher: SandboxLauncher = {
     await pool?.disposeAgent(agentId);
   }
 };
-
-/** Bridge the async VM acquire + ssh exec onto a synchronous SandboxProcess. Streams are wired when
- *  the underlying ssh child starts; exited resolves with its exit code; the pool refcount is released
- *  when the run finishes. */
-function bridgeAsyncExec(
-  key: string,
-  reuse: string,
-  options: SandboxSpawnOptions,
-  argv: string[],
-  policy: SandboxPolicy
-): SandboxProcess {
-  return bridgeAsyncProcess(
-    async () => {
-      if (!pool) throw new VmBackendNotReadyError('not prepared');
-      const vm = await pool.acquire(key, reuse, options.agentId, () => bootVm(key, policy));
-      const egress = egressFor(policy);
-      return sshExec(argv, {
-        sshSock: vm.bundle.sshSock,
-        identity: vm.bundle.sshKey,
-        user: 'monad',
-        cwd: options.cwd,
-        env: {
-          ...options.env,
-          ...(egress.mode === 'filtered' && egress.proxyPort ? guestProxyEnv(egress.proxyPort) : {})
-        }
-      });
-    },
-    () => pool?.release(key)
-  );
-}
 
 // Kill every running VM's vfkit + gvproxy on daemon shutdown so they aren't orphaned across restarts.
 let shutdownInstalled = false;

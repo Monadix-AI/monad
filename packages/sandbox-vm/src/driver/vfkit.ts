@@ -12,11 +12,15 @@ export interface VmSpec {
   memoryMiB: number;
   bundle: VmBundle;
   mounts: MountSpec[];
-  /** Attach the control-plane virtio-net device wired to gvproxy. Guest nftables independently
-   *  enforces the requested egress mode, including net:'none'. */
+  /** When set, attach a virtio-net device wired to this gvproxy datagram socket. Omit for net:'none'
+   *  (no NIC at all — the strongest network isolation; the exec channel is vsock, not the NIC). */
   gvproxyNetSock?: string;
   /** Deterministic guest MAC (kept stable across a VM's restarts). */
   mac: string;
+  /** Host unix socket for the guest's vsock exec port (always present — the control plane). */
+  vsockSock: string;
+  /** Guest vsock port the exec agent listens on. */
+  vsockPort: number;
 }
 
 export interface VmDriver {
@@ -58,10 +62,15 @@ export function vfkitArgv(vfkitBin: string, spec: VmSpec): string[] {
     argv.push('--device', `virtio-fs,sharedDir=${m.path},mountTag=${m.tag}`);
   }
 
-  // The NIC carries the host-initiated SSH control channel. Egress is enforced inside the guest.
+  // net:'none' → no NIC device at all. Otherwise attach to gvproxy's datagram socket.
   if (spec.gvproxyNetSock) {
     argv.push('--device', `virtio-net,unixSocketPath=${spec.gvproxyNetSock},mac=${spec.mac}`);
   }
+
+  // The exec channel: `connect` mode means vfkit LISTENS on the host unix socket and forwards a host
+  // connection to the guest's vsock port (where the agent listens). NIC-independent, so it works even
+  // in net:'none' with no virtio-net device.
+  argv.push('--device', `virtio-vsock,port=${spec.vsockPort},socketURL=${spec.vsockSock},connect`);
 
   return argv;
 }
