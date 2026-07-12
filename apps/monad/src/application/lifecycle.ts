@@ -16,19 +16,12 @@
  */
 
 import type { MonadConfig } from '@monad/home';
-import type { NetworkRuntimeStatus, PrincipalId, SessionId } from '@monad/protocol';
-import type { ModelSubsystem } from '#/agent/model/lifecycle.ts';
-import type { AtomDiscovery } from '#/atoms/lifecycle.ts';
-import type { CapabilitiesRuntime } from '#/capabilities/lifecycle.ts';
-import type { McpRuntime } from '#/capabilities/mcp/lifecycle.ts';
-import type { SkillSubsystem } from '#/capabilities/skills/service.ts';
+import type { NetworkRuntimeStatus, SessionId } from '@monad/protocol';
 import type { Tool } from '#/capabilities/tools/types.ts';
 import type { SessionGateway } from '#/channels/channel.ts';
-import type { SandboxSetup } from '#/platform/sandbox/service.ts';
-import type { DataLayer } from '#/store/lifecycle.ts';
 
 import { join } from 'node:path';
-import { getPaths, initMonadHome, loadAll, loadAuth, resolveDaemonNetwork } from '@monad/home';
+import { loadAll, resolveDaemonNetwork } from '@monad/home';
 import { createLogger } from '@monad/logger';
 
 import { createInterruptServices } from '#/agent/approvals/interrupts.ts';
@@ -36,6 +29,8 @@ import { createConfigWatchers } from '#/agent/config.ts';
 import { applyAcpDelegateTool } from '#/agent/delegation/acp-tool.ts';
 import { createAgentExecutionService } from '#/agent/execution.ts';
 import { createMemorySubsystem } from '#/agent/memory/subsystem.ts';
+import { createCoreRuntime } from '#/application/core-runtime.ts';
+import { runDaemonPreflight } from '#/application/preflight.ts';
 import { createAtomPackRediscoverer } from '#/atoms/reload.ts';
 import { createMcpControls } from '#/capabilities/mcp/controls.ts';
 import { createObscuraController } from '#/capabilities/mcp/obscura.ts';
@@ -43,23 +38,15 @@ import { buildServiceTools } from '#/capabilities/tools';
 import { configureToolBackends } from '#/capabilities/tools/configure-backends.ts';
 import { createChannelGateway } from '#/channels/gateway.ts';
 import { createHotReload } from '#/config/application.ts';
-import { ConfigReloadTargets } from '#/config/reload-targets.ts';
-import { createConfigReloader } from '#/config/reloader.ts';
-import { createHomeConfigSource } from '#/config/source.ts';
 import { createCommandBundle } from '#/handlers/commands/bundle.ts';
 import { type CommandBundle } from '#/handlers/commands/index.ts';
 import { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
 import { createHookRunner } from '#/hooks/runner.ts';
-import { daemonChildProcesses, runDaemonChildSupervisorFromArgv } from '#/infra/daemon-child-processes.ts';
 import { initObservability, resolveObservabilityEndpoint } from '#/infra/observability.ts';
-import { WatchService } from '#/infra/watch-service.ts';
-import { createDaemonModules, createDaemonRuntime } from '#/runtime/create.ts';
-import { configureDaemonLogging, readDaemonRuntimeFlags } from '#/runtime/flags.ts';
-import { acquireDaemonSingletonLock } from '#/runtime/singleton.ts';
+import { configureDaemonLogging } from '#/runtime/flags.ts';
 import { DelegationService } from '#/services/delegation/delegation.ts';
 import { createPeerDelegateTools } from '#/services/delegation/peers.ts';
 import { acpAgentCandidatesFromAdapters } from '#/services/delegation/presets.ts';
-import { configureDeveloperLogTransport } from '#/services/developer-log.ts';
 import { EventBus } from '#/services/event-bus.ts';
 import { isToolExposed } from '#/services/generation/agent-persona.ts';
 import { createLocaleService } from '#/services/i18n-loader.ts';
@@ -69,13 +56,7 @@ import { RoundCache } from '#/services/round-cache.ts';
 import { ScheduleService } from '#/services/scheduling/schedule.ts';
 import { createUpgradeInfoMonitor } from '#/services/upgrade-info.ts';
 import { warnIfNotInitialized } from '#/store/home/init-status.ts';
-import {
-  prependMonadBinToPath,
-  seedDevProviderIfNeeded,
-  startStartupHousekeeping
-} from '#/store/home/startup-housekeeping.ts';
-import { createDataLayer } from '#/store/lifecycle.ts';
-import { runAcpBridge } from '#/transports/acp/launch.ts';
+import { startStartupHousekeeping } from '#/store/home/startup-housekeeping.ts';
 import { createHttpTransport } from '#/transports/http.ts';
 import { serveDaemon } from '#/transports/lifecycle.ts';
 import { createDaemonShutdown } from '#/transports/shutdown.ts';
@@ -93,103 +74,35 @@ configureDaemonLogging();
 const logger = createLogger('monad-daemon');
 
 export async function startDaemon(opts?: { beforeListen?: (app: App) => void }): Promise<void> {
-  if (await runDaemonChildSupervisorFromArgv()) return;
-
-  const paths = getPaths();
-
-  // ACP mode is a thin BRIDGE: it discovers (or auto-spawns) a shared daemon and proxies the
-  // editor's connection to it, so it must NOT take the singleton lock or build a daemon in-process
-  // — that lock belongs to the daemon it bridges to. Branch out before daemon startup.
-  if (process.argv.includes('--acp')) {
-    await runAcpBridge(paths);
-    return;
-  }
-
-  await acquireDaemonSingletonLock(paths);
-
+  const preflight = await runDaemonPreflight({ supervisorEntryPath: import.meta.path, logger });
+  if (!preflight) return;
+  const { paths, flags } = preflight;
   const {
     stdioMode: STDIO_MODE,
     stdoutRpc: STDOUT_RPC,
     useMock: USE_MOCK,
     devMode: DEV_MODE,
     devSilent: DEV_SILENT
-  } = readDaemonRuntimeFlags();
-
-  await initMonadHome(paths);
-  daemonChildProcesses.configure(join(paths.runtime, 'daemon-child-processes.json'), {
-    supervisorEntryPath: import.meta.path
-  });
-
-  prependMonadBinToPath(paths);
-  // TODO: for local dev? tree shake it
-  await seedDevProviderIfNeeded({
-    paths,
-    useMock: USE_MOCK,
-    devMode: DEV_MODE,
-    devSilent: DEV_SILENT,
-    logger
-  });
-
-  const dataLayer = await createDataLayer({ paths, devMode: DEV_MODE || DEV_SILENT });
+  } = flags;
+  const core = await createCoreRuntime(preflight, logger);
+  const {
+    dataLayer,
+    cfg,
+    startupAuth,
+    ownerPrincipalId,
+    monadVersion,
+    watchService,
+    runtime,
+    reloadTargets,
+    configReloader,
+    sandbox,
+    model,
+    capabilities,
+    atoms,
+    skills,
+    mcp: mcpRuntime
+  } = core;
   const { kv, store } = dataLayer;
-  const [cfg, startupAuthValue] = await Promise.all([loadAll(paths.config, paths.profile), loadAuth(paths.auth)]);
-  if (!cfg) throw new Error('monad: config.json missing after repair — aborting');
-  const startupAuth = startupAuthValue ?? undefined;
-  configureDeveloperLogTransport(paths, cfg.developerMode === true);
-  const ownerPrincipalId = cfg.principal.id as PrincipalId;
-
-  const monadVersion = await Bun.file(join(import.meta.dir, '..', 'package.json'))
-    .json()
-    .then((value: { version?: string }) => value.version ?? '0.0.0')
-    .catch(() => '0.0.0');
-  const watchService = new WatchService({ log: (level, message) => logger[level](message) });
-  process.on('exit', () => watchService.closeAll());
-  let runtime: ReturnType<typeof createDaemonRuntime>;
-  const reloadTargets = new ConfigReloadTargets();
-  const configReloader = createConfigReloader(async () => {
-    await runtime.config.refreshNow();
-  });
-  const configSource = createHomeConfigSource(paths, {
-    watch: (onChange) => {
-      watchService.register({
-        name: 'settings',
-        path: paths.home,
-        filter: (filename) =>
-          filename === 'config.json' ||
-          filename === 'profile.json' ||
-          filename === 'sandbox.json' ||
-          filename === 'auth.json',
-        onChange
-      });
-      return () => {};
-    }
-  });
-  const initial = { cfg, auth: startupAuthValue };
-  runtime = createDaemonRuntime({
-    initial,
-    modules: createDaemonModules({
-      initial,
-      paths,
-      devMode: DEV_MODE || DEV_SILENT,
-      useMock: USE_MOCK,
-      monadVersion,
-      watcher: watchService,
-      logger,
-      startStore: async () => dataLayer
-    }),
-    source: configSource,
-    watchOnStart: false,
-    afterReload: (snapshot) => reloadTargets.apply(snapshot)
-  });
-  await runtime.start();
-
-  const runtimeData = runtime.kernel.context.get<DataLayer>('store');
-  const sandbox = runtime.kernel.context.get<SandboxSetup>('platform.sandbox');
-  const model = runtime.kernel.context.get<ModelSubsystem>('agent.model');
-  const capabilities = runtime.kernel.context.get<CapabilitiesRuntime>('capabilities');
-  const atoms = runtime.kernel.context.get<AtomDiscovery>('atoms');
-  const skills = runtime.kernel.context.get<SkillSubsystem>('capabilities.skills');
-  const mcpRuntime = runtime.kernel.context.get<McpRuntime>('capabilities.mcp');
   const { sandboxRoots, sessionSandbox } = sandbox;
   const { modelService, modelCatalog, embeddingIndexer } = model;
   const { registry, commandRegistry } = capabilities;
@@ -201,7 +114,6 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     refreshWorkspaceExperienceSnapshot,
     getWorkspaceExperienceSnapshot
   } = atoms;
-  if (runtimeData !== dataLayer) throw new Error('monad: runtime store output mismatch');
 
   // Bind address: config > default.
   // When remote access is enabled the daemon binds to 0.0.0.0 so other machines
