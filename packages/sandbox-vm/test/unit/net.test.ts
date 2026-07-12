@@ -2,24 +2,19 @@ import { expect, test } from 'bun:test';
 
 import {
   GVPROXY_GATEWAY_IP,
-  GVPROXY_GUEST_IP,
   GVPROXY_HOST_IP,
   guestNftables,
   guestProxyEnv,
   gvproxyArgv
 } from '../../src/net/gvproxy.ts';
 
-test('gvproxy argv wires the vfkit datagram socket and forwards ssh to the GUEST (not the gateway)', () => {
-  const argv = gvproxyArgv({ gvproxyBin: '/bin/gvproxy', vfkitNetSock: '/t/net.sock', sshForwardSock: '/t/ssh.sock' });
+test('gvproxy argv wires the vfkit datagram socket and opens the host ssh-forward port', () => {
+  const argv = gvproxyArgv({ gvproxyBin: '/bin/gvproxy', vfkitNetSock: '/t/net.sock', sshHostPort: 52999 });
   const j = argv.join(' ');
   expect(j).toContain('-listen-vfkit unixgram:///t/net.sock');
-  expect(j).toContain('-forward-sock /t/ssh.sock');
-  // forward-dst must be the guest DHCP address .2 — forwarding to the gateway .1 (gvproxy itself)
-  // reaches a host with no sshd, so nothing ever runs in the VM.
-  expect(GVPROXY_GUEST_IP).toBe('192.168.127.2');
-  expect(j).toContain(`-forward-dst ${GVPROXY_GUEST_IP}:22`);
-  expect(j).not.toContain(`-forward-dst ${GVPROXY_GATEWAY_IP}:`);
-  expect(j).toContain('-forward-user monad');
+  // gvproxy opens a host-loopback listener on this port that tunnels to the guest sshd (guest:22),
+  // the way podman machine reaches its VM — the exec channel ssh's to 127.0.0.1:<port>.
+  expect(j).toContain('-ssh-port 52999');
 });
 
 test('net:none nftables drops everything but loopback', () => {

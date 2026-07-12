@@ -64,12 +64,17 @@ export function describeBundle(key: string): VmBundle {
  *  copy on a non-APFS volume. */
 async function cloneImage(base: string, dest: string): Promise<void> {
   const clone = Bun.spawn(['cp', '-c', base, dest], { stdout: 'ignore', stderr: 'pipe' });
-  if ((await clone.exited) === 0) return;
-  // -c (clonefile) unsupported on this filesystem — fall back to a regular copy.
-  const plain = Bun.spawn(['cp', base, dest], { stdout: 'ignore', stderr: 'pipe' });
-  if ((await plain.exited) !== 0) {
-    throw new Error(`vm bundle: failed to clone base image ${base} → ${dest}`);
+  if ((await clone.exited) !== 0) {
+    // -c (clonefile) unsupported on this filesystem — fall back to a regular copy.
+    const plain = Bun.spawn(['cp', base, dest], { stdout: 'ignore', stderr: 'pipe' });
+    if ((await plain.exited) !== 0) {
+      throw new Error(`vm bundle: failed to clone base image ${base} → ${dest}`);
+    }
   }
+  // The base image is read-only (0444); cp/clonefile preserves that mode, but vfkit's virtio-blk
+  // needs a WRITABLE disk (it mounts rw) or rejects the config ("storage device attachment is
+  // invalid"). Make the per-VM clone writable.
+  chmodSync(dest, 0o600);
 }
 
 /** Generate a one-shot ed25519 keypair (VM lifetime only) via ssh-keygen. */

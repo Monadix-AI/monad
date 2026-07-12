@@ -1,47 +1,32 @@
 // gvproxy — the gvisor-tap-vsock user-space network stack that fronts the VM's virtio-net device.
 // Instead of vmnet (root, host-network exposure), the guest's NIC is a datagram socket into gvproxy,
 // which runs DHCP/DNS/TCP-forwarding entirely in user space. Two things fall out of that:
-//   • the guest's sshd is reachable from the host via `-forward-sock` (a host-side unix socket) with
-//     no host port opened — the exec channel (see ../exec/ssh.ts);
+//   • the guest's sshd is reachable from the host via gvproxy's `-ssh-port` (a host-loopback TCP port
+//     that tunnels to the guest's sshd) — the exec channel (see ../exec/ssh.ts);
 //   • egress is mediated in-process, so `net:'filtered'` routes the guest to monad's host egress
 //     proxy at the gvproxy gateway IP (the guest cannot see host loopback directly).
 //
-// gvproxy's default virtual network: the gateway is 192.168.127.1 and the host is reachable at
-// 192.168.127.254. These are gvproxy defaults; the pool verifies them against the running gvproxy at
-// boot (see the plan's spike note) rather than trusting them blindly.
+// gvproxy's virtual network: gateway 192.168.127.1, host reachable at 192.168.127.254, and `-ssh-port`
+// forwards to a hardcoded guest 192.168.127.2 — so the guest is pinned to .2 (see ignition.ts).
 
 export const GVPROXY_GATEWAY_IP = '192.168.127.1';
 export const GVPROXY_HOST_IP = '192.168.127.254';
-// The guest's own DHCP-assigned address under gvisor-tap-vsock (the first lease after the gateway).
-// The ssh forward target must be the GUEST, not the gateway — forwarding to the gateway reaches
-// gvproxy itself, which has no sshd.
-export const GVPROXY_GUEST_IP = '192.168.127.2';
 
 export interface GvproxySpec {
   gvproxyBin: string;
   /** vfkit ⇄ gvproxy datagram socket (vfkit connects, gvproxy listens). */
   vfkitNetSock: string;
-  /** Host-side unix socket that forwards to the guest's sshd. */
-  sshForwardSock: string;
-  /** Guest-side port to forward from (sshd). */
-  guestSshPort?: number;
+  /** Host loopback TCP port gvproxy opens; connections there tunnel to the guest's sshd (guest:22)
+   *  through the user-space netstack. The exec channel ssh's to 127.0.0.1:<sshHostPort>. Allocated
+   *  free per VM (the host can't route to the guest's netstack IP directly). */
+  sshHostPort: number;
 }
 
 /** Build the gvproxy argv. `-listen-vfkit` is the datagram endpoint vfkit's virtio-net attaches to;
- *  `-forward-sock` exposes the guest's sshd on a host unix socket for the exec channel. */
+ *  `-ssh-port` opens a host-loopback listener that forwards to the guest's sshd (this is how podman
+ *  machine reaches its VM). */
 export function gvproxyArgv(spec: GvproxySpec): string[] {
-  const guestSsh = spec.guestSshPort ?? 22;
-  return [
-    spec.gvproxyBin,
-    '-listen-vfkit',
-    `unixgram://${spec.vfkitNetSock}`,
-    '-forward-sock',
-    spec.sshForwardSock,
-    '-forward-dst',
-    `${GVPROXY_GUEST_IP}:${guestSsh}`,
-    '-forward-user',
-    'monad'
-  ];
+  return [spec.gvproxyBin, '-listen-vfkit', `unixgram://${spec.vfkitNetSock}`, '-ssh-port', String(spec.sshHostPort)];
 }
 
 export interface GvproxyProcess {
@@ -81,12 +66,20 @@ export function guestNftables(rules: GuestEgressRules): string {
     return '# net:unrestricted — no egress rules\n';
   }
   if (rules.mode === 'none') {
+    // The exec channel is ssh over gvproxy's -ssh-port, so the guest ALWAYS has a NIC (the control
+    // plane rides it). "No egress" is therefore enforced here, not by removing the NIC: allow only
+    // loopback, DHCP (to get an address), and the return traffic of already-established connections
+    // (the inbound ssh session). Every NEW outbound connection — i.e. all external egress — is
+    // dropped. The agent runs unprivileged and cannot alter this. (A future vsock exec channel would
+    // let net:none drop the NIC entirely for a stronger guarantee.)
     return [
       'table inet monad {',
       '  chain output {',
       '    type filter hook output priority 0; policy drop;',
       '    oif "lo" accept',
-      '    # net:none — nothing else may leave the VM',
+      '    ct state established,related accept',
+      `    ip daddr ${GVPROXY_GATEWAY_IP} udp dport 67 accept`,
+      '    # net:none — DHCP + the ssh return path only; no new external connections',
       '  }',
       '}',
       ''
@@ -102,6 +95,7 @@ export function guestNftables(rules: GuestEgressRules): string {
     '    type filter hook output priority 0; policy drop;',
     '    oif "lo" accept',
     '    ct state established,related accept',
+    `    ip daddr ${GVPROXY_GATEWAY_IP} udp dport 67 accept`,
     `    ip daddr ${GVPROXY_GATEWAY_IP} udp dport 53 accept`,
     `    ip daddr ${GVPROXY_GATEWAY_IP} tcp dport 53 accept`,
     `    ip daddr ${GVPROXY_HOST_IP} tcp dport ${rules.proxyPort} accept`,

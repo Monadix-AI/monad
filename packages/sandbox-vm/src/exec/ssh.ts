@@ -9,8 +9,8 @@
 import type { SandboxProcess } from '@monad/sdk-atom';
 
 export interface SshExecSpec {
-  /** Host-side unix socket from gvproxy -forward-sock. */
-  sshSock: string;
+  /** Host loopback port gvproxy forwards to the guest's sshd (gvproxy -ssh-port). */
+  sshHostPort: number;
   /** One-shot private key (bundle.sshKey). */
   identity: string;
   /** Guest user (unprivileged). */
@@ -37,10 +37,12 @@ function remoteCommand(argv: string[], spec: SshExecSpec): string {
   return parts.join(' && ');
 }
 
-/** The ssh argv that tunnels to the guest over the forward-sock and runs the command. */
+/** The ssh argv that reaches the guest sshd via gvproxy's host-loopback port and runs the command. */
 export function sshArgv(argv: string[], spec: SshExecSpec): string[] {
   return [
     'ssh',
+    '-o',
+    'ConnectTimeout=10',
     '-o',
     'StrictHostKeyChecking=no',
     '-o',
@@ -48,10 +50,12 @@ export function sshArgv(argv: string[], spec: SshExecSpec): string[] {
     '-o',
     'LogLevel=ERROR',
     '-o',
-    `ProxyCommand=nc -U ${spec.sshSock}`,
+    'IdentitiesOnly=yes',
+    '-p',
+    String(spec.sshHostPort),
     '-i',
     spec.identity,
-    `${spec.user}@placeholder`,
+    `${spec.user}@127.0.0.1`,
     remoteCommand(argv, spec)
   ];
 }
@@ -69,5 +73,75 @@ export function sshExec(argv: string[], spec: SshExecSpec): SandboxProcess {
     },
     exited: proc.exited,
     kill: (signal) => proc.kill(signal as number | undefined)
+  };
+}
+
+export interface SshReadinessOptions {
+  timeoutMs?: number;
+  intervalMs?: number;
+  /** Injectable for tests; defaults to a real `ssh true` against the guest. */
+  probe?: () => Promise<boolean>;
+}
+
+/** Poll the guest with a trivial ssh command until it answers (booted + sshd up) or the timeout
+ *  elapses — vfkit returns as soon as the process spawns, long before CoreOS finishes booting. */
+export async function waitForSsh(spec: SshExecSpec, options: SshReadinessOptions = {}): Promise<void> {
+  const timeoutMs = options.timeoutMs ?? 120_000;
+  const intervalMs = options.intervalMs ?? 250;
+  const probe =
+    options.probe ??
+    (async () => {
+      const proc = Bun.spawn(sshArgv(['true'], spec), { stdout: 'ignore', stderr: 'ignore', stdin: 'ignore' });
+      return (await proc.exited) === 0;
+    });
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() <= deadline) {
+    if (await probe().catch(() => false)) return;
+    if (Date.now() >= deadline) break;
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+  throw new Error(`guest ssh was not ready within ${timeoutMs}ms`);
+}
+
+/** Bridge an async process-start onto a synchronous SandboxProcess: the streams are wired when the
+ *  underlying child starts, `exited` resolves with its code, and a kill issued before the child
+ *  exists is applied once it starts. `onFinally` runs when the run settles (e.g. pool refcount
+ *  release). Closes the transforms on a start failure so readers don't hang. */
+export function bridgeAsyncProcess(start: () => Promise<SandboxProcess>, onFinally?: () => void): SandboxProcess {
+  const stdoutTransform = new TransformStream<Uint8Array, Uint8Array>();
+  const stderrTransform = new TransformStream<Uint8Array, Uint8Array>();
+  let child: SandboxProcess | null = null;
+  let killRequested = false;
+  let killSignal: number | string | undefined;
+
+  const exited = (async (): Promise<number> => {
+    try {
+      child = await start();
+      if (killRequested) child.kill(killSignal);
+      child.stdout?.pipeTo(stdoutTransform.writable).catch(() => {});
+      child.stderr?.pipeTo(stderrTransform.writable).catch(() => {});
+      return await child.exited;
+    } catch (error) {
+      await Promise.allSettled([stdoutTransform.writable.close(), stderrTransform.writable.close()]);
+      throw error;
+    } finally {
+      onFinally?.();
+    }
+  })();
+
+  return {
+    stdout: stdoutTransform.readable,
+    stderr: stderrTransform.readable,
+    get exitCode() {
+      return child?.exitCode ?? null;
+    },
+    exited,
+    kill(signal) {
+      if (child) child.kill(signal);
+      else {
+        killRequested = true;
+        killSignal = signal;
+      }
+    }
   };
 }

@@ -7,7 +7,13 @@
 //
 // The agent never gets root, so it cannot alter the firewall or mounts installed here.
 
-import { type GuestEgressRules, guestNftables } from './net/gvproxy.ts';
+import { type GuestEgressRules, GVPROXY_GATEWAY_IP, guestNftables } from './net/gvproxy.ts';
+
+// The guest is pinned to a STATIC address, not DHCP: gvproxy's `-ssh-port` forwards host-loopback to
+// a hardcoded `192.168.127.2:22`, so the guest MUST be at .2 or the exec channel can't reach sshd
+// ("no route to host"). DHCP drifts (initramfs vs real-root leases race for .2 and the guest can land
+// on .3), so we assign .2 deterministically via a NetworkManager keyfile.
+const GUEST_STATIC_IP = '192.168.127.2';
 
 export interface MountSpec {
   /** virtio-fs mountTag (w0, r0, …) passed to vfkit. */
@@ -141,11 +147,30 @@ export interface IgnitionConfig {
 /** Build the full Ignition config object. */
 export function buildIgnition(spec: IgnitionSpec): IgnitionConfig {
   const rulesPath = '/etc/monad/nftables.conf';
+  const nmKeyfile = [
+    '[connection]',
+    'id=monad',
+    'type=ethernet',
+    'interface-name=enp0s1',
+    '[ipv4]',
+    'method=manual',
+    `address1=${GUEST_STATIC_IP}/24,${GVPROXY_GATEWAY_IP}`,
+    `dns=${GVPROXY_GATEWAY_IP}`,
+    '[ipv6]',
+    'method=disabled',
+    ''
+  ].join('\n');
   const files: object[] = [
     {
       path: rulesPath,
       mode: 0o600,
       contents: { source: dataUri(guestNftables(spec.egress)) }
+    },
+    {
+      // Pin the guest to the static IP gvproxy's -ssh-port forwards to (see GUEST_STATIC_IP note).
+      path: '/etc/NetworkManager/system-connections/monad.nmconnection',
+      mode: 0o600,
+      contents: { source: dataUri(nmKeyfile) }
     }
   ];
 
