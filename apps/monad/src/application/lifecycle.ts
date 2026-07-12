@@ -16,17 +16,10 @@
  */
 
 import type { SessionId } from '@monad/protocol';
-import type { Tool } from '#/capabilities/tools/types.ts';
-import type { SessionGateway } from '#/channels/channel.ts';
 
-import { join } from 'node:path';
 import { createLogger } from '@monad/logger';
 
-import { createInterruptServices } from '#/agent/approvals/interrupts.ts';
-import { createConfigWatchers } from '#/agent/config.ts';
-import { applyAcpDelegateTool } from '#/agent/delegation/acp-tool.ts';
-import { createAgentExecutionService } from '#/agent/execution.ts';
-import { createMemorySubsystem } from '#/agent/memory/subsystem.ts';
+import { createAgentRuntime } from '#/application/agent-runtime.ts';
 import { createCoreRuntime } from '#/application/core-runtime.ts';
 import { createNetworkRuntime } from '#/application/network-runtime.ts';
 import { runDaemonPreflight } from '#/application/preflight.ts';
@@ -34,29 +27,10 @@ import { launchDaemonTransports } from '#/application/transport-runtime.ts';
 import { createAtomPackRediscoverer } from '#/atoms/reload.ts';
 import { createMcpControls } from '#/capabilities/mcp/controls.ts';
 import { createObscuraController } from '#/capabilities/mcp/obscura.ts';
-import { buildServiceTools } from '#/capabilities/tools';
-import { configureToolBackends } from '#/capabilities/tools/configure-backends.ts';
-import { createChannelGateway } from '#/channels/gateway.ts';
-import { createHotReload } from '#/config/application.ts';
-import { createCommandBundle } from '#/handlers/commands/bundle.ts';
-import { type CommandBundle } from '#/handlers/commands/index.ts';
 import { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
-import { createHookRunner } from '#/hooks/runner.ts';
-import { initObservability, resolveObservabilityEndpoint } from '#/infra/observability.ts';
 import { configureDaemonLogging } from '#/runtime/flags.ts';
-import { DelegationService } from '#/services/delegation/delegation.ts';
-import { createPeerDelegateTools } from '#/services/delegation/peers.ts';
-import { acpAgentCandidatesFromAdapters } from '#/services/delegation/presets.ts';
-import { EventBus } from '#/services/event-bus.ts';
 import { isToolExposed } from '#/services/generation/agent-persona.ts';
-import { createLocaleService } from '#/services/i18n-loader.ts';
-import { createGraphQueryTools } from '#/services/memory/graph/query-tools.ts';
-import { createMemoryAgentTools } from '#/services/memory/tools.ts';
-import { RoundCache } from '#/services/round-cache.ts';
-import { ScheduleService } from '#/services/scheduling/schedule.ts';
 import { createUpgradeInfoMonitor } from '#/services/upgrade-info.ts';
-import { warnIfNotInitialized } from '#/store/home/init-status.ts';
-import { startStartupHousekeeping } from '#/store/home/startup-housekeeping.ts';
 import { createHttpTransport } from '#/transports/http.ts';
 
 // Eden type-safe client inference (compile-time only). Derived from the transport factory
@@ -85,9 +59,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
   const {
     dataLayer,
     cfg,
-    startupAuth,
     ownerPrincipalId,
-    monadVersion,
     watchService,
     runtime,
     reloadTargets,
@@ -103,14 +75,9 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
   const { sandboxRoots, sessionSandbox } = sandbox;
   const { modelService, modelCatalog, embeddingIndexer } = model;
   const { registry, commandRegistry } = capabilities;
-  const { loadedSkills, skillList, skillInstances, discoverProjectSkills, reloadSkills } = skills;
-  const {
-    channelRegistry,
-    atomConflicts,
-    atomDetailsByPack,
-    refreshWorkspaceExperienceSnapshot,
-    getWorkspaceExperienceSnapshot
-  } = atoms;
+  const { skillList, skillInstances, discoverProjectSkills, reloadSkills } = skills;
+  const { atomConflicts, atomDetailsByPack, refreshWorkspaceExperienceSnapshot, getWorkspaceExperienceSnapshot } =
+    atoms;
 
   const networkRuntime = await createNetworkRuntime({
     network: cfg.network,
@@ -122,233 +89,27 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
   const PORT = endpoint.port;
   const HOST = endpoint.bindHost;
 
-  await configureToolBackends(cfg, startupAuth);
-
-  const bus = new EventBus();
-  const cache = new RoundCache();
-  const { oversight, clarify, reloadApprovalPolicy } = await createInterruptServices({ paths, cfg, store, bus });
-  startStartupHousekeeping({ paths, store, logger });
-  // Reverse fs/terminal delegation for ACP-bridged sessions. Unlike oversight/clarify, its events are
-  // ephemeral RPC — bus-only, NEVER persisted (replaying a delegation request on reconnect is wrong).
-  const delegation = new DelegationService({ publish: (event) => bus.publish(event) });
-  if (!USE_MOCK) {
-    warnIfNotInitialized({ cfg, auth: startupAuth, host: HOST, port: PORT, logger });
-  }
-  // Live config-derived state: skill auto-load predicate, hot-swappable command/policy hooks, the
-  // config/profile/auth file watcher (feeding the shared ConfigReloader), workspace prompt slots, and
-  // per-agent persona resolution (see #/agent/config.ts).
+  const agentRuntime = await createAgentRuntime(core, { host: HOST, port: PORT }, logger);
   const {
-    getHooksConfig,
-    setHooksConfig,
-    getPolicyHooksConfig,
-    setPolicyHooksConfig,
-    getWorkspacePromptSlots,
-    agentPersona
-  } = await createConfigWatchers({
-    paths,
-    cfg,
-    store,
-    watchService,
-    logger
-  });
-
-  const activeDeveloperMode = cfg.developerMode === true || DEV_MODE || DEV_SILENT;
-  const otelEndpoint = resolveObservabilityEndpoint({
-    endpoint: cfg.observability?.endpoint,
-    developerMode: activeDeveloperMode
-  });
-  const otelActive = initObservability(otelEndpoint, monadVersion);
-  if (otelActive && !cfg.observability?.endpoint) {
-    logger.info('monad: OTel auto-enabled for dev — Phoenix UI at http://localhost:6006');
-  }
-
-  const agentModel = USE_MOCK ? (await import('#/infra/mock-model.ts')).mockModel() : modelService.router;
-  let sessionGateway: SessionGateway | null = null;
-
-  // Locale gateway: file-scan loading from the builtin locale dir + any installed atom-pack locale
-  // dirs (see #/services/i18n-loader.ts).
-  const i18nService = await createLocaleService(paths, cfg.locale);
-
-  const reconnectFileMcp = () => mcpRuntime.reconnectFiles(runtime.config.get().auth);
-
-  // LIVE base tools: a getter (not a snapshot) so a hot-installed atom-pack/MCP tool — which
-  // rediscovery re-registers into this same registry — reaches the running agent without a restart.
-  // toolList() returns a cached array (rebuilt only on a tool-set change) and toolRevision bumps on
-  // every change, so the agent can memoize and skip the per-turn rebuild when nothing was installed.
-  const baseTools = (): Tool[] => registry.toolList();
-  // Scheduled runs. The fire callback is wired after `handlers` exists (it reuses the session
-  // create/generate handlers); until then it is a no-op, which is safe because no timer can
-  // fire before load() below.
-  let runScheduled: (prompt: string, sessionId: string | undefined) => Promise<void> = async () => {};
-  const schedule = new ScheduleService({
-    storePath: join(paths.runtime, 'schedules.json'),
-    fire: (prompt, sessionId) => runScheduled(prompt, sessionId),
-    log: (m) => logger.info(m)
-  });
-
-  // Memory subsystem: auto-memory note store, layered L1 memory service (mem0 + daemon-managed local
-  // qdrant), L2 knowledge graph + background consolidation, the read-only mem0 explorer, and memory
-  // settings write-back, with the lifecycle hooks registered (see #/agent/memory/subsystem.ts).
-  const {
-    noteStore,
-    memoryService,
-    graphStore,
-    graphScopesFor,
-    runConsolidate,
-    runCheckContradictions,
-    explainBelief,
-    getMem0Data,
-    getLaws,
-    memorySetBackend,
-    memorySetMem0Models,
-    memorySetGraph
-  } = createMemorySubsystem({
-    store,
-    paths,
-    port: PORT,
-    router: agentModel,
-    registry,
-    configReloader,
-    liveCfg: () => runtime.config.get().cfg,
-    liveAuth: () => runtime.config.get().auth
-  });
-
-  // Lifecycle hooks: config.json command hooks (shell) + any atom-pack-registered in-process hooks,
-  // behind one runner. cwd = the sandbox root so command hooks resolve relative paths predictably.
-  const hooksLog = createLogger('hooks');
-  const hookRunner = createHookRunner({
-    config: () => getHooksConfig(),
-    policy: () => getPolicyHooksConfig(),
-    atomHooks: registry.hooks,
-    cwd: sandboxRoots?.[0] ?? paths.workspace,
-    log: hooksLog,
-    // Audit/metrics seam: every executed hook lands here. deny/ask are info (a real decision was
-    // made); allow/mutate are debug to keep the hot path quiet unless explicitly traced.
-    record: (e) => {
-      const level = e.outcome === 'deny' || e.outcome === 'ask' || e.outcome === 'timeout' ? 'info' : 'debug';
-      hooksLog[level](
-        {
-          event: e.event,
-          source: e.source,
-          label: e.label.slice(0, 200),
-          outcome: e.outcome,
-          durationMs: e.durationMs,
-          reason: e.reason
-        },
-        'hook ran'
-      );
-    }
-  });
-
-  // monad-as-ACP-client: register `agent_acp_delegate` into the LIVE registry (not extraTools) so an
-  // invite/edit/remove of an external ACP agent takes effect without a restart — re-applied on every
-  // configReloader publish below. Mounted only when ≥1 agent is enabled (an empty roster advertises nothing).
-  applyAcpDelegateTool({
-    registry,
-    agents: cfg.acpAgents,
-    adapterCandidates: acpAgentCandidatesFromAdapters(),
-    gate: oversight.gate,
-    mcpServers: cfg.mcpServers,
-    auth: startupAuth,
-    store
-  });
-
-  const peerDelegateTools = createPeerDelegateTools({
-    peers: cfg.peers,
-    auth: startupAuth,
-    gate: oversight.gate,
-    logger
-  });
-
-  // Inbound (peer-delegation) approval policy — read live by the agent's gate; hot-reloaded below.
-  let inboundApprovalMode = cfg.openaiCompat.approval;
-
-  // Agent assembly: context window + durable history + model-derived tools + repos (see
-  // #/agent/execution.ts). Schedule/memory/acp-delegate tools are wired here and passed in.
-  const { agent, history } = createAgentExecutionService({
-    agentModel,
-    modelService,
-    modelCatalog,
-    store,
-    embeddingIndexer,
-    cfg,
-    paths,
-    sandboxRoots,
+    bus,
+    cache,
     oversight,
     clarify,
-    loadedSkills,
-    baseTools,
-    toolsVersion: () => registry.toolRevision,
-    extraTools: [
-      ...buildServiceTools({ notes: noteStore, scheduler: schedule }),
-      ...createMemoryAgentTools(memoryService),
-      ...createGraphQueryTools(graphStore, graphScopesFor),
-      ...peerDelegateTools
-    ],
-    delegatableAgents: () => agentPersona.delegatableAgents(),
-    toolSourceName: (name) => registry.sourceNameOf(name),
+    delegation,
+    agentPersona,
+    i18nService,
+    schedule,
+    memory,
     hookRunner,
-    // Live so a profile.json/settings edit to the policy hot-applies (updated by the configReloader subscriber).
-    inboundApproval: () => inboundApprovalMode,
-    workspacePromptSlots: (sessionId) => ({
-      ...getWorkspacePromptSlots(),
-      agent: agentPersona.resolve(sessionId) ?? getWorkspacePromptSlots().agent
-    })
-  });
-
-  // Backend for the unified slash commands — model list/switch, /compact, /handoff, memory + graph
-  // consolidation, and the highRisk approval gate (see #/handlers/commands/bundle.ts). sessionGateway is
-  // late-bound (wired after handlers exist), so it is passed as a getter that /handoff guards on.
-  const commandBundle: CommandBundle = createCommandBundle({
-    commandRegistry,
-    skills: () => skillList,
-    store,
-    cfg,
-    modelService,
-    modelCatalog,
-    agentModel,
-    history,
-    runConsolidate,
-    runCheckContradictions,
-    explainBelief,
-    oversight,
-    i18n: i18nService,
-    bus,
-    sessionGateway: () => sessionGateway,
-    logger
-  });
-
-  const channelService = await createChannelGateway({
-    sessionGateway: () => sessionGateway,
-    store,
-    registry: channelRegistry,
-    bus,
-    i18n: i18nService,
-    commands: commandBundle,
-    logger,
-    cfg,
-    paths
-  });
-
-  reloadTargets.setApplication(
-    createHotReload({
-      paths,
-      store,
-      agentPersona,
-      embeddingIndexer,
-      channelService,
-      registry,
-      i18nService,
-      logger,
-      gate: oversight.gate,
-      reloadApprovalPolicy,
-      setInboundApprovalMode: (mode) => {
-        inboundApprovalMode = mode;
-      },
-      setHooksConfig,
-      setPolicyHooksConfig
-    })
-  );
+    agent,
+    commandBundle,
+    channelService,
+    bindSessionGateway,
+    bindScheduledRun,
+    reconnectFileMcp
+  } = agentRuntime;
+  const { memoryService, graphStore, getMem0Data, getLaws, memorySetBackend, memorySetMem0Models, memorySetGraph } =
+    memory;
 
   const rediscoverAtomPacks = createAtomPackRediscoverer({
     paths,
@@ -450,7 +211,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     log: logger
   });
 
-  sessionGateway = handlers.session;
+  bindSessionGateway(handlers.session);
 
   // Watch the atoms directory for drop-in installs: a new atom pack folder (or a removed one)
   // triggers the same rediscovery path as API-driven install/remove, so no daemon restart needed.
@@ -468,11 +229,11 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     }
   });
 
-  runScheduled = async (prompt, sessionId) => {
+  bindScheduledRun(async (prompt, sessionId) => {
     const sid =
       (sessionId as SessionId | undefined) ?? (await handlers.session.create({ title: 'Scheduled' })).sessionId;
     await handlers.session.generate({ sessionId: sid, text: prompt });
-  };
+  });
   await schedule.load();
   process.on('exit', () => schedule.dispose());
 
