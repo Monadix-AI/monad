@@ -1,13 +1,12 @@
-// The VM backend's host tooling: vfkit (the Virtualization.framework front-end) and gvproxy (the
-// gvisor-tap-vsock user-space network stack). Neither ships in monad's release tarball — a user who
-// never selects backend:'vm' pays nothing. When the backend IS selected, prepare() resolves both:
-//   1. DETECT a host copy (podman/crc bundle it) and, for vfkit, verify it declares the
-//      com.apple.security.virtualization entitlement and meets the version floor.
-//   2. Else DOWNLOAD the pinned release to <vmDir>/bin, verify sha256, strip the quarantine xattr,
-//      and adhoc re-sign vfkit with the virtualization entitlement (gvproxy needs no entitlement).
+// The VM backend's host tooling, resolved per platform when backend:'vm' is selected (a user who
+// never selects it pays nothing):
+//   • macOS → vfkit (Virtualization.framework front-end) + gvproxy. Detect a host copy (podman/crc
+//     bundle them) or download the pinned release, verifying the virtualization entitlement + sha256.
+//   • Linux → qemu-system-<arch> (user-installed, too large to vendor) + gvproxy + virtiofsd + socat
+//     + an OVMF/edk2 firmware, all detected from the host; plus a /dev/kvm probe.
 //
-// Pins are hard-coded (version + sha256); a mismatch fails closed rather than running an unknown
-// binary. Regenerate them with scripts/pin-vm-toolchain.ts when bumping a version.
+// Downloaded pins are hard-coded (version + sha256); a mismatch fails closed rather than running an
+// unknown binary. Regenerate with scripts/pin-vm-toolchain.ts when bumping a version.
 
 import { accessSync, chmodSync, constants, existsSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
@@ -63,12 +62,36 @@ const VFKIT: ToolPin = {
   needsEntitlement: true
 };
 
-const GVPROXY: ToolPin = {
-  version: 'v0.8.9',
-  url: 'https://github.com/containers/gvisor-tap-vsock/releases/download/v0.8.9/gvproxy-darwin',
-  sha256: 'c6f7b4bc7f21bf810b5cf54e04d979b014c5d96472a03a9e97fe62a00940067c',
-  needsEntitlement: false
+// gvproxy ships one asset per platform+arch. macOS is a universal `gvproxy-darwin`; Linux is per-arch.
+const GVPROXY_BASE = 'https://github.com/containers/gvisor-tap-vsock/releases/download/v0.8.9';
+const GVPROXY_PINS: Record<string, ToolPin> = {
+  'darwin-*': {
+    version: 'v0.8.9',
+    url: `${GVPROXY_BASE}/gvproxy-darwin`,
+    sha256: 'c6f7b4bc7f21bf810b5cf54e04d979b014c5d96472a03a9e97fe62a00940067c',
+    needsEntitlement: false
+  },
+  'linux-arm64': {
+    version: 'v0.8.9',
+    url: `${GVPROXY_BASE}/gvproxy-linux-arm64`,
+    sha256: '6ecca02839254c9a0cc184bba7aac63755a22d7ed10d455b852528a99d7f7d4b',
+    needsEntitlement: false
+  },
+  'linux-x64': {
+    version: 'v0.8.9',
+    url: `${GVPROXY_BASE}/gvproxy-linux-amd64`,
+    sha256: '3011c5629c9138d2050fb23c510e09ae53e30ec52e6a9ab85632bc1550e8ef63',
+    needsEntitlement: false
+  }
 };
+function gvproxyPin(): ToolPin {
+  const key = process.platform === 'darwin' ? 'darwin-*' : `linux-${process.arch}`;
+  const pin = GVPROXY_PINS[key];
+  if (!pin) throw new Error(`vm toolchain: no gvproxy pin for ${process.platform}/${process.arch}`);
+  return pin;
+}
+
+const GVPROXY: ToolPin = GVPROXY_PINS['darwin-*'] as ToolPin;
 
 /** vfkit version floor — a detected host binary older than this is rejected (falls to download). */
 const VFKIT_MIN_VERSION = [0, 6, 0] as const;
@@ -223,37 +246,117 @@ async function resolveTool(
   return dest;
 }
 
+// ── Linux (QEMU) toolchain detection ────────────────────────────────────────────────────────────
+// The Linux driver is QEMU (see driver/qemu.ts): detect the host binaries — qemu is user-installed
+// (too large to vendor), gvproxy downloads if absent, virtiofsd/socat/firmware are distro-provided.
+
+const LINUX_BIN_DIRS = [
+  '/usr/bin',
+  '/usr/local/bin',
+  '/usr/sbin',
+  '/usr/libexec',
+  '/usr/lib/qemu',
+  '/usr/libexec/podman'
+];
+
+/** Find an executable by name on PATH + the common Linux dirs. */
+function findLinuxBin(name: string): string | null {
+  for (const dir of [...(Bun.env.PATH?.split(':') ?? []), ...LINUX_BIN_DIRS]) {
+    if (!dir) continue;
+    const p = join(dir, name);
+    try {
+      accessSync(p, constants.X_OK);
+      return p;
+    } catch {
+      /* next */
+    }
+  }
+  return null;
+}
+
+/** Locate an OVMF/edk2 firmware image to EFI-boot the CoreOS qcow2 under QEMU (arch-specific). */
+function findFirmware(): string | null {
+  const candidates =
+    process.arch === 'x64'
+      ? ['/usr/share/edk2/x64/OVMF_CODE.fd', '/usr/share/OVMF/OVMF_CODE.fd', '/usr/share/qemu/OVMF.fd']
+      : [
+          '/usr/share/edk2/aarch64/QEMU_EFI.fd',
+          '/usr/share/AAVMF/AAVMF_CODE.fd',
+          '/usr/share/qemu-efi-aarch64/QEMU_EFI.fd'
+        ];
+  return candidates.find((p) => existsSync(p)) ?? null;
+}
+
+/** /dev/kvm present and read/write accessible → hardware acceleration available. */
+function kvmAvailable(): boolean {
+  try {
+    accessSync('/dev/kvm', constants.R_OK | constants.W_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const QEMU_BIN = process.arch === 'x64' ? 'qemu-system-x86_64' : 'qemu-system-aarch64';
+
 export interface ResolvedToolchain {
-  vfkit: string;
+  /** The hypervisor binary: vfkit on macOS, qemu-system-<arch> on Linux. */
+  hypervisor: string;
   gvproxy: string;
+  /** Linux only: virtio-fs daemon, vsock bridge, EFI firmware. */
+  virtiofsd?: string;
+  socat?: string;
+  firmware?: string;
+  /** Linux only: whether /dev/kvm is usable (false → slow TCG emulation). */
+  kvm?: boolean;
 }
 
 let cached: ResolvedToolchain | null = null;
 
-/** Resolve both tools (detect or download+verify+resign). Cached after first success. Called from
- *  the launcher's prepare(); throws if either can't be made available. */
+/** Resolve the platform toolchain (detect or download+verify). Cached after first success. Called from
+ *  the launcher's prepare(); throws if a required tool can't be made available. */
 export async function resolveVmToolchain(): Promise<ResolvedToolchain> {
   if (cached) return cached;
-  if (process.platform !== 'darwin') {
-    throw new Error('vm toolchain: the macOS VM backend requires darwin');
-  }
-  const [vfkit, gvproxy] = await Promise.all([
-    resolveTool('vfkit', VFKIT, config.vfkitPath, vfkitUsable),
-    resolveTool('gvproxy', GVPROXY, config.gvproxyPath, gvproxyUsable)
-  ]);
-  cached = { vfkit, gvproxy };
+  cached = process.platform === 'darwin' ? await resolveDarwin() : await resolveLinux();
   return cached;
 }
 
-/** Sync availability probe for isAvailable(): darwin + either a resolved cache or a plausible host
- *  binary present. The authoritative check (entitlement, sha) runs in prepare()/resolveVmToolchain. */
+async function resolveDarwin(): Promise<ResolvedToolchain> {
+  const [hypervisor, gvproxy] = await Promise.all([
+    resolveTool('vfkit', VFKIT, config.vfkitPath, vfkitUsable),
+    resolveTool('gvproxy', gvproxyPin(), config.gvproxyPath, gvproxyUsable)
+  ]);
+  return { hypervisor, gvproxy };
+}
+
+async function resolveLinux(): Promise<ResolvedToolchain> {
+  if (process.platform !== 'linux') throw new Error('vm toolchain: the VM backend requires darwin or linux');
+  const qemu = config.vfkitPath ?? findLinuxBin(QEMU_BIN);
+  if (!qemu) throw new Error(`vm toolchain: ${QEMU_BIN} not found — install QEMU (e.g. dnf install qemu-kvm)`);
+  const virtiofsd = findLinuxBin('virtiofsd');
+  if (!virtiofsd) throw new Error('vm toolchain: virtiofsd not found — install it (e.g. dnf install virtiofsd)');
+  const socat = findLinuxBin('socat');
+  if (!socat) throw new Error('vm toolchain: socat not found — install it (needed for the vsock bridge)');
+  const firmware = findFirmware();
+  if (!firmware) throw new Error('vm toolchain: no OVMF/edk2 firmware found — install edk2-ovmf / AAVMF');
+  const gvproxy = config.gvproxyPath ?? (await resolveTool('gvproxy', gvproxyPin(), undefined, gvproxyUsable));
+  return { hypervisor: qemu, gvproxy, virtiofsd, socat, firmware, kvm: kvmAvailable() };
+}
+
+/** Sync availability probe for isAvailable(): the host looks capable of running the backend. The
+ *  authoritative check (entitlement/sha on mac, real tool resolution on Linux) runs in prepare(). */
 export function vmToolchainMaybeAvailable(): boolean {
-  if (process.platform !== 'darwin') return false;
   if (cached) return true;
-  if (config.vfkitPath && config.gvproxyPath) return true;
-  // A cached download from a previous run, or a host bundle, makes it worth attempting.
-  if (existsSync(join(vmBinDir(), 'vfkit')) && existsSync(join(vmBinDir(), 'gvproxy'))) return true;
-  return detectRoots().some((r) => existsSync(join(r, 'vfkit')));
+  if (process.platform === 'darwin') {
+    if (config.vfkitPath && config.gvproxyPath) return true;
+    if (existsSync(join(vmBinDir(), 'vfkit')) && existsSync(join(vmBinDir(), 'gvproxy'))) return true;
+    return detectRoots().some((r) => existsSync(join(r, 'vfkit')));
+  }
+  if (process.platform === 'linux') {
+    // Needs KVM + QEMU at minimum; the rest is checked authoritatively in prepare().
+    return kvmAvailable() && findLinuxBin(QEMU_BIN) !== null;
+  }
+  return false;
 }
 
 /** Test seam: reset the resolved cache. */
@@ -263,4 +366,4 @@ export function __resetVmToolchainForTest(): void {
 }
 
 // Exposed for the pin script + unit tests.
-export const __pins = { VFKIT, GVPROXY, VFKIT_MIN_VERSION };
+export const __pins = { VFKIT, GVPROXY, GVPROXY_PINS, VFKIT_MIN_VERSION };

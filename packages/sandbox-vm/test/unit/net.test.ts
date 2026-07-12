@@ -8,12 +8,18 @@ import {
   gvproxyArgv
 } from '../../src/net/gvproxy.ts';
 
-test('gvproxy argv wires the vfkit datagram socket (egress netstack only; exec is vsock)', () => {
-  const argv = gvproxyArgv({ gvproxyBin: '/bin/gvproxy', vfkitNetSock: '/t/net.sock' });
+test('gvproxy argv: vfkit transport uses -listen-vfkit unixgram (macOS)', () => {
+  const argv = gvproxyArgv({ gvproxyBin: '/bin/gvproxy', netSock: '/t/net.sock', transport: 'vfkit' });
   const j = argv.join(' ');
   expect(j).toContain('-listen-vfkit unixgram:///t/net.sock');
-  // gvproxy is only the egress netstack now — no ssh port forwarding (the exec channel is vsock).
-  expect(j).not.toContain('-ssh-port');
+  expect(j).not.toContain('-ssh-port'); // egress netstack only; exec is vsock
+});
+
+test('gvproxy argv: qemu transport uses -listen-qemu unix (Linux)', () => {
+  const argv = gvproxyArgv({ gvproxyBin: '/bin/gvproxy', netSock: '/t/net.sock', transport: 'qemu' });
+  const j = argv.join(' ');
+  expect(j).toContain('-listen-qemu unix:///t/net.sock');
+  expect(j).not.toContain('-listen-vfkit');
 });
 
 test('net:none nftables drops everything but loopback', () => {

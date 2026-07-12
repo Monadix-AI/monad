@@ -18,6 +18,24 @@ import { sha256OfFile } from './util.ts';
 
 const STREAM_URL = 'https://builds.coreos.fedoraproject.org/streams/stable.json';
 
+/** The CoreOS artifact coordinates for a host: arch key, VMM platform, and disk format (which also
+ *  fixes the compression + output extension). */
+export interface ImageTarget {
+  arch: 'aarch64' | 'x86_64';
+  platform: 'applehv' | 'qemu';
+  format: 'raw.gz' | 'qcow2.xz';
+  decompress: 'gzip' | 'xz';
+  ext: '.img' | '.qcow2';
+}
+
+/** The image target for the current host OS + arch. */
+export function hostImageTarget(): ImageTarget {
+  const arch = process.arch === 'x64' ? 'x86_64' : 'aarch64';
+  return process.platform === 'darwin'
+    ? { arch, platform: 'applehv', format: 'raw.gz', decompress: 'gzip', ext: '.img' }
+    : { arch, platform: 'qemu', format: 'qcow2.xz', decompress: 'xz', ext: '.qcow2' };
+}
+
 export interface ImageArtifact {
   location: string;
   sha256: string;
@@ -25,28 +43,35 @@ export interface ImageArtifact {
   uncompressedSha256?: string;
 }
 
-/** Resolve the applehv aarch64 raw.gz artifact from the CoreOS stream metadata. */
-export async function resolveImageArtifact(fetchImpl: typeof fetch = fetch): Promise<ImageArtifact> {
+type StreamJson = {
+  architectures?: Record<
+    string,
+    {
+      artifacts?: Record<
+        string,
+        {
+          formats?: Record<
+            string,
+            Record<string, { location: string; signature?: string; sha256?: string; 'uncompressed-sha256'?: string }>
+          >;
+        }
+      >;
+    }
+  >;
+};
+
+/** Resolve the disk artifact for a target from the CoreOS stream metadata. */
+export async function resolveImageArtifact(
+  target: ImageTarget = hostImageTarget(),
+  fetchImpl: typeof fetch = fetch
+): Promise<ImageArtifact> {
   const res = await fetchImpl(STREAM_URL);
   if (!res.ok) throw new Error(`vm image: stream metadata fetch failed ${res.status}`);
-  const stream = (await res.json()) as {
-    architectures?: {
-      aarch64?: {
-        artifacts?: {
-          applehv?: {
-            formats?: Record<
-              string,
-              Record<string, { location: string; signature?: string; sha256?: string; 'uncompressed-sha256'?: string }>
-            >;
-          };
-        };
-      };
-    };
-  };
-  const fmt = stream.architectures?.aarch64?.artifacts?.applehv?.formats?.['raw.gz'];
+  const stream = (await res.json()) as StreamJson;
+  const fmt = stream.architectures?.[target.arch]?.artifacts?.[target.platform]?.formats?.[target.format];
   const disk = fmt?.disk;
   if (!disk?.location || !disk.sha256) {
-    throw new Error('vm image: no applehv aarch64 raw.gz in CoreOS stream metadata');
+    throw new Error(`vm image: no ${target.platform} ${target.arch} ${target.format} in CoreOS stream metadata`);
   }
   return { location: disk.location, sha256: disk.sha256, uncompressedSha256: disk['uncompressed-sha256'] };
 }
@@ -63,9 +88,10 @@ export type ImageConsent = (info: { url: string; sha256: string; dest: string })
  *  clones this base, so one poisoned cache file would compromise all guests — never trust it on
  *  filename alone). */
 export async function ensureBaseImage(consent: ImageConsent, fetchImpl: typeof fetch = fetch): Promise<string> {
-  const artifact = await resolveImageArtifact(fetchImpl);
+  const target = hostImageTarget();
+  const artifact = await resolveImageArtifact(target, fetchImpl);
   const stamp = artifact.uncompressedSha256 ?? artifact.sha256;
-  const dest = join(imagesDir(), `${stamp.slice(0, 16)}.img`);
+  const dest = join(imagesDir(), `${stamp.slice(0, 16)}${target.ext}`);
   if (existsSync(dest)) {
     // Re-hash the cache against the expected uncompressed digest when CoreOS publishes one; a
     // mismatch means tampering/corruption → delete and re-download rather than boot a poisoned base.
@@ -83,38 +109,39 @@ export async function ensureBaseImage(consent: ImageConsent, fetchImpl: typeof f
   if (!ok) throw new Error('vm image: download declined by user');
 
   await mkdir(imagesDir(), { recursive: true });
-  const gzPath = `${dest}.gz.partial`;
+  const cprPath = `${dest}.cmp.partial`;
   const res = await fetchImpl(artifact.location);
   if (!res.ok) throw new Error(`vm image: download failed ${res.status}`);
-  await Bun.write(gzPath, res);
+  await Bun.write(cprPath, res);
 
   // Verify the compressed artifact before decompressing.
-  const gotGz = await sha256OfFile(gzPath);
-  if (gotGz !== artifact.sha256) {
-    throw new Error(`vm image: raw.gz sha256 mismatch (expected ${artifact.sha256}, got ${gotGz})`);
+  const gotCmp = await sha256OfFile(cprPath);
+  if (gotCmp !== artifact.sha256) {
+    throw new Error(`vm image: compressed sha256 mismatch (expected ${artifact.sha256}, got ${gotCmp})`);
   }
 
-  // Decompress with the system gunzip (streams; no full in-memory buffer of a multi-GB disk).
+  // Decompress with the system tool (streams; no full in-memory buffer of a multi-GB disk).
   const rawPartial = `${dest}.partial`;
-  const gunzip = Bun.spawn(['sh', '-c', `gunzip -c ${JSON.stringify(gzPath)} > ${JSON.stringify(rawPartial)}`], {
+  const tool = target.decompress === 'xz' ? 'unxz -c' : 'gunzip -c';
+  const dec = Bun.spawn(['sh', '-c', `${tool} ${JSON.stringify(cprPath)} > ${JSON.stringify(rawPartial)}`], {
     stdout: 'ignore',
     stderr: 'pipe'
   });
-  if ((await gunzip.exited) !== 0) {
-    const err = await new Response(gunzip.stderr).text();
+  if ((await dec.exited) !== 0) {
+    const err = await new Response(dec.stderr).text();
     throw new Error(`vm image: decompress failed: ${err}`);
   }
 
   if (artifact.uncompressedSha256) {
     const gotRaw = await sha256OfFile(rawPartial);
     if (gotRaw !== artifact.uncompressedSha256) {
-      throw new Error(`vm image: raw sha256 mismatch (expected ${artifact.uncompressedSha256}, got ${gotRaw})`);
+      throw new Error(`vm image: disk sha256 mismatch (expected ${artifact.uncompressedSha256}, got ${gotRaw})`);
     }
   }
 
   const { rename, rm } = await import('node:fs/promises');
   await rename(rawPartial, dest);
-  await rm(gzPath, { force: true });
+  await rm(cprPath, { force: true });
   chmodSync(dest, 0o444); // base image is read-only; VMs clone it
   return dest;
 }

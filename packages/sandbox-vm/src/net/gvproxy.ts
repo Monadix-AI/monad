@@ -14,14 +14,20 @@ export const GVPROXY_HOST_IP = '192.168.127.254';
 
 export interface GvproxySpec {
   gvproxyBin: string;
-  /** vfkit ⇄ gvproxy datagram socket (vfkit connects, gvproxy listens). */
-  vfkitNetSock: string;
+  /** The host socket gvproxy exposes for the VMM's virtio-net device. */
+  netSock: string;
+  /** The VMM's frame transport: vfkit uses a datagram socket (`-listen-vfkit`), QEMU a length-prefixed
+   *  stream (`-listen-qemu`). gvproxy has no TAP/Firecracker/cloud-hypervisor mode, which is why the
+   *  Linux driver is QEMU. */
+  transport: 'vfkit' | 'qemu';
 }
 
-/** Build the gvproxy argv. gvproxy is only the guest's egress netstack now (DHCP/DNS/NAT for
+/** Build the gvproxy argv. gvproxy is only the guest's egress netstack (DHCP/DNS/NAT for
  *  net:'filtered'/'unrestricted'); the exec channel is vsock, so no ssh port forwarding is needed. */
 export function gvproxyArgv(spec: GvproxySpec): string[] {
-  return [spec.gvproxyBin, '-listen-vfkit', `unixgram://${spec.vfkitNetSock}`];
+  return spec.transport === 'qemu'
+    ? [spec.gvproxyBin, '-listen-qemu', `unix://${spec.netSock}`]
+    : [spec.gvproxyBin, '-listen-vfkit', `unixgram://${spec.netSock}`];
 }
 
 export interface GvproxyProcess {

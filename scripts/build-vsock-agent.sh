@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
-# Cross-compile the guest vsock exec agent (Linux aarch64) and vendor the binary into the package.
-# Run when native/vsock-agent/main.go changes; requires Go on PATH.
+# Cross-compile the guest vsock exec agent (Linux, both arches) and vendor the binaries into the
+# package. Run when native/vsock-agent/main.go changes; requires Go on PATH. The guest arch matches
+# the host arch (KVM / Virtualization.framework run same-arch guests), so we ship both.
 set -euo pipefail
 cd "$(dirname "$0")/../native/vsock-agent"
-GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" \
-  -o ../../packages/sandbox-vm/vendor/vsock-agent-arm64 .
-echo "built packages/sandbox-vm/vendor/vsock-agent-arm64"
+OUT=../../packages/sandbox-vm/vendor
+for arch in arm64 amd64; do
+  GOOS=linux GOARCH="$arch" CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o "$OUT/vsock-agent-$arch" .
+  echo "built packages/sandbox-vm/vendor/vsock-agent-$arch"
+done

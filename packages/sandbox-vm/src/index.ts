@@ -21,6 +21,7 @@ import { rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
 import { destroyBundle, ensureBundle, type VmBundle } from './bundle.ts';
+import { configureQemuTools, qemuDriver } from './driver/qemu.ts';
 import { configureVfkitBin, type VmHandle, vfkitDriver } from './driver/vfkit.ts';
 import { bridgeAsyncProcess, vsockExec, waitForVsock } from './exec/vsock.ts';
 import { serializeIgnition } from './ignition.ts';
@@ -29,9 +30,11 @@ import { type GvproxyProcess, guestProxyEnv, spawnGvproxy } from './net/gvproxy.
 import { POOL_DEFAULTS, type PoolConfig, reuseKey, VmPool, vmKey } from './pool.ts';
 import { resolveVmToolchain, vmToolchainMaybeAvailable } from './toolchain.ts';
 
-// The guest vsock exec agent (Linux aarch64), vendored next to the package. Injected into every guest
-// via Ignition. Read once and cached as base64.
-const AGENT_PATH = join(dirname(import.meta.dir), 'vendor', 'vsock-agent-arm64');
+// The guest vsock exec agent (Linux), vendored next to the package. The guest arch matches the host
+// (a hypervisor runs same-arch guests), so pick the binary by process.arch. Injected into every guest
+// via Ignition; read once and cached as base64.
+const AGENT_ARCH = process.arch === 'x64' ? 'amd64' : 'arm64';
+const AGENT_PATH = join(dirname(import.meta.dir), 'vendor', `vsock-agent-${AGENT_ARCH}`);
 const VSOCK_EXEC_PORT = 1024;
 let agentB64: string | null = null;
 async function agentBinaryB64(): Promise<string> {
@@ -154,21 +157,23 @@ async function bootVm(key: string, policy: SandboxPolicy): Promise<RunningVm> {
 
   // The exec channel is vsock (NIC-independent), so net:'none' runs with NO NIC and NO gvproxy — the
   // strongest network isolation. Only 'filtered'/'unrestricted' attach a NIC to gvproxy's user-space
-  // netstack for egress. When there is a NIC, start gvproxy first and wait for its datagram socket so
-  // vfkit's virtio-net can attach at boot.
+  // netstack for egress. When there is a NIC, start gvproxy first and wait for its socket so the VMM's
+  // virtio-net can attach at boot.
+  const transport = process.platform === 'darwin' ? 'vfkit' : 'qemu';
   let gvproxy: GvproxyProcess | undefined;
   let gvproxyNetSock: string | undefined;
   if (egress.mode !== 'none') {
     if (!resolvedGvproxy) throw new VmBackendNotReadyError('gvproxy not resolved (call prepare())');
     // gvproxy fatally exits if its listen socket path already exists (stale socket from a prior boot).
     await rm(bundle.gvproxySock, { force: true });
-    gvproxy = spawnGvproxy({ gvproxyBin: resolvedGvproxy, vfkitNetSock: bundle.gvproxySock });
+    gvproxy = spawnGvproxy({ gvproxyBin: resolvedGvproxy, netSock: bundle.gvproxySock, transport });
     await waitForSocket(bundle.gvproxySock, 5000);
     gvproxyNetSock = bundle.gvproxySock;
   }
 
   await rm(bundle.vsockSock, { force: true });
-  const vfkit = await vfkitDriver.boot({
+  const driver = process.platform === 'darwin' ? vfkitDriver : qemuDriver;
+  const vmHandle = await driver.boot({
     cpus: config.cpus,
     memoryMiB: config.memoryMiB,
     bundle,
@@ -179,11 +184,11 @@ async function bootVm(key: string, policy: SandboxPolicy): Promise<RunningVm> {
     vsockPort: VSOCK_EXEC_PORT
   });
 
-  const vm: RunningVm = { bundle, vfkit, gvproxy };
+  const vm: RunningVm = { bundle, vfkit: vmHandle, gvproxy };
   liveVms.add(vm);
-  // vfkitDriver.boot() returns as soon as the vfkit process is spawned, NOT when the guest is up.
-  // Fedora CoreOS takes ~30-60s to boot + apply Ignition + start the agent, so wait until the guest
-  // is exec-reachable before returning — otherwise the first command races an unbooted guest.
+  // driver.boot() returns as soon as the VMM process is spawned, NOT when the guest is up. Fedora
+  // CoreOS takes ~30-60s to boot + apply Ignition + start the agent, so wait until the guest is
+  // exec-reachable before returning — otherwise the first command races an unbooted guest.
   await waitForVsock({ socketPath: bundle.vsockSock }, { timeoutMs: config.bootTimeoutMs });
   return vm;
 }
@@ -215,16 +220,26 @@ let resolvedGvproxy: string | null = null;
 
 export const vmLauncher: SandboxLauncher = {
   kind: 'vm',
-  platforms: ['darwin'],
+  platforms: ['darwin', 'linux'],
   enforces: { writeConfine: true, readDeny: true, net: ['none', 'filtered', 'unrestricted'] },
   isAvailable: () => vmToolchainMaybeAvailable(),
 
   async prepare(): Promise<void> {
-    // Resolve the host tooling (small: detect or download vfkit+gvproxy). The base image is pulled
-    // lazily on first spawn — never block daemon boot on a multi-GB download.
+    // Resolve the host tooling (detect or download). The base image is pulled lazily on first spawn —
+    // never block daemon boot on a multi-GB download.
     const tools = await resolveVmToolchain();
-    configureVfkitBin(tools.vfkit);
     resolvedGvproxy = tools.gvproxy;
+    if (process.platform === 'darwin') {
+      configureVfkitBin(tools.hypervisor);
+    } else {
+      configureQemuTools({
+        qemu: tools.hypervisor,
+        virtiofsd: tools.virtiofsd ?? '',
+        socat: tools.socat ?? '',
+        firmware: tools.firmware ?? '',
+        kvm: tools.kvm ?? false
+      });
+    }
     pool = new VmPool<RunningVm>(config, { stop: stopVm });
     installShutdownHandler();
   },

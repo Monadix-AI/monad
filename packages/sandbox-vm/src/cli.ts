@@ -13,8 +13,11 @@ async function doctor(): Promise<number> {
   process.stdout.write(`vmDir: ${vmDir()}\n`);
   try {
     const tc = await resolveVmToolchain();
-    process.stdout.write(`vfkit:   ${tc.vfkit}\n`);
-    process.stdout.write(`gvproxy: ${tc.gvproxy}\n`);
+    process.stdout.write(`hypervisor: ${tc.hypervisor}\n`);
+    process.stdout.write(`gvproxy:    ${tc.gvproxy}\n`);
+    if (tc.virtiofsd) process.stdout.write(`virtiofsd:  ${tc.virtiofsd}\n`);
+    if (tc.firmware) process.stdout.write(`firmware:   ${tc.firmware}\n`);
+    if (tc.kvm !== undefined) process.stdout.write(`kvm:        ${tc.kvm}\n`);
     return 0;
   } catch (err) {
     process.stderr.write(`toolchain not ready: ${err instanceof Error ? err.message : String(err)}\n`);
