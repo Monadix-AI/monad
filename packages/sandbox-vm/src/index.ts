@@ -245,14 +245,15 @@ export const vmLauncher: SandboxLauncher = {
   },
 
   spawn(argv: string[], options: SandboxSpawnOptions, policy: SandboxPolicy): SandboxProcess {
-    if (!pool) throw new VmBackendNotReadyError('not prepared — prepare() must run before spawn()');
+    const activePool = pool;
+    if (!activePool) throw new VmBackendNotReadyError('not prepared — prepare() must run before spawn()');
     const key = vmKey(config.scope, options.sessionId, options.agentId, policy);
     const reuse = reuseKey(config.scope, options.sessionId, options.agentId);
     // acquire() is async (boot); the SandboxProcess must be returned synchronously, so bridge the
     // async acquire + vsock exec. The policy is captured in the boot thunk (no module-level side table).
     return bridgeAsyncProcess(
       async () => {
-        const vm = await pool!.acquire(key, reuse, options.agentId, () => bootVm(key, policy));
+        const vm = await activePool.acquire(key, reuse, options.agentId, () => bootVm(key, policy));
         const egress = egressFor(policy);
         return vsockExec(argv, {
           socketPath: vm.bundle.vsockSock,
@@ -263,7 +264,7 @@ export const vmLauncher: SandboxLauncher = {
           }
         });
       },
-      () => pool?.release(key)
+      () => activePool.release(key)
     );
   },
 

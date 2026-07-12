@@ -1,5 +1,7 @@
 import type { Event, EventType } from '@monad/protocol';
 
+import { EventEmitter } from 'node:events';
+
 export type EventSink = (event: Event) => void;
 
 /**
@@ -46,7 +48,7 @@ const sessionTopic = (sessionId: string): Topic => `session:${sessionId}`;
 
 /** In-process pub/sub. Every control-API WS/SSE push originates here. */
 export class EventBus {
-  private readonly subs = new Map<Topic, Set<EventSink>>();
+  private readonly events = new EventEmitter().setMaxListeners(0);
 
   /** Subscribe to one session's full event stream. */
   subscribe(sessionId: string, sink: EventSink): () => void {
@@ -71,21 +73,11 @@ export class EventBus {
   }
 
   private subscribeTopic(topic: Topic, sink: EventSink): () => void {
-    let set = this.subs.get(topic);
-    if (!set) {
-      set = new Set();
-      this.subs.set(topic, set);
-    }
-    set.add(sink);
-    return () => {
-      set?.delete(sink);
-      if (set && set.size === 0) this.subs.delete(topic);
-    };
+    this.events.on(topic, sink);
+    return () => this.events.off(topic, sink);
   }
 
   private emit(topic: Topic, event: Event): void {
-    const set = this.subs.get(topic);
-    if (!set) return;
-    for (const sink of set) sink(event);
+    this.events.emit(topic, event);
   }
 }
