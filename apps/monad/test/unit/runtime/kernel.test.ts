@@ -134,6 +134,38 @@ test('reload keeps the previous output when an optional module fails', async () 
   });
 });
 
+test('required reload failure rejects the snapshot and skips dependent layers', async () => {
+  const events: string[] = [];
+  const kernel = new RuntimeKernel<{ fail: boolean }>([
+    runtimeModule('model', async () => 'old', {
+      reload: async (_current, snapshot) => {
+        events.push('model');
+        if (snapshot.fail) throw new Error('provider reload failed');
+        return 'new';
+      }
+    }),
+    runtimeModule('agent', async () => 'agent:old', {
+      requires: ['model'],
+      reload: async () => {
+        events.push('agent');
+        return 'agent:new';
+      }
+    })
+  ]);
+  await kernel.start();
+
+  await expect(kernel.reload({ fail: true })).rejects.toThrow(
+    'required runtime module "model" failed to reload: provider reload failed'
+  );
+
+  expect(events).toEqual(['model']);
+  expect([kernel.context.get<string>('model'), kernel.context.get<string>('agent')]).toEqual(['old', 'agent:old']);
+  expect(kernel.state.getState()).toMatchObject({
+    phase: 'degraded',
+    modules: { model: { status: 'failed' }, agent: { generation: 1, status: 'ready' } }
+  });
+});
+
 test('reloads independent modules before their dependent and commits new outputs', async () => {
   const events: string[] = [];
   const kernel = new RuntimeKernel<{ value: string }>([

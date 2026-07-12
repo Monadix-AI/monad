@@ -12,7 +12,11 @@ import type { DataLayer } from '#/store/lifecycle.ts';
 import { expect, test } from 'bun:test';
 import { createDefaultConfig } from '@monad/home';
 
-import { createModelLifecycleModule, createModelSubsystemStop } from '#/agent/model/lifecycle.ts';
+import {
+  createEmbeddingModelChangeWarning,
+  createModelLifecycleModule,
+  createModelSubsystemStop
+} from '#/agent/model/lifecycle.ts';
 import { RuntimeContext } from '#/runtime/context.ts';
 
 const paths = { providers: '/home/providers' } as MonadPaths;
@@ -105,4 +109,38 @@ test('model subsystem cleanup is idempotent', () => {
   stop();
 
   expect(events).toEqual(['interval', 'catalog']);
+});
+
+test('embedding model change warning reports vectors produced by the previous model', () => {
+  expect(createEmbeddingModelChangeWarning('openai:old', 'openai:new', 12)).toBe(
+    'monad: embedding model changed (openai:old → openai:new); 12 existing embedding(s) are stale. ' +
+      'Re-index from model settings (or POST /v1/settings/model/embeddings/reindex).'
+  );
+});
+
+test('model reload checks stale vectors against the newly selected embedding model', async () => {
+  const events: string[] = [];
+  let embeddingModel = 'openai:old';
+  const subsystem = fakeSubsystem(events);
+  subsystem.modelService = {
+    get embeddingModel() {
+      return embeddingModel;
+    },
+    reload() {
+      embeddingModel = 'openai:new';
+    }
+  } as unknown as ModelService;
+  const store = {
+    staleEmbeddingCount: (modelId: string) => {
+      events.push(`stale:${modelId}`);
+      return 2;
+    }
+  } as Store;
+  const context = new RuntimeContext();
+  context.commit('store', { ...layer, store });
+  const module = createModelLifecycleModule({ initial: snapshot('a'), paths, useMock: false }, async () => subsystem);
+
+  await module.reload?.(subsystem, snapshot('b'), context, new AbortController().signal);
+
+  expect(events).toEqual(['stale:new']);
 });

@@ -117,6 +117,7 @@ export class RuntimeKernel<Snapshot = unknown> {
           return { durationMs: Date.now() - started, module, output };
         })
       );
+      let requiredFailure: { error: unknown; module: RuntimeModule<Snapshot> } | undefined;
 
       for (let index = 0; index < results.length; index++) {
         const result = results[index];
@@ -135,8 +136,19 @@ export class RuntimeKernel<Snapshot = unknown> {
           continue;
         }
 
-        this.patchModule(module.id, { error: serializeError(result?.reason), status: 'degraded' });
+        this.patchModule(module.id, {
+          error: serializeError(result?.reason),
+          status: module.criticality === 'required' ? 'failed' : 'degraded'
+        });
         degraded.push(module.id);
+        if (module.criticality === 'required') requiredFailure ??= { error: result?.reason, module };
+      }
+
+      if (requiredFailure) {
+        this.setPhase('degraded');
+        throw new Error(
+          `required runtime module "${requiredFailure.module.id}" failed to reload: ${serializeError(requiredFailure.error).message}`
+        );
       }
     }
 

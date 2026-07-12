@@ -86,3 +86,36 @@ test('owns config and file MCP connections across reload and stop', async () => 
     stable: true
   });
 });
+
+test('keeps file MCP connections when unrelated config changes preserve auth and HTTP ownership', async () => {
+  const events: string[] = [];
+  const paths = {} as MonadPaths;
+  const capabilities = createCapabilitiesRuntime({ paths, sandboxRoots: undefined, tools: [] });
+  const file = connection('file-a', events);
+  const handle = {
+    seenHttp: new Set(['https://config']),
+    connections: new Map()
+  } satisfies ConfigMcpHandle;
+  const module = createMcpLifecycleModule(
+    { initial: snapshot('a'), paths },
+    {
+      connectConfig: async () => handle,
+      connectFiles: async () => {
+        events.push('connect:files');
+        return [file];
+      },
+      reloadConfig: async () => {
+        events.push('reload:config');
+        return { ...handle, seenHttp: new Set(handle.seenHttp) };
+      }
+    }
+  );
+  const context = new RuntimeContext();
+  context.commit('capabilities', capabilities);
+  context.commit('atoms', {});
+  const runtime = await module.start(context, new AbortController().signal);
+
+  await module.reload?.(runtime, snapshot('b'), context, new AbortController().signal);
+
+  expect(events).toEqual(['connect:files', 'reload:config']);
+});

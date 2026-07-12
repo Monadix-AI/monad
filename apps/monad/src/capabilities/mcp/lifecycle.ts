@@ -42,6 +42,7 @@ class LiveMcpRuntime implements McpRuntime {
     private readonly registry: CapabilitiesRuntime['registry'],
     config: ConfigMcpHandle,
     files: McpConnection[],
+    private auth: MonadAuth | null,
     private readonly deps: McpLifecycleDeps
   ) {
     this.configHandle = config;
@@ -61,14 +62,19 @@ class LiveMcpRuntime implements McpRuntime {
   }
 
   async reload(snapshot: ConfigSnapshot): Promise<void> {
-    this.configHandle = await this.deps.reloadConfig(
+    const previousSeenHttp = this.configHandle.seenHttp;
+    const nextConfig = await this.deps.reloadConfig(
       this.configHandle.connections,
       snapshot.cfg,
       this.paths,
       this.registry,
       snapshot.auth ?? undefined
     );
-    await this.reconnectFiles(snapshot.auth);
+    this.configHandle = nextConfig;
+    if (!sameAuth(this.auth, snapshot.auth) || !sameSet(previousSeenHttp, nextConfig.seenHttp)) {
+      await this.reconnectFiles(snapshot.auth);
+    }
+    this.auth = snapshot.auth;
   }
 
   async reconnectFiles(auth?: MonadAuth | null): Promise<void> {
@@ -95,7 +101,7 @@ class LiveMcpRuntime implements McpRuntime {
   }
 }
 
-export async function createMcpRuntime(
+async function createMcpRuntime(
   options: McpLifecycleOptions,
   registry: CapabilitiesRuntime['registry'],
   deps: McpLifecycleDeps = defaultDeps
@@ -107,7 +113,15 @@ export async function createMcpRuntime(
     options.initial.auth ?? undefined
   );
   const files = await deps.connectFiles(options.paths, registry, options.initial.auth ?? undefined, config.seenHttp);
-  return new LiveMcpRuntime(options.paths, registry, config, files, deps);
+  return new LiveMcpRuntime(options.paths, registry, config, files, options.initial.auth, deps);
+}
+
+function sameAuth(a: MonadAuth | null, b: MonadAuth | null): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function sameSet(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
+  return a.size === b.size && [...a].every((value) => b.has(value));
 }
 
 export function createMcpLifecycleModule(

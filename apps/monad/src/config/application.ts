@@ -57,9 +57,6 @@ export function createHotReload(deps: {
     await agentPersona.reload(freshCfg);
     // A newly-configured (or changed) embedding role should backfill existing messages.
     embeddingIndexer.kick();
-    // The web UI offers a keep/re-index choice when switching embedding models, but a direct
-    // config.json/CLI edit bypasses it — warn so stale vectors (built with the old model) don't
-    // silently degrade semantic recall. The user can POST …/embeddings/reindex to rebuild.
     // Hot-reload the channel gateway (connect added, disconnect removed, reconnect changed).
     await channelService
       .reload(freshCfg, freshAuth ?? emptyAuth())

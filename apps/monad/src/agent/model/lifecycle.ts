@@ -11,7 +11,7 @@ import { EmbeddingIndexer } from '#/services/embedding-indexer.ts';
 import { createEmptyProviderRegistry, ModelService } from '#/services/model.ts';
 import { ModelCatalogService } from '#/services/model-catalog.ts';
 
-export interface ModelSubsystemOptions {
+interface ModelSubsystemOptions {
   cfg: MonadConfig;
   paths: MonadPaths;
   store: Store;
@@ -32,6 +32,13 @@ export interface ModelSubsystemCleanup {
 }
 
 export type StartModelSubsystem = (options: ModelSubsystemOptions) => Promise<ModelSubsystem>;
+
+export function createEmbeddingModelChangeWarning(previous: string, next: string, stale: number): string {
+  return (
+    `monad: embedding model changed (${previous} → ${next}); ${stale} existing embedding(s) are stale. ` +
+    'Re-index from model settings (or POST /v1/settings/model/embeddings/reindex).'
+  );
+}
 
 export interface ModelLifecycleOptions {
   initial: ConfigSnapshot;
@@ -56,7 +63,7 @@ export function createModelSubsystemStop(resources: ModelSubsystemCleanup): () =
   };
 }
 
-export async function createModelSubsystem(options: ModelSubsystemOptions): Promise<ModelSubsystem> {
+async function createModelSubsystem(options: ModelSubsystemOptions): Promise<ModelSubsystem> {
   const { cfg, paths, store, useMock, auth } = options;
   const modelService = new ModelService(paths.auth, cfg, auth, createEmptyProviderRegistry());
   const modelCatalog = new ModelCatalogService({
@@ -135,9 +142,17 @@ export function createModelLifecycleModule(
         throw error;
       }
     },
-    reload: (current, snapshot) => {
+    reload: (current, snapshot, context) => {
       const subsystem = current as ModelSubsystem;
+      const previousEmbedding = subsystem.modelService.embeddingModel;
       subsystem.modelService.reload(snapshot.cfg, snapshot.auth);
+      const nextEmbedding = subsystem.modelService.embeddingModel;
+      if (previousEmbedding && nextEmbedding && previousEmbedding !== nextEmbedding) {
+        const layer = context.get<DataLayer>('store');
+        const modelId = nextEmbedding.split(':').slice(1).join(':') || nextEmbedding;
+        const stale = layer.store.staleEmbeddingCount(modelId);
+        if (stale > 0) logger.warn(createEmbeddingModelChangeWarning(previousEmbedding, nextEmbedding, stale));
+      }
       return Promise.resolve(subsystem);
     },
     stop: (current) => (current as ModelSubsystem).stop()

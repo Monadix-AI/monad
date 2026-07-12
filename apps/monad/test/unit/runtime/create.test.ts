@@ -95,6 +95,25 @@ test('routes the latest accepted config snapshot through kernel reload', async (
   await runtime.stop();
 });
 
+test('keeps the committed config snapshot when a required module rejects reload', async () => {
+  const events: string[] = [];
+  const configSource = source(snapshot('a'), events);
+  const module = recordingModule(events);
+  module.reload = async () => {
+    throw new Error('model reload failed');
+  };
+  const runtime = createDaemonRuntime({ initial: snapshot('a'), modules: [module], source: configSource });
+  await runtime.start();
+  configSource.current = snapshot('b');
+
+  await expect(runtime.config.refreshNow()).rejects.toThrow(
+    'required runtime module "model" failed to reload: model reload failed'
+  );
+
+  expect(runtime.config.get().cfg.model.default).toBe('a');
+  await runtime.stop();
+});
+
 test('stops watching before stopping modules', async () => {
   const events: string[] = [];
   const runtime = createDaemonRuntime({
