@@ -101,6 +101,33 @@ test('built-ins (no source) stay available to an allowlist agent', async () => {
   expect(builtin.ran).toBe(true); // no source → ungated by the allowlist
 });
 
+test('high-risk tools inside a named subagent are mediated by the provided gate', async () => {
+  let ran = false;
+  const highRisk: Tool<unknown, string> = {
+    ...flagTool('host.mutate', { ran: false }),
+    highRisk: true,
+    run: async () => {
+      ran = true;
+      return toolResult('mutated');
+    }
+  };
+  const gated: string[] = [];
+  const tool = createAgentDelegateTool({
+    agents: () => ROSTER,
+    tools: () => [highRisk],
+    toolSource: () => undefined,
+    model: scriptedModel([{ tool: 'host.mutate' }, 'done']),
+    defaultModel: 'mock',
+    gate: async (req) => {
+      gated.push(req.tool);
+      return { allow: false, reason: 'blocked' };
+    }
+  });
+
+  await tool.run({ agent: 'researcher', instruction: 'go' }, ctx);
+  expect({ gated, ran }).toEqual({ gated: ['host.mutate'], ran: false });
+});
+
 test('the delegate tools are stripped from the sub-agent (no onward delegation)', async () => {
   const recursed = { ran: false };
   const tool = makeTool(scriptedModel([{ tool: 'agent_delegate_to' }, 'final']), [

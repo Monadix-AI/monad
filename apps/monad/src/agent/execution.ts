@@ -241,7 +241,7 @@ export function createAgentExecutionService(deps: AgentDeps): AgentExecutionServ
           toolSource: toolSourceName ?? (() => undefined),
           model: agentModel,
           defaultModel: cfg.model.default || 'default',
-          gate: oversight.gate,
+          gate,
           fileObservations,
           context,
           contextLimit,
