@@ -1,11 +1,11 @@
 // Real-VM integration + confinement conformance. Boots an actual Fedora CoreOS VM via vfkit and runs
-// commands inside it over ssh. Gated: skipped unless MONAD_VM_IT=1 and the base image is present at
-// <MONAD_HOME>/vm/images (prepared by `bun /tmp/dl-image.ts` or a prior run) — a full boot is a
-// ~10GB clone + ~30-60s startup, too heavy for the default unit run.
+// commands inside it over vsock. Gated: skipped unless MONAD_VM_IT=1 and the base image is present at
+// <MONAD_HOME>/vm/images (from a prior run) — a full boot is a ~10GB clone + ~30-60s startup, too
+// heavy for the default unit run.
 //
 // This is the launcher's ADMISSION GATE (docs/proposals/sandbox-package-extraction.md §4): a backend
-// that can't prove it denies out-of-root writes, credential reads, and (net:none) sockets does not
-// ship. The four conformance cases below are exactly those proofs.
+// that can't prove it denies out-of-root writes, credential reads, unprivileged execution, and
+// (net:none) all network does not ship. The cases below are those proofs.
 
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { existsSync } from 'node:fs';
@@ -94,11 +94,35 @@ describe.skipIf(!ENABLED)('vm boot + confinement conformance (macOS, real VM)', 
     expect(r.stdout).not.toContain('PRIVATE KEY');
   }, 120_000);
 
-  test('net:none → no NIC, socket connect fails', async () => {
-    const r = await runInVm(['sh', '-c', 'curl -sS --max-time 5 http://1.1.1.1 2>&1; echo RC=$?'], {
+  test('the workload runs UNPRIVILEGED (no root, no sudo → cannot alter the firewall)', async () => {
+    const who = await runInVm(['whoami'], { writableRoots: [workspace], net: 'none' });
+    expect(who.stdout.trim()).toBe('monad');
+    const sudo = await runInVm(['sh', '-c', 'sudo -n true 2>&1 || echo DENIED'], {
       writableRoots: [workspace],
       net: 'none'
     });
-    expect(r.stdout).not.toContain('RC=0');
+    expect(sudo.stdout).toContain('DENIED');
+  }, 120_000);
+
+  test('net:none → NO network device at all (vsock exec is NIC-independent)', async () => {
+    // The exec channel is vsock, so net:none drops the NIC entirely: only loopback exists.
+    const nics = await runInVm(['sh', '-c', 'ip -o link | grep -v " lo:" | wc -l'], {
+      writableRoots: [workspace],
+      net: 'none'
+    });
+    expect(nics.stdout.trim()).toBe('0');
+    const egress = await runInVm(['sh', '-c', 'curl -sS --max-time 5 http://1.1.1.1 >/dev/null 2>&1; echo RC=$?'], {
+      writableRoots: [workspace],
+      net: 'none'
+    });
+    expect(egress.stdout).not.toContain('RC=0');
+  }, 120_000);
+
+  test('net:unrestricted → the guest has a NIC and reaches the internet', async () => {
+    const r = await runInVm(['sh', '-c', 'curl -sS --max-time 10 http://1.1.1.1 >/dev/null 2>&1; echo RC=$?'], {
+      writableRoots: [workspace],
+      net: 'unrestricted'
+    });
+    expect(r.stdout).toContain('RC=0');
   }, 120_000);
 });

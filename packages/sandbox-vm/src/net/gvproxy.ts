@@ -16,17 +16,12 @@ export interface GvproxySpec {
   gvproxyBin: string;
   /** vfkit ⇄ gvproxy datagram socket (vfkit connects, gvproxy listens). */
   vfkitNetSock: string;
-  /** Host loopback TCP port gvproxy opens; connections there tunnel to the guest's sshd (guest:22)
-   *  through the user-space netstack. The exec channel ssh's to 127.0.0.1:<sshHostPort>. Allocated
-   *  free per VM (the host can't route to the guest's netstack IP directly). */
-  sshHostPort: number;
 }
 
-/** Build the gvproxy argv. `-listen-vfkit` is the datagram endpoint vfkit's virtio-net attaches to;
- *  `-ssh-port` opens a host-loopback listener that forwards to the guest's sshd (this is how podman
- *  machine reaches its VM). */
+/** Build the gvproxy argv. gvproxy is only the guest's egress netstack now (DHCP/DNS/NAT for
+ *  net:'filtered'/'unrestricted'); the exec channel is vsock, so no ssh port forwarding is needed. */
 export function gvproxyArgv(spec: GvproxySpec): string[] {
-  return [spec.gvproxyBin, '-listen-vfkit', `unixgram://${spec.vfkitNetSock}`, '-ssh-port', String(spec.sshHostPort)];
+  return [spec.gvproxyBin, '-listen-vfkit', `unixgram://${spec.vfkitNetSock}`];
 }
 
 export interface GvproxyProcess {

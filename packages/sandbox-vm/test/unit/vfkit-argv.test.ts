@@ -13,6 +13,8 @@ function spec(overrides: Partial<VmSpec> = {}): VmSpec {
     bundle: describeBundle('agt:test'),
     mounts: [],
     mac: '02:aa:bb:cc:dd:ee',
+    vsockSock: '/tmp/vmtest/agents/agt_test/vsock.sock',
+    vsockPort: 1024,
     ...overrides
   };
 }
@@ -32,9 +34,12 @@ test('base argv: EFI boot, rootfs blk, ignition, rng, restful-uri, pidfile', () 
   expect(joined).toContain('--pidfile ');
 });
 
-test('net:none → no virtio-net device', () => {
+test('net:none → no virtio-net device, but the vsock exec device is always present', () => {
   const argv = vfkitArgv('/bin/vfkit', spec({ gvproxyNetSock: undefined }));
-  expect(argv.join(' ')).not.toContain('virtio-net');
+  const j = argv.join(' ');
+  expect(j).not.toContain('virtio-net');
+  // The exec channel is vsock (connect mode), independent of the NIC — present even in net:none.
+  expect(j).toContain('--device virtio-vsock,port=1024,socketURL=/tmp/vmtest/agents/agt_test/vsock.sock,connect');
 });
 
 test('with gvproxy socket → virtio-net wired to the datagram socket + MAC', () => {

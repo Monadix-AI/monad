@@ -18,16 +18,26 @@ import type { MountSpec } from './ignition.ts';
 
 import { existsSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 
 import { destroyBundle, ensureBundle, type VmBundle } from './bundle.ts';
 import { configureVfkitBin, type VmHandle, vfkitDriver } from './driver/vfkit.ts';
-import { bridgeAsyncProcess, sshExec, waitForSsh } from './exec/ssh.ts';
+import { bridgeAsyncProcess, vsockExec, waitForVsock } from './exec/vsock.ts';
 import { serializeIgnition } from './ignition.ts';
 import { ensureBaseImage, type ImageConsent } from './image.ts';
 import { type GvproxyProcess, guestProxyEnv, spawnGvproxy } from './net/gvproxy.ts';
 import { POOL_DEFAULTS, type PoolConfig, reuseKey, VmPool, vmKey } from './pool.ts';
 import { resolveVmToolchain, vmToolchainMaybeAvailable } from './toolchain.ts';
-import { freePort } from './util.ts';
+
+// The guest vsock exec agent (Linux aarch64), vendored next to the package. Injected into every guest
+// via Ignition. Read once and cached as base64.
+const AGENT_PATH = join(dirname(import.meta.dir), 'vendor', 'vsock-agent-arm64');
+const VSOCK_EXEC_PORT = 1024;
+let agentB64: string | null = null;
+async function agentBinaryB64(): Promise<string> {
+  if (agentB64 === null) agentB64 = Buffer.from(await Bun.file(AGENT_PATH).bytes()).toString('base64');
+  return agentB64;
+}
 
 export class VmBackendNotReadyError extends Error {
   constructor(message: string) {
@@ -41,7 +51,7 @@ export class VmBackendNotReadyError extends Error {
 interface VmConfig extends PoolConfig {
   cpus: number;
   memoryMiB: number;
-  /** How long to wait for a freshly-booted guest to become ssh-reachable (CoreOS boot + Ignition). */
+  /** How long to wait for a freshly-booted guest to become exec-reachable (CoreOS boot + Ignition). */
   bootTimeoutMs: number;
   /** Consent gate for the first image download. */
   imageConsent: ImageConsent;
@@ -65,9 +75,8 @@ export function configureVmBackend(cfg: Partial<VmConfig>): void {
 interface RunningVm {
   bundle: VmBundle;
   vfkit: VmHandle;
-  gvproxy: GvproxyProcess;
-  /** Host loopback port gvproxy forwards to the guest sshd (the exec channel ssh's here). */
-  sshHostPort: number;
+  /** Only present for net:'filtered'/'unrestricted' — net:'none' has no NIC and no gvproxy. */
+  gvproxy?: GvproxyProcess;
 }
 
 let baseImage: string | null = null;
@@ -139,43 +148,43 @@ async function bootVm(key: string, policy: SandboxPolicy): Promise<RunningVm> {
   const egress = egressFor(policy);
   const proxyEnv = egress.mode === 'filtered' && egress.proxyPort ? guestProxyEnv(egress.proxyPort) : undefined;
 
-  // Ignition: inject the one-shot pubkey, the mounts, the egress firewall.
-  const pubKey = (await Bun.file(bundle.sshPubKey).text()).trim();
-  const ignition = serializeIgnition({ sshPublicKey: pubKey, mounts, egress, env: proxyEnv });
+  // Ignition: inject the vsock exec agent, the mounts, the egress firewall.
+  const ignition = serializeIgnition({ agentBinaryB64: await agentBinaryB64(), mounts, egress, env: proxyEnv });
   await Bun.write(bundle.ignition, ignition);
 
-  // gvproxy + the NIC are ALWAYS present: the exec channel is ssh over gvproxy's forward-sock, so the
-  // guest needs a NIC even for net:'none' (egress is blocked by the guest firewall, not by removing
-  // the NIC — see guestNftables). Start gvproxy first and WAIT for it to bind its datagram socket
-  // before booting vfkit — vfkit's virtio-net attaches to that socket path at boot, so a race where
-  // vfkit starts first leaves the guest with no network.
-  if (!resolvedGvproxy) throw new VmBackendNotReadyError('gvproxy not resolved (call prepare())');
-  // gvproxy fatally exits if its listen socket path already exists (a stale socket from a prior boot
-  // of a reused bundle), so clear it first.
-  await rm(bundle.gvproxySock, { force: true });
-  const sshHostPort = await freePort();
-  const gvproxy = spawnGvproxy({
-    gvproxyBin: resolvedGvproxy,
-    vfkitNetSock: bundle.gvproxySock,
-    sshHostPort
-  });
-  await waitForSocket(bundle.gvproxySock, 5000);
+  // The exec channel is vsock (NIC-independent), so net:'none' runs with NO NIC and NO gvproxy — the
+  // strongest network isolation. Only 'filtered'/'unrestricted' attach a NIC to gvproxy's user-space
+  // netstack for egress. When there is a NIC, start gvproxy first and wait for its datagram socket so
+  // vfkit's virtio-net can attach at boot.
+  let gvproxy: GvproxyProcess | undefined;
+  let gvproxyNetSock: string | undefined;
+  if (egress.mode !== 'none') {
+    if (!resolvedGvproxy) throw new VmBackendNotReadyError('gvproxy not resolved (call prepare())');
+    // gvproxy fatally exits if its listen socket path already exists (stale socket from a prior boot).
+    await rm(bundle.gvproxySock, { force: true });
+    gvproxy = spawnGvproxy({ gvproxyBin: resolvedGvproxy, vfkitNetSock: bundle.gvproxySock });
+    await waitForSocket(bundle.gvproxySock, 5000);
+    gvproxyNetSock = bundle.gvproxySock;
+  }
 
+  await rm(bundle.vsockSock, { force: true });
   const vfkit = await vfkitDriver.boot({
     cpus: config.cpus,
     memoryMiB: config.memoryMiB,
     bundle,
     mounts,
-    gvproxyNetSock: bundle.gvproxySock,
-    mac: macFor(key)
+    gvproxyNetSock,
+    mac: macFor(key),
+    vsockSock: bundle.vsockSock,
+    vsockPort: VSOCK_EXEC_PORT
   });
 
-  const vm: RunningVm = { bundle, vfkit, gvproxy, sshHostPort };
+  const vm: RunningVm = { bundle, vfkit, gvproxy };
   liveVms.add(vm);
   // vfkitDriver.boot() returns as soon as the vfkit process is spawned, NOT when the guest is up.
-  // Fedora CoreOS takes ~30-60s to boot + apply Ignition + start sshd, so wait until the guest is
-  // exec-reachable before returning — otherwise the first command races an unbooted guest.
-  await waitForSsh({ sshHostPort, identity: bundle.sshKey, user: 'monad' }, { timeoutMs: config.bootTimeoutMs });
+  // Fedora CoreOS takes ~30-60s to boot + apply Ignition + start the agent, so wait until the guest
+  // is exec-reachable before returning — otherwise the first command races an unbooted guest.
+  await waitForVsock({ socketPath: bundle.vsockSock }, { timeoutMs: config.bootTimeoutMs });
   return vm;
 }
 
@@ -225,15 +234,13 @@ export const vmLauncher: SandboxLauncher = {
     const key = vmKey(config.scope, options.sessionId, options.agentId, policy);
     const reuse = reuseKey(config.scope, options.sessionId, options.agentId);
     // acquire() is async (boot); the SandboxProcess must be returned synchronously, so bridge the
-    // async acquire + ssh exec. The policy is captured in the boot thunk (no module-level side table).
+    // async acquire + vsock exec. The policy is captured in the boot thunk (no module-level side table).
     return bridgeAsyncProcess(
       async () => {
         const vm = await pool!.acquire(key, reuse, options.agentId, () => bootVm(key, policy));
         const egress = egressFor(policy);
-        return sshExec(argv, {
-          sshHostPort: vm.sshHostPort,
-          identity: vm.bundle.sshKey,
-          user: 'monad',
+        return vsockExec(argv, {
+          socketPath: vm.bundle.vsockSock,
           cwd: options.cwd,
           env: {
             ...options.env,

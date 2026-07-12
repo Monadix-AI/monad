@@ -8,13 +8,12 @@ import {
   gvproxyArgv
 } from '../../src/net/gvproxy.ts';
 
-test('gvproxy argv wires the vfkit datagram socket and opens the host ssh-forward port', () => {
-  const argv = gvproxyArgv({ gvproxyBin: '/bin/gvproxy', vfkitNetSock: '/t/net.sock', sshHostPort: 52999 });
+test('gvproxy argv wires the vfkit datagram socket (egress netstack only; exec is vsock)', () => {
+  const argv = gvproxyArgv({ gvproxyBin: '/bin/gvproxy', vfkitNetSock: '/t/net.sock' });
   const j = argv.join(' ');
   expect(j).toContain('-listen-vfkit unixgram:///t/net.sock');
-  // gvproxy opens a host-loopback listener on this port that tunnels to the guest sshd (guest:22),
-  // the way podman machine reaches its VM — the exec channel ssh's to 127.0.0.1:<port>.
-  expect(j).toContain('-ssh-port 52999');
+  // gvproxy is only the egress netstack now — no ssh port forwarding (the exec channel is vsock).
+  expect(j).not.toContain('-ssh-port');
 });
 
 test('net:none nftables drops everything but loopback', () => {

@@ -1,19 +1,15 @@
 // The guest boot config. Fedora CoreOS boots from an Ignition config (not cloud-init); vfkit passes
 // it via `--ignition`. We author the Ignition JSON (spec 3.4) directly — no butane needed — to:
-//   • create the unprivileged `monad` user with the bundle's one-shot ssh pubkey;
+//   • create the unprivileged `monad` user (its home);
+//   • install monad-vsock-agent (the exec channel) + a systemd unit that runs it;
 //   • drop the nftables ruleset that enforces the egress mode (the real `net:'filtered'` boundary);
-//   • mount each policy root's virtio-fs tag at its host path inside the guest;
-//   • order sshd after the mounts + firewall are in place.
+//   • mount each policy root's virtio-fs tag at its host path inside the guest.
 //
-// The agent never gets root, so it cannot alter the firewall or mounts installed here.
+// The exec channel is vsock (NIC-independent), so net:'none' runs with NO network device at all — the
+// agent still reaches the guest. The agent runs the workload as the unprivileged `monad` user, so it
+// cannot alter the firewall or mounts installed here.
 
-import { type GuestEgressRules, GVPROXY_GATEWAY_IP, guestNftables } from './net/gvproxy.ts';
-
-// The guest is pinned to a STATIC address, not DHCP: gvproxy's `-ssh-port` forwards host-loopback to
-// a hardcoded `192.168.127.2:22`, so the guest MUST be at .2 or the exec channel can't reach sshd
-// ("no route to host"). DHCP drifts (initramfs vs real-root leases race for .2 and the guest can land
-// on .3), so we assign .2 deterministically via a NetworkManager keyfile.
-const GUEST_STATIC_IP = '192.168.127.2';
+import { type GuestEgressRules, guestNftables } from './net/gvproxy.ts';
 
 export interface MountSpec {
   /** virtio-fs mountTag (w0, r0, …) passed to vfkit. */
@@ -24,10 +20,11 @@ export interface MountSpec {
 }
 
 export interface IgnitionSpec {
-  sshPublicKey: string;
+  /** The guest vsock exec agent binary (Linux aarch64), base64-encoded for the Ignition storage file. */
+  agentBinaryB64: string;
   mounts: MountSpec[];
   egress: GuestEgressRules;
-  /** Guest env exported for the login shell (proxy vars under filtered net). */
+  /** Guest env exported into the workload (proxy vars under filtered net). */
   env?: Record<string, string>;
 }
 
@@ -85,11 +82,9 @@ function mountUnit(m: MountSpec): { name: string; enabled: boolean; contents: st
   };
 }
 
-/** The oneshot unit that applies the nftables ruleset before the agent can get a shell. Fedora CoreOS
- *  SOCKET-activates ssh (`sshd.socket` → per-connection `sshd@.service`), so ordering merely before
- *  `sshd.service` leaves a boot window where the agent connects with no firewall. We order before
- *  `sshd.socket` itself AND make the socket require this unit, so the listener never accepts a
- *  connection until nftables is loaded. Runs before the network comes up too. */
+/** The oneshot unit that applies the nftables egress ruleset. It is ordered before the exec agent, so
+ *  the workload can never run before the firewall is in place; `Requires` makes the agent fail to
+ *  start if nft errored (never run with egress open because the ruleset didn't apply). */
 function firewallUnit(rulesPath: string): { name: string; enabled: boolean; contents: string } {
   return {
     name: 'monad-firewall.service',
@@ -99,39 +94,47 @@ function firewallUnit(rulesPath: string): { name: string; enabled: boolean; cont
       'Description=monad guest egress firewall',
       'DefaultDependencies=no',
       'After=local-fs.target',
-      'Before=sshd.socket sshd.service network-pre.target network.target',
+      'Before=network-pre.target network.target monad-vsock-agent.service',
       'Wants=network-pre.target',
       '[Service]',
       'Type=oneshot',
       'RemainAfterExit=yes',
-      // Fail the unit (and thus block sshd.socket) if the ruleset can't be applied — never let the
-      // agent in with egress open because nft errored.
       `ExecStart=/usr/sbin/nft -f ${rulesPath}`,
       '[Install]',
-      'WantedBy=multi-user.target sshd.socket',
+      'WantedBy=multi-user.target',
       ''
     ].join('\n')
   };
 }
 
-/** A drop-in that makes sshd.socket refuse to start until the firewall unit has applied the rules,
- *  closing the socket-activation boot window entirely. */
-function sshdSocketGate(): {
-  name: string;
-  enabled: boolean;
-  contents: string;
-  dropins: { name: string; contents: string }[];
-} {
+/** The unit that runs the vsock exec agent — the guest's control plane. Root (to bind vsock + be the
+ *  trusted broker), but it drops each workload to the unprivileged `monad` user. Gated on the firewall
+ *  so a workload never runs before egress rules are applied. When there is a NIC (filtered/unrestricted)
+ *  it also waits for `network-online.target` so a command can't race an incomplete DHCP lease; net:'none'
+ *  has no NIC and must NOT wait (network-online never arrives). */
+function agentUnit(hasNic: boolean): { name: string; enabled: boolean; contents: string } {
+  const after = ['local-fs.target', 'monad-firewall.service'];
+  const extra: string[] = [];
+  if (hasNic) {
+    after.push('network-online.target');
+    extra.push('Wants=network-online.target');
+  }
   return {
-    name: 'sshd.socket',
+    name: 'monad-vsock-agent.service',
     enabled: true,
-    contents: '',
-    dropins: [
-      {
-        name: '10-monad-firewall.conf',
-        contents: ['[Unit]', 'After=monad-firewall.service', 'Requires=monad-firewall.service', ''].join('\n')
-      }
-    ]
+    contents: [
+      '[Unit]',
+      'Description=monad vsock exec agent',
+      `After=${after.join(' ')}`,
+      'Requires=monad-firewall.service',
+      ...extra,
+      '[Service]',
+      'ExecStart=/usr/local/bin/monad-vsock-agent',
+      'Restart=always',
+      '[Install]',
+      'WantedBy=multi-user.target',
+      ''
+    ].join('\n')
   };
 }
 
@@ -139,7 +142,7 @@ function sshdSocketGate(): {
  *  are heterogeneous), typed where we assert on it. */
 export interface IgnitionConfig {
   ignition: { version: string };
-  passwd: { users: { name: string; sshAuthorizedKeys: string[]; groups?: string[] }[] };
+  passwd: { users: { name: string; homeDir?: string; groups?: string[] }[] };
   storage: { files: object[]; directories: object[] };
   systemd: { units: { name: string; contents?: string; dropins?: { name: string; contents: string }[] }[] };
 }
@@ -147,19 +150,6 @@ export interface IgnitionConfig {
 /** Build the full Ignition config object. */
 export function buildIgnition(spec: IgnitionSpec): IgnitionConfig {
   const rulesPath = '/etc/monad/nftables.conf';
-  const nmKeyfile = [
-    '[connection]',
-    'id=monad',
-    'type=ethernet',
-    'interface-name=enp0s1',
-    '[ipv4]',
-    'method=manual',
-    `address1=${GUEST_STATIC_IP}/24,${GVPROXY_GATEWAY_IP}`,
-    `dns=${GVPROXY_GATEWAY_IP}`,
-    '[ipv6]',
-    'method=disabled',
-    ''
-  ].join('\n');
   const files: object[] = [
     {
       path: rulesPath,
@@ -167,10 +157,10 @@ export function buildIgnition(spec: IgnitionSpec): IgnitionConfig {
       contents: { source: dataUri(guestNftables(spec.egress)) }
     },
     {
-      // Pin the guest to the static IP gvproxy's -ssh-port forwards to (see GUEST_STATIC_IP note).
-      path: '/etc/NetworkManager/system-connections/monad.nmconnection',
-      mode: 0o600,
-      contents: { source: dataUri(nmKeyfile) }
+      // The vsock exec agent (Linux aarch64), injected as a base64 blob and marked executable.
+      path: '/usr/local/bin/monad-vsock-agent',
+      mode: 0o755,
+      contents: { source: `data:;base64,${spec.agentBinaryB64}` }
     }
   ];
 
@@ -185,12 +175,10 @@ export function buildIgnition(spec: IgnitionSpec): IgnitionConfig {
     });
   }
 
-  const gate = sshdSocketGate();
+  const hasNic = spec.egress.mode !== 'none';
   const units: IgnitionConfig['systemd']['units'] = [
     firewallUnit(rulesPath),
-    // sshd.socket: add-only drop-in (no `contents` → don't replace the shipped unit) that makes it
-    // require the firewall.
-    { name: gate.name, dropins: gate.dropins },
+    agentUnit(hasNic),
     ...spec.mounts.map(mountUnit)
   ];
 
@@ -200,9 +188,9 @@ export function buildIgnition(spec: IgnitionSpec): IgnitionConfig {
       users: [
         {
           // Unprivileged, NO `wheel` group: on Fedora CoreOS wheel grants passwordless sudo, which
-          // would let the agent `sudo nft flush ruleset` and defeat every confinement guarantee.
+          // would let a workload `sudo nft flush ruleset` and defeat every confinement guarantee.
           name: 'monad',
-          sshAuthorizedKeys: [spec.sshPublicKey]
+          homeDir: '/home/monad'
         }
       ]
     },

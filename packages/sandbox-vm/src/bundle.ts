@@ -28,10 +28,9 @@ export interface VmBundle {
   readonly rootfs: string;
   readonly efiVars: string;
   readonly ignition: string;
-  readonly sshKey: string;
-  readonly sshPubKey: string;
   readonly gvproxySock: string;
-  readonly sshSock: string;
+  /** Host unix socket vfkit exposes for the guest's vsock exec port (the control plane). */
+  readonly vsockSock: string;
   readonly vfkitSock: string;
   readonly vfkitPid: string;
 }
@@ -51,10 +50,8 @@ export function describeBundle(key: string): VmBundle {
     rootfs: join(dir, 'rootfs.img'),
     efiVars: join(dir, 'efivars.fd'),
     ignition: join(dir, 'ignition.json'),
-    sshKey: join(dir, 'id_ed25519'),
-    sshPubKey: join(dir, 'id_ed25519.pub'),
     gvproxySock: join(dir, 'gvproxy.sock'),
-    sshSock: join(dir, 'ssh.sock'),
+    vsockSock: join(dir, 'vsock.sock'),
     vfkitSock: join(dir, 'vfkit.sock'),
     vfkitPid: join(dir, 'vfkit.pid')
   };
@@ -77,29 +74,15 @@ async function cloneImage(base: string, dest: string): Promise<void> {
   chmodSync(dest, 0o600);
 }
 
-/** Generate a one-shot ed25519 keypair (VM lifetime only) via ssh-keygen. */
-async function generateSshKey(bundle: VmBundle): Promise<void> {
-  const proc = Bun.spawn(
-    ['ssh-keygen', '-t', 'ed25519', '-N', '', '-C', `monad-vm-${bundle.key}`, '-f', bundle.sshKey],
-    { stdout: 'ignore', stderr: 'pipe' }
-  );
-  if ((await proc.exited) !== 0) {
-    const err = await new Response(proc.stderr).text();
-    throw new Error(`vm bundle: ssh-keygen failed: ${err}`);
-  }
-  chmodSync(bundle.sshKey, 0o600);
-}
-
-/** Create (or reuse) a bundle dir for `key`, cloning the base rootfs and minting an ssh key. Does NOT
- *  write the ignition config — the driver assembles that from the policy + this bundle's pubkey. */
+/** Create (or reuse) a bundle dir for `key`, cloning the base rootfs. Does NOT write the ignition
+ *  config — the launcher assembles that from the policy + the vsock agent binary. */
 export async function ensureBundle(key: string, baseImage: string): Promise<VmBundle> {
   const bundle = describeBundle(key);
-  if (existsSync(bundle.rootfs) && existsSync(bundle.sshKey)) return bundle;
+  if (existsSync(bundle.rootfs)) return bundle;
 
   await mkdir(bundle.dir, { recursive: true });
   chmodSync(bundle.dir, 0o700);
-  if (!existsSync(bundle.rootfs)) await cloneImage(baseImage, bundle.rootfs);
-  if (!existsSync(bundle.sshKey)) await generateSshKey(bundle);
+  await cloneImage(baseImage, bundle.rootfs);
   return bundle;
 }
 
