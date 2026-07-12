@@ -82,7 +82,7 @@ the real mouse/keyboard — so it is treated as a **host-escape capability**, th
 
 - **Read-only** tools (screenshot, cursor, screen size, window list) are auto-approved.
 - **Mutating** tools (click/type/drag/key/scroll) are tagged with the `host-control` gate key
-  (`trust.hostEscape: true` on the server → `bootstrap/mcp.ts`).
+  (`trust.hostEscape: true` on the server → `capabilities/mcp/service.ts`).
 - The approval engine treats `host-control` as a **class grant**: one "control this computer
   for this session" approval covers *all* mutating actions (no per-click prompt), and it
   **expires with the session**.

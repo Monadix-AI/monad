@@ -160,7 +160,7 @@ P0 (MVP): add `orchestration` to `monadProfileSchema` + a `router` model role
 `apps/monad/src/services/orchestration-router.ts`; minimal seam in `AgentLoop.runStream`/
 `runBlock` (set a `turnOrchestration` flag → append `ORCHESTRATOR_INSTRUCTIONS` in
 `buildPrompt` + raise `maxToolSteps`); emit an `agent.routing` event; wire in
-`bootstrap/agent.ts`; unit + dual-transport e2e tests. single-mode behaviour is unchanged
+`agent/execution.ts`; unit + dual-transport e2e tests. single-mode behaviour is unchanged
 (no schema migration needed — additive optional fields). P1 (parity): settings module +
 `/v1/settings/orchestration` HTTP controller + web/CLI surface, following the `peer/`
 three-file pattern. No reuse of the peer-federation network layer (this is purely

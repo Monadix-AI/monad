@@ -154,9 +154,9 @@ Work through them in order; a finding in an earlier category often affects later
 | Security | [security-guidelines.md](security-guidelines.md) | Injections, credential leaks, socket/CSRF exposure, untrusted input paths |
 | Performance | [performance-guidelines.md](performance-guidelines.md) | Latency budget, memory, bundle size, hot-path allocations |
 | Code style & typing | [conventions.md](conventions.md) | Single source of truth for types, no re-declarations, comment policy |
-| Functional architecture | [architecture.md](architecture.md) | Package boundaries, allowed dependency directions, no cross-layer leaks |
-| UI design | [ui-guidelines.md](ui-guidelines.md) | Token usage, component patterns, accessibility, dark-mode |
-| UX design | [ux-guidelines.md](ux-guidelines.md) | Interaction model, copy tone, loading/error/empty states |
+| Functional architecture | [enginerring/architecture.md](enginerring/architecture.md) | Package boundaries, allowed dependency directions, no cross-layer leaks |
+| UI design | [design/ui-guidelines.md](design/ui-guidelines.md) | Token usage, component patterns, accessibility, dark-mode |
+| UX design | [design/ux-guidelines.md](design/ux-guidelines.md) | Interaction model, copy tone, loading/error/empty states |
 
 **Apply only the categories that are relevant to the diff.** A backend-only change
 skips UI and UX; a pure CSS change skips architecture. When in doubt, include it.

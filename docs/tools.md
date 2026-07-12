@@ -56,7 +56,7 @@ Three tiers, one idiom:
 |------|---------|------|-------|
 | **static** | fs, shell, process, code-exec, net, web-search, web-extract, todo, email | `ToolDeps` (ignored) | composed at module load into `builtinTools` |
 | **service** | memory, schedule | `ToolDeps` (`notes`, `scheduler`) | `return []` when a dep is absent → tool not advertised |
-| **agent-runtime** | clarify, delegate, agent_delegate, vision, image, tts, skill, skill-manage, tool-call, tool-search | each its own `XxxDeps` | bootstrap-local deps: model, gate, context, `getTools`, … |
+| **agent-runtime** | clarify, delegate, agent_delegate, vision, image, tts, skill, skill-manage, tool-call, tool-search | each its own `XxxDeps` | turn/runtime deps: model, gate, context, `getTools`, … |
 
 A module may keep an internal `createXxxTool` builder (several are imported directly by tests);
 `register` is the one canonical entry that assembly goes through.
@@ -66,9 +66,9 @@ A module may keep an internal `createXxxTool` builder (several are imported dire
 - **Static + service** → manifests in `registry/index.ts` (`staticModules`, `serviceModules`).
   `builtinTools` is `buildTools(staticModules, {})`. The barrel uses namespace imports (not
   `export *`) precisely because every module exports a symbol named `register`.
-- **Agent-runtime** → composed in `bootstrap/agent.ts` with the live agent deps (model router,
-  inbound-approval gate, context engine, the live `getTools` registry view, hook runner, …). The
-  order is preserved so the prompt-cache prefix stays stable across turns.
+- **Agent-runtime** → composed in `agent/execution.ts` with live agent deps (model router,
+  inbound-approval gate, context engine, the live `getTools` registry view, hook runner, …).
+  The order is preserved so the prompt-cache prefix stays stable across turns.
 
 Conditional tools opt out by returning `[]`: `email` when no backend is configured,
 `agent_delegate` when there are no delegatable Studio agents at boot. Reflexive tools
@@ -95,4 +95,4 @@ including hot-installed atom-pack/MCP tools — without rebinding.
 
 See also [`security-guidelines.md`](security-guidelines.md),
 [`performance-guidelines.md`](performance-guidelines.md), [`skills.md`](skills.md),
-[`hooks.md`](hooks.md).
+[`enginerring/hooks.md`](enginerring/hooks.md).

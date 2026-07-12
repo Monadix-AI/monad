@@ -96,8 +96,10 @@ Most settings live in `~/.monad/config.json` (created on first run) — daemon p
 bind address, client transport, and remote-access token. No env vars are needed for
 normal use.
 
-For the transport model (TCP loopback vs Unix socket), the bootstrap environment
-variables, and the full security posture, see **[docs/runtime.md](docs/runtime.md)**.
+For the daemon startup architecture, hot reload, extension boundaries, transport
+model, bootstrap environment variables, and security posture, see
+**[docs/daemon-architecture.md](docs/daemon-architecture.md)** and
+**[docs/runtime.md](docs/runtime.md)**.
 
 ## CLI
 

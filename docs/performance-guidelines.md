@@ -5,10 +5,11 @@ change**. The rules below split along the two runtimes in this repo:
 
 - **Backend** — the Bun daemon (`apps/monad`) and its packages (`@monad/store`,
   `@monad/kv`, `@monad/agent-core`, `@monad/protocol`, …). Long-lived process,
-  serving REST + a multiplexed WebSocket over TCP/UDS. See [runtime.md](runtime.md)
-  and [architecture.md](architecture.md).
+  serving REST + a multiplexed WebSocket over TCP/UDS. See [runtime.md](runtime.md),
+  [daemon-architecture.md](daemon-architecture.md), and
+  [enginerring/architecture.md](enginerring/architecture.md).
 - **Frontend** — the web client (`apps/web`): Next.js 16 (Turbopack), React 19,
-  Redux, Tailwind 4. See [ui-guidelines.md](ui-guidelines.md) and
+  Redux, Tailwind 4. See [design/ui-guidelines.md](design/ui-guidelines.md) and
   [web-router.md](web-router.md).
 
 > **Measure first.** No optimization lands without a before/after number from one of

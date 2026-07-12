@@ -45,20 +45,21 @@ principles, typing, testing, and the CodeGraph section. The canonical rules.
 | Doc | What it covers |
 |---|---|
 | [design-principles.md](design-principles.md) | Cross-platform parity and agent containment. |
-| [architecture.md](architecture.md) | Module boundaries, dependency directions, design decisions. |
+| [daemon-architecture.md](daemon-architecture.md) | Daemon startup graph, lifecycle modules, hot reload, and extension boundaries. |
+| [enginerring/architecture.md](enginerring/architecture.md) | Package/module boundaries, dependency directions, design decisions. |
 | [conventions.md](conventions.md) | Code style (comments, file length, abstraction) + typing rules + audited exceptions. |
 | [runtime.md](runtime.md) | How the daemon binds — transport (TCP/UDS), config, env, security model. |
 | [session-origin.md](session-origin.md) | Session provenance: identity, write/branch access policy, env snapshot, client extension. |
 | [security-guidelines.md](security-guidelines.md) | Code-level rules for security-sensitive changes; PR security checklist. |
 | [performance-guidelines.md](performance-guidelines.md) | Performance budgets, profiling, hotspots. |
-| [ui-guidelines.md](ui-guidelines.md) | Visual design system, component patterns, accessibility. |
-| [ux-guidelines.md](ux-guidelines.md) | Interaction model, copy, loading/error/empty states. |
-| [ux-writing-guidelines.md](ux-writing-guidelines.md) | Product voice, microcopy, sentence-style capitalization, accessibility text, and review checklist. |
+| [design/ui-guidelines.md](design/ui-guidelines.md) | Visual design system, component patterns, accessibility. |
+| [design/ux-guidelines.md](design/ux-guidelines.md) | Interaction model, copy, loading/error/empty states. |
+| [design/ux-writing-guidelines.md](design/ux-writing-guidelines.md) | Product voice, microcopy, sentence-style capitalization, accessibility text, and review checklist. |
 | [model-providers.md](model-providers.md) | The model gateway: providers, routing, credentials. |
 | [tools.md](tools.md) | The built-in tool set: registry layout, the uniform `register` module contract, assembly, and authoring/security rules. |
 | [skills.md](skills.md) | The agent skills system (`SKILL.md` / agentskills.io standard). |
-| [atoms.md](atoms.md) | The atom pack system. |
-| [hooks.md](hooks.md) | Lifecycle hooks: events, the value contract, command + atom-pack hooks, dispatch semantics, sequence diagrams. |
+| [enginerring/atoms.md](enginerring/atoms.md) | The atom pack system. |
+| [enginerring/hooks.md](enginerring/hooks.md) | Lifecycle hooks: events, the value contract, command + atom-pack hooks, dispatch semantics, sequence diagrams. |
 | [acp.md](acp.md) | The ACP transport (monad as an editor agent). |
 | [peer-federation.md](peer-federation.md) | Daemon-to-daemon task delegation (compute federation) + inbound approval. |
 | [web-router.md](web-router.md) | The web router. |

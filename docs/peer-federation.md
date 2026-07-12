@@ -32,8 +32,8 @@ authenticates it like any OpenAI-compat caller and runs the instruction as an `s
 Key files:
 
 - `apps/monad/src/services/peer-delegate.ts` — the `agent_peer_delegate` tool (high-risk; streams
-  SSE; the model supplies a peer **name**, never a URL/token). Built in `bootstrap/agent.ts` →
-  `main.ts` extra tools from the enabled, token-resolved peers.
+  SSE; the model supplies a peer **name**, never a URL/token). Composed through
+  `agent/execution.ts` with the enabled, token-resolved peer tools.
 - `packages/home/src/config.ts` — `peers[]` (system config) + `peerCredentials` in `auth.json` +
   `resolvePeerSecretRef`.
 - `apps/monad/src/modules/settings/peer/` + `transports/http/peer-settings/controller.ts` — settings
