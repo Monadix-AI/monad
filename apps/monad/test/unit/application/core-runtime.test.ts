@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { readCoreRuntimeOutputs } from '#/application/core-runtime.ts';
+import { readCoreRuntimeOutputs, registerProviderWatcher } from '#/application/core-runtime.ts';
 import { RuntimeContext } from '#/runtime/context.ts';
 
 test('core runtime exposes domain outputs as one structured value', () => {
@@ -23,4 +23,46 @@ test('core runtime exposes domain outputs as one structured value', () => {
   context.commit('capabilities.mcp', expected.mcp);
 
   expect(readCoreRuntimeOutputs(context) as unknown).toEqual(expected);
+});
+
+test('provider watcher reloads JavaScript provider atoms and reports each discovery error', async () => {
+  let reload: () => Promise<void> = async () => {
+    throw new Error('watch source was not registered');
+  };
+  const warnings: string[] = [];
+  const discovered: string[] = [];
+
+  registerProviderWatcher({
+    providersPath: '/runtime/providers',
+    watchService: {
+      register(value) {
+        expect([value.name, value.path, value.filter?.('provider.js'), value.filter?.('provider.json')]).toEqual([
+          'providers',
+          '/runtime/providers',
+          true,
+          false
+        ]);
+        reload = async () => value.onChange();
+        return true;
+      }
+    },
+    discoverProviders: async (path) => {
+      discovered.push(path);
+      return {
+        loaded: [],
+        errors: [
+          { file: 'broken-a.js', error: 'invalid manifest' },
+          { file: 'broken-b.js', error: 'registration failed' }
+        ]
+      };
+    },
+    warn: (message) => warnings.push(message)
+  });
+
+  await reload();
+  expect(discovered).toEqual(['/runtime/providers']);
+  expect(warnings).toEqual([
+    'monad: provider atom "broken-a.js" failed to reload: invalid manifest',
+    'monad: provider atom "broken-b.js" failed to reload: registration failed'
+  ]);
 });

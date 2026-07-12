@@ -46,6 +46,27 @@ export interface DaemonCore extends CoreRuntimeOutputs {
   configReloader: ReturnType<typeof createConfigReloader>;
 }
 
+interface ProviderWatcherDeps {
+  providersPath: string;
+  watchService: Pick<WatchService, 'register'>;
+  discoverProviders: (path: string) => Promise<{ errors: Array<{ file: string; error: string }> }>;
+  warn: (message: string) => void;
+}
+
+export function registerProviderWatcher(deps: ProviderWatcherDeps): void {
+  deps.watchService.register({
+    name: 'providers',
+    path: deps.providersPath,
+    filter: (filename) => Boolean(filename?.endsWith('.js')),
+    onChange: async () => {
+      const result = await deps.discoverProviders(deps.providersPath);
+      for (const error of result.errors) {
+        deps.warn(`monad: provider atom "${error.file}" failed to reload: ${error.error}`);
+      }
+    }
+  });
+}
+
 export function readCoreRuntimeOutputs(context: RuntimeContextReader): CoreRuntimeOutputs {
   return {
     dataLayer: context.get<DataLayer>('store'),
@@ -112,6 +133,12 @@ export async function createCoreRuntime(preflight: DaemonPreflight, logger: Logg
   await runtime.start();
   const outputs = readCoreRuntimeOutputs(runtime.kernel.context);
   if (outputs.dataLayer !== dataLayer) throw new Error('monad: runtime store output mismatch');
+  registerProviderWatcher({
+    providersPath: paths.providers,
+    watchService,
+    discoverProviders: (path) => outputs.model.modelService.discoverProviders(path),
+    warn: (message) => logger.warn(message)
+  });
   return {
     ...outputs,
     paths,

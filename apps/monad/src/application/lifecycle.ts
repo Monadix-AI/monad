@@ -15,13 +15,11 @@
  *                                                      bidirectional peer — see transports/acp/)
  */
 
-import type { MonadConfig } from '@monad/home';
-import type { NetworkRuntimeStatus, SessionId } from '@monad/protocol';
+import type { SessionId } from '@monad/protocol';
 import type { Tool } from '#/capabilities/tools/types.ts';
 import type { SessionGateway } from '#/channels/channel.ts';
 
 import { join } from 'node:path';
-import { loadAll, resolveDaemonNetwork } from '@monad/home';
 import { createLogger } from '@monad/logger';
 
 import { createInterruptServices } from '#/agent/approvals/interrupts.ts';
@@ -30,7 +28,9 @@ import { applyAcpDelegateTool } from '#/agent/delegation/acp-tool.ts';
 import { createAgentExecutionService } from '#/agent/execution.ts';
 import { createMemorySubsystem } from '#/agent/memory/subsystem.ts';
 import { createCoreRuntime } from '#/application/core-runtime.ts';
+import { createNetworkRuntime } from '#/application/network-runtime.ts';
 import { runDaemonPreflight } from '#/application/preflight.ts';
+import { launchDaemonTransports } from '#/application/transport-runtime.ts';
 import { createAtomPackRediscoverer } from '#/atoms/reload.ts';
 import { createMcpControls } from '#/capabilities/mcp/controls.ts';
 import { createObscuraController } from '#/capabilities/mcp/obscura.ts';
@@ -58,9 +58,6 @@ import { createUpgradeInfoMonitor } from '#/services/upgrade-info.ts';
 import { warnIfNotInitialized } from '#/store/home/init-status.ts';
 import { startStartupHousekeeping } from '#/store/home/startup-housekeeping.ts';
 import { createHttpTransport } from '#/transports/http.ts';
-import { serveDaemon } from '#/transports/lifecycle.ts';
-import { createDaemonShutdown } from '#/transports/shutdown.ts';
-import { resolveTlsSetupForNetwork, type TlsSetup } from '#/transports/tls.ts';
 
 // Eden type-safe client inference (compile-time only). Derived from the transport factory
 // so it stays valid without a module-level app instance.
@@ -115,21 +112,13 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     getWorkspaceExperienceSnapshot
   } = atoms;
 
-  // Bind address: config > default.
-  // When remote access is enabled the daemon binds to 0.0.0.0 so other machines
-  // can reach it; bearer-token auth in the HTTP transport guards all remote calls.
-  const remoteAccess = cfg.network.remoteAccess;
-  let _openAiCompatCache: { val: { enabled: boolean; token?: string }; exp: number } | null = null;
-  const getOpenAiCompatConfig = async () => {
-    if (_openAiCompatCache && Date.now() < _openAiCompatCache.exp) return _openAiCompatCache.val;
-    const live = await loadAll(paths.config, paths.profile);
-    const val = { enabled: live?.openaiCompat?.enabled ?? false, token: live?.openaiCompat?.token };
-    _openAiCompatCache = { val, exp: Date.now() + 1000 };
-    return val;
-  };
-  // Resolve the daemon's bind endpoint once from config + env. Clients use the same resolver so
-  // host/port/protocol overrides stay in sync across daemon, web, CLI, and managed runtimes.
-  const endpoint = resolveDaemonNetwork({ network: cfg.network, env: Bun.env });
+  const networkRuntime = await createNetworkRuntime({
+    network: cfg.network,
+    initialOpenAiCompat: cfg.openaiCompat,
+    paths,
+    env: Bun.env
+  });
+  const { endpoint, remoteAccess } = networkRuntime;
   const PORT = endpoint.port;
   const HOST = endpoint.bindHost;
 
@@ -145,16 +134,6 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
   if (!USE_MOCK) {
     warnIfNotInitialized({ cfg, auth: startupAuth, host: HOST, port: PORT, logger });
   }
-  watchService.register({
-    name: 'providers',
-    path: paths.providers,
-    filter: (filename) => Boolean(filename?.endsWith('.js')),
-    onChange: async () => {
-      const res = await modelService.discoverProviders(paths.providers);
-      for (const e of res.errors) logger.warn(`monad: provider atom "${e.file}" failed to reload: ${e.error}`);
-    }
-  });
-
   // Live config-derived state: skill auto-load predicate, hot-swappable command/policy hooks, the
   // config/profile/auth file watcher (feeding the shared ConfigReloader), workspace prompt slots, and
   // per-agent persona resolution (see #/agent/config.ts).
@@ -371,13 +350,6 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     })
   );
 
-  // Auto-generated self-signed TLS for the primary HTTPS listener (see #/transports/tls.ts).
-  let tlsSetup: TlsSetup = await resolveTlsSetupForNetwork({ https: cfg.network.https, tlsDir: paths.tls });
-  const resolveRuntimeTlsSetup = async (https: MonadConfig['network']['https']): Promise<TlsSetup> => {
-    tlsSetup = await resolveTlsSetupForNetwork({ https, tlsDir: paths.tls, current: tlsSetup });
-    return tlsSetup;
-  };
-
   const rediscoverAtomPacks = createAtomPackRediscoverer({
     paths,
     fallbackAtomPins: cfg.atomPins,
@@ -410,7 +382,6 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
 
   const upgradeInfo = await createUpgradeInfoMonitor(paths);
 
-  let getNetworkRuntimeStatus: (() => NetworkRuntimeStatus | undefined) | undefined;
   const handlers = createDaemonHandlers({
     store,
     agent,
@@ -469,10 +440,10 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     skills: skillList,
     skillInstances,
     discoverProjectSkills,
-    getDaemonWarnings: () => tlsSetup.warnings,
-    getNetworkRuntimeStatus: () => getNetworkRuntimeStatus?.(),
-    getCertFingerprint: () => tlsSetup.fingerprint,
-    getCertExpiry: () => tlsSetup.expiry,
+    getDaemonWarnings: () => networkRuntime.tls().warnings,
+    getNetworkRuntimeStatus: networkRuntime.status,
+    getCertFingerprint: () => networkRuntime.tls().fingerprint,
+    getCertExpiry: () => networkRuntime.tls().expiry,
     networkHttps: cfg.network.https,
     externalAgentServerUrl: endpoint.localUrl,
     getUpgradeInfo: upgradeInfo.getUpgradeInfo,
@@ -505,60 +476,38 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
   await schedule.load();
   process.on('exit', () => schedule.dispose());
 
-  // Persist Mo's on/off toggle (web/cli start-stop) so the choice survives a daemon restart.
-  const setMoEnabled = async (enabled: boolean): Promise<void> => {
-    if (runtime.config.get().cfg.mo.enabled === enabled) return;
-    await runtime.config.updateConfig((current) => ({ ...current, mo: { ...current.mo, enabled } }));
-  };
-
   const serveCfg = runtime.config.get().cfg;
-  const shutdown = createDaemonShutdown({
+  await launchDaemonTransports({
+    serveOptions: {
+      handlers,
+      paths,
+      host: HOST,
+      port: PORT,
+      https: serveCfg.network.https,
+      remoteAccess,
+      localHttpFallback: {
+        enabled: serveCfg.network.localHttpFallback.enabled,
+        port: endpoint.localHttpFallback?.port ?? serveCfg.network.localHttpFallback.port
+      },
+      moBinaryPath: serveCfg.mo.binaryPath,
+      moEnabled: serveCfg.mo.enabled,
+      developerMode: () => runtime.config.get().cfg.developerMode === true,
+      i18n: i18nService,
+      channelService,
+      flags: {
+        devMode: DEV_MODE,
+        devSilent: DEV_SILENT,
+        stdoutRpc: STDOUT_RPC,
+        stdioMode: STDIO_MODE,
+        useMock: USE_MOCK
+      },
+      beforeListen: opts?.beforeListen
+    },
+    runtime,
+    network: networkRuntime,
+    reloadTargets,
     schedule,
     watchers: watchService,
-    channels: channelService,
-    runtime
+    channels: channelService
   });
-
-  // Start listening (TCP + Unix socket, or stdio), print the ready banner, wire shutdown signals,
-  // and connect channels (see #/transports/lifecycle.ts).
-  await serveDaemon({
-    handlers,
-    paths,
-    host: HOST,
-    port: PORT,
-    https: serveCfg.network.https,
-    remoteAccess,
-    localHttpFallback: {
-      enabled: serveCfg.network.localHttpFallback.enabled,
-      port:
-        resolveDaemonNetwork({ network: serveCfg.network, env: Bun.env }).localHttpFallback?.port ??
-        serveCfg.network.localHttpFallback.port
-    },
-    moBinaryPath: serveCfg.mo.binaryPath,
-    moEnabled: serveCfg.mo.enabled,
-    setMoEnabled,
-    tlsCert: tlsSetup.cert,
-    tlsFingerprint: tlsSetup.fingerprint,
-    resolveTlsSetupForNetwork: resolveRuntimeTlsSetup,
-    developerMode: () => runtime.config.get().cfg.developerMode === true,
-    i18n: i18nService,
-    channelService,
-    onNetworkReloadReady: (reload) => {
-      reloadTargets.setNetwork(reload);
-    },
-    onNetworkRuntimeStatusReady: (status) => {
-      getNetworkRuntimeStatus = status;
-    },
-    flags: {
-      devMode: DEV_MODE,
-      devSilent: DEV_SILENT,
-      stdoutRpc: STDOUT_RPC,
-      stdioMode: STDIO_MODE,
-      useMock: USE_MOCK
-    },
-    openaiCompatConfig: getOpenAiCompatConfig,
-    onShutdown: shutdown,
-    beforeListen: opts?.beforeListen
-  });
-  runtime.startWatching();
 }
