@@ -5,7 +5,7 @@
 
 import { expect, test } from 'bun:test';
 
-import { applyAcpDelegateTool } from '#/bootstrap/acp-delegate.ts';
+import { applyAcpDelegateTool } from '#/agent/delegation/acp-tool.ts';
 import { AtomPackRegistry } from '#/handlers/atom-pack/atom-pack-registry.ts';
 
 const agent = (name: string, enabled = true) => ({

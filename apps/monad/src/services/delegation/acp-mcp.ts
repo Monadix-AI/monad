@@ -4,7 +4,7 @@ import type { SessionMcpServer } from '@monad/protocol';
 
 import { createLogger } from '@monad/logger';
 
-import { mcpHttpHeaders } from '#/bootstrap/mcp.ts';
+import { mcpHttpHeaders } from '#/capabilities/mcp/service.ts';
 import { resolveSecretMap } from '#/config/secrets.ts';
 
 const log = createLogger('acp-delegate');
@@ -17,7 +17,7 @@ const toPairs = (m: Record<string, string>): { name: string; value: string }[] =
  * monad's external tools. PER-SERVER ISOLATED: a server whose secret refs (${env:}/${secret:}) fail to
  * resolve, or an oauth-mode http server (its bearer is refreshed dynamically and can't be forwarded as
  * a static header), is SKIPPED and logged — one bad server never aborts the whole set (mirrors how
- * bootstrap/mcp.ts isolates each server). Reuses bootstrap's mcpHttpHeaders so http auth stays in sync.
+ * capabilities/mcp/service.ts isolates each server). Reuses the MCP service headers so http auth stays in sync.
  *
  * Caveats by design: forwarding hands RESOLVED secrets to third-party adapter code and makes the
  * adapter spawn its OWN second copy of each stdio server (a stateful server — single write-lock DB,

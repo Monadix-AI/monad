@@ -2,8 +2,8 @@ import type { MonadPaths } from '@monad/home';
 import type { AtomDescriptor, WorkspaceExperienceDefinition } from '@monad/protocol';
 import type { WorkspaceExperienceApiHandler } from '@monad/sdk-atom';
 import type { AtomConflict } from '#/atoms/resolve.ts';
+import type { ConfigReloader } from '#/config/reloader.ts';
 import type { RegisteredWorkspaceExperience } from '#/handlers/atom-pack/atom-pack-registry.ts';
-import type { ConfigBus } from '#/services/config-bus.ts';
 import type { ModelService } from '#/services/model.ts';
 
 import { createMcpModule } from '#/handlers/atom-pack/atom-pack-mcp.ts';
@@ -29,7 +29,7 @@ export interface AtomPacksDeps {
     method: string,
     path: string
   ) => WorkspaceExperienceApiHandler | undefined;
-  configBus?: ConfigBus;
+  configReloader?: ConfigReloader;
   modelService?: ModelService;
 }
 

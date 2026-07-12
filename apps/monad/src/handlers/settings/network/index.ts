@@ -7,7 +7,7 @@ import type {
   ProbeNetworkResponse,
   SetNetworkSettingsRequest
 } from '@monad/protocol';
-import type { ConfigBus } from '#/services/config-bus.ts';
+import type { ConfigReloader } from '#/config/reloader.ts';
 
 import {
   generateRemoteToken,
@@ -20,8 +20,8 @@ import {
   validateDaemonNetworkSecurity
 } from '@monad/home';
 
-import { resolveTlsSetupForNetwork } from '#/bootstrap/tls.ts';
 import { HandlerError } from '#/handlers/handler-error.ts';
+import { resolveTlsSetupForNetwork } from '#/transports/tls.ts';
 
 type ProbeFetch = (input: Request | URL | string, init?: RequestInit) => Promise<Response>;
 
@@ -69,7 +69,7 @@ function toNetworkSettings(
   };
 }
 
-export function createNetworkModule(paths: MonadPaths, configBus?: ConfigBus, deps: NetworkModuleDeps = {}) {
+export function createNetworkModule(paths: MonadPaths, configReloader?: ConfigReloader, deps: NetworkModuleDeps = {}) {
   async function getNetworkSettings(): Promise<NetworkSettings> {
     const cfg = await loadAll(paths.config, paths.profile);
     if (!cfg) throw new Error('network settings: config.json missing');
@@ -135,11 +135,11 @@ export function createNetworkModule(paths: MonadPaths, configBus?: ConfigBus, de
     }
 
     await saveSystemConfig(paths.config, cfg);
-    if (configBus) {
+    if (configReloader) {
       const event = { cfg, auth: await loadAuth(paths.auth) };
-      setTimeout(() => void configBus.publish(event), 25);
+      setTimeout(() => void configReloader.publish(event), 25);
     }
-    return toNetworkSettings(cfg, !configBus, deps);
+    return toNetworkSettings(cfg, !configReloader, deps);
   }
 
   async function probeNetwork(req: ProbeNetworkRequest): Promise<ProbeNetworkResponse> {

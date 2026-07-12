@@ -389,7 +389,7 @@ export function serveTransport(kind: TransportKind, app: ReturnType<typeof creat
   }
   // Keep the path short — macOS caps unix socket paths around 104 bytes.
   const sock = join(tmpdir(), `monad-tr-${process.pid}-${Date.now()}.sock`);
-  // idleTimeout matches production's Unix-socket bind (apps/monad/src/bootstrap/serve.ts) and
+  // idleTimeout matches production's Unix-socket bind (apps/monad/src/transports/lifecycle.ts) and
   // Elysia's own Bun adapter default for the TCP listener above — otherwise a legitimately slow
   // request (e.g. the 20s external agent auth-status probe) hits Bun.serve's 10s default here without
   // ever exercising the code path this transport is supposed to test. bun-types omits `idleTimeout`

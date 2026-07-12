@@ -11,7 +11,7 @@ import { mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { connectFileMcpServers } from '#/bootstrap/mcp.ts';
+import { connectFileMcpServers } from '#/capabilities/mcp/service.ts';
 import { toolResult } from '#/capabilities/tools/types.ts';
 import { AtomPackRegistry } from '#/handlers/atom-pack/index.ts';
 

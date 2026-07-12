@@ -1,6 +1,6 @@
 import type { MonadPaths } from '@monad/home';
 import type { SandboxSettingsResponse, SetSandboxSettingsRequest } from '@monad/protocol';
-import type { ConfigBus } from '#/services/config-bus.ts';
+import type { ConfigReloader } from '#/config/reloader.ts';
 
 import { loadAll, loadAuth, saveSandbox, saveSystemConfig } from '@monad/home';
 
@@ -10,7 +10,7 @@ import { loadAll, loadAuth, saveSandbox, saveSystemConfig } from '@monad/home';
 // persist it via saveSystemConfig. The renderable subset only — env/seedTemplate/initScript/
 // launcherPath stay file-only. Applies on the next daemon restart for boot-time confinement
 // (launcher/net/proxy), like the other system settings.
-export function createSandboxModule(paths: MonadPaths, configBus?: ConfigBus) {
+export function createSandboxModule(paths: MonadPaths, configReloader?: ConfigReloader) {
   async function getSandboxSettings(): Promise<SandboxSettingsResponse> {
     const cfg = await loadAll(paths.config, paths.profile);
     if (!cfg) throw new Error('sandbox: config.json missing');
@@ -40,8 +40,8 @@ export function createSandboxModule(paths: MonadPaths, configBus?: ConfigBus) {
 
     if (req.sandbox) await saveSandbox(paths.sandbox, cfg);
     if (req.globalSandbox) await saveSystemConfig(paths.config, cfg);
-    if (configBus) {
-      await configBus.publish({ cfg, auth: await loadAuth(paths.auth) });
+    if (configReloader) {
+      await configReloader.publish({ cfg, auth: await loadAuth(paths.auth) });
     }
     return getSandboxSettings();
   }

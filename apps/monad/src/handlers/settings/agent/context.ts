@@ -1,11 +1,11 @@
 import type { MonadConfig, MonadPaths } from '@monad/home';
-import type { ConfigBus } from '#/services/config-bus.ts';
+import type { ConfigReloader } from '#/config/reloader.ts';
 
 import { loadAll, loadAuth, saveProfile } from '@monad/home';
 
 export interface AgentDeps {
   paths: MonadPaths;
-  configBus?: ConfigBus;
+  configReloader?: ConfigReloader;
 }
 
 export interface AgentContext {
@@ -15,7 +15,7 @@ export interface AgentContext {
   commit(cfg: MonadConfig): Promise<void>;
 }
 
-export function createAgentContext({ paths, configBus }: AgentDeps): AgentContext {
+export function createAgentContext({ paths, configReloader }: AgentDeps): AgentContext {
   async function read(): Promise<MonadConfig> {
     const cfg = await loadAll(paths.config, paths.profile);
     if (!cfg) throw new Error('agent: config.json missing');
@@ -24,8 +24,8 @@ export function createAgentContext({ paths, configBus }: AgentDeps): AgentContex
 
   async function commit(cfg: MonadConfig): Promise<void> {
     await saveProfile(paths.profile, cfg);
-    if (configBus) {
-      await configBus.publish({ cfg, auth: await loadAuth(paths.auth) });
+    if (configReloader) {
+      await configReloader.publish({ cfg, auth: await loadAuth(paths.auth) });
     }
   }
 

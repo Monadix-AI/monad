@@ -7,12 +7,12 @@ import { basename, join } from 'node:path';
 import { createDefaultConfig, emptyAuth, loadAll, loadAuth, saveAll, saveAuth } from '@monad/home';
 import { ModelProviderType } from '@monad/protocol';
 
+import { createConfigReloader } from '#/config/reloader.ts';
 import {
   applyModelRolesToConfiguredDefaultProfile,
   createSettingsImportModule,
   previewSettingsImport
 } from '#/handlers/settings/import/index.ts';
-import { ConfigBus } from '#/services/config-bus.ts';
 
 function pathsFor(dir: string): MonadPaths {
   return {
@@ -614,12 +614,11 @@ test('apply publishes config bus for system-only sandbox updates', async () => {
   await mkdir(codex, { recursive: true });
   await Bun.write(join(codex, 'config.toml'), 'sandbox_mode = "danger-full-access"\n');
   const events: Array<'system' | 'profile'> = [];
-  const configBus = new ConfigBus();
-  configBus.subscribe(() => {
+  const configReloader = createConfigReloader(async () => {
     events.push('system');
   });
   try {
-    const mod = createSettingsImportModule({ paths, configBus });
+    const mod = createSettingsImportModule({ paths, configReloader });
     const preview = await mod.preview({ from: 'codex', path: codex, replace: false });
     await mod.apply({
       from: 'codex',

@@ -1,7 +1,7 @@
 import type { MonadAuth, MonadConfig, MonadPaths } from '@monad/home';
 import type { ModelModalities, ModelPrice } from '@monad/protocol';
 import type { ModelProviderRegistry } from '#/agent/index.ts';
-import type { ConfigBus } from '#/services/config-bus.ts';
+import type { ConfigReloader } from '#/config/reloader.ts';
 import type { ModelService } from '#/services/model.ts';
 import type { ModelCatalogService } from '#/services/model-catalog.ts';
 
@@ -14,7 +14,7 @@ export interface ModelDeps {
   // Optional: the daemon always injects it (main.ts); absent (e.g. in tests) just means model
   // listings carry no catalog price — pricing display degrades to nothing, never errors.
   modelCatalog?: ModelCatalogService;
-  configBus?: ConfigBus;
+  configReloader?: ConfigReloader;
 }
 
 export interface ModelContext {
@@ -38,7 +38,7 @@ export interface ModelContext {
   lookupCapabilities(provider: string, modelId: string): ModelModalities | undefined;
 }
 
-export function createModelContext({ paths, modelService, modelCatalog, configBus }: ModelDeps): ModelContext {
+export function createModelContext({ paths, modelService, modelCatalog, configReloader }: ModelDeps): ModelContext {
   async function read(): Promise<{ cfg: MonadConfig; auth: MonadAuth }> {
     const cfg = await loadAll(paths.config, paths.profile);
     if (!cfg) throw new Error('model: config.json missing');
@@ -55,8 +55,8 @@ export function createModelContext({ paths, modelService, modelCatalog, configBu
     await saveProfile(paths.profile, cfg);
     if (auth) await saveAuth(paths.auth, auth);
     const resolvedAuth = auth ?? (await loadAuth(paths.auth));
-    if (configBus) {
-      await configBus.publish({ cfg, auth: resolvedAuth });
+    if (configReloader) {
+      await configReloader.publish({ cfg, auth: resolvedAuth });
     } else {
       modelService.reload(cfg, resolvedAuth);
     }
@@ -65,8 +65,8 @@ export function createModelContext({ paths, modelService, modelCatalog, configBu
   async function commitAuth(cfg: MonadConfig, auth: MonadAuth): Promise<void> {
     auth.updatedAt = new Date().toISOString();
     await saveAuth(paths.auth, auth);
-    if (configBus) {
-      await configBus.publish({ cfg, auth });
+    if (configReloader) {
+      await configReloader.publish({ cfg, auth });
     } else {
       modelService.reload(cfg, auth);
     }

@@ -12,8 +12,8 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { computeInitStatus, initMonadHome, loadAll, loadAuth, setMonadRoot } from '@monad/home';
 
-import { installEnvDeps } from '#/bootstrap/env-deps.ts';
 import { HandlerError } from '#/handlers/handler-error.ts';
+import { installEnvDeps } from '#/infra/env-deps.ts';
 
 /** First-run setup: initialization status, home-directory relocation, and local runtime
  *  dependency (node/uv) install. Extracted from handlers.ts — self-contained aside from

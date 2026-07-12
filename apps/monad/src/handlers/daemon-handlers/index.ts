@@ -143,7 +143,7 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
       return skillCatalogs[source].detail(id);
     }
   };
-  const skillsSettings = createSkillsSettingsModule(deps.paths, deps.configBus);
+  const skillsSettings = createSkillsSettingsModule(deps.paths, deps.configReloader);
 
   const mem0Data = {
     get(): Promise<GetMem0DataResponse> {
@@ -204,8 +204,8 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
       if (!cfg) throw new HandlerError('invalid', 'config.json missing');
       cfg.locale = next;
       await saveProfile(paths.profile, cfg);
-      if (deps.configBus) {
-        await deps.configBus.publish({ cfg, auth: await loadAuth(paths.auth) });
+      if (deps.configReloader) {
+        await deps.configReloader.publish({ cfg, auth: await loadAuth(paths.auth) });
       } else {
         deps.localeService.reload(cfg);
       }
@@ -310,10 +310,10 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
       };
     },
     init,
-    agent: createAgentModule({ paths, ownerPrincipalId: deps.ownerPrincipalId, configBus: deps.configBus }),
+    agent: createAgentModule({ paths, ownerPrincipalId: deps.ownerPrincipalId, configReloader: deps.configReloader }),
     model: createModelModule(deps),
-    channel: createChannelModule({ paths, channelService: deps.channelService, configBus: deps.configBus }),
-    peer: createPeerModule({ paths, configBus: deps.configBus }),
+    channel: createChannelModule({ paths, channelService: deps.channelService, configReloader: deps.configReloader }),
+    peer: createPeerModule({ paths, configReloader: deps.configReloader }),
     acpAgent: createAcpAgentModule({ paths }),
     externalAgentSettings: createExternalAgentSettingsModule({ paths, externalAgentSessions: externalAgentHost }),
     mcpServer: createMcpServerModule({
@@ -322,8 +322,8 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
       mcpAuthorize: deps.mcpAuthorize,
       mcpReconnect: deps.mcpReconnect
     }),
-    browserPreset: createBrowserPresetModule(paths, deps.configBus),
-    computerPreset: createComputerPresetModule(paths, deps.configBus),
+    browserPreset: createBrowserPresetModule(paths, deps.configReloader),
+    computerPreset: createComputerPresetModule(paths, deps.configReloader),
     obscura: createObscuraModule({
       paths,
       connectObscura: deps.connectObscura,
@@ -331,20 +331,20 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
       getObscuraStatus: deps.getObscuraStatus
     }),
     openaiCompat: createOpenaiCompatModule(paths),
-    network: createNetworkModule(paths, deps.configBus),
-    appearance: createAppearanceModule(paths, deps.configBus),
-    toolBackends: createToolBackendsModule(paths, deps.configBus),
-    sandbox: createSandboxModule(paths, deps.configBus),
-    developer: createDeveloperModule(paths, deps.configBus),
-    profile: createUserProfileModule(paths, deps.configBus),
+    network: createNetworkModule(paths, deps.configReloader),
+    appearance: createAppearanceModule(paths, deps.configReloader),
+    toolBackends: createToolBackendsModule(paths, deps.configReloader),
+    sandbox: createSandboxModule(paths, deps.configReloader),
+    developer: createDeveloperModule(paths, deps.configReloader),
+    profile: createUserProfileModule(paths, deps.configReloader),
     startup: createStartupSettingsModule({
       monadHome: paths.home,
       logPath: join(paths.logs, 'startup.log')
     }),
-    hooks: createHooksModule(paths, deps.configBus),
+    hooks: createHooksModule(paths, deps.configReloader),
     settingsImport: createSettingsImportModule({
       paths,
-      configBus: deps.configBus,
+      configReloader: deps.configReloader,
       mcpReconnect: deps.mcpReconnect
     }),
     capabilityInventory: createCapabilityInventoryModule(paths),
@@ -356,7 +356,7 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
       getWorkspaceExperienceApiHandler: deps.getWorkspaceExperienceApiHandler,
       getWorkspaceExperienceSnapshot: deps.getWorkspaceExperienceSnapshot,
       getWorkspaceExperiences: deps.getWorkspaceExperiences,
-      configBus: deps.configBus,
+      configReloader: deps.configReloader,
       modelService: deps.modelService
     }),
     session,

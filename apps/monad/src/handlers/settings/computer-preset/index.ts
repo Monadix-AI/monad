@@ -1,10 +1,10 @@
 import type { MonadPaths } from '@monad/home';
 import type { ComputerPresetResponse, SetComputerPresetRequest } from '@monad/protocol';
-import type { ConfigBus } from '#/services/config-bus.ts';
+import type { ConfigReloader } from '#/config/reloader.ts';
 
 import { loadAll, loadAuth, saveProfile } from '@monad/home';
 
-export function createComputerPresetModule(paths: MonadPaths, configBus?: ConfigBus) {
+export function createComputerPresetModule(paths: MonadPaths, configReloader?: ConfigReloader) {
   async function getComputerPreset(): Promise<ComputerPresetResponse> {
     const cfg = await loadAll(paths.config, paths.profile);
     if (!cfg) throw new Error('computer-preset: config.json missing');
@@ -29,8 +29,8 @@ export function createComputerPresetModule(paths: MonadPaths, configBus?: Config
     if (req.autoApproveReadOnly !== undefined) cfg.computer.autoApproveReadOnly = req.autoApproveReadOnly;
 
     await saveProfile(paths.profile, cfg);
-    if (configBus) {
-      await configBus.publish({ cfg, auth: await loadAuth(paths.auth) });
+    if (configReloader) {
+      await configReloader.publish({ cfg, auth: await loadAuth(paths.auth) });
     }
     return getComputerPreset();
   }

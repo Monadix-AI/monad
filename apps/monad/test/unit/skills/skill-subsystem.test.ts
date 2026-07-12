@@ -3,8 +3,8 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { createSkillSubsystem } from '#/bootstrap/skills.ts';
-import { ReloadService } from '#/reload/index.ts';
+import { createSkillSubsystem } from '#/capabilities/skills/service.ts';
+import { WatchService } from '#/infra/watch-service.ts';
 import { makeTestPaths } from '../../helpers.ts';
 
 let dir: string;
@@ -37,13 +37,13 @@ test('skill subsystem exposes same-name global, atom-pack, and by-agent skills b
   await writeSkill(paths.skills, 'summarize-changes', 'from global');
   await writeSkill(join(paths.agents, 'default', 'skills'), 'summarize-changes', 'from default agent');
 
-  const reloadService = new ReloadService({
+  const watchService = new WatchService({
     log: () => {},
     watchFn: () => ({ close: () => {} })
   });
   const subsystem = await createSkillSubsystem({
     paths,
-    reloadService,
+    watchService,
     monadVersion: '0.0.0',
     skillState: () => ({ enabled: true, autoload: true })
   });

@@ -19,6 +19,21 @@ import { createStore } from '#/store/db/index.ts';
 // register the built-ins up front (mirrors the daemon's registration path).
 for (const adapter of builtinAgentAdapters) registerAgentAdapterImpl(adapter);
 
+async function waitForExternalAgentSession(
+  store: ReturnType<typeof createStore>,
+  id: string,
+  predicate: (session: NonNullable<ReturnType<typeof store.getExternalAgentSession>>) => boolean,
+  timeoutMs = 10_000
+) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const session = store.getExternalAgentSession(id);
+    if (session && predicate(session)) return session;
+    await Bun.sleep(25);
+  }
+  throw new Error(`timed out waiting for external agent session ${id}`);
+}
+
 test('external agent auth status probes use a global 20 second timeout', () => {
   expect(AUTH_STATUS_TIMEOUT_MS).toBe(20_000);
 });
@@ -103,6 +118,19 @@ test('managed external agent default server URL follows the daemon HTTPS switch'
       port: 53210
     })
   ).toBe('http://127.0.0.1:59999');
+});
+
+test('managed external agent explicit daemon port overrides ambient worktree port', () => {
+  const previous = Bun.env.MONAD_PORT;
+  Bun.env.MONAD_PORT = '52564';
+  try {
+    expect(resolveExternalAgentManagedServerUrl({ networkHttps: { enabled: true }, port: 53210 })).toBe(
+      'https://127.0.0.1:53210'
+    );
+  } finally {
+    if (previous === undefined) delete Bun.env.MONAD_PORT;
+    else Bun.env.MONAD_PORT = previous;
+  }
 });
 
 test('external agent host can stop every live session during daemon shutdown', () => {
@@ -895,17 +923,19 @@ setInterval(() => {}, 1000);
     for (let i = 0; i < 40 && !Bun.file(logPath).exists(); i++) {
       await Bun.sleep(25);
     }
-    for (let i = 0; i < 40 && store.getExternalAgentSession(view.id)?.providerSessionRef !== 'thread-1'; i++) {
-      await Bun.sleep(25);
-    }
-    for (let i = 0; i < 40 && store.getExternalAgentSession(view.id)?.pid !== null; i++) {
-      await Bun.sleep(25);
-    }
-    expect(store.getExternalAgentSession(view.id)?.state).toBe('running');
-    expect(store.getExternalAgentSession(view.id)?.providerSessionRef).toBe('thread-1');
+    const suspended = await waitForExternalAgentSession(
+      store,
+      view.id,
+      (session) => session.providerSessionRef === 'thread-1' && session.pid === null
+    );
+    expect({ state: suspended.state, providerSessionRef: suspended.providerSessionRef }).toEqual({
+      state: 'running',
+      providerSessionRef: 'thread-1'
+    });
 
     await host.input(view.id, { input: 'wake-up' });
-    for (let i = 0; i < 40; i++) {
+    const wakeDeadline = Date.now() + 10_000;
+    while (Date.now() < wakeDeadline) {
       const log = await Bun.file(logPath).text();
       if ((log.match(/^spawn:/gm) ?? []).length >= 2 && log.includes('input:wake-up')) break;
       await Bun.sleep(25);

@@ -1,7 +1,7 @@
 // HIGH-RISK by design: skill_manage writes executable instruction files the agent will later
 // follow, so every call routes through the oversight gate —
 // the agent proposes, a human approves. Writes are validated by writeSkill (parseSkillMd +
-// name/path guards) and the daemon's ReloadService makes them live without a restart.
+// name/path guards) and the daemon's WatchService makes them live without a restart.
 
 import type { Tool, ToolInputSchema } from '#/capabilities/tools/types.ts';
 

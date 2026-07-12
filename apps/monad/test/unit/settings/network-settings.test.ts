@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initMonadHome } from '@monad/home';
 
+import { createConfigReloader } from '#/config/reloader.ts';
 import { createNetworkModule } from '#/handlers/settings/network/index.ts';
-import { ConfigBus } from '#/services/config-bus.ts';
 import { makeTestPaths } from '../../helpers.ts';
 
 test('network settings apply through config bus without requiring a daemon restart', async () => {
@@ -14,12 +14,11 @@ test('network settings apply through config bus without requiring a daemon resta
     const paths = makeTestPaths(dir);
     await initMonadHome(paths);
     const published: boolean[] = [];
-    const configBus = new ConfigBus();
-    configBus.subscribe(({ cfg }) => {
+    const configReloader = createConfigReloader(async ({ cfg }) => {
       published.push(cfg.network.remoteAccess.enabled);
     });
 
-    const mod = createNetworkModule(paths, configBus);
+    const mod = createNetworkModule(paths, configReloader);
     const result = await mod.setNetworkSettings({ remoteAccess: { enabled: true } });
 
     expect(result.remoteAccess.enabled).toBe(true);
@@ -40,12 +39,11 @@ test('network HTTPS scheme changes publish after the settings response returns',
     const paths = makeTestPaths(dir);
     await initMonadHome(paths);
     const published: boolean[] = [];
-    const configBus = new ConfigBus();
-    configBus.subscribe(({ cfg }) => {
+    const configReloader = createConfigReloader(async ({ cfg }) => {
       published.push(cfg.network.https.enabled);
     });
 
-    const mod = createNetworkModule(paths, configBus);
+    const mod = createNetworkModule(paths, configReloader);
     const result = await mod.setNetworkSettings({ https: { enabled: false } });
 
     expect(result.https.enabled).toBe(false);
@@ -64,8 +62,8 @@ test('network settings expose remote URLs and token revision for the current dae
   try {
     const paths = makeTestPaths(dir);
     await initMonadHome(paths);
-    const configBus = new ConfigBus();
-    const mod = createNetworkModule(paths, configBus, {
+    const configReloader = createConfigReloader(async () => {});
+    const mod = createNetworkModule(paths, configReloader, {
       currentRuntimeStatus: () => ({
         listeners: [{ scheme: 'https', host: '0.0.0.0', port: 52749 }],
         remoteAccess: { enabled: true, tokenRevision: 2 },

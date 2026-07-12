@@ -1,6 +1,6 @@
 import type { MonadAuth, MonadConfig, MonadPaths } from '@monad/home';
 import type { SetSkillsSettingsRequest, SkillsSettingsResponse } from '@monad/protocol';
-import type { ConfigBus } from '#/services/config-bus.ts';
+import type { ConfigReloader } from '#/config/reloader.ts';
 
 import { DEFAULT_SAMPLE_PROVIDER_ID, loadAll, loadAuth, saveProfile } from '@monad/home';
 
@@ -20,7 +20,7 @@ function resolveUsableInstallReviewModel(cfg: MonadConfig, auth: MonadAuth | nul
   return null;
 }
 
-export function createSkillsSettingsModule(paths: MonadPaths, configBus?: ConfigBus) {
+export function createSkillsSettingsModule(paths: MonadPaths, configReloader?: ConfigReloader) {
   async function getSkillsSettings(): Promise<SkillsSettingsResponse> {
     const cfg = await loadAll(paths.config, paths.profile);
     if (!cfg) throw new Error('skills: config.json missing');
@@ -52,8 +52,8 @@ export function createSkillsSettingsModule(paths: MonadPaths, configBus?: Config
     }
 
     await saveProfile(paths.profile, cfg);
-    if (configBus) {
-      await configBus.publish({ cfg, auth });
+    if (configReloader) {
+      await configReloader.publish({ cfg, auth });
     }
     return getSkillsSettings();
   }

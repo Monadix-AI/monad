@@ -111,7 +111,7 @@ export function createPacksModule(deps: AtomPacksDeps) {
     cfg.skills.autoloadDisabled = cfg.skills.autoloadDisabled.filter((id) => !packSkillIds.has(id));
 
     await saveProfile(deps.paths.profile, cfg);
-    await deps.configBus?.publish({ cfg, auth: await loadAuth(deps.paths.auth) });
+    await deps.configReloader?.publish({ cfg, auth: await loadAuth(deps.paths.auth) });
   }
 
   async function installAtomPackUpload(upload: DecodedUpload, consent: boolean): Promise<InstallAtomPackResponse> {
