@@ -55,6 +55,8 @@ Supported validation metadata includes required, min/max, pattern, and select op
 
 VM uses the same contract as contributed backends. This prevents a second built-in-only settings path while keeping VM available without an atom pack.
 
+The field schema and user-prompt lifecycle are provided by the transport-neutral Host Interaction contract in `2026-07-13-host-interaction-design.md`. Sandbox owns backend discovery, settings persistence, status, and activation; it does not implement a separate dialog protocol.
+
 ## Identity and configuration storage
 
 A backend is identified by source plus kind, not kind alone:
