@@ -94,6 +94,7 @@ export const pendingInteractionSchema = z
     id: z.string().min(1),
     source: interactionSourceSchema,
     request: interactionRequestSchema,
+    mode: z.enum(['foreground', 'background']),
     state: z.enum(['pending', 'claimed']),
     createdAt: z.iso.datetime(),
     expiresAt: z.iso.datetime()

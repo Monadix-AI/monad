@@ -76,7 +76,9 @@ describe('HostInteractionService', () => {
     const { service } = createHarness();
     void service.request(source, confirmRequest, { mode: 'background' });
 
-    expect(service.listPending()).toEqual([expect.objectContaining({ id: 'interaction-1', state: 'pending' })]);
+    expect(service.listPending()).toEqual([
+      expect.objectContaining({ id: 'interaction-1', mode: 'background', state: 'pending' })
+    ]);
     expect(() =>
       service.claim('interaction-1', 'cli-1', {
         ...fullCapabilities,
@@ -112,6 +114,18 @@ describe('HostInteractionService', () => {
     advance(1_001);
     const secondClaim = service.claim('interaction-1', 'web-2', fullCapabilities);
     expect(secondClaim.leaseToken).toBe('lease-2');
+  });
+
+  test('renews an active lease while a presenter is collecting input', () => {
+    const { service, advance } = createHarness({ leaseTtlMs: 1_000 });
+    void service.request(source, confirmRequest, { mode: 'foreground' });
+    const { leaseToken } = service.claim('interaction-1', 'web-1', fullCapabilities);
+
+    advance(750);
+    service.renew('interaction-1', leaseToken);
+    advance(750);
+
+    expect(() => service.submit('interaction-1', leaseToken, { confirmed: true })).not.toThrow();
   });
 
   test('submits exactly once and removes the resolver before exposing the result', async () => {

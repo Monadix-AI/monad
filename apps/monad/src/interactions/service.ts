@@ -202,6 +202,11 @@ export class HostInteractionService {
     this.#complete(record, { status: 'submitted', values });
   }
 
+  renew(id: string, leaseToken: string): void {
+    const record = this.#getWithLease(id, leaseToken);
+    if (record.lease) record.lease.expiresAt = this.#now() + this.#leaseTtlMs;
+  }
+
   cancel(id: string, leaseToken: string, reason: InteractionCancellationReason): void {
     const record = this.#getWithLease(id, leaseToken);
     this.#complete(record, { status: 'cancelled', reason });
@@ -261,6 +266,7 @@ export class HostInteractionService {
       id: record.id,
       source: record.source,
       request: record.request,
+      mode: record.routing.mode,
       state: record.lease ? 'claimed' : 'pending',
       createdAt: new Date(record.createdAt).toISOString(),
       expiresAt: new Date(record.expiresAt).toISOString()

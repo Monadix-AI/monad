@@ -59,6 +59,7 @@ test('models presenter capabilities, pending attribution, and exactly typed outc
     id: 'int_123',
     source: { kind: 'atom-pack', packId: 'vendor', atomId: 'cloud' },
     request: { type: 'confirm', title: 'Continue?' },
+    mode: 'background',
     state: 'pending',
     createdAt: '2026-07-13T00:00:00.000Z',
     expiresAt: '2026-07-13T00:01:00.000Z'
@@ -76,6 +77,7 @@ test('models redacted lifecycle events without submitted values', () => {
       id: 'int_123',
       source: { kind: 'builtin', id: 'settings' },
       request: { type: 'confirm', title: 'Continue?' },
+      mode: 'foreground',
       state: 'pending',
       createdAt: '2026-07-13T00:00:00.000Z',
       expiresAt: '2026-07-13T00:01:00.000Z'

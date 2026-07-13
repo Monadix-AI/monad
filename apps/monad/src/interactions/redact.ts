@@ -81,6 +81,7 @@ export function projectPendingInteraction(input: PendingInteraction): PendingInt
     id: input.id,
     source: projectSource(input.source),
     request: redactInteractionRequest(input.request),
+    mode: input.mode,
     state: input.state,
     createdAt: input.createdAt,
     expiresAt: input.expiresAt

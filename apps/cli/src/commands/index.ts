@@ -14,6 +14,7 @@ import { command as credential } from './credential.ts';
 import { command as doctor } from './doctor.ts';
 import { command as importCmd } from './import.ts';
 import { command as init } from './init.ts';
+import { command as interaction } from './interaction.ts';
 import { command as licenses } from './licenses.ts';
 import { command as logs } from './logs.ts';
 import { command as mcp } from './mcp.ts';
@@ -71,6 +72,7 @@ export const commands: CommandDef[] = [
   nativeAgent,
   credential,
   approvals,
+  interaction,
   atom,
   skill,
   mcp,

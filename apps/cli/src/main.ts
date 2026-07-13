@@ -9,6 +9,7 @@ import cac from 'cac';
 
 import { commands } from './commands/index.ts';
 import { CliError, type CommandDef, EXIT, exitCodeFor, type GlobalFlags } from './commands/types.ts';
+import { interactionSourceLabel, startCliInteractionPresenter } from './interactions/presenter.ts';
 import { startDaemon } from './lib/daemon.ts';
 import { initCliI18n, t } from './lib/i18n.ts';
 import { runBrowserInit } from './lib/init-flow.ts';
@@ -229,7 +230,19 @@ export async function main(): Promise<void> {
   }
 
   // cmd is defined (daemon command) — command && !cmd was handled above.
-  await cmd?.run({ positionals, flags, globals, client });
+  const interactive = process.stdin.isTTY && process.stdout.isTTY && !globals.json && opts.input !== false;
+  const stopInteractionPresenter = interactive
+    ? startCliInteractionPresenter(client, {
+        onPresent: (interaction) =>
+          out(`\nRequested by ${interactionSourceLabel(interaction.source)}\n${interaction.request.title}`),
+        onError: (error) => process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`)
+      })
+    : undefined;
+  try {
+    await cmd?.run({ positionals, flags, globals, client });
+  } finally {
+    await stopInteractionPresenter?.();
+  }
 }
 
 function readAgentTokenFile(): string | null {

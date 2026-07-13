@@ -54,6 +54,17 @@ export function createInteractionsController(service: HostInteractionService) {
       }
     )
     .post(
+      '/interactions/:id/renew',
+      ({ params, body }) => {
+        service.renew(params.id, body.leaseToken);
+        return { ok: true as const };
+      },
+      {
+        params: t.Object({ id: t.String({ minLength: 1 }) }),
+        body: leaseBody
+      }
+    )
+    .post(
       '/interactions/:id/submit',
       ({ params, body }) => {
         service.submit(params.id, body.leaseToken, body.values);

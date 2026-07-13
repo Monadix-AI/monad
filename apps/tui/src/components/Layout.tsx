@@ -1,8 +1,11 @@
+import type { MonadClient } from '@monad/client';
 import type { RootState } from '../store/index.ts';
 
 import { Box, Text, useInput } from 'ink';
+import { useEffect, useRef } from 'react';
 import { useSelector } from 'react-redux';
 
+import { HostInteractionPrompt, useTuiInteractionPresenter } from '../interactions/presenter.tsx';
 import { t } from '../lib/i18n.ts';
 import { useUIStore } from '../store/ui.ts';
 import { Composer } from './Composer.tsx';
@@ -11,12 +14,23 @@ import { SessionPicker } from './SessionPicker.tsx';
 import { Transcript } from './Transcript.tsx';
 import { TUI_GLYPHS, TUI_THEME } from './theme.ts';
 
-export function Layout() {
+export function Layout({ client }: { client: MonadClient }) {
+  const interactionPresenter = useTuiInteractionPresenter(client);
   const overlay = useUIStore((s) => s.overlay);
   const setOverlay = useUIStore((s) => s.setOverlay);
+  const overlayBeforeInteraction = useRef<typeof overlay>('none');
   const currentSessionId = useSelector((s: RootState) => s.server.currentSessionId);
   const sessions = useSelector((s: RootState) => s.server.sessions);
   const currentSession = sessions.find((s) => s.id === currentSessionId);
+
+  useEffect(() => {
+    if (interactionPresenter.active && overlay !== 'interaction') {
+      overlayBeforeInteraction.current = overlay;
+      setOverlay('interaction');
+    } else if (!interactionPresenter.active && overlay === 'interaction') {
+      setOverlay(overlayBeforeInteraction.current === 'interaction' ? 'none' : overlayBeforeInteraction.current);
+    }
+  }, [interactionPresenter.active, overlay, setOverlay]);
 
   useInput((input, key) => {
     if (key.ctrl && input === 's') {
@@ -26,8 +40,9 @@ export function Layout() {
     }
   });
 
-  const showSettings = overlay === 'settings';
-  const showPicker = !showSettings && (overlay === 'session-picker' || !currentSessionId);
+  const showInteraction = interactionPresenter.active !== null;
+  const showSettings = !showInteraction && overlay === 'settings';
+  const showPicker = !showInteraction && !showSettings && (overlay === 'session-picker' || !currentSessionId);
   const footerHelp = showSettings
     ? t('cli.tui.footer.settings')
     : showPicker
@@ -83,10 +98,20 @@ export function Layout() {
         flexDirection="column"
         flexGrow={1}
       >
-        {showSettings ? <ModelSettings /> : showPicker ? <SessionPicker /> : <Transcript />}
+        {showInteraction ? (
+          <HostInteractionPrompt presenter={interactionPresenter} />
+        ) : showSettings ? (
+          <ModelSettings />
+        ) : showPicker ? (
+          <SessionPicker />
+        ) : (
+          <Transcript />
+        )}
       </Box>
 
-      {!showSettings && !showPicker && currentSessionId && <Composer sessionId={currentSessionId} />}
+      {!showInteraction && !showSettings && !showPicker && currentSessionId && (
+        <Composer sessionId={currentSessionId} />
+      )}
 
       <Box
         borderColor={TUI_THEME.frame}

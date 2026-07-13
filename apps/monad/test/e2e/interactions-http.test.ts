@@ -80,6 +80,7 @@ test('atom interaction can be claimed and completed once over HTTP without echoi
       {
         id: 'interaction-http-1',
         source: { kind: 'atom-pack', packId: 'installed-contributed-backend', atomId: 'pack' },
+        mode: 'background',
         state: 'pending'
       }
     ]
@@ -96,6 +97,10 @@ test('atom interaction can be claimed and completed once over HTTP without echoi
     leaseToken: 'lease-http-1',
     interaction: { id: 'interaction-http-1', state: 'claimed' }
   });
+
+  const renewed = await call('/v1/interactions/interaction-http-1/renew', json('POST', { leaseToken: 'lease-http-1' }));
+  expect(renewed.status).toBe(200);
+  expect(await renewed.json()).toEqual({ ok: true });
 
   const submitted = await call(
     '/v1/interactions/interaction-http-1/submit',

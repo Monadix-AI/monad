@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-type Overlay = 'none' | 'session-picker' | 'settings';
+type Overlay = 'none' | 'session-picker' | 'settings' | 'interaction';
 
 interface UIState {
   input: string;
