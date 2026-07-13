@@ -34,18 +34,45 @@ test('built-in pack registers no sandbox launchers (light set is closed, heavy i
 
 test('the power pack registers only contributed heavy launchers through the gated loader', async () => {
   const got: SandboxLauncher[] = [];
+  const experiences: WorkspaceExperienceDefinition[] = [];
   clearSandboxLaunchers();
   await loadChannelAtomPacks([monadPowerPack], {
     onSandbox: (l, atomPackId) => {
       got.push(l);
       registerSandboxLauncher(l, { source: 'atom-pack', packId: atomPackId, kind: l.kind });
-    }
+    },
+    onWorkspaceExperience: (experience) => experiences.push(experience)
   });
   expect(got.map((l) => l.kind).sort()).toEqual(['docker', 'e2b']);
   expect(got.find((launcher) => launcher.kind === 'docker')?.descriptor.settings?.fields[0]?.type).toBe('string');
   expect(got.find((launcher) => launcher.kind === 'e2b')?.descriptor.settings?.fields[0]?.type).toBe('secret');
   // Explicit backend selects the registered heavy launcher even when the light default differs.
   expect(selectSandboxLauncher('darwin', 'e2b').kind).toBe('e2b');
+  expect(experiences).toEqual([
+    {
+      id: 'kanban',
+      title: 'Kanban',
+      icon: 'git-fork',
+      entry: {
+        type: 'web-component',
+        module: 'experiences/kanban.js',
+        tagName: 'monad-kanban'
+      }
+    }
+  ]);
+});
+
+test('the power pack still exposes sandbox details when a runtime sink rejects registration', async () => {
+  const described: string[] = [];
+  await loadChannelAtomPacks([monadPowerPack], {
+    onSandbox: () => {
+      throw new Error('runtime registry unavailable');
+    },
+    onAtoms: (_pack, atoms) => described.push(...atoms.map((atom) => `${atom.kind}:${atom.id}`)),
+    onError: () => {}
+  });
+
+  expect(described).toEqual(['sandbox:docker', 'sandbox:e2b', 'workspace-experience:kanban']);
 });
 
 test('vm remains available as a built-in without loading Power Pack', () => {
@@ -64,9 +91,8 @@ test('built-in pack registers workspace experiences through the gated loader', a
     onWorkspaceExperience: (experience) => experiences.push(experience)
   });
 
-  expect(experiences.map((experience) => experience.id)).toEqual(['chat-room', 'graphic-view']);
-  // chat-room stays host-component; graph-view dogfoods the web-component delivery path.
-  expect(experiences.map((experience) => experience.entry.type)).toEqual(['host-component', 'web-component']);
+  expect(experiences.map((experience) => experience.id)).toEqual(['chat-room']);
+  expect(experiences.map((experience) => experience.entry.type)).toEqual(['host-component']);
 });
 
 test('registering a sandbox launcher without declaring the atom kind is rejected', async () => {

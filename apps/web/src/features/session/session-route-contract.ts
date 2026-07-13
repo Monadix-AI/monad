@@ -93,3 +93,8 @@ export function sessionIsDraft(session: Session | null): boolean {
   const ext = session?.origin?.ext;
   return Boolean(ext && typeof ext === 'object' && 'draft' in ext && ext.draft === true);
 }
+
+/** Project sessions use the channel endpoint so messages fan out to their invited members. */
+export function sessionUsesProjectMessageRoute(session: Pick<Session, 'projectId'>): boolean {
+  return session.projectId !== null && session.projectId !== undefined;
+}

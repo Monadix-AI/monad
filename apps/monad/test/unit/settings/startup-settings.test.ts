@@ -3,7 +3,7 @@ import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promise
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { createStartupSettingsModule } from '#/handlers/settings/startup/index.ts';
+import { createStartupSettingsModule, startupSettingsCommands } from '#/handlers/settings/startup/index.ts';
 
 let dir: string;
 
@@ -13,6 +13,17 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await rm(dir, { recursive: true, force: true });
+});
+
+test('native startup settings commands cover macOS, Windows, and mainstream Linux desktops', () => {
+  expect(startupSettingsCommands('darwin', '/Users/test')).toEqual([
+    ['open', 'x-apple.systempreferences:com.apple.LoginItems-Settings.extension']
+  ]);
+  expect(startupSettingsCommands('win32', 'C:\\Users\\test')).toEqual([['explorer.exe', 'ms-settings:startupapps']]);
+  expect(startupSettingsCommands('linux', '/home/test')).toEqual([
+    ['gnome-session-properties'],
+    ['xdg-open', '/home/test/.config/autostart']
+  ]);
 });
 
 test('macOS startup setting writes and removes a LaunchAgent', async () => {

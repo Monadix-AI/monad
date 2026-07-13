@@ -14,7 +14,7 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react';
 import { useCallback, useMemo } from 'react';
 
-import { projectPath, projectSessionPath } from '#/features/shell/routing/paths';
+import { projectSessionPath } from '#/features/shell/routing/paths';
 import {
   SHORTCUT_BADGE_OVERLAY_CLASS,
   ShortcutBadge,
@@ -38,28 +38,23 @@ function confirmDestructive(message: string): boolean {
 export function ProjectTreeRow({
   expanded,
   index,
-  onProjectSessionOpened,
   onToggleProjectExpanded,
-  project,
-  routedProject
+  project
 }: {
   expanded: boolean;
   index: number;
-  onProjectSessionOpened: (projectId: string) => void;
   onToggleProjectExpanded: (id: string) => void;
   project: ProjectItem;
-  routedProject: boolean;
 }) {
   const { actions, meta } = useWorkspaceSidebar();
   const { shortcutModifierLabel, showShortcutBadges, t } = meta;
   const unreadLabel = project.unreadCount > 99 ? '99+' : String(project.unreadCount);
   const runningLabel = t('web.workplace.projectRuntimeRunning');
   const unreadAriaLabel = t('web.workplace.projectUnreadMessages', { count: project.unreadCount });
-  const openProject = useCallback(() => {
-    actions.openProject(project.id);
-    if (routedProject) onToggleProjectExpanded(project.id);
-    else onProjectSessionOpened(project.id);
-  }, [actions, onProjectSessionOpened, onToggleProjectExpanded, project.id, routedProject]);
+  const toggleProjectExpanded = useCallback(
+    () => onToggleProjectExpanded(project.id),
+    [onToggleProjectExpanded, project.id]
+  );
   const renameProject = useCallback((title: string) => actions.renameProject(project.id, title), [actions, project.id]);
   const deleteProject = useCallback(() => {
     if (confirmDestructive(t('web.workplace.deleteProjectConfirmDescription', { name: project.name }))) {
@@ -107,8 +102,6 @@ export function ProjectTreeRow({
       active={false}
       ariaExpanded={expanded}
       className={SIDEBAR_ITEM_ROW_CLASS}
-      editableOnDoubleClick
-      href={projectPath(project.id)}
       icon={
         <HugeiconsIcon
           className="size-4 shrink-0 transition-[opacity,transform] duration-150 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
@@ -118,7 +111,7 @@ export function ProjectTreeRow({
       label={project.name}
       menuActions={projectMenuActions}
       menuLabel={t('web.sidebar.itemMenu')}
-      onOpen={openProject}
+      onOpen={toggleProjectExpanded}
       onRename={renameProject}
       trailingActions={
         <SidebarIconActionButton

@@ -37,6 +37,7 @@ interface CachedProjectWorkplaceProps {
   activeProjectSurface: 'workplace' | 'project-settings';
   experiences: ProjectExperienceDefinition[];
   experiencesLoading: boolean;
+  mode: string;
   onModeChange: (mode: string) => void;
   onProjectControllerChange?: (project: ProjectController) => void;
   onProjectDeleted: () => void;
@@ -231,6 +232,7 @@ export function WorkspaceRoute({
                     activeProjectSurface={active ? activeProjectSurface : 'workplace'}
                     experiences={experiences}
                     experiencesLoading={workspaceExperiencesLoading}
+                    mode={mode}
                     onModeChange={setMode}
                     onProjectControllerChange={active ? updateActiveProjectParticipants : undefined}
                     onProjectDeleted={() => handleProjectDeleted(entry.projectId)}
@@ -263,27 +265,15 @@ const CachedProjectWorkplace = memo(function CachedProjectWorkplace({
   activeProjectSurface,
   experiences,
   experiencesLoading,
+  mode,
   onModeChange,
   onProjectControllerChange,
   onProjectDeleted,
   projectId,
   voiceModelState
 }: CachedProjectWorkplaceProps) {
-  const [activeSessionId, setActiveSessionId] = useState<SessionId | null>(null);
-  const [preferredMode, setProjectMode] = useProjectViewMode(projectId, activeSessionId);
-  const mode = experiences.some((experience) => experience.id === preferredMode)
-    ? (preferredMode as string)
-    : (experiences[0]?.id ?? '');
-  const setMode = useCallback(
-    (nextMode: string) => {
-      setProjectMode(nextMode);
-      if (active) onModeChange(nextMode);
-    },
-    [active, onModeChange, setProjectMode]
-  );
   const handleProjectControllerChange = useCallback(
     (project: ProjectController) => {
-      setActiveSessionId((current) => (current === project.activeSessionId ? current : project.activeSessionId));
       onProjectControllerChange?.(project);
     },
     [onProjectControllerChange]
@@ -295,7 +285,7 @@ const CachedProjectWorkplace = memo(function CachedProjectWorkplace({
       experiences={experiences}
       experiencesLoading={experiencesLoading}
       mode={mode}
-      onModeChange={setMode}
+      onModeChange={active ? onModeChange : undefined}
       onProjectControllerChange={handleProjectControllerChange}
       onProjectDeleted={onProjectDeleted}
       projectId={projectId}
@@ -316,6 +306,7 @@ function areCachedProjectWorkplacePropsEqual(
     prev.activeProjectSurface === next.activeProjectSurface &&
     prev.experiences === next.experiences &&
     prev.experiencesLoading === next.experiencesLoading &&
+    prev.mode === next.mode &&
     prev.onModeChange === next.onModeChange &&
     prev.onProjectControllerChange === next.onProjectControllerChange &&
     prev.onProjectDeleted === next.onProjectDeleted &&

@@ -8,6 +8,10 @@ import { create } from 'zustand';
 // registry instead of baking a built-in id into the host.
 export type ProjectViewMode = string;
 
+export function normalizeProjectViewMode(mode: ProjectViewMode): ProjectViewMode {
+  return mode === 'graphic-view' || mode === 'graph-view' ? 'kanban' : mode;
+}
+
 export function projectViewModeStorageKey({
   projectId,
   sessionId
@@ -22,7 +26,8 @@ export function projectViewModeStorageKey({
 
 function loadMode(key: string): ProjectViewMode | null {
   if (typeof window === 'undefined') return null;
-  return window.localStorage.getItem(key);
+  const mode = window.localStorage.getItem(key);
+  return mode ? normalizeProjectViewMode(mode) : null;
 }
 
 interface ViewModeStore {
@@ -33,8 +38,9 @@ interface ViewModeStore {
 const useViewModeStore = create<ViewModeStore>((set) => ({
   modes: {},
   set: (key, mode) => {
-    if (typeof window !== 'undefined') window.localStorage.setItem(key, mode);
-    set((state) => ({ modes: { ...state.modes, [key]: mode } }));
+    const normalized = normalizeProjectViewMode(mode);
+    if (typeof window !== 'undefined') window.localStorage.setItem(key, normalized);
+    set((state) => ({ modes: { ...state.modes, [key]: normalized } }));
   }
 }));
 

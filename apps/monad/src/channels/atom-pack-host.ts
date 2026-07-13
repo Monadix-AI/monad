@@ -243,11 +243,14 @@ export async function loadChannelAtomPacks(
     currentAtomPack = opts.packIdFor?.(atomPack) ?? atomPack.manifest.name;
     try {
       assertAtomPackMonadCompatibility(atomPack.manifest.name, atomPack.manifest.monadVersion);
+      // Description is metadata for the operator-facing detail view, not a side effect of runtime
+      // registration. Capture it first so a failing sink (for example a duplicate sandbox launcher)
+      // does not collapse an otherwise inspectable pack back to kind-only badges.
+      if (opts.onAtoms) opts.onAtoms(currentAtomPack, await describeAtomPack(atomPack));
       await loadManifestAtomPack(atomPack, host, {
         grantedAtoms: opts.grantedAtomsFor?.(atomPack),
         atomPackId: currentAtomPack
       });
-      if (opts.onAtoms) opts.onAtoms(currentAtomPack, await describeAtomPack(atomPack));
     } catch (err) {
       opts.onError?.(atomPack.manifest.name, err);
     }

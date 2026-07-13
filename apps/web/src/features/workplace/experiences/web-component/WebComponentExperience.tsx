@@ -21,6 +21,8 @@ type WebComponentWorkspaceExperienceDefinition = WorkspaceExperienceDefinition &
   entry: Extract<WorkspaceExperienceEntry, { type: 'web-component' }>;
 };
 
+const moduleLoads = new Map<string, Promise<void>>();
+
 function isValidCustomElementName(name: string): boolean {
   return /^[a-z][.0-9_a-z-]*-[.0-9_a-z-]*$/.test(name);
 }
@@ -31,6 +33,28 @@ function isSameOriginModule(module: string): boolean {
   } catch {
     return false;
   }
+}
+
+function loadWebComponentModule(module: string): Promise<void> {
+  const existing = moduleLoads.get(module);
+  if (existing) return existing;
+
+  const load = new Promise<void>((resolve, reject) => {
+    const script = document.createElement('script');
+    script.type = 'module';
+    script.src = module;
+    script.addEventListener('load', () => resolve(), { once: true });
+    script.addEventListener('error', () => reject(new Error(`failed to load workspace experience module: ${module}`)), {
+      once: true
+    });
+    document.head.append(script);
+  }).catch((error) => {
+    moduleLoads.delete(module);
+    throw error;
+  });
+
+  moduleLoads.set(module, load);
+  return load;
 }
 
 export function WebComponentExperience({
@@ -76,7 +100,7 @@ export function WebComponentExperience({
         active = false;
       };
     }
-    void import(/* webpackIgnore: true */ atom.entry.module).catch((err) => {
+    void loadWebComponentModule(atom.entry.module).catch((err) => {
       if (!active) return;
       setLoadError(err instanceof Error ? err.message : String(err));
     });

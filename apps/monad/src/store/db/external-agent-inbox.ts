@@ -6,7 +6,7 @@ import type { Database } from 'bun:sqlite';
 import type {
   ExternalAgentInboxDeliveryState,
   ExternalAgentInboxItem,
-  MentionInboxItem,
+  InboxItem,
   MessageId,
   NativeAgentDelivery,
   NativeAgentDeliveryId,
@@ -207,35 +207,30 @@ export function countExternalAgentInbox(sqlite: Database, externalAgentSessionId
   return row?.count ?? 0;
 }
 
-export function listMentionInbox(sqlite: Database, limit = 100): MentionInboxItem[] {
-  const rows = sqlite
+export function listMentionInbox(sqlite: Database, limit = 100): InboxItem[] {
+  const mentionRows = sqlite
     .query(
       `SELECT m.*,
-              i.message_seq AS _external_agent_seq,
-              i.delivery_id AS _external_agent_delivery_id,
-              i.state AS _external_agent_state,
-              i.external_agent_session_id AS _external_agent_session_id,
-              i.project_id AS _project_id,
-              i.member_instance_id AS _member_instance_id,
-              i.trigger_message_id AS _trigger_message_id,
-              i.created_at AS _inbox_created_at,
-              i.updated_at AS _inbox_updated_at,
-              eas.transcript_target_id AS _session_id,
+              s.id AS _session_id,
+              s.project_id AS _project_id,
               s.title AS _session_title,
-              p.title AS _project_name
-       FROM external_agent_inbox_items i
-       JOIN messages m ON m.rowid = i.message_seq
-       JOIN external_agent_sessions eas ON eas.id = i.external_agent_session_id
-       LEFT JOIN sessions s ON s.id = eas.transcript_target_id
-       LEFT JOIN workplace_projects p ON p.id = i.project_id
-       WHERE i.project_id IS NOT NULL
+              p.title AS _project_name,
+              COALESCE(json_extract(sm.data, '$.displayName'), json_extract(sm.data, '$.name')) AS _agent_display_name
+       FROM messages m
+       JOIN sessions s ON s.id = m.transcript_target_id
+       LEFT JOIN workplace_projects p ON p.id = s.project_id
+       LEFT JOIN session_members sm
+         ON sm.session_id = s.id
+        AND sm.member_id = CASE WHEN json_valid(m.data) THEN json_extract(m.data, '$.agentName') END
+       WHERE m.role = 'assistant'
          AND m.active = 1
-       ORDER BY i.message_seq DESC
+         AND instr(m.text, 'id="human"') > 0
+       ORDER BY m.rowid DESC
        LIMIT ?`
     )
     .all(limit) as Array<Record<string, unknown>>;
 
-  return rows.map((row) => {
+  const mentions: InboxItem[] = mentionRows.map((row) => {
     const message = rowToMessage({
       id: row.id as string,
       transcriptTargetId: row.transcript_target_id as string,
@@ -249,26 +244,96 @@ export function listMentionInbox(sqlite: Database, limit = 100): MentionInboxIte
       createdAt: row.created_at as string,
       updatedAt: (row.updated_at ?? null) as string | null
     } as MessageRow);
-    const deliveryId = (row._external_agent_delivery_id ?? undefined) as NativeAgentDeliveryId | undefined;
-    const externalAgentSessionId = externalAgentSessionIdSchema.parse(row._external_agent_session_id);
-    const seq = row._external_agent_seq as number;
+    let agentName = typeof row._agent_display_name === 'string' ? row._agent_display_name : undefined;
+    if (typeof row.data === 'string') {
+      try {
+        const data = JSON.parse(row.data) as { agentName?: unknown };
+        if (!agentName && typeof data.agentName === 'string') agentName = data.agentName;
+      } catch {
+        // Invalid message metadata must not hide an otherwise valid mention.
+      }
+    }
     return {
-      id: deliveryId ?? `${externalAgentSessionId}:${seq}`,
-      seq,
-      deliveryId,
-      deliveryState: row._external_agent_state as ExternalAgentInboxDeliveryState,
-      externalAgentSessionId,
+      kind: 'mention',
+      id: message.id,
       projectId: (row._project_id ?? undefined) as ProjectId | undefined,
       projectName: (row._project_name ?? undefined) as string | undefined,
       sessionId: sessionIdSchema.parse(row._session_id),
       sessionTitle: (row._session_title ?? undefined) as string | undefined,
-      memberInstanceId: (row._member_instance_id ?? undefined) as string | undefined,
-      triggerMessageId: (row._trigger_message_id ?? undefined) as MessageId | undefined,
       message,
-      createdAt: row._inbox_created_at as string,
-      updatedAt: (row._inbox_updated_at ?? undefined) as string | undefined
+      ...(agentName ? { agentName } : {}),
+      createdAt: message.createdAt
     };
   });
+
+  const approvalRows = sqlite
+    .query(
+      `SELECT e.type, e.payload, e.at,
+              s.id AS _session_id,
+              s.project_id AS _project_id,
+              s.title AS _session_title,
+              p.title AS _project_name
+       FROM events e
+       JOIN sessions s ON s.id = e.transcript_target_id
+       LEFT JOIN workplace_projects p ON p.id = s.project_id
+       WHERE e.type IN ('tool.approval_requested', 'external_agent.approval_requested')
+         AND NOT EXISTS (
+           SELECT 1 FROM events r
+           WHERE r.transcript_target_id = e.transcript_target_id
+             AND r.type = CASE e.type
+               WHEN 'tool.approval_requested' THEN 'tool.approval_resolved'
+               ELSE 'external_agent.approval_resolved'
+             END
+             AND json_extract(r.payload, '$.requestId') = json_extract(e.payload, '$.requestId')
+         )
+       ORDER BY e.rowid DESC
+       LIMIT ?`
+    )
+    .all(limit) as Array<Record<string, unknown>>;
+
+  const approvals: InboxItem[] = [];
+  for (const row of approvalRows) {
+    let payload: Record<string, unknown>;
+    try {
+      payload = JSON.parse(String(row.payload)) as Record<string, unknown>;
+    } catch {
+      continue;
+    }
+    if (typeof payload.requestId !== 'string') continue;
+    const context = {
+      projectId: (row._project_id ?? undefined) as ProjectId | undefined,
+      projectName: (row._project_name ?? undefined) as string | undefined,
+      sessionId: sessionIdSchema.parse(row._session_id),
+      sessionTitle: (row._session_title ?? undefined) as string | undefined,
+      createdAt: String(row.at)
+    };
+    if (row.type === 'tool.approval_requested') {
+      if (typeof payload.tool !== 'string') continue;
+      approvals.push({
+        kind: 'approval',
+        id: payload.requestId,
+        approvalKind: 'tool',
+        tool: payload.tool,
+        input: payload.input,
+        ...(typeof payload.key === 'string' ? { key: payload.key } : {}),
+        ...context
+      });
+      continue;
+    }
+    if (typeof payload.externalAgentSessionId !== 'string') continue;
+    approvals.push({
+      kind: 'approval',
+      id: payload.requestId,
+      approvalKind: 'external-agent',
+      externalAgentSessionId: externalAgentSessionIdSchema.parse(payload.externalAgentSessionId),
+      ...(typeof payload.provider === 'string' ? { provider: payload.provider } : {}),
+      ...(typeof payload.text === 'string' ? { text: payload.text } : {}),
+      input: payload.data,
+      ...context
+    });
+  }
+
+  return [...mentions, ...approvals].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit);
 }
 
 export function getNativeAgentDelivery(

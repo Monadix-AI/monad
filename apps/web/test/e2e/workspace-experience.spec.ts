@@ -1,5 +1,6 @@
-import type { Session } from '@monad/protocol';
+import type { Session, UIItem } from '@monad/protocol';
 
+import { readFileSync } from 'node:fs';
 import { expect, type Page, test } from '@playwright/test';
 
 const projectId = 'prj_ABCDEF123456';
@@ -77,14 +78,21 @@ const mockCanvasExperience = {
   title: 'Mock Canvas'
 };
 
-// The real first-party graph-view: shipped as a web-component whose module is served same-origin by
-// the web app itself (public/experiences/graph-view.js) — NOT mocked here, so the test exercises the
-// actual shipping module. chat-room stays a host-component, mirroring production.
-const graphViewExperience = {
-  entry: { module: '/experiences/graph-view.js', tagName: 'monad-graph-view', type: 'web-component' },
+// The real Power Pack Kanban module is served through the same pack-relative asset route used after
+// installation. chat-room stays a host-component, mirroring production.
+const kanbanExperienceModule = readFileSync(
+  new URL('../../../../packages/monad-power-pack/src/experiences/kanban.js', import.meta.url),
+  'utf8'
+);
+const kanbanExperience = {
+  entry: {
+    module: '/v1/atoms/monad-power-pack/assets/experiences/kanban.js',
+    tagName: 'monad-kanban',
+    type: 'web-component'
+  },
   icon: 'git-fork',
-  id: 'graphic-view',
-  title: 'Activity'
+  id: 'kanban',
+  title: 'Kanban'
 };
 const chatRoomExperience = {
   entry: { component: 'chat-room', type: 'host-component' },
@@ -99,6 +107,7 @@ async function mockWorkplaceApi(
   options: {
     sessions?: Session[];
     sendProjectMessage?: (request: { text?: string; attempt: number }) => { status?: number; body?: unknown };
+    uiItems?: UIItem[];
   } = {}
 ) {
   let sendProjectMessageAttempts = 0;
@@ -110,6 +119,9 @@ async function mockWorkplaceApi(
       contentType: 'text/javascript',
       status: 200
     })
+  );
+  await page.route('**/v1/atoms/monad-power-pack/assets/experiences/kanban.js', (route) =>
+    route.fulfill({ body: kanbanExperienceModule, contentType: 'text/javascript', status: 200 })
   );
 
   await page.route('**/api/health', (route) =>
@@ -187,10 +199,10 @@ async function mockWorkplaceApi(
     if (method === 'GET' && sessionExternalAgentMatch) {
       return route.fulfill(json({ sessions: [] }));
     }
-    if (method === 'GET' && path === `/v1/projects/${projectId}/ui-stream`) {
-      return route.fulfill(sse({ kind: 'snapshot', items: [], hasMore: false }));
+    if (method === 'GET' && path === `/v1/sessions/${alphaSessionId}/ui-stream`) {
+      return route.fulfill(sse({ kind: 'snapshot', items: options.uiItems ?? [], hasMore: false }));
     }
-    if (method === 'POST' && path === `/v1/projects/${projectId}/messages`) {
+    if (method === 'POST' && path === `/v1/channels/${alphaSessionId}/messages`) {
       sendProjectMessageAttempts += 1;
       const body = request.postDataJSON() as { text?: string };
       const result = options.sendProjectMessage?.({ text: body.text, attempt: sendProjectMessageAttempts }) ?? {};
@@ -244,30 +256,26 @@ test.describe('workspace experience atoms', () => {
     await expect(canvas).toContainText(`mock canvas mounted for ${projectId} via api:${projectId}`);
   });
 
-  test('ships the first-party graph-view over the web-component path and dogfoods its host actions', async ({
-    page
-  }) => {
-    // graph-view is first in the list, so it is the default view — its real shipping module
-    // (public/experiences/graph-view.js) mounts on load, no mock module involved.
-    await mockWorkplaceApi(page, [graphViewExperience, chatRoomExperience]);
+  test('ships Power Pack Kanban over the web-component path and dogfoods its host actions', async ({ page }) => {
+    await mockWorkplaceApi(page, [kanbanExperience, chatRoomExperience]);
 
     await page.goto(`/workspace/${projectRouteId}/${alphaSessionRouteId}`);
     await expect(page.locator('.project-topbar-name', { hasText: 'Mock Project' })).toBeVisible({ timeout: 20_000 });
 
-    const graph = page.locator('monad-graph-view');
-    await expect(graph).toBeVisible();
-    await expect(graph).toHaveAttribute('data-experience-id', 'graphic-view');
+    const kanban = page.locator('monad-kanban');
+    await expect(kanban).toBeVisible();
+    await expect(kanban).toHaveAttribute('data-experience-id', 'kanban');
     // Rendered from the published host snapshot delivered over the event bridge.
-    await expect(graph).toHaveAttribute('data-ready', 'true');
-    await expect(graph).toHaveAttribute('data-project-id', projectId);
+    await expect(kanban).toHaveAttribute('data-ready', 'true');
+    await expect(kanban).toHaveAttribute('data-project-id', projectId);
     // The hub node always renders; participant/activity counts come off snapshot.graphCanvas.
-    await expect(graph).toContainText('monad');
-    await expect(graph).toHaveAttribute('data-participant-count', /\d+/);
+    await expect(kanban).toContainText('monad');
+    await expect(kanban).toHaveAttribute('data-participant-count', /\d+/);
 
     // Clicking the hub dogfoods api.actions.switchExperience — a real switch to the chat-room
     // experience, which unmounts the graph.
-    await graph.locator('[data-node-id="hub:monad"]').click();
-    await expect(graph).toBeHidden();
+    await kanban.locator('[data-node-id="hub:monad"]').click();
+    await expect(kanban).toBeHidden();
     await expect(page.locator('[contenteditable][aria-label="Message agents"]')).toBeVisible();
 
     const chatLayout = await page.evaluate(() => {
@@ -302,14 +310,14 @@ test.describe('workspace experience atoms', () => {
     expect(chatLayout.composerOverlapsTranscript).toBe(true);
     expect(chatLayout.scrollPaddingBottom).toBeGreaterThan(chatLayout.composerHeight);
 
-    // And the host menu can switch back to Activity, re-mounting the same web-component.
+    // And the host menu can switch back to Kanban, re-mounting the same web-component.
     await page.getByRole('button', { name: 'Project view mode' }).click();
-    await page.getByRole('menuitem', { name: 'Activity' }).click();
-    await expect(page.locator('monad-graph-view')).toBeVisible();
+    await page.getByRole('menuitem', { name: 'Kanban' }).click();
+    await expect(page.locator('monad-kanban')).toBeVisible();
   });
 
   test('switches the active experience with the selected project session', async ({ page }) => {
-    await mockWorkplaceApi(page, [graphViewExperience, mockCanvasExperience], {
+    await mockWorkplaceApi(page, [kanbanExperience, mockCanvasExperience], {
       sessions: [
         projectSession(alphaSessionId, 'Alpha session', '2026-07-04T00:00:00.000Z'),
         projectSession(betaSessionId, 'Beta session', '2026-07-03T00:00:00.000Z')
@@ -320,7 +328,7 @@ test.describe('workspace experience atoms', () => {
     await expect(page.locator('.project-topbar-name', { hasText: 'Mock Project' })).toBeVisible({ timeout: 20_000 });
     await expect(page.locator('.project-topbar-name', { hasText: 'Alpha session' })).toBeVisible();
     await expect(page).toHaveURL(new RegExp(`/workspace/${projectRouteId}/${alphaSessionRouteId}$`));
-    await expect(page.locator('monad-graph-view')).toBeVisible();
+    await expect(page.locator('monad-kanban')).toBeVisible();
 
     await page.getByRole('button', { name: 'Project view mode' }).click();
     await page.getByRole('menuitem', { name: 'Mock Canvas' }).click();
@@ -330,7 +338,7 @@ test.describe('workspace experience atoms', () => {
 
     await expect(page).toHaveURL(new RegExp(`/workspace/${projectRouteId}/${betaSessionRouteId}$`));
     await expect(page.locator('.project-topbar-name', { hasText: 'Beta session' })).toBeVisible();
-    await expect(page.locator('monad-graph-view')).toBeVisible();
+    await expect(page.locator('monad-kanban')).toBeVisible();
     await expect(page.locator('mock-canvas')).toBeHidden();
 
     await page.getByRole('treeitem', { name: 'Alpha session' }).click();
@@ -338,7 +346,7 @@ test.describe('workspace experience atoms', () => {
     await expect(page).toHaveURL(new RegExp(`/workspace/${projectRouteId}/${alphaSessionRouteId}$`));
     await expect(page.locator('.project-topbar-name', { hasText: 'Alpha session' })).toBeVisible();
     await expect(page.locator('mock-canvas')).toBeVisible();
-    await expect(page.locator('monad-graph-view')).toBeHidden();
+    await expect(page.locator('monad-kanban')).toBeHidden();
   });
 
   test('shows retry affordance for failed optimistic project messages', async ({ page }) => {
@@ -359,14 +367,7 @@ test.describe('workspace experience atoms', () => {
 
     await expect(page.getByText('hello from optimistic')).toBeVisible();
     const outline = page.getByRole('navigation', { name: 'User message outline' });
-    await expect(outline).toBeVisible();
-    const outlineItem = outline.getByRole('button', { name: /hello from optimistic/ });
-    await expect(outlineItem).toBeVisible();
-    await outlineItem.hover();
-    await expect(
-      outline.locator('.chat-message-outline__preview-body', { hasText: 'hello from optimistic' })
-    ).toBeVisible();
-    await expect(outline.locator('.chat-message-outline__preview-time')).toBeVisible();
+    await expect(outline).toBeHidden();
     await expect(page.getByRole('button', { name: 'Retry message' })).toBeVisible();
     await expect(editor).toHaveText('');
 
@@ -378,5 +379,32 @@ test.describe('workspace experience atoms', () => {
       { text: 'hello from optimistic', attempt: 1 },
       { text: 'hello from optimistic', attempt: 2 }
     ]);
+  });
+
+  test('shows the user message outline only when there are more than five user messages', async ({ page }) => {
+    const uiItems: UIItem[] = Array.from({ length: 5 }, (_, index) => {
+      const id = `msg_OUTLINE${String(index + 1).padStart(5, '0')}` as UIItem['id'];
+      return {
+        id,
+        kind: 'message',
+        parts: [{ text: `outline message ${index + 1}`, type: 'text' }],
+        role: 'user',
+        seq: id,
+        status: 'done'
+      };
+    });
+    await mockWorkplaceApi(page, [chatRoomExperience], { uiItems });
+    await page.goto(`/workspace/${projectRouteId}/${alphaSessionRouteId}`);
+    await expect(page.locator('.project-topbar-name', { hasText: 'Mock Project' })).toBeVisible({ timeout: 20_000 });
+
+    const editor = page.locator('[contenteditable][aria-label="Message agents"]');
+    const outline = page.getByRole('navigation', { name: 'User message outline' });
+    await expect(page.getByText('outline message 5')).toBeVisible();
+    await expect(outline).toBeHidden();
+
+    await editor.fill('outline message 6');
+    await editor.press('Enter');
+    await expect(outline).toBeVisible();
+    await expect(outline.getByRole('button', { name: /outline message 6/ })).toBeVisible();
   });
 });

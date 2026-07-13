@@ -35,7 +35,7 @@ import { useTranscriptHistory } from '#/hooks/use-transcript-history';
 import { normalizedComposerSettings } from '#/lib/composer-settings';
 import { useWorkspaceShellStore, type WorkspaceShellState } from '#/lib/workspace-shell-store';
 import { buildDraftSessionFeedback, resolveDraftAgentLabel } from './draft-session-feedback';
-import { sessionIsDraft } from './session-route-contract';
+import { sessionIsDraft, sessionUsesProjectMessageRoute } from './session-route-contract';
 import {
   buildSessionContextUsage,
   buildViewMessages,
@@ -233,7 +233,8 @@ export function useSessionRouteModel({
     jumpToLive,
     setSessionUrl,
     followUpBehavior: composerSettings.followUpBehavior,
-    assistantLabel
+    assistantLabel,
+    isProjectSession: currentSession ? sessionUsesProjectMessageRoute(currentSession) : false
   });
   const retryDraftSession = useCallback(async () => {
     if (!draftSession) return;

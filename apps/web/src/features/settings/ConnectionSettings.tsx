@@ -336,33 +336,39 @@ export function ConnectionSettings() {
     </section>
   );
 
+  const remoteIndicator = isRemote ? (
+    <div className="flex items-center gap-2">
+      <HugeiconsIcon
+        className="size-4 text-muted-foreground"
+        icon={GlobeIcon}
+      />
+      <span className="rounded bg-primary/10 px-1.5 py-0.5 font-medium text-[10px] text-primary uppercase tracking-wide">
+        {t('web.conn.remote')}
+      </span>
+    </div>
+  ) : null;
+
+  const endpointOverview = (className: string) => (
+    <div className={className}>
+      <div className="flex min-w-0 flex-col gap-1">
+        <span className="font-semibold text-sm">{t('web.conn.localEndpoint')}</span>
+        <code className="min-w-0 break-all font-mono text-foreground text-xs">
+          {daemonScheme}://{daemonHost}:{network.settings?.port ?? 52749}
+        </code>
+      </div>
+      <div className="flex min-w-0 flex-col gap-1">
+        <span className="font-semibold text-sm">{t('web.settings.system.localHttpEndpoint')}</span>
+        <code className="min-w-0 break-all font-mono text-foreground text-xs">{fallbackLabel}</code>
+      </div>
+    </div>
+  );
+
   return (
     <div className="flex min-w-0 flex-1 flex-col">
       <ScrollArea className="min-h-0 flex-1">
         <div className="flex flex-col gap-3 px-6 py-5 pt-4">
-          {isRemote ? (
-            <div className="flex items-center gap-2">
-              <HugeiconsIcon
-                className="size-4 text-muted-foreground"
-                icon={GlobeIcon}
-              />
-              <span className="rounded bg-primary/10 px-1.5 py-0.5 font-medium text-[10px] text-primary uppercase tracking-wide">
-                {t('web.conn.remote')}
-              </span>
-            </div>
-          ) : null}
-          <div className="grid gap-2 rounded-md border bg-muted/30 px-3 py-2.5 sm:grid-cols-2">
-            <div className="flex min-w-0 flex-col gap-1">
-              <span className="font-semibold text-sm">{t('web.conn.localEndpoint')}</span>
-              <code className="min-w-0 break-all font-mono text-foreground text-xs">
-                {daemonScheme}://{daemonHost}:{network.settings?.port ?? 52749}
-              </code>
-            </div>
-            <div className="flex min-w-0 flex-col gap-1">
-              <span className="font-semibold text-sm">{t('web.settings.system.localHttpEndpoint')}</span>
-              <code className="min-w-0 break-all font-mono text-foreground text-xs">{fallbackLabel}</code>
-            </div>
-          </div>
+          {remoteIndicator}
+          {endpointOverview('grid gap-2 rounded-md border bg-muted/30 px-3 py-2.5 sm:grid-cols-2')}
           {networkSection()}
         </div>
       </ScrollArea>

@@ -90,6 +90,40 @@ test('sessionDelete hides queued project sessions from project lists', async () 
   store.close();
 });
 
+test('createProjectSession clones the project member templates into live session members', async () => {
+  const store = createStore();
+  const d = buildHandlers(mockModel(['hi']), undefined, { store });
+  const { projectId } = await d.session.createProject({ title: 'p' });
+  await d.session.updateProject({
+    id: projectId,
+    memberTemplates: [
+      {
+        id: 'pmem_codex',
+        type: 'external-agent',
+        name: 'codex',
+        displayName: 'Lily',
+        settings: { managedProjectAgent: true, launchMode: 'pty' }
+      }
+    ]
+  });
+
+  const { sessionId } = await d.session.createProjectSession({ projectId, title: 'project session' });
+
+  expect(store.listSessionMembers(sessionId)).toMatchObject([
+    {
+      memberId: 'pmem_codex',
+      templateId: 'pmem_codex',
+      type: 'external-agent',
+      data: {
+        name: 'codex',
+        displayName: 'Lily',
+        settings: { managedProjectAgent: true, launchMode: 'pty' }
+      }
+    }
+  ]);
+  store.close();
+});
+
 test('sessionAbort reports false when nothing is in flight', async () => {
   const d = buildHandlers(mockModel(['hi']));
   const { sessionId } = await d.session.create({ title: 't' });

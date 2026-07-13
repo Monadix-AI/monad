@@ -279,7 +279,11 @@ import {
   useSetSandboxMutation
 } from './endpoints/settings/sandbox/index.ts';
 import { useGetSkillsSettingsQuery, useSetSkillsSettingsMutation } from './endpoints/settings/skills/index.ts';
-import { useGetStartupQuery, useSetStartupMutation } from './endpoints/settings/startup/index.ts';
+import {
+  useGetStartupQuery,
+  useOpenStartupSettingsMutation,
+  useSetStartupMutation
+} from './endpoints/settings/startup/index.ts';
 import {
   useGetToolBackendsQuery,
   useInitDockerBackendMutation,
@@ -488,6 +492,7 @@ export {
   useListWorkspaceExperiencesQuery,
   useOpenCapabilityInventoryLocationMutation,
   useOpenDraftAttachmentMutation,
+  useOpenStartupSettingsMutation,
   usePickDirectoryMutation,
   usePreviewSettingsImportMutation,
   useProbeNetworkMutation,

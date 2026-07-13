@@ -1095,6 +1095,7 @@
   "web.settings.system.launchAtLogin": "Launch at login",
   "web.settings.system.launchAtLoginDesc": "Start the monad daemon automatically when you sign in.",
   "web.settings.system.launchAtLoginUnsupported": "Startup items are not supported on this platform.",
+  "web.settings.system.openStartupSettings": "Open startup settings",
   "web.settings.system.certExpiry": "Certificate expiry",
   "web.settings.system.certStatus": "Certificate status",
   "web.settings.system.certStatus.active": "active",

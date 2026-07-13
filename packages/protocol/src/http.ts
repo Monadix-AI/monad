@@ -118,7 +118,11 @@ import {
   importSettingsRequestSchema
 } from './settings/settings-import.ts';
 import { setSkillsSettingsRequestSchema, skillsSettingsResponseSchema } from './settings/skills-settings.ts';
-import { setStartupSettingsRequestSchema, startupSettingsSchema } from './settings/startup-settings.ts';
+import {
+  openStartupSettingsResponseSchema,
+  setStartupSettingsRequestSchema,
+  startupSettingsSchema
+} from './settings/startup-settings.ts';
 import { setUserProfileSettingsRequestSchema, userProfileSettingsSchema } from './settings/user-profile-settings.ts';
 import { systemUpgradeStatusSchema } from './system-upgrade.ts';
 import { initDockerResponseSchema, setToolBackendsRequestSchema, toolBackendsResponseSchema } from './tool-backends.ts';
@@ -478,6 +482,7 @@ export const daemonHttpContract = {
   },
   startupSettings: {
     get: defineHttpEndpoint({ response: { 200: startupSettingsSchema } }),
+    open: defineHttpEndpoint({ response: { 200: openStartupSettingsResponseSchema } }),
     set: defineHttpEndpoint({
       body: setStartupSettingsRequestSchema,
       response: { 200: startupSettingsSchema }

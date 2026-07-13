@@ -1,4 +1,4 @@
-import type { ProjectId, Session, WorkplaceProject } from '@monad/protocol';
+import type { Event, ProjectId, Session, WorkplaceProject } from '@monad/protocol';
 import type { ExternalAgentSessionRow } from '#/store/db/index.ts';
 
 import { afterEach, beforeEach, expect, test } from 'bun:test';
@@ -352,7 +352,7 @@ test('external agent inbox items expose delivery pointers without raw provider o
   });
 });
 
-test('mention inbox aggregates project-routed messages across delivery states', () => {
+test('operator inbox aggregates agent mentions and unresolved approvals', () => {
   const project: WorkplaceProject = {
     id: 'prj_ABCDEF123456',
     title: 'Inbox Project',
@@ -388,55 +388,93 @@ test('mention inbox aggregates project-routed messages across delivery states', 
 
   store.insertWorkplaceProject(project);
   store.insertSession(session);
-  store.upsertExternalAgentSession({
-    ...row,
-    id: 'exa_ABCDEF123456',
-    transcriptTargetId: session.id,
-    runtimeRole: 'managed-project-agent',
-    agentRuntimeId: 'exa_ABCDEF123456'
+  store.insertSessionMember({
+    sessionId: session.id,
+    memberId: 'pmem_codex_1',
+    templateId: 'pmem_codex_1',
+    type: 'external-agent',
+    data: { name: 'codex', displayName: 'Lily' },
+    createdAt: '2026-06-28T00:00:00.000Z',
+    updatedAt: '2026-06-28T00:00:00.000Z'
   });
-  store.insertMessage('msg_ABCDEF123450', session.id, '@codex first', '2026-06-28T00:00:01.000Z', 'user');
-  store.insertMessage('msg_ABCDEF123451', session.id, '@codex second', '2026-06-28T00:00:02.000Z', 'user');
-  store.enqueueExternalAgentInboxItem('exa_ABCDEF123456', 1, {
-    deliveryId: 'deliv_ABCDEF123450',
-    projectId: project.id,
-    memberInstanceId: 'pmem_codex_1',
-    triggerMessageId: 'msg_ABCDEF123450',
-    createdAt: '2026-06-28T00:00:01.500Z'
-  });
-  store.enqueueExternalAgentInboxItem('exa_ABCDEF123456', 2, {
-    deliveryId: 'deliv_ABCDEF123451',
-    projectId: project.id,
-    memberInstanceId: 'pmem_codex_1',
-    triggerMessageId: 'msg_ABCDEF123451',
-    createdAt: '2026-06-28T00:00:02.500Z'
-  });
-  store.markExternalAgentInboxConsumed('exa_ABCDEF123456', 1);
-
-  expect(store.listMentionInbox()).toEqual([
-    expect.objectContaining({
-      id: 'deliv_ABCDEF123451',
-      deliveryState: 'queued',
-      projectId: project.id,
-      projectName: 'Inbox Project',
+  store.insertMessage(
+    'msg_ABCDEF123450',
+    session.id,
+    '@[name="zeke" id="human"] please review',
+    '2026-06-28T00:00:01.000Z',
+    'assistant',
+    { data: { agentName: 'pmem_codex_1', source: 'managed-external-agent' } }
+  );
+  store.insertMessage('msg_ABCDEF123451', session.id, 'ordinary agent reply', '2026-06-28T00:00:02.000Z', 'assistant');
+  store.appendEvents([
+    {
+      id: 'evt_ABCDEF123450',
       sessionId: session.id,
-      sessionTitle: 'Mention Thread',
-      memberInstanceId: 'pmem_codex_1',
-      triggerMessageId: 'msg_ABCDEF123451',
-      message: expect.objectContaining({ id: 'msg_ABCDEF123451', text: '@codex second' })
+      type: 'tool.approval_requested',
+      actorAgentId: null,
+      payload: { requestId: 'req_ABCDEF123450', tool: 'shell_exec', input: { command: 'git status' } },
+      at: '2026-06-28T00:00:03.000Z'
+    } as Event,
+    {
+      id: 'evt_ABCDEF123451',
+      sessionId: session.id,
+      type: 'external_agent.approval_requested',
+      actorAgentId: null,
+      payload: {
+        requestId: 'req_ABCDEF123451',
+        externalAgentSessionId: 'exa_ABCDEF123456',
+        provider: 'codex',
+        text: 'Allow command?',
+        data: { command: 'bun test' }
+      },
+      at: '2026-06-28T00:00:04.000Z'
+    } as Event,
+    {
+      id: 'evt_ABCDEF123452',
+      sessionId: session.id,
+      type: 'tool.approval_requested',
+      actorAgentId: null,
+      payload: { requestId: 'req_ABCDEF123452', tool: 'file_write', input: { path: '/tmp/done' } },
+      at: '2026-06-28T00:00:05.000Z'
+    } as Event,
+    {
+      id: 'evt_ABCDEF123453',
+      sessionId: session.id,
+      type: 'tool.approval_resolved',
+      actorAgentId: null,
+      payload: { requestId: 'req_ABCDEF123452', tool: 'file_write', allow: true },
+      at: '2026-06-28T00:00:06.000Z'
+    } as Event
+  ]);
+
+  const items = store.listMentionInbox();
+  expect(items).toEqual([
+    expect.objectContaining({
+      kind: 'approval',
+      id: 'req_ABCDEF123451',
+      approvalKind: 'external-agent',
+      projectId: project.id,
+      sessionId: session.id,
+      externalAgentSessionId: 'exa_ABCDEF123456'
     }),
     expect.objectContaining({
-      id: 'deliv_ABCDEF123450',
-      deliveryState: 'consumed',
+      kind: 'approval',
+      id: 'req_ABCDEF123450',
+      approvalKind: 'tool',
       projectId: project.id,
-      projectName: 'Inbox Project',
       sessionId: session.id,
-      sessionTitle: 'Mention Thread',
-      memberInstanceId: 'pmem_codex_1',
-      triggerMessageId: 'msg_ABCDEF123450',
-      message: expect.objectContaining({ id: 'msg_ABCDEF123450', text: '@codex first' })
+      tool: 'shell_exec'
+    }),
+    expect.objectContaining({
+      kind: 'mention',
+      id: 'msg_ABCDEF123450',
+      projectId: project.id,
+      sessionId: session.id,
+      agentName: 'Lily',
+      message: expect.objectContaining({ id: 'msg_ABCDEF123450', text: '@[name="zeke" id="human"] please review' })
     })
   ]);
+  expect(items.some((item) => item.id === 'req_ABCDEF123452')).toBe(false);
 });
 
 test('deleteSession cleans up external agent session rows', () => {

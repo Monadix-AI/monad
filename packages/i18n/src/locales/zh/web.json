@@ -678,6 +678,7 @@
   "web.settings.system.launchAtLogin": "开机自启动",
   "web.settings.system.launchAtLoginDesc": "登录系统后自动启动 monad daemon。",
   "web.settings.system.launchAtLoginUnsupported": "当前平台不支持开机自启动设置。",
+  "web.settings.system.openStartupSettings": "打开系统启动项设置",
   "web.settings.system.certExpiry": "证书过期时间",
   "web.settings.system.certStatus": "证书状态",
   "web.settings.system.certStatus.active": "已启用",

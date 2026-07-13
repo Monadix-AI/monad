@@ -67,7 +67,30 @@ export function createStartupSettingsModule(options: StartupSettingsOptions) {
     return getStartupSettings();
   }
 
-  return { getStartupSettings, setStartupSettings };
+  async function openStartupSettings(): Promise<{ ok: true; target: string }> {
+    const candidates = startupSettingsCommands(platformName, context.homeDir);
+    for (const candidate of candidates) {
+      const [executable, ...args] = candidate;
+      if (!executable || !Bun.which(executable)) continue;
+      const proc = Bun.spawn([executable, ...args], { stdin: 'ignore', stdout: 'ignore', stderr: 'ignore' });
+      proc.unref();
+      return { ok: true, target: candidate.join(' ') };
+    }
+    throw new Error(`No startup settings application is available on ${platformName}.`);
+  }
+
+  return { getStartupSettings, openStartupSettings, setStartupSettings };
+}
+
+export function startupSettingsCommands(platform: NodeJS.Platform, homeDir: string): string[][] {
+  if (platform === 'darwin') {
+    return [['open', 'x-apple.systempreferences:com.apple.LoginItems-Settings.extension']];
+  }
+  if (platform === 'win32') return [['explorer.exe', 'ms-settings:startupapps']];
+  if (platform === 'linux') {
+    return [['gnome-session-properties'], ['xdg-open', `${homeDir}/.config/autostart`]];
+  }
+  return [];
 }
 
 function unsupported(platform: string): StartupSettings {

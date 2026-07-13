@@ -4,10 +4,12 @@
 // via config.sandbox.backend. Keeps docker/e2b (and the e2b npm dep) out of the always-on
 // built-in atoms pack.
 
+import { readFileSync } from 'node:fs';
 import { defineAtomPack, SDK_VERSION } from '@monad/sdk-atom';
 
 import { detectDockerRuntime, dockerLauncher, dockerRuntimeAvailable } from './docker.ts';
 import { __setE2bLoaderForTest, configureE2bApiKey, e2bLauncher } from './e2b.ts';
+import { kanbanWorkspaceExperience } from './experiences/kanban.ts';
 
 export {
   __setE2bLoaderForTest,
@@ -26,11 +28,12 @@ export const monadPowerPack = defineAtomPack({
     name: 'monad-power-pack',
     version: '0.0.1',
     sdkVersion: SDK_VERSION,
-    atoms: ['sandbox'],
+    atoms: ['sandbox', 'workspace-experience'],
     description: 'Opt-in contributed sandbox backends (Docker/Podman and E2B) for the monad agent.',
     author: 'Monadix Labs'
   },
-  sandboxes: [dockerLauncher, e2bLauncher]
+  sandboxes: [dockerLauncher, e2bLauncher],
+  workspaceExperiences: [kanbanWorkspaceExperience]
 });
 
 export const MONAD_POWER_PACK_DEBUG_SOURCE = 'debug:monad-power-pack';
@@ -38,16 +41,17 @@ export const MONAD_POWER_PACK_GITHUB_SOURCE = 'github:monadix-labs/monad-power-p
 
 // Staged form of the REAL pack for the dev "install from the network" simulation. atom-pack-packs.ts
 // serves this when a client installs source `debug:monad-power-pack` (NODE_ENV≠production). The on-disk
-// bundle re-exports `monadPowerPack`; its bare specifier resolves from the worktree node_modules, so at
-// discovery time register() registers the docker/e2b/vm sandbox launchers exactly like a fetched pack
-// would. Installing it + setting agent.sandbox.backend=docker|e2b|vm makes that heavy backend selectable.
+// bundle re-exports `monadPowerPack` from this dev checkout by file URL. Installed packs live below
+// `.dev/.monad`, where a workspace bare specifier cannot resolve; the explicit URL keeps this dev-only
+// simulation loadable while still exercising the real on-disk discovery and registration path.
 const stagedManifest = {
   ...monadPowerPack.manifest,
   entry: 'dist/atom-pack.js',
   source: { repo: 'monadix-labs/monad-power-pack', commit: 'debug' }
 };
 
-const stagedBundle = "export { monadPowerPack as default } from '@monad/monad-power-pack';\n";
+const stagedBundle = `export { monadPowerPack as default } from ${JSON.stringify(import.meta.url)};\n`;
+const kanbanAsset = readFileSync(new URL('./experiences/kanban.js', import.meta.url));
 
 export function stagedMonadPowerPack(): {
   manifestRaw: unknown;
@@ -60,6 +64,9 @@ export function stagedMonadPowerPack(): {
     manifestRaw: stagedManifest,
     bundle: bytes,
     fileAtoms: { skills: [], mcpServers: [], locales: [] },
-    files: new Map([['dist/atom-pack.js', bytes]])
+    files: new Map([
+      ['dist/atom-pack.js', bytes],
+      ['experiences/kanban.js', kanbanAsset]
+    ])
   };
 }

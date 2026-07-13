@@ -155,10 +155,6 @@ export default defineConfig(({ command }) => ({
               test: new RegExp(`${WORKSPACE_ROOT}atoms[/\\\\]src[/\\\\]agent-adapters[/\\\\]`)
             },
             {
-              name: 'monad-experience-graph',
-              test: new RegExp(`${WORKSPACE_ROOT}atoms[/\\\\]src[/\\\\]workspace-experiences[/\\\\]graph-view[/\\\\]`)
-            },
-            {
               name: 'monad-experience-chat',
               test: new RegExp(`${WORKSPACE_ROOT}atoms[/\\\\]src[/\\\\]workspace-experiences[/\\\\]chat-room[/\\\\]`)
             },

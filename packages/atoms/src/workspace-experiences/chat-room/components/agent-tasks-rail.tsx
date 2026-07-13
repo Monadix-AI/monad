@@ -58,6 +58,11 @@ import {
   streamWithUiObservationFrame,
   usageMeterFromObservationAccess
 } from '../utils/agent-rail-model.ts';
+import {
+  findOlderObservationPage,
+  oldestObservationTimestamp,
+  prependObservationHistory
+} from '../utils/observation-history.ts';
 import { ExternalAgentObservationPanel } from './observation/panel.tsx';
 
 const RAIL_WIDTH_STORAGE_KEY = 'monad.workplace.agentRail.width';
@@ -111,30 +116,6 @@ type ObservationHistoryPageState = {
   exhausted: boolean;
 };
 
-function observationItemSignature(item: ExternalAgentStreamView['items'][number]): string {
-  return JSON.stringify({
-    kind: item.kind,
-    text: item.text,
-    tool: item.tool,
-    raw: item.raw
-  });
-}
-
-function mergeObservationItems(
-  historyItems: ExternalAgentStreamView['items'],
-  liveItems: ExternalAgentStreamView['items']
-): ExternalAgentStreamView['items'] {
-  const seen = new Set<string>();
-  const merged: ExternalAgentStreamView['items'] = [];
-  for (const item of [...historyItems, ...liveItems]) {
-    const signature = observationItemSignature(item);
-    if (seen.has(signature)) continue;
-    seen.add(signature);
-    merged.push(item);
-  }
-  return merged;
-}
-
 function streamWithHistoryPages(
   stream: ExternalAgentStreamView | undefined,
   history: ObservationHistoryPageState | undefined
@@ -142,7 +123,7 @@ function streamWithHistoryPages(
   if (!stream || !history || history.items.length === 0) return stream;
   return {
     ...stream,
-    items: mergeObservationItems(history.items, stream.items),
+    items: prependObservationHistory(history.items, stream.items),
     output: stream.output
   };
 }
@@ -575,6 +556,7 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
   const observationHistoryResetKey = [observedDeliveryId, observedExternalAgentSessionId].filter(Boolean).join(':');
   const [historyPages, setHistoryPages] = useState<ObservationHistoryPageState | undefined>(undefined);
   const [historyRequested, setHistoryRequested] = useState(false);
+  const historyLoadGenerationRef = useRef(0);
   // The external-agent session observation is the neutral UI plane: a server-pushed SSE that carries the
   // full projected event list every frame, so the panel replaces its list wholesale — no client-side
   // delta re-derivation. Deliveries have no ui-stream twin yet, so they keep the poll + legacy projection.
@@ -619,7 +601,11 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
           : undefined
       )
     : streamWithUiObservationFrame(observedBaseStream, uiFrame);
-  const observedHistoryStream = streamWithHistoryPages(observedAccessStream, historyPages);
+  const liveHistoryBoundaryAt = oldestObservationTimestamp(observedAccessStream?.items ?? []);
+  const observedHistoryStream = streamWithHistoryPages(
+    observedAccessStream,
+    historyRequested ? historyPages : undefined
+  );
   const observedUsageAgentName = observedAccessStream?.templateAgentName;
   const usage = usePolledValue<ExternalAgentUsageResponse>({
     enabled: Boolean(observedUsageAgentName),
@@ -637,65 +623,72 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
 
   const loadHistoryPage = useCallback(
     (before?: string | null) => {
-      if (!observedExternalAgentSessionId) return;
+      if (!observedExternalAgentSessionId || !room.activeSessionId || !liveHistoryBoundaryAt) return;
+      const generation = historyLoadGenerationRef.current;
       setHistoryPages((current) => {
-        if (current?.loading) return current;
         return current
           ? { ...current, loading: true }
           : { items: [], nextCursor: null, loading: true, exhausted: false };
       });
-      if (!room.activeSessionId) return;
-      void triggerExternalAgentHistoryPage({
-        id: observedExternalAgentSessionId,
-        transcriptTargetId: room.activeSessionId as SessionId,
+      void findOlderObservationPage({
         before: before ?? undefined,
-        limit: 20
-      })
-        .unwrap()
-        .then(
-          (response) => {
-            // The daemon already knows this session's provider unambiguously and normalizes with the
-            // same adapter it uses for parseOutput/historyPageOutput — no client-side re-derivation.
-            const pageItems = response.events
+        liveBoundaryAt: liveHistoryBoundaryAt,
+        load: async (cursor) => {
+          const response = await triggerExternalAgentHistoryPage({
+            id: observedExternalAgentSessionId,
+            transcriptTargetId: room.activeSessionId as SessionId,
+            before: cursor,
+            limit: 20,
+            sortDirection: 'desc'
+          }).unwrap();
+          return {
+            items: response.events
               .map((event) => toAgentObservationEvent(event))
-              .filter((event): event is AgentObservationEvent => event !== null);
-            setHistoryPages((current) => {
-              const existing = current?.items ?? [];
-              const nextItems = before
-                ? mergeObservationItems(pageItems, existing)
-                : mergeObservationItems(pageItems, []);
-              return {
-                items: nextItems,
-                nextCursor: response.nextCursor ?? null,
-                loading: false,
-                exhausted: !response.nextCursor || pageItems.length === 0
-              };
-            });
-          },
-          () => {
-            setHistoryPages((current) => ({
-              items: current?.items ?? [],
-              nextCursor: current?.nextCursor ?? null,
+              .filter((event): event is AgentObservationEvent => event !== null),
+            nextCursor: response.nextCursor ?? undefined
+          };
+        }
+      }).then(
+        (page) => {
+          if (historyLoadGenerationRef.current !== generation) return;
+          setHistoryPages((current) => {
+            const existing = current?.items ?? [];
+            const nextItems = before ? prependObservationHistory(page.items, existing) : page.items;
+            return {
+              items: nextItems,
+              nextCursor: page.nextCursor ?? null,
               loading: false,
-              exhausted: true
-            }));
-          }
-        );
+              exhausted: !page.nextCursor
+            };
+          });
+        },
+        () => {
+          if (historyLoadGenerationRef.current !== generation) return;
+          setHistoryPages((current) => ({
+            items: current?.items ?? [],
+            nextCursor: current?.nextCursor ?? null,
+            loading: false,
+            exhausted: true
+          }));
+        }
+      );
     },
-    [observedExternalAgentSessionId, room.activeSessionId, triggerExternalAgentHistoryPage]
+    [liveHistoryBoundaryAt, observedExternalAgentSessionId, room.activeSessionId, triggerExternalAgentHistoryPage]
   );
 
   const showHistory = useCallback(() => {
-    if (historyRequested || !observedExternalAgentSessionId) return;
+    if (historyRequested || !historyPages?.items.length) return;
     setHistoryRequested(true);
-    loadHistoryPage(null);
-  }, [historyRequested, loadHistoryPage, observedExternalAgentSessionId]);
+  }, [historyPages?.items.length, historyRequested]);
 
   useEffect(() => {
     void observationHistoryResetKey;
+    historyLoadGenerationRef.current += 1;
     setHistoryPages(undefined);
     setHistoryRequested(false);
-  }, [observationHistoryResetKey]);
+    if (observedDeliveryId || !liveHistoryBoundaryAt) return;
+    loadHistoryPage(null);
+  }, [liveHistoryBoundaryAt, loadHistoryPage, observationHistoryResetKey, observedDeliveryId]);
 
   useEffect(() => {
     const storedWidth = window.localStorage.getItem(RAIL_WIDTH_STORAGE_KEY);
@@ -977,12 +970,12 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
           }
           focusTurnId={observation.turnId}
           icon={observedAgent?.icon ?? observedHistoryStream?.icon}
-          loadingOlderHistory={historyPages?.loading}
+          loadingOlderHistory={historyRequested && Boolean(historyPages?.loading)}
           onBack={closeRailObservation}
           onLoadOlderHistory={() => loadHistoryPage(historyPages?.nextCursor)}
           onShowHistory={showHistory}
           onStop={(id) => void room.stopExternalAgent(id)}
-          showHistoryButton={!historyRequested && Boolean(observedExternalAgentSessionId)}
+          showHistoryButton={!historyRequested && Boolean(historyPages?.items.length)}
           stream={observedHistoryStream}
           usageMeter={usageMeter}
         />
