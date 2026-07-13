@@ -24,6 +24,7 @@ export * from './hooks.ts';
 export * from './http.ts';
 export * from './ids.ts';
 export * from './inbox.ts';
+export * from './interaction.ts';
 export * from './licenses.ts';
 export * from './locale.ts';
 export * from './marketplace.ts';
