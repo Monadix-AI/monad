@@ -11,6 +11,8 @@
 //   • virtio-fs — one `virtiofsd` daemon per mount tag, plus a shared memory backend (memfd).
 //   • firmware — an OVMF/edk2 image to EFI-boot the CoreOS qcow2 (QEMU boots qcow2 natively).
 
+import type { Firmware } from '../toolchain.ts';
+
 import { type VmDriver, type VmHandle, type VmSpec } from './vfkit.ts';
 
 // Toolchain-resolved paths, wired once at boot (mirrors configureVfkitBin).
@@ -18,7 +20,8 @@ interface QemuTools {
   qemu: string;
   virtiofsd: string;
   socat: string;
-  firmware: string;
+  /** EFI code (readonly pflash) + the vars template each VM copies to a writable pflash. */
+  firmware: Firmware;
   /** true when /dev/kvm is usable; false → software emulation (TCG), far slower but works for tests. */
   kvm: boolean;
 }
@@ -42,9 +45,15 @@ export function guestCidFor(key: string): number {
   return 3 + (Number.parseInt(h.slice(0, 8), 16) % 0xfffffff0);
 }
 
-/** Build the QEMU argv from a VM spec. Pure (no spawn) so it is unit-testable. `t` supplies the
- *  resolved firmware path + KVM flag; the vsock CID and virtiofsd socket paths come from the spec. */
-export function qemuArgv(qemuBin: string, spec: VmSpec, t: { firmware: string; kvm: boolean }, cid: number): string[] {
+/** Build the QEMU argv from a VM spec. Pure (no spawn) so it is unit-testable. `t.firmwareCode` is the
+ *  readonly EFI code pflash; the writable vars pflash is the per-VM `bundle.efiVars` copy (the driver
+ *  writes it before boot). On aarch64 `virt` BOTH pflash images must be exactly 64 MiB. */
+export function qemuArgv(
+  qemuBin: string,
+  spec: VmSpec,
+  t: { firmwareCode: string; kvm: boolean },
+  cid: number
+): string[] {
   const b = spec.bundle;
   const argv: string[] = [
     qemuBin,
@@ -57,9 +66,11 @@ export function qemuArgv(qemuBin: string, spec: VmSpec, t: { firmware: string; k
     '-nodefaults',
     '-serial',
     'null',
-    // EFI firmware to boot the CoreOS qcow2 (QEMU reads qcow2 natively — no raw conversion).
+    // EFI firmware: readonly code + a writable per-VM vars store (both 64 MiB on aarch64 virt).
     '-drive',
-    `if=pflash,format=raw,readonly=on,file=${t.firmware}`,
+    `if=pflash,format=raw,unit=0,readonly=on,file=${t.firmwareCode}`,
+    '-drive',
+    `if=pflash,format=raw,unit=1,file=${b.efiVars}`,
     '-drive',
     `file=${b.rootfs},if=virtio,format=qcow2`,
     // Ignition is delivered over the fw_cfg channel CoreOS reads on QEMU.
@@ -117,6 +128,10 @@ export const qemuDriver: VmDriver = {
     const cid = guestCidFor(spec.bundle.key);
     const children: Child[] = [];
 
+    // 0. Per-VM writable EFI vars store: copy the firmware's vars template into the bundle. QEMU
+    //    persists EFI variables here, and (on aarch64 virt) it must match the code pflash's 64 MiB.
+    await Bun.write(Bun.file(spec.bundle.efiVars), Bun.file(tools.firmware.vars));
+
     // 1. One virtiofsd per mount tag (must be up before QEMU connects the chardev).
     for (const m of spec.mounts) {
       const proc = Bun.spawn(
@@ -134,7 +149,10 @@ export const qemuDriver: VmDriver = {
     children.push(socat);
 
     // 3. QEMU itself.
-    const qemu = Bun.spawn(qemuArgv(tools.qemu, spec, tools, cid), { stdout: 'pipe', stderr: 'pipe' });
+    const qemu = Bun.spawn(qemuArgv(tools.qemu, spec, { firmwareCode: tools.firmware.code, kvm: tools.kvm }, cid), {
+      stdout: 'pipe',
+      stderr: 'pipe'
+    });
 
     return {
       pid: qemu.pid,

@@ -274,17 +274,28 @@ function findLinuxBin(name: string): string | null {
   return null;
 }
 
-/** Locate an OVMF/edk2 firmware image to EFI-boot the CoreOS qcow2 under QEMU (arch-specific). */
-function findFirmware(): string | null {
-  const candidates =
+/** EFI firmware for QEMU: the CODE image (readonly pflash) + a VARS template each VM copies to a
+ *  writable pflash. On aarch64 `virt` BOTH pflash devices must be exactly 64 MiB, so we must pick the
+ *  padded `*-pflash.raw` images, not the raw 2 MiB `.fd` code. */
+export interface Firmware {
+  code: string;
+  vars: string;
+}
+function findFirmware(): Firmware | null {
+  const sets: Firmware[] =
     process.arch === 'x64'
-      ? ['/usr/share/edk2/x64/OVMF_CODE.fd', '/usr/share/OVMF/OVMF_CODE.fd', '/usr/share/qemu/OVMF.fd']
+      ? [
+          { code: '/usr/share/edk2/ovmf/OVMF_CODE.fd', vars: '/usr/share/edk2/ovmf/OVMF_VARS.fd' },
+          { code: '/usr/share/OVMF/OVMF_CODE.fd', vars: '/usr/share/OVMF/OVMF_VARS.fd' }
+        ]
       : [
-          '/usr/share/edk2/aarch64/QEMU_EFI.fd',
-          '/usr/share/AAVMF/AAVMF_CODE.fd',
-          '/usr/share/qemu-efi-aarch64/QEMU_EFI.fd'
+          {
+            code: '/usr/share/edk2/aarch64/QEMU_EFI-pflash.raw',
+            vars: '/usr/share/edk2/aarch64/vars-template-pflash.raw'
+          },
+          { code: '/usr/share/AAVMF/AAVMF_CODE.fd', vars: '/usr/share/AAVMF/AAVMF_VARS.fd' }
         ];
-  return candidates.find((p) => existsSync(p)) ?? null;
+  return sets.find((f) => existsSync(f.code) && existsSync(f.vars)) ?? null;
 }
 
 /** /dev/kvm present and read/write accessible → hardware acceleration available. */
@@ -303,10 +314,10 @@ export interface ResolvedToolchain {
   /** The hypervisor binary: vfkit on macOS, qemu-system-<arch> on Linux. */
   hypervisor: string;
   gvproxy: string;
-  /** Linux only: virtio-fs daemon, vsock bridge, EFI firmware. */
+  /** Linux only: virtio-fs daemon, vsock bridge, EFI firmware (code + vars template). */
   virtiofsd?: string;
   socat?: string;
-  firmware?: string;
+  firmware?: Firmware;
   /** Linux only: whether /dev/kvm is usable (false → slow TCG emulation). */
   kvm?: boolean;
 }

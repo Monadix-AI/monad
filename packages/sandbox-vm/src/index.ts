@@ -232,11 +232,12 @@ export const vmLauncher: SandboxLauncher = {
     if (process.platform === 'darwin') {
       configureVfkitBin(tools.hypervisor);
     } else {
+      if (!tools.firmware) throw new VmBackendNotReadyError('no EFI firmware resolved');
       configureQemuTools({
         qemu: tools.hypervisor,
         virtiofsd: tools.virtiofsd ?? '',
         socat: tools.socat ?? '',
-        firmware: tools.firmware ?? '',
+        firmware: tools.firmware,
         kvm: tools.kvm ?? false
       });
     }
