@@ -37,11 +37,32 @@ export function createSandboxModule(
     const descriptors = new Map(
       listSandboxBackendDescriptors().map((backend) => [serializeSandboxBackendRef(backend.ref), backend.descriptor])
     );
+    const backendSettings = redactBackendSettings(cfg.sandbox.backendSettings, auth, descriptors);
+    const backends = listSandboxBackendDescriptors().map((backend) => {
+      const key = serializeSandboxBackendRef(backend.ref);
+      const settings = { ...(backendSettings[key] ?? {}) };
+      for (const field of backend.descriptor.settings?.fields ?? []) {
+        if (settings[field.id] === undefined && field.type === 'secret') settings[field.id] = { configured: false };
+        else if (settings[field.id] === undefined && field.type !== 'secret' && field.defaultValue !== undefined)
+          settings[field.id] = field.defaultValue;
+      }
+      const active = key === serializeSandboxBackendRef(cfg.sandbox.activeBackend);
+      return {
+        ref: backend.ref,
+        descriptor: backend.descriptor,
+        sourceLabel: backend.ref.source === 'builtin' ? 'Built-in' : backend.ref.packId,
+        ...(backend.platforms ? { platforms: backend.platforms } : {}),
+        ...(backend.enforces ? { enforces: backend.enforces } : {}),
+        status: active ? ('active' as const) : backend.available ? ('available' as const) : ('unavailable' as const),
+        settings
+      };
+    });
     return {
       sandbox: { mode, confine, net, allowedDomains, hostExec },
       globalSandbox: { enabled: cfg.agent.globalSandbox.enabled, mode: cfg.agent.globalSandbox.mode },
       activeBackend: cfg.sandbox.activeBackend,
-      backendSettings: redactBackendSettings(cfg.sandbox.backendSettings, auth, descriptors)
+      backendSettings,
+      backends
     };
   }
 

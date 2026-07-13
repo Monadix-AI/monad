@@ -1,10 +1,10 @@
 'use client';
 
-import type { SetSandboxSettingsRequest } from '@monad/protocol';
+import type { ActivateSandboxBackendRequest, SetSandboxSettingsRequest } from '@monad/protocol';
 
 import { CheckIcon, LoaderPinwheelIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { useGetSandboxQuery, useSetSandboxMutation } from '@monad/client-rtk';
+import { useActivateSandboxMutation, useGetSandboxQuery, useSetSandboxMutation } from '@monad/client-rtk';
 import {
   Button,
   Label,
@@ -17,9 +17,11 @@ import {
   Skeleton,
   Switch
 } from '@monad/ui';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useT } from '#/components/I18nProvider';
+import { BackendCards, backendRefKey } from './sandbox/BackendCards';
+import { SchemaSettingsForm } from './sandbox/SchemaSettingsForm';
 
 type Mode = 'workspace' | 'home' | 'unrestricted' | 'ephemeral';
 type Net = 'none' | 'unrestricted' | 'filtered';
@@ -74,6 +76,7 @@ export function SandboxDefaults() {
   const t = useT();
   const { data, isLoading } = useGetSandboxQuery();
   const [setSandbox] = useSetSandboxMutation();
+  const [activateSandbox, activation] = useActivateSandboxMutation();
 
   const [mode, setMode] = useState<Mode>('workspace');
   const [confine, setConfine] = useState(true);
@@ -86,6 +89,16 @@ export function SandboxDefaults() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string>();
+  const [selectedBackendKey, setSelectedBackendKey] = useState<string>();
+  const [activationSettings, setActivationSettings] = useState<ActivateSandboxBackendRequest['settings']>();
+  const selectedBackend = useMemo(
+    () => data?.backends.find((backend) => backendRefKey(backend) === selectedBackendKey),
+    [data?.backends, selectedBackendKey]
+  );
+  const updateActivationSettings = useCallback(
+    (settings: NonNullable<ActivateSandboxBackendRequest['settings']>) => setActivationSettings(settings),
+    []
+  );
 
   useEffect(() => {
     if (!data) return;
@@ -96,7 +109,20 @@ export function SandboxDefaults() {
     setHostExec(data.sandbox.hostExec);
     setGlobalEnabled(data.globalSandbox.enabled);
     setGlobalMode(data.globalSandbox.mode as Mode);
+    const preferredBackend = data.backends.find((backend) => backend.status === 'active') ?? data.backends[0];
+    if (preferredBackend) setSelectedBackendKey((current) => current ?? backendRefKey(preferredBackend));
   }, [data]);
+
+  const handleActivate = async () => {
+    if (!selectedBackend) return;
+    setError(undefined);
+    try {
+      const result = await activateSandbox({ ref: selectedBackend.ref, settings: activationSettings }).unwrap();
+      if (result.status === 'error') setError(result.error ?? 'Failed to activate sandbox backend');
+    } catch (cause) {
+      setError((cause as { message?: string }).message ?? 'Failed to activate sandbox backend');
+    }
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -158,6 +184,41 @@ export function SandboxDefaults() {
           <h2 className="font-medium text-base">{t('web.studio.sandboxTitle')}</h2>
           <p className="text-muted-foreground text-sm">{t('web.studio.sandboxDesc')}</p>
         </header>
+
+        <section className="flex flex-col gap-3">
+          <div>
+            <p className="font-medium text-sm">Sandbox backend</p>
+            <p className="text-muted-foreground text-xs">Switch new processes without restarting the daemon.</p>
+          </div>
+          <BackendCards
+            backends={data?.backends ?? []}
+            onSelect={(backend) => setSelectedBackendKey(backendRefKey(backend))}
+            selectedKey={selectedBackendKey}
+          />
+          {selectedBackend?.descriptor.settings?.fields.length ? (
+            <SchemaSettingsForm
+              backend={selectedBackend}
+              onChange={updateActivationSettings}
+            />
+          ) : null}
+          {selectedBackend && (
+            <div className="flex items-center gap-3">
+              <Button
+                disabled={activation.isLoading}
+                onClick={handleActivate}
+              >
+                {activation.isLoading
+                  ? 'Preparing…'
+                  : selectedBackend.status === 'active'
+                    ? 'Apply settings'
+                    : 'Activate'}
+              </Button>
+              <span className="text-muted-foreground text-xs">
+                {selectedBackend.sourceLabel} · {selectedBackend.status}
+              </span>
+            </div>
+          )}
+        </section>
 
         <section className="flex flex-col gap-1">
           <p className="pb-1 font-medium text-muted-foreground text-xs uppercase tracking-wide">

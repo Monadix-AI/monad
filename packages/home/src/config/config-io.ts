@@ -24,28 +24,42 @@ const PROFILE_MIGRATIONS_DIR = join(import.meta.dir, '..', 'migrations', 'profil
 const AUTH_MIGRATIONS_DIR = join(import.meta.dir, '..', 'migrations', 'auth');
 
 function migrateSandboxBackend(raw: unknown): unknown {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw) || 'activeBackend' in raw) return raw;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;
   const sandbox = raw as Record<string, unknown>;
   const backend = sandbox.backend;
   const existingSettings = sandbox.backendSettings as Record<string, Record<string, unknown>> | undefined;
   const activeBackend =
-    backend === 'vm'
+    sandbox.activeBackend ??
+    (backend === 'vm'
       ? { source: 'builtin', kind: 'vm' }
       : backend === 'docker' || backend === 'e2b'
         ? { source: 'atom-pack', packId: 'monad-power-pack', kind: backend }
-        : { source: 'builtin', kind: 'auto' };
-  const backendSettings =
-    backend === 'vm' && sandbox.vm && typeof sandbox.vm === 'object' && !Array.isArray(sandbox.vm)
-      ? {
-          ...(existingSettings ?? {}),
-          'builtin/vm': {
-            ...(existingSettings?.['builtin/vm'] ?? {}),
-            ...('cpus' in sandbox.vm ? { cpus: (sandbox.vm as Record<string, unknown>).cpus } : {}),
-            ...('memory' in sandbox.vm ? { memoryMiB: (sandbox.vm as Record<string, unknown>).memory } : {})
-          }
-        }
-      : sandbox.backendSettings;
-  return { ...sandbox, activeBackend, ...(backendSettings === undefined ? {} : { backendSettings }) };
+        : { source: 'builtin', kind: 'auto' });
+  const backendSettings = { ...(existingSettings ?? {}) };
+  if (backend === 'vm' && sandbox.vm && typeof sandbox.vm === 'object' && !Array.isArray(sandbox.vm)) {
+    backendSettings['builtin/vm'] = {
+      ...(existingSettings?.['builtin/vm'] ?? {}),
+      ...('cpus' in sandbox.vm ? { cpus: (sandbox.vm as Record<string, unknown>).cpus } : {}),
+      ...('memory' in sandbox.vm ? { memoryMiB: (sandbox.vm as Record<string, unknown>).memory } : {})
+    };
+  }
+  if (backend === 'docker' && typeof sandbox.dockerImage === 'string') {
+    backendSettings['atom-pack/monad-power-pack/docker'] = {
+      image: sandbox.dockerImage,
+      ...(existingSettings?.['atom-pack/monad-power-pack/docker'] ?? {})
+    };
+  }
+  if (
+    backend === 'e2b' &&
+    typeof sandbox.credential === 'string' &&
+    /^\$\{(?:secret|env):[^}]+}$/.test(sandbox.credential)
+  ) {
+    backendSettings['atom-pack/monad-power-pack/e2b'] = {
+      apiKey: sandbox.credential,
+      ...(existingSettings?.['atom-pack/monad-power-pack/e2b'] ?? {})
+    };
+  }
+  return { ...sandbox, activeBackend, backendSettings };
 }
 
 export async function migrateConfig(raw: unknown): Promise<MonadConfig> {

@@ -5,8 +5,14 @@
 // confines the child — Seatbelt, Landlock, Low-Integrity, or a future cloud backend (e2b / Vercel) —
 // is selected from the registry of launchers contributed by atom packs (built-in + third-party).
 //
-import { interactionFieldSchema, type SandboxBackendRef, sandboxBackendRefSchema } from '@monad/protocol';
-import { z } from 'zod';
+import {
+  type SandboxBackendRef,
+  type SandboxLauncherDescriptor,
+  type SandboxSettingsSchema,
+  sandboxBackendRefSchema,
+  sandboxLauncherDescriptorSchema,
+  sandboxSettingsSchema
+} from '@monad/protocol';
 
 // Two execution models, one contract:
 //   • LOCAL  — `wrap(argv, policy)` rewrites argv (e.g. prepend `sandbox-exec -p <profile>`); the
@@ -59,22 +65,9 @@ export interface SandboxEnforcement {
   net?: ('none' | 'filtered' | 'unrestricted')[];
 }
 
-export type { SandboxBackendRef };
+export type { SandboxBackendRef, SandboxLauncherDescriptor, SandboxSettingsSchema };
 
-export { sandboxBackendRefSchema };
-
-export const sandboxSettingsSchema = z.object({ fields: z.array(interactionFieldSchema).max(32) }).strict();
-export type SandboxSettingsSchema = z.infer<typeof sandboxSettingsSchema>;
-
-/** Serializable, host-rendered metadata. It deliberately has no component, callback, or HTML seam. */
-export const sandboxLauncherDescriptorSchema = z
-  .object({
-    name: z.string().min(1).max(120),
-    description: z.string().max(2_000).optional(),
-    settings: sandboxSettingsSchema.optional()
-  })
-  .strict();
-export type SandboxLauncherDescriptor = z.infer<typeof sandboxLauncherDescriptorSchema>;
+export { sandboxBackendRefSchema, sandboxLauncherDescriptorSchema, sandboxSettingsSchema };
 
 /** Provider-agnostic spawn options for the REMOTE execution model. Kept loose and free of Bun types
  *  so a cloud backend (e2b / Vercel) can satisfy it without importing the daemon's runtime. */

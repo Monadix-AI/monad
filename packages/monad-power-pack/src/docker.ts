@@ -19,6 +19,7 @@ const DEFAULT_IMAGE = 'ubuntu:22.04';
 export type ContainerRuntime = 'docker' | 'podman';
 
 let _runtime: ContainerRuntime | null | undefined;
+let configuredImage: string | undefined;
 
 /** Probe for an available container runtime. Cached for the process lifetime. */
 export async function detectDockerRuntime(): Promise<ContainerRuntime | null> {
@@ -62,6 +63,9 @@ export const dockerLauncher: SandboxLauncher = {
   },
   platforms: undefined,
   enforces: { writeConfine: true, readDeny: true, net: ['none', 'unrestricted'] },
+  configure(settings): void {
+    configuredImage = settings.image as string;
+  },
   isAvailable: () => dockerRuntimeAvailable(),
   // Probe the container runtime when this launcher is the SELECTED backend, so the boot path pays the
   // detection cost only on opt-in — not unconditionally at startup.
@@ -113,7 +117,7 @@ export const dockerLauncher: SandboxLauncher = {
       }
     }
 
-    args.push(sandboxBackendOptions().dockerImage ?? DEFAULT_IMAGE, ...argv);
+    args.push(configuredImage ?? sandboxBackendOptions().dockerImage ?? DEFAULT_IMAGE, ...argv);
 
     const proc = Bun.spawn(args, { stdout: 'pipe', stderr: 'pipe', stdin: 'pipe' });
     return {

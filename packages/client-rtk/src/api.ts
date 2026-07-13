@@ -273,7 +273,11 @@ import {
   useUpsertPeerMutation
 } from './endpoints/settings/peers/index.ts';
 import { useGetProfileSettingsQuery, useSetProfileSettingsMutation } from './endpoints/settings/profile/index.ts';
-import { useGetSandboxQuery, useSetSandboxMutation } from './endpoints/settings/sandbox/index.ts';
+import {
+  useActivateSandboxMutation,
+  useGetSandboxQuery,
+  useSetSandboxMutation
+} from './endpoints/settings/sandbox/index.ts';
 import { useGetSkillsSettingsQuery, useSetSkillsSettingsMutation } from './endpoints/settings/skills/index.ts';
 import { useGetStartupQuery, useSetStartupMutation } from './endpoints/settings/startup/index.ts';
 import {
@@ -344,6 +348,7 @@ export {
   sessionSelectors,
   skillsApi,
   useAbortSessionMutation,
+  useActivateSandboxMutation,
   useAddCredentialMutation,
   useAddMemoryFactMutation,
   useApplySettingsImportMutation,

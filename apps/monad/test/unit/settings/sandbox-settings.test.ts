@@ -169,6 +169,16 @@ test('migrates legacy backend selectors to source-qualified references', async (
     await Bun.write(paths.sandbox, `${JSON.stringify({ backend: 'e2b' })}\n`);
     cfg = await loadAll(paths.config, paths.profile);
     expect(cfg?.sandbox.activeBackend).toEqual({ source: 'atom-pack', packId: 'monad-power-pack', kind: 'e2b' });
+
+    await Bun.write(paths.sandbox, `${JSON.stringify({ backend: 'docker', dockerImage: 'debian:stable' })}\n`);
+    cfg = await loadAll(paths.config, paths.profile);
+    expect(cfg?.sandbox.backendSettings['atom-pack/monad-power-pack/docker']).toEqual({ image: 'debian:stable' });
+
+    await Bun.write(paths.sandbox, `${JSON.stringify({ backend: 'e2b', credential: '$' + '{env:E2B_API_KEY}' })}\n`);
+    cfg = await loadAll(paths.config, paths.profile);
+    expect(cfg?.sandbox.backendSettings['atom-pack/monad-power-pack/e2b']).toEqual({
+      apiKey: '$' + '{env:E2B_API_KEY}'
+    });
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
