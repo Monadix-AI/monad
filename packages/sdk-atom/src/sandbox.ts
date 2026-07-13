@@ -5,6 +5,15 @@
 // confines the child — Seatbelt, Landlock, Low-Integrity, or a future cloud backend (e2b / Vercel) —
 // is selected from the registry of launchers contributed by atom packs (built-in + third-party).
 //
+import {
+  type SandboxBackendRef,
+  type SandboxLauncherDescriptor,
+  type SandboxSettingsSchema,
+  sandboxBackendRefSchema,
+  sandboxLauncherDescriptorSchema,
+  sandboxSettingsSchema
+} from '@monad/protocol';
+
 // Two execution models, one contract:
 //   • LOCAL  — `wrap(argv, policy)` rewrites argv (e.g. prepend `sandbox-exec -p <profile>`); the
 //              host then runs it with its own Bun.spawn. This is the common case.
@@ -56,6 +65,10 @@ export interface SandboxEnforcement {
   net?: ('none' | 'filtered' | 'unrestricted')[];
 }
 
+export type { SandboxBackendRef, SandboxLauncherDescriptor, SandboxSettingsSchema };
+
+export { sandboxBackendRefSchema, sandboxLauncherDescriptorSchema, sandboxSettingsSchema };
+
 /** Provider-agnostic spawn options for the REMOTE execution model. Kept loose and free of Bun types
  *  so a cloud backend (e2b / Vercel) can satisfy it without importing the daemon's runtime. */
 export interface SandboxSpawnOptions {
@@ -101,6 +114,8 @@ export interface SandboxProcess {
 export interface SandboxLauncher {
   /** Stable identifier — 'none' | 'seatbelt' | 'landlock' | 'lowintegrity' | 'bwrap' | 'e2b' | … */
   readonly kind: string;
+  /** Serializable metadata used by every host surface to render this launcher generically. */
+  readonly descriptor: SandboxLauncherDescriptor;
   /** Platforms this launcher can confine on (process.platform values). `undefined` = any platform
    *  (e.g. a cloud launcher that delegates execution off-box). */
   readonly platforms?: NodeJS.Platform[];
@@ -108,6 +123,9 @@ export interface SandboxLauncher {
   readonly enforces?: SandboxEnforcement;
   /** Runtime availability — native binary present, API key configured, etc. Absent → always available. */
   isAvailable?(): boolean;
+  /** Apply host-validated settings before prepare/probe. Secret fields arrive resolved only here and
+   *  must never be retained in serializable descriptors, logs, or errors. */
+  configure?(settings: Record<string, unknown>): void | Promise<void>;
   /** LOCAL model: rewrite argv to apply confinement; the host runs the result. */
   wrap?(argv: string[], policy: SandboxPolicy): string[];
   /** REMOTE model (forward-looking): run the process and return a handle. Implement instead of `wrap`. */
@@ -123,6 +141,9 @@ export interface SandboxLauncher {
   disposeAgent?(agentId: string): void | Promise<void>;
   /** Optional async warm-up run once for the SELECTED launcher before it is wired (e.g. a docker runtime probe). */
   prepare?(): Promise<void>;
+  /** Release idle backend-wide resources after a successful switch away. Active child processes keep
+   *  their original launcher ownership and must not be terminated by this hook. */
+  disposeIdle?(): void | Promise<void>;
 }
 
 // The host's configured sandbox credential (a cloud launcher's API key), resolved from config at
@@ -145,6 +166,7 @@ export function sandboxCredential(): string | undefined {
  *  launcher matches the platform / is available. */
 export const noneLauncher: SandboxLauncher = {
   kind: 'none',
+  descriptor: { name: 'No sandbox', description: 'Runs processes without launcher confinement.' },
   platforms: undefined,
   enforces: {},
   isAvailable: () => true,
@@ -155,6 +177,7 @@ export const noneLauncher: SandboxLauncher = {
  *  Mirrors defineProvider/defineChannel: keeps built-in launchers free of boilerplate. */
 export function defineLocalLauncher(spec: {
   kind: string;
+  descriptor?: SandboxLauncherDescriptor;
   platforms?: NodeJS.Platform[];
   enforces?: SandboxEnforcement;
   isAvailable?: () => boolean;
@@ -163,6 +186,7 @@ export function defineLocalLauncher(spec: {
 }): SandboxLauncher {
   return {
     kind: spec.kind,
+    descriptor: spec.descriptor ?? { name: spec.kind },
     platforms: spec.platforms,
     enforces: spec.enforces,
     isAvailable: spec.isAvailable,

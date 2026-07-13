@@ -9,12 +9,13 @@ import type { SandboxLauncher, WorkspaceExperienceDefinition } from '@monad/sdk-
 import { afterEach, expect, test } from 'bun:test';
 import builtinAtomPack from '@monad/atoms';
 import { monadPowerPack } from '@monad/monad-power-pack';
+import { vmLauncher } from '@monad/sandbox-vm';
 import { defineAtomPack, defineLocalLauncher, SDK_VERSION } from '@monad/sdk-atom';
 
 import { clearSandboxLaunchers, registerSandboxLauncher, selectSandboxLauncher } from '#/capabilities/tools';
 import { loadChannelAtomPacks } from '#/channels/atom-pack-host.ts';
 
-afterEach(() => clearSandboxLaunchers());
+afterEach(() => clearSandboxLaunchers({ includeBuiltin: true }));
 
 test('built-in pack registers no sandbox launchers (light set is closed, heavy is opt-in)', async () => {
   const got: SandboxLauncher[] = [];
@@ -22,7 +23,7 @@ test('built-in pack registers no sandbox launchers (light set is closed, heavy i
   await loadChannelAtomPacks([builtinAtomPack], {
     onSandbox: (l) => {
       got.push(l);
-      registerSandboxLauncher(l, 'builtin');
+      registerSandboxLauncher(l, { source: 'builtin', kind: l.kind });
     }
   });
   expect(got).toEqual([]);
@@ -31,21 +32,57 @@ test('built-in pack registers no sandbox launchers (light set is closed, heavy i
   expect(selectSandboxLauncher('darwin', 'auto').kind).toBe('seatbelt');
 });
 
-test('the power pack registers heavy launchers through the gated loader', async () => {
+test('the power pack registers only contributed heavy launchers through the gated loader', async () => {
   const got: SandboxLauncher[] = [];
+  const experiences: WorkspaceExperienceDefinition[] = [];
   clearSandboxLaunchers();
   await loadChannelAtomPacks([monadPowerPack], {
-    onSandbox: (l) => {
+    onSandbox: (l, atomPackId) => {
       got.push(l);
-      registerSandboxLauncher(l, 'atom');
-    }
+      registerSandboxLauncher(l, { source: 'atom-pack', packId: atomPackId, kind: l.kind });
+    },
+    onWorkspaceExperience: (experience) => experiences.push(experience)
   });
-  expect(got.map((l) => l.kind).sort()).toEqual(['docker', 'e2b', 'vm']);
+  expect(got.map((l) => l.kind).sort()).toEqual(['docker', 'e2b']);
+  expect(got.find((launcher) => launcher.kind === 'docker')?.descriptor.settings?.fields[0]?.type).toBe('string');
+  expect(got.find((launcher) => launcher.kind === 'e2b')?.descriptor.settings?.fields[0]?.type).toBe('secret');
   // Explicit backend selects the registered heavy launcher even when the light default differs.
   expect(selectSandboxLauncher('darwin', 'e2b').kind).toBe('e2b');
-  // The vm backend is a skeleton (isAvailable() === false): selecting it resolves the launcher, but
-  // finalizeSandboxLauncher's post-prepare availability check falls back to the light OS sandbox.
-  expect(selectSandboxLauncher('darwin', 'vm').kind).toBe('vm');
+  expect(experiences).toEqual([
+    {
+      id: 'kanban',
+      title: 'Kanban',
+      icon: 'git-fork',
+      entry: {
+        type: 'web-component',
+        module: 'experiences/kanban.js',
+        tagName: 'monad-kanban'
+      }
+    }
+  ]);
+});
+
+test('the power pack still exposes sandbox details when a runtime sink rejects registration', async () => {
+  const described: string[] = [];
+  await loadChannelAtomPacks([monadPowerPack], {
+    onSandbox: () => {
+      throw new Error('runtime registry unavailable');
+    },
+    onAtoms: (_pack, atoms) => described.push(...atoms.map((atom) => `${atom.kind}:${atom.id}`)),
+    onError: () => {}
+  });
+
+  expect(described).toEqual(['sandbox:docker', 'sandbox:e2b', 'workspace-experience:kanban']);
+});
+
+test('vm remains available as a built-in without loading Power Pack', () => {
+  registerSandboxLauncher(vmLauncher, { source: 'builtin', kind: 'vm' });
+  expect(selectSandboxLauncher('darwin', { source: 'builtin', kind: 'vm' })).toBe(vmLauncher);
+  expect(vmLauncher.descriptor.settings?.fields.map((field) => field.id)).toEqual([
+    'cpus',
+    'memoryMiB',
+    'bootTimeoutMs'
+  ]);
 });
 
 test('built-in pack registers workspace experiences through the gated loader', async () => {
@@ -54,9 +91,8 @@ test('built-in pack registers workspace experiences through the gated loader', a
     onWorkspaceExperience: (experience) => experiences.push(experience)
   });
 
-  expect(experiences.map((experience) => experience.id)).toEqual(['chat-room', 'graphic-view']);
-  // chat-room stays host-component; graph-view dogfoods the web-component delivery path.
-  expect(experiences.map((experience) => experience.entry.type)).toEqual(['host-component', 'web-component']);
+  expect(experiences.map((experience) => experience.id)).toEqual(['chat-room']);
+  expect(experiences.map((experience) => experience.entry.type)).toEqual(['host-component']);
 });
 
 test('registering a sandbox launcher without declaring the atom kind is rejected', async () => {

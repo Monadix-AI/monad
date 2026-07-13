@@ -8,6 +8,7 @@ import type { SessionSandboxService } from '../../services/session-sandbox.ts';
 
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { emptyAuth, loadAuth } from '@monad/home';
 import { logger } from '@monad/logger';
 import {
   caTrustEnv,
@@ -38,6 +39,7 @@ import {
 import { resolveEffectiveSandboxMode } from '#/config/resolve.ts';
 import { resolveSecretRef } from '#/config/secrets.ts';
 import { daemonChildProcesses, killDaemonProcessTree } from '#/infra/daemon-child-processes.ts';
+import { prepareSandboxCandidate } from '#/platform/sandbox/activation.ts';
 import { createSessionSandboxService } from '../../services/session-sandbox.ts';
 
 export interface SandboxSetup {
@@ -242,21 +244,22 @@ export async function finalizeSandboxLauncher(
 ): Promise<void> {
   if (!cfg.sandbox.confine) return; // createSandbox already set noneLauncher
 
-  const backend = cfg.sandbox.backend;
-  let launcher = selectSandboxLauncher(platform, backend);
-  if (backend === 'vm' && launcher.kind === 'vm') {
+  const requestedRef = cfg.sandbox.activeBackend;
+  let launcher = selectSandboxLauncher(platform, requestedRef);
+  if (requestedRef.source === 'builtin' && requestedRef.kind === 'vm' && launcher.kind === 'vm') {
     await configureVmBackendFromConfig(cfg, paths);
   }
-  // Warm up the selected launcher (e.g. the docker runtime probe) before wiring it, so the heavy
-  // path pays detection cost only on opt-in.
-  await launcher.prepare?.();
-  // A heavy backend that turned out unavailable after its probe → fall back to the light OS sandbox
-  // rather than running a backend that can't spawn.
-  if (backend !== 'auto' && launcher.kind === backend && launcher.isAvailable?.() === false) {
+  const auth = paths ? ((await loadAuth(paths.auth)) ?? emptyAuth()) : emptyAuth();
+  try {
+    await prepareSandboxCandidate(requestedRef, launcher, { cfg, auth });
+  } catch (error) {
     logger.warn(
-      `monad: agent.sandbox.backend="${backend}" launcher is not available — falling back to the light OS sandbox.`
+      `monad: sandbox backend "${requestedRef.source}:${requestedRef.kind}" could not activate ` +
+        `(${error instanceof Error ? error.message : String(error)}) — falling back to built-in auto.`
     );
-    launcher = selectSandboxLauncher(platform, 'auto');
+    const fallbackRef = { source: 'builtin', kind: 'auto' } as const;
+    launcher = selectSandboxLauncher(platform, fallbackRef);
+    if (launcher.kind !== 'none') await prepareSandboxCandidate(fallbackRef, launcher, { cfg, auth });
   }
   configureSandboxLauncher(launcher);
   const net = cfg.sandbox.net;

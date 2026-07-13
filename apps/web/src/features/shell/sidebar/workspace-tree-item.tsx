@@ -55,7 +55,7 @@ export function WorkspaceTreeItem({
   className?: string;
   contentClassName?: string;
   editableOnDoubleClick?: boolean;
-  href: string;
+  href?: string;
   icon?: ReactNode;
   label: string;
   menuActions?: TreeItemMenuAction[];
@@ -78,7 +78,7 @@ export function WorkspaceTreeItem({
     if (!editing) onOpen();
   }, [editing, onOpen]);
   const openContextMenu = useCallback(
-    (event: MouseEvent<HTMLAnchorElement>) => {
+    (event: MouseEvent<HTMLElement>) => {
       if (!resolvedMenuActions?.length) return;
       event.preventDefault();
       setMenuOpen(true);
@@ -86,7 +86,7 @@ export function WorkspaceTreeItem({
     [resolvedMenuActions]
   );
   const handleDoubleClick = useCallback(
-    (event: MouseEvent<HTMLAnchorElement>) => {
+    (event: MouseEvent<HTMLElement>) => {
       event.preventDefault();
       event.stopPropagation();
       if (active || editableOnDoubleClick) startEditing();
@@ -99,32 +99,60 @@ export function WorkspaceTreeItem({
       className={sidebarItemContainerClass({ active, className: 'gap-0.5' })}
       data-sidebar-tree-item="true"
     >
-      <ShellLink
-        aria-current={active ? 'page' : undefined}
-        aria-expanded={ariaExpanded}
-        className={cn('flex min-w-0 flex-1 items-center gap-2 text-left text-inherit visited:text-inherit', className)}
-        href={href}
-        onClick={(event) => {
-          event.preventDefault();
-          openItem();
-        }}
-        onContextMenu={openContextMenu}
-        onDoubleClick={handleDoubleClick}
-        title={title}
-      >
-        {icon}
-        <span className={cn(SIDEBAR_ITEM_LABEL_CLASS, contentClassName)}>
-          <SidebarEditableTitle
-            editing={editing}
-            label={label}
-            onCommit={onRename}
-            onEditingChange={setEditing}
-            title={title}
-          >
-            {children}
-          </SidebarEditableTitle>
-        </span>
-      </ShellLink>
+      {href ? (
+        <ShellLink
+          aria-current={active ? 'page' : undefined}
+          aria-expanded={ariaExpanded}
+          className={cn(
+            'flex min-w-0 flex-1 items-center gap-2 text-left text-inherit visited:text-inherit',
+            className
+          )}
+          href={href}
+          onClick={(event) => {
+            event.preventDefault();
+            openItem();
+          }}
+          onContextMenu={openContextMenu}
+          onDoubleClick={handleDoubleClick}
+          title={title}
+        >
+          {icon}
+          <span className={cn(SIDEBAR_ITEM_LABEL_CLASS, contentClassName)}>
+            <SidebarEditableTitle
+              editing={editing}
+              label={label}
+              onCommit={onRename}
+              onEditingChange={setEditing}
+              title={title}
+            >
+              {children}
+            </SidebarEditableTitle>
+          </span>
+        </ShellLink>
+      ) : (
+        <button
+          aria-expanded={ariaExpanded}
+          className={cn('flex min-w-0 flex-1 items-center gap-2 text-left text-inherit', className)}
+          onClick={openItem}
+          onContextMenu={openContextMenu}
+          onDoubleClick={handleDoubleClick}
+          title={title}
+          type="button"
+        >
+          {icon}
+          <span className={cn(SIDEBAR_ITEM_LABEL_CLASS, contentClassName)}>
+            <SidebarEditableTitle
+              editing={editing}
+              label={label}
+              onCommit={onRename}
+              onEditingChange={setEditing}
+              title={title}
+            >
+              {children}
+            </SidebarEditableTitle>
+          </span>
+        </button>
+      )}
       {actions}
       {resolvedMenuActions?.length ? (
         <SidebarItemMenu

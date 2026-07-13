@@ -2,14 +2,119 @@ import type {
   AgentConnection,
   ClientCapabilities,
   CreateElicitationResponse,
+  ElicitationPropertySchema,
   RequestPermissionRequest,
   RequestPermissionResponse
 } from '@agentclientprotocol/sdk';
-import type { ApprovalScope, Event, SessionId } from '@monad/protocol';
+import type {
+  ApprovalScope,
+  Event,
+  InteractionRequest,
+  InteractionResult,
+  InteractionSource,
+  SessionId
+} from '@monad/protocol';
 import type { ToolBackends } from '#/capabilities/tools/types.ts';
 import type { Handlers } from '#/transports/acp/types.ts';
 
 import { toolKind } from '#/transports/acp/translate.ts';
+
+type AcpElicitationRequest = {
+  mode: 'form';
+  sessionId: SessionId;
+  message: string;
+  requestedSchema: {
+    type: 'object';
+    properties: Record<string, ElicitationPropertySchema>;
+    required: string[];
+  };
+};
+
+function interactionSourceLabel(source: InteractionSource): string {
+  return source.kind === 'builtin' ? (source.label ?? source.id) : `${source.packId} / ${source.atomId}`;
+}
+
+/** Convert host-owned semantic fields to ACP's portable form elicitation subset. Secret fields are
+ * refused instead of degrading to plain text because ACP does not advertise a no-echo input type. */
+export function interactionToAcpElicitation(
+  request: InteractionRequest,
+  source: InteractionSource,
+  sessionId: SessionId
+): AcpElicitationRequest {
+  const properties: Record<string, ElicitationPropertySchema> = {};
+  const required: string[] = [];
+
+  if (request.type === 'confirm') {
+    properties.confirmed = { type: 'boolean', title: request.confirmLabel ?? request.title };
+    required.push('confirmed');
+  } else if (request.type === 'select') {
+    properties.value = {
+      type: 'string',
+      title: request.title,
+      oneOf: request.options.map((option) => ({ const: option.value, title: option.label }))
+    };
+    required.push('value');
+  } else {
+    for (const field of request.fields) {
+      if (field.type === 'secret') throw new Error('ACP presenter does not support secret fields');
+      const property: Record<string, unknown> = { title: field.label };
+      if (field.description) property.description = field.description;
+      if (field.type === 'string') {
+        property.type = 'string';
+        if (field.pattern) property.pattern = field.pattern;
+        if (field.defaultValue !== undefined) property.default = field.defaultValue;
+      } else if (field.type === 'number') {
+        property.type = 'number';
+        if (field.min !== undefined) property.minimum = field.min;
+        if (field.max !== undefined) property.maximum = field.max;
+        if (field.defaultValue !== undefined) property.default = field.defaultValue;
+      } else if (field.type === 'boolean') {
+        property.type = 'boolean';
+        if (field.defaultValue !== undefined) property.default = field.defaultValue;
+      } else {
+        property.type = 'string';
+        property.oneOf = field.options.map((option) => ({ const: option.value, title: option.label }));
+        if (field.defaultValue !== undefined) property.default = field.defaultValue;
+      }
+      properties[field.id] = property as ElicitationPropertySchema;
+      if (field.required) required.push(field.id);
+    }
+  }
+
+  return {
+    mode: 'form',
+    sessionId,
+    message: `[${interactionSourceLabel(source)}] ${request.title}${request.description ? `\n${request.description}` : ''}`,
+    requestedSchema: { type: 'object', properties, required }
+  };
+}
+
+/** Present one already-routed host interaction over ACP. Callers retain ownership of claim/lease
+ * completion; this adapter only translates the interaction and returns the semantic result. */
+async function _bridgeHostInteraction(
+  conn: AgentConnection,
+  clientCaps: ClientCapabilities,
+  sessionId: SessionId,
+  source: InteractionSource,
+  request: InteractionRequest
+): Promise<InteractionResult> {
+  if (!clientCaps.elicitation?.form) return { status: 'cancelled', reason: 'unavailable' };
+  let elicitation: AcpElicitationRequest;
+  try {
+    elicitation = interactionToAcpElicitation(request, source, sessionId);
+  } catch {
+    return { status: 'cancelled', reason: 'unavailable' };
+  }
+  try {
+    const response = (await conn.client.request('elicitation/create', elicitation)) as CreateElicitationResponse;
+    if (response.action !== 'accept' || !response.content || typeof response.content !== 'object') {
+      return { status: 'cancelled', reason: 'close' };
+    }
+    return { status: 'submitted', values: response.content as Record<string, unknown> };
+  } catch {
+    return { status: 'cancelled', reason: 'disconnect' };
+  }
+}
 
 /** Service a daemon delegation request against the editor: the daemon's remote fs/terminal backend
  * emitted a `delegation.{fs,terminal}_request` event (routed here over the turn's stream); we run it

@@ -10,10 +10,9 @@ import type {
   ProjectMemberType
 } from './experience/project-members.ts';
 import type { ProjectExperienceCanvasSource } from './experience/source.ts';
-import type { GraphicViewExperienceRuntime } from './graph-view/runtime.ts';
 
 import { createChatRoomExperienceRuntime } from './chat-room/runtime.ts';
-import { createGraphicViewExperienceRuntime } from './graph-view/runtime.ts';
+import { toWorkspaceExperienceGraphCanvas } from './experience/activity-graph.ts';
 
 // Snapshot/actions are the published third-party contract, defined once in @monad/sdk-experience. These
 // aliases keep the atoms-internal names stable while sdk-atom owns the shape.
@@ -29,7 +28,6 @@ export interface ProjectExperienceRuntimeSource extends ProjectExperienceSnapsho
 
 export interface WorkspaceExperienceRuntimeViews {
   'chat-room': ChatRoomExperienceRuntime;
-  'graphic-view': GraphicViewExperienceRuntime;
 }
 
 export interface ProjectExperienceRuntime {
@@ -48,7 +46,6 @@ export function createProjectExperienceRuntime(
   const chatRoom = createChatRoomExperienceRuntime(source, {
     openAgentCard: opts.openAgentCard
   });
-  const graphicView = createGraphicViewExperienceRuntime(source);
   const snapshot: ProjectExperienceSnapshot = {
     projectId: source.projectId,
     activeProjectId: source.activeProjectId,
@@ -59,15 +56,16 @@ export function createProjectExperienceRuntime(
     modelProfiles: source.modelProfiles,
     workdir: source.workdir,
     paused: source.paused,
-    // Stamp the activity-graph projection onto the published snapshot so a web-component experience
-    // (the first-party graph-view) can render presence + activity from the host API alone — the
-    // host-component path read it straight off `views['graphic-view']`, the web-component path can't.
-    graphCanvas: graphicView.canvas
+    // Published framework-neutral data. Optional experiences such as Power Pack's Kanban render it
+    // without gaining access to the built-in React runtime.
+    graphCanvas: toWorkspaceExperienceGraphCanvas({
+      participants: source.participants,
+      liveTools: source.source.liveTools ?? []
+    })
   };
   return {
     views: {
-      'chat-room': chatRoom,
-      'graphic-view': graphicView
+      'chat-room': chatRoom
     },
     snapshot,
     actions: {

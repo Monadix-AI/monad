@@ -1,4 +1,4 @@
-import type { ChannelType } from '@monad/protocol';
+import type { ChannelType, InteractionRequest, InteractionResult } from '@monad/protocol';
 import type {
   ChannelAdapterFactory,
   Connector,
@@ -31,9 +31,10 @@ export function builtinChannelAdapters(
     onProvider?: (provider: ModelProvider) => void;
     onHook?: (hook: HookDefinition) => void;
     onAgentAdapter?: (adapter: ExternalAgentProviderAdapter) => void;
-    onSandbox?: (launcher: SandboxLauncher) => void;
+    onSandbox?: (launcher: SandboxLauncher, atomPackId: string) => void;
     onWorkspaceExperience?: (experience: WorkspaceExperienceDefinition, atomPackName: string) => void;
     onWorkspaceExperienceApi?: (api: WorkspaceExperienceApi, atomPackName: string) => void;
+    onRequestInteraction?: (atomPackId: string, request: InteractionRequest) => Promise<InteractionResult>;
   } = {}
 ): Promise<Map<ChannelType, ChannelAdapterFactory>> {
   return loadChannelAtomPacks(BUILTIN_CHANNEL_ATOM_PACKS, { onError, ...sinks });

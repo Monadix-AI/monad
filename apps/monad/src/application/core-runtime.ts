@@ -7,6 +7,7 @@ import type { AtomDiscovery } from '#/atoms/lifecycle.ts';
 import type { CapabilitiesRuntime } from '#/capabilities/lifecycle.ts';
 import type { McpRuntime } from '#/capabilities/mcp/lifecycle.ts';
 import type { SkillSubsystem } from '#/capabilities/skills/service.ts';
+import type { HostInteractionService } from '#/interactions/service.ts';
 import type { SandboxSetup } from '#/platform/sandbox/service.ts';
 import type { RuntimeContextReader } from '#/runtime/types.ts';
 import type { DataLayer } from '#/store/lifecycle.ts';
@@ -18,6 +19,7 @@ import { ConfigReloadTargets } from '#/config/reload-targets.ts';
 import { createConfigReloader } from '#/config/reloader.ts';
 import { createHomeConfigSource } from '#/config/source.ts';
 import { WatchService } from '#/infra/watch-service.ts';
+import { HostInteractionService as InteractionService } from '#/interactions/service.ts';
 import { createDaemonModules, createDaemonRuntime } from '#/runtime/create.ts';
 import { configureDeveloperLogTransport } from '#/services/developer-log.ts';
 import { createDataLayer } from '#/store/lifecycle.ts';
@@ -44,6 +46,7 @@ export interface DaemonCore extends CoreRuntimeOutputs {
   runtime: ReturnType<typeof createDaemonRuntime>;
   reloadTargets: ConfigReloadTargets;
   configReloader: ReturnType<typeof createConfigReloader>;
+  interactions: HostInteractionService;
 }
 
 interface ProviderWatcherDeps {
@@ -94,6 +97,7 @@ export async function createCoreRuntime(preflight: DaemonPreflight, logger: Logg
   const watchService = new WatchService({ log: (level, message) => logger[level](message) });
   process.on('exit', () => watchService.closeAll());
   const reloadTargets = new ConfigReloadTargets();
+  const interactions = new InteractionService();
   let runtime: ReturnType<typeof createDaemonRuntime>;
   const configReloader = createConfigReloader(async () => {
     await runtime.config.refreshNow();
@@ -124,6 +128,7 @@ export async function createCoreRuntime(preflight: DaemonPreflight, logger: Logg
       monadVersion,
       watcher: watchService,
       logger,
+      interactions,
       startStore: async () => dataLayer
     }),
     source: configSource,
@@ -151,6 +156,7 @@ export async function createCoreRuntime(preflight: DaemonPreflight, logger: Logg
     watchService,
     runtime,
     reloadTargets,
-    configReloader
+    configReloader,
+    interactions
   };
 }

@@ -8,7 +8,7 @@
 // skill/mcp/locale are file-based and do NOT flow through this host — they are installed at the
 // atom-pack-manager level and discovered from disk at daemon startup.
 
-import type { AtomDescriptor, AtomKind, ChannelType } from '@monad/protocol';
+import type { AtomDescriptor, AtomKind, ChannelType, InteractionRequest, InteractionResult } from '@monad/protocol';
 import type {
   AtomPackLog,
   ChannelAdapterFactory,
@@ -44,11 +44,13 @@ interface ChannelAtomPackHostOptions {
   /** Receives each sandbox launcher an atom pack registers (atom-kind-gated like the others). The
    *  daemon collects them into a registry and selects one per platform — no namespace/first-wins
    *  here (selection is by platform + availability, third-party preferred over built-in). */
-  onSandbox?: (launcher: SandboxLauncher) => void;
+  onSandbox?: (launcher: SandboxLauncher, atomPackId: string) => void;
   /** Receives each workspace experience an atom pack registers (atom-kind-gated like the others). */
   onWorkspaceExperience?: (experience: WorkspaceExperienceDefinition, atomPackName: string) => void;
   /** Receives each workspace experience API route set an atom pack registers (same atom-kind gate). */
   onWorkspaceExperienceApi?: (api: WorkspaceExperienceApi, atomPackName: string) => void;
+  /** Receives a schema-only interaction request with the loader-bound, trusted pack identity. */
+  onRequestInteraction?: (atomPackId: string, request: InteractionRequest) => Promise<InteractionResult>;
   /** Name of the atom pack currently being loaded — used to attribute collisions (same-pack dup vs
    *  cross-pack). The loader updates the source before each pack; absent → '' (single-pack callers). */
   currentAtomPack?: () => string;
@@ -124,9 +126,12 @@ function createChannelAtomPackHost(opts: ChannelAtomPackHostOptions = {}): {
     },
     registerHook: (h) => opts.onHook?.(h),
     registerAgentAdapter: (a) => opts.onAgentAdapter?.(a),
-    registerSandbox: (s) => opts.onSandbox?.(s),
+    registerSandbox: (s) => opts.onSandbox?.(s, pack()),
     registerWorkspaceExperienceApi: (api) => opts.onWorkspaceExperienceApi?.(api, pack()),
     registerWorkspaceExperience: (experience) => opts.onWorkspaceExperience?.(experience, pack()),
+    requestInteraction: (atomPackId, request) =>
+      opts.onRequestInteraction?.(atomPackId, request) ??
+      Promise.resolve({ status: 'cancelled', reason: 'unavailable' }),
     log: opts.log
   };
   const finalizeChannels = (): void => {
@@ -218,6 +223,7 @@ export async function loadChannelAtomPacks(
     onSandbox: opts.onSandbox,
     onWorkspaceExperience: opts.onWorkspaceExperience,
     onWorkspaceExperienceApi: opts.onWorkspaceExperienceApi,
+    onRequestInteraction: opts.onRequestInteraction,
     reservedProviderTypes: opts.reservedProviderTypes,
     channelPins: opts.channelPins,
     connectorPins: opts.connectorPins,
@@ -237,8 +243,14 @@ export async function loadChannelAtomPacks(
     currentAtomPack = opts.packIdFor?.(atomPack) ?? atomPack.manifest.name;
     try {
       assertAtomPackMonadCompatibility(atomPack.manifest.name, atomPack.manifest.monadVersion);
-      await loadManifestAtomPack(atomPack, host, { grantedAtoms: opts.grantedAtomsFor?.(atomPack) });
+      // Description is metadata for the operator-facing detail view, not a side effect of runtime
+      // registration. Capture it first so a failing sink (for example a duplicate sandbox launcher)
+      // does not collapse an otherwise inspectable pack back to kind-only badges.
       if (opts.onAtoms) opts.onAtoms(currentAtomPack, await describeAtomPack(atomPack));
+      await loadManifestAtomPack(atomPack, host, {
+        grantedAtoms: opts.grantedAtomsFor?.(atomPack),
+        atomPackId: currentAtomPack
+      });
     } catch (err) {
       opts.onError?.(atomPack.manifest.name, err);
     }

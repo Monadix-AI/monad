@@ -3,8 +3,8 @@ import type {
   Event,
   ExternalAgentInboxItem,
   GetStatsResponse,
+  InboxItem,
   LedgerCategory,
-  MentionInboxItem,
   MessageAttachmentRef,
   MessageId,
   MessageType,
@@ -686,7 +686,7 @@ export class Store {
     return listExternalAgentInbox(this.sqlite, externalAgentSessionId, limit);
   }
 
-  listMentionInbox(limit = 100): MentionInboxItem[] {
+  listMentionInbox(limit = 100): InboxItem[] {
     return listMentionInbox(this.sqlite, limit);
   }
 

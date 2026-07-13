@@ -19,6 +19,8 @@ import type {
   HookEvent,
   HookInput,
   HookOutput,
+  InteractionRequest,
+  InteractionResult,
   MessageTypeDescriptor,
   ModelInfo,
   ModelKind,
@@ -123,10 +125,13 @@ import type {
   VideoResult
 } from './model.ts';
 import type {
+  SandboxBackendRef,
   SandboxEnforcement,
   SandboxLauncher,
+  SandboxLauncherDescriptor,
   SandboxPolicy,
   SandboxProcess,
+  SandboxSettingsSchema,
   SandboxSpawnOptions
 } from './sandbox.ts';
 
@@ -136,7 +141,15 @@ import { assertChannelInbound, createChannelTestHarness, defineChannel, parseCha
 import { defineCommand } from './command.ts';
 import { defineProvider } from './model.ts';
 import { extractCacheWrite, extractProviderCost, usageFromProviderMetadataJson } from './provider-usage.ts';
-import { configureSandboxCredential, defineLocalLauncher, noneLauncher, sandboxCredential } from './sandbox.ts';
+import {
+  configureSandboxCredential,
+  defineLocalLauncher,
+  noneLauncher,
+  sandboxBackendRefSchema,
+  sandboxCredential,
+  sandboxLauncherDescriptorSchema,
+  sandboxSettingsSchema
+} from './sandbox.ts';
 
 export type {
   AdapterMigration,
@@ -234,10 +247,13 @@ export type {
   RerankCall,
   RerankResult,
   ResolvedProviderConfig,
+  SandboxBackendRef,
   SandboxEnforcement,
   SandboxLauncher,
+  SandboxLauncherDescriptor,
   SandboxPolicy,
   SandboxProcess,
+  SandboxSettingsSchema,
   SandboxSpawnOptions,
   Scope,
   SendOptions,
@@ -274,7 +290,10 @@ export {
   noneLauncher,
   parseChannelManifest,
   resolveBinary,
+  sandboxBackendRefSchema,
   sandboxCredential,
+  sandboxLauncherDescriptorSchema,
+  sandboxSettingsSchema,
   usageFromProviderMetadataJson
 };
 
@@ -337,6 +356,8 @@ export interface AtomPackContext {
   registerSandbox(launcher: SandboxLauncher): void;
   registerWorkspaceExperience(experience: WorkspaceExperienceDefinition): void;
   registerWorkspaceExperienceApi(api: WorkspaceExperienceApi): void;
+  /** Request bounded, host-rendered user input. The host owns presentation, routing, and lifecycle. */
+  requestInteraction(request: InteractionRequest): Promise<InteractionResult>;
   log: AtomPackLog;
 }
 
@@ -365,6 +386,8 @@ export interface ManifestAtomPackHost {
   registerWorkspaceExperience?(experience: WorkspaceExperienceDefinition): void;
   /** Optional: hosts that don't support workspace experience APIs omit it; registration then throws. */
   registerWorkspaceExperienceApi?(api: WorkspaceExperienceApi): void;
+  /** Optional host interaction bridge. The loader supplies the trusted, bound atom-pack identity. */
+  requestInteraction?(atomPackId: string, request: InteractionRequest): Promise<InteractionResult>;
   log?: AtomPackLog;
 }
 
@@ -412,10 +435,11 @@ export function defineAtomPack(spec: {
 export async function loadManifestAtomPack(
   pack: ManifestAtomPack,
   host: ManifestAtomPackHost,
-  opts: { grantedAtoms?: readonly Atom[] } = {}
+  opts: { grantedAtoms?: readonly Atom[]; atomPackId?: string } = {}
 ): Promise<void> {
   const declared = new Set<Atom>(opts.grantedAtoms ?? pack.manifest.atoms);
   const name = pack.manifest.name;
+  const atomPackId = opts.atomPackId ?? name;
   const gate = (atom: Atom): void => {
     if (!declared.has(atom)) throw new UndeclaredAtomError(atom, name);
   };
@@ -469,6 +493,12 @@ export async function loadManifestAtomPack(
         throw new Error(`host does not accept workspace experience APIs (atom pack "${name}")`);
       }
       host.registerWorkspaceExperienceApi(api);
+    },
+    requestInteraction: (request) => {
+      if (!host.requestInteraction) {
+        return Promise.resolve({ status: 'cancelled', reason: 'unavailable' });
+      }
+      return host.requestInteraction(atomPackId, request);
     },
     log: host.log ?? (() => {})
   };

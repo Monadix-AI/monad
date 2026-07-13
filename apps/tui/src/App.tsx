@@ -1,3 +1,4 @@
+import type { MonadClient } from '@monad/client';
 import type { SessionId } from '@monad/protocol';
 import type { RootState } from './store/index.ts';
 
@@ -11,13 +12,13 @@ function SessionStream({ sessionId }: { sessionId: SessionId }) {
   return null;
 }
 
-export function App() {
+export function App({ client }: { client: MonadClient }) {
   const currentSessionId = useSelector((s: RootState) => s.server.currentSessionId);
 
   return (
     <>
       {currentSessionId && <SessionStream sessionId={currentSessionId} />}
-      <Layout />
+      <Layout client={client} />
     </>
   );
 }

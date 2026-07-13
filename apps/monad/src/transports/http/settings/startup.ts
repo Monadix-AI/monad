@@ -15,5 +15,9 @@ export function createStartupSettingsController(handlers: ReturnType<typeof crea
       body: c.set.body,
       response: c.set.response,
       detail: { summary: 'Update OS startup settings' }
+    })
+    .post('/startup/open', async () => handlers.startup.openStartupSettings(), {
+      response: c.open.response,
+      detail: { summary: 'Open the native OS startup settings' }
     });
 }

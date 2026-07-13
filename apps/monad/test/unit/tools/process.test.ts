@@ -22,10 +22,12 @@ const ctx: ToolContext = { sessionId: 's1', sandboxRoots: undefined, log: () => 
 const ctxB: ToolContext = { sessionId: 's2', sandboxRoots: undefined, log: () => {} };
 const fakeLauncher: SandboxLauncher = {
   kind: 'fake-os-sandbox',
+  descriptor: { name: 'Fake OS sandbox' },
   wrap: (argv) => argv
 };
 const approvalEquivalentLauncher: SandboxLauncher = {
   kind: 'fake-approval-equivalent-sandbox',
+  descriptor: { name: 'Fake approval equivalent sandbox' },
   enforces: { readDeny: true, net: ['none'] },
   wrap: (argv) => argv
 };

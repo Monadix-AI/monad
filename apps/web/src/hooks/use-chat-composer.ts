@@ -6,7 +6,8 @@ import {
   useGenerateMutation,
   useResetSessionMutation,
   useRestoreSessionMutation,
-  useSendMessageMutation
+  useSendMessageMutation,
+  useSendProjectMessageMutation
 } from '@monad/client-rtk';
 import { parseSlashCommand } from '@monad/protocol';
 import { type SetStateAction, useCallback, useEffect, useRef, useState } from 'react';
@@ -35,6 +36,7 @@ interface UseChatComposerArgs {
   setSessionUrl: (id: SessionId | null) => void;
   followUpBehavior: ComposerFollowUpBehavior;
   assistantLabel: string;
+  isProjectSession: boolean;
 }
 
 function useSessionScopedState<T>({
@@ -79,10 +81,12 @@ export function useChatComposer({
   jumpToLive,
   setSessionUrl,
   followUpBehavior,
-  assistantLabel
+  assistantLabel,
+  isProjectSession
 }: UseChatComposerArgs) {
   const [generate, { isLoading: generating }] = useGenerateMutation();
   const [sendMessage, { isLoading: sending }] = useSendMessageMutation();
+  const [sendProjectMessage, { isLoading: sendingProjectMessage }] = useSendProjectMessageMutation();
   const [abortSession] = useAbortSessionMutation();
   const [resetSession] = useResetSessionMutation();
   const [branchSession] = useBranchSessionMutation();
@@ -119,7 +123,7 @@ export function useChatComposer({
     streamDataRef.current = streamData;
   }, [streamData]);
 
-  const isBusy = sending || generating || commandPending !== null || liveStreaming;
+  const isBusy = sending || sendingProjectMessage || generating || commandPending !== null || liveStreaming;
 
   useEffect(() => {
     if (!currentId || initialUserMessages.length === 0) return;
@@ -276,6 +280,11 @@ export function useChatComposer({
           streamDataRef.current?.items.filter((item) => item.kind === 'message' && item.role === 'assistant').length ??
           0;
         const beforeStreamMsgs = assistantCount();
+        if (isProjectSession) {
+          await sendProjectMessage({ sessionId: currentId, text }).unwrap();
+          setOptimistic((prev) => prev.filter((m) => m.id !== assistantActivity.id));
+          return;
+        }
         await sendMessage({ sessionId: currentId, text }).unwrap();
         // Wait for the assistant reply to land on the live stream so the turn always shows up.
         for (let i = 0; i < 40; i++) {
@@ -296,6 +305,8 @@ export function useChatComposer({
     [
       currentId,
       sendMessage,
+      sendProjectMessage,
+      isProjectSession,
       generate,
       scrollToBottom,
       handleReset,

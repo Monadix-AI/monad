@@ -4,6 +4,7 @@ import type { WorkspaceExperienceApiHandler } from '@monad/sdk-atom';
 import type { AtomConflict } from '#/atoms/resolve.ts';
 import type { ConfigReloader } from '#/config/reloader.ts';
 import type { RegisteredWorkspaceExperience } from '#/handlers/atom-pack/atom-pack-registry.ts';
+import type { SandboxActivationService } from '#/platform/sandbox/activation.ts';
 import type { ModelService } from '#/services/model.ts';
 
 import { createMcpModule } from '#/handlers/atom-pack/atom-pack-mcp.ts';
@@ -30,6 +31,7 @@ export interface AtomPacksDeps {
     path: string
   ) => WorkspaceExperienceApiHandler | undefined;
   configReloader?: ConfigReloader;
+  sandboxActivation?: SandboxActivationService;
   modelService?: ModelService;
 }
 

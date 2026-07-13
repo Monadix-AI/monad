@@ -17,7 +17,7 @@ import {
 afterEach(() => clearSandboxLaunchers());
 
 function launcher(kind: string, over: Partial<SandboxLauncher> = {}): SandboxLauncher {
-  return { kind, wrap: (argv) => argv, ...over };
+  return { kind, descriptor: { name: kind }, wrap: (argv) => argv, ...over };
 }
 
 test('auto selects the light launcher for the platform (macOS → seatbelt)', () => {
@@ -25,7 +25,11 @@ test('auto selects the light launcher for the platform (macOS → seatbelt)', ()
 });
 
 test('auto ignores registered heavy launchers — never auto-selects them', () => {
-  registerSandboxLauncher(launcher('docker', { platforms: undefined }), 'atom');
+  registerSandboxLauncher(launcher('docker', { platforms: undefined }), {
+    source: 'atom-pack',
+    packId: 'test-pack',
+    kind: 'docker'
+  });
   // Even with docker registered, auto stays on the light OS launcher.
   expect(selectSandboxLauncher('darwin', 'auto').kind).toBe('seatbelt');
 });
@@ -47,18 +51,30 @@ test('explicit backend with no registered heavy launcher falls back to the light
 });
 
 test('explicit backend selects a registered heavy launcher of that kind', () => {
-  registerSandboxLauncher(launcher('docker', { platforms: undefined }), 'atom');
+  registerSandboxLauncher(launcher('docker', { platforms: undefined }), {
+    source: 'atom-pack',
+    packId: 'test-pack',
+    kind: 'docker'
+  });
   expect(selectSandboxLauncher('darwin', 'docker').kind).toBe('docker');
 });
 
 test('explicit backend returns a heavy launcher even when it is currently unavailable', () => {
   // Its prepare()/finalize re-check decides availability; selection must not drop it here.
-  registerSandboxLauncher(launcher('docker', { platforms: undefined, isAvailable: () => false }), 'atom');
+  registerSandboxLauncher(launcher('docker', { platforms: undefined, isAvailable: () => false }), {
+    source: 'atom-pack',
+    packId: 'test-pack',
+    kind: 'docker'
+  });
   expect(selectSandboxLauncher('darwin', 'docker').kind).toBe('docker');
 });
 
 test('clearSandboxLaunchers wipes heavy launchers but never the closed light set', () => {
-  registerSandboxLauncher(launcher('docker', { platforms: undefined }), 'atom');
+  registerSandboxLauncher(launcher('docker', { platforms: undefined }), {
+    source: 'atom-pack',
+    packId: 'test-pack',
+    kind: 'docker'
+  });
   clearSandboxLaunchers();
   // heavy gone → explicit docker falls back to light
   expect(selectSandboxLauncher('darwin', 'docker').kind).toBe('seatbelt');
@@ -75,7 +91,7 @@ test('disposeSandboxSession tells every heavy launcher to release the session', 
         disposed.push(s);
       }
     }),
-    'atom'
+    { source: 'atom-pack', packId: 'test-pack', kind: 'e2b' }
   );
   disposeSandboxSession('sess-9');
   expect(disposed).toEqual(['sess-9']);

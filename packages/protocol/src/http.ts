@@ -105,7 +105,12 @@ import {
   setNetworkSettingsRequestSchema
 } from './settings/network-settings.ts';
 import { openaiCompatSettingsSchema, setOpenaiCompatRequestSchema } from './settings/openai-compat-settings.ts';
-import { sandboxSettingsResponseSchema, setSandboxSettingsRequestSchema } from './settings/sandbox-settings.ts';
+import {
+  activateSandboxBackendRequestSchema,
+  sandboxActivationResultSchema,
+  sandboxSettingsResponseSchema,
+  setSandboxSettingsRequestSchema
+} from './settings/sandbox-settings.ts';
 import {
   importSettingsApplyRequestSchema,
   importSettingsApplyResultSchema,
@@ -113,7 +118,11 @@ import {
   importSettingsRequestSchema
 } from './settings/settings-import.ts';
 import { setSkillsSettingsRequestSchema, skillsSettingsResponseSchema } from './settings/skills-settings.ts';
-import { setStartupSettingsRequestSchema, startupSettingsSchema } from './settings/startup-settings.ts';
+import {
+  openStartupSettingsResponseSchema,
+  setStartupSettingsRequestSchema,
+  startupSettingsSchema
+} from './settings/startup-settings.ts';
 import { setUserProfileSettingsRequestSchema, userProfileSettingsSchema } from './settings/user-profile-settings.ts';
 import { systemUpgradeStatusSchema } from './system-upgrade.ts';
 import { initDockerResponseSchema, setToolBackendsRequestSchema, toolBackendsResponseSchema } from './tool-backends.ts';
@@ -430,7 +439,14 @@ export const daemonHttpContract = {
   },
   sandboxSettings: {
     get: defineHttpEndpoint({ response: { 200: sandboxSettingsResponseSchema } }),
-    set: defineHttpEndpoint({ body: setSandboxSettingsRequestSchema, response: { 200: sandboxSettingsResponseSchema } })
+    set: defineHttpEndpoint({
+      body: setSandboxSettingsRequestSchema,
+      response: { 200: sandboxSettingsResponseSchema }
+    }),
+    activate: defineHttpEndpoint({
+      body: activateSandboxBackendRequestSchema,
+      response: { 200: sandboxActivationResultSchema }
+    })
   },
   skillsSettings: {
     get: defineHttpEndpoint({ response: { 200: skillsSettingsResponseSchema } }),
@@ -466,6 +482,7 @@ export const daemonHttpContract = {
   },
   startupSettings: {
     get: defineHttpEndpoint({ response: { 200: startupSettingsSchema } }),
+    open: defineHttpEndpoint({ response: { 200: openStartupSettingsResponseSchema } }),
     set: defineHttpEndpoint({
       body: setStartupSettingsRequestSchema,
       response: { 200: startupSettingsSchema }

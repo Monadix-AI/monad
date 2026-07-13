@@ -1,5 +1,5 @@
 import type { ExternalAgentConfig } from '@monad/home';
-import type { Event, ManagedExternalAgentLifecycleLogEvent, ProjectId, Session, SessionId } from '@monad/protocol';
+import type { Event, ManagedExternalAgentLifecycleLogEvent, Session, SessionId } from '@monad/protocol';
 import type { SessionContext } from '#/handlers/session/context.ts';
 import type { ManagedExternalAgentProjectMessageSender } from '#/handlers/session/handlers/messaging-notices.ts';
 
@@ -104,7 +104,7 @@ export function createManagedExternalAgentDelivery(ctx: SessionContext) {
           if (deliveredSeq > 0) {
             store.enqueueExternalAgentInboxItem(existing.id, deliveredSeq, {
               deliveryId,
-              projectId: session.id as ProjectId,
+              ...(session.projectId ? { projectId: session.projectId } : {}),
               memberInstanceId: runtimeAgentName,
               triggerMessageId,
               providerSessionRef: existing.providerSessionRef ?? null
@@ -172,7 +172,7 @@ export function createManagedExternalAgentDelivery(ctx: SessionContext) {
         if (deliveredSeq > 0) {
           store.enqueueExternalAgentInboxItem(nativeSession.id, deliveredSeq, {
             deliveryId,
-            projectId: session.id as ProjectId,
+            ...(session.projectId ? { projectId: session.projectId } : {}),
             memberInstanceId: runtimeAgentName,
             triggerMessageId,
             providerSessionRef: nativeSession.providerSessionRef ?? null

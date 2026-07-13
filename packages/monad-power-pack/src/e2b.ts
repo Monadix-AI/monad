@@ -14,7 +14,7 @@ export function configureE2bApiKey(key: string | undefined): void {
 }
 
 function resolveKey(perRun?: string): string | undefined {
-  return perRun ?? sandboxCredential() ?? configuredKey;
+  return configuredKey ?? perRun ?? sandboxCredential();
 }
 
 // The e2b module is loaded lazily (only when a run actually happens) and is injectable so the
@@ -83,11 +83,21 @@ const sessionSandboxes = new Map<string, Promise<Sandbox>>();
 
 export const e2bLauncher: SandboxLauncher = {
   kind: 'e2b',
+  descriptor: {
+    name: 'E2B',
+    description: 'Runs commands in a reusable remote micro-VM.',
+    settings: {
+      fields: [{ id: 'apiKey', type: 'secret', label: 'API key', required: true }]
+    }
+  },
   // Cloud launcher: execution is delegated off-box, so it confines on ANY host platform.
   platforms: undefined,
   // The remote micro-VM is strongly isolated from the host — writes, credential reads, and egress
   // are all contained to the disposable remote environment.
   enforces: { writeConfine: true, readDeny: true, net: ['none', 'filtered', 'unrestricted'] },
+  configure(settings): void {
+    configuredKey = settings.apiKey as string;
+  },
   isAvailable: () => Boolean(resolveKey()),
   spawn(argv: string[], options: SandboxSpawnOptions, _policy: SandboxPolicy): SandboxProcess {
     const apiKey = resolveKey(options.credential);

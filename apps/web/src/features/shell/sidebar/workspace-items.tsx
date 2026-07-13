@@ -127,7 +127,6 @@ const WorkspaceSectionList = memo(function WorkspaceSectionList() {
             ) : (
               <ProjectList
                 expandedProjectIds={expandedProjectIds}
-                onProjectSessionOpened={expandProject}
                 onToggleProjectExpanded={toggleProjectExpanded}
               />
             )}

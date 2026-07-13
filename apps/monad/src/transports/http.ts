@@ -8,6 +8,7 @@ import { createLogger, formatTransportCall } from '@monad/logger';
 import { Elysia } from 'elysia';
 
 import { HANDLER_ERROR_MAP, HandlerError } from '#/handlers/handler-error.ts';
+import { HostInteractionError, HostInteractionService } from '#/interactions/service.ts';
 
 const log = createLogger('transport:http');
 const requestTimings = new WeakMap<Request, number>();
@@ -73,6 +74,7 @@ import { createInMemoryHttpIdempotencyStore } from '#/transports/http/idempotenc
 import { createInboxController } from '#/transports/http/inbox.ts';
 import { createIndexerController } from '#/transports/http/indexer.ts';
 import { createInitController } from '#/transports/http/init.ts';
+import { createInteractionsController } from '#/transports/http/interactions.ts';
 import { createLawsController } from '#/transports/http/laws/controller.ts';
 import { createLicensesController } from '#/transports/http/licenses/controller.ts';
 import { createLocaleCatalogController, createLocaleSettingsController } from '#/transports/http/locale.ts';
@@ -132,6 +134,7 @@ export interface HttpTransportOptions {
   developerMode?: LiveFlag;
   remoteAccess?: RemoteAccessSource;
   openaiCompatConfig?: () => Promise<{ enabled: boolean; token?: string }>;
+  interactions?: HostInteractionService;
 }
 
 const LOCALHOST = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
@@ -216,11 +219,12 @@ export function resolveRemoteAccessConfig(source: RemoteAccessSource | undefined
 
 export function createHttpTransport(
   handlers: ReturnType<typeof createDaemonHandlers>,
-  { docs = false, developerMode = false, remoteAccess, openaiCompatConfig }: HttpTransportOptions = {}
+  { docs = false, developerMode = false, remoteAccess, openaiCompatConfig, interactions }: HttpTransportOptions = {}
 ) {
   const connections = new Map<string, ConnectionState>();
   const encoder = new TextEncoder();
   const idempotencyStore = createInMemoryHttpIdempotencyStore();
+  const interactionService = interactions ?? new HostInteractionService();
 
   let app = new Elysia()
     .use(serverTiming({ enabled: resolveLiveFlag(developerMode) }))
@@ -250,6 +254,18 @@ export function createHttpTransport(
         const { httpStatus, httpCode } = HANDLER_ERROR_MAP[error.kind];
         logHttpCall(request.method, url.pathname, httpStatus, durationMs, error, resolveLiveFlag(developerMode));
         return jsonResponse(httpStatus, { error: error.message, code: error.code ?? httpCode }, request);
+      }
+      if (error instanceof HostInteractionError) {
+        const status =
+          error.code === 'not_found'
+            ? 404
+            : error.code === 'invalid_lease'
+              ? 403
+              : error.code === 'source_limit'
+                ? 429
+                : 409;
+        logHttpCall(request.method, url.pathname, status, durationMs, error, resolveLiveFlag(developerMode));
+        return jsonResponse(status, { error: error.message, code: error.code }, request);
       }
       // Client-shaped errors: normalize to JSON so every failure has the same envelope.
       if (code === 'NOT_FOUND') {
@@ -408,6 +424,7 @@ export function createHttpTransport(
         .use(createMemoryController(handlers))
         .use(createAtomsController(handlers))
         .use(createInboxController(handlers))
+        .use(createInteractionsController(interactionService))
         .use(createNativeAgentController(handlers))
         .use(createExternalAgentController(handlers))
         .use(createLocaleCatalogController(handlers))

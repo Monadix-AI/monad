@@ -202,3 +202,39 @@ test('onChanged fires on install + remove (live re-discovery hook)', async () =>
   await m.removeAtomPack({ name: 'wa' }); // remove → fire
   expect(calls).toBe(2);
 });
+
+test('disable and remove consult the active sandbox fallback guard before mutating a pack', async () => {
+  const guarded: string[] = [];
+  const m = createAtomPacksModule({
+    paths: paths(),
+    sandboxActivation: {
+      activateBackend: async (ref) => ({ requested: ref, effective: ref, status: 'active' }),
+      ensurePackCanDeactivate: async (packId) => {
+        guarded.push(packId);
+      }
+    }
+  });
+  await m.installAtomPack({ source: `local:${stagedDir}`, consent: true });
+
+  await m.setAtomPackEnabled({ name: 'wa', enabled: false });
+  await m.setAtomPackEnabled({ name: 'wa', enabled: true });
+  await m.removeAtomPack({ name: 'wa' });
+
+  expect(guarded).toEqual(['wa', 'wa']);
+});
+
+test('a failed sandbox fallback refuses active-pack disable before changing install state', async () => {
+  const m = createAtomPacksModule({
+    paths: paths(),
+    sandboxActivation: {
+      activateBackend: async (ref) => ({ requested: ref, effective: ref, status: 'active' }),
+      ensurePackCanDeactivate: async () => {
+        throw new Error('auto unavailable');
+      }
+    }
+  });
+  await m.installAtomPack({ source: `local:${stagedDir}`, consent: true });
+
+  await expect(m.setAtomPackEnabled({ name: 'wa', enabled: false })).rejects.toThrow('auto unavailable');
+  expect((await m.listAtomPacks()).atomPacks.find((pack) => pack.name === 'wa')?.enabled).toBe(true);
+});

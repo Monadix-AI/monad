@@ -273,9 +273,17 @@ import {
   useUpsertPeerMutation
 } from './endpoints/settings/peers/index.ts';
 import { useGetProfileSettingsQuery, useSetProfileSettingsMutation } from './endpoints/settings/profile/index.ts';
-import { useGetSandboxQuery, useSetSandboxMutation } from './endpoints/settings/sandbox/index.ts';
+import {
+  useActivateSandboxMutation,
+  useGetSandboxQuery,
+  useSetSandboxMutation
+} from './endpoints/settings/sandbox/index.ts';
 import { useGetSkillsSettingsQuery, useSetSkillsSettingsMutation } from './endpoints/settings/skills/index.ts';
-import { useGetStartupQuery, useSetStartupMutation } from './endpoints/settings/startup/index.ts';
+import {
+  useGetStartupQuery,
+  useOpenStartupSettingsMutation,
+  useSetStartupMutation
+} from './endpoints/settings/startup/index.ts';
 import {
   useGetToolBackendsQuery,
   useInitDockerBackendMutation,
@@ -344,6 +352,7 @@ export {
   sessionSelectors,
   skillsApi,
   useAbortSessionMutation,
+  useActivateSandboxMutation,
   useAddCredentialMutation,
   useAddMemoryFactMutation,
   useApplySettingsImportMutation,
@@ -483,6 +492,7 @@ export {
   useListWorkspaceExperiencesQuery,
   useOpenCapabilityInventoryLocationMutation,
   useOpenDraftAttachmentMutation,
+  useOpenStartupSettingsMutation,
   usePickDirectoryMutation,
   usePreviewSettingsImportMutation,
   useProbeNetworkMutation,

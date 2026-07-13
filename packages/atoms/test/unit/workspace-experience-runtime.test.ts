@@ -1,11 +1,10 @@
 import type { UIItem } from '@monad/protocol';
-import type { ActivityRow, Participant } from '../../src/workspace-experiences/experience/types.ts';
+import type { Participant } from '../../src/workspace-experiences/experience/types.ts';
 import type { ProjectExperienceRuntimeSource } from '../../src/workspace-experiences/runtime.ts';
 
 import { expect, test } from 'bun:test';
 
 import { toChatRoomCanvas } from '../../src/workspace-experiences/chat-room/utils/canvas.ts';
-import { canvasToGraph, HUB_ID } from '../../src/workspace-experiences/graph-view/utils/graph-model.ts';
 import {
   requestSpawnAgentMemberDialog,
   spawnAgentMemberDialogRequest
@@ -17,9 +16,6 @@ const participant = (
   kind: Participant['kind'],
   presence: Participant['presence'] = 'online'
 ): Participant => ({ id, av: id.slice(0, 2).toUpperCase(), name: id, kind, tag: 'AI', presence }) as Participant;
-
-const activityRow = (id: string, tool: string, status: ActivityRow['status']): ActivityRow =>
-  ({ id, av: 'MO', tool, detail: tool, status }) as ActivityRow;
 
 type RuntimeSourceOverrides = Partial<Omit<ProjectExperienceRuntimeSource, 'source'>> & {
   source?: Partial<ProjectExperienceRuntimeSource['source']>;
@@ -62,45 +58,6 @@ function runtimeSource(overrides: RuntimeSourceOverrides = {}): ProjectExperienc
   };
   return { ...base, ...overrides, source: { ...base.source, ...overrides.source } };
 }
-
-test('canvasToGraph: projects agent presence and activity status nodes', () => {
-  const { nodes } = canvasToGraph({
-    participants: [participant('busy', 'agent', 'working'), participant('idle', 'agent', 'idle')],
-    activity: [activityRow('ok1', 'file_read', 'ok'), activityRow('err1', 'shell', 'error')]
-  });
-
-  expect(nodes.some((node) => node.id === 'p:busy')).toBe(true);
-  expect(nodes.some((node) => node.id === 'p:idle')).toBe(true);
-  expect(nodes.some((node) => node.id === 'a:ok1')).toBe(true);
-  expect(nodes.some((node) => node.id === 'a:err1')).toBe(true);
-});
-
-test('canvasToGraph: a monad hub, one node + edge per participant, recent activity attached', () => {
-  const { nodes, edges } = canvasToGraph({
-    participants: [participant('you', 'human'), participant('monad', 'agent')],
-    activity: [activityRow('a1', 'file_read', 'ok'), activityRow('a2', 'shell', 'running')]
-  });
-
-  expect(nodes).toHaveLength(5);
-  expect(edges).toHaveLength(4);
-  expect(edges.every((edge) => edge.source === HUB_ID)).toBe(true);
-  expect(edges.find((edge) => edge.id === 'e:a:a2')?.animated).toBe(true);
-  expect(edges.find((edge) => edge.id === 'e:a:a1')?.animated).toBe(false);
-});
-
-test('canvasToGraph: deterministic same input yields identical node positions', () => {
-  const input = { participants: [participant('monad', 'agent')], activity: [] };
-  expect(canvasToGraph(input)).toEqual(canvasToGraph(input));
-});
-
-test('canvasToGraph: only the most recent activity steps are projected', () => {
-  const activity = Array.from({ length: 10 }, (_, i) => activityRow(`a${i}`, `tool${i}`, 'ok'));
-  const { nodes } = canvasToGraph({ participants: [], activity });
-
-  expect(nodes).toHaveLength(7);
-  expect(nodes.some((node) => node.id === 'a:a9')).toBe(true);
-  expect(nodes.some((node) => node.id === 'a:a0')).toBe(false);
-});
 
 test('toChatRoomCanvas: exposes the chatroom surface without project management actions', () => {
   const canvas = toChatRoomCanvas(runtimeSource());
@@ -171,6 +128,14 @@ test('ChatRoomExperienceView: spawn member asks the host through the project dia
   });
 });
 
+test('createProjectExperienceRuntime: publishes an empty activity graph when live tools are absent', () => {
+  const runtime = createProjectExperienceRuntime(runtimeSource({ source: { liveTools: undefined } }), {
+    switchExperience: () => {}
+  });
+
+  expect(runtime.snapshot.graphCanvas?.activity).toEqual([]);
+});
+
 test('createProjectExperienceRuntime: exposes project data and controlled communication actions', () => {
   const calls: string[] = [];
   const source = runtimeSource({
@@ -208,12 +173,9 @@ test('createProjectExperienceRuntime: exposes project data and controlled commun
   expect(runtime.views['chat-room'].canvas.participants).toHaveLength(1);
   expect(runtime.views['chat-room'].composer).not.toBe(runtime.views['chat-room'].canvas);
   expect(runtime.views['chat-room'].composer.participants).toHaveLength(1);
-  expect(runtime.views['graphic-view'].canvas.participants).toHaveLength(1);
-  expect('messages' in runtime.views['graphic-view'].canvas).toBe(false);
-  expect('composer' in runtime.views['graphic-view'].canvas).toBe(false);
-  expect('chatRoom' in runtime.views['graphic-view'].canvas).toBe(false);
-  expect('externalAgentStreams' in runtime.views['graphic-view'].canvas).toBe(false);
-  expect('sendExternalAgentInput' in runtime.views['graphic-view'].canvas).toBe(false);
+  expect('graphic-view' in runtime.views).toBe(false);
+  expect(runtime.snapshot.graphCanvas?.participants).toHaveLength(1);
+  expect(runtime.snapshot.graphCanvas?.activity).toEqual([]);
   expect(typeof runtime.actions.sendDirective).toBe('function');
   expect(typeof runtime.actions.resolveApproval).toBe('function');
   expect(typeof runtime.actions.switchExperience).toBe('function');
@@ -222,14 +184,14 @@ test('createProjectExperienceRuntime: exposes project data and controlled commun
   runtime.actions.loadOlder();
   void runtime.actions.sendDirective('hello');
   runtime.actions.resolveApproval('approval-1', 'approve');
-  runtime.actions.switchExperience('graphic-view');
+  runtime.actions.switchExperience('kanban');
   runtime.views['chat-room'].composer.answerQuestion('question-1', 'answer');
 
   expect(calls).toEqual([
     'loadOlder',
     'send:hello',
     'approval:approval-1:approve',
-    'experience:graphic-view',
+    'experience:kanban',
     'answer:question-1:answer'
   ]);
 });

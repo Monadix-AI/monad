@@ -56,6 +56,7 @@ import { createStartupSettingsModule } from '#/handlers/settings/startup/index.t
 import { createToolBackendsModule } from '#/handlers/settings/tool-backends/index.ts';
 import { createSystemUpgradeModule } from '#/handlers/system-upgrade.ts';
 import { createTranscriptProjector } from '#/handlers/transcript/projector.ts';
+import { createFileSandboxActivationService } from '#/platform/sandbox/activation.ts';
 import { resolveExternalAgentEnv } from '#/services/external-agent/env.ts';
 import { ExternalAgentHost } from '#/services/external-agent/host/index.ts';
 import { resolveExternalAgentManagedServerUrl } from '#/services/external-agent/host/session-launcher.ts';
@@ -77,6 +78,7 @@ export type { DaemonHandlerDeps } from './handlers-deps.ts';
 
 export function createDaemonHandlers(deps: DaemonHandlerDeps) {
   const { paths, mockMode = false } = deps;
+  const sandboxActivation = createFileSandboxActivationService(paths, deps.configReloader);
   const externalAgentHost = new ExternalAgentHost({
     store: deps.store,
     bus: deps.bus,
@@ -334,7 +336,7 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
     network: createNetworkModule(paths, deps.configReloader),
     appearance: createAppearanceModule(paths, deps.configReloader),
     toolBackends: createToolBackendsModule(paths, deps.configReloader),
-    sandbox: createSandboxModule(paths, deps.configReloader),
+    sandbox: createSandboxModule(paths, deps.configReloader, sandboxActivation),
     developer: createDeveloperModule(paths, deps.configReloader),
     profile: createUserProfileModule(paths, deps.configReloader),
     startup: createStartupSettingsModule({
@@ -357,7 +359,8 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
       getWorkspaceExperienceSnapshot: deps.getWorkspaceExperienceSnapshot,
       getWorkspaceExperiences: deps.getWorkspaceExperiences,
       configReloader: deps.configReloader,
-      modelService: deps.modelService
+      modelService: deps.modelService,
+      sandboxActivation
     }),
     session,
     externalAgent: createExternalAgentModule({ paths, host: externalAgentHost, store: deps.store }),

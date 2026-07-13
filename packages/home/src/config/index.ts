@@ -13,6 +13,7 @@ import {
   modelRolesSchema,
   KNOWN_PROVIDER_TYPES as PROTOCOL_KNOWN_PROVIDER_TYPES,
   principalIdSchema,
+  sandboxBackendRefSchema,
   sandboxModeSchema,
   userAvatarDataUrlSchema
 } from '@monad/protocol';
@@ -278,6 +279,12 @@ export const sandboxConfigSchema = z.object({
   // provided by an enabled atom pack (e.g. @monad/monad-power-pack); if unavailable it falls back
   // to the light default.
   backend: z.enum(['auto', 'docker', 'e2b', 'vm']).default('auto'),
+  // Source-qualified identity removes ambiguity when two atom packs contribute the same kind.
+  // `backend` remains during the compatibility window; config loading migrates it into this field.
+  activeBackend: sandboxBackendRefSchema.default({ source: 'builtin', kind: 'auto' }),
+  // Host-owned opaque values, keyed by `builtin/<kind>` or `atom-pack/<packId>/<kind>`.
+  // Secret fields contain only `${secret:sandbox/...}` references, never plaintext.
+  backendSettings: z.record(z.string(), z.record(z.string(), z.unknown())).default({}),
   // DANGER: when confine=true but no launcher is available, allow children to run unconfined on
   // the host rather than refusing to start. Default is fail-closed. Set to true only when you
   // have intentionally deployed without a sandbox launcher and understand that agent-spawned
@@ -632,7 +639,9 @@ export function createDefaultConfig(principalId: PrincipalId, displayName: strin
       hostExec: 'ask',
       env: {},
       allowUnconfinedExec: false,
-      backend: 'auto'
+      backend: 'auto',
+      activeBackend: { source: 'builtin', kind: 'auto' },
+      backendSettings: {}
     },
     skills: { autoload: true, disabled: [], autoloadDisabled: [], installReview: false },
     network: {

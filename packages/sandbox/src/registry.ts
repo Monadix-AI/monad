@@ -3,7 +3,7 @@
 //     AppContainer / Low-Integrity). These are NOT atoms and are NOT registered through the atom
 //     gate; they always exist. `backend:'auto'` (the default) picks the first LIGHT launcher that is
 //     a candidate for the platform.
-//   • HEAVY — opt-in atom launchers (docker / e2b / a future vm backend), contributed by an atom pack
+//   • EXPLICIT — built-in VM or opt-in atom launchers contributed by an atom pack
 //     (e.g. @monad/monad-power-pack) through the atom-pack loader's onSandbox sink. A heavy backend is
 //     used ONLY when explicitly selected via config.sandbox.backend, never auto-selected.
 //
@@ -12,25 +12,54 @@
 // never change. No LIGHT candidate → noneLauncher (unconfined) so the daemon still runs, with a
 // warning at the call site.
 
-import type { SandboxLauncher } from '@monad/sdk-atom';
+import type {
+  SandboxBackendRef,
+  SandboxEnforcement,
+  SandboxLauncher,
+  SandboxLauncherDescriptor
+} from '@monad/sdk-atom';
 
 import { logger } from '@monad/logger';
-import { noneLauncher } from '@monad/sdk-atom';
+import { noneLauncher, sandboxBackendRefSchema, sandboxLauncherDescriptorSchema } from '@monad/sdk-atom';
 
 import { hostSandboxPlatform } from './sandbox-platform.ts';
 
-type Source = 'builtin' | 'atom';
-type Backend = 'auto' | 'docker' | 'e2b' | 'vm';
+export type { SandboxBackendRef } from '@monad/sdk-atom';
+
+type Backend = string;
 
 interface Entry {
   launcher: SandboxLauncher;
-  source: Source;
+  ref: SandboxBackendRef;
+  descriptor: SandboxLauncherDescriptor;
+}
+
+export interface SandboxBackendDescriptorView {
+  ref: SandboxBackendRef;
+  descriptor: SandboxLauncherDescriptor;
+  platforms?: NodeJS.Platform[];
+  enforces?: SandboxEnforcement;
+  available: boolean;
 }
 
 // The closed set of light OS launchers, in priority order (first match wins on auto):
 //   macOS  → Seatbelt · Linux → bwrap → Landlock · Windows → AppContainer → Low-Integrity.
-// HEAVY atom launchers only (docker/e2b/vm). Registered via the atom gate; wiped on hot-reload.
-const entries: Entry[] = [];
+// Explicit built-in and atom-pack launchers. Contributed entries are wiped on hot-reload; built-ins remain.
+const entries = new Map<string, Entry>();
+
+function refKey(ref: SandboxBackendRef): string {
+  return ref.source === 'builtin' ? `builtin/${ref.kind}` : `atom-pack/${ref.packId}/${ref.kind}`;
+}
+
+function cloneDescriptor(descriptor: SandboxLauncherDescriptor): SandboxLauncherDescriptor {
+  return {
+    name: descriptor.name,
+    ...(descriptor.description === undefined ? {} : { description: descriptor.description }),
+    ...(descriptor.settings === undefined
+      ? {}
+      : { settings: { fields: descriptor.settings.fields.map((field) => structuredClone(field)) } })
+  };
+}
 
 // Backend options the daemon passes to heavy launchers WITHOUT importing them (both depend on
 // @monad/sandbox). Module-level state, set at boot before selection.
@@ -46,15 +75,56 @@ export function sandboxBackendOptions(): { dockerImage?: string } {
   return backendOptions;
 }
 
-/** Register a HEAVY atom launcher (docker/e2b/vm). Light launchers are the closed internal set. */
-export function registerSandboxLauncher(launcher: SandboxLauncher, source: Source): void {
-  entries.push({ launcher, source });
+/** Register an explicitly selectable launcher under its trusted, source-qualified identity. */
+export function registerSandboxLauncher(launcher: SandboxLauncher, ref: SandboxBackendRef): void {
+  const trustedRef = sandboxBackendRefSchema.parse(ref);
+  const descriptor = sandboxLauncherDescriptorSchema.parse(launcher.descriptor);
+  if (launcher.kind !== trustedRef.kind) {
+    throw new Error(`sandbox launcher kind "${launcher.kind}" does not match registration kind "${trustedRef.kind}"`);
+  }
+  const key = refKey(trustedRef);
+  if (entries.has(key)) throw new Error(`sandbox launcher already registered: ${key}`);
+  entries.set(key, { launcher, ref: trustedRef, descriptor });
 }
 
-/** Drop all registered HEAVY launchers — used by atom-pack hot-reload before re-registering survivors.
- *  Never touches the closed LIGHT set. */
-export function clearSandboxLaunchers(): void {
-  entries.length = 0;
+/** Drop contributed launchers for hot reload. Tests may explicitly include built-ins. */
+export function clearSandboxLaunchers(options: { includeBuiltin?: boolean } = {}): void {
+  for (const [key, entry] of entries) {
+    if (options.includeBuiltin || entry.ref.source === 'atom-pack') entries.delete(key);
+  }
+}
+
+/** Serializable registry snapshot. Runtime functions and settings values never cross this boundary. */
+export function listSandboxBackendDescriptors(): SandboxBackendDescriptorView[] {
+  const auto: SandboxBackendDescriptorView = {
+    ref: { source: 'builtin', kind: 'auto' },
+    descriptor: {
+      name: 'Automatic',
+      description: 'Selects the best available lightweight sandbox for this host.'
+    },
+    platforms: undefined,
+    enforces: undefined,
+    available: true
+  };
+  return [
+    auto,
+    ...[...entries.values()].map(({ ref, launcher, descriptor }) => ({
+      ref: structuredClone(ref),
+      descriptor: cloneDescriptor(descriptor),
+      platforms: launcher.platforms ? [...launcher.platforms] : undefined,
+      enforces: launcher.enforces ? structuredClone(launcher.enforces) : undefined,
+      available: launcher.isAvailable?.() ?? true
+    }))
+  ];
+}
+
+/** Resolve one exact identity. Built-in auto is virtual and resolves for the requested platform. */
+export function resolveSandboxLauncher(
+  ref: SandboxBackendRef,
+  platform: NodeJS.Platform = process.platform
+): SandboxLauncher | undefined {
+  if (ref.source === 'builtin' && ref.kind === 'auto') return selectAuto(platform);
+  return entries.get(refKey(ref))?.launcher;
 }
 
 /** Tell every launcher (light + heavy) to release a session's per-session resources when it ends.
@@ -62,7 +132,7 @@ export function clearSandboxLaunchers(): void {
  *  acts; the rest no-op. */
 export function disposeSandboxSession(sessionId: string): void {
   for (const l of hostSandboxPlatform.launchers) void l.disposeSession?.(sessionId);
-  for (const e of entries) void e.launcher.disposeSession?.(sessionId);
+  for (const e of entries.values()) void e.launcher.disposeSession?.(sessionId);
 }
 
 /** Tell every launcher to release an agent's per-agent resources when the agent is deleted or its
@@ -71,7 +141,7 @@ export function disposeSandboxSession(sessionId: string): void {
  *  instance must never outlive the policy it was built for. */
 export function disposeSandboxAgent(agentId: string): void {
   for (const l of hostSandboxPlatform.launchers) void l.disposeAgent?.(agentId);
-  for (const e of entries) void e.launcher.disposeAgent?.(agentId);
+  for (const e of entries.values()) void e.launcher.disposeAgent?.(agentId);
 }
 
 function isCandidate(launcher: SandboxLauncher, platform: NodeJS.Platform): boolean {
@@ -101,11 +171,17 @@ export function disposeSandboxHost(): Promise<void> {
  */
 export function selectSandboxLauncher(
   platform: NodeJS.Platform = process.platform,
-  backend: Backend = 'auto'
+  backend: Backend | SandboxBackendRef = 'auto'
 ): SandboxLauncher {
+  if (typeof backend !== 'string') {
+    const exact = resolveSandboxLauncher(backend, platform);
+    if (exact) return exact;
+    logger.warn(`monad: sandbox backend "${refKey(backend)}" is not registered — falling back to built-in auto.`);
+    return selectAuto(platform);
+  }
   if (backend === 'auto') return selectAuto(platform);
 
-  const heavy = entries.filter((e) => e.launcher.kind === backend);
+  const heavy = [...entries.values()].filter((e) => e.launcher.kind === backend);
   // Two+ heavy launchers of the same kind is almost certainly unintended (the loser is silently
   // shadowed); surface it so the operator can remove one rather than guess which won.
   if (heavy.length > 1) {

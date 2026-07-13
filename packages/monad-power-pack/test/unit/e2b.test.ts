@@ -73,6 +73,17 @@ test('isAvailable() follows the configured API key', () => {
   expect(e2bLauncher.isAvailable?.()).toBe(true);
 });
 
+test('generic launcher configuration supplies the schema-declared API key', async () => {
+  const calls: FakeCalls = { created: [], writes: [], killed: 0 };
+  __setE2bLoaderForTest(() => Promise.resolve(fakeE2b(calls, 0)));
+  await e2bLauncher.configure?.({ apiKey: 'schema_key' });
+
+  const proc = e2bLauncher.spawn?.(['echo', 'hi'], { credential: 'legacy_key' }, {});
+  await proc?.exited;
+
+  expect(calls.created[0]?.apiKey).toBe('schema_key');
+});
+
 test('spawn() with no key (neither credential nor configured) throws', () => {
   expect(() => e2bLauncher.spawn?.(['echo', 'hi'], {}, {})).toThrow(/no API key/);
 });

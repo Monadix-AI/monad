@@ -32,7 +32,7 @@ afterAll(() => {
 
 test('the launcher registry selects bwrap on Linux when it is the available candidate', () => {
   clearSandboxLaunchers();
-  registerSandboxLauncher(bwrapLauncher, 'atom');
+  registerSandboxLauncher(bwrapLauncher, { source: 'atom-pack', packId: 'test-bwrap', kind: bwrapLauncher.kind });
   expect(selectSandboxLauncher('linux').kind).toBe('bwrap');
 });
 

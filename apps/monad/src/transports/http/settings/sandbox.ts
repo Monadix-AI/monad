@@ -16,5 +16,10 @@ export function createSandboxSettingsController(handlers: ReturnType<typeof crea
       body: c.set.body,
       response: c.set.response,
       detail: { summary: 'Update system-level sandbox defaults + the global ceiling' }
+    })
+    .put('/sandbox/activate', async ({ body }) => handlers.sandbox.activateSandboxBackend(body), {
+      body: c.activate.body,
+      response: c.activate.response,
+      detail: { summary: 'Atomically activate one source-qualified sandbox backend' }
     });
 }

@@ -18,12 +18,10 @@ import { useWorkspaceSidebar } from './workspace-sidebar-context';
 
 export const ProjectList = memo(function ProjectList({
   expandedProjectIds,
-  onToggleProjectExpanded,
-  onProjectSessionOpened
+  onToggleProjectExpanded
 }: {
   expandedProjectIds: ReadonlySet<string>;
   onToggleProjectExpanded: (id: string) => void;
-  onProjectSessionOpened: (projectId: string) => void;
 }) {
   const { meta, state } = useWorkspaceSidebar();
   const {
@@ -35,7 +33,6 @@ export const ProjectList = memo(function ProjectList({
   return (
     <>
       {state.projects.map((project, index) => {
-        const routedProject = state.activeProjectId === project.id;
         const expanded = expandedProjectIds.has(project.id);
         const visibleSessions = project.sessions.filter((session) => !session.pinned);
         const lessTargetCount = getPreviewLessTargetCount(visibleSessions, state.activeProjectSessionId);
@@ -51,10 +48,8 @@ export const ProjectList = memo(function ProjectList({
             <ProjectTreeRow
               expanded={expanded}
               index={index}
-              onProjectSessionOpened={onProjectSessionOpened}
               onToggleProjectExpanded={onToggleProjectExpanded}
               project={project}
-              routedProject={routedProject}
             />
             <CollapsiblePresence collapsed={!expanded}>
               <div
@@ -63,7 +58,7 @@ export const ProjectList = memo(function ProjectList({
                 role="tree"
               >
                 {visibleSessions.length === 0 ? (
-                  <p className="px-2 py-1.5 text-muted-foreground text-xs">{meta.t('web.sidebar.noSessions')}</p>
+                  <p className="py-1.5 pr-2 pl-5 text-muted-foreground text-xs">{meta.t('web.sidebar.noSessions')}</p>
                 ) : null}
                 {displayedSessions.map((session) => (
                   <ProjectSessionTreeRow

@@ -2,6 +2,7 @@ import type { MonadPaths } from '@monad/home';
 import type { SkillWatchRegistrar } from '#/capabilities/skills/service.ts';
 import type { ReloadScheduler } from '#/config/reload.ts';
 import type { ConfigSnapshot, ConfigSource } from '#/config/service.ts';
+import type { HostInteractionService } from '#/interactions/service.ts';
 import type { RuntimeModule } from './types.ts';
 
 import { createModelLifecycleModule } from '#/agent/model/lifecycle.ts';
@@ -22,6 +23,7 @@ export interface DaemonModulesOptions {
   monadVersion: string;
   watcher: SkillWatchRegistrar;
   logger: { warn(message: string): void };
+  interactions?: HostInteractionService;
   startStore?: StartDataLayer;
 }
 
@@ -33,7 +35,12 @@ export function createDaemonModules(options: DaemonModulesOptions): RuntimeModul
     createSandboxLifecycleModule({ initial: options.initial, paths: options.paths }),
     createModelLifecycleModule({ initial: options.initial, paths: options.paths, useMock: options.useMock }),
     createCapabilitiesLifecycleModule({ paths: options.paths }),
-    createAtomsLifecycleModule({ initial: options.initial, paths: options.paths, logger: options.logger }),
+    createAtomsLifecycleModule({
+      initial: options.initial,
+      paths: options.paths,
+      logger: options.logger,
+      interactions: options.interactions
+    }),
     createSkillsLifecycleModule({
       initial: options.initial,
       paths: options.paths,

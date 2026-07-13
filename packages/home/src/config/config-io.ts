@@ -23,6 +23,45 @@ const CONFIG_MIGRATIONS_DIR = join(import.meta.dir, '..', 'migrations', 'config'
 const PROFILE_MIGRATIONS_DIR = join(import.meta.dir, '..', 'migrations', 'profile');
 const AUTH_MIGRATIONS_DIR = join(import.meta.dir, '..', 'migrations', 'auth');
 
+function migrateSandboxBackend(raw: unknown): unknown {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;
+  const sandbox = raw as Record<string, unknown>;
+  const backend = sandbox.backend;
+  const existingSettings = sandbox.backendSettings as Record<string, Record<string, unknown>> | undefined;
+  const activeBackend =
+    sandbox.activeBackend ??
+    (backend === 'vm'
+      ? { source: 'builtin', kind: 'vm' }
+      : backend === 'docker' || backend === 'e2b'
+        ? { source: 'atom-pack', packId: 'monad-power-pack', kind: backend }
+        : { source: 'builtin', kind: 'auto' });
+  const backendSettings = { ...(existingSettings ?? {}) };
+  if (backend === 'vm' && sandbox.vm && typeof sandbox.vm === 'object' && !Array.isArray(sandbox.vm)) {
+    backendSettings['builtin/vm'] = {
+      ...(existingSettings?.['builtin/vm'] ?? {}),
+      ...('cpus' in sandbox.vm ? { cpus: (sandbox.vm as Record<string, unknown>).cpus } : {}),
+      ...('memory' in sandbox.vm ? { memoryMiB: (sandbox.vm as Record<string, unknown>).memory } : {})
+    };
+  }
+  if (backend === 'docker' && typeof sandbox.dockerImage === 'string') {
+    backendSettings['atom-pack/monad-power-pack/docker'] = {
+      image: sandbox.dockerImage,
+      ...(existingSettings?.['atom-pack/monad-power-pack/docker'] ?? {})
+    };
+  }
+  if (
+    backend === 'e2b' &&
+    typeof sandbox.credential === 'string' &&
+    /^\$\{(?:secret|env):[^}]+}$/.test(sandbox.credential)
+  ) {
+    backendSettings['atom-pack/monad-power-pack/e2b'] = {
+      apiKey: sandbox.credential,
+      ...(existingSettings?.['atom-pack/monad-power-pack/e2b'] ?? {})
+    };
+  }
+  return { ...sandbox, activeBackend, backendSettings };
+}
+
 export async function migrateConfig(raw: unknown): Promise<MonadConfig> {
   return runMigrations(raw, CURRENT_CONFIG_VERSION, CONFIG_MIGRATIONS_DIR, (data) => monadConfigSchema.parse(data));
 }
@@ -220,7 +259,7 @@ export async function loadAll(
       throw new Error(`monad: sandbox.json is not valid JSON at ${sandboxPath}. Fix the file and retry.`);
     }
     try {
-      sandbox = sandboxConfigSchema.parse(parsedSandbox);
+      sandbox = sandboxConfigSchema.parse(migrateSandboxBackend(parsedSandbox));
     } catch (err) {
       // A present-but-invalid policy must fail closed, never silently degrade to an unconfined default.
       throw friendlySchemaError('sandbox.json', sandboxPath, err);

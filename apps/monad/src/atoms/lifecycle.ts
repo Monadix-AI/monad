@@ -15,9 +15,12 @@ import type { CommandRegistry } from '#/handlers/commands/index.ts';
 import type { RuntimeModule } from '#/runtime/types.ts';
 import type { ModelService } from '#/services/model.ts';
 
+import { vmLauncher } from '@monad/sandbox-vm';
+
 import { registerSandboxLauncher } from '#/capabilities/tools';
 import { createChannelRegistry } from '#/channels/discovery.ts';
 import { createWorkspaceExperienceSnapshot } from '#/handlers/atom-pack/atom-pack-content.ts';
+import { HostInteractionService } from '#/interactions/service.ts';
 import { finalizeSandboxLauncher } from '#/platform/sandbox/service.ts';
 import { registerAgentAdapterImpl } from '#/services/external-agent/index.ts';
 
@@ -38,8 +41,17 @@ export async function createAtomDiscovery(deps: {
   commandRegistry: CommandRegistry;
   modelService: ModelService;
   logger: { warn: (msg: string) => void };
+  interactions: HostInteractionService;
 }): Promise<AtomDiscovery> {
-  const { paths, cfg, registry, commandRegistry, modelService, logger } = deps;
+  const { paths, cfg, registry, commandRegistry, modelService, logger, interactions } = deps;
+
+  // VM is daemon-owned and available independently of optional atom packs. It remains explicit and
+  // is never considered by the lightweight built-in `auto` selector.
+  try {
+    registerSandboxLauncher(vmLauncher, { source: 'builtin', kind: 'vm' });
+  } catch (error) {
+    if (!(error instanceof Error) || !error.message.includes('already registered')) throw error;
+  }
 
   // Bare-name collisions surfaced from the latest load sweep (channel/connector/command),
   // mutated in place so the read accessor handed to the atoms module stays valid across re-discovery.
@@ -73,7 +85,9 @@ export async function createAtomDiscovery(deps: {
       // Built-in sandbox launchers (Seatbelt/Landlock/Low-Integrity) register into the launcher
       // registry; finalizeSandboxLauncher() below picks one per platform. Boot-only: not wired into
       // the rediscovery sweep, so a hot-installed launcher takes effect on the next daemon start.
-      onSandbox: (l) => registerSandboxLauncher(l, 'builtin')
+      onSandbox: (l) => registerSandboxLauncher(l, { source: 'builtin', kind: l.kind }),
+      onRequestInteraction: (atomPackId, request) =>
+        interactions.request({ kind: 'builtin', id: atomPackId, label: atomPackId }, request, { mode: 'background' })
     },
     discovered: {
       onConnector: (c) => registry.registerConnector(c),
@@ -99,8 +113,11 @@ export async function createAtomDiscovery(deps: {
       onAgentAdapter: (a) => registerAgentAdapterImpl(a),
       // A discovered pack declaring the `sandbox` capability (e.g. a cloud e2b/Vercel launcher)
       // registers into the launcher registry, preferred over built-ins on select.
-      onSandbox: (l) => registerSandboxLauncher(l, 'atom'),
-      onAtoms: (packName, atoms) => atomDetailsByPack.set(packName, atoms)
+      onSandbox: (l, atomPackId) =>
+        registerSandboxLauncher(l, { source: 'atom-pack', packId: atomPackId, kind: l.kind }),
+      onAtoms: (packName, atoms) => atomDetailsByPack.set(packName, atoms),
+      onRequestInteraction: (packId, request) =>
+        interactions.request({ kind: 'atom-pack', packId, atomId: 'pack' }, request, { mode: 'background' })
     }
   });
   // Resolve bare atom-command names to one winner (pin ?? first-wins); each is always reachable as
@@ -126,6 +143,7 @@ export interface AtomsLifecycleOptions {
   initial: ConfigSnapshot;
   paths: MonadPaths;
   logger: { warn(message: string): void };
+  interactions?: HostInteractionService;
 }
 
 export function createAtomsLifecycleModule(
@@ -145,7 +163,8 @@ export function createAtomsLifecycleModule(
         registry: capabilities.registry,
         commandRegistry: capabilities.commandRegistry,
         modelService: model.modelService,
-        logger: options.logger
+        logger: options.logger,
+        interactions: options.interactions ?? new HostInteractionService()
       });
     }
   };

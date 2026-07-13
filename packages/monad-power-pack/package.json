@@ -3,7 +3,6 @@
   "version": "0.0.0",
   "dependencies": {
     "@monad/sandbox": "workspace:*",
-    "@monad/sandbox-vm": "workspace:*",
     "@monad/sdk-atom": "workspace:*",
     "e2b": "^2.32.0"
   },

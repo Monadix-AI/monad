@@ -57,7 +57,7 @@ export async function startTui(): Promise<void> {
   try {
     const { waitUntilExit } = render(
       <Provider store={store}>
-        <App />
+        <App client={client} />
       </Provider>
     );
 

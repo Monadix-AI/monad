@@ -235,6 +235,7 @@ export function ChatMessageList({
       }),
     [room.messages]
   );
+  const showMessageOutline = outlineItems.length > 5;
   useEffect(() => {
     const shell = shellRef.current;
     if (!shell) return;
@@ -312,7 +313,7 @@ export function ChatMessageList({
   return (
     <div
       className={
-        outlineItems.length > 0 ? 'chat-message-list-has-outline chat-message-list-shell' : 'chat-message-list-shell'
+        showMessageOutline ? 'chat-message-list-has-outline chat-message-list-shell' : 'chat-message-list-shell'
       }
       ref={shellRef}
       style={
@@ -327,11 +328,13 @@ export function ChatMessageList({
       }
     >
       <style>{MESSAGE_OUTLINE_STYLE}</style>
-      <ChatMessageOutline
-        activeIds={activeOutlineIds}
-        items={outlineItems}
-        onSelect={scrollToOutlineItem}
-      />
+      {showMessageOutline ? (
+        <ChatMessageOutline
+          activeIds={activeOutlineIds}
+          items={outlineItems}
+          onSelect={scrollToOutlineItem}
+        />
+      ) : null}
       <VirtualList
         ariaLive="polite"
         bounce

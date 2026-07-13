@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test';
 import builtinAtomPack from '@monad/atoms';
+import { monadPowerPack } from '@monad/monad-power-pack';
 
 import { describeAtomPack } from '#/atoms/describe.ts';
 
@@ -22,4 +23,23 @@ test('describeAtomPack enumerates each individual atom of the built-in pack', as
 
   // Commands carry their human description.
   const _newCommand = atoms.find((a) => a.kind === 'command' && a.id === 'new');
+});
+
+test('describeAtomPack enumerates the power pack sandbox launchers', async () => {
+  const atoms = await describeAtomPack(monadPowerPack);
+
+  expect(atoms.filter((atom) => atom.kind === 'sandbox')).toEqual([
+    {
+      kind: 'sandbox',
+      id: 'docker',
+      name: 'Docker / Podman',
+      description: 'Runs each command in an isolated local container.'
+    },
+    {
+      kind: 'sandbox',
+      id: 'e2b',
+      name: 'E2B',
+      description: 'Runs commands in a reusable remote micro-VM.'
+    }
+  ]);
 });
