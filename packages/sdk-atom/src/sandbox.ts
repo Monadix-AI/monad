@@ -5,7 +5,7 @@
 // confines the child — Seatbelt, Landlock, Low-Integrity, or a future cloud backend (e2b / Vercel) —
 // is selected from the registry of launchers contributed by atom packs (built-in + third-party).
 //
-import { interactionFieldSchema } from '@monad/protocol';
+import { interactionFieldSchema, type SandboxBackendRef, sandboxBackendRefSchema } from '@monad/protocol';
 import { z } from 'zod';
 
 // Two execution models, one contract:
@@ -59,13 +59,9 @@ export interface SandboxEnforcement {
   net?: ('none' | 'filtered' | 'unrestricted')[];
 }
 
-export const sandboxBackendRefSchema = z.discriminatedUnion('source', [
-  z.object({ source: z.literal('builtin'), kind: z.string().min(1).max(80) }).strict(),
-  z
-    .object({ source: z.literal('atom-pack'), packId: z.string().min(1).max(200), kind: z.string().min(1).max(80) })
-    .strict()
-]);
-export type SandboxBackendRef = z.infer<typeof sandboxBackendRefSchema>;
+export type { SandboxBackendRef };
+
+export { sandboxBackendRefSchema };
 
 export const sandboxSettingsSchema = z.object({ fields: z.array(interactionFieldSchema).max(32) }).strict();
 export type SandboxSettingsSchema = z.infer<typeof sandboxSettingsSchema>;
