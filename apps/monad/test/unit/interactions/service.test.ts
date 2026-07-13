@@ -191,4 +191,18 @@ describe('HostInteractionService', () => {
     expect(JSON.stringify(redacted)).not.toContain('secret-value');
     expect(JSON.stringify(redacted)).not.toContain('injected');
   });
+
+  test('publishes redacted lifecycle events and never submitted values', async () => {
+    const { service } = createHarness();
+    const events: unknown[] = [];
+    const unsubscribe = service.subscribe((event) => events.push(event));
+    const resultPromise = service.request(source, secretRequest, { mode: 'background' });
+    service.claim('interaction-1', 'web-1', fullCapabilities);
+    service.submit('interaction-1', 'lease-1', { apiKey: 'secret-value' });
+    await resultPromise;
+    unsubscribe();
+
+    expect(events.map((event) => (event as { type: string }).type)).toEqual(['upsert', 'upsert', 'removed']);
+    expect(JSON.stringify(events)).not.toContain('secret-value');
+  });
 });

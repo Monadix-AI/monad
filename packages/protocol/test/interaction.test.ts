@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 
 import {
+  interactionEventSchema,
   interactionPresenterCapabilitiesSchema,
   interactionRequestSchema,
   interactionResultSchema,
@@ -66,4 +67,32 @@ test('models presenter capabilities, pending attribution, and exactly typed outc
   if (pending.source.kind === 'atom-pack') expect(pending.source.packId).toBe('vendor');
   expect(interactionResultSchema.parse({ status: 'submitted', values: { ok: true } }).status).toBe('submitted');
   expect(interactionResultSchema.parse({ status: 'cancelled', reason: 'timeout' }).status).toBe('cancelled');
+});
+
+test('models redacted lifecycle events without submitted values', () => {
+  const upsert = interactionEventSchema.parse({
+    type: 'upsert',
+    interaction: {
+      id: 'int_123',
+      source: { kind: 'builtin', id: 'settings' },
+      request: { type: 'confirm', title: 'Continue?' },
+      state: 'pending',
+      createdAt: '2026-07-13T00:00:00.000Z',
+      expiresAt: '2026-07-13T00:01:00.000Z'
+    }
+  });
+  expect(upsert.type).toBe('upsert');
+  expect(interactionEventSchema.parse({ type: 'removed', id: 'int_123', outcome: 'submitted' })).toEqual({
+    type: 'removed',
+    id: 'int_123',
+    outcome: 'submitted'
+  });
+  expect(() =>
+    interactionEventSchema.parse({
+      type: 'removed',
+      id: 'int_123',
+      outcome: 'submitted',
+      values: { apiKey: 'secret-value' }
+    })
+  ).toThrow();
 });

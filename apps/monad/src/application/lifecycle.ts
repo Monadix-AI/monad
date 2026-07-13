@@ -52,7 +52,8 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     capabilities,
     atoms,
     skills,
-    mcp: mcpRuntime
+    mcp: mcpRuntime,
+    interactions
   } = core;
   const { kv, store } = dataLayer;
   const { sandboxRoots, sessionSandbox } = sandbox;
@@ -104,7 +105,8 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     modelProviderRegistry: modelService.registry,
     i18nService,
     reconnectFileMcp,
-    channelService
+    channelService,
+    interactions
   });
 
   // Optional Obscura stdio MCP server: connect/disconnect/status behind a trust gate (pinned tool-set
@@ -238,6 +240,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
       developerMode: () => runtime.config.get().cfg.developerMode === true,
       i18n: i18nService,
       channelService,
+      interactions,
       flags: {
         devMode: DEV_MODE,
         devSilent: DEV_SILENT,

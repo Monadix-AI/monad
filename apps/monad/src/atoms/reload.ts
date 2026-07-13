@@ -7,6 +7,7 @@ import type { MonadConfig, MonadPaths } from '@monad/home';
 import type { AtomDescriptor } from '@monad/protocol';
 import type { ModelProvider } from '@monad/sdk-atom';
 import type { AtomConflict } from '#/atoms/resolve.ts';
+import type { HostInteractionService } from '#/interactions/service.ts';
 
 import { loadAll } from '@monad/home';
 import { defaultLocaleName, loadLocalePacksFromDir } from '@monad/i18n';
@@ -32,6 +33,7 @@ export type AtomPackRediscovererDeps = {
   i18nService: I18nService;
   reconnectFileMcp: () => Promise<void>;
   channelService: { setRegistry: (reg: Awaited<ReturnType<typeof createChannelRegistry>>) => unknown };
+  interactions: HostInteractionService;
 };
 
 /** Returns a `rediscoverAtomPacks` trigger. Concurrent calls are serialised — a second trigger
@@ -50,7 +52,8 @@ export function createAtomPackRediscoverer(deps: AtomPackRediscovererDeps): () =
         modelProviderRegistry,
         i18nService,
         reconnectFileMcp,
-        channelService
+        channelService,
+        interactions
       } = deps;
 
       atomConflicts.length = 0;
@@ -68,7 +71,9 @@ export function createAtomPackRediscoverer(deps: AtomPackRediscovererDeps): () =
         onHook: (h) => toolRegistry.registerHook(h),
         onWorkspaceExperienceApi: (api, atomPackId) => toolRegistry.registerWorkspaceExperienceApi(api, atomPackId),
         onWorkspaceExperience: (experience, atomPackId) =>
-          toolRegistry.registerWorkspaceExperience(experience, atomPackId)
+          toolRegistry.registerWorkspaceExperience(experience, atomPackId),
+        onRequestInteraction: (atomPackId, request) =>
+          interactions.request({ kind: 'builtin', id: atomPackId, label: atomPackId }, request, { mode: 'background' })
       };
       const discovered: DiscoveredSinks = {
         onProvider: (p) => modelProviderRegistry.register(p),
@@ -80,7 +85,9 @@ export function createAtomPackRediscoverer(deps: AtomPackRediscovererDeps): () =
         onWorkspaceExperienceApi: (api, atomPackId) => toolRegistry.registerWorkspaceExperienceApi(api, atomPackId),
         onWorkspaceExperience: (experience, atomPackId) =>
           toolRegistry.registerWorkspaceExperience(experience, atomPackId),
-        onAtoms: (packName, atoms) => atomDetailsByPack.set(packName, atoms)
+        onAtoms: (packName, atoms) => atomDetailsByPack.set(packName, atoms),
+        onRequestInteraction: (packId, request) =>
+          interactions.request({ kind: 'atom-pack', packId, atomId: 'pack' }, request, { mode: 'background' })
       };
       const reg = await createChannelRegistry(paths, { builtin, discovered });
       commandRegistry.resolvePins(pins.command, (c) => atomConflicts.push(c));

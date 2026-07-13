@@ -10,7 +10,7 @@
 // own.
 
 import type { Dirent } from 'node:fs';
-import type { AtomDescriptor, AtomKind, ChannelType } from '@monad/protocol';
+import type { AtomDescriptor, AtomKind, ChannelType, InteractionRequest, InteractionResult } from '@monad/protocol';
 import type {
   ChannelAdapterFactory,
   Connector,
@@ -63,6 +63,7 @@ export async function discoverChannelAdapters(
     onWorkspaceExperience?: (experience: WorkspaceExperienceDefinition, atomPackName: string) => void;
     /** Receives each workspace experience API route set a discovered pack registers. */
     onWorkspaceExperienceApi?: (api: WorkspaceExperienceApi, atomPackName: string) => void;
+    onRequestInteraction?: (atomPackId: string, request: InteractionRequest) => Promise<InteractionResult>;
     /** Receives each loaded pack's individual atoms for the per-atom detail view. */
     onAtoms?: (atomPackName: string, atoms: AtomDescriptor[]) => void;
     /** Provider types owned by the built-in pass — a discovered `provider` claiming one is a hard
@@ -166,6 +167,7 @@ export async function discoverChannelAdapters(
     onSandbox: sinks.onSandbox,
     onWorkspaceExperience: sinks.onWorkspaceExperience,
     onWorkspaceExperienceApi: sinks.onWorkspaceExperienceApi,
+    onRequestInteraction: sinks.onRequestInteraction,
     onAtoms: sinks.onAtoms,
     reservedProviderTypes: sinks.reservedProviderTypes,
     channelPins: sinks.channelPins,

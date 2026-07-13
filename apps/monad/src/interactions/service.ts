@@ -1,4 +1,5 @@
 import {
+  type InteractionEvent,
   type InteractionPresenterCapabilities,
   type InteractionRequest,
   type InteractionResult,
@@ -101,6 +102,7 @@ function supportsRequest(
 
 export class HostInteractionService {
   readonly #pending = new Map<string, PendingRecord>();
+  readonly #listeners = new Set<(event: InteractionEvent) => void>();
   readonly #now: () => number;
   readonly #createId: () => string;
   readonly #createLeaseToken: () => string;
@@ -152,7 +154,13 @@ export class HostInteractionService {
       timeout.unref?.();
       record.timeout = timeout;
       this.#pending.set(id, record);
+      this.#emit({ type: 'upsert', interaction: this.#view(record) });
     });
+  }
+
+  subscribe(listener: (event: InteractionEvent) => void): () => void {
+    this.#listeners.add(listener);
+    return () => this.#listeners.delete(listener);
   }
 
   listPending(): PendingInteraction[] {
@@ -184,7 +192,9 @@ export class HostInteractionService {
       token: leaseToken,
       expiresAt: this.#now() + this.#leaseTtlMs
     };
-    return { leaseToken, interaction: this.#view(record) };
+    const interaction = this.#view(record);
+    this.#emit({ type: 'upsert', interaction });
+    return { leaseToken, interaction };
   }
 
   submit(id: string, leaseToken: string, values: Record<string, unknown>): void {
@@ -199,10 +209,16 @@ export class HostInteractionService {
 
   releasePresenter(presenterId: string): void {
     for (const record of this.#pending.values()) {
-      if (record.lease?.presenterId === presenterId) record.lease = undefined;
+      let changed = false;
+      if (record.lease?.presenterId === presenterId) {
+        record.lease = undefined;
+        changed = true;
+      }
       if (record.routing.preferredPresenterId === presenterId) {
         record.routing = { ...record.routing, preferredPresenterId: undefined };
+        changed = true;
       }
+      if (changed) this.#emit({ type: 'upsert', interaction: this.#view(record) });
     }
   }
 
@@ -212,7 +228,9 @@ export class HostInteractionService {
       if (record.expiresAt <= now) {
         this.#complete(record, { status: 'cancelled', reason: 'timeout' });
       } else {
-        this.#releaseExpiredLease(record);
+        if (this.#releaseExpiredLease(record)) {
+          this.#emit({ type: 'upsert', interaction: this.#view(record) });
+        }
       }
     }
   }
@@ -232,8 +250,10 @@ export class HostInteractionService {
     return record;
   }
 
-  #releaseExpiredLease(record: PendingRecord): void {
-    if (record.lease && record.lease.expiresAt <= this.#now()) record.lease = undefined;
+  #releaseExpiredLease(record: PendingRecord): boolean {
+    if (!record.lease || record.lease.expiresAt > this.#now()) return false;
+    record.lease = undefined;
+    return true;
   }
 
   #view(record: PendingRecord): PendingInteraction {
@@ -257,6 +277,15 @@ export class HostInteractionService {
   #complete(record: PendingRecord, result: InteractionResult): void {
     this.#pending.delete(record.id);
     if (record.timeout) clearTimeout(record.timeout);
+    this.#emit({
+      type: 'removed',
+      id: record.id,
+      outcome: result.status === 'submitted' ? 'submitted' : result.reason === 'timeout' ? 'timeout' : 'cancelled'
+    });
     record.resolve(result);
+  }
+
+  #emit(event: InteractionEvent): void {
+    for (const listener of this.#listeners) listener(event);
   }
 }

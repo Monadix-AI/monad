@@ -100,3 +100,15 @@ export const pendingInteractionSchema = z
   })
   .strict();
 export type PendingInteraction = z.infer<typeof pendingInteractionSchema>;
+
+export const interactionEventSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('upsert'), interaction: pendingInteractionSchema }).strict(),
+  z
+    .object({
+      type: z.literal('removed'),
+      id: z.string().min(1),
+      outcome: z.enum(['submitted', 'cancelled', 'timeout'])
+    })
+    .strict()
+]);
+export type InteractionEvent = z.infer<typeof interactionEventSchema>;

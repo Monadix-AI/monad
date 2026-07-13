@@ -8,6 +8,7 @@ import type { NetworkRuntimeStatus } from '@monad/protocol';
 import type { ChannelService } from '#/channels/channel.ts';
 import type { ConfigSnapshot } from '#/config/service.ts';
 import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
+import type { HostInteractionService } from '#/interactions/service.ts';
 import type { I18nService } from '#/services/i18n.ts';
 import type { MutableRemoteAccessState } from '#/transports/http.ts';
 import type { TlsSetup } from '#/transports/tls.ts';
@@ -63,6 +64,7 @@ export function buildDaemonTcpListenOptions(args: {
 
 export interface ServeDeps {
   handlers: ReturnType<typeof createDaemonHandlers>;
+  interactions: HostInteractionService;
   paths: MonadPaths;
   host: string;
   port: number;
@@ -320,7 +322,8 @@ export async function serveDaemon(deps: ServeDeps): Promise<void> {
     channelService,
     onNetworkRuntimeStatusReady,
     flags,
-    openaiCompatConfig
+    openaiCompatConfig,
+    interactions
   } = deps;
   const { devMode, devSilent, stdoutRpc, stdioMode, useMock } = flags;
 
@@ -334,7 +337,8 @@ export async function serveDaemon(deps: ServeDeps): Promise<void> {
     docs: developerDocs,
     developerMode: liveDeveloperMode,
     remoteAccess: remoteAccessState,
-    openaiCompatConfig
+    openaiCompatConfig,
+    interactions
   });
 
   // Mo (the desktop sprite) is launched/quit through the daemon and dies with it: the exit handler
