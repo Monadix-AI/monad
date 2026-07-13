@@ -53,6 +53,13 @@ function canonical(path: string): string {
 
 export const dockerLauncher: SandboxLauncher = {
   kind: 'docker',
+  descriptor: {
+    name: 'Docker / Podman',
+    description: 'Runs each command in an isolated local container.',
+    settings: {
+      fields: [{ id: 'image', type: 'string', label: 'Container image', defaultValue: DEFAULT_IMAGE }]
+    }
+  },
   platforms: undefined,
   enforces: { writeConfine: true, readDeny: true, net: ['none', 'unrestricted'] },
   isAvailable: () => dockerRuntimeAvailable(),

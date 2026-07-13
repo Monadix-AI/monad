@@ -8,7 +8,7 @@ import { monadPowerPack, stagedMonadPowerPack } from '../../src/index.ts';
 test('stagedMonadPowerPack stages the REAL sandbox pack (not a skills placeholder)', () => {
   const staged = stagedMonadPowerPack();
   const manifest = staged.manifestRaw as { atoms: string[]; entry?: string };
-  // The dev network-install sim must now install the sandbox atoms, so backend=docker|e2b|vm is usable.
+  // The dev network-install sim installs the contributed Docker/E2B sandbox atoms.
   expect(manifest.atoms).toContain('sandbox');
   expect(staged.fileAtoms.skills).toEqual([]);
   // The on-disk bundle re-exports the real pack; its bare specifier resolves from node_modules at load.
@@ -17,7 +17,7 @@ test('stagedMonadPowerPack stages the REAL sandbox pack (not a skills placeholde
   expect(bundle).toContain('monadPowerPack as default');
 });
 
-test('the real pack register() registers the docker/e2b/vm launchers through the gated loader', async () => {
+test('the real pack register() registers the docker/e2b launchers through the gated loader', async () => {
   const got: SandboxLauncher[] = [];
   await loadManifestAtomPack(monadPowerPack, {
     registerConnector: () => {},
@@ -26,5 +26,5 @@ test('the real pack register() registers the docker/e2b/vm launchers through the
     registerMessageType: () => {},
     registerSandbox: (l) => got.push(l)
   });
-  expect(got.map((l) => l.kind).sort()).toEqual(['docker', 'e2b', 'vm']);
+  expect(got.map((l) => l.kind).sort()).toEqual(['docker', 'e2b']);
 });

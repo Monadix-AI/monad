@@ -1,5 +1,5 @@
-// @monad/sandbox-vm — the macOS VM sandbox backend. A heavy launcher (like docker/e2b) registered
-// through @monad/monad-power-pack; selected only when config.sandbox.backend = 'vm'. Unlike the light
+// @monad/sandbox-vm — the built-in macOS/Linux VM sandbox backend. It is registered directly by the
+// daemon and selected only when the VM backend is explicit. Unlike the light
 // OS launchers it does not wrap() argv — it runs each command inside a per-agent Fedora CoreOS VM
 // (own kernel, own filesystem, own process table) over ssh, and returns a SandboxProcess the daemon's
 // seam bridges onto its callers.
@@ -220,6 +220,17 @@ let resolvedGvproxy: string | null = null;
 
 export const vmLauncher: SandboxLauncher = {
   kind: 'vm',
+  descriptor: {
+    name: 'Virtual machine',
+    description: 'Runs commands inside a reusable local Fedora CoreOS VM.',
+    settings: {
+      fields: [
+        { id: 'cpus', type: 'number', label: 'CPUs', defaultValue: 2, min: 1, max: 16 },
+        { id: 'memoryMiB', type: 'number', label: 'Memory (MiB)', defaultValue: 2048, min: 512 },
+        { id: 'bootTimeoutMs', type: 'number', label: 'Boot timeout (ms)', defaultValue: 120_000, min: 10_000 }
+      ]
+    }
+  },
   platforms: ['darwin', 'linux'],
   enforces: { writeConfine: true, readDeny: true, net: ['none', 'filtered', 'unrestricted'] },
   isAvailable: () => vmToolchainMaybeAvailable(),

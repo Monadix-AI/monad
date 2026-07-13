@@ -5,6 +5,9 @@
 // confines the child — Seatbelt, Landlock, Low-Integrity, or a future cloud backend (e2b / Vercel) —
 // is selected from the registry of launchers contributed by atom packs (built-in + third-party).
 //
+import { interactionFieldSchema } from '@monad/protocol';
+import { z } from 'zod';
+
 // Two execution models, one contract:
 //   • LOCAL  — `wrap(argv, policy)` rewrites argv (e.g. prepend `sandbox-exec -p <profile>`); the
 //              host then runs it with its own Bun.spawn. This is the common case.
@@ -56,6 +59,27 @@ export interface SandboxEnforcement {
   net?: ('none' | 'filtered' | 'unrestricted')[];
 }
 
+export const sandboxBackendRefSchema = z.discriminatedUnion('source', [
+  z.object({ source: z.literal('builtin'), kind: z.string().min(1).max(80) }).strict(),
+  z
+    .object({ source: z.literal('atom-pack'), packId: z.string().min(1).max(200), kind: z.string().min(1).max(80) })
+    .strict()
+]);
+export type SandboxBackendRef = z.infer<typeof sandboxBackendRefSchema>;
+
+export const sandboxSettingsSchema = z.object({ fields: z.array(interactionFieldSchema).max(32) }).strict();
+export type SandboxSettingsSchema = z.infer<typeof sandboxSettingsSchema>;
+
+/** Serializable, host-rendered metadata. It deliberately has no component, callback, or HTML seam. */
+export const sandboxLauncherDescriptorSchema = z
+  .object({
+    name: z.string().min(1).max(120),
+    description: z.string().max(2_000).optional(),
+    settings: sandboxSettingsSchema.optional()
+  })
+  .strict();
+export type SandboxLauncherDescriptor = z.infer<typeof sandboxLauncherDescriptorSchema>;
+
 /** Provider-agnostic spawn options for the REMOTE execution model. Kept loose and free of Bun types
  *  so a cloud backend (e2b / Vercel) can satisfy it without importing the daemon's runtime. */
 export interface SandboxSpawnOptions {
@@ -101,6 +125,8 @@ export interface SandboxProcess {
 export interface SandboxLauncher {
   /** Stable identifier — 'none' | 'seatbelt' | 'landlock' | 'lowintegrity' | 'bwrap' | 'e2b' | … */
   readonly kind: string;
+  /** Serializable metadata used by every host surface to render this launcher generically. */
+  readonly descriptor: SandboxLauncherDescriptor;
   /** Platforms this launcher can confine on (process.platform values). `undefined` = any platform
    *  (e.g. a cloud launcher that delegates execution off-box). */
   readonly platforms?: NodeJS.Platform[];
@@ -145,6 +171,7 @@ export function sandboxCredential(): string | undefined {
  *  launcher matches the platform / is available. */
 export const noneLauncher: SandboxLauncher = {
   kind: 'none',
+  descriptor: { name: 'No sandbox', description: 'Runs processes without launcher confinement.' },
   platforms: undefined,
   enforces: {},
   isAvailable: () => true,
@@ -155,6 +182,7 @@ export const noneLauncher: SandboxLauncher = {
  *  Mirrors defineProvider/defineChannel: keeps built-in launchers free of boilerplate. */
 export function defineLocalLauncher(spec: {
   kind: string;
+  descriptor?: SandboxLauncherDescriptor;
   platforms?: NodeJS.Platform[];
   enforces?: SandboxEnforcement;
   isAvailable?: () => boolean;
@@ -163,6 +191,7 @@ export function defineLocalLauncher(spec: {
 }): SandboxLauncher {
   return {
     kind: spec.kind,
+    descriptor: spec.descriptor ?? { name: spec.kind },
     platforms: spec.platforms,
     enforces: spec.enforces,
     isAvailable: spec.isAvailable,

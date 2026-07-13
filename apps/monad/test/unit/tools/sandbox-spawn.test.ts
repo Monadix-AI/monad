@@ -34,7 +34,11 @@ test('default launcher is none (passthrough)', () => {
 });
 
 test('isActiveLocalOsSandbox only returns true for local sandboxed roots', () => {
-  const fakeLocal: SandboxLauncher = { kind: 'fake-local', wrap: (argv) => argv };
+  const fakeLocal: SandboxLauncher = {
+    kind: 'fake-local',
+    descriptor: { name: 'Fake local' },
+    wrap: (argv) => argv
+  };
   configureSandboxLauncher(fakeLocal);
   expect(isActiveLocalOsSandbox({ sandboxRoots: ['/work'] })).toBe(true);
   expect(isActiveLocalOsSandbox({ sandboxRoots: undefined })).toBe(false);
@@ -59,6 +63,7 @@ test('a REMOTE launcher (spawn(), no wrap) routes through the seam and returns i
   let killed = false;
   const remote: SandboxLauncher = {
     kind: 'fake-cloud',
+    descriptor: { name: 'Fake cloud' },
     isAvailable: () => true,
     spawn: (argv) => ({
       pid: 4242,
@@ -81,7 +86,7 @@ test('a REMOTE launcher (spawn(), no wrap) routes through the seam and returns i
 });
 
 test('a launcher with neither wrap() nor spawn() throws a clear error', () => {
-  configureSandboxLauncher({ kind: 'broken' });
+  configureSandboxLauncher({ kind: 'broken', descriptor: { name: 'Broken' } });
   expect(() => sandboxedSpawn(['echo', 'x'], { stdout: 'pipe' })).toThrow(/neither wrap\(\) nor spawn\(\)/);
 });
 
@@ -89,6 +94,7 @@ test('the seam injects the daemon-configured credential into a remote launcher s
   let seen: string | undefined = 'UNSET';
   const remote: SandboxLauncher = {
     kind: 'fake-cloud',
+    descriptor: { name: 'Fake cloud' },
     isAvailable: () => true,
     spawn: (_argv, options) => {
       seen = options.credential;
@@ -111,6 +117,7 @@ test('the seam threads opts.sessionId into the remote launcher spawn options (pe
   let seen: string | undefined = 'UNSET';
   const remote: SandboxLauncher = {
     kind: 'fake-cloud',
+    descriptor: { name: 'Fake cloud' },
     isAvailable: () => true,
     spawn: (_argv, options) => {
       seen = options.sessionId;

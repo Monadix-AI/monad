@@ -125,10 +125,13 @@ import type {
   VideoResult
 } from './model.ts';
 import type {
+  SandboxBackendRef,
   SandboxEnforcement,
   SandboxLauncher,
+  SandboxLauncherDescriptor,
   SandboxPolicy,
   SandboxProcess,
+  SandboxSettingsSchema,
   SandboxSpawnOptions
 } from './sandbox.ts';
 
@@ -138,7 +141,15 @@ import { assertChannelInbound, createChannelTestHarness, defineChannel, parseCha
 import { defineCommand } from './command.ts';
 import { defineProvider } from './model.ts';
 import { extractCacheWrite, extractProviderCost, usageFromProviderMetadataJson } from './provider-usage.ts';
-import { configureSandboxCredential, defineLocalLauncher, noneLauncher, sandboxCredential } from './sandbox.ts';
+import {
+  configureSandboxCredential,
+  defineLocalLauncher,
+  noneLauncher,
+  sandboxBackendRefSchema,
+  sandboxCredential,
+  sandboxLauncherDescriptorSchema,
+  sandboxSettingsSchema
+} from './sandbox.ts';
 
 export type {
   AdapterMigration,
@@ -236,10 +247,13 @@ export type {
   RerankCall,
   RerankResult,
   ResolvedProviderConfig,
+  SandboxBackendRef,
   SandboxEnforcement,
   SandboxLauncher,
+  SandboxLauncherDescriptor,
   SandboxPolicy,
   SandboxProcess,
+  SandboxSettingsSchema,
   SandboxSpawnOptions,
   Scope,
   SendOptions,
@@ -276,7 +290,10 @@ export {
   noneLauncher,
   parseChannelManifest,
   resolveBinary,
+  sandboxBackendRefSchema,
   sandboxCredential,
+  sandboxLauncherDescriptorSchema,
+  sandboxSettingsSchema,
   usageFromProviderMetadataJson
 };
 

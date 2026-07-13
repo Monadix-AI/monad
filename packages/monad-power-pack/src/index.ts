@@ -4,7 +4,6 @@
 // via config.sandbox.backend. Keeps docker/e2b (and the e2b npm dep) out of the always-on
 // built-in atoms pack.
 
-import { vmLauncher } from '@monad/sandbox-vm';
 import { defineAtomPack, SDK_VERSION } from '@monad/sdk-atom';
 
 import { detectDockerRuntime, dockerLauncher, dockerRuntimeAvailable } from './docker.ts';
@@ -16,8 +15,7 @@ export {
   detectDockerRuntime,
   dockerLauncher,
   dockerRuntimeAvailable,
-  e2bLauncher,
-  vmLauncher
+  e2bLauncher
 };
 
 /** The heavy-sandbox atom pack: declares the `sandbox` atom kind and contributes the docker + e2b
@@ -29,10 +27,10 @@ export const monadPowerPack = defineAtomPack({
     version: '0.0.1',
     sdkVersion: SDK_VERSION,
     atoms: ['sandbox'],
-    description: 'Opt-in heavy sandbox backends (Docker/Podman, E2B, VM) for the monad agent.',
+    description: 'Opt-in contributed sandbox backends (Docker/Podman and E2B) for the monad agent.',
     author: 'Monadix Labs'
   },
-  sandboxes: [dockerLauncher, e2bLauncher, vmLauncher]
+  sandboxes: [dockerLauncher, e2bLauncher]
 });
 
 export const MONAD_POWER_PACK_DEBUG_SOURCE = 'debug:monad-power-pack';

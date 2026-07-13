@@ -37,7 +37,7 @@ test('a confined spawn gets HOME pointed at the writable root; an unconfined one
   const realHome = Bun.env.HOME;
   const cmd = ['/bin/sh', '-c', 'printf "%s" "$HOME"'];
 
-  configureSandboxLauncher({ kind: 'landlock', wrap: (a) => a });
+  configureSandboxLauncher({ kind: 'landlock', descriptor: { name: 'Landlock' }, wrap: (a) => a });
   const confined = sandboxedSpawn(cmd, { stdout: 'pipe' }, { writableRoots: ['/tmp'] });
   expect((await new Response(confined.stdout).text()).startsWith('/tmp')).toBe(true);
 
@@ -74,6 +74,7 @@ test('configureSandboxLauncher: the active launcher rewrites argv and receives t
   let seenPolicy: SandboxPolicy | undefined;
   const recording: SandboxLauncher = {
     kind: 'seatbelt',
+    descriptor: { name: 'Seatbelt' },
     wrap(argv, policy) {
       seenArgv = argv;
       seenPolicy = policy;

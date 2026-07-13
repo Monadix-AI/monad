@@ -19,11 +19,13 @@ const ctx = (roots?: string[]): ToolContext => ({ sessionId: 's1', sandboxRoots:
 
 const fakeLauncher: SandboxLauncher = {
   kind: 'fake-os-sandbox',
+  descriptor: { name: 'Fake OS sandbox' },
   wrap: (argv) => argv
 };
 
 const approvalEquivalentLauncher: SandboxLauncher = {
   kind: 'fake-approval-equivalent-sandbox',
+  descriptor: { name: 'Fake approval equivalent sandbox' },
   enforces: { readDeny: true, net: ['none'] },
   wrap: (argv) => argv
 };

@@ -83,6 +83,13 @@ const sessionSandboxes = new Map<string, Promise<Sandbox>>();
 
 export const e2bLauncher: SandboxLauncher = {
   kind: 'e2b',
+  descriptor: {
+    name: 'E2B',
+    description: 'Runs commands in a reusable remote micro-VM.',
+    settings: {
+      fields: [{ id: 'apiKey', type: 'secret', label: 'API key', required: true }]
+    }
+  },
   // Cloud launcher: execution is delegated off-box, so it confines on ANY host platform.
   platforms: undefined,
   // The remote micro-VM is strongly isolated from the host — writes, credential reads, and egress

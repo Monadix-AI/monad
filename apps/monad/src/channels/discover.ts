@@ -58,7 +58,7 @@ export async function discoverChannelAdapters(
     onAgentAdapter?: (adapter: ExternalAgentProviderAdapter) => void;
     /** Receives each sandbox launcher a discovered pack registers (e.g. a cloud e2b/Vercel
      *  launcher) — routed to the daemon's sandbox registry, preferred over built-ins on select. */
-    onSandbox?: (launcher: SandboxLauncher) => void;
+    onSandbox?: (launcher: SandboxLauncher, atomPackId: string) => void;
     /** Receives each workspace experience descriptor a discovered pack registers. */
     onWorkspaceExperience?: (experience: WorkspaceExperienceDefinition, atomPackName: string) => void;
     /** Receives each workspace experience API route set a discovered pack registers. */

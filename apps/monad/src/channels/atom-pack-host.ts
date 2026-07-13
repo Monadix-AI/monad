@@ -44,7 +44,7 @@ interface ChannelAtomPackHostOptions {
   /** Receives each sandbox launcher an atom pack registers (atom-kind-gated like the others). The
    *  daemon collects them into a registry and selects one per platform — no namespace/first-wins
    *  here (selection is by platform + availability, third-party preferred over built-in). */
-  onSandbox?: (launcher: SandboxLauncher) => void;
+  onSandbox?: (launcher: SandboxLauncher, atomPackId: string) => void;
   /** Receives each workspace experience an atom pack registers (atom-kind-gated like the others). */
   onWorkspaceExperience?: (experience: WorkspaceExperienceDefinition, atomPackName: string) => void;
   /** Receives each workspace experience API route set an atom pack registers (same atom-kind gate). */
@@ -126,7 +126,7 @@ function createChannelAtomPackHost(opts: ChannelAtomPackHostOptions = {}): {
     },
     registerHook: (h) => opts.onHook?.(h),
     registerAgentAdapter: (a) => opts.onAgentAdapter?.(a),
-    registerSandbox: (s) => opts.onSandbox?.(s),
+    registerSandbox: (s) => opts.onSandbox?.(s, pack()),
     registerWorkspaceExperienceApi: (api) => opts.onWorkspaceExperienceApi?.(api, pack()),
     registerWorkspaceExperience: (experience) => opts.onWorkspaceExperience?.(experience, pack()),
     requestInteraction: (atomPackId, request) =>
