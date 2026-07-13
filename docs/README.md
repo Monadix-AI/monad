@@ -49,6 +49,8 @@ principles, typing, testing, and the CodeGraph section. The canonical rules.
 | [enginerring/architecture.md](enginerring/architecture.md) | Package/module boundaries, dependency directions, design decisions. |
 | [conventions.md](conventions.md) | Code style (comments, file length, abstraction) + typing rules + audited exceptions. |
 | [runtime.md](runtime.md) | How the daemon binds — transport (TCP/UDS), config, env, security model. |
+| [host-interactions.md](host-interactions.md) | Schema-driven user input requested by built-ins and atom packs across Web, TUI, CLI, and ACP. |
+| [sandbox-backends.md](sandbox-backends.md) | Built-in and contributed sandbox launchers, generic settings, secret storage, and atomic hot switching. |
 | [session-origin.md](session-origin.md) | Session provenance: identity, write/branch access policy, env snapshot, client extension. |
 | [security-guidelines.md](security-guidelines.md) | Code-level rules for security-sensitive changes; PR security checklist. |
 | [performance-guidelines.md](performance-guidelines.md) | Performance budgets, profiling, hotspots. |
