@@ -2,6 +2,8 @@ import type { SandboxBackendView } from '@monad/protocol';
 
 import { Button } from '@monad/ui';
 
+import { useT } from '#/components/I18nProvider';
+
 export function backendRefKey(backend: SandboxBackendView): string {
   const { ref } = backend;
   return ref.source === 'builtin' ? `builtin/${ref.kind}` : `atom-pack/${ref.packId}/${ref.kind}`;
@@ -55,13 +57,14 @@ export function BackendCards({
   selectedKey?: string;
   onSelect: (backend: SandboxBackendView) => void;
 }) {
+  const t = useT();
   const groups = groupSandboxBackends(backends);
   return (
     <div className="flex flex-col gap-4">
       {(
         [
-          ['Built-in', groups.builtin],
-          ['Installed', groups.installed]
+          [t('web.studio.sandboxBuiltIn'), groups.builtin],
+          [t('web.studio.sandboxInstalled'), groups.installed]
         ] as const
       ).map(([label, items]) =>
         items.length ? (

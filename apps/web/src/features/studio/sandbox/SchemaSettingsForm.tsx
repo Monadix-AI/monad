@@ -3,6 +3,8 @@ import type { ActivateSandboxBackendRequest, SandboxBackendView } from '@monad/p
 import { Button, Input, Label, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Switch } from '@monad/ui';
 import { useEffect, useState } from 'react';
 
+import { useT } from '#/components/I18nProvider';
+
 type SecretActions = NonNullable<NonNullable<ActivateSandboxBackendRequest['settings']>['secrets']>;
 
 export function initialSchemaValues(backend: SandboxBackendView): Record<string, unknown> {
@@ -43,6 +45,7 @@ export function SchemaSettingsForm({
   backend: SandboxBackendView;
   onChange: (settings: NonNullable<ActivateSandboxBackendRequest['settings']>) => void;
 }) {
+  const t = useT();
   const [values, setValues] = useState<Record<string, unknown>>(() => initialSchemaValues(backend));
   const [secrets, setSecrets] = useState<SecretActions>({});
 
@@ -114,8 +117,8 @@ export function SchemaSettingsForm({
                 }
                 placeholder={
                   (values[field.id] as { configured?: boolean })?.configured
-                    ? 'Configured — enter to replace'
-                    : 'Required'
+                    ? t('web.studio.sandboxSecretConfigured')
+                    : t('web.studio.sandboxSecretRequired')
                 }
                 type="password"
                 value={replacementValue(secrets[field.id])}
@@ -126,7 +129,7 @@ export function SchemaSettingsForm({
                   size="sm"
                   variant="ghost"
                 >
-                  Remove
+                  {t('web.studio.sandboxSecretRemove')}
                 </Button>
               )}
             </div>

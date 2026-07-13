@@ -88,7 +88,8 @@ export function SandboxDefaults() {
 
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [error, setError] = useState<string>();
+  const [policyError, setPolicyError] = useState<string>();
+  const [activationError, setActivationError] = useState<string>();
   const [selectedBackendKey, setSelectedBackendKey] = useState<string>();
   const [activationSettings, setActivationSettings] = useState<ActivateSandboxBackendRequest['settings']>();
   const selectedBackend = useMemo(
@@ -115,19 +116,19 @@ export function SandboxDefaults() {
 
   const handleActivate = async () => {
     if (!selectedBackend) return;
-    setError(undefined);
+    setActivationError(undefined);
     try {
       const result = await activateSandbox({ ref: selectedBackend.ref, settings: activationSettings }).unwrap();
-      if (result.status === 'error') setError(result.error ?? 'Failed to activate sandbox backend');
+      if (result.status === 'error') setActivationError(result.error ?? t('web.studio.sandboxActivationFailed'));
     } catch (cause) {
-      setError((cause as { message?: string }).message ?? 'Failed to activate sandbox backend');
+      setActivationError((cause as { message?: string }).message ?? t('web.studio.sandboxActivationFailed'));
     }
   };
 
   const handleSave = async () => {
     setSaving(true);
     setSaved(false);
-    setError(undefined);
+    setPolicyError(undefined);
     const req: SetSandboxSettingsRequest = {
       sandbox: {
         mode,
@@ -146,7 +147,7 @@ export function SandboxDefaults() {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (e) {
-      setError((e as { message?: string }).message ?? 'Failed to save');
+      setPolicyError((e as { message?: string }).message ?? 'Failed to save');
     } finally {
       setSaving(false);
     }
@@ -187,8 +188,8 @@ export function SandboxDefaults() {
 
         <section className="flex flex-col gap-3">
           <div>
-            <p className="font-medium text-sm">Sandbox backend</p>
-            <p className="text-muted-foreground text-xs">Switch new processes without restarting the daemon.</p>
+            <p className="font-medium text-sm">{t('web.studio.sandboxBackendTitle')}</p>
+            <p className="text-muted-foreground text-xs">{t('web.studio.sandboxBackendDesc')}</p>
           </div>
           <BackendCards
             backends={data?.backends ?? []}
@@ -208,16 +209,17 @@ export function SandboxDefaults() {
                 onClick={handleActivate}
               >
                 {activation.isLoading
-                  ? 'Preparing…'
+                  ? t('web.studio.sandboxPreparing')
                   : selectedBackend.status === 'active'
-                    ? 'Apply settings'
-                    : 'Activate'}
+                    ? t('web.studio.sandboxApplySettings')
+                    : t('web.studio.sandboxActivate')}
               </Button>
               <span className="text-muted-foreground text-xs">
                 {selectedBackend.sourceLabel} · {selectedBackend.status}
               </span>
             </div>
           )}
+          {activationError && <span className="text-destructive text-xs">{activationError}</span>}
         </section>
 
         <section className="flex flex-col gap-1">
@@ -313,7 +315,7 @@ export function SandboxDefaults() {
               {t('web.studio.sandboxSaved')}
             </span>
           )}
-          {error && <span className="text-destructive text-xs">{error}</span>}
+          {policyError && <span className="text-destructive text-xs">{policyError}</span>}
         </div>
 
         <p className="text-[11px] text-muted-foreground">{t('web.studio.sandboxRestartHint')}</p>
