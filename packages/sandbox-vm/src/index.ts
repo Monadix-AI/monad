@@ -98,7 +98,9 @@ function isUnder(child: string, parent: string): boolean {
   return child === parent || child.startsWith(p);
 }
 
-function mountsFor(policy: SandboxPolicy): MountSpec[] {
+/** Map the policy's roots to virtio-fs mounts. Exported for conformance tests (the read-deny nesting
+ *  guard is a security check). */
+export function mountsFor(policy: SandboxPolicy): MountSpec[] {
   // A readDenyRoot nested under an allowed (writable/readable) root would be exposed anyway: virtio-fs
   // mounts the whole subtree, and this backend has no way to subtract a denied subpath (unlike
   // Seatbelt's deny-over-allow). Rather than silently leak the secret while advertising

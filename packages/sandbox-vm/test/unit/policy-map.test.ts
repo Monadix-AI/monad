@@ -1,11 +1,32 @@
 import { expect, test } from 'bun:test';
 
 import { buildIgnition } from '../../src/ignition.ts';
+import { mountsFor } from '../../src/index.ts';
 
-// egressFor and mountsFor are internal to index.ts; we exercise their observable effects through the
-// Ignition config the launcher builds (net mode → firewall rules) and document the fail-closed intent.
-// The nested-readDeny rejection is a launcher-level guard verified in the integration test; here we
-// pin the net-mode fail-closed default at the ignition layer.
+// ── mount-mapping security guards (srt-style: fail closed on ambiguous confinement) ────────────────
+
+test('writable roots map to rw mounts, readable to ro — the write-confine surface', () => {
+  const mounts = mountsFor({ writableRoots: ['/ws'], readableRoots: ['/lib'] });
+  expect(mounts).toEqual([
+    { tag: 'w0', path: '/ws', readOnly: false },
+    { tag: 'r0', path: '/lib', readOnly: true }
+  ]);
+});
+
+test('readDenyRoot NESTED under a mounted root is rejected (would be exposed by the subtree mount)', () => {
+  // Mirrors srt's inode-vs-path deny-bypass concern: a denied path under an allowed root can't be
+  // subtracted by virtio-fs, so we fail closed rather than silently leak it.
+  expect(() => mountsFor({ readableRoots: ['/Users/x'], readDenyRoots: ['/Users/x/.ssh'] })).toThrow(/nested under/);
+  expect(() => mountsFor({ writableRoots: ['/Users/x'], readDenyRoots: ['/Users/x'] })).toThrow(/nested under/);
+});
+
+test('readDenyRoot OUTSIDE every mounted root is fine (it is simply never mounted → absent in guest)', () => {
+  // /Users/x/.aws is not under /work, so it is never mounted and cannot be read — no rejection needed.
+  const mounts = mountsFor({ writableRoots: ['/work'], readDenyRoots: ['/Users/x/.aws'] });
+  expect(mounts).toEqual([{ tag: 'w0', path: '/work', readOnly: false }]);
+  // A sibling that shares a path PREFIX string but not a path boundary must not false-match.
+  expect(() => mountsFor({ writableRoots: ['/work'], readDenyRoots: ['/work-secrets'] })).not.toThrow();
+});
 
 test('net:none produces a drop-all firewall (fail-closed egress)', () => {
   const cfg = buildIgnition({ agentBinaryB64: 'QQ==', mounts: [], egress: { mode: 'none' } });
