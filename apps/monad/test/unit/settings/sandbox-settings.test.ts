@@ -161,9 +161,10 @@ test('rejects unknown fields and values that violate the contributed schema', as
 test('migrates legacy backend selectors to source-qualified references', async () => {
   const { dir, paths } = await fixture();
   try {
-    await Bun.write(paths.sandbox, `${JSON.stringify({ backend: 'vm' })}\n`);
+    await Bun.write(paths.sandbox, `${JSON.stringify({ backend: 'vm', vm: { cpus: 4, memory: 4096 } })}\n`);
     let cfg = await loadAll(paths.config, paths.profile);
     expect(cfg?.sandbox.activeBackend).toEqual({ source: 'builtin', kind: 'vm' });
+    expect(cfg?.sandbox.backendSettings['builtin/vm']).toEqual({ cpus: 4, memoryMiB: 4096 });
 
     await Bun.write(paths.sandbox, `${JSON.stringify({ backend: 'e2b' })}\n`);
     cfg = await loadAll(paths.config, paths.profile);

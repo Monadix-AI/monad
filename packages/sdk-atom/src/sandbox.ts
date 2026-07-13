@@ -130,6 +130,9 @@ export interface SandboxLauncher {
   readonly enforces?: SandboxEnforcement;
   /** Runtime availability — native binary present, API key configured, etc. Absent → always available. */
   isAvailable?(): boolean;
+  /** Apply host-validated settings before prepare/probe. Secret fields arrive resolved only here and
+   *  must never be retained in serializable descriptors, logs, or errors. */
+  configure?(settings: Record<string, unknown>): void | Promise<void>;
   /** LOCAL model: rewrite argv to apply confinement; the host runs the result. */
   wrap?(argv: string[], policy: SandboxPolicy): string[];
   /** REMOTE model (forward-looking): run the process and return a handle. Implement instead of `wrap`. */
@@ -145,6 +148,9 @@ export interface SandboxLauncher {
   disposeAgent?(agentId: string): void | Promise<void>;
   /** Optional async warm-up run once for the SELECTED launcher before it is wired (e.g. a docker runtime probe). */
   prepare?(): Promise<void>;
+  /** Release idle backend-wide resources after a successful switch away. Active child processes keep
+   *  their original launcher ownership and must not be terminated by this hook. */
+  disposeIdle?(): void | Promise<void>;
 }
 
 // The host's configured sandbox credential (a cloud launcher's API key), resolved from config at

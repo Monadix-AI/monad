@@ -278,6 +278,7 @@ export function createPacksModule(deps: AtomPacksDeps) {
       if (!(await stat(join(dir, name)).catch(() => null))?.isDirectory()) {
         throw new HandlerError('not_found', `atom pack not found: ${name}`);
       }
+      if (!enabled) await deps.sandboxActivation?.ensurePackCanDeactivate(name);
       const recordPath = join(dir, name, '.install.json');
       const record = await readInstallRecord(dir, name);
       await Bun.write(recordPath, `${JSON.stringify({ ...record, enabled }, null, 2)}\n`);
@@ -291,6 +292,7 @@ export function createPacksModule(deps: AtomPacksDeps) {
       if (!(await stat(join(dir, name)).catch(() => null))?.isDirectory()) {
         throw new HandlerError('not_found', `atom pack not found: ${name}`);
       }
+      await deps.sandboxActivation?.ensurePackCanDeactivate(name);
       await rm(join(dir, name), { recursive: true, force: true });
       await deps.onChanged?.();
       return { ok: true };

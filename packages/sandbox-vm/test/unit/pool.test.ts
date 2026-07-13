@@ -76,6 +76,19 @@ test('disposeAgent destroys every VM for that agent (the security dispose)', asy
   expect(pool.size()).toBe(0);
 });
 
+test('disposeIdle preserves VMs with active processes while tearing down idle ones', async () => {
+  const stopped: number[] = [];
+  const pool = new VmPool<{ id: number }>(POOL_DEFAULTS, { stop: async (vm) => void stopped.push(vm.id) });
+  await pool.acquire('busy', 'agt:a', 'a', async () => ({ id: 1 }));
+  await pool.acquire('idle', 'agt:b', 'b', async () => ({ id: 2 }));
+  pool.release('idle');
+
+  await pool.disposeIdle();
+
+  expect(stopped).toEqual([2]);
+  expect(pool.size()).toBe(1);
+});
+
 test('at capacity with all VMs busy, a new boot is refused (never kills an active VM)', async () => {
   const pool = new VmPool<{ id: number }>({ ...POOL_DEFAULTS, maxInstances: 1 }, { stop: async () => {} });
   const boot = async () => ({ id: 1 });

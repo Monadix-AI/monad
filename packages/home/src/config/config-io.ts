@@ -27,13 +27,25 @@ function migrateSandboxBackend(raw: unknown): unknown {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw) || 'activeBackend' in raw) return raw;
   const sandbox = raw as Record<string, unknown>;
   const backend = sandbox.backend;
+  const existingSettings = sandbox.backendSettings as Record<string, Record<string, unknown>> | undefined;
   const activeBackend =
     backend === 'vm'
       ? { source: 'builtin', kind: 'vm' }
       : backend === 'docker' || backend === 'e2b'
         ? { source: 'atom-pack', packId: 'monad-power-pack', kind: backend }
         : { source: 'builtin', kind: 'auto' };
-  return { ...sandbox, activeBackend };
+  const backendSettings =
+    backend === 'vm' && sandbox.vm && typeof sandbox.vm === 'object' && !Array.isArray(sandbox.vm)
+      ? {
+          ...(existingSettings ?? {}),
+          'builtin/vm': {
+            ...(existingSettings?.['builtin/vm'] ?? {}),
+            ...('cpus' in sandbox.vm ? { cpus: (sandbox.vm as Record<string, unknown>).cpus } : {}),
+            ...('memory' in sandbox.vm ? { memoryMiB: (sandbox.vm as Record<string, unknown>).memory } : {})
+          }
+        }
+      : sandbox.backendSettings;
+  return { ...sandbox, activeBackend, ...(backendSettings === undefined ? {} : { backendSettings }) };
 }
 
 export async function migrateConfig(raw: unknown): Promise<MonadConfig> {

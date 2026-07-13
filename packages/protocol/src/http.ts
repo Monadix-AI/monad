@@ -105,7 +105,12 @@ import {
   setNetworkSettingsRequestSchema
 } from './settings/network-settings.ts';
 import { openaiCompatSettingsSchema, setOpenaiCompatRequestSchema } from './settings/openai-compat-settings.ts';
-import { sandboxSettingsResponseSchema, setSandboxSettingsRequestSchema } from './settings/sandbox-settings.ts';
+import {
+  activateSandboxBackendRequestSchema,
+  sandboxActivationResultSchema,
+  sandboxSettingsResponseSchema,
+  setSandboxSettingsRequestSchema
+} from './settings/sandbox-settings.ts';
 import {
   importSettingsApplyRequestSchema,
   importSettingsApplyResultSchema,
@@ -430,7 +435,14 @@ export const daemonHttpContract = {
   },
   sandboxSettings: {
     get: defineHttpEndpoint({ response: { 200: sandboxSettingsResponseSchema } }),
-    set: defineHttpEndpoint({ body: setSandboxSettingsRequestSchema, response: { 200: sandboxSettingsResponseSchema } })
+    set: defineHttpEndpoint({
+      body: setSandboxSettingsRequestSchema,
+      response: { 200: sandboxSettingsResponseSchema }
+    }),
+    activate: defineHttpEndpoint({
+      body: activateSandboxBackendRequestSchema,
+      response: { 200: sandboxActivationResultSchema }
+    })
   },
   skillsSettings: {
     get: defineHttpEndpoint({ response: { 200: skillsSettingsResponseSchema } }),

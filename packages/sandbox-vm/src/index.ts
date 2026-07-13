@@ -234,6 +234,13 @@ export const vmLauncher: SandboxLauncher = {
   platforms: ['darwin', 'linux'],
   enforces: { writeConfine: true, readDeny: true, net: ['none', 'filtered', 'unrestricted'] },
   isAvailable: () => vmToolchainMaybeAvailable(),
+  configure(settings): void {
+    configureVmBackend({
+      cpus: settings.cpus as number | undefined,
+      memoryMiB: settings.memoryMiB as number | undefined,
+      bootTimeoutMs: settings.bootTimeoutMs as number | undefined
+    });
+  },
 
   async prepare(): Promise<void> {
     // Resolve the host tooling (detect or download). The base image is pulled lazily on first spawn —
@@ -285,6 +292,10 @@ export const vmLauncher: SandboxLauncher = {
 
   async disposeAgent(agentId: string): Promise<void> {
     await pool?.disposeAgent(agentId);
+  },
+
+  async disposeIdle(): Promise<void> {
+    await pool?.disposeIdle();
   }
 };
 

@@ -58,3 +58,28 @@ export const setSandboxSettingsRequestSchema = z.object({
     .optional()
 });
 export type SetSandboxSettingsRequest = z.infer<typeof setSandboxSettingsRequestSchema>;
+
+export const activateSandboxBackendRequestSchema = z
+  .object({
+    ref: sandboxBackendRefSchema,
+    settings: z
+      .object({
+        values: z.record(z.string(), z.unknown()).optional(),
+        secrets: z.record(z.string(), backendSecretUpdateSchema).optional()
+      })
+      .strict()
+      .optional()
+  })
+  .strict();
+export type ActivateSandboxBackendRequest = z.infer<typeof activateSandboxBackendRequestSchema>;
+
+export const sandboxActivationResultSchema = z
+  .object({
+    requested: sandboxBackendRefSchema,
+    effective: sandboxBackendRefSchema,
+    status: z.enum(['active', 'error']),
+    error: z.string().optional(),
+    cleanupWarning: z.string().optional()
+  })
+  .strict();
+export type SandboxActivationResult = z.infer<typeof sandboxActivationResultSchema>;
