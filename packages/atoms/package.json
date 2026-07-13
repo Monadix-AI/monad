@@ -19,7 +19,6 @@
     "@monad/sdk-atom": "workspace:*",
     "@monad/sdk-experience": "workspace:*",
     "@monad/ui": "workspace:*",
-    "@xyflow/react": "^12.11.2",
     "ai": "^7.0.22",
     "react": "^19.2.7",
     "shiki": "^4.3.1",

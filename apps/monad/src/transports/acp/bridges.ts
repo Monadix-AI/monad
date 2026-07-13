@@ -91,7 +91,7 @@ export function interactionToAcpElicitation(
 
 /** Present one already-routed host interaction over ACP. Callers retain ownership of claim/lease
  * completion; this adapter only translates the interaction and returns the semantic result. */
-export async function bridgeHostInteraction(
+async function _bridgeHostInteraction(
   conn: AgentConnection,
   clientCaps: ClientCapabilities,
   sessionId: SessionId,
