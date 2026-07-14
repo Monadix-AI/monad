@@ -566,7 +566,7 @@
   "web.studio.capabilities": "Capabilities",
   "web.studio.capabilitiesGroup": "Capabilities",
   "web.studio.capabilitiesMcpSection": "MCP Servers",
-  "web.studio.capabilitiesMcpSubtitle": "External tool servers. User-configured servers require a daemon restart; atom-pack servers connect live.",
+  "web.studio.capabilitiesMcpSubtitle": "External tool servers. Changes apply live — edits reconnect only the servers that changed.",
   "web.studio.capabilitiesToolsSection": "Tools",
   "web.studio.capabilitiesToolsSubtitle": "Built-in tools available to agents. Core tools are always on; optional tools can be toggled.",
   "web.capabilityInventory.detected": "detected",

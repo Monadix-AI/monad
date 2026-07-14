@@ -914,7 +914,7 @@
   "web.studio.capabilities": "能力",
   "web.studio.capabilitiesGroup": "能力",
   "web.studio.capabilitiesMcpSection": "MCP 服务器",
-  "web.studio.capabilitiesMcpSubtitle": "外部工具服务器。用户配置的服务器需重启 daemon 后生效；atom-pack 服务器实时连接。",
+  "web.studio.capabilitiesMcpSubtitle": "外部工具服务器。改动实时生效——仅重连发生变化的服务器。",
   "web.studio.capabilitiesToolsSection": "工具",
   "web.studio.capabilitiesToolsSubtitle": "agent 可用的内置工具。核心工具始终开启；可选工具可以单独切换。",
   "web.capabilityInventory.detected": "已探测",
