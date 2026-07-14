@@ -237,13 +237,23 @@ func applyResizes(control io.Reader, master *os.File) {
 }
 
 func privateTmp() error {
-	if err := unix.Mount("", "/", "", unix.MS_REC|unix.MS_PRIVATE, ""); err != nil {
+	return isolateRunFilesystems(unix.Mount, os.MkdirAll)
+}
+
+func isolateRunFilesystems(
+	mount func(source, target, filesystem string, flags uintptr, data string) error,
+	mkdir func(path string, mode os.FileMode) error,
+) error {
+	if err := mount("", "/", "", unix.MS_REC|unix.MS_PRIVATE, ""); err != nil {
 		return err
 	}
-	if err := os.MkdirAll("/tmp", 0o1777); err != nil {
+	if err := mount("proc", "/proc", "proc", unix.MS_NOSUID|unix.MS_NODEV|unix.MS_NOEXEC, ""); err != nil {
 		return err
 	}
-	return unix.Mount("tmpfs", "/tmp", "tmpfs", unix.MS_NOSUID|unix.MS_NODEV, "mode=1777,size=256m")
+	if err := mkdir("/tmp", 0o1777); err != nil {
+		return err
+	}
+	return mount("tmpfs", "/tmp", "tmpfs", unix.MS_NOSUID|unix.MS_NODEV, "mode=1777,size=256m")
 }
 
 func reapChildren() {
