@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -106,6 +107,16 @@ func runSupervisorMode() int {
 		fmt.Fprintln(os.Stderr, "supervisor:", err)
 		return 127
 	}
+	cmd, observationReader, observationWriter := prepareObservedCommand(cmd, req.RunID, reporter)
+	var observationDone chan struct{}
+	if observationReader != nil {
+		observationDone = make(chan struct{})
+		go func() {
+			defer close(observationDone)
+			defer observationReader.Close()
+			drainObservationRecords(observationReader, req.Observation, req.RunID, reporter)
+		}()
+	}
 	var master *os.File
 	outputDone := make(chan struct{})
 	if req.Terminal != nil {
@@ -129,7 +140,13 @@ func runSupervisorMode() int {
 		err = cmd.Start()
 		close(outputDone)
 	}
+	if observationWriter != nil {
+		observationWriter.Close()
+	}
 	if err != nil {
+		if observationReader != nil {
+			observationReader.Close()
+		}
 		operation := "runtime-exit"
 		if req.Terminal != nil {
 			operation = "pty-init"
@@ -153,6 +170,9 @@ func runSupervisorMode() int {
 			signal.Stop(signals)
 			syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 			reapChildren()
+			if observationDone != nil {
+				<-observationDone
+			}
 			if master != nil {
 				<-outputDone
 				master.Close()
@@ -181,6 +201,7 @@ func runSupervisorMode() int {
 
 type supervisorReporter struct {
 	encoder *json.Encoder
+	mu      sync.Mutex
 }
 
 func (reporter *supervisorReporter) violation(kind, operation, runID, detail string) {
@@ -188,10 +209,14 @@ func (reporter *supervisorReporter) violation(kind, operation, runID, detail str
 }
 
 func (reporter *supervisorReporter) recordViolation(violation violationMessage) {
+	reporter.mu.Lock()
+	defer reporter.mu.Unlock()
 	reporter.encoder.Encode(supervisorRecord{Type: "violation", Violation: &violation})
 }
 
 func (reporter *supervisorReporter) exit(exit exitMessage) {
+	reporter.mu.Lock()
+	defer reporter.mu.Unlock()
 	reporter.encoder.Encode(supervisorRecord{Type: "exit", Exit: &exit})
 }
 

@@ -468,7 +468,9 @@ func (run *managedRun) terminate(grace time.Duration) {
 	run.terminateOnce.Do(func() {
 		run.signal(syscall.SIGTERM)
 		time.AfterFunc(grace, func() {
-			if run.cmd.ProcessState == nil {
+			select {
+			case <-run.finished:
+			default:
 				run.signal(syscall.SIGKILL)
 			}
 		})
