@@ -7,11 +7,12 @@
 #
 #   pwsh packages/sandbox-vm/test/smoke/winvm-helper.ps1            # tier-0: build + tests + probe (no Hyper-V needed)
 #   pwsh packages/sandbox-vm/test/smoke/winvm-helper.ps1 -Boot      # also attempt a full `msvm run` (needs Hyper-V)
+#   pwsh packages/sandbox-vm/test/smoke/winvm-helper.ps1 -Conformance # run the complete real Hyper-V suite
 #
 # Run the elevated one-time hvsock registration separately (needs admin):
 #   pwsh -Command "Start-Process pwsh -Verb RunAs -ArgumentList '-File','packages/sandbox-vm/test/smoke/winvm-helper.ps1','-SetupOnly'"
 
-param([switch]$Boot, [switch]$SetupOnly)
+param([switch]$Boot, [switch]$SetupOnly, [switch]$Conformance)
 
 $ErrorActionPreference = 'Stop'
 # This smoke lives in the package (packages/sandbox-vm/test/smoke); the package root is two up.
@@ -78,6 +79,19 @@ if ($Boot) {
     & bun src/cli.ts run -- echo monad-vm-ok
     if ($LASTEXITCODE -ne 0) { Die 'msvm run failed' }
     Ok 'guest booted and executed a command over vsock'
+  } finally { Pop-Location }
+}
+
+if ($Conformance) {
+  if (-not $probe.hyperv) { Die 'cannot run conformance: Hyper-V not usable' }
+  if (-not $reg.registered) { Die 'cannot run conformance: hvsock ports not registered (run -SetupOnly elevated first)' }
+  Step 'Real Hyper-V/hvsock/9p conformance'
+  Push-Location ($pkg)
+  try {
+    $env:MONAD_VM_IT = '1'
+    & bun run test:e2e
+    if ($LASTEXITCODE -ne 0) { Die 'real Hyper-V conformance failed' }
+    Ok 'real Hyper-V conformance'
   } finally { Pop-Location }
 }
 
