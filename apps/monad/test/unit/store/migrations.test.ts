@@ -2,8 +2,13 @@ import { Database } from 'bun:sqlite';
 import { expect, test } from 'bun:test';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/bun-sqlite';
 
+import { createStore } from '#/store/db/index.ts';
 import { LATEST_MIGRATION_TIMESTAMP, MIGRATIONS } from '#/store/db/migrations.generated.ts';
 import { hasCurrentMigration, migrate } from '#/store/db/migrations.ts';
 
@@ -38,6 +43,40 @@ function ftsRowIds(sqlite: Database, table: 'messages_fts' | 'messages_fts_trigr
     sqlite.prepare(`SELECT rowid FROM ${table} WHERE ${table} MATCH ? ORDER BY rowid`).all(query) as { rowid: number }[]
   ).map((row) => row.rowid);
 }
+
+function pragmaValue(store: ReturnType<typeof createStore>, pragma: string): string | number {
+  const row = store.db.get(sql.raw(`PRAGMA ${pragma}`)) as Record<string, string | number> | undefined;
+  if (!row) throw new Error(`missing PRAGMA result: ${pragma}`);
+  const value = Object.values(row)[0];
+  if (value === undefined) throw new Error(`missing PRAGMA value: ${pragma}`);
+  return value;
+}
+
+test('Store configures connection-local PRAGMAs for in-memory databases', () => {
+  const store = createStore();
+  try {
+    expect(pragmaValue(store, 'foreign_keys')).toBe(1);
+    expect(pragmaValue(store, 'synchronous')).toBe(1);
+    expect(pragmaValue(store, 'journal_mode')).toBe('memory');
+  } finally {
+    store.close();
+  }
+});
+
+test('Store enables WAL before migrating a file-backed database', async () => {
+  const path = join(tmpdir(), `monad-store-${Date.now()}-${Math.random().toString(36).slice(2)}.sqlite`);
+  const store = createStore({ path });
+  try {
+    expect(pragmaValue(store, 'foreign_keys')).toBe(1);
+    expect(pragmaValue(store, 'synchronous')).toBe(1);
+    expect(pragmaValue(store, 'journal_mode')).toBe('wal');
+  } finally {
+    store.close();
+    await rm(path, { force: true });
+    await rm(`${path}-shm`, { force: true });
+    await rm(`${path}-wal`, { force: true });
+  }
+});
 
 test('generated migrations exactly embed the source Drizzle history', () => {
   const journal = loadJournal();

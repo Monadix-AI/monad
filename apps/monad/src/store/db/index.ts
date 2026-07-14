@@ -55,6 +55,7 @@ import {
   touchConversation
 } from './channels.ts';
 import { type CheckpointHandle, startWalCheckpoint, stopWalCheckpoint } from './checkpoint.ts';
+import { configureSqliteConnection } from './connection.ts';
 import { appendEvents, type DanglingInterrupt, findDanglingInterrupts, hasEvent, listEvents } from './events.ts';
 import {
   compareAndSwapExperienceState,
@@ -204,11 +205,9 @@ export class Store {
   #checkpoint: CheckpointHandle | undefined;
 
   constructor(opts: StoreOptions = {}) {
-    this.sqlite = new Database(opts.path ?? ':memory:');
-    // Connection-level PRAGMAs applied on every open (not persisted reliably across connections).
-    // These connection-level settings are retained here until the operational PRAGMA work in Task 3.
-    this.sqlite.exec('PRAGMA foreign_keys = ON');
-    this.sqlite.exec('PRAGMA synchronous = NORMAL');
+    const path = opts.path ?? ':memory:';
+    this.sqlite = new Database(path);
+    configureSqliteConnection(this.sqlite, path);
     this.db = drizzle(this.sqlite);
     migrate(this.db);
     if (opts.path && opts.path !== ':memory:') {
