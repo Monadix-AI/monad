@@ -5,6 +5,7 @@ import type { MonadPaths } from '@monad/home';
 import type {
   Event,
   Hooks,
+  PrincipalId,
   SessionId,
   SkillListInstance,
   SkillListItem,
@@ -14,6 +15,7 @@ import type { WorkspaceExperienceApiHandler } from '@monad/sdk-atom';
 import type { PolicyEngine } from '#/agent/approvals/engine.ts';
 import type { ModelRouter } from '#/agent/index.ts';
 import type { Tool } from '#/capabilities/tools/types.ts';
+import type { RegisteredWorkspaceExperienceApiRoute } from '#/handlers/atom-pack/atom-pack-registry.ts';
 
 import { unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -220,6 +222,12 @@ export function buildHandlers(
       method: string,
       path: string
     ) => WorkspaceExperienceApiHandler | undefined;
+    getWorkspaceExperienceApiRoute?: (
+      experienceId: string,
+      method: string,
+      path: string
+    ) => RegisteredWorkspaceExperienceApiRoute | undefined;
+    ownerPrincipalId?: PrincipalId;
     /** Dynamic workspace experience descriptors for atom HTTP tests. */
     getWorkspaceExperiences?: () => WorkspaceExperienceDefinition[];
   }
@@ -297,7 +305,7 @@ export function buildHandlers(
       agent,
       bus,
       cache,
-      ownerPrincipalId: newId('prn'),
+      ownerPrincipalId: opts?.ownerPrincipalId ?? newId('prn'),
       oversight,
       clarify,
       delegation,
@@ -323,6 +331,7 @@ export function buildHandlers(
       getLaws: async () => ({ laws: [] }),
       getUpgradeInfo: opts?.getUpgradeInfo,
       getWorkspaceExperienceApiHandler: opts?.getWorkspaceExperienceApiHandler,
+      getWorkspaceExperienceApiRoute: opts?.getWorkspaceExperienceApiRoute,
       getWorkspaceExperiences: opts?.getWorkspaceExperiences,
       memorySetBackend: async () => {},
       memorySetMem0Models: async () => {},

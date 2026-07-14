@@ -8,13 +8,21 @@
 // skill/mcp/locale are file-based and do NOT flow through this host — they are installed at the
 // atom-pack-manager level and discovered from disk at daemon startup.
 
-import type { AtomDescriptor, AtomKind, ChannelType, InteractionRequest, InteractionResult } from '@monad/protocol';
+import type {
+  AtomDescriptor,
+  AtomKind,
+  ChannelType,
+  InteractionRequest,
+  InteractionResult,
+  WorkspaceExperiencePermission
+} from '@monad/protocol';
 import type {
   AtomPackLog,
   ChannelAdapterFactory,
   ChannelDefinition,
   Connector,
   ExternalAgentProviderAdapter,
+  ExperienceWorker,
   HookDefinition,
   ManifestAtomPack,
   ManifestAtomPackHost,
@@ -48,12 +56,22 @@ interface ChannelAtomPackHostOptions {
   /** Receives each workspace experience an atom pack registers (atom-kind-gated like the others). */
   onWorkspaceExperience?: (experience: WorkspaceExperienceDefinition, atomPackName: string) => void;
   /** Receives each workspace experience API route set an atom pack registers (same atom-kind gate). */
-  onWorkspaceExperienceApi?: (api: WorkspaceExperienceApi, atomPackName: string) => void;
+  onWorkspaceExperienceApi?: (
+    api: WorkspaceExperienceApi,
+    atomPackName: string,
+    permissions: readonly WorkspaceExperiencePermission[]
+  ) => void;
+  onExperienceWorker?: (
+    worker: ExperienceWorker,
+    atomPackName: string,
+    permissions: readonly WorkspaceExperiencePermission[]
+  ) => void;
   /** Receives a schema-only interaction request with the loader-bound, trusted pack identity. */
   onRequestInteraction?: (atomPackId: string, request: InteractionRequest) => Promise<InteractionResult>;
   /** Name of the atom pack currently being loaded — used to attribute collisions (same-pack dup vs
    *  cross-pack). The loader updates the source before each pack; absent → '' (single-pack callers). */
   currentAtomPack?: () => string;
+  currentWorkspaceExperiencePermissions?: () => readonly WorkspaceExperiencePermission[];
   /** Provider types already owned by a prior load pass (e.g. the built-in providers). A `provider`
    *  atom is GLOBALLY UNIQUE — claiming a reserved type throws (hard fail), so a third-party pack
    *  cannot shadow a built-in provider like `openai` to hijack its routing/credentials. */
@@ -127,7 +145,10 @@ function createChannelAtomPackHost(opts: ChannelAtomPackHostOptions = {}): {
     registerHook: (h) => opts.onHook?.(h),
     registerAgentAdapter: (a) => opts.onAgentAdapter?.(a),
     registerSandbox: (s) => opts.onSandbox?.(s, pack()),
-    registerWorkspaceExperienceApi: (api) => opts.onWorkspaceExperienceApi?.(api, pack()),
+    registerWorkspaceExperienceApi: (api) =>
+      opts.onWorkspaceExperienceApi?.(api, pack(), opts.currentWorkspaceExperiencePermissions?.() ?? []),
+    registerExperienceWorker: (worker) =>
+      opts.onExperienceWorker?.(worker, pack(), opts.currentWorkspaceExperiencePermissions?.() ?? []),
     registerWorkspaceExperience: (experience) => opts.onWorkspaceExperience?.(experience, pack()),
     requestInteraction: (atomPackId, request) =>
       opts.onRequestInteraction?.(atomPackId, request) ??
@@ -200,6 +221,7 @@ export type LoadChannelAtomPacksOptions = Omit<ChannelAtomPackHostOptions, 'onCo
    *  instead of the bundle's self-declared `manifest.atoms` — closing the consent-bypass where a
    *  bundle embeds more atoms than the user consented to. Omit for first-party/trusted packs. */
   grantedAtomsFor?: (atomPack: ManifestAtomPack) => readonly AtomKind[] | undefined;
+  grantedPermissionsFor?: (atomPack: ManifestAtomPack) => readonly WorkspaceExperiencePermission[] | undefined;
   /** The pack's stable identity (its install-dir/folder name) for qualified names + pins + conflict
    *  reporting. Unique even when two packs share a manifest name. Falls back to manifest.name. */
   packIdFor?: (atomPack: ManifestAtomPack) => string | undefined;
@@ -215,6 +237,7 @@ export async function loadChannelAtomPacks(
   opts: LoadChannelAtomPacksOptions = {}
 ): Promise<Map<ChannelType, ChannelAdapterFactory>> {
   let currentAtomPack = '';
+  let currentWorkspaceExperiencePermissions: readonly WorkspaceExperiencePermission[] = [];
   const { host, channels, finalizeChannels, finalizeConnectors } = createChannelAtomPackHost({
     onConnector: opts.onConnector,
     onProvider: opts.onProvider,
@@ -223,6 +246,7 @@ export async function loadChannelAtomPacks(
     onSandbox: opts.onSandbox,
     onWorkspaceExperience: opts.onWorkspaceExperience,
     onWorkspaceExperienceApi: opts.onWorkspaceExperienceApi,
+    onExperienceWorker: opts.onExperienceWorker,
     onRequestInteraction: opts.onRequestInteraction,
     reservedProviderTypes: opts.reservedProviderTypes,
     channelPins: opts.channelPins,
@@ -230,6 +254,7 @@ export async function loadChannelAtomPacks(
     onCollision: opts.onCollision,
     log: opts.log,
     currentAtomPack: () => currentAtomPack,
+    currentWorkspaceExperiencePermissions: () => currentWorkspaceExperiencePermissions,
     onCommand: opts.onCommand ? (cmd) => opts.onCommand?.(currentAtomPack, cmd) : undefined
   });
   for (const atomPack of atomPacks) {
@@ -241,6 +266,8 @@ export async function loadChannelAtomPacks(
       continue;
     }
     currentAtomPack = opts.packIdFor?.(atomPack) ?? atomPack.manifest.name;
+    currentWorkspaceExperiencePermissions =
+      opts.grantedPermissionsFor?.(atomPack) ?? atomPack.manifest.permissions ?? [];
     try {
       assertAtomPackMonadCompatibility(atomPack.manifest.name, atomPack.manifest.monadVersion);
       // Description is metadata for the operator-facing detail view, not a side effect of runtime

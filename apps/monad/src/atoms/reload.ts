@@ -69,7 +69,10 @@ export function createAtomPackRediscoverer(deps: AtomPackRediscovererDeps): () =
       const builtin: BuiltinSinks = {
         onProvider: (p) => modelProviderRegistry.register(p),
         onHook: (h) => toolRegistry.registerHook(h),
-        onWorkspaceExperienceApi: (api, atomPackId) => toolRegistry.registerWorkspaceExperienceApi(api, atomPackId),
+        onWorkspaceExperienceApi: (api, atomPackId, permissions) =>
+          toolRegistry.registerWorkspaceExperienceApi(api, atomPackId, permissions),
+        onExperienceWorker: (worker, atomPackId, permissions) =>
+          toolRegistry.registerExperienceWorker(worker, atomPackId, permissions),
         onWorkspaceExperience: (experience, atomPackId) =>
           toolRegistry.registerWorkspaceExperience(experience, atomPackId),
         onRequestInteraction: (atomPackId, request) =>
@@ -82,7 +85,10 @@ export function createAtomPackRediscoverer(deps: AtomPackRediscovererDeps): () =
         onCommand: (atomName, cmd) => commandRegistry.registerAtom(atomName, cmd),
         onCollision: (c) => atomConflicts.push(c),
         onHook: (h) => toolRegistry.registerHook(h),
-        onWorkspaceExperienceApi: (api, atomPackId) => toolRegistry.registerWorkspaceExperienceApi(api, atomPackId),
+        onWorkspaceExperienceApi: (api, atomPackId, permissions) =>
+          toolRegistry.registerWorkspaceExperienceApi(api, atomPackId, permissions),
+        onExperienceWorker: (worker, atomPackId, permissions) =>
+          toolRegistry.registerExperienceWorker(worker, atomPackId, permissions),
         onWorkspaceExperience: (experience, atomPackId) =>
           toolRegistry.registerWorkspaceExperience(experience, atomPackId),
         onAtoms: (packName, atoms) => atomDetailsByPack.set(packName, atoms),

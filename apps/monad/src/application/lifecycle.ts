@@ -176,6 +176,9 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     getWorkspaceExperienceSnapshot,
     getWorkspaceExperienceApiHandler: (experienceId, method, path) =>
       registry.getWorkspaceExperienceApiHandler(experienceId, method, path),
+    getWorkspaceExperienceApiRoute: (experienceId, method, path) =>
+      registry.getWorkspaceExperienceApiRoute(experienceId, method, path),
+    getExperienceWorkers: () => [...registry.experienceWorkers.values()],
     getWorkspaceExperiences: () => [...registry.workspaceExperiences.values()],
     reindexEmbeddings: () => {
       const cleared = store.clearEmbeddings();

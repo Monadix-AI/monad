@@ -248,12 +248,14 @@ export function createLifecycleHandlers(ctx: SessionContext) {
       projectId,
       title,
       origin,
-      cwd
+      cwd,
+      id
     }: {
       projectId: ProjectId;
       title: string;
       origin?: SessionOrigin;
       cwd?: string;
+      id?: SessionId;
     }) {
       const project = store.getWorkplaceProject(projectId);
       if (!project) {
@@ -261,7 +263,7 @@ export function createLifecycleHandlers(ctx: SessionContext) {
       }
       const cwdInput = cwd?.trim() ? cwd : project.cwd;
       const resolvedCwd = cwdInput ? resolveWorkspaceDir(cwdInput, undefined) : undefined;
-      const session = await agent.sessions.createForProject(projectId, title, ownerPrincipalId, origin, resolvedCwd);
+      const session = await agent.sessions.createForProject(projectId, title, ownerPrincipalId, origin, resolvedCwd, id);
       const memberCreatedAt = session.createdAt;
       for (const template of project.memberTemplates) {
         store.insertSessionMember({

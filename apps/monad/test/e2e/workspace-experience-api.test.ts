@@ -1,3 +1,5 @@
+import type { PrincipalId } from '@monad/protocol';
+
 import { expect, test } from 'bun:test';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -10,12 +12,25 @@ import { buildHandlers, makeTestPaths, mockModel, serveTransport, stubModelDeps,
 
 for (const transport of TRANSPORTS) {
   test(`workspace experience API dispatches over ${transport}`, async () => {
+    const ownerPrincipalId = 'prn_workspace_test' as PrincipalId;
     const handlers = buildHandlers(mockModel(), undefined, {
-      getWorkspaceExperienceApiHandler: (experienceId, method, path) => {
+      ownerPrincipalId,
+      getWorkspaceExperienceApiRoute: (experienceId, method, path) => {
         if (experienceId !== 'canvas' || method !== 'POST' || path !== '/search') return undefined;
-        return async (request) => {
-          const body = (await request.json()) as { query?: string };
-          return Response.json({ result: `found:${body.query}` });
+        return {
+          atomPackId: 'pack-a',
+          experienceId,
+          method,
+          path,
+          permissions: ['experience.state'],
+          handler: async (request, context) => {
+            const body = (await request.json()) as { query?: string };
+            return Response.json({
+              result: `found:${body.query}`,
+              pack: context.atomPackId,
+              principal: context.principalId
+            });
+          }
         };
       }
     });
@@ -29,7 +44,7 @@ for (const transport of TRANSPORTS) {
       });
 
       expect(res.status).toBe(200);
-      expect(await res.json()).toEqual({ result: 'found:alpha' });
+      expect(await res.json()).toEqual({ result: 'found:alpha', pack: 'pack-a', principal: ownerPrincipalId });
     } finally {
       await live.stop();
     }
@@ -99,7 +114,8 @@ for (const transport of TRANSPORTS) {
     const registry = new AtomPackRegistry();
     const discovered = await discoverChannelAdapters(paths.packs, {
       onWorkspaceExperience: (experience, atomPackId) => registry.registerWorkspaceExperience(experience, atomPackId),
-      onWorkspaceExperienceApi: (api, atomPackId) => registry.registerWorkspaceExperienceApi(api, atomPackId)
+      onWorkspaceExperienceApi: (api, atomPackId, permissions) =>
+        registry.registerWorkspaceExperienceApi(api, atomPackId, permissions)
     });
     const handlers = buildHandlers(
       mockModel(),

@@ -1,6 +1,7 @@
-import type { HookEvent } from '@monad/protocol';
+import type { HookEvent, WorkspaceExperiencePermission } from '@monad/protocol';
 import type {
   Connector,
+  ExperienceWorker,
   HookDefinition,
   WorkspaceExperienceApi,
   WorkspaceExperienceApiHandler,
@@ -18,6 +19,13 @@ export interface RegisteredWorkspaceExperienceApiRoute {
   handler: WorkspaceExperienceApiHandler;
   method: string;
   path: string;
+  permissions: readonly WorkspaceExperiencePermission[];
+}
+
+export interface RegisteredExperienceWorker {
+  atomPackId: string;
+  permissions: readonly WorkspaceExperiencePermission[];
+  worker: ExperienceWorker;
 }
 
 /** Collects tools/connectors/hooks registered by loaded atom packs — the daemon's host sink for the
@@ -28,6 +36,7 @@ export class AtomPackRegistry {
   readonly hooks = new Map<HookEvent, HookDefinition[]>();
   readonly workspaceExperiences = new Map<string, RegisteredWorkspaceExperience>();
   readonly workspaceExperienceApiRoutes = new Map<string, RegisteredWorkspaceExperienceApiRoute>();
+  readonly experienceWorkers = new Map<string, RegisteredExperienceWorker>();
   /** toolName → its source tag, so a rediscovery sweep can drop just the reloadable sources. */
   private readonly toolSources = new Map<string, string>();
   /** toolName → its specific origin name (atom-pack id / MCP server name), for per-agent atom
@@ -111,7 +120,11 @@ export class AtomPackRegistry {
     this.workspaceExperiences.set(experience.id, { ...experience, ...(atomPackId ? { atomPackId } : {}) });
   }
 
-  registerWorkspaceExperienceApi(api: WorkspaceExperienceApi, atomPackId?: string): void {
+  registerWorkspaceExperienceApi(
+    api: WorkspaceExperienceApi,
+    atomPackId?: string,
+    permissions: readonly WorkspaceExperiencePermission[] = []
+  ): void {
     const experience = this.workspaceExperiences.get(api.experienceId);
     if (!experience) {
       throw new Error(`unknown workspace experience id "${api.experienceId}"`);
@@ -138,7 +151,8 @@ export class AtomPackRegistry {
         experienceId: api.experienceId,
         handler: route.handle,
         method: normalized.method,
-        path: normalized.path
+        path: normalized.path,
+        permissions
       });
     }
   }
@@ -152,9 +166,29 @@ export class AtomPackRegistry {
     return this.workspaceExperienceApiRoutes.get(`${experienceId}:${normalized.key}`)?.handler;
   }
 
+  getWorkspaceExperienceApiRoute(
+    experienceId: string,
+    method: string,
+    path: string
+  ): RegisteredWorkspaceExperienceApiRoute | undefined {
+    const normalized = normalizeWorkspaceExperienceApiRoute(method, path);
+    return this.workspaceExperienceApiRoutes.get(`${experienceId}:${normalized.key}`);
+  }
+
+  registerExperienceWorker(
+    worker: ExperienceWorker,
+    atomPackId: string,
+    permissions: readonly WorkspaceExperiencePermission[] = []
+  ): void {
+    const key = `${atomPackId}:${worker.experienceId}`;
+    if (this.experienceWorkers.has(key)) throw new Error(`duplicate experience worker "${key}"`);
+    this.experienceWorkers.set(key, { atomPackId, permissions, worker });
+  }
+
   clearWorkspaceExperiences(): void {
     this.workspaceExperiences.clear();
     this.workspaceExperienceApiRoutes.clear();
+    this.experienceWorkers.clear();
   }
 
   /** Drop all registered hooks. Used before a re-discovery sweep so a removed atom pack's hooks
