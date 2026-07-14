@@ -1,6 +1,9 @@
 # Project Presets — decoupling project UI from project data
 
-> Status: **proposal / build plan**. Not built. Scope: let one project's data be rendered by
+> Status: **implemented (as "workspace experiences")** — shipped as the workspace-experience seam:
+> `@monad/sdk-experience` (host-API contract + web-component event bridge, recorded in
+> `docs/engineering/architecture.md`), the `workspace-experience` atom kind in `@monad/protocol`,
+> and the renderer/registry in `apps/web/src/features/workplace/experiences/`. Scope was: let one project's data be rendered by
 > different, swappable, full-page UI "presets" chosen per use-case (chat-first, flow-first, …),
 > with third parties shipping new presets as atoms.
 >

@@ -1,6 +1,6 @@
 # Proposal: extract `@monad/sandbox`, open the backend contract, fill the network/credential gaps
 
-Status: draft · Scope: design only (no implementation yet)
+Status: **implemented** — the extraction shipped as `packages/sandbox` (`@monad/sandbox`: launchers, egress proxy/policy, MITM, credential sentinel, registry); current hardening status lives in `docs/engineering/security-guidelines.md` §8. Body kept as the historical design record.
 
 ## Problem
 

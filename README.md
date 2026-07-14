@@ -1,14 +1,26 @@
 # Monad
 
-> A local, single-user daemon for running agentic sessions — with a CLI and web UI.
+> A local, single-user daemon for running agentic sessions — with a CLI, web UI, and TUI.
 
 [![CI](https://github.com/Monadix-AI/monad/actions/workflows/ci.yml/badge.svg)](https://github.com/Monadix-AI/monad/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 monad runs as a local daemon and serves a REST + SSE API over loopback and a
-Unix-domain socket. It ships with a CLI and a browser web UI, and keeps all
-state under `~/.monad/`. It binds **loopback only by
+Unix-domain socket. It ships with a CLI, a browser web UI, and a terminal UI, and
+keeps all state under `~/.monad/`. It binds **loopback only by
 default** — see the [security model](docs/internals/runtime.md#security-model) before exposing it.
+
+## What it does
+
+- **Local-first** — one long-lived daemon owns all state under `~/.monad/`; nothing leaves your machine except the calls to your model provider.
+- **Many clients, one session** — CLI, web UI, and TUI drive the same daemon; sessions persist across restarts, stream live to every client, and can be branched at any turn.
+- **Model gateway** — 24 built-in providers (Anthropic, OpenAI, Google, Ollama, …) behind one router, with per-role model selection and hot-swappable profiles ([model providers](docs/internals/model-providers.md)).
+- **Skills** — portable `SKILL.md` capability packets following the [agentskills.io](https://agentskills.io) standard, the same format used by Claude Code, Codex, and other agents ([skills](docs/usage/skills.md)).
+- **Atom packs** — drop-in extensions that contribute channels, model providers, skills, MCP servers, slash commands, and hooks ([atoms](docs/internals/atoms.md)).
+- **IM channels** — talk to the agent from Telegram, Discord, Slack, and other messaging platforms ([channel conformance](docs/internals/channel-conformance.md)).
+- **OS-level sandboxing** — agent-spawned processes are confined with Seatbelt (macOS), bwrap/Landlock (Linux), or AppContainer (Windows), plus domain-filtered network egress ([sandbox backends](docs/usage/sandbox-backends.md)).
+- **Editor integration** — monad acts as an ACP agent inside editors like Zed, and can itself delegate subtasks to other ACP agents ([ACP](docs/internals/acp.md)).
+- **Peer federation** — delegate a task to another monad daemon you own; it runs on that machine's own tools and credentials and streams the result back ([peer federation](docs/internals/peer-federation.md)).
 
 **Contributing:** see [CONTRIBUTING.md](CONTRIBUTING.md) ·
 **Reporting a vulnerability:** see [SECURITY.md](SECURITY.md) ·

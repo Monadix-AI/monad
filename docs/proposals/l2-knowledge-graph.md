@@ -1,6 +1,6 @@
 # L2 — Dynamic Knowledge Graph (design-A grounded)
 
-> Status: **proposal / build plan**. Supersedes the event-log assumptions of `memory-design.md` §4
+> Status: **implemented** — shipped in `apps/monad/src/services/memory/graph/` (store, extract, service, `graph_explore`/`graph_node` query tools, unit tests). Supersedes the event-log assumptions of `memory-design.md` §4
 > for the actual L1 (design-A: pure Markdown, no `mem_fact_events` log). §4 keeps the original vision;
 > this doc is what we build. Scope of v1: a self-built SQLite graph, `agent` scope only, manually
 > triggered, queried by a CodeGraph-shaped tool.

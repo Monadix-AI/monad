@@ -10,8 +10,11 @@ This document explains the architecture from two angles:
 - **Users and operators**: what starts, what hot-reloads, and what remains local.
 - **Third-party developers**: where to extend monad and which boundaries not to cross.
 
-For wire-level transport and security details, see [runtime.md](runtime.md). For
-agent-reachable tool rules, see [tools.md](tools.md).
+**Scope: inside the process** — the startup graph, lifecycle modules, hot
+reload, and extension boundaries. The daemon's outside surface — how it binds,
+physical transports, configuration/env vars, and the security model — is
+[runtime.md](runtime.md)'s territory. For agent-reachable tool rules, see
+[tools.md](tools.md).
 
 ## User-facing model
 
@@ -26,7 +29,8 @@ At startup the daemon does five things:
 4. Builds agent-facing services: model router, approval gate, hooks, commands,
    memory, scheduling, channels, and daemon handlers.
 5. Launches transports: HTTP REST/SSE over TCP and Unix socket, WebSocket push,
-   stdio mode, ACP mode, Mo, channels, and background monitors.
+   stdio mode, ACP mode, Mo, channels, and background monitors (binding and
+   fallback semantics: [runtime.md](runtime.md)).
 
 The user-visible result is simple: the daemon becomes reachable, clients can send
 sessions, and edits to configuration or installed extensions apply without a

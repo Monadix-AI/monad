@@ -1,6 +1,6 @@
 # Proposal: raw/ui two-plane streaming; adapter decodes to neutral events, experience renders
 
-Status: draft · Scope: design only (no implementation yet)
+Status: **largely implemented** — this design shipped as Track A P1–P4 (neutral `AgentObservationEvent`, adapter-side decode, raw/ui two-plane streams, experience-side render); remaining: P5b (ACP-agent generalization). See [agent-observation-implementation-order.md](agent-observation-implementation-order.md) for the shipped commits.
 
 ## Problem
 

@@ -47,10 +47,11 @@ The oversight layer that sits between the agent and tool execution. When a tool 
 The agent's persistent knowledge store, layered by scope:
 
 - **Static core** — `USER.md` (durable user facts), `SOUL.md` (persona), `AGENT.md` (operating rules). Always injected into the system prompt. Human-curated; hot-reloaded.
-- **Dynamic facts** — machine-written Markdown files under `~/.monad/memory/` keyed by scope (`global`, `agent_<id>`, `session_<id>`). The agent reads/writes them through the `memory` tool (`view` / `record` / `update` / `delete`). Global facts are inlined into the system prompt; agent-private facts are read on demand. Auto-consolidation triggers when a scope exceeds ~2000 chars; manual `/consolidate-memory` runs an LLM dedup/merge pass.
+- **Dynamic facts** — machine-written Markdown files under `~/.monad/memory/` keyed by scope (`global`, `agent_<id>`, `session_<id>`). The agent reads/writes them through the `memory` tool (`view` / `record` / `update` / `delete`). Global facts are inlined into the system prompt; agent-private facts are read on demand. Auto-consolidation triggers when a scope exceeds ~2000 chars; manual `/consolidate` runs an LLM dedup/merge pass.
 - **Semantic recall (mem0)** — an optional layer using a daemon-managed local Qdrant vector store for per-turn observation and semantic retrieval.
+- **Knowledge graph and laws (L2/L3)** — `/consolidate` extracts entities and relations from transcripts into a local graph and infers general rules ("laws") that guide recall; `/why` traces a belief back to its sources.
 
-See [`docs/internals/memory-design.md`](internals/memory-design.md).
+See [`docs/internals/memory.md`](internals/memory.md).
 
 ### Workspace
 

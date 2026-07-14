@@ -62,7 +62,7 @@ hardcoded values, tests to update). If there are none, say so.
 ### Eligibility gates (`requires`)
 
 A skill can declare host prerequisites; when they aren't met it's **hidden from the agent**
-entirely (not listed, not loadable, not `/name`-invocable) but still shown by `monad skills`
+entirely (not listed, not loadable, not `/name`-invocable) but still shown by `monad skill`
 with the unmet reasons, so you know why:
 
 ```yaml
@@ -160,13 +160,13 @@ the denylists union. Changes hot-apply on save (no restart).
 
 ## Managing skills
 
-- **List**: `monad skills` (CLI), `GET /v1/skills` (REST), or the `skills.list` JSON-RPC method.
-- **New**: `monad skills new <name>` — scaffold a `SKILL.md` from a template.
-- **Validate**: `monad skills validate <path>` — parse-check a skill folder or a repo of skills
+- **List**: `monad skill` (CLI), `GET /v1/skills` (REST), or the `skills.list` JSON-RPC method.
+- **New**: `monad skill new <name>` — scaffold a `SKILL.md` from a template.
+- **Validate**: `monad skill validate <path>` — parse-check a skill folder or a repo of skills
   (offline; no daemon needed).
-- **Install**: `monad skills install <local-path | git:owner/repo | git-url>` — copies validated
+- **Install**: `monad skill install <local-path | git:owner/repo | git-url>` — copies validated
   skills into `~/.monad/skills/`. A running daemon picks them up via hot reload.
-- **Remove**: `monad skills remove <name>` — delete a personal-scope skill.
+- **Remove**: `monad skill remove <name>` — delete a personal-scope skill.
 
 A fresh `~/.monad` is seeded with a starter `summarize-changes` skill on first init (deleting it
 keeps it gone — it won't come back on later restarts).
@@ -275,6 +275,6 @@ same trust boundary as a provider atom (see [security-guidelines.md](../engineer
 Only install skills from sources you trust; audit `SKILL.md` and any bundled scripts. Note that
 `allowed-tools` lets an active skill **bypass the human approval gate** for the tools it lists,
 so a malicious skill that declares high-risk tools is dangerous — this is exactly why skill
-*provenance* matters (operator-placed in `~/.monad/skills`, installed via `monad skills install`,
+*provenance* matters (operator-placed in `~/.monad/skills`, installed via `monad skill install`,
 or self-authored through the gated `skill_manage` tool). Skill bodies are otherwise inert text
 (the `skill` tool only returns content; it never executes bundled scripts on its own).

@@ -1,6 +1,6 @@
 # Proposal: pluggable skill sources (ClawHub + others)
 
-Status: draft · Scope: design only (no implementation yet)
+Status: **implemented** — shipped in `apps/monad/src/capabilities/skills/` (`install/{git,tarball,clawhub}.ts` + `sources/{clawhub,marketplaces}.ts`, ref parsing, consent + `.install.json` lock). Body kept as the historical design record.
 
 ## Problem
 

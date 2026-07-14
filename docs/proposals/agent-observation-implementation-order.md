@@ -1,6 +1,6 @@
 # Implementation order: external-agent observation + project/session
 
-Status: **Track A shipped** (2026-07-07); **P5a (monad built-in agent) shipped** (2026-07-09) · Companion to
+Status: **largely implemented** — Track A shipped (2026-07-07), P5a (monad built-in agent) shipped (2026-07-09), Track B P6/P7 shipped (`session_members` store/protocol, session-under-project creation, member templates + per-session invite/spawn); remaining: **P5b (ACP-agent observation)** · Companion to
 [agent-adapter-observation-layering.md](agent-adapter-observation-layering.md). Sequences the work into
 phases. **Every phase leaves the tree green and shippable** (own PR). Two tracks share one foundation
 (P0) and are otherwise independent:

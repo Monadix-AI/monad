@@ -1,8 +1,10 @@
 # Monad Memory System — Design
 
-> Status: **L1 is implemented; L2/L3 are design-only.** §0 ("As built") describes what actually
-> ships and is the authoritative reference — the implementation deliberately diverges from parts
-> of the original design in §1–§13, and where they disagree, §0 wins. Read §0 first.
+> Status: **original design document, kept for history and rationale.** The shipped system is
+> described in [docs/internals/memory.md](../internals/memory.md) — where this document and the
+> code differ, the code wins. L1 shipped as §0's "design A"; L2 (graph) and L3 (laws) have since
+> shipped too, re-rooted per [l2-knowledge-graph.md](l2-knowledge-graph.md) rather than the
+> event-log model of §3–§5.
 > Scope of this doc: the layered, scope-isolated memory subsystem the agent loop
 > reads from (prefetch) and writes to (observe / consolidate / infer). Code lives in
 > `apps/monad/src/agent/memory` (L1Adapter contract + sanitize/render),

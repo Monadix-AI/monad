@@ -1,32 +1,20 @@
 # Runtime: transport, configuration & security model
 
-How the daemon binds, how local clients reach it, and the security posture that
-follows from that design. These are the deep technical details kept out of the
+**Scope: the daemon's outside surface** — network binding, physical transports,
+configuration and environment variables, and the security model that follows.
+Everything *inside* the process — the startup graph, lifecycle modules, hot
+reload, and extension boundaries — is [daemon-architecture.md](daemon-architecture.md)'s
+territory. These are the deep technical details kept out of the
 [README](../README.md). For the **code-level** rules that enforce the posture
 below, see [security-guidelines.md](../engineering/security-guidelines.md).
 
-For the daemon startup graph, lifecycle modules, hot-reload flow, and extension
-boundaries, see [daemon-architecture.md](daemon-architecture.md).
-
 ## Process architecture
 
-The daemon entrypoint is intentionally thin. `main.ts` calls
-`startDaemon()` in `application/lifecycle.ts`; that orchestration layer performs
-preflight, creates the core runtime, resolves network state, builds agent-facing
-services and handlers, then launches transports.
-
-Core startup is handled by `RuntimeKernel` and `ConfigService`:
-
-- `RuntimeKernel` starts declared lifecycle modules in dependency layers and
-  stops them in reverse dependency order.
-- `ConfigService` owns config/profile/auth reads, writes, watching, debounced
-  invalidation, and single-flight reload.
-- Lifecycle modules stay beside their owning domains (`store/`, `agent/model/`,
-  `capabilities/`, `atoms/`, `platform/sandbox/`) rather than in a central
-  bootstrap directory.
-
-This keeps user-visible startup predictable while letting independent subsystems
-initialize concurrently once their dependencies are ready.
+In one line: `main.ts` calls `startDaemon()` (`application/lifecycle.ts`), which
+runs preflight, starts lifecycle modules via `RuntimeKernel`, then launches the
+transports below; `ConfigService` owns config I/O and hot reload. The full
+startup graph and module table live in
+[daemon-architecture.md](daemon-architecture.md).
 
 ## Configuration
 

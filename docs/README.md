@@ -25,6 +25,11 @@ How to use monad's features as an operator or end user.
 
 | Doc | What it covers |
 |---|---|
+| [usage/sessions.md](usage/sessions.md) | Sessions, agents, and approvals: creating, branching, restoring, and watching sessions across clients. |
+| [usage/cli.md](usage/cli.md) | CLI reference: every command group, global flags, aliases, exit codes, and scripting patterns. |
+| [usage/model-providers.md](usage/model-providers.md) | Connecting a model provider: first-run wizard, web settings, CLI, credentials, and provider-specific notes. |
+| [usage/channels.md](usage/channels.md) | Connecting IM channels (Telegram walkthrough): access control, pairing, group rules, and in-chat commands. |
+| [usage/mcp.md](usage/mcp.md) | Adding MCP servers: stdio and http transports, secrets, OAuth, trust controls, and troubleshooting. |
 | [usage/skills.md](usage/skills.md) | The skills system (`SKILL.md` / agentskills.io standard): using, writing, gating, and managing skills. |
 | [usage/computer-use.md](usage/computer-use.md) | Computer use and browser use through off-the-shelf MCP servers, and when to pick which. |
 | [usage/mo.md](usage/mo.md) | Mo, the desktop sprite: drop a file on the floating pixel cat to start a session. |
@@ -44,7 +49,7 @@ For contributors and the curious: architecture and behavior of the running syste
 | [internals/acp.md](internals/acp.md) | ACP both ways: monad as an editor agent, and delegating to other ACP agents. |
 | [internals/peer-federation.md](internals/peer-federation.md) | Daemon-to-daemon task delegation: a peer runs the subtask on its own machine and streams the result back. |
 | [internals/host-interactions.md](internals/host-interactions.md) | Schema-driven user input requested by built-ins and atom packs across Web, TUI, CLI, and ACP. |
-| [internals/memory-design.md](internals/memory-design.md) | The memory system design: L1 as built, plus the L2/L3 designs. |
+| [internals/memory.md](internals/memory.md) | The memory system as built: L1 Markdown facts, L2 knowledge graph, L3 laws, and the consolidation pipeline. |
 | [internals/tools.md](internals/tools.md) | The built-in tool set: registry layout, the uniform `register` contract, and authoring/security rules. |
 | [internals/model-providers.md](internals/model-providers.md) | The model gateway: the provider catalog as source of truth, native vs OpenAI-compatible strategies, auth. |
 | [internals/atoms.md](internals/atoms.md) | The atom pack system: one pack contributes declared, manifest-gated extension kinds. |
@@ -88,7 +93,7 @@ Norms shared by human contributors and coding agents.
 |---|---|
 | [proposals/](proposals/) | Design proposals not yet (or never) implemented. |
 | [proposals/backlog-ideas.md](proposals/backlog-ideas.md) | Ideas worth remembering with no current commitment, and why each was deferred. |
-| [examples/skills/](examples/skills/) | Example skills to copy into `~/.monad/skills/`. |
+| [examples/](examples/README.md) | Example skills to copy into `~/.monad/skills/`, plus pointers to the runnable atom pack examples in `packages/sdk-atom/examples/`. |
 
 ## Root governance docs
 

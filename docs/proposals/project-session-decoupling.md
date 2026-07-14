@@ -1,6 +1,6 @@
 # Track B: project ↔ session decoupling
 
-Status: **decisions resolved (2026-07-08) — ready for P6.** Companion to
+Status: **implemented** — P6/P7 shipped to `main` (`session_members` store layer `271cf0698`, wire schemas `0d24c6c21`, session creation under a project `43ac097be`, id-union collapse to SessionId `2d7b2f03b`/`0d7446b0a`, member-roster materialization `127999a28`, member templates + per-session invite/spawn `d904c8135`). Companion to
 [agent-observation-implementation-order.md](agent-observation-implementation-order.md) (Track B was
 sketched there as P6/P7; this is the full proposal that sketch called for).
 
