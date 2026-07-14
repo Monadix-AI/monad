@@ -1,12 +1,21 @@
+import type { SandboxViolation } from '@monad/sdk-atom';
 import type { Subprocess } from 'bun';
 
 import { expect, test } from 'bun:test';
 
-import { parseSeatbeltViolation, type SandboxViolation, startViolationMonitor } from '../../src/violation-monitor.ts';
+import { parseSeatbeltViolation, startViolationMonitor } from '../../src/violation-monitor.ts';
 
 test('parses a Seatbelt deny line into operation + target + process', () => {
   const v = parseSeatbeltViolation('Sandbox: bash(52413) deny(1) file-read-data /Users/x/.ssh/id_rsa');
-  expect(v).toEqual({ operation: 'file-read-data', target: '/Users/x/.ssh/id_rsa', process: 'bash', pid: 52413 });
+  expect(v).toMatchObject({
+    kind: 'runtime',
+    operation: 'file-read-data',
+    target: '/Users/x/.ssh/id_rsa',
+    runId: 'host',
+    detail: 'process=bash',
+    pid: 52413
+  });
+  expect(Number.isNaN(Date.parse(v?.timestamp ?? ''))).toBe(false);
 });
 
 test('parses a network deny (no filesystem target)', () => {

@@ -136,7 +136,10 @@ import type {
   SandboxRunLimits,
   SandboxSettingsSchema,
   SandboxSpawnOptions,
-  SandboxStdin
+  SandboxStdin,
+  SandboxTerminal,
+  SandboxTerminalOptions,
+  SandboxViolation
 } from './sandbox.ts';
 
 import { ExternalAgentError, externalAgentOutputEventSchema } from './agent-adapter.ts';
@@ -262,6 +265,9 @@ export type {
   SandboxSettingsSchema,
   SandboxSpawnOptions,
   SandboxStdin,
+  SandboxTerminal,
+  SandboxTerminalOptions,
+  SandboxViolation,
   Scope,
   SendOptions,
   SentMessage,

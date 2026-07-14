@@ -8,11 +8,13 @@
 // one register through the atom-pack loader, and the daemon picks one per platform at boot via the
 // registry, wiring it here with configureSandboxLauncher. Until then the default is `none` (identity).
 
-import type { SandboxLauncher, SandboxPolicy, SandboxSpawnOptions } from '@monad/sdk-atom';
+import type { SandboxLauncher, SandboxPolicy, SandboxSpawnOptions, SandboxTerminal } from '@monad/sdk-atom';
 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { noneLauncher, sandboxCredential } from '@monad/sdk-atom';
+
+import { observeSandboxViolations } from './violation-store.ts';
 
 // The launcher contract (SandboxLauncher / SandboxPolicy) and the passthrough noneLauncher live in
 // @monad/sdk-atom — the `sandbox` atom kind — so launchers in @monad/atoms and third-party packs
@@ -23,12 +25,6 @@ export type { SandboxLauncher, SandboxPolicy } from '@monad/sdk-atom';
 export { noneLauncher } from '@monad/sdk-atom';
 
 let activeLauncher: SandboxLauncher = noneLauncher;
-
-interface SandboxTerminal {
-  write(input: string): void;
-  close(): void;
-  resize(cols: number, rows: number): void;
-}
 
 export interface SandboxPtySpawnOptions {
   cwd?: string | URL;
@@ -220,7 +216,9 @@ export function sandboxedSpawn<
       sessionId: opts.sessionId,
       agentId: opts.agentId ?? policy.agentId
     };
-    return activeLauncher.spawn(argv, spawnOptions, policy) as unknown as Bun.Subprocess<In, Out, Err>;
+    const process = activeLauncher.spawn(argv, spawnOptions, policy);
+    observeSandboxViolations(process.violations);
+    return process as unknown as Bun.Subprocess<In, Out, Err>;
   }
   // LOCAL launchers (all built-ins) expose wrap(): rewrite argv, then Bun.spawn here.
   if (!activeLauncher.wrap) {
@@ -246,11 +244,46 @@ export function sandboxedPtySpawn(
   opts: { confine?: boolean; sessionId?: string; agentId?: string } = {}
 ): SandboxPtyProcess {
   if (!activeLauncher.wrap && activeLauncher.spawn) {
-    throw new Error(`Sandbox launcher (${activeLauncher.kind}) does not support PTY processes`);
+    const terminalOptions = { cols: options.terminal.cols ?? 80, rows: options.terminal.rows ?? 24 };
+    const process = activeLauncher.spawn(
+      argv,
+      {
+        cwd: options.cwd ? String(options.cwd) : undefined,
+        env: options.env,
+        credential: sandboxCredential(),
+        sessionId: opts.sessionId,
+        agentId: opts.agentId ?? policy.agentId,
+        terminal: terminalOptions
+      },
+      policy
+    );
+    if (!process.terminal) throw new Error(`Sandbox launcher (${activeLauncher.kind}) did not return a PTY terminal`);
+    observeSandboxViolations(process.violations);
+    const output = process.stdout
+      ? process.stdout.pipeTo(
+          new WritableStream<Uint8Array>({
+            write: (data) => options.terminal.data(process.terminal as SandboxTerminal, data)
+          })
+        )
+      : Promise.resolve();
+    const exited = Promise.all([process.exited, output]).then(([code]) => code);
+    return {
+      get pid() {
+        return process.pid;
+      },
+      terminal: process.terminal,
+      exited,
+      get exitCode() {
+        return process.exitCode ?? null;
+      },
+      kill(signal?: number | string) {
+        process.kill(signal);
+      }
+    } as unknown as SandboxPtyProcess;
   }
   return sandboxedSpawn(
     argv,
-    options as Bun.SpawnOptions.SpawnOptions<'ignore', 'ignore', 'ignore'>,
+    options as unknown as Bun.SpawnOptions.SpawnOptions<'ignore', 'ignore', 'ignore'>,
     policy,
     opts
   ) as SandboxPtyProcess;

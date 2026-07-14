@@ -74,6 +74,7 @@ export { sandboxBackendRefSchema, sandboxLauncherDescriptorSchema, sandboxSettin
 export interface SandboxSpawnOptions {
   cwd?: string;
   env?: Record<string, string | undefined>;
+  terminal?: SandboxTerminalOptions;
   /** Credential the daemon resolved for this launcher (e.g. a cloud sandbox API key). Undefined when
    *  none is configured — a launcher that needs one should fail clearly. */
   credential?: string;
@@ -91,6 +92,27 @@ export interface SandboxSpawnOptions {
 export interface SandboxStdin {
   write(data: Uint8Array | string): void | Promise<void>;
   end(): void | Promise<void>;
+}
+
+export interface SandboxTerminalOptions {
+  cols: number;
+  rows: number;
+}
+
+export interface SandboxTerminal {
+  write(data: Uint8Array | string): void | Promise<void>;
+  close(): void | Promise<void>;
+  resize(cols: number, rows: number): void | Promise<void>;
+}
+
+export interface SandboxViolation {
+  kind: 'protocol' | 'setup' | 'memory' | 'process-limit' | 'runtime';
+  operation: string;
+  runId: string;
+  timestamp: string;
+  target?: string;
+  pid?: number;
+  detail?: string;
 }
 
 export interface SandboxExit {
@@ -120,6 +142,8 @@ export interface SandboxProcess {
   /** Writable stdin handle, if the run accepts input (process_start writes to it). Shape is
    *  launcher-defined (a Bun FileSink locally); callers treat it opaquely. */
   readonly stdin?: SandboxStdin;
+  readonly terminal?: SandboxTerminal;
+  readonly violations?: ReadableStream<SandboxViolation>;
   /** Resolves with the exit code when the run finishes. */
   readonly exited: Promise<number>;
   /** Exit code once known, else null (still running). */

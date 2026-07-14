@@ -19,3 +19,4 @@ export * from './security.ts';
 export * from './session-root.ts';
 export * from './spawn.ts';
 export * from './violation-monitor.ts';
+export * from './violation-store.ts';
