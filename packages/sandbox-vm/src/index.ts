@@ -33,6 +33,7 @@ import { IGNITION_SCHEMA_VERSION, serializeIgnition } from './ignition.ts';
 import { ensureBaseImage, type ImageConsent } from './image.ts';
 import { buildVmMountPlan, fingerprintVmMountPlan, MOUNT_PLAN_SCHEMA_VERSION, type VmMountPlan } from './mount-plan.ts';
 import { type GvproxyProcess, guestProxyEnv, spawnGvproxy } from './net/gvproxy.ts';
+import { observationPolicyFor } from './observation-policy.ts';
 import { effectiveVmIdentity, POOL_DEFAULTS, type PoolConfig, reuseKey, VmPool, vmKey } from './pool.ts';
 import { BootTransaction } from './runtime/boot-transaction.ts';
 import { resolveVmToolchain, vmToolchainMaybeAvailable } from './toolchain.ts';
@@ -384,6 +385,7 @@ export const vmLauncher: SandboxLauncher = {
           cwd: options.cwd !== undefined ? toGuestPath(options.cwd) : undefined,
           limits: options.limits,
           terminal: options.terminal,
+          observation: observationPolicyFor(mountPlan),
           onUnresponsive: () => void activePool.invalidate(key),
           env: {
             ...options.env,
