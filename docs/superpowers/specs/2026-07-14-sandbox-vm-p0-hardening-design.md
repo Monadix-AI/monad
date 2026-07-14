@@ -1,5 +1,9 @@
 # Sandbox VM P0 Hardening Design
 
+## Implementation Status
+
+This document preserves the scope agreed before Windows support landed on `main`. The current implementation also applies the P0 protocol, lifecycle transaction, policy identity, and per-run isolation contracts to the Windows Hyper-V driver. Windows is therefore no longer an implementation gap; its real-hypervisor execution evidence is tracked separately in `docs/sandbox-vm-conformance.md`.
+
 ## Goal
 
 Make `@monad/sandbox-vm` a reliable containment backend rather than a boot-and-exec prototype. A cancelled run must stop inside the guest, a failed boot must leave no processes behind, a VM must never survive a policy identity change, and concurrent runs inside a reused VM must not share a process or temporary-filesystem boundary.
@@ -153,7 +157,7 @@ Existing VM settings keep their defaults. The new per-run limits receive conserv
 
 ## Out of scope
 
-- Windows VM support;
+- Windows VM support was outside the original P0 change and subsequently landed from `main`;
 - interactive PTY allocation;
 - snapshots and suspend/resume;
 - richer filesystem deny carve-outs;

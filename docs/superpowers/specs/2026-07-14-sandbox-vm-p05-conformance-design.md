@@ -156,4 +156,3 @@ P0.5 is code-complete when:
 - docs no longer claim Windows is absent;
 - hosted verification stays green and reports real-VM tests as skipped;
 - no response claims real KVM, vfkit, or Hyper-V success until the corresponding workflow actually completes.
-

@@ -71,7 +71,7 @@ afterAll(async () => {
     expect(await powershell(`@(Get-VM -Name 'monad-${BUNDLE_PREFIX}*' -ErrorAction SilentlyContinue).Count`)).toBe('0');
     expect(
       await powershell(
-        `@(Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*monad-vm-${BUNDLE_PREFIX}*' }).Count`
+        `@(Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -like '*monad-vm-${BUNDLE_PREFIX}*' }).Count`
       )
     ).toBe('0');
   } finally {

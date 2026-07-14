@@ -8,6 +8,8 @@
 
 **Tech Stack:** Bun test, TypeScript, Fedora CoreOS, vfkit, QEMU/KVM, Hyper-V, hvsock, 9p, GitHub Actions, PowerShell.
 
+**Execution note:** Critical review expanded Task 6 with a separate failed-boot rollback smoke and unique-resource audit. The workflow now runs that smoke after each platform preflight and before the conformance suite.
+
 ## Global Constraints
 
 - Use Bun for TypeScript commands and `scripts/bun-test.ts` for test execution.

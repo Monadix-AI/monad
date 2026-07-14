@@ -18,5 +18,6 @@ test('real VM workflow uses only capability-labeled self-hosted runners', async 
     expect(job.steps.some((step) => step.run?.includes('test/smoke/vm-boot-rollback.ts'))).toBe(true);
     expect(job.steps.some((step) => step.run?.includes('bun run --cwd packages/sandbox-vm test:e2e'))).toBe(true);
     expect(job.steps.some((step) => step.env?.MONAD_VM_IT === '1')).toBe(true);
+    expect(job.steps.some((step) => step.run?.includes('1048576'))).toBe(true);
   }
 });

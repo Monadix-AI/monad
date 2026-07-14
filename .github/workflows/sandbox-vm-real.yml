@@ -34,6 +34,11 @@ jobs:
           mkdir -p artifacts
           set -o pipefail
           bun run --cwd packages/sandbox-vm test:e2e 2>&1 | tee artifacts/sandbox-vm-linux-kvm.log
+      - name: Bound diagnostic artifact
+        if: always()
+        run: |
+          test ! -f artifacts/sandbox-vm-linux-kvm.log || tail -c 1048576 artifacts/sandbox-vm-linux-kvm.log > artifacts/sandbox-vm-linux-kvm.tail
+          test ! -f artifacts/sandbox-vm-linux-kvm.tail || mv artifacts/sandbox-vm-linux-kvm.tail artifacts/sandbox-vm-linux-kvm.log
       - name: Upload bounded failure diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
@@ -63,6 +68,11 @@ jobs:
           mkdir -p artifacts
           set -o pipefail
           bun run --cwd packages/sandbox-vm test:e2e 2>&1 | tee artifacts/sandbox-vm-macos-vfkit.log
+      - name: Bound diagnostic artifact
+        if: always()
+        run: |
+          test ! -f artifacts/sandbox-vm-macos-vfkit.log || tail -c 1048576 artifacts/sandbox-vm-macos-vfkit.log > artifacts/sandbox-vm-macos-vfkit.tail
+          test ! -f artifacts/sandbox-vm-macos-vfkit.tail || mv artifacts/sandbox-vm-macos-vfkit.tail artifacts/sandbox-vm-macos-vfkit.log
       - name: Upload bounded failure diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
@@ -91,7 +101,19 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force artifacts | Out-Null
           & bun run --cwd packages/sandbox-vm test:e2e 2>&1 | Tee-Object artifacts/sandbox-vm-windows-hyperv.log
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $code = $LASTEXITCODE
+          if ($code -ne 0) { exit $code }
+      - name: Bound diagnostic artifact
+        if: always()
+        shell: powershell
+        run: |
+          $path = 'artifacts/sandbox-vm-windows-hyperv.log'
+          if (Test-Path $path) {
+            $bytes = [IO.File]::ReadAllBytes($path)
+            if ($bytes.Length -gt 1048576) {
+              [IO.File]::WriteAllBytes($path, $bytes[($bytes.Length - 1048576)..($bytes.Length - 1)])
+            }
+          }
       - name: Upload bounded failure diagnostics
         if: failure()
         uses: actions/upload-artifact@v4

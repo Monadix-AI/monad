@@ -1,5 +1,9 @@
 # Sandbox VM P1 Parity Design
 
+## Implementation Status
+
+This document preserves the P1 scope decision made before Windows support landed on `main`. The merged Hyper-V driver now consumes protocol v3, the canonical mount plan, PTY execution, deny and mask overlays, and bounded violation contracts. Windows is covered by the P0.5 conformance suites, with real-hypervisor evidence reported independently from unit and compile evidence.
+
 ## Goal
 
 Extend `@monad/sandbox-vm` with interactive PTY execution, enforceable credential-file masking and nested read-deny overlays, and bounded structured violation diagnostics. The design follows the security semantics of Anthropic Sandbox Runtime at commit `cf24a43eba92c9ab4140c380d11ca55771be9db2` while preserving Monad's reusable-VM and per-run guest-supervisor architecture.
@@ -18,7 +22,7 @@ The following remain outside P1:
 
 - macOS Virtualization.framework integration without vfkit;
 - VM suspend, resume, and snapshots;
-- Windows VM support;
+- Windows VM support was outside the original P1 change and subsequently landed from `main`;
 - guest-distribution selection;
 - syscall-attempt observation through seccomp USER_NOTIF, audit, fanotify, or eBPF;
 - interactive policy approval or dynamic domain approval.
