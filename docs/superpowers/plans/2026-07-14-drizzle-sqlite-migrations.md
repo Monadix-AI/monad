@@ -91,7 +91,6 @@ git commit -m "refactor(db): generate sqlite schema migrations"
 **Files:**
 - Create: `apps/monad/scripts/generate-migration-assets.ts`
 - Create: `apps/monad/src/store/db/migrations.generated.ts`
-- Create: `apps/monad/src/store/db/migrations-assets.d.ts`
 - Modify: `apps/monad/src/store/db/migrations.ts`
 - Modify: `apps/monad/src/store/db/index.ts`
 - Modify: `scripts/build-release.ts`
@@ -100,11 +99,11 @@ git commit -m "refactor(db): generate sqlite schema migrations"
 
 **Interfaces:**
 - Produces: `migrate(db: BunSQLiteDatabase): void` and `hasCurrentMigration(db: Database): boolean`.
-- The generated asset module exports `MIGRATIONS_FOLDER`, resolved from statically imported migration assets.
+- The generated module exports an inline `MigrationMeta[]` plus the newest bundled migration timestamp.
 
 - [ ] **Step 1: Write failing asset and journal tests**
 
-Add tests that require the generated module to enumerate every journal entry, resolve an existing migration folder in source mode, and make all migration assets discoverable to the Bun release build. Add a journal-status test that deletes the newest row from `__drizzle_migrations` and expects `hasCurrentMigration()` to return false.
+Add tests that require the generated module to preserve every journal entry, SQL statement breakpoint, timestamp, and SHA-256 hash. Add a journal-status test that deletes the newest row from `__drizzle_migrations` and expects `hasCurrentMigration()` to return false.
 
 - [ ] **Step 2: Run tests and verify RED**
 
@@ -112,13 +111,13 @@ Run: `bun test apps/monad/test/unit/store/migrations.test.ts scripts/test/unit/b
 
 Expected: FAIL because the asset generator and journal-status API do not exist.
 
-- [ ] **Step 3: Generate static migration asset imports**
+- [ ] **Step 3: Generate an inline migration bundle**
 
-Implement a deterministic script that reads `drizzle/meta/_journal.json` and writes a TypeScript module containing one `with { type: 'file' }` import per SQL migration plus the journal asset. The module derives `MIGRATIONS_FOLDER` from an imported SQL path and exports the journal timestamp of the newest bundled migration. It must only rewrite the generated file when content changes.
+Implement a deterministic script that reads `drizzle/meta/_journal.json` and every referenced SQL migration, validates journal/SQL completeness, and writes a TypeScript `MigrationMeta[]`. Split SQL on Drizzle's statement breakpoint and compute the same SHA-256 hash as `drizzle-orm/migrator`. Export the newest bundled migration timestamp and only rewrite the generated file when content changes.
 
 - [ ] **Step 4: Replace the handwritten runner**
 
-Reduce `migrations.ts` to a wrapper around `drizzle-orm/bun-sqlite/migrator` using `MIGRATIONS_FOLDER`. Implement `hasCurrentMigration()` by comparing the newest bundled journal timestamp with the newest `created_at` in `__drizzle_migrations`. Remove `MIGRATIONS`, `CURRENT_SCHEMA_VERSION`, `getSchemaVersion()`, and all `PRAGMA user_version` logic.
+Reduce `migrations.ts` to a narrow adapter that passes the inline bundle to Drizzle's `SQLiteSyncDialect.migrate()`, so Drizzle continues to own journal reads/writes, ordering, transactions, and rollback without a runtime filesystem dependency. Implement `hasCurrentMigration()` by comparing the newest bundled journal timestamp with the newest `created_at` in `__drizzle_migrations`. Remove `CURRENT_SCHEMA_VERSION`, `getSchemaVersion()`, and all `PRAGMA user_version` logic.
 
 - [ ] **Step 5: Initialize Drizzle before migration**
 
@@ -126,18 +125,18 @@ In `Store`, create the Drizzle handle from the existing `bun:sqlite` connection,
 
 - [ ] **Step 6: Wire generation into release preparation**
 
-Run the asset generator before `Bun.build` and add a build-focused test proving every journal entry has a static asset import. No runtime temporary directory or copied migration folder is allowed.
+Run the bundle generator before `Bun.build` and add a build-focused test that compiles and executes migrations from a standalone Bun binary with no migration directory present. No runtime temporary directory or copied migration folder is allowed.
 
 - [ ] **Step 7: Run tests and verify GREEN**
 
 Run: `bun test apps/monad/test/unit/store/migrations.test.ts scripts/test/unit/build-release-migrations.test.ts`
 
-Expected: PASS, including journal status and static asset coverage.
+Expected: PASS, including journal status, bundle fidelity, and standalone compiled-binary coverage.
 
 - [ ] **Step 8: Commit**
 
 ```bash
-git add apps/monad/scripts apps/monad/src/store/db/migrations.ts apps/monad/src/store/db/migrations.generated.ts apps/monad/src/store/db/migrations-assets.d.ts apps/monad/src/store/db/index.ts scripts/build-release.ts scripts/test/unit/build-release-migrations.test.ts apps/monad/test/unit/store/migrations.test.ts
+git add apps/monad/scripts apps/monad/src/store/db/migrations.ts apps/monad/src/store/db/migrations.generated.ts apps/monad/src/store/db/index.ts scripts/build-release.ts scripts/test/unit/build-release-migrations.test.ts apps/monad/test/unit/store/migrations.test.ts
 git commit -m "refactor(db): run embedded drizzle migrations"
 ```
 
