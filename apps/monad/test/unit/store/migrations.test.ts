@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/bun-sqlite';
 
+import { configureSqliteConnection } from '#/store/db/connection.ts';
 import { createStore } from '#/store/db/index.ts';
 import { LATEST_MIGRATION_TIMESTAMP, MIGRATIONS } from '#/store/db/migrations.generated.ts';
 import { hasCurrentMigration, migrate } from '#/store/db/migrations.ts';
@@ -63,19 +64,31 @@ test('Store configures connection-local PRAGMAs for in-memory databases', () => 
   }
 });
 
-test('Store enables WAL before migrating a file-backed database', async () => {
+test('file-backed Store reports configured connection PRAGMA values', async () => {
   const path = join(tmpdir(), `monad-store-${Date.now()}-${Math.random().toString(36).slice(2)}.sqlite`);
-  const store = createStore({ path });
+  let store: ReturnType<typeof createStore> | undefined;
   try {
+    store = createStore({ path });
     expect(pragmaValue(store, 'foreign_keys')).toBe(1);
     expect(pragmaValue(store, 'synchronous')).toBe(1);
     expect(pragmaValue(store, 'journal_mode')).toBe('wal');
   } finally {
-    store.close();
+    store?.close();
     await rm(path, { force: true });
     await rm(`${path}-shm`, { force: true });
     await rm(`${path}-wal`, { force: true });
   }
+});
+
+test('WAL configuration rejects a malformed journal mode with its diagnostic', () => {
+  const sqlite = {
+    prepare: () => ({ get: () => ({ journal_mode: 42 }) }),
+    exec: () => {}
+  } as unknown as Database;
+
+  expect(() => configureSqliteConnection(sqlite, 'malformed.sqlite')).toThrow(
+    'SQLite WAL mode was not enabled for malformed.sqlite: 42'
+  );
 });
 
 test('generated migrations exactly embed the source Drizzle history', () => {

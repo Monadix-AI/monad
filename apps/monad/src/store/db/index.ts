@@ -206,10 +206,18 @@ export class Store {
 
   constructor(opts: StoreOptions = {}) {
     const path = opts.path ?? ':memory:';
-    this.sqlite = new Database(path);
-    configureSqliteConnection(this.sqlite, path);
-    this.db = drizzle(this.sqlite);
-    migrate(this.db);
+    const sqlite = new Database(path);
+    let db: BunSQLiteDatabase<Record<string, never>>;
+    try {
+      configureSqliteConnection(sqlite, path);
+      db = drizzle(sqlite);
+      migrate(db);
+    } catch (error) {
+      sqlite.close();
+      throw error;
+    }
+    this.sqlite = sqlite;
+    this.db = db;
     if (opts.path && opts.path !== ':memory:') {
       this.#checkpoint = startWalCheckpoint(opts.path);
     }
