@@ -100,13 +100,13 @@ func serveConnection(conn io.ReadWriteCloser) {
 		writer.json(frameError, map[string]string{"message": "invalid start request"})
 		return
 	}
-	cmd, err := commandFor(req)
+	cmd, supervisorResult, err := commandFor(req)
 	if err != nil {
 		(&frameWriter{w: conn}).json(frameError, map[string]string{"message": err.Error()})
 		return
 	}
 	writer := &frameWriter{w: conn}
-	run, err := startCommand(cmd, func(kind byte, data []byte) { writer.write(kind, data) })
+	run, err := startManagedCommand(cmd, supervisorResult, func(kind byte, data []byte) { writer.write(kind, data) })
 	if err != nil {
 		writer.json(frameError, map[string]string{"message": err.Error()})
 		return
@@ -184,7 +184,7 @@ func handleControl(run *managedRun, writer *frameWriter, frame wireFrame) {
 	}
 }
 
-func commandFor(req startRequest) (*exec.Cmd, error) {
+func commandFor(req startRequest) (*exec.Cmd, io.ReadCloser, error) {
 	return supervisorCommand(req)
 }
 
@@ -217,6 +217,10 @@ func lookupMonad() (uint32, uint32, bool) {
 }
 
 func startCommand(cmd *exec.Cmd, output func(byte, []byte)) (*managedRun, error) {
+	return startManagedCommand(cmd, nil, output)
+}
+
+func startManagedCommand(cmd *exec.Cmd, supervisorResult io.ReadCloser, output func(byte, []byte)) (*managedRun, error) {
 	if cmd.SysProcAttr == nil {
 		cmd.SysProcAttr = &syscall.SysProcAttr{}
 	}
@@ -234,6 +238,12 @@ func startCommand(cmd *exec.Cmd, output func(byte, []byte)) (*managedRun, error)
 		return nil, err
 	}
 	if err := cmd.Start(); err != nil {
+		if supervisorResult != nil {
+			supervisorResult.Close()
+		}
+		for _, file := range cmd.ExtraFiles {
+			file.Close()
+		}
 		return nil, err
 	}
 	for _, file := range cmd.ExtraFiles {
@@ -260,9 +270,21 @@ func startCommand(cmd *exec.Cmd, output func(byte, []byte)) (*managedRun, error)
 	go func() {
 		err := cmd.Wait()
 		pumps.Wait()
-		run.done <- exitResult(cmd, err)
+		result := exitResult(cmd, err)
+		if supervisorResult != nil {
+			defer supervisorResult.Close()
+			var structured exitMessage
+			if json.NewDecoder(supervisorResult).Decode(&structured) == nil && validExitMessage(structured) {
+				result = structured
+			}
+		}
+		run.done <- result
 	}()
 	return run, nil
+}
+
+func validExitMessage(result exitMessage) bool {
+	return (result.Code != nil && result.Signal == 0) || (result.Code == nil && result.Signal > 0)
 }
 
 func exitResult(cmd *exec.Cmd, err error) exitMessage {

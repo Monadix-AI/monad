@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -12,23 +13,29 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func supervisorCommand(req startRequest) (*exec.Cmd, error) {
+func supervisorCommand(req startRequest) (*exec.Cmd, io.ReadCloser, error) {
 	executable, err := os.Executable()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	reader, writer, err := os.Pipe()
+	configReader, configWriter, err := os.Pipe()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+	resultReader, resultWriter, err := os.Pipe()
+	if err != nil {
+		configReader.Close()
+		configWriter.Close()
+		return nil, nil, err
 	}
 	cmd := exec.Command(executable, "--supervise-run")
-	cmd.ExtraFiles = []*os.File{reader}
+	cmd.ExtraFiles = []*os.File{configReader, resultWriter}
 	cmd.SysProcAttr = &syscall.SysProcAttr{Cloneflags: unix.CLONE_NEWPID | unix.CLONE_NEWNS}
 	go func() {
-		defer writer.Close()
-		json.NewEncoder(writer).Encode(req)
+		defer configWriter.Close()
+		json.NewEncoder(configWriter).Encode(req)
 	}()
-	return cmd, nil
+	return cmd, resultReader, nil
 }
 
 func runSupervisorMode() int {
@@ -38,6 +45,12 @@ func runSupervisorMode() int {
 		return 127
 	}
 	defer config.Close()
+	result := os.NewFile(4, "run-result")
+	if result == nil {
+		fmt.Fprintln(os.Stderr, "supervisor: result fd is unavailable")
+		return 127
+	}
+	defer result.Close()
 	var req startRequest
 	if err := json.NewDecoder(config).Decode(&req); err != nil || validateStart(req) != nil {
 		fmt.Fprintln(os.Stderr, "supervisor: invalid config")
@@ -89,11 +102,17 @@ func runSupervisorMode() int {
 			syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 			reapChildren()
 			if status, ok := cmd.ProcessState.Sys().(syscall.WaitStatus); ok && status.Signaled() {
-				return 128 + int(status.Signal())
+				sig := int(status.Signal())
+				json.NewEncoder(result).Encode(exitMessage{Code: nil, Signal: sig})
+				return 128 + sig
 			}
 			if waitErr != nil {
-				return cmd.ProcessState.ExitCode()
+				code := cmd.ProcessState.ExitCode()
+				json.NewEncoder(result).Encode(exitMessage{Code: &code})
+				return code
 			}
+			code := 0
+			json.NewEncoder(result).Encode(exitMessage{Code: &code})
 			return 0
 		}
 	}

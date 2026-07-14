@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"os"
 	"os/exec"
 	"strings"
 	"testing"
@@ -13,6 +14,23 @@ func TestReadFrameRejectsOversizedControlBeforeBodyRead(t *testing.T) {
 	_, err := readFrame(bytes.NewReader(header))
 	if err == nil || !strings.Contains(err.Error(), "exceeds") {
 		t.Fatalf("expected bounded-frame error, got %v", err)
+	}
+}
+
+func TestManagedCommandPrefersStructuredSupervisorExit(t *testing.T) {
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("sh", "-c", `printf '{"code":null,"signal":15}' >&3; exit 143`)
+	cmd.ExtraFiles = []*os.File{writer}
+	run, err := startManagedCommand(cmd, reader, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := <-run.done
+	if result.Code != nil || result.Signal != 15 {
+		t.Fatalf("expected signal metadata, got %+v", result)
 	}
 }
 

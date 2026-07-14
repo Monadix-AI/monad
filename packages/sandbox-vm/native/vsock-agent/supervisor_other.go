@@ -2,10 +2,14 @@
 
 package main
 
-import "os/exec"
+import (
+	"io"
+	"os/exec"
+)
 
-func supervisorCommand(req startRequest) (*exec.Cmd, error) {
-	return workloadCommand(req)
+func supervisorCommand(req startRequest) (*exec.Cmd, io.ReadCloser, error) {
+	cmd, err := workloadCommand(req)
+	return cmd, nil, err
 }
 
 func runSupervisorMode() int {

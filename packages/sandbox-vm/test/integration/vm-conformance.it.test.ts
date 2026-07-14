@@ -27,15 +27,29 @@ async function drain(stream: ReadableStream<Uint8Array> | undefined): Promise<st
 }
 
 type Policy = Parameters<NonNullable<typeof vmLauncher.spawn>>[2];
+type SpawnOptions = Parameters<NonNullable<typeof vmLauncher.spawn>>[1];
+
+function spawn(argv: string[], policy: Policy, agentId: string, options: Partial<SpawnOptions> = {}) {
+  if (!vmLauncher.spawn) throw new Error('vm launcher has no spawn');
+  return vmLauncher.spawn(argv, { sessionId: 's', agentId, ...options }, policy);
+}
 
 async function run(argv: string[], policy: Policy, agentId: string): Promise<{ code: number; stdout: string }> {
-  if (!vmLauncher.spawn) throw new Error('vm launcher has no spawn');
-  const proc = vmLauncher.spawn(argv, { sessionId: 's', agentId }, policy);
+  const proc = spawn(argv, policy, agentId);
   const stdout = await drain(proc.stdout);
   const code = await proc.exited;
   return { code, stdout };
 }
 const sh = (script: string, policy: Policy, agent: string) => run(['sh', '-c', script], policy, agent);
+
+async function waitForHostFile(path: string, timeoutMs = 5000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (existsSync(path)) return;
+    await Bun.sleep(25);
+  }
+  throw new Error(`guest did not create host oracle ${path}`);
+}
 
 let prepared = false;
 beforeAll(async () => {
@@ -135,6 +149,55 @@ describe.skipIf(!ENABLED)('net:none confinement (fs escape, credential, privileg
     expect(r.stdout.split('\n')[0]?.trim()).toBe('0'); // zero non-loopback NICs
     expect(r.stdout).not.toContain('EXT=0');
     expect(r.stdout).not.toContain('META=0');
+  }, 600_000);
+
+  test('cancellation terminates the workload and its descendants before they can mutate the host mount', async () => {
+    const ready = join(ws, 'cancel-ready');
+    const survived = join(ws, 'descendant-survived');
+    const proc = spawn(['sh', '-c', `touch ${ready}; (sleep 2; echo survived > ${survived}) & wait`], NET, AGENT, {
+      limits: { terminateGraceMs: 500 }
+    });
+    const output = Promise.all([drain(proc.stdout), drain(proc.stderr)]);
+    await waitForHostFile(ready);
+
+    proc.kill('SIGTERM');
+
+    expect(await proc.exit).toEqual({ code: null, signal: 15 });
+    await output;
+    await Bun.sleep(2500);
+    expect(existsSync(survived)).toBe(false);
+  }, 600_000);
+
+  test('each run has a fresh PID namespace and private tmpfs', async () => {
+    const firstPid = await sh('echo $$; echo secret >/tmp/only-first-run', NET, AGENT);
+    const second = await sh('echo $$; test ! -e /tmp/only-first-run; echo "TMP=$?"', NET, AGENT);
+
+    expect(firstPid.stdout.trim()).toBe('2');
+    expect(second.stdout).toContain('2\n');
+    expect(second.stdout).toContain('TMP=0');
+  }, 600_000);
+
+  test('per-run pids cgroup applies the requested process ceiling', async () => {
+    const proc = spawn(
+      ['sh', '-c', `cg=$(awk -F: '$1 == "0" { print $3 }' /proc/self/cgroup); cat /sys/fs/cgroup"$cg"/pids.max`],
+      NET,
+      AGENT,
+      { limits: { maxProcesses: 8 } }
+    );
+
+    expect((await drain(proc.stdout)).trim()).toBe('8');
+    expect(await proc.exited).toBe(0);
+  }, 600_000);
+
+  test('a containment-relevant policy change boots a VM with the new mount identity', async () => {
+    const alternate = await mkdtemp(join(tmpdir(), 'monad-vm-policy-'));
+    try {
+      const target = join(alternate, 'new-policy-visible');
+      await sh(`echo visible > ${target}`, { writableRoots: [alternate], net: 'none' } as Policy, AGENT);
+      expect(await Bun.file(target).text()).toBe('visible\n');
+    } finally {
+      rmSync(alternate, { recursive: true, force: true });
+    }
   }, 600_000);
 });
 
