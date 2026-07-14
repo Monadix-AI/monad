@@ -58,3 +58,22 @@ func TestHandleControlRejectsUnknownFrames(t *testing.T) {
 		t.Fatalf("expected unsupported-frame error, got %v", err)
 	}
 }
+
+func TestRunRegistryCancelAllTerminatesActiveRuns(t *testing.T) {
+	registry := newRunRegistry()
+	run, err := startCommand(exec.Command("sh", "-c", "sleep 60 & wait"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := registry.add("active", run); err != nil {
+		t.Fatal(err)
+	}
+
+	registry.cancelAll(50 * time.Millisecond)
+
+	select {
+	case <-run.finished:
+	case <-time.After(3 * time.Second):
+		t.Fatal("active run survived registry shutdown")
+	}
+}

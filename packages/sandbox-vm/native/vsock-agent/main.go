@@ -43,7 +43,56 @@ type managedRun struct {
 	cmd           *exec.Cmd
 	stdin         io.WriteCloser
 	done          chan exitMessage
+	finished      chan struct{}
 	terminateOnce sync.Once
+}
+
+type runRegistry struct {
+	mu   sync.Mutex
+	runs map[string]*managedRun
+}
+
+func newRunRegistry() *runRegistry {
+	return &runRegistry{runs: make(map[string]*managedRun)}
+}
+
+func (registry *runRegistry) add(runID string, run *managedRun) error {
+	registry.mu.Lock()
+	defer registry.mu.Unlock()
+	if _, exists := registry.runs[runID]; exists {
+		return fmt.Errorf("run id is already active")
+	}
+	registry.runs[runID] = run
+	return nil
+}
+
+func (registry *runRegistry) remove(runID string, run *managedRun) {
+	registry.mu.Lock()
+	defer registry.mu.Unlock()
+	if registry.runs[runID] == run {
+		delete(registry.runs, runID)
+	}
+}
+
+func (registry *runRegistry) cancelAll(grace time.Duration) {
+	registry.mu.Lock()
+	runs := make([]*managedRun, 0, len(registry.runs))
+	for _, run := range registry.runs {
+		runs = append(runs, run)
+	}
+	registry.mu.Unlock()
+	for _, run := range runs {
+		run.terminate(grace)
+	}
+	timeout := time.NewTimer(grace + 2*time.Second)
+	defer timeout.Stop()
+	for _, run := range runs {
+		select {
+		case <-run.finished:
+		case <-timeout.C:
+			return
+		}
+	}
 }
 
 func main() {
@@ -73,10 +122,12 @@ func main() {
 		fmt.Fprintln(os.Stderr, "vsock listen:", err)
 		os.Exit(1)
 	}
+	registry := newRunRegistry()
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGTERM, syscall.SIGINT)
 	go func() {
 		<-stop
+		registry.cancelAll(2 * time.Second)
 		unix.Close(fd)
 	}()
 	for {
@@ -84,11 +135,11 @@ func main() {
 		if err != nil {
 			return
 		}
-		go serveConnection(os.NewFile(uintptr(conn), "vsock-conn"))
+		go serveConnection(os.NewFile(uintptr(conn), "vsock-conn"), registry)
 	}
 }
 
-func serveConnection(conn io.ReadWriteCloser) {
+func serveConnection(conn io.ReadWriteCloser, registry *runRegistry) {
 	defer conn.Close()
 	first, err := readFrame(conn)
 	if err != nil || first.Kind != frameStart {
@@ -111,6 +162,13 @@ func serveConnection(conn io.ReadWriteCloser) {
 		writer.json(frameError, map[string]string{"message": err.Error()})
 		return
 	}
+	if err := registry.add(req.RunID, run); err != nil {
+		run.terminate(0)
+		<-run.done
+		writer.json(frameError, map[string]string{"message": err.Error()})
+		return
+	}
+	defer registry.remove(req.RunID, run)
 	writer.json(frameStarted, startedMessage{RunID: req.RunID, PID: run.cmd.Process.Pid})
 
 	frames := make(chan wireFrame)
@@ -262,7 +320,7 @@ func startManagedCommand(cmd *exec.Cmd, supervisorResult io.ReadCloser, output f
 	for _, file := range cmd.ExtraFiles {
 		file.Close()
 	}
-	run := &managedRun{cmd: cmd, stdin: stdin, done: make(chan exitMessage, 1)}
+	run := &managedRun{cmd: cmd, stdin: stdin, done: make(chan exitMessage, 1), finished: make(chan struct{})}
 	var pumps sync.WaitGroup
 	pump := func(reader io.Reader, kind byte) {
 		defer pumps.Done()
@@ -291,6 +349,7 @@ func startManagedCommand(cmd *exec.Cmd, supervisorResult io.ReadCloser, output f
 				result = structured
 			}
 		}
+		close(run.finished)
 		run.done <- result
 	}()
 	return run, nil
