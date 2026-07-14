@@ -29,7 +29,7 @@ function toErrorMessage(e: unknown): string {
   return String(e);
 }
 
-export function ModelSettings() {
+export function ModelSettings({ active = true }: { active?: boolean }) {
   const setOverlay = useUIStore((s) => s.setOverlay);
 
   const settings = useModelSettings();
@@ -59,57 +59,60 @@ export function ModelSettings() {
   const clampedCursor = Math.min(cursor, Math.max(0, rows.length - 1));
   const current = rows[clampedCursor];
 
-  useInput((input, key) => {
-    // While the add-credential text field is focused, only Esc (cancel) is ours;
-    // TextInput owns the rest.
-    if (adding) {
+  useInput(
+    (input, key) => {
+      // While the add-credential text field is focused, only Esc (cancel) is ours;
+      // TextInput owns the rest.
+      if (adding) {
+        if (key.escape) {
+          setAdding(null);
+          setField('');
+        }
+        return;
+      }
+
       if (key.escape) {
-        setAdding(null);
+        setOverlay('none');
+      } else if (key.upArrow) {
+        setCursor((c) => Math.max(0, c - 1));
+      } else if (key.downArrow) {
+        setCursor((c) => Math.min(rows.length - 1, c + 1));
+      } else if (input === 'r') {
+        settingsQuery.refetch();
+      } else if (!current) {
+        // nothing selected
+      } else if (input === 'd' && current.kind === 'profile') {
+        const alias = current.profile.alias;
+        settings
+          .setDefaultProfile(alias)
+          .then(() => setStatus(t('cli.tui.model.defaultSet', { alias })))
+          .catch((e: unknown) => setStatus(toErrorMessage(e)));
+      } else if (input === 'x' && current.kind === 'cred') {
+        const { cred } = current;
+        credActions
+          .deleteCredential(current.providerId, cred.id)
+          .then(() => setStatus(t('cli.tui.model.deleted', { label: cred.label })))
+          .catch((e: unknown) => setStatus(toErrorMessage(e)));
+      } else if (input === 't' && current.kind === 'cred') {
+        const { cred } = current;
+        setStatus(t('cli.tui.model.testing', { label: cred.label }));
+        credActions
+          .testCredential(current.providerId, cred.id)
+          .then((r) =>
+            setStatus(
+              r.ok
+                ? t('cli.tui.model.testOk', { label: cred.label, ms: r.latencyMs ?? '?' })
+                : t('cli.tui.model.testFailed', { error: r.error ?? t('cli.failed') })
+            )
+          )
+          .catch((e: unknown) => setStatus(toErrorMessage(e)));
+      } else if ((key.return || input === 'a') && current.kind === 'add-cred') {
+        setAdding({ providerId: current.providerId, step: 'label', label: '' });
         setField('');
       }
-      return;
-    }
-
-    if (key.escape) {
-      setOverlay('none');
-    } else if (key.upArrow) {
-      setCursor((c) => Math.max(0, c - 1));
-    } else if (key.downArrow) {
-      setCursor((c) => Math.min(rows.length - 1, c + 1));
-    } else if (input === 'r') {
-      settingsQuery.refetch();
-    } else if (!current) {
-      // nothing selected
-    } else if (input === 'd' && current.kind === 'profile') {
-      const alias = current.profile.alias;
-      settings
-        .setDefaultProfile(alias)
-        .then(() => setStatus(t('cli.tui.model.defaultSet', { alias })))
-        .catch((e: unknown) => setStatus(toErrorMessage(e)));
-    } else if (input === 'x' && current.kind === 'cred') {
-      const { cred } = current;
-      credActions
-        .deleteCredential(current.providerId, cred.id)
-        .then(() => setStatus(t('cli.tui.model.deleted', { label: cred.label })))
-        .catch((e: unknown) => setStatus(toErrorMessage(e)));
-    } else if (input === 't' && current.kind === 'cred') {
-      const { cred } = current;
-      setStatus(t('cli.tui.model.testing', { label: cred.label }));
-      credActions
-        .testCredential(current.providerId, cred.id)
-        .then((r) =>
-          setStatus(
-            r.ok
-              ? t('cli.tui.model.testOk', { label: cred.label, ms: r.latencyMs ?? '?' })
-              : t('cli.tui.model.testFailed', { error: r.error ?? t('cli.failed') })
-          )
-        )
-        .catch((e: unknown) => setStatus(toErrorMessage(e)));
-    } else if ((key.return || input === 'a') && current.kind === 'add-cred') {
-      setAdding({ providerId: current.providerId, step: 'label', label: '' });
-      setField('');
-    }
-  });
+    },
+    { isActive: active }
+  );
 
   const submitField = useCallback(
     (value: string) => {

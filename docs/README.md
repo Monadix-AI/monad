@@ -25,6 +25,7 @@ How to use monad's features as an operator or end user.
 
 | Doc | What it covers |
 |---|---|
+| [usage/tui.md](usage/tui.md) | TUI scope, responsive layouts, keyboard/mouse controls, and Web UI degradation rules. |
 | [usage/skills.md](usage/skills.md) | The skills system (`SKILL.md` / agentskills.io standard): using, writing, gating, and managing skills. |
 | [usage/computer-use.md](usage/computer-use.md) | Computer use and browser use through off-the-shelf MCP servers, and when to pick which. |
 | [usage/mo.md](usage/mo.md) | Mo, the desktop sprite: drop a file on the floating pixel cat to start a session. |

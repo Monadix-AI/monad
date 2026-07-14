@@ -18,8 +18,9 @@
  *   4. Scaffolds packages/home/config.init.json from config.init.json.template (dev seed) if missing,
  *      and warns if its apiKey is empty.
  *   5. Initializes CodeGraph when the local machine has it installed and this checkout is unindexed.
- *   6. Prints a connection summary (daemon URL, data dir).
- *   7. Regenerates checked-in/generated dev artifacts used by typecheck and local builds.
+ *   6. Installs a worktree-local `monad` CLI shim under .dev/bin.
+ *   7. Prints a connection summary (daemon URL, data dir).
+ *   8. Regenerates checked-in/generated dev artifacts used by typecheck and local builds.
  *
  * The initialization body runs only when executed directly (import.meta.main); the pure
  * port helpers below are exported so dev-init.test.ts can unit-test them without
@@ -29,6 +30,7 @@
 import { mkdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
+import { installDevCliShim } from './dev-init/cli-shim';
 import { runDevInitCommandStep } from './dev-init/command-step';
 import { scaffoldDevSeed } from './dev-init/dev-seed';
 import { buildMoSprite, initCodeGraph, startPhoenix } from './dev-init/dev-services';
@@ -37,6 +39,7 @@ import { installPostCheckoutHook } from './dev-init/git-hooks';
 import { buildDevInitSummary, generatedArtifactsHeader, shouldColorOutput } from './dev-init/output';
 import { ensurePortLines, removeBlankXdgLines, type WorktreePorts, worktreePorts } from './dev-init/ports';
 
+export { devCliShimText, installDevCliShim } from './dev-init/cli-shim';
 export { shouldRenderDevInitCommandSpinner } from './dev-init/command-step';
 export { buildCodeGraphInitStep, shouldInitCodeGraph } from './dev-init/dev-services';
 export { postCheckoutHookText } from './dev-init/git-hooks';
@@ -145,7 +148,12 @@ async function main(): Promise<void> {
 
   await buildMoSprite(root, color, log, warn);
 
-  // ── 5. Initialization summary ─────────────────────────────────────────────────
+  // ── 5. Worktree-local CLI ──────────────────────────────────────────────────────
+
+  const cliShimPath = await installDevCliShim(root);
+  log(`CLI shim ready        ${cliShimPath}`);
+
+  // ── 6. Initialization summary ─────────────────────────────────────────────────
 
   const resolvedPorts: WorktreePorts = {
     AI_SDK_DEVTOOLS_PORT:
@@ -168,9 +176,9 @@ async function main(): Promise<void> {
     ).join('\n')
   );
 
-  // ── 6. Generated dev artifacts ────────────────────────────────────────────────
-  // `monad` is linked into node_modules/.bin by `bun install` (via apps/cli bin field).
-  // Run the CLI with `bun monad <cmd>`, which resolves the workspace bin automatically.
+  // ── 7. Generated dev artifacts ────────────────────────────────────────────────
+  // In a direnv-authorized checkout, .envrc prepends .dev/bin so `monad <cmd>` runs
+  // this worktree's TypeScript CLI directly. Authorization remains an explicit one-time step.
 
   process.stdout.write(generatedArtifactsHeader(color));
 

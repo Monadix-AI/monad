@@ -7,6 +7,7 @@ import {
   buildDevStepStatusFrame,
   buildGeneratedArtifactProgressFrame,
   buildGeneratedArtifactStatusFrame,
+  devCliShimText,
   ensurePortLines,
   portOffset,
   postCheckoutHookText,
@@ -15,6 +16,27 @@ import {
   shouldRenderDevInitCommandSpinner,
   worktreePorts
 } from '../../dev-init.ts';
+
+test('devCliShimText forwards POSIX arguments to the worktree CLI entry point', () => {
+  expect(devCliShimText('/repo with space', 'darwin')).toBe(
+    `#!/bin/sh\nexec bun '/repo with space/apps/cli/src/bin.ts' "$@"\n`
+  );
+});
+
+test('devCliShimText forwards Windows arguments to the worktree CLI entry point', () => {
+  expect(devCliShimText('C:\\repo', 'win32')).toBe('@echo off\r\nbun "C:\\repo\\apps\\cli\\src\\bin.ts" %*\r\n');
+});
+
+test('bun install initializes the worktree without auto-authorizing direnv', async () => {
+  const root = new URL('../../../', import.meta.url);
+  const packageJson = await Bun.file(new URL('package.json', root)).json();
+  const envrc = await Bun.file(new URL('.envrc', root)).text();
+
+  expect(packageJson.scripts?.postinstall).toBe('bun run scripts/dev-init.ts');
+  expect(envrc).toMatch(/^PATH_add \.dev\/bin$/m);
+  expect(envrc).toMatch(/^\[\[ -f \.env\.local \]\] && dotenv \.env\.local$/m);
+  expect(envrc).not.toMatch(/^\s*direnv allow\s*$/m);
+});
 
 test('portOffset is deterministic and within 0–999', () => {
   const a = portOffset('/Users/x/Projects/monad');
