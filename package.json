@@ -47,6 +47,7 @@
     "clean": "bunx --bun rimraf --glob \"**/node_modules\" \"**/.turbo\" \"**/.next\" \"**/dist\" \"**/out\"",
     "db:bundle": "bun run --cwd apps/monad db:bundle",
     "db:check": "bun run --cwd apps/monad db:check",
+    "db:drift": "bun run --cwd apps/monad db:drift",
     "db:generate": "bun run --cwd apps/monad db:generate",
     "db:generate:custom": "bun run --cwd apps/monad db:generate:custom",
     "dev": "bun run scripts/dev-prep.ts",

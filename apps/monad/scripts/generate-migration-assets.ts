@@ -14,10 +14,7 @@ interface MigrationEntry {
   when: number;
 }
 
-export function generateMigrationAssets(): void {
-  const appRoot = join(import.meta.dir, '..');
-  const drizzleDir = join(appRoot, 'drizzle');
-  const generatedModule = join(appRoot, 'src', 'store', 'db', 'migrations.generated.ts');
+export function renderMigrationAssets(drizzleDir: string): string {
   const journalPath = join(drizzleDir, 'meta', '_journal.json');
   const journal = JSON.parse(readFileSync(journalPath, 'utf8')) as MigrationJournal;
   const entries = journal.entries;
@@ -39,7 +36,14 @@ export function generateMigrationAssets(): void {
       hash: createHash('sha256').update(query).digest('hex')
     };
   });
-  const content = renderGeneratedModule(migrations, entries.at(-1)?.when);
+  return renderGeneratedModule(migrations, entries.at(-1)?.when);
+}
+
+export function generateMigrationAssets(): void {
+  const appRoot = join(import.meta.dir, '..');
+  const drizzleDir = join(appRoot, 'drizzle');
+  const generatedModule = join(appRoot, 'src', 'store', 'db', 'migrations.generated.ts');
+  const content = renderMigrationAssets(drizzleDir);
   if (!existsSync(generatedModule) || readFileSync(generatedModule, 'utf8') !== content) {
     writeFileSync(generatedModule, content);
   }

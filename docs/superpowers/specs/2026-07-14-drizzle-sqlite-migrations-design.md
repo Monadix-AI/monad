@@ -46,10 +46,17 @@ Subsequent regular schema changes use `drizzle-kit generate`. Unsupported DDL
 and backfills use `drizzle-kit generate --custom`. Both forms remain in the
 same ordered migration directory and use the same Drizzle journal.
 
+At build time, `apps/monad/scripts/generate-migration-assets.ts` reads the
+committed journal and SQL files and emits one deterministic inline
+`MigrationMeta[]` bundle at `src/store/db/migrations.generated.ts`. The runtime
+ships this module directly; it does not rely on a type=`file` migration folder
+being present beside a packaged binary.
+
 Generated and custom migration files are immutable after merge. Corrections
 are expressed as later migrations. A change that combines schema evolution and
-data conversion is split into ordered phases, for example: add nullable column,
-custom backfill, then add the non-null constraint.
+data conversion is split into ordered phases: add a nullable column, add a
+custom backfill migration, deploy and verify the backfill, then add a later
+migration that enforces the non-null constraint.
 
 ## Runtime
 
@@ -80,13 +87,36 @@ the old triggers and virtual tables, recreates them, and rebuilds both indexes.
 `CREATE IF NOT EXISTS` alone is not sufficient because it cannot update an
 existing definition.
 
-## Drift Prevention
+## Contributor Workflow and Drift Prevention
 
-The package exposes commands to generate migrations and check migration
-history. CI verifies all three layers:
+All migration commands use the pinned local `drizzle-kit` `0.31.4`; no command
+uses a floating `bunx` installation. From the repository root, the package
+scripts are `bun run db:generate`, `bun run db:generate:custom`, `bun run
+db:bundle`, `bun run db:check`, and `bun run db:drift`. Their application-level
+equivalents are available through `bun run --cwd apps/monad <command>`.
+
+For a normal schema change, update `schema.ts`, run `bun run db:generate`,
+review and retain every generated SQL and snapshot artifact, run `bun run
+db:bundle` to regenerate the inline bundle, then run `bun run db:check` and
+`bun run db:drift`. For unsupported SQLite DDL or a data migration, first add
+any representable schema change, run `bun run db:generate:custom`, replace the
+custom migration placeholder with reviewed SQL, run `bun run db:bundle`, and
+run the same checks. Never edit a committed migration, journal entry, or
+snapshot; add a new ordered migration instead.
+
+`db:check` is Drizzle's snapshot collision and history consistency check.
+`db:drift` is separate and read-only: it copies the committed `drizzle` history
+to a temporary directory, runs the pinned generator against the real schema,
+and fails if the temporary history differs. It also renders the expected inline
+bundle in memory and compares it to `migrations.generated.ts`. Neither check
+rewrites `apps/monad/drizzle`, `schema.ts`, or the generated bundle.
+
+CI verifies all layers:
 
 - Running Drizzle generation against the committed schema must not create or
-  modify migration artifacts.
+  modify temporary migration artifacts.
+- `migrations.generated.ts` must exactly match the committed migration journal
+  and SQL source files.
 - `drizzle-kit check` must accept the snapshot history.
 - A fresh database must successfully run every migration and a second migrate
   call must be a no-op.
