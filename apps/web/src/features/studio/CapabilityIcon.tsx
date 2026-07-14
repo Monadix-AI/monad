@@ -41,7 +41,7 @@ export function CapabilityIcon({ className, icon }: { className?: string; icon: 
   );
 }
 
-export function resolveCapabilityIcon(input: {
+function _resolveCapabilityIcon(input: {
   detail?: string;
   name: string;
   sourceKind?: 'atom' | 'mcp';

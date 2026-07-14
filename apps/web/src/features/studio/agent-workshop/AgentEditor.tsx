@@ -17,6 +17,7 @@ import { studioPath } from '#/features/shell/routing/paths';
 import { StudioBreadcrumbHeader } from '../StudioBreadcrumbHeader';
 import { AgentWorkshop } from './AgentWorkshop';
 import { buildAgentEditorUpdate } from './agent-editor-update';
+import { validateAgentFlow } from './agent-flow-model';
 
 function AgentEditorSkeleton() {
   return (
@@ -129,6 +130,20 @@ export function AgentEditor({ agentId }: { agentId: AgentId; onClose: () => void
   if (isLoading || !agent) return <AgentEditorSkeleton />;
 
   const exposed = subagentCallable || isPublic || a2aEnabled;
+  const { saveBlocked } = validateAgentFlow({
+    a2aEnabled,
+    atomsAllow,
+    atomsMode,
+    isPublic,
+    maxBudgetUsd,
+    maxThinkingTokens,
+    maxTurns,
+    model,
+    name,
+    prompt,
+    sandboxMode,
+    subagentCallable
+  });
 
   return (
     <section className="flex min-w-0 flex-1 flex-col">
@@ -141,7 +156,7 @@ export function AgentEditor({ agentId }: { agentId: AgentId; onClose: () => void
               </span>
             )}
             <Button
-              disabled={saving || savingPrompt}
+              disabled={saving || savingPrompt || saveBlocked}
               onClick={() => void handleSave()}
               size="sm"
             >

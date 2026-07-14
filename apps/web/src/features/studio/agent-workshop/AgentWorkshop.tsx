@@ -1,7 +1,7 @@
-import type { WebMessageIdWithoutParams } from '@monad/i18n/browser';
 import type { A2aAgentStatus, SandboxMode } from '@monad/protocol';
-import type { DragEvent } from 'react';
 
+import { MessageMultiple01Icon } from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
 import {
   atomPackAdapter,
   atomPackSelectors,
@@ -10,16 +10,20 @@ import {
   useListAtomPacksQuery,
   useListMcpServersQuery
 } from '@monad/client-rtk';
-import { ScrollArea } from '@monad/ui';
-import { useMemo, useState } from 'react';
+import { Button, cn } from '@monad/ui';
+import { ReactFlowProvider } from '@xyflow/react';
+import { useEffect, useMemo, useState } from 'react';
 
-import { useT } from '#/components/I18nProvider';
 import { useModelSettings } from '#/hooks/use-model-settings';
-import { AgentWorkshopHeader } from './AgentWorkshopHeader';
-import { AgentWorkshopInspector } from './AgentWorkshopInspector';
-import { AgentWorkshopPartsBin } from './AgentWorkshopPartsBin';
-import { type CapabilityItem, parsePayload, type WorkshopPart } from './AgentWorkshopPrimitives';
-import { AgentWorkshopWorkbench } from './AgentWorkshopWorkbench';
+import { AgentFlowCanvas } from './AgentFlowCanvas';
+import { type AgentFlowCapability, AgentFlowPanel } from './AgentFlowPanel';
+import {
+  type AgentFlowInput,
+  type AgentFlowNodeId,
+  agentFlowSummaries,
+  deriveAgentFlowReadiness,
+  validateAgentFlow
+} from './agent-flow-model';
 
 interface AgentWorkshopProps {
   a2aEnabled: boolean;
@@ -53,204 +57,103 @@ interface AgentWorkshopProps {
   subagentCallable: boolean;
 }
 
-export function AgentWorkshop({
-  a2aEnabled,
-  a2aStatus,
-  atomsAllow,
-  atomsMode,
-  description,
-  isPublic,
-  maxBudgetUsd,
-  maxThinkingTokens,
-  maxTurns,
-  model,
-  name,
-  prompt,
-  roles,
-  sandboxMode,
-  setA2aEnabled,
-  setAtomsAllow,
-  setAtomsMode,
-  setDescription,
-  setIsPublic,
-  setMaxBudgetUsd,
-  setMaxThinkingTokens,
-  setMaxTurns,
-  setModel,
-  setName,
-  setPrompt,
-  setRoles,
-  setSandboxMode,
-  setSubagentCallable,
-  subagentCallable
-}: AgentWorkshopProps) {
-  const t = useT();
+export function AgentWorkshop(props: AgentWorkshopProps) {
   const { profiles } = useModelSettings();
-  const [selectedPart, setSelectedPart] = useState<WorkshopPart>('brain');
-  const [promptMode, setPromptMode] = useState<'write' | 'preview'>('write');
-  const [draggingPart, setDraggingPart] = useState<WorkshopPart | null>(null);
+  const [selected, setSelected] = useState<AgentFlowNodeId | null>('identity');
   const { data: atomData } = useListAtomPacksQuery();
   const mcpQuery = useListMcpServersQuery();
 
-  const packs = useMemo(
-    () =>
-      atomPackSelectors
-        .selectAll(atomData?.atomPacks ?? atomPackAdapter.getInitialState())
-        .filter((pack) => pack.enabled),
-    [atomData?.atomPacks]
-  );
-  const servers = useMemo(
-    () => mcpServerSelectors.selectAll(mcpQuery.data ?? mcpServerAdapter.getInitialState()),
-    [mcpQuery.data]
-  );
-  const capabilityCatalog = useMemo<CapabilityItem[]>(
+  const capabilityCatalog = useMemo<AgentFlowCapability[]>(
     () => [
-      ...packs.map((pack) => ({ name: pack.name, detail: pack.atoms.join(', '), sourceKind: 'atom' as const })),
-      ...servers.map((server) => ({ name: server.name, detail: 'MCP server', sourceKind: 'mcp' as const }))
+      ...atomPackSelectors
+        .selectAll(atomData?.atomPacks ?? atomPackAdapter.getInitialState())
+        .filter((pack) => pack.enabled)
+        .map((pack) => ({ name: pack.name, detail: pack.atoms.join(', '), sourceKind: 'atom' as const })),
+      ...mcpServerSelectors
+        .selectAll(mcpQuery.data ?? mcpServerAdapter.getInitialState())
+        .map((server) => ({ name: server.name, detail: 'MCP server', sourceKind: 'mcp' as const }))
     ],
-    [packs, servers]
+    [atomData?.atomPacks, mcpQuery.data]
   );
 
-  const roleCount = Object.keys(roles).length;
-  const allowCount = atomsMode === 'allowlist' ? atomsAllow.length : packs.length + servers.length;
-  const exposed = subagentCallable || isPublic || a2aEnabled;
-  const safetyConfigured = Boolean(sandboxMode || maxTurns || maxThinkingTokens || maxBudgetUsd);
-  const toolsConfigured = atomsMode === 'allowlist' || atomsAllow.length > 0;
-  const partsInstalled = [
-    Boolean(model || roleCount),
-    Boolean(prompt.trim()),
-    toolsConfigured,
-    safetyConfigured,
-    exposed
-  ].filter(Boolean).length;
-  const partCompletion: { active: boolean; label: string; part: WorkshopPart }[] = [
-    { active: Boolean(model || roleCount), label: t('web.studio.workshopBrain'), part: 'brain' },
-    { active: Boolean(prompt.trim()), label: t('web.studio.workshopPrompt'), part: 'prompt' },
-    { active: toolsConfigured, label: t('web.studio.workshopTools'), part: 'tools' },
-    { active: safetyConfigured, label: t('web.studio.workshopSafety'), part: 'safety' },
-    { active: exposed, label: t('web.studio.workshopVisibility'), part: 'visibility' }
-  ];
-  const nextAssemblyPart = partCompletion.find(({ active }) => !active)?.part ?? null;
-  const readinessKey: WebMessageIdWithoutParams = exposed
-    ? 'web.studio.workshopStateDeployable'
-    : safetyConfigured
-      ? 'web.studio.workshopStateSafe'
-      : model || roleCount || prompt.trim() || toolsConfigured
-        ? 'web.studio.workshopStateRunnable'
-        : 'web.studio.workshopStateBlank';
-
-  const mountCapability = (name: string) => {
-    setSelectedPart('tools');
-    setAtomsMode('allowlist');
-    setAtomsAllow((prev) => (prev.includes(name) ? prev : [...prev, name]));
+  const flowInput: AgentFlowInput = {
+    a2aEnabled: props.a2aEnabled,
+    atomsAllow: props.atomsAllow,
+    atomsMode: props.atomsMode,
+    isPublic: props.isPublic,
+    maxBudgetUsd: props.maxBudgetUsd,
+    maxThinkingTokens: props.maxThinkingTokens,
+    maxTurns: props.maxTurns,
+    model: props.model,
+    name: props.name,
+    prompt: props.prompt,
+    sandboxMode: props.sandboxMode,
+    subagentCallable: props.subagentCallable
   };
+  const summaries = agentFlowSummaries(flowInput);
+  const readiness = deriveAgentFlowReadiness(flowInput);
+  const validation = validateAgentFlow(flowInput);
 
-  const handleDrop = (slot: WorkshopPart, event: DragEvent<HTMLButtonElement | HTMLDivElement>) => {
-    event.preventDefault();
-    const payload = parsePayload(event);
-    setDraggingPart(null);
-    if (!payload) return;
-    if (payload.type === 'part') {
-      if (payload.part === slot) setSelectedPart(slot);
-      return;
-    }
-    if (slot !== 'tools') return;
-    mountCapability(payload.name);
-  };
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSelected(null);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   return (
     <div
-      className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background"
+      className="relative flex min-h-0 flex-1 overflow-hidden bg-background"
       data-testid="agent-workshop"
     >
-      <AgentWorkshopHeader
-        a2aEnabled={a2aEnabled}
-        allowCount={allowCount}
-        atomsMode={atomsMode}
-        description={description}
-        exposed={exposed}
-        isPublic={isPublic}
-        model={model}
-        name={name}
-        nextAssemblyPart={nextAssemblyPart}
-        partCompletion={partCompletion}
-        partsInstalled={partsInstalled}
-        readinessKey={readinessKey}
-        sandboxMode={sandboxMode}
-        setDescription={setDescription}
-        setModel={setModel}
-        setName={setName}
-        setSelectedPart={setSelectedPart}
-        subagentCallable={subagentCallable}
-      />
-
-      <div className="grid min-h-0 flex-1 lg:grid-cols-[240px_minmax(0,1fr)] min-[1500px]:grid-cols-[280px_minmax(0,1fr)_360px]">
-        <AgentWorkshopPartsBin
-          capabilityCatalog={capabilityCatalog}
-          mountCapability={mountCapability}
-          selectedPart={selectedPart}
-          setDraggingPart={setDraggingPart}
-          setSelectedPart={setSelectedPart}
-        />
-
-        <AgentWorkshopWorkbench
-          a2aEnabled={a2aEnabled}
-          atomsAllow={atomsAllow}
-          atomsMode={atomsMode}
-          draggingPart={draggingPart}
-          exposed={exposed}
-          isPublic={isPublic}
-          maxBudgetUsd={maxBudgetUsd}
-          maxThinkingTokens={maxThinkingTokens}
-          maxTurns={maxTurns}
-          model={model}
-          onDrop={handleDrop}
-          prompt={prompt}
-          roleCount={roleCount}
-          safetyConfigured={safetyConfigured}
-          sandboxMode={sandboxMode}
-          selectedPart={selectedPart}
-          setSelectedPart={setSelectedPart}
-          subagentCallable={subagentCallable}
-          toolsConfigured={toolsConfigured}
-        />
-
-        <ScrollArea className="border-t lg:col-span-2 min-[1500px]:col-span-1 min-[1500px]:border-t-0 min-[1500px]:border-l">
-          <AgentWorkshopInspector
-            a2aEnabled={a2aEnabled}
-            a2aStatus={a2aStatus}
-            atomsAllow={atomsAllow}
-            atomsMode={atomsMode}
-            capabilityCatalog={capabilityCatalog}
-            exposed={exposed}
-            isPublic={isPublic}
-            maxBudgetUsd={maxBudgetUsd}
-            maxThinkingTokens={maxThinkingTokens}
-            maxTurns={maxTurns}
-            model={model}
-            profiles={profiles}
-            prompt={prompt}
-            promptMode={promptMode}
-            roles={roles}
-            sandboxMode={sandboxMode}
-            selectedPart={selectedPart}
-            setA2aEnabled={setA2aEnabled}
-            setAtomsAllow={setAtomsAllow}
-            setAtomsMode={setAtomsMode}
-            setIsPublic={setIsPublic}
-            setMaxBudgetUsd={setMaxBudgetUsd}
-            setMaxThinkingTokens={setMaxThinkingTokens}
-            setMaxTurns={setMaxTurns}
-            setModel={setModel}
-            setPrompt={setPrompt}
-            setPromptMode={setPromptMode}
-            setRoles={setRoles}
-            setSandboxMode={setSandboxMode}
-            setSubagentCallable={setSubagentCallable}
-            subagentCallable={subagentCallable}
+      <div className={cn('min-h-0 min-w-0 flex-1 transition-[margin]', selected && 'lg:mr-[500px]')}>
+        <ReactFlowProvider>
+          <AgentFlowCanvas
+            onClearSelection={() => setSelected(null)}
+            onSelect={setSelected}
+            selected={selected}
+            summaries={summaries}
           />
-        </ScrollArea>
+        </ReactFlowProvider>
       </div>
+
+      <div
+        className={cn(
+          'pointer-events-none absolute inset-x-5 top-4 z-10 flex items-center justify-between gap-3 max-md:inset-x-3',
+          selected && 'lg:right-[520px]'
+        )}
+      >
+        <div className="pointer-events-auto flex items-center gap-2 rounded-full border bg-background/95 px-3 py-2 text-xs shadow-sm backdrop-blur">
+          <span
+            className={readiness.saveBlocked ? 'size-2 rounded-full bg-destructive' : 'size-2 rounded-full bg-success'}
+          />
+          <span className="font-medium">{readiness.label}</span>
+          {readiness.optionalImprovements > 0 ? (
+            <span className="text-muted-foreground">· {readiness.optionalImprovements} optional improvements</span>
+          ) : null}
+        </div>
+        <Button
+          className="pointer-events-auto bg-background/95 shadow-sm backdrop-blur"
+          onClick={() => setSelected('request')}
+          size="sm"
+          variant="outline"
+        >
+          <HugeiconsIcon icon={MessageMultiple01Icon} />
+          Try with a sample request
+        </Button>
+      </div>
+
+      {selected ? (
+        <AgentFlowPanel
+          {...props}
+          capabilityCatalog={capabilityCatalog}
+          errors={validation.errors}
+          onClose={() => setSelected(null)}
+          profiles={profiles}
+          selected={selected}
+        />
+      ) : null}
     </div>
   );
 }
