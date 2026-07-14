@@ -17,7 +17,35 @@
 - High-risk tool approvals remain host-owned and are never bypassed.
 - The scheduler must run when no Kanban component is mounted.
 - All pack lifecycle writes use expected-version CAS and append a pack audit event atomically.
+- Worker delivery is at-least-once. The pack stores processed host event ids in
+  its private state and makes every transition idempotent.
+- Generic host capabilities enforce ownership, permission, payload-size,
+  pagination, and execution-time limits before invoking pack code.
 - Existing V1 Experiences remain compatible. Keep `graphCanvas` unchanged.
+
+## Plan audit decisions
+
+- Split delivery into two independently reviewable gates. **Gate A** (Tasks 1–3)
+  ships only reusable host/SDK capabilities and can be accepted without the
+  Kanban product. **Gate B** (Tasks 4–7) ships only Power Pack business logic
+  and UI against Gate A's public contracts.
+- Keep daemon-side extension contracts in `@monad/sdk-atom`. Keep browser-side
+  host bridge types in `@monad/sdk-experience`. The browser never receives the
+  daemon's `WorkspaceExperienceApiContext`; it calls its pack-owned
+  `apiBaseUrl` instead.
+- Current Experience API routing is exact-path matching. Kanban routes use
+  fixed paths and put task ids in query/body data; the plan does not silently
+  assume `:id` path parameters work.
+- “Third-party” means SDK-conformant, user-consented Atom Pack code in this
+  delivery. Atom Pack modules currently execute in-process and web components
+  execute same-origin, so this is not an untrusted-code sandbox. Marketplace
+  isolation requires a later out-of-process worker + iframe design.
+- The first autopilot version starts one session turn whose agent/tool loop
+  iterates internally. `session.stream_ended` closes an execution run; the
+  worker does not invent a second orchestration protocol or parse free-form
+  chat to guess completion.
+- React Flow is not part of the primary UI. A future dependency/DAG view may be
+  added as a Power Pack-owned optional asset without changing task lifecycle.
 
 ---
 
@@ -26,27 +54,37 @@
 **Files:**
 
 - Modify: `packages/sdk-atom/src/index.ts`
+- Modify: `packages/protocol/src/atom-pack.ts`
 - Modify: `packages/sdk-experience/src/runtime.ts`
 - Modify: `packages/sdk-experience/src/index.ts`
+- Modify: `packages/sdk-atom/test/unit/capability.test.ts`
 - Create: `packages/sdk-experience/test/unit/workspace-experience-capabilities.test.ts`
 
 **Interfaces:**
 
-- Consumes: `WorkspaceExperienceApiHandler`, `WorkspaceExperienceActions`.
-- Produces: `WorkspaceExperienceApiContext`, `ExperienceStateStore`, `ProjectSessionOperations`, `ProjectEventSubscription`, and `ExperienceWorker`.
+- Consumes: `WorkspaceExperienceApiHandler`, `WorkspaceExperienceActions`, and
+  the parsed Atom Pack manifest.
+- Produces: daemon-side `WorkspaceExperienceApiContext`,
+  `ExperienceStateStore`, `ProjectSessionOperations`,
+  `ExperienceWorkerScheduler`, `ExperienceWorker`; browser-side
+  `openProjectSession(sessionId)`; and explicit pack permissions.
 
 - [ ] **Step 1: Write the failing SDK contract test.**
 
 ~~~ts
-test('generic Experience capability names contain no Kanban business state', () => {
-  const capabilities = ['experienceState', 'projectSessions', 'projectEvents', 'worker'];
-  expect(capabilities.some((name) => /kanban|proposal|acceptance|task/i.test(name))).toBe(false);
+test('workspace Experience permissions are generic and parsed from the manifest', () => {
+  const manifest = parseAtomPackManifest({
+    name: 'board', version: '1.0.0', sdkVersion: '0',
+    atoms: ['workspace-experience'],
+    permissions: ['experience.state', 'project.sessions.read']
+  });
+  expect(manifest.permissions).toEqual(['experience.state', 'project.sessions.read']);
 });
 ~~~
 
 - [ ] **Step 2: Run the test to verify it fails.**
 
-Run: `bun test packages/sdk-experience/test/unit/workspace-experience-capabilities.test.ts`
+Run: `bun test packages/sdk-atom/test/unit/capability.test.ts packages/sdk-experience/test/unit/workspace-experience-capabilities.test.ts`
 
 Expected: FAIL because the exported generic capability types do not exist.
 
@@ -54,44 +92,72 @@ Expected: FAIL because the exported generic capability types do not exist.
 
 ~~~ts
 export interface ExperienceStateStore {
-  get<T>(key: string): Promise<{ value: T; version: number } | null>;
-  list<T>(prefix: string): Promise<Array<{ key: string; value: T; version: number }>>;
-  compareAndSwap<T>(input: { key: string; expectedVersion: number | null; value: T; event: unknown }): Promise<boolean>;
+  get<T>(projectId: string, key: string): Promise<{ value: T; version: number } | null>;
+  list<T>(projectId: string, prefix: string): Promise<Array<{ key: string; value: T; version: number }>>;
+  compareAndSwap<T>(input: { projectId: string; key: string; expectedVersion: number | null; value: T; event: unknown }): Promise<boolean>;
 }
 export interface ProjectSessionOperations {
   list(projectId: string): Promise<Array<{ id: string; title: string; state: string }>>;
-  create(projectId: string, input: { title: string; cwd?: string }): Promise<{ id: string }>;
-  open(sessionId: string): Promise<void>;
-  sendDirective(sessionId: string, input: { text: string }): Promise<void>;
+  create(projectId: string, input: { title: string; cwd?: string; idempotencyKey: string }): Promise<{ id: string }>;
+  sendMessage(sessionId: string, input: { text: string; idempotencyKey: string }): Promise<void>;
   listMessages(sessionId: string, cursor?: string): Promise<{ items: Array<{ id: string; role: string; text: string; createdAt: string }>; nextCursor: string | null }>;
   listObservations(sessionId: string, cursor?: string): Promise<{ items: Array<{ id: string; kind: string; text: string; createdAt: string }>; nextCursor: string | null }>;
+  runTurn(sessionId: string, input: { text: string; idempotencyKey: string }): Promise<{ runId: string }>;
   pause(sessionId: string): Promise<void>;
   cancel(sessionId: string): Promise<void>;
   listPendingApprovals(projectId: string, sessionId?: string): Promise<Array<{ id: string; sessionId: string; summary: string }>>;
+  resolveApproval(approvalId: string, decision: 'approved' | 'denied'): Promise<void>;
+}
+export interface ProjectExperienceEvent {
+  id: string; projectId: string; sessionId: string;
+  type: string; payload: Record<string, unknown>; createdAt: string;
+}
+export interface ExperienceWorkerScheduler {
+  schedule(projectId: string, input: { key: string; runAt: string }): Promise<void>;
+  cancel(projectId: string, key: string): Promise<void>;
+}
+export interface ExperienceWorker {
+  experienceId: string;
+  onProjectStart(projectId: string, context: WorkspaceExperienceApiContext): Promise<void>;
+  onEvent(event: ProjectExperienceEvent, context: WorkspaceExperienceApiContext): Promise<void>;
+  onWake(input: { projectId: string; key: string; now: string }, context: WorkspaceExperienceApiContext): Promise<void>;
 }
 export interface WorkspaceExperienceApiContext {
   atomPackId: string;
   principalId: string;
   experienceState: ExperienceStateStore;
   projectSessions: ProjectSessionOperations;
-  projectEvents: ProjectEventSubscription;
+  workerScheduler: ExperienceWorkerScheduler;
 }
 export type WorkspaceExperienceApiHandler =
   (request: Request, context: WorkspaceExperienceApiContext) => Response | Promise<Response>;
 ~~~
 
-Export these types through `@monad/sdk-experience`. Keep the existing V1 host API alias and its version compatibility behavior unchanged.
+Add this closed initial permission set to `@monad/protocol`:
+
+~~~ts
+export const workspaceExperiencePermissionSchema = z.enum([
+  'experience.state', 'experience.worker',
+  'project.sessions.read', 'project.sessions.create', 'project.sessions.send',
+  'project.observations.read', 'project.approvals.read', 'project.approvals.resolve'
+]);
+~~~
+
+Define daemon-side context types only in `@monad/sdk-atom`. Add the permission
+schema to `@monad/protocol`. In `@monad/sdk-experience`, add only the optional
+browser action `openProjectSession(sessionId)` and keep the existing V1 host API
+alias/version compatibility behavior unchanged.
 
 - [ ] **Step 4: Run the contract test to verify it passes.**
 
-Run: `bun test packages/sdk-experience/test/unit/workspace-experience-capabilities.test.ts`
+Run: `bun test packages/sdk-atom/test/unit/capability.test.ts packages/sdk-experience/test/unit/workspace-experience-capabilities.test.ts`
 
 Expected: PASS.
 
 - [ ] **Step 5: Commit.**
 
 ~~~bash
-git add packages/sdk-atom/src/index.ts packages/sdk-experience/src/runtime.ts packages/sdk-experience/src/index.ts packages/sdk-experience/test/unit/workspace-experience-capabilities.test.ts
+git add packages/protocol/src/atom-pack.ts packages/sdk-atom/src/index.ts packages/sdk-atom/test/unit/capability.test.ts packages/sdk-experience/src/runtime.ts packages/sdk-experience/src/index.ts packages/sdk-experience/test/unit/workspace-experience-capabilities.test.ts
 git commit -m "feat(sdk): add generic experience capabilities"
 ~~~
 
@@ -108,7 +174,9 @@ git commit -m "feat(sdk): add generic experience capabilities"
 **Interfaces:**
 
 - Consumes: Task 1's `WorkspaceExperienceApiContext`.
-- Produces: `createWorkspaceExperienceApiContext({ atomPackId, principalId, deps })` and route dispatch to `handler(request, context)`.
+- Produces: `createWorkspaceExperienceApiContext({ atomPackId, principalId,
+  permissions, deps })`, per-operation permission gates, and route dispatch to
+  `handler(request, context)`.
 
 - [ ] **Step 1: Write the failing authorization test.**
 
@@ -116,10 +184,20 @@ git commit -m "feat(sdk): add generic experience capabilities"
 test('workspace Experience API receives a derived pack and principal context', async () => {
   const handler = async (_request: Request, context: WorkspaceExperienceApiContext) =>
     Response.json({ pack: context.atomPackId, principal: context.principalId });
-  // Register the route, issue an authenticated request, and assert both derived values.
+  registry.registerApiRoute('pack-a', 'GET', '/whoami', handler);
+  const response = await requestAs('prn_a', '/api/atoms/pack-a/whoami');
+  expect(await response.json()).toEqual({ pack: 'pack-a', principal: 'prn_a' });
 });
 test('pack-b cannot read a record created through pack-a context', async () => {
-  // Assert pack-private namespace isolation for the same principal and key.
+  await contextFor('pack-a', 'prn_a').experienceState.compareAndSwap({
+    projectId: 'prj_a', key: 'task/x', expectedVersion: null,
+    value: { secret: 'a' }, event: { type: 'created' }
+  });
+  expect(await contextFor('pack-b', 'prn_a').experienceState.get('prj_a', 'task/x')).toBeNull();
+});
+test('an undeclared project observation permission fails before store access', async () => {
+  const context = createContext({ permissions: ['experience.state'] });
+  await expect(context.projectSessions.listObservations('ses_a')).rejects.toThrow('project.observations.read');
 });
 ~~~
 
@@ -133,19 +211,25 @@ Expected: FAIL because the current handler receives only `Request`.
 
 ~~~ts
 export function createWorkspaceExperienceApiContext(input: {
-  atomPackId: string; principalId: string; deps: ExperienceCapabilityDeps;
+  atomPackId: string; principalId: string;
+  permissions: readonly WorkspaceExperiencePermission[];
+  deps: ExperienceCapabilityDeps;
 }): WorkspaceExperienceApiContext {
+  const requirePermission = permissionGuard(input.permissions);
   return {
     atomPackId: input.atomPackId,
     principalId: input.principalId,
     experienceState: input.deps.state.forPack(input.atomPackId, input.principalId),
-    projectSessions: input.deps.projectSessions.forPrincipal(input.principalId),
-    projectEvents: input.deps.projectEvents.forPrincipal(input.principalId)
+    projectSessions: input.deps.projectSessions.forPrincipal(input.principalId, requirePermission),
+    workerScheduler: input.deps.workerScheduler.forPack(input.atomPackId, input.principalId, requirePermission)
   };
 }
 ~~~
 
-Derive the principal from the authenticated request and pack id from the registered route owner. Add no `kanban` branch or product-state check.
+Derive the principal from the authenticated request, the pack id from the
+registered route owner, and permissions from the parsed installed manifest.
+Add no `kanban` branch or product-state check. Reject project/session ids the
+principal does not own even when the permission is declared.
 
 - [ ] **Step 4: Run the tests to verify they pass.**
 
@@ -166,6 +250,11 @@ git commit -m "feat(atoms): scope workspace experience APIs"
 
 - Create: `apps/monad/src/atoms/experience-state.ts`
 - Create: `apps/monad/src/atoms/experience-workers.ts`
+- Create: `apps/monad/src/store/db/experience-state.ts`
+- Create: `apps/monad/src/store/db/experience-worker-wakeups.ts`
+- Modify: `apps/monad/src/store/db/schema.ts`
+- Modify: `apps/monad/src/store/db/migrations.ts`
+- Modify: `apps/monad/src/store/db/index.ts`
 - Modify: `apps/monad/src/atoms/lifecycle.ts`
 - Modify: `apps/monad/src/services/event-bus.ts`
 - Modify: `packages/sdk-atom/src/index.ts`
@@ -175,18 +264,40 @@ git commit -m "feat(atoms): scope workspace experience APIs"
 **Interfaces:**
 
 - Consumes: Tasks 1–2.
-- Produces: pack/private opaque state CAS, project session create/list/open/send/pause/cancel, public approval summaries, and worker event delivery.
+- Produces: pack/private opaque state CAS, project session
+  create/list/send/run/pause/cancel, normalized transcript/observation reads,
+  public approval summaries, worker event delivery, and durable project-scoped
+  wake-ups.
 
 - [ ] **Step 1: Write the failing state and worker tests.**
 
 ~~~ts
 test('compareAndSwap appends an event only for the expected version', async () => {
   const state = createExperienceStateStore(db, 'pack-a', 'prn_a');
-  expect(await state.compareAndSwap({ key: 'task/x', expectedVersion: null, value: { n: 1 }, event: { type: 'created' } })).toBe(true);
-  expect(await state.compareAndSwap({ key: 'task/x', expectedVersion: 0, value: { n: 2 }, event: { type: 'updated' } })).toBe(false);
+  expect(await state.compareAndSwap({ projectId: 'prj_a', key: 'task/x', expectedVersion: null, value: { n: 1 }, event: { type: 'created' } })).toBe(true);
+  expect(await state.compareAndSwap({ projectId: 'prj_a', key: 'task/x', expectedVersion: 0, value: { n: 2 }, event: { type: 'updated' } })).toBe(false);
 });
 test('worker receives a permitted approval event', async () => {
-  // Register a worker, publish one approval event, and assert exactly one project-scoped delivery.
+  const onEvent = mock(async () => {});
+  registry.register('pack-a', worker({ onEvent }));
+  await registry.publish(projectEvent({ id: 'evt_1', projectId: 'prj_a', type: 'approval_requested' }));
+  expect(onEvent).toHaveBeenCalledTimes(1);
+  expect(onEvent.mock.calls[0][0]).toMatchObject({ id: 'evt_1', projectId: 'prj_a' });
+});
+test('redelivery of the same host event is idempotent in pack state', async () => {
+  const event = projectEvent({ id: 'evt_1', projectId: 'prj_a', type: 'session.stream_ended' });
+  await sampleExperienceFixture.onEvent(event, context);
+  await sampleExperienceFixture.onEvent(event, context);
+  expect(await fixtureTransitions('evt_1')).toHaveLength(1);
+});
+test('a due wake-up survives daemon registry reconstruction', async () => {
+  await scheduler.schedule('prj_a', { key: 'dispatch', runAt: clock.now() });
+  const restarted = createWorkerRegistry(db, clock);
+  await restarted.deliverDueWakeups();
+  expect(onWake).toHaveBeenCalledWith(
+    expect.objectContaining({ projectId: 'prj_a', key: 'dispatch' }),
+    expect.anything()
+  );
 });
 ~~~
 
@@ -199,19 +310,52 @@ Expected: FAIL because there is neither an opaque state store nor a worker regis
 - [ ] **Step 3: Implement generic runtime primitives.**
 
 ~~~ts
-export interface ExperienceWorker {
-  experienceId: string;
-  onEvent(event: { projectId: string; type: string; payload: Record<string, unknown> },
-          context: WorkspaceExperienceApiContext): Promise<void>;
+export interface ExperienceWorkerRegistry {
+  register(atomPackId: string, worker: ExperienceWorker): void;
+  startProjects(projectsFor: (atomPackId: string) => Promise<string[]>): Promise<void>;
+  publish(event: ProjectExperienceEvent): Promise<void>;
+  deliverDueWakeups(now?: string): Promise<void>;
 }
-export async function deliverExperienceEvent(event: ProjectEvent): Promise<void> {
-  for (const worker of workersFor(event.projectId)) {
-    await worker.onEvent(toPublicEvent(event), workerContext(worker, event.projectId));
+export async function deliverExperienceEvent(event: ProjectExperienceEvent): Promise<void> {
+  for (const registration of workerRegistry.forProject(event.projectId)) {
+    await registration.worker.onEvent(event, contextFor(registration, event.projectId));
   }
 }
 ~~~
 
-Persist opaque JSON under `(atomPackId, principalId, projectId, key)` with monotonically increasing version. The host validates authorization, quotas, and transactions but never inspects a value's task/proposal semantics. Deliver only permission-filtered session and approval events. Worker retries and lifecycle are host-owned; worker decisions are pack-owned.
+Persist opaque JSON under `(atomPackId, principalId, projectId, key)` with monotonically increasing version. The host validates authorization, quotas, and transactions but never inspects a value's task/proposal semantics. Deliver only permission-filtered session and approval events. Worker retries and lifecycle are host-owned; worker decisions are pack-owned. Delivery is at-least-once, keyed by stable event id; the pack owns deduplication in its opaque state.
+
+Add two generic tables to the flattened pre-release schema:
+
+~~~sql
+CREATE TABLE experience_state (
+  atom_pack_id TEXT NOT NULL, principal_id TEXT NOT NULL,
+  project_id TEXT NOT NULL, record_key TEXT NOT NULL,
+  value TEXT NOT NULL, version INTEGER NOT NULL, updated_at TEXT NOT NULL,
+  PRIMARY KEY (atom_pack_id, principal_id, project_id, record_key)
+);
+CREATE TABLE experience_state_events (
+  id TEXT PRIMARY KEY, atom_pack_id TEXT NOT NULL,
+  principal_id TEXT NOT NULL, project_id TEXT NOT NULL,
+  record_key TEXT NOT NULL, version INTEGER NOT NULL,
+  payload TEXT NOT NULL, created_at TEXT NOT NULL
+);
+CREATE TABLE experience_worker_wakeups (
+  atom_pack_id TEXT NOT NULL, principal_id TEXT NOT NULL,
+  project_id TEXT NOT NULL, wake_key TEXT NOT NULL,
+  run_at TEXT NOT NULL, attempt INTEGER NOT NULL, updated_at TEXT NOT NULL,
+  PRIMARY KEY (atom_pack_id, principal_id, project_id, wake_key)
+);
+~~~
+
+Execute the state update and audit insert in one SQLite transaction. Implement
+`listObservations` by adapting existing neutral observation/history services;
+do not expose provider-private raw events. Register workers during pack load.
+After daemon startup, the host enumerates authorized projects internally and
+calls `onProjectStart(projectId, context)`; packs do not receive a generic
+cross-project enumeration capability. Persist scheduled wake-ups, claim them
+transactionally, and retry failed delivery with backoff so expired leases and
+incomplete provisioning can recover without a mounted UI.
 
 - [ ] **Step 4: Run the tests to verify they pass.**
 
@@ -222,9 +366,20 @@ Expected: PASS.
 - [ ] **Step 5: Commit.**
 
 ~~~bash
-git add apps/monad/src/atoms apps/monad/src/services/event-bus.ts packages/sdk-atom/src/index.ts apps/monad/test/unit/atoms
+git add apps/monad/src/atoms apps/monad/src/services/event-bus.ts apps/monad/src/store/db packages/sdk-atom/src/index.ts apps/monad/test/unit/atoms
 git commit -m "feat(atoms): add state and worker capabilities"
 ~~~
+
+## Gate A verification
+
+Before starting Task 4, run:
+
+`bun test packages/sdk-atom/test/unit/capability.test.ts packages/sdk-experience/test/unit/workspace-experience-capabilities.test.ts apps/monad/test/e2e/workspace-experience-api.test.ts apps/monad/test/unit/atoms/experience-capabilities.test.ts apps/monad/test/unit/atoms/experience-workers.test.ts`
+
+Expected: PASS with a synthetic non-Kanban Experience proving state isolation,
+permission denial, session reads, one `runTurn`, and worker restart delivery.
+Review Gate A independently; Gate B must consume it without importing daemon
+internals.
 
 ### Task 4: Build the Power Pack domain and private API
 
@@ -267,21 +422,59 @@ Expected: FAIL because no pack-owned lifecycle module exists.
 ~~~ts
 export type KanbanStage = 'requirements' | 'execution' | 'acceptance' | 'completed' | 'cancelled' | 'failed';
 export interface ProjectTask {
-  id: string; projectId: string; sessionId: string; stage: KanbanStage;
+  schemaVersion: 1; id: string; projectId: string; sessionId: string; stage: KanbanStage;
   version: number; proposalRevision: number; executionIteration: number;
+}
+export interface ProposalRevision {
+  revision: number; summary: string; acceptanceCriteria: string[]; createdAt: string;
+}
+export interface ExecutionRun {
+  iteration: number; runId: string; hostEventIds: string[];
+  status: 'running' | 'waiting_approval' | 'succeeded' | 'failed';
+  artifactRefs: Array<{ kind: string; uri: string; label: string }>;
+}
+export interface AcceptanceReview {
+  runId: string; decision: 'pending' | 'accepted' | 'returned';
+  checklist: Array<{ criterion: string; passed: boolean; evidenceRef?: string }>;
+  reason?: string;
 }
 export const kanbanApi: WorkspaceExperienceApi = {
   experienceId: 'kanban',
   routes: [
     { method: 'GET', path: '/tasks', handle: listTasks },
-    { method: 'POST', path: '/tasks', handle: createTask },
-    { method: 'POST', path: '/tasks/:id/proposals', handle: submitProposal },
-    { method: 'POST', path: '/tasks/:id/acceptance', handle: decideAcceptance }
+    { method: 'POST', path: '/tasks/create', handle: createTask },
+    { method: 'GET', path: '/tasks/panel', handle: getTaskPanel },
+    { method: 'POST', path: '/messages/send', handle: sendTaskMessage },
+    { method: 'POST', path: '/proposals/submit', handle: submitProposal },
+    { method: 'POST', path: '/proposals/decide', handle: decideProposal },
+    { method: 'POST', path: '/execution/control', handle: controlExecution },
+    { method: 'POST', path: '/acceptance/decide', handle: decideAcceptance }
   ]
 };
 ~~~
 
-`createTask` creates a project session via the generic capability, writes the private task record with CAS, and cancels an unused session on a failed pack write. Register the API and worker from `monadPowerPack`; extend staging to include every new web asset.
+Declare these Power Pack permissions next to its existing
+`workspace-experience` atom declaration:
+
+~~~ts
+permissions: [
+  'experience.state', 'experience.worker',
+  'project.sessions.read', 'project.sessions.create', 'project.sessions.send',
+  'project.observations.read', 'project.approvals.read', 'project.approvals.resolve'
+]
+~~~
+
+All ids live in validated query/body objects because the current registry uses
+exact route matching. `createTask` is a recoverable saga:
+
+1. CAS-create `provision/<taskId>` with caller idempotency key.
+2. Call generic `projectSessions.create(..., { idempotencyKey })`.
+3. CAS-bind the returned session id and create `task/<taskId>`.
+4. Mark provisioning complete; on restart the worker resumes incomplete rows.
+
+This avoids pretending a host session write and pack-state write share one
+database transaction. Register the API and worker from `monadPowerPack` and
+extend staging to include every new web asset.
 
 - [ ] **Step 4: Run tests to verify they pass.**
 
@@ -321,6 +514,10 @@ test('approval_requested pauses only its matching task', async () => {
   expect(next.task(taskA.id).executionState).toBe('waiting_approval');
   expect(next.task(taskB.id).executionState).toBe('running');
 });
+test('session.stream_ended moves a clean run to acceptance without parsing chat', async () => {
+  const next = await kanbanWorker.onEvent(streamEndedFor(taskA.sessionId), context);
+  expect(next.task(taskA.id).stage).toBe('acceptance');
+});
 ~~~
 
 - [ ] **Step 2: Run the test to verify it fails.**
@@ -333,18 +530,38 @@ Expected: FAIL because worker dispatch and approval mapping do not exist.
 
 ~~~ts
 export async function dispatchRunnableTasks(input: { limit: number; runnable: ProjectTask[] }) {
-  const leased = input.runnable.slice(0, input.limit);
+  const leased: ProjectTask[] = [];
+  for (const task of input.runnable) {
+    if (leased.length >= input.limit) break;
+    const acquired = await store.acquireLease(task.id, task.version, workerId, leaseExpiresAt());
+    if (acquired) leased.push(acquired);
+  }
   await Promise.all(leased.map((task) => startExecution(task)));
   return leased;
 }
 async function startExecution(task: ProjectTask) {
-  await context.projectSessions.sendDirective(task.sessionId, { text: executionDirective(task) });
-  await store.transition(task.id, task.version, { stage: 'execution', executionState: 'running' },
-    { type: 'execution.started' });
+  try {
+    const run = await context.projectSessions.runTurn(task.sessionId, {
+      text: executionDirective(task), idempotencyKey: `kanban:${task.id}:${task.executionIteration + 1}`
+    });
+    await store.markRunStarted(task.id, task.version, run.runId);
+  } catch (error) {
+    await store.releaseLeaseToQueued(task.id, String(error));
+  }
 }
 ~~~
 
 Only host approval summaries decide `waiting_approval`; the worker never resolves an approval. After `approval_resolved`, reload state and queue the next iteration only when no pending summary remains.
+Acquire the CAS lease before any external side effect. For the first delivery,
+the session's agent/tool loop performs internal plan → implement → verify →
+revise work inside one `runTurn`. A clean `session.stream_ended` moves the task
+to Acceptance; a failed/aborted stream records a failed run. The worker never
+parses prose to determine success. Scheduled wake-ups recover expired leases
+and incomplete provisioning records after daemon restart.
+Every queue-producing transition schedules the same project-scoped `dispatch`
+wake-up key. `onProjectStart` and `onWake` both run the identical recovery +
+dispatch function, making startup, retries, and normal scheduling converge on
+one code path.
 
 - [ ] **Step 4: Run the worker tests to verify they pass.**
 
@@ -369,7 +586,8 @@ git commit -m "feat(power-pack): schedule parallel kanban execution"
 
 **Interfaces:**
 
-- Consumes: Task 4's private routes and Task 1's `apiBaseUrl` / generic session-open action.
+- Consumes: Task 4's private routes and Task 1's browser-side
+  `apiBaseUrl` / optional session-open action.
 - Produces: `monad-kanban` with Requirements, Execution, and Acceptance lanes plus a component-owned selected-task right inspector.
 
 - [ ] **Step 1: Write failing UI tests.**
@@ -385,12 +603,12 @@ test('selecting a requirements card opens the component inspector with the task 
   const api = fakeHostApi();
   await selectTaskCard(api, requirementsTask.id);
   expect(renderedInspector(api)).toContain('Task discussion');
-  expect(api.projectSessions.listMessages).toHaveBeenCalledWith(requirementsTask.sessionId);
+  expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining(`/tasks/panel?taskId=${requirementsTask.id}`));
 });
 test('selecting an execution card opens the complete observation inspector', async () => {
   const api = fakeHostApi();
   await selectTaskCard(api, executionTask.id);
-  expect(api.projectSessions.listObservations).toHaveBeenCalledWith(executionTask.sessionId);
+  expect(renderedInspector(api)).toContain('Tool calls');
 });
 ~~~
 
@@ -411,15 +629,26 @@ async function loadTasks(api) {
   return response.json();
 }
 async function selectTask(api, task) {
-  const content = task.stage === 'execution'
-    ? await api.projectSessions.listObservations(task.sessionId)
-    : await api.projectSessions.listMessages(task.sessionId);
+  const response = await fetch(`${api.apiBaseUrl}/tasks/panel?taskId=${encodeURIComponent(task.id)}`);
+  if (!response.ok) throw new Error(`kanban panel request failed: ${response.status}`);
+  const content = await response.json();
   renderInspector(api, task, content);
 }
 ~~~
 
 Render only the three active lanes, concise cards, proposal/execution/acceptance detail, and their required core actions. Keep terminal cards behind history. Do not read `graphCanvas` for task data or add a host React component.
-The inspector belongs inside the web component, not the host `RightPanelProvider`: Requirements renders the task's complete discussion plus composer; Execution renders complete observation with iteration markers and approval controls; Acceptance renders the proposal, artifacts, evidence, checklist, and accept/return controls. Keep “open full session” as a secondary navigation action.
+The inspector belongs inside the web component, not the host
+`RightPanelProvider`. Its private API uses daemon-side capability context to
+read transcript/observation data; daemon capability objects never cross into
+the browser. Requirements renders complete discussion plus composer; Execution
+renders normalized observation with iteration markers and approval controls;
+Acceptance renders proposal, artifacts, evidence, checklist, and accept/return.
+Keep “open full session” as a secondary browser host action.
+
+Add keyboard arrow navigation between cards, Escape-to-close with focus return,
+an ARIA live region for state changes, a 420–560px resizable inspector on
+desktop, and a full-width overlay inspector below 900px. Paginate lanes and
+panel timelines; do not render every project task or observation event at once.
 
 - [ ] **Step 4: Run UI and staging tests to verify they pass.**
 
@@ -457,7 +686,14 @@ test('two Kanban tasks use two sessions in one shared Experience', async () => {
   expect((await listKanbanTasks(projectId)).map((task) => task.id)).toEqual([first.id, second.id]);
 });
 test('an unresolved approval pauses one task and an acceptance return requeues it', async () => {
-  // Drive proposal approval, approval_requested, approval_resolved, acceptance return, then assert execution/queued.
+  const task = await createAndApproveProposal(projectId, 'A');
+  await publishHostEvent(approvalRequested(task.sessionId, 'apr_1'));
+  expect(await getKanbanTask(task.id)).toMatchObject({ executionState: 'waiting_approval' });
+  await resolveApprovalAsUser('apr_1', 'approved');
+  await publishHostEvent(approvalResolved(task.sessionId, 'apr_1'));
+  await publishHostEvent(streamEnded(task.sessionId));
+  await decideAcceptance(task.id, { decision: 'return', reason: 'add regression case' });
+  expect(await getKanbanTask(task.id)).toMatchObject({ stage: 'execution', executionState: 'queued' });
 });
 ~~~
 
@@ -469,7 +705,12 @@ Expected: FAIL until the generic host capability and Power Pack flow exist.
 
 - [ ] **Step 3: Implement the installed-pack fixture.**
 
-Use the mounted-pack discovery pattern from `workspace-experience-api.test.ts`, execute only public Experience API routes, and assert the host does not expose a `projectKanban` snapshot field or a Kanban-specific route.
+Mount the Power Pack fixture through the same manifest registration helper used
+by `workspace-experience-api.test.ts`. Create and advance tasks only with the
+eight fixed routes declared in Task 4, publish host events through the generic
+worker registry, and read UI data through `/tasks` and `/tasks/panel`. Assert
+that the host snapshot has no `projectKanban` field and its route registry has
+no host-owned route containing `kanban`, `proposal`, or `acceptance`.
 
 - [ ] **Step 4: Run focused verification.**
 
@@ -493,3 +734,23 @@ Expected: no whitespace errors; changes are limited to generic Experience capabi
 git add apps/monad/test/e2e packages/sdk-experience/test/unit
 git commit -m "test: cover third-party kanban lifecycle"
 ~~~
+
+## Deferred extension seams
+
+These are deliberate follow-ons, not hidden MVP requirements:
+
+| Extension | Existing seam | Add later without changing the three-stage contract |
+| --- | --- | --- |
+| Task dependencies / DAG | `ProjectTask.schemaVersion` and pack-private records | Add `dependsOn` plus cycle validation in the Power Pack. React Flow may render an optional dependency view; the Kanban remains the operating surface. |
+| Reusable workflow templates | Proposal snapshot and task creation API | Add pack-owned task templates and policy presets; do not add task types to the host. |
+| Rich artifacts and checks | Immutable run and acceptance records | Store typed artifact references and check results in pack state; blobs continue through generic host file/artifact facilities. |
+| Notifications and external automation | Stable pack audit events and worker events | Add pack-owned webhook/notification adapters with explicit permissions, signing, retry, and delivery logs. |
+| Team review | Principal-scoped capability context | Add generic project-role/actor context first, then pack-owned comments, reviewers, and acceptance policy. |
+| Marketplace-grade isolation | Manifest permissions and Gate A capability boundary | Move daemon workers out of process and web UI into an iframe/sandbox before treating arbitrary third-party code as untrusted. |
+| Portfolio analytics | Cursor-paginated task and audit APIs | Build aggregate, read-only Power Pack views; do not denormalize Kanban state into host snapshots. |
+
+Do not add these schemas or UI controls during Tasks 1–7 except for the
+version, cursor, event-id, and artifact-reference fields needed to preserve the
+seams. The next review checkpoint after MVP is real usage evidence: queue
+depth, approval wait time, execution iterations, acceptance return rate, worker
+recovery count, and inspector load latency.
