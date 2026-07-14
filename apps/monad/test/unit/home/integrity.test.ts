@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initMonadHome, loadAll, pathsForHome, saveProfile } from '@monad/home';
 import { ModelProviderType } from '@monad/protocol';
+import { sql } from 'drizzle-orm';
 
 import { createStore } from '#/store/db/index.ts';
 import { checkAndRepair } from '#/store/home/integrity.ts';
@@ -209,12 +210,27 @@ describe('checkAndRepair', () => {
     store.close();
   });
 
-  test('db schema version matches after migration', async () => {
+  test('db migration status is current after migration', async () => {
     await initMonadHome(paths);
     const store = createStore({ path: paths.db });
     const report = await checkAndRepair(paths, store);
     store.close();
 
     expect(report.db).toBe('ok');
+  });
+
+  test('reports version-mismatch when the newest migration journal row is missing', async () => {
+    await initMonadHome(paths);
+    const store = createStore({ path: paths.db });
+    store.db.run(
+      sql`DELETE FROM __drizzle_migrations
+          WHERE created_at = (SELECT MAX(created_at) FROM __drizzle_migrations)`
+    );
+
+    expect(store.hasCurrentMigration()).toBe(false);
+    const report = await checkAndRepair(paths, store);
+    store.close();
+
+    expect(report.db).toBe('version-mismatch');
   });
 });

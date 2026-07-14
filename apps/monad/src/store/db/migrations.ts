@@ -5,8 +5,6 @@ import type { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core';
 
 import { LATEST_MIGRATION_TIMESTAMP, MIGRATIONS } from './migrations.generated.ts';
 
-// Kept until Task 3 moves Home integrity checks to hasCurrentMigration().
-export const CURRENT_SCHEMA_VERSION = LATEST_MIGRATION_TIMESTAMP;
 const config: MigrationConfig = { migrationsFolder: '<embedded>' };
 
 export function migrate(db: BunSQLiteDatabase): void {

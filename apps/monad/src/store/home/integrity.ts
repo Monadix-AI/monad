@@ -4,8 +4,6 @@ import type { Store } from '#/store/db/index.ts';
 import { unlink } from 'node:fs/promises';
 import { initMonadHome, loadAll, loadAuth, saveAuth, saveProfile, tryParseProfile } from '@monad/home';
 
-import { CURRENT_SCHEMA_VERSION } from '#/store/db/index.ts';
-
 export interface IntegrityReport {
   config: 'ok' | 'missing';
   profile: 'ok' | 'missing' | 'repaired';
@@ -89,12 +87,8 @@ export async function checkAndRepair(paths: MonadPaths, store: Store): Promise<I
       }
     }
   }
-
-  {
-    const version = store.getSchemaVersion();
-    if (version !== CURRENT_SCHEMA_VERSION) {
-      report.db = 'version-mismatch';
-    }
+  if (!store.hasCurrentMigration()) {
+    report.db = 'version-mismatch';
   }
 
   return report;

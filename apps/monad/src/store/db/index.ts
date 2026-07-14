@@ -124,7 +124,7 @@ import {
   setGenStatus,
   setMemory
 } from './messages.ts';
-import { CURRENT_SCHEMA_VERSION, hasCurrentMigration, migrate } from './migrations.ts';
+import { hasCurrentMigration, migrate } from './migrations.ts';
 import { insertNativeAgentDirectMessage, listNativeAgentDirectMessages } from './native-agent-messages.ts';
 import {
   clearEmbeddings,
@@ -216,8 +216,8 @@ export class Store {
     }
   }
 
-  getSchemaVersion(): number {
-    return hasCurrentMigration(this.sqlite) ? CURRENT_SCHEMA_VERSION : 0;
+  hasCurrentMigration(): boolean {
+    return hasCurrentMigration(this.sqlite);
   }
 
   getExperienceState(
@@ -830,4 +830,3 @@ export function createStore(opts?: StoreOptions): Store {
 }
 
 export { factId, MemoryDir, projectKey, scopeOf } from './memory-dir.ts';
-export { CURRENT_SCHEMA_VERSION } from './migrations.ts';
