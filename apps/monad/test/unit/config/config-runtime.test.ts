@@ -4,7 +4,14 @@
 import { describe, expect, test } from 'bun:test';
 import { createDefaultConfig } from '@monad/home';
 
-import { buildBrowserMcpServer, buildComputerMcpServer } from '#/config/mcp-presets.ts';
+import { resolveConfigMcpSpecs } from '#/capabilities/mcp/service.ts';
+import {
+  buildBrowserMcpServer,
+  buildComputerMcpServer,
+  buildMonadixMcpServer,
+  MONADIX_DEFAULT_URL,
+  MONADIX_READONLY_TOOLS
+} from '#/config/mcp-presets.ts';
 import { resolveEffectiveSandboxMode } from '#/config/resolve.ts';
 import { resolveSecretMap, resolveSecretRef } from '#/config/secrets.ts';
 
@@ -197,5 +204,69 @@ describe('buildComputerMcpServer', () => {
   test('marks the server host-escape so its mutating tools are session-gated, never permanently allowed', () => {
     const spec = buildComputerMcpServer({ enabled: true, command: 'uvx', args: [] });
     expect(spec.trust.hostEscape).toBe(true);
+  });
+});
+
+// ── Monadix consumer preset (buildMonadixMcpServer) ─────────────────────────────
+
+describe('buildMonadixMcpServer', () => {
+  test('defaults to the first-party http+oauth endpoint with read-only tools auto-approved', () => {
+    const spec = buildMonadixMcpServer({});
+    expect(spec.name).toBe('monadix');
+    expect(spec.transport).toBe('http');
+    if (spec.transport !== 'http') throw new Error('expected http transport');
+    expect(spec.url).toBe(MONADIX_DEFAULT_URL);
+    expect(spec.auth.mode).toBe('oauth');
+    if (spec.auth.mode === 'oauth') expect(spec.auth.flow).toBe('loopback');
+    expect(spec.trust.hostEscape).toBe(false);
+    expect(spec.trust.autoApproveTools).toEqual(MONADIX_READONLY_TOOLS.map((t) => `monadix__${t}`));
+  });
+
+  test('honors baseUrl and device flow overrides', () => {
+    const spec = buildMonadixMcpServer({ baseUrl: 'https://staging.monadix.ai/mcp', flow: 'device' });
+    if (spec.transport !== 'http') throw new Error('expected http transport');
+    expect(spec.url).toBe('https://staging.monadix.ai/mcp');
+    if (spec.auth.mode === 'oauth') expect(spec.auth.flow).toBe('device');
+  });
+
+  test('autoApproveReadOnly:false gates every tool (empty auto-approve list)', () => {
+    const spec = buildMonadixMcpServer({ autoApproveReadOnly: false });
+    expect(spec.trust.autoApproveTools).toEqual([]);
+  });
+});
+
+describe('resolveConfigMcpSpecs — monadix preset synthesis', () => {
+  const baseCfg = () => createDefaultConfig('prn_x00000000000', 'tester');
+
+  test('synthesizes the monadix server when enabled', () => {
+    const cfg = baseCfg();
+    cfg.monadix = { enabled: true };
+    const specs = resolveConfigMcpSpecs(cfg);
+    expect(specs.some((s) => s.name === 'monadix')).toBe(true);
+  });
+
+  test('omits the monadix server when disabled', () => {
+    const cfg = baseCfg();
+    cfg.monadix = { enabled: false };
+    expect(resolveConfigMcpSpecs(cfg).some((s) => s.name === 'monadix')).toBe(false);
+  });
+
+  test('an operator mcpServers entry named "monadix" wins over the preset', () => {
+    const cfg = baseCfg();
+    cfg.monadix = { enabled: true };
+    cfg.mcpServers = [
+      {
+        name: 'monadix',
+        transport: 'http',
+        url: 'https://self-hosted.example/mcp',
+        auth: { mode: 'none' },
+        enabled: true,
+        trust: { autoApproveTools: [], hostEscape: false }
+      }
+    ];
+    const monadix = resolveConfigMcpSpecs(cfg).filter((s) => s.name === 'monadix');
+    expect(monadix).toHaveLength(1);
+    if (monadix[0]?.transport !== 'http') throw new Error('expected http transport');
+    expect(monadix[0].url).toBe('https://self-hosted.example/mcp');
   });
 });

@@ -17,7 +17,7 @@ import { logger } from '@monad/logger';
 import { HOST_CONTROL_KEY } from '#/agent/approvals/engine.ts';
 import { createDaemonMcpOAuth } from '#/capabilities/mcp/oauth.ts';
 import { assertUrlAllowed, connectMcpServer, isBlockedIp, type McpConnection } from '#/capabilities/tools';
-import { buildBrowserMcpServer, buildComputerMcpServer } from '#/config/mcp-presets.ts';
+import { buildBrowserMcpServer, buildComputerMcpServer, buildMonadixMcpServer } from '#/config/mcp-presets.ts';
 import { resolveSecretMap, resolveSecretRef } from '#/config/secrets.ts';
 
 /** One live config/preset MCP connection plus the spec it was opened from (the spec lets a later
@@ -35,13 +35,16 @@ const configMcpSource = (name: string): string => `config-mcp:${name}`;
 
 /** config.json servers + synthesized browser/computer presets. An operator-defined entry of the same
  *  name wins, so its preset is skipped. */
-function resolveConfigMcpSpecs(cfg: MonadConfig): McpServerConfig[] {
+export function resolveConfigMcpSpecs(cfg: MonadConfig): McpServerConfig[] {
   const mcpServers = [...cfg.mcpServers];
   if (cfg.browser.enabled && !mcpServers.some((s) => s.name === 'browser')) {
     mcpServers.push(buildBrowserMcpServer(cfg.browser));
   }
   if (cfg.computer.enabled && !mcpServers.some((s) => s.name === 'computer')) {
     mcpServers.push(buildComputerMcpServer(cfg.computer));
+  }
+  if (cfg.monadix.enabled && !mcpServers.some((s) => s.name === 'monadix')) {
+    mcpServers.push(buildMonadixMcpServer(cfg.monadix));
   }
   return mcpServers;
 }

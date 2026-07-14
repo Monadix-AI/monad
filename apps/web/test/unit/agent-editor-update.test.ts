@@ -11,7 +11,8 @@ const agent = {
   capabilities: [],
   declaredScopes: [],
   visibility: { subagentCallable: false, public: false },
-  a2a: { enabled: false }
+  a2a: { enabled: false },
+  monadix: { consume: false }
 } satisfies Agent;
 
 test('agent editor update includes per-agent A2A exposure setting', () => {
@@ -30,7 +31,8 @@ test('agent editor update includes per-agent A2A exposure setting', () => {
     roles: {},
     sandboxMode: '',
     subagentCallable: false,
-    a2aEnabled: true
+    a2aEnabled: true,
+    monadixConsume: true
   });
 
   expect(patch).toMatchObject({

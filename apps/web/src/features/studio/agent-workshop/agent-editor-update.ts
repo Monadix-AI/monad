@@ -16,6 +16,7 @@ export interface AgentEditorUpdateInput {
   sandboxMode: SandboxMode | '';
   subagentCallable: boolean;
   a2aEnabled: boolean;
+  monadixConsume: boolean;
 }
 
 export function buildAgentEditorUpdate({
@@ -33,7 +34,8 @@ export function buildAgentEditorUpdate({
   roles,
   sandboxMode,
   subagentCallable,
-  a2aEnabled
+  a2aEnabled,
+  monadixConsume
 }: AgentEditorUpdateInput): { agentId: AgentId } & UpdateAgentRequest {
   return {
     agentId,
@@ -47,6 +49,7 @@ export function buildAgentEditorUpdate({
     roles,
     atoms: { mode: atomsMode, allow: atomsAllow, deny: agent.atoms?.deny ?? [] },
     visibility: { subagentCallable, public: isPublic },
-    a2a: { enabled: a2aEnabled }
+    a2a: { enabled: a2aEnabled },
+    monadix: { consume: monadixConsume }
   };
 }

@@ -57,6 +57,15 @@ export const a2aAgentSettingsSchema = z.object({
 });
 export type A2aAgentSettings = z.infer<typeof a2aAgentSettingsSchema>;
 
+/** Per-agent Monadix consumer setting. When `consume`, this agent is exposed the `monadix__*` tools
+ *  (delegate/match/etc.) so it can hand work OUT to the Monadix network. Off by default and gated
+ *  behind the daemon-level `monadix.enabled` login; the provider (publish) direction is the separate
+ *  `visibility.public` toggle. */
+export const monadixAgentSettingsSchema = z.object({
+  consume: z.boolean().default(false)
+});
+export type MonadixAgentSettings = z.infer<typeof monadixAgentSettingsSchema>;
+
 /** Per-agent tool/atom exposure — a *filter* over the daemon-registered tools, never an installer.
  *  `allow` narrows to a subset; `deny` removes from the inherited/allowed set (Claude Code
  *  `disallowedTools`). Exposure ⊆ registration. */
@@ -134,6 +143,7 @@ export const agentSchema = z.object({
   maxBudgetUsd: z.number().positive().optional(),
   visibility: agentVisibilitySchema.default({ subagentCallable: false, public: false }),
   a2a: a2aAgentSettingsSchema.default({ enabled: false }),
+  monadix: monadixAgentSettingsSchema.default({ consume: false }),
   /** True when an AGENT.md body exists on disk — UI hint without shipping the prompt over the wire. */
   hasPrompt: z.boolean().optional()
 });

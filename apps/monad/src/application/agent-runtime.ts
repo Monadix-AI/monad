@@ -110,6 +110,9 @@ export async function createAgentRuntime(core: DaemonCore, endpoint: { host: str
     logger
   });
   let inboundApprovalMode = cfg.openaiCompat.approval;
+  // Set by lifecycle once the Monadix provider manager exists (it needs the daemon handlers). The
+  // hot-reload subscriber calls it on every config change so a `visibility.public` toggle applies live.
+  let monadixSync: ((cfg: MonadConfig) => Promise<void>) | undefined;
   const { agent, history } = createAgentExecutionService({
     agentModel,
     modelService,
@@ -186,7 +189,8 @@ export async function createAgentRuntime(core: DaemonCore, endpoint: { host: str
         inboundApprovalMode = mode;
       },
       setHooksConfig,
-      setPolicyHooksConfig
+      setPolicyHooksConfig,
+      runMonadixSync: (freshCfg) => monadixSync?.(freshCfg) ?? Promise.resolve()
     })
   );
 
@@ -206,10 +210,14 @@ export async function createAgentRuntime(core: DaemonCore, endpoint: { host: str
     channelService,
     bindSessionGateway: session.bind,
     bindScheduledRun: scheduledRun.bind,
-    reconnectFileMcp: () => core.mcp.reconnectFiles(runtime.config.get().auth)
+    reconnectFileMcp: () => core.mcp.reconnectFiles(runtime.config.get().auth),
+    setMonadixSync: (fn: (cfg: MonadConfig) => Promise<void>) => {
+      monadixSync = fn;
+    }
   };
 }
 
+import type { MonadConfig } from '@monad/home';
 import type { Logger } from '@monad/logger';
 import type { DaemonCore } from '#/application/core-runtime.ts';
 import type { Tool } from '#/capabilities/tools/types.ts';

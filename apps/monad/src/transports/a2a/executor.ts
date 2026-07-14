@@ -1,10 +1,10 @@
 import type { Message, Task, TaskState, TaskStatusUpdateEvent } from '@a2a-js/sdk';
 import type { AgentExecutor, ExecutionEventBus, RequestContext } from '@a2a-js/sdk/server';
-import type { AgentId, Event, SessionId } from '@monad/protocol';
+import type { AgentId, SessionId } from '@monad/protocol';
 import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
+import type { InlineTurnResult } from '#/handlers/session/inline-turn.ts';
 
-import { parseEventPayload } from '@monad/protocol';
-
+import { collectInlineTurn } from '#/handlers/session/inline-turn.ts';
 import { buildSessionOrigin } from '#/handlers/session/origin.ts';
 
 type Handlers = ReturnType<typeof createDaemonHandlers>;
@@ -77,31 +77,20 @@ export function createA2aExecutor(agentId: AgentId, handlers: Handlers): AgentEx
       };
       eventBus.publish(initialTask);
 
-      let streamed = '';
-      let finalText = '';
-      let errorMessage: string | undefined;
-
-      const sink = (event: Event): void => {
-        if (event.type === 'agent.token') {
-          streamed += parseEventPayload('agent.token', event.payload).delta;
-          eventBus.publish(statusUpdate(reqCtx, 'working', streamed, false));
-        } else if (event.type === 'agent.message') {
-          finalText = parseEventPayload('agent.message', event.payload).text;
-        } else if (event.type === 'agent.error') {
-          errorMessage = parseEventPayload('agent.error', event.payload).message;
-        }
-      };
-
+      let result: InlineTurnResult = { finalText: '', streamed: '' };
       try {
-        await handlers.session.sendInline({ sessionId, text }, sink, { transport: 'http' });
+        result = await collectInlineTurn(
+          (sink) => handlers.session.sendInline({ sessionId, text }, sink, { transport: 'http' }),
+          (streamed) => eventBus.publish(statusUpdate(reqCtx, 'working', streamed, false))
+        );
       } catch (err) {
-        errorMessage = errorMessage ?? (err instanceof Error ? err.message : 'agent run failed');
+        result.errorMessage = result.errorMessage ?? (err instanceof Error ? err.message : 'agent run failed');
       }
 
-      if (errorMessage) {
-        eventBus.publish(statusUpdate(reqCtx, 'failed', errorMessage, true));
+      if (result.errorMessage) {
+        eventBus.publish(statusUpdate(reqCtx, 'failed', result.errorMessage, true));
       } else {
-        eventBus.publish(statusUpdate(reqCtx, 'completed', finalText || streamed, true));
+        eventBus.publish(statusUpdate(reqCtx, 'completed', result.finalText || result.streamed, true));
       }
       eventBus.finished();
     },

@@ -4,10 +4,15 @@ import type { Store } from '#/store/db/index.ts';
 
 export type InboundApprovalMode = 'auto' | 'local' | 'deny';
 
-// Origin `client` values that mark a session as an inbound delegation (one daemon driving another).
-// Today only the OpenAI-compat transport; the P1 PeerLink transport adds its own marker HERE — the
-// single place the policy below recognises a delegated session, so it generalises without a second
-// special-case in the gate.
+// Origin `client` values that follow the inbound-delegation approval policy (which can `auto`-allow
+// high-risk tools). This is ONLY for SAME-OWNER delegation — peer federation over OpenAI-compat,
+// where the caller already gated the delegation once, so auto-allowing is safe.
+//
+// Monadix (`client: 'monadix'`) is deliberately NOT here: it is a CROSS-OWNER network (a stranger's
+// agent dispatched the task), so its high-risk tools must NOT inherit the same-owner `auto` policy.
+// Omitting it routes those tools to the real oversight gate instead — a connected client approves,
+// or a headless provider fails closed (deny on timeout). A dedicated cross-owner policy knob can be
+// added later; the safe default is full oversight.
 const INBOUND_DELEGATION_CLIENTS = new Set<string>(['openai-compat']);
 
 /** Whether a session originated from an inbound delegation (and thus follows the approval policy). */

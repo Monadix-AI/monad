@@ -572,7 +572,8 @@ test('replace updates existing agent instead of adding duplicate', async () => {
       declaredScopes: [],
       atoms: { mode: 'inherit', allow: [], deny: [] },
       visibility: { subagentCallable: false, public: false },
-      a2a: { enabled: false }
+      a2a: { enabled: false },
+      monadix: { consume: false }
     }
   ];
   await saveAll(paths.config, paths.profile, cfg);

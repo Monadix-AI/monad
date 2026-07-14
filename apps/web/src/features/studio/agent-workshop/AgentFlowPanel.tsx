@@ -46,6 +46,7 @@ const GUIDANCE = ['Be concise.', 'Ask before risky actions.', 'Explain important
 
 interface AgentFlowPanelProps {
   a2aEnabled: boolean;
+  monadixConsume: boolean;
   a2aStatus?: A2aAgentStatus;
   atomsAllow: string[];
   atomsMode: 'inherit' | 'allowlist';
@@ -65,6 +66,7 @@ interface AgentFlowPanelProps {
   sandboxMode: SandboxMode | '';
   selected: AgentFlowNodeId;
   setA2aEnabled: (value: boolean) => void;
+  setMonadixConsume: (value: boolean) => void;
   setAtomsAllow: (value: string[] | ((prev: string[]) => string[])) => void;
   setAtomsMode: (value: 'inherit' | 'allowlist') => void;
   setDescription: (value: string) => void;
@@ -474,9 +476,15 @@ function ResponsePanel(props: AgentFlowPanelProps) {
           />
           <ToggleRow
             checked={props.isPublic}
-            hint="Expose this agent through the local OpenAI-compatible API."
-            label="Public API"
+            hint="Publish as a Monadix provider (others can delegate to it) and expose through the local OpenAI-compatible API."
+            label="Published to Monadix"
             onCheckedChange={props.setIsPublic}
+          />
+          <ToggleRow
+            checked={props.monadixConsume}
+            hint="Let this agent delegate work out to the Monadix network (adds the monadix tools)."
+            label="Use Monadix"
+            onCheckedChange={props.setMonadixConsume}
           />
           <ToggleRow
             checked={props.a2aEnabled}

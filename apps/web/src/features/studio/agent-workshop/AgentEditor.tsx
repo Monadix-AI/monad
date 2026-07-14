@@ -70,6 +70,7 @@ export function AgentEditor({ agentId }: { agentId: AgentId; onClose: () => void
   const [subagentCallable, setSubagentCallable] = useState(false);
   const [isPublic, setIsPublic] = useState(false);
   const [a2aEnabled, setA2aEnabled] = useState(false);
+  const [monadixConsume, setMonadixConsume] = useState(false);
   const [prompt, setPrompt] = useState('');
   const [atomsMode, setAtomsMode] = useState<'inherit' | 'allowlist'>('inherit');
   const [atomsAllow, setAtomsAllow] = useState<string[]>([]);
@@ -89,6 +90,7 @@ export function AgentEditor({ agentId }: { agentId: AgentId; onClose: () => void
     setSubagentCallable(agent.visibility?.subagentCallable ?? false);
     setIsPublic(agent.visibility?.public ?? false);
     setA2aEnabled(agent.a2a?.enabled ?? false);
+    setMonadixConsume(agent.monadix?.consume ?? false);
     setAtomsMode(agent.atoms?.mode ?? 'inherit');
     setAtomsAllow(agent.atoms?.allow ?? []);
     setRoles((agent.roles as Record<string, string>) ?? {});
@@ -119,7 +121,8 @@ export function AgentEditor({ agentId }: { agentId: AgentId; onClose: () => void
         roles,
         sandboxMode,
         subagentCallable,
-        a2aEnabled
+        a2aEnabled,
+        monadixConsume
       })
     ).unwrap();
     if (promptData && prompt !== promptData.prompt) {
@@ -188,6 +191,7 @@ export function AgentEditor({ agentId }: { agentId: AgentId; onClose: () => void
         maxThinkingTokens={maxThinkingTokens}
         maxTurns={maxTurns}
         model={model}
+        monadixConsume={monadixConsume}
         name={name}
         prompt={prompt}
         roles={roles}
@@ -201,6 +205,7 @@ export function AgentEditor({ agentId }: { agentId: AgentId; onClose: () => void
         setMaxThinkingTokens={setMaxThinkingTokens}
         setMaxTurns={setMaxTurns}
         setModel={setModel}
+        setMonadixConsume={setMonadixConsume}
         setName={setName}
         setPrompt={setPrompt}
         setRoles={setRoles}

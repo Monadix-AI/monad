@@ -253,7 +253,8 @@ function testAgent(id: `agt_${string}`, name: string): MonadConfig['agent']['age
     declaredScopes: [],
     atoms: { mode: 'inherit', allow: [], deny: [] },
     visibility: { subagentCallable: false, public: false },
-    a2a: { enabled: false }
+    a2a: { enabled: false },
+    monadix: { consume: false }
   };
 }
 

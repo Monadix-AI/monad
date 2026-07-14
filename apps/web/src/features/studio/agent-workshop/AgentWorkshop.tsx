@@ -27,6 +27,7 @@ import {
 
 interface AgentWorkshopProps {
   a2aEnabled: boolean;
+  monadixConsume: boolean;
   a2aStatus?: A2aAgentStatus;
   atomsAllow: string[];
   atomsMode: 'inherit' | 'allowlist';
@@ -41,6 +42,7 @@ interface AgentWorkshopProps {
   roles: Record<string, string>;
   sandboxMode: SandboxMode | '';
   setA2aEnabled: (value: boolean) => void;
+  setMonadixConsume: (value: boolean) => void;
   setAtomsAllow: (value: string[] | ((prev: string[]) => string[])) => void;
   setAtomsMode: (mode: 'inherit' | 'allowlist') => void;
   setDescription: (value: string) => void;

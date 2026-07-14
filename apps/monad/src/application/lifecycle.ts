@@ -1,5 +1,6 @@
 import type { SessionId } from '@monad/protocol';
 
+import { loadAll, loadAuth, saveProfile } from '@monad/home';
 import { createLogger } from '@monad/logger';
 
 import { createAgentRuntime } from '#/application/agent-runtime.ts';
@@ -13,6 +14,8 @@ import { createObscuraController } from '#/capabilities/mcp/obscura.ts';
 import { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
 import { configureDaemonLogging } from '#/runtime/flags.ts';
 import { isToolExposed } from '#/services/generation/agent-persona.ts';
+import { createMonadixProviderManager } from '#/services/monadix/index.ts';
+import { createMonadixTaskRunner } from '#/services/monadix/task-runner.ts';
 import { createUpgradeInfoMonitor } from '#/services/upgrade-info.ts';
 import { createHttpTransport } from '#/transports/http.ts';
 
@@ -90,7 +93,8 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     channelService,
     bindSessionGateway,
     bindScheduledRun,
-    reconnectFileMcp
+    reconnectFileMcp,
+    setMonadixSync
   } = agentRuntime;
   const { memoryService, graphStore, getMem0Data, getLaws, memorySetBackend, memorySetMem0Models, memorySetGraph } =
     memory;
@@ -153,7 +157,13 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     sessionSandbox,
     agentToolFilter: (sid) => {
       const atoms = agentPersona.atomsFor(sid);
-      return atoms ? (name) => isToolExposed(atoms, name, registry.sourceNameOf(name)) : undefined;
+      const consumesMonadix = agentPersona.monadixConsumesFor(sid);
+      // Monadix consumer tools are a per-agent opt-in (monadix.consume), independent of the atoms
+      // allow/deny filter. Everything else follows the agent's atoms policy (or is unrestricted).
+      return (name) => {
+        if (name.startsWith('monadix__')) return consumesMonadix;
+        return atoms ? isToolExposed(atoms, name, registry.sourceNameOf(name)) : true;
+      };
     },
     agentSandboxRoots: (sid) => agentPersona.sandboxRootsFor(sid),
     clarify,
@@ -260,4 +270,44 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     watchers: watchService,
     channels: channelService
   });
+
+  // Monadix provider presence: one registration + realtime subscription PER public agent
+  // (`visibility.public`), dial-out over Supabase Realtime (no public URL). The manager reconciles
+  // the live set on boot and on every config reload (so a toggle applies without a restart). Runs
+  // after transports are listening so a served agent can answer inbound tasks immediately.
+  const setAgentPublished = async (
+    agentId: string,
+    published: { providerId: string; publishedAt: string } | undefined
+  ) => {
+    const live = await loadAll(paths.config, paths.profile);
+    const target = live?.agent.agents.find((a) => a.id === agentId);
+    if (!live || !target) return;
+    target.published = published;
+    await saveProfile(paths.profile, live);
+    if (configReloader) await configReloader.publish({ cfg: live, auth: await loadAuth(paths.auth) });
+  };
+  const monadixManager = createMonadixProviderManager({
+    getConfig: () => runtime.config.get().cfg.monadix,
+    getToken: async () => (await loadAuth(paths.auth))?.mcpOAuth?.monadix?.accessToken,
+    runnerFor: (agentId) => createMonadixTaskRunner({ handlers, agentId, logger }),
+    persistProviderId: (agentId, providerId) =>
+      setAgentPublished(agentId, { providerId, publishedAt: new Date().toISOString() }),
+    clearProviderId: (agentId) => setAgentPublished(agentId, undefined),
+    logger
+  });
+  const monadixAgentsFrom = (c: typeof cfg) =>
+    c.agent.agents.map((a) => ({
+      id: a.id,
+      name: a.name,
+      description: a.description,
+      isPublic: a.visibility?.public === true,
+      providerId: a.published?.providerId
+    }));
+  setMonadixSync((freshCfg) => monadixManager.sync(monadixAgentsFrom(freshCfg)));
+  // Fire-and-forget: registration + realtime connect are external network I/O and must stay off the
+  // cold-start path (they run after listen anyway). Failures are logged inside the manager. Shutdown
+  // teardown is intentionally not wired to `process.on('exit')` — it can't await the async
+  // deregister/removeChannel; the daemon's presence heartbeat simply stops and cabinet's stale-provider
+  // cron reaps it. Live config-reload teardown (unpublish) still runs through the awaited sync path.
+  void monadixManager.sync(monadixAgentsFrom(runtime.config.get().cfg));
 }

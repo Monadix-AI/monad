@@ -16,6 +16,7 @@ import {
   modelProfileRoutesSchema,
   modelRoleSchema,
   modelRolesSchema,
+  monadixAgentSettingsSchema,
   KNOWN_PROVIDER_TYPES as PROTOCOL_KNOWN_PROVIDER_TYPES,
   peerIdSchema,
   sandboxModeSchema
@@ -192,7 +193,10 @@ export const agentConfigSchema = z.object({
   /** Per-agent A2A (Agent2Agent) exposure. Off by default; when enabled the daemon serves a
    *  standard A2A surface scoped to this agent's id. */
   a2a: a2aAgentSettingsSchema.default({ enabled: false }),
-  /** P3 — populated when published to Monadix; absent until then. */
+  /** Per-agent Monadix consumer opt-in: exposes the `monadix__*` tools to this agent (gated behind
+   *  the daemon-level `monadix.enabled` login). The provider (publish) direction is `visibility.public`. */
+  monadix: monadixAgentSettingsSchema.default({ consume: false }),
+  /** Populated per-agent when this agent is published to Monadix as its own provider; absent until then. */
   published: z
     .object({
       providerId: z.string(),
@@ -376,6 +380,39 @@ export const obscuraConfigSchema = z
   })
   .default({ enabled: false, stealth: false });
 export type ObscuraConfig = z.infer<typeof obscuraConfigSchema>;
+
+// Monadix integration preset. Monadix is the first-party cross-owner A2A collaboration network
+// (same company as monad). When enabled, the daemon auto-connects a synthesized HTTP MCP server
+// named "monadix" pointed at the first-party endpoint (OAuth), so the agent can delegate OUT to the
+// network — no manual mcpServers entry. A single `monad monadix login` authorizes BOTH this consumer
+// path and the provider (publish) path; the token lives in auth.json (mcpOAuth["monadix"]), never
+// config.json. An operator-defined mcpServers entry named "monadix" takes precedence and this preset
+// steps aside (same rule as browser/computer). `baseUrl` overrides the endpoint for staging/self-host.
+export const monadixConfigSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    /** Override the Monadix MCP endpoint (default is the first-party production URL). */
+    baseUrl: httpUrlSchema.optional(),
+    /** OAuth flow: 'loopback' (desktop, default) or 'device' (RFC 8628, headless daemons). */
+    flow: z.enum(['loopback', 'device']).optional(),
+    /** Auto-approve read-only Monadix tools (discovery/status reads); spend/dispatch tools
+     *  (publish_conversation, delegate_to_provider, send_message, …) always route through the
+     *  approval gate. Default-on; set false to gate everything. */
+    autoApproveReadOnly: z.boolean().optional(),
+
+    // Provider side (native-realtime, per-agent):
+    // `monadix.enabled` is the daemon-level master (login + creds). The provider direction is opt-in
+    // PER AGENT via `agent.visibility.public`: each public agent dials OUT to Monadix's Supabase
+    // Realtime (no public URL / tunnel), auto-registers as its own provider (framework `monad`), and
+    // serves inbound tasks routed to that agent. Supabase creds are auto-fetched from the network's
+    // public `/realtime/config`; the two fields below only override that for staging/self-host.
+    /** Override the Monadix Supabase project URL (default: auto-fetched from the network). */
+    supabaseUrl: httpUrlSchema.optional(),
+    /** Override the Monadix Supabase anon key (public credential; default: auto-fetched). */
+    supabaseAnonKey: z.string().optional()
+  })
+  .default({ enabled: false });
+export type MonadixConfig = z.infer<typeof monadixConfigSchema>;
 
 export const moConfigSchema = z
   .object({

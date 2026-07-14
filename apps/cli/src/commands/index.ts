@@ -19,6 +19,7 @@ import { command as licenses } from './licenses.ts';
 import { command as logs } from './logs.ts';
 import { command as mcp } from './mcp.ts';
 import { command as model } from './model.ts';
+import { command as monadix } from './monadix.ts';
 import { command as nativeAgent } from './native-agent.ts';
 import { command as pair } from './pair.ts';
 import { command as peer } from './peer.ts';
@@ -76,6 +77,7 @@ export const commands: CommandDef[] = [
   atom,
   skill,
   mcp,
+  monadix,
   commandsCmd,
   usage,
   licenses,

@@ -32,6 +32,8 @@ export function createHotReload(deps: {
   setInboundApprovalMode: (mode: MonadConfig['openaiCompat']['approval']) => void;
   setHooksConfig: (config: HookConfig) => void;
   setPolicyHooksConfig: (config: HookConfig) => void;
+  /** Re-sync Monadix provider agents (register/deregister per `visibility.public`) on config change. */
+  runMonadixSync?: (cfg: MonadConfig) => Promise<void>;
 }): (snapshot: ConfigSnapshot) => Promise<void> {
   const {
     paths,
@@ -46,7 +48,8 @@ export function createHotReload(deps: {
     reloadApprovalPolicy,
     setInboundApprovalMode,
     setHooksConfig,
-    setPolicyHooksConfig
+    setPolicyHooksConfig,
+    runMonadixSync
   } = deps;
 
   return async ({ cfg: freshCfg, auth: freshAuth }) => {
@@ -55,6 +58,8 @@ export function createHotReload(deps: {
     setInboundApprovalMode(freshCfg.openaiCompat.approval);
     // Agents may have been created/renamed/deleted — re-read their personas against the fresh config.
     await agentPersona.reload(freshCfg);
+    // A `visibility.public` toggle (or agent add/remove) re-syncs Monadix provider registrations live.
+    await runMonadixSync?.(freshCfg).catch((err: unknown) => logger.warn(`monad: monadix sync failed: ${err}`));
     // A newly-configured (or changed) embedding role should backfill existing messages.
     embeddingIndexer.kick();
     // Hot-reload the channel gateway (connect added, disconnect removed, reconnect changed).

@@ -12,6 +12,7 @@ import {
   chatMessageSchema,
   eventSchema,
   modelRolesSchema,
+  monadixAgentSettingsSchema,
   sandboxModeSchema,
   searchHitSchema,
   sessionOriginExtSchema,
@@ -96,6 +97,7 @@ export const createAgentRequestSchema = z.object({
   maxBudgetUsd: z.number().positive().optional(),
   visibility: agentVisibilitySchema.optional(),
   a2a: a2aAgentSettingsSchema.optional(),
+  monadix: monadixAgentSettingsSchema.optional(),
   /** Initial AGENT.md system-prompt body. Absent → no .md written (valid empty-prompt agent). */
   prompt: z.string().optional()
 });
@@ -116,7 +118,8 @@ export const updateAgentRequestSchema = z.object({
   maxThinkingTokens: z.number().int().positive().optional(),
   maxBudgetUsd: z.number().positive().optional(),
   visibility: agentVisibilitySchema.optional(),
-  a2a: a2aAgentSettingsSchema.optional()
+  a2a: a2aAgentSettingsSchema.optional(),
+  monadix: monadixAgentSettingsSchema.optional()
 });
 export type UpdateAgentRequest = z.infer<typeof updateAgentRequestSchema>;
 

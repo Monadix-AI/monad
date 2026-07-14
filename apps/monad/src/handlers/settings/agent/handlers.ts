@@ -27,6 +27,7 @@ function toWireAgent(a: AgentConfig, principalId: PrincipalId, hasPrompt: boolea
     maxBudgetUsd: a.maxBudgetUsd,
     visibility: a.visibility,
     a2a: a.a2a,
+    monadix: a.monadix,
     hasPrompt
   };
 }
@@ -85,7 +86,8 @@ export function createAgentHandlers(ctx: AgentContext, ownerPrincipalId: Princip
         maxThinkingTokens: req.maxThinkingTokens,
         maxBudgetUsd: req.maxBudgetUsd,
         visibility: req.visibility ?? { subagentCallable: false, public: false },
-        a2a: req.a2a ?? { enabled: false }
+        a2a: req.a2a ?? { enabled: false },
+        monadix: req.monadix ?? { consume: false }
       };
       let hasPrompt = false;
       if (req.prompt?.trim()) {
@@ -119,6 +121,7 @@ export function createAgentHandlers(ctx: AgentContext, ownerPrincipalId: Princip
       if (patch.maxBudgetUsd !== undefined) a.maxBudgetUsd = patch.maxBudgetUsd;
       if (patch.visibility !== undefined) a.visibility = patch.visibility;
       if (patch.a2a !== undefined) a.a2a = patch.a2a;
+      if (patch.monadix !== undefined) a.monadix = patch.monadix;
       await ctx.commit(cfg);
       // A per-agent sandbox-mode change alters the policy a running VM was built for; destroy the old
       // VM so it never outlives its policy (same security constraint as deleteAgent).

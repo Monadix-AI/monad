@@ -6,7 +6,7 @@ import type { AtomPackRegistry } from '#/handlers/atom-pack/index.ts';
 import { loadAll, loadAuth } from '@monad/home';
 
 import { authorizeMcpOAuth } from '#/capabilities/mcp/oauth.ts';
-import { type ConfigMcpHandle, collectMcpStatus, reconnectOneMcpServer } from './service.ts';
+import { type ConfigMcpHandle, collectMcpStatus, reconnectOneMcpServer, resolveConfigMcpSpecs } from './service.ts';
 
 type CollectInput = Parameters<typeof collectMcpStatus>[0];
 
@@ -43,7 +43,7 @@ export function createMcpControls(deps: {
   // logs a code+URL), then force-reconnect it so the freshly-stored token takes effect — no restart.
   const mcpAuthorize = async (name: string): Promise<void> => {
     const live = (await loadAll(paths.config, paths.profile)) ?? cfg;
-    const spec = live.mcpServers.find((s) => s.name === name);
+    const spec = resolveConfigMcpSpecs(live).find((s) => s.name === name);
     if (spec?.transport !== 'http') {
       throw new Error(`MCP server "${name}" is not an http server`);
     }

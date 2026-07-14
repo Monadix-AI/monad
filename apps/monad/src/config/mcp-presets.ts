@@ -1,4 +1,4 @@
-import type { BrowserConfig, ComputerConfig, McpServerConfig, ObscuraConfig } from '@monad/home';
+import type { BrowserConfig, ComputerConfig, McpServerConfig, MonadixConfig, ObscuraConfig } from '@monad/home';
 
 // Conservative list: only tools that don't change page/browser state. Anything that
 // navigates, interacts, evaluates JS, or writes cookies/storage stays gated.
@@ -85,6 +85,40 @@ export function buildComputerMcpServer(computer: ComputerConfig): McpServerConfi
     // hostEscape: every non-read-only tool drives the real desktop → gated as host-escape
     // (session-grantable, never a permanent global allow). Read-only tools stay in autoApproveTools.
     trust: { autoApproveTools, hostEscape: true }
+  };
+}
+
+// First-party Monadix MCP endpoint (cross-owner A2A collaboration network). Overridable via
+// monadix.baseUrl for staging/self-host.
+export const MONADIX_DEFAULT_URL = 'https://api.monadix.ai/mcp';
+
+// Read-only Monadix tools: discovery + status reads, no credit spend and no external dispatch —
+// safe to auto-approve. Spend/dispatch tools (publish_conversation, delegate_to_provider,
+// send_message, reserve_conversation, sign_files_upload, rate_task, close_conversation) stay gated.
+// Names are namespaced by the daemon as `monadix__<tool>`. Verify against the live server's
+// tools/list before trusting this list wholesale.
+export const MONADIX_READONLY_TOOLS = [
+  'match_providers',
+  'get_provider',
+  'get_task_status',
+  'get_conversation',
+  'list_scope_files'
+];
+
+// Synthesized HTTP+OAuth MCP server for the Monadix network. A single `monad monadix login` drives
+// the OAuth (token in auth.json mcpOAuth["monadix"]); this preset carries no secret. Cross-owner
+// output is untrusted — every mutating/spend tool routes through the oversight gate.
+export function buildMonadixMcpServer(
+  cfg: Pick<MonadixConfig, 'baseUrl' | 'flow' | 'autoApproveReadOnly'>
+): McpServerConfig {
+  const autoApproveTools = cfg.autoApproveReadOnly !== false ? MONADIX_READONLY_TOOLS.map((t) => `monadix__${t}`) : [];
+  return {
+    name: 'monadix',
+    transport: 'http',
+    url: cfg.baseUrl ?? MONADIX_DEFAULT_URL,
+    auth: { mode: 'oauth', scopes: [], flow: cfg.flow ?? 'loopback' },
+    enabled: true,
+    trust: { autoApproveTools, hostEscape: false }
   };
 }
 

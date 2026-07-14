@@ -47,6 +47,7 @@ import {
   mcpServerSchema,
   memorySettingsSchema,
   moConfigSchema,
+  monadixConfigSchema,
   obscuraConfigSchema,
   peerSchema,
   profileSchema,
@@ -427,6 +428,7 @@ const monadConfigSchema = z.object({
   computer: computerConfigSchema, // additive so older configs still parse
   mo: moConfigSchema, // additive so older configs still parse
   obscura: obscuraConfigSchema, // additive so older configs still parse
+  monadix: monadixConfigSchema, // additive so older configs still parse
   channels: z.array(channelInstanceSchema).default([]), // additive so older configs still parse
   // Active UI/agent locale (BCP-47-ish tag, e.g. 'en', 'zh'). Resolved against the language packs
   // registered by `locale` atoms; an unknown tag falls back to English.
@@ -573,6 +575,7 @@ export const monadProfileSchema = z.object({
   computer: computerConfigSchema,
   mo: moConfigSchema,
   obscura: obscuraConfigSchema,
+  monadix: monadixConfigSchema,
   channels: z.array(channelInstanceSchema).default([]),
   locale: z.string().default('en'),
   // User atom-pin overrides (hot-reloadable). { <kind>: { <bareId>: <packId> } }; unset → first-wins.
@@ -661,6 +664,7 @@ export function createDefaultConfig(principalId: PrincipalId, displayName: strin
     computer: { enabled: false, command: 'uvx', args: ['computer-control-mcp@latest'] },
     mo: { enabled: true },
     obscura: { enabled: false, stealth: false },
+    monadix: { enabled: false },
     channels: [],
     locale: 'en',
     atomPins: {},

@@ -84,6 +84,12 @@ export class AgentPersonaService {
     return this.boundAgent(sessionId)?.atoms;
   }
 
+  /** Whether the session's bound agent opted in to consuming Monadix (`monadix.consume`). Gates the
+   *  `monadix__*` tools per agent so only agents the user enabled can delegate OUT to the network. */
+  monadixConsumesFor(sessionId?: string): boolean {
+    return this.boundAgent(sessionId)?.monadix?.consume === true;
+  }
+
   /** The fs sandbox roots for the session's bound agent, with the global ceiling applied
    *  (`resolveEffectiveSandboxMode`). A bound agent without an explicit `sandbox` defaults to
    *  `workspace`, so monad-owned agents are jailed to their own agent dir by default. Narrow-only:
