@@ -6,6 +6,7 @@
 
 export * from './active-local.ts';
 export * from './credential-mask-files.ts';
+export * from './credential-materializer.ts';
 export * from './credential-sentinel.ts';
 export * from './egress-policy.ts';
 export * from './egress-proxy.ts';
