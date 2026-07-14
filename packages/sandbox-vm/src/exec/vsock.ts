@@ -22,6 +22,7 @@ import { connect } from 'node:net';
 
 import {
   encodeFrame,
+  type FilesystemObservationPolicy,
   FrameDecoder,
   GuestFrameKind,
   HostFrameKind,
@@ -40,6 +41,7 @@ export interface VsockExecSpec {
   runId?: string;
   limits?: SandboxRunLimits;
   terminal?: SandboxTerminalOptions;
+  observation?: FilesystemObservationPolicy;
   onUnresponsive?: (error: Error) => void;
 }
 
@@ -78,7 +80,14 @@ function parseExit(payload: Buffer): SandboxExit {
   return { code: value.code as number | null, signal: value.signal as number | null };
 }
 
-const VIOLATION_KINDS = new Set<SandboxViolation['kind']>(['protocol', 'setup', 'memory', 'process-limit', 'runtime']);
+const VIOLATION_KINDS = new Set<SandboxViolation['kind']>([
+  'protocol',
+  'setup',
+  'memory',
+  'process-limit',
+  'runtime',
+  'filesystem'
+]);
 const VIOLATION_OPERATIONS = new Set([
   'oom',
   'oom-kill',
@@ -88,7 +97,29 @@ const VIOLATION_OPERATIONS = new Set([
   'pty-init',
   'mount-init',
   'runtime-exit',
-  'unsupported-operation'
+  'unsupported-operation',
+  'violation-limit',
+  'seccomp-observer',
+  'open',
+  'openat',
+  'openat2',
+  'creat',
+  'truncate',
+  'ftruncate',
+  'unlink',
+  'unlinkat',
+  'mkdir',
+  'mkdirat',
+  'rmdir',
+  'mknod',
+  'mknodat',
+  'rename',
+  'renameat',
+  'renameat2',
+  'link',
+  'linkat',
+  'symlink',
+  'symlinkat'
 ]);
 const MAX_VIOLATION_TEXT_BYTES = 4096;
 
@@ -201,7 +232,8 @@ export function vsockExec(argv: string[], spec: VsockExecSpec): SandboxProcess {
       cwd: spec.cwd,
       env,
       limits: spec.limits ?? {},
-      ...(terminalOptions ? { terminal: terminalOptions } : {})
+      ...(terminalOptions ? { terminal: terminalOptions } : {}),
+      ...(spec.observation ? { observation: spec.observation } : {})
     })
   );
 

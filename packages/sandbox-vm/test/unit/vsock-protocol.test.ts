@@ -10,17 +10,17 @@ import {
   VSOCK_PROTOCOL_VERSION
 } from '../../src/exec/protocol.ts';
 
-test('host protocol is version 3', () => {
-  expect(VSOCK_PROTOCOL_VERSION).toBe(3);
+test('host protocol is version 4', () => {
+  expect(VSOCK_PROTOCOL_VERSION).toBe(4);
 });
 
 test('decoder reconstructs a frame split across chunks', () => {
   const decoder = new FrameDecoder();
-  const encoded = encodeFrame(HostFrameKind.Start, Buffer.from('{"version":3}'));
+  const encoded = encodeFrame(HostFrameKind.Start, Buffer.from('{"version":4}'));
 
   expect(decoder.push(encoded.subarray(0, 3))).toEqual([]);
   expect(decoder.push(encoded.subarray(3))).toEqual([
-    { kind: HostFrameKind.Start, payload: Buffer.from('{"version":3}') }
+    { kind: HostFrameKind.Start, payload: Buffer.from('{"version":4}') }
   ]);
 });
 

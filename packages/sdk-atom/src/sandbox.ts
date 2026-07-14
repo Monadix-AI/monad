@@ -106,7 +106,7 @@ export interface SandboxTerminal {
 }
 
 export interface SandboxViolation {
-  kind: 'protocol' | 'setup' | 'memory' | 'process-limit' | 'runtime';
+  kind: 'protocol' | 'setup' | 'memory' | 'process-limit' | 'runtime' | 'filesystem';
   operation: string;
   runId: string;
   timestamp: string;

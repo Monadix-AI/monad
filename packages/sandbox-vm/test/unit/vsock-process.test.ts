@@ -68,7 +68,12 @@ test('PTY start carries dimensions and resize sends a control frame', async () =
     if (frame.kind === HostFrameKind.Start) send(GuestFrameKind.Started, { runId: 'pty-1', pid: 42 });
     if (frame.kind === HostFrameKind.Resize) send(GuestFrameKind.Exit, { code: 0, signal: 0 });
   });
-  const proc = vsockExec(['sh'], { socketPath, runId: 'pty-1', terminal: { cols: 80, rows: 24 } });
+  const proc = vsockExec(['sh'], {
+    socketPath,
+    runId: 'pty-1',
+    terminal: { cols: 80, rows: 24 },
+    observation: { writableRoots: ['/work'], noWriteRoots: ['/work/readonly'] }
+  });
 
   await proc.terminal?.resize(120, 40);
   await proc.exited;
@@ -76,12 +81,13 @@ test('PTY start carries dimensions and resize sends a control frame', async () =
   expect(received[0]).toEqual({
     kind: HostFrameKind.Start,
     payload: {
-      version: 3,
+      version: 4,
       runId: 'pty-1',
       argv: ['sh'],
       env: {},
       limits: {},
-      terminal: { cols: 80, rows: 24 }
+      terminal: { cols: 80, rows: 24 },
+      observation: { writableRoots: ['/work'], noWriteRoots: ['/work/readonly'] }
     }
   });
   expect(received[1]).toEqual({ kind: HostFrameKind.Resize, payload: { cols: 120, rows: 40 } });
@@ -131,6 +137,52 @@ test('invalid violation enums fail the run closed', async () => {
     send(GuestFrameKind.Violation, { kind: 'made-up', operation: 'oom-kill', runId: 'violation-2' });
   });
   const proc = vsockExec(['true'], { socketPath, runId: 'violation-2' });
+
+  await expect(proc.exited).rejects.toThrow('invalid violation payload');
+});
+
+test('filesystem violations accept only bounded syscall operations', async () => {
+  const socketPath = await protocolServer((frame, send) => {
+    if (frame.kind !== HostFrameKind.Start) return;
+    send(GuestFrameKind.Started, { runId: 'filesystem-1', pid: 45 });
+    send(GuestFrameKind.Violation, {
+      kind: 'filesystem',
+      operation: 'openat',
+      runId: 'filesystem-1',
+      target: '/etc/passwd',
+      pid: 7
+    });
+    send(GuestFrameKind.Exit, { code: 0, signal: 0 });
+  });
+  const proc = vsockExec(['true'], { socketPath, runId: 'filesystem-1' });
+  const events = collect(proc.violations as NonNullable<typeof proc.violations>);
+
+  expect(await proc.exited).toBe(0);
+  expect(await events).toEqual([
+    expect.objectContaining({
+      kind: 'filesystem',
+      operation: 'openat',
+      runId: 'filesystem-1',
+      target: '/etc/passwd',
+      pid: 7
+    })
+  ]);
+});
+
+test.each([
+  { operation: 'execve', target: '/etc/passwd' },
+  { operation: 'openat', target: `/${'界'.repeat(1366)}` }
+])('invalid filesystem violation %# fails the run closed', async (violation) => {
+  const socketPath = await protocolServer((frame, send) => {
+    if (frame.kind !== HostFrameKind.Start) return;
+    send(GuestFrameKind.Started, { runId: 'filesystem-invalid', pid: 46 });
+    send(GuestFrameKind.Violation, {
+      kind: 'filesystem',
+      runId: 'filesystem-invalid',
+      ...violation
+    });
+  });
+  const proc = vsockExec(['true'], { socketPath, runId: 'filesystem-invalid' });
 
   await expect(proc.exited).rejects.toThrow('invalid violation payload');
 });

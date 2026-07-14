@@ -1,4 +1,4 @@
-export const VSOCK_PROTOCOL_VERSION = 3;
+export const VSOCK_PROTOCOL_VERSION = 4;
 export const MAX_CONTROL_FRAME_BYTES = 1024 * 1024;
 export const MAX_STREAM_FRAME_BYTES = 64 * 1024;
 
@@ -23,6 +23,11 @@ export enum GuestFrameKind {
 export interface VsockFrame {
   kind: number;
   payload: Buffer;
+}
+
+export interface FilesystemObservationPolicy {
+  writableRoots: string[];
+  noWriteRoots: string[];
 }
 
 const STREAM_KINDS = new Set<number>([HostFrameKind.Stdin, GuestFrameKind.Stdout, GuestFrameKind.Stderr]);
