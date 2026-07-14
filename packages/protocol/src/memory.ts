@@ -1,7 +1,7 @@
-// Layered-memory contracts. Scope-isolated objective facts (L1): the always-injected core +
-// the machine-written recall corpus. L2 (graph) / L3 (laws) are designed but not built; only the
-// L1 wire/domain types live here. `org` scope is reserved for a future paid tier (one monad
-// instance = one user, so `global` = that user). See docs/internals/memory-design.md.
+// Layered-memory contracts: the L1 fact/scope domain types plus the memory control-API shapes
+// (status, settings, laws). L2 (graph) / L3 (laws) storage lives daemon-side in the graph DB.
+// `org` scope is reserved for a future paid tier (one monad instance = one user, so `global` =
+// that user). See docs/internals/memory.md.
 
 import type { AgentId, SessionId } from './ids.ts';
 

@@ -1,6 +1,6 @@
 // Layered-memory L1 store (design A) — CLI-agent-style machine-written Markdown in ONE flat dir,
 // keyed by scope, with a cheap injectable index. MD is the source of truth (human-readable, hand-
-// editable); there is no SQLite event table for L1 (deliberate divergence — see docs/internals/memory-design.md).
+// editable); there is no SQLite event table for L1 (deliberate divergence — see docs/internals/memory.md).
 //
 //   <home>/memory/MEMORY.md                  ← index (titles + descriptions); the ONLY part injected
 //   <home>/memory/MEMORY_global.md           ← cross-agent (the instance's one user)
