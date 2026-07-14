@@ -1,5 +1,6 @@
 import type { AcpAgentConfig } from '@monad/home';
 import type { Session, SessionId } from '@monad/protocol';
+import type { BuildChannelContextInput } from '#/agent/prompts/channel.ts';
 import type { SessionContext } from '#/handlers/session/context.ts';
 
 import { loadAll } from '@monad/home';
@@ -50,6 +51,7 @@ export function createForwardAcpHandler(ctx: SessionContext, sandboxRootsFor: Sa
     text,
     displayText,
     ambientContext,
+    channelPromptInput,
     onComplete
   }: {
     sessionId: SessionId;
@@ -57,6 +59,7 @@ export function createForwardAcpHandler(ctx: SessionContext, sandboxRootsFor: Sa
     text: string;
     displayText?: string;
     ambientContext?: string;
+    channelPromptInput?: BuildChannelContextInput;
     onComplete?: (text: string) => void | Promise<void>;
   }) {
     const session = requireSession(sessionId);
@@ -131,7 +134,7 @@ export function createForwardAcpHandler(ctx: SessionContext, sandboxRootsFor: Sa
 
     const rt = runtimeForSession(sessionId);
     emitAcpActivityStart();
-    directDelegate(spec, composeAcpChannelPrompt(text, ambientContext), {
+    directDelegate(spec, composeAcpChannelPrompt(text, channelPromptInput), {
       sessionId,
       signal,
       sandboxRoots: sandboxRootsFor(sessionId, requireSession(sessionId).cwd, rt),

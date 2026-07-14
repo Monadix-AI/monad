@@ -9,55 +9,30 @@ import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, lstatSync, mkdirSync, readdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 
+import { definePrompt } from '#/agent/prompt-template.ts';
 import { getExternalAgentProviderAdapter } from '#/services/external-agent/index.ts';
-import managedProjectRuntimeMcpPromptPath from './prompts/managed-project-runtime-mcp-prompt.md' with { type: 'file' };
-import managedProjectRuntimePromptPath from './prompts/managed-project-runtime-prompt.md' with { type: 'file' };
-
-const MANAGED_PROJECT_RUNTIME_PROMPT = (await Bun.file(managedProjectRuntimePromptPath).text()).trim();
-const MANAGED_PROJECT_RUNTIME_MCP_PROMPT = (await Bun.file(managedProjectRuntimeMcpPromptPath).text()).trim();
-const PROJECT_MEMORY_INDEX = [
-  '# Project memory index',
-  '',
-  'Durable Workplace Project context shared across managed agents — decisions, conventions,',
-  'status, and external references that a later agent cannot recover from `project read`',
-  'or the code itself. Not a transcript: transient chatter and in-progress task state do not',
-  'belong here.',
-  '',
-  '- Each line below points to one file under `memories/`: `- [title](memories/file.md) — one-line hook`.',
-  '- A detail file starts with frontmatter (`name`, `description`, `metadata.type`); `type` is one of',
-  '  `decision`, `convention`, `status`, `reference`.',
-  '- Before writing, check whether an existing file already covers the topic and update it instead of',
-  '  adding a duplicate.',
-  '- Acquire `MEMORY.md.lock` before editing this file or any file under `memories/`; release it after',
-  '  the write, even if the write fails.',
-  ''
-].join('\n');
+import managedProjectRuntimePromptPath from './prompts/managed-project-runtime.prompt.md' with { type: 'file' };
+import managedProjectRuntimeMcpPromptPath from './prompts/managed-project-runtime-mcp.prompt.md' with { type: 'file' };
+import projectMemoryIndexPath from './prompts/project-memory-index.prompt.md' with { type: 'file' };
 
 type ManagedProjectPromptInput = NativeAgentRuntimePromptInput & { monadCliCommand: string };
+const MANAGED_PROJECT_RUNTIME_PROMPT = await definePrompt<ManagedProjectPromptInput>({
+  id: 'managed-project.runtime',
+  sourcePath: managedProjectRuntimePromptPath
+});
+const MANAGED_PROJECT_RUNTIME_MCP_PROMPT = await definePrompt<ManagedProjectPromptInput>({
+  id: 'managed-project.runtime-mcp',
+  sourcePath: managedProjectRuntimeMcpPromptPath
+});
+const PROJECT_MEMORY_INDEX_PROMPT = await definePrompt({
+  id: 'managed-project.memory-index',
+  sourcePath: projectMemoryIndexPath
+});
 
 function buildManagedProjectPrompt(args: ManagedProjectPromptInput): string {
-  const runtimeMetadata = [
-    `Agent name: ${args.agentName}`,
-    ...(args.displayName ? [`Display name: ${args.displayName}`] : []),
-    ...(args.displayName ? ['Display name is your project communication name.'] : []),
-    'Agent name is an internal API/runtime id for Monad CLI calls only.',
-    `Project id: ${args.projectId}`,
-    `External agent session id: ${args.externalAgentSessionId}`,
-    `Provider: ${args.provider}`,
-    `Workspace: ${args.workspace}`,
-    ...((args.modelId ?? args.modelName) ? [`Requested model: ${args.modelId ?? args.modelName}`] : []),
-    ...(args.reasoningEffort ? [`Requested reasoning effort: ${args.reasoningEffort}`] : []),
-    ...(args.speed ? [`Requested speed: ${args.speed}`] : [])
-  ].join('\n');
-  const customPromptBlock = args.customPrompt
-    ? ['Project instance custom prompt:', args.customPrompt, ''].join('\n')
-    : '';
   const usesMcpBridge = getExternalAgentProviderAdapter(args.provider).managedRuntime?.usesManagedMcpBridge ?? false;
   const template = usesMcpBridge ? MANAGED_PROJECT_RUNTIME_MCP_PROMPT : MANAGED_PROJECT_RUNTIME_PROMPT;
-  return template
-    .replace('{{runtimeMetadata}}', runtimeMetadata)
-    .replace('{{customPromptBlock}}', customPromptBlock)
-    .replaceAll('{{monadCliCommand}}', args.monadCliCommand);
+  return template.render(args);
 }
 
 function hashManagedAgentToken(token: string): string {
@@ -157,7 +132,7 @@ function managedProjectRoot(args: { monadHome: string; projectId: string }): str
 function prepareManagedProjectSharedMemory(root: string): void {
   mkdirSync(join(root, 'memories'), { recursive: true });
   const memoryFile = join(root, 'MEMORY.md');
-  if (!existsSync(memoryFile)) writeFileSync(memoryFile, PROJECT_MEMORY_INDEX, { mode: 0o600 });
+  if (!existsSync(memoryFile)) writeFileSync(memoryFile, PROJECT_MEMORY_INDEX_PROMPT.render({}), { mode: 0o600 });
 }
 
 export function prepareManagedProjectRuntime(

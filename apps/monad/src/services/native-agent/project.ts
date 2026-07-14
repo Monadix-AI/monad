@@ -16,8 +16,17 @@ import type { NativeAgentAttachmentResolver } from './attachments.ts';
 
 import { newId } from '@monad/protocol';
 
+import { definePrompt } from '#/agent/prompt-template.ts';
 import { HandlerError } from '#/handlers/handler-error.ts';
 import { externalAgentProjectMemberDisplayNameForAgent } from '#/handlers/session/handlers/messaging-members.ts';
+import projectAskSummaryPath from './prompts/project-ask-summary-user.prompt.md' with { type: 'file' };
+
+const PROJECT_ASK_SUMMARY_PROMPT = await definePrompt<{
+  answer: string;
+  askerName: string;
+  options: readonly string[];
+  question: string;
+}>({ id: 'native-agent.project-ask-summary.user', sourcePath: projectAskSummaryPath });
 
 export interface NativeAgentProjectBinding {
   agentId: string;
@@ -69,15 +78,7 @@ function projectAskSummary(args: {
   options: readonly string[];
   answer: string;
 }): string {
-  return [
-    'Project Q&A summary:',
-    `Asked by: ${args.askerName}`,
-    `Question: ${args.question}`,
-    ...(args.options.length ? [`Options: ${args.options.join(' | ')}`] : []),
-    `User answer: ${readableAnswer(args.answer)}`,
-    '',
-    'Use this as shared project context. Do not repeat it unless it changes your task-relevant response.'
-  ].join('\n');
+  return PROJECT_ASK_SUMMARY_PROMPT.render({ ...args, answer: readableAnswer(args.answer) });
 }
 
 function enqueueProjectSummaryForManagedRuntimes(

@@ -3,3 +3,4 @@ Given a user task description, return the names of the most relevant tools, one 
 Return ONLY tool names that appear in the catalog - no explanations, no extra text.
 
 TOOL CATALOG:
+<%= it.catalog %>

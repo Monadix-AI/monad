@@ -130,7 +130,7 @@ test('unknown mention stays as ordinary project text', () => {
 });
 
 test('channel context describes direct structured response contract', () => {
-  const _context = buildChannelTurnContext({
+  const context = buildChannelTurnContext({
     channelId: 'Control Room: design',
     sessionId: 'ses_123000000000',
     routeKind: 'forward-acp',
@@ -141,10 +141,12 @@ test('channel context describes direct structured response contract', () => {
       { id: 'acp:reviewer', name: 'reviewer', kind: 'acp' }
     ]
   });
+  expect(context).toContain('Return exactly one JSON object');
+  expect(context).toContain('mention_token=@[name="reviewer" id="acp:reviewer"]');
 });
 
 test('channel context gives project members a plain response mode', () => {
-  const _context = buildChannelTurnContext({
+  const context = buildChannelTurnContext({
     channelId: 'Control Room: design',
     sessionId: 'ses_123000000000',
     routeKind: 'forward-acp',
@@ -152,11 +154,22 @@ test('channel context gives project members a plain response mode', () => {
     responseMode: 'worker_plain',
     participants: [{ id: 'acp:reviewer', name: 'reviewer', kind: 'acp' }]
   });
+  expect(context).toContain('Return plain markdown only.');
+  expect(context).not.toContain('Return exactly one JSON object');
 });
 
-test('ACP channel prompt wraps the user message after channel context', () => {
-  expect(composeAcpChannelPrompt('inspect this', '<channel_context>ctx</channel_context>')).toBe(
-    '<channel_context>ctx</channel_context>\n\n<channel_user_message>\ninspect this\n</channel_user_message>'
-  );
+test('ACP channel prompt renders the complete context and user message from one template', () => {
+  const input = {
+    channelId: 'Control Room: design',
+    sessionId: 'ses_123000000000',
+    routeKind: 'forward-acp' as const,
+    targetName: 'reviewer',
+    responseMode: 'worker_plain' as const,
+    participants: [{ id: 'acp:reviewer', name: 'reviewer', kind: 'acp' as const }]
+  };
+  const prompt = composeAcpChannelPrompt('inspect this', input);
+  expect(prompt).toContain('<channel_context>');
+  expect(prompt).toContain('Return plain markdown only.');
+  expect(prompt).toContain('<channel_user_message>\ninspect this\n</channel_user_message>');
   expect(composeAcpChannelPrompt('inspect this')).toBe('inspect this');
 });

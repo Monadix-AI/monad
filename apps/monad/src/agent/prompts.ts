@@ -5,44 +5,108 @@
 
 import type { LoadedSkill } from './loop/index.ts';
 
+import { definePrompt } from './prompt-template.ts';
 // `with { type: 'file' }` is the embed mechanism bun's --compile reliably bundles AND path-rewrites
 // for the standalone binary; `Bun.file(new URL(..., import.meta.url))` resolves against the bundled
 // module's relocated path and breaks in the compiled binary (ENOENT, notably on Windows).
-import defaultSystemPromptPath from './prompts/default-system-prompt.md' with { type: 'file' };
-import handoffPromptPath from './prompts/handoff-prompt.md' with { type: 'file' };
-import {
-  BUDGET_EXCEEDED,
-  evictedToolResult,
-  GUI_TRACK_BOTH,
-  GUI_TRACK_BROWSER,
-  GUI_TRACK_COMPUTER,
-  OBSERVATION_PREFIX,
-  SKILL_INSTRUCTIONS_TEMPLATE,
-  SUMMARY_MARKER,
-  TOOL_BUDGET_REACHED
-} from './prompts/short-text.ts';
-import summaryPromptPath from './prompts/summary-prompt.md' with { type: 'file' };
-import summaryReflectPromptPath from './prompts/summary-reflect-prompt.md' with { type: 'file' };
-import summaryStructuredPromptPath from './prompts/summary-structured-prompt.md' with { type: 'file' };
+import budgetExceededPath from './prompts/budget-exceeded-user.prompt.md' with { type: 'file' };
+import contextSummaryPath from './prompts/context-summary-user.prompt.md' with { type: 'file' };
+import customSystemEtaPath from './prompts/custom-system.prompt.md' with { type: 'file' };
+import defaultSystemEtaPath from './prompts/default-system.prompt.md' with { type: 'file' };
+import evictedToolResultPath from './prompts/evicted-tool-result-user.prompt.md' with { type: 'file' };
+import handoffSystemPath from './prompts/handoff-system.prompt.md' with { type: 'file' };
+import handoffUserPath from './prompts/handoff-user.prompt.md' with { type: 'file' };
+import { OBSERVATION_PREFIX } from './prompts/short-text.ts';
+import summaryReflectSystemPath from './prompts/summary-reflect-system.prompt.md' with { type: 'file' };
+import summaryReflectUserPath from './prompts/summary-reflect-user.prompt.md' with { type: 'file' };
+import summaryStructuredSystemPath from './prompts/summary-structured-system.prompt.md' with { type: 'file' };
+import summarySystemPath from './prompts/summary-system.prompt.md' with { type: 'file' };
+import summaryUserPath from './prompts/summary-user.prompt.md' with { type: 'file' };
+import toolBudgetReachedPath from './prompts/tool-budget-reached-user.prompt.md' with { type: 'file' };
 
-export { BUDGET_EXCEEDED, evictedToolResult, OBSERVATION_PREFIX, SUMMARY_MARKER, TOOL_BUDGET_REACHED };
+export { OBSERVATION_PREFIX };
 
-/** Base persona/instructions when the host doesn't supply its own via `instructions`. */
-export const DEFAULT_SYSTEM_PROMPT = (await Bun.file(defaultSystemPromptPath).text()).trim();
+const DEFAULT_SYSTEM_TEMPLATE = await definePrompt<{
+  slots: SystemPromptSlots;
+  skills: LoadedSkill[];
+  toolNames: readonly string[];
+}>({ id: 'agent.default-system', sourcePath: defaultSystemEtaPath });
 
-/** Instruction given to the (cheap) model that compacts old turns into the rolling summary. */
-export const SUMMARY_PROMPT = (await Bun.file(summaryPromptPath).text()).trim();
+const CUSTOM_SYSTEM_TEMPLATE = await definePrompt<{
+  instructions: string;
+  slots: SystemPromptSlots;
+  skills: LoadedSkill[];
+  toolNames: readonly string[];
+}>({ id: 'agent.custom-system', sourcePath: customSystemEtaPath });
 
-/** Structured variant of {@link SUMMARY_PROMPT}: sections (objective/decisions/files/tasks/next)
- *  with verbatim identifiers, so compaction preserves the file names and symbols the agent needs
- *  to keep working. Used by the durable summarizer. */
-export const SUMMARY_STRUCTURED_PROMPT = (await Bun.file(summaryStructuredPromptPath).text()).trim();
+const SUMMARY_SYSTEM_TEMPLATE = await definePrompt({ id: 'agent.summary.system', sourcePath: summarySystemPath });
+const SUMMARY_STRUCTURED_SYSTEM_TEMPLATE = await definePrompt<{ preserve: readonly string[] }>({
+  id: 'agent.summary-structured.system',
+  sourcePath: summaryStructuredSystemPath
+});
+const SUMMARY_REFLECT_SYSTEM_TEMPLATE = await definePrompt({
+  id: 'agent.summary-reflect.system',
+  sourcePath: summaryReflectSystemPath
+});
+const SUMMARY_USER_TEMPLATE = await definePrompt<{ prior?: string; transcript: string }>({
+  id: 'agent.summary.user',
+  sourcePath: summaryUserPath
+});
+const SUMMARY_REFLECT_USER_TEMPLATE = await definePrompt<{ summary: string }>({
+  id: 'agent.summary-reflect.user',
+  sourcePath: summaryReflectUserPath
+});
+const HANDOFF_SYSTEM_TEMPLATE = await definePrompt({ id: 'agent.handoff.system', sourcePath: handoffSystemPath });
+const HANDOFF_USER_TEMPLATE = await definePrompt<{ prior?: string; transcript: string }>({
+  id: 'agent.handoff.user',
+  sourcePath: handoffUserPath
+});
+const CONTEXT_SUMMARY_TEMPLATE = await definePrompt<{ summary: string }>({
+  id: 'agent.context-summary.user',
+  sourcePath: contextSummaryPath
+});
+const TOOL_BUDGET_REACHED_TEMPLATE = await definePrompt({
+  id: 'agent.tool-budget-reached.user',
+  sourcePath: toolBudgetReachedPath
+});
+const BUDGET_EXCEEDED_TEMPLATE = await definePrompt({
+  id: 'agent.budget-exceeded.user',
+  sourcePath: budgetExceededPath
+});
+const EVICTED_TOOL_RESULT_TEMPLATE = await definePrompt<{ toolName: string }>({
+  id: 'agent.evicted-tool-result.user',
+  sourcePath: evictedToolResultPath
+});
 
-/** Instruction for the reflector pass that condenses an over-grown rolling summary (GC). */
-export const SUMMARY_REFLECT_PROMPT = (await Bun.file(summaryReflectPromptPath).text()).trim();
+export const SUMMARY_PROMPT = SUMMARY_SYSTEM_TEMPLATE.render({});
+export const SUMMARY_REFLECT_PROMPT = SUMMARY_REFLECT_SYSTEM_TEMPLATE.render({});
+export const HANDOFF_PROMPT = HANDOFF_SYSTEM_TEMPLATE.render({});
+export const TOOL_BUDGET_REACHED = TOOL_BUDGET_REACHED_TEMPLATE.render({});
+export const BUDGET_EXCEEDED = BUDGET_EXCEEDED_TEMPLATE.render({});
 
-/** Instruction for the /handoff summary: a structured cross-session context block. */
-export const HANDOFF_PROMPT = (await Bun.file(handoffPromptPath).text()).trim();
+export function renderSummaryStructuredSystemPrompt(preserve: readonly string[]): string {
+  return SUMMARY_STRUCTURED_SYSTEM_TEMPLATE.render({ preserve });
+}
+
+export function renderSummaryUserPrompt(data: { prior?: string; transcript: string }): string {
+  return SUMMARY_USER_TEMPLATE.render(data);
+}
+
+export function renderSummaryReflectUserPrompt(summary: string): string {
+  return SUMMARY_REFLECT_USER_TEMPLATE.render({ summary });
+}
+
+export function renderHandoffUserPrompt(data: { prior?: string; transcript: string }): string {
+  return HANDOFF_USER_TEMPLATE.render(data);
+}
+
+export function renderContextSummary(summary: string): string {
+  return CONTEXT_SUMMARY_TEMPLATE.render({ summary });
+}
+
+export function evictedToolResult(toolName: string): string {
+  return EVICTED_TOOL_RESULT_TEMPLATE.render({ toolName });
+}
 
 /**
  * Ambient context the host knows about the run (none of which agent-core can introspect on its
@@ -72,75 +136,46 @@ export interface SystemPromptSlots {
   agent?: string;
   user?: string;
   environment?: string;
-  skills?: string;
-  guiTrack?: string;
   summary?: string;
   injectedContext?: string;
 }
 
 export type UserPromptSlots = Pick<SystemPromptSlots, 'soul' | 'agent' | 'user'>;
 
-const SLOT_KEYS = {
-  soul: 'SOUL',
-  agent: 'AGENT',
-  user: 'USER',
-  environment: 'ENVIRONMENT',
-  skills: 'SKILLS',
-  guiTrack: 'GUI_TRACK',
-  summary: 'SUMMARY',
-  injectedContext: 'INJECTED_CONTEXT'
-} as const satisfies Record<keyof SystemPromptSlots, string>;
-
-/** Render a prompt template with explicit slot markers. Any non-empty slot omitted by the template
- * is appended to preserve the legacy "base prompt + addenda" behavior for older prompts. */
-export function renderSystemPrompt(template: string, slots: SystemPromptSlots): string {
-  const values = {
-    [SLOT_KEYS.soul]: slots.soul?.trim(),
-    [SLOT_KEYS.agent]: slots.agent?.trim(),
-    [SLOT_KEYS.user]: slots.user?.trim(),
-    [SLOT_KEYS.environment]: slots.environment?.trim(),
-    [SLOT_KEYS.skills]: slots.skills?.trim(),
-    [SLOT_KEYS.guiTrack]: slots.guiTrack?.trim(),
-    [SLOT_KEYS.summary]: slots.summary?.trim(),
-    [SLOT_KEYS.injectedContext]: slots.injectedContext?.trim()
-  } as const;
+export function renderAgentSystemPrompt(input: {
+  instructions?: string;
+  slots: SystemPromptSlots;
+  skills: LoadedSkill[];
+  toolNames: readonly string[];
+}): string {
+  if (!input.instructions) return DEFAULT_SYSTEM_TEMPLATE.render(input);
   const used = new Set<string>();
-  const rendered = template.replace(/\{\{([A-Z_]+)\}\}/g, (match, key: string) => {
+  const values: Record<string, string | undefined> = {
+    SOUL: input.slots.soul,
+    AGENT: input.slots.agent,
+    USER: input.slots.user,
+    ENVIRONMENT: input.slots.environment,
+    SUMMARY: input.slots.summary,
+    INJECTED_CONTEXT: input.slots.injectedContext,
+    SKILLS: '',
+    GUI_TRACK: ''
+  };
+  const instructions = input.instructions.replace(/\{\{([A-Z_]+)\}\}/g, (match, key: string) => {
     if (!(key in values)) return match;
     used.add(key);
-    return values[key as keyof typeof values] ?? '';
+    return values[key] ?? '';
   });
-  const appended = Object.entries(values)
-    .filter(([key, value]) => value && !used.has(key))
-    .map(([, value]) => value);
-  return [rendered.trim(), ...appended]
-    .filter(Boolean)
-    .join('\n\n')
-    .replace(/\n{3,}/g, '\n\n');
-}
-
-/**
- * System-prompt addendum listing available skills (L1 progressive disclosure). Only
- * names + descriptions — the model pulls a body on demand via the `skill` tool. Skills
- * flagged `modelInvocable:false` are omitted (they stay user-only). Returns '' when no
- * skill is model-invocable, so the caller can skip the section entirely.
- */
-/** Guidance for picking the right GUI-automation track when those tools are present. Emitted only
- *  when a `browser__*` and/or `computer__*` toolset is available, so the model favours the cheaper,
- *  more reliable, more contained browser track and reserves real-desktop control for what it can't
- *  reach otherwise. */
-export function guiTrackInstructions(toolNames: readonly string[]): string {
-  const hasBrowser = toolNames.some((n) => n.startsWith('browser__'));
-  const hasComputer = toolNames.some((n) => n.startsWith('computer__'));
-  if (!hasBrowser && !hasComputer) return '';
-  if (hasBrowser && hasComputer) return GUI_TRACK_BOTH;
-  if (hasComputer) return GUI_TRACK_COMPUTER;
-  return GUI_TRACK_BROWSER;
-}
-
-export function skillInstructions(skills: LoadedSkill[]): string {
-  const visible = skills.filter((s) => s.modelInvocable !== false);
-  if (visible.length === 0) return '';
-  const list = visible.map((s) => JSON.stringify({ skill_id: s.name, description: s.description })).join('\n');
-  return SKILL_INSTRUCTIONS_TEMPLATE.replace('{{SKILL_LIST}}', list);
+  return CUSTOM_SYSTEM_TEMPLATE.render({
+    instructions,
+    skills: input.skills,
+    toolNames: input.toolNames,
+    slots: {
+      soul: used.has('SOUL') ? undefined : input.slots.soul,
+      agent: used.has('AGENT') ? undefined : input.slots.agent,
+      user: used.has('USER') ? undefined : input.slots.user,
+      environment: used.has('ENVIRONMENT') ? undefined : input.slots.environment,
+      summary: used.has('SUMMARY') ? undefined : input.slots.summary,
+      injectedContext: used.has('INJECTED_CONTEXT') ? undefined : input.slots.injectedContext
+    }
+  });
 }

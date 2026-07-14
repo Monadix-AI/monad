@@ -6,7 +6,10 @@ import type { Logger } from '@monad/logger';
 import type { Complete } from './graph/extract.ts';
 import type { LawStore } from './law-store.ts';
 
+import { definePrompt } from '#/agent/prompt-template.ts';
 import { fingerprint } from './consolidation-state.ts';
+import inferSystemPath from './prompts/law-infer-system.prompt.md' with { type: 'file' };
+import inferUserPath from './prompts/law-infer-user.prompt.md' with { type: 'file' };
 
 export interface InferredLaw {
   statement: string;
@@ -14,15 +17,11 @@ export interface InferredLaw {
   support?: string[];
 }
 
-const INFER_SYSTEM = [
-  'You derive a few GENERAL, FALSIFIABLE rules ("laws") that should guide an assistant, by generalizing',
-  'the durable facts and relations below about one user/agent. A law is a stable, actionable',
-  'generalization — e.g. "Always deploy with Bun, never Node" — not a restatement of a single fact.',
-  'Each fact is tagged [f#] and each relation is tagged [e#].',
-  'Output ONLY JSON: {"laws":[{"statement":"…","confidence":0.0-1.0,"support":["f1","e3"]}]} where `support`',
-  'lists the [f#]/[e#] tags the law generalizes (cite only tags shown below; omit if none apply).',
-  'Be conservative: prefer 0-5 high-signal laws over many weak ones. If nothing generalizes, output {"laws":[]}.'
-].join(' ');
+const INFER_SYSTEM_PROMPT = await definePrompt({ id: 'memory.law-infer.system', sourcePath: inferSystemPath });
+const INFER_USER_PROMPT = await definePrompt<{ factsBlock: string; graphBlock: string }>({
+  id: 'memory.law-infer.user',
+  sourcePath: inferUserPath
+});
 
 const cap = (s: string, max: number): string => (s.length > max ? s.slice(0, max) : s);
 
@@ -61,8 +60,8 @@ async function inferLaws(
 ): Promise<InferredLaw[] | null> {
   const text = await complete(
     model,
-    INFER_SYSTEM,
-    `Facts:\n${factsBlock || '(none)'}\n\nRelations:\n${graphBlock || '(none)'}`
+    INFER_SYSTEM_PROMPT.render({}),
+    INFER_USER_PROMPT.render({ factsBlock, graphBlock })
   );
   return parseLaws(text);
 }

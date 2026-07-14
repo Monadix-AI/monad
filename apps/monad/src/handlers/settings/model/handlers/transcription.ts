@@ -1,12 +1,20 @@
 import type { TranscribeAudioRequest } from '@monad/protocol';
 import type { ModelContext, ModelDeps } from '#/handlers/settings/model/context.ts';
 
+import { definePrompt } from '#/agent/prompt-template.ts';
 import { resolveModelRole } from '#/config/resolve.ts';
 import { HandlerError } from '#/handlers/handler-error.ts';
-// `with { type: 'file' }` embeds reliably in bun's --compile binary (unlike new URL+import.meta.url).
-import transcriptionCleanupPromptPath from '../prompts/transcription-cleanup-prompt.md' with { type: 'file' };
+import transcriptionCleanupSystemPath from '../prompts/transcription-cleanup-system.prompt.md' with { type: 'file' };
+import transcriptionCleanupUserPath from '../prompts/transcription-cleanup-user.prompt.md' with { type: 'file' };
 
-const TRANSCRIPTION_CLEANUP_PROMPT = (await Bun.file(transcriptionCleanupPromptPath).text()).trim();
+const TRANSCRIPTION_CLEANUP_SYSTEM_PROMPT = await definePrompt({
+  id: 'transcription-cleanup.system',
+  sourcePath: transcriptionCleanupSystemPath
+});
+const TRANSCRIPTION_CLEANUP_USER_PROMPT = await definePrompt<{ rawText: string }>({
+  id: 'transcription-cleanup.user',
+  sourcePath: transcriptionCleanupUserPath
+});
 
 function decodeBase64(value: string): Uint8Array {
   try {
@@ -46,8 +54,8 @@ export function createTranscriptionHandlers(ctx: ModelContext, deps: Pick<ModelD
         const cleaned = await deps.modelService.router.complete({
           model: cleanupModel,
           messages: [
-            { role: 'system', content: TRANSCRIPTION_CLEANUP_PROMPT, cache: true },
-            { role: 'user', content: `<raw_text>${rawText}</raw_text>` }
+            { role: 'system', content: TRANSCRIPTION_CLEANUP_SYSTEM_PROMPT.render({}), cache: true },
+            { role: 'user', content: TRANSCRIPTION_CLEANUP_USER_PROMPT.render({ rawText }) }
           ]
         });
         return { text: cleaned.text.trim() || rawText };

@@ -8,9 +8,9 @@ import {
   warningToString
 } from '#/capabilities/skills/install/review.ts';
 
-const promptContent = (
+const systemPromptContent = (
   await Bun.file(
-    new URL('../../../src/capabilities/skills/install/prompts/skill-install-review-prompt.md', import.meta.url)
+    new URL('../../../src/capabilities/skills/install/prompts/skill-install-review-system.prompt.md', import.meta.url)
   ).text()
 ).trim();
 
@@ -45,7 +45,10 @@ test('skill install review allows a clean model verdict', async () => {
   });
 
   expect(capturedReq?.messages[0]?.role).toBe('system');
-  expect(capturedReq?.messages[0]?.content).toContain(promptContent);
+  expect(capturedReq?.messages[0]?.content).toBe(systemPromptContent);
+  expect(capturedReq?.messages[1]?.content).toContain('Source: clawhub:demo');
+  expect(capturedReq?.messages[1]?.content).toContain('Skills: demo');
+  expect(capturedReq?.messages[1]?.content).toContain('--- demo/SKILL.md ---');
 });
 
 test('skill install review turns risky or unreadable verdicts into warnings', async () => {

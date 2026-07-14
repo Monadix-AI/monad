@@ -1,5 +1,6 @@
 import type { AcpAgentConfig, McpServerConfig } from '@monad/home';
 import type { ChannelResponseNextTarget, Event, Session, SessionId } from '@monad/protocol';
+import type { BuildChannelContextInput } from '#/agent/prompts/channel.ts';
 import type { SessionContext } from '#/handlers/session/context.ts';
 
 import { newId, parseChannelStructuredResponse } from '@monad/protocol';
@@ -34,13 +35,13 @@ export function createAcpChannelDelegation(
     sessionId,
     spec,
     text,
-    ambientContext,
+    channelPromptInput,
     mcpServers
   }: {
     sessionId: SessionId;
     spec: AcpAgentConfig;
     text: string;
-    ambientContext?: string;
+    channelPromptInput?: BuildChannelContextInput;
     mcpServers?: Parameters<typeof directDelegate>[2]['mcpServers'];
   }): void {
     const round: Event[] = [];
@@ -82,7 +83,7 @@ export function createAcpChannelDelegation(
     emitAcpActivityProgress();
 
     const rt = runtimeForSession(sessionId);
-    directDelegate(spec, composeAcpChannelPrompt(text, ambientContext), {
+    directDelegate(spec, composeAcpChannelPrompt(text, channelPromptInput), {
       sessionId,
       signal: controller.signal,
       sandboxRoots: sandboxRootsFor(sessionId, requireSession(sessionId).cwd, rt),
@@ -163,13 +164,13 @@ export function createAcpChannelDelegation(
   async function dispatchChannelNextTargets({
     sessionId,
     responseText,
-    ambientContext,
+    channelPromptInput,
     acpAgents,
     mcpServers
   }: {
     sessionId: SessionId;
     responseText: string;
-    ambientContext: string;
+    channelPromptInput: BuildChannelContextInput;
     acpAgents: readonly AcpAgentConfig[];
     mcpServers?: Parameters<typeof directDelegate>[2]['mcpServers'];
   }): Promise<void> {
@@ -185,7 +186,7 @@ export function createAcpChannelDelegation(
         sessionId,
         spec,
         text: channelNextPrompt(target),
-        ambientContext,
+        channelPromptInput,
         mcpServers
       });
     }
@@ -196,13 +197,13 @@ export function createAcpChannelDelegation(
     acpAgents,
     mcpServers,
     text,
-    ambientContext
+    channelPromptInput
   }: {
     session: Session;
     acpAgents: readonly AcpAgentConfig[];
     mcpServers: readonly McpServerConfig[] | undefined;
     text: string;
-    ambientContext?: string;
+    channelPromptInput?: BuildChannelContextInput;
   }): Promise<void> {
     const members = projectAcpMembers(store, session.id, acpAgents);
     if (members.length === 0) return;
@@ -236,7 +237,7 @@ export function createAcpChannelDelegation(
         emitAcpActivityProgress();
         try {
           const rt = runtime.get(session.id);
-          const fullText = await directDelegate(spec, composeAcpChannelPrompt(text, ambientContext), {
+          const fullText = await directDelegate(spec, composeAcpChannelPrompt(text, channelPromptInput), {
             sessionId: session.id,
             signal: new AbortController().signal,
             sandboxRoots: sandboxRootsFor(session.id, session.cwd, rt),
