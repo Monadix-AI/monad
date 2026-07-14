@@ -21,6 +21,7 @@
     "./model": "./src/model.ts",
     "./sandbox": "./src/sandbox.ts"
   },
+  "license": "MIT",
   "module": "src/index.ts",
   "private": true,
   "scripts": {

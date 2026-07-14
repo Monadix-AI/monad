@@ -73,7 +73,7 @@ test('initialize → newSession → prompt streams chunks and ends the turn', as
     expect(init.agentInfo?.name).toBe('monad');
 
     const { sessionId } = await ctx.request('session/new', { cwd: '/tmp', mcpServers: [] });
-    expect(sessionId).toBeTruthy();
+    expect(sessionId).toMatch(/^ses_/);
 
     const res = await ctx.request('session/prompt', { sessionId, prompt: [{ type: 'text', text: 'hi' }] });
     expect(res.stopReason).toBe('end_turn');
@@ -92,7 +92,7 @@ test('initialize advertises fork capability and monad extension methods', async 
 
   await makeClientApp([]).connectWith(clientStream, async (ctx) => {
     const init = await ctx.request('initialize', { protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} });
-    expect(init.agentCapabilities?.sessionCapabilities?.fork).toBeDefined();
+    expect(init.agentCapabilities?.sessionCapabilities?.fork).toEqual({});
     const ext = (init.agentCapabilities?._meta as { monad?: { extMethods?: string[] } } | undefined)?.monad?.extMethods;
     expect(ext).toContain('_monad/session.provenance');
     expect(ext).toContain('_monad/model.listProfiles');
@@ -107,7 +107,7 @@ test('session/fork maps to monad branch and returns a new session id', async () 
     await ctx.request('initialize', { protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} });
     const { sessionId } = await ctx.request('session/new', { cwd: '/tmp', mcpServers: [] });
     const forked = await ctx.request('session/fork', { sessionId, cwd: '/tmp', mcpServers: [] });
-    expect(forked.sessionId).toBeTruthy();
+    expect(forked.sessionId).toMatch(/^ses_/);
     expect(forked.sessionId).not.toBe(sessionId);
   });
 });
@@ -432,7 +432,6 @@ test('newSession pushes a session_info_update carrying the title', async () => {
     await new Promise((r) => setTimeout(r, 20)); // flush fire-and-forget notifications
 
     const info = updates.find((u) => u.update.sessionUpdate === 'session_info_update');
-    expect(info).toBeDefined();
     expect((info?.update as { title?: string }).title).toBe('ACP session');
   });
 });
@@ -444,7 +443,7 @@ test('session/resume re-attaches without replaying history', async () => {
 
   await makeClientApp(updates).connectWith(clientStream, async (ctx) => {
     const init = await ctx.request('initialize', { protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} });
-    expect(init.agentCapabilities?.sessionCapabilities?.resume).toBeDefined();
+    expect(init.agentCapabilities?.sessionCapabilities?.resume).toEqual({});
 
     const { sessionId } = await ctx.request('session/new', { cwd: '/tmp', mcpServers: [] });
     await ctx.request('session/prompt', { sessionId, prompt: [{ type: 'text', text: 'hi' }] });

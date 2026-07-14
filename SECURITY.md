@@ -11,7 +11,7 @@ please upgrade before reporting.
 **Please do not open a public issue for security vulnerabilities.**
 
 Report privately through GitHub's
-[private vulnerability reporting](https://github.com/monadix-labs/monad/security/advisories/new)
+[private vulnerability reporting](https://github.com/Monadix-AI/monad/security/advisories/new)
 ("Report a vulnerability" under the repo's **Security** tab). This keeps the
 report confidential until a fix is available and lets us coordinate a release
 with you.
@@ -46,6 +46,6 @@ scope will help you decide whether a finding is a vulnerability:
 
 This is an **evolving** posture, not a hardened one. The corresponding
 hardening work is tracked in
-[docs/security-guidelines.md](docs/security-guidelines.md). Findings that
+[docs/engineering/security-guidelines.md](docs/engineering/security-guidelines.md). Findings that
 demonstrate a bypass of the documented model — or that escalate beyond it —
 are very much in scope and welcome.

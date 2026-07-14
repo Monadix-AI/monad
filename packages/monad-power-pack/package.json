@@ -12,6 +12,7 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "license": "MIT",
   "module": "src/index.ts",
   "private": true,
   "scripts": {

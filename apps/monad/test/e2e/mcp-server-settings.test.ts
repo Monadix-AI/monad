@@ -86,7 +86,10 @@ async function runMcpServerCrud(call: Call, paths: MonadPaths): Promise<void> {
   expect(remote?.auth?.token).toBe(envRef('MCP_TOKEN'));
 
   // 4. persisted to config.json (SYSTEM config)
-  expect((await loadConfig(paths.config))?.mcpServers.find((s) => s.name === 'fs')).toBeDefined();
+  expect((await loadConfig(paths.config))?.mcpServers.find((s) => s.name === 'fs')).toMatchObject({
+    transport: 'stdio',
+    command: 'npx'
+  });
   expect((await loadAll(paths.config, paths.profile))?.mcpServers.length).toBe(2);
 
   // 4b. GET single server round-trips its full spec

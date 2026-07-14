@@ -1,5 +1,5 @@
 // Trust boundary: an AGENT.md body is executable instruction text from disk — treat like a
-// skill body / provider atom (see docs/security-guidelines.md and skills.ts).
+// skill body / provider atom (see docs/engineering/security-guidelines.md and skills.ts).
 //
 // An agent's structured config (model, atoms, sandbox, visibility) lives in profile.json and is
 // authoritative for the live system. AGENT.md owns the *system-prompt body*; its YAML frontmatter

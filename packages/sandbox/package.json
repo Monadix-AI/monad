@@ -21,6 +21,7 @@
     "./launchers/win32": "./src/launchers/win32.ts",
     "./launchers/win32-appcontainer": "./src/launchers/win32-appcontainer.ts"
   },
+  "license": "MIT",
   "module": "src/index.ts",
   "private": true,
   "scripts": {

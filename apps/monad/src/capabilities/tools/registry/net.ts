@@ -4,7 +4,7 @@
 //      (a public name resolving to a private IP).
 //   3. redirect:'manual' — re-run 1+2 on each Location hop; following redirects
 //      automatically would bypass checks via a 302 to an internal host.
-// See docs/security-guidelines.md §4.
+// See docs/engineering/security-guidelines.md §4.
 
 import type { Tool, ToolContext } from '../types.ts';
 

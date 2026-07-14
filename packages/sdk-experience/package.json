@@ -10,6 +10,7 @@
     ".": "./src/index.ts",
     "./react": "./src/react/index.ts"
   },
+  "license": "MIT",
   "module": "src/index.ts",
   "peerDependencies": {
     "react": "^19.2.7",

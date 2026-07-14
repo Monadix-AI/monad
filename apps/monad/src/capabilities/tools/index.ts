@@ -1,6 +1,6 @@
 // @/capabilities/tools — built-in tool atoms. Each tool declares the scopes it needs and
 // whether it is high-risk. Resource-specific guards live in the tool run() bodies —
-// see security.ts and docs/security-guidelines.md §4.
+// see security.ts and docs/engineering/security-guidelines.md §4.
 
 // Sandbox launchers (seatbelt/landlock/win32/bwrap) are the `sandbox` atom kind — they live in
 export {

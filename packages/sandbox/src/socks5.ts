@@ -2,7 +2,7 @@
 // honours ALL_PROXY (socks5h://…) routes non-HTTP TCP (ssh, db, git-ssh) through the SAME single
 // proxy port, gated by the SAME allow + dialable checks as the HTTP path — so nothing is reachable
 // over SOCKS that isn't reachable over HTTP. Only the no-auth CONNECT subset is implemented; BIND,
-// UDP ASSOCIATE, and SOCKS4 are refused. See docs/security-guidelines.md §8.
+// UDP ASSOCIATE, and SOCKS4 are refused. See docs/engineering/security-guidelines.md §8.
 //
 // Wire refs: RFC 1928. Greeting `VER NMETHODS METHODS…`; request `VER CMD RSV ATYP ADDR PORT`.
 //

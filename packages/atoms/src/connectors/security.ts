@@ -1,5 +1,5 @@
 // A webhook URL is an unauthenticated entry point — every payload MUST be verified
-// against the shared secret before ingestion. See docs/security-guidelines.md §6.
+// against the shared secret before ingestion. See docs/engineering/security-guidelines.md §6.
 
 import { createHmac, timingSafeEqual } from 'node:crypto';
 

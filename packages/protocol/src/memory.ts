@@ -1,7 +1,7 @@
 // Layered-memory contracts. Scope-isolated objective facts (L1): the always-injected core +
 // the machine-written recall corpus. L2 (graph) / L3 (laws) are designed but not built; only the
 // L1 wire/domain types live here. `org` scope is reserved for a future paid tier (one monad
-// instance = one user, so `global` = that user). See docs/memory-design.md.
+// instance = one user, so `global` = that user). See docs/internals/memory-design.md.
 
 import type { AgentId, SessionId } from './ids.ts';
 
@@ -124,7 +124,7 @@ export type AddMemoryFactRequest = z.infer<typeof addMemoryFactRequestSchema>;
 
 // `id` travels in the URL path (`PATCH /memory/facts/:id`); the body carries only the patch
 // fields. `editMemoryFactRequestSchema` is the full logical request (path + body) per
-// docs/conventions.md §5 — the HTTP body schema derives from it via `.omit()`.
+// docs/engineering/conventions.md §5 — the HTTP body schema derives from it via `.omit()`.
 export const editMemoryFactRequestSchema = memoryScopeQuerySchema.extend({
   id: z.string(),
   content: z.string().min(1)

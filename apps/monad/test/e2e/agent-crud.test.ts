@@ -115,7 +115,6 @@ async function runCrud(t: TransportHandle, paths: MonadPaths): Promise<void> {
   // 7. AGENT.md persisted on disk under <agents>/<dir>/ and profile.json carries the row
   const cfg = await loadAll(paths.config, paths.profile);
   const row = cfg?.agent.agents.find((a) => a.id === id);
-  expect(row?.dir).toBeTruthy();
   const md = await Bun.file(join(paths.agents, row?.dir as string, 'AGENT.md')).text();
   expect(md).toContain('You are a meticulous researcher.');
 

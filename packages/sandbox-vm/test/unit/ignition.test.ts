@@ -4,7 +4,7 @@ import { buildIgnition, systemdEscapePath } from '../../src/ignition.ts';
 
 test('systemdEscapePath escapes hyphens the way systemd does (name must round-trip to Where=)', () => {
   // A literal hyphen in the path must become \x2d, NOT collide with the / → - separator.
-  expect(systemdEscapePath('/Users/zeke/my-project')).toBe('Users-zeke-my\\x2dproject');
+  expect(systemdEscapePath('/Users/test/my-project')).toBe('Users-test-my\\x2dproject');
   expect(systemdEscapePath('/Users/x/ws')).toBe('Users-x-ws');
   // Dots are kept mid-path; a leading dot (after stripping /) is escaped.
   expect(systemdEscapePath('/var/lib/foo.bar')).toBe('var-lib-foo.bar');
@@ -57,7 +57,6 @@ test('the firewall file carries the egress nftables ruleset', () => {
     egress: { mode: 'filtered', proxyPort: 8080 }
   });
   const nft = cfg.storage.files.find((f) => (f as IgnFile).path === '/etc/monad/nftables.conf') as IgnFile | undefined;
-  expect(nft).toBeDefined();
   const rules = decodeDataUri(nft?.contents?.source ?? '');
   expect(rules).toContain('policy drop;');
   expect(rules).toContain('dport 8080 accept');

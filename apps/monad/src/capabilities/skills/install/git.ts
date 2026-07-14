@@ -107,7 +107,7 @@ function sandboxAvailable(): boolean {
 // staging dir, with the daemon's credential read-deny applied — so it cannot write outside staging,
 // read ~/.ssh etc., or persist on the host. Network stays enabled (daemon net policy) so fetches work;
 // the filesystem confinement is what neutralises the remaining host-damage surface. Required by
-// docs/security-guidelines.md §8 ("use sandboxedSpawn, not bare Bun.spawn").
+// docs/engineering/security-guidelines.md §8 ("use sandboxedSpawn, not bare Bun.spawn").
 async function runGit(
   args: string[],
   opts: { writableRoots: string[]; confine?: boolean }

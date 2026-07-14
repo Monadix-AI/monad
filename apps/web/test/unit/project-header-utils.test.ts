@@ -7,8 +7,8 @@ import {
 } from '../../src/features/workplace/project-shell/project-header-utils';
 
 test('workdir label uses the last path segment', () => {
-  expect(workdirLabel('/Users/zeke/Projects/monad/', 'Set folder')).toBe('monad');
-  expect(workdirLabel('C:\\Users\\zeke\\monad', 'Set folder')).toBe('monad');
+  expect(workdirLabel('/Users/test/Projects/monad/', 'Set folder')).toBe('monad');
+  expect(workdirLabel('C:\\Users\\test\\monad', 'Set folder')).toBe('monad');
   expect(workdirLabel(undefined, 'Set folder')).toBe('Set folder');
 });
 

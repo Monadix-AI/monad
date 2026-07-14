@@ -1,5 +1,5 @@
-// A per-VM bundle directory: the on-disk state a single agent's VM needs. Modeled on Claude Cowork's
-// `claudevm.bundle` layout (EFI vars + rootfs + identity + sockets), but per-agent, not per-install.
+// A per-VM bundle directory: the on-disk state a single agent's VM needs. A self-contained bundle
+// layout (EFI vars + rootfs + identity + sockets), scoped per-agent, not per-install.
 //
 //   <vmDir>/agents/<key>/
 //     rootfs.img        APFS copy-on-write clone of the base image (near-zero until written)

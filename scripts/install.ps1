@@ -4,7 +4,7 @@
 
 .DESCRIPTION
   Usage (production):
-    irm https://raw.githubusercontent.com/monadix-labs/monad/main/scripts/install.ps1 | iex
+    irm https://raw.githubusercontent.com/Monadix-AI/monad/main/scripts/install.ps1 | iex
 
   Usage (local dev — fully self-contained inside dist\):
     bun run build:release        # produces dist\monad-<ver>-windows-x64.tar.gz

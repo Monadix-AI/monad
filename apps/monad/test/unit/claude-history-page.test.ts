@@ -62,7 +62,6 @@ test('Claude Code adapter reads paged history through the Agent SDK', async () =
     limitBytes: 8192,
     page: page ?? { items: [] }
   });
-  expect(output).toBeTruthy();
 
   const events = claudeCodeExternalAgentAdapter.parseOutput(output ?? '');
   expect(events).toEqual([

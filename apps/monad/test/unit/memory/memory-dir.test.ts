@@ -10,11 +10,11 @@ import { join } from 'node:path';
 import { factId, MemoryDir, projectKey, scopeOf } from '#/store/db/index.ts';
 
 test('projectKey is filename-safe, stable, and disambiguates distinct paths', () => {
-  const k = projectKey('/Users/zeke/Projects/Monad');
+  const k = projectKey('/Users/test/Projects/Monad');
   expect(k).toMatch(/^[a-z0-9-]+$/); // safe to embed in MEMORY_project_<key>.md
   expect(k.startsWith('monad-')).toBe(true); // recognizable basename
-  expect(projectKey('/Users/zeke/Projects/Monad')).toBe(k); // stable
-  expect(projectKey('/Users/zeke/Projects/Monad/')).toBe(k); // normalized (trailing slash)
+  expect(projectKey('/Users/test/Projects/Monad')).toBe(k); // stable
+  expect(projectKey('/Users/test/Projects/Monad/')).toBe(k); // normalized (trailing slash)
   expect(projectKey('/other/Monad')).not.toBe(k); // same basename, different path → different key
 });
 

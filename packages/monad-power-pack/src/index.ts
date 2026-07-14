@@ -51,7 +51,7 @@ export const monadPowerPack = defineAtomPack({
 });
 
 export const MONAD_POWER_PACK_DEBUG_SOURCE = 'debug:monad-power-pack';
-export const MONAD_POWER_PACK_GITHUB_SOURCE = 'github:monadix-labs/monad-power-pack@debug';
+export const MONAD_POWER_PACK_GITHUB_SOURCE = 'github:Monadix-AI/monad-power-pack@debug';
 
 // Staged form of the REAL pack for the dev "install from the network" simulation. atom-pack-packs.ts
 // serves this when a client installs source `debug:monad-power-pack` (NODE_ENV≠production). The on-disk
@@ -61,7 +61,7 @@ export const MONAD_POWER_PACK_GITHUB_SOURCE = 'github:monadix-labs/monad-power-p
 const stagedManifest = {
   ...monadPowerPack.manifest,
   entry: 'dist/atom-pack.js',
-  source: { repo: 'monadix-labs/monad-power-pack', commit: 'debug' }
+  source: { repo: 'Monadix-AI/monad-power-pack', commit: 'debug' }
 };
 
 const stagedBundle = `export { monadPowerPack as default } from ${JSON.stringify(import.meta.url)};\n`;

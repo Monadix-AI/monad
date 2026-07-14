@@ -54,7 +54,7 @@ async function runAcpAgentCrud(call: Call, paths: MonadPaths): Promise<void> {
 
   // 4. persisted to config.json (SYSTEM config), not profile.json
   const sys = await loadConfig(paths.config);
-  expect(sys?.acpAgents.find((a) => a.name === 'codex')).toBeDefined();
+  expect(sys?.acpAgents.find((a) => a.name === 'codex')?.args).toEqual(['acp']);
   const merged = await loadAll(paths.config, paths.profile);
   expect(merged?.acpAgents.length).toBe(1);
 

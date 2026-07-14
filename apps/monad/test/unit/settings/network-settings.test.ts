@@ -76,7 +76,6 @@ test('network settings expose remote URLs and token revision for the current dae
     const result = await mod.getNetworkSettings();
     const runtime = result.runtime;
 
-    expect(runtime).toBeDefined();
     if (!runtime) throw new Error('expected runtime status');
     expect(runtime.remoteAccess.tokenRevision).toBe(2);
     expect(result.remoteUrls).toEqual([

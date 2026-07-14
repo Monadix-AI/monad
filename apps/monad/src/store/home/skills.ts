@@ -1,5 +1,5 @@
 // Trust boundary: a skill body is executable instruction text from disk — treat like a
-// provider atom (see docs/security-guidelines.md).
+// provider atom (see docs/engineering/security-guidelines.md).
 
 import type { Dirent } from 'node:fs';
 

@@ -5,7 +5,7 @@
 //     endpoint with no method-table entry, so its event set is declared explicitly below.
 // Their union must equal the full EventType set, so a new event type added to the enum
 // without wiring it into a channel fails here instead of silently being undeliverable.
-// See docs/realtime-channels.md for why generation rides SSE rather than a WS RPC.
+// See docs/internals/realtime-channels.md for why generation rides SSE rather than a WS RPC.
 
 import type { EventType } from '../src/domain.ts';
 
@@ -17,7 +17,7 @@ import { METHOD_TABLE } from '../src/rpc/method-table.ts';
 const ALL_EVENT_TYPES = new Set(eventTypeSchema.options);
 
 // Generation/turn-scoped events the SSE endpoint streams from the per-session topic. Keep in
-// sync with docs/realtime-channels.md (data-plane list) — a new generation event type belongs here.
+// sync with docs/internals/realtime-channels.md (data-plane list) — a new generation event type belongs here.
 const SSE_GENERATION_EMITS: readonly EventType[] = [
   'user.message',
   'agent.message',

@@ -559,7 +559,7 @@ for (const kind of TRANSPORTS) {
       const initial = (await (await json('GET', '/v1/settings/model/roles')).json()) as {
         roles: Record<string, string>;
       };
-      expect(initial.roles).toBeDefined();
+      expect(initial.roles).toEqual({});
 
       await json('PUT', '/v1/settings/model/roles', {
         roles: { vision: 'oai:gpt-vision', embedding: 'oai:text-embedding-3-small' }

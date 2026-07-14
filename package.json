@@ -4,7 +4,7 @@
   "version": "0.0.2",
   "author": "Monadix Labs, Inc.",
   "bugs": {
-    "url": "https://github.com/monadix-labs/monad/issues"
+    "url": "https://github.com/Monadix-AI/monad/issues"
   },
   "config": {
     "commitizen": {
@@ -29,13 +29,13 @@
     "turbo": "^2.10.5",
     "typescript": "7.0.2"
   },
-  "homepage": "https://github.com/monadix-labs/monad#readme",
+  "homepage": "https://github.com/Monadix-AI/monad#readme",
   "license": "MIT",
   "packageManager": "bun@1.3.14",
   "private": true,
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/monadix-labs/monad.git"
+    "url": "git+https://github.com/Monadix-AI/monad.git"
   },
   "scripts": {
     "agents:check": "rulesync generate --check",

@@ -2,7 +2,7 @@
 // seam every tool call passes through: high-risk tools route through the approval gate
 // (fail-closed: no gate → denied); sandbox roots are injected into ToolContext so
 // resource guards (fs paths, net URLs) can enforce at call time.
-// See docs/security-guidelines.md §4.
+// See docs/engineering/security-guidelines.md §4.
 
 import type {
   FileObservationStore,

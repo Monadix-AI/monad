@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { existsSync } from 'node:fs';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -40,7 +40,7 @@ test('seedTemplate: files are copied into the session root on ensure', async () 
     const svc = createSessionSandboxService({ enabled: true, baseDir, seedTemplate: tmpl });
     const roots = await svc.ensure('ses_seed00000000');
     const copied = join(roots?.[0] ?? '', 'requirements.txt');
-    expect(existsSync(copied)).toBe(true);
+    expect(await readFile(copied, 'utf8')).toBe('requests==2.32.0\n');
   } finally {
     await rm(baseDir, { recursive: true, force: true });
     await rm(tmpl, { recursive: true, force: true });
@@ -58,7 +58,7 @@ test('initScript: runs in the session root and its output is logged', async () =
       log: (m) => messages.push(m)
     });
     const roots = await svc.ensure('ses_init00000000');
-    expect(existsSync(join(roots?.[0] ?? '', 'init-done.txt'))).toBe(true);
+    expect((await readFile(join(roots?.[0] ?? '', 'init-done.txt'), 'utf8')).trim()).toBe('hello');
   } finally {
     await rm(baseDir, { recursive: true, force: true });
   }

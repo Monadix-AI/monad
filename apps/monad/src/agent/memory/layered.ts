@@ -1,7 +1,7 @@
 // Layered memory (L1) — headless contracts + the pure security filter shared by every backend.
 // Design A drives MemoryDir + the `memory` tool directly from the daemon service; this module now
 // holds only the swappable-backend contract (mem0 implements it) and the sanitize/render helpers.
-// See docs/memory-design.md.
+// See docs/internals/memory-design.md.
 
 import type { L1Capabilities, MemoryBlock, MemoryConfigField, MemoryScope, RecallCtx, WriteCtx } from '@monad/protocol';
 

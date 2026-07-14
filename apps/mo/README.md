@@ -2,7 +2,7 @@
 
 Mo — the monad desktop sprite. A pixel-art cat you drop files onto to start a session.
 
-See [`docs/mo.md`](../../docs/mo.md) for the architecture and the drop → session flow.
+See [`docs/usage/mo.md`](../../docs/usage/mo.md) for the architecture and the drop → session flow.
 
 ## Layout
 

@@ -1,4 +1,4 @@
-// L1 memory control API over both transports (docs/runtime.md): add/list/edit/forget facts +
+// L1 memory control API over both transports (docs/internals/runtime.md): add/list/edit/forget facts +
 // read/overwrite a scope's MEMORY.md. Backed by the built-in MD adapter (stub service in tests).
 
 import type { Fact } from '@monad/protocol';

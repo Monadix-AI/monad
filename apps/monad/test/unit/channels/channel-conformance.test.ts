@@ -1,6 +1,6 @@
 // Channel service conformance tests — each case pins a specific behavior of the inbound→agent→outbound
 // loop (conversation mapping, allowlist, rate-limit, render chunking, echo guard, etc.) that can't be
-// tested against real third-party platforms. Documented stances live in docs/channel-conformance.md.
+// tested against real third-party platforms. Documented stances live in docs/internals/channel-conformance.md.
 
 import type { ChannelInstanceConfig, MonadAuth, MonadConfig } from '@monad/home';
 import type { ChannelInbound, MessageId, SessionId } from '@monad/protocol';

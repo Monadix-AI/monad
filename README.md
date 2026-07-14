@@ -2,13 +2,13 @@
 
 > A local, single-user daemon for running agentic sessions — with a CLI and web UI.
 
-[![CI](https://github.com/monadix-labs/monad/actions/workflows/ci.yml/badge.svg)](https://github.com/monadix-labs/monad/actions/workflows/ci.yml)
+[![CI](https://github.com/Monadix-AI/monad/actions/workflows/ci.yml/badge.svg)](https://github.com/Monadix-AI/monad/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 monad runs as a local daemon and serves a REST + SSE API over loopback and a
 Unix-domain socket. It ships with a CLI and a browser web UI, and keeps all
 state under `~/.monad/`. It binds **loopback only by
-default** — see the [security model](docs/runtime.md#security-model) before exposing it.
+default** — see the [security model](docs/internals/runtime.md#security-model) before exposing it.
 
 **Contributing:** see [CONTRIBUTING.md](CONTRIBUTING.md) ·
 **Reporting a vulnerability:** see [SECURITY.md](SECURITY.md) ·
@@ -17,7 +17,7 @@ default** — see the [security model](docs/runtime.md#security-model) before ex
 ## Install
 
 Pre-built, self-contained binaries (no Bun or Node needed at runtime) are published
-on the [Releases](https://github.com/monadix-labs/monad/releases) page for macOS,
+on the [Releases](https://github.com/Monadix-AI/monad/releases) page for macOS,
 Linux, and Windows. Each asset is named `monad-<version>-<os>-<arch>.tar.gz` with a
 matching `.sha256`. Linux ships two libc flavours: the plain `linux-<arch>` build for
 glibc distros (Debian/Ubuntu/Fedora…) and a `linux-<arch>-musl` build for musl systems
@@ -33,8 +33,8 @@ the `linux-arm64`/`linux-arm64-musl` builds; bare-metal/RTOS embedded devices ar
 ```bash
 # macOS (Apple Silicon) — swap the asset name for your os/arch (darwin|linux, arm64|x64)
 ASSET=monad-<version>-darwin-arm64
-curl -fsSL "https://github.com/monadix-labs/monad/releases/latest/download/$ASSET.tar.gz" -o "$ASSET.tar.gz"
-curl -fsSL "https://github.com/monadix-labs/monad/releases/latest/download/$ASSET.tar.gz.sha256" | shasum -a 256 -c -
+curl -fsSL "https://github.com/Monadix-AI/monad/releases/latest/download/$ASSET.tar.gz" -o "$ASSET.tar.gz"
+curl -fsSL "https://github.com/Monadix-AI/monad/releases/latest/download/$ASSET.tar.gz.sha256" | shasum -a 256 -c -
 tar -xzf "$ASSET.tar.gz"
 
 ./$ASSET/bin/monad --help
@@ -45,7 +45,7 @@ On **Windows** (PowerShell), grab the `windows-x64` asset (`tar` ships with Wind
 
 ```powershell
 $ASSET = "monad-<version>-windows-x64"
-Invoke-WebRequest "https://github.com/monadix-labs/monad/releases/latest/download/$ASSET.tar.gz" -OutFile "$ASSET.tar.gz"
+Invoke-WebRequest "https://github.com/Monadix-AI/monad/releases/latest/download/$ASSET.tar.gz" -OutFile "$ASSET.tar.gz"
 tar -xzf "$ASSET.tar.gz"
 
 .\$ASSET\bin\monad.exe --help
@@ -56,12 +56,12 @@ tar -xzf "$ASSET.tar.gz"
 
 ```bash
 # macOS / Linux
-curl -fsSL https://raw.githubusercontent.com/monadix-labs/monad/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Monadix-AI/monad/main/scripts/install.sh | bash
 ```
 
 ```powershell
 # Windows (PowerShell)
-irm https://raw.githubusercontent.com/monadix-labs/monad/main/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/Monadix-AI/monad/main/scripts/install.ps1 | iex
 ```
 
 To run from source instead, see [Setup](#setup).
@@ -98,8 +98,8 @@ normal use.
 
 For the daemon startup architecture, hot reload, extension boundaries, transport
 model, bootstrap environment variables, and security posture, see
-**[docs/daemon-architecture.md](docs/daemon-architecture.md)** and
-**[docs/runtime.md](docs/runtime.md)**.
+**[docs/internals/daemon-architecture.md](docs/internals/daemon-architecture.md)** and
+**[docs/internals/runtime.md](docs/internals/runtime.md)**.
 
 ## CLI
 
@@ -108,10 +108,18 @@ bun run apps/cli/src/main.ts health
 bun run apps/cli/src/main.ts create "my session"
 bun run apps/cli/src/main.ts send <sessionId> "hello"
 bun run apps/cli/src/main.ts watch <sessionId>
-bun run apps/cli/src/main.ts config transport uds   # tcp | uds (see docs/runtime.md)
+bun run apps/cli/src/main.ts config transport uds   # tcp | uds (see docs/internals/runtime.md)
 ```
 
 ## Documentation
 
 See **[docs/](docs/README.md)** for architecture, design principles, conventions,
 and contributor docs.
+
+## License
+
+[MIT](LICENSE) © Monadix Labs, Inc.
+
+Bundled third-party components retain their own licenses; see
+[`packages/sandbox-vm/vendor/THIRD_PARTY_LICENSES.md`](packages/sandbox-vm/vendor/THIRD_PARTY_LICENSES.md)
+and run `monad licenses` for the full runtime dependency list.

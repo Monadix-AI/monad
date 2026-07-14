@@ -35,7 +35,7 @@ function installedSkills() {
         name: 'CodeGraph Navigator',
         version: '1.2.3',
         icon: 'CG',
-        source: 'github:monadix-labs/codegraph-navigator@main',
+        source: 'github:Monadix-AI/codegraph-navigator@main',
         commit: '1234567890abcdef',
         installedAt: '2026-06-20T12:00:00.000Z'
       }
@@ -206,7 +206,7 @@ async function installSkillsApiMock(
     }
     if (method === 'POST' && path === '/v1/atoms/skills/install') {
       const payload = (await request.postDataJSON()) as { consent?: boolean; source?: string };
-      if (payload.source === 'github:monadix-labs/failing-skill') {
+      if (payload.source === 'github:Monadix-AI/failing-skill') {
         return json({ error: 'install failed' }, 500);
       }
       if (!payload.consent) {
@@ -360,7 +360,7 @@ test.describe('Studio skills settings', () => {
     await codegraphSkillCard.getByRole('button', { name: 'Update', exact: true }).click();
 
     await page.getByRole('button', { name: 'GitHub metadata' }).click();
-    await expect(page.getByText('monadix-labs/codegraph-navigator')).toBeVisible();
+    await expect(page.getByText('Monadix-AI/codegraph-navigator')).toBeVisible();
     await page.keyboard.press('Escape');
 
     await codegraphSkillCard.hover();
@@ -423,7 +423,7 @@ Use this editor-created skill in e2e.
     await expect(githubDialog).toBeVisible();
     await page
       .getByPlaceholder('https://github.com/username/repo')
-      .fill('https://github.com/monadix-labs/marketplace-scout');
+      .fill('https://github.com/Monadix-AI/marketplace-scout');
     await githubDialog.getByRole('button', { name: 'Install', exact: true }).last().click();
     await expect(page.getByText('This repo declares the following skills:')).toBeVisible();
     const consentButton = page
@@ -525,7 +525,7 @@ Use this editor-created skill in e2e.
 
     await githubDialog
       .getByPlaceholder('https://github.com/username/repo')
-      .fill('https://github.com/monadix-labs/failing-skill');
+      .fill('https://github.com/Monadix-AI/failing-skill');
     await githubDialog.getByRole('button', { name: 'Install', exact: true }).last().click();
     await expect(page.getByText('Install failed.')).toBeVisible();
     await expect(githubDialog).toBeVisible();

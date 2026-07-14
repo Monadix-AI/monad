@@ -15,7 +15,7 @@ export const command: SessionCommandDef = {
     if (!sessionId) throw usageError('usage: monad session watch <sessionId>');
     if (!isStructured()) out(dim(`watching ${sessionId}  (Ctrl-C to stop)`));
     // watchSession holds the WS control stream for lifecycle and opens an SSE generation
-    // subscription only while a turn is in flight — see docs/realtime-channels.md.
+    // subscription only while a turn is in flight — see docs/internals/realtime-channels.md.
     const dispose = client.watchSession(sessionId as SessionId, (event) => {
       if (isStructured()) {
         process.stdout.write(`${JSON.stringify(event)}\n`);

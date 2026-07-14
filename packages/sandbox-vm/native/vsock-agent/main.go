@@ -2,8 +2,8 @@
 // CoreOS guest, listens on an AF_VSOCK port, and executes one command per connection, multiplexing
 // stdout/stderr/exit back to the host over the same connection. This replaces ssh: it is
 // NIC-independent (vsock is a direct host↔guest transport), so net:'none' can drop the guest NIC
-// entirely — the strongest isolation — while the control plane still works. Mirrors Claude Cowork's
-// coworkd/vsock RPC design.
+// entirely — the strongest isolation — while the control plane still works. The control plane is a
+// vsock RPC channel, so the guest needs no network device to be driven.
 //
 // Wire protocol (all integers big-endian). The host sends exactly one request frame, then the agent
 // streams response frames until an EXIT frame, then closes:

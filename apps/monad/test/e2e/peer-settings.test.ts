@@ -176,5 +176,5 @@ test('testPeerConnection reports not ok against an unreachable peer', async () =
   });
   const result = await handlers.peer.testPeerConnection({ id: 'peer_HOME00000000' });
   expect(result.ok).toBe(false);
-  expect(result.error).toBeDefined();
+  expect(typeof result.error).toBe('string');
 });

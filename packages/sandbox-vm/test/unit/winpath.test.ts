@@ -3,7 +3,7 @@ import { expect, test } from 'bun:test';
 import { isWindowsAbsPath, toGuestPath, translateArgvPaths } from '../../src/winpath.ts';
 
 test('windows drive paths translate to /mnt/<drive>', () => {
-  expect(toGuestPath('C:\\Users\\zeke\\proj')).toBe('/mnt/c/Users/zeke/proj');
+  expect(toGuestPath('C:\\Users\\test\\proj')).toBe('/mnt/c/Users/test/proj');
   expect(toGuestPath('D:/data/repo')).toBe('/mnt/d/data/repo');
   expect(toGuestPath('c:\\lower')).toBe('/mnt/c/lower');
 });
@@ -15,7 +15,7 @@ test('drive roots and trailing slashes normalize', () => {
 });
 
 test('POSIX paths pass through unchanged (idempotent for mac/linux callers)', () => {
-  expect(toGuestPath('/Users/zeke/proj')).toBe('/Users/zeke/proj');
+  expect(toGuestPath('/Users/test/proj')).toBe('/Users/test/proj');
   expect(toGuestPath('/mnt/c/already')).toBe('/mnt/c/already');
 });
 

@@ -97,7 +97,7 @@ export const tasks = sqliteTable('tasks', {
   updatedAt: text('updated_at').notNull()
 });
 
-export const experienceState = sqliteTable(
+const _experienceState = sqliteTable(
   'experience_state',
   {
     atomPackId: text('atom_pack_id').notNull(),
@@ -111,7 +111,7 @@ export const experienceState = sqliteTable(
   (table) => [primaryKey({ columns: [table.atomPackId, table.principalId, table.projectId, table.recordKey] })]
 );
 
-export const experienceStateEvents = sqliteTable('experience_state_events', {
+const _experienceStateEvents = sqliteTable('experience_state_events', {
   id: text('id').primaryKey(),
   atomPackId: text('atom_pack_id').notNull(),
   principalId: text('principal_id').notNull(),
@@ -122,7 +122,7 @@ export const experienceStateEvents = sqliteTable('experience_state_events', {
   createdAt: text('created_at').notNull()
 });
 
-export const experienceWorkerWakeups = sqliteTable(
+const _experienceWorkerWakeups = sqliteTable(
   'experience_worker_wakeups',
   {
     atomPackId: text('atom_pack_id').notNull(),

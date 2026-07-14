@@ -6,7 +6,7 @@
 // URL): stable.json → architectures.aarch64.artifacts.applehv.formats["raw.gz"].{location,sha256}.
 // The image is downloaded once to <vmDir>/images/<sha>.img (base, read-only); each VM APFS-clones it.
 //
-// First download is gated on an explicit confirmation callback — unlike Cowork's silent multi-hundred-MB
+// First download is gated on an explicit confirmation callback: rather than a silent multi-hundred-MB
 // pull, monad tells the user the source/size/path and waits for a yes (observability-first).
 
 import { chmodSync, existsSync } from 'node:fs';

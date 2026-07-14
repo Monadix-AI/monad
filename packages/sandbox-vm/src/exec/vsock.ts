@@ -1,7 +1,7 @@
 // The exec channel: run argv inside the guest over vsock (a direct host↔guest transport, independent
 // of the guest NIC). vfkit bridges a host unix socket to the guest's vsock port where monad-vsock-agent
 // listens; we speak a small framed protocol over it. Unlike ssh this needs no sshd, no key, and no
-// guest NIC — so net:'none' can drop the network device entirely. Mirrors Claude Cowork's vsock RPC.
+// guest NIC — so net:'none' can drop the network device entirely.
 //
 // Wire protocol (big-endian), matching this package's native/vsock-agent/main.go:
 //   request  (host→guest): [len:u32][json]   json = {argv, cwd, env}

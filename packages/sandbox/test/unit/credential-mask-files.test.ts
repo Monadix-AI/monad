@@ -21,8 +21,6 @@ describe('whole-file mask', () => {
     const store = new MaskedFileStore();
 
     const bind = store.add(registry, { name: 'GH_TOKEN', realPath: path, injectHosts: ['api.github.com'] });
-    expect(bind).toBeDefined();
-
     if (!bind) throw new Error('expected a bind');
     const fakeContent = readFileSync(bind.fake, 'utf8');
     expect(fakeContent.startsWith(SENTINEL_PREFIX)).toBe(true);
@@ -51,8 +49,6 @@ describe('extract mask', () => {
       injectHosts: ['api.openai.com'],
       extract: '"apiKey":"([^"]+)"'
     });
-    expect(bind).toBeDefined();
-
     if (!bind) throw new Error('expected a bind');
     const fakeContent = readFileSync(bind.fake, 'utf8');
     // Real key gone; the rest of the JSON (endpoint, timeout) is byte-identical.

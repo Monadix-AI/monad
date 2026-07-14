@@ -733,7 +733,7 @@ test('external agent auth status parsers use structured output or documented sta
   expect(codexExternalAgentAdapter.parseAuthStatus(JSON.stringify({ authenticated: false }), 0)).toBe(
     'unauthenticated'
   );
-  expect(codexExternalAgentAdapter.parseAuthStatus('logged in as zeke', 0)).toBe('authenticated');
+  expect(codexExternalAgentAdapter.parseAuthStatus('logged in as test', 0)).toBe('authenticated');
   expect(codexExternalAgentAdapter.parseAuthStatus('not logged in; run codex login', 1)).toBe('unauthenticated');
   expect(claudeCodeExternalAgentAdapter.parseAuthStatus(JSON.stringify({ state: 'authenticated' }), 0)).toBe(
     'authenticated'
@@ -744,7 +744,7 @@ test('external agent auth status parsers use structured output or documented sta
   expect(geminiExternalAgentAdapter.parseAuthStatus(JSON.stringify({ authenticated: true }), 0)).toBe('authenticated');
   expect(
     geminiExternalAgentAdapter.parseAuthStatus(
-      'Please set an Auth method in your /Users/zeke/.gemini/settings.json or specify GEMINI_API_KEY',
+      'Please set an Auth method in your /Users/test/.gemini/settings.json or specify GEMINI_API_KEY',
       0
     )
   ).toBe('unknown');
@@ -1449,23 +1449,23 @@ test('external agent launch resolves provider commands before spawn', () => {
   const claudeLaunch = resolveExternalAgentLaunchCommand(
     claudeCodeExternalAgentAdapter,
     buildExternalAgentLaunch(claudeAgent, { workingPath: '/tmp/project', launchMode: 'pty' }),
-    { which: (name) => (name === 'claude' ? '/Users/zeke/.local/bin/claude' : undefined), exists: () => false }
+    { which: (name) => (name === 'claude' ? '/Users/test/bin/claude' : undefined), exists: () => false }
   );
   const geminiLaunch = resolveExternalAgentLaunchCommand(
     geminiExternalAgentAdapter,
     buildExternalAgentLaunch(geminiAgent, { workingPath: '/tmp/project', launchMode: 'pty' }),
-    { which: (name) => (name === 'gemini' ? '/Users/zeke/.bun/bin/gemini' : undefined), exists: () => false }
+    { which: (name) => (name === 'gemini' ? '/Users/test/bin/gemini' : undefined), exists: () => false }
   );
   const qwenLaunch = resolveExternalAgentLaunchCommand(
     qwenExternalAgentAdapter,
     buildExternalAgentLaunch(qwenAgent, { workingPath: '/tmp/project', launchMode: 'pty' }),
-    { which: (name) => (name === 'qwen' ? '/Users/zeke/.bun/bin/qwen' : undefined), exists: () => false }
+    { which: (name) => (name === 'qwen' ? '/Users/test/bin/qwen' : undefined), exists: () => false }
   );
 
   expect(codexLaunch.argv[0]).toBe('/Applications/Codex.app/Contents/Resources/codex');
-  expect(claudeLaunch.argv[0]).toBe('/Users/zeke/.local/bin/claude');
-  expect(geminiLaunch.argv[0]).toBe('/Users/zeke/.bun/bin/gemini');
-  expect(qwenLaunch.argv[0]).toBe('/Users/zeke/.bun/bin/qwen');
+  expect(claudeLaunch.argv[0]).toBe('/Users/test/bin/claude');
+  expect(geminiLaunch.argv[0]).toBe('/Users/test/bin/gemini');
+  expect(qwenLaunch.argv[0]).toBe('/Users/test/bin/qwen');
 });
 
 test('external agent launch fails before spawn when provider command cannot be resolved', () => {
@@ -1503,7 +1503,7 @@ test('Codex adapter parses app-server raw response item notifications into struc
           call_id: 'call_waNNU2Hk4KxwzqflFGFm5E2k',
           arguments: JSON.stringify({
             cmd: "which codex && codex --help | sed -n '1,180p'",
-            workdir: '/Users/zeke/Documents/Codex/2026-06-28/w'
+            workdir: '/Users/test/project/w'
           })
         }
       }
@@ -1545,7 +1545,7 @@ test('Codex adapter parses app-server raw response item notifications into struc
         tool: 'exec_command',
         input: {
           cmd: "which codex && codex --help | sed -n '1,180p'",
-          workdir: '/Users/zeke/Documents/Codex/2026-06-28/w'
+          workdir: '/Users/test/project/w'
         }
       }
     },
@@ -2188,7 +2188,6 @@ test('Codex adapter projects paged history as completed turn items only', () => 
     }
   });
 
-  expect(output).toBeTruthy();
   const records = (output ?? '').split('\n').map((line) => JSON.parse(line));
   expect(records.map((record) => record.method)).toEqual([
     'turn/started',
@@ -2318,7 +2317,7 @@ test('Codex adapter parses app-server provider-owned approval requests and resol
         environmentId: 'env_1',
         reason: 'network access',
         command: 'curl https://api.openai.com',
-        cwd: '/Users/zeke/project'
+        cwd: '/Users/test/project'
       }
     }),
     JSON.stringify({
@@ -2330,7 +2329,7 @@ test('Codex adapter parses app-server provider-owned approval requests and resol
         itemId: 'item_file',
         startedAtMs: 1790610001000,
         reason: 'write package files',
-        grantRoot: '/Users/zeke/project'
+        grantRoot: '/Users/test/project'
       }
     }),
     JSON.stringify({
@@ -2342,7 +2341,7 @@ test('Codex adapter parses app-server provider-owned approval requests and resol
         itemId: 'item_permissions',
         startedAtMs: 1790610002000,
         reason: 'run command',
-        cwd: '/Users/zeke/project',
+        cwd: '/Users/test/project',
         environmentId: 'env_1',
         permissions: [{ type: 'exec' }]
       }
@@ -2356,7 +2355,7 @@ test('Codex adapter parses app-server provider-owned approval requests and resol
         approvalId: 'approval_exec',
         reason: 'legacy exec',
         command: ['git', 'status'],
-        cwd: '/Users/zeke/project'
+        cwd: '/Users/test/project'
       }
     }),
     JSON.stringify({
@@ -2382,7 +2381,7 @@ test('Codex adapter parses app-server provider-owned approval requests and resol
         startedAtMs: 1790610000000,
         reason: 'network access',
         command: 'curl https://api.openai.com',
-        cwd: '/Users/zeke/project',
+        cwd: '/Users/test/project',
         environmentId: 'env_1'
       }
     },
@@ -2396,7 +2395,7 @@ test('Codex adapter parses app-server provider-owned approval requests and resol
         itemId: 'item_file',
         startedAtMs: 1790610001000,
         reason: 'write package files',
-        grantRoot: '/Users/zeke/project'
+        grantRoot: '/Users/test/project'
       }
     },
     {
@@ -2409,7 +2408,7 @@ test('Codex adapter parses app-server provider-owned approval requests and resol
         itemId: 'item_permissions',
         startedAtMs: 1790610002000,
         reason: 'run command',
-        cwd: '/Users/zeke/project',
+        cwd: '/Users/test/project',
         environmentId: 'env_1',
         permissions: [{ type: 'exec' }]
       }
@@ -2424,7 +2423,7 @@ test('Codex adapter parses app-server provider-owned approval requests and resol
         approvalId: 'approval_exec',
         reason: 'legacy exec',
         command: 'git status',
-        cwd: '/Users/zeke/project'
+        cwd: '/Users/test/project'
       }
     },
     {
@@ -3136,7 +3135,7 @@ test('OpenClaw and Hermes auth status parsers use structured output or status ex
   expect(hermesExternalAgentAdapter.parseAuthStatus(JSON.stringify({ state: 'authenticated' }), 0)).toBe(
     'authenticated'
   );
-  expect(hermesExternalAgentAdapter.parseAuthStatus('signed in as zeke', 0)).toBe('authenticated');
+  expect(hermesExternalAgentAdapter.parseAuthStatus('signed in as test', 0)).toBe('authenticated');
   expect(hermesExternalAgentAdapter.parseAuthStatus('', 0)).toBe('unknown');
   expect(hermesExternalAgentAdapter.parseAuthStatus('no accounts', 0)).toBe('unauthenticated');
   expect(hermesExternalAgentAdapter.parseAuthStatus('no accounts', 1)).toBe('unauthenticated');

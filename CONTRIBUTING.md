@@ -77,7 +77,7 @@ If the version isn't cached yet, `downloading` appears while mise fetches it.
 ### Option C — manual shell hook (no direnv)
 
 If you prefer not to install direnv, add this to `~/.zshrc` (bash/fish variants
-in [`docs/worktree.md`](docs/worktree.md)):
+in [`docs/engineering/worktree.md`](docs/engineering/worktree.md)):
 
 ```zsh
 _mise_auto_bun() {
@@ -118,7 +118,7 @@ Every developer's environment picks up the new version automatically on next `cd
 ## Getting started
 
 ```bash
-git clone https://github.com/monadix-labs/monad.git
+git clone https://github.com/Monadix-AI/monad.git
 cd monad
 bun install              # installs deps and sets up git hooks (lefthook)
 cp .env.example .env.local   # then fill in OPENROUTER_API_KEY
@@ -251,7 +251,7 @@ users can't take yet.
 
 ## Reporting bugs & requesting features
 
-Use the [issue templates](https://github.com/monadix-labs/monad/issues/new/choose).
+Use the [issue templates](https://github.com/Monadix-AI/monad/issues/new/choose).
 For anything security-related, **do not** open a public issue — follow
 [SECURITY.md](SECURITY.md) instead.
 

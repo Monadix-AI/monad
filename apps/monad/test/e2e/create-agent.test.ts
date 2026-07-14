@@ -19,7 +19,6 @@ test('session created via agent is retrievable from the real store', async () =>
   const session = await agent.sessions.create('e2e session', newId('prn'));
 
   const found = store.getSession(session.id);
-  expect(found).not.toBeNull();
   expect(found?.title).toBe('e2e session');
   expect(found?.state).toBe('active');
   store.close();

@@ -200,7 +200,7 @@ for (const kind of TRANSPORTS) {
         expect(body.output.at(0)?.content.at(0)?.type).toBe('output_text');
         expect(body.output.at(0)?.content.at(0)?.text).toBe(MOCK_REPLY);
         expect(body.usage.output_tokens).toBeGreaterThanOrEqual(0);
-        expect(body.x_monad.session_id).toBeTruthy();
+        expect(body.x_monad.session_id).toMatch(/^ses_/);
       } finally {
         await t.stop();
       }
@@ -442,7 +442,7 @@ for (const kind of TRANSPORTS) {
         expect(completed?.response?.status).toBe('completed');
 
         const respId = completed?.response?.id;
-        expect(respId).toBeTruthy();
+        expect(respId).toMatch(/^resp-/);
         const getRes = await t.fetch(`/openai/v1/responses/${respId}`, { headers: AUTH });
         expect(getRes.status).toBe(200);
       } finally {

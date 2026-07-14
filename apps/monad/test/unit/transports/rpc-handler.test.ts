@@ -76,7 +76,7 @@ test('unknown extra params are stripped, not rejected', async () => {
 });
 
 test('control.subscribe is idempotent and unsubscribe disposes', async () => {
-  // Per-session generation is SSE-only now (docs/realtime-channels.md); the control stream is the
+  // Per-session generation is SSE-only now (docs/internals/realtime-channels.md); the control stream is the
   // only per-connection RPC subscription left.
   const handlers = buildHandlers(mockModel(['hi']));
   const state = createConnectionState();

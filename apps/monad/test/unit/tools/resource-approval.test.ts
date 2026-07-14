@@ -193,6 +193,6 @@ test('approvalDeniedMessage standardizes resource denial text', () => {
 });
 
 test('normalizePathApprovalKey canonicalizes Windows drive and UNC keys case-insensitively', () => {
-  expect(normalizePathApprovalKey('C:\\Users\\Zeke\\Project\\..\\Project')).toBe('c:\\users\\zeke\\project');
+  expect(normalizePathApprovalKey('C:\\Users\\Test\\Project\\..\\Project')).toBe('c:\\users\\test\\project');
   expect(normalizePathApprovalKey('\\\\SERVER\\Share\\Dir\\..')).toBe('\\\\server\\share\\');
 });

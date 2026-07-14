@@ -31,7 +31,6 @@ test('setup port spec covers exec, net, and the whole 9p range', () => {
 test('execbridge is always present and targets the exec port over the bundle pipe', () => {
   const services = hypervServiceArgv(spec(), VM_ID);
   const exec = services.find((s) => s[0] === 'execbridge');
-  expect(exec).toBeDefined();
   const j = (exec as string[]).join(' ');
   expect(j).toContain(`--vm-id ${VM_ID}`);
   expect(j).toContain(`--port ${HVSOCK_PORTS.exec}`);
@@ -44,7 +43,6 @@ test('net:none → no netbridge (no NIC plane at all); gvproxy socket → netbri
 
   const net = hypervServiceArgv(spec({ gvproxyNetSock: '/t/gv.sock' }), VM_ID);
   const bridge = net.find((s) => s[0] === 'netbridge');
-  expect(bridge).toBeDefined();
   const j = (bridge as string[]).join(' ');
   expect(j).toContain(`--port ${HVSOCK_PORTS.net}`);
   expect(j).toContain('--connect-unix /t/gv.sock');

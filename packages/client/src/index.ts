@@ -340,7 +340,7 @@ export class MonadClient {
    * `idleTimeoutMs` (no bytes, not even a `:` heartbeat) is treated as half-open and reconnected. With
    * `resume`, the last seen event id is threaded back (as both the `last-event-id` header and an
    * `?after=` query) so a mid-turn reconnect backfills instead of losing events — required for
-   * generation streams (docs/realtime-channels.md). A frame for which `isTerminal` returns true ends
+   * generation streams (docs/internals/realtime-channels.md). A frame for which `isTerminal` returns true ends
    * the stream for good (no reconnect). Fatal statuses (401/403/404) stop; a genuine network/read
    * error is transient and retried. The returned disposer aborts the in-flight read and stops
    * reconnecting.

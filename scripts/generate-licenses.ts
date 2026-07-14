@@ -18,6 +18,13 @@ function avatarStyleLabel(slug: string): string {
 
 const ROOT = resolve(import.meta.dir, '..');
 
+// Packages whose package.json omits a machine-readable `license` field but whose license is known
+// from their repository. Without this the entries render as "unknown" in the Licenses panel.
+const LICENSE_OVERRIDES: Record<string, string> = {
+  '@dicebear/styles': 'MIT',
+  'qrcode-terminal': 'Apache-2.0'
+};
+
 type PkgMeta = { dependencies?: Record<string, string>; peerDependencies?: Record<string, string> };
 type LockWorkspace = { name?: string; dependencies?: Record<string, string>; devDependencies?: Record<string, string> };
 type Lockfile = {
@@ -127,7 +134,8 @@ await Promise.all(
     if (!pkg) return;
     const version: string = (pkg.version as string) ?? '';
     const license: string =
-      typeof pkg.license === 'string' ? pkg.license : ((pkg.license as Record<string, string>)?.type ?? 'unknown');
+      LICENSE_OVERRIDES[pkgName] ??
+      (typeof pkg.license === 'string' ? pkg.license : ((pkg.license as Record<string, string>)?.type ?? 'unknown'));
     const rawUrl: string | undefined =
       (pkg.homepage as string) ??
       (typeof pkg.repository === 'object' ? (pkg.repository as Record<string, string>)?.url : undefined);

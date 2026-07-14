@@ -368,7 +368,7 @@ export function listen(model: ModelRouter): { base: string; stop: () => void } {
 export type TransportKind = 'tcp' | 'unix';
 
 // Every apps/monad REST/SSE feature must behave identically over both transports the daemon
-// serves (docs/runtime.md). Looping a suite over TRANSPORTS and driving it through the uniform
+// serves (docs/internals/runtime.md). Looping a suite over TRANSPORTS and driving it through the uniform
 // fetch/sse below is how we hold that line. WebSocket push (/v1/stream) is TCP-only — Bun's WS
 // client can't dial a unix socket — so WS suites stay TCP and are not run here.
 // Unix sockets are not supported by Bun on Windows; only run unix transport tests on unix-like OSes.

@@ -59,7 +59,7 @@ interface DaemonCommandDef extends BaseCommandDef {
 
 export type CommandDef = LocalCommandDef | DaemonCommandDef;
 
-/** Stable exit codes — scripts depend on these (see docs/cli-design.md §3). */
+/** Stable exit codes — scripts depend on these (see docs/engineering/cli-design.md §3). */
 export const EXIT = { OK: 0, ERROR: 1, USAGE: 2, CONFIG: 3, DAEMON: 4 } as const;
 
 /** Error carrying a process exit code. Thrown by commands; mapped to process.exit in the entry. */

@@ -64,7 +64,7 @@ export function spawnGvproxy(spec: GvproxySpec): GvproxyProcess {
 
 // ── guest-side egress enforcement ────────────────────────────────────────────────────────────────
 // `net:'filtered'` must be enforced INSIDE the guest, not by an injected HTTP_PROXY env var a process
-// can simply unset (Cowork's "the sandbox cannot reconfigure the proxy" principle). The guest runs an
+// can simply unset — the sandbox must not be able to reconfigure its own proxy. The guest runs an
 // nftables ruleset — installed by the bootstrap unit as root, before the unprivileged `monad` user
 // gets a shell — that DROPs all output except loopback, DNS to the gvproxy resolver, and the host
 // egress proxy. The agent runs unprivileged and cannot alter it.

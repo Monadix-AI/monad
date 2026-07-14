@@ -1,8 +1,8 @@
-export type KanbanStage = 'requirements' | 'execution' | 'acceptance' | 'completed' | 'cancelled' | 'failed';
-export type RequirementsState = 'discussing' | 'proposal_awaiting_approval' | 'proposal_approved';
-export type ExecutionState = 'idle' | 'queued' | 'running' | 'paused' | 'waiting_approval' | 'succeeded' | 'failed';
+type KanbanStage = 'requirements' | 'execution' | 'acceptance' | 'completed' | 'cancelled' | 'failed';
+type RequirementsState = 'discussing' | 'proposal_awaiting_approval' | 'proposal_approved';
+type ExecutionState = 'idle' | 'queued' | 'running' | 'paused' | 'waiting_approval' | 'succeeded' | 'failed';
 
-export interface ProposalRevision {
+interface ProposalRevision {
   revision: number;
   summary: string;
   acceptanceCriteria: string[];
@@ -17,7 +17,7 @@ export interface ExecutionRun {
   artifactRefs: Array<{ kind: string; uri: string; label: string }>;
 }
 
-export interface AcceptanceReview {
+interface AcceptanceReview {
   runId: string;
   decision: 'pending' | 'accepted' | 'returned';
   checklist: Array<{ criterion: string; passed: boolean; evidenceRef?: string }>;

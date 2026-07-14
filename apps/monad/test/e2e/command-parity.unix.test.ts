@@ -1,4 +1,4 @@
-// e2e: a slash command must behave IDENTICALLY over every transport the daemon serves (docs/runtime.md).
+// e2e: a slash command must behave IDENTICALLY over every transport the daemon serves (docs/internals/runtime.md).
 // We mount the same handlers over TCP loopback AND a Unix socket, run the same commands through the
 // blocking message endpoint (which returns the directive reply), and assert the replies match.
 

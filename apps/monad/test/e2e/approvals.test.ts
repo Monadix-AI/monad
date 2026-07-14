@@ -1,7 +1,7 @@
 // E2E: the tiered-scope approval allowlist over BOTH transports (TCP + Unix socket). Drives the
 // real HTTP surface — POST /v1/tools/approve (with scope), GET /v1/approvals, POST
 // /v1/approvals/revoke — against a real PolicyEngine + ApprovalStore (temp file), and checks the
-// in-process gate decision reflects the remembered rule. Mirrors docs/runtime.md's both-transports rule.
+// in-process gate decision reflects the remembered rule. Mirrors docs/internals/runtime.md's both-transports rule.
 
 import type { Event } from '@monad/protocol';
 

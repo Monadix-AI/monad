@@ -93,7 +93,7 @@ test('bridge: initialize → newSession → prompt streams chunks over the socke
       expect(init.agentInfo?.name).toBe('monad');
 
       const { sessionId } = await ctx.request('session/new', { cwd: '/tmp', mcpServers: [] });
-      expect(sessionId).toBeTruthy();
+      expect(sessionId).toMatch(/^ses_/);
 
       const res = await ctx.request('session/prompt', { sessionId, prompt: [{ type: 'text', text: 'hi' }] });
       expect(res.stopReason).toBe('end_turn');
@@ -121,7 +121,7 @@ test('bridge: fork maps to a daemon branch and the session is visible via the sh
       const { sessionId } = await ctx.request('session/new', { cwd: '/tmp', mcpServers: [] });
 
       const forked = await ctx.request('session/fork', { sessionId, cwd: '/tmp', mcpServers: [] });
-      expect(forked.sessionId).toBeTruthy();
+      expect(forked.sessionId).toMatch(/^ses_/);
       expect(forked.sessionId).not.toBe(sessionId);
 
       // list() proxies to GET /sessions on the daemon — both the original and the fork are there.

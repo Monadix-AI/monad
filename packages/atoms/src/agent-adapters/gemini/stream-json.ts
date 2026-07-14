@@ -12,7 +12,7 @@ import { compactObject } from '../adapter-shared.ts';
 //
 // Fields the daemon does not consume (`timestamp`, `stats`) stay optional and every object keeps a
 // `catchall`, so a newer CLI that adds fields — or an unknown event type — is skipped rather than
-// wedging the parse (schema-first at the runtime boundary; see docs/conventions.md §3).
+// wedging the parse (schema-first at the runtime boundary; see docs/engineering/conventions.md §3).
 
 export const GEMINI_STREAM_JSON_EVENT_TYPES = [
   'init',

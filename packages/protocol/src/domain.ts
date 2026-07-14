@@ -171,7 +171,7 @@ export type SessionOriginExt = z.infer<typeof sessionOriginExtSchema>;
  *   · access   — `writableBy` (who may send into this session) + `branchableBy` (who may fork it);
  *                two orthogonal policies, each derived from `surface` but explicitly overridable
  *   · env      — audit/telemetry snapshot; MUST NOT enter the model context (PII +
- *                prompt-injection surface). See docs/security-guidelines.md.
+ *                prompt-injection surface). See docs/engineering/security-guidelines.md.
  *   · ext      — open client extension; strict only as bounded JSON; UI renders raw.
  */
 export const sessionOriginSchema = z.object({

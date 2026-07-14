@@ -5,7 +5,7 @@ import { command as model } from './model.ts';
 import { command as session } from './session.ts';
 
 // Friendly top-level shortcuts that delegate into a group command by prefixing a subcommand.
-// Hidden from the usage table (documented in docs/cli-design.md) to keep top-level help clean.
+// Hidden from the usage table (documented in docs/engineering/cli-design.md) to keep top-level help clean.
 function shortcut(name: string, target: CommandDef, prefix: string[], synopsis: string): CommandDef {
   return {
     name,

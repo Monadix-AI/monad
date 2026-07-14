@@ -61,7 +61,7 @@ test('stdio ACP: initialize → newSession → prompt → forkSession over real 
     expect(init.agentInfo?.name).toBe('monad');
 
     const { sessionId } = await ctx.request('session/new', { cwd: process.cwd(), mcpServers: [] });
-    expect(sessionId).toBeTruthy();
+    expect(sessionId).toMatch(/^ses_/);
 
     const res = await ctx.request('session/prompt', { sessionId, prompt: [{ type: 'text', text: 'hello' }] });
     expect(res.stopReason).toBe('end_turn');
@@ -73,7 +73,7 @@ test('stdio ACP: initialize → newSession → prompt → forkSession over real 
     expect(text.length).toBeGreaterThan(0);
 
     const forked = await ctx.request('session/fork', { sessionId, cwd: process.cwd(), mcpServers: [] });
-    expect(forked.sessionId).toBeTruthy();
+    expect(forked.sessionId).toMatch(/^ses_/);
     expect(forked.sessionId).not.toBe(sessionId);
   });
 }, 20_000);

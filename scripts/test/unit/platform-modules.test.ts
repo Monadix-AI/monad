@@ -48,7 +48,6 @@ for (const platform of ['darwin', 'linux', 'windows'] as const) {
 
     expect(result.success).toBe(true);
     const [artifact] = result.outputs;
-    expect(artifact).toBeDefined();
     if (!artifact) throw new Error('fixture build produced no output');
     const output = await artifact.text();
     expect(output).toContain(`selected-${platform}`);

@@ -436,7 +436,7 @@ export type UniversalMethodName = keyof typeof UNIVERSAL_METHODS;
 
 // RPC-only methods (NDJSON transports only — no HTTP binding).
 // control.subscribe/unsubscribe are RPC/stream-only. Per-session generation is NOT an RPC:
-// it streams over the SSE endpoint GET /v1/sessions/:id/events (see docs/realtime-channels.md).
+// it streams over the SSE endpoint GET /v1/sessions/:id/events (see docs/internals/realtime-channels.md).
 
 export const RPC_ONLY_METHODS = {
   // Cross-session control stream: session-list-level changes (create/update/delete/branch/restore,

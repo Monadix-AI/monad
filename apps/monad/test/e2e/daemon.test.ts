@@ -140,7 +140,7 @@ for (const kind of TRANSPORTS) {
       await send(sessionId, 'hi');
       const seenA = await firstLeg;
       const cursor = seenA[seenA.length - 1]?.id;
-      expect(cursor).toBeDefined();
+      expect(cursor).toMatch(/^evt_/);
 
       // Reader B: resume from the cursor; must reach the final agent.message.
       const seenB = await t.sse(`/v1/sessions/${sessionId}/events`, {
@@ -151,7 +151,6 @@ for (const kind of TRANSPORTS) {
 
       // The terminal message is always delivered on resume, carrying the full text…
       const finalB = seenB.find((e) => e.type === 'agent.message') as Event | undefined;
-      expect(finalB).toBeDefined();
       expect((finalB?.payload as unknown as AgentMessagePayload).text).toBe('Hello world');
 
       // …and token deltas are never gapped or duplicated across the reconnect: B's tokens

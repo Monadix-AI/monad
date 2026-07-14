@@ -1,7 +1,7 @@
 // Call-time security primitives for tool implementations. Tool arguments are
 // attacker-controllable (prompt injection), so fs and network tools validate them at
 // invocation — declaring a sandbox scope in the schema is not enforcement.
-// See docs/security-guidelines.md §4.
+// See docs/engineering/security-guidelines.md §4.
 
 import { isAbsolute, resolve, sep } from 'node:path';
 

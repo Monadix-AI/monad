@@ -30,8 +30,8 @@ test('formatReadyInfoTable wraps long values under the value column', () => {
       formatReadyInfoTable(
         [
           ['Web UI:', 'https://localhost:3158  (Daemon API: https://127.0.0.1:52058)'],
-          ['Unix socket:', '/Users/zeke/.codex/worktrees/4fc5/monad/.dev/.monad/runtime/monad.sock'],
-          ['Configure providers:', '/Users/zeke/.codex/worktrees/4fc5/monad/.dev/.monad/configs/config.json']
+          ['Unix socket:', '/Users/test/project/.dev/.monad/runtime/monad.sock'],
+          ['Configure providers:', '/Users/test/project/.dev/.monad/configs/config.json']
         ],
         64
       )
@@ -40,17 +40,17 @@ test('formatReadyInfoTable wraps long values under the value column', () => {
     [
       '  Web UI:                 https://localhost:3158  (Daemon API:',
       '                          https://127.0.0.1:52058)',
-      '  Unix socket:            /Users/zeke/.codex/worktrees/4fc5/',
-      '                          monad/.dev/.monad/runtime/monad.sock',
-      '  Configure providers:    /Users/zeke/.codex/worktrees/4fc5/',
-      '                          monad/.dev/.monad/configs/config.json'
+      '  Unix socket:            /Users/test/project/.dev/.monad/',
+      '                          runtime/monad.sock',
+      '  Configure providers:    /Users/test/project/.dev/.monad/',
+      '                          configs/config.json'
     ].join('\n')
   );
 });
 
 test('formatReadyPath renders home paths with tilde', () => {
-  expect(
-    formatReadyPath('/Users/zeke/.codex/worktrees/4fc5/monad/.dev/.monad/configs/config.json', '/Users/zeke')
-  ).toBe('~/.codex/worktrees/4fc5/monad/.dev/.monad/configs/config.json');
-  expect(formatReadyPath('/tmp/monad.sock', '/Users/zeke')).toBe('/tmp/monad.sock');
+  expect(formatReadyPath('/Users/test/project/.dev/.monad/configs/config.json', '/Users/test')).toBe(
+    '~/project/.dev/.monad/configs/config.json'
+  );
+  expect(formatReadyPath('/tmp/monad.sock', '/Users/test')).toBe('/tmp/monad.sock');
 });

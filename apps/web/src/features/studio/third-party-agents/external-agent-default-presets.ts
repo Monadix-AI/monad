@@ -63,7 +63,7 @@ export const DETECTING_EXTERNAL_AGENT_PRESETS: ExternalAgentPresetView[] = [
     defaultLaunchMode: 'pty',
     supportedLaunchModes: ['pty'],
     installHint: '',
-    installUrl: 'https://github.com/Monadical-SAS/OpenClaw',
+    installUrl: 'https://github.com/openclaw/openclaw',
     installed: false
   },
   {
@@ -76,7 +76,7 @@ export const DETECTING_EXTERNAL_AGENT_PRESETS: ExternalAgentPresetView[] = [
     defaultLaunchMode: 'pty',
     supportedLaunchModes: ['pty'],
     installHint: '',
-    installUrl: 'https://github.com/monadix/hermes',
+    installUrl: 'https://github.com/NousResearch/hermes-agent',
     installed: false
   }
 ];

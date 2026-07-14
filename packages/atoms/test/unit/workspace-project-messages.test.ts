@@ -18,7 +18,7 @@ const externalAgentSession = (overrides: Partial<ExternalAgentSessionView> = {})
   agentName: 'gemini',
   provider: 'gemini',
   productIcon: 'gemini',
-  workingPath: '/Users/zeke/Projects/monad',
+  workingPath: '/Users/test/Projects/monad',
   launchMode: 'pty',
   approvalOwnership: 'provider-owned',
   runtimeRole: 'managed-project-agent',
@@ -771,7 +771,7 @@ test('external agent stream-json events are projected as readable observation it
 
 test('external agent projection ignores startup prose before stream-json objects', () => {
   const output = [
-    'started claude-code in /Users/zeke/.monad/workplace-agents/project/claude-code',
+    'started claude-code in /Users/test/.monad/workplace-agents/project/claude-code',
     JSON.stringify({ type: 'system', subtype: 'init', session_id: 'claude-session' }),
     JSON.stringify({ type: 'result', result: 'Need approval before posting.' })
   ].join('\n');
@@ -807,7 +807,7 @@ test('external agent app-server JSON-RPC output is projected as readable observa
       params: {
         thread: {
           id: '019f1f3a-5e8d-7260-a35e-c755a13bfde2',
-          cwd: '/Users/zeke/.codex/worktrees/28ea/monad/.dev/.monad/workplace-agents/project/test'
+          cwd: '/Users/test/project/.dev/.monad/workplace-agents/project/test'
         }
       }
     }),

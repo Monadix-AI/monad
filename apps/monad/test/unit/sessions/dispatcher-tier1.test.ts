@@ -42,7 +42,7 @@ test('sessionDelete queues deletion and hides the session from handler reads', a
   await expect(d.session.get({ id: sessionId })).rejects.toBeInstanceOf(HandlerError);
   expect((await d.session.list({})).sessions.map((session) => session.id)).toEqual([otherSessionId]);
   expect((await d.session.list({})).total).toBe(1);
-  expect(store.getSession(sessionId)).not.toBeNull();
+  expect(store.getSession(sessionId)?.id).toBe(sessionId);
   expect(await d.session.undoDelete({ id: sessionId })).toEqual({ undone: true });
   expect((await d.session.get({ id: sessionId })).session.title).toBe('t');
   store.close();

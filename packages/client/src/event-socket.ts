@@ -1,6 +1,6 @@
 // One multiplexed WebSocket per client carries the cross-session control stream
 // (session-list lifecycle + stream markers). control.subscribe/unsubscribe are the only
-// RPCs on it — per-session generation is streamed over SSE (see docs/realtime-channels.md),
+// RPCs on it — per-session generation is streamed over SSE (see docs/internals/realtime-channels.md),
 // and all other request/response goes over REST.
 
 import type { Event, JsonRpcNotification, RpcMethod, RpcParams } from '@monad/protocol';

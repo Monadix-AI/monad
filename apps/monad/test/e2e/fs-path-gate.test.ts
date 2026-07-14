@@ -2,7 +2,7 @@
 // Drives the real HTTP surface (POST /v1/tools/approve, GET /v1/approvals, POST
 // /v1/approvals/revoke) against a real PolicyEngine + ApprovalStore, verifying that path
 // escalation behaves identically to the general approval flow but with scope:'agent' (not
-// 'global') for the "Always" choice. Mirrors docs/runtime.md's both-transports rule.
+// 'global') for the "Always" choice. Mirrors docs/internals/runtime.md's both-transports rule.
 
 import type { Event } from '@monad/protocol';
 

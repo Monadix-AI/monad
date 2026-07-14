@@ -41,13 +41,13 @@ import { parseSkillMd } from '#/store/home/skills.ts';
 
 const ATOM_PACK_UPLOAD_MAX_BYTES = 25 * 1024 * 1024;
 const MONAD_POWER_PACK_DEBUG_SOURCE = 'debug:monad-power-pack';
-const MONAD_POWER_PACK_GITHUB_SOURCE = 'github:monadix-labs/monad-power-pack@debug';
+const MONAD_POWER_PACK_GITHUB_SOURCE = 'github:Monadix-AI/monad-power-pack@debug';
 
 async function loadDebugMonadPowerPack(source: AtomPackSource): Promise<StagedAtomPack | null> {
   if (Bun.env.NODE_ENV === 'production') return null;
   if (
     source.kind !== 'github' ||
-    source.owner !== 'monadix-labs' ||
+    source.owner !== 'Monadix-AI' ||
     source.repo !== 'monad-power-pack' ||
     source.ref !== 'debug'
   ) {

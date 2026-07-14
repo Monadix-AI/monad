@@ -1,7 +1,7 @@
 if (process.platform !== 'win32') process.exit(0);
 
 import { afterEach, beforeEach, expect, test } from 'bun:test';
-import { existsSync, writeFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -22,7 +22,6 @@ afterEach(async () => {
 
 test('findGitBash returns the explicit path when CLAUDE_CODE_GIT_BASH_PATH points to a real file', () => {
   Bun.env.CLAUDE_CODE_GIT_BASH_PATH = FAKE_BASH;
-  expect(existsSync(FAKE_BASH)).toBe(true);
   expect(findGitBash()).toBe(FAKE_BASH);
 });
 

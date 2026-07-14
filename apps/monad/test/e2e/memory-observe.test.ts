@@ -124,7 +124,6 @@ for (const kind of TRANSPORTS) {
       expect(fake.searchCalls).toBeGreaterThan(0);
       // AfterTurn observe forwarded the exchange to mem0 (infer=true extraction) under the agent userId.
       const observe = fake.addCalls.find((c) => c.infer !== false);
-      expect(observe).toBeDefined();
       expect(observe?.userId).toBe('agent:agt_100000000000');
       expect(observe?.content).toContain('I deploy with Bun');
       expect(observe?.content).toContain(MOCK_REPLY);

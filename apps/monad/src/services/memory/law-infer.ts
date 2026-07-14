@@ -78,7 +78,7 @@ export interface InferLawsDeps {
   scopes: () => LawScopeRef[];
   /** L1 facts for a scope, with stable ids — so a derived law can cite the facts it generalizes. */
   facts: (kind: 'global' | 'agent' | 'project', id: string) => Promise<{ id: string; content: string }[]>;
-  /** L2 relations for a scope, with edge ids + a short rendered line (e.g. "Zeke —[works_on]→ Monad"). */
+  /** L2 relations for a scope, with edge ids + a short rendered line (e.g. "Ada —[works_on]→ Monad"). */
   graphItems: (scope: string) => { id: string; text: string }[];
   complete: Complete;
   model: (scope: string) => string;

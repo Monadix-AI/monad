@@ -231,7 +231,7 @@ test('GET /v1/atoms/skills lists installed skill atoms; a dropped-in one has no 
   await dropSkill('demo');
   const listed = (await (await fetch(`${base}/v1/atoms/skills`)).json()) as SkillList;
   const demo = listed.skills.find((s) => s.name === 'demo');
-  expect(demo).toBeDefined();
+  expect(demo?.name).toBe('demo');
   expect(demo?.source).toBeUndefined(); // hand-dropped → no install record
 });
 

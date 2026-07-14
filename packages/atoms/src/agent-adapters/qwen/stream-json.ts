@@ -13,7 +13,7 @@ import { compactObject } from '../adapter-shared.ts';
 //
 // Only the fields the daemon consumes are named; every object keeps a `catchall`, so a newer CLI
 // that adds fields — or an unknown message/subtype — is skipped rather than wedging the parse
-// (schema-first at the runtime boundary; see docs/conventions.md §3).
+// (schema-first at the runtime boundary; see docs/engineering/conventions.md §3).
 
 const qwenTextBlockSchema = z.object({ type: z.literal('text'), text: z.string() }).catchall(z.unknown());
 

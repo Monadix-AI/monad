@@ -799,11 +799,11 @@ test('projects resource approvals with user-facing display metadata', () => {
     event('tool.approval_requested', {
       requestId: 'req_path',
       tool: 'path_access',
-      key: '/Users/zeke/project',
+      key: '/Users/test/project',
       input: {
-        path: '/Users/zeke/project/file.txt',
-        dir: '/Users/zeke/project',
-        displayHint: { kind: 'resource-approval', resource: 'path', subject: '/Users/zeke/project' }
+        path: '/Users/test/project/file.txt',
+        dir: '/Users/test/project',
+        displayHint: { kind: 'resource-approval', resource: 'path', subject: '/Users/test/project' }
       }
     })
   );
@@ -811,14 +811,14 @@ test('projects resource approvals with user-facing display metadata', () => {
     kind: 'upsert',
     item: {
       kind: 'approval',
-      display: { kind: 'resource-approval', resource: 'path', subject: '/Users/zeke/project' }
+      display: { kind: 'resource-approval', resource: 'path', subject: '/Users/test/project' }
     }
   });
   if (pathApproval?.kind !== 'upsert' || pathApproval.item.kind !== 'approval') throw new Error('expected approval');
   expect(pathApproval.item.display).toEqual({
     kind: 'resource-approval',
     resource: 'path',
-    subject: '/Users/zeke/project'
+    subject: '/Users/test/project'
   });
 
   const [networkApproval] = projector.applyEvent(
@@ -921,7 +921,7 @@ test('does not project raw external agent PTY output into chat tool text', () =>
       agentName: 'claude-code',
       provider: 'claude-code',
       launchMode: 'pty',
-      workingPath: '/Users/zeke/Projects/monad',
+      workingPath: '/Users/test/Projects/monad',
       pid: 123
     })
   );
