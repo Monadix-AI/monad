@@ -6,8 +6,7 @@
 //
 // Isolation model, per SandboxPolicy:
 //   • writableRoots / readableRoots → shared-directory mounts (virtio-fs on macOS/Linux; 9p-over-
-//     hvsock on Windows, where guest paths are the /mnt/<drive>/… translation of the host roots);
-//     readDenyRoots simply aren't mounted (they don't exist in the guest).
+//     hvsock on Windows), followed by guest-enforced read-deny and credential-mask overlays.
 //   • the exec channel is vsock (NIC-independent), so net:'none' runs with NO network device at all;
 //     'filtered'/'unrestricted' get a NIC into gvproxy's user-space netstack, and egress is enforced
 //     by an in-guest nftables ruleset the unprivileged workload can't alter.
@@ -32,6 +31,7 @@ import { VSOCK_PROTOCOL_VERSION } from './exec/protocol.ts';
 import { bridgeAsyncProcess, vsockExec, waitForVsock } from './exec/vsock.ts';
 import { IGNITION_SCHEMA_VERSION, serializeIgnition } from './ignition.ts';
 import { ensureBaseImage, type ImageConsent } from './image.ts';
+import { buildVmMountPlan, type VmMountPlan } from './mount-plan.ts';
 import { type GvproxyProcess, guestProxyEnv, spawnGvproxy } from './net/gvproxy.ts';
 import { effectiveVmIdentity, POOL_DEFAULTS, type PoolConfig, reuseKey, VmPool, vmKey } from './pool.ts';
 import { BootTransaction } from './runtime/boot-transaction.ts';
@@ -123,49 +123,7 @@ function macFor(key: string): string {
   return `02:${oct(0)}:${oct(1)}:${oct(2)}:${oct(3)}:${oct(4)}`;
 }
 
-/** Canonicalize a path for containment comparison: Windows paths are translated to their guest form
- *  and lowercased (NTFS is case-insensitive — `C:\Secrets` nested under `c:\secrets` must not slip
- *  the read-deny guard); POSIX paths pass through. */
-function canonPath(p: string): string {
-  return process.platform === 'win32' ? toGuestPath(p).toLowerCase() : p;
-}
-
-/** True when `child` is at or below `parent` in the filesystem tree. */
-function isUnder(child: string, parent: string): boolean {
-  const c = canonPath(child);
-  const par = canonPath(parent);
-  const p = par.endsWith('/') ? par : `${par}/`;
-  return c === par || c.startsWith(p);
-}
-
-/** Map the policy's roots to shared-directory mounts (virtio-fs on macOS/Linux, 9p-over-hvsock on
- *  Windows — where each mount also gets its guest path translation and fixed vsock port). Exported
- *  for conformance tests (the read-deny nesting guard is a security check). */
-export function mountsFor(policy: SandboxPolicy): MountSpec[] {
-  // A readDenyRoot nested under an allowed (writable/readable) root would be exposed anyway: the
-  // share exposes the whole subtree, and this backend has no way to subtract a denied subpath
-  // (unlike Seatbelt's deny-over-allow). Rather than silently leak the secret while advertising
-  // enforces.readDeny, fail closed. (A future impl could overlay a tmpfs at each denied path.)
-  const allowed = [...(policy.writableRoots ?? []), ...(policy.readableRoots ?? [])];
-  for (const deny of policy.readDenyRoots ?? []) {
-    for (const root of allowed) {
-      if (isUnder(deny, root)) {
-        throw new VmBackendNotReadyError(
-          `read-deny path ${deny} is nested under mounted root ${root}; the VM backend cannot subtract a denied subpath (would expose it). Narrow the mounted root or drop the deny.`
-        );
-      }
-    }
-  }
-  const mounts: MountSpec[] = [];
-  let i = 0;
-  for (const root of policy.writableRoots ?? []) mounts.push({ tag: `w${i++}`, path: root, readOnly: false });
-  let j = 0;
-  for (const root of policy.readableRoots ?? []) mounts.push({ tag: `r${j++}`, path: root, readOnly: true });
-  return process.platform === 'win32' ? withHvsockMountPlan(mounts) : mounts;
-}
-
-/** Assign each Windows mount its guest path (drive-letter translation) and its fixed hvsock port.
- *  Exported for unit tests (pure). */
+/** Assign each planned Windows share its fixed hvsock port. Exported for unit tests (pure). */
 export function withHvsockMountPlan(mounts: MountSpec[]): MountSpec[] {
   if (mounts.length > HVSOCK_PORTS.maxMounts) {
     throw new VmBackendNotReadyError(
@@ -174,7 +132,6 @@ export function withHvsockMountPlan(mounts: MountSpec[]): MountSpec[] {
   }
   return mounts.map((m, i) => ({
     ...m,
-    guestPath: toGuestPath(m.path),
     vsockPort: HVSOCK_PORTS.mountBase + i
   }));
 }
@@ -212,7 +169,8 @@ async function bootVm(
   key: string,
   policy: SandboxPolicy,
   image: BaseImageArtifact,
-  shape: VmShapeConfig
+  shape: VmShapeConfig,
+  mountPlan: VmMountPlan
 ): Promise<RunningVm> {
   const tx = new BootTransaction();
   let gvproxy: GvproxyProcess | undefined;
@@ -220,7 +178,7 @@ async function bootVm(
   try {
     tx.defer(() => destroyBundle(key));
     const bundle = await ensureBundle(key, image.path);
-    const mounts = mountsFor(policy);
+    const mounts = mountPlan.shares;
     const egress = egressFor(policy);
     const proxyEnv = egress.mode === 'filtered' && egress.proxyPort ? guestProxyEnv(egress.proxyPort) : undefined;
     const win = process.platform === 'win32';
@@ -230,6 +188,7 @@ async function bootVm(
     const ignition = serializeIgnition({
       agentBinaryB64: (await guestAgentArtifact()).b64,
       mounts,
+      overlays: mountPlan.overlays,
       egress,
       env: proxyEnv,
       ...(win
@@ -391,7 +350,15 @@ export const vmLauncher: SandboxLauncher = {
     // async acquire + vsock exec. The policy is captured in the boot thunk (no module-level side table).
     return bridgeAsyncProcess(
       async () => {
-        const [image, agent] = await Promise.all([ensureBaseImageOnce(), guestAgentArtifact()]);
+        const [image, agent, rawMountPlan] = await Promise.all([
+          ensureBaseImageOnce(),
+          guestAgentArtifact(),
+          buildVmMountPlan(policy)
+        ]);
+        const mountPlan = {
+          ...rawMountPlan,
+          shares: process.platform === 'win32' ? withHvsockMountPlan(rawMountPlan.shares) : rawMountPlan.shares
+        };
         const identity = effectiveVmIdentity(policy, {
           agentDigest: agent.digest,
           baseImageDigest: image.digest,
@@ -404,7 +371,9 @@ export const vmLauncher: SandboxLauncher = {
         });
         const key = vmKey(scope, options.sessionId, options.agentId, identity);
         acquiredKey = key;
-        const vm = await activePool.acquire(key, reuse, options.agentId, () => bootVm(key, policy, image, shape));
+        const vm = await activePool.acquire(key, reuse, options.agentId, () =>
+          bootVm(key, policy, image, shape, mountPlan)
+        );
         const egress = egressFor(policy);
         // On Windows, host paths (C:\…) must become their /mnt/<drive>/… guest mounts — for the cwd
         // and for any argv token that is itself an absolute Windows path. Identity on mac/linux.

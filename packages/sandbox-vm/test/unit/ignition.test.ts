@@ -67,7 +67,7 @@ test('the firewall file carries the egress nftables ruleset', () => {
 test('each mount becomes a virtiofs .mount unit ordered before the firewall', () => {
   const cfg = buildIgnition({
     agentBinaryB64: 'QQ==',
-    mounts: [{ tag: 'w0', path: '/Users/x/ws', readOnly: false }],
+    mounts: [{ tag: 'w0', hostPath: '/Users/x/ws', guestPath: '/Users/x/ws', readOnly: false }],
     egress: { mode: 'none' }
   });
   const unit = cfg.systemd.units.find((u) => u.name === 'Users-x-ws.mount');
@@ -77,11 +77,45 @@ test('each mount becomes a virtiofs .mount unit ordered before the firewall', ()
   expect(unit?.contents).toContain('Options=rw,nofail');
 });
 
+test('overlay policy runs after every base mount and before the firewall', () => {
+  const cfg = buildIgnition({
+    agentBinaryB64: 'QQ==',
+    mounts: [
+      { tag: 'w0', hostPath: '/work', guestPath: '/work', readOnly: false },
+      { tag: 'm0', hostPath: '/tmp/masks', guestPath: '/run/monad/masks/0', readOnly: true }
+    ],
+    overlays: [
+      { kind: 'protect-store', source: '/run/monad/masks/0', target: '/tmp/masks' },
+      { kind: 'deny-directory', target: '/work/.ssh' },
+      { kind: 'mask-file', source: '/run/monad/masks/0/token', target: '/work/token' }
+    ],
+    egress: { mode: 'none' }
+  });
+  const unit = cfg.systemd.units.find((item) => item.name === 'monad-mount-policy.service');
+  expect(unit?.contents).toContain('After=work.mount run-monad-masks-0.mount');
+  expect(unit?.contents).toContain('Before=monad-firewall.service');
+  expect(unit?.contents).toContain(
+    'ExecStart=/usr/local/bin/monad-vsock-agent mount-policy -config /etc/monad/mount-policy.json'
+  );
+  const file = cfg.storage.files.find((item) => (item as IgnFile).path === '/etc/monad/mount-policy.json') as
+    | IgnFile
+    | undefined;
+  expect(JSON.parse(decodeDataUri(file?.contents?.source ?? ''))).toEqual({
+    overlays: [
+      { kind: 'protect-store', source: '/run/monad/masks/0', target: '/tmp/masks' },
+      { kind: 'deny-directory', target: '/work/.ssh' },
+      { kind: 'mask-file', source: '/run/monad/masks/0/token', target: '/work/token' }
+    ]
+  });
+  const firewall = cfg.systemd.units.find((item) => item.name === 'monad-firewall.service');
+  expect(firewall?.contents).toContain('Requires=monad-mount-policy.service');
+});
+
 // ── Windows / Hyper-V variants ────────────────────────────────────────────────────────────────────
 
 const WIN_MOUNT = {
   tag: 'w0',
-  path: 'C:\\Users\\z\\proj',
+  hostPath: 'C:\\Users\\z\\proj',
   guestPath: '/mnt/c/Users/z/proj',
   vsockPort: 1026,
   readOnly: false
@@ -114,7 +148,7 @@ test('mount9p quotes the guest path so a space cannot truncate -target or drop -
     mounts: [
       {
         tag: 'r0',
-        path: 'C:\\Users\\First Last\\proj',
+        hostPath: 'C:\\Users\\First Last\\proj',
         guestPath: '/mnt/c/Users/First Last/proj',
         vsockPort: 1026,
         readOnly: true
@@ -132,7 +166,7 @@ test('a 9p mount without port/guestPath fails closed (never boot a VM missing a 
   expect(() =>
     buildIgnition({
       agentBinaryB64: 'QQ==',
-      mounts: [{ tag: 'w0', path: 'C:\\proj', readOnly: false }],
+      mounts: [{ tag: 'w0', hostPath: 'C:\\proj', guestPath: '/mnt/c/proj', readOnly: false }],
       egress: { mode: 'none' },
       mountTransport: '9p-vsock'
     })

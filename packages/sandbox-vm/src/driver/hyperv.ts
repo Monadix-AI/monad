@@ -136,7 +136,7 @@ export function hypervServiceArgv(spec: VmSpec, vmId: string): string[][] {
   const services: string[][] = [];
   for (const m of spec.mounts) {
     if (m.vsockPort === undefined) throw new Error(`hyperv: mount ${m.tag} has no vsockPort`);
-    const args = ['serve9p', '--vm-id', vmId, '--port', String(m.vsockPort), '--root', m.path];
+    const args = ['serve9p', '--vm-id', vmId, '--port', String(m.vsockPort), '--root', m.hostPath];
     if (m.readOnly) args.push('--ro');
     services.push(args);
   }

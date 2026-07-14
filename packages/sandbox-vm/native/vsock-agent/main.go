@@ -103,6 +103,9 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "mount9p" {
 		os.Exit(mount9p(os.Args[2:]))
 	}
+	if len(os.Args) > 1 && os.Args[1] == "mount-policy" {
+		os.Exit(runMountPolicy(os.Args[2:]))
+	}
 	if len(os.Args) == 2 && os.Args[1] == "--supervise-run" {
 		os.Exit(runSupervisorMode())
 	}

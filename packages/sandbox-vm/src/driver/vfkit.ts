@@ -63,7 +63,7 @@ export function vfkitArgv(vfkitBin: string, spec: VmSpec): string[] {
   ];
 
   for (const m of spec.mounts) {
-    argv.push('--device', `virtio-fs,sharedDir=${m.path},mountTag=${m.tag}`);
+    argv.push('--device', `virtio-fs,sharedDir=${m.hostPath},mountTag=${m.tag}`);
   }
 
   // net:'none' → no NIC device at all. Otherwise attach to gvproxy's datagram socket.

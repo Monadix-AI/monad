@@ -60,7 +60,7 @@ test('each mount → a virtiofsd chardev + vhost-user-fs device + shared memory 
   const b = describeBundle('agt:test');
   const argv = qemuArgv(
     '/bin/qemu',
-    spec({ mounts: [{ tag: 'w0', path: '/Users/x/ws', readOnly: false }] }),
+    spec({ mounts: [{ tag: 'w0', hostPath: '/Users/x/ws', guestPath: '/workspace', readOnly: false }] }),
     { firmwareCode: '/f', kvm: true },
     3
   );

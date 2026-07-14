@@ -147,10 +147,13 @@ export const qemuDriver: VmDriver = {
       // 1. One virtiofsd per mount tag (must be up before QEMU connects the chardev).
       for (const m of spec.mounts) {
         ownSidecar(
-          Bun.spawn([tools.virtiofsd, '--socket-path', virtiofsdSock(spec.bundle.dir, m.tag), '--shared-dir', m.path], {
-            stdout: 'ignore',
-            stderr: 'pipe'
-          })
+          Bun.spawn(
+            [tools.virtiofsd, '--socket-path', virtiofsdSock(spec.bundle.dir, m.tag), '--shared-dir', m.hostPath],
+            {
+              stdout: 'ignore',
+              stderr: 'pipe'
+            }
+          )
         );
       }
 

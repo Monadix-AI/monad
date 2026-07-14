@@ -52,8 +52,8 @@ test('each mount → a virtio-fs device at the same guest path', () => {
     '/bin/vfkit',
     spec({
       mounts: [
-        { tag: 'w0', path: '/Users/x/ws', readOnly: false },
-        { tag: 'r0', path: '/usr/lib', readOnly: true }
+        { tag: 'w0', hostPath: '/Users/x/ws', guestPath: '/workspace', readOnly: false },
+        { tag: 'r0', hostPath: '/usr/lib', guestPath: '/runtime/lib', readOnly: true }
       ]
     })
   );
