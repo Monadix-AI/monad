@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -145,6 +146,20 @@ describe('fail-closed: a credential file that cannot be masked is denied, never 
     const store = new MaskedFileStore();
     store.add(registry, { name: 'A', realPath: '/no/such/file/here', injectHosts: ['h'] });
     expect(store.denyPaths).toContain('/no/such/file/here');
+    store.dispose();
+  });
+
+  test('a non-regular declared credential path is denied before reading', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'credmask-fifo-'));
+    const fifo = join(dir, 'secret');
+    execFileSync('mkfifo', [fifo]);
+    const registry = new SentinelRegistry();
+    const store = new MaskedFileStore();
+
+    const bind = store.add(registry, { name: 'FIFO', realPath: fifo, injectHosts: ['h'] });
+
+    expect(bind).toBeUndefined();
+    expect(store.denyPaths).toContain(realpathSync(fifo));
     store.dispose();
   });
 });

@@ -49,6 +49,24 @@ func TestDrainObservationRecordsClassifiesBoundsAndCoalesces(t *testing.T) {
 	}
 }
 
+func TestDrainObservationRecordsContinuesAfterOversizedRecord(t *testing.T) {
+	var output bytes.Buffer
+	reporter := &supervisorReporter{encoder: json.NewEncoder(&output)}
+	oversizedEscapedPath := "/" + strings.Repeat("\\u0001", 4096)
+	input := `{"syscall":"openat","pid":7,"path":"` + oversizedEscapedPath + `"}` + "\n" +
+		`{"syscall":"openat","pid":8,"path":"/etc/after-oversize"}` + "\n"
+
+	drainObservationRecords(strings.NewReader(input), observationPolicy{WritableRoots: []string{"/work"}}, "run-oversize", reporter)
+
+	var record supervisorRecord
+	if err := json.NewDecoder(&output).Decode(&record); err != nil {
+		t.Fatal(err)
+	}
+	if record.Violation == nil || record.Violation.Target != "/etc/after-oversize" {
+		t.Fatalf("later record was not drained: %+v", record)
+	}
+}
+
 func TestPrepareObservedCommandPreservesWorkloadContract(t *testing.T) {
 	directory := t.TempDir()
 	helper := directory + "/observer"

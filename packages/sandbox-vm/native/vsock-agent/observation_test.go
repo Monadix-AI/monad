@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -13,7 +15,7 @@ func TestClassifyObservedPathHonorsComponentBoundariesAndNoWriteChildren(t *test
 	}
 	for _, target := range []string{"/workspace/output", "/work/readonly/file", "/etc/passwd"} {
 		got := classifyObservedPath(policy, "openat", target, 7, "run-1")
-		if got == nil || got.Kind != "filesystem" || got.Target != target || got.PID != 7 {
+		if got == nil || got.Kind != "filesystem" || got.Target != resolveObservedPath(target) || got.PID != 7 {
 			t.Fatalf("target %q classified as %+v", target, got)
 		}
 	}
@@ -21,13 +23,44 @@ func TestClassifyObservedPathHonorsComponentBoundariesAndNoWriteChildren(t *test
 
 func TestClassifyObservedPathNormalizesAbsolutePathsAndDropsUnsafeTargets(t *testing.T) {
 	policy := observationPolicy{WritableRoots: []string{"/work"}}
-	if got := classifyObservedPath(policy, "renameat2", "/work/../etc/passwd", 8, "run-2"); got == nil || got.Target != "/etc/passwd" {
+	target := "/work/../etc/passwd"
+	if got := classifyObservedPath(policy, "renameat2", target, 8, "run-2"); got == nil || got.Target != resolveObservedPath(target) {
 		t.Fatalf("normalized violation = %+v", got)
 	}
 	for _, target := range []string{"relative/path", "", "/" + strings.Repeat("界", 1366)} {
 		if got := classifyObservedPath(policy, "openat", target, 8, "run-2"); got != nil {
 			t.Fatalf("unsafe target %q reported as %+v", target, got)
 		}
+	}
+}
+
+func TestClassifyObservedPathResolvesSymlinkBeforeWritableRootDecision(t *testing.T) {
+	root := t.TempDir()
+	writable := filepath.Join(root, "work")
+	protected := filepath.Join(root, "protected")
+	if err := os.MkdirAll(writable, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(protected, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(protected, filepath.Join(writable, "link")); err != nil {
+		t.Fatal(err)
+	}
+	protected, err := filepath.EvalSymlinks(protected)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	violation := classifyObservedPath(
+		observationPolicy{WritableRoots: []string{writable}},
+		"openat",
+		filepath.Join(writable, "link", "secret"),
+		9,
+		"run-symlink",
+	)
+	if violation == nil || violation.Target != filepath.Join(protected, "secret") {
+		t.Fatalf("symlink target was not reported: %+v", violation)
 	}
 }
 

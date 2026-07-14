@@ -82,11 +82,11 @@ export function spawnGvproxy(spec: GvproxySpec): GvproxyProcess {
 // `net:'filtered'` must be enforced INSIDE the guest, not by an injected HTTP_PROXY env var a process
 // can simply unset (Cowork's "the sandbox cannot reconfigure the proxy" principle). The guest runs an
 // nftables ruleset — installed by the bootstrap unit as root, before the unprivileged `monad` user
-// gets a shell — that DROPs all output except loopback, DNS to the gvproxy resolver, and the host
-// egress proxy. The agent runs unprivileged and cannot alter it.
+// gets a shell — that DROPs all output except loopback, DHCP to gvproxy, and the host egress proxy.
+// The agent runs unprivileged and cannot alter it.
 
 export interface GuestEgressRules {
-  /** 'none' → drop all egress; 'filtered' → only proxy + DNS; 'unrestricted' → no rules. */
+  /** 'none' → drop all egress; 'filtered' → only DHCP + proxy; 'unrestricted' → no rules. */
   mode: 'none' | 'filtered' | 'unrestricted';
   /** Host egress-proxy port (reached at GVPROXY_HOST_IP:proxyPort) for 'filtered'. */
   proxyPort?: number;
@@ -116,7 +116,8 @@ export function guestNftables(rules: GuestEgressRules): string {
       ''
     ].join('\n');
   }
-  // filtered: allow loopback, DNS to the gvproxy resolver, and TCP to the host egress proxy only.
+  // filtered: allow loopback, DHCP to gvproxy, and TCP to the host egress proxy only. DNS must go
+  // through the proxy-capable client path, not directly to gvproxy's resolver.
   if (rules.proxyPort === undefined) {
     throw new Error('guestNftables: net:filtered requires a proxyPort');
   }
@@ -127,8 +128,6 @@ export function guestNftables(rules: GuestEgressRules): string {
     '    oif "lo" accept',
     '    ct state established,related accept',
     `    ip daddr ${GVPROXY_GATEWAY_IP} udp dport 67 accept`,
-    `    ip daddr ${GVPROXY_GATEWAY_IP} udp dport 53 accept`,
-    `    ip daddr ${GVPROXY_GATEWAY_IP} tcp dport 53 accept`,
     `    ip daddr ${GVPROXY_HOST_IP} tcp dport ${rules.proxyPort} accept`,
     '    # everything else dropped by policy',
     '  }',

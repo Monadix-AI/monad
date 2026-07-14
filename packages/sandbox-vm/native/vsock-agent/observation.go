@@ -1,7 +1,9 @@
 package main
 
 import (
+	"os"
 	"path"
+	"path/filepath"
 	"strings"
 )
 
@@ -30,8 +32,11 @@ func classifyObservedPath(
 	if target == "" || !strings.HasPrefix(target, "/") || len([]byte(target)) > maxObservationText {
 		return nil
 	}
-	normalized := path.Clean(target)
+	normalized := resolveObservedPath(target)
 	if !strings.HasPrefix(normalized, "/") {
+		return nil
+	}
+	if len([]byte(normalized)) > maxObservationText {
 		return nil
 	}
 	for _, root := range policy.NoWriteRoots {
@@ -47,6 +52,40 @@ func classifyObservedPath(
 		}
 	}
 	return &violationMessage{Kind: "filesystem", Operation: operation, RunID: runID, Target: normalized, PID: pid}
+}
+
+func resolveObservedPath(target string) string {
+	normalized := path.Clean(target)
+	if resolved, ok := evalSymlinkPrefix(normalized); ok {
+		return path.Clean(resolved)
+	}
+	return normalized
+}
+
+func evalSymlinkPrefix(target string) (string, bool) {
+	if resolved, err := filepath.EvalSymlinks(target); err == nil {
+		return filepath.ToSlash(resolved), true
+	}
+	missing := []string{}
+	cursor := target
+	for {
+		parent := path.Dir(cursor)
+		base := path.Base(cursor)
+		if parent == cursor || base == "." || base == "/" {
+			return "", false
+		}
+		missing = append([]string{base}, missing...)
+		cursor = parent
+		if _, err := os.Lstat(cursor); err != nil {
+			continue
+		}
+		resolved, err := filepath.EvalSymlinks(cursor)
+		if err != nil {
+			return "", false
+		}
+		parts := append([]string{filepath.ToSlash(resolved)}, missing...)
+		return path.Join(parts...), true
+	}
 }
 
 type observationLimiter struct {

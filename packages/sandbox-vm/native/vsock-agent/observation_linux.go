@@ -13,7 +13,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-const maxObservationRecordBytes = 16 * 1024
+const maxObservationRecordBytes = 32 * 1024
 
 var seccompObserverPath = "/usr/local/bin/monad-seccomp-observer"
 
@@ -93,5 +93,8 @@ func drainObservationRecords(
 		for _, admitted := range limiter.admit(*violation) {
 			reporter.recordViolation(admitted)
 		}
+	}
+	if scanner.Err() != nil {
+		reporter.violation("setup", "seccomp-observer", runID, "seccomp observer stream truncated")
 	}
 }

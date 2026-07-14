@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
 
 func TestReadFrameRejectsOversizedControlBeforeBodyRead(t *testing.T) {
@@ -15,6 +17,18 @@ func TestReadFrameRejectsOversizedControlBeforeBodyRead(t *testing.T) {
 	_, err := readFrame(bytes.NewReader(header))
 	if err == nil || !strings.Contains(err.Error(), "exceeds") {
 		t.Fatalf("expected bounded-frame error, got %v", err)
+	}
+}
+
+func TestAuthorizeVsockPeerAllowsOnlyHostCID(t *testing.T) {
+	if !authorizeVsockPeer(&unix.SockaddrVM{CID: unix.VMADDR_CID_HOST}) {
+		t.Fatal("host CID was rejected")
+	}
+	if authorizeVsockPeer(&unix.SockaddrVM{CID: 3}) {
+		t.Fatal("guest-local CID was accepted")
+	}
+	if authorizeVsockPeer(&unix.SockaddrUnix{Name: "/tmp/not-vsock"}) {
+		t.Fatal("non-vsock peer was accepted")
 	}
 }
 

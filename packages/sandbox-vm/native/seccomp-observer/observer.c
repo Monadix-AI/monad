@@ -318,6 +318,10 @@ static void emit_setup_error(int event_fd) {
     (void)ignored;
 }
 
+static int same_path_sample(const char *left, size_t left_length, const char *right, size_t right_length) {
+    return left_length == right_length && (left_length == 0 || memcmp(left, right, left_length) == 0);
+}
+
 static int openat2_is_write(const struct seccomp_notif *request) {
     uint64_t flags = 0;
     ssize_t count = read_remote(request->pid, (unsigned long)request->data.args[2], &flags, sizeof(flags));
@@ -330,12 +334,19 @@ static int service_notification(int listener, int event_fd, struct seccomp_notif
     const struct observed_call *call = find_call(request->data.nr);
     char first[OBS_RESOLVED_CAP];
     char second[OBS_RESOLVED_CAP];
+    char first_check[OBS_RESOLVED_CAP];
+    char second_check[OBS_RESOLVED_CAP];
     size_t first_length = 0;
     size_t second_length = 0;
     if (call && ioctl(listener, SECCOMP_IOCTL_NOTIF_ID_VALID, &request->id) == 0) {
         if (call->flags_arg != -2 || openat2_is_write(request)) {
             first_length = resolve_path(request, call->kind, call->path_arg, call->dirfd_arg, first);
             if (call->path2_arg >= 0) second_length = resolve_path(request, call->kind2, call->path2_arg, call->dirfd2_arg, second);
+            size_t first_check_length = resolve_path(request, call->kind, call->path_arg, call->dirfd_arg, first_check);
+            size_t second_check_length = 0;
+            if (call->path2_arg >= 0) second_check_length = resolve_path(request, call->kind2, call->path2_arg, call->dirfd2_arg, second_check);
+            if (!same_path_sample(first, first_length, first_check, first_check_length)) first_length = 0;
+            if (!same_path_sample(second, second_length, second_check, second_check_length)) second_length = 0;
         }
     }
     memset(response, 0, response_size);

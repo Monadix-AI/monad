@@ -135,6 +135,11 @@ export class MaskedFileStore {
         this.denied.push(real);
         return undefined;
       }
+      if (!stat.isFile()) {
+        logger.warn(`monad: masked credential file "${spec.realPath}" is not a regular file — denying read.`);
+        this.denied.push(real);
+        return undefined;
+      }
       if (stat.size > MAX_CREDENTIAL_BYTES) {
         logger.warn(`monad: masked credential file "${spec.realPath}" failed: INPUT_TOO_LARGE — denying read.`);
         this.denied.push(real);

@@ -101,6 +101,18 @@ function guestTarget(canonical: string, shares: CanonicalShare[], host: MountPla
   return relative === '' ? share.guestPath : posix.join(share.guestPath, ...relative.split(api.sep));
 }
 
+function guestTargets(canonical: string, shares: CanonicalShare[], host: MountPlanHost, fallback: string): string[] {
+  const api = pathApi(host);
+  const targets = shares
+    .filter((share) => isUnder(canonical, share.hostPath, host))
+    .map((share) => {
+      const relative = api.relative(share.hostPath, canonical);
+      return relative === '' ? share.guestPath : posix.join(share.guestPath, ...relative.split(api.sep));
+    });
+  if (targets.length === 0) return [guestPath(api.normalize(fallback), host)];
+  return [...new Set(targets)].sort((a, b) => targetDepth(a) - targetDepth(b) || a.localeCompare(b));
+}
+
 async function canonicalize(input: string, host: MountPlanHost): Promise<CanonicalPath> {
   const api = pathApi(host);
   if (!api.isAbsolute(input)) throw new Error(`mount policy path must be absolute: ${input}`);
@@ -184,10 +196,12 @@ export async function buildVmMountPlan(policy: SandboxPolicy, host: MountPlanHos
     if (canonical.exists && canonical.kind !== 'directory' && canonical.kind !== 'file') {
       throw new Error(`read-deny target has unsupported type: ${rawDeny}`);
     }
-    denyOverlays.push({
-      kind: canonical.exists && canonical.kind === 'file' ? 'deny-file' : 'deny-directory',
-      target: guestTarget(canonical.firstMissing ?? canonical.path, baseShares, host, rawDeny)
-    });
+    for (const target of guestTargets(canonical.firstMissing ?? canonical.path, baseShares, host, rawDeny)) {
+      denyOverlays.push({
+        kind: canonical.exists && canonical.kind === 'file' ? 'deny-file' : 'deny-directory',
+        target
+      });
+    }
   }
   denyOverlays.sort((a, b) => targetDepth(a.target) - targetDepth(b.target) || a.target.localeCompare(b.target));
 
@@ -227,8 +241,8 @@ export async function buildVmMountPlan(policy: SandboxPolicy, host: MountPlanHos
         readOnly: true,
         rawPath: storePath
       });
-      const writableExposure = shares.find((share) => !share.readOnly && isUnder(storePath, share.hostPath, host));
-      if (writableExposure) {
+      const writableExposures = shares.filter((share) => !share.readOnly && isUnder(storePath, share.hostPath, host));
+      for (const writableExposure of writableExposures) {
         if (comparisonPath(writableExposure.hostPath, host) === storeKey) {
           throw new Error(`mask store cannot equal a writable policy root: ${storePath}`);
         }
@@ -241,13 +255,14 @@ export async function buildVmMountPlan(policy: SandboxPolicy, host: MountPlanHos
     }
     const real = await canonicalize(mask.real, host);
     ensureNoEscape(mask.real, real.path, baseShares, host);
-    const target = guestTarget(real.path, baseShares, host, mask.real);
-    if (denyOverlays.some((deny) => isUnder(target, deny.target, { ...host, platform: 'linux' }))) continue;
-    maskOverlays.push({
-      kind: 'mask-file',
-      source: sourceInStaging(store.path, fake.path, store.staging, host),
-      target
-    });
+    for (const target of guestTargets(real.path, baseShares, host, mask.real)) {
+      if (denyOverlays.some((deny) => isUnder(target, deny.target, { ...host, platform: 'linux' }))) continue;
+      maskOverlays.push({
+        kind: 'mask-file',
+        source: sourceInStaging(store.path, fake.path, store.staging, host),
+        target
+      });
+    }
   }
 
   return {

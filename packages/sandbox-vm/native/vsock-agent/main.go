@@ -211,12 +211,21 @@ func main() {
 		unix.Close(fd)
 	}()
 	for {
-		conn, _, err := unix.Accept(fd)
+		conn, peer, err := unix.Accept(fd)
 		if err != nil {
 			return
 		}
+		if !authorizeVsockPeer(peer) {
+			unix.Close(conn)
+			continue
+		}
 		go serveConnection(os.NewFile(uintptr(conn), "vsock-conn"), registry)
 	}
+}
+
+func authorizeVsockPeer(peer unix.Sockaddr) bool {
+	vm, ok := peer.(*unix.SockaddrVM)
+	return ok && vm.CID == unix.VMADDR_CID_HOST
 }
 
 func serveConnection(conn io.ReadWriteCloser, registry *runRegistry) {

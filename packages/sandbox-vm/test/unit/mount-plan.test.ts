@@ -111,6 +111,26 @@ test('canonical host roots preserve the caller-visible guest path', async () => 
   expect(plan.overlays).toEqual([{ kind: 'deny-directory', target: join(alias, '.ssh') }]);
 });
 
+test('overlapping shares deny every guest alias for the same canonical target', async () => {
+  const container = await realpath(await mkdtemp(join(tmpdir(), 'monad-mount-overlap-')));
+  roots.push(container);
+  const parent = join(container, 'parent');
+  const child = join(parent, 'child');
+  const childAlias = join(container, 'child-alias');
+  await mkdir(join(child, '.ssh'), { recursive: true });
+  await symlink(child, childAlias);
+
+  const plan = await buildVmMountPlan({
+    writableRoots: [parent, childAlias],
+    readDenyRoots: [join(childAlias, '.ssh')]
+  });
+
+  expect(plan.overlays).toEqual([
+    { kind: 'deny-directory', target: join(container, 'child-alias', '.ssh') },
+    { kind: 'deny-directory', target: join(parent, 'child', '.ssh') }
+  ]);
+});
+
 test('missing and non-regular fake mask sources fail closed', async () => {
   const { root } = await fixture();
   await expect(
