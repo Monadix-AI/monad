@@ -1,15 +1,19 @@
-// @monad/sandbox-vm — the built-in macOS/Linux VM sandbox backend. It is registered directly by the
-// daemon and selected only when the VM backend is explicit. Unlike the light
+// @monad/sandbox-vm — the built-in macOS/Linux/Windows VM sandbox backend. It is registered directly
+// by the daemon and selected only when the VM backend is explicit. Unlike the light
 // OS launchers it does not wrap() argv — it runs each command inside a per-agent Fedora CoreOS VM
-// (own kernel, own filesystem, own process table) over ssh, and returns a SandboxProcess the daemon's
-// seam bridges onto its callers.
+// (own kernel, own filesystem, own process table) over a vsock exec channel, and returns a
+// SandboxProcess the daemon's seam bridges onto its callers.
 //
 // Isolation model, per SandboxPolicy:
-//   • writableRoots / readableRoots → virtio-fs mounts at the same guest paths (argv unchanged);
+//   • writableRoots / readableRoots → shared-directory mounts (virtio-fs on macOS/Linux; 9p-over-
+//     hvsock on Windows, where guest paths are the /mnt/<drive>/… translation of the host roots);
 //     readDenyRoots simply aren't mounted (they don't exist in the guest).
-//   • the guest always has a NIC (the exec channel is ssh over gvproxy); egress is enforced by an
-//     in-guest nftables ruleset — net:'none' drops all new outbound, net:'filtered' allows only the
-//     host egress proxy, net:'unrestricted' adds no rules. The agent (unprivileged) can't alter it.
+//   • the exec channel is vsock (NIC-independent), so net:'none' runs with NO network device at all;
+//     'filtered'/'unrestricted' get a NIC into gvproxy's user-space netstack, and egress is enforced
+//     by an in-guest nftables ruleset the unprivileged workload can't alter.
+//
+// Per-platform drivers: vfkit (macOS), QEMU+KVM (Linux), Hyper-V via winvm-helper (Windows —
+// Pro/Enterprise/Education; see driver/hyperv.ts for why not QEMU+WHPX).
 //
 // Reuse is per-agent (one VM across an agent's sessions); see pool.ts for the lifecycle state machine.
 
@@ -21,6 +25,7 @@ import { rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
 import { destroyBundle, ensureBundle, type VmBundle } from './bundle.ts';
+import { configureHypervTools, HVSOCK_PORTS, hypervDriver, hypervPreflight } from './driver/hyperv.ts';
 import { configureQemuTools, qemuDriver } from './driver/qemu.ts';
 import { configureVfkitBin, type VmHandle, vfkitDriver } from './driver/vfkit.ts';
 import { bridgeAsyncProcess, vsockExec, waitForVsock } from './exec/vsock.ts';
@@ -29,17 +34,27 @@ import { ensureBaseImage, type ImageConsent } from './image.ts';
 import { type GvproxyProcess, guestProxyEnv, spawnGvproxy } from './net/gvproxy.ts';
 import { POOL_DEFAULTS, type PoolConfig, reuseKey, VmPool, vmKey } from './pool.ts';
 import { resolveVmToolchain, vmToolchainMaybeAvailable } from './toolchain.ts';
+import { toGuestPath, translateArgvPaths } from './winpath.ts';
 
-// The guest vsock exec agent (Linux), vendored next to the package. The guest arch matches the host
-// (a hypervisor runs same-arch guests), so pick the binary by process.arch. Injected into every guest
-// via Ignition; read once and cached as base64.
+// The guest binaries (Linux), vendored next to the package: the vsock exec agent (all platforms) and
+// gvforwarder (Windows only — the guest's tap⇄vsock network forwarder). The guest arch matches the
+// host (a hypervisor runs same-arch guests), so pick by process.arch. Injected via Ignition; read
+// once and cached as base64.
 const AGENT_ARCH = process.arch === 'x64' ? 'amd64' : 'arm64';
 const AGENT_PATH = join(dirname(import.meta.dir), 'vendor', `vsock-agent-${AGENT_ARCH}`);
-const VSOCK_EXEC_PORT = 1024;
+const GVFORWARDER_PATH = join(dirname(import.meta.dir), 'vendor', `gvforwarder-${AGENT_ARCH}`);
+const VSOCK_EXEC_PORT = HVSOCK_PORTS.exec; // 1024 on every platform — the agent's listen port
 let agentB64: string | null = null;
 async function agentBinaryB64(): Promise<string> {
   if (agentB64 === null) agentB64 = Buffer.from(await Bun.file(AGENT_PATH).bytes()).toString('base64');
   return agentB64;
+}
+let gvforwarderB64Cache: string | null = null;
+async function gvforwarderBinaryB64(): Promise<string> {
+  if (gvforwarderB64Cache === null) {
+    gvforwarderB64Cache = Buffer.from(await Bun.file(GVFORWARDER_PATH).bytes()).toString('base64');
+  }
+  return gvforwarderB64Cache;
 }
 
 export class VmBackendNotReadyError extends Error {
@@ -92,18 +107,28 @@ function macFor(key: string): string {
   return `02:${oct(0)}:${oct(1)}:${oct(2)}:${oct(3)}:${oct(4)}`;
 }
 
-/** True when `child` is at or below `parent` in the filesystem tree. */
-function isUnder(child: string, parent: string): boolean {
-  const p = parent.endsWith('/') ? parent : `${parent}/`;
-  return child === parent || child.startsWith(p);
+/** Canonicalize a path for containment comparison: Windows paths are translated to their guest form
+ *  and lowercased (NTFS is case-insensitive — `C:\Secrets` nested under `c:\secrets` must not slip
+ *  the read-deny guard); POSIX paths pass through. */
+function canonPath(p: string): string {
+  return process.platform === 'win32' ? toGuestPath(p).toLowerCase() : p;
 }
 
-/** Map the policy's roots to virtio-fs mounts. Exported for conformance tests (the read-deny nesting
- *  guard is a security check). */
+/** True when `child` is at or below `parent` in the filesystem tree. */
+function isUnder(child: string, parent: string): boolean {
+  const c = canonPath(child);
+  const par = canonPath(parent);
+  const p = par.endsWith('/') ? par : `${par}/`;
+  return c === par || c.startsWith(p);
+}
+
+/** Map the policy's roots to shared-directory mounts (virtio-fs on macOS/Linux, 9p-over-hvsock on
+ *  Windows — where each mount also gets its guest path translation and fixed vsock port). Exported
+ *  for conformance tests (the read-deny nesting guard is a security check). */
 export function mountsFor(policy: SandboxPolicy): MountSpec[] {
-  // A readDenyRoot nested under an allowed (writable/readable) root would be exposed anyway: virtio-fs
-  // mounts the whole subtree, and this backend has no way to subtract a denied subpath (unlike
-  // Seatbelt's deny-over-allow). Rather than silently leak the secret while advertising
+  // A readDenyRoot nested under an allowed (writable/readable) root would be exposed anyway: the
+  // share exposes the whole subtree, and this backend has no way to subtract a denied subpath
+  // (unlike Seatbelt's deny-over-allow). Rather than silently leak the secret while advertising
   // enforces.readDeny, fail closed. (A future impl could overlay a tmpfs at each denied path.)
   const allowed = [...(policy.writableRoots ?? []), ...(policy.readableRoots ?? [])];
   for (const deny of policy.readDenyRoots ?? []) {
@@ -120,7 +145,22 @@ export function mountsFor(policy: SandboxPolicy): MountSpec[] {
   for (const root of policy.writableRoots ?? []) mounts.push({ tag: `w${i++}`, path: root, readOnly: false });
   let j = 0;
   for (const root of policy.readableRoots ?? []) mounts.push({ tag: `r${j++}`, path: root, readOnly: true });
-  return mounts;
+  return process.platform === 'win32' ? withHvsockMountPlan(mounts) : mounts;
+}
+
+/** Assign each Windows mount its guest path (drive-letter translation) and its fixed hvsock port.
+ *  Exported for unit tests (pure). */
+export function withHvsockMountPlan(mounts: MountSpec[]): MountSpec[] {
+  if (mounts.length > HVSOCK_PORTS.maxMounts) {
+    throw new VmBackendNotReadyError(
+      `policy has ${mounts.length} roots; the Windows VM backend supports at most ${HVSOCK_PORTS.maxMounts}`
+    );
+  }
+  return mounts.map((m, i) => ({
+    ...m,
+    guestPath: toGuestPath(m.path),
+    vsockPort: HVSOCK_PORTS.mountBase + i
+  }));
 }
 
 // Map the policy's net mode. A policy with net UNDEFINED fails CLOSED to 'none' (no egress): an
@@ -153,15 +193,31 @@ async function bootVm(key: string, policy: SandboxPolicy): Promise<RunningVm> {
   const egress = egressFor(policy);
   const proxyEnv = egress.mode === 'filtered' && egress.proxyPort ? guestProxyEnv(egress.proxyPort) : undefined;
 
-  // Ignition: inject the vsock exec agent, the mounts, the egress firewall.
-  const ignition = serializeIgnition({ agentBinaryB64: await agentBinaryB64(), mounts, egress, env: proxyEnv });
+  const win = process.platform === 'win32';
+
+  // Ignition: inject the vsock exec agent, the mounts, the egress firewall — and on Windows the
+  // 9p mount transport plus (net≠none) the gvforwarder tap so the guest can reach gvproxy.
+  const ignition = serializeIgnition({
+    agentBinaryB64: await agentBinaryB64(),
+    mounts,
+    egress,
+    env: proxyEnv,
+    ...(win
+      ? {
+          mountTransport: '9p-vsock' as const,
+          ...(egress.mode !== 'none'
+            ? { gvforwarderB64: await gvforwarderBinaryB64(), netVsockPort: HVSOCK_PORTS.net }
+            : {})
+        }
+      : {})
+  });
   await Bun.write(bundle.ignition, ignition);
 
   // The exec channel is vsock (NIC-independent), so net:'none' runs with NO NIC and NO gvproxy — the
   // strongest network isolation. Only 'filtered'/'unrestricted' attach a NIC to gvproxy's user-space
   // netstack for egress. When there is a NIC, start gvproxy first and wait for its socket so the VMM's
   // virtio-net can attach at boot.
-  const transport = process.platform === 'darwin' ? 'vfkit' : 'qemu';
+  const transport = process.platform === 'darwin' ? 'vfkit' : win ? 'hyperv' : 'qemu';
   let gvproxy: GvproxyProcess | undefined;
   let gvproxyNetSock: string | undefined;
   if (egress.mode !== 'none') {
@@ -169,30 +225,47 @@ async function bootVm(key: string, policy: SandboxPolicy): Promise<RunningVm> {
     // gvproxy fatally exits if its listen socket path already exists (stale socket from a prior boot).
     await rm(bundle.gvproxySock, { force: true });
     gvproxy = spawnGvproxy({ gvproxyBin: resolvedGvproxy, netSock: bundle.gvproxySock, transport });
-    await waitForSocket(bundle.gvproxySock, 5000);
-    gvproxyNetSock = bundle.gvproxySock;
   }
 
-  await rm(bundle.vsockSock, { force: true });
-  const driver = process.platform === 'darwin' ? vfkitDriver : qemuDriver;
-  const vmHandle = await driver.boot({
-    cpus: config.cpus,
-    memoryMiB: config.memoryMiB,
-    bundle,
-    mounts,
-    gvproxyNetSock,
-    mac: macFor(key),
-    vsockSock: bundle.vsockSock,
-    vsockPort: VSOCK_EXEC_PORT
-  });
+  // Everything after gvproxy spawns can throw (waitForSocket / driver.boot / waitForVsock); a throw
+  // must kill gvproxy and stop the VMM, or every failed boot orphans a gvproxy (and possibly a VM).
+  try {
+    if (gvproxy) {
+      await waitForSocket(bundle.gvproxySock, 5000);
+      gvproxyNetSock = bundle.gvproxySock;
+    }
+    // On Windows vsockSock is a named-pipe path (no filesystem entry to clear).
+    if (!win) await rm(bundle.vsockSock, { force: true });
+    const driver = process.platform === 'darwin' ? vfkitDriver : win ? hypervDriver : qemuDriver;
+    const vmHandle = await driver.boot({
+      cpus: config.cpus,
+      memoryMiB: config.memoryMiB,
+      bundle,
+      mounts,
+      gvproxyNetSock,
+      mac: macFor(key),
+      vsockSock: bundle.vsockSock,
+      vsockPort: VSOCK_EXEC_PORT
+    });
 
-  const vm: RunningVm = { bundle, vfkit: vmHandle, gvproxy };
-  liveVms.add(vm);
-  // driver.boot() returns as soon as the VMM process is spawned, NOT when the guest is up. Fedora
-  // CoreOS takes ~30-60s to boot + apply Ignition + start the agent, so wait until the guest is
-  // exec-reachable before returning — otherwise the first command races an unbooted guest.
-  await waitForVsock({ socketPath: bundle.vsockSock }, { timeoutMs: config.bootTimeoutMs });
-  return vm;
+    const vm: RunningVm = { bundle, vfkit: vmHandle, gvproxy };
+    liveVms.add(vm);
+    // driver.boot() returns as soon as the VMM process is spawned, NOT when the guest is up. Fedora
+    // CoreOS takes ~30-60s to boot + apply Ignition + start the agent, so wait until the guest is
+    // exec-reachable before returning — otherwise the first command races an unbooted guest. On a
+    // timeout, tear down the VM too (not just gvproxy) so a half-booted guest never leaks.
+    try {
+      await waitForVsock({ socketPath: bundle.vsockSock }, { timeoutMs: config.bootTimeoutMs });
+    } catch (error) {
+      liveVms.delete(vm);
+      await vmHandle.stop().catch(() => {});
+      throw error;
+    }
+    return vm;
+  } catch (error) {
+    gvproxy?.kill();
+    throw error;
+  }
 }
 
 /** Poll for a socket path to appear (gvproxy binds it asynchronously after fork). */
@@ -233,7 +306,7 @@ export const vmLauncher: SandboxLauncher = {
       ]
     }
   },
-  platforms: ['darwin', 'linux'],
+  platforms: ['darwin', 'linux', 'win32'],
   enforces: { writeConfine: true, readDeny: true, net: ['none', 'filtered', 'unrestricted'] },
   isAvailable: () => vmToolchainMaybeAvailable(),
   configure(settings): void {
@@ -251,6 +324,13 @@ export const vmLauncher: SandboxLauncher = {
     resolvedGvproxy = tools.gvproxy;
     if (process.platform === 'darwin') {
       configureVfkitBin(tools.hypervisor);
+    } else if (process.platform === 'win32') {
+      configureHypervTools({ helper: tools.hypervisor });
+      try {
+        await hypervPreflight(tools.hypervisor);
+      } catch (error) {
+        throw new VmBackendNotReadyError(error instanceof Error ? error.message : String(error));
+      }
     } else {
       if (!tools.firmware) throw new VmBackendNotReadyError('no EFI firmware resolved');
       configureQemuTools({
@@ -276,9 +356,11 @@ export const vmLauncher: SandboxLauncher = {
       async () => {
         const vm = await activePool.acquire(key, reuse, options.agentId, () => bootVm(key, policy));
         const egress = egressFor(policy);
-        return vsockExec(argv, {
+        // On Windows, host paths (C:\…) must become their /mnt/<drive>/… guest mounts — for the cwd
+        // and for any argv token that is itself an absolute Windows path. Identity on mac/linux.
+        return vsockExec(translateArgvPaths(argv), {
           socketPath: vm.bundle.vsockSock,
-          cwd: options.cwd,
+          cwd: options.cwd !== undefined ? toGuestPath(options.cwd) : undefined,
           env: {
             ...options.env,
             ...(egress.mode === 'filtered' && egress.proxyPort ? guestProxyEnv(egress.proxyPort) : {})

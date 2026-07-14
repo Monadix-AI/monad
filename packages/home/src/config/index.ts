@@ -269,9 +269,10 @@ export const sandboxConfigSchema = z.object({
       cpus: z.number().int().positive().default(2),
       // Attach a memory-balloon device + host-pressure reclaim so idle VMs release pages. Default on.
       balloon: z.boolean().default(true),
-      // Explicit vfkit / gvproxy binary paths (skip host detection + download).
+      // Explicit vfkit / gvproxy / winvm-helper binary paths (skip host detection + download).
       vfkitPath: z.string().optional(),
-      gvproxyPath: z.string().optional()
+      gvproxyPath: z.string().optional(),
+      winvmHelperPath: z.string().optional()
     })
     .optional(),
   // Heavy sandbox backend selector. 'auto' (default) uses the light OS launcher (Seatbelt /

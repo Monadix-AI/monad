@@ -43,10 +43,41 @@ function fakeFetch(body: unknown, ok = true): typeof fetch {
   return (async () => ({ ok, status: ok ? 200 : 500, json: async () => body })) as unknown as typeof fetch;
 }
 
-test('hostImageTarget picks applehv on darwin, qemu on linux', () => {
+test('hostImageTarget picks applehv on darwin, qemu on linux, hyperv on windows', () => {
   const t = hostImageTarget();
   if (process.platform === 'darwin') expect(t.platform).toBe('applehv');
   else if (process.platform === 'linux') expect(t.platform).toBe('qemu');
+  else if (process.platform === 'win32') {
+    expect(t.platform).toBe('hyperv');
+    expect(t.format).toBe('vhdx.zip');
+    expect(t.ext).toBe('.vhdx');
+  }
+});
+
+test('resolveImageArtifact pulls the hyperv vhdx.zip disk for a Windows target', async () => {
+  const HYPERV_STREAM = {
+    architectures: {
+      x86_64: {
+        artifacts: {
+          hyperv: {
+            formats: {
+              'vhdx.zip': { disk: { location: 'https://example/fcos-hyperv.x86_64.vhdx.zip', sha256: 'f00d' } }
+            }
+          }
+        }
+      }
+    }
+  };
+  const target: ImageTarget = {
+    arch: 'x86_64',
+    platform: 'hyperv',
+    format: 'vhdx.zip',
+    decompress: 'zip',
+    ext: '.vhdx'
+  };
+  const a = await resolveImageArtifact(target, fakeFetch(HYPERV_STREAM));
+  expect(a.location).toBe('https://example/fcos-hyperv.x86_64.vhdx.zip');
+  expect(a.sha256).toBe('f00d');
 });
 
 test('resolveImageArtifact pulls the qemu x86_64 qcow2.xz disk for a Linux target', async () => {

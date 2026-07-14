@@ -12,10 +12,15 @@
 import { type GuestEgressRules, guestNftables } from './net/gvproxy.ts';
 
 export interface MountSpec {
-  /** virtio-fs mountTag (w0, r0, …) passed to vfkit. */
+  /** virtio-fs mountTag (w0, r0, …) passed to vfkit, or the 9p share label on Windows. */
   tag: string;
-  /** Absolute guest path to mount it at (same as the host path so argv paths resolve unchanged). */
+  /** Absolute HOST path of the shared directory. On macOS/Linux it doubles as the guest mount point
+   *  (so argv paths resolve unchanged); on Windows the guest point is `guestPath`. */
   path: string;
+  /** Windows: the translated guest mount point (/mnt/<drive>/…). Unset on macOS/Linux. */
+  guestPath?: string;
+  /** Windows: host vsock port of this share's 9p server (exec=1024, net=1025, 9p from 1026). */
+  vsockPort?: number;
   readOnly: boolean;
 }
 
@@ -26,6 +31,12 @@ export interface IgnitionSpec {
   egress: GuestEgressRules;
   /** Guest env exported into the workload (proxy vars under filtered net). */
   env?: Record<string, string>;
+  /** Windows/Hyper-V only: mount over 9p-vsock units instead of virtio-fs mount units. */
+  mountTransport?: 'virtiofs' | '9p-vsock';
+  /** Windows/Hyper-V, net≠none: the gvforwarder binary (tap⇄vsock network forwarder) + the vsock
+   *  port its tunnel dials — the guest NIC is a tap into the host's gvproxy, not a real NIC. */
+  gvforwarderB64?: string;
+  netVsockPort?: number;
 }
 
 function b64(s: string): string {
@@ -77,6 +88,82 @@ function mountUnit(m: MountSpec): { name: string; enabled: boolean; contents: st
       `Options=${opts}`,
       '[Install]',
       'WantedBy=local-fs.target',
+      ''
+    ].join('\n')
+  };
+}
+
+/** Windows/Hyper-V: a oneshot unit that mounts one 9p-over-vsock share (winvm-helper's serve9p on
+ *  the host side) via the agent binary's mount9p mode. Ordered like the virtio-fs mount units:
+ *  before the firewall, which is before the exec agent — a workload never sees a half-mounted VM. */
+function mount9pUnit(m: MountSpec): { name: string; enabled: boolean; contents: string } {
+  if (m.vsockPort === undefined || m.guestPath === undefined) {
+    throw new Error(`ignition: 9p mount ${m.tag} needs vsockPort + guestPath`);
+  }
+  const ro = m.readOnly ? ' -ro' : '';
+  return {
+    name: `monad-9p-${m.tag}.service`,
+    enabled: true,
+    contents: [
+      '[Unit]',
+      `Description=monad 9p mount ${m.tag}`,
+      'DefaultDependencies=no',
+      'After=systemd-remount-fs.service',
+      'Before=local-fs.target monad-firewall.service',
+      '[Service]',
+      'Type=oneshot',
+      'RemainAfterExit=yes',
+      // The guest path is double-quoted: systemd splits ExecStart on whitespace, so an unquoted path
+      // with a space (e.g. C:\Users\First Last → /mnt/c/Users/First Last) would truncate -target AND
+      // push -ro past a positional token (Go's flag parser stops at the first non-flag), silently
+      // mounting a read-only root read-write. Windows filenames can't contain '"', so quoting is safe.
+      `ExecStart=/usr/local/bin/monad-vsock-agent mount9p${ro} -port ${m.vsockPort} -target "${m.guestPath}"`,
+      '[Install]',
+      'WantedBy=local-fs.target',
+      ''
+    ].join('\n')
+  };
+}
+
+// Windows/Hyper-V guest networking: the VM has NO real NIC — gvforwarder bridges a tap device to
+// the host's gvproxy over vsock (podman machine's hyperv shape). NetworkManager pre-creates the tap
+// from a keyfile (hence -preexisting) and DHCPs on it; gvproxy's static lease pins the guest to
+// 192.168.127.2 by this well-known MAC.
+const GVFORWARDER_MAC = '5A:94:EF:E4:0C:EE';
+
+function vsockNetKeyfile(): string {
+  return [
+    '[connection]',
+    'id=vsock0',
+    'type=tun',
+    'interface-name=vsock0',
+    '',
+    '[tun]',
+    'mode=2',
+    '',
+    '[802-3-ethernet]',
+    `cloned-mac-address=${GVFORWARDER_MAC}`,
+    '',
+    '[ipv4]',
+    'method=auto',
+    ''
+  ].join('\n');
+}
+
+function vsockNetUnit(netVsockPort: number): { name: string; enabled: boolean; contents: string } {
+  return {
+    name: 'monad-vsock-network.service',
+    enabled: true,
+    contents: [
+      '[Unit]',
+      'Description=monad vsock guest network (gvforwarder tap to host gvproxy)',
+      'After=NetworkManager.service',
+      '[Service]',
+      `ExecStart=/usr/local/bin/monad-gvforwarder -preexisting -iface vsock0 -url vsock://2:${netVsockPort}/connect`,
+      'ExecStartPost=/usr/bin/nmcli c up vsock0',
+      'Restart=always',
+      '[Install]',
+      'WantedBy=multi-user.target',
       ''
     ].join('\n')
   };
@@ -164,6 +251,20 @@ export function buildIgnition(spec: IgnitionSpec): IgnitionConfig {
     }
   ];
 
+  if (spec.gvforwarderB64) {
+    files.push({
+      path: '/usr/local/bin/monad-gvforwarder',
+      mode: 0o755,
+      contents: { source: `data:;base64,${spec.gvforwarderB64}` }
+    });
+    files.push({
+      // NetworkManager keyfiles are rejected unless root-owned 0600.
+      path: '/etc/NetworkManager/system-connections/vsock0.nmconnection',
+      mode: 0o600,
+      contents: { source: dataUri(vsockNetKeyfile()) }
+    });
+  }
+
   if (spec.env && Object.keys(spec.env).length > 0) {
     const envLines = Object.entries(spec.env)
       .map(([k, v]) => `${k}=${v}`)
@@ -179,8 +280,12 @@ export function buildIgnition(spec: IgnitionSpec): IgnitionConfig {
   const units: IgnitionConfig['systemd']['units'] = [
     firewallUnit(rulesPath),
     agentUnit(hasNic),
-    ...spec.mounts.map(mountUnit)
+    ...spec.mounts.map(spec.mountTransport === '9p-vsock' ? mount9pUnit : mountUnit)
   ];
+  if (spec.gvforwarderB64) {
+    if (spec.netVsockPort === undefined) throw new Error('ignition: gvforwarder needs netVsockPort');
+    units.push(vsockNetUnit(spec.netVsockPort));
+  }
 
   return {
     ignition: { version: '3.4.0' },

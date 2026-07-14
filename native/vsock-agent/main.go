@@ -63,6 +63,12 @@ const (
 )
 
 func main() {
+	// mount9p mode: mount a host 9p share served over vsock — the Hyper-V mount plane (no virtio-fs
+	// on Windows hosts). Run by a per-mount Ignition oneshot unit as root, before the exec agent
+	// starts. Same binary so the guest payload stays single-file.
+	if len(os.Args) > 1 && os.Args[1] == "mount9p" {
+		os.Exit(mount9p(os.Args[2:]))
+	}
 	fd, err := unix.Socket(unix.AF_VSOCK, unix.SOCK_STREAM, 0)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "vsock socket:", err)

@@ -29,37 +29,58 @@ export interface VmBundle {
   readonly efiVars: string;
   readonly ignition: string;
   readonly gvproxySock: string;
-  /** Host unix socket vfkit exposes for the guest's vsock exec port (the control plane). */
+  /** The host exec-channel endpoint: a unix socket (vfkit exposes it, socat bridges it on Linux) or
+   *  a named pipe on Windows (winvm-helper's execbridge; node dials pipe paths natively). */
   readonly vsockSock: string;
   readonly vfkitSock: string;
   readonly vfkitPid: string;
+  /** Windows: the Hyper-V VM name (WMI ElementName) this bundle boots as. */
+  readonly vmName: string;
+}
+
+function safeKey(key: string): string {
+  // Sanitize the key into a single path segment (agent/session ids are prefixed slugs; a policy
+  // fingerprint is hex — both safe, but guard against separators just in case).
+  return key.replace(/[^A-Za-z0-9_.-]/g, '_');
 }
 
 function bundleDir(key: string): string {
-  // Sanitize the key into a single path segment (agent/session ids are prefixed slugs; a policy
-  // fingerprint is hex — both safe, but guard against separators just in case).
-  const safe = key.replace(/[^A-Za-z0-9_.-]/g, '_');
-  return join(vmDir(), 'agents', safe);
+  return join(vmDir(), 'agents', safeKey(key));
 }
 
 export function describeBundle(key: string): VmBundle {
   const dir = bundleDir(key);
+  const win = process.platform === 'win32';
   return {
     key,
     dir,
-    rootfs: join(dir, 'rootfs.img'),
+    // Hyper-V refuses disks without a .vhdx extension; vfkit/QEMU don't care about .img.
+    rootfs: join(dir, win ? 'rootfs.vhdx' : 'rootfs.img'),
     efiVars: join(dir, 'efivars.fd'),
     ignition: join(dir, 'ignition.json'),
     gvproxySock: join(dir, 'gvproxy.sock'),
-    vsockSock: join(dir, 'vsock.sock'),
+    vsockSock: win ? `\\\\.\\pipe\\monad-vm-${safeKey(key)}` : join(dir, 'vsock.sock'),
     vfkitSock: join(dir, 'vfkit.sock'),
-    vfkitPid: join(dir, 'vfkit.pid')
+    vfkitPid: join(dir, 'vfkit.pid'),
+    vmName: `monad-${safeKey(key)}`
   };
 }
 
 /** APFS copy-on-write clone: instant + near-zero disk until the guest writes. Falls back to a plain
- *  copy on a non-APFS volume. */
+ *  copy on a non-APFS volume. On Windows the equivalent is a differencing VHDX (child references the
+ *  read-only base), created via PowerShell New-VHD; plain copy if that fails (e.g. no Hyper-V module). */
 async function cloneImage(base: string, dest: string): Promise<void> {
+  if (process.platform === 'win32') {
+    const diff = Bun.spawn(
+      ['powershell', '-NoProfile', '-Command', `New-VHD -Path '${dest}' -ParentPath '${base}' -Differencing`],
+      { stdout: 'ignore', stderr: 'pipe' }
+    );
+    if ((await diff.exited) === 0) return;
+    const { copyFile } = await import('node:fs/promises');
+    await copyFile(base, dest);
+    chmodSync(dest, 0o600);
+    return;
+  }
   const clone = Bun.spawn(['cp', '-c', base, dest], { stdout: 'ignore', stderr: 'pipe' });
   if ((await clone.exited) !== 0) {
     // -c (clonefile) unsupported on this filesystem — fall back to a regular copy.

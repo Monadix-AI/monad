@@ -323,7 +323,8 @@ async function configureVmBackendFromConfig(cfg: MonadConfig, paths?: MonadPaths
   configureVmToolchain({
     vmDir: paths ? join(paths.home, 'vm') : undefined,
     vfkitPath: vm?.vfkitPath,
-    gvproxyPath: vm?.gvproxyPath
+    gvproxyPath: vm?.gvproxyPath,
+    winvmHelperPath: vm?.winvmHelperPath
   });
   configureVmBackend({
     scope: vm?.scope ?? 'agent',

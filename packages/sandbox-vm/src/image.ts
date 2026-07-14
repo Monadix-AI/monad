@@ -22,18 +22,21 @@ const STREAM_URL = 'https://builds.coreos.fedoraproject.org/streams/stable.json'
  *  fixes the compression + output extension). */
 export interface ImageTarget {
   arch: 'aarch64' | 'x86_64';
-  platform: 'applehv' | 'qemu';
-  format: 'raw.gz' | 'qcow2.xz';
-  decompress: 'gzip' | 'xz';
-  ext: '.img' | '.qcow2';
+  platform: 'applehv' | 'qemu' | 'hyperv';
+  format: 'raw.gz' | 'qcow2.xz' | 'vhdx.zip';
+  decompress: 'gzip' | 'xz' | 'zip';
+  ext: '.img' | '.qcow2' | '.vhdx';
 }
 
-/** The image target for the current host OS + arch. */
+/** The image target for the current host OS + arch. CoreOS publishes a purpose-built artifact per
+ *  VMM platform: applehv raw (vfkit), qemu qcow2, and hyperv vhdx (both x86_64 and aarch64). */
 export function hostImageTarget(): ImageTarget {
   const arch = process.arch === 'x64' ? 'x86_64' : 'aarch64';
-  return process.platform === 'darwin'
-    ? { arch, platform: 'applehv', format: 'raw.gz', decompress: 'gzip', ext: '.img' }
-    : { arch, platform: 'qemu', format: 'qcow2.xz', decompress: 'xz', ext: '.qcow2' };
+  if (process.platform === 'darwin')
+    return { arch, platform: 'applehv', format: 'raw.gz', decompress: 'gzip', ext: '.img' };
+  if (process.platform === 'win32')
+    return { arch, platform: 'hyperv', format: 'vhdx.zip', decompress: 'zip', ext: '.vhdx' };
+  return { arch, platform: 'qemu', format: 'qcow2.xz', decompress: 'xz', ext: '.qcow2' };
 }
 
 export interface ImageArtifact {
@@ -80,6 +83,38 @@ export function imagesDir(): string {
   return join(vmDir(), 'images');
 }
 
+/** Decompress `src` into `dest` with the host's system tool, streaming (never a multi-GB in-memory
+ *  buffer). gzip/xz use the POSIX tools (mac/linux hosts); zip (the hyperv vhdx) is extracted with
+ *  bsdtar — `tar.exe` ships with Windows 10 1803+ and reads zip archives; `-xOf` streams the entry
+ *  to stdout so we never need an extraction directory. */
+async function decompressTo(kind: ImageTarget['decompress'], src: string, dest: string): Promise<void> {
+  if (kind === 'zip') {
+    // `tar -xO` streams EVERY archive member concatenated — if the zip ever ships a sidecar
+    // (checksum/README) alongside the vhdx, the output would be a corrupt disk. Assert a single
+    // member first so that failure is loud, not a silently-broken image.
+    const list = Bun.spawn(['tar', '-tf', src], { stdout: 'pipe', stderr: 'pipe' });
+    const names = (await new Response(list.stdout).text()).split('\n').filter((l) => l.trim() !== '');
+    if ((await list.exited) !== 0) {
+      throw new Error(`vm image: cannot list zip members: ${await new Response(list.stderr).text()}`);
+    }
+    if (names.length !== 1) {
+      throw new Error(`vm image: expected exactly one member in ${src}, found ${names.length}: ${names.join(', ')}`);
+    }
+    const dec = Bun.spawn(['tar', '-xOf', src], { stdout: Bun.file(dest), stderr: 'pipe' });
+    if ((await dec.exited) !== 0) {
+      throw new Error(`vm image: decompress failed: ${await new Response(dec.stderr).text()}`);
+    }
+    return;
+  }
+  const dec = Bun.spawn(
+    ['sh', '-c', `${kind === 'xz' ? 'unxz -c' : 'gunzip -c'} ${JSON.stringify(src)} > ${JSON.stringify(dest)}`],
+    { stdout: 'ignore', stderr: 'pipe' }
+  );
+  if ((await dec.exited) !== 0) {
+    throw new Error(`vm image: decompress failed: ${await new Response(dec.stderr).text()}`);
+  }
+}
+
 /** Called before a first download; returns true to proceed. The daemon wires this to a user prompt. */
 export type ImageConsent = (info: { url: string; sha256: string; dest: string }) => Promise<boolean>;
 
@@ -122,15 +157,7 @@ export async function ensureBaseImage(consent: ImageConsent, fetchImpl: typeof f
 
   // Decompress with the system tool (streams; no full in-memory buffer of a multi-GB disk).
   const rawPartial = `${dest}.partial`;
-  const tool = target.decompress === 'xz' ? 'unxz -c' : 'gunzip -c';
-  const dec = Bun.spawn(['sh', '-c', `${tool} ${JSON.stringify(cprPath)} > ${JSON.stringify(rawPartial)}`], {
-    stdout: 'ignore',
-    stderr: 'pipe'
-  });
-  if ((await dec.exited) !== 0) {
-    const err = await new Response(dec.stderr).text();
-    throw new Error(`vm image: decompress failed: ${err}`);
-  }
+  await decompressTo(target.decompress, cprPath, rawPartial);
 
   if (artifact.uncompressedSha256) {
     const gotRaw = await sha256OfFile(rawPartial);

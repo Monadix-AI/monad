@@ -12,7 +12,9 @@ import type { SandboxProcess } from '@monad/sdk-atom';
 import { connect } from 'node:net';
 
 export interface VsockExecSpec {
-  /** Host unix socket vfkit exposes for the guest's vsock exec port. */
+  /** The host endpoint bridging to the guest's vsock exec port: a unix socket (vfkit exposes it
+   *  directly on macOS; socat bridges it on Linux) or a named pipe `\\.\pipe\…` (winvm-helper
+   *  bridges hvsock on Windows — node's connect(path) dials pipes there natively). */
   socketPath: string;
   cwd?: string;
   env?: Record<string, string | undefined>;
@@ -96,7 +98,7 @@ export interface VsockReadinessOptions {
 export async function waitForVsock(spec: VsockExecSpec, options: VsockReadinessOptions = {}): Promise<void> {
   const timeoutMs = options.timeoutMs ?? 120_000;
   const intervalMs = options.intervalMs ?? 500;
-  const probe = options.probe ?? (() => probeOnce(spec.socketPath));
+  const probe = options.probe ?? (() => probeOnce(spec));
   const deadline = Date.now() + timeoutMs;
   while (Date.now() <= deadline) {
     if (await probe().catch(() => false)) return;
@@ -107,8 +109,8 @@ export async function waitForVsock(spec: VsockExecSpec, options: VsockReadinessO
 }
 
 /** One readiness probe: run `true` in the guest via vsock, bounded by a short timeout. */
-async function probeOnce(socketPath: string): Promise<boolean> {
-  const proc = vsockExec(['true'], { socketPath });
+async function probeOnce(spec: VsockExecSpec): Promise<boolean> {
+  const proc = vsockExec(['true'], { socketPath: spec.socketPath });
   const timeout = new Promise<number>((resolve) => setTimeout(() => resolve(-1), 4000));
   const code = await Promise.race([proc.exited, timeout]);
   if (code !== 0) proc.kill();

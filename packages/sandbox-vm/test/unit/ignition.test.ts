@@ -75,3 +75,97 @@ test('each mount becomes a virtiofs .mount unit ordered before the firewall', ()
   expect(unit?.contents).toContain('Type=virtiofs');
   expect(unit?.contents).toContain('Options=rw,nofail');
 });
+
+// ── Windows / Hyper-V variants ────────────────────────────────────────────────────────────────────
+
+const WIN_MOUNT = {
+  tag: 'w0',
+  path: 'C:\\Users\\z\\proj',
+  guestPath: '/mnt/c/Users/z/proj',
+  vsockPort: 1026,
+  readOnly: false
+};
+
+test('9p-vsock transport emits mount9p oneshot units ordered before the firewall', () => {
+  const cfg = buildIgnition({
+    agentBinaryB64: 'QQ==',
+    mounts: [WIN_MOUNT, { ...WIN_MOUNT, tag: 'r0', vsockPort: 1027, readOnly: true }],
+    egress: { mode: 'none' },
+    mountTransport: '9p-vsock'
+  });
+  const w0 = cfg.systemd.units.find((u) => u.name === 'monad-9p-w0.service');
+  // guest path is double-quoted so a space in the path can't truncate -target or drop -ro
+  expect(w0?.contents).toContain(
+    'ExecStart=/usr/local/bin/monad-vsock-agent mount9p -port 1026 -target "/mnt/c/Users/z/proj"'
+  );
+  expect(w0?.contents).toContain('Before=local-fs.target monad-firewall.service');
+  expect(w0?.contents).not.toContain(' -ro');
+  const r0 = cfg.systemd.units.find((u) => u.name === 'monad-9p-r0.service');
+  expect(r0?.contents).toContain('-port 1027');
+  expect(r0?.contents).toContain('mount9p -ro -port 1027 -target "/mnt/c/Users/z/proj"');
+  // no virtio-fs mount units on the 9p transport
+  expect(cfg.systemd.units.some((u) => u.name.endsWith('.mount'))).toBe(false);
+});
+
+test('mount9p quotes the guest path so a space cannot truncate -target or drop -ro', () => {
+  const cfg = buildIgnition({
+    agentBinaryB64: 'QQ==',
+    mounts: [
+      {
+        tag: 'r0',
+        path: 'C:\\Users\\First Last\\proj',
+        guestPath: '/mnt/c/Users/First Last/proj',
+        vsockPort: 1026,
+        readOnly: true
+      }
+    ],
+    egress: { mode: 'none' },
+    mountTransport: '9p-vsock'
+  });
+  const unit = cfg.systemd.units.find((u) => u.name === 'monad-9p-r0.service');
+  // -ro precedes the quoted path; the space stays inside the quotes so systemd keeps it one arg
+  expect(unit?.contents).toContain('mount9p -ro -port 1026 -target "/mnt/c/Users/First Last/proj"');
+});
+
+test('a 9p mount without port/guestPath fails closed (never boot a VM missing a policy root)', () => {
+  expect(() =>
+    buildIgnition({
+      agentBinaryB64: 'QQ==',
+      mounts: [{ tag: 'w0', path: 'C:\\proj', readOnly: false }],
+      egress: { mode: 'none' },
+      mountTransport: '9p-vsock'
+    })
+  ).toThrow(/vsockPort/);
+});
+
+test('gvforwarder plane: binary + 0600 NM keyfile + tap unit dialing the net vsock port', () => {
+  const cfg = buildIgnition({
+    agentBinaryB64: 'QQ==',
+    mounts: [],
+    egress: { mode: 'filtered', proxyPort: 8080 },
+    mountTransport: '9p-vsock',
+    gvforwarderB64: 'R1Y=',
+    netVsockPort: 1025
+  });
+  const files = cfg.storage.files as IgnFile[];
+  const fwd = files.find((f) => f.path === '/usr/local/bin/monad-gvforwarder');
+  expect(fwd?.contents?.source).toBe('data:;base64,R1Y=');
+  const keyfile = files.find((f) => f.path === '/etc/NetworkManager/system-connections/vsock0.nmconnection');
+  expect((keyfile as { mode?: number })?.mode).toBe(0o600); // NM rejects world-readable keyfiles
+  expect(decodeDataUri((keyfile as IgnFile).contents?.source ?? '')).toContain('interface-name=vsock0');
+  const unit = cfg.systemd.units.find((u) => u.name === 'monad-vsock-network.service');
+  expect(unit?.contents).toContain('-url vsock://2:1025/connect');
+  expect(unit?.contents).toContain('ExecStartPost=/usr/bin/nmcli c up vsock0');
+});
+
+test('net:none on Windows has NO gvforwarder plane at all (vsock exec/9p need no NIC)', () => {
+  const cfg = buildIgnition({
+    agentBinaryB64: 'QQ==',
+    mounts: [],
+    egress: { mode: 'none' },
+    mountTransport: '9p-vsock'
+  });
+  const files = cfg.storage.files as IgnFile[];
+  expect(files.some((f) => f.path === '/usr/local/bin/monad-gvforwarder')).toBe(false);
+  expect(cfg.systemd.units.some((u) => u.name === 'monad-vsock-network.service')).toBe(false);
+});

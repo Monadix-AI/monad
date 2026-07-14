@@ -4,6 +4,9 @@
 //     bundle them) or download the pinned release, verifying the virtualization entitlement + sha256.
 //   • Linux → qemu-system-<arch> (user-installed, too large to vendor) + gvproxy + virtiofsd + socat
 //     + an OVMF/edk2 firmware, all detected from the host; plus a /dev/kvm probe.
+//   • Windows → winvm-helper (our vendored Go binary: Hyper-V lifecycle over WMI, KVP Ignition
+//     injection, hvsock⇄TCP exec bridge, 9p-over-hvsock file server) + gvproxy-windows. Hyper-V
+//     itself (Pro/Enterprise/Education) is probed by the helper in prepare().
 //
 // Downloaded pins are hard-coded (version + sha256); a mismatch fails closed rather than running an
 // unknown binary. Regenerate with scripts/pin-vm-toolchain.ts when bumping a version.
@@ -22,6 +25,8 @@ export interface VmToolchainConfig {
   vfkitPath?: string;
   /** Explicit gvproxy path override. */
   gvproxyPath?: string;
+  /** Windows: explicit winvm-helper path override (skips the vendored binary). */
+  winvmHelperPath?: string;
 }
 
 let config: VmToolchainConfig = {};
@@ -82,10 +87,24 @@ const GVPROXY_PINS: Record<string, ToolPin> = {
     url: `${GVPROXY_BASE}/gvproxy-linux-amd64`,
     sha256: '3011c5629c9138d2050fb23c510e09ae53e30ec52e6a9ab85632bc1550e8ef63',
     needsEntitlement: false
+  },
+  // The console-subsystem builds (`make cross`), not the -windowsgui ones — we own the process
+  // lifecycle and want stderr; gvproxy on Windows is stopped via winquit/taskkill, not signals.
+  'win32-x64': {
+    version: 'v0.8.9',
+    url: `${GVPROXY_BASE}/gvproxy-windows.exe`,
+    sha256: 'a3b6915d8a976f5ed2bbba727af52c90c55b9d5e85f680b584c8a1c5d6b546bc',
+    needsEntitlement: false
+  },
+  'win32-arm64': {
+    version: 'v0.8.9',
+    url: `${GVPROXY_BASE}/gvproxy-windows-arm64.exe`,
+    sha256: 'a00867aaf0a6694877d3261d0c8e6df5dcfe8eec2fb4b81a084d2bf7a65d7ae8',
+    needsEntitlement: false
   }
 };
 function gvproxyPin(): ToolPin {
-  const key = process.platform === 'darwin' ? 'darwin-*' : `linux-${process.arch}`;
+  const key = process.platform === 'darwin' ? 'darwin-*' : `${process.platform}-${process.arch}`;
   const pin = GVPROXY_PINS[key];
   if (!pin) throw new Error(`vm toolchain: no gvproxy pin for ${process.platform}/${process.arch}`);
   return pin;
@@ -165,10 +184,7 @@ async function vfkitUsable(path: string): Promise<boolean> {
   return hasVirtualizationEntitlement(path);
 }
 
-async function detectHostTool(
-  binName: 'vfkit' | 'gvproxy',
-  validate: (p: string) => Promise<boolean>
-): Promise<string | null> {
+async function detectHostTool(binName: string, validate: (p: string) => Promise<boolean>): Promise<string | null> {
   for (const root of detectRoots()) {
     const candidate = join(root, binName);
     if (existsSync(candidate) && (await validate(candidate))) return candidate;
@@ -210,7 +226,7 @@ async function adhocSignWithEntitlement(path: string): Promise<void> {
 }
 
 async function resolveTool(
-  binName: 'vfkit' | 'gvproxy',
+  binName: string,
   pin: ToolPin,
   override: string | undefined,
   validateHost: (p: string) => Promise<boolean>
@@ -235,8 +251,9 @@ async function resolveTool(
     throw new Error(`vm toolchain: ${binName} sha256 mismatch (pinned ${pin.sha256}, got ${got}) — refusing to run`);
   }
   chmodSync(dest, 0o755);
-  // Strip the download quarantine so the binary runs without a Gatekeeper prompt.
-  await stripQuarantine(dest);
+  // Strip the download quarantine so the binary runs without a Gatekeeper prompt (macOS only —
+  // `xattr` does not exist elsewhere and Bun.spawn throws synchronously on a missing executable).
+  if (process.platform === 'darwin') await stripQuarantine(dest);
   // The crc-org release ships signed WITH the virtualization entitlement, so normally no re-sign is
   // needed — only adhoc re-sign (replacing the upstream signature) if the entitlement is somehow
   // absent, so we never run vfkit without it.
@@ -311,7 +328,8 @@ function kvmAvailable(): boolean {
 const QEMU_BIN = process.arch === 'x64' ? 'qemu-system-x86_64' : 'qemu-system-aarch64';
 
 export interface ResolvedToolchain {
-  /** The hypervisor binary: vfkit on macOS, qemu-system-<arch> on Linux. */
+  /** The hypervisor front-end: vfkit on macOS, qemu-system-<arch> on Linux, winvm-helper on Windows
+   *  (Hyper-V is the hypervisor; the helper is our WMI/hvsock/9p front-end to it). */
   hypervisor: string;
   gvproxy: string;
   /** Linux only: virtio-fs daemon, vsock bridge, EFI firmware (code + vars template). */
@@ -328,7 +346,12 @@ let cached: ResolvedToolchain | null = null;
  *  the launcher's prepare(); throws if a required tool can't be made available. */
 export async function resolveVmToolchain(): Promise<ResolvedToolchain> {
   if (cached) return cached;
-  cached = process.platform === 'darwin' ? await resolveDarwin() : await resolveLinux();
+  cached =
+    process.platform === 'darwin'
+      ? await resolveDarwin()
+      : process.platform === 'win32'
+        ? await resolveWindows()
+        : await resolveLinux();
   return cached;
 }
 
@@ -354,8 +377,33 @@ async function resolveLinux(): Promise<ResolvedToolchain> {
   return { hypervisor: qemu, gvproxy, virtiofsd, socat, firmware, kvm: kvmAvailable() };
 }
 
+// ── Windows (Hyper-V) toolchain detection ───────────────────────────────────────────────────────
+// The host plane is winvm-helper, our vendored Go binary (Bun has no AF_HYPERV or WMI access):
+// VM lifecycle via WMI (libhvee), Ignition over KVP, an hvsock⇄TCP bridge for the exec channel, and
+// a 9p-over-hvsock file server for mounts. Hyper-V itself (Pro/Enterprise/Education, one-time
+// elevated setup) is probed by the helper in prepare(); here we only locate binaries.
+
+const WINVM_HELPER_ARCH = process.arch === 'x64' ? 'amd64' : 'arm64';
+
+/** The vendored winvm-helper (next to the package, like the guest vsock agents). */
+export function vendoredWinvmHelper(): string {
+  return join(dirname(import.meta.dir), 'vendor', `winvm-helper-${WINVM_HELPER_ARCH}.exe`);
+}
+
+async function resolveWindows(): Promise<ResolvedToolchain> {
+  const helper = config.winvmHelperPath ?? vendoredWinvmHelper();
+  if (!existsSync(helper)) {
+    throw new Error(
+      `vm toolchain: winvm-helper not found at ${helper} — run scripts/build-winvm-helper.sh (requires Go) or set sandbox.vm.winvmHelperPath`
+    );
+  }
+  const gvproxy = config.gvproxyPath ?? (await resolveTool('gvproxy.exe', gvproxyPin(), undefined, gvproxyUsable));
+  return { hypervisor: helper, gvproxy };
+}
+
 /** Sync availability probe for isAvailable(): the host looks capable of running the backend. The
- *  authoritative check (entitlement/sha on mac, real tool resolution on Linux) runs in prepare(). */
+ *  authoritative check (entitlement/sha on mac, real tool resolution on Linux, Hyper-V probe on
+ *  Windows) runs in prepare(). */
 export function vmToolchainMaybeAvailable(): boolean {
   if (cached) return true;
   if (process.platform === 'darwin') {
@@ -366,6 +414,10 @@ export function vmToolchainMaybeAvailable(): boolean {
   if (process.platform === 'linux') {
     // Needs KVM + QEMU at minimum; the rest is checked authoritatively in prepare().
     return kvmAvailable() && findLinuxBin(QEMU_BIN) !== null;
+  }
+  if (process.platform === 'win32') {
+    // The helper must be present; whether Hyper-V is enabled is the helper's probe in prepare().
+    return existsSync(config.winvmHelperPath ?? vendoredWinvmHelper());
   }
   return false;
 }

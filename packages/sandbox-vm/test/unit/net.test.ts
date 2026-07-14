@@ -12,7 +12,9 @@ test('gvproxy argv: vfkit transport uses -listen-vfkit unixgram (macOS)', () => 
   const argv = gvproxyArgv({ gvproxyBin: '/bin/gvproxy', netSock: '/t/net.sock', transport: 'vfkit' });
   const j = argv.join(' ');
   expect(j).toContain('-listen-vfkit unixgram:///t/net.sock');
-  expect(j).not.toContain('-ssh-port'); // egress netstack only; exec is vsock
+  // gvproxy's DEFAULT is a host-loopback ssh forward on 2222 — it must be disabled or two VMs'
+  // gvproxies collide on the port (exec is vsock; nothing uses ssh).
+  expect(j).toContain('-ssh-port -1');
 });
 
 test('gvproxy argv: qemu transport uses -listen-qemu unix (Linux)', () => {
@@ -20,6 +22,15 @@ test('gvproxy argv: qemu transport uses -listen-qemu unix (Linux)', () => {
   const j = argv.join(' ');
   expect(j).toContain('-listen-qemu unix:///t/net.sock');
   expect(j).not.toContain('-listen-vfkit');
+});
+
+test('gvproxy argv: hyperv transport serves the /connect tunnel on a plain unix listener (Windows)', () => {
+  const argv = gvproxyArgv({ gvproxyBin: '/bin/gvproxy', netSock: '/t/net.sock', transport: 'hyperv' });
+  const j = argv.join(' ');
+  expect(j).toContain('-listen unix:///t/net.sock');
+  expect(j).not.toContain('-listen-qemu');
+  expect(j).not.toContain('-listen-vfkit');
+  expect(j).toContain('-ssh-port -1');
 });
 
 test('net:none nftables drops everything but loopback', () => {
