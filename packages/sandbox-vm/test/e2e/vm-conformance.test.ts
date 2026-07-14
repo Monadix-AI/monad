@@ -209,6 +209,95 @@ describe.skipIf(!ENABLED)('net:none confinement (fs escape, credential, privileg
     expect(existsSync(survived)).toBe(false);
   }, 600_000);
 
+  test('PTY cancellation terminates descendants before they can mutate the host mount', async () => {
+    const ready = join(ws, 'pty-cancel-ready');
+    const survived = join(ws, 'pty-descendant-survived');
+    const proc = spawn(
+      [
+        'sh',
+        '-c',
+        `stty -echo; touch ${guestArg(ready)}; ` + `(sleep 2; echo survived > ${guestArg(survived)}) & read line; wait`
+      ],
+      NET,
+      AGENT,
+      { limits: { terminateGraceMs: 500 }, terminal: { cols: 80, rows: 24 } }
+    );
+    const output = drain(proc.stdout);
+    await waitForHostFile(ready);
+
+    proc.kill('SIGTERM');
+
+    expect(await proc.exit).toEqual({ code: null, signal: 15 });
+    await output;
+    await Bun.sleep(2500);
+    expect(existsSync(survived)).toBe(false);
+  }, 600_000);
+
+  test('overlapping writable parent and readable child do not re-expose deny or mask targets', async () => {
+    const child = join(ws, 'overlap-child');
+    const denied = join(child, '.ssh');
+    const real = join(child, '.credentials');
+    const fakeStore = join(ws, '.overlap-mask-store');
+    const fake = join(fakeStore, 'empty');
+    await Promise.all([mkdir(denied, { recursive: true }), mkdir(fakeStore, { recursive: true })]);
+    await Promise.all([
+      writeFile(join(denied, 'id_ed25519'), 'OVERLAP_PRIVATE_KEY'),
+      writeFile(real, 'OVERLAP_REAL_CREDENTIAL'),
+      writeFile(fake, 'OVERLAP_MASKED')
+    ]);
+    const policy: Policy = {
+      writableRoots: [ws],
+      readableRoots: [child],
+      readDenyRoots: [denied],
+      maskedFiles: [{ real, fake }],
+      net: 'none'
+    };
+
+    const result = await sh(
+      `cat ${guestArg(join(denied, 'id_ed25519'))} 2>/dev/null || echo DENIED; ` +
+        `printf 'MASK='; cat ${guestArg(real)}`,
+      policy,
+      AGENT
+    );
+
+    expect(result.stdout).toContain('DENIED');
+    expect(result.stdout).toContain('MASK=OVERLAP_MASKED');
+    expect(result.stdout).not.toContain('OVERLAP_PRIVATE_KEY');
+    expect(result.stdout).not.toContain('OVERLAP_REAL_CREDENTIAL');
+  }, 600_000);
+
+  test('concurrent runs in one reused VM cannot observe each other process state or private tmpfs', async () => {
+    const ready = join(ws, 'concurrent-ready');
+    const release = join(ws, 'concurrent-release');
+    const runA = spawn(
+      [
+        'sh',
+        '-c',
+        `echo RUN_A_ONLY >/tmp/concurrent-secret; touch ${guestArg(ready)}; ` +
+          `while [ ! -e ${guestArg(release)} ]; do sleep 0.05; done`
+      ],
+      NET,
+      AGENT
+    );
+    const runAOutput = Promise.all([drain(runA.stdout), drain(runA.stderr)]);
+    try {
+      await waitForHostFile(ready);
+      const runB = await sh(
+        `test ! -e /tmp/concurrent-secret; echo "TMP=$?"; ` +
+          `for p in /proc/[0-9]*/cmdline; do tr '\\0' ' ' <"$p" 2>/dev/null; done`,
+        NET,
+        AGENT
+      );
+
+      expect(runB.stdout).toContain('TMP=0');
+      expect(runB.stdout).not.toContain('RUN_A_ONLY');
+    } finally {
+      await writeFile(release, 'release');
+      await runA.exited;
+      await runAOutput;
+    }
+  }, 600_000);
+
   test('each run has a fresh PID namespace and private tmpfs', async () => {
     const firstPid = await sh('echo $$; echo secret >/tmp/only-first-run', NET, AGENT);
     const second = await sh('echo $$; test ! -e /tmp/only-first-run; echo "TMP=$?"', NET, AGENT);
