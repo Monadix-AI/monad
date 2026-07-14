@@ -1,3 +1,7 @@
+import type { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite';
+import type { MigrationMeta } from 'drizzle-orm/migrator';
+import type { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core';
+
 import { Database } from 'bun:sqlite';
 import { expect, test } from 'bun:test';
 import { createHash } from 'node:crypto';
@@ -24,6 +28,7 @@ interface MigrationEntry {
 }
 
 const drizzleDir = new URL('../../../drizzle/', import.meta.url);
+const migrationConfig = { migrationsFolder: '<embedded-test>' };
 const partialIndexes = [
   'idx_acp_delegates_live',
   'idx_external_agent_sessions_live',
@@ -37,6 +42,14 @@ function loadJournal(): MigrationJournal {
 
 function migrateSqlite(sqlite: Database): void {
   migrate(drizzle(sqlite));
+}
+
+function migrateWith(db: BunSQLiteDatabase, migrations: MigrationMeta[]): void {
+  const migrationDb = db as BunSQLiteDatabase & {
+    readonly dialect: SQLiteSyncDialect;
+    readonly session: Parameters<SQLiteSyncDialect['migrate']>[1];
+  };
+  migrationDb.dialect.migrate(migrations, migrationDb.session, migrationConfig);
 }
 
 function ftsRowIds(sqlite: Database, table: 'messages_fts' | 'messages_fts_trigram', query: string): number[] {
@@ -205,4 +218,21 @@ test('runtime migrator applies the custom FTS migration and stays idempotent', (
     loadJournal().entries.length
   );
   expect((sqlite.prepare('SELECT COUNT(*) AS count FROM usage_ledger').get() as { count: number }).count).toBe(1);
+});
+
+test('custom FTS migration rebuilds indexes for rows created after the regular schema migration', () => {
+  const sqlite = new Database(':memory:');
+  const db = drizzle(sqlite);
+  migrateWith(db, MIGRATIONS.slice(0, 1));
+
+  sqlite.exec(`
+    INSERT INTO messages (id, transcript_target_id, role, text, created_at)
+    VALUES ('pre-fts-message', 'session-1', 'user', 'boundarytoken', '2026-07-14T00:00:00.000Z');
+  `);
+
+  migrateWith(db, MIGRATIONS);
+
+  for (const table of ['messages_fts', 'messages_fts_trigram'] as const) {
+    expect(ftsRowIds(sqlite, table, 'boundarytoken')).toHaveLength(1);
+  }
 });
