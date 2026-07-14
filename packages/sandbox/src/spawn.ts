@@ -33,7 +33,7 @@ export interface SandboxPtySpawnOptions {
   terminal: {
     cols?: number;
     rows?: number;
-    data(terminal: SandboxTerminal, data: Uint8Array): void;
+    data(terminal: unknown, data: Uint8Array): void;
   };
 }
 

@@ -314,44 +314,41 @@ export function startPtyProcess(
   const decoder = new TextDecoder();
   let pendingCR = false;
   const policy = buildSandboxPolicy(ctx.sandboxRoots, [], ctx.sessionId, ctx.agentId);
-  const proc = supervisedSpawn(
-    shellArgv(command),
-    {
-      cwd: dir,
-      detached: true,
-      terminal: {
-        cols: options.cols ?? 80,
-        rows: options.rows ?? 24,
-        data(_terminal, data) {
-          let text = decoder.decode(data);
-          if (pendingCR) text = `\r${text}`;
-          pendingCR = text.endsWith('\r');
-          if (pendingCR) text = text.slice(0, -1);
-          text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-          if (text) onData(text);
-        }
+  const spawnOptions = {
+    cwd: dir,
+    detached: true,
+    terminal: {
+      cols: options.cols ?? 80,
+      rows: options.rows ?? 24,
+      data(_terminal: unknown, data: Uint8Array) {
+        let text = decoder.decode(data);
+        if (pendingCR) text = `\r${text}`;
+        pendingCR = text.endsWith('\r');
+        if (pendingCR) text = text.slice(0, -1);
+        text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+        if (text) onData(text);
       }
-    },
-    {
-      ...daemonTrackedSpawnOptions({
-        event: 'tool.process_spawn',
-        log,
-        context: { sessionId: ctx.sessionId, mode: 'pty' },
-        kill: (child, signal) => signalTree(child as Sub, signal as ProcessSignal),
-        trackLabel: 'tool:shell_exec:background',
-        tracker: daemonChildProcesses,
-        timeout: processTimeout(options.maxRuntimeMs),
-        abortSignal: options.signal,
-        abortKillSignal: 'SIGTERM'
-      }),
-      successLogLevel: 'trace',
-      spawn: ((argv, options) =>
-        sandboxedPtySpawn(argv, options as Parameters<typeof sandboxedPtySpawn>[1], policy, {
-          sessionId: ctx.sessionId,
-          agentId: ctx.agentId
-        })) as typeof Bun.spawn
     }
-  );
+  } satisfies Parameters<typeof sandboxedPtySpawn>[1];
+  const proc = supervisedSpawn(shellArgv(command), spawnOptions, {
+    ...daemonTrackedSpawnOptions({
+      event: 'tool.process_spawn',
+      log,
+      context: { sessionId: ctx.sessionId, mode: 'pty' },
+      kill: (child, signal) => signalTree(child as Sub, signal as ProcessSignal),
+      trackLabel: 'tool:shell_exec:background',
+      tracker: daemonChildProcesses,
+      timeout: processTimeout(options.maxRuntimeMs),
+      abortSignal: options.signal,
+      abortKillSignal: 'SIGTERM'
+    }),
+    successLogLevel: 'trace',
+    spawn: (argv) =>
+      sandboxedPtySpawn(argv, spawnOptions, policy, {
+        sessionId: ctx.sessionId,
+        agentId: ctx.agentId
+      })
+  });
   if (!proc.terminal) throw new ToolSecurityError('failed to start pty terminal');
   void proc.exited.then(() => {
     if (pendingCR) onData('\n');
