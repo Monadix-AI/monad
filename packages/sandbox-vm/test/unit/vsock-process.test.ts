@@ -11,7 +11,7 @@ import {
   HostFrameKind,
   MAX_STREAM_FRAME_BYTES
 } from '../../src/exec/protocol.ts';
-import { vsockExec } from '../../src/exec/vsock.ts';
+import { bridgeAsyncProcess, vsockExec } from '../../src/exec/vsock.ts';
 
 const cleanups: Array<() => void> = [];
 
@@ -77,4 +77,22 @@ test('stdin writes are chunked to the protocol stream limit', async () => {
 
   expect(await proc.exited).toBe(0);
   expect(sizes).toEqual([MAX_STREAM_FRAME_BYTES, 1]);
+});
+
+test('the async bridge rejects queued stdin when process startup fails', async () => {
+  const proc = bridgeAsyncProcess(async () => {
+    await Bun.sleep(5);
+    throw new Error('start failed');
+  });
+  const write = proc.stdin?.write('queued');
+  const outcome = Promise.race([
+    Promise.resolve(write).then(
+      () => 'resolved',
+      (error) => (error as Error).message
+    ),
+    Bun.sleep(50).then(() => 'timeout')
+  ]);
+
+  await expect(proc.exited).rejects.toThrow('start failed');
+  expect(await outcome).toBe('start failed');
 });

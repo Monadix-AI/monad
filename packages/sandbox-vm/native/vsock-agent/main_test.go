@@ -51,3 +51,10 @@ func TestManagedRunTerminateStopsProcessGroup(t *testing.T) {
 		t.Fatal("process group survived termination")
 	}
 }
+
+func TestHandleControlRejectsUnknownFrames(t *testing.T) {
+	err := handleControl(&managedRun{}, &frameWriter{w: &bytes.Buffer{}}, wireFrame{Kind: 99})
+	if err == nil || !strings.Contains(err.Error(), "unsupported") {
+		t.Fatalf("expected unsupported-frame error, got %v", err)
+	}
+}

@@ -146,7 +146,12 @@ func serveConnection(conn io.ReadWriteCloser) {
 				<-run.done
 				return
 			}
-			handleControl(run, writer, frame)
+			if err := handleControl(run, writer, frame); err != nil {
+				writer.json(frameError, map[string]string{"message": err.Error()})
+				run.terminate(grace)
+				<-run.done
+				return
+			}
 		}
 	}
 }
@@ -164,24 +169,32 @@ func validateStart(req startRequest) error {
 	return nil
 }
 
-func handleControl(run *managedRun, writer *frameWriter, frame wireFrame) {
+func handleControl(run *managedRun, writer *frameWriter, frame wireFrame) error {
 	switch frame.Kind {
 	case frameStdin:
 		if run.stdin != nil {
-			run.stdin.Write(frame.Payload)
+			if _, err := run.stdin.Write(frame.Payload); err != nil {
+				return err
+			}
 		}
 	case frameCloseStdin:
 		if run.stdin != nil {
-			run.stdin.Close()
+			if err := run.stdin.Close(); err != nil {
+				return err
+			}
 		}
 	case frameSignal:
 		var req signalRequest
-		if json.Unmarshal(frame.Payload, &req) == nil && req.Signal >= 1 && req.Signal <= 64 {
-			run.signal(syscall.Signal(req.Signal))
+		if json.Unmarshal(frame.Payload, &req) != nil || req.Signal < 1 || req.Signal > 64 {
+			return fmt.Errorf("invalid signal frame")
 		}
+		run.signal(syscall.Signal(req.Signal))
 	case frameResize:
-		writer.json(frameUnsupported, map[string]string{"operation": "resize"})
+		return writer.json(frameUnsupported, map[string]string{"operation": "resize"})
+	default:
+		return fmt.Errorf("unsupported control frame %d", frame.Kind)
 	}
+	return nil
 }
 
 func commandFor(req startRequest) (*exec.Cmd, io.ReadCloser, error) {

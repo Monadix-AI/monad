@@ -217,9 +217,13 @@ export function bridgeAsyncProcess(start: () => Promise<SandboxProcess>, onFinal
   const stdoutTransform = new TransformStream<Uint8Array, Uint8Array>();
   const stderrTransform = new TransformStream<Uint8Array, Uint8Array>();
   let child: SandboxProcess | null = null;
+  let stdinReady = false;
   let killRequested = false;
   let killSignal: number | string | undefined;
-  const stdinOperations: Array<(process: SandboxProcess) => Promise<void>> = [];
+  const stdinOperations: Array<{
+    run(process: SandboxProcess): Promise<void>;
+    reject(reason: unknown): void;
+  }> = [];
 
   let resolveExit!: (value: SandboxExit) => void;
   let rejectExit!: (reason: unknown) => void;
@@ -227,11 +231,15 @@ export function bridgeAsyncProcess(start: () => Promise<SandboxProcess>, onFinal
     resolveExit = resolve;
     rejectExit = reject;
   });
+  void exit.catch(() => {});
 
   const exited = (async (): Promise<number> => {
     try {
       child = await start();
-      for (const operation of stdinOperations.splice(0)) await operation(child);
+      while (stdinOperations.length > 0) {
+        for (const operation of stdinOperations.splice(0)) await operation.run(child);
+      }
+      stdinReady = true;
       if (killRequested) child.kill(killSignal);
       child.stdout?.pipeTo(stdoutTransform.writable).catch(() => {});
       child.stderr?.pipeTo(stderrTransform.writable).catch(() => {});
@@ -240,6 +248,7 @@ export function bridgeAsyncProcess(start: () => Promise<SandboxProcess>, onFinal
       if (!child.exit) resolveExit({ code, signal: null });
       return code;
     } catch (error) {
+      for (const operation of stdinOperations.splice(0)) operation.reject(error);
       rejectExit(error);
       await Promise.allSettled([stdoutTransform.writable.close(), stderrTransform.writable.close()]);
       throw error;
@@ -249,14 +258,23 @@ export function bridgeAsyncProcess(start: () => Promise<SandboxProcess>, onFinal
   })();
 
   const queueStdin = (operation: (stdin: SandboxStdin) => void | Promise<void>): Promise<void> => {
-    if (child) return Promise.resolve(operation(child.stdin ?? unavailableStdin()));
+    if (child && stdinReady) {
+      try {
+        return Promise.resolve(operation(child.stdin ?? unavailableStdin()));
+      } catch (error) {
+        return Promise.reject(error);
+      }
+    }
     return new Promise<void>((resolve, reject) => {
-      stdinOperations.push(async (process) => {
-        try {
-          await operation(process.stdin ?? unavailableStdin());
-          resolve();
-        } catch (error) {
-          reject(error);
+      stdinOperations.push({
+        reject,
+        async run(process) {
+          try {
+            await operation(process.stdin ?? unavailableStdin());
+            resolve();
+          } catch (error) {
+            reject(error);
+          }
         }
       });
     });
