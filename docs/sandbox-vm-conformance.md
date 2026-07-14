@@ -22,7 +22,9 @@ Update the last column only from the exact self-hosted workflow run for the exac
 
 ## Test Surfaces
 
-The common real-VM suites exercise unprivileged execution, PTY and pipe cancellation, host-oracle filesystem confinement, deny and credential-mask precedence, `net:none`, filtered egress, private PID and temporary namespaces, cgroup violation events, policy identity, and cross-agent separation. The Windows-only suite additionally checks drive and space-bearing path translation, Hyper-V teardown, hvsock execution, and 9p share semantics.
+The common real-VM suites exercise unprivileged execution, PTY and pipe cancellation, host-oracle filesystem confinement, deny and credential-mask precedence, `net:none`, filtered egress, private PID and temporary namespaces, cgroup violation events, bounded passive filesystem syscall observations, policy identity, and cross-agent separation. The syscall suite requires denied `openat`, rename destinations, and nested no-write targets to emit diagnostics, requires allowed writable-root attempts to remain silent, and drains rapid attempts during cancellation. The Windows-only suite additionally checks drive and space-bearing path translation, Hyper-V teardown, hvsock execution, and 9p share semantics.
+
+Filesystem syscall events are diagnostic hints from a passive seccomp USER_NOTIF observer. Every notification is continued; mount plans, read-only shares, overlays, and host-side oracles remain the enforcement evidence. Observer setup failure is a conformance failure on a capable runner, not permission to claim reduced coverage.
 
 All commands run inside a Linux guest. Tests translate host paths through the launcher's guest-path mapping and shell-quote them once. Host-side assertions use the original host paths. Guest output can prove guest-local facts such as UID or terminal size, but it cannot prove that a host file was protected.
 
