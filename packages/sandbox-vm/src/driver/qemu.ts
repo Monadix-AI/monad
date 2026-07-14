@@ -13,6 +13,7 @@
 
 import type { Firmware } from '../toolchain.ts';
 
+import { drainDiagnosticStream } from '../runtime/diagnostic-tail.ts';
 import { type VmDriver, type VmHandle, type VmSpec } from './vfkit.ts';
 
 // Toolchain-resolved paths, wired once at boot (mirrors configureVfkitBin).
@@ -119,6 +120,7 @@ export function virtiofsdSock(bundleDir: string, tag: string): string {
 interface Child {
   kill(): void;
   readonly exited: Promise<number>;
+  readonly stderr: ReadableStream<Uint8Array>;
 }
 
 export const qemuDriver: VmDriver = {
@@ -126,42 +128,66 @@ export const qemuDriver: VmDriver = {
   async boot(spec: VmSpec): Promise<VmHandle> {
     if (!tools) throw new Error('qemu driver: not configured (call configureQemuTools)');
     const cid = guestCidFor(spec.bundle.key);
-    const children: Child[] = [];
+    const children: Array<{ process: Child; drain: Promise<void> }> = [];
 
-    // 0. Per-VM writable EFI vars store: copy the firmware's vars template into the bundle. QEMU
-    //    persists EFI variables here, and (on aarch64 virt) it must match the code pflash's 64 MiB.
-    await Bun.write(Bun.file(spec.bundle.efiVars), Bun.file(tools.firmware.vars));
-
-    // 1. One virtiofsd per mount tag (must be up before QEMU connects the chardev).
-    for (const m of spec.mounts) {
-      const proc = Bun.spawn(
-        [tools.virtiofsd, '--socket-path', virtiofsdSock(spec.bundle.dir, m.tag), '--shared-dir', m.path],
-        { stdout: 'ignore', stderr: 'pipe' }
-      );
-      children.push(proc);
-    }
-
-    // 2. The vsock bridge: expose the guest's AF_VSOCK port as the bundle's host unix socket.
-    const socat = Bun.spawn(
-      [tools.socat, `UNIX-LISTEN:${spec.vsockSock},fork`, `VSOCK-CONNECT:${cid}:${spec.vsockPort}`],
-      { stdout: 'ignore', stderr: 'pipe' }
-    );
-    children.push(socat);
-
-    // 3. QEMU itself.
-    const qemu = Bun.spawn(qemuArgv(tools.qemu, spec, { firmwareCode: tools.firmware.code, kvm: tools.kvm }, cid), {
-      stdout: 'pipe',
-      stderr: 'pipe'
-    });
-
-    return {
-      pid: qemu.pid,
-      exited: qemu.exited,
-      async stop() {
-        qemu.kill();
-        await qemu.exited.catch(() => {});
-        for (const c of children) c.kill();
-      }
+    const ownSidecar = (process: Child) => {
+      children.push({ process, drain: drainDiagnosticStream(process.stderr).done });
     };
+
+    const stopSidecars = async () => {
+      for (const child of children) child.process.kill();
+      await Promise.allSettled(children.flatMap((child) => [child.process.exited, child.drain]));
+    };
+
+    try {
+      // 0. Per-VM writable EFI vars store: copy the firmware's vars template into the bundle. QEMU
+      //    persists EFI variables here, and (on aarch64 virt) it must match the code pflash's 64 MiB.
+      await Bun.write(Bun.file(spec.bundle.efiVars), Bun.file(tools.firmware.vars));
+
+      // 1. One virtiofsd per mount tag (must be up before QEMU connects the chardev).
+      for (const m of spec.mounts) {
+        ownSidecar(
+          Bun.spawn([tools.virtiofsd, '--socket-path', virtiofsdSock(spec.bundle.dir, m.tag), '--shared-dir', m.path], {
+            stdout: 'ignore',
+            stderr: 'pipe'
+          })
+        );
+      }
+
+      // 2. The vsock bridge: expose the guest's AF_VSOCK port as the bundle's host unix socket.
+      ownSidecar(
+        Bun.spawn([tools.socat, `UNIX-LISTEN:${spec.vsockSock},fork`, `VSOCK-CONNECT:${cid}:${spec.vsockPort}`], {
+          stdout: 'ignore',
+          stderr: 'pipe'
+        })
+      );
+
+      // 3. QEMU itself.
+      const qemu = Bun.spawn(qemuArgv(tools.qemu, spec, { firmwareCode: tools.firmware.code, kvm: tools.kvm }, cid), {
+        stdout: 'pipe',
+        stderr: 'pipe'
+      });
+      const stdout = drainDiagnosticStream(qemu.stdout);
+      const stderr = drainDiagnosticStream(qemu.stderr);
+      const exited = Promise.race([qemu.exited, ...children.map((child) => child.process.exited)]);
+      let stopPromise: Promise<void> | undefined;
+
+      return {
+        pid: qemu.pid,
+        exited,
+        diagnostics: { stdout: stdout.tail, stderr: stderr.tail },
+        stop() {
+          stopPromise ??= (async () => {
+            qemu.kill();
+            await stopSidecars();
+            await Promise.allSettled([qemu.exited, stdout.done, stderr.done]);
+          })();
+          return stopPromise;
+        }
+      };
+    } catch (error) {
+      await stopSidecars();
+      throw error;
+    }
   }
 };

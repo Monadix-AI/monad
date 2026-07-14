@@ -34,6 +34,7 @@ import { IGNITION_SCHEMA_VERSION, serializeIgnition } from './ignition.ts';
 import { ensureBaseImage, type ImageConsent } from './image.ts';
 import { type GvproxyProcess, guestProxyEnv, spawnGvproxy } from './net/gvproxy.ts';
 import { effectiveVmIdentity, POOL_DEFAULTS, type PoolConfig, reuseKey, VmPool, vmKey } from './pool.ts';
+import { BootTransaction } from './runtime/boot-transaction.ts';
 import { resolveVmToolchain, vmToolchainMaybeAvailable } from './toolchain.ts';
 import { sha256OfFile } from './util.ts';
 import { toGuestPath, translateArgvPaths } from './winpath.ts';
@@ -103,6 +104,8 @@ interface RunningVm {
   vfkit: VmHandle;
   /** Only present for net:'filtered'/'unrestricted' — net:'none' has no NIC and no gvproxy. */
   gvproxy?: GvproxyProcess;
+  stopping: boolean;
+  stopPromise?: Promise<void>;
 }
 
 interface BaseImageArtifact {
@@ -211,56 +214,54 @@ async function bootVm(
   image: BaseImageArtifact,
   shape: VmShapeConfig
 ): Promise<RunningVm> {
-  const bundle = await ensureBundle(key, image.path);
-  const mounts = mountsFor(policy);
-  const egress = egressFor(policy);
-  const proxyEnv = egress.mode === 'filtered' && egress.proxyPort ? guestProxyEnv(egress.proxyPort) : undefined;
-
-  const win = process.platform === 'win32';
-
-  // Ignition: inject the vsock exec agent, the mounts, the egress firewall — and on Windows the
-  // 9p mount transport plus (net≠none) the gvforwarder tap so the guest can reach gvproxy.
-  const ignition = serializeIgnition({
-    agentBinaryB64: (await guestAgentArtifact()).b64,
-    mounts,
-    egress,
-    env: proxyEnv,
-    ...(win
-      ? {
-          mountTransport: '9p-vsock' as const,
-          ...(egress.mode !== 'none'
-            ? { gvforwarderB64: await gvforwarderBinaryB64(), netVsockPort: HVSOCK_PORTS.net }
-            : {})
-        }
-      : {})
-  });
-  await Bun.write(bundle.ignition, ignition);
-
-  // The exec channel is vsock (NIC-independent), so net:'none' runs with NO NIC and NO gvproxy — the
-  // strongest network isolation. Only 'filtered'/'unrestricted' attach a NIC to gvproxy's user-space
-  // netstack for egress. When there is a NIC, start gvproxy first and wait for its socket so the VMM's
-  // virtio-net can attach at boot.
-  const transport = process.platform === 'darwin' ? 'vfkit' : win ? 'hyperv' : 'qemu';
+  const tx = new BootTransaction();
   let gvproxy: GvproxyProcess | undefined;
-  let gvproxyNetSock: string | undefined;
-  if (egress.mode !== 'none') {
-    if (!resolvedGvproxy) throw new VmBackendNotReadyError('gvproxy not resolved (call prepare())');
-    // gvproxy fatally exits if its listen socket path already exists (stale socket from a prior boot).
-    await rm(bundle.gvproxySock, { force: true });
-    gvproxy = spawnGvproxy({ gvproxyBin: resolvedGvproxy, netSock: bundle.gvproxySock, transport });
-  }
-
-  // Everything after gvproxy spawns can throw (waitForSocket / driver.boot / waitForVsock); a throw
-  // must kill gvproxy and stop the VMM, or every failed boot orphans a gvproxy (and possibly a VM).
+  let vmHandle: VmHandle | undefined;
   try {
-    if (gvproxy) {
+    tx.defer(() => destroyBundle(key));
+    const bundle = await ensureBundle(key, image.path);
+    const mounts = mountsFor(policy);
+    const egress = egressFor(policy);
+    const proxyEnv = egress.mode === 'filtered' && egress.proxyPort ? guestProxyEnv(egress.proxyPort) : undefined;
+    const win = process.platform === 'win32';
+
+    // Ignition: inject the vsock exec agent, mounts, and firewall. Windows additionally uses the
+    // guest agent for 9p-over-hvsock mounts and gvforwarder for its tap-to-vsock network plane.
+    const ignition = serializeIgnition({
+      agentBinaryB64: (await guestAgentArtifact()).b64,
+      mounts,
+      egress,
+      env: proxyEnv,
+      ...(win
+        ? {
+            mountTransport: '9p-vsock' as const,
+            ...(egress.mode !== 'none'
+              ? { gvforwarderB64: await gvforwarderBinaryB64(), netVsockPort: HVSOCK_PORTS.net }
+              : {})
+          }
+        : {})
+    });
+    await Bun.write(bundle.ignition, ignition);
+
+    // The exec channel is vsock (NIC-independent), so net:'none' runs with NO NIC and NO gvproxy — the
+    // strongest network isolation. Only 'filtered'/'unrestricted' attach a NIC to gvproxy's user-space
+    // netstack for egress. When there is a NIC, start gvproxy first and wait for its socket so the VMM's
+    // virtio-net can attach at boot.
+    const transport = process.platform === 'darwin' ? 'vfkit' : win ? 'hyperv' : 'qemu';
+    let gvproxyNetSock: string | undefined;
+    if (egress.mode !== 'none') {
+      if (!resolvedGvproxy) throw new VmBackendNotReadyError('gvproxy not resolved (call prepare())');
+      await rm(bundle.gvproxySock, { force: true });
+      gvproxy = spawnGvproxy({ gvproxyBin: resolvedGvproxy, netSock: bundle.gvproxySock, transport });
+      tx.defer(() => gvproxy?.stop());
       await waitForSocket(bundle.gvproxySock, 5000);
       gvproxyNetSock = bundle.gvproxySock;
     }
-    // On Windows vsockSock is a named-pipe path (no filesystem entry to clear).
+
+    // A Windows vsock endpoint is a named pipe, not a filesystem socket.
     if (!win) await rm(bundle.vsockSock, { force: true });
     const driver = process.platform === 'darwin' ? vfkitDriver : win ? hypervDriver : qemuDriver;
-    const vmHandle = await driver.boot({
+    vmHandle = await driver.boot({
       cpus: shape.cpus,
       memoryMiB: shape.memoryMiB,
       bundle,
@@ -270,25 +271,32 @@ async function bootVm(
       vsockSock: bundle.vsockSock,
       vsockPort: VSOCK_EXEC_PORT
     });
+    tx.defer(() => vmHandle?.stop());
 
-    const vm: RunningVm = { bundle, vfkit: vmHandle, gvproxy };
+    await waitForVsock({ socketPath: bundle.vsockSock }, { timeoutMs: shape.bootTimeoutMs });
+    const vm: RunningVm = { bundle, vfkit: vmHandle, gvproxy, stopping: false };
     liveVms.add(vm);
-    // driver.boot() returns as soon as the VMM process is spawned, NOT when the guest is up. Fedora
-    // CoreOS takes ~30-60s to boot + apply Ignition + start the agent, so wait until the guest is
-    // exec-reachable before returning — otherwise the first command races an unbooted guest. On a
-    // timeout, tear down the VM too (not just gvproxy) so a half-booted guest never leaks.
-    try {
-      await waitForVsock({ socketPath: bundle.vsockSock }, { timeoutMs: shape.bootTimeoutMs });
-    } catch (error) {
-      liveVms.delete(vm);
-      await vmHandle.stop().catch(() => {});
-      throw error;
-    }
+    tx.commit();
+    observeRuntimeExit(key, vm, vmHandle.exited);
+    if (gvproxy) observeRuntimeExit(key, vm, gvproxy.exited);
     return vm;
   } catch (error) {
-    gvproxy?.kill();
+    await tx.rollback(error);
+    const details = [vmHandle?.diagnostics.stderr.text(), gvproxy?.diagnostics.stderr.text()]
+      .filter(Boolean)
+      .join('\n');
+    if (details) {
+      throw new Error(`${error instanceof Error ? error.message : String(error)}\n${details}`, { cause: error });
+    }
     throw error;
   }
+}
+
+function observeRuntimeExit(key: string, vm: RunningVm, exited: Promise<number>): void {
+  const invalidate = () => {
+    if (!vm.stopping) void pool?.invalidate(key);
+  };
+  void exited.then(invalidate, invalidate);
 }
 
 /** Poll for a socket path to appear (gvproxy binds it asynchronously after fork). */
@@ -306,10 +314,14 @@ async function waitForSocket(path: string, timeoutMs: number): Promise<void> {
 const liveVms = new Set<RunningVm>();
 
 async function stopVm(vm: RunningVm): Promise<void> {
-  liveVms.delete(vm);
-  await vm.vfkit.stop().catch(() => {});
-  vm.gvproxy?.kill();
-  await destroyBundle(vm.bundle.key);
+  if (vm.stopPromise) return vm.stopPromise;
+  vm.stopping = true;
+  vm.stopPromise = (async () => {
+    liveVms.delete(vm);
+    await Promise.allSettled([vm.vfkit.stop(), vm.gvproxy?.stop()]);
+    await destroyBundle(vm.bundle.key);
+  })();
+  return vm.stopPromise;
 }
 
 let resolvedGvproxy: string | null = null;
@@ -400,6 +412,7 @@ export const vmLauncher: SandboxLauncher = {
           socketPath: vm.bundle.vsockSock,
           cwd: options.cwd !== undefined ? toGuestPath(options.cwd) : undefined,
           limits: options.limits,
+          onUnresponsive: () => void activePool.invalidate(key),
           env: {
             ...options.env,
             ...(egress.mode === 'filtered' && egress.proxyPort ? guestProxyEnv(egress.proxyPort) : {})
@@ -437,7 +450,7 @@ function installShutdownHandler(): void {
       } catch {
         /* best-effort */
       }
-      vm.gvproxy?.kill();
+      void vm.gvproxy?.stop();
     }
   };
   process.once('exit', killAll);

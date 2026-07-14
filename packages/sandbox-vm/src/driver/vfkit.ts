@@ -6,6 +6,9 @@
 
 import type { VmBundle } from '../bundle.ts';
 import type { MountSpec } from '../ignition.ts';
+import type { DiagnosticTail } from '../runtime/diagnostic-tail.ts';
+
+import { drainDiagnosticStream } from '../runtime/diagnostic-tail.ts';
 
 export interface VmSpec {
   cpus: number;
@@ -32,6 +35,7 @@ export interface VmDriver {
 export interface VmHandle {
   readonly pid: number;
   readonly exited: Promise<number>;
+  readonly diagnostics: { stdout: DiagnosticTail; stderr: DiagnosticTail };
   stop(): Promise<void>;
 }
 
@@ -80,12 +84,20 @@ export const vfkitDriver: VmDriver = {
   async boot(spec: VmSpec): Promise<VmHandle> {
     const argv = vfkitArgv(this._vfkitBin ?? 'vfkit', spec);
     const proc = Bun.spawn(argv, { stdout: 'pipe', stderr: 'pipe' });
+    const stdout = drainDiagnosticStream(proc.stdout);
+    const stderr = drainDiagnosticStream(proc.stderr);
+    let stopPromise: Promise<void> | undefined;
     return {
       pid: proc.pid,
       exited: proc.exited,
-      async stop() {
-        proc.kill();
-        await proc.exited;
+      diagnostics: { stdout: stdout.tail, stderr: stderr.tail },
+      stop() {
+        stopPromise ??= (async () => {
+          proc.kill();
+          await proc.exited.catch(() => {});
+          await Promise.allSettled([stdout.done, stderr.done]);
+        })();
+        return stopPromise;
       }
     };
   }

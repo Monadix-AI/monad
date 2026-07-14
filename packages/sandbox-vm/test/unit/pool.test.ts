@@ -121,6 +121,19 @@ test('disposeIdle preserves VMs with active processes while tearing down idle on
   expect(pool.size()).toBe(1);
 });
 
+test('invalidate removes and stops a VM even while it has an active reference', async () => {
+  const stopped: number[] = [];
+  const pool = new VmPool<{ id: number }>(POOL_DEFAULTS, { stop: async (vm) => void stopped.push(vm.id) });
+  await pool.acquire('broken', 'agt:a', 'a', async () => ({ id: 7 }));
+
+  await pool.invalidate('broken');
+
+  expect(pool.size()).toBe(0);
+  expect(stopped).toEqual([7]);
+  pool.release('broken');
+  expect(stopped).toEqual([7]);
+});
+
 test('at capacity with all VMs busy, a new boot is refused (never kills an active VM)', async () => {
   const pool = new VmPool<{ id: number }>({ ...POOL_DEFAULTS, maxInstances: 1 }, { stop: async () => {} });
   const boot = async () => ({ id: 1 });

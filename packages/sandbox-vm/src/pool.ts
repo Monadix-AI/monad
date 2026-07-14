@@ -157,6 +157,9 @@ export class VmPool<VM> {
     entry.lastUsed = this.now();
     try {
       const vm = await entry.vm;
+      if (this.entries.get(key) !== entry || entry.state === 'stopped') {
+        throw new Error(`vm pool: ${key} was invalidated while being acquired`);
+      }
       entry.state = 'running';
       return vm;
     } catch (err) {
@@ -201,6 +204,10 @@ export class VmPool<VM> {
   async disposeIdle(): Promise<void> {
     const keys = [...this.entries.values()].filter((entry) => entry.refcount === 0).map((entry) => entry.key);
     await Promise.all(keys.map((key) => this.teardown(key)));
+  }
+
+  async invalidate(key: string): Promise<void> {
+    await this.teardown(key);
   }
 
   /** Tear down all VMs (daemon shutdown). */

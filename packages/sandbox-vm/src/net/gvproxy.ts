@@ -10,6 +10,10 @@
 // gvproxy's virtual network: gateway 192.168.127.1, host reachable at 192.168.127.254, and a DHCP
 // static lease pins the guest to 192.168.127.2 by its MAC (see ignition.ts).
 
+import type { DiagnosticTail } from '../runtime/diagnostic-tail.ts';
+
+import { drainDiagnosticStream } from '../runtime/diagnostic-tail.ts';
+
 export const GVPROXY_GATEWAY_IP = '192.168.127.1';
 export const GVPROXY_HOST_IP = '192.168.127.254';
 
@@ -49,16 +53,28 @@ export function gvproxyArgv(spec: GvproxySpec): string[] {
 export interface GvproxyProcess {
   readonly pid: number;
   readonly exited: Promise<number>;
-  kill(): void;
+  readonly diagnostics: { stdout: DiagnosticTail; stderr: DiagnosticTail };
+  stop(): Promise<void>;
 }
 
 /** Spawn gvproxy. The caller owns lifecycle (kill on VM teardown). */
 export function spawnGvproxy(spec: GvproxySpec): GvproxyProcess {
   const proc = Bun.spawn(gvproxyArgv(spec), { stdout: 'pipe', stderr: 'pipe' });
+  const stdout = drainDiagnosticStream(proc.stdout);
+  const stderr = drainDiagnosticStream(proc.stderr);
+  let stopPromise: Promise<void> | undefined;
   return {
     pid: proc.pid,
     exited: proc.exited,
-    kill: () => proc.kill()
+    diagnostics: { stdout: stdout.tail, stderr: stderr.tail },
+    stop() {
+      stopPromise ??= (async () => {
+        proc.kill();
+        await proc.exited.catch(() => {});
+        await Promise.allSettled([stdout.done, stderr.done]);
+      })();
+      return stopPromise;
+    }
   };
 }
 
