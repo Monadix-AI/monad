@@ -47,7 +47,7 @@ afterAll(async () => {
   if (!ENABLED) return;
   await disposeRealVm(AGENT);
   if (root) await rm(root, { recursive: true, force: true });
-});
+}, 60_000);
 
 describe.skipIf(!ENABLED)('real VM canonical mount aliases', () => {
   test('deny and mask overlays cover both the canonical path and symlinked guest alias', async () => {

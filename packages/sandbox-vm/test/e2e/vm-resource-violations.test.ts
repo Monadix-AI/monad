@@ -1,7 +1,15 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
 import { realVmAdmission } from './vm-admission.ts';
-import { disposeRealVm, drainBytes, drainViolations, prepareRealVm, spawnVm, type VmPolicy } from './vm-fixture.ts';
+import {
+  disposeRealVm,
+  drainBytes,
+  drainViolations,
+  prepareRealVm,
+  spawnVm,
+  type VmPolicy,
+  waitForGuestProcess
+} from './vm-fixture.ts';
 
 // biome-ignore lint/suspicious/noUndeclaredEnvVars: explicit real-hypervisor test gate
 const ENABLED = realVmAdmission(Bun.env.MONAD_VM_IT) === 'run';
@@ -14,7 +22,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (ENABLED) await disposeRealVm(AGENT);
-});
+}, 60_000);
 
 describe.skipIf(!ENABLED)('real guest cgroup violations', () => {
   test('an actual memory ceiling hit emits a bounded memory violation', async () => {
@@ -43,8 +51,10 @@ describe.skipIf(!ENABLED)('real guest cgroup violations', () => {
     });
     const output = Promise.all([drainBytes(process.stdout), drainBytes(process.stderr)]);
     const violations = drainViolations(process.violations);
+    await waitForGuestProcess(process);
     await Bun.sleep(500);
-    process.kill('SIGTERM');
+    const alreadyExited = await Promise.race([process.exited.then(() => true), Bun.sleep(0).then(() => false)]);
+    if (!alreadyExited) process.kill('SIGTERM');
 
     const events = await violations;
     await Promise.all([process.exited, output]);

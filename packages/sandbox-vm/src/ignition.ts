@@ -33,6 +33,7 @@ export interface IgnitionSpec {
    *  port its tunnel dials — the guest NIC is a tap into the host's gvproxy, not a real NIC. */
   gvforwarderB64?: string;
   netVsockPort?: number;
+  workloadUid?: number;
 }
 
 function b64(s: string): string {
@@ -250,13 +251,15 @@ function agentUnit(hasNic: boolean): { name: string; enabled: boolean; contents:
  *  are heterogeneous), typed where we assert on it. */
 export interface IgnitionConfig {
   ignition: { version: string };
-  passwd: { users: { name: string; homeDir?: string; groups?: string[] }[] };
+  passwd: { users: { name: string; homeDir?: string; groups?: string[]; uid?: number }[] };
   storage: { files: object[]; directories: object[] };
   systemd: { units: { name: string; contents?: string; dropins?: { name: string; contents: string }[] }[] };
 }
 
 /** Build the full Ignition config object. */
 export function buildIgnition(spec: IgnitionSpec): IgnitionConfig {
+  const workloadUid = spec.workloadUid ?? 1001;
+  if (!Number.isSafeInteger(workloadUid) || workloadUid < 1) throw new Error('ignition: workload uid must be non-root');
   const rulesPath = '/etc/monad/nftables.conf';
   const overlays = spec.overlays ?? [];
   const files: object[] = [
@@ -335,7 +338,8 @@ export function buildIgnition(spec: IgnitionSpec): IgnitionConfig {
           // Unprivileged, NO `wheel` group: on Fedora CoreOS wheel grants passwordless sudo, which
           // would let a workload `sudo nft flush ruleset` and defeat every confinement guarantee.
           name: 'monad',
-          homeDir: '/home/monad'
+          homeDir: '/home/monad',
+          uid: workloadUid
         }
       ]
     },

@@ -24,6 +24,18 @@ test('the monad guest user has NO wheel group (no passwordless sudo → cannot d
   expect(user?.groups).toBeUndefined();
 });
 
+test('the monad guest user can map a non-root host uid for writable shares', () => {
+  const cfg = buildIgnition({
+    agentBinaryB64: 'QQ==',
+    observerBinaryB64: 'QQ==',
+    mounts: [],
+    egress: { mode: 'none' },
+    workloadUid: 501
+  });
+
+  expect(cfg.passwd.users[0]?.uid).toBe(501);
+});
+
 test('the exec agent unit is gated on the firewall (workload never runs before egress rules apply)', () => {
   const cfg = buildIgnition({
     agentBinaryB64: 'QQ==',

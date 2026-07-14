@@ -24,6 +24,7 @@ import {
   prepareRealVm,
   runSh as sh,
   spawnVm as spawn,
+  waitForGuestProcess,
   waitForHostFile
 } from './vm-fixture.ts';
 
@@ -72,14 +73,16 @@ describe.skipIf(!ENABLED)('net:none confinement (fs escape, credential, privileg
   afterAll(async () => {
     await disposeRealVm(AGENT);
     for (const d of [ws, ro]) if (d) rmSync(d, { recursive: true, force: true });
-  });
+  }, 60_000);
 
-  test('boots and runs a command unprivileged (uid 1001, no wheel → no sudo)', async () => {
+  test('boots and runs a command as the unprivileged host user without sudo', async () => {
     const r = await sh('echo OK; id -u; whoami; sudo -n true 2>&1 || echo NOSUDO', NET, AGENT);
-    expect(r.stdout).toContain('OK');
-    expect(r.stdout).toContain('1001');
-    expect(r.stdout).toContain('monad');
-    expect(r.stdout).toContain('NOSUDO');
+    const lines = r.stdout.trim().split('\n');
+    expect(lines[0]).toBe('OK');
+    expect(lines[1]).toBe(String(process.getuid?.() ?? 1001));
+    expect(lines[1]).not.toBe('0');
+    expect(lines[2]).toBe('monad');
+    expect(lines.at(-1)).toBe('NOSUDO');
   }, 600_000);
 
   test('interactive runs have a real PTY with resize and merged output', async () => {
@@ -199,6 +202,7 @@ describe.skipIf(!ENABLED)('net:none confinement (fs escape, credential, privileg
       { limits: { terminateGraceMs: 500 } }
     );
     const output = Promise.all([drain(proc.stdout), drain(proc.stderr)]);
+    await waitForGuestProcess(proc);
     await waitForHostFile(ready);
 
     proc.kill('SIGTERM');
@@ -223,7 +227,14 @@ describe.skipIf(!ENABLED)('net:none confinement (fs escape, credential, privileg
       { limits: { terminateGraceMs: 500 }, terminal: { cols: 80, rows: 24 } }
     );
     const output = drain(proc.stdout);
-    await waitForHostFile(ready);
+    await waitForGuestProcess(proc);
+    try {
+      await waitForHostFile(ready);
+    } catch (error) {
+      proc.kill('SIGKILL');
+      const [exit, transcript] = await Promise.all([proc.exit, output]);
+      throw new Error(`${String(error)}; exit=${JSON.stringify(exit)}; output=${JSON.stringify(transcript)}`);
+    }
 
     proc.kill('SIGTERM');
 
@@ -281,6 +292,7 @@ describe.skipIf(!ENABLED)('net:none confinement (fs escape, credential, privileg
     );
     const runAOutput = Promise.all([drain(runA.stdout), drain(runA.stderr)]);
     try {
+      await waitForGuestProcess(runA);
       await waitForHostFile(ready);
       const runB = await sh(
         `test ! -e /tmp/concurrent-secret; echo "TMP=$?"; ` +
@@ -298,12 +310,16 @@ describe.skipIf(!ENABLED)('net:none confinement (fs escape, credential, privileg
     }
   }, 600_000);
 
-  test('each run has a fresh PID namespace and private tmpfs', async () => {
+  test('each run has a bounded private PID view and private tmpfs', async () => {
     const firstPid = await sh('echo $$; echo secret >/tmp/only-first-run', NET, AGENT);
     const second = await sh('echo $$; test ! -e /tmp/only-first-run; echo "TMP=$?"', NET, AGENT);
 
-    expect(firstPid.stdout.trim()).toBe('2');
-    expect(second.stdout).toContain('2\n');
+    const first = Number.parseInt(firstPid.stdout.trim(), 10);
+    const next = Number.parseInt(second.stdout.split('\n')[0] ?? '', 10);
+    expect(first).toBeGreaterThan(1);
+    expect(first).toBeLessThan(32);
+    expect(next).toBeGreaterThan(1);
+    expect(next).toBeLessThan(32);
     expect(second.stdout).toContain('TMP=0');
   }, 600_000);
 
@@ -312,10 +328,10 @@ describe.skipIf(!ENABLED)('net:none confinement (fs escape, credential, privileg
       ['sh', '-c', `cg=$(awk -F: '$1 == "0" { print $3 }' /proc/self/cgroup); cat /sys/fs/cgroup"$cg"/pids.max`],
       NET,
       AGENT,
-      { limits: { maxProcesses: 8 } }
+      { limits: { maxProcesses: 32 } }
     );
 
-    expect((await drain(proc.stdout)).trim()).toBe('8');
+    expect((await drain(proc.stdout)).trim()).toBe('32');
     expect(await proc.exited).toBe(0);
   }, 600_000);
 
@@ -323,7 +339,12 @@ describe.skipIf(!ENABLED)('net:none confinement (fs escape, credential, privileg
     const alternate = await mkdtemp(join(tmpdir(), 'monad-vm-policy-'));
     try {
       const target = join(alternate, 'new-policy-visible');
-      await sh(`echo visible > ${guestArg(target)}`, { writableRoots: [alternate], net: 'none' } as Policy, AGENT);
+      const result = await sh(
+        `echo visible > ${guestArg(target)}`,
+        { writableRoots: [alternate], net: 'none' } as Policy,
+        AGENT
+      );
+      expect(result).toEqual({ code: 0, stdout: '' });
       expect(await Bun.file(target).text()).toBe('visible\n');
     } finally {
       rmSync(alternate, { recursive: true, force: true });

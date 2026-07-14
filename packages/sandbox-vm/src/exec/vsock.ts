@@ -265,6 +265,8 @@ export function vsockExec(argv: string[], spec: VsockExecSpec): SandboxProcess {
   let settled = false;
   let terminationTimer: ReturnType<typeof setTimeout> | undefined;
   let terminalClosed = false;
+  let connected = false;
+  const pendingFrames: Buffer[] = [];
 
   let resolveExit!: (value: SandboxExit) => void;
   let rejectExit!: (reason: Error) => void;
@@ -299,8 +301,15 @@ export function vsockExec(argv: string[], spec: VsockExecSpec): SandboxProcess {
   };
   const send = (kind: HostFrameKind, payload: Uint8Array<ArrayBufferLike> = new Uint8Array()) => {
     if (settled) throw new Error('vsock process has exited');
-    sock.write(encodeFrame(kind, payload));
+    const frame = encodeFrame(kind, payload);
+    if (connected) sock.write(frame);
+    else pendingFrames.push(frame);
   };
+
+  sock.once('connect', () => {
+    connected = true;
+    for (const frame of pendingFrames.splice(0)) sock.write(frame);
+  });
 
   send(
     HostFrameKind.Start,

@@ -178,7 +178,7 @@ export async function buildVmMountPlan(policy: SandboxPolicy, host: MountPlanHos
       shares.push({
         tag: `${prefix}${index++}`,
         hostPath: canonical.path,
-        guestPath: guestPath(api.normalize(rawPath), host),
+        guestPath: guestTarget(canonical.path, shares, host, rawPath),
         readOnly,
         rawPath: api.normalize(rawPath)
       });

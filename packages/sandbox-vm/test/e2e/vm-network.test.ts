@@ -27,7 +27,7 @@ describe.skipIf(!ENABLED)('net:filtered egress enforcement (direct egress is dro
   afterAll(async () => {
     await disposeRealVm(AGENT);
     if (workspace) rmSync(workspace, { recursive: true, force: true });
-  });
+  }, 60_000);
 
   test('direct TCP to a non-allowlisted host is dropped', async () => {
     const result = await runSh('curl -sS --max-time 6 http://1.1.1.1 >/dev/null 2>&1; echo "RC=$?"', policy, AGENT);

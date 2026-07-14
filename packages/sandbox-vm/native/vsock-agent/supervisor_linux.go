@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -14,7 +15,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func supervisorCommand(req startRequest) (*exec.Cmd, io.ReadCloser, io.WriteCloser, error) {
+func supervisorCommand(req startRequest) (*exec.Cmd, io.ReadCloser, io.ReadWriteCloser, error) {
 	executable, err := os.Executable()
 	if err != nil {
 		return nil, nil, nil, err
@@ -29,10 +30,12 @@ func supervisorCommand(req startRequest) (*exec.Cmd, io.ReadCloser, io.WriteClos
 		configWriter.Close()
 		return nil, nil, nil, err
 	}
-	var controlReader *os.File
-	var controlWriter *os.File
+	cmd := exec.Command(executable, "--supervise-run")
+	cmd.ExtraFiles = []*os.File{configReader, resultWriter}
+	var brokerControl *os.File
 	if req.Terminal != nil {
-		controlReader, controlWriter, err = os.Pipe()
+		controlFDs, socketErr := unix.Socketpair(unix.AF_UNIX, unix.SOCK_STREAM|unix.SOCK_CLOEXEC, 0)
+		err = socketErr
 		if err != nil {
 			configReader.Close()
 			configWriter.Close()
@@ -40,18 +43,16 @@ func supervisorCommand(req startRequest) (*exec.Cmd, io.ReadCloser, io.WriteClos
 			resultWriter.Close()
 			return nil, nil, nil, err
 		}
-	}
-	cmd := exec.Command(executable, "--supervise-run")
-	cmd.ExtraFiles = []*os.File{configReader, resultWriter}
-	if controlReader != nil {
-		cmd.ExtraFiles = append(cmd.ExtraFiles, controlReader)
+		brokerControl = os.NewFile(uintptr(controlFDs[0]), "run-control-broker")
+		controlGuest := os.NewFile(uintptr(controlFDs[1]), "run-control-supervisor")
+		cmd.ExtraFiles = append(cmd.ExtraFiles, controlGuest)
 	}
 	cmd.SysProcAttr = &syscall.SysProcAttr{Cloneflags: unix.CLONE_NEWPID | unix.CLONE_NEWNS}
 	go func() {
 		defer configWriter.Close()
 		json.NewEncoder(configWriter).Encode(req)
 	}()
-	return cmd, resultReader, controlWriter, nil
+	return cmd, resultReader, brokerControl, nil
 }
 
 func runSupervisorMode() int {
@@ -108,6 +109,7 @@ func runSupervisorMode() int {
 		return 127
 	}
 	cmd, observationReader, observationWriter := prepareObservedCommand(cmd, req.RunID, reporter)
+	group.attach(cmd)
 	var observationDone chan struct{}
 	if observationReader != nil {
 		observationDone = make(chan struct{})
@@ -220,7 +222,7 @@ func (reporter *supervisorReporter) exit(exit exitMessage) {
 	reporter.encoder.Encode(supervisorRecord{Type: "exit", Exit: &exit})
 }
 
-func applyResizes(control io.Reader, master *os.File) {
+func applyResizes(control io.ReadWriter, master *os.File) {
 	if control == nil || master == nil {
 		return
 	}
@@ -231,7 +233,12 @@ func applyResizes(control io.Reader, master *os.File) {
 			return
 		}
 		if validTerminalSize(req.Cols, req.Rows) {
-			resizePTY(master, req)
+			if resizePTY(master, req) != nil {
+				return
+			}
+			if _, err := control.Write([]byte{1}); err != nil {
+				return
+			}
 		}
 	}
 }
@@ -260,10 +267,17 @@ func reapChildren() {
 	deadline := time.Now().Add(time.Second)
 	for time.Now().Before(deadline) {
 		var status syscall.WaitStatus
-		pid, _ := syscall.Wait4(-1, &status, syscall.WNOHANG, nil)
+		pid, err := syscall.Wait4(-1, &status, syscall.WNOHANG, nil)
+		if shouldFinishReaping(pid, err) {
+			return
+		}
 		if pid <= 0 {
 			time.Sleep(10 * time.Millisecond)
 			continue
 		}
 	}
+}
+
+func shouldFinishReaping(pid int, err error) bool {
+	return pid < 0 && errors.Is(err, syscall.ECHILD)
 }

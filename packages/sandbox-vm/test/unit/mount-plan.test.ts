@@ -125,10 +125,11 @@ test('overlapping shares deny every guest alias for the same canonical target', 
     readDenyRoots: [join(childAlias, '.ssh')]
   });
 
-  expect(plan.overlays).toEqual([
-    { kind: 'deny-directory', target: join(container, 'child-alias', '.ssh') },
-    { kind: 'deny-directory', target: join(parent, 'child', '.ssh') }
+  expect(plan.shares).toEqual([
+    { tag: 'w0', hostPath: parent, guestPath: parent, readOnly: false },
+    { tag: 'w1', hostPath: child, guestPath: child, readOnly: false }
   ]);
+  expect(plan.overlays).toEqual([{ kind: 'deny-directory', target: join(parent, 'child', '.ssh') }]);
 });
 
 test('missing and non-regular fake mask sources fail closed', async () => {

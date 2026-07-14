@@ -47,6 +47,30 @@ static ssize_t read_events(int fd, char *buffer, size_t capacity) {
     return (ssize_t)used;
 }
 
+static void test_signal_passthrough(const char *observer, int event_fd, const char *directory) {
+    char ready[512];
+    char script[1200];
+    char fd_text[16];
+    snprintf(ready, sizeof(ready), "%s/signal-ready", directory);
+    snprintf(script, sizeof(script), "touch '%s'; exec sleep 30", ready);
+    snprintf(fd_text, sizeof(fd_text), "%d", event_fd);
+    pid_t child = fork();
+    if (child < 0) fail("signal fork failed");
+    if (child == 0) {
+        execl(observer, observer, "--event-fd", fd_text, "--", "/bin/sh", "-c", script, NULL);
+        _exit(127);
+    }
+    struct stat info;
+    int attempts = 0;
+    while (stat(ready, &info) < 0 && attempts++ < 500) usleep(10000);
+    if (attempts > 500) fail("signal workload did not start");
+    if (kill(child, SIGTERM) < 0) fail("signal observer failed");
+    int status = 0;
+    while (waitpid(child, &status, 0) < 0 && errno == EINTR) {}
+    if (!WIFSIGNALED(status) || WTERMSIG(status) != SIGTERM) fail("observer did not preserve signal exit");
+    unlink(ready);
+}
+
 int main(int argc, char **argv) {
     if (argc != 2) fail("expected observer path");
 
@@ -71,6 +95,8 @@ int main(int argc, char **argv) {
     close(events[0]);
     if (!strstr(output, "\"syscall\":\"openat\"") || !strstr(output, write_path)) fail("write record missing contract fields");
     if (strstr(output, read_path)) fail("read-only open was observed");
+
+    test_signal_passthrough(argv[1], events[1], directory);
 
     int closed_fd = open("/dev/null", O_RDONLY);
     if (closed_fd < 0) fail("open /dev/null failed");

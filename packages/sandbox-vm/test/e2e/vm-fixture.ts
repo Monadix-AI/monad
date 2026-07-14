@@ -88,11 +88,20 @@ export async function disposeRealVm(agentId: string): Promise<void> {
   await vmLauncher.disposeAgent?.(agentId);
 }
 
-export async function waitForHostFile(path: string, timeoutMs = 5000): Promise<void> {
+export async function waitForHostFile(path: string, timeoutMs = 30_000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (existsSync(path)) return;
     await Bun.sleep(25);
   }
   throw new Error(`guest did not create host oracle ${path}`);
+}
+
+export async function waitForGuestProcess(process: SandboxProcess, timeoutMs = 600_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (process.pid !== undefined) return;
+    await Bun.sleep(10);
+  }
+  throw new Error('guest process did not start');
 }

@@ -2,7 +2,7 @@ import type { SandboxProcess, SandboxTerminalOptions, SandboxViolation } from '@
 
 import { afterEach, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
-import { createServer, type Server } from 'node:net';
+import { createServer, type Server, Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -59,6 +59,34 @@ async function collect<T>(stream: ReadableStream<T>): Promise<T[]> {
     reader.releaseLock();
   }
 }
+
+test('protocol frames are not written before the transport connects', async () => {
+  const originalWrite = Socket.prototype.write;
+  Object.defineProperty(Socket.prototype, 'write', {
+    configurable: true,
+    writable: true,
+    value(this: Socket, ...args: unknown[]) {
+      if (this.connecting) throw new Error('write attempted before connect');
+      return Reflect.apply(originalWrite, this, args);
+    }
+  });
+  try {
+    const socketPath = await protocolServer((frame, send) => {
+      if (frame.kind !== HostFrameKind.Start) return;
+      send(GuestFrameKind.Started, { runId: 'connect-order', pid: 41 });
+      send(GuestFrameKind.Exit, { code: 0, signal: 0 });
+    });
+    const proc = vsockExec(['true'], { socketPath, runId: 'connect-order' });
+
+    expect(await proc.exited).toBe(0);
+  } finally {
+    Object.defineProperty(Socket.prototype, 'write', {
+      configurable: true,
+      writable: true,
+      value: originalWrite
+    });
+  }
+});
 
 test('PTY start carries dimensions and resize sends a control frame', async () => {
   const received: Array<{ kind: number; payload: unknown }> = [];

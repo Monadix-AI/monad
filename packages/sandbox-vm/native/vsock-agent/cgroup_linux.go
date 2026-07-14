@@ -3,9 +3,11 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -35,10 +37,9 @@ func prepareRuntime() error {
 }
 
 type runCgroupHandle struct {
-	path   string
-	broker string
-	pid    int
-	before cgroupEvents
+	path      string
+	directory *os.File
+	before    cgroupEvents
 }
 
 func enterRunCgroup(runID string, limits runLimits) (*runCgroupHandle, error) {
@@ -54,23 +55,30 @@ func enterRunCgroup(runID string, limits runLimits) (*runCgroupHandle, error) {
 		return nil, fmt.Errorf("broker cgroup is not prepared")
 	}
 	service := filepath.Dir(cgroupAbsolute(relative))
-	broker := filepath.Join(service, "broker")
 	path := filepath.Join(service, "runs", name)
 	if err := os.Mkdir(path, 0o755); err != nil {
 		return nil, err
 	}
-	pid, err := globalPID()
+	if err := configureRunCgroup(path, limits); err != nil {
+		os.Remove(path)
+		return nil, err
+	}
+	directory, err := os.Open(path)
 	if err != nil {
 		os.Remove(path)
 		return nil, err
 	}
-	if err := writeRunCgroup(path, limits, pid); err != nil {
-		os.Remove(path)
-		return nil, err
-	}
-	handle := &runCgroupHandle{path: path, broker: broker, pid: pid}
+	handle := &runCgroupHandle{path: path, directory: directory}
 	handle.before, _ = handle.events()
 	return handle, nil
+}
+
+func (handle *runCgroupHandle) attach(cmd *exec.Cmd) {
+	if cmd.SysProcAttr == nil {
+		cmd.SysProcAttr = &syscall.SysProcAttr{}
+	}
+	cmd.SysProcAttr.UseCgroupFD = true
+	cmd.SysProcAttr.CgroupFD = int(handle.directory.Fd())
 }
 
 func (handle *runCgroupHandle) events() (cgroupEvents, error) {
@@ -90,7 +98,7 @@ func (handle *runCgroupHandle) events() (cgroupEvents, error) {
 }
 
 func (handle *runCgroupHandle) cleanup() {
-	os.WriteFile(filepath.Join(handle.broker, "cgroup.procs"), []byte(strconv.Itoa(handle.pid)), 0o600)
+	handle.directory.Close()
 	for deadline := time.Now().Add(time.Second); time.Now().Before(deadline); {
 		if os.Remove(handle.path) == nil {
 			return
@@ -109,21 +117,4 @@ func currentCgroupPath() (string, error) {
 
 func cgroupAbsolute(relative string) string {
 	return filepath.Join(cgroupRoot, strings.TrimPrefix(filepath.Clean(relative), string(filepath.Separator)))
-}
-
-func globalPID() (int, error) {
-	data, err := os.ReadFile("/proc/self/status")
-	if err != nil {
-		return 0, err
-	}
-	for _, line := range strings.Split(string(data), "\n") {
-		if !strings.HasPrefix(line, "NSpid:") {
-			continue
-		}
-		fields := strings.Fields(strings.TrimPrefix(line, "NSpid:"))
-		if len(fields) > 0 {
-			return strconv.Atoi(fields[0])
-		}
-	}
-	return 0, fmt.Errorf("global pid is unavailable")
 }

@@ -15,7 +15,8 @@ import {
   guestPath,
   prepareRealVm,
   spawnVm,
-  type VmPolicy
+  type VmPolicy,
+  waitForGuestProcess
 } from './vm-fixture.ts';
 
 // biome-ignore lint/suspicious/noUndeclaredEnvVars: explicit real-hypervisor test gate
@@ -45,7 +46,7 @@ afterAll(async () => {
   if (!ENABLED) return;
   await disposeRealVm(AGENT);
   if (root) await rm(root, { recursive: true, force: true });
-});
+}, 60_000);
 
 async function runObserved(script: string): Promise<SandboxViolation[]> {
   const process = spawnVm(['sh', '-c', script], policy, AGENT);
@@ -108,6 +109,7 @@ describe.skipIf(!ENABLED)('real guest filesystem syscall observations', () => {
     );
     const output = Promise.all([drainBytes(process.stdout), drainBytes(process.stderr)]);
     const violations = drainViolations(process.violations);
+    await waitForGuestProcess(process);
     await Bun.sleep(250);
     process.kill('SIGTERM');
 

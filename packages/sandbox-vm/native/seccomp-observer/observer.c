@@ -125,6 +125,20 @@ static void install_signal_forwarders(void) {
     signal(SIGPIPE, SIG_IGN);
 }
 
+static int exit_like_child(int status) {
+    if (WIFSIGNALED(status)) {
+        int signal_number = WTERMSIG(status);
+        struct sigaction action;
+        memset(&action, 0, sizeof(action));
+        action.sa_handler = SIG_DFL;
+        sigemptyset(&action.sa_mask);
+        sigaction(signal_number, &action, NULL);
+        raise(signal_number);
+        return 128 + signal_number;
+    }
+    return WIFEXITED(status) ? WEXITSTATUS(status) : 125;
+}
+
 static const struct observed_call *find_call(int nr) {
     size_t count = sizeof(observed_calls) / sizeof(observed_calls[0]);
     for (size_t index = 0; index < count; index++) {
@@ -396,7 +410,7 @@ static int supervise(pid_t child, int listener, int event_fd) {
     }
     free(request);
     free(response);
-    return WIFEXITED(status) ? WEXITSTATUS(status) : 128 + WTERMSIG(status);
+    return exit_like_child(status);
 }
 
 static int parse_event_fd(const char *text) {
@@ -449,7 +463,7 @@ int main(int argc, char **argv) {
     int status;
     if (listener < 0) {
         while (waitpid(child, &status, 0) < 0 && errno == EINTR) {}
-        return WIFEXITED(status) ? WEXITSTATUS(status) : 128 + WTERMSIG(status);
+        return exit_like_child(status);
     }
     int exit_code = supervise(child, listener, event_fd);
     close(listener);

@@ -405,7 +405,7 @@ func protocolViolation(run *managedRun, writer *frameWriter, detail string) {
 	})
 }
 
-func commandFor(req startRequest) (*exec.Cmd, io.ReadCloser, io.WriteCloser, error) {
+func commandFor(req startRequest) (*exec.Cmd, io.ReadCloser, io.ReadWriteCloser, error) {
 	return supervisorCommand(req)
 }
 
@@ -448,7 +448,7 @@ func startManagedCommand(cmd *exec.Cmd, supervisorResult io.ReadCloser, output f
 func startManagedCommandWithControl(
 	cmd *exec.Cmd,
 	supervisorResult io.ReadCloser,
-	supervisorControl io.WriteCloser,
+	supervisorControl io.ReadWriteCloser,
 	output func(byte, []byte),
 ) (*managedRun, error) {
 	if cmd.SysProcAttr == nil {
@@ -488,7 +488,12 @@ func startManagedCommandWithControl(
 		run.resize = func(req resizeRequest) error {
 			resizeMu.Lock()
 			defer resizeMu.Unlock()
-			return json.NewEncoder(supervisorControl).Encode(req)
+			if err := json.NewEncoder(supervisorControl).Encode(req); err != nil {
+				return err
+			}
+			var acknowledgement [1]byte
+			_, err := io.ReadFull(supervisorControl, acknowledgement[:])
+			return err
 		}
 	}
 	var pumps sync.WaitGroup

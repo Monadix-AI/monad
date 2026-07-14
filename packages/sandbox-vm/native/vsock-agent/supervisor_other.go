@@ -7,7 +7,7 @@ import (
 	"os/exec"
 )
 
-func supervisorCommand(req startRequest) (*exec.Cmd, io.ReadCloser, io.WriteCloser, error) {
+func supervisorCommand(req startRequest) (*exec.Cmd, io.ReadCloser, io.ReadWriteCloser, error) {
 	cmd, err := workloadCommand(req)
 	return cmd, nil, nil, err
 }

@@ -22,7 +22,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (ENABLED) await disposeRealVm(AGENT);
-});
+}, 60_000);
 
 describe.skipIf(!ENABLED)('pre-workload baseline capable-host conformance', () => {
   test('cold capture then restore both admit the first workload', async () => {

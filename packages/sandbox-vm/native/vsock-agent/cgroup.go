@@ -16,6 +16,13 @@ func runCgroupName(runID string) (string, error) {
 }
 
 func writeRunCgroup(path string, limits runLimits, pid int) error {
+	if err := configureRunCgroup(path, limits); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(path, "cgroup.procs"), []byte(strconv.Itoa(pid)), 0o600)
+}
+
+func configureRunCgroup(path string, limits runLimits) error {
 	if limits.MemoryMiB > 0 {
 		bytes := int64(limits.MemoryMiB) * 1024 * 1024
 		if err := os.WriteFile(filepath.Join(path, "memory.max"), []byte(strconv.FormatInt(bytes, 10)), 0o600); err != nil {
@@ -27,7 +34,7 @@ func writeRunCgroup(path string, limits runLimits, pid int) error {
 			return err
 		}
 	}
-	return os.WriteFile(filepath.Join(path, "cgroup.procs"), []byte(strconv.Itoa(pid)), 0o600)
+	return nil
 }
 
 func unifiedCgroupPath(data string) (string, error) {

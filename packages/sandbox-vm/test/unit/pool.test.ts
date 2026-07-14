@@ -14,6 +14,7 @@ const artifacts = {
   mountPlanSchemaVersion: 1,
   observerDigest: 'observer-a',
   protocolVersion: 2,
+  workloadUid: 1001,
   runIsolation: { memoryMiB: 1024, maxProcesses: 256, terminateGraceMs: 5000 },
   vsockPort: 1024
 };

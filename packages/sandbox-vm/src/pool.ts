@@ -36,6 +36,7 @@ export interface EffectiveVmIdentityInputs {
   mountPlanSchemaVersion: number;
   observerDigest: string;
   protocolVersion: number;
+  workloadUid: number;
   runIsolation: {
     memoryMiB: number;
     maxProcesses: number;

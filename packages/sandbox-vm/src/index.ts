@@ -65,6 +65,10 @@ const AGENT_PATH = join(dirname(import.meta.dir), 'vendor', `vsock-agent-${AGENT
 const OBSERVER_PATH = join(dirname(import.meta.dir), 'vendor', `seccomp-observer-${AGENT_ARCH}`);
 const GVFORWARDER_PATH = join(dirname(import.meta.dir), 'vendor', `gvforwarder-${AGENT_ARCH}`);
 const VSOCK_EXEC_PORT = HVSOCK_PORTS.exec; // 1024 on every platform — the agent's listen port
+const WORKLOAD_UID = (() => {
+  const uid = process.getuid?.();
+  return uid !== undefined && uid > 0 ? uid : 1001;
+})();
 let agentArtifact: { b64: string; digest: string } | null = null;
 async function guestAgentArtifact(): Promise<{ b64: string; digest: string }> {
   if (agentArtifact === null) {
@@ -239,6 +243,7 @@ async function bootVm(
       overlays: mountPlan.overlays,
       egress,
       env: proxyEnv,
+      workloadUid: WORKLOAD_UID,
       ...(win
         ? {
             mountTransport: '9p-vsock' as const,
@@ -471,6 +476,7 @@ export const vmLauncher: SandboxLauncher = {
           mountPlanSchemaVersion: MOUNT_PLAN_SCHEMA_VERSION,
           observerDigest: observer.digest,
           protocolVersion: VSOCK_PROTOCOL_VERSION,
+          workloadUid: WORKLOAD_UID,
           runIsolation: { memoryMiB: 1024, maxProcesses: 256, terminateGraceMs: 5000 },
           vsockPort: VSOCK_EXEC_PORT
         });

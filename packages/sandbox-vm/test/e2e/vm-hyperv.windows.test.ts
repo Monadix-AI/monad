@@ -92,7 +92,7 @@ afterAll(async () => {
   } finally {
     if (root) rmSync(root, { recursive: true, force: true });
   }
-});
+}, 120_000);
 
 describe.skipIf(!ENABLED)('real Windows Hyper-V hvsock and 9p confinement', () => {
   test('9p shares preserve spaces, read-only mode, deny overlays, and credential masks', async () => {
