@@ -30,7 +30,9 @@ export function createInteractionsController(service: HostInteractionService) {
         start(controller) {
           const send = (event: unknown) =>
             controller.enqueue(encoder.encode(`event: interaction\ndata: ${JSON.stringify(event)}\n\n`));
-          for (const interaction of service.listPending()) send({ type: 'upsert', interaction });
+          const pending = service.listPending();
+          if (pending.length === 0) controller.enqueue(encoder.encode(': connected\n\n'));
+          for (const interaction of pending) send({ type: 'upsert', interaction });
           unsubscribe = service.subscribe(send);
         },
         cancel() {

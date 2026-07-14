@@ -26,9 +26,11 @@ function memoryState(): ExperienceStateStore {
   };
 }
 
-function fixture() {
+function fixture(pendingApprovals: Array<{ id: string }> = []) {
   const scheduled: string[] = [];
   const paused: string[] = [];
+  const resolvedApprovals: Array<{ decision: string; id: string }> = [];
+  const approvalScopes: Array<{ projectId: string; sessionId: string }> = [];
   const context = {
     atomPackId: 'monad-power-pack',
     principalId: 'prn_a',
@@ -44,12 +46,17 @@ function fixture() {
         items: [{ id: 'evt_a', kind: 'tool.called', text: 'Tool calls', createdAt: '2026-07-14T00:00:00.000Z' }],
         nextCursor: null
       }),
-      listPendingApprovals: async () => [],
+      listPendingApprovals: async (projectId: string, sessionId: string) => {
+        approvalScopes.push({ projectId, sessionId });
+        return pendingApprovals;
+      },
       pause: async (sessionId: string) => {
         paused.push(sessionId);
       },
       cancel: async () => {},
-      resolveApproval: async () => {}
+      resolveApproval: async (id: string, decision: string) => {
+        resolvedApprovals.push({ id, decision });
+      }
     },
     workerScheduler: {
       schedule: async (_projectId: string, input: { key: string }) => {
@@ -58,7 +65,7 @@ function fixture() {
       cancel: async () => {}
     }
   } as unknown as WorkspaceExperienceApiContext;
-  return { context, scheduled, paused };
+  return { context, scheduled, paused, resolvedApprovals, approvalScopes };
 }
 
 async function call(context: WorkspaceExperienceApiContext, method: string, path: string, body?: unknown, query = '') {
@@ -206,6 +213,40 @@ test('pause keeps a task non-runnable until an explicit resume', async () => {
   });
   expect(resumedTask.json.task).toMatchObject({ executionState: 'queued', version: 4 });
   expect(scheduled).toEqual(['dispatch']);
+});
+
+test('resolves only approvals that belong to the requested task session', async () => {
+  const { context, resolvedApprovals, approvalScopes } = fixture([{ id: 'approval-a' }]);
+  const created = await call(context, 'POST', '/tasks/create', {
+    projectId: 'prj_a',
+    title: 'A',
+    idempotencyKey: 'request-a'
+  });
+  const taskId = String((created.json.task as { id: string }).id);
+
+  const rejected = await call(context, 'POST', '/execution/control', {
+    action: 'resolve-approval',
+    approvalId: 'approval-other',
+    decision: 'approved',
+    projectId: 'prj_a',
+    taskId
+  });
+  expect(rejected.response.status).toBe(400);
+  expect(resolvedApprovals).toEqual([]);
+
+  const resolved = await call(context, 'POST', '/execution/control', {
+    action: 'resolve-approval',
+    approvalId: 'approval-a',
+    decision: 'approved',
+    projectId: 'prj_a',
+    taskId
+  });
+  expect(resolved.response.status).toBe(200);
+  expect(resolvedApprovals).toEqual([{ id: 'approval-a', decision: 'approved' }]);
+  expect(approvalScopes).toEqual([
+    { projectId: 'prj_a', sessionId: 'ses_a' },
+    { projectId: 'prj_a', sessionId: 'ses_a' }
+  ]);
 });
 
 test('unknown proposal decisions and execution actions are rejected without mutation', async () => {

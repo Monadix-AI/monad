@@ -254,11 +254,14 @@ class MonadKanban extends HTMLElementBase {
           });
         break;
       case 'resolve-approval':
-        void this.#post('/execution/control', {
-          action: 'resolve-approval',
-          approvalId: target.dataset.approvalId,
-          decision: target.dataset.decision
-        });
+        if (task)
+          void this.#post('/execution/control', {
+            action: 'resolve-approval',
+            approvalId: target.dataset.approvalId,
+            decision: target.dataset.decision,
+            projectId: task.projectId,
+            taskId: task.id
+          });
         break;
       case 'execution-control':
         if (task)

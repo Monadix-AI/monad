@@ -259,11 +259,13 @@ export function createHttpTransport(
         const status =
           error.code === 'not_found'
             ? 404
-            : error.code === 'invalid_lease'
-              ? 403
-              : error.code === 'source_limit'
-                ? 429
-                : 409;
+            : error.code === 'invalid_submission'
+              ? 400
+              : error.code === 'invalid_lease'
+                ? 403
+                : error.code === 'source_limit'
+                  ? 429
+                  : 409;
         logHttpCall(request.method, url.pathname, status, durationMs, error, resolveLiveFlag(developerMode));
         return jsonResponse(status, { error: error.message, code: error.code }, request);
       }

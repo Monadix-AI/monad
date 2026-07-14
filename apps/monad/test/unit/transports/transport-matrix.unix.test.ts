@@ -19,6 +19,7 @@ const EXTERNAL_DEPENDENCY_ROUTES = new Set([
   '/v1/settings/mcp-servers/registry/search',
   '/v1/settings/external-agents/presets'
 ]);
+const STREAMING_ROUTES = new Set(['/v1/interactions/events']);
 
 let tcp: ReturnType<typeof Bun.serve>;
 let uds: ReturnType<typeof Bun.serve>;
@@ -50,6 +51,7 @@ function readRoutes(): string[] {
   return mounted.routes
     .filter((r) => r.method === 'GET' && !r.path.includes(':'))
     .filter((r) => !EXTERNAL_DEPENDENCY_ROUTES.has(r.path))
+    .filter((r) => !STREAMING_ROUTES.has(r.path))
     .map((r) => r.path)
     .sort();
 }
@@ -64,6 +66,23 @@ describe('transport parity (TCP loopback ⇆ Unix socket)', () => {
       expect(u.body, `${path} body`).toEqual(t.body);
     });
   }
+
+  test('GET /v1/interactions/events streams over both transports', async () => {
+    const [viaTcp, viaUds] = await Promise.all([
+      fetch(`http://127.0.0.1:${tcp.port}/v1/interactions/events`),
+      fetch('http://localhost/v1/interactions/events', { unix: sockPath })
+    ]);
+    expect(viaTcp.status).toBe(200);
+    expect(viaUds.status).toBe(200);
+    expect(viaTcp.headers.get('content-type')).toStartWith('text/event-stream');
+    expect(viaUds.headers.get('content-type')).toStartWith('text/event-stream');
+    const tcpReader = viaTcp.body?.getReader();
+    const udsReader = viaUds.body?.getReader();
+    const [tcpChunk, udsChunk] = await Promise.all([tcpReader?.read(), udsReader?.read()]);
+    expect(new TextDecoder().decode(tcpChunk?.value)).toBe(': connected\n\n');
+    expect(new TextDecoder().decode(udsChunk?.value)).toBe(': connected\n\n');
+    await Promise.all([tcpReader?.cancel(), udsReader?.cancel()]);
+  });
 
   test('GET /health (status / doctor) matches on both transports', async () => {
     const { tcp: t, uds: u } = await bothTransports('/health');

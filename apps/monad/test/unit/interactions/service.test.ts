@@ -87,6 +87,31 @@ describe('HostInteractionService', () => {
     ).toThrow(new HostInteractionError('incompatible_presenter', 'Presenter cannot claim background interactions'));
   });
 
+  test('rejects interaction patterns with catastrophic backtracking risk', async () => {
+    const { service } = createHarness();
+
+    const result = service.request(
+      source,
+      {
+        type: 'form',
+        title: 'Unsafe validation',
+        fields: [{ id: 'value', type: 'string', label: 'Value', pattern: '(a|aa)+$' }]
+      },
+      { mode: 'background' }
+    );
+    const outcome = await Promise.race([result.catch((error: unknown) => error), Bun.sleep(0)]);
+    const pending = service.listPending()[0];
+    if (pending) {
+      const claim = service.claim(pending.id, 'web-1', fullCapabilities);
+      service.cancel(pending.id, claim.leaseToken, 'close');
+    }
+
+    expect(outcome).toEqual(
+      new HostInteractionError('unsafe_pattern', 'Interaction field "value" uses an unsafe validation pattern')
+    );
+    expect(service.listPending()).toEqual([]);
+  });
+
   test('refuses a presenter that cannot render the entire request', () => {
     const { service } = createHarness();
     void service.request(source, secretRequest, { mode: 'background' });
@@ -139,6 +164,63 @@ describe('HostInteractionService', () => {
     expect(await resultPromise).toEqual({ status: 'submitted', values: { confirmed: true } });
     expect(() => service.submit('interaction-1', leaseToken, { confirmed: false })).toThrow(
       new HostInteractionError('not_found', 'Interaction not found')
+    );
+  });
+
+  test('rejects submitted values that do not satisfy the stored request', async () => {
+    const { service } = createHarness();
+    const resultPromise = service.request(source, secretRequest, { mode: 'background' });
+    const { leaseToken } = service.claim('interaction-1', 'web-1', fullCapabilities);
+
+    expect(() => service.submit('interaction-1', leaseToken, { apiKey: 42, injected: true })).toThrow(
+      new HostInteractionError('invalid_submission', 'Interaction field "apiKey" must be a string')
+    );
+    expect(service.listPending()).toEqual([expect.objectContaining({ id: 'interaction-1', state: 'claimed' })]);
+
+    service.submit('interaction-1', leaseToken, { apiKey: 'secret-value' });
+    expect(await resultPromise).toEqual({ status: 'submitted', values: { apiKey: 'secret-value' } });
+  });
+
+  test('bounds strings before evaluating accepted validation patterns', async () => {
+    const { service } = createHarness();
+    const resultPromise = service.request(
+      source,
+      {
+        type: 'form',
+        title: 'Validate value',
+        fields: [{ id: 'value', type: 'string', label: 'Value', pattern: '^[a-z]+$' }]
+      },
+      { mode: 'background' }
+    );
+    const { leaseToken } = service.claim('interaction-1', 'web-1', fullCapabilities);
+
+    expect(() => service.submit('interaction-1', leaseToken, { value: 'a'.repeat(4_097) })).toThrow(
+      new HostInteractionError('invalid_submission', 'Interaction field "value" is too long for pattern validation')
+    );
+    service.submit('interaction-1', leaseToken, { value: 'safe' });
+    expect(await resultPromise).toEqual({ status: 'submitted', values: { value: 'safe' } });
+  });
+
+  test('rejects undeclared select values and false confirmations', () => {
+    const { service } = createHarness();
+    void service.request(source, confirmRequest, { mode: 'background' });
+    const confirmLease = service.claim('interaction-1', 'web-1', fullCapabilities).leaseToken;
+    expect(() => service.submit('interaction-1', confirmLease, { confirmed: false })).toThrow(
+      new HostInteractionError('invalid_submission', 'Confirmation must be explicitly accepted')
+    );
+
+    void service.request(
+      source,
+      {
+        type: 'select',
+        title: 'Choose a backend',
+        options: [{ label: 'Local', value: 'local' }]
+      },
+      { mode: 'background' }
+    );
+    const selectLease = service.claim('interaction-2', 'web-1', fullCapabilities).leaseToken;
+    expect(() => service.submit('interaction-2', selectLease, { value: 'remote' })).toThrow(
+      new HostInteractionError('invalid_submission', 'Selection must be one of the declared options')
     );
   });
 

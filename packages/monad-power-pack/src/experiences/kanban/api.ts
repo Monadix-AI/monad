@@ -152,8 +152,14 @@ const controlExecution = route(async (request, context) => {
   const data = await body(request);
   const action = oneOf(data.action, 'action', ['resolve-approval', 'pause', 'resume', 'cancel'] as const);
   if (action === 'resolve-approval') {
+    const current = await taskFrom(data, new KanbanStore(context));
+    const approvalId = string(data.approvalId, 'approvalId');
+    const pending = await context.projectSessions.listPendingApprovals(current.projectId, current.sessionId);
+    if (!pending.some((approval) => approval.id === approvalId)) {
+      throw new Error(`approval does not belong to Kanban task: ${approvalId}`);
+    }
     const decision = oneOf(data.decision, 'decision', ['approved', 'denied'] as const);
-    await context.projectSessions.resolveApproval(string(data.approvalId, 'approvalId'), decision);
+    await context.projectSessions.resolveApproval(approvalId, decision);
     return json({ ok: true });
   }
   const store = new KanbanStore(context);

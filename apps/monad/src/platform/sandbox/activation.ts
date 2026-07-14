@@ -10,6 +10,7 @@ import { resolveSecretRef } from '#/config/secrets.ts';
 import { applyBackendSettingsUpdate, serializeSandboxBackendRef } from '#/platform/sandbox/backend-settings.ts';
 
 type SubmittedSettings = Omit<NonNullable<SetSandboxSettingsRequest['backendSettings']>, 'ref'>;
+type ResolvedLauncherSettings = { values: Record<string, unknown>; secrets: string[] };
 
 export interface SandboxActivationSnapshot {
   cfg: MonadConfig;
@@ -56,7 +57,7 @@ function resolvedLauncherSettings(
   descriptor: SandboxLauncherDescriptor,
   stored: Record<string, unknown>,
   auth: MonadAuth
-): { values: Record<string, unknown>; secrets: string[] } {
+): ResolvedLauncherSettings {
   const values: Record<string, unknown> = {};
   const secrets: string[] = [];
   for (const field of descriptor.settings?.fields ?? []) {
@@ -81,20 +82,21 @@ function resolvedLauncherSettings(
   return { values, secrets };
 }
 
-export async function prepareSandboxCandidate(
+function submittedSecretValues(submitted?: SubmittedSettings): string[] {
+  return Object.values(submitted?.secrets ?? {}).flatMap((update) =>
+    update.action === 'replace' ? [update.value] : []
+  );
+}
+
+async function prepareResolvedSandboxCandidate(
   ref: SandboxBackendRef,
   candidate: SandboxLauncher,
-  snapshot: SandboxActivationSnapshot
+  resolved: ResolvedLauncherSettings
 ): Promise<void> {
   const key = serializeSandboxBackendRef(ref);
   if (candidate === noneLauncher || candidate.kind === 'none') {
     throw new Error(`sandbox backend "${key}" provides no confinement`);
   }
-  const resolved = resolvedLauncherSettings(
-    candidate.descriptor,
-    snapshot.cfg.sandbox.backendSettings[key] ?? {},
-    snapshot.auth
-  );
   try {
     await candidate.configure?.(resolved.values);
     await candidate.prepare?.();
@@ -104,6 +106,20 @@ export async function prepareSandboxCandidate(
   } catch (error) {
     throw new Error(errorText(error, resolved.secrets));
   }
+}
+
+export async function prepareSandboxCandidate(
+  ref: SandboxBackendRef,
+  candidate: SandboxLauncher,
+  snapshot: SandboxActivationSnapshot
+): Promise<void> {
+  const key = serializeSandboxBackendRef(ref);
+  const resolved = resolvedLauncherSettings(
+    candidate.descriptor,
+    snapshot.cfg.sandbox.backendSettings[key] ?? {},
+    snapshot.auth
+  );
+  await prepareResolvedSandboxCandidate(ref, candidate, resolved);
 }
 
 export function createSandboxActivationService(options: SandboxActivationOptions): SandboxActivationService {
@@ -128,10 +144,37 @@ export function createSandboxActivationService(options: SandboxActivationOptions
     const previousLauncher = currentLauncher();
     const next = structuredClone(previous);
     let candidate: SandboxLauncher | undefined;
+    let candidateSettings: ResolvedLauncherSettings | undefined;
+    let previousSettings: ResolvedLauncherSettings | undefined;
+    const submittedSecrets = submittedSecretValues(submitted);
+
+    function activationSecrets(): string[] {
+      return [...submittedSecrets, ...(candidateSettings?.secrets ?? []), ...(previousSettings?.secrets ?? [])];
+    }
+
+    async function restoreActiveLauncherSettings(): Promise<string | undefined> {
+      if (!candidate || candidate !== previousLauncher || !previousSettings) return undefined;
+      try {
+        await previousLauncher.configure?.(previousSettings.values);
+        return undefined;
+      } catch (error) {
+        return errorText(error, activationSecrets());
+      }
+    }
 
     try {
       candidate = resolveLauncher(ref, platform);
       if (!candidate) throw new Error(`sandbox backend "${serializeSandboxBackendRef(ref)}" is not registered`);
+      const previousKey = serializeSandboxBackendRef(previousRef);
+      try {
+        previousSettings = resolvedLauncherSettings(
+          previousLauncher.descriptor,
+          previous.cfg.sandbox.backendSettings[previousKey] ?? {},
+          previous.auth
+        );
+      } catch (error) {
+        if (candidate === previousLauncher) throw error;
+      }
 
       if (submitted) {
         const applied = applyBackendSettingsUpdate(next.cfg.sandbox.backendSettings, next.auth, candidate.descriptor, {
@@ -141,13 +184,21 @@ export function createSandboxActivationService(options: SandboxActivationOptions
         next.cfg.sandbox.backendSettings = applied.backendSettings;
         next.auth = applied.auth;
       }
-      await prepareSandboxCandidate(ref, candidate, next);
+      const key = serializeSandboxBackendRef(ref);
+      candidateSettings = resolvedLauncherSettings(
+        candidate.descriptor,
+        next.cfg.sandbox.backendSettings[key] ?? {},
+        next.auth
+      );
+      await prepareResolvedSandboxCandidate(ref, candidate, candidateSettings);
     } catch (error) {
+      const restoreError = await restoreActiveLauncherSettings();
+      const message = errorText(error, activationSecrets());
       return {
         requested: ref,
         effective: previousRef,
         status: 'error',
-        error: errorText(error)
+        error: restoreError ? `${message}; failed to restore previous launcher settings: ${restoreError}` : message
       };
     }
 
@@ -158,11 +209,13 @@ export function createSandboxActivationService(options: SandboxActivationOptions
       await options.persist(next, previous);
     } catch (error) {
       swapLauncher(previousLauncher);
+      const restoreError = await restoreActiveLauncherSettings();
+      const message = errorText(error, activationSecrets());
       return {
         requested: ref,
         effective: previousRef,
         status: 'error',
-        error: errorText(error)
+        error: restoreError ? `${message}; failed to restore previous launcher settings: ${restoreError}` : message
       };
     }
 

@@ -102,6 +102,13 @@ test('atom interaction can be claimed and completed once over HTTP without echoi
   expect(renewed.status).toBe(200);
   expect(await renewed.json()).toEqual({ ok: true });
 
+  const invalidSubmission = await call(
+    '/v1/interactions/interaction-http-1/submit',
+    json('POST', { leaseToken: 'lease-http-1', values: { apiKey: 42 } })
+  );
+  expect(invalidSubmission.status).toBe(400);
+  expect(await invalidSubmission.json()).toMatchObject({ code: 'invalid_submission' });
+
   const submitted = await call(
     '/v1/interactions/interaction-http-1/submit',
     json('POST', {

@@ -17,6 +17,7 @@ function launcher(
   kind: string,
   hooks: {
     configure?: (settings: Record<string, unknown>) => void | Promise<void>;
+    descriptor?: SandboxLauncher['descriptor'];
     prepare?: () => void | Promise<void>;
     available?: () => boolean;
     disposeIdle?: () => void | Promise<void>;
@@ -25,7 +26,7 @@ function launcher(
 ): SandboxLauncher {
   return {
     kind,
-    descriptor: { name: kind },
+    descriptor: hooks.descriptor ?? { name: kind },
     configure: hooks.configure,
     prepare: hooks.prepare ? async () => hooks.prepare?.() : undefined,
     isAvailable: hooks.available,
@@ -120,6 +121,95 @@ test('persistence failure swaps the runtime back to the old launcher', async () 
   expect(result).toMatchObject({ status: 'error', error: 'disk full', effective: oldRef });
   expect(sandboxLauncher()).toBe(f.old);
   expect(f.snapshot.cfg.sandbox.activeBackend).toEqual(oldRef);
+});
+
+test('persistence failure restores settings when reconfiguring the active launcher', async () => {
+  const configured: unknown[] = [];
+  const old = launcher('old', {
+    descriptor: {
+      name: 'old',
+      settings: { fields: [{ id: 'image', type: 'string', label: 'Image' }] }
+    },
+    configure: (settings) => {
+      configured.push(settings.image);
+    }
+  });
+  const f = fixture({ old, persist: async () => Promise.reject(new Error('disk full')) });
+  f.snapshot.cfg.sandbox.backendSettings[serializeSandboxBackendRef(oldRef)] = { image: 'old-image' };
+
+  const result = await f.service.activateBackend(oldRef, { values: { image: 'next-image' } });
+
+  expect(result).toMatchObject({ status: 'error', error: 'disk full', effective: oldRef });
+  expect(configured).toEqual(['next-image', 'old-image']);
+  expect(sandboxLauncher()).toBe(old);
+});
+
+test('active launcher restoration errors redact previously stored secrets', async () => {
+  const configured: unknown[] = [];
+  const old = launcher('old', {
+    descriptor: {
+      name: 'old',
+      settings: { fields: [{ id: 'apiKey', type: 'secret', label: 'API key', required: true }] }
+    },
+    configure: (settings) => {
+      configured.push(settings.apiKey);
+      if (settings.apiKey === 'old-secret') throw new Error(`restore failed for ${settings.apiKey}`);
+    }
+  });
+  const f = fixture({ old, persist: async () => Promise.reject(new Error('disk full')) });
+  f.snapshot.cfg.sandbox.backendSettings[serializeSandboxBackendRef(oldRef)] = {
+    apiKey: ['$', '{secret:sandbox/builtin/old/apiKey}'].join('')
+  };
+  f.snapshot.auth.namedSecrets = { 'sandbox/builtin/old/apiKey': 'old-secret' };
+
+  const result = await f.service.activateBackend(oldRef, {
+    secrets: { apiKey: { action: 'replace', value: 'next-secret' } }
+  });
+
+  expect(configured).toEqual(['next-secret', 'old-secret']);
+  expect(result.error).toContain('[redacted]');
+  expect(result.error).not.toContain('old-secret');
+});
+
+test('persistence errors redact newly submitted sandbox secrets', async () => {
+  const old = launcher('old', {
+    descriptor: {
+      name: 'old',
+      settings: { fields: [{ id: 'apiKey', type: 'secret', label: 'API key', required: true }] }
+    }
+  });
+  const f = fixture({ old, persist: async () => Promise.reject(new Error('persist failed for next-secret')) });
+  f.snapshot.cfg.sandbox.backendSettings[serializeSandboxBackendRef(oldRef)] = {
+    apiKey: ['$', '{secret:sandbox/builtin/old/apiKey}'].join('')
+  };
+  f.snapshot.auth.namedSecrets = { 'sandbox/builtin/old/apiKey': 'old-secret' };
+
+  const result = await f.service.activateBackend(oldRef, {
+    secrets: { apiKey: { action: 'replace', value: 'next-secret' } }
+  });
+
+  expect(result.error).toContain('[redacted]');
+  expect(result.error).not.toContain('next-secret');
+  expect(result.error).not.toContain('old-secret');
+});
+
+test('persistence errors redact secrets from the previous launcher', async () => {
+  const old = launcher('old', {
+    descriptor: {
+      name: 'old',
+      settings: { fields: [{ id: 'apiKey', type: 'secret', label: 'API key', required: true }] }
+    }
+  });
+  const f = fixture({ old, persist: async () => Promise.reject(new Error('persist failed for old-secret')) });
+  f.snapshot.cfg.sandbox.backendSettings[serializeSandboxBackendRef(oldRef)] = {
+    apiKey: ['$', '{secret:sandbox/builtin/old/apiKey}'].join('')
+  };
+  f.snapshot.auth.namedSecrets = { 'sandbox/builtin/old/apiKey': 'old-secret' };
+
+  const result = await f.service.activateBackend(nextRef);
+
+  expect(result.error).toContain('[redacted]');
+  expect(result.error).not.toContain('old-secret');
 });
 
 test('concurrent activation requests are serialized', async () => {
