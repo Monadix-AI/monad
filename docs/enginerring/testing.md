@@ -202,15 +202,20 @@ Lives in `test/e2e/`, runs via `scripts/bun-test.ts ... --only-failures`. Uses a
 
 Example: `apps/monad/test/e2e/channel-telegram-smoke.test.ts` — real Telegram adapter, mock Bot API.
 
-### 5b. Subprocess smoke (`test/smoke/*.ts`)
+### 5b. Subprocess smoke (`test/smoke/*`)
 
 Required when the test must cross a real process boundary (stdio, IPC, install scripts). Cannot run inside `bun test` because the test process and the daemon would be the same process.
 
-- Lives at repo root `test/smoke/{feature}.ts` (no `.test.ts` suffix).
+- Named `{feature}` with **no `.test.ts` suffix** (the `bun test` glob must not pick it up).
 - Exits non-zero on failure — CI-able without a test framework.
-- Run with `bun test/smoke/feature.ts`.
-
-Example: `test/smoke/acp.ts` — spawns `monad --acp` as a child process and drives it with the ACP SDK over stdio.
+- Run directly: `bun <path>/{feature}.ts` (or `pwsh` for a PowerShell smoke).
+- **Location follows ownership:**
+  - **Package-specific** smoke (drives one package's binary/launcher) lives in that package:
+    `packages/<pkg>/test/smoke/{feature}.ts`. Examples: `packages/sandbox/test/smoke/appcontainer-win32.ts`
+    (AppContainer launcher), `packages/sandbox-vm/test/smoke/winvm-helper.ps1` (Hyper-V helper).
+  - **Cross-cutting / whole-daemon** smoke (spans multiple packages or drives the daemon) lives at
+    repo root `test/smoke/{feature}.ts`. Examples: `test/smoke/acp.ts` (spawns `monad --acp`),
+    `test/smoke/codex-appserver-*.ts` (daemon + atoms).
 
 ---
 

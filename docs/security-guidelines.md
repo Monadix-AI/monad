@@ -250,7 +250,7 @@ AppContainer launcher (`monad-sandbox-appcontainer.exe`) — selected when prese
 - Job Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` in both launchers.
 - Compiles with `_WIN32_WINNT 0x0A00` set in-source so userenv.h declares the AppContainer APIs;
   without it clang (the arm64 llvm-mingw build) errors and gcc silently builds wrong implicit stubs.
-- **Validated live on Windows 11 ARM64 (build 26200)** via `test/smoke/appcontainer-win32.ts`
+- **Validated live on Windows 11 ARM64 (build 26200)** via `packages/sandbox/test/smoke/appcontainer-win32.ts`
   (write-grant, write-deny outside root, credential read-deny, orphan sweep, ACE revert all pass).
   The launcher must be the host's native architecture — an x64-emulated launcher cannot start
   AppContainer children (`STATUS_DLL_INIT_FAILED`).
@@ -315,7 +315,7 @@ debugging a too-tight policy. Opt-in (nothing spawned unless started); a no-op o
 | **macOS: seccomp equivalent missing** | Low | Seatbelt's `(deny process*)` can prevent fork/exec but there is no fine-grained syscall filter equivalent to seccomp-bpf. Filed as future work if cross-process injection becomes a realistic threat model item. |
 | **Windows: AppContainer DLL path grants** | Low | `bun.exe` loads runtime DLLs from its install directory. `System32` has `ALL_APPLICATION_PACKAGES` ACE so system DLLs load correctly. If bun's install dir lacks this ACE, the AppContainer child may fail to start; the launcher falls back to unconfined in that case. True fix: grant `ALL_APP_PACKAGES` on the bun install dir during install. Pending real-machine validation. |
 | **Windows: named pipes / COM not protected by AppContainer** | Low | Some legacy COM objects and named pipes with default DACLs may be accessible even from AppContainer. Not a primary threat in the local agent model. |
-| **Windows: no sandbox tests in CI** | Low | `sandbox-escape.linux.test.ts` and `seatbelt.macos.test.ts` run in CI; there is no equivalent `win32.test.ts`. The CI compile gate (ci.yml) validates both Windows launchers build cleanly. `test/smoke/appcontainer-win32.ts` drives the AppContainer launcher on a real Windows host (confinement, orphan sweep, ACE lifecycle) and **passes live on Win11 ARM64 26200**; it is not yet wired into CI (no Windows runtime runner). Pending CI integration. |
+| **Windows: no sandbox tests in CI** | Low | `sandbox-escape.linux.test.ts` and `seatbelt.macos.test.ts` run in CI; there is no equivalent `win32.test.ts`. The CI compile gate (ci.yml) validates both Windows launchers build cleanly. `packages/sandbox/test/smoke/appcontainer-win32.ts` drives the AppContainer launcher on a real Windows host (confinement, orphan sweep, ACE lifecycle) and **passes live on Win11 ARM64 26200**; it is not yet wired into CI (no Windows runtime runner). Pending CI integration. |
 | **`seccomp: 2` test fragile inside Docker** | Info | `/proc/self/status Seccomp: 2` check assumes the process is not already in a seccomp sandbox. Docker's default seccomp profile will cause the check to pass incorrectly in some CI configurations. The test is already guarded by `if (!makeLandlockLauncher()) process.exit(0)` but there's no guard against a pre-existing filter. |
 
 Touching a network boundary, the filesystem, a credential, or tool dispatch? Confirm:

@@ -5,17 +5,18 @@
 # VM boot. Requires: Go 1.24+, and for the boot step, Hyper-V (Pro/Enterprise/Education + nested virt
 # if this is itself a VM). Bun steps are optional.
 #
-#   pwsh test/smoke/winvm-helper.ps1            # tier-0: build + tests + probe (no Hyper-V needed)
-#   pwsh test/smoke/winvm-helper.ps1 -Boot      # also attempt a full `msvm run` (needs Hyper-V)
+#   pwsh packages/sandbox-vm/test/smoke/winvm-helper.ps1            # tier-0: build + tests + probe (no Hyper-V needed)
+#   pwsh packages/sandbox-vm/test/smoke/winvm-helper.ps1 -Boot      # also attempt a full `msvm run` (needs Hyper-V)
 #
 # Run the elevated one-time hvsock registration separately (needs admin):
-#   pwsh -Command "Start-Process pwsh -Verb RunAs -ArgumentList '-File','test/smoke/winvm-helper.ps1','-SetupOnly'"
+#   pwsh -Command "Start-Process pwsh -Verb RunAs -ArgumentList '-File','packages/sandbox-vm/test/smoke/winvm-helper.ps1','-SetupOnly'"
 
 param([switch]$Boot, [switch]$SetupOnly)
 
 $ErrorActionPreference = 'Stop'
-$repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
-$helperSrc = Join-Path $repo 'native\winvm-helper'
+# This smoke lives in the package (packages/sandbox-vm/test/smoke); the package root is two up.
+$pkg = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+$helperSrc = Join-Path $pkg 'native\winvm-helper'
 $arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'amd64' }
 $helperExe = Join-Path $env:TEMP "winvm-helper-$arch.exe"
 
@@ -56,12 +57,12 @@ if ($probe.hyperv) { Ok 'Hyper-V usable' } else { Write-Host "Hyper-V NOT usable
 Step 'hvsock port registration state (--check, no admin)'
 $reg = & $helperExe setup --check --ports '1024,1025,1026-1057' | ConvertFrom-Json
 if ($reg.registered) { Ok 'all hvsock ports registered' }
-else { Write-Host "Not registered (run: pwsh test/smoke/winvm-helper.ps1 -SetupOnly, elevated). Missing: $($reg.missing -join ',')" -ForegroundColor Yellow }
+else { Write-Host "Not registered (run: pwsh packages/sandbox-vm/test/smoke/winvm-helper.ps1 -SetupOnly, elevated). Missing: $($reg.missing -join ',')" -ForegroundColor Yellow }
 
 # Optional: TS unit tests exercise the Windows path branches (winpath, image tar, bundle New-VHD).
 if (Get-Command bun -ErrorAction SilentlyContinue) {
   Step 'Bun unit tests (sandbox-vm)'
-  Push-Location (Join-Path $repo 'packages\sandbox-vm')
+  Push-Location ($pkg)
   try {
     & bun test test/unit/
     if ($LASTEXITCODE -ne 0) { Write-Host 'Bun unit tests failed (non-fatal here)' -ForegroundColor Yellow } else { Ok 'sandbox-vm unit tests' }
@@ -72,7 +73,7 @@ if ($Boot) {
   if (-not $probe.hyperv) { Die 'cannot boot: Hyper-V not usable (enable Hyper-V; if this is a VM, enable nested virtualization)' }
   if (-not $reg.registered) { Die 'cannot boot: hvsock ports not registered (run -SetupOnly elevated first)' }
   Step 'Full VM boot: msvm run -- echo monad-vm-ok (downloads the CoreOS image on first run)'
-  Push-Location (Join-Path $repo 'packages\sandbox-vm')
+  Push-Location ($pkg)
   try {
     & bun src/cli.ts run -- echo monad-vm-ok
     if ($LASTEXITCODE -ne 0) { Die 'msvm run failed' }

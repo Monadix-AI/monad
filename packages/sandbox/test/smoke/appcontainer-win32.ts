@@ -1,7 +1,7 @@
 // biome-ignore-all lint/suspicious/noConsole: standalone smoke CLI — console is the report
 // Windows AppContainer launcher smoke test — drives monad-sandbox-appcontainer.exe directly
 // (no daemon) to validate confinement, orphan-profile sweep, and ACE lifecycle on a real
-// Windows host. Bun runs natively on Windows, so: `bun test/smoke/appcontainer-win32.ts`.
+// Windows host. Bun runs natively on Windows, so: `bun packages/sandbox/test/smoke/appcontainer-win32.ts`.
 //
 // The launcher path is resolved from (in order): argv[2], $MONAD_APPCONTAINER_BIN, or
 // ./monad-sandbox-appcontainer.exe next to the cwd. Build it first on the VM (or cross-compile):
