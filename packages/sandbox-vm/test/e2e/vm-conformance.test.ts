@@ -1,5 +1,5 @@
 // Real-VM confinement conformance — adversarial, modeled on @anthropic-ai/sandbox-runtime's attack
-// tests. Boots an actual Fedora CoreOS VM (vfkit on macOS, QEMU on Linux) and tries to ESCAPE it, then
+// tests. Boots an actual Fedora CoreOS VM (vfkit, QEMU/KVM, or Hyper-V) and tries to ESCAPE it, then
 // asserts with a HOST-SIDE oracle (never trusts the guest's own error): the escape target on the host
 // is untouched, egress never reaches the network. Gated: MONAD_VM_IT=1 + the base image present.
 //
@@ -15,49 +15,25 @@ import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { imagesDir } from '../../src/image.ts';
-import { configureVmBackend, vmLauncher } from '../../src/index.ts';
-import { configureVmToolchain } from '../../src/toolchain.ts';
+import { realVmAdmission } from './vm-admission.ts';
+import {
+  disposeRealVm,
+  drainBytes as drain,
+  guestArg,
+  type VmPolicy as Policy,
+  prepareRealVm,
+  runSh as sh,
+  spawnVm as spawn,
+  waitForHostFile
+} from './vm-fixture.ts';
 
 // biome-ignore lint/suspicious/noUndeclaredEnvVars: test-only gate for the heavy real-VM run
-const ENABLED = Bun.env.MONAD_VM_IT === '1' && (process.platform === 'darwin' || process.platform === 'linux');
-
-async function drain(stream: ReadableStream<Uint8Array> | undefined): Promise<string> {
-  return stream ? await new Response(stream).text() : '';
-}
-
-type Policy = Parameters<NonNullable<typeof vmLauncher.spawn>>[2];
-type SpawnOptions = Parameters<NonNullable<typeof vmLauncher.spawn>>[1];
-
-function spawn(argv: string[], policy: Policy, agentId: string, options: Partial<SpawnOptions> = {}) {
-  if (!vmLauncher.spawn) throw new Error('vm launcher has no spawn');
-  return vmLauncher.spawn(argv, { sessionId: 's', agentId, ...options }, policy);
-}
-
-async function run(argv: string[], policy: Policy, agentId: string): Promise<{ code: number; stdout: string }> {
-  const proc = spawn(argv, policy, agentId);
-  const stdout = await drain(proc.stdout);
-  const code = await proc.exited;
-  return { code, stdout };
-}
-const sh = (script: string, policy: Policy, agent: string) => run(['sh', '-c', script], policy, agent);
-
-async function waitForHostFile(path: string, timeoutMs = 5000): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (existsSync(path)) return;
-    await Bun.sleep(25);
-  }
-  throw new Error(`guest did not create host oracle ${path}`);
-}
+const ENABLED = realVmAdmission(Bun.env.MONAD_VM_IT) === 'run';
 
 let prepared = false;
 beforeAll(async () => {
   if (!ENABLED) return;
-  configureVmToolchain({});
-  configureVmBackend({ imageConsent: async () => true, idleTtlMs: 5_000, bootTimeoutMs: 600_000 });
-  if (!existsSync(imagesDir())) throw new Error(`no base image in ${imagesDir()} — download it first`);
-  await vmLauncher.prepare?.();
+  await prepareRealVm();
   prepared = true;
 }, 120_000);
 
@@ -94,7 +70,7 @@ describe.skipIf(!ENABLED)('net:none confinement (fs escape, credential, privileg
   }, 30_000);
 
   afterAll(async () => {
-    await vmLauncher.disposeAgent?.(AGENT);
+    await disposeRealVm(AGENT);
     for (const d of [ws, ro]) if (d) rmSync(d, { recursive: true, force: true });
   });
 
@@ -128,7 +104,8 @@ describe.skipIf(!ENABLED)('net:none confinement (fs escape, credential, privileg
 
   test('guest overlays hide denied paths and replace masked files', async () => {
     const r = await sh(
-      `cat ${join(deniedDir, 'id_ed25519')} 2>/dev/null || echo DENIED; printf 'MASK='; cat ${maskedCredential}`,
+      `cat ${guestArg(join(deniedDir, 'id_ed25519'))} 2>/dev/null || echo DENIED; ` +
+        `printf 'MASK='; cat ${guestArg(maskedCredential)}`,
       NET,
       AGENT
     );
@@ -140,7 +117,11 @@ describe.skipIf(!ENABLED)('net:none confinement (fs escape, credential, privileg
   }, 600_000);
 
   test('write OUTSIDE any mount stays in the guest namespace — the host escape target is untouched', async () => {
-    await sh(`echo pwned > ${hostSecretOutside} 2>/dev/null; echo x > /etc/monad-escape 2>/dev/null; true`, NET, AGENT);
+    await sh(
+      `echo pwned > ${guestArg(hostSecretOutside)} 2>/dev/null; echo x > /etc/monad-escape 2>/dev/null; true`,
+      NET,
+      AGENT
+    );
     expect(existsSync('/etc/monad-escape')).toBe(false); // the test host's /etc
     expect(await Bun.file(hostSecretOutside).text()).toBe('HOST_SECRET_NEVER_REACHABLE');
   }, 600_000);
@@ -149,8 +130,10 @@ describe.skipIf(!ENABLED)('net:none confinement (fs escape, credential, privileg
     // srt's highest-value port: symlink inside an allowed dir pointing outside, then write through it.
     // In a VM the link resolves in the guest namespace, so the host target is never reached.
     await sh(
-      `ln -sf ${hostSecretOutside} ${ws}/escape-link; echo pwned > ${ws}/escape-link 2>/dev/null;` +
-        `ln -sf /etc ${ws}/etc-link; echo pwned > ${ws}/etc-link/monad-escape2 2>/dev/null; true`,
+      `ln -sf ${guestArg(hostSecretOutside)} ${guestArg(join(ws, 'escape-link'))}; ` +
+        `echo pwned > ${guestArg(join(ws, 'escape-link'))} 2>/dev/null; ` +
+        `ln -sf /etc ${guestArg(join(ws, 'etc-link'))}; ` +
+        `echo pwned > ${guestArg(join(ws, 'etc-link', 'monad-escape2'))} 2>/dev/null; true`,
       NET,
       AGENT
     );
@@ -160,7 +143,9 @@ describe.skipIf(!ENABLED)('net:none confinement (fs escape, credential, privileg
 
   test('write to a READONLY mount fails (ro virtio-fs), directly and via a symlink into it', async () => {
     const r = await sh(
-      `echo direct > ${ro}/ro-write 2>&1; echo "RC=$?"; ln -sf ${ro} ${ws}/ro-link; echo viaLink > ${ws}/ro-link/x 2>&1; echo "RC2=$?"`,
+      `echo direct > ${guestArg(join(ro, 'ro-write'))} 2>&1; echo "RC=$?"; ` +
+        `ln -sf ${guestArg(ro)} ${guestArg(join(ws, 'ro-link'))}; ` +
+        `echo viaLink > ${guestArg(join(ws, 'ro-link', 'x'))} 2>&1; echo "RC2=$?"`,
       NET,
       AGENT
     );
@@ -171,7 +156,11 @@ describe.skipIf(!ENABLED)('net:none confinement (fs escape, credential, privileg
   }, 600_000);
 
   test('a path NOT mounted (host credential file) is absent in the guest', async () => {
-    const r = await sh(`cat ${hostSecretOutside} 2>&1; ls -la ${hostSecretOutside} 2>&1; true`, NET, AGENT);
+    const r = await sh(
+      `cat ${guestArg(hostSecretOutside)} 2>&1; ls -la ${guestArg(hostSecretOutside)} 2>&1; true`,
+      NET,
+      AGENT
+    );
     expect(r.stdout).not.toContain('HOST_SECRET_NEVER_REACHABLE');
   }, 600_000);
 
@@ -203,9 +192,12 @@ describe.skipIf(!ENABLED)('net:none confinement (fs escape, credential, privileg
   test('cancellation terminates the workload and its descendants before they can mutate the host mount', async () => {
     const ready = join(ws, 'cancel-ready');
     const survived = join(ws, 'descendant-survived');
-    const proc = spawn(['sh', '-c', `touch ${ready}; (sleep 2; echo survived > ${survived}) & wait`], NET, AGENT, {
-      limits: { terminateGraceMs: 500 }
-    });
+    const proc = spawn(
+      ['sh', '-c', `touch ${guestArg(ready)}; (sleep 2; echo survived > ${guestArg(survived)}) & wait`],
+      NET,
+      AGENT,
+      { limits: { terminateGraceMs: 500 } }
+    );
     const output = Promise.all([drain(proc.stdout), drain(proc.stderr)]);
     await waitForHostFile(ready);
 
@@ -242,7 +234,7 @@ describe.skipIf(!ENABLED)('net:none confinement (fs escape, credential, privileg
     const alternate = await mkdtemp(join(tmpdir(), 'monad-vm-policy-'));
     try {
       const target = join(alternate, 'new-policy-visible');
-      await sh(`echo visible > ${target}`, { writableRoots: [alternate], net: 'none' } as Policy, AGENT);
+      await sh(`echo visible > ${guestArg(target)}`, { writableRoots: [alternate], net: 'none' } as Policy, AGENT);
       expect(await Bun.file(target).text()).toBe('visible\n');
     } finally {
       rmSync(alternate, { recursive: true, force: true });
@@ -263,7 +255,7 @@ describe.skipIf(!ENABLED)('net:filtered egress enforcement (direct egress is dro
     (NET as { writableRoots?: string[] }).writableRoots = [ws];
   }, 30_000);
   afterAll(async () => {
-    await vmLauncher.disposeAgent?.(AGENT);
+    await disposeRealVm(AGENT);
     if (ws) rmSync(ws, { recursive: true, force: true });
   });
 
@@ -311,13 +303,13 @@ describe.skipIf(!ENABLED)('VM isolation between agents', () => {
     try {
       // Agent A mounts only wsA; wsB is not mounted in A's VM (separate VM, separate CID, separate clone).
       const r = await sh(
-        `cat ${join(wsB, 'b-secret')} 2>&1; ls ${wsB} 2>&1; true`,
+        `cat ${guestArg(join(wsB, 'b-secret'))} 2>&1; ls ${guestArg(wsB)} 2>&1; true`,
         { writableRoots: [wsA], net: 'none' } as Policy,
         'agt_a'
       );
       expect(r.stdout).not.toContain('AGENT_B_ONLY');
     } finally {
-      await vmLauncher.disposeAgent?.('agt_a');
+      await disposeRealVm('agt_a');
       for (const d of [wsA, wsB]) rmSync(d, { recursive: true, force: true });
     }
   }, 600_000);
