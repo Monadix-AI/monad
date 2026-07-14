@@ -149,3 +149,36 @@ func TestRunRegistryCancelAllTerminatesActiveRuns(t *testing.T) {
 		t.Fatal("active run survived registry shutdown")
 	}
 }
+
+func TestBaselineStateIsPreWorkloadAndIrreversible(t *testing.T) {
+	registry := newRunRegistry()
+	ready, err := registry.prepareBaseline(registry.agentDigest)
+	if err != nil || !ready.CaptureEligible || ready.EverStarted || ready.ActiveRuns != 0 {
+		t.Fatalf("prepare baseline failed: ready=%+v err=%v", ready, err)
+	}
+	if _, err := registry.restoredBaseline(ready.BootEpoch, ready.AgentDigest); err != nil {
+		t.Fatalf("restored baseline failed: %v", err)
+	}
+	run := &managedRun{}
+	if err := registry.add("first", run); err != nil {
+		t.Fatalf("first workload rejected: %v", err)
+	}
+	registry.remove("first", run)
+	if _, err := registry.prepareBaseline(registry.agentDigest); err == nil {
+		t.Fatal("baseline capture accepted after a workload started")
+	}
+}
+
+func TestBaselineRejectsDigestAndEpochMismatch(t *testing.T) {
+	registry := newRunRegistry()
+	if _, err := registry.prepareBaseline("wrong"); err == nil {
+		t.Fatal("wrong guest digest accepted")
+	}
+	ready, err := registry.prepareBaseline(registry.agentDigest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := registry.restoredBaseline("wrong", ready.AgentDigest); err == nil {
+		t.Fatal("wrong boot epoch accepted")
+	}
+}

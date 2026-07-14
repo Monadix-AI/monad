@@ -9,23 +9,26 @@ import (
 )
 
 const (
-	protocolVersion      = 4
+	protocolVersion      = 5
 	maxControlFrameBytes = 1024 * 1024
 	maxStreamFrameBytes  = 64 * 1024
 
-	frameStart      byte = 1
-	frameStdin      byte = 2
-	frameCloseStdin byte = 3
-	frameSignal     byte = 4
-	frameResize     byte = 5
+	frameStart            byte = 1
+	frameStdin            byte = 2
+	frameCloseStdin       byte = 3
+	frameSignal           byte = 4
+	frameResize           byte = 5
+	framePrepareBaseline  byte = 6
+	frameRestoredBaseline byte = 7
 
-	frameStarted     byte = 16
-	frameStdout      byte = 17
-	frameStderr      byte = 18
-	frameError       byte = 19
-	frameExit        byte = 20
-	frameUnsupported byte = 21
-	frameViolation   byte = 22
+	frameStarted       byte = 16
+	frameStdout        byte = 17
+	frameStderr        byte = 18
+	frameError         byte = 19
+	frameExit          byte = 20
+	frameUnsupported   byte = 21
+	frameViolation     byte = 22
+	frameBaselineReady byte = 23
 )
 
 type wireFrame struct {
@@ -67,6 +70,20 @@ type signalRequest struct {
 type startedMessage struct {
 	RunID string `json:"runId"`
 	PID   int    `json:"pid"`
+}
+
+type baselineRequest struct {
+	Version     int    `json:"version"`
+	BootEpoch   string `json:"bootEpoch,omitempty"`
+	AgentDigest string `json:"agentDigest"`
+}
+
+type baselineReadyMessage struct {
+	BootEpoch       string `json:"bootEpoch"`
+	AgentDigest     string `json:"agentDigest"`
+	ActiveRuns      int    `json:"activeRuns"`
+	EverStarted     bool   `json:"everStarted"`
+	CaptureEligible bool   `json:"captureEligible"`
 }
 
 type exitMessage struct {

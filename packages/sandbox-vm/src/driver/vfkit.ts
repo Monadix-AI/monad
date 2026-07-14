@@ -28,8 +28,26 @@ export interface VmSpec {
 
 export interface VmDriver {
   readonly kind: string;
+  readonly baselineSupported: boolean;
   /** Boot a VM from the spec and return a handle. */
   boot(spec: VmSpec): Promise<VmHandle>;
+}
+
+export interface VmBaselineArtifact {
+  readonly manifestPath: string;
+  readonly identity: string;
+  readonly byteSize: number;
+}
+
+export interface VmBaselineDriver extends VmDriver {
+  readonly baselineSupported: true;
+  captureBaseline(spec: VmSpec, handle: VmHandle, artifactDir: string): Promise<string[]>;
+  restoreBaseline(spec: VmSpec, artifact: VmBaselineArtifact): Promise<VmHandle>;
+  invalidateBaseline(artifact: VmBaselineArtifact): Promise<void>;
+}
+
+export function isBaselineDriver(driver: VmDriver): driver is VmBaselineDriver {
+  return driver.baselineSupported === true;
 }
 
 export interface VmHandle {
@@ -81,6 +99,7 @@ export function vfkitArgv(vfkitBin: string, spec: VmSpec): string[] {
 
 export const vfkitDriver: VmDriver = {
   kind: 'vfkit',
+  baselineSupported: false,
   async boot(spec: VmSpec): Promise<VmHandle> {
     const argv = vfkitArgv(this._vfkitBin ?? 'vfkit', spec);
     const proc = Bun.spawn(argv, { stdout: 'pipe', stderr: 'pipe' });

@@ -125,6 +125,7 @@ interface Child {
 
 export const qemuDriver: VmDriver = {
   kind: 'qemu',
+  baselineSupported: false,
   async boot(spec: VmSpec): Promise<VmHandle> {
     if (!tools) throw new Error('qemu driver: not configured (call configureQemuTools)');
     const cid = guestCidFor(spec.bundle.key);

@@ -177,6 +177,7 @@ export async function hypervPreflight(helper: string): Promise<void> {
 
 export const hypervDriver: VmDriver = {
   kind: 'hyperv',
+  baselineSupported: false,
   async boot(spec: VmSpec): Promise<VmHandle> {
     if (!tools) throw new Error('hyperv driver: not configured (call configureHypervTools)');
     const helper = tools.helper;

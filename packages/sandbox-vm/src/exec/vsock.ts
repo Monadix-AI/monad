@@ -50,6 +50,85 @@ interface StartedMessage {
   pid: number;
 }
 
+export interface BaselineReadyMessage {
+  bootEpoch: string;
+  agentDigest: string;
+  activeRuns: number;
+  everStarted: boolean;
+  captureEligible: boolean;
+}
+
+export async function prepareVmBaseline(
+  socketPath: string,
+  agentDigest: string,
+  timeoutMs = 5000
+): Promise<BaselineReadyMessage> {
+  return baselineHandshake(socketPath, HostFrameKind.PrepareBaseline, { agentDigest }, timeoutMs);
+}
+
+export async function confirmRestoredVmBaseline(
+  socketPath: string,
+  bootEpoch: string,
+  agentDigest: string,
+  timeoutMs = 5000
+): Promise<BaselineReadyMessage> {
+  return baselineHandshake(socketPath, HostFrameKind.RestoredBaseline, { bootEpoch, agentDigest }, timeoutMs);
+}
+
+function baselineHandshake(
+  socketPath: string,
+  kind: HostFrameKind.PrepareBaseline | HostFrameKind.RestoredBaseline,
+  request: { bootEpoch?: string; agentDigest: string },
+  timeoutMs: number
+): Promise<BaselineReadyMessage> {
+  return new Promise((resolve, reject) => {
+    const socket = connect(socketPath);
+    const decoder = new FrameDecoder();
+    const timer = setTimeout(() => {
+      socket.destroy();
+      reject(new Error('vsock baseline handshake timed out'));
+    }, timeoutMs);
+    const fail = (error: Error) => {
+      clearTimeout(timer);
+      socket.destroy();
+      reject(error);
+    };
+    socket.once('connect', () => {
+      socket.write(encodeFrame(kind, jsonPayload({ version: VSOCK_PROTOCOL_VERSION, ...request })));
+    });
+    socket.on('data', (chunk) => {
+      try {
+        for (const frame of decoder.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk)) {
+          if (frame.kind === GuestFrameKind.Error) {
+            const value = parseJson(frame.payload, 'baseline error') as { message?: unknown };
+            fail(new Error(typeof value.message === 'string' ? value.message : 'guest rejected baseline'));
+            return;
+          }
+          if (frame.kind !== GuestFrameKind.BaselineReady) throw new Error('vsock protocol: invalid baseline frame');
+          const value = parseJson(frame.payload, 'baseline ready') as Partial<BaselineReadyMessage>;
+          if (
+            typeof value.bootEpoch !== 'string' ||
+            value.bootEpoch.length === 0 ||
+            value.agentDigest !== request.agentDigest ||
+            value.activeRuns !== 0 ||
+            value.everStarted !== false ||
+            value.captureEligible !== true
+          ) {
+            throw new Error('vsock protocol: invalid baseline ready payload');
+          }
+          clearTimeout(timer);
+          socket.end();
+          resolve(value as BaselineReadyMessage);
+        }
+      } catch (error) {
+        fail(error instanceof Error ? error : new Error(String(error)));
+      }
+    });
+    socket.once('error', (error) => fail(new Error(`vsock baseline transport failed: ${error.message}`)));
+    socket.once('close', () => clearTimeout(timer));
+  });
+}
+
 function jsonPayload(value: unknown): Buffer {
   return Buffer.from(JSON.stringify(value), 'utf8');
 }

@@ -1,4 +1,4 @@
-export const VSOCK_PROTOCOL_VERSION = 4;
+export const VSOCK_PROTOCOL_VERSION = 5;
 export const MAX_CONTROL_FRAME_BYTES = 1024 * 1024;
 export const MAX_STREAM_FRAME_BYTES = 64 * 1024;
 
@@ -7,7 +7,9 @@ export enum HostFrameKind {
   Stdin = 2,
   CloseStdin = 3,
   Signal = 4,
-  Resize = 5
+  Resize = 5,
+  PrepareBaseline = 6,
+  RestoredBaseline = 7
 }
 
 export enum GuestFrameKind {
@@ -17,7 +19,8 @@ export enum GuestFrameKind {
   Error = 19,
   Exit = 20,
   Unsupported = 21,
-  Violation = 22
+  Violation = 22,
+  BaselineReady = 23
 }
 
 export interface VsockFrame {

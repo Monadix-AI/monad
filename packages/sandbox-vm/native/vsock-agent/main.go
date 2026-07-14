@@ -19,6 +19,9 @@
 package main
 
 import (
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -50,22 +53,78 @@ type managedRun struct {
 }
 
 type runRegistry struct {
-	mu   sync.Mutex
-	runs map[string]*managedRun
+	mu             sync.Mutex
+	runs           map[string]*managedRun
+	bootEpoch      string
+	agentDigest    string
+	everStarted    bool
+	baselinePaused bool
 }
 
 func newRunRegistry() *runRegistry {
-	return &runRegistry{runs: make(map[string]*managedRun)}
+	var epoch [32]byte
+	if _, err := rand.Read(epoch[:]); err != nil {
+		panic("boot epoch randomness unavailable")
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		panic("guest agent executable unavailable")
+	}
+	bytes, err := os.ReadFile(executable)
+	if err != nil {
+		panic("guest agent digest unavailable")
+	}
+	digest := sha256.Sum256(bytes)
+	return &runRegistry{
+		runs:        make(map[string]*managedRun),
+		bootEpoch:   hex.EncodeToString(epoch[:]),
+		agentDigest: hex.EncodeToString(digest[:]),
+	}
 }
 
 func (registry *runRegistry) add(runID string, run *managedRun) error {
 	registry.mu.Lock()
 	defer registry.mu.Unlock()
+	if registry.baselinePaused {
+		return fmt.Errorf("baseline admission is paused")
+	}
 	if _, exists := registry.runs[runID]; exists {
 		return fmt.Errorf("run id is already active")
 	}
 	registry.runs[runID] = run
+	registry.everStarted = true
 	return nil
+}
+
+func (registry *runRegistry) prepareBaseline(expectedDigest string) (baselineReadyMessage, error) {
+	registry.mu.Lock()
+	defer registry.mu.Unlock()
+	if expectedDigest != registry.agentDigest || registry.everStarted || len(registry.runs) != 0 || registry.baselinePaused {
+		return baselineReadyMessage{}, fmt.Errorf("baseline is not eligible")
+	}
+	registry.baselinePaused = true
+	unix.Sync()
+	return registry.baselineStatus(true), nil
+}
+
+func (registry *runRegistry) restoredBaseline(epoch, expectedDigest string) (baselineReadyMessage, error) {
+	registry.mu.Lock()
+	defer registry.mu.Unlock()
+	if !registry.baselinePaused || epoch != registry.bootEpoch || expectedDigest != registry.agentDigest || registry.everStarted || len(registry.runs) != 0 {
+		return baselineReadyMessage{}, fmt.Errorf("restored baseline mismatch")
+	}
+	registry.baselinePaused = false
+	return registry.baselineStatus(true), nil
+}
+
+func (registry *runRegistry) baselineStatus(eligible bool) baselineReadyMessage {
+	return baselineReadyMessage{
+		BootEpoch:       registry.bootEpoch,
+		AgentDigest:     registry.agentDigest,
+		ActiveRuns:      len(registry.runs),
+		EverStarted:     registry.everStarted,
+		CaptureEligible: eligible,
+	}
 }
 
 func (registry *runRegistry) remove(runID string, run *managedRun) {
@@ -147,7 +206,14 @@ func main() {
 func serveConnection(conn io.ReadWriteCloser, registry *runRegistry) {
 	defer conn.Close()
 	first, err := readFrame(conn)
-	if err != nil || first.Kind != frameStart {
+	if err != nil {
+		return
+	}
+	if first.Kind == framePrepareBaseline || first.Kind == frameRestoredBaseline {
+		serveBaseline(first, conn, registry)
+		return
+	}
+	if first.Kind != frameStart {
 		return
 	}
 	var req startRequest
@@ -223,6 +289,27 @@ func serveConnection(conn io.ReadWriteCloser, registry *runRegistry) {
 			}
 		}
 	}
+}
+
+func serveBaseline(frame wireFrame, conn io.Writer, registry *runRegistry) {
+	writer := &frameWriter{w: conn}
+	var req baselineRequest
+	if json.Unmarshal(frame.Payload, &req) != nil || req.Version != protocolVersion || req.AgentDigest == "" {
+		writer.json(frameError, map[string]string{"message": "invalid baseline request"})
+		return
+	}
+	var status baselineReadyMessage
+	var err error
+	if frame.Kind == framePrepareBaseline {
+		status, err = registry.prepareBaseline(req.AgentDigest)
+	} else {
+		status, err = registry.restoredBaseline(req.BootEpoch, req.AgentDigest)
+	}
+	if err != nil {
+		writer.json(frameError, map[string]string{"message": err.Error()})
+		return
+	}
+	writer.json(frameBaselineReady, status)
 }
 
 func validateStart(req startRequest) error {
