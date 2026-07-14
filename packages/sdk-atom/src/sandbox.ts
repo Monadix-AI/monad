@@ -84,7 +84,24 @@ export interface SandboxSpawnOptions {
    *  it across all that agent's sessions (disposed via `disposeAgent` when the agent is deleted or
    *  its sandbox config changes). Undefined → the launcher keys on `sessionId` instead. */
   agentId?: string;
+  limits?: SandboxRunLimits;
   [key: string]: unknown;
+}
+
+export interface SandboxStdin {
+  write(data: Uint8Array | string): void | Promise<void>;
+  end(): void | Promise<void>;
+}
+
+export interface SandboxExit {
+  code: number | null;
+  signal: number | null;
+}
+
+export interface SandboxRunLimits {
+  memoryMiB?: number;
+  maxProcesses?: number;
+  terminateGraceMs?: number;
 }
 
 /** The minimal process handle the daemon's spawn sites consume (code_execute/shell_exec/process_start
@@ -102,11 +119,12 @@ export interface SandboxProcess {
   readonly stderr?: ReadableStream<Uint8Array>;
   /** Writable stdin handle, if the run accepts input (process_start writes to it). Shape is
    *  launcher-defined (a Bun FileSink locally); callers treat it opaquely. */
-  readonly stdin?: unknown;
+  readonly stdin?: SandboxStdin;
   /** Resolves with the exit code when the run finishes. */
   readonly exited: Promise<number>;
   /** Exit code once known, else null (still running). */
   readonly exitCode?: number | null;
+  readonly exit?: Promise<SandboxExit>;
   /** Terminate the run. */
   kill(signal?: number | string): void;
 }
