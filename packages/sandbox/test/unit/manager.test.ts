@@ -60,6 +60,37 @@ test('tlsTerminate injects CA-trust env; credentials give the child a sentinel n
   expect(env.TOKEN).not.toBe('supersecret');
 });
 
+test('structured environment credentials remain parseable and omit failures without exposing input', () => {
+  const messages: string[] = [];
+  const mgr = new SandboxManager({
+    platform: 'darwin',
+    allowUnconfined: true,
+    net: 'filtered',
+    tlsTerminate: true,
+    credentials: [
+      {
+        name: 'STRUCTURED',
+        value: 'token=real-secret;scope=read',
+        injectHosts: ['example.com'],
+        transform: { extract: 'token=([^;]+)' }
+      },
+      {
+        name: 'BROKEN',
+        value: 'must-not-appear',
+        injectHosts: ['example.com'],
+        transform: { extract: 'no-match=(.+)' }
+      }
+    ],
+    log: (message) => messages.push(message)
+  });
+  expect(mgr.childEnv.STRUCTURED).toStartWith('token=fake_value_');
+  expect(mgr.childEnv.STRUCTURED).toEndWith(';scope=read');
+  expect(mgr.childEnv.BROKEN).toBeUndefined();
+  expect(messages.join('\n')).toContain('NO_MATCH');
+  expect(messages.join('\n')).not.toContain('must-not-appear');
+  mgr.dispose();
+});
+
 test('dispose is idempotent', () => {
   const m = new SandboxManager({ platform: 'darwin', net: 'filtered' });
   m.dispose();

@@ -15,8 +15,13 @@ export const SENTINEL_PREFIX = 'fake_value_';
 
 export interface SentinelCredential {
   readonly name: string;
-  readonly sentinel: string;
-  readonly realValue: string;
+  readonly childValue?: string;
+  readonly substitutions: readonly SentinelSubstitution[];
+}
+
+export interface SentinelSubstitution {
+  readonly fake: string;
+  readonly real: string;
   readonly injectHosts: readonly string[];
 }
 
@@ -44,14 +49,35 @@ export class SentinelRegistry {
     // Strip CR/LF: the real value is substituted into a CRLF-joined header block on the outbound leg,
     // so an embedded newline could forge a header line. A credential never legitimately contains one.
     const clean = realValue.replace(/[\r\n]/g, '');
-    this.byName.set(name, { name, sentinel, realValue: clean, injectHosts });
+    this.registerMaterialized(name, sentinel, [{ fake: sentinel, real: clean, injectHosts }]);
     return sentinel;
+  }
+
+  registerMaterialized(name: string, childValue: string, substitutions: readonly SentinelSubstitution[]): void {
+    this.store(name, childValue, substitutions);
+  }
+
+  registerSubstitutions(name: string, substitutions: readonly SentinelSubstitution[]): void {
+    this.store(name, undefined, substitutions);
+  }
+
+  private store(name: string, childValue: string | undefined, substitutions: readonly SentinelSubstitution[]): void {
+    this.byName.set(name, {
+      name,
+      childValue,
+      substitutions: substitutions.map((substitution) => ({
+        ...substitution,
+        real: substitution.real.replace(/[\r\n]/g, '')
+      }))
+    });
   }
 
   /** Env map `{ [name]: sentinel }` to inject into the confined child. Never carries a real value. */
   childEnv(): Record<string, string> {
     const env: Record<string, string> = {};
-    for (const c of this.byName.values()) env[c.name] = c.sentinel;
+    for (const c of this.byName.values()) {
+      if (c.childValue !== undefined) env[c.name] = c.childValue;
+    }
     return env;
   }
 
@@ -69,13 +95,13 @@ export class SentinelRegistry {
    */
   substitute(host: string, text: string): string {
     if (this.byName.size === 0) return text;
-    // Fast path: no sentinel prefix anywhere means nothing to swap.
-    if (!text.includes(SENTINEL_PREFIX)) return text;
     let out = text;
     for (const c of this.byName.values()) {
-      if (!out.includes(c.sentinel)) continue;
-      if (!c.injectHosts.some((pattern) => domainMatches(host, pattern))) continue;
-      out = out.split(c.sentinel).join(c.realValue);
+      for (const substitution of c.substitutions) {
+        if (!out.includes(substitution.fake)) continue;
+        if (!substitution.injectHosts.some((pattern) => domainMatches(host, pattern))) continue;
+        out = out.split(substitution.fake).join(substitution.real);
+      }
     }
     return out;
   }

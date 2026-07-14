@@ -18,6 +18,7 @@ import {
   disposeMitmCA,
   MaskedFileStore,
   type MitmCA,
+  materializeCredential,
   prepareSandboxHost,
   SentinelRegistry,
   startEgressProxy
@@ -134,7 +135,12 @@ export async function createSandbox(
           const fileCreds = cfg.sandbox.credentials.filter((c) => c.file !== undefined);
           for (const cred of envCreds) {
             const real = resolveSecretRef(cred.value as string, auth);
-            registry.register(cred.name, real, cred.injectHosts);
+            const materialized = materializeCredential(real, cred.injectHosts, cred.transform);
+            if (!materialized.ok) {
+              logger.warn(`monad: credential "${cred.name}" failed: ${materialized.error} — omitting child variable.`);
+              continue;
+            }
+            registry.registerMaterialized(cred.name, materialized.value.childValue, materialized.value.substitutions);
           }
           if (fileCreds.length > 0) {
             const store = new MaskedFileStore();
@@ -143,7 +149,7 @@ export async function createSandbox(
                 name: cred.name,
                 realPath: cred.file as string,
                 injectHosts: cred.injectHosts,
-                extract: cred.extract
+                transform: cred.transform
               });
             }
             configureSandboxMaskedFiles([...store.list]);

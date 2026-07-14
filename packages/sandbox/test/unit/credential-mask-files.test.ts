@@ -32,7 +32,26 @@ describe('whole-file mask', () => {
     expect(registry.substitute('api.github.com', fakeContent)).toBe(real);
     // A non-injectHost keeps the sentinel (no leak).
     expect(registry.substitute('evil.example.com', fakeContent)).toBe(fakeContent);
+    expect(registry.childEnv()).toEqual({});
 
+    store.dispose();
+  });
+
+  test('canonical transform masks duplicate structured values', () => {
+    const real = 'abc-secret';
+    const path = tmpFile(`token=${real};mirror=${real}`);
+    const registry = new SentinelRegistry();
+    const store = new MaskedFileStore();
+    const bind = store.add(registry, {
+      name: 'TOKEN',
+      realPath: path,
+      injectHosts: ['api.example.com'],
+      transform: { extract: 'token=([^;]+)', maskDuplicates: true }
+    });
+    if (!bind) throw new Error('expected a bind');
+    const fake = readFileSync(bind.fake, 'utf8');
+    expect(fake).not.toContain(real);
+    expect(registry.substitute('api.example.com', fake)).toBe(`token=${real};mirror=${real}`);
     store.dispose();
   });
 });

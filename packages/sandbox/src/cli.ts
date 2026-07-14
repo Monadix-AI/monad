@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+
 // msr — the monad sandbox runtime CLI. Wraps an arbitrary command in the light OS sandbox (Seatbelt /
 // bwrap / Landlock / AppContainer), the same confinement the daemon applies to tool-spawned children,
 // but as a standalone process wrapper (à la `srt`). No daemon required.
@@ -12,6 +13,8 @@
 // HTTP(S)_PROXY is injected so the child's curl/pip/npm/git honour it. If no light launcher confines
 // this platform, msr refuses to run (exit 3) unless --allow-unconfined is given.
 
+import type { CredentialTransform } from './credential-materializer.ts';
+
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -24,6 +27,7 @@ interface CredentialSpec {
   name: string;
   value: string;
   injectHosts: string[];
+  transform?: CredentialTransform;
 }
 
 interface CredentialFileSpec {
@@ -31,6 +35,7 @@ interface CredentialFileSpec {
   path: string;
   injectHosts: string[];
   extract?: string;
+  transform?: CredentialTransform;
 }
 
 // Subset of a sandbox.json policy msr honours as a base (CLI flags override). Env-credential secret
@@ -247,18 +252,34 @@ function loadSandboxConfigFile(path: string): ConfigFileOptions {
       if (!cr || typeof cr.name !== 'string') continue;
       const hosts = strings(cr.injectHosts);
       if (hosts.length === 0) continue;
+      const candidate = cr.transform;
+      const transform: CredentialTransform | undefined =
+        candidate && typeof candidate === 'object'
+          ? {
+              ...(typeof (candidate as Record<string, unknown>).extract === 'string'
+                ? { extract: (candidate as Record<string, unknown>).extract as string }
+                : {}),
+              ...((candidate as Record<string, unknown>).maskDuplicates === true ? { maskDuplicates: true } : {}),
+              ...((candidate as Record<string, unknown>).decode === 'jwt' ? { decode: 'jwt' as const } : {}),
+              ...(Array.isArray((candidate as Record<string, unknown>).maskClaims)
+                ? { maskClaims: strings((candidate as Record<string, unknown>).maskClaims) }
+                : {})
+            }
+          : typeof cr.extract === 'string'
+            ? { extract: cr.extract }
+            : undefined;
       if (typeof cr.value === 'string') {
         if (cr.value.startsWith('${')) {
           warn(`--config credential "${cr.name}" uses a secret ref; msr cannot resolve it — skipping.`);
           continue;
         }
-        env.push({ name: cr.name, value: cr.value, injectHosts: hosts });
+        env.push({ name: cr.name, value: cr.value, injectHosts: hosts, transform });
       } else if (typeof cr.file === 'string') {
         files.push({
           name: cr.name,
           path: cr.file,
           injectHosts: hosts,
-          ...(typeof cr.extract === 'string' ? { extract: cr.extract } : {})
+          transform
         });
       }
     }
@@ -298,7 +319,8 @@ function main(): void {
               name: f.name,
               path: f.path,
               injectHosts: f.injectHosts,
-              extract: f.extract
+              extract: f.extract,
+              transform: f.transform
             }))
           : cfg.credentialFiles,
       allowUnconfined: args.allowUnconfined,

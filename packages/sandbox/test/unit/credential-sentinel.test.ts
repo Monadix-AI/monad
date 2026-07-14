@@ -48,6 +48,30 @@ describe('SentinelRegistry', () => {
     expect(reg.substitute('any.com', 'Authorization: Bearer fake_value_x')).toBe('Authorization: Bearer fake_value_x');
     expect(reg.size).toBe(0);
   });
+
+  test('registerMaterialized restores every explicit mapping and publishes the structured child value', () => {
+    const reg = new SentinelRegistry();
+    reg.registerMaterialized('TOKEN', 'prefix.fake-jwt.signature', [
+      { fake: 'fake-jwt', real: 'real-jwt', injectHosts: ['allowed.com'] },
+      { fake: 'fake-claim', real: 'real-claim', injectHosts: ['claims.example'] }
+    ]);
+    expect(reg.childEnv()).toEqual({ TOKEN: 'prefix.fake-jwt.signature' });
+    expect(reg.substitute('api.allowed.com', 'Bearer fake-jwt')).toBe('Bearer real-jwt');
+    expect(reg.substitute('evil.com', 'Bearer fake-jwt')).toBe('Bearer fake-jwt');
+    expect(reg.substitute('claims.example', 'fake-claim')).toBe('real-claim');
+  });
+
+  test.each(['allowed.com.', 'api.allowed.com.'])('normalizes a trailing dot on destination %s', (host) => {
+    const reg = new SentinelRegistry();
+    const fake = reg.register('TOKEN', 'real', ['allowed.com']);
+    expect(reg.substitute(host, fake)).toBe('real');
+  });
+
+  test.each(['siblingallowed.com', '127.0.0.1', 'xn--allowed-9za.com'])('does not broaden host scope to %s', (host) => {
+    const reg = new SentinelRegistry();
+    const fake = reg.register('TOKEN', 'real', ['allowed.com']);
+    expect(reg.substitute(host, fake)).toBe(fake);
+  });
 });
 
 test('register strips CR/LF from the real value (no header injection on substitution)', () => {
