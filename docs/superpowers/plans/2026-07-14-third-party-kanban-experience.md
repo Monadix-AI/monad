@@ -63,6 +63,8 @@ export interface ProjectSessionOperations {
   create(projectId: string, input: { title: string; cwd?: string }): Promise<{ id: string }>;
   open(sessionId: string): Promise<void>;
   sendDirective(sessionId: string, input: { text: string }): Promise<void>;
+  listMessages(sessionId: string, cursor?: string): Promise<{ items: Array<{ id: string; role: string; text: string; createdAt: string }>; nextCursor: string | null }>;
+  listObservations(sessionId: string, cursor?: string): Promise<{ items: Array<{ id: string; kind: string; text: string; createdAt: string }>; nextCursor: string | null }>;
   pause(sessionId: string): Promise<void>;
   cancel(sessionId: string): Promise<void>;
   listPendingApprovals(projectId: string, sessionId?: string): Promise<Array<{ id: string; sessionId: string; summary: string }>>;
@@ -368,7 +370,7 @@ git commit -m "feat(power-pack): schedule parallel kanban execution"
 **Interfaces:**
 
 - Consumes: Task 4's private routes and Task 1's `apiBaseUrl` / generic session-open action.
-- Produces: `monad-kanban` with Requirements, Execution, and Acceptance lanes plus selected-task details.
+- Produces: `monad-kanban` with Requirements, Execution, and Acceptance lanes plus a component-owned selected-task right inspector.
 
 - [ ] **Step 1: Write failing UI tests.**
 
@@ -379,10 +381,16 @@ test('kanban renders the three lanes from private API task data', async () => {
   expect(html).toContain('Execution');
   expect(html).toContain('Acceptance');
 });
-test('selecting a card opens its host project session', async () => {
+test('selecting a requirements card opens the component inspector with the task transcript', async () => {
+  const api = fakeHostApi();
+  await selectTaskCard(api, requirementsTask.id);
+  expect(renderedInspector(api)).toContain('Task discussion');
+  expect(api.projectSessions.listMessages).toHaveBeenCalledWith(requirementsTask.sessionId);
+});
+test('selecting an execution card opens the complete observation inspector', async () => {
   const api = fakeHostApi();
   await selectTaskCard(api, executionTask.id);
-  expect(api.actions.openProjectSession).toHaveBeenCalledWith(executionTask.sessionId);
+  expect(api.projectSessions.listObservations).toHaveBeenCalledWith(executionTask.sessionId);
 });
 ~~~
 
@@ -402,12 +410,16 @@ async function loadTasks(api) {
   if (!response.ok) throw new Error(`kanban tasks request failed: ${response.status}`);
   return response.json();
 }
-function selectTask(api, task) {
-  api.actions.openProjectSession(task.sessionId);
+async function selectTask(api, task) {
+  const content = task.stage === 'execution'
+    ? await api.projectSessions.listObservations(task.sessionId)
+    : await api.projectSessions.listMessages(task.sessionId);
+  renderInspector(api, task, content);
 }
 ~~~
 
 Render only the three active lanes, concise cards, proposal/execution/acceptance detail, and their required core actions. Keep terminal cards behind history. Do not read `graphCanvas` for task data or add a host React component.
+The inspector belongs inside the web component, not the host `RightPanelProvider`: Requirements renders the task's complete discussion plus composer; Execution renders complete observation with iteration markers and approval controls; Acceptance renders the proposal, artifacts, evidence, checklist, and accept/return controls. Keep “open full session” as a secondary navigation action.
 
 - [ ] **Step 4: Run UI and staging tests to verify they pass.**
 

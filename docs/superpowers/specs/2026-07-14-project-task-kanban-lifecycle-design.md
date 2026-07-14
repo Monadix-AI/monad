@@ -107,6 +107,10 @@ addition, not any Kanban-specific type, table, endpoint, or state machine:
 - Generic project-session primitives: list/create/open sessions and
   session-targeted `sendDirective`, pause, and cancellation actions. These are
   SDK operations usable by any Experience, not Kanban actions.
+- Generic session-read primitives: paginated transcript reads and a
+  permission-filtered observation stream/page for a specified project session.
+  These expose existing runtime evidence to any Experience without making the
+  host render a chat or observation panel on its behalf.
 - A generic, permission-filtered project event subscription containing session
   progress and approval lifecycle events. Polling the pack API is a safe
   fallback, but subscription is required for responsive autopilot recovery.
@@ -172,14 +176,23 @@ The board has exactly three lanes: **Requirements**, **Execution**, and
 Completed, cancelled, and failed items leave the active board but remain
 available through a compact history filter.
 
-Selecting a card uses the generic `openProjectSession(sessionId)` primitive to
-change the active session for the shared Experience; it does not create another
-Experience instance. The details panel
-shows the requirement discussion/proposal in Requirements, an execution-loop
-timeline plus approvals in Execution, and an evidence-led acceptance packet in
-Acceptance. The primary actions are stage-specific: create task, submit
-proposal, approve/reject proposal, pause/cancel, approve/reject safety gate,
-and accept/return.
+Selecting a card opens a component-owned right inspector inside
+`monad-kanban`; it does not navigate away, create another Experience instance,
+or use the host React right-panel implementation. The inspector is a
+third-party Experience surface that consumes generic session-read APIs:
+
+- **Requirements:** the complete task-session discussion, proposal revision,
+  and a composer that sends a directive to that task session.
+- **Execution:** the complete observation timeline (messages, thinking,
+  tool calls/results, activity, and approval pauses) with compact iteration
+  markers and safe approval controls.
+- **Acceptance:** the proposal, linked artifacts, latest execution evidence,
+  acceptance criteria, and accept/return controls.
+
+The primary actions are stage-specific: create task, submit proposal,
+approve/reject proposal, pause/cancel, approve/reject safety gate, and
+accept/return. A secondary “open full session” action may use the generic host
+navigation primitive, but selection itself always stays in Kanban.
 
 ## Parallel execution and isolation
 
