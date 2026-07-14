@@ -19,6 +19,9 @@ func attach(t *testing.T, dir string) p9.File {
 	if err != nil {
 		t.Fatalf("newConfinedAttacher: %v", err)
 	}
+	// Release the os.Root handle before t.TempDir cleanup — on Windows an open dir handle blocks
+	// RemoveAll of the shared dir.
+	t.Cleanup(func() { _ = a.Close() })
 	root, err := a.Attach()
 	if err != nil {
 		t.Fatalf("Attach: %v", err)
@@ -112,6 +115,7 @@ func TestConfinedNormalFileRoundTrips(t *testing.T) {
 	if _, _, err := walked.Open(p9.ReadOnly); err != nil {
 		t.Fatalf("open in-root file: %v", err)
 	}
+	defer walked.Close() // release the file handle before Windows TempDir cleanup
 	buf := make([]byte, 2)
 	n, err := walked.ReadAt(buf, 0)
 	if err != nil || string(buf[:n]) != "hi" {

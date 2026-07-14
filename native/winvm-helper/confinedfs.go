@@ -40,6 +40,12 @@ func (a *confinedAttacher) Attach() (p9.File, error) {
 	return &confinedFile{root: a.root, rel: "."}, nil
 }
 
+// Close releases the root directory handle. On Windows an open directory handle blocks deletion of
+// that directory (unlike POSIX), so the server must close the root when it stops serving.
+func (a *confinedAttacher) Close() error {
+	return a.root.Close()
+}
+
 // confinedFile is one file/dir within the root, addressed by its root-relative path. All operations
 // go through os.Root, so no path — including any symlink component — can escape the shared dir.
 type confinedFile struct {

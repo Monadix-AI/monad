@@ -98,3 +98,7 @@ rulesync.local.jsonc
 .superpowers
 .deepagents
 .rovodev
+
+# winvm-helper build artifacts (vendored copies live in packages/sandbox-vm/vendor)
+native/winvm-helper/winvm-helper
+native/winvm-helper/winvm-helper.exe

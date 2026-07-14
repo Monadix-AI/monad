@@ -386,7 +386,7 @@ async function resolveLinux(): Promise<ResolvedToolchain> {
 const WINVM_HELPER_ARCH = process.arch === 'x64' ? 'amd64' : 'arm64';
 
 /** The vendored winvm-helper (next to the package, like the guest vsock agents). */
-export function vendoredWinvmHelper(): string {
+function vendoredWinvmHelper(): string {
   return join(dirname(import.meta.dir), 'vendor', `winvm-helper-${WINVM_HELPER_ARCH}.exe`);
 }
 

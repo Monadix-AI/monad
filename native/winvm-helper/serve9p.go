@@ -111,6 +111,7 @@ func cmdServe9p(args []string) {
 	if err != nil {
 		fail("serve9p: open root %s: %v", *root, err)
 	}
+	defer base.Close()
 	var attacher p9.Attacher = base
 	if *ro {
 		attacher = &roAttacher{Attacher: attacher}
