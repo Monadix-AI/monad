@@ -13,19 +13,42 @@ test('systemdEscapePath escapes hyphens the way systemd does (name must round-tr
 type IgnFile = { path: string; contents?: { source: string } };
 
 test('the monad guest user has NO wheel group (no passwordless sudo → cannot disable the firewall)', () => {
-  const cfg = buildIgnition({ agentBinaryB64: 'QQ==', mounts: [], egress: { mode: 'none' } });
+  const cfg = buildIgnition({
+    agentBinaryB64: 'QQ==',
+    observerBinaryB64: 'QQ==',
+    mounts: [],
+    egress: { mode: 'none' }
+  });
   const user = cfg.passwd.users[0];
   expect(user?.name).toBe('monad');
   expect(user?.groups).toBeUndefined();
 });
 
+test('the monad guest user can map a non-root host uid for writable shares', () => {
+  const cfg = buildIgnition({
+    agentBinaryB64: 'QQ==',
+    observerBinaryB64: 'QQ==',
+    mounts: [],
+    egress: { mode: 'none' },
+    workloadUid: 501
+  });
+
+  expect(cfg.passwd.users[0]?.uid).toBe(501);
+});
+
 test('the exec agent unit is gated on the firewall (workload never runs before egress rules apply)', () => {
-  const cfg = buildIgnition({ agentBinaryB64: 'QQ==', mounts: [], egress: { mode: 'filtered', proxyPort: 8080 } });
+  const cfg = buildIgnition({
+    agentBinaryB64: 'QQ==',
+    observerBinaryB64: 'QQ==',
+    mounts: [],
+    egress: { mode: 'filtered', proxyPort: 8080 }
+  });
   const fw = cfg.systemd.units.find((u) => u.name === 'monad-firewall.service');
   expect(fw?.contents).toContain('Before=network-pre.target network.target monad-vsock-agent.service');
   const agent = cfg.systemd.units.find((u) => u.name === 'monad-vsock-agent.service');
   expect(agent?.contents).toContain('Requires=monad-firewall.service');
   expect(agent?.contents).toContain('ExecStart=/usr/local/bin/monad-vsock-agent');
+  expect(agent?.contents).toContain('Delegate=yes');
 });
 
 function decodeDataUri(uri: string): string {
@@ -36,6 +59,7 @@ function decodeDataUri(uri: string): string {
 test('ignition creates the unprivileged monad user and injects the vsock agent binary', () => {
   const cfg = buildIgnition({
     agentBinaryB64: 'QUJD',
+    observerBinaryB64: 'REVG',
     mounts: [],
     egress: { mode: 'unrestricted' }
   });
@@ -48,11 +72,17 @@ test('ignition creates the unprivileged monad user and injects the vsock agent b
     | undefined;
   expect(agent?.contents?.source).toBe('data:;base64,QUJD');
   expect(agent?.mode).toBe(0o755);
+  const observer = cfg.storage.files.find((f) => (f as IgnFile).path === '/usr/local/bin/monad-seccomp-observer') as
+    | (IgnFile & { mode?: number })
+    | undefined;
+  expect(observer?.contents?.source).toBe('data:;base64,REVG');
+  expect(observer?.mode).toBe(0o755);
 });
 
 test('the firewall file carries the egress nftables ruleset', () => {
   const cfg = buildIgnition({
     agentBinaryB64: 'QQ==',
+    observerBinaryB64: 'QQ==',
     mounts: [],
     egress: { mode: 'filtered', proxyPort: 8080 }
   });
@@ -65,7 +95,8 @@ test('the firewall file carries the egress nftables ruleset', () => {
 test('each mount becomes a virtiofs .mount unit ordered before the firewall', () => {
   const cfg = buildIgnition({
     agentBinaryB64: 'QQ==',
-    mounts: [{ tag: 'w0', path: '/Users/x/ws', readOnly: false }],
+    observerBinaryB64: 'QQ==',
+    mounts: [{ tag: 'w0', hostPath: '/Users/x/ws', guestPath: '/Users/x/ws', readOnly: false }],
     egress: { mode: 'none' }
   });
   const unit = cfg.systemd.units.find((u) => u.name === 'Users-x-ws.mount');
@@ -75,11 +106,46 @@ test('each mount becomes a virtiofs .mount unit ordered before the firewall', ()
   expect(unit?.contents).toContain('Options=rw,nofail');
 });
 
+test('overlay policy runs after every base mount and before the firewall', () => {
+  const cfg = buildIgnition({
+    agentBinaryB64: 'QQ==',
+    observerBinaryB64: 'QQ==',
+    mounts: [
+      { tag: 'w0', hostPath: '/work', guestPath: '/work', readOnly: false },
+      { tag: 'm0', hostPath: '/tmp/masks', guestPath: '/run/monad/masks/0', readOnly: true }
+    ],
+    overlays: [
+      { kind: 'protect-store', source: '/run/monad/masks/0', target: '/tmp/masks' },
+      { kind: 'deny-directory', target: '/work/.ssh' },
+      { kind: 'mask-file', source: '/run/monad/masks/0/token', target: '/work/token' }
+    ],
+    egress: { mode: 'none' }
+  });
+  const unit = cfg.systemd.units.find((item) => item.name === 'monad-mount-policy.service');
+  expect(unit?.contents).toContain('After=work.mount run-monad-masks-0.mount');
+  expect(unit?.contents).toContain('Before=monad-firewall.service');
+  expect(unit?.contents).toContain(
+    'ExecStart=/usr/local/bin/monad-vsock-agent mount-policy -config /etc/monad/mount-policy.json'
+  );
+  const file = cfg.storage.files.find((item) => (item as IgnFile).path === '/etc/monad/mount-policy.json') as
+    | IgnFile
+    | undefined;
+  expect(JSON.parse(decodeDataUri(file?.contents?.source ?? ''))).toEqual({
+    overlays: [
+      { kind: 'protect-store', source: '/run/monad/masks/0', target: '/tmp/masks' },
+      { kind: 'deny-directory', target: '/work/.ssh' },
+      { kind: 'mask-file', source: '/run/monad/masks/0/token', target: '/work/token' }
+    ]
+  });
+  const firewall = cfg.systemd.units.find((item) => item.name === 'monad-firewall.service');
+  expect(firewall?.contents).toContain('Requires=monad-mount-policy.service');
+});
+
 // ── Windows / Hyper-V variants ────────────────────────────────────────────────────────────────────
 
 const WIN_MOUNT = {
   tag: 'w0',
-  path: 'C:\\Users\\z\\proj',
+  hostPath: 'C:\\Users\\z\\proj',
   guestPath: '/mnt/c/Users/z/proj',
   vsockPort: 1026,
   readOnly: false
@@ -88,6 +154,7 @@ const WIN_MOUNT = {
 test('9p-vsock transport emits mount9p oneshot units ordered before the firewall', () => {
   const cfg = buildIgnition({
     agentBinaryB64: 'QQ==',
+    observerBinaryB64: 'QQ==',
     mounts: [WIN_MOUNT, { ...WIN_MOUNT, tag: 'r0', vsockPort: 1027, readOnly: true }],
     egress: { mode: 'none' },
     mountTransport: '9p-vsock'
@@ -109,10 +176,11 @@ test('9p-vsock transport emits mount9p oneshot units ordered before the firewall
 test('mount9p quotes the guest path so a space cannot truncate -target or drop -ro', () => {
   const cfg = buildIgnition({
     agentBinaryB64: 'QQ==',
+    observerBinaryB64: 'QQ==',
     mounts: [
       {
         tag: 'r0',
-        path: 'C:\\Users\\First Last\\proj',
+        hostPath: 'C:\\Users\\First Last\\proj',
         guestPath: '/mnt/c/Users/First Last/proj',
         vsockPort: 1026,
         readOnly: true
@@ -130,7 +198,8 @@ test('a 9p mount without port/guestPath fails closed (never boot a VM missing a 
   expect(() =>
     buildIgnition({
       agentBinaryB64: 'QQ==',
-      mounts: [{ tag: 'w0', path: 'C:\\proj', readOnly: false }],
+      observerBinaryB64: 'QQ==',
+      mounts: [{ tag: 'w0', hostPath: 'C:\\proj', guestPath: '/mnt/c/proj', readOnly: false }],
       egress: { mode: 'none' },
       mountTransport: '9p-vsock'
     })
@@ -140,6 +209,7 @@ test('a 9p mount without port/guestPath fails closed (never boot a VM missing a 
 test('gvforwarder plane: binary + 0600 NM keyfile + tap unit dialing the net vsock port', () => {
   const cfg = buildIgnition({
     agentBinaryB64: 'QQ==',
+    observerBinaryB64: 'QQ==',
     mounts: [],
     egress: { mode: 'filtered', proxyPort: 8080 },
     mountTransport: '9p-vsock',
@@ -160,6 +230,7 @@ test('gvforwarder plane: binary + 0600 NM keyfile + tap unit dialing the net vso
 test('net:none on Windows has NO gvforwarder plane at all (vsock exec/9p need no NIC)', () => {
   const cfg = buildIgnition({
     agentBinaryB64: 'QQ==',
+    observerBinaryB64: 'QQ==',
     mounts: [],
     egress: { mode: 'none' },
     mountTransport: '9p-vsock'

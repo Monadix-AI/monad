@@ -18,6 +18,7 @@ import {
   disposeMitmCA,
   MaskedFileStore,
   type MitmCA,
+  materializeCredential,
   prepareSandboxHost,
   SentinelRegistry,
   startEgressProxy
@@ -27,6 +28,7 @@ import { configureSandboxCredential } from '@monad/sdk-atom';
 import {
   configureHostExec,
   configureSandboxBackendOptions,
+  configureSandboxCredentialGeneration,
   configureSandboxExtraEnv,
   configureSandboxLauncher,
   configureSandboxMaskedFiles,
@@ -47,6 +49,8 @@ export interface SandboxSetup {
   sandboxRoots: string[] | undefined;
   sessionSandbox: SessionSandboxService;
 }
+
+let credentialGeneration = 0;
 
 export async function createSandbox(
   cfg: MonadConfig,
@@ -79,6 +83,8 @@ export async function createSandbox(
   // config change cannot strand resources from a prior confined run. Currently Windows reclaims
   // orphaned AppContainer profiles; other host platforms no-op.
   void prepareSandboxHost();
+  configureSandboxCredentialGeneration(0);
+  configureSandboxMaskedFiles([]);
 
   if (cfg.sandbox.confine) {
     // The override path for the native Linux/Windows launcher binary (config.sandbox.launcherPath)
@@ -134,7 +140,12 @@ export async function createSandbox(
           const fileCreds = cfg.sandbox.credentials.filter((c) => c.file !== undefined);
           for (const cred of envCreds) {
             const real = resolveSecretRef(cred.value as string, auth);
-            registry.register(cred.name, real, cred.injectHosts);
+            const materialized = materializeCredential(real, cred.injectHosts, cred.transform);
+            if (!materialized.ok) {
+              logger.warn(`monad: credential "${cred.name}" failed: ${materialized.error} — omitting child variable.`);
+              continue;
+            }
+            registry.registerMaterialized(cred.name, materialized.value.childValue, materialized.value.substitutions);
           }
           if (fileCreds.length > 0) {
             const store = new MaskedFileStore();
@@ -143,7 +154,7 @@ export async function createSandbox(
                 name: cred.name,
                 realPath: cred.file as string,
                 injectHosts: cred.injectHosts,
-                extract: cred.extract
+                transform: cred.transform
               });
             }
             configureSandboxMaskedFiles([...store.list]);
@@ -156,6 +167,7 @@ export async function createSandbox(
           }
           sentinels = registry;
           sentinelEnv = registry.childEnv();
+          configureSandboxCredentialGeneration(++credentialGeneration);
           logger.info(
             `monad: credential sentinels active for ${cfg.sandbox.credentials.map((c) => c.name).join(', ')} ` +
               '(child sees fake values; proxy injects real values on matching hosts)'
@@ -199,10 +211,12 @@ export async function createSandbox(
     } else {
       configureSandboxNet(cfg.sandbox.net);
       configureSandboxProxyEnv(undefined);
+      configureSandboxCredentialGeneration(0);
     }
   } else {
     configureSandboxLauncher(noneLauncher);
     configureSandboxProxyEnv(undefined);
+    configureSandboxCredentialGeneration(0);
   }
   configureHostExec(cfg.sandbox.hostExec);
   if (Object.keys(cfg.sandbox.env).length > 0) {
@@ -332,6 +346,7 @@ async function configureVmBackendFromConfig(cfg: MonadConfig, paths?: MonadPaths
     maxInstances: vm?.maxInstances ?? 8,
     cpus: vm?.cpus ?? 2,
     memoryMiB: vm?.memory ?? 2048,
+    baseline: vm?.baseline ?? { enabled: false, maxInactiveArtifacts: 4, maxBytes: 32 * 1024 * 1024 * 1024 },
     imageConsent: async ({ url, sha256, dest }) => {
       logger.warn(
         `monad: the VM backend needs its guest image (first use of backend:"vm").\n` +

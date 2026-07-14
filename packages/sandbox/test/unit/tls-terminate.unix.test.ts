@@ -21,6 +21,7 @@ import { connect as tcpConnect } from 'node:net';
 import { connect as tlsConnect } from 'node:tls';
 import forge from 'node-forge';
 
+import { materializeCredential } from '../../src/credential-materializer.ts';
 import { SentinelRegistry } from '../../src/credential-sentinel.ts';
 import { startEgressProxy } from '../../src/egress-proxy.ts';
 import { createMitmCA, disposeMitmCA, type MitmCA } from '../../src/mitm/ca.ts';
@@ -219,6 +220,28 @@ describe('egress proxy TLS termination', () => {
       // was recomputed so the request stayed well-formed.
       expect(serverSawBody).toBe(JSON.stringify({ token: 'supersecret' }));
       expect(serverSawBody).not.toContain(sentinel);
+    } finally {
+      proxy.stop();
+    }
+  });
+
+  test('structured fake is restored byte-for-byte only on the authenticated matching TLS destination', async () => {
+    const registry = new SentinelRegistry();
+    const materialized = materializeCredential('token=structured-secret;scope=read', ['127.0.0.1'], {
+      extract: 'token=([^;]+)'
+    });
+    if (!materialized.ok) throw new Error(materialized.error);
+    registry.registerMaterialized('TOKEN', materialized.value.childValue, materialized.value.substitutions);
+    serverSawAuth = '';
+    const proxy = startProxy(undefined, registry);
+    try {
+      const req =
+        'GET /echo HTTP/1.1\r\nHost: 127.0.0.1\r\n' +
+        `Authorization: Custom ${materialized.value.childValue}\r\nConnection: close\r\n\r\n`;
+      const res = await driveClient(proxy.port, ca.caCertPath, upstreamPort, req);
+      expect(res.status).toBe(200);
+      expect(serverSawAuth).toBe('Custom token=structured-secret;scope=read');
+      expect(serverSawAuth).not.toContain('fake_value_');
     } finally {
       proxy.stop();
     }

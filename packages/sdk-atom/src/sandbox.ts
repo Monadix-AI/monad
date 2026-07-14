@@ -40,6 +40,9 @@ export interface SandboxPolicy {
    *  its read-deny set (file unreadable, not masked); one that can do neither (Landlock, Low-IL)
    *  cannot enforce it and must warn — the file stays readable in cleartext. */
   maskedFiles?: { real: string; fake: string }[];
+  /** Non-secret lifecycle generation for materialized credentials. A change invalidates reusable
+   *  launcher state without hashing or serializing credential bytes. */
+  credentialGeneration?: number;
   /** 'none' = no egress; { allowProxyPort } = only the local filtering proxy; 'unrestricted' = open. */
   net?: 'none' | { allowProxyPort: number } | 'unrestricted';
   /** The session this run belongs to. Local launchers that create per-session OS artifacts
@@ -74,6 +77,7 @@ export { sandboxBackendRefSchema, sandboxLauncherDescriptorSchema, sandboxSettin
 export interface SandboxSpawnOptions {
   cwd?: string;
   env?: Record<string, string | undefined>;
+  terminal?: SandboxTerminalOptions;
   /** Credential the daemon resolved for this launcher (e.g. a cloud sandbox API key). Undefined when
    *  none is configured — a launcher that needs one should fail clearly. */
   credential?: string;
@@ -84,7 +88,45 @@ export interface SandboxSpawnOptions {
    *  it across all that agent's sessions (disposed via `disposeAgent` when the agent is deleted or
    *  its sandbox config changes). Undefined → the launcher keys on `sessionId` instead. */
   agentId?: string;
+  limits?: SandboxRunLimits;
   [key: string]: unknown;
+}
+
+export interface SandboxStdin {
+  write(data: Uint8Array | string): void | Promise<void>;
+  end(): void | Promise<void>;
+}
+
+export interface SandboxTerminalOptions {
+  cols: number;
+  rows: number;
+}
+
+export interface SandboxTerminal {
+  write(data: Uint8Array | string): void | Promise<void>;
+  close(): void | Promise<void>;
+  resize(cols: number, rows: number): void | Promise<void>;
+}
+
+export interface SandboxViolation {
+  kind: 'protocol' | 'setup' | 'memory' | 'process-limit' | 'runtime' | 'filesystem';
+  operation: string;
+  runId: string;
+  timestamp: string;
+  target?: string;
+  pid?: number;
+  detail?: string;
+}
+
+export interface SandboxExit {
+  code: number | null;
+  signal: number | null;
+}
+
+export interface SandboxRunLimits {
+  memoryMiB?: number;
+  maxProcesses?: number;
+  terminateGraceMs?: number;
 }
 
 /** The minimal process handle the daemon's spawn sites consume (code_execute/shell_exec/process_start
@@ -102,11 +144,14 @@ export interface SandboxProcess {
   readonly stderr?: ReadableStream<Uint8Array>;
   /** Writable stdin handle, if the run accepts input (process_start writes to it). Shape is
    *  launcher-defined (a Bun FileSink locally); callers treat it opaquely. */
-  readonly stdin?: unknown;
+  readonly stdin?: SandboxStdin;
+  readonly terminal?: SandboxTerminal;
+  readonly violations?: ReadableStream<SandboxViolation>;
   /** Resolves with the exit code when the run finishes. */
   readonly exited: Promise<number>;
   /** Exit code once known, else null (still running). */
   readonly exitCode?: number | null;
+  readonly exit?: Promise<SandboxExit>;
   /** Terminate the run. */
   kill(signal?: number | string): void;
 }

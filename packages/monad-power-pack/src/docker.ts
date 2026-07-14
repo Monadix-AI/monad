@@ -124,7 +124,14 @@ export const dockerLauncher: SandboxLauncher = {
       pid: proc.pid,
       stdout: proc.stdout as ReadableStream<Uint8Array>,
       stderr: proc.stderr as ReadableStream<Uint8Array>,
-      stdin: proc.stdin,
+      stdin: {
+        async write(data) {
+          await proc.stdin.write(data);
+        },
+        async end() {
+          await proc.stdin.end();
+        }
+      },
       get exitCode() {
         return proc.exitCode;
       },

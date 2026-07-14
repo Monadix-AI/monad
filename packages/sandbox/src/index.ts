@@ -6,6 +6,7 @@
 
 export * from './active-local.ts';
 export * from './credential-mask-files.ts';
+export * from './credential-materializer.ts';
 export * from './credential-sentinel.ts';
 export * from './egress-policy.ts';
 export * from './egress-proxy.ts';
@@ -19,3 +20,4 @@ export * from './security.ts';
 export * from './session-root.ts';
 export * from './spawn.ts';
 export * from './violation-monitor.ts';
+export * from './violation-store.ts';

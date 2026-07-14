@@ -50,8 +50,8 @@ test('net:none → no netbridge (no NIC plane at all); gvproxy socket → netbri
 
 test('each mount gets a VMID-pinned serve9p on its assigned port; read-only roots pass --ro', () => {
   const mounts = withHvsockMountPlan([
-    { tag: 'w0', path: 'C:\\Users\\z\\proj', readOnly: false },
-    { tag: 'r0', path: 'D:\\data', readOnly: true }
+    { tag: 'w0', hostPath: 'C:\\Users\\z\\proj', guestPath: '/mnt/c/Users/z/proj', readOnly: false },
+    { tag: 'r0', hostPath: 'D:\\data', guestPath: '/mnt/d/data', readOnly: true }
   ]);
   const services = hypervServiceArgv(spec({ mounts }), VM_ID);
   const nine = services.filter((s) => s[0] === 'serve9p');
@@ -66,19 +66,20 @@ test('each mount gets a VMID-pinned serve9p on its assigned port; read-only root
 });
 
 test('mount plan translates guest paths and rejects over-cap policies', () => {
-  const planned = withHvsockMountPlan([{ tag: 'w0', path: 'C:\\proj', readOnly: false }]);
+  const planned = withHvsockMountPlan([{ tag: 'w0', hostPath: 'C:\\proj', guestPath: '/mnt/c/proj', readOnly: false }]);
   expect(planned[0]?.guestPath).toBe('/mnt/c/proj');
   expect(planned[0]?.vsockPort).toBe(HVSOCK_PORTS.mountBase);
 
   const tooMany = Array.from({ length: HVSOCK_PORTS.maxMounts + 1 }, (_, i) => ({
     tag: `w${i}`,
-    path: `C:\\p${i}`,
+    hostPath: `C:\\p${i}`,
+    guestPath: `/mnt/c/p${i}`,
     readOnly: false
   }));
   expect(() => withHvsockMountPlan(tooMany)).toThrow(/at most/);
 });
 
 test('a mount without a port plan fails closed instead of silently skipping the share', () => {
-  const mounts = [{ tag: 'w0', path: 'C:\\proj', readOnly: false }]; // no withHvsockMountPlan
+  const mounts = [{ tag: 'w0', hostPath: 'C:\\proj', guestPath: '/mnt/c/proj', readOnly: false }];
   expect(() => hypervServiceArgv(spec({ mounts }), VM_ID)).toThrow(/vsockPort/);
 });

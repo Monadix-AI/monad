@@ -37,10 +37,20 @@ function migrateSandboxBackend(raw: unknown): unknown {
         : { source: 'builtin', kind: 'auto' });
   const backendSettings = { ...(existingSettings ?? {}) };
   if (backend === 'vm' && sandbox.vm && typeof sandbox.vm === 'object' && !Array.isArray(sandbox.vm)) {
+    const vm = sandbox.vm as Record<string, unknown>;
+    const baseline =
+      vm.baseline && typeof vm.baseline === 'object' && !Array.isArray(vm.baseline)
+        ? (vm.baseline as Record<string, unknown>)
+        : undefined;
     backendSettings['builtin/vm'] = {
       ...(existingSettings?.['builtin/vm'] ?? {}),
-      ...('cpus' in sandbox.vm ? { cpus: (sandbox.vm as Record<string, unknown>).cpus } : {}),
-      ...('memory' in sandbox.vm ? { memoryMiB: (sandbox.vm as Record<string, unknown>).memory } : {})
+      ...('cpus' in vm ? { cpus: vm.cpus } : {}),
+      ...('memory' in vm ? { memoryMiB: vm.memory } : {}),
+      ...(baseline && 'enabled' in baseline ? { baselineEnabled: baseline.enabled } : {}),
+      ...(baseline && 'maxInactiveArtifacts' in baseline
+        ? { baselineMaxInactiveArtifacts: baseline.maxInactiveArtifacts }
+        : {}),
+      ...(baseline && 'maxBytes' in baseline ? { baselineMaxBytes: baseline.maxBytes } : {})
     };
   }
   if (backend === 'docker' && typeof sandbox.dockerImage === 'string') {

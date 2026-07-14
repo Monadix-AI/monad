@@ -40,10 +40,11 @@ test('net:none nftables drops everything but loopback', () => {
   expect(rules).not.toContain('dport 53');
 });
 
-test('net:filtered nftables allows only DNS + host proxy, drops the rest', () => {
+test('net:filtered nftables allows only DHCP + host proxy, not direct DNS', () => {
   const rules = guestNftables({ mode: 'filtered', proxyPort: 8080 });
   expect(rules).toContain('policy drop;');
-  expect(rules).toContain(`ip daddr ${GVPROXY_GATEWAY_IP} udp dport 53 accept`);
+  expect(rules).toContain(`ip daddr ${GVPROXY_GATEWAY_IP} udp dport 67 accept`);
+  expect(rules).not.toContain('dport 53');
   expect(rules).toContain(`ip daddr ${GVPROXY_HOST_IP} tcp dport 8080 accept`);
 });
 

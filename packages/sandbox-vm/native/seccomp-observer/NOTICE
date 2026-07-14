@@ -1,0 +1,13 @@
+monad-seccomp-observer
+
+Portions of the seccomp USER_NOTIF filter and notification handling were
+adapted from apply-seccomp.c in Anthropic's Sandbox Runtime at commit
+cf24a43eba92c9ab4140c380d11ca55771be9db2.
+
+Copyright 2025 Anthropic PBC
+Licensed under the Apache License, Version 2.0.
+https://www.apache.org/licenses/LICENSE-2.0
+
+The adapted source is distributed as part of monad under this notice and the
+repository's MIT license. The Apache License terms continue to apply to the
+adapted portions.

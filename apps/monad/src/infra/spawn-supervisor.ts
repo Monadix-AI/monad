@@ -135,7 +135,7 @@ export interface SupervisedSpawnOptions<
   event: string;
   log: Logger;
   context?: Record<string, unknown>;
-  spawn?: typeof Bun.spawn;
+  spawn?: (argv: string[], options: SpawnOptions<In, Out, Err>) => Bun.Subprocess<In, Out, Err>;
   timeout?: TimeoutOptions;
   abortSignal?: AbortSignal;
   abortKillSignal?: NodeJS.Signals;
@@ -182,7 +182,9 @@ export function supervisedSpawn<
   options: SpawnOptions<In, Out, Err>,
   logging: SupervisedSpawnOptions<In, Out, Err>
 ): SupervisedSubprocess<In, Out, Err> {
-  const spawn = logging.spawn ?? Bun.spawn;
+  const spawn =
+    logging.spawn ??
+    ((spawnArgv: string[], spawnOptions: SpawnOptions<In, Out, Err>) => Bun.spawn(spawnArgv, spawnOptions));
   const startedAt = Date.now();
   const base = {
     ...(logging.context ?? {}),
@@ -198,7 +200,7 @@ export function supervisedSpawn<
   emit({ phase: 'start', event: `${logging.event}.start` });
 
   try {
-    const proc = spawn<In, Out, Err>(argv, options);
+    const proc = spawn(argv, options);
     const timeout = logging.timeout;
     const tracker = logging.tracker;
 

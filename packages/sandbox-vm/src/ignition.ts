@@ -3,31 +3,27 @@
 //   • create the unprivileged `monad` user (its home);
 //   • install monad-vsock-agent (the exec channel) + a systemd unit that runs it;
 //   • drop the nftables ruleset that enforces the egress mode (the real `net:'filtered'` boundary);
-//   • mount each policy root's virtio-fs tag at its host path inside the guest.
+//   • mount each policy root at its planned guest path, then apply deny and mask overlays.
 //
 // The exec channel is vsock (NIC-independent), so net:'none' runs with NO network device at all — the
 // agent still reaches the guest. The agent runs the workload as the unprivileged `monad` user, so it
 // cannot alter the firewall or mounts installed here.
 
+import type { MountOverlay, SharedMount } from './mount-plan.ts';
+
 import { type GuestEgressRules, guestNftables } from './net/gvproxy.ts';
 
-export interface MountSpec {
-  /** virtio-fs mountTag (w0, r0, …) passed to vfkit, or the 9p share label on Windows. */
-  tag: string;
-  /** Absolute HOST path of the shared directory. On macOS/Linux it doubles as the guest mount point
-   *  (so argv paths resolve unchanged); on Windows the guest point is `guestPath`. */
-  path: string;
-  /** Windows: the translated guest mount point (/mnt/<drive>/…). Unset on macOS/Linux. */
-  guestPath?: string;
-  /** Windows: host vsock port of this share's 9p server (exec=1024, net=1025, 9p from 1026). */
-  vsockPort?: number;
-  readOnly: boolean;
-}
+export const IGNITION_SCHEMA_VERSION = '3.4.0';
+
+export type MountSpec = SharedMount;
 
 export interface IgnitionSpec {
   /** The guest vsock exec agent binary (Linux aarch64), base64-encoded for the Ignition storage file. */
   agentBinaryB64: string;
+  /** Passive seccomp USER_NOTIF launch helper for the guest architecture. */
+  observerBinaryB64: string;
   mounts: MountSpec[];
+  overlays?: MountOverlay[];
   egress: GuestEgressRules;
   /** Guest env exported into the workload (proxy vars under filtered net). */
   env?: Record<string, string>;
@@ -37,6 +33,7 @@ export interface IgnitionSpec {
    *  port its tunnel dials — the guest NIC is a tap into the host's gvproxy, not a real NIC. */
   gvforwarderB64?: string;
   netVsockPort?: number;
+  workloadUid?: number;
 }
 
 function b64(s: string): string {
@@ -69,8 +66,8 @@ export function systemdEscapePath(path: string): string {
 }
 
 /** systemd mount unit for one virtio-fs tag. CoreOS mounts virtiofs by tag with the `virtiofs` fstype. */
-function mountUnit(m: MountSpec): { name: string; enabled: boolean; contents: string } {
-  const unitName = `${systemdEscapePath(m.path)}.mount`;
+function mountUnit(m: MountSpec, hasOverlays: boolean): { name: string; enabled: boolean; contents: string } {
+  const unitName = `${systemdEscapePath(m.guestPath)}.mount`;
   const opts = m.readOnly ? 'ro,nofail' : 'rw,nofail';
   return {
     name: unitName,
@@ -80,10 +77,10 @@ function mountUnit(m: MountSpec): { name: string; enabled: boolean; contents: st
       `Description=monad virtio-fs mount ${m.tag}`,
       'DefaultDependencies=no',
       'After=systemd-remount-fs.service',
-      'Before=local-fs.target monad-firewall.service',
+      `Before=local-fs.target ${hasOverlays ? 'monad-mount-policy.service ' : ''}monad-firewall.service`,
       '[Mount]',
       `What=${m.tag}`,
-      `Where=${m.path}`,
+      `Where=${m.guestPath}`,
       'Type=virtiofs',
       `Options=${opts}`,
       '[Install]',
@@ -96,9 +93,9 @@ function mountUnit(m: MountSpec): { name: string; enabled: boolean; contents: st
 /** Windows/Hyper-V: a oneshot unit that mounts one 9p-over-vsock share (winvm-helper's serve9p on
  *  the host side) via the agent binary's mount9p mode. Ordered like the virtio-fs mount units:
  *  before the firewall, which is before the exec agent — a workload never sees a half-mounted VM. */
-function mount9pUnit(m: MountSpec): { name: string; enabled: boolean; contents: string } {
-  if (m.vsockPort === undefined || m.guestPath === undefined) {
-    throw new Error(`ignition: 9p mount ${m.tag} needs vsockPort + guestPath`);
+function mount9pUnit(m: MountSpec, hasOverlays: boolean): { name: string; enabled: boolean; contents: string } {
+  if (m.vsockPort === undefined) {
+    throw new Error(`ignition: 9p mount ${m.tag} needs vsockPort`);
   }
   const ro = m.readOnly ? ' -ro' : '';
   return {
@@ -109,7 +106,7 @@ function mount9pUnit(m: MountSpec): { name: string; enabled: boolean; contents: 
       `Description=monad 9p mount ${m.tag}`,
       'DefaultDependencies=no',
       'After=systemd-remount-fs.service',
-      'Before=local-fs.target monad-firewall.service',
+      `Before=local-fs.target ${hasOverlays ? 'monad-mount-policy.service ' : ''}monad-firewall.service`,
       '[Service]',
       'Type=oneshot',
       'RemainAfterExit=yes',
@@ -172,7 +169,7 @@ function vsockNetUnit(netVsockPort: number): { name: string; enabled: boolean; c
 /** The oneshot unit that applies the nftables egress ruleset. It is ordered before the exec agent, so
  *  the workload can never run before the firewall is in place; `Requires` makes the agent fail to
  *  start if nft errored (never run with egress open because the ruleset didn't apply). */
-function firewallUnit(rulesPath: string): { name: string; enabled: boolean; contents: string } {
+function firewallUnit(rulesPath: string, hasOverlays: boolean): { name: string; enabled: boolean; contents: string } {
   return {
     name: 'monad-firewall.service',
     enabled: true,
@@ -183,10 +180,34 @@ function firewallUnit(rulesPath: string): { name: string; enabled: boolean; cont
       'After=local-fs.target',
       'Before=network-pre.target network.target monad-vsock-agent.service',
       'Wants=network-pre.target',
+      ...(hasOverlays ? ['Requires=monad-mount-policy.service'] : []),
       '[Service]',
       'Type=oneshot',
       'RemainAfterExit=yes',
       `ExecStart=/usr/sbin/nft -f ${rulesPath}`,
+      '[Install]',
+      'WantedBy=multi-user.target',
+      ''
+    ].join('\n')
+  };
+}
+
+function mountPolicyUnit(mounts: MountSpec[], transport: 'virtiofs' | '9p-vsock') {
+  const dependencies = mounts.map((mount) =>
+    transport === '9p-vsock' ? `monad-9p-${mount.tag}.service` : `${systemdEscapePath(mount.guestPath)}.mount`
+  );
+  return {
+    name: 'monad-mount-policy.service',
+    enabled: true,
+    contents: [
+      '[Unit]',
+      'Description=monad guest mount overlays',
+      `After=${dependencies.join(' ')}`,
+      'Before=monad-firewall.service',
+      '[Service]',
+      'Type=oneshot',
+      'RemainAfterExit=yes',
+      'ExecStart=/usr/local/bin/monad-vsock-agent mount-policy -config /etc/monad/mount-policy.json',
       '[Install]',
       'WantedBy=multi-user.target',
       ''
@@ -217,6 +238,7 @@ function agentUnit(hasNic: boolean): { name: string; enabled: boolean; contents:
       ...extra,
       '[Service]',
       'ExecStart=/usr/local/bin/monad-vsock-agent',
+      'Delegate=yes',
       'Restart=always',
       '[Install]',
       'WantedBy=multi-user.target',
@@ -229,14 +251,17 @@ function agentUnit(hasNic: boolean): { name: string; enabled: boolean; contents:
  *  are heterogeneous), typed where we assert on it. */
 export interface IgnitionConfig {
   ignition: { version: string };
-  passwd: { users: { name: string; homeDir?: string; groups?: string[] }[] };
+  passwd: { users: { name: string; homeDir?: string; groups?: string[]; uid?: number }[] };
   storage: { files: object[]; directories: object[] };
   systemd: { units: { name: string; contents?: string; dropins?: { name: string; contents: string }[] }[] };
 }
 
 /** Build the full Ignition config object. */
 export function buildIgnition(spec: IgnitionSpec): IgnitionConfig {
+  const workloadUid = spec.workloadUid ?? 1001;
+  if (!Number.isSafeInteger(workloadUid) || workloadUid < 1) throw new Error('ignition: workload uid must be non-root');
   const rulesPath = '/etc/monad/nftables.conf';
+  const overlays = spec.overlays ?? [];
   const files: object[] = [
     {
       path: rulesPath,
@@ -248,6 +273,11 @@ export function buildIgnition(spec: IgnitionSpec): IgnitionConfig {
       path: '/usr/local/bin/monad-vsock-agent',
       mode: 0o755,
       contents: { source: `data:;base64,${spec.agentBinaryB64}` }
+    },
+    {
+      path: '/usr/local/bin/monad-seccomp-observer',
+      mode: 0o755,
+      contents: { source: `data:;base64,${spec.observerBinaryB64}` }
     }
   ];
 
@@ -276,26 +306,40 @@ export function buildIgnition(spec: IgnitionSpec): IgnitionConfig {
     });
   }
 
+  if (overlays.length > 0) {
+    files.push({
+      path: '/etc/monad/mount-policy.json',
+      mode: 0o600,
+      contents: { source: dataUri(JSON.stringify({ overlays })) }
+    });
+  }
+
   const hasNic = spec.egress.mode !== 'none';
   const units: IgnitionConfig['systemd']['units'] = [
-    firewallUnit(rulesPath),
+    firewallUnit(rulesPath, overlays.length > 0),
     agentUnit(hasNic),
-    ...spec.mounts.map(spec.mountTransport === '9p-vsock' ? mount9pUnit : mountUnit)
+    ...spec.mounts.map((mount) =>
+      spec.mountTransport === '9p-vsock'
+        ? mount9pUnit(mount, overlays.length > 0)
+        : mountUnit(mount, overlays.length > 0)
+    )
   ];
+  if (overlays.length > 0) units.push(mountPolicyUnit(spec.mounts, spec.mountTransport ?? 'virtiofs'));
   if (spec.gvforwarderB64) {
     if (spec.netVsockPort === undefined) throw new Error('ignition: gvforwarder needs netVsockPort');
     units.push(vsockNetUnit(spec.netVsockPort));
   }
 
   return {
-    ignition: { version: '3.4.0' },
+    ignition: { version: IGNITION_SCHEMA_VERSION },
     passwd: {
       users: [
         {
           // Unprivileged, NO `wheel` group: on Fedora CoreOS wheel grants passwordless sudo, which
           // would let a workload `sudo nft flush ruleset` and defeat every confinement guarantee.
           name: 'monad',
-          homeDir: '/home/monad'
+          homeDir: '/home/monad',
+          uid: workloadUid
         }
       ]
     },

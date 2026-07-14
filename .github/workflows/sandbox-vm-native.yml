@@ -1,0 +1,42 @@
+name: Sandbox VM Native Artifacts
+
+on:
+  pull_request:
+    paths:
+      - "packages/sandbox-vm/native/seccomp-observer/**"
+      - "packages/sandbox-vm/vendor/seccomp-observer-*"
+      - ".github/workflows/sandbox-vm-native.yml"
+  push:
+    branches: [main]
+    paths:
+      - "packages/sandbox-vm/native/seccomp-observer/**"
+      - "packages/sandbox-vm/vendor/seccomp-observer-*"
+      - ".github/workflows/sandbox-vm-native.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  seccomp-observer:
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            platform: linux/amd64
+            artifact: amd64
+          - runner: ubuntu-24.04-arm
+            platform: linux/arm64
+            artifact: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and test native observer
+        run: |
+          docker run --rm --platform ${{ matrix.platform }} \
+            --security-opt seccomp=unconfined \
+            -v "$PWD:/src" \
+            -w /src/packages/sandbox-vm/native/seccomp-observer \
+            gcc:15-bookworm ./build.sh
+      - name: Verify checked-in artifact
+        run: git diff --exit-code -- packages/sandbox-vm/vendor/seccomp-observer-${{ matrix.artifact }}

@@ -6,8 +6,7 @@
 //
 // Isolation model, per SandboxPolicy:
 //   • writableRoots / readableRoots → shared-directory mounts (virtio-fs on macOS/Linux; 9p-over-
-//     hvsock on Windows, where guest paths are the /mnt/<drive>/… translation of the host roots);
-//     readDenyRoots simply aren't mounted (they don't exist in the guest).
+//     hvsock on Windows), followed by guest-enforced read-deny and credential-mask overlays.
 //   • the exec channel is vsock (NIC-independent), so net:'none' runs with NO network device at all;
 //     'filtered'/'unrestricted' get a NIC into gvproxy's user-space netstack, and egress is enforced
 //     by an in-guest nftables ruleset the unprivileged workload can't alter.
@@ -24,16 +23,37 @@ import { existsSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
+import { BaselineCache, type BaselineManifestInput } from './baseline/cache.ts';
+import { BaselineCoordinator } from './baseline/coordinator.ts';
 import { destroyBundle, ensureBundle, type VmBundle } from './bundle.ts';
 import { configureHypervTools, HVSOCK_PORTS, hypervDriver, hypervPreflight } from './driver/hyperv.ts';
 import { configureQemuTools, qemuDriver } from './driver/qemu.ts';
 import { configureVfkitBin, type VmHandle, vfkitDriver } from './driver/vfkit.ts';
-import { bridgeAsyncProcess, vsockExec, waitForVsock } from './exec/vsock.ts';
-import { serializeIgnition } from './ignition.ts';
+import { VSOCK_PROTOCOL_VERSION } from './exec/protocol.ts';
+import {
+  bridgeAsyncProcess,
+  confirmRestoredVmBaseline,
+  prepareVmBaseline,
+  vsockExec,
+  waitForVsock
+} from './exec/vsock.ts';
+import { IGNITION_SCHEMA_VERSION, serializeIgnition } from './ignition.ts';
 import { ensureBaseImage, type ImageConsent } from './image.ts';
+import { buildVmMountPlan, fingerprintVmMountPlan, MOUNT_PLAN_SCHEMA_VERSION, type VmMountPlan } from './mount-plan.ts';
 import { type GvproxyProcess, guestProxyEnv, spawnGvproxy } from './net/gvproxy.ts';
-import { POOL_DEFAULTS, type PoolConfig, reuseKey, VmPool, vmKey } from './pool.ts';
-import { resolveVmToolchain, vmToolchainMaybeAvailable } from './toolchain.ts';
+import { observationPolicyFor } from './observation-policy.ts';
+import {
+  effectiveVmIdentity,
+  POOL_DEFAULTS,
+  type PoolConfig,
+  policyFingerprint,
+  reuseKey,
+  VmPool,
+  vmKey
+} from './pool.ts';
+import { BootTransaction } from './runtime/boot-transaction.ts';
+import { resolveVmToolchain, vmDir, vmToolchainMaybeAvailable } from './toolchain.ts';
+import { sha256OfFile } from './util.ts';
 import { toGuestPath, translateArgvPaths } from './winpath.ts';
 
 // The guest binaries (Linux), vendored next to the package: the vsock exec agent (all platforms) and
@@ -42,12 +62,34 @@ import { toGuestPath, translateArgvPaths } from './winpath.ts';
 // once and cached as base64.
 const AGENT_ARCH = process.arch === 'x64' ? 'amd64' : 'arm64';
 const AGENT_PATH = join(dirname(import.meta.dir), 'vendor', `vsock-agent-${AGENT_ARCH}`);
+const OBSERVER_PATH = join(dirname(import.meta.dir), 'vendor', `seccomp-observer-${AGENT_ARCH}`);
 const GVFORWARDER_PATH = join(dirname(import.meta.dir), 'vendor', `gvforwarder-${AGENT_ARCH}`);
 const VSOCK_EXEC_PORT = HVSOCK_PORTS.exec; // 1024 on every platform — the agent's listen port
-let agentB64: string | null = null;
-async function agentBinaryB64(): Promise<string> {
-  if (agentB64 === null) agentB64 = Buffer.from(await Bun.file(AGENT_PATH).bytes()).toString('base64');
-  return agentB64;
+const WORKLOAD_UID = (() => {
+  const uid = process.getuid?.();
+  return uid !== undefined && uid > 0 ? uid : 1001;
+})();
+let agentArtifact: { b64: string; digest: string } | null = null;
+async function guestAgentArtifact(): Promise<{ b64: string; digest: string }> {
+  if (agentArtifact === null) {
+    const bytes = await Bun.file(AGENT_PATH).bytes();
+    agentArtifact = {
+      b64: Buffer.from(bytes).toString('base64'),
+      digest: new Bun.CryptoHasher('sha256').update(bytes).digest('hex')
+    };
+  }
+  return agentArtifact;
+}
+let observerArtifact: { b64: string; digest: string } | null = null;
+async function guestObserverArtifact(): Promise<{ b64: string; digest: string }> {
+  if (observerArtifact === null) {
+    const bytes = await Bun.file(OBSERVER_PATH).bytes();
+    observerArtifact = {
+      b64: Buffer.from(bytes).toString('base64'),
+      digest: new Bun.CryptoHasher('sha256').update(bytes).digest('hex')
+    };
+  }
+  return observerArtifact;
 }
 let gvforwarderB64Cache: string | null = null;
 async function gvforwarderBinaryB64(): Promise<string> {
@@ -73,6 +115,7 @@ interface VmConfig extends PoolConfig {
   bootTimeoutMs: number;
   /** Consent gate for the first image download. */
   imageConsent: ImageConsent;
+  baseline: { enabled: boolean; maxInactiveArtifacts: number; maxBytes: number };
 }
 
 let config: VmConfig = {
@@ -80,6 +123,7 @@ let config: VmConfig = {
   cpus: 2,
   memoryMiB: 2048,
   bootTimeoutMs: 120_000,
+  baseline: { enabled: false, maxInactiveArtifacts: 4, maxBytes: 32 * 1024 * 1024 * 1024 },
   // Default-deny until the daemon wires a real prompt: never silently pull a multi-GB image.
   imageConsent: async () => false
 };
@@ -95,10 +139,31 @@ interface RunningVm {
   vfkit: VmHandle;
   /** Only present for net:'filtered'/'unrestricted' — net:'none' has no NIC and no gvproxy. */
   gvproxy?: GvproxyProcess;
+  stopping: boolean;
+  stopPromise?: Promise<void>;
 }
 
-let baseImage: string | null = null;
+interface BaseImageArtifact {
+  path: string;
+  digest: string;
+}
+
+let baseImage: BaseImageArtifact | null = null;
 let pool: VmPool<RunningVm> | null = null;
+let baselineCoordinator: BaselineCoordinator | null = null;
+
+export function vmBaselineMetrics() {
+  return (
+    baselineCoordinator?.metrics() ?? {
+      cold: 0,
+      restored: 0,
+      captureFailures: 0,
+      restoreFailures: 0,
+      coldMs: [],
+      restoreMs: []
+    }
+  );
+}
 
 // A deterministic MAC per reuse key (stable across a VM's restarts): 02:xx… locally-administered.
 function macFor(key: string): string {
@@ -107,49 +172,7 @@ function macFor(key: string): string {
   return `02:${oct(0)}:${oct(1)}:${oct(2)}:${oct(3)}:${oct(4)}`;
 }
 
-/** Canonicalize a path for containment comparison: Windows paths are translated to their guest form
- *  and lowercased (NTFS is case-insensitive — `C:\Secrets` nested under `c:\secrets` must not slip
- *  the read-deny guard); POSIX paths pass through. */
-function canonPath(p: string): string {
-  return process.platform === 'win32' ? toGuestPath(p).toLowerCase() : p;
-}
-
-/** True when `child` is at or below `parent` in the filesystem tree. */
-function isUnder(child: string, parent: string): boolean {
-  const c = canonPath(child);
-  const par = canonPath(parent);
-  const p = par.endsWith('/') ? par : `${par}/`;
-  return c === par || c.startsWith(p);
-}
-
-/** Map the policy's roots to shared-directory mounts (virtio-fs on macOS/Linux, 9p-over-hvsock on
- *  Windows — where each mount also gets its guest path translation and fixed vsock port). Exported
- *  for conformance tests (the read-deny nesting guard is a security check). */
-export function mountsFor(policy: SandboxPolicy): MountSpec[] {
-  // A readDenyRoot nested under an allowed (writable/readable) root would be exposed anyway: the
-  // share exposes the whole subtree, and this backend has no way to subtract a denied subpath
-  // (unlike Seatbelt's deny-over-allow). Rather than silently leak the secret while advertising
-  // enforces.readDeny, fail closed. (A future impl could overlay a tmpfs at each denied path.)
-  const allowed = [...(policy.writableRoots ?? []), ...(policy.readableRoots ?? [])];
-  for (const deny of policy.readDenyRoots ?? []) {
-    for (const root of allowed) {
-      if (isUnder(deny, root)) {
-        throw new VmBackendNotReadyError(
-          `read-deny path ${deny} is nested under mounted root ${root}; the VM backend cannot subtract a denied subpath (would expose it). Narrow the mounted root or drop the deny.`
-        );
-      }
-    }
-  }
-  const mounts: MountSpec[] = [];
-  let i = 0;
-  for (const root of policy.writableRoots ?? []) mounts.push({ tag: `w${i++}`, path: root, readOnly: false });
-  let j = 0;
-  for (const root of policy.readableRoots ?? []) mounts.push({ tag: `r${j++}`, path: root, readOnly: true });
-  return process.platform === 'win32' ? withHvsockMountPlan(mounts) : mounts;
-}
-
-/** Assign each Windows mount its guest path (drive-letter translation) and its fixed hvsock port.
- *  Exported for unit tests (pure). */
+/** Assign each planned Windows share its fixed hvsock port. Exported for unit tests (pure). */
 export function withHvsockMountPlan(mounts: MountSpec[]): MountSpec[] {
   if (mounts.length > HVSOCK_PORTS.maxMounts) {
     throw new VmBackendNotReadyError(
@@ -158,7 +181,6 @@ export function withHvsockMountPlan(mounts: MountSpec[]): MountSpec[] {
   }
   return mounts.map((m, i) => ({
     ...m,
-    guestPath: toGuestPath(m.path),
     vsockPort: HVSOCK_PORTS.mountBase + i
   }));
 }
@@ -174,98 +196,148 @@ function egressFor(policy: SandboxPolicy): { mode: 'none' | 'filtered' | 'unrest
 
 // The base image is pulled lazily on first boot (it is multi-GB — never block daemon startup on it).
 // Cached in `baseImage` after the first successful download, gated by the consent callback.
-let baseImagePromise: Promise<string> | null = null;
-function ensureBaseImageOnce(): Promise<string> {
+let baseImagePromise: Promise<BaseImageArtifact> | null = null;
+function ensureBaseImageOnce(): Promise<BaseImageArtifact> {
   if (baseImage) return Promise.resolve(baseImage);
   if (!baseImagePromise) {
-    baseImagePromise = ensureBaseImage(config.imageConsent).then((path) => {
-      baseImage = path;
-      return path;
+    baseImagePromise = ensureBaseImage(config.imageConsent).then(async (path) => {
+      baseImage = { path, digest: await sha256OfFile(path) };
+      return baseImage;
     });
   }
   return baseImagePromise;
 }
 
-async function bootVm(key: string, policy: SandboxPolicy): Promise<RunningVm> {
-  const image = await ensureBaseImageOnce();
-  const bundle = await ensureBundle(key, image);
-  const mounts = mountsFor(policy);
-  const egress = egressFor(policy);
-  const proxyEnv = egress.mode === 'filtered' && egress.proxyPort ? guestProxyEnv(egress.proxyPort) : undefined;
+interface VmShapeConfig {
+  cpus: number;
+  memoryMiB: number;
+  bootTimeoutMs: number;
+}
 
-  const win = process.platform === 'win32';
-
-  // Ignition: inject the vsock exec agent, the mounts, the egress firewall — and on Windows the
-  // 9p mount transport plus (net≠none) the gvforwarder tap so the guest can reach gvproxy.
-  const ignition = serializeIgnition({
-    agentBinaryB64: await agentBinaryB64(),
-    mounts,
-    egress,
-    env: proxyEnv,
-    ...(win
-      ? {
-          mountTransport: '9p-vsock' as const,
-          ...(egress.mode !== 'none'
-            ? { gvforwarderB64: await gvforwarderBinaryB64(), netVsockPort: HVSOCK_PORTS.net }
-            : {})
-        }
-      : {})
-  });
-  await Bun.write(bundle.ignition, ignition);
-
-  // The exec channel is vsock (NIC-independent), so net:'none' runs with NO NIC and NO gvproxy — the
-  // strongest network isolation. Only 'filtered'/'unrestricted' attach a NIC to gvproxy's user-space
-  // netstack for egress. When there is a NIC, start gvproxy first and wait for its socket so the VMM's
-  // virtio-net can attach at boot.
-  const transport = process.platform === 'darwin' ? 'vfkit' : win ? 'hyperv' : 'qemu';
+async function bootVm(
+  key: string,
+  policy: SandboxPolicy,
+  image: BaseImageArtifact,
+  shape: VmShapeConfig,
+  mountPlan: VmMountPlan,
+  guestArtifacts: { agent: { b64: string; digest: string }; observer: { b64: string; digest: string } },
+  baselineManifest: Omit<BaselineManifestInput, 'bootEpoch'>
+): Promise<RunningVm> {
+  const tx = new BootTransaction();
   let gvproxy: GvproxyProcess | undefined;
-  let gvproxyNetSock: string | undefined;
-  if (egress.mode !== 'none') {
-    if (!resolvedGvproxy) throw new VmBackendNotReadyError('gvproxy not resolved (call prepare())');
-    // gvproxy fatally exits if its listen socket path already exists (stale socket from a prior boot).
-    await rm(bundle.gvproxySock, { force: true });
-    gvproxy = spawnGvproxy({ gvproxyBin: resolvedGvproxy, netSock: bundle.gvproxySock, transport });
-  }
-
-  // Everything after gvproxy spawns can throw (waitForSocket / driver.boot / waitForVsock); a throw
-  // must kill gvproxy and stop the VMM, or every failed boot orphans a gvproxy (and possibly a VM).
+  let vmHandle: VmHandle | undefined;
   try {
-    if (gvproxy) {
+    tx.defer(() => destroyBundle(key));
+    const bundle = await ensureBundle(key, image.path);
+    const mounts = mountPlan.shares;
+    const egress = egressFor(policy);
+    const proxyEnv = egress.mode === 'filtered' && egress.proxyPort ? guestProxyEnv(egress.proxyPort) : undefined;
+    const win = process.platform === 'win32';
+
+    // Ignition: inject the vsock exec agent, mounts, and firewall. Windows additionally uses the
+    // guest agent for 9p-over-hvsock mounts and gvforwarder for its tap-to-vsock network plane.
+    const ignition = serializeIgnition({
+      agentBinaryB64: guestArtifacts.agent.b64,
+      observerBinaryB64: guestArtifacts.observer.b64,
+      mounts,
+      overlays: mountPlan.overlays,
+      egress,
+      env: proxyEnv,
+      workloadUid: WORKLOAD_UID,
+      ...(win
+        ? {
+            mountTransport: '9p-vsock' as const,
+            ...(egress.mode !== 'none'
+              ? { gvforwarderB64: await gvforwarderBinaryB64(), netVsockPort: HVSOCK_PORTS.net }
+              : {})
+          }
+        : {})
+    });
+    await Bun.write(bundle.ignition, ignition);
+
+    // The exec channel is vsock (NIC-independent), so net:'none' runs with NO NIC and NO gvproxy — the
+    // strongest network isolation. Only 'filtered'/'unrestricted' attach a NIC to gvproxy's user-space
+    // netstack for egress. When there is a NIC, start gvproxy first and wait for its socket so the VMM's
+    // virtio-net can attach at boot.
+    const transport = process.platform === 'darwin' ? 'vfkit' : win ? 'hyperv' : 'qemu';
+    let gvproxyNetSock: string | undefined;
+    if (egress.mode !== 'none') {
+      if (!resolvedGvproxy) throw new VmBackendNotReadyError('gvproxy not resolved (call prepare())');
+      await rm(bundle.gvproxySock, { force: true });
+      gvproxy = spawnGvproxy({ gvproxyBin: resolvedGvproxy, netSock: bundle.gvproxySock, transport });
+      tx.defer(() => gvproxy?.stop());
       await waitForSocket(bundle.gvproxySock, 5000);
       gvproxyNetSock = bundle.gvproxySock;
     }
-    // On Windows vsockSock is a named-pipe path (no filesystem entry to clear).
+
+    // A Windows vsock endpoint is a named pipe, not a filesystem socket.
     if (!win) await rm(bundle.vsockSock, { force: true });
     const driver = process.platform === 'darwin' ? vfkitDriver : win ? hypervDriver : qemuDriver;
-    const vmHandle = await driver.boot({
-      cpus: config.cpus,
-      memoryMiB: config.memoryMiB,
+    const spec = {
+      cpus: shape.cpus,
+      memoryMiB: shape.memoryMiB,
       bundle,
       mounts,
       gvproxyNetSock,
       mac: macFor(key),
       vsockSock: bundle.vsockSock,
       vsockPort: VSOCK_EXEC_PORT
-    });
+    };
+    const acquired = baselineCoordinator
+      ? await baselineCoordinator.acquire({
+          enabled: config.baseline.enabled,
+          identity: baselineManifest.identity,
+          manifest: baselineManifest,
+          spec,
+          driver,
+          coldBoot: async () => {
+            const handle = await driver.boot(spec);
+            try {
+              await waitForVsock({ socketPath: bundle.vsockSock }, { timeoutMs: shape.bootTimeoutMs });
+              return handle;
+            } catch (error) {
+              await handle.stop().catch(() => {});
+              throw error;
+            }
+          },
+          prepare: async (_handle) => {
+            await waitForVsock({ socketPath: bundle.vsockSock }, { timeoutMs: shape.bootTimeoutMs });
+            const ready = await prepareVmBaseline(bundle.vsockSock, guestArtifacts.agent.digest);
+            return { bootEpoch: ready.bootEpoch, agentDigest: ready.agentDigest };
+          },
+          confirm: async (_handle, handshake) => {
+            await waitForVsock({ socketPath: bundle.vsockSock }, { timeoutMs: shape.bootTimeoutMs });
+            await confirmRestoredVmBaseline(bundle.vsockSock, handshake.bootEpoch, handshake.agentDigest);
+          }
+        })
+      : { handle: await driver.boot(spec), source: 'cold' as const };
+    vmHandle = acquired.handle;
+    tx.defer(() => vmHandle?.stop());
 
-    const vm: RunningVm = { bundle, vfkit: vmHandle, gvproxy };
+    await waitForVsock({ socketPath: bundle.vsockSock }, { timeoutMs: shape.bootTimeoutMs });
+    const vm: RunningVm = { bundle, vfkit: vmHandle, gvproxy, stopping: false };
     liveVms.add(vm);
-    // driver.boot() returns as soon as the VMM process is spawned, NOT when the guest is up. Fedora
-    // CoreOS takes ~30-60s to boot + apply Ignition + start the agent, so wait until the guest is
-    // exec-reachable before returning — otherwise the first command races an unbooted guest. On a
-    // timeout, tear down the VM too (not just gvproxy) so a half-booted guest never leaks.
-    try {
-      await waitForVsock({ socketPath: bundle.vsockSock }, { timeoutMs: config.bootTimeoutMs });
-    } catch (error) {
-      liveVms.delete(vm);
-      await vmHandle.stop().catch(() => {});
-      throw error;
-    }
+    tx.commit();
+    observeRuntimeExit(key, vm, vmHandle.exited);
+    if (gvproxy) observeRuntimeExit(key, vm, gvproxy.exited);
     return vm;
   } catch (error) {
-    gvproxy?.kill();
+    await tx.rollback(error);
+    const details = [vmHandle?.diagnostics.stderr.text(), gvproxy?.diagnostics.stderr.text()]
+      .filter(Boolean)
+      .join('\n');
+    if (details) {
+      throw new Error(`${error instanceof Error ? error.message : String(error)}\n${details}`, { cause: error });
+    }
     throw error;
   }
+}
+
+function observeRuntimeExit(key: string, vm: RunningVm, exited: Promise<number>): void {
+  const invalidate = () => {
+    if (!vm.stopping) void pool?.invalidate(key);
+  };
+  void exited.then(invalidate, invalidate);
 }
 
 /** Poll for a socket path to appear (gvproxy binds it asynchronously after fork). */
@@ -283,13 +355,18 @@ async function waitForSocket(path: string, timeoutMs: number): Promise<void> {
 const liveVms = new Set<RunningVm>();
 
 async function stopVm(vm: RunningVm): Promise<void> {
-  liveVms.delete(vm);
-  await vm.vfkit.stop().catch(() => {});
-  vm.gvproxy?.kill();
-  await destroyBundle(vm.bundle.key);
+  if (vm.stopPromise) return vm.stopPromise;
+  vm.stopping = true;
+  vm.stopPromise = (async () => {
+    liveVms.delete(vm);
+    await Promise.allSettled([vm.vfkit.stop(), vm.gvproxy?.stop()]);
+    await destroyBundle(vm.bundle.key);
+  })();
+  return vm.stopPromise;
 }
 
 let resolvedGvproxy: string | null = null;
+let resolvedHypervisorDigest: string | null = null;
 
 // ── the launcher ──────────────────────────────────────────────────────────────────────────────────
 
@@ -302,7 +379,17 @@ export const vmLauncher: SandboxLauncher = {
       fields: [
         { id: 'cpus', type: 'number', label: 'CPUs', defaultValue: 2, min: 1, max: 16 },
         { id: 'memoryMiB', type: 'number', label: 'Memory (MiB)', defaultValue: 2048, min: 512 },
-        { id: 'bootTimeoutMs', type: 'number', label: 'Boot timeout (ms)', defaultValue: 120_000, min: 10_000 }
+        { id: 'bootTimeoutMs', type: 'number', label: 'Boot timeout (ms)', defaultValue: 120_000, min: 10_000 },
+        { id: 'baselineEnabled', type: 'boolean', label: 'Pre-workload baseline', defaultValue: false },
+        {
+          id: 'baselineMaxInactiveArtifacts',
+          type: 'number',
+          label: 'Baseline cache entries',
+          defaultValue: 4,
+          min: 0,
+          max: 64
+        },
+        { id: 'baselineMaxBytes', type: 'number', label: 'Baseline cache bytes', defaultValue: 34359738368, min: 0 }
       ]
     }
   },
@@ -313,7 +400,13 @@ export const vmLauncher: SandboxLauncher = {
     configureVmBackend({
       cpus: settings.cpus as number | undefined,
       memoryMiB: settings.memoryMiB as number | undefined,
-      bootTimeoutMs: settings.bootTimeoutMs as number | undefined
+      bootTimeoutMs: settings.bootTimeoutMs as number | undefined,
+      baseline: {
+        enabled: (settings.baselineEnabled as boolean | undefined) ?? config.baseline.enabled,
+        maxInactiveArtifacts:
+          (settings.baselineMaxInactiveArtifacts as number | undefined) ?? config.baseline.maxInactiveArtifacts,
+        maxBytes: (settings.baselineMaxBytes as number | undefined) ?? config.baseline.maxBytes
+      }
     });
   },
 
@@ -322,6 +415,7 @@ export const vmLauncher: SandboxLauncher = {
     // never block daemon boot on a multi-GB download.
     const tools = await resolveVmToolchain();
     resolvedGvproxy = tools.gvproxy;
+    resolvedHypervisorDigest = await sha256OfFile(tools.hypervisor);
     if (process.platform === 'darwin') {
       configureVfkitBin(tools.hypervisor);
     } else if (process.platform === 'win32') {
@@ -342,32 +436,103 @@ export const vmLauncher: SandboxLauncher = {
       });
     }
     pool = new VmPool<RunningVm>(config, { stop: stopVm });
+    const baselineCache = new BaselineCache(join(vmDir(), 'baselines'), {
+      maxInactiveArtifacts: config.baseline.maxInactiveArtifacts,
+      maxBytes: config.baseline.maxBytes
+    });
+    await baselineCache.cleanupTemporary();
+    baselineCoordinator = new BaselineCoordinator(baselineCache);
     installShutdownHandler();
   },
 
   spawn(argv: string[], options: SandboxSpawnOptions, policy: SandboxPolicy): SandboxProcess {
     const activePool = pool;
     if (!activePool) throw new VmBackendNotReadyError('not prepared — prepare() must run before spawn()');
-    const key = vmKey(config.scope, options.sessionId, options.agentId, policy);
-    const reuse = reuseKey(config.scope, options.sessionId, options.agentId);
+    const scope = config.scope;
+    const shape = { cpus: config.cpus, memoryMiB: config.memoryMiB, bootTimeoutMs: config.bootTimeoutMs };
+    const reuse = reuseKey(scope, options.sessionId, options.agentId);
+    let acquiredKey: string | undefined;
     // acquire() is async (boot); the SandboxProcess must be returned synchronously, so bridge the
     // async acquire + vsock exec. The policy is captured in the boot thunk (no module-level side table).
     return bridgeAsyncProcess(
       async () => {
-        const vm = await activePool.acquire(key, reuse, options.agentId, () => bootVm(key, policy));
+        const [image, agent, observer, rawMountPlan] = await Promise.all([
+          ensureBaseImageOnce(),
+          guestAgentArtifact(),
+          guestObserverArtifact(),
+          buildVmMountPlan(policy)
+        ]);
+        const mountPlan = {
+          ...rawMountPlan,
+          shares: process.platform === 'win32' ? withHvsockMountPlan(rawMountPlan.shares) : rawMountPlan.shares
+        };
+        const identity = effectiveVmIdentity(policy, {
+          agentDigest: agent.digest,
+          baseImageDigest: image.digest,
+          cpus: shape.cpus,
+          ignitionSchemaVersion: IGNITION_SCHEMA_VERSION,
+          memoryMiB: shape.memoryMiB,
+          mountPlanDigest: fingerprintVmMountPlan(mountPlan),
+          mountPlanSchemaVersion: MOUNT_PLAN_SCHEMA_VERSION,
+          observerDigest: observer.digest,
+          protocolVersion: VSOCK_PROTOCOL_VERSION,
+          workloadUid: WORKLOAD_UID,
+          runIsolation: { memoryMiB: 1024, maxProcesses: 256, terminateGraceMs: 5000 },
+          vsockPort: VSOCK_EXEC_PORT
+        });
+        const key = vmKey(scope, options.sessionId, options.agentId, identity);
+        if (!resolvedHypervisorDigest) throw new VmBackendNotReadyError('hypervisor fingerprint unavailable');
+        const toolchainDigest = resolvedHypervisorDigest;
+        const driverKind = process.platform === 'darwin' ? 'vfkit' : process.platform === 'win32' ? 'hyperv' : 'qemu';
+        const identityDigest = new Bun.CryptoHasher('sha256')
+          .update(JSON.stringify({ identity, driverKind, toolchainDigest }))
+          .digest('hex');
+        const baselineManifest: Omit<BaselineManifestInput, 'bootEpoch'> = {
+          identity: identityDigest,
+          reuseDigest: new Bun.CryptoHasher('sha256').update(reuse).digest('hex'),
+          driver: {
+            kind: driverKind,
+            version: toolchainDigest,
+            toolchain: toolchainDigest,
+            arch: process.arch
+          },
+          guest: {
+            agent: agent.digest,
+            observer: observer.digest,
+            protocol: VSOCK_PROTOCOL_VERSION,
+            ignition: IGNITION_SCHEMA_VERSION,
+            mountPlan: fingerprintVmMountPlan(mountPlan)
+          },
+          topology: {
+            cpus: shape.cpus,
+            memoryMiB: shape.memoryMiB,
+            digest: policyFingerprint(identity)
+          }
+        };
+        acquiredKey = key;
+        const vm = await activePool.acquire(key, reuse, options.agentId, () =>
+          bootVm(key, policy, image, shape, mountPlan, { agent, observer }, baselineManifest)
+        );
         const egress = egressFor(policy);
         // On Windows, host paths (C:\…) must become their /mnt/<drive>/… guest mounts — for the cwd
         // and for any argv token that is itself an absolute Windows path. Identity on mac/linux.
         return vsockExec(translateArgvPaths(argv), {
           socketPath: vm.bundle.vsockSock,
           cwd: options.cwd !== undefined ? toGuestPath(options.cwd) : undefined,
+          limits: options.limits,
+          terminal: options.terminal,
+          observation: observationPolicyFor(mountPlan),
+          onUnresponsive: () => void activePool.invalidate(key),
           env: {
             ...options.env,
             ...(egress.mode === 'filtered' && egress.proxyPort ? guestProxyEnv(egress.proxyPort) : {})
           }
         });
       },
-      () => activePool.release(key)
+      () => {
+        if (acquiredKey) activePool.release(acquiredKey);
+      },
+      options.terminal
     );
   },
 
@@ -396,7 +561,7 @@ function installShutdownHandler(): void {
       } catch {
         /* best-effort */
       }
-      vm.gvproxy?.kill();
+      void vm.gvproxy?.stop();
     }
   };
   process.once('exit', killAll);

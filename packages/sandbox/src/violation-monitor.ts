@@ -3,17 +3,8 @@
 // into a structured event. Off macOS this is a no-op (bwrap/Landlock give no equivalent host-side
 // stream today). Opt-in: nothing is spawned unless startViolationMonitor is called.
 
+import type { SandboxViolation } from '@monad/sdk-atom';
 import type { Subprocess } from 'bun';
-
-export interface SandboxViolation {
-  /** The denied operation, e.g. `file-read-data`, `network-outbound`. */
-  operation: string;
-  /** The target of the denied operation (a path or address), when the log line carries one. */
-  target: string;
-  /** The offending process name, when present. */
-  process?: string;
-  pid?: number;
-}
 
 export interface ViolationMonitor {
   stop(): void;
@@ -32,10 +23,16 @@ export function parseSeatbeltViolation(message: string): SandboxViolation | null
   if (!operation) return null;
   const target = (deny[2] ?? '').trim();
   const proc = PROC_RE.exec(message);
-  const out: SandboxViolation = { operation, target };
+  const out: SandboxViolation = {
+    kind: 'runtime',
+    operation,
+    runId: 'host',
+    timestamp: new Date().toISOString(),
+    ...(target ? { target } : {})
+  };
   if (proc) {
-    out.process = proc[1];
     out.pid = Number(proc[2]);
+    out.detail = `process=${proc[1]}`;
   }
   return out;
 }

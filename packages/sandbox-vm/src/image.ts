@@ -10,13 +10,14 @@
 // pull, monad tells the user the source/size/path and waits for a yes (observability-first).
 
 import { chmodSync, existsSync } from 'node:fs';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { vmDir } from './toolchain.ts';
 import { sha256OfFile } from './util.ts';
 
 const STREAM_URL = 'https://builds.coreos.fedoraproject.org/streams/stable.json';
+const resolvedArtifacts = new Map<string, Promise<ImageArtifact>>();
 
 /** The CoreOS artifact coordinates for a host: arch key, VMM platform, and disk format (which also
  *  fixes the compression + output extension). */
@@ -46,6 +47,19 @@ export interface ImageArtifact {
   uncompressedSha256?: string;
 }
 
+async function fetchWithRetry(url: string, fetchImpl: typeof fetch): Promise<Response> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await fetchImpl(url);
+    } catch (error) {
+      lastError = error;
+      if (attempt < 2) await Bun.sleep(100 * 2 ** attempt);
+    }
+  }
+  throw lastError;
+}
+
 type StreamJson = {
   architectures?: Record<
     string,
@@ -68,7 +82,7 @@ export async function resolveImageArtifact(
   target: ImageTarget = hostImageTarget(),
   fetchImpl: typeof fetch = fetch
 ): Promise<ImageArtifact> {
-  const res = await fetchImpl(STREAM_URL);
+  const res = await fetchWithRetry(STREAM_URL, fetchImpl);
   if (!res.ok) throw new Error(`vm image: stream metadata fetch failed ${res.status}`);
   const stream = (await res.json()) as StreamJson;
   const fmt = stream.architectures?.[target.arch]?.artifacts?.[target.platform]?.formats?.[target.format];
@@ -81,6 +95,54 @@ export async function resolveImageArtifact(
 
 export function imagesDir(): string {
   return join(vmDir(), 'images');
+}
+
+export function imageArtifactCachePath(target: ImageTarget = hostImageTarget()): string {
+  return join(imagesDir(), `artifact-${target.arch}-${target.platform}-${target.format.replace('.', '-')}.json`);
+}
+
+function validArtifact(value: unknown): value is ImageArtifact {
+  if (typeof value !== 'object' || value === null) return false;
+  const artifact = value as Partial<ImageArtifact>;
+  return (
+    typeof artifact.location === 'string' &&
+    artifact.location.startsWith('https://') &&
+    typeof artifact.sha256 === 'string' &&
+    /^[a-f0-9]{64}$/i.test(artifact.sha256) &&
+    (artifact.uncompressedSha256 === undefined || /^[a-f0-9]{64}$/i.test(artifact.uncompressedSha256))
+  );
+}
+
+async function loadCachedArtifact(target: ImageTarget): Promise<ImageArtifact | undefined> {
+  try {
+    const parsed: unknown = JSON.parse(await readFile(imageArtifactCachePath(target), 'utf8'));
+    return validArtifact(parsed) ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function cacheArtifact(target: ImageTarget, artifact: ImageArtifact): Promise<void> {
+  if (!validArtifact(artifact)) return;
+  await mkdir(imagesDir(), { recursive: true });
+  const destination = imageArtifactCachePath(target);
+  const partial = `${destination}.partial`;
+  await writeFile(partial, `${JSON.stringify(artifact)}\n`, { mode: 0o600 });
+  await rename(partial, destination);
+  chmodSync(destination, 0o444);
+}
+
+export async function streamResponseToFile(response: Response, destination: string): Promise<void> {
+  if (!response.body) throw new Error('vm image: download response has no body');
+  const sink = Bun.file(destination).writer();
+  try {
+    for await (const chunk of response.body) sink.write(chunk);
+    await sink.end();
+  } catch (error) {
+    await sink.end();
+    await rm(destination, { force: true });
+    throw error;
+  }
 }
 
 /** Decompress `src` into `dest` with the host's system tool, streaming (never a multi-GB in-memory
@@ -124,7 +186,24 @@ export type ImageConsent = (info: { url: string; sha256: string; dest: string })
  *  filename alone). */
 export async function ensureBaseImage(consent: ImageConsent, fetchImpl: typeof fetch = fetch): Promise<string> {
   const target = hostImageTarget();
-  const artifact = await resolveImageArtifact(target, fetchImpl);
+  const key = `${target.arch}:${target.platform}:${target.format}`;
+  let artifactPromise: Promise<ImageArtifact>;
+  if (fetchImpl === fetch) {
+    artifactPromise = resolvedArtifacts.get(key) ?? resolveImageArtifact(target, fetchImpl);
+    resolvedArtifacts.set(key, artifactPromise);
+    artifactPromise.catch(() => resolvedArtifacts.delete(key));
+  } else {
+    artifactPromise = resolveImageArtifact(target, fetchImpl);
+  }
+  let artifact: ImageArtifact;
+  try {
+    artifact = await artifactPromise;
+    await cacheArtifact(target, artifact);
+  } catch (error) {
+    const cached = await loadCachedArtifact(target);
+    if (!cached) throw error;
+    artifact = cached;
+  }
   const stamp = artifact.uncompressedSha256 ?? artifact.sha256;
   const dest = join(imagesDir(), `${stamp.slice(0, 16)}${target.ext}`);
   if (existsSync(dest)) {
@@ -133,7 +212,6 @@ export async function ensureBaseImage(consent: ImageConsent, fetchImpl: typeof f
     if (artifact.uncompressedSha256) {
       const got = await sha256OfFile(dest);
       if (got === artifact.uncompressedSha256) return dest;
-      const { rm } = await import('node:fs/promises');
       await rm(dest, { force: true });
     } else {
       return dest;
@@ -147,7 +225,7 @@ export async function ensureBaseImage(consent: ImageConsent, fetchImpl: typeof f
   const cprPath = `${dest}.cmp.partial`;
   const res = await fetchImpl(artifact.location);
   if (!res.ok) throw new Error(`vm image: download failed ${res.status}`);
-  await Bun.write(cprPath, res);
+  await streamResponseToFile(res, cprPath);
 
   // Verify the compressed artifact before decompressing.
   const gotCmp = await sha256OfFile(cprPath);
@@ -166,7 +244,6 @@ export async function ensureBaseImage(consent: ImageConsent, fetchImpl: typeof f
     }
   }
 
-  const { rename, rm } = await import('node:fs/promises');
   await rename(rawPartial, dest);
   await rm(cprPath, { force: true });
   chmodSync(dest, 0o444); // base image is read-only; VMs clone it

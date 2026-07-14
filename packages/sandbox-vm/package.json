@@ -19,6 +19,8 @@
   "scripts": {
     "lint": "biome check .",
     "test": "bun ../../scripts/bun-test.ts test/ --only-failures",
+    "test:e2e": "bun ../../scripts/bun-test.ts test/e2e/ --only-failures",
+    "test:e2e:loud": "bun ../../scripts/bun-test.ts test/e2e/ --loud",
     "test:loud": "bun ../../scripts/bun-test.ts test/ --loud",
     "test:unit": "bun ../../scripts/bun-test.ts test/unit/ --only-failures",
     "test:unit:loud": "bun ../../scripts/bun-test.ts test/unit/ --loud",

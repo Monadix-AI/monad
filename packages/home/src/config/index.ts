@@ -167,6 +167,61 @@ function defaultDeveloperMode(): boolean {
   return Bun.env.NODE_ENV === 'development';
 }
 
+const sandboxCredentialTransformSchema = z.object({
+  extract: z.string().min(1).max(4096).optional(),
+  maskDuplicates: z.boolean().optional(),
+  decode: z.literal('jwt').optional(),
+  maskClaims: z.array(z.string().min(1).max(128)).max(32).optional()
+});
+
+const sandboxCredentialSchema = z
+  .object({
+    name: z.string().min(1).max(128),
+    injectHosts: z.array(z.string().min(1).max(253)).min(1).max(64),
+    value: z.string().optional(),
+    file: z.string().optional(),
+    extract: z.string().min(1).max(4096).optional(),
+    transform: sandboxCredentialTransformSchema.optional()
+  })
+  .superRefine((credential, ctx) => {
+    const normalizedTransform = {
+      ...credential.transform,
+      ...(credential.extract === undefined ? {} : { extract: credential.extract })
+    };
+    if ((credential.value === undefined) === (credential.file === undefined)) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'each sandbox credential must set exactly one of `value` or `file`'
+      });
+    }
+    if (credential.extract !== undefined && credential.transform?.extract !== undefined) {
+      ctx.addIssue({ code: 'custom', path: ['extract'], message: 'set extract in only one location' });
+    }
+    if (normalizedTransform.maskDuplicates && !normalizedTransform.extract) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['transform', 'maskDuplicates'],
+        message: 'maskDuplicates requires extract'
+      });
+    }
+    if (normalizedTransform.maskClaims && normalizedTransform.decode !== 'jwt') {
+      ctx.addIssue({ code: 'custom', path: ['transform', 'maskClaims'], message: 'maskClaims requires decode: jwt' });
+    }
+    if (
+      normalizedTransform.maskClaims &&
+      new Set(normalizedTransform.maskClaims).size !== normalizedTransform.maskClaims.length
+    ) {
+      ctx.addIssue({ code: 'custom', path: ['transform', 'maskClaims'], message: 'maskClaims must be unique' });
+    }
+  })
+  .transform(({ extract, transform, ...credential }) => {
+    const normalized =
+      transform === undefined && extract === undefined
+        ? undefined
+        : { ...transform, ...(extract === undefined ? {} : { extract }) };
+    return { ...credential, ...(normalized === undefined ? {} : { transform: normalized }) };
+  });
+
 // Sandbox POLICY block. Lives in its own file (sandbox.json) and is exposed at the top level as
 // `cfg.sandbox`. Every field defaults, so an absent sandbox.json parses to a fail-safe policy
 // (confine=true, net='unrestricted', backend='auto'). The org ceiling (`agent.globalSandbox`) is a
@@ -217,21 +272,7 @@ export const sandboxConfigSchema = z.object({
   //            to DENY (file unreadable); Landlock/Low-IL cannot enforce and warn.
   // REQUIRES net:'filtered' AND tlsTerminate.enabled — without MITM the proxy cannot see HTTPS
   // headers, so sentinels never apply to HTTPS. Empty (default) → no masking.
-  credentials: z
-    .array(
-      z
-        .object({
-          name: z.string(),
-          injectHosts: z.array(z.string()),
-          value: z.string().optional(),
-          file: z.string().optional(),
-          extract: z.string().optional()
-        })
-        .refine((c) => (c.value === undefined) !== (c.file === undefined), {
-          message: 'each sandbox credential must set exactly one of `value` (env) or `file` (masked file)'
-        })
-    )
-    .default([]),
+  credentials: z.array(sandboxCredentialSchema).max(64).default([]),
   // code_execute target:'host' (run unconfined on the real machine): 'deny' refuses it, 'ask'
   // allows it with human approval (default), 'allow' permits it (still approved — host runs are
   // always gated). Sandbox-target runs are unaffected.
@@ -270,6 +311,18 @@ export const sandboxConfigSchema = z.object({
       cpus: z.number().int().positive().default(2),
       // Attach a memory-balloon device + host-pressure reclaim so idle VMs release pages. Default on.
       balloon: z.boolean().default(true),
+      baseline: z
+        .object({
+          enabled: z.boolean().default(false),
+          maxInactiveArtifacts: z.number().int().min(0).max(64).default(4),
+          maxBytes: z
+            .number()
+            .int()
+            .min(0)
+            .max(256 * 1024 * 1024 * 1024)
+            .default(32 * 1024 * 1024 * 1024)
+        })
+        .default({ enabled: false, maxInactiveArtifacts: 4, maxBytes: 32 * 1024 * 1024 * 1024 }),
       // Explicit vfkit / gvproxy / winvm-helper binary paths (skip host detection + download).
       vfkitPath: z.string().optional(),
       gvproxyPath: z.string().optional(),

@@ -23,6 +23,8 @@ import { homedir, tmpdir } from 'node:os';
 import { isAbsolute, join, resolve } from 'node:path';
 import { logger } from '@monad/logger';
 
+import { type CredentialTransform, MAX_CREDENTIAL_BYTES, materializeCredential } from './credential-materializer.ts';
+
 export const MASKED_FILE_STORE_PREFIX = 'monad-credmask-';
 
 /** One masked file's declared source. `extract` (optional) is a regex whose capture group 1 is the
@@ -34,7 +36,7 @@ export interface MaskedFileSpec {
   realPath: string;
   /** Hosts the sentinel may be swapped back to the real value for (exact or subdomain). */
   injectHosts: string[];
-  /** Regex: capture group 1 is the credential value; only matched spans are masked. */
+  transform?: CredentialTransform;
   extract?: string;
 }
 
@@ -127,8 +129,19 @@ export class MaskedFileStore {
 
     let content: string;
     try {
-      if (statSync(real).isDirectory()) {
+      const stat = statSync(real);
+      if (stat.isDirectory()) {
         logger.warn(`monad: masked credential file "${spec.realPath}" resolves to a directory — denying read.`);
+        this.denied.push(real);
+        return undefined;
+      }
+      if (!stat.isFile()) {
+        logger.warn(`monad: masked credential file "${spec.realPath}" is not a regular file — denying read.`);
+        this.denied.push(real);
+        return undefined;
+      }
+      if (stat.size > MAX_CREDENTIAL_BYTES) {
+        logger.warn(`monad: masked credential file "${spec.realPath}" failed: INPUT_TOO_LARGE — denying read.`);
         this.denied.push(real);
         return undefined;
       }
@@ -154,25 +167,19 @@ export class MaskedFileStore {
       return undefined;
     }
 
-    const key = FILE_KEY_PREFIX + spec.name;
-    let fakeContent: string;
-    if (spec.extract === undefined) {
-      fakeContent = registry.register(key, content, spec.injectHosts);
-    } else {
-      const out = extractAndSubstitute(content, spec.extract, (cap, i) =>
-        registry.register(`${key}#${i}`, cap, spec.injectHosts)
-      );
-      if (out === null) {
-        // Fail-closed: a declared credential file whose value we couldn't locate must NOT be readable.
-        logger.warn(
-          `monad: masked credential file "${spec.realPath}" extract pattern /${spec.extract}/ matched ` +
-            'nothing — denying read (fix the regex or remove extract to whole-file mask).'
-        );
-        this.denied.push(real);
-        return undefined;
-      }
-      fakeContent = out;
+    const transform =
+      spec.extract === undefined
+        ? spec.transform
+        : { ...spec.transform, extract: spec.transform?.extract ?? spec.extract };
+    const materialized = materializeCredential(content, spec.injectHosts, transform);
+    if (!materialized.ok) {
+      logger.warn(`monad: masked credential file "${spec.realPath}" failed: ${materialized.error} — denying read.`);
+      this.denied.push(real);
+      return undefined;
     }
+    const key = FILE_KEY_PREFIX + spec.name;
+    registry.registerSubstitutions(key, materialized.value.substitutions);
+    const fakeContent = materialized.value.childValue;
 
     if (this.dir === undefined) this.dir = mkdtempSync(join(tmpdir(), MASKED_FILE_STORE_PREFIX));
     const fake = join(this.dir, `${this.seq++}.fake`);

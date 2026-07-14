@@ -81,7 +81,7 @@
     "test:unit": "bun run i18n:types && turbo run test:unit --output-logs=errors-only",
     "test:unit:loud": "bun run i18n:types && turbo run test:unit:loud",
     "typecheck": "bun run typecheck:prepare && bun run i18n:types && tsc --noEmit && turbo run typecheck",
-    "typecheck:prepare": "bun run scripts/generate-codex-app-server-protocol.ts && bun run --cwd apps/web generate:routes"
+    "typecheck:prepare": "bun run scripts/generate-codex-app-server-protocol.ts && bun run scripts/generate-licenses.ts && bun run --cwd apps/web generate:routes"
   },
   "type": "module",
   "workspaces": [

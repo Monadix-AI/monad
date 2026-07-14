@@ -2,6 +2,8 @@
 
 Sandbox policy and sandbox backend are independent. Policy controls filesystem access, confinement, network access, allowed domains, and host execution. The backend is the launcher that applies that policy to newly spawned processes.
 
+For the evidence-scoped comparison with Anthropic Sandbox Runtime, including the boundary between shared policy and VM enforcement, see [Sandbox VM and SRT parity](../sandbox-vm-srt-parity.md).
+
 `/studio/sandbox` displays both, but activating a backend does not rewrite policy. Backend changes are hot: existing processes remain owned by the launcher that created them, while processes spawned after a successful activation use the new launcher.
 
 ## Built-in and contributed backends
@@ -80,3 +82,9 @@ Disabling or removing the pack that owns the active backend first activates buil
 ## Compatibility
 
 Backend discovery and activation use transport-neutral protocol objects. Studio is one presenter, not part of the backend contract. CLI, TUI, and ACP clients receive the same Host Interaction semantics and never need provider-specific UI code.
+
+## VM pre-workload baselines
+
+The built-in VM backend can cache a driver-native baseline after trusted guest boot and before the first workload. QEMU/KVM and Hyper-V implement the capability; vfkit reports it unavailable and cold boots. Restore is only a latency optimization: an invalid manifest, failed digest, epoch mismatch, active lease, or driver failure invalidates the candidate and cold boots once.
+
+Baselines are disabled by default. The VM backend settings expose `baselineEnabled`, `baselineMaxInactiveArtifacts`, and `baselineMaxBytes`. Legacy `sandbox.vm.baseline` settings normalize into those source-qualified backend settings. Cache directories are owner-only, identity- and toolchain-bound, digest-checked, leased, and LRU-bounded. They never contain credential values or credential-derived hashes.

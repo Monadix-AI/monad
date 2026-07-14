@@ -6,6 +6,9 @@
 
 import type { VmBundle } from '../bundle.ts';
 import type { MountSpec } from '../ignition.ts';
+import type { DiagnosticTail } from '../runtime/diagnostic-tail.ts';
+
+import { drainDiagnosticStream } from '../runtime/diagnostic-tail.ts';
 
 export interface VmSpec {
   cpus: number;
@@ -25,13 +28,33 @@ export interface VmSpec {
 
 export interface VmDriver {
   readonly kind: string;
+  readonly baselineSupported: boolean;
+  canBaseline?(): boolean;
   /** Boot a VM from the spec and return a handle. */
   boot(spec: VmSpec): Promise<VmHandle>;
+}
+
+export interface VmBaselineArtifact {
+  readonly manifestPath: string;
+  readonly identity: string;
+  readonly byteSize: number;
+}
+
+export interface VmBaselineDriver extends VmDriver {
+  readonly baselineSupported: true;
+  captureBaseline(spec: VmSpec, handle: VmHandle, artifactDir: string): Promise<string[]>;
+  restoreBaseline(spec: VmSpec, artifact: VmBaselineArtifact): Promise<VmHandle>;
+  invalidateBaseline(artifact: VmBaselineArtifact): Promise<void>;
+}
+
+export function isBaselineDriver(driver: VmDriver): driver is VmBaselineDriver {
+  return driver.baselineSupported === true && (driver.canBaseline?.() ?? true);
 }
 
 export interface VmHandle {
   readonly pid: number;
   readonly exited: Promise<number>;
+  readonly diagnostics: { stdout: DiagnosticTail; stderr: DiagnosticTail };
   stop(): Promise<void>;
 }
 
@@ -59,7 +82,7 @@ export function vfkitArgv(vfkitBin: string, spec: VmSpec): string[] {
   ];
 
   for (const m of spec.mounts) {
-    argv.push('--device', `virtio-fs,sharedDir=${m.path},mountTag=${m.tag}`);
+    argv.push('--device', `virtio-fs,sharedDir=${m.hostPath},mountTag=${m.tag}`);
   }
 
   // net:'none' → no NIC device at all. Otherwise attach to gvproxy's datagram socket.
@@ -77,15 +100,24 @@ export function vfkitArgv(vfkitBin: string, spec: VmSpec): string[] {
 
 export const vfkitDriver: VmDriver = {
   kind: 'vfkit',
+  baselineSupported: false,
   async boot(spec: VmSpec): Promise<VmHandle> {
     const argv = vfkitArgv(this._vfkitBin ?? 'vfkit', spec);
     const proc = Bun.spawn(argv, { stdout: 'pipe', stderr: 'pipe' });
+    const stdout = drainDiagnosticStream(proc.stdout);
+    const stderr = drainDiagnosticStream(proc.stderr);
+    let stopPromise: Promise<void> | undefined;
     return {
       pid: proc.pid,
       exited: proc.exited,
-      async stop() {
-        proc.kill();
-        await proc.exited;
+      diagnostics: { stdout: stdout.tail, stderr: stderr.tail },
+      stop() {
+        stopPromise ??= (async () => {
+          proc.kill();
+          await proc.exited.catch(() => {});
+          await Promise.allSettled([stdout.done, stderr.done]);
+        })();
+        return stopPromise;
       }
     };
   }

@@ -10,6 +10,7 @@ import type { SandboxLauncher, SandboxPolicy } from '@monad/sdk-atom';
 import { tmpdir } from 'node:os';
 
 import { MaskedFileStore } from './credential-mask-files.ts';
+import { type CredentialTransform, materializeCredential } from './credential-materializer.ts';
 import { SentinelRegistry } from './credential-sentinel.ts';
 import { type EgressProxy, startEgressProxy } from './egress-proxy.ts';
 import { createMitmCA, disposeMitmCA, type MitmCA } from './mitm/ca.ts';
@@ -20,12 +21,14 @@ export interface SandboxManagerCredential {
   name: string;
   value: string;
   injectHosts: string[];
+  transform?: CredentialTransform;
 }
 export interface SandboxManagerCredentialFile {
   name: string;
   path: string;
   injectHosts: string[];
   extract?: string;
+  transform?: CredentialTransform;
 }
 
 export interface SandboxManagerOptions {
@@ -83,6 +86,7 @@ export class SandboxManager {
     let env: Record<string, string> = {};
     let maskedBinds: { real: string; fake: string }[] = [];
     let maskedDeny: string[] = [];
+    let credentialGenerationActive = false;
     const creds = opts.credentials ?? [];
     const credFiles = opts.credentialFiles ?? [];
 
@@ -98,18 +102,32 @@ export class SandboxManager {
           log('credentials require tlsTerminate (the proxy cannot see HTTPS headers otherwise) — ignoring.');
         } else {
           const registry = new SentinelRegistry();
-          for (const c of creds) registry.register(c.name, c.value, c.injectHosts);
+          for (const c of creds) {
+            const materialized = materializeCredential(c.value, c.injectHosts, c.transform);
+            if (!materialized.ok) {
+              log(`credential "${c.name}" failed: ${materialized.error} — omitting child environment variable.`);
+              continue;
+            }
+            registry.registerMaterialized(c.name, materialized.value.childValue, materialized.value.substitutions);
+          }
           if (credFiles.length > 0) {
             const store = new MaskedFileStore();
             this.store = store;
             for (const f of credFiles) {
-              store.add(registry, { name: f.name, realPath: f.path, injectHosts: f.injectHosts, extract: f.extract });
+              store.add(registry, {
+                name: f.name,
+                realPath: f.path,
+                injectHosts: f.injectHosts,
+                extract: f.extract,
+                transform: f.transform
+              });
             }
             maskedBinds = [...store.list];
             maskedDeny = [...store.denyPaths]; // fail-closed: un-maskable files denied, not left readable
           }
           sentinels = registry;
           sentinelEnv = registry.childEnv();
+          credentialGenerationActive = registry.size > 0;
         }
       }
 
@@ -146,6 +164,7 @@ export class SandboxManager {
       writableRoots: [...writable, tmpdir()],
       readDenyRoots: [...(opts.readDenyRoots ?? []), ...maskedDeny],
       maskedFiles: maskedBinds.length > 0 ? maskedBinds : undefined,
+      credentialGeneration: credentialGenerationActive ? 1 : undefined,
       net
     };
   }

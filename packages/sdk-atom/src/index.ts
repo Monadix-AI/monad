@@ -128,12 +128,18 @@ import type {
 import type {
   SandboxBackendRef,
   SandboxEnforcement,
+  SandboxExit,
   SandboxLauncher,
   SandboxLauncherDescriptor,
   SandboxPolicy,
   SandboxProcess,
+  SandboxRunLimits,
   SandboxSettingsSchema,
-  SandboxSpawnOptions
+  SandboxSpawnOptions,
+  SandboxStdin,
+  SandboxTerminal,
+  SandboxTerminalOptions,
+  SandboxViolation
 } from './sandbox.ts';
 
 import { ExternalAgentError, externalAgentOutputEventSchema } from './agent-adapter.ts';
@@ -250,12 +256,18 @@ export type {
   ResolvedProviderConfig,
   SandboxBackendRef,
   SandboxEnforcement,
+  SandboxExit,
   SandboxLauncher,
   SandboxLauncherDescriptor,
   SandboxPolicy,
   SandboxProcess,
+  SandboxRunLimits,
   SandboxSettingsSchema,
   SandboxSpawnOptions,
+  SandboxStdin,
+  SandboxTerminal,
+  SandboxTerminalOptions,
+  SandboxViolation,
   Scope,
   SendOptions,
   SentMessage,

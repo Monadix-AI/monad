@@ -10,6 +10,10 @@
 // gvproxy's virtual network: gateway 192.168.127.1, host reachable at 192.168.127.254, and a DHCP
 // static lease pins the guest to 192.168.127.2 by its MAC (see ignition.ts).
 
+import type { DiagnosticTail } from '../runtime/diagnostic-tail.ts';
+
+import { drainDiagnosticStream } from '../runtime/diagnostic-tail.ts';
+
 export const GVPROXY_GATEWAY_IP = '192.168.127.1';
 export const GVPROXY_HOST_IP = '192.168.127.254';
 
@@ -49,16 +53,28 @@ export function gvproxyArgv(spec: GvproxySpec): string[] {
 export interface GvproxyProcess {
   readonly pid: number;
   readonly exited: Promise<number>;
-  kill(): void;
+  readonly diagnostics: { stdout: DiagnosticTail; stderr: DiagnosticTail };
+  stop(): Promise<void>;
 }
 
 /** Spawn gvproxy. The caller owns lifecycle (kill on VM teardown). */
 export function spawnGvproxy(spec: GvproxySpec): GvproxyProcess {
   const proc = Bun.spawn(gvproxyArgv(spec), { stdout: 'pipe', stderr: 'pipe' });
+  const stdout = drainDiagnosticStream(proc.stdout);
+  const stderr = drainDiagnosticStream(proc.stderr);
+  let stopPromise: Promise<void> | undefined;
   return {
     pid: proc.pid,
     exited: proc.exited,
-    kill: () => proc.kill()
+    diagnostics: { stdout: stdout.tail, stderr: stderr.tail },
+    stop() {
+      stopPromise ??= (async () => {
+        proc.kill();
+        await proc.exited.catch(() => {});
+        await Promise.allSettled([stdout.done, stderr.done]);
+      })();
+      return stopPromise;
+    }
   };
 }
 
@@ -66,11 +82,11 @@ export function spawnGvproxy(spec: GvproxySpec): GvproxyProcess {
 // `net:'filtered'` must be enforced INSIDE the guest, not by an injected HTTP_PROXY env var a process
 // can simply unset — the sandbox must not be able to reconfigure its own proxy. The guest runs an
 // nftables ruleset — installed by the bootstrap unit as root, before the unprivileged `monad` user
-// gets a shell — that DROPs all output except loopback, DNS to the gvproxy resolver, and the host
-// egress proxy. The agent runs unprivileged and cannot alter it.
+// gets a shell — that DROPs all output except loopback, DHCP to gvproxy, and the host egress proxy.
+// The agent runs unprivileged and cannot alter it.
 
 export interface GuestEgressRules {
-  /** 'none' → drop all egress; 'filtered' → only proxy + DNS; 'unrestricted' → no rules. */
+  /** 'none' → drop all egress; 'filtered' → only DHCP + proxy; 'unrestricted' → no rules. */
   mode: 'none' | 'filtered' | 'unrestricted';
   /** Host egress-proxy port (reached at GVPROXY_HOST_IP:proxyPort) for 'filtered'. */
   proxyPort?: number;
@@ -100,7 +116,8 @@ export function guestNftables(rules: GuestEgressRules): string {
       ''
     ].join('\n');
   }
-  // filtered: allow loopback, DNS to the gvproxy resolver, and TCP to the host egress proxy only.
+  // filtered: allow loopback, DHCP to gvproxy, and TCP to the host egress proxy only. DNS must go
+  // through the proxy-capable client path, not directly to gvproxy's resolver.
   if (rules.proxyPort === undefined) {
     throw new Error('guestNftables: net:filtered requires a proxyPort');
   }
@@ -111,8 +128,6 @@ export function guestNftables(rules: GuestEgressRules): string {
     '    oif "lo" accept',
     '    ct state established,related accept',
     `    ip daddr ${GVPROXY_GATEWAY_IP} udp dport 67 accept`,
-    `    ip daddr ${GVPROXY_GATEWAY_IP} udp dport 53 accept`,
-    `    ip daddr ${GVPROXY_GATEWAY_IP} tcp dport 53 accept`,
     `    ip daddr ${GVPROXY_HOST_IP} tcp dport ${rules.proxyPort} accept`,
     '    # everything else dropped by policy',
     '  }',

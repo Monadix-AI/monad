@@ -1,5 +1,7 @@
 import { afterEach, expect, test } from 'bun:test';
+import { mkdtempSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import { SandboxManager, SandboxUnavailableError } from '../../src/manager.ts';
 
@@ -58,6 +60,50 @@ test('tlsTerminate injects CA-trust env; credentials give the child a sentinel n
   // The child's env var holds the sentinel, never the real secret.
   expect(env.TOKEN).toStartWith('fake_value_');
   expect(env.TOKEN).not.toBe('supersecret');
+});
+
+test('structured environment credentials remain parseable and omit failures without exposing input', () => {
+  const messages: string[] = [];
+  const mgr = new SandboxManager({
+    platform: 'darwin',
+    allowUnconfined: true,
+    net: 'filtered',
+    tlsTerminate: true,
+    credentials: [
+      {
+        name: 'STRUCTURED',
+        value: 'token=real-secret;scope=read',
+        injectHosts: ['example.com'],
+        transform: { extract: 'token=([^;]+)' }
+      },
+      {
+        name: 'BROKEN',
+        value: 'must-not-appear',
+        injectHosts: ['example.com'],
+        transform: { extract: 'no-match=(.+)' }
+      }
+    ],
+    log: (message) => messages.push(message)
+  });
+  expect(mgr.childEnv.STRUCTURED).toStartWith('token=fake_value_');
+  expect(mgr.childEnv.STRUCTURED).toEndWith(';scope=read');
+  expect(mgr.childEnv.BROKEN).toBeUndefined();
+  expect(messages.join('\n')).toContain('NO_MATCH');
+  expect(messages.join('\n')).not.toContain('must-not-appear');
+  mgr.dispose();
+});
+
+test('an unmaskable credential source becomes a read deny before launcher policy', () => {
+  const credentialDirectory = mkdtempSync(join(tmpdir(), 'monad-manager-credential-dir-'));
+  const m = mgr({
+    platform: 'darwin',
+    net: 'filtered',
+    tlsTerminate: true,
+    credentialFiles: [{ name: 'DIRECTORY', path: credentialDirectory, injectHosts: ['example.com'] }]
+  });
+
+  expect(m.sandboxPolicy.maskedFiles).toBeUndefined();
+  expect(m.sandboxPolicy.readDenyRoots).toContain(realpathSync(credentialDirectory));
 });
 
 test('dispose is idempotent', () => {
