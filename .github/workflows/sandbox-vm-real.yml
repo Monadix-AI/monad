@@ -1,0 +1,95 @@
+name: Sandbox VM Real Conformance
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 4 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sandbox-vm-real-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-kvm:
+    name: real VM (Linux KVM x64)
+    runs-on: [self-hosted, linux, x64, monad-vm, kvm]
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - run: bun install --frozen-lockfile
+      - name: Preflight KVM toolchain
+        run: bun packages/sandbox-vm/test/smoke/vm-preflight.ts
+      - name: Real KVM conformance
+        env:
+          MONAD_VM_IT: "1"
+        run: |
+          mkdir -p artifacts
+          set -o pipefail
+          bun run --cwd packages/sandbox-vm test:e2e 2>&1 | tee artifacts/sandbox-vm-linux-kvm.log
+      - name: Upload bounded failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sandbox-vm-linux-kvm-${{ github.run_id }}
+          path: artifacts/sandbox-vm-linux-kvm.log
+          if-no-files-found: ignore
+
+  macos-vfkit:
+    name: real VM (macOS vfkit arm64)
+    runs-on: [self-hosted, macos, arm64, monad-vm, vfkit]
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - run: bun install --frozen-lockfile
+      - name: Preflight vfkit toolchain
+        run: bun packages/sandbox-vm/test/smoke/vm-preflight.ts
+      - name: Real vfkit conformance
+        env:
+          MONAD_VM_IT: "1"
+        run: |
+          mkdir -p artifacts
+          set -o pipefail
+          bun run --cwd packages/sandbox-vm test:e2e 2>&1 | tee artifacts/sandbox-vm-macos-vfkit.log
+      - name: Upload bounded failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sandbox-vm-macos-vfkit-${{ github.run_id }}
+          path: artifacts/sandbox-vm-macos-vfkit.log
+          if-no-files-found: ignore
+
+  windows-hyperv:
+    name: real VM (Windows Hyper-V x64)
+    runs-on: [self-hosted, windows, x64, monad-vm, hyperv]
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - run: bun install --frozen-lockfile
+      - name: Preflight Hyper-V toolchain
+        run: bun packages/sandbox-vm/test/smoke/vm-preflight.ts
+      - name: Real Hyper-V conformance
+        env:
+          MONAD_VM_IT: "1"
+        run: |
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+          & bun run --cwd packages/sandbox-vm test:e2e 2>&1 | Tee-Object artifacts/sandbox-vm-windows-hyperv.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload bounded failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sandbox-vm-windows-hyperv-${{ github.run_id }}
+          path: artifacts/sandbox-vm-windows-hyperv.log
+          if-no-files-found: ignore
