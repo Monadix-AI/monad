@@ -1,6 +1,6 @@
 export type KanbanStage = 'requirements' | 'execution' | 'acceptance' | 'completed' | 'cancelled' | 'failed';
 export type RequirementsState = 'discussing' | 'proposal_awaiting_approval' | 'proposal_approved';
-export type ExecutionState = 'idle' | 'queued' | 'running' | 'waiting_approval' | 'succeeded' | 'failed';
+export type ExecutionState = 'idle' | 'queued' | 'running' | 'paused' | 'waiting_approval' | 'succeeded' | 'failed';
 
 export interface ProposalRevision {
   revision: number;

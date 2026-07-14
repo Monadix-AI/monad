@@ -28,10 +28,10 @@ import type {
   ModelPrice,
   ModelProviderDescriptor,
   Scope,
-  WorkspaceExperiencePermission,
   WorkspaceExperienceDefinition,
   WorkspaceExperienceEntry,
-  WorkspaceExperienceHostApi
+  WorkspaceExperienceHostApi,
+  WorkspaceExperiencePermission
 } from '@monad/protocol';
 import type {
   AdapterMigration,
@@ -385,16 +385,14 @@ export interface ExperienceWorker {
   experienceId: string;
   onProjectStart(projectId: string, context: WorkspaceExperienceApiContext): Promise<void>;
   onEvent(event: ProjectExperienceEvent, context: WorkspaceExperienceApiContext): Promise<void>;
-  onWake(
-    input: { projectId: string; key: string; now: string },
-    context: WorkspaceExperienceApiContext
-  ): Promise<void>;
+  onWake(input: { projectId: string; key: string; now: string }, context: WorkspaceExperienceApiContext): Promise<void>;
 }
 
 /** Authenticated, pack-scoped host capabilities passed only at an Experience API/worker boundary. */
 export interface WorkspaceExperienceApiContext {
   atomPackId: string;
   principalId: string;
+  experienceId: string;
   experienceState: ExperienceStateStore;
   projectSessions: ProjectSessionOperations;
   workerScheduler: ExperienceWorkerScheduler;

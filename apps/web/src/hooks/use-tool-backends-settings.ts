@@ -1,5 +1,3 @@
-'use client';
-
 import type { SetToolBackendsRequest, ToolBackendsResponse } from '@monad/protocol';
 
 import { useGetToolBackendsQuery, useSetToolBackendsMutation } from '@monad/client-rtk';

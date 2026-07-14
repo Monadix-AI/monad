@@ -1,5 +1,3 @@
-'use client';
-
 import type { NetworkSettings, SetNetworkSettingsRequest } from '@monad/protocol';
 
 import { useGetNetworkQuery, useSetNetworkMutation } from '@monad/client-rtk';

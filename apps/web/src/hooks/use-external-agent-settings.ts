@@ -1,5 +1,3 @@
-'use client';
-
 import type { ExternalAgentAuthState, ExternalAgentPresetView, ExternalAgentView } from '@monad/protocol';
 
 import {

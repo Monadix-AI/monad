@@ -1,5 +1,3 @@
-'use client';
-
 import type { ChannelId, ChannelInstanceView, ChannelStatus } from '@monad/protocol';
 
 import {

@@ -1,5 +1,3 @@
-'use client';
-
 import { Delete02Icon, PencilEdit01Icon } from '@hugeicons/core-free-icons';
 
 import { SIDEBAR_ITEM_ROW_CLASS } from './nav-item';

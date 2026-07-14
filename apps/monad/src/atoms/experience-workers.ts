@@ -15,6 +15,7 @@ interface Registration {
 
 export class ExperienceWorkerRegistry {
   private readonly registrations = new Map<string, Registration>();
+  private readonly eventQueues = new Map<string, Promise<void>>();
 
   constructor(
     private readonly deps: {
@@ -22,7 +23,8 @@ export class ExperienceWorkerRegistry {
       contextFor: (
         atomPackId: string,
         principalId: string,
-        permissions: readonly WorkspaceExperiencePermission[]
+        permissions: readonly WorkspaceExperiencePermission[],
+        experienceId: string
       ) => WorkspaceExperienceApiContext;
     }
   ) {}
@@ -53,15 +55,33 @@ export class ExperienceWorkerRegistry {
   }
 
   async publish(event: ProjectExperienceEvent): Promise<void> {
+    const previous = this.eventQueues.get(event.sessionId) ?? Promise.resolve();
+    const delivery = previous.catch(() => {}).then(() => this.deliver(event));
+    this.eventQueues.set(event.sessionId, delivery);
+    void delivery.then(
+      () => this.clearEventQueue(event.sessionId, delivery),
+      () => this.clearEventQueue(event.sessionId, delivery)
+    );
+    return delivery;
+  }
+
+  private async deliver(event: ProjectExperienceEvent): Promise<void> {
     for (const registration of this.registrations.values()) {
       await registration.worker.onEvent(event, this.context(registration));
     }
   }
 
+  private clearEventQueue(sessionId: string, delivery: Promise<void>): void {
+    if (this.eventQueues.get(sessionId) === delivery) this.eventQueues.delete(sessionId);
+  }
+
   async deliverDueWakeups(now = new Date().toISOString()): Promise<void> {
     for (const wakeup of this.deps.store.listDueExperienceWorkerWakeups(now)) {
       const registration = [...this.registrations.values()].find(
-        (candidate) => candidate.atomPackId === wakeup.atomPackId && candidate.principalId === wakeup.principalId
+        (candidate) =>
+          candidate.atomPackId === wakeup.atomPackId &&
+          candidate.principalId === wakeup.principalId &&
+          candidate.worker.experienceId === wakeup.experienceId
       );
       if (!registration) continue;
       const context = this.context(registration);
@@ -76,6 +96,11 @@ export class ExperienceWorkerRegistry {
   }
 
   private context(registration: Registration): WorkspaceExperienceApiContext {
-    return this.deps.contextFor(registration.atomPackId, registration.principalId, registration.permissions);
+    return this.deps.contextFor(
+      registration.atomPackId,
+      registration.principalId,
+      registration.permissions,
+      registration.worker.experienceId
+    );
   }
 }

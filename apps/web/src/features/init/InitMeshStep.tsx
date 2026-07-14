@@ -1,5 +1,3 @@
-'use client';
-
 import type { ExternalAgentView } from '@monad/protocol';
 import type { useT } from '#/components/I18nProvider';
 

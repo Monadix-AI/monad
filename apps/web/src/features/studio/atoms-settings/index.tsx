@@ -1,5 +1,3 @@
-'use client';
-
 import { Alert01Icon, PlusSignIcon, Refresh01Icon, ScanIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {

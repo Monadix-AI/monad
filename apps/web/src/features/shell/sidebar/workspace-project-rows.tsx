@@ -1,5 +1,3 @@
-'use client';
-
 import type { ProjectItem } from './types';
 
 import {

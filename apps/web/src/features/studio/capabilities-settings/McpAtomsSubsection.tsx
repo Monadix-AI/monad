@@ -1,5 +1,3 @@
-'use client';
-
 import type { WebMessageIdWithoutParams } from '@monad/i18n/browser';
 import type { InstalledMcpAtom, McpRegistryEntry, McpServerView } from '@monad/protocol';
 

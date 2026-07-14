@@ -1,5 +1,3 @@
-'use client';
-
 import type { SessionId } from '@monad/protocol';
 import type { ToolPart } from '@monad/ui';
 

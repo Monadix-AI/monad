@@ -34,6 +34,12 @@ function strings(value: unknown, name: string): string[] {
   return value.map((entry) => entry.trim()).filter(Boolean);
 }
 
+function oneOf<const T extends readonly string[]>(value: unknown, name: string, allowed: T): T[number] {
+  const parsed = string(value, name);
+  if (!allowed.includes(parsed)) throw new Error(`${name} must be one of: ${allowed.join(', ')}`);
+  return parsed as T[number];
+}
+
 function json(value: unknown, status = 200): Response {
   return Response.json(value, { status });
 }
@@ -129,7 +135,7 @@ const decideProposal = route(async (request, context) => {
   const store = new KanbanStore(context);
   const current = await taskFrom(data, store);
   const expectedVersion = number(data.expectedVersion, 'expectedVersion');
-  const decision = string(data.decision, 'decision');
+  const decision = oneOf(data.decision, 'decision', ['approve', 'reject'] as const);
   const now = new Date().toISOString();
   const next =
     decision === 'approve'
@@ -144,13 +150,10 @@ const decideProposal = route(async (request, context) => {
 
 const controlExecution = route(async (request, context) => {
   const data = await body(request);
-  const action = string(data.action, 'action');
+  const action = oneOf(data.action, 'action', ['resolve-approval', 'pause', 'resume', 'cancel'] as const);
   if (action === 'resolve-approval') {
-    const decision = string(data.decision, 'decision');
-    await context.projectSessions.resolveApproval(
-      string(data.approvalId, 'approvalId'),
-      decision === 'approved' ? 'approved' : 'denied'
-    );
+    const decision = oneOf(data.decision, 'decision', ['approved', 'denied'] as const);
+    await context.projectSessions.resolveApproval(string(data.approvalId, 'approvalId'), decision);
     return json({ ok: true });
   }
   const store = new KanbanStore(context);
@@ -158,17 +161,17 @@ const controlExecution = route(async (request, context) => {
   const expectedVersion = number(data.expectedVersion, 'expectedVersion');
   if (current.version !== expectedVersion) throw new Error(`version conflict: expected ${expectedVersion}`);
   const now = new Date().toISOString();
-  if (action === 'pause') await context.projectSessions.pause(current.sessionId);
-  if (action === 'cancel') await context.projectSessions.cancel(current.sessionId);
   const next: ProjectTask = {
     ...current,
     stage: action === 'cancel' ? 'cancelled' : 'execution',
-    executionState: action === 'cancel' ? 'failed' : 'queued',
+    executionState: action === 'cancel' ? 'failed' : action === 'pause' ? 'paused' : 'queued',
     version: current.version + 1,
     updatedAt: now
   };
   await store.saveTask(next, current.version, { type: `execution.${action}`, taskId: current.id });
-  if (action !== 'cancel') await context.workerScheduler.schedule(current.projectId, { key: 'dispatch', runAt: now });
+  if (action === 'pause') await context.projectSessions.pause(current.sessionId);
+  if (action === 'cancel') await context.projectSessions.cancel(current.sessionId);
+  if (action === 'resume') await context.workerScheduler.schedule(current.projectId, { key: 'dispatch', runAt: now });
   return json({ task: next });
 });
 
@@ -177,7 +180,7 @@ const decideAcceptance = route(async (request, context) => {
   const store = new KanbanStore(context);
   const current = await taskFrom(data, store);
   const expectedVersion = number(data.expectedVersion, 'expectedVersion');
-  const decision = string(data.decision, 'decision');
+  const decision = oneOf(data.decision, 'decision', ['accept', 'return'] as const);
   const now = new Date().toISOString();
   const next =
     decision === 'accept'

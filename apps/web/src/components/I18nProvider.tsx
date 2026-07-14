@@ -1,5 +1,3 @@
-'use client';
-
 import type { StrictTranslateForNamespace, WebMessageId } from '@monad/i18n/browser';
 import type { ReactElement, ReactNode } from 'react';
 

@@ -1,5 +1,3 @@
-'use client';
-
 import type { ReactNode } from 'react';
 
 import { Cancel01Icon } from '@hugeicons/core-free-icons';

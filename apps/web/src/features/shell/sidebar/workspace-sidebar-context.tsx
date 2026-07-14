@@ -1,5 +1,3 @@
-'use client';
-
 import type { Session, SessionId } from '@monad/protocol';
 import type { ReactNode } from 'react';
 import type { ProjectItem, TFunction } from './types';

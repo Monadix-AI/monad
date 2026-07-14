@@ -1,5 +1,3 @@
-'use client';
-
 import type { ComposerSendShortcut } from '@monad/ui';
 import type React from 'react';
 import type { ReactNode } from 'react';

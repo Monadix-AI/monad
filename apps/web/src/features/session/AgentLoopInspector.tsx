@@ -1,5 +1,3 @@
-'use client';
-
 import type { UIItem } from '@monad/protocol';
 import type { NodeProps } from '@xyflow/react';
 

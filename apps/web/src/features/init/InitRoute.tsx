@@ -1,5 +1,3 @@
-'use client';
-
 import { useInitStatusQuery } from '@monad/client-rtk';
 
 import { MonadLoading } from '#/components/MonadLoading';

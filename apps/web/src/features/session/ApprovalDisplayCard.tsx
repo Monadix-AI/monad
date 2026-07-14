@@ -1,5 +1,3 @@
-'use client';
-
 import type { UIApprovalDisplay } from '@monad/protocol';
 
 export function ApprovalDisplayCard({ display }: { display?: UIApprovalDisplay }) {

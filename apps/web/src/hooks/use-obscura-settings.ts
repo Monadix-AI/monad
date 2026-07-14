@@ -1,5 +1,3 @@
-'use client';
-
 import type { ObscuraStatusResponse, SetObscuraRequest } from '@monad/protocol';
 
 import { useGetObscuraQuery, useSetObscuraMutation } from '@monad/client-rtk';

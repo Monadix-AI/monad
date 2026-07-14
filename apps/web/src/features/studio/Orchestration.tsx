@@ -1,5 +1,3 @@
-'use client';
-
 import type { Agent } from '@monad/protocol';
 
 import { ArrowRight01Icon, BotIcon, NeuralNetworkIcon, UserGroupIcon } from '@hugeicons/core-free-icons';

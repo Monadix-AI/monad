@@ -1,5 +1,3 @@
-'use client';
-
 import { ChatAdd01Icon, FolderAddIcon, InboxIcon, ListCollapse, ListTreeIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { memo, useMemo } from 'react';

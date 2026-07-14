@@ -1,5 +1,3 @@
-'use client';
-
 import type { AgentId, IdempotencyKey, SessionId } from '@monad/protocol';
 import type { StudioSectionId } from '#/features/studio/sections';
 

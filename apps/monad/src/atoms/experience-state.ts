@@ -33,16 +33,24 @@ export function createExperienceStateStore(
 export function createExperienceWorkerScheduler(
   store: Store,
   atomPackId: string,
-  principalId: string
+  principalId: string,
+  experienceId: string
 ): ExperienceWorkerScheduler {
   return {
     schedule: async (projectId, input) => {
       assertProjectOwner(store, principalId, projectId);
-      store.scheduleExperienceWorkerWakeup({ atomPackId, principalId, projectId, key: input.key, runAt: input.runAt });
+      store.scheduleExperienceWorkerWakeup({
+        atomPackId,
+        principalId,
+        experienceId,
+        projectId,
+        key: input.key,
+        runAt: input.runAt
+      });
     },
     cancel: async (projectId, key) => {
       assertProjectOwner(store, principalId, projectId);
-      store.cancelExperienceWorkerWakeup(atomPackId, principalId, projectId, key);
+      store.cancelExperienceWorkerWakeup(atomPackId, principalId, experienceId, projectId, key);
     }
   };
 }

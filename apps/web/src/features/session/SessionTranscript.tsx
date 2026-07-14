@@ -1,5 +1,3 @@
-'use client';
-
 import type { ApprovalScope } from '@monad/protocol';
 import type { ViewItem } from './chat-view-items';
 import type { PendingApproval, SessionIdentityModel, SessionTranscriptModel } from './session-route-contract';

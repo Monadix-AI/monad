@@ -58,11 +58,11 @@ import { type CheckpointHandle, startWalCheckpoint, stopWalCheckpoint } from './
 import { appendEvents, type DanglingInterrupt, findDanglingInterrupts, hasEvent, listEvents } from './events.ts';
 import {
   compareAndSwapExperienceState,
+  type ExperienceStateEventRecord,
+  type ExperienceStateRecord,
   getExperienceState,
   listExperienceState,
-  listExperienceStateEvents,
-  type ExperienceStateEventRecord,
-  type ExperienceStateRecord
+  listExperienceStateEvents
 } from './experience-state.ts';
 import {
   cancelExperienceWorkerWakeup,
@@ -181,11 +181,11 @@ import { casTaskState, insertTask } from './tasks.ts';
 
 export type { ChatMessage } from '@monad/protocol';
 export type { AcpDelegateRow } from './acp-delegates.ts';
+export type { ExperienceStateEventRecord, ExperienceStateRecord } from './experience-state.ts';
+export type { ExperienceWorkerWakeupRecord } from './experience-worker-wakeups.ts';
 export type { EnqueueExternalAgentInboxOptions } from './external-agent-inbox.ts';
 export type { ExternalAgentSessionRow } from './external-agent-sessions.ts';
 export type { FileObservationRow } from './file-observations.ts';
-export type { ExperienceStateEventRecord, ExperienceStateRecord } from './experience-state.ts';
-export type { ExperienceWorkerWakeupRecord } from './experience-worker-wakeups.ts';
 export type { ListMessagesOptions } from './messages.ts';
 export type { ChannelConversation, ChannelConversationSession } from './row-mappers.ts';
 export type { SearchOptions } from './search.ts';
@@ -260,10 +260,11 @@ export class Store {
   cancelExperienceWorkerWakeup(
     atomPackId: string,
     principalId: string,
+    experienceId: string,
     projectId: string,
     key: string
   ): void {
-    cancelExperienceWorkerWakeup(this.sqlite, atomPackId, principalId, projectId, key);
+    cancelExperienceWorkerWakeup(this.sqlite, atomPackId, principalId, experienceId, projectId, key);
   }
 
   listDueExperienceWorkerWakeups(now: string): ExperienceWorkerWakeupRecord[] {

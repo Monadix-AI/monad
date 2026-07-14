@@ -1,5 +1,3 @@
-'use client';
-
 import type { ComponentProps, ReactNode } from 'react';
 import type { SessionRouteModel } from '#/features/session/session-route-contract';
 import type { SettingsSectionId } from '#/features/settings/sections';

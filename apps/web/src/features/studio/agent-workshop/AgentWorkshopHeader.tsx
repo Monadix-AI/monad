@@ -1,5 +1,3 @@
-'use client';
-
 import type { WebMessageIdWithoutParams } from '@monad/i18n/browser';
 import type { WorkshopPart } from './AgentWorkshopPrimitives';
 

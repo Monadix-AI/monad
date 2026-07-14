@@ -1,5 +1,3 @@
-'use client';
-
 import type { AcpAgentPresetView, AcpAgentView } from '@monad/protocol';
 
 import {

@@ -1,5 +1,3 @@
-'use client';
-
 import type { HookEvent, SetHooksSettingsRequest } from '@monad/protocol';
 import type { DraftCommand, DraftMatcher } from './hook-settings-types';
 

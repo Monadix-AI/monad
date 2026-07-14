@@ -1,5 +1,3 @@
-'use client';
-
 import type * as Three from 'three';
 
 import { useEffect, useRef } from 'react';

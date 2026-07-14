@@ -31,12 +31,13 @@ function context(permissions: WorkspaceExperiencePermission[]) {
   return createWorkspaceExperienceApiContext({
     atomPackId: 'pack-a',
     principalId: 'prn_a',
+    experienceId: 'board',
     permissions,
     deps: {
       state: { forPack: () => emptyState },
       projectSessions: { forPrincipal: () => sessions() },
       workerScheduler: {
-        forPack: () => ({ schedule: async () => {}, cancel: async () => {} })
+        forExperience: () => ({ schedule: async () => {}, cancel: async () => {} })
       }
     }
   });
@@ -47,6 +48,7 @@ test('workspace Experience context derives the trusted pack and principal', () =
 
   expect(result.atomPackId).toBe('pack-a');
   expect(result.principalId).toBe('prn_a');
+  expect(result.experienceId).toBe('board');
 });
 
 test('an undeclared project observation permission fails before adapter access', async () => {
@@ -91,6 +93,7 @@ test('session idempotency keys are namespaced by the trusted pack identity', asy
   const result = createWorkspaceExperienceApiContext({
     atomPackId: 'pack-a',
     principalId: 'prn_a',
+    experienceId: 'board',
     permissions: ['project.sessions.create'],
     deps: {
       state: { forPack: () => emptyState },
@@ -103,7 +106,7 @@ test('session idempotency keys are namespaced by the trusted pack identity', asy
             }
           })
       },
-      workerScheduler: { forPack: () => ({ schedule: async () => {}, cancel: async () => {} }) }
+      workerScheduler: { forExperience: () => ({ schedule: async () => {}, cancel: async () => {} }) }
     }
   });
 

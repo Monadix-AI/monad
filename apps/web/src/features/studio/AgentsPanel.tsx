@@ -1,5 +1,3 @@
-'use client';
-
 import type { Agent, AgentId } from '@monad/protocol';
 import type { StudioSectionProps } from './section-registry';
 

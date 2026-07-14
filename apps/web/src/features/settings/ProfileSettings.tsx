@@ -1,5 +1,3 @@
-'use client';
-
 import type { Area, Point } from 'react-easy-crop';
 
 import { Delete02Icon, LoaderPinwheelIcon, PencilEdit02Icon, Upload01Icon } from '@hugeicons/core-free-icons';

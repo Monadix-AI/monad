@@ -1,5 +1,3 @@
-'use client';
-
 import { createMonadStore, createMonadTreatyClient, type MonadApiError } from '@monad/client-rtk';
 
 import { toast } from '#/components/ToastProvider';

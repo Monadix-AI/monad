@@ -1,5 +1,3 @@
-'use client';
-
 import type { NetworkRuntimeStatus } from '@monad/protocol';
 import type { ComponentProps, RefObject } from 'react';
 import type { SettingsSectionId } from '#/features/settings/sections';

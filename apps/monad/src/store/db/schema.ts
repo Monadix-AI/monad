@@ -127,13 +127,16 @@ export const experienceWorkerWakeups = sqliteTable(
   {
     atomPackId: text('atom_pack_id').notNull(),
     principalId: text('principal_id').notNull(),
+    experienceId: text('experience_id').notNull(),
     projectId: text('project_id').notNull(),
     wakeKey: text('wake_key').notNull(),
     runAt: text('run_at').notNull(),
     attempt: integer('attempt').notNull().default(0),
     updatedAt: text('updated_at').notNull()
   },
-  (table) => [primaryKey({ columns: [table.atomPackId, table.principalId, table.projectId, table.wakeKey] })]
+  (table) => [
+    primaryKey({ columns: [table.atomPackId, table.principalId, table.experienceId, table.projectId, table.wakeKey] })
+  ]
 );
 
 const _externalAgentSessions = sqliteTable(

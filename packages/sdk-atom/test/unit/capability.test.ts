@@ -2,13 +2,13 @@ import type {
   AtomPackManifest,
   ChannelDefinition,
   Connector,
+  ExperienceWorker,
   HookDefinition,
   ManifestAtomPack,
   ManifestAtomPackHost,
   WorkspaceExperienceApi,
   WorkspaceExperienceApiContext,
-  WorkspaceExperienceDefinition,
-  ExperienceWorker
+  WorkspaceExperienceDefinition
 } from '../../src/index.ts';
 
 import { expect, test } from 'bun:test';
@@ -43,9 +43,9 @@ function collectingHost(): ManifestAtomPackHost & {
   connectors: Connector[];
   channels: ChannelDefinition[];
   hooks: HookDefinition[];
-    workspaceExperienceApis: WorkspaceExperienceApi[];
-    workspaceExperiences: WorkspaceExperienceDefinition[];
-    experienceWorkers: ExperienceWorker[];
+  workspaceExperienceApis: WorkspaceExperienceApi[];
+  workspaceExperiences: WorkspaceExperienceDefinition[];
+  experienceWorkers: ExperienceWorker[];
 } {
   const connectors: Connector[] = [];
   const channels: ChannelDefinition[] = [];
@@ -105,9 +105,12 @@ const dummyExperienceWorker: ExperienceWorker = {
 };
 
 test('workspace experience API handlers receive generic, pack-scoped context', async () => {
-  const response = await dummyWorkspaceExperienceApi.routes[0]!.handle(new Request('https://example.test/search'), {
+  const route = dummyWorkspaceExperienceApi.routes[0];
+  if (!route) throw new Error('fixture requires a workspace Experience API route');
+  const response = await route.handle(new Request('https://example.test/search'), {
     atomPackId: 'pack-a',
     principalId: 'prn_a',
+    experienceId: 'board',
     experienceState: {
       get: async () => null,
       list: async () => [],

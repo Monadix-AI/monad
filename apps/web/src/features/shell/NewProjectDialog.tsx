@@ -1,5 +1,3 @@
-'use client';
-
 import { FolderOpenIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { usePickDirectoryMutation } from '@monad/client-rtk';

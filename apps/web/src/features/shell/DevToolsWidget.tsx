@@ -1,5 +1,3 @@
-'use client';
-
 import type { ProjectId } from '@monad/protocol';
 
 import {

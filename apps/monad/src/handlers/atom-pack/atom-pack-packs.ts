@@ -1,5 +1,6 @@
 import type { Dirent } from 'node:fs';
 import type {
+  AtomDescriptor,
   GetAtomPackResponse,
   InstallAtomPackRequest,
   InstallAtomPackResponse,
@@ -9,12 +10,11 @@ import type {
   OkResponse,
   SetAtomPinRequest
 } from '@monad/protocol';
-import type { WorkspaceExperienceApiHandler } from '@monad/sdk-atom';
 import type { AtomPackSource } from '#/atoms/install/source.ts';
 import type { AtomPacksDeps } from '#/handlers/atom-pack/atom-pack-manager.ts';
 
 import { readdir, rm, stat } from 'node:fs/promises';
-import { join } from 'node:path';
+import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import builtinAtomPack from '@monad/atoms';
 import { loadAll, loadAuth, saveProfile } from '@monad/home';
 import { parseAtomPackManifest } from '@monad/protocol';
@@ -34,9 +34,10 @@ import {
   toPublicWorkspaceExperience
 } from '#/handlers/atom-pack/atom-pack-content.ts';
 import { resolveToken } from '#/handlers/atom-pack/atom-pack-shared.ts';
-import { HandlerError } from '#/handlers/handler-error.ts';
 import { createWorkspaceExperienceApiContext } from '#/handlers/atom-pack/experience-capabilities.ts';
+import { HandlerError } from '#/handlers/handler-error.ts';
 import { type DecodedUpload, decodeRawUpload, unpackZipUpload } from '#/services/upload.ts';
+import { parseSkillMd } from '#/store/home/skills.ts';
 
 const ATOM_PACK_UPLOAD_MAX_BYTES = 25 * 1024 * 1024;
 const MONAD_POWER_PACK_DEBUG_SOURCE = 'debug:monad-power-pack';
@@ -69,6 +70,40 @@ async function readInstallRecord(dir: string, name: string): Promise<AtomPackIns
   } catch {
     return {}; // drop-in atom packs have no install record
   }
+}
+
+async function describeAtomPackSkills(
+  packDir: string,
+  skillDirs: readonly string[] = ['skills']
+): Promise<AtomDescriptor[]> {
+  const descriptors: AtomDescriptor[] = [];
+  for (const skillDir of skillDirs) {
+    const fullDir = resolve(packDir, skillDir);
+    const rel = relative(packDir, fullDir);
+    if (isAbsolute(rel) || rel === '..' || rel.startsWith(`..${sep}`)) continue;
+    let entries: Dirent[];
+    try {
+      entries = await readdir(fullDir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      try {
+        const { frontmatter } = parseSkillMd(await Bun.file(join(fullDir, entry.name, 'SKILL.md')).text());
+        descriptors.push({ kind: 'skill', id: frontmatter.name, description: frontmatter.description });
+      } catch {
+        // Invalid or missing SKILL.md files are ignored consistently with skill discovery.
+      }
+    }
+  }
+  return descriptors.sort((a, b) => a.id.localeCompare(b.id));
+}
+
+function mergeAtomDetails(runtime: AtomDescriptor[], fileBased: AtomDescriptor[]): AtomDescriptor[] {
+  const merged = new Map(runtime.map((atom) => [`${atom.kind}:${atom.id}`, atom]));
+  for (const atom of fileBased) merged.set(`${atom.kind}:${atom.id}`, atom);
+  return [...merged.values()];
 }
 
 export function createPacksModule(deps: AtomPacksDeps) {
@@ -162,6 +197,10 @@ export function createPacksModule(deps: AtomPacksDeps) {
             JSON.parse(await Bun.file(join(dir, e.name, 'atom-pack.json')).text())
           );
           const record = await readInstallRecord(dir, e.name);
+          const atomDetails = mergeAtomDetails(
+            deps.getAtomDetails?.(e.name) ?? [],
+            await describeAtomPackSkills(join(dir, e.name), manifest.skillDirs)
+          );
           atomPacks.push({
             // Operable identity = folder name (unique; may be `<manifest>-<hash>` for a same-named
             // pack from another source). manifest.name is the display label.
@@ -177,9 +216,8 @@ export function createPacksModule(deps: AtomPacksDeps) {
             author: manifest.author,
             sdkVersion: manifest.sdkVersion,
             repository: manifest.source,
-            // Individual atoms captured by the last discovery sweep (keyed by folder name); empty
-            // until the pack has loaded, in which case the UI falls back to the kind summary.
-            atomDetails: deps.getAtomDetails?.(e.name) ?? []
+            // Runtime-registered atoms plus file-based skill metadata parsed from SKILL.md.
+            atomDetails
           });
         } catch {
           /* skip malformed atom pack dirs */
@@ -220,6 +258,7 @@ export function createPacksModule(deps: AtomPacksDeps) {
       const context = createWorkspaceExperienceApiContext({
         atomPackId: route?.atomPackId ?? 'test-pack',
         principalId: deps.ownerPrincipalId,
+        experienceId,
         permissions: route?.permissions ?? [],
         deps: deps.experienceCapabilities
       });

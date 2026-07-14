@@ -1,5 +1,3 @@
-'use client';
-
 import type { ExternalAgentPresetView, ExternalAgentView } from '@monad/protocol';
 
 import { PlusSignIcon, Refresh01Icon } from '@hugeicons/core-free-icons';

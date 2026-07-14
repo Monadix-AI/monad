@@ -1,5 +1,3 @@
-'use client';
-
 import type { NetworkSettings } from '@monad/protocol';
 
 import { Alert01Icon, Copy01Icon, GlobeIcon, RotateLeft01Icon, Shield01Icon } from '@hugeicons/core-free-icons';

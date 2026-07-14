@@ -1,5 +1,3 @@
-'use client';
-
 import type { WheelEvent as ReactWheelEvent } from 'react';
 
 import { PanelLeftCloseIcon, PanelLeftOpenIcon } from '@hugeicons/core-free-icons';

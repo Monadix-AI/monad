@@ -1,5 +1,3 @@
-'use client';
-
 import { cn } from '@monad/ui';
 
 type OverviewIllustrationVariant = 'runtime' | 'mesh';

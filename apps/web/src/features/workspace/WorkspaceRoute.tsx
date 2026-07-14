@@ -1,5 +1,3 @@
-'use client';
-
 import type { Agent, ProjectId, Session, SessionId } from '@monad/protocol';
 import type { ProjectExperienceDefinition } from '#/features/workplace/experiences/types';
 import type { ProjectController } from '#/features/workplace/use-project';

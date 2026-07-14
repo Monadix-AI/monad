@@ -1,5 +1,3 @@
-'use client';
-
 import { Copy01Icon, LoaderPinwheelIcon, Refresh01Icon, SendToMobileIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Button, cn, Input, Label, Skeleton, Switch, Textarea } from '@monad/ui';

@@ -1,5 +1,3 @@
-'use client';
-
 import type { ReactNode } from 'react';
 
 import { ChevronDownIcon } from '@hugeicons/core-free-icons';

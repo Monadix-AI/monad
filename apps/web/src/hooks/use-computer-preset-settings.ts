@@ -1,5 +1,3 @@
-'use client';
-
 import type { ComputerPresetResponse, SetComputerPresetRequest } from '@monad/protocol';
 
 import { useGetComputerPresetQuery, useSetComputerPresetMutation } from '@monad/client-rtk';

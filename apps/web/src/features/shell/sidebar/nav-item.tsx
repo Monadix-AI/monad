@@ -1,5 +1,3 @@
-'use client';
-
 import type { MouseEvent, ReactNode } from 'react';
 
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';

@@ -1,5 +1,3 @@
-'use client';
-
 import type { InteractionField } from '@monad/protocol';
 
 import { Button, Input } from '@monad/ui';

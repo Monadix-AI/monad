@@ -1,5 +1,3 @@
-'use client';
-
 import type { ModelProviderType, ProviderView } from '@monad/protocol';
 
 import {

@@ -1,5 +1,3 @@
-'use client';
-
 import type { QdrantPhase } from '@monad/protocol';
 
 import { CloudIcon, HardDriveIcon, LoaderPinwheelIcon, ShieldQuestionMarkIcon } from '@hugeicons/core-free-icons';

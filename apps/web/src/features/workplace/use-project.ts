@@ -1,5 +1,3 @@
-'use client';
-
 // Single chokepoint between the workspace shell and the live monad backend.
 // Experience-specific transcript, rail, and composer projections live in atoms.
 

@@ -1,5 +1,3 @@
-'use client';
-
 import type { SessionComposerModel, SessionIdentityModel } from './session-route-contract';
 
 import { useMemo } from 'react';

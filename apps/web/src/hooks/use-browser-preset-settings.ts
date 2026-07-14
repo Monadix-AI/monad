@@ -1,5 +1,3 @@
-'use client';
-
 import type { BrowserPresetResponse, SetBrowserPresetRequest } from '@monad/protocol';
 
 import { useGetBrowserPresetQuery, useSetBrowserPresetMutation } from '@monad/client-rtk';

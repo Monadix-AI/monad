@@ -1,5 +1,3 @@
-'use client';
-
 import type { MouseEvent, ReactNode } from 'react';
 
 import { MoreHorizontalIcon, PencilEdit01Icon } from '@hugeicons/core-free-icons';

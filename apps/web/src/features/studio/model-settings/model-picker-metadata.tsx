@@ -1,5 +1,3 @@
-'use client';
-
 import type { ModelInfo, ModelPrice } from '@monad/protocol';
 
 import {

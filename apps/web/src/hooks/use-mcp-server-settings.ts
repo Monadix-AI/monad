@@ -1,5 +1,3 @@
-'use client';
-
 import type { McpCatalogEntry, McpServerStatus, McpServerView } from '@monad/protocol';
 
 import {

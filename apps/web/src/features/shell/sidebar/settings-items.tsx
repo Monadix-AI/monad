@@ -1,5 +1,3 @@
-'use client';
-
 import type { IconSvgElement } from '@hugeicons/react';
 import type { SettingsSectionId } from '#/features/settings/sections';
 import type { TFunction } from './types';

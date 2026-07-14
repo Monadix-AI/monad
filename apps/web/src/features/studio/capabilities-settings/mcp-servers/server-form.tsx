@@ -1,5 +1,3 @@
-'use client';
-
 import type { McpServerView } from '@monad/protocol';
 
 import { zodResolver } from '@hookform/resolvers/zod';

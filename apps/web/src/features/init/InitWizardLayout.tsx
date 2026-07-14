@@ -1,5 +1,3 @@
-'use client';
-
 import type { ReactNode } from 'react';
 import type { useT } from '#/components/I18nProvider';
 

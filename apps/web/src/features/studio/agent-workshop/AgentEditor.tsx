@@ -1,5 +1,3 @@
-'use client';
-
 import type { AgentId } from '@monad/protocol';
 
 import { CheckIcon, LoaderPinwheelIcon } from '@hugeicons/core-free-icons';

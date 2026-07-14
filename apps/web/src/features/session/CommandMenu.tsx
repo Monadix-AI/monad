@@ -1,5 +1,3 @@
-'use client';
-
 import type { SessionCommandMenuItem } from './command-menu';
 
 import { PackageIcon, TerminalIcon } from '@hugeicons/core-free-icons';

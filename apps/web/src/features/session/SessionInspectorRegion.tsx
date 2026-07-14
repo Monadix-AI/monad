@@ -1,5 +1,3 @@
-'use client';
-
 import type { SessionIdentityModel, SessionInspectorModel } from './session-route-contract';
 
 import { CpuIcon } from '@hugeicons/core-free-icons';

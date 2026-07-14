@@ -1,5 +1,3 @@
-'use client';
-
 import type { SessionId } from '@monad/protocol';
 import type { SetStateAction } from 'react';
 import type { SkillEditorState } from '#/features/studio/skills-settings/types';

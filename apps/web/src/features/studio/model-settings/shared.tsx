@@ -1,5 +1,3 @@
-'use client';
-
 import type { CredentialView } from '@monad/protocol';
 
 import { ModelProviderType } from '@monad/protocol';

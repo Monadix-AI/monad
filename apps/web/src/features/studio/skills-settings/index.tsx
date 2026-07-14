@@ -1,5 +1,3 @@
-'use client';
-
 import type { SkillListInstance } from '@monad/protocol';
 import type { Panel, SkillEditorState } from './types';
 

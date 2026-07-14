@@ -1,5 +1,3 @@
-'use client';
-
 import type { ApprovalRule } from '@monad/protocol';
 
 import { Delete02Icon, Shield01Icon } from '@hugeicons/core-free-icons';

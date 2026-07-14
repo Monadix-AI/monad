@@ -1,5 +1,3 @@
-'use client';
-
 import {
   BracesIcon,
   ComputerTerminal01Icon,
