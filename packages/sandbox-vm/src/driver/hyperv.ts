@@ -18,6 +18,7 @@
 // Requires Windows Pro/Enterprise/Education (Hyper-V). Home has no Hyper-V; prepare() fails with a
 // clear message rather than degrading to a weaker sandbox.
 
+import { DiagnosticTail } from '../runtime/diagnostic-tail.ts';
 import { type VmDriver, type VmHandle, type VmSpec } from './vfkit.ts';
 
 /** The fixed hvsock port plan (see module comment). */
@@ -215,6 +216,7 @@ export const hypervDriver: VmDriver = {
     return {
       pid: 0, // the VM is a VMMS object, not a child process; lifecycle goes through the helper
       exited: new Promise<number>(() => {}), // never self-resolves — stop() owns teardown
+      diagnostics: { stdout: new DiagnosticTail(64 * 1024), stderr: new DiagnosticTail(64 * 1024) },
       async stop() {
         for (const c of children) c.kill();
         // remove implies a forced stop; also unregisters the VM so bundles never leak VMMS objects.
