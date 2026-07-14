@@ -9,6 +9,8 @@ import { defineAtomPack, SDK_VERSION } from '@monad/sdk-atom';
 
 import { detectDockerRuntime, dockerLauncher, dockerRuntimeAvailable } from './docker.ts';
 import { __setE2bLoaderForTest, configureE2bApiKey, e2bLauncher } from './e2b.ts';
+import { kanbanApi } from './experiences/kanban/api.ts';
+import { kanbanWorker } from './experiences/kanban/worker.ts';
 import { kanbanWorkspaceExperience } from './experiences/kanban.ts';
 
 export {
@@ -29,11 +31,23 @@ export const monadPowerPack = defineAtomPack({
     version: '0.0.1',
     sdkVersion: SDK_VERSION,
     atoms: ['sandbox', 'workspace-experience'],
+    permissions: [
+      'experience.state',
+      'experience.worker',
+      'project.sessions.read',
+      'project.sessions.create',
+      'project.sessions.send',
+      'project.observations.read',
+      'project.approvals.read',
+      'project.approvals.resolve'
+    ],
     description: 'Opt-in contributed sandbox backends (Docker/Podman and E2B) for the monad agent.',
     author: 'Monadix Labs'
   },
   sandboxes: [dockerLauncher, e2bLauncher],
-  workspaceExperiences: [kanbanWorkspaceExperience]
+  workspaceExperiences: [kanbanWorkspaceExperience],
+  workspaceExperienceApis: [kanbanApi],
+  experienceWorkers: [kanbanWorker]
 });
 
 export const MONAD_POWER_PACK_DEBUG_SOURCE = 'debug:monad-power-pack';
