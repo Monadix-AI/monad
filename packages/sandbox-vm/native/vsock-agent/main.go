@@ -238,6 +238,9 @@ func validateStart(req startRequest) error {
 	if req.Terminal != nil && !validTerminalSize(req.Terminal.Cols, req.Terminal.Rows) {
 		return fmt.Errorf("terminal dimensions must be integers from 1 through 1000")
 	}
+	if !validObservationPolicy(req.Observation) {
+		return fmt.Errorf("invalid observation policy")
+	}
 	return nil
 }
 
