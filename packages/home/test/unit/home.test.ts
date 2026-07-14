@@ -468,6 +468,23 @@ describe('sandbox.json decoupling', () => {
     expect(cfg?.sandbox.backend).toBe('auto');
   });
 
+  test('legacy VM baseline settings migrate into canonical backend settings', async () => {
+    await initMonadHome(paths);
+    await Bun.write(
+      paths.sandbox,
+      JSON.stringify({
+        backend: 'vm',
+        vm: { baseline: { enabled: true, maxInactiveArtifacts: 2, maxBytes: 4096 } }
+      })
+    );
+    const cfg = await loadAll(paths.config, paths.profile);
+    expect(cfg?.sandbox.backendSettings['builtin/vm']).toMatchObject({
+      baselineEnabled: true,
+      baselineMaxInactiveArtifacts: 2,
+      baselineMaxBytes: 4096
+    });
+  });
+
   test('a present-but-malformed sandbox.json throws instead of silently defaulting', async () => {
     await initMonadHome(paths);
     // net must be one of none|unrestricted|filtered — an invalid value must fail closed.

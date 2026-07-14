@@ -182,3 +182,13 @@ func TestBaselineRejectsDigestAndEpochMismatch(t *testing.T) {
 		t.Fatal("wrong boot epoch accepted")
 	}
 }
+
+func TestBaselineRejectsReservedWorkloadBeforeProcessLaunch(t *testing.T) {
+	registry := newRunRegistry()
+	if err := registry.admit("reserved"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := registry.prepareBaseline(registry.agentDigest); err == nil {
+		t.Fatal("baseline accepted while a workload start was reserved")
+	}
+}

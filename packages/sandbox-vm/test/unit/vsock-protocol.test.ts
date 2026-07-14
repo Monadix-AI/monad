@@ -10,8 +10,8 @@ import {
   VSOCK_PROTOCOL_VERSION
 } from '../../src/exec/protocol.ts';
 
-test('host protocol is version 4', () => {
-  expect(VSOCK_PROTOCOL_VERSION).toBe(4);
+test('host protocol is version 5', () => {
+  expect(VSOCK_PROTOCOL_VERSION).toBe(5);
 });
 
 test('decoder reconstructs a frame split across chunks', () => {

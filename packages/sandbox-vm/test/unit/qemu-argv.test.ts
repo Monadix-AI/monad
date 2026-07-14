@@ -38,7 +38,8 @@ test('base argv: EFI firmware, qcow2 rootfs, Ignition via fw_cfg, vhost-vsock', 
   expect(j).toContain('if=pflash,format=raw,unit=1,file=');
   expect(j).toContain('format=qcow2');
   expect(j).toContain('name=opt/com.coreos/config,file='); // Ignition over fw_cfg
-  expect(j).toContain('vhost-vsock-pci,guest-cid=42'); // exec channel (bridged by socat)
+  expect(j).toContain('vhost-vsock-pci,id=vsock0,guest-cid=42'); // exec channel (bridged by socat)
+  expect(j).toContain('-qmp unix:');
   expect(j).toContain('accel=kvm'); // hardware acceleration when /dev/kvm is usable
 });
 
@@ -53,7 +54,7 @@ test('net:none → no virtio-net; with gvproxy socket → virtio-net over the st
   const net = qemuArgv('/bin/qemu', spec({ gvproxyNetSock: '/t/gv.sock' }), { firmwareCode: '/f', kvm: true }, 3);
   const j = net.join(' ');
   expect(j).toContain('stream,id=net0,addr.type=unix,addr.path=/t/gv.sock');
-  expect(j).toContain('virtio-net-pci,netdev=net0,mac=02:aa:bb:cc:dd:ee');
+  expect(j).toContain('virtio-net-pci,id=nic0,netdev=net0,mac=02:aa:bb:cc:dd:ee');
 });
 
 test('each mount → a virtiofsd chardev + vhost-user-fs device + shared memory backend', () => {
@@ -67,5 +68,10 @@ test('each mount → a virtiofsd chardev + vhost-user-fs device + shared memory 
   const j = argv.join(' ');
   expect(j).toContain('memory-backend-memfd,id=mem'); // shared pages for virtio-fs
   expect(j).toContain(`socket,id=vfs-w0,path=${virtiofsdSock(b.dir, 'w0')}`);
-  expect(j).toContain('vhost-user-fs-pci,chardev=vfs-w0,tag=w0');
+  expect(j).toContain('vhost-user-fs-pci,id=vfsdev-w0,chardev=vfs-w0,tag=w0');
+});
+
+test('restore argv consumes an external migration state file', () => {
+  const argv = qemuArgv('/bin/qemu', spec(), { firmwareCode: '/f', kvm: true }, 3, 'file:/state.bin');
+  expect(argv.slice(-2)).toEqual(['-incoming', 'file:/state.bin']);
 });

@@ -62,10 +62,19 @@ export function runSh(script: string, policy: VmPolicy, agentId: string): Promis
 
 let preparePromise: Promise<void> | undefined;
 
-export async function prepareRealVm(): Promise<void> {
+export async function prepareRealVm(options: { baseline?: boolean } = {}): Promise<void> {
   preparePromise ??= (async () => {
     configureVmToolchain({});
-    configureVmBackend({ imageConsent: async () => true, idleTtlMs: 5_000, bootTimeoutMs: 600_000 });
+    configureVmBackend({
+      imageConsent: async () => true,
+      idleTtlMs: 5_000,
+      bootTimeoutMs: 600_000,
+      baseline: {
+        enabled: options.baseline ?? false,
+        maxInactiveArtifacts: 4,
+        maxBytes: 32 * 1024 * 1024 * 1024
+      }
+    });
     if (!existsSync(imagesDir())) throw new Error(`no base image in ${imagesDir()} — download it first`);
     await vmLauncher.prepare?.();
   })().catch((error) => {

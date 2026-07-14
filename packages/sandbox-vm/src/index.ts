@@ -23,20 +23,36 @@ import { existsSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
+import { BaselineCache, type BaselineManifestInput } from './baseline/cache.ts';
+import { BaselineCoordinator } from './baseline/coordinator.ts';
 import { destroyBundle, ensureBundle, type VmBundle } from './bundle.ts';
 import { configureHypervTools, HVSOCK_PORTS, hypervDriver, hypervPreflight } from './driver/hyperv.ts';
 import { configureQemuTools, qemuDriver } from './driver/qemu.ts';
 import { configureVfkitBin, type VmHandle, vfkitDriver } from './driver/vfkit.ts';
 import { VSOCK_PROTOCOL_VERSION } from './exec/protocol.ts';
-import { bridgeAsyncProcess, vsockExec, waitForVsock } from './exec/vsock.ts';
+import {
+  bridgeAsyncProcess,
+  confirmRestoredVmBaseline,
+  prepareVmBaseline,
+  vsockExec,
+  waitForVsock
+} from './exec/vsock.ts';
 import { IGNITION_SCHEMA_VERSION, serializeIgnition } from './ignition.ts';
 import { ensureBaseImage, type ImageConsent } from './image.ts';
 import { buildVmMountPlan, fingerprintVmMountPlan, MOUNT_PLAN_SCHEMA_VERSION, type VmMountPlan } from './mount-plan.ts';
 import { type GvproxyProcess, guestProxyEnv, spawnGvproxy } from './net/gvproxy.ts';
 import { observationPolicyFor } from './observation-policy.ts';
-import { effectiveVmIdentity, POOL_DEFAULTS, type PoolConfig, reuseKey, VmPool, vmKey } from './pool.ts';
+import {
+  effectiveVmIdentity,
+  POOL_DEFAULTS,
+  type PoolConfig,
+  policyFingerprint,
+  reuseKey,
+  VmPool,
+  vmKey
+} from './pool.ts';
 import { BootTransaction } from './runtime/boot-transaction.ts';
-import { resolveVmToolchain, vmToolchainMaybeAvailable } from './toolchain.ts';
+import { resolveVmToolchain, vmDir, vmToolchainMaybeAvailable } from './toolchain.ts';
 import { sha256OfFile } from './util.ts';
 import { toGuestPath, translateArgvPaths } from './winpath.ts';
 
@@ -95,6 +111,7 @@ interface VmConfig extends PoolConfig {
   bootTimeoutMs: number;
   /** Consent gate for the first image download. */
   imageConsent: ImageConsent;
+  baseline: { enabled: boolean; maxInactiveArtifacts: number; maxBytes: number };
 }
 
 let config: VmConfig = {
@@ -102,6 +119,7 @@ let config: VmConfig = {
   cpus: 2,
   memoryMiB: 2048,
   bootTimeoutMs: 120_000,
+  baseline: { enabled: false, maxInactiveArtifacts: 4, maxBytes: 32 * 1024 * 1024 * 1024 },
   // Default-deny until the daemon wires a real prompt: never silently pull a multi-GB image.
   imageConsent: async () => false
 };
@@ -128,6 +146,20 @@ interface BaseImageArtifact {
 
 let baseImage: BaseImageArtifact | null = null;
 let pool: VmPool<RunningVm> | null = null;
+let baselineCoordinator: BaselineCoordinator | null = null;
+
+export function vmBaselineMetrics() {
+  return (
+    baselineCoordinator?.metrics() ?? {
+      cold: 0,
+      restored: 0,
+      captureFailures: 0,
+      restoreFailures: 0,
+      coldMs: [],
+      restoreMs: []
+    }
+  );
+}
 
 // A deterministic MAC per reuse key (stable across a VM's restarts): 02:xx… locally-administered.
 function macFor(key: string): string {
@@ -184,7 +216,8 @@ async function bootVm(
   image: BaseImageArtifact,
   shape: VmShapeConfig,
   mountPlan: VmMountPlan,
-  guestArtifacts: { agent: { b64: string }; observer: { b64: string } }
+  guestArtifacts: { agent: { b64: string; digest: string }; observer: { b64: string; digest: string } },
+  baselineManifest: Omit<BaselineManifestInput, 'bootEpoch'>
 ): Promise<RunningVm> {
   const tx = new BootTransaction();
   let gvproxy: GvproxyProcess | undefined;
@@ -235,7 +268,7 @@ async function bootVm(
     // A Windows vsock endpoint is a named pipe, not a filesystem socket.
     if (!win) await rm(bundle.vsockSock, { force: true });
     const driver = process.platform === 'darwin' ? vfkitDriver : win ? hypervDriver : qemuDriver;
-    vmHandle = await driver.boot({
+    const spec = {
       cpus: shape.cpus,
       memoryMiB: shape.memoryMiB,
       bundle,
@@ -244,7 +277,36 @@ async function bootVm(
       mac: macFor(key),
       vsockSock: bundle.vsockSock,
       vsockPort: VSOCK_EXEC_PORT
-    });
+    };
+    const acquired = baselineCoordinator
+      ? await baselineCoordinator.acquire({
+          enabled: config.baseline.enabled,
+          identity: baselineManifest.identity,
+          manifest: baselineManifest,
+          spec,
+          driver,
+          coldBoot: async () => {
+            const handle = await driver.boot(spec);
+            try {
+              await waitForVsock({ socketPath: bundle.vsockSock }, { timeoutMs: shape.bootTimeoutMs });
+              return handle;
+            } catch (error) {
+              await handle.stop().catch(() => {});
+              throw error;
+            }
+          },
+          prepare: async (_handle) => {
+            await waitForVsock({ socketPath: bundle.vsockSock }, { timeoutMs: shape.bootTimeoutMs });
+            const ready = await prepareVmBaseline(bundle.vsockSock, guestArtifacts.agent.digest);
+            return { bootEpoch: ready.bootEpoch, agentDigest: ready.agentDigest };
+          },
+          confirm: async (_handle, handshake) => {
+            await waitForVsock({ socketPath: bundle.vsockSock }, { timeoutMs: shape.bootTimeoutMs });
+            await confirmRestoredVmBaseline(bundle.vsockSock, handshake.bootEpoch, handshake.agentDigest);
+          }
+        })
+      : { handle: await driver.boot(spec), source: 'cold' as const };
+    vmHandle = acquired.handle;
     tx.defer(() => vmHandle?.stop());
 
     await waitForVsock({ socketPath: bundle.vsockSock }, { timeoutMs: shape.bootTimeoutMs });
@@ -299,6 +361,7 @@ async function stopVm(vm: RunningVm): Promise<void> {
 }
 
 let resolvedGvproxy: string | null = null;
+let resolvedHypervisorDigest: string | null = null;
 
 // ── the launcher ──────────────────────────────────────────────────────────────────────────────────
 
@@ -311,7 +374,17 @@ export const vmLauncher: SandboxLauncher = {
       fields: [
         { id: 'cpus', type: 'number', label: 'CPUs', defaultValue: 2, min: 1, max: 16 },
         { id: 'memoryMiB', type: 'number', label: 'Memory (MiB)', defaultValue: 2048, min: 512 },
-        { id: 'bootTimeoutMs', type: 'number', label: 'Boot timeout (ms)', defaultValue: 120_000, min: 10_000 }
+        { id: 'bootTimeoutMs', type: 'number', label: 'Boot timeout (ms)', defaultValue: 120_000, min: 10_000 },
+        { id: 'baselineEnabled', type: 'boolean', label: 'Pre-workload baseline', defaultValue: false },
+        {
+          id: 'baselineMaxInactiveArtifacts',
+          type: 'number',
+          label: 'Baseline cache entries',
+          defaultValue: 4,
+          min: 0,
+          max: 64
+        },
+        { id: 'baselineMaxBytes', type: 'number', label: 'Baseline cache bytes', defaultValue: 34359738368, min: 0 }
       ]
     }
   },
@@ -322,7 +395,13 @@ export const vmLauncher: SandboxLauncher = {
     configureVmBackend({
       cpus: settings.cpus as number | undefined,
       memoryMiB: settings.memoryMiB as number | undefined,
-      bootTimeoutMs: settings.bootTimeoutMs as number | undefined
+      bootTimeoutMs: settings.bootTimeoutMs as number | undefined,
+      baseline: {
+        enabled: (settings.baselineEnabled as boolean | undefined) ?? config.baseline.enabled,
+        maxInactiveArtifacts:
+          (settings.baselineMaxInactiveArtifacts as number | undefined) ?? config.baseline.maxInactiveArtifacts,
+        maxBytes: (settings.baselineMaxBytes as number | undefined) ?? config.baseline.maxBytes
+      }
     });
   },
 
@@ -331,6 +410,7 @@ export const vmLauncher: SandboxLauncher = {
     // never block daemon boot on a multi-GB download.
     const tools = await resolveVmToolchain();
     resolvedGvproxy = tools.gvproxy;
+    resolvedHypervisorDigest = await sha256OfFile(tools.hypervisor);
     if (process.platform === 'darwin') {
       configureVfkitBin(tools.hypervisor);
     } else if (process.platform === 'win32') {
@@ -351,6 +431,12 @@ export const vmLauncher: SandboxLauncher = {
       });
     }
     pool = new VmPool<RunningVm>(config, { stop: stopVm });
+    const baselineCache = new BaselineCache(join(vmDir(), 'baselines'), {
+      maxInactiveArtifacts: config.baseline.maxInactiveArtifacts,
+      maxBytes: config.baseline.maxBytes
+    });
+    await baselineCache.cleanupTemporary();
+    baselineCoordinator = new BaselineCoordinator(baselineCache);
     installShutdownHandler();
   },
 
@@ -389,9 +475,37 @@ export const vmLauncher: SandboxLauncher = {
           vsockPort: VSOCK_EXEC_PORT
         });
         const key = vmKey(scope, options.sessionId, options.agentId, identity);
+        if (!resolvedHypervisorDigest) throw new VmBackendNotReadyError('hypervisor fingerprint unavailable');
+        const toolchainDigest = resolvedHypervisorDigest;
+        const driverKind = process.platform === 'darwin' ? 'vfkit' : process.platform === 'win32' ? 'hyperv' : 'qemu';
+        const identityDigest = new Bun.CryptoHasher('sha256')
+          .update(JSON.stringify({ identity, driverKind, toolchainDigest }))
+          .digest('hex');
+        const baselineManifest: Omit<BaselineManifestInput, 'bootEpoch'> = {
+          identity: identityDigest,
+          reuseDigest: new Bun.CryptoHasher('sha256').update(reuse).digest('hex'),
+          driver: {
+            kind: driverKind,
+            version: toolchainDigest,
+            toolchain: toolchainDigest,
+            arch: process.arch
+          },
+          guest: {
+            agent: agent.digest,
+            observer: observer.digest,
+            protocol: VSOCK_PROTOCOL_VERSION,
+            ignition: IGNITION_SCHEMA_VERSION,
+            mountPlan: fingerprintVmMountPlan(mountPlan)
+          },
+          topology: {
+            cpus: shape.cpus,
+            memoryMiB: shape.memoryMiB,
+            digest: policyFingerprint(identity)
+          }
+        };
         acquiredKey = key;
         const vm = await activePool.acquire(key, reuse, options.agentId, () =>
-          bootVm(key, policy, image, shape, mountPlan, { agent, observer })
+          bootVm(key, policy, image, shape, mountPlan, { agent, observer }, baselineManifest)
         );
         const egress = egressFor(policy);
         // On Windows, host paths (C:\…) must become their /mnt/<drive>/… guest mounts — for the cwd

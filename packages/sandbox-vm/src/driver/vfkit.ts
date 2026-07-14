@@ -29,6 +29,7 @@ export interface VmSpec {
 export interface VmDriver {
   readonly kind: string;
   readonly baselineSupported: boolean;
+  canBaseline?(): boolean;
   /** Boot a VM from the spec and return a handle. */
   boot(spec: VmSpec): Promise<VmHandle>;
 }
@@ -47,7 +48,7 @@ export interface VmBaselineDriver extends VmDriver {
 }
 
 export function isBaselineDriver(driver: VmDriver): driver is VmBaselineDriver {
-  return driver.baselineSupported === true;
+  return driver.baselineSupported === true && (driver.canBaseline?.() ?? true);
 }
 
 export interface VmHandle {

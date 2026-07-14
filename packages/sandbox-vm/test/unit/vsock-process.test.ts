@@ -81,7 +81,7 @@ test('PTY start carries dimensions and resize sends a control frame', async () =
   expect(received[0]).toEqual({
     kind: HostFrameKind.Start,
     payload: {
-      version: 4,
+      version: 5,
       runId: 'pty-1',
       argv: ['sh'],
       env: {},

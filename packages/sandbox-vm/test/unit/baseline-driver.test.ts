@@ -9,4 +9,6 @@ test('drivers declare baseline capability without platform branching in callers'
   expect(isBaselineDriver(qemuDriver)).toBe(false);
   expect(isBaselineDriver(hypervDriver)).toBe(false);
   expect(vfkitDriver.baselineSupported).toBe(false);
+  expect(qemuDriver.baselineSupported).toBe(true);
+  expect(hypervDriver.baselineSupported).toBe(true);
 });

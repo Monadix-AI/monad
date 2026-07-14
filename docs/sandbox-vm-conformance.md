@@ -24,6 +24,8 @@ Update the last column only from the exact self-hosted workflow run for the exac
 
 The common real-VM suites exercise unprivileged execution, PTY and pipe cancellation, host-oracle filesystem confinement, deny and credential-mask precedence, `net:none`, filtered egress, private PID and temporary namespaces, cgroup violation events, bounded passive filesystem syscall observations, policy identity, and cross-agent separation. The syscall suite requires denied `openat`, rename destinations, and nested no-write targets to emit diagnostics, requires allowed writable-root attempts to remain silent, and drains rapid attempts during cancellation. The Windows-only suite additionally checks drive and space-bearing path translation, Hyper-V teardown, hvsock execution, and 9p share semantics.
 
+The baseline suite captures only while the protocol-v5 guest reports zero active runs and `everStarted:false`, reconstructs host sidecars, restores, verifies the same boot epoch and guest-agent digest, then admits the first pipe workload. vfkit is expected to report cold-only behavior. Unit or mocked restore results are not performance evidence.
+
 Filesystem syscall events are diagnostic hints from a passive seccomp USER_NOTIF observer. Every notification is continued; mount plans, read-only shares, overlays, and host-side oracles remain the enforcement evidence. Observer setup failure is a conformance failure on a capable runner, not permission to claim reduced coverage.
 
 All commands run inside a Linux guest. Tests translate host paths through the launcher's guest-path mapping and shell-quote them once. Host-side assertions use the original host paths. Guest output can prove guest-local facts such as UID or terminal size, but it cannot prove that a host file was protected.
@@ -65,6 +67,14 @@ Run the complete real-VM suite on a capable Unix runner:
 ```sh
 MONAD_VM_IT=1 bun run --cwd packages/sandbox-vm test:e2e
 ```
+
+Collect the required 30 cold and 30 restore samples on a QEMU/KVM or Hyper-V capable host:
+
+```sh
+MONAD_VM_IT=1 MONAD_VM_BASELINE_BENCH=1 bun packages/sandbox-vm/test/e2e/vm-baseline.test.ts
+```
+
+Do not enable a driver by default or claim a latency improvement until this command reports 30 samples in both groups on the same runner and commit. TCG and vfkit results do not qualify as QEMU/KVM or Hyper-V restore evidence.
 
 Provision or run conformance on a capable Windows host from PowerShell:
 

@@ -310,6 +310,18 @@ export const sandboxConfigSchema = z.object({
       cpus: z.number().int().positive().default(2),
       // Attach a memory-balloon device + host-pressure reclaim so idle VMs release pages. Default on.
       balloon: z.boolean().default(true),
+      baseline: z
+        .object({
+          enabled: z.boolean().default(false),
+          maxInactiveArtifacts: z.number().int().min(0).max(64).default(4),
+          maxBytes: z
+            .number()
+            .int()
+            .min(0)
+            .max(256 * 1024 * 1024 * 1024)
+            .default(32 * 1024 * 1024 * 1024)
+        })
+        .default({ enabled: false, maxInactiveArtifacts: 4, maxBytes: 32 * 1024 * 1024 * 1024 }),
       // Explicit vfkit / gvproxy / winvm-helper binary paths (skip host detection + download).
       vfkitPath: z.string().optional(),
       gvproxyPath: z.string().optional(),

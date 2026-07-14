@@ -18,8 +18,11 @@
 // Requires Windows Pro/Enterprise/Education (Hyper-V). Home has no Hyper-V; prepare() fails with a
 // clear message rather than degrading to a weaker sandbox.
 
+import { readdir } from 'node:fs/promises';
+import { dirname, join, relative } from 'node:path';
+
 import { DiagnosticTail } from '../runtime/diagnostic-tail.ts';
-import { type VmDriver, type VmHandle, type VmSpec } from './vfkit.ts';
+import { type VmBaselineDriver, type VmHandle, type VmSpec } from './vfkit.ts';
 
 /** The fixed hvsock port plan (see module comment). */
 export const HVSOCK_PORTS = {
@@ -175,9 +178,52 @@ export async function hypervPreflight(helper: string): Promise<void> {
   }
 }
 
-export const hypervDriver: VmDriver = {
+async function startHypervServices(helper: string, spec: VmSpec, vmId: string): Promise<VmHandle> {
+  const b = spec.bundle;
+  const children: Child[] = [];
+  try {
+    for (const args of hypervServiceArgv(spec, vmId)) children.push(await helperServe(helper, args));
+    await helperRun(helper, ['start', '--name', b.vmName]);
+  } catch (error) {
+    for (const child of children) child.kill();
+    await helperRun(helper, ['remove', '--name', b.vmName]).catch(() => {});
+    throw error;
+  }
+  return {
+    pid: 0,
+    exited: new Promise<number>(() => {}),
+    diagnostics: { stdout: new DiagnosticTail(64 * 1024), stderr: new DiagnosticTail(64 * 1024) },
+    async stop() {
+      for (const child of children) child.kill();
+      await helperRun(helper, ['remove', '--name', b.vmName]).catch(() => {});
+    }
+  };
+}
+
+async function artifactFiles(root: string, dir = root): Promise<string[]> {
+  const files: string[] = [];
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) files.push(...(await artifactFiles(root, path)));
+    else if (entry.isFile()) files.push(relative(root, path));
+  }
+  return files;
+}
+
+export function hypervBaselineCreateArgv(name: string, path: string): string[] {
+  return ['baseline-create', '--name', name, '--path', path];
+}
+
+export function hypervBaselineRestoreArgv(name: string, path: string): string[] {
+  return ['baseline-restore', '--name', name, '--path', path];
+}
+
+export const hypervDriver: VmBaselineDriver = {
   kind: 'hyperv',
-  baselineSupported: false,
+  baselineSupported: true,
+  canBaseline() {
+    return process.platform === 'win32' && tools !== null;
+  },
   async boot(spec: VmSpec): Promise<VmHandle> {
     if (!tools) throw new Error('hyperv driver: not configured (call configureHypervTools)');
     const helper = tools.helper;
@@ -200,29 +246,25 @@ export const hypervDriver: VmDriver = {
     if (!vmId) throw new Error('hyperv: create returned no vmId');
     await helperRun(helper, ['ignition', '--name', b.vmName, '--file', b.ignition]);
 
-    // 2. Host-side services, all pinned to this VMID, all listening before the guest boots.
-    const children: Child[] = [];
-    try {
-      for (const args of hypervServiceArgv(spec, vmId)) {
-        children.push(await helperServe(helper, args));
-      }
-      // 3. Boot.
-      await helperRun(helper, ['start', '--name', b.vmName]);
-    } catch (error) {
-      for (const c of children) c.kill();
-      await helperRun(helper, ['remove', '--name', b.vmName]).catch(() => {});
-      throw error;
-    }
-
-    return {
-      pid: 0, // the VM is a VMMS object, not a child process; lifecycle goes through the helper
-      exited: new Promise<number>(() => {}), // never self-resolves — stop() owns teardown
-      diagnostics: { stdout: new DiagnosticTail(64 * 1024), stderr: new DiagnosticTail(64 * 1024) },
-      async stop() {
-        for (const c of children) c.kill();
-        // remove implies a forced stop; also unregisters the VM so bundles never leak VMMS objects.
-        await helperRun(helper, ['remove', '--name', b.vmName]).catch(() => {});
-      }
-    };
+    return startHypervServices(helper, spec, vmId);
+  },
+  async captureBaseline(spec, _handle, artifactDir) {
+    if (!tools) throw new Error('hyperv driver: not configured');
+    const path = join(artifactDir, 'hyperv');
+    await helperRun(tools.helper, hypervBaselineCreateArgv(spec.bundle.vmName, path));
+    return artifactFiles(artifactDir);
+  },
+  async restoreBaseline(spec, artifact) {
+    if (!tools) throw new Error('hyperv driver: not configured');
+    const path = join(dirname(artifact.manifestPath), 'hyperv');
+    const restored = await helperRun(tools.helper, hypervBaselineRestoreArgv(spec.bundle.vmName, path));
+    const vmId = restored.vmId as string;
+    if (!vmId) throw new Error('hyperv: baseline restore returned no vmId');
+    return startHypervServices(tools.helper, spec, vmId);
+  },
+  async invalidateBaseline(artifact) {
+    if (!tools) return;
+    const path = join(dirname(artifact.manifestPath), 'hyperv');
+    await helperRun(tools.helper, ['baseline-delete', '--path', path]).catch(() => {});
   }
 };

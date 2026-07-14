@@ -44,7 +44,7 @@ func emit(v any) {
 
 func main() {
 	if len(os.Args) < 2 {
-		fail("usage: winvm-helper <probe|setup|create|ignition|start|stop|remove|state|execbridge|netbridge|serve9p> …")
+		fail("usage: winvm-helper <probe|setup|create|ignition|start|stop|remove|state|baseline-create|baseline-restore|baseline-inspect|baseline-delete|execbridge|netbridge|serve9p> …")
 	}
 	cmd, args := os.Args[1], os.Args[2:]
 	switch cmd {
@@ -58,6 +58,8 @@ func main() {
 		cmdIgnition(args)
 	case "start", "stop", "remove", "state":
 		cmdLifecycle(cmd, args)
+	case "baseline-create", "baseline-restore", "baseline-inspect", "baseline-delete":
+		cmdBaseline(cmd, args)
 	case "execbridge":
 		cmdExecBridge(args)
 	case "netbridge":

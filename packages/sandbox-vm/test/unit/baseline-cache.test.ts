@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { existsSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -82,4 +82,19 @@ test('malformed and unknown manifest fields are rejected and removed', async () 
   parsed.unknown = true;
   writeFileSync(artifact.manifestPath, JSON.stringify(parsed));
   expect(await cache.get('identity-a')).toBeUndefined();
+});
+
+test('crash cleanup removes only stale marker-owned temporary resources', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'baseline-cache-'));
+  const stale = join(root, '.capture-stale.lock');
+  const active = join(root, '.capture-active.lock');
+  const unrelated = join(root, 'unrelated');
+  for (const path of [stale, active, unrelated]) mkdirSync(path);
+  writeFileSync(join(stale, 'owner.json'), JSON.stringify({ pid: 2_147_483_647, token: 'stale' }));
+  writeFileSync(join(active, 'owner.json'), JSON.stringify({ pid: process.pid, token: 'active' }));
+  const cache = new BaselineCache(root, { maxInactiveArtifacts: 4, maxBytes: 1024 });
+  await cache.cleanupTemporary();
+  expect(existsSync(stale)).toBe(false);
+  expect(existsSync(active)).toBe(true);
+  expect(existsSync(unrelated)).toBe(true);
 });

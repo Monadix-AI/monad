@@ -83,6 +83,14 @@ func newRunRegistry() *runRegistry {
 }
 
 func (registry *runRegistry) add(runID string, run *managedRun) error {
+	if err := registry.admit(runID); err != nil {
+		return err
+	}
+	registry.attach(runID, run)
+	return nil
+}
+
+func (registry *runRegistry) admit(runID string) error {
 	registry.mu.Lock()
 	defer registry.mu.Unlock()
 	if registry.baselinePaused {
@@ -91,9 +99,15 @@ func (registry *runRegistry) add(runID string, run *managedRun) error {
 	if _, exists := registry.runs[runID]; exists {
 		return fmt.Errorf("run id is already active")
 	}
-	registry.runs[runID] = run
+	registry.runs[runID] = nil
 	registry.everStarted = true
 	return nil
+}
+
+func (registry *runRegistry) attach(runID string, run *managedRun) {
+	registry.mu.Lock()
+	defer registry.mu.Unlock()
+	registry.runs[runID] = run
 }
 
 func (registry *runRegistry) prepareBaseline(expectedDigest string) (baselineReadyMessage, error) {
@@ -139,7 +153,9 @@ func (registry *runRegistry) cancelAll(grace time.Duration) {
 	registry.mu.Lock()
 	runs := make([]*managedRun, 0, len(registry.runs))
 	for _, run := range registry.runs {
-		runs = append(runs, run)
+		if run != nil {
+			runs = append(runs, run)
+		}
 	}
 	registry.mu.Unlock()
 	for _, run := range runs {
@@ -222,8 +238,13 @@ func serveConnection(conn io.ReadWriteCloser, registry *runRegistry) {
 		writer.json(frameError, map[string]string{"message": "invalid start request"})
 		return
 	}
+	if err := registry.admit(req.RunID); err != nil {
+		(&frameWriter{w: conn}).json(frameError, map[string]string{"message": err.Error()})
+		return
+	}
 	cmd, supervisorResult, supervisorControl, err := commandFor(req)
 	if err != nil {
+		registry.remove(req.RunID, nil)
 		(&frameWriter{w: conn}).json(frameError, map[string]string{"message": err.Error()})
 		return
 	}
@@ -235,16 +256,12 @@ func serveConnection(conn io.ReadWriteCloser, registry *runRegistry) {
 		func(kind byte, data []byte) { writer.write(kind, data) },
 	)
 	if err != nil {
+		registry.remove(req.RunID, nil)
 		writer.json(frameError, map[string]string{"message": err.Error()})
 		return
 	}
 	run.runID = req.RunID
-	if err := registry.add(req.RunID, run); err != nil {
-		run.terminate(0)
-		<-run.done
-		writer.json(frameError, map[string]string{"message": err.Error()})
-		return
-	}
+	registry.attach(req.RunID, run)
 	defer registry.remove(req.RunID, run)
 	writer.json(frameStarted, startedMessage{RunID: req.RunID, PID: run.cmd.Process.Pid})
 

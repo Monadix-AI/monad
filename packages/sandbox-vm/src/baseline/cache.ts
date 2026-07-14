@@ -2,14 +2,15 @@ import type { VmBaselineArtifact } from '../driver/vfkit.ts';
 
 import { randomUUID } from 'node:crypto';
 import { chmodSync, existsSync } from 'node:fs';
-import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
-import { basename, join, resolve } from 'node:path';
+import { lstat, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { isAbsolute, join, relative, resolve } from 'node:path';
 
 import { sha256OfFile } from '../util.ts';
 
 const FORMAT = 'monad-vm-baseline';
 const SCHEMA_VERSION = 1;
 const MANIFEST = 'manifest.json';
+const OWNER = '.cache-owner.json';
 
 export interface BaselineManifestInput {
   identity: string;
@@ -82,6 +83,13 @@ function string(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0 && value.length <= 512;
 }
 
+function safeArtifactName(root: string, name: string): boolean {
+  if (!string(name) || isAbsolute(name)) return false;
+  const path = resolve(root, name);
+  const fromRoot = relative(resolve(root), path);
+  return fromRoot.length > 0 && !fromRoot.startsWith('..') && !isAbsolute(fromRoot);
+}
+
 function parseManifest(value: unknown): BaselineManifest | undefined {
   const root = object(value);
   if (
@@ -135,7 +143,7 @@ function parseManifest(value: unknown): BaselineManifest | undefined {
       !artifact ||
       !exactKeys(artifact, ['name', 'byteSize', 'digest']) ||
       !string(artifact.name) ||
-      basename(artifact.name) !== artifact.name ||
+      !safeArtifactName('/baseline', artifact.name) ||
       !Number.isSafeInteger(artifact.byteSize) ||
       (artifact.byteSize as number) < 0 ||
       !string(artifact.digest)
@@ -172,9 +180,12 @@ export class BaselineCache {
   async acquireCaptureLease(identity: string): Promise<BaselineLease> {
     await this.ensureRoot();
     const path = join(this.root, `.capture-${safeIdentity(identity)}.lock`);
+    const token = randomUUID();
     try {
       await mkdir(path, { mode: 0o700 });
+      await writeFile(join(path, 'owner.json'), JSON.stringify({ pid: process.pid, token }), { mode: 0o600 });
     } catch {
+      if (existsSync(path) && !existsSync(join(path, 'owner.json'))) await rm(path, { recursive: true, force: true });
       throw new CacheFailure(BaselineCacheError.LEASED);
     }
     let released = false;
@@ -182,7 +193,12 @@ export class BaselineCache {
       release: async () => {
         if (released) return;
         released = true;
-        await rm(path, { recursive: true, force: true });
+        try {
+          const owner = JSON.parse(await readFile(join(path, 'owner.json'), 'utf8')) as { token?: unknown };
+          if (owner.token === token) await rm(path, { recursive: true, force: true });
+        } catch {
+          // A missing or replaced lease is not ours to remove.
+        }
       }
     };
   }
@@ -195,13 +211,17 @@ export class BaselineCache {
     const target = this.dir(input.identity);
     const temporary = join(this.root, `.tmp-${safeIdentity(input.identity)}-${randomUUID()}`);
     await mkdir(temporary, { mode: 0o700 });
+    await writeFile(join(temporary, OWNER), JSON.stringify({ pid: process.pid }), { mode: 0o600 });
     try {
-      const names = await writeArtifacts(temporary);
+      const names = (await writeArtifacts(temporary)).filter((name) => name !== OWNER);
+      if (names.length === 0 || names.length > 16 || new Set(names).size !== names.length) {
+        throw new CacheFailure(BaselineCacheError.INVALID_ARTIFACT);
+      }
       const artifacts: BaselineArtifactFile[] = [];
       for (const name of names) {
-        if (basename(name) !== name) throw new CacheFailure(BaselineCacheError.INVALID_ARTIFACT);
+        if (!safeArtifactName(temporary, name)) throw new CacheFailure(BaselineCacheError.INVALID_ARTIFACT);
         const path = resolve(temporary, name);
-        const info = await stat(path);
+        const info = await lstat(path);
         if (!info.isFile()) throw new CacheFailure(BaselineCacheError.INVALID_ARTIFACT);
         artifacts.push({ name, byteSize: info.size, digest: await sha256OfFile(path) });
       }
@@ -213,6 +233,7 @@ export class BaselineCache {
         createdAt: Date.now(),
         artifacts
       };
+      await rm(join(temporary, OWNER), { force: true });
       await writeFile(join(temporary, MANIFEST), JSON.stringify(manifest), { mode: 0o600 });
       await rm(target, { recursive: true, force: true });
       await rename(temporary, target);
@@ -251,15 +272,31 @@ export class BaselineCache {
       }
       return this.cached(dir, manifest);
     } catch {
-      if (!this.restoreLeases.has(identity)) await rm(dir, { recursive: true, force: true });
+      if (!this.restoreLeases.has(identity) && !existsSync(this.restoreLock(identity))) {
+        await rm(dir, { recursive: true, force: true });
+      }
       return undefined;
     }
   }
 
   async acquireRestoreLease(identity: string): Promise<BaselineRestoreLease | undefined> {
     if (this.restoreLeases.has(identity)) throw new CacheFailure(BaselineCacheError.LEASED);
+    await this.ensureRoot();
+    const lock = this.restoreLock(identity);
+    const token = randomUUID();
+    try {
+      await mkdir(lock, { mode: 0o700 });
+      await writeFile(join(lock, 'owner.json'), JSON.stringify({ pid: process.pid, token }), { mode: 0o600 });
+    } catch {
+      if (existsSync(lock) && !existsSync(join(lock, 'owner.json'))) await rm(lock, { recursive: true, force: true });
+      throw new CacheFailure(BaselineCacheError.LEASED);
+    }
     const artifact = await this.get(identity);
-    if (!artifact) return undefined;
+    if (!artifact) {
+      await rm(lock, { recursive: true, force: true });
+      await rm(this.dir(identity), { recursive: true, force: true });
+      return undefined;
+    }
     this.restoreLeases.set(identity, 1);
     let released = false;
     return {
@@ -268,26 +305,37 @@ export class BaselineCache {
         if (released) return;
         released = true;
         this.restoreLeases.delete(identity);
+        try {
+          const owner = JSON.parse(await readFile(join(lock, 'owner.json'), 'utf8')) as { token?: unknown };
+          if (owner.token === token) await rm(lock, { recursive: true, force: true });
+        } catch {
+          // A missing or replaced lease is not ours to remove.
+        }
       }
     };
   }
 
   async invalidate(identity: string): Promise<void> {
-    if (this.restoreLeases.has(identity)) return;
+    if (this.restoreLeases.has(identity) || existsSync(this.restoreLock(identity))) return;
     await rm(this.dir(identity), { recursive: true, force: true });
   }
 
   async cleanupTemporary(): Promise<void> {
     await this.ensureRoot();
     for (const entry of await readdir(this.root)) {
-      if (entry.startsWith('.tmp-')) await rm(join(this.root, entry), { recursive: true, force: true });
+      const path = join(this.root, entry);
+      if (entry.startsWith('.tmp-')) {
+        if (await staleOwnedPath(path, OWNER)) await rm(path, { recursive: true, force: true });
+      } else if (entry.startsWith('.capture-') || entry.startsWith('.restore-')) {
+        if (await staleOwnedPath(path, 'owner.json')) await rm(path, { recursive: true, force: true });
+      }
     }
   }
 
   private async evict(): Promise<void> {
     const candidates: CachedBaseline[] = [];
     for (const entry of await readdir(this.root)) {
-      if (entry.startsWith('.') || this.restoreLeases.has(entry)) continue;
+      if (entry.startsWith('.') || existsSync(join(this.root, `.restore-${entry}.lock`))) continue;
       const dir = join(this.root, entry);
       try {
         const manifest = parseManifest(JSON.parse(await readFile(join(dir, MANIFEST), 'utf8')));
@@ -303,6 +351,32 @@ export class BaselineCache {
       if (!victim) break;
       await rm(victim.dir, { recursive: true, force: true });
       bytes -= victim.byteSize;
+    }
+  }
+
+  private restoreLock(identity: string): string {
+    return join(this.root, `.restore-${safeIdentity(identity)}.lock`);
+  }
+}
+
+function pidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function staleOwnedPath(path: string, ownerName: string): Promise<boolean> {
+  try {
+    const owner = JSON.parse(await readFile(join(path, ownerName), 'utf8')) as { pid?: unknown };
+    return typeof owner.pid !== 'number' || !pidAlive(owner.pid);
+  } catch {
+    try {
+      return Date.now() - (await stat(path)).mtimeMs > 30_000;
+    } catch {
+      return false;
     }
   }
 }

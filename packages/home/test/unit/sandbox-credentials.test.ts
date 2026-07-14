@@ -72,3 +72,11 @@ describe('sandbox credentials env/file union', () => {
     ).toThrow();
   });
 });
+
+test('VM baselines are bounded and disabled by default', () => {
+  const configured = sandboxConfigSchema.parse({
+    vm: { baseline: { enabled: true, maxInactiveArtifacts: 2, maxBytes: 4096 } }
+  });
+  expect(configured.vm?.baseline).toEqual({ enabled: true, maxInactiveArtifacts: 2, maxBytes: 4096 });
+  expect(sandboxConfigSchema.parse({ vm: {} }).vm?.baseline.enabled).toBe(false);
+});

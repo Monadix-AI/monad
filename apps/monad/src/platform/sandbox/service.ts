@@ -346,6 +346,7 @@ async function configureVmBackendFromConfig(cfg: MonadConfig, paths?: MonadPaths
     maxInstances: vm?.maxInstances ?? 8,
     cpus: vm?.cpus ?? 2,
     memoryMiB: vm?.memory ?? 2048,
+    baseline: vm?.baseline ?? { enabled: false, maxInactiveArtifacts: 4, maxBytes: 32 * 1024 * 1024 * 1024 },
     imageConsent: async ({ url, sha256, dest }) => {
       logger.warn(
         `monad: the VM backend needs its guest image (first use of backend:"vm").\n` +
