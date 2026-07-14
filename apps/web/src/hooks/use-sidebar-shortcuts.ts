@@ -6,7 +6,9 @@ import { isApplePlatform } from '#/lib/keyboard';
 import { useWorkspaceShellStore } from '#/lib/workspace-shell-store';
 
 interface UseSidebarShortcutsArgs {
+  inboxShortcutAction?: () => void;
   monadAgentShortcutAction?: () => void;
+  newChatShortcutAction?: () => void;
   sidebarShortcutActions: (() => void)[];
   showSettings: boolean;
   toggleSettings: () => void;
@@ -15,6 +17,8 @@ interface UseSidebarShortcutsArgs {
 
 export const settingsHotkey = 'Mod+,' as const;
 export const monadAgentHotkey = 'Mod+`' as const;
+export const newChatHotkey = 'Mod+N' as const;
+export const inboxHotkey = 'Mod+I' as const;
 export const sidebarNumberHotkeys = [
   'Mod+1',
   'Mod+2',
@@ -28,6 +32,47 @@ export const sidebarNumberHotkeys = [
 ] as const;
 
 export const sidebarShortcutListenerOptions = { capture: true } as const;
+const sidebarSessionSelector = '[data-sidebar-session-row="true"]';
+
+export function createVisibleSidebarSessionShortcutActions(
+  activate: (index: number) => boolean = activateVisibleSidebarSession
+): (() => void)[] {
+  return sidebarNumberHotkeys.map((_, index) => () => {
+    activate(index);
+  });
+}
+
+export function visibleSidebarSessionRows(root: Pick<Document, 'querySelectorAll'>): HTMLElement[] {
+  return Array.from(root.querySelectorAll<HTMLElement>(sidebarSessionSelector)).filter(
+    (row) => !row.closest('[inert]')
+  );
+}
+
+export function activateVisibleSidebarSession(
+  index: number,
+  root: Pick<Document, 'querySelectorAll'> = document
+): boolean {
+  const row = visibleSidebarSessionRows(root)[index];
+  if (!row) return false;
+  row.click();
+  return true;
+}
+
+export function syncVisibleSidebarSessionShortcutBadges(
+  modifierLabel: string | null,
+  root: Pick<Document, 'querySelectorAll'> = document
+): void {
+  const rows = Array.from(root.querySelectorAll<HTMLElement>(sidebarSessionSelector));
+  for (const row of rows) {
+    delete row.dataset.sidebarShortcut;
+    delete row.dataset.sidebarShortcutModifier;
+  }
+  if (!modifierLabel) return;
+  for (const [index, row] of visibleSidebarSessionRows(root).slice(0, sidebarNumberHotkeys.length).entries()) {
+    row.dataset.sidebarShortcut = String(index + 1);
+    row.dataset.sidebarShortcutModifier = modifierLabel;
+  }
+}
 
 function matchesMonadAgentHotkey(event: KeyboardEvent, applePlatform: boolean) {
   const hasModifier = applePlatform ? event.metaKey : event.ctrlKey;
@@ -35,7 +80,9 @@ function matchesMonadAgentHotkey(event: KeyboardEvent, applePlatform: boolean) {
 }
 
 export function createSidebarShortcutHandler({
+  inboxShortcutAction,
   monadAgentShortcutAction,
+  newChatShortcutAction,
   sidebarShortcutActions,
   showSettings,
   toggleSettings,
@@ -49,6 +96,20 @@ export function createSidebarShortcutHandler({
     if (matchesKeyboardEvent(event, settingsHotkey, platform)) {
       event.preventDefault();
       toggleSettings();
+      return;
+    }
+
+    if (newChatShortcutAction && matchesKeyboardEvent(event, newChatHotkey, platform)) {
+      event.preventDefault();
+      revealSidebar?.();
+      newChatShortcutAction();
+      return;
+    }
+
+    if (inboxShortcutAction && matchesKeyboardEvent(event, inboxHotkey, platform)) {
+      event.preventDefault();
+      revealSidebar?.();
+      inboxShortcutAction();
       return;
     }
 
@@ -71,10 +132,12 @@ export function createSidebarShortcutHandler({
   };
 }
 
-// Global primary-modifier shortcuts: comma toggles settings, backquote opens Monad Agent, 1..9 jumps to a sidebar pile.
+// Global primary-modifier shortcuts cover settings, New chat, Inbox, Monad Agent, and numbered sidebar navigation.
 // Holding the modifier reveals the numbered badges so the bindings are discoverable.
 export function useSidebarShortcuts({
+  inboxShortcutAction,
   monadAgentShortcutAction,
+  newChatShortcutAction,
   sidebarShortcutActions,
   showSettings,
   toggleSettings
@@ -87,14 +150,25 @@ export function useSidebarShortcuts({
   const shortcutHandler = useMemo(
     () =>
       createSidebarShortcutHandler({
+        inboxShortcutAction,
         sidebarShortcutActions,
         monadAgentShortcutAction,
+        newChatShortcutAction,
         showSettings,
         toggleSettings,
         revealSidebar,
         applePlatform
       }),
-    [sidebarShortcutActions, monadAgentShortcutAction, showSettings, toggleSettings, revealSidebar, applePlatform]
+    [
+      sidebarShortcutActions,
+      inboxShortcutAction,
+      monadAgentShortcutAction,
+      newChatShortcutAction,
+      showSettings,
+      toggleSettings,
+      revealSidebar,
+      applePlatform
+    ]
   );
 
   useEffect(() => {
@@ -102,6 +176,20 @@ export function useSidebarShortcuts({
     window.addEventListener('keydown', shortcutHandler, sidebarShortcutListenerOptions);
     return () => window.removeEventListener('keydown', shortcutHandler, sidebarShortcutListenerOptions);
   }, [shortcutHandler]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const syncBadges = () =>
+      syncVisibleSidebarSessionShortcutBadges(showSidebarShortcutBadges ? shortcutModifierLabel : null);
+    syncBadges();
+    if (!showSidebarShortcutBadges || typeof MutationObserver === 'undefined') return;
+    const observer = new MutationObserver(syncBadges);
+    observer.observe(document.body, { attributeFilter: ['inert'], attributes: true, childList: true, subtree: true });
+    return () => {
+      observer.disconnect();
+      syncVisibleSidebarSessionShortcutBadges(null);
+    };
+  }, [shortcutModifierLabel, showSidebarShortcutBadges]);
 
   return { shortcutModifierLabel, showSidebarShortcutBadges };
 }

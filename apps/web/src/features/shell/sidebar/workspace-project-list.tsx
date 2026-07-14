@@ -30,7 +30,7 @@ export const ProjectList = memo(function ProjectList({
 
   return (
     <>
-      {state.projects.map((project, index) => {
+      {state.projects.map((project) => {
         const expanded = expandedProjectIds.has(project.id);
         const visibleSessions = project.sessions.filter((session) => !session.pinned);
         const lessTargetCount = getPreviewLessTargetCount(visibleSessions, state.activeProjectSessionId);
@@ -45,7 +45,6 @@ export const ProjectList = memo(function ProjectList({
           >
             <ProjectTreeRow
               expanded={expanded}
-              index={index}
               onToggleProjectExpanded={onToggleProjectExpanded}
               project={project}
             />

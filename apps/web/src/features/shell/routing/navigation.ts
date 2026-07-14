@@ -8,7 +8,7 @@ import { useCallback, useEffect, useMemo } from 'react';
 import { runtimeSectionEnabled } from '#/features/init/init-readiness';
 import { normalizeSettingsSection } from '#/features/settings/sections';
 import { pushShellUrl, replaceShellUrl, toShellUrl } from '#/hooks/use-shell-location';
-import { useSidebarShortcuts } from '#/hooks/use-sidebar-shortcuts';
+import { createVisibleSidebarSessionShortcutActions, useSidebarShortcuts } from '#/hooks/use-sidebar-shortcuts';
 import { useWorkspaceShellStore, type WorkspaceShellState } from '#/lib/workspace-shell-store';
 import {
   inboxPath,
@@ -62,8 +62,7 @@ export function useAppShellNavigation({
   sessions,
   sessionsLoading,
   setOptimistic,
-  setSessionUrl,
-  workspaceProjects
+  setSessionUrl
 }: UseAppShellNavigationParams) {
   const {
     currentId,
@@ -313,11 +312,13 @@ export function useAppShellNavigation({
       ];
     }
 
-    return workspaceProjects.slice(0, 9).map((project) => () => openProject(project.id));
-  }, [openProject, setStudioUrl, isStudioRoute, workspaceProjects]);
+    return createVisibleSidebarSessionShortcutActions();
+  }, [setStudioUrl, isStudioRoute]);
 
   const { shortcutModifierLabel, showSidebarShortcutBadges } = useSidebarShortcuts({
+    inboxShortcutAction: openInbox,
     monadAgentShortcutAction: handleOpenMonadChat,
+    newChatShortcutAction: handleNewMonadChat,
     sidebarShortcutActions,
     showSettings: isSettingsRoute,
     toggleSettings

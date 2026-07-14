@@ -43,6 +43,7 @@ export function WorkspaceTreeItem({
   menuLabel,
   onOpen,
   onRename,
+  sidebarSession,
   title = label,
   trailingActions
 }: {
@@ -60,6 +61,7 @@ export function WorkspaceTreeItem({
   menuLabel?: string;
   onOpen: () => void;
   onRename?: (title: string) => void | Promise<void>;
+  sidebarSession?: boolean;
   title?: string;
   trailingActions?: ReactNode;
 }) {
@@ -105,6 +107,7 @@ export function WorkspaceTreeItem({
             'flex min-w-0 flex-1 items-center gap-2 text-left text-inherit visited:text-inherit',
             className
           )}
+          data-sidebar-session-row={sidebarSession || undefined}
           href={href}
           onClick={(event) => {
             event.preventDefault();
@@ -131,6 +134,7 @@ export function WorkspaceTreeItem({
         <button
           aria-expanded={ariaExpanded}
           className={cn('flex min-w-0 flex-1 items-center gap-2 text-left text-inherit', className)}
+          data-sidebar-session-row={sidebarSession || undefined}
           onClick={openItem}
           onContextMenu={openContextMenu}
           onDoubleClick={handleDoubleClick}

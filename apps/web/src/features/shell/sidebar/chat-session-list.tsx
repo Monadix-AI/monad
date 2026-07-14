@@ -49,6 +49,7 @@ export function ChatSessionList() {
             menuLabel={meta.t('web.sidebar.itemMenu')}
             onOpen={() => actions.openSession(session.id)}
             onRename={(title) => actions.renameSession(session.id, title)}
+            sidebarSession
             title={session.title}
           >
             <span className="block truncate">{session.title}</span>

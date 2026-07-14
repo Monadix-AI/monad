@@ -13,13 +13,7 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { useCallback, useMemo } from 'react';
 
 import { projectSessionPath } from '#/features/shell/routing/paths';
-import {
-  SHORTCUT_BADGE_OVERLAY_CLASS,
-  ShortcutBadge,
-  SIDEBAR_INDENTED_ITEM_ROW_CLASS,
-  SIDEBAR_ITEM_ROW_CLASS,
-  SidebarIconActionButton
-} from './nav-item';
+import { SIDEBAR_INDENTED_ITEM_ROW_CLASS, SIDEBAR_ITEM_ROW_CLASS, SidebarIconActionButton } from './nav-item';
 import { useWorkspaceSidebar } from './workspace-sidebar-context';
 import { type TreeItemMenuAction, WorkspaceTreeItem } from './workspace-tree-item';
 
@@ -35,17 +29,15 @@ function confirmDestructive(message: string): boolean {
 
 export function ProjectTreeRow({
   expanded,
-  index,
   onToggleProjectExpanded,
   project
 }: {
   expanded: boolean;
-  index: number;
   onToggleProjectExpanded: (id: string) => void;
   project: ProjectItem;
 }) {
   const { actions, meta } = useWorkspaceSidebar();
-  const { shortcutModifierLabel, showShortcutBadges, t } = meta;
+  const { t } = meta;
   const unreadLabel = project.unreadCount > 99 ? '99+' : String(project.unreadCount);
   const runningLabel = t('web.workplace.projectRuntimeRunning');
   const unreadAriaLabel = t('web.workplace.projectUnreadMessages', { count: project.unreadCount });
@@ -80,22 +72,12 @@ export function ProjectTreeRow({
   return (
     <WorkspaceTreeItem
       actions={
-        <>
-          {showShortcutBadges && shortcutModifierLabel && index < 9 ? (
-            <span className={SHORTCUT_BADGE_OVERLAY_CLASS}>
-              <ShortcutBadge
-                modifierLabel={shortcutModifierLabel}
-                value={index + 1}
-              />
-            </span>
-          ) : null}
-          <SidebarIconActionButton
-            icon={Settings02Icon}
-            label={t('web.project.openSettings')}
-            onClick={() => actions.openProjectSettings(project.id)}
-            tooltip={t('web.project.settings')}
-          />
-        </>
+        <SidebarIconActionButton
+          icon={Settings02Icon}
+          label={t('web.project.openSettings')}
+          onClick={() => actions.openProjectSettings(project.id)}
+          tooltip={t('web.project.settings')}
+        />
       }
       active={false}
       ariaExpanded={expanded}
@@ -216,6 +198,7 @@ export function ProjectSessionTreeRow({
       menuLabel={t('web.sidebar.itemMenu')}
       onOpen={openSession}
       onRename={renameSession}
+      sidebarSession
       title={session.title}
     >
       <span className="block truncate">{session.title}</span>
@@ -286,6 +269,7 @@ export function PinnedSessionTreeRow({
       menuLabel={t('web.sidebar.itemMenu')}
       onOpen={openSession}
       onRename={renameSession}
+      sidebarSession
       title={`${projectName}: ${session.title}`}
     >
       <span className="block min-w-0 flex-1 truncate will-change-auto">{session.title}</span>
