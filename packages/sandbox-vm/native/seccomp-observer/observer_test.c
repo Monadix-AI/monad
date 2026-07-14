@@ -62,7 +62,7 @@ int main(int argc, char **argv) {
     int events[2];
     if (pipe(events) < 0) fail("pipe failed");
     char script[1200];
-    snprintf(script, sizeof(script), "exec 9>'%s'; printf x >&9; exec 9>&-; cat '%s' >/dev/null", write_path, read_path);
+    snprintf(script, sizeof(script), "test ! -e /proc/self/fd/%d || exit 42; exec 9>'%s'; printf x >&9; exec 9>&-; cat '%s' >/dev/null", events[1], write_path, read_path);
     if (run_observer(argv[1], events[1], script) != 0) fail("observed command failed");
     close(events[1]);
 

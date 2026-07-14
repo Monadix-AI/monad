@@ -401,6 +401,7 @@ int main(int argc, char **argv) {
         fprintf(stderr, "usage: %s --event-fd FD -- COMMAND [ARG...]\n", argv[0]);
         return 64;
     }
+    signal(SIGPIPE, SIG_IGN);
     int event_fd = parse_event_fd(argv[2]);
     if (event_fd >= 0) {
         int flags = fcntl(event_fd, F_GETFL);
@@ -423,6 +424,7 @@ int main(int argc, char **argv) {
         } else if (installed == -2) {
             _exit(125);
         }
+        if (event_fd >= 0) close(event_fd);
         close(sockets[1]);
         execvp(argv[4], &argv[4]);
         _exit(127);
