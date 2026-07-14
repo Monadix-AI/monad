@@ -6,16 +6,21 @@ import {
   HostFrameKind,
   MAX_CONTROL_FRAME_BYTES,
   MAX_STREAM_FRAME_BYTES,
-  normalizeSignal
+  normalizeSignal,
+  VSOCK_PROTOCOL_VERSION
 } from '../../src/exec/protocol.ts';
+
+test('host protocol is version 3', () => {
+  expect(VSOCK_PROTOCOL_VERSION).toBe(3);
+});
 
 test('decoder reconstructs a frame split across chunks', () => {
   const decoder = new FrameDecoder();
-  const encoded = encodeFrame(HostFrameKind.Start, Buffer.from('{"version":2}'));
+  const encoded = encodeFrame(HostFrameKind.Start, Buffer.from('{"version":3}'));
 
   expect(decoder.push(encoded.subarray(0, 3))).toEqual([]);
   expect(decoder.push(encoded.subarray(3))).toEqual([
-    { kind: HostFrameKind.Start, payload: Buffer.from('{"version":2}') }
+    { kind: HostFrameKind.Start, payload: Buffer.from('{"version":3}') }
   ]);
 });
 

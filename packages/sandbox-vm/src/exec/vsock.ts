@@ -7,7 +7,15 @@
 //   request  (host→guest): [len:u32][json]   json = {argv, cwd, env}
 //   response (guest→host): [channel:u8][len:u32][data]   channel 1=stdout 2=stderr 3=exit(u32 code)
 
-import type { SandboxExit, SandboxProcess, SandboxRunLimits, SandboxStdin } from '@monad/sdk-atom';
+import type {
+  SandboxExit,
+  SandboxProcess,
+  SandboxRunLimits,
+  SandboxStdin,
+  SandboxTerminal,
+  SandboxTerminalOptions,
+  SandboxViolation
+} from '@monad/sdk-atom';
 
 import { randomUUID } from 'node:crypto';
 import { connect } from 'node:net';
@@ -31,6 +39,7 @@ export interface VsockExecSpec {
   env?: Record<string, string | undefined>;
   runId?: string;
   limits?: SandboxRunLimits;
+  terminal?: SandboxTerminalOptions;
   onUnresponsive?: (error: Error) => void;
 }
 
@@ -69,11 +78,66 @@ function parseExit(payload: Buffer): SandboxExit {
   return { code: value.code as number | null, signal: value.signal as number | null };
 }
 
+const VIOLATION_KINDS = new Set<SandboxViolation['kind']>(['protocol', 'setup', 'memory', 'process-limit', 'runtime']);
+const VIOLATION_OPERATIONS = new Set([
+  'oom',
+  'oom-kill',
+  'pids-max',
+  'namespace-init',
+  'cgroup-init',
+  'pty-init',
+  'mount-init',
+  'runtime-exit',
+  'unsupported-operation'
+]);
+const MAX_VIOLATION_TEXT_BYTES = 4096;
+
+function boundedText(value: unknown, required: boolean): value is string {
+  return (
+    (value !== undefined || required) &&
+    typeof value === 'string' &&
+    (!required || value.length > 0) &&
+    Buffer.byteLength(value, 'utf8') <= MAX_VIOLATION_TEXT_BYTES
+  );
+}
+
+function parseViolation(payload: Buffer, runId: string): SandboxViolation {
+  const value = parseJson(payload, 'violation') as Partial<Omit<SandboxViolation, 'timestamp'>>;
+  if (
+    !VIOLATION_KINDS.has(value.kind as SandboxViolation['kind']) ||
+    !boundedText(value.operation, true) ||
+    !VIOLATION_OPERATIONS.has(value.operation) ||
+    value.runId !== runId ||
+    (value.target !== undefined && !boundedText(value.target, false)) ||
+    (value.detail !== undefined && !boundedText(value.detail, false)) ||
+    (value.pid !== undefined && (!Number.isInteger(value.pid) || value.pid < 1))
+  ) {
+    throw new Error('vsock protocol: invalid violation payload');
+  }
+  return {
+    kind: value.kind as SandboxViolation['kind'],
+    operation: value.operation,
+    runId,
+    timestamp: new Date().toISOString(),
+    ...(value.target === undefined ? {} : { target: value.target }),
+    ...(value.pid === undefined ? {} : { pid: value.pid }),
+    ...(value.detail === undefined ? {} : { detail: value.detail })
+  };
+}
+
+function terminalSize(cols: number, rows: number): SandboxTerminalOptions {
+  if (![cols, rows].every((value) => Number.isInteger(value) && value >= 1 && value <= 1000)) {
+    throw new Error('vsock protocol: terminal dimensions must be integers from 1 through 1000');
+  }
+  return { cols, rows };
+}
+
 function exitCodeOf(exit: SandboxExit): number {
   return exit.code ?? 128 + (exit.signal ?? 0);
 }
 
 export function vsockExec(argv: string[], spec: VsockExecSpec): SandboxProcess {
+  const terminalOptions = spec.terminal ? terminalSize(spec.terminal.cols, spec.terminal.rows) : undefined;
   const runId = spec.runId ?? randomUUID();
   const env = Object.fromEntries(
     Object.entries(spec.env ?? {}).filter((entry): entry is [string, string] => entry[1] !== undefined)
@@ -82,12 +146,15 @@ export function vsockExec(argv: string[], spec: VsockExecSpec): SandboxProcess {
   const decoder = new FrameDecoder();
   const stdout = new TransformStream<Uint8Array, Uint8Array>();
   const stderr = new TransformStream<Uint8Array, Uint8Array>();
+  const violations = new TransformStream<SandboxViolation, SandboxViolation>();
   const stdoutWriter = stdout.writable.getWriter();
   const stderrWriter = stderr.writable.getWriter();
+  const violationWriter = violations.writable.getWriter();
   let pid: number | undefined;
   let exitCode: number | null = null;
   let settled = false;
   let terminationTimer: ReturnType<typeof setTimeout> | undefined;
+  let terminalClosed = false;
 
   let resolveExit!: (value: SandboxExit) => void;
   let rejectExit!: (reason: Error) => void;
@@ -100,6 +167,7 @@ export function vsockExec(argv: string[], spec: VsockExecSpec): SandboxProcess {
   const closeStreams = () => {
     void stdoutWriter.close().catch(() => {});
     void stderrWriter.close().catch(() => {});
+    void violationWriter.close().catch(() => {});
   };
   const fail = (error: Error, notify = true) => {
     if (settled) return;
@@ -126,7 +194,15 @@ export function vsockExec(argv: string[], spec: VsockExecSpec): SandboxProcess {
 
   send(
     HostFrameKind.Start,
-    jsonPayload({ version: VSOCK_PROTOCOL_VERSION, runId, argv, cwd: spec.cwd, env, limits: spec.limits ?? {} })
+    jsonPayload({
+      version: VSOCK_PROTOCOL_VERSION,
+      runId,
+      argv,
+      cwd: spec.cwd,
+      env,
+      limits: spec.limits ?? {},
+      ...(terminalOptions ? { terminal: terminalOptions } : {})
+    })
   );
 
   sock.on('data', (chunk: Buffer) => {
@@ -135,7 +211,9 @@ export function vsockExec(argv: string[], spec: VsockExecSpec): SandboxProcess {
         if (frame.kind === GuestFrameKind.Started) pid = parseStarted(frame.payload, runId).pid;
         else if (frame.kind === GuestFrameKind.Stdout) void stdoutWriter.write(new Uint8Array(frame.payload));
         else if (frame.kind === GuestFrameKind.Stderr) void stderrWriter.write(new Uint8Array(frame.payload));
-        else if (frame.kind === GuestFrameKind.Exit) complete(parseExit(frame.payload));
+        else if (frame.kind === GuestFrameKind.Violation) {
+          void violationWriter.write(parseViolation(frame.payload, runId));
+        } else if (frame.kind === GuestFrameKind.Exit) complete(parseExit(frame.payload));
         else if (frame.kind === GuestFrameKind.Error || frame.kind === GuestFrameKind.Unsupported) {
           const value = parseJson(frame.payload, 'error') as { message?: unknown };
           fail(new Error(typeof value.message === 'string' ? value.message : 'guest rejected the run'), false);
@@ -161,14 +239,36 @@ export function vsockExec(argv: string[], spec: VsockExecSpec): SandboxProcess {
       send(HostFrameKind.CloseStdin);
     }
   };
+  const terminal: SandboxTerminal | undefined = terminalOptions
+    ? {
+        async write(data) {
+          if (terminalClosed || settled) return;
+          const bytes = typeof data === 'string' ? Buffer.from(data) : data;
+          for (let offset = 0; offset < bytes.byteLength; offset += MAX_STREAM_FRAME_BYTES) {
+            send(HostFrameKind.Stdin, bytes.subarray(offset, offset + MAX_STREAM_FRAME_BYTES));
+          }
+        },
+        async close() {
+          if (terminalClosed || settled) return;
+          terminalClosed = true;
+          send(HostFrameKind.CloseStdin);
+        },
+        async resize(cols, rows) {
+          if (terminalClosed || settled) return;
+          send(HostFrameKind.Resize, jsonPayload(terminalSize(cols, rows)));
+        }
+      }
+    : undefined;
 
   return {
     get pid() {
       return pid;
     },
     stdout: stdout.readable,
-    stderr: stderr.readable,
+    stderr: terminalOptions ? undefined : stderr.readable,
     stdin,
+    terminal,
+    violations: violations.readable,
     exit,
     exited,
     get exitCode() {
@@ -213,9 +313,14 @@ async function probeOnce(spec: VsockExecSpec): Promise<boolean> {
   return code === 0;
 }
 
-export function bridgeAsyncProcess(start: () => Promise<SandboxProcess>, onFinally?: () => void): SandboxProcess {
+export function bridgeAsyncProcess(
+  start: () => Promise<SandboxProcess>,
+  onFinally?: () => void,
+  terminalOptions?: SandboxTerminalOptions
+): SandboxProcess {
   const stdoutTransform = new TransformStream<Uint8Array, Uint8Array>();
   const stderrTransform = new TransformStream<Uint8Array, Uint8Array>();
+  const violationTransform = new TransformStream<SandboxViolation, SandboxViolation>();
   let child: SandboxProcess | null = null;
   let stdinReady = false;
   let killRequested = false;
@@ -243,6 +348,8 @@ export function bridgeAsyncProcess(start: () => Promise<SandboxProcess>, onFinal
       if (killRequested) child.kill(killSignal);
       child.stdout?.pipeTo(stdoutTransform.writable).catch(() => {});
       child.stderr?.pipeTo(stderrTransform.writable).catch(() => {});
+      if (child.violations) child.violations.pipeTo(violationTransform.writable).catch(() => {});
+      else await violationTransform.writable.close();
       if (child.exit) child.exit.then(resolveExit, rejectExit);
       const code = await child.exited;
       if (!child.exit) resolveExit({ code, signal: null });
@@ -250,7 +357,11 @@ export function bridgeAsyncProcess(start: () => Promise<SandboxProcess>, onFinal
     } catch (error) {
       for (const operation of stdinOperations.splice(0)) operation.reject(error);
       rejectExit(error);
-      await Promise.allSettled([stdoutTransform.writable.close(), stderrTransform.writable.close()]);
+      await Promise.allSettled([
+        stdoutTransform.writable.close(),
+        stderrTransform.writable.close(),
+        violationTransform.writable.close()
+      ]);
       throw error;
     } finally {
       onFinally?.();
@@ -280,16 +391,50 @@ export function bridgeAsyncProcess(start: () => Promise<SandboxProcess>, onFinal
     });
   };
 
+  const queueTerminal = (operation: (terminal: SandboxTerminal) => void | Promise<void>): Promise<void> => {
+    if (child && stdinReady) {
+      try {
+        return Promise.resolve(operation(child.terminal ?? unavailableTerminal()));
+      } catch (error) {
+        return Promise.reject(error);
+      }
+    }
+    return new Promise<void>((resolve, reject) => {
+      stdinOperations.push({
+        reject,
+        async run(process) {
+          try {
+            await operation(process.terminal ?? unavailableTerminal());
+            resolve();
+          } catch (error) {
+            reject(error);
+          }
+        }
+      });
+    });
+  };
+
   return {
     get pid() {
       return child?.pid;
     },
     stdout: stdoutTransform.readable,
-    stderr: stderrTransform.readable,
+    stderr: terminalOptions ? undefined : stderrTransform.readable,
     stdin: {
       write: (data) => queueStdin((stdin) => stdin.write(data)),
       end: () => queueStdin((stdin) => stdin.end())
     },
+    terminal: terminalOptions
+      ? {
+          write: (data) => queueTerminal((terminal) => terminal.write(data)),
+          close: () => queueTerminal((terminal) => terminal.close()),
+          resize: (cols, rows) => {
+            terminalSize(cols, rows);
+            return queueTerminal((terminal) => terminal.resize(cols, rows));
+          }
+        }
+      : undefined,
+    violations: violationTransform.readable,
     exit,
     get exitCode() {
       return child?.exitCode ?? null;
@@ -307,4 +452,8 @@ export function bridgeAsyncProcess(start: () => Promise<SandboxProcess>, onFinal
 
 function unavailableStdin(): SandboxStdin {
   throw new Error('sandbox process does not expose stdin');
+}
+
+function unavailableTerminal(): SandboxTerminal {
+  throw new Error('sandbox process does not expose a terminal');
 }

@@ -1,3 +1,5 @@
+import type { SandboxProcess, SandboxTerminalOptions, SandboxViolation } from '@monad/sdk-atom';
+
 import { afterEach, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { createServer, type Server } from 'node:net';
@@ -43,6 +45,95 @@ async function protocolServer(
   });
   return socketPath;
 }
+
+async function collect<T>(stream: ReadableStream<T>): Promise<T[]> {
+  const values: T[] = [];
+  const reader = stream.getReader();
+  try {
+    while (true) {
+      const next = await reader.read();
+      if (next.done) return values;
+      values.push(next.value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+test('PTY start carries dimensions and resize sends a control frame', async () => {
+  const received: Array<{ kind: number; payload: unknown }> = [];
+  const socketPath = await protocolServer((frame, send) => {
+    const payload = frame.payload.byteLength > 0 ? JSON.parse(frame.payload.toString()) : undefined;
+    received.push({ kind: frame.kind, payload });
+    if (frame.kind === HostFrameKind.Start) send(GuestFrameKind.Started, { runId: 'pty-1', pid: 42 });
+    if (frame.kind === HostFrameKind.Resize) send(GuestFrameKind.Exit, { code: 0, signal: 0 });
+  });
+  const proc = vsockExec(['sh'], { socketPath, runId: 'pty-1', terminal: { cols: 80, rows: 24 } });
+
+  await proc.terminal?.resize(120, 40);
+  await proc.exited;
+
+  expect(received[0]).toEqual({
+    kind: HostFrameKind.Start,
+    payload: {
+      version: 3,
+      runId: 'pty-1',
+      argv: ['sh'],
+      env: {},
+      limits: {},
+      terminal: { cols: 80, rows: 24 }
+    }
+  });
+  expect(received[1]).toEqual({ kind: HostFrameKind.Resize, payload: { cols: 120, rows: 40 } });
+  expect(proc.stderr).toBeUndefined();
+});
+
+test('PTY dimensions fail before opening the transport', () => {
+  expect(() => vsockExec(['sh'], { socketPath: '/does/not/exist', terminal: { cols: 0, rows: 24 } })).toThrow(
+    'terminal dimensions'
+  );
+  expect(() => vsockExec(['sh'], { socketPath: '/does/not/exist', terminal: { cols: 80, rows: 1001 } })).toThrow(
+    'terminal dimensions'
+  );
+});
+
+test('validated violation frames receive a host timestamp', async () => {
+  const socketPath = await protocolServer((frame, send) => {
+    if (frame.kind !== HostFrameKind.Start) return;
+    send(GuestFrameKind.Started, { runId: 'violation-1', pid: 43 });
+    send(GuestFrameKind.Violation, {
+      kind: 'memory',
+      operation: 'oom-kill',
+      runId: 'violation-1',
+      detail: 'memory.events increased'
+    });
+    send(GuestFrameKind.Exit, { code: 137, signal: 0 });
+  });
+  const proc = vsockExec(['true'], { socketPath, runId: 'violation-1' });
+  const eventsPromise = collect(proc.violations as NonNullable<typeof proc.violations>);
+
+  expect(await proc.exited).toBe(137);
+  const events = await eventsPromise;
+  expect(events).toHaveLength(1);
+  expect(events[0]).toMatchObject({
+    kind: 'memory',
+    operation: 'oom-kill',
+    runId: 'violation-1',
+    detail: 'memory.events increased'
+  });
+  expect(Number.isNaN(Date.parse(events[0]?.timestamp ?? ''))).toBe(false);
+});
+
+test('invalid violation enums fail the run closed', async () => {
+  const socketPath = await protocolServer((frame, send) => {
+    if (frame.kind !== HostFrameKind.Start) return;
+    send(GuestFrameKind.Started, { runId: 'violation-2', pid: 44 });
+    send(GuestFrameKind.Violation, { kind: 'made-up', operation: 'oom-kill', runId: 'violation-2' });
+  });
+  const proc = vsockExec(['true'], { socketPath, runId: 'violation-2' });
+
+  await expect(proc.exited).rejects.toThrow('invalid violation payload');
+});
 
 test('kill sends a signal frame and waits for the guest exit frame', async () => {
   let receivedSignal = 0;
@@ -95,4 +186,59 @@ test('the async bridge rejects queued stdin when process startup fails', async (
 
   await expect(proc.exited).rejects.toThrow('start failed');
   expect(await outcome).toBe('start failed');
+});
+
+test('the async bridge queues terminal controls and forwards violations', async () => {
+  const controls: string[] = [];
+  const event: SandboxViolation = {
+    kind: 'runtime',
+    operation: 'runtime-exit',
+    runId: 'bridge-1',
+    timestamp: '2026-07-14T00:00:00.000Z'
+  };
+  const bridgeWithTerminal = bridgeAsyncProcess as unknown as (
+    start: () => Promise<SandboxProcess>,
+    onFinally: undefined,
+    terminal: SandboxTerminalOptions
+  ) => SandboxProcess;
+  const proc = bridgeWithTerminal(
+    async () => {
+      await Bun.sleep(5);
+      return {
+        terminal: {
+          write(data) {
+            controls.push(`write:${String(data)}`);
+          },
+          close() {
+            controls.push('close');
+          },
+          resize(cols, rows) {
+            controls.push(`resize:${cols}x${rows}`);
+          }
+        },
+        violations: new ReadableStream<SandboxViolation>({
+          start(controller) {
+            controller.enqueue(event);
+            controller.close();
+          }
+        }),
+        exited: Promise.resolve(0),
+        exitCode: 0,
+        kill() {}
+      };
+    },
+    undefined,
+    { cols: 80, rows: 24 }
+  );
+
+  expect(proc.terminal).toBeDefined();
+  expect(proc.violations).toBeDefined();
+  if (!proc.terminal || !proc.violations) return;
+  const resize = proc.terminal.resize(100, 30);
+  const write = proc.terminal.write('hello');
+  const events = collect(proc.violations);
+
+  await Promise.all([resize, write, proc.exited]);
+  expect(controls).toEqual(['resize:100x30', 'write:hello']);
+  expect(await events).toEqual([event]);
 });
