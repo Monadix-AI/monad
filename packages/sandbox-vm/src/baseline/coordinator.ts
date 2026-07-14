@@ -4,7 +4,7 @@ import type { BaselineManifestInput } from './cache.ts';
 import { isBaselineDriver } from '../driver/vfkit.ts';
 import { BaselineCache } from './cache.ts';
 
-export interface BaselineHandshake {
+interface BaselineHandshake {
   bootEpoch: string;
   agentDigest: string;
 }

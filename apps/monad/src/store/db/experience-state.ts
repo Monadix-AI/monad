@@ -73,15 +73,7 @@ export function compareAndSwapExperienceState(
        VALUES (?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(atom_pack_id, principal_id, project_id, record_key) DO UPDATE SET
          value = excluded.value, version = excluded.version, updated_at = excluded.updated_at`
-    ).run(
-      input.atomPackId,
-      input.principalId,
-      input.projectId,
-      input.key,
-      JSON.stringify(input.value),
-      version,
-      now
-    );
+    ).run(input.atomPackId, input.principalId, input.projectId, input.key, JSON.stringify(input.value), version, now);
     db.query(
       `INSERT INTO experience_state_events
          (id, atom_pack_id, principal_id, project_id, record_key, version, payload, created_at)

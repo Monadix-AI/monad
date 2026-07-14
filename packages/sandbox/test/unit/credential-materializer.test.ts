@@ -55,7 +55,7 @@ describe('credential materializer', () => {
   });
 
   test('catastrophic extraction is terminated by the regex deadline', () => {
-    const result = materializeCredential(`${'a'.repeat(80_000)}!`, hosts, { extract: '^(a+)+$' });
+    const result = materializeCredential(`${'a'.repeat(200_000)}!`, hosts, { extract: '^(a+)+$' });
     expect(result).toEqual({ ok: false, error: CredentialMaterializationError.REGEX_TIMEOUT });
   });
 

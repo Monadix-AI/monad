@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { installGitSkill } from '#/capabilities/skills/install/git.ts';
+import { assertSafeGitRef, installGitSkill } from '#/capabilities/skills/install/git.ts';
 
 // The git+ skill source is attacker-controllable and reaches `git clone` before any consent/scan
 // gate. git's remote-helper transports (ext::, fd::) execute code at clone time, so a malicious
@@ -22,10 +22,6 @@ test.each([
   await expect(installGitSkill(source, deps)).rejects.toThrow(/Refusing git/);
 });
 
-test('still accepts a well-formed https source (fails later at the network clone, not the guard)', async () => {
-  // A safe URL passes the guard; it then fails at the actual clone against a non-resolving host.
-  // The point is the rejection is NOT a "Refusing git" guard error.
-  await expect(installGitSkill('git+https://monad.invalid/does-not-exist.git', deps)).rejects.not.toThrow(
-    /Refusing git/
-  );
+test('accepts a well-formed https source without depending on a network clone', () => {
+  expect(() => assertSafeGitRef('https://example.com/owner/repo.git')).not.toThrow();
 });

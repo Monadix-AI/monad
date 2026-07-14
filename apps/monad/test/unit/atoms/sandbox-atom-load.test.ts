@@ -81,7 +81,10 @@ test('vm remains available as a built-in without loading Power Pack', () => {
   expect(vmLauncher.descriptor.settings?.fields.map((field) => field.id)).toEqual([
     'cpus',
     'memoryMiB',
-    'bootTimeoutMs'
+    'bootTimeoutMs',
+    'baselineEnabled',
+    'baselineMaxInactiveArtifacts',
+    'baselineMaxBytes'
   ]);
 });
 

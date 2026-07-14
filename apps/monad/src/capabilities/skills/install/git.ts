@@ -128,7 +128,7 @@ async function runGit(
 }
 
 /** Reject git refs that could execute code (ext::), read local files (file:/fd::), or inject CLI options. */
-function assertSafeGitRef(url: string, branch?: string): void {
+export function assertSafeGitRef(url: string, branch?: string): void {
   if (url.startsWith('-')) throw new Error(`Refusing git source that looks like a CLI option: ${url}`);
   if (branch?.startsWith('-')) throw new Error(`Refusing git branch that looks like a CLI option: ${branch}`);
   // Remote-helper transports take the form "<helper>::<address>" (e.g. ext::, fd::) and can run commands.

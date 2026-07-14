@@ -123,7 +123,7 @@ export function qemuArgv(
   return argv;
 }
 
-export function qmpSock(bundleDir: string): string {
+function qmpSock(bundleDir: string): string {
   return `${bundleDir}/qmp.sock`;
 }
 

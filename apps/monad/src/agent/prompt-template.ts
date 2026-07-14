@@ -9,6 +9,7 @@ export interface PromptTemplate<TData extends object> {
 }
 
 export interface DefinePromptOptions {
+  allowEmpty?: boolean;
   id: string;
   sourcePath: string;
 }
@@ -43,6 +44,7 @@ function registerId(id: string, sourcePath: string): void {
 }
 
 export async function definePrompt<TData extends object = Record<string, never>>({
+  allowEmpty = false,
   id,
   sourcePath
 }: DefinePromptOptions): Promise<PromptTemplate<TData>> {
@@ -57,7 +59,7 @@ export async function definePrompt<TData extends object = Record<string, never>>
     sourcePath,
     render(data) {
       const output = eta.renderString(source, data).trim();
-      if (!output) throw new Error(`prompt "${id}" rendered empty output`);
+      if (!output && !allowEmpty) throw new Error(`prompt "${id}" rendered empty output`);
       return output;
     }
   };

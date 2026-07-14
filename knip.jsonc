@@ -30,7 +30,7 @@
   // Root-level devDependencies invoked by generated i18n tooling or Git hook installation paths.
   "ignoreDependencies": ["@evilmartians/lefthook", "@inlang/paraglide-js"],
   // System binaries invoked from scripts; not npm-installed.
-  "ignoreBinaries": ["codex", "icacls", "powershell", "shasum", "sha256sum"],
+  "ignoreBinaries": ["codex", "icacls", "mkfifo", "shasum", "sha256sum"],
   // Workspaces are auto-discovered from package.json "workspaces". Framework and tool
   // entrypoints are handled by Knip plugins. The only repo-specific shape Knip can't infer is
   // the Bun test wrapper (`bun ../../scripts/bun-test.ts ...`), so those test/fixture globs are
@@ -49,13 +49,10 @@
     "apps/monad": {
       "bun": { "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"] }
     },
-    // public/experiences/*.js are workspace-experience web-component modules loaded by the
-    // browser via a runtime URL string (the atom-pack registry), never a static import — same
-    // rationale as packages/atoms below.
     "apps/web": {
       "playwright": true,
       "bun": { "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"] },
-      "entry": ["public/experiences/*.js", "src/routes/**/*.tsx"]
+      "entry": ["src/routes/**/*.tsx"]
     },
     "apps/mo": {},
     // Channel adapters and model providers are loaded dynamically via the atom-pack runtime
@@ -66,6 +63,11 @@
       "bun": { "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"] }
     },
     "packages/config": {},
+    // Spawned by credential-materializer.ts through its runtime-resolved file path.
+    "packages/sandbox": {
+      "entry": ["src/credential-regex-worker.ts"],
+      "bun": { "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"] }
+    },
     "packages/ui": {},
     "packages/monad-power-pack": {
       "bun": { "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"] }

@@ -40,6 +40,17 @@ test('rejects an empty rendered prompt', async () => {
   expect(() => prompt.render({ enabled: false })).toThrow('rendered empty output');
 });
 
+test('allows an explicitly optional prompt to render empty output', async () => {
+  const sourcePath = await promptFile('<% if (it.enabled) { %>enabled<% } %>');
+  const prompt = await definePrompt<{ enabled: boolean }>({
+    id: 'test.optional-empty-render',
+    sourcePath,
+    allowEmpty: true
+  });
+
+  expect(prompt.render({ enabled: false })).toBe('');
+});
+
 test('rejects legacy mustache slots', async () => {
   const sourcePath = await promptFile('Hello {{NAME}}');
 

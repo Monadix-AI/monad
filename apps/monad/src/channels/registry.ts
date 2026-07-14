@@ -7,8 +7,8 @@ import type {
 import type {
   ChannelAdapterFactory,
   Connector,
-  ExternalAgentProviderAdapter,
   ExperienceWorker,
+  ExternalAgentProviderAdapter,
   HookDefinition,
   ManifestAtomPack,
   ModelProvider,

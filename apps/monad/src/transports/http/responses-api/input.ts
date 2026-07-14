@@ -19,7 +19,7 @@ const AMBIENT_CONTEXT_PROMPT = await definePrompt<{
   jsonOnly: boolean;
   maxOutputTokens?: number;
   temperature?: number;
-}>({ id: 'responses-api.ambient-context', sourcePath: ambientContextPath });
+}>({ id: 'responses-api.ambient-context', sourcePath: ambientContextPath, allowEmpty: true });
 
 export function extractInputText(input: string | ResponseInput): string {
   if (typeof input === 'string') return input;

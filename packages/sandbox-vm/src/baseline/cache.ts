@@ -21,7 +21,7 @@ export interface BaselineManifestInput {
   bootEpoch: string;
 }
 
-export interface BaselineArtifactFile {
+interface BaselineArtifactFile {
   name: string;
   byteSize: number;
   digest: string;

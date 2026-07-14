@@ -24,7 +24,8 @@ test('context panel preserves every existing agent setting group', async () => {
     'Maximum thinking tokens',
     'Maximum budget',
     'Other Monad agents',
-    'Public API',
+    'Published to Monadix',
+    'Use Monadix',
     'A2A'
   ]) {
     expect(source).toContain(label);

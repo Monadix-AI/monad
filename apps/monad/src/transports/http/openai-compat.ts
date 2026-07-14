@@ -168,7 +168,7 @@ const OPENAI_COMPAT_AMBIENT_CONTEXT_PROMPT = await definePrompt<{
   maxTokens?: number;
   stops: string[];
   temperature?: number;
-}>({ id: 'openai-compat.ambient-context', sourcePath: openAiCompatAmbientContextPath });
+}>({ id: 'openai-compat.ambient-context', sourcePath: openAiCompatAmbientContextPath, allowEmpty: true });
 
 function buildAmbientContext(body: ChatCompletionCreateParamsBase): string | undefined {
   const stops = body.stop ? (Array.isArray(body.stop) ? body.stop : [body.stop]).filter(Boolean) : [];

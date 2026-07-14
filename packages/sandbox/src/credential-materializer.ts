@@ -9,7 +9,7 @@ export const MAX_MATERIALIZED_BYTES = 2 * 1024 * 1024;
 export const MAX_CREDENTIAL_CAPTURES = 128;
 export const MAX_JWT_SEGMENT_BYTES = 64 * 1024;
 export const MAX_JWT_NESTING = 16;
-export const REGEX_DEADLINE_MS = 250;
+export const REGEX_DEADLINE_MS = 500;
 
 export interface CredentialTransform {
   extract?: string;
