@@ -321,7 +321,50 @@ export type AtomPackManifest = AtomPackManifestWire;
 
 export type AtomPackLog = (level: 'info' | 'warn' | 'error', msg: string, fields?: Record<string, unknown>) => void;
 
-export type WorkspaceExperienceApiHandler = (request: Request) => Response | Promise<Response>;
+/** Opaque, pack-private state exposed to a workspace experience API or worker.
+ * The host enforces namespace ownership and access control; pack code owns the
+ * shape and lifecycle of every stored value. */
+export interface ExperienceStateStore {
+  get<T>(key: string): Promise<{ value: T; version: number } | null>;
+  list<T>(prefix: string): Promise<Array<{ key: string; value: T; version: number }>>;
+  compareAndSwap<T>(input: { key: string; expectedVersion: number | null; value: T; event: unknown }): Promise<boolean>;
+}
+
+/** Generic project-session operations available to a workspace experience.
+ * These deliberately contain no product-specific task or proposal concepts. */
+export interface ProjectSessionOperations {
+  list(projectId: string): Promise<Array<{ id: string; title: string; state: string }>>;
+  create(projectId: string, input: { title: string; cwd?: string }): Promise<{ id: string }>;
+  open(sessionId: string): Promise<void>;
+  sendDirective(sessionId: string, input: { text: string }): Promise<void>;
+  pause(sessionId: string): Promise<void>;
+  cancel(sessionId: string): Promise<void>;
+  listPendingApprovals(
+    projectId: string,
+    sessionId?: string
+  ): Promise<Array<{ id: string; sessionId: string; summary: string }>>;
+}
+
+export interface ProjectEventSubscription {
+  subscribe(
+    projectId: string,
+    listener: (event: { type: string; payload: Record<string, unknown> }) => void
+  ): () => void;
+}
+
+/** Authenticated, pack-scoped host capabilities passed only at an Experience API/worker boundary. */
+export interface WorkspaceExperienceApiContext {
+  atomPackId: string;
+  principalId: string;
+  experienceState: ExperienceStateStore;
+  projectSessions: ProjectSessionOperations;
+  projectEvents: ProjectEventSubscription;
+}
+
+export type WorkspaceExperienceApiHandler = (
+  request: Request,
+  context: WorkspaceExperienceApiContext
+) => Response | Promise<Response>;
 
 export interface WorkspaceExperienceApiRoute {
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';

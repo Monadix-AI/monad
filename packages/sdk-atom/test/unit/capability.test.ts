@@ -6,6 +6,7 @@ import type {
   ManifestAtomPack,
   ManifestAtomPackHost,
   WorkspaceExperienceApi,
+  WorkspaceExperienceApiContext,
   WorkspaceExperienceDefinition
 } from '../../src/index.ts';
 
@@ -73,10 +74,35 @@ const dummyWorkspaceExperienceApi: WorkspaceExperienceApi = {
     {
       method: 'POST',
       path: '/search',
-      handle: async () => Response.json({ ok: true })
+      handle: async (_request: Request, context: WorkspaceExperienceApiContext) =>
+        Response.json({ ok: true, pack: context.atomPackId })
     }
   ]
 };
+
+test('workspace experience API handlers receive generic, pack-scoped context', async () => {
+  const response = await dummyWorkspaceExperienceApi.routes[0]?.handle(new Request('https://example.test/search'), {
+    atomPackId: 'pack-a',
+    principalId: 'prn_a',
+    experienceState: {
+      get: async () => null,
+      list: async () => [],
+      compareAndSwap: async () => true
+    },
+    projectSessions: {
+      list: async () => [],
+      create: async () => ({ id: 'ses_a' }),
+      open: async () => {},
+      sendDirective: async () => {},
+      pause: async () => {},
+      cancel: async () => {},
+      listPendingApprovals: async () => []
+    },
+    projectEvents: { subscribe: () => () => {} }
+  });
+
+  expect(await response.json()).toEqual({ ok: true, pack: 'pack-a' });
+});
 const dummyChannelAtom = defineChannel({
   type: 'echo',
   name: 'Echo',
