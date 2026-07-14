@@ -2,19 +2,16 @@
 
 import { Database } from 'bun:sqlite';
 import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { drizzle } from 'drizzle-orm/bun-sqlite';
 
 import { createStore } from '#/store/db/index.ts';
-import { CURRENT_SCHEMA_VERSION, migrate } from '#/store/db/migrations.ts';
+import { migrate } from '#/store/db/migrations.ts';
 
 // ── Migration ─────────────────────────────────────────────────────────────────
 
-test('migrate() creates acp_delegates table at v1', () => {
+test('migrate() creates acp_delegates through the Drizzle runtime migrator', () => {
   const db = new Database(':memory:');
-  migrate(db);
-
-  expect((db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(
-    CURRENT_SCHEMA_VERSION
-  );
+  migrate(drizzle(db));
 
   const cols = (db.prepare('PRAGMA table_info(acp_delegates)').all() as { name: string }[]).map((c) => c.name);
   for (const col of [
@@ -36,16 +33,13 @@ test('migrate() creates acp_delegates table at v1', () => {
 
 test('migrate() is idempotent — running again is a no-op', () => {
   const db = new Database(':memory:');
-  migrate(db);
+  migrate(drizzle(db));
   // Insert a row to verify re-running doesn't corrupt data
   db.exec(
     `INSERT INTO acp_delegates (id, session_id, agent_name, acp_session_id, pid, spawned_at, last_used_at)
        VALUES ('k1', 'ses_x00000000000', 'a', 'acp-1', 1, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')`
   );
-  migrate(db);
-  expect((db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(
-    CURRENT_SCHEMA_VERSION
-  );
+  migrate(drizzle(db));
   expect((db.prepare('SELECT COUNT(*) AS n FROM acp_delegates').get() as { n: number }).n).toBe(1);
 });
 
