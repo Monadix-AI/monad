@@ -46,6 +46,7 @@ import { toGuestPath, translateArgvPaths } from './winpath.ts';
 // once and cached as base64.
 const AGENT_ARCH = process.arch === 'x64' ? 'amd64' : 'arm64';
 const AGENT_PATH = join(dirname(import.meta.dir), 'vendor', `vsock-agent-${AGENT_ARCH}`);
+const OBSERVER_PATH = join(dirname(import.meta.dir), 'vendor', `seccomp-observer-${AGENT_ARCH}`);
 const GVFORWARDER_PATH = join(dirname(import.meta.dir), 'vendor', `gvforwarder-${AGENT_ARCH}`);
 const VSOCK_EXEC_PORT = HVSOCK_PORTS.exec; // 1024 on every platform — the agent's listen port
 let agentArtifact: { b64: string; digest: string } | null = null;
@@ -58,6 +59,17 @@ async function guestAgentArtifact(): Promise<{ b64: string; digest: string }> {
     };
   }
   return agentArtifact;
+}
+let observerArtifact: { b64: string; digest: string } | null = null;
+async function guestObserverArtifact(): Promise<{ b64: string; digest: string }> {
+  if (observerArtifact === null) {
+    const bytes = await Bun.file(OBSERVER_PATH).bytes();
+    observerArtifact = {
+      b64: Buffer.from(bytes).toString('base64'),
+      digest: new Bun.CryptoHasher('sha256').update(bytes).digest('hex')
+    };
+  }
+  return observerArtifact;
 }
 let gvforwarderB64Cache: string | null = null;
 async function gvforwarderBinaryB64(): Promise<string> {
@@ -171,7 +183,8 @@ async function bootVm(
   policy: SandboxPolicy,
   image: BaseImageArtifact,
   shape: VmShapeConfig,
-  mountPlan: VmMountPlan
+  mountPlan: VmMountPlan,
+  guestArtifacts: { agent: { b64: string }; observer: { b64: string } }
 ): Promise<RunningVm> {
   const tx = new BootTransaction();
   let gvproxy: GvproxyProcess | undefined;
@@ -187,7 +200,8 @@ async function bootVm(
     // Ignition: inject the vsock exec agent, mounts, and firewall. Windows additionally uses the
     // guest agent for 9p-over-hvsock mounts and gvforwarder for its tap-to-vsock network plane.
     const ignition = serializeIgnition({
-      agentBinaryB64: (await guestAgentArtifact()).b64,
+      agentBinaryB64: guestArtifacts.agent.b64,
+      observerBinaryB64: guestArtifacts.observer.b64,
       mounts,
       overlays: mountPlan.overlays,
       egress,
@@ -351,9 +365,10 @@ export const vmLauncher: SandboxLauncher = {
     // async acquire + vsock exec. The policy is captured in the boot thunk (no module-level side table).
     return bridgeAsyncProcess(
       async () => {
-        const [image, agent, rawMountPlan] = await Promise.all([
+        const [image, agent, observer, rawMountPlan] = await Promise.all([
           ensureBaseImageOnce(),
           guestAgentArtifact(),
+          guestObserverArtifact(),
           buildVmMountPlan(policy)
         ]);
         const mountPlan = {
@@ -368,6 +383,7 @@ export const vmLauncher: SandboxLauncher = {
           memoryMiB: shape.memoryMiB,
           mountPlanDigest: fingerprintVmMountPlan(mountPlan),
           mountPlanSchemaVersion: MOUNT_PLAN_SCHEMA_VERSION,
+          observerDigest: observer.digest,
           protocolVersion: VSOCK_PROTOCOL_VERSION,
           runIsolation: { memoryMiB: 1024, maxProcesses: 256, terminateGraceMs: 5000 },
           vsockPort: VSOCK_EXEC_PORT
@@ -375,7 +391,7 @@ export const vmLauncher: SandboxLauncher = {
         const key = vmKey(scope, options.sessionId, options.agentId, identity);
         acquiredKey = key;
         const vm = await activePool.acquire(key, reuse, options.agentId, () =>
-          bootVm(key, policy, image, shape, mountPlan)
+          bootVm(key, policy, image, shape, mountPlan, { agent, observer })
         );
         const egress = egressFor(policy);
         // On Windows, host paths (C:\…) must become their /mnt/<drive>/… guest mounts — for the cwd

@@ -13,14 +13,24 @@ test('systemdEscapePath escapes hyphens the way systemd does (name must round-tr
 type IgnFile = { path: string; contents?: { source: string } };
 
 test('the monad guest user has NO wheel group (no passwordless sudo → cannot disable the firewall)', () => {
-  const cfg = buildIgnition({ agentBinaryB64: 'QQ==', mounts: [], egress: { mode: 'none' } });
+  const cfg = buildIgnition({
+    agentBinaryB64: 'QQ==',
+    observerBinaryB64: 'QQ==',
+    mounts: [],
+    egress: { mode: 'none' }
+  });
   const user = cfg.passwd.users[0];
   expect(user?.name).toBe('monad');
   expect(user?.groups).toBeUndefined();
 });
 
 test('the exec agent unit is gated on the firewall (workload never runs before egress rules apply)', () => {
-  const cfg = buildIgnition({ agentBinaryB64: 'QQ==', mounts: [], egress: { mode: 'filtered', proxyPort: 8080 } });
+  const cfg = buildIgnition({
+    agentBinaryB64: 'QQ==',
+    observerBinaryB64: 'QQ==',
+    mounts: [],
+    egress: { mode: 'filtered', proxyPort: 8080 }
+  });
   const fw = cfg.systemd.units.find((u) => u.name === 'monad-firewall.service');
   expect(fw?.contents).toContain('Before=network-pre.target network.target monad-vsock-agent.service');
   const agent = cfg.systemd.units.find((u) => u.name === 'monad-vsock-agent.service');
@@ -37,6 +47,7 @@ function decodeDataUri(uri: string): string {
 test('ignition creates the unprivileged monad user and injects the vsock agent binary', () => {
   const cfg = buildIgnition({
     agentBinaryB64: 'QUJD',
+    observerBinaryB64: 'REVG',
     mounts: [],
     egress: { mode: 'unrestricted' }
   });
@@ -49,11 +60,17 @@ test('ignition creates the unprivileged monad user and injects the vsock agent b
     | undefined;
   expect(agent?.contents?.source).toBe('data:;base64,QUJD');
   expect(agent?.mode).toBe(0o755);
+  const observer = cfg.storage.files.find((f) => (f as IgnFile).path === '/usr/local/bin/monad-seccomp-observer') as
+    | (IgnFile & { mode?: number })
+    | undefined;
+  expect(observer?.contents?.source).toBe('data:;base64,REVG');
+  expect(observer?.mode).toBe(0o755);
 });
 
 test('the firewall file carries the egress nftables ruleset', () => {
   const cfg = buildIgnition({
     agentBinaryB64: 'QQ==',
+    observerBinaryB64: 'QQ==',
     mounts: [],
     egress: { mode: 'filtered', proxyPort: 8080 }
   });
@@ -67,6 +84,7 @@ test('the firewall file carries the egress nftables ruleset', () => {
 test('each mount becomes a virtiofs .mount unit ordered before the firewall', () => {
   const cfg = buildIgnition({
     agentBinaryB64: 'QQ==',
+    observerBinaryB64: 'QQ==',
     mounts: [{ tag: 'w0', hostPath: '/Users/x/ws', guestPath: '/Users/x/ws', readOnly: false }],
     egress: { mode: 'none' }
   });
@@ -80,6 +98,7 @@ test('each mount becomes a virtiofs .mount unit ordered before the firewall', ()
 test('overlay policy runs after every base mount and before the firewall', () => {
   const cfg = buildIgnition({
     agentBinaryB64: 'QQ==',
+    observerBinaryB64: 'QQ==',
     mounts: [
       { tag: 'w0', hostPath: '/work', guestPath: '/work', readOnly: false },
       { tag: 'm0', hostPath: '/tmp/masks', guestPath: '/run/monad/masks/0', readOnly: true }
@@ -124,6 +143,7 @@ const WIN_MOUNT = {
 test('9p-vsock transport emits mount9p oneshot units ordered before the firewall', () => {
   const cfg = buildIgnition({
     agentBinaryB64: 'QQ==',
+    observerBinaryB64: 'QQ==',
     mounts: [WIN_MOUNT, { ...WIN_MOUNT, tag: 'r0', vsockPort: 1027, readOnly: true }],
     egress: { mode: 'none' },
     mountTransport: '9p-vsock'
@@ -145,6 +165,7 @@ test('9p-vsock transport emits mount9p oneshot units ordered before the firewall
 test('mount9p quotes the guest path so a space cannot truncate -target or drop -ro', () => {
   const cfg = buildIgnition({
     agentBinaryB64: 'QQ==',
+    observerBinaryB64: 'QQ==',
     mounts: [
       {
         tag: 'r0',
@@ -166,6 +187,7 @@ test('a 9p mount without port/guestPath fails closed (never boot a VM missing a 
   expect(() =>
     buildIgnition({
       agentBinaryB64: 'QQ==',
+      observerBinaryB64: 'QQ==',
       mounts: [{ tag: 'w0', hostPath: 'C:\\proj', guestPath: '/mnt/c/proj', readOnly: false }],
       egress: { mode: 'none' },
       mountTransport: '9p-vsock'
@@ -176,6 +198,7 @@ test('a 9p mount without port/guestPath fails closed (never boot a VM missing a 
 test('gvforwarder plane: binary + 0600 NM keyfile + tap unit dialing the net vsock port', () => {
   const cfg = buildIgnition({
     agentBinaryB64: 'QQ==',
+    observerBinaryB64: 'QQ==',
     mounts: [],
     egress: { mode: 'filtered', proxyPort: 8080 },
     mountTransport: '9p-vsock',
@@ -196,6 +219,7 @@ test('gvforwarder plane: binary + 0600 NM keyfile + tap unit dialing the net vso
 test('net:none on Windows has NO gvforwarder plane at all (vsock exec/9p need no NIC)', () => {
   const cfg = buildIgnition({
     agentBinaryB64: 'QQ==',
+    observerBinaryB64: 'QQ==',
     mounts: [],
     egress: { mode: 'none' },
     mountTransport: '9p-vsock'

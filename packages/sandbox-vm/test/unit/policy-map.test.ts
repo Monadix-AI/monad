@@ -35,7 +35,12 @@ test('a read-deny outside every share remains absent without an overlay', async 
 });
 
 test('net:none produces a drop-all firewall', () => {
-  const cfg = buildIgnition({ agentBinaryB64: 'QQ==', mounts: [], egress: { mode: 'none' } });
+  const cfg = buildIgnition({
+    agentBinaryB64: 'QQ==',
+    observerBinaryB64: 'QQ==',
+    mounts: [],
+    egress: { mode: 'none' }
+  });
   const nft = cfg.storage.files.find((f) => (f as { path?: string }).path === '/etc/monad/nftables.conf') as
     | { contents: { source: string } }
     | undefined;

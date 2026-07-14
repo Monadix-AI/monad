@@ -34,6 +34,7 @@ export interface EffectiveVmIdentityInputs {
   memoryMiB: number;
   mountPlanDigest: string;
   mountPlanSchemaVersion: number;
+  observerDigest: string;
   protocolVersion: number;
   runIsolation: {
     memoryMiB: number;

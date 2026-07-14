@@ -12,6 +12,7 @@ const artifacts = {
   memoryMiB: 2048,
   mountPlanDigest: 'mount-plan-a',
   mountPlanSchemaVersion: 1,
+  observerDigest: 'observer-a',
   protocolVersion: 2,
   runIsolation: { memoryMiB: 1024, maxProcesses: 256, terminateGraceMs: 5000 },
   vsockPort: 1024
@@ -50,12 +51,15 @@ test.each([
   expect(policyFingerprint(identity(a))).not.toBe(policyFingerprint(identity(b)));
 });
 
-test('agent and image digests change the VM fingerprint', () => {
+test('guest artifact digests change the VM fingerprint', () => {
   expect(policyFingerprint(identity({}, { agentDigest: 'a' }))).not.toBe(
     policyFingerprint(identity({}, { agentDigest: 'b' }))
   );
   expect(policyFingerprint(identity({}, { baseImageDigest: 'a' }))).not.toBe(
     policyFingerprint(identity({}, { baseImageDigest: 'b' }))
+  );
+  expect(policyFingerprint(identity({}, { observerDigest: 'a' }))).not.toBe(
+    policyFingerprint(identity({}, { observerDigest: 'b' }))
   );
 });
 

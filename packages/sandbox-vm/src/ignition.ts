@@ -20,6 +20,8 @@ export type MountSpec = SharedMount;
 export interface IgnitionSpec {
   /** The guest vsock exec agent binary (Linux aarch64), base64-encoded for the Ignition storage file. */
   agentBinaryB64: string;
+  /** Passive seccomp USER_NOTIF launch helper for the guest architecture. */
+  observerBinaryB64: string;
   mounts: MountSpec[];
   overlays?: MountOverlay[];
   egress: GuestEgressRules;
@@ -268,6 +270,11 @@ export function buildIgnition(spec: IgnitionSpec): IgnitionConfig {
       path: '/usr/local/bin/monad-vsock-agent',
       mode: 0o755,
       contents: { source: `data:;base64,${spec.agentBinaryB64}` }
+    },
+    {
+      path: '/usr/local/bin/monad-seccomp-observer',
+      mode: 0o755,
+      contents: { source: `data:;base64,${spec.observerBinaryB64}` }
     }
   ];
 
