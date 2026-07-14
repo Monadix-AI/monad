@@ -36,6 +36,18 @@ export const atomKindSchema = z.enum([
 ]);
 export type AtomKind = z.infer<typeof atomKindSchema>;
 
+export const workspaceExperiencePermissionSchema = z.enum([
+  'experience.state',
+  'experience.worker',
+  'project.sessions.read',
+  'project.sessions.create',
+  'project.sessions.send',
+  'project.observations.read',
+  'project.approvals.read',
+  'project.approvals.resolve'
+]);
+export type WorkspaceExperiencePermission = z.infer<typeof workspaceExperiencePermissionSchema>;
+
 export const atomPackManifestSchema = z.object({
   name: z
     .string()
@@ -46,6 +58,7 @@ export const atomPackManifestSchema = z.object({
   /** Semver range of supported Monad host versions, e.g. ">=0.1.0 <0.2.0". Absent means no host-version gate. */
   monadVersion: z.string().min(1).optional(),
   atoms: z.array(atomKindSchema),
+  permissions: z.array(workspaceExperiencePermissionSchema).optional(),
   entry: safeEntrySchema.optional(),
   source: z.object({ repo: z.string(), commit: z.string() }).optional(),
   integrity: z.string().optional(), // "sha256-…"

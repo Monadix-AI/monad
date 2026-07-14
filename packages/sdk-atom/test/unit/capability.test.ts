@@ -11,6 +11,7 @@ import type {
 } from '../../src/index.ts';
 
 import { expect, test } from 'bun:test';
+import { parseAtomPackManifest } from '@monad/protocol';
 import {
   bindWorkspaceExperience,
   defineWorkspaceExperience,
@@ -20,6 +21,18 @@ import {
 import { defineAtomPack, defineChannel, loadManifestAtomPack, UndeclaredAtomError } from '../../src/index.ts';
 
 const SDK_VERSION = '0';
+
+test('workspace Experience permissions are generic and parsed from the manifest', () => {
+  const parsed = parseAtomPackManifest({
+    name: 'board',
+    version: '1.0.0',
+    sdkVersion: SDK_VERSION,
+    atoms: ['workspace-experience'],
+    permissions: ['experience.state', 'project.sessions.read']
+  });
+
+  expect(parsed.permissions).toEqual(['experience.state', 'project.sessions.read']);
+});
 
 function manifest(over: Partial<AtomPackManifest>): AtomPackManifest {
   return { name: 'p', version: '1.0.0', sdkVersion: SDK_VERSION, atoms: [], ...over };
@@ -81,7 +94,7 @@ const dummyWorkspaceExperienceApi: WorkspaceExperienceApi = {
 };
 
 test('workspace experience API handlers receive generic, pack-scoped context', async () => {
-  const response = await dummyWorkspaceExperienceApi.routes[0]?.handle(new Request('https://example.test/search'), {
+  const response = await dummyWorkspaceExperienceApi.routes[0]!.handle(new Request('https://example.test/search'), {
     atomPackId: 'pack-a',
     principalId: 'prn_a',
     experienceState: {
@@ -92,13 +105,19 @@ test('workspace experience API handlers receive generic, pack-scoped context', a
     projectSessions: {
       list: async () => [],
       create: async () => ({ id: 'ses_a' }),
-      open: async () => {},
-      sendDirective: async () => {},
+      sendMessage: async () => {},
+      listMessages: async () => ({ items: [], nextCursor: null }),
+      listObservations: async () => ({ items: [], nextCursor: null }),
+      runTurn: async () => ({ runId: 'run_a' }),
       pause: async () => {},
       cancel: async () => {},
-      listPendingApprovals: async () => []
+      listPendingApprovals: async () => [],
+      resolveApproval: async () => {}
     },
-    projectEvents: { subscribe: () => () => {} }
+    workerScheduler: {
+      schedule: async () => {},
+      cancel: async () => {}
+    }
   });
 
   expect(await response.json()).toEqual({ ok: true, pack: 'pack-a' });

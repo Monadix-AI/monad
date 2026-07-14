@@ -28,6 +28,7 @@ import type {
   ModelPrice,
   ModelProviderDescriptor,
   Scope,
+  WorkspaceExperiencePermission,
   WorkspaceExperienceDefinition,
   WorkspaceExperienceEntry,
   WorkspaceExperienceHostApi
@@ -325,31 +326,69 @@ export type AtomPackLog = (level: 'info' | 'warn' | 'error', msg: string, fields
  * The host enforces namespace ownership and access control; pack code owns the
  * shape and lifecycle of every stored value. */
 export interface ExperienceStateStore {
-  get<T>(key: string): Promise<{ value: T; version: number } | null>;
-  list<T>(prefix: string): Promise<Array<{ key: string; value: T; version: number }>>;
-  compareAndSwap<T>(input: { key: string; expectedVersion: number | null; value: T; event: unknown }): Promise<boolean>;
+  get<T>(projectId: string, key: string): Promise<{ value: T; version: number } | null>;
+  list<T>(projectId: string, prefix: string): Promise<Array<{ key: string; value: T; version: number }>>;
+  compareAndSwap<T>(input: {
+    projectId: string;
+    key: string;
+    expectedVersion: number | null;
+    value: T;
+    event: unknown;
+  }): Promise<boolean>;
 }
 
 /** Generic project-session operations available to a workspace experience.
  * These deliberately contain no product-specific task or proposal concepts. */
 export interface ProjectSessionOperations {
   list(projectId: string): Promise<Array<{ id: string; title: string; state: string }>>;
-  create(projectId: string, input: { title: string; cwd?: string }): Promise<{ id: string }>;
-  open(sessionId: string): Promise<void>;
-  sendDirective(sessionId: string, input: { text: string }): Promise<void>;
+  create(projectId: string, input: { title: string; cwd?: string; idempotencyKey: string }): Promise<{ id: string }>;
+  sendMessage(sessionId: string, input: { text: string; idempotencyKey: string }): Promise<void>;
+  listMessages(
+    sessionId: string,
+    cursor?: string
+  ): Promise<{
+    items: Array<{ id: string; role: string; text: string; createdAt: string }>;
+    nextCursor: string | null;
+  }>;
+  listObservations(
+    sessionId: string,
+    cursor?: string
+  ): Promise<{
+    items: Array<{ id: string; kind: string; text: string; createdAt: string }>;
+    nextCursor: string | null;
+  }>;
+  runTurn(sessionId: string, input: { text: string; idempotencyKey: string }): Promise<{ runId: string }>;
   pause(sessionId: string): Promise<void>;
   cancel(sessionId: string): Promise<void>;
   listPendingApprovals(
     projectId: string,
     sessionId?: string
   ): Promise<Array<{ id: string; sessionId: string; summary: string }>>;
+  resolveApproval(approvalId: string, decision: 'approved' | 'denied'): Promise<void>;
 }
 
-export interface ProjectEventSubscription {
-  subscribe(
-    projectId: string,
-    listener: (event: { type: string; payload: Record<string, unknown> }) => void
-  ): () => void;
+export interface ProjectExperienceEvent {
+  id: string;
+  projectId: string;
+  sessionId: string;
+  type: string;
+  payload: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface ExperienceWorkerScheduler {
+  schedule(projectId: string, input: { key: string; runAt: string }): Promise<void>;
+  cancel(projectId: string, key: string): Promise<void>;
+}
+
+export interface ExperienceWorker {
+  experienceId: string;
+  onProjectStart(projectId: string, context: WorkspaceExperienceApiContext): Promise<void>;
+  onEvent(event: ProjectExperienceEvent, context: WorkspaceExperienceApiContext): Promise<void>;
+  onWake(
+    input: { projectId: string; key: string; now: string },
+    context: WorkspaceExperienceApiContext
+  ): Promise<void>;
 }
 
 /** Authenticated, pack-scoped host capabilities passed only at an Experience API/worker boundary. */
@@ -358,8 +397,10 @@ export interface WorkspaceExperienceApiContext {
   principalId: string;
   experienceState: ExperienceStateStore;
   projectSessions: ProjectSessionOperations;
-  projectEvents: ProjectEventSubscription;
+  workerScheduler: ExperienceWorkerScheduler;
 }
+
+export type { WorkspaceExperiencePermission };
 
 export type WorkspaceExperienceApiHandler = (
   request: Request,
