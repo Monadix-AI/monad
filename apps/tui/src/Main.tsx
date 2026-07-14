@@ -2,6 +2,8 @@
 
 // Exported as startTui() so the unified binary (apps/cli/src/bin.ts) can dispatch into it.
 
+import type { TerminalCapabilities } from './input/types.ts';
+
 import { checkDaemonVersion } from '@monad/client';
 import { createMonadTreatyClient } from '@monad/client-rtk';
 import { resolveClientConn } from '@monad/home';
@@ -9,18 +11,18 @@ import { render } from 'ink';
 import { Provider } from 'react-redux';
 
 import { App } from './App.tsx';
+import { TerminalInputBridge, TerminalLifecycle } from './input/terminal-input.ts';
 import { initTuiI18n, t } from './lib/i18n.ts';
 import { createAppStore } from './store/index.ts';
 
-const ENTER_FULLSCREEN = '\u001B[?1049h\u001B[2J\u001B[H\u001B[?25l';
-const EXIT_FULLSCREEN = '\u001B[?25h\u001B[?1049l';
-
-function enableFullscreenTui() {
-  process.stdout.write(ENTER_FULLSCREEN);
-}
-
-function disableFullscreenTui() {
-  process.stdout.write(EXIT_FULLSCREEN);
+function terminalCapabilities(): TerminalCapabilities {
+  return {
+    colorDepth: process.stdout.getColorDepth(),
+    columns: process.stdout.columns,
+    kittyKeyboard: process.stdin.isTTY,
+    rows: process.stdout.rows,
+    sgrMouse: process.stdin.isTTY
+  };
 }
 
 export async function startTui(): Promise<void> {
@@ -30,8 +32,6 @@ export async function startTui(): Promise<void> {
     process.stderr.write(`${t('cli.tui.requiresTty')}\n`);
     process.exit(1);
   }
-
-  enableFullscreenTui();
 
   const { baseUrl, token } = await resolveClientConn();
 
@@ -53,18 +53,52 @@ export async function startTui(): Promise<void> {
   }
 
   const store = createAppStore(client);
+  const terminal = terminalCapabilities();
+  const input = new TerminalInputBridge(process.stdin);
+  const lifecycle = new TerminalLifecycle(input, (value) => process.stdout.write(value));
+  let unmount: (() => void) | undefined;
+  let userRequestedExit = false;
+  const stopForSignal = (signal: NodeJS.Signals) => {
+    process.exitCode = signal === 'SIGINT' ? 130 : signal === 'SIGHUP' ? 129 : 143;
+    unmount?.();
+    lifecycle.restore();
+  };
+  const onSigint = () => stopForSignal('SIGINT');
+  const onSigterm = () => stopForSignal('SIGTERM');
+  const onSighup = () => stopForSignal('SIGHUP');
+  process.once('SIGINT', onSigint);
+  process.once('SIGTERM', onSigterm);
+  process.once('SIGHUP', onSighup);
 
   try {
-    const { waitUntilExit } = render(
+    if (terminal.sgrMouse) lifecycle.start();
+    const app = render(
       <Provider store={store}>
-        <App client={client} />
-      </Provider>
+        <App
+          baseUrl={baseUrl}
+          client={client}
+          input={input}
+          onExitRequested={() => {
+            userRequestedExit = true;
+          }}
+        />
+      </Provider>,
+      {
+        alternateScreen: true,
+        exitOnCtrlC: false,
+        kittyKeyboard: { mode: 'auto' },
+        stdin: input as unknown as NodeJS.ReadStream
+      }
     );
-
-    await waitUntilExit();
+    unmount = app.unmount;
+    await app.waitUntilExit();
   } finally {
-    disableFullscreenTui();
+    process.off('SIGINT', onSigint);
+    process.off('SIGTERM', onSigterm);
+    process.off('SIGHUP', onSighup);
+    lifecycle.restore();
   }
+  if (userRequestedExit) process.exit(0);
 }
 
 if (import.meta.main) {

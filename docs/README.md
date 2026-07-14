@@ -30,6 +30,7 @@ How to use monad's features as an operator or end user.
 | [usage/model-providers.md](usage/model-providers.md) | Connecting a model provider: first-run wizard, web settings, CLI, credentials, and provider-specific notes. |
 | [usage/channels.md](usage/channels.md) | Connecting IM channels (Telegram walkthrough): access control, pairing, group rules, and in-chat commands. |
 | [usage/mcp.md](usage/mcp.md) | Adding MCP servers: stdio and http transports, secrets, OAuth, trust controls, and troubleshooting. |
+| [usage/tui.md](usage/tui.md) | TUI scope, responsive layouts, keyboard/mouse controls, and Web UI degradation rules. |
 | [usage/skills.md](usage/skills.md) | The skills system (`SKILL.md` / agentskills.io standard): using, writing, gating, and managing skills. |
 | [usage/computer-use.md](usage/computer-use.md) | Computer use and browser use through off-the-shelf MCP servers, and when to pick which. |
 | [usage/mo.md](usage/mo.md) | Mo, the desktop sprite: drop a file on the floating pixel cat to start a session. |

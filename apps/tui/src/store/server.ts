@@ -72,6 +72,12 @@ export const serverSlice = createSlice({
         toolCalls: [],
         at: new Date().toISOString()
       });
+      state.isStreaming = true;
+    },
+    finishTurn(state) {
+      state.streaming = '';
+      state.isStreaming = false;
+      state.pendingTools = [];
     },
     appendToken(state, action: PayloadAction<string>) {
       state.streaming += action.payload;
@@ -110,5 +116,4 @@ export const serverSlice = createSlice({
   }
 });
 
-export const { setSessions, upsertSession, switchSession, addUserMessage, appendToken, commitMessage } =
-  serverSlice.actions;
+export const { switchSession, addUserMessage, finishTurn, appendToken, commitMessage } = serverSlice.actions;
