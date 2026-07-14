@@ -320,7 +320,8 @@ my-atom-pack/
             └── lint.sh       ← optional scripts referenced in SKILL.md
 ```
 
-`SKILL.md` follows the standard skill format (YAML frontmatter + markdown body). After install
+`SKILL.md` follows the standard skill format (YAML frontmatter + markdown body — see
+[skills](../usage/skills.md) for the full format and invocation model). After install
 the agent can load the skill by name. User-managed skills live in `~/.monad/skills/` with the
 same layout and take precedence.
 

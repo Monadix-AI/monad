@@ -3,6 +3,9 @@
 This document tracks end-to-end manual coverage for every built-in model provider type in
 `ModelProviderType` / `KNOWN_PROVIDER_TYPES` (`packages/protocol/src/control.ts`).
 
+This is a living status tracker: if you verify a provider end-to-end (setup, credential
+validation, model listing, profile selection, invocation), please update the table below.
+
 ## Status definitions
 
 | Status | Meaning |

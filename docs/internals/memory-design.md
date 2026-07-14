@@ -1,26 +1,20 @@
 # Monad Memory System — Design
 
-> Status: **L1 built & on main; reworked into "design A"** — §0 ("As built") is authoritative for
-> what ships. **L2/L3 remain design-only.** The L1 implementation deliberately diverges from several
-> decisions below (notably: pure Markdown, *not* the SQLite event log of §3.2/§13.1; a single agent-
-> driven `memory` tool, *not* per-turn extraction; OTR §2.3 **removed**; static `USER.md` core +
-> dynamic facts via tool). §1–§13 keep the original design + rationale; **read §0 first for reality.**
-> Spans (post-refactor): `apps/monad/src/agent/memory` (L1Adapter contract + sanitize/render),
-> `apps/monad/src/store/db` MemoryDir, `apps/monad/src/services/memory` (orchestration + the tool + mem0).
+> Status: **L1 is implemented; L2/L3 are design-only.** §0 ("As built") describes what actually
+> ships and is the authoritative reference — the implementation deliberately diverges from parts
+> of the original design in §1–§13, and where they disagree, §0 wins. Read §0 first.
 > Scope of this doc: the layered, scope-isolated memory subsystem the agent loop
-> reads from (prefetch) and writes to (observe / consolidate / infer).
-> Rev: multiple design-review rounds (D13–D28). OTR = session-scoped L1 only, never promoted,
-> never derived (OTR ⟂ everything); L2/L3 are UI-observable background jobs (forward jobs run
-> whenever Advanced ≠ off; backfill only while `backfilling`); tombstone propagates by `factId`;
-> L3 writes only laws (promotion via a separate job); mem0 is recall-only L1 (lacks the
-> eventLog/tombstone/otrIsolation/drainByCursor capabilities). §13 pins the build contracts.
+> reads from (prefetch) and writes to (observe / consolidate / infer). Code lives in
+> `apps/monad/src/agent/memory` (L1Adapter contract + sanitize/render),
+> `apps/monad/src/store/db` (MemoryDir), and `apps/monad/src/services/memory`
+> (orchestration + the `memory` tool + mem0).
 
 ---
 
 ## 0. As built (L1) — authoritative
 
-L1 shipped to main, then was reworked into **"design A"** (Claude Code model) on
-`feat/memory-design-a`. What actually runs, and where it **deliberately diverges** from §1–§13:
+The shipped L1 follows **"design A"** (Claude Code model), a rework of the original design.
+What actually runs, and where it **deliberately diverges** from §1–§13:
 
 ### 0.1 Two layers by dynamism: static core (injected) + dynamic facts (tool-read)
 

@@ -78,8 +78,8 @@ Norms shared by human contributors and coding agents.
 | Doc | What it covers |
 |---|---|
 | [design/design-system.md](design/design-system.md) | The UI token design system: Stitch-derived surface system, color tokens, theming. |
-| [design/ui-guidelines.md](design/ui-guidelines.md) | Visual design rules for `apps/web`; points at the design system as source of truth. |
-| [design/ux-guidelines.md](design/ux-guidelines.md) | Interaction conventions: touch, cursor and selection defaults, i18n scope. |
+| [design/ui-guidelines.md](design/ui-guidelines.md) | Visual rules for `apps/web`: tokens and theming, `@monad/ui` component conventions, icons, accessibility, motion. |
+| [design/ux-guidelines.md](design/ux-guidelines.md) | Interaction conventions: core interaction model, state requirements, keyboard, touch, cursor and selection, i18n scope. |
 | [design/ux-writing-guidelines.md](design/ux-writing-guidelines.md) | Product voice, microcopy, sentence-style capitalization, accessibility text, review checklist. |
 
 ## Proposals and examples

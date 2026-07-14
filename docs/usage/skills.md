@@ -27,6 +27,9 @@ Skills are discovered from two scopes, in precedence order:
 
 A workspace skill **shadows** a personal one of the same name. Both are watched for hot reload.
 
+Skills can also be distributed as part of an atom pack — an installed pack contributes its
+bundled skills alongside these scopes. See [atoms](../internals/atoms.md).
+
 ## SKILL.md format
 
 ```markdown

@@ -148,6 +148,10 @@ Most of this is also enforced locally by git hooks (lefthook), which on commit
 run Biome, [syncpack](https://github.com/JamieMason/syncpack) (dependency
 version consistency), and a staged typecheck. Don't bypass the hooks.
 
+Fork PRs run the same matrix without repo secrets: the Turbo remote cache is
+skipped (builds are just slower) and live-model suites self-skip without
+`OPENROUTER_API_KEY`. Neither affects whether your checks pass.
+
 When you touch `apps/monad`, exercise the feature over **every transport**
 (TCP loopback and the Unix socket) — the daemon's behaviour must match on both.
 
