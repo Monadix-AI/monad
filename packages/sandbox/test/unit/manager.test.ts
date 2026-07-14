@@ -1,5 +1,7 @@
 import { afterEach, expect, test } from 'bun:test';
+import { mkdtempSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import { SandboxManager, SandboxUnavailableError } from '../../src/manager.ts';
 
@@ -89,6 +91,19 @@ test('structured environment credentials remain parseable and omit failures with
   expect(messages.join('\n')).toContain('NO_MATCH');
   expect(messages.join('\n')).not.toContain('must-not-appear');
   mgr.dispose();
+});
+
+test('an unmaskable credential source becomes a read deny before launcher policy', () => {
+  const credentialDirectory = mkdtempSync(join(tmpdir(), 'monad-manager-credential-dir-'));
+  const m = mgr({
+    platform: 'darwin',
+    net: 'filtered',
+    tlsTerminate: true,
+    credentialFiles: [{ name: 'DIRECTORY', path: credentialDirectory, injectHosts: ['example.com'] }]
+  });
+
+  expect(m.sandboxPolicy.maskedFiles).toBeUndefined();
+  expect(m.sandboxPolicy.readDenyRoots).toContain(realpathSync(credentialDirectory));
 });
 
 test('dispose is idempotent', () => {

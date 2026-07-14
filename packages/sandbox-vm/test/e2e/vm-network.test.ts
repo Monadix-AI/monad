@@ -52,14 +52,18 @@ describe.skipIf(!ENABLED)('net:filtered egress enforcement (direct egress is dro
     expect(result.stdout).not.toContain('RC=0');
   }, 600_000);
 
-  test('DNS and TCP to an arbitrary resolver are dropped', async () => {
+  test('public and gvproxy DNS plus arbitrary direct TCP are dropped', async () => {
     const result = await runSh(
-      'timeout 6 sh -c "echo > /dev/udp/8.8.8.8/53" 2>&1; echo "DNS=$?"; ' +
+      'timeout 6 sh -c "echo > /dev/udp/8.8.8.8/53" 2>&1; echo "PUBLIC_DNS=$?"; ' +
+        'timeout 6 sh -c "echo > /dev/udp/192.168.127.1/53" 2>&1; echo "GVPROXY_UDP_DNS=$?"; ' +
+        'timeout 6 sh -c "echo > /dev/tcp/192.168.127.1/53" 2>&1; echo "GVPROXY_TCP_DNS=$?"; ' +
         'timeout 6 sh -c "echo > /dev/tcp/8.8.8.8/443" 2>&1; echo "TCP=$?"',
       policy,
       AGENT
     );
-    expect(result.stdout).not.toContain('DNS=0');
+    expect(result.stdout).not.toContain('PUBLIC_DNS=0');
+    expect(result.stdout).not.toContain('GVPROXY_UDP_DNS=0');
+    expect(result.stdout).not.toContain('GVPROXY_TCP_DNS=0');
     expect(result.stdout).not.toContain('TCP=0');
   }, 600_000);
 });

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { existsSync, rmSync } from 'node:fs';
-import { mkdir, mkdtemp, readdir, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -18,6 +18,8 @@ let writable = '';
 let readonly = '';
 let denied = '';
 let realCredential = '';
+let aliasCanonical = '';
+let aliasPath = '';
 let policy: VmPolicy;
 
 async function powershell(script: string): Promise<string> {
@@ -39,24 +41,37 @@ beforeAll(async () => {
   readonly = join(root, 'Read Only Share');
   denied = join(writable, '.ssh');
   realCredential = join(writable, 'credential file');
+  aliasCanonical = join(writable, 'Canonical Child');
+  aliasPath = join(writable, 'Child Junction');
+  const aliasDenied = join(aliasCanonical, '.ssh');
+  const aliasRealCredential = join(aliasCanonical, 'credential');
   const fakeStore = join(writable, '.mask store');
   const fakeCredential = join(fakeStore, 'empty');
+  const aliasFakeCredential = join(fakeStore, 'alias empty');
   await Promise.all([
     mkdir(denied, { recursive: true }),
     mkdir(readonly, { recursive: true }),
-    mkdir(fakeStore, { recursive: true })
+    mkdir(fakeStore, { recursive: true }),
+    mkdir(aliasDenied, { recursive: true })
   ]);
+  await symlink(aliasCanonical, aliasPath, 'junction');
   await Promise.all([
     writeFile(join(denied, 'id_ed25519'), 'HYPERV_PRIVATE_KEY'),
     writeFile(join(readonly, 'host file'), 'READ_ONLY'),
     writeFile(realCredential, 'HYPERV_REAL_CREDENTIAL'),
-    writeFile(fakeCredential, 'HYPERV_MASKED')
+    writeFile(fakeCredential, 'HYPERV_MASKED'),
+    writeFile(join(aliasDenied, 'id_ed25519'), 'HYPERV_ALIAS_PRIVATE_KEY'),
+    writeFile(aliasRealCredential, 'HYPERV_ALIAS_REAL_CREDENTIAL'),
+    writeFile(aliasFakeCredential, 'HYPERV_ALIAS_MASKED')
   ]);
   policy = {
     writableRoots: [writable],
-    readableRoots: [readonly],
-    readDenyRoots: [denied],
-    maskedFiles: [{ real: realCredential, fake: fakeCredential }],
+    readableRoots: [readonly, aliasPath],
+    readDenyRoots: [denied, join(aliasPath, '.ssh')],
+    maskedFiles: [
+      { real: realCredential, fake: fakeCredential },
+      { real: join(aliasPath, 'credential'), fake: aliasFakeCredential }
+    ],
     net: 'none'
   };
 }, 120_000);
@@ -100,5 +115,23 @@ describe.skipIf(!ENABLED)('real Windows Hyper-V hvsock and 9p confinement', () =
     expect(result.stdout).toContain('MASK=HYPERV_MASKED');
     expect(result.stdout).not.toContain('HYPERV_PRIVATE_KEY');
     expect(result.stdout).not.toContain('HYPERV_REAL_CREDENTIAL');
+  }, 600_000);
+
+  test('deny and mask overlays cover canonical and junction guest aliases', async () => {
+    const result = await runSh(
+      `cat ${guestArg(join(aliasCanonical, '.ssh', 'id_ed25519'))} 2>/dev/null || echo CANONICAL_DENIED; ` +
+        `cat ${guestArg(join(aliasPath, '.ssh', 'id_ed25519'))} 2>/dev/null || echo ALIAS_DENIED; ` +
+        `printf 'CANONICAL_MASK='; cat ${guestArg(join(aliasCanonical, 'credential'))}; ` +
+        `printf 'ALIAS_MASK='; cat ${guestArg(join(aliasPath, 'credential'))}`,
+      policy,
+      AGENT
+    );
+
+    expect(result.stdout).toContain('CANONICAL_DENIED');
+    expect(result.stdout).toContain('ALIAS_DENIED');
+    expect(result.stdout).toContain('CANONICAL_MASK=HYPERV_ALIAS_MASKED');
+    expect(result.stdout).toContain('ALIAS_MASK=HYPERV_ALIAS_MASKED');
+    expect(result.stdout).not.toContain('HYPERV_ALIAS_PRIVATE_KEY');
+    expect(result.stdout).not.toContain('HYPERV_ALIAS_REAL_CREDENTIAL');
   }, 600_000);
 });

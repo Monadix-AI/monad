@@ -2,6 +2,8 @@
 
 Sandbox policy and sandbox backend are independent. Policy controls filesystem access, confinement, network access, allowed domains, and host execution. The backend is the launcher that applies that policy to newly spawned processes.
 
+For the evidence-scoped comparison with Anthropic Sandbox Runtime, including the boundary between shared policy and VM enforcement, see [Sandbox VM and SRT parity](../sandbox-vm-srt-parity.md).
+
 `/studio/sandbox` displays both, but activating a backend does not rewrite policy. Backend changes are hot: existing processes remain owned by the launcher that created them, while processes spawned after a successful activation use the new launcher.
 
 ## Built-in and contributed backends
