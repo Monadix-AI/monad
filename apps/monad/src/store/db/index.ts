@@ -124,7 +124,7 @@ import {
   setGenStatus,
   setMemory
 } from './messages.ts';
-import { getSchemaVersion, migrate } from './migrations.ts';
+import { CURRENT_SCHEMA_VERSION, hasCurrentMigration, migrate } from './migrations.ts';
 import { insertNativeAgentDirectMessage, listNativeAgentDirectMessages } from './native-agent-messages.ts';
 import {
   clearEmbeddings,
@@ -206,20 +206,18 @@ export class Store {
   constructor(opts: StoreOptions = {}) {
     this.sqlite = new Database(opts.path ?? ':memory:');
     // Connection-level PRAGMAs applied on every open (not persisted reliably across connections).
-    // WAL mode is set in the migration (persisted to the DB header); these complement it.
-    // synchronous=NORMAL is safe with WAL: each committed WAL frame is durable; only the periodic
-    // checkpoint loses the extra fsync of FULL, which is acceptable for a local single-user daemon.
+    // These connection-level settings are retained here until the operational PRAGMA work in Task 3.
     this.sqlite.exec('PRAGMA foreign_keys = ON');
     this.sqlite.exec('PRAGMA synchronous = NORMAL');
-    migrate(this.sqlite);
     this.db = drizzle(this.sqlite);
+    migrate(this.db);
     if (opts.path && opts.path !== ':memory:') {
       this.#checkpoint = startWalCheckpoint(opts.path);
     }
   }
 
   getSchemaVersion(): number {
-    return getSchemaVersion(this.sqlite);
+    return hasCurrentMigration(this.sqlite) ? CURRENT_SCHEMA_VERSION : 0;
   }
 
   getExperienceState(
