@@ -1,8 +1,5 @@
 # UX design guidelines
 
-> **Placeholder.** Fill this in with interaction principles, user-flow conventions,
-> and the review criteria for evaluating new or changed user experiences.
-
 ## Areas to cover
 
 - Core interaction model (how users navigate, invoke actions, recover from errors)

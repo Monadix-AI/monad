@@ -12,13 +12,13 @@ The core machinery that runs an agentic session end-to-end.
 
 The single long-running process (`apps/monad/`) that owns all state. It binds loopback-only by default (TCP `127.0.0.1:52749` **and** a Unix-domain socket at `~/.monad/run/monad.sock`) and exposes a REST + SSE API. All clients — CLI, web UI, TUI, editor ACP bridge, IM channels — talk to the daemon; they carry no agent logic themselves. State lives under `~/.monad/` (config, sessions DB, memory, atom packs, credentials).
 
-See [`docs/runtime.md`](runtime.md) and [`docs/daemon-architecture.md`](daemon-architecture.md).
+See [`docs/internals/runtime.md`](internals/runtime.md) and [`docs/internals/daemon-architecture.md`](internals/daemon-architecture.md).
 
 ### Session
 
 One conversation thread between a user and the agent. A session has an immutable **origin** (which surface created it, which transports may write/fork it) and a mutable transcript of messages and events. Sessions persist across daemon restarts; they can be branched (forked at any turn) for experimentation.
 
-See [`docs/session-origin.md`](session-origin.md).
+See [`docs/internals/session-origin.md`](internals/session-origin.md).
 
 ### Session Origin
 
@@ -28,7 +28,7 @@ The immutable provenance record stamped on every session at creation. It has thr
 - **access** — `writableBy` and `branchableBy` (which transports may send into / fork the session). Derived from `surface` at creation, then stored and enforced immutably.
 - **environment** — `ip`, `userAgent`, `locale`, `workspace`, etc. Audit/telemetry only; never forwarded to the model.
 
-See [`docs/session-origin.md`](session-origin.md).
+See [`docs/internals/session-origin.md`](internals/session-origin.md).
 
 ### Agent
 
@@ -50,7 +50,7 @@ The agent's persistent knowledge store, layered by scope:
 - **Dynamic facts** — machine-written Markdown files under `~/.monad/memory/` keyed by scope (`global`, `agent_<id>`, `session_<id>`). The agent reads/writes them through the `memory` tool (`view` / `record` / `update` / `delete`). Global facts are inlined into the system prompt; agent-private facts are read on demand. Auto-consolidation triggers when a scope exceeds ~2000 chars; manual `/consolidate-memory` runs an LLM dedup/merge pass.
 - **Semantic recall (mem0)** — an optional layer using a daemon-managed local Qdrant vector store for per-turn observation and semantic retrieval.
 
-See [`docs/memory-design.md`](memory-design.md).
+See [`docs/internals/memory-design.md`](internals/memory-design.md).
 
 ### Workspace
 
@@ -66,7 +66,7 @@ What ships with the daemon and is available to every agent out of the box.
 
 A first-party built-in capability the agent can invoke: filesystem ops, shell commands, web search/extract, code execution, email, todo, memory read/write, scheduling, delegation, image/vision, and the MCP adapter. Tools are not contributed by atom packs — they ship with the daemon. Every tool input is treated as hostile (prompt-injection containment); resource guards run at call time inside `invoke.ts`.
 
-See [`docs/tools.md`](tools.md).
+See [`docs/internals/tools.md`](internals/tools.md).
 
 ### Slash Commands
 
@@ -101,13 +101,13 @@ A portable, filesystem-based capability packet. A skill is a directory under `~/
 
 Skills can declare eligibility gates (`requires`), workspace activation globs (`paths`), allowed tools (`allowed-tools`), and a fork mode (`context: fork`) that runs the skill as an isolated subagent at a chosen capability tier.
 
-See [`docs/skills.md`](skills.md).
+See [`docs/usage/skills.md`](usage/skills.md).
 
 ### Channel
 
 An IM platform adapter that lets external messaging apps reach the agent. A channel is declared as an atom (or built-in) with a `ChannelAdapter` implementation. Built-in channels include Telegram, WhatsApp, Feishu, Google Chat, Line, and Twilio. Each channel instance has an isolated `ChannelContext` (no direct access to the session store or agent tools) that normalizes inbound messages into `ChannelInbound` events and delivers outbound replies via `send`.
 
-See [`docs/realtime-channels.md`](realtime-channels.md).
+See [`docs/internals/realtime-channels.md`](internals/realtime-channels.md).
 
 ### Provider
 
@@ -118,7 +118,7 @@ A model backend monad can route requests to. Each provider is one entry in `PROV
 
 Providers are configured in `~/.monad/config.json`; credentials live in `~/.monad/auth.json` as secret refs. The **Model Router** dispatches each turn to the right provider/model based on the active profile and per-role overrides.
 
-See [`docs/model-providers.md`](model-providers.md).
+See [`docs/internals/model-providers.md`](internals/model-providers.md).
 
 ### MCP (Model Context Protocol)
 
@@ -140,7 +140,7 @@ Daemon-to-daemon task delegation between monad instances owned by the **same per
 
 Cross-owner collaboration (different people, independent trust) is **Monadix** territory, not peer federation.
 
-See [`docs/peer-federation.md`](peer-federation.md).
+See [`docs/internals/peer-federation.md`](internals/peer-federation.md).
 
 ### Monadix
 
@@ -156,13 +156,13 @@ The interfaces through which humans and editors interact with the daemon.
 
 The editor integration protocol. `monad acp` is a thin bridge: the editor spawns it over stdio, and it proxies to the already-running daemon over the local Unix socket. Editor sessions appear in the web UI and TUI and share one store, model config, and ledger. monad also acts as an ACP **client**, delegating subtasks to other ACP agents (Codex, Claude Code, …) via the `agent_acp_delegate` tool.
 
-See [`docs/acp.md`](acp.md).
+See [`docs/internals/acp.md`](internals/acp.md).
 
 ### Mo
 
 A pixel-art desktop sprite (a cat named Mochi) that floats always-on-top as a transparent frameless window. Drag a file or folder onto Mo → type a prompt → a new session is seeded. Mo is a thin native process (~5–20 MB, no webview) that talks only to the daemon's REST API. Its animation state tracks the agent lifecycle: idle → waving (file hovering) → jumping (dropped) → waiting (session seeded) → running (agent generating) → review (done).
 
-See [`docs/mo.md`](mo.md).
+See [`docs/usage/mo.md`](usage/mo.md).
 
 ### Workplace
 
@@ -182,4 +182,4 @@ The three wire protocols the daemon speaks:
 
 All behaviour must be identical across TCP loopback and Unix socket; every feature is tested on both.
 
-See [`docs/runtime.md`](runtime.md).
+See [`docs/internals/runtime.md`](internals/runtime.md).

@@ -494,7 +494,7 @@ Start it with: bun run dev
 ```
 
 ```text
-Created worktree: /Users/zeke/Projects/monad-feature
+Created worktree: /Users/you/Projects/monad-feature
 ```
 
 ## Accessibility writing

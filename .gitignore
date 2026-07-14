@@ -91,6 +91,7 @@ rulesync.local.jsonc
 **/.codex/
 **/.claude/
 **/.agent/
+**/.agents/
 **/.vscode/*.json
 !**/.vscode/extensions.json
 !**/.vscode/settings.json

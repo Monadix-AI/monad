@@ -74,7 +74,7 @@ is a P6 implementation detail, not a proposal blocker.)
 backing column in `workplace_projects` and `workplaceProjectSchema` carries no `members` field — traced
 the real write path (`apps/web/features/workplace/use-project-actions.ts`'s `updateProjectMembers`) and
 it's stashed inside **`workplace_projects.origin.ext[workplaceProjectMembersExtKey]`** — the generic,
-untrusted, size-bounded (`≤32 keys, ≤4KB serialized` per `docs/security-guidelines.md`) client extension
+untrusted, size-bounded (`≤32 keys, ≤4KB serialized` per `docs/engineering/security-guidelines.md`) client extension
 bag meant for small ad-hoc metadata, not a growing roster. This is real technical debt Track B fixes:
 today's "roster" is really the single implicit session's member *bindings*, misfiled as project metadata
 because project and session were never actually separate. It moves to two real, purpose-built places —

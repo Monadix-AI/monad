@@ -12,6 +12,7 @@
     "includes": [
       "**",
       "!.agent",
+      "!.agents",
       "!.claude",
       "!.superpowers",
       "!packages/i18n/generated/paraglide",

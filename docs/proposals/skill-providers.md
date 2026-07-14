@@ -20,7 +20,7 @@ and MCP servers.
 - `installSkillFromDir(srcDir, destSkillsDir)` — copies a validated skill dir into `~/.monad/skills`.
 - `SkillRegistry.discoverMany([...])` — discovers from home + workspace scopes.
 - Trust boundary already documented for skills (executable instruction text from disk) in
-  `docs/security-guidelines.md`; MCP servers already model remote-trust with `trust.pinnedToolHash`
+  `docs/engineering/security-guidelines.md`; MCP servers already model remote-trust with `trust.pinnedToolHash`
   + `autoApproveTools` — **reuse that mental model.**
 
 ## Design

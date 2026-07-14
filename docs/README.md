@@ -1,99 +1,102 @@
 # Documentation map
 
-Every doc and instruction file in this repo belongs to exactly one audience. This
-page is the index. The organizing rule — **who reads it**:
+`docs/` is organized by audience: start with the two entry docs, then pick the
+section that matches what you're here for — using monad ([usage/](usage/)),
+understanding how it works inside ([internals/](internals/)), working in this repo
+([engineering/](engineering/)), or design ([design/](design/)).
 
-| Bucket | Audience | Committed? | Where it lives |
-|---|---|---|---|
-| 👤 **For humans** | People — process, governance, onboarding | yes | repo root + `.github/` |
-| 🌐 **For any AI** | Tool-agnostic, canonical behaviour + knowledge | yes | `AGENTS.md` + `docs/` |
-| 🤖 **For a specific AI** | Per-tool glue/config (Claude, Gemini, Cursor, …) | yes | `CLAUDE.md`, `GEMINI.md`, `.cursor/`, … |
-| 🗒️ **Agent scratch** | Working memos a tool jots down mid-task | **no** (gitignored) | `.agent/` |
+Agent *rules* have a separate home: the single source of truth is
+`.rulesync/rules/`, compiled by [rulesync](https://github.com/dyoshikawa/rulesync)
+into the per-tool agent files (`AGENTS.md`, `CLAUDE.md`, …), which are generated
+locally and gitignored — never edit or commit them. Deep contributor knowledge
+lives here in `docs/`; the compiled rules link into it, so the two stay connected
+by reference rather than duplication.
 
-The single source of truth for agent *behaviour* is **`AGENTS.md`**. Everything in
-the 🤖 bucket re-exports or points at it — never duplicate rules into a per-tool file.
-Durable *knowledge* (how the code works and why) lives here in `docs/` and is linked
-from `AGENTS.md`.
+## Entry points
 
----
+| Doc | What it covers |
+|---|---|
+| [concepts.md](concepts.md) | Glossary of every first-class concept in monad, organized by layer, cross-linked to the deeper docs. |
+| [product.md](product.md) | Product positioning: core idea, target users, and brand. |
 
-## 👤 For humans
+## Usage — user documentation
 
-Process, governance, onboarding. Read by people, not loaded into agent context.
+How to use monad's features as an operator or end user.
+
+| Doc | What it covers |
+|---|---|
+| [usage/skills.md](usage/skills.md) | The skills system (`SKILL.md` / agentskills.io standard): using, writing, gating, and managing skills. |
+| [usage/computer-use.md](usage/computer-use.md) | Computer use and browser use through off-the-shelf MCP servers, and when to pick which. |
+| [usage/mo.md](usage/mo.md) | Mo, the desktop sprite: drop a file on the floating pixel cat to start a session. |
+| [usage/sandbox-backends.md](usage/sandbox-backends.md) | Configuring sandbox backends: built-in and contributed launchers, settings, and hot switching. |
+| [usage/native-cli-approvals.md](usage/native-cli-approvals.md) | The per-agent autopilot switch for native CLI agent approvals (Codex, Claude Code, Gemini, …). |
+
+## Internals — how the system works
+
+For contributors and the curious: architecture and behavior of the running system.
+
+| Doc | What it covers |
+|---|---|
+| [internals/runtime.md](internals/runtime.md) | How the daemon binds: transport (TCP/UDS), configuration, env vars, and the security model. |
+| [internals/daemon-architecture.md](internals/daemon-architecture.md) | The daemon as the one long-lived process: startup graph, lifecycle modules, hot reload, extension boundaries. |
+| [internals/realtime-channels.md](internals/realtime-channels.md) | Which realtime channel carries which events: WS control plane vs SSE generation stream. |
+| [internals/session-origin.md](internals/session-origin.md) | Session provenance: the immutable `origin` snapshot — identity, access policy, environment. |
+| [internals/acp.md](internals/acp.md) | ACP both ways: monad as an editor agent, and delegating to other ACP agents. |
+| [internals/peer-federation.md](internals/peer-federation.md) | Daemon-to-daemon task delegation: a peer runs the subtask on its own machine and streams the result back. |
+| [internals/host-interactions.md](internals/host-interactions.md) | Schema-driven user input requested by built-ins and atom packs across Web, TUI, CLI, and ACP. |
+| [internals/memory-design.md](internals/memory-design.md) | The memory system design: L1 as built, plus the L2/L3 designs. |
+| [internals/tools.md](internals/tools.md) | The built-in tool set: registry layout, the uniform `register` contract, and authoring/security rules. |
+| [internals/model-providers.md](internals/model-providers.md) | The model gateway: the provider catalog as source of truth, native vs OpenAI-compatible strategies, auth. |
+| [internals/atoms.md](internals/atoms.md) | The atom pack system: one pack contributes declared, manifest-gated extension kinds. |
+| [internals/hooks.md](internals/hooks.md) | Lifecycle hooks: events, the value contract, command and atom-pack hooks, dispatch semantics. |
+| [internals/channel-conformance.md](internals/channel-conformance.md) | The IM channel conformance contract every adapter is pinned to. |
+| [internals/web-router.md](internals/web-router.md) | The web UI router: a Next.js App Router SPA shipped as a static export embedded in the binary. |
+| [internals/third-party-commands.md](internals/third-party-commands.md) | Slash commands contributed by atom packs via `defineCommand()`; the daemon owns parsing and execution. |
+
+## Engineering — working in this repo
+
+Norms shared by human contributors and coding agents.
+
+| Doc | What it covers |
+|---|---|
+| [engineering/architecture.md](engineering/architecture.md) | Package and app boundaries, dependency direction, recorded decisions, anti-patterns. |
+| [engineering/conventions.md](engineering/conventions.md) | Code style (comments, file length, abstraction) and typing rules, plus audited exceptions. |
+| [engineering/testing.md](engineering/testing.md) | Test runners, directory layout, isolation, mock model, smoke tests, transport loop, coverage expectations. |
+| [engineering/worktree.md](engineering/worktree.md) | The development workflow: worktree-per-feature, quality gates, squash-merge, environment reference. |
+| [engineering/parallel-agents.md](engineering/parallel-agents.md) | Driving multiple coding agents at once: decomposition, coordination, conflict prevention, integration. |
+| [engineering/security-guidelines.md](engineering/security-guidelines.md) | Code-level rules for security-sensitive changes, the threat model, and the PR security checklist. |
+| [engineering/performance-guidelines.md](engineering/performance-guidelines.md) | Performance budgets, hot-path rules, and profiling procedure for backend and frontend. |
+| [engineering/cli-design.md](engineering/cli-design.md) | CLI conventions: command naming, aliases, global flags, output/scriptability, XDG paths. |
+| [engineering/design-principles.md](engineering/design-principles.md) | The two governing design principles: cross-platform parity and security-first agent containment. |
+| [engineering/dx.md](engineering/dx.md) | Developer experience: keeping the edit→verify loop fast and what to do when a loop degrades. |
+| [engineering/tech-stack.md](engineering/tech-stack.md) | Quick-reference map of every tool and library in the repo, by concern. |
+| [engineering/philosophy.md](engineering/philosophy.md) | Engineering philosophy: make correct code the path of least resistance. |
+| [engineering/model-provider-test-status.md](engineering/model-provider-test-status.md) | End-to-end manual coverage status for every built-in model provider type. |
+
+## Design
+
+| Doc | What it covers |
+|---|---|
+| [design/design-system.md](design/design-system.md) | The UI token design system: Stitch-derived surface system, color tokens, theming. |
+| [design/ui-guidelines.md](design/ui-guidelines.md) | Visual design rules for `apps/web`; points at the design system as source of truth. |
+| [design/ux-guidelines.md](design/ux-guidelines.md) | Interaction conventions: touch, cursor and selection defaults, i18n scope. |
+| [design/ux-writing-guidelines.md](design/ux-writing-guidelines.md) | Product voice, microcopy, sentence-style capitalization, accessibility text, review checklist. |
+
+## Proposals and examples
+
+| Doc | What it covers |
+|---|---|
+| [proposals/](proposals/) | Design proposals not yet (or never) implemented. |
+| [proposals/backlog-ideas.md](proposals/backlog-ideas.md) | Ideas worth remembering with no current commitment, and why each was deferred. |
+| [examples/skills/](examples/skills/) | Example skills to copy into `~/.monad/skills/`. |
+
+## Root governance docs
 
 | Doc | What it covers |
 |---|---|
 | [README.md](../README.md) | What monad is, quick start, pointers. |
-| [CONTRIBUTING.md](../CONTRIBUTING.md) | Local setup, required checks, commit & PR workflow. |
+| [CONTRIBUTING.md](../CONTRIBUTING.md) | Local setup, required checks, commit and PR workflow. |
 | [SECURITY.md](../SECURITY.md) | How to report a vulnerability; scope. |
 | [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) | Community standards. |
 | [CHANGELOG.md](../CHANGELOG.md) | Notable changes per release. |
 | [LICENSE](../LICENSE) | License terms. |
-| `.github/` | PR template, issue templates, CODEOWNERS, CI workflows. |
-
-## 🌐 For any AI (canonical)
-
-Tool-agnostic. `AGENTS.md` is the [open cross-tool standard](https://agents.md) for
-agent behaviour; `docs/` is the shared knowledge base it links into. Both are also
-useful to humans, but they are the source of truth that every AI tool draws from.
-
-**Behaviour:** [AGENTS.md](../AGENTS.md) — Bun runtime, build/env, code style, design
-principles, typing, testing, and the CodeGraph section. The canonical rules.
-
-**Knowledge base** (`docs/`):
-
-| Doc | What it covers |
-|---|---|
-| [design-principles.md](design-principles.md) | Cross-platform parity and agent containment. |
-| [daemon-architecture.md](daemon-architecture.md) | Daemon startup graph, lifecycle modules, hot reload, and extension boundaries. |
-| [enginerring/architecture.md](enginerring/architecture.md) | Package/module boundaries, dependency directions, design decisions. |
-| [conventions.md](conventions.md) | Code style (comments, file length, abstraction) + typing rules + audited exceptions. |
-| [runtime.md](runtime.md) | How the daemon binds — transport (TCP/UDS), config, env, security model. |
-| [host-interactions.md](host-interactions.md) | Schema-driven user input requested by built-ins and atom packs across Web, TUI, CLI, and ACP. |
-| [sandbox-backends.md](sandbox-backends.md) | Built-in and contributed sandbox launchers, generic settings, secret storage, and atomic hot switching. |
-| [session-origin.md](session-origin.md) | Session provenance: identity, write/branch access policy, env snapshot, client extension. |
-| [security-guidelines.md](security-guidelines.md) | Code-level rules for security-sensitive changes; PR security checklist. |
-| [performance-guidelines.md](performance-guidelines.md) | Performance budgets, profiling, hotspots. |
-| [design/ui-guidelines.md](design/ui-guidelines.md) | Visual design system, component patterns, accessibility. |
-| [design/ux-guidelines.md](design/ux-guidelines.md) | Interaction model, copy, loading/error/empty states. |
-| [design/ux-writing-guidelines.md](design/ux-writing-guidelines.md) | Product voice, microcopy, sentence-style capitalization, accessibility text, and review checklist. |
-| [model-providers.md](model-providers.md) | The model gateway: providers, routing, credentials. |
-| [tools.md](tools.md) | The built-in tool set: registry layout, the uniform `register` module contract, assembly, and authoring/security rules. |
-| [skills.md](skills.md) | The agent skills system (`SKILL.md` / agentskills.io standard). |
-| [enginerring/atoms.md](enginerring/atoms.md) | The atom pack system. |
-| [enginerring/hooks.md](enginerring/hooks.md) | Lifecycle hooks: events, the value contract, command + atom-pack hooks, dispatch semantics, sequence diagrams. |
-| [acp.md](acp.md) | The ACP transport (monad as an editor agent). |
-| [peer-federation.md](peer-federation.md) | Daemon-to-daemon task delegation (compute federation) + inbound approval. |
-| [web-router.md](web-router.md) | The web router. |
-| [channel-conformance.md](channel-conformance.md) | Channel (IM gateway) conformance. |
-| [worktree.md](worktree.md) | Worktree development: feature workflow (init → test → rebase → audit → squash-merge) + environment reference. |
-| [proposals/](proposals/) | Design proposals not yet (or never) implemented. |
-
-## 🤖 For a specific AI (per-tool glue)
-
-Each tool's entry point is **thin**: it re-exports `AGENTS.md` (so the canonical
-rules load) plus any tool-specific machine config. Edit `AGENTS.md` for behaviour;
-edit these only for tool wiring.
-
-| File / dir | Tool | Role |
-|---|---|---|
-| [CLAUDE.md](../CLAUDE.md) | Claude Code | Re-exports `AGENTS.md` via `@AGENTS.md`. |
-| [.claude/](../.claude) | Claude Code | `settings.json` + project-scoped pointer (no duplicated rules). |
-| [GEMINI.md](../GEMINI.md) | Gemini CLI | Re-exports `AGENTS.md` via `@AGENTS.md`. |
-| [.gemini/](../.gemini) | Gemini CLI | MCP server config. |
-| [.cursor/](../.cursor) | Cursor | MCP server config. |
-| [.kiro/](../.kiro) | Kiro | MCP server config. |
-| [.vscode/mcp.json](../.vscode/mcp.json) | VS Code | MCP server config. |
-| [opencode.jsonc](../opencode.jsonc) | opencode | MCP server config. |
-| [.mcp.json](../.mcp.json) | (generic MCP) | Default MCP server config. |
-
-> The CodeGraph instructions used to be copied into `GEMINI.md` and `.claude/CLAUDE.md`
-> by an injector. They now live once, in `AGENTS.md`. If the injector re-adds a
-> `<!-- CODEGRAPH_START -->` block to a per-tool file, repoint it at `AGENTS.md`.
-
-## 🗒️ Agent scratch — NOT committed
-
-Working memos that vibe-coding tools produce mid-task (plans, notes, intermediate
-analysis) go in one place: [`.agent/`](../.agent). Everything inside is gitignored
-except its `README.md`. Don't scatter stray `NOTES.md` / `TODO.md` files across the
-tree — see [`.agent/README.md`](../.agent/README.md).
