@@ -211,6 +211,9 @@ async function mockWorkplaceApi(
     if (method === 'GET' && path === '/v1/atoms/workspace-experiences') {
       return route.fulfill(json({ experiences }));
     }
+    if (method === 'GET' && path === '/v1/atoms/workspace-experiences/kanban/api/tasks') {
+      return route.fulfill(json({ tasks: [], nextCursor: null }));
+    }
     if (method === 'POST' && path === '/v1/atoms/workspace-experiences/mock-canvas/api/search') {
       const body = request.postDataJSON() as { query?: string };
       return route.fulfill(json({ result: `api:${body.query ?? 'missing'}` }));
@@ -248,10 +251,14 @@ test.describe('workspace experience atoms', () => {
 
     const canvas = page.locator('mock-canvas');
     await expect(canvas).toBeVisible();
+    await expect(page.locator('.workspace-experience-host > style')).toBeHidden();
     await expect(canvas).toHaveAttribute('data-experience-id', 'mock-canvas');
     await expect(canvas).toHaveAttribute('data-host-project-id', projectId);
     await expect(canvas).toHaveAttribute('data-embedded', 'true');
-    await expect(canvas).toHaveAttribute('data-api-base-url', '/api/v1/atoms/workspace-experiences/mock-canvas/api');
+    await expect(canvas).toHaveAttribute(
+      'data-api-base-url',
+      /\/api\/v1\/atoms\/workspace-experiences\/mock-canvas\/api$/
+    );
     await expect(canvas).toHaveAttribute('data-api-result', `api:${projectId}`);
     await expect(canvas).toContainText(`mock canvas mounted for ${projectId} via api:${projectId}`);
   });
@@ -268,13 +275,15 @@ test.describe('workspace experience atoms', () => {
     // Rendered from the published host snapshot delivered over the event bridge.
     await expect(kanban).toHaveAttribute('data-ready', 'true');
     await expect(kanban).toHaveAttribute('data-project-id', projectId);
-    // The hub node always renders; participant/activity counts come off snapshot.graphCanvas.
-    await expect(kanban).toContainText('monad');
-    await expect(kanban).toHaveAttribute('data-participant-count', /\d+/);
+    await expect(page.locator('.workspace-experience-host > style')).toBeHidden();
+    await expect(kanban).toContainText('PROJECT AUTOPILOT');
+    await expect(kanban).toContainText('Requirements');
+    await expect(kanban).toContainText('Execution');
+    await expect(kanban).toContainText('Acceptance');
 
-    // Clicking the hub dogfoods api.actions.switchExperience — a real switch to the chat-room
-    // experience, which unmounts the graph.
-    await kanban.locator('[data-node-id="hub:monad"]').click();
+    // The host menu switches to chat-room and unmounts the third-party web component.
+    await page.getByRole('button', { name: 'Project view mode' }).click();
+    await page.getByRole('menuitem', { name: 'Chat' }).click();
     await expect(kanban).toBeHidden();
     await expect(page.locator('[contenteditable][aria-label="Message agents"]')).toBeVisible();
 
@@ -316,7 +325,7 @@ test.describe('workspace experience atoms', () => {
     await expect(page.locator('monad-kanban')).toBeVisible();
   });
 
-  test('switches the active experience with the selected project session', async ({ page }) => {
+  test('keeps the project experience while switching project sessions', async ({ page }) => {
     await mockWorkplaceApi(page, [kanbanExperience, mockCanvasExperience], {
       sessions: [
         projectSession(alphaSessionId, 'Alpha session', '2026-07-04T00:00:00.000Z'),
@@ -326,25 +335,23 @@ test.describe('workspace experience atoms', () => {
 
     await page.goto(`/workspace/${projectRouteId}/${alphaSessionRouteId}`);
     await expect(page.locator('.project-topbar-name', { hasText: 'Mock Project' })).toBeVisible({ timeout: 20_000 });
-    await expect(page.locator('.project-topbar-name', { hasText: 'Alpha session' })).toBeVisible();
     await expect(page).toHaveURL(new RegExp(`/workspace/${projectRouteId}/${alphaSessionRouteId}$`));
+    await expect(page.getByRole('link', { name: 'Alpha session' })).toBeVisible();
     await expect(page.locator('monad-kanban')).toBeVisible();
 
     await page.getByRole('button', { name: 'Project view mode' }).click();
     await page.getByRole('menuitem', { name: 'Mock Canvas' }).click();
     await expect(page.locator('mock-canvas')).toBeVisible();
 
-    await page.getByRole('treeitem', { name: 'Beta session' }).click();
+    await page.getByRole('link', { name: 'Beta session' }).click();
 
     await expect(page).toHaveURL(new RegExp(`/workspace/${projectRouteId}/${betaSessionRouteId}$`));
-    await expect(page.locator('.project-topbar-name', { hasText: 'Beta session' })).toBeVisible();
-    await expect(page.locator('monad-kanban')).toBeVisible();
-    await expect(page.locator('mock-canvas')).toBeHidden();
+    await expect(page.locator('mock-canvas')).toBeVisible();
+    await expect(page.locator('monad-kanban')).toBeHidden();
 
-    await page.getByRole('treeitem', { name: 'Alpha session' }).click();
+    await page.getByRole('link', { name: 'Alpha session' }).click();
 
     await expect(page).toHaveURL(new RegExp(`/workspace/${projectRouteId}/${alphaSessionRouteId}$`));
-    await expect(page.locator('.project-topbar-name', { hasText: 'Alpha session' })).toBeVisible();
     await expect(page.locator('mock-canvas')).toBeVisible();
     await expect(page.locator('monad-kanban')).toBeHidden();
   });

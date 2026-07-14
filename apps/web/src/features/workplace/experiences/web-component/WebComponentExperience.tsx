@@ -133,7 +133,7 @@ export function WebComponentExperience({
           display: flex;
           background: var(--card);
         }
-        .workspace-experience-host > * {
+        .workspace-experience-host > [data-experience-id] {
           flex: 1;
           min-width: 0;
           min-height: 0;
