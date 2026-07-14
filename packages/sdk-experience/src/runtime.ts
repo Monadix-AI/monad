@@ -134,4 +134,6 @@ export interface WorkspaceExperienceActions {
   sendExternalAgentInput: (id: string, input: string) => Promise<void>;
   stopExternalAgent: (id: string) => Promise<void>;
   switchExperience: (id: string) => void;
+  /** Navigate from an Experience-owned task to the host's full project-session view. */
+  openProjectSession?: (sessionId: string) => void;
 }

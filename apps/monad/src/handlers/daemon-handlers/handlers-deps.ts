@@ -13,6 +13,8 @@ import type {
   SkillListItem
 } from '@monad/protocol';
 import type { WorkspaceExperienceApiHandler } from '@monad/sdk-atom';
+import type { RegisteredWorkspaceExperienceApiRoute } from '#/handlers/atom-pack/atom-pack-registry.ts';
+import type { RegisteredExperienceWorker } from '#/handlers/atom-pack/atom-pack-registry.ts';
 import type { AtomConflict } from '#/atoms/resolve.ts';
 import type { ChannelService } from '#/channels/channel.ts';
 import type { ConfigReloader } from '#/config/reloader.ts';
@@ -80,6 +82,12 @@ export interface DaemonHandlerDeps extends SessionDeps, ModelDeps {
     method: string,
     path: string
   ) => WorkspaceExperienceApiHandler | undefined;
+  getWorkspaceExperienceApiRoute?: (
+    experienceId: string,
+    method: string,
+    path: string
+  ) => RegisteredWorkspaceExperienceApiRoute | undefined;
+  getExperienceWorkers?: () => RegisteredExperienceWorker[];
   /** Clear all stored embeddings and kick the indexer to rebuild — invoked when the user switches
    *  the embedding model and opts to re-index from scratch. */
   reindexEmbeddings?: () => void;

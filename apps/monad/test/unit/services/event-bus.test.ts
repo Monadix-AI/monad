@@ -66,3 +66,16 @@ test('disposing a subscription stops delivery and frees the topic', () => {
 
   expect(seen).toEqual(['session.updated']);
 });
+
+test('generic runtime subscriber sees approval and lifecycle events across sessions', () => {
+  const bus = new EventBus();
+  const seen: EventType[] = [];
+  const dispose = bus.subscribeAll((event) => seen.push(event.type));
+
+  bus.publish(ev('tool.approval_requested', 'ses_a00000000000'));
+  bus.publish(ev('session.stream_ended', 'ses_b00000000000'));
+  dispose();
+  bus.publish(ev('session.updated', 'ses_c00000000000'));
+
+  expect(seen).toEqual(['tool.approval_requested', 'session.stream_ended']);
+});

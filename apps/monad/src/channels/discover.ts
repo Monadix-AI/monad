@@ -10,11 +10,19 @@
 // own.
 
 import type { Dirent } from 'node:fs';
-import type { AtomDescriptor, AtomKind, ChannelType, InteractionRequest, InteractionResult } from '@monad/protocol';
+import type {
+  AtomDescriptor,
+  AtomKind,
+  ChannelType,
+  InteractionRequest,
+  InteractionResult,
+  WorkspaceExperiencePermission
+} from '@monad/protocol';
 import type {
   ChannelAdapterFactory,
   Connector,
   ExternalAgentProviderAdapter,
+  ExperienceWorker,
   HookDefinition,
   ManifestAtomPack,
   ModelProvider,
@@ -62,7 +70,16 @@ export async function discoverChannelAdapters(
     /** Receives each workspace experience descriptor a discovered pack registers. */
     onWorkspaceExperience?: (experience: WorkspaceExperienceDefinition, atomPackName: string) => void;
     /** Receives each workspace experience API route set a discovered pack registers. */
-    onWorkspaceExperienceApi?: (api: WorkspaceExperienceApi, atomPackName: string) => void;
+    onWorkspaceExperienceApi?: (
+      api: WorkspaceExperienceApi,
+      atomPackName: string,
+      permissions: readonly WorkspaceExperiencePermission[]
+    ) => void;
+    onExperienceWorker?: (
+      worker: ExperienceWorker,
+      atomPackName: string,
+      permissions: readonly WorkspaceExperiencePermission[]
+    ) => void;
     onRequestInteraction?: (atomPackId: string, request: InteractionRequest) => Promise<InteractionResult>;
     /** Receives each loaded pack's individual atoms for the per-atom detail view. */
     onAtoms?: (atomPackName: string, atoms: AtomDescriptor[]) => void;
@@ -91,6 +108,7 @@ export async function discoverChannelAdapters(
   // The bundle's own embedded `manifest.atoms` is NEVER trusted for gating: a bundle can self-declare
   // any set, so trusting it would let an installed pack register atoms the user never consented to.
   const granted = new Map<ManifestAtomPack, readonly AtomKind[]>();
+  const grantedPermissions = new Map<ManifestAtomPack, readonly WorkspaceExperiencePermission[]>();
   // The pack's stable identity = its folder name (unique even when two packs share a manifest name),
   // used for qualified names / pins / conflict reporting — consistent with listAtomPacks's operable id.
   const packFolder = new Map<ManifestAtomPack, string>();
@@ -149,6 +167,7 @@ export async function discoverChannelAdapters(
         );
       }
       granted.set(atomPack, grantedAtoms);
+      grantedPermissions.set(atomPack, manifest.permissions ?? []);
       packFolder.set(atomPack, e.name);
       atomPacks.push(atomPack);
     } catch (err) {
@@ -167,6 +186,7 @@ export async function discoverChannelAdapters(
     onSandbox: sinks.onSandbox,
     onWorkspaceExperience: sinks.onWorkspaceExperience,
     onWorkspaceExperienceApi: sinks.onWorkspaceExperienceApi,
+    onExperienceWorker: sinks.onExperienceWorker,
     onRequestInteraction: sinks.onRequestInteraction,
     onAtoms: sinks.onAtoms,
     reservedProviderTypes: sinks.reservedProviderTypes,
@@ -174,6 +194,7 @@ export async function discoverChannelAdapters(
     connectorPins: sinks.connectorPins,
     onCollision: sinks.onCollision,
     grantedAtomsFor: (atomPack) => granted.get(atomPack),
+    grantedPermissionsFor: (atomPack) => grantedPermissions.get(atomPack),
     packIdFor: (atomPack) => packFolder.get(atomPack),
     onError: (atomPack, error) =>
       errors.push({ atom: atomPack, error: error instanceof Error ? error.message : String(error) })

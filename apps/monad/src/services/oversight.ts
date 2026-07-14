@@ -191,6 +191,13 @@ export class OversightService {
     return this.pending.size;
   }
 
+  listPendingRequests(sessionId?: string): Array<{ id: string; sessionId: string; summary: string }> {
+    return [...this.pending.entries()].flatMap(([id, pending]) => {
+      if (sessionId && pending.sessionId !== sessionId) return [];
+      return [{ id, sessionId: pending.sessionId, summary: pending.tool }];
+    });
+  }
+
   private emit(
     sessionId: SessionId,
     type: 'tool.approval_requested' | 'tool.approval_resolved',

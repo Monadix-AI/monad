@@ -27,6 +27,10 @@ import { loadAll, loadAuth, saveProfile } from '@monad/home';
 import { DEFAULT_SKILL_MARKETPLACE_SOURCE, MONAD_VERSION } from '@monad/protocol';
 
 import { createSkillCatalogs } from '#/capabilities/skills/index.ts';
+import { createProjectSessionOperations } from '#/atoms/experience-project-sessions.ts';
+import { createExperienceStateStore, createExperienceWorkerScheduler } from '#/atoms/experience-state.ts';
+import { ExperienceWorkerRegistry } from '#/atoms/experience-workers.ts';
+import { createWorkspaceExperienceApiContext } from '#/handlers/atom-pack/experience-capabilities.ts';
 import { createAtomPacksModule } from '#/handlers/atom-pack/index.ts';
 import { createExternalAgentModule } from '#/handlers/external-agent/index.ts';
 import { HandlerError } from '#/handlers/handler-error.ts';
@@ -279,6 +283,74 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
     }
   };
   const session = createSessionModule({ ...deps, externalAgentHost });
+  const experienceCapabilities = {
+    state: {
+      forPack: (atomPackId: string, principalId: string) =>
+        createExperienceStateStore(deps.store, atomPackId, principalId)
+    },
+    projectSessions: {
+      forPrincipal: (principalId: string) =>
+        createProjectSessionOperations({ store: deps.store, sessions: session, oversight: deps.oversight, principalId })
+    },
+    workerScheduler: {
+      forPack: (atomPackId: string, principalId: string) =>
+        createExperienceWorkerScheduler(deps.store, atomPackId, principalId)
+    }
+  };
+  const experienceWorkers = deps.getExperienceWorkers
+    ? new ExperienceWorkerRegistry({
+        store: deps.store,
+        contextFor: (atomPackId, principalId, permissions) =>
+          createWorkspaceExperienceApiContext({
+            atomPackId,
+            principalId,
+            permissions,
+            deps: experienceCapabilities
+          })
+      })
+    : null;
+  const syncExperienceWorkers = (): void => {
+    if (!experienceWorkers) return;
+    experienceWorkers.clear();
+    for (const registration of deps.getExperienceWorkers?.() ?? []) {
+      experienceWorkers.register(
+        registration.atomPackId,
+        deps.ownerPrincipalId,
+        registration.permissions,
+        registration.worker
+      );
+    }
+  };
+  syncExperienceWorkers();
+  if (experienceWorkers) {
+    const projectIds = deps.store
+      .listWorkplaceProjects()
+      .filter((project) => project.ownerPrincipalId === deps.ownerPrincipalId)
+      .map((project) => project.id);
+    void experienceWorkers.startProjects(projectIds).catch((error) =>
+      deps.log.warn({ error }, 'workspace Experience worker startup failed')
+    );
+    deps.bus.subscribeAll((event) => {
+      const source = deps.store.getSession(event.sessionId);
+      if (!source?.projectId || source.ownerPrincipalId !== deps.ownerPrincipalId) return;
+      void experienceWorkers
+        .publish({
+          id: event.id,
+          projectId: source.projectId,
+          sessionId: event.sessionId,
+          type: event.type,
+          payload: event.payload,
+          createdAt: event.at
+        })
+        .catch((error) => deps.log.warn({ error }, 'workspace Experience worker event failed'));
+    });
+    const wakeTimer = setInterval(() => {
+      void experienceWorkers
+        .deliverDueWakeups()
+        .catch((error) => deps.log.warn({ error }, 'workspace Experience worker wake-up failed'));
+    }, 1_000);
+    wakeTimer.unref();
+  }
   const transcriptProjector = createTranscriptProjector({
     store: deps.store,
     bus: deps.bus,
@@ -352,10 +424,18 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
     capabilityInventory: createCapabilityInventoryModule(paths),
     atoms: createAtomPacksModule({
       paths,
-      onChanged: deps.rediscoverAtomPacks,
+      ownerPrincipalId: deps.ownerPrincipalId,
+      experienceCapabilities,
+      onChanged: deps.rediscoverAtomPacks
+        ? async () => {
+            await deps.rediscoverAtomPacks?.();
+            syncExperienceWorkers();
+          }
+        : undefined,
       getConflicts: deps.getAtomConflicts,
       getAtomDetails: deps.getAtomDetails,
       getWorkspaceExperienceApiHandler: deps.getWorkspaceExperienceApiHandler,
+      getWorkspaceExperienceApiRoute: deps.getWorkspaceExperienceApiRoute,
       getWorkspaceExperienceSnapshot: deps.getWorkspaceExperienceSnapshot,
       getWorkspaceExperiences: deps.getWorkspaceExperiences,
       configReloader: deps.configReloader,

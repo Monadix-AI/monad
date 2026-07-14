@@ -8,7 +8,7 @@ import { WORKSPACE_EXPERIENCE_API_VERSION } from '@monad/sdk-experience';
 import { createElement, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useT } from '#/components/I18nProvider';
-import { studioPath } from '#/features/shell/routing/paths';
+import { projectSessionPath, studioPath } from '#/features/shell/routing/paths';
 import { pushShellUrl } from '#/hooks/use-shell-location';
 import { useMonadRuntime } from '#/lib/monad-runtime-provider';
 import { daemonApiUrl } from '#/lib/monad-store';
@@ -72,7 +72,10 @@ export function WebComponentExperience({
     () => ({
       // TODO: add per-atom API permission controls before third-party workspace experiences ship.
       version: WORKSPACE_EXPERIENCE_API_VERSION,
-      actions: view.runtime.actions,
+      actions: {
+        ...view.runtime.actions,
+        openProjectSession: (sessionId) => pushShellUrl(projectSessionPath(view.runtime.snapshot.projectId, sessionId))
+      },
       apiBaseUrl: daemonApiUrl(daemonBaseUrl, `/v1/atoms/workspace-experiences/${encodeURIComponent(atom.id)}/api`),
       embedded: view.embedded,
       voiceModelState: view.voiceModelState,
@@ -130,7 +133,7 @@ export function WebComponentExperience({
           display: flex;
           background: var(--card);
         }
-        .workspace-experience-host > * {
+        .workspace-experience-host > [data-experience-id] {
           flex: 1;
           min-width: 0;
           min-height: 0;

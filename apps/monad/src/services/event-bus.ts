@@ -40,9 +40,10 @@ const CONTROL_EVENT_TYPES: ReadonlySet<EventType> = new Set<EventType>([
  */
 // Keyed by plain string, not `SessionId`: a project-wide fan-out publishes/subscribes under its own
 // `prj_` id — see apps/monad/src/handlers/session/context.ts's `SessionOrProject` TODO(track-b).
-type Topic = `session:${string}` | 'control';
+type Topic = `session:${string}` | 'control' | 'all';
 
 const CONTROL_TOPIC = 'control' as const;
+const ALL_TOPIC = 'all' as const;
 
 const sessionTopic = (sessionId: string): Topic => `session:${sessionId}`;
 
@@ -64,8 +65,14 @@ export class EventBus {
     return this.subscribeTopic(CONTROL_TOPIC, sink);
   }
 
+  /** Internal generic-runtime feed. Unlike control, this includes approval/tool detail. */
+  subscribeAll(sink: EventSink): () => void {
+    return this.subscribeTopic(ALL_TOPIC, sink);
+  }
+
   publish(event: Event): void {
     this.emit(sessionTopic(event.sessionId), event);
+    this.emit(ALL_TOPIC, event);
     // List-level events also reach control subscribers. A sink subscribed to both
     // the session and control topics receives the event twice — clients dedupe by
     // `event.id` (events are idempotent by id).

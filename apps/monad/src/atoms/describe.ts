@@ -46,6 +46,7 @@ export async function describeAtomPack(pack: ManifestAtomPack): Promise<AtomDesc
     registerSandbox: (s) => atoms.push(toDescriptor('sandbox', s)),
     registerWorkspaceExperience: (e) => atoms.push(toDescriptor('workspace-experience', e)),
     registerWorkspaceExperienceApi: () => {},
+    registerExperienceWorker: () => {},
     requestInteraction: () => Promise.resolve({ status: 'cancelled', reason: 'unavailable' }),
     log: () => {}
   };

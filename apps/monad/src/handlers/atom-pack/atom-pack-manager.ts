@@ -3,7 +3,11 @@ import type { AtomDescriptor, WorkspaceExperienceDefinition } from '@monad/proto
 import type { WorkspaceExperienceApiHandler } from '@monad/sdk-atom';
 import type { AtomConflict } from '#/atoms/resolve.ts';
 import type { ConfigReloader } from '#/config/reloader.ts';
-import type { RegisteredWorkspaceExperience } from '#/handlers/atom-pack/atom-pack-registry.ts';
+import type {
+  RegisteredWorkspaceExperience,
+  RegisteredWorkspaceExperienceApiRoute
+} from '#/handlers/atom-pack/atom-pack-registry.ts';
+import type { ExperienceCapabilityDeps } from '#/handlers/atom-pack/experience-capabilities.ts';
 import type { SandboxActivationService } from '#/platform/sandbox/activation.ts';
 import type { ModelService } from '#/services/model.ts';
 
@@ -13,6 +17,8 @@ import { createSkillsModule } from '#/handlers/atom-pack/atom-pack-skills.ts';
 
 export interface AtomPacksDeps {
   paths: MonadPaths;
+  ownerPrincipalId?: string;
+  experienceCapabilities?: ExperienceCapabilityDeps;
   /** Called after a successful install/remove so the daemon can re-discover atom packs (refresh
    *  the channel registry) without a restart. */
   onChanged?: () => Promise<void>;
@@ -30,6 +36,11 @@ export interface AtomPacksDeps {
     method: string,
     path: string
   ) => WorkspaceExperienceApiHandler | undefined;
+  getWorkspaceExperienceApiRoute?: (
+    experienceId: string,
+    method: string,
+    path: string
+  ) => RegisteredWorkspaceExperienceApiRoute | undefined;
   configReloader?: ConfigReloader;
   sandboxActivation?: SandboxActivationService;
   modelService?: ModelService;

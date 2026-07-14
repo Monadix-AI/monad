@@ -77,7 +77,10 @@ export async function createAtomDiscovery(deps: {
         commandRegistry.registerBuiltin(cmd as Parameters<typeof commandRegistry.registerBuiltin>[0]),
       onProvider: (p) => modelService.registry.register(p),
       onHook: (h) => registry.registerHook(h),
-      onWorkspaceExperienceApi: (api, atomPackId) => registry.registerWorkspaceExperienceApi(api, atomPackId),
+      onWorkspaceExperienceApi: (api, atomPackId, permissions) =>
+        registry.registerWorkspaceExperienceApi(api, atomPackId, permissions),
+      onExperienceWorker: (worker, atomPackId, permissions) =>
+        registry.registerExperienceWorker(worker, atomPackId, permissions),
       onWorkspaceExperience: (experience, atomPackId) => registry.registerWorkspaceExperience(experience, atomPackId),
       // Built-in agent-adapter atoms (Codex/Claude Code/Gemini/Qwen) register into the external agent
       // registry keyed by provider — the same gated path a third-party adapter pack would take.
@@ -106,7 +109,10 @@ export async function createAtomDiscovery(deps: {
       // An atom pack declaring the `hook` capability registers lifecycle hooks into the registry,
       // which the HookRunner reads alongside config.json command hooks.
       onHook: (h) => registry.registerHook(h),
-      onWorkspaceExperienceApi: (api, atomPackId) => registry.registerWorkspaceExperienceApi(api, atomPackId),
+      onWorkspaceExperienceApi: (api, atomPackId, permissions) =>
+        registry.registerWorkspaceExperienceApi(api, atomPackId, permissions),
+      onExperienceWorker: (worker, atomPackId, permissions) =>
+        registry.registerExperienceWorker(worker, atomPackId, permissions),
       onWorkspaceExperience: (experience, atomPackId) => registry.registerWorkspaceExperience(experience, atomPackId),
       // A discovered pack declaring the `agent-adapter` capability registers external agent adapters into
       // the same registry as built-ins; last registration wins, so a third-party pack can override.

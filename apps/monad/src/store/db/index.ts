@@ -57,6 +57,20 @@ import {
 import { type CheckpointHandle, startWalCheckpoint, stopWalCheckpoint } from './checkpoint.ts';
 import { appendEvents, type DanglingInterrupt, findDanglingInterrupts, hasEvent, listEvents } from './events.ts';
 import {
+  compareAndSwapExperienceState,
+  getExperienceState,
+  listExperienceState,
+  listExperienceStateEvents,
+  type ExperienceStateEventRecord,
+  type ExperienceStateRecord
+} from './experience-state.ts';
+import {
+  cancelExperienceWorkerWakeup,
+  type ExperienceWorkerWakeupRecord,
+  listDueExperienceWorkerWakeups,
+  scheduleExperienceWorkerWakeup
+} from './experience-worker-wakeups.ts';
+import {
   countExternalAgentInbox,
   type EnqueueExternalAgentInboxOptions,
   enqueueExternalAgentInboxItem,
@@ -170,6 +184,8 @@ export type { AcpDelegateRow } from './acp-delegates.ts';
 export type { EnqueueExternalAgentInboxOptions } from './external-agent-inbox.ts';
 export type { ExternalAgentSessionRow } from './external-agent-sessions.ts';
 export type { FileObservationRow } from './file-observations.ts';
+export type { ExperienceStateEventRecord, ExperienceStateRecord } from './experience-state.ts';
+export type { ExperienceWorkerWakeupRecord } from './experience-worker-wakeups.ts';
 export type { ListMessagesOptions } from './messages.ts';
 export type { ChannelConversation, ChannelConversationSession } from './row-mappers.ts';
 export type { SearchOptions } from './search.ts';
@@ -204,6 +220,54 @@ export class Store {
 
   getSchemaVersion(): number {
     return getSchemaVersion(this.sqlite);
+  }
+
+  getExperienceState(
+    atomPackId: string,
+    principalId: string,
+    projectId: string,
+    key: string
+  ): ExperienceStateRecord | null {
+    return getExperienceState(this.sqlite, atomPackId, principalId, projectId, key);
+  }
+
+  listExperienceState(
+    atomPackId: string,
+    principalId: string,
+    projectId: string,
+    prefix: string
+  ): ExperienceStateRecord[] {
+    return listExperienceState(this.sqlite, atomPackId, principalId, projectId, prefix);
+  }
+
+  compareAndSwapExperienceState(input: Parameters<typeof compareAndSwapExperienceState>[1]): boolean {
+    return compareAndSwapExperienceState(this.sqlite, input);
+  }
+
+  listExperienceStateEvents(
+    atomPackId: string,
+    principalId: string,
+    projectId: string,
+    key: string
+  ): ExperienceStateEventRecord[] {
+    return listExperienceStateEvents(this.sqlite, atomPackId, principalId, projectId, key);
+  }
+
+  scheduleExperienceWorkerWakeup(input: Omit<ExperienceWorkerWakeupRecord, 'attempt'>): void {
+    scheduleExperienceWorkerWakeup(this.sqlite, input);
+  }
+
+  cancelExperienceWorkerWakeup(
+    atomPackId: string,
+    principalId: string,
+    projectId: string,
+    key: string
+  ): void {
+    cancelExperienceWorkerWakeup(this.sqlite, atomPackId, principalId, projectId, key);
+  }
+
+  listDueExperienceWorkerWakeups(now: string): ExperienceWorkerWakeupRecord[] {
+    return listDueExperienceWorkerWakeups(this.sqlite, now);
   }
 
   insertSession(s: Session): void {

@@ -35,6 +35,7 @@ import {
 } from '#/handlers/atom-pack/atom-pack-content.ts';
 import { resolveToken } from '#/handlers/atom-pack/atom-pack-shared.ts';
 import { HandlerError } from '#/handlers/handler-error.ts';
+import { createWorkspaceExperienceApiContext } from '#/handlers/atom-pack/experience-capabilities.ts';
 import { type DecodedUpload, decodeRawUpload, unpackZipUpload } from '#/services/upload.ts';
 
 const ATOM_PACK_UPLOAD_MAX_BYTES = 25 * 1024 * 1024;
@@ -209,8 +210,20 @@ export function createPacksModule(deps: AtomPacksDeps) {
       experienceId: string,
       method: string,
       path: string
-    ): WorkspaceExperienceApiHandler | undefined {
-      return deps.getWorkspaceExperienceApiHandler?.(experienceId, method, path);
+    ): ((request: Request) => Response | Promise<Response>) | undefined {
+      const route = deps.getWorkspaceExperienceApiRoute?.(experienceId, method, path);
+      const handler = route?.handler ?? deps.getWorkspaceExperienceApiHandler?.(experienceId, method, path);
+      if (!handler) return undefined;
+      if (!deps.ownerPrincipalId || !deps.experienceCapabilities) {
+        return () => Promise.reject(new Error('workspace Experience capabilities are unavailable'));
+      }
+      const context = createWorkspaceExperienceApiContext({
+        atomPackId: route?.atomPackId ?? 'test-pack',
+        principalId: deps.ownerPrincipalId,
+        permissions: route?.permissions ?? [],
+        deps: deps.experienceCapabilities
+      });
+      return (request) => handler(request, context);
     },
 
     async getAtomPackAsset({ name, path }: { name: string; path: string }): Promise<{

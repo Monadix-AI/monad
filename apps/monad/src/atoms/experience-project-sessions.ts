@@ -1,0 +1,148 @@
+import type { ProjectId, SessionId } from '@monad/protocol';
+import type { ProjectSessionOperations } from '@monad/sdk-atom';
+import type { createSessionModule } from '#/handlers/session/index.ts';
+import type { OversightService } from '#/services/oversight.ts';
+import type { Store } from '#/store/db/index.ts';
+
+import { createHash } from 'node:crypto';
+
+function stableSessionId(principalId: string, projectId: string, idempotencyKey: string): SessionId {
+  const digest = createHash('sha256').update(`${principalId}\0${projectId}\0${idempotencyKey}`).digest('hex');
+  return `ses_${digest.slice(0, 20)}` as SessionId;
+}
+
+function assertProjectOwner(store: Store, principalId: string, projectId: string) {
+  const project = store.getWorkplaceProject(projectId);
+  if (!project || project.ownerPrincipalId !== principalId) throw new Error(`project not found: ${projectId}`);
+  return project;
+}
+
+function assertSessionOwner(store: Store, principalId: string, sessionId: string) {
+  const session = store.getSession(sessionId);
+  if (!session || session.ownerPrincipalId !== principalId || !session.projectId) {
+    throw new Error(`project session not found: ${sessionId}`);
+  }
+  return session;
+}
+
+export function createProjectSessionOperations(input: {
+  store: Store;
+  sessions: ReturnType<typeof createSessionModule>;
+  oversight: OversightService;
+  principalId: string;
+}): ProjectSessionOperations {
+  const { store, sessions, oversight, principalId } = input;
+  return {
+    list: async (projectId) => {
+      assertProjectOwner(store, principalId, projectId);
+      return store
+        .listSessions({ projectId: projectId as ProjectId })
+        .filter((session) => session.ownerPrincipalId === principalId)
+        .map((session) => ({ id: session.id, title: session.title, state: session.state }));
+    },
+    create: async (projectId, request) => {
+      assertProjectOwner(store, principalId, projectId);
+      const id = stableSessionId(principalId, projectId, request.idempotencyKey);
+      const existing = store.getSession(id);
+      if (existing) {
+        if (existing.ownerPrincipalId !== principalId || existing.projectId !== projectId) {
+          throw new Error(`idempotency collision for project session: ${id}`);
+        }
+        return { id };
+      }
+      const result = await sessions.createProjectSession({
+        projectId: projectId as ProjectId,
+        title: request.title,
+        cwd: request.cwd,
+        id
+      });
+      return { id: result.sessionId };
+    },
+    sendMessage: async (sessionId, request) => {
+      assertSessionOwner(store, principalId, sessionId);
+      await sessions.generate({ sessionId: sessionId as SessionId, text: request.text });
+    },
+    listMessages: async (sessionId, cursor) => {
+      assertSessionOwner(store, principalId, sessionId);
+      const items = store.listMessages(sessionId, { before: cursor, latest: true, limit: 100 });
+      const oldest = items[0]?.id;
+      const hasOlder = oldest ? store.listMessages(sessionId, { before: oldest, limit: 1 }).length > 0 : false;
+      return {
+        items: items.map((message) => ({
+          id: message.id,
+          role: message.role,
+          text: message.text,
+          createdAt: message.createdAt
+        })),
+        nextCursor: hasOlder ? (oldest ?? null) : null
+      };
+    },
+    listObservations: async (sessionId, cursor) => {
+      assertSessionOwner(store, principalId, sessionId);
+      const events = store.listEvents(sessionId, cursor).slice(0, 100);
+      return {
+        items: events.map((event) => ({
+          id: event.id,
+          kind: event.type,
+          text: JSON.stringify(event.payload),
+          createdAt: event.at
+        })),
+        nextCursor: events.length === 100 ? (events.at(-1)?.id ?? null) : null
+      };
+    },
+    runTurn: async (sessionId, request) => {
+      assertSessionOwner(store, principalId, sessionId);
+      const runId = createHash('sha256').update(`${sessionId}\0${request.idempotencyKey}`).digest('hex').slice(0, 20);
+      const key = `experience:run:${runId}`;
+      if (!store.getMemory(sessionId, key)) {
+        store.setMemory(sessionId, key, JSON.stringify({ runId, state: 'scheduled' }));
+        const timer = setTimeout(() => {
+          void sessions
+            .generate({ sessionId: sessionId as SessionId, text: request.text })
+            .then(() => store.setMemory(sessionId, key, JSON.stringify({ runId, state: 'completed' })))
+            .catch((error) =>
+              store.setMemory(
+                sessionId,
+                key,
+                JSON.stringify({
+                  runId,
+                  state: 'failed',
+                  error: error instanceof Error ? error.message : String(error)
+                })
+              )
+            );
+        }, 0);
+        timer.unref();
+      }
+      return { runId };
+    },
+    pause: async (sessionId) => {
+      assertSessionOwner(store, principalId, sessionId);
+      await sessions.abort({ id: sessionId as SessionId });
+    },
+    cancel: async (sessionId) => {
+      assertSessionOwner(store, principalId, sessionId);
+      await sessions.update({ id: sessionId as SessionId, state: 'cancelled' });
+    },
+    listPendingApprovals: async (projectId, sessionId) => {
+      assertProjectOwner(store, principalId, projectId);
+      if (sessionId) {
+        const session = assertSessionOwner(store, principalId, sessionId);
+        if (session.projectId !== projectId) throw new Error(`session does not belong to project: ${sessionId}`);
+      }
+      const projectSessionIds = new Set(
+        store.listSessions({ projectId: projectId as ProjectId }).map((session) => session.id)
+      );
+      return oversight
+        .listPendingRequests(sessionId)
+        .filter((approval) => projectSessionIds.has(approval.sessionId as SessionId));
+    },
+    resolveApproval: async (approvalId, decision) => {
+      const pending = oversight.listPendingRequests().find((approval) => approval.id === approvalId);
+      if (!pending) throw new Error(`approval not found: ${approvalId}`);
+      assertSessionOwner(store, principalId, pending.sessionId);
+      const resolved = await oversight.respond(approvalId, decision === 'approved');
+      if (!resolved) throw new Error(`approval already resolved: ${approvalId}`);
+    }
+  };
+}

@@ -97,6 +97,45 @@ export const tasks = sqliteTable('tasks', {
   updatedAt: text('updated_at').notNull()
 });
 
+export const experienceState = sqliteTable(
+  'experience_state',
+  {
+    atomPackId: text('atom_pack_id').notNull(),
+    principalId: text('principal_id').notNull(),
+    projectId: text('project_id').notNull(),
+    recordKey: text('record_key').notNull(),
+    value: text('value').notNull(),
+    version: integer('version').notNull(),
+    updatedAt: text('updated_at').notNull()
+  },
+  (table) => [primaryKey({ columns: [table.atomPackId, table.principalId, table.projectId, table.recordKey] })]
+);
+
+export const experienceStateEvents = sqliteTable('experience_state_events', {
+  id: text('id').primaryKey(),
+  atomPackId: text('atom_pack_id').notNull(),
+  principalId: text('principal_id').notNull(),
+  projectId: text('project_id').notNull(),
+  recordKey: text('record_key').notNull(),
+  version: integer('version').notNull(),
+  payload: text('payload').notNull(),
+  createdAt: text('created_at').notNull()
+});
+
+export const experienceWorkerWakeups = sqliteTable(
+  'experience_worker_wakeups',
+  {
+    atomPackId: text('atom_pack_id').notNull(),
+    principalId: text('principal_id').notNull(),
+    projectId: text('project_id').notNull(),
+    wakeKey: text('wake_key').notNull(),
+    runAt: text('run_at').notNull(),
+    attempt: integer('attempt').notNull().default(0),
+    updatedAt: text('updated_at').notNull()
+  },
+  (table) => [primaryKey({ columns: [table.atomPackId, table.principalId, table.projectId, table.wakeKey] })]
+);
+
 const _externalAgentSessions = sqliteTable(
   'external_agent_sessions',
   {

@@ -28,6 +28,7 @@ import type {
   ModelPrice,
   ModelProviderDescriptor,
   Scope,
+  WorkspaceExperiencePermission,
   WorkspaceExperienceDefinition,
   WorkspaceExperienceEntry,
   WorkspaceExperienceHostApi
@@ -321,7 +322,90 @@ export type AtomPackManifest = AtomPackManifestWire;
 
 export type AtomPackLog = (level: 'info' | 'warn' | 'error', msg: string, fields?: Record<string, unknown>) => void;
 
-export type WorkspaceExperienceApiHandler = (request: Request) => Response | Promise<Response>;
+/** Opaque, pack-private state exposed to a workspace experience API or worker.
+ * The host enforces namespace ownership and access control; pack code owns the
+ * shape and lifecycle of every stored value. */
+export interface ExperienceStateStore {
+  get<T>(projectId: string, key: string): Promise<{ value: T; version: number } | null>;
+  list<T>(projectId: string, prefix: string): Promise<Array<{ key: string; value: T; version: number }>>;
+  compareAndSwap<T>(input: {
+    projectId: string;
+    key: string;
+    expectedVersion: number | null;
+    value: T;
+    event: unknown;
+  }): Promise<boolean>;
+}
+
+/** Generic project-session operations available to a workspace experience.
+ * These deliberately contain no product-specific task or proposal concepts. */
+export interface ProjectSessionOperations {
+  list(projectId: string): Promise<Array<{ id: string; title: string; state: string }>>;
+  create(projectId: string, input: { title: string; cwd?: string; idempotencyKey: string }): Promise<{ id: string }>;
+  sendMessage(sessionId: string, input: { text: string; idempotencyKey: string }): Promise<void>;
+  listMessages(
+    sessionId: string,
+    cursor?: string
+  ): Promise<{
+    items: Array<{ id: string; role: string; text: string; createdAt: string }>;
+    nextCursor: string | null;
+  }>;
+  listObservations(
+    sessionId: string,
+    cursor?: string
+  ): Promise<{
+    items: Array<{ id: string; kind: string; text: string; createdAt: string }>;
+    nextCursor: string | null;
+  }>;
+  runTurn(sessionId: string, input: { text: string; idempotencyKey: string }): Promise<{ runId: string }>;
+  pause(sessionId: string): Promise<void>;
+  cancel(sessionId: string): Promise<void>;
+  listPendingApprovals(
+    projectId: string,
+    sessionId?: string
+  ): Promise<Array<{ id: string; sessionId: string; summary: string }>>;
+  resolveApproval(approvalId: string, decision: 'approved' | 'denied'): Promise<void>;
+}
+
+export interface ProjectExperienceEvent {
+  id: string;
+  projectId: string;
+  sessionId: string;
+  type: string;
+  payload: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface ExperienceWorkerScheduler {
+  schedule(projectId: string, input: { key: string; runAt: string }): Promise<void>;
+  cancel(projectId: string, key: string): Promise<void>;
+}
+
+export interface ExperienceWorker {
+  experienceId: string;
+  onProjectStart(projectId: string, context: WorkspaceExperienceApiContext): Promise<void>;
+  onEvent(event: ProjectExperienceEvent, context: WorkspaceExperienceApiContext): Promise<void>;
+  onWake(
+    input: { projectId: string; key: string; now: string },
+    context: WorkspaceExperienceApiContext
+  ): Promise<void>;
+}
+
+/** Authenticated, pack-scoped host capabilities passed only at an Experience API/worker boundary. */
+export interface WorkspaceExperienceApiContext {
+  atomPackId: string;
+  principalId: string;
+  experienceState: ExperienceStateStore;
+  projectSessions: ProjectSessionOperations;
+  workerScheduler: ExperienceWorkerScheduler;
+}
+
+export type { WorkspaceExperiencePermission };
+
+export type WorkspaceExperienceApiHandler = (
+  request: Request,
+  context: WorkspaceExperienceApiContext
+) => Response | Promise<Response>;
 
 export interface WorkspaceExperienceApiRoute {
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -356,6 +440,7 @@ export interface AtomPackContext {
   registerSandbox(launcher: SandboxLauncher): void;
   registerWorkspaceExperience(experience: WorkspaceExperienceDefinition): void;
   registerWorkspaceExperienceApi(api: WorkspaceExperienceApi): void;
+  registerExperienceWorker(worker: ExperienceWorker): void;
   /** Request bounded, host-rendered user input. The host owns presentation, routing, and lifecycle. */
   requestInteraction(request: InteractionRequest): Promise<InteractionResult>;
   log: AtomPackLog;
@@ -386,6 +471,8 @@ export interface ManifestAtomPackHost {
   registerWorkspaceExperience?(experience: WorkspaceExperienceDefinition): void;
   /** Optional: hosts that don't support workspace experience APIs omit it; registration then throws. */
   registerWorkspaceExperienceApi?(api: WorkspaceExperienceApi): void;
+  /** Optional: hosts without background Experience workers reject registration. */
+  registerExperienceWorker?(worker: ExperienceWorker): void;
   /** Optional host interaction bridge. The loader supplies the trusted, bound atom-pack identity. */
   requestInteraction?(atomPackId: string, request: InteractionRequest): Promise<InteractionResult>;
   log?: AtomPackLog;
@@ -405,6 +492,7 @@ export function defineAtomPack(spec: {
   sandboxes?: SandboxLauncher[];
   workspaceExperienceApis?: WorkspaceExperienceApi[];
   workspaceExperiences?: WorkspaceExperienceDefinition[];
+  experienceWorkers?: ExperienceWorker[];
 }): ManifestAtomPack {
   return {
     manifest: spec.manifest,
@@ -419,6 +507,7 @@ export function defineAtomPack(spec: {
       for (const sandbox of spec.sandboxes ?? []) ctx.registerSandbox(sandbox);
       for (const experience of spec.workspaceExperiences ?? []) ctx.registerWorkspaceExperience(experience);
       for (const api of spec.workspaceExperienceApis ?? []) ctx.registerWorkspaceExperienceApi(api);
+      for (const worker of spec.experienceWorkers ?? []) ctx.registerExperienceWorker(worker);
     }
   };
 }
@@ -493,6 +582,13 @@ export async function loadManifestAtomPack(
         throw new Error(`host does not accept workspace experience APIs (atom pack "${name}")`);
       }
       host.registerWorkspaceExperienceApi(api);
+    },
+    registerExperienceWorker: (worker) => {
+      gate('workspace-experience');
+      if (!host.registerExperienceWorker) {
+        throw new Error(`host does not accept experience workers (atom pack "${name}")`);
+      }
+      host.registerExperienceWorker(worker);
     },
     requestInteraction: (request) => {
       if (!host.requestInteraction) {

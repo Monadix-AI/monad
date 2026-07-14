@@ -1,8 +1,14 @@
-import type { ChannelType, InteractionRequest, InteractionResult } from '@monad/protocol';
+import type {
+  ChannelType,
+  InteractionRequest,
+  InteractionResult,
+  WorkspaceExperiencePermission
+} from '@monad/protocol';
 import type {
   ChannelAdapterFactory,
   Connector,
   ExternalAgentProviderAdapter,
+  ExperienceWorker,
   HookDefinition,
   ManifestAtomPack,
   ModelProvider,
@@ -33,7 +39,16 @@ export function builtinChannelAdapters(
     onAgentAdapter?: (adapter: ExternalAgentProviderAdapter) => void;
     onSandbox?: (launcher: SandboxLauncher, atomPackId: string) => void;
     onWorkspaceExperience?: (experience: WorkspaceExperienceDefinition, atomPackName: string) => void;
-    onWorkspaceExperienceApi?: (api: WorkspaceExperienceApi, atomPackName: string) => void;
+    onWorkspaceExperienceApi?: (
+      api: WorkspaceExperienceApi,
+      atomPackName: string,
+      permissions: readonly WorkspaceExperiencePermission[]
+    ) => void;
+    onExperienceWorker?: (
+      worker: ExperienceWorker,
+      atomPackName: string,
+      permissions: readonly WorkspaceExperiencePermission[]
+    ) => void;
     onRequestInteraction?: (atomPackId: string, request: InteractionRequest) => Promise<InteractionResult>;
   } = {}
 ): Promise<Map<ChannelType, ChannelAdapterFactory>> {

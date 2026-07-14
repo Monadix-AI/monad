@@ -59,9 +59,10 @@ export class SessionManager {
     title: string,
     owner: PrincipalId,
     origin?: SessionOrigin,
-    cwd?: string
+    cwd?: string,
+    id?: SessionId
   ): Promise<Session> {
-    return this.build(title, owner, null, undefined, undefined, origin, cwd, projectId);
+    return this.build(title, owner, null, undefined, undefined, origin, cwd, projectId, id);
   }
 
   private async build(
@@ -72,11 +73,12 @@ export class SessionManager {
     agentId?: AgentId,
     origin?: SessionOrigin,
     cwd?: string,
-    projectId?: Session['projectId']
+    projectId?: Session['projectId'],
+    id?: SessionId
   ): Promise<Session> {
     const now = new Date().toISOString();
     const session: Session = {
-      id: newId('ses'),
+      id: id ?? newId('ses'),
       title,
       ownerPrincipalId: owner,
       state: 'active',

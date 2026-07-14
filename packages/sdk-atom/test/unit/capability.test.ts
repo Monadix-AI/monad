@@ -6,10 +6,13 @@ import type {
   ManifestAtomPack,
   ManifestAtomPackHost,
   WorkspaceExperienceApi,
-  WorkspaceExperienceDefinition
+  WorkspaceExperienceApiContext,
+  WorkspaceExperienceDefinition,
+  ExperienceWorker
 } from '../../src/index.ts';
 
 import { expect, test } from 'bun:test';
+import { parseAtomPackManifest } from '@monad/protocol';
 import {
   bindWorkspaceExperience,
   defineWorkspaceExperience,
@@ -20,6 +23,18 @@ import { defineAtomPack, defineChannel, loadManifestAtomPack, UndeclaredAtomErro
 
 const SDK_VERSION = '0';
 
+test('workspace Experience permissions are generic and parsed from the manifest', () => {
+  const parsed = parseAtomPackManifest({
+    name: 'board',
+    version: '1.0.0',
+    sdkVersion: SDK_VERSION,
+    atoms: ['workspace-experience'],
+    permissions: ['experience.state', 'project.sessions.read']
+  });
+
+  expect(parsed.permissions).toEqual(['experience.state', 'project.sessions.read']);
+});
+
 function manifest(over: Partial<AtomPackManifest>): AtomPackManifest {
   return { name: 'p', version: '1.0.0', sdkVersion: SDK_VERSION, atoms: [], ...over };
 }
@@ -28,27 +43,31 @@ function collectingHost(): ManifestAtomPackHost & {
   connectors: Connector[];
   channels: ChannelDefinition[];
   hooks: HookDefinition[];
-  workspaceExperienceApis: WorkspaceExperienceApi[];
-  workspaceExperiences: WorkspaceExperienceDefinition[];
+    workspaceExperienceApis: WorkspaceExperienceApi[];
+    workspaceExperiences: WorkspaceExperienceDefinition[];
+    experienceWorkers: ExperienceWorker[];
 } {
   const connectors: Connector[] = [];
   const channels: ChannelDefinition[] = [];
   const hooks: HookDefinition[] = [];
   const workspaceExperienceApis: WorkspaceExperienceApi[] = [];
   const workspaceExperiences: WorkspaceExperienceDefinition[] = [];
+  const experienceWorkers: ExperienceWorker[] = [];
   return {
     connectors,
     channels,
     hooks,
     workspaceExperienceApis,
     workspaceExperiences,
+    experienceWorkers,
     registerConnector: (c) => connectors.push(c),
     registerChannel: (c) => channels.push(c as ChannelDefinition),
     registerCommand: () => {},
     registerMessageType: () => {},
     registerHook: (h) => hooks.push(h),
     registerWorkspaceExperienceApi: (api) => workspaceExperienceApis.push(api),
-    registerWorkspaceExperience: (experience) => workspaceExperiences.push(experience)
+    registerWorkspaceExperience: (experience) => workspaceExperiences.push(experience),
+    registerExperienceWorker: (worker) => experienceWorkers.push(worker)
   };
 }
 
@@ -73,10 +92,47 @@ const dummyWorkspaceExperienceApi: WorkspaceExperienceApi = {
     {
       method: 'POST',
       path: '/search',
-      handle: async () => Response.json({ ok: true })
+      handle: async (_request: Request, context: WorkspaceExperienceApiContext) =>
+        Response.json({ ok: true, pack: context.atomPackId })
     }
   ]
 };
+const dummyExperienceWorker: ExperienceWorker = {
+  experienceId: 'custom-workspace',
+  onProjectStart: async () => {},
+  onEvent: async () => {},
+  onWake: async () => {}
+};
+
+test('workspace experience API handlers receive generic, pack-scoped context', async () => {
+  const response = await dummyWorkspaceExperienceApi.routes[0]!.handle(new Request('https://example.test/search'), {
+    atomPackId: 'pack-a',
+    principalId: 'prn_a',
+    experienceState: {
+      get: async () => null,
+      list: async () => [],
+      compareAndSwap: async () => true
+    },
+    projectSessions: {
+      list: async () => [],
+      create: async () => ({ id: 'ses_a' }),
+      sendMessage: async () => {},
+      listMessages: async () => ({ items: [], nextCursor: null }),
+      listObservations: async () => ({ items: [], nextCursor: null }),
+      runTurn: async () => ({ runId: 'run_a' }),
+      pause: async () => {},
+      cancel: async () => {},
+      listPendingApprovals: async () => [],
+      resolveApproval: async () => {}
+    },
+    workerScheduler: {
+      schedule: async () => {},
+      cancel: async () => {}
+    }
+  });
+
+  expect(await response.json()).toEqual({ ok: true, pack: 'pack-a' });
+});
 const dummyChannelAtom = defineChannel({
   type: 'echo',
   name: 'Echo',
@@ -182,11 +238,13 @@ test('a declared `workspace-experience` atom routes to the host', async () => {
   const pack = defineAtomPack({
     manifest: manifest({ atoms: ['workspace-experience'] }),
     workspaceExperienceApis: [dummyWorkspaceExperienceApi],
-    workspaceExperiences: [dummyWorkspaceExperience]
+    workspaceExperiences: [dummyWorkspaceExperience],
+    experienceWorkers: [dummyExperienceWorker]
   });
   await loadManifestAtomPack(pack, host);
   expect(host.workspaceExperiences).toEqual([dummyWorkspaceExperience]);
   expect(host.workspaceExperienceApis).toEqual([dummyWorkspaceExperienceApi]);
+  expect(host.experienceWorkers).toEqual([dummyExperienceWorker]);
 });
 
 test('registering a workspace experience WITHOUT the atom kind throws', async () => {
