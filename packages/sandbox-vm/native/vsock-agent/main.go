@@ -44,6 +44,7 @@ type managedRun struct {
 	stdin         io.WriteCloser
 	done          chan exitMessage
 	finished      chan struct{}
+	resize        func(resizeRequest) error
 	terminateOnce sync.Once
 }
 
@@ -151,13 +152,18 @@ func serveConnection(conn io.ReadWriteCloser, registry *runRegistry) {
 		writer.json(frameError, map[string]string{"message": "invalid start request"})
 		return
 	}
-	cmd, supervisorResult, err := commandFor(req)
+	cmd, supervisorResult, supervisorControl, err := commandFor(req)
 	if err != nil {
 		(&frameWriter{w: conn}).json(frameError, map[string]string{"message": err.Error()})
 		return
 	}
 	writer := &frameWriter{w: conn}
-	run, err := startManagedCommand(cmd, supervisorResult, func(kind byte, data []byte) { writer.write(kind, data) })
+	run, err := startManagedCommandWithControl(
+		cmd,
+		supervisorResult,
+		supervisorControl,
+		func(kind byte, data []byte) { writer.write(kind, data) },
+	)
 	if err != nil {
 		writer.json(frameError, map[string]string{"message": err.Error()})
 		return
@@ -224,7 +230,14 @@ func validateStart(req startRequest) error {
 	if len(req.Argv) == 0 || req.Argv[0] == "" {
 		return fmt.Errorf("argv is empty")
 	}
+	if req.Terminal != nil && !validTerminalSize(req.Terminal.Cols, req.Terminal.Rows) {
+		return fmt.Errorf("terminal dimensions must be integers from 1 through 1000")
+	}
 	return nil
+}
+
+func validTerminalSize(cols, rows int) bool {
+	return cols >= 1 && cols <= 1000 && rows >= 1 && rows <= 1000
 }
 
 func handleControl(run *managedRun, writer *frameWriter, frame wireFrame) error {
@@ -248,14 +261,21 @@ func handleControl(run *managedRun, writer *frameWriter, frame wireFrame) error 
 		}
 		run.signal(syscall.Signal(req.Signal))
 	case frameResize:
-		return writer.json(frameUnsupported, map[string]string{"operation": "resize"})
+		if run.resize == nil {
+			return writer.json(frameUnsupported, map[string]string{"operation": "resize"})
+		}
+		var req resizeRequest
+		if json.Unmarshal(frame.Payload, &req) != nil || !validTerminalSize(req.Cols, req.Rows) {
+			return fmt.Errorf("invalid resize frame")
+		}
+		return run.resize(req)
 	default:
 		return fmt.Errorf("unsupported control frame %d", frame.Kind)
 	}
 	return nil
 }
 
-func commandFor(req startRequest) (*exec.Cmd, io.ReadCloser, error) {
+func commandFor(req startRequest) (*exec.Cmd, io.ReadCloser, io.WriteCloser, error) {
 	return supervisorCommand(req)
 }
 
@@ -292,6 +312,15 @@ func startCommand(cmd *exec.Cmd, output func(byte, []byte)) (*managedRun, error)
 }
 
 func startManagedCommand(cmd *exec.Cmd, supervisorResult io.ReadCloser, output func(byte, []byte)) (*managedRun, error) {
+	return startManagedCommandWithControl(cmd, supervisorResult, nil, output)
+}
+
+func startManagedCommandWithControl(
+	cmd *exec.Cmd,
+	supervisorResult io.ReadCloser,
+	supervisorControl io.WriteCloser,
+	output func(byte, []byte),
+) (*managedRun, error) {
 	if cmd.SysProcAttr == nil {
 		cmd.SysProcAttr = &syscall.SysProcAttr{}
 	}
@@ -315,12 +344,23 @@ func startManagedCommand(cmd *exec.Cmd, supervisorResult io.ReadCloser, output f
 		for _, file := range cmd.ExtraFiles {
 			file.Close()
 		}
+		if supervisorControl != nil {
+			supervisorControl.Close()
+		}
 		return nil, err
 	}
 	for _, file := range cmd.ExtraFiles {
 		file.Close()
 	}
 	run := &managedRun{cmd: cmd, stdin: stdin, done: make(chan exitMessage, 1), finished: make(chan struct{})}
+	if supervisorControl != nil {
+		var resizeMu sync.Mutex
+		run.resize = func(req resizeRequest) error {
+			resizeMu.Lock()
+			defer resizeMu.Unlock()
+			return json.NewEncoder(supervisorControl).Encode(req)
+		}
+	}
 	var pumps sync.WaitGroup
 	pump := func(reader io.Reader, kind byte) {
 		defer pumps.Done()
@@ -339,6 +379,9 @@ func startManagedCommand(cmd *exec.Cmd, supervisorResult io.ReadCloser, output f
 	go pump(stdout, frameStdout)
 	go pump(stderr, frameStderr)
 	go func() {
+		if supervisorControl != nil {
+			defer supervisorControl.Close()
+		}
 		err := cmd.Wait()
 		pumps.Wait()
 		result := exitResult(cmd, err)

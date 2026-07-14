@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	protocolVersion      = 2
+	protocolVersion      = 3
 	maxControlFrameBytes = 1024 * 1024
 	maxStreamFrameBytes  = 64 * 1024
 
@@ -39,12 +39,23 @@ type runLimits struct {
 }
 
 type startRequest struct {
-	Version int               `json:"version"`
-	RunID   string            `json:"runId"`
-	Argv    []string          `json:"argv"`
-	Cwd     string            `json:"cwd,omitempty"`
-	Env     map[string]string `json:"env,omitempty"`
-	Limits  runLimits         `json:"limits,omitempty"`
+	Version  int               `json:"version"`
+	RunID    string            `json:"runId"`
+	Argv     []string          `json:"argv"`
+	Cwd      string            `json:"cwd,omitempty"`
+	Env      map[string]string `json:"env,omitempty"`
+	Limits   runLimits         `json:"limits,omitempty"`
+	Terminal *terminalOptions  `json:"terminal,omitempty"`
+}
+
+type terminalOptions struct {
+	Cols int `json:"cols"`
+	Rows int `json:"rows"`
+}
+
+type resizeRequest struct {
+	Cols int `json:"cols"`
+	Rows int `json:"rows"`
 }
 
 type signalRequest struct {

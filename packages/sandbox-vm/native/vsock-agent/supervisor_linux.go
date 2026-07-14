@@ -13,29 +13,44 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func supervisorCommand(req startRequest) (*exec.Cmd, io.ReadCloser, error) {
+func supervisorCommand(req startRequest) (*exec.Cmd, io.ReadCloser, io.WriteCloser, error) {
 	executable, err := os.Executable()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	configReader, configWriter, err := os.Pipe()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	resultReader, resultWriter, err := os.Pipe()
 	if err != nil {
 		configReader.Close()
 		configWriter.Close()
-		return nil, nil, err
+		return nil, nil, nil, err
+	}
+	var controlReader *os.File
+	var controlWriter *os.File
+	if req.Terminal != nil {
+		controlReader, controlWriter, err = os.Pipe()
+		if err != nil {
+			configReader.Close()
+			configWriter.Close()
+			resultReader.Close()
+			resultWriter.Close()
+			return nil, nil, nil, err
+		}
 	}
 	cmd := exec.Command(executable, "--supervise-run")
 	cmd.ExtraFiles = []*os.File{configReader, resultWriter}
+	if controlReader != nil {
+		cmd.ExtraFiles = append(cmd.ExtraFiles, controlReader)
+	}
 	cmd.SysProcAttr = &syscall.SysProcAttr{Cloneflags: unix.CLONE_NEWPID | unix.CLONE_NEWNS}
 	go func() {
 		defer configWriter.Close()
 		json.NewEncoder(configWriter).Encode(req)
 	}()
-	return cmd, resultReader, nil
+	return cmd, resultReader, controlWriter, nil
 }
 
 func runSupervisorMode() int {
@@ -55,6 +70,15 @@ func runSupervisorMode() int {
 	if err := json.NewDecoder(config).Decode(&req); err != nil || validateStart(req) != nil {
 		fmt.Fprintln(os.Stderr, "supervisor: invalid config")
 		return 127
+	}
+	var control *os.File
+	if req.Terminal != nil {
+		control = os.NewFile(5, "run-control")
+		if control == nil {
+			fmt.Fprintln(os.Stderr, "supervisor: control fd is unavailable")
+			return 127
+		}
+		defer control.Close()
 	}
 	limits := req.Limits
 	if limits.MemoryMiB <= 0 {
@@ -78,11 +102,30 @@ func runSupervisorMode() int {
 		fmt.Fprintln(os.Stderr, "supervisor:", err)
 		return 127
 	}
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.SysProcAttr.Setpgid = true
-	if err := cmd.Start(); err != nil {
+	var master *os.File
+	outputDone := make(chan struct{})
+	if req.Terminal != nil {
+		master, err = startPTY(cmd, *req.Terminal)
+		if err == nil {
+			go func() {
+				io.Copy(os.Stdout, master)
+				close(outputDone)
+			}()
+			go func() {
+				io.Copy(master, os.Stdin)
+				master.Close()
+			}()
+			go applyResizes(control, master)
+		}
+	} else {
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		cmd.SysProcAttr.Setpgid = true
+		err = cmd.Start()
+		close(outputDone)
+	}
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "supervisor: start:", err)
 		return 127
 	}
@@ -101,6 +144,10 @@ func runSupervisorMode() int {
 			signal.Stop(signals)
 			syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 			reapChildren()
+			if master != nil {
+				<-outputDone
+				master.Close()
+			}
 			if status, ok := cmd.ProcessState.Sys().(syscall.WaitStatus); ok && status.Signaled() {
 				sig := int(status.Signal())
 				json.NewEncoder(result).Encode(exitMessage{Code: nil, Signal: sig})
@@ -114,6 +161,22 @@ func runSupervisorMode() int {
 			code := 0
 			json.NewEncoder(result).Encode(exitMessage{Code: &code})
 			return 0
+		}
+	}
+}
+
+func applyResizes(control io.Reader, master *os.File) {
+	if control == nil || master == nil {
+		return
+	}
+	decoder := json.NewDecoder(control)
+	for {
+		var req resizeRequest
+		if decoder.Decode(&req) != nil {
+			return
+		}
+		if validTerminalSize(req.Cols, req.Rows) {
+			resizePTY(master, req)
 		}
 	}
 }
