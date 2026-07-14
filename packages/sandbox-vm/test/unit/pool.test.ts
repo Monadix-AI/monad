@@ -46,7 +46,8 @@ test('fingerprint ignores sessionId/agentId but tracks mounts + net', () => {
 
 test.each([
   ['readDenyRoots', { readDenyRoots: ['/secret-a'] }, { readDenyRoots: ['/secret-b'] }],
-  ['maskedFiles', { maskedFiles: [{ real: '/a', fake: '/x' }] }, { maskedFiles: [{ real: '/a', fake: '/y' }] }]
+  ['maskedFiles', { maskedFiles: [{ real: '/a', fake: '/x' }] }, { maskedFiles: [{ real: '/a', fake: '/y' }] }],
+  ['credentialGeneration', { credentialGeneration: 1 }, { credentialGeneration: 2 }]
 ] as Array<[string, SandboxPolicy, SandboxPolicy]>)('%s changes the VM fingerprint', (_name, a, b) => {
   expect(policyFingerprint(identity(a))).not.toBe(policyFingerprint(identity(b)));
 });

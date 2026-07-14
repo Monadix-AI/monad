@@ -46,6 +46,7 @@ export interface EffectiveVmIdentityInputs {
 
 export interface EffectiveVmIdentity extends EffectiveVmIdentityInputs {
   policy: {
+    credentialGeneration: number | null;
     maskedFiles: { real: string; fake: string }[] | null;
     net: 'default' | 'none' | 'unrestricted' | { allowProxyPort: number };
     readDenyRoots: string[] | null;
@@ -72,6 +73,7 @@ export function effectiveVmIdentity(policy: SandboxPolicy, inputs: EffectiveVmId
   return {
     ...inputs,
     policy: {
+      credentialGeneration: policy.credentialGeneration ?? null,
       maskedFiles,
       net,
       readDenyRoots: canonicalPaths(policy.readDenyRoots),

@@ -99,10 +99,15 @@ export function configureSandboxReadDeny(roots: string[]): void {
 // Masked credential files (real→fake binds) applied to every confined spawn. Daemon-wide, built
 // once at boot from a MaskedFileStore — see configureSandboxMaskedFiles.
 let maskedFilesDefault: { real: string; fake: string }[] = [];
+let credentialGenerationDefault = 0;
 
 /** Wire the daemon-wide masked credential files at boot (real→fake read-only binds). */
 export function configureSandboxMaskedFiles(files: { real: string; fake: string }[]): void {
   maskedFilesDefault = files;
+}
+
+export function configureSandboxCredentialGeneration(generation: number): void {
+  credentialGenerationDefault = generation;
 }
 
 // Env injected into every confined child (e.g. HTTP(S)_PROXY pointing at the local filtering proxy)
@@ -159,6 +164,7 @@ export function buildSandboxPolicy(
     writableRoots: writableRoots ? [...writableRoots, tmpdir(), ...extraWritable] : undefined,
     readDenyRoots: readDenyDefault,
     maskedFiles: maskedFilesDefault.length > 0 ? maskedFilesDefault : undefined,
+    credentialGeneration: credentialGenerationDefault > 0 ? credentialGenerationDefault : undefined,
     net: netDefault,
     sessionId,
     agentId

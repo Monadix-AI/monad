@@ -40,6 +40,9 @@ export interface SandboxPolicy {
    *  its read-deny set (file unreadable, not masked); one that can do neither (Landlock, Low-IL)
    *  cannot enforce it and must warn — the file stays readable in cleartext. */
   maskedFiles?: { real: string; fake: string }[];
+  /** Non-secret lifecycle generation for materialized credentials. A change invalidates reusable
+   *  launcher state without hashing or serializing credential bytes. */
+  credentialGeneration?: number;
   /** 'none' = no egress; { allowProxyPort } = only the local filtering proxy; 'unrestricted' = open. */
   net?: 'none' | { allowProxyPort: number } | 'unrestricted';
   /** The session this run belongs to. Local launchers that create per-session OS artifacts

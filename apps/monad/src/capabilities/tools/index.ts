@@ -9,6 +9,7 @@ export {
   buildSandboxPolicy,
   clearSandboxLaunchers,
   configureSandboxBackendOptions,
+  configureSandboxCredentialGeneration,
   configureSandboxExtraEnv,
   configureSandboxLauncher,
   configureSandboxMaskedFiles,

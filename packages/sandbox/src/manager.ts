@@ -86,6 +86,7 @@ export class SandboxManager {
     let env: Record<string, string> = {};
     let maskedBinds: { real: string; fake: string }[] = [];
     let maskedDeny: string[] = [];
+    let credentialGenerationActive = false;
     const creds = opts.credentials ?? [];
     const credFiles = opts.credentialFiles ?? [];
 
@@ -126,6 +127,7 @@ export class SandboxManager {
           }
           sentinels = registry;
           sentinelEnv = registry.childEnv();
+          credentialGenerationActive = registry.size > 0;
         }
       }
 
@@ -162,6 +164,7 @@ export class SandboxManager {
       writableRoots: [...writable, tmpdir()],
       readDenyRoots: [...(opts.readDenyRoots ?? []), ...maskedDeny],
       maskedFiles: maskedBinds.length > 0 ? maskedBinds : undefined,
+      credentialGeneration: credentialGenerationActive ? 1 : undefined,
       net
     };
   }

@@ -28,6 +28,7 @@ import { configureSandboxCredential } from '@monad/sdk-atom';
 import {
   configureHostExec,
   configureSandboxBackendOptions,
+  configureSandboxCredentialGeneration,
   configureSandboxExtraEnv,
   configureSandboxLauncher,
   configureSandboxMaskedFiles,
@@ -48,6 +49,8 @@ export interface SandboxSetup {
   sandboxRoots: string[] | undefined;
   sessionSandbox: SessionSandboxService;
 }
+
+let credentialGeneration = 0;
 
 export async function createSandbox(
   cfg: MonadConfig,
@@ -80,6 +83,8 @@ export async function createSandbox(
   // config change cannot strand resources from a prior confined run. Currently Windows reclaims
   // orphaned AppContainer profiles; other host platforms no-op.
   void prepareSandboxHost();
+  configureSandboxCredentialGeneration(0);
+  configureSandboxMaskedFiles([]);
 
   if (cfg.sandbox.confine) {
     // The override path for the native Linux/Windows launcher binary (config.sandbox.launcherPath)
@@ -162,6 +167,7 @@ export async function createSandbox(
           }
           sentinels = registry;
           sentinelEnv = registry.childEnv();
+          configureSandboxCredentialGeneration(++credentialGeneration);
           logger.info(
             `monad: credential sentinels active for ${cfg.sandbox.credentials.map((c) => c.name).join(', ')} ` +
               '(child sees fake values; proxy injects real values on matching hosts)'
@@ -205,10 +211,12 @@ export async function createSandbox(
     } else {
       configureSandboxNet(cfg.sandbox.net);
       configureSandboxProxyEnv(undefined);
+      configureSandboxCredentialGeneration(0);
     }
   } else {
     configureSandboxLauncher(noneLauncher);
     configureSandboxProxyEnv(undefined);
+    configureSandboxCredentialGeneration(0);
   }
   configureHostExec(cfg.sandbox.hostExec);
   if (Object.keys(cfg.sandbox.env).length > 0) {
