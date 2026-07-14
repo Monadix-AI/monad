@@ -15,6 +15,7 @@ test('real VM workflow uses only capability-labeled self-hosted runners', async 
   expect(workflow.jobs['windows-hyperv']?.['runs-on']).toEqual(['self-hosted', 'windows', 'x64', 'monad-vm', 'hyperv']);
   for (const job of Object.values(workflow.jobs)) {
     expect(job.steps.some((step) => step.run?.includes('test/smoke/vm-preflight.ts'))).toBe(true);
+    expect(job.steps.some((step) => step.run?.includes('test/smoke/vm-boot-rollback.ts'))).toBe(true);
     expect(job.steps.some((step) => step.run?.includes('bun run --cwd packages/sandbox-vm test:e2e'))).toBe(true);
     expect(job.steps.some((step) => step.env?.MONAD_VM_IT === '1')).toBe(true);
   }
