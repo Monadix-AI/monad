@@ -19,48 +19,32 @@
 package main
 
 import (
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"os/user"
+	"regexp"
 	"strconv"
 	"sync"
 	"syscall"
+	"time"
 
 	"golang.org/x/sys/unix"
 )
 
-// lookupMonad resolves the unprivileged guest user's uid/gid. Commands run under it, never root.
-func lookupMonad() (uint32, uint32, bool) {
-	u, err := user.Lookup("monad")
-	if err != nil {
-		return 0, 0, false
-	}
-	uid, err1 := strconv.ParseUint(u.Uid, 10, 32)
-	gid, err2 := strconv.ParseUint(u.Gid, 10, 32)
-	if err1 != nil || err2 != nil {
-		return 0, 0, false
-	}
-	return uint32(uid), uint32(gid), true
-}
-
-// The vsock port the agent listens on. The host wires vfkit's virtio-vsock device to this port.
 const vsockPort = 1024
 
-type request struct {
-	Argv []string          `json:"argv"`
-	Cwd  string            `json:"cwd"`
-	Env  map[string]string `json:"env"`
-}
+var safeRunID = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,128}$`)
 
-const (
-	chStdout = 1
-	chStderr = 2
-	chExit   = 3
-)
+type managedRun struct {
+	cmd           *exec.Cmd
+	stdin         io.WriteCloser
+	done          chan exitMessage
+	terminateOnce sync.Once
+}
 
 func main() {
 	// mount9p mode: mount a host 9p share served over vsock — the Hyper-V mount plane (no virtio-fs
@@ -74,7 +58,6 @@ func main() {
 		fmt.Fprintln(os.Stderr, "vsock socket:", err)
 		os.Exit(1)
 	}
-	// Bind to (CID_ANY, vsockPort): accept host-initiated connections on this port.
 	if err := unix.Bind(fd, &unix.SockaddrVM{CID: unix.VMADDR_CID_ANY, Port: vsockPort}); err != nil {
 		fmt.Fprintln(os.Stderr, "vsock bind:", err)
 		os.Exit(1)
@@ -83,119 +66,215 @@ func main() {
 		fmt.Fprintln(os.Stderr, "vsock listen:", err)
 		os.Exit(1)
 	}
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, syscall.SIGTERM, syscall.SIGINT)
+	go func() {
+		<-stop
+		unix.Close(fd)
+	}()
 	for {
 		conn, _, err := unix.Accept(fd)
 		if err != nil {
-			continue
+			return
 		}
-		go handle(conn)
+		go serveConnection(os.NewFile(uintptr(conn), "vsock-conn"))
 	}
 }
 
-func handle(fd int) {
-	f := os.NewFile(uintptr(fd), "vsock-conn")
-	defer f.Close()
-
-	req, err := readRequest(f)
-	if err != nil {
-		writeExit(f, 127)
+func serveConnection(conn io.ReadWriteCloser) {
+	defer conn.Close()
+	first, err := readFrame(conn)
+	if err != nil || first.Kind != frameStart {
 		return
 	}
-	writeExit(f, run(f, req))
+	var req startRequest
+	if json.Unmarshal(first.Payload, &req) != nil || validateStart(req) != nil {
+		writer := &frameWriter{w: conn}
+		writer.json(frameError, map[string]string{"message": "invalid start request"})
+		return
+	}
+	cmd, err := commandFor(req)
+	if err != nil {
+		(&frameWriter{w: conn}).json(frameError, map[string]string{"message": err.Error()})
+		return
+	}
+	writer := &frameWriter{w: conn}
+	run, err := startCommand(cmd, func(kind byte, data []byte) { writer.write(kind, data) })
+	if err != nil {
+		writer.json(frameError, map[string]string{"message": err.Error()})
+		return
+	}
+	writer.json(frameStarted, startedMessage{RunID: req.RunID, PID: run.cmd.Process.Pid})
+
+	frames := make(chan wireFrame)
+	readErrors := make(chan error, 1)
+	go func() {
+		defer close(frames)
+		for {
+			frame, err := readFrame(conn)
+			if err != nil {
+				readErrors <- err
+				return
+			}
+			frames <- frame
+		}
+	}()
+
+	grace := time.Duration(req.Limits.TerminateGraceMs) * time.Millisecond
+	if grace <= 0 {
+		grace = 2 * time.Second
+	}
+	for {
+		select {
+		case result := <-run.done:
+			writer.json(frameExit, result)
+			return
+		case <-readErrors:
+			run.terminate(grace)
+			<-run.done
+			return
+		case frame, ok := <-frames:
+			if !ok {
+				run.terminate(grace)
+				<-run.done
+				return
+			}
+			handleControl(run, writer, frame)
+		}
+	}
 }
 
-func readRequest(f *os.File) (*request, error) {
-	var lenBuf [4]byte
-	if _, err := io.ReadFull(f, lenBuf[:]); err != nil {
-		return nil, err
+func validateStart(req startRequest) error {
+	if req.Version != protocolVersion {
+		return fmt.Errorf("unsupported protocol version")
 	}
-	n := binary.BigEndian.Uint32(lenBuf[:])
-	body := make([]byte, n)
-	if _, err := io.ReadFull(f, body); err != nil {
-		return nil, err
+	if !safeRunID.MatchString(req.RunID) {
+		return fmt.Errorf("invalid run id")
 	}
-	var req request
-	if err := json.Unmarshal(body, &req); err != nil {
-		return nil, err
+	if len(req.Argv) == 0 || req.Argv[0] == "" {
+		return fmt.Errorf("argv is empty")
 	}
-	return &req, nil
+	return nil
 }
 
-func run(f *os.File, req *request) int {
-	if len(req.Argv) == 0 {
-		return 127
+func handleControl(run *managedRun, writer *frameWriter, frame wireFrame) {
+	switch frame.Kind {
+	case frameStdin:
+		if run.stdin != nil {
+			run.stdin.Write(frame.Payload)
+		}
+	case frameCloseStdin:
+		if run.stdin != nil {
+			run.stdin.Close()
+		}
+	case frameSignal:
+		var req signalRequest
+		if json.Unmarshal(frame.Payload, &req) == nil && req.Signal >= 1 && req.Signal <= 64 {
+			run.signal(syscall.Signal(req.Signal))
+		}
+	case frameResize:
+		writer.json(frameUnsupported, map[string]string{"operation": "resize"})
+	}
+}
+
+func commandFor(req startRequest) (*exec.Cmd, error) {
+	uid, gid, ok := lookupMonad()
+	if !ok {
+		return nil, fmt.Errorf("monad user is unavailable")
 	}
 	cmd := exec.Command(req.Argv[0], req.Argv[1:]...)
 	cmd.Dir = req.Cwd
-	// The agent runs as root (it binds vsock + is the trusted control broker), but the AGENT'S
-	// COMMAND must run unprivileged: drop to the `monad` user so the sandboxed workload never has
-	// root (mirrors sshd running as root but sessions as the user). Fail closed if monad is missing.
-	uid, gid, ok := lookupMonad()
-	if !ok {
-		return 127
+	cmd.Env = []string{"HOME=/home/monad", "USER=monad", "LOGNAME=monad", "PATH=/usr/local/bin:/usr/bin:/bin"}
+	for key, value := range req.Env {
+		cmd.Env = append(cmd.Env, key+"="+value)
 	}
-	env := []string{"HOME=/home/monad", "USER=monad", "LOGNAME=monad", "PATH=/usr/local/bin:/usr/bin:/bin"}
-	for k, v := range req.Env {
-		env = append(env, k+"="+v)
-	}
-	cmd.Env = env
 	cmd.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: uid, Gid: gid}}
+	return cmd, nil
+}
+
+func lookupMonad() (uint32, uint32, bool) {
+	u, err := user.Lookup("monad")
+	if err != nil {
+		return 0, 0, false
+	}
+	uid, errUID := strconv.ParseUint(u.Uid, 10, 32)
+	gid, errGID := strconv.ParseUint(u.Gid, 10, 32)
+	if errUID != nil || errGID != nil {
+		return 0, 0, false
+	}
+	return uint32(uid), uint32(gid), true
+}
+
+func startCommand(cmd *exec.Cmd, output func(byte, []byte)) (*managedRun, error) {
+	if cmd.SysProcAttr == nil {
+		cmd.SysProcAttr = &syscall.SysProcAttr{}
+	}
+	cmd.SysProcAttr.Setpgid = true
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return nil, err
+	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return 127
+		return nil, err
 	}
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		return 127
+		return nil, err
 	}
 	if err := cmd.Start(); err != nil {
-		return 127
+		return nil, err
 	}
-
-	// Serialize frame writes across the two pump goroutines (frames must not interleave).
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-	pump := func(r io.Reader, ch byte) {
-		defer wg.Done()
+	run := &managedRun{cmd: cmd, stdin: stdin, done: make(chan exitMessage, 1)}
+	var pumps sync.WaitGroup
+	pump := func(reader io.Reader, kind byte) {
+		defer pumps.Done()
 		buf := make([]byte, 32*1024)
 		for {
-			n, err := r.Read(buf)
-			if n > 0 {
-				mu.Lock()
-				writeFrame(f, ch, buf[:n])
-				mu.Unlock()
+			n, err := reader.Read(buf)
+			if n > 0 && output != nil {
+				output(kind, append([]byte(nil), buf[:n]...))
 			}
 			if err != nil {
 				return
 			}
 		}
 	}
-	wg.Add(2)
-	go pump(stdout, chStdout)
-	go pump(stderr, chStderr)
-	wg.Wait()
-
-	if err := cmd.Wait(); err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			return exitErr.ExitCode()
-		}
-		return 1
-	}
-	return 0
+	pumps.Add(2)
+	go pump(stdout, frameStdout)
+	go pump(stderr, frameStderr)
+	go func() {
+		err := cmd.Wait()
+		pumps.Wait()
+		run.done <- exitResult(cmd, err)
+	}()
+	return run, nil
 }
 
-func writeFrame(f *os.File, ch byte, data []byte) {
-	var hdr [5]byte
-	hdr[0] = ch
-	binary.BigEndian.PutUint32(hdr[1:], uint32(len(data)))
-	f.Write(hdr[:])
-	if len(data) > 0 {
-		f.Write(data)
+func exitResult(cmd *exec.Cmd, err error) exitMessage {
+	if status, ok := cmd.ProcessState.Sys().(syscall.WaitStatus); ok && status.Signaled() {
+		return exitMessage{Code: nil, Signal: int(status.Signal())}
+	}
+	code := 0
+	if err != nil {
+		code = cmd.ProcessState.ExitCode()
+	}
+	return exitMessage{Code: &code}
+}
+
+func (run *managedRun) signal(sig syscall.Signal) {
+	if run.cmd.Process != nil {
+		syscall.Kill(-run.cmd.Process.Pid, sig)
 	}
 }
 
-func writeExit(f *os.File, code int) {
-	var codeBuf [4]byte
-	binary.BigEndian.PutUint32(codeBuf[:], uint32(code))
-	writeFrame(f, chExit, codeBuf[:])
+func (run *managedRun) terminate(grace time.Duration) {
+	run.terminateOnce.Do(func() {
+		run.signal(syscall.SIGTERM)
+		time.AfterFunc(grace, func() {
+			if run.cmd.ProcessState == nil {
+				run.signal(syscall.SIGKILL)
+			}
+		})
+	})
 }
