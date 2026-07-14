@@ -1,50 +1,41 @@
 import { sql } from 'drizzle-orm';
 // biome-ignore lint/suspicious/noDeprecatedImports: drizzle marks the named export deprecated but the object-form API we use is correct
-import { integer, primaryKey, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { blob, index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
-export const sessions = sqliteTable('sessions', {
-  id: text('id').primaryKey(),
-  projectId: text('project_id'), // null = plain chat session; set = a session under this project (Track B)
-  title: text('title').notNull(),
-  ownerPrincipalId: text('owner_principal_id').notNull(),
-  state: text('state').notNull(),
-  agentIds: text('agent_ids').notNull().default('[]'),
-  parentSessionId: text('parent_session_id'),
-  branchedAtMessageId: text('branched_at_message_id'),
-  archived: integer('archived').notNull().default(0),
-  restoreCount: integer('restore_count').notNull().default(0),
-  model: text('model'), // per-session model-profile alias override (null → daemon default)
-  cwd: text('cwd'), // default working dir for shell commands + skill-path matching; null → daemon workspace
-  origin: text('origin'), // JSON SessionOrigin (provenance + write policy + env); null when no origin was built
-  inputTokens: integer('input_tokens').notNull().default(0),
-  outputTokens: integer('output_tokens').notNull().default(0),
-  totalTokens: integer('total_tokens').notNull().default(0),
-  cacheReadTokens: integer('cache_read_tokens').notNull().default(0),
-  cacheWriteTokens: integer('cache_write_tokens').notNull().default(0),
-  reasoningTokens: integer('reasoning_tokens').notNull().default(0),
-  costUsd: real('cost_usd').notNull().default(0),
-  createdAt: text('created_at').notNull(),
-  updatedAt: text('updated_at').notNull()
-});
+const providerSessionRefNotNull = sql`provider_session_ref IS NOT NULL`;
+const liveExternalAgentSession = sql`state IN ('starting', 'running')`;
+const liveAcpDelegate = sql`evicted_at IS NULL`;
+const deliveryIdNotNull = sql`delivery_id IS NOT NULL`;
 
-export const workplaceProjects = sqliteTable('workplace_projects', {
-  id: text('id').primaryKey(),
-  title: text('title').notNull(),
-  ownerPrincipalId: text('owner_principal_id').notNull(),
-  state: text('state').notNull(),
-  archived: integer('archived').notNull().default(0),
-  model: text('model'),
-  cwd: text('cwd'),
-  origin: text('origin'),
-  memberTemplates: text('member_templates').notNull().default('[]'), // JSON WorkplaceProjectMemberTemplate[] — presets a session can invite from (Track B)
-  createdAt: text('created_at').notNull(),
-  updatedAt: text('updated_at').notNull()
-});
+export const sessions = sqliteTable(
+  'sessions',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id'),
+    title: text('title').notNull(),
+    ownerPrincipalId: text('owner_principal_id').notNull(),
+    state: text('state').notNull(),
+    agentIds: text('agent_ids').notNull().default('[]'),
+    parentSessionId: text('parent_session_id'),
+    branchedAtMessageId: text('branched_at_message_id'),
+    archived: integer('archived').notNull().default(0),
+    restoreCount: integer('restore_count').notNull().default(0),
+    model: text('model'),
+    cwd: text('cwd'),
+    origin: text('origin'),
+    inputTokens: integer('input_tokens').notNull().default(0),
+    outputTokens: integer('output_tokens').notNull().default(0),
+    totalTokens: integer('total_tokens').notNull().default(0),
+    cacheReadTokens: integer('cache_read_tokens').notNull().default(0),
+    cacheWriteTokens: integer('cache_write_tokens').notNull().default(0),
+    reasoningTokens: integer('reasoning_tokens').notNull().default(0),
+    costUsd: real('cost_usd').notNull().default(0),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull()
+  },
+  (table) => [index('idx_sessions_parent').on(table.parentSessionId), index('idx_sessions_project').on(table.projectId)]
+);
 
-// A session's live member bindings (Track B). workplace_projects.memberTemplates are presets;
-// a row here is the actual per-session binding — invited from a template (templateId set) or spawned
-// ad hoc (null). Each session's binding runs its own external-agent session, never shared across
-// sessions even when invited from the same template.
 export const sessionMembers = sqliteTable(
   'session_members',
   {
@@ -53,17 +44,35 @@ export const sessionMembers = sqliteTable(
     templateId: text('template_id'),
     type: text('type').notNull(),
     externalAgentSessionId: text('external_agent_session_id'),
-    data: text('data').notNull().default('{}'), // JSON: name, templateName, displayName, settings, ...
+    data: text('data').notNull().default('{}'),
     createdAt: text('created_at').notNull(),
     updatedAt: text('updated_at').notNull()
   },
-  (t) => [primaryKey({ columns: [t.sessionId, t.memberId] })]
+  (table) => [
+    primaryKey({ columns: [table.sessionId, table.memberId] }),
+    index('idx_session_members_session').on(table.sessionId)
+  ]
 );
 
-// Global, append-only usage accounting — the "账本". Bucketed by (local day, provider, model,
-// category), monotonic, survives session deletion; only a manual clearLedger() resets it. Distinct
-// from per-session usage (which is cleared when a session is reset).
-const _usageLedger = sqliteTable(
+export const workplaceProjects = sqliteTable(
+  'workplace_projects',
+  {
+    id: text('id').primaryKey(),
+    title: text('title').notNull(),
+    ownerPrincipalId: text('owner_principal_id').notNull(),
+    state: text('state').notNull(),
+    archived: integer('archived').notNull().default(0),
+    model: text('model'),
+    cwd: text('cwd'),
+    origin: text('origin'),
+    memberTemplates: text('member_templates').notNull().default('[]'),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull()
+  },
+  (table) => [index('idx_workplace_projects_state').on(table.state, table.archived)]
+);
+
+export const usageLedger = sqliteTable(
   'usage_ledger',
   {
     day: text('day').notNull(),
@@ -78,26 +87,28 @@ const _usageLedger = sqliteTable(
     costUsd: real('cost_usd').notNull().default(0),
     updatedAt: text('updated_at').notNull()
   },
-  (t) => [primaryKey({ columns: [t.day, t.provider, t.model, t.category] })]
+  (table) => [primaryKey({ columns: [table.day, table.provider, table.model, table.category] })]
 );
 
-const providerSessionRefNotNull = sql`provider_session_ref IS NOT NULL`;
+export const tasks = sqliteTable(
+  'tasks',
+  {
+    id: text('id').primaryKey(),
+    sessionId: text('session_id').notNull(),
+    title: text('title').notNull(),
+    assigneeAgentId: text('assignee_agent_id'),
+    dependsOn: text('depends_on').notNull().default('[]'),
+    state: text('state').notNull(),
+    version: integer('version').notNull().default(0),
+    result: text('result'),
+    error: text('error'),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull()
+  },
+  (table) => [index('idx_tasks_session').on(table.sessionId)]
+);
 
-export const tasks = sqliteTable('tasks', {
-  id: text('id').primaryKey(),
-  sessionId: text('session_id').notNull(),
-  title: text('title').notNull(),
-  assigneeAgentId: text('assignee_agent_id'),
-  dependsOn: text('depends_on').notNull().default('[]'),
-  state: text('state').notNull(),
-  version: integer('version').notNull().default(0),
-  result: text('result'),
-  error: text('error'),
-  createdAt: text('created_at').notNull(),
-  updatedAt: text('updated_at').notNull()
-});
-
-const _experienceState = sqliteTable(
+export const experienceState = sqliteTable(
   'experience_state',
   {
     atomPackId: text('atom_pack_id').notNull(),
@@ -108,21 +119,36 @@ const _experienceState = sqliteTable(
     version: integer('version').notNull(),
     updatedAt: text('updated_at').notNull()
   },
-  (table) => [primaryKey({ columns: [table.atomPackId, table.principalId, table.projectId, table.recordKey] })]
+  (table) => [
+    primaryKey({ columns: [table.atomPackId, table.principalId, table.projectId, table.recordKey] }),
+    index('idx_experience_state_project').on(table.atomPackId, table.principalId, table.projectId, table.recordKey)
+  ]
 );
 
-const _experienceStateEvents = sqliteTable('experience_state_events', {
-  id: text('id').primaryKey(),
-  atomPackId: text('atom_pack_id').notNull(),
-  principalId: text('principal_id').notNull(),
-  projectId: text('project_id').notNull(),
-  recordKey: text('record_key').notNull(),
-  version: integer('version').notNull(),
-  payload: text('payload').notNull(),
-  createdAt: text('created_at').notNull()
-});
+export const experienceStateEvents = sqliteTable(
+  'experience_state_events',
+  {
+    id: text('id').primaryKey(),
+    atomPackId: text('atom_pack_id').notNull(),
+    principalId: text('principal_id').notNull(),
+    projectId: text('project_id').notNull(),
+    recordKey: text('record_key').notNull(),
+    version: integer('version').notNull(),
+    payload: text('payload').notNull(),
+    createdAt: text('created_at').notNull()
+  },
+  (table) => [
+    index('idx_experience_state_events_record').on(
+      table.atomPackId,
+      table.principalId,
+      table.projectId,
+      table.recordKey,
+      table.version
+    )
+  ]
+);
 
-const _experienceWorkerWakeups = sqliteTable(
+export const experienceWorkerWakeups = sqliteTable(
   'experience_worker_wakeups',
   {
     atomPackId: text('atom_pack_id').notNull(),
@@ -135,11 +161,129 @@ const _experienceWorkerWakeups = sqliteTable(
     updatedAt: text('updated_at').notNull()
   },
   (table) => [
-    primaryKey({ columns: [table.atomPackId, table.principalId, table.experienceId, table.projectId, table.wakeKey] })
+    primaryKey({ columns: [table.atomPackId, table.principalId, table.experienceId, table.projectId, table.wakeKey] }),
+    index('idx_experience_worker_wakeups_due').on(table.runAt)
   ]
 );
 
-const _externalAgentSessions = sqliteTable(
+export const messages = sqliteTable(
+  'messages',
+  {
+    id: text('id').primaryKey(),
+    transcriptTargetId: text('transcript_target_id').notNull(),
+    role: text('role').notNull(),
+    text: text('text').notNull(),
+    type: text('type').notNull().default('text'),
+    data: text('data'),
+    streamStatus: text('stream_status').notNull().default('settled'),
+    active: integer('active').notNull().default(1),
+    includeInContext: integer('include_in_context'),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at')
+  },
+  (table) => [
+    index('idx_messages_transcript_target').on(table.transcriptTargetId),
+    index('idx_messages_active').on(table.transcriptTargetId, table.active)
+  ]
+);
+
+export const memory = sqliteTable(
+  'memory',
+  {
+    sessionId: text('session_id').notNull(),
+    key: text('key').notNull(),
+    value: text('value').notNull()
+  },
+  (table) => [primaryKey({ columns: [table.sessionId, table.key] })]
+);
+
+export const fileObservations = sqliteTable(
+  'file_observations',
+  {
+    sessionId: text('session_id').notNull(),
+    path: text('path').notNull(),
+    hash: text('hash').notNull(),
+    coverage: text('coverage').notNull(),
+    observedAt: text('observed_at').notNull(),
+    toolCallId: text('tool_call_id')
+  },
+  (table) => [
+    primaryKey({ columns: [table.sessionId, table.path] }),
+    index('idx_file_observations_session').on(table.sessionId)
+  ]
+);
+
+export const events = sqliteTable(
+  'events',
+  {
+    id: text('id').primaryKey(),
+    transcriptTargetId: text('transcript_target_id').notNull(),
+    type: text('type').notNull(),
+    actorAgentId: text('actor_agent_id'),
+    taskId: text('task_id'),
+    payload: text('payload').notNull(),
+    at: text('at').notNull()
+  },
+  (table) => [index('idx_events_transcript_target').on(table.transcriptTargetId, table.id)]
+);
+
+export const channelConversations = sqliteTable(
+  'channel_conversations',
+  {
+    channelId: text('channel_id').notNull(),
+    conversationKey: text('conversation_key').notNull(),
+    activeSessionId: text('active_session_id').notNull(),
+    principalId: text('principal_id').notNull(),
+    createdAt: text('created_at').notNull(),
+    lastSeenAt: text('last_seen_at').notNull()
+  },
+  (table) => [primaryKey({ columns: [table.channelId, table.conversationKey] })]
+);
+
+export const channelConversationSessions = sqliteTable(
+  'channel_conversation_sessions',
+  {
+    channelId: text('channel_id').notNull(),
+    conversationKey: text('conversation_key').notNull(),
+    sessionId: text('session_id').notNull(),
+    label: text('label'),
+    createdAt: text('created_at').notNull()
+  },
+  (table) => [
+    primaryKey({ columns: [table.channelId, table.conversationKey, table.sessionId] }),
+    index('idx_channel_conv_sessions_session').on(table.sessionId)
+  ]
+);
+
+export const messageEmbeddings = sqliteTable('message_embeddings', {
+  messageId: text('message_id').primaryKey(),
+  dim: integer('dim').notNull(),
+  vec: blob('vec').notNull(),
+  model: text('model')
+});
+
+export const acpDelegates = sqliteTable(
+  'acp_delegates',
+  {
+    id: text('id').primaryKey(),
+    sessionId: text('session_id').notNull(),
+    agentName: text('agent_name').notNull(),
+    acpSessionId: text('acp_session_id').notNull(),
+    pid: integer('pid').notNull(),
+    spawnedAt: text('spawned_at').notNull(),
+    lastUsedAt: text('last_used_at').notNull(),
+    evictedAt: text('evicted_at'),
+    evictReason: text('evict_reason'),
+    reuseCount: integer('reuse_count').notNull().default(0),
+    promptCount: integer('prompt_count').notNull().default(0)
+  },
+  (table) => [
+    index('idx_acp_delegates_session').on(table.sessionId),
+    index('idx_acp_delegates_live').on(table.evictedAt).where(liveAcpDelegate)
+  ]
+);
+
+export const externalAgentSessions = sqliteTable(
   'external_agent_sessions',
   {
     id: text('id').primaryKey(),
@@ -162,107 +306,82 @@ const _externalAgentSessions = sqliteTable(
     updatedAt: text('updated_at').notNull(),
     exitedAt: text('exited_at')
   },
-  (t) => [
+  (table) => [
+    index('idx_external_agent_sessions_transcript_target').on(table.transcriptTargetId),
+    index('idx_external_agent_sessions_live').on(table.state).where(liveExternalAgentSession),
     uniqueIndex('idx_external_agent_sessions_provider_ref')
-      .on(t.transcriptTargetId, t.provider, t.providerSessionRef)
+      .on(table.transcriptTargetId, table.provider, table.providerSessionRef)
       .where(providerSessionRefNotNull)
   ]
 );
 
-const _nativeAgentDirectMessages = sqliteTable('native_agent_direct_messages', {
-  id: text('id').primaryKey(),
-  projectId: text('project_id').notNull(),
-  externalAgentSessionId: text('external_agent_session_id').notNull(),
-  fromAgent: text('from_agent'),
-  peer: text('peer').notNull(),
-  text: text('text').notNull(),
-  attachmentIds: text('attachment_ids'), // JSON string[] of message_attachments ids
-  createdAt: text('created_at').notNull()
-});
+export const messageAttachments = sqliteTable(
+  'message_attachments',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id').notNull(),
+    path: text('path').notNull(),
+    name: text('name').notNull(),
+    mime: text('mime').notNull(),
+    bytes: integer('bytes').notNull(),
+    preview: text('preview').notNull(),
+    createdBy: text('created_by'),
+    createdAt: text('created_at').notNull()
+  },
+  (table) => [index('idx_message_attachments_project').on(table.projectId)]
+);
 
-const _messageAttachments = sqliteTable('message_attachments', {
-  id: text('id').primaryKey(),
-  projectId: text('project_id').notNull(),
-  path: text('path').notNull(),
-  name: text('name').notNull(),
-  mime: text('mime').notNull(),
-  bytes: integer('bytes').notNull(),
-  preview: text('preview').notNull(),
-  createdBy: text('created_by'),
-  createdAt: text('created_at').notNull()
-});
+export const nativeAgentDirectMessages = sqliteTable(
+  'native_agent_direct_messages',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id').notNull(),
+    externalAgentSessionId: text('external_agent_session_id').notNull(),
+    fromAgent: text('from_agent'),
+    peer: text('peer').notNull(),
+    text: text('text').notNull(),
+    attachmentIds: text('attachment_ids'),
+    createdAt: text('created_at').notNull()
+  },
+  (table) => [
+    index('idx_native_agent_direct_messages_session_peer').on(
+      table.externalAgentSessionId,
+      table.peer,
+      table.createdAt
+    ),
+    index('idx_native_agent_direct_messages_project_pair').on(
+      table.projectId,
+      table.fromAgent,
+      table.peer,
+      table.createdAt
+    )
+  ]
+);
 
-const _externalAgentInboxItems = sqliteTable(
+export const externalAgentInboxItems = sqliteTable(
   'external_agent_inbox_items',
   {
     externalAgentSessionId: text('external_agent_session_id').notNull(),
     messageSeq: integer('message_seq').notNull(),
+    deliveryId: text('delivery_id'),
+    projectId: text('project_id'),
+    memberInstanceId: text('member_instance_id'),
+    triggerMessageId: text('trigger_message_id'),
+    providerSessionRef: text('provider_session_ref'),
+    providerTurnId: text('provider_turn_id'),
+    errorSummary: text('error_summary'),
     state: text('state').notNull().default('queued'),
     createdAt: text('created_at').notNull(),
     deliveredAt: text('delivered_at'),
     visibleAt: text('visible_at'),
-    consumedAt: text('consumed_at')
+    consumedAt: text('consumed_at'),
+    updatedAt: text('updated_at')
   },
-  (t) => [primaryKey({ columns: [t.externalAgentSessionId, t.messageSeq] })]
+  (table) => [
+    primaryKey({ columns: [table.externalAgentSessionId, table.messageSeq] }),
+    index('idx_external_agent_inbox_items_pending').on(table.externalAgentSessionId, table.state, table.messageSeq),
+    uniqueIndex('idx_external_agent_inbox_delivery_id').on(table.deliveryId).where(deliveryIdNotNull),
+    index('idx_external_agent_inbox_project_trigger').on(table.projectId, table.triggerMessageId),
+    index('idx_external_agent_inbox_member_state').on(table.projectId, table.memberInstanceId, table.state)
+  ]
 );
-
-export const messages = sqliteTable('messages', {
-  id: text('id').primaryKey(),
-  transcriptTargetId: text('transcript_target_id').notNull(),
-  role: text('role').notNull(),
-  text: text('text').notNull(),
-  type: text('type').notNull().default('text'),
-  data: text('data'),
-  streamStatus: text('stream_status').notNull().default('settled'),
-  active: integer('active').notNull().default(1),
-  includeInContext: integer('include_in_context'), // NULL ⇒ use the type's registry default
-  createdAt: text('created_at').notNull(),
-  updatedAt: text('updated_at')
-});
-
-const _memory = sqliteTable('memory', {
-  sessionId: text('session_id').notNull(),
-  key: text('key').notNull(),
-  value: text('value').notNull()
-});
-
-const _fileObservations = sqliteTable(
-  'file_observations',
-  {
-    sessionId: text('session_id').notNull(),
-    path: text('path').notNull(),
-    hash: text('hash').notNull(),
-    coverage: text('coverage').notNull(),
-    observedAt: text('observed_at').notNull(),
-    toolCallId: text('tool_call_id')
-  },
-  (t) => [primaryKey({ columns: [t.sessionId, t.path] })]
-);
-
-const _channelConversations = sqliteTable('channel_conversations', {
-  channelId: text('channel_id').notNull(),
-  conversationKey: text('conversation_key').notNull(),
-  activeSessionId: text('active_session_id').notNull(),
-  principalId: text('principal_id').notNull(),
-  createdAt: text('created_at').notNull(),
-  lastSeenAt: text('last_seen_at').notNull()
-});
-
-const _channelConversationSessions = sqliteTable('channel_conversation_sessions', {
-  channelId: text('channel_id').notNull(),
-  conversationKey: text('conversation_key').notNull(),
-  sessionId: text('session_id').notNull(),
-  label: text('label'),
-  createdAt: text('created_at').notNull()
-});
-
-// Event ids are random branded nanoids; durable replay order comes from SQLite rowid.
-const _events = sqliteTable('events', {
-  id: text('id').primaryKey(),
-  transcriptTargetId: text('transcript_target_id').notNull(),
-  type: text('type').notNull(),
-  actorAgentId: text('actor_agent_id'),
-  taskId: text('task_id'),
-  payload: text('payload').notNull(),
-  at: text('at').notNull()
-});

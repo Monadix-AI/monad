@@ -25,6 +25,7 @@ import { copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node
 import { dirname, join, resolve } from 'node:path';
 import { $, Glob } from 'bun';
 
+import { generateMigrationAssets } from '../apps/monad/scripts/generate-migration-assets.ts';
 import rootPkg from '../package.json' with { type: 'json' };
 import { createPlatformModulePlugin } from './lib/platform-modules.ts';
 import { releasePlatformModuleRules } from './lib/release-platform-modules.ts';
@@ -100,6 +101,7 @@ log(`Building monad ${VERSION} for: ${TARGETS.map((t) => `${t.os}-${t.arch}`).jo
 log('Installing workspace dependencies…');
 await $`bun install`.cwd(ROOT);
 await $`bun run ${join(ROOT, 'packages/home/scripts/gen-config-schema.ts')}`;
+generateMigrationAssets();
 // Regenerate the native Mo atlas header from the manifest before any shell build.
 await $`bun run ${join(ROOT, 'scripts/gen-mo-atlas.ts')}`;
 await $`bun run ${join(ROOT, 'scripts/generate-licenses.ts')}`;

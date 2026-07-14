@@ -40,6 +40,8 @@ jobs:
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
           restore-keys: ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
+      - run: bun run db:check
+      - run: bun run db:drift
       - run: bun run typecheck
       - run: bun run lint
       - run: bun run knip
@@ -108,6 +110,10 @@ jobs:
 
       - name: Test
         run: bun run test
+
+      - name: Test standalone migration binary
+        if: runner.os == 'Linux'
+        run: bun test scripts/test/unit/build-release-migrations.test.ts
 
       - name: Upload coverage
         if: runner.os == 'Linux'

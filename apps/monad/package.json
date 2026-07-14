@@ -29,8 +29,9 @@
     "@opentelemetry/sdk-metrics": "^2.9.0",
     "@opentelemetry/sdk-trace-base": "^2.9.0",
     "@opentelemetry/semantic-conventions": "^1.43.0",
+    "@sinclair/typebox": "0.34.49",
     "@supabase/supabase-js": "^2.110.4",
-    "drizzle-orm": "^0.45.2",
+    "drizzle-orm": "0.45.2",
     "elysia": "^1.4.29",
     "eta": "^4.0.0",
     "mem0ai": "^3.1.0",
@@ -41,6 +42,7 @@
   "devDependencies": {
     "@monad/config": "workspace:*",
     "@monad/monad-power-pack": "workspace:*",
+    "drizzle-kit": "0.31.4",
     "openai": "^6.46.0"
   },
   "exports": {
@@ -71,6 +73,11 @@
   "private": true,
   "scripts": {
     "build": "tsc --noEmit",
+    "db:bundle": "bun scripts/generate-migration-assets.ts",
+    "db:check": "bun ./node_modules/drizzle-kit/bin.cjs check --config=drizzle.config.ts",
+    "db:drift": "bun scripts/check-migration-drift.ts",
+    "db:generate": "bun ./node_modules/drizzle-kit/bin.cjs generate --config=drizzle.config.ts",
+    "db:generate:custom": "bun ./node_modules/drizzle-kit/bin.cjs generate --custom --config=drizzle.config.ts",
     "devtools": "bunx @ai-sdk/devtools",
     "lint": "biome check .",
     "start": "bun src/main.ts",

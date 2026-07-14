@@ -55,6 +55,7 @@ import {
   touchConversation
 } from './channels.ts';
 import { type CheckpointHandle, startWalCheckpoint, stopWalCheckpoint } from './checkpoint.ts';
+import { configureSqliteConnection } from './connection.ts';
 import { appendEvents, type DanglingInterrupt, findDanglingInterrupts, hasEvent, listEvents } from './events.ts';
 import {
   compareAndSwapExperienceState,
@@ -124,7 +125,7 @@ import {
   setGenStatus,
   setMemory
 } from './messages.ts';
-import { getSchemaVersion, migrate } from './migrations.ts';
+import { hasCurrentMigration, migrate } from './migrations.ts';
 import { insertNativeAgentDirectMessage, listNativeAgentDirectMessages } from './native-agent-messages.ts';
 import {
   clearEmbeddings,
@@ -204,22 +205,26 @@ export class Store {
   #checkpoint: CheckpointHandle | undefined;
 
   constructor(opts: StoreOptions = {}) {
-    this.sqlite = new Database(opts.path ?? ':memory:');
-    // Connection-level PRAGMAs applied on every open (not persisted reliably across connections).
-    // WAL mode is set in the migration (persisted to the DB header); these complement it.
-    // synchronous=NORMAL is safe with WAL: each committed WAL frame is durable; only the periodic
-    // checkpoint loses the extra fsync of FULL, which is acceptable for a local single-user daemon.
-    this.sqlite.exec('PRAGMA foreign_keys = ON');
-    this.sqlite.exec('PRAGMA synchronous = NORMAL');
-    migrate(this.sqlite);
-    this.db = drizzle(this.sqlite);
+    const path = opts.path ?? ':memory:';
+    const sqlite = new Database(path);
+    let db: BunSQLiteDatabase<Record<string, never>>;
+    try {
+      configureSqliteConnection(sqlite, path);
+      db = drizzle(sqlite);
+      migrate(db);
+    } catch (error) {
+      sqlite.close();
+      throw error;
+    }
+    this.sqlite = sqlite;
+    this.db = db;
     if (opts.path && opts.path !== ':memory:') {
       this.#checkpoint = startWalCheckpoint(opts.path);
     }
   }
 
-  getSchemaVersion(): number {
-    return getSchemaVersion(this.sqlite);
+  hasCurrentMigration(): boolean {
+    return hasCurrentMigration(this.sqlite);
   }
 
   getExperienceState(
@@ -832,4 +837,3 @@ export function createStore(opts?: StoreOptions): Store {
 }
 
 export { factId, MemoryDir, projectKey, scopeOf } from './memory-dir.ts';
-export { CURRENT_SCHEMA_VERSION } from './migrations.ts';
