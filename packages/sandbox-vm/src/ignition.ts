@@ -217,6 +217,7 @@ function agentUnit(hasNic: boolean): { name: string; enabled: boolean; contents:
       ...extra,
       '[Service]',
       'ExecStart=/usr/local/bin/monad-vsock-agent',
+      'Delegate=yes',
       'Restart=always',
       '[Install]',
       'WantedBy=multi-user.target',

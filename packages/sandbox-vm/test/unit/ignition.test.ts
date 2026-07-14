@@ -26,6 +26,7 @@ test('the exec agent unit is gated on the firewall (workload never runs before e
   const agent = cfg.systemd.units.find((u) => u.name === 'monad-vsock-agent.service');
   expect(agent?.contents).toContain('Requires=monad-firewall.service');
   expect(agent?.contents).toContain('ExecStart=/usr/local/bin/monad-vsock-agent');
+  expect(agent?.contents).toContain('Delegate=yes');
 });
 
 function decodeDataUri(uri: string): string {

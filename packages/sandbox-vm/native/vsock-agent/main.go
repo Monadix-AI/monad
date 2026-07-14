@@ -53,6 +53,13 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "mount9p" {
 		os.Exit(mount9p(os.Args[2:]))
 	}
+	if len(os.Args) == 2 && os.Args[1] == "--supervise-run" {
+		os.Exit(runSupervisorMode())
+	}
+	if err := prepareRuntime(); err != nil {
+		fmt.Fprintln(os.Stderr, "runtime isolation:", err)
+		os.Exit(1)
+	}
 	fd, err := unix.Socket(unix.AF_VSOCK, unix.SOCK_STREAM, 0)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "vsock socket:", err)
@@ -178,6 +185,10 @@ func handleControl(run *managedRun, writer *frameWriter, frame wireFrame) {
 }
 
 func commandFor(req startRequest) (*exec.Cmd, error) {
+	return supervisorCommand(req)
+}
+
+func workloadCommand(req startRequest) (*exec.Cmd, error) {
 	uid, gid, ok := lookupMonad()
 	if !ok {
 		return nil, fmt.Errorf("monad user is unavailable")
@@ -224,6 +235,9 @@ func startCommand(cmd *exec.Cmd, output func(byte, []byte)) (*managedRun, error)
 	}
 	if err := cmd.Start(); err != nil {
 		return nil, err
+	}
+	for _, file := range cmd.ExtraFiles {
+		file.Close()
 	}
 	run := &managedRun{cmd: cmd, stdin: stdin, done: make(chan exitMessage, 1)}
 	var pumps sync.WaitGroup
