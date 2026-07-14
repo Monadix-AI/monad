@@ -32,6 +32,8 @@ export interface EffectiveVmIdentityInputs {
   cpus: number;
   ignitionSchemaVersion: string;
   memoryMiB: number;
+  mountPlanDigest: string;
+  mountPlanSchemaVersion: number;
   protocolVersion: number;
   runIsolation: {
     memoryMiB: number;

@@ -10,6 +10,8 @@ const artifacts = {
   cpus: 2,
   ignitionSchemaVersion: '3.4.0',
   memoryMiB: 2048,
+  mountPlanDigest: 'mount-plan-a',
+  mountPlanSchemaVersion: 1,
   protocolVersion: 2,
   runIsolation: { memoryMiB: 1024, maxProcesses: 256, terminateGraceMs: 5000 },
   vsockPort: 1024
@@ -54,6 +56,15 @@ test('agent and image digests change the VM fingerprint', () => {
   );
   expect(policyFingerprint(identity({}, { baseImageDigest: 'a' }))).not.toBe(
     policyFingerprint(identity({}, { baseImageDigest: 'b' }))
+  );
+});
+
+test('mount plan schema and digest change the VM fingerprint', () => {
+  expect(policyFingerprint(identity({}, { mountPlanSchemaVersion: 1 }))).not.toBe(
+    policyFingerprint(identity({}, { mountPlanSchemaVersion: 2 }))
+  );
+  expect(policyFingerprint(identity({}, { mountPlanDigest: 'mount-plan-a' }))).not.toBe(
+    policyFingerprint(identity({}, { mountPlanDigest: 'mount-plan-b' }))
   );
 });
 

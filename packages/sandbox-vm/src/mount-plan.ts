@@ -23,6 +23,12 @@ export interface VmMountPlan {
   overlays: MountOverlay[];
 }
 
+export const MOUNT_PLAN_SCHEMA_VERSION = 1;
+
+export function fingerprintVmMountPlan(plan: VmMountPlan): string {
+  return new Bun.CryptoHasher('sha256').update(JSON.stringify(plan)).digest('hex');
+}
+
 type PathKind = 'file' | 'directory' | 'other' | 'missing';
 
 export interface MountPlanHost {

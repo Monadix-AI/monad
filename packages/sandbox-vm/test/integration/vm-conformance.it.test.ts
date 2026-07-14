@@ -11,7 +11,7 @@
 
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -66,6 +66,8 @@ describe.skipIf(!ENABLED)('net:none confinement (fs escape, credential, privileg
   let ws: string; // writable mount
   let ro: string; // readonly mount
   let hostSecretOutside: string; // a host file NOT mounted — the escape oracle
+  let deniedDir: string;
+  let maskedCredential: string;
   const NET: Policy = {} as Policy;
 
   beforeAll(async () => {
@@ -74,7 +76,21 @@ describe.skipIf(!ENABLED)('net:none confinement (fs escape, credential, privileg
     ro = await mkdtemp(join(tmpdir(), 'monad-vm-ro-'));
     hostSecretOutside = join(mkdtempSync(join(tmpdir(), 'monad-vm-secret-')), 'host-secret');
     writeFileSync(hostSecretOutside, 'HOST_SECRET_NEVER_REACHABLE');
-    Object.assign(NET, { writableRoots: [ws], readableRoots: [ro], net: 'none' });
+    deniedDir = join(ws, '.ssh');
+    maskedCredential = join(ws, '.credentials');
+    const fakeStore = join(ws, '.monad-mask-store');
+    await Promise.all([mkdir(deniedDir, { recursive: true }), mkdir(fakeStore, { recursive: true })]);
+    await writeFile(join(deniedDir, 'id_ed25519'), 'PRIVATE_KEY_NEVER_REACHABLE');
+    await writeFile(maskedCredential, 'REAL_CREDENTIAL_NEVER_REACHABLE');
+    const fakeCredential = join(fakeStore, 'empty');
+    await writeFile(fakeCredential, 'MASKED');
+    Object.assign(NET, {
+      writableRoots: [ws],
+      readableRoots: [ro],
+      readDenyRoots: [deniedDir],
+      maskedFiles: [{ real: maskedCredential, fake: fakeCredential }],
+      net: 'none'
+    });
   }, 30_000);
 
   afterAll(async () => {
@@ -88,6 +104,39 @@ describe.skipIf(!ENABLED)('net:none confinement (fs escape, credential, privileg
     expect(r.stdout).toContain('1001');
     expect(r.stdout).toContain('monad');
     expect(r.stdout).toContain('NOSUDO');
+  }, 600_000);
+
+  test('interactive runs have a real PTY with resize and merged output', async () => {
+    const proc = spawn(
+      ['sh', '-c', "stty -echo; read line; stty size; printf 'LINE=%s\\n' \"$line\"; printf 'STDERR-MERGED\\n' >&2"],
+      NET,
+      AGENT,
+      { terminal: { cols: 90, rows: 31 } }
+    );
+    const stdout = drain(proc.stdout);
+
+    expect(proc.stderr).toBeUndefined();
+    expect(proc.terminal).toBeDefined();
+    await proc.terminal?.resize(132, 44);
+    await proc.terminal?.write('hello-pty\n');
+
+    expect(await proc.exited).toBe(0);
+    expect(await stdout).toContain('44 132');
+    expect(await stdout).toContain('LINE=hello-pty');
+    expect(await stdout).toContain('STDERR-MERGED');
+  }, 600_000);
+
+  test('guest overlays hide denied paths and replace masked files', async () => {
+    const r = await sh(
+      `cat ${join(deniedDir, 'id_ed25519')} 2>/dev/null || echo DENIED; printf 'MASK='; cat ${maskedCredential}`,
+      NET,
+      AGENT
+    );
+
+    expect(r.stdout).toContain('DENIED');
+    expect(r.stdout).toContain('MASK=MASKED');
+    expect(r.stdout).not.toContain('PRIVATE_KEY_NEVER_REACHABLE');
+    expect(r.stdout).not.toContain('REAL_CREDENTIAL_NEVER_REACHABLE');
   }, 600_000);
 
   test('write OUTSIDE any mount stays in the guest namespace — the host escape target is untouched', async () => {

@@ -31,7 +31,7 @@ import { VSOCK_PROTOCOL_VERSION } from './exec/protocol.ts';
 import { bridgeAsyncProcess, vsockExec, waitForVsock } from './exec/vsock.ts';
 import { IGNITION_SCHEMA_VERSION, serializeIgnition } from './ignition.ts';
 import { ensureBaseImage, type ImageConsent } from './image.ts';
-import { buildVmMountPlan, type VmMountPlan } from './mount-plan.ts';
+import { buildVmMountPlan, fingerprintVmMountPlan, MOUNT_PLAN_SCHEMA_VERSION, type VmMountPlan } from './mount-plan.ts';
 import { type GvproxyProcess, guestProxyEnv, spawnGvproxy } from './net/gvproxy.ts';
 import { effectiveVmIdentity, POOL_DEFAULTS, type PoolConfig, reuseKey, VmPool, vmKey } from './pool.ts';
 import { BootTransaction } from './runtime/boot-transaction.ts';
@@ -365,6 +365,8 @@ export const vmLauncher: SandboxLauncher = {
           cpus: shape.cpus,
           ignitionSchemaVersion: IGNITION_SCHEMA_VERSION,
           memoryMiB: shape.memoryMiB,
+          mountPlanDigest: fingerprintVmMountPlan(mountPlan),
+          mountPlanSchemaVersion: MOUNT_PLAN_SCHEMA_VERSION,
           protocolVersion: VSOCK_PROTOCOL_VERSION,
           runIsolation: { memoryMiB: 1024, maxProcesses: 256, terminateGraceMs: 5000 },
           vsockPort: VSOCK_EXEC_PORT
@@ -381,6 +383,7 @@ export const vmLauncher: SandboxLauncher = {
           socketPath: vm.bundle.vsockSock,
           cwd: options.cwd !== undefined ? toGuestPath(options.cwd) : undefined,
           limits: options.limits,
+          terminal: options.terminal,
           onUnresponsive: () => void activePool.invalidate(key),
           env: {
             ...options.env,
@@ -390,7 +393,8 @@ export const vmLauncher: SandboxLauncher = {
       },
       () => {
         if (acquiredKey) activePool.release(acquiredKey);
-      }
+      },
+      options.terminal
     );
   },
 

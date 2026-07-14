@@ -5,7 +5,12 @@ import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { join, win32 } from 'node:path';
 
-import { buildVmMountPlan, type MountPlanHost } from '../../src/mount-plan.ts';
+import {
+  buildVmMountPlan,
+  fingerprintVmMountPlan,
+  MOUNT_PLAN_SCHEMA_VERSION,
+  type MountPlanHost
+} from '../../src/mount-plan.ts';
 
 const roots: string[] = [];
 
@@ -44,6 +49,19 @@ test('orders fake-store protection, nested deny, and mask after the writable sha
     { kind: 'deny-directory', target: join(root, 'work', '.ssh') },
     { kind: 'mask-file', source: '/run/monad/masks/0/token', target: join(root, 'work', 'token') }
   ]);
+});
+
+test('fingerprint is deterministic and changes with the canonical mount plan', () => {
+  const plan = {
+    shares: [{ tag: 'w0', hostPath: '/work', guestPath: '/work', readOnly: false }],
+    overlays: [{ kind: 'deny-directory' as const, target: '/work/.ssh' }]
+  };
+
+  expect(MOUNT_PLAN_SCHEMA_VERSION).toBe(1);
+  expect(fingerprintVmMountPlan(plan)).toBe(fingerprintVmMountPlan(structuredClone(plan)));
+  expect(fingerprintVmMountPlan(plan)).not.toBe(
+    fingerprintVmMountPlan({ ...plan, overlays: [{ kind: 'deny-directory', target: '/work/.gnupg' }] })
+  );
 });
 
 test('a missing nested deny covers the first missing component', async () => {
