@@ -4,6 +4,7 @@ import { join, relative, resolve } from 'node:path';
 import { renderMigrationAssets } from './generate-migration-assets.ts';
 
 const DRIZZLE_KIT_VERSION = '0.31.4';
+const NO_SCHEMA_CHANGES_MARKER = 'No schema changes, nothing to migrate';
 
 export interface MigrationDriftCheckOptions {
   appRoot?: string;
@@ -55,16 +56,27 @@ function assertMigrationArtifactsAreCurrent(appRoot: string, drizzleDir: string,
 
     const result = Bun.spawnSync([process.execPath, drizzleKitCli(appRoot), 'generate', `--config=${configPath}`], {
       cwd: appRoot,
+      stdin: 'ignore',
       stderr: 'pipe',
       stdout: 'pipe'
     });
     if (result.exitCode !== 0 || result.stderr.toString().trim()) {
-      throw new Error(`drizzle-kit generate failed:\n${formatOutput(result)}`);
+      throw new Error(withSubprocessOutput('drizzle-kit generate failed', result));
     }
 
     const differences = diffMigrationTrees(before, readMigrationTree(temporaryDrizzleDir));
     if (differences.length > 0) {
-      throw new Error(`Drizzle migration artifacts are out of date:\n${differences.join('\n')}`);
+      throw new Error(
+        withSubprocessOutput(`Drizzle migration artifacts are out of date:\n${differences.join('\n')}`, result)
+      );
+    }
+    if (!result.stdout.toString().includes(NO_SCHEMA_CHANGES_MARKER)) {
+      throw new Error(
+        withSubprocessOutput(
+          'Drizzle migration generation did not confirm no schema changes; interactive rename input may be required',
+          result
+        )
+      );
     }
   } finally {
     rmSync(temporaryRoot, { force: true, recursive: true });
@@ -113,6 +125,11 @@ function diffMigrationTrees(before: Map<string, Uint8Array>, after: Map<string, 
 
 function formatOutput(result: ReturnType<typeof Bun.spawnSync>): string {
   return [result.stdout?.toString().trim(), result.stderr?.toString().trim()].filter(Boolean).join('\n');
+}
+
+function withSubprocessOutput(message: string, result: ReturnType<typeof Bun.spawnSync>): string {
+  const output = formatOutput(result);
+  return output ? `${message}:\n${output}` : message;
 }
 
 if (import.meta.main) checkMigrationDrift();

@@ -54,9 +54,11 @@ being present beside a packaged binary.
 
 Generated and custom migration files are immutable after merge. Corrections
 are expressed as later migrations. A change that combines schema evolution and
-data conversion is split into ordered phases: add a nullable column, add a
-custom backfill migration, deploy and verify the backfill, then add a later
-migration that enforces the non-null constraint.
+data conversion is split into ordered phases: update `schema.ts` and run
+`db:generate` to add a nullable column in a generated migration, then run
+`db:generate:custom` to append a separate backfill migration. After deploying
+and verifying the backfill, update `schema.ts` and run `db:generate` again to
+add a later migration that enforces the non-null constraint.
 
 ## Runtime
 
@@ -65,8 +67,13 @@ Database startup performs these operations in order:
 1. Open the `bun:sqlite` connection.
 2. Apply and verify operational PRAGMAs.
 3. Wrap the connection with `drizzle-orm/bun-sqlite`.
-4. Run `drizzle-orm/bun-sqlite/migrator` against `apps/monad/drizzle`.
+4. Pass the generated inline `MigrationMeta[]` to the Drizzle
+   `SQLiteSyncDialect` with the Bun SQLite session.
 5. Construct the Store only after migrations complete.
+
+Runtime migration does not read `apps/monad/drizzle`. That directory is the
+committed generation source; `migrations.generated.ts` is the packaged runtime
+input passed to `SQLiteSyncDialect.migrate()`.
 
 The existing hand-written `MIGRATIONS` array, `CURRENT_SCHEMA_VERSION`,
 `getSchemaVersion()`, and `PRAGMA user_version` checks are removed. Home
@@ -98,11 +105,14 @@ equivalents are available through `bun run --cwd apps/monad <command>`.
 For a normal schema change, update `schema.ts`, run `bun run db:generate`,
 review and retain every generated SQL and snapshot artifact, run `bun run
 db:bundle` to regenerate the inline bundle, then run `bun run db:check` and
-`bun run db:drift`. For unsupported SQLite DDL or a data migration, first add
-any representable schema change, run `bun run db:generate:custom`, replace the
-custom migration placeholder with reviewed SQL, run `bun run db:bundle`, and
-run the same checks. Never edit a committed migration, journal entry, or
-snapshot; add a new ordered migration instead.
+`bun run db:drift`. For a mixed change, first update `schema.ts` and run `bun
+run db:generate` so Drizzle snapshots the representable schema change. Then run
+`bun run db:generate:custom` to append a separate migration for unsupported
+SQLite DDL or a data backfill, and replace its placeholder with reviewed SQL.
+A custom migration alone does not snapshot the current schema. After both
+migrations exist, run `bun run db:bundle` and the same checks. Never edit a
+committed migration, journal entry, or snapshot; add a new ordered migration
+instead.
 
 `db:check` is Drizzle's snapshot collision and history consistency check.
 `db:drift` is separate and read-only: it copies the committed `drizzle` history

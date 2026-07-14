@@ -1,8 +1,8 @@
 import type { MigrationMeta } from 'drizzle-orm/migrator';
 
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { basename, extname, join } from 'node:path';
 
 interface MigrationJournal {
   entries: MigrationEntry[];
@@ -20,12 +20,7 @@ export function renderMigrationAssets(drizzleDir: string): string {
   const entries = journal.entries;
 
   if (entries.length === 0) throw new Error('Drizzle migration journal has no entries');
-
-  for (const entry of entries) {
-    if (!existsSync(join(drizzleDir, `${entry.tag}.sql`))) {
-      throw new Error(`Drizzle journal entry has no SQL file: ${entry.tag}`);
-    }
-  }
+  validateMigrationHistory(drizzleDir, entries);
 
   const migrations = entries.map((entry): MigrationMeta => {
     const query = readFileSync(join(drizzleDir, `${entry.tag}.sql`), 'utf8');
@@ -37,6 +32,27 @@ export function renderMigrationAssets(drizzleDir: string): string {
     };
   });
   return renderGeneratedModule(migrations, entries.at(-1)?.when);
+}
+
+function validateMigrationHistory(drizzleDir: string, entries: MigrationEntry[]): void {
+  const journalTagCounts = new Map<string, number>();
+  for (const entry of entries) {
+    const count = (journalTagCounts.get(entry.tag) ?? 0) + 1;
+    journalTagCounts.set(entry.tag, count);
+    if (count > 1) throw new Error(`Drizzle journal contains duplicate migration tag: ${entry.tag}`);
+  }
+
+  const sqlTags = readdirSync(drizzleDir, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && extname(entry.name) === '.sql')
+    .map((entry) => basename(entry.name, '.sql'));
+  const sqlTagSet = new Set(sqlTags);
+
+  for (const entry of entries) {
+    if (!sqlTagSet.has(entry.tag)) throw new Error(`Drizzle journal entry has no SQL file: ${entry.tag}`);
+  }
+  for (const tag of sqlTags) {
+    if (!journalTagCounts.has(tag)) throw new Error(`Drizzle migration SQL file has no journal entry: ${tag}`);
+  }
 }
 
 export function generateMigrationAssets(): void {
