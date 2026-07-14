@@ -1,10 +1,15 @@
 import type { ModelResult, ModelRouter } from '#/agent/model/index.ts';
 
-// `with { type: 'file' }` embeds reliably in bun's --compile binary (unlike new URL+import.meta.url).
-import reviewPromptPath from './prompts/skill-install-review-prompt.md' with { type: 'file' };
+import { definePrompt } from '#/agent/prompt-template.ts';
+import reviewSystemPath from './prompts/skill-install-review-system.prompt.md' with { type: 'file' };
+import reviewUserPath from './prompts/skill-install-review-user.prompt.md' with { type: 'file' };
 
 const MAX_REVIEW_CHARS = 48_000;
-const SKILL_INSTALL_REVIEW_PROMPT = (await Bun.file(reviewPromptPath).text()).trim();
+const REVIEW_SYSTEM_PROMPT = await definePrompt({ id: 'skill-install-review.system', sourcePath: reviewSystemPath });
+const REVIEW_USER_PROMPT = await definePrompt<{ body: string; skills: string[]; source: string }>({
+  id: 'skill-install-review.user',
+  sourcePath: reviewUserPath
+});
 
 export interface SkillInstallReviewInput {
   files: Map<string, Uint8Array>;
@@ -102,11 +107,11 @@ export async function reviewSkillInstall(input: SkillInstallReviewInput): Promis
       messages: [
         {
           role: 'system',
-          content: SKILL_INSTALL_REVIEW_PROMPT
+          content: REVIEW_SYSTEM_PROMPT.render({})
         },
         {
           role: 'user',
-          content: `Source: ${input.source}\nSkills: ${input.skills.join(', ')}\n\n${body}`
+          content: REVIEW_USER_PROMPT.render({ body, skills: input.skills, source: input.source })
         }
       ],
       params: { temperature: 0 },

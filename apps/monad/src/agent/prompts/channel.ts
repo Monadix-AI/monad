@@ -1,5 +1,9 @@
 import type { ChannelRouteAction } from '#/handlers/session/channel-routing.ts';
 
+import { definePrompt } from '#/agent/prompt-template.ts';
+import channelAcpUserPath from './channel-acp-user.prompt.md' with { type: 'file' };
+import channelContextPath from './channel-context.prompt.md' with { type: 'file' };
+
 export interface ChannelParticipant {
   id: string;
   name: string;
@@ -22,94 +26,38 @@ export interface BuildChannelContextInput {
   };
 }
 
-export function buildChannelTurnContext({
-  channelId,
-  sessionId,
-  routeKind,
-  targetName,
-  responseMode,
-  participants,
-  targetMention
-}: BuildChannelContextInput): string {
-  const roster = participants.length
-    ? participants
-        .map((participant) => {
-          const details = [participant.kind, participant.description].filter(Boolean).join('; ');
-          return `- ${participant.name} (${participant.id}${details ? `; ${details}` : ''}) mention_token=${mentionToken(participant)}`;
-        })
-        .join('\n')
-    : '- No other participants are registered.';
-
-  const behavior =
-    responseMode === 'direct_structured'
-      ? [
-          'You are a directly addressed participant agent in a channel.',
-          'Complete the user request using only channel-visible context.',
-          targetMention
-            ? `The user explicitly targeted ${targetMention.name} (${targetMention.id}). Treat this as a strong routing constraint.`
-            : '',
-          'You may create follow-up task assignments only through the structured next field.'
-        ].filter(Boolean)
-      : [
-          'You are a participant agent in this channel.',
-          'Return ordinary user-facing content only; do not create follow-up task assignments.',
-          'Use only the channel-visible context and the task text provided in this turn.'
-        ];
-
-  const responseFormat =
-    responseMode === 'worker_plain'
-      ? [
-          '<response_format>',
-          'Return plain markdown only.',
-          'Do not return JSON.',
-          'Do not include a next field or assign work to other agents.',
-          "When your reply references a local file that should render as an attachment, use a Markdown link with title 'monad:file', for example [report.md](./report.md 'monad:file').",
-          '</response_format>'
-        ]
-      : [
-          '<response_format>',
-          'Return exactly one JSON object and no surrounding prose.',
-          'Shape: {"visibility":"visible","display":{"kind":"markdown","content":"text shown to the user"},"attachments":[],"next":[]}.',
-          'visibility is "visible" by default.',
-          'display.content is the only user-visible content rendered by the client when visibility is "visible".',
-          'attachments is optional channel-visible metadata for files or references.',
-          "When display.content references a local file that should render as an attachment, use a Markdown link with title 'monad:file', for example [report.md](./report.md 'monad:file').",
-          'next is optional and contains task assignments as {"agentId":"agent id or acp:name","title":"short label","prompt":"task prompt","context":"channel-visible context"}.',
-          'Use next: [] when no further task assignment is needed.',
-          '</response_format>'
-        ];
-
-  return [
-    '<channel_context>',
-    `channel_id: ${channelId}`,
-    `backing_session_id: ${sessionId}`,
-    `target: ${targetName}`,
-    `response_mode: ${responseMode}`,
-    `route: ${routeKind}`,
-    targetMention ? `target_constraint: ${targetMention.name} (${targetMention.id})` : '',
-    'participants:',
-    roster,
-    '</channel_context>',
-    '',
-    '<behavior_mode>',
-    ...behavior,
-    '</behavior_mode>',
-    '',
-    '<mention_syntax>',
-    'Channel-visible user messages may contain strict mention tokens: @[name="display name" id="participant id"].',
-    'Only strict mention tokens are actionable. Plain text like @name or email addresses are ordinary text.',
-    'Use participant ids from the roster when referring to agents. Do not invent ids.',
-    '</mention_syntax>',
-    '',
-    ...responseFormat
-  ]
-    .filter((line) => line !== '')
-    .join('\n');
+interface ChannelPromptData extends BuildChannelContextInput {
+  participants: Array<ChannelParticipant & { details: string; mentionToken: string }>;
+  userMessage?: string;
 }
 
-export function composeAcpChannelPrompt(text: string, ambientContext?: string): string {
-  if (!ambientContext?.trim()) return text;
-  return `${ambientContext.trim()}\n\n<channel_user_message>\n${text}\n</channel_user_message>`;
+const CHANNEL_CONTEXT_TEMPLATE = await definePrompt<ChannelPromptData>({
+  id: 'channel.context',
+  sourcePath: channelContextPath
+});
+const CHANNEL_ACP_USER_TEMPLATE = await definePrompt<ChannelPromptData & { userMessage: string }>({
+  id: 'channel.acp.user',
+  sourcePath: channelAcpUserPath
+});
+
+function promptData(input: BuildChannelContextInput): ChannelPromptData {
+  return {
+    ...input,
+    participants: input.participants.map((participant) => ({
+      ...participant,
+      details: [participant.kind, participant.description].filter(Boolean).join('; '),
+      mentionToken: mentionToken(participant)
+    }))
+  };
+}
+
+export function buildChannelTurnContext(input: BuildChannelContextInput): string {
+  return CHANNEL_CONTEXT_TEMPLATE.render(promptData(input));
+}
+
+export function composeAcpChannelPrompt(text: string, input?: BuildChannelContextInput): string {
+  if (!input) return text;
+  return CHANNEL_ACP_USER_TEMPLATE.render({ ...promptData(input), userMessage: text });
 }
 
 function mentionToken(participant: ChannelParticipant): string {

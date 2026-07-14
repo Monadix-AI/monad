@@ -12,6 +12,15 @@ import type {
 } from 'openai/resources/responses/responses';
 import type { ResponsesRequest } from './types.ts';
 
+import { definePrompt } from '#/agent/prompt-template.ts';
+import ambientContextPath from './ambient-context.prompt.md' with { type: 'file' };
+
+const AMBIENT_CONTEXT_PROMPT = await definePrompt<{
+  jsonOnly: boolean;
+  maxOutputTokens?: number;
+  temperature?: number;
+}>({ id: 'responses-api.ambient-context', sourcePath: ambientContextPath });
+
 export function extractInputText(input: string | ResponseInput): string {
   if (typeof input === 'string') return input;
   const parts: string[] = [];
@@ -37,16 +46,12 @@ export function extractInputText(input: string | ResponseInput): string {
 }
 
 export function buildAmbientContext(body: ResponsesRequest): string | undefined {
-  const hints: string[] = [];
-  if (body.max_output_tokens) hints.push(`Limit your response to at most ${body.max_output_tokens} tokens.`);
-  if (body.text?.format?.type === 'json_object') {
-    hints.push('Respond with valid JSON only. Do not include any text outside the JSON object.');
-  }
-  if (body.temperature != null) {
-    if (body.temperature < 0.3) hints.push('Be precise and deterministic. Avoid creative embellishments.');
-    else if (body.temperature > 0.8) hints.push('Be creative and exploratory in your response.');
-  }
-  return hints.length > 0 ? hints.join('\n') : undefined;
+  const rendered = AMBIENT_CONTEXT_PROMPT.render({
+    jsonOnly: body.text?.format?.type === 'json_object',
+    ...(body.max_output_tokens ? { maxOutputTokens: body.max_output_tokens } : {}),
+    ...(body.temperature != null ? { temperature: body.temperature } : {})
+  });
+  return rendered || undefined;
 }
 
 export function buildUsage(

@@ -12,7 +12,7 @@ import type { Event } from '@monad/protocol';
 import type { Memory } from '../memory/index.ts';
 import type { ModelContentPart, ModelMessage, ModelRouter } from '../model/index.ts';
 
-import { SUMMARY_MARKER, SUMMARY_PROMPT } from '../prompts.ts';
+import { renderContextSummary, renderSummaryUserPrompt, SUMMARY_PROMPT } from '../prompts.ts';
 import { globalEstimator, type TokenEstimator } from './estimate.ts';
 
 export interface ContextPrepareCtx {
@@ -258,7 +258,7 @@ export class SummarizingContextEngine implements ContextEngine {
     // Strip any folded summary from system messages before re-folding below (idempotent).
     const stripped = messages.map((m) =>
       m.role === 'system' && typeof m.content === 'string'
-        ? { ...m, content: m.content.split(`\n\n${SUMMARY_MARKER}`)[0] as string }
+        ? { ...m, content: m.content.split('\n\n<context_summary>')[0] as string }
         : m
     );
     if (!state.summary) return stripped;
@@ -273,7 +273,7 @@ export class SummarizingContextEngine implements ContextEngine {
 
     // Fold the summary INTO the first system message — splitSystem keeps only that one, so a
     // separate system note would be silently dropped before the model. Create one if absent.
-    const note = `${SUMMARY_MARKER}\n${state.summary}`;
+    const note = renderContextSummary(state.summary);
     if (systems.length === 0) return [{ role: 'system', content: note }, ...kept];
     const folded = systems.map((m, i) =>
       i === 0 && typeof m.content === 'string' ? { ...m, content: `${m.content}\n\n${note}` } : m
@@ -290,14 +290,12 @@ export class SummarizingContextEngine implements ContextEngine {
     const transcript = older
       .map((m) => `${m.role}: ${typeof m.content === 'string' ? m.content : m.content.map(partText).join(' ')}`)
       .join('\n');
-    const priorSummary = state.summary ? `Previous summary:\n${state.summary}\n\n` : '';
-
     const result = await this.opts.model.complete({
       model: this.opts.summaryModel,
       sessionId: ctx.sessionId,
       messages: [
         { role: 'system', content: SUMMARY_PROMPT },
-        { role: 'user', content: `${priorSummary}${transcript}` }
+        { role: 'user', content: renderSummaryUserPrompt({ prior: state.summary, transcript }) }
       ]
     });
 

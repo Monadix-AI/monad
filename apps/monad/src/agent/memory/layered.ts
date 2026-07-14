@@ -86,9 +86,3 @@ export function sanitizeFact(raw: string): SanitizeResult {
   if (redacted && stripped.length < 3) return { ok: false, cleaned: '', reason: 'secret-only' };
   return { ok: true, cleaned: s };
 }
-
-/** Render a recalled block to injectable system context (or undefined when empty). Used by mem0. */
-export function renderMemoryBlock(block: MemoryBlock): string | undefined {
-  if (!block.facts.length) return undefined;
-  return `What you know (from memory):\n${block.facts.map((f) => `- ${f.content}`).join('\n')}`;
-}

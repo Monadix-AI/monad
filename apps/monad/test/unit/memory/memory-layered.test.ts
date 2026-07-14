@@ -1,11 +1,9 @@
 // Layered L1 memory contracts — the pure security filter + block rendering shared by every backend.
 // (The built-in adapter was retired in design A; the daemon service drives MemoryDir + the tool.)
 
-import type { Fact } from '@monad/protocol';
-
 import { expect, test } from 'bun:test';
 
-import { renderMemoryBlock, sanitizeFact } from '#/agent/index.ts';
+import { sanitizeFact } from '#/agent/index.ts';
 
 test('sanitizeFact strips invisible unicode and trims', () => {
   const r = sanitizeFact('User uses​ Bun  ');
@@ -24,9 +22,4 @@ test('sanitizeFact redacts secrets at write time', () => {
 
 test('sanitizeFact drops a fact that is only a redacted secret', () => {
   expect(sanitizeFact('ghp_abcdefghijklmnopqrstuvwxyz0123456789').ok).toBe(false);
-});
-
-test('renderMemoryBlock renders recalled facts, undefined when empty', () => {
-  const fact: Fact = { id: 'a', content: 'fact one', scope: { kind: 'global', id: '*' }, provClass: 'machine' };
-  const _out = renderMemoryBlock({ facts: [fact], tokens: 0 });
 });

@@ -14,10 +14,12 @@ import { timingSafeEqual } from 'node:crypto';
 import { newId, parseEventPayload } from '@monad/protocol';
 import { Elysia } from 'elysia';
 
+import { definePrompt } from '#/agent/prompt-template.ts';
 import { HANDLER_ERROR_MAP, HandlerError } from '#/handlers/handler-error.ts';
 import { buildSessionOrigin } from '#/handlers/session/origin.ts';
 import { isInboundDelegationSession } from '#/services/inbound-approval.ts';
 import { SSE_RESPONSE_HEADERS } from '#/transports/http/sessions/sse.ts';
+import openAiCompatAmbientContextPath from './openai-compat-ambient-context.prompt.md' with { type: 'file' };
 
 // ── OpenAI wire types ─────────────────────────────────────────────────────────
 // All openai SDK imports are type-only — erased at bundle time.
@@ -161,22 +163,22 @@ function packContext(messages: ChatCompletionMessageParam[]): string {
   return parts.join('\n\n');
 }
 
+const OPENAI_COMPAT_AMBIENT_CONTEXT_PROMPT = await definePrompt<{
+  jsonOnly: boolean;
+  maxTokens?: number;
+  stops: string[];
+  temperature?: number;
+}>({ id: 'openai-compat.ambient-context', sourcePath: openAiCompatAmbientContextPath });
+
 function buildAmbientContext(body: ChatCompletionCreateParamsBase): string | undefined {
-  const hints: string[] = [];
-  if (body.max_tokens) hints.push(`Limit your response to at most ${body.max_tokens} tokens.`);
-  if (body.stop) {
-    const stops = (Array.isArray(body.stop) ? body.stop : [body.stop]).filter(Boolean);
-    if (stops.length > 0)
-      hints.push(`Stop your response when you reach any of: ${stops.map((s) => JSON.stringify(s)).join(', ')}`);
-  }
-  if (body.response_format?.type === 'json_object') {
-    hints.push('Respond with valid JSON only. Do not include any text outside the JSON object.');
-  }
-  if (body.temperature != null) {
-    if (body.temperature < 0.3) hints.push('Be precise and deterministic. Avoid creative embellishments.');
-    else if (body.temperature > 0.8) hints.push('Be creative and exploratory in your response.');
-  }
-  return hints.length > 0 ? hints.join('\n') : undefined;
+  const stops = body.stop ? (Array.isArray(body.stop) ? body.stop : [body.stop]).filter(Boolean) : [];
+  const rendered = OPENAI_COMPAT_AMBIENT_CONTEXT_PROMPT.render({
+    jsonOnly: body.response_format?.type === 'json_object',
+    stops,
+    ...(body.max_tokens ? { maxTokens: body.max_tokens } : {}),
+    ...(body.temperature != null ? { temperature: body.temperature } : {})
+  });
+  return rendered || undefined;
 }
 
 function jsonResponse(body: unknown, extra?: Record<string, string>): Response {

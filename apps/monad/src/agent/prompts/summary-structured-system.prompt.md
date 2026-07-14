@@ -26,4 +26,8 @@ A checklist of what remains to be done, most important first.
 The single next action the agent should take.
 
 Rules: quote identifiers exactly (never paraphrase a filename or symbol). Prefer specifics over
-generalities. Keep it as short as fidelity allows.
+generalities. Keep it as short as fidelity allows.<% if (it.preserve.length) { %>
+
+Preserve these details verbatim:
+<% for (const item of it.preserve) { %>- <%= item %>
+<% } %><% } %>

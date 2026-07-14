@@ -7,8 +7,9 @@ import { assertPathWithinRoots } from '@monad/sandbox';
 import { z } from 'zod';
 
 import { resolveSpec } from '#/agent/model/index.ts';
-import { VISION_DEFAULT_PROMPT as DEFAULT_PROMPT } from '#/agent/prompts/short-text.ts';
+import { definePrompt } from '#/agent/prompt-template.ts';
 import { toolResult } from '#/capabilities/tools/types.ts';
+import visionDefaultUserPath from './prompts/vision-default-user.prompt.md' with { type: 'file' };
 
 export interface VisionDeps {
   model: ModelRouter;
@@ -19,6 +20,11 @@ export interface VisionDeps {
 const visionInput = z.object({
   image: z.string().min(1).describe('The image to analyze: a local path, http(s) URL, or data URI'),
   prompt: z.string().optional().describe('What to ask about the image (defaults to a general description)')
+});
+
+const VISION_DEFAULT_USER_PROMPT = await definePrompt({
+  id: 'vision.default.user',
+  sourcePath: visionDefaultUserPath
 });
 type VisionInput = z.infer<typeof visionInput>;
 
@@ -54,7 +60,12 @@ export function createVisionTool(deps: VisionDeps): Tool<VisionInput, { text: st
       const imagePart = await toImagePart(image, ctx.sandboxRoots);
       const result = await deps.model.complete({
         model: resolveSpec(deps.defaultModel) ?? '',
-        messages: [{ role: 'user', content: [{ type: 'text', text: prompt ?? DEFAULT_PROMPT }, imagePart] }]
+        messages: [
+          {
+            role: 'user',
+            content: [{ type: 'text', text: prompt ?? VISION_DEFAULT_USER_PROMPT.render({}) }, imagePart]
+          }
+        ]
       });
       return toolResult({ text: result.text });
     }

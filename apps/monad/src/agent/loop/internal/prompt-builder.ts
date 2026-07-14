@@ -9,14 +9,7 @@ import { toolInputJsonSchema } from '#/capabilities/tools/schema.ts';
 import { ContextBuilder } from '../../context/budget.ts';
 import { estimateTokensCached, globalEstimator } from '../../context/estimate.ts';
 import { messageChars } from '../../context/index.ts';
-import {
-  DEFAULT_SYSTEM_PROMPT,
-  guiTrackInstructions,
-  renderEnvironment,
-  renderSystemPrompt,
-  SUMMARY_MARKER,
-  skillInstructions
-} from '../../prompts.ts';
+import { renderAgentSystemPrompt, renderContextSummary, renderEnvironment } from '../../prompts.ts';
 import { replayHistory } from '../replay.ts';
 
 /**
@@ -137,11 +130,9 @@ export class PromptBuilder {
 
   // Tools are offered to the model natively (function-calling), so the system prompt only
   // carries the L1 skill listing here; the model pulls a skill body via the `skill` tool.
-  /** The base system prompt template: host instructions (or the default). */
-  private systemPromptTemplate(sessionId?: SessionId): string {
-    const resolved =
-      typeof this.deps.instructions === 'function' ? this.deps.instructions(sessionId) : this.deps.instructions;
-    return resolved || DEFAULT_SYSTEM_PROMPT;
+  /** The host's optional custom system instructions. Undefined selects the built-in Eta template. */
+  private systemInstructions(sessionId?: SessionId): string | undefined {
+    return typeof this.deps.instructions === 'function' ? this.deps.instructions(sessionId) : this.deps.instructions;
   }
 
   private userPromptSlots(sessionId?: SessionId) {
@@ -164,14 +155,17 @@ export class PromptBuilder {
     }
     // NB: ambientContext is intentionally NOT a system slot — it changes every turn and would bust
     // the prompt-cache breakpoint on the system message. It rides the last user message instead.
-    const system = renderSystemPrompt(this.systemPromptTemplate(sessionId), {
-      ...this.userPromptSlots(sessionId),
-      environment: renderEnvironment(this.deps.environment),
-      skills: withTools ? skillInstructions(this.deps.skills ?? []) : undefined,
-      guiTrack: withTools ? guiTrackInstructions(this.availableTools().map((t) => t.name)) : undefined,
-      // Hook-injected context (SessionStart + UserPromptSubmit additionalContext), folded into the
-      // system prompt so it reaches the model this turn.
-      injectedContext: injectedContext.length ? injectedContext.join('\n\n') : undefined
+    const system = renderAgentSystemPrompt({
+      instructions: this.systemInstructions(sessionId),
+      slots: {
+        ...this.userPromptSlots(sessionId),
+        environment: renderEnvironment(this.deps.environment),
+        // Hook-injected context (SessionStart + UserPromptSubmit additionalContext), folded into the
+        // system prompt so it reaches the model this turn.
+        injectedContext: injectedContext.length ? injectedContext.join('\n\n') : undefined
+      },
+      skills: withTools ? (this.deps.skills ?? []) : [],
+      toolNames: withTools ? this.availableTools().map((t) => t.name) : []
     });
     // Spread `replayed` into a fresh array: the turn appends tool steps to the result, and the
     // cached array must stay immutable for the next turn (and for cross-turn token-cache reuse).
@@ -182,7 +176,7 @@ export class PromptBuilder {
 
   private withContextSummary(messages: ModelMessage[], summary: string | undefined): ModelMessage[] {
     if (!summary) return messages;
-    const summaryText = `<context_summary>\n${SUMMARY_MARKER}\n${summary}\n</context_summary>\n\n`;
+    const summaryText = `${renderContextSummary(summary)}\n\n`;
     const next = [...messages];
     const firstNonSystem = next.findIndex((m) => m.role !== 'system');
     if (firstNonSystem === -1) {
@@ -263,11 +257,14 @@ export class PromptBuilder {
     builder.add(
       'systemPrompt',
       'System prompt',
-      renderSystemPrompt(this.systemPromptTemplate(sessionId), this.userPromptSlots(sessionId))
+      renderAgentSystemPrompt({
+        instructions: this.systemInstructions(sessionId),
+        slots: this.userPromptSlots(sessionId),
+        skills: withTools ? (this.deps.skills ?? []) : [],
+        toolNames: withTools ? this.availableTools().map((t) => t.name) : []
+      })
     );
     if (withTools) {
-      const listing = skillInstructions(this.deps.skills ?? []);
-      if (listing) builder.add('skills', 'Skills', listing);
       for (const spec of this.toolSpecs()) builder.add('systemTools', spec.name, JSON.stringify(spec));
     }
     const staticTokens = builder.list().reduce((sum, s) => sum + s.tokens, 0);

@@ -16,7 +16,6 @@ import {
   parseAllowedTools,
   renderShellInjections,
   renderSkillBody,
-  skillInstructions,
   substituteSkillDir,
   toolMatchesAllowedPattern
 } from '#/agent/index.ts';
@@ -30,20 +29,6 @@ const sid = () => newId('ses') as SessionId;
 const skill = (over: Partial<LoadedSkill> & Pick<LoadedSkill, 'name' | 'body'>): LoadedSkill => ({
   description: `${over.name} description`,
   ...over
-});
-
-// ── skillInstructions (L1 listing) ───────────────────────────────────────────────
-
-test('skillInstructions lists model-invocable skills and points at the skill tool', () => {
-  const _out = skillInstructions([skill({ name: 'alpha', body: 'A' }), skill({ name: 'beta', body: 'B' })]);
-});
-
-test('skillInstructions excludes modelInvocable:false skills, and is empty when none remain', () => {
-  expect(skillInstructions([skill({ name: 'hidden', body: 'H', modelInvocable: false })])).toBe('');
-  const _out = skillInstructions([
-    skill({ name: 'shown', body: 'S' }),
-    skill({ name: 'hidden', body: 'H', modelInvocable: false })
-  ]);
 });
 
 // ── renderSkillBody (explicit-invocation substitution) ────────────────────────────

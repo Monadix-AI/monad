@@ -6,13 +6,18 @@
 import type { Logger } from '@monad/logger';
 import type { Complete } from './graph/extract.ts';
 
-const SYSTEM = [
-  'You check whether any RULE is contradicted by the current FACTS about one user/agent.',
-  'A contradiction means a fact states the OPPOSITE of what a rule claims — not merely an unrelated',
-  'fact or a new topic. Each rule is tagged [r#] and each fact [f#].',
-  'Output ONLY JSON: {"contradictions":[{"rule":"r1","fact":"f2"}]} citing only the tags shown below;',
-  'output {"contradictions":[]} if nothing genuinely contradicts.'
-].join(' ');
+import { definePrompt } from '#/agent/prompt-template.ts';
+import contradictionSystemPath from './prompts/contradiction-system.prompt.md' with { type: 'file' };
+import contradictionUserPath from './prompts/contradiction-user.prompt.md' with { type: 'file' };
+
+const CONTRADICTION_SYSTEM_PROMPT = await definePrompt({
+  id: 'memory.contradiction.system',
+  sourcePath: contradictionSystemPath
+});
+const CONTRADICTION_USER_PROMPT = await definePrompt<{ factsBlock: string; rulesBlock: string }>({
+  id: 'memory.contradiction.user',
+  sourcePath: contradictionUserPath
+});
 
 const cap = (s: string, max: number): string => (s.length > max ? s.slice(0, max) : s);
 
@@ -63,7 +68,11 @@ export async function detectContradictions(
   const rulesBlock = cap(laws.map((l, i) => `[r${i + 1}] ${l.statement}`).join('\n'), maxChars / 2);
   const factsBlock = cap(facts.map((f, i) => `[f${i + 1}] ${f.content}`).join('\n'), maxChars / 2);
 
-  const text = await complete(model, SYSTEM, `Rules:\n${rulesBlock}\n\nFacts:\n${factsBlock}`);
+  const text = await complete(
+    model,
+    CONTRADICTION_SYSTEM_PROMPT.render({}),
+    CONTRADICTION_USER_PROMPT.render({ factsBlock, rulesBlock })
+  );
   const parsed = parseContradictions(text);
   if (!parsed) return [];
 

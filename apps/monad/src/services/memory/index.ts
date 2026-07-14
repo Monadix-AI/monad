@@ -25,12 +25,15 @@ import type { Store } from '#/store/db/index.ts';
 
 import { join } from 'node:path';
 
-import { type MemoryTurn, renderMemoryBlock, sanitizeFact } from '#/agent/index.ts';
+import { type MemoryTurn, sanitizeFact } from '#/agent/index.ts';
+import { definePrompt } from '#/agent/prompt-template.ts';
 import { fingerprint } from '#/services/memory/consolidation-state.ts';
 import { type BuildMem0Options, buildMem0Client, Mem0Adapter, type Mem0Client } from '#/services/memory/mem0.ts';
 import { factId, MemoryDir, projectKey, scopeOf } from '#/store/db/index.ts';
 // `with { type: 'file' }` embeds reliably in bun's --compile binary (unlike new URL+import.meta.url).
-import consolidatePromptPath from '../../agent/prompts/memory-consolidate-system-prompt.md' with { type: 'file' };
+import consolidateSystemPath from './prompts/consolidate-system.prompt.md' with { type: 'file' };
+import consolidateUserPath from './prompts/consolidate-user.prompt.md' with { type: 'file' };
+import recallContextPath from './prompts/recall-context.prompt.md' with { type: 'file' };
 
 export interface MemoryServiceDeps {
   store: Store;
@@ -73,7 +76,21 @@ const FACTS_CHAR_BUDGET = 2000;
 // background so no file balloons — one scope = one MD file, so we compress it rather than split it.
 const CONSOLIDATE_CHAR_TRIGGER = 2000;
 
-const CONSOLIDATE_SYSTEM = (await Bun.file(consolidatePromptPath).text()).trim();
+const CONSOLIDATE_SYSTEM_PROMPT = await definePrompt({
+  id: 'memory.consolidate.system',
+  sourcePath: consolidateSystemPath
+});
+const CONSOLIDATE_USER_PROMPT = await definePrompt<{ facts: string[] }>({
+  id: 'memory.consolidate.user',
+  sourcePath: consolidateUserPath
+});
+const RECALL_CONTEXT_PROMPT = await definePrompt<{
+  globalFacts: string[];
+  laws: string[];
+  mem0Facts: string[];
+  privateFactCount: number;
+  projectFacts: string[];
+}>({ id: 'memory.recall-context', sourcePath: recallContextPath });
 
 // Returns the parsed fact list, or null when the text has no usable JSON array (so the caller can
 // distinguish "model said empty" — [] — from "model output was unparseable" — null).
@@ -200,8 +217,8 @@ export function createMemoryService(deps: MemoryServiceDeps): MemoryService {
       const res = await deps.router.complete({
         model,
         messages: [
-          { role: 'system', content: CONSOLIDATE_SYSTEM },
-          { role: 'user', content: facts.map((f) => `- ${f.content}`).join('\n') }
+          { role: 'system', content: CONSOLIDATE_SYSTEM_PROMPT.render({}) },
+          { role: 'user', content: CONSOLIDATE_USER_PROMPT.render({ facts: facts.map((f) => f.content) }) }
         ]
       });
       const cleaned = parseFactArray(res.text);
@@ -229,20 +246,15 @@ export function createMemoryService(deps: MemoryServiceDeps): MemoryService {
   // in scope — they're small and almost always relevant, and an agent shouldn't have to remember to
   // `view` what it learned about the user. AGENT-private facts can be large/situational, so they are
   // advertised by count and read on demand via the `view` action.
-  const buildBuiltinRecall = (agentId: AgentId, projectScope: MemoryScope | null): string => {
+  const builtinRecallData = (agentId: AgentId, projectScope: MemoryScope | null) => {
     const gFacts = memoryDir.listFacts(scopeOf('global', '*'));
     const aFacts = memoryDir.listFacts(scopeOf('agent', agentId));
     const pFacts = projectScope ? memoryDir.listFacts(projectScope) : [];
-    const parts: string[] = [];
-    if (gFacts.length) parts.push(`What you know about the user:\n${gFacts.map((f) => `- ${f.content}`).join('\n')}`);
-    // Project facts are workspace-specific and almost always relevant when working here, so inline them.
-    if (pFacts.length)
-      parts.push(`What you know about this workspace:\n${pFacts.map((f) => `- ${f.content}`).join('\n')}`);
-    if (aFacts.length)
-      parts.push(
-        `You also have ${aFacts.length} private memory note(s) for this agent — read them with the memory tool (action "view", scope "agent").`
-      );
-    return parts.join('\n\n');
+    return {
+      globalFacts: gFacts.map((f) => f.content),
+      privateFactCount: aFacts.length,
+      projectFacts: pFacts.map((f) => f.content)
+    };
   };
 
   // Background dedup/merge of a single scope once its facts exceed the char trigger (keeps one file
@@ -266,7 +278,7 @@ export function createMemoryService(deps: MemoryServiceDeps): MemoryService {
       const mem0 = await activeMem0();
       // Built-in: serve the frozen per-session snapshot so the cached system prefix stays stable.
       if (!mem0 && recallSnapshot.has(sessionId)) return recallSnapshot.get(sessionId);
-      let rendered: string | undefined;
+      let mem0Facts: string[] = [];
       if (mem0) {
         // mem0: semantic recall across the user (global), this workspace (project), and this agent.
         const scopes = [scopeOf('global', '*'), ...(projectScope ? [projectScope] : []), scopeOf('agent', agentId)];
@@ -278,19 +290,21 @@ export function createMemoryService(deps: MemoryServiceDeps): MemoryService {
           advanced: false,
           budget: { facts: FACTS_CHAR_BUDGET, graph: 0, laws: 0 }
         });
-        rendered = renderMemoryBlock(block);
-      } else {
-        // Built-in: inline global + project facts + advertise agent-private memory (read on demand).
-        rendered = buildBuiltinRecall(agentId, projectScope) || undefined;
+        mem0Facts = block.facts.map((fact) => fact.content);
       }
       // L3: append inferred laws (both backends — laws live in the graph DB, not the L1 store).
       const lawScopes = ['global', `agent:${agentId}`];
       if (projectScope) lawScopes.push(`project:${projectScope.id}`);
       const laws = deps.laws?.(lawScopes) ?? [];
-      if (laws.length > 0) {
-        const block = ['Learned rules (general, follow these):', ...laws.map((l) => `- ${l.statement}`)].join('\n');
-        rendered = rendered ? `${rendered}\n\n${block}` : block;
-      }
+      const builtin = mem0
+        ? { globalFacts: [], privateFactCount: 0, projectFacts: [] }
+        : builtinRecallData(agentId, projectScope);
+      const renderedContext = RECALL_CONTEXT_PROMPT.render({
+        ...builtin,
+        laws: laws.map((law) => law.statement),
+        mem0Facts
+      });
+      const rendered = renderedContext || undefined;
       if (!mem0) recallSnapshot.set(sessionId, rendered); // freeze the whole block (incl. laws) for the session
       return rendered;
     },

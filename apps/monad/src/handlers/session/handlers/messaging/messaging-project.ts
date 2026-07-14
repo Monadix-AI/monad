@@ -6,7 +6,7 @@ import type {
   SessionId,
   SessionMcpServer
 } from '@monad/protocol';
-import type { ChannelParticipant } from '#/agent/prompts/channel.ts';
+import type { BuildChannelContextInput, ChannelParticipant } from '#/agent/prompts/channel.ts';
 import type { SessionContext } from '#/handlers/session/context.ts';
 import type { createAcpChannelDelegation } from '#/handlers/session/handlers/acp-channel-delegation.ts';
 import type { createForwardAcpHandler } from '#/handlers/session/handlers/forward-acp.ts';
@@ -135,10 +135,10 @@ export function createSendProjectMessageHandler(ctx: SessionContext, deps: SendP
       })),
       ...externalAgentParticipants
     ];
-    const ambientContext =
+    const channelPromptInput: BuildChannelContextInput | undefined =
       route.kind === 'send' && route.generate === false
         ? undefined
-        : buildChannelTurnContext({
+        : {
             channelId: session.title,
             sessionId,
             routeKind: route.kind,
@@ -146,10 +146,11 @@ export function createSendProjectMessageHandler(ctx: SessionContext, deps: SendP
             responseMode,
             participants,
             targetMention: route.targetMention
-          });
+          };
+    const ambientContext = channelPromptInput ? buildChannelTurnContext(channelPromptInput) : undefined;
     const mcpServers = channelDelegateMcpServers(cfg?.mcpServers, runtimeForSession(sessionId)?.mcpServers);
     const isPublicProjectFanout = isWorkplaceProject && route.kind === 'send' && !route.direct;
-    const publicAmbientContext = buildChannelTurnContext({
+    const publicChannelPromptInput: BuildChannelContextInput = {
       channelId: session.title,
       sessionId,
       routeKind: route.kind,
@@ -157,14 +158,15 @@ export function createSendProjectMessageHandler(ctx: SessionContext, deps: SendP
       responseMode,
       participants,
       targetMention: route.targetMention
-    });
+    };
+    const publicAmbientContext = buildChannelTurnContext(publicChannelPromptInput);
     const dispatchStructuredNext =
-      ambientContext && responseMode === 'direct_structured'
+      ambientContext && channelPromptInput && responseMode === 'direct_structured'
         ? (responseText: string) =>
             dispatchChannelNextTargets({
               sessionId,
               responseText,
-              ambientContext,
+              channelPromptInput,
               acpAgents,
               mcpServers
             })
@@ -193,7 +195,7 @@ export function createSendProjectMessageHandler(ctx: SessionContext, deps: SendP
             acpAgents,
             mcpServers: cfg?.mcpServers,
             text: messageTextWithAttachments(route.text, attachments),
-            ambientContext: publicAmbientContext
+            channelPromptInput: publicChannelPromptInput
           })
         ]);
         return result;
@@ -230,6 +232,7 @@ export function createSendProjectMessageHandler(ctx: SessionContext, deps: SendP
       text: messageTextWithAttachments(route.text, attachments),
       displayText: route.displayText,
       ambientContext,
+      channelPromptInput,
       onComplete: dispatchStructuredNext
     });
   }

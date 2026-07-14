@@ -16,7 +16,12 @@ import { z } from 'zod';
 import { estimateTokens } from './context/estimate.ts';
 import { messageTokens } from './context/index.ts';
 import { replayHistory } from './loop/index.ts';
-import { SUMMARY_REFLECT_PROMPT, SUMMARY_STRUCTURED_PROMPT } from './prompts.ts';
+import {
+  renderSummaryReflectUserPrompt,
+  renderSummaryStructuredSystemPrompt,
+  renderSummaryUserPrompt,
+  SUMMARY_REFLECT_PROMPT
+} from './prompts.ts';
 
 /** Cap on how much of a single tool-call input / tool-result output is fed to the summarizer, so a
  *  giant file dump doesn't blow up the summary prompt while its head still names the file/symbol. */
@@ -291,7 +296,7 @@ export class DurableSummarizer implements HistoryProvider {
       sessionId,
       messages: [
         { role: 'system', content: SUMMARY_REFLECT_PROMPT },
-        { role: 'user', content: summary }
+        { role: 'user', content: renderSummaryReflectUserPrompt(summary) }
       ]
     });
     return result.text;
@@ -304,18 +309,12 @@ export class DurableSummarizer implements HistoryProvider {
     preserve: string[] = []
   ): Promise<string> {
     const transcript = older.map((m) => `${m.role}: ${renderForSummary(m.content)}`).join('\n');
-    const priorBlock = prior ? `Previous summary:\n${prior}\n\n` : '';
-    // PreCompact hooks can demand certain details survive compaction — append them to the system
-    // instruction so the summarizer treats them as must-keep rather than summarizable.
-    const system = preserve.length
-      ? `${SUMMARY_STRUCTURED_PROMPT}\n\nPreserve these details verbatim if they appear in the transcript:\n${preserve.map((p) => `- ${p}`).join('\n')}`
-      : SUMMARY_STRUCTURED_PROMPT;
     const result = await this.opts.model.complete({
       model: this.opts.summaryModel,
       sessionId,
       messages: [
-        { role: 'system', content: system },
-        { role: 'user', content: `${priorBlock}${transcript}` }
+        { role: 'system', content: renderSummaryStructuredSystemPrompt(preserve) },
+        { role: 'user', content: renderSummaryUserPrompt({ prior, transcript }) }
       ]
     });
     return result.text;

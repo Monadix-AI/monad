@@ -5,17 +5,19 @@ import type { ManagedExternalAgentProjectMember } from '#/handlers/session/handl
 import { newId } from '@monad/protocol';
 
 import { extractError } from '#/agent/index.ts';
+import { definePrompt } from '#/agent/prompt-template.ts';
 import { createManagedExternalAgentDelivery } from '#/handlers/session/handlers/managed-external-agent-delivery.ts';
 import { managedProjectLaunchMode } from '#/services/external-agent/managed-project.ts';
-import managedProjectJoinGreetingNoticePath from '#/services/external-agent/prompts/managed-project-join-greeting-notice.md' with {
+import managedProjectJoinGreetingNoticePath from '#/services/external-agent/prompts/managed-project-join-greeting-user.prompt.md' with {
   type: 'file'
 };
 
 const MANAGED_EXTERNAL_AGENT_MEMBER_START_ERROR_EVENT =
   'project.managed_external_agent.member_start_error' satisfies ManagedExternalAgentLifecycleLogEvent;
-const MANAGED_EXTERNAL_AGENT_JOIN_GREETING_NOTICE = (
-  await Bun.file(managedProjectJoinGreetingNoticePath).text()
-).trim();
+const MANAGED_EXTERNAL_AGENT_JOIN_GREETING_PROMPT = await definePrompt({
+  id: 'managed-project.join-greeting.user',
+  sourcePath: managedProjectJoinGreetingNoticePath
+});
 
 /** Cold-starts (or resumes) one managed-project-agent member's runtime for the given session and
  *  greets it with the join notice — the explicit-invite counterpart of a member joining a project.
@@ -87,7 +89,7 @@ export function createManagedExternalAgentJoin(ctx: SessionContext) {
         launchMode: managedProjectLaunchMode(spec, settings.launchMode),
         allowAutopilot: settings.allowAutopilot,
         providerSessionRef: resumeFrom ?? undefined,
-        input: MANAGED_EXTERNAL_AGENT_JOIN_GREETING_NOTICE
+        input: MANAGED_EXTERNAL_AGENT_JOIN_GREETING_PROMPT.render({})
       });
       emitManagedExternalAgentThinking(session.id, nativeSession.id, runtimeAgentName);
       return { started: true, nativeSessionId: nativeSession.id };

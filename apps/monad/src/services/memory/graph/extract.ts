@@ -1,8 +1,9 @@
 // L2 extraction: one LLM pass over a conversation span → entities + relations. Kept separate from
 // the store + the consolidation loop so it's unit-testable with a fake `complete`.
 
-// `with { type: 'file' }` embeds reliably in bun's --compile binary (unlike new URL+import.meta.url).
-import extractPromptPath from '../../../agent/prompts/memory-graph-extract-system-prompt.md' with { type: 'file' };
+import { definePrompt } from '#/agent/prompt-template.ts';
+import extractSystemPath from '../prompts/graph-extract-system.prompt.md' with { type: 'file' };
+import extractUserPath from '../prompts/graph-extract-user.prompt.md' with { type: 'file' };
 
 interface ExtractedNode {
   name: string;
@@ -23,7 +24,11 @@ export interface ExtractedGraph {
 /** Resolves a model id for a span's scope; returns the raw completion text for the two prompts. */
 export type Complete = (model: string, system: string, user: string) => Promise<string>;
 
-const EXTRACT_SYSTEM = (await Bun.file(extractPromptPath).text()).trim();
+const EXTRACT_SYSTEM_PROMPT = await definePrompt({ id: 'memory.graph-extract.system', sourcePath: extractSystemPath });
+const EXTRACT_USER_PROMPT = await definePrompt<{ transcript: string }>({
+  id: 'memory.graph-extract.user',
+  sourcePath: extractUserPath
+});
 
 /** Pull the first balanced top-level JSON object out of model text and validate the shape. */
 export function parseExtracted(text: string): ExtractedGraph | null {
@@ -74,6 +79,6 @@ export async function extractGraph(
   model: string,
   transcript: string
 ): Promise<ExtractedGraph | null> {
-  const text = await complete(model, EXTRACT_SYSTEM, transcript);
+  const text = await complete(model, EXTRACT_SYSTEM_PROMPT.render({}), EXTRACT_USER_PROMPT.render({ transcript }));
   return parseExtracted(text);
 }

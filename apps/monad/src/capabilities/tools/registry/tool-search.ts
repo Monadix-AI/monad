@@ -4,12 +4,12 @@ import type { Tool } from '#/capabilities/tools/types.ts';
 import { createLogger } from '@monad/logger';
 import { z } from 'zod';
 
+import { definePrompt } from '#/agent/prompt-template.ts';
 import { toolInputJsonSchema } from '#/capabilities/tools/schema.ts';
 import { getCatalog } from '#/capabilities/tools/tool-catalog.ts';
 import { toolResult } from '#/capabilities/tools/types.ts';
-// `with { type: 'file' }` embeds reliably in bun's --compile binary; `new URL(..., import.meta.url)`
-// resolves against the bundled module's relocated path and breaks in the standalone binary.
-import searchPromptPath from '../../../agent/prompts/tool-search-system-prompt.md' with { type: 'file' };
+import searchSystemPath from './prompts/tool-search-system.prompt.md' with { type: 'file' };
+import searchUserPath from './prompts/tool-search-user.prompt.md' with { type: 'file' };
 
 const log = createLogger('tool-search');
 
@@ -26,7 +26,14 @@ export interface ToolSearchDeps {
   topK?: number;
 }
 
-const SEARCH_PROMPT = (await Bun.file(searchPromptPath).text()).trim();
+const SEARCH_SYSTEM_PROMPT = await definePrompt<{ catalog: string }>({
+  id: 'tool-search.system',
+  sourcePath: searchSystemPath
+});
+const SEARCH_USER_PROMPT = await definePrompt<{ query: string; topK: number }>({
+  id: 'tool-search.user',
+  sourcePath: searchUserPath
+});
 
 export function createToolSearchTool(deps: ToolSearchDeps): Tool<{ query: string }, string> {
   const topK = deps.topK ?? 5;
@@ -58,10 +65,10 @@ export function createToolSearchTool(deps: ToolSearchDeps): Tool<{ query: string
       const result = await deps.model.complete({
         model: deps.searchModelId,
         messages: [
-          { role: 'system', content: `${SEARCH_PROMPT}\n${catalogText}`, cache: true },
+          { role: 'system', content: SEARCH_SYSTEM_PROMPT.render({ catalog: catalogText }), cache: true },
           {
             role: 'user',
-            content: `Find tools relevant to: ${input.query}\nReturn at most ${topK} tool names, one per line, most relevant first.`
+            content: SEARCH_USER_PROMPT.render({ query: input.query, topK })
           }
         ]
       });
