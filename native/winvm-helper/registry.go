@@ -78,9 +78,14 @@ func cmdSetup(args []string) {
 		return
 	}
 
+	// The GuestCommunicationServices parent key is created by the Hyper-V feature; opening it fails
+	// either because the shell isn't elevated OR because Hyper-V isn't enabled (verified live: on
+	// Windows Home the key is absent and OpenKey returns "file not found", not an access error).
 	parent, err := registry.OpenKey(registry.LOCAL_MACHINE, vsockRegistryPath, registry.CREATE_SUB_KEY)
 	if err != nil {
-		fail("setup: cannot open %s (requires an elevated shell): %v", vsockRegistryPath, err)
+		fail("setup: cannot open %s: %v — run from an elevated shell, and ensure Hyper-V is enabled "+
+			"(the GuestCommunicationServices key is created by the Hyper-V feature; it is absent on Windows Home)",
+			vsockRegistryPath, err)
 	}
 	defer parent.Close()
 	for _, p := range ports {
