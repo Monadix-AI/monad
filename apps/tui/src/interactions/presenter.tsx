@@ -1,12 +1,12 @@
 import type { MonadClient } from '@monad/client';
 import type {
+  InteractionEvent,
   InteractionField,
   InteractionPresenterCapabilities,
   InteractionSource,
   PendingInteraction
 } from '@monad/protocol';
 
-import { pendingInteractionSchema } from '@monad/protocol';
 import { Box, Text, useInput } from 'ink';
 import TextInput from 'ink-text-input';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -59,6 +59,8 @@ export function useTuiInteractionPresenter(client: MonadClient) {
   const presenterId = useRef(`tui-${crypto.randomUUID()}`);
   const claiming = useRef(false);
   const activeRef = useRef<ClaimedInteraction | null>(null);
+  const pendingRef = useRef(new Map<string, PendingInteraction>());
+  const drainRef = useRef<() => void>(() => {});
   const [active, setActive] = useState<ClaimedInteraction | null>(null);
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [fieldIndex, setFieldIndex] = useState(0);
@@ -66,16 +68,19 @@ export function useTuiInteractionPresenter(client: MonadClient) {
 
   useEffect(() => {
     let disposed = false;
-    const poll = async () => {
-      if (claiming.current || activeRef.current) return;
+    const drain = () => {
+      if (disposed || claiming.current || activeRef.current) return;
+      const candidate = [...pendingRef.current.values()].find(
+        (item) => item.mode === 'foreground' && item.state === 'pending'
+      );
+      if (!candidate) return;
+      pendingRef.current.delete(candidate.id);
+      void claim(candidate);
+    };
+    const claim = async (candidate: PendingInteraction) => {
+      if (claiming.current || activeRef.current || candidate.mode !== 'foreground' || candidate.state !== 'pending')
+        return;
       try {
-        const response = await client.fetch('/v1/interactions');
-        if (!response.ok || disposed) return;
-        const body = (await response.json()) as { interactions?: unknown[] };
-        const candidate = (body.interactions ?? [])
-          .map((item) => pendingInteractionSchema.parse(item))
-          .find((item) => item.mode === 'foreground' && item.state === 'pending');
-        if (!candidate) return;
         claiming.current = true;
         const claimResponse = await client.fetch(`/v1/interactions/${encodeURIComponent(candidate.id)}/claim`, {
           method: 'POST',
@@ -93,13 +98,28 @@ export function useTuiInteractionPresenter(client: MonadClient) {
         // Connection state is rendered by the main TUI; presenter polling remains quiet.
       } finally {
         claiming.current = false;
+        drain();
       }
     };
-    void poll();
-    const timer = setInterval(() => void poll(), 500);
+    drainRef.current = drain;
+    const onEvent = (event: InteractionEvent) => {
+      if (event.type === 'removed') {
+        pendingRef.current.delete(event.id);
+        if (activeRef.current?.interaction.id === event.id) {
+          activeRef.current = null;
+          setActive(null);
+          drain();
+        }
+        return;
+      }
+      pendingRef.current.set(event.interaction.id, event.interaction);
+      drain();
+    };
+    const dispose = client.streamInteractionEvents(onEvent);
     return () => {
       disposed = true;
-      clearInterval(timer);
+      drainRef.current = () => {};
+      dispose();
       void client.fetch(`/v1/interactions/presenters/${encodeURIComponent(presenterId.current)}/release`, {
         method: 'POST'
       });
@@ -132,6 +152,7 @@ export function useTuiInteractionPresenter(client: MonadClient) {
     }
     activeRef.current = null;
     setActive(null);
+    drainRef.current();
   };
 
   return {

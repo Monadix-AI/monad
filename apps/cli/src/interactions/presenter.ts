@@ -1,8 +1,12 @@
 import type { MonadClient } from '@monad/client';
-import type { InteractionPresenterCapabilities, InteractionSource, PendingInteraction } from '@monad/protocol';
+import type {
+  InteractionEvent,
+  InteractionPresenterCapabilities,
+  InteractionSource,
+  PendingInteraction
+} from '@monad/protocol';
 
 import { createInterface } from 'node:readline';
-import { pendingInteractionSchema } from '@monad/protocol';
 
 export interface InteractionPromptIO {
   text(label: string): Promise<string>;
@@ -173,37 +177,44 @@ export function startCliInteractionPresenter(
     io?: InteractionPromptIO;
     onPresent?: (interaction: PendingInteraction) => void;
     onError?: (error: unknown) => void;
-    intervalMs?: number;
   } = {}
 ): () => Promise<void> {
   const presenterId = `cli-${crypto.randomUUID()}`;
   let stopped = false;
   let busy = false;
-  const poll = async () => {
+  const pending = new Map<string, PendingInteraction>();
+  const drain = () => {
     if (stopped || busy) return;
+    const next = [...pending.values()].find((item) => item.mode === 'foreground' && item.state === 'pending');
+    if (!next) return;
+    pending.delete(next.id);
+    void present(next);
+  };
+  const present = async (interaction: PendingInteraction) => {
+    if (stopped || busy || interaction.mode !== 'foreground' || interaction.state !== 'pending') return;
     try {
-      const response = await client.fetch('/v1/interactions');
-      if (!response.ok) return;
-      const body = (await response.json()) as { interactions?: unknown[] };
-      const candidate = (body.interactions ?? [])
-        .map((item) => pendingInteractionSchema.parse(item))
-        .find((item) => item.mode === 'foreground' && item.state === 'pending');
-      if (!candidate) return;
       busy = true;
-      options.onPresent?.(candidate);
-      await answerInteraction(client, candidate, presenterId, options.io);
+      options.onPresent?.(interaction);
+      await answerInteraction(client, interaction, presenterId, options.io);
     } catch (error) {
       options.onError?.(error);
     } finally {
       busy = false;
+      drain();
     }
   };
-  void poll();
-  const timer = setInterval(() => void poll(), options.intervalMs ?? 500);
-  timer.unref?.();
+  const onEvent = (event: InteractionEvent) => {
+    if (event.type === 'removed') {
+      pending.delete(event.id);
+      return;
+    }
+    pending.set(event.interaction.id, event.interaction);
+    drain();
+  };
+  const dispose = client.streamInteractionEvents(onEvent, { onError: options.onError });
   return async () => {
     stopped = true;
-    clearInterval(timer);
+    dispose();
     await client.fetch(`/v1/interactions/presenters/${encodeURIComponent(presenterId)}/release`, { method: 'POST' });
   };
 }

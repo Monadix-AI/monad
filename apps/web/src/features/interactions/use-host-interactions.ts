@@ -1,6 +1,5 @@
-import type { InteractionPresenterCapabilities, PendingInteraction } from '@monad/protocol';
+import type { InteractionEvent, InteractionPresenterCapabilities, PendingInteraction } from '@monad/protocol';
 
-import { pendingInteractionSchema } from '@monad/protocol';
 import { useEffect, useRef, useState } from 'react';
 
 import { useMonadRuntime } from '#/lib/monad-runtime-provider';
@@ -24,22 +23,30 @@ export function useHostInteractions() {
   const presenterId = useRef(`web-${crypto.randomUUID()}`);
   const activeRef = useRef<ClaimedHostInteraction | null>(null);
   const claimingRef = useRef(false);
+  const pendingRef = useRef(new Map<string, PendingInteraction>());
+  const drainRef = useRef<() => void>(() => {});
   const [active, setActive] = useState<ClaimedHostInteraction | null>(null);
   const [backgroundCount, setBackgroundCount] = useState(0);
 
   useEffect(() => {
     let disposed = false;
-    const poll = async () => {
+    const refreshBackgroundCount = () => {
+      setBackgroundCount([...pendingRef.current.values()].filter((item) => item.mode === 'background').length);
+    };
+    const drain = () => {
+      if (disposed || activeRef.current || claimingRef.current) return;
+      const candidate = [...pendingRef.current.values()].find(
+        (item) => item.mode === 'foreground' && item.state === 'pending'
+      );
+      if (!candidate) return;
+      pendingRef.current.delete(candidate.id);
+      refreshBackgroundCount();
+      void claim(candidate);
+    };
+    const claim = async (candidate: PendingInteraction) => {
+      if (activeRef.current || claimingRef.current || candidate.mode !== 'foreground' || candidate.state !== 'pending')
+        return;
       try {
-        const response = await client.fetch('/v1/interactions');
-        if (!response.ok || disposed) return;
-        const body = (await response.json()) as { interactions?: unknown[] };
-        const interactions = (body.interactions ?? []).map((item) => pendingInteractionSchema.parse(item));
-        setBackgroundCount(interactions.filter((item) => item.mode === 'background').length);
-        if (activeRef.current || claimingRef.current) return;
-        const candidate = interactions.find((item) => item.mode === 'foreground' && item.state === 'pending');
-        if (!candidate) return;
-
         claimingRef.current = true;
         const claimed = await client.fetch(`/v1/interactions/${encodeURIComponent(candidate.id)}/claim`, {
           method: 'POST',
@@ -54,14 +61,31 @@ export function useHostInteractions() {
         // A disconnected daemon is reflected elsewhere in the shell; presenter polling stays quiet.
       } finally {
         claimingRef.current = false;
+        drain();
       }
     };
+    drainRef.current = drain;
+    const onEvent = (event: InteractionEvent) => {
+      if (event.type === 'removed') {
+        pendingRef.current.delete(event.id);
+        if (activeRef.current?.interaction.id === event.id) {
+          activeRef.current = null;
+          setActive(null);
+          drain();
+        }
+        refreshBackgroundCount();
+        return;
+      }
+      pendingRef.current.set(event.interaction.id, event.interaction);
+      refreshBackgroundCount();
+      drain();
+    };
 
-    void poll();
-    const timer = window.setInterval(() => void poll(), 750);
+    const dispose = client.streamInteractionEvents(onEvent);
     return () => {
       disposed = true;
-      window.clearInterval(timer);
+      drainRef.current = () => {};
+      dispose();
       void client.fetch(`/v1/interactions/presenters/${encodeURIComponent(presenterId.current)}/release`, {
         method: 'POST'
       });
@@ -91,6 +115,7 @@ export function useHostInteractions() {
     if (!response.ok) throw new Error(`interaction ${action} failed (${response.status})`);
     activeRef.current = null;
     setActive(null);
+    drainRef.current();
   };
 
   return {

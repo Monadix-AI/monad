@@ -1,4 +1,4 @@
-import type { CreateSessionResponse, Event, SessionId, SessionUiEvent } from '@monad/protocol';
+import type { CreateSessionResponse, Event, InteractionEvent, SessionId, SessionUiEvent } from '@monad/protocol';
 
 import { afterEach, expect, test } from 'bun:test';
 import { tmpdir } from 'node:os';
@@ -278,6 +278,54 @@ test('streamUiEvents dispose stops consuming without surfacing a transient error
   });
 
   expect(capturedSignal?.aborted).toBe(true);
+});
+
+test('streamInteractionEvents subscribes to the event stream instead of polling the list endpoint', async () => {
+  const interaction: InteractionEvent = {
+    type: 'upsert',
+    interaction: {
+      id: 'interaction-stream-1',
+      source: { kind: 'builtin', id: 'sandbox', label: 'Sandbox' },
+      request: { type: 'confirm', title: 'Allow?' },
+      mode: 'foreground',
+      state: 'pending',
+      createdAt: '2026-07-14T00:00:00.000Z',
+      expiresAt: '2026-07-14T00:05:00.000Z'
+    }
+  };
+  const frame = `event: interaction\ndata: ${JSON.stringify(interaction)}\n\n`;
+  const urls: string[] = [];
+  let capturedSignal: AbortSignal | undefined;
+
+  globalThis.fetch = (async (url: string, init?: RequestInit) => {
+    urls.push(String(url));
+    capturedSignal = init?.signal ?? undefined;
+    return new Response(
+      new ReadableStream<Uint8Array>({
+        start(ctrl) {
+          ctrl.enqueue(new TextEncoder().encode(frame));
+        }
+      }),
+      { headers: { 'content-type': 'text/event-stream' } }
+    );
+  }) as unknown as typeof fetch;
+
+  const client = new MonadClient({ baseUrl: 'http://127.0.0.1:52749' });
+  const received: InteractionEvent[] = [];
+  let dispose: (() => void) | undefined;
+
+  await new Promise<void>((resolve) => {
+    dispose = client.streamInteractionEvents((event) => {
+      received.push(event);
+      dispose?.();
+      setTimeout(resolve, 0);
+    });
+    setTimeout(resolve, 2000);
+  });
+
+  expect(urls).toEqual(['http://127.0.0.1:52749/v1/interactions/events']);
+  expect(capturedSignal?.aborted).toBe(true);
+  expect(received).toEqual([interaction]);
 });
 
 test('watchSession: opens SSE on stream_started, closes on stream_ended, de-dupes both planes', () => {

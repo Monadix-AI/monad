@@ -4,6 +4,7 @@ import type {
   EventId,
   ExternalAgentAuthSessionView,
   ExternalAgentUiObservationFrame,
+  InteractionEvent,
   ProjectId,
   SendMessageResponse,
   SessionId,
@@ -17,6 +18,7 @@ import {
   eventSchema,
   externalAgentAuthSessionViewSchema,
   externalAgentUiObservationFrameSchema,
+  interactionEventSchema,
   readTypedSseStream,
   SSE_IDLE_TIMEOUT_MS,
   sessionUiEventSchema
@@ -51,6 +53,7 @@ export type UiEventHandler = (event: SessionUiEvent) => void;
 export type LogRecordHandler = (record: DeveloperLogRecord) => void;
 export type ExternalAgentAuthSessionHandler = (session: ExternalAgentAuthSessionView) => void;
 export type ExternalAgentUiObservationHandler = (frame: ExternalAgentUiObservationFrame) => void;
+export type InteractionEventHandler = (event: InteractionEvent) => void;
 
 interface SsePayloadSchema<T> {
   parse(value: unknown): T;
@@ -287,6 +290,13 @@ export class MonadClient {
       ...opts,
       resume: true
     });
+  }
+
+  streamInteractionEvents(
+    onEvent: InteractionEventHandler,
+    opts?: { onOpen?: () => void; onError?: (err: StreamError) => void }
+  ): () => void {
+    return this.stream(`/${CONTROL_API_VERSION}/interactions/events`, interactionEventSchema, onEvent, opts);
   }
 
   streamSessionLogs(
