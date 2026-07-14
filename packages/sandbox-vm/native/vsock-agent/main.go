@@ -41,6 +41,7 @@ var safeRunID = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,128}$`)
 
 type managedRun struct {
 	cmd           *exec.Cmd
+	runID         string
 	stdin         io.WriteCloser
 	done          chan exitMessage
 	finished      chan struct{}
@@ -171,6 +172,7 @@ func serveConnection(conn io.ReadWriteCloser, registry *runRegistry) {
 		writer.json(frameError, map[string]string{"message": err.Error()})
 		return
 	}
+	run.runID = req.RunID
 	if err := registry.add(req.RunID, run); err != nil {
 		run.terminate(0)
 		<-run.done
@@ -260,6 +262,7 @@ func handleControl(run *managedRun, writer *frameWriter, frame wireFrame) error 
 	case frameSignal:
 		var req signalRequest
 		if json.Unmarshal(frame.Payload, &req) != nil || req.Signal < 1 || req.Signal > 64 {
+			protocolViolation(run, writer, "invalid signal frame")
 			return fmt.Errorf("invalid signal frame")
 		}
 		run.signal(syscall.Signal(req.Signal))
@@ -269,13 +272,21 @@ func handleControl(run *managedRun, writer *frameWriter, frame wireFrame) error 
 		}
 		var req resizeRequest
 		if json.Unmarshal(frame.Payload, &req) != nil || !validTerminalSize(req.Cols, req.Rows) {
+			protocolViolation(run, writer, "invalid resize frame")
 			return fmt.Errorf("invalid resize frame")
 		}
 		return run.resize(req)
 	default:
+		protocolViolation(run, writer, "unsupported control frame")
 		return fmt.Errorf("unsupported control frame %d", frame.Kind)
 	}
 	return nil
+}
+
+func protocolViolation(run *managedRun, writer *frameWriter, detail string) {
+	writer.json(frameViolation, violationMessage{
+		Kind: "protocol", Operation: "unsupported-operation", RunID: run.runID, Detail: detail,
+	})
 }
 
 func commandFor(req startRequest) (*exec.Cmd, io.ReadCloser, io.WriteCloser, error) {
@@ -381,6 +392,36 @@ func startManagedCommandWithControl(
 	pumps.Add(2)
 	go pump(stdout, frameStdout)
 	go pump(stderr, frameStderr)
+	var supervisorExit <-chan *exitMessage
+	if supervisorResult != nil {
+		results := make(chan *exitMessage, 1)
+		supervisorExit = results
+		go func() {
+			defer supervisorResult.Close()
+			decoder := json.NewDecoder(supervisorResult)
+			var structured *exitMessage
+			for {
+				var record supervisorRecord
+				if decoder.Decode(&record) != nil {
+					break
+				}
+				switch record.Type {
+				case "violation":
+					if record.Violation != nil && output != nil {
+						if payload, err := json.Marshal(record.Violation); err == nil {
+							output(frameViolation, payload)
+						}
+					}
+				case "exit":
+					if record.Exit != nil && validExitMessage(*record.Exit) {
+						value := *record.Exit
+						structured = &value
+					}
+				}
+			}
+			results <- structured
+		}()
+	}
 	go func() {
 		if supervisorControl != nil {
 			defer supervisorControl.Close()
@@ -388,11 +429,9 @@ func startManagedCommandWithControl(
 		err := cmd.Wait()
 		pumps.Wait()
 		result := exitResult(cmd, err)
-		if supervisorResult != nil {
-			defer supervisorResult.Close()
-			var structured exitMessage
-			if json.NewDecoder(supervisorResult).Decode(&structured) == nil && validExitMessage(structured) {
-				result = structured
+		if supervisorExit != nil {
+			if structured := <-supervisorExit; structured != nil {
+				result = *structured
 			}
 		}
 		close(run.finished)

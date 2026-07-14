@@ -34,7 +34,14 @@ func prepareRuntime() error {
 	return os.WriteFile(filepath.Join(runs, "cgroup.subtree_control"), []byte("+memory +pids"), 0o600)
 }
 
-func enterRunCgroup(runID string, limits runLimits) (func(), error) {
+type runCgroupHandle struct {
+	path   string
+	broker string
+	pid    int
+	before cgroupEvents
+}
+
+func enterRunCgroup(runID string, limits runLimits) (*runCgroupHandle, error) {
 	name, err := runCgroupName(runID)
 	if err != nil {
 		return nil, err
@@ -61,15 +68,35 @@ func enterRunCgroup(runID string, limits runLimits) (func(), error) {
 		os.Remove(path)
 		return nil, err
 	}
-	return func() {
-		os.WriteFile(filepath.Join(broker, "cgroup.procs"), []byte(strconv.Itoa(pid)), 0o600)
-		for deadline := time.Now().Add(time.Second); time.Now().Before(deadline); {
-			if os.Remove(path) == nil {
-				return
-			}
-			time.Sleep(10 * time.Millisecond)
-		}
+	handle := &runCgroupHandle{path: path, broker: broker, pid: pid}
+	handle.before, _ = handle.events()
+	return handle, nil
+}
+
+func (handle *runCgroupHandle) events() (cgroupEvents, error) {
+	memory, err := os.ReadFile(filepath.Join(handle.path, "memory.events"))
+	if err != nil {
+		return cgroupEvents{}, err
+	}
+	pids, err := os.ReadFile(filepath.Join(handle.path, "pids.events"))
+	if err != nil {
+		return cgroupEvents{}, err
+	}
+	return cgroupEvents{
+		OOM:     parseCgroupCounter(string(memory), "oom"),
+		OOMKill: parseCgroupCounter(string(memory), "oom_kill"),
+		PidsMax: parseCgroupCounter(string(pids), "max"),
 	}, nil
+}
+
+func (handle *runCgroupHandle) cleanup() {
+	os.WriteFile(filepath.Join(handle.broker, "cgroup.procs"), []byte(strconv.Itoa(handle.pid)), 0o600)
+	for deadline := time.Now().Add(time.Second); time.Now().Before(deadline); {
+		if os.Remove(handle.path) == nil {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 func currentCgroupPath() (string, error) {

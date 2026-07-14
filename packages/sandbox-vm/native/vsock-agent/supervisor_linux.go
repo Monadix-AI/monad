@@ -66,6 +66,7 @@ func runSupervisorMode() int {
 		return 127
 	}
 	defer result.Close()
+	reporter := &supervisorReporter{encoder: json.NewEncoder(result)}
 	var req startRequest
 	if err := json.NewDecoder(config).Decode(&req); err != nil || validateStart(req) != nil {
 		fmt.Fprintln(os.Stderr, "supervisor: invalid config")
@@ -87,18 +88,21 @@ func runSupervisorMode() int {
 	if limits.MaxProcesses <= 0 {
 		limits.MaxProcesses = 256
 	}
-	cleanup, err := enterRunCgroup(req.RunID, limits)
+	group, err := enterRunCgroup(req.RunID, limits)
 	if err != nil {
+		reporter.violation("setup", "cgroup-init", req.RunID, "cgroup initialization failed")
 		fmt.Fprintln(os.Stderr, "supervisor: cgroup:", err)
 		return 127
 	}
-	defer cleanup()
+	defer group.cleanup()
 	if err := privateTmp(); err != nil {
+		reporter.violation("setup", "namespace-init", req.RunID, "mount namespace initialization failed")
 		fmt.Fprintln(os.Stderr, "supervisor: private tmp:", err)
 		return 127
 	}
 	cmd, err := workloadCommand(req)
 	if err != nil {
+		reporter.violation("setup", "runtime-exit", req.RunID, "workload preparation failed")
 		fmt.Fprintln(os.Stderr, "supervisor:", err)
 		return 127
 	}
@@ -126,6 +130,11 @@ func runSupervisorMode() int {
 		close(outputDone)
 	}
 	if err != nil {
+		operation := "runtime-exit"
+		if req.Terminal != nil {
+			operation = "pty-init"
+		}
+		reporter.violation("setup", operation, req.RunID, "workload start failed")
 		fmt.Fprintln(os.Stderr, "supervisor: start:", err)
 		return 127
 	}
@@ -148,21 +157,42 @@ func runSupervisorMode() int {
 				<-outputDone
 				master.Close()
 			}
+			if after, err := group.events(); err == nil {
+				for _, violation := range violationDeltas(req.RunID, group.before, after) {
+					reporter.recordViolation(violation)
+				}
+			}
 			if status, ok := cmd.ProcessState.Sys().(syscall.WaitStatus); ok && status.Signaled() {
 				sig := int(status.Signal())
-				json.NewEncoder(result).Encode(exitMessage{Code: nil, Signal: sig})
+				reporter.exit(exitMessage{Code: nil, Signal: sig})
 				return 128 + sig
 			}
 			if waitErr != nil {
 				code := cmd.ProcessState.ExitCode()
-				json.NewEncoder(result).Encode(exitMessage{Code: &code})
+				reporter.exit(exitMessage{Code: &code})
 				return code
 			}
 			code := 0
-			json.NewEncoder(result).Encode(exitMessage{Code: &code})
+			reporter.exit(exitMessage{Code: &code})
 			return 0
 		}
 	}
+}
+
+type supervisorReporter struct {
+	encoder *json.Encoder
+}
+
+func (reporter *supervisorReporter) violation(kind, operation, runID, detail string) {
+	reporter.recordViolation(violationMessage{Kind: kind, Operation: operation, RunID: runID, Detail: detail})
+}
+
+func (reporter *supervisorReporter) recordViolation(violation violationMessage) {
+	reporter.encoder.Encode(supervisorRecord{Type: "violation", Violation: &violation})
+}
+
+func (reporter *supervisorReporter) exit(exit exitMessage) {
+	reporter.encoder.Encode(supervisorRecord{Type: "exit", Exit: &exit})
 }
 
 func applyResizes(control io.Reader, master *os.File) {

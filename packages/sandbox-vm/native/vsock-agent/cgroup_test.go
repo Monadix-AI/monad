@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
@@ -37,6 +38,23 @@ func TestUnifiedCgroupPathSelectsV2Hierarchy(t *testing.T) {
 	got, err := unifiedCgroupPath("7:cpu:/legacy\n0::/system.slice/monad.service/broker\n")
 	if err != nil || got != "/system.slice/monad.service/broker" {
 		t.Fatalf("got %q, %v", got, err)
+	}
+}
+
+func TestCgroupEventDeltasProduceBoundedViolations(t *testing.T) {
+	before := cgroupEvents{OOM: 1, OOMKill: 2, PidsMax: 3}
+	after := cgroupEvents{OOM: 2, OOMKill: 4, PidsMax: 5}
+	got := violationDeltas("run-1", before, after)
+	want := []violationMessage{
+		{Kind: "memory", Operation: "oom", RunID: "run-1", Detail: "memory.events oom increased by 1"},
+		{Kind: "memory", Operation: "oom-kill", RunID: "run-1", Detail: "memory.events oom_kill increased by 2"},
+		{Kind: "process-limit", Operation: "pids-max", RunID: "run-1", Detail: "pids.events max increased by 2"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("violations = %#v", got)
+	}
+	if events := violationDeltas("run-1", after, before); len(events) != 0 {
+		t.Fatalf("counter decreases produced events: %#v", events)
 	}
 }
 

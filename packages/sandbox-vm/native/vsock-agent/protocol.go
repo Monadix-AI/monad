@@ -25,6 +25,7 @@ const (
 	frameError       byte = 19
 	frameExit        byte = 20
 	frameUnsupported byte = 21
+	frameViolation   byte = 22
 )
 
 type wireFrame struct {
@@ -70,6 +71,21 @@ type startedMessage struct {
 type exitMessage struct {
 	Code   *int `json:"code"`
 	Signal int  `json:"signal"`
+}
+
+type violationMessage struct {
+	Kind      string `json:"kind"`
+	Operation string `json:"operation"`
+	RunID     string `json:"runId"`
+	Target    string `json:"target,omitempty"`
+	PID       int    `json:"pid,omitempty"`
+	Detail    string `json:"detail,omitempty"`
+}
+
+type supervisorRecord struct {
+	Type      string            `json:"type"`
+	Violation *violationMessage `json:"violation,omitempty"`
+	Exit      *exitMessage      `json:"exit,omitempty"`
 }
 
 func frameLimit(kind byte) uint32 {

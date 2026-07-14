@@ -23,7 +23,7 @@ func TestManagedCommandPrefersStructuredSupervisorExit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.Command("sh", "-c", `printf '{"code":null,"signal":15}' >&3; exit 143`)
+	cmd := exec.Command("sh", "-c", `printf '{"type":"exit","exit":{"code":null,"signal":15}}\n' >&3; exit 143`)
 	cmd.ExtraFiles = []*os.File{writer}
 	run, err := startManagedCommand(cmd, reader, nil)
 	if err != nil {
@@ -32,6 +32,36 @@ func TestManagedCommandPrefersStructuredSupervisorExit(t *testing.T) {
 	result := <-run.done
 	if result.Code != nil || result.Signal != 15 {
 		t.Fatalf("expected signal metadata, got %+v", result)
+	}
+}
+
+func TestManagedCommandForwardsSupervisorViolationsBeforeExit(t *testing.T) {
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("sh", "-c", `printf '%s\n' '{"type":"violation","violation":{"kind":"memory","operation":"oom-kill","runId":"run-1"}}' '{"type":"exit","exit":{"code":137,"signal":0}}' >&3; exit 137`)
+	cmd.ExtraFiles = []*os.File{writer}
+	var frames []wireFrame
+	run, err := startManagedCommand(cmd, reader, func(kind byte, data []byte) {
+		frames = append(frames, wireFrame{Kind: kind, Payload: append([]byte(nil), data...)})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := <-run.done
+	if result.Code == nil || *result.Code != 137 {
+		t.Fatalf("exit = %+v", result)
+	}
+	if len(frames) != 1 || frames[0].Kind != frameViolation {
+		t.Fatalf("frames = %#v", frames)
+	}
+	var violation violationMessage
+	if err := json.Unmarshal(frames[0].Payload, &violation); err != nil {
+		t.Fatal(err)
+	}
+	if violation.Operation != "oom-kill" || violation.RunID != "run-1" {
+		t.Fatalf("violation = %+v", violation)
 	}
 }
 
@@ -54,9 +84,14 @@ func TestManagedRunTerminateStopsProcessGroup(t *testing.T) {
 }
 
 func TestHandleControlRejectsUnknownFrames(t *testing.T) {
-	err := handleControl(&managedRun{}, &frameWriter{w: &bytes.Buffer{}}, wireFrame{Kind: 99})
+	var output bytes.Buffer
+	err := handleControl(&managedRun{}, &frameWriter{w: &output}, wireFrame{Kind: 99})
 	if err == nil || !strings.Contains(err.Error(), "unsupported") {
 		t.Fatalf("expected unsupported-frame error, got %v", err)
+	}
+	frame, readErr := readFrame(&output)
+	if readErr != nil || frame.Kind != frameViolation {
+		t.Fatalf("violation frame = %+v, %v", frame, readErr)
 	}
 }
 

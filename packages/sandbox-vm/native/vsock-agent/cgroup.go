@@ -41,3 +41,49 @@ func unifiedCgroupPath(data string) (string, error) {
 	}
 	return "", fmt.Errorf("cgroup v2 is unavailable")
 }
+
+type cgroupEvents struct {
+	OOM     uint64
+	OOMKill uint64
+	PidsMax uint64
+}
+
+func parseCgroupCounter(data, name string) uint64 {
+	for _, line := range strings.Split(data, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) != 2 || fields[0] != name {
+			continue
+		}
+		value, err := strconv.ParseUint(fields[1], 10, 64)
+		if err == nil {
+			return value
+		}
+	}
+	return 0
+}
+
+func violationDeltas(runID string, before, after cgroupEvents) []violationMessage {
+	violations := make([]violationMessage, 0, 3)
+	if after.OOM > before.OOM {
+		delta := after.OOM - before.OOM
+		violations = append(violations, violationMessage{
+			Kind: "memory", Operation: "oom", RunID: runID,
+			Detail: fmt.Sprintf("memory.events oom increased by %d", delta),
+		})
+	}
+	if after.OOMKill > before.OOMKill {
+		delta := after.OOMKill - before.OOMKill
+		violations = append(violations, violationMessage{
+			Kind: "memory", Operation: "oom-kill", RunID: runID,
+			Detail: fmt.Sprintf("memory.events oom_kill increased by %d", delta),
+		})
+	}
+	if after.PidsMax > before.PidsMax {
+		delta := after.PidsMax - before.PidsMax
+		violations = append(violations, violationMessage{
+			Kind: "process-limit", Operation: "pids-max", RunID: runID,
+			Detail: fmt.Sprintf("pids.events max increased by %d", delta),
+		})
+	}
+	return violations
+}
