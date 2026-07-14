@@ -59,7 +59,7 @@ test('a scheduled wake-up survives reopening the database', async () => {
   seedProject(first);
 
   try {
-    await createExperienceWorkerScheduler(first, 'pack-a', 'prn_a').schedule('prj_a', {
+    await createExperienceWorkerScheduler(first, 'pack-a', 'prn_a', 'board').schedule('prj_a', {
       key: 'dispatch',
       runAt: '2026-07-14T00:00:00.000Z'
     });
@@ -87,7 +87,8 @@ test('worker receives a project-scoped event and a durable wake-up', async () =>
     principalId: 'prn_a',
     experienceState: createExperienceStateStore(store, 'pack-a', 'prn_a'),
     projectSessions: {} as never,
-    workerScheduler: createExperienceWorkerScheduler(store, 'pack-a', 'prn_a')
+    experienceId: 'board',
+    workerScheduler: createExperienceWorkerScheduler(store, 'pack-a', 'prn_a', 'board')
   };
   const registry = new ExperienceWorkerRegistry({ store, contextFor: () => context });
   registry.register('pack-a', 'prn_a', ['experience.worker'], {
@@ -123,10 +124,97 @@ test('worker receives a project-scoped event and a durable wake-up', async () =>
   }
 });
 
+test('events for one session are delivered in order without overlapping', async () => {
+  const store = createStore();
+  const seen: string[] = [];
+  let releaseFirst!: () => void;
+  const firstBlocked = new Promise<void>((resolve) => {
+    releaseFirst = resolve;
+  });
+  const registry = new ExperienceWorkerRegistry({
+    store,
+    contextFor: () => ({}) as never
+  });
+  registry.register('pack-a', 'prn_a', ['experience.worker'], {
+    experienceId: 'board',
+    onProjectStart: async () => {},
+    onEvent: async (event) => {
+      seen.push(`start:${event.id}`);
+      if (event.id === 'evt_1') await firstBlocked;
+      seen.push(`end:${event.id}`);
+    },
+    onWake: async () => {}
+  });
+  const event = (id: string) => ({
+    id,
+    projectId: 'prj_a',
+    sessionId: 'ses_a',
+    type: 'agent.message',
+    payload: {},
+    createdAt: '2026-07-14T00:00:00.000Z'
+  });
+
+  try {
+    const first = registry.publish(event('evt_1'));
+    await Promise.resolve();
+    const second = registry.publish(event('evt_2'));
+    await Promise.resolve();
+    expect(seen).toEqual(['start:evt_1']);
+    releaseFirst();
+    await Promise.all([first, second]);
+    expect(seen).toEqual(['start:evt_1', 'end:evt_1', 'start:evt_2', 'end:evt_2']);
+  } finally {
+    store.close();
+  }
+});
+
+test('same-key wakeups are isolated between sibling experience workers', async () => {
+  const store = createStore();
+  seedProject(store);
+  const seen: string[] = [];
+  const contextFor = (experienceId: string) => ({
+    atomPackId: 'pack-a',
+    principalId: 'prn_a',
+    experienceId,
+    experienceState: createExperienceStateStore(store, 'pack-a', 'prn_a'),
+    projectSessions: {} as never,
+    workerScheduler: createExperienceWorkerScheduler(store, 'pack-a', 'prn_a', experienceId)
+  });
+  const registry = new ExperienceWorkerRegistry({
+    store,
+    contextFor: (_atomPackId, _principalId, _permissions, experienceId) => contextFor(experienceId)
+  });
+  for (const experienceId of ['board', 'timeline']) {
+    registry.register('pack-a', 'prn_a', ['experience.worker'], {
+      experienceId,
+      onProjectStart: async () => {},
+      onEvent: async () => {},
+      onWake: async () => {
+        seen.push(experienceId);
+      }
+    });
+  }
+
+  try {
+    await contextFor('board').workerScheduler.schedule('prj_a', {
+      key: 'dispatch',
+      runAt: '2026-07-14T00:00:00.000Z'
+    });
+    await contextFor('timeline').workerScheduler.schedule('prj_a', {
+      key: 'dispatch',
+      runAt: '2026-07-14T00:00:00.000Z'
+    });
+    await registry.deliverDueWakeups('2026-07-14T00:00:01.000Z');
+    expect(seen).toEqual(['board', 'timeline']);
+  } finally {
+    store.close();
+  }
+});
+
 test('state and scheduler reject a project outside the principal boundary', async () => {
   const store = createStore();
   const state = createExperienceStateStore(store, 'pack-a', 'prn_a');
-  const scheduler = createExperienceWorkerScheduler(store, 'pack-a', 'prn_a');
+  const scheduler = createExperienceWorkerScheduler(store, 'pack-a', 'prn_a', 'board');
 
   try {
     await expect(state.get('prj_missing', 'task/a')).rejects.toThrow('project not found');

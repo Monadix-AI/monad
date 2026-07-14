@@ -331,6 +331,29 @@ test('streams reasoning and text onto the same message item', () => {
   expect(final.item.status).toBe('done');
 });
 
+test('settles a pre-tool reasoning segment when a tool call starts', () => {
+  const projector = new SessionUiProjector();
+  projector.applyEvent(
+    event('agent.reasoning', { messageId: 'msg_100000000000', delta: 'I will use a tool.', index: 0 })
+  );
+
+  projector.applyEvent(event('tool.called', { toolCallId: 'call_1', tool: 'file_write', input: { path: 'test.md' } }));
+  projector.applyEvent(
+    event('tool.result', { toolCallId: 'call_1', tool: 'file_write', ok: true, result: 'wrote test.md' })
+  );
+  projector.applyEvent(
+    event('agent.reasoning', { messageId: 'msg_200000000000', delta: 'The file was written.', index: 0 })
+  );
+  projector.applyEvent(event('agent.message', { messageId: 'msg_200000000000', text: 'Done.' }));
+
+  const snapshot = projector.snapshot();
+  if (snapshot.kind !== 'snapshot') throw new Error('expected snapshot');
+  expect(snapshot.items.filter((item) => item.kind === 'message' && item.status === 'streaming')).toEqual([]);
+  expect(snapshot.items).toContainEqual(
+    expect.objectContaining({ kind: 'message', id: 'msg_100000000000', status: 'done' })
+  );
+});
+
 test('accumulates streamed text deltas across tokens (non-channel session)', () => {
   const projector = new SessionUiProjector();
   projector.applyEvent(event('agent.token', { messageId: 'msg_100000000000', delta: 'Hello', index: 0 }));

@@ -13,11 +13,23 @@ import {
   MAX_EXTERNAL_AGENT_UI_OUTPUT
 } from './ui-projection-helpers.ts';
 
+function settleBuiltInStreamingMessages(m: ProjectionMutations): SessionUiEvent[] {
+  const settled: SessionUiEvent[] = [];
+  for (const item of m.items.values()) {
+    if (item.kind !== 'message' || item.role !== 'assistant' || item.status !== 'streaming' || item.source) continue;
+    m.rawStreamingText.delete(item.id);
+    m.channelDisplayCache.delete(item.id);
+    settled.push(m.setMessage({ ...item, status: 'done' }));
+  }
+  return settled;
+}
+
 export function applyToolEvent(m: ProjectionMutations, event: Event): SessionUiEvent[] | undefined {
   switch (event.type) {
     case 'tool.called': {
       const p = parseEventPayload('tool.called', event.payload);
       return [
+        ...settleBuiltInStreamingMessages(m),
         {
           kind: 'upsert',
           cursor: event.id,

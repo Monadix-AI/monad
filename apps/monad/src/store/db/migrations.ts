@@ -130,12 +130,13 @@ CREATE INDEX IF NOT EXISTS idx_experience_state_events_record
 CREATE TABLE IF NOT EXISTS experience_worker_wakeups (
   atom_pack_id TEXT NOT NULL,
   principal_id TEXT NOT NULL,
+  experience_id TEXT NOT NULL,
   project_id TEXT NOT NULL,
   wake_key TEXT NOT NULL,
   run_at TEXT NOT NULL,
   attempt INTEGER NOT NULL DEFAULT 0,
   updated_at TEXT NOT NULL,
-  PRIMARY KEY (atom_pack_id, principal_id, project_id, wake_key)
+  PRIMARY KEY (atom_pack_id, principal_id, experience_id, project_id, wake_key)
 );
 CREATE INDEX IF NOT EXISTS idx_experience_worker_wakeups_due
   ON experience_worker_wakeups(run_at);

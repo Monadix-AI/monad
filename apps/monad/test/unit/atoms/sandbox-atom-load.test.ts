@@ -48,18 +48,18 @@ test('the power pack registers only contributed heavy launchers through the gate
   expect(got.find((launcher) => launcher.kind === 'e2b')?.descriptor.settings?.fields[0]?.type).toBe('secret');
   // Explicit backend selects the registered heavy launcher even when the light default differs.
   expect(selectSandboxLauncher('darwin', 'e2b').kind).toBe('e2b');
-  expect(experiences).toEqual([
-    {
-      id: 'kanban',
-      title: 'Kanban',
-      icon: 'git-fork',
-      entry: {
-        type: 'web-component',
-        module: 'experiences/kanban.js',
-        tagName: 'monad-kanban'
-      }
+  expect(experiences).toHaveLength(1);
+  expect(experiences[0]).toMatchObject({
+    id: 'kanban',
+    title: 'Kanban',
+    icon: 'git-fork',
+    api: { routes: expect.any(Array) },
+    entry: {
+      type: 'web-component',
+      module: 'experiences/kanban.js',
+      tagName: 'monad-kanban'
     }
-  ]);
+  });
 });
 
 test('the power pack still exposes sandbox details when a runtime sink rejects registration', async () => {

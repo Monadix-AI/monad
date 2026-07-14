@@ -106,6 +106,11 @@ test('install with consent → list → remove', async () => {
   const listed = await installed();
   expect(listed.length).toBe(1);
   expect(listed[0]).toMatchObject({ name: 'wa', atoms: ['channel', 'skill'], source: `local:${stagedDir}` });
+  expect(listed[0]?.atomDetails).toContainEqual({
+    kind: 'skill',
+    id: 'summarize-changes',
+    description: 'Summarize changes.'
+  });
 
   expect(await mod.removeAtomPack({ name: 'wa' })).toEqual({ ok: true });
   expect(await installed()).toEqual([]);

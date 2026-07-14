@@ -95,7 +95,7 @@ export function renderInspectorMarkup(task, panel = {}) {
       )
       .join('');
     content = `<section><div class="section-title"><h3>Execution observation</h3><span>Iteration ${escapeHtml(task.executionIteration ?? 0)}</span></div>${approvalMarkup}${timeline(panel.observations, 'Waiting for execution events')}</section>
-      <div class="action-row sticky-actions"><button type="button" data-action="execution-control" data-control="pause">Pause</button><button type="button" class="danger" data-action="execution-control" data-control="cancel">Cancel</button></div>`;
+      <div class="action-row sticky-actions"><button type="button" data-action="execution-control" data-control="${task.executionState === 'paused' ? 'resume' : 'pause'}">${task.executionState === 'paused' ? 'Resume' : 'Pause'}</button><button type="button" class="danger" data-action="execution-control" data-control="cancel">Cancel</button></div>`;
   } else {
     content = `${proposals(task)}<section><div class="section-title"><h3>Artifacts & evidence</h3><span>${escapeHtml(task.runs?.length ?? 0)} runs</span></div>${artifacts(task)}${timeline(panel.observations, 'No execution evidence')}</section>
       <div class="action-row"><button type="button" class="primary" data-action="accept-task">Accept</button></div>

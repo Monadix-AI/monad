@@ -28,6 +28,7 @@ function memoryState(): ExperienceStateStore {
 
 function fixture() {
   const scheduled: string[] = [];
+  const paused: string[] = [];
   const context = {
     atomPackId: 'monad-power-pack',
     principalId: 'prn_a',
@@ -43,7 +44,12 @@ function fixture() {
         items: [{ id: 'evt_a', kind: 'tool.called', text: 'Tool calls', createdAt: '2026-07-14T00:00:00.000Z' }],
         nextCursor: null
       }),
-      listPendingApprovals: async () => []
+      listPendingApprovals: async () => [],
+      pause: async (sessionId: string) => {
+        paused.push(sessionId);
+      },
+      cancel: async () => {},
+      resolveApproval: async () => {}
     },
     workerScheduler: {
       schedule: async (_projectId: string, input: { key: string }) => {
@@ -52,7 +58,7 @@ function fixture() {
       cancel: async () => {}
     }
   } as unknown as WorkspaceExperienceApiContext;
-  return { context, scheduled };
+  return { context, scheduled, paused };
 }
 
 async function call(context: WorkspaceExperienceApiContext, method: string, path: string, body?: unknown, query = '') {
@@ -157,4 +163,90 @@ test('task listing is cursor paginated', async () => {
   );
   expect(second.json.tasks).toHaveLength(1);
   expect(second.json.nextCursor).toBeNull();
+});
+
+test('pause keeps a task non-runnable until an explicit resume', async () => {
+  const { context, scheduled, paused } = fixture();
+  const created = await call(context, 'POST', '/tasks/create', {
+    projectId: 'prj_a',
+    title: 'A',
+    idempotencyKey: 'request-a'
+  });
+  const taskId = String((created.json.task as { id: string }).id);
+  await call(context, 'POST', '/proposals/submit', {
+    projectId: 'prj_a',
+    taskId,
+    expectedVersion: 0,
+    summary: 'Ship A',
+    acceptanceCriteria: []
+  });
+  await call(context, 'POST', '/proposals/decide', {
+    projectId: 'prj_a',
+    taskId,
+    expectedVersion: 1,
+    decision: 'approve'
+  });
+  scheduled.length = 0;
+
+  const pausedTask = await call(context, 'POST', '/execution/control', {
+    projectId: 'prj_a',
+    taskId,
+    expectedVersion: 2,
+    action: 'pause'
+  });
+  expect(pausedTask.json.task).toMatchObject({ executionState: 'paused', version: 3 });
+  expect(paused).toEqual(['ses_a']);
+  expect(scheduled).toEqual([]);
+
+  const resumedTask = await call(context, 'POST', '/execution/control', {
+    projectId: 'prj_a',
+    taskId,
+    expectedVersion: 3,
+    action: 'resume'
+  });
+  expect(resumedTask.json.task).toMatchObject({ executionState: 'queued', version: 4 });
+  expect(scheduled).toEqual(['dispatch']);
+});
+
+test('unknown proposal decisions and execution actions are rejected without mutation', async () => {
+  const { context, scheduled } = fixture();
+  const created = await call(context, 'POST', '/tasks/create', {
+    projectId: 'prj_a',
+    title: 'A',
+    idempotencyKey: 'request-a'
+  });
+  const taskId = String((created.json.task as { id: string }).id);
+  await call(context, 'POST', '/proposals/submit', {
+    projectId: 'prj_a',
+    taskId,
+    expectedVersion: 0,
+    summary: 'Ship A',
+    acceptanceCriteria: []
+  });
+
+  const badDecision = await call(context, 'POST', '/proposals/decide', {
+    projectId: 'prj_a',
+    taskId,
+    expectedVersion: 1,
+    decision: 'maybe'
+  });
+  expect(badDecision.response.status).toBe(400);
+
+  const approved = await call(context, 'POST', '/proposals/decide', {
+    projectId: 'prj_a',
+    taskId,
+    expectedVersion: 1,
+    decision: 'approve'
+  });
+  expect(approved.response.status).toBe(200);
+  scheduled.length = 0;
+
+  const badAction = await call(context, 'POST', '/execution/control', {
+    projectId: 'prj_a',
+    taskId,
+    expectedVersion: 2,
+    action: 'restart-everything'
+  });
+  expect(badAction.response.status).toBe(400);
+  expect(scheduled).toEqual([]);
 });

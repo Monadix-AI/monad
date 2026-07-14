@@ -6,6 +6,47 @@ import type { Store } from '#/store/db/index.ts';
 
 import { createHash } from 'node:crypto';
 
+const MAX_OBSERVATION_TEXT = 512;
+
+function payloadString(payload: Record<string, unknown>, key: string): string | undefined {
+  const value = payload[key];
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function observationText(event: { type: string; payload: Record<string, unknown> }): string {
+  const tool = payloadString(event.payload, 'tool');
+  let text: string;
+  switch (event.type) {
+    case 'agent.message':
+      text = payloadString(event.payload, 'text') ?? 'Agent message';
+      break;
+    case 'agent.error':
+      text = 'Agent run failed';
+      break;
+    case 'agent.reasoning':
+      text = 'Agent reasoning update';
+      break;
+    case 'tool.called':
+      text = tool ? `Tool called: ${tool}` : 'Tool called';
+      break;
+    case 'tool.result':
+      text = tool ? `Tool completed: ${tool}` : 'Tool completed';
+      break;
+    case 'tool.approval_requested':
+      text = tool ? `Approval requested: ${tool}` : 'Tool approval requested';
+      break;
+    case 'tool.approval_resolved':
+      text = tool ? `Approval resolved: ${tool}` : 'Tool approval resolved';
+      break;
+    case 'session.stream_ended':
+      text = 'Session turn ended';
+      break;
+    default:
+      text = event.type;
+  }
+  return text.slice(0, MAX_OBSERVATION_TEXT);
+}
+
 function stableSessionId(principalId: string, projectId: string, idempotencyKey: string): SessionId {
   const digest = createHash('sha256').update(`${principalId}\0${projectId}\0${idempotencyKey}`).digest('hex');
   return `ses_${digest.slice(0, 20)}` as SessionId;
@@ -60,7 +101,21 @@ export function createProjectSessionOperations(input: {
     },
     sendMessage: async (sessionId, request) => {
       assertSessionOwner(store, principalId, sessionId);
-      await sessions.generate({ sessionId: sessionId as SessionId, text: request.text });
+      const requestId = createHash('sha256').update(request.idempotencyKey).digest('hex').slice(0, 20);
+      const key = `experience:message:${requestId}`;
+      const existing = store.getMemory(sessionId, key);
+      if (existing) {
+        const state = (JSON.parse(existing) as { state?: string }).state;
+        if (state === 'scheduled' || state === 'completed') return;
+      }
+      store.setMemory(sessionId, key, JSON.stringify({ state: 'scheduled' }));
+      try {
+        await sessions.generate({ sessionId: sessionId as SessionId, text: request.text });
+        store.setMemory(sessionId, key, JSON.stringify({ state: 'completed' }));
+      } catch (error) {
+        store.setMemory(sessionId, key, JSON.stringify({ state: 'failed' }));
+        throw error;
+      }
     },
     listMessages: async (sessionId, cursor) => {
       assertSessionOwner(store, principalId, sessionId);
@@ -84,7 +139,7 @@ export function createProjectSessionOperations(input: {
         items: events.map((event) => ({
           id: event.id,
           kind: event.type,
-          text: JSON.stringify(event.payload),
+          text: observationText(event),
           createdAt: event.at
         })),
         nextCursor: events.length === 100 ? (events.at(-1)?.id ?? null) : null

@@ -26,10 +26,10 @@ import { join } from 'node:path';
 import { loadAll, loadAuth, saveProfile } from '@monad/home';
 import { DEFAULT_SKILL_MARKETPLACE_SOURCE, MONAD_VERSION } from '@monad/protocol';
 
-import { createSkillCatalogs } from '#/capabilities/skills/index.ts';
 import { createProjectSessionOperations } from '#/atoms/experience-project-sessions.ts';
 import { createExperienceStateStore, createExperienceWorkerScheduler } from '#/atoms/experience-state.ts';
 import { ExperienceWorkerRegistry } from '#/atoms/experience-workers.ts';
+import { createSkillCatalogs } from '#/capabilities/skills/index.ts';
 import { createWorkspaceExperienceApiContext } from '#/handlers/atom-pack/experience-capabilities.ts';
 import { createAtomPacksModule } from '#/handlers/atom-pack/index.ts';
 import { createExternalAgentModule } from '#/handlers/external-agent/index.ts';
@@ -293,17 +293,18 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
         createProjectSessionOperations({ store: deps.store, sessions: session, oversight: deps.oversight, principalId })
     },
     workerScheduler: {
-      forPack: (atomPackId: string, principalId: string) =>
-        createExperienceWorkerScheduler(deps.store, atomPackId, principalId)
+      forExperience: (atomPackId: string, principalId: string, experienceId: string) =>
+        createExperienceWorkerScheduler(deps.store, atomPackId, principalId, experienceId)
     }
   };
   const experienceWorkers = deps.getExperienceWorkers
     ? new ExperienceWorkerRegistry({
         store: deps.store,
-        contextFor: (atomPackId, principalId, permissions) =>
+        contextFor: (atomPackId, principalId, permissions, experienceId) =>
           createWorkspaceExperienceApiContext({
             atomPackId,
             principalId,
+            experienceId,
             permissions,
             deps: experienceCapabilities
           })
@@ -327,9 +328,9 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
       .listWorkplaceProjects()
       .filter((project) => project.ownerPrincipalId === deps.ownerPrincipalId)
       .map((project) => project.id);
-    void experienceWorkers.startProjects(projectIds).catch((error) =>
-      deps.log.warn({ error }, 'workspace Experience worker startup failed')
-    );
+    void experienceWorkers
+      .startProjects(projectIds)
+      .catch((error) => deps.log.warn({ error }, 'workspace Experience worker startup failed'));
     deps.bus.subscribeAll((event) => {
       const source = deps.store.getSession(event.sessionId);
       if (!source?.projectId || source.ownerPrincipalId !== deps.ownerPrincipalId) return;
