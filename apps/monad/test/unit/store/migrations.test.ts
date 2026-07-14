@@ -1,125 +1,156 @@
 import { Database } from 'bun:sqlite';
 import { expect, test } from 'bun:test';
+import { existsSync, readFileSync } from 'node:fs';
 
-import { CURRENT_SCHEMA_VERSION, migrate } from '#/store/db/migrations.ts';
+interface MigrationJournal {
+  entries: MigrationEntry[];
+}
 
-// Pre-release: migrations are additive. These tests assert migrate() builds the current
-// shape on a fresh DB and is safe to re-run.
+interface MigrationEntry {
+  tag: string;
+  when: number;
+}
 
-test('migrate() builds the current schema and stamps user_version', () => {
+const drizzleDir = new URL('../../../drizzle/', import.meta.url);
+const journalUrl = new URL('meta/_journal.json', drizzleDir);
+const expectedMigrationTags = ['0000_initial-schema', '0001_message-fts'];
+const partialIndexes = [
+  'idx_acp_delegates_live',
+  'idx_external_agent_sessions_live',
+  'idx_external_agent_sessions_provider_ref',
+  'idx_external_agent_inbox_delivery_id'
+];
+
+function loadJournal(): MigrationJournal {
+  if (!existsSync(journalUrl)) return { entries: [] };
+  return JSON.parse(readFileSync(journalUrl, 'utf8')) as MigrationJournal;
+}
+
+function applyMigration(db: Database, entry: MigrationEntry): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS __drizzle_migrations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+      hash TEXT NOT NULL,
+      created_at NUMERIC
+    );
+  `);
+
+  const applied = db.prepare('SELECT 1 FROM __drizzle_migrations WHERE hash = ?').get(entry.tag);
+  if (applied) return;
+
+  db.exec(readFileSync(new URL(`${entry.tag}.sql`, drizzleDir), 'utf8'));
+  db.prepare('INSERT INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)').run(entry.tag, entry.when);
+}
+
+function applyInitialHistory(db: Database, beforeCustomMigration?: (db: Database) => void): void {
+  const journal = loadJournal();
+  expect(journal.entries.map((entry) => entry.tag)).toEqual(expectedMigrationTags);
+
+  const regularMigration = journal.entries[0];
+  const customMigration = journal.entries[1];
+  if (!regularMigration || !customMigration) throw new Error('initial Drizzle history is incomplete');
+
+  applyMigration(db, regularMigration);
+  beforeCustomMigration?.(db);
+  applyMigration(db, customMigration);
+}
+
+function ftsRowIds(db: Database, table: 'messages_fts' | 'messages_fts_trigram', query: string): number[] {
+  return (
+    db.prepare(`SELECT rowid FROM ${table} WHERE ${table} MATCH ? ORDER BY rowid`).all(query) as { rowid: number }[]
+  ).map((row) => row.rowid);
+}
+
+test('initial Drizzle history creates the regular schema and partial indexes', () => {
   const db = new Database(':memory:');
-  migrate(db);
+  applyInitialHistory(db);
 
-  expect((db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(
-    CURRENT_SCHEMA_VERSION
+  expect((db.prepare('SELECT COUNT(*) AS count FROM __drizzle_migrations').get() as { count: number }).count).toBe(2);
+
+  const embeddingColumns = (db.prepare('PRAGMA table_info(message_embeddings)').all() as { name: string }[]).map(
+    (row) => row.name
   );
+  expect(embeddingColumns).toEqual(['message_id', 'dim', 'vec', 'model']);
 
-  const _ledgerCols = (db.prepare('PRAGMA table_info(usage_ledger)').all() as { name: string }[]).map((c) => c.name);
-
-  const _embedCols = (db.prepare('PRAGMA table_info(message_embeddings)').all() as { name: string }[]).map(
-    (c) => c.name
+  const inboxColumns = (db.prepare('PRAGMA table_info(external_agent_inbox_items)').all() as { name: string }[]).map(
+    (row) => row.name
   );
-
-  const _sessionCols = (db.prepare('PRAGMA table_info(sessions)').all() as { name: string }[]).map((c) => c.name);
-
-  const acpCols = (db.prepare('PRAGMA table_info(acp_delegates)').all() as { name: string }[]).map((c) => c.name);
-  for (const col of [
-    'id',
-    'session_id',
-    'agent_name',
-    'acp_session_id',
-    'pid',
-    'spawned_at',
-    'last_used_at',
-    'evicted_at',
-    'evict_reason',
-    'reuse_count',
-    'prompt_count'
-  ]) {
-    expect(acpCols).toContain(col);
-  }
-
-  const externalAgentCols = (db.prepare('PRAGMA table_info(external_agent_sessions)').all() as { name: string }[]).map(
-    (c) => c.name
-  );
-  for (const col of [
-    'id',
-    'transcript_target_id',
-    'agent_name',
-    'provider',
-    'working_path',
-    'launch_mode',
-    'state',
-    'pid',
-    'provider_session_ref',
-    'runtime_role',
-    'agent_runtime_id',
-    'agent_runtime_token_hash',
-    'last_delivered_seq',
-    'last_visible_seq',
-    'output_snapshot',
-    'exit_code',
-    'started_at',
-    'updated_at',
-    'exited_at'
-  ]) {
-    expect(externalAgentCols).toContain(col);
-  }
-  const externalAgentIndexes = db.prepare('PRAGMA index_list(external_agent_sessions)').all() as {
-    name: string;
-    unique: number;
-  }[];
-  expect(externalAgentIndexes).toContainEqual(
-    expect.objectContaining({ name: 'idx_external_agent_sessions_provider_ref', unique: 1 })
-  );
-
-  const nativeInboxCols = (db.prepare('PRAGMA table_info(external_agent_inbox_items)').all() as { name: string }[]).map(
-    (c) => c.name
-  );
-  for (const col of [
+  expect(inboxColumns).toEqual([
     'external_agent_session_id',
     'message_seq',
+    'delivery_id',
+    'project_id',
+    'member_instance_id',
+    'trigger_message_id',
+    'provider_session_ref',
+    'provider_turn_id',
+    'error_summary',
     'state',
     'created_at',
     'delivered_at',
     'visible_at',
-    'consumed_at'
-  ]) {
-    expect(nativeInboxCols).toContain(col);
-  }
-  const nativeInboxIndexes = db.prepare('PRAGMA index_list(external_agent_inbox_items)').all() as {
-    name: string;
-  }[];
-  expect(nativeInboxIndexes).toContainEqual(
-    expect.objectContaining({ name: 'idx_external_agent_inbox_items_pending' })
-  );
+    'consumed_at',
+    'updated_at'
+  ]);
 
-  const nativeDirectCols = (
-    db.prepare('PRAGMA table_info(native_agent_direct_messages)').all() as {
-      name: string;
-    }[]
-  ).map((c) => c.name);
-  for (const col of ['id', 'project_id', 'external_agent_session_id', 'from_agent', 'peer', 'text', 'created_at']) {
-    expect(nativeDirectCols).toContain(col);
-  }
-  const nativeDirectIndexes = db.prepare('PRAGMA index_list(native_agent_direct_messages)').all() as {
+  const indexedSql = db
+    .prepare("SELECT name, sql FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL")
+    .all() as {
     name: string;
+    sql: string;
   }[];
-  expect(nativeDirectIndexes).toContainEqual(
-    expect.objectContaining({ name: 'idx_native_agent_direct_messages_session_peer' })
-  );
-  expect(nativeDirectIndexes).toContainEqual(
-    expect.objectContaining({ name: 'idx_native_agent_direct_messages_project_pair' })
-  );
+  for (const name of partialIndexes) {
+    const index = indexedSql.find((entry) => entry.name === name);
+    expect(index).toBeDefined();
+    if (!index) throw new Error(`missing partial index: ${name}`);
+    expect(index.sql.toUpperCase()).toContain('WHERE');
+  }
 });
 
-test('migrate() is idempotent — running again is a no-op', () => {
+test('the custom FTS migration rebuilds existing messages and keeps both indexes synchronized', () => {
   const db = new Database(':memory:');
-  migrate(db);
+  applyInitialHistory(db, (regularDb) => {
+    regularDb.exec(`
+      INSERT INTO messages (id, transcript_target_id, role, text, created_at)
+      VALUES ('before-fts', 'session-1', 'user', 'before rebuild content', '2026-07-14T00:00:00.000Z');
+    `);
+  });
+
+  for (const table of ['messages_fts', 'messages_fts_trigram'] as const) {
+    expect(
+      (db.prepare(`SELECT sql FROM sqlite_master WHERE name = '${table}'`).get() as { sql: string }).sql
+    ).toContain('fts5');
+    expect(ftsRowIds(db, table, 'rebuild')).toHaveLength(1);
+  }
+
+  db.exec(`
+    INSERT INTO messages (id, transcript_target_id, role, text, created_at)
+    VALUES ('trigger-message', 'session-1', 'user', 'inserted token', '2026-07-14T00:00:01.000Z');
+  `);
+  for (const table of ['messages_fts', 'messages_fts_trigram'] as const) {
+    expect(ftsRowIds(db, table, 'inserted')).toHaveLength(1);
+  }
+
+  db.exec("UPDATE messages SET text = 'updated token' WHERE id = 'trigger-message'");
+  for (const table of ['messages_fts', 'messages_fts_trigram'] as const) {
+    expect(ftsRowIds(db, table, 'inserted')).toHaveLength(0);
+    expect(ftsRowIds(db, table, 'updated')).toHaveLength(1);
+  }
+
+  db.exec("DELETE FROM messages WHERE id = 'trigger-message'");
+  for (const table of ['messages_fts', 'messages_fts_trigram'] as const) {
+    expect(ftsRowIds(db, table, 'updated')).toHaveLength(0);
+  }
+});
+
+test('the initial Drizzle history is idempotent', () => {
+  const db = new Database(':memory:');
+  applyInitialHistory(db);
   db.exec(
-    `INSERT INTO usage_ledger (day, provider, model, category, updated_at)
-       VALUES ('2026-01-15', 'anthropic', 'claude-x', 'chat', '2026-01-15T08:30:00.000Z')`
+    "INSERT INTO usage_ledger (day, provider, model, category, updated_at) VALUES ('2026-07-14', 'openai', 'gpt-5', 'chat', '2026-07-14T00:00:00.000Z')"
   );
-  migrate(db);
-  expect((db.prepare('SELECT COUNT(*) AS n FROM usage_ledger').get() as { n: number }).n).toBe(1);
+  applyInitialHistory(db);
+
+  expect((db.prepare('SELECT COUNT(*) AS count FROM __drizzle_migrations').get() as { count: number }).count).toBe(2);
+  expect((db.prepare('SELECT COUNT(*) AS count FROM usage_ledger').get() as { count: number }).count).toBe(1);
 });
