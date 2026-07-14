@@ -7,8 +7,23 @@ import { createExperienceStateStore, createExperienceWorkerScheduler } from '#/a
 import { ExperienceWorkerRegistry } from '#/atoms/experience-workers.ts';
 import { createStore } from '#/store/db/index.ts';
 
+function seedProject(store: ReturnType<typeof createStore>, projectId = 'prj_a', principalId = 'prn_a') {
+  const now = '2026-07-14T00:00:00.000Z';
+  store.insertWorkplaceProject({
+    id: projectId as never,
+    title: 'Project',
+    ownerPrincipalId: principalId as never,
+    state: 'active',
+    archived: false,
+    memberTemplates: [],
+    createdAt: now,
+    updatedAt: now
+  });
+}
+
 test('compareAndSwap appends one audit event only for the expected version', async () => {
   const store = createStore();
+  seedProject(store);
   const state = createExperienceStateStore(store, 'pack-a', 'prn_a');
 
   try {
@@ -41,6 +56,7 @@ test('a scheduled wake-up survives reopening the database', async () => {
   const base = await mkdtemp(join(tmpdir(), 'monad-experience-worker-'));
   const path = join(base, 'store.sqlite');
   const first = createStore({ path });
+  seedProject(first);
 
   try {
     await createExperienceWorkerScheduler(first, 'pack-a', 'prn_a').schedule('prj_a', {
@@ -64,6 +80,7 @@ test('a scheduled wake-up survives reopening the database', async () => {
 
 test('worker receives a project-scoped event and a durable wake-up', async () => {
   const store = createStore();
+  seedProject(store);
   const seen: string[] = [];
   const context = {
     atomPackId: 'pack-a',
@@ -101,6 +118,21 @@ test('worker receives a project-scoped event and a durable wake-up', async () =>
 
     expect(seen).toEqual(['start:prj_a', 'event:evt_1', 'wake:dispatch']);
     expect(store.listDueExperienceWorkerWakeups('2026-07-14T00:00:01.000Z')).toEqual([]);
+  } finally {
+    store.close();
+  }
+});
+
+test('state and scheduler reject a project outside the principal boundary', async () => {
+  const store = createStore();
+  const state = createExperienceStateStore(store, 'pack-a', 'prn_a');
+  const scheduler = createExperienceWorkerScheduler(store, 'pack-a', 'prn_a');
+
+  try {
+    await expect(state.get('prj_missing', 'task/a')).rejects.toThrow('project not found');
+    await expect(
+      scheduler.schedule('prj_missing', { key: 'dispatch', runAt: '2026-07-14T00:00:00.000Z' })
+    ).rejects.toThrow('project not found');
   } finally {
     store.close();
   }

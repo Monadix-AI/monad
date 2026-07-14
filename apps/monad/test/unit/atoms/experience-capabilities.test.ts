@@ -1,13 +1,9 @@
-import type {
-  ExperienceStateStore,
-  ProjectSessionOperations,
-  WorkspaceExperiencePermission
-} from '@monad/sdk-atom';
+import type { ExperienceStateStore, ProjectSessionOperations, WorkspaceExperiencePermission } from '@monad/sdk-atom';
 
 import { expect, test } from 'bun:test';
 
-import { createWorkspaceExperienceApiContext } from '#/handlers/atom-pack/experience-capabilities.ts';
 import { AtomPackRegistry } from '#/handlers/atom-pack/atom-pack-registry.ts';
+import { createWorkspaceExperienceApiContext } from '#/handlers/atom-pack/experience-capabilities.ts';
 
 const emptyState: ExperienceStateStore = {
   get: async () => null,
@@ -88,4 +84,29 @@ test('registered API routes retain their trusted pack owner and manifest permiss
     atomPackId: 'pack-a',
     permissions: ['experience.state']
   });
+});
+
+test('session idempotency keys are namespaced by the trusted pack identity', async () => {
+  let received = '';
+  const result = createWorkspaceExperienceApiContext({
+    atomPackId: 'pack-a',
+    principalId: 'prn_a',
+    permissions: ['project.sessions.create'],
+    deps: {
+      state: { forPack: () => emptyState },
+      projectSessions: {
+        forPrincipal: () =>
+          sessions({
+            create: async (_projectId, input) => {
+              received = input.idempotencyKey;
+              return { id: 'ses_a' };
+            }
+          })
+      },
+      workerScheduler: { forPack: () => ({ schedule: async () => {}, cancel: async () => {} }) }
+    }
+  });
+
+  await result.projectSessions.create('prj_a', { title: 'A', idempotencyKey: 'request-a' });
+  expect(received).toBe('pack-a:request-a');
 });

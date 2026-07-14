@@ -74,7 +74,7 @@ export function createProjectSessionOperations(input: {
           text: message.text,
           createdAt: message.createdAt
         })),
-        nextCursor: hasOlder ? oldest ?? null : null
+        nextCursor: hasOlder ? (oldest ?? null) : null
       };
     },
     listObservations: async (sessionId, cursor) => {
@@ -87,7 +87,7 @@ export function createProjectSessionOperations(input: {
           text: JSON.stringify(event.payload),
           createdAt: event.at
         })),
-        nextCursor: events.length === 100 ? events.at(-1)?.id ?? null : null
+        nextCursor: events.length === 100 ? (events.at(-1)?.id ?? null) : null
       };
     },
     runTurn: async (sessionId, request) => {
@@ -95,8 +95,24 @@ export function createProjectSessionOperations(input: {
       const runId = createHash('sha256').update(`${sessionId}\0${request.idempotencyKey}`).digest('hex').slice(0, 20);
       const key = `experience:run:${runId}`;
       if (!store.getMemory(sessionId, key)) {
-        await sessions.generate({ sessionId: sessionId as SessionId, text: request.text });
-        store.setMemory(sessionId, key, JSON.stringify({ runId }));
+        store.setMemory(sessionId, key, JSON.stringify({ runId, state: 'scheduled' }));
+        const timer = setTimeout(() => {
+          void sessions
+            .generate({ sessionId: sessionId as SessionId, text: request.text })
+            .then(() => store.setMemory(sessionId, key, JSON.stringify({ runId, state: 'completed' })))
+            .catch((error) =>
+              store.setMemory(
+                sessionId,
+                key,
+                JSON.stringify({
+                  runId,
+                  state: 'failed',
+                  error: error instanceof Error ? error.message : String(error)
+                })
+              )
+            );
+        }, 0);
+        timer.unref();
       }
       return { runId };
     },

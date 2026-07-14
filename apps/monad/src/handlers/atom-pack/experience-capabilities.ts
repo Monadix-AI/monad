@@ -35,6 +35,7 @@ export function createWorkspaceExperienceApiContext(input: {
   const state = input.deps.state.forPack(input.atomPackId, input.principalId);
   const sessions = input.deps.projectSessions.forPrincipal(input.principalId);
   const scheduler = input.deps.workerScheduler.forPack(input.atomPackId, input.principalId);
+  const namespaceIdempotencyKey = (key: string): string => `${input.atomPackId}:${key}`;
   const authorized = <T>(permission: WorkspaceExperiencePermission, operation: () => Promise<T>): Promise<T> => {
     try {
       requirePermission(permission);
@@ -55,15 +56,24 @@ export function createWorkspaceExperienceApiContext(input: {
     projectSessions: {
       list: (projectId) => authorized('project.sessions.read', () => sessions.list(projectId)),
       create: (projectId, request) =>
-        authorized('project.sessions.create', () => sessions.create(projectId, request)),
+        authorized('project.sessions.create', () =>
+          sessions.create(projectId, { ...request, idempotencyKey: namespaceIdempotencyKey(request.idempotencyKey) })
+        ),
       sendMessage: (sessionId, request) =>
-        authorized('project.sessions.send', () => sessions.sendMessage(sessionId, request)),
+        authorized('project.sessions.send', () =>
+          sessions.sendMessage(sessionId, {
+            ...request,
+            idempotencyKey: namespaceIdempotencyKey(request.idempotencyKey)
+          })
+        ),
       listMessages: (sessionId, cursor) =>
         authorized('project.sessions.read', () => sessions.listMessages(sessionId, cursor)),
       listObservations: (sessionId, cursor) =>
         authorized('project.observations.read', () => sessions.listObservations(sessionId, cursor)),
       runTurn: (sessionId, request) =>
-        authorized('project.sessions.send', () => sessions.runTurn(sessionId, request)),
+        authorized('project.sessions.send', () =>
+          sessions.runTurn(sessionId, { ...request, idempotencyKey: namespaceIdempotencyKey(request.idempotencyKey) })
+        ),
       pause: (sessionId) => authorized('project.sessions.send', () => sessions.pause(sessionId)),
       cancel: (sessionId) => authorized('project.sessions.send', () => sessions.cancel(sessionId)),
       listPendingApprovals: (projectId, sessionId) =>
@@ -72,8 +82,7 @@ export function createWorkspaceExperienceApiContext(input: {
         authorized('project.approvals.resolve', () => sessions.resolveApproval(approvalId, decision))
     },
     workerScheduler: {
-      schedule: (projectId, request) =>
-        authorized('experience.worker', () => scheduler.schedule(projectId, request)),
+      schedule: (projectId, request) => authorized('experience.worker', () => scheduler.schedule(projectId, request)),
       cancel: (projectId, key) => authorized('experience.worker', () => scheduler.cancel(projectId, key))
     }
   };
