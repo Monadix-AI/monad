@@ -34,7 +34,7 @@ export class ExperienceWorkerRegistry {
     worker: ExperienceWorker
   ): void {
     if (!permissions.includes('experience.worker')) {
-      throw new Error(`workspace Experience permission required: experience.worker`);
+      throw new Error('workspace Experience permission required: experience.worker');
     }
     const key = `${atomPackId}:${principalId}:${worker.experienceId}`;
     if (this.registrations.has(key)) throw new Error(`duplicate experience worker: ${key}`);
@@ -61,16 +61,12 @@ export class ExperienceWorkerRegistry {
   async deliverDueWakeups(now = new Date().toISOString()): Promise<void> {
     for (const wakeup of this.deps.store.listDueExperienceWorkerWakeups(now)) {
       const registration = [...this.registrations.values()].find(
-        (candidate) =>
-          candidate.atomPackId === wakeup.atomPackId && candidate.principalId === wakeup.principalId
+        (candidate) => candidate.atomPackId === wakeup.atomPackId && candidate.principalId === wakeup.principalId
       );
       if (!registration) continue;
       const context = this.context(registration);
       try {
-        await registration.worker.onWake(
-          { projectId: wakeup.projectId, key: wakeup.key, now },
-          context
-        );
+        await registration.worker.onWake({ projectId: wakeup.projectId, key: wakeup.key, now }, context);
         await context.workerScheduler.cancel(wakeup.projectId, wakeup.key);
       } catch {
         const retryAt = new Date(new Date(now).getTime() + 60_000).toISOString();
