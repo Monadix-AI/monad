@@ -1,5 +1,3 @@
-'use client';
-
 import type { GetMem0DataResponse, Mem0EntryView } from '@monad/protocol';
 
 import { BoxesIcon, DatabaseIcon } from '@hugeicons/core-free-icons';

@@ -1,5 +1,3 @@
-'use client';
-
 import type { Agent, MessageId, ProfileView, Session, SessionId, UIItem } from '@monad/protocol';
 import type { VirtualListHandle } from '@monad/ui/components/VirtualList';
 import type { SessionRouteModel } from './session-route-contract';

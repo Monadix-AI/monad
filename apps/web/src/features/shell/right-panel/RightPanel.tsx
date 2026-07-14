@@ -1,5 +1,3 @@
-'use client';
-
 import { cn } from '@monad/ui';
 
 import { useWorkspaceShellStore } from '#/lib/workspace-shell-store';

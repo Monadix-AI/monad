@@ -1,5 +1,3 @@
-'use client';
-
 import { useCallback, useState } from 'react';
 
 import { SIDEBAR_SECONDARY_TEXT_CLASS } from './nav-item';

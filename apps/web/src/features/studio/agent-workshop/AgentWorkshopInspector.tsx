@@ -1,5 +1,3 @@
-'use client';
-
 import type { A2aAgentStatus, SandboxMode } from '@monad/protocol';
 
 import {

@@ -1,5 +1,3 @@
-'use client';
-
 import type { AnyRouter } from '@tanstack/react-router';
 
 import { useRouterState } from '@tanstack/react-router';

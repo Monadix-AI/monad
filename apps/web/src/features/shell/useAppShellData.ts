@@ -1,5 +1,3 @@
-'use client';
-
 import type { Agent, ProfileView, Session } from '@monad/protocol';
 
 import {

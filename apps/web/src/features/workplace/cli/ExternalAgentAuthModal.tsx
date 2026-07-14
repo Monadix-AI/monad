@@ -1,5 +1,3 @@
-'use client';
-
 import type { ExternalAgentAuthSessionView } from '@monad/protocol';
 
 import {

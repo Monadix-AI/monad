@@ -1,5 +1,3 @@
-'use client';
-
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
 import { cn } from '@monad/ui';
 

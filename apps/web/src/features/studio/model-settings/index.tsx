@@ -1,5 +1,3 @@
-'use client';
-
 import type { GenerationParamsView, ModelInfo, ProfileView } from '@monad/protocol';
 
 import { CpuIcon, PlusSignIcon } from '@hugeicons/core-free-icons';

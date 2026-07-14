@@ -1,5 +1,3 @@
-'use client';
-
 import type { DeveloperLogRecord, Event, ProjectId } from '@monad/protocol';
 
 import { BugIcon, Cancel01Icon, ClipboardIcon, Delete02Icon, PauseIcon, PlayIcon } from '@hugeicons/core-free-icons';

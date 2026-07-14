@@ -1,5 +1,3 @@
-'use client';
-
 import type { ReactNode } from 'react';
 
 // One labelled block inside the Capabilities panel (Tools, MCP, …). A sticky sub-header keeps the

@@ -1,5 +1,3 @@
-'use client';
-
 import type { CSSProperties, ReactNode } from 'react';
 
 import { BrainIcon, EnergyIcon } from '@hugeicons/core-free-icons';

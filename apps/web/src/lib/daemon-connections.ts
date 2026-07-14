@@ -1,5 +1,3 @@
-'use client';
-
 export interface RemoteDaemonConnection {
   id: string;
   label: string;

@@ -1,5 +1,3 @@
-'use client';
-
 import type { ApprovalInboxItem, InboxItem } from '@monad/protocol';
 
 import {

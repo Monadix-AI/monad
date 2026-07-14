@@ -1,5 +1,3 @@
-'use client';
-
 import type { TFunction } from './types';
 
 import { runtimeSectionEnabled } from '#/features/init/init-readiness';

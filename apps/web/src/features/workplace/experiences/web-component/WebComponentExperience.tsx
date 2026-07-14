@@ -1,5 +1,3 @@
-'use client';
-
 import type { WorkspaceExperienceDefinition, WorkspaceExperienceEntry } from '@monad/protocol';
 import type { WorkspaceExperienceHostApiV1 } from '@monad/sdk-experience';
 import type { ProjectExperienceView } from '../types';

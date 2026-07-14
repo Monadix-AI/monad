@@ -1,5 +1,3 @@
-'use client';
-
 import { ShieldHalfIcon, WorkflowSquare01Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Button } from '@monad/ui';

@@ -1,5 +1,3 @@
-'use client';
-
 import type { ProjectId, Session, SessionId } from '@monad/protocol';
 import type { ProjectItem, TFunction } from './sidebar/types';
 

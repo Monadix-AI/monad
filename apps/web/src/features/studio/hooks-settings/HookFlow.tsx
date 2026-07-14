@@ -1,5 +1,3 @@
-'use client';
-
 import type { HookEvent } from '@monad/protocol';
 import type { Edge, EdgeProps, Node, NodeProps } from '@xyflow/react';
 import type { TFn } from '#/components/I18nProvider';

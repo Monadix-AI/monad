@@ -1,5 +1,3 @@
-'use client';
-
 import type { SandboxMode } from '@monad/protocol';
 import type { DragEvent } from 'react';
 

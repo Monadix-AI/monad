@@ -1,5 +1,3 @@
-'use client';
-
 import { cn } from '@monad/ui';
 
 export type CapabilityIconId =

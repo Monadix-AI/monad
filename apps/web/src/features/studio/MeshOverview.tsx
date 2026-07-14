@@ -1,5 +1,3 @@
-'use client';
-
 import type { ExternalAgentSessionState, ExternalAgentSessionView, WorkplaceProject } from '@monad/protocol';
 
 import {

@@ -1,5 +1,3 @@
-'use client';
-
 export type ThemePreference = 'auto' | 'dark' | 'light';
 
 const THEME_STORAGE_KEY = 'monad:theme';

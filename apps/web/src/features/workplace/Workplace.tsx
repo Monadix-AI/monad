@@ -1,5 +1,3 @@
-'use client';
-
 import type { SessionId, WorkspaceExperienceProjectDialogRequest } from '@monad/protocol';
 import type { CSSProperties } from 'react';
 import type { ProjectExperienceDefinition } from './experiences/types';

@@ -1,5 +1,3 @@
-'use client';
-
 import type { MouseEvent } from 'react';
 
 import { Moon02Icon, Sun03Icon } from '@hugeicons/core-free-icons';

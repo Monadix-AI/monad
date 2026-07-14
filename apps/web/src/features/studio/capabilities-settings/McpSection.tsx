@@ -1,5 +1,3 @@
-'use client';
-
 import { useT } from '#/components/I18nProvider';
 import { CapabilitySection } from './CapabilitySection';
 import { McpAtomsSubsection } from './McpAtomsSubsection';

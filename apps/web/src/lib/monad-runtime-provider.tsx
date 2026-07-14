@@ -1,5 +1,3 @@
-'use client';
-
 import type { MonadClient } from '@monad/client';
 import type { ReactNode } from 'react';
 

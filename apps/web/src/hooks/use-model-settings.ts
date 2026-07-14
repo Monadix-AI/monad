@@ -1,5 +1,3 @@
-'use client';
-
 import type { CredentialView, ModelInfo, TestCredentialResponse } from '@monad/protocol';
 
 import {

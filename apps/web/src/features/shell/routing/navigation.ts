@@ -1,5 +1,3 @@
-'use client';
-
 import type { Session, SessionId } from '@monad/protocol';
 import type { SettingsSectionId } from '#/features/settings/sections';
 import type { StudioSectionId } from '#/features/studio/sections';

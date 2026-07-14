@@ -1,5 +1,3 @@
-'use client';
-
 import type { GetGraphResponse } from '@monad/protocol';
 
 import { NeuralNetworkIcon } from '@hugeicons/core-free-icons';

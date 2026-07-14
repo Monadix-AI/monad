@@ -1,5 +1,3 @@
-'use client';
-
 import type { HookEvent } from '@monad/protocol';
 import type { TFn } from '#/components/I18nProvider';
 import type { DraftMatcher } from './hook-settings-types';

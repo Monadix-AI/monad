@@ -1,5 +1,3 @@
-'use client';
-
 import type { InteractionPresenterCapabilities, PendingInteraction } from '@monad/protocol';
 
 import { pendingInteractionSchema } from '@monad/protocol';

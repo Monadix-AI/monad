@@ -1,5 +1,3 @@
-'use client';
-
 import type { MemoryScopeQuery, ScopeKind } from '@monad/protocol';
 
 import {

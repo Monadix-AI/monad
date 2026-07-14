@@ -1,5 +1,3 @@
-'use client';
-
 import type { LawView } from '@monad/protocol';
 
 import {

@@ -1,5 +1,3 @@
-'use client';
-
 import type { HooksSettingsResponse, SetHooksSettingsRequest } from '@monad/protocol';
 
 import { useGetHooksQuery, useSetHooksMutation } from '@monad/client-rtk';

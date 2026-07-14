@@ -1,5 +1,3 @@
-'use client';
-
 import { create } from 'zustand';
 
 const SHOW_DEV_SYSTEM_MESSAGES_IN_STREAM_KEY = 'monad.workplace.showDevSystemMessagesInStream';

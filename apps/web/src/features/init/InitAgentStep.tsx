@@ -1,5 +1,3 @@
-'use client';
-
 import { CheckIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Button, Input, Label } from '@monad/ui';

@@ -1,5 +1,3 @@
-'use client';
-
 import { useGetMemoryStatusQuery, useSetMemoryGraphMutation } from '@monad/client-rtk';
 import { Input, Label, Switch } from '@monad/ui';
 import { useState } from 'react';

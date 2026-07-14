@@ -1,5 +1,3 @@
-'use client';
-
 import { LoaderPinwheelIcon, PlayIcon, SquareIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Button, cn, Skeleton } from '@monad/ui';

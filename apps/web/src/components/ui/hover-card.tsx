@@ -1,5 +1,3 @@
-'use client';
-
 import { cn } from '@monad/ui';
 import { HoverCard as HoverCardPrimitive } from 'radix-ui';
 import * as React from 'react';

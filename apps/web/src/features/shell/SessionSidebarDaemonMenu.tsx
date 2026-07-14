@@ -1,5 +1,3 @@
-'use client';
-
 import type { NetworkRuntimeStatus, SystemUpgradeStatus } from '@monad/protocol';
 import type { useT } from '#/components/I18nProvider';
 

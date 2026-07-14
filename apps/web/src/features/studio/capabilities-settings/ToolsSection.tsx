@@ -1,5 +1,3 @@
-'use client';
-
 import type { SetToolBackendsRequest, SmtpSettings } from '@monad/protocol';
 
 import { Refresh01Icon } from '@hugeicons/core-free-icons';

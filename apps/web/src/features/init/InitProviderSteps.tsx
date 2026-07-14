@@ -1,5 +1,3 @@
-'use client';
-
 import type { useT } from '#/components/I18nProvider';
 import type { DraftProvider, InitProviderMeta } from './InitWizardTypes';
 

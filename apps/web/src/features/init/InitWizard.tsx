@@ -1,5 +1,3 @@
-'use client';
-
 import type { AgentId, ModelInfo, ProviderView } from '@monad/protocol';
 import type { DraftKey, DraftProvider } from './InitWizardTypes';
 

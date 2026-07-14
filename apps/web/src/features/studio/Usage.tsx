@@ -1,5 +1,3 @@
-'use client';
-
 import type { GetStatsResponse, GetUsageResponse, StatsRange } from '@monad/protocol';
 
 import { Delete02Icon, LoaderPinwheelIcon } from '@hugeicons/core-free-icons';

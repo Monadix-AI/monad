@@ -1,5 +1,3 @@
-'use client';
-
 import type { StudioSectionProps } from '#/features/studio/section-registry';
 
 import { BotIcon } from '@hugeicons/core-free-icons';

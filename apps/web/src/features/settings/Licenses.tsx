@@ -1,5 +1,3 @@
-'use client';
-
 import {
   Cancel01Icon,
   ExternalLinkIcon,

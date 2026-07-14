@@ -1,5 +1,3 @@
-'use client';
-
 import type { ModelInfo, ProviderView } from '@monad/protocol';
 
 import { ArrowLeft01Icon, ArrowRight01Icon, CheckIcon } from '@hugeicons/core-free-icons';

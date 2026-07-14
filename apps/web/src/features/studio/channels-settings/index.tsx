@@ -1,5 +1,3 @@
-'use client';
-
 import type { ChannelAccessPolicy, ChannelId, ChannelInstanceView } from '@monad/protocol';
 
 import {

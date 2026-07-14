@@ -1,5 +1,3 @@
-'use client';
-
 import type { VersionCheckResult } from '@monad/client';
 
 import {

@@ -1,5 +1,3 @@
-'use client';
-
 import type { ComponentProps } from 'react';
 
 import { Avatar, workspaceMono as mono, workspaceSans as sans } from '@monad/ui/components/AgentAvatar';

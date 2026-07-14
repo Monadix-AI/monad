@@ -1,5 +1,3 @@
-'use client';
-
 import type { StudioSectionId } from './sections';
 
 import { useInitStatusQuery } from '@monad/client-rtk';

@@ -1,5 +1,3 @@
-'use client';
-
 import type { ITheme } from 'ghostty-web';
 import type { CSSProperties } from 'react';
 

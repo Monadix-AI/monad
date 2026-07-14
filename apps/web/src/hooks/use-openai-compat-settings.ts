@@ -1,5 +1,3 @@
-'use client';
-
 import type { OpenaiCompatSettings, SetOpenaiCompatRequest } from '@monad/protocol';
 
 import { useGetOpenaiCompatQuery, useSetOpenaiCompatMutation } from '@monad/client-rtk';
