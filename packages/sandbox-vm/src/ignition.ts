@@ -11,6 +11,8 @@
 
 import { type GuestEgressRules, guestNftables } from './net/gvproxy.ts';
 
+export const IGNITION_SCHEMA_VERSION = '3.4.0';
+
 export interface MountSpec {
   /** virtio-fs mountTag (w0, r0, …) passed to vfkit, or the 9p share label on Windows. */
   tag: string;
@@ -289,7 +291,7 @@ export function buildIgnition(spec: IgnitionSpec): IgnitionConfig {
   }
 
   return {
-    ignition: { version: '3.4.0' },
+    ignition: { version: IGNITION_SCHEMA_VERSION },
     passwd: {
       users: [
         {

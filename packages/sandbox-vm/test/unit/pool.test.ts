@@ -1,6 +1,22 @@
+import type { SandboxPolicy } from '@monad/sdk-atom';
+
 import { expect, test } from 'bun:test';
 
-import { POOL_DEFAULTS, policyFingerprint, reuseKey, VmPool, vmKey } from '../../src/pool.ts';
+import { effectiveVmIdentity, POOL_DEFAULTS, policyFingerprint, reuseKey, VmPool, vmKey } from '../../src/pool.ts';
+
+const artifacts = {
+  agentDigest: 'agent-a',
+  baseImageDigest: 'image-a',
+  cpus: 2,
+  ignitionSchemaVersion: '3.4.0',
+  memoryMiB: 2048,
+  protocolVersion: 2,
+  runIsolation: { memoryMiB: 1024, maxProcesses: 256, terminateGraceMs: 5000 },
+  vsockPort: 1024
+};
+
+const identity = (policy: Parameters<typeof effectiveVmIdentity>[0], overrides = {}) =>
+  effectiveVmIdentity(policy, { ...artifacts, ...overrides });
 
 test('reuse key is the agent under agent scope, the session otherwise', () => {
   expect(reuseKey('agent', 'ses_1', 'agt_1')).toBe('agt:agt_1');
@@ -10,19 +26,35 @@ test('reuse key is the agent under agent scope, the session otherwise', () => {
 });
 
 test('same policy → same vmKey; differing net mode → different vmKey', () => {
-  const a = vmKey('agent', 'ses_1', 'agt_1', { net: 'none' });
-  const b = vmKey('agent', 'ses_2', 'agt_1', { net: 'none' }); // same agent, diff session, same policy
-  const c = vmKey('agent', 'ses_1', 'agt_1', { net: 'unrestricted' }); // same agent, diff net
+  const a = vmKey('agent', 'ses_1', 'agt_1', identity({ net: 'none' }));
+  const b = vmKey('agent', 'ses_2', 'agt_1', identity({ net: 'none' })); // same agent, diff session, same policy
+  const c = vmKey('agent', 'ses_1', 'agt_1', identity({ net: 'unrestricted' })); // same agent, diff net
   expect(a).toBe(b); // reused across the agent's sessions
   expect(a).not.toBe(c); // policy shape differs → separate VM
 });
 
 test('fingerprint ignores sessionId/agentId but tracks mounts + net', () => {
-  const p1 = policyFingerprint({ writableRoots: ['/a', '/b'], net: 'none', sessionId: 'x' });
-  const p2 = policyFingerprint({ writableRoots: ['/b', '/a'], net: 'none', sessionId: 'y' }); // order-insensitive
-  const p3 = policyFingerprint({ writableRoots: ['/a'], net: 'none' });
+  const p1 = policyFingerprint(identity({ writableRoots: ['/a', '/b'], net: 'none', sessionId: 'x' }));
+  const p2 = policyFingerprint(identity({ writableRoots: ['/b', '/a'], net: 'none', sessionId: 'y' })); // order-insensitive
+  const p3 = policyFingerprint(identity({ writableRoots: ['/a'], net: 'none' }));
   expect(p1).toBe(p2);
   expect(p1).not.toBe(p3);
+});
+
+test.each([
+  ['readDenyRoots', { readDenyRoots: ['/secret-a'] }, { readDenyRoots: ['/secret-b'] }],
+  ['maskedFiles', { maskedFiles: [{ real: '/a', fake: '/x' }] }, { maskedFiles: [{ real: '/a', fake: '/y' }] }]
+] as Array<[string, SandboxPolicy, SandboxPolicy]>)('%s changes the VM fingerprint', (_name, a, b) => {
+  expect(policyFingerprint(identity(a))).not.toBe(policyFingerprint(identity(b)));
+});
+
+test('agent and image digests change the VM fingerprint', () => {
+  expect(policyFingerprint(identity({}, { agentDigest: 'a' }))).not.toBe(
+    policyFingerprint(identity({}, { agentDigest: 'b' }))
+  );
+  expect(policyFingerprint(identity({}, { baseImageDigest: 'a' }))).not.toBe(
+    policyFingerprint(identity({}, { baseImageDigest: 'b' }))
+  );
 });
 
 test('acquire reuses one VM across sessions; release + TTL tears it down', async () => {

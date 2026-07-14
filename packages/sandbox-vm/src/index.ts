@@ -28,12 +28,14 @@ import { destroyBundle, ensureBundle, type VmBundle } from './bundle.ts';
 import { configureHypervTools, HVSOCK_PORTS, hypervDriver, hypervPreflight } from './driver/hyperv.ts';
 import { configureQemuTools, qemuDriver } from './driver/qemu.ts';
 import { configureVfkitBin, type VmHandle, vfkitDriver } from './driver/vfkit.ts';
+import { VSOCK_PROTOCOL_VERSION } from './exec/protocol.ts';
 import { bridgeAsyncProcess, vsockExec, waitForVsock } from './exec/vsock.ts';
-import { serializeIgnition } from './ignition.ts';
+import { IGNITION_SCHEMA_VERSION, serializeIgnition } from './ignition.ts';
 import { ensureBaseImage, type ImageConsent } from './image.ts';
 import { type GvproxyProcess, guestProxyEnv, spawnGvproxy } from './net/gvproxy.ts';
-import { POOL_DEFAULTS, type PoolConfig, reuseKey, VmPool, vmKey } from './pool.ts';
+import { effectiveVmIdentity, POOL_DEFAULTS, type PoolConfig, reuseKey, VmPool, vmKey } from './pool.ts';
 import { resolveVmToolchain, vmToolchainMaybeAvailable } from './toolchain.ts';
+import { sha256OfFile } from './util.ts';
 import { toGuestPath, translateArgvPaths } from './winpath.ts';
 
 // The guest binaries (Linux), vendored next to the package: the vsock exec agent (all platforms) and
@@ -44,10 +46,16 @@ const AGENT_ARCH = process.arch === 'x64' ? 'amd64' : 'arm64';
 const AGENT_PATH = join(dirname(import.meta.dir), 'vendor', `vsock-agent-${AGENT_ARCH}`);
 const GVFORWARDER_PATH = join(dirname(import.meta.dir), 'vendor', `gvforwarder-${AGENT_ARCH}`);
 const VSOCK_EXEC_PORT = HVSOCK_PORTS.exec; // 1024 on every platform — the agent's listen port
-let agentB64: string | null = null;
-async function agentBinaryB64(): Promise<string> {
-  if (agentB64 === null) agentB64 = Buffer.from(await Bun.file(AGENT_PATH).bytes()).toString('base64');
-  return agentB64;
+let agentArtifact: { b64: string; digest: string } | null = null;
+async function guestAgentArtifact(): Promise<{ b64: string; digest: string }> {
+  if (agentArtifact === null) {
+    const bytes = await Bun.file(AGENT_PATH).bytes();
+    agentArtifact = {
+      b64: Buffer.from(bytes).toString('base64'),
+      digest: new Bun.CryptoHasher('sha256').update(bytes).digest('hex')
+    };
+  }
+  return agentArtifact;
 }
 let gvforwarderB64Cache: string | null = null;
 async function gvforwarderBinaryB64(): Promise<string> {
@@ -97,7 +105,12 @@ interface RunningVm {
   gvproxy?: GvproxyProcess;
 }
 
-let baseImage: string | null = null;
+interface BaseImageArtifact {
+  path: string;
+  digest: string;
+}
+
+let baseImage: BaseImageArtifact | null = null;
 let pool: VmPool<RunningVm> | null = null;
 
 // A deterministic MAC per reuse key (stable across a VM's restarts): 02:xx… locally-administered.
@@ -174,21 +187,31 @@ function egressFor(policy: SandboxPolicy): { mode: 'none' | 'filtered' | 'unrest
 
 // The base image is pulled lazily on first boot (it is multi-GB — never block daemon startup on it).
 // Cached in `baseImage` after the first successful download, gated by the consent callback.
-let baseImagePromise: Promise<string> | null = null;
-function ensureBaseImageOnce(): Promise<string> {
+let baseImagePromise: Promise<BaseImageArtifact> | null = null;
+function ensureBaseImageOnce(): Promise<BaseImageArtifact> {
   if (baseImage) return Promise.resolve(baseImage);
   if (!baseImagePromise) {
-    baseImagePromise = ensureBaseImage(config.imageConsent).then((path) => {
-      baseImage = path;
-      return path;
+    baseImagePromise = ensureBaseImage(config.imageConsent).then(async (path) => {
+      baseImage = { path, digest: await sha256OfFile(path) };
+      return baseImage;
     });
   }
   return baseImagePromise;
 }
 
-async function bootVm(key: string, policy: SandboxPolicy): Promise<RunningVm> {
-  const image = await ensureBaseImageOnce();
-  const bundle = await ensureBundle(key, image);
+interface VmShapeConfig {
+  cpus: number;
+  memoryMiB: number;
+  bootTimeoutMs: number;
+}
+
+async function bootVm(
+  key: string,
+  policy: SandboxPolicy,
+  image: BaseImageArtifact,
+  shape: VmShapeConfig
+): Promise<RunningVm> {
+  const bundle = await ensureBundle(key, image.path);
   const mounts = mountsFor(policy);
   const egress = egressFor(policy);
   const proxyEnv = egress.mode === 'filtered' && egress.proxyPort ? guestProxyEnv(egress.proxyPort) : undefined;
@@ -198,7 +221,7 @@ async function bootVm(key: string, policy: SandboxPolicy): Promise<RunningVm> {
   // Ignition: inject the vsock exec agent, the mounts, the egress firewall — and on Windows the
   // 9p mount transport plus (net≠none) the gvforwarder tap so the guest can reach gvproxy.
   const ignition = serializeIgnition({
-    agentBinaryB64: await agentBinaryB64(),
+    agentBinaryB64: (await guestAgentArtifact()).b64,
     mounts,
     egress,
     env: proxyEnv,
@@ -238,8 +261,8 @@ async function bootVm(key: string, policy: SandboxPolicy): Promise<RunningVm> {
     if (!win) await rm(bundle.vsockSock, { force: true });
     const driver = process.platform === 'darwin' ? vfkitDriver : win ? hypervDriver : qemuDriver;
     const vmHandle = await driver.boot({
-      cpus: config.cpus,
-      memoryMiB: config.memoryMiB,
+      cpus: shape.cpus,
+      memoryMiB: shape.memoryMiB,
       bundle,
       mounts,
       gvproxyNetSock,
@@ -255,7 +278,7 @@ async function bootVm(key: string, policy: SandboxPolicy): Promise<RunningVm> {
     // exec-reachable before returning — otherwise the first command races an unbooted guest. On a
     // timeout, tear down the VM too (not just gvproxy) so a half-booted guest never leaks.
     try {
-      await waitForVsock({ socketPath: bundle.vsockSock }, { timeoutMs: config.bootTimeoutMs });
+      await waitForVsock({ socketPath: bundle.vsockSock }, { timeoutMs: shape.bootTimeoutMs });
     } catch (error) {
       liveVms.delete(vm);
       await vmHandle.stop().catch(() => {});
@@ -348,26 +371,44 @@ export const vmLauncher: SandboxLauncher = {
   spawn(argv: string[], options: SandboxSpawnOptions, policy: SandboxPolicy): SandboxProcess {
     const activePool = pool;
     if (!activePool) throw new VmBackendNotReadyError('not prepared — prepare() must run before spawn()');
-    const key = vmKey(config.scope, options.sessionId, options.agentId, policy);
-    const reuse = reuseKey(config.scope, options.sessionId, options.agentId);
+    const scope = config.scope;
+    const shape = { cpus: config.cpus, memoryMiB: config.memoryMiB, bootTimeoutMs: config.bootTimeoutMs };
+    const reuse = reuseKey(scope, options.sessionId, options.agentId);
+    let acquiredKey: string | undefined;
     // acquire() is async (boot); the SandboxProcess must be returned synchronously, so bridge the
     // async acquire + vsock exec. The policy is captured in the boot thunk (no module-level side table).
     return bridgeAsyncProcess(
       async () => {
-        const vm = await activePool.acquire(key, reuse, options.agentId, () => bootVm(key, policy));
+        const [image, agent] = await Promise.all([ensureBaseImageOnce(), guestAgentArtifact()]);
+        const identity = effectiveVmIdentity(policy, {
+          agentDigest: agent.digest,
+          baseImageDigest: image.digest,
+          cpus: shape.cpus,
+          ignitionSchemaVersion: IGNITION_SCHEMA_VERSION,
+          memoryMiB: shape.memoryMiB,
+          protocolVersion: VSOCK_PROTOCOL_VERSION,
+          runIsolation: { memoryMiB: 1024, maxProcesses: 256, terminateGraceMs: 5000 },
+          vsockPort: VSOCK_EXEC_PORT
+        });
+        const key = vmKey(scope, options.sessionId, options.agentId, identity);
+        acquiredKey = key;
+        const vm = await activePool.acquire(key, reuse, options.agentId, () => bootVm(key, policy, image, shape));
         const egress = egressFor(policy);
         // On Windows, host paths (C:\…) must become their /mnt/<drive>/… guest mounts — for the cwd
         // and for any argv token that is itself an absolute Windows path. Identity on mac/linux.
         return vsockExec(translateArgvPaths(argv), {
           socketPath: vm.bundle.vsockSock,
           cwd: options.cwd !== undefined ? toGuestPath(options.cwd) : undefined,
+          limits: options.limits,
           env: {
             ...options.env,
             ...(egress.mode === 'filtered' && egress.proxyPort ? guestProxyEnv(egress.proxyPort) : {})
           }
         });
       },
-      () => activePool.release(key)
+      () => {
+        if (acquiredKey) activePool.release(acquiredKey);
+      }
     );
   },
 
