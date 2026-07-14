@@ -7,9 +7,20 @@
 //   request  (host→guest): [len:u32][json]   json = {argv, cwd, env}
 //   response (guest→host): [channel:u8][len:u32][data]   channel 1=stdout 2=stderr 3=exit(u32 code)
 
-import type { SandboxProcess } from '@monad/sdk-atom';
+import type { SandboxExit, SandboxProcess, SandboxRunLimits, SandboxStdin } from '@monad/sdk-atom';
 
+import { randomUUID } from 'node:crypto';
 import { connect } from 'node:net';
+
+import {
+  encodeFrame,
+  FrameDecoder,
+  GuestFrameKind,
+  HostFrameKind,
+  MAX_STREAM_FRAME_BYTES,
+  normalizeSignal,
+  VSOCK_PROTOCOL_VERSION
+} from './protocol.ts';
 
 export interface VsockExecSpec {
   /** The host endpoint bridging to the guest's vsock exec port: a unix socket (vfkit exposes it
@@ -18,72 +29,159 @@ export interface VsockExecSpec {
   socketPath: string;
   cwd?: string;
   env?: Record<string, string | undefined>;
+  runId?: string;
+  limits?: SandboxRunLimits;
+  onUnresponsive?: (error: Error) => void;
 }
 
-const CH_STDOUT = 1;
-const CH_STDERR = 2;
-const CH_EXIT = 3;
-
-function encodeRequest(argv: string[], spec: VsockExecSpec): Buffer {
-  const env: Record<string, string> = {};
-  for (const [k, v] of Object.entries(spec.env ?? {})) if (v !== undefined) env[k] = v;
-  const json = Buffer.from(JSON.stringify({ argv, cwd: spec.cwd, env }), 'utf8');
-  const hdr = Buffer.alloc(4);
-  hdr.writeUInt32BE(json.length, 0);
-  return Buffer.concat([hdr, json]);
+interface StartedMessage {
+  runId: string;
+  pid: number;
 }
 
-/** Run argv in the guest over vsock, returning a SandboxProcess the daemon's seam consumes. */
+function jsonPayload(value: unknown): Buffer {
+  return Buffer.from(JSON.stringify(value), 'utf8');
+}
+
+function parseJson(payload: Buffer, label: string): unknown {
+  try {
+    return JSON.parse(payload.toString('utf8'));
+  } catch {
+    throw new Error(`vsock protocol: invalid ${label} payload`);
+  }
+}
+
+function parseStarted(payload: Buffer, runId: string): StartedMessage {
+  const value = parseJson(payload, 'started') as Partial<StartedMessage>;
+  if (value.runId !== runId || !Number.isInteger(value.pid) || (value.pid ?? 0) < 1) {
+    throw new Error('vsock protocol: invalid started payload');
+  }
+  return value as StartedMessage;
+}
+
+function parseExit(payload: Buffer): SandboxExit {
+  const value = parseJson(payload, 'exit') as Partial<SandboxExit>;
+  const validCode = value.code === null || (Number.isInteger(value.code) && (value.code ?? -1) >= 0);
+  const validSignal = value.signal === null || (Number.isInteger(value.signal) && (value.signal ?? -1) >= 0);
+  if (!validCode || !validSignal || (value.code === null && !value.signal)) {
+    throw new Error('vsock protocol: invalid exit payload');
+  }
+  return { code: value.code as number | null, signal: value.signal as number | null };
+}
+
+function exitCodeOf(exit: SandboxExit): number {
+  return exit.code ?? 128 + (exit.signal ?? 0);
+}
+
 export function vsockExec(argv: string[], spec: VsockExecSpec): SandboxProcess {
+  const runId = spec.runId ?? randomUUID();
+  const env = Object.fromEntries(
+    Object.entries(spec.env ?? {}).filter((entry): entry is [string, string] => entry[1] !== undefined)
+  );
   const sock = connect(spec.socketPath);
-  let exitCode: number | null = null;
-
+  const decoder = new FrameDecoder();
   const stdout = new TransformStream<Uint8Array, Uint8Array>();
   const stderr = new TransformStream<Uint8Array, Uint8Array>();
-  const outW = stdout.writable.getWriter();
-  const errW = stderr.writable.getWriter();
+  const stdoutWriter = stdout.writable.getWriter();
+  const stderrWriter = stderr.writable.getWriter();
+  let pid: number | undefined;
+  let exitCode: number | null = null;
+  let settled = false;
+  let terminationTimer: ReturnType<typeof setTimeout> | undefined;
 
-  // Demux the response frame stream. Frames may span TCP reads, so buffer until a full frame is in.
-  let buf = Buffer.alloc(0);
-  const pump = () => {
-    while (buf.length >= 5) {
-      const ch = buf[0] as number;
-      const len = buf.readUInt32BE(1);
-      if (buf.length < 5 + len) break;
-      const data = buf.subarray(5, 5 + len);
-      if (ch === CH_STDOUT) void outW.write(new Uint8Array(data));
-      else if (ch === CH_STDERR) void errW.write(new Uint8Array(data));
-      else if (ch === CH_EXIT) exitCode = data.readUInt32BE(0);
-      buf = buf.subarray(5 + len);
+  let resolveExit!: (value: SandboxExit) => void;
+  let rejectExit!: (reason: Error) => void;
+  const exit = new Promise<SandboxExit>((resolve, reject) => {
+    resolveExit = resolve;
+    rejectExit = reject;
+  });
+  const exited = exit.then(exitCodeOf);
+
+  const closeStreams = () => {
+    void stdoutWriter.close().catch(() => {});
+    void stderrWriter.close().catch(() => {});
+  };
+  const fail = (error: Error, notify = true) => {
+    if (settled) return;
+    settled = true;
+    if (terminationTimer) clearTimeout(terminationTimer);
+    closeStreams();
+    rejectExit(error);
+    if (notify) spec.onUnresponsive?.(error);
+    sock.destroy();
+  };
+  const complete = (result: SandboxExit) => {
+    if (settled) return;
+    settled = true;
+    if (terminationTimer) clearTimeout(terminationTimer);
+    exitCode = exitCodeOf(result);
+    closeStreams();
+    resolveExit(result);
+    sock.end();
+  };
+  const send = (kind: HostFrameKind, payload: Uint8Array<ArrayBufferLike> = new Uint8Array()) => {
+    if (settled) throw new Error('vsock process has exited');
+    sock.write(encodeFrame(kind, payload));
+  };
+
+  send(
+    HostFrameKind.Start,
+    jsonPayload({ version: VSOCK_PROTOCOL_VERSION, runId, argv, cwd: spec.cwd, env, limits: spec.limits ?? {} })
+  );
+
+  sock.on('data', (chunk: Buffer) => {
+    try {
+      for (const frame of decoder.push(chunk)) {
+        if (frame.kind === GuestFrameKind.Started) pid = parseStarted(frame.payload, runId).pid;
+        else if (frame.kind === GuestFrameKind.Stdout) void stdoutWriter.write(new Uint8Array(frame.payload));
+        else if (frame.kind === GuestFrameKind.Stderr) void stderrWriter.write(new Uint8Array(frame.payload));
+        else if (frame.kind === GuestFrameKind.Exit) complete(parseExit(frame.payload));
+        else if (frame.kind === GuestFrameKind.Error || frame.kind === GuestFrameKind.Unsupported) {
+          const value = parseJson(frame.payload, 'error') as { message?: unknown };
+          fail(new Error(typeof value.message === 'string' ? value.message : 'guest rejected the run'), false);
+        } else fail(new Error(`vsock protocol: unsupported guest frame ${frame.kind}`));
+      }
+    } catch (error) {
+      fail(error instanceof Error ? error : new Error(String(error)));
+    }
+  });
+  sock.on('error', (error) => fail(new Error(`vsock transport failed: ${error.message}`)));
+  sock.on('close', () => {
+    if (!settled) fail(new Error('vsock transport closed before the guest confirmed exit'));
+  });
+
+  const stdin: SandboxStdin = {
+    async write(data) {
+      const bytes = typeof data === 'string' ? Buffer.from(data) : data;
+      for (let offset = 0; offset < bytes.byteLength; offset += MAX_STREAM_FRAME_BYTES) {
+        send(HostFrameKind.Stdin, bytes.subarray(offset, offset + MAX_STREAM_FRAME_BYTES));
+      }
+    },
+    async end() {
+      send(HostFrameKind.CloseStdin);
     }
   };
 
-  sock.on('connect', () => sock.write(encodeRequest(argv, spec)));
-  sock.on('data', (d: Buffer) => {
-    buf = Buffer.concat([buf, d]);
-    pump();
-  });
-
-  const exited = new Promise<number>((resolve) => {
-    const finish = () => {
-      void outW.close().catch(() => {});
-      void errW.close().catch(() => {});
-      // No exit frame received (connection dropped mid-run) → treat as killed.
-      if (exitCode === null) exitCode = 137;
-      resolve(exitCode);
-    };
-    sock.on('close', finish);
-    sock.on('error', finish);
-  });
-
   return {
+    get pid() {
+      return pid;
+    },
     stdout: stdout.readable,
     stderr: stderr.readable,
+    stdin,
+    exit,
+    exited,
     get exitCode() {
       return exitCode;
     },
-    exited,
-    kill: () => sock.destroy()
+    kill(signal) {
+      const normalized = normalizeSignal(signal);
+      send(HostFrameKind.Signal, jsonPayload({ signal: normalized }));
+      if (terminationTimer) clearTimeout(terminationTimer);
+      terminationTimer = setTimeout(() => {
+        fail(new Error(`guest did not confirm signal ${normalized} within the termination grace period`));
+      }, spec.limits?.terminateGraceMs ?? 5000);
+    }
   };
 }
 
@@ -93,8 +191,6 @@ export interface VsockReadinessOptions {
   probe?: () => Promise<boolean>;
 }
 
-/** Poll the guest with a trivial vsock command until the agent answers (booted + agent up) or the
- *  timeout elapses. vfkit returns as soon as the process spawns, long before CoreOS finishes booting. */
 export async function waitForVsock(spec: VsockExecSpec, options: VsockReadinessOptions = {}): Promise<void> {
   const timeoutMs = options.timeoutMs ?? 120_000;
   const intervalMs = options.intervalMs ?? 500;
@@ -117,25 +213,34 @@ async function probeOnce(spec: VsockExecSpec): Promise<boolean> {
   return code === 0;
 }
 
-/** Bridge an async process-start onto a synchronous SandboxProcess: the streams are wired when the
- *  underlying child starts, `exited` resolves with its code, and a kill issued before the child
- *  exists is applied once it starts. `onFinally` runs when the run settles (e.g. pool refcount
- *  release). Closes the transforms on a start failure so readers don't hang. */
 export function bridgeAsyncProcess(start: () => Promise<SandboxProcess>, onFinally?: () => void): SandboxProcess {
   const stdoutTransform = new TransformStream<Uint8Array, Uint8Array>();
   const stderrTransform = new TransformStream<Uint8Array, Uint8Array>();
   let child: SandboxProcess | null = null;
   let killRequested = false;
   let killSignal: number | string | undefined;
+  const stdinOperations: Array<(process: SandboxProcess) => Promise<void>> = [];
+
+  let resolveExit!: (value: SandboxExit) => void;
+  let rejectExit!: (reason: unknown) => void;
+  const exit = new Promise<SandboxExit>((resolve, reject) => {
+    resolveExit = resolve;
+    rejectExit = reject;
+  });
 
   const exited = (async (): Promise<number> => {
     try {
       child = await start();
+      for (const operation of stdinOperations.splice(0)) await operation(child);
       if (killRequested) child.kill(killSignal);
       child.stdout?.pipeTo(stdoutTransform.writable).catch(() => {});
       child.stderr?.pipeTo(stderrTransform.writable).catch(() => {});
-      return await child.exited;
+      if (child.exit) child.exit.then(resolveExit, rejectExit);
+      const code = await child.exited;
+      if (!child.exit) resolveExit({ code, signal: null });
+      return code;
     } catch (error) {
+      rejectExit(error);
       await Promise.allSettled([stdoutTransform.writable.close(), stderrTransform.writable.close()]);
       throw error;
     } finally {
@@ -143,9 +248,31 @@ export function bridgeAsyncProcess(start: () => Promise<SandboxProcess>, onFinal
     }
   })();
 
+  const queueStdin = (operation: (stdin: SandboxStdin) => void | Promise<void>): Promise<void> => {
+    if (child) return Promise.resolve(operation(child.stdin ?? unavailableStdin()));
+    return new Promise<void>((resolve, reject) => {
+      stdinOperations.push(async (process) => {
+        try {
+          await operation(process.stdin ?? unavailableStdin());
+          resolve();
+        } catch (error) {
+          reject(error);
+        }
+      });
+    });
+  };
+
   return {
+    get pid() {
+      return child?.pid;
+    },
     stdout: stdoutTransform.readable,
     stderr: stderrTransform.readable,
+    stdin: {
+      write: (data) => queueStdin((stdin) => stdin.write(data)),
+      end: () => queueStdin((stdin) => stdin.end())
+    },
+    exit,
     get exitCode() {
       return child?.exitCode ?? null;
     },
@@ -158,4 +285,8 @@ export function bridgeAsyncProcess(start: () => Promise<SandboxProcess>, onFinal
       }
     }
   };
+}
+
+function unavailableStdin(): SandboxStdin {
+  throw new Error('sandbox process does not expose stdin');
 }

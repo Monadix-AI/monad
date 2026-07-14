@@ -1,13 +1,16 @@
-const VSOCK_PROTOCOL_VERSION = 2;
+export const VSOCK_PROTOCOL_VERSION = 2;
 export const MAX_CONTROL_FRAME_BYTES = 1024 * 1024;
 export const MAX_STREAM_FRAME_BYTES = 64 * 1024;
 
 export enum HostFrameKind {
   Start = 1,
   Stdin = 2,
-  }
+  CloseStdin = 3,
+  Signal = 4,
+  Resize = 5
+}
 
-enum GuestFrameKind {
+export enum GuestFrameKind {
   Started = 16,
   Stdout = 17,
   Stderr = 18,
@@ -34,7 +37,7 @@ function assertFrameLength(kind: number, length: number): void {
   throw new Error(`vsock protocol: ${label} frame exceeds ${limit} bytes`);
 }
 
-export function encodeFrame(kind: number, payload: Uint8Array = new Uint8Array()): Buffer {
+export function encodeFrame(kind: number, payload: Uint8Array<ArrayBufferLike> = new Uint8Array()): Buffer {
   assertFrameLength(kind, payload.byteLength);
   const frame = Buffer.allocUnsafe(5 + payload.byteLength);
   frame[0] = kind;
