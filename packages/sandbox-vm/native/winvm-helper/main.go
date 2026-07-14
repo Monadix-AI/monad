@@ -21,7 +21,7 @@
 // Long-running commands (execbridge/netbridge/serve9p) print one JSON "ready" line to stdout, then
 // serve until killed. Everything else prints one JSON result line and exits. Exit code 0/1.
 //
-// Build: scripts/build-winvm-helper.sh (GOOS=windows, both arches, vendored into
+// Build: native/winvm-helper/build.sh (GOOS=windows, both arches, vendored into
 // packages/sandbox-vm/vendor/winvm-helper-<arch>.exe).
 
 package main

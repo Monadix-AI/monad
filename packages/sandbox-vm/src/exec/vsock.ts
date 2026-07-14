@@ -3,7 +3,7 @@
 // listens; we speak a small framed protocol over it. Unlike ssh this needs no sshd, no key, and no
 // guest NIC — so net:'none' can drop the network device entirely. Mirrors Claude Cowork's vsock RPC.
 //
-// Wire protocol (big-endian), matching native/vsock-agent/main.go:
+// Wire protocol (big-endian), matching this package's native/vsock-agent/main.go:
 //   request  (host→guest): [len:u32][json]   json = {argv, cwd, env}
 //   response (guest→host): [channel:u8][len:u32][data]   channel 1=stdout 2=stderr 3=exit(u32 code)
 

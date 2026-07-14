@@ -100,5 +100,5 @@ rulesync.local.jsonc
 .rovodev
 
 # winvm-helper build artifacts (vendored copies live in packages/sandbox-vm/vendor)
-native/winvm-helper/winvm-helper
-native/winvm-helper/winvm-helper.exe
+packages/sandbox-vm/native/winvm-helper/winvm-helper
+packages/sandbox-vm/native/winvm-helper/winvm-helper.exe

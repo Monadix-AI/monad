@@ -394,7 +394,7 @@ async function resolveWindows(): Promise<ResolvedToolchain> {
   const helper = config.winvmHelperPath ?? vendoredWinvmHelper();
   if (!existsSync(helper)) {
     throw new Error(
-      `vm toolchain: winvm-helper not found at ${helper} — run scripts/build-winvm-helper.sh (requires Go) or set sandbox.vm.winvmHelperPath`
+      `vm toolchain: winvm-helper not found at ${helper} — run native/winvm-helper/build.sh (requires Go) or set sandbox.vm.winvmHelperPath`
     );
   }
   const gvproxy = config.gvproxyPath ?? (await resolveTool('gvproxy.exe', gvproxyPin(), undefined, gvproxyUsable));
