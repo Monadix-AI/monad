@@ -12,7 +12,7 @@
 //	response (guest→host): [channel:u8][len:u32][data]
 //	                       channel 1 = stdout, 2 = stderr, 3 = exit (data = 4-byte exit code)
 //
-// Build (from the repo, run by native/vsock-agent/build.sh):
+// Build (from the repo, run by packages/sandbox-vm/native/vsock-agent/build.sh):
 //
 //	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o <out> .
 

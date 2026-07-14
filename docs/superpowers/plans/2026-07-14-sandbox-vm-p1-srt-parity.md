@@ -1,5 +1,9 @@
 # Sandbox VM P1 SRT Parity Implementation Plan
 
+> Post-rebase layout: references below to `native/vsock-agent` map to
+> `packages/sandbox-vm/native/vsock-agent`; the build script now lives at
+> `packages/sandbox-vm/native/vsock-agent/build.sh`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add guest-native PTY execution, enforceable SRT-style credential masks and nested read-deny overlays, and bounded structured violation diagnostics to the reusable macOS, Linux, and Windows VM backend.
