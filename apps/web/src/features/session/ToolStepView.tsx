@@ -19,12 +19,14 @@ export interface ToolItem {
   output?: string;
   errorCode?: string;
   display?: unknown;
+  seq?: string;
 }
 
 export interface ToolGroupItem {
   kind: 'toolGroup';
   id: string;
   steps: ToolItem[];
+  seq?: string;
 }
 
 export type ToolViewItem = ToolItem | ToolGroupItem;

@@ -137,6 +137,7 @@ export type CommandEffect =
   | { type: 'model-changed'; alias: string }
   | { type: 'workdir-changed'; path?: string }
   | { type: 'view-clear' }
+  | { type: 'observation-render-mode-changed'; mode: 'detail' | 'compact' }
   | { type: 'help'; commands: CommandItem[] };
 
 export interface CommandResult {

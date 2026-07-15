@@ -1,5 +1,6 @@
 'use client';
 
+import type { AgentObservationEvent } from '@monad/protocol';
 import type { CSSProperties } from 'react';
 import type { ExternalAgentUsageLimitMeter } from '../../../experience/external-agent-observation/external-agent-observation.ts';
 import type { ExternalAgentStreamView, Participant } from '../../../experience/types.ts';
@@ -37,6 +38,15 @@ import {
 } from './timeline.tsx';
 
 const observationRowId = (row: ObservationTimelineRow): string => row.id;
+type ObservationRenderMode = 'detail' | 'compact';
+
+type CompactObservationTurn = {
+  id: string;
+  done: boolean;
+  durationLabel: string;
+  summaryText?: string;
+  rows: ObservationTimelineRow[];
+};
 
 export function observationFollowResetKey(stream?: { id?: string; status?: string }): string {
   return `${stream?.id ?? ''}:${stream?.status ?? ''}`;
@@ -98,10 +108,13 @@ export function ExternalAgentObservationPanel({
   onBack,
   onClose,
   onLoadOlderHistory,
+  onRenderModeChange,
   onShowHistory,
   onStop,
   canLoadOlderHistory,
+  defaultRenderMode = 'detail',
   loadingOlderHistory,
+  renderMode: controlledRenderMode,
   showHistoryButton,
   stream,
   usageMeter: usageMeterProp
@@ -109,14 +122,17 @@ export function ExternalAgentObservationPanel({
   agent?: Participant;
   agentName?: string;
   canLoadOlderHistory?: boolean;
+  defaultRenderMode?: ObservationRenderMode;
   focusTurnId?: string;
   icon?: ExternalAgentStreamView['icon'];
   loadingOlderHistory?: boolean;
   onBack?: () => void;
   onClose?: () => void;
   onLoadOlderHistory?: () => void;
+  onRenderModeChange?: (mode: ObservationRenderMode) => void;
   onShowHistory?: () => void;
   onStop: (id: string) => void;
+  renderMode?: ObservationRenderMode;
   showHistoryButton?: boolean;
   stream?: ExternalAgentStreamView;
   usageMeter?: ExternalAgentUsageLimitMeter | null;
@@ -142,6 +158,8 @@ export function ExternalAgentObservationPanel({
   const [follow, setFollow] = useState(true);
   const [allExpanded, setAllExpanded] = useState(true);
   const [collapseCommand, setCollapseCommand] = useState<ObservationCollapseCommand>({ collapsed: false });
+  const [uncontrolledRenderMode, setUncontrolledRenderMode] = useState<ObservationRenderMode>(defaultRenderMode);
+  const renderMode = controlledRenderMode ?? uncontrolledRenderMode;
   const streamId = stream?.id;
   const streamStatus = stream?.status;
   const followResetKey = observationFollowResetKey(stream);
@@ -149,6 +167,10 @@ export function ExternalAgentObservationPanel({
   const timelineProvider = stream?.provider ?? '';
   const timelineRows = useMemo(
     () => observationTimelineRows(observationTimelineEntries(stream?.items ?? [], timelineProvider)),
+    [stream?.items, timelineProvider]
+  );
+  const compactTurns = useMemo(
+    () => compactObservationTurns(stream?.items ?? [], timelineProvider),
     [stream?.items, timelineProvider]
   );
   const firstItemIndex = useFirstItemIndex(timelineRows, observationRowId);
@@ -257,6 +279,10 @@ export function ExternalAgentObservationPanel({
     setCollapseCommand({ collapsed: nextCollapsed });
     setAllExpanded(!nextCollapsed);
   };
+  const setRenderMode = (mode: ObservationRenderMode) => {
+    if (controlledRenderMode === undefined) setUncontrolledRenderMode(mode);
+    onRenderModeChange?.(mode);
+  };
 
   return (
     <section
@@ -354,22 +380,6 @@ export function ExternalAgentObservationPanel({
             />
           </div>
         </div>
-        <button
-          aria-label={allExpanded ? 'Collapse all observations' : 'Expand all observations'}
-          className="workplace-action"
-          disabled={!hasItems}
-          onClick={toggleAllRows}
-          style={headerIconButtonStyle(allExpanded, !hasItems)}
-          title={allExpanded ? 'Collapse all observations' : 'Expand all observations'}
-          type="button"
-        >
-          <HugeiconsIcon
-            aria-hidden="true"
-            icon={allExpanded ? ReduceParagraphIcon : ExpandParagraphIcon}
-            size={15}
-            strokeWidth={2}
-          />
-        </button>
         {usageMeter ? (
           <button
             aria-expanded={usageOpen}
@@ -399,6 +409,26 @@ export function ExternalAgentObservationPanel({
             />
           </button>
         ) : null}
+        <button
+          aria-label={allExpanded ? 'Collapse all observations' : 'Expand all observations'}
+          className="workplace-action"
+          disabled={!hasItems || renderMode === 'compact'}
+          onClick={toggleAllRows}
+          style={headerIconButtonStyle(allExpanded, !hasItems || renderMode === 'compact')}
+          title={allExpanded ? 'Collapse all observations' : 'Expand all observations'}
+          type="button"
+        >
+          <HugeiconsIcon
+            aria-hidden="true"
+            icon={allExpanded ? ReduceParagraphIcon : ExpandParagraphIcon}
+            size={15}
+            strokeWidth={2}
+          />
+        </button>
+        <ObservationModeIconButton
+          mode={renderMode}
+          onClick={() => setRenderMode(renderMode === 'detail' ? 'compact' : 'detail')}
+        />
         {stream?.status === 'running' ? (
           <button
             className="workplace-action"
@@ -460,7 +490,7 @@ export function ExternalAgentObservationPanel({
           overflow: 'hidden'
         }}
       >
-        {hasItems ? (
+        {hasItems && renderMode === 'detail' ? (
           <VirtualList
             ariaLive="polite"
             className="scwf-scroll"
@@ -484,6 +514,32 @@ export function ExternalAgentObservationPanel({
               overscrollBehavior: 'contain'
             }}
           />
+        ) : hasItems ? (
+          <div
+            aria-live="polite"
+            className="scwf-scroll"
+            role="log"
+            style={{
+              boxSizing: 'border-box',
+              height: '100%',
+              overflowX: 'hidden',
+              overflowY: 'auto',
+              overscrollBehavior: 'contain',
+              padding: '14px 14px 62px',
+              width: '100%'
+            }}
+          >
+            {historyHeader}
+            <div style={{ display: 'grid', gap: 10 }}>
+              {compactTurns.map((turn) => (
+                <CompactObservationTurnView
+                  key={turn.id}
+                  provider={timelineProvider}
+                  turn={turn}
+                />
+              ))}
+            </div>
+          </div>
         ) : (
           <div
             style={{
@@ -551,6 +607,111 @@ export function ExternalAgentObservationPanel({
   );
 }
 
+function ObservationModeIconButton({
+  mode,
+  onClick
+}: {
+  mode: ObservationRenderMode;
+  onClick: () => void;
+}): React.ReactElement {
+  const compact = mode === 'compact';
+  const label = compact ? 'Switch observation view to Detail' : 'Switch observation view to Compact';
+  return (
+    <button
+      aria-label={label}
+      aria-pressed={compact}
+      className="workplace-action"
+      onClick={onClick}
+      style={headerIconButtonStyle(compact)}
+      title={compact ? 'Compact observation view' : 'Detail observation view'}
+      type="button"
+    >
+      <HugeiconsIcon
+        aria-hidden="true"
+        icon={compact ? ExpandParagraphIcon : ReduceParagraphIcon}
+        size={15}
+        strokeWidth={2}
+      />
+    </button>
+  );
+}
+
+function CompactObservationTurnView({
+  provider,
+  turn
+}: {
+  provider: string;
+  turn: CompactObservationTurn;
+}): React.ReactElement {
+  return (
+    <details
+      data-observation-turn-mode="compact"
+      style={{
+        border: '1px solid var(--border)',
+        borderRadius: 8,
+        background: 'var(--secondary)',
+        overflow: 'hidden'
+      }}
+    >
+      <summary
+        style={{
+          cursor: 'pointer',
+          display: 'grid',
+          gap: 8,
+          listStyle: 'none',
+          padding: '10px 12px'
+        }}
+      >
+        <span
+          style={{
+            color: 'var(--muted-foreground)',
+            fontFamily: mono,
+            fontSize: 11,
+            fontWeight: 700,
+            textTransform: 'uppercase'
+          }}
+        >
+          {turn.done ? 'Completed' : 'Running'} for {turn.durationLabel}
+          {turn.done ? '' : '…'}
+        </span>
+        {turn.summaryText ? (
+          <span
+            style={{
+              color: 'var(--foreground)',
+              fontFamily: sans,
+              fontSize: 13,
+              lineHeight: 1.45,
+              overflowWrap: 'anywhere',
+              whiteSpace: 'pre-wrap'
+            }}
+          >
+            {turn.summaryText}
+          </span>
+        ) : null}
+        <span
+          style={{
+            color: 'var(--muted-foreground)',
+            fontFamily: sans,
+            fontSize: 11,
+            fontWeight: 650
+          }}
+        >
+          Show turn details
+        </span>
+      </summary>
+      <div style={{ display: 'grid', gap: 10, padding: '0 10px 10px' }}>
+        {turn.rows.map((row) => (
+          <ObservationTimelineRowView
+            key={row.id}
+            provider={provider}
+            row={row}
+          />
+        ))}
+      </div>
+    </details>
+  );
+}
+
 function ObservationScrollButton({
   active,
   disabled,
@@ -610,6 +771,72 @@ function headerIconButtonStyle(active: boolean, disabled = false): CSSProperties
     opacity: disabled ? 0.45 : 1,
     padding: 0
   };
+}
+
+function compactObservationTurns(items: readonly AgentObservationEvent[], provider: string): CompactObservationTurn[] {
+  const groups: AgentObservationEvent[][] = [];
+  let current: AgentObservationEvent[] = [];
+  const flush = () => {
+    if (current.length > 0) groups.push(current);
+    current = [];
+  };
+
+  for (const item of items) {
+    if (item.kind === 'turn-start' && current.length > 0) flush();
+    current.push(item);
+    if (item.kind === 'turn-end') flush();
+  }
+  flush();
+
+  return groups.map((group, index) => {
+    const done = group.at(-1)?.kind === 'turn-end';
+    const startMs = firstTimestampMs(group) ?? Date.now();
+    const endMs = done ? (lastTimestampMs(group) ?? startMs) : Date.now();
+    const summaryText = [...group]
+      .reverse()
+      .find((event) => event.kind === 'assistant-message' && event.text?.trim())?.text;
+    const detailItems = group.filter((event) => event.kind !== 'turn-start' && event.kind !== 'turn-end');
+    const rows = observationTimelineRows(observationTimelineEntries(detailItems, provider));
+    return {
+      id: `compact-turn:${group[0]?.id ?? index}`,
+      done,
+      durationLabel: formatTurnDuration(Math.max(0, endMs - startMs)),
+      summaryText,
+      rows
+    };
+  });
+}
+
+function firstTimestampMs(items: readonly AgentObservationEvent[]): number | undefined {
+  for (const item of items) {
+    const ms = timestampMs(item.at);
+    if (ms !== undefined) return ms;
+  }
+  return undefined;
+}
+
+function lastTimestampMs(items: readonly AgentObservationEvent[]): number | undefined {
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const ms = timestampMs(items[index]?.at);
+    if (ms !== undefined) return ms;
+  }
+  return undefined;
+}
+
+function timestampMs(value: string | undefined): number | undefined {
+  if (!value) return undefined;
+  const ms = Date.parse(value);
+  return Number.isFinite(ms) ? ms : undefined;
+}
+
+function formatTurnDuration(durationMs: number): string {
+  const totalSeconds = Math.max(0, Math.floor(durationMs / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) return `${hours}h${minutes.toString().padStart(2, '0')}m${seconds.toString().padStart(2, '0')}s`;
+  if (minutes > 0) return `${minutes}m${seconds.toString().padStart(2, '0')}s`;
+  return `${seconds}s`;
 }
 
 function UsageLimitPopover({ meter }: { meter: ExternalAgentUsageLimitMeter }): React.ReactElement {

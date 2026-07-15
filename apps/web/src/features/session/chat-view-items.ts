@@ -12,7 +12,21 @@ export interface CompactCommandViewItem {
   summary?: string;
 }
 
-export type ViewItem = Msg | ToolViewItem | MemorySummaryViewItem | CompactCommandViewItem;
+export interface CompactTranscriptTurnViewItem {
+  kind: 'compact_transcript_turn';
+  id: string;
+  status: 'running' | 'done';
+  durationLabel: string;
+  summary?: string;
+  details: ViewItem[];
+}
+
+export type ViewItem =
+  | Msg
+  | ToolViewItem
+  | MemorySummaryViewItem
+  | CompactCommandViewItem
+  | CompactTranscriptTurnViewItem;
 
 export const isToolItem = (m: ViewItem): m is ToolViewItem =>
   'kind' in m && (m.kind === 'tool' || m.kind === 'toolGroup');
@@ -22,6 +36,9 @@ export const isMemorySummaryItem = (m: ViewItem): m is MemorySummaryViewItem =>
 
 export const isCompactCommandItem = (m: ViewItem): m is CompactCommandViewItem =>
   'kind' in m && m.kind === 'compact_command';
+
+export const isCompactTranscriptTurnItem = (m: ViewItem): m is CompactTranscriptTurnViewItem =>
+  'kind' in m && m.kind === 'compact_transcript_turn';
 
 function compactEffectFromMessage(item: ViewItem): { compacted: number; summary?: string } | null {
   if (!('role' in item) || item.role !== 'assistant') return null;
@@ -115,6 +132,7 @@ function messageFromUi(item: UIMessageItem): Msg {
     reasoning: reasoningFromParts(item.parts),
     error: item.status === 'error',
     streaming: item.status === 'streaming',
+    seq: item.seq,
     type: artifact?.messageType,
     data: artifact?.data
   };
@@ -127,7 +145,8 @@ function toolFromUi(item: Extract<UIItem, { kind: 'tool' }>): ToolItem {
     tool: item.tool,
     input: item.input,
     status: item.status,
-    output: item.output
+    output: item.output,
+    seq: item.seq
   };
 }
 
@@ -152,7 +171,8 @@ export function groupToolCalls(items: ViewItem[]): ViewItem[] {
       out.push({
         kind: 'toolGroup',
         id: `tool-group:${pending.map((step) => step.id).join(':')}`,
-        steps: pending
+        steps: pending,
+        seq: pending[0]?.seq
       } satisfies ToolGroupItem);
     }
     pending = [];
@@ -168,4 +188,91 @@ export function groupToolCalls(items: ViewItem[]): ViewItem[] {
   }
   flush();
   return out;
+}
+
+export function compactTranscriptTurns(items: ViewItem[]): ViewItem[] {
+  const turns: ViewItem[] = [];
+  let current: ViewItem[] = [];
+  const flush = () => {
+    if (current.length === 0) return;
+    const first = current[0] as ViewItem | undefined;
+    const last = current[current.length - 1] as ViewItem | undefined;
+    const running = current.some(itemIsRunning);
+    const summary = [...current].reverse().find(itemIsAssistantMessage)?.text;
+    turns.push({
+      kind: 'compact_transcript_turn',
+      id: `compact-turn:${first?.id ?? turns.length}`,
+      status: running ? 'running' : 'done',
+      durationLabel: formatDuration(durationMs(firstSeq(current), itemSeq(last) ?? firstSeq(current))),
+      ...(summary ? { summary } : {}),
+      details: current
+    });
+    current = [];
+  };
+
+  for (const item of items) {
+    if (itemIsUserMessage(item) && current.length > 0) flush();
+    current.push(item);
+  }
+  flush();
+  return turns;
+}
+
+function itemIsUserMessage(item: ViewItem): item is Msg {
+  return 'role' in item && item.role === 'user';
+}
+
+function itemIsAssistantMessage(item: ViewItem): item is Msg {
+  return (
+    'role' in item &&
+    item.role === 'assistant' &&
+    item.streaming !== true &&
+    item.pending !== true &&
+    Boolean(item.text.trim())
+  );
+}
+
+function itemIsRunning(item: ViewItem): boolean {
+  if ('role' in item) return item.streaming === true || item.pending === true;
+  if ('kind' in item && item.kind === 'tool') return item.status === 'running';
+  if ('kind' in item && item.kind === 'toolGroup') return item.steps.some((step) => step.status === 'running');
+  return false;
+}
+
+function itemSeq(item: ViewItem | undefined): string | undefined {
+  if (!item) return undefined;
+  if ('seq' in item && typeof item.seq === 'string') return item.seq;
+  if ('kind' in item && item.kind === 'toolGroup') return item.steps.at(-1)?.seq ?? item.seq;
+  return undefined;
+}
+
+function firstSeq(items: ViewItem[]): string | undefined {
+  for (const item of items) {
+    const seq = itemSeq(item);
+    if (seq) return seq;
+  }
+  return undefined;
+}
+
+function durationMs(start: string | undefined, end: string | undefined): number {
+  const startMs = timestampMs(start);
+  const endMs = timestampMs(end);
+  if (startMs === undefined || endMs === undefined) return 0;
+  return Math.max(0, endMs - startMs);
+}
+
+function timestampMs(value: string | undefined): number | undefined {
+  if (!value) return undefined;
+  const ms = Date.parse(value);
+  return Number.isFinite(ms) ? ms : undefined;
+}
+
+function formatDuration(duration: number): string {
+  const totalSeconds = Math.max(0, Math.floor(duration / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) return `${hours}h${minutes.toString().padStart(2, '0')}m${seconds.toString().padStart(2, '0')}s`;
+  if (minutes > 0) return `${minutes}m${seconds.toString().padStart(2, '0')}s`;
+  return `${seconds}s`;
 }

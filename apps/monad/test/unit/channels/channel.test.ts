@@ -164,6 +164,17 @@ test('renderer (streaming): sends a draft then edits to the final text', async (
   expect(edits.at(-1)).toBe('hello world'); // finalized to the authoritative text
 });
 
+test('renderer (compact): edit-capable channels buffer tokens and send only the final message', async () => {
+  const { adapter, sends, edits } = makeCapturingAdapter(true);
+  const r = createRenderer({ adapter, chatId: 'c1', log: () => {}, t, renderMode: 'compact' });
+  r.consume(tokenEvent('hel', 0));
+  r.consume(tokenEvent('lo', 1));
+  r.consume(messageEvent('hello world'));
+  await r.finalize();
+  expect(sends).toEqual(['hello world']);
+  expect(edits).toEqual([]);
+});
+
 test('renderer: agent.error surfaces an error message and resets stream state', async () => {
   const { adapter, sends } = makeCapturingAdapter(true);
   const r = createRenderer({ adapter, chatId: 'c1', log: () => {}, t });
@@ -578,11 +589,14 @@ test('channel: per-conversation granularity shares one session across users in t
  *  live bus so tests can publish events as if they came from the web UI. */
 async function makeMirrorHarness(mirror: boolean): Promise<{
   sends: { chatId: string; content: string }[];
+  edits: string[];
   bus: EventBus;
   sessionId: () => SessionId;
+  push(m: ChannelInbound): void;
   flush(): Promise<void>;
 }> {
   const sends: { chatId: string; content: string }[] = [];
+  const edits: string[] = [];
   const bus = new EventBus();
   let capturedCtx: ChannelContext | undefined;
   let lastSessionId: SessionId | undefined;
@@ -590,7 +604,7 @@ async function makeMirrorHarness(mirror: boolean): Promise<{
   const adapter: ChannelAdapter = {
     type: 'telegram',
     capabilities: {
-      edit: false,
+      edit: true,
       typing: false,
       threads: false,
       maxMessageChars: 4096,
@@ -604,6 +618,9 @@ async function makeMirrorHarness(mirror: boolean): Promise<{
     async send(chatId, content) {
       sends.push({ chatId, content });
       return { ref: String(sends.length), chatId };
+    },
+    async editMessage(_msg, content) {
+      edits.push(content);
     }
   };
 
@@ -618,6 +635,7 @@ async function makeMirrorHarness(mirror: boolean): Promise<{
         createForPrincipal: async ({ title: _title, principalId: _principalId }) => ({ sessionId: newId('ses') }),
         sendInline: async ({ sessionId, text }, sink) => {
           lastSessionId = sessionId as SessionId;
+          sink({ ...tokenEvent('draft ', 0), sessionId: sessionId as SessionId });
           sink(messageEvent(`reply: ${text}`));
         },
         reset: async () => ({ clearedCount: 0 })
@@ -632,6 +650,7 @@ async function makeMirrorHarness(mirror: boolean): Promise<{
           }
         ]
       ]),
+      commands: testCommandBundle(),
       log: { info: () => {}, warn: () => {}, error: () => {} },
       bus,
       t
@@ -650,9 +669,11 @@ async function makeMirrorHarness(mirror: boolean): Promise<{
 
   return {
     sends,
+    edits,
     bus,
     // biome-ignore lint/style/noNonNullAssertion: always set before this is called (warm-up above)
     sessionId: () => lastSessionId!,
+    push: (m) => ctx.onMessage(m),
     flush: () => new Promise((r) => setTimeout(r, 20))
   };
 }
@@ -685,6 +706,41 @@ test('mirror: no forwarding when outboundMirror is false', async () => {
   await h.flush();
 
   expect(h.sends.length).toBe(countBefore); // adapter.send never called by the mirror
+});
+
+test('channel: /view compact makes direct and mirrored channel replies final-message-only', async () => {
+  const h = await makeMirrorHarness(true);
+  const sid = h.sessionId();
+
+  h.push(
+    inbound({
+      chatId: 'chat1',
+      userId: 'u1',
+      kind: 'command',
+      command: 'view',
+      commandArgs: ['compact'],
+      text: '/view compact'
+    })
+  );
+  await h.flush();
+
+  const countBeforeDirect = h.sends.length;
+  const editsBeforeDirect = h.edits.length;
+  h.push(inbound({ chatId: 'chat1', userId: 'u1', text: 'direct after compact' }));
+  await h.flush();
+  expect(h.sends.at(-1)?.content).toBe('reply: direct after compact');
+  expect(h.sends.length).toBe(countBeforeDirect + 1);
+  expect(h.edits.length).toBe(editsBeforeDirect);
+
+  const countBeforeMirror = h.sends.length;
+  const editsBeforeMirror = h.edits.length;
+  h.bus.publish(makeAgentEvent(sid, 'user.message', { messageId: newId('msg'), text: 'web hi' }));
+  h.bus.publish(makeAgentEvent(sid, 'agent.token', { messageId: newId('msg'), delta: 'draft', index: 0 }));
+  h.bus.publish(makeAgentEvent(sid, 'agent.message', { messageId: newId('msg'), text: 'web final' }));
+  await h.flush();
+
+  expect(h.sends.slice(countBeforeMirror).map((s) => s.content)).toEqual(['web final']);
+  expect(h.edits.length).toBe(editsBeforeMirror);
 });
 
 test('mirror: Telegram inbound dispatch is not double-sent (activeDispatches guard)', async () => {

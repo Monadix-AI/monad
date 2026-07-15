@@ -18,6 +18,8 @@ export interface Renderer {
   finalize(): Promise<void>;
 }
 
+export type ChannelRenderMode = 'detail' | 'compact';
+
 export interface RendererOptions {
   adapter: ChannelAdapter;
   chatId: string;
@@ -25,6 +27,8 @@ export interface RendererOptions {
   log: ChannelLog;
   /** Active-locale translator for the notices this renderer emits (approval / error). */
   t: StrictTranslateForNamespace<'channel'>;
+  /** Compact mode buffers token previews and only sends settled final messages to the channel. */
+  renderMode?: ChannelRenderMode;
 }
 
 /**
@@ -48,8 +52,15 @@ export function splitForLimit(text: string, max: number): string[] {
   return parts;
 }
 
-export function createRenderer({ adapter, chatId, threadId, log, t }: RendererOptions): Renderer {
-  const streaming = adapter.capabilities.edit;
+export function createRenderer({
+  adapter,
+  chatId,
+  threadId,
+  log,
+  t,
+  renderMode = 'detail'
+}: RendererOptions): Renderer {
+  const streaming = renderMode === 'detail' && adapter.capabilities.edit;
   const maxChars = adapter.capabilities.maxMessageChars;
   // Serialize all platform I/O so edits/sends keep order and finalize() can await the tail.
   let chain: Promise<void> = Promise.resolve();

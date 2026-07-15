@@ -12,7 +12,6 @@ import {
   useStreamUiItemsQuery,
   useTranscribeAudioMutation
 } from '@monad/client-rtk';
-import { useFirstItemIndex } from '@monad/ui/hooks/use-first-item-index';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import { useT } from '#/components/I18nProvider';
@@ -38,8 +37,7 @@ import {
   buildSessionContextUsage,
   buildViewMessages,
   createTextareaKeyDownHandler,
-  EMPTY_UI_ITEMS,
-  viewMessageId
+  EMPTY_UI_ITEMS
 } from './session-view';
 
 type UseSessionRouteModelParams = {
@@ -79,6 +77,8 @@ export function useSessionRouteModel({
   const input = useSessionUiStore((state) => state.input);
   const activeSkill = useSessionUiStore((state) => state.activeSkill);
   const applyCommandInsert = useSessionUiStore((state) => state.applyCommandInsert);
+  const transcriptRenderMode = useSessionUiStore((state) => state.transcriptRenderMode);
+  const setTranscriptRenderMode = useSessionUiStore((state) => state.setTranscriptRenderMode);
   const clearComposerInput = useSessionUiStore((state) => state.clearComposerInput);
   const setActiveSkill = useSessionUiStore((state) => state.setActiveSkill);
   const skillMenuDismissed = useSessionUiStore((state) => state.skillMenuDismissed);
@@ -273,7 +273,6 @@ export function useSessionRouteModel({
       }),
     [visibleHistory, visibleLiveItems, optimistic, draftMessages, commandPending, transcript.mode]
   );
-  const firstItemIndex = useFirstItemIndex(viewMessages, viewMessageId);
   const deepLinkMsg = useShellSearchParam('msg');
   const openAtMessage = transcript.openAtMessage;
   const pendingScrollKeyRef = useRef<string | null>(null);
@@ -346,7 +345,6 @@ export function useSessionRouteModel({
               }
             },
             transcript: {
-              firstItemIndex,
               onApproval: (approval, allow, scope, reason) => {
                 void approveTool({ requestId: approval.requestId, allow, scope, reason });
               },
@@ -358,6 +356,7 @@ export function useSessionRouteModel({
               onStartReached: transcript.loadOlder,
               pendingApprovals,
               pendingClarifications,
+              renderMode: transcriptRenderMode,
               transcriptRef,
               viewMessages
             },
@@ -386,7 +385,9 @@ export function useSessionRouteModel({
             inspector: {
               items: inspectorItems,
               onToggle: toggleSessionInspector,
-              open: showInspector
+              open: showInspector,
+              renderMode: transcriptRenderMode,
+              onRenderModeChange: setTranscriptRenderMode
             }
           }
         : null,
@@ -396,7 +397,6 @@ export function useSessionRouteModel({
       sessionContextUsage,
       currentSession,
       isReadOnly,
-      firstItemIndex,
       inspectorItems,
       isBusy,
       commandMenuLoading,
@@ -422,9 +422,11 @@ export function useSessionRouteModel({
       handleStop,
       handleSubmit,
       toggleSessionInspector,
+      transcriptRenderMode,
       transcribeAudio,
       pendingApprovals,
       pendingClarifications,
+      setTranscriptRenderMode,
       showInspector,
       skillMenuOpen,
       viewMessages,

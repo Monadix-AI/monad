@@ -4,7 +4,7 @@ import type { ChannelLogger, ChannelTranslate } from '#/channels/types.ts';
 import type { EventBus } from '#/services/event-bus.ts';
 
 import { errMsg } from '#/channels/helpers.ts';
-import { createRenderer } from '#/channels/render.ts';
+import { type ChannelRenderMode, createRenderer } from '#/channels/render.ts';
 
 export interface MirrorContext {
   sessionMirrors: Map<string, { channelId: string; unsubscribe: () => void }>;
@@ -12,6 +12,7 @@ export interface MirrorContext {
   bus: EventBus;
   log: ChannelLogger;
   t: ChannelTranslate;
+  getRenderMode?(channelId: string, conversationKey: string, sessionId: SessionId): ChannelRenderMode;
 }
 
 /** Register an EventBus subscription that mirrors agent replies back to a channel chat.
@@ -45,7 +46,16 @@ export function subscribeMirror(
       case 'agent.message':
       case 'tool.approval_requested':
       case 'agent.error':
-        if (!currentRenderer) currentRenderer = createRenderer({ adapter, chatId, threadId, log, t });
+        if (!currentRenderer) {
+          currentRenderer = createRenderer({
+            adapter,
+            chatId,
+            threadId,
+            log,
+            t,
+            renderMode: ctx.getRenderMode?.(channelId, conversationKey, sessionId)
+          });
+        }
         currentRenderer.consume(event);
         if (
           event.type === 'agent.message' ||

@@ -10,6 +10,9 @@
   "cmd.reset.done_other": "🧹 Cleared {{count}} messages.",
   "cmd.compact.done": "🗜️ Context compacted.",
   "cmd.compact.noop": "Nothing to compact yet — the recent context is already kept verbatim.",
+  "cmd.view.usage": "Usage: /view <detail|compact>",
+  "cmd.view.detail": "Observation view set to Detail.",
+  "cmd.view.compact": "Observation view set to Compact.",
   "cmd.handoff.done": "✅ Context summarized. A new conversation has been started.",
   "cmd.handoff.desc": "Summarize this conversation and continue it in a new session",
   "cmd.memory.usage": "Usage: /memory <consolidate|why|check>",
@@ -49,6 +52,7 @@
   "cmd.memory.desc": "Manage memory commands",
   "cmd.consolidate.desc": "Consolidate memory: dedup facts, then update the graph and laws (to your memory level)",
   "cmd.clear.desc": "Clear the view (client-side)",
+  "cmd.view.desc": "Switch local observation rendering mode",
   "cmd.model.desc": "Show or switch the model for this conversation",
   "cmd.workdir.desc": "Show or set the shared working folder for this conversation",
   "cmd.help.desc": "List available commands"

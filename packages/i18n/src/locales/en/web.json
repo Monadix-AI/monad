@@ -188,6 +188,8 @@
   "web.chat.compacting": "Compacting context…",
   "web.chat.compacted": "Compacted",
   "web.chat.compactNoop": "Nothing to compact yet — the recent context is already kept verbatim.",
+  "web.chat.viewModeCompact": "Switch transcript to Compact",
+  "web.chat.viewModeDetail": "Switch transcript to Detail",
   "web.chat.memorySummary": "Compacted memory summary",
   "web.chat.msgActions": "Message actions",
   "web.chat.noSession": "No session selected",

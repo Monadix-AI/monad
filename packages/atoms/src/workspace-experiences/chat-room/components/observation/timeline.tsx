@@ -73,7 +73,7 @@ export type ObservationTimelineRow = {
 };
 
 export function observationTimelineEntries(
-  items: ExternalAgentStreamView['items'],
+  items: readonly ExternalAgentStreamView['items'][number][],
   provider: string
 ): ObservationTimelineEntry[] {
   const entries: ObservationTimelineEntry[] = [];

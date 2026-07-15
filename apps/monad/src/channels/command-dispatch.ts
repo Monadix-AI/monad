@@ -4,7 +4,7 @@ import type { ChannelAdapter } from '@monad/sdk-atom';
 import type { ChannelRoute, ChannelServiceDeps, ChannelTranslate, Instance } from '#/channels/types.ts';
 
 import { errMsg } from '#/channels/helpers.ts';
-import { createRenderer } from '#/channels/render.ts';
+import { type ChannelRenderMode, createRenderer } from '#/channels/render.ts';
 import { principalFor } from '#/channels/routing.ts';
 import {
   type CommandBundle,
@@ -36,6 +36,8 @@ export interface CommandHost {
     role?: ChannelRoute['kind']
   ): Promise<SessionId>;
   registerMirror(channelId: string, conversationKey: string, sessionId: SessionId, adapter: ChannelAdapter): void;
+  getRenderMode(channelId: string, conversationKey: string): ChannelRenderMode;
+  setRenderMode(channelId: string, conversationKey: string, mode: ChannelRenderMode): void;
 }
 
 /** Dispatch one in-band command through the unified registry with a conversation-keyed navigator.
@@ -69,6 +71,9 @@ export async function runCommand(
   };
   const result = await executeCommand(exec, sessionId, text);
   if (result === null) return false;
+  if (result.effect?.type === 'observation-render-mode-changed') {
+    host.setRenderMode(c.id, key, result.effect.mode);
+  }
 
   // Render the directive reply to IM (renderer turns the agent.message event into adapter.send),
   // and publish to the bus so cross-client viewers see the same turn.
@@ -77,7 +82,8 @@ export async function runCommand(
     chatId: m.chatId,
     threadId: m.threadId,
     log: (level, msg) => host.deps.log[level](`[${c.id}] ${msg}`),
-    t: host.channelT
+    t: host.channelT,
+    renderMode: host.getRenderMode(c.id, key)
   });
   emitCommandTurn(
     host.deps.store,
