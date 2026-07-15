@@ -7,17 +7,16 @@ import { runQualityGate } from '../../quality-gate/runner.ts';
 
 const root = join(import.meta.dir, '..', '..', '..');
 
-test('precommit fixes run before every read-only check and knip is never mutated', () => {
+test('precommit is read-only and uses the canonical check list', () => {
   const commands = qualityGateCommands('precommit', ['apps/web/src/main.tsx']);
-  const lastFix = commands.findLastIndex((command) => command.phase === 'fix');
-  const firstCheck = commands.findIndex((command) => command.phase === 'check');
 
-  expect(lastFix).toBeGreaterThanOrEqual(0);
-  expect(firstCheck).toBeGreaterThan(lastFix);
+  expect(commands).toEqual(qualityGateCommands('check'));
+  expect(commands.every((command) => command.phase === 'check' && !command.mutatesTrackedFiles)).toBe(true);
   expect(commands.filter((command) => command.id === 'knip')).toEqual([
     expect.objectContaining({ argv: ['bun', 'run', 'knip'], mutatesTrackedFiles: false, phase: 'check' })
   ]);
   expect(commands.flatMap((command) => command.argv)).not.toContain('--fix');
+  expect(commands.flatMap((command) => command.argv)).not.toContain('--write');
 });
 
 test('check mode contains only read-only check commands and never runs generators', () => {
@@ -28,13 +27,6 @@ test('check mode contains only read-only check commands and never runs generator
   expect(commands.map((command) => command.id)).not.toContain('agents-sync');
   expect(commands.map((command) => command.id)).not.toContain('i18n-types');
   expect(commands.map((command) => command.id)).not.toContain('typecheck-prepare');
-});
-
-test('precommit Biome fix is scoped to staged files', () => {
-  const [file] = ['apps/web/src/main.tsx'];
-  const command = qualityGateCommands('precommit', [file]).find((candidate) => candidate.id === 'biome-fix');
-
-  expect(command?.argv.at(-1)).toBe(file);
 });
 
 test('runner executes the complete gate and returns every failure', async () => {
@@ -58,6 +50,7 @@ test('Lefthook and CI delegate to the shared quality-gate scripts', () => {
 
   expect(lefthook).toContain('bun run quality:precommit');
   expect(lefthook).not.toContain('knip --fix');
+  expect(lefthook).not.toContain('stage_fixed');
   expect(ci).toContain('bun run quality:check');
   expect(ci).toContain('git diff --exit-code');
 });

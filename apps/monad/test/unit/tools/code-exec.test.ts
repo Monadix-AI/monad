@@ -2,14 +2,19 @@ import { afterEach, beforeEach, expect, test } from 'bun:test';
 
 import {
   CodeExecError,
+  clearSandboxLaunchers,
   codeExecTool,
   configureCodeExec,
   followSystemBackend,
+  registerSandboxLauncher,
   selectCodeExecBackend
 } from '#/capabilities/tools';
 
 beforeEach(() => configureCodeExec('follow-system'));
-afterEach(() => configureCodeExec('follow-system'));
+afterEach(() => {
+  configureCodeExec('follow-system');
+  clearSandboxLaunchers();
+});
 
 test('code_execute gateKey distinguishes host escape from sandbox runs', () => {
   expect(codeExecTool.gateKey?.({ language: 'bash', code: 'x', target: 'host' })).toBe('target:host');
@@ -43,6 +48,36 @@ test("'local' is a backward-compat alias for 'follow-system'", () => {
 test('selectCodeExecBackend throws on an unknown backend', () => {
   configureCodeExec('nope');
   expect(() => selectCodeExecBackend()).toThrow(/unknown code-exec backend/);
+});
+
+test('docker backend executes through the registered launcher', async () => {
+  let spawnedArgv: string[] | undefined;
+  registerSandboxLauncher(
+    {
+      kind: 'docker',
+      descriptor: { name: 'Test container' },
+      isAvailable: () => true,
+      spawn: (argv) => {
+        spawnedArgv = argv;
+        return {
+          stdout: new Blob(['from registered launcher']).stream(),
+          stderr: new Blob([]).stream(),
+          exitCode: 0,
+          exited: Promise.resolve(0),
+          kill: () => {}
+        };
+      }
+    },
+    { source: 'atom-pack', packId: 'test-container-pack', kind: 'docker' }
+  );
+  configureCodeExec('docker');
+
+  const backend = selectCodeExecBackend();
+  expect(backend.isAvailable()).toBe(true);
+  const result = await backend.execute({ language: 'bash', code: 'echo ignored' });
+
+  expect(spawnedArgv?.[0]).toBe('bash');
+  expect(result).toMatchObject({ stdout: 'from registered launcher', exitCode: 0, backend: 'docker' });
 });
 
 test('code_execute is high-risk (gated) and schema-validated', () => {

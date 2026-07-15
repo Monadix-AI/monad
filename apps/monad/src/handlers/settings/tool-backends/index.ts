@@ -3,19 +3,17 @@ import type { InitDockerResponse, SetToolBackendsRequest, ToolBackendsResponse }
 import type { ConfigReloader } from '#/config/reloader.ts';
 
 import { loadAll, loadAuth, saveProfile } from '@monad/home';
-import { detectDockerRuntime, dockerRuntimeAvailable } from '@monad/monad-power-pack';
+
+import { initializeDockerCodeExec, prepareCodeExecBackend } from '#/capabilities/tools';
 
 export function createToolBackendsModule(paths: MonadPaths, configReloader?: ConfigReloader) {
-  // Probe docker availability once at module creation time (cached in dockerRuntimeAvailable()).
-  void detectDockerRuntime();
-
   async function getToolBackends(): Promise<ToolBackendsResponse> {
     const cfg = await loadAll(paths.config, paths.profile);
     if (!cfg) throw new Error('tool-backends: config.json missing');
     const { webSearch, email, codeExecBackend, codeExecE2b, codeExecDocker } = cfg.agent.tools;
 
     const availableBackends: string[] = ['follow-system'];
-    if (dockerRuntimeAvailable()) availableBackends.push('docker');
+    if (await prepareCodeExecBackend('docker')) availableBackends.push('docker');
     if (codeExecE2b?.apiKey) availableBackends.push('e2b');
 
     return {
@@ -90,17 +88,10 @@ export function createToolBackendsModule(paths: MonadPaths, configReloader?: Con
   async function initDockerBackend(): Promise<InitDockerResponse> {
     const cfg = await loadAll(paths.config, paths.profile);
     const image = cfg?.agent.tools.codeExecDocker?.image ?? 'ubuntu:22.04';
-    const runtime = await detectDockerRuntime();
-    if (!runtime) return { ok: false, image, error: 'Docker/Podman not available' };
     try {
-      const proc = Bun.spawn([runtime, 'pull', image], { stdout: 'ignore', stderr: 'pipe' });
-      // Drain stderr concurrently with waiting for exit to avoid pipe-buffer deadlock.
-      const [exitCode, errText] = await Promise.all([
-        proc.exited,
-        new Response(proc.stderr as ReadableStream<Uint8Array>).text()
-      ]);
-      if (exitCode === 0) return { ok: true, image };
-      return { ok: false, image, error: errText.trim().slice(0, 400) };
+      const result = await initializeDockerCodeExec(image);
+      if (result.exitCode === 0) return { ok: true, image };
+      return { ok: false, image, error: result.stderr.trim().slice(0, 400) };
     } catch (e) {
       return { ok: false, image, error: String(e) };
     }

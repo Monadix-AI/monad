@@ -15,8 +15,13 @@ import type { Tool } from '../types.ts';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { detectDockerRuntime, dockerLauncher, dockerRuntimeAvailable, e2bLauncher } from '@monad/monad-power-pack';
-import { buildSandboxPolicy, configureSandboxBackendOptions, sandboxedSpawn, sandboxLauncher } from '@monad/sandbox';
+import {
+  buildSandboxPolicy,
+  configureSandboxBackendOptions,
+  resolveRegisteredSandboxLauncher,
+  sandboxedSpawn,
+  sandboxLauncher
+} from '@monad/sandbox';
 import { z } from 'zod';
 
 import { findGitBash } from '../backends.ts';
@@ -169,9 +174,12 @@ export const followSystemBackend: CodeExecBackend = {
 // The temp dir is mounted rw so the interpreter can read the staged snippet file.
 const dockerCodeExecBackend: CodeExecBackend = {
   name: 'docker',
-  isAvailable: () => dockerRuntimeAvailable(),
+  isAvailable: () => Boolean(resolveRegisteredSandboxLauncher('docker')?.spawn),
   async execute(req) {
-    if (!dockerRuntimeAvailable())
+    const launcher = resolveRegisteredSandboxLauncher('docker');
+    if (!launcher?.spawn) throw new CodeExecError('docker backend: no launcher is registered');
+    await launcher.prepare?.();
+    if (!(launcher.isAvailable?.() ?? true))
       throw new CodeExecError('docker backend: no container runtime available (install Docker or Podman)');
     const dir = await mkdtemp(join(tmpdir(), 'monad-code-'));
     const file = join(dir, `snippet.${FILE_EXT[req.language]}`);
@@ -181,8 +189,7 @@ const dockerCodeExecBackend: CodeExecBackend = {
       // Passing [dir] as writableRoots (not undefined) prevents the docker launcher from falling
       // through to its unrestricted-mode branch that would mount the entire host root rw.
       const policy = buildSandboxPolicy([dir], []);
-      if (!dockerLauncher.spawn) throw new CodeExecError('docker backend: launcher does not support spawn');
-      const proc = dockerLauncher.spawn(
+      const proc = launcher.spawn(
         [containerInterpreter(req.language), file],
         { cwd: dir, sessionId: req.sessionId, agentId: req.agentId },
         policy
@@ -198,17 +205,18 @@ const dockerCodeExecBackend: CodeExecBackend = {
 // e2bLauncher.spawn's stageLocalFiles uploads the local snippet to the remote sandbox.
 const e2bCodeExecBackend: CodeExecBackend = {
   name: 'e2b',
-  isAvailable: () => Boolean(_e2bApiKey),
+  isAvailable: () => Boolean(_e2bApiKey && resolveRegisteredSandboxLauncher('e2b')?.spawn),
   async execute(req) {
     const apiKey = req.e2bCredential ?? _e2bApiKey;
     if (!apiKey) throw new CodeExecError('e2b backend: no API key configured (set agent.tools.codeExecE2b.apiKey)');
+    const launcher = resolveRegisteredSandboxLauncher('e2b');
+    if (!launcher?.spawn) throw new CodeExecError('e2b backend: no launcher is registered');
     const dir = await mkdtemp(join(tmpdir(), 'monad-code-'));
     const file = join(dir, `snippet.${FILE_EXT[req.language]}`);
     try {
       await Bun.write(file, req.code);
       // TODO(P2): pass templateId from config (codeExecE2b.templateId) once the field is added.
-      if (!e2bLauncher.spawn) throw new CodeExecError('e2b backend: launcher does not support spawn');
-      const proc = e2bLauncher.spawn(
+      const proc = launcher.spawn(
         [containerInterpreter(req.language), file],
         { cwd: '/home/user', sessionId: req.sessionId, agentId: req.agentId, credential: apiKey },
         {}
@@ -259,19 +267,17 @@ export function configureHostExec(policy: HostExecPolicy): void {
   _hostExec = policy;
 }
 
-/** Probe docker availability (async, cached). Call at boot so isAvailable() is synchronous. */
-export { detectDockerRuntime };
+export async function prepareCodeExecBackend(kind: 'docker' | 'e2b'): Promise<boolean> {
+  const launcher = resolveRegisteredSandboxLauncher(kind);
+  if (!launcher?.spawn) return false;
+  if (kind === 'e2b') return Boolean(_e2bApiKey);
+  await launcher.prepare?.();
+  return launcher.isAvailable?.() ?? true;
+}
 
-/** Returns the backends with their current availability. Used by the tool-backends handler. */
-function _codeExecBackendStatus(): { backend: string; available: Record<string, boolean> } {
-  return {
-    backend: _codeExecBackend,
-    available: {
-      'follow-system': true,
-      docker: dockerRuntimeAvailable(),
-      e2b: Boolean(_e2bApiKey)
-    }
-  };
+export async function initializeDockerCodeExec(image: string): Promise<CodeExecResult> {
+  configureSandboxBackendOptions({ dockerImage: image });
+  return dockerCodeExecBackend.execute({ language: 'bash', code: 'exit 0' });
 }
 
 export function selectCodeExecBackend(): CodeExecBackend {

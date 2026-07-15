@@ -127,6 +127,16 @@ export function resolveSandboxLauncher(
   return entries.get(refKey(ref))?.launcher;
 }
 
+export function resolveRegisteredSandboxLauncher(kind: string): SandboxLauncher | undefined {
+  const matching = [...entries.values()].filter((entry) => entry.launcher.kind === kind);
+  if (matching.length > 1) {
+    logger.warn(
+      `monad: ${matching.length} sandbox launchers registered for backend "${kind}" — using the first, shadowing the rest`
+    );
+  }
+  return matching[0]?.launcher;
+}
+
 /** Tell every launcher (light + heavy) to release a session's per-session resources when it ends.
  *  Only a launcher that keeps per-session state (e.g. a cloud launcher's reused remote instance)
  *  acts; the rest no-op. */
@@ -181,15 +191,7 @@ export function selectSandboxLauncher(
   }
   if (backend === 'auto') return selectAuto(platform);
 
-  const heavy = [...entries.values()].filter((e) => e.launcher.kind === backend);
-  // Two+ heavy launchers of the same kind is almost certainly unintended (the loser is silently
-  // shadowed); surface it so the operator can remove one rather than guess which won.
-  if (heavy.length > 1) {
-    logger.warn(
-      `monad: ${heavy.length} sandbox launchers registered for backend "${backend}" — using the first, shadowing the rest`
-    );
-  }
-  const chosen = heavy[0]?.launcher;
+  const chosen = resolveRegisteredSandboxLauncher(backend);
   if (chosen) return chosen;
 
   logger.warn(

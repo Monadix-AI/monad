@@ -128,13 +128,12 @@ Dev data is isolated under `.dev/` (gitignored) — it never touches your real
 
 ## Required checks
 
-Every commit runs the canonical quality gate. The gate first applies the approved
-automatic repairs (syncpack formatting and Biome), stages those repairs, then runs
-all read-only checks. Knip never deletes code automatically: a finding blocks the
-commit until the source is intentionally changed.
+Every commit runs the canonical quality gate in read-only mode. It never repairs or
+stages files; any finding blocks the commit. Knip never deletes code automatically:
+a finding blocks the commit until the source is intentionally changed.
 
 ```bash
-bun run quality:precommit  # repair, then run every commit-time check
+bun run quality:precommit  # run every commit-time check without writing files
 bun run quality:check      # CI/read-only quality checks
 bun run test               # cross-package Bun tests
 ```

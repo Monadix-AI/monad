@@ -2,6 +2,7 @@ import type { SandboxLauncher } from '@monad/sdk-atom';
 
 import { afterEach, expect, test } from 'bun:test';
 
+import * as registry from '../../src/registry.ts';
 import {
   clearSandboxLaunchers,
   listSandboxBackendDescriptors,
@@ -37,6 +38,18 @@ test('keeps duplicate kinds from different packs independently addressable', () 
   expect(resolveSandboxLauncher({ source: 'atom-pack', packId: 'vendor-a', kind: 'cloud' })).toBe(first);
   expect(resolveSandboxLauncher({ source: 'atom-pack', packId: 'vendor-b', kind: 'cloud' })).toBe(second);
   expect(listSandboxBackendDescriptors().filter((entry) => entry.ref.kind === 'cloud')).toHaveLength(2);
+});
+
+test('resolves a registered launcher by kind without falling back', () => {
+  const docker = launcher('docker', 'Containers');
+  registerSandboxLauncher(docker, { source: 'atom-pack', packId: 'container-pack', kind: 'docker' });
+  const resolveRegistered = Reflect.get(registry, 'resolveRegisteredSandboxLauncher') as
+    | ((kind: string) => SandboxLauncher | undefined)
+    | undefined;
+
+  expect(resolveRegistered).toBeFunction();
+  expect(resolveRegistered?.('docker')).toBe(docker);
+  expect(resolveRegistered?.('missing')).toBeUndefined();
 });
 
 test('rejects duplicate source-qualified identities', () => {

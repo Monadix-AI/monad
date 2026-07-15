@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - `bun install` remains the one-step initializer.
-- Biome and syncpack may repair files before commit.
+- Pre-commit only checks and blocks; it never repairs or stages files.
 - knip is check-only and never receives `--fix`.
 - Required quality findings block commit.
 - CI check mode is read-only.
@@ -45,7 +45,7 @@
 **Interfaces:**
 - Produces: `qualityGateCommands(mode)`, `runQualityGate(mode, deps)`, and root scripts `quality:fix`, `quality:check`, `quality:precommit`.
 
-- [x] Write tests proving knip is read-only, fixes precede checks, every failure is collected, and check mode contains no mutating command.
+- [x] Write tests proving pre-commit and knip are read-only, every failure is collected, and check mode contains no mutating command.
 - [x] Run the focused test and confirm it fails because the modules do not exist.
 - [x] Implement typed command definitions and a stable-output runner.
 - [x] Add root scripts while retaining `lint` as the auto-fixing developer command and adding `lint:check`.
@@ -63,7 +63,7 @@
 
 - [x] Add contract tests that read Lefthook and CI configuration and assert the shared entrypoints.
 - [x] Run the test and confirm the old inline commands fail the assertions.
-- [x] Replace parallel mutating hook jobs with the orchestrated pre-commit entry.
+- [x] Replace parallel mutating hook jobs with the read-only orchestrated pre-commit entry.
 - [x] Replace duplicated CI checks with `quality:check` and add `git diff --exit-code`.
 - [x] Run the focused contract tests.
 
@@ -120,7 +120,7 @@
 - Documents the commands and policies produced by Tasks 1-5.
 
 - [x] Replace stale Next.js/setup-dev/Codespaces/AGENTS claims with current Vite, TanStack Router, initializer, and gate behavior.
-- [x] Document the two-phase pre-commit gate and check-only knip policy.
+- [x] Document the read-only pre-commit gate, explicit fix command, and check-only knip policy.
 - [x] Document shared Phoenix and explicit CodeGraph ownership.
 - [x] Run repository searches proving stale framework and command claims are removed.
 

@@ -43,7 +43,7 @@ mistake; escalate only when it can't.
 | Typecheck | `bun run typecheck` (TypeScript 7 `tsc`) | tens of seconds | type errors across the workspace |
 | Scoped tests | `bun scripts/bun-test.ts <dir> --only-failures` | seconds–minutes | the package you're editing |
 | Lint | `bun run lint` (Biome, auto-fixes) | seconds | style, correctness lints |
-| Commit gate | `bun run quality:precommit` | seconds–minutes | repairs plus all required commit checks |
+| Commit gate | `bun run quality:precommit` | seconds–minutes | all required commit checks; never writes files |
 | Full gate | `bun run quality:check` + `bun run test` | minutes | everything, pre-merge only |
 | Cross-OS | CI matrix (Ubuntu/macOS/Windows), `docker:test:*` | CI-time | platform drift, musl, install scripts |
 
@@ -54,10 +54,11 @@ cost, fix or record it.
 
 ### Quality-gate etiquette
 
-`quality:precommit` first runs syncpack format and Biome autofix sequentially, then
-collects the complete read-only failure surface. Knip is check-only: it never receives
-`--fix`. `quality:check` uses the same check list in CI. Tests remain a separate matrix
-because transport and platform behavior must run on Linux, macOS, and Windows.
+`quality:precommit` and `quality:check` run the same read-only checks and collect the
+complete failure surface. They never modify or stage files. Knip is check-only: it
+never receives `--fix`. Use `quality:fix` explicitly when you want syncpack, Biome,
+and generated inputs repaired. Tests remain a separate matrix because transport and
+platform behavior must run on Linux, macOS, and Windows.
 
 ---
 
@@ -89,7 +90,7 @@ mysterious:
 
 | Hook | What runs |
 |---|---|
-| `pre-commit` | sequential syncpack/Biome repair, then Biome, syncpack, knip, dependency, generated-input, database, and TypeScript checks |
+| `pre-commit` | read-only Biome, syncpack, knip, dependency, generated-input, database, and TypeScript checks |
 | `commit-msg` | commitlint — Conventional Commits format is enforced, not advisory |
 | `post-merge` / `post-checkout` / `post-rewrite` | `sync-after-git.sh` re-syncs deps/codegen when the tree moved under you; `direnv allow` on branch switch |
 
@@ -97,8 +98,8 @@ Two implications:
 
 - A commit that fails the hook is telling you something the gate would also catch —
   fix it, don't `--no-verify` (reserve that for genuine hook bugs, and then fix the hook).
-- Because `pre-commit` auto-fixes and re-stages, review `git diff --staged` after a
-  hook run before assuming your commit contains only what you wrote.
+- The hook never repairs or stages files. Run `bun run quality:fix` explicitly, review
+  the diff, and stage the intended changes yourself.
 - Knip only reports unused code. Remove or export code intentionally; the hook never
   uses `knip --fix`.
 

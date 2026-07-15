@@ -64,6 +64,5 @@ function checkCommands(): QualityGateCommand[] {
 
 export function qualityGateCommands(mode: QualityGateMode, stagedFiles: string[] = []): QualityGateCommand[] {
   if (mode === 'fix') return [...fixCommands(stagedFiles), ...prepareCommands()];
-  if (mode === 'check') return checkCommands();
-  return [...fixCommands(stagedFiles), ...prepareCommands(), ...checkCommands()];
+  return checkCommands();
 }

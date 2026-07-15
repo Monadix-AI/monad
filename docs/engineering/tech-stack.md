@@ -24,7 +24,7 @@ A quick-reference map of every tool and library in the repo, organized by concer
 | Tool | Role |
 |------|------|
 | **[Biome](https://biomejs.dev)** | Linting + formatting (replaces ESLint + Prettier) |
-| **[Lefthook](https://github.com/evilmartians/lefthook)** | Git hooks runner — delegates pre-commit repair and checks to the shared quality gate |
+| **[Lefthook](https://github.com/evilmartians/lefthook)** | Git hooks runner — delegates read-only pre-commit checks to the shared quality gate |
 | **Commitlint + Commitizen** | Enforces Conventional Commits on every commit message |
 | **[Rulesync](https://github.com/dyoshikawa/rulesync)** | Compiles committed `.rulesync/rules/` into gitignored local targets for supported agents |
 

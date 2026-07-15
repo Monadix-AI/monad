@@ -2,7 +2,6 @@ pre-commit:
   commands:
     quality-gate:
       run: bun run quality:precommit -- {staged_files}
-      stage_fixed: true
 
 post-merge:
   commands:

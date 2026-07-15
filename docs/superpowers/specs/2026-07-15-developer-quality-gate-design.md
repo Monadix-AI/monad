@@ -2,7 +2,7 @@
 
 ## Goal
 
-Make local setup and commit verification predictable without weakening the repository's existing policy: `bun install` remains the one-step initializer, formatting tools may repair files before commit, and syncpack, knip, dependency-direction, generated-artifact, database, and TypeScript failures all block the commit.
+Make local setup and commit verification predictable without weakening the repository's existing policy: `bun install` remains the one-step initializer, pre-commit only checks and blocks, and syncpack, knip, dependency-direction, generated-artifact, database, and TypeScript failures all block the commit.
 
 ## Command contract
 
@@ -11,13 +11,13 @@ The root package exposes four distinct operations:
 - `bun run setup` reruns the idempotent developer initializer used by `postinstall`.
 - `bun run quality:fix` performs the approved automatic repairs: syncpack formatting, Biome writes, and generated-artifact refreshes.
 - `bun run quality:check` performs only read-only checks and is the canonical CI gate.
-- `bun run quality:precommit` applies repairs, stages only files changed by those repairs, and then performs the read-only gate.
+- `bun run quality:precommit` performs the same read-only gate as CI and never modifies or stages files.
 
 `knip` never runs with `--fix`. A knip finding blocks the commit and requires an intentional source edit.
 
 ## Gate execution
 
-The gate has two phases. The mutation phase is sequential because syncpack, Biome, and generators may touch overlapping files. The check phase collects every failure instead of stopping at the first command. Independent read-only checks may run concurrently, but their output is rendered in a stable command order.
+The explicit `quality:fix` command runs mutations sequentially because syncpack, Biome, and generators may touch overlapping files. The check gate collects every failure instead of stopping at the first command. Independent read-only checks may run concurrently, but their output is rendered in a stable command order.
 
 The canonical read-only checks are Biome, syncpack, knip, dependency direction, agent-rule drift, i18n drift, database history, database drift, generated artifacts, and TypeScript. The pre-commit entry may use the existing staged TypeScript optimization; CI runs the complete workspace typecheck. Tests remain a separate CI matrix because they are cross-platform and materially more expensive than the commit gate.
 
@@ -46,7 +46,7 @@ CI invokes `bun run quality:check`, then the cross-platform test matrix, and ver
 ## Acceptance criteria
 
 - `bun install && bun run dev` remains the complete onboarding path.
-- Approved formatting and generated-file repairs are applied and staged before commit.
+- Pre-commit never applies or stages repairs; developers invoke `quality:fix` explicitly.
 - knip, syncpack, dependency, database, generated-file, i18n, agent-rule, and TypeScript findings block commits.
 - CI and pre-commit consume one check definition.
 - Read-only check mode leaves `git diff` unchanged.

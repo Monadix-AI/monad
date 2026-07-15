@@ -46,8 +46,9 @@ export {
   codeExecTool,
   configureCodeExec,
   configureHostExec,
-  detectDockerRuntime,
   followSystemBackend,
+  initializeDockerCodeExec,
+  prepareCodeExecBackend,
   selectCodeExecBackend
 } from './registry/code-exec.ts';
 export {
