@@ -14,7 +14,6 @@ function WorkspaceProjectRoute() {
     <WorkspaceRoute
       {...workspaceRouteProps}
       activeProjectId={projectId}
-      activeProjectSessionId={null}
     />
   );
 }

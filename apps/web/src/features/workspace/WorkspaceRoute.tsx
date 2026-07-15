@@ -9,6 +9,7 @@ import { listProjectExperiences, toProjectExperienceDefinitions } from '#/featur
 import { Workplace } from '#/features/workplace/Workplace';
 import { useWorkspaceShellStore } from '#/lib/workspace-shell-store';
 import { ProjectTopBar } from './ProjectTopBar';
+import { deriveProjectRouteSessionState } from './project-route-session-state';
 import { useProjectViewMode } from './use-project-view-mode';
 import { WorkspaceHome } from './WorkspaceHome';
 
@@ -49,7 +50,7 @@ export interface WorkspaceRouteProps {
   activeProjectSurface?: 'workplace' | 'project-settings';
   agents: Agent[];
   chatSessions: Pick<Session, 'id' | 'title'>[];
-  projects: { id: string; name: string; cwd?: string; sessions?: { id: SessionId }[] }[];
+  projects: { id: string; name: string; cwd?: string; sessions?: { id: SessionId; title: string }[] }[];
   onOpenProjectSettings: (projectId: string) => void;
   onProjectDeleted: () => void;
   onOpenSettings: () => void;
@@ -105,6 +106,17 @@ export function WorkspaceRoute({
     ? (preferredMode as string)
     : (experiences[0]?.id ?? '');
   const activeProject = projects.find((p) => p.id === activeProjectId);
+  const routedProjectSessionState = activeProject
+    ? deriveProjectRouteSessionState(
+        {
+          activeSessionId: activeProjectSessionId,
+          projectSessions: activeProject.sessions ?? []
+        },
+        activeProjectSessionId
+      )
+    : { activeSessionId: null, activeSessionTitle: null };
+  const visibleActiveSessionId = routedProjectSessionState.activeSessionId ?? (activeSessionId as SessionId | null);
+  const visibleActiveSessionTitle = routedProjectSessionState.activeSessionTitle ?? activeSessionTitle;
   const projectName = activeProject?.name ?? activeProjectId ?? 'Project';
   const openProjectSettings = useCallback(() => {
     if (activeProjectId) onOpenProjectSettings(activeProjectId);
@@ -115,21 +127,9 @@ export function WorkspaceRoute({
       setActiveProjectParticipants((current) =>
         current.signature === signature ? current : { participants: project.participants, signature }
       );
-      if (
-        activeProjectSessionId &&
-        project.activeSessionId !== activeProjectSessionId &&
-        project.projectSessions.some((session) => session.id === activeProjectSessionId)
-      ) {
-        const routedSession = project.projectSessions.find((session) => session.id === activeProjectSessionId);
-        setActiveSessionId((current) => (current === activeProjectSessionId ? current : activeProjectSessionId));
-        setActiveSessionTitle((current) => {
-          const next = routedSession?.title ?? null;
-          return current === next ? current : next;
-        });
-        return;
-      }
-      setActiveSessionId((current) => (current === null ? current : null));
-      setActiveSessionTitle((current) => (current === null ? current : null));
+      const next = deriveProjectRouteSessionState(project, activeProjectSessionId);
+      setActiveSessionId((current) => (current === next.activeSessionId ? current : next.activeSessionId));
+      setActiveSessionTitle((current) => (current === next.activeSessionTitle ? current : next.activeSessionTitle));
     },
     [activeProjectSessionId]
   );
@@ -146,10 +146,10 @@ export function WorkspaceRoute({
       return;
     }
     setActiveProjectSession({
-      activeSessionId: activeSessionId as SessionId | null,
+      activeSessionId: visibleActiveSessionId,
       projectId: activeProjectId
     });
-  }, [activeProjectId, activeSessionId, setActiveProjectSession]);
+  }, [activeProjectId, setActiveProjectSession, visibleActiveSessionId]);
 
   useEffect(() => () => setActiveProjectSession(null), [setActiveProjectSession]);
 
@@ -211,8 +211,8 @@ export function WorkspaceRoute({
             projectId={activeProjectId as ProjectId}
             projectName={projectName}
             projectWorkdir={activeProject?.cwd}
-            sessionId={activeSessionId as SessionId | null}
-            sessionTitle={activeSessionTitle}
+            sessionId={visibleActiveSessionId}
+            sessionTitle={visibleActiveSessionTitle}
           />
           <div className="g1-workspace-canvas">
             {cachedProjectEntries.map((entry) => {
