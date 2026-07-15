@@ -304,15 +304,23 @@ export class PromptBuilder {
       builder.addTokens('messages', 'Messages', tokens);
     }
 
-    this.emitEvent(
-      sessionId,
-      'context.usage',
-      builder.build({
-        contextLimit,
-        approximate: total === undefined,
-        reclaimed: this.deps.evictedTokens?.(sessionId)
-      })
-    );
+    const usage = builder.build({
+      contextLimit,
+      approximate: total === undefined,
+      reclaimed: this.deps.evictedTokens?.(sessionId)
+    });
+    this.emitEvent(sessionId, 'context.usage', usage);
+
+    // Handoff nudge: this is only ever called at a settled task boundary (end of a turn — see
+    // TurnWriter.finishBookkeeping's call sites), never mid tool-loop, so firing here is exactly
+    // "at a task boundary" without extra state tracking.
+    const atFraction = this.deps.handoffNudgeFraction;
+    if (atFraction !== undefined) {
+      const usedFraction = usage.used / usage.contextLimit;
+      if (usedFraction >= atFraction) {
+        this.emitEvent(sessionId, 'context.handoff_suggested', { usedFraction, atFraction });
+      }
+    }
   }
 
   observeEstimator(usage?: ModelUsage): void {

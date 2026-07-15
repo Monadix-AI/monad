@@ -105,6 +105,9 @@ export interface AgentLoopDeps {
   /** Cumulative tool-result-eviction tokens reclaimed for a session, for the context.usage 'evicted'
    *  bucket. Backed by the same ToolResultEvictionContext instance passed as `context`. */
   evictedTokens?: (sessionId: SessionId) => number;
+  /** Fraction of contextLimit past which a context.handoff_suggested notice fires at each task
+   *  boundary (turn settled, no tool call mid-flight). Absent → the nudge never fires. */
+  handoffNudgeFraction?: number;
   /** Durable, bounded-load history strategy. */
   history?: HistoryProvider;
   /** Cross-turn cache of replayed message history, shared by per-turn AgentLoop instances. */

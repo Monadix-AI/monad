@@ -126,6 +126,55 @@ test('context.usage carries evictedTokens as reclaimed, not folded into used', a
   expect(usage?.payload.used).toBe(1234); // reclaimed does not inflate the real provider total
 });
 
+test('fires context.handoff_suggested at a task boundary once usage crosses the configured fraction', async () => {
+  const model = buildMockModel().text(['hi']).usage({ inputTokens: 180_000 }).build();
+  const events: Event[] = [];
+  const loop = new AgentLoop({
+    model,
+    tools: [],
+    messages: new InMemoryMessageRepo(),
+    defaultModel: 'mock',
+    emit: (e) => events.push(e),
+    contextLimit: 200_000, // 180k/200k = 0.9 ≥ atFraction(0.7); static overhead negligible at this scale
+    handoffNudgeFraction: 0.7
+  });
+  await loop.runBlock(newId('ses') as SessionId, 'hello');
+
+  const nudge = events.find((e) => e.type === 'context.handoff_suggested');
+  expect(nudge?.payload).toEqual({ usedFraction: 0.9, atFraction: 0.7 });
+});
+
+test('does not fire context.handoff_suggested below the configured fraction', async () => {
+  const model = buildMockModel().text(['hi']).usage({ inputTokens: 20_000 }).build();
+  const events: Event[] = [];
+  const loop = new AgentLoop({
+    model,
+    tools: [],
+    messages: new InMemoryMessageRepo(),
+    defaultModel: 'mock',
+    emit: (e) => events.push(e),
+    contextLimit: 200_000, // 20k/200k = 0.1 < atFraction(0.7)
+    handoffNudgeFraction: 0.7
+  });
+  await loop.runBlock(newId('ses') as SessionId, 'hello');
+  expect(events.some((e) => e.type === 'context.handoff_suggested')).toBe(false);
+});
+
+test('does not fire context.handoff_suggested when handoffNudgeFraction is unset', async () => {
+  const model = buildMockModel().text(['hi']).usage({ inputTokens: 190_000 }).build();
+  const events: Event[] = [];
+  const loop = new AgentLoop({
+    model,
+    tools: [],
+    messages: new InMemoryMessageRepo(),
+    defaultModel: 'mock',
+    emit: (e) => events.push(e),
+    contextLimit: 200_000
+  });
+  await loop.runBlock(newId('ses') as SessionId, 'hello');
+  expect(events.some((e) => e.type === 'context.handoff_suggested')).toBe(false);
+});
+
 test('no context.usage event without a configured contextLimit', async () => {
   const model = buildMockModel().text(['hi']).build();
   const events: Event[] = [];

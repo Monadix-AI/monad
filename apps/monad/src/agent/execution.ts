@@ -395,6 +395,7 @@ export function createAgentExecutionService(deps: AgentDeps): AgentExecutionServ
       : undefined,
     context,
     evictedTokens,
+    handoffNudgeFraction: ctxCfg.handoffNudge.enabled ? ctxCfg.handoffNudge.atFraction : undefined,
     history,
     // Prompt-cache the static system+tools prefix (no-op for non-Anthropic models).
     cacheSystemPrompt: true,

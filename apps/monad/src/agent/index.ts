@@ -63,6 +63,9 @@ export interface AgentConfig {
   /** Cumulative tool-result-eviction tokens reclaimed for a session (the context.usage 'evicted'
    *  bucket). Backed by the same eviction engine instance passed as `context`. */
   evictedTokens?: AgentLoopDeps['evictedTokens'];
+  /** Fraction of contextLimit past which a context.handoff_suggested notice fires at each task
+   *  boundary. Absent → the nudge never fires. */
+  handoffNudgeFraction?: AgentLoopDeps['handoffNudgeFraction'];
   /** Durable bounded-load history strategy (summary boundary). Replaces the full-load path. */
   history?: HistoryProvider;
   /** Prompt-cache the static system+tools prefix (Anthropic; ignored elsewhere). */
@@ -300,6 +303,7 @@ export function createAgent(config: AgentConfig): Agent {
         maxToolResultChars: config.maxToolResultChars,
         context: config.context,
         evictedTokens: config.evictedTokens,
+        handoffNudgeFraction: config.handoffNudgeFraction,
         history: config.history,
         cacheSystemPrompt: config.cacheSystemPrompt,
         instructions: config.instructions,

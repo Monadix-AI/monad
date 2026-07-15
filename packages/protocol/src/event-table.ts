@@ -227,6 +227,16 @@ export const contextEvictedPayloadSchema = z.object({
   resultCount: z.number().int().positive()
 });
 
+// Publish-only, never persisted: fired at a task boundary (a turn just settled — no tool call is
+// mid-flight) once window occupancy crosses `context.handoffNudge.atFraction`. A client can offer a
+// one-click fresh session (reusing the existing `handoff` command/HANDOFF_PROMPT) instead of letting
+// the user run into a hard truncation later. Refires every qualifying turn while still over the
+// fraction — the client decides whether/how long to keep showing it.
+export const contextHandoffSuggestedPayloadSchema = z.object({
+  usedFraction: z.number().min(0),
+  atFraction: z.number().min(0).max(1)
+});
+
 const fsOpSchema = z.enum(['read', 'write']);
 
 export const delegationFsRequestPayloadSchema = z.object({
@@ -323,6 +333,7 @@ export type ClarifyRequestedPayload = z.infer<typeof clarifyRequestedPayloadSche
 export type ClarifyResolvedPayload = z.infer<typeof clarifyResolvedPayloadSchema>;
 export type ContextUsagePayload = z.infer<typeof contextUsagePayloadSchema>;
 export type ContextEvictedPayload = z.infer<typeof contextEvictedPayloadSchema>;
+export type ContextHandoffSuggestedPayload = z.infer<typeof contextHandoffSuggestedPayloadSchema>;
 export type DelegationFsRequestPayload = z.infer<typeof delegationFsRequestPayloadSchema>;
 export type DelegationTerminalRequestPayload = z.infer<typeof delegationTerminalRequestPayloadSchema>;
 export type ExternalAgentStartedPayload = z.infer<typeof externalAgentStartedPayloadSchema>;
@@ -361,6 +372,7 @@ export const EVENT_TABLE = {
   'clarify.resolved': clarifyResolvedPayloadSchema,
   'context.usage': contextUsagePayloadSchema,
   'context.evicted': contextEvictedPayloadSchema,
+  'context.handoff_suggested': contextHandoffSuggestedPayloadSchema,
   'delegation.fs_request': delegationFsRequestPayloadSchema,
   'delegation.terminal_request': delegationTerminalRequestPayloadSchema,
   'external_agent.started': externalAgentStartedPayloadSchema,
