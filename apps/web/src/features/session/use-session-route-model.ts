@@ -23,6 +23,7 @@ import {
   shouldActivateSlashCommandDiscovery
 } from '#/features/session/command-menu';
 import { useSessionUiStore } from '#/features/session/session-ui-store';
+import { useContextNotices } from '#/features/session/use-context-notices';
 import { audioBlobToBase64 } from '#/features/session/voice-transcription';
 import { studioPath } from '#/features/shell/routing/paths';
 import { useShellRoute } from '#/features/shell/routing/use-shell-route';
@@ -171,6 +172,7 @@ export function useSessionRouteModel({
     () => liveItems.filter((item) => !hiddenViewItemKeys.has(viewItemKey(item) ?? '')),
     [liveItems, hiddenViewItemKeys]
   );
+  useContextNotices(visibleLiveItems);
   const draftAgentLabel = useMemo(
     () =>
       resolveDraftAgentLabel({

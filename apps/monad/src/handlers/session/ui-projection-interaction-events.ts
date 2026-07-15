@@ -95,6 +95,43 @@ export function applyInteractionEvent(m: ProjectionMutations, event: Event): Ses
         }
       ];
     }
+    case 'context.evicted': {
+      const p = parseEventPayload('context.evicted', event.payload);
+      const resultWord = p.resultCount === 1 ? 'result' : 'results';
+      return [
+        {
+          kind: 'upsert',
+          cursor: event.id,
+          item: m.upsert({
+            kind: 'system',
+            id: event.id,
+            text: `Cleared ~${p.reclaimedTokens.toLocaleString()} tokens (${p.resultCount} tool ${resultWord}) from context.`,
+            level: 'info',
+            seq: event.id
+          })
+        }
+      ];
+    }
+    case 'context.handoff_suggested': {
+      const p = parseEventPayload('context.handoff_suggested', event.payload);
+      return [
+        {
+          kind: 'upsert',
+          cursor: event.id,
+          item: m.upsert({
+            kind: 'system',
+            id: event.id,
+            text: `Context is ${Math.round(p.usedFraction * 100)}% full — consider starting a fresh session.`,
+            level: 'warn',
+            seq: event.id
+          })
+        }
+      ];
+    }
+    case 'memory.suggestion': {
+      const p = parseEventPayload('memory.suggestion', event.payload);
+      return [m.setCustom({ id: event.id, name: event.type, data: p, status: 'streaming', seq: event.id })];
+    }
     case 'session.updated': {
       const p = parseEventPayload('session.updated', event.payload);
       return p.reset ? [m.clearItems()] : [];

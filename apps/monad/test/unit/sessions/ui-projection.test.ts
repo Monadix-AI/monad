@@ -1351,3 +1351,33 @@ test('agent join, its output card, and its wall reply project in chronological o
     reply.parts.find((x) => x.type === 'text')?.type === 'text' && reply.parts.find((x) => x.type === 'text')
   ).toMatchObject({ text: 'looks good to me' });
 });
+
+test('projects context.evicted as an info-level system notice', () => {
+  const projector = new SessionUiProjector();
+  const [upsert] = projector.applyEvent(event('context.evicted', { reclaimedTokens: 6200, resultCount: 7 }));
+  if (upsert?.kind !== 'upsert' || upsert.item.kind !== 'system') throw new Error('expected system item');
+  expect(upsert.item.level).toBe('info');
+  expect(upsert.item.text).toContain('6,200');
+  expect(upsert.item.text).toContain('7 tool results');
+});
+
+test('projects context.handoff_suggested as a warn-level system notice', () => {
+  const projector = new SessionUiProjector();
+  const [upsert] = projector.applyEvent(event('context.handoff_suggested', { usedFraction: 0.85, atFraction: 0.7 }));
+  if (upsert?.kind !== 'upsert' || upsert.item.kind !== 'system') throw new Error('expected system item');
+  expect(upsert.item.level).toBe('warn');
+  expect(upsert.item.text).toContain('85%');
+});
+
+test('projects memory.suggestion as a custom item carrying scope + facts', () => {
+  const projector = new SessionUiProjector();
+  const [upsert] = projector.applyEvent(
+    event('memory.suggestion', { scope: { kind: 'agent', id: 'agt_100000000000' }, facts: ['User prefers dark mode'] })
+  );
+  if (upsert?.kind !== 'upsert' || upsert.item.kind !== 'custom') throw new Error('expected custom item');
+  expect(upsert.item.name).toBe('memory.suggestion');
+  expect(upsert.item.data).toEqual({
+    scope: { kind: 'agent', id: 'agt_100000000000' },
+    facts: ['User prefers dark mode']
+  });
+});
