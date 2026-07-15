@@ -14,7 +14,10 @@ test('productIcon resolves every branded external agent product id including ope
   }
 });
 
-test('productIcon rejects unknown or non-string values', () => {});
+test('productIcon rejects unknown or non-string values', () => {
+  expect(productIcon('unknown')).toBeUndefined();
+  expect(productIcon(42)).toBeUndefined();
+});
 
 test('externalAgentProductDisplayName brands openclaw and hermes instead of falling back', () => {
   expect(externalAgentProductDisplayName('openclaw', 'openclaw', 'fallback')).toBe('OpenClaw');

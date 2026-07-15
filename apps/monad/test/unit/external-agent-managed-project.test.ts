@@ -62,7 +62,7 @@ test('managed project runtime keeps base PATH when no wrapper bin is needed', ()
 
 test('managed project runtime does not blank PATH when no base PATH is supplied', () => {
   const monadHome = join(tmpdir(), `monad-managed-runtime-${Date.now()}-${process.hrtime.bigint()}`);
-  const _prepared = prepareManagedProjectRuntime({
+  const prepared = prepareManagedProjectRuntime({
     monadHome,
     serverUrl: 'http://127.0.0.1:1234',
     agentName: 'codex',
@@ -70,6 +70,7 @@ test('managed project runtime does not blank PATH when no base PATH is supplied'
     externalAgentSessionId: 'exa_nopath000000',
     provider: 'codex'
   });
+  expect(prepared.env).not.toHaveProperty('PATH');
 });
 
 test('managed project runtimes share the same current CLI entry per process', async () => {
@@ -114,7 +115,7 @@ test('managed project runtime removes stale per-agent wrapper bins', async () =>
 
 test('managed project runtimes share a project root memory index', async () => {
   const monadHome = join(tmpdir(), `monad-managed-runtime-${Date.now()}-${process.hrtime.bigint()}`);
-  const _codex = prepareManagedProjectRuntime({
+  const codex = prepareManagedProjectRuntime({
     monadHome,
     serverUrl: 'http://127.0.0.1:1234',
     agentName: 'codex',
@@ -122,7 +123,7 @@ test('managed project runtimes share a project root memory index', async () => {
     externalAgentSessionId: 'exa_codex0000000',
     provider: 'codex'
   });
-  const _claude = prepareManagedProjectRuntime({
+  const claude = prepareManagedProjectRuntime({
     monadHome,
     serverUrl: 'http://127.0.0.1:1234',
     agentName: 'claude',
@@ -131,8 +132,11 @@ test('managed project runtimes share a project root memory index', async () => {
     provider: 'claude-code'
   });
   const projectRoot = join(monadHome, 'workplace-agents', 'prj_PROJECT00000');
-  const _sharedMemory = join(projectRoot, 'MEMORY.md');
+  const sharedMemory = join(projectRoot, 'MEMORY.md');
 
+  expect(codex.workspace).toBe(join(projectRoot, 'codex'));
+  expect(claude.workspace).toBe(join(projectRoot, 'claude'));
+  expect(await readFile(sharedMemory, 'utf8')).toStartWith('# Project memory index');
   expect(await stat(join(projectRoot, 'memories'))).toMatchObject({ mode: expect.any(Number) });
 
   await rm(monadHome, { recursive: true, force: true });
@@ -221,8 +225,6 @@ test('managed project runtime prefers structured launch modes over interactive P
 
 test('managed project runtime rejects agent names that escape the project workspace', async () => {
   const monadHome = join(tmpdir(), `monad-managed-runtime-${Date.now()}-${process.hrtime.bigint()}`);
-  const _escapedWorkspace = join(monadHome, 'escaped-agent');
-
   expect(() =>
     prepareManagedProjectRuntime({
       monadHome,

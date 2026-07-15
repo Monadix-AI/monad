@@ -1623,11 +1623,12 @@ test('Codex adapter auto-declines an unhandled server-initiated request so the t
     kill() {}
   };
 
-  const _events = codexExternalAgentAdapter.parseOutput(
+  const events = codexExternalAgentAdapter.parseOutput(
     JSON.stringify({ method: 'tool/requestUserInput', id: 42, params: { questions: [] } }),
     handle
   );
-
+  expect(events).toEqual([]);
+  expect(writes).toHaveLength(1);
   expect(JSON.parse(writes[0] ?? '')).toEqual({
     id: 42,
     error: { code: -32601, message: 'Unsupported method: tool/requestUserInput' }
@@ -1648,10 +1649,12 @@ test('Codex adapter ignores an unhandled server notification (no id) without rep
     nextRequestId: () => 1,
     kill() {}
   };
-  const _events = codexExternalAgentAdapter.parseOutput(
+  const events = codexExternalAgentAdapter.parseOutput(
     JSON.stringify({ method: 'fuzzyFileSearch/sessionUpdated', params: {} }),
     handle
   );
+  expect(events).toEqual([]);
+  expect(writes).toEqual([]);
 });
 
 test('Codex adapter dispatches app-server responses by request id, not result shape', () => {
@@ -1933,7 +1936,7 @@ test('Qwen adapter auto-declines unsupported control requests so the turn cannot
     kill() {}
   };
 
-  const _events = qwenExternalAgentAdapter.parseOutput(
+  const events = qwenExternalAgentAdapter.parseOutput(
     JSON.stringify({
       type: 'control_request',
       request_id: 'req-2',
@@ -1945,6 +1948,7 @@ test('Qwen adapter auto-declines unsupported control requests so the turn cannot
     type: 'control_response',
     response: { subtype: 'error', request_id: 'req-2', error: 'Unsupported control request: mcp_message' }
   });
+  expect(events).toEqual([]);
 });
 
 test('Qwen adapter initializes and frames turns through the SDK stream-json bridge', () => {
@@ -2673,7 +2677,9 @@ test('pty fallback is undefined for OpenClaw/Hermes: app-server-only but ws-only
   }
 });
 
-test('pty fallback is undefined when a provider supports no non-pty mode', () => {});
+test('pty fallback is undefined when a provider supports no non-pty mode', () => {
+  expect(pickPtyFallbackLaunchMode(['pty'], [])).toBeUndefined();
+});
 
 test('OpenClaw adapter launches the interactive CLI in pty mode rooted at the working path', () => {
   const launch = buildExternalAgentLaunch(openClawAgent, { workingPath: '/tmp/project', launchMode: 'pty' });
@@ -3606,10 +3612,12 @@ test('OpenClaw adapter ignores an unrecognized frame envelope without replying',
     kill() {}
   };
 
-  const _events = openClawExternalAgentAdapter.parseOutput(
+  const events = openClawExternalAgentAdapter.parseOutput(
     JSON.stringify({ type: 'req', id: '42', method: 'server.ping', params: {} }),
     handle
   );
+  expect(events).toEqual([]);
+  expect(writes).toEqual([]);
 });
 
 // Managed project-agent runtime: OpenClaw & Hermes join Workplace projects as supervised members and
@@ -3650,10 +3658,11 @@ test('OpenClaw sessions.create response with an empty key emits nothing (no inva
     appServer: { send() {}, close() {} },
     kill() {}
   };
-  const _empty = openClawExternalAgentAdapter.parseOutput(
+  const empty = openClawExternalAgentAdapter.parseOutput(
     JSON.stringify({ type: 'res', id: '5', ok: true, payload: { key: '' } }),
     handle
   );
+  expect(empty).toEqual([]);
 });
 
 test('OpenClaw exec.approval.resolved requires an id or is dropped', () => {
@@ -3664,17 +3673,19 @@ test('OpenClaw exec.approval.resolved requires an id or is dropped', () => {
   expectExternalAgentOutputContract(viaId);
   expect(viaId).toEqual([{ type: 'approval_resolved', payload: { requestId: 'req-9' } }]);
 
-  const _idLess = openClawExternalAgentAdapter.parseOutput(
+  const idLess = openClawExternalAgentAdapter.parseOutput(
     JSON.stringify({ type: 'event', event: 'exec.approval.resolved', payload: {} }),
     { launchMode: 'app-server', kill() {} }
   );
+  expect(idLess).toEqual([]);
 });
 
 test('OpenClaw exec.approval.requested with no id is dropped (unroutable)', () => {
-  const _events = openClawExternalAgentAdapter.parseOutput(
+  const events = openClawExternalAgentAdapter.parseOutput(
     JSON.stringify({ type: 'event', event: 'exec.approval.requested', payload: { command: 'ls' } }),
     { launchMode: 'app-server', kill() {} }
   );
+  expect(events).toEqual([]);
 });
 
 test('OpenClaw chat delta with empty deltaText yields nothing and never replies', () => {
@@ -3692,8 +3703,10 @@ test('OpenClaw chat delta with empty deltaText yields nothing and never replies'
     kill() {}
   };
 
-  const _events = openClawExternalAgentAdapter.parseOutput(
+  const events = openClawExternalAgentAdapter.parseOutput(
     JSON.stringify({ type: 'event', event: 'chat', payload: { state: 'delta', deltaText: '' } }),
     handle
   );
+  expect(events).toEqual([]);
+  expect(writes).toEqual([]);
 });

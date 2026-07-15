@@ -60,7 +60,8 @@ test('a non-GitHub origin does not expose an Open in GitHub URL', async () => {
   await git(dir, 'add', '.');
   await git(dir, 'commit', '-m', 'init');
 
-  const _g = await readWorkspaceGit(dir);
+  const g = await readWorkspaceGit(dir);
+  expect(g.remoteUrl).toBeUndefined();
 });
 
 test('an uncommitted change flips dirty to true', async () => {

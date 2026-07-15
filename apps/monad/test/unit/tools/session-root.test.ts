@@ -24,6 +24,7 @@ afterEach(async () => {
 
 test('sandboxDirName keeps simple ids and neutralizes traversal', () => {
   expect(sandboxDirName('sess_abc-123')).toBe('sess_abc-123');
+  expect(sandboxDirName('../../etc')).not.toContain('/');
   expect(sandboxDirName('..')).not.toBe('..');
   expect(sandboxDirName('a/b')).toBe('a_b');
 });

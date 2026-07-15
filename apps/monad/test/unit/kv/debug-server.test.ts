@@ -33,7 +33,9 @@ afterEach(async () => {
 
 test('GET / serves the HTML page', async () => {
   const res = await fetch(`${ui.url}/`);
-  const _body = await res.text();
+  expect(res.headers.get('content-type')).toContain('text/html');
+  const body = await res.text();
+  expect(body).toContain('<title>monad kv — debug</title>');
 });
 
 test('GET /api/dump returns the store snapshot', async () => {

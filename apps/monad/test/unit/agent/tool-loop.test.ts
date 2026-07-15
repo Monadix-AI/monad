@@ -187,6 +187,7 @@ test('runs a tool then returns the final prose answer', async () => {
   expect(called(events)).toHaveLength(1);
   expect(called(events)[0]?.payload.tool).toBe('test.echo');
   expect(results(events)[0]?.payload).toMatchObject({ tool: 'test.echo', ok: true });
+  expect(results(events)[0]?.payload.result).toContain('echoed:');
 });
 
 test('strips ANSI from model text while persisting raw whitelisted tool output', async () => {
@@ -260,7 +261,10 @@ test('runs multiple tool calls from one step (parallel) and orders results by ca
   expect(msg.text).toBe('both done');
   expect(called(events)).toHaveLength(2); // both executed
   // The tool results feed back in call order (a before b).
-  const _toolRows = messages.list(s).filter((m) => m.type === 'tool_result');
+  const toolRows = messages.list(s).filter((m) => m.type === 'tool_result');
+  expect(toolRows.map((m) => m.text.includes('echoed:1') || m.text.includes('echoed:2'))).toEqual([true, true]);
+  expect(toolRows[0]?.text).toContain('echoed:1');
+  expect(toolRows[1]?.text).toContain('echoed:2');
 });
 
 test('a huge tool result is truncated before being fed back to the model', async () => {
@@ -320,6 +324,7 @@ test('malformed tool input is rejected by the schema and surfaced as a tool erro
 
   expect(msg.text).toBe('done');
   expect(results(events)[0]?.payload).toMatchObject({ ok: false });
+  expect(results(events)[0]?.payload.result).toContain('invalid input');
 });
 
 test('high-risk tool is denied when no gate is configured (fail-closed)', async () => {
@@ -330,6 +335,7 @@ test('high-risk tool is denied when no gate is configured (fail-closed)', async 
 
   expect(msg.text).toBe('could not run');
   expect(results(events)[0]?.payload).toMatchObject({ ok: false });
+  expect(results(events)[0]?.payload.result).toContain('approval gate');
 });
 
 test('high-risk tool runs when an allowing gate is configured', async () => {
@@ -399,11 +405,12 @@ test('a tool with structured modelContent feeds multimodal content back to the m
     (m) => Array.isArray(m.content) && (m.content as ModelContentPart[]).some((p) => p.type === 'image')
   );
   expect(hasImage).toBe(true);
-  const _persisted = messages.list(sessionId).find((m) => m.type === 'tool_result')?.data as
+  const persisted = messages.list(sessionId).find((m) => m.type === 'tool_result')?.data as
     | {
         rawResult?: unknown;
       }
     | undefined;
+  expect(persisted?.rawResult).toBeUndefined();
 });
 
 test('AfterTool redaction drops original multimodal tool parts', async () => {
@@ -513,7 +520,9 @@ test('AfterTool redaction prevents raw tool result persistence', async () => {
 
   const row = messages.list(sessionId).find((m) => m.type === 'tool_result');
   expect(row?.text).toBe('redacted result');
-  const _serialized = JSON.stringify(row?.data);
+  const serialized = JSON.stringify(row?.data);
+  expect(serialized).toContain('redacted result');
+  expect(serialized).not.toContain('sk-live-secret');
 });
 
 test('zod tool schema (descriptions + examples) reaches the model as a native spec', async () => {
@@ -537,7 +546,9 @@ test('zod tool schema (descriptions + examples) reaches the model as a native sp
   await loop.runBlock(sid(), 'go');
 
   const spec = (toolSpecs[0] ?? []).find((s) => s.name === 'test.ex');
-  const _json = JSON.stringify(spec?.parameters);
+  const json = JSON.stringify(spec?.parameters);
+  expect(json).toContain('the magic number'); // zod .describe() flows to the model-facing schema
+  expect(json).toContain('examples'); // inputExamples ride along
 });
 
 test('stops after the tool-step budget and forces a direct answer', async () => {
@@ -582,6 +593,7 @@ test('runStream: sandbox guard enforced; tool error surfaced, final answer strea
   await loop.runStream(sid(), 'read it');
 
   expect(results(events)[0]?.payload).toMatchObject({ ok: false });
+  expect(results(events)[0]?.payload.result).toContain('path access denied');
   expect(streamedText(events)).toBe('done');
 });
 

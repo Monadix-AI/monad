@@ -84,6 +84,9 @@ test('the new canonical commands are all registered', () => {
 
 test('agent-facing project and direct-agent commands stay separate', () => {
   const reg = registry();
+  expect(reg.get('project')?.synopsis).toContain('project <post|ask|read|inbox>');
+  expect(reg.get('agent')?.synopsis).toContain('agent <send|read>');
+  expect(reg.get('runtime')?.synopsis).toContain('runtime info');
   expect(reg.has('message')).toBe(false);
 });
 
@@ -107,14 +110,21 @@ test('removed names no longer resolve', () => {
 });
 
 test('shortcuts and acp are hidden from the usage table', () => {
-  const _visible = commands.filter((c) => !c.hidden).map((c) => c.name);
+  const visible = commands.filter((c) => !c.hidden).map((c) => c.name);
+  expect(visible).not.toContain('acp');
+  expect(visible).not.toContain('ls');
+  expect(visible).not.toContain('ask');
+  expect(visible).toContain('status');
+  expect(visible).toContain('chat');
 });
 
 // ── completion ────────────────────────────────────────────────────────────────
 
 test('completion emits a script naming the commands for each shell', async () => {
   for (const shell of ['bash', 'zsh', 'fish']) {
-    const _out = await captureStdout(() => completion.run(ctx([shell])));
+    const out = await captureStdout(() => completion.run(ctx([shell])));
+    expect(out).toContain('status');
+    expect(out).toContain('chat');
   }
 });
 

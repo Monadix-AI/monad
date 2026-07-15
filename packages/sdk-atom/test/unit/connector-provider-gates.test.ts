@@ -119,7 +119,9 @@ test('connector: UndeclaredAtomError message identifies the atom kind and pack n
     caught = e;
   }
   expect(caught).toBeInstanceOf(UndeclaredAtomError);
-  const _msg = (caught as UndeclaredAtomError).message;
+  const msg = (caught as UndeclaredAtomError).message;
+  expect(msg).toContain('connector');
+  expect(msg).toContain('shady-pack');
 });
 
 // ── provider (model) gate ──────────────────────────────────────────────────────

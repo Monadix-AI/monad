@@ -13,7 +13,7 @@ import { bold, green, out, red } from './output.ts';
  * reach into the daemon's first-party tool internals. Returns null on non-Windows.
  * Priority: explicit path → bundled (shipped in the installer) → system Git.
  */
-function findGitBash(explicitPath?: string): string | null {
+export function findGitBash(explicitPath?: string): string | null {
   if (process.platform !== 'win32') return null;
   const candidates = [
     explicitPath,

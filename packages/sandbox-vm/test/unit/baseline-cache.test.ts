@@ -50,9 +50,9 @@ test('capture lease admits one writer and restore lease protects an active artif
     return ['state.bin'];
   });
   const restore = await cache.acquireRestoreLease('identity-a');
-  expect(restore).toBeDefined();
+  expect(restore?.artifact).toMatchObject({ byteSize: 1, identity: 'identity-a' });
   await cache.invalidate('identity-a');
-  expect(await cache.get('identity-a')).toBeDefined();
+  expect(await cache.get('identity-a')).toMatchObject({ byteSize: 1, identity: 'identity-a' });
   await restore?.release();
   await cache.invalidate('identity-a');
   expect(await cache.get('identity-a')).toBeUndefined();
@@ -68,7 +68,7 @@ test('LRU evicts only inactive artifacts to count and byte bounds', async () => 
     });
   }
   expect(await cache.get('a')).toBeUndefined();
-  expect(await cache.get('b')).toBeDefined();
+  expect(await cache.get('b')).toMatchObject({ byteSize: 3, identity: 'b' });
 });
 
 test('malformed and unknown manifest fields are rejected and removed', async () => {

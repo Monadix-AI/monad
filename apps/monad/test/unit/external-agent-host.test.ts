@@ -1234,7 +1234,9 @@ setInterval(() => {}, 1000);
       if (log.includes('input:wake-fallback')) break;
       await Bun.sleep(25);
     }
-    const _log = await Bun.file(logPath).text();
+    const log = await Bun.file(logPath).text();
+    expect(log).toContain('argv:--mode=json-stream|--resume|thread-fallback');
+    expect(log).toContain('input:wake-fallback');
   } finally {
     (Bun as unknown as { spawn: typeof Bun.spawn }).spawn = originalSpawn;
     host.stop(host.list(projectId).sessions[0]?.id ?? '');
@@ -1902,11 +1904,13 @@ test('a real spawned managed process actually receives the autopilot skip flag o
       allowAutopilot: false
     });
 
-    const _autopilotArgv = await readArgvOnceReady(autopilotArgvFile);
-    const _delegatedArgv = await readArgvOnceReady(delegatedArgvFile);
+    const autopilotArgv = await readArgvOnceReady(autopilotArgvFile);
+    const delegatedArgv = await readArgvOnceReady(delegatedArgvFile);
 
     // This is the process's OWN argv, read back from the file IT wrote after spawning — proof the
     // flag actually reached the real OS process, not just the in-memory launch spec.
+    expect(autopilotArgv).toContain('--test-autopilot-flag');
+    expect(delegatedArgv).not.toContain('--test-autopilot-flag');
 
     host.stop(autopilotView.id);
     host.stop(delegatedView.id);
@@ -1982,30 +1986,34 @@ async function runRealAdapterArgvCapture(opts: {
 test.skipIf(process.platform === 'win32')(
   'the real Codex adapter spawns app-server with --ask-for-approval never only in autopilot',
   async () => {
-    const _autopilotArgv = await runRealAdapterArgvCapture({
+    const autopilotArgv = await runRealAdapterArgvCapture({
       provider: 'codex',
       launchMode: 'app-server',
       allowAutopilot: true
     });
-    const _delegatedArgv = await runRealAdapterArgvCapture({
+    const delegatedArgv = await runRealAdapterArgvCapture({
       provider: 'codex',
       launchMode: 'app-server',
       allowAutopilot: false
     });
+    expect(autopilotArgv).toContain('--ask-for-approval never');
+    expect(delegatedArgv).not.toContain('--ask-for-approval');
   }
 );
 
 test('the real Qwen adapter spawns json-stream with --approval-mode=yolo only in autopilot', async () => {
-  const _autopilotArgv = await runRealAdapterArgvCapture({
+  const autopilotArgv = await runRealAdapterArgvCapture({
     provider: 'qwen',
     launchMode: 'json-stream',
     allowAutopilot: true
   });
-  const _delegatedArgv = await runRealAdapterArgvCapture({
+  const delegatedArgv = await runRealAdapterArgvCapture({
     provider: 'qwen',
     launchMode: 'json-stream',
     allowAutopilot: false
   });
+  expect(autopilotArgv).toContain('--approval-mode=yolo');
+  expect(delegatedArgv).not.toContain('--approval-mode=yolo');
 });
 
 // Skipped on Windows: claude's stream-json buildLaunch unshifts `-p` before `agent.args`, so the
@@ -2014,12 +2022,12 @@ test('the real Qwen adapter spawns json-stream with --approval-mode=yolo only in
 test.skipIf(process.platform === 'win32')(
   'the real Claude Code adapter cannot delegate: --dangerously-skip-permissions is always present',
   async () => {
-    const _autopilotArgv = await runRealAdapterArgvCapture({
+    const autopilotArgv = await runRealAdapterArgvCapture({
       provider: 'claude-code',
       launchMode: 'json-stream',
       allowAutopilot: true
     });
-    const _delegatedArgv = await runRealAdapterArgvCapture({
+    const delegatedArgv = await runRealAdapterArgvCapture({
       provider: 'claude-code',
       launchMode: 'json-stream',
       allowAutopilot: false
@@ -2027,5 +2035,7 @@ test.skipIf(process.platform === 'win32')(
     // Claude Code's adapter has no resolvable approval channel over json-stream, so the capability
     // lock keeps it on autopilot regardless of the requested setting — proven here at the real-process
     // level, not just via the adapter capability-matrix unit test.
+    expect(autopilotArgv).toContain('--dangerously-skip-permissions');
+    expect(delegatedArgv).toContain('--dangerously-skip-permissions');
   }
 );

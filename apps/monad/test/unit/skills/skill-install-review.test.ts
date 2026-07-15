@@ -34,7 +34,7 @@ const files = new Map([
 
 test('skill install review allows a clean model verdict', async () => {
   let capturedReq: ModelRequest | undefined;
-  const _warnings = await reviewSkillInstall({
+  const warnings = await reviewSkillInstall({
     files,
     model: modelReply('{"risky":false,"reason":"clean"}', (req) => {
       capturedReq = req;
@@ -44,6 +44,7 @@ test('skill install review allows a clean model verdict', async () => {
     source: 'clawhub:demo'
   });
 
+  expect(warnings).toEqual([]);
   expect(capturedReq?.messages[0]?.role).toBe('system');
   expect(capturedReq?.messages[0]?.content).toBe(systemPromptContent);
   expect(capturedReq?.messages[1]?.content).toContain('Source: clawhub:demo');

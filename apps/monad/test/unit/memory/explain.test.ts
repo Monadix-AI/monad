@@ -19,7 +19,9 @@ test('matchLaws ranks by query/statement word overlap', () => {
   ]);
 });
 
-test('matchLaws returns nothing for a query that shares no words', () => {});
+test('matchLaws returns nothing for a query that shares no words', () => {
+  expect(matchLaws(laws, 'quantum bananas')).toEqual([]);
+});
 
 test('matchLaws caps results at the limit', () => {
   expect(matchLaws(laws, 'user run tests deploy', 1)).toHaveLength(1);

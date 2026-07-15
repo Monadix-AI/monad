@@ -114,6 +114,8 @@ test('send_later accepts a valid ISO at string', () => {
 test('send_later is included in createScheduleTools output', () => {
   const { service } = svc();
   const tools = createScheduleTools(service);
-  const _names = tools.map((t) => t.name);
+  const names = tools.map((t) => t.name);
+  expect(names).toContain('send_later');
+  expect(names).toContain('schedule_cancel'); // always co-registered
   service.dispose();
 });

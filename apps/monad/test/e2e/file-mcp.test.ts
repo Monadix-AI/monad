@@ -117,7 +117,10 @@ test('a file MCP server installed after the first scan is picked up on re-scan (
   // Install a server, then re-scan — exactly what rediscovery's reconnectFileMcp does.
   await writeMcpFile('atoms/mcp/srv.json', { mock: { command: 'bun', args: [fixture] } });
   open.push(...(await connectFileMcpServers(paths, registry)));
-  expect(registry.tools.get('mock__echo')).toBeDefined(); // hot-registered into the live registry
+  const result = await registry.tools
+    .get('mock__echo')
+    ?.run({ text: 'hot-install-roundtrip' }, { sessionId: 'ses_filemcp000000', log() {} });
+  expect(result?.modelContent).toEqual([{ type: 'text', text: 'hot-install-roundtrip' }]);
 });
 
 test('removing a file MCP server clears its tools on re-scan (clearToolsFrom)', async () => {
@@ -127,7 +130,10 @@ test('removing a file MCP server clears its tools on re-scan (clearToolsFrom)', 
 
   await writeMcpFile('atoms/mcp/srv.json', { mock: { command: 'bun', args: [fixture] } });
   open.push(...(await connectFileMcpServers(paths, registry)));
-  expect(registry.tools.get('mock__echo')).toBeDefined();
+  const beforeRemoval = await registry.tools
+    .get('mock__echo')
+    ?.run({ text: 'before-removal' }, { sessionId: 'ses_filemcp000000', log() {} });
+  expect(beforeRemoval?.modelContent).toEqual([{ type: 'text', text: 'before-removal' }]);
 
   // Uninstall + re-scan, exactly as reconnectFileMcp does: clear the 'file-mcp' source, then re-scan.
   await rmFile(join(base, 'atoms', 'mcp', 'srv.json'));
@@ -136,7 +142,7 @@ test('removing a file MCP server clears its tools on re-scan (clearToolsFrom)', 
   expect(registry.tools.get('mock__echo')).toBeUndefined(); // gone, no restart
 });
 
-test('clearToolsFrom only drops the named source — static (builtin/config-MCP) tools persist', () => {
+test('clearToolsFrom only drops the named source — static (builtin/config-MCP) tools persist', async () => {
   const registry = new AtomPackRegistry();
   registry.registerTool({ name: 'builtin.read', description: 'b', scopes: [], run: async () => toolResult('ok') }); // default 'static'
   registry.registerTool(
@@ -146,7 +152,8 @@ test('clearToolsFrom only drops the named source — static (builtin/config-MCP)
 
   registry.clearToolsFrom('atom-pack');
   expect(registry.tools.get('pack.tool')).toBeUndefined();
-  expect(registry.tools.get('builtin.read')).toBeDefined(); // boot-once tool survives
+  const result = await registry.tools.get('builtin.read')?.run({}, { sessionId: 'ses_filemcp000000', log() {} });
+  expect(result?.modelContent).toBe('ok');
 });
 
 test('two packs declaring the same http server collapse to one connection', async () => {
@@ -189,9 +196,7 @@ test('two packs declaring the same http server collapse to one connection', asyn
 
     expect(open.length).toBe(1);
     expect(initCount).toBe(1);
-    // The winning (first, by sorted file) server's tool is registered exactly once.
-    expect(registry.tools.get('srvA__echo')).toBeDefined();
-    expect(registry.tools.get('srvB__echo')).toBeUndefined();
+    expect([...registry.tools.keys()]).toEqual(['srvA__echo']);
   } finally {
     server.stop(true);
   }

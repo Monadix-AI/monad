@@ -1137,7 +1137,7 @@ test('Claude Code usage meter reads status-only rate limit events', () => {
 });
 
 test('non-Claude providers do not parse Claude rate limit events by field shape', () => {
-  const _output = JSON.stringify({
+  const output = JSON.stringify({
     type: 'rate_limit_event',
     rate_limit_info: {
       status: 'allowed',
@@ -1145,6 +1145,7 @@ test('non-Claude providers do not parse Claude rate limit events by field shape'
       rateLimitType: 'five_hour'
     }
   });
+  expect(externalAgentUsageLimitMeter({ provider: 'codex', output })).toBeNull();
 });
 
 test('observation panel shows a token usage meter entry when Codex reports token usage', () => {
@@ -1158,7 +1159,7 @@ test('observation panel shows a token usage meter entry when Codex reports token
       }
     }
   });
-  const _html = renderToStaticMarkup(
+  const html = renderToStaticMarkup(
     React.createElement(ExternalAgentObservationPanel, {
       onStop: () => {},
       stream: {
@@ -1175,6 +1176,7 @@ test('observation panel shows a token usage meter entry when Codex reports token
       usageMeter: externalAgentUsageLimitMeter({ provider: 'codex', output })
     })
   );
+  expect(html).toContain('aria-label="Show token usage"');
 });
 
 test('observation panel shows a usage limits entry when the stream has limit data', () => {
@@ -1183,7 +1185,7 @@ test('observation panel shows a usage limits entry when the stream has limit dat
     params: { rateLimits: { primary: { usedPercent: 6, windowDurationMins: 300, resetsAt: 1_782_935_600_000 } } }
   });
   const usageMeter = externalAgentUsageLimitMeter({ provider: 'codex', output });
-  const _html = renderToStaticMarkup(
+  const html = renderToStaticMarkup(
     React.createElement(ExternalAgentObservationPanel, {
       onStop: () => {},
       stream: {
@@ -1198,10 +1200,11 @@ test('observation panel shows a usage limits entry when the stream has limit dat
       usageMeter
     })
   );
+  expect(html).toContain('aria-label="Show usage remaining"');
 });
 
 test('observation panel distinguishes unavailable provider history from empty live activity', () => {
-  const _html = renderToStaticMarkup(
+  const html = renderToStaticMarkup(
     React.createElement(ExternalAgentObservationPanel, {
       onStop: () => {},
       stream: {
@@ -1215,6 +1218,8 @@ test('observation panel distinguishes unavailable provider history from empty li
       }
     })
   );
+  expect(html).toContain('Agent currently not running');
+  expect(html).not.toContain('No activity yet.');
 });
 
 test('observation panel renders show history as the first list placeholder when activity exists', () => {

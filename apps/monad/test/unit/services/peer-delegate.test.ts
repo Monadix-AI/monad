@@ -119,7 +119,8 @@ test('a JSON error body lifts the upstream message', async () => {
       headers: { 'content-type': 'application/json' }
     });
   const tool = createPeerDelegateTool({ peers: [target()] });
-  const _err = await tool.run({ peer: 'B', instruction: 'x' }, fakeCtx()).catch((e: unknown) => e as Error);
+  const err = await tool.run({ peer: 'B', instruction: 'x' }, fakeCtx()).catch((e: unknown) => e as Error);
+  expect((err as Error).message).toContain('no such agent');
   responder = () => sse(['{"choices":[{"delta":{"content":"ok"}}]}', '[DONE]']);
 });
 

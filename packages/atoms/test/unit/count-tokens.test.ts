@@ -110,12 +110,14 @@ test('an openai-compatible provider with no native route returns undefined witho
     return json({});
   });
   const provider = makeOpenAICompatibleProvider(PROVIDER_DESCRIPTORS.deepseek);
-  const _n = await provider.countTokens?.(call({ id: 'd1', type: 'deepseek' }, 'deepseek-chat', fetch));
+  const n = await provider.countTokens?.(call({ id: 'd1', type: 'deepseek' }, 'deepseek-chat', fetch));
+  expect(n).toBeUndefined();
   expect(called).toBe(false);
 });
 
 test('a non-2xx response resolves undefined (best-effort)', async () => {
   const fetch = fakeFetch(() => new Response('nope', { status: 500 }));
   const provider = makeOpenAICompatibleProvider(PROVIDER_DESCRIPTORS.moonshot);
-  const _n = await provider.countTokens?.(call({ id: 'm1', type: 'moonshot' }, 'kimi-k2', fetch));
+  const n = await provider.countTokens?.(call({ id: 'm1', type: 'moonshot' }, 'kimi-k2', fetch));
+  expect(n).toBeUndefined();
 });

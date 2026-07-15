@@ -68,14 +68,3 @@ test('secret fields use explicit replace/remove operations and never enter norma
   });
   expect(JSON.stringify(settings.values)).not.toContain('secret-value');
 });
-
-test('Studio sandbox components contain no contributed backend kind conditionals', async () => {
-  const files = await Promise.all([
-    Bun.file(new URL('../../src/features/studio/sandbox/BackendCards.tsx', import.meta.url)).text(),
-    Bun.file(new URL('../../src/features/studio/sandbox/SchemaSettingsForm.tsx', import.meta.url)).text(),
-    Bun.file(new URL('../../src/features/studio/SandboxDefaults.tsx', import.meta.url)).text()
-  ]);
-  const source = files.join('\n').toLowerCase();
-  expect(source).not.toContain("kind === 'e2b'");
-  expect(source).not.toContain("kind === 'docker'");
-});

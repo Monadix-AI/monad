@@ -252,7 +252,7 @@ test('usage is attributed to the FALLBACK model that actually served the turn', 
 });
 
 test('countTokens delegates to a provider with a native endpoint', async () => {
-  let _seenUrl = '';
+  let seenUrl = '';
   let seenBody: Record<string, unknown> = {};
   const router = mkRouter(
     deps({
@@ -261,7 +261,7 @@ test('countTokens delegates to a provider with a native endpoint', async () => {
         { alias: 'default', routes: { chat: { provider: 'a1', modelId: 'claude-x' } }, params: {}, fallbacks: [] }
       ],
       fetch: fakeFetch((url, init) => {
-        _seenUrl = url;
+        seenUrl = url;
         seenBody = JSON.parse(String(init?.body));
         return new Response(JSON.stringify({ input_tokens: 42 }), {
           headers: { 'Content-Type': 'application/json' }
@@ -277,6 +277,7 @@ test('countTokens delegates to a provider with a native endpoint', async () => {
     ]
   });
   expect(count).toBe(42);
+  expect(seenUrl).toContain('/v1/messages/count_tokens');
   expect(seenBody.model).toBe('claude-x');
   expect(seenBody.system).toBe('be brief');
 });
@@ -307,11 +308,12 @@ test('countTokens forwards tool schemas so the count includes them', async () =>
 
 test('countTokens returns undefined for a provider without a native endpoint', async () => {
   // openai-compatible has no countTokens provider method ⇒ caller falls back to the char heuristic.
-  const _router = mkRouter(deps({ fetch: fakeFetch(() => jsonResponse('x')) }));
+  const router = mkRouter(deps({ fetch: fakeFetch(() => jsonResponse('x')) }));
+  expect(await router.countTokens({ model: 'default', messages: userMsg })).toBeUndefined();
 });
 
 test('countTokens swallows a provider error and resolves undefined', async () => {
-  const _router = mkRouter(
+  const router = mkRouter(
     deps({
       providers: [{ id: 'a1', type: 'anthropic', baseUrl: 'https://anthropic.test' }],
       profiles: [
@@ -320,6 +322,7 @@ test('countTokens swallows a provider error and resolves undefined', async () =>
       fetch: fakeFetch(() => new Response('nope', { status: 500 }))
     })
   );
+  expect(await router.countTokens({ model: 'default', messages: userMsg })).toBeUndefined();
 });
 
 test('stream falls over before the first token', async () => {

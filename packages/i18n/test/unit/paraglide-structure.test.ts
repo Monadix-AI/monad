@@ -29,7 +29,9 @@ describe('Paraglide generated layout', () => {
 
   test('client scopes import the shared runtime', async () => {
     for (const scope of ['cli', 'web']) {
-      const _index = await readFile(join(outputDir, scope, 'messages', '_index.js'), 'utf8');
+      const index = await readFile(join(outputDir, scope, 'messages', '_index.js'), 'utf8');
+      expect(index).toContain('"../../common/runtime.js"');
+      expect(index).not.toContain('"../runtime.js"');
     }
   });
 });

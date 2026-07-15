@@ -32,7 +32,8 @@ test('flags a base64-into-shell pipe and a destructive command', () => {
 });
 
 test('binary resources are skipped (no decode/scan)', () => {
-  const _png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x00, 0x01, 0x02]); // has a NUL byte
+  const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x00, 0x01, 0x02]); // has a NUL byte
+  expect(scanSkillFiles(new Map([['ok/logo.png', png]]))).toEqual([]);
 });
 
 // ── Private key & credential patterns ────────────────────────────────────────
@@ -223,10 +224,11 @@ test('scan result is always an array (never throws)', () => {
 });
 
 test('a clean skill with credential mentions in prose produces no false positives', () => {
-  const _w = scanSkillFiles(
+  const w = scanSkillFiles(
     files({
       'ok/SKILL.md':
         '---\nname: ok\ndescription: Summarize API usage.\n---\nThis skill helps with APIs. Never include your API key in prompts.\n'
     })
   );
+  expect(w).toEqual([]);
 });

@@ -74,7 +74,7 @@ test('configureSandboxLauncher: the active launcher rewrites argv and receives t
   let seenPolicy: SandboxPolicy | undefined;
   const recording: SandboxLauncher = {
     kind: 'seatbelt',
-    descriptor: { name: 'Seatbelt' },
+    descriptor: { name: 'Recording sandbox' },
     wrap(argv, policy) {
       seenArgv = argv;
       seenPolicy = policy;
@@ -85,8 +85,9 @@ test('configureSandboxLauncher: the active launcher rewrites argv and receives t
   expect(sandboxLauncher().kind).toBe('seatbelt');
 
   const policy: SandboxPolicy = { writableRoots: ['/tmp/x'], net: 'none' };
-  const _proc = sandboxedSpawn(['echo', 'wrapped'], { stdout: 'pipe' }, policy);
+  const proc = sandboxedSpawn(['echo', 'wrapped'], { stdout: 'pipe' }, policy);
 
+  expect(await new Response(proc.stdout).text()).toContain('wrapped');
   expect(seenArgv).toEqual(['echo', 'wrapped']);
   expect(seenPolicy).toEqual(policy);
 });

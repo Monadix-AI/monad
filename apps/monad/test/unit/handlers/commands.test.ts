@@ -154,6 +154,7 @@ describe('CommandRegistry precedence', () => {
     );
     const entry = r.resolve('reset');
     expect(entry?.source).toBe('builtin');
+    expect(warnings.some((w) => w.includes('cannot be overridden'))).toBe(true);
   });
 
   test('an atom alias colliding with a built-in: the command still registers, the reserved alias stays built-in', () => {
@@ -286,7 +287,9 @@ describe('CommandRegistry precedence', () => {
 
 describe('dispatchCommand', () => {
   test('returns null for non-commands and unknown names (fall through to the loop)', async () => {
-    const _r = seededCommandRegistry();
+    const r = seededCommandRegistry();
+    expect(await dispatchCommand(r, 'hello world', (a) => fakeCtx(a))).toBeNull();
+    expect(await dispatchCommand(r, '/nope', (a) => fakeCtx(a))).toBeNull();
   });
 
   test('/new creates a session and emits a session-created effect', async () => {
@@ -316,14 +319,16 @@ describe('dispatchCommand', () => {
 
   test('/model with no args lists profiles; with an alias switches', async () => {
     const r = seededCommandRegistry();
-    const _list = await dispatchCommand(r, '/model', (a) => fakeCtx(a));
+    const list = await dispatchCommand(r, '/model', (a) => fakeCtx(a));
+    expect(list?.message).toContain('fast');
     const set = await dispatchCommand(r, '/model smart', (a) => fakeCtx(a));
     expect(set?.effect).toEqual({ type: 'model-changed', alias: 'smart' });
   });
 
   test('/model rejects an unknown alias without calling setModel', async () => {
     const r = seededCommandRegistry();
-    const _res = await dispatchCommand(r, '/model nonexistent', (a) => fakeCtx(a));
+    const res = await dispatchCommand(r, '/model nonexistent', (a) => fakeCtx(a));
+    expect(res?.message).toContain('Unknown model profile');
   });
 
   test('/memory routes built-in subcommands while shortcuts stay available', async () => {
@@ -354,7 +359,8 @@ describe('dispatchCommand', () => {
 
   test('an alias resolves to the canonical built-in (/ls → sessions)', async () => {
     const r = seededCommandRegistry();
-    const _res = await dispatchCommand(r, '/ls', (a) => fakeCtx(a));
+    const res = await dispatchCommand(r, '/ls', (a) => fakeCtx(a));
+    expect(res?.message).toContain('Alpha');
   });
 
   test('/help reports built-ins, atom commands, and skills', async () => {
@@ -394,7 +400,8 @@ describe('command dispatch', () => {
 describe('concurrency guard (busy)', () => {
   test('a command is refused while a turn is streaming', async () => {
     const r = seededCommandRegistry();
-    const _res = await dispatchCommand(r, '/reset', (a) => fakeCtx(a), { isBusy: true });
+    const res = await dispatchCommand(r, '/reset', (a) => fakeCtx(a), { isBusy: true });
+    expect(res?.message).toContain('in progress');
   });
 
   test('a duringTurn command bypasses the busy guard', async () => {

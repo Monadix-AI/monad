@@ -161,8 +161,10 @@ describe('initMonadHome', () => {
 
   test('seeds SOUL.md and AGENT.md in workspace', async () => {
     await initMonadHome(paths);
-    const _soul = await readFile(join(paths.workspace, 'SOUL.md'), 'utf-8');
-    const _agent = await readFile(join(paths.workspace, 'AGENT.md'), 'utf-8');
+    const soul = await readFile(join(paths.workspace, 'SOUL.md'), 'utf-8');
+    const agent = await readFile(join(paths.workspace, 'AGENT.md'), 'utf-8');
+    expect(soul).toContain('Identity');
+    expect(agent).toContain('Workspace Instructions');
   });
 
   test('does not overwrite user-edited SOUL.md', async () => {
@@ -179,21 +181,24 @@ describe('initMonadHome', () => {
     await Bun.write(join(paths.workspace, 'SOUL.md'), 'my custom soul');
     await initMonadHome(paths, { reseed: true });
 
-    const _soul = await readFile(join(paths.workspace, 'SOUL.md'), 'utf-8');
+    const soul = await readFile(join(paths.workspace, 'SOUL.md'), 'utf-8');
+    expect(soul).toContain('Identity');
   });
 
   test('seeds the starter skill on first init', async () => {
     await initMonadHome(paths);
-    const [globalSkill, defaultAgentSkill, atomPackSkill, atomPackManifest, _atomPackEntry] = await Promise.all([
+    const [globalSkill, defaultAgentSkill, atomPackSkill, atomPackManifest, atomPackEntry] = await Promise.all([
       readFile(join(paths.skills, 'summarize-changes', 'SKILL.md'), 'utf-8'),
       readFile(join(paths.workspace, 'skills', 'summarize-changes', 'SKILL.md'), 'utf-8'),
       readFile(join(paths.packs, 'monad-test', 'skills', 'summarize-changes', 'SKILL.md'), 'utf-8'),
       readFile(join(paths.packs, 'monad-test', 'atom-pack.json'), 'utf-8'),
       readFile(join(paths.packs, 'monad-test', 'dist', 'atom-pack.js'), 'utf-8')
     ]);
+    expect(globalSkill).toContain('name: summarize-changes');
     expect(defaultAgentSkill).toBe(globalSkill);
     expect(atomPackSkill).toBe(globalSkill);
     expect(JSON.parse(atomPackManifest)).toMatchObject({ name: 'monad-test', atoms: ['skill'] });
+    expect(atomPackEntry).toContain('register()');
   });
 
   test('does not re-seed a deleted starter skill on a later init', async () => {
@@ -495,7 +500,9 @@ describe('sandbox.json decoupling', () => {
 });
 
 describe('loadConfig', () => {
-  test('returns null when file does not exist', async () => {});
+  test('returns null when file does not exist', async () => {
+    expect(await loadConfig(paths.config)).toBeNull();
+  });
 
   test('round-trips a valid config', async () => {
     await initMonadHome(paths);
@@ -584,7 +591,11 @@ describe('loadConfig', () => {
       await loadConfig(paths.config);
       throw new Error('expected loadConfig to throw');
     } catch (err) {
-      const _message = err instanceof Error ? err.message : String(err);
+      const message = err instanceof Error ? err.message : String(err);
+      expect(message).toContain('config.json has invalid fields');
+      expect(message).toContain('| Path');
+      expect(message).toContain('| Issue');
+      expect(message).toContain('principal.id');
     }
   });
 
@@ -607,7 +618,10 @@ describe('loadConfig', () => {
       await loadConfig(paths.config);
       throw new Error('expected loadConfig to throw');
     } catch (err) {
-      const _message = err instanceof Error ? err.message : String(err);
+      const message = err instanceof Error ? err.message : String(err);
+      expect(message).toContain('profile.json has invalid fields');
+      expect(message).toContain('model.providers');
+      expect(message).toContain('url must be http(s)');
     }
   });
 
@@ -682,9 +696,13 @@ describe('loadConfig', () => {
 });
 
 describe('tryParseConfig', () => {
-  test('returns null for corrupt data', async () => {});
+  test('returns null for corrupt data', async () => {
+    expect(await tryParseConfig({ version: 1, principal: { id: 'bad' } })).toBeNull();
+  });
 
-  test('returns MonadConfig for valid fixture', async () => {});
+  test('returns MonadConfig for valid fixture', async () => {
+    expect(await tryParseConfig(CONFIG_V1_FIXTURE)).toEqual(monadConfigSchema.parse(CONFIG_V1_FIXTURE));
+  });
 
   test('openaiCompat inbound approval defaults to local (fail-closed, not auto-approve)', () => {
     expect(createDefaultConfig('prn_x00000000000', 'tester').openaiCompat.approval).toBe('local');
@@ -693,23 +711,29 @@ describe('tryParseConfig', () => {
 
 describe('editor JSON schemas', () => {
   test('runtime schema content is valid JSON schema payloads', () => {
-    const _configSchema = JSON.parse(SCHEMA_CONTENT) as { $schema?: string; properties?: Record<string, unknown> };
-    const _profileSchema = JSON.parse(PROFILE_SCHEMA_CONTENT) as {
+    const configSchema = JSON.parse(SCHEMA_CONTENT) as { $schema?: string; properties?: Record<string, unknown> };
+    const profileSchema = JSON.parse(PROFILE_SCHEMA_CONTENT) as {
       $schema?: string;
       properties?: Record<string, unknown>;
     };
+
+    expect(configSchema.$schema).toContain('json-schema.org');
+    expect(profileSchema.$schema).toContain('json-schema.org');
   });
 });
 
 // ── mcpServers (external MCP servers connected at startup) ──────────────────────
 
 describe('mcpServers config', () => {
-  test('createDefaultConfig starts with no MCP servers', () => {});
+  test('createDefaultConfig starts with no MCP servers', () => {
+    expect(createDefaultConfig('prn_x00000000000', 'tester').mcpServers).toEqual([]);
+  });
 
   test('a config written before the field still parses, defaulting to []', async () => {
     const cfg = createDefaultConfig('prn_x00000000000', 'tester') as Record<string, unknown>;
     delete cfg.mcpServers; // simulate an older config on disk
-    const _parsed = await tryParseConfig(cfg);
+    const parsed = await tryParseConfig(cfg);
+    expect(parsed?.mcpServers).toEqual([]);
   });
 
   test('mcpServerSchema accepts a stdio server spec', () => {
@@ -886,6 +910,7 @@ describe('network.transport', () => {
       const p = await setTransport('uds');
       const conn = await resolveClientConn();
       expect(conn.unixSocket).toBe(p.sock);
+      expect(conn.baseUrl).toContain('127.0.0.1');
     });
 
     test('tcp → no unix socket (HTTPS over loopback)', async () => {

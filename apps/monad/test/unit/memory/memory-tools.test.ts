@@ -29,17 +29,19 @@ test('memory: remember → recall → renderNotes → forget', async () => {
   const store = memStore();
   const { remember, recall, forget } = tools(store);
 
-  await remember.run({ key: 'deploy', value: 'eu-west-1' }, ctx('ses_100000000000'));
-  await remember.run({ key: 'owner', value: 'alice' }, ctx('ses_100000000000'));
+  await remember.run({ key: 'deploy', value: 'eu-west-1' }, ctx('ses_1'));
+  await remember.run({ key: 'owner', value: 'alice' }, ctx('ses_1'));
 
-  expect((await recall.run({ key: 'deploy' }, ctx('ses_100000000000'))).metadata as { value: string | null }).toEqual({
+  expect((await recall.run({ key: 'deploy' }, ctx('ses_1'))).metadata as { value: string | null }).toEqual({
     value: 'eu-west-1'
   });
 
-  const _rendered = renderNotes(store, 'ses_100000000000');
+  const rendered = renderNotes(store, 'ses_1');
+  expect(rendered).toContain('deploy: eu-west-1');
+  expect(rendered).toContain('owner: alice');
 
-  await forget.run({ key: 'deploy' }, ctx('ses_100000000000'));
-  expect((await recall.run({ key: 'deploy' }, ctx('ses_100000000000'))).metadata as { value: string | null }).toEqual({
+  await forget.run({ key: 'deploy' }, ctx('ses_1'));
+  expect((await recall.run({ key: 'deploy' }, ctx('ses_1'))).metadata as { value: string | null }).toEqual({
     value: null
   });
 });

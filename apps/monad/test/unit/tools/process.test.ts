@@ -235,8 +235,13 @@ test('logs and wait can strip ANSI sequences', async () => {
   );
   const waited = await waitProcess({ id, pattern: 'READY', match: 'regex', stripAnsi: true, timeoutMs: 1000 }, ctx);
   expect(waited.matched).toBe(true);
-  const _raw = await readProcessLogs({ id }, ctx);
-  const _stripped = await readProcessLogs({ id, stripAnsi: true }, ctx);
+  expect(waited.stdout).toContain('READY');
+  expect(waited.stdout).not.toContain('\x1b');
+  const raw = await readProcessLogs({ id }, ctx);
+  const stripped = await readProcessLogs({ id, stripAnsi: true }, ctx);
+  expect(raw.stdout).toContain('\x1b[31m');
+  expect(stripped.stdout).toContain('READY');
+  expect(stripped.stdout).not.toContain('\x1b');
 });
 
 test.skipIf(process.platform === 'win32')('write supports structured keys', async () => {

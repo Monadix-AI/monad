@@ -11,25 +11,25 @@ function args(policy: Partial<SandboxPolicy>): string[] {
 // ── baseline flags ───────────────────────────────────────────────────────────
 
 test('always includes isolation flags', () => {
-  const _a = args({});
+  expect(args({})).toEqual(expect.arrayContaining(['--die-with-parent', '--new-session', '--unshare-pid']));
 });
 
 test('always mounts /dev /proc /run', () => {
-  const _a = args({});
+  expect(args({})).toEqual(expect.arrayContaining(['--dev', '/dev', '--proc', '/proc', '--tmpfs', '/run']));
 });
 
 // ── network ──────────────────────────────────────────────────────────────────
 
 test('net:none adds --unshare-net', () => {
-  const _a = args({ net: 'none' });
+  expect(args({ net: 'none' })).toContain('--unshare-net');
 });
 
 test('net:filtered does NOT add --unshare-net (child must reach host proxy)', () => {
-  const _a = args({ net: { allowProxyPort: 9999 } });
+  expect(args({ net: { allowProxyPort: 9999 } })).not.toContain('--unshare-net');
 });
 
 test('net:unrestricted does not add --unshare-net', () => {
-  const _a = args({ net: 'unrestricted' });
+  expect(args({ net: 'unrestricted' })).not.toContain('--unshare-net');
 });
 
 // ── filesystem confinement ───────────────────────────────────────────────────

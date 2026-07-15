@@ -84,11 +84,14 @@ describe('writeAgentBody / loadAgentBody / deleteAgentDir', () => {
     expect(await loadAgentBody(dir, 'research-bot')).toBe('Be thorough.');
   });
 
-  test('absent agent dir loads as undefined (valid empty-prompt agent)', async () => {});
+  test('absent agent dir loads as undefined (valid empty-prompt agent)', async () => {
+    expect(await loadAgentBody(dir, 'missing')).toBeUndefined();
+  });
 
   test('delete removes the dir, load then undefined', async () => {
     await writeAgentBody(dir, 'temp', { name: 'Temp' }, 'x');
     await deleteAgentDir(dir, 'temp');
+    expect(await loadAgentBody(dir, 'temp')).toBeUndefined();
   });
 
   test('traversal dir rejected on write', async () => {

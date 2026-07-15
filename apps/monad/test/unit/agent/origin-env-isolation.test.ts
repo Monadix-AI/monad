@@ -55,8 +55,12 @@ test('system prompt renders exactly the four daemon environment keys', async () 
 
   await loop.runBlock(newId('ses') as SessionId, 'hello');
 
-  const _content = allContent(requests);
+  const content = allContent(requests);
   // The four daemon-supplied fields must appear.
+  expect(content).toContain('date: 2026-06-19');
+  expect(content).toContain('os: linux');
+  expect(content).toContain('cwd: /home/user/.monad/workspace');
+  expect(content).toContain('sandbox:');
 });
 
 test('system prompt contains no origin.env field names or PII patterns', async () => {
@@ -110,6 +114,8 @@ test('adding an origin.env field to AgentEnvironment WOULD render it — proving
 
   await loop.runBlock(newId('ses') as SessionId, 'hello');
 
-  const _content = allContent(requests);
+  const content = allContent(requests);
   // Confirm the leak would be visible (the index signature renders all keys).
+  expect(content).toContain('ip: 192.168.1.42');
+  expect(content).toContain('userAgent: Mozilla/5.0');
 });

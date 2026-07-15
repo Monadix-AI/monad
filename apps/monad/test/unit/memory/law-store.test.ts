@@ -73,11 +73,13 @@ test('setContradictions flags laws and replaceLaws clears the flag', () => {
     return law.id;
   };
   const neverNodeId = idOf('never Node');
-  const _darkModeId = idOf('dark mode');
+  const darkModeId = idOf('dark mode');
+  expect(s.listLaws(['agent:a1']).find((l) => l.id === neverNodeId)?.contradictedBy).toBeNull();
 
   s.setContradictions('agent:a1', new Map([[neverNodeId, 'now uses Node']]));
   const flagged = s.listLaws(['agent:a1']);
   expect(flagged.find((l) => l.id === neverNodeId)?.contradictedBy).toBe('now uses Node');
+  expect(flagged.find((l) => l.id === darkModeId)?.contradictedBy).toBeNull(); // others untouched
 
   // a fresh setContradictions clears the prior flag (resolved contradiction)
   s.setContradictions('agent:a1', new Map());
@@ -86,6 +88,7 @@ test('setContradictions flags laws and replaceLaws clears the flag', () => {
   // re-deriving the scope also clears flags
   s.setContradictions('agent:a1', new Map([[neverNodeId, 'x']]));
   s.replaceLaws('agent:a1', [{ scope: 'agent:a1', statement: 'never Node', confidence: 0.9 }]);
+  expect(s.listLaws(['agent:a1'])[0]?.contradictedBy).toBeNull();
 });
 
 test('replacing one scope leaves others intact', () => {

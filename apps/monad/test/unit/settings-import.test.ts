@@ -603,7 +603,8 @@ test('replace updates existing agent instead of adding duplicate', async () => {
     expect(imported?.id).toBe('agt_existing0000');
     expect(imported?.description).toBe('updated');
     expect(imported?.model).toBe('claude-3');
-    const _prompt = await Bun.file(join(paths.agents, 'reviewer', 'AGENT.md')).text();
+    const prompt = await Bun.file(join(paths.agents, 'reviewer', 'AGENT.md')).text();
+    expect(prompt).toContain('Updated prompt.');
   } finally {
     await cleanup();
   }
@@ -676,8 +677,10 @@ test('apply skips selected item when preview hash is missing', async () => {
       allSafe: false,
       hashes: {}
     });
+    expect(result.applied).toEqual([]);
     expect(result.skipped).toContainEqual({ id: 'mcpServers:echo', reason: 'missing preview hash for selected item' });
-    const _cfg = await loadAll(paths.config, paths.profile);
+    const cfg = await loadAll(paths.config, paths.profile);
+    expect(cfg?.mcpServers).toEqual([]);
   } finally {
     await cleanup();
   }
@@ -725,8 +728,10 @@ test('apply skips selected item when preview hash changed', async () => {
       allSafe: false,
       hashes: { 'mcpServers:echo': item?.hash ?? '' }
     });
+    expect(result.applied).toEqual([]);
     expect(result.skipped).toContainEqual({ id: 'mcpServers:echo', reason: 'preview item changed since selection' });
-    const _cfg = await loadAll(paths.config, paths.profile);
+    const cfg = await loadAll(paths.config, paths.profile);
+    expect(cfg?.mcpServers).toEqual([]);
   } finally {
     await cleanup();
   }
@@ -812,7 +817,7 @@ test('skill import skips directories above the import size limit', async () => {
     const mod = createSettingsImportModule({ paths });
     const preview = await mod.preview({ from: 'codex', path: codex, replace: false });
     const item = preview.items.find((i) => i.id === 'skills:heavy');
-    const _result = await mod.apply({
+    const result = await mod.apply({
       from: 'codex',
       path: codex,
       replace: false,
@@ -820,6 +825,7 @@ test('skill import skips directories above the import size limit', async () => {
       allSafe: false,
       hashes: { 'skills:heavy': item?.hash ?? '' }
     });
+    expect(result.skipped[0]?.reason).toContain('skill import is too large');
     expect(await Bun.file(join(paths.skills, 'heavy', 'SKILL.md')).exists()).toBe(false);
   } finally {
     await cleanup();

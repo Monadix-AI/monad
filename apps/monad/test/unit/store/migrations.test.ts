@@ -179,12 +179,16 @@ test('runtime migrator creates the regular schema and partial indexes', () => {
   const indexedSql = sqlite
     .prepare("SELECT name, sql FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL")
     .all() as Array<{ name: string; sql: string }>;
-  for (const name of partialIndexes) {
-    const index = indexedSql.find((entry) => entry.name === name);
-    expect(index).toBeDefined();
-    if (!index) throw new Error(`missing partial index: ${name}`);
-    expect(index.sql.toUpperCase()).toContain('WHERE');
-  }
+  expect(
+    partialIndexes.map((name) => ({
+      hasPredicate:
+        indexedSql
+          .find((entry) => entry.name === name)
+          ?.sql.toUpperCase()
+          .includes('WHERE') ?? false,
+      name
+    }))
+  ).toEqual(partialIndexes.map((name) => ({ hasPredicate: true, name })));
 });
 
 test('runtime migrator applies the custom FTS migration and stays idempotent', () => {

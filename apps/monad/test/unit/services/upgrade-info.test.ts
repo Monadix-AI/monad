@@ -77,6 +77,7 @@ test('upgrade info monitor ignores malformed cache and empty release payloads', 
   await writeFile(join(paths.cache, 'upgrade-info.json'), '{bad json');
   globalThis.fetch = (async () => response({})) as unknown as typeof fetch;
 
-  const _monitor = await createUpgradeInfoMonitor(paths);
+  const monitor = await createUpgradeInfoMonitor(paths);
   await Bun.sleep(20);
+  expect(monitor.getUpgradeInfo()).toBeNull();
 });

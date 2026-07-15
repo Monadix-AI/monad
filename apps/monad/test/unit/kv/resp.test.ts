@@ -44,8 +44,12 @@ describe('encoders', () => {
 });
 
 describe('parseCommand', () => {
-  test('returns null for empty buffer', () => {});
-  test('returns null for incomplete', () => {});
+  test('returns null for empty buffer', () => {
+    expect(parseCommand(Buffer.alloc(0))).toBeNull();
+  });
+  test('returns null for incomplete', () => {
+    expect(parseCommand(Buffer.from('*1\r\n$4\r\nPI'))).toBeNull();
+  });
   test('parses PING array', () => {
     const r = parseCommand(Buffer.from('*1\r\n$4\r\nPING\r\n'));
     expect(r?.args).toEqual(['PING']);

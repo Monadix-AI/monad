@@ -35,5 +35,6 @@ test('since() replays buffered events after the cursor, retire() clears them', (
 });
 
 test('since() on an unknown session returns empty (falls back to durable log)', () => {
-  const _cache = new RoundCache();
+  const cache = new RoundCache();
+  expect(cache.since(newId('ses') as SessionId, newId('evt'))).toEqual([]);
 });

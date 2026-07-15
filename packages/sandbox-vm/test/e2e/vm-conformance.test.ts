@@ -95,7 +95,6 @@ describe.skipIf(!ENABLED)('net:none confinement (fs escape, credential, privileg
     const stdout = drain(proc.stdout);
 
     expect(proc.stderr).toBeUndefined();
-    expect(proc.terminal).toBeDefined();
     await proc.terminal?.resize(132, 44);
     await proc.terminal?.write('hello-pty\n');
 

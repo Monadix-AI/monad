@@ -26,8 +26,8 @@ async function runSearch(tool: ReturnType<typeof createToolSearchTool>, input: u
 }
 
 test('returns matching tools with their schemas', async () => {
-  const tools = [makeTool('file_read', 'reads a file'), makeTool('net_fetch', 'fetches a URL')];
-  const model = makeModel('file_read');
+  const tools = [makeTool('fs_read', 'reads a file'), makeTool('net_fetch', 'fetches a URL')];
+  const model = makeModel('fs_read');
   const builtinNames = new Set<string>();
 
   const tool = createToolSearchTool({
@@ -38,7 +38,10 @@ test('returns matching tools with their schemas', async () => {
     builtinToolNames: builtinNames
   });
 
-  const _result = await runSearch(tool, { query: 'read a file' });
+  const result = await runSearch(tool, { query: 'read a file' });
+  expect(result).toContain('## fs_read');
+  expect(result).toContain('reads a file');
+  expect(result).toContain('tool_call');
 });
 
 test('filters out builtin tools from the catalog search', async () => {
@@ -54,8 +57,10 @@ test('filters out builtin tools from the catalog search', async () => {
     builtinToolNames: builtinNames
   });
 
-  const _result = await runSearch(tool, { query: 'do something' });
+  const result = await runSearch(tool, { query: 'do something' });
   // builtin_a is excluded from catalog → only mcp_tool can be returned
+  expect(result).not.toContain('## builtin_a');
+  expect(result).toContain('## mcp_tool');
 });
 
 test('returns "no tools found" message when LLM returns no matches', async () => {
@@ -71,7 +76,8 @@ test('returns "no tools found" message when LLM returns no matches', async () =>
     builtinToolNames: builtinNames
   });
 
-  const _result = await runSearch(tool, { query: 'something impossible' });
+  const result = await runSearch(tool, { query: 'something impossible' });
+  expect(result).toContain('No tools found');
 });
 
 test('returns early when no deferrable tools are registered', async () => {
@@ -86,7 +92,8 @@ test('returns early when no deferrable tools are registered', async () => {
     builtinToolNames: builtinNames
   });
 
-  const _result = await runSearch(tool, { query: 'find something' });
+  const result = await runSearch(tool, { query: 'find something' });
+  expect(result).toContain('No additional tools');
   expect(model.complete).not.toHaveBeenCalled();
 });
 
@@ -104,13 +111,14 @@ test('respects topK limit', async () => {
     topK: 2
   });
 
-  const _result = await runSearch(tool, { query: 'all tools' });
+  const result = await runSearch(tool, { query: 'all tools' });
   // Only 2 tools should appear
+  expect(result).toContain('Found 2 tool(s)');
+  expect(result).not.toContain('## tool_c');
 });
 
 test('passes cache:true on the system message for prefix caching', async () => {
   const tools = [makeTool('cached_tool')];
-  const _model = makeModel('cached_tool');
   const builtinNames = new Set<string>();
   const completeSpy = mock(async (_req: { messages: { role: string; cache?: boolean }[] }) => {
     return { text: 'cached_tool', usage: { inputTokens: 0, outputTokens: 0 } };

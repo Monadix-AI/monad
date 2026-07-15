@@ -57,9 +57,9 @@ for (const kind of TRANSPORTS) {
       expect(res.status).toBe(200);
       const body = (await res.json()) as ListExternalAgentRuntimesResponse;
       expect(body.sessions.map((s) => s.id)).toEqual(['exa_rt1000000000', 'exa_rt2000000000']);
-      expect(body.nextCursor).toBeDefined();
 
       const nextRes = await t.fetch(`/v1/external-agent-runtimes?limit=2&before=${body.nextCursor}`);
+      expect(nextRes.status).toBe(200);
       const nextBody = (await nextRes.json()) as ListExternalAgentRuntimesResponse;
       expect(nextBody.sessions.map((s) => s.id)).toEqual(['exa_rt0000000000']);
       expect(nextBody.nextCursor).toBeUndefined();
@@ -69,8 +69,12 @@ for (const kind of TRANSPORTS) {
       const res = await t.fetch('/v1/external-agent-session-summaries?limit=1');
       expect(res.status).toBe(200);
       const body = (await res.json()) as ListExternalAgentRuntimesResponse;
-      expect(body.sessions.length).toBe(1);
-      expect(body.nextCursor).toBeDefined();
+      expect(body.sessions.map((session) => session.id)).toEqual(['exa_rt0000000000']);
+
+      const nextRes = await t.fetch(`/v1/external-agent-session-summaries?limit=1&before=${body.nextCursor}`);
+      expect(nextRes.status).toBe(200);
+      const nextBody = (await nextRes.json()) as ListExternalAgentRuntimesResponse;
+      expect(nextBody.sessions.map((session) => session.id)).toEqual(['exa_rt1000000000']);
     });
   });
 }

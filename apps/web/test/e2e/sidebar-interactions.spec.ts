@@ -485,11 +485,9 @@ test.describe('workspace sidebar interactions', () => {
     await expect
       .poll(() => Boolean(state.sessions.find((session) => session.title === draft && session.projectId === null)))
       .toBe(true);
-    const created = state.sessions.find((session) => session.title === draft && session.projectId === null);
-    expect(created).toBeTruthy();
-    await expect(page).toHaveURL(new RegExp(`/sessions/${created?.id}$`));
-    await expect(page.getByRole('link', { name: created?.title })).toHaveCount(1);
-    expect(state.sendMessageRequests).toContainEqual({ sessionId: created?.id, text: draft });
+    await expect(page).toHaveURL(/\/sessions\/ses_newchat00015$/);
+    await expect(page.getByRole('link', { name: draft })).toHaveCount(1);
+    expect(state.sendMessageRequests).toContainEqual({ sessionId: 'ses_newchat00015', text: draft });
     expect(state.invalidSessionRequests).toEqual([]);
   });
 
@@ -544,9 +542,7 @@ test.describe('workspace sidebar interactions', () => {
     await page.getByRole('textbox', { name: 'Project name' }).fill('Created From Sidebar');
     await page.locator('#new-project-cwd').fill('/tmp/created-from-sidebar');
     await page.getByRole('button', { name: 'Create project' }).click();
-    const createdProject = state.projects.find((project) => project.title === 'Created From Sidebar');
-    expect(createdProject).toBeTruthy();
-    await expect(page.locator(`a[href="/workspace/${createdProject?.id}"]`)).toBeVisible();
+    await expect(page.locator('a[href="/workspace/prj_created_3"]')).toHaveText('Created From Sidebar');
     expect(state.createProjectRequests).toContainEqual({
       cwd: '/tmp/created-from-sidebar',
       title: 'Created From Sidebar'

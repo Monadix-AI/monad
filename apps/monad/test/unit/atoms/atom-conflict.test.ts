@@ -90,6 +90,7 @@ test('cross-pack channel-type clash: namespace-coexist — both addressable, bar
   expect(channels.get('shared')).toBe(channels.get('first__shared'));
   expect(channels.has('other')).toBe(true);
   expect(providers).toEqual(['pb']);
+  expect(warnings.some((w) => w.includes('shared') && w.includes('first'))).toBe(true);
 });
 
 test('onCollision emits structured conflicts for the UI (channel + connector)', async () => {
@@ -148,6 +149,7 @@ test('cross-pack connector-name clash: first wins, second rejected + warned', as
   });
   // namespace-coexist: a's t1 wins the bare name; b's t1 is still reachable as 'b__t1'; b's t2 is bare
   expect(registered.sort()).toEqual(['b__t1', 't1', 't2']);
+  expect(warnings.some((w) => w.includes('connector') && w.includes('t1') && w.includes('a'))).toBe(true);
 });
 
 test('cross-pack connector-name clash: a pin makes the bare name resolve to the pinned pack', async () => {

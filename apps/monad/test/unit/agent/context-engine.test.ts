@@ -133,7 +133,8 @@ test('SummarizingContextEngine fires background compaction at soft threshold wit
   const msgs = [sys('s'), user(big('A')), assistant('recent')];
 
   // Soft-threshold: returns immediately without blocking, model call queued in background.
-  const _out = await engine.prepare(msgs, ctx);
+  const out = await engine.prepare(msgs, ctx);
+  expect(out).toEqual(msgs);
   expect(calls()).toBe(0); // compaction is in-flight, not yet resolved
 
   // Yield to the microtask queue so the background promise resolves.
@@ -169,7 +170,8 @@ test('SummarizingContextEngine injects summary as a new system message when none
   // No system message — the withSummary branch for systems.length === 0.
   const msgs = [user(big('OLD')), assistant('recent')];
   const out = await engine.prepare(msgs, ctx);
-  const _injected = out.find((m) => m.role === 'system');
+  const injected = out.find((m) => m.role === 'system');
+  expect(String(injected?.content)).toContain('NOTE');
   expect(out.some((m) => m.content === 'recent')).toBe(true);
 });
 

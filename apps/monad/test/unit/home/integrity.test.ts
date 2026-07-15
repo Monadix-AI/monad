@@ -189,8 +189,10 @@ describe('checkAndRepair', () => {
     const report = await checkAndRepair(paths, store);
     store.close();
 
-    const _repaired = await loadAll(paths.config, paths.profile);
+    const repaired = await loadAll(paths.config, paths.profile);
     expect(report.profile).toBe('repaired');
+    expect(repaired?.agent.agents[0]?.modelAlias).toBeUndefined();
+    expect(repaired?.agent.agents[0]?.model).toBeUndefined();
   });
 
   test('fails startup health check when a profile references a missing provider', async () => {

@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from 'bun:test';
-import { mkdtempSync, realpathSync } from 'node:fs';
+import { mkdtempSync, readFileSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -56,7 +56,7 @@ test('tlsTerminate injects CA-trust env; credentials give the child a sentinel n
     credentials: [{ name: 'TOKEN', value: 'supersecret', injectHosts: ['example.com'] }]
   });
   const env = m.childEnv;
-  expect(env.NODE_EXTRA_CA_CERTS).toBeTruthy();
+  expect(readFileSync(env.NODE_EXTRA_CA_CERTS ?? '', 'utf8')).toStartWith('-----BEGIN CERTIFICATE-----');
   // The child's env var holds the sentinel, never the real secret.
   expect(env.TOKEN).toStartWith('fake_value_');
   expect(env.TOKEN).not.toBe('supersecret');

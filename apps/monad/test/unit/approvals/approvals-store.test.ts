@@ -46,22 +46,25 @@ test('persists global + agent rules across a reload', async () => {
 test('a corrupt file loads as empty (fail-closed)', async () => {
   const file = tmpFile();
   await Bun.write(file, '{ this is not valid json');
-  const _store = await ApprovalStore.load(file);
+  const store = await ApprovalStore.load(file);
+  expect(store.all()).toEqual([]);
 });
 
 test('a schema-mismatched file loads as empty (fail-closed)', async () => {
   const file = tmpFile();
   await Bun.write(file, JSON.stringify({ version: 99, global: 'nope' }));
-  const _store = await ApprovalStore.load(file);
+  const store = await ApprovalStore.load(file);
+  expect(store.all()).toEqual([]);
 });
 
 test('remove deletes by id and prunes empty agent buckets', async () => {
   const file = tmpFile();
   const store = await ApprovalStore.load(file);
-  await store.add(rule('a1', { scope: 'agent', agentId: 'agt_100000000000' }));
+  await store.add(rule('a1', { scope: 'agent', agentId: 'agt_1' }));
   expect(await store.remove('a1')).toBe(true);
   expect(await store.remove('a1')).toBe(false);
-  const _reloaded = await ApprovalStore.load(file);
+  const reloaded = await ApprovalStore.load(file);
+  expect(reloaded.forAgent('agt_1')).toEqual([]);
 });
 
 test('clear filters by scope/agent', async () => {

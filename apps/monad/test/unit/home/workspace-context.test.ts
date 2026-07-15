@@ -26,18 +26,27 @@ afterEach(async () => {
 });
 
 test('empty workspace falls back to shipped default slots', async () => {
-  const _slots = await loadWorkspacePromptSlots(workspace);
+  const slots = await loadWorkspacePromptSlots(workspace);
+  expect(slots.soul).toContain('# Identity');
+  expect(slots.agent).toContain('# Workspace Instructions');
+  expect(slots.user).toContain('# User');
 });
 
 test('unedited seeded files still provide default slot values', async () => {
   const paths = makePaths(testDir);
   await initMonadHome(paths);
-  const _slots = await loadWorkspacePromptSlots(paths.workspace);
+  const slots = await loadWorkspacePromptSlots(paths.workspace);
+  expect(slots.soul).toContain('# Identity');
+  expect(slots.agent).toContain('# Workspace Instructions');
+  expect(slots.user).toContain('# User');
 });
 
 test('injects edited files in precedence order (SOUL then AGENT)', async () => {
   await Bun.write(join(workspace, 'AGENT.md'), 'Always write tests.');
   await Bun.write(join(workspace, 'SOUL.md'), 'You are Hermes.');
+  const slots = await loadWorkspacePromptSlots(workspace);
+  expect(slots.soul).toBe('You are Hermes.');
+  expect(slots.agent).toBe('Always write tests.');
 });
 
 test('AGENTS.md is accepted as the AGENT.md alias', async () => {
@@ -53,6 +62,7 @@ test('AGENT.md wins over AGENTS.md when both exist', async () => {
 
 test('whitespace-only files fall back to defaults', async () => {
   await Bun.write(join(workspace, 'SOUL.md'), '   \n\n  ');
+  expect((await loadWorkspacePromptSlots(workspace)).soul).toContain('# Identity');
 });
 
 test('whitelist names cover SOUL, AGENT (+ AGENTS alias) and USER', () => {
@@ -62,4 +72,7 @@ test('whitelist names cover SOUL, AGENT (+ AGENTS alias) and USER', () => {
 test('injects USER.md as part of the static core (after SOUL/AGENT)', async () => {
   await Bun.write(join(workspace, 'SOUL.md'), 'You are Hermes.');
   await Bun.write(join(workspace, 'USER.md'), 'User deploys with Bun.');
+  const slots = await loadWorkspacePromptSlots(workspace);
+  expect(slots.soul).toBe('You are Hermes.');
+  expect(slots.user).toBe('User deploys with Bun.');
 });

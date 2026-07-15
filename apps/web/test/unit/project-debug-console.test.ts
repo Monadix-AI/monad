@@ -3,6 +3,7 @@ import type { ProjectDebugTraceEntry } from '../../src/lib/project-debug-trace';
 import { expect, test } from 'bun:test';
 
 import {
+  debugTraceText,
   filterDebugTraceEntries,
   formatDebugTimestamp,
   logRecordToDebugTrace
@@ -43,10 +44,16 @@ test('project debug console filters trace entries by layer and label', () => {
   expect(filterDebugTraceEntries(entries, 'error').map((item) => item.label)).toEqual(['POST /x']);
 });
 
-test('project debug console renders entry data as formatted JSON', () => {});
+test('project debug console renders entry data as formatted JSON', () => {
+  expect(debugTraceText(entry({ data: { chunk: '\u001b[?25l' } }))).toContain('"chunk":');
+});
 
 test('project debug console formats timestamps in the requested time zone', () => {
-  const _formatted = formatDebugTimestamp('2026-06-29T10:00:00.123Z', 'Asia/Shanghai');
+  const formatted = formatDebugTimestamp('2026-06-29T10:00:00.123Z', 'Asia/Shanghai');
+
+  expect(formatted).toContain('18:00:00');
+  expect(formatted).not.toContain('.123');
+  expect(formatted).not.toContain('GMT+8');
 });
 
 test('project debug console maps logger records to log trace entries', () => {

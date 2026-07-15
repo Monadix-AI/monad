@@ -229,6 +229,7 @@ test('AfterTool sees ok=false and the error when a tool throws', async () => {
     })
   }).runBlock(sid(), 'go');
   expect(seen.ok).toBe(false);
+  expect(seen.error).toContain('kaboom');
 });
 
 test('AfterTurn fires with reason=error when the turn fails', async () => {
@@ -276,6 +277,8 @@ test('AfterModel does NOT fire on a failed model call — failure surfaces via A
   } catch {
     // expected
   }
+  expect(seen).toContain('BeforeModel'); // the model call was attempted
+  expect(seen).not.toContain('AfterModel'); // …but it failed, so AfterModel (success-only) is skipped
 });
 
 test('an aborted streaming turn reports AfterTurn reason=aborted', async () => {

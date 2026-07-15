@@ -89,7 +89,9 @@ test('agent.reasoning becomes an agent_thought_chunk', () => {
   });
 });
 
-test('empty agent.token delta yields no update', () => {});
+test('empty agent.token delta yields no update', () => {
+  expect(eventToSessionUpdate(evt('agent.token', { messageId: 'msg_100000000000', delta: '', index: 0 }))).toBeNull();
+});
 
 test('tool.called becomes a tool_call with kind + rawInput', () => {
   const u = eventToSessionUpdate(evt('tool.called', { toolCallId: 'tc_1', tool: 'file_write', input: { path: '/x' } }));
@@ -103,9 +105,10 @@ test('tool.called becomes a tool_call with kind + rawInput', () => {
     locations: [{ path: '/x' }]
   });
   // No `path` arg → no locations.
-  const _noPath = eventToSessionUpdate(
+  const noPath = eventToSessionUpdate(
     evt('tool.called', { toolCallId: 'tc_2', tool: 'web_fetch', input: { url: 'u' } })
   );
+  expect((noPath as { locations?: unknown }).locations).toBeUndefined();
 });
 
 test('tool.progress becomes an in_progress tool_call_update with cumulative output', () => {
@@ -148,7 +151,11 @@ test('agent.message surfaces usage_update only when usage present', () => {
   expect(u).toEqual({ sessionUpdate: 'usage_update', used: 10, size: 10 });
 });
 
-test('approval events produce no streaming update', () => {});
+test('approval events produce no streaming update', () => {
+  expect(
+    eventToSessionUpdate(evt('tool.approval_requested', { requestId: 'req_1', tool: 'shell_exec', input: {} }))
+  ).toBeNull();
+});
 
 test('sessions.updated with a title becomes a session_info_update', () => {
   expect(eventToSessionUpdate(evt('session.updated', { title: 'Renamed', state: 'active' }))).toEqual({
@@ -158,7 +165,11 @@ test('sessions.updated with a title becomes a session_info_update', () => {
   // state-only update (no title) → nothing to push.
 });
 
-test('empty agent.reasoning delta yields no update', () => {});
+test('empty agent.reasoning delta yields no update', () => {
+  expect(
+    eventToSessionUpdate(evt('agent.reasoning', { messageId: 'msg_100000000000', delta: '', index: 0 }))
+  ).toBeNull();
+});
 
 test('agent.message falls back to inputTokens + outputTokens when totalTokens is absent', () => {
   const u = eventToSessionUpdate(
@@ -182,7 +193,9 @@ test('promptToAttachments extracts image blocks as Uint8Array attachments', () =
   expect(out[1]?.mediaType).toBe('image/jpeg');
 });
 
-test('promptToAttachments returns empty array when no image blocks are present', () => {});
+test('promptToAttachments returns empty array when no image blocks are present', () => {
+  expect(promptToAttachments([{ type: 'text', text: 'hello' }])).toEqual([]);
+});
 
 // ── promptToText edge cases ───────────────────────────────────────────────────
 

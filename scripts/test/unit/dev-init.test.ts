@@ -167,20 +167,23 @@ test('buildDevInitSummary groups the initialized dev environment for terminal ou
 });
 
 test('dev-init summary can be colorized for terminal output', () => {
-  const _lines = buildDevInitSummary(
+  const lines = buildDevInitSummary(
     {
       apiKeySet: true,
       monadHome: '/repo/.dev/.monad',
       ports: {
         AI_SDK_DEVTOOLS_PORT: '7401',
-        MONAD_KV_UI_PORT: '6401',
         MONAD_HTTP_PORT: '53001',
+        MONAD_KV_UI_PORT: '6401',
         MONAD_PORT: '52001',
         WEB_PORT: '3101'
       }
     },
     { color: true }
   );
+
+  expect(lines.join('\n')).toContain('\u001b[');
+  expect(lines.join('\n')).toContain('Monad dev init');
 });
 
 test('dev-init step frames support generic progress animation', () => {
@@ -251,5 +254,6 @@ test('generated artifact status frames emit one final visible line per artifact'
 });
 
 test('dev-init regenerates Codex app-server protocol artifacts', async () => {
-  const _source = await Bun.file(new URL('../../dev-init.ts', import.meta.url)).text();
+  const source = await Bun.file(new URL('../../dev-init.ts', import.meta.url)).text();
+  expect(source).toContain('scripts/generate-codex-app-server-protocol.ts');
 });

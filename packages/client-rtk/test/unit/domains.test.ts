@@ -170,7 +170,8 @@ test('deleteAgent: rolls back the optimistic update on failure', async () => {
 
   await store.dispatch(listAgentsApi.endpoints.listAgents.initiate(undefined));
 
-  const _res = await store.dispatch(deleteAgentApi.endpoints.deleteAgent.initiate('agent_del' as never));
+  const res = await store.dispatch(deleteAgentApi.endpoints.deleteAgent.initiate('agent_del' as never));
+  expect(res.error).toMatchObject({ message: 'forbidden' });
 });
 
 // ── agents: updateAgent (optimistic update) ────────────────────────────────────

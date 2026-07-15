@@ -180,7 +180,7 @@ test('Claude server errors project as agent-scoped system messages', () => {
 });
 
 test('external agent developer messages are projected only when explicitly enabled', () => {
-  const _hidden = __workplaceProjectMessageTest.buildProjectMessages({
+  const hidden = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
     externalAgentSessions: [],
     liveItems: [],
@@ -214,10 +214,11 @@ test('external agent developer messages are projected only when explicitly enabl
     showDeveloperOnlyMessages: true
   });
 
-  expect(visible.find((message) => message.kind === 'developer')).toMatchObject({
-    id: 'external-agent-session-developer:exa_live00000000',
-    text: 'CLI stream available'
-  });
+  expect(hidden.map((message) => [message.kind, message.text])).toEqual([['system', 'joined the project']]);
+  expect(visible.map((message) => [message.kind, message.text])).toEqual([
+    ['system', 'joined the project'],
+    ['developer', 'CLI stream available']
+  ]);
 });
 
 test('external agent runtime lifecycle projects the current join per project member', () => {
@@ -294,7 +295,7 @@ test('managed external agent timeline messages use display names instead of runt
 });
 
 test('managed external agent reasoning-only streaming messages stay off the transcript wall', () => {
-  const _messages = __workplaceProjectMessageTest.buildProjectMessages({
+  const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
     externalAgentSessions: [],
     liveItems: [
@@ -312,10 +313,11 @@ test('managed external agent reasoning-only streaming messages stay off the tran
     liveTools: [],
     externalAgentDisplayNames: new Map([['pmem_codex_abcd1234', 'codex-reviewer']])
   });
+  expect(messages).toEqual([]);
 });
 
 test('managed external agent terminal reasoning-only messages stay off the transcript wall', () => {
-  const _messages = __workplaceProjectMessageTest.buildProjectMessages({
+  const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
     externalAgentSessions: [],
     liveItems: [
@@ -333,6 +335,7 @@ test('managed external agent terminal reasoning-only messages stay off the trans
     liveTools: [],
     externalAgentDisplayNames: new Map([['pmem_codex_abcd1234', 'codex-reviewer']])
   });
+  expect(messages).toEqual([]);
 });
 
 test('external agent live start projects joined without raw terminal output', () => {

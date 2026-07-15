@@ -93,12 +93,12 @@ test('surfaces content-scan flags (bundled script) in the consent prompt', async
 });
 
 test('surfaces install review warnings in the consent prompt before writing files', async () => {
-  let _info: { skills: string[]; source: string; warnings: string[] } | undefined;
+  let info: { skills: string[]; source: string; warnings: string[] } | undefined;
   const out = await installSkill(`github:acme/widget@${SHA}`, {
     skillsDir,
     fetch: fakeFetch({ 'SKILL.md': md('widget') }, SHA),
     consent: (next) => {
-      _info = next;
+      info = next;
       return false;
     },
     review: async ({ files, skills, source }) => {
@@ -110,6 +110,7 @@ test('surfaces install review warnings in the consent prompt before writing file
   });
 
   expect(out).toMatchObject({ installed: false, needsConsent: true, skills: ['widget'] });
+  expect(info?.warnings).toContain('install review flagged this skill: test risk');
   expect(await Bun.file(join(skillsDir, 'widget', 'SKILL.md')).exists()).toBe(false);
 });
 
@@ -214,7 +215,8 @@ test('github fetcher fails without git fallback for non-auth ref resolution erro
   const fetcher = createSkillFetcher();
   globalThis.fetch = Object.assign(
     async (input: string | URL | Request) => {
-      const _url = String(input);
+      const url = String(input);
+      expect(url).toContain('/repos/acme/widget/commits/main');
       return new Response('server error', { status: 500 });
     },
     { preconnect: realFetch.preconnect }
@@ -270,6 +272,7 @@ exit 0
   });
 
   expect(out.commit).toBe(SHA);
+  expect([...out.files.keys()]).toContain('pixel2motion/SKILL.md');
   await rm(binDir, { recursive: true, force: true });
 });
 

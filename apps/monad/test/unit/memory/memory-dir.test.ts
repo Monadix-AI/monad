@@ -71,6 +71,7 @@ test('readCore/writeCore expose the raw markdown (human-editable source of truth
   const md = freshDir();
   md.writeCore(GLOBAL, '# Memory\n\n- hand-written fact\n');
   expect(md.listFacts(GLOBAL).map((f) => f.content)).toEqual(['hand-written fact']);
+  expect(md.readCore(GLOBAL)).toContain('hand-written fact');
 });
 
 test('scope isolation: session/agent/global write to separate files', () => {
@@ -123,4 +124,6 @@ test('writes are atomic — the scope file carries frontmatter + bullets after e
   md.appendFact(GLOBAL, { content: 'fact one' });
   const raw = readFileSync(join(root, 'MEMORY_global.md'), 'utf8');
   expect(raw.startsWith('---')).toBe(true); // frontmatter block
+  expect(raw).toContain('name: global');
+  expect(raw).toContain('- fact one');
 });

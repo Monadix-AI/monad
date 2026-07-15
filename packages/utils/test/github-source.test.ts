@@ -1,5 +1,10 @@
 import { expect, test } from 'bun:test';
-import { githubSourceIdentity, parseGithubReleaseSource, parseGithubSource } from '@monad/utils';
+import {
+  githubSourceIdentity,
+  parseGithubReleaseSource,
+  parseGithubSource,
+  parseGithubSourceOrNull
+} from '@monad/utils';
 
 test('parseGithubSource handles shorthand, repo URLs, subdirectories, SKILL.md pages, and skill selectors', () => {
   expect(parseGithubSource('github:o/r@abc123')).toMatchObject({
@@ -27,7 +32,9 @@ test('parseGithubSource handles shorthand, repo URLs, subdirectories, SKILL.md p
   });
 });
 
-test('parseGithubSourceOrNull returns null for unsupported sources', () => {});
+test('parseGithubSourceOrNull returns null for unsupported sources', () => {
+  expect(parseGithubSourceOrNull('https://gitlab.com/acme/tools')).toBeNull();
+});
 
 test('githubSourceIdentity ignores ref but preserves repo path and skill selector', () => {
   expect(githubSourceIdentity(parseGithubSource('github:acme/skills@main/pixel2motion'))).toBe(

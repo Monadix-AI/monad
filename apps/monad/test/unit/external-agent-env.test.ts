@@ -61,4 +61,7 @@ test('resolveExternalAgentEnv resolves secret refs from auth and drops unresolva
   expect(resolved && 'MISSING' in resolved).toBe(false);
 });
 
-test('resolveExternalAgentEnv returns undefined for empty/undefined env', () => {});
+test('resolveExternalAgentEnv returns undefined for empty/undefined env', () => {
+  expect(resolveExternalAgentEnv(undefined, undefined)).toBeUndefined();
+  expect(resolveExternalAgentEnv({}, undefined)).toBeUndefined();
+});

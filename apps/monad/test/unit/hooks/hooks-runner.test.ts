@@ -106,8 +106,10 @@ test('SessionStart context is delivered to the first BeforeTurn, then cleared', 
   const r = runner({ SessionStart: [{ hooks: [{ command: `echo '{"additionalContext":"boot ctx"}'` }] }] });
   const start = await r.run(input('SessionStart'));
   expect(start.additionalContext).toEqual(['boot ctx']);
-  const _first = await r.run(input('BeforeTurn', { prompt: 'hi' }));
-  const _second = await r.run(input('BeforeTurn', { prompt: 'again' }));
+  const first = await r.run(input('BeforeTurn', { prompt: 'hi' }));
+  expect(first.additionalContext).toContain('boot ctx');
+  const second = await r.run(input('BeforeTurn', { prompt: 'again' }));
+  expect(second.additionalContext).not.toContain('boot ctx');
 });
 
 test('Stop continueWork surfaces on the decision', async () => {

@@ -46,7 +46,9 @@ test('every builtin provider carries a descriptor and a stream()', () => {
 });
 
 test('Vercel AI Gateway lets the SDK use its default endpoint instead of requiring a base URL', () => {
-  const _descriptor = PROVIDER_DESCRIPTORS['vercel-gateway'] as Record<string, unknown>;
+  const descriptor = PROVIDER_DESCRIPTORS['vercel-gateway'] as Record<string, unknown>;
+  expect(descriptor.defaultBaseUrl).toBeUndefined();
+  expect(descriptor.needsUrl).toBeUndefined();
 });
 
 test('Vercel AI Gateway listModels maps rich /v1/models metadata', async () => {
@@ -1053,6 +1055,7 @@ test('an openai-compatible preset targets the catalog default base URL', async (
     /* drain */
   }
   const base = PROVIDER_DESCRIPTORS.groq.defaultBaseUrl ?? '';
+  expect(base).toContain('api.groq.com');
   expect(seen.startsWith(base)).toBe(true);
 });
 

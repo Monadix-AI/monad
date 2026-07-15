@@ -37,7 +37,7 @@ describe('profile name encoding', () => {
   });
 
   test('no sessionId → no --profile flag', () => {
-    const _a = args({ writableRoots: [], net: 'none' });
+    expect(args({ writableRoots: [], net: 'none' })).not.toContain('--profile');
   });
 });
 
@@ -53,15 +53,15 @@ describe('arg structure', () => {
   });
 
   test('net:none → no --net-client', () => {
-    const _a = args({ writableRoots: [], net: 'none' });
+    expect(args({ writableRoots: [], net: 'none' })).not.toContain('--net-client');
   });
 
   test('net:filtered → --net-client', () => {
-    const _a = args({ writableRoots: [], net: { allowProxyPort: 12345 } });
+    expect(args({ writableRoots: [], net: { allowProxyPort: 12345 } })).toContain('--net-client');
   });
 
   test('net:unrestricted → --net-client', () => {
-    const _a = args({ writableRoots: [], net: 'unrestricted' });
+    expect(args({ writableRoots: [], net: 'unrestricted' })).toContain('--net-client');
   });
 
   test('writableRoots → one --writable per path', () => {

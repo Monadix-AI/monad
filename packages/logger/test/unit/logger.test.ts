@@ -161,8 +161,12 @@ describe('createLogger', () => {
       log.info('info event');
       log.error('error event');
 
-      const _infoLog = readFileSync(infoFile, 'utf8');
-      const _errorLog = readFileSync(errorFile, 'utf8');
+      const infoLog = readFileSync(infoFile, 'utf8');
+      const errorLog = readFileSync(errorFile, 'utf8');
+      expect(infoLog).toContain('info event');
+      expect(infoLog).toContain('error event');
+      expect(errorLog).not.toContain('info event');
+      expect(errorLog).toContain('error event');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -186,20 +190,17 @@ describe('formatPrettyMessage', () => {
 
   test('colors error HTTP status codes differently from success codes', async () => {
     const { formatPrettyMessage } = await import('../../src/index.ts');
-    const _success = formatPrettyMessage({
-      name: 'transport:http',
-      msg: 'call',
-      method: 'GET',
-      path: '/',
-      status: 200
-    });
-    const _serverError = formatPrettyMessage({
+    const success = formatPrettyMessage({ name: 'transport:http', msg: 'call', method: 'GET', path: '/', status: 200 });
+    const serverError = formatPrettyMessage({
       name: 'transport:http',
       msg: 'call',
       method: 'GET',
       path: '/',
       status: 500
     });
+
+    expect(success).toContain('\x1B[32m200\x1B[0m');
+    expect(serverError).toContain('\x1B[31m500\x1B[0m');
   });
 
   test('formats non-HTTP transport calls with method, result, and duration', async () => {
@@ -235,6 +236,7 @@ describe('debugLogPath', () => {
   test('defaults to OS temp dir with today date', async () => {
     const { debugLogPath } = await import('../../src/log-files.ts');
     const today = new Date().toISOString().slice(0, 10);
+    expect(debugLogPath).toContain('monad-debug-');
     expect(debugLogPath).toContain(today);
     expect(debugLogPath.startsWith(tmpdir())).toBe(true);
   });

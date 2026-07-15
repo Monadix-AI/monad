@@ -58,11 +58,13 @@ test('embedDim override wins over auto-detection', () => {
 });
 
 test('anthropic embedder is rejected (can not produce embeddings)', () => {
-  const _r = resolveMem0Models(cfg, auth, { embedder: 'claude' });
+  const r = resolveMem0Models(cfg, auth, { embedder: 'claude' });
+  expect(r.error).toContain("can't produce embeddings");
 });
 
 test('unknown model reference errors', () => {
-  const _r = resolveMem0Models(cfg, auth, { llm: 'nope' });
+  const r = resolveMem0Models(cfg, auth, { llm: 'nope' });
+  expect(r.error).toContain('LLM');
 });
 
 test('no embedding configured errors', () => {
@@ -74,7 +76,8 @@ test('no embedding configured errors', () => {
       )
     }
   } as unknown as MonadConfig;
-  const _r = resolveMem0Models(noEmb, auth, {});
+  const r = resolveMem0Models(noEmb, auth, {});
+  expect(r.error).toContain('no embedding model selected');
 });
 
 test('openrouter LLM maps to openai provider with default base URL', () => {

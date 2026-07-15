@@ -67,11 +67,19 @@ function preview() {
 
 test('import command is registered with settings synopsis', () => {
   const command = commands.find((c) => c.name === 'import');
+  expect(command?.synopsis).toContain('import settings');
   expect(command?.flags?.path?.type).toBe('string');
   expect(command?.flags?.apply?.type).toBe('boolean');
 });
 
-test('import command help metadata documents explicit-path and apply safety boundaries', () => {});
+test('import command help metadata documents explicit-path and apply safety boundaries', () => {
+  expect(importCommand.flags?.path?.description).toBe(
+    'explicit local file or directory to read; no parent-dir, home-dir, or network scanning'
+  );
+  expect(importCommand.flags?.apply?.description).toBe(
+    'write selected preview items; omitted means dry-run preview only'
+  );
+});
 
 test('import settings defaults to dry-run preview', async () => {
   let previewBody: unknown;
@@ -116,7 +124,13 @@ test('import settings human output is grouped as a table', async () => {
       }
     }
   };
-  const _output = await captureStdout(() => importCommand.run(ctx({ path: '/settings', from: 'codex' }, client)));
+  const output = await captureStdout(() => importCommand.run(ctx({ path: '/settings', from: 'codex' }, client)));
+  expect(output).toContain('mcpServers (1)');
+  expect(output).toContain('sandbox (1)');
+  expect(output).toContain('id');
+  expect(output).toContain('action');
+  expect(output).toContain('target');
+  expect(output).toContain('mcpServers:remote');
 });
 
 test('import settings --apply --select sends selected ids', async () => {

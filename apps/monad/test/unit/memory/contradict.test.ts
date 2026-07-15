@@ -31,10 +31,12 @@ test('detectContradictions maps cited tags to real ids and drops invented ones',
 
 test('detectContradictions short-circuits when there are no laws or no facts', async () => {
   let called = false;
-  const _model = async () => {
+  const model = async () => {
     called = true;
     return '{}';
   };
+  expect(await detectContradictions(model, 'test', [], [{ content: 'x' }])).toEqual([]);
+  expect(await detectContradictions(model, 'test', [{ id: 'L1', statement: 's' }], [])).toEqual([]);
   expect(called).toBe(false);
 });
 

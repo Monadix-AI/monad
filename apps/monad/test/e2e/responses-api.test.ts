@@ -371,20 +371,6 @@ for (const kind of TRANSPORTS) {
           headers: { 'content-type': 'application/json', ...AUTH },
           body: JSON.stringify({ model: 'default', input: 'stream me', stream: true })
         };
-        const _url = kind === 'unix' ? (t as unknown as { _sock: string })._sock : undefined;
-
-        // Use the custom SSE reader
-        const _baseUrl = await (async () => {
-          // Grab base URL via a non-streaming call to the same server
-          const probe = await t.fetch('/openai/v1/responses', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json', ...AUTH },
-            body: JSON.stringify({ model: 'default', input: 'probe' })
-          });
-          await probe.json(); // drain
-          return '';
-        })();
-
         // For streaming we need to drive fetch directly through the handle
         const streamRes = await t.fetch('/openai/v1/responses', {
           ...reqInit,

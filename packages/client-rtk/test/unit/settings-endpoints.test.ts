@@ -432,17 +432,20 @@ test('runTreaty: null data is treated as an empty response error', async () => {
 // store factory
 // ═══════════════════════════════════════════════════════════════════════════════
 
-test('createMonadStore: builds a store with the client in extra', () => {
+test('createMonadStore: installs only the shared API reducer by default', () => {
   const client = fakeClient({});
-  const _store = createMonadStore({ client });
+  const store = createMonadStore({ client });
+  expect(Object.keys(store.getState())).toEqual(['monadApi']);
 });
 
 test('createMonadStore: merges custom reducers', () => {
   const client = fakeClient({});
-  const _store = createMonadStore({
+  const store = createMonadStore({
     client,
     reducer: { custom: (state = 0) => state }
   });
+  expect(store.getState()).toHaveProperty('custom');
+  expect(store.getState()).toHaveProperty('monadApi');
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -521,6 +524,8 @@ test('createMonadTreatyClient: serializes multi-scope skills query as repeated p
   });
 
   await client.treaty.v1.skills.get({ query: { scope: ['global', 'atom-pack'] } as unknown as { scope: string } });
+
+  expect(urls[0]).toContain('/v1/skills?scope=global&scope=atom-pack');
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -818,7 +823,8 @@ test('setLocale: writes locale, invalidates Locale+Catalog, and rolls back on fa
   expect(seed.data).toBe('en');
 
   // Mutate — will fail
-  const _res = await dispatchEndpoint(store, 'setLocale', { locale: 'de' });
+  const res = await dispatchEndpoint(store, 'setLocale', { locale: 'de' });
+  expect(res.error).toMatchObject({ message: 'request failed (409)', status: 409 });
 
   // Optimistic update rolled back — cache still 'en'
   const cached = await dispatchEndpoint(store, 'getLocale');

@@ -54,6 +54,7 @@ test('semantic search recalls a conceptually-related message with no literal ove
 
   const { hits } = await d.session.search({ q: 'pet care advice', mode: 'semantic' });
   expect(hits.length).toBeGreaterThanOrEqual(1);
+  expect(hits[0]?.snippet).toContain('dog'); // animals bucket beat finance
   expect(hits[0]?.matchedBy).toBe('semantic');
 });
 

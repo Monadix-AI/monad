@@ -103,21 +103,22 @@ test('cost: tool/non-prose messages are excluded from the extraction prompt (cur
     { id: 'p2', role: 'tool', text: `TOOL OUTPUT ${'x'.repeat(5000)}` }, // huge, no graph signal
     { id: 'p3', role: 'assistant', text: 'Monad is the daemon' }
   ];
-  let _prompt = '';
+  let prompt = '';
   await consolidateGraph({
     store,
-    sessions: () => [{ id: 'ses_t00000000000', agentId: 'a1', projectKey: null }],
+    sessions: () => [{ id: 'ses_t', agentId: 'a1', projectKey: null }],
     messagesAfter: () => span,
     isAlive: () => true,
     complete: async (_m, _s, user) => {
-      _prompt = user;
+      prompt = user;
       return GRAPH_JSON;
     },
     extractModel: () => 'test',
     minNewMessages: 1,
     log: silent
   });
-  expect(store.getCursor('ses_t00000000000')).toBe('p3'); // advanced to the last fed prose message
+  expect(prompt).toContain('I work on Monad');
+  expect(store.getCursor('ses_t')).toBe('p3'); // advanced to the last fed prose message
 });
 
 test('cost: a long span is capped to the char budget; the tail is consolidated on the next pass', async () => {
@@ -167,13 +168,20 @@ test('graph_explore and graph_node surface the consolidated graph, scope-isolate
   const store = new GraphStore(':memory:');
   await consolidateGraph(deps(store, async () => GRAPH_JSON, new Set(['m1', 'm2', 'm3', 'm4'])));
   const [explore, node] = createGraphQueryTools(store, () => ['agent:a1']);
-  const ctx = { sessionId: 'ses_100000000000' } as unknown as ToolContext;
+  const ctx = { sessionId: 'ses_1' } as unknown as ToolContext;
 
   // querying both entities surfaces the relation between them (edgesAmong needs both endpoints in the hits)
-  const _ex = (await explore?.run({ query: 'zeke monad' }, ctx))?.modelContent as string;
+  const ex = (await explore?.run({ query: 'zeke monad' }, ctx))?.modelContent as string;
+  expect(ex).toContain('Monad');
+  expect(ex).toContain('works_on');
 
-  const _nd = (await node?.run({ query: 'Zeke' }, ctx))?.modelContent as string;
+  const nd = (await node?.run({ query: 'Zeke' }, ctx))?.modelContent as string;
+  expect(nd).toContain('Zeke');
+  expect(nd).toContain('—[works_on]→ Monad');
 
   // a different agent's scope sees nothing
-  const [_explore2] = createGraphQueryTools(store, () => ['agent:other']);
+  const [explore2] = createGraphQueryTools(store, () => ['agent:other']);
+  expect((await explore2?.run({ query: 'zeke monad' }, ctx))?.modelContent).toBe(
+    'No matching entities for "zeke monad".'
+  );
 });

@@ -55,6 +55,9 @@ Rules:
 - Test files must not live next to `src/` files (`runner.test.ts` is a legacy exception).
 - File naming: `{concern}.test.ts` — name by the behaviour or feature under test, not the source file. One concern may span multiple source files; one source file may be split into multiple concern-focused test files.
 - Platform-specific tests use **separate files**: `{concern}.{platform}.test.ts` where platform is `windows`, `unix`, `macos`, or `linux`. Do not use `if (process.platform === …)` guards inside shared test files. The test runner (`scripts/bun-test.ts`) passes `--path-ignore-patterns` automatically so non-matching platform files are never loaded — no runtime skip needed.
+- Assertions must prove observable behavior: returned contracts, state transitions, emitted events, transport responses, user interactions, side effects, or errors. Do not use `toBeDefined()`, `toBeTruthy()`, or `toBeFalsy()` to prove that a logic branch, entity, registry entry, DOM node, or mock exists; exercise it and assert its result instead.
+- Absence assertions are valid only when absence is the public contract, such as redaction, deletion, a not-found response, an optional response field, or pagination termination.
+- Do not read implementation source and assert that fixed code or copy exists as a proxy for runtime behavior. Source assertions are reserved for generated artifacts, release bundles, migrations, compiler transformations, and other cases where source text is the product under test.
 
 ---
 

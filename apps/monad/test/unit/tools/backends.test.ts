@@ -70,7 +70,9 @@ test('sandbox terminal backend asks piped git commands to preserve color', async
   try {
     const { terminal } = createSandboxBackends([dir]);
     await terminal.exec({ command: 'git init --quiet && touch a.txt && git add a.txt && echo x > a.txt' });
-    const _r = await terminal.exec({ command: 'git status --short' });
+    const r = await terminal.exec({ command: 'git status --short' });
+    expect(r.stdout).toContain('\x1B[');
+    expect(r.stdout).toContain('a.txt');
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

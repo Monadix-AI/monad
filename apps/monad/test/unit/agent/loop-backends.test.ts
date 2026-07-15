@@ -96,11 +96,12 @@ test('extraTools (e.g. per-session MCP tools) are available and callable this ru
 test('toolFilter hides a tool from execution (model gets unknown-tool)', async () => {
   // A second, unfiltered tool keeps tool-mode active so the filtered call reaches execution
   // and resolves to unknown-tool (rather than the loop skipping tools entirely).
-  const { loop, events } = run([{ tool: 'file_glob', input: { pattern: '*' } }, 'done'], {
+  const { loop, events } = run([{ tool: 'fs_glob', input: { pattern: '*' } }, 'done'], {
     tools: [fileWriteTool as Tool, fileGlobTool as Tool],
-    toolFilter: (n) => n !== 'file_glob'
+    toolFilter: (n) => n !== 'fs_glob'
   });
-  await loop.runBlock('ses_100000000000' as SessionId, 'list files');
+  await loop.runBlock('ses_1' as SessionId, 'list files');
   const result = events.find((e) => e.type === 'tool.result');
-  expect(result?.payload).toMatchObject({ tool: 'file_glob', ok: false });
+  expect(result?.payload).toMatchObject({ tool: 'fs_glob', ok: false });
+  expect(String((result?.payload as { result: string }).result)).toContain('unknown tool');
 });

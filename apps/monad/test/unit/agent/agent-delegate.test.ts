@@ -144,5 +144,7 @@ test('subagent activity is bridged to the parent via reportProgress', async () =
   const tool = makeTool(scriptedModel([{ tool: 'work.do' }, 'final']), [flagTool('work.do', { ran: false })]);
   await tool.run({ agent: 'researcher', instruction: 'go' }, probeCtx);
   expect(progress.length).toBeGreaterThan(0);
-  const _last = progress.at(-1) ?? '';
+  const last = progress.at(-1) ?? '';
+  expect(last).toContain('▸ researcher'); // labelled with the target agent
+  expect(last).toContain('↪ work.do'); // the subagent's tool call surfaced
 });
