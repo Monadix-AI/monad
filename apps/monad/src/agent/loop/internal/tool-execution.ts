@@ -203,16 +203,10 @@ export class ToolExecutor {
     const maxResultChars = this.deps.maxToolResultChars ?? DEFAULT_MAX_TOOL_RESULT_CHARS;
     const fullResultText = resultText; // pre-truncation, for handle-based recovery
     const wasTruncated = fullResultText.length > maxResultChars;
-    // Only advertise the handle when spilling is actually configured — otherwise nothing is there
-    // to read back.
-    const recoveryHandle = this.deps.persistRawToolOutput ? call.toolCallId : undefined;
-    resultText = truncateToolOutput(resultText, maxResultChars, recoveryHandle);
-    if (displayResultText !== undefined) {
-      displayResultText = truncateToolOutput(displayResultText, maxResultChars, recoveryHandle);
-      if (displayResultText === resultText) displayResultText = undefined;
-    }
     // AfterTool: a hook may rewrite the result fed back to the model (e.g. redact secrets) or append
-    // context. Fires on success AND failure — `ok`/`error` carry the outcome, the handler decides.
+    // context. Runs ONCE against the FULL pre-truncation text — not a truncated preview — so a
+    // secret sitting in the portion truncation would omit still triggers redaction (and blocks the
+    // raw spill below). Fires on success AND failure — `ok`/`error` carry the outcome.
     const post = await this.hooks().run({
       event: 'AfterTool',
       sessionId,
@@ -220,51 +214,36 @@ export class ToolExecutor {
       timestamp: new Date().toISOString(),
       toolName: call.toolName,
       toolInput,
-      toolResult: resultText,
+      toolResult: fullResultText,
       ok,
-      ...(ok ? {} : { error: resultText })
+      ...(ok ? {} : { error: fullResultText })
     });
-    const beforePost = resultText;
     // NO_HOOKS (and any pass-through hook) still sets effectiveToolOutput = the input toolResult —
     // it's never absent — so "redacted" means the value actually CHANGED, not merely present.
-    // A genuine rewrite replaces resultText wholesale, including any truncation marker, so the
-    // recoveryHandle embedded above is gone with it — never dangling. A pass-through (or a hook that
-    // only appends additionalContext below) leaves the marker and the bytes behind it untouched, so
-    // it's safe to spill in that case — only an actual rewrite must block the spill, or the
-    // pre-truncation raw would leak what the hook redacted.
-    const hookRedacted = post.effectiveToolOutput !== undefined && post.effectiveToolOutput !== beforePost;
-    if (post.effectiveToolOutput !== undefined) resultText = post.effectiveToolOutput;
-    if (post.additionalContext.length) resultText = `${resultText}\n\n${post.additionalContext.join('\n\n')}`;
-    const hookModified = resultText !== beforePost;
+    const hookRedacted = post.effectiveToolOutput !== undefined && post.effectiveToolOutput !== fullResultText;
+    let rewrittenFullText = post.effectiveToolOutput !== undefined ? post.effectiveToolOutput : fullResultText;
+    if (post.additionalContext.length)
+      rewrittenFullText = `${rewrittenFullText}\n\n${post.additionalContext.join('\n\n')}`;
+    const hookModified = rewrittenFullText !== fullResultText;
+    // Only advertise the handle when spilling is actually configured AND the hook didn't redact —
+    // otherwise the handle would either have nothing to read back, or would hand back exactly what
+    // the hook just redacted.
+    const recoveryHandle = this.deps.persistRawToolOutput && !hookRedacted ? call.toolCallId : undefined;
+    resultText = truncateToolOutput(rewrittenFullText, maxResultChars, recoveryHandle);
+    if (displayResultText !== undefined) {
+      displayResultText = hookModified
+        ? undefined
+        : truncateToolOutput(displayResultText, maxResultChars, recoveryHandle);
+      if (displayResultText === resultText) displayResultText = undefined;
+    }
     if (hookModified) {
-      displayResultText = undefined;
       display = undefined;
       parts = undefined;
     }
     // Spill the full pre-truncation output for handle-based recovery — but ONLY when it was actually
-    // truncated AND no AfterTool hook redacted it. `hookRedacted` above only saw the TRUNCATED
-    // head+tail (that's what was fed to the hook at line 223), so a secret sitting in the omitted
-    // middle of a large output would never trigger it — the hook would report "unchanged" while the
-    // untouched secret sat in fullResultText, which read_tool_output would then hand straight back to
-    // the model. Re-run AfterTool against the FULL text specifically for this decision, so a redaction
-    // hook that would touch content buried in the middle also blocks the spill.
+    // truncated AND the hook (checked above, against the full text) didn't redact it.
     if (wasTruncated && !hookRedacted && this.deps.persistRawToolOutput) {
-      const fullCheck = await this.hooks().run({
-        event: 'AfterTool',
-        sessionId,
-        cwd: this.hookCwd(),
-        timestamp: new Date().toISOString(),
-        toolName: call.toolName,
-        toolInput,
-        toolResult: fullResultText,
-        ok,
-        ...(ok ? {} : { error: fullResultText })
-      });
-      const fullTextRedacted =
-        fullCheck.effectiveToolOutput !== undefined && fullCheck.effectiveToolOutput !== fullResultText;
-      if (!fullTextRedacted) {
-        this.deps.persistRawToolOutput(sessionId, call.toolCallId, fullResultText);
-      }
+      this.deps.persistRawToolOutput(sessionId, call.toolCallId, fullResultText);
     }
     const observation = ok ? resultText : `Error: ${resultText}`;
     const persistedResult: PersistedToolResultEnvelope = rawResult

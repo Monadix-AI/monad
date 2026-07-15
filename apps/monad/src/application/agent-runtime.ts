@@ -133,7 +133,11 @@ export async function createAgentRuntime(core: DaemonCore, endpoint: { host: str
       ...buildServiceTools({
         notes: memory.noteStore,
         scheduler: schedule,
-        rawOutputs: { get: (sessionId, toolCallId) => store.getToolRawOutput(sessionId, toolCallId) }
+        // Nothing is ever spilled to tool_raw_outputs when persistRaw is off, so read_tool_output
+        // would always report "not found" — omit the tool entirely rather than advertise a dead one.
+        ...(cfg.context.toolOutput.persistRaw
+          ? { rawOutputs: { get: (sessionId, toolCallId) => store.getToolRawOutput(sessionId, toolCallId) } }
+          : {})
       }),
       ...createMemoryAgentTools(memory.memoryService),
       ...createGraphQueryTools(memory.graphStore, memory.graphScopesFor),

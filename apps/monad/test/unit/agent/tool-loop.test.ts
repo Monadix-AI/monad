@@ -507,11 +507,10 @@ test('a secret buried in the OMITTED MIDDLE of a truncated output is not spilled
   });
   await loop.runBlock(sid(), 'go');
 
-  // Two AfterTool passes ran: one on the truncated preview (blind to the secret), one on the full
-  // pre-truncation text (which caught it) — proving the fix actually engages, not a coincidence.
-  expect(hookCalls).toHaveLength(2);
-  expect(hookCalls[0]).not.toContain('SECRET_MARKER'); // truncated pass never saw it
-  expect(hookCalls[1]).toContain('SECRET_MARKER'); // full-text pass did
+  // Exactly one AfterTool pass ran, against the FULL pre-truncation text — so it actually saw the
+  // secret (a truncated-preview-only pass would have missed it, per the scenario name).
+  expect(hookCalls).toHaveLength(1);
+  expect(hookCalls[0]).toContain('SECRET_MARKER');
   expect(spilled).toHaveLength(0); // spill correctly blocked — the secret is not recoverable via a handle
 });
 

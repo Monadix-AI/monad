@@ -246,12 +246,15 @@ export function createAgentExecutionService(deps: AgentDeps): AgentExecutionServ
           keepRecentRounds: ctxCfg.eviction.keepRecentRounds,
           clearAtLeast: ctxCfg.eviction.clearAtLeast,
           minResultTokens: ctxCfg.eviction.minResultTokens,
-          persistRawOutput: persistRawToolOutput
+          persistRawOutput: persistRawToolOutput,
+          hasRawOutput: (sessionId, toolCallId) => store.getToolRawOutput(sessionId, toolCallId) !== null
         })
       : undefined;
   // Stage 4 (optional): semantic retrieval over the session's full message history — see
-  // context/retrieval.ts. Runs between eviction and the hard TokenLimiter guard so injected hits
-  // still respect the hard cap.
+  // context/retrieval.ts. Wired as its own `retrieval` dep (run once per turn from buildPrompt), NOT
+  // part of the per-model-step `context` cascade below — the query text (the latest user message)
+  // doesn't change across a turn's tool-loop steps, so splicing it in per-step would duplicate the
+  // injected block and re-embed/re-search on every step for no new information.
   const retrieval = ctxCfg.retrieval.enabled
     ? new RetrievalReinjectionContext({
         embed: async (text) => {
@@ -271,7 +274,6 @@ export function createAgentExecutionService(deps: AgentDeps): AgentExecutionServ
   const context = contextLimit
     ? new CompositeContextEngine([
         ...(eviction ? [eviction] : []),
-        ...(retrieval ? [retrieval] : []),
         new TokenLimiterContext({ maxTokens: Math.floor(contextLimit * ctxCfg.summarize.hardFraction) })
       ])
     : undefined;
@@ -449,6 +451,7 @@ export function createAgentExecutionService(deps: AgentDeps): AgentExecutionServ
         }
       : undefined,
     context,
+    retrieval,
     evictedTokens,
     handoffNudgeFraction: ctxCfg.handoffNudge.enabled ? ctxCfg.handoffNudge.atFraction : undefined,
     recitationEnabled: ctxCfg.recitation.enabled,

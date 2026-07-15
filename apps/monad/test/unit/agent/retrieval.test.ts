@@ -1,8 +1,11 @@
-import type { ContextPrepareCtx, ModelMessage } from '#/agent/index.ts';
+import type { ContextPrepareCtx, ModelMessage, ModelResult, ModelRouter } from '#/agent/index.ts';
+import type { Tool } from '#/capabilities/tools/types.ts';
 
 import { expect, test } from 'bun:test';
+import { newId } from '@monad/protocol';
 
-import { RetrievalReinjectionContext } from '#/agent/index.ts';
+import { AgentLoop, InMemoryMessageRepo, RetrievalReinjectionContext } from '#/agent/index.ts';
+import { toolResult } from '#/capabilities/tools/types.ts';
 
 const ctx = (sessionId?: string): ContextPrepareCtx | undefined =>
   sessionId ? { sessionId, emit: () => {} } : undefined;
@@ -115,4 +118,90 @@ test('maxResults: 0 disables the stage entirely (never calls embed)', async () =
   const out = await eng.prepare(msgs, ctx('ses_x'));
   expect(out).toBe(msgs);
   expect(embedCalls()).toBe(0);
+});
+
+test('AgentLoop runs retrieval exactly ONCE per turn, even across a multi-step tool loop (buildPrompt, not per-step prepare())', async () => {
+  const { eng, embedCalls, searchCalls } = engine({
+    vec: [0.1],
+    hits: [{ messageId: 'm', snippet: 'earlier: uses Bun not Node', score: 0.9 }]
+  });
+  const probeTool: Tool<Record<string, never>, string> = {
+    name: 'test.probe',
+    description: 'probe',
+    scopes: [],
+    run: async () => toolResult('probed')
+  };
+  let step = 0;
+  const model: ModelRouter = {
+    async *stream() {},
+    async complete(): Promise<ModelResult> {
+      step++;
+      // Two tool-call round trips before the final answer, so prepare() (the per-step context
+      // cascade) runs at least 3 times this turn — retrieval must NOT scale with that.
+      if (step <= 2) {
+        return {
+          text: '',
+          toolCalls: [{ toolCallId: `tc_${step}`, toolName: 'test.probe', input: {} }],
+          finishReason: 'tool-calls'
+        };
+      }
+      return { text: 'done', finishReason: 'stop' };
+    }
+  };
+  const loop = new AgentLoop({
+    model,
+    tools: [probeTool as Tool],
+    messages: new InMemoryMessageRepo(),
+    defaultModel: 'mock',
+    emit: () => {},
+    retrieval: eng
+  });
+  await loop.runBlock(newId('ses') as never, 'what does this project use?');
+
+  expect(embedCalls()).toBe(1);
+  expect(searchCalls).toHaveLength(1);
+});
+
+test('AgentLoop splices the retrieval block only once — a multi-step turn does not duplicate it', async () => {
+  const { eng } = engine({
+    vec: [0.1],
+    hits: [{ messageId: 'm', snippet: 'earlier: uses Bun not Node', score: 0.9 }]
+  });
+  const probeTool: Tool<Record<string, never>, string> = {
+    name: 'test.probe',
+    description: 'probe',
+    scopes: [],
+    run: async () => toolResult('probed')
+  };
+  let step = 0;
+  let lastPrompt: ModelMessage[] = [];
+  const model: ModelRouter = {
+    async *stream() {},
+    async complete(req): Promise<ModelResult> {
+      lastPrompt = req.messages ?? [];
+      step++;
+      if (step <= 2) {
+        return {
+          text: '',
+          toolCalls: [{ toolCallId: `tc_${step}`, toolName: 'test.probe', input: {} }],
+          finishReason: 'tool-calls'
+        };
+      }
+      return { text: 'done', finishReason: 'stop' };
+    }
+  };
+  const loop = new AgentLoop({
+    model,
+    tools: [probeTool as Tool],
+    messages: new InMemoryMessageRepo(),
+    defaultModel: 'mock',
+    emit: () => {},
+    retrieval: eng
+  });
+  await loop.runBlock(newId('ses') as never, 'what does this project use?');
+
+  const userMsg = lastPrompt.find((m) => m.role === 'user');
+  const text = typeof userMsg?.content === 'string' ? userMsg.content : '';
+  const occurrences = text.split('<related_context>').length - 1;
+  expect(occurrences).toBe(1);
 });

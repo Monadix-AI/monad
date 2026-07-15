@@ -43,6 +43,15 @@ export interface ToolResultEvictionOptions {
    *  handle exists). Same seam as AgentLoopDeps.persistRawToolOutput. Absent → eviction stays
    *  recoverable only via re-running the tool. */
   persistRawOutput?: (sessionId: string, toolCallId: string, output: string) => void;
+  /** True when a raw output is already spilled for this toolCallId. Gates `persistRawOutput` above —
+   *  a result long enough to have been truncated at tool-execution time was already spilled there
+   *  with the ORIGINAL full bytes; by eviction time `r.output` is that same tool call's PERSISTED
+   *  (already-truncated) text, since replay reconstructs it from the stored row. Spilling
+   *  unconditionally would overwrite the correct full-text entry with the truncated one — silently
+   *  corrupting the recovery handle for exactly the large results most likely to need it. Absent →
+   *  always spills (matches the pre-this-check behavior; only correct when nothing is ever truncated
+   *  at execution time, e.g. persistRawOutput itself is also absent). */
+  hasRawOutput?: (sessionId: string, toolCallId: string) => boolean;
 }
 
 /** Leading marker on every placeholder, used to detect already-evicted results idempotently. */
@@ -111,13 +120,20 @@ export class ToolResultEvictionContext implements ContextEngine {
     // Spill each candidate's full output BEFORE it's overwritten below — this covers results that
     // were never truncated at tool-execution time (short enough to send whole) and so were never
     // spilled there. Without this a short-but-old result would lose its bytes for good on eviction.
-    // The placeholder only promises a handle when the spill actually runs — same condition gates
-    // both, so the promise and the write can never disagree.
+    // A result that WAS truncated at execution time was already spilled there with the ORIGINAL full
+    // bytes — by now `r.output` is that same call's PERSISTED (already-truncated) text (replay
+    // reconstructs it from the stored row), so spilling it here would silently overwrite the correct
+    // entry with the truncated one. `hasRawOutput` lets us skip re-spilling those — a handle exists
+    // either way, so the placeholder still promises one.
     const persist = this.opts.persistRawOutput;
     const sessionId = ctx?.sessionId;
-    const handle = Boolean(persist && sessionId);
+    const hasRaw = this.opts.hasRawOutput;
+    const hasHandle = new Set<string>();
     if (persist && sessionId) {
-      for (const r of candidates) persist(sessionId, r.toolCallId, r.output);
+      for (const r of candidates) {
+        if (!(hasRaw?.(sessionId, r.toolCallId) ?? false)) persist(sessionId, r.toolCallId, r.output);
+        hasHandle.add(r.toolCallId);
+      }
     }
 
     // Rewrite only the affected messages, cloning so cached history objects are never mutated.
@@ -131,7 +147,10 @@ export class ToolResultEvictionContext implements ContextEngine {
         const toolCallId = evictParts.get(`${i}:${j}`);
         if (toolCallId === undefined || p.type !== 'tool-result') return p;
         changed = true;
-        return { ...p, output: `${EVICTED_MARKER} ${evictedToolResult(p.toolName, handle ? toolCallId : undefined)}` };
+        return {
+          ...p,
+          output: `${EVICTED_MARKER} ${evictedToolResult(p.toolName, hasHandle.has(toolCallId) ? toolCallId : undefined)}`
+        };
       });
       return changed ? { ...m, content } : m;
     });

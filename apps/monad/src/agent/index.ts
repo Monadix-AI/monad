@@ -61,6 +61,8 @@ export interface AgentConfig {
   maxToolResultChars?: AgentLoopDeps['maxToolResultChars'];
   /** Keeps each turn's prompt within the window (truncate/summarize). Default: passthrough. */
   context?: ContextEngine;
+  /** Optional semantic-retrieval stage, run once per turn — see AgentLoopDeps.retrieval. */
+  retrieval?: AgentLoopDeps['retrieval'];
   /** Cumulative tool-result-eviction tokens reclaimed for a session (the context.usage 'evicted'
    *  bucket). Backed by the same eviction engine instance passed as `context`. */
   evictedTokens?: AgentLoopDeps['evictedTokens'];
@@ -305,6 +307,7 @@ export function createAgent(config: AgentConfig): Agent {
         persistRawToolOutput: config.persistRawToolOutput,
         maxToolResultChars: config.maxToolResultChars,
         context: config.context,
+        retrieval: config.retrieval,
         evictedTokens: config.evictedTokens,
         handoffNudgeFraction: config.handoffNudgeFraction,
         recitationEnabled: config.recitationEnabled,

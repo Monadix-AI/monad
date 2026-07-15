@@ -178,10 +178,23 @@ export class PromptBuilder {
     // cached array must stay immutable for the next turn (and for cross-turn token-cache reuse).
     const systemMsg: ModelMessage = { role: 'system', content: system };
     if (this.deps.cacheSystemPrompt) systemMsg.cache = true; // prompt-cache the static prefix
-    return this.withRecitation(
-      this.withContextSummary(this.composeUserTurn([systemMsg, ...replayed]), summary),
-      summary
-    );
+    const withSummary = this.withContextSummary(this.composeUserTurn([systemMsg, ...replayed]), summary);
+    const withRetrieved = await this.withRetrieval(sessionId, withSummary);
+    return this.withRecitation(withRetrieved, summary);
+  }
+
+  /** Runs the optional semantic-retrieval stage exactly ONCE per turn (buildPrompt is called once
+   *  per turn, unlike `prepare()` which re-runs every tool-loop step) — the query text (the latest
+   *  user message) never changes across a turn's steps, so running it per-step would re-embed,
+   *  re-search, and re-splice a duplicate block on every step. See context/retrieval.ts. */
+  private async withRetrieval(sessionId: SessionId, messages: ModelMessage[]): Promise<ModelMessage[]> {
+    if (!this.deps.retrieval) return messages;
+    return this.deps.retrieval.prepare(messages, {
+      sessionId,
+      emit: this.deps.emit,
+      estimator: globalEstimator,
+      lastRealInputTokens: this.lastRealInputTokens
+    });
   }
 
   /** Stage 3 of the context cascade: re-anchor the current plan (Open Tasks / Next Step, parsed from

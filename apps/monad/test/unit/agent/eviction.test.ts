@@ -291,6 +291,33 @@ test('spills each evicted result to persistRawOutput before overwriting it, keye
   expect(spilled.find((s) => s.toolCallId === 't0')?.output.startsWith('OUT0')).toBe(true);
 });
 
+test('does not re-spill (and corrupt) a result whose full bytes are already spilled — but the placeholder still promises a handle', () => {
+  const spilled: Array<{ toolCallId: string; output: string }> = [];
+  const alreadySpilled = new Set(['t0', 't2']); // e.g. these were truncated + spilled in full at tool-execution time
+  const engine = new ToolResultEvictionContext({
+    contextLimit: 1000,
+    atFraction: 0.5,
+    keepRecentRounds: 1,
+    clearAtLeast: 1,
+    minResultTokens: 1,
+    persistRawOutput: (_sessionId, toolCallId, output) => spilled.push({ toolCallId, output }),
+    hasRawOutput: (_sessionId, toolCallId) => alreadySpilled.has(toolCallId)
+  });
+  const msgs = transcript(4); // toolCallIds t0..t3, one per round; 3 evicted (keepRecentRounds=1): t0,t1,t2
+  const out = engine.prepare(msgs, ctx(600));
+
+  // t0/t2 were already spilled elsewhere — re-spilling here would overwrite the correct full text
+  // (which eviction never sees — by eviction time r.output is already the persisted/truncated copy)
+  // with a corrupted one. Only t1 (never spilled before) gets a fresh spill call.
+  expect(spilled.map((s) => s.toolCallId).sort()).toEqual(['t1']);
+
+  // All three evicted results still promise a readable handle — t0/t2 via the pre-existing spill,
+  // t1 via the fresh one — so the placeholder text is truthful for all of them, not just t1.
+  const evicted = outputs(out).filter((o) => o.startsWith(EVICTED_MARKER));
+  expect(evicted).toHaveLength(3);
+  for (const o of evicted) expect(o).toContain('read_tool_output');
+});
+
 test('the eviction placeholder points at read_tool_output with the handle when spilling is configured', () => {
   const engine = new ToolResultEvictionContext({
     contextLimit: 1000,

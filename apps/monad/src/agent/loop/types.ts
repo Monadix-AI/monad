@@ -102,6 +102,11 @@ export interface AgentLoopDeps {
   /** Records one turn's real provider usage and returns computed cost for agent.message. */
   recordTurnUsage?: (sessionId: SessionId, usage: ModelUsage, modelId: string) => Cost | undefined;
   context?: ContextEngine;
+  /** Optional semantic-retrieval stage (context/retrieval.ts), run ONCE per turn from buildPrompt —
+   *  not part of `context`'s per-model-step cascade. The query text (the latest user message) doesn't
+   *  change across a turn's tool-loop steps, so running it there would re-embed, re-search, and
+   *  re-splice a duplicate block on every step. */
+  retrieval?: ContextEngine;
   /** Cumulative tool-result-eviction tokens reclaimed for a session, for the context.usage 'evicted'
    *  bucket. Backed by the same ToolResultEvictionContext instance passed as `context`. */
   evictedTokens?: (sessionId: SessionId) => number;
