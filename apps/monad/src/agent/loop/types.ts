@@ -102,6 +102,9 @@ export interface AgentLoopDeps {
   /** Records one turn's real provider usage and returns computed cost for agent.message. */
   recordTurnUsage?: (sessionId: SessionId, usage: ModelUsage, modelId: string) => Cost | undefined;
   context?: ContextEngine;
+  /** Cumulative tool-result-eviction tokens reclaimed for a session, for the context.usage 'evicted'
+   *  bucket. Backed by the same ToolResultEvictionContext instance passed as `context`. */
+  evictedTokens?: (sessionId: SessionId) => number;
   /** Durable, bounded-load history strategy. */
   history?: HistoryProvider;
   /** Cross-turn cache of replayed message history, shared by per-turn AgentLoop instances. */

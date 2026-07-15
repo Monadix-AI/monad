@@ -203,23 +203,24 @@ export function createAgentExecutionService(deps: AgentDeps): AgentExecutionServ
   // prompt): lossless tool-result eviction first, then a hard truncation guard so the window can't
   // overflow mid tool-loop even if summarization lagged. DurableSummarizer (above) remains the
   // durable, lineage-aware summary stage at assemble time.
+  const eviction =
+    contextLimit && ctxCfg.eviction.enabled
+      ? new ToolResultEvictionContext({
+          contextLimit,
+          atFraction: ctxCfg.eviction.atFraction,
+          keepRecentRounds: ctxCfg.eviction.keepRecentRounds,
+          clearAtLeast: ctxCfg.eviction.clearAtLeast,
+          minResultTokens: ctxCfg.eviction.minResultTokens,
+          persistRawOutput: persistRawToolOutput
+        })
+      : undefined;
   const context = contextLimit
     ? new CompositeContextEngine([
-        ...(ctxCfg.eviction.enabled
-          ? [
-              new ToolResultEvictionContext({
-                contextLimit,
-                atFraction: ctxCfg.eviction.atFraction,
-                keepRecentRounds: ctxCfg.eviction.keepRecentRounds,
-                clearAtLeast: ctxCfg.eviction.clearAtLeast,
-                minResultTokens: ctxCfg.eviction.minResultTokens,
-                persistRawOutput: persistRawToolOutput
-              })
-            ]
-          : []),
+        ...(eviction ? [eviction] : []),
         new TokenLimiterContext({ maxTokens: Math.floor(contextLimit * ctxCfg.summarize.hardFraction) })
       ])
     : undefined;
+  const evictedTokens = eviction ? (sessionId: string) => eviction.reclaimedTokens(sessionId) : undefined;
 
   // Static (non-registry) tools — always visible to the model regardless of deferred mode. Each
   // module exposes the uniform `register(deps) => Tool[]` entry; we compose them with execution-local
@@ -393,6 +394,7 @@ export function createAgentExecutionService(deps: AgentDeps): AgentExecutionServ
         }
       : undefined,
     context,
+    evictedTokens,
     history,
     // Prompt-cache the static system+tools prefix (no-op for non-Anthropic models).
     cacheSystemPrompt: true,

@@ -31,7 +31,7 @@ There are two realtime channels, split by **event kind**, not by who triggered t
 - **SSE (`GET /v1/sessions/:id/events`) — data plane.** Carries the high-frequency
   **generation** stream for a single session: `user.message`, `agent.token`,
   `agent.reasoning`, `agent.message`, `tool.called`, `tool.result`,
-  `message.delta`, `message.complete`, `context.usage`, `clarify.*`,
+  `message.delta`, `message.complete`, `context.usage`, `context.evicted`, `clarify.*`,
   `tool.approval_*`, `agent.error`.
 
 **A client MUST explicitly subscribe to a session's generation stream over SSE.**

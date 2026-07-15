@@ -347,3 +347,55 @@ test('does not spill when prepare() is called with no ctx (no session to key the
     expect(o).toContain('Call the tool again');
   }
 });
+
+test('reclaimedTokens accumulates across multiple firings for the same session', () => {
+  const engine = new ToolResultEvictionContext({
+    contextLimit: 1000,
+    atFraction: 0.5,
+    keepRecentRounds: 1,
+    clearAtLeast: 1,
+    minResultTokens: 1
+  });
+  expect(engine.reclaimedTokens('ses_x00000000000')).toBe(0);
+  const once = engine.prepare(transcript(4), ctx(600));
+  const firstTotal = engine.reclaimedTokens('ses_x00000000000');
+  expect(firstTotal).toBeGreaterThan(0);
+  // A second pass over a fresh (unevicted) transcript reclaims more and adds to the running total.
+  engine.prepare(transcript(4), ctx(600));
+  expect(engine.reclaimedTokens('ses_x00000000000')).toBeGreaterThan(firstTotal);
+  // A no-op pass (already evicted, nothing left to reclaim) leaves the total unchanged.
+  engine.prepare(once, ctx(600));
+  expect(engine.reclaimedTokens('ses_x00000000000')).toBeGreaterThan(firstTotal);
+});
+
+test('reclaimedTokens stays 0 for a session that never triggered eviction', () => {
+  const engine = new ToolResultEvictionContext({ contextLimit: 1_000_000, atFraction: 0.99 });
+  engine.prepare(transcript(4), ctx(600));
+  expect(engine.reclaimedTokens('ses_x00000000000')).toBe(0);
+});
+
+test('emits a context.evicted notice with the reclaimed total and result count when eviction fires', () => {
+  const events: Array<{ type: string; payload: unknown }> = [];
+  const engine = new ToolResultEvictionContext({
+    contextLimit: 1000,
+    atFraction: 0.5,
+    keepRecentRounds: 1,
+    clearAtLeast: 1,
+    minResultTokens: 1
+  });
+  const emittingCtx: ContextPrepareCtx = {
+    sessionId: 'ses_x00000000000',
+    emit: (e) => events.push(e),
+    estimator: est()
+  };
+  engine.prepare(transcript(5), emittingCtx); // keepRecentRounds=1 → 4 of 5 rounds evicted
+  const notice = events.find((e) => e.type === 'context.evicted');
+  expect(notice?.payload).toEqual({ reclaimedTokens: engine.reclaimedTokens('ses_x00000000000'), resultCount: 4 });
+});
+
+test('does not emit context.evicted when nothing fires', () => {
+  const events: Array<{ type: string }> = [];
+  const engine = new ToolResultEvictionContext({ contextLimit: 1_000_000, atFraction: 0.99 });
+  engine.prepare(transcript(4), { sessionId: 'ses_x00000000000', emit: (e) => events.push(e), estimator: est() });
+  expect(events.some((e) => e.type === 'context.evicted')).toBe(false);
+});

@@ -212,7 +212,19 @@ export const contextUsagePayloadSchema = z.object({
   free: z.number().int().nonnegative(),
   autocompactBuffer: z.number().int().nonnegative(),
   approximate: z.boolean(),
-  segments: z.array(contextSegmentSchema)
+  segments: z.array(contextSegmentSchema),
+  /** Cumulative tokens reclaimed by lossless tool-result eviction so far this session. Informational
+   *  only — NOT part of `segments`/`used` (those already reflect the post-eviction, shrunk prompt;
+   *  adding this on top would double-count space that's already been freed). */
+  reclaimed: z.number().int().nonnegative().optional()
+});
+
+// Publish-only, never persisted (like the session.stream_started/ended markers): fires the moment
+// ToolResultEvictionContext actually reclaims space, so a client can show a transient "freed ~62K
+// clearing 7 tool results" notice without it becoming a permanent transcript row.
+export const contextEvictedPayloadSchema = z.object({
+  reclaimedTokens: z.number().int().positive(),
+  resultCount: z.number().int().positive()
 });
 
 const fsOpSchema = z.enum(['read', 'write']);
@@ -310,6 +322,7 @@ export type ToolApprovalResolvedPayload = z.infer<typeof toolApprovalResolvedPay
 export type ClarifyRequestedPayload = z.infer<typeof clarifyRequestedPayloadSchema>;
 export type ClarifyResolvedPayload = z.infer<typeof clarifyResolvedPayloadSchema>;
 export type ContextUsagePayload = z.infer<typeof contextUsagePayloadSchema>;
+export type ContextEvictedPayload = z.infer<typeof contextEvictedPayloadSchema>;
 export type DelegationFsRequestPayload = z.infer<typeof delegationFsRequestPayloadSchema>;
 export type DelegationTerminalRequestPayload = z.infer<typeof delegationTerminalRequestPayloadSchema>;
 export type ExternalAgentStartedPayload = z.infer<typeof externalAgentStartedPayloadSchema>;
@@ -347,6 +360,7 @@ export const EVENT_TABLE = {
   'clarify.requested': clarifyRequestedPayloadSchema,
   'clarify.resolved': clarifyResolvedPayloadSchema,
   'context.usage': contextUsagePayloadSchema,
+  'context.evicted': contextEvictedPayloadSchema,
   'delegation.fs_request': delegationFsRequestPayloadSchema,
   'delegation.terminal_request': delegationTerminalRequestPayloadSchema,
   'external_agent.started': externalAgentStartedPayloadSchema,

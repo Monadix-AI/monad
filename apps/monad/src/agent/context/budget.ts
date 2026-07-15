@@ -16,6 +16,9 @@ export interface ContextUsageOptions {
   autocompactBuffer?: number;
   /** True when any segment was locally estimated (no exact provider tokenizer). Default true. */
   approximate?: boolean;
+  /** Cumulative tokens reclaimed by lossless tool-result eviction so far — informational, not
+   *  summed into `used`/`free` (those already reflect the post-eviction, shrunk prompt). */
+  reclaimed?: number;
 }
 
 /** Sum segments, group nothing (the client groups), and compute used/free against the limit. */
@@ -29,7 +32,8 @@ export function buildContextUsage(segments: ContextSegment[], opts: ContextUsage
     free,
     autocompactBuffer,
     approximate: opts.approximate ?? true,
-    segments
+    segments,
+    ...(opts.reclaimed ? { reclaimed: opts.reclaimed } : {})
   };
 }
 

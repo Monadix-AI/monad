@@ -304,7 +304,15 @@ export class PromptBuilder {
       builder.addTokens('messages', 'Messages', tokens);
     }
 
-    this.emitEvent(sessionId, 'context.usage', builder.build({ contextLimit, approximate: total === undefined }));
+    this.emitEvent(
+      sessionId,
+      'context.usage',
+      builder.build({
+        contextLimit,
+        approximate: total === undefined,
+        reclaimed: this.deps.evictedTokens?.(sessionId)
+      })
+    );
   }
 
   observeEstimator(usage?: ModelUsage): void {

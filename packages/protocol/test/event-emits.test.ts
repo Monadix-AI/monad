@@ -34,6 +34,7 @@ const SSE_GENERATION_EMITS: readonly EventType[] = [
   'clarify.requested',
   'clarify.resolved',
   'context.usage',
+  'context.evicted',
   'delegation.fs_request',
   'delegation.terminal_request',
   'external_agent.started',

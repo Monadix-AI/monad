@@ -19,6 +19,8 @@
 
 import type { ModelContentPart, ModelMessage } from '../model/index.ts';
 
+import { newId, type SessionId } from '@monad/protocol';
+
 import { evictedToolResult } from '../prompts.ts';
 import { globalEstimator, type TokenEstimator } from './estimate.ts';
 import { type ContextEngine, type ContextPrepareCtx, effectiveInputTokens } from './index.ts';
@@ -46,6 +48,9 @@ export interface ToolResultEvictionOptions {
 /** Leading marker on every placeholder, used to detect already-evicted results idempotently. */
 export const EVICTED_MARKER = '[context-cleared]';
 
+/** Backstop cap on per-session cumulative stats held by a long-lived engine instance. */
+const MAX_TRACKED_SESSIONS = 1000;
+
 /** True once a tool-result output is already a pointer placeholder — never re-evict it. */
 function isEvicted(output: string): boolean {
   return output.startsWith(EVICTED_MARKER);
@@ -67,12 +72,21 @@ export class ToolResultEvictionContext implements ContextEngine {
   private readonly keepRecentRounds: number;
   private readonly clearAtLeast: number;
   private readonly minResultTokens: number;
+  // Cumulative tokens reclaimed per session across the process lifetime — the running total the
+  // 'evicted' context.usage bucket reports (placeholders keep occupying window space forever, so
+  // this only grows). Touch-to-front + capped like SummarizingContextEngine's session map.
+  private readonly reclaimed = new Map<string, number>();
 
   constructor(private readonly opts: ToolResultEvictionOptions) {
     this.atFraction = opts.atFraction ?? 0.5;
     this.keepRecentRounds = opts.keepRecentRounds ?? 3;
     this.clearAtLeast = opts.clearAtLeast ?? 2000;
     this.minResultTokens = opts.minResultTokens ?? 200;
+  }
+
+  /** Cumulative tokens reclaimed for this session so far (0 if it never triggered). */
+  reclaimedTokens(sessionId: string): number {
+    return this.reclaimed.get(sessionId) ?? 0;
   }
 
   prepare(messages: ModelMessage[], ctx?: ContextPrepareCtx): ModelMessage[] {
@@ -110,7 +124,7 @@ export class ToolResultEvictionContext implements ContextEngine {
     const evictParts = new Map<string, string>();
     for (const r of candidates) evictParts.set(`${r.msgIndex}:${r.partIndex}`, r.toolCallId);
 
-    return messages.map((m, i) => {
+    const out = messages.map((m, i) => {
       if (!Array.isArray(m.content)) return m;
       let changed = false;
       const content = m.content.map((p, j) => {
@@ -121,6 +135,25 @@ export class ToolResultEvictionContext implements ContextEngine {
       });
       return changed ? { ...m, content } : m;
     });
+
+    if (sessionId) {
+      const prior = this.reclaimedTokens(sessionId);
+      this.reclaimed.delete(sessionId); // touch-to-front
+      this.reclaimed.set(sessionId, prior + reclaimable);
+      if (this.reclaimed.size > MAX_TRACKED_SESSIONS) {
+        const oldest = this.reclaimed.keys().next().value;
+        if (oldest !== undefined) this.reclaimed.delete(oldest);
+      }
+      ctx?.emit({
+        id: newId('evt'),
+        sessionId: sessionId as SessionId,
+        type: 'context.evicted',
+        actorAgentId: null,
+        payload: { reclaimedTokens: reclaimable, resultCount: candidates.length },
+        at: new Date().toISOString()
+      });
+    }
+    return out;
   }
 
   /** Every tool-result part across all messages, in transcript order, tagged with its round and
