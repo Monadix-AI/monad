@@ -1,8 +1,8 @@
-'use client';
-
 import type { ComponentPropsWithoutRef, CSSProperties, ReactElement, ReactNode } from 'react';
+import type { ComposerContextUsagePanelProps } from './composer/context-usage-panel';
 
 import {
+  CheckIcon,
   ChevronDownIcon,
   CornerDownLeftIcon,
   MagicWand02Icon,
@@ -11,16 +11,32 @@ import {
   SquareIcon
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { forwardRef, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { Fragment, forwardRef, useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import { cn } from '../lib/utils';
 import { ChatInputChrome } from './ChatInput';
+import { ComposerContextUsagePanel } from './composer/context-usage-panel';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger
+} from './DropdownMenu';
+import { Popover, PopoverContent, PopoverTrigger } from './Popover';
+import { Tooltip, TooltipContent, TooltipTrigger } from './Tooltip';
 
 export type { ComposerContextUsagePanelProps } from './composer/context-usage-panel';
 
 export { ComposerContextUsagePanel } from './composer/context-usage-panel';
 
 export type ComposerSurfaceProps = {
+  accessoryLeftTools?: ReactNode;
+  accessoryRightTools?: ReactNode;
   ariaBusy?: boolean;
   children: ReactNode;
   className?: string;
@@ -34,6 +50,85 @@ export type ComposerSurfaceProps = {
   voiceState?: 'idle' | 'listening' | 'busy';
 };
 
+export type ComposerAccessoryItem = 'access' | 'usage' | 'model' | 'effort';
+
+export type ComposerAccessoryControls = {
+  access?: {
+    ariaLabel?: string;
+    askLabel: string;
+    autoLabel: string;
+    mode: ComposerAccessMode;
+    onChange?: (mode: ComposerAccessMode) => void;
+  };
+  items?: ComposerAccessoryItem[];
+  effort?: {
+    ariaLabel?: string;
+    control: ReactNode;
+    current?: string;
+    onOpenChange?: (open: boolean) => void;
+  };
+  model?: {
+    ariaLabel?: string;
+    currentEffort?: string;
+    currentModel?: string;
+    currentProvider?: string;
+    onModelChange?: (provider: string, model: string) => void;
+    onProviderChange?: (provider: string) => void;
+    onUseProfile?: () => void;
+    noModelsLabel?: string;
+    placeholder?: string;
+    profileDefault?: {
+      effort?: string;
+      label?: string;
+      modelLabel?: string;
+    };
+    providers: ComposerModelProviderOption[];
+    providersLabel?: string;
+    searchModelsLabel?: string;
+    useProfileLabel?: string;
+  };
+  profile?: {
+    ariaLabel?: string;
+    current?: string;
+    currentModel?: string;
+    onChange?: (profile: string) => void;
+    onModelChange?: (profile: string, model: string) => void;
+    options: { label: string; value: string }[];
+    profiles?: ComposerProfileOption[];
+    placeholder?: string;
+  };
+  usage?: {
+    ariaLabel?: string;
+    panel?: Omit<ComposerContextUsagePanelProps, 'percent'>;
+    percent: number;
+    title?: string;
+    unavailableLabel?: string;
+    usageAvailable?: boolean;
+  };
+};
+
+export type ComposerProfileModelOption = {
+  displayName?: string;
+  effort?: string;
+  efforts?: string[];
+  label: string;
+  value: string;
+};
+
+export type ComposerModelOption = ComposerProfileModelOption;
+
+export type ComposerModelProviderOption = {
+  label: string;
+  models: ComposerModelOption[];
+  value: string;
+};
+
+export type ComposerProfileOption = {
+  label: string;
+  models?: ComposerProfileModelOption[];
+  value: string;
+};
+
 export type UnifiedComposerControls = {
   access?: ReactNode;
   attach?: ReactNode;
@@ -45,7 +140,11 @@ export type UnifiedComposerControls = {
   voice?: ReactNode;
 };
 
-export type UnifiedComposerProps = Omit<ComposerSurfaceProps, 'children' | 'leftTools' | 'rightTools'> & {
+export type UnifiedComposerProps = Omit<
+  ComposerSurfaceProps,
+  'accessoryLeftTools' | 'accessoryRightTools' | 'children' | 'leftTools' | 'rightTools'
+> & {
+  accessoryControls?: ComposerAccessoryControls;
   ariaLabel?: string;
   controls?: UnifiedComposerControls;
   editor: ReactNode;
@@ -60,27 +159,430 @@ type ComposerLiquidGlassState = {
   width: number;
 };
 
+type ComposerToolSlot = {
+  key: string;
+  node: ReactNode;
+};
+
 const LIQUID_GLASS_MAX_AREA = 130_000;
 const LIQUID_GLASS_MAX_WIDTH = 900;
 const LIQUID_GLASS_MAX_HEIGHT = 180;
 const COMPOSER_LIQUID_GLASS_DEFAULT_ENABLED = true;
 const liquidGlassMapCache = new Map<string, string>();
 
-function composeComposerTools(nodes: ReactNode[]): ReactNode {
-  const visible = nodes.filter((node) => node !== null && node !== undefined && node !== false);
-  return visible.length ? visible : null;
+function composeComposerTools(slots: ComposerToolSlot[]): ReactNode {
+  const visible = slots.filter((slot) => slot.node !== null && slot.node !== undefined && slot.node !== false);
+  return visible.length ? visible.map((slot) => <Fragment key={slot.key}>{slot.node}</Fragment>) : null;
+}
+
+function composeComposerAccessoryTools(controls?: ComposerAccessoryControls): {
+  left: ReactNode;
+  right: ReactNode;
+} {
+  if (!controls) return { left: null, right: null };
+  const enabled = new Set<ComposerAccessoryItem>(controls.items ?? ['access', 'usage', 'model', 'effort']);
+  const left = composeComposerTools([
+    {
+      key: 'access',
+      node:
+        enabled.has('access') && controls.access ? (
+          <ComposerAccessSelect
+            ariaLabel={controls.access.ariaLabel ?? 'Approval strength'}
+            askLabel={controls.access.askLabel}
+            autoLabel={controls.access.autoLabel}
+            mode={controls.access.mode}
+            onChange={controls.access.onChange}
+          />
+        ) : null
+    }
+  ]);
+  const right = composeComposerTools([
+    {
+      key: 'usage',
+      node: enabled.has('usage') && controls.usage ? <ComposerUsageControl usage={controls.usage} /> : null
+    },
+    {
+      key: 'model',
+      node: enabled.has('model') ? (
+        <ComposerModelAccessory model={controls.model ?? legacyProfileModel(controls.profile)} />
+      ) : null
+    },
+    {
+      key: 'effort',
+      node: enabled.has('effort') && controls.effort ? <ComposerEffortAccessory effort={controls.effort} /> : null
+    }
+  ]);
+  return { left, right };
+}
+
+function ComposerModelAccessory({
+  model
+}: {
+  model?: NonNullable<ComposerAccessoryControls['model']>;
+}): ReactElement | null {
+  return model ? <ComposerModelPicker model={model} /> : null;
+}
+
+function ComposerEffortAccessory({
+  effort
+}: {
+  effort: NonNullable<ComposerAccessoryControls['effort']>;
+}): ReactElement {
+  return (
+    <Popover onOpenChange={effort.onOpenChange}>
+      <PopoverTrigger asChild>
+        <button
+          aria-label={effort.ariaLabel ?? 'Effort'}
+          className="workplace-action shared-composer-pill"
+          style={{
+            alignItems: 'center',
+            background: 'var(--shared-composer-control-bg, transparent)',
+            border: 'none',
+            borderRadius: 999,
+            color: 'var(--shared-composer-control-fg, var(--muted-foreground))',
+            cursor: 'pointer',
+            display: 'inline-flex',
+            flex: 'none',
+            fontFamily: 'var(--font-sans), ui-sans-serif, system-ui, sans-serif',
+            fontSize: 'var(--shared-composer-font-size, 13px)',
+            fontWeight: 'var(--shared-composer-font-weight, 500)',
+            gap: 4,
+            minHeight: 32,
+            padding: '0 var(--shared-composer-pill-x, 7px)',
+            whiteSpace: 'nowrap'
+          }}
+          type="button"
+        >
+          {effortLabel(effort.current) || effort.ariaLabel || 'Effort'}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        className="w-72 p-2.5"
+        collisionPadding={12}
+        side="top"
+        sticky="partial"
+      >
+        {effort.control}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function legacyProfileModel(
+  profile: ComposerAccessoryControls['profile']
+): NonNullable<ComposerAccessoryControls['model']> | undefined {
+  if (!profile) return undefined;
+  const profiles: ComposerProfileOption[] =
+    profile.profiles ?? profile.options.map((option) => ({ label: option.label, value: option.value }));
+  return {
+    ariaLabel: profile.ariaLabel,
+    currentModel: profile.currentModel,
+    currentProvider: profile.current,
+    onModelChange: profile.onModelChange,
+    onProviderChange: profile.onChange,
+    placeholder: profile.placeholder,
+    providers: profiles.map((item) => ({
+      label: item.label,
+      models: item.models ?? [],
+      value: item.value
+    }))
+  };
+}
+
+function effortLabel(effort: string | undefined): string {
+  if (!effort) return '';
+  return effort
+    .split(/([-_])/)
+    .map((part) => (part === '-' || part === '_' ? part : part.charAt(0).toUpperCase() + part.slice(1)))
+    .join('');
+}
+
+export function composerModelMenuLayout() {
+  return {
+    align: 'start' as const,
+    collisionPadding: 12,
+    itemClassName: 'cursor-pointer',
+    modelListClassName: 'h-72 overflow-y-auto',
+    modelNameClassName: 'max-w-72 truncate pl-3',
+    rootContentClassName: 'w-max min-w-[180px] max-w-[var(--radix-dropdown-menu-content-available-width)]',
+    searchContainerClassName: 'w-full pb-2',
+    searchInputClassName: 'h-8 w-full rounded-sm border bg-background px-2 text-sm outline-none',
+    side: 'top' as const,
+    subContentClassName:
+      'w-max min-w-[160px] max-w-[var(--radix-dropdown-menu-content-available-width)] overflow-hidden',
+    sticky: 'partial' as const,
+    valueClassName: 'ml-auto max-w-56 truncate text-right text-muted-foreground'
+  };
+}
+
+export function composerModelMenuPanelWidth(provider: ComposerModelProviderOption): number {
+  const longestLabel = provider.models.reduce((longest, item) => {
+    const label = item.displayName ?? item.label;
+    return Math.max(longest, Array.from(label).length);
+  }, Array.from(provider.label).length);
+  return Math.min(352, Math.max(256, 72 + longestLabel * 7));
+}
+
+export function buildComposerModelMenuSections(
+  model: Pick<NonNullable<ComposerAccessoryControls['model']>, 'currentModel' | 'currentProvider' | 'providers'>
+) {
+  return model.providers.map((provider) => ({
+    label: provider.label,
+    models: provider.models.map((item) => ({
+      label: item.displayName ?? item.label,
+      selected: provider.value === model.currentProvider && item.value === model.currentModel,
+      value: item.value
+    })),
+    selected: provider.value === model.currentProvider,
+    value: provider.value
+  }));
+}
+
+type ComposerModelMenuHoverTarget = { kind: 'profile' } | { kind: 'provider'; provider: string };
+
+export function composerModelMenuHoverState(target: ComposerModelMenuHoverTarget): { openProvider?: string } {
+  return { openProvider: target.kind === 'provider' ? target.provider : undefined };
+}
+
+function ComposerModelPicker({ model }: { model: NonNullable<ComposerAccessoryControls['model']> }): ReactElement {
+  const menuLayout = composerModelMenuLayout();
+  const [hoverState, setHoverState] = useState(() => composerModelMenuHoverState({ kind: 'profile' }));
+  const [query, setQuery] = useState('');
+  const currentProvider = model.providers.find((item) => item.value === model.currentProvider) ?? model.providers[0];
+  const currentModels = currentProvider?.models ?? [];
+  const selectedModel =
+    currentModels.find((item) => item.value === model.currentModel) ??
+    currentModels[0] ??
+    (model.currentModel ? { label: model.currentModel, value: model.currentModel } : undefined);
+  const displayName =
+    selectedModel?.displayName ??
+    selectedModel?.label ??
+    model.profileDefault?.modelLabel ??
+    model.placeholder ??
+    'Model';
+  const filteredModels = (provider: ComposerModelProviderOption) => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return provider.models;
+    return provider.models.filter((item) =>
+      `${item.displayName ?? ''} ${item.label} ${item.value}`.toLowerCase().includes(needle)
+    );
+  };
+
+  return (
+    <DropdownMenu
+      onOpenChange={(open) => {
+        if (open) return;
+        setHoverState(composerModelMenuHoverState({ kind: 'profile' }));
+        setQuery('');
+      }}
+    >
+      <DropdownMenuTrigger asChild>
+        <button
+          aria-label={model.ariaLabel ?? 'Model'}
+          className="workplace-action shared-composer-pill"
+          style={{
+            alignItems: 'center',
+            background: 'var(--shared-composer-control-bg, transparent)',
+            border: 'none',
+            borderRadius: 999,
+            color: 'var(--shared-composer-control-fg, var(--muted-foreground))',
+            cursor: 'pointer',
+            display: 'inline-flex',
+            flex: 'none',
+            fontFamily: 'var(--font-sans), ui-sans-serif, system-ui, sans-serif',
+            fontSize: 'var(--shared-composer-font-size, 13px)',
+            fontWeight: 'var(--shared-composer-font-weight, 500)',
+            gap: 4,
+            minHeight: 32,
+            padding: '0 var(--shared-composer-pill-x, 7px)',
+            whiteSpace: 'nowrap'
+          }}
+          type="button"
+        >
+          <span>{displayName}</span>
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align={menuLayout.align}
+        className={menuLayout.rootContentClassName}
+        collisionPadding={menuLayout.collisionPadding}
+        side={menuLayout.side}
+        sticky={menuLayout.sticky}
+      >
+        <DropdownMenuLabel className="text-muted-foreground text-xs">
+          {model.providersLabel ?? 'Providers'}
+        </DropdownMenuLabel>
+        {model.providers.map((provider) => {
+          const providerModels = filteredModels(provider);
+          const selected = provider.value === model.currentProvider;
+          return (
+            <DropdownMenuSub
+              key={provider.value}
+              onOpenChange={(open) =>
+                setHoverState((current) =>
+                  open
+                    ? composerModelMenuHoverState({ kind: 'provider', provider: provider.value })
+                    : current.openProvider === provider.value
+                      ? composerModelMenuHoverState({ kind: 'profile' })
+                      : current
+                )
+              }
+              open={hoverState.openProvider === provider.value}
+            >
+              <DropdownMenuSubTrigger
+                className={cn(menuLayout.itemClassName, 'justify-between gap-4')}
+                onPointerEnter={() => {
+                  if (hoverState.openProvider !== provider.value) setQuery('');
+                  setHoverState(composerModelMenuHoverState({ kind: 'provider', provider: provider.value }));
+                }}
+              >
+                <span>{provider.label}</span>
+                {selected ? (
+                  <HugeiconsIcon
+                    className="text-muted-foreground"
+                    icon={CheckIcon}
+                    size={15}
+                  />
+                ) : null}
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent
+                className={menuLayout.subContentClassName}
+                collisionPadding={menuLayout.collisionPadding}
+                sideOffset={4}
+                style={{ width: composerModelMenuPanelWidth(provider) }}
+              >
+                <div className={menuLayout.searchContainerClassName}>
+                  <input
+                    aria-label={model.searchModelsLabel ?? 'Search models'}
+                    className={menuLayout.searchInputClassName}
+                    onChange={(event) => setQuery(event.currentTarget.value)}
+                    onClick={(event) => event.stopPropagation()}
+                    onKeyDown={(event) => event.stopPropagation()}
+                    placeholder={model.searchModelsLabel ?? 'Search models'}
+                    value={query}
+                  />
+                </div>
+                <div className={menuLayout.modelListClassName}>
+                  {providerModels.length ? (
+                    providerModels.map((item) => {
+                      const active = selected && item.value === model.currentModel;
+                      return (
+                        <DropdownMenuItem
+                          className={cn(menuLayout.itemClassName, 'justify-between gap-4')}
+                          key={item.value}
+                          onSelect={() => model.onModelChange?.(provider.value, item.value)}
+                        >
+                          <span className={menuLayout.modelNameClassName}>{item.displayName ?? item.label}</span>
+                          {active ? (
+                            <HugeiconsIcon
+                              className="text-muted-foreground"
+                              icon={CheckIcon}
+                              size={15}
+                            />
+                          ) : null}
+                        </DropdownMenuItem>
+                      );
+                    })
+                  ) : (
+                    <div className="px-2 py-6 text-center text-muted-foreground text-sm">
+                      {model.noModelsLabel ?? 'No models'}
+                    </div>
+                  )}
+                </div>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          );
+        })}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          className={cn(menuLayout.itemClassName, 'justify-between gap-4')}
+          onPointerEnter={() => setHoverState(composerModelMenuHoverState({ kind: 'profile' }))}
+          onSelect={model.onUseProfile}
+        >
+          <span>{model.useProfileLabel ?? 'Use agent profile'}</span>
+          <span className={menuLayout.valueClassName}>
+            {model.profileDefault?.label ?? model.profileDefault?.modelLabel ?? 'Default'}
+          </span>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function ComposerUsageControl({ usage }: { usage: NonNullable<ComposerAccessoryControls['usage']> }): ReactElement {
+  const presentation = resolveComposerUsagePresentation(usage);
+  const button = (
+    <ComposerContextUsageButton
+      ariaLabel={usage.ariaLabel ?? 'Context usage'}
+      percent={usage.percent}
+      title={presentation.tooltipLabel}
+      usageAvailable
+    />
+  );
+  return (
+    <Popover>
+      <Tooltip>
+        <PopoverTrigger asChild>
+          <TooltipTrigger asChild>{button}</TooltipTrigger>
+        </PopoverTrigger>
+        <TooltipContent side="top">{presentation.tooltipLabel}</TooltipContent>
+      </Tooltip>
+      <PopoverContent
+        align="end"
+        className="w-72 p-0"
+        collisionPadding={12}
+        side="top"
+        sticky="partial"
+      >
+        {usage.panel ? (
+          <ComposerContextUsagePanel
+            {...usage.panel}
+            percent={usage.percent}
+          />
+        ) : (
+          <div className="p-3 text-muted-foreground text-sm">{presentation.panelLabel}</div>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+export function resolveComposerUsagePresentation(usage: NonNullable<ComposerAccessoryControls['usage']>): {
+  panelLabel: string;
+  tooltipLabel: string;
+} {
+  if (!usage.panel) {
+    const unavailableLabel = usage.unavailableLabel ?? usage.title ?? usage.ariaLabel ?? 'Context usage';
+    return { panelLabel: unavailableLabel, tooltipLabel: unavailableLabel };
+  }
+  const tooltipLabel = `${usage.percent}% ${usage.panel.contextUsedLabel}`;
+  return { panelLabel: tooltipLabel, tooltipLabel };
 }
 
 export function UnifiedComposer({
+  accessoryControls,
   ariaLabel = 'Message composer',
   controls,
   editor,
   voiceDebug,
   ...surfaceProps
 }: UnifiedComposerProps): ReactElement {
-  const leftTools = controls?.left ?? composeComposerTools([controls?.attach, controls?.access]);
+  const leftTools =
+    controls?.left ??
+    composeComposerTools([
+      { key: 'attach', node: controls?.attach },
+      { key: 'access', node: controls?.access }
+    ]);
   const rightTools =
-    controls?.right ?? composeComposerTools([controls?.context, controls?.model, controls?.voice, controls?.submit]);
+    controls?.right ??
+    composeComposerTools([
+      { key: 'context', node: controls?.context },
+      { key: 'model', node: controls?.model },
+      { key: 'voice', node: controls?.voice },
+      { key: 'submit', node: controls?.submit }
+    ]);
+  const accessoryTools = composeComposerAccessoryTools(accessoryControls);
 
   return (
     <fieldset
@@ -94,6 +596,8 @@ export function UnifiedComposer({
     >
       <ComposerSurface
         {...surfaceProps}
+        accessoryLeftTools={accessoryTools.left}
+        accessoryRightTools={accessoryTools.right}
         leftTools={leftTools}
         rightTools={rightTools}
       >
@@ -105,6 +609,8 @@ export function UnifiedComposer({
 }
 
 export function ComposerSurface({
+  accessoryLeftTools,
+  accessoryRightTools,
   ariaBusy,
   children,
   className,
@@ -120,6 +626,8 @@ export function ComposerSurface({
   const voiceActive = voiceState !== 'idle';
   const frameRef = useRef<HTMLDivElement | null>(null);
   const liquidGlassState = useComposerLiquidGlass(frameRef, liquidGlass);
+  const hasPrimaryToolbar = leftTools || rightTools;
+  const hasAccessoryRail = accessoryLeftTools || accessoryRightTools;
   return (
     <ChatInputChrome
       className={cn(
@@ -141,96 +649,121 @@ export function ComposerSurface({
         className="chat-input-frame"
         ref={frameRef}
       >
-        <div
-          aria-hidden="true"
-          className="chat-input-aurora"
-        >
-          <div className="chat-input-aurora-root">
-            <div className="chat-input-aurora-inner-glow">
-              <div className="chat-input-aurora-glow-pulse">
-                <div className="chat-input-aurora-edge-mask">
-                  <div className="chat-input-aurora-blur-field">
-                    <div className="chat-input-aurora-gradient" />
+        <div className="chat-input-surface-frame">
+          <div
+            aria-hidden="true"
+            className="chat-input-aurora"
+          >
+            <div className="chat-input-aurora-root">
+              <div className="chat-input-aurora-inner-glow">
+                <div className="chat-input-aurora-glow-pulse">
+                  <div className="chat-input-aurora-edge-mask">
+                    <div className="chat-input-aurora-blur-field">
+                      <div className="chat-input-aurora-gradient" />
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-            <div className="chat-input-aurora-border-pulse">
-              <div className="chat-input-aurora-border-mask">
-                <div className="chat-input-aurora-gradient" />
+              <div className="chat-input-aurora-border-pulse">
+                <div className="chat-input-aurora-border-mask">
+                  <div className="chat-input-aurora-gradient" />
+                </div>
               </div>
             </div>
           </div>
-        </div>
-        <div
-          className="chat-input-surface composer-live-dense"
-          role="presentation"
-        >
           <div
-            aria-busy={ariaBusy || undefined}
-            className="chat-input-content"
-            onBeforeInputCapture={(event) => {
-              if (ariaBusy) event.preventDefault();
-            }}
-            onDropCapture={(event) => {
-              if (ariaBusy) event.preventDefault();
-            }}
-            onKeyDownCapture={(event) => {
-              if (ariaBusy) event.preventDefault();
-            }}
-            onPasteCapture={(event) => {
-              if (ariaBusy) event.preventDefault();
-            }}
-            style={{
-              opacity: ariaBusy ? 0.72 : 1,
-              pointerEvents: ariaBusy ? 'none' : undefined
-            }}
+            className="chat-input-surface composer-live-dense"
+            role="presentation"
           >
-            {children}
-            {mentionPreview ? (
+            <div
+              aria-busy={ariaBusy || undefined}
+              className="chat-input-content"
+              onBeforeInputCapture={(event) => {
+                if (ariaBusy) event.preventDefault();
+              }}
+              onDropCapture={(event) => {
+                if (ariaBusy) event.preventDefault();
+              }}
+              onKeyDownCapture={(event) => {
+                if (ariaBusy) event.preventDefault();
+              }}
+              onPasteCapture={(event) => {
+                if (ariaBusy) event.preventDefault();
+              }}
+              style={{
+                opacity: ariaBusy ? 0.72 : 1,
+                pointerEvents: ariaBusy ? 'none' : undefined
+              }}
+            >
+              {children}
+              {mentionPreview ? (
+                <div
+                  className="flex flex-wrap items-center gap-1.5 text-[13px]"
+                  style={{ color: 'var(--muted-foreground)' }}
+                >
+                  {mentionPreview}
+                </div>
+              ) : null}
+            </div>
+
+            <ComposerVoiceSpectrum
+              level={voiceLevel}
+              spectrum={voiceSpectrum}
+              state={voiceState}
+            />
+
+            {hasPrimaryToolbar ? (
               <div
-                className="flex flex-wrap items-center gap-1.5 text-[13px]"
-                style={{ color: 'var(--muted-foreground)' }}
+                className="shared-composer-toolbar"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 5,
+                  padding: 0
+                }}
               >
-                {mentionPreview}
+                <div
+                  className="shared-composer-tools"
+                  style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0 }}
+                >
+                  {leftTools}
+                </div>
+                <div
+                  className="shared-composer-tools shared-composer-tools-right"
+                  style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto', minWidth: 0 }}
+                >
+                  {rightTools}
+                </div>
               </div>
             ) : null}
           </div>
-
-          <ComposerVoiceSpectrum
-            level={voiceLevel}
-            spectrum={voiceSpectrum}
-            state={voiceState}
-          />
-
+        </div>
+        {hasAccessoryRail ? (
           <div
-            className="shared-composer-toolbar"
+            className="shared-composer-accessory-rail"
             style={{
-              display: 'flex',
               alignItems: 'center',
+              display: 'flex',
+              gap: 8,
               justifyContent: 'space-between',
-              gap: 5,
-              padding: 0
+              minWidth: 0
             }}
           >
-            {leftTools ? (
-              <div
-                className="shared-composer-tools"
-                style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0 }}
-              >
-                {leftTools}
-              </div>
-            ) : null}
-            {rightTools ? (
-              <div
-                className="shared-composer-tools shared-composer-tools-right"
-                style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto', minWidth: 0 }}
-              >
-                {rightTools}
-              </div>
-            ) : null}
+            <div
+              className="shared-composer-accessory shared-composer-accessory-left"
+              style={{ alignItems: 'center', display: 'inline-flex', gap: 4, minWidth: 0 }}
+            >
+              {accessoryLeftTools}
+            </div>
+            <div
+              className="shared-composer-accessory shared-composer-accessory-right"
+              style={{ alignItems: 'center', display: 'inline-flex', gap: 4, marginLeft: 'auto', minWidth: 0 }}
+            >
+              {accessoryRightTools}
+            </div>
           </div>
-        </div>
+        ) : null}
         {mentionMenu}
       </div>
     </ChatInputChrome>
@@ -525,6 +1058,7 @@ export function ComposerSelect({
   disabled = false,
   icon,
   onChange,
+  showChevron = true,
   tone = 'accent',
   value
 }: {
@@ -533,6 +1067,7 @@ export function ComposerSelect({
   disabled?: boolean;
   icon?: ReactNode;
   onChange?: (value: string) => void;
+  showChevron?: boolean;
   tone?: 'accent' | 'ink';
   value: string;
 }): ReactElement {
@@ -545,7 +1080,9 @@ export function ComposerSelect({
         border: 'none',
         borderRadius: 999,
         background: 'var(--shared-composer-control-bg, transparent)',
-        color: disabled ? 'var(--muted-foreground)' : tone === 'ink' ? 'var(--foreground)' : 'var(--accent-blue)',
+        color: disabled
+          ? 'var(--muted-foreground)'
+          : `var(--shared-composer-control-fg, ${tone === 'ink' ? 'var(--foreground)' : 'var(--muted-foreground)'})`,
         cursor: disabled ? 'not-allowed' : 'pointer',
         display: 'flex',
         alignItems: 'center',
@@ -553,7 +1090,7 @@ export function ComposerSelect({
         padding: '0 var(--shared-composer-pill-x, 7px)',
         fontFamily: 'var(--font-sans), ui-sans-serif, system-ui, sans-serif',
         fontSize: 'var(--shared-composer-font-size, 14px)',
-        fontWeight: 600,
+        fontWeight: 'var(--shared-composer-font-weight, 600)',
         whiteSpace: 'nowrap',
         opacity: disabled ? 0.62 : 1
       }}
@@ -566,9 +1103,10 @@ export function ComposerSelect({
         style={{
           appearance: 'none',
           border: 'none',
-          background: 'transparent',
+          background: 'var(--shared-composer-control-bg, transparent)',
           color: 'inherit',
           cursor: disabled ? 'not-allowed' : 'pointer',
+          fieldSizing: 'content',
           font: 'inherit',
           outline: 'none'
         }}
@@ -576,11 +1114,13 @@ export function ComposerSelect({
       >
         {children}
       </select>
-      <HugeiconsIcon
-        aria-hidden
-        icon={ChevronDownIcon}
-        size={14}
-      />
+      {showChevron ? (
+        <HugeiconsIcon
+          aria-hidden
+          icon={ChevronDownIcon}
+          size={14}
+        />
+      ) : null}
     </label>
   );
 }
@@ -610,6 +1150,7 @@ export function ComposerAccessSelect({
         />
       }
       onChange={(nextValue) => onChange?.(nextValue as ComposerAccessMode)}
+      showChevron={false}
       tone="ink"
       value={mode}
     >
@@ -679,7 +1220,7 @@ export const ComposerIconButton = forwardRef<HTMLButtonElement, ComposerIconButt
         border: 'none',
         borderRadius: '50%',
         background: active ? 'var(--accent-blue-soft)' : 'var(--shared-composer-control-bg, transparent)',
-        color: active ? 'var(--accent-blue)' : 'var(--muted-foreground)',
+        color: active ? 'var(--accent-blue)' : 'var(--shared-composer-control-fg, var(--muted-foreground))',
         cursor: disabled || ariaDisabled ? 'not-allowed' : 'pointer',
         display: 'flex',
         alignItems: 'center',
@@ -760,7 +1301,7 @@ export const ComposerContextUsageButton = forwardRef<HTMLButtonElement, Composer
           border: 'none',
           borderRadius: '50%',
           background: 'transparent',
-          color: 'var(--foreground)',
+          color: 'var(--shared-composer-control-fg, var(--muted-foreground))',
           cursor: usageAvailable ? 'pointer' : 'default',
           display: 'flex',
           alignItems: 'center',

@@ -48,33 +48,30 @@ export function createSubscribeHandlers(ctx: SessionContext) {
     sink: (event: SessionUiEvent) => void
   ) {
     const session = requireSession(sessionId);
-    const projector = new SessionUiProjector({ channelStructured: isChannelStructuredSession(session) });
-    // Bound the initial snapshot to the most-recent window; older history is loaded lazily by
-    // the client over GET /ui-items. A full window implies there may be older messages.
-    const recent = store.listMessages(sessionId, {
-      includeInactive: false,
-      latest: true,
-      limit: LIVE_SNAPSHOT_LIMIT
-    });
-    const hasMore = recent.length === LIVE_SNAPSHOT_LIMIT;
-    projector.hydrateMessages(recent, parseDurableSummary(store.getMemory(sessionId, 'ctx:summary')));
-    // Rebuild external agent tool cards from their durable output snapshots (external_agent.output chunks are
-    // not persisted as events). Scope to this window: runs that started within it, plus any still
-    // active, so an in-flight or recent CLI run survives a refresh/reconnect without dragging every
-    // historical run into the bounded snapshot.
-    const oldestTs = recent[0]?.createdAt;
-    projector.hydrateExternalAgentSessions(
-      store
-        .listExternalAgentSessionsForTranscriptTarget(sessionId)
-        .filter(
-          (s) =>
-            s.runtimeRole === 'managed-project-agent' ||
-            s.state === 'running' ||
-            s.state === 'starting' ||
-            oldestTs === undefined ||
-            s.startedAt >= oldestTs
-        )
-    );
+    const hydrateProjector = () => {
+      const next = new SessionUiProjector({ channelStructured: isChannelStructuredSession(session) });
+      const recent = store.listMessages(sessionId, {
+        includeInactive: false,
+        latest: true,
+        limit: LIVE_SNAPSHOT_LIMIT
+      });
+      const oldestTs = recent[0]?.createdAt;
+      next.hydrateMessages(recent, parseDurableSummary(store.getMemory(sessionId, 'ctx:summary')));
+      next.hydrateExternalAgentSessions(
+        store
+          .listExternalAgentSessionsForTranscriptTarget(sessionId)
+          .filter(
+            (s) =>
+              s.runtimeRole === 'managed-project-agent' ||
+              s.state === 'running' ||
+              s.state === 'starting' ||
+              oldestTs === undefined ||
+              s.startedAt >= oldestTs
+          )
+      );
+      return { projector: next, hasMore: recent.length === LIVE_SNAPSHOT_LIMIT };
+    };
+    let { projector, hasMore } = hydrateProjector();
     // Replay only the in-flight (un-persisted) round on top of the hydrated window. This is a
     // snapshot endpoint (the client replaces its view wholesale), so hydration IS the reconnect
     // baseline — every settled round is already in the bounded message window. We must NOT replay
@@ -85,6 +82,14 @@ export function createSubscribeHandlers(ctx: SessionContext) {
     for (const event of buffered) projector.applyEvent(event);
     sink(projector.snapshot({ hasMore }));
     const dispose = bus.subscribe(sessionId, (event) => {
+      const resetsTranscript =
+        event.type === 'session.restored' || (event.type === 'session.updated' && event.payload.reset === true);
+      if (resetsTranscript) {
+        ({ projector, hasMore } = hydrateProjector());
+        projector.applyEvent(event);
+        sink(projector.snapshot({ hasMore, replacesTranscript: true }));
+        return;
+      }
       for (const uiEvent of projector.applyEvent(event)) sink(uiEvent);
     });
     return { subscribed: true as const, dispose };

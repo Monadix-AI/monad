@@ -8,7 +8,7 @@ import { createElement, useEffect, useMemo, useRef, useState } from 'react';
 import { useT } from '#/components/I18nProvider';
 import { projectSessionPath, studioPath } from '#/features/shell/routing/paths';
 import { pushShellUrl } from '#/hooks/use-shell-location';
-import { useMonadRuntime } from '#/lib/monad-runtime-provider';
+import { useMonadRuntime } from '#/lib/monad-runtime-context';
 import { daemonApiUrl } from '#/lib/monad-store';
 
 type WorkspaceExperienceElement = HTMLElement & {

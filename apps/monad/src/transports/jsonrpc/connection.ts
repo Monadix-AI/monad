@@ -10,6 +10,8 @@ export { consumeToken };
 export interface ConnectionState {
   /** Disposer for this connection's cross-session control subscription, if any. */
   control?: Disposer;
+  /** Disposer for this connection's host-interaction subscription, if any. */
+  interactions?: Disposer;
   /** Per-session live subscriptions keyed by session id. Used by session.subscribe RPC. */
   sessions?: Map<string, Disposer>;
   /** Per-connection RPC rate limiter. Absent → unlimited (trusted local transports). */
@@ -27,6 +29,8 @@ export function createConnectionState(rateLimit?: RateLimitConfig): ConnectionSt
 export function closeConnection(state: ConnectionState): void {
   state.control?.();
   state.control = undefined;
+  state.interactions?.();
+  state.interactions = undefined;
   state.sessions?.forEach((dispose) => {
     dispose();
   });

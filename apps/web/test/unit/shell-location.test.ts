@@ -102,4 +102,42 @@ describe('shell location navigation', () => {
 
     expect(calls).toEqual([]);
   });
+
+  test('consuming a reached message deep link re-enables transcript follow mode', async () => {
+    installWindowMock('http://localhost:3000/sessions/ses_ABCDEF123456?msg=msg_ABCDEF123456&panel=inspector#details');
+    const { calls } = installShellRouterMock('/sessions/ses_ABCDEF123456?msg=msg_ABCDEF123456&panel=inspector#details');
+    const shellLocation = await import('../../src/hooks/use-shell-location');
+    const removeShellSearchParam = Reflect.get(shellLocation, 'removeShellSearchParam') as
+      | ((param: string) => void)
+      | undefined;
+
+    expect(removeShellSearchParam).toBeFunction();
+    if (!removeShellSearchParam) return;
+
+    removeShellSearchParam('msg');
+
+    expect(calls).toEqual([
+      {
+        mode: 'replace',
+        url: '/sessions/ses_ABCDEF123456?panel=inspector#details'
+      }
+    ]);
+    const consumedUrl = calls[0]?.url;
+    expect(consumedUrl).toBeDefined();
+    if (!consumedUrl) return;
+    const consumedRoute = new URL(consumedUrl, 'http://localhost:3000');
+    expect(consumedRoute.searchParams.get('msg')).toBeNull();
+    expect(consumedRoute.searchParams.get('panel')).toBe('inspector');
+    expect(consumedRoute.hash).toBe('#details');
+  });
+
+  test('a stale message scroll callback does not consume a newer deep link', async () => {
+    installWindowMock('http://localhost:3000/sessions/ses_NEW?msg=msg_NEW');
+    const { calls } = installShellRouterMock('/sessions/ses_NEW?msg=msg_NEW');
+    const { removeShellSearchParam } = await import('../../src/hooks/use-shell-location');
+
+    removeShellSearchParam('msg', 'msg_OLD');
+
+    expect(calls).toEqual([]);
+  });
 });

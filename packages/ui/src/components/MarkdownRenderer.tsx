@@ -1,5 +1,3 @@
-'use client';
-
 import { mermaid } from '@streamdown/mermaid';
 import { type Components, Streamdown } from 'streamdown';
 import 'streamdown/styles.css';

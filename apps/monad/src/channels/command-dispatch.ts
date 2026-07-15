@@ -115,6 +115,7 @@ function channelServices(host: CommandHost, bundle: CommandBundle): CommandServi
     checkMemory: () => bundle.checkMemory(),
     listModels: (sid) => bundle.listModels(sid as SessionId),
     setModel: (sid, alias) => bundle.setModel(sid as SessionId, alias),
+    setEffort: (sid, effort) => bundle.setEffort(sid as SessionId, effort),
     getWorkdir: async (sid) => ({ path: host.deps.store.getSession(sid)?.cwd }),
     setWorkdir: (sid, path) =>
       host.deps.session.setWorkspace

@@ -20,7 +20,7 @@ import {
   DialogTitle
 } from '#/components/ui/dialog';
 import { FileIcon } from '#/lib/file-icons';
-import { useMonadRuntime } from '#/lib/monad-runtime-provider';
+import { useMonadRuntime } from '#/lib/monad-runtime-context';
 import { formatAttachmentSize, loadSkillContent, parseSkillFrontmatter, parseSkillPreview } from './utils';
 
 export function SkillEditorDialog({

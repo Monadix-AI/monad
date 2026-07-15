@@ -5,7 +5,7 @@ export { useTestCredentialMutation } from './credentials/test-credential.ts';
 export { useGetDefaultQuery } from './default/get-default.ts';
 export { useSetDefaultMutation } from './default/set-default.ts';
 export { useReindexEmbeddingsMutation } from './embeddings/reindex.ts';
-export { modelAdapter, modelSelectors, useListModelsQuery } from './models/list-models.ts';
+export { modelAdapter, modelSelectors, useLazyListModelsQuery, useListModelsQuery } from './models/list-models.ts';
 export { useDeleteProfileMutation } from './profiles/delete-profile.ts';
 export { profileAdapter, profileSelectors, useListProfilesQuery } from './profiles/list-profiles.ts';
 export { useRenameProfileMutation } from './profiles/rename-profile.ts';

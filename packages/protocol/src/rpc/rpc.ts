@@ -1,5 +1,6 @@
 import type { Event } from '../domain.ts';
 import type { SessionId } from '../ids.ts';
+import type { InteractionEvent } from '../interaction.ts';
 
 export interface JsonRpcRequest {
   jsonrpc: '2.0';
@@ -16,11 +17,17 @@ export interface JsonRpcResponse {
 }
 
 /** Server-push notification — no `id` field (fire-and-forget). */
-export interface JsonRpcNotification {
-  jsonrpc: '2.0';
-  method: 'sessions.event';
-  params: { sessionId: SessionId; event: Event };
-}
+export type JsonRpcNotification =
+  | {
+      jsonrpc: '2.0';
+      method: 'sessions.event';
+      params: { sessionId: SessionId; event: Event };
+    }
+  | {
+      jsonrpc: '2.0';
+      method: 'interactions.event';
+      params: { event: InteractionEvent };
+    };
 
 export interface JsonRpcError {
   code: number;

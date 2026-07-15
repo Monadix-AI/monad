@@ -35,6 +35,7 @@ export interface CommandServices {
   checkMemory(): Promise<ContradictionCheckSummary>;
   listModels(sessionId: string): Promise<CommandModelInfo[]>;
   setModel(sessionId: string, alias: string): Promise<void>;
+  setEffort(sessionId: string, effort?: string): Promise<void>;
   getWorkdir(sessionId: string): Promise<{ path?: string }>;
   setWorkdir(sessionId: string, path: string): Promise<{ path?: string }>;
   listCommands(): Promise<CommandItem[]>;
@@ -66,6 +67,7 @@ export function makeCommandRunContext(p: {
     checkMemory: () => services.checkMemory(),
     listModels: () => services.listModels(sessionId),
     setModel: (alias) => services.setModel(sessionId, alias),
+    setEffort: (effort) => services.setEffort(sessionId, effort),
     getWorkdir: () => services.getWorkdir(sessionId),
     setWorkdir: (path) => services.setWorkdir(sessionId, path),
     listCommands: () => services.listCommands(),

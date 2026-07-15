@@ -19,7 +19,7 @@ interface UiItemsWindowArg {
 // transcript arrives over the bounded stream (streamUiItems); this fills in older/newer pages
 // on demand. `olderCursor`/`newerCursor` are RAW message ids (the `before`/`after` for the
 // next page) — never derived from projected UI items, whose ids are not message ids.
-const getUiItemsApi = apiSlice.injectEndpoints({
+export const getUiItemsApi = apiSlice.injectEndpoints({
   overrideExisting: true,
   endpoints: (builder) => ({
     getUiItemsWindow: builder.query<ListUiItemsResponse, UiItemsWindowArg>({

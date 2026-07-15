@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useT } from '#/components/I18nProvider';
 import { SkillEditorDialog } from '#/features/studio/skills-settings/SkillEditorDialog';
 import { loadSkillContent } from '#/features/studio/skills-settings/utils';
-import { useMonadRuntime } from '#/lib/monad-runtime-provider';
+import { useMonadRuntime } from '#/lib/monad-runtime-context';
 import { skillCommandMeta } from './command-menu';
 import { SessionComposerRegion } from './SessionComposerRegion';
 import { SessionHeader } from './SessionHeader';

@@ -16,9 +16,9 @@ import { useEffect, useState } from 'react';
 
 import { useT } from '#/components/I18nProvider';
 import {
-  defaultReasoningEffort,
   ReasoningEffortControl,
-  reasoningEffortOption
+  reasoningEffortOption,
+  resolveReasoningEffort
 } from '#/components/ReasoningEffortControl';
 import { externalAgentModelDisplayName } from './external-agent-member-dialog-model';
 
@@ -43,6 +43,7 @@ export function ExternalAgentMemberDialog({
     setSaving(false);
   }, [resetSavingKey]);
   if (!invite) return null;
+  const effortState = resolveReasoningEffort(invite.candidate.reasoningEfforts, invite.draft.reasoningEffort);
   const field: React.CSSProperties = {
     width: '100%',
     border: `1px solid ${'var(--border)'}`,
@@ -211,7 +212,7 @@ export function ExternalAgentMemberDialog({
                 onCheckedChange={(checked) => updateDraft({ speed: checked ? 'fast' : undefined })}
               />
             </div>
-            {(invite.candidate.reasoningEfforts ?? []).length > 0 ? (
+            {effortState.efforts.length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                 <span style={{ fontFamily: mono, fontSize: 10, color: 'var(--muted-foreground)' }}>
                   {t('web.workplace.reasoningEffort')}
@@ -223,13 +224,9 @@ export function ExternalAgentMemberDialog({
                       type="button"
                       variant="ghost"
                     >
-                      {
-                        reasoningEffortOption(
-                          invite.draft.reasoningEffort ??
-                            defaultReasoningEffort(invite.candidate.reasoningEfforts) ??
-                            ''
-                        ).label
-                      }
+                      {effortState.value
+                        ? reasoningEffortOption(effortState.value).label
+                        : t('web.workplace.reasoningEffort')}
                       <HugeiconsIcon
                         icon={ChevronDownIcon}
                         size={12}
@@ -242,9 +239,10 @@ export function ExternalAgentMemberDialog({
                   >
                     <ReasoningEffortControl
                       className="border-0 shadow-none"
+                      defaultLabel={t('web.workplace.reasoningEffort')}
                       onChange={(reasoningEffort) => updateDraft({ reasoningEffort })}
-                      options={(invite.candidate.reasoningEfforts ?? []).map(reasoningEffortOption)}
-                      value={invite.draft.reasoningEffort ?? defaultReasoningEffort(invite.candidate.reasoningEfforts)}
+                      options={effortState.efforts.map(reasoningEffortOption)}
+                      value={effortState.value}
                     />
                   </PopoverContent>
                 </Popover>

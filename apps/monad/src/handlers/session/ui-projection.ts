@@ -316,7 +316,7 @@ export class SessionUiProjector {
     );
   }
 
-  snapshot(opts: { hasMore?: boolean } = {}): SessionUiEvent {
+  snapshot(opts: { hasMore?: boolean; replacesTranscript?: boolean } = {}): SessionUiEvent {
     // From here on the initial view is committed; subsequent live growth may be evicted (see upsert).
     this.snapshotted = true;
     return {
@@ -324,6 +324,7 @@ export class SessionUiProjector {
       ...(this.lastCursor ? { cursor: this.lastCursor as `evt_${string}` } : {}),
       ...(this.oldestMessageId ? { oldestCursor: this.oldestMessageId as `msg_${string}` } : {}),
       ...(opts.hasMore ? { hasMore: true } : {}),
+      ...(opts.replacesTranscript ? { replacesTranscript: true } : {}),
       items: this.order.map((key) => this.items.get(key)).filter((item): item is UIItem => item !== undefined)
     };
   }

@@ -8,9 +8,9 @@ import type {
   UIItem
 } from '@monad/protocol';
 import type { VirtualListHandle } from '@monad/ui/components/VirtualList';
-import type { ComponentProps, KeyboardEventHandler, Ref } from 'react';
+import type { ComponentProps, KeyboardEventHandler, RefObject } from 'react';
 import type { ComposerShell } from './ComposerShell';
-import type { ViewItem } from './chat-view-items';
+import type { BranchSourceViewItem, ViewItem } from './chat-view-items';
 import type { SessionCommandMenuItem } from './command-menu';
 
 export const SESSION_ROUTE_MODEL_REGIONS = ['identity', 'transcript', 'composer', 'inspector'] as const;
@@ -42,17 +42,20 @@ export interface SessionIdentityModel {
 }
 
 export interface SessionTranscriptModel {
+  commands: CommandItem[];
   firstItemIndex: number;
+  highlightedMessageId: string | null;
   onApproval: (approval: PendingApproval, allow: boolean, scope: ApprovalScope, reason?: string) => void;
-  onBranch: (messageId: string) => void;
+  onBranch: (messageId: string, role: 'user' | 'assistant') => void;
   onClarifyAnswer: (requestId: string, answer: string) => void;
   onEndReached: () => void;
-  onRestore: (messageId: string) => void;
+  onOpenBranchSource: (source: BranchSourceViewItem) => void;
+  onRestore: (messageId: string, text: string) => void;
   onScrollToBottom: (behavior?: 'smooth' | 'auto') => void;
   onStartReached: () => void;
   pendingApprovals: PendingApproval[];
   pendingClarifications: PendingClarification[];
-  transcriptRef: Ref<VirtualListHandle>;
+  transcriptRef: RefObject<VirtualListHandle | null>;
   viewMessages: ViewItem[];
 }
 

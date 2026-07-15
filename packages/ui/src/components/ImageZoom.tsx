@@ -1,5 +1,3 @@
-'use client';
-
 import Zoom, { type ControlledProps, type UncontrolledProps } from 'react-medium-image-zoom';
 
 import { cn } from '../lib/utils';

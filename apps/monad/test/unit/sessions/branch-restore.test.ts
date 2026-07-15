@@ -19,6 +19,36 @@ test('branch creates a child with parentSessionId set; provenance links them', a
   expect(parentProv.descendants.map((s) => s.id)).toContain(child);
 });
 
+test('a branch ending at a user message can generate without duplicating the user turn', async () => {
+  const d = buildHandlers(mockModel(['Alternative']));
+  const { sessionId: parent } = await d.session.create({ title: 'parent' });
+  await d.session.send({ generate: false, sessionId: parent, text: 'Try this' });
+  const user = (await d.session.messages({ id: parent })).messages.find((message) => message.role === 'user');
+  if (!user) throw new Error('expected a user message');
+  const { sessionId: child } = await d.session.branch({ id: parent, atMessageId: user.id });
+
+  await d.session.sendInline({ continueFromHistory: true, sessionId: child, text: '' }, () => {}, {
+    transport: 'http'
+  });
+
+  const childMessages = (await d.session.messages({ id: child })).messages;
+  expect(childMessages.map(({ role, text, type }) => ({ role, text, type }))).toEqual([
+    { role: 'assistant', text: '', type: 'branch_source' },
+    { role: 'user', text: 'Try this', type: 'text' },
+    { role: 'assistant', text: 'Alternative', type: 'text' }
+  ]);
+  expect(childMessages.slice(0, 2).map((message) => message.includeInContext)).toEqual([false, false]);
+  expect(childMessages[0]?.data).toEqual({ messageId: user.id, sessionId: parent });
+  expect(
+    (await d.session.messages({ id: child, includeAncestors: true })).messages.map(({ role, text }) => ({ role, text }))
+  ).toEqual([
+    { role: 'user', text: 'Try this' },
+    { role: 'assistant', text: '' },
+    { role: 'user', text: 'Try this' },
+    { role: 'assistant', text: 'Alternative' }
+  ]);
+});
+
 test('restore soft-deletes from a user message onward and bumps restore_count', async () => {
   const d = buildHandlers(mockModel(['A']));
   const { sessionId } = await d.session.create({ title: 't' });
@@ -73,9 +103,9 @@ test('messages(includeAncestors) replays parent history truncated at the branch 
   await d.session.generate({ sessionId: child, text: 'c1' }); // user:c1, assistant:R
 
   const own = (await d.session.messages({ id: child })).messages.map((m) => m.text);
-  expect(own).toEqual(['c1', 'R']);
+  expect(own).toEqual(['', 'R', 'c1', 'R']);
 
   const withAncestors = (await d.session.messages({ id: child, includeAncestors: true })).messages.map((m) => m.text);
-  // parent truncated at first assistant (p1, R) + child's own (c1, R)
-  expect(withAncestors).toEqual(['p1', 'R', 'c1', 'R']);
+  // parent truncated at first assistant (p1, R) + source reference + copied branch target + child's own (c1, R)
+  expect(withAncestors).toEqual(['p1', 'R', '', 'R', 'c1', 'R']);
 });

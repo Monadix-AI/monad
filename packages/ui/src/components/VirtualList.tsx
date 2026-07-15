@@ -1,5 +1,3 @@
-'use client';
-
 import type { CSSProperties, ReactNode, Ref } from 'react';
 import type { StateSnapshot, VirtuosoHandle } from 'react-virtuoso';
 
@@ -105,6 +103,10 @@ export function shouldPinToBottom(stickToBottom: boolean, pinned: boolean): bool
   return stickToBottom && pinned;
 }
 
+export function scrollTopPreservingAnchor(scrollTop: number, previousTop: number, currentTop: number): number {
+  return scrollTop + currentTop - previousTop;
+}
+
 // Generic windowed list over react-virtuoso. The custom pinning below exists because
 // virtuoso's built-in `followOutput` does not re-pin when a row grows IN PLACE (a streaming
 // message) — only on item-count changes. We instead pin from `totalListHeightChanged`
@@ -146,6 +148,32 @@ export function VirtualList<T>({
   const userScrolledRef = useRef(false);
   const lastScrollTopRef = useRef<number | null>(null);
   const viewportResizeObserverRef = useRef<ResizeObserver | null>(null);
+  const layoutAnchorRef = useRef<{ element: HTMLElement; top: number; expiresAt: number } | null>(null);
+
+  const captureLayoutAnchor = useCallback((target: EventTarget | null) => {
+    if (!(target instanceof Element)) return;
+    const element = target.closest<HTMLElement>('[data-virtual-list-anchor="true"]');
+    if (!element) return;
+    layoutAnchorRef.current = {
+      element,
+      top: element.getBoundingClientRect().top,
+      expiresAt: performance.now() + 500
+    };
+  }, []);
+
+  const handleAnchorPointerDown = useCallback(
+    (event: PointerEvent) => {
+      captureLayoutAnchor(event.target);
+    },
+    [captureLayoutAnchor]
+  );
+
+  const handleAnchorKeyDown = useCallback(
+    (event: KeyboardEvent) => {
+      if (event.key === 'Enter' || event.key === ' ') captureLayoutAnchor(event.target);
+    },
+    [captureLayoutAnchor]
+  );
 
   const measurePinned = useCallback(() => {
     const el = scrollerRef.current;
@@ -172,13 +200,38 @@ export function VirtualList<T>({
     }
   }, [stickToBottom]);
 
+  const preserveLayoutAnchor = useCallback(() => {
+    const anchor = layoutAnchorRef.current;
+    const el = scrollerRef.current;
+    if (!anchor || !el) return false;
+    if (!anchor.element.isConnected || performance.now() > anchor.expiresAt) {
+      layoutAnchorRef.current = null;
+      return false;
+    }
+    const nextScrollTop = scrollTopPreservingAnchor(
+      el.scrollTop,
+      anchor.top,
+      anchor.element.getBoundingClientRect().top
+    );
+    if (Math.abs(nextScrollTop - el.scrollTop) > 0.5) {
+      selfScrollRef.current = true;
+      el.scrollTop = nextScrollTop;
+      lastScrollTopRef.current = el.scrollTop;
+    }
+    return true;
+  }, []);
+
   // Pin now, then once more next frame: a freshly appended row reports its real height a
   // frame after it mounts, so a single re-pin catches the residual gap that one pass leaves.
   const pinToBottomSoon = useCallback(() => {
     if (userScrolledRef.current && !pinnedRef.current) return;
+    if (preserveLayoutAnchor()) {
+      requestAnimationFrame(preserveLayoutAnchor);
+      return;
+    }
     pinToBottom();
     requestAnimationFrame(pinToBottom);
-  }, [pinToBottom]);
+  }, [pinToBottom, preserveLayoutAnchor]);
 
   useImperativeHandle(
     controlRef,
@@ -202,7 +255,11 @@ export function VirtualList<T>({
       scrollToKey: (key, opts) => {
         const index = indexOfKey(items, getKey, key);
         if (index >= 0) {
-          handleRef.current?.scrollToIndex({ index, align: opts?.align ?? 'center', behavior: opts?.behavior });
+          handleRef.current?.scrollToIndex({
+            index,
+            align: opts?.align ?? 'center',
+            behavior: opts?.behavior
+          });
         }
       },
       getState: () =>
@@ -267,11 +324,15 @@ export function VirtualList<T>({
 
   const setScroller = useCallback(
     (el: HTMLElement | Window | null) => {
+      scrollerRef.current?.removeEventListener('pointerdown', handleAnchorPointerDown);
+      scrollerRef.current?.removeEventListener('keydown', handleAnchorKeyDown);
       viewportResizeObserverRef.current?.disconnect();
       viewportResizeObserverRef.current = null;
       const node = el instanceof HTMLElement ? el : null;
       scrollerRef.current = node;
       if (!node) return;
+      node.addEventListener('pointerdown', handleAnchorPointerDown);
+      node.addEventListener('keydown', handleAnchorKeyDown);
       if (typeof ResizeObserver !== 'undefined') {
         viewportResizeObserverRef.current = new ResizeObserver(pinToBottomSoon);
         viewportResizeObserverRef.current.observe(node);
@@ -287,15 +348,17 @@ export function VirtualList<T>({
         window.clearTimeout(bounceSettleTimeoutRef.current);
       };
     },
-    [role, ariaLive, bounce, handleBounceWheel, pinToBottomSoon]
+    [role, ariaLive, bounce, handleAnchorKeyDown, handleAnchorPointerDown, handleBounceWheel, pinToBottomSoon]
   );
 
   useEffect(
     () => () => {
+      scrollerRef.current?.removeEventListener('pointerdown', handleAnchorPointerDown);
+      scrollerRef.current?.removeEventListener('keydown', handleAnchorKeyDown);
       viewportResizeObserverRef.current?.disconnect();
       viewportResizeObserverRef.current = null;
     },
-    []
+    [handleAnchorKeyDown, handleAnchorPointerDown]
   );
 
   // Only forward firstItemIndex when paginating: Virtuoso computes `data-item-index` as

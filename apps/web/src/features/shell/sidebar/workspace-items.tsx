@@ -1,16 +1,8 @@
 import { ChatAdd01Icon, FolderAddIcon, InboxIcon, ListCollapse, ListTreeIcon } from '@hugeicons/core-free-icons';
-import { HugeiconsIcon } from '@hugeicons/react';
 import { memo, useMemo } from 'react';
 
-import { ShellLink } from '#/components/ShellLink';
 import { ChatSessionList } from './chat-session-list';
-import {
-  SIDEBAR_ITEM_FOCUS_CLASS,
-  SIDEBAR_ITEM_ROW_CLASS,
-  SidebarActionVisibilityRules,
-  SidebarIconActionButton,
-  sidebarItemContainerClass
-} from './nav-item';
+import { SidebarActionVisibilityRules, SidebarIconActionButton, SidebarNavItem } from './nav-item';
 import { SidebarItemSkeletonList } from './sidebar-skeleton';
 import { useWorkspaceSidebarTreeState } from './use-workspace-sidebar-tree-state';
 import { PinnedSessionList, ProjectList } from './workspace-project-list';
@@ -47,39 +39,25 @@ const WorkspaceSectionList = memo(function WorkspaceSectionList() {
     <div className="flex min-h-0 flex-1 flex-col">
       <SidebarActionVisibilityRules />
       <div className="flex-none px-2.5 pb-2">
-        <ShellLink
-          className={sidebarItemContainerClass({
-            className: `${SIDEBAR_ITEM_ROW_CLASS} gap-2 ${SIDEBAR_ITEM_FOCUS_CLASS}`
-          })}
+        <SidebarNavItem
           href="/"
-          onClick={(event) => {
-            event.preventDefault();
-            actions.createChatSession();
-          }}
-        >
-          <HugeiconsIcon
-            className="size-4 shrink-0"
-            icon={ChatAdd01Icon}
-          />
-          <span className="truncate">{meta.t('web.workspace.newChat')}</span>
-        </ShellLink>
-        <ShellLink
-          className={sidebarItemContainerClass({
-            active: state.inboxActive,
-            className: `${SIDEBAR_ITEM_ROW_CLASS} mt-0.5 gap-2 ${SIDEBAR_ITEM_FOCUS_CLASS}`
-          })}
-          href="/inbox"
-          onClick={(event) => {
-            event.preventDefault();
-            actions.openInbox();
-          }}
-        >
-          <HugeiconsIcon
-            className="size-4 shrink-0"
+          icon={ChatAdd01Icon}
+          label={meta.t('web.workspace.newChat')}
+          onClick={actions.createChatSession}
+          shortcutModifierLabel={meta.shortcutModifierLabel}
+          shortcutValue={meta.showShortcutBadges ? '`' : undefined}
+        />
+        <div className="mt-0.5">
+          <SidebarNavItem
+            active={state.inboxActive}
+            href="/inbox"
             icon={InboxIcon}
+            label={meta.t('web.sidebar.inbox')}
+            onClick={actions.openInbox}
+            shortcutModifierLabel={meta.shortcutModifierLabel}
+            shortcutValue={meta.showShortcutBadges ? 'I' : undefined}
           />
-          <span className="truncate">{meta.t('web.sidebar.inbox')}</span>
-        </ShellLink>
+        </div>
       </div>
       <div className="sidebar-scroll-area min-h-0 flex-1 overflow-y-auto">
         <div className="flex flex-col gap-0.5 px-2.5 pb-4">

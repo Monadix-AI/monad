@@ -1,13 +1,13 @@
-// One multiplexed WebSocket per client carries the cross-session control stream
-// (session-list lifecycle + stream markers). control.subscribe/unsubscribe are the only
-// RPCs on it — per-session generation is streamed over SSE (see docs/internals/realtime-channels.md),
-// and all other request/response goes over REST.
+// One multiplexed WebSocket per client carries long-lived control streams: session-list lifecycle,
+// stream markers, and host interaction notifications. Per-session generation is streamed over SSE
+// (see docs/internals/realtime-channels.md), and all other request/response goes over REST.
 
-import type { Event, JsonRpcNotification, RpcMethod, RpcParams } from '@monad/protocol';
+import type { Event, InteractionEvent, JsonRpcNotification, RpcMethod, RpcParams } from '@monad/protocol';
 
-import { eventSchema } from '@monad/protocol';
+import { eventSchema, interactionEventSchema } from '@monad/protocol';
 
 export type EventHandler = (event: Event) => void;
+export type InteractionEventHandler = (event: InteractionEvent) => void;
 
 /** Reconnect backoff schedule (ms), clamped to the last entry. */
 const BACKOFF_MS = [250, 500, 1000, 2000, 5000] as const;
@@ -20,22 +20,27 @@ export class EventSocket {
   private reconnectTimer?: ReturnType<typeof setTimeout>;
 
   private readonly controlHandlers = new Set<EventHandler>();
+  private readonly interactionHandlers = new Set<InteractionEventHandler>();
 
   constructor(private readonly url: string) {}
 
   subscribeControl(onEvent: EventHandler): () => void {
-    const first = this.controlHandlers.size === 0;
+    const first = this.totalHandlers() === 0;
     this.controlHandlers.add(onEvent);
-    if (first) {
-      this.ensureOpen();
-      this.send({ method: 'control.subscribe', params: {} });
-    }
+    if (first) this.openAndSubscribe();
     return () => {
       this.controlHandlers.delete(onEvent);
-      if (this.controlHandlers.size === 0) {
-        this.send({ method: 'control.unsubscribe', params: {} });
-        this.closeIfIdle();
-      }
+      this.unsubscribeIfIdle();
+    };
+  }
+
+  subscribeInteractions(onEvent: InteractionEventHandler): () => void {
+    const first = this.totalHandlers() === 0;
+    this.interactionHandlers.add(onEvent);
+    if (first) this.openAndSubscribe();
+    return () => {
+      this.interactionHandlers.delete(onEvent);
+      this.unsubscribeIfIdle();
     };
   }
 
@@ -43,6 +48,7 @@ export class EventSocket {
     this.closed = true;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.controlHandlers.clear();
+    this.interactionHandlers.clear();
     this.ws?.close();
     this.ws = undefined;
   }
@@ -64,7 +70,7 @@ export class EventSocket {
   }
 
   private resubscribeAll(): void {
-    if (this.controlHandlers.size > 0) this.send({ method: 'control.subscribe', params: {} });
+    if (this.totalHandlers() > 0) this.send({ method: 'control.subscribe', params: {} });
   }
 
   private onMessage(ev: MessageEvent): void {
@@ -74,18 +80,25 @@ export class EventSocket {
     } catch {
       return; // malformed frame — never throw out of the socket message handler
     }
-    if (msg.method !== 'sessions.event' || !msg.params) return;
-    // Validate at the boundary rather than casting — drop anything that isn't a well-formed Event.
-    const parsed = eventSchema.safeParse((msg.params as { event?: unknown }).event);
-    if (!parsed.success) return;
-    for (const handler of this.controlHandlers) handler(parsed.data);
+    if (msg.method === 'sessions.event' && msg.params) {
+      // Validate at the boundary rather than casting — drop anything that isn't a well-formed Event.
+      const parsed = eventSchema.safeParse((msg.params as { event?: unknown }).event);
+      if (!parsed.success) return;
+      for (const handler of this.controlHandlers) handler(parsed.data);
+      return;
+    }
+    if (msg.method === 'interactions.event' && msg.params) {
+      const parsed = interactionEventSchema.safeParse((msg.params as { event?: unknown }).event);
+      if (!parsed.success) return;
+      for (const handler of this.interactionHandlers) handler(parsed.data);
+    }
   }
 
   private onClose(ws: WebSocket): void {
     if (this.ws !== ws) return; // stale close event from a superseded socket
     this.ws = undefined;
     this.connecting = false;
-    if (this.closed || this.controlHandlers.size === 0) return;
+    if (this.closed || this.totalHandlers() === 0) return;
 
     const delay = BACKOFF_MS[Math.min(this.reconnectAttempt, BACKOFF_MS.length - 1)];
     this.reconnectAttempt += 1;
@@ -93,9 +106,25 @@ export class EventSocket {
   }
 
   private closeIfIdle(): void {
-    if (this.controlHandlers.size === 0) {
+    if (this.totalHandlers() === 0) {
       this.ws?.close();
       this.ws = undefined;
+    }
+  }
+
+  private totalHandlers(): number {
+    return this.controlHandlers.size + this.interactionHandlers.size;
+  }
+
+  private openAndSubscribe(): void {
+    this.ensureOpen();
+    this.send({ method: 'control.subscribe', params: {} });
+  }
+
+  private unsubscribeIfIdle(): void {
+    if (this.totalHandlers() === 0) {
+      this.send({ method: 'control.unsubscribe', params: {} });
+      this.closeIfIdle();
     }
   }
 

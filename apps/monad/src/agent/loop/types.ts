@@ -1,6 +1,7 @@
 import type {
   Cost,
   Event,
+  GenerationParams,
   Hooks,
   MessageStream,
   MessageType,
@@ -47,6 +48,8 @@ export interface AgentLoopDeps {
   tools: Tool[];
   messages: MessageRepo;
   defaultModel: string;
+  /** Per-run generation parameter overrides supplied by the session. */
+  generationParams?: GenerationParams;
   /** Principal id for observability span attribution. In-process telemetry only. */
   userId?: string;
   emit(event: Event): void;
@@ -136,6 +139,9 @@ export interface LoadedSkill {
   description: string;
   version?: string;
   icon?: string;
+  license?: string;
+  compatibility?: string;
+  metadata?: Record<string, string>;
   /** Rendered SKILL.md body. */
   body: string;
   /** Absolute skill directory anchoring bundled resource files. */

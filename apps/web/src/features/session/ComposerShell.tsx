@@ -3,18 +3,21 @@ import type React from 'react';
 import type { ReactNode } from 'react';
 
 import {
-  ComposerAccessSelect,
-  ComposerContextUsageButton,
-  ComposerContextUsagePanel,
   ComposerEditor,
-  ComposerModelSelect,
   ComposerSubmitButton,
   ComposerVoiceButton,
   ComposerVoiceUnavailableContent,
   UnifiedComposer
 } from '@monad/ui';
+import { useEffect, useState } from 'react';
 
 import { useT } from '#/components/I18nProvider';
+import {
+  deferredEffortCommit,
+  ReasoningEffortControl,
+  reasoningEffortOption,
+  resolveReasoningEffort
+} from '#/components/ReasoningEffortControl';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '#/components/ui/hover-card';
 import { useComposerVoice } from './use-composer-voice';
 
@@ -67,12 +70,30 @@ type ComposerShellProps = {
     transcribeAudio?: (audio: Blob) => Promise<string>;
   };
   model?: {
+    currentEffort?: string;
+    effortOverride?: string;
     current?: string;
-    onChange?: (model: string) => void;
-    options: { label: string; value: string }[];
+    currentModel?: string;
+    onModelChange?: (provider: string, model: string) => void;
+    onEffortChange?: (effort?: string) => void;
+    onUseProfile?: () => void;
+    profileDefault?: {
+      effort?: string;
+      label: string;
+      modelLabel?: string;
+    };
+    providers: {
+      label: string;
+      models: { displayName?: string; effort?: string; efforts?: string[]; label: string; value: string }[];
+      value: string;
+    }[];
   };
   textareaRef?: React.Ref<HTMLDivElement>;
 };
+
+export function composerReasoningEffortOptions(efforts: readonly string[], defaultLabel: string) {
+  return [{ value: undefined, label: defaultLabel }, ...efforts.map(reasoningEffortOption)];
+}
 
 export function ComposerShell({
   access = { mode: 'auto' },
@@ -141,35 +162,105 @@ export function ComposerShell({
     submit: controls?.submit ?? true,
     voice: controls?.voice ?? true
   };
+  const selectedProvider = model?.providers.find((provider) => provider.value === model.current);
+  const selectedModel = selectedProvider?.models.find((option) => option.value === model?.currentModel);
+  const { efforts: effortOptions, value: currentEffort } = resolveReasoningEffort(
+    selectedModel?.efforts,
+    model?.currentEffort,
+    selectedModel?.effort
+  );
+  const effortOverride = resolveReasoningEffort(effortOptions, model?.effortOverride).value;
+  const [effortPopoverOpen, setEffortPopoverOpen] = useState(false);
+  const [effortDraft, setEffortDraft] = useState<string | undefined>(effortOverride);
+  const [initialEffortDraft, setInitialEffortDraft] = useState<string | undefined>(effortOverride);
+
+  useEffect(() => {
+    if (!effortPopoverOpen) {
+      setEffortDraft(effortOverride);
+      setInitialEffortDraft(effortOverride);
+    }
+  }, [effortOverride, effortPopoverOpen]);
+
+  const handleEffortPopoverOpenChange = (open: boolean) => {
+    if (open) {
+      setEffortDraft(effortOverride);
+      setInitialEffortDraft(effortOverride);
+      setEffortPopoverOpen(true);
+      return;
+    }
+    const commit = deferredEffortCommit(open, initialEffortDraft, effortDraft);
+    setEffortPopoverOpen(false);
+    if (commit) model?.onEffortChange?.(commit.value);
+  };
 
   return (
     <UnifiedComposer
+      accessoryControls={{
+        access: {
+          ariaLabel: 'Permission mode',
+          askLabel: t('web.chat.accessAsk'),
+          autoLabel: t('web.chat.accessAuto'),
+          mode: access.mode,
+          onChange: access.onChange
+        },
+        items: [
+          ...(enabledControls.access ? (['access'] as const) : []),
+          ...(enabledControls.context ? (['usage'] as const) : []),
+          ...(enabledControls.model ? (['model'] as const) : []),
+          ...(enabledControls.model && effortOptions.length > 0 ? (['effort'] as const) : [])
+        ],
+        effort:
+          effortOptions.length > 0
+            ? {
+                ariaLabel: t('web.reasoning.effort'),
+                current: currentEffort,
+                control: (
+                  <ReasoningEffortControl
+                    compact
+                    defaultLabel={t('web.common.default')}
+                    onChange={setEffortDraft}
+                    options={composerReasoningEffortOptions(effortOptions, t('web.common.default'))}
+                    surface="plain"
+                    value={effortDraft}
+                  />
+                ),
+                onOpenChange: handleEffortPopoverOpenChange
+              }
+            : undefined,
+        model: {
+          ariaLabel: t('web.chat.model'),
+          currentEffort: model?.currentEffort,
+          currentModel: model?.currentModel,
+          currentProvider: model?.current,
+          onModelChange: model?.onModelChange,
+          onUseProfile: model?.onUseProfile,
+          noModelsLabel: t('web.chat.noModels'),
+          profileDefault: model?.profileDefault,
+          providers: model?.providers ?? [],
+          providersLabel: t('web.chat.providers'),
+          searchModelsLabel: t('web.chat.searchModels'),
+          useProfileLabel: t('web.chat.useAgentProfile')
+        },
+        usage: {
+          ariaLabel: t('web.chat.contextUsage'),
+          panel: contextUsage
+            ? {
+                approximate: contextUsage.approximate,
+                contextUsedLabel: t('web.chat.contextUsed'),
+                limit: contextUsage.limit,
+                segments: contextUsage.segments,
+                used: contextUsage.used
+              }
+            : undefined,
+          percent: budgetPercent,
+          title: t('web.chat.contextUsage'),
+          unavailableLabel: t('web.chat.contextUsageUnavailable'),
+          usageAvailable: Boolean(contextUsage)
+        }
+      }}
       ariaBusy={voiceBusy}
       ariaLabel="Message composer"
       controls={{
-        access: enabledControls.access ? (
-          <ComposerAccessSelect
-            ariaLabel="Permission mode"
-            askLabel={t('web.chat.accessAsk')}
-            autoLabel={t('web.chat.accessAuto')}
-            mode={access.mode}
-            onChange={access.onChange}
-          />
-        ) : null,
-        context: enabledControls.context ? (
-          <ContextUsageButton
-            percent={budgetPercent}
-            usage={contextUsage}
-          />
-        ) : null,
-        model: enabledControls.model ? (
-          <ComposerModelSelect
-            ariaLabel="Model"
-            current={model?.current}
-            onChange={model?.onChange}
-            options={model?.options ?? []}
-          />
-        ) : null,
         submit: enabledControls.submit ? (
           <ComposerSubmitButton
             ariaLabel={canStop ? 'Stop' : 'Send message'}
@@ -290,51 +381,5 @@ function VoiceDebugPanel({
         ))}
       </dl>
     </details>
-  );
-}
-
-function ContextUsageButton({
-  percent,
-  usage
-}: {
-  percent: number;
-  usage?: {
-    approximate?: boolean;
-    limit: number;
-    segments?: { category: string; color?: string; label: string; tokens: number }[];
-    used: number;
-  };
-}): React.ReactElement {
-  const t = useT();
-
-  return (
-    <HoverCard
-      closeDelay={80}
-      openDelay={120}
-    >
-      <HoverCardTrigger asChild>
-        <ComposerContextUsageButton
-          ariaLabel={t('web.chat.contextUsage')}
-          percent={percent}
-          title={t('web.chat.contextUsage')}
-          usageAvailable={Boolean(usage)}
-        />
-      </HoverCardTrigger>
-      {usage ? (
-        <HoverCardContent
-          align="end"
-          className="w-72 p-0"
-        >
-          <ComposerContextUsagePanel
-            approximate={usage.approximate}
-            contextUsedLabel="context used"
-            limit={usage.limit}
-            percent={percent}
-            segments={usage.segments}
-            used={usage.used}
-          />
-        </HoverCardContent>
-      ) : null}
-    </HoverCard>
   );
 }

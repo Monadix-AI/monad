@@ -1,5 +1,3 @@
-'use client';
-
 import type { NativeAgentDeliveryId } from '@monad/protocol';
 
 import { create } from 'zustand';

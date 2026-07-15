@@ -32,11 +32,28 @@ type UseAppShellNavigationParams = {
   routedSessionInList: boolean;
   runtimeReady: boolean;
   sessions: Session[];
+  sessionsFetching: boolean;
   sessionsLoading: boolean;
   setOptimistic: (items: []) => void;
   setSessionUrl: (id: SessionId | null) => void;
   workspaceProjects: { id: string; sessions?: { id: SessionId }[] }[];
 };
+
+export function shouldResetMissingSessionRoute({
+  currentId,
+  isDraftSession,
+  sessionExists,
+  sessionsFetching,
+  sessionsLoading
+}: {
+  currentId: SessionId | null;
+  isDraftSession: boolean;
+  sessionExists: boolean;
+  sessionsFetching: boolean;
+  sessionsLoading: boolean;
+}): boolean {
+  return Boolean(currentId && !isDraftSession && !sessionExists && !sessionsFetching && !sessionsLoading);
+}
 
 function currentShellUrl(): string {
   if (typeof window === 'undefined') return '/';
@@ -60,6 +77,7 @@ export function useAppShellNavigation({
   routedSessionInList,
   runtimeReady,
   sessions,
+  sessionsFetching,
   sessionsLoading,
   setOptimistic,
   setSessionUrl
@@ -179,10 +197,18 @@ export function useAppShellNavigation({
   );
 
   useEffect(() => {
-    if (sessionsLoading || !currentId) return;
-    if (draftChatSessionIds.has(currentId)) return;
-    if (!sessions.find((s) => s.id === currentId)) setSessionUrl(null);
-  }, [sessions, sessionsLoading, currentId, setSessionUrl, draftChatSessionIds]);
+    if (
+      shouldResetMissingSessionRoute({
+        currentId,
+        isDraftSession: Boolean(currentId && draftChatSessionIds.has(currentId)),
+        sessionExists: Boolean(currentId && sessions.some((session) => session.id === currentId)),
+        sessionsFetching,
+        sessionsLoading
+      })
+    ) {
+      setSessionUrl(null);
+    }
+  }, [sessions, sessionsFetching, sessionsLoading, currentId, setSessionUrl, draftChatSessionIds]);
 
   useEffect(() => {
     if (!routedProjectId) return;
@@ -317,7 +343,6 @@ export function useAppShellNavigation({
 
   const { shortcutModifierLabel, showSidebarShortcutBadges } = useSidebarShortcuts({
     inboxShortcutAction: openInbox,
-    monadAgentShortcutAction: handleOpenMonadChat,
     newChatShortcutAction: handleNewMonadChat,
     sidebarShortcutActions,
     showSettings: isSettingsRoute,

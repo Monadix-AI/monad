@@ -122,7 +122,8 @@ export function useProject(
   const transcript = useTranscriptHistory({
     sessionId: activeSessionId,
     streamOldestCursor: stream.data?.oldestCursor,
-    streamHasMore: stream.data?.hasMore ?? false
+    streamHasMore: stream.data?.hasMore ?? false,
+    streamReplacementRevision: stream.data?.replacementRevision
   });
 
   const acp = useAcpAgentSettings();

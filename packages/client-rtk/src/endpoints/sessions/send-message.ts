@@ -16,6 +16,7 @@ export const sendMessageApi = generateApi.injectEndpoints({
           text,
           attachments,
           generate,
+          continueFromHistory,
           ambientContext,
           idempotencyKey
         }: { sessionId: SessionId } & SendMessageRequest & IdempotentMutationArgs,
@@ -30,6 +31,7 @@ export const sendMessageApi = generateApi.injectEndpoints({
                   text,
                   attachments,
                   generate,
+                  continueFromHistory,
                   ambientContext
                 } as SendMessageRequest,
                 idempotencyOptions({ idempotencyKey })

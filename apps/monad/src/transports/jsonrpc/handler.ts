@@ -1,3 +1,4 @@
+import type { HostInteractionService } from '#/interactions/service.ts';
 import type { ConnectionState } from '#/transports/jsonrpc/connection.ts';
 import type { Push, RpcContext } from '#/transports/jsonrpc/methods.ts';
 
@@ -36,7 +37,8 @@ export async function handleRpcMessage(
   state: ConnectionState,
   handlers: ReturnType<typeof createDaemonHandlers>,
   push: Push,
-  transport = 'rpc'
+  transport = 'rpc',
+  options: { interactions?: HostInteractionService } = {}
 ): Promise<void> {
   let req: { jsonrpc?: unknown; id?: unknown; method?: unknown; params?: unknown };
 
@@ -98,7 +100,7 @@ export async function handleRpcMessage(
       d: ReturnType<typeof createDaemonHandlers>,
       ctx: RpcContext
     ) => Promise<unknown>;
-    const result = await handler(parsed.data, handlers, { state, push });
+    const result = await handler(parsed.data, handlers, { state, push, interactions: options.interactions });
     logRpcCall(transport, id, method, Math.round(performance.now() - t0));
     if (!isNotification) push({ jsonrpc: '2.0', id, result });
   } catch (err) {

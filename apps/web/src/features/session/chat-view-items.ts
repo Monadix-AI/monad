@@ -1,7 +1,15 @@
 import type { Msg } from './ChatMessage';
 import type { ToolGroupItem, ToolItem, ToolViewItem } from './ToolStepView';
 
-import { channelDisplayText, type UIItem, type UIMessageItem, type UIPart } from '@monad/protocol';
+import {
+  branchSourceSchema,
+  channelDisplayText,
+  type MessageId,
+  type SessionId,
+  type UIItem,
+  type UIMessageItem,
+  type UIPart
+} from '@monad/protocol';
 
 export type MemorySummaryViewItem = Extract<UIItem, { kind: 'memory_summary' }> & { kind: 'memory_summary' };
 
@@ -12,7 +20,14 @@ export interface CompactCommandViewItem {
   summary?: string;
 }
 
-export type ViewItem = Msg | ToolViewItem | MemorySummaryViewItem | CompactCommandViewItem;
+export interface BranchSourceViewItem {
+  id: string;
+  kind: 'branch_source';
+  messageId: MessageId;
+  sessionId: SessionId;
+}
+
+export type ViewItem = Msg | ToolViewItem | MemorySummaryViewItem | CompactCommandViewItem | BranchSourceViewItem;
 
 export const isToolItem = (m: ViewItem): m is ToolViewItem =>
   'kind' in m && (m.kind === 'tool' || m.kind === 'toolGroup');
@@ -22,6 +37,31 @@ export const isMemorySummaryItem = (m: ViewItem): m is MemorySummaryViewItem =>
 
 export const isCompactCommandItem = (m: ViewItem): m is CompactCommandViewItem =>
   'kind' in m && m.kind === 'compact_command';
+
+export const isBranchSourceItem = (m: ViewItem): m is BranchSourceViewItem => 'kind' in m && m.kind === 'branch_source';
+
+export function branchSourceHref(source: Pick<BranchSourceViewItem, 'messageId' | 'sessionId'>): string {
+  return `/sessions/${encodeURIComponent(source.sessionId)}?msg=${encodeURIComponent(source.messageId)}`;
+}
+
+export function branchSourceSessionName(
+  source: Pick<BranchSourceViewItem, 'sessionId'>,
+  ancestors?: ReadonlyArray<{ id: SessionId; title: string }>
+): string {
+  return ancestors?.find((session) => session.id === source.sessionId)?.title || source.sessionId;
+}
+
+function isDirectiveMessage(item: ViewItem, role: Msg['role']): item is Msg {
+  return 'role' in item && item.role === role && item.type === 'directive';
+}
+
+export function collapseAnsweredCommandMessages(items: ViewItem[]): ViewItem[] {
+  return items.filter((item, index) => {
+    if (!('role' in item) || item.role !== 'user' || !item.text.trimStart().startsWith('/')) return true;
+    const reply = items[index + 1];
+    return !reply || !isDirectiveMessage(reply, 'assistant');
+  });
+}
 
 function compactEffectFromMessage(item: ViewItem): { compacted: number; summary?: string } | null {
   if (!('role' in item) || item.role !== 'assistant') return null;
@@ -86,11 +126,15 @@ export function compactDividerItems(items: ViewItem[], commandPending: string | 
   return out;
 }
 
-export function textFromParts(parts: UIPart[]): string {
+function textFromParts(parts: UIPart[]): string {
   return parts
     .filter((part): part is Extract<UIPart, { type: 'text' }> => part.type === 'text')
     .map((part) => part.text)
     .join('');
+}
+
+export function messageTextFromParts(parts: UIPart[]): string {
+  return textFromParts(parts) || artifactFromParts(parts)?.text || '';
 }
 
 function reasoningFromParts(parts: UIPart[]): string | undefined {
@@ -107,7 +151,7 @@ function artifactFromParts(parts: UIPart[]): Extract<UIPart, { type: 'artifact' 
 
 function messageFromUi(item: UIMessageItem): Msg {
   const artifact = artifactFromParts(item.parts);
-  const text = textFromParts(item.parts) || artifact?.text || '';
+  const text = messageTextFromParts(item.parts);
   return {
     id: item.id,
     role: item.role,
@@ -137,7 +181,17 @@ export function viewItemKey(item: UIItem): string | null {
 }
 
 export function viewItemFromUi(item: UIItem): ViewItem | null {
-  if (item.kind === 'message') return messageFromUi(item);
+  if (item.kind === 'message') {
+    const sourcePart = item.parts.find(
+      (part): part is Extract<UIPart, { type: 'artifact' }> =>
+        part.type === 'artifact' && part.messageType === 'branch_source'
+    );
+    if (sourcePart) {
+      const source = branchSourceSchema.safeParse(sourcePart.data);
+      if (source.success) return { id: item.id, kind: 'branch_source', ...source.data };
+    }
+    return messageFromUi(item);
+  }
   if (item.kind === 'tool') return toolFromUi(item);
   if (item.kind === 'memory_summary') return item;
   return null;

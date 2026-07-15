@@ -114,6 +114,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
     text,
     attachments,
     generate,
+    continueFromHistory,
     ambientContext,
     onComplete
   }: { sessionId: SessionId; onComplete?: (text: string) => void | Promise<void> } & SendMessageRequest) {
@@ -122,12 +123,25 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
     const session = requireSession(sessionId);
     assertWriteAllowed(session, 'http');
     log?.debug(
-      { sessionId, event: 'session.send.accept', text: effectiveText, generate, ambientContext },
+      { sessionId, event: 'session.send.accept', text: effectiveText, generate, continueFromHistory, ambientContext },
       'session send accept'
     );
+    if (continueFromHistory) {
+      if (effectiveText || attachments?.length || generate === false) {
+        throw new HandlerError('invalid', 'history continuation cannot include a new user message');
+      }
+      const lastMessage = store.listMessagesWithLineage(sessionId).at(-1);
+      if (lastMessage?.role !== 'user') {
+        throw new HandlerError('invalid', 'history continuation requires a trailing user message');
+      }
+    }
     // `busy` = a prior turn is still streaming for this session — the concurrency guard refuses a
     // command that would race it (the command check runs before beginRun, so aborts reflects prior).
-    if (runner && (await tryRunSessionCommand(runner, session, effectiveText, { busy: aborts.has(sessionId) })))
+    if (
+      !continueFromHistory &&
+      runner &&
+      (await tryRunSessionCommand(runner, session, effectiveText, { busy: aborts.has(sessionId) }))
+    )
       return { accepted: true as const };
     if (generate === false) {
       const messageId = newId('msg');
@@ -152,6 +166,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
     const rt = runtimeForSession(sessionId);
     const loop = agent.loop(makeEmit(round), {
       modelOverride: session.model,
+      generationParams: session.reasoningEffort ? { reasoningEffort: session.reasoningEffort } : undefined,
       ambientContext,
       sandboxRoots: sandboxRootsFor(sessionId, session.cwd, rt),
       agentId: session.agentIds[0],
@@ -160,8 +175,10 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
       extraSkills: rt?.extraSkills,
       toolFilter: composeFilter(rt?.toolFilter, agentToolFilterForSession(sessionId))
     });
-    loop
-      .runStream(sessionId as SessionId, effectiveText, signal, modelAttachments)
+    const run = continueFromHistory
+      ? loop.runStreamFromHistory(sessionId as SessionId, signal)
+      : loop.runStream(sessionId as SessionId, effectiveText, signal, modelAttachments);
+    run
       .then(async () => {
         const finalText = lastAgentMessageText(round);
         persistAndRetire(sessionId, round);
@@ -218,7 +235,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
     completeManagedExternalAgentProviderMessage,
 
     async sendInline(
-      { sessionId, text }: { sessionId: SessionId } & SendMessageRequest,
+      { sessionId, text, continueFromHistory }: { sessionId: SessionId } & SendMessageRequest,
       sink: EventSink,
       // ACP sessions pass a delegating backend (fs/shell run in the connected editor), a toolFilter
       // dropping tools that would otherwise run on the daemon host, and any image attachments for
@@ -235,7 +252,19 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
     ) {
       const session = requireSession(sessionId);
       assertWriteAllowed(session, runOpts?.transport ?? 'acp');
-      if (runner && (await tryRunSessionCommand(runner, session, text, { sink, busy: aborts.has(sessionId) }))) return;
+      if (continueFromHistory) {
+        if (text) throw new HandlerError('invalid', 'history continuation cannot include a new user message');
+        const lastMessage = store.listMessagesWithLineage(sessionId).at(-1);
+        if (lastMessage?.role !== 'user') {
+          throw new HandlerError('invalid', 'history continuation requires a trailing user message');
+        }
+      }
+      if (
+        !continueFromHistory &&
+        runner &&
+        (await tryRunSessionCommand(runner, session, text, { sink, busy: aborts.has(sessionId) }))
+      )
+        return;
       // Out-of-band per-session runtime config (sandbox roots / session-scoped MCP tools / delegating
       // backends) set via configureRuntime — used when the caller doesn't pass explicit runOpts (the
       // ACP bridge proxies turns over HTTP and can't ship in-process backends, so it configures the
@@ -260,7 +289,8 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
           extraSkills: rt?.extraSkills,
           sandboxRoots,
           defaultCwd: session.cwd,
-          modelOverride: session.model
+          modelOverride: session.model,
+          generationParams: session.reasoningEffort ? { reasoningEffort: session.reasoningEffort } : undefined
         }
       );
       // Oversight (tool.approval_requested) and clarify (clarify.requested) are emitted by their
@@ -282,7 +312,8 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
         }
       });
       try {
-        await loop.runStream(sessionId as SessionId, text, signal, runOpts?.attachments);
+        if (continueFromHistory) await loop.runStreamFromHistory(sessionId as SessionId, signal);
+        else await loop.runStream(sessionId as SessionId, text, signal, runOpts?.attachments);
       } finally {
         oob();
         persistAndRetire(sessionId, round);
@@ -308,6 +339,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
       const rt = runtimeForSession(sessionId);
       const loop = agent.loop(makeEmit(round), {
         modelOverride: session.model,
+        generationParams: session.reasoningEffort ? { reasoningEffort: session.reasoningEffort } : undefined,
         sandboxRoots: sandboxRootsFor(sessionId, session.cwd, rt),
         agentId: session.agentIds[0],
         defaultCwd: session.cwd,

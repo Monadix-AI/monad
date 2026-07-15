@@ -199,9 +199,12 @@ export function ChatRoomExperienceView({ runtime }: { runtime: ChatRoomExperienc
             connectInStudio: t('web.workplace.emptyConnectInStudio'),
             emptyDescription: t('web.workplace.emptyChatDescription'),
             emptyTitle: t('web.workplace.emptyChatTitle'),
+            goToMessage: (label: string) => t('web.chat.goToMessage', { message: label }),
             jumpLatest: t('web.workplace.jumpLatest'),
+            messageOutline: t('web.chat.messageOutline'),
             observe: t('web.workplace.observe'),
             spawnAgentMember: t('web.workplace.emptySpawnAgentMember'),
+            timeUnavailable: t('web.chat.timeUnavailable'),
             working: t('web.workplace.working')
           },
           room: chatRoom

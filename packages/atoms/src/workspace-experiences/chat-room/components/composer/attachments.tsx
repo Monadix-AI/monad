@@ -1,5 +1,3 @@
-'use client';
-
 import type { SendMessageAttachment } from '@monad/protocol';
 import type { ReactElement } from 'react';
 

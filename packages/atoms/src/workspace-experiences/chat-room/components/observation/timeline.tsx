@@ -1,5 +1,3 @@
-'use client';
-
 import type { ExternalAgentStreamView } from '../../../experience/types.ts';
 import type { ObservationItem, ObservationTimelineEntry, PublicObservationCard } from './types.ts';
 

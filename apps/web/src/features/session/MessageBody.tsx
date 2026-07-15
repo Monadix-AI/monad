@@ -1,10 +1,9 @@
-import type { Card, ClientRenderCaps } from '@monad/protocol';
+import type { Card, ClientRenderCaps, CommandItem } from '@monad/protocol';
 import type { ComponentType, ReactNode } from 'react';
 
-import { BoxIcon } from '@hugeicons/core-free-icons';
-import { HugeiconsIcon } from '@hugeicons/react';
 import { isHttpUrl, pickRepresentation } from '@monad/protocol';
 import { Button, cn } from '@monad/ui';
+import { ComposerInlineChip } from '@monad/ui/components/ComposerInlineChip';
 import { Markdown } from '@monad/ui/components/Markdown';
 import { MentionText } from '@monad/ui/components/MentionText';
 
@@ -86,8 +85,10 @@ export function MessageBody({
   text,
   data,
   isUser,
+  commands,
   onSkillPreview
 }: {
+  commands?: CommandItem[];
   type?: string;
   text: string;
   data?: unknown;
@@ -98,6 +99,7 @@ export function MessageBody({
     return (
       <span className={cn('whitespace-pre-wrap')}>
         <UserMessageText
+          commands={commands}
           onSkillPreview={onSkillPreview}
           text={text}
         />
@@ -122,16 +124,53 @@ function skillLabel(id: string): string {
   return id;
 }
 
-function skillSource(id: string): string | null {
-  const parts = id.split(':');
-  if (parts.length === 2 && parts[0] === 'global') return 'Global';
-  if (parts.length === 3 && parts[0] === 'atom-pack') return `Atom Pack: ${parts[1]}`;
-  if (parts.length === 3 && parts[0] === 'agent') return `Agent: ${parts[1]}`;
-  return null;
+type UserMessageToken = {
+  end: number;
+  icon?: string;
+  id: string;
+  kind: 'command' | 'skill';
+  label: string;
+  start: number;
+};
+
+export function userMessageTokens(text: string, commands: CommandItem[] = []): UserMessageToken[] {
+  const tokens: UserMessageToken[] = [];
+  const commandMatch = /^\s*\/([a-z0-9]+(?:-[a-z0-9]+)*)(?=\s|$)/.exec(text);
+  if (commandMatch) {
+    const id = commandMatch[1] as string;
+    const command = commands.find((item) => item.enabled && item.type === 'action' && item.id === id);
+    if (command) {
+      const start = commandMatch[0].lastIndexOf('/');
+      tokens.push({ end: start + id.length + 1, id, kind: 'command', label: command.name, start });
+    }
+  }
+  const skillRe =
+    /\/((?:global:[a-z0-9-]+)|(?:atom-pack:[a-z0-9-]+:[a-z0-9-]+)|(?:agent:[a-z0-9-]+:[a-z0-9-]+))(?=\s|$)/g;
+  for (const match of text.matchAll(skillRe)) {
+    const id = match[1] as string;
+    const start = match.index ?? 0;
+    const command = commands.find((item) => item.type === 'skill' && item.id === id);
+    tokens.push({
+      end: start + id.length + 1,
+      icon: command?.icon,
+      id,
+      kind: 'skill',
+      label: command?.name ?? skillLabel(id),
+      start
+    });
+  }
+  return tokens.sort((a, b) => a.start - b.start);
 }
 
-function UserMessageText({ text, onSkillPreview }: { text: string; onSkillPreview?: (id: string) => void }) {
-  const re = /\/((?:global:[a-z0-9-]+)|(?:atom-pack:[a-z0-9-]+:[a-z0-9-]+)|(?:agent:[a-z0-9-]+:[a-z0-9-]+))(?=\s|$)/g;
+function UserMessageText({
+  commands,
+  text,
+  onSkillPreview
+}: {
+  commands?: CommandItem[];
+  text: string;
+  onSkillPreview?: (id: string) => void;
+}) {
   const parts: ReactNode[] = [];
   let last = 0;
   const pushText = (value: string, key: string): void => {
@@ -143,30 +182,18 @@ function UserMessageText({ text, onSkillPreview }: { text: string; onSkillPrevie
       />
     );
   };
-  for (const match of text.matchAll(re)) {
-    const start = match.index ?? 0;
-    const id = match[1] as string;
-    if (start > last) pushText(text.slice(last, start), `text:${last}`);
+  for (const token of userMessageTokens(text, commands)) {
+    if (token.start > last) pushText(text.slice(last, token.start), `text:${last}`);
     parts.push(
-      <button
-        className="inline-flex max-w-full translate-y-[2px] items-center gap-1.5 rounded-(--radius-md) border border-primary/20 bg-background/80 px-2 py-0.5 text-accent-foreground transition hover:border-primary/35 hover:bg-background focus-visible:outline-2 focus-visible:outline-ring/60"
-        key={`${id}:${start}`}
-        onClick={() => onSkillPreview?.(id)}
-        type="button"
-      >
-        <HugeiconsIcon
-          className="size-3.5 shrink-0"
-          icon={BoxIcon}
-        />
-        <span className="truncate font-medium">{skillLabel(id)}</span>
-        {skillSource(id) ? (
-          <span className="shrink-0 rounded-(--radius-xs) border border-current/15 bg-accent px-1.5 py-0.5 text-[10px] text-muted-foreground">
-            {skillSource(id)}
-          </span>
-        ) : null}
-      </button>
+      <ComposerInlineChip
+        icon={token.icon}
+        key={`${token.kind}:${token.id}:${token.start}`}
+        kind={token.kind}
+        label={token.label}
+        onClick={token.kind === 'skill' && onSkillPreview ? () => onSkillPreview(token.id) : undefined}
+      />
     );
-    last = start + id.length + 1;
+    last = token.end;
   }
   if (parts.length === 0) return <MentionText text={text} />;
   if (last < text.length) pushText(text.slice(last), `text:${last}`);

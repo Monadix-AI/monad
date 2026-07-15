@@ -99,6 +99,7 @@ export interface CommandBundle {
   skills(): SkillCommandView[];
   listModels(sessionId: SessionId): Promise<CommandModelInfo[]>;
   setModel(sessionId: SessionId, alias: string): Promise<void>;
+  setEffort(sessionId: SessionId, effort?: string): Promise<void>;
   compact(sessionId: SessionId): Promise<CompactSummary>;
   consolidate(level?: number): Promise<ConsolidateSummary>;
   explainBelief(sessionId: SessionId, query: string): Promise<BeliefExplanation>;
@@ -169,6 +170,7 @@ function genericExecution(runner: SessionCommandRunner, session: Session, busy: 
       checkMemory: () => commands.checkMemory(),
       listModels: (sid: SessionId) => commands.listModels(sid),
       setModel: (sid: SessionId, alias: string) => commands.setModel(sid, alias),
+      setEffort: (sid: SessionId, effort?: string) => commands.setEffort(sid, effort),
       getWorkdir: async (sid: SessionId) => ({
         path: runner.store.getSession(sid)?.cwd
       }),

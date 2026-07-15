@@ -7,8 +7,10 @@ import { join } from 'node:path';
 import { MonadClient, type StreamError } from '../../src/index.ts';
 
 const realFetch = globalThis.fetch;
+const realWebSocket = globalThis.WebSocket;
 afterEach(() => {
   globalThis.fetch = realFetch;
+  globalThis.WebSocket = realWebSocket;
 });
 
 function createSessionResponse(data: CreateSessionResponse | Response | null | undefined): CreateSessionResponse {
@@ -280,7 +282,7 @@ test('streamUiEvents dispose stops consuming without surfacing a transient error
   expect(capturedSignal?.aborted).toBe(true);
 });
 
-test('streamInteractionEvents subscribes to the event stream instead of polling the list endpoint', async () => {
+test('streamInteractionEvents subscribes over the control websocket', async () => {
   const interaction: InteractionEvent = {
     type: 'upsert',
     interaction: {
@@ -293,22 +295,43 @@ test('streamInteractionEvents subscribes to the event stream instead of polling 
       expiresAt: '2026-07-14T00:05:00.000Z'
     }
   };
-  const frame = `event: interaction\ndata: ${JSON.stringify(interaction)}\n\n`;
   const urls: string[] = [];
-  let capturedSignal: AbortSignal | undefined;
-
-  globalThis.fetch = (async (url: string, init?: RequestInit) => {
+  globalThis.fetch = (async (url: string) => {
     urls.push(String(url));
-    capturedSignal = init?.signal ?? undefined;
-    return new Response(
-      new ReadableStream<Uint8Array>({
-        start(ctrl) {
-          ctrl.enqueue(new TextEncoder().encode(frame));
-        }
-      }),
-      { headers: { 'content-type': 'text/event-stream' } }
-    );
+    return new Response(null, { status: 500 });
   }) as unknown as typeof fetch;
+
+  const sent: string[] = [];
+  let socket: { emit: (type: 'open' | 'message', event?: unknown) => void } | undefined;
+  class FakeWebSocket {
+    static readonly OPEN = 1;
+    readonly OPEN = 1;
+    readyState = FakeWebSocket.OPEN;
+    private readonly listeners = new Map<string, Set<(event: unknown) => void>>();
+
+    constructor(readonly url: string) {
+      socket = this;
+    }
+
+    addEventListener(type: string, listener: (event: unknown) => void): void {
+      const set = this.listeners.get(type) ?? new Set<(event: unknown) => void>();
+      set.add(listener);
+      this.listeners.set(type, set);
+    }
+
+    send(data: string): void {
+      sent.push(data);
+    }
+
+    close(): void {
+      this.readyState = 3;
+    }
+
+    emit(type: 'open' | 'message', event: unknown = {}): void {
+      for (const listener of this.listeners.get(type) ?? []) listener(event);
+    }
+  }
+  globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
 
   const client = new MonadClient({ baseUrl: 'http://127.0.0.1:52749' });
   const received: InteractionEvent[] = [];
@@ -320,11 +343,19 @@ test('streamInteractionEvents subscribes to the event stream instead of polling 
       dispose?.();
       setTimeout(resolve, 0);
     });
+    socket?.emit('open');
+    socket?.emit('message', {
+      data: JSON.stringify({ jsonrpc: '2.0', method: 'interactions.event', params: { event: interaction } })
+    });
     setTimeout(resolve, 2000);
   });
 
-  expect(urls).toEqual(['http://127.0.0.1:52749/v1/interactions/events']);
-  expect(capturedSignal?.aborted).toBe(true);
+  expect(urls).toEqual([]);
+  expect(sent.map((value) => JSON.parse(value))).toEqual([
+    { jsonrpc: '2.0', method: 'control.subscribe', params: {} },
+    { jsonrpc: '2.0', method: 'control.subscribe', params: {} },
+    { jsonrpc: '2.0', method: 'control.unsubscribe', params: {} }
+  ]);
   expect(received).toEqual([interaction]);
 });
 

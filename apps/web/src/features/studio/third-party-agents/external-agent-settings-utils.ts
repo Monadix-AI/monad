@@ -25,6 +25,16 @@ export const strToEnv = (s: string): Record<string, string> => {
   return out;
 };
 
+export function externalAgentReasoningEffortsForModel(
+  reasoningEfforts: readonly string[] | undefined,
+  reasoningEffortsByModel: Readonly<Record<string, string[]>> | undefined,
+  modelId: string | undefined
+): string[] {
+  const values =
+    modelId && reasoningEffortsByModel ? (reasoningEffortsByModel[modelId] ?? []) : (reasoningEfforts ?? []);
+  return [...new Set(values.map((effort) => effort.trim()).filter(Boolean))];
+}
+
 export const nextTemplateId = (templates: readonly ExternalAgentProjectTemplate[]): string => {
   for (let index = templates.length + 1; index < 1000; index += 1) {
     const candidate = `template-${index}`;

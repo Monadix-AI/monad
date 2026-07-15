@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { listUiItemsResponseSchema, sessionUiEventSchema } from '../src/ui.ts';
+import { listUiItemsResponseSchema, sessionUiEventSchema, uiSnapshotEventSchema } from '../src/ui.ts';
 
 test('sessionUiEventSchema accepts snapshot and upsert payloads', () => {
   expect(
@@ -31,6 +31,12 @@ test('sessionUiEventSchema accepts snapshot and upsert payloads', () => {
       }
     }).kind
   ).toBe('upsert');
+});
+
+test('sessionUiEventSchema preserves authoritative transcript replacement snapshots', () => {
+  expect(
+    uiSnapshotEventSchema.parse({ kind: 'snapshot', items: [], replacesTranscript: true }).replacesTranscript
+  ).toBe(true);
 });
 
 test('listUiItemsResponseSchema accepts mixed ui items', () => {

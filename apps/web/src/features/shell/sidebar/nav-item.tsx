@@ -10,7 +10,6 @@ const SIDEBAR_ITEM_HEIGHT_CLASS = 'min-h-8';
 const SIDEBAR_ITEM_PADDING_CLASS = 'px-2 py-1.5';
 export const SIDEBAR_ITEM_LABEL_CLASS = 'min-w-0 flex-1 truncate';
 export const SIDEBAR_ITEM_ROW_CLASS = `${SIDEBAR_ITEM_HEIGHT_CLASS} ${SIDEBAR_ITEM_PADDING_CLASS}`;
-export const SIDEBAR_ITEM_FOCUS_CLASS = 'focus-visible:bg-sidebar-accent focus-visible:outline-none';
 export const SIDEBAR_INDENTED_ITEM_ROW_CLASS = `${SIDEBAR_ITEM_HEIGHT_CLASS} py-1.5 pr-2 pl-5`;
 const SIDEBAR_ITEM_TEXT_CLASS = 'text-foreground hover:text-foreground';
 export const SIDEBAR_SECONDARY_TEXT_CLASS = 'text-muted-foreground/75 hover:text-muted-foreground';
@@ -119,6 +118,15 @@ export function SidebarActionVisibilityRules() {
   );
 }
 
+export function SidebarShortcutBadge({ modifierLabel, value }: { modifierLabel: string; value: number | string }) {
+  return (
+    <ShortcutBadge
+      modifierLabel={modifierLabel}
+      value={value}
+    />
+  );
+}
+
 function ShortcutBadge({ modifierLabel, value }: { modifierLabel: string; value: number | string }) {
   return (
     <span className="inline-flex h-4 min-w-7 items-center justify-center gap-px rounded-full bg-sidebar-accent/85 px-1.5 font-medium text-[10px] text-muted-foreground tabular-nums shadow-[inset_0_1px_0_rgb(255_255_255/0.08)] backdrop-blur">
@@ -185,7 +193,7 @@ export function SidebarNavItem({
       </div>
       {shortcutValue && shortcutModifierLabel ? (
         <span className={SHORTCUT_BADGE_OVERLAY_CLASS}>
-          <ShortcutBadge
+          <SidebarShortcutBadge
             modifierLabel={shortcutModifierLabel}
             value={shortcutValue}
           />

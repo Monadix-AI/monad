@@ -42,6 +42,20 @@ export type ToolDisplayContent =
         newPath?: string;
       }>;
     }
+  | {
+      type: 'skill';
+      name: string;
+      description: string;
+      body: string;
+      version?: string;
+      license?: string;
+      compatibility?: string;
+      metadata?: Record<string, string>;
+      allowedTools?: string;
+      context: 'inline' | 'fork';
+      tier?: string;
+      resource?: string;
+    }
   | { type: 'text'; text: string };
 
 const toolDisplayContentSchema = z.discriminatedUnion('type', [
@@ -88,6 +102,20 @@ const toolDisplayContentSchema = z.discriminatedUnion('type', [
         newPath: z.string().optional()
       })
     )
+  }),
+  z.object({
+    type: z.literal('skill'),
+    name: z.string(),
+    description: z.string(),
+    body: z.string(),
+    version: z.string().optional(),
+    license: z.string().optional(),
+    compatibility: z.string().optional(),
+    metadata: z.record(z.string(), z.string()).optional(),
+    allowedTools: z.string().optional(),
+    context: z.enum(['inline', 'fork']),
+    tier: z.string().optional(),
+    resource: z.string().optional()
   }),
   z.object({ type: z.literal('text'), text: z.string() })
 ]);

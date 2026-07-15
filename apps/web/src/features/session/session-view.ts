@@ -3,9 +3,10 @@ import type { Dispatch, KeyboardEvent as ReactKeyboardEvent, SetStateAction } fr
 import type { SessionCommandMenuItem } from '#/features/session/command-menu';
 
 import {
+  collapseAnsweredCommandMessages,
   compactDividerItems,
   groupToolCalls,
-  textFromParts,
+  messageTextFromParts,
   type ViewItem,
   viewItemFromUi,
   viewItemKey
@@ -77,7 +78,7 @@ export function buildViewMessages({
   const serverUserTextCounts = new Map<string, number>();
   for (const item of [...visibleHistory, ...visibleLiveItems]) {
     if (item.kind !== 'message' || item.role !== 'user') continue;
-    const text = textFromParts(item.parts);
+    const text = messageTextFromParts(item.parts);
     serverUserTextCounts.set(text, (serverUserTextCounts.get(text) ?? 0) + 1);
   }
   for (const message of optimistic) {
@@ -91,7 +92,7 @@ export function buildViewMessages({
     }
     out.push(message);
   }
-  return groupToolCalls(compactDividerItems(out, commandPending));
+  return groupToolCalls(collapseAnsweredCommandMessages(compactDividerItems(out, commandPending)));
 }
 
 export function createTextareaKeyDownHandler({

@@ -1,5 +1,3 @@
-'use client';
-
 import type * as React from 'react';
 
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from '@hugeicons/core-free-icons';

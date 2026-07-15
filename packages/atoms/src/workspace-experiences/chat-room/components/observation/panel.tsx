@@ -1,5 +1,3 @@
-'use client';
-
 import type { CSSProperties } from 'react';
 import type { ExternalAgentUsageLimitMeter } from '../../../experience/external-agent-observation/external-agent-observation.ts';
 import type { ExternalAgentStreamView, Participant } from '../../../experience/types.ts';

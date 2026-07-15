@@ -157,3 +157,49 @@ test('subscribeUi keeps managed external agent joins after newer transcript mess
 
   handlers.store.close();
 });
+
+test('subscribeUi replaces the live snapshot when another client restores the session', async () => {
+  const handlers = buildHandlers(buildMockModel().text(['x']).build());
+  const { sessionId } = await handlers.session.create({ title: 't' });
+  const now = new Date().toISOString();
+  const keepUser = newId('msg');
+  const keepAssistant = newId('msg');
+  const rewindUser = newId('msg');
+  handlers.store.insertMessage(keepUser, sessionId, 'keep', now, 'user');
+  handlers.store.insertMessage(keepAssistant, sessionId, 'keep response', now, 'assistant');
+  handlers.store.insertMessage(rewindUser, sessionId, 'rewind', now, 'user');
+  handlers.store.insertMessage(newId('msg'), sessionId, 'remove response', now, 'assistant');
+
+  const snapshots: Extract<SessionUiEvent, { kind: 'snapshot' }>[] = [];
+  const { dispose } = await handlers.session.subscribeUi({ sessionId }, (event) => {
+    if (event.kind === 'snapshot') snapshots.push(event);
+  });
+
+  await handlers.session.restore({ id: sessionId, toMessageId: rewindUser });
+
+  expect(snapshots.map((snapshot) => snapshot.items.map((item) => item.id))).toEqual([
+    [keepUser, keepAssistant, rewindUser, expect.any(String)],
+    [keepUser, keepAssistant]
+  ]);
+  expect(snapshots[1]?.replacesTranscript).toBe(true);
+  dispose();
+  handlers.store.close();
+});
+
+test('subscribeUi replaces the live snapshot when another client resets the session', async () => {
+  const handlers = buildHandlers(buildMockModel().text(['x']).build());
+  const { sessionId } = await handlers.session.create({ title: 't' });
+  handlers.store.insertMessage(newId('msg'), sessionId, 'remove', new Date().toISOString(), 'user');
+
+  const snapshots: Extract<SessionUiEvent, { kind: 'snapshot' }>[] = [];
+  const { dispose } = await handlers.session.subscribeUi({ sessionId }, (event) => {
+    if (event.kind === 'snapshot') snapshots.push(event);
+  });
+
+  await handlers.session.reset({ id: sessionId });
+
+  expect(snapshots.map((snapshot) => snapshot.items.map((item) => item.id))).toEqual([[expect.any(String)], []]);
+  expect(snapshots[1]?.replacesTranscript).toBe(true);
+  dispose();
+  handlers.store.close();
+});

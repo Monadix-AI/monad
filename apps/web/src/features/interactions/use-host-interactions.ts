@@ -2,7 +2,7 @@ import type { InteractionEvent, InteractionPresenterCapabilities, PendingInterac
 
 import { useEffect, useRef, useState } from 'react';
 
-import { useMonadRuntime } from '#/lib/monad-runtime-provider';
+import { useMonadRuntime } from '#/lib/monad-runtime-context';
 
 const WEB_CAPABILITIES: InteractionPresenterCapabilities = {
   interactionTypes: ['confirm', 'select', 'form'],

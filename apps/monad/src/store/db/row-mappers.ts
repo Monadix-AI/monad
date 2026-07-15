@@ -7,6 +7,7 @@ import type { ChatMessage, MessageType, Session, SessionState, StreamStatus, Wor
 import { sessionOriginSchema } from '@monad/protocol';
 
 import { messages, sessions, workplaceProjects } from './schema.ts';
+import { parseSessionModelSelection } from './session-model-selection.ts';
 
 export type SessionRow = typeof sessions.$inferSelect;
 export type WorkplaceProjectRow = typeof workplaceProjects.$inferSelect;
@@ -81,6 +82,7 @@ function parseOrigin(raw: string | null): Session['origin'] {
 }
 
 export function rowToSession(row: SessionRow): Session {
+  const modelSelection = parseSessionModelSelection(row.model);
   return {
     id: row.id as Session['id'],
     projectId: (row.projectId ?? undefined) as Session['projectId'],
@@ -92,7 +94,8 @@ export function rowToSession(row: SessionRow): Session {
     branchedAtMessageId: (row.branchedAtMessageId ?? undefined) as Session['branchedAtMessageId'],
     archived: row.archived === 1,
     restoreCount: row.restoreCount,
-    model: row.model ?? undefined,
+    model: modelSelection.model,
+    reasoningEffort: modelSelection.effort,
     cwd: row.cwd ?? undefined,
     origin: parseOrigin(row.origin),
     usage: {

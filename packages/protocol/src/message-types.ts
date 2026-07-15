@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { messageIdSchema, sessionIdSchema } from './ids.ts';
 import { httpUrlSchema } from './url.ts';
 
 export { isHttpUrl } from './url.ts';
@@ -44,6 +45,12 @@ export const cardSchema = z.object({
 });
 export type Card = z.infer<typeof cardSchema>;
 
+export const branchSourceSchema = z.object({
+  sessionId: sessionIdSchema,
+  messageId: messageIdSchema
+});
+export type BranchSource = z.infer<typeof branchSourceSchema>;
+
 export const BUILTIN_MESSAGE_TYPES: Record<string, MessageTypeDescriptor> = Object.freeze({
   text: { type: 'text', dataSchema: z.unknown(), fallbacks: ['text'], includeInContext: true },
   markdown: { type: 'markdown', dataSchema: z.unknown(), fallbacks: ['markdown', 'text'], includeInContext: true },
@@ -61,6 +68,13 @@ export const BUILTIN_MESSAGE_TYPES: Record<string, MessageTypeDescriptor> = Obje
   },
   // UI-only: a host slash-command echo with no model call — never replayed, counted, or summarized.
   directive: { type: 'directive', dataSchema: z.unknown(), fallbacks: ['text'], includeInContext: false },
+  branch_source: {
+    type: 'branch_source',
+    dataSchema: branchSourceSchema,
+    fallbacks: ['data', 'text'],
+    interactions: ['links'],
+    includeInContext: false
+  },
   // UI-only: a surfaced failure — never replayed, counted, or summarized.
   error: { type: 'error', dataSchema: z.unknown(), fallbacks: ['text'], includeInContext: false }
 });

@@ -26,4 +26,4 @@ export const listModelsApi = setDefaultApi.injectEndpoints({
   })
 });
 
-export const { useListModelsQuery } = listModelsApi;
+export const { useLazyListModelsQuery, useListModelsQuery } = listModelsApi;

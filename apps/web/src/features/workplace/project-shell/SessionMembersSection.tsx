@@ -22,7 +22,6 @@ import { useState } from 'react';
 
 import { DestructiveConfirmPopover } from '#/components/DestructiveConfirmPopover';
 import { useT } from '#/components/I18nProvider';
-import { defaultReasoningEffort } from '#/components/ReasoningEffortControl';
 import { ExternalAgentMemberDialog } from './ExternalAgentMemberDialog';
 
 type ProjectMember = ProjectController['projectMembers'][number];
@@ -259,8 +258,11 @@ export function SessionMembersSection({
                           displayName: candidate.template?.displayName,
                           projectTemplateId: candidate.template?.id,
                           modelId: candidate.template?.modelId,
-                          reasoningEffort:
-                            candidate.template?.reasoningEffort ?? defaultReasoningEffort(candidate.reasoningEfforts),
+                          reasoningEffort: candidate.reasoningEfforts.includes(
+                            candidate.template?.reasoningEffort ?? ''
+                          )
+                            ? candidate.template?.reasoningEffort
+                            : undefined,
                           speed: candidate.template?.speed,
                           customPrompt: candidate.template?.customPrompt
                         }

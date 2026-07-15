@@ -61,6 +61,17 @@ export function createCommandBundle(deps: CommandBundleDeps): CommandBundle {
     logger
   } = deps;
 
+  const publishSessionUpdated = (sessionId: SessionId): void => {
+    bus.publish({
+      id: newId('evt'),
+      sessionId,
+      type: 'session.updated',
+      actorAgentId: null,
+      payload: {},
+      at: new Date().toISOString()
+    });
+  };
+
   // listModels marks the session's effective model (its per-session override, else the daemon
   // default); setModel persists the override (the loop reads session.model per turn). /compact still
   // degrades to a clear reply (needs an engine trigger).
@@ -77,10 +88,52 @@ export function createCommandBundle(deps: CommandBundleDeps): CommandBundle {
       }));
     },
     setModel: async (sessionId, alias) => {
-      if (!modelService.profiles.some((p) => p.alias === alias)) {
+      if (alias === 'inherit') {
+        if (store.updateSession(sessionId, { model: null, reasoningEffort: null })) {
+          publishSessionUpdated(sessionId);
+          return;
+        }
+        throw new Error(`Session not found: ${sessionId}`);
+      }
+      const separator = alias.indexOf(':');
+      const rawProvider = separator > 0 && separator < alias.length - 1 ? alias.slice(0, separator) : undefined;
+      const validProfile = modelService.profiles.some((p) => p.alias === alias);
+      const validRawModel = rawProvider
+        ? modelService.providers.some((provider) => provider.id === rawProvider)
+        : false;
+      if (!validProfile && !validRawModel) {
         throw new Error(`Unknown model profile: ${alias}`);
       }
-      if (store.updateSession(sessionId, { model: alias })) return;
+      if (store.updateSession(sessionId, { model: alias, reasoningEffort: null })) {
+        publishSessionUpdated(sessionId);
+        return;
+      }
+      throw new Error(`Session not found: ${sessionId}`);
+    },
+    setEffort: async (sessionId, effort) => {
+      const session = store.getSession(sessionId);
+      if (!session) throw new Error(`Session not found: ${sessionId}`);
+      if (effort) {
+        const agent = session.agentIds[0]
+          ? cfg.agent.agents.find((candidate) => candidate.id === session.agentIds[0])
+          : undefined;
+        const agentProfile = agent?.modelAlias ?? (agent?.model && agent.model !== 'inherit' ? agent.model : undefined);
+        const modelRef = session.model ?? agentProfile ?? cfg.model.default;
+        const separator = modelRef.indexOf(':');
+        const profile =
+          separator > 0 ? undefined : modelService.profiles.find((candidate) => candidate.alias === modelRef);
+        const provider = separator > 0 ? modelRef.slice(0, separator) : profile?.routes.chat.provider;
+        const modelId = separator > 0 ? modelRef.slice(separator + 1) : profile?.routes.chat.modelId;
+        const supported =
+          provider && modelId ? modelCatalog.lookupCapabilities(provider, modelId)?.reasoningEfforts : undefined;
+        if (supported && !supported.includes(effort)) {
+          throw new Error(`Unsupported reasoning effort "${effort}" for ${provider}:${modelId}`);
+        }
+      }
+      if (store.updateSession(sessionId, { reasoningEffort: effort ?? null })) {
+        publishSessionUpdated(sessionId);
+        return;
+      }
       throw new Error(`Session not found: ${sessionId}`);
     },
     compact: async (sessionId) => {

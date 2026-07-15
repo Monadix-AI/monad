@@ -12,8 +12,10 @@ import {
 import { parseSlashCommand } from '@monad/protocol';
 import { type SetStateAction, useCallback, useEffect, useRef, useState } from 'react';
 
+import { branchFromMessage } from '#/features/session/branch-from-message';
 import { type Msg } from '#/features/session/ChatMessage';
-import { textFromParts, viewItemKey } from '#/features/session/chat-view-items';
+import { messageTextFromParts, viewItemKey } from '#/features/session/chat-view-items';
+import { rewindUserMessage } from '#/features/session/rewind-user-message';
 import { useSessionUiStore } from '#/features/session/session-ui-store';
 
 type CommandEffect = { type: string; sessionId?: string; compacted?: number };
@@ -109,6 +111,7 @@ export function useChatComposer({
   });
   const input = useSessionUiStore((state) => state.input);
   const clearComposerInput = useSessionUiStore((state) => state.clearComposerInput);
+  const setComposerInput = useSessionUiStore((state) => state.setComposerInput);
   const initialUserMessages = useSessionUiStore((state) =>
     currentId ? (state.initialUserMessagesBySession[currentId] ?? EMPTY_QUEUE) : EMPTY_QUEUE
   );
@@ -145,7 +148,7 @@ export function useChatComposer({
     const liveUserTextCounts = new Map<string, number>();
     for (const item of liveItems) {
       if (item.kind !== 'message' || item.role !== 'user') continue;
-      const text = textFromParts(item.parts);
+      const text = messageTextFromParts(item.parts);
       liveUserTextCounts.set(text, (liveUserTextCounts.get(text) ?? 0) + 1);
     }
     setOptimistic((prev) =>
@@ -177,30 +180,38 @@ export function useChatComposer({
 
   // Fork the conversation into a child session at this message, then jump to it.
   const handleBranch = useCallback(
-    async (atMessageId: string) => {
+    async (atMessageId: string, role: Msg['role']) => {
       if (!currentId) return;
-      const res = await branchSession({ id: currentId, atMessageId: atMessageId as MessageId })
-        .unwrap()
-        .catch(() => null);
-      if (res) {
-        setOptimistic([]);
-        setSessionUrl(res.sessionId);
-      }
+      await branchFromMessage({
+        branch: (messageId) => branchSession({ id: currentId, atMessageId: messageId }).unwrap(),
+        continueFromHistory: (sessionId) => sendMessage({ continueFromHistory: true, sessionId, text: '' }).unwrap(),
+        messageId: atMessageId as MessageId,
+        onBranched: (sessionId) => {
+          setOptimistic([]);
+          setSessionUrl(sessionId);
+        },
+        role
+      }).catch(() => null);
     },
-    [currentId, branchSession, setSessionUrl, setOptimistic]
+    [currentId, branchSession, sendMessage, setSessionUrl, setOptimistic]
   );
 
-  // Rewind the conversation to this message, dropping everything after it.
+  // Rewind from this user message, then put its raw text back into the composer.
   const handleRestore = useCallback(
-    async (toMessageId: string) => {
+    async (toMessageId: string, text: string) => {
       if (!currentId || isBusy) return;
-      await restoreSession({ id: currentId, toMessageId: toMessageId as MessageId })
-        .unwrap()
-        .catch(() => {});
+      const restoredText = await rewindUserMessage({
+        messageId: toMessageId as MessageId,
+        restore: (request) => restoreSession(request).unwrap(),
+        sessionId: currentId,
+        text
+      });
+      if (restoredText === null) return;
+      setComposerInput(restoredText);
       setOptimistic([]);
       jumpToLive();
     },
-    [currentId, isBusy, restoreSession, jumpToLive, setOptimistic]
+    [currentId, isBusy, restoreSession, setComposerInput, jumpToLive, setOptimistic]
   );
 
   // React to a host command's structured effect (rich-client behaviour; dumb clients just show text).

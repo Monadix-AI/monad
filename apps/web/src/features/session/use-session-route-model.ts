@@ -16,7 +16,12 @@ import { useFirstItemIndex } from '@monad/ui/hooks/use-first-item-index';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import { useT } from '#/components/I18nProvider';
-import { type ViewItem, viewItemKey } from '#/features/session/chat-view-items';
+import {
+  type BranchSourceViewItem,
+  branchSourceHref,
+  type ViewItem,
+  viewItemKey
+} from '#/features/session/chat-view-items';
 import {
   buildCommandMenuItems,
   type SessionCommandMenuItem,
@@ -28,11 +33,16 @@ import { studioPath } from '#/features/shell/routing/paths';
 import { useShellRoute } from '#/features/shell/routing/use-shell-route';
 import { workspaceLaunchErrorMessage } from '#/features/workspace/workspace-home-model';
 import { useChatComposer } from '#/hooks/use-chat-composer';
-import { pushShellUrl, replaceShellUrl, useShellSearchParam } from '#/hooks/use-shell-location';
+import { pushShellUrl, removeShellSearchParam, replaceShellUrl, useShellSearchParam } from '#/hooks/use-shell-location';
 import { useTranscriptHistory } from '#/hooks/use-transcript-history';
 import { normalizedComposerSettings } from '#/lib/composer-settings';
 import { useWorkspaceShellStore, type WorkspaceShellState } from '#/lib/workspace-shell-store';
 import { buildDraftSessionFeedback, resolveDraftAgentLabel } from './draft-session-feedback';
+import {
+  nextSessionModelCommand,
+  resolveAgentProfileDefault,
+  type SessionModelSelectionTarget
+} from './session-model-options';
 import { sessionIsDraft, sessionUsesProjectMessageRoute } from './session-route-contract';
 import {
   buildSessionContextUsage,
@@ -41,10 +51,12 @@ import {
   EMPTY_UI_ITEMS,
   viewMessageId
 } from './session-view';
+import { useSessionModelOptions } from './use-session-model-options';
 
 type UseSessionRouteModelParams = {
   agents: Agent[];
   currentSession: Session | null;
+  defaultProfileAlias?: string;
   profiles: ProfileView[];
   sessions: Session[];
   voiceModelConfigured: boolean;
@@ -53,6 +65,7 @@ type UseSessionRouteModelParams = {
 export function useSessionRouteModel({
   agents,
   currentSession,
+  defaultProfileAlias,
   profiles,
   sessions,
   voiceModelConfigured
@@ -67,6 +80,7 @@ export function useSessionRouteModel({
   const [clarifyRespond] = useClarifyRespondMutation();
   const [createSession] = useCreateSessionMutation();
   const [sendMessage] = useSendMessageMutation();
+  const modelProviders = useSessionModelOptions();
   const showInspector = useWorkspaceShellStore((state: WorkspaceShellState) => state.rightPanelOpen);
   const toggleSessionInspector = useWorkspaceShellStore((state: WorkspaceShellState) => state.toggleRightPanel);
   const draftSession = useWorkspaceShellStore((state: WorkspaceShellState) =>
@@ -115,6 +129,24 @@ export function useSessionRouteModel({
     [commands, profiles, sessions, input, t]
   );
   const skillMenuOpen = (menuItems.length > 0 || commandMenuLoading) && !skillMenuDismissed;
+  const previousInputRef = useRef(input);
+
+  useEffect(() => {
+    if (previousInputRef.current === input) return;
+    previousInputRef.current = input;
+    if (!slashDiscoveryActive) return;
+    setSkillMenuDismissed(false);
+    setActiveSkill(0);
+  }, [input, setActiveSkill, setSkillMenuDismissed, slashDiscoveryActive]);
+
+  useEffect(() => {
+    if (menuItems.length === 0) {
+      if (activeSkill !== 0) setActiveSkill(0);
+      return;
+    }
+    if (activeSkill >= menuItems.length) setActiveSkill(menuItems.length - 1);
+  }, [activeSkill, menuItems.length, setActiveSkill]);
+
   const writableBy = currentSession?.origin?.writableBy;
   const isReadOnly = writableBy != null && !writableBy.includes('http');
   const stream = useStreamUiItemsQuery(currentId as SessionId, { skip: currentId === null || draftSession !== null });
@@ -122,7 +154,8 @@ export function useSessionRouteModel({
   const transcript = useTranscriptHistory({
     sessionId: draftSession ? null : currentId,
     streamOldestCursor: streamData?.oldestCursor,
-    streamHasMore: streamData?.hasMore ?? false
+    streamHasMore: streamData?.hasMore ?? false,
+    streamReplacementRevision: streamData?.replacementRevision
   });
   const history = draftSession ? EMPTY_UI_ITEMS : transcript.items;
   const hiddenViewItemKeys = useMemo(
@@ -187,10 +220,6 @@ export function useSessionRouteModel({
   const usage = visibleLiveItems.find(
     (item): item is Extract<UIItem, { kind: 'context' }> => item.kind === 'context'
   )?.usage;
-  const modelOptions = useMemo(
-    () => profiles.map((profile) => ({ label: profile.alias, value: profile.alias })),
-    [profiles]
-  );
   const liveStreaming = liveItems.some(
     (item) =>
       (item.kind === 'message' && item.status === 'streaming') || (item.kind === 'tool' && item.status === 'running')
@@ -288,8 +317,16 @@ export function useSessionRouteModel({
     const key = pendingScrollKeyRef.current;
     if (!key) return;
     if (viewMessages.some((m) => m.id === key)) {
-      transcriptRef.current?.scrollToKey(key, { align: 'center' });
       pendingScrollKeyRef.current = null;
+      const scroll = () => transcriptRef.current?.scrollToKey(key, { align: 'center' });
+      scroll();
+      requestAnimationFrame(() => {
+        scroll();
+        requestAnimationFrame(() => {
+          scroll();
+          removeShellSearchParam('msg', key);
+        });
+      });
     }
   }, [viewMessages]);
 
@@ -317,17 +354,68 @@ export function useSessionRouteModel({
     skillMenuOpen
   });
   const sessionContextUsage = useMemo(() => buildSessionContextUsage(usage), [usage]);
-  const sessionModel = useMemo(
-    () => ({
-      current: modelOptions[0]?.value,
-      onChange: (alias: string) => {
-        if (!alias || isBusy || isReadOnly) return;
-        void handleSend(`/model ${alias}`);
+  const sessionModel = useMemo(() => {
+    const agent = currentAgentId ? agents.find((item) => item.id === currentAgentId) : undefined;
+    const agentProfileAlias =
+      agent?.modelAlias ?? (agent?.model && agent.model !== 'inherit' ? agent.model : undefined);
+    const profileDefault = resolveAgentProfileDefault(profiles, defaultProfileAlias, agentProfileAlias);
+    const sessionModelValue = currentSession?.model;
+    const separator = sessionModelValue?.indexOf(':') ?? -1;
+    const rawModelSpec = separator > 0 ? sessionModelValue : undefined;
+    const sessionProfile = sessionModelValue
+      ? profiles.find((profile) => profile.alias === sessionModelValue)
+      : undefined;
+    const effectiveProfile = sessionProfile ?? (rawModelSpec ? undefined : profileDefault);
+    const effectiveProvider = rawModelSpec?.slice(0, separator) ?? effectiveProfile?.routes.chat.provider;
+    const effectiveModel = rawModelSpec
+      ? rawModelSpec
+      : effectiveProfile
+        ? `${effectiveProfile.routes.chat.provider}:${effectiveProfile.routes.chat.modelId}`
+        : undefined;
+    const applyModelSelection = (target: SessionModelSelectionTarget) => {
+      if (isBusy || isReadOnly) return;
+      const command = nextSessionModelCommand({ effectiveModel, override: currentSession?.model }, target);
+      if (command) void handleSend(command);
+    };
+
+    return {
+      current: effectiveProvider,
+      currentEffort:
+        currentSession?.reasoningEffort ??
+        effectiveProfile?.routeParams?.chat?.reasoningEffort ??
+        effectiveProfile?.params.reasoningEffort,
+      effortOverride: currentSession?.reasoningEffort,
+      currentModel: effectiveModel,
+      onModelChange: (_provider: string, modelSpec: string) => applyModelSelection({ type: 'model', value: modelSpec }),
+      onEffortChange: (effort?: string) => {
+        if (isBusy || isReadOnly) return;
+        void handleSend(`/effort ${effort ?? 'default'}`);
       },
-      options: modelOptions
-    }),
-    [handleSend, isBusy, isReadOnly, modelOptions]
-  );
+      onUseProfile: () => {
+        if (!profileDefault?.alias) return;
+        applyModelSelection({ type: 'profile' });
+      },
+      profileDefault: profileDefault
+        ? {
+            label: profileDefault.alias,
+            modelLabel: profileDefault.routes.chat.modelId,
+            effort: profileDefault.routeParams?.chat?.reasoningEffort ?? profileDefault.params.reasoningEffort
+          }
+        : undefined,
+      providers: modelProviders
+    };
+  }, [
+    agents,
+    currentAgentId,
+    currentSession?.model,
+    currentSession?.reasoningEffort,
+    defaultProfileAlias,
+    handleSend,
+    isBusy,
+    isReadOnly,
+    modelProviders,
+    profiles
+  ]);
 
   const sessionRouteModel = useMemo<SessionRouteModel | null>(
     () =>
@@ -346,13 +434,16 @@ export function useSessionRouteModel({
               }
             },
             transcript: {
+              commands,
               firstItemIndex,
+              highlightedMessageId: deepLinkMsg,
               onApproval: (approval, allow, scope, reason) => {
                 void approveTool({ requestId: approval.requestId, allow, scope, reason });
               },
               onBranch: handleBranch,
               onClarifyAnswer: (requestId, answer) => void clarifyRespond({ requestId, answer }),
               onEndReached: transcript.loadNewer,
+              onOpenBranchSource: (source: BranchSourceViewItem) => pushShellUrl(branchSourceHref(source)),
               onRestore: handleRestore,
               onScrollToBottom: scrollToBottom,
               onStartReached: transcript.loadOlder,
@@ -397,6 +488,7 @@ export function useSessionRouteModel({
       currentSession,
       isReadOnly,
       firstItemIndex,
+      deepLinkMsg,
       inspectorItems,
       isBusy,
       commandMenuLoading,

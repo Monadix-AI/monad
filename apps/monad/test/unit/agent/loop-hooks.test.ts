@@ -80,6 +80,89 @@ test('BeforeTurn deny aborts the turn (model never runs) but keeps the user turn
   expect(history[1]?.text).toBe('denied by policy');
 });
 
+test('history continuation re-applies BeforeTurn denial to the trailing user message', async () => {
+  const messages = new InMemoryMessageRepo();
+  const id = sid();
+  await messages.append({
+    createdAt: new Date().toISOString(),
+    id: newId('msg'),
+    role: 'user',
+    sessionId: id,
+    text: 'persisted untrusted prompt'
+  });
+  let modelRan = false;
+  const loop = new AgentLoop({
+    model: {
+      async *stream() {
+        modelRan = true;
+        yield { type: 'text' as const, token: 'unsafe response' };
+      },
+      async complete() {
+        throw new Error('complete() should not run');
+      }
+    },
+    tools: [],
+    messages,
+    defaultModel: 'mock',
+    emit: () => {},
+    hooks: fakeHooks((input) =>
+      input.event === 'BeforeTurn' ? { blocked: true, reason: 'denied persisted prompt' } : {}
+    )
+  });
+
+  await loop.runStreamFromHistory(id);
+
+  expect(modelRan).toBe(false);
+  expect(messages.list(id).map(({ role, text }) => ({ role, text }))).toEqual([
+    { role: 'user', text: 'persisted untrusted prompt' },
+    { role: 'assistant', text: 'denied persisted prompt' }
+  ]);
+});
+
+test('history continuation sends the BeforeTurn rewrite without changing persisted user text', async () => {
+  const messages = new InMemoryMessageRepo();
+  const id = sid();
+  await messages.append({
+    createdAt: new Date().toISOString(),
+    id: newId('msg'),
+    role: 'user',
+    sessionId: id,
+    text: 'raw persisted prompt'
+  });
+  let modelPrompt = '';
+  const loop = new AgentLoop({
+    model: {
+      async *stream(request) {
+        const user = [...request.messages].reverse().find((message) => message.role === 'user');
+        modelPrompt =
+          typeof user?.content === 'string'
+            ? user.content
+            : (user?.content ?? [])
+                .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
+                .map((part) => part.text)
+                .join('');
+        yield { type: 'text' as const, token: 'safe response' };
+      },
+      async complete() {
+        throw new Error('complete() should not run');
+      }
+    },
+    tools: [],
+    messages,
+    defaultModel: 'mock',
+    emit: () => {},
+    hooks: fakeHooks((input) => (input.event === 'BeforeTurn' ? { effectivePrompt: 'rewritten safe prompt' } : {}))
+  });
+
+  await loop.runStreamFromHistory(id);
+
+  expect(modelPrompt).toBe('rewritten safe prompt');
+  expect(messages.list(id).map(({ role, text }) => ({ role, text }))).toEqual([
+    { role: 'user', text: 'raw persisted prompt' },
+    { role: 'assistant', text: 'safe response' }
+  ]);
+});
+
 test('BeforeTurn modelOverride selects the model for the turn', async () => {
   let seenModel = '';
   const model = completeOnly(async (req: ModelRequest): Promise<ModelResult> => {

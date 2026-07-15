@@ -25,6 +25,7 @@ import {
 import {
   argsToStr,
   envToStr,
+  externalAgentReasoningEffortsForModel,
   modelOptionsToStr,
   newProjectTemplateEditorRow,
   nextTemplateId,
@@ -228,6 +229,8 @@ export function AgentForm({
       <ProjectTemplatesEditor
         modelOptions={strToModelOptions(modelOptions)}
         onChange={setProjectTemplates}
+        reasoningEfforts={agent?.reasoningEfforts}
+        reasoningEffortsByModel={agent?.reasoningEffortsByModel}
         templates={projectTemplates}
       />
       {mode === 'create' ? (
@@ -483,10 +486,14 @@ function ArgsEnvFields({
 function ProjectTemplatesEditor({
   templates,
   modelOptions,
+  reasoningEfforts,
+  reasoningEffortsByModel,
   onChange
 }: {
   templates: ProjectTemplateEditorRow[];
   modelOptions: string[];
+  reasoningEfforts?: string[];
+  reasoningEffortsByModel?: Record<string, string[]>;
   onChange: (templates: ProjectTemplateEditorRow[]) => void;
 }) {
   const t = useT();
@@ -499,6 +506,9 @@ function ProjectTemplatesEditor({
   };
   const removeTemplate = (index: number) => {
     onChange(templates.filter((_, i) => i !== index));
+  };
+  const effortsForModel = (modelId: string | undefined) => {
+    return externalAgentReasoningEffortsForModel(reasoningEfforts, reasoningEffortsByModel, modelId);
   };
 
   return (
@@ -523,113 +533,143 @@ function ProjectTemplatesEditor({
           {t('web.externalAgent.noProjectTemplates')}
         </p>
       ) : null}
-      {templates.map((template, index) => (
-        <div
-          className="grid gap-2 rounded-md border bg-card p-3"
-          key={template.rowKey}
-        >
-          <div className="grid gap-2 sm:grid-cols-2">
-            <div className="flex flex-col gap-1">
-              <Label className="text-xs">{t('web.externalAgent.projectTemplateId')}</Label>
-              <Input
-                onChange={(e) => updateTemplate(index, { id: e.target.value })}
-                placeholder="reviewer"
-                value={template.id}
-              />
+      {templates.map((template, index) => {
+        const availableEfforts = effortsForModel(template.modelId);
+        return (
+          <div
+            className="grid gap-2 rounded-md border bg-card p-3"
+            key={template.rowKey}
+          >
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div className="flex flex-col gap-1">
+                <Label className="text-xs">{t('web.externalAgent.projectTemplateId')}</Label>
+                <Input
+                  onChange={(e) => updateTemplate(index, { id: e.target.value })}
+                  placeholder="reviewer"
+                  value={template.id}
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <Label className="text-xs">{t('web.externalAgent.projectTemplateDisplayName')}</Label>
+                <Input
+                  onChange={(e) => updateTemplate(index, { displayName: e.target.value })}
+                  placeholder="Reviewer"
+                  value={template.displayName}
+                />
+              </div>
             </div>
-            <div className="flex flex-col gap-1">
-              <Label className="text-xs">{t('web.externalAgent.projectTemplateDisplayName')}</Label>
-              <Input
-                onChange={(e) => updateTemplate(index, { displayName: e.target.value })}
-                placeholder="Reviewer"
-                value={template.displayName}
-              />
-            </div>
-          </div>
-          <div className="grid gap-2 sm:grid-cols-3">
-            <div className="flex flex-col gap-1">
-              <Label className="text-xs">{t('web.workplace.model')}</Label>
-              {modelOptions.length > 0 ? (
+            <div className="grid gap-2 sm:grid-cols-3">
+              <div className="flex flex-col gap-1">
+                <Label className="text-xs">{t('web.workplace.model')}</Label>
+                {modelOptions.length > 0 ? (
+                  <Select
+                    onValueChange={(value) => {
+                      const modelId = value === SELECT_EMPTY_VALUE ? undefined : value;
+                      const nextEfforts = effortsForModel(modelId);
+                      updateTemplate(index, {
+                        modelId,
+                        reasoningEffort: nextEfforts.includes(template.reasoningEffort ?? '')
+                          ? template.reasoningEffort
+                          : undefined
+                      });
+                    }}
+                    value={template.modelId ?? SELECT_EMPTY_VALUE}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={SELECT_EMPTY_VALUE}>{t('web.workplace.defaultModel')}</SelectItem>
+                      {modelOptions.map((model) => (
+                        <SelectItem
+                          key={model}
+                          value={model}
+                        >
+                          {model}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    onChange={(e) => updateTemplate(index, { modelId: e.target.value || undefined })}
+                    placeholder="gpt-5.5"
+                    value={template.modelId ?? ''}
+                  />
+                )}
+              </div>
+              {availableEfforts.length > 0 ? (
+                <div className="flex flex-col gap-1">
+                  <Label className="text-xs">{t('web.workplace.reasoningEffort')}</Label>
+                  <Select
+                    onValueChange={(value) =>
+                      updateTemplate(index, {
+                        reasoningEffort: value === SELECT_EMPTY_VALUE ? undefined : value
+                      })
+                    }
+                    value={template.reasoningEffort ?? SELECT_EMPTY_VALUE}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={SELECT_EMPTY_VALUE}>{t('web.workplace.reasoningEffort')}</SelectItem>
+                      {availableEfforts.map((effort) => (
+                        <SelectItem
+                          key={effort}
+                          value={effort}
+                        >
+                          {effort}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null}
+              <div className="flex flex-col gap-1">
+                <Label className="text-xs">{t('web.workplace.enableFastMode')}</Label>
                 <Select
                   onValueChange={(value) =>
-                    updateTemplate(index, { modelId: value === SELECT_EMPTY_VALUE ? undefined : value })
+                    updateTemplate(index, {
+                      speed: (value === SELECT_EMPTY_VALUE ? undefined : value) as ExternalAgentProjectTemplate['speed']
+                    })
                   }
-                  value={template.modelId ?? SELECT_EMPTY_VALUE}
+                  value={template.speed ?? SELECT_EMPTY_VALUE}
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={SELECT_EMPTY_VALUE}>{t('web.workplace.defaultModel')}</SelectItem>
-                    {modelOptions.map((model) => (
-                      <SelectItem
-                        key={model}
-                        value={model}
-                      >
-                        {model}
-                      </SelectItem>
-                    ))}
+                    <SelectItem value={SELECT_EMPTY_VALUE}>
+                      {t('web.externalAgent.projectTemplateStandardSpeed')}
+                    </SelectItem>
+                    <SelectItem value="fast">{t('web.externalAgent.projectTemplateFastSpeed')}</SelectItem>
                   </SelectContent>
                 </Select>
-              ) : (
-                <Input
-                  onChange={(e) => updateTemplate(index, { modelId: e.target.value || undefined })}
-                  placeholder="gpt-5.5"
-                  value={template.modelId ?? ''}
-                />
-              )}
+              </div>
             </div>
             <div className="flex flex-col gap-1">
-              <Label className="text-xs">{t('web.workplace.reasoningEffort')}</Label>
-              <Input
-                onChange={(e) => updateTemplate(index, { reasoningEffort: e.target.value || undefined })}
-                placeholder="high"
-                value={template.reasoningEffort ?? ''}
+              <Label className="text-xs">{t('web.externalAgent.projectTemplatePrompt')}</Label>
+              <textarea
+                className="min-h-16 rounded-md border bg-transparent px-2 py-1 text-xs"
+                onChange={(e) => updateTemplate(index, { customPrompt: e.target.value || undefined })}
+                placeholder={t('web.externalAgent.projectTemplatePromptPlaceholder')}
+                value={template.customPrompt ?? ''}
               />
             </div>
-            <div className="flex flex-col gap-1">
-              <Label className="text-xs">{t('web.workplace.enableFastMode')}</Label>
-              <Select
-                onValueChange={(value) =>
-                  updateTemplate(index, {
-                    speed: (value === SELECT_EMPTY_VALUE ? undefined : value) as ExternalAgentProjectTemplate['speed']
-                  })
-                }
-                value={template.speed ?? SELECT_EMPTY_VALUE}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={SELECT_EMPTY_VALUE}>
-                    {t('web.externalAgent.projectTemplateStandardSpeed')}
-                  </SelectItem>
-                  <SelectItem value="fast">{t('web.externalAgent.projectTemplateFastSpeed')}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <Button
+              className="w-fit"
+              onClick={() => removeTemplate(index)}
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
+              <HugeiconsIcon icon={Cancel01Icon} />
+              {t('web.remove')}
+            </Button>
           </div>
-          <div className="flex flex-col gap-1">
-            <Label className="text-xs">{t('web.externalAgent.projectTemplatePrompt')}</Label>
-            <textarea
-              className="min-h-16 rounded-md border bg-transparent px-2 py-1 text-xs"
-              onChange={(e) => updateTemplate(index, { customPrompt: e.target.value || undefined })}
-              placeholder={t('web.externalAgent.projectTemplatePromptPlaceholder')}
-              value={template.customPrompt ?? ''}
-            />
-          </div>
-          <Button
-            className="w-fit"
-            onClick={() => removeTemplate(index)}
-            size="sm"
-            type="button"
-            variant="ghost"
-          >
-            <HugeiconsIcon icon={Cancel01Icon} />
-            {t('web.remove')}
-          </Button>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { useT } from '#/components/I18nProvider';
 import { useAsyncAction } from '#/hooks/use-async-action';
-import { useMonadRuntime } from '#/lib/monad-runtime-provider';
+import { useMonadRuntime } from '#/lib/monad-runtime-context';
 import moAtlasManifest from '../../../../mo/assets/atlas.json' with { type: 'json' };
 
 const MO_ATLAS = {

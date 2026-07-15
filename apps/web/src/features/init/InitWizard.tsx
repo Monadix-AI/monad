@@ -29,7 +29,7 @@ import { useForm } from 'react-hook-form';
 
 import { useT } from '#/components/I18nProvider';
 import { providerFormSchema } from '#/lib/form-validation';
-import { useMonadRuntime } from '#/lib/monad-runtime-provider';
+import { useMonadRuntime } from '#/lib/monad-runtime-context';
 import { daemonApiUrl } from '#/lib/monad-store';
 import { useProviderMeta } from '#/lib/ProviderMeta';
 import { SECRET_INPUT_PASSWORD_MANAGER_PROPS } from '#/lib/secret-input-props';

@@ -19,9 +19,15 @@ import type {
 } from './components/AIElements';
 import type {
   ComposerAccessMode,
+  ComposerAccessoryControls,
+  ComposerAccessoryItem,
   ComposerContextUsageButtonProps,
   ComposerContextUsagePanelProps,
   ComposerIconButtonProps,
+  ComposerModelOption,
+  ComposerModelProviderOption,
+  ComposerProfileModelOption,
+  ComposerProfileOption,
   ComposerSubmitButtonProps,
   ComposerSurfaceProps,
   ComposerVoiceButtonProps,
@@ -37,6 +43,7 @@ import type {
   ComposerSendShortcut,
   ComposerSkillToken
 } from './components/ComposerEditor';
+import type { ComposerInlineChipProps } from './components/ComposerInlineChip';
 import type { ProductIconColors, ProductIconId, ProductIconProps } from './components/ProductIcon';
 import type { SwitchProps } from './components/Switch';
 
@@ -80,6 +87,7 @@ import {
 } from './components/Composer';
 import { ComposerAskSheet } from './components/ComposerAskSheet';
 import { ComposerEditor, shouldSubmitComposerKey } from './components/ComposerEditor';
+import { ComposerInlineChip } from './components/ComposerInlineChip';
 import {
   Dialog,
   DialogClose,
@@ -120,6 +128,12 @@ import {
   InputGroupTextarea
 } from './components/InputGroup';
 import { Label } from './components/Label';
+import {
+  activeMessageOutlineIds,
+  MessageOutline,
+  type MessageOutlineItem,
+  type MessageOutlineProps
+} from './components/MessageOutline';
 import { Popover, PopoverContent, PopoverTrigger } from './components/Popover';
 import { isProductIconId, ProductIcon } from './components/ProductIcon';
 import { Progress } from './components/Progress';
@@ -144,15 +158,22 @@ import { cn } from './lib/utils';
 
 export type {
   ComposerAccessMode,
+  ComposerAccessoryControls,
+  ComposerAccessoryItem,
   ComposerAskSheetProps,
   ComposerAskSheetQuestion,
   ComposerContextUsageButtonProps,
   ComposerContextUsagePanelProps,
   ComposerEditorHandle,
   ComposerIconButtonProps,
+  ComposerInlineChipProps,
   ComposerMentionPosition,
   ComposerMentionState,
   ComposerMentionTarget,
+  ComposerModelOption,
+  ComposerModelProviderOption,
+  ComposerProfileModelOption,
+  ComposerProfileOption,
   ComposerSendShortcut,
   ComposerSkillToken,
   ComposerSubmitButtonProps,
@@ -162,6 +183,8 @@ export type {
   MessageActionProps,
   MessageActionsProps,
   MessageContentProps,
+  MessageOutlineItem,
+  MessageOutlineProps,
   MessageProps,
   MessageResponseProps,
   ProductIconColors,
@@ -186,6 +209,7 @@ export type {
 
 export {
   AiElementIcons,
+  activeMessageOutlineIds,
   Badge,
   Button,
   ButtonGroup,
@@ -208,6 +232,7 @@ export {
   ComposerContextUsagePanel,
   ComposerEditor,
   ComposerIconButton,
+  ComposerInlineChip,
   ComposerModelSelect,
   ComposerSelect,
   ComposerSubmitButton,
@@ -256,6 +281,7 @@ export {
   MessageAction,
   MessageActions,
   MessageContent,
+  MessageOutline,
   MessageResponse,
   Popover,
   PopoverContent,

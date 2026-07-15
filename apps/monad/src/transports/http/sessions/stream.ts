@@ -20,17 +20,21 @@ export function createSessionMessageSseResponse(params: {
   handlers: ReturnType<typeof createDaemonHandlers>;
   sessionId: SessionId;
   text: string;
+  continueFromHistory?: boolean;
   ambientContext?: string;
   encoder: TextEncoder;
 }): Response {
-  const { handlers, sessionId, text, ambientContext, encoder } = params;
+  const { handlers, sessionId, text, continueFromHistory, ambientContext, encoder } = params;
 
   const stream = new ReadableStream<Uint8Array>({
     async start(ctrl) {
       const stopHeartbeat = startSseHeartbeat(ctrl, encoder);
       const sink = createBoundedSseSink(ctrl, encoder, () => void handlers.session.abort({ id: sessionId }));
       try {
-        await handlers.session.sendInline({ sessionId, text }, sink, { transport: 'http', ambientContext });
+        await handlers.session.sendInline({ sessionId, text, continueFromHistory }, sink, {
+          transport: 'http',
+          ambientContext
+        });
       } finally {
         stopHeartbeat();
         try {

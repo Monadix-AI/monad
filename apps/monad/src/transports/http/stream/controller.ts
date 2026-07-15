@@ -1,4 +1,5 @@
 import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
+import type { HostInteractionService } from '#/interactions/service.ts';
 import type { ConnectionState } from '#/transports/jsonrpc/index.ts';
 
 import { Elysia } from 'elysia';
@@ -40,7 +41,8 @@ export function pushBounded(ws: StreamWs, state: ConnectionState, msg: unknown):
 export function createStreamController(
   handlers: ReturnType<typeof createDaemonHandlers>,
   connections: Map<string, ConnectionState>,
-  remoteEnabled: boolean | (() => boolean)
+  remoteEnabled: boolean | (() => boolean),
+  interactions?: HostInteractionService
 ) {
   return new Elysia().ws('/stream', {
     // Guards against CSWSH + DNS rebinding (browsers can open ws:// cross-origin).
@@ -62,9 +64,11 @@ export function createStreamController(
       // ServerWebSocket), which pushBounded uses for backpressure. Cast to reach them.
       const sock = ws as StreamWs;
       const rawStr = typeof raw === 'string' ? raw : JSON.stringify(raw);
-      handleRpcMessage(rawStr, state, handlers, (msg) => pushBounded(sock, state, msg), 'ws').catch((err: unknown) => {
-        process.stderr.write(`ws rpc error: ${err}\n`);
-      });
+      handleRpcMessage(rawStr, state, handlers, (msg) => pushBounded(sock, state, msg), 'ws', { interactions }).catch(
+        (err: unknown) => {
+          process.stderr.write(`ws rpc error: ${err}\n`);
+        }
+      );
     },
     close(ws: unknown) {
       const id = getStreamSocketId(ws);

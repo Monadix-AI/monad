@@ -24,8 +24,12 @@
   "cmd.checkMemory.done": "🔍 已检查记忆：标记 {{flagged}} 条被矛盾的规则。",
   "cmd.model.none": "未配置 model profile。",
   "cmd.model.list": "model：\n{{list}}\n\n使用 /model <别名> 切换。",
+  "cmd.model.ambiguous": "多个 provider 匹配“{{alias}}”。请选择一个 profile：\n{{list}}",
   "cmd.model.unknown": "未知的 model profile：{{alias}}。使用 /model 查看可用档案。",
   "cmd.model.set": "➡️ model 已设置为 {{alias}}。",
+  "cmd.effort.usage": "用法：/effort <值|default>。",
+  "cmd.effort.set": "推理强度已设置为 {{effort}}。",
+  "cmd.effort.default": "推理强度现在继承 model 默认值。",
   "cmd.workdir.show": "📁 工作文件夹：{{path}}",
   "cmd.workdir.none": "未设置工作文件夹——使用默认 workspace。",
   "cmd.workdir.set": "📁 工作文件夹已设置为 {{path}}。",
@@ -49,6 +53,7 @@
   "cmd.consolidate.desc": "整理记忆：去重事实，再按记忆级别更新图谱与律",
   "cmd.clear.desc": "清空视图（仅客户端）",
   "cmd.model.desc": "查看或切换当前对话使用的 model",
+  "cmd.effort.desc": "设置当前对话的推理强度",
   "cmd.workdir.desc": "查看或设置当前对话的共享工作文件夹",
   "cmd.help.desc": "列出可用命令"
 }

@@ -36,6 +36,23 @@ const skillInput = z.object({
 });
 type SkillToolInput = z.infer<typeof skillInput>;
 
+function skillDisplayContent(skill: LoadedSkill, body: string, resource?: string) {
+  return {
+    type: 'skill' as const,
+    name: skill.name,
+    description: skill.description,
+    body,
+    ...(skill.version ? { version: skill.version } : {}),
+    ...(skill.license ? { license: skill.license } : {}),
+    ...(skill.compatibility ? { compatibility: skill.compatibility } : {}),
+    ...(skill.metadata ? { metadata: skill.metadata } : {}),
+    ...(skill.allowedTools ? { allowedTools: skill.allowedTools } : {}),
+    context: skill.fork ? ('fork' as const) : ('inline' as const),
+    ...(skill.tier ? { tier: skill.tier } : {}),
+    ...(resource ? { resource } : {})
+  };
+}
+
 /** Reject path-traversal / absolute escapes before touching the filesystem. The `file`
  *  arg is model-supplied (prompt-injectable), so it must stay within the skill dir. */
 function resolveResource(dir: string, file: string): string {
@@ -78,16 +95,19 @@ export function createSkillTool(getSkills: () => LoadedSkill[], runFork?: ForkRu
         if (!skill.dir) throw new Error(`skill "${name}" has no directory; cannot load "${file}"`);
         const resource = Bun.file(resolveResource(skill.dir, file));
         if (!(await resource.exists())) throw new Error(`skill "${name}" has no bundled file "${file}"`);
-        return toolResult(await resource.text());
+        const body = await resource.text();
+        return toolResult(body, { displayContent: skillDisplayContent(skill, body, file) });
       }
 
       // `context: fork` — run the body as an isolated subagent and hand back its result, so
       // the skill's multi-step work stays out of the main conversation.
       if (skill.fork && runFork) {
         const result = await runFork(substituteSkillDir(skill.body, skill.dir), ctx, skill.tier, name);
-        return toolResult(`Ran skill "${name}" as an isolated subagent. Result:\n\n${result}`);
+        const body = `Ran skill "${name}" as an isolated subagent. Result:\n\n${result}`;
+        return toolResult(body, { displayContent: skillDisplayContent(skill, body) });
       }
-      return toolResult(substituteSkillDir(skill.body, skill.dir));
+      const body = substituteSkillDir(skill.body, skill.dir);
+      return toolResult(body, { displayContent: skillDisplayContent(skill, body) });
     }
   };
 }

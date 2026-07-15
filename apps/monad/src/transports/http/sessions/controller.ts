@@ -392,6 +392,7 @@ export function createSessionsController(
                     sessionId: params.id,
                     text: body.text,
                     generate: body.generate,
+                    continueFromHistory: body.continueFromHistory,
                     ambientContext: body.ambientContext
                   })
                 )
@@ -402,6 +403,7 @@ export function createSessionsController(
             handlers,
             sessionId: params.id,
             text: body.text,
+            continueFromHistory: body.continueFromHistory,
             ambientContext: body.ambientContext,
             encoder
           });

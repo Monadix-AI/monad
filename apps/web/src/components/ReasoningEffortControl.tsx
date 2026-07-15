@@ -25,16 +25,30 @@ export function reasoningEffortOption(value: string): ReasoningEffortOption {
   return { value, label: formatEffortLabel(value) };
 }
 
-export function defaultReasoningEffort(efforts: readonly string[] | undefined): string | undefined {
-  const values = efforts?.filter((effort) => effort.trim().length > 0) ?? [];
-  return values.at(Math.min(1, values.length - 1));
+export function resolveReasoningEffort(
+  efforts: readonly string[] | undefined,
+  ...preferredValues: Array<string | undefined>
+): { efforts: string[]; value: string | undefined } {
+  const values = [...new Set(efforts?.map((effort) => effort.trim()).filter(Boolean) ?? [])];
+  return {
+    efforts: values,
+    value: preferredValues.find((value): value is string => !!value && values.includes(value))
+  };
+}
+
+export function deferredEffortCommit(
+  open: boolean,
+  current: string | undefined,
+  draft: string | undefined
+): { value: string | undefined } | null {
+  return !open && current !== draft ? { value: draft } : null;
 }
 
 function clampIndex(value: number, length: number): number {
   return Math.min(Math.max(Math.round(value), 0), Math.max(0, length - 1));
 }
 
-const THUMB_WIDTH_PX = 22;
+const THUMB_WIDTH_PX = 18;
 const TRACK_BORDER_PX = 0.5;
 
 function positionFromPointer(clientX: number, rect: DOMRect, maxIndex: number): number {
@@ -93,22 +107,20 @@ export function ReasoningEffortControl({
   value,
   onChange,
   defaultLabel,
-  allowDefault = false,
   className,
-  compact = false
+  compact = false,
+  surface = 'card'
 }: {
   options: ReasoningEffortOption[];
   value?: string;
   onChange: (value: string | undefined) => void;
   defaultLabel?: string;
-  allowDefault?: boolean;
   className?: string;
   compact?: boolean;
+  surface?: 'card' | 'plain';
 }) {
   const t = useT();
-  const sliderOptions: ReasoningEffortOption[] = allowDefault
-    ? [{ value: undefined, label: defaultLabel ?? t('web.common.default') }, ...options]
-    : options;
+  const sliderOptions = options;
   const activeIndex = sliderOptions.findIndex((option) => option.value === value);
   const sliderIndex = activeIndex >= 0 ? activeIndex : 0;
   const maxIndex = Math.max(0, sliderOptions.length - 1);
@@ -162,11 +174,16 @@ export function ReasoningEffortControl({
 
   return (
     <div
-      className={cn('min-w-0 rounded-lg border border-border/70 bg-card p-3 shadow-sm', compact && 'p-2.5', className)}
+      className={cn(
+        'min-w-0',
+        surface === 'card' && 'rounded-lg border border-border/70 bg-card p-3 shadow-sm',
+        surface === 'card' && compact && 'p-2.5',
+        className
+      )}
       style={
         {
-          '--effort-fill': 'var(--foreground)',
-          '--effort-fill-edge': 'color-mix(in srgb, var(--foreground) 24%, var(--border))',
+          '--effort-fill-end': 'color-mix(in oklab, var(--foreground) 82%, var(--muted-foreground))',
+          '--effort-fill-start': 'color-mix(in oklab, var(--foreground) 58%, var(--muted-foreground))',
           '--effort-thumb': 'color-mix(in srgb, var(--card) 88%, var(--foreground) 12%)',
           '--effort-track-end': 'color-mix(in srgb, var(--muted) 70%, var(--background))',
           '--effort-track-start': 'color-mix(in srgb, var(--muted) 84%, var(--card))'
@@ -238,7 +255,7 @@ export function ReasoningEffortControl({
           >
             <HugeiconsIcon
               className={cn(
-                'absolute top-1/2 size-4 -translate-x-1/2 -translate-y-1/2 transition-colors duration-150 ease-out',
+                'absolute top-1/2 size-3.5 -translate-x-1/2 -translate-y-1/2 transition-colors duration-150 ease-out',
                 progressRatio > 0 ? 'text-background/90' : 'text-muted-foreground'
               )}
               icon={EnergyIcon}
@@ -246,7 +263,7 @@ export function ReasoningEffortControl({
             />
             <HugeiconsIcon
               className={cn(
-                'absolute top-1/2 size-4 -translate-x-1/2 -translate-y-1/2 transition-colors duration-150 ease-out',
+                'absolute top-1/2 size-3.5 -translate-x-1/2 -translate-y-1/2 transition-colors duration-150 ease-out',
                 progressRatio >= 1 ? 'text-background/90' : 'text-muted-foreground'
               )}
               icon={BrainIcon}
@@ -267,12 +284,12 @@ export function ReasoningEffortControl({
             aria-hidden="true"
             className={cn(
               'absolute inset-y-[0.5px] left-[0.5px] overflow-hidden rounded-[10.5px]',
-              !interacting && 'transition-[width] duration-150 ease-out'
+              !interacting && 'transition-[width,opacity] duration-150 ease-out'
             )}
             style={{
-              background:
-                'linear-gradient(180deg, color-mix(in srgb, white 16%, var(--effort-fill)), var(--effort-fill))',
-              boxShadow: 'inset 0 1px 0 color-mix(in srgb, white 28%, transparent), 0 0 0 1px var(--effort-fill-edge)',
+              background: 'linear-gradient(90deg, var(--effort-fill-start), var(--effort-fill-end))',
+              boxShadow: 'inset 0 1px 0 color-mix(in srgb, white 24%, transparent)',
+              opacity: progressRatio <= 0 ? 0 : 1,
               width: progressWidth
             }}
           />
@@ -282,7 +299,7 @@ export function ReasoningEffortControl({
               <span
                 aria-hidden="true"
                 className={cn(
-                  'pointer-events-none absolute top-1/2 z-20 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full transition-colors duration-200',
+                  'pointer-events-none absolute top-1/2 z-20 size-1 -translate-x-1/2 -translate-y-1/2 rounded-full transition-colors duration-200',
                   optionIndex <= previewIndex ? 'bg-background/90' : 'bg-muted-foreground/45'
                 )}
                 key={option.value}
@@ -290,31 +307,24 @@ export function ReasoningEffortControl({
               />
             );
           })}
-          {sliderOptions.slice(1, -1).map((option, index) => {
-            const ratio = (index + 1) / maxIndex;
-            return (
-              <span
-                aria-hidden="true"
-                className="pointer-events-none absolute top-1/2 z-20 h-4 w-px -translate-x-1/2 -translate-y-1/2 bg-border/70"
-                key={option.value}
-                style={{ left: thumbCenterStyle(ratio) }}
-              />
-            );
-          })}
           <span
             aria-hidden="true"
             className={cn(
-              'absolute inset-y-0 z-30 w-[22px] -translate-x-1/2 rounded-[11px] transition-[background-color,border-color,box-shadow] duration-150 ease-out',
+              'absolute inset-y-0 z-30 w-[18px] -translate-x-1/2 rounded-[10.5px] transition-[background-color,border-color,box-shadow] duration-150 ease-out',
               interacting && 'brightness-110'
             )}
             style={{
               background:
                 'linear-gradient(180deg, color-mix(in srgb, white 8%, var(--effort-thumb)), var(--effort-thumb))',
-              border: '0.5px solid color-mix(in srgb, var(--foreground) 18%, var(--effort-fill-edge))',
+              border: '0.5px solid color-mix(in srgb, var(--foreground) 18%, var(--border))',
               boxShadow: '0 2px 8px rgb(0 0 0 / 0.18), inset 0 1px 0 color-mix(in srgb, white 18%, transparent)',
               left: thumbCenterStyle(progressRatio)
             }}
           />
+        </div>
+        <div className="mt-1 flex items-center justify-between px-0.5 text-[11px] text-muted-foreground leading-none">
+          <span>{t('web.reasoning.fast')}</span>
+          <span>{t('web.reasoning.smart')}</span>
         </div>
       </div>
     </div>

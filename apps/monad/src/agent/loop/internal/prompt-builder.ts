@@ -23,6 +23,7 @@ export class PromptBuilder {
   // Turn-scoped: reset at the start of every runStream/runBlock call.
   private turnAttachments?: ImageAttachment[];
   private pendingSkillExpansion: string | null = null;
+  private pendingUserTextOverride: string | null = null;
 
   // Chars of the prompt actually sent on the last model step — paired with the provider's real
   // input tokens in finishBookkeeping to self-calibrate the chars/token estimator.
@@ -56,10 +57,15 @@ export class PromptBuilder {
 
   resetSkillExpansion(): void {
     this.pendingSkillExpansion = null;
+    this.pendingUserTextOverride = null;
   }
 
   setSkillExpansion(text: string): void {
     this.pendingSkillExpansion = text;
+  }
+
+  setUserTextOverride(text: string): void {
+    this.pendingUserTextOverride = text;
   }
 
   /** Record a model step's real input-token count for the next prepare() to use as its base. */
@@ -206,17 +212,20 @@ export class PromptBuilder {
   private composeUserTurn(messages: ModelMessage[]): ModelMessage[] {
     const ambient = this.deps.ambientContext;
     const skillBody = this.pendingSkillExpansion;
+    const userTextOverride = this.pendingUserTextOverride;
     this.pendingSkillExpansion = null;
+    this.pendingUserTextOverride = null;
     const images: ModelContentPart[] = (this.turnAttachments ?? []).map((a) => ({
       type: 'image',
       image: a.image,
       mediaType: a.mediaType
     }));
-    if (!ambient && !skillBody && images.length === 0) return messages;
+    if (!ambient && !skillBody && userTextOverride === null && images.length === 0) return messages;
     for (let i = messages.length - 1; i >= 0; i--) {
       const m = messages[i];
       if (m?.role === 'user') {
         const text =
+          userTextOverride ??
           skillBody ??
           (typeof m.content === 'string'
             ? m.content

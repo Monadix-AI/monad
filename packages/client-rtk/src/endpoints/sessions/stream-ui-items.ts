@@ -9,6 +9,8 @@ export interface SessionUiStreamState {
   oldestCursor?: string;
   /** True when older messages exist before the live window (so the client can page history). */
   hasMore?: boolean;
+  /** Advances when the daemon replaces the authoritative transcript after a restore or reset. */
+  replacementRevision?: number;
   streamError?: { kind: 'fatal' | 'transient'; status?: number };
 }
 
@@ -30,6 +32,9 @@ export function applyUiEvent(draft: SessionUiStreamState, event: SessionUiEvent,
     draft.items = event.items;
     draft.oldestCursor = event.oldestCursor;
     draft.hasMore = event.hasMore ?? false;
+    if (event.replacesTranscript) {
+      draft.replacementRevision = (draft.replacementRevision ?? 0) + 1;
+    }
     index.clear();
     for (let i = 0; i < event.items.length; i++) index.set(keyOf(event.items[i] as UIItem), i);
     return;
@@ -47,11 +52,11 @@ export function applyUiEvent(draft: SessionUiStreamState, event: SessionUiEvent,
   for (let i = 0; i < draft.items.length; i++) index.set(keyOf(draft.items[i] as UIItem), i);
 }
 
-export const streamUiItemsApi = sendMessageApi.injectEndpoints({
+const streamUiItemsApi = sendMessageApi.injectEndpoints({
   overrideExisting: true,
   endpoints: (builder) => ({
     streamUiItems: builder.query<SessionUiStreamState, SessionId>({
-      queryFn: () => ({ data: { items: [], hasMore: false } }),
+      queryFn: () => ({ data: { items: [], hasMore: false, replacementRevision: 0 } }),
       async onCacheEntryAdded(
         sessionId: SessionId,
         {

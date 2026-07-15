@@ -48,6 +48,25 @@ test('runStream emits one agent.token per delta then a final agent.message', asy
   expect(history[1]?.text).toBe('Hello world');
 });
 
+test('runStreamFromHistory generates an assistant response without appending another user message', async () => {
+  const { loop, messages } = harness(['Alternative response']);
+  const sessionId = newId('ses') as SessionId;
+  await messages.append({
+    createdAt: new Date().toISOString(),
+    id: newId('msg'),
+    role: 'user',
+    sessionId,
+    text: 'Try this approach'
+  });
+
+  await loop.runStreamFromHistory(sessionId);
+
+  expect(messages.list(sessionId).map(({ role, text }) => ({ role, text }))).toEqual([
+    { role: 'user', text: 'Try this approach' },
+    { role: 'assistant', text: 'Alternative response' }
+  ]);
+});
+
 test('runBlock returns the full assistant message and emits a single agent.message', async () => {
   const { loop, events, messages } = harness(['Hello', ' world']);
   const sessionId = newId('ses') as SessionId;
@@ -58,6 +77,29 @@ test('runBlock returns the full assistant message and emits a single agent.messa
   expect(message.text).toBe('Hello world');
   expect(events.filter((e) => e.type === 'agent.message')).toHaveLength(1);
   expect(messages.list(sessionId).map((m) => m.role)).toEqual(['user', 'assistant']);
+});
+
+test('runBlock passes the session reasoning effort to the model request', async () => {
+  const seen: Array<string | undefined> = [];
+  const model: ModelRouter = {
+    async *stream() {},
+    async complete(req): Promise<ModelResult> {
+      seen.push(req.params?.reasoningEffort);
+      return { text: 'ok', finishReason: 'stop' };
+    }
+  };
+  const loop = new AgentLoop({
+    model,
+    tools: [],
+    messages: new InMemoryMessageRepo(),
+    defaultModel: 'mock',
+    generationParams: { reasoningEffort: 'high' },
+    emit: () => {}
+  } as ConstructorParameters<typeof AgentLoop>[0]);
+
+  await loop.runBlock(newId('ses') as SessionId, 'hi');
+
+  expect(seen).toEqual(['high']);
 });
 
 test('runStream surfaces reasoning deltas on agent.reasoning, separate from agent.token', async () => {

@@ -26,8 +26,11 @@ export type ChatTranscriptLabels = MessageRowLabels & {
   connectInStudio: string;
   emptyDescription: string;
   emptyTitle: string;
+  goToMessage: (label: string) => string;
   jumpLatest: string;
+  messageOutline: string;
   spawnAgentMember: string;
+  timeUnavailable: string;
 };
 
 export function ChatTranscript({

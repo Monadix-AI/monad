@@ -457,7 +457,12 @@ export function createHttpTransport(
             .use(createSkillsSettingsController(handlers))
         )
         .use(
-          createStreamController(handlers, connections, () => resolveRemoteAccessConfig(remoteAccess)?.enabled ?? false)
+          createStreamController(
+            handlers,
+            connections,
+            () => resolveRemoteAccessConfig(remoteAccess)?.enabled ?? false,
+            interactionService
+          )
         )
         .use(createDaemonCtlController())
     );

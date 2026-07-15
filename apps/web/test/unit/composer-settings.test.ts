@@ -3,6 +3,7 @@ import { expect, test } from 'bun:test';
 import {
   composerShortcutLabel,
   DEFAULT_COMPOSER_SETTINGS,
+  LONG_PROMPT_CHARACTER_THRESHOLD,
   queuedCardsForDisplay,
   shouldSubmitComposerKey
 } from '../../src/lib/composer-settings';
@@ -27,19 +28,43 @@ test('shouldSubmitComposerKey supports Enter send mode', () => {
 test('shouldSubmitComposerKey supports primary-modifier multiline mode', () => {
   expect(
     shouldSubmitComposerKey(
-      { hasMultipleLines: false, key: 'Enter', shiftKey: false, primaryModifier: false },
+      {
+        characterCount: LONG_PROMPT_CHARACTER_THRESHOLD - 1,
+        hasMultipleLines: false,
+        key: 'Enter',
+        shiftKey: false,
+        primaryModifier: false
+      },
       'mod-enter-for-multiline'
     )
   ).toBe(true);
   expect(
     shouldSubmitComposerKey(
-      { hasMultipleLines: true, key: 'Enter', shiftKey: false, primaryModifier: false },
+      {
+        characterCount: LONG_PROMPT_CHARACTER_THRESHOLD,
+        hasMultipleLines: false,
+        key: 'Enter',
+        shiftKey: false,
+        primaryModifier: false
+      },
       'mod-enter-for-multiline'
     )
   ).toBe(false);
   expect(
     shouldSubmitComposerKey(
-      { hasMultipleLines: true, key: 'Enter', shiftKey: false, primaryModifier: true },
+      {
+        characterCount: LONG_PROMPT_CHARACTER_THRESHOLD,
+        hasMultipleLines: false,
+        key: 'Enter',
+        shiftKey: false,
+        primaryModifier: true
+      },
+      'mod-enter-for-multiline'
+    )
+  ).toBe(true);
+  expect(
+    shouldSubmitComposerKey(
+      { characterCount: 4, hasMultipleLines: true, key: 'Enter', shiftKey: false, primaryModifier: true },
       'mod-enter-for-multiline'
     )
   ).toBe(true);

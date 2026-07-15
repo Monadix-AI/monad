@@ -68,7 +68,7 @@
       "entry": ["src/credential-regex-worker.ts"],
       "bun": { "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"] }
     },
-    "packages/ui": {},
+    "packages/ui": { "bun": { "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"] } },
     "packages/monad-power-pack": {
       "bun": { "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"] }
     }

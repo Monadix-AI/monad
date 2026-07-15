@@ -150,6 +150,30 @@ export class AgentLoop {
     const modelInput = ex ? skillModelInput(ex.skill.name, this.applyNonForkSkill(ex)) : undefined;
     const messageId = await this.writer.beginTurn(sessionId, userText, modelInput);
 
+    await this.runAssistantStream(sessionId, messageId, signal);
+  }
+
+  async runStreamFromHistory(sessionId: SessionId, signal?: AbortSignal): Promise<void> {
+    this.prompt.setAttachments(undefined);
+    this.prompt.resetSkillExpansion();
+    const history = await this.deps.messages.list(sessionId);
+    const trailingUser = [...history].reverse().find((message) => message.role === 'user');
+    if (!trailingUser) throw new Error('history continuation requires a user message');
+    const submit = await this.hookOrchestrator.userPromptSubmit(sessionId, trailingUser.text);
+    const messageId = newId('msg');
+    if (submit.blocked) {
+      await this.writer.finishTurn(sessionId, messageId, submit.reason);
+      return;
+    }
+    this.prompt.setUserTextOverride(submit.text);
+    await this.runAssistantStream(sessionId, messageId, signal);
+  }
+
+  private async runAssistantStream(
+    sessionId: SessionId,
+    messageId: `msg_${string}`,
+    signal?: AbortSignal
+  ): Promise<void> {
     try {
       if (this.availableTools.length > 0) {
         await this.runStreamWithTools(sessionId, messageId, signal);
@@ -164,6 +188,7 @@ export class AgentLoop {
       for await (const chunk of this.deps.model.stream({
         model: this.hookOrchestrator.modelId(),
         messages: await this.hookOrchestrator.beforeModel(sessionId, messages),
+        params: this.deps.generationParams,
         sessionId,
         userId: this.deps.userId
       })) {
@@ -244,6 +269,7 @@ export class AgentLoop {
       const result = await this.deps.model.complete({
         model: this.hookOrchestrator.modelId(),
         messages: await this.hookOrchestrator.beforeModel(sessionId, messages),
+        params: this.deps.generationParams,
         sessionId,
         userId: this.deps.userId
       });
@@ -291,6 +317,7 @@ export class AgentLoop {
       const result = await this.deps.model.complete({
         model: this.hookOrchestrator.modelId(),
         messages: await this.hookOrchestrator.beforeModel(sessionId, messages),
+        params: this.deps.generationParams,
         tools,
         sessionId,
         userId: this.deps.userId
@@ -334,6 +361,7 @@ export class AgentLoop {
     const result = await this.deps.model.complete({
       model: this.hookOrchestrator.modelId(),
       messages: await this.hookOrchestrator.beforeModel(sessionId, messages),
+      params: this.deps.generationParams,
       sessionId,
       userId: this.deps.userId
     });
@@ -450,6 +478,7 @@ export class AgentLoop {
     for await (const chunk of this.deps.model.stream({
       model: this.hookOrchestrator.modelId(),
       messages: await this.hookOrchestrator.beforeModel(sessionId, messages),
+      params: this.deps.generationParams,
       sessionId,
       userId: this.deps.userId
     })) {
@@ -505,6 +534,7 @@ export class AgentLoop {
     for await (const chunk of this.deps.model.stream({
       model: this.hookOrchestrator.modelId(),
       messages: await this.hookOrchestrator.beforeModel(sessionId, messages),
+      params: this.deps.generationParams,
       tools,
       sessionId,
       userId: this.deps.userId

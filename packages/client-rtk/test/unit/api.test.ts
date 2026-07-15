@@ -14,13 +14,12 @@ import { getNativeAgentDeliveryObservationApi } from '../../src/endpoints/extern
 import { listExternalAgentSessionsApi } from '../../src/endpoints/external-agent/list-external-agent-sessions.ts';
 import { streamExternalAgentUiObservationApi } from '../../src/endpoints/external-agent/stream-external-agent-ui-observation.ts';
 import {
-  getMessagesApi,
+  getUiItemsApi,
   listSessionsApi,
   resetSessionApi,
   sessionAdapter,
   sessionSelectors,
-  streamControlApi,
-  streamUiItemsApi
+  streamControlApi
 } from '../../src/endpoints/sessions/index.ts';
 import { channelsApi } from '../../src/endpoints/settings/channels/index.ts';
 import {
@@ -616,12 +615,12 @@ test('credential mutations invalidate that provider’s credential list', async 
   expect(credCalls).toBe(2);
 });
 
-test('resetSession invalidates Messages and Sessions, forcing refetches', async () => {
-  let msgCalls = 0;
+test('resetSession invalidates transcript windows and Sessions, forcing refetches', async () => {
+  let uiItemCalls = 0;
   let sessionCalls = 0;
   const client = fakeClient({
-    getMessages: async () => {
-      msgCalls++;
+    getUiItems: async () => {
+      uiItemCalls++;
       return [];
     },
     listSessions: async () => {
@@ -632,41 +631,15 @@ test('resetSession invalidates Messages and Sessions, forcing refetches', async 
   });
   const store = createMonadStore({ client });
 
-  await store.dispatch(getMessagesApi.endpoints.getMessages.initiate('ses_abc000000000'));
+  await store.dispatch(getUiItemsApi.endpoints.getUiItemsWindow.initiate({ sessionId: 'ses_abc000000000' }));
   await store.dispatch(listSessionsApi.endpoints.listSessions.initiate(undefined));
-  expect(msgCalls).toBe(1);
+  expect(uiItemCalls).toBe(1);
   expect(sessionCalls).toBe(1);
 
   await store.dispatch(resetSessionApi.endpoints.resetSession.initiate('ses_abc000000000'));
   await new Promise((r) => setTimeout(r, 0));
-  expect(msgCalls).toBe(2);
+  expect(uiItemCalls).toBe(2);
   expect(sessionCalls).toBe(2);
-});
-
-test('resetSession clears the live stream cache immediately', async () => {
-  // History pages now live in component state (the Chat accumulator), so reset only needs to
-  // clear the live stream cache optimistically; invalidatesTags('Messages') drops cached pages.
-  const summaryItem = {
-    kind: 'memory_summary',
-    id: 'memory-summary:undefined',
-    summary: 'Earlier context.',
-    uptoMessageId: 'msg_100000000000',
-    seq: 'msg_100000000000'
-  } as const;
-  const client = fakeClient({ resetSession: async () => ({ clearedCount: 1 }) });
-  const store = createMonadStore({ client });
-
-  await store.dispatch(
-    streamUiItemsApi.util.upsertQueryData('streamUiItems', 'ses_abc000000000', { items: [summaryItem] }) as never
-  );
-  expect(
-    streamUiItemsApi.endpoints.streamUiItems.select('ses_abc000000000')(store.getState() as never).data?.items
-  ).toEqual([summaryItem]);
-
-  await store.dispatch(resetSessionApi.endpoints.resetSession.initiate('ses_abc000000000'));
-
-  const uiStream = streamUiItemsApi.endpoints.streamUiItems.select('ses_abc000000000')(store.getState() as never);
-  expect(uiStream.data?.items).toEqual([]);
 });
 
 test('streamControl subscribes to the control stream and invalidates Sessions on list events', async () => {

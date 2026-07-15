@@ -225,11 +225,63 @@ const modelCommandAtom = defineCommand({
       const lines = models.map((m) => `${m.current ? '➡️' : '  '} ${m.alias}  (${m.provider}:${m.modelId})`);
       return { message: ctx.t('cmd.model.list', { list: lines.join('\n') }) };
     }
-    if (!models.some((m) => m.alias === alias)) {
-      return { message: ctx.t('cmd.model.unknown', { alias }) };
+    if (alias === 'inherit') {
+      await ctx.setModel(alias);
+      return {
+        message: ctx.t('cmd.model.set', { alias }),
+        effect: { type: 'model-changed', alias }
+      };
     }
-    await ctx.setModel(alias);
-    return { message: ctx.t('cmd.model.set', { alias }), effect: { type: 'model-changed', alias } };
+    const profile = models.find((m) => m.alias === alias);
+    if (profile) {
+      await ctx.setModel(profile.alias);
+      return {
+        message: ctx.t('cmd.model.set', { alias: profile.alias }),
+        effect: { type: 'model-changed', alias: profile.alias }
+      };
+    }
+    const separator = alias.indexOf(':');
+    if (separator > 0 && separator < alias.length - 1) {
+      await ctx.setModel(alias);
+      return {
+        message: ctx.t('cmd.model.set', { alias }),
+        effect: { type: 'model-changed', alias }
+      };
+    }
+    const modelMatches = models.filter((m) => m.modelId === alias);
+    const providers = new Set(modelMatches.map((m) => m.provider));
+    const match = modelMatches[0];
+    if (match && providers.size === 1) {
+      await ctx.setModel(match.alias);
+      return {
+        message: ctx.t('cmd.model.set', { alias: match.alias }),
+        effect: { type: 'model-changed', alias: match.alias }
+      };
+    }
+    if (providers.size > 1) {
+      const lines = modelMatches.map((m) => `${m.provider}: ${m.alias}  (${m.modelId})`);
+      return { message: ctx.t('cmd.model.ambiguous', { alias, list: lines.join('\n') }) };
+    }
+    return { message: ctx.t('cmd.model.unknown', { alias }) };
+  }
+});
+
+const effortCommandAtom = defineCommand({
+  name: 'effort',
+  description: 'Set the reasoning effort for this conversation',
+  descriptionKey: 'cmd.effort.desc',
+  group: 'Runtime',
+  argHint: '<value|default>',
+  args: [{ name: 'effort', type: 'string', required: true, placeholder: '<value|default>' }],
+  async run(ctx) {
+    const value = ctx.args.trim();
+    if (!value) return { message: ctx.t('cmd.effort.usage') };
+    const effort = value === 'default' ? undefined : value;
+    await ctx.setEffort(effort);
+    return {
+      message: ctx.t(effort ? 'cmd.effort.set' : 'cmd.effort.default', effort ? { effort } : undefined),
+      effect: { type: 'model-effort-changed', ...(effort ? { effort } : {}) }
+    };
   }
 });
 
@@ -282,17 +334,39 @@ const helpCommandAtom = defineCommand({
     const builtins = commands.filter((c) => c.type === 'action' && c.source === 'builtin');
     const atoms = commands.filter((c) => c.type === 'action' && c.source === 'atom-pack');
     const skills = commands.filter((c) => c.type === 'skill');
-    const fmt = (c: (typeof commands)[number]) => commandHelpRows(c).join('\n');
-    const sections: string[] = groupedCommandSections(ctx.t('cmd.help.commands'), builtins, fmt, (group) =>
+    const sections: string[] = groupedCommandSections(ctx.t('cmd.help.commands'), builtins, commandHelpBlock, (group) =>
       helpGroupLabel(ctx.t, group)
     );
-    if (atoms.length > 0) sections.push(`${ctx.t('cmd.help.atoms')}\n${atoms.map(fmt).join('\n')}`);
-    if (skills.length > 0) sections.push(`${ctx.t('cmd.help.skills')}\n${skills.map(fmt).join('\n')}`);
+    if (atoms.length > 0) sections.push(commandHelpSection(ctx.t('cmd.help.atoms'), commandHelpBlock(atoms)));
+    if (skills.length > 0) sections.push(commandHelpSection(ctx.t('cmd.help.skills'), commandHelpBlock(skills)));
     return { message: sections.join('\n\n'), effect: { type: 'help', commands } };
   }
 });
 
-function commandHelpRows(command: {
+interface CommandHelpEntry {
+  description: string;
+  invocation: string;
+}
+
+function commandHelpBlock(
+  commands: Array<{
+    id: string;
+    description: string;
+    argHint?: string;
+    args?: Array<{ name: string; placeholder?: string; required?: boolean }>;
+    subcommands?: Array<{
+      id: string;
+      description: string;
+      shortcut?: string;
+      args?: Array<{ name: string; placeholder?: string; required?: boolean }>;
+    }>;
+  }>
+): string {
+  const entries = commands.flatMap(commandHelpEntries);
+  return entries.map((entry) => `- \`${entry.invocation}\` ${entry.description}`).join('\n');
+}
+
+function commandHelpEntries(command: {
   id: string;
   description: string;
   argHint?: string;
@@ -303,11 +377,14 @@ function commandHelpRows(command: {
     shortcut?: string;
     args?: Array<{ name: string; placeholder?: string; required?: boolean }>;
   }>;
-}): string[] {
-  const rows = [`  /${command.id}${commandHint(command)} — ${command.description}`];
+}): CommandHelpEntry[] {
+  const rows = [{ invocation: `/${command.id}${commandHint(command)}`, description: command.description }];
   for (const subcommand of command.subcommands ?? []) {
     const shortcut = subcommand.shortcut ? ` (shortcut /${subcommand.shortcut})` : '';
-    rows.push(`    /${command.id} ${subcommand.id}${commandHint(subcommand)} — ${subcommand.description}${shortcut}`);
+    rows.push({
+      invocation: `/${command.id} ${subcommand.id}${commandHint(subcommand)}`,
+      description: `${subcommand.description}${shortcut}`
+    });
   }
   return rows;
 }
@@ -326,7 +403,7 @@ const COMMAND_GROUP_ORDER = ['Conversation', 'Context', 'Memory', 'Runtime', 'He
 function groupedCommandSections<T extends { group?: string }>(
   title: string,
   commands: T[],
-  fmt: (command: T) => string,
+  fmt: (commands: T[]) => string,
   label: (group: string) => string
 ): string[] {
   if (commands.length === 0) return [`${title}\n`];
@@ -340,9 +417,13 @@ function groupedCommandSections<T extends { group?: string }>(
   return [...byGroup]
     .toSorted(([a], [b]) => commandGroupRank(a) - commandGroupRank(b) || a.localeCompare(b))
     .map(([group, rows], index) => {
-      const heading = index === 0 ? `${title}\n${label(group)}` : label(group);
-      return `${heading}\n${rows.map(fmt).join('\n')}`;
+      const heading = index === 0 ? `## ${title}\n\n### ${label(group)}` : `### ${label(group)}`;
+      return `${heading}\n${fmt(rows)}`;
     });
+}
+
+function commandHelpSection(title: string, body: string): string {
+  return `## ${title}\n${body}`;
 }
 
 function commandGroupRank(group: string): number {
@@ -369,6 +450,7 @@ export const BUILTIN_COMMANDS: CommandDefinition[] = [
   checkMemoryCommandAtom,
   clearCommandAtom,
   modelCommandAtom,
+  effortCommandAtom,
   workdirCommandAtom,
   handoffCommandAtom,
   helpCommandAtom

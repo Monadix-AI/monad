@@ -6,6 +6,7 @@
 
 import type {
   CreateSessionOriginHint,
+  InteractionEvent,
   JsonRpcNotification,
   JsonRpcResponse,
   RpcMethod,
@@ -13,6 +14,7 @@ import type {
   RpcResult
 } from '@monad/protocol';
 import type { EventSink } from '#/handlers/session/index.ts';
+import type { HostInteractionService } from '#/interactions/service.ts';
 import type { ConnectionState } from '#/transports/jsonrpc/connection.ts';
 
 import { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
@@ -36,6 +38,7 @@ const nativeOrigin = (origin?: CreateSessionOriginHint) =>
 export interface RpcContext {
   state: ConnectionState;
   push: Push;
+  interactions?: HostInteractionService;
 }
 
 type RpcHandlerMap = {
@@ -75,7 +78,7 @@ export const RPC_HANDLERS: RpcHandlerMap = {
   'sessions.send': ({ id, ...rest }, h: D) => h.session.send({ sessionId: id, ...rest }),
   'sessions.generate': ({ id, ...rest }, h: D) => h.session.generate({ sessionId: id, ...rest }),
 
-  'control.subscribe': async (_params, h: D, { state, push }) => {
+  'control.subscribe': async (_params, h: D, { state, push, interactions }) => {
     // Idempotent: a second control.subscribe on this connection is a no-op.
     if (!state.control) {
       const sink: EventSink = (event) => {
@@ -88,11 +91,24 @@ export const RPC_HANDLERS: RpcHandlerMap = {
       const { dispose } = h.session.subscribeControl(sink);
       state.control = dispose;
     }
+    if (interactions && !state.interactions) {
+      const sink = (event: InteractionEvent) => {
+        push({
+          jsonrpc: '2.0',
+          method: 'interactions.event',
+          params: { event }
+        });
+      };
+      state.interactions = interactions.subscribe(sink);
+      for (const interaction of interactions.listPending()) sink({ type: 'upsert', interaction });
+    }
     return { subscribed: true };
   },
   'control.unsubscribe': async (_params, _h: D, { state }) => {
     state.control?.();
     state.control = undefined;
+    state.interactions?.();
+    state.interactions = undefined;
     return {};
   },
 

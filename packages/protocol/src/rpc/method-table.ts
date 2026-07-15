@@ -440,7 +440,8 @@ export type UniversalMethodName = keyof typeof UNIVERSAL_METHODS;
 
 export const RPC_ONLY_METHODS = {
   // Cross-session control stream: session-list-level changes (create/update/delete/branch/restore,
-  // task lifecycle). Lets a client keep its session list live without subscribing per session id.
+  // task lifecycle) plus host interaction notifications. Lets a client keep its session list and
+  // app-wide interaction presenter live without subscribing per session id.
   'control.subscribe': {
     result: subscribeAckSchema,
     emits: [

@@ -8,7 +8,7 @@ import { PanelShell, PanelShellBody } from '#/components/ui/panel-shell';
 import { StudioBreadcrumbHeader } from '#/features/studio/StudioBreadcrumbHeader';
 import { useAsyncAction } from '#/hooks/use-async-action';
 import { useOpenaiCompatSettings } from '#/hooks/use-openai-compat-settings';
-import { useMonadRuntime } from '#/lib/monad-runtime-provider';
+import { useMonadRuntime } from '#/lib/monad-runtime-context';
 import { SECRET_INPUT_PASSWORD_MANAGER_PROPS } from '#/lib/secret-input-props';
 
 function OpenaiCompatSettingsSkeleton() {

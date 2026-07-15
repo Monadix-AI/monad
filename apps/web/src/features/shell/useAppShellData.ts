@@ -64,7 +64,11 @@ export function useAppShellData({ loadModelData = true }: { loadModelData?: bool
         (health as { latestVersion?: string; version?: string } | undefined)?.version
   );
 
-  const { data: sessionData, isLoading: sessionsLoading } = useListSessionsQuery(undefined);
+  const {
+    data: sessionData,
+    isFetching: sessionsFetching,
+    isLoading: sessionsLoading
+  } = useListSessionsQuery(undefined);
   const { data: projectData, isLoading: projectsLoading } = useListWorkplaceProjectsQuery(undefined);
   const { data: agentData } = useListAgentsQuery(undefined, { skip: !loadModelData });
   const { data: liveExternalAgentSessionData } = useListLiveExternalAgentSessionsQuery(undefined);
@@ -143,10 +147,12 @@ export function useAppShellData({ loadModelData = true }: { loadModelData?: bool
     daemonVersion,
     hasUpgrade,
     agents,
+    defaultProfileAlias: profileData?.defaultAlias,
     networkRuntime,
     profiles,
     projectsLoading,
     sessions,
+    sessionsFetching,
     sessionsLoading,
     voiceModelConfigured,
     voiceModelState,

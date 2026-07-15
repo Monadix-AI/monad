@@ -1,5 +1,3 @@
-'use client';
-
 import type { ComponentProps, CSSProperties, HTMLAttributes } from 'react';
 import type { BundledLanguage, BundledTheme, HighlighterGeneric, ThemedToken } from 'shiki';
 

@@ -105,6 +105,8 @@ export interface CommandRunContext {
   listModels(): Promise<CommandModelInfo[]>;
   /** Switch the model for this session; rejects if the alias is unknown. */
   setModel(alias: string): Promise<void>;
+  /** Set or clear the reasoning effort override for this session. */
+  setEffort(effort?: string): Promise<void>;
 
   /** The session's shared working folder (absent → daemon default). All agents in the conversation
    *  — including delegated subagents — resolve fs/shell paths against it. */
@@ -135,6 +137,7 @@ export type CommandEffect =
   | { type: 'history-reset' }
   | { type: 'compacted'; compacted: number; summary?: string }
   | { type: 'model-changed'; alias: string }
+  | { type: 'model-effort-changed'; effort?: string }
   | { type: 'workdir-changed'; path?: string }
   | { type: 'view-clear' }
   | { type: 'help'; commands: CommandItem[] };

@@ -1,5 +1,3 @@
-'use client';
-
 import type { MessageAttachment } from '../../experience/types.ts';
 
 import { Attachment01Icon, Download04Icon, EyeIcon } from '@hugeicons/core-free-icons';

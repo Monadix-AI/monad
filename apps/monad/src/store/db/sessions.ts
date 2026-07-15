@@ -10,6 +10,7 @@ import { and, count, desc, eq, inArray } from 'drizzle-orm';
 
 import { rowToSession, rowToWorkplaceProject } from './row-mappers.ts';
 import { sessions, workplaceProjects } from './schema.ts';
+import { parseSessionModelSelection, serializeSessionModelSelection } from './session-model-selection.ts';
 
 type Db = BunSQLiteDatabase<Record<string, never>>;
 
@@ -29,6 +30,7 @@ export interface SessionPatch {
   archived?: boolean;
   agentIds?: Session['agentIds'];
   model?: string | null;
+  reasoningEffort?: string | null;
   cwd?: string | null;
   origin?: Session['origin'] | null;
 }
@@ -56,7 +58,7 @@ export function insertSession(db: Db, s: Session): void {
       branchedAtMessageId: s.branchedAtMessageId ?? null,
       archived: s.archived ? 1 : 0,
       restoreCount: s.restoreCount,
-      model: s.model ?? null,
+      model: serializeSessionModelSelection({ model: s.model, effort: s.reasoningEffort }),
       cwd: s.cwd ?? null,
       origin: s.origin ? JSON.stringify(s.origin) : null,
       inputTokens: s.usage?.inputTokens ?? 0,
@@ -106,7 +108,15 @@ export function updateSession(db: Db, id: string, patch: SessionPatch): Session 
   if (patch.state !== undefined) sets.state = patch.state;
   if (patch.archived !== undefined) sets.archived = patch.archived ? 1 : 0;
   if (patch.agentIds !== undefined) sets.agentIds = JSON.stringify(patch.agentIds);
-  if (patch.model !== undefined) sets.model = patch.model;
+  if (patch.model !== undefined || patch.reasoningEffort !== undefined) {
+    const current = parseSessionModelSelection(
+      db.select({ model: sessions.model }).from(sessions).where(eq(sessions.id, id)).get()?.model ?? null
+    );
+    sets.model = serializeSessionModelSelection({
+      model: patch.model === undefined ? current.model : (patch.model ?? undefined),
+      effort: patch.reasoningEffort === undefined ? current.effort : (patch.reasoningEffort ?? undefined)
+    });
+  }
   if (patch.cwd !== undefined) sets.cwd = patch.cwd;
   if (patch.origin !== undefined) sets.origin = patch.origin ? JSON.stringify(patch.origin) : null;
   db.update(sessions).set(sets).where(eq(sessions.id, id)).run();

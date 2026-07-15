@@ -4,8 +4,10 @@ export const DEFAULT_COMPOSER_SETTINGS: ComposerSettings = {
   followUpBehavior: 'queue',
   sendShortcut: 'enter'
 };
+export const LONG_PROMPT_CHARACTER_THRESHOLD = 160;
 
 export type ComposerKeyIntent = {
+  characterCount?: number;
   hasMultipleLines?: boolean;
   key: string;
   primaryModifier: boolean;
@@ -29,8 +31,11 @@ export function shouldSubmitComposerKey(intent: ComposerKeyIntent, shortcut: Com
   if (intent.key !== 'Enter') return false;
   if (intent.shiftKey) return false;
   if (shortcut === 'enter') return !intent.primaryModifier;
-  if (shortcut === 'mod-enter-for-multiline')
-    return intent.hasMultipleLines ? intent.primaryModifier : !intent.primaryModifier;
+  if (shortcut === 'mod-enter-for-multiline') {
+    const longPrompt =
+      Boolean(intent.hasMultipleLines) || (intent.characterCount ?? 0) >= LONG_PROMPT_CHARACTER_THRESHOLD;
+    return longPrompt ? intent.primaryModifier : !intent.primaryModifier;
+  }
   return intent.primaryModifier;
 }
 

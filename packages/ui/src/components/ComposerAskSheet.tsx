@@ -1,5 +1,3 @@
-'use client';
-
 import type { ReactElement, ReactNode } from 'react';
 
 import { useEffect, useMemo, useRef, useState } from 'react';

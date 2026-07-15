@@ -18,7 +18,6 @@ import {
   eventSchema,
   externalAgentAuthSessionViewSchema,
   externalAgentUiObservationFrameSchema,
-  interactionEventSchema,
   readTypedSseStream,
   SSE_IDLE_TIMEOUT_MS,
   sessionUiEventSchema
@@ -296,7 +295,14 @@ export class MonadClient {
     onEvent: InteractionEventHandler,
     opts?: { onOpen?: () => void; onError?: (err: StreamError) => void }
   ): () => void {
-    return this.stream(`/${CONTROL_API_VERSION}/interactions/events`, interactionEventSchema, onEvent, opts);
+    try {
+      const dispose = this.eventSocket().subscribeInteractions(onEvent);
+      opts?.onOpen?.();
+      return dispose;
+    } catch (cause) {
+      opts?.onError?.({ kind: 'fatal', cause });
+      return () => {};
+    }
   }
 
   streamSessionLogs(

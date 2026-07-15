@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tanstackRouter } from '@tanstack/router-plugin/vite';
 import react from '@vitejs/plugin-react';
-import { defineConfig } from 'vite';
+import { createLogger, defineConfig } from 'vite';
 
 const REPO_ROOT = resolve(import.meta.dirname, '../..');
 const APP_ROOT = import.meta.dirname;
@@ -70,6 +70,18 @@ export function ensureDestroySoon(socket: unknown): void {
   };
 }
 
+export function isTransientDaemonWsProxyError(message: string, error: unknown): boolean {
+  const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined;
+  return message.includes('ws proxy error') && code === 'ECONNREFUSED';
+}
+
+const viteLogger = createLogger();
+const logViteError = viteLogger.error.bind(viteLogger);
+viteLogger.error = (message, options) => {
+  if (isTransientDaemonWsProxyError(message, options?.error)) return;
+  logViteError(message, options);
+};
+
 function configureBunWsProxyCompat(proxy: { on(event: string, handler: (...args: unknown[]) => void): void }): void {
   proxy.on('proxyReqWs', (_proxyReq, _req, socket) => ensureDestroySoon(socket));
 }
@@ -98,6 +110,7 @@ const NODE_MODULES = String.raw`[/\\]node_modules[/\\](?:\.bun[/\\][^/\\]+[/\\]n
 const WORKSPACE_ROOT = String.raw`[/\\](?:packages|apps)[/\\]`;
 
 export default defineConfig(({ command }) => ({
+  customLogger: viteLogger,
   plugins: [
     tanstackRouter({
       generatedRouteTree: './src/routeTree.gen.ts',

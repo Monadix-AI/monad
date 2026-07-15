@@ -2,6 +2,11 @@ import type { UIMessageItem } from '@monad/protocol';
 
 import { expect, test } from 'bun:test';
 
+import {
+  branchSourceHref,
+  branchSourceSessionName,
+  isBranchSourceItem
+} from '../../src/features/session/chat-view-items.ts';
 import { buildViewMessages } from '../../src/features/session/session-view.ts';
 
 function message(id: string, role: UIMessageItem['role'], text: string): UIMessageItem {
@@ -10,6 +15,17 @@ function message(id: string, role: UIMessageItem['role'], text: string): UIMessa
     id,
     role,
     parts: [{ type: 'text', text }],
+    status: 'done',
+    seq: id
+  };
+}
+
+function directive(id: string, role: UIMessageItem['role'], text: string): UIMessageItem {
+  return {
+    kind: 'message',
+    id,
+    role,
+    parts: [{ type: 'artifact', messageType: 'directive', text }],
     status: 'done',
     seq: id
   };
@@ -58,4 +74,113 @@ test('assistant activity messages stay ephemeral in the optimistic tail', () => 
     { id: 'local-1', role: 'user', text: 'hello now' },
     { id: 'local-assistant-1', role: 'assistant', pending: true }
   ]);
+});
+
+test('answered command directives render only their system reply', () => {
+  const items = buildViewMessages({
+    commandPending: null,
+    optimistic: [],
+    transcriptMode: 'live',
+    visibleHistory: [],
+    visibleLiveItems: [
+      directive('msg_command', 'user', '/model openrouter:gpt-5'),
+      directive('msg_reply', 'assistant', 'Model set to openrouter:gpt-5.')
+    ]
+  });
+
+  expect(items).toMatchObject([{ id: 'msg_reply', role: 'assistant', type: 'directive' }]);
+});
+
+test('answered command directives consume their optimistic command echo', () => {
+  const items = buildViewMessages({
+    commandPending: null,
+    optimistic: [{ id: 'local-command', role: 'user', text: '/model openrouter:gpt-5' }],
+    transcriptMode: 'live',
+    visibleHistory: [],
+    visibleLiveItems: [
+      directive('msg_command', 'user', '/model openrouter:gpt-5'),
+      directive('msg_reply', 'assistant', 'Model set to openrouter:gpt-5.')
+    ]
+  });
+
+  expect(items).toMatchObject([{ id: 'msg_reply', role: 'assistant', type: 'directive' }]);
+});
+
+test('live text command echoes collapse when their assistant directive reply arrives', () => {
+  const items = buildViewMessages({
+    commandPending: null,
+    optimistic: [],
+    transcriptMode: 'live',
+    visibleHistory: [],
+    visibleLiveItems: [
+      message('msg_command', 'user', '/effort medium'),
+      directive('msg_reply', 'assistant', 'Reasoning effort set to medium.')
+    ]
+  });
+
+  expect(items).toMatchObject([{ id: 'msg_reply', role: 'assistant', type: 'directive' }]);
+});
+
+test('unanswered command directives remain visible until their reply arrives', () => {
+  const items = buildViewMessages({
+    commandPending: 'model',
+    optimistic: [],
+    transcriptMode: 'live',
+    visibleHistory: [],
+    visibleLiveItems: [directive('msg_command', 'user', '/model openrouter:gpt-5')]
+  });
+
+  expect(items).toMatchObject([{ id: 'msg_command', role: 'user', type: 'directive' }]);
+});
+
+test('ordinary slash-prefixed messages are not collapsed with assistant messages', () => {
+  const items = buildViewMessages({
+    commandPending: null,
+    optimistic: [],
+    transcriptMode: 'live',
+    visibleHistory: [],
+    visibleLiveItems: [message('msg_user', 'user', '/not-a-command'), message('msg_reply', 'assistant', 'response')]
+  });
+
+  expect(items.map((item) => item.id)).toEqual(['msg_user', 'msg_reply']);
+});
+
+test('branch source artifacts become a navigable transcript item', () => {
+  const source: UIMessageItem = {
+    id: 'msg_source',
+    kind: 'message',
+    parts: [
+      {
+        data: { messageId: 'msg_123456789012', sessionId: 'ses_123456789012' },
+        messageType: 'branch_source',
+        type: 'artifact'
+      }
+    ],
+    role: 'assistant',
+    seq: 'msg_source',
+    status: 'done'
+  };
+  const items = buildViewMessages({
+    commandPending: null,
+    optimistic: [],
+    transcriptMode: 'live',
+    visibleHistory: [],
+    visibleLiveItems: [source]
+  });
+
+  expect(items).toEqual([
+    {
+      id: 'msg_source',
+      kind: 'branch_source',
+      messageId: 'msg_123456789012',
+      sessionId: 'ses_123456789012'
+    }
+  ]);
+  const item = items[0];
+  if (!item || !isBranchSourceItem(item)) throw new Error('expected branch source item');
+  expect(branchSourceHref(item)).toBe('/sessions/ses_123456789012?msg=msg_123456789012');
+  expect(branchSourceSessionName(item, [{ id: 'ses_123456789012', title: 'Original session' }])).toBe(
+    'Original session'
+  );
+  expect(branchSourceSessionName(item, [])).toBe('ses_123456789012');
 });

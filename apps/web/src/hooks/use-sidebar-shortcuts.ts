@@ -7,7 +7,6 @@ import { useWorkspaceShellStore } from '#/lib/workspace-shell-store';
 
 interface UseSidebarShortcutsArgs {
   inboxShortcutAction?: () => void;
-  monadAgentShortcutAction?: () => void;
   newChatShortcutAction?: () => void;
   sidebarShortcutActions: (() => void)[];
   showSettings: boolean;
@@ -16,8 +15,7 @@ interface UseSidebarShortcutsArgs {
 }
 
 export const settingsHotkey = 'Mod+,' as const;
-export const monadAgentHotkey = 'Mod+`' as const;
-export const newChatHotkey = 'Mod+N' as const;
+export const newChatHotkey = 'Mod+`' as const;
 export const inboxHotkey = 'Mod+I' as const;
 export const sidebarNumberHotkeys = [
   'Mod+1',
@@ -31,7 +29,7 @@ export const sidebarNumberHotkeys = [
   'Mod+9'
 ] as const;
 
-export const sidebarShortcutListenerOptions = { capture: true } as const;
+export const sidebarShortcutListenerOptions = { capture: true, passive: false } as const;
 const sidebarSessionSelector = '[data-sidebar-session-row="true"]';
 
 export function createVisibleSidebarSessionShortcutActions(
@@ -74,14 +72,19 @@ export function syncVisibleSidebarSessionShortcutBadges(
   }
 }
 
-function matchesMonadAgentHotkey(event: KeyboardEvent, applePlatform: boolean) {
+function matchesNewChatHotkey(event: KeyboardEvent, applePlatform: boolean) {
   const hasModifier = applePlatform ? event.metaKey : event.ctrlKey;
   return hasModifier && !event.altKey && !event.shiftKey && (event.key === '`' || event.code === 'Backquote');
 }
 
+function consumeSidebarShortcutEvent(event: KeyboardEvent) {
+  event.preventDefault();
+  event.stopPropagation();
+  event.stopImmediatePropagation();
+}
+
 export function createSidebarShortcutHandler({
   inboxShortcutAction,
-  monadAgentShortcutAction,
   newChatShortcutAction,
   sidebarShortcutActions,
   showSettings,
@@ -94,49 +97,41 @@ export function createSidebarShortcutHandler({
     if (event.isComposing) return;
 
     if (matchesKeyboardEvent(event, settingsHotkey, platform)) {
-      event.preventDefault();
+      consumeSidebarShortcutEvent(event);
       toggleSettings();
       return;
     }
 
-    if (newChatShortcutAction && matchesKeyboardEvent(event, newChatHotkey, platform)) {
-      event.preventDefault();
+    if (newChatShortcutAction && matchesNewChatHotkey(event, applePlatform)) {
+      consumeSidebarShortcutEvent(event);
       revealSidebar?.();
       newChatShortcutAction();
       return;
     }
 
     if (inboxShortcutAction && matchesKeyboardEvent(event, inboxHotkey, platform)) {
-      event.preventDefault();
+      consumeSidebarShortcutEvent(event);
       revealSidebar?.();
       inboxShortcutAction();
       return;
     }
 
     if (showSettings) return;
-    if (monadAgentShortcutAction && matchesMonadAgentHotkey(event, applePlatform)) {
-      event.preventDefault();
-      revealSidebar?.();
-      monadAgentShortcutAction();
-      return;
-    }
-
     const shortcutIndex = sidebarNumberHotkeys.findIndex((hotkey) => matchesKeyboardEvent(event, hotkey, platform));
     if (shortcutIndex < 0) return;
     const action = sidebarShortcutActions[shortcutIndex];
     if (!action) return;
 
-    event.preventDefault();
+    consumeSidebarShortcutEvent(event);
     revealSidebar?.();
     action();
   };
 }
 
-// Global primary-modifier shortcuts cover settings, New chat, Inbox, Monad Agent, and numbered sidebar navigation.
+// Global primary-modifier shortcuts cover settings, New chat, Inbox, and numbered sidebar navigation.
 // Holding the modifier reveals the numbered badges so the bindings are discoverable.
 export function useSidebarShortcuts({
   inboxShortcutAction,
-  monadAgentShortcutAction,
   newChatShortcutAction,
   sidebarShortcutActions,
   showSettings,
@@ -152,7 +147,6 @@ export function useSidebarShortcuts({
       createSidebarShortcutHandler({
         inboxShortcutAction,
         sidebarShortcutActions,
-        monadAgentShortcutAction,
         newChatShortcutAction,
         showSettings,
         toggleSettings,
@@ -162,7 +156,6 @@ export function useSidebarShortcuts({
     [
       sidebarShortcutActions,
       inboxShortcutAction,
-      monadAgentShortcutAction,
       newChatShortcutAction,
       showSettings,
       toggleSettings,

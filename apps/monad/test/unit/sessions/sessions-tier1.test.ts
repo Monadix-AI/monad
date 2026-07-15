@@ -61,6 +61,23 @@ test('updateSession merges fields and bumps updatedAt', async () => {
   store.close();
 });
 
+test('session model and effort persist through the shared model column', () => {
+  const store = createStore();
+  const session = fixtureSession({ model: 'openrouter:gpt-5', reasoningEffort: 'high' });
+  store.insertSession(session);
+
+  expect(store.db.select({ model: sessions.model }).from(sessions).get()?.model).toBe(
+    '{"model":"openrouter:gpt-5","effort":"high"}'
+  );
+  expect(store.getSession(session.id)).toMatchObject({ model: 'openrouter:gpt-5', reasoningEffort: 'high' });
+
+  store.updateSession(session.id, { reasoningEffort: null });
+  expect(store.db.select({ model: sessions.model }).from(sessions).get()?.model).toBe('{"model":"openrouter:gpt-5"}');
+  expect(store.getSession(session.id)).toMatchObject({ model: 'openrouter:gpt-5' });
+  expect(store.getSession(session.id)?.reasoningEffort).toBeUndefined();
+  store.close();
+});
+
 test('listSessions filters by archived and state', () => {
   const store = createStore();
   store.insertSession(fixtureSession({ state: 'active', archived: false }));

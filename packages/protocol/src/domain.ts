@@ -255,6 +255,8 @@ export const sessionSchema = z.object({
   restoreCount: z.number(), // how many times this session was restored/rewound (audit)
   /** Per-session model-profile alias override (set via /model); absent → daemon default. */
   model: z.string().optional(),
+  /** Per-session reasoning-effort override; absent inherits the effective profile/model default. */
+  reasoningEffort: z.string().optional(),
   /** Default working directory for this session — used for shell commands and skill-path matching.
    * Absent → daemon workspace path (`~/.monad/workspace`). */
   cwd: z.string().optional(),
@@ -296,7 +298,15 @@ export type MessageRole = z.infer<typeof messageRoleSchema>;
 /** `(string & {})` keeps this union open — unknown types fall back to `text`.
  * Open unions can't round-trip through z.infer, so the type is hand-written and
  * the schema is intentionally just `z.string()`. */
-export type MessageType = 'text' | 'markdown' | 'tool_call' | 'tool_result' | 'card' | 'directive' | (string & {});
+export type MessageType =
+  | 'text'
+  | 'markdown'
+  | 'tool_call'
+  | 'tool_result'
+  | 'card'
+  | 'directive'
+  | 'branch_source'
+  | (string & {});
 export const messageTypeSchema: z.ZodType<MessageType> = z.string();
 
 // Generation lifecycle for any message. `static` = never generated (user text, pasted content).

@@ -1,10 +1,17 @@
 import type { SessionId } from '@monad/protocol';
 import type { ToolPart } from '@monad/ui';
 
-import { ComputerTerminal01Icon, ExternalLinkIcon, SquareIcon, TextIcon } from '@hugeicons/core-free-icons';
+import {
+  ComputerTerminal01Icon,
+  ExternalLinkIcon,
+  PackageIcon,
+  SquareIcon,
+  TextIcon
+} from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Button, cn, Tool, ToolContent, ToolHeader, ToolInput, ToolOutput } from '@monad/ui';
 import { CodeInline } from '@monad/ui/components/CodeBlock';
+import { Markdown } from '@monad/ui/components/Markdown';
 import { memo, useMemo, useState } from 'react';
 
 import { useT } from '#/components/I18nProvider';
@@ -129,6 +136,21 @@ interface MultiDiffDisplay {
     operation?: string;
     newPath?: string;
   }>;
+}
+
+interface SkillDisplay {
+  type: 'skill';
+  name: string;
+  description: string;
+  body: string;
+  version?: string;
+  license?: string;
+  compatibility?: string;
+  metadata?: Record<string, string>;
+  allowedTools?: string;
+  context: 'inline' | 'fork';
+  tier?: string;
+  resource?: string;
 }
 
 interface AnsiState {
@@ -337,6 +359,61 @@ function parseMultiDiffDisplay(display: unknown): MultiDiffDisplay | null {
   return files.length > 0 ? { type: 'multi_diff', files, ...(summary ? { summary } : {}) } : null;
 }
 
+function parseSkillDisplay(step: ToolItem): SkillDisplay {
+  const fallbackName = firstStringField(step.input, ['name']) ?? 'skill';
+  const fallbackResource = firstStringField(step.input, ['file']);
+  if (!step.display || typeof step.display !== 'object' || Array.isArray(step.display)) {
+    return {
+      type: 'skill',
+      name: fallbackName,
+      description: '',
+      body: step.output ?? '',
+      context: 'inline',
+      ...(fallbackResource ? { resource: fallbackResource } : {})
+    };
+  }
+
+  const value = step.display as Record<string, unknown>;
+  if (
+    value.type !== 'skill' ||
+    typeof value.name !== 'string' ||
+    typeof value.description !== 'string' ||
+    typeof value.body !== 'string' ||
+    (value.context !== 'inline' && value.context !== 'fork')
+  ) {
+    return {
+      type: 'skill',
+      name: fallbackName,
+      description: '',
+      body: step.output ?? '',
+      context: 'inline',
+      ...(fallbackResource ? { resource: fallbackResource } : {})
+    };
+  }
+
+  const metadata =
+    value.metadata && typeof value.metadata === 'object' && !Array.isArray(value.metadata)
+      ? Object.fromEntries(
+          Object.entries(value.metadata).filter((entry): entry is [string, string] => typeof entry[1] === 'string')
+        )
+      : undefined;
+  const optionalString = (key: string) => (typeof value[key] === 'string' ? value[key] : undefined);
+  return {
+    type: 'skill',
+    name: value.name,
+    description: value.description,
+    body: value.body,
+    context: value.context,
+    ...(optionalString('version') ? { version: optionalString('version') } : {}),
+    ...(optionalString('license') ? { license: optionalString('license') } : {}),
+    ...(optionalString('compatibility') ? { compatibility: optionalString('compatibility') } : {}),
+    ...(metadata && Object.keys(metadata).length > 0 ? { metadata } : {}),
+    ...(optionalString('allowedTools') ? { allowedTools: optionalString('allowedTools') } : {}),
+    ...(optionalString('tier') ? { tier: optionalString('tier') } : {}),
+    ...(optionalString('resource') ? { resource: optionalString('resource') } : {})
+  };
+}
+
 function firstStringField(input: unknown, keys: string[]): string | undefined {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return undefined;
   const obj = input as Record<string, unknown>;
@@ -356,6 +433,13 @@ function groupStatus(steps: ToolItem[]): ToolItem['status'] {
   if (steps.some((step) => step.status === 'running')) return 'running';
   if (steps.some((step) => step.status === 'error')) return 'error';
   return 'ok';
+}
+
+const TOOL_EVENT_HEADER_CLASS =
+  'min-h-8 w-fit max-w-full justify-start gap-2 p-1 text-base leading-5 transition-colors hover:text-foreground focus-visible:text-foreground [&>div]:min-w-0 [&>div]:overflow-hidden [&>div>svg]:size-5 [&>div>svg]:shrink-0 [&>div>svg]:text-current [&>div>span]:min-w-0 [&>div>span]:truncate [&>div>span]:font-normal [&>div>span]:text-base [&>svg]:shrink-0';
+
+function toolEventTone(status: ToolItem['status']): string {
+  return status === 'error' ? 'text-destructive' : status === 'running' ? 'text-accent-blue' : 'text-muted-foreground';
 }
 
 export const ToolStepView = memo(function ToolStepView({
@@ -380,87 +464,154 @@ export const ToolStepView = memo(function ToolStepView({
   );
 });
 
+function skillDisplayName(name: string | undefined): string {
+  const unscoped = name?.split(':').at(-1)?.trim();
+  if (!unscoped) return 'Skill';
+  return unscoped
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
+    .join(' ');
+}
+
 function SingleToolView({ step, sessionId }: { step: ToolItem; sessionId?: SessionId }) {
   const t = useT();
-  const isError = step.status === 'error';
+  const isSkill = step.tool === 'skill';
+  const title = isSkill
+    ? t('web.tools.useSkill', { name: skillDisplayName(firstStringField(step.input, ['name'])) })
+    : step.input !== undefined
+      ? `${step.tool} · ${summarizeArgs(step.input)}`
+      : step.tool;
+  const statusLabel =
+    step.status === 'running' ? t('web.tools.running') : step.status === 'error' ? t('web.tools.error') : '';
 
   return (
     <Tool
-      className={cn('mb-1 w-full self-start text-xs', isError && 'border-destructive/40')}
-      defaultOpen
+      className={cn('mb-1 w-full self-start rounded-none border-0 text-base', toolEventTone(step.status))}
+      defaultOpen={step.status !== 'ok'}
+      {...(isSkill ? { 'data-slot': 'skill-tool-event' } : {})}
     >
       <ToolHeader
+        aria-label={isSkill && statusLabel ? `${title} · ${statusLabel}` : title}
+        className={cn(TOOL_EVENT_HEADER_CLASS, step.status === 'running' && '[&>div>svg]:motion-safe:animate-pulse')}
+        data-virtual-list-anchor="true"
+        icon={isSkill ? PackageIcon : undefined}
+        showStatus={false}
         state={toolState(step.status)}
-        title={step.input !== undefined ? `${step.tool} · ${summarizeArgs(step.input)}` : step.tool}
+        title={title}
         type={`tool-${step.tool}` as `tool-${string}`}
       />
-      <ToolContent>
-        <ToolDetails
-          pendingLabel={t('web.tools.running')}
-          sessionId={sessionId}
-          step={step}
-        />
+      <ToolContent className="gap-3 p-1 pt-2">
+        {isSkill ? (
+          <SkillDetails
+            pendingLabel={t('web.tools.running')}
+            step={step}
+          />
+        ) : (
+          <ToolDetails
+            pendingLabel={t('web.tools.running')}
+            sessionId={sessionId}
+            step={step}
+          />
+        )}
       </ToolContent>
     </Tool>
+  );
+}
+
+function SkillDetails({ step, pendingLabel }: { step: ToolItem; pendingLabel: string }) {
+  const t = useT();
+  const skill = parseSkillDisplay(step);
+  const nameParts = skill.name.split(':');
+  const scope = nameParts.length > 1 ? nameParts.slice(0, -1).join(':') : undefined;
+  const metadata = [
+    skill.version ? [t('web.tools.skillVersion'), skill.version] : undefined,
+    scope ? [t('web.tools.skillScope'), scope] : undefined,
+    [t('web.tools.skillContext'), skill.context === 'fork' ? t('web.tools.skillFork') : t('web.tools.skillInline')],
+    skill.tier ? [t('web.tools.skillTier'), skill.tier] : undefined,
+    skill.license ? [t('web.tools.skillLicense'), skill.license] : undefined,
+    skill.compatibility ? [t('web.tools.skillCompatibility'), skill.compatibility] : undefined,
+    skill.allowedTools ? [t('web.tools.skillTools'), skill.allowedTools] : undefined,
+    skill.resource ? [t('web.tools.skillResource'), skill.resource] : undefined,
+    ...Object.entries(skill.metadata ?? {})
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, value]) => [skillDisplayName(key), value])
+  ].filter((entry): entry is [string, string] => entry !== undefined);
+
+  return (
+    <div className="flex max-w-full flex-col gap-4 pb-2">
+      {(skill.description || metadata.length > 0) && (
+        <div
+          className="flex flex-col gap-3"
+          data-slot="skill-metadata"
+        >
+          {skill.description && (
+            <p className="max-w-[72ch] text-muted-foreground text-sm leading-6">{skill.description}</p>
+          )}
+          {metadata.length > 0 && (
+            <dl className="flex max-w-[72ch] flex-wrap gap-x-5 gap-y-1.5 text-xs leading-5">
+              {metadata.map(([label, value]) => (
+                <div
+                  className="inline-flex min-w-0 max-w-full gap-1.5"
+                  key={`${label}-${value}`}
+                >
+                  <dt className="shrink-0 text-muted-foreground">{label}</dt>
+                  <dd className="min-w-0 break-words font-medium text-foreground/85">{value}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+        </div>
+      )}
+      {step.status === 'error' ? (
+        <ToolOutput
+          errorText={formatToolError(step.output, step.errorCode)}
+          output={undefined}
+        />
+      ) : skill.body ? (
+        <div
+          className="max-w-[72ch] text-base text-foreground leading-6"
+          data-slot="skill-body"
+        >
+          <Markdown
+            text={skill.body}
+            variant="default"
+          />
+        </div>
+      ) : (
+        step.status === 'running' && <ToolPending label={pendingLabel} />
+      )}
+    </div>
   );
 }
 
 function ToolGroupView({ step, sessionId }: { step: ToolGroupItem; sessionId?: SessionId }) {
   const t = useT();
   const status = groupStatus(step.steps);
-  const isError = status === 'error';
 
   return (
     <Tool
-      className={cn('mb-1 w-full self-start text-xs', isError && 'border-destructive/40')}
-      defaultOpen
+      className={cn('mb-1 w-full self-start rounded-none border-0 text-base', toolEventTone(status))}
+      defaultOpen={status !== 'ok'}
     >
       <ToolHeader
+        className={TOOL_EVENT_HEADER_CLASS}
+        data-virtual-list-anchor="true"
+        showStatus={false}
         state={toolState(status)}
         title={t('web.tools.concurrentCalls', { count: step.steps.length })}
         type="tool-parallel"
       />
-      <ToolContent>
-        <div className="flex flex-col gap-3">
+      <ToolContent className="gap-2 p-0 pt-1">
+        <div className="flex flex-col gap-1">
           {step.steps.map((child) => (
-            <NestedToolView
+            <ToolStepView
               key={child.id}
-              pendingLabel={t('web.tools.running')}
               sessionId={sessionId}
               step={child}
             />
           ))}
         </div>
-      </ToolContent>
-    </Tool>
-  );
-}
-
-function NestedToolView({
-  step,
-  pendingLabel,
-  sessionId
-}: {
-  step: ToolItem;
-  pendingLabel: string;
-  sessionId?: SessionId;
-}) {
-  return (
-    <Tool
-      className={cn('mb-0 text-xs', step.status === 'error' && 'border-destructive/30')}
-      defaultOpen={step.status !== 'ok'}
-    >
-      <ToolHeader
-        state={toolState(step.status)}
-        title={step.input !== undefined ? `${step.tool} · ${summarizeArgs(step.input)}` : step.tool}
-        type={`tool-${step.tool}` as `tool-${string}`}
-      />
-      <ToolContent>
-        <ToolDetails
-          pendingLabel={pendingLabel}
-          sessionId={sessionId}
-          step={step}
-        />
       </ToolContent>
     </Tool>
   );

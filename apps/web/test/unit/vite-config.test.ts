@@ -3,7 +3,12 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { devToolPorts, ensureDestroySoon, readDaemonEndpoint } from '../../vite.config.ts';
+import {
+  devToolPorts,
+  ensureDestroySoon,
+  isTransientDaemonWsProxyError,
+  readDaemonEndpoint
+} from '../../vite.config.ts';
 
 test('readDaemonEndpoint prefers repo env MONAD_PORT over config network port', () => {
   const dir = mkdtempSync(join(tmpdir(), 'monad-vite-config-'));
@@ -122,4 +127,10 @@ test('ensureDestroySoon does not replace an existing socket helper', () => {
   ensureDestroySoon(socket);
 
   expect(socket.destroySoon).toBe(existing);
+});
+
+test('transient daemon websocket refusals are recognized without hiding other proxy failures', () => {
+  expect(isTransientDaemonWsProxyError('ws proxy error:', { code: 'ECONNREFUSED' })).toBe(true);
+  expect(isTransientDaemonWsProxyError('http proxy error: /v1/sessions', { code: 'ECONNREFUSED' })).toBe(false);
+  expect(isTransientDaemonWsProxyError('ws proxy error:', { code: 'ECONNRESET' })).toBe(false);
 });

@@ -5,7 +5,7 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { workspaceMono as mono } from '@monad/ui/components/AgentAvatar';
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
-import { useMonadRuntime } from '#/lib/monad-runtime-provider';
+import { useMonadRuntime } from '#/lib/monad-runtime-context';
 import {
   appendProjectDebugTrace,
   clearProjectDebugTrace,

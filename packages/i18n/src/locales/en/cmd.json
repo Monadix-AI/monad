@@ -25,8 +25,12 @@
   "cmd.checkMemory.done": "🔍 Checked memory: {{flagged}} contradicted rule(s) flagged.",
   "cmd.model.none": "No model profiles configured.",
   "cmd.model.list": "Models:\n{{list}}\n\nSwitch with /model <alias>.",
+  "cmd.model.ambiguous": "Multiple providers match \"{{alias}}\". Choose one profile:\n{{list}}",
   "cmd.model.unknown": "Unknown model profile: {{alias}}. Use /model to list available profiles.",
   "cmd.model.set": "➡️ Model set to {{alias}}.",
+  "cmd.effort.usage": "Usage: /effort <value|default>.",
+  "cmd.effort.set": "Reasoning effort set to {{effort}}.",
+  "cmd.effort.default": "Reasoning effort now inherits the model default.",
   "cmd.workdir.show": "📁 Working folder: {{path}}",
   "cmd.workdir.none": "No working folder set — using the default workspace.",
   "cmd.workdir.set": "📁 Working folder set to {{path}}.",
@@ -50,6 +54,7 @@
   "cmd.consolidate.desc": "Consolidate memory: dedup facts, then update the graph and laws (to your memory level)",
   "cmd.clear.desc": "Clear the view (client-side)",
   "cmd.model.desc": "Show or switch the model for this conversation",
+  "cmd.effort.desc": "Set the reasoning effort for this conversation",
   "cmd.workdir.desc": "Show or set the shared working folder for this conversation",
   "cmd.help.desc": "List available commands"
 }

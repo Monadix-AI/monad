@@ -1,16 +1,14 @@
 import type { ComponentProps, ReactNode } from 'react';
-import type { SessionRouteModel } from '#/features/session/session-route-contract';
 import type { SettingsSectionId } from '#/features/settings/sections';
 import type { StudioSectionId } from '#/features/studio/sections';
 import type { WorkspaceRouteProps } from '#/features/workspace/WorkspaceRoute';
 
 import { useInitStatusQuery } from '@monad/client-rtk';
 import { cn } from '@monad/ui';
-import { createContext, useCallback, useContext, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 
 import { isRuntimeReady } from '#/features/init/init-readiness';
 import { useSessionRouteModel } from '#/features/session/use-session-route-model';
-import { Settings } from '#/features/settings/Settings';
 import { AppShellSidebarReveal } from '#/features/shell/AppShellSidebarReveal';
 import { RightPanel } from '#/features/shell/right-panel/RightPanel';
 import { RightPanelProvider } from '#/features/shell/right-panel/right-panel-context';
@@ -18,17 +16,11 @@ import { useAppShellNavigation } from '#/features/shell/routing/navigation';
 import { useShellRoute } from '#/features/shell/routing/use-shell-route';
 import { SessionSidebar } from '#/features/shell/SessionSidebar';
 import { useAppShellData } from '#/features/shell/useAppShellData';
-import { useMonadRuntime } from '#/lib/monad-runtime-provider';
+import { useMonadRuntime } from '#/lib/monad-runtime-context';
 import { useWorkspaceShellStore, type WorkspaceShellState } from '#/lib/workspace-shell-store';
+import { ShellRouteContext, type ShellRouteContextValue, useShellRouteContext } from './shell-route-context';
 
-type ShellRouteContextValue = {
-  onCloseStudio: () => void;
-  sessionRouteModel: SessionRouteModel | null;
-  settingsRouteProps: ComponentProps<typeof Settings>;
-  workspaceRouteProps: WorkspaceRouteProps;
-};
-
-const ShellRouteContext = createContext<ShellRouteContextValue | null>(null);
+export { useShellRouteContext };
 
 export function ShellRouteProvider({ children }: { children: ReactNode }) {
   const shellRoute = useShellRoute();
@@ -50,11 +42,13 @@ export function ShellRouteProvider({ children }: { children: ReactNode }) {
     agents,
     daemonStatus,
     daemonVersion,
+    defaultProfileAlias,
     hasUpgrade,
     networkRuntime,
     profiles,
     projectsLoading,
     sessions,
+    sessionsFetching,
     sessionsLoading,
     voiceModelConfigured,
     voiceModelState,
@@ -80,6 +74,7 @@ export function ShellRouteProvider({ children }: { children: ReactNode }) {
   const { sessionRouteModel, setOptimistic, setSessionUrl } = useSessionRouteModel({
     agents,
     currentSession,
+    defaultProfileAlias,
     profiles,
     sessions,
     voiceModelConfigured
@@ -116,6 +111,7 @@ export function ShellRouteProvider({ children }: { children: ReactNode }) {
     routedSessionInList,
     runtimeReady,
     sessions,
+    sessionsFetching,
     sessionsLoading,
     setOptimistic,
     setSessionUrl,
@@ -284,10 +280,4 @@ export function ShellRouteProvider({ children }: { children: ReactNode }) {
       </RightPanelProvider>
     </ShellRouteContext.Provider>
   );
-}
-
-export function useShellRouteContext(): ShellRouteContextValue {
-  const value = useContext(ShellRouteContext);
-  if (!value) throw new Error('useShellRouteContext must be used within ShellRouteProvider');
-  return value;
 }

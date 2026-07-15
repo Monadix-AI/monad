@@ -1,5 +1,3 @@
-'use client';
-
 import type { MotionProps } from 'motion/react';
 import type { ComponentProps, CSSProperties, ElementType, HTMLAttributes, JSX, ReactNode } from 'react';
 
@@ -443,12 +441,16 @@ export const defaultToolStatusLabels: Record<ToolState, string> = {
 };
 
 export type ToolHeaderProps = {
+  'aria-label'?: string;
+  'data-virtual-list-anchor'?: string;
   title?: string;
   className?: string;
   type: ToolPart['type'];
   state: ToolPart['state'];
   toolName?: string;
   statusLabels?: ToolStatusLabels;
+  showStatus?: boolean;
+  icon?: ComponentProps<typeof HugeiconsIcon>['icon'];
 };
 
 const statusIcons: Record<ToolState, ReactNode> = {
@@ -508,24 +510,35 @@ function getStatusBadge(status: ToolState, labels?: ToolStatusLabels) {
   );
 }
 
-export const ToolHeader = ({ className, title, type, state, toolName, statusLabels, ...props }: ToolHeaderProps) => {
+export const ToolHeader = ({
+  className,
+  title,
+  type,
+  state,
+  toolName,
+  statusLabels,
+  showStatus = true,
+  icon = Wrench01Icon,
+  ...props
+}: ToolHeaderProps) => {
   const derivedName = type === 'dynamic-tool' ? toolName : type.split('-').slice(1).join('-');
 
   return (
     <CollapsibleTrigger
-      className={cn('flex w-full items-center justify-between gap-4 p-3', className)}
+      className={cn('group/trigger flex w-full items-center justify-between gap-4 p-3', className)}
+      data-virtual-list-anchor="true"
       {...props}
     >
       <div className="flex items-center gap-2">
         <HugeiconsIcon
           className="size-4 text-muted-foreground"
-          icon={Wrench01Icon}
+          icon={icon}
         />
         <span className="font-medium text-sm">{title ?? derivedName}</span>
-        {getStatusBadge(state, statusLabels)}
+        {showStatus ? getStatusBadge(state, statusLabels) : null}
       </div>
       <HugeiconsIcon
-        className="size-4 text-muted-foreground transition-transform group-data-[state=open]/tool:rotate-180"
+        className="size-4 text-current transition-[color,transform] group-data-[state=open]/trigger:rotate-180"
         icon={ChevronDownIcon}
       />
     </CollapsibleTrigger>
@@ -612,7 +625,7 @@ export const ToolOutput = ({
       <div
         className={cn(
           'overflow-x-auto rounded-md text-xs [&_table]:w-full',
-          errorText ? 'bg-destructive/10 text-destructive' : 'bg-muted/50 text-foreground'
+          errorText ? 'bg-transparent text-destructive' : 'bg-muted/50 text-foreground'
         )}
       >
         {errorText && <div>{errorText}</div>}

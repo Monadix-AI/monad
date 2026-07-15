@@ -1,4 +1,4 @@
-import type { Event, Hooks, SessionId } from '@monad/protocol';
+import type { Event, GenerationParams, Hooks, SessionId } from '@monad/protocol';
 import type { FileObservationStore, Tool, ToolBackends, ToolGate } from '#/capabilities/tools/types.ts';
 import type { ContextEngine } from './context/index.ts';
 import type { HistoryProvider } from './history.ts';
@@ -114,6 +114,8 @@ export interface Agent {
       /** Per-run model override (resolved profile alias or "provider:model"). Set from a session's
        *  `/model` choice; falls back to the agent's defaultModel. */
       modelOverride?: string;
+      /** Per-run generation parameter overrides supplied by the session. */
+      generationParams?: GenerationParams;
       /** Default working directory for shell commands. Absent → sandboxRoots?.[0]. */
       defaultCwd?: string;
       /** Project-local skills discovered from session.cwd/.monad/skills/ — merged with global skills
@@ -272,6 +274,7 @@ export function createAgent(config: AgentConfig): Agent {
         messages: messageRepo,
         promptCache,
         defaultModel: opts?.modelOverride ?? defaultModel,
+        generationParams: opts?.generationParams,
         userId: config.userId,
         emit,
         sandboxRoots: opts?.sandboxRoots ?? config.sandboxRoots,

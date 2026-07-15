@@ -8,6 +8,7 @@ type CommandReplaceRange = { start: number; end: number };
 
 export interface SessionCommandMenuItem {
   badge?: string;
+  badgeTitle?: string;
   dismissAfter?: boolean;
   executeOnSelect?: boolean;
   hint?: string;
@@ -28,10 +29,27 @@ export function shouldActivateSlashCommandDiscovery(input: string): boolean {
   return commandNamePhase || inlineSkillPhase;
 }
 
+function skillSourceBadge(command: CommandItem): { label: string; title: string } | null {
+  if (command.type !== 'skill') return null;
+  if (command.source === 'atom-pack' || command.id.startsWith('atom-pack:')) {
+    return { label: 'P', title: command.sourceName ? `Atom Pack: ${command.sourceName}` : 'Atom Pack' };
+  }
+  if (command.id.startsWith('agent:')) {
+    return { label: 'A', title: command.sourceName ? `Agent: ${command.sourceName}` : 'Agent' };
+  }
+  return { label: 'G', title: 'Global' };
+}
+
 function itemBadge(command: CommandItem, t: TFn): string | undefined {
+  const skillBadge = skillSourceBadge(command);
+  if (skillBadge) return skillBadge.label;
   if (command.source === 'atom-pack') return command.sourceName ?? 'atom-pack';
   if (command.source === 'custom') return command.sourceName ?? t('web.skills.sourceGlobal');
   return undefined;
+}
+
+function itemBadgeTitle(command: CommandItem): string | undefined {
+  return skillSourceBadge(command)?.title;
 }
 
 function commandMenuRank(command: CommandItem): string {
@@ -160,18 +178,18 @@ function buildCommandNameSuggestions({
     })
     .filter((item): item is { command: CommandItem; match: FuzzyMatch & { labelIndices: number[] } } => Boolean(item))
     .toSorted((a, b) => a.match.rank - b.match.rank || compareCommandMenuItems(a.command, b.command))
-    .slice(0, 8)
     .map(({ command: c, match }) => {
       const hint = commandHint(c);
       return {
         key: c.id,
-        label: `/${c.name}${hint}`,
-        labelMatches: match.labelIndices.map((index) => index + 1),
+        label: `${c.name}${hint}`,
+        labelMatches: match.labelIndices,
         hint: c.description,
         typeBadge: c.type === 'skill' ? 'Skill' : 'Command',
         icon: c.type === 'skill' ? c.icon : undefined,
         version: c.type === 'skill' ? c.version : undefined,
         badge: itemBadge(c, t),
+        badgeTitle: itemBadgeTitle(c),
         insert: `/${c.id} `,
         replace,
         section: commandSection(c),
@@ -201,16 +219,16 @@ function buildInlineSkillSuggestions({
     })
     .filter((item): item is { command: CommandItem; match: FuzzyMatch & { labelIndices: number[] } } => Boolean(item))
     .toSorted((a, b) => a.match.rank - b.match.rank || compareCommandMenuItems(a.command, b.command))
-    .slice(0, 8)
     .map(({ command: c, match: commandMatch }) => ({
       key: c.id,
-      label: `/${c.name}`,
-      labelMatches: commandMatch.labelIndices.map((index) => index + 1),
+      label: c.name,
+      labelMatches: commandMatch.labelIndices,
       hint: c.description,
       typeBadge: 'Skill',
       icon: c.icon,
       version: c.version,
       badge: itemBadge(c, t),
+      badgeTitle: itemBadgeTitle(c),
       insert: `/${c.id} `,
       section: 'Skills',
       replace: { start, end: input.length }

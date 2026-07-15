@@ -26,6 +26,11 @@ test('sendMessage text: accepts up to the cap, rejects beyond it (DoS guard)', (
   expect(sendMessageRequestSchema.safeParse({ text: 'x'.repeat(MESSAGE_TEXT_MAX + 1) }).success).toBe(false);
 });
 
+test('sendMessage preserves assistant-only continuation intent', () => {
+  const parsed = sendMessageRequestSchema.parse({ text: '', continueFromHistory: true });
+  expect(parsed.continueFromHistory).toBe(true);
+});
+
 test('optional title fields are bounded too (update + branch)', () => {
   const tooLong = 'x'.repeat(SESSION_TITLE_MAX + 1);
   expect(updateSessionRequestSchema.safeParse({ title: tooLong }).success).toBe(false);

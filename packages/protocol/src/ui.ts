@@ -182,7 +182,9 @@ export const uiSnapshotEventSchema = z.object({
   /** Oldest message id in this (bounded) snapshot — the `before` cursor for loading older history. */
   oldestCursor: messageIdSchema.optional(),
   /** True when older messages exist before `oldestCursor` (the snapshot is windowed, not the full transcript). */
-  hasMore: z.boolean().optional()
+  hasMore: z.boolean().optional(),
+  /** True when this snapshot supersedes all prior transcript windows after a restore or reset. */
+  replacesTranscript: z.boolean().optional()
 });
 export type UISnapshotEvent = z.infer<typeof uiSnapshotEventSchema>;
 

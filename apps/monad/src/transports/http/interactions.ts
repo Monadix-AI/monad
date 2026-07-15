@@ -10,14 +10,18 @@ import {
 } from '@monad/protocol';
 import { Elysia } from 'elysia';
 
-export function createInteractionsController(service: HostInteractionService) {
+import { startSseHeartbeat } from '#/transports/http/sessions/sse.ts';
+
+export function createInteractionsController(service: HostInteractionService, options: { heartbeatMs?: number } = {}) {
   return new Elysia({ tags: ['http-only'] })
     .get('/interactions', () => ({ interactions: service.listPending() }))
     .get('/interactions/events', () => {
       const encoder = new TextEncoder();
       let unsubscribe = () => {};
+      let stopHeartbeat = () => {};
       const body = new ReadableStream<Uint8Array>({
         start(controller) {
+          stopHeartbeat = startSseHeartbeat(controller, encoder, options.heartbeatMs);
           const send = (event: unknown) =>
             controller.enqueue(encoder.encode(`event: interaction\ndata: ${JSON.stringify(event)}\n\n`));
           const pending = service.listPending();
@@ -26,6 +30,7 @@ export function createInteractionsController(service: HostInteractionService) {
           unsubscribe = service.subscribe(send);
         },
         cancel() {
+          stopHeartbeat();
           unsubscribe();
         }
       });

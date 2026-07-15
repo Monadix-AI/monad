@@ -18,6 +18,7 @@ import type { SessionContext } from '#/handlers/session/context.ts';
 
 import { loadAll } from '@monad/home';
 import { createLogger } from '@monad/logger';
+import { newId } from '@monad/protocol';
 
 import { parseDurableSummary } from '#/agent/history.ts';
 import { canTransition } from '#/agent/index.ts';
@@ -487,6 +488,8 @@ export function createLifecycleHandlers(ctx: SessionContext) {
     async branch({ id, title, atMessageId, origin }: { id: SessionId; origin?: SessionOrigin } & BranchSessionRequest) {
       const parent = requireSession(id);
       assertBranchAllowed(parent, origin?.transport);
+      const target = atMessageId ? store.getMessage(id, atMessageId) : null;
+      if (atMessageId && !target) throw new HandlerError('invalid', `message not found: ${atMessageId}`);
       const child = await agent.sessions.branch(
         id,
         ownerPrincipalId,
@@ -494,6 +497,21 @@ export function createLifecycleHandlers(ctx: SessionContext) {
         atMessageId,
         origin
       );
+      if (target) {
+        const createdAt = new Date().toISOString();
+        store.insertMessage(newId('msg'), child.id, '', createdAt, 'assistant', {
+          data: { messageId: target.id, sessionId: id },
+          includeInContext: false,
+          type: 'branch_source'
+        });
+        if (target.role === 'user' || target.role === 'assistant') {
+          store.insertMessage(newId('msg'), child.id, target.text, createdAt, target.role, {
+            data: target.data,
+            includeInContext: false,
+            type: target.type
+          });
+        }
+      }
       log.info({ sessionId: child.id, parentSessionId: id, ...originLog(origin) }, 'session branched');
       emitLifecycle(id, 'session.branched', { childId: child.id, atMessageId });
       emitLifecycle(child.id, 'session.created', { title: child.title, parentSessionId: id });

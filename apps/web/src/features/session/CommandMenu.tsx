@@ -9,9 +9,14 @@ import { renderableIconText } from '#/lib/renderable-icon-text';
 
 const MENU_WIDTH = 288;
 const DETAIL_WIDTH = 280;
-const MENU_MAX_HEIGHT = 224;
 const MENU_GAP = 10;
 const VIEWPORT_PADDING = 12;
+export const COMMAND_MENU_ITEM_HEIGHT = 31;
+export const COMMAND_MENU_EDGE_PADDING = 4;
+const COMMAND_MENU_STICKY_HEADER_HEIGHT = COMMAND_MENU_EDGE_PADDING + COMMAND_MENU_ITEM_HEIGHT;
+const MENU_VISIBLE_ITEM_COUNT = 7;
+const MENU_MAX_HEIGHT = commandMenuPanelHeight(MENU_VISIBLE_ITEM_COUNT);
+export const COMMAND_MENU_SURFACE_BACKGROUND = 'color-mix(in srgb, var(--popover) 84%, transparent)';
 
 type CommandMenuLayout = {
   bottom: number;
@@ -34,15 +39,13 @@ export function CommandMenu({
   onHover: (index: number) => void;
 }) {
   const skeletonRows = ['one', 'two', 'three', 'four'];
-  const renderedItems = items.map((item, index) => {
-    const previous = items[index - 1];
-    const showSection = item.section && item.section !== previous?.section;
-    return { index, item, showSection };
-  });
+  const renderedRows = useMemo(() => commandMenuRows(items), [items]);
+  const initialSection = renderedRows.find((row) => row.type === 'section')?.label ?? null;
   const anchorRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const detailRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef(new Map<number, HTMLButtonElement>());
+  const [activeSection, setActiveSection] = useState<string | null>(initialSection);
   const [detailTop, setDetailTop] = useState(0);
   const [layout, setLayout] = useState<CommandMenuLayout>({
     bottom: VIEWPORT_PADDING,
@@ -52,6 +55,7 @@ export function CommandMenu({
   });
   const activeIndex = items.length > 0 ? Math.min(activeSkill, items.length - 1) : 0;
   const activeItem = items[activeIndex] ?? null;
+  const activeDetailSource = activeItem ? commandMenuDetailSource(activeItem) : null;
   const detailSideClass = layout.detailSide === 'right' ? 'left-full ml-2' : 'right-full mr-2';
   const menuStyle = useMemo(
     () => ({
@@ -61,6 +65,13 @@ export function CommandMenu({
       width: MENU_WIDTH
     }),
     [layout.bottom, layout.left, layout.maxHeight]
+  );
+  const updateActiveSection = useCallback(
+    (scrollTop: number) => {
+      const nextSection = commandMenuSectionAtScrollTop(renderedRows, scrollTop) ?? initialSection;
+      setActiveSection((current) => (current === nextSection ? current : nextSection));
+    },
+    [initialSection, renderedRows]
   );
   const updateDetailTop = useCallback(() => {
     if (!activeItem?.hint) {
@@ -87,7 +98,7 @@ export function CommandMenu({
       const viewportHeight = window.innerHeight;
       const width = MENU_WIDTH;
       const aboveSpace = Math.max(1, rect.top - VIEWPORT_PADDING - MENU_GAP);
-      const maxHeight = Math.min(MENU_MAX_HEIGHT, aboveSpace);
+      const maxHeight = commandMenuSnappedMaxHeight(aboveSpace);
       const bottom = Math.max(VIEWPORT_PADDING, viewportHeight - rect.top + MENU_GAP);
       const idealLeft = Math.min(rect.left - 2, viewportWidth - width - VIEWPORT_PADDING);
       const left = Math.max(VIEWPORT_PADDING, idealLeft);
@@ -106,14 +117,30 @@ export function CommandMenu({
   }, []);
 
   useLayoutEffect(() => {
-    rowRefs.current.get(activeIndex)?.scrollIntoView({ block: 'nearest' });
+    const scrollBox = menuRef.current?.querySelector<HTMLElement>('[data-command-menu-scroll]');
+    const row = rowRefs.current.get(activeIndex);
+    if (scrollBox && row) {
+      const scrollRect = scrollBox.getBoundingClientRect();
+      const rowRect = row.getBoundingClientRect();
+      scrollBox.scrollTop = commandMenuScrollTop({
+        current: scrollBox.scrollTop,
+        itemBottom: scrollBox.scrollTop + rowRect.bottom - scrollRect.top,
+        itemTop: scrollBox.scrollTop + rowRect.top - scrollRect.top,
+        viewportHeight: scrollBox.clientHeight
+      });
+      updateActiveSection(scrollBox.scrollTop);
+    }
     const frame = window.requestAnimationFrame(updateDetailTop);
     return () => window.cancelAnimationFrame(frame);
-  }, [activeIndex, updateDetailTop]);
+  }, [activeIndex, updateActiveSection, updateDetailTop]);
 
   useLayoutEffect(() => {
     updateDetailTop();
   }, [updateDetailTop]);
+
+  useLayoutEffect(() => {
+    setActiveSection(initialSection);
+  }, [initialSection]);
 
   return (
     <div ref={anchorRef}>
@@ -123,7 +150,7 @@ export function CommandMenu({
         style={{
           ...menuStyle,
           backdropFilter: 'blur(18px) saturate(1.15)',
-          background: 'color-mix(in srgb, var(--popover) 84%, transparent)',
+          background: COMMAND_MENU_SURFACE_BACKGROUND,
           borderColor: 'rgb(var(--borderColor-secondary) / 0.12)',
           boxShadow: '0 1px 0 rgb(var(--borderColor-secondary) / 0.05), 0 18px 42px -28px rgb(0 0 0 / 0.42)'
         }}
@@ -136,74 +163,171 @@ export function CommandMenu({
             )}
             ref={detailRef}
             style={{
+              backdropFilter: 'blur(18px) saturate(1.15)',
+              background: COMMAND_MENU_SURFACE_BACKGROUND,
               maxHeight: Math.max(80, layout.maxHeight - detailTop),
               scrollbarWidth: 'none',
               top: detailTop
             }}
           >
             <p className="text-muted-foreground text-xs leading-relaxed">{activeItem.hint}</p>
+            {activeDetailSource ? (
+              <p className="mt-2 font-medium text-[10px] text-muted-foreground leading-4">{activeDetailSource}</p>
+            ) : null}
           </div>
         ) : null}
         <div
-          className="overflow-y-auto overscroll-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-          onScroll={updateDetailTop}
-          style={{
-            maxHeight: layout.maxHeight,
-            scrollbarWidth: 'none'
-          }}
+          className="relative overflow-hidden rounded-[9px]"
+          data-command-menu-viewport
         >
-          <div className="p-1">
-            {loading
-              ? skeletonRows.map((row) => (
+          {activeSection ? (
+            <div
+              className="pointer-events-none absolute right-0 left-0 z-30 flex items-center rounded-t-[9px] bg-popover px-3 font-medium text-[10.5px] text-muted-foreground leading-none"
+              data-command-menu-sticky-header
+              style={{
+                height: COMMAND_MENU_STICKY_HEADER_HEIGHT,
+                paddingTop: COMMAND_MENU_EDGE_PADDING,
+                top: 0
+              }}
+            >
+              {activeSection}
+            </div>
+          ) : null}
+          <div
+            className="overflow-y-auto overscroll-contain rounded-[9px] p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            data-command-menu-scroll
+            onScroll={(event) => {
+              updateDetailTop();
+              updateActiveSection(event.currentTarget.scrollTop);
+            }}
+            style={{
+              maxHeight: layout.maxHeight,
+              scrollbarWidth: 'none'
+            }}
+          >
+            <div>
+              {loading
+                ? skeletonRows.map((row) => (
+                    <div
+                      className="flex min-h-[25px] items-center gap-2 rounded-md px-2 py-[3px]"
+                      key={`command-skeleton-${row}`}
+                    >
+                      <span className="h-3 min-w-0 flex-1 animate-pulse rounded bg-muted" />
+                      <span className="h-4 w-12 animate-pulse rounded-full bg-muted" />
+                    </div>
+                  ))
+                : null}
+              {renderedRows.map((row) =>
+                row.type === 'section' ? (
                   <div
-                    className="flex min-h-[25px] items-center gap-2 rounded-md px-2 py-[3px]"
-                    key={`command-skeleton-${row}`}
+                    className="flex h-[31px] items-center px-2 font-medium text-[10.5px] text-muted-foreground leading-none"
+                    key={row.key}
                   >
-                    <span className="h-3 min-w-0 flex-1 animate-pulse rounded bg-muted" />
-                    <span className="h-4 w-12 animate-pulse rounded-full bg-muted" />
+                    {row.label}
                   </div>
-                ))
-              : null}
-            {renderedItems.map(({ index, item, showSection }) => (
-              <div key={item.key}>
-                {showSection ? (
-                  <div className="px-2.5 pt-2 pb-1 font-medium text-[10.5px] text-muted-foreground leading-4">
-                    {item.section}
-                  </div>
-                ) : null}
-                <button
-                  className={cn(
-                    'flex min-h-[25px] w-full items-center gap-1.5 rounded-md px-2 py-[3px] text-left',
-                    index === activeIndex ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
-                  )}
-                  onMouseDown={(event) => {
-                    event.preventDefault();
-                    onApply(item);
-                  }}
-                  onMouseEnter={() => onHover(index)}
-                  ref={(node) => {
-                    if (node) rowRefs.current.set(index, node);
-                    else rowRefs.current.delete(index);
-                  }}
-                  type="button"
-                >
-                  <CommandMenuItemIcon item={item} />
-                  <HighlightedCommandLabel
-                    label={item.label}
-                    matches={item.labelMatches}
-                  />
-                  <span className="min-w-3 flex-1" />
-                  <span className="shrink-0 opacity-75">
-                    <SourceChip label={sourceLabel(item)} />
-                  </span>
-                </button>
-              </div>
-            ))}
+                ) : (
+                  <button
+                    className={cn(
+                      'flex min-h-[25px] w-full items-center gap-1.5 rounded-md px-2 py-[3px] text-left',
+                      row.index === activeIndex ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
+                    )}
+                    key={row.item.key}
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      onApply(row.item);
+                    }}
+                    onMouseEnter={() => onHover(row.index)}
+                    ref={(node) => {
+                      if (node) rowRefs.current.set(row.index, node);
+                      else rowRefs.current.delete(row.index);
+                    }}
+                    type="button"
+                  >
+                    <CommandMenuItemIcon item={row.item} />
+                    <HighlightedCommandLabel
+                      label={row.item.label}
+                      matches={row.item.labelMatches}
+                    />
+                    <span className="min-w-3 flex-1" />
+                  </button>
+                )
+              )}
+            </div>
           </div>
         </div>
       </div>
     </div>
   );
+}
+
+type CommandMenuRenderRow =
+  | { key: string; label: string; type: 'section' }
+  | { index: number; item: SessionCommandMenuItem; type: 'item' };
+
+function commandMenuRows(items: SessionCommandMenuItem[]): CommandMenuRenderRow[] {
+  const rows: CommandMenuRenderRow[] = [];
+  items.forEach((item, index) => {
+    const previous = items[index - 1];
+    if (item.section && item.section !== previous?.section) {
+      rows.push({ key: `section:${item.section}`, label: item.section, type: 'section' });
+    }
+    rows.push({ index, item, type: 'item' });
+  });
+  return rows;
+}
+
+function commandMenuSectionAtScrollTop(rows: CommandMenuRenderRow[], scrollTop: number): string | null {
+  let currentSection: string | null = null;
+  let offset = 0;
+  for (const row of rows) {
+    if (row.type === 'section') {
+      if (offset <= scrollTop) currentSection = row.label;
+    }
+    offset += COMMAND_MENU_ITEM_HEIGHT;
+    if (offset > scrollTop) break;
+  }
+  return currentSection;
+}
+
+export function commandMenuScrollTop({
+  current,
+  itemBottom,
+  itemTop,
+  viewportHeight
+}: {
+  current: number;
+  itemBottom: number;
+  itemTop: number;
+  viewportHeight: number;
+}): number {
+  const visibleTop = current + COMMAND_MENU_STICKY_HEADER_HEIGHT;
+  const visibleBottom = current + viewportHeight - COMMAND_MENU_EDGE_PADDING;
+  if (itemTop < visibleTop) return Math.max(0, current - COMMAND_MENU_ITEM_HEIGHT);
+  if (itemBottom > visibleBottom) return current + COMMAND_MENU_ITEM_HEIGHT;
+  return current;
+}
+
+export function commandMenuPanelHeight(itemCount: number): number {
+  return COMMAND_MENU_EDGE_PADDING * 2 + COMMAND_MENU_ITEM_HEIGHT * itemCount;
+}
+
+export function commandMenuSnappedMaxHeight(availableHeight: number): number {
+  const visibleItems = Math.max(
+    1,
+    Math.min(
+      MENU_VISIBLE_ITEM_COUNT,
+      Math.floor((availableHeight - COMMAND_MENU_EDGE_PADDING * 2) / COMMAND_MENU_ITEM_HEIGHT)
+    )
+  );
+  return commandMenuPanelHeight(visibleItems);
+}
+
+export function commandMenuDetailSource(item: SessionCommandMenuItem): string | null {
+  if (!item.badgeTitle) return null;
+  if (item.badgeTitle === 'Global') return 'From: Global';
+  if (item.badgeTitle.startsWith('Agent:')) return `From ${item.badgeTitle}`;
+  if (item.badgeTitle.startsWith('Atom Pack:')) return `From ${item.badgeTitle}`;
+  return `From: ${item.badgeTitle}`;
 }
 
 function caretAnchorRect(anchor: HTMLElement): DOMRect | null {
@@ -227,10 +351,6 @@ function firstUsableRect(range: Range): DOMRect | null {
   const rect = rects[rects.length - 1] ?? range.getBoundingClientRect();
   if (rect.width === 0 && rect.height === 0) return null;
   return rect;
-}
-
-function sourceLabel(item: SessionCommandMenuItem): string {
-  return item.badge ?? item.typeBadge ?? item.section ?? 'Command';
 }
 
 function CommandMenuItemIcon({ item }: { item: SessionCommandMenuItem }) {
@@ -260,15 +380,6 @@ function CommandMenuItemIcon({ item }: { item: SessionCommandMenuItem }) {
       className="size-4 shrink-0 text-muted-foreground"
       icon={item.typeBadge === 'Skill' ? PackageIcon : TerminalIcon}
     />
-  );
-}
-
-function SourceChip({ label }: { label: string | null }) {
-  if (!label) return null;
-  return (
-    <span className="label-mono shrink-0 rounded-full border border-border/70 bg-muted/60 px-1.5 py-0.5 text-[9.5px] text-muted-foreground leading-[14px]">
-      {label}
-    </span>
   );
 }
 

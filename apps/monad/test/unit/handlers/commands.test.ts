@@ -41,6 +41,7 @@ function fakeCtx(args: string, servicesOver: ServicesOver = {}): CommandRunConte
       checkMemory: async () => ({ flagged: 0 }),
       listModels: async () => models,
       setModel: async () => {},
+      setEffort: async () => {},
       getWorkdir: async () => ({ path: undefined }),
       setWorkdir: async (_sid, path) => ({ path }),
       listCommands: async () => [] as CommandItem[],
@@ -154,7 +155,9 @@ describe('CommandRegistry precedence', () => {
     );
     const entry = r.resolve('reset');
     expect(entry?.source).toBe('builtin');
-    expect(warnings.some((w) => w.includes('cannot be overridden'))).toBe(true);
+    expect(warnings).toEqual([
+      'atom pack "evil" command "reset" collides with a built-in command and was rejected (built-ins cannot be overridden); use /evil.reset'
+    ]);
   });
 
   test('an atom alias colliding with a built-in: the command still registers, the reserved alias stays built-in', () => {
@@ -181,22 +184,26 @@ describe('CommandRegistry precedence', () => {
   test('an atom pack id must be slash-token compatible for command registration', () => {
     const warnings: string[] = [];
     const r = seededCommandRegistry((level, msg) => level === 'warn' && warnings.push(msg));
+    const baselineIds = r.list().map((item) => item.id);
     r.registerAtom('bad_pack', defineCommand({ name: 'deploy', description: 'x', run: async () => ({}) }));
-    expect(r.resolve('bad_pack.deploy')).toBeUndefined();
-    expect(warnings.join('\n')).toContain('must be lowercase-with-hyphens');
+    expect(r.list().map((item) => item.id)).toEqual(baselineIds);
+    expect(warnings).toEqual(['atom pack "bad_pack" command namespace must be lowercase-with-hyphens — rejected']);
   });
 
   test('malformed structured args from an atom command are rejected', () => {
     const warnings: string[] = [];
     const r = seededCommandRegistry((level, msg) => level === 'warn' && warnings.push(msg));
+    const baselineIds = r.list().map((item) => item.id);
     r.registerAtom('acme', {
       name: 'deploy',
       description: 'x',
       args: [{ name: 'target', type: 'enum', required: 'yes', values: [{ id: 'prod', name: 1 }] }],
       run: async () => ({})
     });
-    expect(r.resolve('deploy')).toBeUndefined();
-    expect(warnings.join('\n')).toContain('malformed command');
+    expect(r.list().map((item) => item.id)).toEqual(baselineIds);
+    expect(warnings).toEqual([
+      'atom pack "acme" registered a malformed command (needs name, description, run) — skipped'
+    ]);
   });
 
   test('atom-vs-atom collision: both coexist (qualified), bare = first-wins; pin can override', () => {
@@ -217,30 +224,51 @@ describe('CommandRegistry precedence', () => {
       { name: 'global:deep-research', description: 'research', userInvocable: true, available: true },
       { name: 'internal', description: 'hidden', userInvocable: false, available: true }
     ]);
-    expect(specs.find((s) => s.id === 'reset')).toMatchObject({
-      id: 'reset',
-      name: 'Reset',
-      type: 'action',
-      source: 'builtin',
-      group: 'Context',
-      enabled: true
-    });
-    expect(specs.find((s) => s.id === 'acme.acme-x')).toMatchObject({
-      id: 'acme.acme-x',
-      name: 'Acme X',
-      type: 'action',
-      source: 'atom-pack',
-      sourceName: 'acme',
-      aliases: ['acme.acme-x', 'acme-x'],
-      enabled: true
-    });
-    expect(specs.find((s) => s.id === 'global:deep-research')).toMatchObject({
-      id: 'global:deep-research',
-      name: 'Deep Research',
-      type: 'skill',
-      source: 'custom',
-      enabled: true
-    });
+    const projected = specs
+      .filter((spec) => spec.id === 'reset' || spec.id === 'acme.acme-x' || spec.id === 'global:deep-research')
+      .sort((a, b) => a.id.localeCompare(b.id))
+      .map(({ aliases, enabled, group, id, name, source, sourceName, type }) => ({
+        aliases,
+        enabled,
+        group,
+        id,
+        name,
+        source,
+        sourceName,
+        type
+      }));
+    expect(projected).toEqual([
+      {
+        aliases: ['acme.acme-x', 'acme-x'],
+        enabled: true,
+        group: undefined,
+        id: 'acme.acme-x',
+        name: 'Acme X',
+        source: 'atom-pack',
+        sourceName: 'acme',
+        type: 'action'
+      },
+      {
+        aliases: [],
+        enabled: true,
+        group: undefined,
+        id: 'global:deep-research',
+        name: 'Deep Research',
+        source: 'custom',
+        sourceName: undefined,
+        type: 'skill'
+      },
+      {
+        aliases: ['clear-history'],
+        enabled: true,
+        group: 'Context',
+        id: 'reset',
+        name: 'Reset',
+        source: 'builtin',
+        sourceName: undefined,
+        type: 'action'
+      }
+    ]);
   });
 
   test('list() supports all and disabled filters', () => {
@@ -249,9 +277,15 @@ describe('CommandRegistry precedence', () => {
       { name: 'enabled-skill', description: 'on', userInvocable: true, available: true },
       { name: 'disabled-skill', description: 'off', userInvocable: true, available: false }
     ];
-    expect(r.list(skills, undefined, { filter: 'all' }).map((s) => s.id)).toEqual(
-      expect.arrayContaining(['enabled-skill', 'disabled-skill'])
-    );
+    expect(
+      r
+        .list(skills, undefined, { filter: 'all' })
+        .filter((spec) => spec.type === 'skill')
+        .map(({ enabled, id }) => ({ enabled, id }))
+    ).toEqual([
+      { enabled: false, id: 'disabled-skill' },
+      { enabled: true, id: 'enabled-skill' }
+    ]);
     expect(r.list(skills, undefined, { filter: 'disabled' }).map((s) => s.id)).toEqual(['disabled-skill']);
   });
 
@@ -275,11 +309,19 @@ describe('CommandRegistry precedence', () => {
         run: async () => ({})
       })
     );
-    expect(r.list().find((s) => s.id === 'memory')).toMatchObject({
+    const memory = r.list().find((s) => s.id === 'memory');
+    expect(memory && { args: memory.args, group: memory.group, subcommands: memory.subcommands }).toEqual({
       group: 'Memory',
-      args: [{ name: 'query', type: 'string' }],
+      args: [{ name: 'query', type: 'string', required: false, placeholder: '[query]' }],
       subcommands: [
-        { id: 'consolidate', name: 'Consolidate', shortcut: 'consolidate', args: [{ name: 'level', type: 'number' }] }
+        {
+          id: 'consolidate',
+          name: 'Consolidate',
+          description: 'Consolidate memory layers',
+          shortcut: 'consolidate',
+          aliases: [],
+          args: [{ name: 'level', type: 'number', required: false, placeholder: '[level]' }]
+        }
       ]
     });
   });
@@ -288,8 +330,8 @@ describe('CommandRegistry precedence', () => {
 describe('dispatchCommand', () => {
   test('returns null for non-commands and unknown names (fall through to the loop)', async () => {
     const r = seededCommandRegistry();
-    expect(await dispatchCommand(r, 'hello world', (a) => fakeCtx(a))).toBeNull();
-    expect(await dispatchCommand(r, '/nope', (a) => fakeCtx(a))).toBeNull();
+    expect(await dispatchCommand(r, 'hello world', (a) => fakeCtx(a))).toEqual(null);
+    expect(await dispatchCommand(r, '/nope', (a) => fakeCtx(a))).toEqual(null);
   });
 
   test('/new creates a session and emits a session-created effect', async () => {
@@ -320,7 +362,7 @@ describe('dispatchCommand', () => {
   test('/model with no args lists profiles; with an alias switches', async () => {
     const r = seededCommandRegistry();
     const list = await dispatchCommand(r, '/model', (a) => fakeCtx(a));
-    expect(list?.message).toContain('fast');
+    expect(list?.message).toBe('Models:\n➡️ fast  (p:m1)\n   smart  (p:m2)\n\nSwitch with /model <alias>.');
     const set = await dispatchCommand(r, '/model smart', (a) => fakeCtx(a));
     expect(set?.effect).toEqual({ type: 'model-changed', alias: 'smart' });
   });
@@ -328,7 +370,95 @@ describe('dispatchCommand', () => {
   test('/model rejects an unknown alias without calling setModel', async () => {
     const r = seededCommandRegistry();
     const res = await dispatchCommand(r, '/model nonexistent', (a) => fakeCtx(a));
-    expect(res?.message).toContain('Unknown model profile');
+    expect(res?.message).toBe('Unknown model profile: nonexistent. Use /model to list available profiles.');
+  });
+
+  test('/model accepts a model slug when it matches a single configured provider', async () => {
+    const r = seededCommandRegistry();
+    const calls: string[] = [];
+    const res = await dispatchCommand(r, '/model claude-sonnet', (a) =>
+      fakeCtx(a, {
+        listModels: async () => [
+          { alias: 'fast', provider: 'anthropic', modelId: 'claude-haiku', current: true },
+          { alias: 'smart', provider: 'anthropic', modelId: 'claude-sonnet', current: false }
+        ],
+        setModel: async (_sid, alias) => {
+          calls.push(alias);
+        }
+      })
+    );
+
+    expect(calls).toEqual(['smart']);
+    expect(res?.effect).toEqual({ type: 'model-changed', alias: 'smart' });
+  });
+
+  test('/model accepts a raw provider:model override', async () => {
+    const r = seededCommandRegistry();
+    const calls: string[] = [];
+    const res = await dispatchCommand(r, '/model openrouter:openai/gpt-5', (a) =>
+      fakeCtx(a, {
+        listModels: async () => [],
+        setModel: async (_sid, model) => {
+          calls.push(model);
+        }
+      })
+    );
+
+    expect(calls).toEqual(['openrouter:openai/gpt-5']);
+    expect(res?.effect).toEqual({ type: 'model-changed', alias: 'openrouter:openai/gpt-5' });
+  });
+
+  test('/model inherit clears the session model override', async () => {
+    const r = seededCommandRegistry();
+    const calls: string[] = [];
+    const res = await dispatchCommand(r, '/model inherit', (a) =>
+      fakeCtx(a, {
+        setModel: async (_sid, model) => {
+          calls.push(model);
+        }
+      })
+    );
+
+    expect(calls).toEqual(['inherit']);
+    expect(res?.effect).toEqual({ type: 'model-changed', alias: 'inherit' });
+  });
+
+  test('/effort sets and clears the session reasoning effort', async () => {
+    const r = seededCommandRegistry();
+    const calls: Array<string | undefined> = [];
+    const withEffort = {
+      setEffort: async (_sid: string, effort: string | undefined) => {
+        calls.push(effort);
+      }
+    } as ServicesOver;
+
+    const high = await dispatchCommand(r, '/effort high', (a) => fakeCtx(a, withEffort));
+    const reset = await dispatchCommand(r, '/effort default', (a) => fakeCtx(a, withEffort));
+
+    expect(calls).toEqual(['high', undefined]);
+    expect(high?.effect).toEqual({ type: 'model-effort-changed', effort: 'high' });
+    expect(reset?.effect).toEqual({ type: 'model-effort-changed' });
+  });
+
+  test('/model asks for a provider when a model slug matches multiple configured providers', async () => {
+    const r = seededCommandRegistry();
+    const calls: string[] = [];
+    const res = await dispatchCommand(r, '/model gpt-5', (a) =>
+      fakeCtx(a, {
+        listModels: async () => [
+          { alias: 'openai-gpt', provider: 'openai', modelId: 'gpt-5', current: false },
+          { alias: 'gateway-gpt', provider: 'vercel', modelId: 'gpt-5', current: false }
+        ],
+        setModel: async (_sid, alias) => {
+          calls.push(alias);
+        }
+      })
+    );
+
+    expect(calls).toEqual([]);
+    expect(res?.message).toBe(
+      'Multiple providers match "gpt-5". Choose one profile:\nopenai: openai-gpt  (gpt-5)\nvercel: gateway-gpt  (gpt-5)'
+    );
   });
 
   test('/memory routes built-in subcommands while shortcuts stay available', async () => {
@@ -343,7 +473,7 @@ describe('dispatchCommand', () => {
       })
     );
     expect(calls).toEqual(['consolidate:2']);
-    expect(consolidate?.message).toContain('Consolidated to L2');
+    expect(consolidate?.message).toBe('🧠 Consolidated to L2: 1 fact scope(s), +2 entities/3 relations, 4 law(s).');
 
     const shortcut = await dispatchCommand(r, '/consolidate 3', (a) =>
       fakeCtx(a, {
@@ -354,13 +484,13 @@ describe('dispatchCommand', () => {
       })
     );
     expect(calls.at(-1)).toBe('shortcut:3');
-    expect(shortcut?.message).toContain('Consolidated to L3');
+    expect(shortcut?.message).toBe('🧠 Consolidated to L3: 0 fact scope(s), +0 entities/0 relations, 0 law(s).');
   });
 
   test('an alias resolves to the canonical built-in (/ls → sessions)', async () => {
     const r = seededCommandRegistry();
     const res = await dispatchCommand(r, '/ls', (a) => fakeCtx(a));
-    expect(res?.message).toContain('Alpha');
+    expect(res?.message).toBe('Conversations:\n➡️ 1. Alpha\n   2. Beta\n\nSwitch with /switch <number>.');
   });
 
   test('/help reports built-ins, atom commands, and skills', async () => {
@@ -373,6 +503,37 @@ describe('dispatchCommand', () => {
       })
     );
     expect(res?.effect?.type).toBe('help');
+    expect(res?.message?.split('\n\n')).toEqual([
+      '## Commands:',
+      [
+        '### Conversation',
+        '- `/end` End the current conversation and start fresh',
+        '- `/handoff [initial task for the new session]` Summarize this conversation and continue it in a new session',
+        '- `/new [label]` Start a new conversation',
+        '- `/sessions` List conversations',
+        '- `/switch <number|session-id>` Switch to another conversation'
+      ].join('\n'),
+      [
+        '### Context',
+        '- `/clear` Clear the view (client-side)',
+        '- `/compact` Summarize and compact the context window now',
+        '- `/reset` Clear this conversation’s history'
+      ].join('\n'),
+      [
+        '### Memory',
+        '- `/check-memory` Flag learned rules contradicted by a current fact (suppresses them until re-derived)',
+        '- `/consolidate` Consolidate memory: dedup facts, then update the graph and laws (to your memory level)',
+        '- `/memory` Manage memory commands',
+        '- `/memory consolidate [level]` Consolidate memory layers (shortcut /consolidate)',
+        '- `/memory why <query>` Explain why the agent believes something (shortcut /why)',
+        '- `/memory check` Flag contradicted learned rules (shortcut /check-memory)',
+        '- `/why` Explain why the agent believes something, traced through its memory'
+      ].join('\n'),
+      '### Runtime\n- `/effort <value|default>` Set the reasoning effort for this conversation\n- `/model [alias]` Show or switch the model for this conversation\n- `/workdir [absolute path]` Show or set the shared working folder for this conversation',
+      '### Help\n- `/help` List available commands',
+      '## Atom commands:\n- `/acme.acme-x` deploy',
+      '## Skills:\n- `/deep-research` r'
+    ]);
   });
 });
 
@@ -401,7 +562,7 @@ describe('concurrency guard (busy)', () => {
   test('a command is refused while a turn is streaming', async () => {
     const r = seededCommandRegistry();
     const res = await dispatchCommand(r, '/reset', (a) => fakeCtx(a), { isBusy: true });
-    expect(res?.message).toContain('in progress');
+    expect(res?.message).toBe('⏳ A turn is in progress — try /reset again when it finishes.');
   });
 
   test('a duringTurn command bypasses the busy guard', async () => {

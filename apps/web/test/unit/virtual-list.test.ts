@@ -1,6 +1,12 @@
 import { expect, test } from 'bun:test';
 import { observationFollowResetKey } from '@monad/atoms/workspace-experiences';
-import { indexOfKey, isAtBottom, reducePinnedOnScroll, shouldPinToBottom } from '@monad/ui/components/VirtualList';
+import {
+  indexOfKey,
+  isAtBottom,
+  reducePinnedOnScroll,
+  scrollTopPreservingAnchor,
+  shouldPinToBottom
+} from '@monad/ui/components/VirtualList';
 
 test('isAtBottom: at the exact bottom', () => {
   expect(isAtBottom({ scrollHeight: 1000, scrollTop: 500, clientHeight: 500 })).toBe(true);
@@ -50,6 +56,12 @@ test('shouldPinToBottom: follows viewport changes unless the user is parked abov
   expect(shouldPinToBottom(true, true)).toBe(true);
   expect(shouldPinToBottom(true, false)).toBe(false);
   expect(shouldPinToBottom(false, true)).toBe(false);
+});
+
+test('scrollTopPreservingAnchor: offsets list scrolling so an expanded title keeps its viewport position', () => {
+  expect(scrollTopPreservingAnchor(640, 120, 72)).toBe(592);
+  expect(scrollTopPreservingAnchor(640, 120, 120)).toBe(640);
+  expect(scrollTopPreservingAnchor(640, 120, 168)).toBe(688);
 });
 
 test('observationFollowResetKey: streaming text changes do not request an imperative scroll reset', () => {

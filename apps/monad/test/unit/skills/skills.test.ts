@@ -20,7 +20,7 @@ import {
   toolMatchesAllowedPattern
 } from '#/agent/index.ts';
 import { createSkillTool } from '#/capabilities/tools/registry/skill.ts';
-import { toolResult } from '#/capabilities/tools/types.ts';
+import { toolResult, toolResultSchema } from '#/capabilities/tools/types.ts';
 
 const stubSessionRepo = { insertSession: () => {}, getSession: () => null };
 
@@ -168,8 +168,28 @@ test('allowed-tools: without a grant the gate still denies the high-risk tool', 
 const ctx = { sessionId: 'ses_x00000000000', log: () => {} };
 
 test('createSkillTool returns the body for a known skill', async () => {
-  const tool = createSkillTool(() => [skill({ name: 'alpha', body: 'ALPHA BODY' })]);
-  expect((await tool.run({ name: 'alpha' }, ctx)).modelContent).toBe('ALPHA BODY');
+  const tool = createSkillTool(() => [
+    skill({
+      name: 'alpha',
+      body: 'ALPHA BODY',
+      version: '1.2.0',
+      metadata: { owner: 'runtime' },
+      allowedTools: 'file_read'
+    })
+  ]);
+  const result = await tool.run({ name: 'alpha' }, ctx);
+  const parsed = toolResultSchema.parse(result);
+  expect(result.modelContent).toBe('ALPHA BODY');
+  expect(parsed.displayContent).toEqual({
+    type: 'skill',
+    name: 'alpha',
+    description: 'alpha description',
+    version: '1.2.0',
+    metadata: { owner: 'runtime' },
+    allowedTools: 'file_read',
+    context: 'inline',
+    body: 'ALPHA BODY'
+  });
 });
 
 test('createSkillTool resolves same-name skills by addressable id', async () => {

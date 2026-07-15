@@ -16,6 +16,8 @@ interface Params {
   streamOldestCursor: string | undefined;
   /** Whether older messages exist before the live window. */
   streamHasMore: boolean;
+  /** Changes when restore/reset replaces the daemon's authoritative transcript. */
+  streamReplacementRevision?: number;
 }
 
 export interface TranscriptHistory {
@@ -45,8 +47,15 @@ function mergeUnique(a: UIItem[], b: UIItem[]): UIItem[] {
  * live tail is suppressed (avoids a gap between the window and the tail) until paging newer
  * reaches the end, at which point it reconnects to `live`.
  */
-export function useTranscriptHistory({ sessionId, streamOldestCursor, streamHasMore }: Params): TranscriptHistory {
-  const [historyState, setHistoryState] = useState(() => createTranscriptHistoryState(sessionId));
+export function useTranscriptHistory({
+  sessionId,
+  streamOldestCursor,
+  streamHasMore,
+  streamReplacementRevision = 0
+}: Params): TranscriptHistory {
+  const [historyState, setHistoryState] = useState(() =>
+    createTranscriptHistoryState(sessionId, streamReplacementRevision)
+  );
   const [fetchWindow] = useLazyGetUiItemsWindowQuery();
 
   const olderCursor = useRef<string | undefined>(undefined);
@@ -57,7 +66,7 @@ export function useTranscriptHistory({ sessionId, streamOldestCursor, streamHasM
   const seeded = useRef(false);
   const activeSessionId = useRef(sessionId);
   activeSessionId.current = sessionId;
-  const activeHistoryState = activateTranscriptHistory(historyState, sessionId);
+  const activeHistoryState = activateTranscriptHistory(historyState, sessionId, streamReplacementRevision);
 
   if (activeHistoryState !== historyState) {
     olderCursor.current = undefined;
@@ -90,7 +99,7 @@ export function useTranscriptHistory({ sessionId, streamOldestCursor, streamHasM
       .then((res) => {
         if (activeSessionId.current !== sessionId) return;
         setHistoryState((state) =>
-          updateTranscriptHistory(state, sessionId, (current) => ({
+          updateTranscriptHistory(state, sessionId, streamReplacementRevision, (current) => ({
             ...current,
             items: mergeUnique(res.items, current.items)
           }))
@@ -102,7 +111,7 @@ export function useTranscriptHistory({ sessionId, streamOldestCursor, streamHasM
       .finally(() => {
         fetching.current = false;
       });
-  }, [sessionId, fetchWindow]);
+  }, [sessionId, streamReplacementRevision, fetchWindow]);
 
   const loadNewer = useCallback(() => {
     if (sessionId === null || mode !== 'history' || fetching.current || !canNewer.current) return;
@@ -114,7 +123,7 @@ export function useTranscriptHistory({ sessionId, streamOldestCursor, streamHasM
       .then((res) => {
         if (activeSessionId.current !== sessionId) return;
         setHistoryState((state) =>
-          updateTranscriptHistory(state, sessionId, (current) => ({
+          updateTranscriptHistory(state, sessionId, streamReplacementRevision, (current) => ({
             ...current,
             items: mergeUnique(current.items, res.items),
             mode: res.newerCursor === undefined ? 'live' : current.mode
@@ -127,13 +136,16 @@ export function useTranscriptHistory({ sessionId, streamOldestCursor, streamHasM
       .finally(() => {
         fetching.current = false;
       });
-  }, [sessionId, mode, fetchWindow]);
+  }, [sessionId, mode, streamReplacementRevision, fetchWindow]);
 
   const openAtMessage = useCallback(
     (messageId: MessageId) => {
       if (sessionId === null) return;
       setHistoryState((state) =>
-        updateTranscriptHistory(state, sessionId, (current) => ({ ...current, mode: 'history' }))
+        updateTranscriptHistory(state, sessionId, streamReplacementRevision, (current) => ({
+          ...current,
+          mode: 'history'
+        }))
       );
       seeded.current = true; // don't re-seed from the stream while detached
       fetching.current = true;
@@ -142,7 +154,7 @@ export function useTranscriptHistory({ sessionId, streamOldestCursor, streamHasM
         .then((res) => {
           if (activeSessionId.current !== sessionId) return;
           setHistoryState((state) =>
-            updateTranscriptHistory(state, sessionId, (current) => ({
+            updateTranscriptHistory(state, sessionId, streamReplacementRevision, (current) => ({
               ...current,
               items: res.items,
               mode: res.newerCursor === undefined ? 'live' : current.mode
@@ -158,19 +170,23 @@ export function useTranscriptHistory({ sessionId, streamOldestCursor, streamHasM
           fetching.current = false;
         });
     },
-    [sessionId, fetchWindow]
+    [sessionId, streamReplacementRevision, fetchWindow]
   );
 
   const jumpToLive = useCallback(() => {
     setHistoryState((state) =>
-      updateTranscriptHistory(state, sessionId, (current) => ({ ...current, items: [], mode: 'live' }))
+      updateTranscriptHistory(state, sessionId, streamReplacementRevision, (current) => ({
+        ...current,
+        items: [],
+        mode: 'live'
+      }))
     );
     olderCursor.current = streamOldestCursor;
     newerCursor.current = undefined;
     canOlder.current = streamHasMore;
     canNewer.current = false;
     seeded.current = true;
-  }, [sessionId, streamOldestCursor, streamHasMore]);
+  }, [sessionId, streamOldestCursor, streamHasMore, streamReplacementRevision]);
 
   return { items, mode, loadOlder, loadNewer, openAtMessage, jumpToLive };
 }

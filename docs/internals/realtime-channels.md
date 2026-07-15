@@ -162,8 +162,10 @@ These are requirements, not nice-to-haves. Violating them produces user-visible 
    supports `afterEventId`; this is mandatory, not optional.
 2. **No cross-channel ordering guarantee.** A WS lifecycle event and an SSE
    generation event for the same turn may arrive in either order. The UI must treat
-   refetched history as canonical — `stream-session` invalidates `Messages` on each
-   turn's settle for exactly this reason. Keep that reconciliation.
+   persisted history as canonical. Restore and reset rebuild the focused session's UI
+   projector and emit an authoritative replacement snapshot over its SSE; clients must
+   discard both the live window and any locally paged history when that marker arrives.
+   Do not reconcile transcript mutations by patching multiple client caches.
 3. **Serve the daemon over HTTP/2 (or keep one active SSE per client).** Under
    HTTP/1.1 a browser caps 6 connections per origin; one SSE per open session plus
    the WS can hit it. HTTP/2 multiplexes many SSE streams over one connection.

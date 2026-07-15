@@ -1,5 +1,3 @@
-'use client';
-
 import type { ComposerEditorHandle } from '@monad/ui';
 import type { ReactElement, ReactNode } from 'react';
 import type { QuestionView } from '../../../experience/types.ts';

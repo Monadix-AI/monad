@@ -23,6 +23,13 @@ test('snapshot resets items and index', () => {
   expect(index.get('tool:b')).toBe(1);
 });
 
+test('replacement snapshots advance the transcript replacement revision', () => {
+  const draft = { items: [item('message', 'old')], replacementRevision: 2 };
+  const index = buildIndex(draft.items);
+  applyUiEvent(draft, { kind: 'snapshot', items: [], replacesTranscript: true } as SessionUiEvent, index);
+  expect(draft.replacementRevision).toBe(3);
+});
+
 test('upsert updates in place by key, appends when new, preserving order', () => {
   const draft = { items: [] as UIItem[] };
   const index = buildIndex(draft.items);

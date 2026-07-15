@@ -175,6 +175,7 @@ export const sendMessageRequestSchema = z.object({
   text: z.string().max(MESSAGE_TEXT_MAX),
   attachments: z.array(sendMessageAttachmentSchema).max(MESSAGE_ATTACHMENT_MAX).optional(),
   generate: z.boolean().optional(),
+  continueFromHistory: z.boolean().optional(),
   // Optional ambient context for THIS turn (the ACP bridge forwards the editor's open-document
   // snapshot here, since it can't ride in-process runOpts over the wire). Inline-SSE send only.
   ambientContext: z.string().max(MESSAGE_TEXT_MAX).optional()

@@ -53,6 +53,14 @@ export function replaceShellUrl(url: string): void {
   navigateShellUrl(url, 'replace');
 }
 
+export function removeShellSearchParam(param: string, expectedValue?: string): void {
+  const current = new URL(currentShellUrl(), 'http://monad.local');
+  if (!current.searchParams.has(param)) return;
+  if (expectedValue !== undefined && current.searchParams.get(param) !== expectedValue) return;
+  current.searchParams.delete(param);
+  replaceShellUrl(`${current.pathname}${current.search}${current.hash}`);
+}
+
 export function useShellPathname(): string {
   return useRouterState({ select: (state) => state.location.pathname });
 }

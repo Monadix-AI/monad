@@ -7,25 +7,38 @@ import {
   ArrowUp01Icon,
   Cancel01Icon,
   CheckIcon,
+  GitBranchIcon,
   HelpCircleIcon,
   ShieldQuestionMarkIcon
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { Button, Textarea } from '@monad/ui';
+import { useProvenanceQuery } from '@monad/client-rtk';
+import { Button, cn, Textarea } from '@monad/ui';
+import { activeMessageOutlineIds, MessageOutline } from '@monad/ui/components/MessageOutline';
 import { VirtualList } from '@monad/ui/components/VirtualList';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { type CSSProperties, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useT } from '#/components/I18nProvider';
 import { ApprovalDisplayCard } from './ApprovalDisplayCard';
 import { approvalActionScopes } from './approval-display';
 import { Message } from './ChatMessage';
-import { isCompactCommandItem, isMemorySummaryItem, isToolItem } from './chat-view-items';
+import {
+  branchSourceSessionName,
+  isBranchSourceItem,
+  isCompactCommandItem,
+  isMemorySummaryItem,
+  isToolItem
+} from './chat-view-items';
 import { MemorySummaryDivider } from './MemorySummaryDivider';
+import { MessageBody } from './MessageBody';
+import { SESSION_CONTENT_CLASS } from './session-layout';
+import { sessionMessageOutlineItems } from './session-message-outline';
 import { useSessionUiStore } from './session-ui-store';
 import { ToolStepView } from './ToolStepView';
 
 const sessionMessageKey = (message: ViewItem): string => message.id;
 const COMPOSER_CLEARANCE = 'calc(var(--session-composer-clearance, 132px) + 24px)';
+export const SESSION_TRANSCRIPT_CONTENT_CLASS = SESSION_CONTENT_CLASS;
 
 export function SessionTranscript({
   identity,
@@ -37,13 +50,48 @@ export function SessionTranscript({
   onSkillPreview: (id: string) => void;
 }) {
   const t = useT();
+  const shellRef = useRef<HTMLDivElement>(null);
+  const { data: provenance } = useProvenanceQuery(identity.currentSessionId, { skip: identity.isDraft });
   const atBottom = useSessionUiStore((state) => state.atBottom);
   const setAtBottom = useSessionUiStore((state) => state.setAtBottom);
+  const [visibleRange, setVisibleRange] = useState<{ endIndex: number; startIndex: number } | null>(null);
+  const [outlineTop, setOutlineTop] = useState('50%');
   const pendingActionCount = model.pendingApprovals.length + model.pendingClarifications.length;
+  const outlineItems = useMemo(
+    () =>
+      sessionMessageOutlineItems(
+        model.viewMessages,
+        (number) => t('web.chat.messageNumber', { number }),
+        t('web.chat.timeUnavailable')
+      ),
+    [model.viewMessages, t]
+  );
+  const activeOutlineIds = useMemo(
+    () => activeMessageOutlineIds(outlineItems, visibleRange, model.firstItemIndex, model.viewMessages.length),
+    [model.firstItemIndex, model.viewMessages.length, outlineItems, visibleRange]
+  );
+
+  useEffect(() => {
+    const shell = shellRef.current;
+    if (!shell) return;
+    const updateOutlineTop = () => {
+      const rect = shell.getBoundingClientRect();
+      setOutlineTop(`${window.innerHeight / 2 - rect.top}px`);
+    };
+    updateOutlineTop();
+    window.addEventListener('resize', updateOutlineTop);
+    if (typeof ResizeObserver === 'undefined') return () => window.removeEventListener('resize', updateOutlineTop);
+    const observer = new ResizeObserver(updateOutlineTop);
+    observer.observe(shell);
+    return () => {
+      window.removeEventListener('resize', updateOutlineTop);
+      observer.disconnect();
+    };
+  }, []);
   const footer = useMemo(
     () =>
       pendingActionCount > 0 ? (
-        <div className="mx-auto flex w-full max-w-4xl flex-col gap-5 px-6 pb-5">
+        <div className={cn(SESSION_TRANSCRIPT_CONTENT_CLASS, 'flex flex-col gap-5 pb-5')}>
           {model.pendingApprovals.map((approval) => (
             <ApprovalCard
               approval={approval}
@@ -72,7 +120,7 @@ export function SessionTranscript({
   const header = useMemo(
     () =>
       model.viewMessages.length === 0 ? (
-        <div className="mx-auto w-full max-w-4xl px-6 pt-5">
+        <div className={cn(SESSION_TRANSCRIPT_CONTENT_CLASS, 'pt-5')}>
           <div className="gradient-spotlight-card flex flex-col items-start gap-2.5 px-5 py-5">
             <span className="label-mono">{t('web.chat.sessionReady')}</span>
             <p className="poster-heading text-foreground text-xl">{t('web.chat.start')}</p>
@@ -86,8 +134,28 @@ export function SessionTranscript({
   );
   const renderItem = useCallback(
     (message: ViewItem) => (
-      <div className="mx-auto w-full max-w-4xl px-6 pb-5">
-        {isToolItem(message) ? (
+      <div
+        className={cn(
+          SESSION_TRANSCRIPT_CONTENT_CLASS,
+          'pb-5',
+          message.id === model.highlightedMessageId && 'message-deep-link-target'
+        )}
+        data-message-id={message.id}
+      >
+        {isBranchSourceItem(message) ? (
+          <button
+            className="flex items-center gap-1.5 text-muted-foreground text-xs transition-colors hover:text-foreground"
+            onClick={() => model.onOpenBranchSource(message)}
+            type="button"
+          >
+            <HugeiconsIcon
+              className="size-3.5"
+              icon={GitBranchIcon}
+            />
+            {t('web.chat.lineageParent')}{' '}
+            <span className="text-foreground/80">{branchSourceSessionName(message, provenance?.ancestors)}</span>
+          </button>
+        ) : isToolItem(message) ? (
           <ToolStepView
             sessionId={identity.currentSessionId}
             step={message}
@@ -103,6 +171,7 @@ export function SessionTranscript({
         ) : (
           <Message
             assistantLabel={identity.assistantLabel}
+            commands={model.commands}
             msg={message}
             onBranch={model.onBranch}
             onRestore={model.onRestore}
@@ -111,11 +180,41 @@ export function SessionTranscript({
         )}
       </div>
     ),
-    [identity.assistantLabel, identity.currentSessionId, model.onBranch, model.onRestore, onSkillPreview]
+    [
+      identity.assistantLabel,
+      identity.currentSessionId,
+      provenance?.ancestors,
+      model.commands,
+      model.highlightedMessageId,
+      model.onBranch,
+      model.onOpenBranchSource,
+      model.onRestore,
+      onSkillPreview,
+      t
+    ]
   );
 
   return (
-    <div className="transcript-grid relative min-h-0 flex-1">
+    <div
+      className="transcript-grid relative min-h-0 flex-1"
+      ref={shellRef}
+      style={{ '--chat-message-outline-top': outlineTop } as CSSProperties}
+    >
+      <MessageOutline
+        activeIds={activeOutlineIds}
+        ariaLabel={t('web.chat.messageOutline')}
+        goToLabel={(item) => t('web.chat.goToMessage', { message: item.label })}
+        items={outlineItems}
+        onSelect={(id) => model.transcriptRef.current?.scrollToKey(id, { align: 'start', behavior: 'smooth' })}
+        renderPreview={(item) => (
+          <MessageBody
+            commands={model.commands}
+            isUser
+            onSkillPreview={onSkillPreview}
+            text={item.preview}
+          />
+        )}
+      />
       <VirtualList
         ariaLive="polite"
         controlRef={model.transcriptRef}
@@ -126,10 +225,11 @@ export function SessionTranscript({
         items={model.viewMessages}
         onAtBottomChange={setAtBottom}
         onEndReached={model.onEndReached}
+        onRangeChange={setVisibleRange}
         onStartReached={model.onStartReached}
         renderItem={renderItem}
         role="log"
-        stickToBottom
+        stickToBottom={!model.highlightedMessageId}
         style={{ height: '100%' }}
       />
       {!atBottom &&

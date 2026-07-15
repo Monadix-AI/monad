@@ -1,4 +1,5 @@
 import { cn } from '../lib/utils.ts';
+import { ComposerInlineChip } from './ComposerInlineChip';
 
 export interface MentionToken {
   name: string;
@@ -46,26 +47,11 @@ export function mentionSegments(text: string): MentionSegment[] {
 
 export function MentionCapsule({ id, name }: { id: string; name: string }) {
   return (
-    <span
-      className="inline-flex items-baseline gap-[0.14em] align-baseline text-accent-blue leading-[inherit]"
+    <ComposerInlineChip
+      kind="mention"
+      label={name}
       title={id}
-    >
-      <span
-        aria-hidden="true"
-        className="inline-block size-[0.94em] shrink-0 translate-y-[0.14em] bg-current"
-        style={{
-          WebkitMaskImage: 'url("/monad-icon-vector-solid.svg")',
-          WebkitMaskPosition: 'center',
-          WebkitMaskRepeat: 'no-repeat',
-          WebkitMaskSize: 'contain',
-          maskImage: 'url("/monad-icon-vector-solid.svg")',
-          maskPosition: 'center',
-          maskRepeat: 'no-repeat',
-          maskSize: 'contain'
-        }}
-      />
-      {name}
-    </span>
+    />
   );
 }
 

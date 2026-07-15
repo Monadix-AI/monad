@@ -1,5 +1,3 @@
-'use client';
-
 import type { Components } from 'streamdown';
 
 import { lazy, memo, Suspense } from 'react';

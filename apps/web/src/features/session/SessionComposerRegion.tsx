@@ -7,6 +7,7 @@ import { CommandMenu } from './CommandMenu';
 import { ComposerQueueStack } from './ComposerQueueStack';
 import { ComposerShell } from './ComposerShell';
 import { activeCommandToken, activeSkillToken } from './command-menu';
+import { SESSION_CONTENT_CLASS } from './session-layout';
 import { useSessionUiStore } from './session-ui-store';
 
 export function SessionComposerRegion({
@@ -48,16 +49,16 @@ export function SessionComposerRegion({
     : undefined;
 
   return (
-    <div className="px-4 pt-2 pb-3">
+    <div className={`${SESSION_CONTENT_CLASS} pt-2 pb-3`}>
       {identity.isReadOnly ? (
-        <div className="mx-auto flex max-w-4xl items-center justify-center gap-2 py-2 text-muted-foreground text-sm">
+        <div className="flex items-center justify-center gap-2 py-2 text-muted-foreground text-sm">
           <span className="rounded border bg-muted px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide">
             {identity.currentSession?.origin?.client ?? identity.currentSession?.origin?.surface}
           </span>
           <span>{t('web.chat.readOnly')}</span>
         </div>
       ) : null}
-      <div className="mx-auto flex max-w-4xl flex-col gap-2">
+      <div className="flex flex-col gap-2">
         <div className="flex items-end gap-2.5">
           <div className="relative flex-1">
             {!identity.isReadOnly ? (

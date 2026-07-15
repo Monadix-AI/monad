@@ -5,7 +5,6 @@ import {
   createSidebarShortcutHandler,
   createVisibleSidebarSessionShortcutActions,
   inboxHotkey,
-  monadAgentHotkey,
   newChatHotkey,
   settingsHotkey,
   sidebarNumberHotkeys,
@@ -56,6 +55,9 @@ function shortcutEvent(init: {
     },
     stopPropagation: () => {
       stopped += 1;
+    },
+    stopImmediatePropagation: () => {
+      stopped += 1;
     }
   } as KeyboardEvent;
 
@@ -66,10 +68,24 @@ function shortcutEvent(init: {
   };
 }
 
+const platforms = [
+  {
+    applePlatform: true,
+    label: 'mac',
+    primaryModifier: { metaKey: true },
+    secondaryModifier: { ctrlKey: true }
+  },
+  {
+    applePlatform: false,
+    label: 'non-mac',
+    primaryModifier: { ctrlKey: true },
+    secondaryModifier: { metaKey: true }
+  }
+] as const;
+
 test('sidebar hotkey map reserves global actions and Mod 1-9 navigation', () => {
   expect(settingsHotkey).toBe('Mod+,');
-  expect(monadAgentHotkey).toBe('Mod+`');
-  expect(newChatHotkey).toBe('Mod+N');
+  expect(newChatHotkey).toBe('Mod+`');
   expect(inboxHotkey).toBe('Mod+I');
   expect(sidebarNumberHotkeys).toEqual([
     'Mod+1',
@@ -117,11 +133,32 @@ test('session shortcut badges number only the first nine visible rows and clear 
 
   syncVisibleSidebarSessionShortcutBadges('⌘', fakeRoot(rows));
 
-  expect(rows[0].dataset.sidebarShortcut).toBe('1');
-  expect(rows[0].dataset.sidebarShortcutModifier).toBe('⌘');
-  expect(rows[1].dataset.sidebarShortcut).toBeUndefined();
-  expect(rows[9].dataset.sidebarShortcut).toBe('9');
-  expect(rows[10].dataset.sidebarShortcut).toBeUndefined();
+  expect(rows.map((row) => row.dataset.sidebarShortcut ?? null)).toEqual([
+    '1',
+    null,
+    '2',
+    '3',
+    '4',
+    '5',
+    '6',
+    '7',
+    '8',
+    '9',
+    null
+  ]);
+  expect(rows.map((row) => row.dataset.sidebarShortcutModifier ?? null)).toEqual([
+    '⌘',
+    null,
+    '⌘',
+    '⌘',
+    '⌘',
+    '⌘',
+    '⌘',
+    '⌘',
+    '⌘',
+    '⌘',
+    null
+  ]);
 });
 
 test('workspace session shortcuts build nine ordered activators', () => {
@@ -141,81 +178,94 @@ test('sidebar shortcuts stay on a capture listener', () => {
   expect(sidebarShortcutListenerOptions.capture).toBe(true);
 });
 
-test('settings shortcut prevents browser default without stopping propagation', () => {
-  let toggled = 0;
-  const shortcut = shortcutEvent({ key: ',', code: 'Comma', metaKey: true });
-  const handler = createSidebarShortcutHandler({
-    applePlatform: true,
-    revealSidebar: () => {},
-    showSettings: false,
-    sidebarShortcutActions: [],
-    toggleSettings: () => {
-      toggled += 1;
-    }
+for (const platform of platforms) {
+  test(`settings shortcut uses the primary modifier on ${platform.label}`, () => {
+    let toggled = 0;
+    const shortcut = shortcutEvent({ key: ',', code: 'Comma', ...platform.primaryModifier });
+    const secondaryShortcut = shortcutEvent({ key: ',', code: 'Comma', ...platform.secondaryModifier });
+    const handler = createSidebarShortcutHandler({
+      applePlatform: platform.applePlatform,
+      revealSidebar: () => {},
+      showSettings: false,
+      sidebarShortcutActions: [],
+      toggleSettings: () => {
+        toggled += 1;
+      }
+    });
+
+    handler(shortcut.event);
+    handler(secondaryShortcut.event);
+
+    expect(toggled).toBe(1);
+    expect(shortcut.prevented()).toBe(1);
+    expect(shortcut.stopped()).toBe(2);
+    expect(secondaryShortcut.prevented()).toBe(0);
   });
 
-  handler(shortcut.event);
+  test(`new chat and inbox shortcuts use the primary modifier on ${platform.label}`, () => {
+    const calls: string[] = [];
+    const newChatShortcut = shortcutEvent({ key: '`', code: 'Backquote', ...platform.primaryModifier });
+    const inboxShortcut = shortcutEvent({ key: 'i', code: 'KeyI', ...platform.primaryModifier });
+    const secondaryNewChatShortcut = shortcutEvent({ key: '`', code: 'Backquote', ...platform.secondaryModifier });
+    const handler = createSidebarShortcutHandler({
+      applePlatform: platform.applePlatform,
+      inboxShortcutAction: () => calls.push('inbox'),
+      newChatShortcutAction: () => calls.push('new-chat'),
+      revealSidebar: () => calls.push('reveal'),
+      showSettings: false,
+      sidebarShortcutActions: [],
+      toggleSettings: () => calls.push('settings')
+    });
 
-  expect(toggled).toBe(1);
-  expect(shortcut.prevented()).toBe(1);
-  expect(shortcut.stopped()).toBe(0);
-});
+    handler(newChatShortcut.event);
+    handler(inboxShortcut.event);
+    handler(secondaryNewChatShortcut.event);
 
-test('monad agent shortcut reveal the sidebar and runs the dedicated action', () => {
-  const calls: string[] = [];
-  const shortcut = shortcutEvent({ key: '`', code: 'Backquote', metaKey: true });
-  const handler = createSidebarShortcutHandler({
-    applePlatform: true,
-    monadAgentShortcutAction: () => calls.push('monad'),
-    revealSidebar: () => calls.push('reveal'),
-    showSettings: false,
-    sidebarShortcutActions: [() => calls.push('one')],
-    toggleSettings: () => calls.push('settings')
+    expect(calls).toEqual(['reveal', 'new-chat', 'reveal', 'inbox']);
+    expect(newChatShortcut.prevented()).toBe(1);
+    expect(newChatShortcut.stopped()).toBe(2);
+    expect(inboxShortcut.prevented()).toBe(1);
+    expect(inboxShortcut.stopped()).toBe(2);
+    expect(secondaryNewChatShortcut.prevented()).toBe(0);
   });
 
-  handler(shortcut.event);
+  test(`new chat shortcut matches the physical backquote key on ${platform.label}`, () => {
+    const calls: string[] = [];
+    const shortcut = shortcutEvent({ key: 'Dead', code: 'Backquote', ...platform.primaryModifier });
+    const handler = createSidebarShortcutHandler({
+      applePlatform: platform.applePlatform,
+      newChatShortcutAction: () => calls.push('new-chat'),
+      revealSidebar: () => calls.push('reveal'),
+      showSettings: false,
+      sidebarShortcutActions: [],
+      toggleSettings: () => calls.push('settings')
+    });
 
-  expect(calls).toEqual(['reveal', 'monad']);
-  expect(shortcut.prevented()).toBe(1);
-  expect(shortcut.stopped()).toBe(0);
-});
+    handler(shortcut.event);
 
-test('new chat and inbox shortcuts reveal the sidebar and run dedicated actions', () => {
-  const calls: string[] = [];
-  const newChatShortcut = shortcutEvent({ key: 'n', code: 'KeyN', metaKey: true });
-  const inboxShortcut = shortcutEvent({ key: 'i', code: 'KeyI', metaKey: true });
-  const handler = createSidebarShortcutHandler({
-    applePlatform: true,
-    inboxShortcutAction: () => calls.push('inbox'),
-    newChatShortcutAction: () => calls.push('new-chat'),
-    revealSidebar: () => calls.push('reveal'),
-    showSettings: false,
-    sidebarShortcutActions: [],
-    toggleSettings: () => calls.push('settings')
+    expect(calls).toEqual(['reveal', 'new-chat']);
+    expect(shortcut.prevented()).toBe(1);
+    expect(shortcut.stopped()).toBe(2);
   });
 
-  handler(newChatShortcut.event);
-  handler(inboxShortcut.event);
+  test(`number shortcuts use the primary modifier on ${platform.label}`, () => {
+    const calls: string[] = [];
+    const shortcut = shortcutEvent({ key: '2', code: 'Digit2', ...platform.primaryModifier });
+    const secondaryShortcut = shortcutEvent({ key: '2', code: 'Digit2', ...platform.secondaryModifier });
+    const handler = createSidebarShortcutHandler({
+      applePlatform: platform.applePlatform,
+      revealSidebar: () => calls.push('reveal'),
+      showSettings: false,
+      sidebarShortcutActions: [() => calls.push('one'), () => calls.push('two')],
+      toggleSettings: () => calls.push('settings')
+    });
 
-  expect(calls).toEqual(['reveal', 'new-chat', 'reveal', 'inbox']);
-  expect(newChatShortcut.prevented()).toBe(1);
-  expect(inboxShortcut.prevented()).toBe(1);
-});
+    handler(shortcut.event);
+    handler(secondaryShortcut.event);
 
-test('number shortcuts reveal the sidebar and run the matching action', () => {
-  const calls: string[] = [];
-  const shortcut = shortcutEvent({ key: '2', code: 'Digit2', metaKey: true });
-  const handler = createSidebarShortcutHandler({
-    applePlatform: true,
-    revealSidebar: () => calls.push('reveal'),
-    showSettings: false,
-    sidebarShortcutActions: [() => calls.push('one'), () => calls.push('two')],
-    toggleSettings: () => calls.push('settings')
+    expect(calls).toEqual(['reveal', 'two']);
+    expect(shortcut.prevented()).toBe(1);
+    expect(shortcut.stopped()).toBe(2);
+    expect(secondaryShortcut.prevented()).toBe(0);
   });
-
-  handler(shortcut.event);
-
-  expect(calls).toEqual(['reveal', 'two']);
-  expect(shortcut.prevented()).toBe(1);
-  expect(shortcut.stopped()).toBe(0);
-});
+}

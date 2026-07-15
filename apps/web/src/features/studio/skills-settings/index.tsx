@@ -42,7 +42,7 @@ import { PanelShell, PanelShellBody } from '#/components/ui/panel-shell';
 import { isSkillMarketplacePath, skillMarketplacePath, studioPath } from '#/features/shell/routing/paths';
 import { StudioBreadcrumbHeader } from '#/features/studio/StudioBreadcrumbHeader';
 import { replaceShellUrl, useShellPathname } from '#/hooks/use-shell-location';
-import { useMonadRuntime } from '#/lib/monad-runtime-provider';
+import { useMonadRuntime } from '#/lib/monad-runtime-context';
 import { CapabilitySection } from '../capabilities-settings/CapabilitySection';
 import { BrowsePanel } from './BrowsePanel';
 import { GitHubMark } from './GitHubMark';

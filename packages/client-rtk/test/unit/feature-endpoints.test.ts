@@ -66,7 +66,11 @@ function fakeClient(overrides: Record<string, unknown>, calls: Calls): MonadClie
             }
           },
           restore: {
-            post: async (body: { toMessageId: string }) => ok({ restoredCount: 1, newHeadMessageId: body.toMessageId })
+            post: async (body: { toMessageId: string }) => {
+              const fn = overrides.restore as ((sessionId: string, toMessageId: string) => Promise<void>) | undefined;
+              if (fn) await fn(id, body.toMessageId);
+              return ok({ restoredCount: 1, newHeadMessageId: body.toMessageId });
+            }
           }
         }),
         atoms: Object.assign(

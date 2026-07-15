@@ -16,7 +16,6 @@ import {
 import { useCallback, useEffect, useState } from 'react';
 
 import { useT } from '#/components/I18nProvider';
-import { defaultReasoningEffort } from '#/components/ReasoningEffortControl';
 import { ExternalAgentMemberDialog } from './ExternalAgentMemberDialog';
 import {
   type ExternalAgentMemberDialogState,
@@ -242,8 +241,9 @@ export function ProjectSettings({
                     displayName: candidate.template?.displayName,
                     projectTemplateId: candidate.template?.id,
                     modelId: candidate.template?.modelId,
-                    reasoningEffort:
-                      candidate.template?.reasoningEffort ?? defaultReasoningEffort(candidate.reasoningEfforts),
+                    reasoningEffort: candidate.reasoningEfforts.includes(candidate.template?.reasoningEffort ?? '')
+                      ? candidate.template?.reasoningEffort
+                      : undefined,
                     speed: candidate.template?.speed,
                     customPrompt: candidate.template?.customPrompt
                   }

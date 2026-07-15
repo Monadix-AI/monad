@@ -16,9 +16,9 @@ import { useEffect, useState } from 'react';
 import { ProfileCardHoverActions } from '#/components/HoverActions';
 import { useT } from '#/components/I18nProvider';
 import {
-  defaultReasoningEffort,
   ReasoningEffortControl,
-  reasoningEffortOption
+  reasoningEffortOption,
+  resolveReasoningEffort
 } from '#/components/ReasoningEffortControl';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '#/components/ui/hover-card';
 import { Popover, PopoverContent, PopoverTrigger } from '#/components/ui/popover';
@@ -167,14 +167,12 @@ export function ProfileCard({
     setOpenModelHover(open ? key : null);
   };
   const reasoningSummary = (role: RouteKey, model: ModelInfo | undefined) => {
-    const efforts = model?.modalities?.reasoningEfforts?.filter((effort) => effort.trim().length > 0) ?? [];
     const selected = profile.routeParams?.[role]?.reasoningEffort ?? profile.params?.reasoningEffort;
-    const value = efforts.includes(selected ?? '')
-      ? selected
-      : model?.modalities?.defaultReasoningEffort && efforts.includes(model.modalities.defaultReasoningEffort)
-        ? model.modalities.defaultReasoningEffort
-        : defaultReasoningEffort(efforts);
-    return { efforts, value };
+    return resolveReasoningEffort(
+      model?.modalities?.reasoningEfforts,
+      selected,
+      model?.modalities?.defaultReasoningEffort
+    );
   };
   const setRouteReasoningEffort = (role: RouteKey, effort: string) => {
     const base = profile.routeParams?.[role] ?? {};
@@ -440,7 +438,9 @@ export function ProfileCard({
                             type="button"
                           >
                             <span className="text-muted-foreground">{t('web.reasoning.effort')}</span>
-                            <span className="font-medium text-primary">{formatEffortLabel(value)}</span>
+                            {value ? (
+                              <span className="font-medium text-primary">{formatEffortLabel(value)}</span>
+                            ) : null}
                           </button>
                         </PopoverTrigger>
                         <PopoverContent
@@ -450,6 +450,7 @@ export function ProfileCard({
                           <ReasoningEffortControl
                             className="border-0 shadow-none"
                             compact
+                            defaultLabel={t('web.reasoning.effort')}
                             onChange={(level) => {
                               if (level) setRouteReasoningEffort(row.key, level);
                             }}

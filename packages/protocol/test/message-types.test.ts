@@ -38,6 +38,15 @@ test('unknown types fall back to the pass-through descriptor (in context via tex
   expect(resolveMessageType('something_custom').fallbacks).toEqual(['markdown', 'text']);
 });
 
+test('branch source messages are UI-only links with validated targets', () => {
+  const descriptor = resolveMessageType('branch_source');
+  expect(descriptor.includeInContext).toBe(false);
+  expect(
+    descriptor.dataSchema.safeParse({ sessionId: 'ses_123456789012', messageId: 'msg_123456789012' }).success
+  ).toBe(true);
+  expect(descriptor.dataSchema.safeParse({ sessionId: 'bad', messageId: 'msg_123456789012' }).success).toBe(false);
+});
+
 test('atom types are namespaced and cannot shadow built-ins', () => {
   const d = registerMessageType('myatompack', {
     type: 'card',

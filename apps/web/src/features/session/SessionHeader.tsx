@@ -1,7 +1,6 @@
-import type { SessionId } from '@monad/protocol';
 import type { SessionIdentityModel, SessionInspectorModel } from './session-route-contract';
 
-import { Activity01Icon, GitBranchIcon } from '@hugeicons/core-free-icons';
+import { Activity01Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { useProvenanceQuery } from '@monad/client-rtk';
 import { Button } from '@monad/ui';
@@ -20,12 +19,7 @@ export function SessionHeader({
 
   return (
     <>
-      {identity.isDraft ? null : (
-        <SessionLineage
-          onSelect={identity.onSelectSession}
-          sessionId={identity.currentSessionId}
-        />
-      )}
+      {identity.isDraft ? null : <SessionLineage sessionId={identity.currentSessionId} />}
       <div className="flex items-center justify-between gap-2.5 border-border/70 border-b px-4 py-2">
         <div className="min-w-0">
           <div className="truncate font-medium text-sm">
@@ -65,40 +59,18 @@ export function SessionHeader({
 }
 
 const SessionLineage = memo(function SessionLineage({
-  sessionId,
-  onSelect
+  sessionId
 }: {
-  sessionId: SessionId;
-  onSelect: (id: SessionId) => void;
+  sessionId: SessionIdentityModel['currentSessionId'];
 }) {
   const t = useT();
   const { data } = useProvenanceQuery(sessionId);
-  const parent = data?.ancestors.at(-1);
   const branches = data?.descendants ?? [];
-  if (!parent && branches.length === 0) return null;
+  if (branches.length === 0) return null;
 
   return (
     <div className="flex items-center gap-2 border-b px-4 py-1.5 text-muted-foreground text-xs">
-      {parent && (
-        <button
-          className="flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-accent hover:text-accent-foreground"
-          onClick={() => onSelect(parent.id)}
-          type="button"
-        >
-          <HugeiconsIcon
-            className="size-3"
-            icon={GitBranchIcon}
-          />
-          <span className="text-muted-foreground/70">{t('web.chat.lineageParent')}</span>
-          <span className="max-w-40 truncate font-medium text-foreground">{parent.title}</span>
-        </button>
-      )}
-      {branches.length > 0 && (
-        <span className="flex items-center gap-1">
-          <span className="text-muted-foreground/40">·</span>
-          {t('web.chat.lineageBranches', { count: branches.length })}
-        </span>
-      )}
+      {t('web.chat.lineageBranches', { count: branches.length })}
     </div>
   );
 });

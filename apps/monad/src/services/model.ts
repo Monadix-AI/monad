@@ -77,6 +77,10 @@ export class ModelService {
     return this.cfg.model.profiles;
   }
 
+  get providers(): MonadConfig['model']['providers'] {
+    return this.cfg.model.providers;
+  }
+
   /** Live operator tier pins (profile alias → tier) — override the catalog's cost-ranking. */
   get tierOverrides(): MonadConfig['model']['tierOverrides'] {
     return this.cfg.model.tierOverrides;

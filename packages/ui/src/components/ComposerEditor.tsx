@@ -1,5 +1,3 @@
-'use client';
-
 import type { JSONContent } from '@tiptap/core';
 import type { Editor } from '@tiptap/react';
 import type { ForwardedRef, MutableRefObject, ReactElement } from 'react';
@@ -12,7 +10,10 @@ import Text from '@tiptap/extension-text';
 import { EditorContent, useEditor } from '@tiptap/react';
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef } from 'react';
 
+import { renderComposerInlineChip } from './ComposerInlineChip';
 import { mentionToken, parseMentionTokens } from './MentionText';
+
+export { renderComposerInlineChip } from './ComposerInlineChip';
 
 export type ComposerMentionTarget = { id: string; name: string };
 
@@ -42,6 +43,7 @@ export type ComposerCommandToken = {
 };
 
 export type ComposerSendShortcut = 'enter' | 'mod-enter-for-multiline' | 'mod-enter-always';
+export const LONG_PROMPT_CHARACTER_THRESHOLD = 160;
 
 export type ComposerEditorHandle = {
   appendText: (text: string) => void;
@@ -57,15 +59,9 @@ type ActiveMentionRange = ComposerMentionState & {
 
 const SKILL_ID_RE =
   /\/((?:global:[a-z0-9-]+)|(?:atom-pack:[a-z0-9-]+:[a-z0-9-]+)|(?:agent:[a-z0-9-]+:[a-z0-9-]+))(?=\s|$)/g;
-const HUGEICONS_SYMBOL_NAME_RE = /^[A-Z][A-Za-z0-9]*Icon$/;
+const COMPOSER_EDITOR_INPUT_CLASS =
+  'composer-editor-input composer-tiptap-input min-w-0 flex-1 overflow-y-auto p-1 text-[15px] leading-[22px] outline-none whitespace-pre-wrap break-words [overflow-wrap:anywhere]';
 export const COMPOSER_EDITOR_IMMEDIATELY_RENDER = true;
-
-function renderableIconText(icon: string | undefined): string | undefined {
-  if (!icon) return undefined;
-  const value = icon.trim();
-  if (!value || HUGEICONS_SYMBOL_NAME_RE.test(value)) return undefined;
-  return value;
-}
 
 function fallbackSkillLabel(id: string): string {
   const parts = id.split(':');
@@ -85,24 +81,14 @@ function fallbackSkillSource(id: string): string | undefined {
 const ChatMentionExtension = Mention.configure({
   renderHTML({ node, options }) {
     const name = String(node.attrs.label ?? node.attrs.id ?? '');
-    return [
-      'span',
-      mergeAttributes(options.HTMLAttributes, {
+    return renderComposerInlineChip({
+      attributes: mergeAttributes(options.HTMLAttributes, {
         'data-mention-id': node.attrs.id,
-        'data-mention-name': name,
-        class: 'inline-flex items-baseline gap-[0.14em] align-baseline text-[0.92em] text-accent-blue leading-[inherit]'
+        'data-mention-name': name
       }),
-      [
-        'span',
-        {
-          'aria-hidden': 'true',
-          class: 'inline-block size-[0.94em] shrink-0 translate-y-[0.14em] bg-current',
-          style:
-            'mask-image: url("/monad-icon-vector-solid.svg"); -webkit-mask-image: url("/monad-icon-vector-solid.svg"); mask-repeat: no-repeat; -webkit-mask-repeat: no-repeat; mask-position: center; -webkit-mask-position: center; mask-size: contain; -webkit-mask-size: contain;'
-        }
-      ],
-      name
-    ];
+      kind: 'mention',
+      label: name
+    });
   },
 
   renderText({ node }) {
@@ -129,69 +115,16 @@ const SkillTokenNode = Node.create({
   },
 
   renderHTML({ HTMLAttributes }) {
-    const icon = String(HTMLAttributes.icon ?? '');
-    const iconText = renderableIconText(icon);
-    const iconNode =
-      icon.startsWith('http://') || icon.startsWith('https://')
-        ? [
-            'span',
-            {
-              class: 'size-4 shrink-0 rounded bg-center bg-cover',
-              style: `background-image: url("${icon.replaceAll('"', '\\"')}")`
-            }
-          ]
-        : iconText
-          ? ['span', { class: 'grid size-4 shrink-0 place-items-center text-xs' }, iconText]
-          : [
-              'span',
-              {
-                class: 'grid size-4 shrink-0 place-items-center text-xs',
-                'data-skill-token-default-icon': 'true'
-              },
-              '□'
-            ];
-
-    return [
-      'span',
-      mergeAttributes(HTMLAttributes, {
+    return renderComposerInlineChip({
+      attributes: {
+        'data-skill-token-id': HTMLAttributes.id,
         'data-skill-token-raw': HTMLAttributes.raw,
-        class:
-          'mx-0.5 inline-flex max-w-full translate-y-[2px] items-center gap-1.5 rounded-(--radius-md) border border-primary/20 bg-background px-2 py-0.5 text-left text-accent-foreground text-sm shadow-xs transition hover:border-primary/35 hover:bg-accent/70'
-      }),
-      iconNode,
-      ['span', { class: 'truncate font-medium' }, HTMLAttributes.label],
-      HTMLAttributes.source
-        ? [
-            'span',
-            {
-              class:
-                'shrink-0 rounded-(--radius-xs) border border-current/15 bg-accent px-1.5 py-0.5 text-[10px] text-muted-foreground'
-            },
-            HTMLAttributes.source
-          ]
-        : '',
-      HTMLAttributes.version
-        ? [
-            'span',
-            {
-              class:
-                'shrink-0 rounded-(--radius-xs) border border-current/15 px-1.5 py-0.5 text-[10px] text-muted-foreground'
-            },
-            `v${HTMLAttributes.version}`
-          ]
-        : '',
-      [
-        'span',
-        {
-          'aria-label': 'Remove skill',
-          class:
-            'ml-0.5 grid size-4 shrink-0 place-items-center rounded-full text-muted-foreground text-xs leading-none hover:bg-muted hover:text-foreground',
-          'data-composer-token-delete': 'skill',
-          role: 'button'
-        },
-        '×'
-      ]
-    ];
+        title: HTMLAttributes.label
+      },
+      icon: String(HTMLAttributes.icon ?? ''),
+      kind: 'skill',
+      label: String(HTMLAttributes.label ?? '')
+    });
   },
 
   renderText({ node }) {
@@ -214,31 +147,33 @@ const CommandTokenNode = Node.create({
   },
 
   renderHTML({ HTMLAttributes }) {
-    return [
-      'span',
-      mergeAttributes(HTMLAttributes, {
+    return renderComposerInlineChip({
+      attributes: {
         'data-command-token-raw': HTMLAttributes.raw,
-        class:
-          'mx-0.5 inline-flex max-w-full translate-y-[2px] items-center gap-1.5 rounded-(--radius-md) border border-border/70 bg-muted/60 px-2 py-0.5 text-left text-foreground text-sm shadow-xs transition hover:bg-accent/70'
-      }),
-      ['span', { 'aria-hidden': 'true', class: 'font-mono text-[12px] text-muted-foreground leading-none' }, '/'],
-      ['span', { class: 'truncate font-medium' }, HTMLAttributes.label],
-      [
-        'span',
-        {
-          'aria-label': 'Remove command',
-          class:
-            'ml-0.5 grid size-4 shrink-0 place-items-center rounded-full text-muted-foreground text-xs leading-none hover:bg-muted hover:text-foreground',
-          'data-composer-token-delete': 'command',
-          role: 'button'
-        },
-        '×'
-      ]
-    ];
+        title: HTMLAttributes.label
+      },
+      kind: 'command',
+      label: String(HTMLAttributes.label ?? '')
+    });
   },
 
   renderText({ node }) {
     return String(node.attrs.raw ?? '');
+  }
+});
+
+const HardBreakNode = Node.create({
+  name: 'hardBreak',
+  group: 'inline',
+  inline: true,
+  selectable: false,
+
+  parseHTML() {
+    return [{ tag: 'br' }];
+  },
+
+  renderHTML() {
+    return ['br'];
   }
 });
 
@@ -294,9 +229,19 @@ export const ComposerEditor = forwardRef(function ComposerEditor(
   onKeyDownRef.current = onKeyDown;
   onPasteTextRef.current = onPasteText;
   skillTokenRef.current = skillToken;
+  const activePlaceholder = placeholder && value.trim().length === 0 ? placeholder : '';
+  const editorAttributes = useMemo(
+    () => ({
+      'aria-label': ariaLabel,
+      'aria-multiline': 'true',
+      'data-placeholder': activePlaceholder,
+      class: COMPOSER_EDITOR_INPUT_CLASS
+    }),
+    [activePlaceholder, ariaLabel]
+  );
 
   const extensions = useMemo(
-    () => [Document, Paragraph, Text, ChatMentionExtension, SkillTokenNode, CommandTokenNode],
+    () => [Document, Paragraph, Text, HardBreakNode, ChatMentionExtension, SkillTokenNode, CommandTokenNode],
     []
   );
   const editor = useEditor({
@@ -305,12 +250,7 @@ export const ComposerEditor = forwardRef(function ComposerEditor(
     editable: !disabled,
     immediatelyRender: COMPOSER_EDITOR_IMMEDIATELY_RENDER,
     editorProps: {
-      attributes: {
-        'aria-label': ariaLabel,
-        'aria-multiline': 'true',
-        class:
-          'composer-editor-input composer-tiptap-input min-w-0 flex-1 overflow-y-auto p-1 text-[15px] leading-[22px] outline-none whitespace-pre-wrap break-words [overflow-wrap:anywhere]'
-      },
+      attributes: editorAttributes,
       handleClick(_view, _pos, event) {
         const target = event.target instanceof Element ? event.target : null;
         const deleteTarget = target?.closest<HTMLElement>('[data-composer-token-delete]');
@@ -339,19 +279,25 @@ export const ComposerEditor = forwardRef(function ComposerEditor(
       },
       handleKeyDown(_view, event) {
         if (onKeyDownRef.current?.(event)) return true;
-        if (
-          shouldSubmitComposerKey(
-            {
-              hasMultipleLines: (editor?.getText() ?? '').includes('\n'),
-              key: event.key,
-              primaryModifier: primaryModifierPressed(event),
-              shiftKey: event.shiftKey
-            },
-            sendShortcut
-          )
-        ) {
+        const currentText = editor ? tiptapDocToSerializedText(editor.getJSON()) : '';
+        const action = composerEnterAction(
+          {
+            characterCount: currentText.length,
+            hasMultipleLines: currentText.includes('\n'),
+            key: event.key,
+            primaryModifier: primaryModifierPressed(event),
+            shiftKey: event.shiftKey
+          },
+          sendShortcut
+        );
+        if (action === 'submit') {
           event.preventDefault();
           onSubmit();
+          return true;
+        }
+        if (action === 'line-break') {
+          event.preventDefault();
+          editor?.chain().focus().insertContent({ type: 'hardBreak' }).scrollIntoView().run();
           return true;
         }
         return false;
@@ -440,8 +386,18 @@ export const ComposerEditor = forwardRef(function ComposerEditor(
   }, [commandToken, editor, onMentionChange, skillToken, value]);
 
   useEffect(() => {
+    if (!editor) return;
+    editor.setOptions({
+      editorProps: {
+        ...editor.options.editorProps,
+        attributes: editorAttributes
+      }
+    });
+  }, [editor, editorAttributes]);
+
+  useEffect(() => {
     if (!editorRef) return;
-    const node = (editor?.view.dom ?? null) as HTMLDivElement | null;
+    const node = editorDom(editor);
     if (typeof editorRef === 'function') {
       editorRef(node);
       return () => {
@@ -463,7 +419,21 @@ export const ComposerEditor = forwardRef(function ComposerEditor(
           overflow: hidden;
         }
         .composer-tiptap-editor .ProseMirror {
+          position: relative;
           max-height: 100%;
+        }
+        .composer-tiptap-editor .ProseMirror::before {
+          content: attr(data-placeholder);
+          float: left;
+          height: 0;
+          color: color-mix(in srgb, var(--chat-input-placeholder) 44%, transparent);
+          pointer-events: none;
+          user-select: none;
+          white-space: nowrap;
+        }
+        .composer-tiptap-editor .ProseMirror:not([data-placeholder])::before,
+        .composer-tiptap-editor .ProseMirror[data-placeholder=""]::before {
+          content: none;
         }
         .composer-tiptap-editor .ProseMirror p {
           margin: 0;
@@ -477,14 +447,21 @@ export const ComposerEditor = forwardRef(function ComposerEditor(
         editor={editor}
         onKeyUp={onKeyUp}
       />
-      {placeholder && value.trim().length === 0 ? (
-        <div className="composer-editor-placeholder pointer-events-none">{placeholder}</div>
-      ) : null}
     </div>
   );
 });
 
+function editorDom(editor: Editor | null): HTMLDivElement | null {
+  if (!editor || editor.isDestroyed) return null;
+  try {
+    return editor.view.dom as HTMLDivElement;
+  } catch {
+    return null;
+  }
+}
+
 type ComposerKeyIntent = {
+  characterCount?: number;
   hasMultipleLines?: boolean;
   key: string;
   primaryModifier: boolean;
@@ -495,9 +472,20 @@ export function shouldSubmitComposerKey(intent: ComposerKeyIntent, shortcut: Com
   if (intent.key !== 'Enter') return false;
   if (intent.shiftKey) return false;
   if (shortcut === 'enter') return !intent.primaryModifier;
-  if (shortcut === 'mod-enter-for-multiline')
-    return intent.hasMultipleLines ? intent.primaryModifier : !intent.primaryModifier;
+  if (shortcut === 'mod-enter-for-multiline') {
+    const longPrompt =
+      Boolean(intent.hasMultipleLines) || (intent.characterCount ?? 0) >= LONG_PROMPT_CHARACTER_THRESHOLD;
+    return longPrompt ? intent.primaryModifier : !intent.primaryModifier;
+  }
   return intent.primaryModifier;
+}
+
+export function composerEnterAction(
+  intent: ComposerKeyIntent,
+  shortcut: ComposerSendShortcut
+): 'ignore' | 'line-break' | 'submit' {
+  if (intent.key !== 'Enter') return 'ignore';
+  return shouldSubmitComposerKey(intent, shortcut) ? 'submit' : 'line-break';
 }
 
 function primaryModifierPressed(event: KeyboardEvent): boolean {
@@ -673,5 +661,6 @@ function tiptapNodeToSerializedText(node: JSONContent): string {
   }
   if (node.type === 'composerSkillToken') return String(node.attrs?.raw ?? '');
   if (node.type === 'composerCommandToken') return String(node.attrs?.raw ?? '');
+  if (node.type === 'hardBreak') return '\n';
   return (node.content ?? []).map(tiptapNodeToSerializedText).join('');
 }
