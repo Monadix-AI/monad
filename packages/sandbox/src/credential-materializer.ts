@@ -9,7 +9,8 @@ export const MAX_MATERIALIZED_BYTES = 2 * 1024 * 1024;
 export const MAX_CREDENTIAL_CAPTURES = 128;
 export const MAX_JWT_SEGMENT_BYTES = 64 * 1024;
 export const MAX_JWT_NESTING = 16;
-export const REGEX_DEADLINE_MS = 500;
+export const REGEX_DEADLINE_MS = 250;
+export const REGEX_PROCESS_DEADLINE_MS = 2_000;
 
 export interface CredentialTransform {
   extract?: string;
@@ -72,9 +73,9 @@ function sentinel(): string {
 function extractCaptures(input: string, pattern: string): RegexWorkerSuccess | RegexWorkerFailure {
   const worker = join(import.meta.dir, 'credential-regex-worker.ts');
   const result = spawnSync(process.execPath, [worker], {
-    input: JSON.stringify({ input, pattern, maxCaptures: MAX_CREDENTIAL_CAPTURES }),
+    input: JSON.stringify({ input, pattern, maxCaptures: MAX_CREDENTIAL_CAPTURES, deadlineMs: REGEX_DEADLINE_MS }),
     encoding: 'utf8',
-    timeout: REGEX_DEADLINE_MS,
+    timeout: REGEX_PROCESS_DEADLINE_MS,
     maxBuffer: MAX_MATERIALIZED_BYTES
   });
   if (result.error && (result.error as NodeJS.ErrnoException).code === 'ETIMEDOUT') {

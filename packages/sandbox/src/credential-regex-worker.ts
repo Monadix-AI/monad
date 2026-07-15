@@ -1,37 +1,35 @@
-interface Request {
+export interface RegexWorkerRequest {
   input: string;
   pattern: string;
   maxCaptures: number;
+  deadlineMs: number;
 }
 
-type WorkerResult =
+export type RegexWorkerResult =
   | { ok: true; captures: Array<{ start: number; end: number; value: string }> }
-  | { ok: false; error: 'INVALID_REGEX' | 'NO_MATCH' | 'EMPTY_CAPTURE' | 'TOO_MANY_CAPTURES' };
+  | { ok: false; error: 'INVALID_REGEX' | 'REGEX_TIMEOUT' | 'NO_MATCH' | 'EMPTY_CAPTURE' | 'TOO_MANY_CAPTURES' };
 
-function run(request: Request): WorkerResult {
-  let regex: RegExp;
-  try {
-    regex = new RegExp(request.pattern, 'gd');
-  } catch {
-    return { ok: false, error: 'INVALID_REGEX' };
-  }
-  const captures: Array<{ start: number; end: number; value: string }> = [];
-  for (const match of request.input.matchAll(regex)) {
-    const value = match[1];
-    const span = (match as RegExpMatchArray & { indices: Array<[number, number] | undefined> }).indices[1];
-    if (value === undefined || value.length === 0 || span === undefined) {
-      return { ok: false, error: 'EMPTY_CAPTURE' };
-    }
-    captures.push({ start: span[0], end: span[1], value });
-    if (captures.length > request.maxCaptures) return { ok: false, error: 'TOO_MANY_CAPTURES' };
-  }
-  return captures.length === 0 ? { ok: false, error: 'NO_MATCH' } : { ok: true, captures };
-}
-
-let result: WorkerResult;
+let request: RegexWorkerRequest;
 try {
-  result = run((await Bun.stdin.json()) as Request);
+  request = (await Bun.stdin.json()) as RegexWorkerRequest;
 } catch {
-  result = { ok: false, error: 'INVALID_REGEX' };
+  process.stdout.write(JSON.stringify({ ok: false, error: 'INVALID_REGEX' } satisfies RegexWorkerResult));
+  process.exit(0);
 }
-process.stdout.write(JSON.stringify(result));
+
+const worker = new Worker(new URL('./credential-regex-executor.ts', import.meta.url));
+let settled = false;
+let timer: ReturnType<typeof setTimeout> | undefined;
+
+function finish(result: RegexWorkerResult): void {
+  if (settled) return;
+  settled = true;
+  if (timer) clearTimeout(timer);
+  worker.terminate();
+  process.stdout.write(JSON.stringify(result));
+}
+
+worker.addEventListener('message', (event: MessageEvent<RegexWorkerResult>) => finish(event.data));
+worker.addEventListener('error', () => finish({ ok: false, error: 'INVALID_REGEX' }));
+timer = setTimeout(() => finish({ ok: false, error: 'REGEX_TIMEOUT' }), request.deadlineMs);
+worker.postMessage(request);
