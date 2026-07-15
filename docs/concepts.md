@@ -4,6 +4,81 @@ A reference glossary of every first-class concept in monad, organized by layer. 
 
 ---
 
+## Product Model
+
+The product layers that explain what Monad operates and how people work with it.
+
+### Agent Team Runtime
+
+**Monad is a daemon-first agent team runtime with headless architecture.** The
+runtime keeps agents available independently of client interfaces and owns the
+identity, capabilities, permissions, work state, artifacts, approvals, and audit
+history required to operate them safely over time.
+
+Headless means the Web UI, CLI, TUI, editors, APIs, messaging channels, and custom
+workspaces are clients of the runtime. They can close, reconnect, or be replaced;
+none becomes the owner of the agents or their work.
+
+### Monad Agent
+
+The focused, single-agent product form. Monad Agent places one agent at the center
+of the experience while using the full Monad Runtime for persistent context,
+capability control, approvals, recovery, auditability, and multi-surface access.
+
+### Monad Mesh
+
+The agent-team product form. Monad Mesh coordinates multiple agents through roles,
+delegation, parallel work, shared context and artifacts, human approvals, and
+recoverable collaboration state. Monad Agent and Monad Mesh use the same runtime
+objects and policy; Mesh is not a second daemon or data silo.
+
+Sessions, Workplace, ACP delegation, peer federation, approvals, and activity or
+artifact primitives are current foundations for this model. Monad Mesh does not yet
+imply arbitrary distributed scheduling, a universal task schema, or cross-owner
+identity and trust.
+
+### Workspace Experience
+
+A scenario-specific projection of the agents, tasks, artifacts, approvals, and
+collaboration state owned by Monad Runtime. An experience can organize interaction
+for coding, research, operations, content, or another domain without creating a
+second source of truth.
+
+Workspace Experiences can be contributed by Atom Packs and switched without
+migrating the underlying team or work state. The experience controls presentation
+and scenario-specific interaction; runtime contracts continue to control identity,
+policy, persistence, and execution.
+
+### Team Task
+
+The durable unit of intent assigned to an agent or coordinated across a team. At
+the product level, a task must be inspectable, interruptible, resumable, and linked
+to its participants, activity, approvals, and outputs. Current implementations use
+sessions, Workplace task state, and delegation records; Monad does not yet define
+one universal Mesh task wire schema.
+
+### Collaboration State
+
+The shared record of who is participating, what each participant is doing, which
+decisions have been made, what remains blocked, and how work relates across agents.
+It is runtime-owned state that Workspace Experiences present in forms suited to the
+scenario.
+
+### Artifact
+
+A durable output of work, such as a patch, file, report, source collection, plan, or
+review result. Artifacts remain associated with the task and activity that produced
+them so humans and other agents can inspect provenance rather than relying only on
+transcript text.
+
+### Approval and Audit
+
+Approval is the human decision boundary before a gated action executes. Audit is
+the durable record of agent activity, tool requests, decisions, and outcomes needed
+to understand what happened. Together they make progressive autonomy accountable.
+
+---
+
 ## Agent Runtime
 
 The core machinery that runs an agentic session end-to-end.
@@ -53,9 +128,16 @@ The agent's persistent knowledge store, layered by scope:
 
 See [`docs/internals/memory.md`](internals/memory.md).
 
-### Workspace
+### Workspace Root
 
-The agent's working directory — `~/.monad/workspace/` by default. All file operations are sandboxed to roots anchored at the workspace (and any explicitly allowed additional roots). Skills under `workspace/skills/` travel with the workspace and shadow personal skills of the same name.
+The agent's working directory — `~/.monad/workspace/` by default. All file
+operations are sandboxed to roots anchored at the workspace (and any explicitly
+allowed additional roots). Skills under `workspace/skills/` travel with the
+workspace and shadow personal skills of the same name.
+
+The Workspace Root is an execution and filesystem boundary. It is distinct from a
+Workspace Experience, which is an interaction projection over runtime state. An
+experience may present one or more workspace roots without owning them.
 
 ---
 
@@ -127,9 +209,11 @@ The integration layer for external tool servers. MCP servers expose tools over s
 
 ---
 
-## Multi-agent & Federation
+## Monad Mesh & Federation
 
-Concepts that span more than one agent instance or daemon.
+Runtime mechanisms that support collaboration across more than one agent instance
+or daemon. They are foundations used by Monad Mesh, not synonyms for the complete
+Mesh product model.
 
 ### Studio
 
@@ -177,8 +261,9 @@ The three wire protocols the daemon speaks:
 
 | Transport | Used by | Notes |
 |-----------|---------|-------|
-| **REST + SSE** | Web UI, CLI, TUI, API clients, peer delegate | Primary; TCP loopback + Unix socket |
-| **WebSocket** | Web UI push (session events, approval cards) | Single multiplexed connection per client |
+| **REST** | Web UI, CLI, TUI, API clients, peer delegate | Request/response operations over TCP loopback or Unix socket |
+| **Session SSE** | Web UI, CLI, TUI | Per-session generation streams with a bounded start and end |
+| **Control WebSocket** | Web UI and other subscribed clients | Multiplexed lifecycle, interaction, and approval events |
 | **ACP (stdio)** | Editors (Zed, VS Code via bridge) | JSON-RPC over stdout; bridge proxies to daemon |
 
 All behaviour must be identical across TCP loopback and Unix socket; every feature is tested on both.

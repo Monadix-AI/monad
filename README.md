@@ -7,7 +7,7 @@
 
 <h1 align="center">Monad</h1>
 
-<p align="center"><strong>Your local AI agent runtime — one daemon, every interface, your data.</strong></p>
+<p align="center"><strong>Monad is a daemon-first agent team runtime with headless architecture.</strong></p>
 
 <p align="center">
   <a href="https://github.com/Monadix-AI/monad/actions/workflows/ci.yml"><img src="https://github.com/Monadix-AI/monad/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
@@ -17,14 +17,20 @@
 
 <p align="center">
   <a href="#quick-start">Quick start</a> ·
+  <a href="#monad-agent-and-monad-mesh">Agent &amp; Mesh</a> ·
+  <a href="#workspace-experiences">Workspace Experiences</a> ·
   <a href="#features">Features</a> ·
   <a href="#documentation">Documentation</a> ·
   <a href="README.zh-CN.md">简体中文</a>
 </p>
 
-Monad is a local runtime for AI agents. One long-lived daemon keeps your sessions,
-configuration, approvals, and history together while the Web UI, CLI, TUI, editors,
-and messaging channels give you different ways to work with the same agent.
+**Models can reason. Agents can act. A team needs a runtime.**
+
+Monad runs agents in one long-lived local daemon, from a focused individual agent
+to a coordinated team. The daemon owns their identities, capabilities, permissions,
+tasks, collaboration state, artifacts, approvals, and audit history. Web UI, CLI,
+TUI, editors, APIs, messaging channels, and custom workspaces are interchangeable
+ways to operate the same durable runtime.
 
 Monad stores its own state on your machine and binds to loopback only by default.
 Requests to the model provider you configure still leave the machine; everything
@@ -57,23 +63,71 @@ updates the daemon when needed and opens the Web UI.
 Prefer to inspect every step or install offline? See
 [manual installation](#manual-installation).
 
+## The runtime behind the team
+
+Agent teams create operational questions that a model or chat window cannot answer
+on its own:
+
+- **Who keeps the agents running?** The Monad daemon outlives any client window and
+  restores durable work after reconnects and restarts.
+- **Who gives them identity, capabilities, and permissions?** The runtime resolves
+  each agent's role, models, skills, tools, credentials, and policy boundaries.
+- **Who assigns and recovers work?** Tasks and sessions remain runtime-owned so work
+  can be delegated, paused, resumed, branched, or inspected.
+- **Who preserves collaboration state, artifacts, and audit history?** Agents and
+  humans work from one local source of truth instead of isolated chat transcripts.
+- **Who brings humans into approval decisions?** Risky actions stop at explicit
+  approval gates before tools execute.
+- **Who shapes the work experience?** Workspace Experiences project the same team
+  and state into interfaces tailored to the job.
+
+This is what daemon-first and headless mean in Monad: clients render and control the
+runtime, but no client owns the agents or their work.
+
+## Monad Agent and Monad Mesh
+
+Monad provides two product forms over the same runtime:
+
+| Product form | Designed for |
+|---|---|
+| **Monad Agent** | Focused work with one agent, backed by persistent context, controlled capabilities, approvals, recovery, and every client surface. |
+| **Monad Mesh** | Multi-agent teamwork with explicit roles, delegation, parallel work, shared context and artifacts, human approvals, and recoverable collaboration state. |
+
+Monad Agent is not a lightweight runtime beside Monad Mesh. Both use the same
+daemon, policies, capabilities, task state, storage, and audit trail. You can begin
+with one agent and compose a team without moving the work into another system.
+
+## Workspace Experiences
+
+A **Workspace Experience** is a scenario-specific projection of the same agents,
+tasks, artifacts, approvals, and collaboration state. A coding workspace can center
+repositories, diffs, and terminals; a research workspace can center sources,
+evidence, and reports; operations and content workflows can expose their own views
+and controls.
+
+Experiences are composable and switchable. Atom packs can contribute them, while
+the daemon remains the source of truth underneath. Changing the experience changes
+how a team works with its state, not where that state lives.
+
 ## Why Monad
 
 **Local-first by design.** Sessions, configuration, credentials, approvals, and
 history live under `~/.monad/`. The daemon listens on loopback or a local Unix-domain
 socket instead of exposing an unauthenticated service to your network.
 
-**One daemon, every interface.** Start a session in the browser, inspect it from the
-CLI, continue in the TUI, or reach the same agent through an editor or messaging
-channel. Each surface shares one source of truth.
+**One daemon, every experience.** Start with Monad Agent in the browser, inspect its
+work from the CLI, coordinate a team through Monad Mesh, or reach the same runtime
+through an editor, API, or messaging channel. Every surface shares one source of
+truth.
 
 **Progressive autonomy.** Monad makes agent actions, tool calls, and approval requests
 visible. You can begin with close supervision and grant broader autonomy only where
 the task and environment justify it.
 
-**Extensible and contained.** Skills, atom packs, MCP servers, external agent
-runtimes, and peer delegation expand what an agent can do. Approval gates and native
-OS sandbox backends constrain how those capabilities execute.
+**Extensible and contained.** Skills, atom packs, Workspace Experiences, MCP
+servers, external agent runtimes, and peer delegation expand how agents work.
+Approval gates and native OS sandbox backends constrain how those capabilities
+execute.
 
 ## Features
 
@@ -83,7 +137,9 @@ OS sandbox backends constrain how those capabilities execute.
 | [Models](docs/usage/model-providers.md) | One model gateway for hosted and local providers, with profiles and per-role selection. |
 | [Skills](docs/usage/skills.md) | Portable `SKILL.md` capability packets that agents can discover and follow. |
 | [Atom packs](docs/internals/atoms.md) | Installable extensions for channels, providers, skills, MCP servers, commands, and hooks. |
-| [Channels](docs/usage/channels.md) | Reach the same local agent through Telegram, Discord, Slack, and other adapters. |
+| [Workspace Experiences](docs/concepts.md#workspace-experience) | Tailored interfaces for coding, research, operations, content, and other workflows over shared runtime state. |
+| [Monad Mesh](docs/concepts.md#monad-mesh) | Compose multiple agents into a team with shared tasks, artifacts, approvals, and collaboration state. |
+| [Channels](docs/usage/channels.md) | Reach the same agent or team through Telegram, Discord, Slack, and other adapters. |
 | [Sandboxing](docs/usage/sandbox-backends.md) | Native process isolation and controlled network egress on macOS, Linux, and Windows. |
 | [Editor agents](docs/internals/acp.md) | Use Monad as an ACP agent in editors, or delegate work to another ACP runtime. |
 | [Peer federation](docs/internals/peer-federation.md) | Delegate a task to another Monad daemon that uses its own tools and credentials. |
@@ -91,26 +147,33 @@ OS sandbox backends constrain how those capabilities execute.
 ## How it works
 
 ```text
- Web UI       CLI        TUI       Editors       IM channels
-    │          │          │           │               │
-    └──────────┴──────────┴───────────┴───────────────┘
-                              │
-                    ┌─────────▼─────────┐
-                    │  Local Monad      │
-                    │  daemon           │
-                    ├───────────────────┤
-                    │ Sessions          │
-                    │ Approvals & tools │
-                    │ Models & skills   │
-                    │ Local storage     │
-                    └─────────┬─────────┘
-                              │
-                    Configured model provider
+ Web UI      CLI      TUI      Editors      APIs      IM channels
+    │         │        │          │          │             │
+    └─────────┴────────┴──────────┴──────────┴─────────────┘
+                                │
+               Workspace Experiences
+           coding · research · operations · content
+                                │
+                  ┌─────────────▼─────────────┐
+                  │       Monad Runtime       │
+                  │   long-running daemon     │
+                  ├───────────────────────────┤
+                  │ Monad Agent │ Monad Mesh  │
+                  ├───────────────────────────┤
+                  │ Identity & permissions    │
+                  │ Tasks, state & artifacts  │
+                  │ Approvals & audit history │
+                  │ Models, skills & tools    │
+                  │ Local storage             │
+                  └─────────────┬─────────────┘
+                                │
+                    Configured model providers
 ```
 
-The daemon is the single owner of runtime state. Clients connect over REST, SSE,
-WebSocket, or a local Unix-domain socket; the daemon coordinates sessions, streams
-events, applies policy, and calls the model provider selected by the user.
+The daemon is the single owner of runtime state. Clients and Workspace Experiences
+connect over REST, SSE, WebSocket, or a local Unix-domain socket; the daemon runs
+agents, coordinates work, streams events, applies policy, and calls the model
+providers selected by the user.
 
 For the complete startup graph and transport boundaries, see
 [daemon architecture](docs/internals/daemon-architecture.md) and
@@ -213,8 +276,8 @@ architecture, conventions, testing, security, and DX guidance live under
 | Start here | Description |
 |---|---|
 | [Documentation map](docs/README.md) | Every user, internals, engineering, and design document. |
-| [Concepts](docs/concepts.md) | A layer-by-layer glossary of Monad's first-class concepts. |
-| [Product](docs/product.md) | Product purpose, audiences, principles, and brand direction. |
+| [Concepts](docs/concepts.md) | Runtime, Agent, Mesh, Workspace Experience, capability, and federation concepts by layer. |
+| [Product](docs/product.md) | Agent Team Runtime positioning, product forms, experience principles, boundaries, audiences, and brand. |
 | [CLI reference](docs/usage/cli.md) | Commands, flags, aliases, outputs, and scripting contracts. |
 | [Runtime internals](docs/internals/runtime.md) | Transport, configuration, remote access, and security boundaries. |
 | [Changelog](CHANGELOG.md) | Notable changes across releases. |

@@ -2,31 +2,123 @@
 
 ## Core idea
 
-Monad is an AI-native development environment built to make human-machine
-collaboration the default mode of work, not the exception.
+**Monad is a daemon-first agent team runtime with headless architecture.**
 
-- **Human intent, machine execution** — users own direction and judgment; AI owns
-  implementation and verification.
-- **Context is the product** — good tools aren't just feature lists; they surface
-  the right context at the right moment.
-- **Progressive autonomy** — the system moves from assistant to autonomous actor
-  one step at a time, always keeping the user informed and in control.
+Models can reason. Agents can act. A team needs a runtime. Monad is the durable
+operating layer that keeps agents available, governs what they can do, preserves
+their work, and lets humans supervise them through interfaces shaped for the job.
+
+- **Human intent, agent execution** — people own direction, judgment, and
+  accountability; agents carry out work within explicit capabilities and policy.
+- **The runtime owns continuity** — agents, tasks, collaboration state, artifacts,
+  approvals, and audit history survive beyond any client window.
+- **The experience follows the work** — the same runtime can be projected into
+  interfaces designed for coding, research, operations, content, or another domain.
+- **Autonomy is progressive** — responsibility expands only as identity,
+  permissions, observability, recovery, and human approval make it safe to do so.
+
+## Agent team runtime responsibilities
+
+Monad exists to answer the operational questions behind an agent team:
+
+1. **Who keeps the agents running?** A long-lived daemon operates independently of
+   the Web UI, CLI, TUI, editors, APIs, and messaging channels.
+2. **Who gives them identity, capabilities, and permissions?** The runtime resolves
+   roles, model routes, skills, tools, credentials, sandbox boundaries, and approval
+   policy.
+3. **Who assigns and restores their work?** Runtime-owned sessions and task state
+   support delegation, interruption, resumption, branching, and inspection.
+4. **Who preserves collaboration state, artifacts, and audit history?** Agents and
+   humans work from one durable source of truth instead of isolated transcripts.
+5. **Who brings humans into approval decisions?** Tool calls cross an explicit
+   approval boundary before high-risk actions execute.
+6. **Who projects the same team into different work experiences?** Workspace
+   Experiences tailor information architecture and controls without owning a second
+   copy of runtime state.
+
+Daemon-first and headless are therefore product properties, not only implementation
+choices. Clients can close, reconnect, or be replaced without becoming the owner of
+the agents or their work.
+
+## Product forms
+
+Monad exposes two product forms over one runtime:
+
+### Monad Agent
+
+The focused, single-agent form. Monad Agent gives an individual a direct working
+relationship with one agent while retaining persistent context, controlled
+capabilities, approvals, recovery, auditability, and access from every client
+surface.
+
+### Monad Mesh
+
+The agent-team form. Monad Mesh coordinates multiple agents through explicit roles,
+delegation, parallel work, shared context and artifacts, human approvals, and
+recoverable collaboration state.
+
+Monad Agent and Monad Mesh are not separate runtimes or data silos. They share the
+same daemon, identities, policy, capability system, task state, storage, approvals,
+and audit history. A user can begin with one agent and compose a team without moving
+the work into another product.
+
+## Workspace Experiences
+
+A Workspace Experience is a scenario-specific projection of agents, tasks,
+artifacts, approvals, and collaboration state from the shared runtime. It is more
+than a theme, but it is not a separate application or source of truth.
+
+- **Shared runtime, tailored experience** — every experience reads and acts on the
+  same runtime objects.
+- **Scenario-specific interaction** — coding may center repositories, diffs, and
+  terminals; research may center sources, evidence, and reports; operations and
+  content workflows can expose different structures and controls.
+- **Composable and switchable** — Atom Packs can contribute experiences, and users
+  can change the experience without migrating the underlying team or work state.
 
 ## Users
 
-Three overlapping groups who all share the same UI surface:
+Three overlapping groups who share one runtime but may use different experiences:
 
-1. **Everyday AI agent users** — non-technical or semi-technical people who want a capable local AI agent experience. They care about the chat flow being smooth and approachable. Settings complexity should stay out of their way.
-2. **Developer power users** — engineers who run agentic sessions, configure model providers, wire up MCP servers, install atom packs, and read tool-approval events. Information density matters; they trust the tool with real work.
-3. **Team operators** — people who set up monad for others, manage approval rules, configure channels (Telegram, etc.), and monitor sessions. Onboarding, policy UI, and observability are their primary surfaces.
+1. **Everyday Agent users** — people who want a capable, approachable Monad Agent
+   experience. Runtime and configuration complexity should stay out of their way.
+2. **Developer power users** — engineers who run long-lived work, configure model
+   providers and MCP servers, install Atom Packs, inspect tool events, and compose
+   specialist agents. Information density and controllability matter.
+3. **Team operators** — people who organize Monad Mesh teams, manage identity and
+   approval policy, configure channels, recover tasks, and monitor collaboration.
+   Observability, governance, and Workspace Experience customization are primary.
 
-Context: always local, often running alongside code or a terminal. The browser window lives next to other work.
+Context is local-first and spans several surfaces. The runtime may continue
+working while the browser is closed, an editor is focused, or a channel is the only
+active human interface.
 
 ## Product Purpose
 
-monad runs as a local daemon that serves agentic AI sessions — with a REST + SSE API, CLI, and this web UI. It keeps all state local (nothing goes to a cloud service), binds loopback only by default, and is designed to be a power tool that non-experts can still use.
+The `monad` daemon runs Agent and Mesh workloads and exposes them through local APIs
+and client surfaces. It keeps Monad-owned state local, binds loopback only by
+default, and remains useful as both an approachable Agent product and a deeply
+configurable team runtime. Requests to configured model providers still leave the
+machine; the runtime, policy, credentials, and local state around those calls remain
+under the user's control.
 
-Success looks like: any user, regardless of technical background, can start a session, understand what the agent is doing, and trust the output — while power users can configure every dial without leaving the browser.
+Success means a user can start with one agent, understand and approve what it is
+doing, compose additional agents when the work benefits from a team, recover that
+work after interruption, and choose an experience suited to the scenario without
+splitting state across products.
+
+## Product boundaries
+
+Monad already provides the foundations of this model: a daemon/API boundary,
+persistent sessions, Workplace collaboration, external-agent and ACP delegation,
+peer federation, approval gates, activity records, and Workspace Experience
+extensions. These are enabling primitives for Monad Mesh.
+
+The product positioning does not claim that every Mesh contract is complete. In
+particular, it does not imply arbitrary distributed scheduling, universal task and
+artifact schemas, or cross-owner identity and trust. Cross-owner collaboration
+remains Monadix territory. Product documentation must distinguish present
+capabilities from the direction they support.
 
 ## Brand Personality
 
@@ -48,11 +140,23 @@ Emotional goals:
 
 ## Design Principles
 
-1. **Warm precision** — the UI should feel warm and inviting (generous whitespace, soft surfaces, considered color) without sacrificing information density and keyboard-first efficiency. Warmth is achieved through quality and care, not decorative friendliness.
-2. **Progressive depth** — the first thing you see on any screen should be learnable by a non-technical user. The full depth (model config, MCP wiring, approval policies, atom conflicts) should be there and reachable, but it shouldn't crowd the primary experience.
-3. **Agency, clearly surfaced** — when the agent takes an action or asks for approval, the UI makes it impossible to miss and easy to understand. Trust is built by clarity about what's happening and why.
-4. **One surface, two speeds** — the same UI serves a casual afternoon session and a 6-hour deep-work agentic coding run. Design for both cadences: smooth and frictionless at low stakes, dense and precise when things get serious.
-5. **Earned craft** — every detail should feel intentional, not decorated. No gradients for gradient's sake, no animation for animation's sake. The interface earns the user's trust through consistency, contrast, and precision.
+1. **Warm precision** — each experience should feel inviting without sacrificing
+   information density and keyboard-first efficiency. Warmth comes from quality and
+   care, not decorative friendliness.
+2. **Progressive depth** — Monad Agent should be learnable without hiding the full
+   depth needed to configure models, capabilities, Mesh roles, approval policy, and
+   extension conflicts.
+3. **Team state, clearly surfaced** — users should be able to see which agent is
+   acting, which task it owns, what changed, which artifacts were produced, and
+   where human judgment is required.
+4. **One runtime, tailored experiences** — scenario-specific interfaces may differ
+   substantially, but they must preserve shared identity, task, artifact, approval,
+   and audit semantics.
+5. **Continuity over client state** — closing or switching a client must not make
+   the work disappear. Experiences reconnect to runtime-owned state.
+6. **Earned craft** — every detail should feel intentional, not decorated. The
+   interface earns trust through consistency, contrast, precision, and predictable
+   behavior.
 
 ## Accessibility & Inclusion
 

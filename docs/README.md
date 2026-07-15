@@ -16,8 +16,8 @@ by reference rather than duplication.
 
 | Doc | What it covers |
 |---|---|
-| [concepts.md](concepts.md) | Glossary of every first-class concept in monad, organized by layer, cross-linked to the deeper docs. |
-| [product.md](product.md) | Product positioning: core idea, target users, and brand. |
+| [concepts.md](concepts.md) | Layered glossary for Monad Runtime, Monad Agent, Monad Mesh, Workspace Experiences, capabilities, extensions, federation, and client surfaces. |
+| [product.md](product.md) | Agent Team Runtime positioning, product responsibilities, Agent and Mesh forms, Workspace Experience principles, audiences, boundaries, and brand. |
 
 ## Usage — user documentation
 
@@ -100,7 +100,7 @@ Norms shared by human contributors and coding agents.
 
 | Doc | What it covers |
 |---|---|
-| [README.md](../README.md) | What monad is, quick start, pointers. |
+| [README.md](../README.md) | Agent Team Runtime overview, quick start, product forms, Workspace Experiences, and pointers. |
 | [CONTRIBUTING.md](../CONTRIBUTING.md) | Local setup, required checks, commit and PR workflow. |
 | [SECURITY.md](../SECURITY.md) | How to report a vulnerability; scope. |
 | [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) | Community standards. |
