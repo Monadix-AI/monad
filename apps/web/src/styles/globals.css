@@ -40,6 +40,46 @@
   }
 }
 
+@layer components {
+  [cmdk-overlay] {
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+    background: rgb(var(--backgroundColor-transparent) / 0.24);
+    backdrop-filter: blur(2px);
+  }
+
+  .command-palette-dialog {
+    transform-origin: 50% 0;
+    animation: command-palette-enter 160ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .command-palette-group [cmdk-group-heading] {
+    padding: 12px 12px 7px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--muted-foreground);
+    text-transform: uppercase;
+  }
+
+  @keyframes command-palette-enter {
+    0% {
+      opacity: 0;
+      filter: blur(2px);
+    }
+    100% {
+      opacity: 1;
+      filter: blur(0);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .command-palette-dialog {
+      animation: none;
+    }
+  }
+}
+
 /* ── /init onboarding — eye candy, warmth & microinteractions ──────────────────
    A full-bleed beach scene sits behind a glassmorphic wizard card. The motion
    here is intentionally gentle: a slow Ken-Burns drift on the photo, a soft

@@ -52,17 +52,14 @@ const switchSessionCommandAtom = defineCommand({
   }
 });
 
-const endCommandAtom = defineCommand({
-  name: 'end',
-  description: 'End the current conversation and start fresh',
-  descriptionKey: 'cmd.end.desc',
+const archiveCommandAtom = defineCommand({
+  name: 'archive',
+  description: 'Archive the current conversation',
+  descriptionKey: 'cmd.archive.desc',
   group: 'Conversation',
   async run(ctx) {
-    const { sessionId } = await ctx.newSession();
-    return {
-      message: ctx.t('cmd.end.done'),
-      effect: { type: 'session-created', sessionId }
-    };
+    await ctx.archiveSession();
+    return { message: ctx.t('cmd.archive.done') };
   }
 });
 
@@ -458,7 +455,7 @@ export const BUILTIN_COMMANDS: CommandDefinition[] = [
   newSessionCommandAtom,
   sessionsCommandAtom,
   switchSessionCommandAtom,
-  endCommandAtom,
+  archiveCommandAtom,
   resetCommandAtom,
   compactCommandAtom,
   memoryCommandAtom,

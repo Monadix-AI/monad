@@ -25,6 +25,7 @@ export function createSessionModule(deps: SessionDeps) {
               origin: a.origin
             }),
           reset: (a) => lifecycle.reset(a),
+          update: (a) => lifecycle.update(a),
           list: (a) => lifecycle.list(a),
           setWorkspace: (a) => lifecycle.setWorkspace(a)
         }

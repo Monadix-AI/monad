@@ -34,6 +34,7 @@ function fakeCtx(args: string, servicesOver: ServicesOver = {}): CommandRunConte
       switchSession: async (t) => sessions[Number(t) - 1] ?? sessions.find((s) => s.sessionId === t) ?? null
     },
     services: {
+      archiveSession: async () => {},
       resetHistory: async () => ({ clearedCount: 3 }),
       compact: async () => ({ compacted: 1 }),
       consolidate: async () => ({ level: 1, l1Scopes: 0, nodes: 0, edges: 0, prunedEdges: 0, laws: 0, lawScopes: 0 }),
@@ -74,6 +75,24 @@ describe('i18n: command replies follow the active locale', () => {
     // English still works through the same path (default locale)
     const enNew = await dispatchCommand(r, '/new', (a) => fakeCtx(a, { t: enT }));
     expect(enNew?.message).toBe('🆕 Started a new conversation.');
+  });
+});
+
+describe('/archive', () => {
+  test('archives the current session without creating a new session effect', async () => {
+    const r = seededCommandRegistry();
+    let archivedSessionId: string | undefined;
+    const res = await dispatchCommand(r, '/archive', (a) =>
+      fakeCtx(a, {
+        archiveSession: async (sid) => {
+          archivedSessionId = sid;
+        }
+      })
+    );
+
+    expect(archivedSessionId).toBe('ses_a00000000000');
+    expect(res?.message).toBe('✅ Archived the current conversation.');
+    expect(res?.effect).toBeUndefined();
   });
 });
 

@@ -17,12 +17,12 @@ interface WorkspaceSidebarState {
 }
 
 interface WorkspaceSidebarActions {
+  archiveChatSession: (sessionId: SessionId) => void | Promise<void>;
+  archiveProjectSession: (projectId: string, sessionId: SessionId) => void | Promise<void>;
   createChatSession: () => void;
   createProject: () => void;
   createProjectSession: (projectId: string) => void;
-  deleteChatSession: (sessionId: SessionId) => void | Promise<void>;
   deleteProject: (id: string) => void | Promise<void>;
-  deleteProjectSession: (projectId: string, sessionId: SessionId) => void | Promise<void>;
   openInbox: () => void;
   openProject: (id: string) => void;
   openProjectSession: (projectId: string, sessionId: SessionId) => void;

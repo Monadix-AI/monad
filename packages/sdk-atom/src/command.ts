@@ -88,6 +88,8 @@ export interface CommandRunContext {
   listSessions(): Promise<CommandSessionInfo[]>;
   /** Switch the active session by 1-based index or session id; null when no match. */
   switchSession(target: string): Promise<CommandSessionInfo | null>;
+  /** Archive the current session. */
+  archiveSession(): Promise<void>;
 
   /** Context management. */
   resetHistory(): Promise<{ clearedCount: number }>;

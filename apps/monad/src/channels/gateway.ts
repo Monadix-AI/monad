@@ -45,6 +45,11 @@ export async function createChannelGateway(deps: {
           if (!gw?.reset) throw new Error('channel gateway used before session wiring');
           return gw.reset(a);
         },
+        update: (a) => {
+          const gw = sessionGateway();
+          if (!gw?.update) throw new Error('channel gateway used before session wiring');
+          return gw.update(a);
+        },
         setWorkspace: (a) => {
           const gw = sessionGateway();
           if (!gw?.setWorkspace) throw new Error('channel gateway used before session wiring');
