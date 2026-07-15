@@ -14,8 +14,6 @@ import {
 
 export const EMPTY_UI_ITEMS: UIItem[] = [];
 
-export const viewMessageId = (item: ViewItem): string => item.id;
-
 const SEGMENT_COLORS: Record<string, string> = {
   customAgents: 'var(--success)',
   mcpTools: 'var(--info)',

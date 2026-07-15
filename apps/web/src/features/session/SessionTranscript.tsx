@@ -1,4 +1,4 @@
-import type { ApprovalScope } from '@monad/protocol';
+import type { ApprovalScope, SessionId } from '@monad/protocol';
 import type { ViewItem } from './chat-view-items';
 import type { PendingApproval, SessionIdentityModel, SessionTranscriptModel } from './session-route-contract';
 
@@ -16,6 +16,7 @@ import { useProvenanceQuery } from '@monad/client-rtk';
 import { Button, cn, Textarea } from '@monad/ui';
 import { activeMessageOutlineIds, MessageOutline } from '@monad/ui/components/MessageOutline';
 import { VirtualList } from '@monad/ui/components/VirtualList';
+import { useFirstItemIndex } from '@monad/ui/hooks/use-first-item-index';
 import { type CSSProperties, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useT } from '#/components/I18nProvider';
@@ -24,8 +25,11 @@ import { approvalActionScopes } from './approval-display';
 import { Message } from './ChatMessage';
 import {
   branchSourceSessionName,
+  type CompactTranscriptTurnViewItem,
+  compactTranscriptTurns,
   isBranchSourceItem,
   isCompactCommandItem,
+  isCompactTranscriptTurnItem,
   isMemorySummaryItem,
   isToolItem
 } from './chat-view-items';
@@ -132,6 +136,11 @@ export function SessionTranscript({
       ),
     [model.viewMessages.length, t]
   );
+  const renderedMessages = useMemo(
+    () => (model.renderMode === 'compact' ? compactTranscriptTurns(model.viewMessages) : model.viewMessages),
+    [model.renderMode, model.viewMessages]
+  );
+  const firstItemIndex = useFirstItemIndex(renderedMessages, sessionMessageKey);
   const renderItem = useCallback(
     (message: ViewItem) => (
       <div
@@ -167,6 +176,15 @@ export function SessionTranscript({
             compactStatus={message.status}
             item={message.summary ? { summary: message.summary } : undefined}
             pending={message.status === 'pending'}
+          />
+        ) : isCompactTranscriptTurnItem(message) ? (
+          <CompactTranscriptTurn
+            assistantLabel={identity.assistantLabel}
+            item={message}
+            onBranch={model.onBranch}
+            onRestore={model.onRestore}
+            onSkillPreview={onSkillPreview}
+            sessionId={identity.currentSessionId}
           />
         ) : (
           <Message
@@ -218,11 +236,11 @@ export function SessionTranscript({
       <VirtualList
         ariaLive="polite"
         controlRef={model.transcriptRef}
-        firstItemIndex={model.firstItemIndex}
+        firstItemIndex={firstItemIndex}
         footer={footer}
         getKey={sessionMessageKey}
         header={header}
-        items={model.viewMessages}
+        items={renderedMessages}
         onAtBottomChange={setAtBottom}
         onEndReached={model.onEndReached}
         onRangeChange={setVisibleRange}
@@ -263,6 +281,67 @@ export function SessionTranscript({
           </Button>
         ))}
     </div>
+  );
+}
+
+function CompactTranscriptTurn({
+  assistantLabel,
+  item,
+  onBranch,
+  onRestore,
+  onSkillPreview,
+  sessionId
+}: {
+  assistantLabel: string;
+  item: CompactTranscriptTurnViewItem;
+  onBranch?: (messageId: string, role: 'user' | 'assistant') => void;
+  onRestore?: (messageId: string, text: string) => void;
+  onSkillPreview: (id: string) => void;
+  sessionId: SessionId;
+}) {
+  const running = item.status === 'running';
+  return (
+    <details className="rounded-lg border bg-card">
+      <summary className="grid cursor-pointer gap-2 px-4 py-3 marker:text-muted-foreground">
+        <span className="font-mono text-muted-foreground text-xs uppercase">
+          {running ? 'Running' : 'Completed'} for {item.durationLabel}
+          {running ? '…' : ''}
+        </span>
+        {item.summary ? <span className="whitespace-pre-wrap text-sm">{item.summary}</span> : null}
+      </summary>
+      <div className="grid gap-4 border-t px-4 py-4">
+        {item.details.map((detail) =>
+          isToolItem(detail) ? (
+            <ToolStepView
+              key={detail.id}
+              sessionId={sessionId}
+              step={detail}
+            />
+          ) : isMemorySummaryItem(detail) ? (
+            <MemorySummaryDivider
+              item={detail}
+              key={detail.id}
+            />
+          ) : isCompactCommandItem(detail) ? (
+            <MemorySummaryDivider
+              compactStatus={detail.status}
+              item={detail.summary ? { summary: detail.summary } : undefined}
+              key={detail.id}
+              pending={detail.status === 'pending'}
+            />
+          ) : isCompactTranscriptTurnItem(detail) || isBranchSourceItem(detail) ? null : (
+            <Message
+              assistantLabel={assistantLabel}
+              key={detail.id}
+              msg={detail}
+              onBranch={onBranch}
+              onRestore={onRestore}
+              onSkillPreview={onSkillPreview}
+            />
+          )
+        )}
+      </div>
+    </details>
   );
 }
 

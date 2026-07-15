@@ -1243,6 +1243,91 @@ test('observation panel renders show history as the first list placeholder when 
   expect(html.indexOf('data-observation-list-placeholder="history"')).toBeGreaterThan(html.indexOf('role="log"'));
 });
 
+test('observation panel compact mode folds turn details and shows only the final output summary', () => {
+  const html = renderToStaticMarkup(
+    React.createElement(ExternalAgentObservationPanel, {
+      defaultRenderMode: 'compact',
+      onStop: () => {},
+      stream: {
+        id: 'exa_codex0000000',
+        agentName: 'codex',
+        provider: 'codex',
+        tag: 'Codex',
+        status: 'ok',
+        output: '',
+        items: [
+          { id: 'evt_1', kind: 'turn-start', streaming: false, at: '2026-07-15T00:00:00.000Z' },
+          {
+            id: 'evt_2',
+            kind: 'reasoning',
+            streaming: false,
+            text: 'private thinking',
+            at: '2026-07-15T00:00:12.000Z'
+          },
+          {
+            id: 'evt_3',
+            kind: 'assistant-message',
+            streaming: false,
+            text: 'first draft output',
+            at: '2026-07-15T00:00:30.000Z'
+          },
+          {
+            id: 'evt_4',
+            kind: 'assistant-message',
+            streaming: false,
+            text: 'final answer output',
+            at: '2026-07-15T00:01:10.000Z'
+          },
+          {
+            id: 'evt_5',
+            kind: 'turn-end',
+            streaming: false,
+            reason: 'completed',
+            at: '2026-07-15T00:01:12.000Z'
+          }
+        ]
+      }
+    })
+  );
+
+  expect(html).toContain('Completed for 1m12s');
+  expect(html).toContain('final answer output');
+  expect(html).toContain('Show turn details');
+  expect(html.indexOf('final answer output')).toBeLessThan(html.indexOf('private thinking'));
+});
+
+test('observation panel accepts a controlled render mode command', () => {
+  const html = renderToStaticMarkup(
+    React.createElement(ExternalAgentObservationPanel, {
+      onRenderModeChange: () => {},
+      onStop: () => {},
+      renderMode: 'compact',
+      stream: {
+        id: 'exa_codex0000000',
+        agentName: 'codex',
+        provider: 'codex',
+        tag: 'Codex',
+        status: 'running',
+        output: '',
+        items: [
+          { id: 'evt_1', kind: 'turn-start', streaming: false, at: '2026-07-15T00:00:00.000Z' },
+          {
+            id: 'evt_2',
+            kind: 'assistant-message',
+            streaming: false,
+            text: 'live output',
+            at: '2026-07-15T00:00:05.000Z'
+          }
+        ]
+      }
+    })
+  );
+
+  expect(html).toContain('Running for');
+  expect(html).toContain('live output');
+  expect(html).toContain('aria-pressed="true"');
+});
+
 test('Claude Code observation projects transcript user events as user message cards', () => {
   const output = JSON.stringify({
     parentUuid: '8c04922a-bbb2-4a25-a71c-8fdc0154f58e',

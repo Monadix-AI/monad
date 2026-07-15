@@ -26,6 +26,7 @@ test('ships the expected first-party commands', () => {
       'reset',
       'sessions',
       'switch',
+      'view',
       'why',
       'workdir'
     ].sort()
@@ -55,6 +56,7 @@ test('every first-party command has the expected product group', () => {
     reset: 'Context',
     sessions: 'Conversation',
     switch: 'Conversation',
+    view: 'Context',
     why: 'Memory',
     workdir: 'Runtime'
   });
@@ -107,4 +109,38 @@ test('model command localizes ambiguous bare model responses', async () => {
     }
   ]);
   expect(result).toEqual({ message: 'translated:cmd.model.ambiguous' });
+});
+
+test('view command switches the local observation render mode', async () => {
+  const view = BUILTIN_COMMANDS.find((c) => c.name === 'view');
+  const result = await view?.run(
+    {
+      args: 'compact',
+      sessionId: 'ses_test',
+      principalId: 'usr_test',
+      newSession: async () => ({ sessionId: 'ses_new' }),
+      listSessions: async () => [],
+      switchSession: async () => null,
+      resetHistory: async () => ({ clearedCount: 0 }),
+      compact: async () => ({ compacted: 0 }),
+      consolidate: async () => ({ level: 1, l1Scopes: 0, nodes: 0, edges: 0, laws: 0, prunedEdges: 0, lawScopes: 0 }),
+      explainBelief: async () => ({ matches: [] }),
+      checkMemory: async () => ({ flagged: 0 }),
+      listModels: async () => [],
+      setModel: async () => {},
+      setEffort: async () => {},
+      getWorkdir: async () => ({}),
+      setWorkdir: async () => ({}),
+      listCommands: async () => [],
+      handoff: async () => ({ sessionId: 'ses_handoff' }),
+      t: (key) => key,
+      log: () => {}
+    },
+    'compact'
+  );
+
+  expect(result).toEqual({
+    message: 'cmd.view.compact',
+    effect: { type: 'observation-render-mode-changed', mode: 'compact' }
+  });
 });

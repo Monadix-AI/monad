@@ -33,6 +33,7 @@ export interface Msg {
   pending?: boolean;
   label?: string;
   error?: boolean;
+  seq?: string;
   /** This assistant segment is still streaming — render a live cursor. */
   streaming?: boolean;
   type?: string;

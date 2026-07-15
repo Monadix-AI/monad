@@ -23,7 +23,7 @@ import { rateOk, serialize } from '#/channels/flow-control.ts';
 import { errMsg, redact, rememberSeen, resolveExtra } from '#/channels/helpers.ts';
 import { type MirrorContext, subscribeMirror } from '#/channels/mirror.ts';
 import { ChannelPairings } from '#/channels/pairing.ts';
-import { createRenderer } from '#/channels/render.ts';
+import { type ChannelRenderMode, createRenderer } from '#/channels/render.ts';
 import {
   accessDecision,
   channelOriginExt,
@@ -50,6 +50,8 @@ export class ChannelService {
   /** Sessions currently running a Telegram-inbound dispatch — the EventBus mirror skips these
    *  to prevent double-sending (sendInline already routes events via a direct renderer sink). */
   private readonly activeDispatches = new Set<string>();
+  /** Per-channel-conversation presentation mode. Compact suppresses token previews on IM channels. */
+  private readonly renderModes = new Map<string, ChannelRenderMode>();
   /** Unsubscribe function for the control-bus subscription that cleans up mirrors on session deletion. */
   private controlUnsubscribe: (() => void) | undefined;
   private readonly pairings: ChannelPairings;
@@ -227,7 +229,8 @@ export class ChannelService {
       activeDispatches: this.activeDispatches,
       bus: this.deps.bus,
       log: this.deps.log,
-      t: this.channelT
+      t: this.channelT,
+      getRenderMode: (channelId, conversationKey) => this.getRenderMode(channelId, conversationKey)
     };
   }
 
@@ -238,6 +241,18 @@ export class ChannelService {
     adapter: ChannelAdapter
   ): void {
     subscribeMirror(this.mirrorContext(), channelId, conversationKey, sessionId, adapter);
+  }
+
+  private renderModeKey(channelId: string, conversationKey: string): string {
+    return `${channelId}\0${conversationKey}`;
+  }
+
+  private getRenderMode(channelId: string, conversationKey: string): ChannelRenderMode {
+    return this.renderModes.get(this.renderModeKey(channelId, conversationKey)) ?? 'detail';
+  }
+
+  private setRenderMode(channelId: string, conversationKey: string, mode: ChannelRenderMode): void {
+    this.renderModes.set(this.renderModeKey(channelId, conversationKey), mode);
   }
 
   private async disconnectOne(id: ChannelId): Promise<void> {
@@ -324,7 +339,8 @@ export class ChannelService {
       chatId: m.chatId,
       threadId: m.threadId,
       log: (level, msg) => this.deps.log[level](`[${c.id}] ${msg}`),
-      t: this.channelT
+      t: this.channelT,
+      renderMode: this.getRenderMode(c.id, key)
     });
     let finalMessage: AgentMessagePayload | undefined;
     try {
@@ -354,7 +370,9 @@ export class ChannelService {
       resolveSession: (c, key, label, agentId, role) => this.resolveSession(c, key, label, agentId, role),
       startNewSession: (c, key, label, agentId, role) => this.startNewSession(c, key, label, agentId, role),
       registerMirror: (channelId, conversationKey, sessionId, adapter) =>
-        this.registerMirror(channelId, conversationKey, sessionId, adapter)
+        this.registerMirror(channelId, conversationKey, sessionId, adapter),
+      getRenderMode: (channelId, conversationKey) => this.getRenderMode(channelId, conversationKey),
+      setRenderMode: (channelId, conversationKey, mode) => this.setRenderMode(channelId, conversationKey, mode)
     };
   }
 

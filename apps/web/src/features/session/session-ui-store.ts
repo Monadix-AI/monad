@@ -1,6 +1,7 @@
 import type { SessionId } from '@monad/protocol';
 import type { SetStateAction } from 'react';
 import type { SkillEditorState } from '#/features/studio/skills-settings/types';
+import type { SessionTranscriptRenderMode } from './session-route-contract';
 
 import { create } from 'zustand';
 
@@ -17,6 +18,7 @@ export interface SessionUiState {
   accessMode: 'auto' | 'ask';
   atBottom: boolean;
   activeSkill: number;
+  transcriptRenderMode: SessionTranscriptRenderMode;
   hiddenViewItemKeysBySession: HiddenViewMap;
   initialUserMessagesBySession: InitialUserMessageMap;
   skillPreview: SkillEditorState | null;
@@ -30,6 +32,7 @@ export interface SessionUiState {
   setAccessMode: (mode: 'auto' | 'ask') => void;
   setAtBottom: (value: boolean) => void;
   setActiveSkill: (skill: SetStateAction<number>) => void;
+  setTranscriptRenderMode: (mode: SessionTranscriptRenderMode) => void;
   setHiddenViewItemKeysBySession: (updater: (prev: HiddenViewMap) => HiddenViewMap) => void;
   setSkillPreview: (preview: SkillEditorState | null) => void;
   setSkillMenuDismissed: (dismissed: SetStateAction<boolean>) => void;
@@ -40,6 +43,7 @@ export const useSessionUiStore = create<SessionUiState>()((set) => ({
   accessMode: 'auto',
   atBottom: true,
   activeSkill: 0,
+  transcriptRenderMode: 'detail',
   hiddenViewItemKeysBySession: {},
   initialUserMessagesBySession: {},
   skillPreview: null,
@@ -80,6 +84,7 @@ export const useSessionUiStore = create<SessionUiState>()((set) => ({
     set((state) => ({
       activeSkill: typeof skill === 'function' ? skill(state.activeSkill) : skill
     })),
+  setTranscriptRenderMode: (mode) => set({ transcriptRenderMode: mode }),
   setHiddenViewItemKeysBySession: (updater) =>
     set((state) => ({
       hiddenViewItemKeysBySession: updater(state.hiddenViewItemKeysBySession)

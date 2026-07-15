@@ -48,8 +48,7 @@ import {
   buildSessionContextUsage,
   buildViewMessages,
   createTextareaKeyDownHandler,
-  EMPTY_UI_ITEMS,
-  viewMessageId
+  EMPTY_UI_ITEMS
 } from './session-view';
 import { useSessionModelOptions } from './use-session-model-options';
 
@@ -61,6 +60,8 @@ type UseSessionRouteModelParams = {
   sessions: Session[];
   voiceModelConfigured: boolean;
 };
+
+const sessionViewItemKey = (item: ViewItem): string => item.id;
 
 export function useSessionRouteModel({
   agents,
@@ -93,6 +94,8 @@ export function useSessionRouteModel({
   const input = useSessionUiStore((state) => state.input);
   const activeSkill = useSessionUiStore((state) => state.activeSkill);
   const applyCommandInsert = useSessionUiStore((state) => state.applyCommandInsert);
+  const transcriptRenderMode = useSessionUiStore((state) => state.transcriptRenderMode);
+  const setTranscriptRenderMode = useSessionUiStore((state) => state.setTranscriptRenderMode);
   const clearComposerInput = useSessionUiStore((state) => state.clearComposerInput);
   const setActiveSkill = useSessionUiStore((state) => state.setActiveSkill);
   const skillMenuDismissed = useSessionUiStore((state) => state.skillMenuDismissed);
@@ -302,7 +305,7 @@ export function useSessionRouteModel({
       }),
     [visibleHistory, visibleLiveItems, optimistic, draftMessages, commandPending, transcript.mode]
   );
-  const firstItemIndex = useFirstItemIndex(viewMessages, viewMessageId);
+  const firstItemIndex = useFirstItemIndex(viewMessages, sessionViewItemKey);
   const deepLinkMsg = useShellSearchParam('msg');
   const openAtMessage = transcript.openAtMessage;
   const pendingScrollKeyRef = useRef<string | null>(null);
@@ -449,6 +452,7 @@ export function useSessionRouteModel({
               onStartReached: transcript.loadOlder,
               pendingApprovals,
               pendingClarifications,
+              renderMode: transcriptRenderMode,
               transcriptRef,
               viewMessages
             },
@@ -477,7 +481,9 @@ export function useSessionRouteModel({
             inspector: {
               items: inspectorItems,
               onToggle: toggleSessionInspector,
-              open: showInspector
+              open: showInspector,
+              renderMode: transcriptRenderMode,
+              onRenderModeChange: setTranscriptRenderMode
             }
           }
         : null,
@@ -514,9 +520,11 @@ export function useSessionRouteModel({
       handleStop,
       handleSubmit,
       toggleSessionInspector,
+      transcriptRenderMode,
       transcribeAudio,
       pendingApprovals,
       pendingClarifications,
+      setTranscriptRenderMode,
       showInspector,
       skillMenuOpen,
       viewMessages,

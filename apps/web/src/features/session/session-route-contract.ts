@@ -14,6 +14,7 @@ import type { BranchSourceViewItem, ViewItem } from './chat-view-items';
 import type { SessionCommandMenuItem } from './command-menu';
 
 export const SESSION_ROUTE_MODEL_REGIONS = ['identity', 'transcript', 'composer', 'inspector'] as const;
+export type SessionTranscriptRenderMode = 'detail' | 'compact';
 
 export interface PendingApproval {
   display?: UIApprovalDisplay;
@@ -55,6 +56,7 @@ export interface SessionTranscriptModel {
   onStartReached: () => void;
   pendingApprovals: PendingApproval[];
   pendingClarifications: PendingClarification[];
+  renderMode: SessionTranscriptRenderMode;
   transcriptRef: RefObject<VirtualListHandle | null>;
   viewMessages: ViewItem[];
 }
@@ -83,6 +85,8 @@ export interface SessionInspectorModel {
   items: UIItem[];
   onToggle: () => void;
   open: boolean;
+  renderMode: SessionTranscriptRenderMode;
+  onRenderModeChange: (mode: SessionTranscriptRenderMode) => void;
 }
 
 export interface SessionRouteModel {

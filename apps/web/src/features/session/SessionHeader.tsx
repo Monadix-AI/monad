@@ -1,6 +1,6 @@
 import type { SessionIdentityModel, SessionInspectorModel } from './session-route-contract';
 
-import { Activity01Icon } from '@hugeicons/core-free-icons';
+import { Activity01Icon, ExpandParagraphIcon, ReduceParagraphIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { useProvenanceQuery } from '@monad/client-rtk';
 import { Button } from '@monad/ui';
@@ -39,19 +39,38 @@ export function SessionHeader({
             {t('web.chat.retry')}
           </Button>
         ) : (
-          <Button
-            aria-pressed={inspector.open}
-            className="gap-1.5"
-            onClick={inspector.onToggle}
-            size="sm"
-            variant={inspector.open ? 'secondary' : 'ghost'}
-          >
-            <HugeiconsIcon
-              className="size-3.5"
-              icon={Activity01Icon}
-            />
-            {t('web.inspector.toggle')}
-          </Button>
+          <div className="flex items-center gap-1.5">
+            <Button
+              aria-label={
+                inspector.renderMode === 'compact' ? t('web.chat.viewModeDetail') : t('web.chat.viewModeCompact')
+              }
+              aria-pressed={inspector.renderMode === 'compact'}
+              className="gap-1.5"
+              onClick={() => inspector.onRenderModeChange(inspector.renderMode === 'compact' ? 'detail' : 'compact')}
+              size="sm"
+              title={inspector.renderMode === 'compact' ? t('web.chat.viewModeCompact') : t('web.chat.viewModeDetail')}
+              variant={inspector.renderMode === 'compact' ? 'secondary' : 'ghost'}
+            >
+              <HugeiconsIcon
+                className="size-3.5"
+                icon={inspector.renderMode === 'compact' ? ExpandParagraphIcon : ReduceParagraphIcon}
+              />
+              {inspector.renderMode === 'compact' ? 'Compact' : 'Detail'}
+            </Button>
+            <Button
+              aria-pressed={inspector.open}
+              className="gap-1.5"
+              onClick={inspector.onToggle}
+              size="sm"
+              variant={inspector.open ? 'secondary' : 'ghost'}
+            >
+              <HugeiconsIcon
+                className="size-3.5"
+                icon={Activity01Icon}
+              />
+              {t('web.inspector.toggle')}
+            </Button>
+          </div>
         )}
       </div>
     </>

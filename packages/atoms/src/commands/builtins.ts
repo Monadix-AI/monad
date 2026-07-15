@@ -210,6 +210,23 @@ const clearCommandAtom = defineCommand({
   }
 });
 
+const viewCommandAtom = defineCommand({
+  name: 'view',
+  description: 'Switch local observation rendering mode',
+  descriptionKey: 'cmd.view.desc',
+  group: 'Context',
+  argHint: '<detail|compact>',
+  args: [{ name: 'mode', type: 'enum', values: [{ id: 'detail' }, { id: 'compact' }], required: true }],
+  async run(ctx) {
+    const mode = ctx.args.trim().toLowerCase();
+    if (mode !== 'detail' && mode !== 'compact') return { message: ctx.t('cmd.view.usage') };
+    return {
+      message: ctx.t(mode === 'compact' ? 'cmd.view.compact' : 'cmd.view.detail'),
+      effect: { type: 'observation-render-mode-changed', mode }
+    };
+  }
+});
+
 const modelCommandAtom = defineCommand({
   name: 'model',
   description: 'Show or switch the model for this conversation',
@@ -449,6 +466,7 @@ export const BUILTIN_COMMANDS: CommandDefinition[] = [
   whyCommandAtom,
   checkMemoryCommandAtom,
   clearCommandAtom,
+  viewCommandAtom,
   modelCommandAtom,
   effortCommandAtom,
   workdirCommandAtom,

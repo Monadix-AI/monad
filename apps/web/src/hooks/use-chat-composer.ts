@@ -18,7 +18,7 @@ import { messageTextFromParts, viewItemKey } from '#/features/session/chat-view-
 import { rewindUserMessage } from '#/features/session/rewind-user-message';
 import { useSessionUiStore } from '#/features/session/session-ui-store';
 
-type CommandEffect = { type: string; sessionId?: string; compacted?: number };
+type CommandEffect = { type: string; sessionId?: string; compacted?: number; mode?: 'detail' | 'compact' };
 
 const EMPTY_MESSAGES: Msg[] = [];
 const EMPTY_QUEUE: string[] = [];
@@ -117,6 +117,7 @@ export function useChatComposer({
   );
   const clearInitialUserMessages = useSessionUiStore((state) => state.clearInitialUserMessages);
   const setHiddenViewItemKeysBySession = useSessionUiStore((state) => state.setHiddenViewItemKeysBySession);
+  const setTranscriptRenderMode = useSessionUiStore((state) => state.setTranscriptRenderMode);
   const messageQueueRef = useRef<string[]>([]);
   const prevBusyRef = useRef(false);
   const handleSendRef = useRef<((text: string) => Promise<void>) | null>(null);
@@ -230,10 +231,21 @@ export function useChatComposer({
         });
         setHiddenViewItemKeysBySession((prev) => ({ ...prev, [currentId]: keys }));
         setOptimistic([]);
+      } else if (effect.type === 'observation-render-mode-changed') {
+        if (effect.mode === 'detail' || effect.mode === 'compact') setTranscriptRenderMode(effect.mode);
       }
       return effect.type;
     },
-    [setSessionUrl, jumpToLive, currentId, history, liveItems, setHiddenViewItemKeysBySession, setOptimistic]
+    [
+      setSessionUrl,
+      jumpToLive,
+      currentId,
+      history,
+      liveItems,
+      setHiddenViewItemKeysBySession,
+      setOptimistic,
+      setTranscriptRenderMode
+    ]
   );
 
   const handleSend = useCallback(
