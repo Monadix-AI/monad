@@ -9,7 +9,8 @@ import { toolInputJsonSchema } from '#/capabilities/tools/schema.ts';
 import { ContextBuilder } from '../../context/budget.ts';
 import { estimateTokensCached, globalEstimator } from '../../context/estimate.ts';
 import { messageChars } from '../../context/index.ts';
-import { renderAgentSystemPrompt, renderContextSummary, renderEnvironment } from '../../prompts.ts';
+import { parsePlanSections } from '../../context/recitation.ts';
+import { renderAgentSystemPrompt, renderContextSummary, renderEnvironment, renderPlanAnchor } from '../../prompts.ts';
 import { replayHistory } from '../replay.ts';
 
 /**
@@ -177,7 +178,28 @@ export class PromptBuilder {
     // cached array must stay immutable for the next turn (and for cross-turn token-cache reuse).
     const systemMsg: ModelMessage = { role: 'system', content: system };
     if (this.deps.cacheSystemPrompt) systemMsg.cache = true; // prompt-cache the static prefix
-    return this.withContextSummary(this.composeUserTurn([systemMsg, ...replayed]), summary);
+    return this.withRecitation(
+      this.withContextSummary(this.composeUserTurn([systemMsg, ...replayed]), summary),
+      summary
+    );
+  }
+
+  /** Stage 3 of the context cascade: re-anchor the current plan (Open Tasks / Next Step, parsed from
+   *  the durable summary) at the END of the prompt, closest to where the model generates from — a
+   *  compacted session otherwise has to re-derive "what am I doing right now" from dense prose every
+   *  turn. No-op without a summary (nothing compacted yet) or when both sections are absent. */
+  private withRecitation(messages: ModelMessage[], summary: string | undefined): ModelMessage[] {
+    if (!this.deps.recitationEnabled || !summary) return messages;
+    const anchor = renderPlanAnchor(parsePlanSections(summary));
+    if (!anchor) return messages;
+    const last = messages[messages.length - 1];
+    if (!last) return messages;
+    const next = [...messages];
+    next[next.length - 1] =
+      typeof last.content === 'string'
+        ? { ...last, content: `${last.content}\n\n${anchor}` }
+        : { ...last, content: [...last.content, { type: 'text', text: `\n\n${anchor}` }] };
+    return next;
   }
 
   private withContextSummary(messages: ModelMessage[], summary: string | undefined): ModelMessage[] {

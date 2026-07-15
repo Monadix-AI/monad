@@ -67,6 +67,8 @@ export interface AgentConfig {
   /** Fraction of contextLimit past which a context.handoff_suggested notice fires at each task
    *  boundary. Absent → the nudge never fires. */
   handoffNudgeFraction?: AgentLoopDeps['handoffNudgeFraction'];
+  /** Re-anchor the durable summary's Open Tasks / Next Step sections at the end of the prompt. */
+  recitationEnabled?: AgentLoopDeps['recitationEnabled'];
   /** Durable bounded-load history strategy (summary boundary). Replaces the full-load path. */
   history?: HistoryProvider;
   /** Prompt-cache the static system+tools prefix (Anthropic; ignored elsewhere). */
@@ -305,6 +307,7 @@ export function createAgent(config: AgentConfig): Agent {
         context: config.context,
         evictedTokens: config.evictedTokens,
         handoffNudgeFraction: config.handoffNudgeFraction,
+        recitationEnabled: config.recitationEnabled,
         history: config.history,
         cacheSystemPrompt: config.cacheSystemPrompt,
         instructions: config.instructions,

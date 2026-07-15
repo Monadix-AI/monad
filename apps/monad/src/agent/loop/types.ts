@@ -108,6 +108,9 @@ export interface AgentLoopDeps {
   /** Fraction of contextLimit past which a context.handoff_suggested notice fires at each task
    *  boundary (turn settled, no tool call mid-flight). Absent → the nudge never fires. */
   handoffNudgeFraction?: number;
+  /** Re-anchor the durable summary's Open Tasks / Next Step sections at the end of the prompt after
+   *  compaction. Default false (no-op without a summary regardless). */
+  recitationEnabled?: boolean;
   /** Durable, bounded-load history strategy. */
   history?: HistoryProvider;
   /** Cross-turn cache of replayed message history, shared by per-turn AgentLoop instances. */
