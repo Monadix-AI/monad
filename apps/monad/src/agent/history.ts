@@ -60,6 +60,12 @@ function renderForSummary(content: ModelMessage['content']): string {
     .join(' ');
 }
 
+/** Render messages the way the summarizer sees them — shared so afterCompact's `foldedText` matches
+ *  exactly what fed the summarization call, not a re-derivation that could drift from it. */
+function renderTranscript(messages: ModelMessage[]): string {
+  return messages.map((m) => `${m.role}: ${renderForSummary(m.content)}`).join('\n');
+}
+
 /** What a HistoryProvider produces for a turn: the recent messages + an optional rolling summary. */
 export interface AssembledHistory {
   /** Durable summary of older turns. The loop folds this into the system prompt, not as a message. */
@@ -133,8 +139,10 @@ export interface DurableSummarizerOptions {
    *  that lossy compaction would otherwise drop. Must not throw — wire it to swallow hook failures. */
   preCompact?: (info: { sessionId: string; trigger: 'soft' | 'manual'; tokens: number }) => Promise<string[]>;
   /** Fired right after a compaction commits (the AfterCompact lifecycle event). Observe-only;
-   *  must not throw. */
-  afterCompact?: (info: { sessionId: string; trigger: 'soft' | 'manual'; tokens: number }) => void;
+   *  must not throw. `foldedText` is the rendered transcript of exactly what got folded into the
+   *  summary this pass — the source for memory-promotion extraction, since the summary itself is
+   *  already lossy/paraphrased. */
+  afterCompact?: (info: { sessionId: string; trigger: 'soft' | 'manual'; tokens: number; foldedText: string }) => void;
 }
 
 /** Backstop cap on per-session background-compaction state held by the long-lived summarizer. */
@@ -228,10 +236,16 @@ export class DurableSummarizer implements HistoryProvider {
     if (olderRows.length === 0) return { summary: w.summary, messages: w.replayed };
     const boundaryId = (olderRows[olderRows.length - 1] as ChatMessage).id;
     const preserve = (await this.opts.preCompact?.({ sessionId, trigger: 'soft', tokens: w.tokens })) ?? [];
-    let summary = await this.summarize(w.summary, replayHistory(olderRows), sessionId, preserve);
+    const olderMessages = replayHistory(olderRows);
+    let summary = await this.summarize(w.summary, olderMessages, sessionId, preserve);
     summary = await this.reflectIfNeeded(summary, sessionId);
     await this.opts.summaryStore.save(sessionId, { summary, uptoMessageId: boundaryId });
-    this.opts.afterCompact?.({ sessionId, trigger: 'soft', tokens: w.tokens });
+    this.opts.afterCompact?.({
+      sessionId,
+      trigger: 'soft',
+      tokens: w.tokens,
+      foldedText: renderTranscript(olderMessages)
+    });
     // Sent window is the recent tail; older turns are folded into `summary`.
     return { summary, messages: replayHistory(w.rows.slice(w.rows.length - this.keepRecent)) };
   }
@@ -289,7 +303,7 @@ export class DurableSummarizer implements HistoryProvider {
     let summary = await this.summarize(rec?.summary, replayed, sessionId, preserve);
     summary = await this.reflectIfNeeded(summary, sessionId);
     await this.opts.summaryStore.save(sessionId, { summary, uptoMessageId: boundaryId });
-    this.opts.afterCompact?.({ sessionId, trigger: 'manual', tokens });
+    this.opts.afterCompact?.({ sessionId, trigger: 'manual', tokens, foldedText: renderTranscript(replayed) });
     return { compacted: rows.length, summary };
   }
 
@@ -314,7 +328,7 @@ export class DurableSummarizer implements HistoryProvider {
     sessionId: string,
     preserve: string[] = []
   ): Promise<string> {
-    const transcript = older.map((m) => `${m.role}: ${renderForSummary(m.content)}`).join('\n');
+    const transcript = renderTranscript(older);
     const result = await this.opts.model.complete({
       model: this.opts.summaryModel,
       sessionId,

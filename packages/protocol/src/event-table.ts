@@ -22,6 +22,7 @@ import {
 } from './external-agent/index.ts';
 import { agentIdSchema, externalAgentSessionIdSchema, messageIdSchema, nativeAgentDeliveryIdSchema } from './ids.ts';
 import { mcpServerStatusSchema } from './mcp-server.ts';
+import { memoryScopeSchema } from './memory.ts';
 
 const requestIdSchema = z.string();
 
@@ -237,6 +238,14 @@ export const contextHandoffSuggestedPayloadSchema = z.object({
   atFraction: z.number().min(0).max(1)
 });
 
+// Fired when memoryPromotion.mode is 'suggest': a span about to be compacted away yielded durable
+// facts, offered to the user for confirmation rather than written automatically. Persisted (unlike
+// the context.* transients above) — a suggestion the user hasn't acted on yet must survive a reload.
+export const memorySuggestionPayloadSchema = z.object({
+  scope: memoryScopeSchema,
+  facts: z.array(z.string().min(1)).min(1)
+});
+
 const fsOpSchema = z.enum(['read', 'write']);
 
 export const delegationFsRequestPayloadSchema = z.object({
@@ -334,6 +343,7 @@ export type ClarifyResolvedPayload = z.infer<typeof clarifyResolvedPayloadSchema
 export type ContextUsagePayload = z.infer<typeof contextUsagePayloadSchema>;
 export type ContextEvictedPayload = z.infer<typeof contextEvictedPayloadSchema>;
 export type ContextHandoffSuggestedPayload = z.infer<typeof contextHandoffSuggestedPayloadSchema>;
+export type MemorySuggestionPayload = z.infer<typeof memorySuggestionPayloadSchema>;
 export type DelegationFsRequestPayload = z.infer<typeof delegationFsRequestPayloadSchema>;
 export type DelegationTerminalRequestPayload = z.infer<typeof delegationTerminalRequestPayloadSchema>;
 export type ExternalAgentStartedPayload = z.infer<typeof externalAgentStartedPayloadSchema>;
@@ -373,6 +383,7 @@ export const EVENT_TABLE = {
   'context.usage': contextUsagePayloadSchema,
   'context.evicted': contextEvictedPayloadSchema,
   'context.handoff_suggested': contextHandoffSuggestedPayloadSchema,
+  'memory.suggestion': memorySuggestionPayloadSchema,
   'delegation.fs_request': delegationFsRequestPayloadSchema,
   'delegation.terminal_request': delegationTerminalRequestPayloadSchema,
   'external_agent.started': externalAgentStartedPayloadSchema,

@@ -2,19 +2,23 @@
 // the daemon lifetime; each model invocation creates its AgentLoop through `agent.loop(...)`.
 
 import type { MonadConfig, MonadPaths } from '@monad/home';
+import type { Event, SessionId } from '@monad/protocol';
 import type { LoadedSkill } from '#/agent/index.ts';
 import type { UserPromptSlots } from '#/agent/prompts.ts';
 import type { FileObservationStore } from '#/capabilities/tools/types.ts';
 import type { createHookRunner } from '#/hooks/runner.ts';
 import type { EmbeddingIndexer } from '#/services/embedding-indexer.ts';
+import type { EventBus } from '#/services/event-bus.ts';
 import type { DelegatableAgent } from '#/services/generation/agent-persona.ts';
 import type { ClarifyService } from '#/services/generation/clarify.ts';
+import type { MemoryService } from '#/services/memory/index.ts';
 import type { ModelService } from '#/services/model.ts';
 import type { ModelCatalogService } from '#/services/model-catalog.ts';
 import type { OversightService } from '#/services/oversight.ts';
 import type { Store } from '#/store/db/index.ts';
 
 import { createLogger } from '@monad/logger';
+import { newId } from '@monad/protocol';
 
 import {
   CompositeContextEngine,
@@ -74,6 +78,12 @@ export interface AgentDeps {
   hookRunner: ReturnType<typeof createHookRunner>;
   /** Inbound (peer-delegated) approval policy for high-risk tools — see services/inbound-approval.ts. */
   inboundApproval: () => InboundApprovalMode;
+  /** For persisting + publishing the memory.suggestion notice from outside a turn's own emit closure
+   *  (afterCompact fires from the long-lived DurableSummarizer, not a per-turn AgentLoop). */
+  bus: EventBus;
+  /** Extracts + (in `auto` mode) writes durable facts from a compacted span — see
+   *  MemoryService.promoteFacts. Absent → memory promotion never runs, regardless of config. */
+  memoryService?: MemoryService;
   /** Live user-editable prompt slots, resolved per turn (reloads take effect). Receives the active
    *  session id so the host can return that session's Studio agent persona (its AGENT.md), falling back
    *  to the global workspace AGENT slot while always preserving SOUL/USER. */
@@ -106,7 +116,9 @@ export function createAgentExecutionService(deps: AgentDeps): AgentExecutionServ
     toolSourceName,
     hookRunner,
     inboundApproval,
-    workspacePromptSlots
+    workspacePromptSlots,
+    bus,
+    memoryService
   } = deps;
 
   // High-risk tools in an inbound (peer-delegated) session follow the configured policy instead of
@@ -179,7 +191,7 @@ export function createAgentExecutionService(deps: AgentDeps): AgentExecutionServ
       }
     },
     // AfterCompact: observe-only, fired once the summary is committed.
-    afterCompact: ({ sessionId, trigger, tokens }) => {
+    afterCompact: ({ sessionId, trigger, tokens, foldedText }) => {
       void hookRunner
         .run({
           event: 'AfterCompact',
@@ -189,6 +201,28 @@ export function createAgentExecutionService(deps: AgentDeps): AgentExecutionServ
           compaction: { trigger, tokens }
         })
         .catch(() => {});
+      // Memory promotion: the span that just got folded into a lossy summary is the last chance to
+      // pull out durable facts from its ORIGINAL text (the summary is already a paraphrase). Runs a
+      // fast-model extraction; 'suggest' surfaces a persisted memory.suggestion event for the user to
+      // confirm, 'auto' writes straight to the resolved scope inside promoteFacts itself.
+      const mode = ctxCfg.memoryPromotion.mode;
+      if (mode === 'off' || !memoryService) return;
+      void memoryService
+        .promoteFacts(sessionId as SessionId, foldedText, mode)
+        .then((promoted) => {
+          if (!promoted || mode !== 'suggest') return;
+          const event: Event = {
+            id: newId('evt'),
+            sessionId: sessionId as SessionId,
+            type: 'memory.suggestion',
+            actorAgentId: null,
+            payload: { scope: promoted.scope, facts: promoted.facts },
+            at: new Date().toISOString()
+          };
+          store.appendEvents([event]);
+          bus.publish(event);
+        })
+        .catch(() => {}); // best-effort — a failed extraction must not affect the turn
     }
   });
   // Spill a truncated/evicted tool result's full output to the store (capped) so it can be recovered

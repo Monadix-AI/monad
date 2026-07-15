@@ -395,6 +395,7 @@ export const eventTypeSchema = z.enum([
   'context.usage', // a context-window breakdown (token consumption by category)
   'context.evicted', // lossless tool-result eviction fired this step — publish-only signal, never persisted (like the stream markers above)
   'context.handoff_suggested', // window past the handoff-nudge fraction at a task boundary — publish-only signal, never persisted
+  'memory.suggestion', // memoryPromotion.mode:'suggest' extracted facts from a compacted span — persisted, awaits user confirmation
   // Reverse fs/terminal delegation (ACP bridge): the daemon asks the connected editor to perform an
   // fs op / run a terminal command on its side; the editor answers via the `delegation.respond` RPC
   // (and streams terminal output via `delegation.output`). Bus-only (never persisted) — ephemeral RPC.
@@ -439,6 +440,7 @@ export type {
   ContextHandoffSuggestedPayload,
   ContextUsagePayload,
   EventPayload,
+  MemorySuggestionPayload,
   MessageCompletePayload,
   MessageDeltaPayload,
   SessionCreatedPayload,

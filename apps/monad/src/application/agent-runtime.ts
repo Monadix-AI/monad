@@ -127,6 +127,8 @@ export async function createAgentRuntime(core: DaemonCore, endpoint: { host: str
     loadedSkills,
     baseTools: (): Tool[] => registry.toolList(),
     toolsVersion: () => registry.toolRevision,
+    bus,
+    memoryService: memory.memoryService,
     extraTools: [
       ...buildServiceTools({
         notes: memory.noteStore,

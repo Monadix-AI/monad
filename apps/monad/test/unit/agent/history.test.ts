@@ -201,6 +201,55 @@ test('PreCompact: preserve instructions are folded into the summarization system
   expect(capturedSystem).toContain('keep the API key rotation decision');
 });
 
+test('AfterCompact: foldedText is exactly the rendered ORIGINAL rows that were folded, not the summary', async () => {
+  const rows = [
+    msg('m1', 'user', big('A')),
+    msg('m2', 'assistant', big('B')),
+    msg('m3', 'user', big('C')),
+    msg('m4', 'assistant', 'recent')
+  ];
+  const calls: { trigger: string; foldedText: string }[] = [];
+  const { model } = summaryModel('a lossy paraphrase, not the original text');
+  const eng = new DurableSummarizer({
+    messages: source(rows),
+    summaryStore: memStore(),
+    model,
+    summaryModel: 'mock',
+    softThresholdTokens: 50,
+    keepRecent: 1,
+    afterCompact: (info) => calls.push({ trigger: info.trigger, foldedText: info.foldedText })
+  });
+
+  await eng.assemble('ses_x');
+  expect(calls).toHaveLength(1);
+  expect(calls[0]?.trigger).toBe('soft');
+  // Folds m1-m3 (older); m4 ('recent') is the keepRecent(1) tail — never folded, never in foldedText.
+  expect(calls[0]?.foldedText).toContain(big('A'));
+  expect(calls[0]?.foldedText).toContain(big('C'));
+  expect(calls[0]?.foldedText).not.toContain('recent');
+  expect(calls[0]?.foldedText).not.toContain('a lossy paraphrase');
+});
+
+test('AfterCompact: manual compact() folds foldedText from the FULL loaded window (no keepRecent tail held back)', async () => {
+  const rows = [msg('m1', 'user', 'a'), msg('m2', 'assistant', 'b'), msg('m3', 'user', 'recent-ish')];
+  const calls: { trigger: string; foldedText: string }[] = [];
+  const { model } = summaryModel('DENSE');
+  const eng = new DurableSummarizer({
+    messages: source(rows),
+    summaryStore: memStore(),
+    model,
+    summaryModel: 'mock',
+    softThresholdTokens: 1_000_000,
+    keepRecent: 1,
+    afterCompact: (info) => calls.push({ trigger: info.trigger, foldedText: info.foldedText })
+  });
+
+  await eng.compact('ses_x');
+  expect(calls).toHaveLength(1);
+  expect(calls[0]?.trigger).toBe('manual');
+  expect(calls[0]?.foldedText).toContain('recent-ish'); // manual compact folds everything, no held-back tail
+});
+
 test('over threshold: compacts older rows, advances the durable boundary, keeps recent tail', async () => {
   const rows = [
     msg('m1', 'user', big('A')),
