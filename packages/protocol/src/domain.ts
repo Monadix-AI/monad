@@ -67,8 +67,7 @@ export const monadixAgentSettingsSchema = z.object({
 export type MonadixAgentSettings = z.infer<typeof monadixAgentSettingsSchema>;
 
 /** Per-agent tool/atom exposure — a *filter* over the daemon-registered tools, never an installer.
- *  `allow` narrows to a subset; `deny` removes from the inherited/allowed set (Claude Code
- *  `disallowedTools`). Exposure ⊆ registration. */
+ *  `allow` narrows to a subset; `deny` removes from the inherited/allowed set. Exposure ⊆ registration. */
 export const agentAtomsSchema = z.object({
   mode: z.enum(['inherit', 'allowlist']).default('inherit'),
   allow: z.array(z.string()).default([]),

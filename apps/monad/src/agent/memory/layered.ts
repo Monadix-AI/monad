@@ -18,8 +18,8 @@ export interface MemoryToolSchema {
 }
 
 /**
- * The single active L1 backend (a swappable, mutually-exclusive slot). Modeled on Hermes Agent's
- * MemoryProvider ABC: `recall` = prefetch (latency-aware), `observe` = sync_turn (non-blocking).
+ * The single active L1 backend (a swappable, mutually-exclusive slot). `recall` is prefetch
+ * (latency-aware), and `observe` is per-turn writeback (non-blocking).
  * Built-in memory is driven directly by the daemon service (design A); mem0 implements this contract.
  */
 export interface L1Adapter {

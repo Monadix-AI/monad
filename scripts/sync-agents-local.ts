@@ -24,7 +24,7 @@ const note =
   'Personal & gitignored — edit the source, not this file. -->';
 
 const targets: Array<{ path: string; content: string }> = [
-  // Claude Code reads CLAUDE.local.md in addition to CLAUDE.md.
+  // Some tools read local overlays in addition to the shared generated instructions.
   { path: 'CLAUDE.local.md', content: `${note}\n\n${body}\n` },
   // Cursor reads every .mdc under .cursor/rules/; this one sorts after the team rule.
   {

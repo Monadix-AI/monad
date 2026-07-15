@@ -1,5 +1,5 @@
 // Attributes the context window to functional categories (system prompt, tools, skills,
-// memory, messages, …) so a client can render the Claude-Code-style `/context` breakdown.
+// memory, messages, …) so a client can render the `/context` breakdown.
 // Itemize as the prompt is assembled, then group by category at render time. For the
 // messages bucket, prefer the provider's returned usage as ground truth (pass it as
 // `usedMessageTokens`); everything else is locally estimated. See ./tokenize.ts.

@@ -1,4 +1,4 @@
-// The agent-facing memory tool for the built-in L1 backend (the Claude Code model: the agent reads
+// The agent-facing memory tool for the built-in L1 backend (self-curated Markdown: the agent reads
 // and curates its own durable memory as it works). ONE tool with an `action` discriminator —
 // view/record/update/delete — matching Anthropic's memory_20250818 / text_editor single-tool shape;
 // a lean tool list keeps tool-choice sharp, and the action surface is backend-agnostic so the service

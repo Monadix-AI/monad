@@ -27,7 +27,7 @@ export function createAcpAgentSettingsController(handlers: ReturnType<typeof cre
         detail: { summary: 'List external ACP agents', description: 'Returns the configured acpAgents registry.' }
       })
       // Static path declared before the `:name` routes so it can't be shadowed. Returns the turnkey
-      // invite presets (Codex / Claude Code) with same-machine detection so the UI can one-click invite.
+      // invite presets with same-machine detection so the UI can one-click invite.
       .get('/acp-agents/presets', () => handlers.acpAgent.listAcpAgentPresets(), {
         response: { 200: listAcpAgentPresetsResponseSchema },
         detail: { summary: 'List invite presets', description: 'Built-in third-party agent presets + local detection.' }

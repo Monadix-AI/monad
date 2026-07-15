@@ -131,7 +131,7 @@ export class ExternalAgentSessionLauncher {
     // dropping it would leave the CLI blocked on an approval it has no channel to resolve. The member
     // setting overrides the agent template's `allowAutopilot`. Computed before `prepareManagedProjectRuntime`
     // so `skipProviderApprovals` can reach `managedRuntime.env` for a provider whose autopilot toggle has
-    // no CLI-flag equivalent (OpenClaw) and must instead write its own config into the managed workspace.
+    // no CLI-flag equivalent and must instead write its own config into the managed workspace.
     const effectiveLaunchMode = args.launchMode ?? agent.defaultLaunchMode;
     const allowAutopilot = args.allowAutopilot ?? agent.allowAutopilot;
     const proxyApprovals =

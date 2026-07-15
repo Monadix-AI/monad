@@ -1,6 +1,6 @@
 // Mo desktop sprite — macOS / Cocoa reference shell.
 //
-// A transparent, frameless, always-on-top window showing a Codex atlas-pet sprite (assets/mochi.png).
+// A transparent, frameless, always-on-top window showing an atlas-pet sprite (assets/mochi.png).
 // Drag a file onto Mo to open a native input box (Mo waits attentively while it's open); submitting
 // POSTs the dropped paths + your text to the local daemon (POST /v1/mo/drop), which seeds a session.
 // Click Mo (without dragging) to open the web UI; drag to reposition it. Mo renders one of nine

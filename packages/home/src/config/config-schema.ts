@@ -178,7 +178,7 @@ export const agentConfigSchema = z.object({
     .string()
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
     .optional(),
-  /** One-line description (Claude-subagent frontmatter `description`) — drives delegation routing. */
+  /** One-line description — drives delegation routing. */
   description: z.string().max(1024).optional(),
   /** Profile alias | 'inherit'. Falls back to the fixed "default" profile when unset. */
   model: z.string().optional(),
@@ -483,7 +483,7 @@ export const channelInstanceSchema = z.object({
   // Group behaviour: by default the bot only answers in a group when addressed (mention/reply).
   // Optional for back-compat — the core resolves an absent policy to requireMention=true.
   groupPolicy: channelGroupPolicySchema.optional(),
-  /** Per-channel system-prompt hint injected into this channel's sessions (Hermes platform_hint). */
+  /** Per-channel system-prompt hint injected into this channel's sessions. */
   agentHint: z.string().max(2000).optional(),
   // Conversation→session granularity is a CORE policy; the atom pack never sees it.
   mapping: z

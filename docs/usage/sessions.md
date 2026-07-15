@@ -105,7 +105,7 @@ monad approvals revoke <id>                     # remove one rule
 monad approvals clear [--scope <s>] [--agent <id>]
 ```
 
-Native CLI agents (Codex, Claude Code, and others) run their own approval
+Native CLI agents run their own approval
 prompts; monad only decides whether those run unattended or are relayed to you —
 see [native-cli-approvals.md](native-cli-approvals.md).
 

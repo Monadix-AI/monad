@@ -442,7 +442,7 @@ export interface AtomPackContext {
   registerMessageType(descriptor: MessageTypeDescriptor): void;
   registerProvider(provider: ModelProvider): void;
   registerHook(hook: HookDefinition): void;
-  /** Register a native coding-CLI agent adapter (Codex, Claude Code, …). The daemon collects them
+  /** Register a native coding-CLI agent adapter. The daemon collects them
    *  into the external agent registry keyed by provider and owns the process/pty/socket lifecycle. */
   registerAgentAdapter(adapter: ExternalAgentProviderAdapter): void;
   /** Register an OS/remote sandbox launcher. The daemon collects launchers into a registry and

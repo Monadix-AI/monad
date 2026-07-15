@@ -144,7 +144,7 @@ const webSearchTool: Tool<z.infer<typeof webSearchInput>, { provider: string; re
   inputSchema: webSearchInput,
   // Anthropic and OpenAI have provider-native server-side search — the adapter emits the
   // built-in tool spec and the loop skips local execution for those providers. For all
-  // others (OpenRouter, Gemini, …) the run() below fires (DDG or Brave).
+  // others (for example provider-routed models) the run() below fires (DDG or Brave).
   providerTool: {
     anthropic: { type: 'web_search_20260209' },
     openai: { type: 'web_search_preview' }

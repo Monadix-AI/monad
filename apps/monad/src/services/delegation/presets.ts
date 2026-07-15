@@ -1,5 +1,5 @@
 // ACP-agent invite presets, DERIVED from the agent-adapter registry. "Inviting" a same-machine
-// third-party agent (Codex / Claude Code) as an external ACP agent is just the ACP *delivery variant*
+// third-party agent as an external ACP agent is just the ACP *delivery variant*
 // of the same agent-adapter — so the identity (id/label/productIcon) and same-machine install
 // detection come from the adapter's detect(), and only the ACP spawn command/env come from its `acp`
 // descriptor. One agent, forked by delivery mode; there is no parallel static list to drift.

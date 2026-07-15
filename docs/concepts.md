@@ -98,7 +98,7 @@ Atom packs are installed under `~/.monad/atoms/` and managed via `monad atoms` /
 
 ### Skill
 
-A portable, filesystem-based capability packet. A skill is a directory under `~/.monad/skills/` (or `~/.monad/workspace/skills/`) containing a `SKILL.md` with YAML frontmatter and free-prose instructions. Skills extend the agent with domain knowledge and procedures **without paying token cost until needed** — they are lazily loaded into context when invoked by `/name` or by the model. monad implements the [agentskills.io](https://agentskills.io) open standard (`SKILL.md`), the same format used by Claude Code, Codex, and ~40 other agents.
+A portable, filesystem-based capability packet. A skill is a directory under `~/.monad/skills/` (or `~/.monad/workspace/skills/`) containing a `SKILL.md` with YAML frontmatter and free-prose instructions. Skills extend the agent with domain knowledge and procedures **without paying token cost until needed** — they are lazily loaded into context when invoked by `/name` or by the model. monad implements the [agentskills.io](https://agentskills.io) open standard (`SKILL.md`), a portable format shared across the agent ecosystem.
 
 Skills can declare eligibility gates (`requires`), workspace activation globs (`paths`), allowed tools (`allowed-tools`), and a fork mode (`context: fork`) that runs the skill as an isolated subagent at a chosen capability tier.
 
@@ -114,7 +114,7 @@ See [`docs/internals/realtime-channels.md`](internals/realtime-channels.md).
 
 A model backend monad can route requests to. Each provider is one entry in `PROVIDER_CATALOG` and uses one of two strategies:
 
-- **native** — a dedicated AI SDK package (Anthropic, OpenAI, OpenRouter, Google Gemini, Mistral, Amazon Bedrock, Azure OpenAI).
+- **native** — a dedicated AI SDK package (Anthropic, OpenAI, OpenRouter, Google, Mistral, Amazon Bedrock, Azure OpenAI).
 - **openai-compatible** — a preset pointed at a known base URL (Groq, xAI, DeepSeek, Ollama, and ~15 others), with zero extra dependencies.
 
 Providers are configured in `~/.monad/config.json`; credentials live in `~/.monad/auth.json` as secret refs. The **Model Router** dispatches each turn to the right provider/model based on the active profile and per-role overrides.
@@ -155,7 +155,7 @@ The interfaces through which humans and editors interact with the daemon.
 
 ### ACP (Agent Client Protocol)
 
-The editor integration protocol. `monad acp` is a thin bridge: the editor spawns it over stdio, and it proxies to the already-running daemon over the local Unix socket. Editor sessions appear in the web UI and TUI and share one store, model config, and ledger. monad also acts as an ACP **client**, delegating subtasks to other ACP agents (Codex, Claude Code, …) via the `agent_acp_delegate` tool.
+The editor integration protocol. `monad acp` is a thin bridge: the editor spawns it over stdio, and it proxies to the already-running daemon over the local Unix socket. Editor sessions appear in the web UI and TUI and share one store, model config, and ledger. monad also acts as an ACP **client**, delegating subtasks to other ACP agents via the `agent_acp_delegate` tool.
 
 See [`docs/internals/acp.md`](internals/acp.md).
 

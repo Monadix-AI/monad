@@ -34,7 +34,7 @@ test('migration drift check fails when a schema fixture needs a new migration', 
   );
 }, 30_000);
 
-test('migration drift check rejects a rename prompt even when Drizzle exits zero without changing artifacts', async () => {
+test('migration drift check classifies a non-interactive rename prompt as schema drift', async () => {
   const directory = await mkdtemp(join(appRoot, '.migration-rename-'));
   temporaryDirectories.push(directory);
   const fixture = join(directory, 'schema.ts');
@@ -44,7 +44,7 @@ test('migration drift check rejects a rename prompt even when Drizzle exits zero
   await writeFile(fixture, renamedSchema);
 
   expect(() => checkMigrationDrift({ appRoot, schemaPath: fixture })).toThrow(
-    /Drizzle migration generation did not confirm no schema changes[\s\S]*renamed_sessions/
+    /Drizzle migration generation did not confirm no schema changes; interactive rename input is required[\s\S]*Interactive prompts require a TTY/
   );
 }, 30_000);
 

@@ -36,7 +36,7 @@ across agents), `agent:<agentId>` (private to one agent, across sessions),
 `project:<key>` (a workspace, keyed from its cwd), `session:<sessionId>` (ephemeral,
 dropped at session end). `org` is reserved in the schema for a future tier.
 
-## L1 — facts (design A, the Claude Code model)
+## L1 — facts (design A, self-curated Markdown)
 
 Two kinds of always-relevant context, split by dynamism:
 

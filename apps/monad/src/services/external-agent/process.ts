@@ -8,9 +8,9 @@ export type ExternalAgentTreeKillFn = (pid: number) => void;
 
 /** Non-pty launch mode to retry with when Bun's pty (`terminal:`) spawn throws — e.g. ConPTY
  *  unavailable on the host. `json-stream` is preferred (keeps stdin/stdout structured); `app-server`
- *  over the `stdio` transport (no socket/port setup needed) is the fallback for codex, which has no
- *  json-stream mode — but only when the adapter actually offers `stdio` (OpenClaw/Hermes's app-server
- *  is `ws`-only, so falling back to a `stdio` launch for them would just throw `unsupported_capability`
+ *  over the `stdio` transport (no socket/port setup needed) is the fallback for providers with no
+ *  json-stream mode — but only when the adapter actually offers `stdio` (some app-server providers
+ *  are `ws`-only, so falling back to a `stdio` launch for them would just throw `unsupported_capability`
  *  a step later, replacing the real pty error with a confusing one). `undefined` means the provider has
  *  no non-pty mode to degrade to — the caller should let the original pty error propagate. */
 export function pickPtyFallbackLaunchMode(

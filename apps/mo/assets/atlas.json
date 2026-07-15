@@ -1,5 +1,5 @@
 {
-  "comment": "Codex atlas-pet manifest for Mo. The sprite sheet (mochi.png) is a columns×rows grid of cell_width×cell_height RGBA cells (transparent background, chroma-keyed from #00FFFF at generation time). Each row is one agent-lifecycle state; frames are packed left-aligned, unused cells transparent. Row order is fixed and matches the mo_state enum. fps is a render choice, not part of the generated atlas.",
+  "comment": "Atlas-pet manifest for Mo. The sprite sheet (mochi.png) is a columns×rows grid of cell_width×cell_height RGBA cells (transparent background, chroma-keyed from #00FFFF at generation time). Each row is one agent-lifecycle state; frames are packed left-aligned, unused cells transparent. Row order is fixed and matches the mo_state enum. fps is a render choice, not part of the generated atlas.",
   "pet_id": "mochi",
   "display_name": "Mochi",
   "columns": 8,

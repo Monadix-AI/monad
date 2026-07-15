@@ -331,7 +331,7 @@ oversight gate — no special restrictions.
 
 ### MCP server
 
-Ship a `mcp.json` at your pack root using the industry-standard format (Claude Desktop /
+Ship a `mcp.json` at your pack root using the industry-standard MCP server format (
 Cursor / VS Code Copilot compatible):
 
 ```json

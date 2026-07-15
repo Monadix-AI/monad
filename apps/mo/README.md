@@ -10,8 +10,8 @@ See [`docs/usage/mo.md`](../../docs/usage/mo.md) for the architecture and the dr
 - `native/linux/` — GTK3 + Cairo shell (window, cat, file drop → input box)
 - `native/macos/` — Cocoa shell; builds `Mo.app` (`LSUIElement` agent app)
 - `native/windows/` — Win32 shell _(TODO)_
-- `native/common/` — also `atlas.h`: compiled Codex atlas-pet layout table (mirrors `assets/atlas.json`)
-- `assets/` — `mochi.png` Codex atlas-pet sprite sheet + `atlas.json` manifest
+- `native/common/` — also `atlas.h`: compiled atlas-pet layout table (mirrors `assets/atlas.json`)
+- `assets/` — `mochi.png` atlas-pet sprite sheet + `atlas.json` manifest
 - `scripts/build.ts` — builds the native shell for the host OS
 
 ## Build

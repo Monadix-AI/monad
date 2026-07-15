@@ -93,7 +93,7 @@ Examples:
 
 Exceptions:
 
-- Preserve official names: `GitHub`, `OpenAI`, `Claude Code`, `Codex`, `Bun`,
+- Preserve official names: `GitHub`, `OpenAI`, `Bun`,
   `WebSocket`, `SQLite`, `macOS`.
 - Preserve product concepts and technical terms in English when the English term
   is the canonical product vocabulary: `Hooks`, `Workspace`, `MCP`.
@@ -170,7 +170,7 @@ Use `you` and `your` for user-owned action or data:
 Use product or agent names for system actions:
 
 - `Monad saved the transcript`
-- `Codex is reading files`
+- `Agent is reading files`
 - `The daemon rejected the request`
 
 Use `my` only when it is part of a user-authored name or an external product label.

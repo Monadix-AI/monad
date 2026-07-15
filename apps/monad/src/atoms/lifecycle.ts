@@ -82,7 +82,7 @@ export async function createAtomDiscovery(deps: {
       onExperienceWorker: (worker, atomPackId, permissions) =>
         registry.registerExperienceWorker(worker, atomPackId, permissions),
       onWorkspaceExperience: (experience, atomPackId) => registry.registerWorkspaceExperience(experience, atomPackId),
-      // Built-in agent-adapter atoms (Codex/Claude Code/Gemini/Qwen) register into the external agent
+      // Built-in agent-adapter atoms register into the external agent
       // registry keyed by provider — the same gated path a third-party adapter pack would take.
       onAgentAdapter: (a) => registerAgentAdapterImpl(a),
       // Built-in sandbox launchers (Seatbelt/Landlock/Low-Integrity) register into the launcher

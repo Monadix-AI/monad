@@ -35,7 +35,7 @@ How to use monad's features as an operator or end user.
 | [usage/computer-use.md](usage/computer-use.md) | Computer use and browser use through off-the-shelf MCP servers, and when to pick which. |
 | [usage/mo.md](usage/mo.md) | Mo, the desktop sprite: drop a file on the floating pixel cat to start a session. |
 | [usage/sandbox-backends.md](usage/sandbox-backends.md) | Configuring sandbox backends: built-in and contributed launchers, settings, and hot switching. |
-| [usage/native-cli-approvals.md](usage/native-cli-approvals.md) | The per-agent autopilot switch for native CLI agent approvals (Codex, Claude Code, Gemini, …). |
+| [usage/native-cli-approvals.md](usage/native-cli-approvals.md) | The per-agent autopilot switch for native CLI agent approvals. |
 
 ## Internals — how the system works
 

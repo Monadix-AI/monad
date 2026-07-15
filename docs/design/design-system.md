@@ -101,20 +101,20 @@ Use the existing app font stack:
 
 Headings should stay functional and compact. The product UI should not use oversized marketing hero typography inside app surfaces. Labels may use uppercase mono styling, but letter spacing stays conservative.
 
-### Codex Density Reference
+### App Density Reference
 
-These values are extracted from the local Codex Electron bundle (`/Applications/Codex.app/Contents/Resources/app.asar`, `webview/assets/app-CAcOAj6U.css` plus button/sidebar/thread/composer chunks). Use them as the density target for Monad's app chrome and operational screens.
+Use these values as the density target for Monad's app chrome and operational screens.
 
 #### Font Families
 
-| Role | Codex source value | Monad target |
+| Role | Reference value | Monad target |
 |---|---|---|
 | UI sans | `var(--vscode-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif)` | Use `--font-sans`; do not use display fonts in sidebar rows, toolbar controls, settings rows, or composer controls |
 | Code / telemetry | `ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace` | Use `--font-mono` only for code, terminal, compact badges, counters, and telemetry |
 
 #### Type Scale
 
-Codex's product UI scale is denser than Tailwind defaults:
+The product UI scale is denser than Tailwind defaults:
 
 | Token | Size | Line-height | Use |
 |---|---:|---:|---|
@@ -146,7 +146,7 @@ Practical Monad mapping:
 
 #### Row And Toolbar Density
 
-Codex row/toolbar tokens:
+Reference row/toolbar tokens:
 
 | Token / pattern | Value |
 |---|---:|
@@ -164,7 +164,7 @@ Use these as upper bounds for ordinary chrome. If a sidebar item needs two lines
 
 #### Buttons And Controls
 
-Codex button variants:
+Reference button variants:
 
 | Variant | Shape | Size / padding | Text |
 |---|---|---|---|
@@ -214,7 +214,7 @@ Extracted recurring component patterns:
 
 #### Shapes, Borders, Shadow
 
-Codex uses tight radii with a `corner-radius-scale: 1.25` where supported:
+Use tight radii with a `corner-radius-scale: 1.25` where supported:
 
 | Token | Base | Effective with scale |
 |---|---:|---:|
@@ -237,7 +237,7 @@ Use `shadow-sm/md` only for floating or elevated surfaces. Sidebars, route shell
 
 #### Motion
 
-Codex motion density:
+Reference motion density:
 
 ```css
 --transition-duration-basic: 0.15s;

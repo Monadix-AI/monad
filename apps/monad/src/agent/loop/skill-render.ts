@@ -6,7 +6,7 @@ export function parseAllowedTools(value: string): string[] {
 }
 
 /**
- * Does an `allowed-tools` pattern grant `toolName`? A Claude-style argument constraint
+ * Does an `allowed-tools` pattern grant `toolName`? An argument constraint
  * (`Bash(git:*)`) is reduced to its tool name (monad gates per tool, not per argument); a
  * trailing `*` is a name prefix; otherwise it's an exact match.
  */
@@ -23,7 +23,7 @@ const SKILL_ARG_PLACEHOLDER = /\$ARGUMENTS(?:\[\d+\])?|\$\d+/;
 /**
  * Substitute the skill-directory placeholder so a body can reference its own bundled
  * resources by absolute path (e.g. "run `${SKILL_DIR}/scripts/build.py`") — the seam that
- * makes L3 scripts actually usable. Supports `${SKILL_DIR}` and the Claude-compatible
+ * makes L3 scripts actually usable. Supports `${SKILL_DIR}` and the legacy
  * `${CLAUDE_SKILL_DIR}` so cross-tool skills port unchanged. With no dir the placeholder is
  * removed (an unanchored skill has no resources to point at).
  */
@@ -53,7 +53,7 @@ export function renderSkillBody(body: string, argString: string, dir?: string): 
 }
 
 /**
- * Inline dynamic-context placeholder, Claude-Code style: `` !`cmd` `` recognised only at the
+ * Inline dynamic-context placeholder: `` !`cmd` `` recognised only at the
  * start of a line or immediately after whitespace (so `KEY=!`x`` stays literal).
  */
 const SHELL_INJECT_RE = /(^|\s)!`([^`]+)`/gm;

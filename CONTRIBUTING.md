@@ -154,7 +154,7 @@ When you touch `apps/monad`, exercise the feature over **every transport**
 
 Agent-facing files are local generated output — don't hand-edit them. The committed
 single source is [`.rulesync/rules/`](.rulesync/rules/); Rulesync compiles it into
-`AGENTS.md`, Codex/Claude/Copilot files, and MCP configuration for the tools installed
+`AGENTS.md`, tool-specific agent files, and MCP configuration for the tools installed
 on the developer's machine. Generated targets are gitignored.
 
 Edit the source, then regenerate:

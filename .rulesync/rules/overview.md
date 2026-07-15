@@ -7,8 +7,7 @@ globs: ["**/*"]
 
 # Agent instructions
 
-Conventions for working in this repo. These apply to **all** coding agents (Claude
-Code, Cursor, Copilot, Gemini, ...). Keep this short and imperative; depth lives in
+Conventions for working in this repo. These apply to **all** coding agents. Keep this short and imperative; depth lives in
 `docs/` and is referenced here.
 
 > **Single source of truth:** this content lives in `.rulesync/rules/` and is

@@ -36,7 +36,7 @@ export interface ModelMessage {
  *  provider matches, the adapter emits the provider's native tool — its model was trained on that
  *  exact schema and the provider sets any required beta header — instead of a generic function
  *  tool; providers that don't match fall back to the generic `parameters` schema. Additive and
- *  per-provider, so one tool definition stays portable across Claude/GPT/Gemini.
+ *  per-provider, so one tool definition stays portable across model families.
  *  `anthropic`: computer-use (action-based schema, display dimensions) or native web/fetch search.
  *  `openai`: native web_search_preview (provider-executed, no client key required). */
 export interface ProviderToolHint {

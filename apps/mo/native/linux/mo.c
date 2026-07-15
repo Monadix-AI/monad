@@ -34,7 +34,7 @@ typedef struct {
 
 // --- rendering ---------------------------------------------------------------
 // Placeholder procedural cat drawn with Cairo. NOTE: the Linux shell is not yet wired to the shared
-// behavior FSM or the Codex atlas (assets/mochi.png + common/atlas.h) — the macOS shell is the
+// behavior FSM or the atlas (assets/mochi.png + common/atlas.h) — the macOS shell is the
 // reference implementation. Follow-up: blit atlas cells per behavior.c state, as mo.m does.
 
 static void draw_cat(cairo_t *cr, Mo *mo) {

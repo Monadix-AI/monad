@@ -1,7 +1,7 @@
 // monad-to-monad delegation: the `agent_delegate_to` tool runs one of the operator's Studio agents
 // (those flagged `visibility.subagentCallable`) as an in-process subagent — under its OWN AGENT.md
 // persona and its OWN narrowed tool set — and returns its final answer. This is the peer/in-process
-// model (Hermes/Claude), distinct from `agent_acp_delegate` (external ACP process) and the anonymous
+// model, distinct from `agent_acp_delegate` (external ACP process) and the anonymous
 // `agent_delegate` fork (same tools, no persona).
 //
 // Security (containment, never escalation):

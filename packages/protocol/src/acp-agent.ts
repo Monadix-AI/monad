@@ -33,7 +33,7 @@ export type UpsertAcpAgentRequest = z.infer<typeof upsertAcpAgentRequestSchema>;
 export const setAcpAgentEnabledRequestSchema = z.object({ enabled: z.boolean() });
 export type SetAcpAgentEnabledRequest = z.infer<typeof setAcpAgentEnabledRequestSchema>;
 
-// A turnkey "invite" preset for a same-machine third-party agent (Codex / Claude Code). `command`,
+// A turnkey "invite" preset for a same-machine third-party agent. `command`,
 // `args`, `env` are a ready-made acpAgents entry the UI prefills on invite; `installed` is the result
 // of probing the local machine for the underlying tool, so the UI can badge it and surface installHint.
 export const acpAgentPresetSchema = z.object({

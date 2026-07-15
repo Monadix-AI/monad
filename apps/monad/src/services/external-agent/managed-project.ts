@@ -142,7 +142,7 @@ export function prepareManagedProjectRuntime(
     baseEnvPath?: string;
     platform?: NodeJS.Platform;
     /** The resolved autopilot outcome for this launch — threaded to `managedRuntime.env` so a provider
-     *  whose autopilot toggle has no CLI-flag equivalent (OpenClaw) can write its own config instead.
+     *  whose autopilot toggle has no CLI-flag equivalent can write its own config instead.
      *  Defaults to false (don't silently disable a provider's own approval prompts) when omitted. */
     skipProviderApprovals?: boolean;
   } & Omit<NativeAgentRuntimePromptInput, 'workspace'>

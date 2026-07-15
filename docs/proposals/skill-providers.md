@@ -1,12 +1,12 @@
-# Proposal: pluggable skill sources (ClawHub + others)
+# Proposal: pluggable skill sources
 
 Status: **implemented** — shipped in `apps/monad/src/capabilities/skills/` (`install/{git,tarball,clawhub}.ts` + `sources/{clawhub,marketplaces}.ts`, ref parsing, consent + `.install.json` lock). Body kept as the historical design record.
 
 ## Problem
 
-monad can only install a skill from a **local directory** (`installSkillFromDir`). Every other
-agent ecosystem has a supply chain: OpenClaw has **ClawHub** (publish / version / vector-search),
-and community skills are commonly distributed as **git repos** or **tarballs**. monad has no way
+monad can only install a skill from a **local directory** (`installSkillFromDir`). The broader
+agent ecosystem has supply chains with publish, version, and search workflows, and community
+skills are commonly distributed as **git repos** or **tarballs**. monad has no way
 to pull a skill from any of these, no versioning, and no integrity/provenance story for remote
 skills.
 

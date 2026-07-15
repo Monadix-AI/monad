@@ -406,7 +406,7 @@ export interface ExternalAgentManagedRuntimeContext {
 
 export interface ExternalAgentManagedEnvContext {
   /** The managed agent's private workspace directory (already created on disk). A provider whose
-   *  autopilot toggle has no CLI-flag equivalent (e.g. OpenClaw — see its adapter) writes its own
+   *  autopilot toggle has no CLI-flag equivalent writes its own
    *  config/state files here and points the child at them via env vars, rather than an argv flag. */
   workspace: string;
   /** The resolved `allowAutopilot` outcome for this launch: true → the provider should run unattended
@@ -420,32 +420,32 @@ export interface ExternalAgentManagedEnvContext {
  *  managed-runtime code stays provider-agnostic and reads intent from the adapter instead of branching
  *  on the provider id. */
 export interface ExternalAgentManagedRuntime {
-  /** Launch-mode override for the managed runtime (e.g. codex → 'app-server', others → 'json-stream'). */
+  /** Launch-mode override for the managed runtime. */
   launchMode?(defaultMode: ExternalAgentLaunchMode): ExternalAgentLaunchMode;
-  /** Env additions for the managed child (e.g. codex → `CODEX_NON_INTERACTIVE=1`). */
+  /** Env additions for the managed child. */
   env?(context: ExternalAgentManagedEnvContext): Record<string, string>;
-  /** CLI args wiring monad's managed MCP server into the provider (codex → `-c mcp_servers.monad…`). */
+  /** CLI args wiring monad's managed MCP server into the provider. */
   mcpConfigArgs?(context: ExternalAgentManagedRuntimeContext): string[];
   /** The provider mounts monad's managed MCP server as its project bridge — drives the MCP prompt
    *  template, the MCP-flavored join greeting, and the MCP tool-usage communication instructions. */
   usesManagedMcpBridge?: boolean;
-  /** The managed prompt is delivered as an appended system-prompt file (claude-code). */
+  /** The managed prompt is delivered as an appended system-prompt file. */
   usesSystemPromptFile?: boolean;
-  /** The managed prompt is delivered as developer instructions on session init (codex app-server). */
+  /** The managed prompt is delivered as developer instructions on session init. */
   usesDeveloperInstructions?: boolean;
 }
 
 /** ACP (Agent Client Protocol) delivery variant — the SAME agent launched as an external ACP
  *  sub-agent (an `npx` wrapper package bridging the agent's own SDK) instead of driven as a native
- *  CLI. Present only on agents that ship an ACP wrapper (codex, claude-code); the daemon's ACP
+ *  CLI. Present only on agents that ship an ACP wrapper; the daemon's ACP
  *  delegation derives its invite preset + spawn command from this, while the agent's identity and
  *  install detection still come from `detect()` — one adapter, forked by delivery mode. */
 export interface ExternalAgentAcpDelivery {
   /** Spawn command for the ACP wrapper (e.g. `npx`). */
   command: string;
-  /** Args for the ACP wrapper (e.g. `['-y', '@agentclientprotocol/codex-acp@1.0.0']`). */
+  /** Args for the ACP wrapper. */
   args: string[];
-  /** Optional auth env forwarded to the wrapper as secret refs (e.g. `{ OPENAI_API_KEY: '${env:OPENAI_API_KEY}' }`). */
+  /** Optional auth env forwarded to the wrapper as secret refs. */
   env?: Record<string, string>;
 }
 
@@ -460,7 +460,7 @@ export interface AdapterMigration {
 }
 export type ExternalAgentSettingsImport = AdapterMigration;
 
-/** The authoring contract for an agent-adapter atom: a native coding-CLI (Codex, Claude Code, …)
+/** The authoring contract for an agent-adapter atom: a native coding-CLI
  *  wrapped as a monad agent. The daemon owns the process/pty/socket lifecycle and calls these hooks;
  *  the adapter only builds launch specs and translates the provider's wire format to/from
  *  `ExternalAgentOutputEvent`s. Registered through `AtomPackContext.registerAgentAdapter`. */
@@ -481,7 +481,7 @@ export interface ExternalAgentProviderAdapter {
   settings?(agent?: ExternalAgentView): ExternalAgentSetting[];
   provider: ExternalAgentProvider;
   productIcon: ExternalAgentProductIcon;
-  /** Human display name (e.g. "Claude Code", "Codex") — the single source the daemon/UI reads instead
+  /** Human display name — the single source the daemon/UI reads instead
    *  of mapping a provider id to a label. */
   label: string;
   detect(probes?: BinProbes): ExternalAgentPresetView;

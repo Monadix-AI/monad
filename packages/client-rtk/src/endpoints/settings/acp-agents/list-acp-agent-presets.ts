@@ -3,7 +3,7 @@ import { type AcpAgentPresetView, listAcpAgentPresetsResponseSchema } from '@mon
 import { clientOf, runTreaty } from '../../../endpoint-helpers.ts';
 import { sessionsApi } from '../../sessions/index.ts';
 
-// Turnkey invite presets (Codex / Claude Code) with same-machine detection. Read-only; a plain array
+// Turnkey invite presets with same-machine detection. Read-only; a plain array
 // (no entity adapter) since the UI just lists them and prefills an upsert from the chosen preset.
 const listAcpAgentPresetsApi = sessionsApi.injectEndpoints({
   overrideExisting: true,

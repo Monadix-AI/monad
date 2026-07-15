@@ -148,8 +148,8 @@ export class ExternalAgentAppServerConnectionManager {
         },
         'native cli app-server socket dropped while the process is still alive'
       );
-      // A gateway can close the socket on its very first handshake attempt (e.g. OpenClaw rejects
-      // `connect` with `retryable:true` while its sidecar plugins are still loading, then drops the
+      // A gateway can close the socket on its very first handshake attempt (for example, rejecting
+      // `connect` with `retryable:true` while sidecar plugins are still loading, then dropping the
       // connection) — redial first if the launch mode supports it, even while `live.startup` is still
       // pending. `reconnectAppServer`'s own bounded attempts keep this fast, and its failure path already
       // calls `stop()`, which rejects a still-pending `startup` with a clear message — so this doesn't

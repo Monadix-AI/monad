@@ -179,7 +179,7 @@ function stripJsonFence(text: string): string {
 export const channelGranularitySchema = z.enum(['per-conversation', 'per-thread', 'per-user']);
 export type ChannelGranularity = z.infer<typeof channelGranularitySchema>;
 
-// Inbound DM gate. Mirrors OpenClaw's dmPolicy:
+// Inbound DM gate:
 //  - 'allowlist' (default): only `allowedUsers` get through (default-deny).
 //  - 'pairing':   an unknown sender gets a one-time pairing code; the operator approves it
 //                 (POST pairChannel), which appends them to `allowedUsers`.
@@ -222,7 +222,7 @@ export const channelInstanceViewSchema = z.object({
   groupPolicy: channelGroupPolicySchema.optional(),
   mapping: channelMappingPolicySchema,
   /** Per-channel system-prompt hint injected into this channel's sessions (e.g. "IM surface —
-   *  keep replies short"). Mirrors Hermes' platform_hint. */
+   *  keep replies short"). */
   agentHint: z.string().max(2000).optional(),
   rateLimitPerMin: z.number().int().positive().default(20)
 });

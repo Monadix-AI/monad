@@ -73,7 +73,7 @@ export const l1CapabilitiesSchema = z.object({
 });
 export type L1Capabilities = z.infer<typeof l1CapabilitiesSchema>;
 
-// Setup-wizard field descriptor a swappable backend advertises (mirrors Hermes get_config_schema).
+// Setup-wizard field descriptor a swappable backend advertises.
 export const memoryConfigFieldSchema = z.object({
   key: z.string(),
   label: z.string(),

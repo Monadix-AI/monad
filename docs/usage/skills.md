@@ -3,7 +3,7 @@
 Skills are portable, filesystem-based capability packets that extend the monad agent with
 domain knowledge and procedures — **without paying the token cost until they're needed**.
 monad implements the [agentskills.io](https://agentskills.io) open standard, the same
-`SKILL.md` format used by Claude Code, Codex, Hermes, OpenClaw, and ~40 other agents, so a
+`SKILL.md` format used across the agent ecosystem, so a
 skill written once works across all of them.
 
 ## Where skills live
@@ -124,7 +124,7 @@ skills are not.
 ## Referencing bundled files (`${SKILL_DIR}`)
 
 A skill body can point at its own bundled resources by absolute path with `${SKILL_DIR}` (the
-Claude-compatible alias `${CLAUDE_SKILL_DIR}` also works). This is resolved wherever the body is
+legacy alias `${CLAUDE_SKILL_DIR}` also works). This is resolved wherever the body is
 surfaced — both when the model loads the skill and on `/name` invocation — so L3 scripts are
 actually runnable:
 
@@ -213,7 +213,7 @@ allowed-tools: file_read shell_exec
 ```
 
 Patterns are matched against monad tool *names*: exact (`file_read`), prefix glob (`file_*`), or a
-Claude-style `Bash(git:*)` form (the argument constraint is ignored — monad gates per tool, not
+argument-constrained `Bash(git:*)` form (the argument constraint is ignored — monad gates per tool, not
 per argument). A granted high-risk tool skips the human approval prompt; everything else still
 goes through the gate. Grants are **turn-scoped** and only apply to tools a skill explicitly
 lists, so the trust boundary is *which skills you install* — see Security.
@@ -264,7 +264,7 @@ matches the tier, the fork falls back to the agent's default model — it never 
 
 ## Not yet supported
 
-These Claude-Code frontmatter features are parsed-or-ignored but not yet enforced, pending
+These imported frontmatter features are parsed-or-ignored but not yet enforced, pending
 monad infrastructure: per-skill `model`/`effort` overrides (monad uses `tier` instead) and
 `hooks` — which needs a hook subsystem monad doesn't have yet.
 

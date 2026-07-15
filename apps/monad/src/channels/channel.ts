@@ -394,7 +394,7 @@ export class ChannelService {
         client: c.type, // 'telegram' | 'slack' | … — the concrete chat tool
         instanceId: c.id, // which configured channel instance
         // Per-channel system-prompt hint travels on the origin; sendInline reads it back as
-        // ambientContext so it reaches the model on every turn (Hermes platform_hint).
+        // ambientContext so it reaches the model on every turn.
         ext: channelOriginExt(c)
       })
     });

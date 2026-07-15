@@ -15,7 +15,7 @@
 
 ## 0. As built (L1) — authoritative
 
-The shipped L1 follows **"design A"** (Claude Code model), a rework of the original design.
+The shipped L1 follows **"design A"** (self-curated Markdown), a rework of the original design.
 What actually runs, and where it **deliberately diverges** from §1–§13:
 
 ### 0.1 Two layers by dynamism: static core (injected) + dynamic facts (tool-read)
@@ -28,7 +28,7 @@ What actually runs, and where it **deliberately diverges** from §1–§13:
 
 ### 0.2 Storage — flat scope-keyed Markdown + an index
 
-Machine-written Markdown, Claude Code-style — *not* the append-only `mem_fact_events` table of
+Machine-written Markdown — *not* the append-only `mem_fact_events` table of
 §3.2/§13.1 (D17/F5 **reversed**). One flat dir, one file per scope, frontmatter the store stamps:
 
 ```
@@ -46,7 +46,7 @@ degrades to re-derive-on-next-pass.
 
 ### 0.3 Write path — one `memory` tool, backend-routed
 
-The built-in backend follows the **Claude Code model**: the agent curates its own memory inline.
+The built-in backend follows the **self-curated Markdown model**: the agent curates its own memory inline.
 
 - One tool: `memory(action, …)` — `view` (read the index, or a scope's facts) / `record` / `update` /
   `delete`, with `scope` = `agent` (default) or `global`. NOT raw file read/write: the action surface

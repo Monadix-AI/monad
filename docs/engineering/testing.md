@@ -139,7 +139,7 @@ Additional rules:
 | type | fields | notes |
 |------|--------|-------|
 | `text` | `token: string` | plain text delta |
-| `reasoning` | `token: string` | thinking token (Claude extended thinking, o-series) |
+| `reasoning` | `token: string` | thinking token (extended thinking, o-series) |
 | `tool-call` | `call: ToolCall` | complete tool invocation |
 | `finish` | `reason: string` | `stop` / `tool-calls` / `length` / `content-filter` |
 | `usage` | `usage: ModelUsage` | terminal chunk with token counts |
@@ -149,7 +149,7 @@ Industry-standard chunk types not yet in the protocol (add when the protocol lay
 | type | source | meaning |
 |------|--------|---------|
 | `tool-input-delta` | AI SDK | streaming partial tool input JSON |
-| `source` | AI SDK / Gemini | grounding citation (web-search models) |
+| `source` | AI SDK / provider-native | grounding citation (web-search models) |
 | `file` | AI SDK | inline file / code-execution output |
 | `error` | AI SDK | inline stream error before finish |
 

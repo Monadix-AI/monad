@@ -66,7 +66,7 @@ export function createAcpAgentModule({ paths }: AcpAgentDeps) {
       return { agent: toView(found) };
     },
 
-    // Turnkey invite presets (Codex / Claude Code) + same-machine detection. Read-only, no config
+    // Turnkey invite presets with same-machine detection. Read-only, no config
     // touch — the UI prefills an upsert from a chosen preset. (See services/delegation/presets.ts.)
     listAcpAgentPresets(): ListAcpAgentPresetsResponse {
       return { presets: listAcpAgentPresets() };

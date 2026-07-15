@@ -1,6 +1,6 @@
 // Network-free token estimation with NO local tokenizer. A bundled BPE table (gpt-tokenizer's
-// o200k_base) cost ~200 MB RSS for too little gain — even Claude's own desktop app counts tokens
-// via the provider, not a shipped tokenizer. Instead: a self-calibrating chars-per-token ratio,
+// o200k_base) cost ~200 MB RSS for too little gain; exact counts should come from the provider,
+// not a shipped tokenizer. Instead: a self-calibrating chars-per-token ratio,
 // learned from the provider's real reported usage. `tokens ≈ ceil(chars / ratio)`.
 //
 // Provider-reported token totals stay authoritative wherever they exist; this only fills the

@@ -3,7 +3,7 @@ import { join, relative, resolve } from 'node:path';
 
 import { renderMigrationAssets } from './generate-migration-assets.ts';
 
-const DRIZZLE_KIT_VERSION = '0.31.4';
+const DRIZZLE_KIT_VERSION = '0.31.10';
 const NO_SCHEMA_CHANGES_MARKER = 'No schema changes, nothing to migrate';
 
 export interface MigrationDriftCheckOptions {
@@ -60,6 +60,15 @@ function assertMigrationArtifactsAreCurrent(appRoot: string, drizzleDir: string,
       stderr: 'pipe',
       stdout: 'pipe'
     });
+    const output = formatOutput(result);
+    if (output.includes('Interactive prompts require a TTY')) {
+      throw new Error(
+        withSubprocessOutput(
+          'Drizzle migration generation did not confirm no schema changes; interactive rename input is required',
+          result
+        )
+      );
+    }
     if (result.exitCode !== 0 || result.stderr.toString().trim()) {
       throw new Error(withSubprocessOutput('drizzle-kit generate failed', result));
     }

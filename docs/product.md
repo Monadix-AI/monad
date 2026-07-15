@@ -16,7 +16,7 @@ collaboration the default mode of work, not the exception.
 
 Three overlapping groups who all share the same UI surface:
 
-1. **Everyday AI agent users** — non-technical or semi-technical people who want a capable local AI agent experience similar to Claude Code / Codex. They care about the chat flow being smooth and approachable. Settings complexity should stay out of their way.
+1. **Everyday AI agent users** — non-technical or semi-technical people who want a capable local AI agent experience. They care about the chat flow being smooth and approachable. Settings complexity should stay out of their way.
 2. **Developer power users** — engineers who run agentic sessions, configure model providers, wire up MCP servers, install atom packs, and read tool-approval events. Information density matters; they trust the tool with real work.
 3. **Team operators** — people who set up monad for others, manage approval rules, configure channels (Telegram, etc.), and monitor sessions. Onboarding, policy UI, and observability are their primary surfaces.
 

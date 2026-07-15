@@ -55,9 +55,9 @@ conflicts with the repo's Bun convention, and no memory win over native blitting
 Files are passed by **absolute path** (the daemon is co-located) — no file contents are
 read or transmitted by Mo itself.
 
-## Sprite atlas — the Codex atlas-pet standard
+## Sprite Atlas
 
-Mo's art follows the **Codex atlas-pet** format (the same standard the `hatch-pet` pipeline emits).
+Mo's art follows the **atlas-pet** format (the same standard the `hatch-pet` pipeline emits).
 The sheet (`assets/mochi.png`) is a `columns × rows` grid of `cell_width × cell_height` RGBA cells
 on a transparent background (chroma-keyed from cyan `#00FFFF` at generation time). The bundled Mochi
 sheet is **8 × 9** cells of **192 × 208**. Each row is one **agent-lifecycle state**; frames are
@@ -91,8 +91,7 @@ those nine states; both shells share it. Each shell samples sensors once per tic
   **running** (agent generating) → **review** (done); a failed drop or an offline daemon → **failed**;
   dragging Mo's window → **running-left/right**; otherwise **idle**.
 
-This is purely agent-lifecycle driven — there is no cursor-chasing/sleep behavior (the Codex state
-taxonomy has no such states).
+This is purely agent-lifecycle driven — there is no cursor-chasing or sleep behavior.
 
 ### Working animation (SSE)
 

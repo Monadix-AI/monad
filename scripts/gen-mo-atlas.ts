@@ -43,7 +43,7 @@ const headerRows = atlas.states.map((s) => `  [${enumName(s.state)}] = {${s.fram
 const headerOut = `// GENERATED from apps/mo/assets/atlas.json by scripts/gen-mo-atlas.ts — DO NOT EDIT.
 // Regenerate with \`bun run scripts/gen-mo-atlas.ts\` (postinstall and build-release run it automatically).
 //
-// Codex atlas-pet layout: the sheet (assets/mochi.png) is a columns×rows grid of MO_CELL_W×MO_CELL_H
+// Atlas-pet layout: the sheet (assets/mochi.png) is a columns×rows grid of MO_CELL_W×MO_CELL_H
 // RGBA cells on a transparent background; each row is one agent-lifecycle state, frames packed
 // left-aligned. The mo_state enum order IS the atlas row order, so a state value is its row index.
 

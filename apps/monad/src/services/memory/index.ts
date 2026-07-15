@@ -1,7 +1,7 @@
 // Daemon-side orchestration for L1 memory. A single active backend is selected by
 // `cfg.memory.backend`: 'builtin' = local Markdown (MemoryDir) or 'mem0' = mem0 OSS (lazy-loaded).
 //
-// Design A (Claude Code model): the agent curates its OWN memory through one `memory` tool
+// Design A (self-curated Markdown): the agent curates its OWN memory through one `memory` tool
 // (view/record/update/delete) as it works. Recall does NOT inject the facts — it injects a cheap,
 // per-session-frozen INDEX (what scopes exist + counts) so the agent knows what to `view`. Static
 // identity (SOUL.md/AGENT.md/USER.md) is injected separately as the always-on core. There is no
@@ -148,7 +148,7 @@ export function createMemoryService(deps: MemoryServiceDeps): MemoryService {
   // changed index mid-session would shift the prefix and miss the prompt cache on every memory write.
   // We snapshot recall at first use per session and reuse it unchanged all session — writes still land
   // on disk immediately (and the agent reads live content via the `view` action), surfacing in the NEXT
-  // session's snapshot (Claude Code / Hermes semantics). mem0 recall is query-dependent, not frozen.
+  // session's snapshot. mem0 recall is query-dependent, not frozen.
   const recallSnapshot = new Map<SessionId, string | undefined>();
 
   let mem0Cache: Mem0Adapter | null | undefined;

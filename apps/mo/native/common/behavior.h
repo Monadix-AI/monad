@@ -3,7 +3,7 @@
 // atlas row (see atlas.h). Platform-independent C (mirrors common/daemon.c) so both shells share
 // identical behavior.
 //
-// The state set is the Codex atlas-pet taxonomy — agent-lifecycle semantics, not generic animations.
+// The state set is the atlas-pet taxonomy — agent-lifecycle semantics, not generic animations.
 // The enum order IS the atlas row order, so a state value doubles as its sprite-sheet row index.
 
 #ifndef MO_BEHAVIOR_H
