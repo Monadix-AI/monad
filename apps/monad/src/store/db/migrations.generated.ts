@@ -68,7 +68,15 @@ export const MIGRATIONS: MigrationMeta[] = [
     "bps": true,
     "folderMillis": 1784139452695,
     "hash": "fc5d64d8314ca3403fd6a871ef1ee95c72b5d078fdbea9c457f9377c21dc0297"
+  },
+  {
+    "sql": [
+      "CREATE TABLE `tool_raw_outputs` (\n\t`transcript_target_id` text NOT NULL,\n\t`tool_call_id` text NOT NULL,\n\t`output` text NOT NULL,\n\t`created_at` text NOT NULL,\n\tPRIMARY KEY(`transcript_target_id`, `tool_call_id`)\n);\n"
+    ],
+    "bps": true,
+    "folderMillis": 1784184248878,
+    "hash": "c7199704c6f771a29b12abe4cf57993e52107dbc4ce2dd6aba37888465828ed5"
   }
 ];
 
-export const LATEST_MIGRATION_TIMESTAMP = 1784139452695;
+export const LATEST_MIGRATION_TIMESTAMP = 1784184248878;

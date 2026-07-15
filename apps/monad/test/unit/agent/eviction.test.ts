@@ -321,7 +321,7 @@ test('without persistRawOutput configured, the placeholder falls back to the re-
   expect(evicted.length).toBeGreaterThan(0);
   for (const o of evicted) {
     expect(o).not.toContain('read_tool_output');
-    expect(o).toContain('Re-run the tool');
+    expect(o).toContain('Call the tool again');
   }
 });
 
@@ -344,6 +344,6 @@ test('does not spill when prepare() is called with no ctx (no session to key the
   // read_tool_output for it would always get "not found" for bytes that are gone for good.
   for (const o of outputs(out).filter((o) => o.startsWith(EVICTED_MARKER))) {
     expect(o).not.toContain('read_tool_output');
-    expect(o).toContain('Re-run the tool');
+    expect(o).toContain('Call the tool again');
   }
 });

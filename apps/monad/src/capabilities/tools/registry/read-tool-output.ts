@@ -58,7 +58,7 @@ const readToolOutputInput: ToolInputSchema<ReadToolOutputInput> = {
       id: { type: 'string', description: 'The tool-call id from a "…truncated…" or "…cleared…" marker' },
       offset: { type: 'number', description: 'Character offset to start reading from (default 0)' },
       limit: { type: 'number', description: 'Max characters to return (default 24000)' },
-      grep: { type: 'string', description: 'Return only lines matching this substring instead of a byte range' }
+      grep: { type: 'string', description: 'Filter to lines matching this substring instead of a byte range' }
     },
     required: ['id']
   })

@@ -211,6 +211,23 @@ export const fileObservations = sqliteTable(
   ]
 );
 
+// Full pre-truncation tool outputs, spilled here ONLY when the model-visible result was truncated
+// or evicted from context. Keyed by (transcript target, provider tool-call id) so a later handle
+// read can page the original bytes instead of re-running the tool — tool calls run in both session
+// and workplace-project transcripts, so this follows the messages/events pattern rather than being
+// session-only. Cleaned up with the owning session/project. Not stored inline on messages.data to
+// keep message reads from dragging blobs.
+export const toolRawOutputs = sqliteTable(
+  'tool_raw_outputs',
+  {
+    transcriptTargetId: text('transcript_target_id').notNull(),
+    toolCallId: text('tool_call_id').notNull(),
+    output: text('output').notNull(),
+    createdAt: text('created_at').notNull()
+  },
+  (table) => [primaryKey({ columns: [table.transcriptTargetId, table.toolCallId] })]
+);
+
 export const events = sqliteTable(
   'events',
   {
