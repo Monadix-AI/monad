@@ -1528,6 +1528,7 @@
   "web.chat.contextUsage": "上下文用量",
   "web.chat.contextUsageUnavailable": "用量数据暂不可用",
   "web.chat.contextUsed": "上下文已使用",
+  "web.chat.contextReclaimed": "清理工具输出释放",
   "web.chat.model": "模型",
   "web.chat.providers": "Provider",
   "web.chat.searchModels": "搜索模型",

@@ -1530,6 +1530,7 @@
   "web.chat.contextUsage": "Context usage",
   "web.chat.contextUsageUnavailable": "Usage data is not available yet",
   "web.chat.contextUsed": "context used",
+  "web.chat.contextReclaimed": "Freed from cleared tool output",
   "web.chat.model": "Model",
   "web.chat.providers": "Providers",
   "web.chat.searchModels": "Search models",
