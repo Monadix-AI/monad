@@ -87,7 +87,8 @@ This is a read-only summary node. It derives a short preview from the current pr
 The visual target folds availability into the overall flow, but existing settings must remain accessible. A compact `Who can use this agent?` section sits beneath the Response node panel or in the Response advanced disclosure:
 
 - Other Monad agents -> `subagentCallable`
-- Public API -> `isPublic`
+- Published to Monadix -> `isPublic`; this also exposes the agent through the local OpenAI-compatible API
+- Use Monadix -> `monadixConsume`
 - A2A -> `a2aEnabled`, with current `a2aStatus`
 
 This placement keeps the six-node causal story intact while preserving every existing field. Exposure warnings remain visible in the header when any availability setting is enabled.

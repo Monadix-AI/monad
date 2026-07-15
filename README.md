@@ -82,7 +82,12 @@ To run from source instead, see [Setup](#setup).
 
 ```bash
 bun install
+bun run dev
 ```
+
+`bun install` performs the idempotent worktree setup: environment, ports, local CLI
+shim, generated inputs, and optional shared development services. If startup fails,
+run `bun run dev:doctor` for a read-only diagnosis with repair commands.
 
 ## Running the daemon
 
@@ -116,11 +121,11 @@ model, bootstrap environment variables, and security posture, see
 ## CLI
 
 ```bash
-bun run apps/cli/src/main.ts health
-bun run apps/cli/src/main.ts create "my session"
-bun run apps/cli/src/main.ts send <sessionId> "hello"
-bun run apps/cli/src/main.ts watch <sessionId>
-bun run apps/cli/src/main.ts config transport uds   # tcp | uds (see docs/internals/runtime.md)
+monad status
+monad session new "my session"
+monad session send <sessionId> "hello"
+monad session watch <sessionId>
+monad config set network.transport uds   # tcp | uds (see docs/internals/runtime.md)
 ```
 
 ## Documentation

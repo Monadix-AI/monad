@@ -39,7 +39,7 @@ async function dispatch(): Promise<void> {
   if (sub === 'up' || sub === undefined) {
     const { baseUrl } = await resolveClientConn();
     const daemonUrl = baseUrl.replace(/\/$/, '');
-    // WEB_PORT is a dev-only override (Next.js dev server runs separately). In a release build the
+    // WEB_PORT is a dev-only override (the Vite dev server runs separately). In a release build the
     // web UI is served by the daemon itself, so ignore a WEB_PORT that leaked in from a dev shell
     // (e.g. direnv in the repo). NODE_ENV is pinned to "production" at build time, so this whole
     // branch is dead-code-eliminated in the compiled binary.

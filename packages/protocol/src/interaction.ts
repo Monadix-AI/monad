@@ -62,12 +62,15 @@ export const interactionRequestSchema = z.discriminatedUnion('type', [
 ]);
 export type InteractionRequest = z.infer<typeof interactionRequestSchema>;
 
+export const interactionCancellationReasonSchema = z.enum(['close', 'escape', 'timeout', 'disconnect', 'unavailable']);
+export type InteractionCancellationReason = z.infer<typeof interactionCancellationReasonSchema>;
+
 export const interactionResultSchema = z.discriminatedUnion('status', [
   z.object({ status: z.literal('submitted'), values: z.record(z.string(), z.unknown()) }).strict(),
   z
     .object({
       status: z.literal('cancelled'),
-      reason: z.enum(['close', 'escape', 'timeout', 'disconnect', 'unavailable'])
+      reason: interactionCancellationReasonSchema
     })
     .strict()
 ]);
@@ -82,6 +85,33 @@ export const interactionPresenterCapabilitiesSchema = z
   })
   .strict();
 export type InteractionPresenterCapabilities = z.infer<typeof interactionPresenterCapabilitiesSchema>;
+
+export const interactionIdParamsSchema = z.object({ id: z.string().min(1) }).strict();
+export type InteractionIdParams = z.infer<typeof interactionIdParamsSchema>;
+
+export const interactionPresenterParamsSchema = z.object({ presenterId: z.string().min(1) }).strict();
+export type InteractionPresenterParams = z.infer<typeof interactionPresenterParamsSchema>;
+
+export const interactionClaimBodySchema = z
+  .object({
+    presenterId: z.string().min(1),
+    capabilities: interactionPresenterCapabilitiesSchema
+  })
+  .strict();
+export type InteractionClaimBody = z.infer<typeof interactionClaimBodySchema>;
+
+export const interactionLeaseBodySchema = z.object({ leaseToken: z.string().min(1) }).strict();
+export type InteractionLeaseBody = z.infer<typeof interactionLeaseBodySchema>;
+
+export const interactionSubmitBodySchema = interactionLeaseBodySchema
+  .extend({ values: z.record(z.string(), z.unknown()) })
+  .strict();
+export type InteractionSubmitBody = z.infer<typeof interactionSubmitBodySchema>;
+
+export const interactionCancelBodySchema = interactionLeaseBodySchema
+  .extend({ reason: interactionCancellationReasonSchema })
+  .strict();
+export type InteractionCancelBody = z.infer<typeof interactionCancelBodySchema>;
 
 export const interactionSourceSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('builtin'), id: z.string().min(1), label: z.string().optional() }).strict(),

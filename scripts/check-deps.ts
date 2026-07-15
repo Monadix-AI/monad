@@ -1,22 +1,16 @@
 #!/usr/bin/env bun
-// Enforce the repo's dependency direction:
-//   Leaf apps (apps/*) are the top of the graph — no workspace may depend on one.
-//   Shared code belongs in packages/*; apps compose it, never the reverse.
-// Exits non-zero on any violation.
+// Enforce the repo's dependency direction while preserving explicitly recorded
+// release-composition edges. Exits non-zero on any unrecorded violation.
 
 import { resolve } from 'node:path';
 import { Glob } from 'bun';
 
-interface Pkg {
-  name: string;
-  dir: string;
-  deps: string[];
-}
+import { checkDependencyDirections, defaultDependencyPolicy, type WorkspacePackage } from './dependency-policy.ts';
 
 const root = resolve(import.meta.dir, '..');
 const glob = new Glob('{apps,packages}/*/package.json');
 
-const byName = new Map<string, Pkg>();
+const packages: WorkspacePackage[] = [];
 for await (const rel of glob.scan({ cwd: root })) {
   const json = (await Bun.file(`${root}/${rel}`).json()) as {
     name?: string;
@@ -24,25 +18,25 @@ for await (const rel of glob.scan({ cwd: root })) {
     devDependencies?: Record<string, string>;
   };
   if (!json.name) continue;
-  const deps = [...Object.keys(json.dependencies ?? {}), ...Object.keys(json.devDependencies ?? {})];
-  byName.set(json.name, { name: json.name, dir: rel.replace(/\/package\.json$/, ''), deps });
+  packages.push({
+    dependencies: Object.keys(json.dependencies ?? {}),
+    devDependencies: Object.keys(json.devDependencies ?? {}),
+    dir: rel.replace(/\/package\.json$/, ''),
+    name: json.name
+  });
 }
 
-const isLeafApp = (p: Pkg): boolean => p.dir.startsWith('apps/');
-
-const violations: string[] = [];
-for (const pkg of byName.values()) {
-  for (const dep of pkg.deps) {
-    const target = byName.get(dep);
-    if (!target) continue; // external dep
-    if (isLeafApp(target)) {
-      violations.push(`${pkg.name} (${pkg.dir}) depends on leaf app ${target.name} (${target.dir})`);
-    }
-  }
-}
+const violations = checkDependencyDirections(packages, defaultDependencyPolicy);
 
 if (violations.length > 0) {
-  process.stderr.write(`dependency-direction violations:\n${violations.map((v) => `  - ${v}`).join('\n')}\n`);
+  process.stderr.write(
+    `dependency-direction violations:\n${violations
+      .map(
+        (violation) =>
+          `  - ${violation.from} (${violation.fromDir}) has an unrecorded ${violation.dependencyKind} dependency on app ${violation.to} (${violation.toDir})`
+      )
+      .join('\n')}\n`
+  );
   process.exit(1);
 }
-process.stdout.write(`check-deps: ok (${byName.size} workspaces)\n`);
+process.stdout.write(`check-deps: ok (${packages.length} workspaces, explicit app composition policy)\n`);

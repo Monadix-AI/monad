@@ -40,11 +40,8 @@ jobs:
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
           restore-keys: ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
-      - run: bun run db:check
-      - run: bun run db:drift
-      - run: bun run typecheck
-      - run: bun run lint
-      - run: bun run knip
+      - run: bun run quality:check
+      - run: git diff --exit-code
 
   # Cross-OS coverage: the daemon/CLI ship to all three (build-release --all emits
   # darwin/linux/windows). Unix-socket paths differ per OS — Linux & macOS use the

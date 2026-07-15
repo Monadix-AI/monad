@@ -17,18 +17,7 @@ setup path fits your workflow.
 
 ---
 
-### Option A — GitHub Codespaces or Dev Container (zero local install)
-
-Click **Code → Codespaces → Create codespace** on GitHub, or open the repo in
-VS Code / Cursor and choose **Reopen in Container** when prompted. The container
-comes with the right Bun version pre-installed and runs `bun install`
-automatically on first start.
-
-No local tooling required.
-
----
-
-### Option B — direnv (recommended for local development)
+### Option A — direnv (recommended for local development)
 
 [direnv](https://direnv.net) reads the `.envrc` in the repo root and switches Bun
 automatically on `cd`. The version is sourced from `"packageManager"` in
@@ -74,7 +63,7 @@ If the version isn't cached yet, `downloading` appears while mise fetches it.
 
 ---
 
-### Option C — manual shell hook (no direnv)
+### Option B — manual shell hook (no direnv)
 
 If you prefer not to install direnv, add this to `~/.zshrc` (bash/fish variants
 in [`docs/engineering/worktree.md`](docs/engineering/worktree.md)):
@@ -121,9 +110,13 @@ Every developer's environment picks up the new version automatically on next `cd
 git clone https://github.com/Monadix-AI/monad.git
 cd monad
 bun install              # installs deps and sets up git hooks (lefthook)
-cp .env.example .env.local   # then fill in OPENROUTER_API_KEY
 bun run dev              # daemon (@monad/monad) + web UI
 ```
+
+`bun install` is the one-step initializer. It creates `.env.local`, assigns stable
+worktree ports, installs local shims and hooks, refreshes generated inputs, and starts
+optional shared development services when their host tools are available. Run
+`bun run dev:doctor` if any part of the environment is unhealthy.
 
 The repo is a monorepo managed with Bun workspaces + Turbo:
 
@@ -135,18 +128,21 @@ Dev data is isolated under `.dev/` (gitignored) — it never touches your real
 
 ## Required checks
 
-Your change must pass all three before it can merge. CI runs the same commands
-on Ubuntu, macOS, and Windows.
+Every commit runs the canonical quality gate. The gate first applies the approved
+automatic repairs (syncpack formatting and Biome), stages those repairs, then runs
+all read-only checks. Knip never deletes code automatically: a finding blocks the
+commit until the source is intentionally changed.
 
 ```bash
-bun run typecheck    # turbo run typecheck
-bun run test         # turbo run test (bun:test under the hood)
-bun run lint         # biome check --unsafe
+bun run quality:precommit  # repair, then run every commit-time check
+bun run quality:check      # CI/read-only quality checks
+bun run test               # cross-package Bun tests
 ```
 
-Most of this is also enforced locally by git hooks (lefthook), which on commit
-run Biome, [syncpack](https://github.com/JamieMason/syncpack) (dependency
-version consistency), and a staged typecheck. Don't bypass the hooks.
+The quality gate covers Biome, syncpack, knip, dependency direction, agent-rule and
+i18n generation, database history/drift, and workspace typechecking. CI runs the
+same check definition, verifies it left the tracked checkout unchanged, and runs the
+test suite on Linux, macOS, and Windows. Don't bypass the hooks.
 
 Fork PRs run the same matrix without repo secrets: the Turbo remote cache is
 skipped (builds are just slower) and live-model suites self-skip without
@@ -157,31 +153,20 @@ When you touch `apps/monad`, exercise the feature over **every transport**
 
 ## Agent instruction files
 
-The **repo-root** `AGENTS.md` is **generated** — don't hand-edit it. The single
-source is [`.rulesync/rules/`](.rulesync/rules/);
-[rulesync](https://github.com/dyoshikawa/rulesync) compiles it into `AGENTS.md`.
-We commit **only `AGENTS.md`** — every major agent reads it natively or as a
-fallback (Codex, Cursor, Copilot, Gemini, Claude Code, Zed, Roo, Warp, opencode,
-Cline, Kiro, Antigravity), so the per-tool files (`CLAUDE.md`, `.cursor/rules/`,
-`.github/copilot-instructions.md`, `GEMINI.md`) are redundant and not produced.
+Agent-facing files are local generated output — don't hand-edit them. The committed
+single source is [`.rulesync/rules/`](.rulesync/rules/); Rulesync compiles it into
+`AGENTS.md`, Codex/Claude/Copilot files, and MCP configuration for the tools installed
+on the developer's machine. Generated targets are gitignored.
 
 Edit the source, then regenerate:
 
 ```bash
-bun run agents:sync     # regenerate AGENTS.md from .rulesync/
-bun run agents:check    # verify it's up to date (CI runs this)
+bun run agents:sync     # regenerate local agent targets from .rulesync/
+bun run agents:check    # verify the local targets match the source
 ```
 
-The lefthook pre-commit hook regenerates and stages it automatically when you
-change `.rulesync/`. To give a specific tool its proprietary format (e.g. Cursor
-`.mdc` glob scoping), add that target back in `rulesync.jsonc`.
-
-**Per-package rules** are **hand-written**, not generated. A subpackage with its own
-conventions carries a thin, package-specific `AGENTS.md` — read by Codex/Cursor/Gemini
-via nearest-file precedence and by Claude Code as a per-directory fallback. Edit that
-file directly; don't repeat repo-root rules. These live next to the code they govern,
-outside rulesync's SSOT — intentionally. (If a tool ever fails to pick up a nested
-`AGENTS.md`, drop a one-line `CLAUDE.md` containing `@AGENTS.md` beside it.)
+The quality gate regenerates these ignored local targets before checking them. To add
+or remove a tool-specific target, edit `rulesync.jsonc`, not generated output.
 
 **Personal rules** (just for you, never committed) go in `.rulesync.local/rules.md`;
 `bun run agents:local` fans them into gitignored local slots (`CLAUDE.local.md`,

@@ -246,10 +246,9 @@ future review doesn't re-raise them.
 - **"Unix socket has no chmod"** — false. `apps/monad/src/main.ts` calls
   `chmod(sockPath, 0o600)` immediately after `Bun.serve({ unix })`; the socket's
   filesystem perms ARE its auth.
-- **"`apps/web` uses Next.js → violates no-vite"** — false. It's a deliberate, documented
-  choice ([web-router.md](../internals/web-router.md)): `apps/web` is a Next.js App Router SPA shipped
-  as a static export embedded in the binary. The "Bun.serve + HTML imports" rule targets
-  simple frontends.
+- **"`apps/web` should use framework server routes"** — false. The documented
+  [web-router](../internals/web-router.md) is a Vite-built TanStack Router SPA. Daemon
+  authority stays behind the `/api` and `/v1` proxies instead of moving into the UI.
 
 **Intentionally not extracted:**
 

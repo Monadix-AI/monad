@@ -1,19 +1,24 @@
 import { expect, test } from 'bun:test';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import {
-  buildCodeGraphInitStep,
   buildDevInitSummary,
   buildDevStepProgressFrame,
   buildDevStepStatusFrame,
   buildGeneratedArtifactProgressFrame,
   buildGeneratedArtifactStatusFrame,
+  codeGraphStatus,
   devCliShimText,
   ensurePortLines,
+  isExpectedPhoenixImage,
   portOffset,
   postCheckoutHookText,
   removeBlankXdgLines,
-  shouldInitCodeGraph,
+  resolvePhoenixContainerImage,
   shouldRenderDevInitCommandSpinner,
+  withSharedDirectoryLock,
   worktreePorts
 } from '../../dev-init.ts';
 
@@ -120,11 +125,10 @@ test('removeBlankXdgLines preserves real XDG overrides and comments', () => {
   expect(removed).toEqual([]);
 });
 
-test('shouldInitCodeGraph only initializes when codegraph is installed and the checkout is unindexed', () => {
-  expect(shouldInitCodeGraph(true, false)).toBe(true);
-  expect(shouldInitCodeGraph(true, true)).toBe(false);
-  expect(shouldInitCodeGraph(false, false)).toBe(false);
-  expect(shouldInitCodeGraph(false, true)).toBe(false);
+test('CodeGraph status leaves indexing as an explicit project-owner action', () => {
+  expect(codeGraphStatus(false, false)).toBe('unavailable');
+  expect(codeGraphStatus(true, false)).toBe('available-unindexed');
+  expect(codeGraphStatus(true, true)).toBe('indexed');
 });
 
 test('postCheckoutHookText runs monad bootstrap before lefthook', () => {
@@ -214,15 +218,35 @@ test('dev-init command steps only render Monad progress animation when output is
   expect(shouldRenderDevInitCommandSpinner('pipe', false)).toBe(false);
 });
 
-test('CodeGraph init step inherits stdio so the CodeGraph animation is visible', () => {
-  expect(buildCodeGraphInitStep('/usr/local/bin/codegraph', '/repo')).toMatchObject({
-    command: ['/usr/local/bin/codegraph', 'init', '-i'],
-    cwd: '/repo',
-    label: 'CodeGraph',
-    stdio: 'inherit',
-    target: '.codegraph/codegraph.db',
-    verb: 'indexing'
-  });
+test('Phoenix only reuses the expected shared image', () => {
+  expect(isExpectedPhoenixImage('arizephoenix/phoenix')).toBe(true);
+  expect(isExpectedPhoenixImage('arizephoenix/phoenix:latest')).toBe(true);
+  expect(isExpectedPhoenixImage('docker.io/arizephoenix/phoenix:latest')).toBe(true);
+  expect(isExpectedPhoenixImage('other/image:latest')).toBe(false);
+});
+
+test('Phoenix identity falls back to the container list when inspect cannot read stale state', () => {
+  expect(resolvePhoenixContainerImage('', 'docker.io/arizephoenix/phoenix:latest')).toBe(
+    'docker.io/arizephoenix/phoenix:latest'
+  );
+  expect(resolvePhoenixContainerImage('arizephoenix/phoenix:latest', 'other/image')).toBe(
+    'arizephoenix/phoenix:latest'
+  );
+});
+
+test('shared service lock is released after the initializer finishes', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'monad-dev-init-lock-'));
+  const lockPath = join(dir, 'phoenix.lock');
+  try {
+    const value = await withSharedDirectoryLock(lockPath, async () => {
+      expect(existsSync(lockPath)).toBe(true);
+      return 'ready';
+    });
+    expect(value).toBe('ready');
+    expect(existsSync(lockPath)).toBe(false);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('generated artifact progress frame is an overwrite-only terminal animation frame', () => {

@@ -24,9 +24,9 @@ A quick-reference map of every tool and library in the repo, organized by concer
 | Tool | Role |
 |------|------|
 | **[Biome](https://biomejs.dev)** | Linting + formatting (replaces ESLint + Prettier) |
-| **[Lefthook](https://github.com/evilmartians/lefthook)** | Git hooks runner — runs Biome, syncpack, typecheck, and codegen on pre-commit |
+| **[Lefthook](https://github.com/evilmartians/lefthook)** | Git hooks runner — delegates pre-commit repair and checks to the shared quality gate |
 | **Commitlint + Commitizen** | Enforces Conventional Commits on every commit message |
-| **[Rulesync](https://github.com/dyoshikawa/rulesync)** | Single-source agent rules (`.rulesync/rules/`) compiled into `CLAUDE.md`, `AGENTS.md`, `.cursor/rules/` |
+| **[Rulesync](https://github.com/dyoshikawa/rulesync)** | Compiles committed `.rulesync/rules/` into gitignored local targets for supported agents |
 
 ## Backend daemon (`apps/monad`)
 
@@ -52,8 +52,8 @@ A quick-reference map of every tool and library in the repo, organized by concer
 
 | Tool | Role |
 |------|------|
-| **[Next.js 16](https://nextjs.org)** | App router; runs under Bun with `--bun next dev` |
-| **[Turbopack](https://turbo.build/pack)** | Next.js dev bundler (`--turbopack`) |
+| **[Vite](https://vite.dev)** | Development server and production SPA build (`out/`) |
+| **[TanStack Router](https://tanstack.com/router)** | Type-safe file-based client routing and generated route tree |
 | **[React 19](https://react.dev)** | UI framework; React Compiler enabled |
 | **[Tailwind CSS v4](https://tailwindcss.com)** | Utility-first CSS; PostCSS pipeline |
 | **[Redux Toolkit](https://redux-toolkit.js.org) + React-Redux** | Global client state (sessions, messages, config) |

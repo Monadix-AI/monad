@@ -138,8 +138,7 @@ surface once, then make a concentrated repair pass instead of cycling through
 test → fix → test → fix for one command at a time:
 
 ```sh
-bun run typecheck       # TypeScript — must have zero errors
-bun run lint            # Biome — auto-fixes style issues, then exits non-zero on remaining errors
+bun run quality:check   # complete commit-time gate, no tracked-file changes
 bun run test            # all unit + e2e — must be green
 ```
 
@@ -286,11 +285,11 @@ Read this when `bun run dev` fails or you need to find/verify this worktree's po
    - **assigns this worktree its own ports** (derived from the checkout path) and writes
      them into `.env.local` if absent — it never clobbers a value you set by hand,
    - regenerates the `./.dev/bin` CLI shims with this worktree's absolute paths.
-2. **At dev time**, `bun run dev` runs `scripts/dev-prep.ts`, which reads `.env.local`, mirrors
-   `WEB_PORT` → `PORT` (Next.js only honors `PORT`/`-p`, not `WEB_PORT`), points Bun's
+2. **At dev time**, `bun run dev` runs `scripts/dev-prep.ts`, which reads `.env.local`, exposes
+   `WEB_PORT` to Vite, points Bun's
    runtime transpiler cache at a shared `~/.cache/monad-bun` (so `*.pile` files stop piling
    up in each worktree's `node_modules`), then starts `turbo`.
-3. `turbo` starts `@monad/monad` (daemon) and `@monad/web` (Next dev) as persistent tasks.
+3. `turbo` starts `@monad/monad` (daemon) and `@monad/web` (Vite dev) as persistent tasks.
 
 Everything lives inside the worktree (`.dev/` is gitignored). Nothing global on the
 machine is touched, so worktrees never share daemon state, sockets, or a database.
@@ -306,7 +305,7 @@ grep -E '^(MONAD_PORT|WEB_PORT|MONAD_KV_UI_PORT)=' .env.local
 | Var | What | Default range |
 |---|---|---|
 | `MONAD_PORT` | Daemon TCP port. Overrides `config.json`'s `network.port` for the daemon **and** its clients, so they stay in sync. | 52000–52999 |
-| `WEB_PORT` | Next dev server port. | 3100–4099 |
+| `WEB_PORT` | Vite dev server port. | 3100–4099 |
 | `MONAD_KV_UI_PORT` | Dev-only KV debug UI port. | 6400–7399 |
 
 The daemon binds `MONAD_PORT`; the web app, TUI, and CLI all resolve the same value, so
@@ -343,7 +342,7 @@ are only the fallbacks for a checkout that hasn't been set up.
 
 The daemon binds a TCP port **unconditionally** — the WebSocket push channel
 (`/v1/stream`) is TCP-only, so the Unix socket alone can't serve the web UI. Two worktrees
-on the same default port would mean the second daemon dies with `EADDRINUSE`. The Next dev
+on the same default port would mean the second daemon dies with `EADDRINUSE`. The Vite dev
 server (`WEB_PORT`) and the KV debug UI (`MONAD_KV_UI_PORT`) are the same story. Per-worktree
 port assignment in `scripts/dev-init.ts` is what makes concurrent worktrees work; the
 single `MONAD_PORT` env var (honored by both the daemon and every client) is what keeps

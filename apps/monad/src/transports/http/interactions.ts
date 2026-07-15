@@ -1,24 +1,14 @@
 import type { HostInteractionService } from '#/interactions/service.ts';
 
-import { Elysia, t } from 'elysia';
-
-const interactionType = t.Union([t.Literal('confirm'), t.Literal('select'), t.Literal('form')]);
-const fieldType = t.Union([
-  t.Literal('string'),
-  t.Literal('secret'),
-  t.Literal('number'),
-  t.Literal('boolean'),
-  t.Literal('select')
-]);
-
-const capabilities = t.Object({
-  interactionTypes: t.Array(interactionType),
-  fieldTypes: t.Array(fieldType),
-  supportsSecretInput: t.Boolean(),
-  supportsBackgroundQueue: t.Boolean()
-});
-
-const leaseBody = t.Object({ leaseToken: t.String({ minLength: 1 }) });
+import {
+  interactionCancelBodySchema,
+  interactionClaimBodySchema,
+  interactionIdParamsSchema,
+  interactionLeaseBodySchema,
+  interactionPresenterParamsSchema,
+  interactionSubmitBodySchema
+} from '@monad/protocol';
+import { Elysia } from 'elysia';
 
 export function createInteractionsController(service: HostInteractionService) {
   return new Elysia({ tags: ['http-only'] })
@@ -51,8 +41,8 @@ export function createInteractionsController(service: HostInteractionService) {
       '/interactions/:id/claim',
       ({ params, body }) => service.claim(params.id, body.presenterId, body.capabilities),
       {
-        params: t.Object({ id: t.String({ minLength: 1 }) }),
-        body: t.Object({ presenterId: t.String({ minLength: 1 }), capabilities })
+        params: interactionIdParamsSchema,
+        body: interactionClaimBodySchema
       }
     )
     .post(
@@ -62,8 +52,8 @@ export function createInteractionsController(service: HostInteractionService) {
         return { ok: true as const };
       },
       {
-        params: t.Object({ id: t.String({ minLength: 1 }) }),
-        body: leaseBody
+        params: interactionIdParamsSchema,
+        body: interactionLeaseBodySchema
       }
     )
     .post(
@@ -73,8 +63,8 @@ export function createInteractionsController(service: HostInteractionService) {
         return { ok: true as const };
       },
       {
-        params: t.Object({ id: t.String({ minLength: 1 }) }),
-        body: t.Object({ ...leaseBody.properties, values: t.Record(t.String(), t.Unknown()) })
+        params: interactionIdParamsSchema,
+        body: interactionSubmitBodySchema
       }
     )
     .post(
@@ -84,17 +74,8 @@ export function createInteractionsController(service: HostInteractionService) {
         return { ok: true as const };
       },
       {
-        params: t.Object({ id: t.String({ minLength: 1 }) }),
-        body: t.Object({
-          ...leaseBody.properties,
-          reason: t.Union([
-            t.Literal('close'),
-            t.Literal('escape'),
-            t.Literal('timeout'),
-            t.Literal('disconnect'),
-            t.Literal('unavailable')
-          ])
-        })
+        params: interactionIdParamsSchema,
+        body: interactionCancelBodySchema
       }
     )
     .post(
@@ -103,6 +84,6 @@ export function createInteractionsController(service: HostInteractionService) {
         service.releasePresenter(params.presenterId);
         return { ok: true as const };
       },
-      { params: t.Object({ presenterId: t.String({ minLength: 1 }) }) }
+      { params: interactionPresenterParamsSchema }
     );
 }

@@ -1,10 +1,16 @@
 import { expect, test } from 'bun:test';
 
 import {
+  interactionCancelBodySchema,
+  interactionClaimBodySchema,
   interactionEventSchema,
+  interactionIdParamsSchema,
+  interactionLeaseBodySchema,
   interactionPresenterCapabilitiesSchema,
+  interactionPresenterParamsSchema,
   interactionRequestSchema,
   interactionResultSchema,
+  interactionSubmitBodySchema,
   pendingInteractionSchema
 } from '../src/interaction.ts';
 
@@ -97,4 +103,45 @@ test('models redacted lifecycle events without submitted values', () => {
       values: { apiKey: 'secret-value' }
     })
   ).toThrow();
+});
+
+test('validates interaction HTTP parameters and request bodies from protocol schemas', () => {
+  expect(interactionIdParamsSchema.parse({ id: 'int_123' })).toEqual({ id: 'int_123' });
+  expect(interactionPresenterParamsSchema.parse({ presenterId: 'web' })).toEqual({ presenterId: 'web' });
+  expect(
+    interactionClaimBodySchema.parse({
+      presenterId: 'web',
+      capabilities: {
+        interactionTypes: ['confirm'],
+        fieldTypes: ['string'],
+        supportsSecretInput: false,
+        supportsBackgroundQueue: true
+      }
+    })
+  ).toEqual({
+    presenterId: 'web',
+    capabilities: {
+      interactionTypes: ['confirm'],
+      fieldTypes: ['string'],
+      supportsSecretInput: false,
+      supportsBackgroundQueue: true
+    }
+  });
+  expect(interactionLeaseBodySchema.parse({ leaseToken: 'lease_123' })).toEqual({ leaseToken: 'lease_123' });
+  expect(interactionSubmitBodySchema.parse({ leaseToken: 'lease_123', values: { approved: true } })).toEqual({
+    leaseToken: 'lease_123',
+    values: { approved: true }
+  });
+  expect(interactionCancelBodySchema.parse({ leaseToken: 'lease_123', reason: 'escape' })).toEqual({
+    leaseToken: 'lease_123',
+    reason: 'escape'
+  });
+});
+
+test('rejects malformed interaction HTTP parameters and request bodies', () => {
+  expect(() => interactionIdParamsSchema.parse({ id: '' })).toThrow();
+  expect(() => interactionPresenterParamsSchema.parse({ presenterId: '' })).toThrow();
+  expect(() => interactionLeaseBodySchema.parse({ leaseToken: '' })).toThrow();
+  expect(() => interactionSubmitBodySchema.parse({ leaseToken: 'lease_123', values: {}, extra: true })).toThrow();
+  expect(() => interactionCancelBodySchema.parse({ leaseToken: 'lease_123', reason: 'unknown' })).toThrow();
 });

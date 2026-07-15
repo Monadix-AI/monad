@@ -33,7 +33,7 @@ import { join, resolve } from 'node:path';
 import { installDevCliShim } from './dev-init/cli-shim';
 import { runDevInitCommandStep } from './dev-init/command-step';
 import { scaffoldDevSeed } from './dev-init/dev-seed';
-import { buildMoSprite, initCodeGraph, startPhoenix } from './dev-init/dev-services';
+import { buildMoSprite, reportCodeGraph, startPhoenix } from './dev-init/dev-services';
 import { parseEnvFile, shouldSkipDevInit } from './dev-init/env';
 import { installPostCheckoutHook } from './dev-init/git-hooks';
 import { buildDevInitSummary, generatedArtifactsHeader, shouldColorOutput } from './dev-init/output';
@@ -41,7 +41,12 @@ import { ensurePortLines, removeBlankXdgLines, type WorktreePorts, worktreePorts
 
 export { devCliShimText, installDevCliShim } from './dev-init/cli-shim';
 export { shouldRenderDevInitCommandSpinner } from './dev-init/command-step';
-export { buildCodeGraphInitStep, shouldInitCodeGraph } from './dev-init/dev-services';
+export {
+  codeGraphStatus,
+  isExpectedPhoenixImage,
+  resolvePhoenixContainerImage,
+  withSharedDirectoryLock
+} from './dev-init/dev-services';
 export { postCheckoutHookText } from './dev-init/git-hooks';
 export {
   buildDevInitSummary,
@@ -138,7 +143,7 @@ async function main(): Promise<void> {
 
   const apiKey = await scaffoldDevSeed(root, log, warn);
 
-  await initCodeGraph(root, color, log, warn);
+  await reportCodeGraph(root, log);
 
   // ── 4. Arize Phoenix (local LLM observability backend) ───────────────────────
 

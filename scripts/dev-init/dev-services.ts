@@ -1,43 +1,73 @@
+import { mkdir, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { type DevInitCommandStepOptions, runDevInitCommandStep } from './command-step';
+import { runDevInitCommandStep } from './command-step';
 
-export function shouldInitCodeGraph(codeGraphAvailable: boolean, indexExists: boolean): boolean {
-  return codeGraphAvailable && !indexExists;
+export type CodeGraphStatus = 'available-unindexed' | 'indexed' | 'unavailable';
+
+export function codeGraphStatus(codeGraphAvailable: boolean, indexExists: boolean): CodeGraphStatus {
+  if (!codeGraphAvailable) return 'unavailable';
+  return indexExists ? 'indexed' : 'available-unindexed';
 }
 
-export function buildCodeGraphInitStep(codeGraphBin: string, root: string): DevInitCommandStepOptions {
-  return {
-    color: false,
-    command: [codeGraphBin, 'init', '-i'],
-    cwd: root,
-    doneVerb: 'ready',
-    label: 'CodeGraph',
-    stdio: 'inherit',
-    target: '.codegraph/codegraph.db',
-    verb: 'indexing'
-  };
-}
-
-export async function initCodeGraph(
-  root: string,
-  color: boolean,
-  log: (msg: string) => void,
-  warn: (msg: string) => void
-): Promise<void> {
-  const codeGraphBin = Bun.which('codegraph');
-  const codeGraphAvailable = codeGraphBin !== null;
+export async function reportCodeGraph(root: string, log: (msg: string) => void): Promise<void> {
+  const codeGraphAvailable = Bun.which('codegraph') !== null;
   const codeGraphIndexExists = await Bun.file(join(root, '.codegraph', 'codegraph.db')).exists();
-  if (codeGraphBin && shouldInitCodeGraph(codeGraphAvailable, codeGraphIndexExists)) {
-    const result = await runDevInitCommandStep({
-      ...buildCodeGraphInitStep(codeGraphBin, root),
-      color
-    });
-    if (result.exitCode !== 0) {
-      warn(`CodeGraph             init failed with exit code ${result.exitCode}`);
+  const status = codeGraphStatus(codeGraphAvailable, codeGraphIndexExists);
+  if (status === 'indexed') log('CodeGraph             indexed');
+  if (status === 'available-unindexed') {
+    log('CodeGraph             available (project owner may run: codegraph init)');
+  }
+}
+
+export function isExpectedPhoenixImage(image: string): boolean {
+  const normalized = image.replace(/^docker\.io\//, '');
+  return (
+    normalized === 'arizephoenix/phoenix' ||
+    normalized.startsWith('arizephoenix/phoenix:') ||
+    normalized.startsWith('arizephoenix/phoenix@')
+  );
+}
+
+export function resolvePhoenixContainerImage(inspectedImage: string, listedImage: string): string {
+  return inspectedImage.trim() || listedImage.trim();
+}
+
+function dockerText(args: string[]): string {
+  const result = Bun.spawnSync(['docker', ...args], { stdout: 'pipe', stderr: 'pipe' });
+  return result.exitCode === 0 ? result.stdout.toString().trim() : '';
+}
+
+function listedPhoenixImage(): string {
+  const rows = dockerText(['ps', '-a', '--filter', 'name=phoenix', '--format', '{{.Names}}\t{{.Image}}']);
+  for (const row of rows.split('\n')) {
+    const [name, image] = row.split('\t');
+    if (name === 'phoenix') return image ?? '';
+  }
+  return '';
+}
+
+export async function withSharedDirectoryLock<T>(
+  lockPath: string,
+  action: () => Promise<T>,
+  timeoutMs = 30_000
+): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+  while (true) {
+    try {
+      await mkdir(lockPath);
+      break;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+      if (Date.now() >= deadline) throw new Error(`timed out waiting for shared service lock ${lockPath}`);
+      await Bun.sleep(100);
     }
-  } else if (codeGraphAvailable) {
-    log('CodeGraph             already indexed');
+  }
+  try {
+    return await action();
+  } finally {
+    await rm(lockPath, { force: true, recursive: true });
   }
 }
 
@@ -59,20 +89,23 @@ export async function startPhoenix(
     if (!dockerAvailable) {
       log('Phoenix               skipped  (docker not found)');
     } else {
-      const running = await Bun.$`docker inspect -f '{{.State.Running}}' phoenix`
-        .quiet()
-        .text()
-        .then((t) => t.trim() === 'true')
-        .catch(() => false);
-      if (running) {
-        log('Phoenix               already running');
-        otelUiUrl = 'http://localhost:6006';
-      } else {
-        const exists = await Bun.$`docker inspect phoenix`
-          .quiet()
-          .then(() => true)
-          .catch(() => false);
-        if (exists) {
+      otelUiUrl = await withSharedDirectoryLock(join(tmpdir(), 'monad-phoenix-init.lock'), async () => {
+        const containerImage = resolvePhoenixContainerImage(
+          dockerText(['inspect', '--format', '{{.Config.Image}}', 'phoenix']),
+          listedPhoenixImage()
+        );
+        if (containerImage && !isExpectedPhoenixImage(containerImage)) {
+          warn(`Phoenix               skipped  (container name "phoenix" belongs to ${containerImage})`);
+          return '';
+        }
+        const running = containerImage
+          ? dockerText(['inspect', '--format', '{{.State.Running}}', 'phoenix']) === 'true'
+          : false;
+        if (running) {
+          log('Phoenix               already running (shared)');
+          return 'http://localhost:6006';
+        }
+        if (containerImage) {
           const result = await runDevInitCommandStep({
             color,
             command: ['docker', 'start', 'phoenix'],
@@ -81,7 +114,10 @@ export async function startPhoenix(
             target: 'http://localhost:6006',
             verb: 'starting'
           });
-          if (result.exitCode !== 0) warn(`Phoenix               restart failed with exit code ${result.exitCode}`);
+          if (result.exitCode !== 0) {
+            warn(`Phoenix               restart failed with exit code ${result.exitCode}`);
+            return '';
+          }
         } else {
           const imagePresent = await Bun.$`docker image inspect arizephoenix/phoenix`
             .quiet()
@@ -96,7 +132,10 @@ export async function startPhoenix(
               target: 'arizephoenix/phoenix',
               verb: 'pulling'
             });
-            if (pull.exitCode !== 0) warn(`Phoenix               image pull failed with exit code ${pull.exitCode}`);
+            if (pull.exitCode !== 0) {
+              warn(`Phoenix               image pull failed with exit code ${pull.exitCode}`);
+              return '';
+            }
           }
           const run = await runDevInitCommandStep({
             color,
@@ -117,10 +156,13 @@ export async function startPhoenix(
             target: 'http://localhost:6006',
             verb: 'starting'
           });
-          if (run.exitCode !== 0) warn(`Phoenix               start failed with exit code ${run.exitCode}`);
+          if (run.exitCode !== 0) {
+            warn(`Phoenix               start failed with exit code ${run.exitCode}`);
+            return '';
+          }
         }
-        otelUiUrl = 'http://localhost:6006';
-      }
+        return 'http://localhost:6006';
+      });
     }
   } catch (err) {
     warn(`Phoenix               failed to start: ${err instanceof Error ? err.message : String(err)}`);

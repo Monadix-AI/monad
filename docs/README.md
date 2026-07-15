@@ -56,7 +56,7 @@ For contributors and the curious: architecture and behavior of the running syste
 | [internals/atoms.md](internals/atoms.md) | The atom pack system: one pack contributes declared, manifest-gated extension kinds. |
 | [internals/hooks.md](internals/hooks.md) | Lifecycle hooks: events, the value contract, command and atom-pack hooks, dispatch semantics. |
 | [internals/channel-conformance.md](internals/channel-conformance.md) | The IM channel conformance contract every adapter is pinned to. |
-| [internals/web-router.md](internals/web-router.md) | The web UI router: a Next.js App Router SPA shipped as a static export embedded in the binary. |
+| [internals/web-router.md](internals/web-router.md) | The web UI router: a Vite-built TanStack Router SPA embedded in the binary. |
 | [internals/third-party-commands.md](internals/third-party-commands.md) | Slash commands contributed by atom packs via `defineCommand()`; the daemon owns parsing and execution. |
 
 ## Engineering — working in this repo

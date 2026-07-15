@@ -10,7 +10,8 @@ import {
   cleanupDevProcess,
   devCommand,
   devSpawnOptions,
-  i18nCommand
+  i18nCommand,
+  reportPortSurvivors
 } from '../../dev-prep.ts';
 
 const repoRoot = join(import.meta.dir, '..', '..', '..');
@@ -182,4 +183,24 @@ test('cleanupDevProcess uses taskkill for Windows tree termination', () => {
   });
 
   expect(calls).toEqual(['taskkill:1234']);
+});
+
+test('port survivor diagnostics warn without killing the occupying process', () => {
+  const warnings: string[] = [];
+  const lookedUp: string[] = [];
+
+  reportPortSurvivors(
+    { MONAD_PORT: '52147', WEB_PORT: '3247' },
+    (message) => warnings.push(message),
+    (port) => {
+      lookedUp.push(port);
+      return port === '52147' ? ['991'] : [];
+    },
+    'darwin'
+  );
+
+  expect(lookedUp).toEqual(['3247', '52147']);
+  expect(warnings).toEqual([
+    '[dev-prep] port 52147 is still occupied by PID 991; inspect it with: lsof -nP -iTCP:52147 -sTCP:LISTEN'
+  ]);
 });

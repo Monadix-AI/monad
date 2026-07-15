@@ -39,11 +39,12 @@ mistake; escalate only when it can't.
 
 | Loop | Command | Budget | Catches |
 |---|---|---|---|
-| Hot reload | save the file (`bun run dev` running) | seconds | daemon config/skill/atom changes, Next.js UI edits |
+| Hot reload | save the file (`bun run dev` running) | seconds | daemon config/skill/atom changes, Vite UI edits |
 | Typecheck | `bun run typecheck` (TypeScript 7 `tsc`) | tens of seconds | type errors across the workspace |
 | Scoped tests | `bun scripts/bun-test.ts <dir> --only-failures` | seconds–minutes | the package you're editing |
 | Lint | `bun run lint` (Biome, auto-fixes) | seconds | style, correctness lints |
-| Full gate | `typecheck` + `lint` + `bun run test` | minutes | everything, pre-merge only |
+| Commit gate | `bun run quality:precommit` | seconds–minutes | repairs plus all required commit checks |
+| Full gate | `bun run quality:check` + `bun run test` | minutes | everything, pre-merge only |
 | Cross-OS | CI matrix (Ubuntu/macOS/Windows), `docker:test:*` | CI-time | platform drift, musl, install scripts |
 
 Budget regressions are bugs. If `bun run dev` cold-start or the unit suite gets
@@ -53,11 +54,10 @@ cost, fix or record it.
 
 ### Quality-gate etiquette
 
-Run the gate as **one failure-collection pass**: typecheck, lint, and tests once each,
-record every failure, then make a single concentrated repair pass. Do not ping-pong
-between one failing command and one fix — that turns a minutes-long gate into an
-hour-long one. (Same rule as `AGENTS.md` and
-[testing.md](testing.md).)
+`quality:precommit` first runs syncpack format and Biome autofix sequentially, then
+collects the complete read-only failure surface. Knip is check-only: it never receives
+`--fix`. `quality:check` uses the same check list in CI. Tests remain a separate matrix
+because transport and platform behavior must run on Linux, macOS, and Windows.
 
 ---
 
@@ -69,8 +69,8 @@ So you know what you should *never* be doing by hand:
   `.env.local`, assigns this worktree stable ports (`MONAD_PORT`, `WEB_PORT`,
   `MONAD_KV_UI_PORT`, derived from the checkout path), regenerates `.dev/bin` CLI shims
   with this worktree's absolute paths. Idempotent; never clobbers a value you set.
-- **`bun run dev` (`scripts/dev-prep.ts`)** — mirrors `WEB_PORT` → `PORT` for Next.js,
-  points Bun's transpiler cache at a shared `~/.cache/monad-bun`, then starts turbo's
+- **`bun run dev` (`scripts/dev-prep.ts`)** — loads the worktree's `WEB_PORT`, points
+  Bun's transpiler cache at a shared `~/.cache/monad-bun`, then starts turbo's
   persistent daemon + web tasks.
 - **mise shell hook** — switches Bun to the version pinned in `package.json`
   `packageManager` on every `cd`. Setup: [worktree.md §0](worktree.md).
@@ -89,7 +89,7 @@ mysterious:
 
 | Hook | What runs |
 |---|---|
-| `pre-commit` | knip (dead-export removal), Biome check `--write` on staged files, syncpack lint+format, typecheck of staged `*.ts(x)` |
+| `pre-commit` | sequential syncpack/Biome repair, then Biome, syncpack, knip, dependency, generated-input, database, and TypeScript checks |
 | `commit-msg` | commitlint — Conventional Commits format is enforced, not advisory |
 | `post-merge` / `post-checkout` / `post-rewrite` | `sync-after-git.sh` re-syncs deps/codegen when the tree moved under you; `direnv allow` on branch switch |
 
@@ -99,6 +99,8 @@ Two implications:
   fix it, don't `--no-verify` (reserve that for genuine hook bugs, and then fix the hook).
 - Because `pre-commit` auto-fixes and re-stages, review `git diff --staged` after a
   hook run before assuming your commit contains only what you wrote.
+- Knip only reports unused code. Remove or export code intentionally; the hook never
+  uses `knip --fix`.
 
 ## Generated files — edit the source, run the sync
 
@@ -112,15 +114,15 @@ lost work; each has a sync command:
 | license inventory | dependency tree | project hook |
 | codex app-server protocol types | upstream protocol spec | project hook |
 
-`bun run agents:check` and `bun run i18n:check` verify sync without writing — CI runs
-them, so a hand-edited artifact fails fast instead of silently diverging.
+`bun run quality:check` refreshes ignored build inputs, then runs `agents:check` and
+`i18n:check` with the rest of the gate. Tracked files must remain unchanged.
 
 ## Navigating the codebase
 
-- **CodeGraph first.** The repo is indexed (`.codegraph/`); `codegraph explore
+- **CodeGraph first when indexed.** If `.codegraph/` exists, `codegraph explore
   "<question or symbols>"` answers most "how does X work / who calls Y" questions in
-  one call, cheaper and more accurately than a grep+read crawl. Fall back to grep only
-  to confirm a detail the graph didn't cover.
+  one call, cheaper and more accurately than a grep+read crawl. If the directory is
+  absent, use normal search; indexing is an explicit project-owner decision.
 - **Docs are the second index.** Every focused concern has a doc under `docs/`
   referenced from `AGENTS.md`. When you learn something the docs
   don't say (a gotcha, an accepted trade-off, a "why is it like this"), the fix is a
@@ -148,6 +150,9 @@ Current, verified traps — remove entries when the underlying cause is fixed:
   between worktrees. ([worktree.md](worktree.md))
 - **`bun` exiting 137** under sandboxed test runs is the sandbox OOM-killing the
   process, not a test failure — re-run with the sandbox disabled.
-- **Next.js only honors `PORT`**, not `WEB_PORT`; that bridging lives in
-  `scripts/dev-prep.ts`. Don't start the web app directly with `next dev` and expect the
-  per-worktree port.
+- **Shared Phoenix is deliberate.** Worktrees reuse the `phoenix` container after
+  verifying its image. Initialization is serialized, and a worktree never stops it.
+- **Port survivors are diagnostic only.** Dev shutdown terminates its own process
+  group and reports any remaining listener; it never kills an unknown PID by port.
+- Run `bun run dev:doctor` when setup is incomplete or a worktree points at stale
+  generated files, shims, or ports.

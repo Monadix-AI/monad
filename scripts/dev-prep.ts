@@ -7,11 +7,10 @@
  *   `postinstall` (scripts/dev-init.ts) writes stable per-worktree ports into
  *   `.env.local` (MONAD_PORT / WEB_PORT / MONAD_KV_UI_PORT / AI_SDK_DEVTOOLS_PORT) so two worktrees
  *   can run `bun dev` at once. The daemon picks MONAD_PORT up via its own
- *   `--env-file=../../.env.local`, but Next.js only honours `PORT`/`-p` — it does
- *   NOT read `WEB_PORT`. The old root script relied on a shell-level `$WEB_PORT`,
- *   which is only ever populated by direnv in the MAIN checkout, so every worktree
- *   silently fell back to PORT=3000 and collided. We read `.env.local` here and
- *   mirror WEB_PORT → PORT so the web port rotates per worktree without direnv.
+ *   `--env-file=../../.env.local`, while the Vite task reads `WEB_PORT` from its
+ *   process environment. The old root script relied on direnv populating that value
+ *   in the main checkout, so linked worktrees silently fell back to port 3000. This
+ *   launcher reads `.env.local` before starting Turbo so every worktree gets its port.
  *
  * Also points Bun's runtime transpiler cache at a single shared directory so the
  * `*.pile` files stop accumulating inside every worktree's node_modules/.cache/bun
@@ -228,19 +227,29 @@ export function cleanupDevProcess(proc: DevProcess, signal: DevSignal = 'SIGTERM
   }
 }
 
-function killPortSurvivors(env: Record<string, string>): void {
-  if (process.platform === 'win32') return;
-  const ports = [env.WEB_PORT, env.MONAD_PORT, env.MONAD_HTTP_PORT].filter(Boolean);
+type PortPidLookup = (port: string) => string[];
+
+function lookupPortPids(port: string): string[] {
+  const result = Bun.spawnSync(['lsof', '-ti', `:${port}`], { stdout: 'pipe', stderr: 'pipe' });
+  return result.stdout.toString().trim().split('\n').filter(Boolean);
+}
+
+export function reportPortSurvivors(
+  env: Record<string, string>,
+  warn: (message: string) => void = (message) => process.stderr.write(`${message}\n`),
+  lookup: PortPidLookup = lookupPortPids,
+  platform: NodeJS.Platform = process.platform
+): void {
+  if (platform === 'win32') return;
+  const ports = [env.WEB_PORT, env.MONAD_PORT, env.MONAD_HTTP_PORT]
+    .filter((port): port is string => Boolean(port))
+    .sort();
   for (const port of ports) {
-    const result = Bun.spawnSync(['lsof', '-ti', `:${port}`], { stdout: 'pipe', stderr: 'pipe' });
-    const pids = result.stdout.toString().trim().split('\n').filter(Boolean);
-    for (const pid of pids) {
-      try {
-        process.kill(Number(pid), 'SIGKILL');
-      } catch {
-        /* already gone */
-      }
-    }
+    const pids = lookup(port);
+    if (pids.length === 0) continue;
+    warn(
+      `[dev-prep] port ${port} is still occupied by PID ${pids.join(', ')}; inspect it with: lsof -nP -iTCP:${port} -sTCP:LISTEN`
+    );
   }
 }
 
@@ -335,8 +344,8 @@ export async function main(): Promise<number> {
   process.on('SIGTERM', () => cleanup('SIGTERM'));
 
   const exitCode = await proc.exited;
-  killPortSurvivors(env);
   cleanup('SIGTERM');
+  reportPortSurvivors(env);
   return exitCode;
 }
 

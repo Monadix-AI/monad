@@ -8,7 +8,7 @@ change**. The rules below split along the two runtimes in this repo:
   serving REST + a multiplexed WebSocket over TCP/UDS. See [runtime.md](../internals/runtime.md),
   [daemon-architecture.md](../internals/daemon-architecture.md), and
   [engineering/architecture.md](architecture.md).
-- **Frontend** — the web client (`apps/web`): Next.js 16 (Turbopack), React 19,
+- **Frontend** — the web client (`apps/web`): Vite, TanStack Router, React 19,
   Redux, Tailwind 4. See [design/ui-guidelines.md](../design/ui-guidelines.md) and
   [web-router.md](../internals/web-router.md).
 
@@ -113,7 +113,7 @@ token). Markdown rendering during streaming is the single biggest hot path.
   window. Mounting the full DOM tree blows the INP and LCP budgets.
 - **Keep the bundle lean.** Import `HugeiconsIcon` plus named icons from `@hugeicons/core-free-icons` (no
   barrel-import of the whole set). Lazy-load heavy, rarely-shown widgets (mermaid
-  diagrams, syntax highlighting, settings panels) with `next/dynamic`.
+  diagrams, syntax highlighting, settings panels) with `React.lazy` and dynamic imports.
 - **Don't fetch on every keystroke.** Debounce search/filter inputs; the daemon's
   `search-sessions` endpoint is not free.
 - **No layout thrash in the scroll/stream loop.** Batch DOM reads and writes; avoid
@@ -126,14 +126,14 @@ token). Markdown rendering during streaming is the single biggest hot path.
 # Production build with per-route bundle sizes in the output table
 bun run --cwd apps/web build
 
-# Analyze what's in the bundle
-ANALYZE=true bun run --cwd apps/web build   # if @next/bundle-analyzer is wired
+# Inspect emitted chunks and source maps in apps/web/out
+du -sh apps/web/out/*
 
 # Runtime: React DevTools Profiler (flamegraph of re-renders during streaming)
 # Runtime: Chrome DevTools → Performance tab; watch INP and long tasks while typing
 ```
 
-Read the per-route size table that `next build` prints — a route that jumps in size
+Compare the named chunks emitted by Vite — a route or vendor chunk that jumps in size
 between PRs is a regression to explain. For render cost, record a Performance trace
 *while a response streams in* and look for re-renders of components that did not change.
 
