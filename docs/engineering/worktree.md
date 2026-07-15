@@ -102,6 +102,13 @@ Rules for test coverage:
 
 - New behaviour → new test. There is no "too small to test".
 - If you changed a code path that existing tests do not reach, add a case.
+- Review every new or modified test case for weak assertions. Do not prove a path with
+  assertions whose only claim is that an entity, value, DOM node, registry entry, or
+  mock exists or does not exist. Exercise the behavior and assert its exact output,
+  state transition, event, side effect, or error instead.
+- Presence or absence assertions are valid only when presence or absence is part of the
+  business path, such as deletion, redaction, a not-found response, or pagination
+  termination.
 - Tests are hermetic — they must not depend on a running daemon or on `.dev/` state.
 - **`apps/monad` specifically:** changes there must be exercised over both TCP loopback
   and the Unix socket. A test that covers only one transport is incomplete.
@@ -157,6 +164,8 @@ Work through them in order; a finding in an earlier category often affects later
 | Functional architecture | [engineering/architecture.md](architecture.md) | Package boundaries, allowed dependency directions, no cross-layer leaks |
 | UI design | [design/ui-guidelines.md](../design/ui-guidelines.md) | Token usage, component patterns, accessibility, dark-mode |
 | UX design | [design/ux-guidelines.md](../design/ux-guidelines.md) | Interaction model, copy tone, loading/error/empty states |
+| Internationalization | Repository i18n catalogs and APIs | Every user-facing string uses i18n; no hard-coded UI, CLI, TUI, daemon, channel, notification, accessibility, or interaction copy |
+| UX writing | [ux-writing-guidelines.md](../design/ux-writing-guidelines.md) | Terminology, tone, capitalization, consequences, recovery steps, and destructive-action clarity |
 
 **Apply only the categories that are relevant to the diff.** A backend-only change
 skips UI and UX; a pure CSS change skips architecture. When in doubt, include it.
@@ -220,7 +229,36 @@ git commit -m "<commit message as above>"
 
 `--squash` stages all changes but does not commit, giving you control over the message.
 
-### Clean up
+### Verify merged main
+
+After the GitHub or local merge completes, update the main checkout and run the full
+quality gate again against the merged result:
+
+```sh
+git checkout main
+git pull --ff-only       # when the merge happened on GitHub
+bun run lint             # must have zero remaining errors
+bun run typecheck        # must have zero errors
+bun run test             # all unit + e2e — must be green
+```
+
+If any command fails, record the complete failure surface, repair it from an isolated
+worktree, merge the repair, and repeat the post-merge gate. Do not report the task as
+complete and do not remove its worktrees or branches until all three commands pass on
+merged `main`.
+
+### Clean up every task worktree and branch
+
+Inventory the worktrees and merged branches before deleting anything:
+
+```sh
+git worktree list
+git branch --merged main
+git branch -r --merged origin/main
+```
+
+For every feature, review, repair, or temporary worktree and branch used by the task,
+confirm that its intended commits are present in `main`, then remove it:
 
 ```sh
 git worktree remove ../monad-<feature>   # removes the directory
@@ -230,7 +268,9 @@ git push origin --delete <feature>       # delete the remote branch (if pushed)
 
 If `git worktree remove` fails because the worktree has untracked or modified files,
 confirm the branch is fully merged, then use `--force`. Never force-remove a worktree
-with uncommitted work you intend to keep.
+with uncommitted work you intend to keep. Do not leave behind merged task worktrees or
+local or remote task branches, and never delete an unmerged branch merely to make the
+inventory empty.
 
 ---
 

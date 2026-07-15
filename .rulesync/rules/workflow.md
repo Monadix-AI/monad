@@ -32,13 +32,33 @@ are printed. Full testing conventions and patterns: `docs/engineering/testing.md
   failure-collection pass that exposes all current errors before fixing them. Do not
   bounce between a single failing command and a single fix when the broader failure
   surface is available.
-- In unit and integration tests, avoid assertions whose only claim is that a value
-  exists, does not exist, or that static copy contains or omits fixed text. Prefer
-  behavior, structure, state transitions, and exact machine contracts. E2E tests may
-  assert visible copy.
+- Every new or modified test case must avoid weak assertions whose only claim is that
+  something exists or does not exist. Assert observable behavior, structure, state
+  transitions, and exact machine contracts instead. Presence or absence is valid only
+  when it is itself part of the business path, such as verifying deletion, redaction,
+  or a not-found result. E2E tests may assert visible copy.
 - Every `apps/monad` feature must be exercised over **all transports** (TCP
   loopback and the Unix socket) — behaviour must match on both. See
   `docs/internals/runtime.md` / @docs/internals/runtime.md.
+
+# Merge gate and cleanup
+
+Before merging any branch into `main`:
+
+- Rebase or otherwise update the branch against current `main`, then run `bun run lint`,
+  `bun run typecheck`, and `bun run test`; all three must pass.
+- Audit the diff for weak assertions in every new or modified test case.
+- Put every user-facing string in the i18n catalog and use the repository's i18n APIs;
+  do not merge hard-coded UI, CLI, TUI, daemon, channel, notification, accessibility,
+  or interaction copy.
+- Review UI and UX copy against `docs/design/ux-writing-guidelines.md` and the relevant
+  UI/UX guidelines. Fix non-conforming copy before merging.
+
+After merging, update the `main` checkout and run the same lint, typecheck, and test
+quality gate again. Do not report completion or clean up the task until all three pass
+on merged `main`. Then enumerate every worktree and local or remote branch used for the
+task, confirm each is merged into `main`, and remove it. Never delete an unmerged branch
+or a worktree that contains work intended to be kept.
 
 ```ts#index.test.ts
 import { test, expect } from "bun:test";
