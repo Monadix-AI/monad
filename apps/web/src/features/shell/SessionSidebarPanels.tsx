@@ -12,6 +12,7 @@ import { motion } from 'motion/react';
 import { ThemeToggle } from '#/components/ThemeToggle';
 import { DaemonMenu } from './SessionSidebarDaemonMenu';
 import { SettingsSidebarItems, StudioSidebarItems, WorkspaceSidebarItems } from './sidebar';
+import { ArchivedSidebarItems } from './sidebar/archived-items';
 
 type PagerStyle = ComponentProps<typeof motion.div>['style'];
 
@@ -25,6 +26,16 @@ interface SessionSidebarSettingsConfig {
   activeSection: SettingsSectionId;
   onBack: () => void;
   onSelect: (section: SettingsSectionId) => void;
+}
+
+interface SessionSidebarArchivedConfig {
+  chatSessions: ComponentProps<typeof ArchivedSidebarItems>['chatSessions'];
+  loading?: boolean;
+  onBack: () => void;
+  onOpenProjectSession: ComponentProps<typeof ArchivedSidebarItems>['onOpenProjectSession'];
+  onOpenSession: ComponentProps<typeof ArchivedSidebarItems>['onOpenSession'];
+  onUnarchiveSession: ComponentProps<typeof ArchivedSidebarItems>['onUnarchiveSession'];
+  projectSessions: ComponentProps<typeof ArchivedSidebarItems>['projectSessions'];
 }
 
 interface SessionSidebarStudioConfig {
@@ -59,6 +70,7 @@ interface SessionSidebarFooterConfig {
 }
 
 interface SessionSidebarPanelsProps {
+  archived: SessionSidebarArchivedConfig;
   footer: SessionSidebarFooterConfig;
   pager: SessionSidebarPagerConfig;
   settings: SessionSidebarSettingsConfig;
@@ -67,7 +79,15 @@ interface SessionSidebarPanelsProps {
   workspace: WorkspaceSidebarContextValue;
 }
 
-export function SessionSidebarPanels({ footer, pager, settings, studio, t, workspace }: SessionSidebarPanelsProps) {
+export function SessionSidebarPanels({
+  archived,
+  footer,
+  pager,
+  settings,
+  studio,
+  t,
+  workspace
+}: SessionSidebarPanelsProps) {
   return (
     <>
       <motion.div
@@ -95,6 +115,17 @@ export function SessionSidebarPanels({ footer, pager, settings, studio, t, works
                 runtimeReady={studio.runtimeReady}
                 shortcutModifierLabel={studio.shortcutModifierLabel}
                 showShortcutBadges={studio.showShortcutBadges}
+                t={t}
+              />
+            ) : surface === 'archived' ? (
+              <ArchivedSidebarItems
+                chatSessions={archived.chatSessions}
+                loading={archived.loading}
+                onBack={archived.onBack}
+                onOpenProjectSession={archived.onOpenProjectSession}
+                onOpenSession={archived.onOpenSession}
+                onUnarchiveSession={archived.onUnarchiveSession}
+                projectSessions={archived.projectSessions}
                 t={t}
               />
             ) : (

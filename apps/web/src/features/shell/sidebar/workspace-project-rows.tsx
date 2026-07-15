@@ -3,6 +3,7 @@ import type { ProjectItem } from './types';
 import {
   ChatAdd01Icon,
   Delete02Icon,
+  FileArchiveIcon,
   Folder01Icon,
   FolderOpenIcon,
   PencilEdit01Icon,
@@ -147,8 +148,8 @@ export function ProjectSessionTreeRow({
     : t('web.workplace.pinSessionNamed', { name: session.title });
   const sessionPinTooltip = session.pinned ? t('web.workplace.unpinSession') : t('web.workplace.pinSession');
   const togglePinned = useCallback(() => actions.toggleSessionPinned(session.id), [actions, session.id]);
-  const deleteSession = useCallback(() => {
-    void actions.deleteProjectSession(projectId, session.id);
+  const archiveSession = useCallback(() => {
+    void actions.archiveProjectSession(projectId, session.id);
   }, [actions, projectId, session.id]);
   const openSession = useCallback(
     () => actions.openProjectSession(projectId, session.id),
@@ -168,14 +169,13 @@ export function ProjectSessionTreeRow({
         onSelect: togglePinned
       },
       {
-        icon: Delete02Icon,
-        label: t('web.workplace.deleteSession'),
-        onSelect: deleteSession,
-        shortcut: 'D',
-        variant: 'destructive'
+        icon: FileArchiveIcon,
+        label: t('web.workplace.archiveSession'),
+        onSelect: archiveSession,
+        shortcut: 'A'
       }
     ],
-    [deleteSession, session.pinned, t, togglePinned]
+    [archiveSession, session.pinned, t, togglePinned]
   );
 
   return (
@@ -219,8 +219,8 @@ export function PinnedSessionTreeRow({
   const { t } = meta;
   const { projectId, projectName, session } = item;
   const togglePinned = useCallback(() => actions.toggleSessionPinned(session.id), [actions, session.id]);
-  const deleteSession = useCallback(() => {
-    void actions.deleteProjectSession(projectId, session.id);
+  const archiveSession = useCallback(() => {
+    void actions.archiveProjectSession(projectId, session.id);
   }, [actions, projectId, session.id]);
   const openSession = useCallback(() => {
     onProjectSessionOpened(projectId);
@@ -240,14 +240,13 @@ export function PinnedSessionTreeRow({
         onSelect: togglePinned
       },
       {
-        icon: Delete02Icon,
-        label: t('web.workplace.deleteSession'),
-        onSelect: deleteSession,
-        shortcut: 'D',
-        variant: 'destructive'
+        icon: FileArchiveIcon,
+        label: t('web.workplace.archiveSession'),
+        onSelect: archiveSession,
+        shortcut: 'A'
       }
     ],
-    [deleteSession, t, togglePinned]
+    [archiveSession, t, togglePinned]
   );
 
   return (

@@ -68,12 +68,16 @@ export function useAppShellData({ loadModelData = true }: { loadModelData?: bool
     data: sessionData,
     isFetching: sessionsFetching,
     isLoading: sessionsLoading
-  } = useListSessionsQuery(undefined);
+  } = useListSessionsQuery({ archived: false });
+  const { data: archivedSessionData, isLoading: archivedSessionsLoading } = useListSessionsQuery({ archived: true });
   const { data: projectData, isLoading: projectsLoading } = useListWorkplaceProjectsQuery(undefined);
   const { data: agentData } = useListAgentsQuery(undefined, { skip: !loadModelData });
   const { data: liveExternalAgentSessionData } = useListLiveExternalAgentSessionsQuery(undefined);
   const { data: externalAgentSessionSummaryData } = useListExternalAgentSessionSummariesQuery(undefined);
   const serverSessions = sessionSelectors.selectAll(sessionData?.sessions ?? sessionAdapter.getInitialState());
+  const archivedSessions = sessionSelectors.selectAll(
+    archivedSessionData?.sessions ?? sessionAdapter.getInitialState()
+  );
   const draftChatSessions = useWorkspaceShellStore((state: WorkspaceShellState) => state.draftChatSessions);
   const sessions = useMemo(() => {
     const serverSessionIds = new Set(serverSessions.map((session) => session.id));
@@ -148,6 +152,8 @@ export function useAppShellData({ loadModelData = true }: { loadModelData?: bool
     hasUpgrade,
     agents,
     defaultProfileAlias: profileData?.defaultAlias,
+    archivedSessions,
+    archivedSessionsLoading,
     networkRuntime,
     profiles,
     projectsLoading,

@@ -22,6 +22,8 @@ export interface SessionGateway {
   ): Promise<void>;
   /** Clear a session's history (for /reset over a channel). Optional: tests omit the command path. */
   reset?(args: { id: SessionId }): Promise<{ clearedCount: number }>;
+  /** Archive a session (for /archive over a channel). Optional: tests omit the command path. */
+  update?(args: { id: SessionId; archived?: boolean }): Promise<unknown>;
   /** Set the session's shared working folder (for /workdir over a channel). Optional: tests omit it. */
   setWorkspace?(args: { id: SessionId; cwd: string }): Promise<{ cwd?: string }>;
 }

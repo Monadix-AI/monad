@@ -38,7 +38,7 @@ export type SidebarPagerUpdate =
   | { dragPx: number; kind: 'settle' }
   | { dragPx: 0; kind: 'swallowed' };
 
-export type SidebarPagerSurface = 'settings' | 'studio' | 'workspace';
+export type SidebarPagerSurface = 'archived' | 'settings' | 'studio' | 'workspace';
 
 export function resolveSidebarPagerTarget({
   clientWidth,

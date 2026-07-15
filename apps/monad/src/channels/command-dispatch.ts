@@ -105,6 +105,10 @@ export async function runCommand(
 // Project id), so `sid` is cast to `SessionId` at each `bundle.*`/`session.*` call below.
 function channelServices(host: CommandHost, bundle: CommandBundle): CommandServices {
   return {
+    archiveSession: (sid) =>
+      host.deps.session.update
+        ? host.deps.session.update({ id: sid as SessionId, archived: true }).then(() => undefined)
+        : Promise.reject(new Error('archive is unavailable')),
     resetHistory: (sid) =>
       host.deps.session.reset
         ? host.deps.session.reset({ id: sid as SessionId })

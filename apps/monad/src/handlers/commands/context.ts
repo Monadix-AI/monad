@@ -28,6 +28,7 @@ export interface SessionNavigator {
 // own `sessionOnlyId` guard before calling out.
 /** Daemon-uniform backing for the non-navigation verbs. */
 export interface CommandServices {
+  archiveSession(sessionId: string): Promise<void>;
   resetHistory(sessionId: string): Promise<{ clearedCount: number }>;
   compact(sessionId: string): Promise<CompactSummary>;
   consolidate(level?: number): Promise<ConsolidateSummary>;
@@ -60,6 +61,7 @@ export function makeCommandRunContext(p: {
     newSession: (label) => nav.newSession(label),
     listSessions: () => nav.listSessions(),
     switchSession: (target) => nav.switchSession(target),
+    archiveSession: () => services.archiveSession(sessionId),
     resetHistory: () => services.resetHistory(sessionId),
     compact: () => services.compact(sessionId),
     consolidate: (level) => services.consolidate(level),

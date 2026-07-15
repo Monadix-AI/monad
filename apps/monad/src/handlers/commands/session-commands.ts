@@ -89,6 +89,7 @@ export interface LifecycleOps {
     origin?: SessionOrigin;
   }): Promise<{ sessionId: string }>;
   reset(args: { id: SessionId }): Promise<{ clearedCount: number }>;
+  update(args: { id: SessionId; archived?: boolean }): Promise<{ session: Session }>;
   list(args: { limit?: number }): Promise<{ sessions: Session[] }>;
   setWorkspace(args: { id: SessionId; cwd: string }): Promise<{ cwd?: string }>;
 }
@@ -163,6 +164,9 @@ function genericExecution(runner: SessionCommandRunner, session: Session, busy: 
     isBusy: busy,
     gate: approve ? (def) => approve(session.id, def) : undefined,
     services: {
+      archiveSession: async (sid: SessionId) => {
+        await runner.lifecycle.update({ id: sid, archived: true });
+      },
       resetHistory: (sid: SessionId) => runner.lifecycle.reset({ id: sid }),
       compact: (sid: SessionId) => commands.compact(sid),
       consolidate: (level?: number) => commands.consolidate(level),

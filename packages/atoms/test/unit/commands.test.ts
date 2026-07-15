@@ -13,10 +13,10 @@ test('ships the expected first-party commands', () => {
   expect(names).toEqual(
     [
       'check-memory',
+      'archive',
       'clear',
       'compact',
       'consolidate',
-      'end',
       'effort',
       'handoff',
       'help',
@@ -42,10 +42,10 @@ test('every first-party command has the expected product group', () => {
   const groups = Object.fromEntries(BUILTIN_COMMANDS.map((c) => [c.name, c.group]));
   expect(groups).toEqual({
     'check-memory': 'Memory',
+    archive: 'Conversation',
     clear: 'Context',
     compact: 'Context',
     consolidate: 'Memory',
-    end: 'Conversation',
     effort: 'Runtime',
     handoff: 'Conversation',
     help: 'Help',

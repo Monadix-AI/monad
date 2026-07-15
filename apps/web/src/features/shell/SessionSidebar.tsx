@@ -1,5 +1,6 @@
 import type { NetworkRuntimeStatus, Session, SessionId } from '@monad/protocol';
 import type { SettingsSectionId } from '#/features/settings/sections';
+import type { ArchivedSessionListItem } from '#/features/shell/archived-sessions';
 import type { StudioSectionId } from '#/features/studio/sections';
 import type { RemoteDaemonConnection } from '#/lib/daemon-connections';
 import type { WorkspaceSidebarContextValue } from './sidebar/workspace-sidebar-context';
@@ -35,6 +36,8 @@ import {
 } from './sidebar-trackpad-switch';
 
 interface SidebarWorkspaceConfig {
+  archivedSessions: Pick<Session, 'id' | 'projectId' | 'title' | 'updatedAt'>[];
+  archivedSessionsLoading?: boolean;
   projects: ProjectItem[];
   chatSessions: Pick<Session, 'id' | 'projectId' | 'title'>[];
   workspaceItemsLoading?: boolean;
@@ -52,17 +55,20 @@ interface SidebarWorkspaceConfig {
 }
 
 interface SidebarSurfacesConfig {
+  onCloseArchived: () => void;
   onCloseSettings: () => void;
+  onOpenArchived: () => void;
   onOpenSettingsSection: (section: SettingsSectionId) => void;
   onOpenStudio: () => void;
   onOpenStudioSection: (section: StudioSectionId) => void;
   onOpenWorkspace: () => void;
   onToggleSettings: () => void;
   runtimeReady: boolean;
-  settingsReturnSurface: Exclude<SidebarPagerSurface, 'settings'>;
+  settingsReturnSurface: Exclude<SidebarPagerSurface, 'archived' | 'settings'>;
   settingsSection: SettingsSectionId;
   shortcutModifierLabel?: string;
   showSettings: boolean;
+  showArchived: boolean;
   showShortcutBadges?: boolean;
   showStudio: boolean;
   studioPileActive: boolean;
@@ -114,6 +120,8 @@ export function SessionSidebar({ daemon, surfaces, workspace }: Props) {
     activeChatSessionId,
     activeProjectId,
     activeProjectSessionId,
+    archivedSessions,
+    archivedSessionsLoading,
     chatSessions,
     inboxActive,
     onCreateChatSession,
@@ -127,7 +135,9 @@ export function SessionSidebar({ daemon, surfaces, workspace }: Props) {
     workspaceItemsLoading
   } = workspace;
   const {
+    onCloseArchived,
     onCloseSettings,
+    onOpenArchived,
     onOpenSettingsSection,
     onOpenStudio,
     onOpenStudioSection,
@@ -137,6 +147,7 @@ export function SessionSidebar({ daemon, surfaces, workspace }: Props) {
     settingsReturnSurface,
     settingsSection,
     shortcutModifierLabel = '⌘',
+    showArchived,
     showSettings,
     showShortcutBadges,
     showStudio,
@@ -167,13 +178,15 @@ export function SessionSidebar({ daemon, surfaces, workspace }: Props) {
   const [sidebarMotionReady, setSidebarMotionReady] = useState(false);
   const {
     createProject,
-    deleteChatSession,
     deleteProject,
-    deleteProjectSession,
+    archiveChatSession,
+    archiveProjectSession,
     newProjectDialogOpen,
+    pendingUnarchivedSessionIds,
     renameProject,
     renameSession,
     setNewProjectDialogOpen,
+    unarchiveSession,
     visibleChatSessions,
     visibleProjects
   } = useSessionSidebarActions({
@@ -181,10 +194,11 @@ export function SessionSidebar({ daemon, surfaces, workspace }: Props) {
     chatSessions,
     onOpenProject,
     onOpenWorkspace,
-    projects,
-    t
+    projects
   });
-  const currentSidebarSurfaceRef = useRef<SidebarPagerSurface>(showStudio ? 'studio' : 'workspace');
+  const currentSidebarSurfaceRef = useRef<SidebarPagerSurface>(
+    showArchived ? 'archived' : showStudio ? 'studio' : 'workspace'
+  );
   const sidebarRef = useRef<HTMLElement | null>(null);
   const panelScrollRef = useRef<HTMLDivElement | null>(null);
   const dragStartRef = useRef({ pointerX: 0, width: DEFAULT_SIDEBAR_WIDTH });
@@ -241,10 +255,21 @@ export function SessionSidebar({ daemon, surfaces, workspace }: Props) {
   }, [overlay]);
 
   const pagerSurfaces = useMemo<SidebarPagerSurface[]>(
-    () => (showSettings ? [settingsReturnSurface, 'settings'] : ['workspace', 'studio']),
-    [settingsReturnSurface, showSettings]
+    () =>
+      showSettings
+        ? [settingsReturnSurface, 'settings']
+        : showArchived
+          ? ['workspace', 'archived']
+          : ['workspace', 'studio'],
+    [settingsReturnSurface, showArchived, showSettings]
   );
-  const activeSidebarSurface: SidebarPagerSurface = showSettings ? 'settings' : showStudio ? 'studio' : 'workspace';
+  const activeSidebarSurface: SidebarPagerSurface = showSettings
+    ? 'settings'
+    : showArchived
+      ? 'archived'
+      : showStudio
+        ? 'studio'
+        : 'workspace';
   const activeSidebarPageIndex = Math.max(0, pagerSurfaces.indexOf(activeSidebarSurface));
 
   const openMenuAction = (action: () => void) => {
@@ -546,6 +571,7 @@ export function SessionSidebar({ daemon, surfaces, workspace }: Props) {
         if (!closesSettings) {
           if (targetSurfaceId === 'settings') onToggleSettings();
           if (targetSurfaceId === 'studio') onOpenStudio();
+          if (targetSurfaceId === 'archived') onOpenArchived();
           if (targetSurfaceId === 'workspace') onOpenWorkspace();
         }
       }
@@ -649,6 +675,7 @@ export function SessionSidebar({ daemon, surfaces, workspace }: Props) {
   }, [
     clearTrackpadGesture,
     onCloseSettings,
+    onOpenArchived,
     onOpenStudio,
     onOpenWorkspace,
     onToggleSettings,
@@ -688,9 +715,9 @@ export function SessionSidebar({ daemon, surfaces, workspace }: Props) {
         createChatSession: onCreateChatSession,
         createProject: () => setNewProjectDialogOpen(true),
         createProjectSession: onCreateProjectSession,
-        deleteChatSession,
+        archiveChatSession,
+        archiveProjectSession,
         deleteProject,
-        deleteProjectSession,
         openInbox: onOpenInbox,
         openProject: onOpenProject,
         openProjectSession: onOpenProjectSession,
@@ -710,9 +737,9 @@ export function SessionSidebar({ daemon, surfaces, workspace }: Props) {
       activeChatSessionId,
       activeProjectId,
       activeProjectSessionId,
-      deleteChatSession,
+      archiveChatSession,
+      archiveProjectSession,
       deleteProject,
-      deleteProjectSession,
       inboxActive,
       onCreateChatSession,
       onCreateProjectSession,
@@ -733,6 +760,22 @@ export function SessionSidebar({ daemon, surfaces, workspace }: Props) {
       workspaceItemsLoading
     ]
   );
+  const archivedPanel = useMemo(() => {
+    const projectNames = new Map(visibleProjects.map((project) => [project.id, project.name]));
+    const items = archivedSessions
+      .filter((session) => !pendingUnarchivedSessionIds.has(session.id))
+      .map<ArchivedSessionListItem>((session) => ({
+        id: session.id,
+        projectId: session.projectId,
+        projectName: session.projectId ? projectNames.get(session.projectId) : undefined,
+        title: session.title,
+        updatedAt: session.updatedAt
+      }));
+    return {
+      chatSessions: items.filter((session) => !session.projectId),
+      projectSessions: items.filter((session) => session.projectId)
+    };
+  }, [archivedSessions, pendingUnarchivedSessionIds, visibleProjects]);
 
   return (
     <>
@@ -776,6 +819,15 @@ export function SessionSidebar({ daemon, surfaces, workspace }: Props) {
 
           {!collapsed ? (
             <SessionSidebarPanels
+              archived={{
+                chatSessions: archivedPanel.chatSessions,
+                loading: archivedSessionsLoading,
+                onBack: onCloseArchived,
+                onOpenProjectSession,
+                onOpenSession,
+                onUnarchiveSession: unarchiveSession,
+                projectSessions: archivedPanel.projectSessions
+              }}
               footer={{
                 daemonBaseUrl,
                 daemonStatus,

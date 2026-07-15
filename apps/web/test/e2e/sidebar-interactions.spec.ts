@@ -31,7 +31,7 @@ type MockSession = {
 type SidebarMockState = {
   projects: MockProject[];
   sessions: MockSession[];
-  updateSessionRequests: Array<{ id: string; title?: string }>;
+  updateSessionRequests: Array<{ archived?: boolean; id: string; title?: string }>;
   updateProjectRequests: Array<{ id: string; title?: string }>;
   deleteSessionRequests: string[];
   createProjectRequests: Array<{ cwd?: string; title: string }>;
@@ -171,13 +171,17 @@ async function installSidebarMock(page: Page, state = createSidebarState(), opti
       return route.fulfill(json({ presets: [] }));
     }
     if (method === 'GET' && path === '/v1/sessions') {
+      const archivedParam = url.searchParams.get('archived');
+      const archived = archivedParam === null ? undefined : archivedParam === 'true';
+      const sessions =
+        archived === undefined ? state.sessions : state.sessions.filter((session) => session.archived === archived);
       return route.fulfill(
         json({
           hasMore: false,
           limit: 50,
           offset: 0,
-          sessions: state.sessions,
-          total: state.sessions.length
+          sessions,
+          total: sessions.length
         })
       );
     }
@@ -209,10 +213,15 @@ async function installSidebarMock(page: Page, state = createSidebarState(), opti
     const sessionMatch = path.match(/^\/v1\/sessions\/([^/]+)$/);
     if (sessionMatch && method === 'PATCH') {
       const id = sessionMatch[1] ?? '';
-      const body = request.postDataJSON() as { title?: string };
-      state.updateSessionRequests.push({ id, title: body.title });
+      const body = request.postDataJSON() as { archived?: boolean; title?: string };
+      state.updateSessionRequests.push({
+        id,
+        ...(body.title !== undefined ? { title: body.title } : {}),
+        ...(body.archived !== undefined ? { archived: body.archived } : {})
+      });
       const session = state.sessions.find((item) => item.id === id);
       if (session && body.title) session.title = body.title;
+      if (session && body.archived !== undefined) session.archived = body.archived;
       return route.fulfill(json({ session }));
     }
     if (sessionMatch && method === 'DELETE') {
@@ -321,12 +330,17 @@ async function installSidebarMock(page: Page, state = createSidebarState(), opti
 function projectRow(page: Page, name = 'Sidebar Project') {
   return page
     .locator('[data-sidebar-tree-item="true"]')
-    .filter({ has: page.getByRole('link', { name }) })
+    .filter({ has: page.getByRole('button', { name }) })
     .first();
 }
 
 async function openItemMenu(page: Page, itemName: string) {
-  await page.getByRole('link', { name: itemName }).click({ button: 'right' });
+  const link = page.getByRole('link', { name: itemName });
+  if ((await link.count()) > 0) {
+    await link.click({ button: 'right' });
+    return;
+  }
+  await page.getByRole('button', { name: itemName }).click({ button: 'right' });
 }
 
 async function expandAllProjects(page: Page) {
@@ -335,14 +349,13 @@ async function expandAllProjects(page: Page) {
 }
 
 test.describe('workspace sidebar interactions', () => {
-  test('opens projects without selecting a session, then opens an explicit project session', async ({ page }) => {
+  test('shows projects without selecting a session, then opens an explicit project session', async ({ page }) => {
     await installSidebarMock(page);
     await page.goto('/');
     await expect(page.getByTestId('daemon-menu-trigger')).toBeVisible();
 
-    await page.getByRole('link', { name: 'Sidebar Project' }).click();
-    await expect(page).toHaveURL(new RegExp(`/workspace/${PROJECT_ID}$`));
     await expect(page).not.toHaveURL(/ses_project/);
+    await expect(page.getByRole('button', { name: 'Sidebar Project' })).toBeVisible();
     await expandAllProjects(page);
     await expect(page.getByRole('link', { name: 'Project Session 1' })).toBeVisible();
 
@@ -501,7 +514,7 @@ test.describe('workspace sidebar interactions', () => {
     await page.getByRole('menuitem', { name: 'Rename project' }).click();
     await page.getByRole('textbox', { name: 'Sidebar Project' }).fill('Renamed Project');
     await page.keyboard.press('Enter');
-    await expect(page.getByRole('link', { name: 'Renamed Project' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Renamed Project' })).toBeVisible();
     expect(state.updateProjectRequests).toContainEqual({ id: PROJECT_ID, title: 'Renamed Project' });
 
     await openItemMenu(page, 'Project Session 1');
@@ -519,7 +532,7 @@ test.describe('workspace sidebar interactions', () => {
     expect(state.updateSessionRequests).toContainEqual({ id: CHAT_SESSION_ID, title: 'Renamed Chat Session' });
   });
 
-  test('pins, unpins, deletes sessions, and creates projects from sidebar actions', async ({ page }) => {
+  test('pins, unpins, archives sessions, and creates projects from sidebar actions', async ({ page }) => {
     const state = await installSidebarMock(page);
     await page.goto(`/workspace/${PROJECT_ID}`);
     await expandAllProjects(page);
@@ -533,16 +546,15 @@ test.describe('workspace sidebar interactions', () => {
     await expect(page.getByRole('button', { name: 'Pinned' })).toBeHidden();
 
     await openItemMenu(page, 'Project Session 3');
-    await page.getByRole('menuitem', { name: 'Delete session' }).click();
-    await expect(page.getByText('Deleted Project Session 3')).toBeVisible();
+    await page.getByRole('menuitem', { name: 'Archive' }).click();
     await expect(page.getByRole('link', { name: 'Project Session 3' })).toBeHidden();
-    expect(state.deleteSessionRequests).toContain('ses_project0000003');
+    expect(state.updateSessionRequests).toContainEqual({ archived: true, id: 'ses_project0000003' });
 
     await page.getByRole('button', { exact: true, name: 'New project' }).click({ force: true });
     await page.getByRole('textbox', { name: 'Project name' }).fill('Created From Sidebar');
     await page.locator('#new-project-cwd').fill('/tmp/created-from-sidebar');
     await page.getByRole('button', { name: 'Create project' }).click();
-    await expect(page.locator('a[href="/workspace/prj_created_3"]')).toHaveText('Created From Sidebar');
+    await expect(page.getByRole('button', { name: 'Created From Sidebar' })).toBeVisible();
     expect(state.createProjectRequests).toContainEqual({
       cwd: '/tmp/created-from-sidebar',
       title: 'Created From Sidebar'

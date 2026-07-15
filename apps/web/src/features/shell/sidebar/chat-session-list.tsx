@@ -1,4 +1,4 @@
-import { Delete02Icon, PencilEdit01Icon } from '@hugeicons/core-free-icons';
+import { FileArchiveIcon, PencilEdit01Icon } from '@hugeicons/core-free-icons';
 
 import { SIDEBAR_ITEM_ROW_CLASS } from './nav-item';
 import { getPreviewLessTargetCount, SidebarMoreLessControls, useSidebarPreviewCount } from './session-preview-controls';
@@ -37,13 +37,12 @@ export function ChatSessionList() {
                 label: meta.t('web.sidebar.renameSession')
               },
               {
-                icon: Delete02Icon,
-                label: meta.t('web.sidebar.deleteSession'),
+                icon: FileArchiveIcon,
+                label: meta.t('web.sidebar.archiveSession'),
                 onSelect: () => {
-                  void actions.deleteChatSession(session.id);
+                  void actions.archiveChatSession(session.id);
                 },
-                shortcut: 'D',
-                variant: 'destructive'
+                shortcut: 'A'
               }
             ]}
             menuLabel={meta.t('web.sidebar.itemMenu')}

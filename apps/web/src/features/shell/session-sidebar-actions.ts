@@ -1,19 +1,13 @@
 import type { ProjectId, Session, SessionId } from '@monad/protocol';
-import type { ProjectItem, TFunction } from './sidebar/types';
+import type { ProjectItem } from './sidebar/types';
 
 import {
   useCreateWorkplaceProjectMutation,
-  useDeleteSessionMutation,
   useDeleteWorkplaceProjectMutation,
-  useUndoDeleteSessionMutation,
   useUpdateSessionMutation,
   useUpdateWorkplaceProjectMutation
 } from '@monad/client-rtk';
 import { useCallback, useMemo, useState } from 'react';
-
-import { toast } from '#/components/ToastProvider';
-
-const SESSION_DELETE_UNDO_MS = 5000;
 
 interface UseSessionSidebarActionsParams {
   activeProjectId: string | null;
@@ -21,7 +15,6 @@ interface UseSessionSidebarActionsParams {
   onOpenProject: (id: string) => void;
   onOpenWorkspace: () => void;
   projects: ProjectItem[];
-  t: TFunction;
 }
 
 export function useSessionSidebarActions({
@@ -29,8 +22,7 @@ export function useSessionSidebarActions({
   chatSessions,
   onOpenProject,
   onOpenWorkspace,
-  projects,
-  t
+  projects
 }: UseSessionSidebarActionsParams) {
   const projectActions = useProjectSidebarActions({
     activeProjectId,
@@ -38,31 +30,30 @@ export function useSessionSidebarActions({
     onOpenWorkspace
   });
   const sessionActions = useSidebarSessionActions({
-    chatSessions,
-    onOpenWorkspace,
-    projects,
-    t
+    onOpenWorkspace
   });
 
   const visibleChatSessions = useMemo(
-    () => chatSessions.filter((session) => !sessionActions.pendingDeletedSessionIds.has(session.id)),
-    [chatSessions, sessionActions.pendingDeletedSessionIds]
+    () => chatSessions.filter((session) => !sessionActions.pendingArchivedSessionIds.has(session.id)),
+    [chatSessions, sessionActions.pendingArchivedSessionIds]
   );
 
   const visibleProjects = useMemo(
     () =>
       projects.map((project) => ({
         ...project,
-        sessions: project.sessions.filter((session) => !sessionActions.pendingDeletedSessionIds.has(session.id))
+        sessions: project.sessions.filter((session) => !sessionActions.pendingArchivedSessionIds.has(session.id))
       })),
-    [projects, sessionActions.pendingDeletedSessionIds]
+    [projects, sessionActions.pendingArchivedSessionIds]
   );
 
   return {
     ...projectActions,
-    deleteChatSession: sessionActions.deleteChatSession,
-    deleteProjectSession: sessionActions.deleteProjectSession,
+    archiveChatSession: sessionActions.archiveChatSession,
+    archiveProjectSession: sessionActions.archiveProjectSession,
+    pendingUnarchivedSessionIds: sessionActions.pendingUnarchivedSessionIds,
     renameSession: sessionActions.renameSession,
+    unarchiveSession: sessionActions.unarchiveSession,
     visibleChatSessions,
     visibleProjects
   };
@@ -115,21 +106,10 @@ function useProjectSidebarActions({
   };
 }
 
-function useSidebarSessionActions({
-  chatSessions,
-  onOpenWorkspace,
-  projects,
-  t
-}: {
-  chatSessions: Pick<Session, 'id' | 'projectId' | 'title'>[];
-  onOpenWorkspace: () => void;
-  projects: ProjectItem[];
-  t: TFunction;
-}) {
+function useSidebarSessionActions({ onOpenWorkspace }: { onOpenWorkspace: () => void }) {
   const [updateSession] = useUpdateSessionMutation();
-  const [deleteSession] = useDeleteSessionMutation();
-  const [undoDeleteSession] = useUndoDeleteSessionMutation();
-  const [pendingDeletedSessionIds, setPendingDeletedSessionIds] = useState<Set<SessionId>>(() => new Set());
+  const [pendingArchivedSessionIds, setPendingArchivedSessionIds] = useState<Set<SessionId>>(() => new Set());
+  const [pendingUnarchivedSessionIds, setPendingUnarchivedSessionIds] = useState<Set<SessionId>>(() => new Set());
 
   const renameSession = useCallback(
     async (sessionId: SessionId, title: string) => {
@@ -138,8 +118,8 @@ function useSidebarSessionActions({
     [updateSession]
   );
 
-  const revealPendingSessionDelete = useCallback((sessionId: SessionId) => {
-    setPendingDeletedSessionIds((current) => {
+  const revealPendingSessionArchive = useCallback((sessionId: SessionId) => {
+    setPendingArchivedSessionIds((current) => {
       if (!current.has(sessionId)) return current;
       const next = new Set(current);
       next.delete(sessionId);
@@ -147,76 +127,68 @@ function useSidebarSessionActions({
     });
   }, []);
 
-  const queueSessionDelete = useCallback(
-    ({ afterDelete, sessionId, title }: { afterDelete?: () => void; sessionId: SessionId; title: string }) => {
-      revealPendingSessionDelete(sessionId);
-      setPendingDeletedSessionIds((current) => new Set(current).add(sessionId));
-      void deleteSession(sessionId)
+  const revealPendingSessionUnarchive = useCallback((sessionId: SessionId) => {
+    setPendingUnarchivedSessionIds((current) => {
+      if (!current.has(sessionId)) return current;
+      const next = new Set(current);
+      next.delete(sessionId);
+      return next;
+    });
+  }, []);
+
+  const archiveSession = useCallback(
+    ({ afterArchive, sessionId }: { afterArchive?: () => void; sessionId: SessionId }) => {
+      revealPendingSessionArchive(sessionId);
+      setPendingArchivedSessionIds((current) => new Set(current).add(sessionId));
+      void updateSession({ archived: true, id: sessionId })
         .unwrap()
-        .then(() => afterDelete?.())
-        .catch(() => revealPendingSessionDelete(sessionId));
-      toast.undo(t('web.sidebar.sessionDeleteQueued', { name: title }), {
-        action: {
-          label: t('web.sidebar.undoDelete'),
-          onClick: async () => {
-            revealPendingSessionDelete(sessionId);
-            await undoDeleteSession(sessionId)
-              .unwrap()
-              .catch(() => undefined);
-          }
-        },
-        duration: SESSION_DELETE_UNDO_MS,
-        onExpire: () => {
-          revealPendingSessionDelete(sessionId);
-          void deleteSession(sessionId)
-            .unwrap()
-            .catch(() => undefined);
-          afterDelete?.();
-        },
-        onPause: () => {
-          void undoDeleteSession(sessionId)
-            .unwrap()
-            .catch(() => undefined);
-        }
-      });
+        .then(() => afterArchive?.())
+        .catch(() => revealPendingSessionArchive(sessionId));
     },
-    [deleteSession, revealPendingSessionDelete, t, undoDeleteSession]
+    [revealPendingSessionArchive, updateSession]
   );
 
-  const deleteProjectSession = useCallback(
-    (projectId: string, sessionId: SessionId) => {
-      const title =
-        projects.find((project) => project.id === projectId)?.sessions.find((session) => session.id === sessionId)
-          ?.title ?? t('web.sidebar.session');
-      queueSessionDelete({
-        afterDelete: () => {
-          onOpenWorkspace();
-        },
-        sessionId,
-        title
-      });
-    },
-    [onOpenWorkspace, projects, queueSessionDelete, t]
-  );
-
-  const deleteChatSession = useCallback(
+  const unarchiveSession = useCallback(
     (sessionId: SessionId) => {
-      const title = chatSessions.find((session) => session.id === sessionId)?.title ?? t('web.sidebar.session');
-      queueSessionDelete({
-        afterDelete: () => {
+      revealPendingSessionUnarchive(sessionId);
+      setPendingUnarchivedSessionIds((current) => new Set(current).add(sessionId));
+      void updateSession({ archived: false, id: sessionId })
+        .unwrap()
+        .catch(() => revealPendingSessionUnarchive(sessionId));
+    },
+    [revealPendingSessionUnarchive, updateSession]
+  );
+
+  const archiveProjectSession = useCallback(
+    (_projectId: string, sessionId: SessionId) => {
+      archiveSession({
+        afterArchive: () => {
           onOpenWorkspace();
         },
-        sessionId,
-        title
+        sessionId
       });
     },
-    [chatSessions, onOpenWorkspace, queueSessionDelete, t]
+    [archiveSession, onOpenWorkspace]
+  );
+
+  const archiveChatSession = useCallback(
+    (sessionId: SessionId) => {
+      archiveSession({
+        afterArchive: () => {
+          onOpenWorkspace();
+        },
+        sessionId
+      });
+    },
+    [archiveSession, onOpenWorkspace]
   );
 
   return {
-    deleteChatSession,
-    deleteProjectSession,
-    pendingDeletedSessionIds,
-    renameSession
+    archiveChatSession,
+    archiveProjectSession,
+    pendingArchivedSessionIds,
+    pendingUnarchivedSessionIds,
+    renameSession,
+    unarchiveSession
   };
 }
