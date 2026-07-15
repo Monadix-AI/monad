@@ -20,7 +20,7 @@
     "@monad/sandbox-vm": "workspace:*",
     "@monad/sdk-atom": "workspace:*",
     "@monad/utils": "workspace:*",
-    "@monadix/realtime-protocol": "0.0.2",
+    "@monadix/realtime-protocol": "0.0.3",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/context-async-hooks": "^2.9.0",
     "@opentelemetry/exporter-metrics-otlp-proto": "^0.220.0",

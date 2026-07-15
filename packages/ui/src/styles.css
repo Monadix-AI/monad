@@ -224,12 +224,6 @@
   --chat-input-surface: rgb(var(--backgroundColor-surface-container) / 0.5);
   --chat-input-surface-active: rgb(var(--backgroundColor-state-active));
   --chat-input-placeholder: var(--muted-foreground);
-  --openclaw: oklch(0.74 0.13 70);
-  --openclaw-soft: oklch(0.74 0.13 70 / 0.16);
-  --hermes: oklch(0.72 0.105 200);
-  --hermes-soft: oklch(0.72 0.105 200 / 0.16);
-  --manus: oklch(0.72 0.13 295);
-  --manus-soft: oklch(0.72 0.13 295 / 0.16);
 }
 
 @theme inline {
@@ -316,12 +310,6 @@
   --color-sidebar-ring: var(--sidebar-ring);
   --color-accent-blue: var(--accent-blue);
   --color-accent-blue-soft: var(--accent-blue-soft);
-  --color-openclaw: var(--openclaw);
-  --color-openclaw-soft: var(--openclaw-soft);
-  --color-hermes: var(--hermes);
-  --color-hermes-soft: var(--hermes-soft);
-  --color-manus: var(--manus);
-  --color-manus-soft: var(--manus-soft);
 
   --radius-2xs: 0.125rem;
   --radius-xs: 0.3125rem;

@@ -71,7 +71,7 @@
         "@monad/sandbox-vm": "workspace:*",
         "@monad/sdk-atom": "workspace:*",
         "@monad/utils": "workspace:*",
-        "@monadix/realtime-protocol": "0.0.2",
+        "@monadix/realtime-protocol": "0.0.3",
         "@opentelemetry/api": "^1.9.1",
         "@opentelemetry/context-async-hooks": "^2.9.0",
         "@opentelemetry/exporter-metrics-otlp-proto": "^0.220.0",
@@ -791,7 +791,7 @@
 
     "@monad/web": ["@monad/web@workspace:apps/web"],
 
-    "@monadix/realtime-protocol": ["@monadix/realtime-protocol@0.0.2", "", { "dependencies": { "zod": "^4.4.3" } }, "sha512-AuyykSN3Z6VW3dGuvY6rIjNcGnH3xyaOWnWRDF0d6NC6i0UfpPp2E7S63kl1NQ49ZhX0knDqnZh/rKD5fU64sQ=="],
+    "@monadix/realtime-protocol": ["@monadix/realtime-protocol@0.0.3", "", { "dependencies": { "zod": "^4.4.3" } }, "sha512-6nwBmHpiz8kxYT3JeRjQVwAnew5NT/SneIEDQu46BvVJcsbY8W5FqvzD7p8pohwyuJqr5aaIpwSDT77dTuHO4A=="],
 
     "@mongodb-js/saslprep": ["@mongodb-js/saslprep@1.4.12", "", { "dependencies": { "sparse-bitfield": "^3.0.3" } }, "sha512-QAfAMwNgnYxZ2C6D1HgeP7Gc4i/uvJRim415PCIL9ptRxWMNbWeLBYb2/9R4pGKny/s1FVu2JA2cxCUBUOggrA=="],
 
