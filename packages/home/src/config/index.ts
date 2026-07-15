@@ -731,7 +731,8 @@ export function createDefaultConfig(principalId: PrincipalId, displayName: strin
       toolOutput: { maxChars: 24_000, persistRaw: true, rawCapBytes: 2_000_000 },
       recitation: { enabled: false },
       memoryPromotion: { mode: 'off' },
-      handoffNudge: { enabled: false, atFraction: 0.7 }
+      handoffNudge: { enabled: false, atFraction: 0.7 },
+      retrieval: { enabled: false, minScore: 0.7, maxResults: 3 }
     }
   };
 }

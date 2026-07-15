@@ -26,6 +26,7 @@ import {
   createAgent,
   DurableSummarizer,
   parseDurableSummary,
+  RetrievalReinjectionContext,
   type SummaryStore,
   TokenLimiterContext,
   ToolResultEvictionContext
@@ -248,9 +249,29 @@ export function createAgentExecutionService(deps: AgentDeps): AgentExecutionServ
           persistRawOutput: persistRawToolOutput
         })
       : undefined;
+  // Stage 4 (optional): semantic retrieval over the session's full message history — see
+  // context/retrieval.ts. Runs between eviction and the hard TokenLimiter guard so injected hits
+  // still respect the hard cap.
+  const retrieval = ctxCfg.retrieval.enabled
+    ? new RetrievalReinjectionContext({
+        embed: async (text) => {
+          const embed = modelService.router.embed;
+          if (!embed || !modelService.embeddingModel) return undefined;
+          const result = await embed.call(modelService.router, [text]);
+          return result.embeddings[0];
+        },
+        search: (sessionId, queryVec, limit) =>
+          store
+            .searchSemantic(queryVec, { transcriptTargetId: sessionId as SessionId, limit })
+            .map((h) => ({ messageId: h.messageId, snippet: h.snippet, score: h.score })),
+        minScore: ctxCfg.retrieval.minScore,
+        maxResults: ctxCfg.retrieval.maxResults
+      })
+    : undefined;
   const context = contextLimit
     ? new CompositeContextEngine([
         ...(eviction ? [eviction] : []),
+        ...(retrieval ? [retrieval] : []),
         new TokenLimiterContext({ maxTokens: Math.floor(contextLimit * ctxCfg.summarize.hardFraction) })
       ])
     : undefined;

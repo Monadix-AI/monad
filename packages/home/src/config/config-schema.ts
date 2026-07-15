@@ -625,7 +625,19 @@ export const contextSettingsSchema = z
     // Nudge the user to hand off to a fresh session past `atFraction` at a task boundary.
     handoffNudge: z
       .object({ enabled: z.boolean().default(false), atFraction: z.number().min(0).max(1).default(0.7) })
-      .default({ enabled: false, atFraction: 0.7 })
+      .default({ enabled: false, atFraction: 0.7 }),
+    // Stage 4 (optional) — semantic retrieval: before a turn, embed the latest user message and
+    // search this session's full message history (unaffected by eviction/summarization — the store
+    // keeps original text regardless of what's currently sent) for related content, splicing the
+    // top hits back onto the end of the prompt. Recovers exactly what the earlier lossy stages can
+    // silently discard. Requires an embedding model configured; no-ops otherwise.
+    retrieval: z
+      .object({
+        enabled: z.boolean().default(false),
+        minScore: z.number().min(0).max(1).default(0.7),
+        maxResults: z.number().int().min(0).max(10).default(3)
+      })
+      .default({ enabled: false, minScore: 0.7, maxResults: 3 })
   })
   .default({
     eviction: { enabled: true, atFraction: 0.5, keepRecentRounds: 3, clearAtLeast: 2000, minResultTokens: 200 },
@@ -633,6 +645,7 @@ export const contextSettingsSchema = z
     toolOutput: { maxChars: 24_000, persistRaw: true, rawCapBytes: 2_000_000 },
     recitation: { enabled: false },
     memoryPromotion: { mode: 'off' },
-    handoffNudge: { enabled: false, atFraction: 0.7 }
+    handoffNudge: { enabled: false, atFraction: 0.7 },
+    retrieval: { enabled: false, minScore: 0.7, maxResults: 3 }
   });
 export type ContextSettings = z.infer<typeof contextSettingsSchema>;
