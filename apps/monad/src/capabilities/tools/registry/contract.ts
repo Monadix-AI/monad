@@ -15,6 +15,7 @@
 
 import type { Tool } from '#/capabilities/tools/types.ts';
 import type { NoteStore } from './memory.ts';
+import type { RawOutputStore } from './read-tool-output.ts';
 import type { Scheduler } from './schedule.ts';
 
 export interface ToolDeps {
@@ -22,6 +23,8 @@ export interface ToolDeps {
   notes?: NoteStore;
   /** Daemon ScheduleService surface for the schedule_* tools. */
   scheduler?: Scheduler;
+  /** Spill-table reader for read_tool_output (Store.getToolRawOutput). */
+  rawOutputs?: RawOutputStore;
 }
 
 /** The uniform entry shape for a tool module, parameterized by the deps that module needs. */

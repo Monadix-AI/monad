@@ -608,6 +608,16 @@ export const contextSettingsSchema = z
         background: z.boolean().default(true)
       })
       .default({ softFraction: 0.6, hardFraction: 0.9, background: true }),
+    // Large tool outputs: the model-visible result is truncated to `maxChars` (head+tail). When
+    // `persistRaw` is on, the full pre-truncation output is spilled (capped at `rawCapBytes`) so it
+    // can be recovered later by handle instead of re-running the tool.
+    toolOutput: z
+      .object({
+        maxChars: z.number().int().min(0).default(24_000),
+        persistRaw: z.boolean().default(true),
+        rawCapBytes: z.number().int().min(0).default(2_000_000)
+      })
+      .default({ maxChars: 24_000, persistRaw: true, rawCapBytes: 2_000_000 }),
     // Stage 3 — re-anchor the current plan after compaction (implemented in a later phase).
     recitation: z.object({ enabled: z.boolean().default(false) }).default({ enabled: false }),
     // Promote durable facts out of compacted spans: off | suggest (propose, user confirms) | auto.
@@ -620,6 +630,7 @@ export const contextSettingsSchema = z
   .default({
     eviction: { enabled: true, atFraction: 0.5, keepRecentRounds: 3, clearAtLeast: 2000, minResultTokens: 200 },
     summarize: { softFraction: 0.6, hardFraction: 0.9, background: true },
+    toolOutput: { maxChars: 24_000, persistRaw: true, rawCapBytes: 2_000_000 },
     recitation: { enabled: false },
     memoryPromotion: { mode: 'off' },
     handoffNudge: { enabled: false, atFraction: 0.7 }

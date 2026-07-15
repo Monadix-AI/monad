@@ -191,6 +191,14 @@ export function createAgentExecutionService(deps: AgentDeps): AgentExecutionServ
         .catch(() => {});
     }
   });
+  // Spill a truncated/evicted tool result's full output to the store (capped) so it can be recovered
+  // by handle later instead of re-running the tool. Gated by config; shared by the tool-execution
+  // truncation seam (below) and the eviction engine (both call it on the same table).
+  const persistRawToolOutput = ctxCfg.toolOutput.persistRaw
+    ? (sessionId: string, toolCallId: string, output: string) =>
+        store.saveToolRawOutput(sessionId, toolCallId, output.slice(0, ctxCfg.toolOutput.rawCapBytes))
+    : undefined;
+
   // In-turn context cascade (runs each model step, after the durable summarizer has assembled the
   // prompt): lossless tool-result eviction first, then a hard truncation guard so the window can't
   // overflow mid tool-loop even if summarization lagged. DurableSummarizer (above) remains the
@@ -204,7 +212,8 @@ export function createAgentExecutionService(deps: AgentDeps): AgentExecutionServ
                 atFraction: ctxCfg.eviction.atFraction,
                 keepRecentRounds: ctxCfg.eviction.keepRecentRounds,
                 clearAtLeast: ctxCfg.eviction.clearAtLeast,
-                minResultTokens: ctxCfg.eviction.minResultTokens
+                minResultTokens: ctxCfg.eviction.minResultTokens,
+                persistRawOutput: persistRawToolOutput
               })
             ]
           : []),
@@ -360,6 +369,8 @@ export function createAgentExecutionService(deps: AgentDeps): AgentExecutionServ
     userId: cfg.principal?.id,
     sandboxRoots,
     contextLimit,
+    persistRawToolOutput,
+    maxToolResultChars: ctxCfg.toolOutput.maxChars,
     // Record each turn's REAL usage into the session + the global ledger, and compute its real
     // cost from the catalog price (cache-aware). Uses the configured default model for pricing;
     // money is never inferred from estimated tokens.

@@ -128,7 +128,11 @@ export async function createAgentRuntime(core: DaemonCore, endpoint: { host: str
     baseTools: (): Tool[] => registry.toolList(),
     toolsVersion: () => registry.toolRevision,
     extraTools: [
-      ...buildServiceTools({ notes: memory.noteStore, scheduler: schedule }),
+      ...buildServiceTools({
+        notes: memory.noteStore,
+        scheduler: schedule,
+        rawOutputs: { get: (sessionId, toolCallId) => store.getToolRawOutput(sessionId, toolCallId) }
+      }),
       ...createMemoryAgentTools(memory.memoryService),
       ...createGraphQueryTools(memory.graphStore, memory.graphScopesFor),
       ...peerDelegateTools

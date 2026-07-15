@@ -93,6 +93,10 @@ export interface AgentLoopDeps {
   computeCost?: (usage: ModelUsage | undefined, price: ModelPrice | undefined, providerUsd?: number) => Cost;
   /** Max chars of a single tool result fed back to the model. */
   maxToolResultChars?: number;
+  /** Spill a tool result's FULL pre-truncation output for later handle-based recovery. Called ONLY
+   *  when the output was actually truncated AND not rewritten by an AfterTool hook (a hook may redact
+   *  secrets from the fed-back text; the pre-truncation raw predates that redaction). Absent → no spill. */
+  persistRawToolOutput?: (sessionId: SessionId, toolCallId: string, output: string) => void;
   /** Active model context-window size for context.usage events. */
   contextLimit?: number;
   /** Records one turn's real provider usage and returns computed cost for agent.message. */

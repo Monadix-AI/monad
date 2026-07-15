@@ -27,10 +27,16 @@ import {
  *  giant file dump doesn't blow up the summary prompt while its head still names the file/symbol. */
 const SUMMARY_PART_CHARS = 800;
 
-function truncateForSummary(s: string): string {
-  return s.length > SUMMARY_PART_CHARS
-    ? `${s.slice(0, SUMMARY_PART_CHARS)}… [${s.length - SUMMARY_PART_CHARS} more chars]`
-    : s;
+// A tool-result's full pre-truncation bytes are (usually) recoverable by handle via
+// read_tool_output — see AgentLoopDeps.persistRawToolOutput / ToolResultEvictionContext. The
+// summarizer therefore only needs a head preview to name the file/symbol involved, not a
+// faithfully-balanced head+tail: the handle is the fidelity backstop, this is just a pointer.
+function truncateForSummary(s: string, handle?: string): string {
+  if (s.length <= SUMMARY_PART_CHARS) return s;
+  const recover = handle
+    ? `read_tool_output({ id: "${handle}" }) for the rest`
+    : `${s.length - SUMMARY_PART_CHARS} more chars`;
+  return `${s.slice(0, SUMMARY_PART_CHARS)}… [${recover}]`;
 }
 
 /** Render a message's content for the summarizer, surfacing tool names + (truncated) inputs/outputs
@@ -46,7 +52,7 @@ function renderForSummary(content: ModelMessage['content']): string {
         case 'tool-call':
           return `[tool-call ${p.toolName} ${truncateForSummary(JSON.stringify(p.input))}]`;
         case 'tool-result':
-          return `[tool-result ${p.toolName} ${truncateForSummary(p.output)}]`;
+          return `[tool-result ${p.toolName} ${truncateForSummary(p.output, p.toolCallId)}]`;
         default:
           return '[image]';
       }

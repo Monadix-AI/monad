@@ -352,6 +352,43 @@ export class Store {
     return clearMessages(this.sqlite, this.db, id);
   }
 
+  /** Spill a tool result's full pre-truncation output, keyed by (transcript target, provider
+   *  tool-call id). Idempotent per key (a replayed/re-run call with the same id overwrites). */
+  saveToolRawOutput(sessionId: string, toolCallId: string, output: string): void {
+    this.sqlite
+      .query(
+        `INSERT INTO tool_raw_outputs (transcript_target_id, tool_call_id, output, created_at)
+         VALUES ($sid, $tid, $out, $at)
+         ON CONFLICT(transcript_target_id, tool_call_id) DO UPDATE SET output = excluded.output, created_at = excluded.created_at`
+      )
+      .run({ $sid: sessionId, $tid: toolCallId, $out: output, $at: new Date().toISOString() });
+  }
+
+  /** Read a spilled tool output by handle, scoped to exactly this transcript target. Branching
+   *  copies spills alongside messages (see cloneToolRawOutputs) — copy semantics, matching how
+   *  session branching clones history rather than sharing it by lineage. Returns null when no
+   *  spill exists for that id in this transcript. */
+  getToolRawOutput(sessionId: string, toolCallId: string): string | null {
+    const row = this.sqlite
+      .query('SELECT output FROM tool_raw_outputs WHERE transcript_target_id = ? AND tool_call_id = ?')
+      .get(sessionId, toolCallId) as { output: string } | null;
+    return row?.output ?? null;
+  }
+
+  /** Copy the source transcript's spilled tool outputs referenced by the given tool-call ids into a
+   *  branch child — cloneMessages copies tool_call rows with their toolCallIds intact, so the child's
+   *  read_tool_output handles must resolve against its own transcript id. */
+  cloneToolRawOutputs(sourceId: string, targetId: string, toolCallIds: readonly string[]): void {
+    if (toolCallIds.length === 0) return;
+    const placeholders = toolCallIds.map(() => '?').join(', ');
+    this.sqlite
+      .query(
+        `INSERT OR REPLACE INTO tool_raw_outputs (transcript_target_id, tool_call_id, output, created_at)
+         SELECT ?, tool_call_id, output, created_at FROM tool_raw_outputs
+         WHERE transcript_target_id = ? AND tool_call_id IN (${placeholders})`
+      )
+      .run(targetId, sourceId, ...toolCallIds);
+  }
   /** Accumulate one turn's REAL usage + cost into a session (per-session, resettable). Missing
    *  fields contribute 0 (presence ≠ value — never invent). */
   addUsage(id: string, usage: TokenUsage, costUsd = 0): void {

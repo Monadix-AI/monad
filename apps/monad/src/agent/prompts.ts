@@ -73,7 +73,7 @@ const BUDGET_EXCEEDED_TEMPLATE = await definePrompt({
   id: 'agent.budget-exceeded.user',
   sourcePath: budgetExceededPath
 });
-const EVICTED_TOOL_RESULT_TEMPLATE = await definePrompt<{ toolName: string }>({
+const EVICTED_TOOL_RESULT_TEMPLATE = await definePrompt<{ toolName: string; handle?: string }>({
   id: 'agent.evicted-tool-result.user',
   sourcePath: evictedToolResultPath
 });
@@ -104,8 +104,11 @@ export function renderContextSummary(summary: string): string {
   return CONTEXT_SUMMARY_TEMPLATE.render({ summary });
 }
 
-export function evictedToolResult(toolName: string): string {
-  return EVICTED_TOOL_RESULT_TEMPLATE.render({ toolName });
+/** `handle`, when given, is the tool-call id the full output was spilled under before eviction —
+ *  point the model at read_tool_output instead of re-running the (possibly non-reproducible or
+ *  side-effecting) call. */
+export function evictedToolResult(toolName: string, handle?: string): string {
+  return EVICTED_TOOL_RESULT_TEMPLATE.render({ toolName, handle });
 }
 
 /**

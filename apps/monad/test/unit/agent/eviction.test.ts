@@ -270,3 +270,80 @@ test('does not mutate the original message objects (durable history stays intact
   engine.prepare(msgs, ctx(600));
   expect(outputs(msgs)).toEqual(originalOutputs);
 });
+
+test('spills each evicted result to persistRawOutput before overwriting it, keyed by toolCallId', () => {
+  const spilled: Array<{ sessionId: string; toolCallId: string; output: string }> = [];
+  const engine = new ToolResultEvictionContext({
+    contextLimit: 1000,
+    atFraction: 0.5,
+    keepRecentRounds: 1,
+    clearAtLeast: 1,
+    minResultTokens: 1,
+    persistRawOutput: (sessionId, toolCallId, output) => spilled.push({ sessionId, toolCallId, output })
+  });
+  const msgs = transcript(4); // toolCallIds t0..t3, one per round
+  engine.prepare(msgs, ctx(600));
+
+  // 3 of 4 rounds evicted (keepRecentRounds=1): t0, t1, t2.
+  expect(spilled.map((s) => s.toolCallId).sort()).toEqual(['t0', 't1', 't2']);
+  expect(spilled.every((s) => s.sessionId === 'ses_x00000000000')).toBe(true);
+  // The spilled bytes are the ORIGINAL output, not the placeholder.
+  expect(spilled.find((s) => s.toolCallId === 't0')?.output.startsWith('OUT0')).toBe(true);
+});
+
+test('the eviction placeholder points at read_tool_output with the handle when spilling is configured', () => {
+  const engine = new ToolResultEvictionContext({
+    contextLimit: 1000,
+    atFraction: 0.5,
+    keepRecentRounds: 1,
+    clearAtLeast: 1,
+    minResultTokens: 1,
+    persistRawOutput: () => {}
+  });
+  const msgs = transcript(3);
+  const out = engine.prepare(msgs, ctx(600));
+  const evicted = outputs(out).filter((o) => o.startsWith(EVICTED_MARKER));
+  expect(evicted.length).toBeGreaterThan(0);
+  for (const o of evicted) expect(o).toContain('read_tool_output');
+});
+
+test('without persistRawOutput configured, the placeholder falls back to the re-run hint (no dangling handle promise)', () => {
+  const engine = new ToolResultEvictionContext({
+    contextLimit: 1000,
+    atFraction: 0.5,
+    keepRecentRounds: 1,
+    clearAtLeast: 1,
+    minResultTokens: 1
+  });
+  const msgs = transcript(3);
+  const out = engine.prepare(msgs, ctx(600));
+  const evicted = outputs(out).filter((o) => o.startsWith(EVICTED_MARKER));
+  expect(evicted.length).toBeGreaterThan(0);
+  for (const o of evicted) {
+    expect(o).not.toContain('read_tool_output');
+    expect(o).toContain('Re-run the tool');
+  }
+});
+
+test('does not spill when prepare() is called with no ctx (no session to key the spill by)', () => {
+  const spilled: unknown[] = [];
+  const engine = new ToolResultEvictionContext({
+    contextLimit: 1000,
+    // Tiny trigger so this fires regardless of the shared globalEstimator's calibrated ratio (no
+    // ctx here means no per-test estimator override, per ctx?.estimator ?? globalEstimator).
+    atFraction: 0.001,
+    keepRecentRounds: 1,
+    clearAtLeast: 1,
+    minResultTokens: 1,
+    persistRawOutput: (...args) => spilled.push(args)
+  });
+  const msgs = transcript(3);
+  const out = engine.prepare(msgs); // ctx omitted entirely → ctx?.sessionId is undefined
+  expect(spilled).toHaveLength(0);
+  // The placeholder must not promise a handle that was never spilled — a model calling
+  // read_tool_output for it would always get "not found" for bytes that are gone for good.
+  for (const o of outputs(out).filter((o) => o.startsWith(EVICTED_MARKER))) {
+    expect(o).not.toContain('read_tool_output');
+    expect(o).toContain('Re-run the tool');
+  }
+});

@@ -728,6 +728,7 @@ export function createDefaultConfig(principalId: PrincipalId, displayName: strin
     context: {
       eviction: { enabled: true, atFraction: 0.5, keepRecentRounds: 3, clearAtLeast: 2000, minResultTokens: 200 },
       summarize: { softFraction: 0.6, hardFraction: 0.9, background: true },
+      toolOutput: { maxChars: 24_000, persistRaw: true, rawCapBytes: 2_000_000 },
       recitation: { enabled: false },
       memoryPromotion: { mode: 'off' },
       handoffNudge: { enabled: false, atFraction: 0.7 }

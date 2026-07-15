@@ -1,1 +1,1 @@
-Earlier output from `<%= it.toolName %>` was cleared to save context. Call the tool again if you need it.
+Earlier output from `<%= it.toolName %>` was cleared to save context. <% if (it.handle) { %>Full output available via read_tool_output({ id: "<%= it.handle %>" }).<% } else { %>Call the tool again if you need it.<% } %>

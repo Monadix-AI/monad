@@ -35,6 +35,12 @@ export interface ToolResultEvictionOptions {
   clearAtLeast?: number;
   /** Skip results smaller than this (not worth a placeholder). Default 200. */
   minResultTokens?: number;
+  /** Spill an evicted result's full output before replacing it with a placeholder — covers results
+   *  that were NEVER truncated at tool-execution time (short enough to send whole) and so were never
+   *  spilled there. Without this, evicting one of those loses the bytes for good (no read_tool_output
+   *  handle exists). Same seam as AgentLoopDeps.persistRawToolOutput. Absent → eviction stays
+   *  recoverable only via re-running the tool. */
+  persistRawOutput?: (sessionId: string, toolCallId: string, output: string) => void;
 }
 
 /** Leading marker on every placeholder, used to detect already-evicted results idempotently. */
@@ -48,6 +54,7 @@ function isEvicted(output: string): boolean {
 interface ResultRef {
   msgIndex: number;
   partIndex: number;
+  toolCallId: string;
   toolName: string;
   output: string;
   tokens: number;
@@ -87,23 +94,32 @@ export class ToolResultEvictionContext implements ContextEngine {
     const reclaimable = candidates.reduce((sum, r) => sum + r.tokens, 0);
     if (reclaimable < this.clearAtLeast) return messages; // not enough to justify the loss this pass
 
-    // Rewrite only the affected messages, cloning so cached history objects are never mutated.
-    const evictParts = new Map<number, Set<number>>();
-    for (const r of candidates) {
-      const parts = evictParts.get(r.msgIndex) ?? new Set<number>();
-      parts.add(r.partIndex);
-      evictParts.set(r.msgIndex, parts);
+    // Spill each candidate's full output BEFORE it's overwritten below — this covers results that
+    // were never truncated at tool-execution time (short enough to send whole) and so were never
+    // spilled there. Without this a short-but-old result would lose its bytes for good on eviction.
+    // The placeholder only promises a handle when the spill actually runs — same condition gates
+    // both, so the promise and the write can never disagree.
+    const persist = this.opts.persistRawOutput;
+    const sessionId = ctx?.sessionId;
+    const handle = Boolean(persist && sessionId);
+    if (persist && sessionId) {
+      for (const r of candidates) persist(sessionId, r.toolCallId, r.output);
     }
 
+    // Rewrite only the affected messages, cloning so cached history objects are never mutated.
+    const evictParts = new Map<string, string>();
+    for (const r of candidates) evictParts.set(`${r.msgIndex}:${r.partIndex}`, r.toolCallId);
+
     return messages.map((m, i) => {
-      const parts = evictParts.get(i);
-      if (!parts || !Array.isArray(m.content)) return m;
-      const content = m.content.map((p, j) =>
-        parts.has(j) && p.type === 'tool-result'
-          ? { ...p, output: `${EVICTED_MARKER} ${evictedToolResult(p.toolName)}` }
-          : p
-      );
-      return { ...m, content };
+      if (!Array.isArray(m.content)) return m;
+      let changed = false;
+      const content = m.content.map((p, j) => {
+        const toolCallId = evictParts.get(`${i}:${j}`);
+        if (toolCallId === undefined || p.type !== 'tool-result') return p;
+        changed = true;
+        return { ...p, output: `${EVICTED_MARKER} ${evictedToolResult(p.toolName, handle ? toolCallId : undefined)}` };
+      });
+      return changed ? { ...m, content } : m;
     });
   }
 
@@ -124,6 +140,7 @@ export class ToolResultEvictionContext implements ContextEngine {
         out.push({
           msgIndex: i,
           partIndex: j,
+          toolCallId: p.toolCallId,
           toolName: p.toolName,
           output: p.output,
           tokens: est.fromChars(p.output.length),

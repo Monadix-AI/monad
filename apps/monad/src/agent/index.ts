@@ -53,6 +53,11 @@ export interface AgentConfig {
   /** Records each turn's real usage (session + global ledger) and returns its real cost. Injected
    *  by the daemon (store + price catalog); absent → no usage/cost accounting. */
   recordTurnUsage?: AgentLoopDeps['recordTurnUsage'];
+  /** Spill a truncated tool result's full pre-truncation output for later handle-based recovery.
+   *  Injected by the daemon (store); absent → no spill. */
+  persistRawToolOutput?: AgentLoopDeps['persistRawToolOutput'];
+  /** Max chars of a single tool result fed back to the model. Absent → DEFAULT_MAX_TOOL_RESULT_CHARS. */
+  maxToolResultChars?: AgentLoopDeps['maxToolResultChars'];
   /** Keeps each turn's prompt within the window (truncate/summarize). Default: passthrough. */
   context?: ContextEngine;
   /** Durable bounded-load history strategy (summary boundary). Replaces the full-load path. */
@@ -288,6 +293,8 @@ export function createAgent(config: AgentConfig): Agent {
         extraTools: opts?.extraTools,
         contextLimit: config.contextLimit,
         recordTurnUsage: config.recordTurnUsage,
+        persistRawToolOutput: config.persistRawToolOutput,
+        maxToolResultChars: config.maxToolResultChars,
         context: config.context,
         history: config.history,
         cacheSystemPrompt: config.cacheSystemPrompt,
