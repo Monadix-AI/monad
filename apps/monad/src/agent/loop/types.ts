@@ -93,11 +93,29 @@ export interface AgentLoopDeps {
   computeCost?: (usage: ModelUsage | undefined, price: ModelPrice | undefined, providerUsd?: number) => Cost;
   /** Max chars of a single tool result fed back to the model. */
   maxToolResultChars?: number;
+  /** Spill a tool result's FULL pre-truncation output for later handle-based recovery. Called ONLY
+   *  when the output was actually truncated AND not rewritten by an AfterTool hook (a hook may redact
+   *  secrets from the fed-back text; the pre-truncation raw predates that redaction). Absent → no spill. */
+  persistRawToolOutput?: (sessionId: SessionId, toolCallId: string, output: string) => void;
   /** Active model context-window size for context.usage events. */
   contextLimit?: number;
   /** Records one turn's real provider usage and returns computed cost for agent.message. */
   recordTurnUsage?: (sessionId: SessionId, usage: ModelUsage, modelId: string) => Cost | undefined;
   context?: ContextEngine;
+  /** Optional semantic-retrieval stage (context/retrieval.ts), run ONCE per turn from buildPrompt —
+   *  not part of `context`'s per-model-step cascade. The query text (the latest user message) doesn't
+   *  change across a turn's tool-loop steps, so running it there would re-embed, re-search, and
+   *  re-splice a duplicate block on every step. */
+  retrieval?: ContextEngine;
+  /** Cumulative tool-result-eviction tokens reclaimed for a session, for the context.usage 'evicted'
+   *  bucket. Backed by the same ToolResultEvictionContext instance passed as `context`. */
+  evictedTokens?: (sessionId: SessionId) => number;
+  /** Fraction of contextLimit past which a context.handoff_suggested notice fires at each task
+   *  boundary (turn settled, no tool call mid-flight). Absent → the nudge never fires. */
+  handoffNudgeFraction?: number;
+  /** Re-anchor the durable summary's Open Tasks / Next Step sections at the end of the prompt after
+   *  compaction. Default false (no-op without a summary regardless). */
+  recitationEnabled?: boolean;
   /** Durable, bounded-load history strategy. */
   history?: HistoryProvider;
   /** Cross-turn cache of replayed message history, shared by per-turn AgentLoop instances. */

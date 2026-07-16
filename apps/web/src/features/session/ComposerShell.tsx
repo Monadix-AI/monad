@@ -33,6 +33,7 @@ type ComposerShellProps = {
   contextUsage?: {
     approximate?: boolean;
     limit: number;
+    reclaimed?: number;
     segments?: { category: string; color?: string; label: string; tokens: number }[];
     used: number;
   };
@@ -248,6 +249,8 @@ export function ComposerShell({
                 approximate: contextUsage.approximate,
                 contextUsedLabel: t('web.chat.contextUsed'),
                 limit: contextUsage.limit,
+                reclaimed: contextUsage.reclaimed,
+                reclaimedLabel: t('web.chat.contextReclaimed'),
                 segments: contextUsage.segments,
                 used: contextUsage.used
               }

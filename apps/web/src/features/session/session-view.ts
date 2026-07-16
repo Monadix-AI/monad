@@ -74,6 +74,7 @@ export function buildSessionContextUsage(usage: ContextUsage | undefined) {
   return {
     approximate: usage.approximate,
     limit: usage.contextLimit,
+    reclaimed: usage.reclaimed,
     segments: Array.from(segmentsByCategory.values()).map((segment) => ({
       category: segment.category,
       color: SEGMENT_COLORS[segment.category],

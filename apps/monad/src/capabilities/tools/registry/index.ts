@@ -14,6 +14,7 @@ import * as fs from './fs.ts';
 import * as memory from './memory.ts';
 import * as net from './net.ts';
 import * as process from './process.ts';
+import * as readToolOutput from './read-tool-output.ts';
 import * as schedule from './schedule.ts';
 import * as shell from './shell.ts';
 import * as todo from './todo.ts';
@@ -34,7 +35,7 @@ const staticModules: ToolModule[] = [
 ];
 
 /** Service modules — composed at their boot call site with a populated ToolDeps (see main.ts). */
-const serviceModules: ToolModule[] = [memory.register, schedule.register];
+const serviceModules: ToolModule[] = [memory.register, schedule.register, readToolOutput.register];
 
 /** The static built-in tool set (no deps). */
 export const builtinTools: Tool[] = buildTools(staticModules, {});

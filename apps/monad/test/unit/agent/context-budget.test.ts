@@ -43,6 +43,25 @@ test('free never goes negative when the window is over budget', () => {
   expect(usage.free).toBe(0);
 });
 
+test('reclaimed is surfaced informationally and never added into used/free', () => {
+  const usage = buildContextUsage([{ category: 'messages', label: 'Messages', tokens: 400 }], {
+    contextLimit: 10_000,
+    autocompactBuffer: 1000,
+    reclaimed: 5_000
+  });
+  expect(usage.reclaimed).toBe(5_000);
+  expect(usage.used).toBe(400); // reclaimed is NOT summed into used
+  expect(usage.free).toBe(10_000 - 400 - 1000);
+});
+
+test('reclaimed is omitted when zero (nothing evicted yet)', () => {
+  const usage = buildContextUsage([{ category: 'messages', label: 'Messages', tokens: 400 }], {
+    contextLimit: 10_000,
+    reclaimed: 0
+  });
+  expect(usage.reclaimed).toBeUndefined();
+});
+
 test('ContextBuilder drops zero-token segments and defaults the autocompact buffer', () => {
   const usage = new ContextBuilder()
     .add('systemPrompt', 'System prompt', 'you are a helpful agent')
@@ -86,6 +105,74 @@ test('context.usage prefers provider usage for the total (estimate fallback othe
   const usage = events.find((e) => e.type === 'context.usage');
   expect(usage?.payload.used).toBe(1234); // provider total, not a local estimate
   expect(usage?.payload.approximate).toBe(false);
+});
+
+test('context.usage carries evictedTokens as reclaimed, not folded into used', async () => {
+  const model = buildMockModel().text(['hi']).usage({ inputTokens: 1234 }).build();
+  const events: Event[] = [];
+  const loop = new AgentLoop({
+    model,
+    tools: [],
+    messages: new InMemoryMessageRepo(),
+    defaultModel: 'mock',
+    emit: (e) => events.push(e),
+    contextLimit: 200_000,
+    evictedTokens: () => 3_000
+  });
+  await loop.runBlock(newId('ses') as SessionId, 'hello');
+
+  const usage = events.find((e) => e.type === 'context.usage');
+  expect(usage?.payload.reclaimed).toBe(3_000);
+  expect(usage?.payload.used).toBe(1234); // reclaimed does not inflate the real provider total
+});
+
+test('fires context.handoff_suggested at a task boundary once usage crosses the configured fraction', async () => {
+  const model = buildMockModel().text(['hi']).usage({ inputTokens: 180_000 }).build();
+  const events: Event[] = [];
+  const loop = new AgentLoop({
+    model,
+    tools: [],
+    messages: new InMemoryMessageRepo(),
+    defaultModel: 'mock',
+    emit: (e) => events.push(e),
+    contextLimit: 200_000, // 180k/200k = 0.9 ≥ atFraction(0.7); static overhead negligible at this scale
+    handoffNudgeFraction: 0.7
+  });
+  await loop.runBlock(newId('ses') as SessionId, 'hello');
+
+  const nudge = events.find((e) => e.type === 'context.handoff_suggested');
+  expect(nudge?.payload).toEqual({ usedFraction: 0.9, atFraction: 0.7 });
+});
+
+test('does not fire context.handoff_suggested below the configured fraction', async () => {
+  const model = buildMockModel().text(['hi']).usage({ inputTokens: 20_000 }).build();
+  const events: Event[] = [];
+  const loop = new AgentLoop({
+    model,
+    tools: [],
+    messages: new InMemoryMessageRepo(),
+    defaultModel: 'mock',
+    emit: (e) => events.push(e),
+    contextLimit: 200_000, // 20k/200k = 0.1 < atFraction(0.7)
+    handoffNudgeFraction: 0.7
+  });
+  await loop.runBlock(newId('ses') as SessionId, 'hello');
+  expect(events.some((e) => e.type === 'context.handoff_suggested')).toBe(false);
+});
+
+test('does not fire context.handoff_suggested when handoffNudgeFraction is unset', async () => {
+  const model = buildMockModel().text(['hi']).usage({ inputTokens: 190_000 }).build();
+  const events: Event[] = [];
+  const loop = new AgentLoop({
+    model,
+    tools: [],
+    messages: new InMemoryMessageRepo(),
+    defaultModel: 'mock',
+    emit: (e) => events.push(e),
+    contextLimit: 200_000
+  });
+  await loop.runBlock(newId('ses') as SessionId, 'hello');
+  expect(events.some((e) => e.type === 'context.handoff_suggested')).toBe(false);
 });
 
 test('no context.usage event without a configured contextLimit', async () => {

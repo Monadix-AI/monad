@@ -5,6 +5,10 @@ export type ComposerContextUsagePanelProps = {
   contextUsedLabel: string;
   limit: number;
   percent: number;
+  /** Cumulative tokens reclaimed by lossless tool-result eviction so far this session. Informational
+   *  — already excluded from `used`/segments upstream, shown as a separate footer line. */
+  reclaimed?: number;
+  reclaimedLabel?: string;
   segments?: { category: string; color?: string; label: string; tokens: number }[];
   used: number;
 };
@@ -14,6 +18,8 @@ export function ComposerContextUsagePanel({
   contextUsedLabel,
   limit,
   percent,
+  reclaimed,
+  reclaimedLabel,
   segments,
   used
 }: ComposerContextUsagePanelProps): ReactElement {
@@ -45,6 +51,12 @@ export function ComposerContextUsagePanel({
               <span className="shrink-0 font-mono tabular-nums">{segment.tokens.toLocaleString()}</span>
             </div>
           ))}
+        </div>
+      ) : null}
+      {reclaimed && reclaimed > 0 ? (
+        <div className="flex items-center justify-between gap-3 border-t p-3 text-muted-foreground text-xs">
+          <span>{reclaimedLabel}</span>
+          <span className="shrink-0 font-mono tabular-nums">{formatCompact(reclaimed)}</span>
         </div>
       ) : null}
     </>

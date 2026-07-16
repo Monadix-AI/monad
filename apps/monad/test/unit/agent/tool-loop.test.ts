@@ -421,6 +421,99 @@ test('a huge tool result is truncated before being fed back to the model', async
   expect(out.output.length).toBeLessThan(2000);
 });
 
+test('a truncated result is still spilled when an AfterTool hook only appends context (pass-through effectiveToolOutput)', async () => {
+  const huge = 'X'.repeat(100_000);
+  const bigTool: Tool<Record<string, never>, string> = {
+    name: 'test.big',
+    description: 'returns a huge string',
+    scopes: [],
+    run: async () => toolResult(huge)
+  };
+  const spilled: Array<{ toolCallId: string; output: string }> = [];
+  const loop = new AgentLoop({
+    model: scriptedModel([{ tool: 'test.big' }, 'done']),
+    tools: [bigTool as Tool],
+    messages: new InMemoryMessageRepo(),
+    defaultModel: 'mock',
+    emit: () => {},
+    maxToolResultChars: 1000,
+    persistRawToolOutput: (_sessionId, toolCallId, output) => spilled.push({ toolCallId, output }),
+    // A real hook runner's NO_HOOKS / pass-through decision also sets effectiveToolOutput to the
+    // input toolResult (see @monad/protocol NO_HOOKS) — this hook mirrors that shape, only adding
+    // additionalContext, to prove the spill isn't blocked by mere presence of effectiveToolOutput.
+    hooks: fakeHooks((i) => (i.event === 'AfterTool' ? { additionalContext: ['policy note'] } : {}))
+  });
+  await loop.runBlock(sid(), 'go');
+
+  expect(spilled).toHaveLength(1);
+  expect(spilled[0]?.toolCallId).toBe('tc_1');
+  expect(spilled[0]?.output).toBe(huge); // the full pre-truncation bytes, not the capped copy
+});
+
+test('a truncated result is NOT spilled when an AfterTool hook actually rewrites (redacts) the output', async () => {
+  const huge = 'X'.repeat(100_000);
+  const bigTool: Tool<Record<string, never>, string> = {
+    name: 'test.big',
+    description: 'returns a huge string',
+    scopes: [],
+    run: async () => toolResult(huge)
+  };
+  const spilled: unknown[] = [];
+  const loop = new AgentLoop({
+    model: scriptedModel([{ tool: 'test.big' }, 'done']),
+    tools: [bigTool as Tool],
+    messages: new InMemoryMessageRepo(),
+    defaultModel: 'mock',
+    emit: () => {},
+    maxToolResultChars: 1000,
+    persistRawToolOutput: (...args) => spilled.push(args),
+    hooks: fakeHooks((i) => (i.event === 'AfterTool' ? { effectiveToolOutput: 'redacted' } : {}))
+  });
+  await loop.runBlock(sid(), 'go');
+
+  expect(spilled).toHaveLength(0);
+});
+
+test('a secret buried in the OMITTED MIDDLE of a truncated output is not spilled, even though the truncated preview never shows it to the redaction hook', async () => {
+  // 100k chars; truncateToolOutput(maxResultChars=1000) keeps head=700 + tail=300 of the ORIGINAL.
+  // Put the secret at position 50_000 — well outside both windows, so the hook never sees it in the
+  // truncated pass. Only a hook run against the FULL text can catch it.
+  const secret = 'SECRET_MARKER_sk-live-abc123';
+  const huge = `${'A'.repeat(50_000)}${secret}${'B'.repeat(50_000 - secret.length)}`;
+  const bigTool: Tool<Record<string, never>, string> = {
+    name: 'test.big',
+    description: 'returns a huge string with a buried secret',
+    scopes: [],
+    run: async () => toolResult(huge)
+  };
+  const spilled: unknown[] = [];
+  const hookCalls: string[] = [];
+  const loop = new AgentLoop({
+    model: scriptedModel([{ tool: 'test.big' }, 'done']),
+    tools: [bigTool as Tool],
+    messages: new InMemoryMessageRepo(),
+    defaultModel: 'mock',
+    emit: () => {},
+    maxToolResultChars: 1000,
+    persistRawToolOutput: (...args) => spilled.push(args),
+    hooks: fakeHooks((i) => {
+      if (i.event !== 'AfterTool') return {};
+      hookCalls.push(i.toolResult ?? '');
+      // A realistic redaction hook: only touches output that actually contains the secret pattern —
+      // the truncated preview (head/tail only) never contains it, so this hook would silently pass
+      // it through if the spill decision only consulted the truncated pass.
+      return i.toolResult?.includes('SECRET_MARKER') ? { effectiveToolOutput: '[REDACTED]' } : {};
+    })
+  });
+  await loop.runBlock(sid(), 'go');
+
+  // Exactly one AfterTool pass ran, against the FULL pre-truncation text — so it actually saw the
+  // secret (a truncated-preview-only pass would have missed it, per the scenario name).
+  expect(hookCalls).toHaveLength(1);
+  expect(hookCalls[0]).toContain('SECRET_MARKER');
+  expect(spilled).toHaveLength(0); // spill correctly blocked — the secret is not recoverable via a handle
+});
+
 test('sandbox guard is enforced through the loop (file_read traversal → tool error)', async () => {
   const { loop, events } = harness([{ tool: 'file_read', input: { path: '/etc/passwd' } }, 'done'], {
     tools: [fileReadTool],

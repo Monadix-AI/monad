@@ -149,10 +149,18 @@ export function createSessionContext(deps: SessionDeps): SessionContext {
     });
   }
 
+  const TRANSIENT_EVENT_TYPES = new Set<EventType>([
+    'agent.token',
+    'agent.reasoning',
+    'context.evicted',
+    'context.handoff_suggested'
+  ]);
+
   function persistAndRetire(sessionId: SessionId, round: Event[]): void {
     // agent.token / agent.reasoning are transient stream deltas — delivered live over the bus,
     // never persisted as event rows (the final agent.message carries the durable text).
-    store.appendEvents(round.filter((e) => e.type !== 'agent.token' && e.type !== 'agent.reasoning'));
+    // context.evicted / context.handoff_suggested are transient notices — never persisted.
+    store.appendEvents(round.filter((e) => !TRANSIENT_EVENT_TYPES.has(e.type)));
     cache.retire(sessionId);
     emitStreamMarker(sessionId, 'session.stream_ended');
   }

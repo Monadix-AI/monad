@@ -33,6 +33,8 @@ import { factId, MemoryDir, projectKey, scopeOf } from '#/store/db/index.ts';
 // `with { type: 'file' }` embeds reliably in bun's --compile binary (unlike new URL+import.meta.url).
 import consolidateSystemPath from './prompts/consolidate-system.prompt.md' with { type: 'file' };
 import consolidateUserPath from './prompts/consolidate-user.prompt.md' with { type: 'file' };
+import promoteFactsSystemPath from './prompts/promote-facts-system.prompt.md' with { type: 'file' };
+import promoteFactsUserPath from './prompts/promote-facts-user.prompt.md' with { type: 'file' };
 import recallContextPath from './prompts/recall-context.prompt.md' with { type: 'file' };
 
 export interface MemoryServiceDeps {
@@ -84,6 +86,14 @@ const CONSOLIDATE_USER_PROMPT = await definePrompt<{ facts: string[] }>({
   id: 'memory.consolidate.user',
   sourcePath: consolidateUserPath
 });
+const PROMOTE_FACTS_SYSTEM_PROMPT = await definePrompt({
+  id: 'memory.promote-facts.system',
+  sourcePath: promoteFactsSystemPath
+});
+const PROMOTE_FACTS_USER_PROMPT = await definePrompt<{ transcript: string }>({
+  id: 'memory.promote-facts.user',
+  sourcePath: promoteFactsUserPath
+});
 const RECALL_CONTEXT_PROMPT = await definePrompt<{
   globalFacts: string[];
   laws: string[];
@@ -114,6 +124,10 @@ interface ConsolidateResult {
   before: number;
   after: number;
 }
+interface PromotedFacts {
+  scope: MemoryScope;
+  facts: string[];
+}
 
 export interface MemoryService {
   /** Per-session-frozen recall injected into the prompt: the index (builtin) or semantic facts (mem0). */
@@ -138,6 +152,11 @@ export interface MemoryService {
   addFact(kind: ScopeKind, id: string, content: string): Promise<Fact | null>;
   editFact(kind: ScopeKind, id: string, factId: string, content: string): Promise<Fact | null>;
   forgetFact(kind: ScopeKind, id: string, factId: string): Promise<boolean>;
+  /** Extract durable facts from a span of conversation about to be compacted away (a fast-model
+   *  call), and — in `auto` mode — write them straight to the resolved scope (this session's agent,
+   *  or global when it has none). Returns null when nothing durable was found (nothing to suggest or
+   *  write). `suggest` mode extracts only; the caller decides how to surface the suggestion. */
+  promoteFacts(sessionId: SessionId, transcript: string, mode: 'suggest' | 'auto'): Promise<PromotedFacts | null>;
 }
 
 export function createMemoryService(deps: MemoryServiceDeps): MemoryService {
@@ -268,6 +287,17 @@ export function createMemoryService(deps: MemoryServiceDeps): MemoryService {
     consolidating.add(key);
     deps.log.info(`memory: auto-consolidate ${key} (>${CONSOLIDATE_CHAR_TRIGGER} chars)`);
     void consolidateScope(scope).finally(() => consolidating.delete(key));
+  };
+
+  // Shared by addFact (user/API-initiated) and promoteFacts (auto-write of a machine-extracted fact)
+  // so the backend split (mem0 vs MemoryDir) and sanitization live in exactly one place.
+  const writeFact = async (kind: ScopeKind, id: string, content: string, provClass: 'user' | 'machine') => {
+    const scope = scopeOf(kind, id);
+    const s = sanitizeFact(content);
+    if (!s.ok) return null;
+    const mem0 = await activeMem0();
+    if (mem0) return mem0.addFact(scope, s.cleaned);
+    return memoryDir.appendFact(scope, { content: s.cleaned, provClass });
   };
 
   return {
@@ -426,12 +456,7 @@ export function createMemoryService(deps: MemoryServiceDeps): MemoryService {
       memoryDir.writeCore(scopeOf(kind, id), md);
     },
     async addFact(kind, id, content) {
-      const scope = scopeOf(kind, id);
-      const s = sanitizeFact(content);
-      if (!s.ok) return null;
-      const mem0 = await activeMem0();
-      if (mem0) return mem0.addFact(scope, s.cleaned);
-      return memoryDir.appendFact(scope, { content: s.cleaned, provClass: 'user' });
+      return writeFact(kind, id, content, 'user');
     },
     async editFact(kind, id, factId, content) {
       if (deps.backend() === 'mem0') return null;
@@ -443,6 +468,36 @@ export function createMemoryService(deps: MemoryServiceDeps): MemoryService {
       const mem0 = await activeMem0();
       if (mem0) return mem0.forgetFact(factId);
       return memoryDir.removeFact(scopeOf(kind, id), factId);
+    },
+
+    async promoteFacts(sessionId, transcript, mode) {
+      if (!transcript.trim()) return null;
+      const agentId = agentOf(sessionId);
+      const scope: MemoryScope = agentId ? scopeOf('agent', agentId) : scopeOf('global', '*');
+      let facts: string[];
+      try {
+        const result = await deps.router.complete({
+          model: deps.extractModel(agentId ?? undefined),
+          sessionId,
+          messages: [
+            { role: 'system', content: PROMOTE_FACTS_SYSTEM_PROMPT.render({}) },
+            { role: 'user', content: PROMOTE_FACTS_USER_PROMPT.render({ transcript }) }
+          ]
+        });
+        facts = parseFactArray(result.text) ?? [];
+      } catch (err) {
+        deps.log.warn(`memory: promoteFacts failed: ${String(err)}`);
+        return null;
+      }
+      if (facts.length === 0) return null;
+      // Each fact writes independently (distinct content → distinct id; the builtin backend's
+      // appendFact is a synchronous read-modify-write, so concurrent continuations don't interleave,
+      // and mem0's addFact is independent per fact) — write them concurrently, not one round-trip
+      // at a time.
+      if (mode === 'auto') {
+        await Promise.all(facts.map((f) => writeFact(scope.kind, scope.id, f, 'machine')));
+      }
+      return { scope, facts };
     }
   };
 }

@@ -18,6 +18,7 @@ export * from './context/budget.ts';
 export * from './context/estimate.ts';
 export * from './context/eviction.ts';
 export * from './context/index.ts';
+export * from './context/retrieval.ts';
 export * from './history.ts';
 export * from './loop/index.ts';
 export * from './memory/index.ts';
@@ -53,8 +54,23 @@ export interface AgentConfig {
   /** Records each turn's real usage (session + global ledger) and returns its real cost. Injected
    *  by the daemon (store + price catalog); absent → no usage/cost accounting. */
   recordTurnUsage?: AgentLoopDeps['recordTurnUsage'];
+  /** Spill a truncated tool result's full pre-truncation output for later handle-based recovery.
+   *  Injected by the daemon (store); absent → no spill. */
+  persistRawToolOutput?: AgentLoopDeps['persistRawToolOutput'];
+  /** Max chars of a single tool result fed back to the model. Absent → DEFAULT_MAX_TOOL_RESULT_CHARS. */
+  maxToolResultChars?: AgentLoopDeps['maxToolResultChars'];
   /** Keeps each turn's prompt within the window (truncate/summarize). Default: passthrough. */
   context?: ContextEngine;
+  /** Optional semantic-retrieval stage, run once per turn — see AgentLoopDeps.retrieval. */
+  retrieval?: AgentLoopDeps['retrieval'];
+  /** Cumulative tool-result-eviction tokens reclaimed for a session (the context.usage 'evicted'
+   *  bucket). Backed by the same eviction engine instance passed as `context`. */
+  evictedTokens?: AgentLoopDeps['evictedTokens'];
+  /** Fraction of contextLimit past which a context.handoff_suggested notice fires at each task
+   *  boundary. Absent → the nudge never fires. */
+  handoffNudgeFraction?: AgentLoopDeps['handoffNudgeFraction'];
+  /** Re-anchor the durable summary's Open Tasks / Next Step sections at the end of the prompt. */
+  recitationEnabled?: AgentLoopDeps['recitationEnabled'];
   /** Durable bounded-load history strategy (summary boundary). Replaces the full-load path. */
   history?: HistoryProvider;
   /** Prompt-cache the static system+tools prefix (Anthropic; ignored elsewhere). */
@@ -288,7 +304,13 @@ export function createAgent(config: AgentConfig): Agent {
         extraTools: opts?.extraTools,
         contextLimit: config.contextLimit,
         recordTurnUsage: config.recordTurnUsage,
+        persistRawToolOutput: config.persistRawToolOutput,
+        maxToolResultChars: config.maxToolResultChars,
         context: config.context,
+        retrieval: config.retrieval,
+        evictedTokens: config.evictedTokens,
+        handoffNudgeFraction: config.handoffNudgeFraction,
+        recitationEnabled: config.recitationEnabled,
         history: config.history,
         cacheSystemPrompt: config.cacheSystemPrompt,
         instructions: config.instructions,

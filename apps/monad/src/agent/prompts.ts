@@ -16,6 +16,7 @@ import defaultSystemEtaPath from './prompts/default-system.prompt.md' with { typ
 import evictedToolResultPath from './prompts/evicted-tool-result-user.prompt.md' with { type: 'file' };
 import handoffSystemPath from './prompts/handoff-system.prompt.md' with { type: 'file' };
 import handoffUserPath from './prompts/handoff-user.prompt.md' with { type: 'file' };
+import recitationPlanPath from './prompts/recitation-plan.prompt.md' with { type: 'file' };
 import { OBSERVATION_PREFIX } from './prompts/short-text.ts';
 import summaryReflectSystemPath from './prompts/summary-reflect-system.prompt.md' with { type: 'file' };
 import summaryReflectUserPath from './prompts/summary-reflect-user.prompt.md' with { type: 'file' };
@@ -73,9 +74,13 @@ const BUDGET_EXCEEDED_TEMPLATE = await definePrompt({
   id: 'agent.budget-exceeded.user',
   sourcePath: budgetExceededPath
 });
-const EVICTED_TOOL_RESULT_TEMPLATE = await definePrompt<{ toolName: string }>({
+const EVICTED_TOOL_RESULT_TEMPLATE = await definePrompt<{ toolName: string; handle?: string }>({
   id: 'agent.evicted-tool-result.user',
   sourcePath: evictedToolResultPath
+});
+const RECITATION_PLAN_TEMPLATE = await definePrompt<{ openTasks?: string; nextStep?: string }>({
+  id: 'agent.recitation-plan.user',
+  sourcePath: recitationPlanPath
 });
 
 export const SUMMARY_PROMPT = SUMMARY_SYSTEM_TEMPLATE.render({});
@@ -104,8 +109,18 @@ export function renderContextSummary(summary: string): string {
   return CONTEXT_SUMMARY_TEMPLATE.render({ summary });
 }
 
-export function evictedToolResult(toolName: string): string {
-  return EVICTED_TOOL_RESULT_TEMPLATE.render({ toolName });
+/** `handle`, when given, is the tool-call id the full output was spilled under before eviction —
+ *  point the model at read_tool_output instead of re-running the (possibly non-reproducible or
+ *  side-effecting) call. */
+export function evictedToolResult(toolName: string, handle?: string): string {
+  return EVICTED_TOOL_RESULT_TEMPLATE.render({ toolName, handle });
+}
+
+/** Renders the `<plan>` recitation anchor from a durable summary's parsed Open Tasks / Next Step
+ *  sections (see context/recitation.ts's parsePlanSections). '' when both are absent. */
+export function renderPlanAnchor(sections: { openTasks?: string; nextStep?: string }): string {
+  if (!sections.openTasks && !sections.nextStep) return '';
+  return RECITATION_PLAN_TEMPLATE.render(sections);
 }
 
 /**

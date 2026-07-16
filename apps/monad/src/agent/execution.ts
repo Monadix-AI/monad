@@ -2,19 +2,23 @@
 // the daemon lifetime; each model invocation creates its AgentLoop through `agent.loop(...)`.
 
 import type { MonadConfig, MonadPaths } from '@monad/home';
+import type { Event, SessionId } from '@monad/protocol';
 import type { LoadedSkill } from '#/agent/index.ts';
 import type { UserPromptSlots } from '#/agent/prompts.ts';
 import type { FileObservationStore } from '#/capabilities/tools/types.ts';
 import type { createHookRunner } from '#/hooks/runner.ts';
 import type { EmbeddingIndexer } from '#/services/embedding-indexer.ts';
+import type { EventBus } from '#/services/event-bus.ts';
 import type { DelegatableAgent } from '#/services/generation/agent-persona.ts';
 import type { ClarifyService } from '#/services/generation/clarify.ts';
+import type { MemoryService } from '#/services/memory/index.ts';
 import type { ModelService } from '#/services/model.ts';
 import type { ModelCatalogService } from '#/services/model-catalog.ts';
 import type { OversightService } from '#/services/oversight.ts';
 import type { Store } from '#/store/db/index.ts';
 
 import { createLogger } from '@monad/logger';
+import { newId } from '@monad/protocol';
 
 import {
   CompositeContextEngine,
@@ -22,6 +26,7 @@ import {
   createAgent,
   DurableSummarizer,
   parseDurableSummary,
+  RetrievalReinjectionContext,
   type SummaryStore,
   TokenLimiterContext,
   ToolResultEvictionContext
@@ -74,6 +79,12 @@ export interface AgentDeps {
   hookRunner: ReturnType<typeof createHookRunner>;
   /** Inbound (peer-delegated) approval policy for high-risk tools — see services/inbound-approval.ts. */
   inboundApproval: () => InboundApprovalMode;
+  /** For persisting + publishing the memory.suggestion notice from outside a turn's own emit closure
+   *  (afterCompact fires from the long-lived DurableSummarizer, not a per-turn AgentLoop). */
+  bus: EventBus;
+  /** Extracts + (in `auto` mode) writes durable facts from a compacted span — see
+   *  MemoryService.promoteFacts. Absent → memory promotion never runs, regardless of config. */
+  memoryService?: MemoryService;
   /** Live user-editable prompt slots, resolved per turn (reloads take effect). Receives the active
    *  session id so the host can return that session's Studio agent persona (its AGENT.md), falling back
    *  to the global workspace AGENT slot while always preserving SOUL/USER. */
@@ -106,7 +117,9 @@ export function createAgentExecutionService(deps: AgentDeps): AgentExecutionServ
     toolSourceName,
     hookRunner,
     inboundApproval,
-    workspacePromptSlots
+    workspacePromptSlots,
+    bus,
+    memoryService
   } = deps;
 
   // High-risk tools in an inbound (peer-delegated) session follow the configured policy instead of
@@ -179,7 +192,7 @@ export function createAgentExecutionService(deps: AgentDeps): AgentExecutionServ
       }
     },
     // AfterCompact: observe-only, fired once the summary is committed.
-    afterCompact: ({ sessionId, trigger, tokens }) => {
+    afterCompact: ({ sessionId, trigger, tokens, foldedText }) => {
       void hookRunner
         .run({
           event: 'AfterCompact',
@@ -189,28 +202,82 @@ export function createAgentExecutionService(deps: AgentDeps): AgentExecutionServ
           compaction: { trigger, tokens }
         })
         .catch(() => {});
+      // Memory promotion: the span that just got folded into a lossy summary is the last chance to
+      // pull out durable facts from its ORIGINAL text (the summary is already a paraphrase). Runs a
+      // fast-model extraction; 'suggest' surfaces a persisted memory.suggestion event for the user to
+      // confirm, 'auto' writes straight to the resolved scope inside promoteFacts itself.
+      const mode = ctxCfg.memoryPromotion.mode;
+      if (mode === 'off' || !memoryService) return;
+      void memoryService
+        .promoteFacts(sessionId as SessionId, foldedText, mode)
+        .then((promoted) => {
+          if (!promoted || mode !== 'suggest') return;
+          const event: Event = {
+            id: newId('evt'),
+            sessionId: sessionId as SessionId,
+            type: 'memory.suggestion',
+            actorAgentId: null,
+            payload: { scope: promoted.scope, facts: promoted.facts },
+            at: new Date().toISOString()
+          };
+          store.appendEvents([event]);
+          bus.publish(event);
+        })
+        .catch(() => {}); // best-effort — a failed extraction must not affect the turn
     }
   });
+  // Spill a truncated/evicted tool result's full output to the store (capped) so it can be recovered
+  // by handle later instead of re-running the tool. Gated by config; shared by the tool-execution
+  // truncation seam (below) and the eviction engine (both call it on the same table).
+  const persistRawToolOutput = ctxCfg.toolOutput.persistRaw
+    ? (sessionId: string, toolCallId: string, output: string) =>
+        store.saveToolRawOutput(sessionId, toolCallId, output.slice(0, ctxCfg.toolOutput.rawCapBytes))
+    : undefined;
+
   // In-turn context cascade (runs each model step, after the durable summarizer has assembled the
   // prompt): lossless tool-result eviction first, then a hard truncation guard so the window can't
   // overflow mid tool-loop even if summarization lagged. DurableSummarizer (above) remains the
   // durable, lineage-aware summary stage at assemble time.
+  const eviction =
+    contextLimit && ctxCfg.eviction.enabled
+      ? new ToolResultEvictionContext({
+          contextLimit,
+          atFraction: ctxCfg.eviction.atFraction,
+          keepRecentRounds: ctxCfg.eviction.keepRecentRounds,
+          clearAtLeast: ctxCfg.eviction.clearAtLeast,
+          minResultTokens: ctxCfg.eviction.minResultTokens,
+          persistRawOutput: persistRawToolOutput,
+          hasRawOutput: (sessionId, toolCallId) => store.getToolRawOutput(sessionId, toolCallId) !== null
+        })
+      : undefined;
+  // Stage 4 (optional): semantic retrieval over the session's full message history — see
+  // context/retrieval.ts. Wired as its own `retrieval` dep (run once per turn from buildPrompt), NOT
+  // part of the per-model-step `context` cascade below — the query text (the latest user message)
+  // doesn't change across a turn's tool-loop steps, so splicing it in per-step would duplicate the
+  // injected block and re-embed/re-search on every step for no new information.
+  const retrieval = ctxCfg.retrieval.enabled
+    ? new RetrievalReinjectionContext({
+        embed: async (text) => {
+          const embed = modelService.router.embed;
+          if (!embed || !modelService.embeddingModel) return undefined;
+          const result = await embed.call(modelService.router, [text]);
+          return result.embeddings[0];
+        },
+        search: (sessionId, queryVec, limit) =>
+          store
+            .searchSemantic(queryVec, { transcriptTargetId: sessionId as SessionId, limit })
+            .map((h) => ({ messageId: h.messageId, snippet: h.snippet, score: h.score })),
+        minScore: ctxCfg.retrieval.minScore,
+        maxResults: ctxCfg.retrieval.maxResults
+      })
+    : undefined;
   const context = contextLimit
     ? new CompositeContextEngine([
-        ...(ctxCfg.eviction.enabled
-          ? [
-              new ToolResultEvictionContext({
-                contextLimit,
-                atFraction: ctxCfg.eviction.atFraction,
-                keepRecentRounds: ctxCfg.eviction.keepRecentRounds,
-                clearAtLeast: ctxCfg.eviction.clearAtLeast,
-                minResultTokens: ctxCfg.eviction.minResultTokens
-              })
-            ]
-          : []),
+        ...(eviction ? [eviction] : []),
         new TokenLimiterContext({ maxTokens: Math.floor(contextLimit * ctxCfg.summarize.hardFraction) })
       ])
     : undefined;
+  const evictedTokens = eviction ? (sessionId: string) => eviction.reclaimedTokens(sessionId) : undefined;
 
   // Static (non-registry) tools — always visible to the model regardless of deferred mode. Each
   // module exposes the uniform `register(deps) => Tool[]` entry; we compose them with execution-local
@@ -360,6 +427,8 @@ export function createAgentExecutionService(deps: AgentDeps): AgentExecutionServ
     userId: cfg.principal?.id,
     sandboxRoots,
     contextLimit,
+    persistRawToolOutput,
+    maxToolResultChars: ctxCfg.toolOutput.maxChars,
     // Record each turn's REAL usage into the session + the global ledger, and compute its real
     // cost from the catalog price (cache-aware). Uses the configured default model for pricing;
     // money is never inferred from estimated tokens.
@@ -382,6 +451,10 @@ export function createAgentExecutionService(deps: AgentDeps): AgentExecutionServ
         }
       : undefined,
     context,
+    retrieval,
+    evictedTokens,
+    handoffNudgeFraction: ctxCfg.handoffNudge.enabled ? ctxCfg.handoffNudge.atFraction : undefined,
+    recitationEnabled: ctxCfg.recitation.enabled,
     history,
     // Prompt-cache the static system+tools prefix (no-op for non-Anthropic models).
     cacheSystemPrompt: true,

@@ -9,7 +9,8 @@ import { toolInputJsonSchema } from '#/capabilities/tools/schema.ts';
 import { ContextBuilder } from '../../context/budget.ts';
 import { estimateTokensCached, globalEstimator } from '../../context/estimate.ts';
 import { messageChars } from '../../context/index.ts';
-import { renderAgentSystemPrompt, renderContextSummary, renderEnvironment } from '../../prompts.ts';
+import { parsePlanSections } from '../../context/recitation.ts';
+import { renderAgentSystemPrompt, renderContextSummary, renderEnvironment, renderPlanAnchor } from '../../prompts.ts';
 import { replayHistory } from '../replay.ts';
 
 /**
@@ -177,7 +178,41 @@ export class PromptBuilder {
     // cached array must stay immutable for the next turn (and for cross-turn token-cache reuse).
     const systemMsg: ModelMessage = { role: 'system', content: system };
     if (this.deps.cacheSystemPrompt) systemMsg.cache = true; // prompt-cache the static prefix
-    return this.withContextSummary(this.composeUserTurn([systemMsg, ...replayed]), summary);
+    const withSummary = this.withContextSummary(this.composeUserTurn([systemMsg, ...replayed]), summary);
+    const withRetrieved = await this.withRetrieval(sessionId, withSummary);
+    return this.withRecitation(withRetrieved, summary);
+  }
+
+  /** Runs the optional semantic-retrieval stage exactly ONCE per turn (buildPrompt is called once
+   *  per turn, unlike `prepare()` which re-runs every tool-loop step) — the query text (the latest
+   *  user message) never changes across a turn's steps, so running it per-step would re-embed,
+   *  re-search, and re-splice a duplicate block on every step. See context/retrieval.ts. */
+  private async withRetrieval(sessionId: SessionId, messages: ModelMessage[]): Promise<ModelMessage[]> {
+    if (!this.deps.retrieval) return messages;
+    return this.deps.retrieval.prepare(messages, {
+      sessionId,
+      emit: this.deps.emit,
+      estimator: globalEstimator,
+      lastRealInputTokens: this.lastRealInputTokens
+    });
+  }
+
+  /** Stage 3 of the context cascade: re-anchor the current plan (Open Tasks / Next Step, parsed from
+   *  the durable summary) at the END of the prompt, closest to where the model generates from — a
+   *  compacted session otherwise has to re-derive "what am I doing right now" from dense prose every
+   *  turn. No-op without a summary (nothing compacted yet) or when both sections are absent. */
+  private withRecitation(messages: ModelMessage[], summary: string | undefined): ModelMessage[] {
+    if (!this.deps.recitationEnabled || !summary) return messages;
+    const anchor = renderPlanAnchor(parsePlanSections(summary));
+    if (!anchor) return messages;
+    const last = messages[messages.length - 1];
+    if (!last) return messages;
+    const next = [...messages];
+    next[next.length - 1] =
+      typeof last.content === 'string'
+        ? { ...last, content: `${last.content}\n\n${anchor}` }
+        : { ...last, content: [...last.content, { type: 'text', text: `\n\n${anchor}` }] };
+    return next;
   }
 
   private withContextSummary(messages: ModelMessage[], summary: string | undefined): ModelMessage[] {
@@ -304,7 +339,23 @@ export class PromptBuilder {
       builder.addTokens('messages', 'Messages', tokens);
     }
 
-    this.emitEvent(sessionId, 'context.usage', builder.build({ contextLimit, approximate: total === undefined }));
+    const usage = builder.build({
+      contextLimit,
+      approximate: total === undefined,
+      reclaimed: this.deps.evictedTokens?.(sessionId)
+    });
+    this.emitEvent(sessionId, 'context.usage', usage);
+
+    // Handoff nudge: this is only ever called at a settled task boundary (end of a turn — see
+    // TurnWriter.finishBookkeeping's call sites), never mid tool-loop, so firing here is exactly
+    // "at a task boundary" without extra state tracking.
+    const atFraction = this.deps.handoffNudgeFraction;
+    if (atFraction !== undefined) {
+      const usedFraction = usage.used / usage.contextLimit;
+      if (usedFraction >= atFraction) {
+        this.emitEvent(sessionId, 'context.handoff_suggested', { usedFraction, atFraction });
+      }
+    }
   }
 
   observeEstimator(usage?: ModelUsage): void {

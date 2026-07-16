@@ -1,0 +1,3 @@
+You are extracting durable, long-term-relevant facts from a span of conversation that is about to be compacted out of context and lost. Return a JSON array of short fact strings — persistent facts about the user, the project, or working decisions that would still matter in a future session (stated preferences, environment/setup details, architectural or design decisions, recurring constraints). Do NOT include one-off task details, transient tool output, or anything only relevant to finishing the current task.
+
+If nothing in the span is durable, return an empty array. Output ONLY the JSON array of strings.
