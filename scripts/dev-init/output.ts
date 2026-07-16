@@ -98,6 +98,8 @@ export function buildDevInitSummary(
     `  ${muted('Daemon API', useColor)}        ${portUrl(ports.MONAD_PORT, 'https')}`,
     `  ${muted('Local HTTP', useColor)}        ${portUrl(ports.MONAD_HTTP_PORT)}`,
     `  ${muted('Web app', useColor)}           ${portUrl(ports.WEB_PORT)}`,
+    `  ${muted('Web Storybook', useColor)}     ${portUrl(ports.WEB_STORYBOOK_PORT)}`,
+    `  ${muted('UI Storybook', useColor)}      ${portUrl(ports.UI_STORYBOOK_PORT)}`,
     `  ${muted('KV inspector', useColor)}      ${portUrl(ports.MONAD_KV_UI_PORT)}`,
     `  ${muted('AI SDK DevTools', useColor)}   ${portUrl(ports.AI_SDK_DEVTOOLS_PORT)}`,
     label('Runtime URL priority', useColor),

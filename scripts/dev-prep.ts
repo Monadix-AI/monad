@@ -20,6 +20,8 @@
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
+import { worktreePorts } from './dev-init/ports.ts';
+
 const root = resolve(import.meta.dir, '..');
 const unset = 'not set';
 
@@ -60,7 +62,8 @@ function parseEnvFile(text: string): Map<string, string> {
 export function buildDevEnv(
   parsed: Map<string, string> | Record<string, string>,
   base: Record<string, string | undefined>,
-  homeDir = homedir()
+  homeDir = homedir(),
+  worktreeRoot?: string
 ): Record<string, string> {
   const env: Record<string, string> = {};
   for (const [key, value] of Object.entries(base)) {
@@ -74,6 +77,12 @@ export function buildDevEnv(
 
   if (!base.PORT && env.WEB_PORT) env.PORT = env.WEB_PORT;
 
+  if (worktreeRoot) {
+    const ports = worktreePorts(worktreeRoot);
+    if (!env.WEB_STORYBOOK_PORT) env.WEB_STORYBOOK_PORT = ports.WEB_STORYBOOK_PORT;
+    if (!env.UI_STORYBOOK_PORT) env.UI_STORYBOOK_PORT = ports.UI_STORYBOOK_PORT;
+  }
+
   if (!base.BUN_RUNTIME_TRANSPILER_CACHE_PATH) {
     env.BUN_RUNTIME_TRANSPILER_CACHE_PATH = join(homeDir, '.cache', 'monad-bun');
   }
@@ -86,11 +95,12 @@ export function devCommand(): string[] {
     'bunx',
     'turbo',
     'run',
-    'start:dev',
-    'devtools',
-    '--filter=@monad/i18n',
-    '--filter=@monad/monad',
-    '--filter=@monad/web'
+    '@monad/i18n#start:dev',
+    '@monad/monad#start:dev',
+    '@monad/monad#devtools',
+    '@monad/web#start:dev',
+    '@monad/ui#storybook',
+    '@monad/web#storybook'
   ];
 }
 
@@ -147,6 +157,8 @@ export function buildDevPrepSummary(
     `  ${muted('Daemon API', useColor)}        ${portUrl(env.MONAD_PORT, 'https')}`,
     `  ${muted('Local HTTP', useColor)}        ${portUrl(env.MONAD_HTTP_PORT)}`,
     `  ${muted('Web app', useColor)}           ${portUrl(env.PORT ?? env.WEB_PORT)}`,
+    `  ${muted('Web Storybook', useColor)}     ${portUrl(env.WEB_STORYBOOK_PORT)}`,
+    `  ${muted('UI Storybook', useColor)}      ${portUrl(env.UI_STORYBOOK_PORT)}`,
     `  ${muted('KV inspector', useColor)}      ${portUrl(env.MONAD_KV_UI_PORT)}`,
     label('Runtime URL priority', useColor),
     `  ${muted('Daemon proxy', useColor)}      MONAD_URL > config network.host/https/port`,
@@ -154,7 +166,7 @@ export function buildDevPrepSummary(
     `  ${muted('Bun transpiler', useColor)}    ${valueOrUnset(env.BUN_RUNTIME_TRANSPILER_CACHE_PATH)}`,
     label('Tasks', useColor),
     '  1. Refresh i18n artifacts',
-    '  2. Start daemon, web app, and devtools',
+    '  2. Start daemon, web app, Storybook, and devtools',
     ''
   ];
 }
@@ -241,7 +253,7 @@ export function reportPortSurvivors(
   platform: NodeJS.Platform = process.platform
 ): void {
   if (platform === 'win32') return;
-  const ports = [env.WEB_PORT, env.MONAD_PORT, env.MONAD_HTTP_PORT]
+  const ports = [env.WEB_PORT, env.MONAD_PORT, env.MONAD_HTTP_PORT, env.WEB_STORYBOOK_PORT, env.UI_STORYBOOK_PORT]
     .filter((port): port is string => Boolean(port))
     .sort();
   for (const port of ports) {
@@ -320,7 +332,7 @@ async function runDevPrepCommandStep(options: {
 export async function main(): Promise<number> {
   const envLocal = Bun.file(join(root, '.env.local'));
   const parsed = (await envLocal.exists()) ? parseEnvFile(await envLocal.text()) : new Map<string, string>();
-  const env = buildDevEnv(parsed, process.env as Record<string, string | undefined>);
+  const env = buildDevEnv(parsed, process.env as Record<string, string | undefined>, homedir(), root);
   const color = shouldColorOutput();
   printDevPrepSummary(env, color);
 
@@ -334,7 +346,7 @@ export async function main(): Promise<number> {
   });
   if (i18nExitCode !== 0) return i18nExitCode;
 
-  process.stdout.write('[dev-prep] starting dev task group -> turbo start:dev + devtools\n');
+  process.stdout.write('[dev-prep] starting dev task group -> turbo start:dev + devtools + storybook\n');
 
   const proc = Bun.spawn(devCommand(), devSpawnOptions(root, env));
 

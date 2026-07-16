@@ -166,7 +166,9 @@ async function main(): Promise<void> {
     MONAD_KV_UI_PORT: envVars.get('MONAD_KV_UI_PORT') || Bun.env.MONAD_KV_UI_PORT || ports.MONAD_KV_UI_PORT,
     MONAD_HTTP_PORT: envVars.get('MONAD_HTTP_PORT') || Bun.env.MONAD_HTTP_PORT || ports.MONAD_HTTP_PORT,
     MONAD_PORT: envVars.get('MONAD_PORT') || Bun.env.MONAD_PORT || '52749',
-    WEB_PORT: envVars.get('WEB_PORT') || Bun.env.WEB_PORT || '3000'
+    UI_STORYBOOK_PORT: envVars.get('UI_STORYBOOK_PORT') || Bun.env.UI_STORYBOOK_PORT || ports.UI_STORYBOOK_PORT,
+    WEB_PORT: envVars.get('WEB_PORT') || Bun.env.WEB_PORT || '3000',
+    WEB_STORYBOOK_PORT: envVars.get('WEB_STORYBOOK_PORT') || Bun.env.WEB_STORYBOOK_PORT || ports.WEB_STORYBOOK_PORT
   };
 
   process.stdout.write(

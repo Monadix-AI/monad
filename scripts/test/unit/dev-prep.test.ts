@@ -42,17 +42,24 @@ test('buildDevEnv preserves an explicit shell PORT over WEB_PORT', () => {
   expect(env.PORT).toBe('7777');
 });
 
+test('buildDevEnv derives missing Storybook ports from the worktree root', () => {
+  const env = buildDevEnv({ WEB_PORT: '3100' }, {}, '/Users/dev', '/some/worktree');
+  expect(env.WEB_STORYBOOK_PORT).toBe('4950');
+  expect(env.UI_STORYBOOK_PORT).toBe('9250');
+});
+
 test('devSpawnOptions starts turbo as a process-group leader', () => {
   expect(i18nCommand()).toEqual(['bun', 'run', 'scripts/i18n.ts', '--write-if-stale']);
   expect(devCommand()).toEqual([
     'bunx',
     'turbo',
     'run',
-    'start:dev',
-    'devtools',
-    '--filter=@monad/i18n',
-    '--filter=@monad/monad',
-    '--filter=@monad/web'
+    '@monad/i18n#start:dev',
+    '@monad/monad#start:dev',
+    '@monad/monad#devtools',
+    '@monad/web#start:dev',
+    '@monad/ui#storybook',
+    '@monad/web#storybook'
   ]);
   expect(devSpawnOptions('/repo', { PATH: '/bin' })).toMatchObject({
     cwd: '/repo',
@@ -77,7 +84,9 @@ test('buildDevPrepSummary groups the resolved dev environment for terminal outpu
     MONAD_HTTP_PORT: '53001',
     MONAD_PORT: '52001',
     PORT: '3101',
-    WEB_PORT: '3101'
+    UI_STORYBOOK_PORT: '6007',
+    WEB_PORT: '3101',
+    WEB_STORYBOOK_PORT: '6006'
   });
 
   expect(lines).toEqual([
@@ -87,6 +96,8 @@ test('buildDevPrepSummary groups the resolved dev environment for terminal outpu
     '  Daemon API        https://127.0.0.1:52001',
     '  Local HTTP        http://127.0.0.1:53001',
     '  Web app           http://127.0.0.1:3101',
+    '  Web Storybook     http://127.0.0.1:6006',
+    '  UI Storybook      http://127.0.0.1:6007',
     '  KV inspector      http://127.0.0.1:6401',
     'Runtime URL priority',
     '  Daemon proxy      MONAD_URL > config network.host/https/port',
@@ -94,7 +105,7 @@ test('buildDevPrepSummary groups the resolved dev environment for terminal outpu
     '  Bun transpiler    /Users/dev/.cache/monad-bun',
     'Tasks',
     '  1. Refresh i18n artifacts',
-    '  2. Start daemon, web app, and devtools',
+    '  2. Start daemon, web app, Storybook, and devtools',
     ''
   ]);
 });
@@ -190,17 +201,18 @@ test('port survivor diagnostics warn without killing the occupying process', () 
   const lookedUp: string[] = [];
 
   reportPortSurvivors(
-    { MONAD_PORT: '52147', WEB_PORT: '3247' },
+    { MONAD_PORT: '52147', UI_STORYBOOK_PORT: '6007', WEB_PORT: '3247', WEB_STORYBOOK_PORT: '6006' },
     (message) => warnings.push(message),
     (port) => {
       lookedUp.push(port);
-      return port === '52147' ? ['991'] : [];
+      return port === '52147' || port === '6007' ? ['991'] : [];
     },
     'darwin'
   );
 
-  expect(lookedUp).toEqual(['3247', '52147']);
+  expect(lookedUp).toEqual(['3247', '52147', '6006', '6007']);
   expect(warnings).toEqual([
-    '[dev-prep] port 52147 is still occupied by PID 991; inspect it with: lsof -nP -iTCP:52147 -sTCP:LISTEN'
+    '[dev-prep] port 52147 is still occupied by PID 991; inspect it with: lsof -nP -iTCP:52147 -sTCP:LISTEN',
+    '[dev-prep] port 6007 is still occupied by PID 991; inspect it with: lsof -nP -iTCP:6007 -sTCP:LISTEN'
   ]);
 });
