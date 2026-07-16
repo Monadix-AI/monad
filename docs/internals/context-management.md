@@ -1,13 +1,77 @@
 # Context management (the gentle cascade)
 
-How the agent keeps a turn's prompt inside the model's context window without a
-single lossy "summarize everything" cliff. Instead of one step, pressure is
-relieved in a **cascade**: cheap and lossless first, lossy only when it must be,
-each stage doing the least destructive thing that still fits the window — and
-every stage is recoverable or observable rather than silent.
+Every model has a fixed **context window** — the amount of conversation it can
+"see" at once. A long agent session eventually fills it. The naive fix is to
+summarize the whole history into a paragraph the moment it gets tight — one big,
+lossy step that throws away detail and often drops the thread.
 
-This describes the code as it runs today. The original design notes live in
-`.claude/plans/`; where they differ, this document and the code win.
+Monad instead relieves the pressure in a **cascade**: the cheapest, least
+destructive thing first, and only escalating when it must — so a session can run
+for hours without a jarring "I forgot everything" moment.
+
+```mermaid
+flowchart LR
+  Fill["Window filling up"] --> C
+  subgraph C["The cascade — least destructive first"]
+    direction TB
+    E["1 · Evict stale tool output<br/>lossless — bytes recoverable by handle"]
+    S["2 · Summarize old turns<br/>lossy — runs in the background"]
+    T["3 · Hard truncate<br/>last-resort backstop"]
+    E --> S --> T
+  end
+  C --> Vis["Every step is observable<br/>or recoverable — never silent"]
+```
+
+Two optional stages sit alongside the cascade: a **recitation** anchor that
+re-pins the current plan after a summary, and **semantic retrieval** that pulls
+relevant older messages back when a new question needs them. And **memory
+promotion** can lift durable facts out of a span just before it's compacted away.
+
+---
+
+## For operators — do I need to touch this?
+
+**No, by default.** The lossless and lossy stages are on out of the box with
+sensible thresholds; a fresh install manages its own context and you never have
+to think about it. Everything lives under the `context.*` block in
+`config.json` and hot-reloads on save (no restart).
+
+You'd reach for the config only to:
+
+| Want to… | Set |
+|---|---|
+| Let the agent auto-remember facts across sessions | `context.memoryPromotion.mode: "suggest"` (asks you first) or `"auto"` |
+| Pull relevant old messages back into long sessions | `context.retrieval.enabled: true` (needs an embedding model configured) |
+| Be nudged to start a fresh session when things get full | `context.handoffNudge.enabled: true` |
+| Re-pin the task plan after each compaction | `context.recitation.enabled: true` |
+| Turn OFF automatic summarization (keep only eviction) | `context.summarize.background: false` (synchronous) — or tune the fractions |
+
+The full [Configuration](#configuration) table lists every knob. The rest of this
+document is for developers working on the cascade itself.
+
+---
+
+## The pressure ladder (developers)
+
+Each stage triggers at a fraction of the active model's context limit. Occupancy
+is measured by `effectiveInputTokens`
+([context/index.ts](../../apps/monad/src/agent/context/index.ts)): it prefers the
+provider's **real** input-token count from the previous step (true occupancy —
+system prompt + tool schemas + messages) and falls back to a self-calibrating
+char/token estimate before any real count exists. The one-step lag is fine for
+soft/eviction triggers; the hard overflow guard stays on the in-turn estimate,
+which tracks growth without lag.
+
+```mermaid
+flowchart TD
+  A["Occupancy climbs as the session grows"]
+  A --> B["≥ 50% · eviction.atFraction<br/>replace OLD tool-result output with a placeholder<br/>LOSSLESS — bytes recoverable by handle"]
+  B --> C["≥ 60% · summarize.softFraction<br/>fold older turns into a durable summary<br/>LOSSY — in the background, turn proceeds at full width"]
+  C --> D["≥ 90% · summarize.hardFraction<br/>compact synchronously, then a hard token-limit truncate<br/>LOSSY — last-resort so the window can never overflow"]
+```
+
+Tool-output truncation (below) is separate — it fires per result at a fixed char
+cap, not on window pressure.
 
 Code map:
 
@@ -21,76 +85,46 @@ Code map:
 | Raw-output store (`tool_raw_outputs`) | `apps/monad/src/store/db/schema.ts`, `index.ts` |
 | `read_tool_output` recovery tool | `apps/monad/src/capabilities/tools/registry/read-tool-output.ts` |
 | Memory promotion from compacted spans | `apps/monad/src/services/memory/index.ts` (`promoteFacts`) |
-| Assembly of the whole thing (config → engines → deps) | `apps/monad/src/agent/execution.ts` |
+| Assembly (config → engines → deps) | `apps/monad/src/agent/execution.ts` |
 | Config | `packages/home/src/config/config-schema.ts` (`contextSettingsSchema`) |
 | Telemetry / notice events | `packages/protocol/src/event-table.ts` |
-| Web surfaces (usage panel, toasts) | `apps/web/src/features/session/` (`use-context-notices.ts`), `packages/ui/src/components/composer/context-usage-panel.tsx` |
-
-Everything is under the `context.*` block in `config.json`, hot-reloaded via
-`ConfigService`. The shipped defaults turn on the lossless and lossy stages;
-recitation, memory promotion, the handoff nudge, and semantic retrieval are
-opt-in (see [Configuration](#configuration)).
-
-## The pressure ladder
-
-Each stage triggers at a fraction of the active model's context limit. Occupancy
-is measured by `effectiveInputTokens` ([context/index.ts](../../apps/monad/src/agent/context/index.ts)):
-it prefers the provider's **real** input-token count from the previous step
-(true occupancy — system prompt + tool schemas + messages) and falls back to a
-self-calibrating char/token estimate before any real count exists. The one-step
-lag is fine for soft/eviction triggers; the hard overflow guard stays on the
-in-turn estimate, which tracks growth without lag.
-
-```
-occupancy →   0.5              0.6                        0.9
-              │ eviction        │ summarize (soft)          │ summarize (hard) / TokenLimiter
-              │ lossless        │ lossy, background          │ lossy, blocking / truncate
-```
-
-- **0.5 `eviction.atFraction`** — replace old tool-result *outputs* with a short
-  pointer placeholder (lossless — the bytes are recoverable, see below).
-- **0.6 `summarize.softFraction`** — fold older turns into a durable rolling
-  summary, in the background by default (the turn proceeds at full width; the
-  summary lands on a later turn).
-- **0.9 `summarize.hardFraction`** — the same summarization, but blocking: a turn
-  that starts at/over this waits for any in-flight compaction, then compacts
-  synchronously if still over. A per-model-step `TokenLimiterContext` at the same
-  fraction is the last-resort hard truncation so the window can never overflow
-  mid tool-loop even if summarization lagged.
-
-Tool-output truncation (below) is separate — it fires per result at a fixed char
-cap, not on window pressure.
+| Web surfaces (usage panel, toasts) | `apps/web/src/features/session/use-context-notices.ts`, `packages/ui/src/components/composer/context-usage-panel.tsx` |
 
 ## Two assembly phases
 
-The stages don't all run at the same point. There are two:
+The stages don't all run at the same moment. There are two, and getting a stage
+in the wrong phase either duplicates injected text or misses mid-loop growth.
 
-**Per turn, once — `PromptBuilder.buildPrompt`.** The durable summarizer
-(`DurableSummarizer.assemble`) loads only the messages since the summary boundary
-plus the rolling summary; then the summary is folded into the first user message;
-then **retrieval** splices related history; then **recitation** appends the plan
-anchor. These run once because their inputs (the loaded window, the latest user
-message) don't change across a turn's tool round-trips.
-
-**Per model step — `PromptBuilder.prepare`.** On every step of the tool loop the
-assembled messages run through the `context` engine — `CompositeContextEngine([
-eviction, TokenLimiter ])`. These re-run each step because the message array grows
-as tool results are appended, so eviction and the hard cap must re-evaluate.
+```mermaid
+flowchart TD
+  subgraph turn["Per TURN — buildPrompt, runs ONCE"]
+    direction TB
+    H["Load window since the summary boundary<br/>+ fold in the rolling summary"]
+    H --> R["Retrieval — splice related history<br/>(query = latest user message, doesn't change this turn)"]
+    R --> RC["Recitation — append the plan anchor"]
+  end
+  subgraph step["Per MODEL STEP — prepare, runs EVERY tool round"]
+    direction TB
+    EV["Eviction — rewrite old tool output to placeholders<br/>(message array grows each step, so re-evaluate)"]
+    EV --> TL["Hard token-limit backstop"]
+  end
+  RC --> EV
+```
 
 > A stage that appends to the *prompt* (retrieval, recitation) runs per-turn to
 > avoid duplicating its block on every step; a stage that reacts to the *growing
-> window* (eviction, token limiter) runs per-step. Getting this wrong duplicates
-> injected text or misses mid-loop growth — see the regression tests in
+> window* (eviction, token limiter) runs per-step. Regression tests pin this in
 > `test/unit/agent/retrieval.test.ts`.
 
 ## Stage 1 — lossless tool-result eviction
 
-Tool results (file reads, command output, search dumps) dominate a long transcript
-and go stale fast: once the model has acted on a `read_file`, the raw bytes rarely
-matter again. `ToolResultEvictionContext` reclaims that space **without summarizing**
-by replacing the `output` of old tool-result parts with a placeholder
-(`[context-cleared] …`). The tool-call/tool-result pairing is preserved (only the
-output text changes, no message dropped), so strict providers never see an orphan.
+Tool results (file reads, command output, search dumps) dominate a long
+transcript and go stale fast: once the model has acted on a `read_file`, the raw
+bytes rarely matter again. `ToolResultEvictionContext` reclaims that space
+**without summarizing** by replacing the `output` of old tool-result parts with a
+placeholder (`[context-cleared] …`). The tool-call/tool-result pairing is
+preserved (only the output text changes, no message dropped), so strict providers
+never see an orphan.
 
 - **Recency is measured in ROUNDS, not results.** A round is one assistant→tools
   step; parallel tool calls in one step land in one `tool` message (same age).
@@ -103,7 +137,7 @@ output text changes, no message dropped), so strict providers never see an orpha
 - **Idempotent.** An already-evicted placeholder is never re-evicted.
 
 The placeholder points the model at `read_tool_output` when a recovery handle
-exists (see the next section) — so eviction upgrades from "re-run the tool (maybe
+exists (next section) — so eviction upgrades from "re-run the tool (maybe
 non-reproducible or side-effecting)" to "read the exact bytes back."
 
 ## Recovery by handle — `tool_raw_outputs` + `read_tool_output`
@@ -111,6 +145,19 @@ non-reproducible or side-effecting)" to "read the exact bytes back."
 Truncation and eviction both hide bytes the model might still need. Both spill the
 **full pre-truncation output** to a store so it can be paged back deterministically
 instead of re-run.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant Tool
+  participant Store as tool_raw_outputs
+  participant Model
+  Tool->>Store: spill full output (when persistRaw is on)
+  Tool->>Model: truncated head+tail + "read_tool_output(id, …)" hint
+  Note over Model: later — needs a detail that was truncated
+  Model->>Store: read_tool_output(id, offset/limit or grep)
+  Store->>Model: exact original bytes (re-capped so paging can't overflow)
+```
 
 **Tool-output truncation (at execution time).** `truncateToolOutput`
 ([loop/tool-output.ts](../../apps/monad/src/agent/loop/tool-output.ts)) caps a
@@ -127,10 +174,13 @@ paging can't itself blow the window. Registered **only** when `persistRaw` is on
 **Store semantics** ([store/db/index.ts](../../apps/monad/src/store/db/index.ts)):
 
 - `saveToolRawOutput` upserts on the primary key.
-- `getToolRawOutput` is **lineage-aware** — a branched/forked session can read a
-  handle spilled by an ancestor (same `provenance()` chain the `messages`/`events`
-  reads use), and is scoped to that lineage so one session can't read another's
-  bytes.
+- `getToolRawOutput` reads by exact `(transcript_target_id, tool_call_id)` — scoped
+  to one transcript, so one session can't read another's bytes.
+- **Branching copies, not shares.** Session branching clones the message snapshot
+  (`cloneMessages`); the branch handler then calls `cloneToolRawOutputs` to copy the
+  snapshot tool calls' spilled outputs into the child, so the cloned tool_call rows'
+  `read_tool_output` handles keep resolving against the child's own id. The copies
+  are independent — overwriting the child's doesn't touch the parent's.
 - Cleaned up on session/project delete and on `session reset` (cascade in
   [store/db/sessions.ts](../../apps/monad/src/store/db/sessions.ts)).
 
@@ -169,8 +219,7 @@ survive restarts.
 - The summary is folded into the **first user message** (not a separate system
   message — `splitSystem` keeps only the first system message, so a second would be
   dropped). The cheapest configured model (the `fast` tier) does the summarization.
-- A reflect pass GC-condenses the rolling summary once it exceeds
-  ~4000 tokens.
+- A reflect pass GC-condenses the rolling summary once it exceeds ~4000 tokens.
 
 `/compact` forces a compaction immediately regardless of threshold.
 
