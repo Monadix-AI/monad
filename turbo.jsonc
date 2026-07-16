@@ -42,6 +42,8 @@
     "MONAD_URL",
     "WEB_HOST",
     "WEB_PORT",
+    "WEB_STORYBOOK_PORT",
+    "UI_STORYBOOK_PORT",
 
     // Generic terminal/runtime behavior.
     "NO_COLOR",
@@ -112,6 +114,10 @@
       "cache": false
     },
     "devtools": {
+      "persistent": true,
+      "cache": false
+    },
+    "storybook": {
       "persistent": true,
       "cache": false
     }

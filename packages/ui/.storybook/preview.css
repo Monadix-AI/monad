@@ -1,0 +1,12 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "../src/styles.css";
+
+@source "../src";
+@source "../stories";
+
+body {
+  min-height: 100vh;
+  color: var(--foreground);
+  background: var(--background);
+}

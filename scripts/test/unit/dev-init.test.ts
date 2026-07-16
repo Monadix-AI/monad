@@ -56,6 +56,8 @@ test('different worktree paths get different ports', () => {
   expect(p1.MONAD_PORT).not.toBe(p2.MONAD_PORT);
   expect(p1.MONAD_HTTP_PORT).not.toBe(p2.MONAD_HTTP_PORT);
   expect(p1.WEB_PORT).not.toBe(p2.WEB_PORT);
+  expect(p1.WEB_STORYBOOK_PORT).not.toBe(p2.WEB_STORYBOOK_PORT);
+  expect(p1.UI_STORYBOOK_PORT).not.toBe(p2.UI_STORYBOOK_PORT);
   expect(p1.MONAD_KV_UI_PORT).not.toBe(p2.MONAD_KV_UI_PORT);
   expect(p1.AI_SDK_DEVTOOLS_PORT).not.toBe(p2.AI_SDK_DEVTOOLS_PORT);
 });
@@ -68,6 +70,10 @@ test('ports land in their documented non-overlapping ranges', () => {
   expect(Number(p.MONAD_HTTP_PORT)).toBeLessThan(54000);
   expect(Number(p.WEB_PORT)).toBeGreaterThanOrEqual(3100);
   expect(Number(p.WEB_PORT)).toBeLessThan(4100);
+  expect(Number(p.WEB_STORYBOOK_PORT)).toBeGreaterThanOrEqual(4100);
+  expect(Number(p.WEB_STORYBOOK_PORT)).toBeLessThan(5100);
+  expect(Number(p.UI_STORYBOOK_PORT)).toBeGreaterThanOrEqual(8400);
+  expect(Number(p.UI_STORYBOOK_PORT)).toBeLessThan(9400);
   expect(Number(p.MONAD_KV_UI_PORT)).toBeGreaterThanOrEqual(6400);
   expect(Number(p.MONAD_KV_UI_PORT)).toBeLessThan(7400);
   expect(Number(p.AI_SDK_DEVTOOLS_PORT)).toBeGreaterThanOrEqual(7400);
@@ -81,8 +87,10 @@ test('ensurePortLines appends all ports to a file missing them', () => {
     `MONAD_PORT=${ports.MONAD_PORT}`,
     `MONAD_HTTP_PORT=${ports.MONAD_HTTP_PORT}`,
     `WEB_PORT=${ports.WEB_PORT}`,
+    `WEB_STORYBOOK_PORT=${ports.WEB_STORYBOOK_PORT}`,
     `MONAD_KV_UI_PORT=${ports.MONAD_KV_UI_PORT}`,
-    `AI_SDK_DEVTOOLS_PORT=${ports.AI_SDK_DEVTOOLS_PORT}`
+    `AI_SDK_DEVTOOLS_PORT=${ports.AI_SDK_DEVTOOLS_PORT}`,
+    `UI_STORYBOOK_PORT=${ports.UI_STORYBOOK_PORT}`
   ]);
   expect(text).toContain(`MONAD_PORT=${ports.MONAD_PORT}\n`);
 });
@@ -146,7 +154,9 @@ test('buildDevInitSummary groups the initialized dev environment for terminal ou
       MONAD_KV_UI_PORT: '6401',
       MONAD_HTTP_PORT: '53001',
       MONAD_PORT: '52001',
-      WEB_PORT: '3101'
+      UI_STORYBOOK_PORT: '8401',
+      WEB_PORT: '3101',
+      WEB_STORYBOOK_PORT: '4101'
     }
   });
 
@@ -160,6 +170,8 @@ test('buildDevInitSummary groups the initialized dev environment for terminal ou
     '  Daemon API        https://127.0.0.1:52001',
     '  Local HTTP        http://127.0.0.1:53001',
     '  Web app           http://127.0.0.1:3101',
+    '  Web Storybook     http://127.0.0.1:4101',
+    '  UI Storybook      http://127.0.0.1:8401',
     '  KV inspector      http://127.0.0.1:6401',
     '  AI SDK DevTools   http://127.0.0.1:7401',
     'Runtime URL priority',
@@ -180,7 +192,9 @@ test('dev-init summary can be colorized for terminal output', () => {
         MONAD_HTTP_PORT: '53001',
         MONAD_KV_UI_PORT: '6401',
         MONAD_PORT: '52001',
-        WEB_PORT: '3101'
+        UI_STORYBOOK_PORT: '8401',
+        WEB_PORT: '3101',
+        WEB_STORYBOOK_PORT: '4101'
       }
     },
     { color: true }

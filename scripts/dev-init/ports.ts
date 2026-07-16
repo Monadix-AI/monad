@@ -18,8 +18,10 @@ export interface WorktreePorts {
   MONAD_PORT: string; // 52000–52999
   MONAD_HTTP_PORT: string; // 53000–53999 (loopback-only HTTP fallback)
   WEB_PORT: string; // 3100–4099
+  WEB_STORYBOOK_PORT: string; // 4100–5099
   MONAD_KV_UI_PORT: string; // 6400–7399 (dev KV debug UI)
   AI_SDK_DEVTOOLS_PORT: string; // 7400–8399 (AI SDK DevTools)
+  UI_STORYBOOK_PORT: string; // 8400–9399
 }
 
 export function worktreePorts(root: string): WorktreePorts {
@@ -28,8 +30,10 @@ export function worktreePorts(root: string): WorktreePorts {
     MONAD_PORT: String(52000 + offset),
     MONAD_HTTP_PORT: String(53000 + offset),
     WEB_PORT: String(3100 + offset),
+    WEB_STORYBOOK_PORT: String(4100 + offset),
     MONAD_KV_UI_PORT: String(6400 + offset),
-    AI_SDK_DEVTOOLS_PORT: String(7400 + offset)
+    AI_SDK_DEVTOOLS_PORT: String(7400 + offset),
+    UI_STORYBOOK_PORT: String(8400 + offset)
   };
 }
 
