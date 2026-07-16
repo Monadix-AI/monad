@@ -97,7 +97,6 @@ export function applyInteractionEvent(m: ProjectionMutations, event: Event): Ses
     }
     case 'context.evicted': {
       const p = parseEventPayload('context.evicted', event.payload);
-      const resultWord = p.resultCount === 1 ? 'result' : 'results';
       return [
         {
           kind: 'upsert',
@@ -105,7 +104,10 @@ export function applyInteractionEvent(m: ProjectionMutations, event: Event): Ses
           item: m.upsert({
             kind: 'system',
             id: event.id,
-            text: `Cleared ~${p.reclaimedTokens.toLocaleString()} tokens (${p.resultCount} tool ${resultWord}) from context.`,
+            text: m.t('daemon.session.contextEvicted', {
+              tokens: p.reclaimedTokens.toLocaleString(),
+              count: p.resultCount
+            }),
             level: 'info',
             seq: event.id
           })
@@ -121,7 +123,7 @@ export function applyInteractionEvent(m: ProjectionMutations, event: Event): Ses
           item: m.upsert({
             kind: 'system',
             id: event.id,
-            text: `Context is ${Math.round(p.usedFraction * 100)}% full — consider starting a fresh session.`,
+            text: m.t('daemon.session.contextHandoffSuggested', { pct: Math.round(p.usedFraction * 100) }),
             level: 'warn',
             seq: event.id
           })

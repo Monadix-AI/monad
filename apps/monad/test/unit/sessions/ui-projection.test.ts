@@ -3,6 +3,7 @@ import type { ExternalAgentSessionSnapshot } from '#/handlers/session/ui-project
 
 import { expect, test } from 'bun:test';
 import { builtinAgentAdapters } from '@monad/atoms/agent-adapters';
+import { createI18n } from '@monad/i18n';
 import { newId } from '@monad/protocol';
 
 import { SessionUiProjector } from '#/handlers/session/ui-projection.ts';
@@ -1352,21 +1353,36 @@ test('agent join, its output card, and its wall reply project in chronological o
   ).toMatchObject({ text: 'looks good to me' });
 });
 
-test('projects context.evicted as an info-level system notice', () => {
+test('projects context.evicted as a localized info-level system notice', () => {
   const projector = new SessionUiProjector();
   const [upsert] = projector.applyEvent(event('context.evicted', { reclaimedTokens: 6200, resultCount: 7 }));
   if (upsert?.kind !== 'upsert' || upsert.item.kind !== 'system') throw new Error('expected system item');
   expect(upsert.item.level).toBe('info');
-  expect(upsert.item.text).toContain('6,200');
-  expect(upsert.item.text).toContain('7 tool results');
+  expect(upsert.item.text).toBe(`Cleared ~${(6200).toLocaleString()} tokens (7 tool results) from context.`);
+
+  const [single] = new SessionUiProjector().applyEvent(
+    event('context.evicted', { reclaimedTokens: 800, resultCount: 1 })
+  );
+  if (single?.kind !== 'upsert' || single.item.kind !== 'system') throw new Error('expected system item');
+  expect(single.item.text).toBe(`Cleared ~${(800).toLocaleString()} tokens (1 tool result) from context.`);
+
+  const zh = new SessionUiProjector({ t: createI18n({ locale: 'zh', packs: [] }).t });
+  const [zhUpsert] = zh.applyEvent(event('context.evicted', { reclaimedTokens: 6200, resultCount: 7 }));
+  if (zhUpsert?.kind !== 'upsert' || zhUpsert.item.kind !== 'system') throw new Error('expected system item');
+  expect(zhUpsert.item.text).toBe(`已从上下文清理约 ${(6200).toLocaleString()} 个 token（7 个工具结果）。`);
 });
 
-test('projects context.handoff_suggested as a warn-level system notice', () => {
+test('projects context.handoff_suggested as a localized warn-level system notice', () => {
   const projector = new SessionUiProjector();
   const [upsert] = projector.applyEvent(event('context.handoff_suggested', { usedFraction: 0.85, atFraction: 0.7 }));
   if (upsert?.kind !== 'upsert' || upsert.item.kind !== 'system') throw new Error('expected system item');
   expect(upsert.item.level).toBe('warn');
-  expect(upsert.item.text).toContain('85%');
+  expect(upsert.item.text).toBe('Context is 85% full — consider starting a fresh session.');
+
+  const zh = new SessionUiProjector({ t: createI18n({ locale: 'zh', packs: [] }).t });
+  const [zhUpsert] = zh.applyEvent(event('context.handoff_suggested', { usedFraction: 0.85, atFraction: 0.7 }));
+  if (zhUpsert?.kind !== 'upsert' || zhUpsert.item.kind !== 'system') throw new Error('expected system item');
+  expect(zhUpsert.item.text).toBe('上下文已使用 85%，建议开启新会话。');
 });
 
 test('projects memory.suggestion as a custom item carrying scope + facts', () => {
@@ -1380,4 +1396,39 @@ test('projects memory.suggestion as a custom item carrying scope + facts', () =>
     scope: { kind: 'agent', id: 'agt_100000000000' },
     facts: ['User prefers dark mode']
   });
+});
+
+test('external_agent.resume_failed system notice renders from the i18n catalog', () => {
+  const payload = {
+    agentName: 'reviewer',
+    provider: 'codex',
+    providerSessionRef: 'thread-42',
+    code: 'resume_unavailable',
+    message: 'no such thread',
+    fallback: 'cold-start'
+  };
+
+  const en = new SessionUiProjector();
+  const enEvent = event('external_agent.resume_failed', payload);
+  const enOut = en.applyEvent(enEvent);
+  expect(enOut).toEqual([
+    {
+      kind: 'upsert',
+      cursor: enEvent.id as `evt_${string}`,
+      item: {
+        kind: 'system',
+        id: 'external-agent-resume-failed:reviewer:thread-42',
+        text: 'Codex resume failed for provider session thread-42; cold started a new runtime.',
+        level: 'warn',
+        seq: enEvent.id
+      }
+    }
+  ]);
+
+  const zh = new SessionUiProjector({ t: createI18n({ locale: 'zh', packs: [] }).t });
+  const zhEvent = event('external_agent.resume_failed', payload);
+  const zhOut = zh.applyEvent(zhEvent);
+  expect(zhOut[0]?.kind === 'upsert' && zhOut[0].item.kind === 'system' ? zhOut[0].item.text : undefined).toBe(
+    'Codex 恢复 provider 会话 thread-42 失败，已冷启动新的运行时。'
+  );
 });

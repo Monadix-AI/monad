@@ -412,7 +412,7 @@ export function createLifecycleHandlers(ctx: SessionContext) {
           : after !== undefined
             ? store.listMessages(id, { limit, after, includeInactive })
             : store.listMessages(id, { limit, before, includeInactive, latest: true });
-      const projector = new SessionUiProjector();
+      const projector = new SessionUiProjector(ctx.deps.localeService ? { t: ctx.deps.localeService.t } : {});
       projector.hydrateMessages(messages, parseDurableSummary(store.getMemory(id, 'ctx:summary')));
       // Rebuild external agent tool cards from their durable snapshots for this window (external_agent.output
       // chunks aren't persisted as events). Scope to the page's time span so a card lands on the page

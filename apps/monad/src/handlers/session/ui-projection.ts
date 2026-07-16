@@ -1,3 +1,4 @@
+import type { Translate } from '@monad/i18n';
 import type {
   ChatMessage,
   Event,
@@ -8,6 +9,8 @@ import type {
 } from '@monad/protocol';
 import type { ExternalAgentSessionSnapshot } from './ui-projection-helpers.ts';
 import type { ProjectionMutations } from './ui-projection-state.ts';
+
+import { createI18n, DEFAULT_LOCALE } from '@monad/i18n';
 
 import {
   agentNameFromData,
@@ -35,6 +38,14 @@ export type { ExternalAgentSessionSnapshot } from './ui-projection-helpers.ts';
 // projector never re-emits a settled item), so it bounds memory without any client-visible effect.
 const MAX_LIVE_UI_ITEMS = 1000;
 
+// Builtin-English fallback for projectors constructed without a session translator (tests, legacy
+// call sites) — keeps projected system copy flowing through the catalog instead of hardcoded strings.
+let defaultT: Translate | undefined;
+function fallbackT(): Translate {
+  defaultT ??= createI18n({ locale: DEFAULT_LOCALE, packs: [] }).t;
+  return defaultT;
+}
+
 interface MemorySummaryProjection {
   summary: string;
   uptoMessageId: string;
@@ -58,9 +69,10 @@ export class SessionUiProjector {
 
   private readonly mutations: ProjectionMutations;
 
-  constructor(private readonly opts: { channelStructured?: boolean } = {}) {
+  constructor(private readonly opts: { channelStructured?: boolean; t?: Translate } = {}) {
     this.mutations = {
       opts: this.opts,
+      t: this.opts.t ?? fallbackT(),
       items: this.items,
       rawStreamingText: this.rawStreamingText,
       channelDisplayCache: this.channelDisplayCache,

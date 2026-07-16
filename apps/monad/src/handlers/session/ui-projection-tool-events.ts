@@ -174,7 +174,7 @@ export function applyToolEvent(m: ProjectionMutations, event: Event): SessionUiE
           item: m.upsert({
             kind: 'system',
             id: `external-agent-resume-failed:${p.agentName}:${p.providerSessionRef}`,
-            text: `${label} resume failed for provider session ${p.providerSessionRef}; cold started a new runtime.`,
+            text: m.t('daemon.session.externalAgentResumeFailed', { label, ref: p.providerSessionRef }),
             level: 'warn',
             seq: event.id
           })

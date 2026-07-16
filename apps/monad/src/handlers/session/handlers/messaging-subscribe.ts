@@ -49,7 +49,10 @@ export function createSubscribeHandlers(ctx: SessionContext) {
   ) {
     const session = requireSession(sessionId);
     const hydrateProjector = () => {
-      const next = new SessionUiProjector({ channelStructured: isChannelStructuredSession(session) });
+      const next = new SessionUiProjector({
+        channelStructured: isChannelStructuredSession(session),
+        ...(ctx.deps.localeService ? { t: ctx.deps.localeService.t } : {})
+      });
       const recent = store.listMessages(sessionId, {
         includeInactive: false,
         latest: true,

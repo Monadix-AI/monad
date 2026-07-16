@@ -1,3 +1,4 @@
+import type { Translate } from '@monad/i18n';
 import type { ExternalAgentSessionId, SessionUiEvent, UIItem, UIMessageItem } from '@monad/protocol';
 
 interface ChannelDisplayCacheEntry {
@@ -15,6 +16,7 @@ interface SetCustomArgs {
 
 export interface ProjectionMutations {
   readonly opts: { channelStructured?: boolean };
+  readonly t: Translate;
   readonly items: Map<string, UIItem>;
   readonly rawStreamingText: Map<string, string>;
   readonly channelDisplayCache: Map<string, ChannelDisplayCacheEntry>;

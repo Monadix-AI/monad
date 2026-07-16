@@ -3,5 +3,9 @@
   "daemon.ready.webUi": "Web UI:",
   "daemon.ready.cli": "CLI:",
   "daemon.ready.configure": "Configure providers:",
-  "daemon.singleton.alreadyRunning": "Monad daemon is already running. Run `monad stop` to stop it first."
+  "daemon.singleton.alreadyRunning": "Monad daemon is already running. Run `monad stop` to stop it first.",
+  "daemon.session.externalAgentResumeFailed": "{{label}} resume failed for provider session {{ref}}; cold started a new runtime.",
+  "daemon.session.contextEvicted_one": "Cleared ~{{tokens}} tokens ({{count}} tool result) from context.",
+  "daemon.session.contextEvicted_other": "Cleared ~{{tokens}} tokens ({{count}} tool results) from context.",
+  "daemon.session.contextHandoffSuggested": "Context is {{pct}}% full — consider starting a fresh session."
 }
