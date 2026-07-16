@@ -174,7 +174,7 @@ async function installCapabilitiesApiMock(page: Page) {
           name: `config-server-${index + 1}`,
           source: 'config',
           transport: 'stdio',
-          state: 'connected',
+          state: 'ready',
           toolCount: 2,
           tools: ['search', 'read']
         }))

@@ -121,16 +121,19 @@ export type GetInstalledMcpAtomResponse = z.infer<typeof getInstalledMcpAtomResp
 
 // Runtime connection health for every MCP server the daemon currently knows — config.json
 // servers + synthesized presets (browser/computer), file/pack atoms, and the obscura preset. Unlike
-// the config view above, this reflects the LIVE connection: connected / disabled / failed, with the
-// advertised tool set. Read-only; the daemon derives it from its open connections + current config.
+// the config view above, this reflects the LIVE connection: disabled / starting / ready / failed, with
+// the advertised tool set for ready servers. Read-only; the daemon derives it from its open
+// connections + current config.
 export const mcpServerStatusSchema = z.object({
   name: z.string(),
   /** Where the server is declared: config.json, a synthesized preset, a file/pack atom, or obscura. */
   source: z.enum(['config', 'preset', 'file', 'obscura']),
   transport: z.enum(['stdio', 'http']).optional(),
-  /** connected = handshake ok + tools registered; disabled = `enabled:false`; failed = enabled but no
-   *  live connection (handshake error, pin mismatch, or url deduped against another server). */
-  state: z.enum(['connected', 'disabled', 'failed']),
+  /** ready = handshake ok + tools registered; starting = handshake in progress; disabled =
+   *  `enabled:false`; failed = enabled but startup failed (handshake error, pin mismatch, or url
+   *  deduped against another server). */
+  state: z.enum(['ready', 'starting', 'disabled', 'failed']),
+  error: z.string().optional(),
   toolCount: z.number().int().nonnegative(),
   tools: z.array(z.string())
 });

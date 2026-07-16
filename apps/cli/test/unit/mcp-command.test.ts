@@ -93,7 +93,7 @@ test('mcp status: prints empty when no servers', async () => {
 });
 
 test('mcp status: shows connected server with tool count', async () => {
-  const servers = [{ name: 'fs', state: 'connected', source: 'atom', transport: 'stdio', toolCount: 8 }];
+  const servers = [{ name: 'fs', state: 'ready', source: 'file', transport: 'stdio', toolCount: 8 }];
   const client = makeClient({}, { status: { get: async () => ok({ servers }) } });
   await silently(() => mcp.run(ctx(['st'], {}, client)));
 });

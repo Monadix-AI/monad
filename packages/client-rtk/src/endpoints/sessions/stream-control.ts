@@ -18,6 +18,10 @@ const EXTERNAL_AGENT_SESSION_EVENTS: ReadonlySet<Event['type']> = new Set([
   'external_agent.exited'
 ] as const satisfies ReadonlyArray<Event['type']>);
 
+const MCP_STATUS_EVENTS: ReadonlySet<Event['type']> = new Set(['mcp.status_updated'] as const satisfies ReadonlyArray<
+  Event['type']
+>);
+
 /**
  * Subscribes to the cross-session control stream for the lifetime of the cache entry. There is no
  * data to read — mount it once (e.g. `useStreamControlQuery()`) and it keeps the session list live.
@@ -43,6 +47,9 @@ export const streamControlApi = apiSlice.injectEndpoints({
                   { type: 'ExternalAgentSessions', id: event.sessionId }
                 ])
               );
+            }
+            if (MCP_STATUS_EVENTS.has(event.type)) {
+              dispatch(apiSlice.util.invalidateTags(['McpServers']));
             }
           });
         } catch {

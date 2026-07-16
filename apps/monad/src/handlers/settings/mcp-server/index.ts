@@ -82,7 +82,7 @@ export function createMcpServerModule({ paths, getMcpStatus, mcpAuthorize, mcpRe
       return { entries, query };
     },
 
-    // Live connection health (connected / disabled / failed + tool sets) across config, presets,
+    // Live connection health (disabled / starting / ready / failed + tool sets) across config, presets,
     // file/pack atoms, and obscura — distinct from listMcpServers' static config view.
     async listMcpServerStatus(): Promise<ListMcpServerStatusResponse> {
       return { servers: (await getMcpStatus?.()) ?? [] };

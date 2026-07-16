@@ -28,7 +28,8 @@ const CONTROL_EVENT_TYPES: ReadonlySet<EventType> = new Set<EventType>([
   'task.created',
   'task.progress',
   'task.completed',
-  'task.failed'
+  'task.failed',
+  'mcp.status_updated'
 ]);
 
 /**

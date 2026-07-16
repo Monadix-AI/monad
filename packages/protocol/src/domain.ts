@@ -377,6 +377,7 @@ export const eventTypeSchema = z.enum([
   'task.progress',
   'task.completed',
   'task.failed',
+  'mcp.status_updated',
   'user.message', // a human/channel-originated turn was accepted (lets other clients render it live)
   'agent.message', // agent-to-human note (renderable)
   'agent.token', // streamed model token chunk
