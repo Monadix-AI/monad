@@ -23,6 +23,11 @@ async function dispatch(): Promise<void> {
     return;
   }
 
+  if (sub === '--daemon-child-supervisor') {
+    await (await import('@monad/monad/start')).runDaemonChildSupervisorFromArgv();
+    return;
+  }
+
   if (sub === 'daemon') {
     const { attachWebRoutes } = await import('@monad/web/server');
     await (await import('@monad/monad/start')).startDaemon({ beforeListen: attachWebRoutes });

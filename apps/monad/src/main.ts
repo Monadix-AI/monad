@@ -20,6 +20,7 @@ import { startDaemon } from '#/application/lifecycle.ts';
 export type { App } from '#/application/lifecycle.ts';
 
 export { startDaemon } from '#/application/lifecycle.ts';
+export { runDaemonChildSupervisorFromArgv } from '#/infra/daemon-child-processes.ts';
 
 if (import.meta.main) {
   startDaemon().catch((error: unknown) => {
