@@ -1,6 +1,7 @@
 import type { ModelRequest, ModelResult, ModelRouter } from '#/agent/index.ts';
 
 import { expect, test } from 'bun:test';
+import { newId } from '@monad/protocol';
 
 import { HandlerError } from '#/handlers/handler-error.ts';
 import { buildHandlers, mockModel } from '../../helpers.ts';
@@ -171,4 +172,25 @@ test('branch snapshot is truncated at the branch point and unaffected by later p
 
   const snapshot = (await d.session.messages({ id: child })).messages.map((m) => m.text);
   expect(snapshot).toEqual(['p1', 'R', 'p2', '', 'c1', 'R']);
+});
+
+test('branch copies the snapshot tool calls’ spilled raw outputs, so the child’s recovery handles resolve', async () => {
+  const d = buildHandlers(mockModel(['ok', 'ok']));
+  const { sessionId: parent } = await d.session.create({ title: 'p' });
+  await d.session.generate({ sessionId: parent, text: 'q1' });
+  const branchPoint = (await d.session.messages({ id: parent })).messages.find((m) => m.role === 'user');
+  if (!branchPoint) throw new Error('expected a user message');
+  // A tool_call row inside the snapshot with a spilled raw output…
+  d.store.insertMessage(newId('msg'), parent, '', new Date().toISOString(), 'assistant', {
+    type: 'tool_call',
+    data: { toolCallId: 'call_in', toolName: 'file_read', input: {} }
+  });
+  d.store.saveToolRawOutput(parent, 'call_in', 'FULL BYTES');
+  // …and one that will fall OUTSIDE the branch point (branching at the first user message).
+  d.store.saveToolRawOutput(parent, 'call_out', 'NOT CLONED');
+
+  const { sessionId: child } = await d.session.branch({ id: parent });
+  expect(d.store.getToolRawOutput(child, 'call_in')).toBe('FULL BYTES');
+  expect(d.store.getToolRawOutput(child, 'call_out')).toBeNull(); // presence-ok: no tool_call row references it, so no copy
+  expect(d.store.getToolRawOutput(parent, 'call_in')).toBe('FULL BYTES'); // parent's copy untouched
 });

@@ -22,7 +22,6 @@ function freshStore(agentIds: AgentId[] = ['agt_100000000000' as AgentId]) {
     ownerPrincipalId: 'prn_100000000000',
     state: 'active',
     agentIds,
-    parentSessionId: null,
     archived: false,
     restoreCount: 0,
     createdAt: new Date(0).toISOString(),

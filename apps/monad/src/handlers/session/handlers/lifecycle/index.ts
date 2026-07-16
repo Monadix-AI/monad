@@ -496,6 +496,13 @@ export function createLifecycleHandlers(ctx: SessionContext) {
         parent.cwd
       );
       store.cloneMessages(child.id, snapshot);
+      // Cloned tool_call rows keep their toolCallIds, so the child's read_tool_output handles must
+      // resolve against its own transcript id — copy the referenced spills alongside the messages.
+      const snapshotToolCallIds = snapshot
+        .filter((message) => message.type === 'tool_call')
+        .map((message) => (message.data as { toolCallId?: unknown } | undefined)?.toolCallId)
+        .filter((toolCallId): toolCallId is string => typeof toolCallId === 'string');
+      store.cloneToolRawOutputs(id, child.id, snapshotToolCallIds);
       if (target) {
         const createdAt = new Date().toISOString();
         store.insertMessage(newId('msg'), child.id, '', createdAt, 'assistant', {

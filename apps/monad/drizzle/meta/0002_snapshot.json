@@ -90,16 +90,12 @@
       "indexes": {
         "idx_acp_delegates_session": {
           "name": "idx_acp_delegates_session",
-          "columns": [
-            "session_id"
-          ],
+          "columns": ["session_id"],
           "isUnique": false
         },
         "idx_acp_delegates_live": {
           "name": "idx_acp_delegates_live",
-          "columns": [
-            "evicted_at"
-          ],
+          "columns": ["evicted_at"],
           "isUnique": false,
           "where": "evicted_at IS NULL"
         }
@@ -151,20 +147,14 @@
       "indexes": {
         "idx_channel_conv_sessions_session": {
           "name": "idx_channel_conv_sessions_session",
-          "columns": [
-            "session_id"
-          ],
+          "columns": ["session_id"],
           "isUnique": false
         }
       },
       "foreignKeys": {},
       "compositePrimaryKeys": {
         "channel_conversation_sessions_channel_id_conversation_key_session_id_pk": {
-          "columns": [
-            "channel_id",
-            "conversation_key",
-            "session_id"
-          ],
+          "columns": ["channel_id", "conversation_key", "session_id"],
           "name": "channel_conversation_sessions_channel_id_conversation_key_session_id_pk"
         }
       },
@@ -221,10 +211,7 @@
       "foreignKeys": {},
       "compositePrimaryKeys": {
         "channel_conversations_channel_id_conversation_key_pk": {
-          "columns": [
-            "channel_id",
-            "conversation_key"
-          ],
+          "columns": ["channel_id", "conversation_key"],
           "name": "channel_conversations_channel_id_conversation_key_pk"
         }
       },
@@ -287,10 +274,7 @@
       "indexes": {
         "idx_events_transcript_target": {
           "name": "idx_events_transcript_target",
-          "columns": [
-            "transcript_target_id",
-            "id"
-          ],
+          "columns": ["transcript_target_id", "id"],
           "isUnique": false
         }
       },
@@ -355,24 +339,14 @@
       "indexes": {
         "idx_experience_state_project": {
           "name": "idx_experience_state_project",
-          "columns": [
-            "atom_pack_id",
-            "principal_id",
-            "project_id",
-            "record_key"
-          ],
+          "columns": ["atom_pack_id", "principal_id", "project_id", "record_key"],
           "isUnique": false
         }
       },
       "foreignKeys": {},
       "compositePrimaryKeys": {
         "experience_state_atom_pack_id_principal_id_project_id_record_key_pk": {
-          "columns": [
-            "atom_pack_id",
-            "principal_id",
-            "project_id",
-            "record_key"
-          ],
+          "columns": ["atom_pack_id", "principal_id", "project_id", "record_key"],
           "name": "experience_state_atom_pack_id_principal_id_project_id_record_key_pk"
         }
       },
@@ -442,13 +416,7 @@
       "indexes": {
         "idx_experience_state_events_record": {
           "name": "idx_experience_state_events_record",
-          "columns": [
-            "atom_pack_id",
-            "principal_id",
-            "project_id",
-            "record_key",
-            "version"
-          ],
+          "columns": ["atom_pack_id", "principal_id", "project_id", "record_key", "version"],
           "isUnique": false
         }
       },
@@ -521,22 +489,14 @@
       "indexes": {
         "idx_experience_worker_wakeups_due": {
           "name": "idx_experience_worker_wakeups_due",
-          "columns": [
-            "run_at"
-          ],
+          "columns": ["run_at"],
           "isUnique": false
         }
       },
       "foreignKeys": {},
       "compositePrimaryKeys": {
         "experience_worker_wakeups_atom_pack_id_principal_id_experience_id_project_id_wake_key_pk": {
-          "columns": [
-            "atom_pack_id",
-            "principal_id",
-            "experience_id",
-            "project_id",
-            "wake_key"
-          ],
+          "columns": ["atom_pack_id", "principal_id", "experience_id", "project_id", "wake_key"],
           "name": "experience_worker_wakeups_atom_pack_id_principal_id_experience_id_project_id_wake_key_pk"
         }
       },
@@ -656,46 +616,30 @@
       "indexes": {
         "idx_external_agent_inbox_items_pending": {
           "name": "idx_external_agent_inbox_items_pending",
-          "columns": [
-            "external_agent_session_id",
-            "state",
-            "message_seq"
-          ],
+          "columns": ["external_agent_session_id", "state", "message_seq"],
           "isUnique": false
         },
         "idx_external_agent_inbox_delivery_id": {
           "name": "idx_external_agent_inbox_delivery_id",
-          "columns": [
-            "delivery_id"
-          ],
+          "columns": ["delivery_id"],
           "isUnique": true,
           "where": "delivery_id IS NOT NULL"
         },
         "idx_external_agent_inbox_project_trigger": {
           "name": "idx_external_agent_inbox_project_trigger",
-          "columns": [
-            "project_id",
-            "trigger_message_id"
-          ],
+          "columns": ["project_id", "trigger_message_id"],
           "isUnique": false
         },
         "idx_external_agent_inbox_member_state": {
           "name": "idx_external_agent_inbox_member_state",
-          "columns": [
-            "project_id",
-            "member_instance_id",
-            "state"
-          ],
+          "columns": ["project_id", "member_instance_id", "state"],
           "isUnique": false
         }
       },
       "foreignKeys": {},
       "compositePrimaryKeys": {
         "external_agent_inbox_items_external_agent_session_id_message_seq_pk": {
-          "columns": [
-            "external_agent_session_id",
-            "message_seq"
-          ],
+          "columns": ["external_agent_session_id", "message_seq"],
           "name": "external_agent_inbox_items_external_agent_session_id_message_seq_pk"
         }
       },
@@ -846,26 +790,18 @@
       "indexes": {
         "idx_external_agent_sessions_transcript_target": {
           "name": "idx_external_agent_sessions_transcript_target",
-          "columns": [
-            "transcript_target_id"
-          ],
+          "columns": ["transcript_target_id"],
           "isUnique": false
         },
         "idx_external_agent_sessions_live": {
           "name": "idx_external_agent_sessions_live",
-          "columns": [
-            "state"
-          ],
+          "columns": ["state"],
           "isUnique": false,
           "where": "state IN ('starting', 'running')"
         },
         "idx_external_agent_sessions_provider_ref": {
           "name": "idx_external_agent_sessions_provider_ref",
-          "columns": [
-            "transcript_target_id",
-            "provider",
-            "provider_session_ref"
-          ],
+          "columns": ["transcript_target_id", "provider", "provider_session_ref"],
           "isUnique": true,
           "where": "provider_session_ref IS NOT NULL"
         }
@@ -924,19 +860,14 @@
       "indexes": {
         "idx_file_observations_session": {
           "name": "idx_file_observations_session",
-          "columns": [
-            "session_id"
-          ],
+          "columns": ["session_id"],
           "isUnique": false
         }
       },
       "foreignKeys": {},
       "compositePrimaryKeys": {
         "file_observations_session_id_path_pk": {
-          "columns": [
-            "session_id",
-            "path"
-          ],
+          "columns": ["session_id", "path"],
           "name": "file_observations_session_id_path_pk"
         }
       },
@@ -972,10 +903,7 @@
       "foreignKeys": {},
       "compositePrimaryKeys": {
         "memory_session_id_key_pk": {
-          "columns": [
-            "session_id",
-            "key"
-          ],
+          "columns": ["session_id", "key"],
           "name": "memory_session_id_key_pk"
         }
       },
@@ -1052,9 +980,7 @@
       "indexes": {
         "idx_message_attachments_project": {
           "name": "idx_message_attachments_project",
-          "columns": [
-            "project_id"
-          ],
+          "columns": ["project_id"],
           "isUnique": false
         }
       },
@@ -1188,17 +1114,12 @@
       "indexes": {
         "idx_messages_transcript_target": {
           "name": "idx_messages_transcript_target",
-          "columns": [
-            "transcript_target_id"
-          ],
+          "columns": ["transcript_target_id"],
           "isUnique": false
         },
         "idx_messages_active": {
           "name": "idx_messages_active",
-          "columns": [
-            "transcript_target_id",
-            "active"
-          ],
+          "columns": ["transcript_target_id", "active"],
           "isUnique": false
         }
       },
@@ -1270,21 +1191,12 @@
       "indexes": {
         "idx_native_agent_direct_messages_session_peer": {
           "name": "idx_native_agent_direct_messages_session_peer",
-          "columns": [
-            "external_agent_session_id",
-            "peer",
-            "created_at"
-          ],
+          "columns": ["external_agent_session_id", "peer", "created_at"],
           "isUnique": false
         },
         "idx_native_agent_direct_messages_project_pair": {
           "name": "idx_native_agent_direct_messages_project_pair",
-          "columns": [
-            "project_id",
-            "from_agent",
-            "peer",
-            "created_at"
-          ],
+          "columns": ["project_id", "from_agent", "peer", "created_at"],
           "isUnique": false
         }
       },
@@ -1357,19 +1269,14 @@
       "indexes": {
         "idx_session_members_session": {
           "name": "idx_session_members_session",
-          "columns": [
-            "session_id"
-          ],
+          "columns": ["session_id"],
           "isUnique": false
         }
       },
       "foreignKeys": {},
       "compositePrimaryKeys": {
         "session_members_session_id_member_id_pk": {
-          "columns": [
-            "session_id",
-            "member_id"
-          ],
+          "columns": ["session_id", "member_id"],
           "name": "session_members_session_id_member_id_pk"
         }
       },
@@ -1533,9 +1440,7 @@
       "indexes": {
         "idx_sessions_project": {
           "name": "idx_sessions_project",
-          "columns": [
-            "project_id"
-          ],
+          "columns": ["project_id"],
           "isUnique": false
         }
       },
@@ -1630,9 +1535,7 @@
       "indexes": {
         "idx_tasks_session": {
           "name": "idx_tasks_session",
-          "columns": [
-            "session_id"
-          ],
+          "columns": ["session_id"],
           "isUnique": false
         }
       },
@@ -1677,10 +1580,7 @@
       "foreignKeys": {},
       "compositePrimaryKeys": {
         "tool_raw_outputs_transcript_target_id_tool_call_id_pk": {
-          "columns": [
-            "transcript_target_id",
-            "tool_call_id"
-          ],
+          "columns": ["transcript_target_id", "tool_call_id"],
           "name": "tool_raw_outputs_transcript_target_id_tool_call_id_pk"
         }
       },
@@ -1779,12 +1679,7 @@
       "foreignKeys": {},
       "compositePrimaryKeys": {
         "usage_ledger_day_provider_model_category_pk": {
-          "columns": [
-            "day",
-            "provider",
-            "model",
-            "category"
-          ],
+          "columns": ["day", "provider", "model", "category"],
           "name": "usage_ledger_day_provider_model_category_pk"
         }
       },
@@ -1877,10 +1772,7 @@
       "indexes": {
         "idx_workplace_projects_state": {
           "name": "idx_workplace_projects_state",
-          "columns": [
-            "state",
-            "archived"
-          ],
+          "columns": ["state", "archived"],
           "isUnique": false
         }
       },
