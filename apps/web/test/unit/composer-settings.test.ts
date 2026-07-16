@@ -79,9 +79,10 @@ test('shouldSubmitComposerKey supports primary-modifier send mode', () => {
   );
 });
 
-test('queuedCardsForDisplay shows at most the latest two queued messages newest first', () => {
-  expect(queuedCardsForDisplay(['first', 'second', 'third'])).toEqual([
-    { displayIndex: 0, queueIndex: 2, text: 'third' },
-    { displayIndex: 1, queueIndex: 1, text: 'second' }
+test('queuedCardsForDisplay shows at most the latest three queued messages newest first', () => {
+  expect(queuedCardsForDisplay(['first', 'second', 'third', 'fourth'])).toEqual([
+    { displayIndex: 0, queueIndex: 3, text: 'fourth' },
+    { displayIndex: 1, queueIndex: 2, text: 'third' },
+    { displayIndex: 2, queueIndex: 1, text: 'second' }
   ]);
 });

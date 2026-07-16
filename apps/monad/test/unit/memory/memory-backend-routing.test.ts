@@ -24,7 +24,6 @@ function freshStore(cwd?: string) {
     ownerPrincipalId: 'prn_100000000000',
     state: 'active',
     agentIds: ['agt_100000000000'],
-    parentSessionId: null,
     archived: false,
     restoreCount: 0,
     cwd,

@@ -13,7 +13,6 @@ export {
   useListSessionMembersQuery
 } from './list-session-members.ts';
 export { listSessionsApi, sessionAdapter, sessionSelectors, useListSessionsQuery } from './list-sessions.ts';
-export { provenanceApi, useProvenanceQuery } from './provenance.ts';
 export { useRemoveSessionMemberMutation } from './remove-session-member.ts';
 export { resetSessionApi, useResetSessionMutation } from './reset-session.ts';
 export { restoreSessionApi, useRestoreSessionMutation } from './restore-session.ts';

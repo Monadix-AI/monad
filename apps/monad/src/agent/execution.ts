@@ -153,11 +153,8 @@ export function createAgentExecutionService(deps: AgentDeps): AgentExecutionServ
   const historyHardThreshold = Math.floor((contextLimit ?? 120_000) * ctxCfg.summarize.hardFraction);
   const history = new DurableSummarizer({
     messages: {
-      list: (sid) => store.listMessagesWithLineage(sid),
-      // Lineage-aware cursor: a branched session's summary boundary may sit in an ancestor,
-      // so slice the full lineage list — a per-session `after` would drop post-boundary
-      // ancestor messages (neither summarized nor loaded → context loss).
-      listSince: (sid, after) => store.listMessagesWithLineage(sid, { after })
+      list: (sid) => store.listMessages(sid),
+      listSince: (sid, after) => store.listMessages(sid, { after })
     },
     summaryStore,
     model: agentModel,
@@ -322,8 +319,7 @@ export function createAgentExecutionService(deps: AgentDeps): AgentExecutionServ
       getSession: (id) => store.getSession(id)
     },
     messageRepo: {
-      // Lineage-aware: a branched session sees its ancestors' history up to the branch point.
-      list: (sessionId) => store.listMessagesWithLineage(sessionId),
+      list: (sessionId) => store.listMessages(sessionId),
       append: (m) => {
         store.insertMessage(m.id, m.sessionId, m.text, m.createdAt, m.role, {
           type: m.type,

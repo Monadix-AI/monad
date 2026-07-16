@@ -28,10 +28,13 @@ file, use `scripts/bun-test.ts ... --only-failures` so only failing case details
 are printed. Full testing conventions and patterns: `docs/engineering/testing.md` /
 @docs/engineering/testing.md.
 
-- When running lint, typecheck, and tests as a quality gate, prefer one
-  failure-collection pass that exposes all current errors before fixing them. Do not
-  bounce between a single failing command and a single fix when the broader failure
-  surface is available.
+- Agents must not use `:loud` scripts or pass `--loud`. Keep test output focused on
+  failures; when diagnosing a failure, narrow the package, directory, file, or test
+  name and continue using the default quiet entry point or `--only-failures`.
+- Run each applicable lint, typecheck, or test scope once to completion and collect all
+  failures before editing. Fix the collected failures as one batch, then rerun the same
+  complete scope once to verify the batch. Do not alternate between fixing one failure
+  and rerunning the command when the script can report the full failure set in one pass.
 - Every new or modified test case must avoid weak assertions whose only claim is that
   something exists or does not exist. Assert observable behavior, structure, state
   transitions, and exact machine contracts instead. Presence or absence is valid only

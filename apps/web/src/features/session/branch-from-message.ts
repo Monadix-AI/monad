@@ -5,18 +5,16 @@ interface BranchFromMessageArgs {
   continueFromHistory: (sessionId: SessionId) => Promise<unknown>;
   messageId: MessageId;
   onBranched: (sessionId: SessionId) => void;
-  role: 'user' | 'assistant';
 }
 
 export async function branchFromMessage({
   branch,
   continueFromHistory,
   messageId,
-  onBranched,
-  role
+  onBranched
 }: BranchFromMessageArgs): Promise<SessionId> {
   const { sessionId } = await branch(messageId);
   onBranched(sessionId);
-  if (role === 'user') await continueFromHistory(sessionId);
+  await continueFromHistory(sessionId);
   return sessionId;
 }

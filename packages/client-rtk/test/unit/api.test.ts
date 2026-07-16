@@ -21,6 +21,7 @@ import {
   sessionSelectors,
   streamControlApi
 } from '../../src/endpoints/sessions/index.ts';
+import { updateSessionApi } from '../../src/endpoints/sessions/update-session.ts';
 import { channelsApi } from '../../src/endpoints/settings/channels/index.ts';
 import {
   createMonadStore,
@@ -59,6 +60,12 @@ function fakeClient(overrides: Record<string, unknown>): MonadClient {
       v1: {
         sessions: Object.assign(
           ({ id }: { id: string }) => ({
+            patch: async (body: Record<string, unknown>) => {
+              const fn = overrides.updateSession as
+                | ((sessionId: string, body: Record<string, unknown>) => Promise<unknown>)
+                | undefined;
+              return ok({ session: fn ? await fn(id, body) : undefined });
+            },
             messages: {
               get: async () => {
                 const fn = overrides.getMessages as ((sessionId: string) => Promise<unknown[]>) | undefined;
@@ -103,9 +110,11 @@ function fakeClient(overrides: Record<string, unknown>): MonadClient {
             }
           }),
           {
-            get: async () => {
-              const fn = overrides.listSessions as (() => Promise<unknown[]>) | undefined;
-              const sessions = fn ? await fn() : [];
+            get: async ({ query }: { query?: Record<string, unknown> } = {}) => {
+              const fn = overrides.listSessions as
+                | ((query?: Record<string, unknown>) => Promise<unknown[]>)
+                | undefined;
+              const sessions = fn ? await fn(query) : [];
               return ok({ sessions, total: sessions.length, limit: 50, offset: 0 });
             },
             post: async ({ title }: { title: string }) => {
@@ -488,7 +497,6 @@ test('a query delegates to the client and caches by tag', async () => {
           ownerPrincipalId: 'prn_TEST00000000',
           state: 'active',
           agentIds: [],
-          parentSessionId: null,
           archived: false,
           restoreCount: 0,
           createdAt: new Date().toISOString(),
@@ -508,6 +516,69 @@ test('a query delegates to the client and caches by tag', async () => {
   // Second subscriber hits the cache — no extra client call.
   await store.dispatch(monadApi.endpoints.listSessions.initiate(undefined));
   expect(calls).toBe(1);
+});
+
+test('listSessions forwards the server search query and archived scope', async () => {
+  let receivedQuery: Record<string, unknown> | undefined;
+  const client = fakeClient({
+    listSessions: async (query: Record<string, unknown> | undefined) => {
+      receivedQuery = query;
+      return [];
+    }
+  });
+  const store = createMonadStore({ client });
+
+  await store.dispatch(
+    monadApi.endpoints.listSessions.initiate({ archived: true, query: 'runtime', limit: 20, offset: 0 })
+  );
+
+  expect(receivedQuery).toEqual({ archived: true, query: 'runtime', limit: 20, offset: 0 });
+});
+
+test('unarchiving moves a session between scoped list caches before the request resolves', async () => {
+  let archived = true;
+  let resolveUpdate: ((value: unknown) => void) | undefined;
+  const session = {
+    id: 'ses_archived00001' as const,
+    title: 'Archived session',
+    ownerPrincipalId: 'prn_TEST00000000',
+    state: 'active' as const,
+    agentIds: [],
+    archived,
+    restoreCount: 0,
+    createdAt: '2026-07-15T00:00:00.000Z',
+    updatedAt: '2026-07-15T00:00:00.000Z'
+  };
+  const client = fakeClient({
+    listSessions: async (query: Record<string, unknown> | undefined) =>
+      query?.archived === archived ? [{ ...session, archived }] : [],
+    updateSession: async () =>
+      new Promise((resolve) => {
+        resolveUpdate = resolve;
+      })
+  });
+  const store = createMonadStore({ client });
+  const activeArgs = { archived: false };
+  const archivedArgs = { archived: true };
+  await store.dispatch(listSessionsApi.endpoints.listSessions.initiate(activeArgs));
+  await store.dispatch(listSessionsApi.endpoints.listSessions.initiate(archivedArgs));
+
+  const mutation = store.dispatch(
+    updateSessionApi.endpoints.updateSession.initiate({ id: session.id, archived: false })
+  );
+  const activeData = listSessionsApi.endpoints.listSessions.select(activeArgs)(store.getState() as never).data;
+  const archivedData = listSessionsApi.endpoints.listSessions.select(archivedArgs)(store.getState() as never).data;
+
+  expect(
+    sessionSelectors.selectAll(activeData?.sessions ?? sessionAdapter.getInitialState()).map((item) => item.id)
+  ).toEqual([session.id]);
+  expect(
+    sessionSelectors.selectAll(archivedData?.sessions ?? sessionAdapter.getInitialState()).map((item) => item.id)
+  ).toEqual([]);
+
+  archived = false;
+  resolveUpdate?.({ ...session, archived: false });
+  await mutation;
 });
 
 test('createSession invalidates Sessions, forcing a refetch', async () => {

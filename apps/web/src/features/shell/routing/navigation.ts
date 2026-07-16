@@ -30,6 +30,7 @@ type UseAppShellNavigationParams = {
   routedProjectInList: boolean;
   routedProjectSessionId: SessionId | null;
   routedSessionInList: boolean;
+  preserveMissingSessionRoute?: boolean;
   runtimeReady: boolean;
   sessions: Session[];
   sessionsFetching: boolean;
@@ -42,17 +43,26 @@ type UseAppShellNavigationParams = {
 export function shouldResetMissingSessionRoute({
   currentId,
   isDraftSession,
+  preserveMissingSessionRoute = false,
   sessionExists,
   sessionsFetching,
   sessionsLoading
 }: {
   currentId: SessionId | null;
   isDraftSession: boolean;
+  preserveMissingSessionRoute?: boolean;
   sessionExists: boolean;
   sessionsFetching: boolean;
   sessionsLoading: boolean;
 }): boolean {
-  return Boolean(currentId && !isDraftSession && !sessionExists && !sessionsFetching && !sessionsLoading);
+  return Boolean(
+    currentId &&
+      !isDraftSession &&
+      !preserveMissingSessionRoute &&
+      !sessionExists &&
+      !sessionsFetching &&
+      !sessionsLoading
+  );
 }
 
 function currentShellUrl(): string {
@@ -71,6 +81,7 @@ function normalizedSettingsReturnPath(value: string | null, fallback: string): s
 export function useAppShellNavigation({
   primaryAgentSession,
   projectsLoading,
+  preserveMissingSessionRoute,
   routedProjectId,
   routedProjectInList,
   routedProjectSessionId,
@@ -201,6 +212,7 @@ export function useAppShellNavigation({
       shouldResetMissingSessionRoute({
         currentId,
         isDraftSession: Boolean(currentId && draftChatSessionIds.has(currentId)),
+        preserveMissingSessionRoute,
         sessionExists: Boolean(currentId && sessions.some((session) => session.id === currentId)),
         sessionsFetching,
         sessionsLoading
@@ -208,7 +220,15 @@ export function useAppShellNavigation({
     ) {
       setSessionUrl(null);
     }
-  }, [sessions, sessionsFetching, sessionsLoading, currentId, setSessionUrl, draftChatSessionIds]);
+  }, [
+    sessions,
+    sessionsFetching,
+    sessionsLoading,
+    currentId,
+    setSessionUrl,
+    draftChatSessionIds,
+    preserveMissingSessionRoute
+  ]);
 
   useEffect(() => {
     if (!routedProjectId) return;

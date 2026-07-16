@@ -345,7 +345,7 @@ function buildArgSuggestions({
   if (!arg) return [];
   const prefix = state.prefix.toLowerCase();
   const insertPrefix = [baseInsert, ...state.committed].join(' ');
-  const insertValue = (value: string) => `${insertPrefix} ${value}`.trim();
+  const insertValue = (value: string) => `${insertPrefix} ${value} `;
 
   if (arg.type === 'enum') {
     return (arg.values ?? [])

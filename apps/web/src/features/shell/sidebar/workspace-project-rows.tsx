@@ -151,6 +151,9 @@ export function ProjectSessionTreeRow({
   const archiveSession = useCallback(() => {
     void actions.archiveProjectSession(projectId, session.id);
   }, [actions, projectId, session.id]);
+  const deleteSession = useCallback(() => {
+    void actions.deleteProjectSession(projectId, session.id);
+  }, [actions, projectId, session.id]);
   const openSession = useCallback(
     () => actions.openProjectSession(projectId, session.id),
     [actions, projectId, session.id]
@@ -173,9 +176,16 @@ export function ProjectSessionTreeRow({
         label: t('web.workplace.archiveSession'),
         onSelect: archiveSession,
         shortcut: 'A'
+      },
+      {
+        icon: Delete02Icon,
+        label: t('web.sidebar.deleteSession'),
+        onSelect: deleteSession,
+        shortcut: 'D',
+        variant: 'destructive'
       }
     ],
-    [archiveSession, session.pinned, t, togglePinned]
+    [archiveSession, deleteSession, session.pinned, t, togglePinned]
   );
 
   return (
@@ -222,6 +232,9 @@ export function PinnedSessionTreeRow({
   const archiveSession = useCallback(() => {
     void actions.archiveProjectSession(projectId, session.id);
   }, [actions, projectId, session.id]);
+  const deleteSession = useCallback(() => {
+    void actions.deleteProjectSession(projectId, session.id);
+  }, [actions, projectId, session.id]);
   const openSession = useCallback(() => {
     onProjectSessionOpened(projectId);
     actions.openProjectSession(projectId, session.id);
@@ -244,9 +257,16 @@ export function PinnedSessionTreeRow({
         label: t('web.workplace.archiveSession'),
         onSelect: archiveSession,
         shortcut: 'A'
+      },
+      {
+        icon: Delete02Icon,
+        label: t('web.sidebar.deleteSession'),
+        onSelect: deleteSession,
+        shortcut: 'D',
+        variant: 'destructive'
       }
     ],
-    [archiveSession, t, togglePinned]
+    [archiveSession, deleteSession, t, togglePinned]
   );
 
   return (

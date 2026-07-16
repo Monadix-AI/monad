@@ -217,8 +217,6 @@ CREATE TABLE `sessions` (
 	`owner_principal_id` text NOT NULL,
 	`state` text NOT NULL,
 	`agent_ids` text DEFAULT '[]' NOT NULL,
-	`parent_session_id` text,
-	`branched_at_message_id` text,
 	`archived` integer DEFAULT 0 NOT NULL,
 	`restore_count` integer DEFAULT 0 NOT NULL,
 	`model` text,
@@ -235,7 +233,6 @@ CREATE TABLE `sessions` (
 	`updated_at` text NOT NULL
 );
 --> statement-breakpoint
-CREATE INDEX `idx_sessions_parent` ON `sessions` (`parent_session_id`);--> statement-breakpoint
 CREATE INDEX `idx_sessions_project` ON `sessions` (`project_id`);--> statement-breakpoint
 CREATE TABLE `tasks` (
 	`id` text PRIMARY KEY NOT NULL,

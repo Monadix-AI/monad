@@ -20,7 +20,7 @@ const echoTool = {
 function storeRepo(store: ReturnType<typeof createStore>) {
   const now = () => new Date().toISOString();
   return {
-    list: (sessionId: string) => store.listMessagesWithLineage(sessionId) as ChatMessage[],
+    list: (sessionId: string) => store.listMessages(sessionId) as ChatMessage[],
     append: (m: ChatMessage) =>
       store.insertMessage(m.id, m.sessionId, m.text, m.createdAt, m.role, {
         type: m.type,
@@ -50,7 +50,6 @@ function fixtureSession(id: SessionId): Session {
     ownerPrincipalId: newId('prn'),
     state: 'active',
     agentIds: [],
-    parentSessionId: null,
     archived: false,
     restoreCount: 0,
     usage: {

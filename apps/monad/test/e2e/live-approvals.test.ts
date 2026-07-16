@@ -232,7 +232,7 @@ describe.skipIf(!KEY)(`live model approvals (${MODEL})`, () => {
           const resolved = events.filter((e) => e.type === 'tool.approval_resolved');
           expect(resolved.length).toBeGreaterThan(0);
           expect(allowOf(resolved[0] as Event)).toBe(false);
-          expect((resolved[0]?.payload as { reason?: string }).reason).toBe('timeout');
+          expect((resolved[0]?.payload as { reason?: string } | undefined)?.reason).toBe('timeout');
           expect(runs).not.toContain('TIMEOUT'); // expired → run() never reached
         },
         { timeout: TIMEOUT, retry: 2 }

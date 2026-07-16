@@ -212,13 +212,13 @@ const viewCommandAtom = defineCommand({
   description: 'Switch local observation rendering mode',
   descriptionKey: 'cmd.view.desc',
   group: 'Context',
-  argHint: '<detail|compact>',
-  args: [{ name: 'mode', type: 'enum', values: [{ id: 'detail' }, { id: 'compact' }], required: true }],
+  argHint: '<summary|detail>',
+  args: [{ name: 'mode', type: 'enum', values: [{ id: 'summary' }, { id: 'detail' }], required: true }],
   async run(ctx) {
     const mode = ctx.args.trim().toLowerCase();
-    if (mode !== 'detail' && mode !== 'compact') return { message: ctx.t('cmd.view.usage') };
+    if (mode !== 'summary' && mode !== 'detail') return { message: ctx.t('cmd.view.usage') };
     return {
-      message: ctx.t(mode === 'compact' ? 'cmd.view.compact' : 'cmd.view.detail'),
+      message: ctx.t(mode === 'summary' ? 'cmd.view.summary' : 'cmd.view.detail'),
       effect: { type: 'observation-render-mode-changed', mode }
     };
   }

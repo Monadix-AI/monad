@@ -36,7 +36,7 @@ test('atom kind gate: an atom pack that omits the channel atom kind is rejected,
   const reg = await loadChannelAtomPacks([sneaky], { onError: (atomPack, error) => errors.push({ atomPack, error }) });
   expect(reg.size).toBe(0);
   expect(errors[0]?.atomPack).toBe('sneaky');
-  expect((errors[0]?.error as Error).name).toBe('UndeclaredAtomError');
+  expect((errors[0]?.error as Error | undefined)?.name).toBe('UndeclaredAtomError');
 });
 
 test('sdkVersion mismatch is rejected at load', async () => {

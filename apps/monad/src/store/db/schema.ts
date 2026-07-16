@@ -16,8 +16,6 @@ export const sessions = sqliteTable(
     ownerPrincipalId: text('owner_principal_id').notNull(),
     state: text('state').notNull(),
     agentIds: text('agent_ids').notNull().default('[]'),
-    parentSessionId: text('parent_session_id'),
-    branchedAtMessageId: text('branched_at_message_id'),
     archived: integer('archived').notNull().default(0),
     restoreCount: integer('restore_count').notNull().default(0),
     model: text('model'),
@@ -33,7 +31,7 @@ export const sessions = sqliteTable(
     createdAt: text('created_at').notNull(),
     updatedAt: text('updated_at').notNull()
   },
-  (table) => [index('idx_sessions_parent').on(table.parentSessionId), index('idx_sessions_project').on(table.projectId)]
+  (table) => [index('idx_sessions_project').on(table.projectId)]
 );
 
 export const sessionMembers = sqliteTable(

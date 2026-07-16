@@ -3,8 +3,6 @@ import type { ChannelAccessPolicy, ChannelId, ChannelInstanceView } from '@monad
 import {
   Cancel01Icon,
   CheckIcon,
-  ChevronDownIcon,
-  ChevronRightIcon,
   Delete02Icon,
   Key01Icon,
   LoaderPinwheelIcon,
@@ -26,6 +24,7 @@ import {
   cn,
   Input,
   Label,
+  MorphChevron,
   Select,
   SelectContent,
   SelectItem,
@@ -265,17 +264,10 @@ function ChannelCard({
         onClick={() => setOpen((v) => !v)}
         type="button"
       >
-        {open ? (
-          <HugeiconsIcon
-            className="size-4 text-muted-foreground"
-            icon={ChevronDownIcon}
-          />
-        ) : (
-          <HugeiconsIcon
-            className="size-4 text-muted-foreground"
-            icon={ChevronRightIcon}
-          />
-        )}
+        <MorphChevron
+          className="size-4 text-muted-foreground"
+          expanded={open}
+        />
         <Badge
           className="text-[10px]"
           variant="secondary"

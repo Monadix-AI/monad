@@ -448,16 +448,14 @@ export class MonadAcpAgent {
     logAcpCall('cancel', { sessionId, durationMs: Math.round(performance.now() - t0) });
   }
 
-  /** monad-specific extension methods over ACP's `_meta`/ext channel. Restore + provenance have no
-   * ACP equivalent; model gateway lets a client pick a profile through monad. Credential mutation
+  /** monad-specific extension methods over ACP's `_meta`/ext channel. Restore has no ACP
+   * equivalent; model gateway lets a client pick a profile through monad. Credential mutation
    * is intentionally NOT exposed here — it stays on the trusted native/TUI path. */
   async extMethod(method: string, params: Record<string, unknown>): Promise<Record<string, unknown>> {
     const sid = params.sessionId as SessionId;
     switch (method) {
       case '_monad/session.restore':
         return { ...(await this.handlers.session.restore({ id: sid, toMessageId: params.toMessageId as MessageId })) };
-      case '_monad/session.provenance':
-        return { ...(await this.handlers.session.provenance({ id: sid })) };
       case '_monad/model.listProviders':
         return { ...(await this.handlers.model.listProviders()) };
       case '_monad/model.listModels':

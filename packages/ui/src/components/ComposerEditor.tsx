@@ -279,16 +279,14 @@ export const ComposerEditor = forwardRef(function ComposerEditor(
       },
       handleKeyDown(_view, event) {
         if (onKeyDownRef.current?.(event)) return true;
-        const currentText = editor ? tiptapDocToSerializedText(editor.getJSON()) : '';
-        const action = composerEnterAction(
+        const action = composerKeyDownAction(
           {
-            characterCount: currentText.length,
-            hasMultipleLines: currentText.includes('\n'),
             key: event.key,
             primaryModifier: primaryModifierPressed(event),
             shiftKey: event.shiftKey
           },
-          sendShortcut
+          sendShortcut,
+          () => (editor ? tiptapDocToSerializedText(editor.getJSON()) : '')
         );
         if (action === 'submit') {
           event.preventDefault();
@@ -486,6 +484,23 @@ export function composerEnterAction(
 ): 'ignore' | 'line-break' | 'submit' {
   if (intent.key !== 'Enter') return 'ignore';
   return shouldSubmitComposerKey(intent, shortcut) ? 'submit' : 'line-break';
+}
+
+export function composerKeyDownAction(
+  intent: Pick<ComposerKeyIntent, 'key' | 'primaryModifier' | 'shiftKey'>,
+  shortcut: ComposerSendShortcut,
+  readCurrentText: () => string
+): 'ignore' | 'line-break' | 'submit' {
+  if (intent.key !== 'Enter') return 'ignore';
+  const currentText = readCurrentText();
+  return composerEnterAction(
+    {
+      ...intent,
+      characterCount: currentText.length,
+      hasMultipleLines: currentText.includes('\n')
+    },
+    shortcut
+  );
 }
 
 function primaryModifierPressed(event: KeyboardEvent): boolean {

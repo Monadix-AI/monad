@@ -1,12 +1,6 @@
 import type { MemoryScopeQuery, ScopeKind } from '@monad/protocol';
 
-import {
-  ChevronDownIcon,
-  ChevronRightIcon,
-  DatabaseIcon,
-  Delete02Icon,
-  PlusSignIcon
-} from '@hugeicons/core-free-icons';
+import { DatabaseIcon, Delete02Icon, PlusSignIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
   factSelectors,
@@ -22,6 +16,7 @@ import {
   Badge,
   Button,
   Input,
+  MorphChevron,
   Select,
   SelectContent,
   SelectItem,
@@ -188,17 +183,10 @@ export function FactsView() {
                 onClick={() => setRawOpen((v) => !v)}
                 type="button"
               >
-                {rawOpen ? (
-                  <HugeiconsIcon
-                    className="size-3.5"
-                    icon={ChevronDownIcon}
-                  />
-                ) : (
-                  <HugeiconsIcon
-                    className="size-3.5"
-                    icon={ChevronRightIcon}
-                  />
-                )}
+                <MorphChevron
+                  className="size-3.5"
+                  expanded={rawOpen}
+                />
                 {t('web.memory.editRaw')}
               </button>
               {rawOpen ? (

@@ -32,6 +32,7 @@ interface SessionSidebarArchivedConfig {
   chatSessions: ComponentProps<typeof ArchivedSidebarItems>['chatSessions'];
   loading?: boolean;
   onBack: () => void;
+  onDeleteSession: ComponentProps<typeof ArchivedSidebarItems>['onDeleteSession'];
   onOpenProjectSession: ComponentProps<typeof ArchivedSidebarItems>['onOpenProjectSession'];
   onOpenSession: ComponentProps<typeof ArchivedSidebarItems>['onOpenSession'];
   onUnarchiveSession: ComponentProps<typeof ArchivedSidebarItems>['onUnarchiveSession'];
@@ -122,6 +123,7 @@ export function SessionSidebarPanels({
                 chatSessions={archived.chatSessions}
                 loading={archived.loading}
                 onBack={archived.onBack}
+                onDeleteSession={archived.onDeleteSession}
                 onOpenProjectSession={archived.onOpenProjectSession}
                 onOpenSession={archived.onOpenSession}
                 onUnarchiveSession={archived.onUnarchiveSession}

@@ -104,10 +104,9 @@ monad session send <sessionId> <text|-> [--no-stream] [--detach]
                                                  send a message (--detach fires and forgets)
 monad session watch <sessionId>                  stream a session's events (alias: tail)
 monad session search [--mode <m>] <query>        search history (keyword | semantic | hybrid)
-monad session branch <sessionId> [title] [atMessageId]   fork a child session
+monad session branch <sessionId> [title] [atMessageId]   copy history into a new session
 monad session restore <sessionId> <toMessageId>  rewind to a message checkpoint
 monad session reset <sessionId>                  clear messages, keep the session
-monad session tree <sessionId>                   show session lineage (aliases: provenance, lineage)
 monad session abort <sessionId>                  cancel an in-flight run
 monad session rm <sessionId>                     delete a session and its data
 ```

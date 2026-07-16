@@ -1,12 +1,10 @@
-// Session + workplace-project CRUD, branch provenance, and per-session usage accumulation. Split out
-// of index.ts. Functions take the drizzle handle (`db`) for schema-typed queries and/or the raw
-// bun:sqlite handle (`sqlite`) for recursive CTEs and multi-table transactions.
+// Session + workplace-project CRUD and per-session usage accumulation. Split out of index.ts.
 
 import type { Database } from 'bun:sqlite';
 import type { Session, SessionState, TokenUsage, WorkplaceProject } from '@monad/protocol';
 import type { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite';
 
-import { and, count, desc, eq, inArray } from 'drizzle-orm';
+import { and, count, desc, eq, or, sql } from 'drizzle-orm';
 
 import { rowToSession, rowToWorkplaceProject } from './row-mappers.ts';
 import { sessions, workplaceProjects } from './schema.ts';
@@ -20,6 +18,7 @@ export interface ListSessionsFilter {
   /** Scope to sessions under one Workplace Project (Track B); omitted → plain chat sessions are not
    *  filtered out, so callers that only want chat sessions must also exclude rows with a projectId. */
   projectId?: string;
+  query?: string;
   limit?: number;
   offset?: number;
 }
@@ -54,8 +53,6 @@ export function insertSession(db: Db, s: Session): void {
       ownerPrincipalId: s.ownerPrincipalId,
       state: s.state,
       agentIds: JSON.stringify(s.agentIds),
-      parentSessionId: s.parentSessionId ?? null,
-      branchedAtMessageId: s.branchedAtMessageId ?? null,
       archived: s.archived ? 1 : 0,
       restoreCount: s.restoreCount,
       model: serializeSessionModelSelection({ model: s.model, effort: s.reasoningEffort }),
@@ -75,10 +72,7 @@ export function insertSession(db: Db, s: Session): void {
 }
 
 export function listSessions(db: Db, filter: ListSessionsFilter = {}): Session[] {
-  const conds = [];
-  if (filter.archived !== undefined) conds.push(eq(sessions.archived, filter.archived ? 1 : 0));
-  if (filter.state !== undefined) conds.push(eq(sessions.state, filter.state));
-  if (filter.projectId !== undefined) conds.push(eq(sessions.projectId, filter.projectId));
+  const conds = sessionFilterConditions(filter);
   const where = conds.length === 1 ? conds[0] : conds.length > 1 ? and(...conds) : undefined;
   const base = db.select().from(sessions).where(where).orderBy(desc(sessions.updatedAt), desc(sessions.id));
   const limited = filter.limit !== undefined ? base.limit(filter.limit) : base;
@@ -87,13 +81,33 @@ export function listSessions(db: Db, filter: ListSessionsFilter = {}): Session[]
 }
 
 export function countSessions(db: Db, filter: Omit<ListSessionsFilter, 'limit' | 'offset'> = {}): number {
+  const conds = sessionFilterConditions(filter);
+  const where = conds.length === 1 ? conds[0] : conds.length > 1 ? and(...conds) : undefined;
+  const result = db.select({ count: count() }).from(sessions).where(where).get();
+  return result?.count ?? 0;
+}
+
+function sessionFilterConditions(filter: Omit<ListSessionsFilter, 'limit' | 'offset'>) {
   const conds = [];
   if (filter.archived !== undefined) conds.push(eq(sessions.archived, filter.archived ? 1 : 0));
   if (filter.state !== undefined) conds.push(eq(sessions.state, filter.state));
   if (filter.projectId !== undefined) conds.push(eq(sessions.projectId, filter.projectId));
-  const where = conds.length === 1 ? conds[0] : conds.length > 1 ? and(...conds) : undefined;
-  const result = db.select({ count: count() }).from(sessions).where(where).get();
-  return result?.count ?? 0;
+  const query = filter.query?.trim();
+  if (query) {
+    const pattern = `%${query.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_')}%`;
+    conds.push(
+      or(
+        sql`lower(${sessions.title}) LIKE lower(${pattern}) ESCAPE '\\'`,
+        sql`lower(${sessions.id}) LIKE lower(${pattern}) ESCAPE '\\'`,
+        sql`EXISTS (
+          SELECT 1 FROM ${workplaceProjects}
+          WHERE ${workplaceProjects.id} = ${sessions.projectId}
+            AND lower(${workplaceProjects.title}) LIKE lower(${pattern}) ESCAPE '\\'
+        )`
+      )
+    );
+  }
+  return conds;
 }
 
 export function getSession(db: Db, id: string): Session | null {
@@ -256,58 +270,6 @@ export function clearMessages(sqlite: Database, db: Db, id: string): number {
     return row.n;
   });
   return tx(id);
-}
-
-/** Ancestors (root-first) + BFS descendants. Excludes `id` itself — caller adds it. */
-export function provenance(sqlite: Database, db: Db, id: string): { ancestors: Session[]; descendants: Session[] } {
-  if (!getSession(db, id)) return { ancestors: [], descendants: [] };
-
-  // Collect ancestor IDs root-first via recursive CTE (depth DESC = farthest ancestor first).
-  const ancIds = (
-    sqlite
-      .query(
-        `WITH RECURSIVE anc(id, depth) AS (
-           SELECT parent_session_id, 1 FROM sessions WHERE id = $id AND parent_session_id IS NOT NULL
-           UNION ALL
-           SELECT s.parent_session_id, anc.depth + 1
-           FROM sessions s JOIN anc ON s.id = anc.id
-           WHERE s.parent_session_id IS NOT NULL
-         )
-         SELECT id FROM anc ORDER BY depth DESC`
-      )
-      .all({ $id: id }) as { id: `ses_${string}` }[]
-  ).map((r) => r.id);
-
-  // Collect all descendant IDs via recursive CTE.
-  const descIds = (
-    sqlite
-      .query(
-        `WITH RECURSIVE desc(id) AS (
-           SELECT id FROM sessions WHERE parent_session_id = $id
-           UNION ALL
-           SELECT s.id FROM sessions s JOIN desc ON s.parent_session_id = desc.id
-         )
-         SELECT id FROM desc ORDER BY id`
-      )
-      .all({ $id: id }) as { id: `ses_${string}` }[]
-  ).map((r) => r.id);
-
-  // Fetch full rows via drizzle (returns camelCase-mapped SessionRow) and re-apply CTE order.
-  const fetchOrdered = (ids: `ses_${string}`[]): Session[] => {
-    if (!ids.length) return [];
-    const byId = new Map(
-      db
-        .select()
-        .from(sessions)
-        .where(inArray(sessions.id, ids))
-        .all()
-        .map(rowToSession)
-        .map((s) => [s.id, s])
-    );
-    return ids.map((i) => byId.get(i)).filter((s): s is Session => s !== undefined);
-  };
-
-  return { ancestors: fetchOrdered(ancIds), descendants: fetchOrdered(descIds) };
 }
 
 /** Accumulate one turn's REAL usage + cost into a session (per-session, resettable). Missing

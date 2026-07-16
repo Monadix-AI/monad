@@ -5,7 +5,6 @@ import {
   BrainIcon,
   CancelCircleIcon,
   CheckmarkCircle02Icon,
-  ChevronDownIcon,
   CircleIcon,
   Clock01Icon,
   Copy01Icon,
@@ -28,6 +27,7 @@ import { cn } from '../lib/utils';
 import { Badge } from './Badge';
 import { Button } from './Button';
 import { CodeBlock } from './CodeBlock';
+import { MorphChevron } from './MorphChevron';
 import { Tooltip, TooltipContent, TooltipTrigger } from './Tooltip';
 
 type MotionHTMLProps = MotionProps & Record<string, unknown>;
@@ -379,9 +379,9 @@ export const ReasoningTrigger = memo(
             {getThinkingMessage
               ? getThinkingMessage(isStreaming, duration)
               : defaultThinkingMessage(labels, isStreaming, duration)}
-            <HugeiconsIcon
-              className={cn('size-4 transition-transform', isOpen ? 'rotate-180' : 'rotate-0')}
-              icon={ChevronDownIcon}
+            <MorphChevron
+              className="size-4"
+              expanded={isOpen}
             />
           </>
         )}
@@ -421,12 +421,36 @@ export type ToolPart = {
 
 export type ToolProps = ComponentProps<typeof Collapsible>;
 
-export const Tool = ({ className, ...props }: ToolProps) => (
-  <Collapsible
-    className={cn('group/tool not-prose mb-4 w-full rounded-md border', className)}
-    {...props}
-  />
-);
+interface ToolContextValue {
+  isOpen: boolean;
+}
+
+const ToolContext = React.createContext<ToolContextValue | null>(null);
+
+function useTool() {
+  const context = React.useContext(ToolContext);
+  if (!context) throw new Error('Tool components must be used within Tool');
+  return context;
+}
+
+export const Tool = ({ className, defaultOpen, onOpenChange, open, ...props }: ToolProps) => {
+  const [isOpen, setIsOpen] = useControllableState<boolean>({
+    defaultProp: defaultOpen ?? false,
+    onChange: onOpenChange,
+    prop: open
+  });
+
+  return (
+    <ToolContext.Provider value={{ isOpen }}>
+      <Collapsible
+        className={cn('group/tool not-prose mb-4 w-full rounded-md border', className)}
+        onOpenChange={setIsOpen}
+        open={isOpen}
+        {...props}
+      />
+    </ToolContext.Provider>
+  );
+};
 
 export type ToolStatusLabels = Partial<Record<ToolState, string>>;
 
@@ -522,6 +546,7 @@ export const ToolHeader = ({
   ...props
 }: ToolHeaderProps) => {
   const derivedName = type === 'dynamic-tool' ? toolName : type.split('-').slice(1).join('-');
+  const { isOpen } = useTool();
 
   return (
     <CollapsibleTrigger
@@ -537,9 +562,9 @@ export const ToolHeader = ({
         <span className="font-medium text-sm">{title ?? derivedName}</span>
         {showStatus ? getStatusBadge(state, statusLabels) : null}
       </div>
-      <HugeiconsIcon
-        className="size-4 text-current transition-[color,transform] group-data-[state=open]/trigger:rotate-180"
-        icon={ChevronDownIcon}
+      <MorphChevron
+        className="size-4 text-current"
+        expanded={isOpen}
       />
     </CollapsibleTrigger>
   );

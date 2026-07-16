@@ -9,7 +9,6 @@ import { command as restore } from '../../src/commands/session/restore.ts';
 import { command as rm } from '../../src/commands/session/rm.ts';
 import { command as search } from '../../src/commands/session/search.ts';
 import { command as show } from '../../src/commands/session/show.ts';
-import { command as tree } from '../../src/commands/session/tree.ts';
 import { CliError, type CommandContext, EXIT } from '../../src/commands/types.ts';
 
 // ── helpers ────────────────────────────────────────────────────────────────────
@@ -126,7 +125,7 @@ test('session abort: throws usage error when session id is missing', async () =>
 
 // ── session branch ────────────────────────────────────────────────────────────────
 
-test('session branch: forks a child session', async () => {
+test('session branch: creates an independent session snapshot', async () => {
   const client = {
     treaty: {
       v1: {
@@ -239,47 +238,6 @@ test('session show: throws usage error when session id is missing', async () => 
   await expect(silently(() => show.run(ctx([], {}, client)))).rejects.toBeInstanceOf(CliError);
 });
 
-// ── session tree ────────────────────────────────────────────────────────────────
-
-test('session tree: shows lineage with ancestors and descendants', async () => {
-  const result = {
-    ancestors: [{ id: 'ses_000000000000', title: 'Root' }],
-    self: { id: 'ses_100000000000', title: 'Current' },
-    descendants: [{ id: 'ses_200000000000', title: 'Child' }]
-  };
-  const client = {
-    treaty: {
-      v1: {
-        sessions: (_: unknown) => ({ provenance: { get: async () => ok(result) } })
-      }
-    }
-  };
-  await silently(() => tree.run(ctx(['ses_100000000000'], {}, client)));
-});
-
-test('session tree: handles root session (no ancestors or descendants)', async () => {
-  const result = {
-    ancestors: [],
-    self: { id: 'ses_100000000000', title: 'Root' },
-    descendants: []
-  };
-  const client = {
-    treaty: {
-      v1: {
-        sessions: (_: unknown) => ({ provenance: { get: async () => ok(result) } })
-      }
-    }
-  };
-  await silently(() => tree.run(ctx(['ses_100000000000'], {}, client)));
-});
-
-test('session tree: throws usage error when session id is missing', async () => {
-  const client = {
-    treaty: { v1: { sessions: (_: unknown) => ({ provenance: { get: async () => ok({}) } }) } }
-  };
-  await expect(silently(() => tree.run(ctx([], {}, client)))).rejects.toBeInstanceOf(CliError);
-});
-
 // ── session search ────────────────────────────────────────────────────────────────
 
 test('session search: returns hits for keyword query', async () => {
@@ -366,6 +324,5 @@ test('usage errors always carry EXIT.USAGE code', async () => {
   expect(await check(() => reset.run(ctx([], {}, noClient)))).toBe(EXIT.USAGE);
   expect(await check(() => restore.run(ctx(['ses_100000000000'], {}, noClient)))).toBe(EXIT.USAGE);
   expect(await check(() => show.run(ctx([], {}, noClient)))).toBe(EXIT.USAGE);
-  expect(await check(() => tree.run(ctx([], {}, noClient)))).toBe(EXIT.USAGE);
   expect(await check(() => search.run(ctx([], {}, noClient)))).toBe(EXIT.USAGE);
 });

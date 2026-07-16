@@ -58,7 +58,7 @@ test('POST /messages with Accept: text/event-stream streams the round inline the
   const finals = events.filter((e) => e.type === 'agent.message');
   expect(tokens.length).toBe(3);
   expect(finals.length).toBe(1);
-  expect((finals[0]?.payload as { text: string }).text).toBe('Hello!');
+  expect((finals[0]?.payload as { text: string } | undefined)?.text).toBe('Hello!');
 });
 
 test('fire-and-forget POST /messages (no Accept) returns {accepted:true}', async () => {

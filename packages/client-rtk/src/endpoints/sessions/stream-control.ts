@@ -10,7 +10,6 @@ const SESSION_LIST_EVENTS: ReadonlySet<Event['type']> = new Set([
   'session.created',
   'session.updated',
   'session.deleted',
-  'session.branched',
   'session.restored'
 ] as const satisfies ReadonlyArray<Event['type']>);
 

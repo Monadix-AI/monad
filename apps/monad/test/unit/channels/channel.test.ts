@@ -165,9 +165,9 @@ test('renderer (streaming): sends a draft then edits to the final text', async (
   expect(edits.at(-1)).toBe('hello world'); // finalized to the authoritative text
 });
 
-test('renderer (compact): edit-capable channels buffer tokens and send only the final message', async () => {
+test('renderer (summary): edit-capable channels buffer tokens and send only the final message', async () => {
   const { adapter, sends, edits } = makeCapturingAdapter(true);
-  const r = createRenderer({ adapter, chatId: 'c1', log: () => {}, t, renderMode: 'compact' });
+  const r = createRenderer({ adapter, chatId: 'c1', log: () => {}, t, renderMode: 'summary' });
   r.consume(tokenEvent('hel', 0));
   r.consume(tokenEvent('lo', 1));
   r.consume(messageEvent('hello world'));
@@ -709,7 +709,7 @@ test('mirror: no forwarding when outboundMirror is false', async () => {
   expect(h.sends.length).toBe(countBefore); // adapter.send never called by the mirror
 });
 
-test('channel: /view compact makes direct and mirrored channel replies final-message-only', async () => {
+test('channel: /view summary makes direct and mirrored channel replies final-message-only', async () => {
   const h = await makeMirrorHarness(true);
   const sid = h.sessionId();
 
@@ -719,17 +719,17 @@ test('channel: /view compact makes direct and mirrored channel replies final-mes
       userId: 'u1',
       kind: 'command',
       command: 'view',
-      commandArgs: ['compact'],
-      text: '/view compact'
+      commandArgs: ['summary'],
+      text: '/view summary'
     })
   );
   await h.flush();
 
   const countBeforeDirect = h.sends.length;
   const editsBeforeDirect = h.edits.length;
-  h.push(inbound({ chatId: 'chat1', userId: 'u1', text: 'direct after compact' }));
+  h.push(inbound({ chatId: 'chat1', userId: 'u1', text: 'direct after summary' }));
   await h.flush();
-  expect(h.sends.at(-1)?.content).toBe('reply: direct after compact');
+  expect(h.sends.at(-1)?.content).toBe('reply: direct after summary');
   expect(h.sends.length).toBe(countBeforeDirect + 1);
   expect(h.edits.length).toBe(editsBeforeDirect);
 

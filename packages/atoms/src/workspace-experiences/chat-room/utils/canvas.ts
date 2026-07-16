@@ -149,10 +149,8 @@ export function toChatRoomCanvas(
     if (s.status !== 'running') return false;
     return s.tool === 'agent_acp_delegate' || s.tool.startsWith('acp:');
   });
-  const typingAgentName =
-    typeof (runningDelegation?.input as { agent?: unknown } | undefined)?.agent === 'string'
-      ? ((runningDelegation?.input as { agent: string }).agent ?? 'monad')
-      : 'monad';
+  const delegationInput = runningDelegation?.input as { agent?: unknown } | undefined;
+  const typingAgentName = typeof delegationInput?.agent === 'string' ? delegationInput.agent : 'monad';
   const hasStreamingMessage = messages.some((message) => message.streaming && (message.text || message.reasoning));
   const typing =
     monadStreaming && !hasStreamingMessage

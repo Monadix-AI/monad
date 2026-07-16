@@ -7,7 +7,6 @@ import { sessionOriginExtSchema } from '@monad/protocol';
 /** Extension methods advertised in `initialize` under `_meta.monad.extMethods`. */
 export const MONAD_EXT_METHODS = [
   '_monad/session.restore',
-  '_monad/session.provenance',
   '_monad/model.listProviders',
   '_monad/model.listModels',
   '_monad/model.listProfiles',

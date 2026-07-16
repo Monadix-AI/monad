@@ -12,6 +12,7 @@ import { SessionComposerRegion } from './SessionComposerRegion';
 import { SessionHeader } from './SessionHeader';
 import { SessionInspectorRegion } from './SessionInspectorRegion';
 import { SessionTranscript } from './SessionTranscript';
+import { SessionProvider } from './session-context';
 import { useSessionUiStore } from './session-ui-store';
 
 export function SessionRoute({ model }: { model: SessionRouteModel }) {
@@ -21,44 +22,38 @@ export function SessionRoute({ model }: { model: SessionRouteModel }) {
   const setSkillPreview = useSessionUiStore((state) => state.setSkillPreview);
   const openSkillPreview = useCallback(
     async (id: string) => {
-      const command = model.composer.commands.find((item) => item.type === 'skill' && item.id === id);
+      const command = model.commands.find((item) => item.type === 'skill' && item.id === id);
       const meta = skillCommandMeta(command, t);
       if (!command || !meta) return;
       const content = await loadSkillContent({ id: command.id, name: command.name }, monadClient).catch(() => null);
       if (content) setSkillPreview({ id: command.id, name: content.name, title: meta.label, content: content.content });
     },
-    [model.composer.commands, monadClient, setSkillPreview, t]
+    [model.commands, monadClient, setSkillPreview, t]
+  );
+  const sessionContext = useMemo(
+    () => ({
+      commands: model.commands,
+      identity: model.identity,
+      onSkillPreview: (id: string) => void openSkillPreview(id)
+    }),
+    [model.commands, model.identity, openSkillPreview]
   );
 
+  if (model.identity.isDeleted) {
+    return (
+      <div className="flex min-h-0 flex-1 items-center justify-center px-6 text-center text-muted-foreground text-sm">
+        {t('web.sidebar.sessionDeleted')}
+      </div>
+    );
+  }
+
   return (
-    <>
+    <SessionProvider value={sessionContext}>
       <SessionConversationLayout
-        composer={
-          <SessionComposerRegion
-            identity={model.identity}
-            model={model.composer}
-            onSkillPreview={(id) => void openSkillPreview(id)}
-          />
-        }
-        header={
-          <SessionHeader
-            identity={model.identity}
-            inspector={model.inspector}
-          />
-        }
-        inspector={
-          <SessionInspectorRegion
-            identity={model.identity}
-            inspector={model.inspector}
-          />
-        }
-        transcript={
-          <SessionTranscript
-            identity={model.identity}
-            model={model.transcript}
-            onSkillPreview={(id) => void openSkillPreview(id)}
-          />
-        }
+        composer={<SessionComposerRegion model={model.composer} />}
+        header={<SessionHeader />}
+        inspector={<SessionInspectorRegion inspector={model.inspector} />}
+        transcript={<SessionTranscript model={model.transcript} />}
       />
       <SkillEditorDialog
         editor={skillPreview}
@@ -67,7 +62,7 @@ export function SessionRoute({ model }: { model: SessionRouteModel }) {
         onClose={() => setSkillPreview(null)}
         onSaved={() => setSkillPreview(null)}
       />
-    </>
+    </SessionProvider>
   );
 }
 
@@ -106,7 +101,7 @@ function SessionConversationLayout({
   return (
     <>
       {header}
-      <div className="min-h-0 flex-1 overflow-hidden lg:flex">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
         <div
           className="relative flex min-h-0 flex-1 overflow-hidden"
           style={bodyStyle}

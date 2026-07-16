@@ -68,7 +68,8 @@ export function createLifecycleHandlers(ctx: SessionContext) {
     deps: { store, agent, ownerPrincipalId, paths, oversight, delegation, sessionSandbox, hooks, hookCwd },
     aborts,
     requireSession,
-    emitLifecycle
+    emitLifecycle,
+    waitForRun
   } = ctx;
 
   const { spawnManagedSessionMember } = createManagedExternalAgentJoin(ctx);
@@ -95,7 +96,7 @@ export function createLifecycleHandlers(ctx: SessionContext) {
   const isPendingSessionDelete = (id: SessionId) => pendingSessionDeletes.has(id);
 
   const listVisibleSessions = (
-    filter: { archived?: boolean; projectId?: ProjectId; state?: SessionState },
+    filter: { archived?: boolean; projectId?: ProjectId; query?: string; state?: SessionState },
     limit: number,
     offset: number
   ) => {
@@ -168,10 +169,12 @@ export function createLifecycleHandlers(ctx: SessionContext) {
   }
 
   return {
-    async list(params: { archived?: boolean; state?: SessionState; limit?: number; offset?: number } = {}) {
+    async list(
+      params: { archived?: boolean; query?: string; state?: SessionState; limit?: number; offset?: number } = {}
+    ) {
       const limit = params.limit ?? 50;
       const offset = params.offset ?? 0;
-      const filter = { archived: params.archived, state: params.state };
+      const filter = { archived: params.archived, query: params.query, state: params.state };
       return listVisibleSessions(filter, limit, offset);
     },
 
@@ -392,9 +395,8 @@ export function createLifecycleHandlers(ctx: SessionContext) {
     async abort({ id }: { id: SessionId }) {
       const current = requireSession(id);
       const controller = aborts.get(id);
-      const aborted = controller !== undefined;
+      const aborted = controller !== undefined && !controller.signal.aborted;
       controller?.abort();
-      aborts.delete(id);
       oversight?.cancelSession(id, 'session_aborted');
       delegation?.cancelSession(id, 'session_aborted');
       if (aborted && canTransition(current.state, 'paused')) {
@@ -408,20 +410,15 @@ export function createLifecycleHandlers(ctx: SessionContext) {
       id,
       limit,
       before,
-      includeInactive,
-      includeAncestors
+      includeInactive
     }: {
       id: SessionId;
       limit?: number;
       before?: string;
       includeInactive?: boolean;
-      includeAncestors?: boolean;
     }) {
       requireSession(id);
-      if (!includeAncestors) {
-        return { messages: store.listMessages(id, { limit, before, includeInactive }) };
-      }
-      return { messages: store.listMessagesWithLineage(id, { includeInactive }) };
+      return { messages: store.listMessages(id, { limit, before, includeInactive }) };
     },
 
     async uiItems({
@@ -430,8 +427,7 @@ export function createLifecycleHandlers(ctx: SessionContext) {
       before,
       after,
       around,
-      includeInactive,
-      includeAncestors
+      includeInactive
     }: {
       id: SessionId;
       limit?: number;
@@ -439,15 +435,13 @@ export function createLifecycleHandlers(ctx: SessionContext) {
       after?: string;
       around?: string;
       includeInactive?: boolean;
-      includeAncestors?: boolean;
     }): Promise<ListUiItemsResponse> {
       requireSession(id);
       // `around` opens an inclusive window centred on a message; `after` pages forward
       // (oldest-first from the cursor); otherwise take the newest window (optionally older than
       // `before`) — all returned oldest→newest by listMessages.
-      const messages = includeAncestors
-        ? store.listMessagesWithLineage(id, { includeInactive })
-        : around !== undefined
+      const messages =
+        around !== undefined
           ? store.listMessages(id, { limit, around, includeInactive })
           : after !== undefined
             ? store.listMessages(id, { limit, after, includeInactive })
@@ -459,19 +453,15 @@ export function createLifecycleHandlers(ctx: SessionContext) {
       // it belongs to; the full lineage view takes them all. Cross-page overlap is harmless — the
       // client merges transcript items by key.
       const cliSessions = store.listExternalAgentSessionsForTranscriptTarget(id);
-      if (includeAncestors) projector.hydrateExternalAgentSessions(cliSessions);
-      else {
-        const oldestTs = messages.at(0)?.createdAt;
-        const newestTs = messages.at(-1)?.createdAt;
-        if (oldestTs !== undefined && newestTs !== undefined) {
-          projector.hydrateExternalAgentSessions(
-            cliSessions.filter((s) => s.startedAt >= oldestTs && s.startedAt <= newestTs)
-          );
-        }
+      const oldestTs = messages.at(0)?.createdAt;
+      const newestTs = messages.at(-1)?.createdAt;
+      if (oldestTs !== undefined && newestTs !== undefined) {
+        projector.hydrateExternalAgentSessions(
+          cliSessions.filter((s) => s.startedAt >= oldestTs && s.startedAt <= newestTs)
+        );
       }
       const snapshot = projector.snapshot();
       const items = snapshot.kind === 'snapshot' ? snapshot.items : [];
-      if (includeAncestors) return { items };
       const oldest = messages.at(0)?.id;
       const newest = messages.at(-1)?.id;
       const hasOlder =
@@ -488,40 +478,35 @@ export function createLifecycleHandlers(ctx: SessionContext) {
     async branch({ id, title, atMessageId, origin }: { id: SessionId; origin?: SessionOrigin } & BranchSessionRequest) {
       const parent = requireSession(id);
       assertBranchAllowed(parent, origin?.transport);
-      const target = atMessageId ? store.getMessage(id, atMessageId) : null;
-      if (atMessageId && !target) throw new HandlerError('invalid', `message not found: ${atMessageId}`);
-      const child = await agent.sessions.branch(
-        id,
-        ownerPrincipalId,
-        title ?? `${parent.title} (branch)`,
-        atMessageId,
-        origin
+      const sourceMessages = store.listMessages(id);
+      const targetIndex = atMessageId ? sourceMessages.findIndex((message) => message.id === atMessageId) : -1;
+      if (atMessageId && targetIndex < 0) throw new HandlerError('invalid', `message not found: ${atMessageId}`);
+      if (atMessageId && sourceMessages[targetIndex]?.role !== 'user') {
+        throw new HandlerError('invalid', 'branch target must be a user message');
+      }
+      const snapshot = (targetIndex >= 0 ? sourceMessages.slice(0, targetIndex + 1) : sourceMessages).filter(
+        (message) => message.type !== 'branch_source'
       );
+      const target = targetIndex >= 0 ? sourceMessages[targetIndex] : sourceMessages.at(-1);
+      const child = await agent.sessions.create(
+        title ?? `${parent.title} (branch)`,
+        ownerPrincipalId,
+        undefined,
+        origin,
+        parent.cwd
+      );
+      store.cloneMessages(child.id, snapshot);
       if (target) {
         const createdAt = new Date().toISOString();
         store.insertMessage(newId('msg'), child.id, '', createdAt, 'assistant', {
-          data: { messageId: target.id, sessionId: id },
+          data: { sessionTitle: parent.title },
           includeInContext: false,
           type: 'branch_source'
         });
-        if (target.role === 'user' || target.role === 'assistant') {
-          store.insertMessage(newId('msg'), child.id, target.text, createdAt, target.role, {
-            data: target.data,
-            includeInContext: false,
-            type: target.type
-          });
-        }
       }
-      log.info({ sessionId: child.id, parentSessionId: id, ...originLog(origin) }, 'session branched');
-      emitLifecycle(id, 'session.branched', { childId: child.id, atMessageId });
-      emitLifecycle(child.id, 'session.created', { title: child.title, parentSessionId: id });
+      log.info({ sessionId: child.id, ...originLog(origin) }, 'session branched');
+      emitLifecycle(child.id, 'session.created', { title: child.title });
       return { sessionId: child.id };
-    },
-
-    async provenance({ id }: { id: SessionId }) {
-      const self = requireSession(id);
-      const { ancestors, descendants } = store.provenance(id);
-      return { ancestors, self, descendants };
     },
 
     async restore({ id, toMessageId }: { id: SessionId } & RestoreSessionRequest) {
@@ -533,6 +518,13 @@ export function createLifecycleHandlers(ctx: SessionContext) {
       if (target.role !== 'user') {
         throw new HandlerError('invalid', 'restore target must be a user message');
       }
+      const controller = aborts.get(id);
+      controller?.abort();
+      if (controller) {
+        oversight?.cancelSession(id, 'session_aborted');
+        delegation?.cancelSession(id, 'session_aborted');
+      }
+      await waitForRun(id);
       const raw = store.restoreMessages(id, toMessageId);
       const result: RestoreSessionResponse = {
         restoredCount: raw.restoredCount,

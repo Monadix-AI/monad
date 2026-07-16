@@ -17,7 +17,6 @@ const CONTROL_EVENT_TYPES: ReadonlySet<EventType> = new Set<EventType>([
   'session.created',
   'session.updated',
   'session.deleted',
-  'session.branched',
   'session.restored',
   'session.stream_started',
   'session.stream_ended',

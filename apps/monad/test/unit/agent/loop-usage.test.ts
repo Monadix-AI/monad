@@ -46,7 +46,7 @@ test('finishTurn records real usage via recordTurnUsage and attaches the returne
 
   // The cost rides on the agent.message event.
   const msg = events.find((e) => e.type === 'agent.message');
-  expect((msg?.payload as { cost?: Cost }).cost).toEqual(fakeCost);
+  expect((msg?.payload as { cost?: Cost } | undefined)?.cost).toEqual(fakeCost);
 });
 
 test('forwards costUsd + resolved provider/modelId on usage to recordTurnUsage', async () => {
@@ -88,7 +88,7 @@ test('emitContextUsage: provider input tokens → exact (non-approximate)', asyn
   });
   await loop.runStream(newId('ses') as SessionId, 'hi');
   const ctx = events.find((e) => e.type === 'context.usage');
-  expect((ctx?.payload as { approximate?: boolean }).approximate).toBe(false);
+  expect((ctx?.payload as { approximate?: boolean } | undefined)?.approximate).toBe(false);
 });
 
 test('emitContextUsage: no provider usage and no countTokens → approximate char estimate', async () => {
@@ -111,7 +111,7 @@ test('emitContextUsage: no provider usage and no countTokens → approximate cha
   });
   await loop.runStream(newId('ses') as SessionId, 'hi');
   const ctx = events.find((e) => e.type === 'context.usage');
-  expect((ctx?.payload as { approximate?: boolean }).approximate).toBe(true);
+  expect((ctx?.payload as { approximate?: boolean } | undefined)?.approximate).toBe(true);
 });
 
 test('emitContextUsage: native countTokens fills in an exact total without provider usage', async () => {
@@ -155,7 +155,7 @@ test('no recordTurnUsage configured → no crash, no cost attached', async () =>
   });
   await loop.runStream(newId('ses') as SessionId, 'hi');
   const msg = events.find((e) => e.type === 'agent.message');
-  expect((msg?.payload as { cost?: Cost }).cost).toBeUndefined();
+  expect((msg?.payload as { cost?: Cost } | undefined)?.cost).toBeUndefined();
 });
 
 test('the global estimator self-calibrates from a turn with real input tokens', async () => {

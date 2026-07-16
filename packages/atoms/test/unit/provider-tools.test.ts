@@ -20,7 +20,7 @@ const computerSpec: ToolSpec = {
 test('generic tools build a function tool for any provider', () => {
   const set = buildSdkTools([genericSpec], 'anthropic');
   // The generic path is NOT a provider-defined tool.
-  expect((set?.file_read as { type?: string }).type).not.toBe('provider');
+  expect((set?.file_read as { type?: string } | undefined)?.type).not.toBe('provider');
 });
 
 test('anthropic provider emits the native computer tool when providerTool.anthropic is set', () => {
@@ -36,7 +36,7 @@ test('computer_20251124 maps to its newer native tool', () => {
     providerTool: { anthropic: { type: 'computer_20251124', displayWidthPx: 1280, displayHeightPx: 800 } }
   };
   const set = buildSdkTools([spec], 'anthropic');
-  expect((set?.computer as { id?: string }).id).toBe('anthropic.computer_20251124');
+  expect((set?.computer as { id?: string } | undefined)?.id).toBe('anthropic.computer_20251124');
 });
 
 test('search provider override disables anthropic native web search when ddgs is selected', () => {

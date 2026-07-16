@@ -211,7 +211,6 @@ test('deleteSession cleans up acp_delegates rows', () => {
     ownerPrincipalId: 'prn_test10000000',
     state: 'active',
     agentIds: [],
-    parentSessionId: null,
     archived: false,
     restoreCount: 0,
     createdAt: new Date().toISOString(),

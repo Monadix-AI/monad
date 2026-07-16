@@ -24,7 +24,6 @@ function fixtureSession(store: ReturnType<typeof createStore>, over: Partial<Ses
     ownerPrincipalId: newId('prn'),
     state: 'active',
     agentIds: [],
-    parentSessionId: null,
     archived: false,
     restoreCount: 0,
     usage: {

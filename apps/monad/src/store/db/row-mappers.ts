@@ -90,8 +90,6 @@ export function rowToSession(row: SessionRow): Session {
     ownerPrincipalId: row.ownerPrincipalId as Session['ownerPrincipalId'],
     state: row.state as SessionState,
     agentIds: JSON.parse(row.agentIds) as Session['agentIds'],
-    parentSessionId: (row.parentSessionId ?? null) as Session['parentSessionId'],
-    branchedAtMessageId: (row.branchedAtMessageId ?? undefined) as Session['branchedAtMessageId'],
     archived: row.archived === 1,
     restoreCount: row.restoreCount,
     model: modelSelection.model,

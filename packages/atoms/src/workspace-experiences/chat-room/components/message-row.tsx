@@ -1,4 +1,3 @@
-import type { NativeAgentDeliveryId } from '@monad/protocol';
 import type { ComponentType } from 'react';
 import type { Message, MessageAttachment } from '../../experience/types.ts';
 
@@ -314,21 +313,18 @@ export const MessageRow = memo(function MessageRow({
   msg,
   Attachment,
   labels,
-  onAgentClick,
-  onFollowExternalAgentSession
+  onAgentClick
 }: {
   msg: Message;
   Attachment?: MessageAttachmentComponent;
   labels?: MessageRowLabels;
   onAgentClick?: (id: string) => void;
-  onFollowExternalAgentSession?: (id: string, deliveryId?: NativeAgentDeliveryId) => void;
 }): React.ReactElement {
   if (msg.kind === 'system' || msg.kind === 'developer') {
     return (
       <SystemMessageRow
         msg={msg}
         onAgentClick={onAgentClick}
-        onFollowExternalAgentSession={onFollowExternalAgentSession}
       />
     );
   }

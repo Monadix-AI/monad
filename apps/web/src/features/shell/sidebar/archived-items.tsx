@@ -2,16 +2,13 @@ import type { SessionId } from '@monad/protocol';
 import type { ArchivedSessionListItem } from '#/features/shell/archived-sessions';
 import type { TFunction } from './types';
 
-import { ArrowLeft01Icon, FileArchiveIcon } from '@hugeicons/core-free-icons';
+import { ArrowLeft01Icon, Delete02Icon, FileArchiveIcon } from '@hugeicons/core-free-icons';
 import { useMemo, useState } from 'react';
 
-import {
-  archivedSessionBuckets,
-  filterArchivedSessions,
-  visibleArchivedBucketItems
-} from '#/features/shell/archived-sessions';
+import { archivedSessionBuckets, visibleArchivedBucketItems } from '#/features/shell/archived-sessions';
 import { projectSessionPath } from '#/features/shell/routing/paths';
-import { SIDEBAR_ITEM_ROW_CLASS, SidebarNavItem, SidebarNavSection, SidebarNavSectionLabel } from './nav-item';
+import { useServerSessionSearch } from '#/features/shell/session-server-search';
+import { SIDEBAR_ITEM_ROW_CLASS, SidebarNavItem, SidebarNavSection } from './nav-item';
 import { SidebarMoreLessControls } from './session-preview-controls';
 import { WorkspaceSection } from './workspace-section';
 import { WorkspaceTreeItem } from './workspace-tree-item';
@@ -23,6 +20,7 @@ interface ArchivedSidebarItemsProps {
   chatSessions: ArchivedSessionListItem[];
   loading?: boolean;
   onBack: () => void;
+  onDeleteSession: (sessionId: SessionId, title: string) => void;
   onOpenProjectSession: (projectId: string, sessionId: SessionId) => void;
   onOpenSession: (sessionId: SessionId) => void;
   onUnarchiveSession: (sessionId: SessionId) => void;
@@ -34,6 +32,7 @@ export function ArchivedSidebarItems({
   chatSessions,
   loading,
   onBack,
+  onDeleteSession,
   onOpenProjectSession,
   onOpenSession,
   onUnarchiveSession,
@@ -43,12 +42,36 @@ export function ArchivedSidebarItems({
   const [query, setQuery] = useState('');
   const [projectCollapsed, setProjectCollapsed] = useState(false);
   const [chatCollapsed, setChatCollapsed] = useState(false);
-
-  const visibleProjectSessions = useMemo(
-    () => filterArchivedSessions(projectSessions, query),
-    [projectSessions, query]
+  const { searching, sessions: searchSessions } = useServerSessionSearch({
+    archived: true,
+    limit: 200,
+    query
+  });
+  const projectNames = useMemo(
+    () =>
+      new Map(
+        projectSessions.flatMap((session) =>
+          session.projectId && session.projectName ? [[session.projectId, session.projectName]] : []
+        )
+      ),
+    [projectSessions]
   );
-  const visibleChatSessions = useMemo(() => filterArchivedSessions(chatSessions, query), [chatSessions, query]);
+  const searchItems = useMemo<ArchivedSessionListItem[]>(
+    () =>
+      searchSessions.map((session) => ({
+        id: session.id,
+        projectId: session.projectId,
+        projectName: session.projectId ? projectNames.get(session.projectId) : undefined,
+        title: session.title,
+        updatedAt: session.updatedAt
+      })),
+    [projectNames, searchSessions]
+  );
+  const searchingServer = query.trim().length > 0;
+  const visibleItems = searchingServer && !searching ? searchItems : [...projectSessions, ...chatSessions];
+  const visibleProjectSessions = visibleItems.filter((session) => session.projectId);
+  const visibleChatSessions = visibleItems.filter((session) => !session.projectId);
+  const showLoading = Boolean(loading);
 
   return (
     <>
@@ -69,8 +92,8 @@ export function ArchivedSidebarItems({
       </div>
       <div className="sidebar-scroll-area min-h-0 flex-1 overflow-y-auto">
         <div className="flex flex-col gap-0.5 px-2.5 py-3">
-          {loading ? <p className="px-2 py-2 text-muted-foreground text-xs">Loading archived sessions...</p> : null}
-          {!loading && visibleProjectSessions.length === 0 && visibleChatSessions.length === 0 ? (
+          {showLoading ? <p className="px-2 py-2 text-muted-foreground text-xs">{t('web.common.loading')}</p> : null}
+          {!showLoading && visibleProjectSessions.length === 0 && visibleChatSessions.length === 0 ? (
             <p className="px-2 py-2 text-muted-foreground text-xs">No archived sessions.</p>
           ) : null}
           {visibleProjectSessions.length > 0 ? (
@@ -83,6 +106,7 @@ export function ArchivedSidebarItems({
                 items={visibleProjectSessions}
                 lessLabel={t('web.sidebar.less')}
                 moreLabel={t('web.sidebar.more')}
+                onDeleteSession={onDeleteSession}
                 onOpenProjectSession={onOpenProjectSession}
                 onOpenSession={onOpenSession}
                 onUnarchiveSession={onUnarchiveSession}
@@ -100,6 +124,7 @@ export function ArchivedSidebarItems({
                 items={visibleChatSessions}
                 lessLabel={t('web.sidebar.less')}
                 moreLabel={t('web.sidebar.more')}
+                onDeleteSession={onDeleteSession}
                 onOpenProjectSession={onOpenProjectSession}
                 onOpenSession={onOpenSession}
                 onUnarchiveSession={onUnarchiveSession}
@@ -117,6 +142,7 @@ function ArchivedBucketList({
   items,
   lessLabel,
   moreLabel,
+  onDeleteSession,
   onOpenProjectSession,
   onOpenSession,
   onUnarchiveSession,
@@ -125,6 +151,7 @@ function ArchivedBucketList({
   items: ArchivedSessionListItem[];
   lessLabel: string;
   moreLabel: string;
+  onDeleteSession: (sessionId: SessionId, title: string) => void;
   onOpenProjectSession: (projectId: string, sessionId: SessionId) => void;
   onOpenSession: (sessionId: SessionId) => void;
   onUnarchiveSession: (sessionId: SessionId) => void;
@@ -140,12 +167,13 @@ function ArchivedBucketList({
         const canShowMore = bucket.id === 'earlier' && visibleItems.length < bucket.items.length;
         return (
           <div key={bucket.id}>
-            <SidebarNavSectionLabel>{bucket.label}</SidebarNavSectionLabel>
+            <div className="px-2 pb-1 text-[10px] text-muted-foreground leading-4">{bucket.label}</div>
             <div className="flex flex-col gap-0.5">
               {visibleItems.map((item) => (
                 <ArchivedSessionRow
                   item={item}
                   key={item.id}
+                  onDeleteSession={onDeleteSession}
                   onOpenProjectSession={onOpenProjectSession}
                   onOpenSession={onOpenSession}
                   onUnarchiveSession={onUnarchiveSession}
@@ -172,12 +200,14 @@ function ArchivedBucketList({
 
 function ArchivedSessionRow({
   item,
+  onDeleteSession,
   onOpenProjectSession,
   onOpenSession,
   onUnarchiveSession,
   t
 }: {
   item: ArchivedSessionListItem;
+  onDeleteSession: (sessionId: SessionId, title: string) => void;
   onOpenProjectSession: (projectId: string, sessionId: SessionId) => void;
   onOpenSession: (sessionId: SessionId) => void;
   onUnarchiveSession: (sessionId: SessionId) => void;
@@ -206,6 +236,15 @@ function ArchivedSessionRow({
             onUnarchiveSession(sessionId);
           },
           shortcut: 'U'
+        },
+        {
+          icon: Delete02Icon,
+          label: t('web.sidebar.deleteSession'),
+          onSelect: () => {
+            onDeleteSession(sessionId, item.title);
+          },
+          shortcut: 'D',
+          variant: 'destructive'
         }
       ]}
       menuLabel={t('web.sidebar.itemMenu')}

@@ -48,7 +48,7 @@ test('registering a provider without declaring the atom kind is rejected (Undecl
     { onProvider: () => {}, onError: (atomPack, error) => errors.push({ atomPack, error }) }
   );
   expect(errors[0]?.atomPack).toBe('sneaky');
-  expect((errors[0]?.error as Error).name).toBe('UndeclaredAtomError');
+  expect((errors[0]?.error as Error | undefined)?.name).toBe('UndeclaredAtomError');
 });
 
 test('a discovered provider atom pack is registered into the registry and usable by the gateway', async () => {

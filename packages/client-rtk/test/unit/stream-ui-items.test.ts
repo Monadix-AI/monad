@@ -16,22 +16,30 @@ const remove = (kind: string, id: string): SessionUiEvent =>
   ({ kind: 'remove', target: { kind, id } }) as SessionUiEvent;
 
 test('snapshot resets items and index', () => {
-  const draft = { items: [item('message', 'old')] };
+  const draft = { items: [item('message', 'old')], snapshotReceived: false };
   const index = buildIndex(draft.items);
   applyUiEvent(draft, snapshot([item('message', 'a'), item('tool', 'b')]), index);
   expect(draft.items.map((i) => i.id)).toEqual(['a', 'b']);
+  expect(draft.snapshotReceived).toBe(true);
   expect(index.get('tool:b')).toBe(1);
 });
 
+test('non-snapshot events do not finish initial transcript loading', () => {
+  const draft = { items: [] as UIItem[], snapshotReceived: false };
+  const index = buildIndex(draft.items);
+  applyUiEvent(draft, upsert(item('message', 'live')), index);
+  expect(draft.snapshotReceived).toBe(false);
+});
+
 test('replacement snapshots advance the transcript replacement revision', () => {
-  const draft = { items: [item('message', 'old')], replacementRevision: 2 };
+  const draft = { items: [item('message', 'old')], replacementRevision: 2, snapshotReceived: false };
   const index = buildIndex(draft.items);
   applyUiEvent(draft, { kind: 'snapshot', items: [], replacesTranscript: true } as SessionUiEvent, index);
   expect(draft.replacementRevision).toBe(3);
 });
 
 test('upsert updates in place by key, appends when new, preserving order', () => {
-  const draft = { items: [] as UIItem[] };
+  const draft = { items: [] as UIItem[], snapshotReceived: false };
   const index = buildIndex(draft.items);
   applyUiEvent(draft, upsert(item('message', 'm1', { seq: 1 })), index);
   applyUiEvent(draft, upsert(item('message', 'm2', { seq: 1 })), index);
@@ -42,7 +50,7 @@ test('upsert updates in place by key, appends when new, preserving order', () =>
 });
 
 test('same id under different kinds are distinct entries', () => {
-  const draft = { items: [] as UIItem[] };
+  const draft = { items: [] as UIItem[], snapshotReceived: false };
   const index = buildIndex(draft.items);
   applyUiEvent(draft, upsert(item('message', 'x')), index);
   applyUiEvent(draft, upsert(item('tool', 'x')), index);
@@ -50,7 +58,7 @@ test('same id under different kinds are distinct entries', () => {
 });
 
 test('remove drops the entry and keeps the index consistent for later upserts', () => {
-  const draft = { items: [] as UIItem[] };
+  const draft = { items: [] as UIItem[], snapshotReceived: false };
   const index = buildIndex(draft.items);
   applyUiEvent(draft, upsert(item('message', 'a')), index);
   applyUiEvent(draft, upsert(item('message', 'b')), index);
@@ -67,13 +75,16 @@ test('remove drops the entry and keeps the index consistent for later upserts', 
 });
 
 test('clears a prior streamError on any event', () => {
-  const draft = { items: [] as UIItem[], streamError: { kind: 'transient' as const } };
+  const draft = { items: [] as UIItem[], snapshotReceived: false, streamError: { kind: 'transient' as const } };
   const index = buildIndex(draft.items);
   applyUiEvent(draft, upsert(item('message', 'a')), index);
 });
 
 test('snapshot captures oldestCursor and hasMore from the bounded window', () => {
-  const draft: { items: UIItem[]; oldestCursor?: string; hasMore?: boolean } = { items: [] };
+  const draft: { items: UIItem[]; oldestCursor?: string; hasMore?: boolean; snapshotReceived: boolean } = {
+    items: [],
+    snapshotReceived: false
+  };
   const index = buildIndex(draft.items);
   const snap: SessionUiEvent = {
     kind: 'snapshot',
@@ -87,9 +98,10 @@ test('snapshot captures oldestCursor and hasMore from the bounded window', () =>
 });
 
 test('upsert and remove leave the snapshot cursors untouched', () => {
-  const draft: { items: UIItem[]; oldestCursor?: string; hasMore?: boolean } = {
+  const draft: { items: UIItem[]; oldestCursor?: string; hasMore?: boolean; snapshotReceived: boolean } = {
     items: [item('message', 'a')],
     oldestCursor: 'msg_a00000000000',
+    snapshotReceived: true,
     hasMore: true
   };
   const index = buildIndex(draft.items);

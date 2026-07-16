@@ -1,11 +1,12 @@
 import type { MouseEvent, ReactNode } from 'react';
 
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
-import { cn, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
+import { cn, ShortcutChip, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
 
 import { ShellLink } from '#/components/ShellLink';
 
-const SHORTCUT_BADGE_OVERLAY_CLASS = 'pointer-events-none absolute top-1/2 right-1.5 -mt-px -translate-y-1/2';
+export const SIDEBAR_SHORTCUT_BADGE_OVERLAY_CLASS =
+  'pointer-events-none absolute top-1/2 right-1.5 -mt-px -translate-y-1/2';
 const SIDEBAR_ITEM_HEIGHT_CLASS = 'min-h-8';
 const SIDEBAR_ITEM_PADDING_CLASS = 'px-2 py-1.5';
 export const SIDEBAR_ITEM_LABEL_CLASS = 'min-w-0 flex-1 truncate';
@@ -96,23 +97,8 @@ export function SidebarActionVisibilityRules() {
       [data-sidebar-tree-item="true"] > .sidebar-item-action[data-state="open"] {
         opacity: 1;
       }
-      [data-sidebar-session-row="true"][data-sidebar-shortcut]::after {
-        align-items: center;
-        background: color-mix(in oklab, var(--sidebar-accent) 85%, transparent);
-        border-radius: 9999px;
-        color: var(--muted-foreground);
-        content: attr(data-sidebar-shortcut-modifier) attr(data-sidebar-shortcut);
-        display: inline-flex;
-        font-size: 10px;
-        font-weight: 500;
-        height: 16px;
-        justify-content: center;
-        min-width: 28px;
-        padding-inline: 6px;
-        position: absolute;
-        right: 6px;
-        top: 50%;
-        transform: translateY(-50%);
+      [data-sidebar-tree-item="true"]:hover [data-sidebar-shortcut-chip="true"] {
+        opacity: 0;
       }
     `}</style>
   );
@@ -120,19 +106,10 @@ export function SidebarActionVisibilityRules() {
 
 export function SidebarShortcutBadge({ modifierLabel, value }: { modifierLabel: string; value: number | string }) {
   return (
-    <ShortcutBadge
-      modifierLabel={modifierLabel}
-      value={value}
-    />
-  );
-}
-
-function ShortcutBadge({ modifierLabel, value }: { modifierLabel: string; value: number | string }) {
-  return (
-    <span className="inline-flex h-4 min-w-7 items-center justify-center gap-px rounded-full bg-sidebar-accent/85 px-1.5 font-medium text-[10px] text-muted-foreground tabular-nums shadow-[inset_0_1px_0_rgb(255_255_255/0.08)] backdrop-blur">
+    <ShortcutChip>
       {modifierLabel}
       {value}
-    </span>
+    </ShortcutChip>
   );
 }
 
@@ -192,7 +169,7 @@ export function SidebarNavItem({
         {children}
       </div>
       {shortcutValue && shortcutModifierLabel ? (
-        <span className={SHORTCUT_BADGE_OVERLAY_CLASS}>
+        <span className={SIDEBAR_SHORTCUT_BADGE_OVERLAY_CLASS}>
           <SidebarShortcutBadge
             modifierLabel={shortcutModifierLabel}
             value={shortcutValue}

@@ -1,6 +1,5 @@
 import { z } from 'zod';
 
-import { messageIdSchema, sessionIdSchema } from './ids.ts';
 import { httpUrlSchema } from './url.ts';
 
 export { isHttpUrl } from './url.ts';
@@ -46,8 +45,7 @@ export const cardSchema = z.object({
 export type Card = z.infer<typeof cardSchema>;
 
 export const branchSourceSchema = z.object({
-  sessionId: sessionIdSchema,
-  messageId: messageIdSchema
+  sessionTitle: z.string().optional()
 });
 export type BranchSource = z.infer<typeof branchSourceSchema>;
 
@@ -72,7 +70,6 @@ export const BUILTIN_MESSAGE_TYPES: Record<string, MessageTypeDescriptor> = Obje
     type: 'branch_source',
     dataSchema: branchSourceSchema,
     fallbacks: ['data', 'text'],
-    interactions: ['links'],
     includeInContext: false
   },
   // UI-only: a surfaced failure — never replayed, counted, or summarized.

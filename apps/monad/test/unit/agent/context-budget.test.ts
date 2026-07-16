@@ -67,7 +67,7 @@ test('the loop emits a context.usage breakdown when contextLimit is set', async 
 
   const usage = events.find((e) => e.type === 'context.usage');
   expect(usage?.payload.contextLimit).toBe(200_000);
-  expect((usage?.payload.segments as unknown[]).length).toBeGreaterThan(0);
+  expect((usage?.payload.segments as unknown[] | undefined)?.length).toBeGreaterThan(0);
 });
 
 test('context.usage prefers provider usage for the total (estimate fallback otherwise)', async () => {

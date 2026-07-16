@@ -45,6 +45,7 @@ import type {
 } from './components/ComposerEditor';
 import type { ComposerInlineChipProps } from './components/ComposerInlineChip';
 import type { ProductIconColors, ProductIconId, ProductIconProps } from './components/ProductIcon';
+import type { ShortcutChipProps } from './components/ShortcutChip';
 import type { SwitchProps } from './components/Switch';
 
 import {
@@ -134,6 +135,7 @@ import {
   type MessageOutlineItem,
   type MessageOutlineProps
 } from './components/MessageOutline';
+import { MorphChevron, type MorphChevronProps } from './components/MorphChevron';
 import { Popover, PopoverContent, PopoverTrigger } from './components/Popover';
 import { isProductIconId, ProductIcon } from './components/ProductIcon';
 import { Progress } from './components/Progress';
@@ -148,6 +150,7 @@ import {
   SelectValue
 } from './components/Select';
 import { Separator } from './components/Separator';
+import { ShortcutChip } from './components/ShortcutChip';
 import { Skeleton } from './components/Skeleton';
 import { Spinner } from './components/Spinner';
 import { Switch } from './components/Switch';
@@ -187,6 +190,7 @@ export type {
   MessageOutlineProps,
   MessageProps,
   MessageResponseProps,
+  MorphChevronProps,
   ProductIconColors,
   ProductIconId,
   ProductIconProps,
@@ -195,6 +199,7 @@ export type {
   ReasoningProps,
   ReasoningTriggerProps,
   ShimmerProps,
+  ShortcutChipProps,
   SwitchProps,
   ToolContentProps,
   ToolHeaderProps,
@@ -283,6 +288,7 @@ export {
   MessageContent,
   MessageOutline,
   MessageResponse,
+  MorphChevron,
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -302,6 +308,7 @@ export {
   SelectValue,
   Separator,
   Shimmer,
+  ShortcutChip,
   Skeleton,
   Spinner,
   Switch,

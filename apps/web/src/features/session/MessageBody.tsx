@@ -7,6 +7,8 @@ import { ComposerInlineChip } from '@monad/ui/components/ComposerInlineChip';
 import { Markdown } from '@monad/ui/components/Markdown';
 import { MentionText } from '@monad/ui/components/MentionText';
 
+import { useOptionalSessionContext } from './session-context';
+
 // Tool calls/results are NOT here — they are paired into inline ToolStepView items upstream in
 // chat.tsx's viewMessages and never reach MessageBody. This client owns the `card` renderer;
 // everything else degrades to markdown/text via the shared registry.
@@ -95,12 +97,15 @@ export function MessageBody({
   isUser: boolean;
   onSkillPreview?: (id: string) => void;
 }) {
+  const sessionContext = useOptionalSessionContext();
+  const resolvedCommands = commands ?? sessionContext?.commands;
+  const resolvedOnSkillPreview = onSkillPreview ?? sessionContext?.onSkillPreview;
   if (isUser)
     return (
       <span className={cn('whitespace-pre-wrap')}>
         <UserMessageText
-          commands={commands}
-          onSkillPreview={onSkillPreview}
+          commands={resolvedCommands}
+          onSkillPreview={resolvedOnSkillPreview}
           text={text}
         />
       </span>

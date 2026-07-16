@@ -37,7 +37,7 @@ test('client.treaty posts to the control API and returns the id', async () => {
   if (!cap) throw new Error('fetch was not called');
   expect(cap.url).toBe('http://127.0.0.1:52749/v1/sessions');
   // token goes in the header, never the URL
-  expect((cap.init?.headers as Record<string, string>).authorization).toBe('Bearer secret');
+  expect((cap.init?.headers as Record<string, string> | undefined)?.authorization).toBe('Bearer secret');
 });
 
 test('client.fetch sends raw requests with bearer auth in the header', async () => {

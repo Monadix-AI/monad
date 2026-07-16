@@ -57,7 +57,8 @@ export function buildCall(
     fetch: deps.fetch,
     ...(req.sessionId ? { sessionId: req.sessionId } : {}),
     ...(req.userId ? { userId: req.userId } : {}),
-    ...(req.maxThinkingTokens ? { maxThinkingTokens: req.maxThinkingTokens } : {})
+    ...(req.maxThinkingTokens ? { maxThinkingTokens: req.maxThinkingTokens } : {}),
+    ...(req.signal ? { signal: req.signal } : {})
   };
 }
 

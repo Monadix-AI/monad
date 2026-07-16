@@ -5,10 +5,11 @@ import type { ObservationItem } from './types.ts';
 // it as this plain union.
 type ObservationVisualRole = 'user' | 'agent' | 'tool' | 'system';
 
-import { CheckIcon, ChevronDownIcon, Copy01Icon, SourceCodeIcon } from '@hugeicons/core-free-icons';
+import { CheckIcon, Copy01Icon, SourceCodeIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { workspaceMono as mono, workspaceSans as sans } from '@monad/ui/components/AgentAvatar';
 import { CodeBlock } from '@monad/ui/components/CodeBlock';
+import { MorphChevron } from '@monad/ui/components/MorphChevron';
 import { useEffect, useState } from 'react';
 
 export type ObservationCollapseCommand = {
@@ -58,10 +59,9 @@ export function ObservationCardShell({
           style={headerToggleStyle}
           type="button"
         >
-          <span style={collapseIndicatorStyle(collapsed)}>
-            <HugeiconsIcon
-              aria-hidden="true"
-              icon={ChevronDownIcon}
+          <span style={collapseIndicatorStyle}>
+            <MorphChevron
+              expanded={!collapsed}
               size={13}
               strokeWidth={2}
             />
@@ -433,20 +433,16 @@ function bodySlotStyle(rawOpen: boolean): CSSProperties {
   };
 }
 
-function collapseIndicatorStyle(collapsed: boolean): CSSProperties {
-  return {
-    width: 22,
-    height: 22,
-    flex: 'none',
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 7,
-    color: 'var(--muted-foreground)',
-    transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
-    transition: 'transform 150ms ease'
-  };
-}
+const collapseIndicatorStyle: CSSProperties = {
+  width: 22,
+  height: 22,
+  flex: 'none',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  borderRadius: 7,
+  color: 'var(--muted-foreground)'
+};
 
 const rawPanelStyle: CSSProperties = {
   boxSizing: 'border-box',

@@ -58,7 +58,8 @@ export const RPC_HANDLERS: RpcHandlerMap = {
 
   // The wire folds the session id into `id` (matching the HTTP `:id` path param);
   // handlers that take `sessionId` get the rename absorbed here, in one place.
-  'sessions.list': ({ archived, state, limit, offset }, h: D) => h.session.list({ archived, state, limit, offset }),
+  'sessions.list': ({ archived, query, state, limit, offset }, h: D) =>
+    h.session.list({ archived, query, state, limit, offset }),
   'sessions.get': ({ id }, h: D) => h.session.get({ id }),
   // The native JSON-RPC socket is the CLI/TUI control plane — it shares the `http` write-class
   // (both are owner-local control transports), defaulting to the `tui` surface.
@@ -72,7 +73,6 @@ export const RPC_HANDLERS: RpcHandlerMap = {
   'sessions.messages': ({ id, ...rest }, h: D) => h.session.messages({ id, ...rest }),
   'sessions.branch': ({ id, title, atMessageId, origin }, h: D) =>
     h.session.branch({ id, title, atMessageId, origin: nativeOrigin(origin) }),
-  'sessions.provenance': ({ id }, h: D) => h.session.provenance({ id }),
   'sessions.restore': ({ id, ...rest }, h: D) => h.session.restore({ id, ...rest }),
   'sessions.search': (params, h: D) => h.session.search(params),
   'sessions.send': ({ id, ...rest }, h: D) => h.session.send({ sessionId: id, ...rest }),

@@ -52,8 +52,8 @@ export class SessionUiProjector {
   // (Not a UI-item id: projection is not 1:1, so the client cannot derive this from the items.)
   private oldestMessageId: string | undefined;
   // Live-eviction only applies after the initial snapshot is taken, so a bounded hydration window or a
-  // full includeAncestors snapshot is never trimmed — only unbounded live streaming on a held-open
-  // subscription is.
+  // Hydration snapshots are bounded by the caller; only unbounded live streaming on a held-open
+  // subscription is trimmed here.
   private snapshotted = false;
 
   private readonly mutations: ProjectionMutations;

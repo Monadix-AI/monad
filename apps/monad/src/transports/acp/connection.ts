@@ -48,9 +48,6 @@ export function connectAcp(handlers: Handlers, stream: Stream, sandboxRoots?: st
     .onNotification('document/didFocus', ({ params }) => inst.unstable_didFocusDocument(params))
     .onNotification('document/didSave', ({ params }) => inst.unstable_didSaveDocument(params))
     .onRequest('_monad/session.restore', asParams, ({ params }) => inst.extMethod('_monad/session.restore', params))
-    .onRequest('_monad/session.provenance', asParams, ({ params }) =>
-      inst.extMethod('_monad/session.provenance', params)
-    )
     .onRequest('_monad/model.listProviders', asParams, ({ params }) =>
       inst.extMethod('_monad/model.listProviders', params)
     )

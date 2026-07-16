@@ -99,7 +99,6 @@ for (const kind of TRANSPORTS) {
         ownerPrincipalId: 'prn_100000000000',
         state: 'active',
         agentIds: ['agt_100000000000'],
-        parentSessionId: null,
         archived: false,
         restoreCount: 0,
         createdAt: new Date(0).toISOString(),

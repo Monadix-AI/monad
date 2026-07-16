@@ -15,9 +15,9 @@ export const listSessionsApi = apiSlice.injectEndpoints({
   endpoints: (builder) => ({
     listSessions: builder.query<ListSessionsResult, ListSessionsQuery | undefined>({
       queryFn: (args, api: { extra: unknown }) => {
-        const { archived, limit, offset } = args ?? {};
+        const { archived, query, limit, offset } = args ?? {};
         return runTreaty(
-          () => clientOf(api).treaty.v1.sessions.get({ query: { archived, limit, offset } }),
+          () => clientOf(api).treaty.v1.sessions.get({ query: { archived, query, limit, offset } }),
           (raw) => ({
             ...raw,
             sessions: sessionAdapter.setAll(sessionAdapter.getInitialState(), raw.sessions)

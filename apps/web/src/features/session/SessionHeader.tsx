@@ -1,95 +1,69 @@
-import type { SessionIdentityModel, SessionInspectorModel } from './session-route-contract';
-
 import { Activity01Icon, ExpandParagraphIcon, ReduceParagraphIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { useProvenanceQuery } from '@monad/client-rtk';
 import { Button } from '@monad/ui';
-import { memo } from 'react';
 
 import { useT } from '#/components/I18nProvider';
+import { useWorkspaceShellStore } from '#/lib/workspace-shell-store';
+import { useSessionContext } from './session-context';
+import { useSessionUiStore } from './session-ui-store';
 
-export function SessionHeader({
-  identity,
-  inspector
-}: {
-  identity: SessionIdentityModel;
-  inspector: SessionInspectorModel;
-}) {
+export function SessionHeader() {
   const t = useT();
+  const { identity } = useSessionContext();
+  const inspectorOpen = useWorkspaceShellStore((state) => state.rightPanelOpen);
+  const toggleInspector = useWorkspaceShellStore((state) => state.toggleRightPanel);
+  const renderMode = useSessionUiStore((state) => state.transcriptRenderMode);
+  const setRenderMode = useSessionUiStore((state) => state.setTranscriptRenderMode);
 
   return (
-    <>
-      {identity.isDraft ? null : <SessionLineage sessionId={identity.currentSessionId} />}
-      <div className="flex items-center justify-between gap-2.5 border-border/70 border-b px-4 py-2">
-        <div className="min-w-0">
-          <div className="truncate font-medium text-sm">
-            {identity.currentSession?.title ?? identity.assistantLabel}
-          </div>
-          <div className="text-muted-foreground text-xs">
-            {identity.onRetryDraftSession ? t('web.chat.draftCreateFailed') : t('web.inspector.sessionRuntime')}
-          </div>
-        </div>
+    <div className="panel-shell-header [.app-main-sidebar-collapsed_&]:!pl-[8.5rem] flex h-[52px] shrink-0 items-center justify-between gap-2.5 border-border/70 border-b px-4 py-2">
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="truncate font-medium text-sm">{identity.currentSession?.title ?? identity.assistantLabel}</div>
         {identity.onRetryDraftSession ? (
-          <Button
-            className="gap-1.5"
-            onClick={identity.onRetryDraftSession}
-            size="sm"
-            variant="secondary"
-          >
-            {t('web.chat.retry')}
-          </Button>
-        ) : (
-          <div className="flex items-center gap-1.5">
-            <Button
-              aria-label={
-                inspector.renderMode === 'compact' ? t('web.chat.viewModeDetail') : t('web.chat.viewModeCompact')
-              }
-              aria-pressed={inspector.renderMode === 'compact'}
-              className="gap-1.5"
-              onClick={() => inspector.onRenderModeChange(inspector.renderMode === 'compact' ? 'detail' : 'compact')}
-              size="sm"
-              title={inspector.renderMode === 'compact' ? t('web.chat.viewModeCompact') : t('web.chat.viewModeDetail')}
-              variant={inspector.renderMode === 'compact' ? 'secondary' : 'ghost'}
-            >
-              <HugeiconsIcon
-                className="size-3.5"
-                icon={inspector.renderMode === 'compact' ? ExpandParagraphIcon : ReduceParagraphIcon}
-              />
-              {inspector.renderMode === 'compact' ? 'Compact' : 'Detail'}
-            </Button>
-            <Button
-              aria-pressed={inspector.open}
-              className="gap-1.5"
-              onClick={inspector.onToggle}
-              size="sm"
-              variant={inspector.open ? 'secondary' : 'ghost'}
-            >
-              <HugeiconsIcon
-                className="size-3.5"
-                icon={Activity01Icon}
-              />
-              {t('web.inspector.toggle')}
-            </Button>
-          </div>
-        )}
+          <div className="text-muted-foreground text-xs">{t('web.chat.draftCreateFailed')}</div>
+        ) : null}
       </div>
-    </>
-  );
-}
-
-const SessionLineage = memo(function SessionLineage({
-  sessionId
-}: {
-  sessionId: SessionIdentityModel['currentSessionId'];
-}) {
-  const t = useT();
-  const { data } = useProvenanceQuery(sessionId);
-  const branches = data?.descendants ?? [];
-  if (branches.length === 0) return null;
-
-  return (
-    <div className="flex items-center gap-2 border-b px-4 py-1.5 text-muted-foreground text-xs">
-      {t('web.chat.lineageBranches', { count: branches.length })}
+      {identity.onRetryDraftSession ? (
+        <Button
+          className="gap-1.5"
+          onClick={identity.onRetryDraftSession}
+          size="sm"
+          variant="secondary"
+        >
+          {t('web.chat.retry')}
+        </Button>
+      ) : (
+        <div className="flex shrink-0 items-center gap-1.5">
+          <Button
+            aria-label={renderMode === 'summary' ? t('web.chat.viewModeDetail') : t('web.chat.viewModeSummary')}
+            aria-pressed={renderMode === 'summary'}
+            className="gap-1.5"
+            onClick={() => setRenderMode(renderMode === 'summary' ? 'detail' : 'summary')}
+            size="sm"
+            title={renderMode === 'summary' ? t('web.chat.viewModeSummary') : t('web.chat.viewModeDetail')}
+            variant={renderMode === 'summary' ? 'secondary' : 'ghost'}
+          >
+            <HugeiconsIcon
+              className="size-3.5"
+              icon={renderMode === 'summary' ? ExpandParagraphIcon : ReduceParagraphIcon}
+            />
+            {renderMode === 'summary' ? t('web.chat.viewModeSummaryLabel') : t('web.chat.viewModeDetailLabel')}
+          </Button>
+          <Button
+            aria-pressed={inspectorOpen}
+            className="gap-1.5"
+            onClick={toggleInspector}
+            size="sm"
+            variant={inspectorOpen ? 'secondary' : 'ghost'}
+          >
+            <HugeiconsIcon
+              className="size-3.5"
+              icon={Activity01Icon}
+            />
+            {t('web.inspector.toggle')}
+          </Button>
+        </div>
+      )}
     </div>
   );
-});
+}

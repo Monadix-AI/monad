@@ -1,15 +1,7 @@
 import type { Msg } from './ChatMessage';
 import type { ToolGroupItem, ToolItem, ToolViewItem } from './ToolStepView';
 
-import {
-  branchSourceSchema,
-  channelDisplayText,
-  type MessageId,
-  type SessionId,
-  type UIItem,
-  type UIMessageItem,
-  type UIPart
-} from '@monad/protocol';
+import { branchSourceSchema, channelDisplayText, type UIItem, type UIMessageItem, type UIPart } from '@monad/protocol';
 
 export type MemorySummaryViewItem = Extract<UIItem, { kind: 'memory_summary' }> & { kind: 'memory_summary' };
 
@@ -23,16 +15,14 @@ export interface CompactCommandViewItem {
 export interface BranchSourceViewItem {
   id: string;
   kind: 'branch_source';
-  messageId: MessageId;
-  sessionId: SessionId;
+  sessionTitle?: string;
 }
 
-export interface CompactTranscriptTurnViewItem {
-  kind: 'compact_transcript_turn';
+export interface SummaryTranscriptTurnViewItem {
+  kind: 'summary_transcript_turn';
   id: string;
   status: 'running' | 'done';
   durationLabel: string;
-  summary?: string;
   details: ViewItem[];
 }
 
@@ -42,7 +32,7 @@ export type ViewItem =
   | MemorySummaryViewItem
   | CompactCommandViewItem
   | BranchSourceViewItem
-  | CompactTranscriptTurnViewItem;
+  | SummaryTranscriptTurnViewItem;
 
 export const isToolItem = (m: ViewItem): m is ToolViewItem =>
   'kind' in m && (m.kind === 'tool' || m.kind === 'toolGroup');
@@ -55,18 +45,13 @@ export const isCompactCommandItem = (m: ViewItem): m is CompactCommandViewItem =
 
 export const isBranchSourceItem = (m: ViewItem): m is BranchSourceViewItem => 'kind' in m && m.kind === 'branch_source';
 
-export const isCompactTranscriptTurnItem = (m: ViewItem): m is CompactTranscriptTurnViewItem =>
-  'kind' in m && m.kind === 'compact_transcript_turn';
+export const isSummaryTranscriptTurnItem = (m: ViewItem): m is SummaryTranscriptTurnViewItem =>
+  'kind' in m && m.kind === 'summary_transcript_turn';
 
-export function branchSourceHref(source: Pick<BranchSourceViewItem, 'messageId' | 'sessionId'>): string {
-  return `/sessions/${encodeURIComponent(source.sessionId)}?msg=${encodeURIComponent(source.messageId)}`;
-}
-
-export function branchSourceSessionName(
-  source: Pick<BranchSourceViewItem, 'sessionId'>,
-  ancestors?: ReadonlyArray<{ id: SessionId; title: string }>
-): string {
-  return ancestors?.find((session) => session.id === source.sessionId)?.title || source.sessionId;
+export function branchSnapshotItems(items: ViewItem[], expanded: boolean): ViewItem[] {
+  if (expanded) return items;
+  const boundary = items.findLastIndex(isBranchSourceItem);
+  return boundary < 0 ? items : items.slice(boundary);
 }
 
 function isDirectiveMessage(item: ViewItem, role: Msg['role']): item is Msg {
@@ -245,27 +230,43 @@ export function groupToolCalls(items: ViewItem[]): ViewItem[] {
   return out;
 }
 
-export function compactTranscriptTurns(items: ViewItem[]): ViewItem[] {
+export function summaryTranscriptTurns(items: ViewItem[]): ViewItem[] {
   const turns: ViewItem[] = [];
   let current: ViewItem[] = [];
   const flush = () => {
     if (current.length === 0) return;
     const first = current[0] as ViewItem | undefined;
-    const last = current[current.length - 1] as ViewItem | undefined;
-    const running = current.some(itemIsRunning);
-    const summary = [...current].reverse().find(itemIsAssistantMessage)?.text;
-    turns.push({
-      kind: 'compact_transcript_turn',
-      id: `compact-turn:${first?.id ?? turns.length}`,
-      status: running ? 'running' : 'done',
-      durationLabel: formatDuration(durationMs(firstSeq(current), itemSeq(last) ?? firstSeq(current))),
-      ...(summary ? { summary } : {}),
-      details: current
-    });
+    if (!first || !itemIsUserMessage(first)) {
+      turns.push(...current);
+      current = [];
+      return;
+    }
+
+    const finalAssistantIndex = lastAssistantMessageIndex(current);
+    const detailsEnd = finalAssistantIndex < 0 ? current.length : finalAssistantIndex;
+    const details = current.slice(1, detailsEnd);
+    const end = current[finalAssistantIndex < 0 ? current.length - 1 : finalAssistantIndex];
+
+    turns.push(first);
+    if (details.length > 0) {
+      turns.push({
+        kind: 'summary_transcript_turn',
+        id: `summary-turn:${details[0]?.id ?? turns.length}`,
+        status: current.some(itemIsRunning) ? 'running' : 'done',
+        durationLabel: formatDuration(durationMs(firstSeq(current), itemSeq(end) ?? firstSeq(current))),
+        details
+      });
+    }
+    if (finalAssistantIndex >= 0) turns.push(...current.slice(finalAssistantIndex));
     current = [];
   };
 
   for (const item of items) {
+    if (isBranchSourceItem(item)) {
+      flush();
+      turns.push(item);
+      continue;
+    }
     if (itemIsUserMessage(item) && current.length > 0) flush();
     current.push(item);
   }
@@ -277,14 +278,12 @@ function itemIsUserMessage(item: ViewItem): item is Msg {
   return 'role' in item && item.role === 'user';
 }
 
-function itemIsAssistantMessage(item: ViewItem): item is Msg {
-  return (
-    'role' in item &&
-    item.role === 'assistant' &&
-    item.streaming !== true &&
-    item.pending !== true &&
-    Boolean(item.text.trim())
-  );
+function lastAssistantMessageIndex(items: ViewItem[]): number {
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index];
+    if (item && 'role' in item && item.role === 'assistant' && item.type !== 'directive') return index;
+  }
+  return -1;
 }
 
 function itemIsRunning(item: ViewItem): boolean {

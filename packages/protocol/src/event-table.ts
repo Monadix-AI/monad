@@ -20,19 +20,12 @@ import {
   externalAgentProviderSchema,
   messageAttachmentRefSchema
 } from './external-agent/index.ts';
-import {
-  agentIdSchema,
-  externalAgentSessionIdSchema,
-  messageIdSchema,
-  nativeAgentDeliveryIdSchema,
-  sessionIdSchema
-} from './ids.ts';
+import { agentIdSchema, externalAgentSessionIdSchema, messageIdSchema, nativeAgentDeliveryIdSchema } from './ids.ts';
 
 const requestIdSchema = z.string();
 
 export const sessionCreatedPayloadSchema = z.object({
-  title: z.string(),
-  parentSessionId: sessionIdSchema.optional()
+  title: z.string()
 });
 
 export const sessionUpdatedPayloadSchema = z.object({
@@ -55,11 +48,6 @@ export const sessionStreamStartedPayloadSchema = z.object({
 });
 
 export const sessionStreamEndedPayloadSchema = z.object({});
-
-export const sessionBranchedPayloadSchema = z.object({
-  childId: sessionIdSchema,
-  atMessageId: messageIdSchema.optional()
-});
 
 export const sessionRestoredPayloadSchema = z.object({
   toMessageId: messageIdSchema,
@@ -298,7 +286,6 @@ export const externalAgentExitedPayloadSchema = z.object({
 
 export type SessionCreatedPayload = z.infer<typeof sessionCreatedPayloadSchema>;
 export type SessionUpdatedPayload = z.infer<typeof sessionUpdatedPayloadSchema>;
-export type SessionBranchedPayload = z.infer<typeof sessionBranchedPayloadSchema>;
 export type SessionRestoredPayload = z.infer<typeof sessionRestoredPayloadSchema>;
 export type SessionStreamStartedPayload = z.infer<typeof sessionStreamStartedPayloadSchema>;
 export type SessionStreamEndedPayload = z.infer<typeof sessionStreamEndedPayloadSchema>;
@@ -331,7 +318,6 @@ export const EVENT_TABLE = {
   'session.created': sessionCreatedPayloadSchema,
   'session.updated': sessionUpdatedPayloadSchema,
   'session.deleted': sessionDeletedPayloadSchema,
-  'session.branched': sessionBranchedPayloadSchema,
   'session.restored': sessionRestoredPayloadSchema,
   'session.stream_started': sessionStreamStartedPayloadSchema,
   'session.stream_ended': sessionStreamEndedPayloadSchema,

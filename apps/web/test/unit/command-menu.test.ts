@@ -196,8 +196,9 @@ test('argument phase uses structured arg metadata for dynamic suggestions', () =
   expect(
     items.map(({ key, label, insert, replace, dismissAfter }) => ({ key, label, insert, replace, dismissAfter }))
   ).toEqual([
-    { key: 'smart', label: 'smart', insert: '/model smart', replace: { start: 0, end: 9 }, dismissAfter: true }
+    { key: 'smart', label: 'smart', insert: '/model smart ', replace: { start: 0, end: 9 }, dismissAfter: true }
   ]);
+  expect(buildCommandMenuItems(items[0]?.insert ?? '', commands, profiles, [], t)).toEqual([]);
 });
 
 test('subcommand phase suggests subcommands and then their args', () => {
@@ -231,8 +232,9 @@ test('subcommand phase suggests subcommands and then their args', () => {
   );
   const args = buildCommandMenuItems('/memory consolidate ', commands, [], [], t);
   expect(args.map(({ key, label, insert, replace }) => ({ key, label, insert, replace }))).toEqual([
-    { key: '1', label: 'L1', insert: '/memory consolidate 1', replace: { start: 0, end: 20 } }
+    { key: '1', label: 'L1', insert: '/memory consolidate 1 ', replace: { start: 0, end: 20 } }
   ]);
+  expect(buildCommandMenuItems(args[0]?.insert ?? '', commands, [], [], t)).toEqual([]);
 });
 
 test('unavailable commands are excluded from suggestions', () => {

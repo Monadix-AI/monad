@@ -8,12 +8,18 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuShortcut,
-  DropdownMenuTrigger
+  DropdownMenuTrigger,
+  ShortcutChip
 } from '@monad/ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ShellLink } from '#/components/ShellLink';
-import { SIDEBAR_ITEM_LABEL_CLASS, sidebarIconButtonClass, sidebarItemContainerClass } from './nav-item';
+import {
+  SIDEBAR_ITEM_LABEL_CLASS,
+  SIDEBAR_SHORTCUT_BADGE_OVERLAY_CLASS,
+  sidebarIconButtonClass,
+  sidebarItemContainerClass
+} from './nav-item';
 
 export type TreeItemMenuAction = {
   icon: typeof PencilEdit01Icon;
@@ -129,6 +135,7 @@ export function WorkspaceTreeItem({
               {children}
             </SidebarEditableTitle>
           </span>
+          {sidebarSession ? <SidebarSessionShortcutChip /> : null}
         </ShellLink>
       ) : (
         <button
@@ -153,6 +160,7 @@ export function WorkspaceTreeItem({
               {children}
             </SidebarEditableTitle>
           </span>
+          {sidebarSession ? <SidebarSessionShortcutChip /> : null}
         </button>
       )}
       {actions}
@@ -166,6 +174,17 @@ export function WorkspaceTreeItem({
       ) : null}
       {trailingActions}
     </div>
+  );
+}
+
+export function SidebarSessionShortcutChip() {
+  return (
+    <ShortcutChip
+      aria-hidden="true"
+      className={cn(SIDEBAR_SHORTCUT_BADGE_OVERLAY_CLASS, 'transition-opacity')}
+      data-sidebar-shortcut-chip="true"
+      hidden
+    />
   );
 }
 

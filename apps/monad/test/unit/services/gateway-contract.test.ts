@@ -65,6 +65,30 @@ test('stream() stamps the resolved provider+model onto the usage chunk', async (
   expect(usage?.modelId).toBe('mock-model');
 });
 
+test('stream() forwards the request abort signal to the provider', async () => {
+  let receivedSignal: AbortSignal | undefined;
+  const provider: ModelProvider = {
+    type: 'mock',
+    descriptor: { type: 'mock', label: 'Mock', strategy: 'native' },
+    async *stream(call): AsyncIterable<ModelChunk> {
+      receivedSignal = call.signal;
+      yield { type: 'text', token: 'done' };
+    }
+  };
+  const router = new GatewayModelRouter(deps(), registryWith(provider));
+  const controller = new AbortController();
+
+  for await (const _chunk of router.stream({
+    model: 'default',
+    messages: userMsg,
+    signal: controller.signal
+  })) {
+    // consume the stream
+  }
+
+  expect(receivedSignal).toBe(controller.signal);
+});
+
 test('a stream-only provider with no tool-calls finishes with "stop"', async () => {
   const textOnly: ModelProvider = {
     type: 'mock',

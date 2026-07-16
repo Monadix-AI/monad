@@ -4,8 +4,6 @@ import type { AcpAgentPresetView, AcpAgentView } from '@monad/protocol';
 import {
   Cancel01Icon,
   CheckIcon,
-  ChevronDownIcon,
-  ChevronRightIcon,
   Delete02Icon,
   LoaderPinwheelIcon,
   PlusSignIcon,
@@ -14,7 +12,7 @@ import {
   SaveIcon
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { Badge, Button, cn, Input, isProductIconId, Label, ProductIcon, Switch } from '@monad/ui';
+import { Badge, Button, cn, Input, isProductIconId, Label, MorphChevron, ProductIcon, Switch } from '@monad/ui';
 import { useId, useState } from 'react';
 
 import { I18nTrans, useT } from '#/components/I18nProvider';
@@ -227,17 +225,10 @@ function AcpAgentCard({
         onClick={() => setOpen((v) => !v)}
         type="button"
       >
-        {open ? (
-          <HugeiconsIcon
-            className="size-4 text-muted-foreground"
-            icon={ChevronDownIcon}
-          />
-        ) : (
-          <HugeiconsIcon
-            className="size-4 text-muted-foreground"
-            icon={ChevronRightIcon}
-          />
-        )}
+        <MorphChevron
+          className="size-4 text-muted-foreground"
+          expanded={open}
+        />
         <span className="truncate font-medium text-sm">{agent.name}</span>
         <Badge
           className="text-[10px]"

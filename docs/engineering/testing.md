@@ -14,16 +14,14 @@ bun run test:unit       # all package-local unit suites that expose test:unit
 bun run test:e2e        # all project e2e suites (daemon + web)
 bun run test:e2e:daemon # daemon/runtime e2e only
 bun run test:e2e:web    # web Playwright e2e only
-bun run test:loud       # full suite with verbose output
-bun run test:unit:loud  # unit suites with verbose output
-bun run test:e2e:loud   # e2e suites with verbose output
 bun ../../scripts/bun-test.ts test/e2e/*.smoke.test.ts --only-failures   # smoke tests only
 bun test/smoke/acp.ts   # subprocess smoke (ACP wire)
 ```
 
 When targeting a specific package, directory, or file, use `scripts/bun-test.ts`
-with `--only-failures` so the output stays focused on failing cases. Use `--loud`
-only when you intentionally need passing-case logs.
+with `--only-failures` so the output stays focused on failing cases. Agents must not
+use `:loud` scripts or pass `--loud`; narrow the test scope and keep the quiet failure
+filter enabled when investigating a failure.
 
 For final verification or any broad quality gate, collect the whole failure surface
 before fixing: run typecheck, lint, and the relevant test suites once, record every

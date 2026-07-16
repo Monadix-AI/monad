@@ -1243,10 +1243,10 @@ test('observation panel renders show history as the first list placeholder when 
   expect(html.indexOf('data-observation-list-placeholder="history"')).toBeGreaterThan(html.indexOf('role="log"'));
 });
 
-test('observation panel compact mode folds turn details and shows only the final output summary', () => {
+test('observation panel summary mode folds turn details and shows only the final output summary', () => {
   const html = renderToStaticMarkup(
     React.createElement(ExternalAgentObservationPanel, {
-      defaultRenderMode: 'compact',
+      defaultRenderMode: 'summary',
       onStop: () => {},
       stream: {
         id: 'exa_codex0000000',
@@ -1301,7 +1301,7 @@ test('observation panel accepts a controlled render mode command', () => {
     React.createElement(ExternalAgentObservationPanel, {
       onRenderModeChange: () => {},
       onStop: () => {},
-      renderMode: 'compact',
+      renderMode: 'summary',
       stream: {
         id: 'exa_codex0000000',
         agentName: 'codex',
@@ -1326,6 +1326,8 @@ test('observation panel accepts a controlled render mode command', () => {
   expect(html).toContain('Running for');
   expect(html).toContain('live output');
   expect(html).toContain('aria-pressed="true"');
+  expect(html).toContain('Summary observation view');
+  expect(html).toContain('data-observation-turn-mode="summary"');
 });
 
 test('Claude Code observation projects transcript user events as user message cards', () => {

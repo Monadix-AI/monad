@@ -141,12 +141,11 @@ export function createBridgeHandlers(opts: BridgeOptions): { handlers: AcpHandle
       branch: ({ id, title, atMessageId, origin }) =>
         post(`/v1/sessions/${id}/branch`, { title, atMessageId, origin: allowHttpTransport(origin) }),
       list: (params = {}) => get(`/v1/sessions${buildQuery(params)}`),
-      messages: ({ id, limit, before, includeInactive, includeAncestors }) =>
-        get(`/v1/sessions/${id}/messages${buildQuery({ limit, before, includeInactive, includeAncestors })}`),
+      messages: ({ id, limit, before, includeInactive }) =>
+        get(`/v1/sessions/${id}/messages${buildQuery({ limit, before, includeInactive })}`),
       delete: ({ id }) => del(`/v1/sessions/${id}`),
       abort: ({ id }) => post(`/v1/sessions/${id}/abort`),
       restore: ({ id, toMessageId }) => post(`/v1/sessions/${id}/restore`, { toMessageId }),
-      provenance: ({ id }) => get(`/v1/sessions/${id}/provenance`),
       configureRuntime: ({ id, sandboxRoots, mcpServers, delegate }) =>
         put(`/v1/sessions/${id}/runtime`, { sandboxRoots, mcpServers, delegate }),
       sendInline: async ({ sessionId, text }, sink: EventSink, runOpts) => {

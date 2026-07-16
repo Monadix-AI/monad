@@ -1,5 +1,5 @@
 // Offline wiring tests for the feature endpoints added for web-UI parity (usage reset, clarify,
-// session branch/restore/provenance, atom-pack management). Same approach as api.test.ts: drive
+// session branch/restore and atom-pack management). Same approach as api.test.ts: drive
 // endpoints through store.dispatch against a fake treaty-backed client, asserting delegation,
 // response shaping, and tag-based invalidation — no React render, no live daemon.
 
@@ -8,7 +8,7 @@ import type { MonadClient } from '@monad/client';
 import { expect, test } from 'bun:test';
 
 import { atomsApi } from '../../src/endpoints/atoms/index.ts';
-import { branchSessionApi, provenanceApi, restoreSessionApi } from '../../src/endpoints/sessions/index.ts';
+import { branchSessionApi, restoreSessionApi } from '../../src/endpoints/sessions/index.ts';
 import { clarifyRespondApi } from '../../src/endpoints/tools/clarify-respond.ts';
 import { getUsageApi } from '../../src/endpoints/usage/get-usage.ts';
 import { resetUsageApi } from '../../src/endpoints/usage/reset-usage.ts';
@@ -57,12 +57,6 @@ function fakeClient(overrides: Record<string, unknown>, calls: Calls): MonadClie
             post: async (body: { atMessageId?: string }) => {
               const fn = overrides.branch as ((sessionId: string, atMessageId?: string) => Promise<string>) | undefined;
               return ok({ sessionId: fn ? await fn(id, body.atMessageId) : `undefined${id}` });
-            }
-          },
-          provenance: {
-            get: async () => {
-              const self = { id, title: 't', createdAt: '', updatedAt: '' };
-              return ok({ ancestors: [{ id: 'ses_parent000000', title: 'p' }], self, descendants: [] });
             }
           },
           restore: {
@@ -199,15 +193,6 @@ test('restoreSession returns the restored count and new head', async () => {
   );
   expect('data' in res && res.data?.restoredCount).toBe(1);
   expect('data' in res && res.data?.newHeadMessageId).toBe('msg_300000000000');
-});
-
-test('provenance returns ancestors and descendants for the session', async () => {
-  const calls: Calls = { usageGet: 0, atomsList: 0, workspaceExperiencesList: 0 };
-  const store = createMonadStore({ client: fakeClient({}, calls) });
-
-  const res = await store.dispatch(provenanceApi.endpoints.provenance.initiate('ses_100000000000' as never));
-  expect(res.data?.ancestors[0]?.id).toBe('ses_parent000000');
-  expect(res.data?.self.id).toBe('ses_100000000000');
 });
 
 test('listAtomPacks caches by the Atoms tag', async () => {

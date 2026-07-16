@@ -121,6 +121,7 @@ export interface Agent {
       /** Project-local skills discovered from session.cwd/.monad/skills/ — merged with global skills
        *  for this loop only; global skill hot-reload still applies to the shared portion. */
       extraSkills?: LoadedSkill[];
+      steers?: AgentLoopDeps['steers'];
     }
   ): AgentLoop;
 }
@@ -277,6 +278,7 @@ export function createAgent(config: AgentConfig): Agent {
         generationParams: opts?.generationParams,
         userId: config.userId,
         emit,
+        steers: opts?.steers,
         sandboxRoots: opts?.sandboxRoots ?? config.sandboxRoots,
         agentId: opts?.agentId,
         backends: opts?.backends,

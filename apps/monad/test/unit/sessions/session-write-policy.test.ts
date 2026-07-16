@@ -75,7 +75,7 @@ test('branching an http-forkable editor session from http yields an http-writabl
   });
 
   // A fork initiated over http is a web session — the child's policy is the branching transport's,
-  // NOT the parent's acp-only policy. (The parent origin stays reachable via parentSessionId.)
+  // NOT the source session's acp-only policy.
   const { sessionId: childId } = await h.session.branch({ id: sessionId, origin: webOrigin });
 
   const r = await h.session.send({ sessionId: childId, text: '/help' });

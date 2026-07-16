@@ -5,6 +5,8 @@ import { sendMessageApi } from './send-message.ts';
 
 export interface SessionUiStreamState {
   items: UIItem[];
+  /** True after the daemon's first authoritative snapshot, including an empty transcript. */
+  snapshotReceived: boolean;
   /** Oldest message id in the (bounded) live window — the `before` cursor for loading older history. */
   oldestCursor?: string;
   /** True when older messages exist before the live window (so the client can page history). */
@@ -30,6 +32,7 @@ export function applyUiEvent(draft: SessionUiStreamState, event: SessionUiEvent,
   if (draft.streamError) draft.streamError = undefined;
   if (event.kind === 'snapshot') {
     draft.items = event.items;
+    draft.snapshotReceived = true;
     draft.oldestCursor = event.oldestCursor;
     draft.hasMore = event.hasMore ?? false;
     if (event.replacesTranscript) {
@@ -56,7 +59,7 @@ const streamUiItemsApi = sendMessageApi.injectEndpoints({
   overrideExisting: true,
   endpoints: (builder) => ({
     streamUiItems: builder.query<SessionUiStreamState, SessionId>({
-      queryFn: () => ({ data: { items: [], hasMore: false, replacementRevision: 0 } }),
+      queryFn: () => ({ data: { items: [], hasMore: false, replacementRevision: 0, snapshotReceived: false } }),
       async onCacheEntryAdded(
         sessionId: SessionId,
         {

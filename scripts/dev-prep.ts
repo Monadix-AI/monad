@@ -228,9 +228,13 @@ export function cleanupDevProcess(proc: DevProcess, signal: DevSignal = 'SIGTERM
 }
 
 type PortPidLookup = (port: string) => string[];
+type PortLookupSpawn = (command: string[]) => { stdout: Buffer; stderr: Buffer };
 
-function lookupPortPids(port: string): string[] {
-  const result = Bun.spawnSync(['lsof', '-ti', `:${port}`], { stdout: 'pipe', stderr: 'pipe' });
+export function lookupPortPids(
+  port: string,
+  spawn: PortLookupSpawn = (command) => Bun.spawnSync(command, { stdout: 'pipe', stderr: 'pipe' })
+): string[] {
+  const result = spawn(['lsof', `-tiTCP:${port}`, '-sTCP:LISTEN']);
   return result.stdout.toString().trim().split('\n').filter(Boolean);
 }
 

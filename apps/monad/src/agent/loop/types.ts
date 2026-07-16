@@ -37,6 +37,12 @@ export interface MessageRepo {
   settle?(message: ChatMessage, status: 'complete' | 'error'): boolean | Promise<boolean>;
 }
 
+export interface PendingSteerSource {
+  close(): string[];
+  reopen(): void;
+  take(): string[];
+}
+
 /** Attached to the current user turn only; persisted history replay will not resend it. */
 export interface ImageAttachment {
   image: Uint8Array;
@@ -53,6 +59,7 @@ export interface AgentLoopDeps {
   /** Principal id for observability span attribution. In-process telemetry only. */
   userId?: string;
   emit(event: Event): void;
+  steers?: PendingSteerSource;
   sandboxRoots?: string[];
   /** The session's bound agent (`session.agentIds[0]`), threaded to the sandbox seam so a per-agent
    *  launcher (the VM backend) reuses one instance across the agent's sessions. Absent → per-session. */

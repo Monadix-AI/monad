@@ -526,7 +526,7 @@ describe('dispatchCommand', () => {
       '## Commands:',
       [
         '### Conversation',
-        '- `/end` End the current conversation and start fresh',
+        '- `/archive` Archive the current conversation',
         '- `/handoff [initial task for the new session]` Summarize this conversation and continue it in a new session',
         '- `/new [label]` Start a new conversation',
         '- `/sessions` List conversations',
@@ -536,7 +536,8 @@ describe('dispatchCommand', () => {
         '### Context',
         '- `/clear` Clear the view (client-side)',
         '- `/compact` Summarize and compact the context window now',
-        '- `/reset` Clear this conversation’s history'
+        '- `/reset` Clear this conversation’s history',
+        '- `/view <summary|detail>` Switch local observation rendering mode'
       ].join('\n'),
       [
         '### Memory',

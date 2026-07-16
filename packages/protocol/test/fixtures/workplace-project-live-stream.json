@@ -4,7 +4,7 @@
     "daemonUrl": "http://127.0.0.1:52749",
     "projectId": "prj_01KWV7JGB54M",
     "projectTitle": "Monad",
-    "uiItemsEndpoint": "/v1/projects/prj_01KWV7JGB54M/ui-items?limit=200&includeInactive=true&includeAncestors=true",
+    "uiItemsEndpoint": "/v1/projects/prj_01KWV7JGB54M/ui-items?limit=200&includeInactive=true",
     "uiStreamEndpoint": "/v1/projects/prj_01KWV7JGB54M/ui-stream"
   },
   "uiItems": {

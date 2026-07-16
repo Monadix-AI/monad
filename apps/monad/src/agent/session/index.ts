@@ -1,7 +1,7 @@
 // session — agent-side run/session management. Persistence is injected via SessionRepo
 // (the daemon backs it with @monad/store); agent-core stays storage-agnostic.
 
-import type { AgentId, MessageId, PrincipalId, Session, SessionId, SessionOrigin, SessionState } from '@monad/protocol';
+import type { AgentId, PrincipalId, Session, SessionId, SessionOrigin, SessionState } from '@monad/protocol';
 
 import { newId } from '@monad/protocol';
 
@@ -35,21 +35,7 @@ export class SessionManager {
     origin?: SessionOrigin,
     cwd?: string
   ): Promise<Session> {
-    return this.build(title, owner, null, undefined, agentId, origin, cwd);
-  }
-
-  /** Fork a child session off `parentId`. Child starts empty; history is replayed across
-   * the lineage via `includeAncestors`. `atMessageId` records the branch point. `origin` is the
-   * BRANCHING transport's provenance (a fork from web is a web session) — not inherited from the
-   * parent; the parent's origin stays reachable via `parentSessionId`. */
-  async branch(
-    parentId: SessionId,
-    owner: PrincipalId,
-    title: string,
-    atMessageId?: MessageId,
-    origin?: SessionOrigin
-  ): Promise<Session> {
-    return this.build(title, owner, parentId, atMessageId, undefined, origin);
+    return this.build(title, owner, agentId, origin, cwd);
   }
 
   /** A session under a Workplace Project (Track B). Otherwise identical to `create` — same lineage,
@@ -62,14 +48,12 @@ export class SessionManager {
     cwd?: string,
     id?: SessionId
   ): Promise<Session> {
-    return this.build(title, owner, null, undefined, undefined, origin, cwd, projectId, id);
+    return this.build(title, owner, undefined, origin, cwd, projectId, id);
   }
 
   private async build(
     title: string,
     owner: PrincipalId,
-    parentSessionId: SessionId | null,
-    branchedAtMessageId?: MessageId,
     agentId?: AgentId,
     origin?: SessionOrigin,
     cwd?: string,
@@ -83,8 +67,6 @@ export class SessionManager {
       ownerPrincipalId: owner,
       state: 'active',
       agentIds: agentId ? [agentId] : [],
-      parentSessionId,
-      branchedAtMessageId,
       archived: false,
       restoreCount: 0,
       origin,

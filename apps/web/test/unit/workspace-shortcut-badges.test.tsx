@@ -1,7 +1,12 @@
 import { expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import { SidebarShortcutBadge } from '../../src/features/shell/sidebar/nav-item';
+import {
+  SIDEBAR_SHORTCUT_BADGE_OVERLAY_CLASS,
+  SidebarActionVisibilityRules,
+  SidebarShortcutBadge
+} from '../../src/features/shell/sidebar/nav-item';
+import { SidebarSessionShortcutChip } from '../../src/features/shell/sidebar/workspace-tree-item';
 
 for (const modifierLabel of ['⌘', 'Ctrl']) {
   test(`shortcut badge renders the ${modifierLabel} modifier with its action key`, () => {
@@ -12,9 +17,7 @@ for (const modifierLabel of ['⌘', 'Ctrl']) {
           value="`"
         />
       )
-    ).toBe(
-      `<span class="inline-flex h-4 min-w-7 items-center justify-center gap-px rounded-full bg-sidebar-accent/85 px-1.5 font-medium text-[10px] text-muted-foreground tabular-nums shadow-[inset_0_1px_0_rgb(255_255_255/0.08)] backdrop-blur">${modifierLabel}\`</span>`
-    );
+    ).toContain(`data-slot="shortcut-chip"`);
     expect(
       renderToStaticMarkup(
         <SidebarShortcutBadge
@@ -22,8 +25,18 @@ for (const modifierLabel of ['⌘', 'Ctrl']) {
           value="I"
         />
       )
-    ).toBe(
-      `<span class="inline-flex h-4 min-w-7 items-center justify-center gap-px rounded-full bg-sidebar-accent/85 px-1.5 font-medium text-[10px] text-muted-foreground tabular-nums shadow-[inset_0_1px_0_rgb(255_255_255/0.08)] backdrop-blur">${modifierLabel}I</span>`
-    );
+    ).toContain(`>${modifierLabel}I</kbd>`);
   });
 }
+
+test('session shortcut badges stay at the item right edge and hide on hover', () => {
+  const chip = renderToStaticMarkup(<SidebarSessionShortcutChip />);
+  const rules = renderToStaticMarkup(<SidebarActionVisibilityRules />);
+
+  for (const className of SIDEBAR_SHORTCUT_BADGE_OVERLAY_CLASS.split(' ')) {
+    expect(chip).toContain(className);
+  }
+  expect(chip).not.toContain('ml-auto');
+  expect(rules).toContain('[data-sidebar-tree-item="true"]:hover [data-sidebar-shortcut-chip="true"]');
+  expect(rules).toContain('opacity: 0');
+});

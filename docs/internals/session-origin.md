@@ -81,8 +81,7 @@ ACP `_meta.monad.ext` (validated). Channel has no client-declared ext source.
 Identity/policy hints are **client-declared** (a TUI sends `surface:'tui'`); `transport` and
 `env` are filled **server-side** and never trusted from the body. A slash-command `/new`
 inherits the running session's origin (a `/new` in Telegram stays Telegram). **Branch
-stamps the branching transport's origin**, not the parent's — the parent stays reachable via
-`parentSessionId`.
+stamps the branching transport's origin** on the independent snapshot session.
 
 ## Adding to the model
 

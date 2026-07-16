@@ -1,4 +1,3 @@
-import type { NativeAgentDeliveryId } from '@monad/protocol';
 import type { Message } from '../../experience/types.ts';
 
 import { ProductIcon } from '@monad/ui';
@@ -48,14 +47,11 @@ const SYSTEM_EVENT_CSS = `
 
 export function SystemMessageRow({
   msg,
-  onAgentClick,
-  onFollowExternalAgentSession
+  onAgentClick
 }: {
   msg: Message;
   onAgentClick?: (id: string) => void;
-  onFollowExternalAgentSession?: (id: string, deliveryId?: NativeAgentDeliveryId) => void;
 }): React.ReactElement {
-  void onFollowExternalAgentSession;
   const developer = msg.kind === 'developer' || msg.developerOnly === true;
   const agentProductIcon = msg.agentChip ? resolveProductIcon(msg.agentChip) : null;
   return (

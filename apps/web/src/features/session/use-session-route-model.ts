@@ -10,18 +10,13 @@ import {
   useLazyListCommandsQuery,
   useSendMessageMutation,
   useStreamUiItemsQuery,
-  useTranscribeAudioMutation
+  useTranscribeAudioMutation,
+  useUpdateSessionMutation
 } from '@monad/client-rtk';
-import { useFirstItemIndex } from '@monad/ui/hooks/use-first-item-index';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import { useT } from '#/components/I18nProvider';
-import {
-  type BranchSourceViewItem,
-  branchSourceHref,
-  type ViewItem,
-  viewItemKey
-} from '#/features/session/chat-view-items';
+import { type ViewItem, viewItemKey } from '#/features/session/chat-view-items';
 import {
   buildCommandMenuItems,
   type SessionCommandMenuItem,
@@ -36,6 +31,8 @@ import { useChatComposer } from '#/hooks/use-chat-composer';
 import { pushShellUrl, removeShellSearchParam, replaceShellUrl, useShellSearchParam } from '#/hooks/use-shell-location';
 import { useTranscriptHistory } from '#/hooks/use-transcript-history';
 import { normalizedComposerSettings } from '#/lib/composer-settings';
+import { getActiveDaemonConnection } from '#/lib/daemon-connections';
+import { useMonadRuntime } from '#/lib/monad-runtime-context';
 import { useWorkspaceShellStore, type WorkspaceShellState } from '#/lib/workspace-shell-store';
 import { buildDraftSessionFeedback, resolveDraftAgentLabel } from './draft-session-feedback';
 import {
@@ -56,22 +53,25 @@ type UseSessionRouteModelParams = {
   agents: Agent[];
   currentSession: Session | null;
   defaultProfileAlias?: string;
+  isCurrentSessionDeleted?: boolean;
+  onSessionUnarchived: () => void;
   profiles: ProfileView[];
   sessions: Session[];
   voiceModelConfigured: boolean;
 };
 
-const sessionViewItemKey = (item: ViewItem): string => item.id;
-
 export function useSessionRouteModel({
   agents,
   currentSession,
   defaultProfileAlias,
+  isCurrentSessionDeleted = false,
+  onSessionUnarchived,
   profiles,
   sessions,
   voiceModelConfigured
 }: UseSessionRouteModelParams) {
   const t = useT();
+  const { baseUrl: daemonBaseUrl } = useMonadRuntime();
   const { currentId } = useShellRoute();
   const { data: appearance } = useGetAppearanceQuery();
   const composerSettings = normalizedComposerSettings(appearance?.composer);
@@ -81,9 +81,8 @@ export function useSessionRouteModel({
   const [clarifyRespond] = useClarifyRespondMutation();
   const [createSession] = useCreateSessionMutation();
   const [sendMessage] = useSendMessageMutation();
+  const [updateSession, updateSessionState] = useUpdateSessionMutation();
   const modelProviders = useSessionModelOptions();
-  const showInspector = useWorkspaceShellStore((state: WorkspaceShellState) => state.rightPanelOpen);
-  const toggleSessionInspector = useWorkspaceShellStore((state: WorkspaceShellState) => state.toggleRightPanel);
   const draftSession = useWorkspaceShellStore((state: WorkspaceShellState) =>
     currentId ? (state.draftChatSessions.find((session) => session.id === currentId) ?? null) : null
   );
@@ -94,8 +93,6 @@ export function useSessionRouteModel({
   const input = useSessionUiStore((state) => state.input);
   const activeSkill = useSessionUiStore((state) => state.activeSkill);
   const applyCommandInsert = useSessionUiStore((state) => state.applyCommandInsert);
-  const transcriptRenderMode = useSessionUiStore((state) => state.transcriptRenderMode);
-  const setTranscriptRenderMode = useSessionUiStore((state) => state.setTranscriptRenderMode);
   const clearComposerInput = useSessionUiStore((state) => state.clearComposerInput);
   const setActiveSkill = useSessionUiStore((state) => state.setActiveSkill);
   const skillMenuDismissed = useSessionUiStore((state) => state.skillMenuDismissed);
@@ -239,6 +236,11 @@ export function useSessionRouteModel({
   const setSessionUrl = useCallback((id: SessionId | null) => {
     replaceShellUrl(id === null ? '/' : `/sessions/${id}`);
   }, []);
+  const unarchiveCurrentSession = useCallback(async () => {
+    if (currentId === null) return;
+    await updateSession({ id: currentId, archived: false }).unwrap();
+    onSessionUnarchived();
+  }, [currentId, onSessionUnarchived, updateSession]);
   const {
     isBusy,
     optimistic,
@@ -252,6 +254,8 @@ export function useSessionRouteModel({
     handleSubmit,
     handleQueueSubmit,
     handleForceSteer,
+    handleSteerQueued,
+    cancelQueuedMessages,
     removeQueuedMessage
   } = useChatComposer({
     currentId: draftSession ? null : currentId,
@@ -305,7 +309,6 @@ export function useSessionRouteModel({
       }),
     [visibleHistory, visibleLiveItems, optimistic, draftMessages, commandPending, transcript.mode]
   );
-  const firstItemIndex = useFirstItemIndex(viewMessages, sessionViewItemKey);
   const deepLinkMsg = useShellSearchParam('msg');
   const openAtMessage = transcript.openAtMessage;
   const pendingScrollKeyRef = useRef<string | null>(null);
@@ -424,50 +427,54 @@ export function useSessionRouteModel({
     () =>
       currentId
         ? {
+            commands,
             identity: {
               assistantLabel,
               currentSession,
               currentSessionId: currentId,
+              isArchived: Boolean(currentSession?.archived),
+              isDeleted: isCurrentSessionDeleted,
               isDraft: sessionIsDraft(currentSession),
               isReadOnly,
+              isUnarchiving: updateSessionState.isLoading,
               onRetryDraftSession: draftSession?.status === 'failed' ? retryDraftSession : undefined,
               onSelectSession: (sessionId) => {
                 setOptimistic([]);
                 setSessionUrl(sessionId);
-              }
+              },
+              onUnarchive: () => void unarchiveCurrentSession()
             },
             transcript: {
-              commands,
-              firstItemIndex,
               highlightedMessageId: deepLinkMsg,
+              isLoading: draftSession === null && streamData?.snapshotReceived !== true,
+              showLoadingSkeleton: getActiveDaemonConnection(daemonBaseUrl).type === 'remote',
               onApproval: (approval, allow, scope, reason) => {
                 void approveTool({ requestId: approval.requestId, allow, scope, reason });
               },
               onBranch: handleBranch,
               onClarifyAnswer: (requestId, answer) => void clarifyRespond({ requestId, answer }),
               onEndReached: transcript.loadNewer,
-              onOpenBranchSource: (source: BranchSourceViewItem) => pushShellUrl(branchSourceHref(source)),
               onRestore: handleRestore,
               onScrollToBottom: scrollToBottom,
               onStartReached: transcript.loadOlder,
               pendingApprovals,
               pendingClarifications,
-              renderMode: transcriptRenderMode,
               transcriptRef,
               viewMessages
             },
             composer: {
               commandMenuLoading,
-              commands,
               composerSettings,
               contextUsage: sessionContextUsage,
               isBusy,
               menuItems,
               messageQueue,
               model: sessionModel,
+              onCancelQueued: cancelQueuedMessages,
               onCommandItemApply: applyItem,
               onKeyDown: handleTextareaKeyDown,
               onRemoveQueuedMessage: removeQueuedMessage,
+              onSteerQueued: () => void handleSteerQueued(),
               onStop: handleStop,
               onSubmit: () => void handleSubmit(),
               onVoiceSettingsClick: () => pushShellUrl(studioPath('models')),
@@ -479,21 +486,18 @@ export function useSessionRouteModel({
               voiceModelConfigured
             },
             inspector: {
-              items: inspectorItems,
-              onToggle: toggleSessionInspector,
-              open: showInspector,
-              renderMode: transcriptRenderMode,
-              onRenderModeChange: setTranscriptRenderMode
+              items: inspectorItems
             }
           }
         : null,
     [
       currentId,
       commands,
+      daemonBaseUrl,
       sessionContextUsage,
       currentSession,
+      isCurrentSessionDeleted,
       isReadOnly,
-      firstItemIndex,
       deepLinkMsg,
       inspectorItems,
       isBusy,
@@ -505,6 +509,7 @@ export function useSessionRouteModel({
       sessionModel,
       assistantLabel,
       approveTool,
+      cancelQueuedMessages,
       handleBranch,
       clarifyRespond,
       removeQueuedMessage,
@@ -519,14 +524,14 @@ export function useSessionRouteModel({
       transcript.loadOlder,
       handleStop,
       handleSubmit,
-      toggleSessionInspector,
-      transcriptRenderMode,
+      handleSteerQueued,
       transcribeAudio,
       pendingApprovals,
       pendingClarifications,
-      setTranscriptRenderMode,
-      showInspector,
       skillMenuOpen,
+      streamData?.snapshotReceived,
+      unarchiveCurrentSession,
+      updateSessionState.isLoading,
       viewMessages,
       voiceModelConfigured
     ]

@@ -7,9 +7,15 @@ import {
   pickRepresentation,
   registerMessageType,
   resolveMessageType,
+  sessionSchema,
   unregisterMessageType,
   validateMessageData
 } from '../src/index.ts';
+
+test('session contract has no branch lineage fields', () => {
+  expect('parentSessionId' in sessionSchema.shape).toBe(false);
+  expect('branchedAtMessageId' in sessionSchema.shape).toBe(false);
+});
 
 test('isHttpUrl accepts only http(s) — the shared scheme allowlist for card actions + render boundaries', () => {
   expect(isHttpUrl('https://x.dev')).toBe(true);
@@ -38,13 +44,17 @@ test('unknown types fall back to the pass-through descriptor (in context via tex
   expect(resolveMessageType('something_custom').fallbacks).toEqual(['markdown', 'text']);
 });
 
-test('branch source messages are UI-only links with validated targets', () => {
+test('branch source messages are UI-only snapshot boundaries with a title', () => {
   const descriptor = resolveMessageType('branch_source');
   expect(descriptor.includeInContext).toBe(false);
+  expect(descriptor.interactions).toBeUndefined();
   expect(
-    descriptor.dataSchema.safeParse({ sessionId: 'ses_123456789012', messageId: 'msg_123456789012' }).success
-  ).toBe(true);
-  expect(descriptor.dataSchema.safeParse({ sessionId: 'bad', messageId: 'msg_123456789012' }).success).toBe(false);
+    descriptor.dataSchema.parse({
+      sessionTitle: 'Original session',
+      sessionId: 'ses_123456789012',
+      messageId: 'msg_123456789012'
+    })
+  ).toEqual({ sessionTitle: 'Original session' });
 });
 
 test('atom types are namespaced and cannot shadow built-ins', () => {

@@ -5,6 +5,7 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { DropdownMenu as DropdownMenuPrimitive } from 'radix-ui';
 
 import { cn } from '../lib/utils';
+import { ShortcutChip, type ShortcutChipProps } from './ShortcutChip';
 
 function DropdownMenu({ ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {
   return (
@@ -177,10 +178,10 @@ function DropdownMenuSeparator({ className, ...props }: React.ComponentProps<typ
   );
 }
 
-function DropdownMenuShortcut({ className, ...props }: React.ComponentProps<'span'>) {
+function DropdownMenuShortcut({ className, ...props }: ShortcutChipProps) {
   return (
-    <span
-      className={cn('ml-auto text-muted-foreground text-xs tracking-widest', className)}
+    <ShortcutChip
+      className={cn('ml-auto', className)}
       data-slot="dropdown-menu-shortcut"
       {...props}
     />

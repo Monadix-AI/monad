@@ -37,11 +37,17 @@ type SidebarMockState = {
   createProjectRequests: Array<{ cwd?: string; title: string }>;
   createProjectSessionRequests: Array<{ projectId: string; title?: string }>;
   invalidSessionRequests: Array<{ method: string; path: string; sessionId: string }>;
-  sendMessageRequests: Array<{ sessionId: string; text?: string }>;
+  sendMessageRequests: Array<{
+    sessionId: string;
+    steer?: boolean;
+    steerMessages?: string[];
+    text?: string;
+  }>;
 };
 
 type SidebarMockOptions = {
   createChatSessionGate?: Promise<void>;
+  steerGate?: Promise<void>;
 };
 
 function deferred() {
@@ -188,20 +194,18 @@ async function installSidebarMock(page: Page, state = createSidebarState(), opti
     const sessionMessagesMatch = path.match(/^\/v1\/sessions\/([^/]+)\/messages$/);
     if (sessionMessagesMatch && method === 'POST') {
       const sessionId = sessionMessagesMatch[1] ?? '';
-      const body = request.postDataJSON() as { text?: string };
+      const body = request.postDataJSON() as { steer?: boolean; steerMessages?: string[]; text?: string };
       if (!state.sessions.some((session) => session.id === sessionId)) {
         state.invalidSessionRequests.push({ method, path, sessionId });
       }
-      state.sendMessageRequests.push({ sessionId, text: body.text });
+      state.sendMessageRequests.push({
+        sessionId,
+        ...(body.steer !== undefined ? { steer: body.steer } : {}),
+        ...(body.steerMessages ? { steerMessages: body.steerMessages } : {}),
+        ...(body.text !== undefined ? { text: body.text } : {})
+      });
+      if (body.steer) await options.steerGate;
       return route.fulfill(json({ accepted: true }));
-    }
-    const provenanceMatch = path.match(/^\/v1\/sessions\/([^/]+)\/provenance$/);
-    if (provenanceMatch && method === 'GET') {
-      const sessionId = provenanceMatch[1] ?? '';
-      if (!state.sessions.some((session) => session.id === sessionId)) {
-        state.invalidSessionRequests.push({ method, path, sessionId });
-      }
-      return route.fulfill(json({ ancestors: [], descendants: [] }));
     }
     if (method === 'POST' && path === '/v1/sessions') {
       await options.createChatSessionGate;
@@ -349,6 +353,80 @@ async function expandAllProjects(page: Page) {
 }
 
 test.describe('workspace sidebar interactions', () => {
+  test('composer queue expands without scrollbars, steers immediately, and cancels without sending', async ({
+    page
+  }) => {
+    const steer = deferred();
+    const state = await installSidebarMock(page, createSidebarState(), { steerGate: steer.promise });
+    await page.goto(`/sessions/${CHAT_SESSION_ID}`);
+    await expect(page.getByTestId('daemon-menu-trigger')).toBeVisible();
+
+    const editor = page.locator('[contenteditable][aria-label^="Message "]');
+    await expect(editor).toBeVisible();
+    await editor.fill('Keep this initial response running');
+    await editor.press('Enter');
+
+    const queuedMessages = [
+      'First queued adjustment uses enough words to occupy more than one visual line in the card.',
+      'Second queued adjustment keeps the implementation details in their original order.',
+      'Third queued adjustment asks for a compact comparison of every relevant behavior and edge case.',
+      'Fourth queued adjustment checks transport parity, persistence order, accessibility, scrolling behavior, layout stability, and error handling with enough additional detail to exceed five rendered lines inside the fixed-width card.',
+      'Fifth queued adjustment is the newest card.'
+    ];
+    for (const message of queuedMessages) {
+      await editor.fill(message);
+      await editor.press('Enter');
+    }
+
+    const queue = page.locator('[data-slot="composer-queue-stack"]');
+    await expect(queue).toBeVisible();
+    await expect(queue.locator('[data-slot="composer-queue-stack-card"]')).toHaveCount(3);
+    await expect(queue.locator('[data-slot="composer-queue-expanded-card"]')).toHaveCount(5);
+
+    await queue.hover();
+    const expanded = queue.locator('[data-slot="composer-queue-expanded-list"]');
+    await expect(expanded).toBeVisible();
+    const layout = await expanded.evaluate((element) => {
+      const style = getComputedStyle(element);
+      const cards = Array.from(element.querySelectorAll<HTMLElement>('[data-slot="composer-queue-expanded-card"]'));
+      const heights = cards.map((card) => card.getBoundingClientRect().height);
+      const text = cards[1]?.querySelector<HTMLElement>('p');
+      return {
+        backgroundColor: style.backgroundColor,
+        horizontalOverflow: style.overflowX,
+        lineClamp: text ? getComputedStyle(text).webkitLineClamp : '',
+        maxHeight: style.maxHeight,
+        scrollHeight: element.scrollHeight,
+        clientHeight: element.clientHeight,
+        scrollbarWidth: style.scrollbarWidth,
+        heights
+      };
+    });
+    expect(layout.backgroundColor).toBe('rgba(0, 0, 0, 0)');
+    expect(layout.horizontalOverflow).toBe('hidden');
+    expect(layout.lineClamp).toBe('5');
+    expect(layout.maxHeight).toBe('240px');
+    expect(layout.scrollHeight).toBeGreaterThan(layout.clientHeight);
+    expect(layout.scrollbarWidth).toBe('none');
+    expect(Math.max(...layout.heights)).toBeGreaterThan(Math.min(...layout.heights));
+
+    await page.getByRole('button', { name: 'Steer now' }).click();
+    await expect(queue).toBeHidden();
+    for (const message of queuedMessages) await expect(page.getByText(message, { exact: true })).toBeVisible();
+    await expect
+      .poll(() => state.sendMessageRequests.find((request) => request.steer)?.steerMessages)
+      .toEqual(queuedMessages);
+    steer.resolve();
+
+    const requestsAfterSteer = state.sendMessageRequests.length;
+    await editor.fill('Cancel this queued follow-up');
+    await editor.press('Enter');
+    await expect(queue).toBeVisible();
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(queue).toBeHidden();
+    expect(state.sendMessageRequests).toHaveLength(requestsAfterSteer);
+  });
+
   test('shows projects without selecting a session, then opens an explicit project session', async ({ page }) => {
     await installSidebarMock(page);
     await page.goto('/');
@@ -481,7 +559,7 @@ test.describe('workspace sidebar interactions', () => {
     await expect(page).toHaveURL(/\/sessions\/ses_/);
     const transcript = page.getByRole('log');
     await expect(transcript.getByText(draft)).toBeVisible();
-    await expect(transcript.locator('[data-message-pending="true"]')).toHaveText('Default Agent');
+    await expect(transcript.locator('[data-pending="true"]')).toHaveText('Default Agent');
     createChatSession.resolve();
     await expect(transcript.getByText('Old chat transcript should not flash')).toBeHidden();
     await expect(rightPanel.getByText('Old inspector content should not flash')).toHaveCount(0);
@@ -530,6 +608,61 @@ test.describe('workspace sidebar interactions', () => {
     await page.keyboard.press('Enter');
     await expect(page.getByRole('link', { name: 'Renamed Chat Session' })).toBeVisible();
     expect(state.updateSessionRequests).toContainEqual({ id: CHAT_SESSION_ID, title: 'Renamed Chat Session' });
+  });
+
+  test('deletes chat sessions through right-click item menus', async ({ page }) => {
+    const state = await installSidebarMock(page);
+    await page.goto('/');
+
+    await openItemMenu(page, 'Chat Session 1');
+    await expect(page.getByRole('menuitem', { name: 'Archive' })).toBeVisible();
+    await page.getByRole('menuitem', { name: 'Delete session' }).click();
+    await expect(page.getByRole('link', { name: 'Chat Session 1' })).toBeHidden();
+    expect(state.deleteSessionRequests).toContain(CHAT_SESSION_ID);
+  });
+
+  test('offers archive and delete actions for project sessions', async ({ page }) => {
+    await installSidebarMock(page);
+    await page.goto(`/workspace/${PROJECT_ID}`);
+    await expandAllProjects(page);
+
+    await openItemMenu(page, 'Project Session 1');
+    await expect(page.getByRole('menuitem', { name: 'Archive' })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'Delete session' })).toBeVisible();
+  });
+
+  test('opens a compositor-safe command palette and remains responsive after tab', async ({ page }) => {
+    await installSidebarMock(page);
+    await page.goto('/');
+
+    await page.evaluate(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, ctrlKey: true, key: 'k' }));
+    });
+    const palette = page.getByRole('dialog', { name: 'Command palette' });
+    const overlay = page.locator('[data-slot="dialog-overlay"]');
+    await expect(palette).toBeVisible();
+    await expect(overlay).toBeVisible();
+    const backdropFilters = await page.evaluate(() => {
+      const dialog = document.querySelector('[role="dialog"]');
+      const nodes = [
+        dialog,
+        document.querySelector('[data-slot="dialog-overlay"]'),
+        ...(dialog?.querySelectorAll('[data-slot="shortcut-chip"]') ?? [])
+      ];
+      return nodes
+        .filter((node): node is Element => node !== null)
+        .map((node) => getComputedStyle(node).backdropFilter);
+    });
+    expect(backdropFilters.length).toBeGreaterThan(2);
+    expect(backdropFilters).toEqual(Array.from({ length: backdropFilters.length }, () => 'none'));
+    await page.evaluate(() => {
+      for (let index = 0; index < 20; index += 1) {
+        window.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, ctrlKey: true, key: 'k', repeat: true }));
+      }
+    });
+    await page.keyboard.press('Tab');
+    await expect(palette).toBeVisible();
+    await expect(page.getByRole('option', { name: 'New chat' })).toBeVisible();
   });
 
   test('pins, unpins, archives sessions, and creates projects from sidebar actions', async ({ page }) => {

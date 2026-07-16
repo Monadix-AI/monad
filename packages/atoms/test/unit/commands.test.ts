@@ -115,12 +115,13 @@ test('view command switches the local observation render mode', async () => {
   const view = BUILTIN_COMMANDS.find((c) => c.name === 'view');
   const result = await view?.run(
     {
-      args: 'compact',
+      args: 'summary',
       sessionId: 'ses_test',
       principalId: 'usr_test',
       newSession: async () => ({ sessionId: 'ses_new' }),
       listSessions: async () => [],
       switchSession: async () => null,
+      archiveSession: async () => {},
       resetHistory: async () => ({ clearedCount: 0 }),
       compact: async () => ({ compacted: 0 }),
       consolidate: async () => ({ level: 1, l1Scopes: 0, nodes: 0, edges: 0, laws: 0, prunedEdges: 0, lawScopes: 0 }),
@@ -136,11 +137,11 @@ test('view command switches the local observation render mode', async () => {
       t: (key) => key,
       log: () => {}
     },
-    'compact'
+    'summary'
   );
 
   expect(result).toEqual({
-    message: 'cmd.view.compact',
-    effect: { type: 'observation-render-mode-changed', mode: 'compact' }
+    message: 'cmd.view.summary',
+    effect: { type: 'observation-render-mode-changed', mode: 'summary' }
   });
 });

@@ -14,7 +14,6 @@ function seedSession(store: ReturnType<typeof createStore>): Session {
     ownerPrincipalId: newId('prn'),
     state: 'active',
     agentIds: [],
-    parentSessionId: null,
     archived: false,
     restoreCount: 0,
     usage: {
@@ -61,7 +60,7 @@ test('startGenerativeMessage streams a card: pending → delta → complete, the
   const settled = store.getMessage(s.id, gen.messageId);
   expect(settled?.stream.status).toBe('complete');
   expect(settled?.text).toBe('Pick one');
-  expect((settled?.data as { title: string }).title).toBe('Choose');
+  expect((settled?.data as { title: string } | undefined)?.title).toBe('Choose');
   store.close();
 });
 

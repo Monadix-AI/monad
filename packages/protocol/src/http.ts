@@ -64,7 +64,6 @@ import {
   getAgentResponseSchema,
   getDefaultAgentResponseSchema,
   getHealthResponseSchema,
-  getProvenanceResponseSchema,
   getSessionResponseSchema,
   listAgentsResponseSchema,
   listMessagesQuerySchema,
@@ -270,10 +269,6 @@ export const daemonHttpContract = {
       params: sessionParamsSchema,
       body: branchSessionRequestSchema,
       response: { 201: branchSessionResponseSchema }
-    }),
-    provenance: defineHttpEndpoint({
-      params: sessionParamsSchema,
-      response: { 200: getProvenanceResponseSchema }
     }),
     restore: defineHttpEndpoint({
       params: sessionParamsSchema,

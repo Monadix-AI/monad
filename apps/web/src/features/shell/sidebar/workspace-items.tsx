@@ -1,4 +1,11 @@
-import { ChatAdd01Icon, FolderAddIcon, InboxIcon, ListCollapse, ListTreeIcon } from '@hugeicons/core-free-icons';
+import {
+  ChatAdd01Icon,
+  FolderAddIcon,
+  InboxIcon,
+  ListCollapse,
+  ListTreeIcon,
+  Search01Icon
+} from '@hugeicons/core-free-icons';
 import { memo, useMemo } from 'react';
 
 import { ChatSessionList } from './chat-session-list';
@@ -47,7 +54,7 @@ const WorkspaceSectionList = memo(function WorkspaceSectionList() {
           shortcutModifierLabel={meta.shortcutModifierLabel}
           shortcutValue={meta.showShortcutBadges ? '`' : undefined}
         />
-        <div className="mt-0.5">
+        <div className="mt-0.5 flex flex-col gap-0.5">
           <SidebarNavItem
             active={state.inboxActive}
             href="/inbox"
@@ -56,6 +63,13 @@ const WorkspaceSectionList = memo(function WorkspaceSectionList() {
             onClick={actions.openInbox}
             shortcutModifierLabel={meta.shortcutModifierLabel}
             shortcutValue={meta.showShortcutBadges ? 'I' : undefined}
+          />
+          <SidebarNavItem
+            icon={Search01Icon}
+            label={meta.t('web.sidebar.searchSessions')}
+            onClick={actions.openSearch}
+            shortcutModifierLabel={meta.shortcutModifierLabel}
+            shortcutValue={meta.showShortcutBadges ? 'K' : undefined}
           />
         </div>
       </div>

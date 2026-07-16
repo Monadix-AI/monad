@@ -13,7 +13,6 @@ function session(over: Partial<Session> = {}): Session {
     ownerPrincipalId: newId('prn'),
     state: 'active',
     agentIds: [],
-    parentSessionId: null,
     archived: false,
     restoreCount: 0,
     createdAt: now,

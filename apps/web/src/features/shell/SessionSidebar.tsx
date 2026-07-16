@@ -52,6 +52,7 @@ interface SidebarWorkspaceConfig {
   onOpenProject: (id: string) => void;
   onOpenProjectSettings: (id: string) => void;
   onOpenProjectSession: (projectId: string, sessionId: SessionId) => void;
+  onOpenSearch: () => void;
 }
 
 interface SidebarSurfacesConfig {
@@ -130,6 +131,7 @@ export function SessionSidebar({ daemon, surfaces, workspace }: Props) {
     onOpenProject,
     onOpenProjectSession,
     onOpenProjectSettings,
+    onOpenSearch,
     onOpenSession,
     projects,
     workspaceItemsLoading
@@ -181,6 +183,9 @@ export function SessionSidebar({ daemon, surfaces, workspace }: Props) {
     deleteProject,
     archiveChatSession,
     archiveProjectSession,
+    deleteArchivedSession,
+    deleteChatSession,
+    deleteProjectSession,
     newProjectDialogOpen,
     pendingUnarchivedSessionIds,
     renameProject,
@@ -194,7 +199,8 @@ export function SessionSidebar({ daemon, surfaces, workspace }: Props) {
     chatSessions,
     onOpenProject,
     onOpenWorkspace,
-    projects
+    projects,
+    t
   });
   const currentSidebarSurfaceRef = useRef<SidebarPagerSurface>(
     showArchived ? 'archived' : showStudio ? 'studio' : 'workspace'
@@ -717,11 +723,14 @@ export function SessionSidebar({ daemon, surfaces, workspace }: Props) {
         createProjectSession: onCreateProjectSession,
         archiveChatSession,
         archiveProjectSession,
+        deleteChatSession,
         deleteProject,
+        deleteProjectSession,
         openInbox: onOpenInbox,
         openProject: onOpenProject,
         openProjectSession: onOpenProjectSession,
         openProjectSettings: onOpenProjectSettings,
+        openSearch: onOpenSearch,
         openSession: onOpenSession,
         renameProject,
         renameSession,
@@ -739,7 +748,9 @@ export function SessionSidebar({ daemon, surfaces, workspace }: Props) {
       activeProjectSessionId,
       archiveChatSession,
       archiveProjectSession,
+      deleteChatSession,
       deleteProject,
+      deleteProjectSession,
       inboxActive,
       onCreateChatSession,
       onCreateProjectSession,
@@ -747,6 +758,7 @@ export function SessionSidebar({ daemon, surfaces, workspace }: Props) {
       onOpenProject,
       onOpenProjectSession,
       onOpenProjectSettings,
+      onOpenSearch,
       onOpenSession,
       renameProject,
       renameSession,
@@ -823,6 +835,7 @@ export function SessionSidebar({ daemon, surfaces, workspace }: Props) {
                 chatSessions: archivedPanel.chatSessions,
                 loading: archivedSessionsLoading,
                 onBack: onCloseArchived,
+                onDeleteSession: deleteArchivedSession,
                 onOpenProjectSession,
                 onOpenSession,
                 onUnarchiveSession: unarchiveSession,

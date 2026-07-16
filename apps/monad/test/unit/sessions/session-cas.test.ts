@@ -13,7 +13,6 @@ function fixtureSession(): Session {
     ownerPrincipalId: newId('prn'),
     state: 'active',
     agentIds: [],
-    parentSessionId: null,
     archived: false,
     restoreCount: 0,
     usage: {

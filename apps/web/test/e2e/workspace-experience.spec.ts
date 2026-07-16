@@ -231,7 +231,6 @@ function projectSession(id: string, title: string, updatedAt: string): Session {
     ownerPrincipalId: 'prn_mock00000000' as Session['ownerPrincipalId'],
     state: 'active',
     agentIds: [],
-    parentSessionId: null,
     archived: false,
     restoreCount: 0,
     createdAt: updatedAt,

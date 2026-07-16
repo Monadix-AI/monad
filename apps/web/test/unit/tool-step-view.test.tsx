@@ -129,11 +129,14 @@ test('tool calls use the flat skill event style and reveal details on expand', (
   expect(completedMarkup).not.toContain('data-slot="badge"');
   expect(completedMarkup).not.toContain('hover:bg-muted/50');
   expect(completedMarkup).toContain('hover:text-foreground');
-  expect(completedMarkup).toContain('group-data-[state=open]/trigger:rotate-180');
-  expect(completedMarkup).not.toContain('group-data-[state=open]/tool:rotate-180');
+  expect(completedMarkup).toContain('data-expanded="false"');
+  expect(completedMarkup).toContain('d="M6 9L12 15L18 9"');
+  expect(completedMarkup).not.toContain('rotate-180');
   expect(completedMarkup).not.toContain('Parameters');
   expect(completedMarkup).not.toContain('Result');
   expect(runningMarkup).toContain('aria-expanded="true"');
+  expect(runningMarkup).toContain('data-expanded="true"');
+  expect(runningMarkup).toContain('d="M6 15L12 9L18 15"');
   expect(runningMarkup).toContain('Parameters');
 });
 

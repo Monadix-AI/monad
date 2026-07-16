@@ -29,7 +29,6 @@ function fixture() {
     ownerPrincipalId: principalId,
     state: 'active',
     agentIds: [],
-    parentSessionId: null,
     archived: false,
     restoreCount: 0,
     createdAt: now,

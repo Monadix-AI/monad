@@ -38,9 +38,9 @@ import {
 } from './timeline.tsx';
 
 const observationRowId = (row: ObservationTimelineRow): string => row.id;
-type ObservationRenderMode = 'detail' | 'compact';
+type ObservationRenderMode = 'detail' | 'summary';
 
-type CompactObservationTurn = {
+type SummaryObservationTurn = {
   id: string;
   done: boolean;
   durationLabel: string;
@@ -169,8 +169,8 @@ export function ExternalAgentObservationPanel({
     () => observationTimelineRows(observationTimelineEntries(stream?.items ?? [], timelineProvider)),
     [stream?.items, timelineProvider]
   );
-  const compactTurns = useMemo(
-    () => compactObservationTurns(stream?.items ?? [], timelineProvider),
+  const summaryTurns = useMemo(
+    () => summaryObservationTurns(stream?.items ?? [], timelineProvider),
     [stream?.items, timelineProvider]
   );
   const firstItemIndex = useFirstItemIndex(timelineRows, observationRowId);
@@ -412,9 +412,9 @@ export function ExternalAgentObservationPanel({
         <button
           aria-label={allExpanded ? 'Collapse all observations' : 'Expand all observations'}
           className="workplace-action"
-          disabled={!hasItems || renderMode === 'compact'}
+          disabled={!hasItems || renderMode === 'summary'}
           onClick={toggleAllRows}
-          style={headerIconButtonStyle(allExpanded, !hasItems || renderMode === 'compact')}
+          style={headerIconButtonStyle(allExpanded, !hasItems || renderMode === 'summary')}
           title={allExpanded ? 'Collapse all observations' : 'Expand all observations'}
           type="button"
         >
@@ -427,7 +427,7 @@ export function ExternalAgentObservationPanel({
         </button>
         <ObservationModeIconButton
           mode={renderMode}
-          onClick={() => setRenderMode(renderMode === 'detail' ? 'compact' : 'detail')}
+          onClick={() => setRenderMode(renderMode === 'detail' ? 'summary' : 'detail')}
         />
         {stream?.status === 'running' ? (
           <button
@@ -531,8 +531,8 @@ export function ExternalAgentObservationPanel({
           >
             {historyHeader}
             <div style={{ display: 'grid', gap: 10 }}>
-              {compactTurns.map((turn) => (
-                <CompactObservationTurnView
+              {summaryTurns.map((turn) => (
+                <SummaryObservationTurnView
                   key={turn.id}
                   provider={timelineProvider}
                   turn={turn}
@@ -614,21 +614,21 @@ function ObservationModeIconButton({
   mode: ObservationRenderMode;
   onClick: () => void;
 }): React.ReactElement {
-  const compact = mode === 'compact';
-  const label = compact ? 'Switch observation view to Detail' : 'Switch observation view to Compact';
+  const summary = mode === 'summary';
+  const label = summary ? 'Switch observation view to Detail' : 'Switch observation view to Summary';
   return (
     <button
       aria-label={label}
-      aria-pressed={compact}
+      aria-pressed={summary}
       className="workplace-action"
       onClick={onClick}
-      style={headerIconButtonStyle(compact)}
-      title={compact ? 'Compact observation view' : 'Detail observation view'}
+      style={headerIconButtonStyle(summary)}
+      title={summary ? 'Summary observation view' : 'Detail observation view'}
       type="button"
     >
       <HugeiconsIcon
         aria-hidden="true"
-        icon={compact ? ExpandParagraphIcon : ReduceParagraphIcon}
+        icon={summary ? ExpandParagraphIcon : ReduceParagraphIcon}
         size={15}
         strokeWidth={2}
       />
@@ -636,16 +636,16 @@ function ObservationModeIconButton({
   );
 }
 
-function CompactObservationTurnView({
+function SummaryObservationTurnView({
   provider,
   turn
 }: {
   provider: string;
-  turn: CompactObservationTurn;
+  turn: SummaryObservationTurn;
 }): React.ReactElement {
   return (
     <details
-      data-observation-turn-mode="compact"
+      data-observation-turn-mode="summary"
       style={{
         border: '1px solid var(--border)',
         borderRadius: 8,
@@ -773,7 +773,7 @@ function headerIconButtonStyle(active: boolean, disabled = false): CSSProperties
   };
 }
 
-function compactObservationTurns(items: readonly AgentObservationEvent[], provider: string): CompactObservationTurn[] {
+function summaryObservationTurns(items: readonly AgentObservationEvent[], provider: string): SummaryObservationTurn[] {
   const groups: AgentObservationEvent[][] = [];
   let current: AgentObservationEvent[] = [];
   const flush = () => {

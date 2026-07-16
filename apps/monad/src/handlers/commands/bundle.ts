@@ -147,7 +147,7 @@ export function createCommandBundle(deps: CommandBundleDeps): CommandBundle {
 
       const assembled = history
         ? await history.assemble(sessionId)
-        : { summary: undefined, messages: replayHistory(store.listMessagesWithLineage(sessionId)) };
+        : { summary: undefined, messages: replayHistory(store.listMessages(sessionId)) };
       const transcript = assembled.messages
         .filter((m) => m.role !== 'system')
         .map((m) => {

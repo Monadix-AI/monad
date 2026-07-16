@@ -121,7 +121,6 @@ turn's stream. `env` is operator-vetted infrastructure config → it lives in th
 Advertised in `initialize` under `_meta.monad.extMethods`:
 
 - `_monad/session.restore` `{ sessionId, toMessageId }` — rewind to a checkpoint.
-- `_monad/session.provenance` `{ sessionId }` — ancestors/descendants of a session.
 - `_monad/model.{listProviders,listModels,listProfiles,getDefaultProfile,setDefaultProfile}` — pick a
   model through monad's gateway. (Credential mutation is intentionally not exposed over ACP.)
 

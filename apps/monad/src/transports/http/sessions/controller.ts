@@ -253,7 +253,7 @@ export function createSessionsController(
           params: contracts.branch.params,
           body: contracts.branch.body,
           response: contracts.branch.response,
-          detail: { summary: 'Branch session', description: 'Creates a child session branched from a parent session.' }
+          detail: { summary: 'Branch session', description: 'Copies history into a new independent session.' }
         }
       )
       .put(
@@ -283,14 +283,6 @@ export function createSessionsController(
           }
         }
       )
-      .get('/sessions/:id/provenance', async ({ params }) => handlers.session.provenance({ id: params.id }), {
-        params: contracts.provenance.params,
-        response: contracts.provenance.response,
-        detail: {
-          summary: 'Get session provenance',
-          description: 'Returns ancestors and descendants for session lineage.'
-        }
-      })
       .post(
         '/sessions/:id/restore',
         async ({ params, body }) => handlers.session.restore({ id: params.id, toMessageId: body.toMessageId }),
@@ -311,8 +303,7 @@ export function createSessionsController(
             id: params.id,
             limit: query.limit,
             before: query.before,
-            includeInactive: query.includeInactive,
-            includeAncestors: query.includeAncestors
+            includeInactive: query.includeInactive
           }),
         {
           params: contracts.messages.params,
@@ -320,7 +311,7 @@ export function createSessionsController(
           response: contracts.messages.response,
           detail: {
             summary: 'List session messages',
-            description: 'Returns session messages with pagination and lineage options.'
+            description: 'Returns session messages with pagination options.'
           }
         }
       )
@@ -333,8 +324,7 @@ export function createSessionsController(
             before: query.before,
             after: query.after,
             around: query.around,
-            includeInactive: query.includeInactive,
-            includeAncestors: query.includeAncestors
+            includeInactive: query.includeInactive
           }),
         {
           params: sessionParams,
@@ -382,7 +372,7 @@ export function createSessionsController(
       .post(
         '/sessions/:id/messages',
         async ({ params, body, headers, request }) => {
-          if (!wantsInlineSessionStream(headers.accept) || body.generate === false) {
+          if (body.steer || !wantsInlineSessionStream(headers.accept) || body.generate === false) {
             return idempotentJsonHandler({
               route: () => `/v1/sessions/${params.id}/messages`,
               store: idempotencyStore,
@@ -392,6 +382,8 @@ export function createSessionsController(
                     sessionId: params.id,
                     text: body.text,
                     generate: body.generate,
+                    steer: body.steer,
+                    steerMessages: body.steerMessages,
                     continueFromHistory: body.continueFromHistory,
                     ambientContext: body.ambientContext
                   })

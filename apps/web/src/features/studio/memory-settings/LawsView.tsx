@@ -1,17 +1,9 @@
 import type { LawView } from '@monad/protocol';
 
-import {
-  Alert01Icon,
-  ChevronDownIcon,
-  ChevronRightIcon,
-  HistoryIcon,
-  JusticeScaleIcon,
-  NeuralNetworkIcon,
-  QuoteUpIcon
-} from '@hugeicons/core-free-icons';
+import { Alert01Icon, HistoryIcon, JusticeScaleIcon, NeuralNetworkIcon, QuoteUpIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { useGetLawsQuery } from '@monad/client-rtk';
-import { Badge, Button, Skeleton } from '@monad/ui';
+import { Badge, Button, MorphChevron, Skeleton } from '@monad/ui';
 import { useMemo, useState } from 'react';
 
 import { type TFn, useT } from '#/components/I18nProvider';
@@ -104,17 +96,10 @@ function LawRow({ law, t }: { law: LawView; t: TFn }) {
             onClick={() => setOpen((v) => !v)}
             type="button"
           >
-            {open ? (
-              <HugeiconsIcon
-                className="size-3.5"
-                icon={ChevronDownIcon}
-              />
-            ) : (
-              <HugeiconsIcon
-                className="size-3.5"
-                icon={ChevronRightIcon}
-              />
-            )}
+            <MorphChevron
+              className="size-3.5"
+              expanded={open}
+            />
             {t('web.laws.basedOn', { count: String(count) })}
           </button>
           {open ? (

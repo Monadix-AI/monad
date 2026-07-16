@@ -1,8 +1,11 @@
+import type { IconSvgElement } from '@hugeicons/react';
+
 import { matchesKeyboardEvent } from '@tanstack/hotkeys';
 
 export const commandPaletteHotkey = 'Mod+K' as const;
 
 interface CommandPaletteItem {
+  icon?: IconSvgElement;
   id: string;
   keywords?: string[];
   label: string;

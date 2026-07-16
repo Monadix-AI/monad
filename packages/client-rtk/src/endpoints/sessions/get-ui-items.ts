@@ -29,7 +29,7 @@ export const getUiItemsApi = apiSlice.injectEndpoints({
             clientOf(api)
               .treaty.v1.sessions({ id: sessionId })
               ['ui-items'].get({
-                query: { limit: PAGE_SIZE, before, after, around, includeInactive: false, includeAncestors: false }
+                query: { limit: PAGE_SIZE, before, after, around, includeInactive: false }
               }),
           (raw) => raw as ListUiItemsResponse
         ),

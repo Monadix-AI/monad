@@ -370,7 +370,6 @@ test('operator inbox aggregates agent mentions and unresolved approvals', () => 
     ownerPrincipalId: 'prn_ABCDEF123456',
     state: 'active',
     agentIds: [],
-    parentSessionId: null,
     archived: false,
     restoreCount: 0,
     usage: {

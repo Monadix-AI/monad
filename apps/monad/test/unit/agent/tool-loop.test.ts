@@ -267,6 +267,124 @@ test('runs multiple tool calls from one step (parallel) and orders results by ca
   expect(toolRows[1]?.text).toContain('echoed:2');
 });
 
+test('inserts steer messages after every parallel tool finishes and before the next model step', async () => {
+  const events: Event[] = [];
+  const messages = new InMemoryMessageRepo();
+  const seenPrompts: ModelMessage[][] = [];
+  let modelStep = 0;
+  let reopenCount = 0;
+  const pendingSteers = ['adjust the answer'];
+  const model: ModelRouter = {
+    async *stream(req) {
+      seenPrompts.push(req.messages.slice());
+      if (modelStep++ === 0) {
+        yield {
+          type: 'tool-call' as const,
+          call: { toolCallId: 'parallel-a', toolName: 'test.parallel', input: { delay: 15 } }
+        };
+        yield {
+          type: 'tool-call' as const,
+          call: { toolCallId: 'parallel-b', toolName: 'test.parallel', input: { delay: 1 } }
+        };
+        return;
+      }
+      yield { type: 'text' as const, token: 'updated' };
+    },
+    async complete(): Promise<ModelResult> {
+      return { text: 'unused', finishReason: 'stop' };
+    }
+  };
+  const parallelTool: Tool<{ delay: number }, string> = {
+    name: 'test.parallel',
+    description: 'parallel completion probe',
+    scopes: [],
+    run: async ({ delay }) => {
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      return toolResult(`finished:${delay}`);
+    }
+  };
+  const loop = new AgentLoop({
+    model,
+    tools: [parallelTool],
+    messages,
+    defaultModel: 'mock',
+    emit: (event) => events.push(event),
+    steers: {
+      take: () => pendingSteers.splice(0),
+      close: () => pendingSteers.splice(0),
+      reopen: () => {
+        reopenCount++;
+      }
+    }
+  });
+
+  await loop.runStream(sid(), 'start');
+
+  const lastToolResult = events.findLastIndex((event) => event.type === 'tool.result');
+  const steerMessage = events.findIndex(
+    (event) => event.type === 'user.message' && event.payload.text === 'adjust the answer'
+  );
+  expect(lastToolResult).toBeGreaterThan(-1);
+  expect(steerMessage).toBeGreaterThan(lastToolResult);
+  expect(reopenCount).toBe(0);
+  expect(seenPrompts).toHaveLength(2);
+  expect(seenPrompts[1]?.at(-1)).toMatchObject({ role: 'user', content: 'adjust the answer' });
+  const persistedRoles = messages.list((events[0] as Event).sessionId).map((message) => message.role);
+  expect(persistedRoles.lastIndexOf('tool')).toBeLessThan(persistedRoles.lastIndexOf('user'));
+});
+
+test('accepts a steer submitted during the budget-limited final generation', async () => {
+  const events: Event[] = [];
+  const messages = new InMemoryMessageRepo();
+  const pendingSteers: string[] = [];
+  const seenPrompts: ModelMessage[][] = [];
+  let modelStep = 0;
+  const model: ModelRouter = {
+    async *stream(req) {
+      seenPrompts.push(req.messages.slice());
+      modelStep++;
+      if (modelStep === 1) {
+        yield {
+          type: 'tool-call' as const,
+          call: { toolCallId: 'budget-tool', toolName: 'test.echo', input: { v: 1 } }
+        };
+        return;
+      }
+      if (modelStep === 2) {
+        yield { type: 'text' as const, token: 'first final' };
+        pendingSteers.push('change the final answer');
+        return;
+      }
+      yield { type: 'text' as const, token: 'changed final' };
+    },
+    async complete(): Promise<ModelResult> {
+      return { text: 'unused', finishReason: 'stop' };
+    }
+  };
+  const loop = new AgentLoop({
+    model,
+    tools: [echoTool],
+    messages,
+    defaultModel: 'mock',
+    emit: (event) => events.push(event),
+    maxTurns: 1,
+    steers: {
+      take: () => pendingSteers.splice(0),
+      close: () => pendingSteers.splice(0),
+      reopen: () => {}
+    }
+  });
+
+  await loop.runStream(sid(), 'start');
+
+  expect(seenPrompts).toHaveLength(3);
+  expect(seenPrompts[2]?.at(-1)).toMatchObject({ role: 'user', content: 'change the final answer' });
+  expect(
+    events.some((event) => event.type === 'user.message' && event.payload.text === 'change the final answer')
+  ).toBe(true);
+  expect(events.filter((event) => event.type === 'agent.message').at(-1)?.payload.text).toBe('changed final');
+});
+
 test('a huge tool result is truncated before being fed back to the model', async () => {
   const huge = 'X'.repeat(100_000);
   const bigTool: Tool<Record<string, never>, string> = {
@@ -297,7 +415,7 @@ test('a huge tool result is truncated before being fed back to the model', async
 
   // The 2nd prompt carries the tool result; it must be capped well below the raw 100k.
   const toolMsg = (seen[1] as ModelMessage[]).find((m) => m.role === 'tool');
-  const out = (toolMsg?.content as ModelContentPart[]).find((p) => p.type === 'tool-result') as {
+  const out = ((toolMsg?.content as ModelContentPart[] | undefined) ?? []).find((p) => p.type === 'tool-result') as {
     output: string;
   };
   expect(out.output.length).toBeLessThan(2000);
@@ -683,12 +801,16 @@ test('replays persisted tool steps WITH data structurally (native tool-call/tool
   // Structured replay: an assistant tool-call part immediately followed by a tool tool-result part.
   const asst = prompt.find((m) => m.role === 'assistant' && Array.isArray(m.content));
   const toolMsg = prompt.find((m) => m.role === 'tool' && Array.isArray(m.content));
-  expect((asst?.content as ModelContentPart[]).some((p) => p.type === 'tool-call' && p.toolCallId === 'tc1')).toBe(
-    true
-  );
-  expect((toolMsg?.content as ModelContentPart[]).some((p) => p.type === 'tool-result' && p.toolCallId === 'tc1')).toBe(
-    true
-  );
+  expect(
+    ((asst?.content as ModelContentPart[] | undefined) ?? []).some(
+      (p) => p.type === 'tool-call' && p.toolCallId === 'tc1'
+    )
+  ).toBe(true);
+  expect(
+    ((toolMsg?.content as ModelContentPart[] | undefined) ?? []).some(
+      (p) => p.type === 'tool-result' && p.toolCallId === 'tc1'
+    )
+  ).toBe(true);
   // Not degraded to a user observation when structured data is present.
   expect(
     prompt.some((m) => m.role === 'user' && typeof m.content === 'string' && m.content.includes('Observation'))
@@ -734,7 +856,7 @@ test('replay uses persisted result.modelContent as the model-facing source of tr
 
   await loop.runBlock(s, 'hi');
   const toolMsg = (seen[0] as ModelMessage[]).find((m) => m.role === 'tool' && Array.isArray(m.content));
-  const part = (toolMsg?.content as ModelContentPart[]).find((p) => p.type === 'tool-result') as
+  const part = ((toolMsg?.content as ModelContentPart[] | undefined) ?? []).find((p) => p.type === 'tool-result') as
     | { output?: string }
     | undefined;
   expect(part?.output).toBe('canonical model output');

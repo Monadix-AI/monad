@@ -18,7 +18,7 @@ export interface Renderer {
   finalize(): Promise<void>;
 }
 
-export type ChannelRenderMode = 'detail' | 'compact';
+export type ChannelRenderMode = 'detail' | 'summary';
 
 export interface RendererOptions {
   adapter: ChannelAdapter;
@@ -27,7 +27,7 @@ export interface RendererOptions {
   log: ChannelLog;
   /** Active-locale translator for the notices this renderer emits (approval / error). */
   t: StrictTranslateForNamespace<'channel'>;
-  /** Compact mode buffers token previews and only sends settled final messages to the channel. */
+  /** Summary mode buffers token previews and only sends settled final messages to the channel. */
   renderMode?: ChannelRenderMode;
 }
 

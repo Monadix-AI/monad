@@ -12,9 +12,8 @@ test('sessions.list query: string→boolean and string→number coercion', () =>
 
 test('sessions.messages query: boolean coercion', () => {
   const q = daemonHttpContract.sessions.messages.query ?? '';
-  expect(q.parse({ includeInactive: 'true', includeAncestors: 'false', limit: '5' })).toMatchObject({
+  expect(q.parse({ includeInactive: 'true', limit: '5' })).toMatchObject({
     includeInactive: true,
-    includeAncestors: false,
     limit: 5
   });
 });

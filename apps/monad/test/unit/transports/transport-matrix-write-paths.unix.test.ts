@@ -5,7 +5,7 @@
 //   - Approvals (POST revoke/clear)
 // Agent CRUD is covered separately in test/e2e/agent-crud.test.ts (requires real home dir).
 
-import type { ModelResult, ModelRouter } from '#/agent/index.ts';
+import type { ModelRequest, ModelResult, ModelRouter } from '#/agent/index.ts';
 
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -140,6 +140,26 @@ describe('transport parity — session write paths', () => {
     expect((u.body as { sessionId: string }).sessionId).toMatch(/^ses_/);
   });
 
+  test('POST /v1/sessions/:id/branch: rejects assistant targets on both transports', async () => {
+    const sesId = await createSession('User-only branch target');
+    await fetch(`http://127.0.0.1:${tcp.port}/v1/sessions/${sesId}/messages`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ text: 'question' })
+    });
+    const transcript = (await fetch(`http://127.0.0.1:${tcp.port}/v1/sessions/${sesId}/messages`).then((response) =>
+      response.json()
+    )) as { messages: Array<{ id: string; role: string }> };
+    const assistant = transcript.messages.find((message) => message.role === 'assistant');
+    if (!assistant) throw new Error('expected assistant message');
+
+    const { tcp: t, uds: u } = await postBoth(`/v1/sessions/${sesId}/branch`, {
+      atMessageId: assistant.id
+    });
+    expect(t.status).toBe(400);
+    expect(u.status).toBe(400);
+  });
+
   test('POST /v1/sessions write policy: non-loopback connections cannot send messages', async () => {
     // The write policy gate (assertWriteAllowed) blocks non-local transports from sending
     // messages. Over loopback both TCP and UDS are local, so they CAN send — this verifies
@@ -198,6 +218,64 @@ describe('transport parity — GET routes with write-path prerequisites', () => 
     expect(Array.isArray((udsRes as { rules: unknown[] }).rules)).toBe(true);
     expect((udsRes as { rules: unknown[] }).rules.length).toBe((tcpRes as { rules: unknown[] }).rules.length);
   });
+});
+
+describe('transport parity — active generation restore', () => {
+  for (const kind of TRANSPORTS) {
+    test(`${kind}: restore aborts generation and discards the active turn`, async () => {
+      let signalSeen: AbortSignal | undefined;
+      let markStarted: (() => void) | undefined;
+      const started = new Promise<void>((resolve) => {
+        markStarted = resolve;
+      });
+      const model: ModelRouter = {
+        async *stream(req: ModelRequest) {
+          signalSeen = req.signal;
+          markStarted?.();
+          yield { type: 'text' as const, token: 'partial' };
+          await new Promise<void>((resolve) => {
+            if (req.signal?.aborted) return resolve();
+            req.signal?.addEventListener('abort', () => resolve(), { once: true });
+            setTimeout(resolve, 250);
+          });
+        },
+        async complete(): Promise<ModelResult> {
+          return { finishReason: 'stop', text: 'unused' };
+        }
+      };
+      const transport = serveTransport(kind as TransportKind, createHttpTransport(buildHandlers(model)));
+
+      try {
+        const created = await postJson<{ sessionId: string }>(transport, '/v1/sessions', {
+          title: `active restore ${kind}`
+        });
+        await postJson(transport, `/v1/sessions/${created.sessionId}/messages`, {
+          text: 'keep',
+          generate: false
+        });
+        await postJson(transport, `/v1/sessions/${created.sessionId}/messages`, { text: 'rewind me' });
+        await started;
+        const messagesRes = await transport.fetch(`/v1/sessions/${created.sessionId}/messages`);
+        const before = (await messagesRes.json()) as { messages: Array<{ id: string; role: string; text: string }> };
+        const target = before.messages.find((message) => message.role === 'user' && message.text === 'rewind me');
+        if (!target) throw new Error('expected active user message');
+
+        const restored = await postJson<{ restoredCount: number }>(
+          transport,
+          `/v1/sessions/${created.sessionId}/restore`,
+          { toMessageId: target.id }
+        );
+        const afterRes = await transport.fetch(`/v1/sessions/${created.sessionId}/messages`);
+        const after = (await afterRes.json()) as { messages: Array<{ text: string }> };
+
+        expect(signalSeen?.aborted).toBe(true);
+        expect(restored.restoredCount).toBe(2);
+        expect(after.messages.map((message) => message.text)).toEqual(['keep']);
+      } finally {
+        await transport.stop();
+      }
+    });
+  }
 });
 
 describe('transport parity — file observation restore guard', () => {

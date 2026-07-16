@@ -17,6 +17,7 @@ import type { Store } from '#/store/db/index.ts';
 import { newId } from '@monad/protocol';
 
 import { HandlerError } from '#/handlers/handler-error.ts';
+import { SessionSteerMailbox } from '#/handlers/session/steer-mailbox.ts';
 
 export type Disposer = () => void;
 export type { EventSink };
@@ -79,6 +80,7 @@ interface SessionRuntime {
 export interface SessionContext {
   deps: SessionDeps;
   aborts: Map<SessionId, AbortController>;
+  steers: Map<SessionId, SessionSteerMailbox>;
   /** Per-transcript execution config (see {@link SessionRuntime}); keyed by session or project id. */
   runtime: Map<SessionId, SessionRuntime>;
   requireSession(id: SessionId): Session;
@@ -86,11 +88,16 @@ export interface SessionContext {
   persistAndRetire(sessionId: SessionId, round: Event[]): void;
   emitLifecycle(sessionId: SessionId, type: EventType, payload: Record<string, unknown>): void;
   beginRun(sessionId: SessionId): { round: Event[]; signal: AbortSignal };
+  enqueueSteers(sessionId: SessionId, messages: string[]): boolean;
+  trackRun<T>(sessionId: SessionId, signal: AbortSignal, run: Promise<T>): Promise<T>;
+  waitForRun(sessionId: SessionId): Promise<void>;
 }
 
 export function createSessionContext(deps: SessionDeps): SessionContext {
   const { store, bus, cache } = deps;
   const aborts = new Map<SessionId, AbortController>();
+  const activeRuns = new Map<SessionId, Promise<void>>();
+  const steers = new Map<SessionId, SessionSteerMailbox>();
   const runtime = new Map<SessionId, SessionRuntime>();
 
   function requireSession(id: SessionId): Session {
@@ -167,18 +174,48 @@ export function createSessionContext(deps: SessionDeps): SessionContext {
     const round: Event[] = [];
     const controller = new AbortController();
     aborts.set(sessionId, controller);
+    steers.set(sessionId, new SessionSteerMailbox());
     emitStreamMarker(sessionId, 'session.stream_started');
     return { round, signal: controller.signal };
+  }
+
+  function trackRun<T>(sessionId: SessionId, signal: AbortSignal, run: Promise<T>): Promise<T> {
+    const settled = run.then(
+      () => {},
+      () => {}
+    );
+    activeRuns.set(sessionId, settled);
+    void settled.then(() => {
+      if (activeRuns.get(sessionId) === settled) activeRuns.delete(sessionId);
+      if (aborts.get(sessionId)?.signal === signal) {
+        aborts.delete(sessionId);
+        steers.delete(sessionId);
+      }
+    });
+    return run;
+  }
+
+  async function waitForRun(sessionId: SessionId): Promise<void> {
+    await activeRuns.get(sessionId);
+  }
+
+  function enqueueSteers(sessionId: SessionId, messages: string[]): boolean {
+    if (!activeRuns.has(sessionId)) return false;
+    return steers.get(sessionId)?.enqueueMany(messages) ?? false;
   }
 
   return {
     deps,
     aborts,
+    steers,
     runtime,
     requireSession,
     makeEmit,
     persistAndRetire,
     emitLifecycle,
-    beginRun
+    beginRun,
+    enqueueSteers,
+    trackRun,
+    waitForRun
   };
 }

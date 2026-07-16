@@ -51,26 +51,23 @@ session. The same commands work from every surface, including IM channels. See
 
 ## Branching and restoring
 
-Sessions form a tree. Use these when you want to explore without losing the
-original thread:
+Use these when you want to explore without losing the original thread:
 
-- **Branch** forks a child session from a parent — from the tip, or from a
-  specific message. The parent is untouched; the child starts with the history up
-  to the branch point. Use it to try a different approach, ask a side question
-  with full context, or compare two directions.
+- **Branch** copies history through the selected message into a new independent
+  session. The source is untouched, and later edits to either session do not
+  affect the other. Use it to try a different approach, ask a side question with
+  full context, or compare two directions.
 - **Restore** rewinds a session in place to an earlier message checkpoint,
   discarding everything after it. Use it when a conversation went off the rails
   and you want to redo from a known-good point. Unlike branch, this rewrites the
   session itself, so the web UI asks you to confirm.
 
 In the web UI, hover a settled message to find the branch and restore actions;
-the session header shows the lineage (parent and branches) once a session has
-either. From the CLI:
+the new session includes a collapsible source-history boundary. From the CLI:
 
 ```sh
-monad session branch <sessionId> [title] [atMessageId]   # fork a child session
+monad session branch <sessionId> [title] [atMessageId]   # copy history into a new session
 monad session restore <sessionId> <toMessageId>          # rewind to a checkpoint
-monad session tree <sessionId>                           # show ancestors and descendants
 ```
 
 Whether a transport may fork a given session is part of the session's origin

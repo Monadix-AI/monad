@@ -1329,20 +1329,6 @@
           "autoincrement": false,
           "default": "'[]'"
         },
-        "parent_session_id": {
-          "name": "parent_session_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "branched_at_message_id": {
-          "name": "branched_at_message_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "archived": {
           "name": "archived",
           "type": "integer",
@@ -1452,11 +1438,6 @@
         }
       },
       "indexes": {
-        "idx_sessions_parent": {
-          "name": "idx_sessions_parent",
-          "columns": ["parent_session_id"],
-          "isUnique": false
-        },
         "idx_sessions_project": {
           "name": "idx_sessions_project",
           "columns": ["project_id"],

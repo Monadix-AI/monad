@@ -1,4 +1,3 @@
-import type { NativeAgentDeliveryId } from '@monad/protocol';
 import type { Message, TypingIndicator } from '../../experience/types.ts';
 import type { MessageRowLabels } from './message-row.tsx';
 
@@ -64,7 +63,6 @@ export function shouldFollowLatestMessage(atBottom: boolean, localStatus?: Messa
 }
 
 export type ChatMessageListRoom = {
-  followExternalAgentSession?: (id: string, deliveryId?: NativeAgentDeliveryId) => void;
   loadOlder: () => void;
   messages: Message[];
   openAgentCard?: (id: string) => void;
@@ -132,11 +130,10 @@ export function ChatMessageList({
           labels={labels}
           msg={msg}
           onAgentClick={room.openAgentCard}
-          onFollowExternalAgentSession={room.followExternalAgentSession}
         />
       </div>
     ),
-    [labels, room.followExternalAgentSession, room.openAgentCard]
+    [labels, room.openAgentCard]
   );
   useLayoutEffect(() => {
     if (!lastMessageKey) return;

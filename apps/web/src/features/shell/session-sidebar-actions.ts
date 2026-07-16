@@ -1,13 +1,19 @@
 import type { ProjectId, Session, SessionId } from '@monad/protocol';
-import type { ProjectItem } from './sidebar/types';
+import type { ProjectItem, TFunction } from './sidebar/types';
 
 import {
   useCreateWorkplaceProjectMutation,
+  useDeleteSessionMutation,
   useDeleteWorkplaceProjectMutation,
+  useUndoDeleteSessionMutation,
   useUpdateSessionMutation,
   useUpdateWorkplaceProjectMutation
 } from '@monad/client-rtk';
 import { useCallback, useMemo, useState } from 'react';
+
+import { toast } from '#/components/ToastProvider';
+
+const SESSION_DELETE_UNDO_MS = 5000;
 
 interface UseSessionSidebarActionsParams {
   activeProjectId: string | null;
@@ -15,6 +21,7 @@ interface UseSessionSidebarActionsParams {
   onOpenProject: (id: string) => void;
   onOpenWorkspace: () => void;
   projects: ProjectItem[];
+  t: TFunction;
 }
 
 export function useSessionSidebarActions({
@@ -22,7 +29,8 @@ export function useSessionSidebarActions({
   chatSessions,
   onOpenProject,
   onOpenWorkspace,
-  projects
+  projects,
+  t
 }: UseSessionSidebarActionsParams) {
   const projectActions = useProjectSidebarActions({
     activeProjectId,
@@ -30,27 +38,42 @@ export function useSessionSidebarActions({
     onOpenWorkspace
   });
   const sessionActions = useSidebarSessionActions({
-    onOpenWorkspace
+    chatSessions,
+    onOpenWorkspace,
+    projects,
+    t
   });
 
   const visibleChatSessions = useMemo(
-    () => chatSessions.filter((session) => !sessionActions.pendingArchivedSessionIds.has(session.id)),
-    [chatSessions, sessionActions.pendingArchivedSessionIds]
+    () =>
+      chatSessions.filter(
+        (session) =>
+          !sessionActions.pendingArchivedSessionIds.has(session.id) &&
+          !sessionActions.pendingDeletedSessionIds.has(session.id)
+      ),
+    [chatSessions, sessionActions.pendingArchivedSessionIds, sessionActions.pendingDeletedSessionIds]
   );
 
   const visibleProjects = useMemo(
     () =>
       projects.map((project) => ({
         ...project,
-        sessions: project.sessions.filter((session) => !sessionActions.pendingArchivedSessionIds.has(session.id))
+        sessions: project.sessions.filter(
+          (session) =>
+            !sessionActions.pendingArchivedSessionIds.has(session.id) &&
+            !sessionActions.pendingDeletedSessionIds.has(session.id)
+        )
       })),
-    [projects, sessionActions.pendingArchivedSessionIds]
+    [projects, sessionActions.pendingArchivedSessionIds, sessionActions.pendingDeletedSessionIds]
   );
 
   return {
     ...projectActions,
     archiveChatSession: sessionActions.archiveChatSession,
     archiveProjectSession: sessionActions.archiveProjectSession,
+    deleteArchivedSession: sessionActions.deleteArchivedSession,
+    deleteChatSession: sessionActions.deleteChatSession,
+    deleteProjectSession: sessionActions.deleteProjectSession,
     pendingUnarchivedSessionIds: sessionActions.pendingUnarchivedSessionIds,
     renameSession: sessionActions.renameSession,
     unarchiveSession: sessionActions.unarchiveSession,
@@ -106,9 +129,22 @@ function useProjectSidebarActions({
   };
 }
 
-function useSidebarSessionActions({ onOpenWorkspace }: { onOpenWorkspace: () => void }) {
+function useSidebarSessionActions({
+  chatSessions,
+  onOpenWorkspace,
+  projects,
+  t
+}: {
+  chatSessions: Pick<Session, 'id' | 'projectId' | 'title'>[];
+  onOpenWorkspace: () => void;
+  projects: ProjectItem[];
+  t: TFunction;
+}) {
   const [updateSession] = useUpdateSessionMutation();
+  const [deleteSession] = useDeleteSessionMutation();
+  const [undoDeleteSession] = useUndoDeleteSessionMutation();
   const [pendingArchivedSessionIds, setPendingArchivedSessionIds] = useState<Set<SessionId>>(() => new Set());
+  const [pendingDeletedSessionIds, setPendingDeletedSessionIds] = useState<Set<SessionId>>(() => new Set());
   const [pendingUnarchivedSessionIds, setPendingUnarchivedSessionIds] = useState<Set<SessionId>>(() => new Set());
 
   const renameSession = useCallback(
@@ -116,6 +152,87 @@ function useSidebarSessionActions({ onOpenWorkspace }: { onOpenWorkspace: () => 
       await updateSession({ id: sessionId, title }).unwrap();
     },
     [updateSession]
+  );
+
+  const revealPendingSessionDelete = useCallback((sessionId: SessionId) => {
+    setPendingDeletedSessionIds((current) => {
+      if (!current.has(sessionId)) return current;
+      const next = new Set(current);
+      next.delete(sessionId);
+      return next;
+    });
+  }, []);
+
+  const queueSessionDelete = useCallback(
+    ({ afterDelete, sessionId, title }: { afterDelete?: () => void; sessionId: SessionId; title: string }) => {
+      revealPendingSessionDelete(sessionId);
+      setPendingDeletedSessionIds((current) => new Set(current).add(sessionId));
+      void deleteSession(sessionId)
+        .unwrap()
+        .then(() => afterDelete?.())
+        .catch(() => revealPendingSessionDelete(sessionId));
+      toast.undo(t('web.sidebar.sessionDeleteQueued', { name: title }), {
+        action: {
+          label: t('web.sidebar.undoDelete'),
+          onClick: async () => {
+            revealPendingSessionDelete(sessionId);
+            await undoDeleteSession(sessionId)
+              .unwrap()
+              .catch(() => undefined);
+          }
+        },
+        duration: SESSION_DELETE_UNDO_MS,
+        onExpire: () => {
+          revealPendingSessionDelete(sessionId);
+          void deleteSession(sessionId)
+            .unwrap()
+            .catch(() => undefined);
+          afterDelete?.();
+        },
+        onPause: () => {
+          void undoDeleteSession(sessionId)
+            .unwrap()
+            .catch(() => undefined);
+        }
+      });
+    },
+    [deleteSession, revealPendingSessionDelete, t, undoDeleteSession]
+  );
+
+  const deleteProjectSession = useCallback(
+    (projectId: string, sessionId: SessionId) => {
+      const title =
+        projects.find((project) => project.id === projectId)?.sessions.find((session) => session.id === sessionId)
+          ?.title ?? t('web.sidebar.session');
+      queueSessionDelete({
+        afterDelete: onOpenWorkspace,
+        sessionId,
+        title
+      });
+    },
+    [onOpenWorkspace, projects, queueSessionDelete, t]
+  );
+
+  const deleteChatSession = useCallback(
+    (sessionId: SessionId) => {
+      const title = chatSessions.find((session) => session.id === sessionId)?.title ?? t('web.sidebar.session');
+      queueSessionDelete({
+        afterDelete: onOpenWorkspace,
+        sessionId,
+        title
+      });
+    },
+    [chatSessions, onOpenWorkspace, queueSessionDelete, t]
+  );
+
+  const deleteArchivedSession = useCallback(
+    (sessionId: SessionId, title: string) => {
+      queueSessionDelete({
+        sessionId,
+        title
+      });
+    },
+    [queueSessionDelete]
   );
 
   const revealPendingSessionArchive = useCallback((sessionId: SessionId) => {
@@ -186,7 +303,11 @@ function useSidebarSessionActions({ onOpenWorkspace }: { onOpenWorkspace: () => 
   return {
     archiveChatSession,
     archiveProjectSession,
+    deleteArchivedSession,
+    deleteChatSession,
+    deleteProjectSession,
     pendingArchivedSessionIds,
+    pendingDeletedSessionIds,
     pendingUnarchivedSessionIds,
     renameSession,
     unarchiveSession

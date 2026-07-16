@@ -1,9 +1,8 @@
 import type { ExternalAgentStreamView } from '../../../experience/types.ts';
 import type { ObservationItem, ObservationTimelineEntry, PublicObservationCard } from './types.ts';
 
-import { ChevronDownIcon } from '@hugeicons/core-free-icons';
-import { HugeiconsIcon } from '@hugeicons/react';
 import { workspaceMono as mono } from '@monad/ui/components/AgentAvatar';
+import { MorphChevron } from '@monad/ui/components/MorphChevron';
 import { memo, useEffect, useState } from 'react';
 
 import {
@@ -430,12 +429,10 @@ function ToolCallGroup({
         style={toolGroupHeaderStyle}
         type="button"
       >
-        <HugeiconsIcon
-          aria-hidden="true"
-          icon={ChevronDownIcon}
+        <MorphChevron
+          expanded={!collapsed}
           size={13}
           strokeWidth={2}
-          style={{ transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 150ms ease' }}
         />
         <span>{entries.length} tool calls</span>
       </button>

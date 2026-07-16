@@ -142,6 +142,12 @@ test('plain Error with no structured data: uses err.message + httpCode', () => {
   expect(message).toBe('connection refused');
 });
 
+test('DOMException: normalizes a numeric code for the agent.error wire contract', () => {
+  const { code, message } = extractError(new DOMException('This operation was aborted', 'AbortError'));
+  expect(code).toBe('20');
+  expect(message).toBe('This operation was aborted');
+});
+
 test('non-Error value: stringified', () => {
   const { message } = extractError('something broke');
   expect(message).toBe('something broke');

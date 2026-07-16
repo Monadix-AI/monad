@@ -107,6 +107,7 @@ import {
   recordFileObservation
 } from './file-observations.ts';
 import {
+  cloneMessages,
   failOrphanedStreamingMessages,
   findManagedExternalAgentStreamingMessage,
   getMemory,
@@ -115,7 +116,6 @@ import {
   insertMessage,
   type ListMessagesOptions,
   listMessages,
-  listMessagesWithLineage,
   maxMessageCreatedAt,
   maxMessageSeq,
   messageIdForSeq,
@@ -163,7 +163,6 @@ import {
   type ListSessionsFilter,
   listSessions,
   listWorkplaceProjects,
-  provenance,
   type SessionPatch,
   updateSession,
   updateWorkplaceProject,
@@ -353,11 +352,6 @@ export class Store {
     return clearMessages(this.sqlite, this.db, id);
   }
 
-  /** Ancestors (root-first) + BFS descendants. Excludes `id` itself — caller adds it. */
-  provenance(id: string): { ancestors: Session[]; descendants: Session[] } {
-    return provenance(this.sqlite, this.db, id);
-  }
-
   /** Accumulate one turn's REAL usage + cost into a session (per-session, resettable). Missing
    *  fields contribute 0 (presence ≠ value — never invent). */
   addUsage(id: string, usage: TokenUsage, costUsd = 0): void {
@@ -405,6 +399,10 @@ export class Store {
     insertMessage(this.db, id, transcriptTargetId, text, createdAt, role, opts);
   }
 
+  cloneMessages(transcriptTargetId: SessionId, sourceMessages: readonly ChatMessage[]): Map<MessageId, MessageId> {
+    return cloneMessages(this.sqlite, this.db, transcriptTargetId, sourceMessages);
+  }
+
   messageSeq(transcriptTargetId: string, messageId: string): number {
     return messageSeq(this.sqlite, transcriptTargetId, messageId);
   }
@@ -435,16 +433,6 @@ export class Store {
   /** Ordered by sqlite rowid (insertion order). Defaults to active (non-rewound) messages only. */
   listMessages(transcriptTargetId: string, opts: ListMessagesOptions = {}): ChatMessage[] {
     return listMessages(this.sqlite, transcriptTargetId, opts);
-  }
-
-  /**
-   * Full history for a session INCLUDING inherited ancestor messages, root-first, with each
-   * ancestor truncated at the branch point its child forked from. For a root (non-branched)
-   * session this is exactly `listMessages`. The agent loop uses this so a branched session sees
-   * its parent context, and the `sessions.messages` includeAncestors view shares the same logic.
-   */
-  listMessagesWithLineage(sessionId: string, opts: { includeInactive?: boolean; after?: string } = {}): ChatMessage[] {
-    return listMessagesWithLineage(this.sqlite, this.db, sessionId, opts);
   }
 
   getMessage(transcriptTargetId: string, messageId: string): ChatMessage | null {

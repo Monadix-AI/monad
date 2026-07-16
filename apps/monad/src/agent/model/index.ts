@@ -58,6 +58,8 @@ export interface ModelRequest {
   userId?: string;
   /** Max thinking/reasoning tokens per model step. Absent → profile's reasoningEffort default. */
   maxThinkingTokens?: number;
+  /** Cancels the upstream provider request when the originating turn is aborted. */
+  signal?: AbortSignal;
 }
 
 export interface ImageRequest {

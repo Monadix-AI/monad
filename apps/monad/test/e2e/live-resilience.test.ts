@@ -151,7 +151,7 @@ describe.skipIf(!KEY)(`live model resilience (${MODEL})`, () => {
           // (+ emoji) survived POST → store → SSE intact. (We don't assert the model's ANSWER: the
           // free router's reply quality is non-deterministic; the pipe's encoding is what's tested.)
           const echoed = events.find((e) => e.type === 'user.message');
-          expect((echoed?.payload as { text: string }).text).toBe(cjk);
+          expect((echoed?.payload as { text: string } | undefined)?.text).toBe(cjk);
           expect(events.some((e) => e.type === 'agent.message')).toBe(true); // the round completed, not errored
         },
         { timeout: TIMEOUT, retry: 2 }

@@ -249,8 +249,6 @@ export const sessionSchema = z.object({
   ownerPrincipalId: principalIdSchema,
   state: sessionStateSchema,
   agentIds: z.array(agentIdSchema),
-  parentSessionId: sessionIdSchema.nullable(), // null = root
-  branchedAtMessageId: messageIdSchema.optional(), // only set on branch children
   archived: z.boolean(),
   restoreCount: z.number(), // how many times this session was restored/rewound (audit)
   /** Per-session model-profile alias override (set via /model); absent → daemon default. */
@@ -372,7 +370,6 @@ export const eventTypeSchema = z.enum([
   'session.created',
   'session.updated', // title / state / archived changed
   'session.deleted',
-  'session.branched',
   'session.restored',
   'session.stream_started', // a turn began generating — control-plane signal for clients to open an SSE generation subscription
   'session.stream_ended', // the turn settled (success/error/abort) — clients close the SSE generation subscription
@@ -439,7 +436,6 @@ export type {
   EventPayload,
   MessageCompletePayload,
   MessageDeltaPayload,
-  SessionBranchedPayload,
   SessionCreatedPayload,
   SessionRestoredPayload,
   SessionUpdatedPayload,

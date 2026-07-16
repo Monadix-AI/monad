@@ -1,4 +1,3 @@
-import type { NativeAgentDeliveryId } from '@monad/protocol';
 import type { CSSProperties, DragEvent as ReactDragEvent, ReactElement } from 'react';
 import type { ChatRoomCanvas } from '../utils/canvas.ts';
 import type { ProjectComposerDirective, ProjectComposerSurface } from '../utils/composer.ts';
@@ -9,7 +8,6 @@ import { cn } from '@monad/ui/lib/utils';
 import { createElement, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { workspaceExperienceT } from '../../i18n.ts';
-import { useChatRoomExperienceStore } from '../store.ts';
 import {
   createOptimisticUserMessage,
   mergeOptimisticMessages,
@@ -43,7 +41,6 @@ export function ChatRoomExperienceView({ runtime }: { runtime: ChatRoomExperienc
   const [droppedFiles, setDroppedFiles] = useState<ComposerDroppedFiles | undefined>(undefined);
   const optimisticIdRef = useRef(0);
   const [optimisticMessages, setOptimisticMessages] = useState<OptimisticChatMessage[]>([]);
-  const followExternalAgentSession = useChatRoomExperienceStore((state) => state.followExternalAgentSession);
   const human = room.human;
   const sendOptimisticDirective = useCallback(
     async (directive: ProjectComposerDirective, existingId?: string) => {
@@ -87,11 +84,9 @@ export function ChatRoomExperienceView({ runtime }: { runtime: ChatRoomExperienc
   const chatRoom = useMemo(
     () => ({
       ...room,
-      messages,
-      followExternalAgentSession: (id: string, deliveryId?: NativeAgentDeliveryId) =>
-        followExternalAgentSession(room.projectId, id, undefined, deliveryId)
+      messages
     }),
-    [followExternalAgentSession, messages, room]
+    [messages, room]
   );
   const composer = useMemo(
     () => ({

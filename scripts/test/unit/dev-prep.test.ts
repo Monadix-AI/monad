@@ -11,6 +11,7 @@ import {
   devCommand,
   devSpawnOptions,
   i18nCommand,
+  lookupPortPids,
   reportPortSurvivors
 } from '../../dev-prep.ts';
 
@@ -203,4 +204,18 @@ test('port survivor diagnostics warn without killing the occupying process', () 
   expect(warnings).toEqual([
     '[dev-prep] port 52147 is still occupied by PID 991; inspect it with: lsof -nP -iTCP:52147 -sTCP:LISTEN'
   ]);
+});
+
+test('port survivor lookup only returns listeners', () => {
+  const calls: string[][] = [];
+
+  lookupPortPids('3000', (command) => {
+    calls.push(command);
+    return {
+      stdout: Buffer.from('123\n'),
+      stderr: Buffer.from('')
+    };
+  });
+
+  expect(calls).toEqual([['lsof', '-tiTCP:3000', '-sTCP:LISTEN']]);
 });

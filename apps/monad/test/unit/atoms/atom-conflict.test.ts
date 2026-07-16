@@ -183,7 +183,7 @@ test('provider is globally unique: a reserved (built-in) type is a hard error, a
     onError: (atomPack, error) => errors.push({ atomPack, error })
   });
   expect(errors[0]?.atomPack).toBe('shadower');
-  expect(String((errors[0]?.error as Error).message)).toMatch(/reserved by a built-in provider/i);
+  expect(String((errors[0]?.error as Error | undefined)?.message)).toMatch(/reserved by a built-in provider/i);
 });
 
 test('provider is globally unique: two packs claiming the same type → second is a hard error', async () => {
@@ -195,7 +195,7 @@ test('provider is globally unique: two packs claiming the same type → second i
   });
   expect(registered).toEqual(['vend']); // a's wins; b's is not a silent first-wins skip but an error
   expect(errors[0]?.atomPack).toBe('b');
-  expect(String((errors[0]?.error as Error).message)).toMatch(/globally unique/i);
+  expect(String((errors[0]?.error as Error | undefined)?.message)).toMatch(/globally unique/i);
 });
 
 test('message-type same-pack duplicate aborts that pack; cross-pack same name is fine', async () => {
@@ -325,5 +325,5 @@ test('undeclared workspace-experience atoms are rejected during daemon atom load
   });
 
   expect(errors[0]?.atomPack).toBe('px-sneaky');
-  expect((errors[0]?.error as Error).name).toBe('UndeclaredAtomError');
+  expect((errors[0]?.error as Error | undefined)?.name).toBe('UndeclaredAtomError');
 });

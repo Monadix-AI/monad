@@ -13,7 +13,6 @@ function seedSession(store: ReturnType<typeof createStore>, title: string): Sess
     ownerPrincipalId: newId('prn'),
     state: 'active',
     agentIds: [],
-    parentSessionId: null,
     archived: false,
     restoreCount: 0,
     createdAt: now,

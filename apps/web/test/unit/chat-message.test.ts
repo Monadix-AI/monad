@@ -68,7 +68,7 @@ test('reasoning trigger marks itself as the viewport anchor for user toggles', (
   expect(markup).toContain('data-virtual-list-anchor="true"');
 });
 
-test('pending assistant activity does not flash the agent label', () => {
+test('pending assistant activity renders the agent label with shimmer state', () => {
   const markup = renderToStaticMarkup(
     createElement(Message, {
       assistantLabel: 'Default Dev Agent',
@@ -81,7 +81,10 @@ test('pending assistant activity does not flash the agent label', () => {
     })
   );
 
-  expect(markup).not.toContain('Default Dev Agent');
+  expect(markup).toContain('Default Dev Agent');
+  expect(markup).toContain('agent-name-shimmer');
+  expect(markup).toContain('data-pending="true"');
+  expect(markup).toContain('aria-live="polite"');
 });
 
 test('user message bubble does not render a username label', () => {

@@ -3,8 +3,6 @@ import type { McpCatalogEntry, McpServerStatus, McpServerView } from '@monad/pro
 
 import {
   BoxesIcon,
-  ChevronDownIcon,
-  ChevronRightIcon,
   Delete02Icon,
   Key01Icon,
   LoaderPinwheelIcon,
@@ -13,7 +11,7 @@ import {
   Refresh01Icon
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { Badge, Button, cn } from '@monad/ui';
+import { Badge, Button, cn, MorphChevron } from '@monad/ui';
 import { useState } from 'react';
 
 import { I18nTrans, useT } from '#/components/I18nProvider';
@@ -271,17 +269,10 @@ function McpServerCard({
         onClick={() => setOpen((v) => !v)}
         type="button"
       >
-        {open ? (
-          <HugeiconsIcon
-            className="size-4 text-muted-foreground"
-            icon={ChevronDownIcon}
-          />
-        ) : (
-          <HugeiconsIcon
-            className="size-4 text-muted-foreground"
-            icon={ChevronRightIcon}
-          />
-        )}
+        <MorphChevron
+          className="size-4 text-muted-foreground"
+          expanded={open}
+        />
         <McpStatusDot
           enabled={server.enabled}
           status={status}

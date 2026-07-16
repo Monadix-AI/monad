@@ -113,7 +113,7 @@ describe.skipIf(!KEY)(`live model (${MODEL})`, () => {
             tokens.map((_e, i) => i)
           );
           expect(finals).toHaveLength(1);
-          const reply = (finals[0]?.payload as unknown as AgentMessagePayload).text;
+          const reply = (finals[0]?.payload as unknown as AgentMessagePayload | undefined)?.text ?? '';
           expect(reply.trim().length).toBeGreaterThan(0);
           // The concatenated deltas are a prefix of (or equal to) the final text the model settled on.
           const streamed = tokens.map((e) => (e.payload as unknown as AgentTokenPayload).delta).join('');
@@ -139,7 +139,7 @@ describe.skipIf(!KEY)(`live model (${MODEL})`, () => {
           const events = await eventsP;
           const toolCalls = events.filter((e) => e.type === 'tool.called');
           expect(toolCalls.length).toBeGreaterThan(0);
-          expect((toolCalls[0]?.payload as { tool?: string }).tool).toBe('record_marker');
+          expect((toolCalls[0]?.payload as { tool?: string } | undefined)?.tool).toBe('record_marker');
           // The tool's run() actually executed: its side effect captured the marker.
           expect(calls.map((c) => c.marker)).toContain('LIVEOK');
         },

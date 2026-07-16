@@ -14,11 +14,11 @@ for every SSE consumer) and [`@monad/client-rtk`](../../packages/client-rtk)
 ## Decision
 
 There are two realtime channels, split by **event kind**, not by who triggered the
-event:
+  event:
 
 - **WebSocket (`/v1/stream`) — control plane.** Carries low-frequency,
   cross-session **lifecycle** events that arrive unsolicited: `session.created`,
-  `session.updated`, `session.deleted`, `session.branched`, `session.restored`,
+  `session.updated`, `session.deleted`, `session.restored`,
   plus the two stream markers `session.stream_started` / `session.stream_ended`
   (a turn began / settled in some session). A client holds **one** multiplexed WS
   for its whole lifetime to learn that *something happened* — e.g. another client

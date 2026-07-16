@@ -61,14 +61,31 @@ export function syncVisibleSidebarSessionShortcutBadges(
   root: Pick<Document, 'querySelectorAll'> = document
 ): void {
   const rows = Array.from(root.querySelectorAll<HTMLElement>(sidebarSessionSelector));
+  const shortcuts = new Map(
+    modifierLabel
+      ? visibleSidebarSessionRows(root)
+          .slice(0, sidebarNumberHotkeys.length)
+          .map((row, index) => [row, String(index + 1)] as const)
+      : []
+  );
+
   for (const row of rows) {
-    delete row.dataset.sidebarShortcut;
-    delete row.dataset.sidebarShortcutModifier;
-  }
-  if (!modifierLabel) return;
-  for (const [index, row] of visibleSidebarSessionRows(root).slice(0, sidebarNumberHotkeys.length).entries()) {
-    row.dataset.sidebarShortcut = String(index + 1);
-    row.dataset.sidebarShortcutModifier = modifierLabel;
+    const shortcut = shortcuts.get(row);
+    if (shortcut) {
+      if (row.dataset.sidebarShortcut !== shortcut) row.dataset.sidebarShortcut = shortcut;
+      if (row.dataset.sidebarShortcutModifier !== modifierLabel) {
+        row.dataset.sidebarShortcutModifier = modifierLabel ?? '';
+      }
+    } else {
+      if (row.dataset.sidebarShortcut !== undefined) delete row.dataset.sidebarShortcut;
+      if (row.dataset.sidebarShortcutModifier !== undefined) delete row.dataset.sidebarShortcutModifier;
+    }
+    const chip = row.querySelector?.<HTMLElement>('[data-sidebar-shortcut-chip="true"]');
+    if (chip) {
+      const text = shortcut ? `${modifierLabel}${shortcut}` : '';
+      if (chip.hidden === Boolean(shortcut)) chip.hidden = !shortcut;
+      if (chip.textContent !== text) chip.textContent = text;
+    }
   }
 }
 

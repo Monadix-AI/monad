@@ -28,6 +28,41 @@ type ComposerKeyDownEvent = KeyboardEvent | ReactKeyboardEvent<HTMLElement>;
 
 type ContextUsage = Extract<UIItem, { kind: 'context' }>['usage'];
 
+export function countServerUserMessagesByText(items: UIItem[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  const seen = new Set<string>();
+  for (const item of items) {
+    if (item.kind !== 'message' || item.role !== 'user' || seen.has(item.id)) continue;
+    seen.add(item.id);
+    const text = messageTextFromParts(item.parts);
+    counts.set(text, (counts.get(text) ?? 0) + 1);
+  }
+  return counts;
+}
+
+export function reconcileOptimisticMessages<T extends ViewItem>({
+  legacyServerItems,
+  optimistic,
+  serverItems
+}: {
+  legacyServerItems?: UIItem[];
+  optimistic: T[];
+  serverItems: UIItem[];
+}): T[] {
+  const serverUserTextCounts = countServerUserMessagesByText(serverItems);
+  const legacyUserTextCounts = countServerUserMessagesByText(legacyServerItems ?? serverItems);
+  return optimistic.filter((message) => {
+    if (!('role' in message) || message.role !== 'user') return true;
+    if (message.serverEchoOrdinal !== undefined) {
+      return (serverUserTextCounts.get(message.text) ?? 0) < message.serverEchoOrdinal;
+    }
+    const count = legacyUserTextCounts.get(message.text) ?? 0;
+    if (count <= 0) return true;
+    legacyUserTextCounts.set(message.text, count - 1);
+    return false;
+  });
+}
+
 export function buildSessionContextUsage(usage: ContextUsage | undefined) {
   if (!usage) return undefined;
   const segmentsByCategory = new Map<string, { category: string; label: string; tokens: number }>();
@@ -73,21 +108,12 @@ export function buildViewMessages({
     }
   }
   const out = [...items.values()];
-  const serverUserTextCounts = new Map<string, number>();
-  for (const item of [...visibleHistory, ...visibleLiveItems]) {
-    if (item.kind !== 'message' || item.role !== 'user') continue;
-    const text = messageTextFromParts(item.parts);
-    serverUserTextCounts.set(text, (serverUserTextCounts.get(text) ?? 0) + 1);
-  }
-  for (const message of optimistic) {
+  const pendingOptimistic = reconcileOptimisticMessages({
+    optimistic,
+    serverItems: [...visibleHistory, ...visibleLiveItems]
+  });
+  for (const message of pendingOptimistic) {
     if (items.has(`message:${message.id}`)) continue;
-    if ('role' in message && message.role === 'user') {
-      const count = serverUserTextCounts.get(message.text) ?? 0;
-      if (count > 0) {
-        serverUserTextCounts.set(message.text, count - 1);
-        continue;
-      }
-    }
     out.push(message);
   }
   return groupToolCalls(collapseAnsweredCommandMessages(compactDividerItems(out, commandPending)));

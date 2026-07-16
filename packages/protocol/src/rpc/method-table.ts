@@ -72,7 +72,6 @@ import {
   getAgentResponseSchema,
   getDefaultAgentResponseSchema,
   getHealthResponseSchema,
-  getProvenanceResponseSchema,
   getSessionResponseSchema,
   listAgentsResponseSchema,
   listMessagesQuerySchema,
@@ -209,11 +208,6 @@ export const UNIVERSAL_METHODS = {
     path: idPath,
     body: branchSessionRequestSchema,
     result: branchSessionResponseSchema
-  },
-  'sessions.provenance': {
-    http: { verb: 'GET', template: '/v1/sessions/:id/provenance' },
-    path: idPath,
-    result: getProvenanceResponseSchema
   },
   'sessions.restore': {
     http: { verb: 'POST', template: '/v1/sessions/:id/restore' },
@@ -448,7 +442,6 @@ export const RPC_ONLY_METHODS = {
       'session.created',
       'session.updated',
       'session.deleted',
-      'session.branched',
       'session.restored',
       'session.stream_started',
       'session.stream_ended',

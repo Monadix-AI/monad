@@ -16,6 +16,8 @@ export const sendMessageApi = generateApi.injectEndpoints({
           text,
           attachments,
           generate,
+          steer,
+          steerMessages,
           continueFromHistory,
           ambientContext,
           idempotencyKey
@@ -31,6 +33,8 @@ export const sendMessageApi = generateApi.injectEndpoints({
                   text,
                   attachments,
                   generate,
+                  steer,
+                  steerMessages,
                   continueFromHistory,
                   ambientContext
                 } as SendMessageRequest,

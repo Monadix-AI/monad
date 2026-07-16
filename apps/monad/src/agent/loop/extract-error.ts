@@ -12,8 +12,11 @@ export function extractError(err: unknown): { code?: string; message: string } {
   }
   if (!(err instanceof Error)) return { message: String(err) };
 
-  const e = err as Error & { statusCode?: number; code?: string; data?: unknown };
-  const httpCode = e.statusCode !== undefined ? String(e.statusCode) : e.code;
+  const e = err as Error & { statusCode?: unknown; code?: unknown; data?: unknown };
+  const statusCode =
+    typeof e.statusCode === 'number' || typeof e.statusCode === 'string' ? String(e.statusCode) : undefined;
+  const errorCode = typeof e.code === 'number' || typeof e.code === 'string' ? String(e.code) : undefined;
+  const httpCode = statusCode ?? errorCode;
   const data = e.data;
 
   if (data !== null && data !== undefined && typeof data === 'object') {

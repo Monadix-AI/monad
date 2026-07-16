@@ -14,11 +14,12 @@ import { type SetStateAction, useCallback, useEffect, useRef, useState } from 'r
 
 import { branchFromMessage } from '#/features/session/branch-from-message';
 import { type Msg } from '#/features/session/ChatMessage';
-import { messageTextFromParts, viewItemKey } from '#/features/session/chat-view-items';
+import { viewItemKey } from '#/features/session/chat-view-items';
 import { rewindUserMessage } from '#/features/session/rewind-user-message';
 import { useSessionUiStore } from '#/features/session/session-ui-store';
+import { countServerUserMessagesByText, reconcileOptimisticMessages } from '#/features/session/session-view';
 
-type CommandEffect = { type: string; sessionId?: string; compacted?: number; mode?: 'detail' | 'compact' };
+type CommandEffect = { type: string; sessionId?: string; compacted?: number; mode?: 'detail' | 'summary' };
 
 const EMPTY_MESSAGES: Msg[] = [];
 const EMPTY_QUEUE: string[] = [];
@@ -26,6 +27,12 @@ const EMPTY_QUEUE: string[] = [];
 const isEmptyMessages = (value: Msg[]) => value.length === 0;
 const isEmptyQueue = (value: string[]) => value.length === 0;
 const isEmptyPendingCommand = (value: string | null) => value === null;
+
+export function steerSendMessageRequest(sessionId: SessionId, followUps: string[]) {
+  if (followUps.length === 0) throw new Error('steer requires at least one follow-up');
+  if (followUps.length === 1) return { sessionId, steer: true as const, text: followUps[0] ?? '' };
+  return { sessionId, steer: true as const, steerMessages: followUps, text: '' };
+}
 
 interface UseChatComposerArgs {
   currentId: SessionId | null;
@@ -120,6 +127,7 @@ export function useChatComposer({
   const setTranscriptRenderMode = useSessionUiStore((state) => state.setTranscriptRenderMode);
   const messageQueueRef = useRef<string[]>([]);
   const prevBusyRef = useRef(false);
+  const submitBusyRef = useRef(false);
   const handleSendRef = useRef<((text: string) => Promise<void>) | null>(null);
 
   const streamDataRef = useRef(streamData);
@@ -127,7 +135,19 @@ export function useChatComposer({
     streamDataRef.current = streamData;
   }, [streamData]);
 
-  const isBusy = sending || sendingProjectMessage || generating || commandPending !== null || liveStreaming;
+  const optimisticAssistantPending = optimistic.some((message) => message.role === 'assistant' && message.pending);
+  const isBusy =
+    sending ||
+    sendingProjectMessage ||
+    generating ||
+    commandPending !== null ||
+    liveStreaming ||
+    optimisticAssistantPending;
+  if (isBusy) submitBusyRef.current = true;
+
+  useEffect(() => {
+    if (!isBusy) submitBusyRef.current = false;
+  }, [isBusy]);
 
   useEffect(() => {
     if (!currentId || initialUserMessages.length === 0) return;
@@ -141,27 +161,17 @@ export function useChatComposer({
     requestAnimationFrame(() => scrollToBottom('smooth'));
   }, [currentId, initialUserMessages, clearInitialUserMessages, scrollToBottom, setOptimistic]);
 
-  // Drop optimistic user messages one-for-one as the live stream echoes them back. Text is the only
-  // correlation key available today, so counts matter: two identical submits must not both disappear
-  // when only one server echo has arrived.
   useEffect(() => {
     if (optimistic.length === 0) return;
-    const liveUserTextCounts = new Map<string, number>();
-    for (const item of liveItems) {
-      if (item.kind !== 'message' || item.role !== 'user') continue;
-      const text = messageTextFromParts(item.parts);
-      liveUserTextCounts.set(text, (liveUserTextCounts.get(text) ?? 0) + 1);
-    }
-    setOptimistic((prev) =>
-      prev.filter((message) => {
-        if (message.role !== 'user') return true;
-        const count = liveUserTextCounts.get(message.text) ?? 0;
-        if (count <= 0) return true;
-        liveUserTextCounts.set(message.text, count - 1);
-        return false;
-      })
-    );
-  }, [liveItems, optimistic.length, setOptimistic]);
+    setOptimistic((prev) => {
+      const next = reconcileOptimisticMessages({
+        legacyServerItems: liveItems,
+        optimistic: prev,
+        serverItems: [...history, ...liveItems]
+      });
+      return next.length === prev.length ? prev : next;
+    });
+  }, [history, liveItems, optimistic.length, setOptimistic]);
 
   const handleStop = useCallback(() => {
     if (currentId) void abortSession(currentId);
@@ -179,9 +189,9 @@ export function useChatComposer({
     jumpToLive();
   }, [currentId, isBusy, resetSession, jumpToLive, setHiddenViewItemKeysBySession, setOptimistic]);
 
-  // Fork the conversation into a child session at this message, then jump to it.
+  // Copy the conversation through this message into an independent session, then jump to it.
   const handleBranch = useCallback(
-    async (atMessageId: string, role: Msg['role']) => {
+    async (atMessageId: string) => {
       if (!currentId) return;
       await branchFromMessage({
         branch: (messageId) => branchSession({ id: currentId, atMessageId: messageId }).unwrap(),
@@ -190,8 +200,7 @@ export function useChatComposer({
         onBranched: (sessionId) => {
           setOptimistic([]);
           setSessionUrl(sessionId);
-        },
-        role
+        }
       }).catch(() => null);
     },
     [currentId, branchSession, sendMessage, setSessionUrl, setOptimistic]
@@ -200,7 +209,7 @@ export function useChatComposer({
   // Rewind from this user message, then put its raw text back into the composer.
   const handleRestore = useCallback(
     async (toMessageId: string, text: string) => {
-      if (!currentId || isBusy) return;
+      if (!currentId) return;
       const restoredText = await rewindUserMessage({
         messageId: toMessageId as MessageId,
         restore: (request) => restoreSession(request).unwrap(),
@@ -212,7 +221,7 @@ export function useChatComposer({
       setOptimistic([]);
       jumpToLive();
     },
-    [currentId, isBusy, restoreSession, setComposerInput, jumpToLive, setOptimistic]
+    [currentId, restoreSession, setComposerInput, jumpToLive, setOptimistic]
   );
 
   // React to a host command's structured effect (rich-client behaviour; dumb clients just show text).
@@ -232,7 +241,7 @@ export function useChatComposer({
         setHiddenViewItemKeysBySession((prev) => ({ ...prev, [currentId]: keys }));
         setOptimistic([]);
       } else if (effect.type === 'observation-render-mode-changed') {
-        if (effect.mode === 'detail' || effect.mode === 'compact') setTranscriptRenderMode(effect.mode);
+        if (effect.mode === 'detail' || effect.mode === 'summary') setTranscriptRenderMode(effect.mode);
       }
       return effect.type;
     },
@@ -351,16 +360,38 @@ export function useChatComposer({
   const handleForceSteerText = useCallback(
     async (text: string) => {
       if (!currentId) return;
-      const merged = [...messageQueueRef.current, ...(text ? [text] : [])].join('\n\n');
-      if (!merged) return;
+      const followUps = [...messageQueueRef.current, ...(text ? [text] : [])];
+      if (followUps.length === 0) return;
       setMessageQueue([]);
       messageQueueRef.current = [];
-      clearComposerInput();
-      void abortSession(currentId);
-      await new Promise((r) => setTimeout(r, 100));
-      await handleSend(merged);
+      if (isProjectSession) {
+        setMessageQueue(followUps);
+        messageQueueRef.current = followUps;
+        return;
+      }
+      const serverUserTextCounts = countServerUserMessagesByText([...history, ...liveItems]);
+      const optimisticMessages = followUps.map<Msg>((followUp) => {
+        const serverEchoOrdinal = (serverUserTextCounts.get(followUp) ?? 0) + 1;
+        serverUserTextCounts.set(followUp, serverEchoOrdinal);
+        return {
+          id: `local-steer-${crypto.randomUUID()}`,
+          role: 'user',
+          serverEchoOrdinal,
+          text: followUp
+        };
+      });
+      setOptimistic((prev) => [...prev, ...optimisticMessages]);
+      requestAnimationFrame(() => scrollToBottom('smooth'));
+      try {
+        await sendMessage(steerSendMessageRequest(currentId, followUps)).unwrap();
+      } catch {
+        const failedIds = new Set(optimisticMessages.map((message) => message.id));
+        setOptimistic((prev) =>
+          prev.map((message) => (failedIds.has(message.id) ? { ...message, error: true } : message))
+        );
+      }
     },
-    [currentId, abortSession, clearComposerInput, handleSend, setMessageQueue]
+    [currentId, history, isProjectSession, liveItems, scrollToBottom, sendMessage, setMessageQueue, setOptimistic]
   );
 
   // When generation ends (stream or block), drain the queue: merge all queued messages and send as one turn.
@@ -379,7 +410,8 @@ export function useChatComposer({
     const text = input.trim();
     if (!text || !currentId) return;
     clearComposerInput();
-    if (isBusy) {
+    const busy = submitBusyRef.current || isBusy;
+    if (busy) {
       if (followUpBehavior === 'steer') {
         await handleForceSteerText(text);
         return;
@@ -387,7 +419,12 @@ export function useChatComposer({
       setMessageQueue((q) => [...q, text]);
       return;
     }
-    await handleSend(text);
+    submitBusyRef.current = true;
+    try {
+      await handleSend(text);
+    } finally {
+      submitBusyRef.current = false;
+    }
   }, [
     input,
     currentId,
@@ -403,18 +440,30 @@ export function useChatComposer({
     const text = input.trim();
     if (!text || !currentId) return;
     clearComposerInput();
-    if (isBusy) {
+    const busy = submitBusyRef.current || isBusy;
+    if (busy) {
       setMessageQueue((queue) => [...queue, text]);
       return;
     }
-    await handleSend(text);
+    submitBusyRef.current = true;
+    try {
+      await handleSend(text);
+    } finally {
+      submitBusyRef.current = false;
+    }
   }, [input, currentId, isBusy, handleSend, clearComposerInput, setMessageQueue]);
 
   const handleForceSteer = useCallback(async () => {
     if (!currentId) return;
     const text = input.trim();
+    if (!text) return;
+    clearComposerInput();
     await handleForceSteerText(text);
-  }, [currentId, input, handleForceSteerText]);
+  }, [currentId, input, clearComposerInput, handleForceSteerText]);
+
+  const handleSteerQueued = useCallback(async () => {
+    await handleForceSteerText('');
+  }, [handleForceSteerText]);
 
   const removeQueuedMessage = useCallback(
     (index: number) => {
@@ -422,6 +471,11 @@ export function useChatComposer({
     },
     [setMessageQueue]
   );
+
+  const cancelQueuedMessages = useCallback(() => {
+    messageQueueRef.current = [];
+    setMessageQueue([]);
+  }, [setMessageQueue]);
 
   return {
     isBusy,
@@ -437,6 +491,8 @@ export function useChatComposer({
     handleSubmit,
     handleQueueSubmit,
     handleForceSteer,
+    handleSteerQueued,
+    cancelQueuedMessages,
     removeQueuedMessage
   };
 }

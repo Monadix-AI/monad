@@ -94,7 +94,6 @@ test('initialize advertises fork capability and monad extension methods', async 
     const init = await ctx.request('initialize', { protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} });
     expect(init.agentCapabilities?.sessionCapabilities?.fork).toEqual({});
     const ext = (init.agentCapabilities?._meta as { monad?: { extMethods?: string[] } } | undefined)?.monad?.extMethods;
-    expect(ext).toContain('_monad/session.provenance');
     expect(ext).toContain('_monad/model.listProfiles');
   });
 });
@@ -130,11 +129,7 @@ test('_monad extension methods route to monad handlers', async () => {
 
   await makeClientApp([]).connectWith(clientStream, async (ctx) => {
     await ctx.request('initialize', { protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} });
-    const { sessionId } = await ctx.request('session/new', { cwd: '/tmp', mcpServers: [] });
-
-    const prov = await ctx.request('_monad/session.provenance', { sessionId });
-    expect((prov as { self: { id: string } }).self).toMatchObject({ id: sessionId });
-    expect(Array.isArray((prov as { ancestors: unknown[] }).ancestors)).toBe(true);
+    await ctx.request('session/new', { cwd: '/tmp', mcpServers: [] });
 
     // model.* dispatch is covered by typecheck + the dispatcher; calling it needs a real config
     // (the test stub uses /dev/null), so we only assert unknown methods reject here.
@@ -432,7 +427,7 @@ test('newSession pushes a session_info_update carrying the title', async () => {
     await new Promise((r) => setTimeout(r, 20)); // flush fire-and-forget notifications
 
     const info = updates.find((u) => u.update.sessionUpdate === 'session_info_update');
-    expect((info?.update as { title?: string }).title).toBe('ACP session');
+    expect((info?.update as { title?: string } | undefined)?.title).toBe('ACP session');
   });
 });
 
@@ -557,7 +552,7 @@ test('didCloseDocument removes the doc from ambient context and clears focusedUr
 
     const lastUser = [...(captured ?? [])].reverse().find((m) => m.role === 'user');
     const text = Array.isArray(lastUser?.content)
-      ? (lastUser?.content as Array<{ text?: string }>).map((p) => p.text ?? '').join('')
+      ? ((lastUser?.content as Array<{ text?: string }> | undefined) ?? []).map((p) => p.text ?? '').join('')
       : String(lastUser?.content ?? '');
     expect(text).not.toContain('SECRET=42');
     expect(text).not.toContain('(focused)');

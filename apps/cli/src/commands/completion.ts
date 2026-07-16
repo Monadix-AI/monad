@@ -22,7 +22,7 @@ const GLOBAL_FLAGS = [
 // Second-level subcommands per group command. Kept here (not derived) so the generator stays a
 // pure string builder with no import cycle into the command registry.
 const SUBCOMMANDS: Record<string, string[]> = {
-  session: ['new', 'list', 'show', 'send', 'watch', 'search', 'branch', 'restore', 'reset', 'tree', 'abort', 'rm'],
+  session: ['new', 'list', 'show', 'send', 'watch', 'search', 'branch', 'restore', 'reset', 'abort', 'rm'],
   model: ['list', 'set', 'rm', 'use', 'test'],
   provider: ['list', 'set', 'remove', 'models'],
   credential: ['list', 'add', 'remove', 'test'],

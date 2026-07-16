@@ -34,3 +34,16 @@ test('a missing non-draft session route resets after session loading settles', (
     })
   ).toBe(false);
 });
+
+test('a deleted archived preview keeps its missing session route', () => {
+  expect(
+    shouldResetMissingSessionRoute({
+      currentId: 'ses_archived00000',
+      isDraftSession: false,
+      preserveMissingSessionRoute: true,
+      sessionExists: false,
+      sessionsFetching: false,
+      sessionsLoading: false
+    })
+  ).toBe(false);
+});

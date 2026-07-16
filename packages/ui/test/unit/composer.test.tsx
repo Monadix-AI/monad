@@ -7,10 +7,31 @@ import { UnifiedComposer } from '../../src/components/Composer';
 import {
   ComposerEditor,
   composerEnterAction,
+  composerKeyDownAction,
   LONG_PROMPT_CHARACTER_THRESHOLD,
   renderComposerInlineChip,
   shouldSubmitComposerKey
 } from '../../src/components/ComposerEditor';
+
+test('ComposerEditor leaves non-Enter shortcuts on the fast path', () => {
+  let documentReads = 0;
+  const readCurrentText = () => {
+    documentReads += 1;
+    return 'current composer text';
+  };
+
+  for (const key of ['c', 'v', 'k']) {
+    expect(composerKeyDownAction({ key, primaryModifier: true, shiftKey: false }, 'enter', readCurrentText)).toBe(
+      'ignore'
+    );
+  }
+  expect(documentReads).toBe(0);
+
+  expect(
+    composerKeyDownAction({ key: 'Enter', primaryModifier: false, shiftKey: false }, 'enter', readCurrentText)
+  ).toBe('submit');
+  expect(documentReads).toBe(1);
+});
 
 test('UnifiedComposer renders composed controls without React key warnings', () => {
   const errors: unknown[][] = [];

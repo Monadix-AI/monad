@@ -42,6 +42,28 @@ for (const kind of TRANSPORTS) {
       expect(((await res.json()) as { status: string }).status).toBe('ok');
     });
 
+    test('session list searches within the requested archived scope', async () => {
+      const activeSessionId = await createSession('Runtime gateway');
+      const archivedSessionId = await createSession('Runtime archive');
+      await t.fetch(`/v1/sessions/${archivedSessionId}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ archived: true })
+      });
+
+      const active = (await (await t.fetch('/v1/sessions?archived=false&query=gateway&limit=20&offset=0')).json()) as {
+        sessions: { id: string }[];
+        total: number;
+      };
+      const archived = (await (await t.fetch('/v1/sessions?archived=true&query=archive&limit=20&offset=0')).json()) as {
+        sessions: { id: string }[];
+        total: number;
+      };
+
+      expect(active).toMatchObject({ sessions: [{ id: activeSessionId }], total: 1 });
+      expect(archived).toMatchObject({ sessions: [{ id: archivedSessionId }], total: 1 });
+    });
+
     test('GET /health includes upgrade info when the daemon monitor has a result', async () => {
       const withUpgrade = serveTransport(
         kind,
@@ -81,10 +103,9 @@ for (const kind of TRANSPORTS) {
 
     test('GET /sessions/:id/ui-items accepts browser query strings', async () => {
       const sessionId = await createSession('ui-items-query');
-      const res = await t.fetch(
-        `/v1/sessions/${sessionId}/ui-items?limit=50&includeInactive=false&includeAncestors=false`,
-        { headers: { origin: 'http://localhost:3000' } }
-      );
+      const res = await t.fetch(`/v1/sessions/${sessionId}/ui-items?limit=50&includeInactive=false`, {
+        headers: { origin: 'http://localhost:3000' }
+      });
 
       expect(res.status).toBe(200);
       expect(res.headers.get('access-control-allow-origin')).toBe('http://localhost:3000');
@@ -112,7 +133,7 @@ for (const kind of TRANSPORTS) {
       expect(text).toBe('Hello world');
       expect(tokens.map((e) => (e.payload as unknown as AgentTokenPayload).index)).toEqual(tokens.map((_e, i) => i));
       expect(finals).toHaveLength(1);
-      expect((finals[0]?.payload as unknown as AgentMessagePayload).text).toBe('Hello world');
+      expect((finals[0]?.payload as unknown as AgentMessagePayload | undefined)?.text).toBe('Hello world');
     });
 
     test('block: POST .../messages/block returns the full assistant message synchronously', async () => {
@@ -151,7 +172,7 @@ for (const kind of TRANSPORTS) {
 
       // The terminal message is always delivered on resume, carrying the full text…
       const finalB = seenB.find((e) => e.type === 'agent.message') as Event | undefined;
-      expect((finalB?.payload as unknown as AgentMessagePayload).text).toBe('Hello world');
+      expect((finalB?.payload as unknown as AgentMessagePayload | undefined)?.text).toBe('Hello world');
 
       // …and token deltas are never gapped or duplicated across the reconnect: B's tokens
       // are exactly the ones A had not yet seen (resumed from the hot buffer), or none at

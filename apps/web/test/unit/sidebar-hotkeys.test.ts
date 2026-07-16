@@ -15,14 +15,16 @@ import {
 
 function fakeRow(testId: string, inert = false) {
   let clicked = 0;
+  const chip = { hidden: true, textContent: '' } as HTMLElement;
   const row = {
     click: () => {
       clicked += 1;
     },
     closest: (selector: string) => (selector === '[inert]' && inert ? {} : null),
-    dataset: { testId }
+    dataset: { testId },
+    querySelector: (selector: string) => (selector === '[data-sidebar-shortcut-chip="true"]' ? chip : null)
   } as unknown as HTMLElement;
-  return { clicked: () => clicked, row };
+  return { chip, clicked: () => clicked, row };
 }
 
 function fakeRoot(rows: HTMLElement[]) {
@@ -127,7 +129,8 @@ test('visible session activation clicks only an existing target', () => {
 });
 
 test('session shortcut badges number only the first nine visible rows and clear stale values', () => {
-  const rows = Array.from({ length: 11 }, (_, index) => fakeRow(`row-${index}`, index === 1).row);
+  const items = Array.from({ length: 11 }, (_, index) => fakeRow(`row-${index}`, index === 1));
+  const rows = items.map((item) => item.row);
   rows[1].dataset.sidebarShortcut = '8';
   rows[10].dataset.sidebarShortcut = '9';
 
@@ -159,6 +162,58 @@ test('session shortcut badges number only the first nine visible rows and clear 
     '⌘',
     null
   ]);
+  expect(items.map((item) => (item.chip.hidden ? null : item.chip.textContent))).toEqual([
+    '⌘1',
+    null,
+    '⌘2',
+    '⌘3',
+    '⌘4',
+    '⌘5',
+    '⌘6',
+    '⌘7',
+    '⌘8',
+    '⌘9',
+    null
+  ]);
+
+  syncVisibleSidebarSessionShortcutBadges(null, fakeRoot(rows));
+  expect(items.every((item) => item.chip.hidden && item.chip.textContent === '')).toBe(true);
+});
+
+test('session shortcut badge sync does not rewrite unchanged chip content', () => {
+  let hidden = true;
+  let textContent = '';
+  let writes = 0;
+  const chip = {
+    get hidden() {
+      return hidden;
+    },
+    set hidden(value: boolean) {
+      hidden = value;
+      writes += 1;
+    },
+    get textContent() {
+      return textContent;
+    },
+    set textContent(value: string) {
+      textContent = value;
+      writes += 1;
+    }
+  } as HTMLElement;
+  const row = {
+    closest: () => null,
+    dataset: {},
+    querySelector: () => chip
+  } as unknown as HTMLElement;
+  const root = fakeRoot([row]);
+
+  syncVisibleSidebarSessionShortcutBadges('⌘', root);
+  writes = 0;
+  syncVisibleSidebarSessionShortcutBadges('⌘', root);
+
+  expect(writes).toBe(0);
+  expect(hidden).toBe(false);
+  expect(textContent).toBe('⌘1');
 });
 
 test('workspace session shortcuts build nine ordered activators', () => {

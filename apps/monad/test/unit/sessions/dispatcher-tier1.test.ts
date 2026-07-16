@@ -48,6 +48,17 @@ test('sessionDelete queues deletion and hides the session from handler reads', a
   store.close();
 });
 
+test('session list applies server-side search before pagination', async () => {
+  const d = buildHandlers(mockModel(['hi']));
+  const { sessionId: alphaId } = await d.session.create({ title: 'Alpha runtime' });
+  await d.session.create({ title: 'Beta notes' });
+
+  expect(await d.session.list({ archived: false, query: 'alpha', limit: 1, offset: 0 })).toMatchObject({
+    sessions: [{ id: alphaId, title: 'Alpha runtime' }],
+    total: 1
+  });
+});
+
 test('sessionDelete undo preserves session_members rows', async () => {
   const store = createStore();
   const d = buildHandlers(mockModel(['hi']), undefined, { store });

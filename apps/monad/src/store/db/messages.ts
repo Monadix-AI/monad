@@ -3,15 +3,14 @@
 // schema-typed insert or lineage walk is needed, the drizzle handle (`db`).
 
 import type { Database } from 'bun:sqlite';
-import type { ChatMessage, MessageId, MessageType, Session, SessionId, StreamStatus } from '@monad/protocol';
+import type { ChatMessage, MessageId, MessageType, SessionId, StreamStatus } from '@monad/protocol';
 import type { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite';
 
-import { persistedIncludeInContext } from '@monad/protocol';
+import { newId, persistedIncludeInContext } from '@monad/protocol';
 
 import { clearFileObservationsIfObservedSince } from './file-observations.ts';
 import { type MessageRow, rowToMessage, toIntFlag } from './row-mappers.ts';
 import { messages } from './schema.ts';
-import { getSession, provenance } from './sessions.ts';
 
 type Db = BunSQLiteDatabase<Record<string, never>>;
 
@@ -55,6 +54,32 @@ export function insertMessage(
       createdAt
     })
     .run();
+}
+
+export function cloneMessages(
+  sqlite: Database,
+  db: Db,
+  transcriptTargetId: SessionId,
+  sourceMessages: readonly ChatMessage[]
+): Map<MessageId, MessageId> {
+  const clonedIds = new Map<MessageId, MessageId>(sourceMessages.map((message) => [message.id, newId('msg')] as const));
+  const tx = sqlite.transaction(() => {
+    for (const message of sourceMessages) {
+      const id = clonedIds.get(message.id);
+      if (!id) continue;
+      insertMessage(db, id, transcriptTargetId, message.text, message.createdAt, message.role, {
+        data: message.data,
+        includeInContext: message.includeInContext,
+        streamStatus: message.stream.status,
+        type: message.type
+      });
+      if (message.updatedAt) {
+        sqlite.query('UPDATE messages SET updated_at = ? WHERE id = ?').run(message.updatedAt, id);
+      }
+    }
+  });
+  tx();
+  return clonedIds;
 }
 
 export function messageSeq(sqlite: Database, transcriptTargetId: string, messageId: string): number {
@@ -225,46 +250,6 @@ export function listMessages(
       updatedAt: (r.updated_at ?? null) as string | null
     } as MessageRow)
   );
-}
-
-/**
- * Full history for a session INCLUDING inherited ancestor messages, root-first, with each
- * ancestor truncated at the branch point its child forked from. For a root (non-branched)
- * session this is exactly `listMessages`. The agent loop uses this so a branched session sees
- * its parent context, and the `sessions.messages` includeAncestors view shares the same logic.
- */
-export function listMessagesWithLineage(
-  sqlite: Database,
-  db: Db,
-  sessionId: string,
-  opts: { includeInactive?: boolean; after?: string } = {}
-): ChatMessage[] {
-  const self = getSession(db, sessionId);
-  // `after` operates on the assembled lineage list (an id may live in an ancestor), so for a
-  // root session we still slice here rather than delegating the cursor to listMessages.
-  const sliceAfter = (msgs: ChatMessage[]): ChatMessage[] => {
-    if (!opts.after) return msgs;
-    const i = msgs.findIndex((m) => m.id === opts.after);
-    return i === -1 ? msgs : msgs.slice(i + 1); // unknown cursor → everything (matches listMessages)
-  };
-  if (!self?.parentSessionId)
-    return sliceAfter(listMessages(sqlite, sessionId, { includeInactive: opts.includeInactive }));
-
-  const chain = [...provenance(sqlite, db, sessionId).ancestors, self];
-  const out: ChatMessage[] = [];
-  for (let i = 0; i < chain.length; i++) {
-    const node = chain[i] as Session;
-    const child = chain[i + 1];
-    let segment = listMessages(sqlite, node.id, { includeInactive: opts.includeInactive });
-    if (child?.branchedAtMessageId) {
-      const cut = segment.findIndex((m) => m.id === child.branchedAtMessageId);
-      if (cut >= 0) segment = segment.slice(0, cut + 1);
-    }
-    for (const m of segment) out.push(m);
-  }
-  // Slice the FULL lineage list — the boundary id may be in an ancestor segment, which a
-  // per-session `after` query would miss (dropping post-boundary ancestor messages).
-  return sliceAfter(out);
 }
 
 export function getMessage(sqlite: Database, transcriptTargetId: string, messageId: string): ChatMessage | null {

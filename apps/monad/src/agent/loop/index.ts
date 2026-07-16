@@ -22,6 +22,7 @@ export type {
   ImageAttachment,
   LoadedSkill,
   MessageRepo,
+  PendingSteerSource,
   SkillTier,
   ToolSearchConfig
 } from './types.ts';
@@ -175,7 +176,7 @@ export class AgentLoop {
     signal?: AbortSignal
   ): Promise<void> {
     try {
-      if (this.availableTools.length > 0) {
+      if (this.availableTools.length > 0 || this.deps.steers) {
         await this.runStreamWithTools(sessionId, messageId, signal);
         return;
       }
@@ -190,7 +191,8 @@ export class AgentLoop {
         messages: await this.hookOrchestrator.beforeModel(sessionId, messages),
         params: this.deps.generationParams,
         sessionId,
-        userId: this.deps.userId
+        userId: this.deps.userId,
+        signal
       })) {
         if (signal?.aborted) break; // sessions.abort — stop consuming; persist what we have
         if (!chunk) continue; // defensive: a provider may yield an empty pull before the next real chunk
@@ -227,7 +229,12 @@ export class AgentLoop {
     }
   }
 
-  async runBlock(sessionId: SessionId, userText: string, attachments?: ImageAttachment[]): Promise<ChatMessage> {
+  async runBlock(
+    sessionId: SessionId,
+    userText: string,
+    attachments?: ImageAttachment[],
+    signal?: AbortSignal
+  ): Promise<ChatMessage> {
     this.prompt.setAttachments(attachments);
     this.prompt.resetSkillExpansion();
     const submit = await this.hookOrchestrator.userPromptSubmit(sessionId, userText);
@@ -261,7 +268,7 @@ export class AgentLoop {
 
     try {
       if (this.availableTools.length > 0) {
-        const { text, usage } = await this.runToolLoop(sessionId);
+        const { text, usage } = await this.runToolLoop(sessionId, signal);
         return this.writer.finishTurn(sessionId, messageId, text, usage);
       }
 
@@ -271,7 +278,8 @@ export class AgentLoop {
         messages: await this.hookOrchestrator.beforeModel(sessionId, messages),
         params: this.deps.generationParams,
         sessionId,
-        userId: this.deps.userId
+        userId: this.deps.userId,
+        signal
       });
       const parsed = finishReasonSchema.safeParse(result.finishReason);
       this.prompt.noteUsage(result.usage);
@@ -298,7 +306,7 @@ export class AgentLoop {
    * them (gate + sandbox via invokeTool), feed structured tool results back, and re-prompt —
    * up to a step budget. Returns the model's final prose.
    */
-  private async runToolLoop(sessionId: SessionId): Promise<{ text: string; usage?: ModelUsage }> {
+  private async runToolLoop(sessionId: SessionId, signal?: AbortSignal): Promise<{ text: string; usage?: ModelUsage }> {
     const maxTurns = this.deps.maxTurns;
     const maxBudgetUsd = this.deps.maxBudgetUsd;
     let messages = await this.prompt.buildPrompt(sessionId, true, this.hookOrchestrator.turnInjectedContext);
@@ -320,7 +328,8 @@ export class AgentLoop {
         params: this.deps.generationParams,
         tools,
         sessionId,
-        userId: this.deps.userId
+        userId: this.deps.userId,
+        signal
       });
       this.prompt.noteUsage(result.usage);
       // AfterModel fires per model step — including the intermediate responses that carry tool calls.
@@ -352,7 +361,7 @@ export class AgentLoop {
         }
         return { text: stop.text, usage: result.usage };
       }
-      await this.toolExecutor.runToolCalls(sessionId, responseText, clientCalls, messages);
+      await this.toolExecutor.runToolCalls(sessionId, responseText, clientCalls, messages, signal);
     }
 
     // Budget exhausted (turn limit or cost) — force a direct answer with no tools offered.
@@ -363,7 +372,8 @@ export class AgentLoop {
       messages: await this.hookOrchestrator.beforeModel(sessionId, messages),
       params: this.deps.generationParams,
       sessionId,
-      userId: this.deps.userId
+      userId: this.deps.userId,
+      signal
     });
     const stop = await this.hookOrchestrator.runStopHook(
       sessionId,
@@ -443,6 +453,14 @@ export class AgentLoop {
       }
 
       if (isFinal) {
+        const steeredSegmentId = await this.consumeSteers(sessionId, messages, true, {
+          role: 'assistant',
+          content: text || '(continuing)'
+        });
+        if (steeredSegmentId) {
+          segmentId = steeredSegmentId;
+          continue;
+        }
         // Candidate final answer — a Stop hook may force the agent to keep working. (AfterModel
         // already fired inside streamStep, so `text` is the post-AfterModel response here.)
         const stop = await this.hookOrchestrator.runStopHook(
@@ -456,6 +474,7 @@ export class AgentLoop {
           // instruction, and re-enter with a fresh segment.
           messages.push({ role: 'assistant', content: text || '(continuing)' });
           messages.push({ role: 'user', content: stop.continueReason });
+          this.deps.steers?.reopen();
           segmentId = newId('msg');
           continue;
         }
@@ -466,41 +485,87 @@ export class AgentLoop {
         return;
       }
       await this.toolExecutor.runToolCalls(sessionId, text, calls, messages, signal);
-      segmentId = newId('msg'); // the next step's text is a fresh, later-sorting segment
+      segmentId = (await this.consumeSteers(sessionId, messages, false)) ?? newId('msg'); // the next step's text is a fresh, later-sorting segment
     }
 
     // Budget exhausted (turn limit or cost) — stream a direct answer with no tools offered.
     const budgetMsg = budgetExceeded() ? BUDGET_EXCEEDED : TOOL_BUDGET_REACHED;
     messages.push({ role: 'user', content: budgetMsg });
-    const seg = this.writer.beginSegment(sessionId, segmentId, reasonBase);
-    let finalText = '';
-    let finalUsage: ModelUsage | undefined;
-    for await (const chunk of this.deps.model.stream({
-      model: this.hookOrchestrator.modelId(),
-      messages: await this.hookOrchestrator.beforeModel(sessionId, messages),
-      params: this.deps.generationParams,
-      sessionId,
-      userId: this.deps.userId
-    })) {
-      if (signal?.aborted) break;
-      if (!chunk) continue; // defensive: a provider may yield an empty pull before the next real chunk
-      if (chunk.type === 'usage') {
-        finalUsage = chunk.usage;
+    for (;;) {
+      const seg = this.writer.beginSegment(sessionId, segmentId, reasonBase);
+      let finalText = '';
+      let finalUsage: ModelUsage | undefined;
+      for await (const chunk of this.deps.model.stream({
+        model: this.hookOrchestrator.modelId(),
+        messages: await this.hookOrchestrator.beforeModel(sessionId, messages),
+        params: this.deps.generationParams,
+        sessionId,
+        userId: this.deps.userId,
+        signal
+      })) {
+        if (signal?.aborted) break;
+        if (!chunk) continue; // defensive: a provider may yield an empty pull before the next real chunk
+        if (chunk.type === 'usage') {
+          finalUsage = chunk.usage;
+          continue;
+        }
+        if (chunk.type !== 'text') continue;
+        finalText += chunk.token;
+        seg.emitToken(chunk.token);
+      }
+      if (!(await seg.settle(finalText))) await this.writer.appendEmptyAnswer(sessionId, segmentId);
+      const processedText = await this.hookOrchestrator.afterModel(sessionId, finalText);
+      const steeredSegmentId = await this.consumeSteers(sessionId, messages, true, {
+        role: 'assistant',
+        content: processedText || '(continuing)'
+      });
+      if (steeredSegmentId) {
+        segmentId = steeredSegmentId;
         continue;
       }
-      if (chunk.type !== 'text') continue;
-      finalText += chunk.token;
-      seg.emitToken(chunk.token);
+      const stop = await this.hookOrchestrator.runStopHook(
+        sessionId,
+        processedText,
+        finalUsage ?? lastUsage,
+        signal?.aborted ? 'aborted' : 'completed'
+      );
+      if (stop.text !== finalText) await this.writer.repersistFinalText(sessionId, segmentId, stop.text);
+      await this.writer.finishBookkeeping(sessionId, segmentId, stop.text, finalUsage ?? lastUsage);
+      return;
     }
-    if (!(await seg.settle(finalText))) await this.writer.appendEmptyAnswer(sessionId, segmentId);
-    const stop = await this.hookOrchestrator.runStopHook(
-      sessionId,
-      await this.hookOrchestrator.afterModel(sessionId, finalText),
-      finalUsage ?? lastUsage,
-      signal?.aborted ? 'aborted' : 'completed'
-    );
-    if (stop.text !== finalText) await this.writer.repersistFinalText(sessionId, segmentId, stop.text);
-    await this.writer.finishBookkeeping(sessionId, segmentId, stop.text, finalUsage ?? lastUsage);
+  }
+
+  private async consumeSteers(
+    sessionId: SessionId,
+    messages: ModelMessage[],
+    closing: boolean,
+    preceding?: ModelMessage
+  ): Promise<`msg_${string}` | undefined> {
+    const source = this.deps.steers;
+    if (!source) return undefined;
+    const pending = closing ? source.close() : source.take();
+    if (pending.length === 0) return undefined;
+
+    let segmentId: `msg_${string}` | undefined;
+    let insertedPreceding = false;
+    const acceptedTexts: string[] = [];
+    for (const rawText of pending) {
+      const submit = await this.hookOrchestrator.userPromptSubmit(sessionId, rawText);
+      if (submit.blocked) {
+        const blockedSegmentId = await this.writer.beginTurn(sessionId, rawText);
+        await this.writer.finishTurn(sessionId, blockedSegmentId, submit.reason);
+        continue;
+      }
+      if (preceding && !insertedPreceding) {
+        messages.push(preceding);
+        insertedPreceding = true;
+      }
+      segmentId = await this.writer.beginTurn(sessionId, submit.text);
+      acceptedTexts.push(submit.text);
+    }
+    if (acceptedTexts.length > 0) messages.push({ role: 'user', content: acceptedTexts.join('\n\n') });
+    if (closing && segmentId) source.reopen();
+    return segmentId;
   }
 
   /**
@@ -537,7 +602,8 @@ export class AgentLoop {
       params: this.deps.generationParams,
       tools,
       sessionId,
-      userId: this.deps.userId
+      userId: this.deps.userId,
+      signal
     })) {
       if (signal?.aborted) break;
       if (!chunk) continue; // defensive: a provider may yield an empty pull before the next real chunk

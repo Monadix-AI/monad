@@ -20,7 +20,6 @@ export type AcpHandlers = {
     | 'abort'
     | 'sendInline'
     | 'restore'
-    | 'provenance'
     | 'configureRuntime'
   >;
   commands: Pick<DaemonHandlers['commands'], 'list'>;

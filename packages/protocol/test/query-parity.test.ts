@@ -40,17 +40,18 @@ test('HTTP search query: coercion matches canonical, and q-max / limit-positive 
 test('HTTP list query: coercion matches canonical typed parse', () => {
   const q = daemonHttpContract.sessions.list.query;
   if (!q) throw new Error('expected a query schema');
-  expect(q.parse({ archived: 'true', limit: '10', offset: '0' })).toEqual(
-    listSessionsQuerySchema.parse({ archived: true, limit: 10, offset: 0 })
+  expect(q.parse({ archived: 'true', query: 'runtime', limit: '10', offset: '0' })).toEqual(
+    listSessionsQuerySchema.parse({ archived: true, query: 'runtime', limit: 10, offset: 0 })
   );
   expect(q.safeParse({ archived: 'notabool' }).success).toBe(false);
+  expect(q.safeParse({ query: 'x'.repeat(201) }).success).toBe(false);
 });
 
 test('HTTP messages query: boolean coercion matches canonical parse', () => {
   const q = daemonHttpContract.sessions.messages.query;
   if (!q) throw new Error('expected a query schema');
-  expect(q.parse({ includeInactive: 'true', includeAncestors: 'false', limit: '5' })).toEqual(
-    listMessagesQuerySchema.parse({ includeInactive: 'true', includeAncestors: 'false', limit: 5 })
+  expect(q.parse({ includeInactive: 'true', limit: '5' })).toEqual(
+    listMessagesQuerySchema.parse({ includeInactive: 'true', limit: 5 })
   );
   expect(q.safeParse({ includeInactive: 'notabool' }).success).toBe(false);
 });

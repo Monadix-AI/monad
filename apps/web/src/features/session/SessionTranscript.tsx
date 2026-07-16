@@ -1,19 +1,17 @@
 import type { ApprovalScope, SessionId } from '@monad/protocol';
 import type { ViewItem } from './chat-view-items';
-import type { PendingApproval, SessionIdentityModel, SessionTranscriptModel } from './session-route-contract';
+import type { PendingApproval, SessionTranscriptModel } from './session-route-contract';
 
 import {
   ArrowDown01Icon,
   ArrowUp01Icon,
   Cancel01Icon,
   CheckIcon,
-  GitBranchIcon,
   HelpCircleIcon,
   ShieldQuestionMarkIcon
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { useProvenanceQuery } from '@monad/client-rtk';
-import { Button, cn, Textarea } from '@monad/ui';
+import { Button, cn, MorphChevron, Skeleton, Textarea } from '@monad/ui';
 import { activeMessageOutlineIds, MessageOutline } from '@monad/ui/components/MessageOutline';
 import { VirtualList } from '@monad/ui/components/VirtualList';
 import { useFirstItemIndex } from '@monad/ui/hooks/use-first-item-index';
@@ -24,55 +22,67 @@ import { ApprovalDisplayCard } from './ApprovalDisplayCard';
 import { approvalActionScopes } from './approval-display';
 import { Message } from './ChatMessage';
 import {
-  branchSourceSessionName,
-  type CompactTranscriptTurnViewItem,
-  compactTranscriptTurns,
+  branchSnapshotItems,
   isBranchSourceItem,
   isCompactCommandItem,
-  isCompactTranscriptTurnItem,
   isMemorySummaryItem,
-  isToolItem
+  isSummaryTranscriptTurnItem,
+  isToolItem,
+  type SummaryTranscriptTurnViewItem,
+  summaryTranscriptTurns
 } from './chat-view-items';
 import { MemorySummaryDivider } from './MemorySummaryDivider';
 import { MessageBody } from './MessageBody';
-import { SESSION_CONTENT_CLASS } from './session-layout';
+import { useSessionContext } from './session-context';
 import { sessionMessageOutlineItems } from './session-message-outline';
 import { useSessionUiStore } from './session-ui-store';
 import { ToolStepView } from './ToolStepView';
 
 const sessionMessageKey = (message: ViewItem): string => message.id;
 const COMPOSER_CLEARANCE = 'calc(var(--session-composer-clearance, 132px) + 24px)';
-export const SESSION_TRANSCRIPT_CONTENT_CLASS = SESSION_CONTENT_CLASS;
 
-export function SessionTranscript({
-  identity,
-  model,
-  onSkillPreview
-}: {
-  identity: SessionIdentityModel;
-  model: SessionTranscriptModel;
-  onSkillPreview: (id: string) => void;
-}) {
+export function sessionTranscriptHeaderState(
+  isLoading: boolean,
+  showLoadingSkeleton: boolean,
+  messageCount: number
+): 'loading' | 'skeleton' | 'empty' | 'content' {
+  if (isLoading) return showLoadingSkeleton ? 'skeleton' : 'loading';
+  return messageCount === 0 ? 'empty' : 'content';
+}
+
+export function SessionTranscript({ model }: { model: SessionTranscriptModel }) {
   const t = useT();
+  const { identity } = useSessionContext();
   const shellRef = useRef<HTMLDivElement>(null);
-  const { data: provenance } = useProvenanceQuery(identity.currentSessionId, { skip: identity.isDraft });
   const atBottom = useSessionUiStore((state) => state.atBottom);
+  const renderMode = useSessionUiStore((state) => state.transcriptRenderMode);
   const setAtBottom = useSessionUiStore((state) => state.setAtBottom);
   const [visibleRange, setVisibleRange] = useState<{ endIndex: number; startIndex: number } | null>(null);
   const [outlineTop, setOutlineTop] = useState('50%');
+  const [expandedBranchSessionId, setExpandedBranchSessionId] = useState<SessionId | null>(null);
+  const branchHistoryExpanded = expandedBranchSessionId === identity.currentSessionId;
+  const visibleMessages = useMemo(
+    () => branchSnapshotItems(model.viewMessages, branchHistoryExpanded),
+    [branchHistoryExpanded, model.viewMessages]
+  );
+  const renderedMessages = useMemo(
+    () => (renderMode === 'summary' ? summaryTranscriptTurns(visibleMessages) : visibleMessages),
+    [renderMode, visibleMessages]
+  );
+  const firstItemIndex = useFirstItemIndex(renderedMessages, sessionMessageKey);
   const pendingActionCount = model.pendingApprovals.length + model.pendingClarifications.length;
   const outlineItems = useMemo(
     () =>
       sessionMessageOutlineItems(
-        model.viewMessages,
+        renderedMessages,
         (number) => t('web.chat.messageNumber', { number }),
         t('web.chat.timeUnavailable')
       ),
-    [model.viewMessages, t]
+    [renderedMessages, t]
   );
   const activeOutlineIds = useMemo(
-    () => activeMessageOutlineIds(outlineItems, visibleRange, model.firstItemIndex, model.viewMessages.length),
-    [model.firstItemIndex, model.viewMessages.length, outlineItems, visibleRange]
+    () => activeMessageOutlineIds(outlineItems, visibleRange, firstItemIndex, renderedMessages.length),
+    [firstItemIndex, outlineItems, renderedMessages.length, visibleRange]
   );
 
   useEffect(() => {
@@ -95,7 +105,7 @@ export function SessionTranscript({
   const footer = useMemo(
     () =>
       pendingActionCount > 0 ? (
-        <div className={cn(SESSION_TRANSCRIPT_CONTENT_CLASS, 'flex flex-col gap-5 pb-5')}>
+        <div className={cn('session-content-column', 'flex flex-col gap-5 pb-5')}>
           {model.pendingApprovals.map((approval) => (
             <ApprovalCard
               approval={approval}
@@ -121,31 +131,27 @@ export function SessionTranscript({
       ),
     [model.onApproval, model.onClarifyAnswer, model.pendingApprovals, model.pendingClarifications, pendingActionCount]
   );
-  const header = useMemo(
-    () =>
-      model.viewMessages.length === 0 ? (
-        <div className={cn(SESSION_TRANSCRIPT_CONTENT_CLASS, 'pt-5')}>
-          <div className="gradient-spotlight-card flex flex-col items-start gap-2.5 px-5 py-5">
-            <span className="label-mono">{t('web.chat.sessionReady')}</span>
-            <p className="poster-heading text-foreground text-xl">{t('web.chat.start')}</p>
-            <p className="max-w-xl text-muted-foreground text-sm">{t('web.chat.hint')}</p>
-          </div>
+  const header = useMemo(() => {
+    const state = sessionTranscriptHeaderState(model.isLoading, model.showLoadingSkeleton, model.viewMessages.length);
+    if (state === 'skeleton') return <SessionTranscriptSkeleton />;
+    if (state === 'loading') return null;
+    return state === 'empty' ? (
+      <div className={cn('session-content-column', 'pt-5')}>
+        <div className="gradient-spotlight-card flex flex-col items-start gap-2.5 px-5 py-5">
+          <span className="label-mono">{t('web.chat.sessionReady')}</span>
+          <p className="poster-heading text-foreground text-xl">{t('web.chat.start')}</p>
+          <p className="max-w-xl text-muted-foreground text-sm">{t('web.chat.hint')}</p>
         </div>
-      ) : (
-        <div className="h-5" />
-      ),
-    [model.viewMessages.length, t]
-  );
-  const renderedMessages = useMemo(
-    () => (model.renderMode === 'compact' ? compactTranscriptTurns(model.viewMessages) : model.viewMessages),
-    [model.renderMode, model.viewMessages]
-  );
-  const firstItemIndex = useFirstItemIndex(renderedMessages, sessionMessageKey);
+      </div>
+    ) : (
+      <div className="h-5" />
+    );
+  }, [model.isLoading, model.showLoadingSkeleton, model.viewMessages.length, t]);
   const renderItem = useCallback(
     (message: ViewItem) => (
       <div
         className={cn(
-          SESSION_TRANSCRIPT_CONTENT_CLASS,
+          'session-content-column',
           'pb-5',
           message.id === model.highlightedMessageId && 'message-deep-link-target'
         )}
@@ -153,16 +159,17 @@ export function SessionTranscript({
       >
         {isBranchSourceItem(message) ? (
           <button
+            aria-expanded={branchHistoryExpanded}
             className="flex items-center gap-1.5 text-muted-foreground text-xs transition-colors hover:text-foreground"
-            onClick={() => model.onOpenBranchSource(message)}
+            onClick={() => setExpandedBranchSessionId(branchHistoryExpanded ? null : identity.currentSessionId)}
             type="button"
           >
-            <HugeiconsIcon
+            {t('web.chat.lineageParent')}
+            {message.sessionTitle ? <span className="text-foreground/80">{message.sessionTitle}</span> : null}
+            <MorphChevron
               className="size-3.5"
-              icon={GitBranchIcon}
+              expanded={branchHistoryExpanded}
             />
-            {t('web.chat.lineageParent')}{' '}
-            <span className="text-foreground/80">{branchSourceSessionName(message, provenance?.ancestors)}</span>
           </button>
         ) : isToolItem(message) ? (
           <ToolStepView
@@ -177,23 +184,20 @@ export function SessionTranscript({
             item={message.summary ? { summary: message.summary } : undefined}
             pending={message.status === 'pending'}
           />
-        ) : isCompactTranscriptTurnItem(message) ? (
-          <CompactTranscriptTurn
+        ) : isSummaryTranscriptTurnItem(message) ? (
+          <SummaryTranscriptTurn
             assistantLabel={identity.assistantLabel}
             item={message}
             onBranch={model.onBranch}
             onRestore={model.onRestore}
-            onSkillPreview={onSkillPreview}
             sessionId={identity.currentSessionId}
           />
         ) : (
           <Message
             assistantLabel={identity.assistantLabel}
-            commands={model.commands}
             msg={message}
             onBranch={model.onBranch}
             onRestore={model.onRestore}
-            onSkillPreview={onSkillPreview}
           />
         )}
       </div>
@@ -201,13 +205,10 @@ export function SessionTranscript({
     [
       identity.assistantLabel,
       identity.currentSessionId,
-      provenance?.ancestors,
-      model.commands,
+      branchHistoryExpanded,
       model.highlightedMessageId,
       model.onBranch,
-      model.onOpenBranchSource,
       model.onRestore,
-      onSkillPreview,
       t
     ]
   );
@@ -226,9 +227,7 @@ export function SessionTranscript({
         onSelect={(id) => model.transcriptRef.current?.scrollToKey(id, { align: 'start', behavior: 'smooth' })}
         renderPreview={(item) => (
           <MessageBody
-            commands={model.commands}
             isUser
-            onSkillPreview={onSkillPreview}
             text={item.preview}
           />
         )}
@@ -284,32 +283,63 @@ export function SessionTranscript({
   );
 }
 
-function CompactTranscriptTurn({
+function SessionTranscriptSkeleton() {
+  return (
+    <div
+      aria-hidden="true"
+      className={cn('session-content-column', 'grid gap-8 pt-6')}
+      data-session-transcript-skeleton
+    >
+      <div className="ml-auto grid w-[min(72%,36rem)] gap-2">
+        <Skeleton className="ml-auto h-3 w-20" />
+        <Skeleton className="h-16 w-full" />
+      </div>
+      <div className="grid w-[min(78%,40rem)] gap-2">
+        <Skeleton className="h-3 w-24" />
+        <Skeleton className="h-3 w-full" />
+        <Skeleton className="h-3 w-[88%]" />
+        <Skeleton className="h-3 w-[64%]" />
+      </div>
+      <div className="ml-auto grid w-[min(58%,30rem)] gap-2">
+        <Skeleton className="ml-auto h-3 w-16" />
+        <Skeleton className="h-12 w-full" />
+      </div>
+    </div>
+  );
+}
+
+function SummaryTranscriptTurn({
   assistantLabel,
   item,
   onBranch,
   onRestore,
-  onSkillPreview,
   sessionId
 }: {
   assistantLabel: string;
-  item: CompactTranscriptTurnViewItem;
-  onBranch?: (messageId: string, role: 'user' | 'assistant') => void;
+  item: SummaryTranscriptTurnViewItem;
+  onBranch?: (messageId: string) => void;
   onRestore?: (messageId: string, text: string) => void;
-  onSkillPreview: (id: string) => void;
   sessionId: SessionId;
 }) {
   const running = item.status === 'running';
+  const [expanded, setExpanded] = useState(false);
   return (
-    <details className="rounded-lg border bg-card">
-      <summary className="grid cursor-pointer gap-2 px-4 py-3 marker:text-muted-foreground">
+    <details
+      className="group w-full"
+      onToggle={(event) => setExpanded(event.currentTarget.open)}
+      open={expanded}
+    >
+      <summary className="flex w-full cursor-pointer list-none items-center gap-1 border-b py-2 [&::-webkit-details-marker]:hidden">
         <span className="font-mono text-muted-foreground text-xs uppercase">
           {running ? 'Running' : 'Completed'} for {item.durationLabel}
           {running ? '…' : ''}
         </span>
-        {item.summary ? <span className="whitespace-pre-wrap text-sm">{item.summary}</span> : null}
+        <MorphChevron
+          className="size-3.5"
+          expanded={expanded}
+        />
       </summary>
-      <div className="grid gap-4 border-t px-4 py-4">
+      <div className="mt-4 grid w-full gap-5">
         {item.details.map((detail) =>
           isToolItem(detail) ? (
             <ToolStepView
@@ -329,14 +359,13 @@ function CompactTranscriptTurn({
               key={detail.id}
               pending={detail.status === 'pending'}
             />
-          ) : isCompactTranscriptTurnItem(detail) || isBranchSourceItem(detail) ? null : (
+          ) : isSummaryTranscriptTurnItem(detail) || isBranchSourceItem(detail) ? null : (
             <Message
               assistantLabel={assistantLabel}
               key={detail.id}
               msg={detail}
               onBranch={onBranch}
               onRestore={onRestore}
-              onSkillPreview={onSkillPreview}
             />
           )
         )}

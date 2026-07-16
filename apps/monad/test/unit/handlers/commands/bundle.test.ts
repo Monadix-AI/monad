@@ -33,7 +33,6 @@ test('command bundle model commands read and write a project-bound session', asy
     ownerPrincipalId: 'prn_100000000000',
     state: 'active',
     agentIds: [],
-    parentSessionId: null,
     archived: false,
     restoreCount: 0,
     origin: {

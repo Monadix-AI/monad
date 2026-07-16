@@ -237,7 +237,7 @@ describe.skipIf(!KEY)(`live model scenarios (${MODEL})`, () => {
       );
 
       test(
-        'branch: a child session links to its parent in provenance and runs on its own',
+        'branch: a new session snapshots history and runs independently',
         async () => {
           const t = serve(kind);
           const parent = await createSession(t, 'branch-parent');
@@ -251,14 +251,14 @@ describe.skipIf(!KEY)(`live model scenarios (${MODEL})`, () => {
             .then((r) => r.json() as Promise<{ sessionId: string }>)
             .then((j) => j.sessionId);
           expect(child).not.toBe(parent);
-          // Provenance is deterministic: the child knows the parent as an ancestor.
-          const prov = (await (await t.fetch(`/v1/sessions/${child}/provenance`)).json()) as {
-            ancestors: { id: string }[];
-            self: { id: string; parentSessionId: string | null };
+          const childSession = (await (await t.fetch(`/v1/sessions/${child}`)).json()) as {
+            session: { id: string };
           };
-          expect(prov.self.id).toBe(child);
-          expect(prov.self.parentSessionId).toBe(parent);
-          expect(prov.ancestors.some((a) => a.id === parent)).toBe(true);
+          expect(childSession.session.id).toBe(child);
+          const snapshot = (await (await t.fetch(`/v1/sessions/${child}/messages`)).json()) as {
+            messages: Array<{ type: string }>;
+          };
+          expect(snapshot.messages.some((message) => message.type === 'branch_source')).toBe(true);
           // The branch is an independent, working session — a fresh turn on it gets a real reply.
           const reply = await blockRound(t, child, 'Reply with exactly: BRANCHOK');
           expect(reply.trim().length).toBeGreaterThan(0);
@@ -273,8 +273,10 @@ describe.skipIf(!KEY)(`live model scenarios (${MODEL})`, () => {
           const sid = await createSession(t, 'restore');
           // Capture the first turn's user-message id from the stream — restore rewinds to it.
           const first = await runStream(t, sid, 'Reply with exactly: ONE');
-          const firstUserId = (first.find((e) => e.type === 'user.message')?.payload as { messageId: string })
-            .messageId;
+          const firstUserId = (
+            first.find((e) => e.type === 'user.message')?.payload as { messageId: string } | undefined
+          )?.messageId;
+          if (!firstUserId) throw new Error('missing first user message');
           await runStream(t, sid, 'Reply with exactly: TWO');
 
           const restored = (await (

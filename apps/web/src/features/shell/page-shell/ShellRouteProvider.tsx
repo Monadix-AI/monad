@@ -3,6 +3,7 @@ import type { SettingsSectionId } from '#/features/settings/sections';
 import type { StudioSectionId } from '#/features/studio/sections';
 import type { WorkspaceRouteProps } from '#/features/workspace/WorkspaceRoute';
 
+import { ChatAdd01Icon, CpuIcon, FileArchiveIcon, InboxIcon, Settings02Icon } from '@hugeicons/core-free-icons';
 import { useInitStatusQuery } from '@monad/client-rtk';
 import { cn } from '@monad/ui';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -21,6 +22,7 @@ import { RightPanelProvider } from '#/features/shell/right-panel/right-panel-con
 import { useAppShellNavigation } from '#/features/shell/routing/navigation';
 import { useShellRoute } from '#/features/shell/routing/use-shell-route';
 import { SessionSidebar } from '#/features/shell/SessionSidebar';
+import { useServerSessionSearch } from '#/features/shell/session-server-search';
 import { useAppShellData } from '#/features/shell/useAppShellData';
 import { isApplePlatform } from '#/lib/keyboard';
 import { useMonadRuntime } from '#/lib/monad-runtime-context';
@@ -82,7 +84,26 @@ export function ShellRouteProvider({ children }: { children: ReactNode }) {
   const sidebarAutoReveal = useWorkspaceShellStore((state: WorkspaceShellState) => state.sidebarAutoReveal);
   const setNewChatPrefill = useWorkspaceShellStore((state: WorkspaceShellState) => state.setNewChatPrefill);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [commandPaletteQuery, setCommandPaletteQuery] = useState('');
+  const openCommandPalette = useCallback(() => setCommandPaletteOpen(true), []);
   const [showArchivedSidebar, setShowArchivedSidebar] = useState(false);
+  const [archivedPreviewSessionId, setArchivedPreviewSessionId] = useState<NonNullable<typeof currentId> | null>(null);
+  useEffect(() => {
+    if (!showArchivedSidebar) setArchivedPreviewSessionId(null);
+    else if (currentSession?.archived) setArchivedPreviewSessionId(currentSession.id);
+    else if (archivedPreviewSessionId !== currentId) setArchivedPreviewSessionId(null);
+  }, [archivedPreviewSessionId, currentId, currentSession, showArchivedSidebar]);
+  const isCurrentArchivedSessionDeleted = Boolean(
+    showArchivedSidebar && currentId && archivedPreviewSessionId === currentId && !currentSession
+  );
+  const { searching: commandPaletteSearching, sessions: commandSearchSessions } = useServerSessionSearch({
+    archived: false,
+    limit: 20,
+    query: commandPaletteOpen ? commandPaletteQuery : ''
+  });
+  const closeArchivedSidebar = useCallback(() => {
+    setShowArchivedSidebar(false);
+  }, []);
 
   const reserveHeaderLeading = sidebarCollapsed || sidebarAutoReveal;
   const runtimeReady = initStatus.isLoading ? true : isRuntimeReady(initStatus.data);
@@ -91,6 +112,8 @@ export function ShellRouteProvider({ children }: { children: ReactNode }) {
     agents,
     currentSession,
     defaultProfileAlias,
+    isCurrentSessionDeleted: isCurrentArchivedSessionDeleted,
+    onSessionUnarchived: closeArchivedSidebar,
     profiles,
     sessions: allSessions,
     voiceModelConfigured
@@ -120,6 +143,7 @@ export function ShellRouteProvider({ children }: { children: ReactNode }) {
     toggleSettings
   } = useAppShellNavigation({
     primaryAgentSession,
+    preserveMissingSessionRoute: isCurrentArchivedSessionDeleted,
     projectsLoading,
     routedProjectId,
     routedProjectInList,
@@ -146,10 +170,6 @@ export function ShellRouteProvider({ children }: { children: ReactNode }) {
     setShowArchivedSidebar(true);
   }, []);
 
-  const closeArchivedSidebar = useCallback(() => {
-    setShowArchivedSidebar(false);
-  }, []);
-
   const openWorkspaceAndCloseArchived = useCallback(() => {
     setShowArchivedSidebar(false);
     setWorkspaceUrl();
@@ -174,14 +194,22 @@ export function ShellRouteProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const applePlatform = isApplePlatform();
+    let pendingCommandPaletteFrame = 0;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.isComposing) return;
       if (!matchesCommandPaletteHotkey(event, applePlatform)) return;
       event.preventDefault();
-      setCommandPaletteOpen((open) => !open);
+      if (event.repeat || pendingCommandPaletteFrame !== 0) return;
+      pendingCommandPaletteFrame = requestAnimationFrame(() => {
+        pendingCommandPaletteFrame = 0;
+        setCommandPaletteOpen((open) => !open);
+      });
     };
     window.addEventListener('keydown', onKeyDown, { capture: true });
-    return () => window.removeEventListener('keydown', onKeyDown, { capture: true });
+    return () => {
+      window.removeEventListener('keydown', onKeyDown, { capture: true });
+      cancelAnimationFrame(pendingCommandPaletteFrame);
+    };
   }, []);
 
   const workspaceRouteProps = useMemo<WorkspaceRouteProps>(
@@ -262,9 +290,10 @@ export function ShellRouteProvider({ children }: { children: ReactNode }) {
         onCreateProjectSession: handlePrepareProjectSession,
         onOpenInbox: openInbox,
         onOpenProject: openProject,
-        onOpenProjectSession: openProjectSessionAndCloseArchived,
+        onOpenProjectSession: handleOpenProjectSession,
         onOpenProjectSettings: handleOpenProjectSettings,
-        onOpenSession: openSessionAndCloseArchived,
+        onOpenSearch: openCommandPalette,
+        onOpenSession: handleOpenSession,
         projects: workspaceProjects,
         workspaceItemsLoading: projectsLoading || sessionsLoading
       }
@@ -280,8 +309,10 @@ export function ShellRouteProvider({ children }: { children: ReactNode }) {
       daemonStatus,
       daemonVersion,
       handleNewMonadChat,
+      handleOpenProjectSession,
       handlePrepareProjectSession,
       handleOpenProjectSettings,
+      handleOpenSession,
       hasUpgrade,
       isInboxRoute,
       isSettingsRoute,
@@ -291,8 +322,7 @@ export function ShellRouteProvider({ children }: { children: ReactNode }) {
       openArchivedSidebar,
       openInbox,
       openProject,
-      openProjectSessionAndCloseArchived,
-      openSessionAndCloseArchived,
+      openCommandPalette,
       openWorkspaceAndCloseArchived,
       projectsLoading,
       routedProjectSessionId,
@@ -315,25 +345,33 @@ export function ShellRouteProvider({ children }: { children: ReactNode }) {
 
   const commandPaletteSections = useMemo<CommandPaletteSection[]>(() => {
     const projectNames = new Map(workspaceProjects.map((project) => [project.id, project.name]));
+    const recentSessions = commandPaletteQuery.trim()
+      ? commandPaletteSearching
+        ? sessions.slice(0, 8)
+        : commandSearchSessions
+      : sessions.slice(0, 8);
     return buildCommandPaletteSections({
       actions: [
         {
+          icon: ChatAdd01Icon,
           id: 'new-chat',
           keywords: ['create', 'session'],
           label: 'New chat',
-          shortcut: `${shortcutModifierLabel} N`,
+          shortcut: `${shortcutModifierLabel}N`,
           subtitle: 'Start a Monad chat',
           run: handleNewMonadChat
         },
         {
+          icon: InboxIcon,
           id: 'inbox',
           keywords: ['approvals', 'mentions'],
           label: 'Open inbox',
-          shortcut: `${shortcutModifierLabel} I`,
+          shortcut: `${shortcutModifierLabel}I`,
           subtitle: 'Review messages and approvals',
           run: openInbox
         },
         {
+          icon: CpuIcon,
           id: 'studio',
           keywords: ['runtime', 'agents', 'models'],
           label: 'Open Studio',
@@ -341,21 +379,23 @@ export function ShellRouteProvider({ children }: { children: ReactNode }) {
           run: handleOpenStudio
         },
         {
+          icon: Settings02Icon,
           id: 'settings',
           keywords: ['preferences', 'configuration'],
           label: 'Open Settings',
-          shortcut: `${shortcutModifierLabel} ,`,
+          shortcut: `${shortcutModifierLabel},`,
           subtitle: 'Connection, profile, and system settings',
           run: openSettings
         },
         {
+          icon: FileArchiveIcon,
           id: 'show-archived',
           keywords: ['archive', 'history', 'sessions'],
           label: 'Show archived',
           run: openArchivedSidebar
         }
       ],
-      recents: sessions.slice(0, 8).map((session) => ({
+      recents: recentSessions.map((session) => ({
         id: `session:${session.id}`,
         keywords: [session.id, session.projectId ? (projectNames.get(session.projectId) ?? '') : 'chat'],
         label: session.title || 'Untitled chat',
@@ -374,6 +414,9 @@ export function ShellRouteProvider({ children }: { children: ReactNode }) {
     openSettings,
     openProjectSessionAndCloseArchived,
     openSessionAndCloseArchived,
+    commandPaletteQuery,
+    commandPaletteSearching,
+    commandSearchSessions,
     shortcutModifierLabel,
     sessions,
     workspaceProjects
@@ -412,9 +455,10 @@ export function ShellRouteProvider({ children }: { children: ReactNode }) {
           <RightPanel />
           <CommandPaletteDialog
             onOpenChange={setCommandPaletteOpen}
+            onSearchChange={setCommandPaletteQuery}
             open={commandPaletteOpen}
+            search={commandPaletteQuery}
             sections={commandPaletteSections}
-            shortcutModifierLabel={shortcutModifierLabel}
           />
         </div>
       </RightPanelProvider>

@@ -3,10 +3,9 @@ import type { UIMessageItem } from '@monad/protocol';
 import { expect, test } from 'bun:test';
 
 import {
-  branchSourceHref,
-  branchSourceSessionName,
-  compactTranscriptTurns,
-  isBranchSourceItem
+  branchSnapshotItems,
+  isBranchSourceItem,
+  summaryTranscriptTurns
 } from '../../src/features/session/chat-view-items.ts';
 import { buildViewMessages } from '../../src/features/session/session-view.ts';
 
@@ -66,6 +65,33 @@ test('server user echoes consume duplicate optimistic messages one at a time', (
   expect(items.map((item) => item.id)).toEqual(['msg_server', 'local-2']);
 });
 
+test('historical matching text does not consume a new optimistic steer', () => {
+  const items = buildViewMessages({
+    commandPending: null,
+    optimistic: [{ id: 'local-steer-1', role: 'user', serverEchoOrdinal: 2, text: 'same text' }],
+    transcriptMode: 'live',
+    visibleHistory: [message('msg_historical', 'user', 'same text')],
+    visibleLiveItems: []
+  });
+
+  expect(items.map((item) => item.id)).toEqual(['msg_historical', 'local-steer-1']);
+});
+
+test('a new matching server echo consumes its corresponding optimistic steer', () => {
+  const items = buildViewMessages({
+    commandPending: null,
+    optimistic: [
+      { id: 'local-steer-1', role: 'user', serverEchoOrdinal: 2, text: 'same text' },
+      { id: 'local-steer-2', role: 'user', serverEchoOrdinal: 3, text: 'same text' }
+    ],
+    transcriptMode: 'live',
+    visibleHistory: [message('msg_historical', 'user', 'same text')],
+    visibleLiveItems: [message('msg_echo', 'user', 'same text')]
+  });
+
+  expect(items.map((item) => item.id)).toEqual(['msg_historical', 'msg_echo', 'local-steer-2']);
+});
+
 test('assistant activity messages stay ephemeral in the optimistic tail', () => {
   const items = buildViewMessages({
     commandPending: null,
@@ -82,6 +108,31 @@ test('assistant activity messages stay ephemeral in the optimistic tail', () => 
     { id: 'local-1', role: 'user', text: 'hello now' },
     { id: 'local-assistant-1', role: 'assistant', pending: true }
   ]);
+});
+
+test('optimistic steer messages stay after the active assistant and all running tools', () => {
+  const items = buildViewMessages({
+    commandPending: null,
+    optimistic: [
+      { id: 'local-steer-1', role: 'user', text: 'adjust the answer' },
+      { id: 'local-steer-2', role: 'user', text: 'keep it concise' }
+    ],
+    transcriptMode: 'live',
+    visibleHistory: [],
+    visibleLiveItems: [
+      streamingMessage('assistant-active', 'assistant', 'working'),
+      {
+        kind: 'tool',
+        id: 'tool-active',
+        tool: 'search',
+        input: { query: 'current state' },
+        status: 'running',
+        seq: 'tool-active'
+      }
+    ]
+  });
+
+  expect(items.map((item) => item.id)).toEqual(['assistant-active', 'tool-active', 'local-steer-1', 'local-steer-2']);
 });
 
 test('answered command directives render only their system reply', () => {
@@ -153,13 +204,15 @@ test('ordinary slash-prefixed messages are not collapsed with assistant messages
   expect(items.map((item) => item.id)).toEqual(['msg_user', 'msg_reply']);
 });
 
-test('branch source artifacts become a navigable transcript item', () => {
+test('branch source artifacts become a title-only transcript boundary', () => {
   const source: UIMessageItem = {
     id: 'msg_source',
     kind: 'message',
     parts: [
       {
-        data: { messageId: 'msg_123456789012', sessionId: 'ses_123456789012' },
+        data: {
+          sessionTitle: 'Original session'
+        },
         messageType: 'branch_source',
         type: 'artifact'
       }
@@ -180,20 +233,36 @@ test('branch source artifacts become a navigable transcript item', () => {
     {
       id: 'msg_source',
       kind: 'branch_source',
-      messageId: 'msg_123456789012',
-      sessionId: 'ses_123456789012'
+      sessionTitle: 'Original session'
     }
   ]);
   const item = items[0];
   if (!item || !isBranchSourceItem(item)) throw new Error('expected branch source item');
-  expect(branchSourceHref(item)).toBe('/sessions/ses_123456789012?msg=msg_123456789012');
-  expect(branchSourceSessionName(item, [{ id: 'ses_123456789012', title: 'Original session' }])).toBe(
-    'Original session'
-  );
-  expect(branchSourceSessionName(item, [])).toBe('ses_123456789012');
+  expect(item.sessionTitle).toBe('Original session');
 });
 
-test('compact transcript turns keep only the final assistant output as summary', () => {
+test('branch snapshot history is collapsed before the latest boundary by default', () => {
+  const items = [
+    { id: 'old-user', role: 'user' as const, text: 'old question' },
+    { id: 'old-assistant', role: 'assistant' as const, text: 'old answer' },
+    { id: 'source', kind: 'branch_source' as const, sessionTitle: 'Original session' },
+    { id: 'new-user', role: 'user' as const, text: 'new question' }
+  ];
+
+  expect(branchSnapshotItems(items, false).map((item) => item.id)).toEqual(['source', 'new-user']);
+  expect(branchSnapshotItems(items, true)).toEqual(items);
+});
+
+test('summary transcript keeps the branch boundary visible after a copied user message', () => {
+  const items = [
+    { id: 'old-user', role: 'user' as const, text: 'old question' },
+    { id: 'source', kind: 'branch_source' as const, sessionTitle: 'Original session' }
+  ];
+
+  expect(summaryTranscriptTurns(items).map((item) => item.id)).toEqual(['old-user', 'source']);
+});
+
+test('summary transcript turns keep user and final assistant messages expanded', () => {
   const items = buildViewMessages({
     commandPending: null,
     optimistic: [],
@@ -206,18 +275,40 @@ test('compact transcript turns keep only the final assistant output as summary',
     ]
   });
 
-  expect(compactTranscriptTurns(items)).toMatchObject([
+  expect(summaryTranscriptTurns(items)).toEqual([
+    expect.objectContaining({ id: 'u1', role: 'user' }),
     {
-      kind: 'compact_transcript_turn',
+      kind: 'summary_transcript_turn',
+      id: 'summary-turn:a1',
       status: 'done',
       durationLabel: '1m12s',
-      summary: 'final answer',
-      details: [{ id: 'u1' }, { id: 'a1' }, { id: 'a2' }]
-    }
+      details: [expect.objectContaining({ id: 'a1', role: 'assistant' })]
+    },
+    expect.objectContaining({ id: 'a2', role: 'assistant', text: 'final answer' })
   ]);
 });
 
-test('compact transcript turns do not summarize streaming token previews', () => {
+test('summary transcript directives do not replace the final assistant message', () => {
+  const items = buildViewMessages({
+    commandPending: null,
+    optimistic: [],
+    transcriptMode: 'live',
+    visibleHistory: [],
+    visibleLiveItems: [
+      message('u1', 'user', 'hello', '2026-07-15T00:00:00.000Z'),
+      message('a1', 'assistant', 'final answer', '2026-07-15T00:00:05.000Z'),
+      directive('d1', 'assistant', 'Observation view set to Summary.')
+    ]
+  });
+
+  expect(summaryTranscriptTurns(items)).toEqual([
+    expect.objectContaining({ id: 'u1', role: 'user' }),
+    expect.objectContaining({ id: 'a1', role: 'assistant', text: 'final answer' }),
+    expect.objectContaining({ id: 'd1', role: 'assistant', type: 'directive' })
+  ]);
+});
+
+test('summary transcript turns keep streaming assistant messages expanded', () => {
   const items = buildViewMessages({
     commandPending: null,
     optimistic: [],
@@ -229,13 +320,8 @@ test('compact transcript turns do not summarize streaming token previews', () =>
     ]
   });
 
-  expect(compactTranscriptTurns(items)).toMatchObject([
-    {
-      kind: 'compact_transcript_turn',
-      status: 'running',
-      durationLabel: '5s',
-      details: [{ id: 'u1' }, { id: 'a1' }]
-    }
+  expect(summaryTranscriptTurns(items)).toEqual([
+    expect.objectContaining({ id: 'u1', role: 'user' }),
+    expect.objectContaining({ id: 'a1', role: 'assistant', streaming: true })
   ]);
-  expect(compactTranscriptTurns(items)[0]).not.toHaveProperty('summary');
 });

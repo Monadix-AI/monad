@@ -10,11 +10,11 @@ import type {
 import type { VirtualListHandle } from '@monad/ui/components/VirtualList';
 import type { ComponentProps, KeyboardEventHandler, RefObject } from 'react';
 import type { ComposerShell } from './ComposerShell';
-import type { BranchSourceViewItem, ViewItem } from './chat-view-items';
+import type { ViewItem } from './chat-view-items';
 import type { SessionCommandMenuItem } from './command-menu';
 
 export const SESSION_ROUTE_MODEL_REGIONS = ['identity', 'transcript', 'composer', 'inspector'] as const;
-export type SessionTranscriptRenderMode = 'detail' | 'compact';
+export type SessionTranscriptRenderMode = 'detail' | 'summary';
 
 export interface PendingApproval {
   display?: UIApprovalDisplay;
@@ -36,43 +36,46 @@ export interface SessionIdentityModel {
   assistantLabel: string;
   currentSession: Session | null;
   currentSessionId: SessionId;
+  isArchived: boolean;
+  isDeleted: boolean;
   isDraft: boolean;
   isReadOnly: boolean;
+  isUnarchiving: boolean;
   onRetryDraftSession?: () => void;
   onSelectSession: (sessionId: SessionId) => void;
+  onUnarchive: () => void;
 }
 
 export interface SessionTranscriptModel {
-  commands: CommandItem[];
-  firstItemIndex: number;
   highlightedMessageId: string | null;
+  isLoading: boolean;
+  showLoadingSkeleton: boolean;
   onApproval: (approval: PendingApproval, allow: boolean, scope: ApprovalScope, reason?: string) => void;
-  onBranch: (messageId: string, role: 'user' | 'assistant') => void;
+  onBranch: (messageId: string) => void;
   onClarifyAnswer: (requestId: string, answer: string) => void;
   onEndReached: () => void;
-  onOpenBranchSource: (source: BranchSourceViewItem) => void;
   onRestore: (messageId: string, text: string) => void;
   onScrollToBottom: (behavior?: 'smooth' | 'auto') => void;
   onStartReached: () => void;
   pendingApprovals: PendingApproval[];
   pendingClarifications: PendingClarification[];
-  renderMode: SessionTranscriptRenderMode;
   transcriptRef: RefObject<VirtualListHandle | null>;
   viewMessages: ViewItem[];
 }
 
 export interface SessionComposerModel {
   commandMenuLoading: boolean;
-  commands: CommandItem[];
   composerSettings: ComposerSettings;
   contextUsage?: ComposerProps['contextUsage'];
   isBusy: boolean;
   menuItems: SessionCommandMenuItem[];
   messageQueue: string[];
   model: ComposerProps['model'];
+  onCancelQueued: () => void;
   onCommandItemApply: (item: SessionCommandMenuItem) => void;
   onKeyDown: KeyboardEventHandler<HTMLElement>;
   onRemoveQueuedMessage: (index: number) => void;
+  onSteerQueued: () => void;
   onStop: () => void;
   onSubmit: () => void;
   onVoiceSettingsClick: () => void;
@@ -83,13 +86,10 @@ export interface SessionComposerModel {
 
 export interface SessionInspectorModel {
   items: UIItem[];
-  onToggle: () => void;
-  open: boolean;
-  renderMode: SessionTranscriptRenderMode;
-  onRenderModeChange: (mode: SessionTranscriptRenderMode) => void;
 }
 
 export interface SessionRouteModel {
+  commands: CommandItem[];
   composer: SessionComposerModel;
   identity: SessionIdentityModel;
   inspector: SessionInspectorModel;

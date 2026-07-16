@@ -1,25 +1,21 @@
-import type { SessionComposerModel, SessionIdentityModel } from './session-route-contract';
+import type { SessionComposerModel } from './session-route-contract';
 
-import { useMemo } from 'react';
+import { FileArchiveIcon } from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
+import { Button } from '@monad/ui';
+import { useEffect, useMemo, useRef } from 'react';
 
 import { useT } from '#/components/I18nProvider';
 import { CommandMenu } from './CommandMenu';
 import { ComposerQueueStack } from './ComposerQueueStack';
 import { ComposerShell } from './ComposerShell';
 import { activeCommandToken, activeSkillToken } from './command-menu';
-import { SESSION_CONTENT_CLASS } from './session-layout';
+import { useSessionContext } from './session-context';
 import { useSessionUiStore } from './session-ui-store';
 
-export function SessionComposerRegion({
-  identity,
-  model,
-  onSkillPreview
-}: {
-  identity: SessionIdentityModel;
-  model: SessionComposerModel;
-  onSkillPreview: (id: string) => void;
-}) {
+export function SessionComposerRegion({ model }: { model: SessionComposerModel }) {
   const t = useT();
+  const { commands, identity, onSkillPreview } = useSessionContext();
   const accessMode = useSessionUiStore((state) => state.accessMode);
   const activeSkill = useSessionUiStore((state) => state.activeSkill);
   const input = useSessionUiStore((state) => state.input);
@@ -27,8 +23,10 @@ export function SessionComposerRegion({
   const setAccessMode = useSessionUiStore((state) => state.setAccessMode);
   const setActiveSkill = useSessionUiStore((state) => state.setActiveSkill);
   const setComposerInput = useSessionUiStore((state) => state.setComposerInput);
-  const activeInputSkill = useMemo(() => activeSkillToken(input, model.commands, t), [input, model.commands, t]);
-  const activeInputCommand = useMemo(() => activeCommandToken(input, model.commands), [input, model.commands]);
+  const editorRef = useRef<HTMLDivElement>(null);
+  const archivedSessionIdRef = useRef(identity.isArchived ? identity.currentSessionId : null);
+  const activeInputSkill = useMemo(() => activeSkillToken(input, commands, t), [commands, input, t]);
+  const activeInputCommand = useMemo(() => activeCommandToken(input, commands), [commands, input]);
   const skillToken = activeInputSkill
     ? {
         label: activeInputSkill.label,
@@ -48,8 +46,40 @@ export function SessionComposerRegion({
       }
     : undefined;
 
+  useEffect(() => {
+    if (identity.isArchived) {
+      archivedSessionIdRef.current = identity.currentSessionId;
+      return;
+    }
+    if (archivedSessionIdRef.current !== identity.currentSessionId) return;
+    archivedSessionIdRef.current = null;
+    const frame = requestAnimationFrame(() => editorRef.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [identity.currentSessionId, identity.isArchived]);
+
+  if (identity.isArchived) {
+    return (
+      <div className="session-content-column flex min-h-[112px] items-center justify-center py-3">
+        <Button
+          aria-busy={identity.isUnarchiving}
+          className="gap-1.5"
+          disabled={identity.isUnarchiving}
+          onClick={identity.onUnarchive}
+          size="sm"
+          variant="secondary"
+        >
+          <HugeiconsIcon
+            className="size-3.5"
+            icon={FileArchiveIcon}
+          />
+          {t('web.sidebar.unarchiveSession')}
+        </Button>
+      </div>
+    );
+  }
+
   return (
-    <div className={`${SESSION_CONTENT_CLASS} pt-2 pb-3`}>
+    <div className="session-content-column pt-2 pb-3">
       {identity.isReadOnly ? (
         <div className="flex items-center justify-center gap-2 py-2 text-muted-foreground text-sm">
           <span className="rounded border bg-muted px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide">
@@ -63,8 +93,12 @@ export function SessionComposerRegion({
           <div className="relative flex-1">
             {!identity.isReadOnly ? (
               <ComposerQueueStack
+                cancelLabel={t('web.cancel')}
                 items={model.messageQueue}
+                onCancel={model.onCancelQueued}
                 onRemove={model.onRemoveQueuedMessage}
+                onSteerNow={model.onSteerQueued}
+                steerNowLabel={t('web.chat.steerNow')}
               />
             ) : null}
             {model.skillMenuOpen && !identity.isReadOnly ? (
@@ -95,6 +129,7 @@ export function SessionComposerRegion({
               placeholder={t('web.chat.placeholder')}
               sendShortcut={model.composerSettings.sendShortcut}
               skillToken={skillToken}
+              textareaRef={editorRef}
               value={input}
               voice={{
                 modelConfigured: model.voiceModelConfigured,

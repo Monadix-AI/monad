@@ -15,7 +15,6 @@ import { command as rm } from './rm.ts';
 import { command as search } from './search.ts';
 import { command as send } from './send.ts';
 import { command as show } from './show.ts';
-import { command as tree } from './tree.ts';
 import { command as watch } from './watch.ts';
 
 const sessionCommands: SessionCommandDef[] = [
@@ -28,7 +27,6 @@ const sessionCommands: SessionCommandDef[] = [
   branch,
   restore,
   reset,
-  tree,
   abort,
   rm
 ];

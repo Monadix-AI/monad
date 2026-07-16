@@ -43,33 +43,32 @@ export const MIGRATIONS: MigrationMeta[] = [
       "\nCREATE INDEX `idx_native_agent_direct_messages_project_pair` ON `native_agent_direct_messages` (`project_id`,`from_agent`,`peer`,`created_at`);",
       "\nCREATE TABLE `session_members` (\n\t`session_id` text NOT NULL,\n\t`member_id` text NOT NULL,\n\t`template_id` text,\n\t`type` text NOT NULL,\n\t`external_agent_session_id` text,\n\t`data` text DEFAULT '{}' NOT NULL,\n\t`created_at` text NOT NULL,\n\t`updated_at` text NOT NULL,\n\tPRIMARY KEY(`session_id`, `member_id`)\n);\n",
       "\nCREATE INDEX `idx_session_members_session` ON `session_members` (`session_id`);",
-      "\nCREATE TABLE `sessions` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`project_id` text,\n\t`title` text NOT NULL,\n\t`owner_principal_id` text NOT NULL,\n\t`state` text NOT NULL,\n\t`agent_ids` text DEFAULT '[]' NOT NULL,\n\t`parent_session_id` text,\n\t`branched_at_message_id` text,\n\t`archived` integer DEFAULT 0 NOT NULL,\n\t`restore_count` integer DEFAULT 0 NOT NULL,\n\t`model` text,\n\t`cwd` text,\n\t`origin` text,\n\t`input_tokens` integer DEFAULT 0 NOT NULL,\n\t`output_tokens` integer DEFAULT 0 NOT NULL,\n\t`total_tokens` integer DEFAULT 0 NOT NULL,\n\t`cache_read_tokens` integer DEFAULT 0 NOT NULL,\n\t`cache_write_tokens` integer DEFAULT 0 NOT NULL,\n\t`reasoning_tokens` integer DEFAULT 0 NOT NULL,\n\t`cost_usd` real DEFAULT 0 NOT NULL,\n\t`created_at` text NOT NULL,\n\t`updated_at` text NOT NULL\n);\n",
-      "\nCREATE INDEX `idx_sessions_parent` ON `sessions` (`parent_session_id`);",
+      "\nCREATE TABLE `sessions` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`project_id` text,\n\t`title` text NOT NULL,\n\t`owner_principal_id` text NOT NULL,\n\t`state` text NOT NULL,\n\t`agent_ids` text DEFAULT '[]' NOT NULL,\n\t`archived` integer DEFAULT 0 NOT NULL,\n\t`restore_count` integer DEFAULT 0 NOT NULL,\n\t`model` text,\n\t`cwd` text,\n\t`origin` text,\n\t`input_tokens` integer DEFAULT 0 NOT NULL,\n\t`output_tokens` integer DEFAULT 0 NOT NULL,\n\t`total_tokens` integer DEFAULT 0 NOT NULL,\n\t`cache_read_tokens` integer DEFAULT 0 NOT NULL,\n\t`cache_write_tokens` integer DEFAULT 0 NOT NULL,\n\t`reasoning_tokens` integer DEFAULT 0 NOT NULL,\n\t`cost_usd` real DEFAULT 0 NOT NULL,\n\t`created_at` text NOT NULL,\n\t`updated_at` text NOT NULL\n);\n",
       "\nCREATE INDEX `idx_sessions_project` ON `sessions` (`project_id`);",
       "\nCREATE TABLE `tasks` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`session_id` text NOT NULL,\n\t`title` text NOT NULL,\n\t`assignee_agent_id` text,\n\t`depends_on` text DEFAULT '[]' NOT NULL,\n\t`state` text NOT NULL,\n\t`version` integer DEFAULT 0 NOT NULL,\n\t`result` text,\n\t`error` text,\n\t`created_at` text NOT NULL,\n\t`updated_at` text NOT NULL\n);\n",
       "\nCREATE INDEX `idx_tasks_session` ON `tasks` (`session_id`);",
       "\nCREATE TABLE `usage_ledger` (\n\t`day` text NOT NULL,\n\t`provider` text NOT NULL,\n\t`model` text NOT NULL,\n\t`category` text DEFAULT 'chat' NOT NULL,\n\t`input_tokens` integer DEFAULT 0 NOT NULL,\n\t`output_tokens` integer DEFAULT 0 NOT NULL,\n\t`cache_read_tokens` integer DEFAULT 0 NOT NULL,\n\t`cache_write_tokens` integer DEFAULT 0 NOT NULL,\n\t`reasoning_tokens` integer DEFAULT 0 NOT NULL,\n\t`cost_usd` real DEFAULT 0 NOT NULL,\n\t`updated_at` text NOT NULL,\n\tPRIMARY KEY(`day`, `provider`, `model`, `category`)\n);\n",
       "\nCREATE TABLE `workplace_projects` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`title` text NOT NULL,\n\t`owner_principal_id` text NOT NULL,\n\t`state` text NOT NULL,\n\t`archived` integer DEFAULT 0 NOT NULL,\n\t`model` text,\n\t`cwd` text,\n\t`origin` text,\n\t`member_templates` text DEFAULT '[]' NOT NULL,\n\t`created_at` text NOT NULL,\n\t`updated_at` text NOT NULL\n);\n",
-      "\nCREATE INDEX `idx_workplace_projects_state` ON `workplace_projects` (`state`,`archived`);"
+      "\nCREATE INDEX `idx_workplace_projects_state` ON `workplace_projects` (`state`,`archived`);\n"
     ],
     "bps": true,
     "folderMillis": 1784030043899,
-    "hash": "862c404a2a0945262e8647759789b229e483f54433c24d105caec760d7a97ece"
+    "hash": "462c6cdc6ec84950a3561b308b561da50ec80da948580c45b4c3fdfb9fd4eb08"
   },
   {
     "sql": [
-      "-- Custom SQL migration file, put your code below! --\nCREATE VIRTUAL TABLE `messages_fts`\nUSING fts5(`text`, content='messages', content_rowid='rowid');\n",
-      "\nCREATE VIRTUAL TABLE `messages_fts_trigram`\nUSING fts5(`text`, content='messages', content_rowid='rowid', tokenize='trigram');\n",
-      "\nCREATE TRIGGER `messages_ai` AFTER INSERT ON `messages` BEGIN\n  INSERT INTO messages_fts(rowid, text) VALUES (new.rowid, new.text);\n  INSERT INTO messages_fts_trigram(rowid, text) VALUES (new.rowid, new.text);\nEND;\n",
-      "\nCREATE TRIGGER `messages_ad` AFTER DELETE ON `messages` BEGIN\n  INSERT INTO messages_fts(messages_fts, rowid, text) VALUES ('delete', old.rowid, old.text);\n  INSERT INTO messages_fts_trigram(messages_fts_trigram, rowid, text) VALUES ('delete', old.rowid, old.text);\nEND;\n",
-      "\nCREATE TRIGGER `messages_au` AFTER UPDATE ON `messages` BEGIN\n  INSERT INTO messages_fts(messages_fts, rowid, text) VALUES ('delete', old.rowid, old.text);\n  INSERT INTO messages_fts_trigram(messages_fts_trigram, rowid, text) VALUES ('delete', old.rowid, old.text);\n  INSERT INTO messages_fts(rowid, text) VALUES (new.rowid, new.text);\n  INSERT INTO messages_fts_trigram(rowid, text) VALUES (new.rowid, new.text);\nEND;\n",
+      "-- Custom SQL migration file, put your code below! --\nCREATE VIRTUAL TABLE IF NOT EXISTS `messages_fts`\nUSING fts5(`text`, content='messages', content_rowid='rowid');\n",
+      "\nCREATE VIRTUAL TABLE IF NOT EXISTS `messages_fts_trigram`\nUSING fts5(`text`, content='messages', content_rowid='rowid', tokenize='trigram');\n",
+      "\nCREATE TRIGGER IF NOT EXISTS `messages_ai` AFTER INSERT ON `messages` BEGIN\n  INSERT INTO messages_fts(rowid, text) VALUES (new.rowid, new.text);\n  INSERT INTO messages_fts_trigram(rowid, text) VALUES (new.rowid, new.text);\nEND;\n",
+      "\nCREATE TRIGGER IF NOT EXISTS `messages_ad` AFTER DELETE ON `messages` BEGIN\n  INSERT INTO messages_fts(messages_fts, rowid, text) VALUES ('delete', old.rowid, old.text);\n  INSERT INTO messages_fts_trigram(messages_fts_trigram, rowid, text) VALUES ('delete', old.rowid, old.text);\nEND;\n",
+      "\nCREATE TRIGGER IF NOT EXISTS `messages_au` AFTER UPDATE ON `messages` BEGIN\n  INSERT INTO messages_fts(messages_fts, rowid, text) VALUES ('delete', old.rowid, old.text);\n  INSERT INTO messages_fts_trigram(messages_fts_trigram, rowid, text) VALUES ('delete', old.rowid, old.text);\n  INSERT INTO messages_fts(rowid, text) VALUES (new.rowid, new.text);\n  INSERT INTO messages_fts_trigram(rowid, text) VALUES (new.rowid, new.text);\nEND;\n",
       "\nINSERT INTO messages_fts(messages_fts) VALUES ('rebuild');\n",
       "\nINSERT INTO messages_fts_trigram(messages_fts_trigram) VALUES ('rebuild');\n"
     ],
     "bps": true,
-    "folderMillis": 1784030049774,
-    "hash": "75e02e7a9211f007334e58a4699d604f99fe1f047bbfd80b8bcb4d1f0b34d97f"
+    "folderMillis": 1784139452695,
+    "hash": "fc5d64d8314ca3403fd6a871ef1ee95c72b5d078fdbea9c457f9377c21dc0297"
   }
 ];
 
-export const LATEST_MIGRATION_TIMESTAMP = 1784030049774;
+export const LATEST_MIGRATION_TIMESTAMP = 1784139452695;

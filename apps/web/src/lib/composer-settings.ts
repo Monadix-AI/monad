@@ -42,7 +42,7 @@ export function shouldSubmitComposerKey(intent: ComposerKeyIntent, shortcut: Com
 export function queuedCardsForDisplay(queue: string[]): QueuedComposerCard[] {
   return queue
     .map((text, queueIndex) => ({ queueIndex, text }))
-    .slice(-2)
+    .slice(-3)
     .reverse()
     .map((card, displayIndex) => ({ displayIndex, ...card }));
 }

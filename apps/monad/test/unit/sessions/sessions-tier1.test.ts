@@ -15,7 +15,6 @@ function fixtureSession(over: Partial<Session> = {}): Session {
     ownerPrincipalId: newId('prn'),
     state: 'active',
     agentIds: [],
-    parentSessionId: null,
     archived: false,
     restoreCount: 0,
     usage: {
@@ -89,6 +88,33 @@ test('listSessions filters by archived and state', () => {
   expect(store.listSessions({ archived: true }).length).toBe(1);
   expect(store.listSessions({ state: 'active' }).length).toBe(2);
   expect(store.listSessions({ state: 'active', archived: false }).length).toBe(1);
+  store.close();
+});
+
+test('listSessions searches title, id, and project title within the archived scope', () => {
+  const store = createStore();
+  const project = fixtureProject({ title: 'Runtime Console' });
+  const titleMatch = fixtureSession({ title: 'Investigate Gateway', archived: false });
+  const projectMatch = fixtureSession({ title: 'Agent notes', projectId: project.id, archived: false });
+  const archivedMatch = fixtureSession({ title: 'Gateway archive', archived: true });
+  store.insertWorkplaceProject(project);
+  store.insertSession(titleMatch);
+  store.insertSession(projectMatch);
+  store.insertSession(archivedMatch);
+
+  expect(store.listSessions({ archived: false, query: 'gateway' }).map((session) => session.id)).toEqual([
+    titleMatch.id
+  ]);
+  expect(store.listSessions({ archived: false, query: titleMatch.id.slice(-8) }).map((session) => session.id)).toEqual([
+    titleMatch.id
+  ]);
+  expect(store.listSessions({ archived: false, query: 'runtime console' }).map((session) => session.id)).toEqual([
+    projectMatch.id
+  ]);
+  expect(store.listSessions({ archived: true, query: 'gateway' }).map((session) => session.id)).toEqual([
+    archivedMatch.id
+  ]);
+  expect(store.countSessions({ archived: false, query: 'gateway' })).toBe(1);
   store.close();
 });
 
@@ -363,34 +389,6 @@ test('updateSession patches cwd and origin', () => {
   const cleared = store.updateSession(s.id, { cwd: null, origin: null });
   expect(cleared?.cwd).toBeUndefined();
   expect(cleared?.origin).toBeUndefined();
-  store.close();
-});
-
-test('provenance returns empty for unknown id', () => {
-  const store = createStore();
-  expect(store.provenance('ses_DOESNOTEXIST')).toEqual({ ancestors: [], descendants: [] });
-  store.close();
-});
-
-test('provenance returns root-first ancestors and all descendants', () => {
-  const store = createStore();
-  const root = fixtureSession();
-  const child = fixtureSession({ parentSessionId: root.id });
-  const grandchild = fixtureSession({ parentSessionId: child.id });
-  const sibling = fixtureSession({ parentSessionId: root.id });
-  store.insertSession(root);
-  store.insertSession(child);
-  store.insertSession(grandchild);
-  store.insertSession(sibling);
-
-  // Provenance of child: root is the only ancestor; grandchild + sibling are NOT its descendants.
-  const fromChild = store.provenance(child.id);
-  expect(fromChild.ancestors.map((s) => s.id)).toEqual([root.id]);
-  expect(fromChild.descendants.map((s) => s.id)).toEqual([grandchild.id]);
-
-  // Provenance of root: no ancestors; child, grandchild, sibling are all descendants.
-  const fromRoot = store.provenance(root.id);
-  expect(fromRoot.descendants.map((s) => s.id).sort()).toEqual([child.id, grandchild.id, sibling.id].sort());
   store.close();
 });
 

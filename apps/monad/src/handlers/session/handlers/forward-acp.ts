@@ -38,6 +38,7 @@ export function createForwardAcpHandler(ctx: SessionContext, sandboxRootsFor: Sa
     aborts,
     runtime,
     beginRun,
+    trackRun,
     makeEmit,
     persistAndRetire,
     requireSession
@@ -134,7 +135,7 @@ export function createForwardAcpHandler(ctx: SessionContext, sandboxRootsFor: Sa
 
     const rt = runtimeForSession(sessionId);
     emitAcpActivityStart();
-    directDelegate(spec, composeAcpChannelPrompt(text, channelPromptInput), {
+    const run = directDelegate(spec, composeAcpChannelPrompt(text, channelPromptInput), {
       sessionId,
       signal,
       sandboxRoots: sandboxRootsFor(sessionId, requireSession(sessionId).cwd, rt),
@@ -233,8 +234,9 @@ export function createForwardAcpHandler(ctx: SessionContext, sandboxRootsFor: Sa
         } catch (innerErr) {
           process.stderr.write(`forwardToAcp persistAndRetire error (${sessionId}): ${innerErr}\n`);
         }
-      })
-      .finally(() => aborts.delete(sessionId));
+      });
+
+    trackRun(sessionId, signal, run);
 
     return { accepted: true as const };
   };

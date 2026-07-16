@@ -69,8 +69,11 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
   const {
     deps: { agent, bus, cache, store, ownerPrincipalId, sessionSandbox, agentToolFilter, agentSandboxRoots, log },
     aborts,
+    steers,
     runtime,
     beginRun,
+    enqueueSteers,
+    trackRun,
     makeEmit,
     persistAndRetire,
     requireSession
@@ -108,12 +111,23 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
   const runtimeForSession = (sessionId: SessionId) => runtime.get(sessionId);
   const agentToolFilterForSession = (sessionId: SessionId) =>
     sessionId.startsWith('ses_') ? agentToolFilter?.(sessionId as SessionId) : undefined;
+  const trailingContextMessage = (sessionId: SessionId) =>
+    store
+      .listMessages(sessionId)
+      .findLast(
+        (message) =>
+          message.includeInContext !== false &&
+          message.stream.status !== 'pending' &&
+          message.stream.status !== 'streaming'
+      );
 
   async function send({
     sessionId,
     text,
     attachments,
     generate,
+    steer,
+    steerMessages,
     continueFromHistory,
     ambientContext,
     onComplete
@@ -126,11 +140,25 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
       { sessionId, event: 'session.send.accept', text: effectiveText, generate, continueFromHistory, ambientContext },
       'session send accept'
     );
+    if (steerMessages && !steer) throw new HandlerError('invalid', 'steerMessages requires steer mode');
+    if (steerMessages && effectiveText) throw new HandlerError('invalid', 'steer batch cannot include text');
+    const requestedSteers = steerMessages ?? (effectiveText ? [effectiveText] : []);
+    if (steer && requestedSteers.length === 0) throw new HandlerError('invalid', 'steer requires a message');
+    if (steer && (continueFromHistory || generate === false || attachments?.length)) {
+      throw new HandlerError('invalid', 'steer accepts text only and cannot continue history');
+    }
+    if (steer && enqueueSteers(sessionId, requestedSteers)) {
+      return { accepted: true as const };
+    }
+    if (steer) {
+      await ctx.waitForRun(sessionId);
+      if (steerMessages) throw new HandlerError('invalid', 'steer batch requires an active session run');
+    }
     if (continueFromHistory) {
       if (effectiveText || attachments?.length || generate === false) {
         throw new HandlerError('invalid', 'history continuation cannot include a new user message');
       }
-      const lastMessage = store.listMessagesWithLineage(sessionId).at(-1);
+      const lastMessage = trailingContextMessage(sessionId);
       if (lastMessage?.role !== 'user') {
         throw new HandlerError('invalid', 'history continuation requires a trailing user message');
       }
@@ -173,16 +201,16 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
       defaultCwd: session.cwd,
       extraTools: rt?.extraTools,
       extraSkills: rt?.extraSkills,
+      steers: steers.get(sessionId),
       toolFilter: composeFilter(rt?.toolFilter, agentToolFilterForSession(sessionId))
     });
     const run = continueFromHistory
       ? loop.runStreamFromHistory(sessionId as SessionId, signal)
       : loop.runStream(sessionId as SessionId, effectiveText, signal, modelAttachments);
-    run
+    const execution = run
       .then(async () => {
         const finalText = lastAgentMessageText(round);
         persistAndRetire(sessionId, round);
-        aborts.delete(sessionId);
         log?.debug({ sessionId, event: 'session.send.complete', finalText }, 'session send complete');
         if (finalText && onComplete) {
           try {
@@ -203,8 +231,8 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
           'session send error'
         );
         persistAndRetire(sessionId, round);
-        aborts.delete(sessionId);
       });
+    trackRun(sessionId, signal, execution);
     return { accepted: true as const };
   }
 
@@ -254,7 +282,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
       assertWriteAllowed(session, runOpts?.transport ?? 'acp');
       if (continueFromHistory) {
         if (text) throw new HandlerError('invalid', 'history continuation cannot include a new user message');
-        const lastMessage = store.listMessagesWithLineage(sessionId).at(-1);
+        const lastMessage = trailingContextMessage(sessionId);
         if (lastMessage?.role !== 'user') {
           throw new HandlerError('invalid', 'history continuation requires a trailing user message');
         }
@@ -287,6 +315,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
           ambientContext: runOpts?.ambientContext,
           extraTools: runOpts?.extraTools ?? rt?.extraTools,
           extraSkills: rt?.extraSkills,
+          steers: steers.get(sessionId),
           sandboxRoots,
           defaultCwd: session.cwd,
           modelOverride: session.model,
@@ -311,14 +340,16 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
             sink(event);
         }
       });
-      try {
-        if (continueFromHistory) await loop.runStreamFromHistory(sessionId as SessionId, signal);
-        else await loop.runStream(sessionId as SessionId, text, signal, runOpts?.attachments);
-      } finally {
-        oob();
-        persistAndRetire(sessionId, round);
-        aborts.delete(sessionId);
-      }
+      const execution = (async () => {
+        try {
+          if (continueFromHistory) await loop.runStreamFromHistory(sessionId as SessionId, signal);
+          else await loop.runStream(sessionId as SessionId, text, signal, runOpts?.attachments);
+        } finally {
+          oob();
+          persistAndRetire(sessionId, round);
+        }
+      })();
+      await trackRun(sessionId, signal, execution);
     },
 
     async generate({ sessionId, text }: { sessionId: SessionId } & SendMessageRequest) {
@@ -335,7 +366,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
           return { message };
         }
       }
-      const round: Event[] = [];
+      const { round, signal } = beginRun(sessionId);
       const rt = runtimeForSession(sessionId);
       const loop = agent.loop(makeEmit(round), {
         modelOverride: session.model,
@@ -347,30 +378,33 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
         extraSkills: rt?.extraSkills,
         toolFilter: composeFilter(rt?.toolFilter, agentToolFilterForSession(sessionId))
       });
-      try {
-        const msg = await loop.runBlock(sessionId as SessionId, text);
-        log?.debug({ sessionId, event: 'session.generate.complete', text: msg.text }, 'session generate complete');
-        const message: ChatMessage = {
-          id: msg.id as ChatMessage['id'],
-          sessionId: msg.sessionId as ChatMessage['sessionId'],
-          role: msg.role,
-          text: msg.text,
-          type: 'text',
-          stream: { status: 'complete' },
-          active: true,
-          createdAt: msg.createdAt
-        };
-        return { message };
-      } catch (err) {
-        // The model/gateway failed upstream — the daemon itself is healthy, so 502
-        // (Bad Gateway) is the accurate status, not 500. runBlock already persisted
-        // and emitted the failure; surface the parsed message in the response body.
-        const { code, message } = extractError(err);
-        log?.debug({ sessionId, event: 'session.generate.error', code, message }, 'session generate error');
-        throw new HandlerError('bad_gateway', code ? `[${code}] ${message}` : message);
-      } finally {
-        persistAndRetire(sessionId, round);
-      }
+      const execution = (async () => {
+        try {
+          const msg = await loop.runBlock(sessionId as SessionId, text, undefined, signal);
+          log?.debug({ sessionId, event: 'session.generate.complete', text: msg.text }, 'session generate complete');
+          const message: ChatMessage = {
+            id: msg.id as ChatMessage['id'],
+            sessionId: msg.sessionId as ChatMessage['sessionId'],
+            role: msg.role,
+            text: msg.text,
+            type: 'text',
+            stream: { status: 'complete' },
+            active: true,
+            createdAt: msg.createdAt
+          };
+          return { message };
+        } catch (err) {
+          // The model/gateway failed upstream — the daemon itself is healthy, so 502
+          // (Bad Gateway) is the accurate status, not 500. runBlock already persisted
+          // and emitted the failure; surface the parsed message in the response body.
+          const { code, message } = extractError(err);
+          log?.debug({ sessionId, event: 'session.generate.error', code, message }, 'session generate error');
+          throw new HandlerError('bad_gateway', code ? `[${code}] ${message}` : message);
+        } finally {
+          persistAndRetire(sessionId, round);
+        }
+      })();
+      return trackRun(sessionId, signal, execution);
     },
 
     subscribe,

@@ -24,7 +24,7 @@ createdAt           createdAt
 updatedAt           updatedAt
 ```
 
-(`sessions` additionally carries `agentIds`, `parentSessionId`/`branchedAtMessageId`, `restoreCount`,
+(`sessions` additionally carries `agentIds`, `restoreCount`,
 and usage/cost columns — a project has none of that.)
 
 The REST surface mirrors the duplication one-for-one: `/sessions/:id/*` and `/projects/:id/*` each
@@ -52,7 +52,7 @@ sessions: {
   id: SessionId,              // single ses_… prefix for both kinds — see "id scheme" below
   projectId: ProjectId | null, // null = chat session; set = project session
   title, ownerPrincipalId, state, archived, model, cwd, origin,
-  agentIds, parentSessionId, branchedAtMessageId, restoreCount,
+  agentIds, restoreCount,
   inputTokens, outputTokens, totalTokens, cacheReadTokens, cacheWriteTokens, reasoningTokens, costUsd,
   createdAt, updatedAt
 }

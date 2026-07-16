@@ -14,14 +14,6 @@ export interface ArchivedSessionBucket {
   label: string;
 }
 
-export function filterArchivedSessions(items: ArchivedSessionListItem[], query: string): ArchivedSessionListItem[] {
-  const normalizedQuery = query.trim().toLowerCase();
-  if (!normalizedQuery) return items;
-  return items.filter((item) =>
-    [item.title, item.projectName, item.id].filter(Boolean).join(' ').toLowerCase().includes(normalizedQuery)
-  );
-}
-
 export function archivedSessionBuckets(
   items: ArchivedSessionListItem[],
   now: Date = new Date()

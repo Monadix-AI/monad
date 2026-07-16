@@ -175,6 +175,8 @@ export const sendMessageRequestSchema = z.object({
   text: z.string().max(MESSAGE_TEXT_MAX),
   attachments: z.array(sendMessageAttachmentSchema).max(MESSAGE_ATTACHMENT_MAX).optional(),
   generate: z.boolean().optional(),
+  steer: z.boolean().optional(),
+  steerMessages: z.array(z.string().min(1).max(MESSAGE_TEXT_MAX)).min(1).max(100).optional(),
   continueFromHistory: z.boolean().optional(),
   // Optional ambient context for THIS turn (the ACP bridge forwards the editor's open-document
   // snapshot here, since it can't ride in-process runOpts over the wire). Inline-SSE send only.
@@ -224,6 +226,7 @@ export type GenerateMessageResponse = z.infer<typeof generateMessageResponseSche
 
 export const listSessionsQuerySchema = offsetPaginationQuerySchema.extend({
   archived: z.boolean().optional(),
+  query: z.string().trim().max(200).optional(),
   state: sessionStateSchema.optional()
 });
 export type ListSessionsQuery = z.infer<typeof listSessionsQuerySchema>;
@@ -399,8 +402,7 @@ export type ResetSessionResponse = z.infer<typeof resetSessionResponseSchema>;
 
 export const listMessagesQuerySchema = cursorPaginationQuerySchema.extend({
   before: messageIdSchema.optional(),
-  includeInactive: z.stringbool().optional(),
-  includeAncestors: z.stringbool().optional()
+  includeInactive: z.stringbool().optional()
 });
 export type ListMessagesQuery = z.infer<typeof listMessagesQuerySchema>;
 
@@ -419,13 +421,6 @@ export type BranchSessionRequest = z.infer<typeof branchSessionRequestSchema>;
 
 export const branchSessionResponseSchema = z.object({ sessionId: sessionIdSchema });
 export type BranchSessionResponse = z.infer<typeof branchSessionResponseSchema>;
-
-export const getProvenanceResponseSchema = z.object({
-  ancestors: z.array(sessionSchema),
-  self: sessionSchema,
-  descendants: z.array(sessionSchema)
-});
-export type GetProvenanceResponse = z.infer<typeof getProvenanceResponseSchema>;
 
 export const restoreSessionRequestSchema = z.object({ toMessageId: messageIdSchema });
 export type RestoreSessionRequest = z.infer<typeof restoreSessionRequestSchema>;

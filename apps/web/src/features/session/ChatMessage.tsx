@@ -34,6 +34,7 @@ export interface Msg {
   label?: string;
   error?: boolean;
   seq?: string;
+  serverEchoOrdinal?: number;
   /** This assistant segment is still streaming — render a live cursor. */
   streaming?: boolean;
   type?: string;
@@ -135,7 +136,7 @@ export const Message = memo(function Message({
   msg: Msg;
   commands?: CommandItem[];
   assistantLabel: string;
-  onBranch?: (messageId: string, role: Msg['role']) => void;
+  onBranch?: (messageId: string) => void;
   onRestore?: (messageId: string, text: string) => void;
   onSkillPreview?: (id: string) => void;
 }) {
@@ -180,7 +181,15 @@ export const Message = memo(function Message({
       className={cn('gap-2', isUser ? 'max-w-[min(82%,42rem)] items-end self-end' : 'max-w-3xl items-start self-start')}
       from={msg.role}
     >
-      {!isUser && !msg.pending ? <span className="label-mono px-1">{label}</span> : null}
+      {!isUser ? (
+        <span
+          aria-live={msg.pending ? 'polite' : undefined}
+          className={cn('label-mono px-1', msg.pending && 'agent-name-shimmer')}
+          data-pending={msg.pending || undefined}
+        >
+          {label}
+        </span>
+      ) : null}
       {!isUser && msg.reasoning && (
         <ReasoningBubble
           streaming={Boolean(msg.streaming)}
@@ -271,10 +280,10 @@ export const Message = memo(function Message({
               />
             )}
           </MessageAction>
-          {canEdit && onBranch && (
+          {isUser && canEdit && onBranch && (
             <MessageAction
               className="size-6"
-              onClick={() => onBranch(msg.id, msg.role)}
+              onClick={() => onBranch(msg.id)}
               tooltip={t('web.chat.branchHere')}
             >
               <HugeiconsIcon

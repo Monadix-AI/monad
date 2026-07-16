@@ -3,13 +3,11 @@ import {
   Cancel01Icon,
   CheckIcon,
   CheckmarkCircle02Icon,
-  ChevronDownIcon,
-  ChevronUpIcon,
   Copy01Icon,
   InformationCircleIcon
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { Button, cn } from '@monad/ui';
+import { Button, cn, MorphChevron } from '@monad/ui';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useT } from '#/components/I18nProvider';
@@ -267,17 +265,10 @@ function ExpandableMessage({
           onClick={onToggle}
           type="button"
         >
-          {expanded ? (
-            <HugeiconsIcon
-              className="size-3"
-              icon={ChevronUpIcon}
-            />
-          ) : (
-            <HugeiconsIcon
-              className="size-3"
-              icon={ChevronDownIcon}
-            />
-          )}
+          <MorphChevron
+            className="size-3"
+            expanded={expanded}
+          />
           {expanded ? t('web.toast.collapse') : t('web.toast.expand')}
         </button>
       )}
