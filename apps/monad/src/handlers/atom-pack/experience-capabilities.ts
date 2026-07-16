@@ -8,13 +8,13 @@ import type {
 
 export interface ExperienceCapabilityDeps {
   state: {
-    forPack(atomPackId: string, principalId: string): ExperienceStateStore;
+    forPack(atomPackId: string): ExperienceStateStore;
   };
   projectSessions: {
-    forPrincipal(principalId: string): ProjectSessionOperations;
+    operations(): ProjectSessionOperations;
   };
   workerScheduler: {
-    forExperience(atomPackId: string, principalId: string, experienceId: string): ExperienceWorkerScheduler;
+    forExperience(atomPackId: string, experienceId: string): ExperienceWorkerScheduler;
   };
 }
 
@@ -27,15 +27,14 @@ function permissionGuard(permissions: readonly WorkspaceExperiencePermission[]) 
 
 export function createWorkspaceExperienceApiContext(input: {
   atomPackId: string;
-  principalId: string;
   experienceId: string;
   permissions: readonly WorkspaceExperiencePermission[];
   deps: ExperienceCapabilityDeps;
 }): WorkspaceExperienceApiContext {
   const requirePermission = permissionGuard(input.permissions);
-  const state = input.deps.state.forPack(input.atomPackId, input.principalId);
-  const sessions = input.deps.projectSessions.forPrincipal(input.principalId);
-  const scheduler = input.deps.workerScheduler.forExperience(input.atomPackId, input.principalId, input.experienceId);
+  const state = input.deps.state.forPack(input.atomPackId);
+  const sessions = input.deps.projectSessions.operations();
+  const scheduler = input.deps.workerScheduler.forExperience(input.atomPackId, input.experienceId);
   const namespaceIdempotencyKey = (key: string): string => `${input.atomPackId}:${key}`;
   const authorized = <T>(permission: WorkspaceExperiencePermission, operation: () => Promise<T>): Promise<T> => {
     try {
@@ -48,7 +47,6 @@ export function createWorkspaceExperienceApiContext(input: {
 
   return {
     atomPackId: input.atomPackId,
-    principalId: input.principalId,
     experienceId: input.experienceId,
     experienceState: {
       get: (projectId, key) => authorized('experience.state', () => state.get(projectId, key)),

@@ -1,4 +1,4 @@
-import type { MonadPaths } from '@monad/home';
+import type { MonadConfig, MonadPaths } from '@monad/environment';
 import type {
   NetworkRemoteUrl,
   NetworkRuntimeStatus,
@@ -7,18 +7,15 @@ import type {
   ProbeNetworkResponse,
   SetNetworkSettingsRequest
 } from '@monad/protocol';
-import type { ConfigReloader } from '#/config/reloader.ts';
+import type { ConfigAccess } from '#/config/manager.ts';
 
 import {
   generateRemoteToken,
   getLanIp,
   getTailscaleIp,
   isLoopbackDaemonHost,
-  loadAll,
-  loadAuth,
-  saveSystemConfig,
   validateDaemonNetworkSecurity
-} from '@monad/home';
+} from '@monad/environment';
 
 import { HandlerError } from '#/handlers/handler-error.ts';
 import { resolveTlsSetupForNetwork } from '#/transports/tls.ts';
@@ -31,10 +28,7 @@ export interface NetworkModuleDeps {
   probeFetch?: ProbeFetch;
 }
 
-function remoteUrlsFor(
-  cfg: NonNullable<Awaited<ReturnType<typeof loadAll>>>,
-  addresses: { lan?: string; overlay?: string }
-): NetworkRemoteUrl[] {
+function remoteUrlsFor(cfg: MonadConfig, addresses: { lan?: string; overlay?: string }): NetworkRemoteUrl[] {
   if (!cfg.network.remoteAccess.enabled) return [];
   const scheme = cfg.network.https.enabled === false ? 'http' : 'https';
   const port = cfg.network.port;
@@ -46,11 +40,7 @@ function remoteUrlsFor(
   ];
 }
 
-function toNetworkSettings(
-  cfg: NonNullable<Awaited<ReturnType<typeof loadAll>>>,
-  restartRequired: boolean,
-  deps: NetworkModuleDeps = {}
-): NetworkSettings {
+function toNetworkSettings(cfg: MonadConfig, restartRequired: boolean, deps: NetworkModuleDeps = {}): NetworkSettings {
   const addresses = deps.networkAddresses?.() ?? { lan: getLanIp(), overlay: getTailscaleIp() };
   const runtime = deps.currentRuntimeStatus?.();
   return {
@@ -69,16 +59,14 @@ function toNetworkSettings(
   };
 }
 
-export function createNetworkModule(paths: MonadPaths, configReloader?: ConfigReloader, deps: NetworkModuleDeps = {}) {
+export function createNetworkModule(paths: MonadPaths, config: ConfigAccess, deps: NetworkModuleDeps = {}) {
   async function getNetworkSettings(): Promise<NetworkSettings> {
-    const cfg = await loadAll(paths.config, paths.profile);
-    if (!cfg) throw new Error('network settings: config.json missing');
+    const cfg = config.get().cfg;
     return toNetworkSettings(cfg, false, deps);
   }
 
   async function setNetworkSettings(req: SetNetworkSettingsRequest): Promise<NetworkSettings> {
-    const cfg = await loadAll(paths.config, paths.profile);
-    if (!cfg) throw new Error('network settings: config.json missing');
+    const cfg = structuredClone(config.get().cfg);
     if (req.host !== undefined) {
       cfg.network.host = req.host;
     }
@@ -134,12 +122,8 @@ export function createNetworkModule(paths: MonadPaths, configReloader?: ConfigRe
       }
     }
 
-    await saveSystemConfig(paths.config, cfg);
-    if (configReloader) {
-      const event = { cfg, auth: await loadAuth(paths.auth) };
-      setTimeout(() => void configReloader.publish(event), 25);
-    }
-    return toNetworkSettings(cfg, !configReloader, deps);
+    await config.updateConfig(() => cfg);
+    return toNetworkSettings(cfg, false, deps);
   }
 
   async function probeNetwork(req: ProbeNetworkRequest): Promise<ProbeNetworkResponse> {

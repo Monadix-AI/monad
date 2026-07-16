@@ -13,7 +13,6 @@ export const sessions = sqliteTable(
     id: text('id').primaryKey(),
     projectId: text('project_id'),
     title: text('title').notNull(),
-    ownerPrincipalId: text('owner_principal_id').notNull(),
     state: text('state').notNull(),
     agentIds: text('agent_ids').notNull().default('[]'),
     archived: integer('archived').notNull().default(0),
@@ -57,7 +56,6 @@ export const workplaceProjects = sqliteTable(
   {
     id: text('id').primaryKey(),
     title: text('title').notNull(),
-    ownerPrincipalId: text('owner_principal_id').notNull(),
     state: text('state').notNull(),
     archived: integer('archived').notNull().default(0),
     model: text('model'),
@@ -110,7 +108,6 @@ export const experienceState = sqliteTable(
   'experience_state',
   {
     atomPackId: text('atom_pack_id').notNull(),
-    principalId: text('principal_id').notNull(),
     projectId: text('project_id').notNull(),
     recordKey: text('record_key').notNull(),
     value: text('value').notNull(),
@@ -118,8 +115,8 @@ export const experienceState = sqliteTable(
     updatedAt: text('updated_at').notNull()
   },
   (table) => [
-    primaryKey({ columns: [table.atomPackId, table.principalId, table.projectId, table.recordKey] }),
-    index('idx_experience_state_project').on(table.atomPackId, table.principalId, table.projectId, table.recordKey)
+    primaryKey({ columns: [table.atomPackId, table.projectId, table.recordKey] }),
+    index('idx_experience_state_project').on(table.atomPackId, table.projectId, table.recordKey)
   ]
 );
 
@@ -128,7 +125,6 @@ export const experienceStateEvents = sqliteTable(
   {
     id: text('id').primaryKey(),
     atomPackId: text('atom_pack_id').notNull(),
-    principalId: text('principal_id').notNull(),
     projectId: text('project_id').notNull(),
     recordKey: text('record_key').notNull(),
     version: integer('version').notNull(),
@@ -136,13 +132,7 @@ export const experienceStateEvents = sqliteTable(
     createdAt: text('created_at').notNull()
   },
   (table) => [
-    index('idx_experience_state_events_record').on(
-      table.atomPackId,
-      table.principalId,
-      table.projectId,
-      table.recordKey,
-      table.version
-    )
+    index('idx_experience_state_events_record').on(table.atomPackId, table.projectId, table.recordKey, table.version)
   ]
 );
 
@@ -150,7 +140,6 @@ export const experienceWorkerWakeups = sqliteTable(
   'experience_worker_wakeups',
   {
     atomPackId: text('atom_pack_id').notNull(),
-    principalId: text('principal_id').notNull(),
     experienceId: text('experience_id').notNull(),
     projectId: text('project_id').notNull(),
     wakeKey: text('wake_key').notNull(),
@@ -159,7 +148,7 @@ export const experienceWorkerWakeups = sqliteTable(
     updatedAt: text('updated_at').notNull()
   },
   (table) => [
-    primaryKey({ columns: [table.atomPackId, table.principalId, table.experienceId, table.projectId, table.wakeKey] }),
+    primaryKey({ columns: [table.atomPackId, table.experienceId, table.projectId, table.wakeKey] }),
     index('idx_experience_worker_wakeups_due').on(table.runAt)
   ]
 );
@@ -248,7 +237,6 @@ export const channelConversations = sqliteTable(
     channelId: text('channel_id').notNull(),
     conversationKey: text('conversation_key').notNull(),
     activeSessionId: text('active_session_id').notNull(),
-    principalId: text('principal_id').notNull(),
     createdAt: text('created_at').notNull(),
     lastSeenAt: text('last_seen_at').notNull()
   },

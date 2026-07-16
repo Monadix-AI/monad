@@ -1,31 +1,27 @@
 import type { ExperienceStateStore, ExperienceWorkerScheduler } from '@monad/sdk-atom';
 import type { Store } from '#/store/db/index.ts';
 
-function assertProjectOwner(store: Store, principalId: string, projectId: string): void {
+function assertProject(store: Store, projectId: string): void {
   const project = store.getWorkplaceProject(projectId);
-  if (!project || project.ownerPrincipalId !== principalId) throw new Error(`project not found: ${projectId}`);
+  if (!project) throw new Error(`project not found: ${projectId}`);
 }
 
-export function createExperienceStateStore(
-  store: Store,
-  atomPackId: string,
-  principalId: string
-): ExperienceStateStore {
+export function createExperienceStateStore(store: Store, atomPackId: string): ExperienceStateStore {
   return {
     get: async <T>(projectId: string, key: string) => {
-      assertProjectOwner(store, principalId, projectId);
-      const record = store.getExperienceState(atomPackId, principalId, projectId, key);
+      assertProject(store, projectId);
+      const record = store.getExperienceState(atomPackId, projectId, key);
       return record ? { value: record.value as T, version: record.version } : null;
     },
     list: async <T>(projectId: string, prefix: string) => {
-      assertProjectOwner(store, principalId, projectId);
+      assertProject(store, projectId);
       return store
-        .listExperienceState(atomPackId, principalId, projectId, prefix)
+        .listExperienceState(atomPackId, projectId, prefix)
         .map((record) => ({ key: record.key, value: record.value as T, version: record.version }));
     },
     compareAndSwap: async (input) => {
-      assertProjectOwner(store, principalId, input.projectId);
-      return store.compareAndSwapExperienceState({ atomPackId, principalId, ...input });
+      assertProject(store, input.projectId);
+      return store.compareAndSwapExperienceState({ atomPackId, ...input });
     }
   };
 }
@@ -33,15 +29,13 @@ export function createExperienceStateStore(
 export function createExperienceWorkerScheduler(
   store: Store,
   atomPackId: string,
-  principalId: string,
   experienceId: string
 ): ExperienceWorkerScheduler {
   return {
     schedule: async (projectId, input) => {
-      assertProjectOwner(store, principalId, projectId);
+      assertProject(store, projectId);
       store.scheduleExperienceWorkerWakeup({
         atomPackId,
-        principalId,
         experienceId,
         projectId,
         key: input.key,
@@ -49,8 +43,8 @@ export function createExperienceWorkerScheduler(
       });
     },
     cancel: async (projectId, key) => {
-      assertProjectOwner(store, principalId, projectId);
-      store.cancelExperienceWorkerWakeup(atomPackId, principalId, experienceId, projectId, key);
+      assertProject(store, projectId);
+      store.cancelExperienceWorkerWakeup(atomPackId, experienceId, projectId, key);
     }
   };
 }

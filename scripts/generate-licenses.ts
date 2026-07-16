@@ -2,9 +2,7 @@
 import { mkdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
-// The style SET is enumerated from @dicebear/styles in exactly one generated protocol file; this
-// script derives its credits from that list.
-import { AVATAR_STYLE_SLUGS } from '../packages/protocol/generated/avatar-styles.ts';
+import { listAvatarStyleSlugs } from './avatar-style-slugs.ts';
 
 // Mirror of @monad/protocol's `avatarStyleLabel` (kept local because this build script isn't a
 // workspace package and can't resolve the workspace import). A style's display name is exactly its
@@ -110,7 +108,7 @@ async function readStyleMeta(slug: string): Promise<DicebearStyleMeta | null> {
 }
 
 const avatarStyles = await Promise.all(
-  AVATAR_STYLE_SLUGS.map(async (slug) => {
+  (await listAvatarStyleSlugs(ROOT)).map(async (slug) => {
     const meta = (await readStyleMeta(slug)) ?? {};
     const label = avatarStyleLabel(slug);
     return {

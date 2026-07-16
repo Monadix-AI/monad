@@ -1,6 +1,6 @@
 # Architecture guidelines
 
-This document records the codebase boundaries that should stay stable as monad
+This document records the codebase boundaries that should stay stable as Monad
 grows. For the daemon startup graph and runtime lifecycle, see
 [daemon-architecture.md](../internals/daemon-architecture.md). For transport and security
 posture, see [runtime.md](../internals/runtime.md).
@@ -10,7 +10,7 @@ posture, see [runtime.md](../internals/runtime.md).
 | Area | Owns | Must not own |
 |---|---|---|
 | `@monad/protocol` | Wire/domain schemas, RPC method table, ids, shared events | Runtime logic, daemon imports, UI-only view models |
-| `@monad/home` | `~/.monad` layout, config/auth/profile parsing and persistence | Daemon lifecycle, tools, model routing, UI logic |
+| `@monad/environment` | `~/.monad` layout, config/auth/profile parsing and persistence | Daemon lifecycle, tools, model routing, UI logic |
 | `apps/monad` | Long-lived daemon runtime: store, agent loop, tools, MCP, atoms, channels, transports | Client-only cache, React UI state |
 | `@monad/client` | Type-safe daemon API client and stream parsing | Daemon implementation details |
 | `@monad/client-rtk` | Shared RTK Query cache/endpoints | Endpoint implementations, daemon business logic |
@@ -69,9 +69,9 @@ instead of leaking daemon implementation types.
   has an owning domain.
 - Putting runtime service instances into Zustand. Zustand is for serializable
   lifecycle state; service outputs live in `RuntimeContext`.
-- Creating a second config implementation outside `@monad/home`.
+- Reading or writing settings files outside environment initialization/repair or the daemon ConfigManager source.
 - Using RxJS, revision queues, or global event logs for local config hot reload.
-  Use `ConfigService` and module reload hooks.
+  Use `ConfigManager` and module reload hooks.
 - Adding feature-specific `process.platform` branches outside a thin platform
   adapter.
 - Redeclaring wire/domain types in consumers instead of deriving from the schema

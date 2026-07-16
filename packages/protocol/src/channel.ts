@@ -173,7 +173,7 @@ function stripJsonFence(text: string): string {
   return match?.[1]?.trim() ?? text;
 }
 
-// Channel settings (HTTP CRUD DTOs): config/auth shapes live in @monad/home; these are the
+// Channel settings (HTTP CRUD DTOs): config/auth shapes live in @monad/environment; these are the
 // over-the-wire views. Token material is NEVER returned — only `hasToken`.
 
 export const channelGranularitySchema = z.enum(['per-conversation', 'per-thread', 'per-user']);

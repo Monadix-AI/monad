@@ -4,7 +4,7 @@ import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { getPaths, initMonadHome, loadConfig } from '@monad/home';
+import { getPaths, initMonadHome, loadConfig } from '@monad/environment';
 
 import { command } from '../../src/commands/config.ts';
 
@@ -76,13 +76,13 @@ test('config get on an unknown key throws', async () => {
 
 test('config set network.transport uds writes uds', async () => {
   await captureOutput(() => command.run(ctx(['set', 'network.transport', 'uds'])));
-  const cfg = await loadConfig(getPaths().config);
+  const cfg = await loadConfig(getPaths());
   expect(cfg?.network.transport).toBe('uds');
 });
 
 test('config set coerces numeric values', async () => {
   await captureOutput(() => command.run(ctx(['set', 'network.port', '8123'])));
-  const cfg = await loadConfig(getPaths().config);
+  const cfg = await loadConfig(getPaths());
   expect(cfg?.network.port).toBe(8123);
 });
 

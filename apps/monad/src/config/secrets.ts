@@ -1,4 +1,4 @@
-import { type MonadAuth, matchEnvRef, matchSecretRef } from '@monad/home';
+import { type MonadAuth, matchEnvRef, matchSecretRef } from '@monad/environment';
 
 /**
  * Resolve a secret reference in a config string.

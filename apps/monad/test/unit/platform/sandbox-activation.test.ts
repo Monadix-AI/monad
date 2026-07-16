@@ -1,7 +1,7 @@
 import type { SandboxBackendRef, SandboxLauncher, SandboxProcess } from '@monad/sdk-atom';
 
 import { afterEach, expect, test } from 'bun:test';
-import { createDefaultConfig, emptyAuth } from '@monad/home';
+import { createDefaultConfig, emptyAuth } from '@monad/environment';
 import { configureSandboxLauncher, noneLauncher, sandboxedSpawn, sandboxLauncher } from '@monad/sandbox';
 
 import { createSandboxActivationService } from '#/platform/sandbox/activation.ts';
@@ -39,7 +39,7 @@ function launcher(
 
 function fixture(options: { persist?: () => Promise<void>; old?: SandboxLauncher; next?: SandboxLauncher } = {}) {
   let snapshot = {
-    cfg: createDefaultConfig('prn_test00000000', 'Test'),
+    cfg: createDefaultConfig('Test'),
     auth: emptyAuth()
   };
   snapshot.cfg.sandbox.activeBackend = oldRef;

@@ -1,4 +1,4 @@
-import type { ExternalAgentConfig } from '@monad/home';
+import type { ExternalAgentConfig } from '@monad/environment';
 import type { ExternalAgentSessionView, Session } from '@monad/protocol';
 import type { SessionContext } from '#/handlers/session/context.ts';
 

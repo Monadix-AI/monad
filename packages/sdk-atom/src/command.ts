@@ -79,7 +79,6 @@ export interface CompactSummary {
 
 export interface CommandRunContext {
   readonly sessionId: string;
-  readonly principalId: string;
   /** The raw argument string after the command name (untrimmed remainder). */
   readonly args: string;
 

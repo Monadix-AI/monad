@@ -1,4 +1,4 @@
-import type { PeerConfig } from '@monad/home';
+import type { PeerConfig } from '@monad/environment';
 import type {
   GetPeerResponse,
   ListPeersResponse,

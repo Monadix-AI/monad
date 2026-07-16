@@ -1,4 +1,4 @@
-import type { ExternalAgentConfig } from '@monad/home';
+import type { ExternalAgentConfig } from '@monad/environment';
 import type { Event, ManagedExternalAgentLifecycleLogEvent, Session, SessionId } from '@monad/protocol';
 import type { SessionContext } from '#/handlers/session/context.ts';
 import type { ManagedExternalAgentProjectMessageSender } from '#/handlers/session/handlers/messaging-notices.ts';

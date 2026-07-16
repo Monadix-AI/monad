@@ -1,7 +1,7 @@
 // Trust boundary: an AGENT.md body is executable instruction text from disk — treat like a
 // skill body / provider atom (see docs/engineering/security-guidelines.md and skills.ts).
 //
-// An agent's structured config (model, atoms, sandbox, visibility) lives in profile.json and is
+// An agent's structured config (model, atoms, sandbox, visibility) lives in agents.json and is
 // authoritative for the live system. AGENT.md owns the *system-prompt body*; its YAML frontmatter
 // is an external agent subagent superset kept only so a subagent `.md` imports cleanly.
 
@@ -16,7 +16,7 @@ const AGENT_MD_FILENAME = 'AGENT.md';
 
 /** AGENT.md YAML frontmatter — an external agent subagent superset (`name`, `description`, `tools`,
  *  `disallowedTools`, `model`) so an external subagent file imports cleanly. Only the body is
- *  load-bearing at runtime; the config row in profile.json wins for structured fields. */
+ *  load-bearing at runtime; the config row in agents.json wins for structured fields. */
 const agentFrontmatterSchema = z.object({
   name: z.string().min(1).max(100),
   description: z.string().max(1024).optional(),

@@ -1,7 +1,7 @@
 import type { CommandDef } from './types.ts';
 
 import { join } from 'node:path';
-import { getPaths } from '@monad/home';
+import { getPaths } from '@monad/environment';
 
 import { t } from '../lib/i18n.ts';
 import { dim, out } from '../lib/output.ts';

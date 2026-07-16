@@ -4,12 +4,12 @@
 // This must run BEFORE the agent snapshots its tools, so a third-party atom pack's declared tools/
 // connectors reach the agent from the first turn.
 
-import type { MonadConfig, MonadPaths } from '@monad/home';
+import type { MonadAuth, MonadConfig, MonadPaths } from '@monad/environment';
 import type { AtomDescriptor } from '@monad/protocol';
 import type { ModelSubsystem } from '#/agent/model/lifecycle.ts';
 import type { AtomConflict } from '#/atoms/resolve.ts';
 import type { CapabilitiesRuntime } from '#/capabilities/lifecycle.ts';
-import type { ConfigSnapshot } from '#/config/service.ts';
+import type { ConfigSnapshot } from '#/config/manager.ts';
 import type { AtomPackRegistry } from '#/handlers/atom-pack/index.ts';
 import type { CommandRegistry } from '#/handlers/commands/index.ts';
 import type { RuntimeModule } from '#/runtime/types.ts';
@@ -42,8 +42,9 @@ export async function createAtomDiscovery(deps: {
   modelService: ModelService;
   logger: { warn: (msg: string) => void };
   interactions: HostInteractionService;
+  auth?: MonadAuth;
 }): Promise<AtomDiscovery> {
-  const { paths, cfg, registry, commandRegistry, modelService, logger, interactions } = deps;
+  const { paths, cfg, registry, commandRegistry, modelService, logger, interactions, auth } = deps;
 
   // VM is daemon-owned and available independently of optional atom packs. It remains explicit and
   // is never considered by the lightweight built-in `auto` selector.
@@ -134,7 +135,7 @@ export async function createAtomDiscovery(deps: {
   );
   // The sandbox launcher atoms have now registered (any discovered heavy pack) — select the light OS
   // launcher (default) or the configured heavy backend and wire it into the spawn seam.
-  await finalizeSandboxLauncher(cfg, process.platform, paths);
+  await finalizeSandboxLauncher(cfg, process.platform, paths, auth);
 
   return {
     channelRegistry,
@@ -170,7 +171,8 @@ export function createAtomsLifecycleModule(
         commandRegistry: capabilities.commandRegistry,
         modelService: model.modelService,
         logger: options.logger,
-        interactions: options.interactions ?? new HostInteractionService()
+        interactions: options.interactions ?? new HostInteractionService(),
+        auth: options.initial.auth ?? undefined
       });
     }
   };

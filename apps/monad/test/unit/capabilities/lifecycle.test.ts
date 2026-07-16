@@ -1,4 +1,4 @@
-import type { MonadPaths } from '@monad/home';
+import type { MonadPaths } from '@monad/environment';
 import type { Tool } from '#/capabilities/tools/types.ts';
 import type { SandboxSetup } from '#/platform/sandbox/service.ts';
 

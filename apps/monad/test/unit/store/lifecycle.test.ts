@@ -1,4 +1,4 @@
-import type { MonadPaths } from '@monad/home';
+import type { MonadPaths } from '@monad/environment';
 import type { KvService } from '#/services/kv.ts';
 import type { Store } from '#/store/db/index.ts';
 import type { DataLayer } from '#/store/lifecycle.ts';

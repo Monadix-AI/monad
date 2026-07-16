@@ -42,13 +42,10 @@ class SessionAwareSpanProcessor extends OpenInferenceBatchSpanProcessor {
   override onEnd(span: ReadableSpan): void {
     const attrs = span.attributes as Record<string, unknown>;
 
-    // Session / user grouping (Phoenix Sessions tab + per-user filtering) — both ride along as
-    // AI-SDK telemetry metadata, which the translator keeps under `metadata.*`; re-key to the
-    // OpenInference top-level conventions Phoenix groups by.
+    // Session grouping (Phoenix Sessions tab) rides along as AI-SDK telemetry metadata, which the
+    // translator keeps under `metadata.*`; re-key to the OpenInference top-level convention.
     const sid = attrs['ai.telemetry.metadata.sessionId'] ?? attrs['ai.settings.context.sessionId'];
     if (typeof sid === 'string' && sid && !attrs[OI.SESSION_ID]) attrs[OI.SESSION_ID] = sid;
-    const uid = attrs['ai.telemetry.metadata.userId'] ?? attrs['ai.settings.context.userId'];
-    if (typeof uid === 'string' && uid && !attrs[OI.USER_ID]) attrs[OI.USER_ID] = uid;
 
     // Token-count details the translator omits (it only maps prompt/completion).
     const reasoningTokens = num(attrs['ai.usage.reasoningTokens']);

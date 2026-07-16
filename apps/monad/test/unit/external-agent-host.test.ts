@@ -581,7 +581,13 @@ test('external agent observation resume returns only the delta past the client c
 });
 
 test('external agent app-server reconnect re-dials the socket and resumes the thread', async () => {
-  const host = new ExternalAgentHost({ store: createStore(), bus: new EventBus(), agents: async () => [] });
+  const host = new ExternalAgentHost({
+    store: createStore(),
+    bus: new EventBus(),
+    agents: async () => [],
+    appServerReconnectBaseMs: 1,
+    appServerDisconnectGraceMs: 1
+  });
   const externalAgentSessionId = 'exa_reconnec1Vci';
   const initCalls: { providerSessionRef?: string }[] = [];
   const adapter = {
@@ -630,6 +636,7 @@ test('external agent app-server reconnect re-dials the socket and resumes the th
   expect(live.appServer).toBe(freshConnection); // swapped to the fresh connection
   expect(live.pendingRequests.size).toBe(0); // stale request ids from the dropped socket cleared
   expect(initCalls).toEqual([{ providerSessionRef: 'codex-thread-resume' }]); // re-init resumes the thread
+  expect((live as typeof live & { appServerStreakResetTimer: Timer }).appServerStreakResetTimer.hasRef()).toBe(false);
 });
 
 test('external agent app-server gives up instead of reconnecting forever when the transport keeps reopening but the handshake keeps failing', async () => {
@@ -643,7 +650,13 @@ test('external agent app-server gives up instead of reconnecting forever when th
   const bus = new EventBus();
   const events: string[] = [];
   bus.subscribe(transcriptTargetId, (e) => events.push(e.type));
-  const host = new ExternalAgentHost({ store: createStore(), bus, agents: async () => [] });
+  const host = new ExternalAgentHost({
+    store: createStore(),
+    bus,
+    agents: async () => [],
+    appServerReconnectBaseMs: 1,
+    appServerDisconnectGraceMs: 1
+  });
   const externalAgentSessionId = 'exa_reconnecDa55';
   const adapter = {
     provider: 'openclaw',
@@ -710,7 +723,13 @@ test('external agent app-server disconnect during initial startup redials before
   // Locks in the `handleAppServerDisconnect` reorder's intent: a drop while `live.startup` is still
   // pending gets a few redial attempts (a slow-starting gateway shouldn't fail on its very first
   // handshake attempt), but if the handshake never succeeds, the session still fails — not hangs.
-  const host = new ExternalAgentHost({ store: createStore(), bus: new EventBus(), agents: async () => [] });
+  const host = new ExternalAgentHost({
+    store: createStore(),
+    bus: new EventBus(),
+    agents: async () => [],
+    appServerReconnectBaseMs: 1,
+    appServerDisconnectGraceMs: 1
+  });
   const id = 'exa_pendingspNT9';
   const adapter = {
     provider: 'openclaw',
@@ -1222,19 +1241,20 @@ setInterval(() => {}, 1000);
       workingPath: workdir,
       launchMode: 'pty'
     });
-    for (let i = 0; i < 40 && store.getExternalAgentSession(view.id)?.providerSessionRef !== 'thread-fallback'; i++) {
-      await Bun.sleep(25);
-    }
-    for (let i = 0; i < 40 && store.getExternalAgentSession(view.id)?.pid !== null; i++) {
-      await Bun.sleep(25);
-    }
+    await waitForExternalAgentSession(
+      store,
+      view.id,
+      (session) => session.providerSessionRef === 'thread-fallback' && session.pid === null
+    );
     await host.input(view.id, { input: 'wake-fallback' });
-    for (let i = 0; i < 40; i++) {
-      const log = await Bun.file(logPath).text();
-      if (log.includes('input:wake-fallback')) break;
+    let log = '';
+    for (let i = 0; i < 80; i++) {
+      log = await Bun.file(logPath).text();
+      if (log.includes('argv:--mode=json-stream|--resume|thread-fallback') && log.includes('input:wake-fallback')) {
+        break;
+      }
       await Bun.sleep(25);
     }
-    const log = await Bun.file(logPath).text();
     expect(log).toContain('argv:--mode=json-stream|--resume|thread-fallback');
     expect(log).toContain('input:wake-fallback');
   } finally {

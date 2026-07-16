@@ -1,4 +1,10 @@
-import type { ExternalAgentPresetView, ExternalAgentProvider, ExternalAgentView } from '@monad/protocol';
+import type { ExternalAgentConfig } from '@monad/environment';
+import type {
+  ExternalAgentLaunchMode,
+  ExternalAgentPresetView,
+  ExternalAgentProvider,
+  ExternalAgentView
+} from '@monad/protocol';
 import type { BinProbes } from '#/infra/resolve-binary.ts';
 import type {
   BuildExternalAgentLaunchOptions,
@@ -114,6 +120,29 @@ export function buildExternalAgentArgumentSupportProbe(
   assertSafeArgs(agent);
   assertCommandShape(agent);
   return adapterFor(agent.provider).argumentSupport?.(agent);
+}
+
+export function resolveExternalAgentDefaultLaunchMode(provider: ExternalAgentProvider): ExternalAgentLaunchMode {
+  return adapterFor(provider).detect().defaultLaunchMode;
+}
+
+export function externalAgentConfigToView(agent: ExternalAgentConfig): ExternalAgentView {
+  const adapter = adapterFor(agent.provider);
+  return {
+    name: agent.name,
+    provider: agent.provider,
+    productIcon: adapter.productIcon,
+    command: agent.command,
+    args: agent.args,
+    env: agent.env,
+    enabled: agent.enabled,
+    defaultLaunchMode: adapter.detect().defaultLaunchMode,
+    appServerTransport: agent.appServerTransport,
+    allowAutopilot: agent.allowAutopilot,
+    approvalOwnership: 'provider-owned',
+    projectTemplates: agent.projectTemplates,
+    adapterSettings: agent.adapterSettings
+  };
 }
 
 export function listExternalAgentModelOptions(

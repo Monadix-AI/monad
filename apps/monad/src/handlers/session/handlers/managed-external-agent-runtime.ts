@@ -1,6 +1,8 @@
-import type { ExternalAgentConfig } from '@monad/home';
+import type { ExternalAgentConfig } from '@monad/environment';
 import type {
   Event,
+  ExternalAgentAppServerTransport,
+  ExternalAgentLaunchMode,
   ExternalAgentSessionView,
   ManagedExternalAgentLifecycleLogEvent,
   Session,
@@ -41,8 +43,8 @@ export type StartManagedExternalAgentRuntimeArgs = {
   reasoningEffort?: string;
   speed?: 'standard' | 'fast';
   customPrompt?: string;
-  launchMode: ExternalAgentConfig['defaultLaunchMode'];
-  appServerTransport?: ExternalAgentConfig['appServerTransport'];
+  launchMode: ExternalAgentLaunchMode;
+  appServerTransport?: ExternalAgentAppServerTransport;
   allowAutopilot?: boolean;
   providerSessionRef?: string;
   input: string;

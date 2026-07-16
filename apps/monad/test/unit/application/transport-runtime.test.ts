@@ -61,5 +61,5 @@ test('transport runtime owns mutable listener bindings and starts config watchin
   ]);
 });
 
-import type { MonadConfig } from '@monad/home';
+import type { MonadConfig } from '@monad/environment';
 import type { NetworkRuntimeStatus } from '@monad/protocol';

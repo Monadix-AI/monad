@@ -1,10 +1,8 @@
-import type { Credential, MonadAuth, MonadConfig } from '@monad/home';
+import type { Credential, MonadAuth, MonadConfig } from '@monad/environment';
 import type { ModelRole } from '@monad/protocol';
 import type { ProviderCredential } from '@monad/sdk-atom';
 import type { DiscoverResult, GatewayDeps, ModelRouter } from '#/agent/index.ts';
 import type { ModelCatalogService } from '#/services/model-catalog.ts';
-
-import { saveAuth } from '@monad/home';
 
 import { GatewayModelRouter, ModelProviderRegistry } from '#/agent/index.ts';
 import { DEFAULT_PROFILE_ALIAS, resolveModelRole } from '#/config/resolve.ts';
@@ -28,10 +26,11 @@ export class ModelService {
   private cfg: MonadConfig;
   private auth: MonadAuth;
   private catalog?: ModelCatalogService;
+  private persistAuth?: (auth: MonadAuth) => Promise<void>;
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
-    private readonly authPath: string,
+    _authPath: string,
     cfg: MonadConfig,
     auth: MonadAuth | null,
     registry: ModelProviderRegistry = createEmptyProviderRegistry()
@@ -71,6 +70,10 @@ export class ModelService {
     this.router = new GatewayModelRouter(deps, registry);
   }
 
+  setAuthPersistence(persist: (auth: MonadAuth) => Promise<void>): void {
+    this.persistAuth = persist;
+  }
+
   /** Live (hot-reloaded) model profiles — the configured alias→provider/model set. Read by
    *  capability-tier resolution so a `context: fork` skill's tier maps to a current profile. */
   get profiles(): MonadConfig['model']['profiles'] {
@@ -79,6 +82,10 @@ export class ModelService {
 
   get providers(): MonadConfig['model']['providers'] {
     return this.cfg.model.providers;
+  }
+
+  snapshot(): { cfg: MonadConfig; auth: MonadAuth } {
+    return { cfg: structuredClone(this.cfg), auth: structuredClone(this.auth) };
   }
 
   /** Live operator tier pins (profile alias → tier) — override the catalog's cost-ranking. */
@@ -150,7 +157,7 @@ export class ModelService {
     this.saveTimer = setTimeout(() => {
       this.saveTimer = null;
       this.auth.updatedAt = new Date().toISOString();
-      saveAuth(this.authPath, this.auth).catch(() => {
+      this.persistAuth?.(structuredClone(this.auth)).catch(() => {
         // Best-effort: a failed health write must never break generation.
       });
     }, SAVE_DEBOUNCE_MS);

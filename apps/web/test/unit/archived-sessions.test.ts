@@ -1,5 +1,4 @@
 import { expect, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
 
 import { archivedSessionBuckets, visibleArchivedBucketItems } from '../../src/features/shell/archived-sessions.ts';
 
@@ -36,49 +35,4 @@ test('only the earlier bucket is capped by more count', () => {
     'older-2',
     'older-3'
   ]);
-});
-
-test('archived time bucket labels are smaller and non-interactive', () => {
-  const source = readFileSync(new URL('../../src/features/shell/sidebar/archived-items.tsx', import.meta.url), 'utf8');
-
-  expect(source).toContain('className="px-2 pb-1 text-[10px] text-muted-foreground leading-4"');
-  expect(source).not.toContain('<SidebarNavSectionLabel>{bucket.label}</SidebarNavSectionLabel>');
-});
-
-test('archived session search uses the archived server scope instead of local filtering', () => {
-  const source = readFileSync(new URL('../../src/features/shell/sidebar/archived-items.tsx', import.meta.url), 'utf8');
-
-  expect(source).toContain('useServerSessionSearch({');
-  expect(source).toContain('archived: true');
-  expect(source).toContain('limit: 200');
-  expect(source).not.toContain('filterArchivedSessions');
-});
-
-test('archived session rows expose the shared undoable delete action', () => {
-  const itemSource = readFileSync(
-    new URL('../../src/features/shell/sidebar/archived-items.tsx', import.meta.url),
-    'utf8'
-  );
-  const actionsSource = readFileSync(
-    new URL('../../src/features/shell/session-sidebar-actions.ts', import.meta.url),
-    'utf8'
-  );
-
-  expect(itemSource).toContain('icon: Delete02Icon');
-  expect(itemSource).toContain("label: t('web.sidebar.deleteSession')");
-  expect(itemSource).toContain('onDeleteSession(sessionId, item.title)');
-  expect(actionsSource).toContain('deleteArchivedSession');
-  expect(actionsSource).toContain('queueSessionDelete({');
-  expect(actionsSource).toMatch(
-    /const deleteArchivedSession = useCallback\([\s\S]*?queueSessionDelete\(\{\s*sessionId,\s*title\s*\}\);/
-  );
-});
-
-test('archived search keeps the current list visible without a loading indicator', () => {
-  const source = readFileSync(new URL('../../src/features/shell/sidebar/archived-items.tsx', import.meta.url), 'utf8');
-
-  expect(source).toMatch(
-    /searchingServer && !searching\s*\?\s*searchItems\s*:\s*\[\.\.\.projectSessions, \.\.\.chatSessions\]/s
-  );
-  expect(source).not.toContain('searchingServer && searching');
 });

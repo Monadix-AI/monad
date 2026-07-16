@@ -3,13 +3,13 @@
 // returned function to both the API handler and the fs-watcher without re-capturing local variables.
 // Tools are first-party only (wired once at startup) and never part of a rediscovery sweep.
 
-import type { MonadConfig, MonadPaths } from '@monad/home';
+import type { MonadPaths } from '@monad/environment';
 import type { AtomDescriptor } from '@monad/protocol';
 import type { ModelProvider } from '@monad/sdk-atom';
 import type { AtomConflict } from '#/atoms/resolve.ts';
+import type { ConfigAccess } from '#/config/manager.ts';
 import type { HostInteractionService } from '#/interactions/service.ts';
 
-import { loadAll } from '@monad/home';
 import { defaultLocaleName, loadLocalePacksFromDir } from '@monad/i18n';
 import { BUILTIN_LOCALES_DIR } from '@monad/i18n/locale-dir';
 
@@ -20,8 +20,7 @@ import { I18nService, loadInstalledLocalePacks } from '#/services/i18n.ts';
 
 export type AtomPackRediscovererDeps = {
   paths: MonadPaths;
-  /** cfg.atomPins — used as fallback when loadAll fails mid-write during a sweep. */
-  fallbackAtomPins: MonadConfig['atomPins'];
+  config: Pick<ConfigAccess, 'get'>;
   /** Mutated in place: cleared at the start of each sweep, then re-populated. */
   atomConflicts: AtomConflict[];
   /** Per-pack individual atoms (packId → atoms). Mutated in place: cleared then re-populated each sweep. */
@@ -44,7 +43,7 @@ export function createAtomPackRediscoverer(deps: AtomPackRediscovererDeps): () =
     const next = (inFlight ?? Promise.resolve()).then(async () => {
       const {
         paths,
-        fallbackAtomPins,
+        config,
         atomConflicts,
         atomDetailsByPack,
         commandRegistry,
@@ -58,8 +57,7 @@ export function createAtomPackRediscoverer(deps: AtomPackRediscovererDeps): () =
 
       atomConflicts.length = 0;
       atomDetailsByPack.clear();
-      // Re-read pins so a just-saved pin (setAtomPin → onChanged) takes effect this sweep.
-      const pins = (await loadAll(paths.config, paths.profile))?.atomPins ?? fallbackAtomPins;
+      const pins = config.get().cfg.atomPins;
       // Drop the previous sweep's third-party commands + all atom hooks so a removed/changed pack
       // doesn't leave stale entries; the sweep below re-adds the survivors.
       commandRegistry.clearAtoms();

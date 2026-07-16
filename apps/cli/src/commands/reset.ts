@@ -3,7 +3,7 @@ import type { CommandDef } from './types.ts';
 import { cp, mkdir, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { MonadClient } from '@monad/client';
-import { emptyAuth, getPaths, initMonadHome, loadAll, resolveClientConn, saveAuth } from '@monad/home';
+import { emptyAuth, getPaths, initMonadHome, loadAll, resolveClientConn, saveAuth } from '@monad/environment';
 
 import { stopDaemon } from '../lib/daemon.ts';
 import { t } from '../lib/i18n.ts';
@@ -51,7 +51,7 @@ export const command: CommandDef = {
   local: true,
   name: 'reset',
   synopsis: 'reset <sessions|config|auth|usage|all> [--keep-last <n>]',
-  description: 'selectively reset parts of the monad system',
+  description: 'selectively reset parts of the Monad system',
   descriptionKey: 'cli.cmd.reset.desc',
   flags: {
     'keep-last': {
@@ -91,8 +91,8 @@ export const command: CommandDef = {
       await stopDaemon();
       const { rm } = await import('node:fs/promises');
       await rm(paths.home, { recursive: true, force: true });
-      const result = await initMonadHome(paths);
-      out(green(t('cli.reset.done')) + dim(` (principal: ${result.principalId})`));
+      await initMonadHome(paths);
+      out(green(t('cli.reset.done')));
       out(dim(t('cli.reset.restartHint')));
       return;
     }
@@ -143,10 +143,10 @@ export const command: CommandDef = {
 
     if (sub === 'config') {
       // Show current config summary before wiping
-      const existing = await loadAll(paths.config, paths.profile);
+      const existing = await loadAll(paths);
       if (existing) {
         out(t('cli.resetCmd.config.current'));
-        out(dim(`  principal:  ${existing.principal.displayName} (${existing.principal.id})`));
+        out(dim(`  user:  ${existing.user.displayName}`));
         out(dim(`  default model: ${existing.model.default || '(none)'}`));
         out(dim(`  providers:  ${existing.model.providers.map((p) => p.label).join(', ') || '(none)'}`));
         out(dim(`  port:  ${existing.network.port}  transport: ${existing.network.transport}`));
@@ -159,9 +159,9 @@ export const command: CommandDef = {
         return;
       }
       await stopDaemon();
-      const backupDir = await backupFiles('config', [paths.config, paths.profile]);
+      const backupDir = await backupFiles('config', [paths.config, paths.agentsConfig]);
       out(dim(t('cli.resetCmd.backedUpTo', { path: backupDir })));
-      await Promise.all([silentUnlink(paths.config), silentUnlink(paths.profile)]);
+      await Promise.all([silentUnlink(paths.config), silentUnlink(paths.agentsConfig)]);
       await initMonadHome(paths);
       out(green(t('cli.resetCmd.config.done')));
       out(dim(t('cli.resetCmd.config.hint')));

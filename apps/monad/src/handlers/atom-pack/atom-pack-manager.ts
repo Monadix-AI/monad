@@ -1,8 +1,8 @@
-import type { MonadPaths } from '@monad/home';
+import type { MonadPaths } from '@monad/environment';
 import type { AtomDescriptor, WorkspaceExperienceDefinition } from '@monad/protocol';
 import type { WorkspaceExperienceApiHandler } from '@monad/sdk-atom';
 import type { AtomConflict } from '#/atoms/resolve.ts';
-import type { ConfigReloader } from '#/config/reloader.ts';
+import type { ConfigAccess } from '#/config/manager.ts';
 import type {
   RegisteredWorkspaceExperience,
   RegisteredWorkspaceExperienceApiRoute
@@ -17,7 +17,6 @@ import { createSkillsModule } from '#/handlers/atom-pack/atom-pack-skills.ts';
 
 export interface AtomPacksDeps {
   paths: MonadPaths;
-  ownerPrincipalId?: string;
   experienceCapabilities?: ExperienceCapabilityDeps;
   /** Called after a successful install/remove so the daemon can re-discover atom packs (refresh
    *  the channel registry) without a restart. */
@@ -41,7 +40,7 @@ export interface AtomPacksDeps {
     method: string,
     path: string
   ) => RegisteredWorkspaceExperienceApiRoute | undefined;
-  configReloader?: ConfigReloader;
+  config?: ConfigAccess;
   sandboxActivation?: SandboxActivationService;
   modelService?: ModelService;
 }

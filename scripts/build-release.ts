@@ -100,7 +100,7 @@ log(`Building monad ${VERSION} for: ${TARGETS.map((t) => `${t.os}-${t.arch}`).jo
 // ── 0. Install workspace deps ─────────────────────────────────────────────────
 log('Installing workspace dependencies…');
 await $`bun install`.cwd(ROOT);
-await $`bun run ${join(ROOT, 'packages/home/scripts/gen-config-schema.ts')}`;
+await $`bun run ${join(ROOT, 'packages/environment/scripts/gen-config-schema.ts')}`;
 generateMigrationAssets();
 // Regenerate the native Mo atlas header from the manifest before any shell build.
 await $`bun run ${join(ROOT, 'scripts/gen-mo-atlas.ts')}`;

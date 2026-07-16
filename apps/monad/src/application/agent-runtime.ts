@@ -14,10 +14,13 @@ export function createRuntimeBinding<T>(initial: T): RuntimeBinding<T> {
 }
 
 export async function createAgentRuntime(core: DaemonCore, endpoint: { host: string; port: number }, logger: Logger) {
-  const { paths, flags, cfg, startupAuth, monadVersion, watchService, runtime, reloadTargets, configReloader } = core;
+  const { paths, flags, cfg, startupAuth, monadVersion, watchService, runtime, reloadTargets } = core;
   const { store } = core.dataLayer;
   const { sandboxRoots } = core.sandbox;
   const { modelService, modelCatalog, embeddingIndexer } = core.model;
+  modelService.setAuthPersistence(async (auth) => {
+    await runtime.config.updateAuth(() => auth);
+  });
   const { registry, commandRegistry } = core.capabilities;
   const { loadedSkills, skillList } = core.skills;
 
@@ -65,7 +68,7 @@ export async function createAgentRuntime(core: DaemonCore, endpoint: { host: str
     port: endpoint.port,
     router: agentModel,
     registry,
-    configReloader,
+    config: runtime.config,
     liveCfg: () => runtime.config.get().cfg,
     liveAuth: () => runtime.config.get().auth
   });
@@ -180,7 +183,7 @@ export async function createAgentRuntime(core: DaemonCore, endpoint: { host: str
     commands: commandBundle,
     logger,
     cfg,
-    paths
+    config: core.runtime.config
   });
 
   reloadTargets.setApplication(
@@ -227,7 +230,7 @@ export async function createAgentRuntime(core: DaemonCore, endpoint: { host: str
   };
 }
 
-import type { MonadConfig } from '@monad/home';
+import type { MonadConfig } from '@monad/environment';
 import type { Logger } from '@monad/logger';
 import type { DaemonCore } from '#/application/core-runtime.ts';
 import type { Tool } from '#/capabilities/tools/types.ts';

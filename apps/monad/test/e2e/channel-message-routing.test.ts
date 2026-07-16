@@ -1,4 +1,4 @@
-import type { MonadPaths } from '@monad/home';
+import type { MonadPaths } from '@monad/environment';
 import type {
   ProjectId,
   Session,
@@ -18,7 +18,7 @@ import { createHash } from 'node:crypto';
 import { chmod, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initMonadHome, loadAuth, loadConfig } from '@monad/home';
+import { initMonadHome, loadAuth, loadConfig } from '@monad/environment';
 
 import { ModelService } from '#/handlers/settings/model/index.ts';
 import { createHttpTransport } from '#/transports/http.ts';
@@ -408,7 +408,7 @@ for (const kind of TRANSPORTS) {
       dir = join(tmpdir(), `monad-channel-routing-${Date.now()}-${process.hrtime.bigint()}`);
       const paths = makePaths(dir);
       await initMonadHome(paths);
-      const cfg = await loadConfig(paths.config);
+      const cfg = await loadConfig(paths);
       if (!cfg) throw new Error('config missing after init');
       const modelService = new ModelService(paths.auth, cfg, await loadAuth(paths.auth), seededProviderRegistry());
       handlers = buildHandlers(

@@ -1,5 +1,4 @@
 import { expect, test } from 'bun:test';
-import { newId } from '@monad/protocol';
 
 import { createAgent } from '#/agent/index.ts';
 import { createStore } from '#/store/db/index.ts';
@@ -16,7 +15,7 @@ test('session created via agent is retrievable from the real store', async () =>
     }
   });
 
-  const session = await agent.sessions.create('e2e session', newId('prn'));
+  const session = await agent.sessions.create('e2e session');
 
   const found = store.getSession(session.id);
   expect(found?.title).toBe('e2e session');
@@ -32,10 +31,8 @@ test('multiple sessions accumulate in the store independently', async () => {
   };
 
   const agent = createAgent({ sessionRepo: repo });
-  const owner = newId('prn');
-
-  const s1 = await agent.sessions.create('first', owner);
-  const s2 = await agent.sessions.create('second', owner);
+  const s1 = await agent.sessions.create('first');
+  const s2 = await agent.sessions.create('second');
 
   expect(store.getSession(s1.id)?.title).toBe('first');
   expect(store.getSession(s2.id)?.title).toBe('second');

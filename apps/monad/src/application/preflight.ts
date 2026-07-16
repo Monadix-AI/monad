@@ -1,9 +1,9 @@
-import type { MonadPaths } from '@monad/home';
+import type { MonadPaths } from '@monad/environment';
 import type { Logger } from '@monad/logger';
 import type { DaemonRuntimeFlags } from '#/runtime/flags.ts';
 
 import { join } from 'node:path';
-import { getPaths, initMonadHome } from '@monad/home';
+import { getPaths, initMonadHome } from '@monad/environment';
 
 import { daemonChildProcesses, runDaemonChildSupervisorFromArgv } from '#/infra/daemon-child-processes.ts';
 import { readDaemonRuntimeFlags } from '#/runtime/flags.ts';

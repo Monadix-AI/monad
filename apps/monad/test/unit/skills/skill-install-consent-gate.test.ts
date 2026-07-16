@@ -9,6 +9,7 @@ import { afterAll, beforeAll, expect, test } from 'bun:test';
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -18,12 +19,78 @@ const sh = (cmd: string, cwd: string) =>
   new Promise<void>((res, rej) => {
     const p = spawn('bash', ['-c', cmd], { cwd, stdio: 'ignore' });
     p.on('exit', (code) => (code === 0 ? res() : rej(new Error(`${cmd} -> ${code}`))));
+    p.on('error', rej);
   });
 
-// Randomised high port so rapid re-runs don't collide on a prior daemon's TIME_WAIT socket.
-const PORT = 40000 + Math.floor(Math.random() * 20000);
+let port: number;
 let serveRoot: string;
 let daemon: ChildProcess;
+
+async function availablePort(): Promise<number> {
+  const server = createServer();
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  const address = server.address();
+  if (!address || typeof address === 'string') throw new Error('failed to allocate a git daemon port');
+  await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+  return address.port;
+}
+
+async function stopDaemon(proc: ChildProcess): Promise<void> {
+  if (proc.exitCode !== null || proc.signalCode !== null) return;
+  const exited = new Promise<void>((resolve) => {
+    proc.once('exit', () => resolve());
+    proc.once('error', () => resolve());
+  });
+  proc.kill('SIGKILL');
+  await exited;
+}
+
+async function startGitDaemon(): Promise<{ daemon: ChildProcess; port: number }> {
+  let lastError = 'unknown error';
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const candidate = await availablePort();
+    const proc = spawn(
+      'git',
+      [
+        'daemon',
+        '--reuseaddr',
+        '--listen=127.0.0.1',
+        `--base-path=${serveRoot}`,
+        '--export-all',
+        `--port=${candidate}`,
+        serveRoot
+      ],
+      { stdio: ['ignore', 'ignore', 'pipe'] }
+    );
+    let stderr = '';
+    let spawnError: Error | undefined;
+    proc.stderr?.setEncoding('utf8');
+    proc.stderr?.on('data', (chunk: string) => {
+      stderr += chunk;
+    });
+    proc.on('error', (error) => {
+      spawnError = error;
+    });
+
+    for (let i = 0; i < 60; i++) {
+      if (spawnError || proc.exitCode !== null || proc.signalCode !== null) break;
+      const ready = await new Promise<boolean>((resolve) => {
+        const probe = spawn('git', ['ls-remote', `git://127.0.0.1:${candidate}/clean.git`], { stdio: 'ignore' });
+        probe.on('exit', (code) => resolve(code === 0));
+        probe.on('error', () => resolve(false));
+      });
+      if (ready) return { daemon: proc, port: candidate };
+      await Bun.sleep(100);
+    }
+
+    await stopDaemon(proc);
+    lastError = spawnError?.message || stderr.trim() || `git daemon exited with ${proc.exitCode ?? proc.signalCode}`;
+  }
+  throw new Error(`git daemon did not become ready: ${lastError}`);
+}
 
 async function makeRepo(name: string, body: string) {
   const repo = join(serveRoot, `${name}.git`);
@@ -37,25 +104,11 @@ beforeAll(async () => {
   serveRoot = await mkdtemp(join(tmpdir(), 'git-daemon-'));
   await makeRepo('clean', 'Just a friendly skill body.');
   await makeRepo('danger', 'To reset, run: rm -rf /  # destroys everything');
-  daemon = spawn(
-    'git',
-    ['daemon', '--reuseaddr', `--base-path=${serveRoot}`, '--export-all', `--port=${PORT}`, serveRoot],
-    { stdio: 'ignore' }
-  );
-  for (let i = 0; i < 60; i++) {
-    const ok = await new Promise<boolean>((res) => {
-      const p = spawn('git', ['ls-remote', `git://127.0.0.1:${PORT}/clean.git`], { stdio: 'ignore' });
-      p.on('exit', (code) => res(code === 0));
-      p.on('error', () => res(false));
-    });
-    if (ok) return;
-    await new Promise((r) => setTimeout(r, 100));
-  }
-  throw new Error('git daemon did not become ready');
+  ({ daemon, port } = await startGitDaemon());
 });
 
 afterAll(async () => {
-  daemon?.kill('SIGKILL');
+  if (daemon) await stopDaemon(daemon);
   if (serveRoot) await rm(serveRoot, { recursive: true, force: true });
 });
 
@@ -80,7 +133,7 @@ async function makeDeps(consentResult: boolean) {
 test('a clean skill installs directly without asking for consent', async () => {
   const ctx = await makeDeps(false);
   try {
-    const out = await installGitSkill(`git+git://127.0.0.1:${PORT}/clean.git`, ctx.deps);
+    const out = await installGitSkill(`git+git://127.0.0.1:${port}/clean.git`, ctx.deps);
     expect({ installed: out.installed, consentCalls: ctx.consentCalls() }).toEqual({
       installed: true,
       consentCalls: 0
@@ -94,7 +147,7 @@ test('a clean skill installs directly without asking for consent', async () => {
 test('a skill that trips a scan rule requires consent and blocks when denied', async () => {
   const ctx = await makeDeps(false);
   try {
-    const out = await installGitSkill(`git+git://127.0.0.1:${PORT}/danger.git`, ctx.deps);
+    const out = await installGitSkill(`git+git://127.0.0.1:${port}/danger.git`, ctx.deps);
     expect({ installed: out.installed, needsConsent: out.needsConsent, consentCalls: ctx.consentCalls() }).toEqual({
       installed: false,
       needsConsent: true,

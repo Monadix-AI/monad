@@ -2,13 +2,13 @@
 // provider/credential/profile/default CRUD and asserts secrets are redacted in
 // responses while the full token is persisted to auth.json. Runs over both transports.
 
-import type { MonadPaths } from '@monad/home';
+import type { MonadPaths } from '@monad/environment';
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initMonadHome, loadAuth, loadConfig } from '@monad/home';
+import { initMonadHome, loadAuth, loadConfig } from '@monad/environment';
 import { ModelProviderType } from '@monad/protocol';
 
 import { ModelProviderRegistry } from '#/agent/index.ts';
@@ -61,7 +61,7 @@ for (const kind of TRANSPORTS) {
       paths = makePaths(dir);
       await initMonadHome(paths);
 
-      const cfg = await loadConfig(paths.config);
+      const cfg = await loadConfig(paths);
       if (!cfg) throw new Error('config missing after init');
       const modelService = new ModelService(paths.auth, cfg, await loadAuth(paths.auth), seededProviderRegistry());
       t = serveTransport(kind, createHttpTransport(buildHandlers(mockModel(), { paths, modelService })));
@@ -85,7 +85,7 @@ for (const kind of TRANSPORTS) {
       });
 
       expect(res.status).toBe(400);
-      const cfg = await loadConfig(paths.config);
+      const cfg = await loadConfig(paths);
       expect(cfg?.model.providers.some((provider) => provider.id === 'bad-url')).toBe(false);
     });
 
@@ -141,7 +141,7 @@ for (const kind of TRANSPORTS) {
         ])
       );
 
-      const cfg = await loadConfig(paths.config);
+      const cfg = await loadConfig(paths);
       expect(cfg?.model.profiles.find((profile) => profile.alias === 'default')?.routes.chat.modelId).toBe('gpt-x');
       expect(cfg?.model.providers).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'oai' })]));
 
@@ -174,7 +174,7 @@ for (const kind of TRANSPORTS) {
 
       const profiles = (await (await json('GET', '/v1/settings/model/profiles')).json()) as { defaultAlias: string };
       expect(profiles.defaultAlias).toBe('fast');
-      expect((await loadConfig(paths.config))?.model.default).toBe('fast');
+      expect((await loadConfig(paths))?.model.default).toBe('fast');
     });
 
     test('rejects deleting the protected default profile', async () => {
@@ -188,7 +188,7 @@ for (const kind of TRANSPORTS) {
       const res = await json('DELETE', '/v1/settings/model/profiles/default');
       expect(res.status).toBe(409);
 
-      const cfg = await loadConfig(paths.config);
+      const cfg = await loadConfig(paths);
       expect(cfg?.model.profiles.some((profile) => profile.alias === 'default')).toBe(true);
     });
 
@@ -207,7 +207,7 @@ for (const kind of TRANSPORTS) {
       const res = await json('DELETE', '/v1/settings/model/profiles/fast');
       expect(res.status).toBe(409);
 
-      const cfg = await loadConfig(paths.config);
+      const cfg = await loadConfig(paths);
       expect(cfg?.model.profiles.some((profile) => profile.alias === 'fast')).toBe(true);
     });
 
@@ -250,7 +250,7 @@ for (const kind of TRANSPORTS) {
       const res = await json('PATCH', '/v1/settings/model/providers/oai', { label: 'Renamed' });
       expect(res.status).toBe(200);
 
-      const cfg = await loadConfig(paths.config);
+      const cfg = await loadConfig(paths);
       const provider = cfg?.model.providers.find((p) => p.id === 'oai');
       expect(provider?.label).toBe('Renamed');
       expect(provider?.baseUrl).toBe('https://api.test/v1');
@@ -266,12 +266,12 @@ for (const kind of TRANSPORTS) {
 
       const disableRes = await json('POST', '/v1/settings/model/providers/oai/disable');
       expect(disableRes.status).toBe(200);
-      let cfg = await loadConfig(paths.config);
+      let cfg = await loadConfig(paths);
       expect(cfg?.model.providers.find((p) => p.id === 'oai')?.enabled).toBe(false);
 
       const enableRes = await json('POST', '/v1/settings/model/providers/oai/enable');
       expect(enableRes.status).toBe(200);
-      cfg = await loadConfig(paths.config);
+      cfg = await loadConfig(paths);
       expect(cfg?.model.providers.find((p) => p.id === 'oai')?.enabled).toBe(true);
 
       const missing = await json('POST', '/v1/settings/model/providers/ghost/enable');
@@ -289,7 +289,7 @@ for (const kind of TRANSPORTS) {
       const res = await json('DELETE', '/v1/settings/model/providers/oai');
       expect(res.status).toBeGreaterThanOrEqual(400);
 
-      const cfg = await loadConfig(paths.config);
+      const cfg = await loadConfig(paths);
       expect(cfg?.model.providers.some((provider) => provider.id === 'oai')).toBe(true);
     });
 
@@ -320,7 +320,7 @@ for (const kind of TRANSPORTS) {
       const res = await json('DELETE', '/v1/settings/model/providers/oai');
       expect(res.status).toBe(200);
 
-      const cfg = await loadConfig(paths.config);
+      const cfg = await loadConfig(paths);
       const auth = await loadAuth(paths.auth);
       const cache = await readProviderModelCache(paths);
       expect(cfg?.model.providers.some((provider) => provider.id === 'oai')).toBe(false);
@@ -329,7 +329,7 @@ for (const kind of TRANSPORTS) {
     });
 
     test('list models returns cached models immediately while refreshing in the background', async () => {
-      const cfg = await loadConfig(paths.config);
+      const cfg = await loadConfig(paths);
       if (!cfg) throw new Error('config missing');
       const registry = seededProviderRegistry();
       const openai = registry.get(ModelProviderType.OpenAICompatible);
@@ -387,12 +387,12 @@ for (const kind of TRANSPORTS) {
         'remote-fresh'
       ]);
 
-      const persistedConfig = await loadConfig(paths.config);
+      const persistedConfig = await loadConfig(paths);
       expect(persistedConfig).not.toHaveProperty('model.modelCache');
     });
 
     test('test connection enriches provider models with catalog fallback', async () => {
-      const cfg = await loadConfig(paths.config);
+      const cfg = await loadConfig(paths);
       if (!cfg) throw new Error('config missing');
       const registry = seededProviderRegistry();
       const deepseek = registry.get(ModelProviderType.DeepSeek);
@@ -489,7 +489,7 @@ for (const kind of TRANSPORTS) {
       const modelFieldRes = await json('DELETE', '/v1/settings/model/profiles/writer');
       expect(modelFieldRes.status).toBeGreaterThanOrEqual(400);
 
-      const cfg = await loadConfig(paths.config);
+      const cfg = await loadConfig(paths);
       expect(cfg?.model.profiles.some((profile) => profile.alias === 'research')).toBe(true);
       expect(cfg?.model.profiles.some((profile) => profile.alias === 'writer')).toBe(true);
     });
@@ -511,7 +511,7 @@ for (const kind of TRANSPORTS) {
       const res = await json('PATCH', '/v1/settings/model/profiles/research/alias', { alias: 'writer' });
       expect(res.status).toBe(200);
 
-      const cfg = await loadConfig(paths.config);
+      const cfg = await loadConfig(paths);
       expect(cfg?.model.default).toBe('writer');
       expect(cfg?.model.profiles.some((profile) => profile.alias === 'research')).toBe(false);
       expect(cfg?.model.profiles.some((profile) => profile.alias === 'writer')).toBe(true);
@@ -569,7 +569,7 @@ for (const kind of TRANSPORTS) {
       expect(after.roles.vision).toBe('oai:gpt-vision');
       expect(after.roles.embedding).toBe('oai:text-embedding-3-small');
 
-      const cfg = await loadConfig(paths.config);
+      const cfg = await loadConfig(paths);
       expect(cfg?.model.profiles.find((profile) => profile.alias === 'default')?.routes.embedding).toEqual({
         provider: 'oai',
         modelId: 'text-embedding-3-small'
@@ -590,7 +590,7 @@ for (const kind of TRANSPORTS) {
 
       await json('PUT', '/v1/settings/model/roles', { roles: { image: 'oai:image-model' } });
 
-      const cfg = await loadConfig(paths.config);
+      const cfg = await loadConfig(paths);
       expect(cfg?.model.profiles.find((profile) => profile.alias === 'fast')?.routes.image).toEqual({
         provider: 'oai',
         modelId: 'image-model'
@@ -628,7 +628,7 @@ for (const kind of TRANSPORTS) {
           return { text: 'I am using Ollama with Llama 3.2, and it works.' };
         }
       });
-      const cfg = await loadConfig(paths.config);
+      const cfg = await loadConfig(paths);
       if (!cfg) throw new Error('config missing');
       const modelService = new ModelService(paths.auth, cfg, await loadAuth(paths.auth), registry);
       t = serveTransport(kind, createHttpTransport(buildHandlers(mockModel(), { paths, modelService })));
@@ -691,7 +691,7 @@ for (const kind of TRANSPORTS) {
           throw new Error('cleanup failed');
         }
       });
-      const cfg = await loadConfig(paths.config);
+      const cfg = await loadConfig(paths);
       if (!cfg) throw new Error('config missing');
       const modelService = new ModelService(paths.auth, cfg, await loadAuth(paths.auth), registry);
       t = serveTransport(kind, createHttpTransport(buildHandlers(mockModel(), { paths, modelService })));

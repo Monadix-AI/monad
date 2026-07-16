@@ -24,7 +24,7 @@
     "@types/bun": "^1.3.14",
     "commitizen": "^4.3.2",
     "knip": "^6.27.0",
-    "rulesync": "^11.0.0",
+    "rulesync": "^12.0.0",
     "syncpack": "15.3.2",
     "turbo": "^2.10.5",
     "typescript": "7.0.2"
@@ -46,6 +46,7 @@
     "build-storybook:ui": "bun run --cwd packages/ui build-storybook",
     "build-storybook:web": "bun run --cwd apps/web build-storybook",
     "check:deps": "bun run scripts/check-deps.ts",
+    "check:test-assertions": "bun run scripts/check-test-assertions.ts",
     "clean": "bunx --bun rimraf --glob \"**/node_modules\" \"**/.turbo\" \"**/.next\" \"**/dist\" \"**/out\"",
     "db:bundle": "bun run --cwd apps/monad db:bundle",
     "db:check": "bun run --cwd apps/monad db:check",
@@ -93,9 +94,9 @@
     "test:loud": "bun run i18n:types && turbo run test:loud",
     "test:unit": "bun run i18n:types && turbo run test:unit --output-logs=errors-only",
     "test:unit:loud": "bun run i18n:types && turbo run test:unit:loud",
-    "typecheck": "bun run typecheck:prepare && bun run i18n:types && bun run typecheck:check",
+    "typecheck": "bun run typecheck:prepare && bun run typecheck:check",
     "typecheck:check": "tsc --noEmit && turbo run typecheck",
-    "typecheck:prepare": "bun run scripts/generate-codex-app-server-protocol.ts && bun run scripts/generate-avatar-styles.ts && bun run scripts/generate-licenses.ts && bun run --cwd apps/web generate:routes"
+    "typecheck:prepare": "bun run scripts/typecheck-prepare.ts"
   },
   "type": "module",
   "workspaces": [

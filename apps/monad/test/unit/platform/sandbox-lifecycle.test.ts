@@ -1,6 +1,5 @@
-import type { MonadPaths } from '@monad/home';
-import type { PrincipalId } from '@monad/protocol';
-import type { ConfigSnapshot } from '#/config/service.ts';
+import type { MonadPaths } from '@monad/environment';
+import type { ConfigSnapshot } from '#/config/manager.ts';
 import type { SandboxSetup } from '#/platform/sandbox/service.ts';
 import type { KvService } from '#/services/kv.ts';
 import type { SessionSandboxService } from '#/services/session-sandbox.ts';
@@ -8,13 +7,13 @@ import type { Store } from '#/store/db/index.ts';
 import type { DataLayer } from '#/store/lifecycle.ts';
 
 import { expect, test } from 'bun:test';
-import { createDefaultConfig } from '@monad/home';
+import { createDefaultConfig } from '@monad/environment';
 
 import { createSandboxLifecycleModule } from '#/platform/sandbox/lifecycle.ts';
 import { RuntimeContext } from '#/runtime/context.ts';
 
 test('creates the required sandbox module from config and store dependencies', async () => {
-  const cfg = createDefaultConfig('usr_test' as PrincipalId, 'Test');
+  const cfg = createDefaultConfig('Test');
   const initial: ConfigSnapshot = { cfg, auth: null };
   const paths = { workspace: '/workspace' } as MonadPaths;
   const layer = { kv: {} as KvService, store: {} as Store, stop: async () => {} } satisfies DataLayer;

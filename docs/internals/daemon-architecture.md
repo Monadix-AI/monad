@@ -1,6 +1,6 @@
 # Daemon architecture
 
-monad is a local, single-user agent runtime. The daemon is the only long-lived
+Monad is a local, single-user agent runtime. The daemon is the only long-lived
 process that owns state, credentials, model routing, tool execution, extension
 loading, and network transports. Client surfaces such as the CLI, web UI, TUI,
 ACP bridge, and channels are thin entry points into that daemon.
@@ -8,7 +8,7 @@ ACP bridge, and channels are thin entry points into that daemon.
 This document explains the architecture from two angles:
 
 - **Users and operators**: what starts, what hot-reloads, and what remains local.
-- **Third-party developers**: where to extend monad and which boundaries not to cross.
+- **Third-party developers**: where to extend Monad and which boundaries not to cross.
 
 **Scope: inside the process** — the startup graph, lifecycle modules, hot
 reload, and extension boundaries. The daemon's outside surface — how it binds,
@@ -38,7 +38,7 @@ restart where the owning module supports reload.
 
 ```mermaid
 flowchart TD
-  Start["monad daemon starts"] --> Preflight["Preflight: flags, paths, singleton, logging"]
+  Start["Monad daemon starts"] --> Preflight["Preflight: flags, paths, singleton, logging"]
   Preflight --> Core["Core runtime: store + config snapshot + lifecycle graph"]
   Core --> Network["Network runtime: TCP, Unix socket, TLS, remote access"]
   Network --> Agent["Agent runtime: model, tools, hooks, memory, channels"]
@@ -51,7 +51,7 @@ Hot reload is intentionally conservative. It exists to improve local UX, not to
 process a high-volume event stream:
 
 - filesystem watchers only invalidate the current snapshot;
-- `ConfigService` waits for a trailing quiet period before applying;
+- `ConfigManager` waits for a trailing quiet period before applying;
 - only one apply is in flight at a time;
 - if another change arrives while apply is running, the daemon marks itself dirty
   and applies the final latest snapshot after the active apply settles;
@@ -70,7 +70,7 @@ apps/monad/src/main.ts
     -> application/core-runtime.ts:createCoreRuntime()
       -> runtime/create.ts:createDaemonRuntime()
         -> RuntimeKernel
-        -> ConfigService
+        -> ConfigManager
     -> application/network-runtime.ts
     -> application/agent-runtime.ts
     -> application/transport-runtime.ts
@@ -102,9 +102,9 @@ Current core modules are assembled in `runtime/create.ts`:
 | `capabilities.skills` | `capabilities/skills/lifecycle.ts` | personal/workspace skill discovery and watch integration |
 | `capabilities.mcp` | `capabilities/mcp/lifecycle.ts` | configured and atom-contributed MCP connections |
 
-`ConfigService` is a sibling of `RuntimeKernel`, not a child. It owns config/auth
+`ConfigManager` is a sibling of `RuntimeKernel`, not a child. It owns config/auth
 I/O, watching, invalidation, and accepted snapshots. It delegates schema and file
-layout to `@monad/home`, then calls `RuntimeKernel.reload(snapshot)` and any
+layout to `@monad/environment`, then calls `RuntimeKernel.reload(snapshot)` and any
 application-level reload targets.
 
 ## Developer extension points
@@ -123,7 +123,7 @@ of importing daemon internals:
 
 Atom and skill authors should not import `apps/monad` internals. The stable
 contracts live in `@monad/sdk-atom`, `@monad/protocol`, and the documented config
-files under `@monad/home`.
+files under `@monad/environment`.
 
 ## Ownership rules for core contributors
 
@@ -138,9 +138,9 @@ files under `@monad/home`.
 - Keep runtime objects out of Zustand. Zustand stores serializable lifecycle
   state only; service instances live in `RuntimeContext`.
 - Do not introduce RxJS, revision queues, or a global event log for local config
-  reload. Use the existing trailing-debounce, single-flight `ConfigService`.
-- Settings writes go through `ConfigService.updateConfig()` or
-  `ConfigService.updateAuth()` so persistence and hot-apply stay coupled.
+  reload. Use the existing trailing-debounce, single-flight `ConfigManager`.
+- Settings writes go through `ConfigManager.updateConfig()` or
+  `ConfigManager.updateAuth()` so persistence and hot-apply stay coupled.
 - New reloadable subsystems should expose a stable facade and mutate/reconnect
   internal handles on reload where possible.
 
@@ -150,7 +150,7 @@ files under `@monad/home`.
 1. main.ts imports startDaemon() and exits.
 2. startDaemon() runs preflight and returns early for supervisor-only modes.
 3. createCoreRuntime() opens the data layer and loads the initial config/auth snapshot.
-4. createDaemonRuntime() creates RuntimeKernel + ConfigService.
+4. createDaemonRuntime() creates RuntimeKernel + ConfigManager.
 5. RuntimeKernel starts lifecycle layers:
    store
    platform.sandbox
@@ -162,5 +162,5 @@ files under `@monad/home`.
 7. createAgentRuntime() builds agent-facing services and stable registries.
 8. createDaemonHandlers() binds HTTP/RPC/session/settings handlers to those services.
 9. launchDaemonTransports() starts TCP, Unix socket, WebSocket, stdio/ACP, Mo, and channels.
-10. File watchers invalidate ConfigService; ConfigService applies the latest snapshot through RuntimeKernel.reload().
+10. File watchers invalidate ConfigManager; ConfigManager applies the latest snapshot through RuntimeKernel.reload().
 ```

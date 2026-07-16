@@ -8,6 +8,7 @@ import {
   buildDevPrepStepStatusFrame,
   buildDevPrepSummary,
   cleanupDevProcess,
+  configSchemaCommand,
   devCommand,
   devSpawnOptions,
   i18nCommand,
@@ -50,6 +51,7 @@ test('buildDevEnv derives missing Storybook ports from the worktree root', () =>
 });
 
 test('devSpawnOptions starts turbo as a process-group leader', () => {
+  expect(configSchemaCommand()).toEqual(['bun', 'run', 'packages/environment/scripts/gen-config-schema.ts']);
   expect(i18nCommand()).toEqual(['bun', 'run', 'scripts/i18n.ts', '--write-if-stale']);
   expect(devCommand()).toEqual([
     'bunx',
@@ -105,8 +107,9 @@ test('buildDevPrepSummary groups the resolved dev environment for terminal outpu
     'Runtime',
     '  Bun transpiler    /Users/dev/.cache/monad-bun',
     'Tasks',
-    '  1. Refresh i18n artifacts',
-    '  2. Start daemon, web app, Storybook, and devtools',
+    '  1. Generate config schemas',
+    '  2. Refresh i18n artifacts',
+    '  3. Start daemon, web app, Storybook, and devtools',
     ''
   ]);
 });

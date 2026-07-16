@@ -1,38 +1,29 @@
-import type { MonadPaths } from '@monad/home';
 import type {
   ActivateSandboxBackendRequest,
   SandboxActivationResult,
   SandboxSettingsResponse,
   SetSandboxSettingsRequest
 } from '@monad/protocol';
-import type { ConfigReloader } from '#/config/reloader.ts';
+import type { ConfigAccess } from '#/config/manager.ts';
 import type { SandboxActivationService } from '#/platform/sandbox/activation.ts';
 
-import { emptyAuth, loadAll, loadAuth, saveAuth, saveSandbox, saveSystemConfig } from '@monad/home';
+import { emptyAuth } from '@monad/environment';
 import { listSandboxBackendDescriptors } from '@monad/sandbox';
 
-import { createFileSandboxActivationService } from '#/platform/sandbox/activation.ts';
 import {
   applyBackendSettingsUpdate,
   redactBackendSettings,
   serializeSandboxBackendRef
 } from '#/platform/sandbox/backend-settings.ts';
 
-// System-level sandbox POLICY (cfg.sandbox, persisted to sandbox.json) + the global ceiling
-// (cfg.agent.globalSandbox, persisted to config.json). HTTP-only settings surface. The policy block
-// lives in its own file, so persist it via saveSandbox; globalSandbox stays in the system config, so
-// persist it via saveSystemConfig. The renderable subset only — env/seedTemplate/initScript/
+// Sandbox policy and its global ceiling both belong to agents.json. The renderable subset only —
+// env/seedTemplate/initScript/
 // launcherPath stay file-only. Applies on the next daemon restart for boot-time confinement
 // (launcher/net/proxy), like the other system settings.
-export function createSandboxModule(
-  paths: MonadPaths,
-  configReloader?: ConfigReloader,
-  activationService: SandboxActivationService = createFileSandboxActivationService(paths, configReloader)
-) {
+export function createSandboxModule(config: ConfigAccess, activationService: SandboxActivationService) {
   async function getSandboxSettings(): Promise<SandboxSettingsResponse> {
-    const cfg = await loadAll(paths.config, paths.profile);
-    if (!cfg) throw new Error('sandbox: config.json missing');
-    const auth = (await loadAuth(paths.auth)) ?? emptyAuth();
+    const { cfg, auth: storedAuth } = config.get();
+    const auth = storedAuth ?? emptyAuth();
     const { mode, confine, net, allowedDomains, hostExec } = cfg.sandbox;
     const descriptors = new Map(
       listSandboxBackendDescriptors().map((backend) => [serializeSandboxBackendRef(backend.ref), backend.descriptor])
@@ -67,8 +58,7 @@ export function createSandboxModule(
   }
 
   async function setSandboxSettings(req: SetSandboxSettingsRequest): Promise<SandboxSettingsResponse> {
-    const cfg = await loadAll(paths.config, paths.profile);
-    if (!cfg) throw new Error('sandbox: config.json missing');
+    const cfg = structuredClone(config.get().cfg);
 
     if (req.sandbox) {
       const s = cfg.sandbox;
@@ -83,7 +73,7 @@ export function createSandboxModule(
       if (req.globalSandbox.mode !== undefined) cfg.agent.globalSandbox.mode = req.globalSandbox.mode;
     }
 
-    let auth = (await loadAuth(paths.auth)) ?? emptyAuth();
+    let auth = structuredClone(config.get().auth) ?? emptyAuth();
     if (req.backendSettings) {
       const key = serializeSandboxBackendRef(req.backendSettings.ref);
       const backend = listSandboxBackendDescriptors().find(
@@ -98,14 +88,12 @@ export function createSandboxModule(
       );
       cfg.sandbox.backendSettings = applied.backendSettings;
       auth = applied.auth;
-      if (applied.authChanged) await saveAuth(paths.auth, auth);
     }
 
-    if (req.sandbox || req.backendSettings) await saveSandbox(paths.sandbox, cfg);
-    if (req.globalSandbox) await saveSystemConfig(paths.config, cfg);
-    if (configReloader) {
-      await configReloader.publish({ cfg, auth });
-    }
+    await config.update((draft) => {
+      draft.cfg = cfg;
+      draft.auth = auth;
+    });
     return getSandboxSettings();
   }
 

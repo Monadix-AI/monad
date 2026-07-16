@@ -356,7 +356,6 @@ test('operator inbox aggregates agent mentions and unresolved approvals', () => 
   const project: WorkplaceProject = {
     id: 'prj_ABCDEF123456',
     title: 'Inbox Project',
-    ownerPrincipalId: 'prn_ABCDEF123456',
     state: 'active',
     archived: false,
     memberTemplates: [],
@@ -367,7 +366,6 @@ test('operator inbox aggregates agent mentions and unresolved approvals', () => 
     id: 'ses_ABCDEF123456',
     projectId: project.id,
     title: 'Mention Thread',
-    ownerPrincipalId: 'prn_ABCDEF123456',
     state: 'active',
     agentIds: [],
     archived: false,

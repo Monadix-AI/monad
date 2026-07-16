@@ -452,7 +452,7 @@ export function EmailSettingsDialog({
                   <Input
                     id="smtp-client"
                     onChange={(e) => setSmtpClientName(e.target.value)}
-                    placeholder="monad"
+                    placeholder="Monad"
                     value={smtpClientName}
                   />
                 </div>

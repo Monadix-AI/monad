@@ -1,9 +1,9 @@
-import type { MonadAuth, MonadConfig, MonadPaths } from '@monad/home';
+import type { MonadAuth, MonadConfig } from '@monad/environment';
 import type { SandboxBackendRef, SetSandboxSettingsRequest } from '@monad/protocol';
 import type { SandboxLauncher, SandboxLauncherDescriptor } from '@monad/sdk-atom';
-import type { ConfigReloader } from '#/config/reloader.ts';
+import type { ConfigAccess } from '#/config/manager.ts';
 
-import { emptyAuth, loadAll, loadAuth, saveAuth, saveSandbox } from '@monad/home';
+import { emptyAuth } from '@monad/environment';
 import { configureSandboxLauncher, noneLauncher, resolveSandboxLauncher, sandboxLauncher } from '@monad/sandbox';
 
 import { resolveSecretRef } from '#/config/secrets.ts';
@@ -252,28 +252,17 @@ export function createSandboxActivationService(options: SandboxActivationOptions
   };
 }
 
-export function createFileSandboxActivationService(
-  paths: MonadPaths,
-  configReloader?: ConfigReloader
-): SandboxActivationService {
+export function createConfigSandboxActivationService(config: ConfigAccess): SandboxActivationService {
   return createSandboxActivationService({
     load: async () => {
-      const cfg = await loadAll(paths.config, paths.profile);
-      if (!cfg) throw new Error('sandbox: config.json missing');
-      return { cfg, auth: (await loadAuth(paths.auth)) ?? emptyAuth() };
+      const snapshot = structuredClone(config.get());
+      return { cfg: snapshot.cfg, auth: snapshot.auth ?? emptyAuth() };
     },
-    persist: async (next, previous) => {
-      const authChanged = JSON.stringify(next.auth) !== JSON.stringify(previous.auth);
-      try {
-        if (authChanged) await saveAuth(paths.auth, next.auth);
-        await saveSandbox(paths.sandbox, next.cfg);
-        await configReloader?.publish(next);
-      } catch (error) {
-        if (authChanged) await saveAuth(paths.auth, previous.auth).catch(() => {});
-        await saveSandbox(paths.sandbox, previous.cfg).catch(() => {});
-        await configReloader?.publish(previous).catch(() => {});
-        throw error;
-      }
+    persist: async (next) => {
+      await config.update((draft) => {
+        draft.cfg = next.cfg;
+        draft.auth = next.auth;
+      });
     }
   });
 }

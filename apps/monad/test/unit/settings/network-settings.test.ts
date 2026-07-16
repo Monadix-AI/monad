@@ -2,11 +2,12 @@ import { expect, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initMonadHome } from '@monad/home';
+import { initMonadHome } from '@monad/environment';
 
-import { createConfigReloader } from '#/config/reloader.ts';
+import { ConfigManager } from '#/config/manager.ts';
+import { createHomeConfigSource } from '#/config/source.ts';
 import { createNetworkModule } from '#/handlers/settings/network/index.ts';
-import { makeTestPaths } from '../../helpers.ts';
+import { createTestConfigManager, makeTestPaths } from '../../helpers.ts';
 
 test('network settings apply through config bus without requiring a daemon restart', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'monad-network-settings-'));
@@ -14,19 +15,21 @@ test('network settings apply through config bus without requiring a daemon resta
     const paths = makeTestPaths(dir);
     await initMonadHome(paths);
     const published: boolean[] = [];
-    const configReloader = createConfigReloader(async ({ cfg }) => {
-      published.push(cfg.network.remoteAccess.enabled);
+    const source = createHomeConfigSource(paths);
+    const config = new ConfigManager({
+      initial: await ConfigManager.load(source),
+      source,
+      apply: async ({ cfg }) => {
+        published.push(cfg.network.remoteAccess.enabled);
+      }
     });
 
-    const mod = createNetworkModule(paths, configReloader);
+    const mod = createNetworkModule(paths, config);
     const result = await mod.setNetworkSettings({ remoteAccess: { enabled: true } });
 
     expect(result.remoteAccess.enabled).toBe(true);
     expect(result.remoteAccess.token).toBeString();
     expect(result.restartRequired).toBe(false);
-    expect(published).toEqual([]);
-
-    await Bun.sleep(75);
     expect(published).toEqual([true]);
   } finally {
     await rm(dir, { recursive: true, force: true });
@@ -39,18 +42,20 @@ test('network HTTPS scheme changes publish after the settings response returns',
     const paths = makeTestPaths(dir);
     await initMonadHome(paths);
     const published: boolean[] = [];
-    const configReloader = createConfigReloader(async ({ cfg }) => {
-      published.push(cfg.network.https.enabled);
+    const source = createHomeConfigSource(paths);
+    const config = new ConfigManager({
+      initial: await ConfigManager.load(source),
+      source,
+      apply: async ({ cfg }) => {
+        published.push(cfg.network.https.enabled);
+      }
     });
 
-    const mod = createNetworkModule(paths, configReloader);
+    const mod = createNetworkModule(paths, config);
     const result = await mod.setNetworkSettings({ https: { enabled: false } });
 
     expect(result.https.enabled).toBe(false);
     expect(result.restartRequired).toBe(false);
-    expect(published).toEqual([]);
-
-    await Bun.sleep(75);
     expect(published).toEqual([false]);
   } finally {
     await rm(dir, { recursive: true, force: true });
@@ -62,8 +67,8 @@ test('network settings expose remote URLs and token revision for the current dae
   try {
     const paths = makeTestPaths(dir);
     await initMonadHome(paths);
-    const configReloader = createConfigReloader(async () => {});
-    const mod = createNetworkModule(paths, configReloader, {
+    const config = await createTestConfigManager(paths);
+    const mod = createNetworkModule(paths, config, {
       currentRuntimeStatus: () => ({
         listeners: [{ scheme: 'https', host: '0.0.0.0', port: 52749 }],
         remoteAccess: { enabled: true, tokenRevision: 2 },
@@ -92,7 +97,8 @@ test('network probe reports ok responses and failed checks without throwing', as
   try {
     const paths = makeTestPaths(dir);
     await initMonadHome(paths);
-    const mod = createNetworkModule(paths, undefined, {
+    const config = await createTestConfigManager(paths);
+    const mod = createNetworkModule(paths, config, {
       probeFetch: async (input, init) => {
         expect(String(input)).toBe('https://172.16.112.210:52749/health');
         expect(init?.headers).toEqual({ authorization: 'Bearer secret' });
@@ -105,7 +111,7 @@ test('network probe reports ok responses and failed checks without throwing', as
       status: 200
     });
 
-    const failed = createNetworkModule(paths, undefined, {
+    const failed = createNetworkModule(paths, config, {
       probeFetch: async () => {
         throw new Error('connection refused');
       }

@@ -1,4 +1,4 @@
-import type { MonadConfig, MonadPaths } from '@monad/home';
+import type { MonadConfig, MonadPaths } from '@monad/environment';
 import type { AgentAtoms } from '@monad/protocol';
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';

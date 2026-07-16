@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { externalAgentProductIconSchema } from './external-agent/index.ts';
 
 // Settings-UI view of a configured external ACP agent (the registry monad delegates subtasks to via
-// the `agent_acp_delegate` tool). Mirrors @monad/home's acpAgentSchema field-for-field; no secret
+// the `agent_acp_delegate` tool). Mirrors @monad/environment's acpAgentSchema field-for-field; no secret
 // stripping is needed because `env` values are `${env:NAME}` refs, not stored secrets. acpAgents are
 // SYSTEM config (config.json); edits re-apply the agent_acp_delegate tool live (no restart).
 export const acpAgentViewSchema = z.object({

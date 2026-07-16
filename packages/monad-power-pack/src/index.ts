@@ -41,7 +41,7 @@ export const monadPowerPack = defineAtomPack({
       'project.approvals.read',
       'project.approvals.resolve'
     ],
-    description: 'Opt-in contributed sandbox backends (Docker/Podman and E2B) for the monad agent.',
+    description: 'Opt-in contributed sandbox backends (Docker/Podman and E2B) for the Monad agent.',
     author: 'Monadix Labs'
   },
   sandboxes: [dockerLauncher, e2bLauncher],

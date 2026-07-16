@@ -22,7 +22,6 @@ function projectView(project: WorkplaceProject): WorkplaceProject {
   return {
     id: project.id,
     title: project.title,
-    ownerPrincipalId: project.ownerPrincipalId,
     state: project.state,
     archived: project.archived,
     ...(project.model ? { model: project.model } : {}),
@@ -44,7 +43,7 @@ export function createProjectLifecycleHandlers(
   }
 ) {
   const {
-    deps: { store, ownerPrincipalId, sessionSandbox, log }
+    deps: { store, sessionSandbox, log }
   } = ctx;
   const { resolveWorkspaceDir } = deps;
 
@@ -77,7 +76,6 @@ export function createProjectLifecycleHandlers(
       const project: WorkplaceProject = {
         id: newId('prj'),
         title,
-        ownerPrincipalId,
         state: 'active',
         archived: false,
         ...(resolvedCwd ? { cwd: resolvedCwd } : {}),

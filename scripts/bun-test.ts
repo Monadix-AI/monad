@@ -2,6 +2,8 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 
+import { type FailedTestFile, groupFailedCases, parseFailedCases } from './lib/test-failure-rerun.ts';
+
 /**
  * Platform-aware test runner. Passes through all arguments to `bun test` and
  * appends --path-ignore-patterns for suffixes that don't apply to the current OS,
@@ -66,6 +68,7 @@ if (process.env.MONAD_TEST_CONTAINER_DEPS !== '1') {
 }
 
 const coverage = process.env.CI ? ['--coverage'] : [];
+const rerunLimit = 10;
 const rawArgs = process.argv.slice(2);
 if (
   process.env.MONAD_TEST_CONTAINER_DEPS !== '1' &&
@@ -95,55 +98,28 @@ const proc = Bun.spawn(['bun', 'test', ...loudPreload, ...args, ...coverage, ...
 const exitCode = await proc.exited;
 
 if (exitCode !== 0 && junitPath && existsSync(junitPath)) {
-  const failed = parseFailedCases(readFileSync(junitPath, 'utf8'));
-  if (failed.length > 0) {
-    process.stderr.write('\n[monad-test] Re-running failed cases with logger output enabled\n');
-    for (const testCase of failed) {
-      await rerunFailedCase(testCase);
+  const failed = groupFailedCases(parseFailedCases(readFileSync(junitPath, 'utf8')));
+  const selected = failed.slice(0, rerunLimit);
+  if (selected.length > 0) {
+    process.stderr.write('\n[monad-test] Re-running failed files with logger output enabled\n');
+    for (const testFile of selected) {
+      await rerunFailedFile(testFile);
     }
+  }
+  if (selected.length < failed.length) {
+    process.stderr.write(
+      `\n[monad-test] Skipped debug reruns for ${failed.length - selected.length} additional failed file(s).\n`
+    );
   }
 }
 
 if (tempDir) rmSync(tempDir, { recursive: true, force: true });
 process.exit(exitCode);
 
-interface FailedCase {
-  file: string;
-  name: string;
-}
-
-function parseFailedCases(xml: string): FailedCase[] {
-  const failed: FailedCase[] = [];
-  for (const match of xml.matchAll(/<testcase\b([^>]*[^/])>([\s\S]*?)<\/testcase>/g)) {
-    const attrsSource = match[1];
-    const body = match[2];
-    if (!attrsSource || !body) continue;
-    if (!body.includes('<failure') && !body.includes('<error')) continue;
-    const attrs = Object.fromEntries(
-      [...attrsSource.matchAll(/(\w+)="([^"]*)"/g)].map(([, key, value]) => [key, decodeXml(value ?? '')])
-    );
-    if (attrs.file && attrs.name) failed.push({ file: attrs.file, name: attrs.name });
-  }
-  return failed;
-}
-
-function decodeXml(value: string): string {
-  return value
-    .replaceAll('&quot;', '"')
-    .replaceAll('&apos;', "'")
-    .replaceAll('&lt;', '<')
-    .replaceAll('&gt;', '>')
-    .replaceAll('&amp;', '&');
-}
-
-function escapeRegex(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-async function rerunFailedCase(testCase: FailedCase): Promise<void> {
-  const file = resolve(testCase.file);
-  const shownFile = relative(process.cwd(), file) || testCase.file;
-  process.stderr.write(`\n[monad-test] ${shownFile} - ${testCase.name}\n`);
+async function rerunFailedFile(testFile: FailedTestFile): Promise<void> {
+  const file = resolve(testFile.file);
+  const shownFile = relative(process.cwd(), file) || testFile.file;
+  process.stderr.write(`\n[monad-test] ${shownFile} - ${testFile.names.length} failed case(s)\n`);
   const proc = Bun.spawn(
     [
       'bun',
@@ -152,8 +128,7 @@ async function rerunFailedCase(testCase: FailedCase): Promise<void> {
       debugPreloadPath(),
       file,
       '--only-failures',
-      '--test-name-pattern',
-      `^${escapeRegex(testCase.name)}$`,
+      ...(testFile.pattern ? ['--test-name-pattern', testFile.pattern] : []),
       ...ignore
     ],
     {

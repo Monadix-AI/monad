@@ -8,7 +8,6 @@ import type { Store } from '#/store/db/index.ts';
 
 interface Registration {
   atomPackId: string;
-  principalId: string;
   permissions: readonly WorkspaceExperiencePermission[];
   worker: ExperienceWorker;
 }
@@ -22,25 +21,19 @@ export class ExperienceWorkerRegistry {
       store: Store;
       contextFor: (
         atomPackId: string,
-        principalId: string,
         permissions: readonly WorkspaceExperiencePermission[],
         experienceId: string
       ) => WorkspaceExperienceApiContext;
     }
   ) {}
 
-  register(
-    atomPackId: string,
-    principalId: string,
-    permissions: readonly WorkspaceExperiencePermission[],
-    worker: ExperienceWorker
-  ): void {
+  register(atomPackId: string, permissions: readonly WorkspaceExperiencePermission[], worker: ExperienceWorker): void {
     if (!permissions.includes('experience.worker')) {
       throw new Error('workspace Experience permission required: experience.worker');
     }
-    const key = `${atomPackId}:${principalId}:${worker.experienceId}`;
+    const key = `${atomPackId}:${worker.experienceId}`;
     if (this.registrations.has(key)) throw new Error(`duplicate experience worker: ${key}`);
-    this.registrations.set(key, { atomPackId, principalId, permissions, worker });
+    this.registrations.set(key, { atomPackId, permissions, worker });
   }
 
   clear(): void {
@@ -79,9 +72,7 @@ export class ExperienceWorkerRegistry {
     for (const wakeup of this.deps.store.listDueExperienceWorkerWakeups(now)) {
       const registration = [...this.registrations.values()].find(
         (candidate) =>
-          candidate.atomPackId === wakeup.atomPackId &&
-          candidate.principalId === wakeup.principalId &&
-          candidate.worker.experienceId === wakeup.experienceId
+          candidate.atomPackId === wakeup.atomPackId && candidate.worker.experienceId === wakeup.experienceId
       );
       if (!registration) continue;
       const context = this.context(registration);
@@ -96,11 +87,6 @@ export class ExperienceWorkerRegistry {
   }
 
   private context(registration: Registration): WorkspaceExperienceApiContext {
-    return this.deps.contextFor(
-      registration.atomPackId,
-      registration.principalId,
-      registration.permissions,
-      registration.worker.experienceId
-    );
+    return this.deps.contextFor(registration.atomPackId, registration.permissions, registration.worker.experienceId);
   }
 }

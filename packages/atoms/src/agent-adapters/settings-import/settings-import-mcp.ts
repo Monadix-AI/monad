@@ -78,7 +78,7 @@ export function addMcpItems(
         'mcpServers',
         `${sourcePath}:mcp.${name}`,
         name,
-        mapped ? `${provider} MCP server maps to monad mcpServers` : `Unsupported ${provider} MCP shape`,
+        mapped ? `${provider} MCP server maps to Monad mcpServers` : `Unsupported ${provider} MCP shape`,
         mapped?.payload ?? { kind: 'manual' },
         {
           action: mapped ? 'add' : 'manual',

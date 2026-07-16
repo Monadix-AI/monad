@@ -1,4 +1,4 @@
-import type { MonadPaths } from '@monad/home';
+import type { MonadPaths } from '@monad/environment';
 import type { RegistryLog } from '#/handlers/commands/registry.ts';
 import type { SandboxSetup } from '#/platform/sandbox/service.ts';
 import type { RuntimeModule } from '#/runtime/types.ts';

@@ -1,15 +1,11 @@
-import type { MonadPaths } from '@monad/home';
 import type { InitDockerResponse, SetToolBackendsRequest, ToolBackendsResponse } from '@monad/protocol';
-import type { ConfigReloader } from '#/config/reloader.ts';
-
-import { loadAll, loadAuth, saveProfile } from '@monad/home';
+import type { ConfigAccess } from '#/config/manager.ts';
 
 import { initializeDockerCodeExec, prepareCodeExecBackend } from '#/capabilities/tools';
 
-export function createToolBackendsModule(paths: MonadPaths, configReloader?: ConfigReloader) {
+export function createToolBackendsModule(config: ConfigAccess) {
   async function getToolBackends(): Promise<ToolBackendsResponse> {
-    const cfg = await loadAll(paths.config, paths.profile);
-    if (!cfg) throw new Error('tool-backends: config.json missing');
+    const cfg = config.get().cfg;
     const { webSearch, email, codeExecBackend, codeExecE2b, codeExecDocker } = cfg.agent.tools;
 
     const availableBackends: string[] = ['follow-system'];
@@ -46,48 +42,43 @@ export function createToolBackendsModule(paths: MonadPaths, configReloader?: Con
   }
 
   async function setToolBackends(req: SetToolBackendsRequest): Promise<ToolBackendsResponse> {
-    const cfg = await loadAll(paths.config, paths.profile);
-    if (!cfg) throw new Error('tool-backends: config.json missing');
+    await config.updateConfig((cfg) => {
+      if (req.webSearch) {
+        if (req.webSearch.provider !== undefined) cfg.agent.tools.webSearch.provider = req.webSearch.provider;
+        if (req.webSearch.braveApiKey !== undefined) {
+          cfg.agent.tools.webSearch.brave = req.webSearch.braveApiKey
+            ? { apiKey: req.webSearch.braveApiKey }
+            : undefined;
+        }
+      }
 
-    if (req.webSearch) {
-      if (req.webSearch.provider !== undefined) cfg.agent.tools.webSearch.provider = req.webSearch.provider;
-      if (req.webSearch.braveApiKey !== undefined) {
-        cfg.agent.tools.webSearch.brave = req.webSearch.braveApiKey ? { apiKey: req.webSearch.braveApiKey } : undefined;
+      if (req.email) {
+        if (req.email.backend !== undefined) cfg.agent.tools.email.backend = req.email.backend;
+        if (req.email.from !== undefined) cfg.agent.tools.email.from = req.email.from || undefined;
+        if (req.email.resendApiKey !== undefined) {
+          cfg.agent.tools.email.resend = req.email.resendApiKey ? { apiKey: req.email.resendApiKey } : undefined;
+        }
+        if (req.email.smtp !== undefined) {
+          cfg.agent.tools.email.smtp = req.email.smtp ?? undefined;
+        }
       }
-    }
 
-    if (req.email) {
-      if (req.email.backend !== undefined) cfg.agent.tools.email.backend = req.email.backend;
-      if (req.email.from !== undefined) cfg.agent.tools.email.from = req.email.from || undefined;
-      if (req.email.resendApiKey !== undefined) {
-        cfg.agent.tools.email.resend = req.email.resendApiKey ? { apiKey: req.email.resendApiKey } : undefined;
+      if (req.codeExec) {
+        if (req.codeExec.backend !== undefined) cfg.agent.tools.codeExecBackend = req.codeExec.backend;
+        if (req.codeExec.e2bApiKey !== undefined) {
+          cfg.agent.tools.codeExecE2b = req.codeExec.e2bApiKey ? { apiKey: req.codeExec.e2bApiKey } : undefined;
+        }
+        if (req.codeExec.dockerImage !== undefined) {
+          cfg.agent.tools.codeExecDocker = req.codeExec.dockerImage ? { image: req.codeExec.dockerImage } : undefined;
+        }
       }
-      if (req.email.smtp !== undefined) {
-        cfg.agent.tools.email.smtp = req.email.smtp ?? undefined;
-      }
-    }
-
-    if (req.codeExec) {
-      if (req.codeExec.backend !== undefined) cfg.agent.tools.codeExecBackend = req.codeExec.backend;
-      if (req.codeExec.e2bApiKey !== undefined) {
-        cfg.agent.tools.codeExecE2b = req.codeExec.e2bApiKey ? { apiKey: req.codeExec.e2bApiKey } : undefined;
-      }
-      if (req.codeExec.dockerImage !== undefined) {
-        cfg.agent.tools.codeExecDocker = req.codeExec.dockerImage ? { image: req.codeExec.dockerImage } : undefined;
-      }
-    }
-
-    await saveProfile(paths.profile, cfg);
-    if (configReloader) {
-      await configReloader.publish({ cfg, auth: await loadAuth(paths.auth) });
-    }
+    });
 
     return getToolBackends();
   }
 
   async function initDockerBackend(): Promise<InitDockerResponse> {
-    const cfg = await loadAll(paths.config, paths.profile);
-    const image = cfg?.agent.tools.codeExecDocker?.image ?? 'ubuntu:22.04';
+    const image = config.get().cfg.agent.tools.codeExecDocker?.image ?? 'ubuntu:22.04';
     try {
       const result = await initializeDockerCodeExec(image);
       if (result.exitCode === 0) return { ok: true, image };

@@ -1,11 +1,10 @@
 // Shared test harness: builds a daemon handlers + HTTP app wired to a deterministic
 // mock model (no network), plus a tiny SSE reader for the event stream.
 
-import type { MonadPaths } from '@monad/home';
+import type { MonadAuth, MonadConfig, MonadPaths } from '@monad/environment';
 import type {
   Event,
   Hooks,
-  PrincipalId,
   SessionId,
   SkillListInstance,
   SkillListItem,
@@ -15,6 +14,7 @@ import type { WorkspaceExperienceApiHandler } from '@monad/sdk-atom';
 import type { PolicyEngine } from '#/agent/approvals/engine.ts';
 import type { ModelRouter } from '#/agent/index.ts';
 import type { Tool } from '#/capabilities/tools/types.ts';
+import type { ConfigAccess, ConfigSnapshot } from '#/config/manager.ts';
 import type {
   RegisteredExperienceWorker,
   RegisteredWorkspaceExperienceApiRoute
@@ -26,13 +26,15 @@ import { join } from 'node:path';
 import { builtinAgentAdapters } from '@monad/atoms/agent-adapters';
 import { BUILTIN_COMMANDS } from '@monad/atoms/commands/builtins';
 import { builtinModelProviders } from '@monad/atoms/providers/registry';
-import { createDefaultConfig } from '@monad/home';
+import { createDefaultConfig, emptyAuth, saveAll, saveAuth } from '@monad/environment';
 import { enMessages as i18nMessages } from '@monad/i18n/messages';
 import { ModelProviderType, newId } from '@monad/protocol';
 
 import { createAgent, ModelProviderRegistry } from '#/agent/index.ts';
 import { createClarifyTool } from '#/capabilities/tools/registry/clarify.ts';
 import { ChannelService } from '#/channels/channel.ts';
+import { ConfigManager } from '#/config/manager.ts';
+import { createHomeConfigSource } from '#/config/source.ts';
 import { type CommandBundle, type CommandRegistry, createCommandRegistry } from '#/handlers/commands/index.ts';
 import { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
 import { type ModelDeps, ModelService } from '#/handlers/settings/model/index.ts';
@@ -86,8 +88,8 @@ export function makeTestPaths(base: string, overrides?: Partial<MonadPaths>): Mo
     runtime: base,
     configs: base,
     config: join(base, 'config.json'),
-    profile: join(base, 'profile.json'),
-    sandbox: join(base, 'sandbox.json'),
+    agentsConfig: join(base, 'agents.json'),
+    mesh: join(base, 'mesh.json'),
     approvals: join(base, 'approvals.json'),
     credentials: join(base, 'credentials'),
     auth: join(base, 'credentials', 'auth.json'),
@@ -134,6 +136,56 @@ export function stubMemoryService(store: ReturnType<typeof createStore>): Memory
   });
 }
 
+export function stubConfigAccess(
+  initial: MonadConfig = createDefaultConfig('stub'),
+  initialAuth: MonadAuth | null = null,
+  persist?: (snapshot: ConfigSnapshot) => Promise<void>,
+  apply?: (snapshot: ConfigSnapshot) => Promise<void>
+): ConfigAccess {
+  let snapshot: ConfigSnapshot = { cfg: structuredClone(initial), auth: structuredClone(initialAuth) };
+  const listeners = new Set<(next: ConfigSnapshot, previous: ConfigSnapshot) => void>();
+  const commit = async (mutate: (draft: ConfigSnapshot) => void | Promise<void>): Promise<ConfigSnapshot> => {
+    const previous = snapshot;
+    const draft = structuredClone(snapshot);
+    await mutate(draft);
+    await persist?.(draft);
+    await apply?.(draft);
+    snapshot = draft;
+    for (const listener of listeners) listener(snapshot, previous);
+    return snapshot;
+  };
+  return {
+    get: () => snapshot,
+    status: () => ({ state: 'ready' }),
+    subscribe: (select, listener) => {
+      const wrapped = (next: ConfigSnapshot, previous: ConfigSnapshot) => listener(select(next), select(previous));
+      listeners.add(wrapped);
+      return () => listeners.delete(wrapped);
+    },
+    update: (mutate) =>
+      commit(async (draft) => {
+        const result = await mutate(draft);
+        if (result) {
+          draft.cfg = result.cfg;
+          draft.auth = result.auth;
+        }
+      }),
+    updateConfig: (mutate) =>
+      commit(async (draft) => {
+        draft.cfg = (await mutate(draft.cfg)) ?? draft.cfg;
+      }),
+    updateAuth: (mutate) =>
+      commit(async (draft) => {
+        draft.auth = await mutate(draft.auth);
+      })
+  };
+}
+
+export async function createTestConfigManager(paths: MonadPaths): Promise<ConfigManager> {
+  const source = createHomeConfigSource(paths);
+  return new ConfigManager({ initial: await ConfigManager.load(source), source, apply: async () => {} });
+}
+
 /** Minimal ModelDeps that doesn't need a real home directory. */
 export function stubModelDeps(): ModelDeps {
   const paths: MonadPaths = {
@@ -144,8 +196,8 @@ export function stubModelDeps(): ModelDeps {
     db: '/dev/null',
     // No real config paths — lifecycle handler treats missing config as "no agents yet"
     config: '/dev/null/config.json',
-    profile: '/dev/null/profile.json',
-    sandbox: '/dev/null/sandbox.json',
+    agentsConfig: '/dev/null/agents.json',
+    mesh: '/dev/null/mesh.json',
     approvals: '/dev/null/approvals.json',
     credentials: '/dev/null/credentials',
     auth: '/dev/null/credentials/auth.json',
@@ -168,7 +220,7 @@ export function stubModelDeps(): ModelDeps {
     pid: '/dev/null/monad.pid',
     logs: '/dev/null/daemon.log'
   };
-  const cfg = createDefaultConfig('prn_stub00000000', 'stub');
+  const cfg = createDefaultConfig('stub');
   return {
     paths,
     modelService: new ModelService('/dev/null/auth.json', cfg, null, seededProviderRegistry()),
@@ -217,6 +269,8 @@ export function buildHandlers(
     externalAgentAuthHeartbeatTimeoutMs?: number;
     /** Override external agent auth/usage probe timeout for fast timeout-path coverage. */
     externalAgentAuthStatusTimeoutMs?: number;
+    /** Override the session-delete undo grace for lifecycle tests. */
+    sessionDeleteGraceMs?: number;
     /** Override the loopback URL injected into managed external agent runtimes. */
     externalAgentServerUrl?: string;
     /** Dynamic workspace experience API route resolver for atom HTTP tests. */
@@ -231,7 +285,6 @@ export function buildHandlers(
       path: string
     ) => RegisteredWorkspaceExperienceApiRoute | undefined;
     getExperienceWorkers?: () => RegisteredExperienceWorker[];
-    ownerPrincipalId?: PrincipalId;
     /** Dynamic workspace experience descriptors for atom HTTP tests. */
     getWorkspaceExperiences?: () => WorkspaceExperienceDefinition[];
   }
@@ -273,18 +326,35 @@ export function buildHandlers(
     defaultModel: opts?.defaultModel ?? 'mock'
   });
   const i18n = new I18nService([{ locale: 'en', name: 'English', messages: i18nMessages }], 'en');
+  const initial = modelDeps.modelService.snapshot();
+  let applySnapshot: (snapshot: ConfigSnapshot) => Promise<void> = async (snapshot) => {
+    modelDeps.modelService.reload(snapshot.cfg, snapshot.auth);
+  };
+  const configManager = stubConfigAccess(
+    initial.cfg,
+    initial.auth,
+    async (snapshot) => {
+      await saveAll(modelDeps.paths, snapshot.cfg);
+      if (snapshot.auth) await saveAuth(modelDeps.paths.auth, snapshot.auth);
+    },
+    (snapshot) => applySnapshot(snapshot)
+  );
   const channelService = new ChannelService(
     {
-      session: { createForPrincipal: async () => ({ sessionId: newId('ses') }), sendInline: async () => {} },
+      session: { create: async () => ({ sessionId: newId('ses') }), sendInline: async () => {} },
       store,
       registry: new Map(),
       bus,
       t: i18n.t,
       log: { info: () => {}, warn: () => {}, error: () => {} }
     },
-    createDefaultConfig('prn_stub00000000', 'stub'),
+    createDefaultConfig('stub'),
     { version: 1, activeProvider: null, updatedAt: '', credentialPool: {} }
   );
+  applySnapshot = async (snapshot) => {
+    modelDeps.modelService.reload(snapshot.cfg, snapshot.auth);
+    await channelService.reload(snapshot.cfg, snapshot.auth ?? emptyAuth());
+  };
   // Wire the unified slash-command bundle so commands (/help, /reset, …) dispatch over every
   // transport exactly as the daemon does. Model/compact backends are stubbed — the built-ins
   // exercised in tests don't need them.
@@ -310,12 +380,12 @@ export function buildHandlers(
       agent,
       bus,
       cache,
-      ownerPrincipalId: opts?.ownerPrincipalId ?? newId('prn'),
       oversight,
       clarify,
       delegation,
       channelService,
       localeService: i18n,
+      configManager,
       skills: opts?.skills ?? [],
       skillInstances: opts?.skillInstances,
       commands,
@@ -344,6 +414,7 @@ export function buildHandlers(
       memorySetGraph: async () => {},
       externalAgentAuthHeartbeatTimeoutMs: opts?.externalAgentAuthHeartbeatTimeoutMs,
       externalAgentAuthStatusTimeoutMs: opts?.externalAgentAuthStatusTimeoutMs,
+      sessionDeleteGraceMs: opts?.sessionDeleteGraceMs,
       externalAgentServerUrl: opts?.externalAgentServerUrl,
       log: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} } as never,
       ...modelDeps
@@ -491,7 +562,7 @@ export function liveModelDeps(
   modelId: string,
   opts?: { fallbacks?: Array<{ provider: string; modelId: string }> }
 ): { router: ModelRouter; deps: ModelDeps } {
-  const cfg = createDefaultConfig('prn_live00000000', 'live');
+  const cfg = createDefaultConfig('live');
   cfg.model.providers = [{ id: 'openrouter', label: 'OpenRouter', type: ModelProviderType.OpenRouter }];
   // `modelId` may be a bogus id and `fallbacks` a working chain — that's how the routing-resilience
   // suite exercises GatewayModelRouter failover.

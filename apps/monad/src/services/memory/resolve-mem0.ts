@@ -2,7 +2,7 @@
 // mem0 just *selects* from it (by profile alias or `providerId:modelId`). No environment variables:
 // provider type, model id, API key, and base URL all come from cfg.model + auth.credentialPool.
 
-import type { MonadAuth, MonadConfig } from '@monad/home';
+import type { MonadAuth, MonadConfig } from '@monad/environment';
 
 import { DEFAULT_PROFILE_ALIAS, resolveModelRole } from '#/config/resolve.ts';
 

@@ -10,7 +10,6 @@ function seedSession(store: ReturnType<typeof createStore>, title: string): Sess
   const s: Session = {
     id: newId('ses'),
     title,
-    ownerPrincipalId: newId('prn'),
     state: 'active',
     agentIds: [],
     archived: false,

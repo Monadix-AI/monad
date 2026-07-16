@@ -153,7 +153,7 @@ Every record carries `(scopeKind, scopeId)`:
 
 - `session:<sessionId>` — short-term, session lifetime only.
 - `agent:<agentId>` — persists for that agent across sessions ("always loaded").
-- `global` (`scopeId = '*'`) — **the instance's user. By design one monad instance = one
+- `global` (`scopeId = '*'`) — **the instance's user. By design one Monad instance = one
   user**, so `global` is that single user's cross-agent memory; no per-user partition is
   needed (revises Open-Q1). `USER.md` is global-scoped.
 - `org:<orgId>` — **reserved, future paid tier.** A scope *above* `global`, shared across an
@@ -381,7 +381,7 @@ own L1+L2." Keep it concrete/self-built; expose an internal `InferenceStrategy` 
 - `global` scope: a single low-frequency cron (expensive, slow-changing).
 - `session` scope: **no L3**.
 
-Crons register on the daemon (monad already has `scheduled-tasks` / daemon plumbing).
+Crons register on the daemon (Monad already has `scheduled-tasks` / daemon plumbing).
 
 ### 5.2 Incremental, not full re-inference
 
@@ -543,7 +543,7 @@ facts stay session-local and never promote or feed L2/L3 (§2.3).
 
 ## 7. Storage (all local, single `bun:sqlite` + files)
 
-monad standardizes on `bun:sqlite` + Drizzle, "no external service". Native graph bindings
+Monad standardizes on `bun:sqlite` + Drizzle, "no external service". Native graph bindings
 (Cozo/Oxigraph via napi) carry Bun-compat risk, so the **default is pure SQLite**. The only
 files are L1.1's MD core (human-authored, small, hand-edited); everything machine-written
 lives in SQLite (revised F5).
@@ -582,7 +582,7 @@ free-string `relation` + JSON `props` — new relation types / property keys nee
 ### 7.2 Audit / edit / delete / add
 
 - **L1.1:** edit MD files directly.
-- **L1.2:** the append-only event table is the canonical record (§3.2); `monad memory list
+- **L1.2:** the append-only event table is the canonical record (§3.2); `Monad memory list
   --scope ...` (CLI in `apps/cli`) + web table (`apps/web`) read the **materialized** view,
   all via the daemon (single writer, transactional). Every mutation **inserts an event** —
   rows are never rewritten, so support-chain refs and reproducible replay are preserved.
@@ -622,7 +622,7 @@ free-string `relation` + JSON `props` — new relation types / property keys nee
 | D15 | L2 idempotency | L2 has its own `consolidatedThrough` cursor (≠ L3's `derivedThrough`); edges key on `(scope,src,dst,relation,provenanceClass,validFrom)` and carry a `support` set of `{factId,eventId,taskId}` merged idempotently by `eventId` — late facts extend support, relation changes open a new window. (F3; F-5; provenanceClass F-P3) |
 | D16 | Conflict rule | one canonical rule at read time: `provenance > specificity > recency` (specificity `session>agent>global>org`). L2 temporal supersession only closes same-`(scope,src,dst,relation,provenance)` edges; it is not a second rule. (F4) |
 | D17 | L1.2 storage model | append-only event **table** in `bun:sqlite` (`fact_added/edited/tombstoned`) is truth; fact table + index materialized by replay; `memory export` → JSONL for readability. (F5, revised — table over file for consistency) |
-| D18 | Scope model | one monad instance = one user, so `global` = that user (no per-user partition). `org:<id>` reserved as a future paid tier above `global`. (Open-Q1, revised) |
+| D18 | Scope model | one Monad instance = one user, so `global` = that user (no per-user partition). `org:<id>` reserved as a future paid tier above `global`. (Open-Q1, revised) |
 | D19 | Advanced Mode state | a state machine with pinned transitions (§5.5); `on/declined/failed` are all "Advanced ON" terminal states; `decline`→`declined` (not `off`); only `setAdvanced(off)`→`off`; `failed`/`declined` resume via `backfill`. (F6, pinned F-6) |
 | D20 | Package boundary | agent-core = interfaces/types/pure logic; store = persistence + replay + queries; daemon = single-writer, cron, backfill, control API, OTR enforcement. (Open-Q2, §12) |
 | D21 | L2/L3 are background jobs | L2 consolidation, L2 catch-up, and L3 inference are independent background jobs — never block an agent turn; in-flight jobs surfaced via `memoryJobs` so the user waits or continues. (F-1) |
@@ -668,7 +668,7 @@ consuming app only**, never of this package.
 @monad/store       (persistence: L1.1 MD files, SQLite event table, replay, CTE queries)
         ▲
         │ orchestrated by
-monad daemon       (single writer, cron, backfill, OTR enforcement, control API)
+Monad daemon       (single writer, cron, backfill, OTR enforcement, control API)
         ▲
         │ depends on (read/mutate via daemon control API)
 apps/web / clients/desktop   ── own ALL visualization deps (graph libs, charts, time-slider)

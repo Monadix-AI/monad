@@ -25,7 +25,6 @@ function fixtureSession(store: ReturnType<typeof createStore>, over: Partial<Ses
   const session: Session = {
     id: newId('ses'),
     title: 'test',
-    ownerPrincipalId: newId('prn'),
     state: 'active',
     agentIds: [],
     archived: false,
@@ -52,7 +51,6 @@ function fixtureProject(store: ReturnType<typeof createStore>, over: Partial<Wor
   const project: WorkplaceProject = {
     id: newId('prj'),
     title: 'project',
-    ownerPrincipalId: newId('prn'),
     state: 'active',
     archived: false,
     memberTemplates: [],

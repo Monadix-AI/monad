@@ -1,7 +1,7 @@
 import type { Event, SessionId } from '@monad/protocol';
 
 import { expect, test } from 'bun:test';
-import { createDefaultConfig } from '@monad/home';
+import { createDefaultConfig } from '@monad/environment';
 
 import { createCommandBundle } from '#/handlers/commands/bundle.ts';
 import { createStore } from '#/store/db/index.ts';
@@ -9,7 +9,7 @@ import { createStore } from '#/store/db/index.ts';
 test('command bundle model commands read and write a project-bound session', async () => {
   const store = createStore();
   const published: Event[] = [];
-  const cfg = createDefaultConfig('prn_100000000000', 'tester');
+  const cfg = createDefaultConfig('tester');
   cfg.model.profiles = [
     { alias: 'fast', routes: { chat: { provider: 'test', modelId: 'fast-model' } }, params: {}, fallbacks: [] },
     { alias: 'smart', routes: { chat: { provider: 'test', modelId: 'smart-model' } }, params: {}, fallbacks: [] }
@@ -18,7 +18,6 @@ test('command bundle model commands read and write a project-bound session', asy
   store.insertWorkplaceProject({
     id: 'prj_project00000',
     title: 'project',
-    ownerPrincipalId: 'prn_100000000000',
     state: 'active',
     archived: false,
     memberTemplates: [],
@@ -30,7 +29,6 @@ test('command bundle model commands read and write a project-bound session', asy
     id: sessionId,
     projectId: 'prj_project00000',
     title: 'project session',
-    ownerPrincipalId: 'prn_100000000000',
     state: 'active',
     agentIds: [],
     archived: false,

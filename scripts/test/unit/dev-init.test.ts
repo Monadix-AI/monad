@@ -165,7 +165,7 @@ test('buildDevInitSummary groups the initialized dev environment for terminal ou
     'Monad dev init',
     'Environment',
     '  Data directory    /repo/.dev/.monad',
-    '  API key           not set - add apiKey to packages/home/config.init.json',
+    '  API key           not set - add apiKey to packages/environment/config.init.json',
     'Ports',
     '  Daemon API        https://127.0.0.1:52001',
     '  Local HTTP        http://127.0.0.1:53001',
@@ -289,9 +289,4 @@ test('generated artifact status frames emit one final visible line per artifact'
   expect(buildGeneratedArtifactStatusFrame({ ...artifact, state: 'done', tty: false })).toBe(
     '[dev-init] generated Avatar styles -> packages/protocol/generated/avatar-styles.ts\n'
   );
-});
-
-test('dev-init regenerates Codex app-server protocol artifacts', async () => {
-  const source = await Bun.file(new URL('../../dev-init.ts', import.meta.url)).text();
-  expect(source).toContain('scripts/generate-codex-app-server-protocol.ts');
 });

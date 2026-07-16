@@ -4,7 +4,7 @@
   "dependencies": {
     "@monad/client": "workspace:*",
     "@monad/client-rtk": "workspace:*",
-    "@monad/home": "workspace:*",
+    "@monad/environment": "workspace:*",
     "@monad/protocol": "workspace:*",
     "@reduxjs/toolkit": "^2.12.0",
     "ink": "^7.1.0",
@@ -14,7 +14,7 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
-    "@monad/config": "workspace:*",
+    "@monad/tsconfig": "workspace:*",
     "@types/react": "^19.2.17"
   },
   "exports": {

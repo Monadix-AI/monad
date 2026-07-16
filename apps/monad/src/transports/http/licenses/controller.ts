@@ -9,7 +9,7 @@ export function createLicensesController(handlers: ReturnType<typeof createDaemo
     detail: {
       tags: ['http-only'],
       summary: 'List third-party package licenses',
-      description: 'Returns name, version, license type, and homepage for every third-party package bundled with monad.'
+      description: 'Returns name, version, license type, and homepage for every third-party package bundled with Monad.'
     }
   });
 }

@@ -5,7 +5,7 @@ import type { CommandDef } from './types.ts';
 import { appendFile, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
-import { getPaths } from '@monad/home';
+import { getPaths } from '@monad/environment';
 
 import { resolveText, streamReply } from '../lib/chat.ts';
 import { t } from '../lib/i18n.ts';
@@ -26,7 +26,7 @@ async function sendOnce(client: MonadClient, sessionId: SessionId, text: string,
     const message = requireTreatyData<{ message: { text: string } }>(
       await client.treaty.v1.sessions({ id: sessionId }).messages.block.post({ text })
     ).message;
-    out(cyan('monad ▸ ') + message.text);
+    out(cyan('Monad ▸ ') + message.text);
     return;
   }
   await streamReply(client, sessionId, text);

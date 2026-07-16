@@ -208,7 +208,6 @@ test('deleteSession cleans up acp_delegates rows', () => {
   store.insertSession({
     id: 'ses_del000000000',
     title: 'test',
-    ownerPrincipalId: 'prn_test10000000',
     state: 'active',
     agentIds: [],
     archived: false,

@@ -31,7 +31,7 @@ const iconStyle: CSSProperties = {
 export function MonadLogo({ className }: MonadLogoProps) {
   return (
     <span
-      aria-label="monad"
+      aria-label="Monad"
       className={cn('block shrink-0 bg-current', className)}
       role="img"
       style={logoStyle}
@@ -42,7 +42,7 @@ export function MonadLogo({ className }: MonadLogoProps) {
 export function MonadIcon({ className }: MonadLogoProps) {
   return (
     <span
-      aria-label="monad"
+      aria-label="Monad"
       className={cn('block shrink-0 bg-current', className)}
       role="img"
       style={iconStyle}

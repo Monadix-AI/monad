@@ -1,4 +1,4 @@
-// Intentionally free of any @monad/home dependency: the daemon reads config.json/auth.json and
+// Intentionally free of any @monad/environment dependency: the daemon reads config.json/auth.json and
 // injects already-resolved settings plus a `credentialsFor` accessor, so agent-core never touches
 // the filesystem. Also free of ai-sdk: the gateway resolves a profile → provider + credential and
 // drives the provider through the ai-sdk-free ModelProvider contract; ai-sdk lives in @monad/atoms.

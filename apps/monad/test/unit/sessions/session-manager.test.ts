@@ -1,7 +1,6 @@
 import type { Session } from '@monad/protocol';
 
 import { expect, test } from 'bun:test';
-import { newId } from '@monad/protocol';
 
 import { createAgent } from '#/agent/index.ts';
 
@@ -16,7 +15,7 @@ test('createAgent with mock repo creates a session in the active state', async (
     }
   });
 
-  const session = await agent.sessions.create('hello', newId('prn'));
+  const session = await agent.sessions.create('hello');
 
   expect(session.state).toBe('active');
   expect(session.id).toMatch(/^ses_/);

@@ -9,7 +9,7 @@ import {
   useListExternalAgentsQuery,
   useListLiveExternalAgentSessionsQuery
 } from '@monad/client-rtk';
-import { openUrl } from '@monad/home';
+import { openUrl } from '@monad/environment';
 import { Box, Text, useInput } from 'ink';
 import { useState } from 'react';
 

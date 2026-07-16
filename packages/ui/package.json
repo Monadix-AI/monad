@@ -33,7 +33,7 @@
     "tailwind-merge": "^3.3.1"
   },
   "devDependencies": {
-    "@monad/config": "workspace:*",
+    "@monad/tsconfig": "workspace:*",
     "@storybook/react-vite": "^10.5.0",
     "@tailwindcss/postcss": "^4.3.2",
     "@types/react": "^19.2.17",

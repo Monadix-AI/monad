@@ -1,6 +1,6 @@
 # Computer use & browser use
 
-monad lets the agent *see and operate a GUI* through off-the-shelf MCP servers — monad
+Monad lets the agent *see and operate a GUI* through off-the-shelf MCP servers — Monad
 ships no automation server of its own, it connects existing ones and applies its gate,
 tool-pinning, and image-passthrough on top. There are **two distinct capabilities**, on
 two tracks; pick by task:
@@ -76,7 +76,7 @@ or a sandboxed/remote desktop like [trycua](https://www.trycua.com) / e2b deskto
 
 ### Security model: host-escape (the sanctioned exception)
 
-monad's default posture is *contain the agent*. Computer-use can't be contained — it moves
+Monad's default posture is *contain the agent*. Computer-use can't be contained — it moves
 the real mouse/keyboard — so it is treated as a **host-escape capability**, the same class as
 `code_execute` running on the host. The exception is explicit and bounded, not silent:
 
@@ -126,7 +126,7 @@ action set onto a chosen server's tools is future work.
 
 - `apps/monad/test/unit/tools/mcp.test.ts` — image passthrough (bytes off the text channel).
 - `packages/atoms/test/unit/provider-tools.test.ts` — Anthropic native tool emission + generic fallback.
-- `packages/home/test/unit/home.test.ts` — browser/computer presets + `hostEscape`.
+- `packages/environment/test/unit/home.test.ts` — browser/computer presets + `hostEscape`.
 - `apps/monad/test/unit/approvals-engine.test.ts` — host-control class grant + persistence cap.
 - `apps/monad/test/e2e/computer-use-e2e.test.ts` — a screenshot reaches the model through the real loop.
 - `apps/monad/test/e2e/host-escape-wiring.test.ts` — a hostEscape server's mutating tools get the gate key.

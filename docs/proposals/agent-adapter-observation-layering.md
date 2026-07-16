@@ -9,16 +9,16 @@ The agent-adapter contract mixes two responsibilities and leaks a UI model. Toda
 1. **Runtime plumbing** — launch/communicate with a 3rd-party agent + decode the minimal events the
    daemon *acts on* (`agent_message`, `approval_requested`, `session_ref`, `connection_required`,
    `provider_error`, …). The daemon can't route/gate/persist on raw bytes, so this stays in the adapter.
-2. **Observation projection to monad's UI model** — `observation: NativeCliObservationProjector`
+2. **Observation projection to Monad's UI model** — `observation: NativeCliObservationProjector`
    (per-provider `recordProjectors`, `classifyActivity`, `isStreamingFragment`, …): raw provider output
-   → `NativeCliObservationEvent`, which is **monad's observation-UI data model** (roles, pre-formatted
+   → `NativeCliObservationEvent`, which is **Monad's observation-UI data model** (roles, pre-formatted
    `text` like `"Tool call ${name}"`, `providerEventType` passthrough), not a neutral contract.
 
 The bug isn't "the adapter decodes" — decoding raw provider output *is* the adapter's value (the unified
-contract). The bug is **the adapter decodes straight into monad's UI shape and leaks provider event
+contract). The bug is **the adapter decodes straight into Monad's UI shape and leaks provider event
 strings**:
 
-- A different experience (graph view, metrics dashboard) can't reuse it — it's monad-UI-shaped.
+- A different experience (graph view, metrics dashboard) can't reuse it — it's Monad-UI-shaped.
 - `classifyActivity` / `isStreamingFragment` exist only because the adapter leaked a raw
   `providerEventType` that consumers then *re-classify*. Bake `kind`/`streaming` into a neutral event at
   decode time and the patches vanish.
@@ -34,8 +34,8 @@ neutral-projected plane. Generalize the whole thing off "native-cli" to any exte
 A **session** is the *conversation entity* — one user↔agent(s) exchange with its own message log. It
 comes in **two parallel kinds that sit side by side, not nested**:
 
-- **chat session** — a standalone user↔monad-agent conversation. This is the current `ses_…`
-  ("monad session") **renamed to *chat session***; its endpoints rename accordingly (see below).
+- **chat session** — a standalone user↔Monad-agent conversation. This is the current `ses_…`
+  ("Monad session") **renamed to *chat session***; its endpoints rename accordingly (see below).
 - **project session** — a conversation inside a **project** environment. A **project** is an
   *environment* (cwd, member-agent roster, config/workspace), not a conversation; the relation is
   **one project → N project-sessions**. In the simplified design a project had exactly one implicit
@@ -51,7 +51,7 @@ Consequences:
   members/env). Chat sessions are already `ses_…`-keyed (fine; only the *name* changes). Today's
   `prj_…`-keyed `events`/`ui-stream` are really the single coupled project-session; as it decouples,
   those become project-session-keyed and `prj_…` is the environment scope above them.
-- **Endpoints rename:** the paths/handlers/client methods that today say "session" and mean the monad
+- **Endpoints rename:** the paths/handlers/client methods that today say "session" and mean the Monad
   chat session move to *chat session* naming, so "session" can be the abstract concept shared by both
   kinds. The exact path scheme (`/chat-sessions/:id` vs keeping `/sessions/:id` documented as chat
   session) is an implementation call — see Open questions.
@@ -61,11 +61,11 @@ Consequences:
 ## Observation is per-agent, for ANY agent kind
 
 Observation is not native-cli-specific — it is "one agent's raw activity + optional projection", and it
-applies to **any** agent in a session: a native-CLI process, an ACP agent, or monad's own built-in
+applies to **any** agent in a session: a native-CLI process, an ACP agent, or Monad's own built-in
 agent. The raw *source* differs by kind, the plane is uniform:
 
 - **external-agent (native-CLI, ACP, …):** raw = the provider's own output stream.
-- **monad's built-in agent:** raw = its own domain events (`agent.token`/`agent.reasoning`/`tool.called`)
+- **Monad's built-in agent:** raw = its own domain events (`agent.token`/`agent.reasoning`/`tool.called`)
   — no external decode needed.
 
 **Migration: rename `NativeCli*` → `ExternalAgent*`** across protocol / daemon / atoms / client.
@@ -80,7 +80,7 @@ multi-agent sessions (project sessions) actually slice per agent.
 
 | | **`stream` (raw)** | **`ui-stream` (projected)** |
 |---|---|---|
-| **session** (a project's multi-agent conversation) | full merged log: member agents' raw + user/session events, wrapped in monad metadata (token deltas kept) | transcript `UIItem`s (`SessionUiProjector` aggregates to transcript level; monad first-party) |
+| **session** (a project's multi-agent conversation) | full merged log: member agents' raw + user/session events, wrapped in Monad metadata (token deltas kept) | transcript `UIItem`s (`SessionUiProjector` aggregates to transcript level; Monad first-party) |
 | **observation** (one `agentId`; multi-agent sessions only) | that agent's pure raw (envelope stripped) | that agent's normalized activity events (provider projector) |
 
 **Source direction & granularity (important — raw is never coarsened).** The atomic source is
@@ -112,15 +112,15 @@ fan-out is handled there, not by mutilating the source:
 | **raw → normalized events** (the `ui-stream` payload) | provider-protocol decode: emit `kind` / structured `tool` / `streaming` — a **neutral, UI-agnostic, protocol-defined** event | **external-agent adapter, OPTIONAL.** Absent → **`ui-stream` ≡ `stream`** |
 | **normalized events → cards / DOM** | thinking cards, tool timeline, sheen, layout | **experience, always** |
 
-The load-bearing rule: **the `ui-stream` payload is a neutral protocol schema, not monad's UI model.**
-That single constraint is what lets the decode live in the adapter without re-coupling it to monad's UI
+The load-bearing rule: **the `ui-stream` payload is a neutral protocol schema, not Monad's UI model.**
+That single constraint is what lets the decode live in the adapter without re-coupling it to Monad's UI
 — it emits events any experience can render. `classifyActivity` / `isStreamingFragment` are **not moved
 elsewhere; they are subsumed** into the neutral event's `kind` / `streaming` fields, produced once by
 each provider's decoder at decode time (which also confines all provider vocab —
 `turn/completed`/`result`/`content_block_delta` — inside that one decoder, killing the shared pile).
 
-The **session `ui-stream`** (transcript) is the one exception that stays a monad-first-party UI model
-(`SessionUiProjector`) — it's monad's app shell, not a neutral contract, and that's fine.
+The **session `ui-stream`** (transcript) is the one exception that stays a Monad-first-party UI model
+(`SessionUiProjector`) — it's Monad's app shell, not a neutral contract, and that's fine.
 
 ## What already exists vs. what changes
 
@@ -128,7 +128,7 @@ The **session `ui-stream`** (transcript) is the one exception that stays a monad
   chat session already keyed right (only the concept renames), project session moves off `prj_…` on
   decouple.
 - `session.ui-stream` = existing `GET …/ui-stream` (`streamUiEvents`, `SessionUiProjector`). Stays
-  monad first-party.
+  Monad first-party.
 - `observation.stream` / `observation.ui-stream` = the change: split today's combined
   `NativeCliObservationAccessResponse` into two planes, per `agentId`; the `ui-stream` payload becomes
   the neutral normalized-event schema (or ≡ raw when the adapter has no projector).
@@ -148,7 +148,7 @@ experience                         neutral events → cards / DOM (observation p
 - **Runtime vs UI litmus:** does the daemon runtime act on it? → adapter runtime decode. Provider
   wire → neutral events? → adapter's optional projector. Neutral → pixels? → experience.
 - **3rd party:** subscribe to `raw` and render your own way, OR subscribe to the neutral `ui-stream`
-  and render it differently from monad. `raw` is the ground truth and escape hatch.
+  and render it differently from Monad. `raw` is the ground truth and escape hatch.
 
 ## Neutral observation event (the `ui-stream` payload)
 
@@ -233,7 +233,7 @@ direct access + sub-resources (flat, global session id):
    per `agentId`.
 5. **Move rendering to experience:** neutral events → cards/timeline in the observation experience;
    delete the client re-classification.
-6. **Generalize observation to all agent kinds** (external-agent + monad's built-in agent); confirm the
+6. **Generalize observation to all agent kinds** (external-agent + Monad's built-in agent); confirm the
    chat-session-is-its-own-observation identity holds.
 7. **(optional)** derive `observation.stream` from the per-agent source and retire the hub.
 
@@ -254,7 +254,7 @@ and "chat session / project session are parallel kinds". The rest is its own pro
 ## Resolved decisions
 
 - **`raw` shape:** `session.stream` = domain events (`external_agent.output` carrying the raw chunk +
-  monad metadata, interleaved with `user.message` etc.); `/sessions/:sid/agents/:agentId/stream` =
+  Monad metadata, interleaved with `user.message` etc.); `/sessions/:sid/agents/:agentId/stream` =
   **provider-raw** (that agent's chunks, envelope stripped = its pure stdout), framed per provider record
   with a seq cursor.
 - **Runtime event shrinks.** `tool_call` / `tool_result` / `web_search_result` **leave** the runtime

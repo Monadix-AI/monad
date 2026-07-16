@@ -1,8 +1,8 @@
-import type { McpServerConfig } from '@monad/home';
+import type { McpServerConfig } from '@monad/environment';
 import type { SessionMcpServer } from '@monad/protocol';
 
 import { expect, test } from 'bun:test';
-import { envRef } from '@monad/home';
+import { envRef } from '@monad/environment';
 
 import { channelDelegateMcpServers } from '#/handlers/session/handlers/messaging/index.ts';
 

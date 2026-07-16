@@ -107,7 +107,7 @@ test('atom-pack-loaded telegram delivers an agent reply end-to-end (mock Bot API
       log: { info: () => {}, warn: () => {}, error: () => {} }
     },
     {
-      ...(await import('@monad/home')).createDefaultConfig('prn_OWNER0000000', 'owner'),
+      ...(await import('@monad/environment')).createDefaultConfig('owner'),
       channels: [
         {
           id: channelId,

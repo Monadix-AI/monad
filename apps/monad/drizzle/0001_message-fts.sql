@@ -1,4 +1,3 @@
--- Custom SQL migration file, put your code below! --
 CREATE VIRTUAL TABLE IF NOT EXISTS `messages_fts`
 USING fts5(`text`, content='messages', content_rowid='rowid');
 --> statement-breakpoint

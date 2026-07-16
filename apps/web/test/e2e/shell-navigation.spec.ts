@@ -123,7 +123,6 @@ async function installShellMock(page: Page) {
               createdAt: '2026-07-03T00:00:00.000Z',
               cwd: '/tmp/mock-workplace',
               id: PROJECT_ID,
-              ownerPrincipalId: 'prn_mock00000000',
               state: 'ready',
               title: 'Mock Workplace',
               updatedAt: '2026-07-03T00:00:00.000Z'

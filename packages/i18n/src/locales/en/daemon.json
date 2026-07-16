@@ -1,7 +1,7 @@
 {
-  "daemon.ready.title": "monad is running!",
+  "daemon.ready.title": "Monad is running",
   "daemon.ready.webUi": "Web UI:",
   "daemon.ready.cli": "CLI:",
   "daemon.ready.configure": "Configure providers:",
-  "daemon.singleton.alreadyRunning": "monad daemon is already running. Run `monad stop` to stop it first."
+  "daemon.singleton.alreadyRunning": "Monad daemon is already running. Run `monad stop` to stop it first."
 }

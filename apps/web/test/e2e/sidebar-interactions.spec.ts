@@ -11,7 +11,6 @@ type MockProject = {
   createdAt: string;
   cwd?: string;
   id: string;
-  ownerPrincipalId: string;
   state: string;
   title: string;
   updatedAt: string;
@@ -21,7 +20,6 @@ type MockSession = {
   archived: boolean;
   createdAt: string;
   id: string;
-  ownerPrincipalId: string;
   projectId?: string | null;
   state: string;
   title: string;
@@ -67,7 +65,6 @@ function makeSession(id: string, title: string, index: number, projectId: string
     archived: false,
     createdAt: `2026-07-0${Math.min(index, 9)}T00:00:00.000Z`,
     id,
-    ownerPrincipalId: 'prn_mock00000000',
     projectId,
     state: 'active',
     title,
@@ -87,7 +84,6 @@ function createSidebarState(): SidebarMockState {
         createdAt: '2026-07-03T00:00:00.000Z',
         cwd: '/tmp/sidebar-project',
         id: PROJECT_ID,
-        ownerPrincipalId: 'prn_mock00000000',
         state: 'ready',
         title: 'Sidebar Project',
         updatedAt: '2026-07-03T00:00:00.000Z'
@@ -97,7 +93,6 @@ function createSidebarState(): SidebarMockState {
         createdAt: '2026-07-03T00:00:00.000Z',
         cwd: '/tmp/sidebar-second-project',
         id: SECOND_PROJECT_ID,
-        ownerPrincipalId: 'prn_mock00000000',
         state: 'ready',
         title: 'Second Project',
         updatedAt: '2026-07-02T00:00:00.000Z'
@@ -248,7 +243,6 @@ async function installSidebarMock(page: Page, state = createSidebarState(), opti
         createdAt: '2026-07-04T00:00:00.000Z',
         cwd: body.cwd,
         id,
-        ownerPrincipalId: 'prn_mock00000000',
         state: 'ready',
         title: body.title,
         updatedAt: '2026-07-04T00:00:00.000Z'

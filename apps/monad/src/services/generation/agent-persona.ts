@@ -4,7 +4,7 @@
 // dir changes. `resolve(sessionId)` maps session → bound agent → cached body; a miss falls back to
 // the global workspace AGENT slot handled by the caller.
 
-import type { MonadConfig, MonadPaths } from '@monad/home';
+import type { MonadConfig, MonadPaths } from '@monad/environment';
 import type { AgentAtoms } from '@monad/protocol';
 
 import { homedir } from 'node:os';

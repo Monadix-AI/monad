@@ -1,4 +1,4 @@
-import type { AcpAgentConfig, McpServerConfig } from '@monad/home';
+import type { AcpAgentConfig, McpServerConfig } from '@monad/environment';
 import type { ChannelResponseNextTarget, Event, Session, SessionId } from '@monad/protocol';
 import type { BuildChannelContextInput } from '#/agent/prompts/channel.ts';
 import type { SessionContext } from '#/handlers/session/context.ts';

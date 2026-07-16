@@ -1,4 +1,4 @@
-import type { MonadConfig } from '@monad/home';
+import type { MonadConfig } from '@monad/environment';
 import type { ModelModalities, ModelRole, ModelRoles, SandboxMode } from '@monad/protocol';
 
 export const DEFAULT_PROFILE_ALIAS = 'default';

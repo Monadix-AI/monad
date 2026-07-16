@@ -12,7 +12,7 @@
     "@elysiajs/swagger": "^1.3.1",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@monad/atoms": "workspace:*",
-    "@monad/home": "workspace:*",
+    "@monad/environment": "workspace:*",
     "@monad/i18n": "workspace:*",
     "@monad/logger": "workspace:*",
     "@monad/protocol": "workspace:*",
@@ -40,7 +40,7 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
-    "@monad/config": "workspace:*",
+    "@monad/tsconfig": "workspace:*",
     "@monad/monad-power-pack": "workspace:*",
     "drizzle-kit": "0.31.10",
     "openai": "^6.47.0"

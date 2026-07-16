@@ -2,7 +2,7 @@
 
 import { readFileSync } from 'node:fs';
 import { checkDaemonVersion, MonadClient } from '@monad/client';
-import { openUrl, resolveClientConn } from '@monad/home';
+import { openUrl, resolveClientConn } from '@monad/environment';
 import { setLogLevel } from '@monad/logger';
 import { MONAD_VERSION } from '@monad/protocol';
 import cac from 'cac';

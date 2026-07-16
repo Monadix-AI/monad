@@ -3,10 +3,10 @@
 // graceful-shutdown signals, and connect channels. No outputs: this is where startDaemon ends and
 // the daemon begins serving.
 
-import type { MonadConfig, MonadPaths } from '@monad/home';
+import type { MonadConfig, MonadPaths } from '@monad/environment';
 import type { NetworkRuntimeStatus } from '@monad/protocol';
 import type { ChannelService } from '#/channels/channel.ts';
-import type { ConfigSnapshot } from '#/config/service.ts';
+import type { ConfigSnapshot } from '#/config/manager.ts';
 import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
 import type { HostInteractionService } from '#/interactions/service.ts';
 import type { I18nService } from '#/services/i18n.ts';
@@ -14,7 +14,7 @@ import type { MutableRemoteAccessState } from '#/transports/http.ts';
 import type { TlsSetup } from '#/transports/tls.ts';
 
 import { chmod, unlink } from 'node:fs/promises';
-import { resolveDaemonNetwork, validateDaemonNetworkSecurity } from '@monad/home';
+import { resolveDaemonNetwork, validateDaemonNetworkSecurity } from '@monad/environment';
 import { logger } from '@monad/logger';
 import { MONAD_VERSION } from '@monad/protocol';
 import { Elysia } from 'elysia';

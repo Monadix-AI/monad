@@ -3,9 +3,9 @@
 // connection to it. The agent loop then runs in that shared daemon, so editor sessions show up in the
 // Web UI/CLI and reuse one store/model config. See bridge.ts for the proxy handlers.
 
-import type { MonadConfig, MonadPaths } from '@monad/home';
+import type { MonadConfig, MonadPaths } from '@monad/environment';
 
-import { loadConfig, resolveDaemonNetwork } from '@monad/home';
+import { loadConfig, resolveDaemonNetwork } from '@monad/environment';
 import { createLogger } from '@monad/logger';
 
 import { createBridgeHandlers } from '#/transports/acp/bridge.ts';
@@ -78,7 +78,7 @@ async function ensureDaemon(baseUrl: string, unixSocket: string): Promise<void> 
 
 /** Run the ACP transport as a thin bridge to a (possibly auto-spawned) local daemon. */
 export async function runAcpBridge(paths: MonadPaths): Promise<void> {
-  const cfg = await loadConfig(paths.config);
+  const cfg = await loadConfig(paths);
   const port = Number(Bun.env.MONAD_PORT) || cfg?.network.port || DEFAULT_PORT;
   const { tcpBaseUrl, unixBaseUrl } = computeAcpBridgeUrls({ https: cfg?.network.https ?? { enabled: true }, port });
   // The bridge always dials the LOCAL Unix socket, so delegation/session-scoped MCP (later phases)

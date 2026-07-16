@@ -1,4 +1,4 @@
-import type { AgentConfig, MonadAuth, MonadConfig, MonadPaths } from '@monad/home';
+import type { AgentConfig, MonadConfig } from '@monad/environment';
 import type {
   ImportSettingsApplyRequest,
   ImportSettingsApplyResult,
@@ -12,7 +12,7 @@ import type { ParsedImport, PlannedItem, SettingsImportDeps } from './types.ts';
 import { createHash } from 'node:crypto';
 import { lstat, mkdir, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { loadAll, loadAuth, saveAll, saveAuth, saveSandbox, saveSystemConfig } from '@monad/home';
+import { emptyAuth } from '@monad/environment';
 import { newId } from '@monad/protocol';
 
 import { toAgentDir, writeAgentBody } from '#/store/home/agent-def.ts';
@@ -192,18 +192,6 @@ export async function previewSettingsImport(
   return { ...parsed, items: parsed.items.map(publicItem) };
 }
 
-async function loadCfg(paths: MonadPaths): Promise<{ cfg: MonadConfig; auth: MonadAuth }> {
-  const cfg = await loadAll(paths.config, paths.profile);
-  if (!cfg) throw new Error('settings import: config.json missing');
-  const auth = (await loadAuth(paths.auth)) ?? {
-    version: 1 as const,
-    activeProvider: null,
-    updatedAt: new Date().toISOString(),
-    credentialPool: {}
-  };
-  return { cfg, auth };
-}
-
 function ensureAgentDir(base: string, taken: Set<string>): string {
   const slug = toAgentDir(base);
   if (!taken.has(slug)) return slug;
@@ -240,14 +228,16 @@ async function validateSkillDirForImport(root: string): Promise<void> {
   }
 }
 
-export function createSettingsImportModule({ paths, configReloader, mcpReconnect }: SettingsImportDeps) {
+export function createSettingsImportModule({ paths, config, mcpReconnect }: SettingsImportDeps) {
   async function preview(req: ImportSettingsRequest): Promise<ImportSettingsPreview> {
-    const { cfg } = await loadCfg(paths);
+    const { cfg } = structuredClone(config.get());
     return previewSettingsImport(req, cfg);
   }
 
   async function apply(req: ImportSettingsApplyRequest): Promise<ImportSettingsApplyResult> {
-    const { cfg, auth } = await loadCfg(paths);
+    const snapshot = structuredClone(config.get());
+    const cfg = snapshot.cfg;
+    const auth = snapshot.auth ?? emptyAuth();
     const parsed = planConflicts(await parseSource(req), cfg, req.replace);
     const selectedIds = new Set(req.select);
     const selected = parsed.items.filter((item) =>
@@ -256,10 +246,8 @@ export function createSettingsImportModule({ paths, configReloader, mcpReconnect
     const applied: string[] = [];
     const skipped: Array<{ id: string; reason: string }> = [];
     const reconnectMcp: string[] = [];
-    let wroteSystem = false;
-    let wroteProfile = false;
+    let wroteAgents = false;
     let wroteAuth = false;
-    let wroteSandbox = false;
     const takenAgentDirs = new Set(cfg.agent.agents.map((a) => a.dir ?? toAgentDir(a.name)));
 
     for (const item of selected) {
@@ -282,14 +270,14 @@ export function createSettingsImportModule({ paths, configReloader, mcpReconnect
           case 'mcpServer':
             cfg.mcpServers = [...cfg.mcpServers.filter((s) => s.name !== payload.server.name), payload.server];
             reconnectMcp.push(payload.server.name);
-            wroteSystem = true;
+            wroteAgents = true;
             break;
           case 'modelProvider':
             cfg.model.providers = [
               ...cfg.model.providers.filter((p) => p.id !== payload.provider.id),
               payload.provider
             ];
-            wroteProfile = true;
+            wroteAgents = true;
             break;
           case 'modelProfile':
             cfg.model.profiles = [
@@ -303,11 +291,11 @@ export function createSettingsImportModule({ paths, configReloader, mcpReconnect
               ];
               cfg.model.default = 'default';
             }
-            wroteProfile = true;
+            wroteAgents = true;
             break;
           case 'modelRoles':
             applyModelRolesToConfiguredDefaultProfile(cfg, payload.roles);
-            wroteProfile = true;
+            wroteAgents = true;
             break;
           case 'credential':
             auth.credentialPool[payload.providerId] ??= [];
@@ -334,7 +322,7 @@ export function createSettingsImportModule({ paths, configReloader, mcpReconnect
             break;
           case 'sandbox':
             cfg.sandbox.mode = payload.mode;
-            wroteSandbox = true;
+            wroteAgents = true;
             break;
           case 'agent': {
             const existingIndex = cfg.agent.agents.findIndex((a) => a.name === payload.name);
@@ -376,7 +364,7 @@ export function createSettingsImportModule({ paths, configReloader, mcpReconnect
               payload.prompt
             );
             takenAgentDirs.add(stableDir);
-            wroteProfile = true;
+            wroteAgents = true;
             break;
           }
           default:
@@ -389,16 +377,13 @@ export function createSettingsImportModule({ paths, configReloader, mcpReconnect
       }
     }
 
-    if (wroteSystem && wroteProfile) await saveAll(paths.config, paths.profile, cfg);
-    else if (wroteSystem) await saveSystemConfig(paths.config, cfg);
-    else if (wroteProfile) await saveAll(paths.config, paths.profile, cfg);
-    if (wroteSandbox) await saveSandbox(paths.sandbox, cfg);
-    if (wroteAuth) {
-      auth.updatedAt = new Date().toISOString();
-      await saveAuth(paths.auth, auth);
+    if (wroteAuth) auth.updatedAt = new Date().toISOString();
+    if (wroteAgents || wroteAuth) {
+      await config.update((draft) => {
+        if (wroteAgents) draft.cfg = cfg;
+        if (wroteAuth) draft.auth = auth;
+      });
     }
-    if (configReloader && (wroteProfile || wroteAuth || wroteSystem || wroteSandbox))
-      await configReloader.publish({ cfg, auth });
     for (const name of reconnectMcp) await mcpReconnect?.(name);
 
     return {

@@ -1,7 +1,7 @@
-import type { MonadAuth, MonadConfig } from '@monad/home';
+import type { MonadAuth, MonadConfig } from '@monad/environment';
 
 import { join } from 'node:path';
-import { DEFAULT_SAMPLE_PROVIDER_ID } from '@monad/home';
+import { DEFAULT_SAMPLE_PROVIDER_ID } from '@monad/environment';
 import { DEFAULT_SKILL_MARKETPLACE_SOURCE, skillMarketplaceSourceMeta } from '@monad/protocol';
 
 import { type SkillInstallRecord, skillInstallRecordSchema } from '#/capabilities/skills/install/index.ts';

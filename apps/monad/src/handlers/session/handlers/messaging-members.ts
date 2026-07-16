@@ -1,4 +1,4 @@
-import type { AcpAgentConfig, ExternalAgentConfig, McpServerConfig } from '@monad/home';
+import type { AcpAgentConfig, ExternalAgentConfig, McpServerConfig } from '@monad/environment';
 import type { Session, SessionId, SessionMcpServer, WorkplaceProjectMemberSettings } from '@monad/protocol';
 import type { Store } from '#/store/db/index.ts';
 

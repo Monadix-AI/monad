@@ -38,7 +38,7 @@ Two capability gaps also remain, both already documented in `security-guidelines
   threat model is the browser and the model's own tool calls, not a MITM-capable network adversary.
 - **Not** open-sourcing the package in this pass. See "Distribution" — open-sourcing adds a
   prebuilt-binary + Node-compat + API-stability tax (the same one srt pays as a "beta research preview").
-  Ship it Bun-native and monad-internal first; reconsider once the API settles and the gaps land.
+  Ship it Bun-native and Monad-internal first; reconsider once the API settles and the gaps land.
 - **Not** building a local-VM backend now. The registry will *admit* one (§ VM), but E2B and Docker
   already cover heavy isolation; a local VM is a subsystem, deferred until a concrete
   "run fully-untrusted code" requirement exists.
@@ -47,7 +47,7 @@ Two capability gaps also remain, both already documented in `security-guidelines
 
 ### 1. Package boundary
 
-A new `@monad/sandbox` that consolidates the OS-level, monad-agnostic pieces. Session/config/approval
+A new `@monad/sandbox` that consolidates the OS-level, Monad-agnostic pieces. Session/config/approval
 coupling stays in `apps/monad` as a **consumer** of the package.
 
 | Move into `@monad/sandbox` | Stay in `apps/monad` (consumer) |
@@ -57,7 +57,7 @@ coupling stays in `apps/monad` as a **consumer** of the package.
 | `egress-proxy` + `egress-policy` + `spawn` + security primitives | config → `SandboxPolicy` assembly |
 | native launcher path resolution (`native-path`) | boot sweep scheduling |
 
-Decision rule: **OS-level and monad-agnostic → in the package; coupled to session / config / approval →
+Decision rule: **OS-level and Monad-agnostic → in the package; coupled to session / config / approval →
 stays and consumes it.**
 
 The contract stays dependency-light. Either keep it in `@monad/sdk-atom` (protocol + zod only) and have
@@ -118,7 +118,7 @@ confining one. Therefore, unlike normal atoms:
 
 ### 5. Fill the gaps (in the clean package, after migration)
 
-Priority is set by monad's actual threat model, not srt parity:
+Priority is set by Monad's actual threat model, not srt parity:
 
 | Gap | Priority | Notes |
 |---|---|---|
@@ -148,8 +148,8 @@ real untrusted-code requirement lands.
 ### Distribution / the native-binary tax
 
 `native/sandbox-launcher/` (Landlock+seccomp, AppContainer) is the hard part of "standalone package", the
-same tax srt pays (`apply_seccomp`, `srt-win.exe`). Decision: **keep `@monad/sandbox` monad-internal and
-Bun-native initially** — the binaries ride monad's existing build, no external prebuilt-binary
+same tax srt pays (`apply_seccomp`, `srt-win.exe`). Decision: **keep `@monad/sandbox` Monad-internal and
+Bun-native initially** — the binaries ride Monad's existing build, no external prebuilt-binary
 distribution. Only if/when we open-source do we take on per-OS/per-arch prebuilt binaries + Node compat.
 
 ## Phasing

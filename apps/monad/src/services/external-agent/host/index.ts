@@ -141,7 +141,9 @@ export class ExternalAgentHost {
       live: this.live,
       emit: (sessionId, type, payload) => this.events.emit(sessionId, type, payload),
       stop: (id) => this.stop(id),
-      log: this.log
+      log: this.log,
+      reconnectBaseMs: deps.appServerReconnectBaseMs,
+      disconnectGraceMs: deps.appServerDisconnectGraceMs
     });
     this.outputPipeline = new ExternalAgentOutputPipeline({
       live: this.live,

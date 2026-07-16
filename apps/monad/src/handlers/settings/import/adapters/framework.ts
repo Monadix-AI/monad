@@ -33,7 +33,7 @@ export async function parseFramework(inputPath: string, from: 'hermes' | 'opencl
         source: `${cfg.path}:mcp.${name}`,
         target: name,
         action: server ? 'add' : 'manual',
-        reason: server ? `${from} MCP server maps to monad mcpServers` : `Unsupported ${from} MCP shape`,
+        reason: server ? `${from} MCP server maps to Monad mcpServers` : `Unsupported ${from} MCP shape`,
         payload: server ? { kind: 'mcpServer', server } : { kind: 'manual' },
         risk: server?.transport === 'stdio' ? 'medium' : 'low'
       });
@@ -51,7 +51,7 @@ export async function parseFramework(inputPath: string, from: 'hermes' | 'opencl
           source: `${cfg.path}:providers.${name}`,
           target: provider.id,
           action: 'add',
-          reason: `${from} provider has a direct monad provider type`,
+          reason: `${from} provider has a direct Monad provider type`,
           payload: { kind: 'modelProvider', provider }
         });
       }
@@ -76,7 +76,7 @@ export async function parseFramework(inputPath: string, from: 'hermes' | 'opencl
         source: cfg.path,
         target: `${from}:runtime`,
         action: 'manual',
-        reason: `${from} workflow/state/runtime plugin concepts are not monad settings`,
+        reason: `${from} workflow/state/runtime plugin concepts are not Monad settings`,
         payload: { kind: 'manual' },
         risk: 'medium'
       });

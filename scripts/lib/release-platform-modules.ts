@@ -6,7 +6,7 @@ export function releasePlatformModuleRules(root: string): PlatformModuleRule[] {
   const resolvedRoot = resolve(root);
   return [
     platformRule(join(resolvedRoot, 'packages/sandbox/src'), 'sandbox-platform'),
-    platformRule(join(resolvedRoot, 'packages/home/src'), 'host-platform'),
+    platformRule(join(resolvedRoot, 'packages/environment/src'), 'host-platform'),
     platformRule(join(resolvedRoot, 'apps/monad/src/handlers/settings/startup'), 'startup-platform')
   ];
 }

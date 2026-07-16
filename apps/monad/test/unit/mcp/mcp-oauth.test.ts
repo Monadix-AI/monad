@@ -8,14 +8,21 @@ import { afterAll, beforeAll, expect, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadAuth, saveAuth } from '@monad/home';
+import { loadAuth, saveAuth } from '@monad/environment';
 
 import { createDaemonMcpOAuth } from '#/capabilities/mcp/oauth.ts';
+import { stubConfigAccess } from '../../helpers.ts';
 
 let dir: string;
 let authPath: string;
 let as: ReturnType<typeof Bun.serve>;
 let origin: string;
+
+async function configFor(path: string) {
+  return stubConfigAccess(undefined, await loadAuth(path), async (snapshot) => {
+    if (snapshot.auth) await saveAuth(path, snapshot.auth);
+  });
+}
 
 beforeAll(async () => {
   dir = await mkdtemp(join(tmpdir(), 'monad-mcp-oauth-'));
@@ -96,7 +103,7 @@ test('full OAuth flow: onUnauthorized authorizes, persists, and getHeader yields
   const auth = createDaemonMcpOAuth({
     serverName: 'remote',
     serverUrl: `${origin}/mcp`,
-    authPath,
+    config: await configFor(authPath),
     interactive: true, // armed: a 401 may run the browser flow (explicit action / live tool-call)
     // The "browser": follow the authorize redirect into monad's loopback callback.
     openBrowser: (authUrl) => {
@@ -143,7 +150,7 @@ test('un-armed auth never opens the browser on a 401; arm() enables it', async (
   const auth = createDaemonMcpOAuth({
     serverName: 'remote',
     serverUrl: `${origin}/mcp`,
-    authPath: authPath2,
+    config: await configFor(authPath2),
     // interactive defaults to false — this is a boot/diff-reload connect.
     openBrowser: (authUrl) => {
       browserOpens++;

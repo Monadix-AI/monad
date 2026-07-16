@@ -503,7 +503,6 @@ test('a query delegates to the client and caches by tag', async () => {
         {
           id: 'ses_100000000000',
           title: 't',
-          ownerPrincipalId: 'prn_TEST00000000',
           state: 'active',
           agentIds: [],
           archived: false,
@@ -550,7 +549,6 @@ test('unarchiving moves a session between scoped list caches before the request 
   const session = {
     id: 'ses_archived00001' as const,
     title: 'Archived session',
-    ownerPrincipalId: 'prn_TEST00000000',
     state: 'active' as const,
     agentIds: [],
     archived,

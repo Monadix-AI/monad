@@ -1,5 +1,5 @@
-import type { AgentConfig } from '@monad/home';
-import type { Agent, AgentId, CreateAgentRequest, PrincipalId, UpdateAgentRequest } from '@monad/protocol';
+import type { AgentConfig } from '@monad/environment';
+import type { Agent, AgentId, CreateAgentRequest, UpdateAgentRequest } from '@monad/protocol';
 import type { AgentContext } from './context.ts';
 
 import { newId } from '@monad/protocol';
@@ -8,10 +8,9 @@ import { disposeSandboxAgent } from '#/capabilities/tools';
 import { HandlerError } from '#/handlers/handler-error.ts';
 import { deleteAgentDir, loadAgentBody, toAgentDir, writeAgentBody } from '#/store/home/agent-def.ts';
 
-function toWireAgent(a: AgentConfig, principalId: PrincipalId, hasPrompt: boolean): Agent {
+function toWireAgent(a: AgentConfig, hasPrompt: boolean): Agent {
   return {
     id: a.id as AgentId,
-    principalId,
     name: a.name,
     description: a.description,
     modelAlias: a.modelAlias,
@@ -45,11 +44,11 @@ function uniqueDir(base: string, taken: Set<string>): string {
   return `${base}-${i}`;
 }
 
-export function createAgentHandlers(ctx: AgentContext, ownerPrincipalId: PrincipalId) {
+export function createAgentHandlers(ctx: AgentContext) {
   const hasPromptFor = async (a: AgentConfig): Promise<boolean> =>
     (await loadAgentBody(ctx.paths.agents, agentDirOf(a))) !== undefined;
 
-  const wire = async (a: AgentConfig): Promise<Agent> => toWireAgent(a, ownerPrincipalId, await hasPromptFor(a));
+  const wire = async (a: AgentConfig): Promise<Agent> => toWireAgent(a, await hasPromptFor(a));
 
   return {
     async listAgents() {
@@ -96,7 +95,7 @@ export function createAgentHandlers(ctx: AgentContext, ownerPrincipalId: Princip
       }
       cfg.agent.agents.push(newAgent);
       await ctx.commit(cfg);
-      return { agent: toWireAgent(newAgent, ownerPrincipalId, hasPrompt) };
+      return { agent: toWireAgent(newAgent, hasPrompt) };
     },
 
     async updateAgent({ agentId, ...patch }: UpdateAgentRequest & { agentId: AgentId }) {

@@ -1,13 +1,14 @@
-import type { ChannelInstanceConfig, MonadAuth, MonadConfig } from '@monad/home';
+import type { ChannelInstanceConfig, MonadAuth, MonadConfig } from '@monad/environment';
+import type { Translate } from '@monad/i18n';
 import type { ChannelInbound, Event, MessageId, SessionId } from '@monad/protocol';
 import type { ChannelAdapter, ChannelContext, SentMessage } from '@monad/sdk-atom';
 import type { CommandBundle } from '#/handlers/commands/index.ts';
 
 import { expect, test } from 'bun:test';
-import { createDefaultConfig } from '@monad/home';
+import { createDefaultConfig } from '@monad/environment';
 import { createI18n } from '@monad/i18n';
 import { enMessages as i18nMessages } from '@monad/i18n/messages';
-import { channelDisplayText, newId, principalIdSchema } from '@monad/protocol';
+import { channelDisplayText, newId } from '@monad/protocol';
 
 import { ChannelService, sweepIdleBuckets } from '#/channels/channel.ts';
 import { createRenderer } from '#/channels/render.ts';
@@ -17,6 +18,15 @@ import { seededCommandRegistry } from '../../helpers.ts';
 
 /** A real English translator so command/channel replies read as before (assertions check English). */
 const t = createI18n({ locale: 'en', packs: [{ locale: 'en', name: 'English', messages: i18nMessages }] }).t;
+
+function recordingTranslator() {
+  const calls: Array<{ key: string; params?: unknown }> = [];
+  const t: Translate = (key, params) => {
+    calls.push({ key: String(key), ...(params ? { params } : {}) });
+    return String(key);
+  };
+  return { calls, t };
+}
 
 /** A command bundle for the channel harness: the real built-in registry + inert model/compact hooks. */
 function testCommandBundle(): CommandBundle {
@@ -178,7 +188,8 @@ test('renderer (summary): edit-capable channels buffer tokens and send only the 
 
 test('renderer: agent.error surfaces an error message and resets stream state', async () => {
   const { adapter, sends } = makeCapturingAdapter(true);
-  const r = createRenderer({ adapter, chatId: 'c1', log: () => {}, t });
+  const translations = recordingTranslator();
+  const r = createRenderer({ adapter, chatId: 'c1', log: () => {}, t: translations.t });
   r.consume(tokenEvent('partial', 0)); // start a streaming bubble
   r.consume({
     id: newId('evt'),
@@ -189,7 +200,8 @@ test('renderer: agent.error surfaces an error message and resets stream state', 
     at: ''
   });
   await r.finalize(); // finalize should not flush the abandoned bubble
-  expect(sends.some((s) => s.includes('⚠') && s.includes('503') && s.includes('upstream 503'))).toBe(true);
+  expect(translations.calls).toEqual([{ key: 'channel.error', params: { label: '503: upstream 503' } }]);
+  expect(sends).toContain('channel.error');
   // The next message starts a fresh bubble (stream state was reset by agent.error)
   const countBefore = sends.length;
   r.consume(tokenEvent('fresh', 0));
@@ -200,7 +212,8 @@ test('renderer: agent.error surfaces an error message and resets stream state', 
 
 test('renderer: agent.error without code still includes the message', async () => {
   const { adapter, sends } = makeCapturingAdapter(false);
-  const r = createRenderer({ adapter, chatId: 'c1', log: () => {}, t });
+  const translations = recordingTranslator();
+  const r = createRenderer({ adapter, chatId: 'c1', log: () => {}, t: translations.t });
   r.consume({
     id: newId('evt'),
     sessionId: 'ses_X00000000000' as SessionId,
@@ -210,12 +223,14 @@ test('renderer: agent.error without code still includes the message', async () =
     at: ''
   });
   await r.finalize();
-  expect(sends.some((s) => s.includes('something broke') && !s.includes('undefined'))).toBe(true);
+  expect(translations.calls).toEqual([{ key: 'channel.error', params: { label: 'something broke' } }]);
+  expect(sends).toContain('channel.error');
 });
 
 test('renderer: surfaces an approval notice (no channel approver)', async () => {
   const { adapter, sends } = makeCapturingAdapter(false);
-  const r = createRenderer({ adapter, chatId: 'c1', log: () => {}, t });
+  const translations = recordingTranslator();
+  const r = createRenderer({ adapter, chatId: 'c1', log: () => {}, t: translations.t });
   r.consume({
     id: newId('evt'),
     sessionId: 'ses_X00000000000' as SessionId,
@@ -225,8 +240,8 @@ test('renderer: surfaces an approval notice (no channel approver)', async () => 
     at: ''
   });
   await r.finalize();
-  expect(sends.length).toBe(1);
-  expect(sends[0]).toContain('approve');
+  expect(translations.calls).toEqual([{ key: 'channel.approvalNeeded' }]);
+  expect(sends).toEqual(['channel.approvalNeeded']);
 });
 
 // ---------- ChannelService (mock adapter) ----------
@@ -235,7 +250,7 @@ interface Harness {
   service: ChannelService;
   ctx: ChannelContext;
   sends: { chatId: string; content: string }[];
-  creates: { title: string; principalId: string; agentId?: string; origin?: unknown }[];
+  creates: { title: string; agentId?: string; origin?: unknown }[];
   reactions: { messageId: string; emoji: string }[];
   logs: { level: 'info' | 'warn' | 'error'; message: string }[];
   store: ReturnType<typeof createStore>;
@@ -308,13 +323,13 @@ async function makeHarness(
     }
   };
 
-  const cfg: MonadConfig = { ...createDefaultConfig('prn_OWNER0000000', 'owner'), channels: [channel] };
+  const cfg: MonadConfig = { ...createDefaultConfig('owner'), channels: [channel] };
   cfg.agent.agents = agents;
   const service = new ChannelService(
     {
       session: {
-        createForPrincipal: async ({ title, principalId, agentId, origin }) => {
-          creates.push({ title, principalId, agentId, origin });
+        create: async ({ title, agentId, origin }) => {
+          creates.push({ title, agentId, origin });
           return { sessionId: newId('ses') };
         },
         sendInline,
@@ -387,25 +402,13 @@ test('channel: the adapter context is hard-isolated from session/host internals'
   expect(typeof h.ctx.onMessage).toBe('function');
 });
 
-test('channel: an allowed inbound creates a session with a SYNTHETIC principal (not owner)', async () => {
+test('channel: an allowed inbound creates a session and returns the reply', async () => {
   const h = await makeHarness(channelConfig());
   h.ctx.onMessage(inbound({ chatId: 'chat1', userId: 'u1', text: 'hi' }));
   await h.flush();
 
   expect(h.creates.length).toBe(1);
-  expect(h.creates[0]?.principalId).toBe('prn_TESTCHANNEL0'); // derived from the channel id
-  expect(h.creates[0]?.principalId).not.toBe('prn_OWNER0000000');
   expect(h.sends.at(-1)).toEqual({ chatId: 'chat1', content: 'reply: hi' });
-});
-
-test('channel: the synthetic principal stays schema-valid for any canonical channel id', async () => {
-  const h = await makeHarness(channelConfig({ id: 'chn_DEVTelegram0' }));
-  h.ctx.onMessage(inbound({ chatId: 'chat1', userId: 'u1', text: 'hi' }));
-  await h.flush();
-
-  const principalId = h.creates[0]?.principalId;
-  expect(principalId).toBe('prn_DEVTelegram0');
-  expect(() => principalIdSchema.parse(principalId)).not.toThrow();
 });
 
 test('channel: a second inbound from the same chat REUSES the session', async () => {
@@ -627,13 +630,13 @@ async function makeMirrorHarness(mirror: boolean): Promise<{
 
   const store = createStore();
   const cfg: MonadConfig = {
-    ...createDefaultConfig('prn_OWNER0000000', 'owner'),
+    ...createDefaultConfig('owner'),
     channels: [channelConfig({ allowlist: { allowAllUsers: true, allowedUsers: [] } })]
   };
   const service = new ChannelService(
     {
       session: {
-        createForPrincipal: async ({ title: _title, principalId: _principalId }) => ({ sessionId: newId('ses') }),
+        create: async () => ({ sessionId: newId('ses') }),
         sendInline: async ({ sessionId, text }, sink) => {
           lastSessionId = sessionId as SessionId;
           sink({ ...tokenEvent('draft ', 0), sessionId: sessionId as SessionId });
@@ -772,13 +775,13 @@ test('mirror: Telegram inbound dispatch is not double-sent (activeDispatches gua
   };
 
   const cfg: MonadConfig = {
-    ...createDefaultConfig('prn_OWNER0000000', 'owner'),
+    ...createDefaultConfig('owner'),
     channels: [channelConfig({ allowlist: { allowAllUsers: true, allowedUsers: [] } })]
   };
   const service = new ChannelService(
     {
       session: {
-        createForPrincipal: async () => ({ sessionId: newId('ses') }),
+        create: async () => ({ sessionId: newId('ses') }),
         // Simulate real behavior: publish to bus AND call the direct sink.
         sendInline: async ({ sessionId, text }, sink) => {
           const evt = messageEvent(`reply: ${text}`);

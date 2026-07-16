@@ -2,13 +2,13 @@
 // (TCP loopback + Unix socket). Asserts CRUD works and persists to config.json (acpAgents is SYSTEM
 // config, unlike channels which live in profile.json).
 
-import type { MonadPaths } from '@monad/home';
+import type { MonadPaths } from '@monad/environment';
 
 import { describe, expect, test } from 'bun:test';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { envRef, initMonadHome, loadAll, loadAuth, loadConfig } from '@monad/home';
+import { envRef, initMonadHome, loadAll, loadAuth, loadConfig } from '@monad/environment';
 
 import { ModelService } from '#/handlers/settings/model/index.ts';
 import { createHttpTransport } from '#/transports/http.ts';
@@ -53,9 +53,9 @@ async function runAcpAgentCrud(call: Call, paths: MonadPaths): Promise<void> {
   expect(agents[0]?.env?.TOK).toBe(envRef('TOK'));
 
   // 4. persisted to config.json (SYSTEM config), not profile.json
-  const sys = await loadConfig(paths.config);
+  const sys = await loadConfig(paths);
   expect(sys?.acpAgents.find((a) => a.name === 'codex')?.args).toEqual(['acp']);
-  const merged = await loadAll(paths.config, paths.profile);
+  const merged = await loadAll(paths);
   expect(merged?.acpAgents.length).toBe(1);
 
   // 5. disable → reflected
@@ -75,7 +75,7 @@ async function runAcpAgentCrud(call: Call, paths: MonadPaths): Promise<void> {
   expect(res.status).toBe(200);
   res = await call('GET', '/v1/settings/acp-agents');
   expect(((await res.json()) as AgentsBody).agents).toEqual([]);
-  expect((await loadConfig(paths.config))?.acpAgents).toEqual([]);
+  expect((await loadConfig(paths))?.acpAgents).toEqual([]);
 }
 
 async function runAcpAgentGetSingle(call: Call): Promise<void> {
@@ -120,7 +120,7 @@ async function runAcpAgentMulti(call: Call, paths: MonadPaths): Promise<void> {
   expect(agents.map((a) => a.name).sort()).toEqual(['claude-code', 'codex']);
 
   // both persisted to config.json
-  const cfg = await loadConfig(paths.config);
+  const cfg = await loadConfig(paths);
   expect(cfg?.acpAgents.length).toBe(2);
 
   // removing one leaves the other intact
@@ -174,14 +174,14 @@ async function runAcpAgentValidation(call: Call, paths: MonadPaths): Promise<voi
   });
   expect(res.status).not.toBe(200);
   // …and nothing was persisted.
-  expect((await loadConfig(paths.config))?.acpAgents.find((a) => a.name === 'blank')).toBeUndefined();
+  expect((await loadConfig(paths))?.acpAgents.find((a) => a.name === 'blank')).toBeUndefined();
 }
 
 async function setup(): Promise<{ dir: string; paths: MonadPaths; app: ReturnType<typeof createHttpTransport> }> {
   const dir = join(tmpdir(), `monad-acpsettings-${process.pid}-${Date.now()}-${process.hrtime.bigint()}`);
   const paths = makePaths(dir);
   await initMonadHome(paths);
-  const cfg = await loadConfig(paths.config);
+  const cfg = await loadConfig(paths);
   if (!cfg) throw new Error('config missing after init');
   const modelService = new ModelService(paths.auth, cfg, await loadAuth(paths.auth), seededProviderRegistry());
   const app = createHttpTransport(buildHandlers(mockModel(), { paths, modelService }));

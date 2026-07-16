@@ -5,7 +5,7 @@ import { expect, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createDefaultConfig, saveAll } from '@monad/home';
+import { createDefaultConfig, saveAll } from '@monad/environment';
 
 import { ModelService } from '#/handlers/settings/model/index.ts';
 import { createHttpTransport } from '#/transports/http.ts';
@@ -18,8 +18,8 @@ function makeTempPaths() {
     logs: join(dir, 'logs'),
     runtime: dir,
     configs: dir,
-    profile: join(dir, 'profile.json'),
-    sandbox: join(dir, 'sandbox.json'),
+    agentsConfig: join(dir, 'agents.json'),
+    mesh: join(dir, 'mesh.json'),
     approvals: join(dir, 'approvals.json'),
     dbDir: dir,
     db: join(dir, 'db'),
@@ -53,8 +53,8 @@ test('POST /v1/sessions without agentId when no agents exist: session created wi
   // Blank config with no agents, no default — should still succeed (no agents configured means no requirement)
   const { paths, cleanup } = makeTempPaths();
   try {
-    const cfg = createDefaultConfig('prn_test00000000', 'test');
-    await saveAll(paths.config, paths.profile, cfg);
+    const cfg = createDefaultConfig('test');
+    await saveAll(paths, cfg);
     const modelService = new ModelService(paths.auth, cfg, null, seededProviderRegistry());
     const app = createHttpTransport(buildHandlers(mockModel(['hi']), { paths, modelService }));
     const res = await app.handle(
@@ -75,7 +75,7 @@ test('POST /v1/sessions without agentId when no agents exist: session created wi
 test('POST /v1/sessions without agentId when agents exist but no default: 400 error', async () => {
   const { paths, cleanup } = makeTempPaths();
   try {
-    const cfg = createDefaultConfig('prn_test00000000', 'test');
+    const cfg = createDefaultConfig('test');
     // Add an agent but no defaultAgentId
     cfg.agent.agents.push({
       id: 'agt_TEST01000000',
@@ -87,7 +87,7 @@ test('POST /v1/sessions without agentId when agents exist but no default: 400 er
       a2a: { enabled: false },
       monadix: { consume: false }
     });
-    await saveAll(paths.config, paths.profile, cfg);
+    await saveAll(paths, cfg);
     const modelService = new ModelService(paths.auth, cfg, null, seededProviderRegistry());
     const app = createHttpTransport(buildHandlers(mockModel(['hi']), { paths, modelService }));
     const res = await app.handle(
@@ -106,7 +106,7 @@ test('POST /v1/sessions without agentId when agents exist but no default: 400 er
 test('POST /v1/sessions without agentId when default is set: resolves agent, agentIds populated', async () => {
   const { paths, cleanup } = makeTempPaths();
   try {
-    const cfg = createDefaultConfig('prn_test00000000', 'test');
+    const cfg = createDefaultConfig('test');
     cfg.agent.agents.push({
       id: 'agt_DEFAULT01000',
       name: 'Default',
@@ -118,7 +118,7 @@ test('POST /v1/sessions without agentId when default is set: resolves agent, age
       monadix: { consume: false }
     });
     cfg.agent.defaultAgentId = 'agt_DEFAULT01000';
-    await saveAll(paths.config, paths.profile, cfg);
+    await saveAll(paths, cfg);
     const modelService = new ModelService(paths.auth, cfg, null, seededProviderRegistry());
     const app = createHttpTransport(buildHandlers(mockModel(['hi']), { paths, modelService }));
     const res = await app.handle(
@@ -139,7 +139,7 @@ test('POST /v1/sessions without agentId when default is set: resolves agent, age
 test('POST /v1/sessions with explicit agentId: resolves correctly', async () => {
   const { paths, cleanup } = makeTempPaths();
   try {
-    const cfg = createDefaultConfig('prn_test00000000', 'test');
+    const cfg = createDefaultConfig('test');
     cfg.agent.agents.push({
       id: 'agt_EXPLICIT0100',
       name: 'Explicit',
@@ -150,7 +150,7 @@ test('POST /v1/sessions with explicit agentId: resolves correctly', async () => 
       a2a: { enabled: false },
       monadix: { consume: false }
     });
-    await saveAll(paths.config, paths.profile, cfg);
+    await saveAll(paths, cfg);
     const modelService = new ModelService(paths.auth, cfg, null, seededProviderRegistry());
     const app = createHttpTransport(buildHandlers(mockModel(['hi']), { paths, modelService }));
     const res = await app.handle(
@@ -169,7 +169,7 @@ test('POST /v1/sessions with explicit agentId: resolves correctly', async () => 
 test('POST /v1/sessions with unknown explicit agentId: 400 error', async () => {
   const { paths, cleanup } = makeTempPaths();
   try {
-    const cfg = createDefaultConfig('prn_test00000000', 'test');
+    const cfg = createDefaultConfig('test');
     cfg.agent.agents.push({
       id: 'agt_REAL01000000',
       name: 'Real',
@@ -180,7 +180,7 @@ test('POST /v1/sessions with unknown explicit agentId: 400 error', async () => {
       a2a: { enabled: false },
       monadix: { consume: false }
     });
-    await saveAll(paths.config, paths.profile, cfg);
+    await saveAll(paths, cfg);
     const modelService = new ModelService(paths.auth, cfg, null, seededProviderRegistry());
     const app = createHttpTransport(buildHandlers(mockModel(['hi']), { paths, modelService }));
     const res = await app.handle(

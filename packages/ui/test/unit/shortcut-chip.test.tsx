@@ -2,12 +2,7 @@ import { expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 test('ShortcutChip provides the shared semantic keycap treatment', async () => {
-  const componentModule = await import('../../src/components/ShortcutChip').catch(() => null);
-
-  expect(componentModule).not.toBeNull();
-  if (!componentModule) return;
-
-  const { ShortcutChip } = componentModule;
+  const { ShortcutChip } = await import('../../src/components/ShortcutChip');
   const markup = renderToStaticMarkup(<ShortcutChip>⌘K</ShortcutChip>);
 
   expect(markup).toStartWith('<kbd');

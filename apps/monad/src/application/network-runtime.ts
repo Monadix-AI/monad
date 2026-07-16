@@ -1,15 +1,15 @@
-import type { MonadConfig } from '@monad/home';
+import type { MonadConfig, MonadPaths } from '@monad/environment';
 import type { NetworkRuntimeStatus } from '@monad/protocol';
 import type { TlsSetup } from '#/transports/tls.ts';
 
-import { loadAll, resolveDaemonNetwork } from '@monad/home';
+import { resolveDaemonNetwork } from '@monad/environment';
 
 import { resolveTlsSetupForNetwork } from '#/transports/tls.ts';
 
 interface NetworkRuntimeOptions {
   network: MonadConfig['network'];
   initialOpenAiCompat: Pick<MonadConfig['openaiCompat'], 'enabled' | 'token'>;
-  paths: { config: string; profile: string; tls: string };
+  paths: Pick<MonadPaths, 'config' | 'agentsConfig' | 'mesh' | 'tls'>;
   env: Record<string, string | undefined>;
   now?: () => number;
   loadConfig?: () => Promise<{ openaiCompat?: Pick<MonadConfig['openaiCompat'], 'enabled' | 'token'> } | null>;
@@ -33,8 +33,7 @@ export interface NetworkRuntime {
 export async function createNetworkRuntime(_options: NetworkRuntimeOptions): Promise<NetworkRuntime> {
   const options = _options;
   const now = options.now ?? Date.now;
-  const loadConfig =
-    options.loadConfig ?? (() => loadAll(options.paths.config, options.paths.profile) as ReturnType<typeof loadAll>);
+  const loadConfig = options.loadConfig ?? (async () => ({ openaiCompat: options.initialOpenAiCompat }));
   const resolveTls = options.resolveTls ?? resolveTlsSetupForNetwork;
   const endpoint = resolveDaemonNetwork({ network: options.network, env: options.env });
   let tls = await resolveTls({ https: options.network.https, tlsDir: options.paths.tls });

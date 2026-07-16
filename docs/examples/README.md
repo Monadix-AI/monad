@@ -1,6 +1,6 @@
 # Examples
 
-Copyable starting points for monad's two extension surfaces: skills and atom packs.
+Copyable starting points for Monad's two extension surfaces: skills and atom packs.
 
 ## Skills
 

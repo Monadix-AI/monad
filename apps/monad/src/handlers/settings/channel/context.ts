@@ -1,13 +1,10 @@
-import type { MonadAuth, MonadConfig, MonadPaths } from '@monad/home';
+import type { MonadAuth, MonadConfig } from '@monad/environment';
 import type { ChannelService } from '#/channels/channel.ts';
-import type { ConfigReloader } from '#/config/reloader.ts';
-
-import { loadAll, loadAuth, saveAuth, saveProfile } from '@monad/home';
+import type { ConfigAccess } from '#/config/manager.ts';
 
 export interface ChannelDeps {
-  paths: MonadPaths;
   channelService: ChannelService;
-  configReloader?: ConfigReloader;
+  config: ConfigAccess;
 }
 
 export interface ChannelSettingsContext {
@@ -22,33 +19,26 @@ function emptyAuth(): MonadAuth {
   return { version: 1, activeProvider: null, updatedAt: new Date().toISOString(), credentialPool: {} };
 }
 
-export function createChannelContext({ paths, channelService, configReloader }: ChannelDeps): ChannelSettingsContext {
+export function createChannelContext({ channelService, config }: ChannelDeps): ChannelSettingsContext {
   async function read(): Promise<{ cfg: MonadConfig; auth: MonadAuth }> {
-    const cfg = await loadAll(paths.config, paths.profile);
-    if (!cfg) throw new Error('channel: config.json missing');
-    const auth = (await loadAuth(paths.auth)) ?? emptyAuth();
+    const { cfg, auth: storedAuth } = structuredClone(config.get());
+    const auth = storedAuth ?? emptyAuth();
     return { cfg, auth };
   }
 
   async function commit(cfg: MonadConfig, auth?: MonadAuth): Promise<void> {
-    await saveProfile(paths.profile, cfg);
-    if (auth) await saveAuth(paths.auth, auth);
-    const resolvedAuth = auth ?? (await loadAuth(paths.auth)) ?? emptyAuth();
-    if (configReloader) {
-      await configReloader.publish({ cfg, auth: resolvedAuth });
-    } else {
-      await channelService.reload(cfg, resolvedAuth);
-    }
+    await config.update((draft) => {
+      draft.cfg = cfg;
+      if (auth) draft.auth = auth;
+    });
   }
 
   async function commitAuth(cfg: MonadConfig, auth: MonadAuth): Promise<void> {
     auth.updatedAt = new Date().toISOString();
-    await saveAuth(paths.auth, auth);
-    if (configReloader) {
-      await configReloader.publish({ cfg, auth });
-    } else {
-      await channelService.reload(cfg, auth);
-    }
+    await config.update((draft) => {
+      draft.cfg = cfg;
+      draft.auth = auth;
+    });
   }
 
   return { read, commit, commitAuth, service: channelService };

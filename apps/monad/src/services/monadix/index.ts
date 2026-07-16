@@ -1,4 +1,4 @@
-import type { MonadixConfig } from '@monad/home';
+import type { MonadixConfig } from '@monad/environment';
 import type { MonadixRealtimeHandle } from './realtime-client.ts';
 
 import { startMonadixRealtime } from './realtime-client.ts';
@@ -51,7 +51,7 @@ interface ActiveProvider {
 export function createMonadixProviderManager(deps: MonadixProviderManagerDeps) {
   const active = new Map<string, ActiveProvider>();
   let cachedCreds: { supabaseUrl: string; supabaseAnonKey: string } | null = null;
-  // sync() is re-entrant: bringUp → persistProviderId → configReloader.publish → hot-reload →
+  // sync() is re-entrant: bringUp → persistProviderId → ConfigManager.publish → hot-reload →
   // runMonadixSync → sync(). Coalesce instead of running concurrently (a blocking mutex would
   // deadlock — the outer sync awaits the write that triggers the inner one). A call while a
   // reconcile is in flight just records the latest agent set; the running loop picks it up.
@@ -92,7 +92,7 @@ export function createMonadixProviderManager(deps: MonadixProviderManagerDeps) {
         apiBase,
         token,
         name: agent.name,
-        description: agent.description ?? `A monad agent (${agent.name}) on the Monadix network.`,
+        description: agent.description ?? `A Monad agent (${agent.name}) on the Monadix network.`,
         capabilities: ['general assistance']
       });
       await deps.persistProviderId(agent.id, providerId);

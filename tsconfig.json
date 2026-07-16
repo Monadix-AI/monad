@@ -1,8 +1,8 @@
 {
-  "extends": "./packages/config/tsconfig.base.json",
+  "extends": "./packages/tsconfig/tsconfig.base.json",
   "compilerOptions": {
     "paths": {
-      "@monad/home": ["./packages/home/src/index.ts"]
+      "@monad/environment": ["./packages/environment/src/index.ts"]
     }
   },
   "include": ["scripts/**/*.ts", "test/**/*.ts"]

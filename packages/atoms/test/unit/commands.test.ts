@@ -117,7 +117,6 @@ test('view command switches the local observation render mode', async () => {
     {
       args: 'summary',
       sessionId: 'ses_test',
-      principalId: 'usr_test',
       newSession: async () => ({ sessionId: 'ses_new' }),
       listSessions: async () => [],
       switchSession: async () => null,

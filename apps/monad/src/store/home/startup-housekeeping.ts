@@ -1,4 +1,4 @@
-import type { MonadPaths } from '@monad/home';
+import type { MonadPaths } from '@monad/environment';
 import type { createLogger } from '@monad/logger';
 import type { Store } from '#/store/db/index.ts';
 

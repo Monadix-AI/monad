@@ -1,6 +1,5 @@
-import type { MonadAuth, MonadConfig, MonadPaths } from '@monad/home';
+import type { MonadAuth, MonadConfig, MonadPaths } from '@monad/environment';
 import type { Logger } from '@monad/logger';
-import type { PrincipalId } from '@monad/protocol';
 import type { ModelSubsystem } from '#/agent/model/lifecycle.ts';
 import type { DaemonPreflight } from '#/application/preflight.ts';
 import type { AtomDiscovery } from '#/atoms/lifecycle.ts';
@@ -13,10 +12,9 @@ import type { RuntimeContextReader } from '#/runtime/types.ts';
 import type { DataLayer } from '#/store/lifecycle.ts';
 
 import { join } from 'node:path';
-import { loadAll, loadAuth } from '@monad/home';
 
+import { ConfigManager } from '#/config/manager.ts';
 import { ConfigReloadTargets } from '#/config/reload-targets.ts';
-import { createConfigReloader } from '#/config/reloader.ts';
 import { createHomeConfigSource } from '#/config/source.ts';
 import { WatchService } from '#/infra/watch-service.ts';
 import { HostInteractionService as InteractionService } from '#/interactions/service.ts';
@@ -40,12 +38,10 @@ export interface DaemonCore extends CoreRuntimeOutputs {
   cfg: MonadConfig;
   startupAuthValue: MonadAuth | null;
   startupAuth: MonadAuth | undefined;
-  ownerPrincipalId: PrincipalId;
   monadVersion: string;
   watchService: WatchService;
   runtime: ReturnType<typeof createDaemonRuntime>;
   reloadTargets: ConfigReloadTargets;
-  configReloader: ReturnType<typeof createConfigReloader>;
   interactions: HostInteractionService;
 }
 
@@ -85,23 +81,10 @@ export function readCoreRuntimeOutputs(context: RuntimeContextReader): CoreRunti
 export async function createCoreRuntime(preflight: DaemonPreflight, logger: Logger): Promise<DaemonCore> {
   const { paths, flags } = preflight;
   const dataLayer = await createDataLayer({ paths, devMode: flags.devMode || flags.devSilent });
-  const [cfg, startupAuthValue] = await Promise.all([loadAll(paths.config, paths.profile), loadAuth(paths.auth)]);
-  if (!cfg) throw new Error('monad: config.json missing after repair — aborting');
-  const startupAuth = startupAuthValue ?? undefined;
-  configureDeveloperLogTransport(paths, cfg.developerMode === true);
-  const ownerPrincipalId = cfg.principal.id as PrincipalId;
-  const monadVersion = await Bun.file(join(import.meta.dir, '..', '..', 'package.json'))
-    .json()
-    .then((value: { version?: string }) => value.version ?? '0.0.0')
-    .catch(() => '0.0.0');
   const watchService = new WatchService({ log: (level, message) => logger[level](message) });
   process.on('exit', () => watchService.closeAll());
   const reloadTargets = new ConfigReloadTargets();
   const interactions = new InteractionService();
-  let runtime: ReturnType<typeof createDaemonRuntime>;
-  const configReloader = createConfigReloader(async () => {
-    await runtime.config.refreshNow();
-  });
   const configSource = createHomeConfigSource(paths, {
     watch: (onChange) => {
       watchService.register({
@@ -109,15 +92,23 @@ export async function createCoreRuntime(preflight: DaemonPreflight, logger: Logg
         path: paths.home,
         filter: (filename) =>
           filename === 'config.json' ||
-          filename === 'profile.json' ||
-          filename === 'sandbox.json' ||
+          filename === 'agents.json' ||
+          filename === 'mesh.json' ||
           filename === 'auth.json',
         onChange
       });
       return () => {};
     }
   });
-  const initial = { cfg, auth: startupAuthValue };
+  const initial = await ConfigManager.load(configSource);
+  const { cfg, auth: startupAuthValue } = initial;
+  const startupAuth = startupAuthValue ?? undefined;
+  configureDeveloperLogTransport(paths, cfg.developerMode === true);
+  const monadVersion = await Bun.file(join(import.meta.dir, '..', '..', 'package.json'))
+    .json()
+    .then((value: { version?: string }) => value.version ?? '0.0.0')
+    .catch(() => '0.0.0');
+  let runtime: ReturnType<typeof createDaemonRuntime>;
   runtime = createDaemonRuntime({
     initial,
     modules: createDaemonModules({
@@ -129,6 +120,7 @@ export async function createCoreRuntime(preflight: DaemonPreflight, logger: Logg
       watcher: watchService,
       logger,
       interactions,
+      config: () => runtime.config,
       startStore: async () => dataLayer
     }),
     source: configSource,
@@ -151,12 +143,10 @@ export async function createCoreRuntime(preflight: DaemonPreflight, logger: Logg
     cfg,
     startupAuthValue,
     startupAuth,
-    ownerPrincipalId,
     monadVersion,
     watchService,
     runtime,
     reloadTargets,
-    configReloader,
     interactions
   };
 }

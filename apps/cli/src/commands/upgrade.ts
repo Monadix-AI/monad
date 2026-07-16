@@ -3,7 +3,7 @@ import type { CommandDef } from './types.ts';
 import { cp, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { getPaths } from '@monad/home';
+import { getPaths } from '@monad/environment';
 import { MONAD_VERSION } from '@monad/protocol';
 
 import { t } from '../lib/i18n.ts';
@@ -150,7 +150,7 @@ export function createUpgradeCommand(commandDeps: UpgradeCommandDeps = {}): Comm
     local: true,
     name: 'upgrade',
     synopsis: 'upgrade [rollback] [--check] [--channel <stable|beta|nightly>]',
-    description: 'check for and apply monad updates; rollback reverts the last upgrade',
+    description: 'check for and apply Monad updates; rollback reverts the last upgrade',
     descriptionKey: 'cli.cmd.upgrade.desc',
     flags: {
       check: {

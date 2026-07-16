@@ -4,7 +4,7 @@
 // re-discovered (setPacks()). Exposes a STABLE `t` that always delegates to the latest build, so
 // consumers (channel renderer, command services) can capture it once at wiring time.
 
-import type { MonadConfig } from '@monad/home';
+import type { MonadConfig } from '@monad/environment';
 import type { I18n, LocalePack, MessageId, TParams, Translate } from '@monad/i18n';
 
 import { readdir } from 'node:fs/promises';

@@ -50,7 +50,6 @@ export function insertSession(db: Db, s: Session): void {
       id: s.id,
       projectId: s.projectId ?? null,
       title: s.title,
-      ownerPrincipalId: s.ownerPrincipalId,
       state: s.state,
       agentIds: JSON.stringify(s.agentIds),
       archived: s.archived ? 1 : 0,
@@ -171,7 +170,6 @@ export function insertWorkplaceProject(db: Db, project: WorkplaceProject): void 
     .values({
       id: project.id,
       title: project.title,
-      ownerPrincipalId: project.ownerPrincipalId,
       state: project.state,
       archived: project.archived ? 1 : 0,
       model: project.model ?? null,

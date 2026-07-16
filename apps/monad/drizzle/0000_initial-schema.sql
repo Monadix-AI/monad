@@ -28,7 +28,6 @@ CREATE TABLE `channel_conversations` (
 	`channel_id` text NOT NULL,
 	`conversation_key` text NOT NULL,
 	`active_session_id` text NOT NULL,
-	`principal_id` text NOT NULL,
 	`created_at` text NOT NULL,
 	`last_seen_at` text NOT NULL,
 	PRIMARY KEY(`channel_id`, `conversation_key`)
@@ -47,20 +46,18 @@ CREATE TABLE `events` (
 CREATE INDEX `idx_events_transcript_target` ON `events` (`transcript_target_id`,`id`);--> statement-breakpoint
 CREATE TABLE `experience_state` (
 	`atom_pack_id` text NOT NULL,
-	`principal_id` text NOT NULL,
 	`project_id` text NOT NULL,
 	`record_key` text NOT NULL,
 	`value` text NOT NULL,
 	`version` integer NOT NULL,
 	`updated_at` text NOT NULL,
-	PRIMARY KEY(`atom_pack_id`, `principal_id`, `project_id`, `record_key`)
+	PRIMARY KEY(`atom_pack_id`, `project_id`, `record_key`)
 );
 --> statement-breakpoint
-CREATE INDEX `idx_experience_state_project` ON `experience_state` (`atom_pack_id`,`principal_id`,`project_id`,`record_key`);--> statement-breakpoint
+CREATE INDEX `idx_experience_state_project` ON `experience_state` (`atom_pack_id`,`project_id`,`record_key`);--> statement-breakpoint
 CREATE TABLE `experience_state_events` (
 	`id` text PRIMARY KEY NOT NULL,
 	`atom_pack_id` text NOT NULL,
-	`principal_id` text NOT NULL,
 	`project_id` text NOT NULL,
 	`record_key` text NOT NULL,
 	`version` integer NOT NULL,
@@ -68,17 +65,16 @@ CREATE TABLE `experience_state_events` (
 	`created_at` text NOT NULL
 );
 --> statement-breakpoint
-CREATE INDEX `idx_experience_state_events_record` ON `experience_state_events` (`atom_pack_id`,`principal_id`,`project_id`,`record_key`,`version`);--> statement-breakpoint
+CREATE INDEX `idx_experience_state_events_record` ON `experience_state_events` (`atom_pack_id`,`project_id`,`record_key`,`version`);--> statement-breakpoint
 CREATE TABLE `experience_worker_wakeups` (
 	`atom_pack_id` text NOT NULL,
-	`principal_id` text NOT NULL,
 	`experience_id` text NOT NULL,
 	`project_id` text NOT NULL,
 	`wake_key` text NOT NULL,
 	`run_at` text NOT NULL,
 	`attempt` integer DEFAULT 0 NOT NULL,
 	`updated_at` text NOT NULL,
-	PRIMARY KEY(`atom_pack_id`, `principal_id`, `experience_id`, `project_id`, `wake_key`)
+	PRIMARY KEY(`atom_pack_id`, `experience_id`, `project_id`, `wake_key`)
 );
 --> statement-breakpoint
 CREATE INDEX `idx_experience_worker_wakeups_due` ON `experience_worker_wakeups` (`run_at`);--> statement-breakpoint
@@ -214,7 +210,6 @@ CREATE TABLE `sessions` (
 	`id` text PRIMARY KEY NOT NULL,
 	`project_id` text,
 	`title` text NOT NULL,
-	`owner_principal_id` text NOT NULL,
 	`state` text NOT NULL,
 	`agent_ids` text DEFAULT '[]' NOT NULL,
 	`archived` integer DEFAULT 0 NOT NULL,
@@ -267,7 +262,6 @@ CREATE TABLE `usage_ledger` (
 CREATE TABLE `workplace_projects` (
 	`id` text PRIMARY KEY NOT NULL,
 	`title` text NOT NULL,
-	`owner_principal_id` text NOT NULL,
 	`state` text NOT NULL,
 	`archived` integer DEFAULT 0 NOT NULL,
 	`model` text,
@@ -279,3 +273,11 @@ CREATE TABLE `workplace_projects` (
 );
 --> statement-breakpoint
 CREATE INDEX `idx_workplace_projects_state` ON `workplace_projects` (`state`,`archived`);
+--> statement-breakpoint
+CREATE TABLE `tool_raw_outputs` (
+	`transcript_target_id` text NOT NULL,
+	`tool_call_id` text NOT NULL,
+	`output` text NOT NULL,
+	`created_at` text NOT NULL,
+	PRIMARY KEY(`transcript_target_id`, `tool_call_id`)
+);

@@ -36,10 +36,16 @@ are printed. Full testing conventions and patterns: `docs/engineering/testing.md
   complete scope once to verify the batch. Do not alternate between fixing one failure
   and rerunning the command when the script can report the full failure set in one pass.
 - Every new or modified test case must avoid weak assertions whose only claim is that
-  something exists or does not exist. Assert observable behavior, structure, state
-  transitions, and exact machine contracts instead. Presence or absence is valid only
-  when it is itself part of the business path, such as verifying deletion, redaction,
-  or a not-found result. E2E tests may assert visible copy.
+  something exists or does not exist. Litmus test per assertion: if it flipped, what
+  user-visible bug would it catch? No answer → delete or rewrite. Rewrite patterns:
+  added field/feature → `toEqual` on the full exact contract shape (subsumes existence);
+  removed field → typecheck + strict schema parse + updated `toEqual` shapes, never a
+  standalone "is gone" case; new UI element → fire the interaction and assert its effect,
+  never `getBy* … toBeInTheDocument` (getBy already throws). Presence or absence is valid
+  only when it is itself the business contract (deletion, redaction, not-found) — then
+  assert it exactly and waive the gate with `// presence-ok: <reason>`. Enforced by
+  `bun run check:test-assertions` in `quality:check`; full table in
+  `docs/engineering/testing.md` / @docs/engineering/testing.md.
 - Every `apps/monad` feature must be exercised over **all transports** (TCP
   loopback and the Unix socket) — behaviour must match on both. See
   `docs/internals/runtime.md` / @docs/internals/runtime.md.

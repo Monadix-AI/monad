@@ -16,7 +16,6 @@ import type { AtomPacksDeps } from '#/handlers/atom-pack/atom-pack-manager.ts';
 import { readdir, rm, stat } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import builtinAtomPack from '@monad/atoms';
-import { loadAll, loadAuth, saveProfile } from '@monad/home';
 import { parseAtomPackManifest } from '@monad/protocol';
 
 import { describeAtomPack } from '#/atoms/describe.ts';
@@ -137,17 +136,14 @@ export function createPacksModule(deps: AtomPacksDeps) {
   async function setAtomPackSkillsEnabled(name: string, enabled: boolean): Promise<void> {
     const skillIds = await atomPackSkillIds(name);
     if (skillIds.length === 0) return;
-    const cfg = await loadAll(deps.paths.config, deps.paths.profile);
-    if (!cfg) return;
-
-    const packSkillIds = new Set(skillIds);
-    cfg.skills.disabled = enabled
-      ? cfg.skills.disabled.filter((id) => !packSkillIds.has(id))
-      : [...new Set([...cfg.skills.disabled, ...skillIds])];
-    cfg.skills.autoloadDisabled = cfg.skills.autoloadDisabled.filter((id) => !packSkillIds.has(id));
-
-    await saveProfile(deps.paths.profile, cfg);
-    await deps.configReloader?.publish({ cfg, auth: await loadAuth(deps.paths.auth) });
+    if (!deps.config) throw new Error('atom packs: config manager unavailable');
+    await deps.config.updateConfig((cfg) => {
+      const packSkillIds = new Set(skillIds);
+      cfg.skills.disabled = enabled
+        ? cfg.skills.disabled.filter((id) => !packSkillIds.has(id))
+        : [...new Set([...cfg.skills.disabled, ...skillIds])];
+      cfg.skills.autoloadDisabled = cfg.skills.autoloadDisabled.filter((id) => !packSkillIds.has(id));
+    });
   }
 
   async function installAtomPackUpload(upload: DecodedUpload, consent: boolean): Promise<InstallAtomPackResponse> {
@@ -252,12 +248,11 @@ export function createPacksModule(deps: AtomPacksDeps) {
       const route = deps.getWorkspaceExperienceApiRoute?.(experienceId, method, path);
       const handler = route?.handler ?? deps.getWorkspaceExperienceApiHandler?.(experienceId, method, path);
       if (!handler) return undefined;
-      if (!deps.ownerPrincipalId || !deps.experienceCapabilities) {
+      if (!deps.experienceCapabilities) {
         return () => Promise.reject(new Error('workspace Experience capabilities are unavailable'));
       }
       const context = createWorkspaceExperienceApiContext({
         atomPackId: route?.atomPackId ?? 'test-pack',
-        principalId: deps.ownerPrincipalId,
         experienceId,
         permissions: route?.permissions ?? [],
         deps: deps.experienceCapabilities
@@ -279,7 +274,7 @@ export function createPacksModule(deps: AtomPacksDeps) {
     },
 
     async installAtomPack({ source, consent }: InstallAtomPackRequest): Promise<InstallAtomPackResponse> {
-      const auth = await loadAuth(deps.paths.auth);
+      const auth = deps.config?.get().auth;
       const normalizedSource = normalizeAtomPackSource(source);
       const fetch = createAtomFetcher({
         githubToken: resolveToken(auth?.atomRegistries?.github?.token),
@@ -353,13 +348,13 @@ export function createPacksModule(deps: AtomPacksDeps) {
     /** Pin which pack wins a bare id (or clear with packId:null → first-wins). Persists to
      *  config.atomPins and re-discovers so the new winner takes effect without a restart. */
     async setAtomPin({ kind, bareId, packId }: SetAtomPinRequest): Promise<OkResponse> {
-      const cfg = await loadAll(deps.paths.config, deps.paths.profile);
-      if (!cfg) throw new HandlerError('invalid', 'config.json missing');
-      const pins = cfg.atomPins[kind] ?? {};
-      if (packId === null) delete pins[bareId];
-      else pins[bareId] = packId;
-      cfg.atomPins[kind] = pins;
-      await saveProfile(deps.paths.profile, cfg);
+      if (!deps.config) throw new HandlerError('invalid', 'config manager unavailable');
+      await deps.config.updateConfig((cfg) => {
+        const pins = cfg.atomPins[kind] ?? {};
+        if (packId === null) delete pins[bareId];
+        else pins[bareId] = packId;
+        cfg.atomPins[kind] = pins;
+      });
       await deps.onChanged?.(); // re-resolve bare winners with the new pin
       return { ok: true };
     }

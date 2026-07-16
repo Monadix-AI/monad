@@ -1,4 +1,4 @@
-import type { MonadConfig } from '@monad/home';
+import type { MonadConfig } from '@monad/environment';
 import type {
   ExternalAgentHistoryPageRequest,
   ExternalAgentHistoryPageResponse,
@@ -140,4 +140,8 @@ export interface ExternalAgentHostDeps {
   authStatusTimeoutMs?: number;
   /** Milliseconds before a resumable external agent child is released while idle. <=0 disables it. */
   externalAgentIdleTimeoutMs?: number;
+  /** Base delay for app-server reconnect backoff. Defaults to the production retry policy. */
+  appServerReconnectBaseMs?: number;
+  /** Grace before treating an app-server disconnect as recoverable transport loss. */
+  appServerDisconnectGraceMs?: number;
 }

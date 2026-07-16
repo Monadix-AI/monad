@@ -1,25 +1,20 @@
-import type { MonadPaths } from '@monad/home';
+import type { MonadPaths } from '@monad/environment';
 import type { DeveloperSettings, SetDeveloperSettingsRequest } from '@monad/protocol';
-import type { ConfigReloader } from '#/config/reloader.ts';
-
-import { loadAll, loadAuth, saveSystemConfig } from '@monad/home';
+import type { ConfigAccess } from '#/config/manager.ts';
 
 import { configureDeveloperLogTransport, developerLogsDir } from '#/services/developer-log.ts';
 
-export function createDeveloperModule(paths: MonadPaths, configReloader?: ConfigReloader) {
+export function createDeveloperModule(paths: MonadPaths, config: ConfigAccess) {
   async function getDeveloperSettings(): Promise<DeveloperSettings> {
-    const cfg = await loadAll(paths.config, paths.profile);
-    if (!cfg) throw new Error('developer settings: config.json missing');
+    const cfg = config.get().cfg;
     return { developerMode: cfg.developerMode === true, logsDir: developerLogsDir(paths) };
   }
 
   async function setDeveloperSettings(req: SetDeveloperSettingsRequest): Promise<DeveloperSettings> {
-    const cfg = await loadAll(paths.config, paths.profile);
-    if (!cfg) throw new Error('developer settings: config.json missing');
-    cfg.developerMode = req.developerMode;
-    await saveSystemConfig(paths.config, cfg);
+    await config.updateConfig((cfg) => {
+      cfg.developerMode = req.developerMode;
+    });
     configureDeveloperLogTransport(paths, req.developerMode);
-    if (configReloader) await configReloader.publish({ cfg, auth: await loadAuth(paths.auth) });
     return getDeveloperSettings();
   }
 

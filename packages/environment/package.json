@@ -1,0 +1,29 @@
+{
+  "name": "@monad/environment",
+  "version": "0.0.0",
+  "dependencies": {
+    "@monad/protocol": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@monad/tsconfig": "workspace:*"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./network-endpoints": "./src/network-endpoints.ts",
+    "./paths": "./src/paths.ts",
+    "./tls": "./src/tls.ts"
+  },
+  "module": "src/index.ts",
+  "private": true,
+  "scripts": {
+    "gen:schema": "bun run scripts/gen-config-schema.ts",
+    "lint": "biome check .",
+    "test": "bun ../../scripts/bun-test.ts test/ --only-failures",
+    "test:loud": "bun ../../scripts/bun-test.ts test/ --loud",
+    "test:unit": "bun ../../scripts/bun-test.ts test/unit/ --only-failures",
+    "test:unit:loud": "bun ../../scripts/bun-test.ts test/unit/ --loud",
+    "typecheck": "tsc --noEmit"
+  },
+  "type": "module"
+}

@@ -2,12 +2,12 @@
 // loop (conversation mapping, allowlist, rate-limit, render chunking, echo guard, etc.) that can't be
 // tested against real third-party platforms. Documented stances live in docs/internals/channel-conformance.md.
 
-import type { ChannelInstanceConfig, MonadAuth, MonadConfig } from '@monad/home';
+import type { ChannelInstanceConfig, MonadAuth, MonadConfig } from '@monad/environment';
 import type { ChannelInbound, MessageId, SessionId } from '@monad/protocol';
 import type { ChannelAdapter, ChannelContext } from '@monad/sdk-atom';
 
 import { expect, test } from 'bun:test';
-import { createDefaultConfig } from '@monad/home';
+import { createDefaultConfig } from '@monad/environment';
 import { createI18n } from '@monad/i18n';
 import { enMessages as i18nMessages } from '@monad/i18n/messages';
 import { newId } from '@monad/protocol';
@@ -181,11 +181,11 @@ async function coreHarness(channel: ChannelInstanceConfig) {
       return { ref: String(sends.length), chatId };
     }
   };
-  const cfg: MonadConfig = { ...createDefaultConfig('prn_OWNER0000000', 'owner'), channels: [channel] };
+  const cfg: MonadConfig = { ...createDefaultConfig('owner'), channels: [channel] };
   const service = new ChannelService(
     {
       session: {
-        createForPrincipal: async () => {
+        create: async () => {
           creates.push(newId('ses'));
           return { sessionId: newId('ses') as SessionId };
         },

@@ -1,10 +1,10 @@
-import type { MonadPaths, ObscuraConfig } from '@monad/home';
+import type { MonadPaths, ObscuraConfig } from '@monad/environment';
 import type { ObscuraStatusResponse, SetObscuraRequest } from '@monad/protocol';
+import type { ConfigAccess } from '#/config/manager.ts';
 import type { DownloadProgress } from '#/services/download.ts';
 
 import { chmodSync, mkdirSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
-import { loadAll, saveProfile } from '@monad/home';
 
 import { resolveBinary } from '#/infra/resolve-binary.ts';
 import { downloadBytes } from '#/services/download.ts';
@@ -72,6 +72,7 @@ async function ensureObscuraBinary(
 
 export interface ObscuraModuleDeps {
   paths: MonadPaths;
+  config: ConfigAccess;
   connectObscura?: (config: ObscuraConfig, command: string) => Promise<{ connected: boolean; tools: string[] }>;
   disconnectObscura?: () => Promise<void>;
   getObscuraStatus?: () => { connected: boolean; tools: string[] };
@@ -80,6 +81,7 @@ export interface ObscuraModuleDeps {
 
 export function createObscuraModule({
   paths,
+  config,
   connectObscura,
   disconnectObscura,
   getObscuraStatus,
@@ -91,7 +93,7 @@ export function createObscuraModule({
   }
 
   async function getObscura(): Promise<ObscuraStatusResponse> {
-    const cfg = await loadAll(paths.config, paths.profile);
+    const cfg = config.get().cfg;
     const status = getObscuraStatus?.() ?? { connected: false, tools: [] };
     return {
       enabled: cfg?.obscura.enabled ?? false,
@@ -103,13 +105,12 @@ export function createObscuraModule({
   }
 
   async function setObscura(req: SetObscuraRequest): Promise<ObscuraStatusResponse> {
-    const cfg = await loadAll(paths.config, paths.profile);
-    if (!cfg) throw new Error('obscura settings: config missing');
+    const cfg = structuredClone(config.get().cfg);
 
     if (req.enabled) {
       const command = await ensureObscuraBinary(paths.home, onDownloadProgress);
       cfg.obscura = { enabled: true, stealth: req.stealth ?? false, requestTimeoutMs: req.requestTimeoutMs };
-      await saveProfile(paths.profile, cfg);
+      await config.updateConfig(() => cfg);
       const result = await (connectObscura?.(cfg.obscura, command) ?? { connected: false, tools: [] });
       return {
         enabled: true,
@@ -124,7 +125,7 @@ export function createObscuraModule({
         stealth: req.stealth ?? cfg.obscura.stealth,
         requestTimeoutMs: req.requestTimeoutMs
       };
-      await saveProfile(paths.profile, cfg);
+      await config.updateConfig(() => cfg);
       await disconnectObscura?.();
       return {
         enabled: false,

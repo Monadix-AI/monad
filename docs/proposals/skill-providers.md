@@ -4,15 +4,15 @@ Status: **implemented** — shipped in `apps/monad/src/capabilities/skills/` (`i
 
 ## Problem
 
-monad can only install a skill from a **local directory** (`installSkillFromDir`). The broader
+Monad can only install a skill from a **local directory** (`installSkillFromDir`). The broader
 agent ecosystem has supply chains with publish, version, and search workflows, and community
-skills are commonly distributed as **git repos** or **tarballs**. monad has no way
+skills are commonly distributed as **git repos** or **tarballs**. Monad has no way
 to pull a skill from any of these, no versioning, and no integrity/provenance story for remote
 skills.
 
 Goal: a thin **provider abstraction** so `monad skills install <ref>` can resolve a skill from
 any source — local dir, git, HTTP tarball, ClawHub, or a future custom registry — behind one
-uniform interface, while keeping the security posture monad already applies to provider atoms
+uniform interface, while keeping the security posture Monad already applies to provider atoms
 and MCP servers.
 
 ## Current state
@@ -113,7 +113,7 @@ Config (mirrors `mcpServers` trust shape):
 
 - SKILL.md gains optional `version` (semver). Surfaced in `skills.list` + CLI.
 - `compatibility` becomes **enforced** at install (see proposal-adjacent item #8): a skill
-  declaring an incompatible monad version is refused.
+  declaring an incompatible Monad version is refused.
 
 ## Security
 

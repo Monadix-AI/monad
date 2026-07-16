@@ -1,9 +1,8 @@
-import type { AcpAgentConfig } from '@monad/home';
+import type { AcpAgentConfig } from '@monad/environment';
 import type { Session, SessionId } from '@monad/protocol';
 import type { BuildChannelContextInput } from '#/agent/prompts/channel.ts';
 import type { SessionContext } from '#/handlers/session/context.ts';
 
-import { loadAll } from '@monad/home';
 import { newId } from '@monad/protocol';
 
 import { extractError } from '#/agent/index.ts';
@@ -67,10 +66,9 @@ export function createForwardAcpHandler(ctx: SessionContext, sandboxRootsFor: Sa
     assertWriteAllowed(session, 'http');
     // Reject if a turn is already streaming for this session — same concurrency guard as `send`.
     if (aborts.has(sessionId)) throw new HandlerError('conflict', 'a turn is already in progress for this session');
-    const paths = ctx.deps.paths;
-    if (!paths) throw new HandlerError('internal', 'daemon paths not configured');
-    const cfg = await loadAll(paths.config, paths.profile);
-    const spec = (cfg?.acpAgents ?? []).find((a: AcpAgentConfig) => a.name === agentName && a.enabled !== false);
+    const cfg = ctx.deps.configManager?.get().cfg;
+    if (!cfg) throw new HandlerError('internal', 'daemon config not configured');
+    const spec = cfg.acpAgents.find((a: AcpAgentConfig) => a.name === agentName && a.enabled !== false);
     if (!spec) throw new HandlerError('invalid', `ACP agent "${agentName}" not found or disabled`);
     log?.debug({ sessionId, event: 'session.forward_acp.start', agentName, text, ambientContext }, 'forward acp start');
 

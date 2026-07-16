@@ -27,7 +27,6 @@ export interface ChannelConversation {
   channelId: string;
   conversationKey: string;
   activeSessionId: string;
-  principalId: string;
   createdAt: string;
   lastSeenAt: string;
 }
@@ -61,7 +60,6 @@ export function rowToConversation(row: Record<string, unknown>): ChannelConversa
     channelId: row.channel_id as string,
     conversationKey: row.conversation_key as string,
     activeSessionId: row.active_session_id as string,
-    principalId: row.principal_id as string,
     createdAt: row.created_at as string,
     lastSeenAt: row.last_seen_at as string
   };
@@ -87,7 +85,6 @@ export function rowToSession(row: SessionRow): Session {
     id: row.id as Session['id'],
     projectId: (row.projectId ?? undefined) as Session['projectId'],
     title: row.title,
-    ownerPrincipalId: row.ownerPrincipalId as Session['ownerPrincipalId'],
     state: row.state as SessionState,
     agentIds: JSON.parse(row.agentIds) as Session['agentIds'],
     archived: row.archived === 1,
@@ -114,7 +111,6 @@ export function rowToWorkplaceProject(row: WorkplaceProjectRow): WorkplaceProjec
   return {
     id: row.id as WorkplaceProject['id'],
     title: row.title,
-    ownerPrincipalId: row.ownerPrincipalId as WorkplaceProject['ownerPrincipalId'],
     state: row.state as SessionState,
     archived: row.archived === 1,
     model: row.model ?? undefined,

@@ -11,7 +11,6 @@ function seedSession(store: ReturnType<typeof createStore>): Session {
   const s: Session = {
     id: newId('ses'),
     title: 't',
-    ownerPrincipalId: newId('prn'),
     state: 'active',
     agentIds: [],
     archived: false,

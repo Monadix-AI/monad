@@ -2,14 +2,14 @@
 // (TCP loopback + Unix socket). Asserts the full lifecycle (create → get → prompt get/set → update →
 // delete) persists to profile.json AND that the AGENT.md body lands on disk under <agents>/<dir>/.
 
-import type { MonadPaths } from '@monad/home';
+import type { MonadPaths } from '@monad/environment';
 import type { Agent } from '@monad/protocol';
 
 import { describe, expect, test } from 'bun:test';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initMonadHome, loadAll, loadAuth, loadConfig } from '@monad/home';
+import { initMonadHome, loadAll, loadAuth, loadConfig } from '@monad/environment';
 
 import { ModelService } from '#/handlers/settings/model/index.ts';
 import { createHttpTransport } from '#/transports/http.ts';
@@ -31,7 +31,7 @@ async function setup(): Promise<{ dir: string; paths: MonadPaths; app: ReturnTyp
   const dir = join(tmpdir(), `monad-agentcrud-${process.pid}-${Date.now()}-${process.hrtime.bigint()}`);
   const paths = makePaths(dir);
   await initMonadHome(paths);
-  const cfg = await loadConfig(paths.config);
+  const cfg = await loadConfig(paths);
   if (!cfg) throw new Error('config missing after init');
   const modelService = new ModelService(paths.auth, cfg, await loadAuth(paths.auth), seededProviderRegistry());
   const app = createHttpTransport(buildHandlers(mockModel(), { paths, modelService }));
@@ -113,7 +113,7 @@ async function runCrud(t: TransportHandle, paths: MonadPaths): Promise<void> {
   expect(((await res.json()) as AgentBody).agent.roles?.memory).toBe('cheap-alias');
 
   // 7. AGENT.md persisted on disk under <agents>/<dir>/ and profile.json carries the row
-  const cfg = await loadAll(paths.config, paths.profile);
+  const cfg = await loadAll(paths);
   const row = cfg?.agent.agents.find((a) => a.id === id);
   const md = await Bun.file(join(paths.agents, row?.dir as string, 'AGENT.md')).text();
   expect(md).toContain('You are a meticulous researcher.');
@@ -123,7 +123,7 @@ async function runCrud(t: TransportHandle, paths: MonadPaths): Promise<void> {
   expect(res.status).toBe(200);
   res = await t.fetch('/v1/agents');
   expect(((await res.json()) as ListBody).agents).toEqual([]);
-  expect((await loadAll(paths.config, paths.profile))?.agent.agents).toEqual([]);
+  expect((await loadAll(paths))?.agent.agents).toEqual([]);
   expect(await Bun.file(join(paths.agents, row?.dir as string, 'AGENT.md')).exists()).toBe(false);
 }
 

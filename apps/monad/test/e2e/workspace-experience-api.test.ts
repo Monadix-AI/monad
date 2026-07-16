@@ -1,5 +1,3 @@
-import type { PrincipalId } from '@monad/protocol';
-
 import { expect, test } from 'bun:test';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -12,9 +10,7 @@ import { buildHandlers, makeTestPaths, mockModel, serveTransport, stubModelDeps,
 
 for (const transport of TRANSPORTS) {
   test(`workspace experience API dispatches over ${transport}`, async () => {
-    const ownerPrincipalId = 'prn_workspace_test' as PrincipalId;
     const handlers = buildHandlers(mockModel(), undefined, {
-      ownerPrincipalId,
       getWorkspaceExperienceApiRoute: (experienceId, method, path) => {
         if (experienceId !== 'canvas' || method !== 'POST' || path !== '/search') return undefined;
         return {
@@ -27,8 +23,7 @@ for (const transport of TRANSPORTS) {
             const body = (await request.json()) as { query?: string };
             return Response.json({
               result: `found:${body.query}`,
-              pack: context.atomPackId,
-              principal: context.principalId
+              pack: context.atomPackId
             });
           }
         };
@@ -44,7 +39,7 @@ for (const transport of TRANSPORTS) {
       });
 
       expect(res.status).toBe(200);
-      expect(await res.json()).toEqual({ result: 'found:alpha', pack: 'pack-a', principal: ownerPrincipalId });
+      expect(await res.json()).toEqual({ result: 'found:alpha', pack: 'pack-a' });
     } finally {
       await live.stop();
     }

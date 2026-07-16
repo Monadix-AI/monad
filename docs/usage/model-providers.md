@@ -1,6 +1,6 @@
 # Setting up model providers
 
-How to connect monad to a model provider: pick a provider, add a credential, choose a
+How to connect Monad to a model provider: pick a provider, add a credential, choose a
 default model. This is the user-facing companion to
 [model-providers.md](../internals/model-providers.md), which explains the provider
 catalog, the two provider strategies, and why the long tail of OpenAI-compatible
@@ -101,7 +101,7 @@ The web UI edits the same profiles under **Studio → Models and providers**.
 
 ## Where things are stored
 
-- Providers and profiles live in `config.json` under monad's home directory.
+- Providers and profiles live in `config.json` under Monad's home directory.
 - Secrets never live in `config.json`: credentials are stored per provider in
   `auth.json`, which is written with owner-only permissions (see
   [runtime.md](../internals/runtime.md)).
@@ -133,7 +133,7 @@ picks it up without a restart. See
 
 ## For contributors
 
-When developing monad itself, copy `.env.example` to `.env.local` and set
+When developing Monad itself, copy `.env.example` to `.env.local` and set
 `OPENROUTER_API_KEY`; the dev environment seeds it as a working credential so live
 runs work out of the box. This is a dev-only path — release builds configure
 providers only through the flows above. See

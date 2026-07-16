@@ -1,7 +1,7 @@
-import type { MonadPaths } from '@monad/home';
+import type { MonadPaths } from '@monad/environment';
 import type { SkillWatchRegistrar } from '#/capabilities/skills/service.ts';
+import type { ConfigAccess, ConfigSnapshot, ConfigSource } from '#/config/manager.ts';
 import type { ReloadScheduler } from '#/config/reload.ts';
-import type { ConfigSnapshot, ConfigSource } from '#/config/service.ts';
 import type { HostInteractionService } from '#/interactions/service.ts';
 import type { RuntimeModule } from './types.ts';
 
@@ -10,7 +10,7 @@ import { createAtomsLifecycleModule } from '#/atoms/lifecycle.ts';
 import { createCapabilitiesLifecycleModule } from '#/capabilities/lifecycle.ts';
 import { createMcpLifecycleModule } from '#/capabilities/mcp/lifecycle.ts';
 import { createSkillsLifecycleModule } from '#/capabilities/skills/lifecycle.ts';
-import { ConfigService } from '#/config/service.ts';
+import { ConfigManager } from '#/config/manager.ts';
 import { createSandboxLifecycleModule } from '#/platform/sandbox/lifecycle.ts';
 import { createStoreLifecycleModule, type StartDataLayer } from '#/store/lifecycle.ts';
 import { RuntimeKernel } from './kernel.ts';
@@ -25,6 +25,7 @@ export interface DaemonModulesOptions {
   logger: { warn(message: string): void };
   interactions?: HostInteractionService;
   startStore?: StartDataLayer;
+  config?: () => ConfigAccess;
 }
 
 export function createDaemonModules(options: DaemonModulesOptions): RuntimeModule<ConfigSnapshot>[] {
@@ -47,7 +48,11 @@ export function createDaemonModules(options: DaemonModulesOptions): RuntimeModul
       monadVersion: options.monadVersion,
       watcher: options.watcher
     }),
-    createMcpLifecycleModule({ initial: options.initial, paths: options.paths })
+    createMcpLifecycleModule({
+      initial: options.initial,
+      paths: options.paths,
+      ...(options.config === undefined ? {} : { config: options.config })
+    })
   ];
 }
 
@@ -64,7 +69,7 @@ export interface DaemonRuntimeOptions {
 }
 
 export interface DaemonRuntime {
-  readonly config: ConfigService;
+  readonly config: ConfigManager;
   readonly kernel: RuntimeKernel<ConfigSnapshot>;
   start(): Promise<void>;
   startWatching(): void;
@@ -73,7 +78,7 @@ export interface DaemonRuntime {
 
 export function createDaemonRuntime(options: DaemonRuntimeOptions): DaemonRuntime {
   const kernel = new RuntimeKernel<ConfigSnapshot>(options.modules);
-  const config = new ConfigService({
+  const config = new ConfigManager({
     initial: options.initial,
     source: options.source,
     apply: async (snapshot) => {

@@ -1,6 +1,6 @@
 # Host interactions
 
-Host interactions let built-in features and atom packs request bounded user input without shipping UI code. The requester declares semantic content; monad owns presentation, attribution, validation, secrets, and completion across Web, TUI, CLI, and ACP.
+Host interactions let built-in features and atom packs request bounded user input without shipping UI code. The requester declares semantic content; Monad owns presentation, attribution, validation, secrets, and completion across Web, TUI, CLI, and ACP.
 
 ## Requesting input from an atom pack
 

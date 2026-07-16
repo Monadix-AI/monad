@@ -34,7 +34,7 @@ export async function addSkillItems(items: PlannedItem[], source: string, dir: s
         source: `${source}:${skillDir}`,
         target: parsed.frontmatter.name,
         action: 'add',
-        reason: 'valid SKILL.md can be installed as a global monad skill',
+        reason: 'valid SKILL.md can be installed as a global Monad skill',
         payload: { kind: 'skill', dir: skillDir, name: parsed.frontmatter.name },
         summary: parsed.frontmatter.description
       });

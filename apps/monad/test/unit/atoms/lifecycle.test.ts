@@ -1,21 +1,20 @@
-import type { MonadPaths } from '@monad/home';
-import type { PrincipalId } from '@monad/protocol';
+import type { MonadPaths } from '@monad/environment';
 import type { ModelSubsystem } from '#/agent/model/lifecycle.ts';
 import type { AtomDiscovery } from '#/atoms/lifecycle.ts';
-import type { ConfigSnapshot } from '#/config/service.ts';
+import type { ConfigSnapshot } from '#/config/manager.ts';
 import type { EmbeddingIndexer } from '#/services/embedding-indexer.ts';
 import type { ModelService } from '#/services/model.ts';
 import type { ModelCatalogService } from '#/services/model-catalog.ts';
 
 import { expect, test } from 'bun:test';
-import { createDefaultConfig } from '@monad/home';
+import { createDefaultConfig } from '@monad/environment';
 
 import { createAtomsLifecycleModule } from '#/atoms/lifecycle.ts';
 import { createCapabilitiesRuntime } from '#/capabilities/lifecycle.ts';
 import { RuntimeContext } from '#/runtime/context.ts';
 
 test('discovers atoms from stable capabilities and model dependencies', async () => {
-  const cfg = createDefaultConfig('usr_test' as PrincipalId, 'Test');
+  const cfg = createDefaultConfig('Test');
   const initial: ConfigSnapshot = { cfg, auth: null };
   const paths = { credentials: '/home/credentials' } as MonadPaths;
   const capabilities = createCapabilitiesRuntime({ paths, sandboxRoots: ['/workspace'], tools: [] });

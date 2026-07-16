@@ -6,14 +6,14 @@
 //   2. tool_search dispatches an inner LLM call with the catalog and returns matching schemas.
 //   3. tool_call executes the found tool via invokeTool and returns its result.
 
-import type { McpServerConfig, MonadPaths } from '@monad/home';
+import type { McpServerConfig, MonadPaths } from '@monad/environment';
 import type { SessionId } from '@monad/protocol';
 import type { ModelResult, ModelRouter } from '#/agent/index.ts';
 import type { ToolGate } from '#/capabilities/tools/types.ts';
 
 import { afterEach, expect, test } from 'bun:test';
 import { join } from 'node:path';
-import { createDefaultConfig } from '@monad/home';
+import { createDefaultConfig } from '@monad/environment';
 import { newId } from '@monad/protocol';
 
 import { AgentLoop, InMemoryMessageRepo } from '#/agent/index.ts';
@@ -34,8 +34,8 @@ const paths: MonadPaths = {
   dbDir: '/dev/null',
   db: '/dev/null',
   config: '/dev/null/config.json',
-  profile: '/dev/null/profile.json',
-  sandbox: '/dev/null/sandbox.json',
+  agentsConfig: '/dev/null/agents.json',
+  mesh: '/dev/null/mesh.json',
   approvals: '/dev/null/approvals.json',
   credentials: '/dev/null',
   auth: '/dev/null/auth.json',
@@ -113,7 +113,7 @@ afterEach(async () => {
 });
 
 test('deferred mode activates when fat MCP server registers 50 tools', async () => {
-  const cfg = createDefaultConfig('prn_t00000000000', 't');
+  const cfg = createDefaultConfig('t');
   cfg.mcpServers = [fatServer()];
   const registry = new AtomPackRegistry();
   openHandle = await connectMcpServers(cfg, paths, registry);
@@ -185,7 +185,7 @@ test('deferred mode activates when fat MCP server registers 50 tools', async () 
 });
 
 test('tool_search returns matching MCP tool schemas when queried', async () => {
-  const cfg = createDefaultConfig('prn_t00000000000', 't');
+  const cfg = createDefaultConfig('t');
   cfg.mcpServers = [fatServer()];
   const registry = new AtomPackRegistry();
   openHandle = await connectMcpServers(cfg, paths, registry);
@@ -212,7 +212,7 @@ test('tool_search returns matching MCP tool schemas when queried', async () => {
 });
 
 test('tool_call executes a real MCP tool and returns its output', async () => {
-  const cfg = createDefaultConfig('prn_t00000000000', 't');
+  const cfg = createDefaultConfig('t');
   cfg.mcpServers = [fatServer()];
   const registry = new AtomPackRegistry();
   openHandle = await connectMcpServers(cfg, paths, registry);

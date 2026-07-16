@@ -1,4 +1,4 @@
-import type { MonadConfig } from '@monad/home';
+import type { MonadConfig } from '@monad/environment';
 
 export function buildExternalAgentServerUrl(args: { port: number; https: MonadConfig['network']['https'] }): string {
   const scheme = args.https.enabled ? 'https' : 'http';

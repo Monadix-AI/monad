@@ -43,7 +43,7 @@ in their editor.
 - Library: `smol-toml` (already a transitive dep — promote to direct)
 - Editor validation: taplo + existing `SCHEMA_CONTENT` generation; write `#:schema` pragma as first line of each file
 - Backward compat: on startup, if `.json` exists and `.toml` does not, auto-migrate once (idempotent)
-- Core changes: `packages/home/src/config.ts` (load/save functions) and `packages/home/src/paths.ts` (filename constants)
+- Core changes: `packages/environment/src/config.ts` (load/save functions) and `packages/environment/src/paths.ts` (filename constants)
 
 ---
 
@@ -156,7 +156,7 @@ read-only fan-out, keep writes on the main thread, default to single on uncertai
 
 **Minimum-cost path if revisited:** Full design in `~/.claude/plans/purring-mixing-goose.md`.
 P0 (MVP): add `orchestration` to `monadProfileSchema` + a `router` model role
-(`packages/home/src/config.ts`, `packages/protocol/src/domain.ts`); new
+(`packages/environment/src/config.ts`, `packages/protocol/src/domain.ts`); new
 `apps/monad/src/services/orchestration-router.ts`; minimal seam in `AgentLoop.runStream`/
 `runBlock` (set a `turnOrchestration` flag → append `ORCHESTRATOR_INSTRUCTIONS` in
 `buildPrompt` + raise `maxToolSteps`); emit an `agent.routing` event; wire in

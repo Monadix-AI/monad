@@ -1,18 +1,13 @@
-import type { ChannelInstanceConfig } from '@monad/home';
+import type { ChannelInstanceConfig } from '@monad/environment';
 import type { StrictTranslateForNamespace } from '@monad/i18n';
-import type { AgentId, ChannelType, PrincipalId, SessionId, SessionOrigin, SessionTransport } from '@monad/protocol';
+import type { AgentId, ChannelType, SessionId, SessionOrigin, SessionTransport } from '@monad/protocol';
 import type { ChannelAdapter, ChannelAdapterFactory } from '@monad/sdk-atom';
 import type { CommandBundle } from '#/handlers/commands/index.ts';
 import type { EventBus, EventSink } from '#/services/event-bus.ts';
 import type { Store } from '#/store/db/index.ts';
 
 export interface SessionGateway {
-  createForPrincipal(args: {
-    title: string;
-    agentId?: AgentId;
-    principalId: PrincipalId;
-    origin?: SessionOrigin;
-  }): Promise<{
+  create(args: { title: string; agentId?: AgentId; origin?: SessionOrigin }): Promise<{
     sessionId: SessionId;
   }>;
   sendInline(

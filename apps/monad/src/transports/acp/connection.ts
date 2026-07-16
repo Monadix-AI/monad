@@ -27,7 +27,7 @@ export function connectAcp(handlers: Handlers, stream: Stream, sandboxRoots?: st
   // multiple simultaneous connections (or sequential test runs) don't share state.
   let inst!: MonadAcpAgent;
   const asParams = (p: unknown) => p as Record<string, unknown>;
-  return createAcpAgent({ name: 'monad' })
+  return createAcpAgent({ name: 'Monad' })
     .onConnect((conn) => {
       inst = new MonadAcpAgent(conn, handlers, sandboxRoots);
     })

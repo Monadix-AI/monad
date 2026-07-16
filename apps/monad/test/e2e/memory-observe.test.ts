@@ -96,7 +96,6 @@ for (const kind of TRANSPORTS) {
       store.insertSession({
         id: sid,
         title: 't',
-        ownerPrincipalId: 'prn_100000000000',
         state: 'active',
         agentIds: ['agt_100000000000'],
         archived: false,

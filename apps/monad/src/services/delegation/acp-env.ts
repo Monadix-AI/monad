@@ -1,4 +1,4 @@
-import type { AcpAgentConfig } from '@monad/home';
+import type { AcpAgentConfig } from '@monad/environment';
 
 import { existsSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';

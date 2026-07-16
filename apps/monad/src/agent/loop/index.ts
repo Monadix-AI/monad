@@ -191,7 +191,6 @@ export class AgentLoop {
         messages: await this.hookOrchestrator.beforeModel(sessionId, messages),
         params: this.deps.generationParams,
         sessionId,
-        userId: this.deps.userId,
         signal
       })) {
         if (signal?.aborted) break; // sessions.abort — stop consuming; persist what we have
@@ -278,7 +277,6 @@ export class AgentLoop {
         messages: await this.hookOrchestrator.beforeModel(sessionId, messages),
         params: this.deps.generationParams,
         sessionId,
-        userId: this.deps.userId,
         signal
       });
       const parsed = finishReasonSchema.safeParse(result.finishReason);
@@ -328,7 +326,6 @@ export class AgentLoop {
         params: this.deps.generationParams,
         tools,
         sessionId,
-        userId: this.deps.userId,
         signal
       });
       this.prompt.noteUsage(result.usage);
@@ -372,7 +369,6 @@ export class AgentLoop {
       messages: await this.hookOrchestrator.beforeModel(sessionId, messages),
       params: this.deps.generationParams,
       sessionId,
-      userId: this.deps.userId,
       signal
     });
     const stop = await this.hookOrchestrator.runStopHook(
@@ -500,7 +496,6 @@ export class AgentLoop {
         messages: await this.hookOrchestrator.beforeModel(sessionId, messages),
         params: this.deps.generationParams,
         sessionId,
-        userId: this.deps.userId,
         signal
       })) {
         if (signal?.aborted) break;
@@ -602,7 +597,6 @@ export class AgentLoop {
       params: this.deps.generationParams,
       tools,
       sessionId,
-      userId: this.deps.userId,
       signal
     })) {
       if (signal?.aborted) break;

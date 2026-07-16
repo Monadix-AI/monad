@@ -1,4 +1,4 @@
-import type { McpServerConfig } from '@monad/home';
+import type { McpServerConfig } from '@monad/environment';
 
 import { asBoolean, asRecordArray, asString, asStringArray, isRecord } from './shared.ts';
 

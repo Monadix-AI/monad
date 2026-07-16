@@ -21,7 +21,6 @@ function freshStore(cwd?: string) {
   store.insertSession({
     id: 'ses_100000000000',
     title: 't',
-    ownerPrincipalId: 'prn_100000000000',
     state: 'active',
     agentIds: ['agt_100000000000'],
     archived: false,
@@ -39,7 +38,6 @@ function freshStoreWithProject(cwd: string) {
   store.insertWorkplaceProject({
     id: 'prj_project00000',
     title: 'project',
-    ownerPrincipalId: 'prn_100000000000',
     state: 'active',
     archived: false,
     memberTemplates: [],

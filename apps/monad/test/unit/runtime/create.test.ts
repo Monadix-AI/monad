@@ -1,10 +1,9 @@
-import type { MonadAuth, MonadConfig } from '@monad/home';
-import type { PrincipalId } from '@monad/protocol';
-import type { ConfigSnapshot, ConfigSource } from '#/config/service.ts';
+import type { MonadAuth, MonadConfig } from '@monad/environment';
+import type { ConfigSnapshot, ConfigSource } from '#/config/manager.ts';
 import type { RuntimeModule } from '#/runtime/types.ts';
 
 import { expect, test } from 'bun:test';
-import { createDefaultConfig } from '@monad/home';
+import { createDefaultConfig } from '@monad/environment';
 
 import { createDaemonModules, createDaemonRuntime } from '#/runtime/create.ts';
 import { buildRuntimeGraph } from '#/runtime/graph.ts';
@@ -16,7 +15,7 @@ interface RecordingSource extends ConfigSource {
 }
 
 function snapshot(model: string): ConfigSnapshot {
-  const cfg = createDefaultConfig('usr_test' as PrincipalId, 'Test');
+  const cfg = createDefaultConfig('Test');
   return { auth: null, cfg: { ...cfg, model: { ...cfg.model, default: model } } };
 }
 

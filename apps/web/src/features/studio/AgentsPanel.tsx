@@ -245,7 +245,7 @@ export function AgentsPanel({ onClose, subpath = [] }: StudioSectionProps) {
                 {confirmDelete === a.id ? (
                   <>
                     <Button
-                      aria-label={t('web.common.confirm')}
+                      aria-label={t('web.studio.deleteAgent')}
                       className="size-6 text-destructive"
                       onClick={() => {
                         void deleteAgent(a.id);
@@ -274,7 +274,7 @@ export function AgentsPanel({ onClose, subpath = [] }: StudioSectionProps) {
                   </>
                 ) : (
                   <Button
-                    aria-label={t('web.common.delete')}
+                    aria-label={t('web.studio.deleteAgent')}
                     className="size-6"
                     onClick={() => setConfirmDelete(a.id)}
                     size="icon"

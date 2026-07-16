@@ -14,7 +14,6 @@ sessions            workplace_projects
 ------------------  ------------------
 id                  id
 title               title
-ownerPrincipalId    ownerPrincipalId
 state               state
 archived            archived
 model               model
@@ -51,7 +50,7 @@ full parallel table.
 sessions: {
   id: SessionId,              // single ses_… prefix for both kinds — see "id scheme" below
   projectId: ProjectId | null, // null = chat session; set = project session
-  title, ownerPrincipalId, state, archived, model, cwd, origin,
+  title, state, archived, model, cwd, origin,
   agentIds, restoreCount,
   inputTokens, outputTokens, totalTokens, cacheReadTokens, cacheWriteTokens, reasoningTokens, costUsd,
   createdAt, updatedAt
@@ -63,7 +62,7 @@ session_members: {            // empty for a plain chat session
 }
 ```
 
-`workplace_projects` shrinks to pure environment state: `id, title, ownerPrincipalId, cwd, config,
+`workplace_projects` shrinks to pure environment state: `id, title, cwd, config,
 memberTemplates, createdAt, updatedAt` — no `state`/`archived`/`origin`/`model`, since those are
 per-*session* now, not per-project. (Exact leftover column list beyond `memberTemplates` — see below —
 is a P6 implementation detail, not a proposal blocker.)
@@ -168,7 +167,7 @@ each still ships green on its own:
 
 ## Non-goals (explicitly out of scope for Track B)
 
-- Anything ACP-related — ACP agents are sub-agents the monad agent calls, never a first-class project
+- Anything ACP-related — ACP agents are sub-agents the Monad agent calls, never a first-class project
   session member (confirmed earlier in the observation-architecture work).
-- P5 (generalizing *observation* to monad-builtin/ACP agents) — depends on Track B's stable `agentId`
+- P5 (generalizing *observation* to Monad-builtin/ACP agents) — depends on Track B's stable `agentId`
   per session, but is Track A's tail, not part of this proposal. Comes after P6 lands.

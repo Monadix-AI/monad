@@ -1,4 +1,4 @@
-import type { MonadConfig, MonadPaths, ObscuraConfig } from '@monad/home';
+import type { MonadConfig, MonadPaths, ObscuraConfig } from '@monad/environment';
 import type { Logger } from '@monad/logger';
 import type {
   GetLawsResponse,
@@ -15,7 +15,7 @@ import type {
 import type { WorkspaceExperienceApiHandler } from '@monad/sdk-atom';
 import type { AtomConflict } from '#/atoms/resolve.ts';
 import type { ChannelService } from '#/channels/channel.ts';
-import type { ConfigReloader } from '#/config/reloader.ts';
+import type { ConfigAccess } from '#/config/manager.ts';
 import type {
   RegisteredExperienceWorker,
   RegisteredWorkspaceExperienceApiRoute
@@ -58,7 +58,7 @@ export interface DaemonHandlerDeps extends SessionDeps, ModelDeps {
   channelService: ChannelService;
   /** Locale gateway — backs /v1/settings/locale + the web catalog endpoint. */
   localeService: I18nService;
-  configReloader?: ConfigReloader;
+  configManager: ConfigAccess;
   connectObscura?: (config: ObscuraConfig, command: string) => Promise<{ connected: boolean; tools: string[] }>;
   disconnectObscura?: () => Promise<void>;
   getObscuraStatus?: () => { connected: boolean; tools: string[] };

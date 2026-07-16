@@ -1,4 +1,4 @@
-import type { McpServerConfig, MonadConfig, MonadPaths } from '@monad/home';
+import type { McpServerConfig, MonadConfig } from '@monad/environment';
 import type {
   GetMcpServerResponse,
   ListMcpCatalogResponse,
@@ -11,8 +11,7 @@ import type {
   SetMcpServerEnabledRequest,
   UpsertMcpServerRequest
 } from '@monad/protocol';
-
-import { loadAll, saveSystemConfig } from '@monad/home';
+import type { ConfigAccess } from '#/config/manager.ts';
 
 import {
   BuiltInMcpAdapter,
@@ -32,7 +31,7 @@ const REGISTRY_ADAPTERS = [
 ];
 
 export interface McpServerDeps {
-  paths: MonadPaths;
+  config: ConfigAccess;
   /** Live connection health (config + presets + file/pack + obscura). Absent in mock/test wiring. */
   getMcpStatus?: () => Promise<McpServerStatus[]>;
   /** Run interactive OAuth for a config http oauth server, then reconnect it. Absent in mock/test. */
@@ -41,21 +40,18 @@ export interface McpServerDeps {
   mcpReconnect?: (name: string) => Promise<void>;
 }
 
-// MCP servers are SYSTEM config (config.json). Edits persist via saveSystemConfig, which trips the
-// settings file-watcher → configReloader → diff-reconnect (connect added / disconnect removed / reconnect
-// changed) — so a change applies live, no restart (see capabilities/mcp/service.ts reloadConfigMcpServers). The
-// view mirrors @monad/home's mcpServerSchema field-for-field; secret-bearing values are `${env:NAME}`
-// refs by convention, so nothing is stripped. saveSystemConfig re-validates, so a bad shape is rejected.
+// MCP servers are agent infrastructure. ConfigManager persists edits and diff-reconnects added, removed, or
+// changed servers live (see capabilities/mcp/service.ts reloadConfigMcpServers). The
+// view mirrors @monad/environment's mcpServerSchema field-for-field; secret-bearing values are `${env:NAME}`
+// refs by convention, so nothing is stripped. ConfigManager re-validates updates before persistence.
 const toView = (s: McpServerConfig): McpServerView => s as McpServerView;
 const fromView = (v: McpServerView): McpServerConfig => v as McpServerConfig;
 
-export function createMcpServerModule({ paths, getMcpStatus, mcpAuthorize, mcpReconnect }: McpServerDeps) {
+export function createMcpServerModule({ config, getMcpStatus, mcpAuthorize, mcpReconnect }: McpServerDeps) {
   async function read(): Promise<MonadConfig> {
-    const cfg = await loadAll(paths.config, paths.profile);
-    if (!cfg) throw new Error('mcp-server settings: config.json missing');
-    return cfg;
+    return structuredClone(config.get().cfg);
   }
-  const commit = (cfg: MonadConfig): Promise<void> => saveSystemConfig(paths.config, cfg);
+  const commit = (cfg: MonadConfig): Promise<unknown> => config.updateConfig(() => cfg);
 
   return {
     async listMcpServers(): Promise<ListMcpServersResponse> {

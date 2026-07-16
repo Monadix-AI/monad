@@ -1,4 +1,4 @@
-import type { Credential, Provider } from '@monad/home';
+import type { Credential, Provider } from '@monad/environment';
 import type { ModelInfo, PatchProviderRequest, ProviderView, SetProviderRequest } from '@monad/protocol';
 import type { ModelContext } from '#/handlers/settings/model/context.ts';
 

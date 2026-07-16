@@ -16,7 +16,7 @@ import {
   useUpdateWorkplaceProjectMutation,
   workplaceProjectSelectors
 } from '@monad/client-rtk';
-import { openUrl } from '@monad/home';
+import { openUrl } from '@monad/environment';
 import { skipToken } from '@reduxjs/toolkit/query';
 import { Box, Text, useInput } from 'ink';
 import { useEffect, useState } from 'react';

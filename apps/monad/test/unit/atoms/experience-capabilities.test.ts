@@ -30,12 +30,11 @@ function sessions(overrides: Partial<ProjectSessionOperations> = {}): ProjectSes
 function context(permissions: WorkspaceExperiencePermission[]) {
   return createWorkspaceExperienceApiContext({
     atomPackId: 'pack-a',
-    principalId: 'prn_a',
     experienceId: 'board',
     permissions,
     deps: {
       state: { forPack: () => emptyState },
-      projectSessions: { forPrincipal: () => sessions() },
+      projectSessions: { operations: () => sessions() },
       workerScheduler: {
         forExperience: () => ({ schedule: async () => {}, cancel: async () => {} })
       }
@@ -43,11 +42,10 @@ function context(permissions: WorkspaceExperiencePermission[]) {
   });
 }
 
-test('workspace Experience context derives the trusted pack and principal', () => {
+test('workspace Experience context derives the trusted pack and experience', () => {
   const result = context(['experience.state']);
 
   expect(result.atomPackId).toBe('pack-a');
-  expect(result.principalId).toBe('prn_a');
   expect(result.experienceId).toBe('board');
 });
 
@@ -57,7 +55,7 @@ test('an undeclared project observation permission fails before adapter access',
   await expect(result.projectSessions.listObservations('ses_a')).rejects.toThrow('project.observations.read');
 });
 
-test('a declared observation permission reaches the principal-scoped adapter', async () => {
+test('a declared observation permission reaches the project session adapter', async () => {
   const result = context(['project.observations.read']);
 
   expect(await result.projectSessions.listObservations('ses_a')).toEqual({ items: [], nextCursor: null });
@@ -92,13 +90,12 @@ test('session idempotency keys are namespaced by the trusted pack identity', asy
   let received = '';
   const result = createWorkspaceExperienceApiContext({
     atomPackId: 'pack-a',
-    principalId: 'prn_a',
     experienceId: 'board',
     permissions: ['project.sessions.create'],
     deps: {
       state: { forPack: () => emptyState },
       projectSessions: {
-        forPrincipal: () =>
+        operations: () =>
           sessions({
             create: async (_projectId, input) => {
               received = input.idempotencyKey;

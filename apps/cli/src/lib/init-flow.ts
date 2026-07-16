@@ -9,7 +9,7 @@ import type {
 } from '@monad/protocol';
 
 import { createInterface, emitKeypressEvents } from 'node:readline';
-import { getPaths, initMonadHome, isHomeInitialized, loadAll, openUrl, setMonadRoot } from '@monad/home';
+import { getPaths, initMonadHome, isHomeInitialized, loadAll, openUrl, setMonadRoot } from '@monad/environment';
 import { KNOWN_PROVIDER_TYPES } from '@monad/protocol';
 
 import { ensureBrowserBinary } from './browser-binary.ts';
@@ -361,7 +361,7 @@ export async function runTerminalInit(client: MonadClient): Promise<boolean> {
   // Offer to install a Playwright browser if the preset is enabled — without it
   // the browser tools fail cryptically on first use.
   const p = getPaths();
-  const cfg = await loadAll(p.config, p.profile);
+  const cfg = await loadAll(p);
   if (cfg?.browser.enabled) await ensureBrowserBinary(ask);
 
   let addAnother = true;
@@ -477,7 +477,7 @@ export async function runBrowserInit(client: MonadClient, port: number): Promise
   }
 
   if (opened) {
-    out(`\n${t('init.browser.prompt', { label: bold('monad setup') })}`);
+    out(`\n${t('init.browser.prompt', { label: bold('Monad setup') })}`);
     out(cyan(url));
     out(dim(t('init.browser.waiting')));
 

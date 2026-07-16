@@ -24,14 +24,16 @@ dependencies beyond `zod`.
 - UI-only types do not belong here.
 - See `docs/engineering/conventions.md` / @docs/engineering/conventions.md.
 
-### `@monad/home`
+### `@monad/environment`
 
-Owns the daemon home boundary: `config.json`, `auth.json`, filesystem layout,
-workspace context discovery, init flow, and client connection resolution.
+Owns the host environment boundary: settings schemas and disk storage adapters,
+filesystem layout, workspace context discovery, init flow, TLS, and client connection resolution.
 
-- `src/config.ts` is the settings source of truth; add user-facing settings there.
+- `src/config/` is the settings schema and storage source of truth.
 - `src/paths.ts` is the only place that knows the `~/.monad` layout.
 - Parse config/auth on load; never log secrets.
+- Runtime consumers must use the daemon `ConfigManager`; only initialization, repair,
+  and the manager's source adapter access settings files directly.
 - Keep this layer below runtime modules: do not import `@monad/monad`, atoms, web, CLI,
   or other executable layers.
 - See `docs/engineering/conventions.md` / @docs/engineering/conventions.md and
@@ -45,6 +47,7 @@ config reload, and observability.
 - Bootstrap in dependency order: config -> store -> agent -> handlers -> transports.
 - Keep handlers transport-agnostic and split by domain.
 - Prefer hot reload over restart: file watcher -> config bus -> subscribers.
+- `src/config/manager.ts` is the sole runtime reader/writer/watcher for settings.
 - Built-in and third-party atom packs must load through the same manifest-gated path.
 - Hot paths must parse at edges, prepare statements once, and bound growing state.
 - Any feature touching daemon behavior must match over TCP loopback and Unix socket.

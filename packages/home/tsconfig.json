@@ -1,4 +1,0 @@
-{
-  "extends": "@monad/config/tsconfig.base.json",
-  "include": ["src", "test"]
-}

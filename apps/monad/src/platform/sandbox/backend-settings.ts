@@ -1,4 +1,4 @@
-import type { MonadAuth } from '@monad/home';
+import type { MonadAuth } from '@monad/environment';
 import type { InteractionField, SandboxBackendRef, SetSandboxSettingsRequest } from '@monad/protocol';
 import type { SandboxLauncherDescriptor } from '@monad/sdk-atom';
 

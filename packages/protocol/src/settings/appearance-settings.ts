@@ -25,7 +25,7 @@ export const composerSettingsSchema = z
 export type ComposerSettings = z.infer<typeof composerSettingsSchema>;
 
 // App-wide presentation settings — not tied to any individual user's profile, and not
-// restart-required (see monadSystemConfigSchema vs monadProfileSchema in @monad/home).
+// restart-required (see monadSystemConfigSchema vs monadProfileSchema in @monad/environment).
 export const appearanceSettingsSchema = z.object({
   avatarStyle: avatarStyleSchema.default(DEFAULT_AVATAR_STYLE),
   composer: composerSettingsSchema

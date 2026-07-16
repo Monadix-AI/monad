@@ -2,14 +2,14 @@
 // auth.json + enables) → update (preserves tokenRef) → disable → remove (drops credential). Exercises
 // the settings module (modules/settings/peer) the same way the HTTP controller + CLI drive it.
 
-import type { MonadPaths } from '@monad/home';
+import type { MonadPaths } from '@monad/environment';
 import type { PeerView } from '@monad/protocol';
 
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initMonadHome, loadAll, loadAuth, saveSystemConfig } from '@monad/home';
+import { initMonadHome, loadAll, loadAuth, saveAgents } from '@monad/environment';
 
 import { ModelService } from '#/handlers/settings/model/index.ts';
 import { buildHandlers, makeTestPaths, mockModel, seededProviderRegistry } from '../helpers.ts';
@@ -26,7 +26,7 @@ beforeEach(async () => {
   dir = join(tmpdir(), `monad-peersettings-${process.pid}-${Date.now()}-${process.hrtime.bigint()}`);
   paths = makePaths(dir);
   await initMonadHome(paths);
-  const cfg = await loadAll(paths.config, paths.profile);
+  const cfg = await loadAll(paths);
   if (!cfg) throw new Error('config missing');
   const modelService = new ModelService(paths.auth, cfg, await loadAuth(paths.auth), seededProviderRegistry());
   handlers = buildHandlers(mockModel(), { paths, modelService });
@@ -53,7 +53,7 @@ test('upsert → list returns the peer without any secret material', async () =>
   expect(JSON.stringify(peers[0])).not.toContain('secret');
   expect(JSON.stringify(peers[0])).not.toContain('token');
   // config.json carries the ref; auth.json has no credential yet.
-  const cfg = await loadAll(paths.config, paths.profile);
+  const cfg = await loadAll(paths);
   // biome-ignore lint/suspicious/noTemplateCurlyInString: testing the literal secret-ref syntax
   expect(cfg?.peers[0]?.tokenRef).toBe('${secret:peer/peer_HOME00000000/token}');
 });
@@ -73,7 +73,7 @@ test('updating a peer preserves its existing tokenRef', async () => {
   const { peers } = await handlers.peer.listPeers();
   expect(peers).toHaveLength(1);
   expect(peers[0]).toMatchObject({ label: 'renamed', baseUrl: 'https://new.example/openai' });
-  const cfg = await loadAll(paths.config, paths.profile);
+  const cfg = await loadAll(paths);
   // biome-ignore lint/suspicious/noTemplateCurlyInString: testing the literal secret-ref syntax
   expect(cfg?.peers[0]?.tokenRef).toBe('${secret:peer/peer_HOME00000000/token}');
 });
@@ -98,17 +98,20 @@ test('remove drops the peer and its credential', async () => {
   expect(auth?.peerCredentials?.peer_HOME00000000).toBeUndefined();
 });
 
-// Regression: a peer mutation persists system config via saveSystemConfig → extractSystemConfig,
-// which must round-trip agent.approvals rather than letting the schema default silently wipe them.
+// A peer mutation writes mesh.json and must leave the independent agents.json policy untouched.
 test('a peer mutation preserves the operator agent.approvals policy', async () => {
-  const cfg = await loadAll(paths.config, paths.profile);
+  const cfg = await loadAll(paths);
   if (!cfg) throw new Error('config missing');
   cfg.agent.approvals = { deny: ['shell_exec'], ask: ['file_write'], allow: [] };
-  await saveSystemConfig(paths.config, cfg);
+  await saveAgents(paths.agentsConfig, cfg);
+  handlers = buildHandlers(mockModel(), {
+    paths,
+    modelService: new ModelService(paths.auth, cfg, await loadAuth(paths.auth), seededProviderRegistry())
+  });
 
   await handlers.peer.upsertPeer({ peer: view() });
 
-  const after = await loadAll(paths.config, paths.profile);
+  const after = await loadAll(paths);
   expect(after?.agent.approvals).toEqual({ deny: ['shell_exec'], ask: ['file_write'], allow: [] });
 });
 

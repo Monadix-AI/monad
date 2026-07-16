@@ -2,7 +2,7 @@
 // dirs (~/.monad/locales/<packName>/<lng>/<namespace>.json). Third-party packs override the
 // built-in for the same tag (first discovered per tag wins across pack directories).
 
-import type { MonadConfig, MonadPaths } from '@monad/home';
+import type { MonadConfig, MonadPaths } from '@monad/environment';
 
 import { defaultLocaleName, loadLocalePacksFromDir } from '@monad/i18n';
 import { BUILTIN_LOCALES_DIR } from '@monad/i18n/locale-dir';

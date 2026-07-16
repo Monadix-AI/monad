@@ -13,8 +13,7 @@ const otelTelemetry = new OpenTelemetry({
     return {
       ...(typeof runtimeContext?.sessionId === 'string'
         ? { 'ai.telemetry.metadata.sessionId': runtimeContext.sessionId }
-        : {}),
-      ...(typeof runtimeContext?.userId === 'string' ? { 'ai.telemetry.metadata.userId': runtimeContext.userId } : {})
+        : {})
     };
   }
 });
@@ -27,12 +26,11 @@ type AiSdkRuntimeContext = {
   provider: string;
   model: string;
   sessionId?: string;
-  userId?: string;
 };
 
 // Shared `telemetry` config for both the stream and complete paths — keeps the two
 // call sites from drifting (a field added to one but not the other). Phoenix reads runtime context;
-// sessionId/userId are promoted to OpenInference session.id/user.id by the daemon span processor.
+// sessionId is promoted to OpenInference session.id by the daemon span processor.
 export function buildTelemetry(
   call: ModelCall,
   spec: AiSdkProviderSpec,
@@ -51,8 +49,7 @@ export function buildTelemetry(
   const runtimeContext: AiSdkRuntimeContext = {
     provider: spec.type,
     model: call.modelId,
-    ...(call.sessionId ? { sessionId: call.sessionId } : {}),
-    ...(call.userId ? { userId: call.userId } : {})
+    ...(call.sessionId ? { sessionId: call.sessionId } : {})
   };
   const telemetry: {
     isEnabled: true;
@@ -69,8 +66,7 @@ export function buildTelemetry(
     includeRuntimeContext: {
       provider: true,
       model: true,
-      sessionId: true,
-      userId: true
+      sessionId: true
     },
     integrations: telemetryIntegrations()
   };

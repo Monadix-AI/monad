@@ -1,5 +1,5 @@
 import type { Dirent } from 'node:fs';
-import type { MonadPaths } from '@monad/home';
+import type { MonadPaths } from '@monad/environment';
 import type {
   CapabilityInventoryItem,
   CapabilityInventoryOpenLocationRequest,
@@ -15,7 +15,7 @@ import { existsSync } from 'node:fs';
 import { readdir, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, dirname, extname, join, resolve } from 'node:path';
-import { loadAll, openNativePath } from '@monad/home';
+import { openNativePath } from '@monad/environment';
 
 import { defaultBinProbes } from '#/infra/resolve-binary.ts';
 import { listExternalAgentProviderAdapters } from '#/services/external-agent/index.ts';
@@ -808,8 +808,6 @@ export function createCapabilityInventoryModule(paths: MonadPaths) {
         }
       }
 
-      const cfg = await loadAll(paths.config, paths.profile);
-      if (!cfg) warnings.push('Monad config.json missing; configured MCP inventory may be incomplete.');
       return { roots, items, warnings };
     },
 

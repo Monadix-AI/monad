@@ -1,11 +1,11 @@
 # Peer federation — daemon-to-daemon task delegation
 
-One monad daemon can delegate a self-contained task to a **peer** monad daemon's agent (compute
+One Monad daemon can delegate a self-contained task to a **peer** Monad daemon's agent (compute
 federation). The caller's agent invokes the `agent_peer_delegate` tool; the peer runs the subtask on
 its **own** filesystem, tools, and credentials, and streams the answer back as the tool's result.
 
-This is the inverse of [ACP delegation](acp.md): there monad drives an external ACP agent over stdio
-(and serves *its* files/terminal); here monad drives a networked **monad peer** that is fully
+This is the inverse of [ACP delegation](acp.md): there Monad drives an external ACP agent over stdio
+(and serves *its* files/terminal); here Monad drives a networked **Monad peer** that is fully
 self-contained — there is **no filesystem/terminal bridge-back**.
 
 > **Ownership boundary.** This mechanism assumes the two daemons share a single owner (same person).
@@ -34,7 +34,7 @@ Key files:
 - `apps/monad/src/services/peer-delegate.ts` — the `agent_peer_delegate` tool (high-risk; streams
   SSE; the model supplies a peer **name**, never a URL/token). Composed through
   `agent/execution.ts` with the enabled, token-resolved peer tools.
-- `packages/home/src/config.ts` — `peers[]` (system config) + `peerCredentials` in `auth.json` +
+- `packages/environment/src/config.ts` — `peers[]` (system config) + `peerCredentials` in `auth.json` +
   `resolvePeerSecretRef`.
 - `apps/monad/src/modules/settings/peer/` + `transports/http/peer-settings/controller.ts` — settings
   CRUD (`/v1/settings/peers`), driven by `monad peer …`.
@@ -118,9 +118,9 @@ phase is **PeerLink**: a bidirectional JSON-RPC link over one WebSocket (`/v1/pe
 - **NAT traversal via reverse tunnel** — the NAT'd daemon dials out; the link is symmetric, so either
   side can initiate a delegation once connected (connect direction ⟂ request direction).
 - **`forward` approval** — B's approval request streams back to A over the link (`peer.delegate.approve`
-  reverse-RPC), so A's user decides — the same-owner default once it is expressible.
-- **`prn_PEER00000000*` isolation** — inbound delegations run under a synthetic low-privilege principal with a
-  per-peer handler facade and a `'peer'` session transport/surface.
+  reverse-RPC), so the initiating daemon's human can decide.
+- **Peer-scoped isolation** — inbound delegations use a restricted per-peer handler facade and a
+  `'peer'` session transport/surface, with capabilities and approval policy enforced at that boundary.
 
 The `agent_peer_delegate` tool would then become transport-pluggable (`direct` = OpenAI-compat |
 `link` = PeerLink). The full design lives in the team's planning notes.
@@ -136,4 +136,4 @@ The `agent_peer_delegate` tool would then become transport-pluggable (`direct` =
   in `auth.json`).
 - `apps/monad/test/e2e/peer-delegate.test.ts` — a real B daemon over loopback: tool-level closed loop +
   a **true two-daemon** test where A's real agent loop emits the tool call and answers from B's result.
-- `packages/home/test/unit/peer-secret.test.ts` — `resolvePeerSecretRef`.
+- `packages/environment/test/unit/peer-secret.test.ts` — `resolvePeerSecretRef`.

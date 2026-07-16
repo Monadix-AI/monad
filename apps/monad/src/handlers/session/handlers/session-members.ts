@@ -9,7 +9,6 @@ import type { SessionContext } from '#/handlers/session/context.ts';
 import type { ManagedExternalAgentProjectMember } from '#/handlers/session/handlers/messaging-members.ts';
 import type { SessionMember } from '#/store/db/session-members.ts';
 
-import { loadAll } from '@monad/home';
 import { newId } from '@monad/protocol';
 
 import { HandlerError } from '#/handlers/handler-error.ts';
@@ -70,8 +69,9 @@ export function createSessionMembersHandlers(ctx: SessionContext, deps: SessionM
   async function spawnIfManaged(sessionId: SessionId, memberId: string): Promise<void> {
     if (!paths) return;
     const session = requireSession(sessionId);
-    const cfg = await loadAll(paths.config, paths.profile);
-    const externalAgents = (cfg?.externalAgents ?? []).filter((agent) => agent.enabled !== false);
+    const externalAgents = (ctx.deps.configManager?.get().cfg.externalAgents ?? []).filter(
+      (agent) => agent.enabled !== false
+    );
     const managed = managedExternalAgentProjectMembers(store, sessionId, externalAgents).find(
       (candidate) => candidate.runtimeAgentName === memberId
     );

@@ -1,4 +1,4 @@
-import type { MonadAuth } from '@monad/home';
+import type { MonadAuth } from '@monad/environment';
 import type { ChannelInbound } from '@monad/protocol';
 
 const DEDUPE_CAP = 1000;

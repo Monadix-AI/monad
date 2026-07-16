@@ -22,7 +22,7 @@ Typing rules: `docs/engineering/conventions.md` / @docs/engineering/conventions.
 
 - Single source of truth: one producer per type; consumers import and derive (`.pick()/.omit()/.extend()`, `Pick/Omit/&`), never redeclare.
 - Data-layer types live with their producer: `@monad/protocol` for wire/domain,
-  `@monad/home` for config and home layout, daemon store modules for DB rows.
+  `@monad/environment` for config and home layout, daemon store modules for DB rows.
 - UI-only props, form state, and view-models stay in the UI app/package.
 - Schema-first at runtime boundaries (HTTP/WS/disk): the zod schema is the definition;
   always `parse`, never cast external data.

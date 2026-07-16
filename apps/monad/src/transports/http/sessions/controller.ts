@@ -516,7 +516,7 @@ export function createSessionsController(
           detail: {
             tags: ['http-only'],
             summary: 'Forward to ACP agent',
-            description: 'Sends a message directly to a configured ACP agent, bypassing the monad LLM layer.'
+            description: 'Sends a message directly to a configured ACP agent, bypassing the Monad LLM layer.'
           }
         }
       )

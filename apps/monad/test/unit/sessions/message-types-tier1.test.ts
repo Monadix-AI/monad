@@ -10,7 +10,6 @@ function fixtureSession(over: Partial<Session> = {}): Session {
   return {
     id: newId('ses'),
     title: 'test',
-    ownerPrincipalId: newId('prn'),
     state: 'active',
     agentIds: [],
     archived: false,

@@ -1,10 +1,10 @@
-import type { MonadPaths } from '@monad/home';
+import type { MonadPaths } from '@monad/environment';
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, rm } from 'node:fs/promises';
+import { tmpdir, userInfo } from 'node:os';
 import { join } from 'node:path';
-import { initMonadHome, loadAll, pathsForHome, saveProfile } from '@monad/home';
+import { initMonadHome, loadAll, pathsForHome, saveAgents } from '@monad/environment';
 import { ModelProviderType } from '@monad/protocol';
 import { sql } from 'drizzle-orm';
 
@@ -39,32 +39,37 @@ afterEach(async () => {
 describe('checkAndRepair', () => {
   test('reports ok when everything is healthy', async () => {
     await initMonadHome(paths);
-    const cfg = await loadAll(paths.config, paths.profile);
+    const cfg = await loadAll(paths);
     if (!cfg) throw new Error('config missing');
     cfg.model.default = cfg.model.profiles[0]?.alias ?? '';
-    await saveProfile(paths.profile, cfg);
+    await saveAgents(paths.agentsConfig, cfg);
 
     const store = createStore({ path: paths.db });
     const report = await checkAndRepair(paths, store);
     store.close();
 
     expect(report.config).toBe('ok');
-    expect(report.profile).toBe('ok');
+    expect(report.agents).toBe('ok');
+    expect(report.mesh).toBe('ok');
     expect(report.auth).toBe('ok');
     expect(report.db).toBe('ok');
   });
 
-  test('repairs missing config.json', async () => {
-    // Provide auth only
-    await initMonadHome(paths);
-    await rm(paths.config);
-
+  test('initializes an entirely empty home', async () => {
+    await mkdir(paths.dbDir, { recursive: true });
     const store = createStore({ path: paths.db });
     const report = await checkAndRepair(paths, store);
     store.close();
 
     expect(report.config).toBe('missing');
-    // After repair, config should exist
+    expect(report.agents).toBe('missing');
+    expect(report.mesh).toBe('missing');
+    const initialized = await loadAll(paths);
+    expect({
+      displayName: initialized?.user.displayName,
+      agents: initialized?.agent.agents,
+      peers: initialized?.peers
+    }).toEqual({ displayName: userInfo().username, agents: [], peers: [] });
   });
 
   test('throws when config.json is corrupt', async () => {
@@ -90,33 +95,28 @@ describe('checkAndRepair', () => {
     expect(report.auth).toBe('repaired');
   });
 
-  test('repairs missing profile.json', async () => {
+  test('rejects missing agents.json', async () => {
     await initMonadHome(paths);
-    await rm(paths.profile);
+    await rm(paths.agentsConfig);
 
     const store = createStore({ path: paths.db });
-    const report = await checkAndRepair(paths, store);
+    await expect(checkAndRepair(paths, store)).rejects.toThrow(/agents\.json is missing/);
     store.close();
-
-    expect(report.profile).toBe('missing');
-    expect(await Bun.file(paths.profile).exists()).toBe(true);
+    expect(await Bun.file(paths.agentsConfig).exists()).toBe(false);
   });
 
-  test('repairs corrupt profile.json', async () => {
+  test('rejects corrupt agents.json', async () => {
     await initMonadHome(paths);
-    await Bun.write(paths.profile, '{not valid json}');
+    await Bun.write(paths.agentsConfig, '{not valid json}');
 
     const store = createStore({ path: paths.db });
-    const report = await checkAndRepair(paths, store);
+    await expect(checkAndRepair(paths, store)).rejects.toThrow(/agents\.json is not valid JSON/);
     store.close();
-
-    expect(report.profile).toBe('repaired');
-    expect(await Bun.file(paths.profile).exists()).toBe(true);
   });
 
   test('repairs missing model default by selecting the first profile', async () => {
     await initMonadHome(paths);
-    const cfg = await loadAll(paths.config, paths.profile);
+    const cfg = await loadAll(paths);
     if (!cfg) throw new Error('config missing');
     cfg.model.default = '';
     cfg.model.providers = [
@@ -126,19 +126,19 @@ describe('checkAndRepair', () => {
       { alias: 'fast', routes: { chat: { provider: 'p', modelId: 'm1' } }, params: {}, fallbacks: [] },
       { alias: 'smart', routes: { chat: { provider: 'p', modelId: 'm2' } }, params: {}, fallbacks: [] }
     ];
-    await saveProfile(paths.profile, cfg);
+    await saveAgents(paths.agentsConfig, cfg);
 
     const store = createStore({ path: paths.db });
     const report = await checkAndRepair(paths, store);
     store.close();
 
-    expect(report.profile).toBe('repaired');
-    expect((await loadAll(paths.config, paths.profile))?.model.default).toBe('fast');
+    expect(report.agents).toBe('repaired');
+    expect((await loadAll(paths))?.model.default).toBe('fast');
   });
 
   test('repairs stale model default by selecting the first profile', async () => {
     await initMonadHome(paths);
-    const cfg = await loadAll(paths.config, paths.profile);
+    const cfg = await loadAll(paths);
     if (!cfg) throw new Error('config missing');
     cfg.model.default = 'missing';
     cfg.model.providers = [
@@ -148,19 +148,19 @@ describe('checkAndRepair', () => {
       { alias: 'fast', routes: { chat: { provider: 'p', modelId: 'm1' } }, params: {}, fallbacks: [] },
       { alias: 'smart', routes: { chat: { provider: 'p', modelId: 'm2' } }, params: {}, fallbacks: [] }
     ];
-    await saveProfile(paths.profile, cfg);
+    await saveAgents(paths.agentsConfig, cfg);
 
     const store = createStore({ path: paths.db });
     const report = await checkAndRepair(paths, store);
     store.close();
 
-    expect(report.profile).toBe('repaired');
-    expect((await loadAll(paths.config, paths.profile))?.model.default).toBe('fast');
+    expect(report.agents).toBe('repaired');
+    expect((await loadAll(paths))?.model.default).toBe('fast');
   });
 
   test('repairs agent model aliases that point at missing profiles', async () => {
     await initMonadHome(paths);
-    const cfg = await loadAll(paths.config, paths.profile);
+    const cfg = await loadAll(paths);
     if (!cfg) throw new Error('config missing');
     cfg.model.providers = [
       { id: 'p', label: 'P', type: ModelProviderType.OpenAICompatible, baseUrl: 'https://api.example.com/v1' }
@@ -183,28 +183,28 @@ describe('checkAndRepair', () => {
         monadix: { consume: false }
       }
     ];
-    await saveProfile(paths.profile, cfg);
+    await saveAgents(paths.agentsConfig, cfg);
 
     const store = createStore({ path: paths.db });
     const report = await checkAndRepair(paths, store);
     store.close();
 
-    const repaired = await loadAll(paths.config, paths.profile);
-    expect(report.profile).toBe('repaired');
+    const repaired = await loadAll(paths);
+    expect(report.agents).toBe('repaired');
     expect(repaired?.agent.agents[0]?.modelAlias).toBeUndefined();
     expect(repaired?.agent.agents[0]?.model).toBeUndefined();
   });
 
   test('fails startup health check when a profile references a missing provider', async () => {
     await initMonadHome(paths);
-    const cfg = await loadAll(paths.config, paths.profile);
+    const cfg = await loadAll(paths);
     if (!cfg) throw new Error('config missing');
     cfg.model.providers = [];
     cfg.model.profiles = [
       { alias: 'default', routes: { chat: { provider: 'missing', modelId: 'm1' } }, params: {}, fallbacks: [] }
     ];
     cfg.model.default = 'default';
-    await saveProfile(paths.profile, cfg);
+    await saveAgents(paths.agentsConfig, cfg);
 
     const store = createStore({ path: paths.db });
     await expect(checkAndRepair(paths, store)).rejects.toThrow(

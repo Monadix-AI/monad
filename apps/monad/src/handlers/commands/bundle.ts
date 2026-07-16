@@ -3,7 +3,7 @@
 // fresh one), memory + graph consolidation, and the highRisk approval gate. Returned to the channel
 // gateway and the daemon handlers (see ./serve.ts / handlers.ts).
 
-import type { MonadConfig } from '@monad/home';
+import type { MonadConfig } from '@monad/environment';
 import type { Logger } from '@monad/logger';
 import type { Event, SessionId } from '@monad/protocol';
 import type { BeliefExplanation, ConsolidateSummary, ContradictionCheckSummary } from '@monad/sdk-atom';
@@ -180,9 +180,8 @@ export function createCommandBundle(deps: CommandBundleDeps): CommandBundle {
             }
           ]
         }),
-        gateway.createForPrincipal({
+        gateway.create({
           title,
-          principalId: session.ownerPrincipalId,
           agentId: session.agentIds[0] ?? undefined,
           origin: session.origin
         })

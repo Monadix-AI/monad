@@ -1,4 +1,4 @@
-import type { AcpAgentConfig, ExternalAgentConfig } from '@monad/home';
+import type { AcpAgentConfig, ExternalAgentConfig } from '@monad/environment';
 import type {
   SendMessageAttachment,
   SendMessageRequest,
@@ -12,8 +12,6 @@ import type { createAcpChannelDelegation } from '#/handlers/session/handlers/acp
 import type { createForwardAcpHandler } from '#/handlers/session/handlers/forward-acp.ts';
 import type { createForwardExternalAgentHandler } from '#/handlers/session/handlers/forward-external-agent.ts';
 import type { createManagedExternalAgentDelivery } from '#/handlers/session/handlers/managed-external-agent-delivery.ts';
-
-import { loadAll } from '@monad/home';
 
 import { buildChannelTurnContext } from '#/agent/prompts/channel.ts';
 import { routeChannelMessage } from '#/handlers/session/channel-routing.ts';
@@ -72,8 +70,7 @@ export function createSendProjectMessageHandler(ctx: SessionContext, deps: SendP
   }) {
     const routeSeedText = text.trim() || (attachments?.length ? 'Shared attachments.' : '');
     const session = requireSession(sessionId);
-    const paths = ctx.deps.paths;
-    const cfg = paths ? await loadAll(paths.config, paths.profile) : null;
+    const cfg = ctx.deps.configManager?.get().cfg;
     const acpAgents = (cfg?.acpAgents ?? []).filter((agent: AcpAgentConfig) => agent.enabled !== false);
     const externalAgents = (cfg?.externalAgents ?? []).filter((agent: ExternalAgentConfig) => agent.enabled !== false);
     const isWorkplaceProject = isWorkplaceProjectTarget(session);
@@ -121,7 +118,7 @@ export function createSendProjectMessageHandler(ctx: SessionContext, deps: SendP
           kind: 'external-agent' as const
         }));
     const participants: ChannelParticipant[] = [
-      { id: 'human', name: 'User', kind: 'human' },
+      { id: 'human', name: cfg?.user.displayName ?? 'User', kind: 'human' },
       ...studioAgents.map((agent) => ({
         id: `agent:${agent.id}`,
         name: agent.name,
@@ -182,7 +179,7 @@ export function createSendProjectMessageHandler(ctx: SessionContext, deps: SendP
               ambientContext: publicAmbientContext
             })
           : await send({ sessionId, text: route.text, attachments, generate: false });
-        const humanSender = { kind: 'human' as const, name: cfg?.principal.displayName ?? 'User', id: 'human' };
+        const humanSender = { kind: 'human' as const, name: cfg?.user.displayName ?? 'User', id: 'human' };
         await Promise.all([
           deliverProjectMessageToManagedExternalAgentMembers({
             session,
@@ -214,7 +211,7 @@ export function createSendProjectMessageHandler(ctx: SessionContext, deps: SendP
           session,
           externalAgents,
           text: messageTextWithAttachments(route.text, attachments),
-          sender: { kind: 'human', name: cfg?.principal.displayName ?? 'User', id: 'human' }
+          sender: { kind: 'human', name: cfg?.user.displayName ?? 'User', id: 'human' }
         });
       }
       return result;

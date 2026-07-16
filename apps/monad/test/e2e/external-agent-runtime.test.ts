@@ -1,4 +1,4 @@
-import type { MonadPaths } from '@monad/home';
+import type { MonadPaths } from '@monad/environment';
 import type {
   DeveloperLogRecord,
   ExternalAgentAuthSessionView,
@@ -12,10 +12,9 @@ import { chmod, mkdir, readFile, realpath, rm, symlink, writeFile } from 'node:f
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { builtinAgentAdapters } from '@monad/atoms/agent-adapters';
-import { initMonadHome, loadAuth, loadConfig } from '@monad/home';
+import { initMonadHome, loadAuth, loadConfig } from '@monad/environment';
 import { setLogLevel } from '@monad/logger';
 
-import { SESSION_DELETE_BACKEND_GRACE_MS } from '#/handlers/session/handlers/lifecycle/index.ts';
 import { ModelService } from '#/handlers/settings/model/index.ts';
 import { registerAgentAdapterImpl } from '#/services/external-agent/index.ts';
 import { createHttpTransport } from '#/transports/http.ts';
@@ -68,11 +67,11 @@ async function setup(opts?: {
   await mkdir(projectDir, { recursive: true });
   const paths = makePaths(dir);
   await initMonadHome(paths);
-  const cfg = await loadConfig(paths.config);
+  const cfg = await loadConfig(paths);
   if (!cfg) throw new Error('config missing after init');
   setLogLevel('debug');
   const modelService = new ModelService(paths.auth, cfg, await loadAuth(paths.auth), seededProviderRegistry());
-  const handlers = buildHandlers(mockModel(), { paths, modelService }, opts);
+  const handlers = buildHandlers(mockModel(), { paths, modelService }, { sessionDeleteGraceMs: 5, ...opts });
   const app = createHttpTransport(handlers);
   return { dir, projectDir, app, handlers };
 }
@@ -209,7 +208,7 @@ const jsonInit = (method: string, body?: unknown): RequestInit => ({
   headers: { 'content-type': 'application/json' },
   body: body === undefined ? undefined : JSON.stringify(body)
 });
-const SESSION_DELETE_TEST_TIMEOUT_MS = SESSION_DELETE_BACKEND_GRACE_MS + 5_000;
+const SESSION_DELETE_TEST_TIMEOUT_MS = 5_000;
 
 async function waitFor<T>(fn: () => T | undefined | Promise<T | undefined>, timeoutMs = 2_000): Promise<T> {
   const deadline = Date.now() + timeoutMs;
@@ -578,7 +577,7 @@ async function runRuntime(call: Call, projectDir: string, handlers: ReturnType<t
   await waitFor(
     async () =>
       (await Bun.file(join(dirname(projectDir), 'external-agent-processes.json')).exists()) ? undefined : true,
-    SESSION_DELETE_BACKEND_GRACE_MS + 2_000
+    2_000
   );
 }
 
@@ -654,7 +653,7 @@ async function runSessionResetStopsExternalAgentRuntime(
   await waitFor(
     async () =>
       (await Bun.file(join(dirname(projectDir), 'external-agent-processes.json')).exists()) ? undefined : true,
-    SESSION_DELETE_BACKEND_GRACE_MS + 2_000
+    2_000
   );
 }
 
@@ -675,7 +674,7 @@ async function runSessionDeleteStopsExternalAgentRuntime(
   await waitFor(
     async () =>
       (await Bun.file(join(dirname(projectDir), 'external-agent-processes.json')).exists()) ? undefined : true,
-    SESSION_DELETE_BACKEND_GRACE_MS + 2_000
+    2_000
   );
   expect(handlers.store.getExternalAgentSession(nativeSession.id)).toBeNull();
 }
@@ -1270,7 +1269,7 @@ async function runSpawnFailureRuntime(
     return row?.outputSnapshot.includes('/definitely/not/a/external-agent-provider') ? row : undefined;
   });
   expect(failed.pid).toBeNull();
-  expect(failed.exitedAt).not.toBeNull();
+  expect(Date.parse(failed.exitedAt ?? '')).toBeGreaterThan(0);
   expect(handlers.store.listEvents(sessionId).some((event) => event.type === 'external_agent.exited')).toBe(true);
 }
 

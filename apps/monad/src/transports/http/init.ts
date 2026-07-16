@@ -18,7 +18,7 @@ export function createInitController(handlers: ReturnType<typeof createDaemonHan
   return new Elysia({ tags: ['http-only'] })
     .get('/init/status', async () => handlers.init.status(), {
       response: { 200: getInitStatusResponseSchema },
-      detail: { summary: 'Init status', description: 'Returns whether monad has been initialized.' }
+      detail: { summary: 'Init status', description: 'Returns whether Monad has been initialized.' }
     })
     .post(
       '/init/home',
@@ -35,7 +35,7 @@ export function createInitController(handlers: ReturnType<typeof createDaemonHan
       {
         body: setInitHomeRequestSchema,
         response: { 200: okResponseSchema, 409: httpErrorSchema },
-        detail: { summary: 'Set home directory', description: 'Change monad home and trigger daemon restart.' }
+        detail: { summary: 'Set home directory', description: 'Change Monad home and trigger daemon restart.' }
       }
     )
     .get('/init/env-deps', async () => handlers.init.envDepsStatus(), {

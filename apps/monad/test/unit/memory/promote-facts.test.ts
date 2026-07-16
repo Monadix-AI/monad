@@ -19,7 +19,6 @@ function freshStore(agentIds: AgentId[] = ['agt_100000000000' as AgentId]) {
   store.insertSession({
     id: 'ses_100000000000',
     title: 't',
-    ownerPrincipalId: 'prn_100000000000',
     state: 'active',
     agentIds,
     archived: false,

@@ -1,10 +1,8 @@
-import type { ExternalAgentConfig } from '@monad/home';
+import type { ExternalAgentConfig } from '@monad/environment';
 import type { MessageAttachmentRef, SessionId } from '@monad/protocol';
 import type { SessionContext } from '#/handlers/session/context.ts';
 import type { createManagedExternalAgentDelivery } from '#/handlers/session/handlers/managed-external-agent-delivery.ts';
 import type { ManagedExternalAgentProjectMessageSender } from '#/handlers/session/handlers/messaging-notices.ts';
-
-import { loadAll } from '@monad/home';
 
 /** Wraps the managed-external-agent delivery primitives with the project-config lookups the
  *  session handlers need (loading enabled agents, resolving the transcript target). */
@@ -33,9 +31,7 @@ export function createMessagingNotifyHandlers(
       exceptAgentName?: string;
     }) {
       const session = requireSession(sessionId);
-      const paths = ctx.deps.paths;
-      const cfg = paths ? await loadAll(paths.config, paths.profile) : null;
-      const externalAgents = (cfg?.externalAgents ?? []).filter(
+      const externalAgents = (ctx.deps.configManager?.get().cfg.externalAgents ?? []).filter(
         (agent: ExternalAgentConfig) => agent.enabled !== false
       );
       await deliverProjectMessageToManagedExternalAgentMembers({
@@ -60,9 +56,7 @@ export function createMessagingNotifyHandlers(
       text: string;
     }) {
       const session = requireSession(sessionId);
-      const paths = ctx.deps.paths;
-      const cfg = paths ? await loadAll(paths.config, paths.profile) : null;
-      const externalAgents = (cfg?.externalAgents ?? []).filter(
+      const externalAgents = (ctx.deps.configManager?.get().cfg.externalAgents ?? []).filter(
         (agent: ExternalAgentConfig) => agent.enabled !== false
       );
       await deliverDirectMessageToManagedExternalAgentMember({ session, externalAgents, fromAgentName, to, text });

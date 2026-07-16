@@ -58,7 +58,7 @@ test('stdio ACP: initialize → newSession → prompt → forkSession over real 
   await app.connectWith(stream, async (ctx) => {
     const init = await ctx.request('initialize', { protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} });
     expect(init.protocolVersion).toBe(PROTOCOL_VERSION);
-    expect(init.agentInfo?.name).toBe('monad');
+    expect(init.agentInfo?.name).toBe('Monad');
 
     const { sessionId } = await ctx.request('session/new', { cwd: process.cwd(), mcpServers: [] });
     expect(sessionId).toMatch(/^ses_/);

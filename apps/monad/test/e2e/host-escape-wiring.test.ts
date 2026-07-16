@@ -4,11 +4,11 @@
 // tools are exempt and ungated. Pairs with approvals-engine.test.ts (which proves the SEMANTICS of
 // that key) — this proves the daemon actually attaches it.
 
-import type { MonadPaths } from '@monad/home';
+import type { MonadPaths } from '@monad/environment';
 
 import { expect, test } from 'bun:test';
 import { join } from 'node:path';
-import { createDefaultConfig } from '@monad/home';
+import { createDefaultConfig } from '@monad/environment';
 
 import { HOST_CONTROL_KEY } from '#/agent/approvals/engine.ts';
 import { connectMcpServers } from '#/capabilities/mcp/service.ts';
@@ -23,8 +23,8 @@ const paths: MonadPaths = {
   dbDir: '/dev/null',
   db: '/dev/null',
   config: '/dev/null/config.json',
-  profile: '/dev/null/profile.json',
-  sandbox: '/dev/null/sandbox.json',
+  agentsConfig: '/dev/null/agents.json',
+  mesh: '/dev/null/mesh.json',
   approvals: '/dev/null/approvals.json',
   credentials: '/dev/null',
   auth: '/dev/null/auth.json',
@@ -49,7 +49,7 @@ const paths: MonadPaths = {
 };
 
 test('hostEscape server: non-read-only tools get the host-control gate key; read-only stays ungated', async () => {
-  const cfg = createDefaultConfig('prn_t00000000000', 't');
+  const cfg = createDefaultConfig('t');
   // A hostEscape server (stand-in for the computer-use preset) with screenshot auto-approved.
   cfg.mcpServers = [
     {

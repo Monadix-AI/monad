@@ -8,8 +8,6 @@ import type {
 } from '@monad/protocol';
 import type { AtomPacksDeps } from '#/handlers/atom-pack/atom-pack-manager.ts';
 
-import { loadAuth } from '@monad/home';
-
 import {
   createReleaseAssetFetcher,
   installMcpBinary as installMcpBinaryService
@@ -50,7 +48,7 @@ export function createMcpModule(deps: AtomPacksDeps) {
     },
 
     async installMcpBinary(req: InstallMcpBinaryRequest): Promise<InstallMcpAtomResponse> {
-      const auth = await loadAuth(deps.paths.auth);
+      const auth = deps.config?.get().auth;
       const out = await installMcpBinaryService(
         req.name,
         { owner: req.owner, repo: req.repo, tag: req.tag },

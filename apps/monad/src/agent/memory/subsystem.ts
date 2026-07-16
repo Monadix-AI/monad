@@ -7,7 +7,7 @@
 // backend switch) takes effect without rebuilding the service. mem0 selects its LLM + embedder FROM
 // that config (no env vars).
 
-import type { MonadAuth, MonadConfig, MonadPaths } from '@monad/home';
+import type { MonadAuth, MonadConfig, MonadPaths } from '@monad/environment';
 import type {
   GetLawsResponse,
   MemoryBackendId,
@@ -18,14 +18,13 @@ import type {
 import type { BeliefExplanation, ConsolidateSummary } from '@monad/sdk-atom';
 import type { ModelRouter } from '#/agent/index.ts';
 import type { NoteStore } from '#/capabilities/tools/registry/memory.ts';
-import type { ConfigReloader } from '#/config/reloader.ts';
+import type { ConfigAccess } from '#/config/manager.ts';
 import type { MemoryHookRegistry } from '#/services/memory/hooks.ts';
 import type { MemoryService } from '#/services/memory/index.ts';
 import type { Mem0Data } from '#/services/memory/mem0-explorer.ts';
 import type { Store } from '#/store/db/index.ts';
 
 import { join } from 'node:path';
-import { saveProfile } from '@monad/home';
 import { createLogger } from '@monad/logger';
 
 import { renderNotes } from '#/capabilities/tools/registry/memory.ts';
@@ -54,7 +53,7 @@ export interface MemorySubsystemDeps {
   router: ModelRouter;
   /** The daemon hook registry — memory lifecycle hooks register here. */
   registry: MemoryHookRegistry;
-  configReloader: ConfigReloader;
+  config: ConfigAccess;
   /** Live config holder (owned by main.ts), so a settings hot-reload takes effect without rebuild. */
   liveCfg: () => MonadConfig;
   liveAuth: () => MonadAuth | null;
@@ -76,7 +75,7 @@ export interface MemorySubsystem {
 }
 
 export function createMemorySubsystem(deps: MemorySubsystemDeps): MemorySubsystem {
-  const { store, paths, port, router: agentModel, registry, configReloader, liveCfg, liveAuth } = deps;
+  const { store, paths, port, router: agentModel, registry, config, liveCfg, liveAuth } = deps;
 
   // Auto-memory dogfood: the agent saves session notes via the memory_* tools; a built-in
   // UserPromptSubmit hook re-surfaces them every turn (the capture/recall split hooks make clean).
@@ -382,11 +381,11 @@ export function createMemorySubsystem(deps: MemorySubsystemDeps): MemorySubsyste
       log: graphLog
     });
 
-  // Persist + hot-apply a memory settings change from the UI (writes profile.json, publishes the bus).
+  // Persist + hot-apply a memory settings change from the UI (writes agents.json, publishes the bus).
   const persistMemory = async (mutate: (m: MonadConfig['memory']) => void): Promise<void> => {
-    mutate(liveCfg().memory);
-    await saveProfile(paths.profile, liveCfg());
-    await configReloader.publish({ cfg: liveCfg(), auth: liveAuth() });
+    await config.updateConfig((cfg) => {
+      mutate(cfg.memory);
+    });
   };
   const memorySetBackend = async (backend: MemoryBackendId): Promise<void> => {
     await persistMemory((m) => {

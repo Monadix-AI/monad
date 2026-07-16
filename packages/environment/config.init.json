@@ -1,0 +1,9 @@
+{
+  "//": "Dev-only seed for `bun run dev`. Copy this file to config.init.json (gitignored) and fill in your own values. On a fresh .dev/data the daemon seeds a model provider + profile + credential + default agent from this file so you skip the /init wizard. Leave apiKey/model blank to fall back to OPENROUTER_API_KEY / OPENROUTER_MODEL from .env.local. Leave telegram.botToken blank (or drop the telegram block) to skip the dev Telegram channel. Nothing here is read in production.",
+  "provider": { "id": "openrouter", "label": "OpenRouter", "type": "openrouter" },
+  "apiKey": "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",
+  "model": "openrouter/free",
+  "profileAlias": "default",
+  "reasoningEffort": "low",
+  "telegram": { "channelId": "chn_DEVTELEGRAM0", "botToken": "" }
+}

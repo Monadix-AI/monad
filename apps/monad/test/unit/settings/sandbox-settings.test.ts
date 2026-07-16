@@ -4,11 +4,12 @@ import { afterEach, expect, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initMonadHome, loadAll, loadAuth } from '@monad/home';
+import { initMonadHome, loadAll, loadAuth } from '@monad/environment';
 import { clearSandboxLaunchers, registerSandboxLauncher } from '@monad/sandbox';
 
 import { createSandboxModule } from '#/handlers/settings/sandbox/index.ts';
-import { makeTestPaths } from '../../helpers.ts';
+import { createConfigSandboxActivationService } from '#/platform/sandbox/activation.ts';
+import { createTestConfigManager, makeTestPaths } from '../../helpers.ts';
 
 afterEach(() => clearSandboxLaunchers());
 
@@ -34,7 +35,8 @@ async function fixture() {
   const dir = await mkdtemp(join(tmpdir(), 'monad-sandbox-settings-'));
   const paths = makeTestPaths(dir);
   await initMonadHome(paths);
-  return { dir, paths, mod: createSandboxModule(paths) };
+  const config = await createTestConfigManager(paths);
+  return { dir, paths, mod: createSandboxModule(config, createConfigSandboxActivationService(config)) };
 }
 
 test('persists normal settings by source-qualified backend identity', async () => {
@@ -60,7 +62,7 @@ test('persists normal settings by source-qualified backend identity', async () =
       apiKey: { configured: false }
     });
 
-    const cfg = await loadAll(paths.config, paths.profile);
+    const cfg = await loadAll(paths);
     expect(cfg?.sandbox.backendSettings['atom-pack/vendor-a/cloud']).toEqual({ region: 'us-east', workers: 2 });
   } finally {
     await rm(dir, { recursive: true, force: true });
@@ -81,7 +83,7 @@ test('writes, redacts, replaces, and explicitly removes backend secrets', async 
 
     let auth = await loadAuth(paths.auth);
     expect(auth?.namedSecrets?.['sandbox/atom-pack/vendor/cloud/apiKey']).toBe('first-secret');
-    let cfg = await loadAll(paths.config, paths.profile);
+    let cfg = await loadAll(paths);
     expect(cfg?.sandbox.backendSettings['atom-pack/vendor/cloud']?.apiKey).toBe(
       '$' + '{secret:sandbox/atom-pack/vendor/cloud/apiKey}'
     );
@@ -96,7 +98,7 @@ test('writes, redacts, replaces, and explicitly removes backend secrets', async 
     expect(view.backendSettings['atom-pack/vendor/cloud']?.apiKey).toEqual({ configured: false });
     auth = await loadAuth(paths.auth);
     expect(auth?.namedSecrets?.['sandbox/atom-pack/vendor/cloud/apiKey']).toBeUndefined();
-    cfg = await loadAll(paths.config, paths.profile);
+    cfg = await loadAll(paths);
     expect(cfg?.sandbox.backendSettings['atom-pack/vendor/cloud']?.apiKey).toBeUndefined();
   } finally {
     await rm(dir, { recursive: true, force: true });
@@ -153,32 +155,6 @@ test('rejects unknown fields and values that violate the contributed schema', as
         backendSettings: { ref, secrets: { apiKey: { action: 'replace', value: '' } } }
       })
     ).rejects.toThrow('apiKey');
-  } finally {
-    await rm(dir, { recursive: true, force: true });
-  }
-});
-
-test('migrates legacy backend selectors to source-qualified references', async () => {
-  const { dir, paths } = await fixture();
-  try {
-    await Bun.write(paths.sandbox, `${JSON.stringify({ backend: 'vm', vm: { cpus: 4, memory: 4096 } })}\n`);
-    let cfg = await loadAll(paths.config, paths.profile);
-    expect(cfg?.sandbox.activeBackend).toEqual({ source: 'builtin', kind: 'vm' });
-    expect(cfg?.sandbox.backendSettings['builtin/vm']).toEqual({ cpus: 4, memoryMiB: 4096 });
-
-    await Bun.write(paths.sandbox, `${JSON.stringify({ backend: 'e2b' })}\n`);
-    cfg = await loadAll(paths.config, paths.profile);
-    expect(cfg?.sandbox.activeBackend).toEqual({ source: 'atom-pack', packId: 'monad-power-pack', kind: 'e2b' });
-
-    await Bun.write(paths.sandbox, `${JSON.stringify({ backend: 'docker', dockerImage: 'debian:stable' })}\n`);
-    cfg = await loadAll(paths.config, paths.profile);
-    expect(cfg?.sandbox.backendSettings['atom-pack/monad-power-pack/docker']).toEqual({ image: 'debian:stable' });
-
-    await Bun.write(paths.sandbox, `${JSON.stringify({ backend: 'e2b', credential: '$' + '{env:E2B_API_KEY}' })}\n`);
-    cfg = await loadAll(paths.config, paths.profile);
-    expect(cfg?.sandbox.backendSettings['atom-pack/monad-power-pack/e2b']).toEqual({
-      apiKey: '$' + '{env:E2B_API_KEY}'
-    });
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

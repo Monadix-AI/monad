@@ -1,16 +1,15 @@
-import type { MonadPaths } from '@monad/home';
-import type { PrincipalId } from '@monad/protocol';
+import type { MonadPaths } from '@monad/environment';
 import type { SkillSubsystem } from '#/capabilities/skills/service.ts';
-import type { ConfigSnapshot } from '#/config/service.ts';
+import type { ConfigSnapshot } from '#/config/manager.ts';
 
 import { expect, test } from 'bun:test';
-import { createDefaultConfig } from '@monad/home';
+import { createDefaultConfig } from '@monad/environment';
 
 import { createSkillsLifecycleModule } from '#/capabilities/skills/lifecycle.ts';
 import { RuntimeContext } from '#/runtime/context.ts';
 
 test('reloads stable skill views from the latest config snapshot', async () => {
-  const cfg = createDefaultConfig('usr_test' as PrincipalId, 'Test');
+  const cfg = createDefaultConfig('Test');
   const initial: ConfigSnapshot = { cfg, auth: null };
   const next: ConfigSnapshot = {
     auth: null,
@@ -66,7 +65,7 @@ test('reloads stable skill views from the latest config snapshot', async () => {
 });
 
 test('retains the accepted skill state when reload fails', async () => {
-  const cfg = createDefaultConfig('usr_test' as PrincipalId, 'Test');
+  const cfg = createDefaultConfig('Test');
   const initial: ConfigSnapshot = { cfg, auth: null };
   const next: ConfigSnapshot = {
     auth: null,

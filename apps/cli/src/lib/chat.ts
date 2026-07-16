@@ -21,12 +21,12 @@ export async function streamReply(
     (event: Event) => {
       if (event.type === 'agent.token') {
         if (!started) {
-          process.stdout.write(cyan('monad ▸ '));
+          process.stdout.write(cyan('Monad ▸ '));
           started = true;
         }
         process.stdout.write(parseEventPayload('agent.token', event.payload).delta);
       } else if (event.type === 'agent.message') {
-        if (!started) process.stdout.write(cyan('monad ▸ ') + parseEventPayload('agent.message', event.payload).text);
+        if (!started) process.stdout.write(cyan('Monad ▸ ') + parseEventPayload('agent.message', event.payload).text);
         process.stdout.write('\n');
       }
     },

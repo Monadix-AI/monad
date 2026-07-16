@@ -125,7 +125,7 @@ function channelScaffold(type: string): Record<string, string> {
         sdkVersion: '0',
         atoms: ['channel'],
         entry: 'dist/atom-pack.js',
-        description: `${Type} channel for monad`
+        description: `${Type} channel for Monad`
       },
       null,
       2
@@ -195,14 +195,14 @@ export default defineAtomPack({
     version: '0.1.0',
     sdkVersion: '0',
     atoms: ['channel'],
-    description: '${Type} channel for monad'
+    description: '${Type} channel for Monad'
   },
   channels: [${type}ChannelAtom]
 });
 `,
-    'README.md': `# ${Type} channel for monad
+    'README.md': `# ${Type} channel for Monad
 
-A third-party \`channel\` atom pack. The adapter does **platform I/O only** — monad owns sessions,
+A third-party \`channel\` atom pack. The adapter does **platform I/O only** — Monad owns sessions,
 the access policy (allowlist / pairing / open / disabled), group require-mention, rate-limiting and
 the conversation→session mapping. Your adapter never sees a sessionId.
 

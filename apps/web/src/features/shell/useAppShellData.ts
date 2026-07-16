@@ -34,7 +34,6 @@ function draftChatSessionToSession(draft: WorkspaceShellState['draftChatSessions
   return {
     id: draft.id,
     title: draft.title,
-    ownerPrincipalId: 'prn_000000000000',
     state: 'active',
     agentIds: draft.agentId ? [draft.agentId] : [],
     archived: false,

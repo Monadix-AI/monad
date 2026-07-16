@@ -54,6 +54,7 @@ function checkCommands(): QualityGateCommand[] {
     command('syncpack', 'syncpack', 'check', ['bun', 'run', 'syncpack:lint']),
     command('knip', 'knip', 'check', ['bun', 'run', 'knip']),
     command('dependency-directions', 'dependency directions', 'check', ['bun', 'run', 'check:deps']),
+    command('test-assertions', 'test assertion quality', 'check', ['bun', 'run', 'check:test-assertions']),
     command('agents', 'agent instruction generation', 'check', ['bun', 'run', 'agents:check']),
     command('i18n', 'i18n catalog drift', 'check', ['bun', 'run', 'i18n:check']),
     command('database-history', 'database migration history', 'check', ['bun', 'run', 'db:check']),

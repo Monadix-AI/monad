@@ -123,7 +123,7 @@ export function createPeerDelegateTool(deps: PeerDelegateDeps): Tool<DelegateInp
   return {
     name: 'agent_peer_delegate',
     description:
-      'Delegate a self-contained subtask to a peer monad daemon, returning its final answer. The peer ' +
+      'Delegate a self-contained subtask to a peer Monad daemon, returning its final answer. The peer ' +
       `runs it on its own tools and credentials. Available peers: ${catalog}.`,
     scopes: [{ resource: 'agent:delegate' }],
     // Delegating to a networked peer is a real escalation → route through the oversight gate once.

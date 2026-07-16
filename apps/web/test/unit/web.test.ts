@@ -229,15 +229,20 @@ test('proxyDevWebRequest forwards method, path, query, and body to Vite', async 
 });
 
 // ── readDaemonUrl path resolution ─────────────────────────────────────────────
-// readDaemonUrl() is private; test it by writing a port into MONAD_HOME/configs/config.json
+// readDaemonUrl() is private; test it by writing a port into MONAD_HOME/configs/mesh.json
 // and verifying startWeb() auto-proxies to that port without an explicit daemonUrl.
 
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ensureTlsCert } from '@monad/home/tls';
+import { ensureTlsCert } from '@monad/environment/tls';
 
-test('readDaemonUrl reads port from MONAD_HOME/configs/config.json', async () => {
+function restoreEnv(name: string, value: string | undefined): void {
+  if (value === undefined) delete Bun.env[name];
+  else Bun.env[name] = value;
+}
+
+test('readDaemonUrl reads port from MONAD_HOME/configs/mesh.json', async () => {
   const home = join(tmpdir(), `monad-web-cfgpath-${Date.now()}`);
   mkdirSync(join(home, 'configs'), { recursive: true });
 
@@ -248,10 +253,17 @@ test('readDaemonUrl reads port from MONAD_HOME/configs/config.json', async () =>
     tls: { key: Bun.file(cert.keyPath), cert: Bun.file(cert.certPath) },
     fetch: () => new Response('hit', { status: 418, headers: { 'x-hit': '1' } })
   });
-  writeFileSync(join(home, 'configs', 'config.json'), JSON.stringify({ network: { port: fake.port } }));
+  writeFileSync(join(home, 'configs', 'mesh.json'), JSON.stringify({ network: { port: fake.port } }));
 
   const prevHome = Bun.env.MONAD_HOME;
+  const prevMonadUrl = Bun.env.MONAD_URL;
+  const prevPort = Bun.env.MONAD_PORT;
+  const prevHost = Bun.env.MONAD_HOST;
+  const prevWebPort = Bun.env.WEB_PORT;
   Bun.env.MONAD_HOME = home;
+  delete Bun.env.MONAD_URL;
+  delete Bun.env.MONAD_PORT;
+  delete Bun.env.MONAD_HOST;
   Bun.env.WEB_PORT = '0';
   const ws = startWeb();
 
@@ -263,7 +275,11 @@ test('readDaemonUrl reads port from MONAD_HOME/configs/config.json', async () =>
   } finally {
     ws.stop(true);
     fake.stop(true);
-    Bun.env.MONAD_HOME = prevHome;
+    restoreEnv('MONAD_HOME', prevHome);
+    restoreEnv('MONAD_URL', prevMonadUrl);
+    restoreEnv('MONAD_PORT', prevPort);
+    restoreEnv('MONAD_HOST', prevHost);
+    restoreEnv('WEB_PORT', prevWebPort);
     rmSync(home, { recursive: true, force: true });
   }
 });
@@ -277,12 +293,19 @@ test('readDaemonUrl uses HTTP when config disables HTTPS', async () => {
     fetch: () => new Response('hit', { status: 418, headers: { 'x-hit': '1' } })
   });
   writeFileSync(
-    join(home, 'configs', 'config.json'),
+    join(home, 'configs', 'mesh.json'),
     JSON.stringify({ network: { https: { enabled: false }, port: fake.port } })
   );
 
   const prevHome = Bun.env.MONAD_HOME;
+  const prevMonadUrl = Bun.env.MONAD_URL;
+  const prevPort = Bun.env.MONAD_PORT;
+  const prevHost = Bun.env.MONAD_HOST;
+  const prevWebPort = Bun.env.WEB_PORT;
   Bun.env.MONAD_HOME = home;
+  delete Bun.env.MONAD_URL;
+  delete Bun.env.MONAD_PORT;
+  delete Bun.env.MONAD_HOST;
   Bun.env.WEB_PORT = '0';
   const ws = startWeb();
 
@@ -293,7 +316,11 @@ test('readDaemonUrl uses HTTP when config disables HTTPS', async () => {
   } finally {
     ws.stop(true);
     fake.stop(true);
-    Bun.env.MONAD_HOME = prevHome;
+    restoreEnv('MONAD_HOME', prevHome);
+    restoreEnv('MONAD_URL', prevMonadUrl);
+    restoreEnv('MONAD_PORT', prevPort);
+    restoreEnv('MONAD_HOST', prevHost);
+    restoreEnv('WEB_PORT', prevWebPort);
     rmSync(home, { recursive: true, force: true });
   }
 });

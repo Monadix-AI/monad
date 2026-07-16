@@ -1,9 +1,9 @@
 // Builds the narrow CommandRunContext a command runs against. The session verbs are backed by an
 // injectable SessionNavigator because their meaning differs per client: a channel multiplexes many
-// sessions over one chat (conversation-keyed), while web/ACP/CLI navigate sessions client-side
-// (principal-scoped). Everything else (reset/compact/model/listCommands) is daemon-uniform.
+// sessions over one chat (conversation-keyed), while web/ACP/CLI navigate sessions client-side.
+// Everything else (reset/compact/model/listCommands) is daemon-uniform.
 
-import type { CommandItem, PrincipalId } from '@monad/protocol';
+import type { CommandItem } from '@monad/protocol';
 import type {
   BeliefExplanation,
   CommandModelInfo,
@@ -21,7 +21,7 @@ export interface SessionNavigator {
 }
 
 // `sessionId` here is plain `string` (matching @monad/sdk-atom's CommandRunContext.sessionId), not
-// `SessionId`: the generic (principal-scoped) command bridge in session-commands.ts can pass a
+// `SessionId`: the generic command bridge in session-commands.ts can pass a
 // Workplace Project's own id through this same path (project-wide command execution) — see the
 // SessionOrProject TODO(track-b) in apps/monad/src/handlers/session/context.ts. Individual command
 // implementations that are genuinely session-only (compact/model/belief/handoff) narrow via their
@@ -48,15 +48,13 @@ export interface CommandServices {
 
 export function makeCommandRunContext(p: {
   sessionId: string;
-  principalId: PrincipalId;
   args: string;
   nav: SessionNavigator;
   services: CommandServices;
 }): CommandRunContext {
-  const { sessionId, principalId, args, nav, services } = p;
+  const { sessionId, args, nav, services } = p;
   return {
     sessionId,
-    principalId,
     args,
     newSession: (label) => nav.newSession(label),
     listSessions: () => nav.listSessions(),

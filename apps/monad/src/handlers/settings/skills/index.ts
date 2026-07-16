@@ -1,8 +1,8 @@
-import type { MonadAuth, MonadConfig, MonadPaths } from '@monad/home';
+import type { MonadAuth, MonadConfig } from '@monad/environment';
 import type { SetSkillsSettingsRequest, SkillsSettingsResponse } from '@monad/protocol';
-import type { ConfigReloader } from '#/config/reloader.ts';
+import type { ConfigAccess } from '#/config/manager.ts';
 
-import { DEFAULT_SAMPLE_PROVIDER_ID, loadAll, loadAuth, saveProfile } from '@monad/home';
+import { DEFAULT_SAMPLE_PROVIDER_ID } from '@monad/environment';
 
 function resolveUsableInstallReviewModel(cfg: MonadConfig, auth: MonadAuth | null): string | null {
   if (!auth) return null;
@@ -20,11 +20,9 @@ function resolveUsableInstallReviewModel(cfg: MonadConfig, auth: MonadAuth | nul
   return null;
 }
 
-export function createSkillsSettingsModule(paths: MonadPaths, configReloader?: ConfigReloader) {
+export function createSkillsSettingsModule(config: ConfigAccess) {
   async function getSkillsSettings(): Promise<SkillsSettingsResponse> {
-    const cfg = await loadAll(paths.config, paths.profile);
-    if (!cfg) throw new Error('skills: config.json missing');
-    const auth = await loadAuth(paths.auth);
+    const { cfg, auth } = config.get();
     const installReviewAvailable = resolveUsableInstallReviewModel(cfg, auth) !== null;
     return {
       autoload: cfg.skills.autoload,
@@ -36,25 +34,20 @@ export function createSkillsSettingsModule(paths: MonadPaths, configReloader?: C
   }
 
   async function setSkillsSettings(req: SetSkillsSettingsRequest): Promise<SkillsSettingsResponse> {
-    const cfg = await loadAll(paths.config, paths.profile);
-    if (!cfg) throw new Error('skills: config.json missing');
-    const auth = await loadAuth(paths.auth);
+    const { cfg, auth } = config.get();
     const installReviewAvailable = resolveUsableInstallReviewModel(cfg, auth) !== null;
 
-    if (req.autoload !== undefined) cfg.skills.autoload = req.autoload;
-    if (req.disabled !== undefined) cfg.skills.disabled = req.disabled;
-    if (req.autoloadDisabled !== undefined) cfg.skills.autoloadDisabled = req.autoloadDisabled;
-    if (req.installReview !== undefined) {
-      if (req.installReview && !installReviewAvailable) {
-        throw new Error('skills: install review requires a usable model');
+    await config.updateConfig((draft) => {
+      if (req.autoload !== undefined) draft.skills.autoload = req.autoload;
+      if (req.disabled !== undefined) draft.skills.disabled = req.disabled;
+      if (req.autoloadDisabled !== undefined) draft.skills.autoloadDisabled = req.autoloadDisabled;
+      if (req.installReview !== undefined) {
+        if (req.installReview && !installReviewAvailable) {
+          throw new Error('skills: install review requires a usable model');
+        }
+        draft.skills.installReview = req.installReview;
       }
-      cfg.skills.installReview = req.installReview;
-    }
-
-    await saveProfile(paths.profile, cfg);
-    if (configReloader) {
-      await configReloader.publish({ cfg, auth });
-    }
+    });
     return getSkillsSettings();
   }
 

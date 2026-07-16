@@ -1,4 +1,4 @@
-import type { AgentId, ISO8601, PrincipalId, SessionId, TaskId } from './ids.ts';
+import type { AgentId, ISO8601, SessionId, TaskId } from './ids.ts';
 
 import { z } from 'zod';
 
@@ -7,7 +7,6 @@ import {
   eventIdSchema,
   iso8601Schema,
   messageIdSchema,
-  principalIdSchema,
   projectIdSchema,
   sessionIdSchema,
   taskIdSchema
@@ -16,13 +15,6 @@ import {
 // Schema-first at wire boundaries (HTTP/WS/disk). Types with no runtime boundary yet
 // stay hand-written — convert them when they gain a wire boundary.
 
-export interface Principal {
-  id: PrincipalId;
-  kind: 'human' | 'builder' | 'external' | 'system';
-  displayName: string;
-  verification: 'unverified' | 'email' | 'domain' | 'attested';
-}
-
 const scopeSchema = z.object({
   resource: z.string(),
   constraints: z.record(z.string(), z.unknown()).optional()
@@ -30,7 +22,7 @@ const scopeSchema = z.object({
 
 export type Scope = z.infer<typeof scopeSchema>;
 
-// Filesystem sandbox scope. Single source of truth — @monad/home re-exports this so the
+// Filesystem sandbox scope. Single source of truth — @monad/environment re-exports this so the
 // home config and the wire `agentSchema` share one definition (protocol can't depend on home).
 //   "workspace"    → fs:* confined to ~/.monad/workspace/ (default)
 //   "home"         → fs:* confined to the user's home directory
@@ -75,7 +67,7 @@ export const agentAtomsSchema = z.object({
 });
 export type AgentAtoms = z.infer<typeof agentAtomsSchema>;
 
-// Model routing roles (single source of truth — control.ts + @monad/home re-export).
+// Model routing roles (single source of truth — control.ts + @monad/environment re-export).
 // A model profile is a recipe of route slots: `chat` is the required default model, `fast` is the
 // lightweight lane, and the remaining roles are capability-specific overrides.
 export const modelRoleSchema = z.enum([
@@ -124,7 +116,6 @@ export type ModelRoles = z.infer<typeof modelRolesSchema>;
 
 export const agentSchema = z.object({
   id: agentIdSchema,
-  principalId: principalIdSchema,
   name: z.string(),
   description: z.string().optional(),
   modelAlias: z.string().optional(),
@@ -246,7 +237,6 @@ export const sessionSchema = z.object({
    *  See docs/proposals/project-session-decoupling.md. */
   projectId: projectIdSchema.optional(),
   title: z.string(),
-  ownerPrincipalId: principalIdSchema,
   state: sessionStateSchema,
   agentIds: z.array(agentIdSchema),
   archived: z.boolean(),

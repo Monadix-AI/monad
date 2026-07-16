@@ -10,7 +10,10 @@ import { existsSync, lstatSync, mkdirSync, readdirSync, rmSync, unlinkSync, writ
 import { isAbsolute, join, relative, resolve } from 'node:path';
 
 import { definePrompt } from '#/agent/prompt-template.ts';
-import { getExternalAgentProviderAdapter } from '#/services/external-agent/index.ts';
+import {
+  getExternalAgentProviderAdapter,
+  resolveExternalAgentDefaultLaunchMode
+} from '#/services/external-agent/index.ts';
 import managedProjectRuntimePromptPath from './prompts/managed-project-runtime.prompt.md' with { type: 'file' };
 import managedProjectRuntimeMcpPromptPath from './prompts/managed-project-runtime-mcp.prompt.md' with { type: 'file' };
 import projectMemoryIndexPath from './prompts/project-memory-index.prompt.md' with { type: 'file' };
@@ -59,12 +62,13 @@ function _managedProjectMonadCliCommand(): string {
 }
 
 export function managedProjectLaunchMode(
-  agent: Pick<NativeAgentRuntimePromptInput, 'provider'> & { defaultLaunchMode: ExternalAgentLaunchMode },
+  agent: Pick<NativeAgentRuntimePromptInput, 'provider'> & { defaultLaunchMode?: ExternalAgentLaunchMode },
   requested?: ExternalAgentLaunchMode
 ): ExternalAgentLaunchMode {
   if (requested && requested !== 'pty') return requested;
   const managed = getExternalAgentProviderAdapter(agent.provider).managedRuntime;
-  return managed?.launchMode?.(agent.defaultLaunchMode) ?? requested ?? agent.defaultLaunchMode;
+  const defaultLaunchMode = agent.defaultLaunchMode ?? resolveExternalAgentDefaultLaunchMode(agent.provider);
+  return managed?.launchMode?.(defaultLaunchMode) ?? requested ?? defaultLaunchMode;
 }
 
 export function cleanupManagedProjectRuntimeToken(workspace: string): void {

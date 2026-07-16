@@ -1,6 +1,6 @@
 # Application Design Principles
 
-Higher-altitude rules for **how features are designed** in monad, before any code is
+Higher-altitude rules for **how features are designed** in Monad, before any code is
 written. Two principles govern every feature: it must behave the same on every
 platform, and it must be safe to run a tool-using agent against the user's machine.
 Concrete, code-level rules live in the focused docs ([security-guidelines.md](security-guidelines.md),
@@ -9,10 +9,10 @@ those rules serve.
 
 ## 1. Cross-platform parity
 
-monad ships to **macOS, Linux, and Windows** (the daemon, CLI, and web UI all
+Monad ships to **macOS, Linux, and Windows** (the daemon, CLI, and web UI all
 target all three). A feature is not done until it behaves identically on each.
 
-- **Same behaviour, same surface.** A user scripting against monad on Linux and a
+- **Same behaviour, same surface.** A user scripting against Monad on Linux and a
   user on Windows see the same commands, the same outputs, the same semantics.
   Platform is an implementation detail, never a behavioural one.
 - **Push platform differences into a thin glue layer.** When platforms genuinely
@@ -37,7 +37,7 @@ target all three). A feature is not done until it behaves identically on each.
 
 ## 2. Security-first — contain the agent
 
-monad runs a **tool-using LLM agent on the user's own machine**. Every feature is
+Monad runs a **tool-using LLM agent on the user's own machine**. Every feature is
 designed to keep that agent contained. Design against three failure modes:
 
 - **Don't let the agent damage the host.** A feature that gives the model

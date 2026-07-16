@@ -1,4 +1,4 @@
-import type { Credential } from '@monad/home';
+import type { Credential } from '@monad/environment';
 import type { AddCredentialRequest, TestConnectionRequest, TestCredentialRequest } from '@monad/protocol';
 import type { ModelContext } from '#/handlers/settings/model/context.ts';
 

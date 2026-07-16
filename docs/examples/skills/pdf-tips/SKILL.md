@@ -2,7 +2,7 @@
 name: pdf-tips
 description: Guidance for extracting text and tables from PDF files. Use when the user works with PDFs or mentions PDF extraction.
 metadata:
-  author: monad-examples
+  author: Monad-examples
   version: "1.0"
 ---
 

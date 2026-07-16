@@ -2,12 +2,7 @@ import { expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 test('MorphChevron renders down and up paths without rotating the svg', async () => {
-  const componentModule = await import('../../src/components/MorphChevron').catch(() => null);
-
-  expect(componentModule).not.toBeNull();
-  if (!componentModule) return;
-
-  const { MorphChevron } = componentModule;
+  const { MorphChevron } = await import('../../src/components/MorphChevron');
   const collapsed = renderToStaticMarkup(<MorphChevron expanded={false} />);
   const expanded = renderToStaticMarkup(<MorphChevron expanded />);
 

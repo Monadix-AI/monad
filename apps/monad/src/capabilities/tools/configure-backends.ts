@@ -2,7 +2,7 @@
 // Pure side effects keyed off cfg — no outputs the rest of startDaemon consumes — so it lifts out of
 // the runtime assembly cleanly. Secret refs are resolved here, at the edge, before reaching a backend.
 
-import type { MonadAuth, MonadConfig } from '@monad/home';
+import type { MonadAuth, MonadConfig } from '@monad/environment';
 
 import { configureCodeExec, configureEmail, configureShell, configureWebSearch } from '#/capabilities/tools';
 import { resolveSecretRef } from '#/config/secrets.ts';

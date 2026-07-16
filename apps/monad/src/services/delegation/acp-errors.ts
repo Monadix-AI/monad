@@ -1,4 +1,4 @@
-import type { AcpAgentConfig } from '@monad/home';
+import type { AcpAgentConfig } from '@monad/environment';
 import type { LocalePack, Translate } from '@monad/i18n';
 
 import { createI18n } from '@monad/i18n';

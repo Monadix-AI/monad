@@ -54,8 +54,6 @@ export interface ModelRequest {
   tools?: ToolSpec[];
   /** Originating session, for observability span grouping. In-process telemetry only. */
   sessionId?: string;
-  /** Principal the turn is attributed to, for observability. In-process telemetry only. */
-  userId?: string;
   /** Max thinking/reasoning tokens per model step. Absent → profile's reasoningEffort default. */
   maxThinkingTokens?: number;
   /** Cancels the upstream provider request when the originating turn is aborted. */

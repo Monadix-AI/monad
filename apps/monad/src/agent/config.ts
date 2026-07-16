@@ -1,11 +1,11 @@
 // Live config-derived state: the skill auto-load predicate, hot-swappable command/policy hook
-// config, the config/profile/auth file watcher (feeding the shared ConfigReloader), workspace prompt
+// config, the settings watcher (feeding the shared ConfigManager), workspace prompt
 // slots (SOUL.md / AGENT.md / USER.md), and per-agent persona resolution. Everything here is a
 // `let` swapped in place on a settings hot-reload so the running agent picks up edits without a
 // restart — accessors are exposed as getters/setters rather than the raw bindings so callers in
 // main.ts keep reading the CURRENT value, not a snapshot taken at construction time.
 
-import type { MonadConfig, MonadPaths } from '@monad/home';
+import type { MonadConfig, MonadPaths } from '@monad/environment';
 import type { Logger } from '@monad/logger';
 import type { HookConfig } from '#/hooks/runner.ts';
 import type { WatchService } from '#/infra/watch-service.ts';

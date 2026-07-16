@@ -736,7 +736,6 @@ test('workplace projects: list/create/update/delete use the typed treaty project
   const project = {
     id: 'ses_project00000',
     title: 'Workplace: alpha',
-    ownerPrincipalId: 'prn_owner0000000',
     state: 'active',
     archived: false,
     createdAt: '2026-07-02T00:00:00.000Z',

@@ -1,4 +1,4 @@
-import type { ExternalAgentConfig, MonadConfig, MonadPaths } from '@monad/home';
+import type { ExternalAgentConfig, MonadConfig } from '@monad/environment';
 import type {
   ExternalAgentView,
   GetExternalAgentResponse,
@@ -7,11 +7,11 @@ import type {
   OkResponse,
   UpsertExternalAgentRequest
 } from '@monad/protocol';
-
-import { loadAll, saveSystemConfig } from '@monad/home';
+import type { ConfigAccess } from '#/config/manager.ts';
 
 import { HandlerError } from '#/handlers/handler-error.ts';
 import {
+  externalAgentConfigToView,
   getExternalAgentProviderAdapter,
   listExternalAgentPresets,
   listExternalAgentReasoningEfforts,
@@ -20,7 +20,7 @@ import {
 } from '#/services/external-agent/index.ts';
 
 export interface ExternalAgentSettingsDeps {
-  paths: MonadPaths;
+  config: ConfigAccess;
   externalAgentSessions?: {
     stopAgentProvider(provider: ExternalAgentView['provider']): void;
   };
@@ -57,24 +57,14 @@ function restoreRedactedEnv(
 
 const toView = (a: ExternalAgentConfig): ExternalAgentView => {
   const adapter = getExternalAgentProviderAdapter(a.provider);
-  const modelOptions = resolveExternalAgentModelOptions(a);
+  const baseView = externalAgentConfigToView(a);
+  const modelOptions = resolveExternalAgentModelOptions(baseView);
   const view: ExternalAgentView = {
-    name: a.name,
-    provider: a.provider,
-    productIcon: adapter.productIcon,
-    command: a.command,
-    args: a.args,
+    ...baseView,
     env: redactEnvForView(a.env),
     ...modelOptions,
-    reasoningEfforts: listExternalAgentReasoningEfforts(a),
-    reasoningEffortsByModel: listExternalAgentReasoningEffortsByModel(a),
-    enabled: a.enabled,
-    defaultLaunchMode: a.defaultLaunchMode,
-    appServerTransport: a.appServerTransport,
-    allowAutopilot: a.allowAutopilot,
-    approvalOwnership: 'provider-owned',
-    projectTemplates: a.projectTemplates,
-    adapterSettings: a.adapterSettings
+    reasoningEfforts: listExternalAgentReasoningEfforts(baseView),
+    reasoningEffortsByModel: listExternalAgentReasoningEffortsByModel(baseView)
   };
   return { ...view, settings: adapter.settings?.(view) };
 };
@@ -84,10 +74,8 @@ const fromView = (v: ExternalAgentView, stored?: ExternalAgentConfig): ExternalA
   provider: v.provider,
   command: v.command,
   args: v.args,
-  modelOptions: v.modelOptions,
   env: restoreRedactedEnv(v.env, stored?.env),
   enabled: v.enabled,
-  defaultLaunchMode: v.defaultLaunchMode,
   appServerTransport: v.appServerTransport,
   allowAutopilot: v.allowAutopilot,
   approvalOwnership: 'provider-owned',
@@ -95,13 +83,11 @@ const fromView = (v: ExternalAgentView, stored?: ExternalAgentConfig): ExternalA
   adapterSettings: v.adapterSettings
 });
 
-export function createExternalAgentSettingsModule({ paths, externalAgentSessions }: ExternalAgentSettingsDeps) {
+export function createExternalAgentSettingsModule({ config, externalAgentSessions }: ExternalAgentSettingsDeps) {
   async function read(): Promise<MonadConfig> {
-    const cfg = await loadAll(paths.config, paths.profile);
-    if (!cfg) throw new Error('external-agent settings: config.json missing');
-    return cfg;
+    return structuredClone(config.get().cfg);
   }
-  const commit = (cfg: MonadConfig): Promise<void> => saveSystemConfig(paths.config, cfg);
+  const commit = (cfg: MonadConfig): Promise<unknown> => config.updateConfig(() => cfg);
 
   return {
     async listExternalAgents(): Promise<ListExternalAgentsResponse> {

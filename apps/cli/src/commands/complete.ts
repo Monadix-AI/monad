@@ -1,6 +1,6 @@
 import type { CommandDef } from './types.ts';
 
-import { getPaths, loadConfig } from '@monad/home';
+import { getPaths, loadConfig } from '@monad/environment';
 
 import { requireTreatyData } from '../lib/treaty.ts';
 
@@ -30,7 +30,7 @@ export const command: CommandDef = {
         const { providers } = requireTreatyData(await client.treaty.v1.settings.model.providers.get());
         process.stdout.write(`${providers.map((p) => p.id).join('\n')}\n`);
       } else if (type === 'config-keys') {
-        const cfg = await loadConfig(getPaths().config);
+        const cfg = await loadConfig(getPaths());
         if (cfg) process.stdout.write(`${flattenKeys(cfg as unknown as Record<string, unknown>).join('\n')}\n`);
       }
     } catch {

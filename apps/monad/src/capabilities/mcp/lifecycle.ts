@@ -1,7 +1,7 @@
-import type { MonadAuth, MonadPaths } from '@monad/home';
+import type { MonadAuth, MonadPaths } from '@monad/environment';
 import type { CapabilitiesRuntime } from '#/capabilities/lifecycle.ts';
 import type { McpConnection } from '#/capabilities/tools';
-import type { ConfigSnapshot } from '#/config/service.ts';
+import type { ConfigAccess, ConfigSnapshot } from '#/config/manager.ts';
 import type { RuntimeModule } from '#/runtime/types.ts';
 
 import { logger } from '@monad/logger';
@@ -17,6 +17,7 @@ import {
 export interface McpLifecycleOptions {
   initial: ConfigSnapshot;
   paths: MonadPaths;
+  config?: () => ConfigAccess;
 }
 
 export interface McpLifecycleDeps {
@@ -52,6 +53,7 @@ class LiveMcpRuntime implements McpRuntime {
   constructor(
     private readonly paths: MonadPaths,
     private readonly registry: CapabilitiesRuntime['registry'],
+    private readonly configAccess: ConfigAccess,
     initial: ConfigSnapshot,
     private auth: MonadAuth | null,
     private readonly deps: McpLifecycleDeps
@@ -95,7 +97,8 @@ class LiveMcpRuntime implements McpRuntime {
       snapshot.cfg,
       this.paths,
       this.registry,
-      snapshot.auth ?? undefined
+      snapshot.auth ?? undefined,
+      this.configAccess
     );
     this.configHandle = nextConfig;
     if (!sameAuth(this.auth, snapshot.auth) || !sameSet(previousSeenHttp, nextConfig.seenHttp)) {
@@ -133,7 +136,13 @@ class LiveMcpRuntime implements McpRuntime {
   }
 
   private async initialize(initial: ConfigSnapshot): Promise<void> {
-    const config = await this.deps.connectConfig(initial.cfg, this.paths, this.registry, initial.auth ?? undefined);
+    const config = await this.deps.connectConfig(
+      initial.cfg,
+      this.paths,
+      this.registry,
+      initial.auth ?? undefined,
+      this.configAccess
+    );
     if (this.stopped) {
       await Promise.allSettled([...config.connections.values()].map((entry) => entry.conn.close()));
       return;
@@ -168,7 +177,35 @@ function createMcpRuntime(
   registry: CapabilitiesRuntime['registry'],
   deps: McpLifecycleDeps = defaultDeps
 ): McpRuntime {
-  return new LiveMcpRuntime(options.paths, registry, options.initial, options.initial.auth, deps);
+  return new LiveMcpRuntime(
+    options.paths,
+    registry,
+    options.config?.() ?? createInitialConfigAccess(options.initial),
+    options.initial,
+    options.initial.auth,
+    deps
+  );
+}
+
+function createInitialConfigAccess(initial: ConfigSnapshot): ConfigAccess {
+  let snapshot = structuredClone(initial);
+  return {
+    get: () => snapshot,
+    status: () => ({ state: 'ready' }),
+    subscribe: () => () => {},
+    update: async (mutate) => {
+      snapshot = (await mutate(structuredClone(snapshot))) ?? snapshot;
+      return snapshot;
+    },
+    updateConfig: async (mutate) => {
+      snapshot.cfg = (await mutate(structuredClone(snapshot.cfg))) ?? snapshot.cfg;
+      return snapshot;
+    },
+    updateAuth: async (mutate) => {
+      snapshot.auth = await mutate(structuredClone(snapshot.auth));
+      return snapshot;
+    }
+  };
 }
 
 function sameAuth(a: MonadAuth | null, b: MonadAuth | null): boolean {

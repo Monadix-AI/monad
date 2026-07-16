@@ -1,10 +1,10 @@
-import type { MonadPaths } from '@monad/home';
+import type { MonadPaths } from '@monad/environment';
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { computeInitStatus, initMonadHome, loadAll, loadAuth, pathsForHome } from '@monad/home';
+import { computeInitStatus, initMonadHome, loadAll, loadAuth, pathsForHome } from '@monad/environment';
 
 import { defaultSeedPath, ensureDevProvider } from '#/store/home/dev-init.ts';
 
@@ -30,15 +30,15 @@ afterEach(async () => {
 });
 
 describe('ensureDevProvider', () => {
-  test('default seed path points at repo packages/home/config.init.json', () => {
-    expect(defaultSeedPath()).toBe(resolve(import.meta.dir, '../../../../..', 'packages/home/config.init.json'));
+  test('default seed path points at repo packages/environment/config.init.json', () => {
+    expect(defaultSeedPath()).toBe(resolve(import.meta.dir, '../../../../..', 'packages/environment/config.init.json'));
   });
 
   test('no-op when no API key is provided', async () => {
     const result = await ensureDevProvider(paths, { apiKey: '', seedPath });
     expect(result).toEqual({ seeded: false, reason: 'no-key' });
 
-    const cfg = await loadAll(paths.config, paths.profile);
+    const cfg = await loadAll(paths);
     if (!cfg) throw new Error('config missing');
     expect(computeInitStatus(cfg, await loadAuth(paths.auth)).initialized).toBe(false);
   });
@@ -56,7 +56,7 @@ describe('ensureDevProvider', () => {
     });
     expect(result).toEqual({ seeded: true, model: 'anthropic/claude-sonnet-4-6' });
 
-    const cfg = await loadAll(paths.config, paths.profile);
+    const cfg = await loadAll(paths);
     const auth = await loadAuth(paths.auth);
     if (!cfg) throw new Error('config missing');
     expect(cfg.model.providers.some((p) => p.id === 'openrouter' && p.type === 'openrouter')).toBe(true);
@@ -84,7 +84,7 @@ describe('ensureDevProvider', () => {
     const result = await ensureDevProvider(paths, { seedPath });
     expect(result).toEqual({ seeded: true, model: 'some/model' });
 
-    const cfg = await loadAll(paths.config, paths.profile);
+    const cfg = await loadAll(paths);
     const auth = await loadAuth(paths.auth);
     if (!cfg) throw new Error('config missing');
     expect(cfg.model.default).toBe('dev');

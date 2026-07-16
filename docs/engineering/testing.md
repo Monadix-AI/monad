@@ -57,6 +57,31 @@ Rules:
 - Presence or absence assertions are valid only when presence or absence is part of the public business path, such as creation, redaction, deletion, a not-found response, an optional response field, or pagination termination. Even then, assert the exact business contract rather than using a generic truthiness check.
 - Do not read implementation source and assert that fixed code or copy exists as a proxy for runtime behavior. Source assertions are reserved for generated artifacts, release bundles, migrations, compiler transformations, and other cases where source text is the product under test.
 
+### Existence → behavior: how to rewrite
+
+The litmus test for every assertion: **if this assertion flipped, what user-visible bug
+would it catch?** No answer → delete it or rewrite it. Common rewrites:
+
+| Task | Existence test (wrong) | Behavior test (right) |
+|---|---|---|
+| Added a field/feature | `expect(res.newField).toBeDefined()` | `expect(res).toEqual({ …full exact shape… })` — exact equality proves the field AND its value AND that nothing else changed |
+| Removed a field | `expect(res.oldField).toBeUndefined()` as its own case | delete the field from the type and let `tsc` find every reference; make the wire schema `.strict()` so extra keys fail parse; update the existing `toEqual` full-shape assertions — removal falls out of them |
+| Added a handler/route/registry entry | `expect(registry.get('x')).toBeDefined()` | call it through the public dispatch path and assert its exact response/effect |
+| UI: added a button | `expect(screen.getByRole('button')).toBeInTheDocument()` — `getBy*` already throws when absent, so this asserts nothing | fire the interaction and assert the outcome: `await user.click(screen.getByRole('button', { name: 'Create session' })); expect(onCreate).toHaveBeenCalledWith(…)` |
+| UI: removed an element | a standalone "is gone" case | assert the replacement behavior; use `queryBy* … not.toBeInTheDocument()` only when absence itself is the contract (e.g. redacted content, dismissed dialog) |
+| Guard/branch exists | `expect(result).toBeTruthy()` | drive the branch with the input that selects it and assert the exact branch-specific output or error |
+
+Deletion/refactor tasks specifically: the verification ladder is
+**typecheck > strict schema parse > exact `toEqual` on the public contract**. A test
+case whose only claim is "the thing is gone from the source" duplicates what the
+compiler already guarantees and rots immediately.
+
+The mechanical gate: `bun run check:test-assertions` (part of `quality:check`) rejects
+`toBeDefined` / `toBeTruthy` / `toBeFalsy` / `not.toBeNull` / `not.toBeUndefined` /
+positive `toBeInTheDocument` in test files. When presence/absence genuinely is the
+business contract, keep the assertion exact and waive the line with
+`// presence-ok: <reason>` (same line or the line above).
+
 ---
 
 ## 2. package.json scripts
@@ -326,7 +351,7 @@ test('renders label', () => {
 | daemon agent core (`apps/monad/src/agent`) | unit + e2e | loop, tool calls, compaction |
 | `apps/monad` | unit + e2e | every handler, both transports |
 | `apps/monad/src/capabilities/tools` | unit | sandbox, fs ops, security boundaries |
-| `@monad/home` | unit | path initialisation |
+| `@monad/environment` | unit | path initialisation |
 | `@monad/ui` | unit (happy-dom + RTL) | component render, interaction, a11y |
 | `apps/tui` | — | TUI rendering cost is high; covered by manual testing |
 

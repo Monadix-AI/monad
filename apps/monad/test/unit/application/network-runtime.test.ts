@@ -1,4 +1,4 @@
-import type { MonadConfig } from '@monad/home';
+import type { MonadConfig } from '@monad/environment';
 import type { NetworkRuntimeStatus } from '@monad/protocol';
 import type { TlsSetup } from '#/transports/tls.ts';
 
@@ -26,7 +26,12 @@ test('network runtime keeps live compatibility config and TLS state behind stabl
       https: httpsEnabled
     } as MonadConfig['network'],
     initialOpenAiCompat: { enabled: false },
-    paths: { config: '/home/config.json', profile: '/home/profile.json', tls: '/home/tls' },
+    paths: {
+      config: '/home/config.json',
+      agentsConfig: '/home/agents.json',
+      mesh: '/home/mesh.json',
+      tls: '/home/tls'
+    },
     env: {},
     now: () => now,
     loadConfig: async () => {

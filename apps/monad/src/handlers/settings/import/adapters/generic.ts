@@ -30,7 +30,7 @@ export async function parseGenericMcpConfig(inputPath: string, from: KnownSource
       source: `${cfg.path}:mcp.${name}`,
       target: name,
       action: server ? 'add' : 'manual',
-      reason: server ? `${from} MCP server maps to monad mcpServers` : `Unsupported ${from} MCP shape`,
+      reason: server ? `${from} MCP server maps to Monad mcpServers` : `Unsupported ${from} MCP shape`,
       payload: server ? { kind: 'mcpServer', server } : { kind: 'manual' },
       risk: server?.transport === 'stdio' ? 'medium' : 'low',
       summary: server ? (server.transport === 'stdio' ? server.command : server.url) : undefined
@@ -42,7 +42,7 @@ export async function parseGenericMcpConfig(inputPath: string, from: KnownSource
       source: cfg.path,
       target: `${from}:runtime`,
       action: 'manual',
-      reason: `${from} workflow/plugin/runtime concepts are not monad settings`,
+      reason: `${from} workflow/plugin/runtime concepts are not Monad settings`,
       payload: { kind: 'manual' },
       risk: 'medium'
     });

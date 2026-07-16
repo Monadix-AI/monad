@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/monad-logo-dark.svg">
-    <img src="apps/web/public/monad-logo-vector-solid.svg" alt="Monad" width="520">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/Monad-logo-dark.svg">
+    <img src="apps/web/public/Monad-logo-vector-solid.svg" alt="Monad" width="520">
   </picture>
 </p>
 
@@ -17,7 +17,7 @@
 
 <p align="center">
   <a href="#quick-start">Quick start</a> ·
-  <a href="#monad-agent-and-monad-mesh">Agent &amp; Mesh</a> ·
+  <a href="#Monad-agent-and-Monad-mesh">Agent &amp; Mesh</a> ·
   <a href="#workspace-experiences">Workspace Experiences</a> ·
   <a href="#features">Features</a> ·
   <a href="#documentation">Documentation</a> ·

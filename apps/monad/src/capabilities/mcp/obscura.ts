@@ -3,7 +3,7 @@
 // single live connection so a reconnect closes the prior one and a tool-set change is refused unless
 // re-pinned. Returns the three handles startDaemon hands to createDaemonHandlers.
 
-import type { ObscuraConfig } from '@monad/home';
+import type { ObscuraConfig } from '@monad/environment';
 import type { Logger } from '@monad/logger';
 import type { McpConnection } from '#/capabilities/tools';
 

@@ -1,11 +1,10 @@
-import type { ChannelInstanceConfig } from '@monad/home';
+import type { ChannelInstanceConfig } from '@monad/environment';
 import type { ChannelInbound, SessionId } from '@monad/protocol';
 import type { ChannelAdapter } from '@monad/sdk-atom';
 import type { ChannelRoute, ChannelServiceDeps, ChannelTranslate, Instance } from '#/channels/types.ts';
 
 import { errMsg } from '#/channels/helpers.ts';
 import { type ChannelRenderMode, createRenderer } from '#/channels/render.ts';
-import { principalFor } from '#/channels/routing.ts';
 import {
   type CommandBundle,
   type CommandExecution,
@@ -58,7 +57,6 @@ export async function runCommand(
   const exec: CommandExecution = {
     registry: bundle.registry,
     navigator: conversationNavigator(host, c, key, m.senderDisplay),
-    principalId: principalFor(c.id),
     // The channel serializes per conversation (one run at a time), so a command never races an
     // in-flight turn → not busy.
     isBusy: false,
@@ -167,8 +165,7 @@ function conversationNavigator(
       store.setActiveSession({
         channelId,
         conversationKey: key,
-        sessionId: found.sessionId,
-        principalId: principalFor(channelId)
+        sessionId: found.sessionId
       });
       // Register a mirror for the switched-to session so web-UI messages are immediately mirrored.
       const adapter = host.instances.get(channelId)?.adapter;

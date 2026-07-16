@@ -1,4 +1,4 @@
-import type { MonadPaths } from '@monad/home';
+import type { MonadPaths } from '@monad/environment';
 
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
@@ -18,8 +18,8 @@ function paths(): MonadPaths {
     logs: join(base, 'logs'),
     runtime: base,
     configs: base,
-    profile: join(base, 'profile.json'),
-    sandbox: join(base, 'sandbox.json'),
+    agentsConfig: join(base, 'agents.json'),
+    mesh: join(base, 'mesh.json'),
     approvals: join(base, 'approvals.json'),
     config: join(base, 'config.json'),
     credentials: join(base, 'credentials'),

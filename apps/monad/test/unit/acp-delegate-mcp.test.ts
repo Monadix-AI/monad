@@ -2,10 +2,10 @@
 // delegated sub-agent. Covers stdio/http mapping, env/header secret resolution, and the skip rules
 // (disabled servers, oauth-mode http whose bearer can't be forwarded as a static header).
 
-import type { McpServerConfig } from '@monad/home';
+import type { McpServerConfig } from '@monad/environment';
 
 import { expect, test } from 'bun:test';
-import { envRef } from '@monad/home';
+import { envRef } from '@monad/environment';
 
 import { toAcpMcpServers } from '#/services/delegation/acp-delegate.ts';
 

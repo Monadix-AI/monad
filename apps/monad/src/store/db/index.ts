@@ -226,49 +226,28 @@ export class Store {
     return hasCurrentMigration(this.sqlite);
   }
 
-  getExperienceState(
-    atomPackId: string,
-    principalId: string,
-    projectId: string,
-    key: string
-  ): ExperienceStateRecord | null {
-    return getExperienceState(this.sqlite, atomPackId, principalId, projectId, key);
+  getExperienceState(atomPackId: string, projectId: string, key: string): ExperienceStateRecord | null {
+    return getExperienceState(this.sqlite, atomPackId, projectId, key);
   }
 
-  listExperienceState(
-    atomPackId: string,
-    principalId: string,
-    projectId: string,
-    prefix: string
-  ): ExperienceStateRecord[] {
-    return listExperienceState(this.sqlite, atomPackId, principalId, projectId, prefix);
+  listExperienceState(atomPackId: string, projectId: string, prefix: string): ExperienceStateRecord[] {
+    return listExperienceState(this.sqlite, atomPackId, projectId, prefix);
   }
 
   compareAndSwapExperienceState(input: Parameters<typeof compareAndSwapExperienceState>[1]): boolean {
     return compareAndSwapExperienceState(this.sqlite, input);
   }
 
-  listExperienceStateEvents(
-    atomPackId: string,
-    principalId: string,
-    projectId: string,
-    key: string
-  ): ExperienceStateEventRecord[] {
-    return listExperienceStateEvents(this.sqlite, atomPackId, principalId, projectId, key);
+  listExperienceStateEvents(atomPackId: string, projectId: string, key: string): ExperienceStateEventRecord[] {
+    return listExperienceStateEvents(this.sqlite, atomPackId, projectId, key);
   }
 
   scheduleExperienceWorkerWakeup(input: Omit<ExperienceWorkerWakeupRecord, 'attempt'>): void {
     scheduleExperienceWorkerWakeup(this.sqlite, input);
   }
 
-  cancelExperienceWorkerWakeup(
-    atomPackId: string,
-    principalId: string,
-    experienceId: string,
-    projectId: string,
-    key: string
-  ): void {
-    cancelExperienceWorkerWakeup(this.sqlite, atomPackId, principalId, experienceId, projectId, key);
+  cancelExperienceWorkerWakeup(atomPackId: string, experienceId: string, projectId: string, key: string): void {
+    cancelExperienceWorkerWakeup(this.sqlite, atomPackId, experienceId, projectId, key);
   }
 
   listDueExperienceWorkerWakeups(now: string): ExperienceWorkerWakeupRecord[] {

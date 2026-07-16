@@ -1,6 +1,6 @@
 {
-  "channel.approvalNeeded": "⚠ This action needs approval. Please approve it in the monad UI.",
-  "channel.error": "⚠ Error: {{label}}",
-  "channel.rateLimited": "⏳ You are sending messages too quickly — please slow down.",
-  "channel.pairing.requested": "🔑 To connect, share this one-time code with the operator: {{code}}"
+  "channel.approvalNeeded": "Approval required. Review this action in Monad.",
+  "channel.error": "Cannot complete the action: {{label}}",
+  "channel.rateLimited": "Messages are arriving too quickly. Wait before sending another message.",
+  "channel.pairing.requested": "Share this one-time pairing code with the operator: {{code}}"
 }

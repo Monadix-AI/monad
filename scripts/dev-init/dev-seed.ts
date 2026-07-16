@@ -25,7 +25,7 @@ async function findMainSeedPath(root: string): Promise<string | null> {
       } else if (line.startsWith('branch ')) {
         const branch = line.slice('branch '.length).trim();
         if (branch === 'refs/heads/main' && currentPath && currentPath !== root) {
-          const mainSeed = join(currentPath, 'packages', 'home', 'config.init.json');
+          const mainSeed = join(currentPath, 'packages', 'environment', 'config.init.json');
           if (await Bun.file(mainSeed).exists()) {
             return mainSeed;
           }
@@ -39,7 +39,7 @@ async function findMainSeedPath(root: string): Promise<string | null> {
 }
 
 /**
- * Scaffold packages/home/config.init.json (dev seed) if missing — copying the main worktree's
+ * Scaffold packages/environment/config.init.json (dev seed) if missing — copying the main worktree's
  * seed when available, otherwise from config.init.json.template — and return the seed's apiKey
  * (empty when unset or the seed is missing/malformed), warning the caller if it's empty.
  */
@@ -48,8 +48,8 @@ async function scaffoldConfigInitDevSeed(
   log: (msg: string) => void,
   warn: (msg: string) => void
 ): Promise<string> {
-  const seedPath = join(root, 'packages', 'home', 'config.init.json');
-  const seedTemplatePath = join(root, 'packages', 'home', 'config.init.json.template');
+  const seedPath = join(root, 'packages', 'environment', 'config.init.json');
+  const seedTemplatePath = join(root, 'packages', 'environment', 'config.init.json.template');
 
   if (!(await Bun.file(seedPath).exists())) {
     // Try to copy from main worktree first

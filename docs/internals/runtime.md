@@ -12,7 +12,7 @@ below, see [security-guidelines.md](../engineering/security-guidelines.md).
 
 In one line: `main.ts` calls `startDaemon()` (`application/lifecycle.ts`), which
 runs preflight, starts lifecycle modules via `RuntimeKernel`, then launches the
-transports below; `ConfigService` owns config I/O and hot reload. The full
+transports below; `ConfigManager` owns config I/O and hot reload. The full
 startup graph and module table live in
 [daemon-architecture.md](daemon-architecture.md).
 
@@ -56,7 +56,7 @@ Local clients (the CLI) choose which one to dial via `network.transport` in
 | `uds` | HTTP over the Unix socket — **default on every platform** |
 | `tcp` | HTTP over `127.0.0.1` loopback |
 
-`uds` is the default everywhere: Bun supports AF_UNIX on all platforms monad
+`uds` is the default everywhere: Bun supports AF_UNIX on all platforms Monad
 targets — including Windows (native since Windows 10 1803) — the daemon binds the
 socket on all of them, and a Unix socket is browser-safe (a web page can reach
 `127.0.0.1` but not an AF_UNIX path). It's overridable at any time:
@@ -116,7 +116,7 @@ These are bootstrap-only. Everything else is in `config.json`.
 
 ## Security model
 
-monad is a **local, single-user daemon**. By default it binds the **loopback
+Monad is a **local, single-user daemon**. By default it binds the **loopback
 interface only** (`127.0.0.1`) plus the Unix socket under `~/.monad/run/` — neither
 is reachable from other machines. A bound loopback port is **not** an exposed port.
 The in-scope adversaries today are the user's **own web browser** (any page can

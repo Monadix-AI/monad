@@ -1,4 +1,4 @@
-import type { ModelDeps } from '#/handlers/settings/model/context.ts';
+import type { ModelSettingsDeps } from '#/handlers/settings/model/context.ts';
 
 import { createModelContext } from '#/handlers/settings/model/context.ts';
 import { createAtomKindsHandlers } from '#/handlers/settings/model/handlers/atom-kinds.ts';
@@ -11,7 +11,7 @@ export type { ModelDeps } from '#/handlers/settings/model/context.ts';
 
 export { ModelService } from '#/services/model.ts';
 
-export function createModelModule(deps: ModelDeps) {
+export function createModelModule(deps: ModelSettingsDeps) {
   const ctx = createModelContext(deps);
 
   return Object.assign(

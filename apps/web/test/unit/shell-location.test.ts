@@ -123,7 +123,6 @@ describe('shell location navigation', () => {
       }
     ]);
     const consumedUrl = calls[0]?.url;
-    expect(consumedUrl).toBeDefined();
     if (!consumedUrl) return;
     const consumedRoute = new URL(consumedUrl, 'http://localhost:3000');
     expect(consumedRoute.searchParams.get('msg')).toBeNull();

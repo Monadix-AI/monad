@@ -1,6 +1,6 @@
 # Channels
 
-A channel connects an IM platform (Telegram, Slack, Discord, …) to your monad agent.
+A channel connects an IM platform (Telegram, Slack, Discord, …) to your Monad agent.
 The platform's bot account becomes a front door: messages sent to the bot are routed
 to an agent session, and the agent's replies go back to the chat. Each conversation
 gets its own persistent session, so a Telegram DM and the web UI can watch the same
@@ -136,7 +136,7 @@ message in the group.
 
 ## In-chat commands
 
-Messages starting with `/` run monad's slash commands instead of going to the agent.
+Messages starting with `/` run Monad's slash commands instead of going to the agent.
 Unknown `/words` are treated as normal text. The conversation commands:
 
 | Command | Effect |

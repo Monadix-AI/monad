@@ -1,7 +1,7 @@
 # Model providers
 
-monad's gateway is a "gateway of gateways": every **provider** is one place a request can
-be sent. The set of providers monad offers out of the box is defined once, in a single
+Monad's gateway is a "gateway of gateways": every **provider** is one place a request can
+be sent. The set of providers Monad offers out of the box is defined once, in a single
 catalog, and every layer (init wizard, CLI, Model Settings, the agent-core registry) derives
 from it.
 

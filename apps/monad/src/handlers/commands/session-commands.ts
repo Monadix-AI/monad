@@ -1,9 +1,9 @@
 // Bridges the unified CommandRegistry to the daemon's generic (non-channel) transports. Builds a
-// principal-scoped SessionNavigator + CommandServices, runs the command, and emits the reply as a
+// daemon-local SessionNavigator + CommandServices, runs the command, and emits the reply as a
 // persisted directive message plus a live event — so HTTP/ACP/WS/CLI all render it identically.
 
 import type { Translate } from '@monad/i18n';
-import type { ChatMessage, CommandItem, Event, PrincipalId, Session, SessionId, SessionOrigin } from '@monad/protocol';
+import type { AgentId, ChatMessage, CommandItem, Event, Session, SessionId, SessionOrigin } from '@monad/protocol';
 import type {
   BeliefExplanation,
   CommandDefinition,
@@ -28,7 +28,6 @@ export interface CommandExecution {
   registry: CommandRegistry;
   navigator: SessionNavigator;
   services: CommandServices;
-  principalId: PrincipalId;
   /** Approval gate for `highRisk` commands (e.g. an atom pack command) — throws to deny. */
   gate?: (def: CommandDefinition) => Promise<void>;
   /** Host-side policy hook for transport-specific command restrictions. */
@@ -51,7 +50,6 @@ export async function executeCommand(
       (args) =>
         makeCommandRunContext({
           sessionId,
-          principalId: exec.principalId,
           args,
           nav: exec.navigator,
           services: exec.services
@@ -82,12 +80,7 @@ export function emitCommandTurn(
 
 /** Session-lifecycle ops the command bridge needs — satisfied by the lifecycle handlers. */
 export interface LifecycleOps {
-  createForPrincipal(args: {
-    title: string;
-    principalId: PrincipalId;
-    agentId?: string;
-    origin?: SessionOrigin;
-  }): Promise<{ sessionId: string }>;
+  create(args: { title: string; agentId?: AgentId; origin?: SessionOrigin }): Promise<{ sessionId: string }>;
   reset(args: { id: SessionId }): Promise<{ clearedCount: number }>;
   update(args: { id: SessionId; archived?: boolean }): Promise<{ session: Session }>;
   list(args: { limit?: number }): Promise<{ sessions: Session[] }>;
@@ -118,22 +111,20 @@ export interface SessionCommandRunner {
   bus: EventBus;
   lifecycle: LifecycleOps;
   commands: CommandBundle;
-  ownerPrincipalId: PrincipalId;
 }
 
-/** A principal-scoped navigator for generic transports: it creates sessions and resolves targets,
+/** A daemon-local navigator for generic transports: it creates sessions and resolves targets,
  *  but holds no server-side "active session" pointer — the client navigates via the returned effect. */
 function genericNavigator(runner: SessionCommandRunner, session: Session): SessionNavigator {
   const { lifecycle } = runner;
   const owned = async () => {
     const { sessions } = await lifecycle.list({ limit: 50 });
-    return sessions.filter((s) => s.ownerPrincipalId === session.ownerPrincipalId);
+    return sessions;
   };
   return {
     async newSession(label) {
-      const { sessionId } = await lifecycle.createForPrincipal({
+      const { sessionId } = await lifecycle.create({
         title: label ?? 'New conversation',
-        principalId: session.ownerPrincipalId,
         agentId: 'agentIds' in session ? session.agentIds[0] : undefined,
         // A /new spawned inside a session inherits its provenance (a /new in Telegram → Telegram).
         origin: session.origin
@@ -153,14 +144,13 @@ function genericNavigator(runner: SessionCommandRunner, session: Session): Sessi
   };
 }
 
-/** The generic (principal-scoped) execution context for a session command. */
+/** The generic execution context for a session command. */
 function genericExecution(runner: SessionCommandRunner, session: Session, busy: boolean): CommandExecution {
   const { commands } = runner;
   const approve = commands.approveHighRisk;
   return {
     registry: commands.registry,
     navigator: genericNavigator(runner, session),
-    principalId: session.ownerPrincipalId,
     isBusy: busy,
     gate: approve ? (def) => approve(session.id, def) : undefined,
     services: {

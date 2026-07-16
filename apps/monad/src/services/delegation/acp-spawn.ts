@@ -1,5 +1,5 @@
 import type { ClientConnection, McpServer } from '@agentclientprotocol/sdk';
-import type { AcpAgentConfig } from '@monad/home';
+import type { AcpAgentConfig } from '@monad/environment';
 import type { ToolContext, ToolGate } from '#/capabilities/tools/types.ts';
 import type { LiveDelegate } from './acp-delegate-types.ts';
 

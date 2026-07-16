@@ -226,8 +226,6 @@ export interface ModelCall {
   fetch?: typeof globalThis.fetch;
   /** Originating session, for observability span grouping. In-process telemetry only. */
   sessionId?: string;
-  /** Principal the turn is attributed to, for observability. In-process telemetry only. */
-  userId?: string;
   /** Max thinking/reasoning tokens for this call. Overrides profile's reasoningEffort mapping. */
   maxThinkingTokens?: number;
 }

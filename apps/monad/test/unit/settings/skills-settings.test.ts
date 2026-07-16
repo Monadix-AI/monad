@@ -1,13 +1,14 @@
-import type { MonadPaths } from '@monad/home';
+import type { MonadPaths } from '@monad/environment';
 
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createDefaultConfig, loadAll, saveAll, saveAuth } from '@monad/home';
+import { createDefaultConfig, loadAll, saveAll, saveAuth } from '@monad/environment';
 import { ModelProviderType } from '@monad/protocol';
 
 import { createSkillsSettingsModule } from '#/handlers/settings/skills/index.ts';
+import { createTestConfigManager } from '../../helpers.ts';
 
 let dir: string;
 let paths: MonadPaths;
@@ -19,8 +20,8 @@ beforeEach(async () => {
     runtime: dir,
     configs: dir,
     config: join(dir, 'config.json'),
-    profile: join(dir, 'profile.json'),
-    sandbox: join(dir, 'sandbox.json'),
+    agentsConfig: join(dir, 'agents.json'),
+    mesh: join(dir, 'mesh.json'),
     approvals: join(dir, 'approvals.json'),
     credentials: join(dir, 'credentials'),
     auth: join(dir, 'credentials', 'auth.json'),
@@ -46,7 +47,7 @@ beforeEach(async () => {
     pid: join(dir, 'monad.pid')
   };
   await mkdir(paths.credentials, { recursive: true });
-  await saveAll(paths.config, paths.profile, createDefaultConfig('prn_test00000000', 'Test'));
+  await saveAll(paths, createDefaultConfig('Test'));
 });
 
 afterEach(async () => {
@@ -54,14 +55,14 @@ afterEach(async () => {
 });
 
 test('install review setting cannot be enabled without a usable model', async () => {
-  const mod = createSkillsSettingsModule(paths);
+  const mod = createSkillsSettingsModule(await createTestConfigManager(paths));
 
   await expect(mod.setSkillsSettings({ installReview: true })).rejects.toThrow(/usable model/);
   expect(await mod.getSkillsSettings()).toMatchObject({ installReview: false, installReviewAvailable: false });
 });
 
 test('install review setting can use any configured model with credentials', async () => {
-  const cfg = await loadAll(paths.config, paths.profile);
+  const cfg = await loadAll(paths);
   if (!cfg) throw new Error('config missing');
   cfg.model.default = '';
   cfg.model.providers.push({
@@ -75,7 +76,7 @@ test('install review setting can use any configured model with credentials', asy
     params: {},
     fallbacks: []
   });
-  await saveAll(paths.config, paths.profile, cfg);
+  await saveAll(paths, cfg);
   await saveAuth(paths.auth, {
     version: 1,
     activeProvider: null,
@@ -101,11 +102,11 @@ test('install review setting can use any configured model with credentials', asy
     }
   });
 
-  const mod = createSkillsSettingsModule(paths);
+  const mod = createSkillsSettingsModule(await createTestConfigManager(paths));
   expect(await mod.getSkillsSettings()).toMatchObject({ installReview: false, installReviewAvailable: true });
 
   const updated = await mod.setSkillsSettings({ installReview: true });
 
   expect(updated).toMatchObject({ installReview: true, installReviewAvailable: true });
-  expect((await loadAll(paths.config, paths.profile))?.skills.installReview).toBe(true);
+  expect((await loadAll(paths))?.skills.installReview).toBe(true);
 });

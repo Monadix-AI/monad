@@ -2,9 +2,9 @@
 // The daemon is HTTPS-first even for loopback TCP; a separate local-only HTTP fallback listener can
 // be enabled for compatibility, but certificate provisioning itself is fail-closed.
 
-import type { MonadConfig, MonadPaths } from '@monad/home';
+import type { MonadConfig, MonadPaths } from '@monad/environment';
 
-import { certExpiry, certFingerprint, ensureTlsCert, findOpenssl, renewTlsCert } from '@monad/home';
+import { certExpiry, certFingerprint, ensureTlsCert, findOpenssl, renewTlsCert } from '@monad/environment';
 
 export interface TlsSetup {
   cert?: { certPath: string; keyPath: string };

@@ -1,7 +1,7 @@
 # MCP servers
 
 MCP (Model Context Protocol) is an open standard that lets an agent call tools served by
-an external process or remote service. monad connects to the MCP servers you configure
+an external process or remote service. Monad connects to the MCP servers you configure
 and merges their tools into the agent's toolbox: a remote tool appears to the model as
 `<server>__<tool>` (for example `github__create_issue`) and behaves like any built-in
 tool. MCP tools cross a trust boundary, so they are high-risk by default — every call
@@ -23,7 +23,7 @@ remove servers. It is backed by the REST surface under `/v1/settings/mcp-servers
 ### config.json
 
 Add entries to the `mcpServers` array in `config.json`. Two transports are supported:
-`stdio` (monad spawns the server as a subprocess) and `http` (streamable HTTP to a
+`stdio` (Monad spawns the server as a subprocess) and `http` (streamable HTTP to a
 remote URL).
 
 ```jsonc
@@ -93,9 +93,9 @@ The `auth` field on an `http` server selects one of four modes:
 
 ### OAuth
 
-For `oauth` servers, monad runs discovery, dynamic client registration, and the
+For `oauth` servers, Monad runs discovery, dynamic client registration, and the
 authorization-code + PKCE flow, then stores the tokens in `auth.json`. Trigger it with
-the Authorize button in the web UI or `monad mcp authorize <name>`; monad opens your
+the Authorize button in the web UI or `monad mcp authorize <name>`; Monad opens your
 browser and reconnects the server once authorization completes. Optional fields:
 `clientId` (skips dynamic registration), `scopes`, and `flow` — `"loopback"` (browser +
 localhost redirect, the default) or `"device"` (RFC 8628 device code for headless

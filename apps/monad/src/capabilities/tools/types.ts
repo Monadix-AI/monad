@@ -250,7 +250,7 @@ export interface ToolContext {
   /** The id of this tool call, for correlation/logging. The loop always sets it. */
   toolCallId?: string;
   /**
-   * Resolved sandbox roots (see @monad/home resolveEffectiveSandboxMode). `undefined` = unrestricted.
+   * Resolved sandbox roots (see @monad/environment resolveEffectiveSandboxMode). `undefined` = unrestricted.
    * fs:* tools MUST call assertPathWithinRoots(path, sandboxRoots) — declaration is not enforcement.
    */
   sandboxRoots?: string[];

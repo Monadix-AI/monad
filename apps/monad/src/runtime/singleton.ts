@@ -1,4 +1,4 @@
-import type { MonadPaths } from '@monad/home';
+import type { MonadPaths } from '@monad/environment';
 
 import { createI18n, defaultLocaleName, loadLocalePacksFromDir } from '@monad/i18n';
 import { BUILTIN_LOCALES_DIR } from '@monad/i18n/locale-dir';

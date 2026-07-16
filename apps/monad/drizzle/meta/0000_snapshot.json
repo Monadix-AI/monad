@@ -185,13 +185,6 @@
           "notNull": true,
           "autoincrement": false
         },
-        "principal_id": {
-          "name": "principal_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "text",
@@ -293,13 +286,6 @@
           "notNull": true,
           "autoincrement": false
         },
-        "principal_id": {
-          "name": "principal_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
         "project_id": {
           "name": "project_id",
           "type": "text",
@@ -339,15 +325,15 @@
       "indexes": {
         "idx_experience_state_project": {
           "name": "idx_experience_state_project",
-          "columns": ["atom_pack_id", "principal_id", "project_id", "record_key"],
+          "columns": ["atom_pack_id", "project_id", "record_key"],
           "isUnique": false
         }
       },
       "foreignKeys": {},
       "compositePrimaryKeys": {
-        "experience_state_atom_pack_id_principal_id_project_id_record_key_pk": {
-          "columns": ["atom_pack_id", "principal_id", "project_id", "record_key"],
-          "name": "experience_state_atom_pack_id_principal_id_project_id_record_key_pk"
+        "experience_state_atom_pack_id_project_id_record_key_pk": {
+          "columns": ["atom_pack_id", "project_id", "record_key"],
+          "name": "experience_state_atom_pack_id_project_id_record_key_pk"
         }
       },
       "uniqueConstraints": {},
@@ -365,13 +351,6 @@
         },
         "atom_pack_id": {
           "name": "atom_pack_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "principal_id": {
-          "name": "principal_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -416,7 +395,7 @@
       "indexes": {
         "idx_experience_state_events_record": {
           "name": "idx_experience_state_events_record",
-          "columns": ["atom_pack_id", "principal_id", "project_id", "record_key", "version"],
+          "columns": ["atom_pack_id", "project_id", "record_key", "version"],
           "isUnique": false
         }
       },
@@ -430,13 +409,6 @@
       "columns": {
         "atom_pack_id": {
           "name": "atom_pack_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "principal_id": {
-          "name": "principal_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -495,9 +467,9 @@
       },
       "foreignKeys": {},
       "compositePrimaryKeys": {
-        "experience_worker_wakeups_atom_pack_id_principal_id_experience_id_project_id_wake_key_pk": {
-          "columns": ["atom_pack_id", "principal_id", "experience_id", "project_id", "wake_key"],
-          "name": "experience_worker_wakeups_atom_pack_id_principal_id_experience_id_project_id_wake_key_pk"
+        "experience_worker_wakeups_atom_pack_id_experience_id_project_id_wake_key_pk": {
+          "columns": ["atom_pack_id", "experience_id", "project_id", "wake_key"],
+          "name": "experience_worker_wakeups_atom_pack_id_experience_id_project_id_wake_key_pk"
         }
       },
       "uniqueConstraints": {},
@@ -1307,13 +1279,6 @@
           "notNull": true,
           "autoincrement": false
         },
-        "owner_principal_id": {
-          "name": "owner_principal_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
         "state": {
           "name": "state",
           "type": "text",
@@ -1544,6 +1509,49 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
+    "tool_raw_outputs": {
+      "name": "tool_raw_outputs",
+      "columns": {
+        "transcript_target_id": {
+          "name": "transcript_target_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "tool_call_id": {
+          "name": "tool_call_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "output": {
+          "name": "output",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "tool_raw_outputs_transcript_target_id_tool_call_id_pk": {
+          "columns": ["transcript_target_id", "tool_call_id"],
+          "name": "tool_raw_outputs_transcript_target_id_tool_call_id_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
     "usage_ledger": {
       "name": "usage_ledger",
       "columns": {
@@ -1655,13 +1663,6 @@
         },
         "title": {
           "name": "title",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "owner_principal_id": {
-          "name": "owner_principal_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true,

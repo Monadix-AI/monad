@@ -1,4 +1,4 @@
-import type { ConfigSource } from './service.ts';
+import type { ConfigSource } from './manager.ts';
 
 import {
   loadAll,
@@ -6,14 +6,14 @@ import {
   type MonadAuth,
   type MonadConfig,
   type MonadPaths,
-  saveAuth as saveHomeAuth,
-  saveProfile
-} from '@monad/home';
+  saveAll,
+  saveAuth as saveHomeAuth
+} from '@monad/environment';
 
 export interface HomeConfigIo {
-  loadConfig(configPath: string, profilePath: string): Promise<MonadConfig | null>;
+  loadConfig(paths: Pick<MonadPaths, 'config' | 'agentsConfig' | 'mesh'>): Promise<MonadConfig | null>;
   loadAuth(authPath: string): Promise<MonadAuth | null>;
-  saveConfig(profilePath: string, config: MonadConfig): Promise<void>;
+  saveConfig(paths: Pick<MonadPaths, 'config' | 'agentsConfig' | 'mesh'>, config: MonadConfig): Promise<void>;
   saveAuth(authPath: string, auth: MonadAuth): Promise<void>;
 }
 
@@ -25,22 +25,22 @@ export interface HomeConfigSourceOptions {
 const defaultIo: HomeConfigIo = {
   loadConfig: loadAll,
   loadAuth: loadHomeAuth,
-  saveConfig: saveProfile,
+  saveConfig: saveAll,
   saveAuth: saveHomeAuth
 };
 
 export function createHomeConfigSource(
-  paths: Pick<MonadPaths, 'auth' | 'config' | 'profile'>,
+  paths: Pick<MonadPaths, 'auth' | 'config' | 'agentsConfig' | 'mesh'>,
   options: HomeConfigSourceOptions = {}
 ): ConfigSource {
   const io = options.io ?? defaultIo;
 
   return {
     async load() {
-      const [cfg, auth] = await Promise.all([io.loadConfig(paths.config, paths.profile), io.loadAuth(paths.auth)]);
+      const [cfg, auth] = await Promise.all([io.loadConfig(paths), io.loadAuth(paths.auth)]);
       return cfg === null ? null : { cfg, auth };
     },
-    saveConfig: (config) => io.saveConfig(paths.profile, config),
+    saveConfig: (config) => io.saveConfig(paths, config),
     saveAuth: (auth) => io.saveAuth(paths.auth, auth),
     ...(options.watch === undefined ? {} : { watch: options.watch })
   };

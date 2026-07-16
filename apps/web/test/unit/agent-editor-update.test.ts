@@ -6,7 +6,6 @@ import { buildAgentEditorUpdate } from '#/features/studio/agent-workshop/agent-e
 
 const agent = {
   id: 'agt_100000000000',
-  principalId: 'prn_100000000000',
   name: 'Reviewer',
   capabilities: [],
   declaredScopes: [],

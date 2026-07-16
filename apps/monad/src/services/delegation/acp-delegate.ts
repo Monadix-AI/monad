@@ -21,7 +21,7 @@
 // (clearAcpDelegatesForSession), on adapter exit, on turn abort/failure, and after an idle timeout.
 
 import type { McpServer } from '@agentclientprotocol/sdk';
-import type { AcpAgentConfig } from '@monad/home';
+import type { AcpAgentConfig } from '@monad/environment';
 import type { Tool, ToolBackends, ToolContext, ToolGate } from '#/capabilities/tools/types.ts';
 import type { Store } from '#/store/db/index.ts';
 

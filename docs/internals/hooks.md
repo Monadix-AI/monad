@@ -26,7 +26,7 @@ The failure is carried in the input (`ok` / `error`), and the handler decides wh
 Source of truth in code:
 [`packages/protocol/src/hooks.ts`](../../packages/protocol/src/hooks.ts) (contract),
 [`apps/monad/src/hooks/runner.ts`](../../apps/monad/src/hooks/runner.ts)
-(dispatch), [`packages/home/src/config/index.ts`](../../packages/home/src/config/index.ts) (`hooks` +
+(dispatch), [`packages/environment/src/config/index.ts`](../../packages/environment/src/config/index.ts) (`hooks` +
 `policyHooks`), [`packages/sdk-atom/src/hook.ts`](../../packages/sdk-atom/src/hook.ts) (SDK).
 
 ---

@@ -15,7 +15,7 @@
  *   2. Migrates an existing .env.local whose MONAD_HOME is outside the
  *      project root, preserving all other lines.
  *   3. Creates the MONAD_HOME directory if it doesn't exist.
- *   4. Scaffolds packages/home/config.init.json from config.init.json.template (dev seed) if missing,
+ *   4. Scaffolds packages/environment/config.init.json from config.init.json.template (dev seed) if missing,
  *      and warns if its apiKey is empty.
  *   5. Initializes CodeGraph when the local machine has it installed and this checkout is unindexed.
  *   6. Installs a worktree-local `monad` CLI shim under .dev/bin.
@@ -200,29 +200,30 @@ async function main(): Promise<void> {
     });
   };
 
-  await generateArtifact({
-    command: ['bun', 'run', join(root, 'scripts/generate-codex-app-server-protocol.ts')],
-    label: 'Codex app-server protocol',
-    target: 'packages/atoms/generated/codex-app-server'
-  });
+  const generatedArtifacts = [
+    {
+      command: ['bun', 'run', join(root, 'scripts/generate-codex-app-server-protocol.ts')],
+      label: 'Codex app-server protocol',
+      target: 'packages/atoms/generated/codex-app-server'
+    },
+    {
+      command: ['bun', 'run', join(root, 'scripts/generate-avatar-styles.ts')],
+      label: 'Avatar styles',
+      target: 'packages/protocol/generated/avatar-styles.ts'
+    },
+    {
+      command: ['bun', 'run', join(root, 'packages/environment/scripts/gen-config-schema.ts')],
+      label: 'Config schemas',
+      target: 'packages/environment/{config,agents,mesh,auth}.schema.json'
+    },
+    {
+      command: ['bun', 'run', join(root, 'scripts/generate-licenses.ts')],
+      label: 'License inventory',
+      target: 'apps/monad/generated/licenses.json'
+    }
+  ];
 
-  await generateArtifact({
-    command: ['bun', 'run', join(root, 'scripts/generate-avatar-styles.ts')],
-    label: 'Avatar styles',
-    target: 'packages/protocol/generated/avatar-styles.ts'
-  });
-
-  await generateArtifact({
-    command: ['bun', 'run', join(root, 'packages/home/scripts/gen-config-schema.ts')],
-    label: 'Config schema',
-    target: 'packages/home/config.schema.json'
-  });
-
-  await generateArtifact({
-    command: ['bun', 'run', join(root, 'scripts/generate-licenses.ts')],
-    label: 'License inventory',
-    target: 'apps/monad/generated/licenses.json'
-  });
+  await Promise.all(generatedArtifacts.map(generateArtifact));
 }
 
 if (import.meta.main) {

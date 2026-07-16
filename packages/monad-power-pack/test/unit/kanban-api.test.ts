@@ -33,7 +33,6 @@ function fixture(pendingApprovals: Array<{ id: string }> = []) {
   const approvalScopes: Array<{ projectId: string; sessionId: string }> = [];
   const context = {
     atomPackId: 'monad-power-pack',
-    principalId: 'prn_a',
     experienceState: memoryState(),
     projectSessions: {
       create: async () => ({ id: 'ses_a' }),

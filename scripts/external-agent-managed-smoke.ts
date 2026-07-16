@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { resolveClientConn } from '@monad/home';
+import { resolveClientConn } from '@monad/environment';
 
 type Json = Record<string, unknown>;
 

@@ -137,7 +137,7 @@ export function HookEditorDialog({
                           />
                         </Button>
                         <Button
-                          aria-label={t('web.common.delete')}
+                          aria-label={t('web.hooks.deleteCommand')}
                           className="size-8"
                           onClick={() => onRemoveCommand(event, matcher._id, hook._id)}
                           size="icon"

@@ -8,7 +8,7 @@ Code-level rules for the `monad` CLI surface: how commands are **named**, how th
 and CLI UX. Read it before adding or renaming a command.
 
 The north star is the convention set shared by `git`, `gh`, `docker`, `systemctl`,
-and `brew`: a user who knows those tools should be able to guess monad's commands.
+and `brew`: a user who knows those tools should be able to guess Monad's commands.
 
 ## 1. Naming
 
@@ -114,7 +114,7 @@ This restates the rule in `AGENTS.md` for the CLI surface:
 
 ## 6. Data directories (XDG)
 
-Paths are owned by `@monad/home` (`paths.ts`); no command constructs paths itself.
+Paths are owned by `@monad/environment` (`paths.ts`); no command constructs paths itself.
 
 - **Linux** follows the XDG Base Directory spec, split by category:
   - `$XDG_CONFIG_HOME/monad/` — `config.json`, `auth.json`

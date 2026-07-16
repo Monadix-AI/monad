@@ -94,7 +94,7 @@ export class MonadAcpAgent {
     const protocolVersion = params.protocolVersion <= PROTOCOL_VERSION ? params.protocolVersion : PROTOCOL_VERSION;
     const result = {
       protocolVersion,
-      agentInfo: { name: 'monad', version: VERSION },
+      agentInfo: { name: 'Monad', version: VERSION },
       agentCapabilities: {
         loadSession: true,
         promptCapabilities: { image: true, audio: false, embeddedContext: true },

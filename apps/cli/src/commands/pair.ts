@@ -1,6 +1,6 @@
 import type { CommandDef } from './types.ts';
 
-import { enableRemoteAccess, getLanIp, getPaths, getTailscaleIp, loadConfig } from '@monad/home';
+import { enableRemoteAccess, getLanIp, getPaths, getTailscaleIp, loadConfig } from '@monad/environment';
 
 import { t } from '../lib/i18n.ts';
 import { bold, cyan, dim, green, out, red, yellow } from '../lib/output.ts';
@@ -38,13 +38,13 @@ export const command: CommandDef = {
     }
 
     const paths = getPaths();
-    const cfg = await loadConfig(paths.config);
+    const cfg = await loadConfig(paths);
     if (!cfg) {
       out(`${red('✖')} no config yet — run ${bold('monad init')} first`);
       process.exit(1);
     }
 
-    const { token, changed } = await enableRemoteAccess(paths.config, { rotate });
+    const { token, changed } = await enableRemoteAccess(paths, { rotate });
     const port = cfg.network.port;
 
     const ip = mode === 'overlay' ? getTailscaleIp() : getLanIp();

@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { openUrl, resolveClientConn } from '@monad/home';
+import { openUrl, resolveClientConn } from '@monad/environment';
 import { setLogLevel } from '@monad/logger';
 import { MONAD_VERSION } from '@monad/protocol';
 
@@ -58,7 +58,7 @@ async function dispatch(): Promise<void> {
     const { startDaemon } = await import('./lib/daemon.ts');
     await startDaemon();
 
-    process.stdout.write(`monad — ${webUrl}\n`);
+    process.stdout.write(`Monad — ${webUrl}\n`);
     if (Bun.env.MONAD_NO_OPEN !== '1') openUrl(webUrl);
     // Exit naturally — do NOT process.exit(). Bun terminates a spawned child whose stdout is piped
     // to us when we hard-exit, which would kill the detached daemon we just launched; letting the

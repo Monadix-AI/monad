@@ -1,5 +1,5 @@
-import type { MonadAuth, MonadConfig, MonadPaths } from '@monad/home';
-import type { ConfigSnapshot } from '#/config/service.ts';
+import type { MonadAuth, MonadConfig, MonadPaths } from '@monad/environment';
+import type { ConfigSnapshot } from '#/config/manager.ts';
 import type { RuntimeModule } from '#/runtime/types.ts';
 import type { Store } from '#/store/db/index.ts';
 import type { DataLayer } from '#/store/lifecycle.ts';

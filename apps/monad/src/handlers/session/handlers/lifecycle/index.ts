@@ -3,7 +3,6 @@ import type {
   BranchSessionRequest,
   ListUiItemsResponse,
   MessageId,
-  PrincipalId,
   ProjectId,
   RestoreSessionRequest,
   RestoreSessionResponse,
@@ -16,7 +15,6 @@ import type {
 } from '@monad/protocol';
 import type { SessionContext } from '#/handlers/session/context.ts';
 
-import { loadAll } from '@monad/home';
 import { createLogger } from '@monad/logger';
 import { newId } from '@monad/protocol';
 
@@ -34,7 +32,7 @@ import { createWorkspaceHandlers, resolveWorkspaceDir } from './lifecycle-worksp
 
 const log = createLogger('session');
 
-export const SESSION_DELETE_BACKEND_GRACE_MS = 8000;
+const SESSION_DELETE_BACKEND_GRACE_MS = 8000;
 
 type SessionProcessControlRequest = {
   action: 'stop';
@@ -65,12 +63,13 @@ function assertBranchAllowed(parent: Session, transport: SessionTransport | unde
 
 export function createLifecycleHandlers(ctx: SessionContext) {
   const {
-    deps: { store, agent, ownerPrincipalId, paths, oversight, delegation, sessionSandbox, hooks, hookCwd },
+    deps: { store, agent, oversight, delegation, sessionSandbox, hooks, hookCwd },
     aborts,
     requireSession,
     emitLifecycle,
     waitForRun
   } = ctx;
+  const sessionDeleteGraceMs = ctx.deps.sessionDeleteGraceMs ?? SESSION_DELETE_BACKEND_GRACE_MS;
 
   const { spawnManagedSessionMember } = createManagedExternalAgentJoin(ctx);
   const { listSessionMembers, inviteSessionMember, spawnSessionMember, removeSessionMember } =
@@ -151,17 +150,16 @@ export function createLifecycleHandlers(ctx: SessionContext) {
 
   async function resolveAgentId(agentId?: AgentId): Promise<AgentId | undefined> {
     let resolvedId: AgentId | undefined = agentId;
-    if (!resolvedId && paths) {
-      const cfg = await loadAll(paths.config, paths.profile);
-      if (cfg?.agent.defaultAgentId) {
+    const cfg = ctx.deps.configManager?.get().cfg;
+    if (!resolvedId && cfg) {
+      if (cfg.agent.defaultAgentId) {
         resolvedId = cfg.agent.defaultAgentId as AgentId;
       } else if (cfg?.agent.agents.length) {
         throw new HandlerError('invalid', 'no agent specified and no default agent configured');
       }
     }
-    if (resolvedId && paths) {
-      const cfg = await loadAll(paths.config, paths.profile);
-      if (cfg && !cfg.agent.agents.some((a) => a.id === resolvedId)) {
+    if (resolvedId && cfg) {
+      if (!cfg.agent.agents.some((a) => a.id === resolvedId)) {
         throw new HandlerError('invalid', `agent not found: ${resolvedId}`);
       }
     }
@@ -209,37 +207,12 @@ export function createLifecycleHandlers(ctx: SessionContext) {
     }) {
       const resolvedId = await resolveAgentId(agentId);
       const resolvedCwd = cwd?.trim() ? resolveWorkspaceDir(cwd, undefined) : undefined;
-      const session = await agent.sessions.create(title, ownerPrincipalId, resolvedId, origin, resolvedCwd);
+      const session = await agent.sessions.create(title, resolvedId, origin, resolvedCwd);
       await sessionSandbox?.ensure(session.id);
       // Broaden the runtime sandbox to the working folder (so fs/shell + delegated subagents reach it)
       // and load its project-local skills — mirrors setWorkspace for the create-time entry point.
       if (session.cwd) await applyWorkspaceRuntime(session.id, session.cwd);
       log.info({ sessionId: session.id, ...originLog(origin) }, 'session created');
-      emitLifecycle(session.id, 'session.created', { title: session.title });
-      await fireSessionHook('SessionStart', session.id);
-      return { sessionId: session.id };
-    },
-
-    /**
-     * Internal-only create that binds a CALLER-supplied principal instead of the daemon
-     * owner. Not exposed over any RPC/HTTP route — used by the channel gateway so an external
-     * IM user's session is owned by a restricted synthetic principal, never the owner.
-     */
-    async createForPrincipal({
-      title,
-      agentId,
-      principalId,
-      origin
-    }: {
-      title: string;
-      agentId?: AgentId;
-      principalId: PrincipalId;
-      origin?: SessionOrigin;
-    }) {
-      const resolvedId = await resolveAgentId(agentId);
-      const session = await agent.sessions.create(title, principalId, resolvedId, origin);
-      await sessionSandbox?.ensure(session.id);
-      log.info({ sessionId: session.id, principalId, ...originLog(origin) }, 'session created (principal)');
       emitLifecycle(session.id, 'session.created', { title: session.title });
       await fireSessionHook('SessionStart', session.id);
       return { sessionId: session.id };
@@ -267,14 +240,7 @@ export function createLifecycleHandlers(ctx: SessionContext) {
       }
       const cwdInput = cwd?.trim() ? cwd : project.cwd;
       const resolvedCwd = cwdInput ? resolveWorkspaceDir(cwdInput, undefined) : undefined;
-      const session = await agent.sessions.createForProject(
-        projectId,
-        title,
-        ownerPrincipalId,
-        origin,
-        resolvedCwd,
-        id
-      );
+      const session = await agent.sessions.createForProject(projectId, title, origin, resolvedCwd, id);
       const memberCreatedAt = session.createdAt;
       for (const template of project.memberTemplates) {
         store.insertSessionMember({
@@ -363,7 +329,7 @@ export function createLifecycleHandlers(ctx: SessionContext) {
       if (!pendingSessionDeletes.has(id)) {
         const timer = setTimeout(() => {
           void hardDeleteSession(id).catch((err) => log.warn({ err, sessionId: id }, 'pending session delete failed'));
-        }, SESSION_DELETE_BACKEND_GRACE_MS);
+        }, sessionDeleteGraceMs);
         (timer as { unref?: () => void }).unref?.();
         pendingSessionDeletes.set(id, timer);
       }
@@ -488,13 +454,7 @@ export function createLifecycleHandlers(ctx: SessionContext) {
         (message) => message.type !== 'branch_source'
       );
       const target = targetIndex >= 0 ? sourceMessages[targetIndex] : sourceMessages.at(-1);
-      const child = await agent.sessions.create(
-        title ?? `${parent.title} (branch)`,
-        ownerPrincipalId,
-        undefined,
-        origin,
-        parent.cwd
-      );
+      const child = await agent.sessions.create(title ?? `${parent.title} (branch)`, undefined, origin, parent.cwd);
       store.cloneMessages(child.id, snapshot);
       // Cloned tool_call rows keep their toolCallIds, so the child's read_tool_output handles must
       // resolve against its own transcript id — copy the referenced spills alongside the messages.

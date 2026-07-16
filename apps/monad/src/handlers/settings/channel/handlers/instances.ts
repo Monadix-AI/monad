@@ -1,4 +1,4 @@
-import type { ChannelInstanceConfig } from '@monad/home';
+import type { ChannelInstanceConfig } from '@monad/environment';
 import type {
   ChannelInstanceView,
   GetChannelResponse,

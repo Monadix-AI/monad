@@ -8,13 +8,12 @@ import {
   sessionSurfaceSchema
 } from './domain.ts';
 import { workplaceProjectMemberTemplatesSchema } from './external-agent/external-agent-workplace.ts';
-import { messageIdSchema, nativeAgentDeliveryIdSchema, principalIdSchema, projectIdSchema } from './ids.ts';
+import { messageIdSchema, nativeAgentDeliveryIdSchema, projectIdSchema } from './ids.ts';
 import { offsetPaginationQuerySchema, offsetPaginationResponseSchema, SESSION_TITLE_MAX } from './rpc/control.ts';
 
 export const workplaceProjectSchema = z.object({
   id: projectIdSchema,
   title: z.string(),
-  ownerPrincipalId: principalIdSchema,
   state: sessionStateSchema,
   archived: z.boolean(),
   model: z.string().optional(),

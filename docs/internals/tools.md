@@ -1,6 +1,6 @@
 # Tools
 
-monad's built-in tool set — the agent-reachable capabilities (fs, shell, process, net,
+Monad's built-in tool set — the agent-reachable capabilities (fs, shell, process, net,
 web-search/extract, email, code-exec, todo, memory, schedule, the delegation/model-derived
 tools, and the MCP adapter). Every tool is reachable by the model, so **all tool inputs are
 treated as hostile** (prompt injection): validation and resource guards run at call time, not

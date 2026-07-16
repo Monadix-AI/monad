@@ -99,7 +99,7 @@ test('telegram smoke: an allowlisted DM gets a mock-agent reply delivered back',
       log: { info: () => {}, warn: () => {}, error: () => {} }
     },
     {
-      ...(await import('@monad/home')).createDefaultConfig('prn_OWNER0000000', 'owner'),
+      ...(await import('@monad/environment')).createDefaultConfig('owner'),
       channels: [
         {
           id: channelId,
@@ -128,7 +128,6 @@ test('telegram smoke: an allowlisted DM gets a mock-agent reply delivered back',
     expect(mappingStore.countActiveConversations(channelId)).toBe(1);
     const conv = mappingStore.getActiveConversation(channelId, `${channelId}|${TESTER_ID}`);
     expect(conv?.activeSessionId).toMatch(/^ses_/);
-    expect(conv?.principalId).toBe('prn_SMOKE0000000'); // synthetic, not the owner
   } finally {
     await channelService.stop();
     tg.stop();

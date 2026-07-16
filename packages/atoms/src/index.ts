@@ -52,8 +52,8 @@ export default defineAtomPack({
     version: '1.0.0',
     sdkVersion: SDK_VERSION,
     atoms: ['connector', 'channel', 'command', 'provider', 'workspace-experience', 'agent-adapter'],
-    description: 'First-party atoms bundled with monad',
-    author: 'monad'
+    description: 'First-party atoms bundled with Monad',
+    author: 'Monad'
   },
   connectors: builtinConnectors,
   channels: [

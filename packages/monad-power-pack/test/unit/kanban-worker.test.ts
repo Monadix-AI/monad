@@ -33,7 +33,6 @@ async function fixture() {
   const pending = new Map<string, Array<{ id: string; sessionId: string; summary: string }>>();
   const context = {
     atomPackId: 'monad-power-pack',
-    principalId: 'prn_a',
     experienceState: memoryState(),
     projectSessions: {
       create: async (_projectId: string, input: { title: string }) => ({ id: `ses_${input.title}` }),

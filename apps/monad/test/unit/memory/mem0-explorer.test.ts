@@ -50,7 +50,7 @@ test('joins embeddings → 2D coords; entries without a vector get null coords',
   ]);
   const d = await collectMem0Data(base({ fetchVectors: async () => vecs }));
   const byId = new Map(d.entries.map((e) => [e.id, e]));
-  expect(byId.get('g1')?.x).not.toBeNull();
+  expect(Number.isFinite(byId.get('g1')?.x)).toBe(true);
   expect(byId.get('a1m2')?.x).toBeNull(); // no embedding → no coords
 });
 

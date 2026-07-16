@@ -1,4 +1,4 @@
-import type { BrowserConfig, ComputerConfig, McpServerConfig, MonadixConfig, ObscuraConfig } from '@monad/home';
+import type { BrowserConfig, ComputerConfig, McpServerConfig, MonadixConfig, ObscuraConfig } from '@monad/environment';
 
 // Conservative list: only tools that don't change page/browser state. Anything that
 // navigates, interacts, evaluates JS, or writes cookies/storage stays gated.

@@ -1,12 +1,12 @@
-import type { MonadAuth, MonadConfig, MonadPaths } from '@monad/home';
+import type { MonadAuth, MonadConfig, MonadPaths } from '@monad/environment';
 import type { ModelModalities, ModelPrice } from '@monad/protocol';
 import type { ModelProviderRegistry } from '#/agent/index.ts';
-import type { ConfigReloader } from '#/config/reloader.ts';
+import type { ConfigAccess } from '#/config/manager.ts';
 import type { ModelService } from '#/services/model.ts';
 import type { ModelCatalogService } from '#/services/model-catalog.ts';
 
 import { join } from 'node:path';
-import { loadAll, loadAuth, saveAuth, saveProfile } from '@monad/home';
+import { emptyAuth } from '@monad/environment';
 
 export interface ModelDeps {
   paths: MonadPaths;
@@ -14,8 +14,9 @@ export interface ModelDeps {
   // Optional: the daemon always injects it (main.ts); absent (e.g. in tests) just means model
   // listings carry no catalog price — pricing display degrades to nothing, never errors.
   modelCatalog?: ModelCatalogService;
-  configReloader?: ConfigReloader;
 }
+
+export type ModelSettingsDeps = ModelDeps & { config: ConfigAccess };
 
 export interface ModelContext {
   read(): Promise<{ cfg: MonadConfig; auth: MonadAuth }>;
@@ -38,38 +39,26 @@ export interface ModelContext {
   lookupCapabilities(provider: string, modelId: string): ModelModalities | undefined;
 }
 
-export function createModelContext({ paths, modelService, modelCatalog, configReloader }: ModelDeps): ModelContext {
+export function createModelContext({ paths, modelService, modelCatalog, config }: ModelSettingsDeps): ModelContext {
   async function read(): Promise<{ cfg: MonadConfig; auth: MonadAuth }> {
-    const cfg = await loadAll(paths.config, paths.profile);
-    if (!cfg) throw new Error('model: config.json missing');
-    const auth = (await loadAuth(paths.auth)) ?? {
-      version: 1 as const,
-      activeProvider: null,
-      updatedAt: new Date().toISOString(),
-      credentialPool: {}
-    };
+    const { cfg, auth: storedAuth } = structuredClone(config.get());
+    const auth = storedAuth ?? emptyAuth();
     return { cfg, auth };
   }
 
   async function commit(cfg: MonadConfig, auth?: MonadAuth): Promise<void> {
-    await saveProfile(paths.profile, cfg);
-    if (auth) await saveAuth(paths.auth, auth);
-    const resolvedAuth = auth ?? (await loadAuth(paths.auth));
-    if (configReloader) {
-      await configReloader.publish({ cfg, auth: resolvedAuth });
-    } else {
-      modelService.reload(cfg, resolvedAuth);
-    }
+    await config.update((draft) => {
+      draft.cfg = cfg;
+      if (auth) draft.auth = auth;
+    });
   }
 
   async function commitAuth(cfg: MonadConfig, auth: MonadAuth): Promise<void> {
     auth.updatedAt = new Date().toISOString();
-    await saveAuth(paths.auth, auth);
-    if (configReloader) {
-      await configReloader.publish({ cfg, auth });
-    } else {
-      modelService.reload(cfg, auth);
-    }
+    await config.update((draft) => {
+      draft.cfg = cfg;
+      draft.auth = auth;
+    });
   }
 
   return {

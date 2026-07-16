@@ -47,7 +47,6 @@ function fixtureSession(id: SessionId): Session {
   return {
     id,
     title: 't',
-    ownerPrincipalId: newId('prn'),
     state: 'active',
     agentIds: [],
     archived: false,

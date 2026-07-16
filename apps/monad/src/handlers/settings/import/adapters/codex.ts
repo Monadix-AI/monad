@@ -31,7 +31,7 @@ export async function parseCodex(inputPath: string): Promise<ParsedImport> {
         source: `${cfg.path}:mcp_servers.${name}`,
         target: name,
         action: server ? 'add' : 'manual',
-        reason: server ? `Codex MCP server maps to monad mcpServers${timeoutNote}` : 'Unsupported Codex MCP shape',
+        reason: server ? `Codex MCP server maps to Monad mcpServers${timeoutNote}` : 'Unsupported Codex MCP shape',
         payload: server ? { kind: 'mcpServer', server } : { kind: 'manual' },
         risk: server?.transport === 'stdio' ? 'medium' : 'low',
         summary: server ? (server.transport === 'stdio' ? server.command : server.url) : undefined
@@ -45,7 +45,7 @@ export async function parseCodex(inputPath: string): Promise<ParsedImport> {
         source: `${cfg.path}:sandbox_mode`,
         target: 'sandbox.mode',
         action: 'add',
-        reason: `Codex sandbox_mode can be mapped to monad sandbox mode "${mode}"`,
+        reason: `Codex sandbox_mode can be mapped to Monad sandbox mode "${mode}"`,
         payload: { kind: 'sandbox', mode },
         risk: mode === 'unrestricted' ? 'high' : 'medium'
       });
@@ -57,7 +57,7 @@ export async function parseCodex(inputPath: string): Promise<ParsedImport> {
         source: `${cfg.path}:approval_policy`,
         target: 'agent.approvals',
         action: 'manual',
-        reason: 'Codex approval policy is coarser than monad operator allow/ask/deny lists',
+        reason: 'Codex approval policy is coarser than Monad operator allow/ask/deny lists',
         payload: { kind: 'approval', approvalPolicy: approval },
         risk: 'high'
       });
@@ -68,7 +68,7 @@ export async function parseCodex(inputPath: string): Promise<ParsedImport> {
         source: cfg.path,
         target: 'plugins/apps',
         action: 'manual',
-        reason: 'Codex plugins/apps/connectors are not equivalent to monad skills or MCP servers',
+        reason: 'Codex plugins/apps/connectors are not equivalent to Monad skills or MCP servers',
         payload: { kind: 'manual' },
         risk: 'medium'
       });

@@ -1,20 +1,20 @@
-import type { MonadConfig, MonadPaths } from '@monad/home';
-import type { PrincipalId } from '@monad/protocol';
+import type { MonadConfig, MonadPaths } from '@monad/environment';
 import type { HomeConfigIo } from '#/config/source.ts';
 
 import { expect, test } from 'bun:test';
-import { createDefaultConfig, emptyAuth } from '@monad/home';
+import { createDefaultConfig, emptyAuth } from '@monad/environment';
 
 import { createHomeConfigSource } from '#/config/source.ts';
 
 const paths = {
   auth: '/home/auth.json',
   config: '/home/config.json',
-  profile: '/home/profile.json'
-} satisfies Pick<MonadPaths, 'auth' | 'config' | 'profile'>;
+  agentsConfig: '/home/agents.json',
+  mesh: '/home/mesh.json'
+} satisfies Pick<MonadPaths, 'auth' | 'config' | 'agentsConfig' | 'mesh'>;
 
 function config(): MonadConfig {
-  return createDefaultConfig('usr_test' as PrincipalId, 'Test');
+  return createDefaultConfig('Test');
 }
 
 function io(overrides: Partial<HomeConfigIo> = {}): HomeConfigIo {
@@ -33,8 +33,8 @@ test('loads config and auth as one snapshot from canonical paths', async () => {
   const reads: string[] = [];
   const source = createHomeConfigSource(paths, {
     io: io({
-      loadConfig: async (configPath, profilePath) => {
-        reads.push(`config:${configPath}:${profilePath}`);
+      loadConfig: async (configPaths) => {
+        reads.push(`config:${configPaths.config}:${configPaths.agentsConfig}:${configPaths.mesh}`);
         return cfg;
       },
       loadAuth: async (authPath) => {
@@ -47,7 +47,7 @@ test('loads config and auth as one snapshot from canonical paths', async () => {
   const loaded = await source.load();
 
   expect(loaded).toEqual({ auth, cfg });
-  expect(reads.sort()).toEqual([`auth:${paths.auth}`, `config:${paths.config}:${paths.profile}`]);
+  expect(reads.sort()).toEqual([`auth:${paths.auth}`, `config:${paths.config}:${paths.agentsConfig}:${paths.mesh}`]);
 });
 
 test('returns null when the config input is unavailable', async () => {
@@ -56,13 +56,16 @@ test('returns null when the config input is unavailable', async () => {
   expect(await source.load()).toBeNull();
 });
 
-test('delegates profile and auth writes to canonical paths', async () => {
+test('delegates config and auth writes to canonical paths', async () => {
   const cfg = config();
   const auth = emptyAuth();
   const writes: string[] = [];
   const source = createHomeConfigSource(paths, {
     io: io({
-      saveConfig: async (path, value) => void writes.push(`config:${path}:${value.principal.id}`),
+      saveConfig: async (configPaths, value) =>
+        void writes.push(
+          `config:${configPaths.config}:${configPaths.agentsConfig}:${configPaths.mesh}:${value.user.displayName}`
+        ),
       saveAuth: async (path, value) => void writes.push(`auth:${path}:${value.version}`)
     })
   });
@@ -70,7 +73,10 @@ test('delegates profile and auth writes to canonical paths', async () => {
   await source.saveConfig(cfg);
   await source.saveAuth(auth);
 
-  expect(writes).toEqual([`config:${paths.profile}:${cfg.principal.id}`, `auth:${paths.auth}:${auth.version}`]);
+  expect(writes).toEqual([
+    `config:${paths.config}:${paths.agentsConfig}:${paths.mesh}:${cfg.user.displayName}`,
+    `auth:${paths.auth}:${auth.version}`
+  ]);
 });
 
 test('passes watcher events and unsubscribe through unchanged', () => {

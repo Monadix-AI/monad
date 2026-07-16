@@ -4,14 +4,15 @@
 // startup (mirrors provider/skill discovery). MCP tools are high-risk by construction, so every
 // call still routes through the oversight gate.
 
-import type { McpServerConfig, MonadAuth, MonadConfig, MonadPaths } from '@monad/home';
+import type { McpServerConfig, MonadAuth, MonadConfig, MonadPaths } from '@monad/environment';
 import type { McpServerStatus } from '@monad/protocol';
+import type { ConfigAccess } from '#/config/manager.ts';
 import type { AtomPackRegistry } from '#/handlers/atom-pack/index.ts';
 
 import { lookup } from 'node:dns/promises';
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { matchEnvRef, matchSecretRef } from '@monad/home';
+import { matchEnvRef, matchSecretRef } from '@monad/environment';
 import { logger } from '@monad/logger';
 
 import { HOST_CONTROL_KEY } from '#/agent/approvals/engine.ts';
@@ -70,7 +71,8 @@ export function createPendingConfigMcpHandle(cfg: MonadConfig): ConfigMcpHandle 
  *  registers the tools + tracks it. */
 async function connectOneMcp(
   spec: McpServerConfig,
-  paths: MonadPaths,
+  _paths: MonadPaths,
+  config: Pick<ConfigAccess, 'get' | 'updateAuth'> | undefined,
   auth: MonadAuth | undefined,
   interactive: boolean
 ): Promise<McpConnection> {
@@ -89,7 +91,7 @@ async function connectOneMcp(
       ? createDaemonMcpOAuth({
           serverName: spec.name,
           serverUrl: spec.url,
-          authPath: paths.auth,
+          config: requireConfigAccess(config),
           clientId: spec.auth.clientId,
           scopes: spec.auth.scopes,
           flow: spec.auth.flow,
@@ -100,7 +102,7 @@ async function connectOneMcp(
         ? createDaemonMcpOAuth({
             serverName: spec.name,
             serverUrl: spec.url,
-            authPath: paths.auth,
+            config: requireConfigAccess(config),
             interactive,
             log: (m) => logger.info(m)
           })
@@ -132,7 +134,8 @@ export async function connectMcpServers(
   cfg: MonadConfig,
   paths: MonadPaths,
   registry: AtomPackRegistry,
-  auth?: MonadAuth
+  auth?: MonadAuth,
+  config?: Pick<ConfigAccess, 'get' | 'updateAuth'>
 ): Promise<ConfigMcpHandle> {
   const seenHttp = new Set<string>();
   const connections = new Map<string, ConfigMcpEntry>();
@@ -154,7 +157,7 @@ export async function connectMcpServers(
     }
     status.set(spec.name, { state: 'starting' });
     try {
-      const conn = await connectOneMcp(spec, paths, auth, false); // boot: never pop a browser
+      const conn = await connectOneMcp(spec, paths, config, auth, false); // boot: never pop a browser
       if (!registerMcpTools(conn, spec.trust, registry, spec.name, configMcpSource(spec.name))) {
         await conn.close();
         status.set(spec.name, { state: 'failed', error: 'tool set refused by trust policy' });
@@ -189,7 +192,8 @@ export async function reloadConfigMcpServers(
   cfg: MonadConfig,
   paths: MonadPaths,
   registry: AtomPackRegistry,
-  auth?: MonadAuth
+  auth?: MonadAuth,
+  config?: Pick<ConfigAccess, 'get' | 'updateAuth'>
 ): Promise<ConfigMcpHandle> {
   const seenHttp = new Set<string>();
   const status = new Map<string, ConfigMcpStatus>();
@@ -225,7 +229,7 @@ export async function reloadConfigMcpServers(
   for (const [name, spec] of desired) {
     if (next.has(name)) continue;
     try {
-      const conn = await connectOneMcp(spec, paths, auth, false); // diff-reload: silent (no browser)
+      const conn = await connectOneMcp(spec, paths, config, auth, false); // diff-reload: silent (no browser)
       if (!registerMcpTools(conn, spec.trust, registry, name, configMcpSource(name))) {
         await conn.close();
         status.set(name, { state: 'failed', error: 'tool set refused by trust policy' });
@@ -262,7 +266,8 @@ export async function reconnectOneMcpServer(
   cfg: MonadConfig,
   paths: MonadPaths,
   registry: AtomPackRegistry,
-  auth?: MonadAuth
+  auth?: MonadAuth,
+  config?: Pick<ConfigAccess, 'get' | 'updateAuth'>
 ): Promise<ConfigMcpHandle> {
   const next = new Map(prev.connections);
   const status = new Map(prev.status);
@@ -279,7 +284,7 @@ export async function reconnectOneMcpServer(
   }
   status.set(name, { state: 'starting' });
   try {
-    const conn = await connectOneMcp(spec, paths, auth, true); // explicit reconnect: may open the browser
+    const conn = await connectOneMcp(spec, paths, config, auth, true); // explicit reconnect: may open the browser
     if (!registerMcpTools(conn, spec.trust, registry, name, configMcpSource(name))) {
       await conn.close();
       status.set(name, { state: 'failed', error: 'tool set refused by trust policy' });
@@ -295,6 +300,13 @@ export async function reconnectOneMcpServer(
     logger.warn(`monad: MCP server "${name}" failed to reconnect: ${err instanceof Error ? err.message : String(err)}`);
   }
   return { seenHttp: seenHttpFor(next), connections: next, status };
+}
+
+function requireConfigAccess(
+  config: Pick<ConfigAccess, 'get' | 'updateAuth'> | undefined
+): Pick<ConfigAccess, 'get' | 'updateAuth'> {
+  if (!config) throw new Error('MCP OAuth requires ConfigManager access');
+  return config;
 }
 
 /** Derive live connection health for every MCP server the daemon knows: config.json servers +

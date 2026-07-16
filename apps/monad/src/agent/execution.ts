@@ -1,7 +1,7 @@
 // Long-lived execution dependencies and repositories. The facade created here remains stable for
 // the daemon lifetime; each model invocation creates its AgentLoop through `agent.loop(...)`.
 
-import type { MonadConfig, MonadPaths } from '@monad/home';
+import type { MonadConfig, MonadPaths } from '@monad/environment';
 import type { Event, SessionId } from '@monad/protocol';
 import type { LoadedSkill } from '#/agent/index.ts';
 import type { UserPromptSlots } from '#/agent/prompts.ts';
@@ -288,7 +288,6 @@ export function createAgentExecutionService(deps: AgentDeps): AgentExecutionServ
       model: agentModel,
       tools: baseTools, // live getter → delegated subagents also see hot-installed tools
       defaultModel: cfg.model.default || 'default',
-      userId: cfg.principal?.id,
       gate, // inbound-approval gate so delegated tools follow the peer-delegation policy too
       fileObservations,
       context,
@@ -424,7 +423,6 @@ export function createAgentExecutionService(deps: AgentDeps): AgentExecutionServ
         })
     },
     defaultModel: cfg.model.default || 'default',
-    userId: cfg.principal?.id,
     sandboxRoots,
     contextLimit,
     persistRawToolOutput,

@@ -4,7 +4,7 @@
 // detection come from the adapter's detect(), and only the ACP spawn command/env come from its `acp`
 // descriptor. One agent, forked by delivery mode; there is no parallel static list to drift.
 
-import type { AcpAgentConfig } from '@monad/home';
+import type { AcpAgentConfig } from '@monad/environment';
 import type { ExternalAgentProductIcon, ExternalAgentProvider } from '@monad/protocol';
 
 import { homedir } from 'node:os';

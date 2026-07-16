@@ -1,5 +1,5 @@
 import type { McpServer } from '@agentclientprotocol/sdk';
-import type { McpServerConfig, MonadAuth } from '@monad/home';
+import type { McpServerConfig, MonadAuth } from '@monad/environment';
 import type { SessionMcpServer } from '@monad/protocol';
 
 import { createLogger } from '@monad/logger';

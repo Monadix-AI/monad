@@ -80,7 +80,7 @@ export function Avatar({
       })
     : icon === 'monad'
       ? createElement('span', {
-          'aria-label': 'monad',
+          'aria-label': 'Monad',
           role: 'img',
           style: {
             width: Math.round(size * 0.58),

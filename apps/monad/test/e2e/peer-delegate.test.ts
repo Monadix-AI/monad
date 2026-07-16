@@ -4,7 +4,7 @@
 // shared deterministic mock (as in every e2e); everything else is the real wire path: the
 // openai-compat controller, session create, sendInline, and SSE streaming.
 
-import type { MonadPaths } from '@monad/home';
+import type { MonadPaths } from '@monad/environment';
 import type { Event, SessionId } from '@monad/protocol';
 import type { PolicyEngine } from '#/agent/approvals/engine.ts';
 import type { ModelRouter } from '#/agent/index.ts';
@@ -14,7 +14,7 @@ import { afterAll, beforeAll, expect, test } from 'bun:test';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initMonadHome, loadAuth, loadConfig } from '@monad/home';
+import { initMonadHome, loadAuth, loadConfig } from '@monad/environment';
 
 import { buildSessionOrigin } from '#/handlers/session/origin.ts';
 import { ModelService } from '#/handlers/settings/model/index.ts';
@@ -41,7 +41,7 @@ async function startPeerDaemon(): Promise<PeerDaemon> {
   const dir = join(tmpdir(), `monad-peer-${process.pid}-${Date.now()}-${process.hrtime.bigint()}`);
   const paths = makePaths(dir);
   await initMonadHome(paths);
-  const cfg = await loadConfig(paths.config);
+  const cfg = await loadConfig(paths);
   if (!cfg) throw new Error('config missing');
   const modelService = new ModelService(paths.auth, cfg, await loadAuth(paths.auth), seededProviderRegistry());
   const handlers = buildHandlers(mockModel(), { paths, modelService });

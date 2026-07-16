@@ -1,10 +1,10 @@
 # ACP — editor integration (Agent Client Protocol)
 
-monad speaks [ACP](https://agentclientprotocol.com) **both ways**:
+Monad speaks [ACP](https://agentclientprotocol.com) **both ways**:
 
-- **As an agent** — editors (Zed, and others) drive monad as a built-in coding agent: streamed
+- **As an agent** — editors (Zed, and others) drive Monad as a built-in coding agent: streamed
   responses, reviewable inline diffs, integrated-terminal commands, approval prompts.
-- **As a client** — monad can delegate a subtask to *another* ACP agent (codex, claude-code, …) via
+- **As a client** — Monad can delegate a subtask to *another* ACP agent (codex, claude-code, …) via
   the `agent_acp_delegate` tool (see [Multi-agent delegation](#monad-as-an-acp-client--multi-agent-delegation)).
 
 Built on the official SDK `@agentclientprotocol/sdk@^0.25.1`.
@@ -12,7 +12,7 @@ Built on the official SDK `@agentclientprotocol/sdk@^0.25.1`.
 ## Architecture — `monad acp` is a thin bridge
 
 `monad acp` does **not** build a daemon in-process. It's a thin **bridge**: the editor spawns it over
-stdio, and it proxies the ACP connection to an already-running monad daemon over the local Unix socket
+stdio, and it proxies the ACP connection to an already-running Monad daemon over the local Unix socket
 (REST + inline SSE). If no daemon is running, it **auto-spawns** one (detached) and waits for health,
 then bridges. The agent loop runs in that shared daemon — so editor sessions appear in the Web UI/TUI
 and reuse one store, model config, and ledger.
@@ -56,13 +56,13 @@ activity on stderr.
 ## What's supported
 
 - **Core**: `initialize`, `session/new`, `session/prompt` (streaming `session/update`), `session/cancel`.
-- **Sessions**: `session/list`, `session/load` (replays transcript), `session/fork` → monad's branch
+- **Sessions**: `session/list`, `session/load` (replays transcript), `session/fork` → Monad's branch
   (time-travel), `session/resume` (re-attach without replay), `session/delete`, `session/close`.
-- **Permission**: monad's oversight gate bridges to `session/request_permission`.
+- **Permission**: Monad's oversight gate bridges to `session/request_permission`.
 - **Multimodal**: image content blocks reach the model (transient on the turn's user message).
 - **Document sync**: `unstable_did{Open,Change,Close,Focus,Save}Document` — open editor docs are
   tracked per session and folded into the turn as ambient context (utf-16 positions).
-- **Commands**: monad's unified command set (built-ins + atom pack commands + user-invocable skills) is advertised
+- **Commands**: Monad's unified command set (built-ins + atom pack commands + user-invocable skills) is advertised
   via `available_commands_update`.
 - **Free-text clarify**: via `unstable_createElicitation` (form mode) when the client supports it; else
   the question is surfaced and the turn proceeds.
@@ -82,7 +82,7 @@ Because the loop runs in the shared daemon, the editor's per-session settings re
 
 ### Reverse fs/terminal delegation
 
-When the client advertises `fs`/`terminal` capability, monad delegates those ops back to the editor so
+When the client advertises `fs`/`terminal` capability, Monad delegates those ops back to the editor so
 edits appear as **reviewable diffs** and commands run in the editor's terminal. Since the loop runs in
 the daemon (not in the bridge), this is modelled like oversight/clarify — **an out-of-band event + an
 inbound RPC**, not in-process backends:
@@ -96,7 +96,7 @@ inbound RPC**, not in-process backends:
 Tools that can't be delegated (`process_*`, `code_execute`, `file_glob`, `file_grep`) are dropped from a
 delegated session so they can't silently run on the daemon host (`isDelegableTool`).
 
-## monad as an ACP client — multi-agent delegation
+## Monad as an ACP client — multi-agent delegation
 
 The `agent_acp_delegate` tool spawns a **configured external ACP agent** and drives it to carry out a
 self-contained subtask, returning its answer. Register agents in `config.json`:
@@ -110,19 +110,19 @@ self-contained subtask, returning its answer. Register agents in `config.json`:
 ```
 
 The model supplies a registered **name**, never a command (no RCE); the tool is high-risk so spawning
-is gated by oversight. `env` values support `${env:NAME}` secret-refs (resolved at spawn). monad serves
+is gated by oversight. `env` values support `${env:NAME}` secret-refs (resolved at spawn). Monad serves
 the sub-agent's **fs + terminal** through its own sandbox (containment) and routes the sub-agent's
 permission prompts through the oversight gate; the sub-agent's tool calls + plan surface on the parent
 turn's stream. `env` is operator-vetted infrastructure config → it lives in the **system** config
 (`config.json`), alongside `mcpServers`.
 
-## monad extensions (`_meta` / extMethod)
+## Monad extensions (`_meta` / extMethod)
 
 Advertised in `initialize` under `_meta.monad.extMethods`:
 
 - `_monad/session.restore` `{ sessionId, toMessageId }` — rewind to a checkpoint.
 - `_monad/model.{listProviders,listModels,listProfiles,getDefaultProfile,setDefaultProfile}` — pick a
-  model through monad's gateway. (Credential mutation is intentionally not exposed over ACP.)
+  model through Monad's gateway. (Credential mutation is intentionally not exposed over ACP.)
 
 Multi-agent: pass `_meta.monad.agentId` to `session/new` to choose a configured agent; the response
 echoes `_meta.monad.agentIds`.

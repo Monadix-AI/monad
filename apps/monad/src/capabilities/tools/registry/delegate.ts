@@ -41,8 +41,6 @@ export interface SubagentRunDeps {
   model: ModelRouter;
   tools: Tool[];
   defaultModel: string;
-  /** Principal id for observability span attribution, inherited from the parent. Telemetry only. */
-  userId?: string;
   gate?: ToolGate;
   fileObservations?: FileObservationStore;
   maxTurns?: number;
@@ -76,7 +74,6 @@ export async function runSubagent(
     tools: deps.tools,
     messages: new InMemoryMessageRepo(), // isolated history — discarded after the run
     defaultModel: deps.defaultModel,
-    userId: deps.userId,
     // Silent by default (the parent wants only the final result); `onEvent` opts into progress.
     emit: deps.onEvent ?? (() => {}),
     sandboxRoots: ctx.sandboxRoots,
@@ -101,8 +98,6 @@ export interface DelegateDeps {
   /** A function is resolved per-delegation, so a hot-installed tool reaches delegated subagents too. */
   tools: Tool[] | (() => Tool[]);
   defaultModel: string;
-  /** Principal id for observability span attribution, inherited from the parent. Telemetry only. */
-  userId?: string;
   gate?: ToolGate;
   fileObservations?: FileObservationStore;
   maxTurns?: number;
@@ -136,7 +131,6 @@ export function createDelegateTool(deps: DelegateDeps): Tool<DelegateInput, { te
           model: deps.model,
           tools: subTools,
           defaultModel: deps.defaultModel,
-          userId: deps.userId,
           gate: deps.gate,
           fileObservations: deps.fileObservations,
           maxTurns: deps.maxTurns,

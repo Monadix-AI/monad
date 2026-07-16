@@ -12,7 +12,6 @@ function fixtureSession(over: Partial<Session> = {}): Session {
   return {
     id: newId('ses'),
     title: 'test',
-    ownerPrincipalId: newId('prn'),
     state: 'active',
     agentIds: [],
     archived: false,
@@ -37,7 +36,6 @@ function fixtureProject(over: Partial<WorkplaceProject> = {}): WorkplaceProject 
   return {
     id: newId('prj'),
     title: 'project',
-    ownerPrincipalId: newId('prn'),
     state: 'active',
     archived: false,
     memberTemplates: [],
@@ -188,7 +186,6 @@ test('deleteSession cascades session-owned project data', () => {
     channelId: 'discord',
     conversationKey: 'thread-1',
     sessionId: s.id,
-    principalId: s.ownerPrincipalId,
     label: 'project'
   });
   store.appendEvents([

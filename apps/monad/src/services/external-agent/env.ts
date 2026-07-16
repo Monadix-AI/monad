@@ -1,4 +1,4 @@
-import type { MonadAuth } from '@monad/home';
+import type { MonadAuth } from '@monad/environment';
 
 import { tryResolveSecretMap } from '#/config/secrets.ts';
 

@@ -1,8 +1,8 @@
 # Skills
 
-Skills are portable, filesystem-based capability packets that extend the monad agent with
+Skills are portable, filesystem-based capability packets that extend the Monad agent with
 domain knowledge and procedures — **without paying the token cost until they're needed**.
-monad implements the [agentskills.io](https://agentskills.io) open standard, the same
+Monad implements the [agentskills.io](https://agentskills.io) open standard, the same
 `SKILL.md` format used across the agent ecosystem, so a
 skill written once works across all of them.
 
@@ -49,7 +49,7 @@ hardcoded values, tests to update). If there are none, say so.
 | `name` | yes | ≤64 chars, lowercase alphanumeric + single hyphens, no `anthropic`/`claude`, equals dir name |
 | `description` | yes | 1–1024 chars; say **what** it does and **when** to use it (this is all the model sees until the skill loads) |
 | `license` | no | license name or bundled file |
-| `compatibility` | no | environment requirement (≤500 chars). **Advisory, never blocks** — a semver range (e.g. `>=0.5.0`) is checked against the running monad and warned if unmet; the skill still loads (override) — see below |
+| `compatibility` | no | environment requirement (≤500 chars). **Advisory, never blocks** — a semver range (e.g. `>=0.5.0`) is checked against the running Monad and warned if unmet; the skill still loads (override) — see below |
 | `metadata` | no | arbitrary string→string map |
 | `allowed-tools` | no | space/comma-separated tool patterns auto-approved while this skill is active — see below |
 | `disable-model-invocation` | no | `true` → the model can't auto-load it; only `/name` invokes it |
@@ -87,18 +87,18 @@ paths:
   - "**/Dockerfile"
 ```
 
-Matched against `~/.monad/workspace` (monad's working area), evaluated at load and on every hot
+Matched against `~/.monad/workspace` (Monad's working area), evaluated at load and on every hot
 reload. `paths` gates **L1 auto-load only** — the skill is still `/name`-invocable by the user
 regardless of workspace contents.
 
 ### Compatibility (`compatibility`)
 
 Advisory, **never blocks**. When `compatibility` reads as a semver range it's checked against the
-running monad version and a warning is logged if unmet; when it's free-form prose it's just
+running Monad version and a warning is logged if unmet; when it's free-form prose it's just
 surfaced. Either way the skill loads — the operator decides whether to override:
 
 ```yaml
-compatibility: ">=0.5.0"        # warns if running monad is older, still loads
+compatibility: ">=0.5.0"        # warns if running Monad is older, still loads
 # compatibility: "needs network access and a GPU"   # free-form → surfaced as a note
 ```
 
@@ -212,8 +212,8 @@ you invoke it with `/name`:
 allowed-tools: file_read shell_exec
 ```
 
-Patterns are matched against monad tool *names*: exact (`file_read`), prefix glob (`file_*`), or a
-argument-constrained `Bash(git:*)` form (the argument constraint is ignored — monad gates per tool, not
+Patterns are matched against Monad tool *names*: exact (`file_read`), prefix glob (`file_*`), or a
+argument-constrained `Bash(git:*)` form (the argument constraint is ignored — Monad gates per tool, not
 per argument). A granted high-risk tool skips the human approval prompt; everything else still
 goes through the gate. Grants are **turn-scoped** and only apply to tools a skill explicitly
 lists, so the trust boundary is *which skills you install* — see Security.
@@ -265,8 +265,8 @@ matches the tier, the fork falls back to the agent's default model — it never 
 ## Not yet supported
 
 These imported frontmatter features are parsed-or-ignored but not yet enforced, pending
-monad infrastructure: per-skill `model`/`effort` overrides (monad uses `tier` instead) and
-`hooks` — which needs a hook subsystem monad doesn't have yet.
+Monad infrastructure: per-skill `model`/`effort` overrides (Monad uses `tier` instead) and
+`hooks` — which needs a hook subsystem Monad doesn't have yet.
 
 ## Security
 

@@ -1,4 +1,4 @@
-import type { AcpAgentConfig, MonadConfig, MonadPaths } from '@monad/home';
+import type { AcpAgentConfig, MonadConfig } from '@monad/environment';
 import type {
   AcpAgentView,
   GetAcpAgentResponse,
@@ -8,19 +8,17 @@ import type {
   SetAcpAgentEnabledRequest,
   UpsertAcpAgentRequest
 } from '@monad/protocol';
-
-import { loadAll, saveSystemConfig } from '@monad/home';
+import type { ConfigAccess } from '#/config/manager.ts';
 
 import { HandlerError } from '#/handlers/handler-error.ts';
 import { listAcpAgentPresets, productIconForAcpAgent } from '#/services/delegation/presets.ts';
 
 export interface AcpAgentDeps {
-  paths: MonadPaths;
+  config: ConfigAccess;
 }
 
-// External ACP agents are SYSTEM config (config.json). Writing here persists via saveSystemConfig,
-// which trips the config.json watcher → configReloader → applyAcpDelegateTool, so an invite/edit/enable/
-// disable/remove re-applies the `agent_acp_delegate` tool LIVE (no restart — see agent/delegation/acp-tool.ts).
+// External ACP agents are mesh config. ConfigManager persists each update and re-applies the
+// `agent_acp_delegate` tool live (see agent/delegation/acp-tool.ts).
 // `env` values are `${env:NAME}` refs, not secrets, so the view is the full config — nothing to strip.
 const toView = (a: AcpAgentConfig): AcpAgentView => ({
   name: a.name,
@@ -44,14 +42,11 @@ const fromView = (v: AcpAgentView): AcpAgentConfig => ({
   forwardMcp: v.forwardMcp ?? false
 });
 
-export function createAcpAgentModule({ paths }: AcpAgentDeps) {
+export function createAcpAgentModule({ config }: AcpAgentDeps) {
   async function read(): Promise<MonadConfig> {
-    const cfg = await loadAll(paths.config, paths.profile);
-    if (!cfg) throw new Error('acp-agent settings: config.json missing');
-    return cfg;
+    return structuredClone(config.get().cfg);
   }
-  // acpAgents live in the system slice → write config.json (not profile.json).
-  const commit = (cfg: MonadConfig): Promise<void> => saveSystemConfig(paths.config, cfg);
+  const commit = (cfg: MonadConfig): Promise<unknown> => config.updateConfig(() => cfg);
 
   return {
     async listAcpAgents(): Promise<ListAcpAgentsResponse> {

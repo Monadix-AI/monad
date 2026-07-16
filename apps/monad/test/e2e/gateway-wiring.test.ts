@@ -2,13 +2,13 @@
 // router → daemon HTTP — produces a completion against a real (stub) provider.
 // The stub speaks the OpenAI chat-completions shape that openai-compatible uses.
 
-import type { MonadConfig, MonadPaths } from '@monad/home';
+import type { MonadConfig, MonadPaths } from '@monad/environment';
 
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initMonadHome, loadAuth, loadConfig, saveAll, saveAuth } from '@monad/home';
+import { initMonadHome, loadAuth, loadConfig, saveAll, saveAuth } from '@monad/environment';
 import { enMessages as i18nMessages } from '@monad/i18n/messages';
 import { ModelProviderType, newId } from '@monad/protocol';
 
@@ -24,7 +24,7 @@ import { OversightService } from '#/services/oversight.ts';
 import { RoundCache } from '#/services/round-cache.ts';
 import { createStore } from '#/store/db/index.ts';
 import { createHttpTransport } from '#/transports/http.ts';
-import { makeTestPaths, seededProviderRegistry, stubMemoryService } from '../helpers.ts';
+import { createTestConfigManager, makeTestPaths, seededProviderRegistry, stubMemoryService } from '../helpers.ts';
 
 function makePaths(b: string): MonadPaths {
   return makeTestPaths(b);
@@ -58,7 +58,7 @@ beforeEach(async () => {
   paths = makePaths(dir);
   await initMonadHome(paths);
 
-  const cfg = (await loadConfig(paths.config)) as MonadConfig;
+  const cfg = (await loadConfig(paths)) as MonadConfig;
   cfg.model.providers = [
     {
       id: 'stub',
@@ -71,7 +71,7 @@ beforeEach(async () => {
     { alias: 'default', routes: { chat: { provider: 'stub', modelId: 'stub-model' } }, params: {}, fallbacks: [] }
   ];
   cfg.model.default = 'default';
-  await saveAll(paths.config, paths.profile, cfg);
+  await saveAll(paths, cfg);
 
   await saveAuth(paths.auth, {
     version: 1,
@@ -113,7 +113,7 @@ beforeEach(async () => {
   const i18n = new I18nService([{ locale: 'en', name: 'English', messages: i18nMessages }], 'en');
   const channelService = new ChannelService(
     {
-      session: { createForPrincipal: async () => ({ sessionId: newId('ses') }), sendInline: async () => {} },
+      session: { create: async () => ({ sessionId: newId('ses') }), sendInline: async () => {} },
       store,
       registry: new Map(),
       bus: new EventBus(),
@@ -124,11 +124,11 @@ beforeEach(async () => {
     (await loadAuth(paths.auth)) ?? { version: 1, activeProvider: null, updatedAt: '', credentialPool: {} }
   );
   const handlers = createDaemonHandlers({
+    configManager: await createTestConfigManager(paths),
     store,
     agent,
     bus: new EventBus(),
     cache: new RoundCache(),
-    ownerPrincipalId: newId('prn'),
     paths,
     modelService,
     oversight: new OversightService({ publish: () => {} }),

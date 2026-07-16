@@ -109,7 +109,6 @@ test('workspace experience API handlers receive generic, pack-scoped context', a
   if (!route) throw new Error('fixture requires a workspace Experience API route');
   const response = await route.handle(new Request('https://example.test/search'), {
     atomPackId: 'pack-a',
-    principalId: 'prn_a',
     experienceId: 'board',
     experienceState: {
       get: async () => null,

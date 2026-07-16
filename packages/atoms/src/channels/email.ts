@@ -254,7 +254,7 @@ export function createEmailAdapter(ctx: ChannelContext): ChannelAdapter {
         ? tc.subject.toLowerCase().startsWith('re:')
           ? tc.subject
           : `Re: ${tc.subject}`
-        : 'Message from monad';
+        : 'Message from Monad';
       await smtpSend(chatId, subject, content, tc?.messageId || undefined);
       return { ref: `email-${Date.now()}`, chatId };
     }

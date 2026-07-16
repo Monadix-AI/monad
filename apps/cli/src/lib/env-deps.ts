@@ -6,7 +6,7 @@ import type { MonadClient } from '@monad/client';
 
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { getPaths } from '@monad/home';
+import { getPaths } from '@monad/environment';
 
 import { t } from './i18n.ts';
 import { bold, dim, green, out, red, yellow } from './output.ts';

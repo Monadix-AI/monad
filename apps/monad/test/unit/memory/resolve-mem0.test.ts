@@ -2,7 +2,7 @@
 // credentials), maps provider types → mem0 providers, derives embedding dimension, and errors when
 // a selection is unresolvable or can't embed. No environment variables.
 
-import type { MonadAuth, MonadConfig } from '@monad/home';
+import type { MonadAuth, MonadConfig } from '@monad/environment';
 
 import { expect, test } from 'bun:test';
 

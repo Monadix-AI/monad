@@ -1,4 +1,4 @@
-import type { MonadConfig, MonadPaths } from '@monad/home';
+import type { MonadConfig, MonadPaths } from '@monad/environment';
 import type { Event, SessionId } from '@monad/protocol';
 import type { EventBus } from '#/services/event-bus.ts';
 import type { Store } from '#/store/db/index.ts';

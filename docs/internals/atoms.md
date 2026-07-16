@@ -1,6 +1,6 @@
 # Atom Packs
 
-monad has a **unified atom pack system**: one atom pack can contribute connectors, channels,
+Monad has a **unified atom pack system**: one atom pack can contribute connectors, channels,
 commands, skills, MCP servers, and locale packs. (**Tools are not an atom kind** — they are always
 first-party and built into the daemon; atom packs cannot contribute them. See "Why tools aren't
 atoms" below.) An atom pack **declares the JS-registered atom kinds it uses**; the host shows those
@@ -213,8 +213,8 @@ host-owned concerns documented inline. Then `bun install && bun run build` and
 ## Authoring a model provider
 
 A `provider` atom adds a model backend (a new vendor, a self-hosted gateway, …). The contract is
-**ai-sdk-free**: you implement a monad-native `stream()` returning `ModelChunk`s — a third-party
-provider can talk raw HTTP and never touch the Vercel AI SDK. (monad's own first-party providers
+**ai-sdk-free**: you implement a Monad-native `stream()` returning `ModelChunk`s — a third-party
+provider can talk raw HTTP and never touch the Vercel AI SDK. (Monad's own first-party providers
 in `@monad/atoms/src/providers` happen to use ai-sdk internally via a shared adapter, but that's
 an implementation detail, not part of the contract.)
 
@@ -227,7 +227,7 @@ const myProvider = defineProvider({
   // hint, key placeholder, extra fields) from every registered provider's descriptor.
   descriptor: { type: 'my-vendor', label: 'My Vendor', strategy: 'native', keyPlaceholder: 'mv-…' },
   // The only required method. The gateway resolves a profile → provider + credential and calls it;
-  // yield monad-native chunks (text / reasoning / tool-call / usage). Throw on a request error so
+  // yield Monad-native chunks (text / reasoning / tool-call / usage). Throw on a request error so
   // the gateway can fail over to the next credential/model in the chain.
   async *stream(call) {
     // call: { modelId, messages, tools?, params, provider, credential, signal?, fetch? }
@@ -245,7 +245,7 @@ export default defineAtomPack({
 });
 ```
 
-The gateway only ever sees the monad-native `ModelChunk`/`ModelResult` — it owns the
+The gateway only ever sees the Monad-native `ModelChunk`/`ModelResult` — it owns the
 credential-fallback chain, retries, cost accounting, and stamps the resolved provider/model onto
 usage. `ModelPrice` and the pricing parsers live in `@monad/protocol` so both the gateway and
 provider atoms can attach `price` to a `ModelInfo`.
@@ -391,5 +391,5 @@ for the same tag.
 - **Load order is stable** (atom-pack dirs sorted by folder name), so cross-pack first-wins conflict
   resolution is reproducible across machines rather than filesystem-order-dependent.
 - SHA/integrity pinning (rug-pull guard) and `sdkVersion` checks on install.
-- Channel sessions bind a restricted synthetic principal, never the daemon owner; high-risk tools
-  still hit the oversight gate.
+- Channel platform sender ids are used only for allowlists, rate limits, and conversation routing;
+  every channel session still sends high-risk tools through the oversight gate.

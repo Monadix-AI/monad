@@ -33,7 +33,6 @@ function fixtureSession(): Session {
   return {
     id: newId('ses'),
     title: 'e2e persistence test',
-    ownerPrincipalId: newId('prn'),
     state: 'active',
     agentIds: [],
     archived: false,

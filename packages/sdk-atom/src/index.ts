@@ -403,7 +403,6 @@ export interface ExperienceWorker {
 /** Authenticated, pack-scoped host capabilities passed only at an Experience API/worker boundary. */
 export interface WorkspaceExperienceApiContext {
   atomPackId: string;
-  principalId: string;
   experienceId: string;
   experienceState: ExperienceStateStore;
   projectSessions: ProjectSessionOperations;

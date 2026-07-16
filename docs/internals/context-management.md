@@ -86,7 +86,7 @@ Code map:
 | `read_tool_output` recovery tool | `apps/monad/src/capabilities/tools/registry/read-tool-output.ts` |
 | Memory promotion from compacted spans | `apps/monad/src/services/memory/index.ts` (`promoteFacts`) |
 | Assembly (config → engines → deps) | `apps/monad/src/agent/execution.ts` |
-| Config | `packages/home/src/config/config-schema.ts` (`contextSettingsSchema`) |
+| Config | `packages/environment/src/config/agents.ts` (`contextSettingsSchema`) |
 | Telemetry / notice events | `packages/protocol/src/event-table.ts` |
 | Web surfaces (usage panel, toasts) | `apps/web/src/features/session/use-context-notices.ts`, `packages/ui/src/components/composer/context-usage-panel.tsx` |
 

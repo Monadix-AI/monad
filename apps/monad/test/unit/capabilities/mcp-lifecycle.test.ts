@@ -1,12 +1,11 @@
-import type { MonadPaths } from '@monad/home';
-import type { PrincipalId } from '@monad/protocol';
+import type { MonadPaths } from '@monad/environment';
 import type { McpRuntime } from '#/capabilities/mcp/lifecycle.ts';
 import type { ConfigMcpHandle } from '#/capabilities/mcp/service.ts';
 import type { McpConnection } from '#/capabilities/tools';
-import type { ConfigSnapshot } from '#/config/service.ts';
+import type { ConfigSnapshot } from '#/config/manager.ts';
 
 import { expect, test } from 'bun:test';
-import { createDefaultConfig } from '@monad/home';
+import { createDefaultConfig } from '@monad/environment';
 
 import { createCapabilitiesRuntime } from '#/capabilities/lifecycle.ts';
 import { createMcpLifecycleModule } from '#/capabilities/mcp/lifecycle.ts';
@@ -23,7 +22,7 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void; reje
 }
 
 function snapshot(model: string): ConfigSnapshot {
-  const cfg = createDefaultConfig('usr_test' as PrincipalId, 'Test');
+  const cfg = createDefaultConfig('Test');
   return { auth: null, cfg: { ...cfg, model: { ...cfg.model, default: model } } };
 }
 

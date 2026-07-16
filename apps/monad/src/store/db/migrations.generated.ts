@@ -11,14 +11,14 @@ export const MIGRATIONS: MigrationMeta[] = [
       "\nCREATE INDEX `idx_acp_delegates_live` ON `acp_delegates` (`evicted_at`) WHERE evicted_at IS NULL;",
       "\nCREATE TABLE `channel_conversation_sessions` (\n\t`channel_id` text NOT NULL,\n\t`conversation_key` text NOT NULL,\n\t`session_id` text NOT NULL,\n\t`label` text,\n\t`created_at` text NOT NULL,\n\tPRIMARY KEY(`channel_id`, `conversation_key`, `session_id`)\n);\n",
       "\nCREATE INDEX `idx_channel_conv_sessions_session` ON `channel_conversation_sessions` (`session_id`);",
-      "\nCREATE TABLE `channel_conversations` (\n\t`channel_id` text NOT NULL,\n\t`conversation_key` text NOT NULL,\n\t`active_session_id` text NOT NULL,\n\t`principal_id` text NOT NULL,\n\t`created_at` text NOT NULL,\n\t`last_seen_at` text NOT NULL,\n\tPRIMARY KEY(`channel_id`, `conversation_key`)\n);\n",
+      "\nCREATE TABLE `channel_conversations` (\n\t`channel_id` text NOT NULL,\n\t`conversation_key` text NOT NULL,\n\t`active_session_id` text NOT NULL,\n\t`created_at` text NOT NULL,\n\t`last_seen_at` text NOT NULL,\n\tPRIMARY KEY(`channel_id`, `conversation_key`)\n);\n",
       "\nCREATE TABLE `events` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`transcript_target_id` text NOT NULL,\n\t`type` text NOT NULL,\n\t`actor_agent_id` text,\n\t`task_id` text,\n\t`payload` text NOT NULL,\n\t`at` text NOT NULL\n);\n",
       "\nCREATE INDEX `idx_events_transcript_target` ON `events` (`transcript_target_id`,`id`);",
-      "\nCREATE TABLE `experience_state` (\n\t`atom_pack_id` text NOT NULL,\n\t`principal_id` text NOT NULL,\n\t`project_id` text NOT NULL,\n\t`record_key` text NOT NULL,\n\t`value` text NOT NULL,\n\t`version` integer NOT NULL,\n\t`updated_at` text NOT NULL,\n\tPRIMARY KEY(`atom_pack_id`, `principal_id`, `project_id`, `record_key`)\n);\n",
-      "\nCREATE INDEX `idx_experience_state_project` ON `experience_state` (`atom_pack_id`,`principal_id`,`project_id`,`record_key`);",
-      "\nCREATE TABLE `experience_state_events` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`atom_pack_id` text NOT NULL,\n\t`principal_id` text NOT NULL,\n\t`project_id` text NOT NULL,\n\t`record_key` text NOT NULL,\n\t`version` integer NOT NULL,\n\t`payload` text NOT NULL,\n\t`created_at` text NOT NULL\n);\n",
-      "\nCREATE INDEX `idx_experience_state_events_record` ON `experience_state_events` (`atom_pack_id`,`principal_id`,`project_id`,`record_key`,`version`);",
-      "\nCREATE TABLE `experience_worker_wakeups` (\n\t`atom_pack_id` text NOT NULL,\n\t`principal_id` text NOT NULL,\n\t`experience_id` text NOT NULL,\n\t`project_id` text NOT NULL,\n\t`wake_key` text NOT NULL,\n\t`run_at` text NOT NULL,\n\t`attempt` integer DEFAULT 0 NOT NULL,\n\t`updated_at` text NOT NULL,\n\tPRIMARY KEY(`atom_pack_id`, `principal_id`, `experience_id`, `project_id`, `wake_key`)\n);\n",
+      "\nCREATE TABLE `experience_state` (\n\t`atom_pack_id` text NOT NULL,\n\t`project_id` text NOT NULL,\n\t`record_key` text NOT NULL,\n\t`value` text NOT NULL,\n\t`version` integer NOT NULL,\n\t`updated_at` text NOT NULL,\n\tPRIMARY KEY(`atom_pack_id`, `project_id`, `record_key`)\n);\n",
+      "\nCREATE INDEX `idx_experience_state_project` ON `experience_state` (`atom_pack_id`,`project_id`,`record_key`);",
+      "\nCREATE TABLE `experience_state_events` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`atom_pack_id` text NOT NULL,\n\t`project_id` text NOT NULL,\n\t`record_key` text NOT NULL,\n\t`version` integer NOT NULL,\n\t`payload` text NOT NULL,\n\t`created_at` text NOT NULL\n);\n",
+      "\nCREATE INDEX `idx_experience_state_events_record` ON `experience_state_events` (`atom_pack_id`,`project_id`,`record_key`,`version`);",
+      "\nCREATE TABLE `experience_worker_wakeups` (\n\t`atom_pack_id` text NOT NULL,\n\t`experience_id` text NOT NULL,\n\t`project_id` text NOT NULL,\n\t`wake_key` text NOT NULL,\n\t`run_at` text NOT NULL,\n\t`attempt` integer DEFAULT 0 NOT NULL,\n\t`updated_at` text NOT NULL,\n\tPRIMARY KEY(`atom_pack_id`, `experience_id`, `project_id`, `wake_key`)\n);\n",
       "\nCREATE INDEX `idx_experience_worker_wakeups_due` ON `experience_worker_wakeups` (`run_at`);",
       "\nCREATE TABLE `external_agent_inbox_items` (\n\t`external_agent_session_id` text NOT NULL,\n\t`message_seq` integer NOT NULL,\n\t`delivery_id` text,\n\t`project_id` text,\n\t`member_instance_id` text,\n\t`trigger_message_id` text,\n\t`provider_session_ref` text,\n\t`provider_turn_id` text,\n\t`error_summary` text,\n\t`state` text DEFAULT 'queued' NOT NULL,\n\t`created_at` text NOT NULL,\n\t`delivered_at` text,\n\t`visible_at` text,\n\t`consumed_at` text,\n\t`updated_at` text,\n\tPRIMARY KEY(`external_agent_session_id`, `message_seq`)\n);\n",
       "\nCREATE INDEX `idx_external_agent_inbox_items_pending` ON `external_agent_inbox_items` (`external_agent_session_id`,`state`,`message_seq`);",
@@ -43,21 +43,22 @@ export const MIGRATIONS: MigrationMeta[] = [
       "\nCREATE INDEX `idx_native_agent_direct_messages_project_pair` ON `native_agent_direct_messages` (`project_id`,`from_agent`,`peer`,`created_at`);",
       "\nCREATE TABLE `session_members` (\n\t`session_id` text NOT NULL,\n\t`member_id` text NOT NULL,\n\t`template_id` text,\n\t`type` text NOT NULL,\n\t`external_agent_session_id` text,\n\t`data` text DEFAULT '{}' NOT NULL,\n\t`created_at` text NOT NULL,\n\t`updated_at` text NOT NULL,\n\tPRIMARY KEY(`session_id`, `member_id`)\n);\n",
       "\nCREATE INDEX `idx_session_members_session` ON `session_members` (`session_id`);",
-      "\nCREATE TABLE `sessions` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`project_id` text,\n\t`title` text NOT NULL,\n\t`owner_principal_id` text NOT NULL,\n\t`state` text NOT NULL,\n\t`agent_ids` text DEFAULT '[]' NOT NULL,\n\t`archived` integer DEFAULT 0 NOT NULL,\n\t`restore_count` integer DEFAULT 0 NOT NULL,\n\t`model` text,\n\t`cwd` text,\n\t`origin` text,\n\t`input_tokens` integer DEFAULT 0 NOT NULL,\n\t`output_tokens` integer DEFAULT 0 NOT NULL,\n\t`total_tokens` integer DEFAULT 0 NOT NULL,\n\t`cache_read_tokens` integer DEFAULT 0 NOT NULL,\n\t`cache_write_tokens` integer DEFAULT 0 NOT NULL,\n\t`reasoning_tokens` integer DEFAULT 0 NOT NULL,\n\t`cost_usd` real DEFAULT 0 NOT NULL,\n\t`created_at` text NOT NULL,\n\t`updated_at` text NOT NULL\n);\n",
+      "\nCREATE TABLE `sessions` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`project_id` text,\n\t`title` text NOT NULL,\n\t`state` text NOT NULL,\n\t`agent_ids` text DEFAULT '[]' NOT NULL,\n\t`archived` integer DEFAULT 0 NOT NULL,\n\t`restore_count` integer DEFAULT 0 NOT NULL,\n\t`model` text,\n\t`cwd` text,\n\t`origin` text,\n\t`input_tokens` integer DEFAULT 0 NOT NULL,\n\t`output_tokens` integer DEFAULT 0 NOT NULL,\n\t`total_tokens` integer DEFAULT 0 NOT NULL,\n\t`cache_read_tokens` integer DEFAULT 0 NOT NULL,\n\t`cache_write_tokens` integer DEFAULT 0 NOT NULL,\n\t`reasoning_tokens` integer DEFAULT 0 NOT NULL,\n\t`cost_usd` real DEFAULT 0 NOT NULL,\n\t`created_at` text NOT NULL,\n\t`updated_at` text NOT NULL\n);\n",
       "\nCREATE INDEX `idx_sessions_project` ON `sessions` (`project_id`);",
       "\nCREATE TABLE `tasks` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`session_id` text NOT NULL,\n\t`title` text NOT NULL,\n\t`assignee_agent_id` text,\n\t`depends_on` text DEFAULT '[]' NOT NULL,\n\t`state` text NOT NULL,\n\t`version` integer DEFAULT 0 NOT NULL,\n\t`result` text,\n\t`error` text,\n\t`created_at` text NOT NULL,\n\t`updated_at` text NOT NULL\n);\n",
       "\nCREATE INDEX `idx_tasks_session` ON `tasks` (`session_id`);",
       "\nCREATE TABLE `usage_ledger` (\n\t`day` text NOT NULL,\n\t`provider` text NOT NULL,\n\t`model` text NOT NULL,\n\t`category` text DEFAULT 'chat' NOT NULL,\n\t`input_tokens` integer DEFAULT 0 NOT NULL,\n\t`output_tokens` integer DEFAULT 0 NOT NULL,\n\t`cache_read_tokens` integer DEFAULT 0 NOT NULL,\n\t`cache_write_tokens` integer DEFAULT 0 NOT NULL,\n\t`reasoning_tokens` integer DEFAULT 0 NOT NULL,\n\t`cost_usd` real DEFAULT 0 NOT NULL,\n\t`updated_at` text NOT NULL,\n\tPRIMARY KEY(`day`, `provider`, `model`, `category`)\n);\n",
-      "\nCREATE TABLE `workplace_projects` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`title` text NOT NULL,\n\t`owner_principal_id` text NOT NULL,\n\t`state` text NOT NULL,\n\t`archived` integer DEFAULT 0 NOT NULL,\n\t`model` text,\n\t`cwd` text,\n\t`origin` text,\n\t`member_templates` text DEFAULT '[]' NOT NULL,\n\t`created_at` text NOT NULL,\n\t`updated_at` text NOT NULL\n);\n",
-      "\nCREATE INDEX `idx_workplace_projects_state` ON `workplace_projects` (`state`,`archived`);\n"
+      "\nCREATE TABLE `workplace_projects` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`title` text NOT NULL,\n\t`state` text NOT NULL,\n\t`archived` integer DEFAULT 0 NOT NULL,\n\t`model` text,\n\t`cwd` text,\n\t`origin` text,\n\t`member_templates` text DEFAULT '[]' NOT NULL,\n\t`created_at` text NOT NULL,\n\t`updated_at` text NOT NULL\n);\n",
+      "\nCREATE INDEX `idx_workplace_projects_state` ON `workplace_projects` (`state`,`archived`);\n",
+      "\nCREATE TABLE `tool_raw_outputs` (\n\t`transcript_target_id` text NOT NULL,\n\t`tool_call_id` text NOT NULL,\n\t`output` text NOT NULL,\n\t`created_at` text NOT NULL,\n\tPRIMARY KEY(`transcript_target_id`, `tool_call_id`)\n);\n"
     ],
     "bps": true,
     "folderMillis": 1784030043899,
-    "hash": "462c6cdc6ec84950a3561b308b561da50ec80da948580c45b4c3fdfb9fd4eb08"
+    "hash": "d07aaeeb913440a7e5d9bad3d47ffe95ebc546f63dea06347d6b25f4c48a5926"
   },
   {
     "sql": [
-      "-- Custom SQL migration file, put your code below! --\nCREATE VIRTUAL TABLE IF NOT EXISTS `messages_fts`\nUSING fts5(`text`, content='messages', content_rowid='rowid');\n",
+      "CREATE VIRTUAL TABLE IF NOT EXISTS `messages_fts`\nUSING fts5(`text`, content='messages', content_rowid='rowid');\n",
       "\nCREATE VIRTUAL TABLE IF NOT EXISTS `messages_fts_trigram`\nUSING fts5(`text`, content='messages', content_rowid='rowid', tokenize='trigram');\n",
       "\nCREATE TRIGGER IF NOT EXISTS `messages_ai` AFTER INSERT ON `messages` BEGIN\n  INSERT INTO messages_fts(rowid, text) VALUES (new.rowid, new.text);\n  INSERT INTO messages_fts_trigram(rowid, text) VALUES (new.rowid, new.text);\nEND;\n",
       "\nCREATE TRIGGER IF NOT EXISTS `messages_ad` AFTER DELETE ON `messages` BEGIN\n  INSERT INTO messages_fts(messages_fts, rowid, text) VALUES ('delete', old.rowid, old.text);\n  INSERT INTO messages_fts_trigram(messages_fts_trigram, rowid, text) VALUES ('delete', old.rowid, old.text);\nEND;\n",
@@ -67,16 +68,8 @@ export const MIGRATIONS: MigrationMeta[] = [
     ],
     "bps": true,
     "folderMillis": 1784139452695,
-    "hash": "fc5d64d8314ca3403fd6a871ef1ee95c72b5d078fdbea9c457f9377c21dc0297"
-  },
-  {
-    "sql": [
-      "CREATE TABLE `tool_raw_outputs` (\n\t`transcript_target_id` text NOT NULL,\n\t`tool_call_id` text NOT NULL,\n\t`output` text NOT NULL,\n\t`created_at` text NOT NULL,\n\tPRIMARY KEY(`transcript_target_id`, `tool_call_id`)\n);\n"
-    ],
-    "bps": true,
-    "folderMillis": 1784184248878,
-    "hash": "c7199704c6f771a29b12abe4cf57993e52107dbc4ce2dd6aba37888465828ed5"
+    "hash": "60e311db225abad53357805d7914bab5e209a2e560ee2484d1e8dd886c4151e5"
   }
 ];
 
-export const LATEST_MIGRATION_TIMESTAMP = 1784184248878;
+export const LATEST_MIGRATION_TIMESTAMP = 1784139452695;

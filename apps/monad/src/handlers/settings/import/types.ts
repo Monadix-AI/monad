@@ -1,6 +1,6 @@
-import type { AgentConfig, McpServerConfig, ModelProfile, MonadConfig, MonadPaths, Provider } from '@monad/home';
+import type { AgentConfig, McpServerConfig, ModelProfile, MonadConfig, MonadPaths, Provider } from '@monad/environment';
 import type { ImportSettingsItem, ImportSettingsSource, ModelRoles } from '@monad/protocol';
-import type { ConfigReloader } from '#/config/reloader.ts';
+import type { ConfigAccess } from '#/config/manager.ts';
 
 export type KnownSource = Exclude<ImportSettingsSource, 'auto'>;
 
@@ -36,6 +36,6 @@ export interface ParsedImport {
 
 export interface SettingsImportDeps {
   paths: MonadPaths;
-  configReloader?: ConfigReloader;
+  config: ConfigAccess;
   mcpReconnect?: (name: string) => Promise<void>;
 }

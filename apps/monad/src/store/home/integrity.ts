@@ -1,64 +1,37 @@
-import type { MonadPaths } from '@monad/home';
+import type { MonadPaths } from '@monad/environment';
 import type { Store } from '#/store/db/index.ts';
 
-import { unlink } from 'node:fs/promises';
-import { initMonadHome, loadAll, loadAuth, saveAuth, saveProfile, tryParseProfile } from '@monad/home';
+import { initMonadHome, loadAll, loadAuth, saveAgents, saveAuth } from '@monad/environment';
 
 export interface IntegrityReport {
   config: 'ok' | 'missing';
-  profile: 'ok' | 'missing' | 'repaired';
+  agents: 'ok' | 'missing' | 'repaired';
+  mesh: 'ok' | 'missing';
   auth: 'ok' | 'repaired' | 'missing';
   db: 'ok' | 'version-mismatch';
 }
 
 /** Run integrity checks and auto-repair where safe. Safe to call on every daemon startup. */
 export async function checkAndRepair(paths: MonadPaths, store: Store): Promise<IntegrityReport> {
-  const report: IntegrityReport = { config: 'ok', profile: 'ok', auth: 'ok', db: 'ok' };
+  const report: IntegrityReport = { config: 'ok', agents: 'ok', mesh: 'ok', auth: 'ok', db: 'ok' };
 
-  // Check profile.json before calling loadAll so corrupt profile is repaired first
-  // (loadAll throws on corrupt profile.json, which would mask the config check).
-  {
-    let profileExists = true;
-    try {
-      await Bun.file(paths.profile).text();
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code === 'ENOENT') profileExists = false;
-    }
-
-    if (!profileExists) {
-      // loadAll initializes profile from config.json in memory but doesn't persist it.
-      // Re-load then save explicitly.
-      const merged = await loadAll(paths.config, paths.profile).catch(() => null);
-      if (merged) await saveProfile(paths.profile, merged);
-      report.profile = 'missing';
-    } else {
-      const parsed = await tryParseProfile(paths.profile);
-      if (parsed === null) {
-        // Remove corrupt file so loadAll can initialize a default profile.
-        await unlink(paths.profile).catch(() => {});
-        const merged = await loadAll(paths.config, paths.profile).catch(() => null);
-        if (merged) await saveProfile(paths.profile, merged);
-        report.profile = 'repaired';
-      }
-    }
+  let parsed = await loadAll(paths);
+  if (parsed === null) {
+    await initMonadHome(paths);
+    report.config = 'missing';
+    report.agents = 'missing';
+    report.mesh = 'missing';
+    parsed = await loadAll(paths);
   }
-
-  {
-    const parsed = await loadAll(paths.config, paths.profile);
-    if (parsed === null) {
-      await initMonadHome(paths);
-      report.config = 'missing';
-    } else {
-      validateRequiredProfileProviders(parsed);
-      let repaired = false;
-      repaired = repairDefaultProfile(parsed) || repaired;
-      repaired = repairProfileOptionalProviderRefs(parsed) || repaired;
-      repaired = repairAgentProfileRefs(parsed) || repaired;
-      if (repaired) {
-        await saveProfile(paths.profile, parsed);
-        report.profile = 'repaired';
-      }
-    }
+  if (!parsed) throw new Error('monad: config files missing after initialization');
+  validateRequiredProfileProviders(parsed);
+  let repaired = false;
+  repaired = repairDefaultProfile(parsed) || repaired;
+  repaired = repairProfileOptionalProviderRefs(parsed) || repaired;
+  repaired = repairAgentProfileRefs(parsed) || repaired;
+  if (repaired) {
+    await saveAgents(paths.agentsConfig, parsed);
+    if (report.agents === 'ok') report.agents = 'repaired';
   }
 
   {

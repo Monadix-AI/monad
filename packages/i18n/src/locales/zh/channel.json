@@ -1,6 +1,6 @@
 {
-  "channel.approvalNeeded": "⚠ 此操作需要批准。请在 monad 界面中批准。",
-  "channel.error": "⚠ 错误：{{label}}",
-  "channel.rateLimited": "⏳ 你发送消息的速度过快——请慢一点。",
-  "channel.pairing.requested": "🔑 如需连接，请把这个一次性配对码交给管理员：{{code}}"
+  "channel.approvalNeeded": "需要审批。请在 Monad 中审阅此操作。",
+  "channel.error": "无法完成操作：{{label}}",
+  "channel.rateLimited": "消息发送过快。请稍后再发送。",
+  "channel.pairing.requested": "请将此一次性配对码交给操作者：{{code}}"
 }

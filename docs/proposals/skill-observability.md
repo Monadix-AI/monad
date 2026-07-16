@@ -4,7 +4,7 @@ Status: draft · Scope: design only (no implementation yet)
 
 ## Problem
 
-monad has no visibility into **which skills actually get used**. We can't tell a load-bearing
+Monad has no visibility into **which skills actually get used**. We can't tell a load-bearing
 skill from dead weight, can't order the `/` menu by relevance, can't auto-suggest disabling a
 skill nobody invokes, and self-authoring (`skill_manage`) has no usage signal to learn from. The
 auto-load switches (config `skills.autoload`/`disabled`) are operated blind.

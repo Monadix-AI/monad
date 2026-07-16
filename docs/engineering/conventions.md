@@ -107,7 +107,7 @@ a designated home:
 
 | What | Where |
 |------|-------|
-| User-facing settings (tool backends, search providers, email, …) | `config.json` via `@monad/home` |
+| User-facing settings (tool backends, search providers, email, …) | `config.json` via `@monad/environment` |
 | Daemon startup flags | `--flag` CLI arguments |
 | Platform/OS path conventions (`APPDATA`, `XDG_CACHE_HOME`, …) | Environment variables |
 | Build-time injected values (`NODE_ENV`, `NEXT_PUBLIC_*`) | Environment variables |
@@ -142,7 +142,7 @@ are kept strictly apart:
 | Layer | Lives in | Examples |
 | --- | --- | --- |
 | Wire contract / domain | `@monad/protocol` | `Session`, `ChatMessage`, `ProviderView`, request/response shapes |
-| Config / auth files | `@monad/home` | `MonadConfig`, `Credential` |
+| Config / auth files | `@monad/environment` | `MonadConfig`, `Credential` |
 | DB rows | `@monad/store` | drizzle `$inferSelect` rows, mapped **back to** protocol types |
 | UI view-models, component props, form state | the UI package/app that renders them | `ModelSettings` / `ProviderDetail` in `@monad/client-rtk`, form interfaces in `apps/web` components |
 
@@ -167,11 +167,11 @@ export type Session = z.infer<typeof sessionSchema>;
   a schema of the same shape.
 - At the boundary, always `schema.parse(...)` — never `as` cast external data.
 - Reference implementations: `packages/protocol/src/domain.ts`,
-  `packages/home/src/config.ts`.
+  `packages/environment/src/config.ts`.
 
 ## 4. Pure TS is fine without a boundary
 
-In-process-only types (e.g. `Principal`, `Task`, event payload shapes) stay as
+In-process-only types (e.g. `RetryPolicy`, `Task`, event payload shapes) stay as
 hand-written interfaces. Don't wrap them in zod for its own sake — convert them to
 schema-first when they actually gain a wire boundary.
 

@@ -6,7 +6,7 @@ import type { TerminalCapabilities } from './input/types.ts';
 
 import { checkDaemonVersion } from '@monad/client';
 import { createMonadTreatyClient } from '@monad/client-rtk';
-import { resolveClientConn } from '@monad/home';
+import { resolveClientConn } from '@monad/environment';
 import { render } from 'ink';
 import { Provider } from 'react-redux';
 

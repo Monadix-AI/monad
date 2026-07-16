@@ -1,5 +1,5 @@
 import type { ClientConnection } from '@agentclientprotocol/sdk';
-import type { AcpAgentConfig } from '@monad/home';
+import type { AcpAgentConfig } from '@monad/environment';
 import type { sandboxedSpawn } from '#/capabilities/tools';
 import type { TerminalExecResult, ToolBackends, ToolContext, ToolGate } from '#/capabilities/tools/types.ts';
 

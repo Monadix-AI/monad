@@ -1,18 +1,20 @@
-import type { MonadPaths } from '@monad/home';
+import type { MonadPaths } from '@monad/environment';
 
 import { expect, test } from 'bun:test';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
-import { createDefaultConfig, emptyAuth, loadAll, loadAuth, saveAll, saveAuth } from '@monad/home';
+import { createDefaultConfig, emptyAuth, loadAll, loadAuth, saveAll, saveAuth } from '@monad/environment';
 import { ModelProviderType } from '@monad/protocol';
 
-import { createConfigReloader } from '#/config/reloader.ts';
+import { ConfigManager } from '#/config/manager.ts';
+import { createHomeConfigSource } from '#/config/source.ts';
 import {
   applyModelRolesToConfiguredDefaultProfile,
   createSettingsImportModule,
   previewSettingsImport
 } from '#/handlers/settings/import/index.ts';
+import { createTestConfigManager } from '../helpers.ts';
 
 function pathsFor(dir: string): MonadPaths {
   return {
@@ -21,8 +23,8 @@ function pathsFor(dir: string): MonadPaths {
     runtime: join(dir, 'runtime'),
     configs: join(dir, 'configs'),
     config: join(dir, 'configs', 'config.json'),
-    profile: join(dir, 'configs', 'profile.json'),
-    sandbox: join(dir, 'configs', 'sandbox.json'),
+    agentsConfig: join(dir, 'configs', 'agents.json'),
+    mesh: join(dir, 'configs', 'mesh.json'),
     credentials: join(dir, 'credentials'),
     auth: join(dir, 'credentials', 'auth.json'),
     tls: join(dir, 'credentials', 'tls'),
@@ -57,11 +59,11 @@ async function makeHome() {
     mkdir(paths.skills, { recursive: true }),
     mkdir(paths.agents, { recursive: true })
   ]);
-  const cfg = createDefaultConfig('prn_test00000000', 'test');
+  const cfg = createDefaultConfig('test');
   cfg.model.default = '';
   cfg.model.providers = [];
   cfg.model.profiles = [];
-  await saveAll(paths.config, paths.profile, cfg);
+  await saveAll(paths, cfg);
   await saveAuth(paths.auth, emptyAuth());
   return { dir, paths, cfg, cleanup: () => rm(dir, { recursive: true, force: true }) };
 }
@@ -113,7 +115,7 @@ test('Codex TOML import handles quoted commas and inline tables', async () => {
     ['[mcp_servers.echo]', 'command = "echo"', 'args = ["hello,world", "ok"]', 'env = { FOO = "bar" }'].join('\n')
   );
   try {
-    const mod = createSettingsImportModule({ paths });
+    const mod = createSettingsImportModule({ paths, config: await createTestConfigManager(paths) });
     const preview = await previewSettingsImport({ from: 'codex', path: codex, replace: false }, cfg);
     expect(preview.items.map((i) => [i.category, i.target, i.action])).toContainEqual(['mcpServers', 'echo', 'add']);
     await mod.apply({
@@ -124,7 +126,7 @@ test('Codex TOML import handles quoted commas and inline tables', async () => {
       allSafe: false,
       hashes: hashesFor(preview.items)
     });
-    const saved = await loadAll(paths.config, paths.profile);
+    const saved = await loadAll(paths);
     expect(saved?.mcpServers.find((server) => server.name === 'echo')).toMatchObject({
       transport: 'stdio',
       command: 'echo',
@@ -442,19 +444,19 @@ test('dry-run preview does not mutate config files', async () => {
   await mkdir(codex, { recursive: true });
   await Bun.write(join(codex, 'config.toml'), 'model = "gpt-4.1"\n');
   const beforeConfig = await Bun.file(paths.config).text();
-  const beforeProfile = await Bun.file(paths.profile).text();
+  const beforeProfile = await Bun.file(paths.agentsConfig).text();
   try {
-    const mod = createSettingsImportModule({ paths });
+    const mod = createSettingsImportModule({ paths, config: await createTestConfigManager(paths) });
     await mod.preview({ from: 'codex', path: codex, replace: false });
     expect(await Bun.file(paths.config).text()).toBe(beforeConfig);
-    expect(await Bun.file(paths.profile).text()).toBe(beforeProfile);
+    expect(await Bun.file(paths.agentsConfig).text()).toBe(beforeProfile);
   } finally {
     await cleanup();
   }
 });
 
 test('model role imports target the configured default profile alias', () => {
-  const cfg = createDefaultConfig('prn_test00000000', 'test');
+  const cfg = createDefaultConfig('test');
   cfg.model.default = 'writer';
   cfg.model.providers = [{ id: 'oai', label: 'OpenAI', type: ModelProviderType.OpenAICompatible }];
   cfg.model.profiles = [
@@ -496,7 +498,7 @@ test('allSafe applies only low-risk add items', async () => {
     ].join('\n')
   );
   try {
-    const mod = createSettingsImportModule({ paths });
+    const mod = createSettingsImportModule({ paths, config: await createTestConfigManager(paths) });
     const preview = await mod.preview({ from: 'codex', path: codex, replace: false });
     const result = await mod.apply({
       from: 'codex',
@@ -511,7 +513,7 @@ test('allSafe applies only low-risk add items', async () => {
     expect(result.applied).toContain('mcpServers:remote');
     expect(result.applied).not.toContain('mcpServers:local_shell');
     expect(result.applied).not.toContain('sandbox:sandbox.mode');
-    const cfg = await loadAll(paths.config, paths.profile);
+    const cfg = await loadAll(paths);
     expect(cfg?.mcpServers.some((s) => s.name === 'remote')).toBe(true);
     expect(cfg?.mcpServers.some((s) => s.name === 'local_shell')).toBe(false);
     expect(cfg?.sandbox.mode).not.toBe('unrestricted');
@@ -531,12 +533,12 @@ test('replace turns existing MCP conflict into selected update', async () => {
       trust: { autoApproveTools: [], hostEscape: false }
     }
   ];
-  await saveAll(paths.config, paths.profile, cfg);
+  await saveAll(paths, cfg);
   const codex = join(dir, 'codex');
   await mkdir(codex, { recursive: true });
   await Bun.write(join(codex, 'config.toml'), '[mcp_servers.echo]\ncommand = "new-echo"\n');
   try {
-    const mod = createSettingsImportModule({ paths });
+    const mod = createSettingsImportModule({ paths, config: await createTestConfigManager(paths) });
     const conflict = await mod.preview({ from: 'codex', path: codex, replace: false });
     expect(conflict.items.find((i) => i.id === 'mcpServers:echo')?.action).toBe('conflict');
     const replacement = await mod.preview({ from: 'codex', path: codex, replace: true });
@@ -549,7 +551,7 @@ test('replace turns existing MCP conflict into selected update', async () => {
       allSafe: false,
       hashes: hashesFor(replacement.items)
     });
-    const after = await loadAll(paths.config, paths.profile);
+    const after = await loadAll(paths);
     const echo = after?.mcpServers.find((s) => s.name === 'echo');
     expect(echo?.transport).toBe('stdio');
     if (echo?.transport === 'stdio') expect(echo.command).toBe('new-echo');
@@ -576,7 +578,7 @@ test('replace updates existing agent instead of adding duplicate', async () => {
       monadix: { consume: false }
     }
   ];
-  await saveAll(paths.config, paths.profile, cfg);
+  await saveAll(paths, cfg);
   await Bun.write(join(paths.agents, 'reviewer', 'AGENT.md'), ['<!-- name: reviewer -->', 'Old prompt', ''].join('\n'));
   const claude = join(dir, 'claude');
   await mkdir(join(claude, 'agents'), { recursive: true });
@@ -585,7 +587,7 @@ test('replace updates existing agent instead of adding duplicate', async () => {
     ['---', 'name: reviewer', 'description: updated', 'model: claude-3', '---', 'Updated prompt.'].join('\n')
   );
   try {
-    const mod = createSettingsImportModule({ paths });
+    const mod = createSettingsImportModule({ paths, config: await createTestConfigManager(paths) });
     const replacement = await mod.preview({ from: 'claude-code', path: claude, replace: true });
     expect(replacement.items.find((i) => i.id === 'agents:reviewer')?.action).toBe('update');
     const result = await mod.apply({
@@ -597,7 +599,7 @@ test('replace updates existing agent instead of adding duplicate', async () => {
       hashes: hashesFor(replacement.items)
     });
     expect(result.applied).toEqual(['agents:reviewer']);
-    const next = await loadAll(paths.config, paths.profile);
+    const next = await loadAll(paths);
     expect(next?.agent.agents).toHaveLength(1);
     const imported = next?.agent.agents[0];
     expect(imported?.id).toBe('agt_existing0000');
@@ -616,11 +618,14 @@ test('apply publishes config bus for system-only sandbox updates', async () => {
   await mkdir(codex, { recursive: true });
   await Bun.write(join(codex, 'config.toml'), 'sandbox_mode = "danger-full-access"\n');
   const events: Array<'system' | 'profile'> = [];
-  const configReloader = createConfigReloader(async () => {
-    events.push('system');
+  const source = createHomeConfigSource(paths);
+  const config = new ConfigManager({
+    initial: await ConfigManager.load(source),
+    source,
+    apply: async () => void events.push('system')
   });
   try {
-    const mod = createSettingsImportModule({ paths, configReloader });
+    const mod = createSettingsImportModule({ paths, config });
     const preview = await mod.preview({ from: 'codex', path: codex, replace: false });
     await mod.apply({
       from: 'codex',
@@ -631,7 +636,7 @@ test('apply publishes config bus for system-only sandbox updates', async () => {
       hashes: hashesFor(preview.items)
     });
     expect(events).toEqual(['system']);
-    const cfg = await loadAll(paths.config, paths.profile);
+    const cfg = await loadAll(paths);
     expect(cfg?.sandbox.mode).toBe('unrestricted');
   } finally {
     await cleanup();
@@ -668,7 +673,7 @@ test('apply skips selected item when preview hash is missing', async () => {
   await mkdir(codex, { recursive: true });
   await Bun.write(join(codex, 'config.toml'), '[mcp_servers.echo]\ncommand = "echo"\n');
   try {
-    const mod = createSettingsImportModule({ paths });
+    const mod = createSettingsImportModule({ paths, config: await createTestConfigManager(paths) });
     const result = await mod.apply({
       from: 'codex',
       path: codex,
@@ -679,7 +684,7 @@ test('apply skips selected item when preview hash is missing', async () => {
     });
     expect(result.applied).toEqual([]);
     expect(result.skipped).toContainEqual({ id: 'mcpServers:echo', reason: 'missing preview hash for selected item' });
-    const cfg = await loadAll(paths.config, paths.profile);
+    const cfg = await loadAll(paths);
     expect(cfg?.mcpServers).toEqual([]);
   } finally {
     await cleanup();
@@ -692,7 +697,7 @@ test('selected manual secret-bearing env item is skipped and never writes auth',
   await mkdir(claude, { recursive: true });
   await Bun.write(join(claude, 'settings.json'), JSON.stringify({ env: { API_KEY: 'SECRET' } }));
   try {
-    const mod = createSettingsImportModule({ paths });
+    const mod = createSettingsImportModule({ paths, config: await createTestConfigManager(paths) });
     const preview = await mod.preview({ from: 'claude-code', path: claude, replace: false });
     const result = await mod.apply({
       from: 'claude-code',
@@ -716,7 +721,7 @@ test('apply skips selected item when preview hash changed', async () => {
   const config = join(codex, 'config.toml');
   await Bun.write(config, '[mcp_servers.echo]\ncommand = "old-echo"\n');
   try {
-    const mod = createSettingsImportModule({ paths });
+    const mod = createSettingsImportModule({ paths, config: await createTestConfigManager(paths) });
     const preview = await mod.preview({ from: 'codex', path: codex, replace: false });
     const item = preview.items.find((i) => i.id === 'mcpServers:echo');
     await Bun.write(config, '[mcp_servers.echo]\ncommand = "new-echo"\n');
@@ -730,7 +735,7 @@ test('apply skips selected item when preview hash changed', async () => {
     });
     expect(result.applied).toEqual([]);
     expect(result.skipped).toContainEqual({ id: 'mcpServers:echo', reason: 'preview item changed since selection' });
-    const cfg = await loadAll(paths.config, paths.profile);
+    const cfg = await loadAll(paths);
     expect(cfg?.mcpServers).toEqual([]);
   } finally {
     await cleanup();
@@ -746,7 +751,7 @@ test('apply hash detects changed Claude agent prompt even when public preview fi
   const frontmatter = ['---', 'name: reviewer', 'description: reviews code', '---'];
   await Bun.write(agentFile, [...frontmatter, 'Original prompt.'].join('\n'));
   try {
-    const mod = createSettingsImportModule({ paths });
+    const mod = createSettingsImportModule({ paths, config: await createTestConfigManager(paths) });
     const preview = await mod.preview({ from: 'claude-code', path: claude, replace: false });
     const item = preview.items.find((i) => i.id === 'agents:reviewer');
     await Bun.write(agentFile, [...frontmatter, 'Changed prompt.'].join('\n'));
@@ -777,7 +782,7 @@ test('apply selected imports MCP, model profile and skill', async () => {
     ['---', 'name: hello', 'description: hello', '---', 'Say hello.'].join('\n')
   );
   try {
-    const mod = createSettingsImportModule({ paths });
+    const mod = createSettingsImportModule({ paths, config: await createTestConfigManager(paths) });
     const preview = await mod.preview({ from: 'codex', path: codex, replace: false });
     const ids = preview.items.filter((i) => i.action === 'add').map((i) => i.id);
     const result = await mod.apply({
@@ -789,7 +794,7 @@ test('apply selected imports MCP, model profile and skill', async () => {
       hashes: hashesFor(preview.items)
     });
     expect(result.applied.sort()).toEqual(ids.sort());
-    const cfg = await loadAll(paths.config, paths.profile);
+    const cfg = await loadAll(paths);
     expect(cfg?.mcpServers.some((s) => s.name === 'echo')).toBe(true);
     expect(cfg?.model.default).toBe('default');
     expect(cfg?.model.profiles.find((profile) => profile.alias === 'default')).toMatchObject({
@@ -814,7 +819,7 @@ test('skill import skips directories above the import size limit', async () => {
   );
   await Bun.write(join(skill, 'blob.bin'), 'x'.repeat(10 * 1024 * 1024 + 1));
   try {
-    const mod = createSettingsImportModule({ paths });
+    const mod = createSettingsImportModule({ paths, config: await createTestConfigManager(paths) });
     const preview = await mod.preview({ from: 'codex', path: codex, replace: false });
     const item = preview.items.find((i) => i.id === 'skills:heavy');
     const result = await mod.apply({

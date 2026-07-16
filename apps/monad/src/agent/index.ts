@@ -44,8 +44,6 @@ export interface AgentConfig {
   sessionRepo: SessionRepo;
   messageRepo?: MessageRepo;
   defaultModel?: string;
-  /** Principal id for observability span attribution (Phoenix user.id). In-process telemetry only. */
-  userId?: string;
   sandboxRoots?: string[];
   /** Durable per-session file observations used by file tools. */
   fileObservations?: FileObservationStore;
@@ -197,7 +195,6 @@ export function createAgent(config: AgentConfig): Agent {
       model,
       tools: forkTools,
       defaultModel: forkModel,
-      userId: config.userId,
       gate: config.gate,
       fileObservations: config.fileObservations,
       context: config.context,
@@ -292,7 +289,6 @@ export function createAgent(config: AgentConfig): Agent {
         promptCache,
         defaultModel: opts?.modelOverride ?? defaultModel,
         generationParams: opts?.generationParams,
-        userId: config.userId,
         emit,
         steers: opts?.steers,
         sandboxRoots: opts?.sandboxRoots ?? config.sandboxRoots,

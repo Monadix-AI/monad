@@ -91,13 +91,17 @@ export function messageToView(
 ): Message {
   const agent = item.role === 'assistant';
   const rawName = agent ? (item.agentName ?? 'monad') : human.name;
-  const displayName = agent ? (externalAgentDisplayNames.get(rawName) ?? rawName) : rawName;
+  const displayName = agent
+    ? rawName === 'monad'
+      ? 'Monad'
+      : (externalAgentDisplayNames.get(rawName) ?? rawName)
+    : rawName;
   const icon = agent ? (externalAgentIcons.get(rawName) ?? iconForAgent(displayName)) : undefined;
   const reasoning = agent ? reasoningFromParts(item.parts) : undefined;
   const attachments = attachmentsFromParts(item.parts);
   const agentAvatarSeed =
     externalAgentAvatarSeeds.get(displayName) ??
-    (displayName === 'monad'
+    (displayName === 'Monad'
       ? undefined
       : item.source === 'managed-external-agent'
         ? `external-agent:${displayName}`
@@ -111,7 +115,7 @@ export function messageToView(
     avatarUrl: agent ? (agentAvatarSeed ? entityAvatarUrl(agentAvatarSeed, avatarStyle) : undefined) : human.avatarUrl,
     kind: agent ? 'agent' : human.kind,
     tag: agent
-      ? displayName === 'monad'
+      ? displayName === 'Monad'
         ? 'AI'
         : (externalAgentTags.get(rawName) ?? externalAgentTags.get(displayName) ?? 'ACP')
       : human.tag,
@@ -453,7 +457,7 @@ export function buildProjectMessages({
       const externalAgentResumeAgent = item.id.startsWith('external-agent-resume-failed:')
         ? item.id.slice('external-agent-resume-failed:'.length).split(':')[0]
         : undefined;
-      const authorName = externalAgentResumeAgent || 'monad';
+      const authorName = externalAgentResumeAgent || 'Monad';
       byId.set(item.id, {
         id: item.id,
         authorId: authorName,

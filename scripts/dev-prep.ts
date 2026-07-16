@@ -165,8 +165,9 @@ export function buildDevPrepSummary(
     label('Runtime', useColor),
     `  ${muted('Bun transpiler', useColor)}    ${valueOrUnset(env.BUN_RUNTIME_TRANSPILER_CACHE_PATH)}`,
     label('Tasks', useColor),
-    '  1. Refresh i18n artifacts',
-    '  2. Start daemon, web app, Storybook, and devtools',
+    '  1. Generate config schemas',
+    '  2. Refresh i18n artifacts',
+    '  3. Start daemon, web app, Storybook, and devtools',
     ''
   ];
 }
@@ -193,6 +194,10 @@ function printDevPrepSummary(env: Record<string, string | undefined>, color: boo
 
 export function i18nCommand(): string[] {
   return ['bun', 'run', 'scripts/i18n.ts', '--write-if-stale'];
+}
+
+export function configSchemaCommand(): string[] {
+  return ['bun', 'run', 'packages/environment/scripts/gen-config-schema.ts'];
 }
 
 export function devSpawnOptions(cwd: string, env: Record<string, string>) {
@@ -339,6 +344,16 @@ export async function main(): Promise<number> {
   const env = buildDevEnv(parsed, process.env as Record<string, string | undefined>, homedir(), root);
   const color = shouldColorOutput();
   printDevPrepSummary(env, color);
+
+  const schemaExitCode = await runDevPrepCommandStep({
+    color,
+    command: configSchemaCommand(),
+    cwd: root,
+    env,
+    label: 'config schemas',
+    target: 'packages/environment/*.schema.json'
+  });
+  if (schemaExitCode !== 0) return schemaExitCode;
 
   const i18nExitCode = await runDevPrepCommandStep({
     color,

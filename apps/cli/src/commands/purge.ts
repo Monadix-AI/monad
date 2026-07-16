@@ -3,7 +3,7 @@ import type { CommandDef } from './types.ts';
 import { rm } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { createInterface } from 'node:readline';
-import { getPaths, initMonadHome } from '@monad/home';
+import { getPaths, initMonadHome } from '@monad/environment';
 
 import { stopDaemon } from '../lib/daemon.ts';
 import { t } from '../lib/i18n.ts';
@@ -23,7 +23,7 @@ export const command: CommandDef = {
   local: true,
   name: 'purge',
   synopsis: 'purge',
-  description: 'wipe and rebuild monad home (destructive — requires double confirmation)',
+  description: 'wipe and rebuild Monad home (destructive — requires double confirmation)',
   descriptionKey: 'cli.cmd.purge.desc',
   async run({ globals }) {
     const paths = getPaths();
@@ -54,8 +54,8 @@ export const command: CommandDef = {
 
     await stopDaemon();
     for (const root of roots) await rm(root, { recursive: true, force: true });
-    const result = await initMonadHome(paths);
-    out(green(t('cli.reset.done')) + dim(` (principal: ${result.principalId})`));
+    await initMonadHome(paths);
+    out(green(t('cli.reset.done')));
     out(dim(t('cli.reset.restartHint')));
   }
 };

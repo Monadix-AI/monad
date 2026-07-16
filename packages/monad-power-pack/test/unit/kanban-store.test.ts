@@ -30,7 +30,6 @@ test('createTask is idempotent and binds exactly one project session', async () 
   let creates = 0;
   const context = {
     atomPackId: 'monad-power-pack',
-    principalId: 'prn_a',
     experienceState: memoryState(),
     projectSessions: {
       create: async () => {
@@ -54,7 +53,6 @@ test('createTask is idempotent and binds exactly one project session', async () 
 test('saveTask rejects a stale domain version', async () => {
   const context = {
     atomPackId: 'monad-power-pack',
-    principalId: 'prn_a',
     experienceState: memoryState(),
     projectSessions: { create: async () => ({ id: 'ses_a' }) },
     workerScheduler: { schedule: async () => {}, cancel: async () => {} }
@@ -70,7 +68,6 @@ test('recoverProvisioning resumes an incomplete create saga after restart', asyn
   let creates = 0;
   const context = {
     atomPackId: 'monad-power-pack',
-    principalId: 'prn_a',
     experienceState: state,
     projectSessions: {
       create: async () => {

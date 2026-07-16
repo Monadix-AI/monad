@@ -1,8 +1,7 @@
-import type { ExternalAgentConfig } from '@monad/home';
-import type { Event, ExternalAgentSessionView, Session, SessionId } from '@monad/protocol';
+import type { ExternalAgentConfig } from '@monad/environment';
+import type { Event, ExternalAgentLaunchMode, ExternalAgentSessionView, Session, SessionId } from '@monad/protocol';
 import type { SessionContext } from '#/handlers/session/context.ts';
 
-import { loadAll } from '@monad/home';
 import { newId } from '@monad/protocol';
 
 import { extractError } from '#/agent/index.ts';
@@ -12,6 +11,7 @@ import {
   externalAgentProjectMemberSettings,
   managedExternalAgentProjectMembers
 } from '#/handlers/session/handlers/messaging-members.ts';
+import { resolveExternalAgentDefaultLaunchMode } from '#/services/external-agent/index.ts';
 import { managedProjectLaunchMode } from '#/services/external-agent/managed-project.ts';
 
 type StartManagedExternalAgentRuntimeWithRecovery = (args: {
@@ -25,7 +25,7 @@ type StartManagedExternalAgentRuntimeWithRecovery = (args: {
   reasoningEffort?: string;
   speed?: 'standard' | 'fast';
   customPrompt?: string;
-  launchMode: ExternalAgentConfig['defaultLaunchMode'];
+  launchMode: ExternalAgentLaunchMode;
   allowAutopilot?: boolean;
   providerSessionRef?: string;
   input: string;
@@ -104,9 +104,9 @@ export function createForwardExternalAgentHandler(
       persistAndRetire(sessionId, round);
     };
 
-    const paths = ctx.deps.paths;
-    if (!paths) {
-      emitExternalAgentError(new HandlerError('internal', 'daemon paths not configured'));
+    const cfg = ctx.deps.configManager?.get().cfg;
+    if (!cfg) {
+      emitExternalAgentError(new HandlerError('internal', 'daemon config not configured'));
       return { accepted: true as const };
     }
     const externalAgentHost = ctx.deps.externalAgentHost;
@@ -114,10 +114,7 @@ export function createForwardExternalAgentHandler(
       emitExternalAgentError(new HandlerError('internal', 'external agent host not configured'));
       return { accepted: true as const };
     }
-    const cfg = await loadAll(paths.config, paths.profile);
-    const configuredExternalAgents = (cfg?.externalAgents ?? []).filter(
-      (agent: ExternalAgentConfig) => agent.enabled !== false
-    );
+    const configuredExternalAgents = cfg.externalAgents.filter((agent: ExternalAgentConfig) => agent.enabled !== false);
     const managedMember = managedExternalAgentProjectMembers(store, sessionId, configuredExternalAgents).find(
       (candidate) => candidate.runtimeAgentName === agentName || candidate.templateAgentName === agentName
     );
@@ -248,7 +245,7 @@ export function createForwardExternalAgentHandler(
               agentName: runtimeAgentName,
               templateAgentName,
               workingPath: session.cwd,
-              launchMode: memberSettings.launchMode ?? spec.defaultLaunchMode,
+              launchMode: memberSettings.launchMode ?? resolveExternalAgentDefaultLaunchMode(spec.provider),
               appServerTransport: memberSettings.appServerTransport,
               allowAutopilot: memberSettings.allowAutopilot,
               runtimeRole

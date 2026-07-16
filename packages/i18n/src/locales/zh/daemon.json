@@ -1,7 +1,7 @@
 {
-  "daemon.ready.title": "monad 已启动！",
+  "daemon.ready.title": "Monad 已启动",
   "daemon.ready.webUi": "Web 界面：",
   "daemon.ready.cli": "命令行：",
   "daemon.ready.configure": "配置 model provider：",
-  "daemon.singleton.alreadyRunning": "monad daemon 已在运行，请先运行 `monad stop` 停止它。"
+  "daemon.singleton.alreadyRunning": "Monad Daemon 已在运行，请先运行 `monad stop` 停止它。"
 }

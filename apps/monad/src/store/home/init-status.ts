@@ -1,7 +1,7 @@
-import type { MonadAuth, MonadConfig } from '@monad/home';
+import type { MonadAuth, MonadConfig } from '@monad/environment';
 import type { Logger } from '@monad/logger';
 
-import { computeInitStatus } from '@monad/home';
+import { computeInitStatus } from '@monad/environment';
 
 export function warnIfNotInitialized(deps: {
   cfg: MonadConfig;

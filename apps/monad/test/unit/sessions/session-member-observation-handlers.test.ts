@@ -21,7 +21,6 @@ function fixtureSession(store: ReturnType<typeof createStore>, over: Partial<Ses
   const session: Session = {
     id: newId('ses'),
     title: 'test',
-    ownerPrincipalId: newId('prn'),
     state: 'active',
     agentIds: [],
     archived: false,

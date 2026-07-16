@@ -3,7 +3,7 @@
 // server (autoApprove + pinned-tool-hash rug-pull guard), and two sources pointing at one http
 // server collapse to a single connection (dedup by normalized url).
 
-import type { MonadPaths } from '@monad/home';
+import type { MonadPaths } from '@monad/environment';
 import type { McpConnection } from '#/capabilities/tools';
 
 import { afterEach, beforeEach, expect, test } from 'bun:test';
@@ -38,8 +38,8 @@ function makePaths(): MonadPaths {
     dbDir: dev,
     db: dev,
     config: dev,
-    profile: dev,
-    sandbox: dev,
+    agentsConfig: dev,
+    mesh: dev,
     approvals: dev,
     credentials: dev,
     auth: dev,

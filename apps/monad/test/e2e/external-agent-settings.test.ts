@@ -1,11 +1,11 @@
-import type { MonadPaths } from '@monad/home';
+import type { MonadPaths } from '@monad/environment';
 import type { ExternalAgentProviderAdapter } from '@monad/sdk-atom';
 
 import { describe, expect, test } from 'bun:test';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initMonadHome, loadAll, loadAuth, loadConfig } from '@monad/home';
+import { initMonadHome, loadAll, loadAuth, loadConfig } from '@monad/environment';
 
 import { ModelService } from '#/handlers/settings/model/index.ts';
 import { registerAgentAdapterImpl } from '#/services/external-agent/index.ts';
@@ -28,7 +28,7 @@ const agentView = () => ({
   provider: 'codex',
   command: 'codex-settings-test',
   args: ['--ask-for-approval', 'on-request'],
-  modelOptions: ['gpt-5.5', 'custom-codex'],
+  modelOptions: ['custom-codex'],
   projectTemplates: [
     {
       id: 'reviewer',
@@ -173,7 +173,7 @@ async function setup(): Promise<{ dir: string; paths: MonadPaths; app: ReturnTyp
   const dir = join(tmpdir(), `monad-external-agent-settings-${process.pid}-${Date.now()}-${process.hrtime.bigint()}`);
   const paths = makePaths(dir);
   await initMonadHome(paths);
-  const cfg = await loadConfig(paths.config);
+  const cfg = await loadConfig(paths);
   if (!cfg) throw new Error('config missing after init');
   const modelService = new ModelService(paths.auth, cfg, await loadAuth(paths.auth), seededProviderRegistry());
   const app = createHttpTransport(buildHandlers(mockModel(), { paths, modelService }));
@@ -199,7 +199,7 @@ async function runCrud(call: Call, paths: MonadPaths): Promise<void> {
   expect(agents).toHaveLength(1);
   expect(agents[0]?.approvalOwnership).toBe('provider-owned');
   expect(agents[0]?.provider).toBe('codex');
-  expect(agents[0]?.modelOptions).toEqual(['gpt-5.5', 'custom-codex']);
+  expect(agents[0]?.modelOptions).toEqual(['gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.3-codex', 'gpt-5.2']);
   expect(agents[0]?.projectTemplates).toEqual([
     {
       id: 'reviewer',
@@ -215,14 +215,14 @@ async function runCrud(call: Call, paths: MonadPaths): Promise<void> {
     useExperimentalGateway: true
   });
 
-  expect((await loadConfig(paths.config))?.externalAgents).toHaveLength(1);
-  expect((await loadConfig(paths.config))?.externalAgents[0]?.modelOptions).toEqual(['gpt-5.5', 'custom-codex']);
-  expect((await loadConfig(paths.config))?.externalAgents[0]?.adapterSettings).toEqual({
+  expect((await loadConfig(paths))?.externalAgents).toHaveLength(1);
+  expect(agents[0]?.defaultLaunchMode).toBe('pty');
+  expect((await loadConfig(paths))?.externalAgents[0]?.adapterSettings).toEqual({
     configProfile: 'work',
     useExperimentalGateway: true
   });
-  expect((await loadConfig(paths.config))?.externalAgents[0]?.projectTemplates?.[0]?.displayName).toBe('Reviewer');
-  const loaded = await loadAll(paths.config, paths.profile);
+  expect((await loadConfig(paths))?.externalAgents[0]?.projectTemplates?.[0]?.displayName).toBe('Reviewer');
+  const loaded = await loadAll(paths);
   expect(loaded?.externalAgents).toHaveLength(1);
   expect(loaded?.externalAgents[0]?.projectTemplates?.[0]?.customPrompt).toBe('Review changes only.');
 
@@ -318,7 +318,7 @@ async function runValidation(call: Call, paths: MonadPaths): Promise<void> {
   });
   expect(res.status).not.toBe(200);
 
-  expect((await loadConfig(paths.config))?.externalAgents).toEqual([]);
+  expect((await loadConfig(paths))?.externalAgents).toEqual([]);
 }
 
 for (const kind of TRANSPORTS) {

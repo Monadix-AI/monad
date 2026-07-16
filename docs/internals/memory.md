@@ -89,7 +89,7 @@ wiring is three hooks (`services/memory/hooks.ts`): recall + tool nudge on
 `memory.backend` selects `builtin` (above) or `mem0` (mem0 OSS, lazy-loaded).
 mem0 is **passive**: per-turn `observe()` extraction plus query-dependent semantic
 recall (not frozen); the `memory` tool's write actions are no-ops on it. Its LLM
-and embedder resolve from monad's own model registry (no env vars). Because
+and embedder resolve from Monad's own model registry (no env vars). Because
 mem0-JS has no embedded persistent vector store, the daemon downloads and manages
 a local **qdrant** on first use (`services/memory/qdrant.ts`; loopback-bound, data
 under `db/qdrant`, port defaults to daemon port + 1000, killed on exit) —

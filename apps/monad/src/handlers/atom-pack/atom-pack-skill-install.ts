@@ -2,8 +2,6 @@ import type { InstallSkillRequest, InstallSkillResponse } from '@monad/protocol'
 import type { SkillInstallReviewer } from '#/capabilities/skills/install/index.ts';
 import type { AtomPacksDeps } from '#/handlers/atom-pack/atom-pack-manager.ts';
 
-import { loadAuth } from '@monad/home';
-
 import { installClawHubSkill } from '#/capabilities/skills/install/clawhub.ts';
 import { createSkillFetcher } from '#/capabilities/skills/install/fetch.ts';
 import { installGitSkill } from '#/capabilities/skills/install/git.ts';
@@ -74,7 +72,7 @@ export function createSkillInstallers(
           ...(out.needsConsent ? { needsConsent: true } : {})
         });
       }
-      const auth = await loadAuth(deps.paths.auth);
+      const auth = deps.config?.get().auth;
       const out = await installSkillFromGithub(source, {
         skillsDir: deps.paths.skills,
         fetch: createSkillFetcher({ githubToken: resolveToken(auth?.atomRegistries?.github?.token) }),
@@ -142,7 +140,7 @@ export function createSkillInstallers(
           ...(out.needsConsent ? { needsConsent: true } : {})
         });
       }
-      const auth = await loadAuth(deps.paths.auth);
+      const auth = deps.config?.get().auth;
       const out = await installSkillFromGithub(source, {
         skillsDir: deps.paths.skills,
         fetch: createSkillFetcher({ githubToken: resolveToken(auth?.atomRegistries?.github?.token) }),

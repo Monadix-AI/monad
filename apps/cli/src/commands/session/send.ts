@@ -34,7 +34,7 @@ export const command: SessionCommandDef = {
       const message = requireTreatyData<{ message: { text: string } }>(
         await client.treaty.v1.sessions({ id: sessionId as SessionId }).messages.block.post({ text })
       ).message;
-      out(cyan('monad ▸ ') + message.text);
+      out(cyan('Monad ▸ ') + message.text);
       return;
     }
 

@@ -7,8 +7,8 @@ import type { ServerWebSocket } from 'bun';
 
 import { readFileSync } from 'node:fs';
 import { extname } from 'node:path';
-import { resolveDaemonUrl } from '@monad/home/network-endpoints';
-import { getPaths } from '@monad/home/paths';
+import { resolveDaemonUrl } from '@monad/environment/network-endpoints';
+import { getPaths } from '@monad/environment/paths';
 import { createLogger } from '@monad/logger';
 
 import { loopbackTlsOptions } from '../src/lib/loopback-tls';
@@ -212,7 +212,7 @@ export function attachWebRoutes(app: App): void {
   app.get('/*', ({ path }) => serveAsset(path));
 }
 
-function daemonUrlFromConfig(raw: string): string {
+function daemonUrlFromMesh(raw: string): string {
   const network = (JSON.parse(raw) as { network?: Parameters<typeof resolveDaemonUrl>[0]['network'] })?.network;
   return resolveDaemonUrl({ network, env: Bun.env });
 }
@@ -220,9 +220,9 @@ function daemonUrlFromConfig(raw: string): string {
 export function readDaemonUrl(): string {
   if (Bun.env.MONAD_URL) return resolveDaemonUrl({ env: Bun.env });
   try {
-    const configPath = getPaths().config;
-    const raw = readFileSync(configPath, 'utf-8');
-    return daemonUrlFromConfig(raw);
+    const meshPath = getPaths().mesh;
+    const raw = readFileSync(meshPath, 'utf-8');
+    return daemonUrlFromMesh(raw);
   } catch {
     return resolveDaemonUrl({ env: Bun.env });
   }

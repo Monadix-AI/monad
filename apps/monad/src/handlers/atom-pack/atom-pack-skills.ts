@@ -21,7 +21,6 @@ import type { AtomPacksDeps } from '#/handlers/atom-pack/atom-pack-manager.ts';
 import { Buffer } from 'node:buffer';
 import { mkdir, readdir, rm } from 'node:fs/promises';
 import { basename, join } from 'node:path';
-import { loadAll, loadAuth } from '@monad/home';
 
 import { checkClawHubSkillUpdate, removeFromSkillsLock } from '#/capabilities/skills/install/clawhub.ts';
 import { resolveGithubCommit } from '#/capabilities/skills/install/fetch.ts';
@@ -47,9 +46,9 @@ const SKILL_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
 
 export function createSkillsModule(deps: AtomPacksDeps) {
   const reviewInstall: SkillInstallReviewer = async ({ files, skills, source }) => {
-    const cfg = await loadAll(deps.paths.config, deps.paths.profile);
-    if (!cfg?.skills.installReview) return [];
-    const auth = await loadAuth(deps.paths.auth);
+    const snapshot = deps.config?.get();
+    if (!snapshot?.cfg.skills.installReview) return [];
+    const { cfg, auth } = snapshot;
     const modelSpec = resolveUsableInstallReviewModel(cfg, auth);
     if (!modelSpec || !deps.modelService) {
       return [{ code: 'failure:no-usable-model' }];
@@ -343,7 +342,7 @@ export function createSkillsModule(deps: AtomPacksDeps) {
 
     async checkSkillUpdates(): Promise<CheckSkillUpdatesResponse> {
       const skillsDir = deps.paths.skills;
-      const auth = await loadAuth(deps.paths.auth);
+      const auth = deps.config?.get().auth;
       const token = resolveToken(auth?.atomRegistries?.github?.token);
       let entries: Dirent[];
       try {

@@ -1,7 +1,7 @@
 import type { CommandDef } from './types.ts';
 
 import { join } from 'node:path';
-import { certExpiry, certFingerprint, ensureTlsCert, getPaths, renewTlsCert } from '@monad/home';
+import { certExpiry, certFingerprint, ensureTlsCert, getPaths, renewTlsCert } from '@monad/environment';
 
 import { t } from '../lib/i18n.ts';
 import { bold, dim, green, json, out, red, yellow } from '../lib/output.ts';

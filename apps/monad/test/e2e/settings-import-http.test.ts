@@ -1,11 +1,11 @@
-import type { MonadPaths } from '@monad/home';
+import type { MonadPaths } from '@monad/environment';
 import type { ImportSettingsApplyResult, ImportSettingsPreview } from '@monad/protocol';
 
 import { describe, expect, test } from 'bun:test';
 import { mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initMonadHome, loadAll, loadAuth, loadConfig } from '@monad/home';
+import { initMonadHome, loadAll, loadAuth, loadConfig } from '@monad/environment';
 
 import { ModelService } from '#/handlers/settings/model/index.ts';
 import { createHttpTransport } from '#/transports/http.ts';
@@ -25,7 +25,7 @@ async function setup(
   const dir = join(tmpdir(), `monad-settings-import-http-${process.pid}-${Date.now()}-${process.hrtime.bigint()}`);
   const paths = makeTestPaths(dir);
   await initMonadHome(paths);
-  const cfg = await loadConfig(paths.config);
+  const cfg = await loadConfig(paths);
   if (!cfg) throw new Error('config missing after init');
   const modelService = new ModelService(paths.auth, cfg, await loadAuth(paths.auth), seededProviderRegistry());
   const app = createHttpTransport(buildHandlers(mockModel(), { paths, modelService }));
@@ -84,7 +84,7 @@ for (const kind of TRANSPORTS) {
         expect(applyRes.status).toBe(200);
         const result = (await applyRes.json()) as ImportSettingsApplyResult;
         expect(result.applied).toEqual(['mcpServers:remote']);
-        const cfg = await loadAll(paths.config, paths.profile);
+        const cfg = await loadAll(paths);
         expect(cfg?.mcpServers.map((s) => s.name)).toContain('remote');
         expect(cfg?.mcpServers.map((s) => s.name)).not.toContain('local');
       } finally {

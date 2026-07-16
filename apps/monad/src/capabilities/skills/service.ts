@@ -3,7 +3,7 @@
 // in-place arrays (loadedSkills/skillList) that the live `skill` tool and skills.list RPC read, so
 // the runtime assembly just consumes the returned handles.
 
-import type { MonadPaths } from '@monad/home';
+import type { MonadPaths } from '@monad/environment';
 import type { AtomConflict, SkillListInstance, SkillListItem } from '@monad/protocol';
 import type { LoadedSkill } from '#/agent/index.ts';
 import type { WatchSource } from '#/infra/watch-service.ts';

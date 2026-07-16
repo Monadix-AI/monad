@@ -8,7 +8,6 @@ import type { ModelChunk, ModelRequest, ModelResult, ModelRouter } from '#/agent
 
 import { expect, test } from 'bun:test';
 import { join } from 'node:path';
-import { newId } from '@monad/protocol';
 
 import { createAgent } from '#/agent/index.ts';
 import { connectMcpServer } from '#/capabilities/tools';
@@ -55,7 +54,7 @@ test('a screenshot returned by an MCP tool reaches the model as an image content
     defaultModel: 'mock'
   });
 
-  const session = await agent.sessions.create('shot', newId('prn'));
+  const session = await agent.sessions.create('shot');
   await agent.loop(() => {}).runStream(session.id, 'take a screenshot', new AbortController().signal);
 
   // The model must have been called at least twice (screenshot turn, then the follow-up turn that

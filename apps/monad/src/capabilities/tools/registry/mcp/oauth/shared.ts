@@ -11,7 +11,7 @@ export class McpOAuthError extends Error {
   }
 }
 
-/** Persisted OAuth state for one server (structurally matches @monad/home's McpOAuthToken). The
+/** Persisted OAuth state for one server (structurally matches @monad/environment's McpOAuthToken). The
  *  daemon owns the live token lifecycle (via the MCP SDK); this is just the on-disk shape it
  *  reads/writes and that the device-grant flow returns. */
 export interface StoredOAuth {

@@ -4,7 +4,7 @@ description: Investigate a topic thoroughly and report findings with sources. Us
 context: fork
 tier: power
 metadata:
-  author: monad-examples
+  author: Monad-examples
   version: "1.0"
 ---
 

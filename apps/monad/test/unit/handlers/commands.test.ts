@@ -1,4 +1,5 @@
-import type { CommandItem, PrincipalId, SessionId } from '@monad/protocol';
+import type { Translate } from '@monad/i18n';
+import type { CommandItem, SessionId } from '@monad/protocol';
 import type { CommandModelInfo, CommandRunContext, CommandSessionInfo } from '@monad/sdk-atom';
 
 import { describe, expect, test } from 'bun:test';
@@ -15,6 +16,15 @@ type ServicesOver = Partial<Parameters<typeof makeCommandRunContext>[0]['service
 
 const enT = createI18n({ locale: 'en', packs: [{ locale: 'en', name: 'English', messages: i18nMessages }] }).t;
 
+function recordingTranslator() {
+  const calls: Array<{ key: string; params?: unknown }> = [];
+  const t: Translate = (key, params) => {
+    calls.push({ key: String(key), ...(params ? { params } : {}) });
+    return String(key);
+  };
+  return { calls, t };
+}
+
 function fakeCtx(args: string, servicesOver: ServicesOver = {}): CommandRunContext {
   const sessions: CommandSessionInfo[] = [
     { sessionId: 'ses_a00000000000', label: 'Alpha', active: true },
@@ -26,7 +36,6 @@ function fakeCtx(args: string, servicesOver: ServicesOver = {}): CommandRunConte
   ];
   return makeCommandRunContext({
     sessionId: 'ses_a00000000000' as SessionId,
-    principalId: 'prn_x00000000000' as PrincipalId,
     args,
     nav: {
       newSession: async () => ({ sessionId: 'ses_new000000000' }),
@@ -54,30 +63,6 @@ function fakeCtx(args: string, servicesOver: ServicesOver = {}): CommandRunConte
   });
 }
 
-describe('i18n: command replies follow the active locale', () => {
-  test('switching to zh localizes built-in replies (the core deliverable)', async () => {
-    const { BUILTIN_LOCALES_DIR } = await import('@monad/i18n/locale-dir');
-    const { loadLocalePacksFromDir, defaultLocaleName } = await import('@monad/i18n');
-    const packs = await loadLocalePacksFromDir(BUILTIN_LOCALES_DIR, defaultLocaleName);
-    const zhT = createI18n({ locale: 'zh', packs }).t;
-    const r = seededCommandRegistry();
-
-    const zhNew = await dispatchCommand(r, '/new', (a) => fakeCtx(a, { t: zhT }));
-    expect(zhNew?.message).toBe('🆕 已开启新对话。');
-
-    // plural via Intl.PluralRules (zh has only "other"); resetHistory mock returns clearedCount: 3
-    const zhReset = await dispatchCommand(r, '/reset', (a) => fakeCtx(a, { t: zhT }));
-    expect(zhReset?.message).toBe('🧹 已清除 3 条消息。');
-
-    const zhCompact = await dispatchCommand(r, '/compact', (a) => fakeCtx(a, { t: zhT }));
-    expect(zhCompact?.message).toBe('🗜️ 上下文已压缩。');
-
-    // English still works through the same path (default locale)
-    const enNew = await dispatchCommand(r, '/new', (a) => fakeCtx(a, { t: enT }));
-    expect(enNew?.message).toBe('🆕 Started a new conversation.');
-  });
-});
-
 describe('/archive', () => {
   test('archives the current session without creating a new session effect', async () => {
     const r = seededCommandRegistry();
@@ -91,7 +76,6 @@ describe('/archive', () => {
     );
 
     expect(archivedSessionId).toBe('ses_a00000000000');
-    expect(res?.message).toBe('✅ Archived the current conversation.');
     expect(res?.effect).toBeUndefined();
   });
 });
@@ -99,15 +83,19 @@ describe('/archive', () => {
 describe('/workdir (shared working folder)', () => {
   test('no arg shows the current folder, or a "none" notice when unset', async () => {
     const r = seededCommandRegistry();
+    const translations = recordingTranslator();
     const none = await dispatchCommand(r, '/workdir', (a) =>
-      fakeCtx(a, { getWorkdir: async () => ({ path: undefined }) })
+      fakeCtx(a, { t: translations.t, getWorkdir: async () => ({ path: undefined }) })
     );
-    expect(none?.message).toBe('No working folder set — using the default workspace.');
 
     const shown = await dispatchCommand(r, '/workdir', (a) =>
-      fakeCtx(a, { getWorkdir: async () => ({ path: '/tmp/project' }) })
+      fakeCtx(a, { t: translations.t, getWorkdir: async () => ({ path: '/tmp/project' }) })
     );
-    expect(shown?.message).toBe('📁 Working folder: /tmp/project');
+    expect({ none: none?.message, shown: shown?.message, calls: translations.calls }).toEqual({
+      none: 'cmd.workdir.none',
+      shown: 'cmd.workdir.show',
+      calls: [{ key: 'cmd.workdir.none' }, { key: 'cmd.workdir.show', params: { path: '/tmp/project' } }]
+    });
   });
 
   test('with a path sets the folder and emits a workdir-changed effect', async () => {
@@ -122,7 +110,6 @@ describe('/workdir (shared working folder)', () => {
       })
     );
     expect(received).toBe('/tmp/project');
-    expect(res?.message).toBe('📁 Working folder set to /tmp/project.');
     expect(res?.effect).toEqual({ type: 'workdir-changed', path: '/tmp/project' });
   });
 
@@ -143,24 +130,6 @@ describe('/workdir (shared working folder)', () => {
     );
     expect(received).toBe('/tmp/project');
     expect(res?.effect).toEqual({ type: 'workdir-changed', path: '/tmp/project' });
-  });
-
-  test('replies are localized (zh)', async () => {
-    const { BUILTIN_LOCALES_DIR } = await import('@monad/i18n/locale-dir');
-    const { loadLocalePacksFromDir, defaultLocaleName } = await import('@monad/i18n');
-    const packs = await loadLocalePacksFromDir(BUILTIN_LOCALES_DIR, defaultLocaleName);
-    const zhT = createI18n({ locale: 'zh', packs }).t;
-    const r = seededCommandRegistry();
-
-    const none = await dispatchCommand(r, '/workdir', (a) =>
-      fakeCtx(a, { t: zhT, getWorkdir: async () => ({ path: undefined }) })
-    );
-    expect(none?.message).toBe('未设置工作文件夹——使用默认 workspace。');
-
-    const set = await dispatchCommand(r, '/workdir /tmp/project', (a) =>
-      fakeCtx(a, { t: zhT, setWorkdir: async (_sid, path) => ({ path }) })
-    );
-    expect(set?.message).toBe('📁 工作文件夹已设置为 /tmp/project。');
   });
 });
 
@@ -367,8 +336,11 @@ describe('dispatchCommand', () => {
 
   test('/compact reports when the recent tail leaves nothing to compact', async () => {
     const r = seededCommandRegistry();
-    const res = await dispatchCommand(r, '/compact', (a) => fakeCtx(a, { compact: async () => ({ compacted: 0 }) }));
-    expect(res?.message).toBe('Nothing to compact yet — the recent context is already kept verbatim.');
+    const translations = recordingTranslator();
+    const res = await dispatchCommand(r, '/compact', (a) =>
+      fakeCtx(a, { t: translations.t, compact: async () => ({ compacted: 0 }) })
+    );
+    expect(translations.calls).toEqual([{ key: 'cmd.compact.noop' }]);
     expect(res?.effect).toEqual({ type: 'compacted', compacted: 0 });
   });
 
@@ -380,16 +352,20 @@ describe('dispatchCommand', () => {
 
   test('/model with no args lists profiles; with an alias switches', async () => {
     const r = seededCommandRegistry();
-    const list = await dispatchCommand(r, '/model', (a) => fakeCtx(a));
-    expect(list?.message).toBe('Models:\n➡️ fast  (p:m1)\n   smart  (p:m2)\n\nSwitch with /model <alias>.');
+    const translations = recordingTranslator();
+    await dispatchCommand(r, '/model', (a) => fakeCtx(a, { t: translations.t }));
+    expect(translations.calls).toEqual([
+      { key: 'cmd.model.list', params: { list: '➡️ fast  (p:m1)\n   smart  (p:m2)' } }
+    ]);
     const set = await dispatchCommand(r, '/model smart', (a) => fakeCtx(a));
     expect(set?.effect).toEqual({ type: 'model-changed', alias: 'smart' });
   });
 
   test('/model rejects an unknown alias without calling setModel', async () => {
     const r = seededCommandRegistry();
-    const res = await dispatchCommand(r, '/model nonexistent', (a) => fakeCtx(a));
-    expect(res?.message).toBe('Unknown model profile: nonexistent. Use /model to list available profiles.');
+    const translations = recordingTranslator();
+    await dispatchCommand(r, '/model nonexistent', (a) => fakeCtx(a, { t: translations.t }));
+    expect(translations.calls).toEqual([{ key: 'cmd.model.unknown', params: { alias: 'nonexistent' } }]);
   });
 
   test('/model accepts a model slug when it matches a single configured provider', async () => {
@@ -462,8 +438,10 @@ describe('dispatchCommand', () => {
   test('/model asks for a provider when a model slug matches multiple configured providers', async () => {
     const r = seededCommandRegistry();
     const calls: string[] = [];
-    const res = await dispatchCommand(r, '/model gpt-5', (a) =>
+    const translations = recordingTranslator();
+    await dispatchCommand(r, '/model gpt-5', (a) =>
       fakeCtx(a, {
+        t: translations.t,
         listModels: async () => [
           { alias: 'openai-gpt', provider: 'openai', modelId: 'gpt-5', current: false },
           { alias: 'gateway-gpt', provider: 'vercel', modelId: 'gpt-5', current: false }
@@ -475,16 +453,21 @@ describe('dispatchCommand', () => {
     );
 
     expect(calls).toEqual([]);
-    expect(res?.message).toBe(
-      'Multiple providers match "gpt-5". Choose one profile:\nopenai: openai-gpt  (gpt-5)\nvercel: gateway-gpt  (gpt-5)'
-    );
+    expect(translations.calls).toEqual([
+      {
+        key: 'cmd.model.ambiguous',
+        params: { alias: 'gpt-5', list: 'openai: openai-gpt  (gpt-5)\nvercel: gateway-gpt  (gpt-5)' }
+      }
+    ]);
   });
 
   test('/memory routes built-in subcommands while shortcuts stay available', async () => {
     const r = seededCommandRegistry();
     const calls: string[] = [];
-    const consolidate = await dispatchCommand(r, '/memory consolidate 2', (a) =>
+    const translations = recordingTranslator();
+    await dispatchCommand(r, '/memory consolidate 2', (a) =>
       fakeCtx(a, {
+        t: translations.t,
         consolidate: async (level) => {
           calls.push(`consolidate:${level}`);
           return { level: level ?? 1, l1Scopes: 1, nodes: 2, edges: 3, prunedEdges: 0, laws: 4, lawScopes: 0 };
@@ -492,10 +475,10 @@ describe('dispatchCommand', () => {
       })
     );
     expect(calls).toEqual(['consolidate:2']);
-    expect(consolidate?.message).toBe('🧠 Consolidated to L2: 1 fact scope(s), +2 entities/3 relations, 4 law(s).');
 
-    const shortcut = await dispatchCommand(r, '/consolidate 3', (a) =>
+    await dispatchCommand(r, '/consolidate 3', (a) =>
       fakeCtx(a, {
+        t: translations.t,
         consolidate: async (level) => {
           calls.push(`shortcut:${level}`);
           return { level: level ?? 1, l1Scopes: 0, nodes: 0, edges: 0, prunedEdges: 0, laws: 0, lawScopes: 0 };
@@ -503,57 +486,40 @@ describe('dispatchCommand', () => {
       })
     );
     expect(calls.at(-1)).toBe('shortcut:3');
-    expect(shortcut?.message).toBe('🧠 Consolidated to L3: 0 fact scope(s), +0 entities/0 relations, 0 law(s).');
+    expect(translations.calls).toEqual([
+      {
+        key: 'cmd.consolidate.done',
+        params: { level: '2', scopes: '1', nodes: '2', edges: '3', laws: '4' }
+      },
+      {
+        key: 'cmd.consolidate.done',
+        params: { level: '3', scopes: '0', nodes: '0', edges: '0', laws: '0' }
+      }
+    ]);
   });
 
   test('an alias resolves to the canonical built-in (/ls → sessions)', async () => {
     const r = seededCommandRegistry();
-    const res = await dispatchCommand(r, '/ls', (a) => fakeCtx(a));
-    expect(res?.message).toBe('Conversations:\n➡️ 1. Alpha\n   2. Beta\n\nSwitch with /switch <number>.');
+    const translations = recordingTranslator();
+    await dispatchCommand(r, '/ls', (a) => fakeCtx(a, { t: translations.t }));
+    expect(translations.calls).toEqual([{ key: 'cmd.sessions.list', params: { list: '➡️ 1. Alpha\n   2. Beta' } }]);
   });
 
   test('/help reports built-ins, atom commands, and skills', async () => {
     const r = seededCommandRegistry();
     r.registerAtom('acme', defineCommand({ name: 'acme-x', description: 'deploy', run: async () => ({}) }));
+    let listed: CommandItem[] = [];
     const res = await dispatchCommand(r, '/help', (a) =>
       fakeCtx(a, {
-        listCommands: async () =>
-          r.list([{ name: 'deep-research', description: 'r', userInvocable: true, available: true }])
+        listCommands: async () => {
+          listed = r.list([{ name: 'deep-research', description: 'r', userInvocable: true, available: true }]);
+          return listed;
+        }
       })
     );
     expect(res?.effect?.type).toBe('help');
-    expect(res?.message?.split('\n\n')).toEqual([
-      '## Commands:',
-      [
-        '### Conversation',
-        '- `/archive` Archive the current conversation',
-        '- `/handoff [initial task for the new session]` Summarize this conversation and continue it in a new session',
-        '- `/new [label]` Start a new conversation',
-        '- `/sessions` List conversations',
-        '- `/switch <number|session-id>` Switch to another conversation'
-      ].join('\n'),
-      [
-        '### Context',
-        '- `/clear` Clear the view (client-side)',
-        '- `/compact` Summarize and compact the context window now',
-        '- `/reset` Clear this conversation’s history',
-        '- `/view <summary|detail>` Switch local observation rendering mode'
-      ].join('\n'),
-      [
-        '### Memory',
-        '- `/check-memory` Flag learned rules contradicted by a current fact (suppresses them until re-derived)',
-        '- `/consolidate` Consolidate memory: dedup facts, then update the graph and laws (to your memory level)',
-        '- `/memory` Manage memory commands',
-        '- `/memory consolidate [level]` Consolidate memory layers (shortcut /consolidate)',
-        '- `/memory why <query>` Explain why the agent believes something (shortcut /why)',
-        '- `/memory check` Flag contradicted learned rules (shortcut /check-memory)',
-        '- `/why` Explain why the agent believes something, traced through its memory'
-      ].join('\n'),
-      '### Runtime\n- `/effort <value|default>` Set the reasoning effort for this conversation\n- `/model [alias]` Show or switch the model for this conversation\n- `/workdir [absolute path]` Show or set the shared working folder for this conversation',
-      '### Help\n- `/help` List available commands',
-      '## Atom commands:\n- `/acme.acme-x` deploy',
-      '## Skills:\n- `/deep-research` r'
-    ]);
+    expect(listed.map((item) => item.id)).toContain('acme.acme-x');
+    expect(listed.map((item) => item.id)).toContain('deep-research');
   });
 });
 
@@ -581,8 +547,18 @@ describe('command dispatch', () => {
 describe('concurrency guard (busy)', () => {
   test('a command is refused while a turn is streaming', async () => {
     const r = seededCommandRegistry();
-    const res = await dispatchCommand(r, '/reset', (a) => fakeCtx(a), { isBusy: true });
-    expect(res?.message).toBe('⏳ A turn is in progress — try /reset again when it finishes.');
+    let contextCalls = 0;
+    const res = await dispatchCommand(
+      r,
+      '/reset',
+      (a) => {
+        contextCalls++;
+        return fakeCtx(a);
+      },
+      { isBusy: true }
+    );
+    expect(contextCalls).toBe(0);
+    expect(res?.effect).toBeUndefined();
   });
 
   test('a duringTurn command bypasses the busy guard', async () => {

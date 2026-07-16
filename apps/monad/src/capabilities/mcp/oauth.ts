@@ -20,9 +20,10 @@ import type {
   OAuthTokens
 } from '@modelcontextprotocol/sdk/shared/auth.js';
 import type { LocalePack } from '@monad/i18n';
+import type { ConfigAccess } from '#/config/manager.ts';
 
 import { auth, type OAuthClientProvider, type OAuthDiscoveryState } from '@modelcontextprotocol/sdk/client/auth.js';
-import { loadAuth, openUrl, saveAuth } from '@monad/home';
+import { openUrl } from '@monad/environment';
 import { createI18n } from '@monad/i18n';
 import { enMessages, zhMessages } from '@monad/i18n/messages';
 
@@ -54,7 +55,7 @@ function callbackT(req: Request) {
 export interface McpOAuthOptions {
   serverName: string;
   serverUrl: string;
-  authPath: string;
+  config: Pick<ConfigAccess, 'get' | 'updateAuth'>;
   /** Preconfigured client id (skips Dynamic Client Registration). */
   clientId?: string;
   scopes?: string[];
@@ -77,7 +78,7 @@ export function createDaemonMcpOAuth(opts: McpOAuthOptions): DaemonMcpAuth {
   let armed = opts.interactive ?? false;
   return {
     async getHeader() {
-      const stored = await loadToken(opts.authPath, opts.serverName);
+      const stored = loadToken(opts.config, opts.serverName);
       return stored?.accessToken ? `Bearer ${stored.accessToken}` : undefined;
     },
     async onUnauthorized() {
@@ -103,28 +104,28 @@ export async function authorizeMcpOAuth(opts: McpOAuthOptions): Promise<void> {
 
 function runInteractiveFlow(opts: McpOAuthOptions): Promise<void> {
   if (opts.flow === 'device') {
-    return authorizeDevice(opts).then((tokens) => saveToken(opts.authPath, opts.serverName, tokens));
+    return authorizeDevice(opts).then((tokens) => saveToken(opts.config, opts.serverName, tokens));
   }
   return authorizeInteractive(opts);
 }
 
-async function loadToken(authPath: string, name: string): Promise<StoredOAuth | null> {
-  const auth = await loadAuth(authPath);
-  return auth?.mcpOAuth?.[name] ?? null;
+function loadToken(config: Pick<ConfigAccess, 'get'>, name: string): StoredOAuth | null {
+  return config.get().auth?.mcpOAuth?.[name] ?? null;
 }
 
-async function saveToken(authPath: string, name: string, tokens: StoredOAuth): Promise<void> {
-  const auth = await loadAuth(authPath);
-  if (!auth) throw new McpOAuthError('auth.json missing — cannot persist MCP OAuth tokens');
-  auth.mcpOAuth = { ...(auth.mcpOAuth ?? {}), [name]: tokens };
-  auth.updatedAt = new Date().toISOString();
-  await saveAuth(authPath, auth);
+async function saveToken(config: Pick<ConfigAccess, 'updateAuth'>, name: string, tokens: StoredOAuth): Promise<void> {
+  await config.updateAuth((auth) => {
+    if (!auth) throw new McpOAuthError('auth.json missing — cannot persist MCP OAuth tokens');
+    auth.mcpOAuth = { ...(auth.mcpOAuth ?? {}), [name]: tokens };
+    auth.updatedAt = new Date().toISOString();
+    return auth;
+  });
 }
 
 /** Attempt a no-browser token refresh via the SDK. Returns true only if a fresh token was obtained
  *  and persisted; never opens a browser (the provider's redirect is a no-op here). */
 async function refreshSilently(opts: McpOAuthOptions): Promise<boolean> {
-  const stored = await loadToken(opts.authPath, opts.serverName);
+  const stored = loadToken(opts.config, opts.serverName);
   if (!stored?.refreshToken) return false; // nothing to refresh with → needs interactive authz
   const clientRef: ClientRef = { id: opts.clientId ?? stored.clientId };
   // redirect_uri is required metadata but unused on the refresh path; a placeholder loopback is fine.
@@ -153,7 +154,7 @@ interface ClientRef {
  * per the MCP spec we drop it and re-register once.
  */
 async function authorizeInteractive(opts: McpOAuthOptions): Promise<void> {
-  const persisted = await loadToken(opts.authPath, opts.serverName);
+  const persisted = loadToken(opts.config, opts.serverName);
   const clientRef: ClientRef = { id: opts.clientId ?? persisted?.clientId };
 
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -222,7 +223,7 @@ function createProvider(
       clientRef.id = info.client_id;
     },
     async tokens() {
-      const s = await loadToken(opts.authPath, opts.serverName);
+      const s = loadToken(opts.config, opts.serverName);
       if (!s?.accessToken) return undefined;
       return {
         access_token: s.accessToken,
@@ -231,7 +232,7 @@ function createProvider(
       };
     },
     async saveTokens(tokens: OAuthTokens) {
-      await saveToken(opts.authPath, opts.serverName, {
+      await saveToken(opts.config, opts.serverName, {
         clientId: clientRef.id,
         accessToken: tokens.access_token,
         refreshToken: tokens.refresh_token,

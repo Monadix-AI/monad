@@ -1,8 +1,8 @@
-import type { MonadAuth, MonadConfig } from '@monad/home';
+import type { MonadAuth, MonadConfig } from '@monad/environment';
 import type { Logger } from '@monad/logger';
 import type { Tool } from '#/capabilities/tools/types.ts';
 
-import { emptyAuth, resolvePeerSecretRef } from '@monad/home';
+import { emptyAuth, resolvePeerSecretRef } from '@monad/environment';
 
 import { createPeerDelegateTool, type PeerDelegateTarget } from '#/services/delegation/peer-delegate.ts';
 

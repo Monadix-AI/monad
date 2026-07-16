@@ -1,15 +1,15 @@
 // e2e: the system-level sandbox-defaults REST surface over a real temp ~/.monad, exercised over BOTH
 // transports (TCP loopback + Unix socket). The sandbox POLICY block persists to its own sandbox.json
-// (via saveSandbox); the global ceiling persists to config.json (via saveSystemConfig).
+// (via saveAgents); the global ceiling persists to config.json (via saveConfig).
 
-import type { MonadPaths } from '@monad/home';
+import type { MonadPaths } from '@monad/environment';
 import type { SandboxSettingsResponse } from '@monad/protocol';
 
 import { describe, expect, test } from 'bun:test';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initMonadHome, loadAuth, loadConfig } from '@monad/home';
+import { initMonadHome, loadAuth, loadConfig } from '@monad/environment';
 
 import { ModelService } from '#/handlers/settings/model/index.ts';
 import { createHttpTransport } from '#/transports/http.ts';
@@ -31,7 +31,7 @@ async function setup(): Promise<{ dir: string; paths: MonadPaths; app: ReturnTyp
   const dir = join(tmpdir(), `monad-sandboxset-${process.pid}-${Date.now()}-${process.hrtime.bigint()}`);
   const paths = makePaths(dir);
   await initMonadHome(paths);
-  const cfg = await loadConfig(paths.config);
+  const cfg = await loadConfig(paths);
   if (!cfg) throw new Error('config missing after init');
   const modelService = new ModelService(paths.auth, cfg, await loadAuth(paths.auth), seededProviderRegistry());
   const app = createHttpTransport(buildHandlers(mockModel(), { paths, modelService }));
@@ -72,7 +72,7 @@ async function run(t: TransportHandle, paths: MonadPaths): Promise<void> {
   expect(body.globalSandbox).toEqual({ enabled: true, mode: 'workspace' });
 
   // 3. policy persisted to sandbox.json, ceiling to config.json — both reflected on a fresh load
-  const sys = await loadConfig(paths.config);
+  const sys = await loadConfig(paths);
   expect(sys?.sandbox.mode).toBe('home');
   expect(sys?.sandbox.allowedDomains).toEqual(['example.com']);
   expect(sys?.agent.globalSandbox).toEqual({ enabled: true, mode: 'workspace' });

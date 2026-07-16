@@ -1,7 +1,6 @@
-import type { MonadConfig, MonadPaths } from '@monad/home';
-import type { PrincipalId } from '@monad/protocol';
+import type { MonadConfig, MonadPaths } from '@monad/environment';
 import type { ModelSubsystem } from '#/agent/model/lifecycle.ts';
-import type { ConfigSnapshot } from '#/config/service.ts';
+import type { ConfigSnapshot } from '#/config/manager.ts';
 import type { EmbeddingIndexer } from '#/services/embedding-indexer.ts';
 import type { KvService } from '#/services/kv.ts';
 import type { ModelService } from '#/services/model.ts';
@@ -10,7 +9,7 @@ import type { Store } from '#/store/db/index.ts';
 import type { DataLayer } from '#/store/lifecycle.ts';
 
 import { expect, test } from 'bun:test';
-import { createDefaultConfig } from '@monad/home';
+import { createDefaultConfig } from '@monad/environment';
 
 import {
   createEmbeddingModelChangeWarning,
@@ -23,7 +22,7 @@ const paths = { providers: '/home/providers' } as MonadPaths;
 const layer = { kv: {} as KvService, store: {} as Store, stop: async () => {} } satisfies DataLayer;
 
 function snapshot(model: string): ConfigSnapshot {
-  const cfg = createDefaultConfig('usr_test' as PrincipalId, 'Test');
+  const cfg = createDefaultConfig('Test');
   return { auth: null, cfg: { ...cfg, model: { ...cfg.model, default: model } } };
 }
 

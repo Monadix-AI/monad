@@ -2,13 +2,13 @@
 // transports (TCP loopback + Unix socket). Asserts GET returns defaults and PUT round-trips to
 // profile.json, and that smtp config persists and clears correctly.
 
-import type { MonadPaths } from '@monad/home';
+import type { MonadPaths } from '@monad/environment';
 
 import { describe, expect, test } from 'bun:test';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initMonadHome, loadAll, loadAuth, loadConfig } from '@monad/home';
+import { initMonadHome, loadAll, loadAuth, loadConfig } from '@monad/environment';
 
 import { ModelService } from '#/handlers/settings/model/index.ts';
 import { createHttpTransport } from '#/transports/http.ts';
@@ -29,7 +29,7 @@ async function setup(tag: string) {
   const base = join(tmpdir(), `monad-tool-backends-${Date.now()}-${tag}`);
   const paths = makePaths(base);
   await initMonadHome(paths);
-  const cfg = await loadConfig(paths.config);
+  const cfg = await loadConfig(paths);
   if (!cfg) throw new Error('config missing after init');
   const modelService = new ModelService(paths.auth, cfg, await loadAuth(paths.auth), seededProviderRegistry());
   const app = createHttpTransport(buildHandlers(mockModel(), { paths, modelService }));
@@ -73,7 +73,7 @@ for (const kind of TRANSPORTS) {
         expect(updated.email.from).toBe('bot@example.com');
         expect(updated.email.resendApiKey).toBe('re_abc');
 
-        const cfg = await loadAll(paths.config, paths.profile);
+        const cfg = await loadAll(paths);
         expect(cfg?.agent.tools.webSearch.provider).toBe('native');
         expect(cfg?.agent.tools.webSearch.brave?.apiKey).toBe('BSAtest123');
         expect(cfg?.agent.tools.email.backend).toBe('resend');
@@ -103,7 +103,7 @@ for (const kind of TRANSPORTS) {
         });
 
         // Verify persisted to disk
-        const cfg = await loadAll(paths.config, paths.profile);
+        const cfg = await loadAll(paths);
         expect(cfg?.agent.tools.codeExecBackend).toBe('follow-system');
       } finally {
         t.stop();
@@ -127,7 +127,7 @@ for (const kind of TRANSPORTS) {
         });
         expect(setSmtp.status).toBe(200);
 
-        const cfg = await loadAll(paths.config, paths.profile);
+        const cfg = await loadAll(paths);
         expect(cfg?.agent.tools.email.smtp?.host).toBe('smtp.example.com');
         expect(cfg?.agent.tools.email.smtp?.port).toBe(587);
 
@@ -137,7 +137,7 @@ for (const kind of TRANSPORTS) {
           body: JSON.stringify({ email: { smtp: null } })
         });
 
-        const cfg2 = await loadAll(paths.config, paths.profile);
+        const cfg2 = await loadAll(paths);
         expect(cfg2?.agent.tools.email.smtp).toBeUndefined();
       } finally {
         t.stop();

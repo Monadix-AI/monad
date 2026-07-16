@@ -1,4 +1,4 @@
-import type { ModelProfile, Provider } from '@monad/home';
+import type { ModelProfile, Provider } from '@monad/environment';
 import type { PlannedItem } from '../types.ts';
 
 import { ModelProviderType } from '@monad/protocol';
@@ -55,7 +55,7 @@ export function addModelProfileFromExternal(
       source,
       target: `${targetPrefix}.default`,
       action: 'manual',
-      reason: `model "${model}" does not identify a supported monad provider`,
+      reason: `model "${model}" does not identify a supported Monad provider`,
       payload: { kind: 'manual' },
       risk: 'medium',
       summary: providerId ? `provider=${providerId} model=${model}` : `model=${model}`
@@ -82,7 +82,7 @@ export function addModelProfileFromExternal(
     source,
     target: profile.alias,
     action: 'add',
-    reason: 'external default model can be represented as a monad model profile',
+    reason: 'external default model can be represented as a Monad model profile',
     payload: { kind: 'modelProfile', profile, makeDefault }
   });
 }

@@ -1,5 +1,5 @@
 // Build the native Mo binary for the host OS. The single `process.platform` branch
-// lives HERE (mirroring packages/home/src/open-url.ts) — each OS has its own native
+// lives HERE (mirroring packages/environment/src/open-url.ts) — each OS has its own native
 // shell under native/<os>/, all implementing the same behaviour against the daemon's
 // REST contract. No feature code branches on platform.
 

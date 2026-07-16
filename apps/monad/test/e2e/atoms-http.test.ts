@@ -1,14 +1,14 @@
 // e2e: the /v1/atoms REST surface over a real temp ~/.monad. Installs a local: atom pack
 // (default-deny consent), lists it, then removes it — exercising the controller wiring.
 
-import type { MonadPaths } from '@monad/home';
+import type { MonadPaths } from '@monad/environment';
 import type { ModelRouter } from '#/agent/index.ts';
 
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { mkdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initMonadHome, loadAuth, loadConfig, saveAll, saveAuth } from '@monad/home';
+import { initMonadHome, loadAuth, loadConfig, saveAll, saveAuth } from '@monad/environment';
 import { ModelProviderType } from '@monad/protocol';
 
 import { ModelService } from '#/handlers/settings/model/index.ts';
@@ -86,7 +86,7 @@ beforeEach(async () => {
 export default {manifest:{name:'wa',version:'1.0.0',sdkVersion:'0',atoms:['channel']},register(ctx){ctx.registerChannel({type:'whatsapp',name:'X',capabilities:cap,create:()=>({type:'whatsapp',capabilities:cap,connect:async()=>{},disconnect:async()=>{},send:async(c)=>({ref:'1',chatId:c})})});}};`
   );
 
-  const cfg = await loadConfig(paths.config);
+  const cfg = await loadConfig(paths);
   if (!cfg) throw new Error('config missing');
   cfg.model.providers = [{ id: 'review-provider', label: 'Review Provider', type: ModelProviderType.OpenAICompatible }];
   cfg.model.profiles = [
@@ -99,7 +99,7 @@ export default {manifest:{name:'wa',version:'1.0.0',sdkVersion:'0',atoms:['chann
   ];
   cfg.model.default = 'review';
   cfg.skills.installReview = true;
-  await saveAll(paths.config, paths.profile, cfg);
+  await saveAll(paths, cfg);
   await saveAuth(paths.auth, {
     version: 1,
     activeProvider: null,

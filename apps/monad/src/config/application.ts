@@ -1,7 +1,7 @@
-import type { MonadConfig, MonadPaths } from '@monad/home';
+import type { MonadConfig, MonadPaths } from '@monad/environment';
 import type { Logger } from '@monad/logger';
 import type { ChannelService } from '#/channels/channel.ts';
-import type { ConfigSnapshot } from '#/config/service.ts';
+import type { ConfigSnapshot } from '#/config/manager.ts';
 import type { AtomPackRegistry } from '#/handlers/atom-pack/index.ts';
 import type { HookConfig } from '#/hooks/runner.ts';
 import type { EmbeddingIndexer } from '#/services/embedding-indexer.ts';
@@ -9,14 +9,14 @@ import type { AgentPersonaService } from '#/services/generation/agent-persona.ts
 import type { I18nService } from '#/services/i18n.ts';
 import type { Store } from '#/store/db/index.ts';
 
-import { emptyAuth } from '@monad/home';
+import { emptyAuth } from '@monad/environment';
 
 import { applyAcpDelegateTool } from '#/agent/delegation/acp-tool.ts';
 import { configureToolBackends } from '#/capabilities/tools/configure-backends.ts';
 import { acpAgentCandidatesFromAdapters } from '#/services/delegation/presets.ts';
 import { configureDeveloperLogTransport } from '#/services/developer-log.ts';
 
-// Wire the configReloader hot-reload subscriber now that all services are in scope. The bus fires on both
+// Wire the ConfigManager hot-reload subscriber now that all services are in scope. The bus fires on both
 // file-watcher events (disk edits) and in-process commit() calls (settings API).
 export function createHotReload(deps: {
   paths: MonadPaths;

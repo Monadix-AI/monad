@@ -42,7 +42,7 @@ packages/home/config.init.json
 packages/home/dev-seed.project-live-stream.json
 
 # generated
-config.schema.json
+packages/environment/*.schema.json
 apps/monad/generated/licenses.json
 packages/i18n/src/catalog-types.ts
 packages/i18n/generated/

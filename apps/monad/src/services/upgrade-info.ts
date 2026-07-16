@@ -1,4 +1,4 @@
-import type { MonadPaths } from '@monad/home';
+import type { MonadPaths } from '@monad/environment';
 
 import { join } from 'node:path';
 import { MONAD_VERSION } from '@monad/protocol';

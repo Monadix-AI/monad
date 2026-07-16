@@ -2,25 +2,26 @@ import { expect, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createDefaultConfig, saveAll } from '@monad/home';
-import { newId } from '@monad/protocol';
+import { createDefaultConfig, saveAll } from '@monad/environment';
 
 import { createAgentContext } from '#/handlers/settings/agent/context.ts';
 import { createAgentHandlers } from '#/handlers/settings/agent/handlers.ts';
+import { stubConfigAccess } from '../../helpers.ts';
 
 function makeHandlers() {
   const dir = mkdtempSync(join(tmpdir(), 'monad-agent-test-'));
   const configPath = join(dir, 'config.json');
-  const cfg = createDefaultConfig('prn_test00000000', 'test');
+  const cfg = createDefaultConfig('test');
   // Write initial config synchronously via Bun for simplicity
   const ctx = createAgentContext({
+    config: stubConfigAccess(cfg),
     paths: {
       home: dir,
       logs: join(dir, 'logs'),
       runtime: dir,
       configs: dir,
-      profile: join(dir, 'profile.json'),
-      sandbox: join(dir, 'sandbox.json'),
+      agentsConfig: join(dir, 'agents.json'),
+      mesh: join(dir, 'mesh.json'),
       approvals: join(dir, 'approvals.json'),
       dbDir: dir,
       db: join(dir, 'db'),
@@ -46,19 +47,17 @@ function makeHandlers() {
       pid: join(dir, 'monad.pid')
     }
   });
-  const principalId = newId('prn');
   return {
-    handlers: createAgentHandlers(ctx, principalId),
-    configPath,
-    profilePath: join(dir, 'profile.json'),
+    handlers: createAgentHandlers(ctx),
+    paths: ctx.paths,
     cfg,
     cleanup: () => rmSync(dir, { recursive: true, force: true })
   };
 }
 
 test('listAgents: empty on fresh config', async () => {
-  const { handlers, cfg, configPath, profilePath, cleanup } = makeHandlers();
-  await saveAll(configPath, profilePath, cfg);
+  const { handlers, cfg, paths, cleanup } = makeHandlers();
+  await saveAll(paths, cfg);
   try {
     const result = await handlers.listAgents();
     expect(result.agents).toHaveLength(0);
@@ -68,8 +67,8 @@ test('listAgents: empty on fresh config', async () => {
 });
 
 test('createAgent: generates agt_ id and persists', async () => {
-  const { handlers, cfg, configPath, profilePath, cleanup } = makeHandlers();
-  await saveAll(configPath, profilePath, cfg);
+  const { handlers, cfg, paths, cleanup } = makeHandlers();
+  await saveAll(paths, cfg);
   try {
     const result = await handlers.createAgent({ name: 'My Agent', capabilities: [] });
     expect(result.agent.id).toMatch(/^agt_/);
@@ -82,8 +81,8 @@ test('createAgent: generates agt_ id and persists', async () => {
 });
 
 test('getAgent: 404 for unknown id', async () => {
-  const { handlers, cfg, configPath, profilePath, cleanup } = makeHandlers();
-  await saveAll(configPath, profilePath, cfg);
+  const { handlers, cfg, paths, cleanup } = makeHandlers();
+  await saveAll(paths, cfg);
   try {
     await expect(handlers.getAgent({ agentId: 'agt_UNKNOWN00000' as never })).rejects.toThrow();
   } finally {
@@ -92,8 +91,8 @@ test('getAgent: 404 for unknown id', async () => {
 });
 
 test('setDefaultAgent then deleteAgent clears defaultAgentId', async () => {
-  const { handlers, cfg, configPath, profilePath, cleanup } = makeHandlers();
-  await saveAll(configPath, profilePath, cfg);
+  const { handlers, cfg, paths, cleanup } = makeHandlers();
+  await saveAll(paths, cfg);
   try {
     const { agent } = await handlers.createAgent({ name: 'A', capabilities: [] });
     await handlers.setDefaultAgent({ agentId: agent.id });

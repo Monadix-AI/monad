@@ -1,4 +1,4 @@
-import type { MonadPaths } from '@monad/home';
+import type { MonadPaths } from '@monad/environment';
 import type { Logger } from '@monad/logger';
 import type {
   EnvDepsStatusResponse,
@@ -10,7 +10,7 @@ import type {
 
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { computeInitStatus, initMonadHome, loadAll, loadAuth, setMonadRoot } from '@monad/home';
+import { computeInitStatus, initMonadHome, loadAll, loadAuth, pathsForHome, setMonadRoot } from '@monad/environment';
 
 import { HandlerError } from '#/handlers/handler-error.ts';
 import { installEnvDeps } from '#/infra/env-deps.ts';
@@ -22,7 +22,7 @@ export function createInitHandlers(paths: MonadPaths, mockMode: boolean, log: Lo
   return {
     async status(): Promise<GetInitStatusResponse> {
       if (mockMode) return { initialized: true, missing: [], homePath: paths.home };
-      const cfg = await loadAll(paths.config, paths.profile);
+      const cfg = await loadAll(paths);
       const auth = cfg ? await loadAuth(paths.auth) : null;
       const status = cfg
         ? computeInitStatus(cfg, auth)
@@ -31,34 +31,14 @@ export function createInitHandlers(paths: MonadPaths, mockMode: boolean, log: Lo
     },
     async setHome(newPath: string): Promise<OkResponse> {
       // Only allowed before initialization is complete.
-      const cfg = await loadAll(paths.config, paths.profile);
+      const cfg = await loadAll(paths);
       const auth = cfg ? await loadAuth(paths.auth) : null;
       const status = cfg ? computeInitStatus(cfg, auth) : { initialized: false, missing: [] };
       if (status.initialized) {
         throw new HandlerError('conflict', 'Already initialized — run monad reset to start over');
       }
       await setMonadRoot(newPath);
-      await initMonadHome({
-        ...paths,
-        home: newPath,
-        configs: `${newPath}/configs`,
-        config: `${newPath}/configs/config.json`,
-        profile: `${newPath}/configs/profile.json`,
-        credentials: `${newPath}/credentials`,
-        auth: `${newPath}/credentials/auth.json`,
-        tls: `${newPath}/credentials/tls`,
-        workspace: `${newPath}/agents/default`,
-        providers: `${newPath}/atoms/providers`,
-        skills: `${newPath}/atoms/skills`,
-        atoms: `${newPath}/atoms`,
-        agents: `${newPath}/agents`,
-        cache: `${newPath}/cache`,
-        runtime: `${newPath}/runtime`,
-        db: `${newPath}/runtime/monad.sqlite`,
-        sock: `${newPath}/runtime/monad.sock`,
-        kvSock: `${newPath}/runtime/kv.sock`,
-        pid: `${newPath}/runtime/monad.pid`
-      });
+      await initMonadHome(pathsForHome(newPath));
       // Spawn detached so the child outlives this process.
       const proc = Bun.spawn(process.argv, { detached: true, stdio: ['ignore', 'ignore', 'ignore'] });
       proc.unref();

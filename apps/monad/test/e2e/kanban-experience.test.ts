@@ -1,4 +1,4 @@
-import type { PrincipalId, ProjectId } from '@monad/protocol';
+import type { ProjectId } from '@monad/protocol';
 
 import { expect, test } from 'bun:test';
 import { monadPowerPack } from '@monad/monad-power-pack';
@@ -9,7 +9,6 @@ import { createStore } from '#/store/db/index.ts';
 import { createHttpTransport } from '#/transports/http.ts';
 import { buildHandlers, mockModel, serveTransport } from '../helpers.ts';
 
-const ownerPrincipalId = 'prn_kanbanowner' as PrincipalId;
 const projectId = 'prj_kanbanproj1' as ProjectId;
 
 async function harness() {
@@ -32,7 +31,6 @@ async function harness() {
   store.insertWorkplaceProject({
     id: projectId,
     title: 'Kanban project',
-    ownerPrincipalId,
     state: 'active',
     archived: false,
     memberTemplates: [],
@@ -41,7 +39,6 @@ async function harness() {
   });
   const handlers = buildHandlers(mockModel(), undefined, {
     store,
-    ownerPrincipalId,
     getWorkspaceExperienceApiRoute: (experienceId, method, path) =>
       registry.getWorkspaceExperienceApiRoute(experienceId, method, path),
     getExperienceWorkers: () => [...registry.experienceWorkers.values()]

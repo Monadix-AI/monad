@@ -62,7 +62,7 @@ function oaiErrorResponse(message: string, status = 400, type = 'invalid_request
 
 function disabled404(): Response {
   return oaiErrorResponse(
-    'OpenAI-compat API is disabled. Set openaiCompat.enabled=true in profile.json.',
+    'OpenAI-compat API is disabled. Set openaiCompat.enabled=true in config.json.',
     404,
     'api_error',
     'disabled'
@@ -226,7 +226,7 @@ export function createOpenAiCompatController(
     // than silently exposing an unauthenticated agent-driving endpoint.
     if (!config.token) {
       return oaiErrorResponse(
-        'OpenAI-compat API requires a token. Set openaiCompat.token in profile.json.',
+        'OpenAI-compat API requires a token. Set openaiCompat.token in config.json.',
         401,
         'api_error',
         'unauthorized'

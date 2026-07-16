@@ -16,13 +16,11 @@ test('setActiveSession binds a conversation and records history', () => {
     channelId: 'chn_A00000000000',
     conversationKey: 'chn_A00000000000|chat1',
     sessionId: 'ses_100000000000',
-    principalId: 'prn_A00000000000',
     label: 'first'
   });
 
   const conv = store.getActiveConversation('chn_A00000000000', 'chn_A00000000000|chat1');
   expect(conv?.activeSessionId).toBe('ses_100000000000');
-  expect(conv?.principalId).toBe('prn_A00000000000');
 
   const sessions = store.listConversationSessions('chn_A00000000000', 'chn_A00000000000|chat1');
   expect(sessions.map((s) => s.sessionId)).toEqual(['ses_100000000000']);
@@ -34,14 +32,12 @@ test('repointing keeps history and updates the active pointer (/new, /switch)', 
   store.setActiveSession({
     channelId: 'chn_A00000000000',
     conversationKey: 'k',
-    sessionId: 'ses_100000000000',
-    principalId: 'prn_A00000000000'
+    sessionId: 'ses_100000000000'
   });
   store.setActiveSession({
     channelId: 'chn_A00000000000',
     conversationKey: 'k',
-    sessionId: 'ses_200000000000',
-    principalId: 'prn_A00000000000'
+    sessionId: 'ses_200000000000'
   });
 
   expect(store.getActiveConversation('chn_A00000000000', 'k')?.activeSessionId).toBe('ses_200000000000'); // pointer moved
@@ -55,8 +51,7 @@ test('repointing keeps history and updates the active pointer (/new, /switch)', 
   store.setActiveSession({
     channelId: 'chn_A00000000000',
     conversationKey: 'k',
-    sessionId: 'ses_100000000000',
-    principalId: 'prn_A00000000000'
+    sessionId: 'ses_100000000000'
   });
   expect(store.getActiveConversation('chn_A00000000000', 'k')?.activeSessionId).toBe('ses_100000000000');
   expect(store.listConversationSessions('chn_A00000000000', 'k').length).toBe(2);
@@ -67,20 +62,17 @@ test('distinct conversations are counted per channel and isolated', () => {
   store.setActiveSession({
     channelId: 'chn_A00000000000',
     conversationKey: 'k1',
-    sessionId: 'ses_100000000000',
-    principalId: 'prn_A00000000000'
+    sessionId: 'ses_100000000000'
   });
   store.setActiveSession({
     channelId: 'chn_A00000000000',
     conversationKey: 'k2',
-    sessionId: 'ses_200000000000',
-    principalId: 'prn_A00000000000'
+    sessionId: 'ses_200000000000'
   });
   store.setActiveSession({
     channelId: 'chn_B00000000000',
     conversationKey: 'k1',
-    sessionId: 'ses_300000000000',
-    principalId: 'prn_B00000000000'
+    sessionId: 'ses_300000000000'
   });
 
   expect(store.countActiveConversations('chn_A00000000000')).toBe(2);
@@ -94,8 +86,7 @@ test('touchConversation advances last_seen_at without changing the session', () 
   store.setActiveSession({
     channelId: 'chn_A00000000000',
     conversationKey: 'k',
-    sessionId: 'ses_100000000000',
-    principalId: 'prn_A00000000000'
+    sessionId: 'ses_100000000000'
   });
   // biome-ignore lint/style/noNonNullAssertion: just set above
   const before = store.getActiveConversation('chn_A00000000000', 'k')!;

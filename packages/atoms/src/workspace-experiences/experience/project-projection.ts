@@ -46,7 +46,7 @@ export const initials = (name: string): string =>
     .slice(0, 2)
     .toUpperCase() || name.slice(0, 2).toUpperCase();
 
-export const avatarForAgent = (name: string): string => (name === 'monad' ? 'MO' : initials(name));
+export const avatarForAgent = (name: string): string => (name === 'monad' || name === 'Monad' ? 'MO' : initials(name));
 
 export const fmtTime = (iso?: string): string => {
   if (!iso) return '';
@@ -75,7 +75,7 @@ export function externalAgentApprovalName(provider: ExternalAgentProvider | stri
 }
 
 export function iconForAgent(name: string): Participant['icon'] | undefined {
-  if (name === 'monad') return 'monad';
+  if (name === 'monad' || name === 'Monad') return 'monad';
   return undefined;
 }
 
@@ -277,8 +277,8 @@ export function projectMemberCandidates(args: {
           {
             id: 'monad',
             type: 'monad' as const,
-            name: 'monad',
-            label: 'monad',
+            name: 'Monad',
+            label: 'Monad',
             tag: 'AI',
             enabled: true,
             modelOptions: [],

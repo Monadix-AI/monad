@@ -2,7 +2,7 @@
   "name": "@monad/utils",
   "version": "0.0.0",
   "devDependencies": {
-    "@monad/config": "workspace:*"
+    "@monad/tsconfig": "workspace:*"
   },
   "exports": {
     ".": "./src/index.ts"

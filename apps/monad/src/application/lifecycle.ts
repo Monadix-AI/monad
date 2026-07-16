@@ -1,6 +1,5 @@
 import type { SessionId } from '@monad/protocol';
 
-import { loadAll, loadAuth, saveProfile } from '@monad/home';
 import { createLogger } from '@monad/logger';
 import { newId } from '@monad/protocol';
 
@@ -46,11 +45,9 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
   const {
     dataLayer,
     cfg,
-    ownerPrincipalId,
     watchService,
     runtime,
     reloadTargets,
-    configReloader,
     sandbox,
     model,
     capabilities,
@@ -71,7 +68,8 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     network: cfg.network,
     initialOpenAiCompat: cfg.openaiCompat,
     paths,
-    env: Bun.env
+    env: Bun.env,
+    loadConfig: async () => runtime.config.get().cfg
   });
   const { endpoint, remoteAccess } = networkRuntime;
   const PORT = endpoint.port;
@@ -102,7 +100,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
 
   const rediscoverAtomPacks = createAtomPackRediscoverer({
     paths,
-    fallbackAtomPins: cfg.atomPins,
+    config: runtime.config,
     atomConflicts,
     atomDetailsByPack,
     commandRegistry,
@@ -120,9 +118,9 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
 
   const { getMcpStatus, mcpAuthorize, mcpReconnect } = createMcpControls({
     paths,
-    cfg,
     registry,
     logger,
+    config: runtime.config,
     getConfigMcp: () => mcpRuntime.config,
     setConfigMcp: (v) => {
       mcpRuntime.replaceConfig(v);
@@ -149,7 +147,6 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     agent,
     bus,
     cache,
-    ownerPrincipalId,
     paths,
     memoryService,
     graphStore,
@@ -181,7 +178,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     clarify,
     channelService,
     localeService: i18nService,
-    configReloader,
+    configManager: runtime.config,
     commands: commandBundle,
     connectObscura,
     disconnectObscura,
@@ -291,16 +288,14 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     agentId: string,
     published: { providerId: string; publishedAt: string } | undefined
   ) => {
-    const live = await loadAll(paths.config, paths.profile);
-    const target = live?.agent.agents.find((a) => a.id === agentId);
-    if (!live || !target) return;
-    target.published = published;
-    await saveProfile(paths.profile, live);
-    if (configReloader) await configReloader.publish({ cfg: live, auth: await loadAuth(paths.auth) });
+    await runtime.config.updateConfig((live) => {
+      const target = live.agent.agents.find((a) => a.id === agentId);
+      if (target) target.published = published;
+    });
   };
   const monadixManager = createMonadixProviderManager({
     getConfig: () => runtime.config.get().cfg.monadix,
-    getToken: async () => (await loadAuth(paths.auth))?.mcpOAuth?.monadix?.accessToken,
+    getToken: async () => runtime.config.get().auth?.mcpOAuth?.monadix?.accessToken,
     runnerFor: (agentId) => createMonadixTaskRunner({ handlers, agentId, logger }),
     persistProviderId: (agentId, providerId) =>
       setAgentPublished(agentId, { providerId, publishedAt: new Date().toISOString() }),

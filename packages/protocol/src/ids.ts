@@ -4,7 +4,6 @@
 
 import { z } from 'zod';
 
-export type PrincipalId = `prn_${string}`;
 export type AgentId = `agt_${string}`;
 export type SessionId = `ses_${string}`;
 export type ProjectId = `prj_${string}`;
@@ -31,7 +30,6 @@ export function prefixedIdSchema<T extends string>(prefix: string): z.ZodType<T>
   return z.string().regex(new RegExp(`^${prefix}_${ID_BODY_PATTERN}$`)) as unknown as z.ZodType<T>;
 }
 
-export const principalIdSchema: z.ZodType<PrincipalId> = prefixedIdSchema<PrincipalId>('prn');
 export const agentIdSchema: z.ZodType<AgentId> = prefixedIdSchema<AgentId>('agt');
 export const sessionIdSchema: z.ZodType<SessionId> = prefixedIdSchema<SessionId>('ses');
 export const projectIdSchema: z.ZodType<ProjectId> = prefixedIdSchema<ProjectId>('prj');

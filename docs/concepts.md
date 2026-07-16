@@ -1,6 +1,6 @@
 # Monad — Product Concepts
 
-A reference glossary of every first-class concept in monad, organized by layer. Read this before diving into any feature area; each entry cross-links the deeper doc where one exists.
+A reference glossary of every first-class concept in Monad, organized by layer. Read this before diving into any feature area; each entry cross-links the deeper doc where one exists.
 
 ---
 
@@ -186,7 +186,7 @@ Atom packs are installed under `~/.monad/atoms/` and managed via `monad atoms` /
 
 ### Skill
 
-A portable, filesystem-based capability packet. A skill is a directory under `~/.monad/skills/` (or `~/.monad/workspace/skills/`) containing a `SKILL.md` with YAML frontmatter and free-prose instructions. Skills extend the agent with domain knowledge and procedures **without paying token cost until needed** — they are lazily loaded into context when invoked by `/name` or by the model. monad implements the [agentskills.io](https://agentskills.io) open standard (`SKILL.md`), a portable format shared across the agent ecosystem.
+A portable, filesystem-based capability packet. A skill is a directory under `~/.monad/skills/` (or `~/.monad/workspace/skills/`) containing a `SKILL.md` with YAML frontmatter and free-prose instructions. Skills extend the agent with domain knowledge and procedures **without paying token cost until needed** — they are lazily loaded into context when invoked by `/name` or by the model. Monad implements the [agentskills.io](https://agentskills.io) open standard (`SKILL.md`), a portable format shared across the agent ecosystem.
 
 Skills can declare eligibility gates (`requires`), workspace activation globs (`paths`), allowed tools (`allowed-tools`), and a fork mode (`context: fork`) that runs the skill as an isolated subagent at a chosen capability tier.
 
@@ -200,7 +200,7 @@ See [`docs/internals/realtime-channels.md`](internals/realtime-channels.md).
 
 ### Provider
 
-A model backend monad can route requests to. Each provider is one entry in `PROVIDER_CATALOG` and uses one of two strategies:
+A model backend Monad can route requests to. Each provider is one entry in `PROVIDER_CATALOG` and uses one of two strategies:
 
 - **native** — a dedicated AI SDK package (Anthropic, OpenAI, OpenRouter, Google, Mistral, Amazon Bedrock, Azure OpenAI).
 - **openai-compatible** — a preset pointed at a known base URL (Groq, xAI, DeepSeek, Ollama, and ~15 others), with zero extra dependencies.
@@ -227,7 +227,7 @@ A two-layer builder for authoring custom agents and capabilities: a **capability
 
 ### Peer Federation
 
-Daemon-to-daemon task delegation between monad instances owned by the **same person** (e.g. home node ↔ work laptop). The `agent_peer_delegate` tool routes a subtask to a named peer daemon over its OpenAI-compatible HTTP endpoint; the peer runs a full agent session on its own filesystem and credentials and streams the answer back. Peers are configured in `config.json` with credentials in `auth.json`.
+Daemon-to-daemon task delegation between Monad instances owned by the **same person** (e.g. home node ↔ work laptop). The `agent_peer_delegate` tool routes a subtask to a named peer daemon over its OpenAI-compatible HTTP endpoint; the peer runs a full agent session on its own filesystem and credentials and streams the answer back. Peers are configured in `config.json` with credentials in `auth.json`.
 
 Cross-owner collaboration (different people, independent trust) is **Monadix** territory, not peer federation.
 
@@ -235,7 +235,7 @@ See [`docs/internals/peer-federation.md`](internals/peer-federation.md).
 
 ### Monadix
 
-The cross-owner collaboration network. Where peer federation is same-person multi-machine, Monadix is A2A (agent-to-agent) across independent users and trust boundaries — with its own billing, routing, and identity model. monad integrates with the Monadix network via the `monadix` MCP connector.
+The cross-owner collaboration network. Where peer federation is same-person multi-machine, Monadix is A2A (agent-to-agent) across independent users and trust boundaries — with its own billing, routing, and identity model. Monad integrates with the Monadix network via the `monadix` MCP connector.
 
 ---
 
@@ -245,7 +245,7 @@ The interfaces through which humans and editors interact with the daemon.
 
 ### ACP (Agent Client Protocol)
 
-The editor integration protocol. `monad acp` is a thin bridge: the editor spawns it over stdio, and it proxies to the already-running daemon over the local Unix socket. Editor sessions appear in the web UI and TUI and share one store, model config, and ledger. monad also acts as an ACP **client**, delegating subtasks to other ACP agents via the `agent_acp_delegate` tool.
+The editor integration protocol. `monad acp` is a thin bridge: the editor spawns it over stdio, and it proxies to the already-running daemon over the local Unix socket. Editor sessions appear in the web UI and TUI and share one store, model config, and ledger. Monad also acts as an ACP **client**, delegating subtasks to other ACP agents via the `agent_acp_delegate` tool.
 
 See [`docs/internals/acp.md`](internals/acp.md).
 
@@ -257,7 +257,7 @@ See [`docs/usage/mo.md`](usage/mo.md).
 
 ### Workplace
 
-A project-scoped multi-agent collaboration workspace in the web UI, reachable at `/workplace/projects/:projectId`. Each Workplace is backed by a monad session (stored as `"Workplace: <slug>"`); within it the user can invite ACP agents as participants, issue directives, watch a live activity log of tool calls, manage an approval queue, and view a shared chat transcript. Components: `ProjectHeader`, `ProjectRail` (session list), `AgentTasksRail` (per-agent task status), `ChatTranscript`, `Composer`, `ActivityLog`, `ApprovalStack`.
+A project-scoped multi-agent collaboration workspace in the web UI, reachable at `/workplace/projects/:projectId`. Each Workplace is backed by a Monad session (stored as `"Workplace: <slug>"`); within it the user can invite ACP agents as participants, issue directives, watch a live activity log of tool calls, manage an approval queue, and view a shared chat transcript. Components: `ProjectHeader`, `ProjectRail` (session list), `AgentTasksRail` (per-agent task status), `ChatTranscript`, `Composer`, `ActivityLog`, `ApprovalStack`.
 
 Designed for operators running multiple agents in parallel on a shared task — each agent sees the same session context and can be approved or steered independently.
 

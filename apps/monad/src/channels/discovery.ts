@@ -2,7 +2,7 @@
 // packs, then merge into one registry. Generic over the per-call sinks (which wire providers/
 // commands into the daemon's registries) so both the boot build and the post-install reload share it.
 
-import type { MonadPaths } from '@monad/home';
+import type { MonadPaths } from '@monad/environment';
 
 import { logger } from '@monad/logger';
 

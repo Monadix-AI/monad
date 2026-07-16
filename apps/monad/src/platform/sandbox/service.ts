@@ -2,13 +2,13 @@
 // the ephemeral per-session sandbox service. Reads cfg + paths, applies the process-wide sandbox
 // policy as a side effect, and returns the three products the rest of startDaemon consumes.
 
-import type { MonadAuth, MonadConfig, MonadPaths, SandboxMode } from '@monad/home';
+import type { MonadAuth, MonadConfig, MonadPaths, SandboxMode } from '@monad/environment';
 import type { Store } from '#/store/db/index.ts';
 import type { SessionSandboxService } from '../../services/session-sandbox.ts';
 
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { emptyAuth, loadAuth } from '@monad/home';
+import { emptyAuth } from '@monad/environment';
 import { logger } from '@monad/logger';
 import {
   caTrustEnv,
@@ -254,7 +254,8 @@ export async function createSandbox(
 export async function finalizeSandboxLauncher(
   cfg: MonadConfig,
   platform: NodeJS.Platform = process.platform,
-  paths?: MonadPaths
+  paths?: MonadPaths,
+  auth = emptyAuth()
 ): Promise<void> {
   if (!cfg.sandbox.confine) return; // createSandbox already set noneLauncher
 
@@ -263,7 +264,6 @@ export async function finalizeSandboxLauncher(
   if (requestedRef.source === 'builtin' && requestedRef.kind === 'vm' && launcher.kind === 'vm') {
     await configureVmBackendFromConfig(cfg, paths);
   }
-  const auth = paths ? ((await loadAuth(paths.auth)) ?? emptyAuth()) : emptyAuth();
   try {
     await prepareSandboxCandidate(requestedRef, launcher, { cfg, auth });
   } catch (error) {

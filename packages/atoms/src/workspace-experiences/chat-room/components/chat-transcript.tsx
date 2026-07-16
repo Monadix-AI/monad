@@ -96,7 +96,7 @@ export function ChatTranscript({
               }}
             >
               <span
-                aria-label="monad"
+                aria-label="Monad"
                 role="img"
                 style={{
                   width: '52%',
@@ -127,7 +127,7 @@ export function ChatTranscript({
                 }}
               >
                 Connect an external agent in Studio, then bring it into this room. You can also spawn a project-local
-                member when you want monad to manage the session.
+                member when you want Monad to manage the session.
               </div>
             </div>
           </div>

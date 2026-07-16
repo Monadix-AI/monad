@@ -51,7 +51,7 @@ monad restart                restart the daemon
 monad status                 check whether the daemon is running
 monad logs [-f] [-n <lines>] show the daemon log (-f to follow, default 200 lines)
 monad doctor                 diagnose configuration, connection, and version problems
-monad version                print the monad version
+monad version                print the Monad version
 monad upgrade [rollback]     check for and apply updates; rollback reverts the last one
 monad tls <renew|show|trust> manage the daemon TLS certificate
 monad pair                   enable remote access and print a QR code for mobile pairing
@@ -69,7 +69,7 @@ monad config <get|set|list|path|edit> [key] [value]  read or write configuration
 monad import settings|doctor --from <source> --path <path> [--apply]
                                                   preview or import settings from Codex, Claude Code, Hermes, or OpenClaw
 monad reset <sessions|config|auth|usage|all>      selectively reset parts of the system
-monad purge                                       wipe and rebuild monad home (destructive; double confirmation)
+monad purge                                       wipe and rebuild Monad home (destructive; double confirmation)
 monad completion <bash|zsh|fish|install>          output a shell completion script
 monad licenses                                    list third-party package licenses
 ```

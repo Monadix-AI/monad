@@ -62,7 +62,7 @@
       "entry": ["src/**/*.ts"],
       "bun": { "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"] }
     },
-    "packages/config": {},
+    "packages/tsconfig": {},
     // Spawned by credential-materializer.ts through its runtime-resolved file path.
     "packages/sandbox": {
       "entry": ["src/credential-regex-worker.ts"],

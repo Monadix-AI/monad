@@ -151,7 +151,7 @@ export function addModelItems(
       'modelProviders',
       `${sourcePath}:model.provider`,
       providerId,
-      `${provider} provider maps to monad model provider`,
+      `${provider} provider maps to Monad model provider`,
       {
         kind: 'modelProvider',
         provider: { id: providerId, label: providerId, type: providerType }
@@ -163,7 +163,7 @@ export function addModelItems(
       'modelProfiles',
       `${sourcePath}:model.default`,
       `${provider}-${sanitizeId(modelId)}`,
-      `${provider} default model maps to a monad model profile`,
+      `${provider} default model maps to a Monad model profile`,
       {
         kind: 'modelProfile',
         profile: {
@@ -190,7 +190,7 @@ export function addChannelItems(
     const tokenEnv = asString(raw.token_env) ?? asString(raw.tokenEnv);
     const id = `chn_${sanitizeId(`${provider}-${name}`).replace(/-/g, '_')}`;
     items.push(
-      previewItem('channels', `${sourcePath}:channels.${name}`, id, `${provider} channel maps to a monad channel`, {
+      previewItem('channels', `${sourcePath}:channels.${name}`, id, `${provider} channel maps to a Monad channel`, {
         kind: 'channel',
         channel: {
           id,
@@ -216,7 +216,7 @@ export function addMonadAgentItem(
   const name = asString(agent.name) ?? `${provider}-agent`;
   const prompt = asString(agent.prompt) ?? asString(agent.system_prompt) ?? `Use ${provider} imported behavior.`;
   items.push(
-    previewItem('agents', `${sourcePath}:agent`, name, `${provider} agent persona maps to a monad agent`, {
+    previewItem('agents', `${sourcePath}:agent`, name, `${provider} agent persona maps to a Monad agent`, {
       kind: 'agent',
       name,
       prompt,

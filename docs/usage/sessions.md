@@ -1,6 +1,6 @@
 # Sessions, agents, and approvals
 
-How to work with monad's core objects day to day: create and continue sessions,
+How to work with Monad's core objects day to day: create and continue sessions,
 branch and rewind them, answer approval requests, and choose which agent handles a
 conversation. For one-paragraph definitions of each concept, see
 [concepts.md](../concepts.md); this guide is the operational view.
@@ -103,7 +103,7 @@ monad approvals clear [--scope <s>] [--agent <id>]
 ```
 
 Native CLI agents run their own approval
-prompts; monad only decides whether those run unattended or are relayed to you —
+prompts; Monad only decides whether those run unattended or are relayed to you —
 see [native-cli-approvals.md](native-cli-approvals.md).
 
 ## Agents

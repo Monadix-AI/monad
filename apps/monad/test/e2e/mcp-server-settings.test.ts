@@ -2,13 +2,13 @@
 // (TCP loopback + Unix socket). Asserts CRUD works, persists to config.json (mcpServers is SYSTEM
 // config), and round-trips both the stdio and http variants of the discriminated union.
 
-import type { MonadPaths } from '@monad/home';
+import type { MonadPaths } from '@monad/environment';
 
 import { describe, expect, test } from 'bun:test';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { envRef, initMonadHome, loadAll, loadAuth, loadConfig } from '@monad/home';
+import { envRef, initMonadHome, loadAll, loadAuth, loadConfig } from '@monad/environment';
 
 import { ModelService } from '#/handlers/settings/model/index.ts';
 import { createHttpTransport } from '#/transports/http.ts';
@@ -86,11 +86,11 @@ async function runMcpServerCrud(call: Call, paths: MonadPaths): Promise<void> {
   expect(remote?.auth?.token).toBe(envRef('MCP_TOKEN'));
 
   // 4. persisted to config.json (SYSTEM config)
-  expect((await loadConfig(paths.config))?.mcpServers.find((s) => s.name === 'fs')).toMatchObject({
+  expect((await loadConfig(paths))?.mcpServers.find((s) => s.name === 'fs')).toMatchObject({
     transport: 'stdio',
     command: 'npx'
   });
-  expect((await loadAll(paths.config, paths.profile))?.mcpServers.length).toBe(2);
+  expect((await loadAll(paths))?.mcpServers.length).toBe(2);
 
   // 4b. GET single server round-trips its full spec
   res = await call('GET', '/v1/settings/mcp-servers/fs');
@@ -116,7 +116,7 @@ async function runMcpServerCrud(call: Call, paths: MonadPaths): Promise<void> {
   expect((await call('DELETE', '/v1/settings/mcp-servers/remote')).status).toBe(200);
   res = await call('GET', '/v1/settings/mcp-servers');
   expect(((await res.json()) as ServersBody).servers).toEqual([]);
-  expect((await loadConfig(paths.config))?.mcpServers).toEqual([]);
+  expect((await loadConfig(paths))?.mcpServers).toEqual([]);
 
   // 6b. DELETE an unknown (already-removed) server 404s
   expect((await call('DELETE', '/v1/settings/mcp-servers/fs')).status).toBe(404);
@@ -126,7 +126,7 @@ async function setup(): Promise<{ dir: string; paths: MonadPaths; app: ReturnTyp
   const dir = join(tmpdir(), `monad-mcpsettings-${process.pid}-${Date.now()}-${process.hrtime.bigint()}`);
   const paths = makePaths(dir);
   await initMonadHome(paths);
-  const cfg = await loadConfig(paths.config);
+  const cfg = await loadConfig(paths);
   if (!cfg) throw new Error('config missing after init');
   const modelService = new ModelService(paths.auth, cfg, await loadAuth(paths.auth), seededProviderRegistry());
   const app = createHttpTransport(buildHandlers(mockModel(), { paths, modelService }));

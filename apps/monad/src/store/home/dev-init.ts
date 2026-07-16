@@ -1,19 +1,27 @@
-import type { MonadPaths } from '@monad/home';
+import type { MonadPaths } from '@monad/environment';
 
 import { join, resolve } from 'node:path';
-import { type Credential, computeInitStatus, loadAll, loadAuth, saveAuth, saveProfile } from '@monad/home';
+import {
+  type Credential,
+  computeInitStatus,
+  loadAll,
+  loadAuth,
+  saveAgents,
+  saveAuth,
+  saveConfig
+} from '@monad/environment';
 import { channelIdSchema, ModelProviderType, newId } from '@monad/protocol';
 import { z } from 'zod';
 
-// Developer-specific seed parameters live in a gitignored `config.init.json` inside packages/home —
+// Developer-specific seed parameters live in a gitignored `config.init.json` inside packages/environment —
 // NEVER in the codebase. The repo only ships `config.init.json.template`; each developer copies it
 // to `config.init.json` and fills in their own provider / model / API key / bot token.
 const DEV_SEED_FILE = 'config.init.json';
 
-/** packages/home-relative path of the seed file. Resolves up from apps/monad/src/store/home/ to the repo
- *  root, then into packages/home/ where the template and gitignored seed file live. */
+/** packages/environment-relative path of the seed file. Resolves up from apps/monad/src/store/home/ to the repo
+ *  root, then into packages/environment/ where the template and gitignored seed file live. */
 export function defaultSeedPath(): string {
-  return join(resolve(import.meta.dir, '../../../../..', 'packages', 'home'), DEV_SEED_FILE);
+  return join(resolve(import.meta.dir, '../../../../..', 'packages', 'environment'), DEV_SEED_FILE);
 }
 
 const devSeedSchema = z.object({
@@ -89,7 +97,7 @@ export async function ensureDevProvider(
   const apiKey = (opts.apiKey ?? seed.apiKey ?? '').trim();
   if (!apiKey) return { seeded: false, reason: 'no-key' };
 
-  const cfg = await loadAll(paths.config, paths.profile);
+  const cfg = await loadAll(paths);
   if (!cfg) return { seeded: false, reason: 'no-config' };
 
   const auth = (await loadAuth(paths.auth)) ?? {
@@ -180,8 +188,7 @@ export async function ensureDevProvider(
     auth.channelCredentials[telegramChannelId] = { token: telegramToken };
   }
 
-  await saveProfile(paths.profile, cfg);
-  await saveAuth(paths.auth, auth);
+  await Promise.all([saveAgents(paths.agentsConfig, cfg), saveConfig(paths.config, cfg), saveAuth(paths.auth, auth)]);
 
   return { seeded: true, model };
 }

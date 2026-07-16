@@ -2,7 +2,7 @@ import type { CommandDef } from './types.ts';
 
 import { rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
-import { certExpiry, certFingerprint, getPaths, loadConfig, resolveClientConn } from '@monad/home';
+import { certExpiry, certFingerprint, getPaths, loadConfig, resolveClientConn } from '@monad/environment';
 import { MONAD_VERSION } from '@monad/protocol';
 
 import { dim, green, json, out, red, yellow } from '../lib/output.ts';
@@ -30,7 +30,7 @@ export const command: CommandDef = {
     // config.json present and valid.
     let transport: string | undefined;
     try {
-      const cfg = await loadConfig(paths.config);
+      const cfg = await loadConfig(paths);
       if (cfg) {
         transport = cfg.network.transport;
         checks.push({ name: 'config', ok: true, detail: paths.config });

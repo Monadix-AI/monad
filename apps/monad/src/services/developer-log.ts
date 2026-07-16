@@ -1,4 +1,4 @@
-import type { MonadPaths } from '@monad/home';
+import type { MonadPaths } from '@monad/environment';
 
 import { join } from 'node:path';
 import { setDeveloperLogTransport } from '@monad/logger';

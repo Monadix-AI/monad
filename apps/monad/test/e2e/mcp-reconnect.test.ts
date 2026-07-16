@@ -3,11 +3,11 @@
 // UNCHANGED server keeps its live connection untouched (no needless re-handshake), and a CHANGED
 // server is torn down + reconnected. This is what makes a config.json edit apply without a restart.
 
-import type { McpServerConfig, MonadPaths } from '@monad/home';
+import type { McpServerConfig, MonadPaths } from '@monad/environment';
 
 import { expect, test } from 'bun:test';
 import { join } from 'node:path';
-import { createDefaultConfig } from '@monad/home';
+import { createDefaultConfig } from '@monad/environment';
 
 import {
   collectMcpStatus,
@@ -26,8 +26,8 @@ const paths: MonadPaths = {
   dbDir: '/dev/null',
   db: '/dev/null',
   config: '/dev/null/config.json',
-  profile: '/dev/null/profile.json',
-  sandbox: '/dev/null/sandbox.json',
+  agentsConfig: '/dev/null/agents.json',
+  mesh: '/dev/null/mesh.json',
   approvals: '/dev/null/approvals.json',
   credentials: '/dev/null',
   auth: '/dev/null/auth.json',
@@ -61,7 +61,7 @@ const server = (name: string): McpServerConfig => ({
 });
 
 test('reloadConfigMcpServers diffs: add connects, remove clears tools, unchanged keeps the same connection', async () => {
-  const cfg = createDefaultConfig('prn_t00000000000', 't');
+  const cfg = createDefaultConfig('t');
   cfg.mcpServers = [server('a'), server('b')];
   const registry = new AtomPackRegistry();
   const handle = await connectMcpServers(cfg, paths, registry);
@@ -73,7 +73,7 @@ test('reloadConfigMcpServers diffs: add connects, remove clears tools, unchanged
   const connA = handle.connections.get('a')?.conn;
 
   // Hot-reload: keep 'a' (identical spec), drop 'b', add 'c'.
-  const next = createDefaultConfig('prn_t00000000000', 't');
+  const next = createDefaultConfig('t');
   next.mcpServers = [server('a'), server('c')];
   const handle2 = await reloadConfigMcpServers(handle.connections, next, paths, registry);
 
@@ -90,7 +90,7 @@ test('reloadConfigMcpServers diffs: add connects, remove clears tools, unchanged
 });
 
 test('collectMcpStatus reports ready / disabled / failed across config servers', async () => {
-  const cfg = createDefaultConfig('prn_t00000000000', 't');
+  const cfg = createDefaultConfig('t');
   cfg.mcpServers = [
     server('ok'),
     { ...server('off'), enabled: false },
@@ -122,7 +122,7 @@ test('collectMcpStatus reports ready / disabled / failed across config servers',
 });
 
 test('collectMcpStatus reports enabled config servers as starting before their handshake finishes', () => {
-  const cfg = createDefaultConfig('prn_t00000000000', 't');
+  const cfg = createDefaultConfig('t');
   cfg.mcpServers = [server('slow')];
 
   const status = collectMcpStatus({
@@ -146,7 +146,7 @@ test('collectMcpStatus reports enabled config servers as starting before their h
 });
 
 test('reloadConfigMcpServers reconnects a CHANGED server (new connection, tools re-registered)', async () => {
-  const cfg = createDefaultConfig('prn_t00000000000', 't');
+  const cfg = createDefaultConfig('t');
   cfg.mcpServers = [server('a')];
   const registry = new AtomPackRegistry();
   const handle = await connectMcpServers(cfg, paths, registry);
@@ -154,7 +154,7 @@ test('reloadConfigMcpServers reconnects a CHANGED server (new connection, tools 
   expect(registry.tools.has('a__echo')).toBe(true);
 
   // Edit 'a' (a content change → reconnect). requestTimeoutMs differs, so specEqual is false.
-  const next = createDefaultConfig('prn_t00000000000', 't');
+  const next = createDefaultConfig('t');
   next.mcpServers = [{ ...server('a'), requestTimeoutMs: 5000 }];
   const handle2 = await reloadConfigMcpServers(handle.connections, next, paths, registry);
 
@@ -166,7 +166,7 @@ test('reloadConfigMcpServers reconnects a CHANGED server (new connection, tools 
 });
 
 test('reconnectOneMcpServer updates status when a previously ready server is refused', async () => {
-  const cfg = createDefaultConfig('prn_t00000000000', 't');
+  const cfg = createDefaultConfig('t');
   cfg.mcpServers = [server('a')];
   const registry = new AtomPackRegistry();
   const handle = await connectMcpServers(cfg, paths, registry);
@@ -174,7 +174,7 @@ test('reconnectOneMcpServer updates status when a previously ready server is ref
   expect(handle.connections.has('a')).toBe(true);
   expect(handle.status.get('a')?.state).toBe('ready');
 
-  const next = createDefaultConfig('prn_t00000000000', 't');
+  const next = createDefaultConfig('t');
   next.mcpServers = [
     {
       ...server('a'),

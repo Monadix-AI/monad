@@ -1,20 +1,23 @@
 // The atom packs handler module: install (default-deny consent) → list → remove, end-to-end over a
 // real temp ~/.monad/atoms using a local: source (no network).
 
-import type { MonadPaths } from '@monad/home';
+import type { MonadPaths } from '@monad/environment';
 
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { mkdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createDefaultConfig, loadAll, saveAll } from '@monad/home';
+import { createDefaultConfig, loadAll, saveAll } from '@monad/environment';
 
+import { ConfigManager } from '#/config/manager.ts';
 import { createAtomPacksModule } from '#/handlers/atom-pack/index.ts';
+import { createTestConfigManager } from '../helpers.ts';
 
 let base: string;
 let atomsDir: string;
 let stagedDir: string;
 let mod: ReturnType<typeof createAtomPacksModule>;
+let config: ConfigManager;
 const realFetch = globalThis.fetch;
 const realPath = process.env.PATH;
 
@@ -24,8 +27,8 @@ function paths(): MonadPaths {
     logs: join(base, 'logs'),
     runtime: base,
     configs: base,
-    profile: join(base, 'profile.json'),
-    sandbox: join(base, 'sandbox.json'),
+    agentsConfig: join(base, 'agents.json'),
+    mesh: join(base, 'mesh.json'),
     approvals: join(base, 'approvals.json'),
     config: join(base, 'config.json'),
     credentials: join(base, 'credentials'),
@@ -79,7 +82,9 @@ export default {manifest:{name:'wa',version:'1.0.0',sdkVersion:'0',atoms:['chann
     join(stagedDir, 'skills', 'summarize-changes', 'SKILL.md'),
     ['---', 'name: summarize-changes', 'description: Summarize changes.', '---', 'Summarize.'].join('\n')
   );
-  mod = createAtomPacksModule({ paths: paths() });
+  await saveAll(paths(), createDefaultConfig('Test User'));
+  config = await createTestConfigManager(paths());
+  mod = createAtomPacksModule({ paths: paths(), config });
 });
 afterEach(async () => {
   globalThis.fetch = realFetch;
@@ -119,6 +124,7 @@ test('install with consent → list → remove', async () => {
 test('listWorkspaceExperiences returns the daemon registry snapshot', async () => {
   const m = createAtomPacksModule({
     paths: paths(),
+    config,
     getWorkspaceExperiences: () => [
       {
         atomPackId: 'canvas-pack',
@@ -173,7 +179,7 @@ test('removeAtomPack rejects path-traversal names', async () => {
 test('disable hides an atom pack from discovery; enable restores it', async () => {
   const { discoverChannelAdapters } = await import('#/channels/discover.ts');
   const p = paths();
-  await saveAll(p.config, p.profile, createDefaultConfig('prn_test00000000', 'Test User'));
+  await saveAll(p, createDefaultConfig('Test User'));
   await mod.installAtomPack({ source: `local:${stagedDir}`, consent: true });
   await mkdir(join(atomsDir, 'packs', 'wa', 'skills', 'summarize-changes'), { recursive: true });
   await writeFile(
@@ -185,17 +191,18 @@ test('disable hides an atom pack from discovery; enable restores it', async () =
   await mod.setAtomPackEnabled({ name: 'wa', enabled: false });
   expect((await mod.listAtomPacks()).atomPacks.find((p) => p.name === 'wa')?.enabled).toBe(false);
   expect((await discoverChannelAdapters(join(atomsDir, 'packs'))).factories.has('whatsapp')).toBe(false); // skipped
-  expect((await loadAll(p.config, p.profile))?.skills.disabled).toContain('atom-pack:wa:summarize-changes');
+  expect((await loadAll(p))?.skills.disabled).toContain('atom-pack:wa:summarize-changes');
 
   await mod.setAtomPackEnabled({ name: 'wa', enabled: true });
   expect((await discoverChannelAdapters(join(atomsDir, 'packs'))).factories.has('whatsapp')).toBe(true);
-  expect((await loadAll(p.config, p.profile))?.skills.disabled).not.toContain('atom-pack:wa:summarize-changes');
+  expect((await loadAll(p))?.skills.disabled).not.toContain('atom-pack:wa:summarize-changes');
 });
 
 test('onChanged fires on install + remove (live re-discovery hook)', async () => {
   let calls = 0;
   const m = createAtomPacksModule({
     paths: paths(),
+    config,
     onChanged: async () => {
       calls += 1;
     }
@@ -212,6 +219,7 @@ test('disable and remove consult the active sandbox fallback guard before mutati
   const guarded: string[] = [];
   const m = createAtomPacksModule({
     paths: paths(),
+    config,
     sandboxActivation: {
       activateBackend: async (ref) => ({ requested: ref, effective: ref, status: 'active' }),
       ensurePackCanDeactivate: async (packId) => {
@@ -231,6 +239,7 @@ test('disable and remove consult the active sandbox fallback guard before mutati
 test('a failed sandbox fallback refuses active-pack disable before changing install state', async () => {
   const m = createAtomPacksModule({
     paths: paths(),
+    config,
     sandboxActivation: {
       activateBackend: async (ref) => ({ requested: ref, effective: ref, status: 'active' }),
       ensurePackCanDeactivate: async () => {

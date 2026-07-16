@@ -21,7 +21,6 @@ function fixtureSession(over: Partial<Session> = {}): Session {
   return {
     id: newId('ses'),
     title: 'room',
-    ownerPrincipalId: newId('prn'),
     state: 'active',
     agentIds: [],
     archived: false,
@@ -41,8 +40,7 @@ function lifecycleCtx() {
     store,
     agent: {} as Agent,
     bus: new EventBus(),
-    cache: new RoundCache(),
-    ownerPrincipalId: newId('prn')
+    cache: new RoundCache()
   });
   return { store, ctx, handlers: createLifecycleHandlers(ctx) };
 }

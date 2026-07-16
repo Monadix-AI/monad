@@ -148,7 +148,6 @@ async function installStudioIaApiMock(page: Page) {
               createdAt: '2026-07-03T00:00:00.000Z',
               cwd: '/tmp/mock-workplace',
               id: 'prj_mock00000000',
-              ownerPrincipalId: 'prn_mock00000000',
               state: 'ready',
               title: 'Mock Workplace',
               updatedAt: '2026-07-03T00:00:00.000Z'

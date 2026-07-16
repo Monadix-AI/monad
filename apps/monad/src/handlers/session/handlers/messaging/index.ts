@@ -67,7 +67,7 @@ function lastAgentMessageText(round: Event[]): string | null {
 
 export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingCommandDeps) {
   const {
-    deps: { agent, bus, cache, store, ownerPrincipalId, sessionSandbox, agentToolFilter, agentSandboxRoots, log },
+    deps: { agent, bus, cache, store, sessionSandbox, agentToolFilter, agentSandboxRoots, log },
     aborts,
     steers,
     runtime,
@@ -95,7 +95,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
     rt?.sandboxRoots ??
     (cwd ? [cwd] : sessionId.startsWith('ses_') ? agentSandboxRoots?.(sessionId as SessionId) : undefined);
 
-  const runner = cmd ? { store, bus, lifecycle: cmd.lifecycle, commands: cmd.commands, ownerPrincipalId } : null;
+  const runner = cmd ? { store, bus, lifecycle: cmd.lifecycle, commands: cmd.commands } : null;
 
   const managedExternalAgentDelivery = createManagedExternalAgentDelivery(ctx);
   const { deliverProjectMessageToManagedExternalAgentMembers, startManagedExternalAgentRuntimeWithRecovery } =

@@ -56,8 +56,6 @@ export interface AgentLoopDeps {
   defaultModel: string;
   /** Per-run generation parameter overrides supplied by the session. */
   generationParams?: GenerationParams;
-  /** Principal id for observability span attribution. In-process telemetry only. */
-  userId?: string;
   emit(event: Event): void;
   steers?: PendingSteerSource;
   sandboxRoots?: string[];
@@ -158,7 +156,7 @@ export interface ToolSearchConfig {
 /** Skill names a tier, not a model; the routing layer resolves it to a concrete model. */
 export type SkillTier = 'fast';
 
-/** Structurally a subset of @monad/home's Skill so the daemon can pass discovered skills through. */
+/** Structurally a subset of @monad/environment's Skill so the daemon can pass discovered skills through. */
 export interface LoadedSkill {
   name: string;
   description: string;

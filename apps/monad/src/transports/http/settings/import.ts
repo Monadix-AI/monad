@@ -12,7 +12,7 @@ export function createSettingsImportController(handlers: ReturnType<typeof creat
       response: c.preview.response,
       detail: {
         summary: 'Preview external settings import',
-        description: 'Parses a user-provided local file or directory and returns importable monad settings.'
+        description: 'Parses a user-provided local file or directory and returns importable Monad settings.'
       }
     })
     .post('/import/apply', async ({ body }) => handlers.settingsImport.apply(body), {

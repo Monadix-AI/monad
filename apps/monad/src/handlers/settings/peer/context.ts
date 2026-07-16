@@ -1,11 +1,10 @@
-import type { MonadAuth, MonadConfig, MonadPaths } from '@monad/home';
-import type { ConfigReloader } from '#/config/reloader.ts';
+import type { MonadAuth, MonadConfig } from '@monad/environment';
+import type { ConfigAccess } from '#/config/manager.ts';
 
-import { emptyAuth, loadAll, loadAuth, saveAuth, saveSystemConfig } from '@monad/home';
+import { emptyAuth } from '@monad/environment';
 
 export interface PeerDeps {
-  paths: MonadPaths;
-  configReloader?: ConfigReloader;
+  config: ConfigAccess;
 }
 
 export interface PeerSettingsContext {
@@ -15,21 +14,18 @@ export interface PeerSettingsContext {
   commit(cfg: MonadConfig, auth?: MonadAuth): Promise<void>;
 }
 
-export function createPeerContext({ paths, configReloader }: PeerDeps): PeerSettingsContext {
+export function createPeerContext({ config }: PeerDeps): PeerSettingsContext {
   async function read(): Promise<{ cfg: MonadConfig; auth: MonadAuth }> {
-    const cfg = await loadAll(paths.config, paths.profile);
-    if (!cfg) throw new Error('peer: config.json missing');
-    const auth = (await loadAuth(paths.auth)) ?? emptyAuth();
+    const { cfg, auth: storedAuth } = structuredClone(config.get());
+    const auth = storedAuth ?? emptyAuth();
     return { cfg, auth };
   }
 
   async function commit(cfg: MonadConfig, auth?: MonadAuth): Promise<void> {
-    await saveSystemConfig(paths.config, cfg);
-    if (auth) await saveAuth(paths.auth, auth);
-    if (configReloader) {
-      const resolvedAuth = auth ?? (await loadAuth(paths.auth)) ?? emptyAuth();
-      await configReloader.publish({ cfg, auth: resolvedAuth });
-    }
+    await config.update((draft) => {
+      draft.cfg = cfg;
+      if (auth) draft.auth = auth;
+    });
   }
 
   return { read, commit };

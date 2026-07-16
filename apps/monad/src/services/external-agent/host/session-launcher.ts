@@ -14,7 +14,7 @@ import type { ExternalAgentSessionRow } from '#/store/db/index.ts';
 
 import { chmodSync, realpathSync, statSync } from 'node:fs';
 import { dirname, isAbsolute } from 'node:path';
-import { resolveDaemonUrl } from '@monad/home';
+import { resolveDaemonUrl } from '@monad/environment';
 import { newId } from '@monad/protocol';
 
 import { daemonTrackedSpawnOptions, redactedSpawnArgv, supervisedSpawn } from '#/infra/spawn-supervisor.ts';

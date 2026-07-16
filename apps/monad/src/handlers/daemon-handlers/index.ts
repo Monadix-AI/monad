@@ -23,7 +23,6 @@ import type { EmbedResult, ModelMessage, ModelResult, ToolSpec } from '@monad/sd
 import type { DaemonHandlerDeps } from './handlers-deps.ts';
 
 import { join } from 'node:path';
-import { loadAll, loadAuth, saveProfile } from '@monad/home';
 import { DEFAULT_SKILL_MARKETPLACE_SOURCE, MONAD_VERSION } from '@monad/protocol';
 
 import { createProjectSessionOperations } from '#/atoms/experience-project-sessions.ts';
@@ -60,10 +59,11 @@ import { createStartupSettingsModule } from '#/handlers/settings/startup/index.t
 import { createToolBackendsModule } from '#/handlers/settings/tool-backends/index.ts';
 import { createSystemUpgradeModule } from '#/handlers/system-upgrade.ts';
 import { createTranscriptProjector } from '#/handlers/transcript/projector.ts';
-import { createFileSandboxActivationService } from '#/platform/sandbox/activation.ts';
+import { createConfigSandboxActivationService } from '#/platform/sandbox/activation.ts';
 import { resolveExternalAgentEnv } from '#/services/external-agent/env.ts';
 import { ExternalAgentHost } from '#/services/external-agent/host/index.ts';
 import { resolveExternalAgentManagedServerUrl } from '#/services/external-agent/host/session-launcher.ts';
+import { externalAgentConfigToView } from '#/services/external-agent/index.ts';
 import { managedProjectRuntimeWorkspace } from '#/services/external-agent/managed-project.ts';
 import licensesData from '../../../generated/licenses.json';
 import { createInitHandlers } from './handlers-init.ts';
@@ -82,7 +82,10 @@ export type { DaemonHandlerDeps } from './handlers-deps.ts';
 
 export function createDaemonHandlers(deps: DaemonHandlerDeps) {
   const { paths, mockMode = false } = deps;
-  const sandboxActivation = createFileSandboxActivationService(paths, deps.configReloader);
+  deps.modelService.setAuthPersistence(async (auth) => {
+    await deps.configManager.updateAuth(() => auth);
+  });
+  const sandboxActivation = createConfigSandboxActivationService(deps.configManager);
   const externalAgentHost = new ExternalAgentHost({
     store: deps.store,
     bus: deps.bus,
@@ -93,10 +96,9 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
     }),
     networkHttps: deps.networkHttps,
     agents: async () => {
-      const cfg = await loadAll(paths.config, paths.profile);
-      return cfg?.externalAgents ?? [];
+      return deps.configManager.get().cfg.externalAgents.map(externalAgentConfigToView);
     },
-    resolveAgentEnv: async (env) => resolveExternalAgentEnv(env, (await loadAuth(paths.auth)) ?? undefined),
+    resolveAgentEnv: async (env) => resolveExternalAgentEnv(env, deps.configManager.get().auth ?? undefined),
     externalAgentProcessRegistryPath: `${paths.runtime}/external-agent-processes.json`,
     authProcessRegistryPath: `${paths.runtime}/external-agent-auth-processes.json`,
     authHeartbeatTimeoutMs: deps.externalAgentAuthHeartbeatTimeoutMs,
@@ -149,7 +151,7 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
       return skillCatalogs[source].detail(id);
     }
   };
-  const skillsSettings = createSkillsSettingsModule(deps.paths, deps.configReloader);
+  const skillsSettings = createSkillsSettingsModule(deps.configManager);
 
   const mem0Data = {
     get(): Promise<GetMem0DataResponse> {
@@ -202,19 +204,12 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
   // `catalog` returns the raw message templates for a locale (the web UI formats them client-side).
   const locale = {
     async get(): Promise<{ locale: string }> {
-      const cfg = await loadAll(paths.config, paths.profile);
-      return { locale: cfg?.locale ?? 'en' };
+      return { locale: deps.configManager.get().cfg.locale };
     },
     async set({ locale: next }: { locale: string }): Promise<OkResponse> {
-      const cfg = await loadAll(paths.config, paths.profile);
-      if (!cfg) throw new HandlerError('invalid', 'config.json missing');
-      cfg.locale = next;
-      await saveProfile(paths.profile, cfg);
-      if (deps.configReloader) {
-        await deps.configReloader.publish({ cfg, auth: await loadAuth(paths.auth) });
-      } else {
-        deps.localeService.reload(cfg);
-      }
+      await deps.configManager.updateConfig((cfg) => {
+        cfg.locale = next;
+      });
       return { ok: true };
     },
     async list(): Promise<{ locales: { locale: string; name: string }[] }> {
@@ -285,25 +280,23 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
   const session = createSessionModule({ ...deps, externalAgentHost });
   const experienceCapabilities = {
     state: {
-      forPack: (atomPackId: string, principalId: string) =>
-        createExperienceStateStore(deps.store, atomPackId, principalId)
+      forPack: (atomPackId: string) => createExperienceStateStore(deps.store, atomPackId)
     },
     projectSessions: {
-      forPrincipal: (principalId: string) =>
-        createProjectSessionOperations({ store: deps.store, sessions: session, oversight: deps.oversight, principalId })
+      operations: () =>
+        createProjectSessionOperations({ store: deps.store, sessions: session, oversight: deps.oversight })
     },
     workerScheduler: {
-      forExperience: (atomPackId: string, principalId: string, experienceId: string) =>
-        createExperienceWorkerScheduler(deps.store, atomPackId, principalId, experienceId)
+      forExperience: (atomPackId: string, experienceId: string) =>
+        createExperienceWorkerScheduler(deps.store, atomPackId, experienceId)
     }
   };
   const experienceWorkers = deps.getExperienceWorkers
     ? new ExperienceWorkerRegistry({
         store: deps.store,
-        contextFor: (atomPackId, principalId, permissions, experienceId) =>
+        contextFor: (atomPackId, permissions, experienceId) =>
           createWorkspaceExperienceApiContext({
             atomPackId,
-            principalId,
             experienceId,
             permissions,
             deps: experienceCapabilities
@@ -314,26 +307,18 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
     if (!experienceWorkers) return;
     experienceWorkers.clear();
     for (const registration of deps.getExperienceWorkers?.() ?? []) {
-      experienceWorkers.register(
-        registration.atomPackId,
-        deps.ownerPrincipalId,
-        registration.permissions,
-        registration.worker
-      );
+      experienceWorkers.register(registration.atomPackId, registration.permissions, registration.worker);
     }
   };
   syncExperienceWorkers();
   if (experienceWorkers) {
-    const projectIds = deps.store
-      .listWorkplaceProjects()
-      .filter((project) => project.ownerPrincipalId === deps.ownerPrincipalId)
-      .map((project) => project.id);
+    const projectIds = deps.store.listWorkplaceProjects().map((project) => project.id);
     void experienceWorkers
       .startProjects(projectIds)
       .catch((error) => deps.log.warn({ error }, 'workspace Experience worker startup failed'));
     deps.bus.subscribeAll((event) => {
       const source = deps.store.getSession(event.sessionId);
-      if (!source?.projectId || source.ownerPrincipalId !== deps.ownerPrincipalId) return;
+      if (!source?.projectId) return;
       void experienceWorkers
         .publish({
           id: event.id,
@@ -364,8 +349,8 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
   return {
     health: async (): Promise<GetHealthResponse> => {
       const upgradeInfo = deps.getUpgradeInfo?.();
-      const cfg = await loadAll(paths.config, paths.profile);
-      const httpsDisabled = cfg?.network.https.enabled === false;
+      const cfg = deps.configManager.get().cfg;
+      const httpsDisabled = cfg.network.https.enabled === false;
       const certFingerprint = deps.getCertFingerprint?.() ?? deps.certFingerprint;
       const certExpiry = deps.getCertExpiry?.() ?? deps.certExpiry;
       const warnings = [...(deps.getDaemonWarnings?.() ?? deps.daemonWarnings ?? [])];
@@ -385,47 +370,50 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
       };
     },
     init,
-    agent: createAgentModule({ paths, ownerPrincipalId: deps.ownerPrincipalId, configReloader: deps.configReloader }),
-    model: createModelModule(deps),
-    channel: createChannelModule({ paths, channelService: deps.channelService, configReloader: deps.configReloader }),
-    peer: createPeerModule({ paths, configReloader: deps.configReloader }),
-    acpAgent: createAcpAgentModule({ paths }),
-    externalAgentSettings: createExternalAgentSettingsModule({ paths, externalAgentSessions: externalAgentHost }),
+    agent: createAgentModule({ paths, config: deps.configManager }),
+    model: createModelModule({ ...deps, config: deps.configManager }),
+    channel: createChannelModule({ channelService: deps.channelService, config: deps.configManager }),
+    peer: createPeerModule({ config: deps.configManager }),
+    acpAgent: createAcpAgentModule({ config: deps.configManager }),
+    externalAgentSettings: createExternalAgentSettingsModule({
+      config: deps.configManager,
+      externalAgentSessions: externalAgentHost
+    }),
     mcpServer: createMcpServerModule({
-      paths,
+      config: deps.configManager,
       getMcpStatus: deps.getMcpStatus,
       mcpAuthorize: deps.mcpAuthorize,
       mcpReconnect: deps.mcpReconnect
     }),
-    browserPreset: createBrowserPresetModule(paths, deps.configReloader),
-    computerPreset: createComputerPresetModule(paths, deps.configReloader),
+    browserPreset: createBrowserPresetModule(deps.configManager),
+    computerPreset: createComputerPresetModule(deps.configManager),
     obscura: createObscuraModule({
       paths,
+      config: deps.configManager,
       connectObscura: deps.connectObscura,
       disconnectObscura: deps.disconnectObscura,
       getObscuraStatus: deps.getObscuraStatus
     }),
-    openaiCompat: createOpenaiCompatModule(paths),
-    network: createNetworkModule(paths, deps.configReloader),
-    appearance: createAppearanceModule(paths, deps.configReloader),
-    toolBackends: createToolBackendsModule(paths, deps.configReloader),
-    sandbox: createSandboxModule(paths, deps.configReloader, sandboxActivation),
-    developer: createDeveloperModule(paths, deps.configReloader),
-    profile: createUserProfileModule(paths, deps.configReloader),
+    openaiCompat: createOpenaiCompatModule(deps.configManager),
+    network: createNetworkModule(paths, deps.configManager),
+    appearance: createAppearanceModule(deps.configManager),
+    toolBackends: createToolBackendsModule(deps.configManager),
+    sandbox: createSandboxModule(deps.configManager, sandboxActivation),
+    developer: createDeveloperModule(paths, deps.configManager),
+    profile: createUserProfileModule(deps.configManager),
     startup: createStartupSettingsModule({
       monadHome: paths.home,
       logPath: join(paths.logs, 'startup.log')
     }),
-    hooks: createHooksModule(paths, deps.configReloader),
+    hooks: createHooksModule(deps.configManager),
     settingsImport: createSettingsImportModule({
       paths,
-      configReloader: deps.configReloader,
+      config: deps.configManager,
       mcpReconnect: deps.mcpReconnect
     }),
     capabilityInventory: createCapabilityInventoryModule(paths),
     atoms: createAtomPacksModule({
       paths,
-      ownerPrincipalId: deps.ownerPrincipalId,
       experienceCapabilities,
       onChanged: deps.rediscoverAtomPacks
         ? async () => {
@@ -439,12 +427,17 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
       getWorkspaceExperienceApiRoute: deps.getWorkspaceExperienceApiRoute,
       getWorkspaceExperienceSnapshot: deps.getWorkspaceExperienceSnapshot,
       getWorkspaceExperiences: deps.getWorkspaceExperiences,
-      configReloader: deps.configReloader,
+      config: deps.configManager,
       modelService: deps.modelService,
       sandboxActivation
     }),
     session,
-    externalAgent: createExternalAgentModule({ paths, host: externalAgentHost, store: deps.store }),
+    externalAgent: createExternalAgentModule({
+      paths,
+      host: externalAgentHost,
+      store: deps.store,
+      config: deps.configManager
+    }),
     _nativeAgentStore: deps.store,
     _nativeAgentAttachmentRoots: (args: { sessionId: string; agentId: string; workingPath?: string | null }) => {
       const nativeSession = args.agentId

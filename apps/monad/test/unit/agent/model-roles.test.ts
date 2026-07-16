@@ -1,7 +1,7 @@
-import type { MonadConfig } from '@monad/home';
+import type { MonadConfig } from '@monad/environment';
 
 import { expect, test } from 'bun:test';
-import { createDefaultConfig } from '@monad/home';
+import { createDefaultConfig } from '@monad/environment';
 
 import { resolveAgentModelRole, resolveModelRole } from '#/config/resolve.ts';
 
@@ -245,5 +245,5 @@ test('resolveAgentModelRole: per-agent override > profile role > fallback', () =
 
 test('the default config carries an empty manual model-kind override map', () => {
   // The override layer ("providerId:modelId" → kind) starts empty; operators opt in via config.
-  expect(createDefaultConfig('prn_x00000000000', 'x').model.kinds).toEqual({});
+  expect(createDefaultConfig('x').model.kinds).toEqual({});
 });

@@ -21,6 +21,8 @@ export interface ExternalAgentAppServerConnectionContext {
   emit(sessionId: string, type: Event['type'], payload: Record<string, unknown>): void;
   stop(id: string): void;
   log: Logger;
+  reconnectBaseMs?: number;
+  disconnectGraceMs?: number;
 }
 
 /** Owns the app-server byte-channel lifecycle for `unix`/`ws` sessions: socket/port allocation,
@@ -191,7 +193,7 @@ export class ExternalAgentAppServerConnectionManager {
       }
       this.emitReconnectRequired(id, current);
       this.ctx.stop(id);
-    }, APP_SERVER_DISCONNECT_GRACE_MS);
+    }, this.ctx.disconnectGraceMs ?? APP_SERVER_DISCONNECT_GRACE_MS);
   }
 
   /** Re-dial the app-server socket and resume the thread, with a few backoff attempts. On success the
@@ -203,7 +205,7 @@ export class ExternalAgentAppServerConnectionManager {
     live.appServerReconnecting = true;
     for (let attempt = 1; attempt <= APP_SERVER_RECONNECT_ATTEMPTS; attempt++) {
       if (!this.ctx.live.has(id)) return; // torn down meanwhile
-      await Bun.sleep(APP_SERVER_RECONNECT_BASE_MS * attempt);
+      await Bun.sleep((this.ctx.reconnectBaseMs ?? APP_SERVER_RECONNECT_BASE_MS) * attempt);
       const current = this.ctx.live.get(id);
       if (!current?.appServerRedial) return;
       try {
@@ -227,6 +229,7 @@ export class ExternalAgentAppServerConnectionManager {
             stillLive.appServerStreakResetTimer = undefined;
           }
         }, APP_SERVER_RECONNECT_STREAK_RESET_MS);
+        current.appServerStreakResetTimer.unref();
         this.ctx.log.debug(
           {
             sessionId: current.transcriptTargetId,

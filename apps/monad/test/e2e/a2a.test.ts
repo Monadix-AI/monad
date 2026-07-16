@@ -3,14 +3,14 @@
 // message/stream backed by the mock model; a disabled agent 404s. The /v1/agents/:id/a2a status
 // endpoint reports enablement + URLs.
 
-import type { MonadPaths } from '@monad/home';
+import type { MonadPaths } from '@monad/environment';
 import type { Agent } from '@monad/protocol';
 
 import { describe, expect, test } from 'bun:test';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initMonadHome, loadAuth, loadConfig } from '@monad/home';
+import { initMonadHome, loadAuth, loadConfig } from '@monad/environment';
 
 import { ModelService } from '#/handlers/settings/model/index.ts';
 import { MOCK_REPLY } from '#/infra/mock-model.ts';
@@ -29,7 +29,7 @@ async function setup(): Promise<{ dir: string; app: ReturnType<typeof createHttp
   const dir = join(tmpdir(), `monad-a2a-${process.pid}-${Date.now()}-${process.hrtime.bigint()}`);
   const paths: MonadPaths = makeTestPaths(dir);
   await initMonadHome(paths);
-  const cfg = await loadConfig(paths.config);
+  const cfg = await loadConfig(paths);
   if (!cfg) throw new Error('config missing after init');
   const modelService = new ModelService(paths.auth, cfg, await loadAuth(paths.auth), seededProviderRegistry());
   const app = createHttpTransport(buildHandlers(mockModel(), { paths, modelService }));

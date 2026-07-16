@@ -1,7 +1,7 @@
 # Documentation map
 
 `docs/` is organized by audience: start with the two entry docs, then pick the
-section that matches what you're here for — using monad ([usage/](usage/)),
+section that matches what you're here for — using Monad ([usage/](usage/)),
 understanding how it works inside ([internals/](internals/)), working in this repo
 ([engineering/](engineering/)), or design ([design/](design/)).
 
@@ -21,7 +21,7 @@ by reference rather than duplication.
 
 ## Usage — user documentation
 
-How to use monad's features as an operator or end user.
+How to use Monad's features as an operator or end user.
 
 | Doc | What it covers |
 |---|---|
@@ -47,7 +47,7 @@ For contributors and the curious: architecture and behavior of the running syste
 | [internals/daemon-architecture.md](internals/daemon-architecture.md) | The daemon as the one long-lived process: startup graph, lifecycle modules, hot reload, extension boundaries. |
 | [internals/realtime-channels.md](internals/realtime-channels.md) | Which realtime channel carries which events: WS control plane vs SSE generation stream. |
 | [internals/session-origin.md](internals/session-origin.md) | Session provenance: the immutable `origin` snapshot — identity, access policy, environment. |
-| [internals/acp.md](internals/acp.md) | ACP both ways: monad as an editor agent, and delegating to other ACP agents. |
+| [internals/acp.md](internals/acp.md) | ACP both ways: Monad as an editor agent, and delegating to other ACP agents. |
 | [internals/peer-federation.md](internals/peer-federation.md) | Daemon-to-daemon task delegation: a peer runs the subtask on its own machine and streams the result back. |
 | [internals/host-interactions.md](internals/host-interactions.md) | Schema-driven user input requested by built-ins and atom packs across Web, TUI, CLI, and ACP. |
 | [internals/memory.md](internals/memory.md) | The memory system as built: L1 Markdown facts, L2 knowledge graph, L3 laws, and the consolidation pipeline. |

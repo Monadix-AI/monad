@@ -1,6 +1,6 @@
 import type { CommandDef } from './types.ts';
 
-import { getPaths, initMonadHome } from '@monad/home';
+import { getPaths, initMonadHome } from '@monad/environment';
 
 import { startDaemon, stopDaemon } from '../lib/daemon.ts';
 import { t } from '../lib/i18n.ts';
@@ -10,7 +10,7 @@ import { bold, dim, out, yellow } from '../lib/output.ts';
 export const command: CommandDef = {
   name: 'init',
   synopsis: 'init [--no-input]',
-  description: 'initialize monad (interactive setup: home directory + model provider)',
+  description: 'initialize Monad (interactive setup: home directory + model provider)',
   descriptionKey: 'cli.cmd.init.desc',
   flags: {
     'non-interactive': { type: 'boolean', description: 'seed home without prompting (alias of --no-input)' }

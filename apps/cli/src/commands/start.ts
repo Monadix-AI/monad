@@ -1,6 +1,6 @@
 import type { CommandDef } from './types.ts';
 
-import { resolveClientConn } from '@monad/home';
+import { resolveClientConn } from '@monad/environment';
 
 import { startDaemon } from '../lib/daemon.ts';
 import { t } from '../lib/i18n.ts';

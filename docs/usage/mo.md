@@ -2,13 +2,13 @@
 
 Mo is a pixel-art cat that floats on the desktop as a transparent, frameless,
 always-on-top window. Drop a file or folder onto Mo and it opens a small input box;
-submitting starts a new monad **session** seeded with what you dropped.
+submitting starts a new Monad **session** seeded with what you dropped.
 
 ## Architecture
 
 Mo is deliberately tiny. There is **no webview and no Bun host** — the desktop side is
 a single lightweight native process per OS, and all the orchestration lives in the
-**already-running monad daemon**.
+**already-running Monad daemon**.
 
 ```
 ┌───────────────────────────────────────────────┐
@@ -21,7 +21,7 @@ a single lightweight native process per OS, and all the orchestration lives in t
 └──────────────────────┬────────────────────────┘
                        │ loopback / unix socket (HTTP)
 ┌──────────────────────▼────────────────────────┐
-│ monad daemon  (apps/monad)                     │
+│ Monad daemon  (apps/monad)                     │
 │  GET  /v1/health              ← awake/asleep   │
 │  POST /v1/mo/drop {paths,prompt}               │
 │       → validate · create session · seed msg   │
@@ -32,7 +32,7 @@ a single lightweight native process per OS, and all the orchestration lives in t
 
 The uniform interface is the daemon's REST contract (`@monad/protocol`). Each OS has its
 own native shell implementing the same behaviour against that contract — there is no
-shared platform-branching feature code, mirroring `packages/home/src/open-url.ts`.
+shared platform-branching feature code, mirroring `packages/environment/src/open-url.ts`.
 
 ### Why native rendering (no webview)
 

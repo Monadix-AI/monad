@@ -1,4 +1,4 @@
-import type { ConfigSnapshot } from './service.ts';
+import type { ConfigSnapshot } from './manager.ts';
 
 type ReloadTarget = (snapshot: ConfigSnapshot) => Promise<void>;
 

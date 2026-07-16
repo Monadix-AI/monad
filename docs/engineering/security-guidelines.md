@@ -1,7 +1,7 @@
 # Security Guidelines
 
-Rules for writing security-sensitive code in monad. The threat model is specific:
-**monad is a local, single-user daemon that listens on the loopback interface and
+Rules for writing security-sensitive code in Monad. The threat model is specific:
+**Monad is a local, single-user daemon that listens on the loopback interface and
 runs a tool-using LLM agent.** That shapes everything below — the adversary is not
 (yet) a remote network attacker; it is **the user's own web browser** and **the
 model's own tool calls**.
@@ -15,7 +15,7 @@ credential, or tool dispatch.
 
 ## Threat model — who the attacker is
 
-1. **The browser (primary, today).** monad binds `127.0.0.1`. Any web page the user
+1. **The browser (primary, today).** Monad binds `127.0.0.1`. Any web page the user
    visits can issue requests to `http://127.0.0.1:<port>` and open
    `ws://127.0.0.1:<port>`. The loopback IP allowlist does **not** identify the
    *caller* — only that the packet came from this machine. A malicious origin is
@@ -37,7 +37,7 @@ credential, or tool dispatch.
 
 ## 1. Network boundary: validate Origin, not just IP
 
-A loopback peer address is not a principal. Any browser tab is a loopback peer.
+A loopback peer address does not authenticate the caller. Any browser tab can be a loopback peer.
 
 - **REST writes are CSRF-exploitable.** A page can POST to `127.0.0.1` without
   reading the response (no CORS needed to *send*). Any state-changing endpoint
@@ -119,7 +119,7 @@ them — `net_fetch` already does. Before any tool is made callable:
 - **Route high-risk tools through the approval gate.** Every tool call goes through
   `invokeTool` (`@monad/agent-core`), which sends `highRisk` tools to the host-supplied
   `ToolGate` before running and is **fail-closed**: high-risk + no gate configured →
-  denied. The daemon ships a real gate — `OversightService` (apps/monad): it emits a
+  denied. The daemon ships a real gate — `OversightService` (apps/Monad): it emits a
   `tool.approval_requested` event, blocks the turn, and resolves only when a client
   answers via the `tools.approve` RPC, or auto-denies after a timeout. Never call
   `tool.run()` directly from the loop — go through `invokeTool` so the gate and sandbox

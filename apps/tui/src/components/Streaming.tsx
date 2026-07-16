@@ -47,7 +47,7 @@ export function StreamingRow() {
             bold
             color={TUI_THEME.glow}
           >
-            {'monad'}
+            {'Monad'}
           </Text>
           <Text color={TUI_THEME.accent}>{`  ${activityFrame(tick)} `}</Text>
           <Text wrap="wrap">{streaming || t('cli.tui.running')}</Text>

@@ -8,7 +8,6 @@ const project = (id: string, title: string): WorkplaceProject =>
   ({
     id,
     title,
-    ownerPrincipalId: 'prn_test00000000',
     state: 'active',
     archived: false,
     origin: { surface: 'web', client: 'workplace', transport: 'http', writableBy: ['http'], branchableBy: ['http'] },

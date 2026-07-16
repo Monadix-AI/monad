@@ -1,6 +1,6 @@
 import type { CommandDef } from './types.ts';
 
-import { getPaths, loadConfig, saveAll } from '@monad/home';
+import { getPaths, loadConfig, saveAll } from '@monad/environment';
 
 import { t } from '../lib/i18n.ts';
 import { bold, cyan, dim, green, json, out, red } from '../lib/output.ts';
@@ -39,7 +39,7 @@ function setByPath(obj: Json, path: string, raw: string): void {
 }
 
 async function load(): Promise<Json> {
-  const cfg = await loadConfig(getPaths().config);
+  const cfg = await loadConfig(getPaths());
   if (!cfg) throw new CliError(`${red('✖')} ${t('cli.config.noConfig', { cmd: bold('monad init') })}`, EXIT.CONFIG);
   return cfg as unknown as Json;
 }
@@ -83,7 +83,7 @@ export const command: CommandDef = {
         const cfg = await load();
         setByPath(cfg, key, value);
         try {
-          await saveAll(paths.config, paths.profile, cfg as never);
+          await saveAll(paths, cfg as never);
         } catch (err) {
           throw new CliError(
             `${red('✖')} ${(err instanceof Error ? err.message : String(err)).split('\n')[0]}`,

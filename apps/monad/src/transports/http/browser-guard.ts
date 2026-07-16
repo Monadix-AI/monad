@@ -1,7 +1,7 @@
 // Browser-facing request guard for the daemon's HTTP + WebSocket surface.
 //
 // The daemon listens on loopback (and, opt-in, on 0.0.0.0). A loopback peer is NOT
-// a principal — any web page the user visits can reach `http://127.0.0.1:<port>` and
+// a trusted caller — any web page the user visits can reach `http://127.0.0.1:<port>` and
 // `ws://127.0.0.1:<port>`. Two browser-only attacks follow, and this guard closes
 // both before any handler (or WS upgrade) runs:
 //

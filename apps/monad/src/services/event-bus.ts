@@ -35,7 +35,7 @@ const CONTROL_EVENT_TYPES: ReadonlySet<EventType> = new Set<EventType>([
 /**
  * Topic a sink can subscribe to. `session:<id>` carries one session's full event
  * stream; `control` carries the cross-session, list-level slice. Modelled as a
- * string so the topic axis can later widen (e.g. `principal:<id>`) without
+ * string so the topic axis can later widen without
  * touching the publish/subscribe plumbing.
  */
 // Keyed by plain string, not `SessionId`: a project-wide fan-out publishes/subscribes under its own

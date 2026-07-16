@@ -92,7 +92,9 @@ export function buildDevInitSummary(
     label('Environment', useColor),
     `  ${muted('Data directory', useColor)}    ${monadHome}`,
     `  ${muted('API key', useColor)}           ${
-      apiKeySet ? success('set', useColor) : warning('not set - add apiKey to packages/home/config.init.json', useColor)
+      apiKeySet
+        ? success('set', useColor)
+        : warning('not set - add apiKey to packages/environment/config.init.json', useColor)
     }`,
     label('Ports', useColor),
     `  ${muted('Daemon API', useColor)}        ${portUrl(ports.MONAD_PORT, 'https')}`,

@@ -1,16 +1,17 @@
-import type { MonadConfig, MonadPaths } from '@monad/home';
+import type { MonadConfig } from '@monad/environment';
 import type { Logger } from '@monad/logger';
+import type { ConfigAccess } from '#/config/manager.ts';
 import type { CommandBundle } from '#/handlers/commands/index.ts';
 import type { EventBus } from '#/services/event-bus.ts';
 import type { I18nService } from '#/services/i18n.ts';
 import type { Store } from '#/store/db/index.ts';
 
-import { emptyAuth, loadAuth } from '@monad/home';
+import { emptyAuth } from '@monad/environment';
 
 import { ChannelService, type ChannelServiceDeps, type SessionGateway } from '#/channels/channel.ts';
 
 // Channel gateway: external IM platforms (Telegram, …) as an inbound transport. It CALLS the
-// session handlers (createForPrincipal + sendInline), wired via the late-bound sessionGateway ref
+// session handlers (create + sendInline), wired via the late-bound sessionGateway ref
 // (declared with the early atom pack discovery). The atom pack contract is narrow by design —
 // adapters never see a sessionId; the core owns conversation→session.
 export async function createChannelGateway(deps: {
@@ -22,18 +23,18 @@ export async function createChannelGateway(deps: {
   commands: CommandBundle;
   logger: Logger;
   cfg: MonadConfig;
-  paths: MonadPaths;
+  config: ConfigAccess;
 }): Promise<ChannelService> {
-  const { sessionGateway, store, registry, bus, i18n, commands, logger, cfg, paths } = deps;
+  const { sessionGateway, store, registry, bus, i18n, commands, logger, cfg, config } = deps;
   return new ChannelService(
     {
       session: {
         // Guard-narrows sessionGateway to non-null (it is wired before start() runs). A throw
         // also resists a linter "fix" that would rewrite a `!` assertion into an unsafe `?.`.
-        createForPrincipal: (a) => {
+        create: (a) => {
           const gw = sessionGateway();
           if (!gw) throw new Error('channel gateway used before session wiring');
-          return gw.createForPrincipal(a);
+          return gw.create(a);
         },
         sendInline: (a, sink) => {
           const gw = sessionGateway();
@@ -64,6 +65,6 @@ export async function createChannelGateway(deps: {
       log: { info: (m) => logger.info(m), warn: (m) => logger.warn(m), error: (m) => logger.error(m) }
     },
     cfg,
-    (await loadAuth(paths.auth)) ?? emptyAuth()
+    config.get().auth ?? emptyAuth()
   );
 }

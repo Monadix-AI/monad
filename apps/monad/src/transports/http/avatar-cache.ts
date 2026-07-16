@@ -41,7 +41,7 @@ import stripes from '@dicebear/styles/stripes.json' with { type: 'json' };
 import thumbs from '@dicebear/styles/thumbs.json' with { type: 'json' };
 import toonHead from '@dicebear/styles/toon-head.json' with { type: 'json' };
 import triangles from '@dicebear/styles/triangles.json' with { type: 'json' };
-import { getPaths } from '@monad/home';
+import { getPaths } from '@monad/environment';
 import { avatarCacheKey, DEFAULT_AVATAR_STYLE, isAvatarStyle } from '@monad/protocol';
 import { Elysia } from 'elysia';
 

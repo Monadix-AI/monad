@@ -1,4 +1,4 @@
-import type { MonadPaths } from '@monad/home';
+import type { MonadPaths } from '@monad/environment';
 import type {
   ExternalAgentApprovalResolutionRequest,
   ExternalAgentAuthSessionView,
@@ -22,13 +22,13 @@ import type {
   StartExternalAgentRequest,
   StartExternalAgentResponse
 } from '@monad/protocol';
+import type { ConfigAccess } from '#/config/manager.ts';
 import type { ExternalAgentHost } from '#/services/external-agent/host/index.ts';
 import type { ExternalAgentTargetId } from '#/store/db/external-agent-sessions.ts';
 import type { Store } from '#/store/db/index.ts';
 
 import { realpathSync } from 'node:fs';
 import { isAbsolute, relative, resolve } from 'node:path';
-import { loadAll } from '@monad/home';
 import {
   externalAgentObservationAccessResponseSchema,
   externalAgentUiObservationFrameSchema,
@@ -46,6 +46,7 @@ export interface ExternalAgentDeps {
   paths: MonadPaths;
   host: ExternalAgentHost;
   store: Store;
+  config: ConfigAccess;
 }
 
 function realOrResolve(p: string): string {
@@ -63,12 +64,8 @@ function isWithin(base: string, target: string): boolean {
   return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
 }
 
-export function createExternalAgentModule({ paths, host, store }: ExternalAgentDeps) {
-  async function requireConfig() {
-    const cfg = await loadAll(paths.config, paths.profile);
-    if (!cfg) throw new Error('external agent runtime: config.json missing');
-    return cfg;
-  }
+export function createExternalAgentModule({ host, store, config }: ExternalAgentDeps) {
+  const requireConfig = () => config.get().cfg;
 
   function mapExternalAgentError(error: unknown): never {
     if (error instanceof ExternalAgentError) {
@@ -113,7 +110,7 @@ export function createExternalAgentModule({ paths, host, store }: ExternalAgentD
       sessionId: SessionId;
       request: StartExternalAgentRequest;
     }): Promise<StartExternalAgentResponse> {
-      await requireConfig();
+      config.get();
       // TODO(track-b): `sessionId` is typed `SessionId` here (the id union collapse), so
       // `getWorkplaceProject(sessionId)` can no longer match anything reachable through this
       // handler's own type boundary — the /v1/sessions/:id/external-agent route casts to

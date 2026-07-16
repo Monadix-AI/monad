@@ -1,4 +1,3 @@
-import type { AgentId } from '@monad/protocol';
 import type { SessionDeps } from '#/handlers/session/context.ts';
 import type { MessagingCommandDeps } from '#/handlers/session/handlers/messaging/index.ts';
 
@@ -17,13 +16,7 @@ export function createSessionModule(deps: SessionDeps) {
     ? {
         commands: deps.commands,
         lifecycle: {
-          createForPrincipal: (a) =>
-            lifecycle.createForPrincipal({
-              title: a.title,
-              principalId: a.principalId,
-              agentId: a.agentId as AgentId,
-              origin: a.origin
-            }),
+          create: (a) => lifecycle.create(a),
           reset: (a) => lifecycle.reset(a),
           update: (a) => lifecycle.update(a),
           list: (a) => lifecycle.list(a),

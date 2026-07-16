@@ -7,7 +7,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { getPaths, initMonadHome } from '@monad/home';
+import { getPaths, initMonadHome } from '@monad/environment';
 
 const env = { ...Bun.env };
 let testHome: string;

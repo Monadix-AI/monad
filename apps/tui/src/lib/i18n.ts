@@ -3,7 +3,7 @@ import type { I18n, LocalePack, MessageId, TParams, Translate } from '../../../.
 
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { getPaths, loadAll } from '@monad/home';
+import { getPaths, loadAll } from '@monad/environment';
 
 import { createI18n, defaultLocaleName, loadLocalePacksFromDir } from '../../../../packages/i18n/src/index.ts';
 import { BUILTIN_LOCALES_DIR } from '../../../../packages/i18n/src/locale-dir.ts';
@@ -16,7 +16,7 @@ export async function initTuiI18n(): Promise<void> {
   const paths = getPaths();
   let locale = 'en';
   try {
-    const cfg = await loadAll(paths.config, paths.profile);
+    const cfg = await loadAll(paths);
     if (cfg) locale = cfg.locale;
   } catch {
     // Invalid or missing config falls back to English.

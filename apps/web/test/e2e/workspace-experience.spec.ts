@@ -149,7 +149,6 @@ async function mockWorkplaceApi(
               createdAt: '2026-07-03T00:00:00.000Z',
               cwd: '/tmp/mock-workplace',
               id: projectId,
-              ownerPrincipalId: 'pri_mock',
               state: 'ready',
               title: 'Mock Project',
               updatedAt: '2026-07-03T00:00:00.000Z'
@@ -228,7 +227,6 @@ function projectSession(id: string, title: string, updatedAt: string): Session {
     id: id as Session['id'],
     projectId: projectId as Session['projectId'],
     title,
-    ownerPrincipalId: 'prn_mock00000000' as Session['ownerPrincipalId'],
     state: 'active',
     agentIds: [],
     archived: false,

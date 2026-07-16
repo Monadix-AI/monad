@@ -3,14 +3,14 @@
 // requested but no launcher is available. These branches are exactly the kind that regress quietly,
 // so they get explicit coverage.
 
-import type { MonadConfig } from '@monad/home';
+import type { MonadConfig } from '@monad/environment';
 
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createDefaultConfig, pathsForHome } from '@monad/home';
+import { createDefaultConfig, pathsForHome } from '@monad/environment';
 
 import { clearSandboxLaunchers, configureSandboxLauncher, noneLauncher } from '#/capabilities/tools';
 import { createSandbox, finalizeSandboxLauncher } from '#/platform/sandbox/service.ts';
@@ -130,7 +130,7 @@ test('resolveTlsSetupForNetwork provisions a certificate when HTTPS is enabled b
 
 // ── sandbox fail-closed ──────────────────────────────────────────────────────────
 function sandboxConfig(over: { confine: boolean; allowUnconfinedExec?: boolean }): MonadConfig {
-  const cfg = createDefaultConfig('prn_test00000000', 'Test');
+  const cfg = createDefaultConfig('Test');
   cfg.sandbox.confine = over.confine;
   cfg.sandbox.allowUnconfinedExec = over.allowUnconfinedExec ?? false;
   return cfg;
@@ -162,7 +162,7 @@ test('finalizeSandboxLauncher accepts the light launcher on a supported platform
 test('createSandbox boot sweep keeps Workplace Project sandbox roots alive', async () => {
   const home = await mkdtemp(join(tmpdir(), 'monad-sandbox-runtime-'));
   const paths = pathsForHome(home);
-  const cfg = createDefaultConfig('prn_test00000000', 'Test');
+  const cfg = createDefaultConfig('Test');
   cfg.sandbox.mode = 'ephemeral';
   cfg.sandbox.confine = false;
 

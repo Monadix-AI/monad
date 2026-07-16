@@ -3,7 +3,6 @@ import type { ToolContext } from '#/capabilities/tools/types.ts';
 import { afterEach, expect, test } from 'bun:test';
 
 import { clearProcesses, processControlTool, shellExecTool } from '#/capabilities/tools';
-import { SESSION_DELETE_BACKEND_GRACE_MS } from '#/handlers/session/handlers/lifecycle/index.ts';
 import { buildHandlers, mockModel } from '../../helpers.ts';
 
 // Guards the lifecycle wiring: clearProcessesForSession must be CALLED from delete()/reset(),
@@ -33,17 +32,14 @@ test('session reset kills the session’s background processes', async () => {
   await expect(processControlTool.run({ action: 'logs', id }, procCtx(sessionId))).rejects.toThrow(/unknown process/);
 });
 
-test(
-  'session delete kills the session’s background processes after the undo grace period',
-  async () => {
-    const d = buildHandlers(mockModel(['ok']));
-    const { sessionId } = await d.session.create({ title: 't' });
-    const id = await startProcess(sessionId);
+test('session delete kills the session’s background processes after the undo grace period', async () => {
+  const deleteGraceMs = 5;
+  const d = buildHandlers(mockModel(['ok']), undefined, { sessionDeleteGraceMs: deleteGraceMs });
+  const { sessionId } = await d.session.create({ title: 't' });
+  const id = await startProcess(sessionId);
 
-    await d.session.delete({ id: sessionId });
-    await Bun.sleep(SESSION_DELETE_BACKEND_GRACE_MS + 50);
+  await d.session.delete({ id: sessionId });
+  await Bun.sleep(deleteGraceMs + 20);
 
-    await expect(processControlTool.run({ action: 'logs', id }, procCtx(sessionId))).rejects.toThrow(/unknown process/);
-  },
-  SESSION_DELETE_BACKEND_GRACE_MS + 2_000
-);
+  await expect(processControlTool.run({ action: 'logs', id }, procCtx(sessionId))).rejects.toThrow(/unknown process/);
+});

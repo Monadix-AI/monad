@@ -1,11 +1,10 @@
-import type { Event, PrincipalId, ProjectId, Session, SessionId } from '@monad/protocol';
+import type { Event, ProjectId, Session, SessionId } from '@monad/protocol';
 
 import { expect, test } from 'bun:test';
 
 import { createProjectSessionOperations } from '#/atoms/experience-project-sessions.ts';
 import { createStore } from '#/store/db/index.ts';
 
-const principalId = 'prn_a' as PrincipalId;
 const projectId = 'prj_a' as ProjectId;
 const sessionId = 'ses_a' as SessionId;
 
@@ -15,7 +14,6 @@ function fixture() {
   store.insertWorkplaceProject({
     id: projectId,
     title: 'Project',
-    ownerPrincipalId: principalId,
     state: 'active',
     archived: false,
     memberTemplates: [],
@@ -26,7 +24,6 @@ function fixture() {
     id: sessionId,
     projectId,
     title: 'Task',
-    ownerPrincipalId: principalId,
     state: 'active',
     agentIds: [],
     archived: false,
@@ -37,7 +34,6 @@ function fixture() {
   let generated = 0;
   const operations = createProjectSessionOperations({
     store,
-    principalId,
     sessions: {
       generate: async () => {
         generated++;

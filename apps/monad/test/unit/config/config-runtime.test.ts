@@ -1,8 +1,8 @@
 // Daemon-side config runtime: secret resolution, MCP preset builders, and effective-sandbox /
-// model-role resolution. The config *schema* lives in @monad/home; these helpers apply it.
+// model-role resolution. The config *schema* lives in @monad/environment; these helpers apply it.
 
 import { describe, expect, test } from 'bun:test';
-import { createDefaultConfig } from '@monad/home';
+import { createDefaultConfig } from '@monad/environment';
 
 import { resolveConfigMcpSpecs } from '#/capabilities/mcp/service.ts';
 import {
@@ -33,7 +33,7 @@ describe('resolveEffectiveSandboxMode', () => {
   });
 
   test('createDefaultConfig ships with the global restriction off', () => {
-    const cfg = createDefaultConfig('prn_x00000000000', 'tester');
+    const cfg = createDefaultConfig('tester');
     expect(cfg.agent.globalSandbox).toEqual({ enabled: false, mode: 'workspace' });
     expect(cfg.sandbox.mode).toBe('workspace');
   });
@@ -247,7 +247,7 @@ describe('buildMonadixMcpServer', () => {
 });
 
 describe('resolveConfigMcpSpecs — monadix preset synthesis', () => {
-  const baseCfg = () => createDefaultConfig('prn_x00000000000', 'tester');
+  const baseCfg = () => createDefaultConfig('tester');
 
   test('synthesizes the monadix server when enabled', () => {
     const cfg = baseCfg();

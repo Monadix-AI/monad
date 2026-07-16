@@ -9,7 +9,7 @@ import type { DelegationService } from '#/services/delegation/delegation.ts';
 import type { ClarifyService } from '#/services/generation/clarify.ts';
 import type { OversightService } from '#/services/oversight.ts';
 
-import { pickDirectory } from '@monad/home';
+import { pickDirectory } from '@monad/environment';
 
 import { createSystemUpgradeModule } from '#/handlers/system-upgrade.ts';
 

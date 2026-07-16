@@ -47,20 +47,20 @@ function observationText(event: { type: string; payload: Record<string, unknown>
   return text.slice(0, MAX_OBSERVATION_TEXT);
 }
 
-function stableSessionId(principalId: string, projectId: string, idempotencyKey: string): SessionId {
-  const digest = createHash('sha256').update(`${principalId}\0${projectId}\0${idempotencyKey}`).digest('hex');
+function stableSessionId(projectId: string, idempotencyKey: string): SessionId {
+  const digest = createHash('sha256').update(`${projectId}\0${idempotencyKey}`).digest('hex');
   return `ses_${digest.slice(0, 20)}` as SessionId;
 }
 
-function assertProjectOwner(store: Store, principalId: string, projectId: string) {
+function assertProject(store: Store, projectId: string) {
   const project = store.getWorkplaceProject(projectId);
-  if (!project || project.ownerPrincipalId !== principalId) throw new Error(`project not found: ${projectId}`);
+  if (!project) throw new Error(`project not found: ${projectId}`);
   return project;
 }
 
-function assertSessionOwner(store: Store, principalId: string, sessionId: string) {
+function assertProjectSession(store: Store, sessionId: string) {
   const session = store.getSession(sessionId);
-  if (!session || session.ownerPrincipalId !== principalId || !session.projectId) {
+  if (!session?.projectId) {
     throw new Error(`project session not found: ${sessionId}`);
   }
   return session;
@@ -70,23 +70,21 @@ export function createProjectSessionOperations(input: {
   store: Store;
   sessions: ReturnType<typeof createSessionModule>;
   oversight: OversightService;
-  principalId: string;
 }): ProjectSessionOperations {
-  const { store, sessions, oversight, principalId } = input;
+  const { store, sessions, oversight } = input;
   return {
     list: async (projectId) => {
-      assertProjectOwner(store, principalId, projectId);
+      assertProject(store, projectId);
       return store
         .listSessions({ projectId: projectId as ProjectId })
-        .filter((session) => session.ownerPrincipalId === principalId)
         .map((session) => ({ id: session.id, title: session.title, state: session.state }));
     },
     create: async (projectId, request) => {
-      assertProjectOwner(store, principalId, projectId);
-      const id = stableSessionId(principalId, projectId, request.idempotencyKey);
+      assertProject(store, projectId);
+      const id = stableSessionId(projectId, request.idempotencyKey);
       const existing = store.getSession(id);
       if (existing) {
-        if (existing.ownerPrincipalId !== principalId || existing.projectId !== projectId) {
+        if (existing.projectId !== projectId) {
           throw new Error(`idempotency collision for project session: ${id}`);
         }
         return { id };
@@ -100,7 +98,7 @@ export function createProjectSessionOperations(input: {
       return { id: result.sessionId };
     },
     sendMessage: async (sessionId, request) => {
-      assertSessionOwner(store, principalId, sessionId);
+      assertProjectSession(store, sessionId);
       const requestId = createHash('sha256').update(request.idempotencyKey).digest('hex').slice(0, 20);
       const key = `experience:message:${requestId}`;
       const existing = store.getMemory(sessionId, key);
@@ -118,7 +116,7 @@ export function createProjectSessionOperations(input: {
       }
     },
     listMessages: async (sessionId, cursor) => {
-      assertSessionOwner(store, principalId, sessionId);
+      assertProjectSession(store, sessionId);
       const items = store.listMessages(sessionId, { before: cursor, latest: true, limit: 100 });
       const oldest = items[0]?.id;
       const hasOlder = oldest ? store.listMessages(sessionId, { before: oldest, limit: 1 }).length > 0 : false;
@@ -133,7 +131,7 @@ export function createProjectSessionOperations(input: {
       };
     },
     listObservations: async (sessionId, cursor) => {
-      assertSessionOwner(store, principalId, sessionId);
+      assertProjectSession(store, sessionId);
       const events = store.listEvents(sessionId, cursor).slice(0, 100);
       return {
         items: events.map((event) => ({
@@ -146,7 +144,7 @@ export function createProjectSessionOperations(input: {
       };
     },
     runTurn: async (sessionId, request) => {
-      assertSessionOwner(store, principalId, sessionId);
+      assertProjectSession(store, sessionId);
       const runId = createHash('sha256').update(`${sessionId}\0${request.idempotencyKey}`).digest('hex').slice(0, 20);
       const key = `experience:run:${runId}`;
       if (!store.getMemory(sessionId, key)) {
@@ -172,17 +170,17 @@ export function createProjectSessionOperations(input: {
       return { runId };
     },
     pause: async (sessionId) => {
-      assertSessionOwner(store, principalId, sessionId);
+      assertProjectSession(store, sessionId);
       await sessions.abort({ id: sessionId as SessionId });
     },
     cancel: async (sessionId) => {
-      assertSessionOwner(store, principalId, sessionId);
+      assertProjectSession(store, sessionId);
       await sessions.update({ id: sessionId as SessionId, state: 'cancelled' });
     },
     listPendingApprovals: async (projectId, sessionId) => {
-      assertProjectOwner(store, principalId, projectId);
+      assertProject(store, projectId);
       if (sessionId) {
-        const session = assertSessionOwner(store, principalId, sessionId);
+        const session = assertProjectSession(store, sessionId);
         if (session.projectId !== projectId) throw new Error(`session does not belong to project: ${sessionId}`);
       }
       const projectSessionIds = new Set(
@@ -195,7 +193,7 @@ export function createProjectSessionOperations(input: {
     resolveApproval: async (approvalId, decision) => {
       const pending = oversight.listPendingRequests().find((approval) => approval.id === approvalId);
       if (!pending) throw new Error(`approval not found: ${approvalId}`);
-      assertSessionOwner(store, principalId, pending.sessionId);
+      assertProjectSession(store, pending.sessionId);
       const resolved = await oversight.respond(approvalId, decision === 'approved');
       if (!resolved) throw new Error(`approval already resolved: ${approvalId}`);
     }

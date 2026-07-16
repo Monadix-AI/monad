@@ -20,7 +20,6 @@ export interface SetActiveSessionArgs {
   channelId: string;
   conversationKey: string;
   sessionId: string;
-  principalId: string;
   label?: string;
 }
 
@@ -31,16 +30,15 @@ export function setActiveSession(sqlite: Database, args: SetActiveSessionArgs): 
     sqlite
       .query(
         `INSERT INTO channel_conversations
-           (channel_id, conversation_key, active_session_id, principal_id, created_at, last_seen_at)
-         VALUES ($channelId, $key, $sessionId, $principalId, $now, $now)
+           (channel_id, conversation_key, active_session_id, created_at, last_seen_at)
+         VALUES ($channelId, $key, $sessionId, $now, $now)
          ON CONFLICT(channel_id, conversation_key)
-         DO UPDATE SET active_session_id = $sessionId, principal_id = $principalId, last_seen_at = $now`
+         DO UPDATE SET active_session_id = $sessionId, last_seen_at = $now`
       )
       .run({
         $channelId: args.channelId,
         $key: args.conversationKey,
         $sessionId: args.sessionId,
-        $principalId: args.principalId,
         $now: now
       });
     sqlite

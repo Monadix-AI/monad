@@ -38,7 +38,7 @@ async function addClaudeAgents(items: PlannedItem[], root: string): Promise<void
         source: path,
         target: agent.name,
         action: 'add',
-        reason: 'Claude Code subagent persona maps to a monad agent; Claude tools are not imported',
+        reason: 'Claude Code subagent persona maps to a Monad agent; Claude tools are not imported',
         payload: { kind: 'agent', ...agent, framework: 'custom' },
         summary: agent.description
       });
@@ -68,7 +68,7 @@ export async function parseClaudeCode(inputPath: string): Promise<ParsedImport> 
         source: `${cfg.path}:mcpServers.${name}`,
         target: name,
         action: server ? 'add' : 'manual',
-        reason: server ? 'Claude Code MCP server maps to monad mcpServers' : 'Unsupported Claude Code MCP shape',
+        reason: server ? 'Claude Code MCP server maps to Monad mcpServers' : 'Unsupported Claude Code MCP shape',
         payload: server ? { kind: 'mcpServer', server } : { kind: 'manual' },
         risk: server?.transport === 'stdio' ? 'medium' : 'low',
         summary: server ? (server.transport === 'stdio' ? server.command : server.url) : undefined

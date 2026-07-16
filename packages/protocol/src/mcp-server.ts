@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { httpsUrlSchema, httpUrlSchema } from './url.ts';
 
-// Settings-UI view of a configured MCP server. Mirrors @monad/home's mcpServerSchema (the stdio/http
+// Settings-UI view of a configured MCP server. Mirrors @monad/environment's mcpServerSchema (the stdio/http
 // discriminated union) field-for-field. Secret-bearing values (env / headers / bearer token) follow
 // the `${env:NAME}` ref convention — resolved at connect time — so the view carries them as-is, no
 // masking (same posture as acpAgents). MCP servers are SYSTEM config (config.json), connected at

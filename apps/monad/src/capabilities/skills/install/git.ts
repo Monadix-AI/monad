@@ -1,6 +1,6 @@
 import type { SkillInstallReviewer } from '#/capabilities/skills/install/index.ts';
 
-import { lstat, mkdir, rm } from 'node:fs/promises';
+import { lstat, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildSandboxPolicy, sandboxedSpawn, sandboxLauncher } from '@monad/sandbox';
@@ -184,8 +184,7 @@ export async function installGitSkill(source: string, deps: GitSkillInstallDeps)
   // filesystem clone otherwise (never blocks). Consent is only required when the scan/review surfaces
   // a warning — installing is itself the user's intent, so a finding-free install proceeds directly.
   const confine = sandboxAvailable();
-  const cloneDir = join(tmpdir(), `monad-skill-git-${Date.now()}`);
-  await mkdir(cloneDir, { recursive: true });
+  const cloneDir = await mkdtemp(join(tmpdir(), 'monad-skill-git-'));
   try {
     const branchArgs = branch ? ['--branch', branch] : [];
     const cloneResult = await runGit(['clone', '--depth', '1', ...branchArgs, url, cloneDir], {

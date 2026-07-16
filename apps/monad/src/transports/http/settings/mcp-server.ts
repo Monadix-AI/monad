@@ -14,7 +14,7 @@ import { Elysia } from 'elysia';
 import { z } from 'zod';
 
 // CRUD for the MCP-server registry (cfg.mcpServers) the daemon connects to. System config — edits
-// persist to config.json and apply live via the configReloader diff-reconnect (no restart). The /status
+// persist to config.json and apply live via the ConfigManager diff-reconnect (no restart). The /status
 // route reports the LIVE connection health (connected/disabled/failed) across all sources.
 // HTTP-only surface: contract declared inline; reusable wire schemas come from @monad/protocol.
 const serverParams = z.object({ name: z.string() });

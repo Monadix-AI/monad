@@ -2,7 +2,7 @@
 // and drives the inbound → agent → outbound loop. It CALLS handlers.session but is not
 // wired as part of createDaemonHandlers.
 
-import type { ChannelInstanceConfig, MonadAuth, MonadConfig } from '@monad/home';
+import type { ChannelInstanceConfig, MonadAuth, MonadConfig } from '@monad/environment';
 import type {
   AgentId,
   AgentMessagePayload,
@@ -24,14 +24,7 @@ import { errMsg, redact, rememberSeen, resolveExtra } from '#/channels/helpers.t
 import { type MirrorContext, subscribeMirror } from '#/channels/mirror.ts';
 import { ChannelPairings } from '#/channels/pairing.ts';
 import { type ChannelRenderMode, createRenderer } from '#/channels/render.ts';
-import {
-  accessDecision,
-  channelOriginExt,
-  deriveKey,
-  needsReset,
-  principalFor,
-  routeInbound
-} from '#/channels/routing.ts';
+import { accessDecision, channelOriginExt, deriveKey, needsReset, routeInbound } from '#/channels/routing.ts';
 import { resolveChannelSecretRef } from '#/config/secrets.ts';
 import { buildSessionOrigin } from '#/handlers/session/origin.ts';
 import { daemonChildProcesses, killDaemonProcessTree } from '#/infra/daemon-child-processes.ts';
@@ -398,14 +391,12 @@ export class ChannelService {
     agentId?: string,
     _role?: ChannelRoute['kind']
   ): Promise<SessionId> {
-    const principalId = principalFor(c.id);
     const agent = agentId ? this.cfg.agent.agents.find((a) => a.id === agentId) : undefined;
     const titleParts = [c.label, label, agent?.name].filter(Boolean);
     const title = titleParts.join(': ');
-    const { sessionId } = await this.deps.session.createForPrincipal({
+    const { sessionId } = await this.deps.session.create({
       title,
       agentId: (agentId ?? c.agentId) as AgentId | undefined,
-      principalId,
       origin: buildSessionOrigin({
         transport: 'channel',
         surface: 'im',
@@ -416,7 +407,7 @@ export class ChannelService {
         ext: channelOriginExt(c)
       })
     });
-    this.deps.store.setActiveSession({ channelId: c.id, conversationKey: key, sessionId, principalId, label: title });
+    this.deps.store.setActiveSession({ channelId: c.id, conversationKey: key, sessionId, label: title });
     return sessionId;
   }
 

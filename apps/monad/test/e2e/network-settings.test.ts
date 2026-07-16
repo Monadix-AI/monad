@@ -2,7 +2,7 @@ import { afterEach, expect, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initMonadHome } from '@monad/home';
+import { initMonadHome } from '@monad/environment';
 
 import { ModelService } from '#/handlers/settings/model/index.ts';
 import { ModelCatalogService } from '#/services/model-catalog.ts';
@@ -21,7 +21,7 @@ test('network settings probe checks a daemon health endpoint over HTTP', async (
   try {
     const paths = makeTestPaths(dir);
     await initMonadHome(paths);
-    const cfg = (await import('@monad/home')).createDefaultConfig('prn_test00000000', 'Test');
+    const cfg = (await import('@monad/environment')).createDefaultConfig('Test');
     const modelDeps = {
       paths,
       modelService: new ModelService(paths.auth, cfg, null, seededProviderRegistry()),

@@ -1,5 +1,5 @@
-import type { ChannelInstanceConfig, MonadConfig } from '@monad/home';
-import type { ChannelInbound, PrincipalId } from '@monad/protocol';
+import type { ChannelInstanceConfig, MonadConfig } from '@monad/environment';
+import type { ChannelInbound } from '@monad/protocol';
 import type { ChannelRoute } from '#/channels/types.ts';
 
 import { addressedToBot, channelStructuredResponseHint, mentionedAgents } from '#/channels/helpers.ts';
@@ -10,14 +10,6 @@ export function deriveKey(c: ChannelInstanceConfig, m: ChannelInbound, agentId?:
   else if (c.mapping.granularity === 'per-user') parts.push(`u:${m.userId}`);
   if (agentId) parts.push(`a:${agentId}`);
   return parts.join('|');
-}
-
-export function principalFor(channelId: string): PrincipalId {
-  // Stable, low-privilege synthetic principal — derived from the channel's id suffix so it never
-  // collides with the daemon owner. verification stays implicitly unverified. ChannelId and
-  // PrincipalId share the same 12-char alphanumeric body contract.
-  const suffix = channelId.slice(4);
-  return `prn_${suffix}` as PrincipalId;
 }
 
 export function channelOriginExt(c: ChannelInstanceConfig): { agentHint?: string } | undefined {

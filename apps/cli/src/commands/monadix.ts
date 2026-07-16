@@ -1,20 +1,20 @@
 import type { ListMcpServerStatusResponse } from '@monad/protocol';
 import type { CommandDef } from './types.ts';
 
-import { getPaths, loadConfig, saveAll } from '@monad/home';
+import { getPaths, loadConfig, saveMesh } from '@monad/environment';
 
 import { cyan, dim, green, json, out, red } from '../lib/output.ts';
 import { requireTreatyData } from '../lib/treaty.ts';
 import { CliError, EXIT } from './types.ts';
 
-// Persist the monadix enable toggle to config.json. The daemon's config watcher hot-applies it, so
+// Persist the monadix enable toggle to mesh.json. The daemon's config watcher hot-applies it, so
 // the synthesized MCP preset appears/disappears without a restart.
 async function setEnabled(enabled: boolean): Promise<void> {
   const paths = getPaths();
-  const cfg = await loadConfig(paths.config);
+  const cfg = await loadConfig(paths);
   if (!cfg) throw new CliError(`${red('✖')} run "monad init" first`, EXIT.CONFIG);
   cfg.monadix = { ...cfg.monadix, enabled };
-  await saveAll(paths.config, paths.profile, cfg);
+  await saveMesh(paths.mesh, cfg);
 }
 
 // Monadix is the first-party cross-owner collaboration network. This is sugar over `monad config set

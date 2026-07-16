@@ -70,7 +70,7 @@ test('initialize → newSession → prompt streams chunks and ends the turn', as
   await makeClientApp(updates).connectWith(clientStream, async (ctx) => {
     const init = await ctx.request('initialize', { protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} });
     expect(init.protocolVersion).toBe(PROTOCOL_VERSION);
-    expect(init.agentInfo?.name).toBe('monad');
+    expect(init.agentInfo?.name).toBe('Monad');
 
     const { sessionId } = await ctx.request('session/new', { cwd: '/tmp', mcpServers: [] });
     expect(sessionId).toMatch(/^ses_/);

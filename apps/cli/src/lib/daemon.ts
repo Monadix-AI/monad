@@ -2,7 +2,7 @@ import { appendFileSync, closeSync, openSync } from 'node:fs';
 import { mkdir, unlink } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { makeLoopbackHttpsFetcher } from '@monad/client';
-import { getPaths, loadAll, resolveClientConn } from '@monad/home';
+import { getPaths, loadAll, resolveClientConn } from '@monad/environment';
 import { rotateDaemonLog } from '@monad/monad/log-maintenance';
 
 import { t } from './i18n.ts';
@@ -93,7 +93,7 @@ export async function startDaemon(): Promise<{ alreadyRunning: boolean }> {
   // Validate user-edited config before daemon spawn so startup errors are visible.
   const paths = getPaths();
   try {
-    await loadAll(paths.config, paths.profile);
+    await loadAll(paths);
   } catch (err) {
     throw new Error(formatConfigValidationError(paths.config, err));
   }

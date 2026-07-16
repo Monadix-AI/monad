@@ -2,9 +2,9 @@
 
 Native CLI agents (Codex, Claude Code, Gemini, Qwen, OpenClaw, Hermes) own their own approval
 prompts — when a tool call needs approval, the *provider* decides whether to ask. Monad never
-second-guesses that decision or applies its own approval policy to a native CLI. What monad
+second-guesses that decision or applies its own approval policy to a native CLI. What Monad
 controls is a single switch per managed agent: whether those provider approvals run **on
-autopilot** or are **delegated to a human through monad's UI**.
+autopilot** or are **delegated to a human through Monad's UI**.
 
 ## The switch: autopilot
 

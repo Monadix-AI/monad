@@ -1,8 +1,8 @@
-import type { MonadAuth, MonadConfig } from '@monad/home';
+import type { MonadAuth, MonadConfig } from '@monad/environment';
 import type { ModelContext } from '#/handlers/settings/model/context.ts';
 
 import { expect, test } from 'bun:test';
-import { createDefaultConfig } from '@monad/home';
+import { createDefaultConfig } from '@monad/environment';
 import { ModelProviderType } from '@monad/protocol';
 
 import { ModelProviderRegistry } from '#/agent/index.ts';
@@ -10,7 +10,7 @@ import { enrichModelInfo } from '#/handlers/settings/model/utils.ts';
 
 function modelContextWithCatalogContextLimit(limit?: number): ModelContext {
   return {
-    read: async () => ({ auth: {} as MonadAuth, cfg: createDefaultConfig('prn_test00000000', 'Test') }),
+    read: async () => ({ auth: {} as MonadAuth, cfg: createDefaultConfig('Test') }),
     commit: async () => {},
     commitAuth: async () => {},
     providerModelCachePath: '/dev/null/provider-models.json',
@@ -25,7 +25,7 @@ function modelContextWithCatalogContextLimit(limit?: number): ModelContext {
 }
 
 test('enrichModelInfo drops non-positive provider context limits and uses catalog fallback', () => {
-  const cfg = createDefaultConfig('prn_test00000000', 'Test') as MonadConfig;
+  const cfg = createDefaultConfig('Test') as MonadConfig;
   const provider = { id: 'openrouter', type: ModelProviderType.OpenRouter };
 
   expect(

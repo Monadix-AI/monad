@@ -1,26 +1,17 @@
-import type { HooksConfig, MonadPaths } from '@monad/home';
+import type { HooksConfig } from '@monad/environment';
 import type { HooksSettingsResponse, SetHooksSettingsRequest } from '@monad/protocol';
-import type { ConfigReloader } from '#/config/reloader.ts';
+import type { ConfigAccess } from '#/config/manager.ts';
 
-import { loadAll, loadAuth, saveProfile } from '@monad/home';
-
-export function createHooksModule(paths: MonadPaths, configReloader?: ConfigReloader) {
+export function createHooksModule(config: ConfigAccess) {
   async function getHooks(): Promise<HooksSettingsResponse> {
-    const cfg = await loadAll(paths.config, paths.profile);
-    if (!cfg) throw new Error('hooks: config.json missing');
+    const cfg = config.get().cfg;
     return { hooks: cfg.hooks ?? {} };
   }
 
   async function setHooks(req: SetHooksSettingsRequest): Promise<HooksSettingsResponse> {
-    const cfg = await loadAll(paths.config, paths.profile);
-    if (!cfg) throw new Error('hooks: config.json missing');
-
-    cfg.hooks = req.hooks as HooksConfig;
-
-    await saveProfile(paths.profile, cfg);
-    if (configReloader) {
-      await configReloader.publish({ cfg, auth: await loadAuth(paths.auth) });
-    }
+    await config.updateConfig((cfg) => {
+      cfg.hooks = req.hooks as HooksConfig;
+    });
 
     return getHooks();
   }

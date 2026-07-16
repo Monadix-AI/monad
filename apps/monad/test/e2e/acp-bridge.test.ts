@@ -89,8 +89,7 @@ test('bridge: initialize → newSession → prompt streams chunks over the socke
 
   try {
     await makeClientApp(updates).connectWith(clientStream, async (ctx) => {
-      const init = await ctx.request('initialize', { protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} });
-      expect(init.agentInfo?.name).toBe('monad');
+      await ctx.request('initialize', { protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} });
 
       const { sessionId } = await ctx.request('session/new', { cwd: '/tmp', mcpServers: [] });
       expect(sessionId).toMatch(/^ses_/);

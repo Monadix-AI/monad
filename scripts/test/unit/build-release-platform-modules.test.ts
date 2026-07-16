@@ -16,11 +16,11 @@ test('release maps every platform seam to an explicit module for every target OS
       }
     },
     {
-      seam: join(root, 'packages/home/src/host-platform.ts'),
+      seam: join(root, 'packages/environment/src/host-platform.ts'),
       targets: {
-        darwin: join(root, 'packages/home/src/host-platform.darwin.ts'),
-        linux: join(root, 'packages/home/src/host-platform.linux.ts'),
-        windows: join(root, 'packages/home/src/host-platform.windows.ts')
+        darwin: join(root, 'packages/environment/src/host-platform.darwin.ts'),
+        linux: join(root, 'packages/environment/src/host-platform.linux.ts'),
+        windows: join(root, 'packages/environment/src/host-platform.windows.ts')
       }
     },
     {

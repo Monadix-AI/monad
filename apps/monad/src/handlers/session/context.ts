@@ -1,8 +1,10 @@
+import type { MonadPaths } from '@monad/environment';
 import type { Logger } from '@monad/logger';
-import type { Event, EventType, Hooks, PrincipalId, Session, SessionId, SessionMcpServer } from '@monad/protocol';
+import type { Event, EventType, Hooks, Session, SessionId, SessionMcpServer } from '@monad/protocol';
 import type { Agent, LoadedSkill } from '#/agent/index.ts';
 import type { McpConnection } from '#/capabilities/tools';
 import type { Tool, ToolBackends } from '#/capabilities/tools/types.ts';
+import type { ConfigAccess } from '#/config/manager.ts';
 import type { CommandBundle } from '#/handlers/commands/index.ts';
 import type { DelegationService } from '#/services/delegation/delegation.ts';
 import type { EventBus, EventSink } from '#/services/event-bus.ts';
@@ -28,7 +30,6 @@ export interface SessionDeps {
   bus: EventBus;
   cache: RoundCache;
   log?: Logger;
-  ownerPrincipalId: PrincipalId;
   /** Distributed-state handle (embedded KV via Bun.RedisClient; cloud swaps in real Redis). Retained
    *  as the reuse seam — no session-layer consumer today (cross-process resume was intentionally dropped). */
   kv?: KvService;
@@ -39,11 +40,14 @@ export interface SessionDeps {
   /** Per-session ephemeral sandbox roots (sandbox mode 'ephemeral'). Absent → no per-session root. */
   sessionSandbox?: SessionSandboxService;
   /** Config file paths — used to resolve agents on session create. */
-  paths?: { config: string; profile: string };
+  paths?: Pick<MonadPaths, 'config' | 'agentsConfig' | 'mesh'>;
+  configManager?: ConfigAccess;
   /** Slash-command backend (registry + model/compact/skill hooks). Absent → commands disabled. */
   commands?: CommandBundle;
   /** Lifecycle hooks — SessionStart/SessionEnd fire from the lifecycle handlers. */
   hooks?: Hooks;
+  /** Session deletion undo grace. Defaults to the product grace period. */
+  sessionDeleteGraceMs?: number;
   /** cwd handed to command hooks (the resolved sandbox root). */
   hookCwd?: string;
   /** Discover project-local skills from a cwd, called on session create when cwd is set. */
