@@ -16,6 +16,7 @@ import { memo, useMemo, useState } from 'react';
 
 import { useT } from '#/components/I18nProvider';
 import { useToolBackendsSettings } from '#/hooks/use-tool-backends-settings';
+import { type FileDiffPreviewDisplay, FileReadPreview, UnifiedDiffPreview } from './FileToolPreview';
 
 export interface ToolItem {
   kind: 'tool';
@@ -117,15 +118,7 @@ interface CodeExecOutput {
   backend?: string;
 }
 
-interface DiffDisplay {
-  type: 'diff';
-  path: string;
-  beforeText: string | null;
-  afterText: string;
-  diff?: string;
-  diffStat?: { added: number; removed: number };
-  warning?: string;
-}
+type DiffDisplay = FileDiffPreviewDisplay;
 
 interface MultiDiffDisplay {
   type: 'multi_diff';
@@ -427,6 +420,15 @@ function firstStringField(input: unknown, keys: string[]): string | undefined {
   return undefined;
 }
 
+function firstNumberField(input: unknown, keys: string[]): number | undefined {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return undefined;
+  const record = input as Record<string, unknown>;
+  for (const key of keys) {
+    if (typeof record[key] === 'number') return record[key];
+  }
+  return undefined;
+}
+
 function toolState(status: ToolItem['status']): ToolPart['state'] {
   return status === 'running' ? 'input-available' : status === 'error' ? 'output-error' : 'output-available';
 }
@@ -684,7 +686,7 @@ function ToolDetails({
     return (
       <>
         {step.input !== undefined && <ToolInput input={step.input} />}
-        <FileDiffOutputBlock display={diffDisplay} />
+        <UnifiedDiffPreview display={diffDisplay} />
       </>
     );
   }
@@ -702,7 +704,8 @@ function ToolDetails({
     return (
       <>
         {step.input !== undefined && <ToolInput input={step.input} />}
-        <FileReadOutputBlock
+        <FileReadPreview
+          offset={firstNumberField(step.input, ['offset'])}
           output={step.output}
           path={firstStringField(step.input, ['path'])}
         />
@@ -938,83 +941,6 @@ function AnsiText({ segments }: { segments: AnsiSegment[] }) {
   );
 }
 
-function FileReadOutputBlock({ output, path }: { output: string; path?: string }) {
-  return (
-    <div className="overflow-hidden rounded-md border border-border/70 bg-background">
-      <div className="flex items-center gap-2 border-border/70 border-b bg-muted/50 px-3 py-2 text-muted-foreground text-xs">
-        <HugeiconsIcon
-          className="size-3.5"
-          icon={TextIcon}
-        />
-        <span className="min-w-0 truncate font-mono">{path ?? 'file'}</span>
-      </div>
-      <pre className="max-h-80 overflow-auto whitespace-pre p-3 font-mono text-[12px] text-foreground leading-relaxed">
-        {output}
-      </pre>
-    </div>
-  );
-}
-
-function FileDiffOutputBlock({ display }: { display: DiffDisplay }) {
-  const diff = display.diff ?? display.afterText;
-  const added =
-    display.diffStat?.added ??
-    diff.split('\n').filter((line) => line.startsWith('+') && !line.startsWith('+++')).length;
-  const removed =
-    display.diffStat?.removed ??
-    diff.split('\n').filter((line) => line.startsWith('-') && !line.startsWith('---')).length;
-  const occurrences = new Map<string, number>();
-  const lines = diff.split('\n').map((line) => {
-    const count = occurrences.get(line) ?? 0;
-    occurrences.set(line, count + 1);
-    return { key: `${line}-${count}`, line };
-  });
-
-  return (
-    <div className="overflow-hidden rounded-md border border-border/70 bg-background">
-      <div className="flex items-center gap-2 border-border/70 border-b bg-muted/50 px-3 py-2 text-muted-foreground text-xs">
-        <HugeiconsIcon
-          className="size-3.5"
-          icon={TextIcon}
-        />
-        <span className="min-w-0 truncate font-mono">{display.path}</span>
-        {display.warning && (
-          <span className="shrink-0 rounded bg-warning/10 px-1.5 py-0.5 font-mono text-[10px] text-warning">
-            warning
-          </span>
-        )}
-        <span className="ml-auto shrink-0 font-mono text-[11px]">
-          <span className="text-emerald-500">+{added}</span>
-          <span className="mx-1 text-muted-foreground/50">/</span>
-          <span className="text-red-500">-{removed}</span>
-        </span>
-      </div>
-      {display.warning && (
-        <div className="border-warning/20 border-b bg-warning/5 px-3 py-2 text-[11px] text-warning">
-          {display.warning}
-        </div>
-      )}
-      <pre className="max-h-80 overflow-auto whitespace-pre p-3 font-mono text-[12px] leading-relaxed">
-        {lines.map(({ key, line }) => (
-          <span
-            className={cn(
-              'block min-h-[1.35em]',
-              line.startsWith('+') &&
-                !line.startsWith('+++') &&
-                'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
-              line.startsWith('-') && !line.startsWith('---') && 'bg-red-500/10 text-red-700 dark:text-red-300',
-              (line.startsWith('@@') || line.startsWith('---') || line.startsWith('+++')) && 'text-muted-foreground'
-            )}
-            key={key}
-          >
-            {line || ' '}
-          </span>
-        ))}
-      </pre>
-    </div>
-  );
-}
-
 function MultiFileDiffOutputBlock({ display }: { display: MultiDiffDisplay }) {
   const [expanded, setExpanded] = useState(false);
   const summary =
@@ -1056,7 +982,7 @@ function MultiFileDiffOutputBlock({ display }: { display: MultiDiffDisplay }) {
       </div>
       {visibleFiles.map((file) =>
         file.status === 'ok' && file.display ? (
-          <FileDiffOutputBlock
+          <UnifiedDiffPreview
             display={file.display}
             key={`${file.path}-${file.operation ?? 'ok'}`}
           />
