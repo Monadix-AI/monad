@@ -1,6 +1,15 @@
 import { expect, test } from 'bun:test';
 
-import { nextDaemonSupervisorAction } from '../../src/lib/daemon.ts';
+import { nextDaemonSupervisorAction, releaseDaemonSupervisorSpawnOptions } from '../../src/lib/daemon.ts';
+
+test('release daemon supervisor starts detached from the launcher process group', () => {
+  expect(releaseDaemonSupervisorSpawnOptions('/opt/monad/bin/monad', '/tmp/daemon.log')).toEqual({
+    argv: ['/opt/monad/bin/monad', 'daemon-supervisor', '/tmp/daemon.log'],
+    detached: true,
+    stdin: 'ignore',
+    stdout: 'ignore'
+  });
+});
 
 test('daemon supervisor exits instead of restarting when the first daemon startup crashes before health is ready', () => {
   expect(nextDaemonSupervisorAction({ started: false, readyOnce: false, exitCode: 1 })).toEqual({

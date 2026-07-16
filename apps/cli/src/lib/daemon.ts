@@ -81,6 +81,15 @@ async function getPortPid(): Promise<number | null> {
   }
 }
 
+export function releaseDaemonSupervisorSpawnOptions(execPath: string, logPath: string) {
+  return {
+    argv: [execPath, 'daemon-supervisor', logPath],
+    detached: true as const,
+    stdin: 'ignore' as const,
+    stdout: 'ignore' as const
+  };
+}
+
 export async function startDaemon(): Promise<{ alreadyRunning: boolean }> {
   // The installer stops any running daemon before overwriting the binary, so a reachable daemon
   // here is an intentional one the caller is reusing — report it and leave it running.
@@ -129,36 +138,20 @@ export async function startDaemon(): Promise<{ alreadyRunning: boolean }> {
   // logFd` redirect below still captures native/pre-logger crash output on Unix, but a detached child
   // does not inherit that fd on Windows — so the daemon owning the file is what populates it there.
   const relayArgs = ['--start-relay', '--log-file', logPath];
-  if (!isDevEntry && process.platform !== 'win32') {
-    closeSync(logFd);
-    const result = Bun.spawnSync(
-      [
-        'sh',
-        '-c',
-        'nohup "$1" daemon-supervisor "$2" </dev/null >/dev/null 2>>"$2" & printf "%s\\n" "$!"',
-        'monad-supervisor-launch',
-        process.execPath,
-        logPath
-      ],
-      { stdin: 'ignore', stdout: 'pipe', stderr: 'pipe' }
-    );
-    const supervisorPid = Number.parseInt(new TextDecoder().decode(result.stdout).trim(), 10);
-    if (result.exitCode !== 0 || !Number.isInteger(supervisorPid) || supervisorPid <= 0) {
-      const stderr = new TextDecoder().decode(result.stderr).trim();
-      throw new Error(stderr || `failed to launch daemon supervisor (${logPath})`);
-    }
-    await Bun.write(getPidPath(), String(supervisorPid));
-    await waitUntilReady(supervisorPid, logPath);
-    return { alreadyRunning: false };
-  }
-
-  const releaseSupervisorArgs = [process.execPath, 'daemon-supervisor', logPath];
-  const argv = isDevEntry ? ['bun', devEntry, ...relayArgs] : releaseSupervisorArgs;
-  const proc = Bun.spawn(argv, {
-    stdin: 'ignore',
-    stdout: isDevEntry ? 'pipe' : 'ignore',
+  const releaseSpawn = releaseDaemonSupervisorSpawnOptions(process.execPath, logPath);
+  const spawn = isDevEntry
+    ? {
+        argv: ['bun', devEntry, ...relayArgs],
+        detached: true as const,
+        stdin: 'ignore' as const,
+        stdout: 'pipe' as const
+      }
+    : releaseSpawn;
+  const proc = Bun.spawn(spawn.argv, {
+    stdin: spawn.stdin,
+    stdout: spawn.stdout,
     stderr: logFd,
-    detached: true
+    detached: spawn.detached
   });
   closeSync(logFd);
   await Bun.write(getPidPath(), String(proc.pid));
