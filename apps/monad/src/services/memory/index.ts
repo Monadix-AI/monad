@@ -490,8 +490,12 @@ export function createMemoryService(deps: MemoryServiceDeps): MemoryService {
         return null;
       }
       if (facts.length === 0) return null;
+      // Each fact writes independently (distinct content → distinct id; the builtin backend's
+      // appendFact is a synchronous read-modify-write, so concurrent continuations don't interleave,
+      // and mem0's addFact is independent per fact) — write them concurrently, not one round-trip
+      // at a time.
       if (mode === 'auto') {
-        for (const f of facts) await writeFact(scope.kind, scope.id, f, 'machine');
+        await Promise.all(facts.map((f) => writeFact(scope.kind, scope.id, f, 'machine')));
       }
       return { scope, facts };
     }

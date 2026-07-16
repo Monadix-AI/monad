@@ -94,6 +94,19 @@ test('auto mode extracts facts AND writes them to the resolved scope', async () 
   expect(written[0]?.provClass).toBe('machine');
 });
 
+test('auto mode writes ALL extracted facts concurrently, none lost to the read-modify-write append', async () => {
+  const router = routerReturning('["User prefers dark mode", "Project uses Bun, not Node", "Deploys on Fridays"]');
+  const service = svc(router);
+  await service.promoteFacts('ses_100000000000' as never, 'some folded span', 'auto');
+
+  const written = await service.listFacts('agent', 'agt_100000000000');
+  // Concurrent Promise.all writes to one scope file — every fact must survive (a racy
+  // read-modify-write would drop all but the last).
+  expect(written.map((f) => f.content).sort()).toEqual(
+    ['Deploys on Fridays', 'Project uses Bun, not Node', 'User prefers dark mode'].sort()
+  );
+});
+
 test('falls back to the global scope when the session has no agent', async () => {
   const router = routerReturning('["User is a backend engineer"]');
   const service = svc(router, freshStore([]));
