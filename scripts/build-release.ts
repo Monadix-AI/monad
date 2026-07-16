@@ -28,6 +28,7 @@ import { $, Glob } from 'bun';
 import { generateMigrationAssets } from '../apps/monad/scripts/generate-migration-assets.ts';
 import rootPkg from '../package.json' with { type: 'json' };
 import { createPlatformModulePlugin } from './lib/platform-modules.ts';
+import { optionalPeerExternals } from './lib/release-optional-peers.ts';
 import { releasePlatformModuleRules } from './lib/release-platform-modules.ts';
 
 const ROOT = resolve(import.meta.dir, '..');
@@ -100,6 +101,7 @@ log(`Building monad ${VERSION} for: ${TARGETS.map((t) => `${t.os}-${t.arch}`).jo
 // ── 0. Install workspace deps ─────────────────────────────────────────────────
 log('Installing workspace dependencies…');
 await $`bun install`.cwd(ROOT);
+const optionalExternals = await optionalPeerExternals(join(ROOT, 'apps/monad/node_modules/mem0ai/package.json'));
 await $`bun run ${join(ROOT, 'packages/environment/scripts/gen-config-schema.ts')}`;
 generateMigrationAssets();
 // Regenerate the native Mo atlas header from the manifest before any shell build.
@@ -211,6 +213,7 @@ try {
     });
     const res = await Bun.build({
       entrypoints: [join(ROOT, 'apps/cli/src/bin.ts'), ...webFiles],
+      external: optionalExternals,
       compile: {
         target: `bun-${t.os}-${t.arch}${t.libc ? `-${t.libc}` : ''}` as Bun.Build.CompileTarget,
         outfile: join(binDir, binName)
