@@ -109,6 +109,12 @@ See [`docs/internals/session-origin.md`](internals/session-origin.md).
 
 The AI reasoning core that lives inside a session. It runs a **tool loop**: receive a message → call the model → execute any tool calls → stream events → repeat. The agent reads from its context window (system prompt + transcript + injected skill/memory content) and dispatches tool calls through the **Approval Gate** before execution. One daemon can run many agent instances concurrently, one per session.
 
+### Context management (gentle cascade)
+
+How a long session stays inside the model's context window without one lossy "summarize everything" cliff. Pressure is relieved in a **cascade** — cheap and lossless first, lossy only when it must be: **eviction** replaces stale tool-result output with a placeholder (the bytes stay recoverable by handle via `read_tool_output`); **durable summarization** folds older turns into a persisted structured briefing (in the background by default); a hard token limiter is the last-resort backstop. Optional stages add a `<plan>` **recitation** anchor after compaction, **semantic retrieval** of related history, and **memory promotion** of durable facts out of a span before it's compacted away. Every stage is observable (`context.usage` / `context.evicted` events) or recoverable rather than silent. All under the `context.*` config block.
+
+See [`docs/internals/context-management.md`](internals/context-management.md).
+
 ### Model Router
 
 The routing layer that picks the concrete model for each agent turn. It resolves a **role** (e.g. `primary`, `fast`, `background`, `embed`) through the active **profile** to a `(provider, modelId)` pair. Profiles let operators swap entire model stacks with one config change. The router hot-reloads when `config.json` changes.

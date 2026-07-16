@@ -51,6 +51,7 @@ For contributors and the curious: architecture and behavior of the running syste
 | [internals/peer-federation.md](internals/peer-federation.md) | Daemon-to-daemon task delegation: a peer runs the subtask on its own machine and streams the result back. |
 | [internals/host-interactions.md](internals/host-interactions.md) | Schema-driven user input requested by built-ins and atom packs across Web, TUI, CLI, and ACP. |
 | [internals/memory.md](internals/memory.md) | The memory system as built: L1 Markdown facts, L2 knowledge graph, L3 laws, and the consolidation pipeline. |
+| [internals/context-management.md](internals/context-management.md) | Keeping a turn inside the context window: the gentle cascade — lossless eviction, durable summarization, recitation, retrieval, recovery-by-handle. |
 | [internals/tools.md](internals/tools.md) | The built-in tool set: registry layout, the uniform `register` contract, and authoring/security rules. |
 | [internals/model-providers.md](internals/model-providers.md) | The model gateway: the provider catalog as source of truth, native vs OpenAI-compatible strategies, auth. |
 | [internals/atoms.md](internals/atoms.md) | The atom pack system: one pack contributes declared, manifest-gated extension kinds. |

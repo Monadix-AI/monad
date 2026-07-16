@@ -579,7 +579,7 @@ export type MemorySettings = z.infer<typeof memorySettingsSchema>;
 // The defaults define the shipped cascade behavior (lossless eviction on, background compaction on).
 // To revert an individual stage to pre-cascade behavior, disable it explicitly: `eviction.enabled`
 // false drops the lossless stage, `summarize.background` false makes compaction synchronous again.
-// Fractions are of the active model's context limit.
+// Fractions are of the active model's context limit. Full reference: docs/internals/context-management.md.
 export const contextSettingsSchema = z
   .object({
     // Stage 1 — lossless: once the window crosses `atFraction`, replace OLD tool-result outputs with
@@ -618,7 +618,8 @@ export const contextSettingsSchema = z
         rawCapBytes: z.number().int().min(0).default(2_000_000)
       })
       .default({ maxChars: 24_000, persistRaw: true, rawCapBytes: 2_000_000 }),
-    // Stage 3 — re-anchor the current plan after compaction (implemented in a later phase).
+    // Stage 3 — re-anchor the current plan (summary's Open Tasks / Next Step) at the end of the
+    // prompt after compaction, closest to where the model generates. Opt-in; no-op without a summary.
     recitation: z.object({ enabled: z.boolean().default(false) }).default({ enabled: false }),
     // Promote durable facts out of compacted spans: off | suggest (propose, user confirms) | auto.
     memoryPromotion: z.object({ mode: z.enum(['off', 'suggest', 'auto']).default('off') }).default({ mode: 'off' }),
