@@ -875,6 +875,39 @@ test('Codex app-server observation projects item tool lifecycle and output delta
   ]);
 });
 
+test('Codex observation does not project a capped partial JSON record as one giant message', () => {
+  const output = `truncated provider payload ${'x'.repeat(70_000)} \\"method\\":\\"item/completed\\"}`;
+
+  expect(externalAgentStreamItems({ id: 'exa_codex0000000', provider: 'codex', output })).toEqual([]);
+});
+
+test('Codex observation keeps item ids stable when older records leave the snapshot', () => {
+  const completed = JSON.stringify({
+    method: 'item/completed',
+    params: {
+      item: {
+        type: 'commandExecution',
+        id: 'call_stable',
+        command: 'bun test',
+        status: 'completed',
+        aggregatedOutput: 'pass'
+      }
+    }
+  });
+  const first = externalAgentStreamItems({
+    id: 'exa_codex0000000',
+    provider: 'codex',
+    output: [JSON.stringify({ method: 'thread/tokenUsage/updated', params: { threadId: 'thread_1' } }), completed].join(
+      '\n'
+    )
+  });
+  const shifted = externalAgentStreamItems({ id: 'exa_codex0000000', provider: 'codex', output: completed });
+
+  expect(first.filter((item) => item.role === 'tool').map((item) => item.id)).toEqual(
+    shifted.filter((item) => item.role === 'tool').map((item) => item.id)
+  );
+});
+
 test('Codex app-server observation projects completed MCP tool calls with arguments and result', () => {
   const output = JSON.stringify({
     method: 'item/completed',

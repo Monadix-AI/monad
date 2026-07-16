@@ -897,10 +897,20 @@ test('projects structured clarification requests for composer questions', () => 
     }
   });
 
-  const [removed] = projector.applyEvent(event('clarify.resolved', { requestId: 'clarify_1', answer: 'Ship it' }));
-  expect(removed).toEqual(
-    expect.objectContaining({ kind: 'remove', target: { kind: 'clarification', id: 'clarify_1' } })
-  );
+  expect(projector.applyEvent(event('clarify.resolved', { requestId: 'clarify_1', answer: 'Ship it' }))).toEqual([
+    expect.objectContaining({ kind: 'remove', target: { kind: 'clarification', id: 'clarify_1' } }),
+    expect.objectContaining({
+      kind: 'upsert',
+      item: {
+        kind: 'message',
+        id: 'clarify-answer:clarify_1',
+        role: 'user',
+        parts: [{ type: 'text', text: 'Ship it' }],
+        status: 'done',
+        seq: expect.any(String)
+      }
+    })
+  ]);
 });
 
 test('keeps tool progress on the standard tool item', () => {

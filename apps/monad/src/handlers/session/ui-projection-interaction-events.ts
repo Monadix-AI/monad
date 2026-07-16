@@ -78,7 +78,23 @@ export function applyInteractionEvent(m: ProjectionMutations, event: Event): Ses
     }
     case 'clarify.resolved': {
       const p = parseEventPayload('clarify.resolved', event.payload);
-      return [m.remove('clarification', p.requestId)];
+      const removed = m.remove('clarification', p.requestId);
+      if (!p.answer.trim()) return [removed];
+      return [
+        removed,
+        {
+          kind: 'upsert',
+          cursor: event.id,
+          item: m.upsert({
+            kind: 'message',
+            id: `clarify-answer:${p.requestId}`,
+            role: 'user',
+            parts: [{ type: 'text', text: p.answer }],
+            status: 'done',
+            seq: event.id
+          })
+        }
+      ];
     }
     case 'context.usage': {
       const p = parseEventPayload('context.usage', event.payload);

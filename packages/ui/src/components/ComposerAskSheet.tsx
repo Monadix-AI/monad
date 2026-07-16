@@ -27,6 +27,31 @@ export type ComposerAskSheetProps = {
   total: number;
 };
 
+type ComposerAskSheetKeyAction =
+  | { type: 'choose'; index: number }
+  | { type: 'dismiss' | 'focus-next' | 'focus-previous' | 'ignore' | 'submit' | 'toggle-active' };
+
+export function composerAskSheetKeyAction(input: {
+  inTextInput: boolean;
+  isComposing: boolean;
+  key: string;
+  primaryModifier: boolean;
+}): ComposerAskSheetKeyAction {
+  if (input.isComposing) return { type: 'ignore' };
+  if (input.inTextInput) {
+    if (input.key === 'Escape') return { type: 'dismiss' };
+    if (input.key === 'Enter' && input.primaryModifier) return { type: 'submit' };
+    return { type: 'ignore' };
+  }
+  if (/^[1-9]$/.test(input.key)) return { type: 'choose', index: Number(input.key) - 1 };
+  if (input.key === 'ArrowDown') return { type: 'focus-next' };
+  if (input.key === 'ArrowUp') return { type: 'focus-previous' };
+  if (input.key === ' ') return { type: 'toggle-active' };
+  if (input.key === 'Enter') return { type: 'submit' };
+  if (input.key === 'Escape') return { type: 'dismiss' };
+  return { type: 'ignore' };
+}
+
 export function ComposerAskSheet({
   askedLabel,
   asker,
@@ -95,51 +120,37 @@ export function ComposerAskSheet({
     <fieldset
       className={closing ? 'monad-ui-question-sheet is-closing' : 'monad-ui-question-sheet'}
       onKeyDown={(event) => {
-        if (event.nativeEvent.isComposing) return;
-        if (event.target instanceof HTMLInputElement) {
-          if (event.key === 'Escape') {
-            event.preventDefault();
-            dismiss();
-          }
-          if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
-            event.preventDefault();
+        const action = composerAskSheetKeyAction({
+          inTextInput: event.target instanceof HTMLInputElement,
+          isComposing: event.nativeEvent.isComposing,
+          key: event.key,
+          primaryModifier: event.metaKey || event.ctrlKey
+        });
+        if (action.type === 'ignore') return;
+        event.preventDefault();
+        switch (action.type) {
+          case 'choose':
+            chooseIndex(action.index);
+            return;
+          case 'focus-next':
+            setActive((index) => (focusableCount ? (index + 1) % focusableCount : 0));
+            return;
+          case 'focus-previous':
+            setActive((index) => (focusableCount ? (index - 1 + focusableCount) % focusableCount : 0));
+            return;
+          case 'toggle-active':
+            chooseIndex(active);
+            return;
+          case 'submit':
             submit();
-          }
-          return;
-        }
-        if (/^[1-9]$/.test(event.key)) {
-          event.preventDefault();
-          chooseIndex(Number(event.key) - 1);
-          return;
-        }
-        if (event.key === 'ArrowDown') {
-          event.preventDefault();
-          setActive((index) => (focusableCount ? (index + 1) % focusableCount : 0));
-          return;
-        }
-        if (event.key === 'ArrowUp') {
-          event.preventDefault();
-          setActive((index) => (focusableCount ? (index - 1 + focusableCount) % focusableCount : 0));
-          return;
-        }
-        if (event.key === ' ') {
-          event.preventDefault();
-          chooseIndex(active);
-          return;
-        }
-        if (event.key === 'Enter') {
-          event.preventDefault();
-          submit();
-          return;
-        }
-        if (event.key === 'Escape') {
-          event.preventDefault();
-          dismiss();
+            return;
+          case 'dismiss':
+            dismiss();
         }
       }}
       ref={panelRef}
       style={{
-        background: 'color-mix(in srgb, var(--card) 92%, var(--background))',
+        background: 'var(--popover)',
         border: '1px solid color-mix(in srgb, var(--border) 86%, transparent)',
         borderRadius: 24,
         boxShadow: '0 18px 54px color-mix(in srgb, #000 14%, transparent)',

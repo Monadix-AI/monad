@@ -55,6 +55,7 @@ export function QuestionStack({
       }
       buildAnswer={buildClarifyAnswer}
       dismissLabel="Dismiss"
+      key={question.id}
       onAnswer={onAnswer}
       onDismiss={onDismiss}
       otherAriaLabel={t('web.workplace.otherAnswer')}

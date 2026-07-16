@@ -12,6 +12,7 @@ export class BoundedOutputBuffer {
   private chunks: string[] = [];
   private len = 0;
   private joined: string | null = '';
+  private framed = false;
 
   constructor(private readonly max: number) {}
 
@@ -33,10 +34,22 @@ export class BoundedOutputBuffer {
     }
   }
 
+  appendFrame(frame: string): void {
+    if (!frame || frame.length > this.max) return;
+    this.framed = true;
+    this.chunks.push(frame);
+    this.len += frame.length;
+    this.joined = null;
+    while (this.len > this.max && this.chunks.length > 0) {
+      const first = this.chunks.shift() ?? '';
+      this.len -= first.length;
+    }
+  }
+
   snapshot(): string {
     if (this.joined !== null) return this.joined;
     const s = this.chunks.length === 1 ? (this.chunks[0] ?? '') : this.chunks.join('');
-    this.chunks = s ? [s] : [];
+    if (!this.framed) this.chunks = s ? [s] : [];
     this.len = s.length;
     this.joined = s;
     return s;

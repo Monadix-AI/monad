@@ -40,3 +40,27 @@ test('BoundedOutputBuffer snapshot is stable across repeated reads and appends',
   expect(buffer.snapshot()).toBe('hello world');
   expect(buffer.snapshot()).toBe('hello world');
 });
+
+test('BoundedOutputBuffer keeps framed JSON aligned to complete record boundaries', () => {
+  const buffer = new BoundedOutputBuffer(64);
+
+  buffer.appendFrame(`${JSON.stringify({ method: 'first', value: 'x'.repeat(18) })}\n`);
+  buffer.appendFrame(`${JSON.stringify({ method: 'second', value: 'y'.repeat(18) })}\n`);
+
+  const records = buffer
+    .snapshot()
+    .trim()
+    .split('\n')
+    .map((line) => JSON.parse(line) as { method: string; value: string });
+  expect(records).toEqual([{ method: 'second', value: 'y'.repeat(18) }]);
+});
+
+test('BoundedOutputBuffer drops an oversized frame without replacing the last valid snapshot', () => {
+  const buffer = new BoundedOutputBuffer(64);
+
+  const valid = `${JSON.stringify({ method: 'item/started', id: 'call_1' })}\n`;
+  buffer.appendFrame(valid);
+  buffer.appendFrame(`${JSON.stringify({ method: 'item/completed', output: 'x'.repeat(256) })}\n`);
+
+  expect(buffer.snapshot()).toBe(valid);
+});

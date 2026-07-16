@@ -74,11 +74,12 @@ export function codexAppServerToolCallObservation(args: {
   item: Record<string, unknown>;
   createdAt?: string;
 }): ExternalAgentObservationEvent[] {
+  const recordKey = textValue(args.item.id) ?? String(args.recordIndex);
   const tool = codexAppServerToolName(args.item);
   const input = codexAppServerToolInput(args.item);
   const inputText = compactJson(input);
   return observation({
-    id: `${args.id}:json:${args.recordIndex}:tool-call`,
+    id: `${args.id}:json:${recordKey}:tool-call`,
     role: 'tool',
     text: `Tool call ${tool}${inputText ? ` ${inputText}` : ''}`,
     source: 'codex-app-server',
@@ -97,6 +98,7 @@ export function codexAppServerToolResultObservation(args: {
   item: Record<string, unknown>;
   createdAt?: string;
 }): ExternalAgentObservationEvent[] {
+  const recordKey = textValue(args.item.id) ?? String(args.recordIndex);
   const output =
     textValue(
       args.item.output,
@@ -109,7 +111,7 @@ export function codexAppServerToolResultObservation(args: {
     codexMcpContentText(args.item.result ?? args.item.output ?? args.item.content ?? args.item.aggregatedOutput) ??
     compactJson(args.item.output ?? args.item.result ?? args.item.content ?? args.item.aggregatedOutput ?? args.item);
   return observation({
-    id: `${args.id}:json:${args.recordIndex}${args.itemIndex === undefined ? '' : `:${args.itemIndex}`}:tool-result`,
+    id: `${args.id}:json:${recordKey}${args.itemIndex === undefined ? '' : `:${args.itemIndex}`}:tool-result`,
     role: 'tool',
     text: output,
     source: 'codex-app-server',

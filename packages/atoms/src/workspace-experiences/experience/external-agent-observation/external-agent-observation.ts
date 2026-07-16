@@ -312,6 +312,12 @@ function externalAgentObservationEvents(args: {
       adapterObservation
     );
   }
+  if (
+    adapterObservation &&
+    text.length >= 64 * 1024 &&
+    (text.includes('"method":') || text.includes('\\"method\\":') || text.includes('"type":'))
+  )
+    return [];
   return undefined;
 }
 

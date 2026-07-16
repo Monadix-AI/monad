@@ -19,6 +19,7 @@ import {
   useClarifyRespondMutation,
   useDeleteWorkplaceProjectMutation,
   useInputExternalAgentSessionMutation,
+  useInviteSessionMemberMutation,
   useSendProjectMessageMutation,
   useStopExternalAgentSessionMutation,
   useUpdateWorkplaceProjectMutation
@@ -55,6 +56,17 @@ type AddProjectMemberOptions = {
   appServerTransport?: ExternalAgentAppServerTransport;
   customPrompt?: string;
 };
+
+export async function persistProjectMemberAndInvite(args: {
+  activeSessionId: SessionId | null;
+  memberId: string;
+  invite: (args: { sessionId: SessionId; templateId: string }) => Promise<unknown>;
+  persist: () => Promise<unknown>;
+}): Promise<void> {
+  await args.persist();
+  if (!args.activeSessionId) return;
+  await args.invite({ sessionId: args.activeSessionId, templateId: args.memberId });
+}
 
 function warmEntityAvatar(seed: string, avatarStyle?: AvatarStyle): void {
   void fetch(entityAvatarWriteUrl(seed, avatarStyle), { method: 'POST' }).catch(() => {});
@@ -93,6 +105,7 @@ export function useProjectActions(args: {
   const [updateWorkplaceProject] = useUpdateWorkplaceProjectMutation();
   const [deleteWorkplaceProject] = useDeleteWorkplaceProjectMutation();
   const [inputExternalAgentSession] = useInputExternalAgentSessionMutation();
+  const [inviteSessionMember] = useInviteSessionMemberMutation();
   const [stopExternalAgentSession] = useStopExternalAgentSessionMutation();
 
   const sendDirective = useCallback(
@@ -220,27 +233,34 @@ export function useProjectActions(args: {
           uniqueExternalAgentDisplayName(options.displayName?.trim() || defaultDisplayName, projectMembers)
         );
         const instanceId = newExternalAgentInstanceId(name);
-        await updateProjectMembers([
-          ...projectMembers,
-          {
-            id: instanceId,
-            type,
-            // `name` stays the real, configured external-agent name (config resolution reads
-            // `templateName ?? name`) — the user-facing label lives only in `displayName`.
-            name,
-            displayName,
-            instanceId,
-            settings
-          }
-        ]);
+        await persistProjectMemberAndInvite({
+          activeSessionId,
+          memberId: instanceId,
+          persist: () =>
+            updateProjectMembers([
+              ...projectMembers,
+              {
+                id: instanceId,
+                type,
+                name,
+                displayName,
+                instanceId,
+                settings
+              }
+            ]),
+          invite: (request) => inviteSessionMember(request).unwrap()
+        });
         return;
       }
-      await updateProjectMembers([
-        ...projectMembers,
-        { id: workplaceProjectMemberId(type, name), type, name, settings }
-      ]);
+      const memberId = workplaceProjectMemberId(type, name);
+      await persistProjectMemberAndInvite({
+        activeSessionId,
+        memberId,
+        persist: () => updateProjectMembers([...projectMembers, { id: memberId, type, name, settings }]),
+        invite: (request) => inviteSessionMember(request).unwrap()
+      });
     },
-    [acpAgents, externalAgents, projectMembers, updateProjectMembers]
+    [acpAgents, activeSessionId, externalAgents, inviteSessionMember, projectMembers, updateProjectMembers]
   );
 
   const removeProjectMember = useCallback(

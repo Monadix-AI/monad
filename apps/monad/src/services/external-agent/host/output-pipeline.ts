@@ -104,7 +104,8 @@ export class ExternalAgentOutputPipeline {
     if (live) {
       // Accumulate in memory and flush the bounded snapshot to SQLite on a timer — avoids a
       // per-chunk 256 KB read-modify-write under a chatty agent.
-      live.outputBuffer.append(buffered);
+      if (stream === 'app-server') live.outputBuffer.appendFrame(buffered);
+      else live.outputBuffer.append(buffered);
       live.outputSeq += buffered.length;
       this.scheduleSnapshotFlush(id);
       this.ctx.observation.publish(id);
