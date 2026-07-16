@@ -5,8 +5,8 @@ import {
   mcpServerSelectors,
   useAuthorizeMcpServerMutation,
   useDeleteMcpServerMutation,
-  useLazyListMcpServerStatusQuery,
   useListMcpCatalogQuery,
+  useListMcpServerStatusQuery,
   useListMcpServersQuery,
   useReconnectMcpServerMutation,
   useUpsertMcpServerMutation
@@ -15,7 +15,7 @@ import { useCallback } from 'react';
 
 export interface McpServerSettingsStore {
   servers: McpServerView[];
-  /** Live connection health by server name (connected / disabled / failed + tools). */
+  /** Live connection health by server name (disabled / starting / ready / failed + tools). */
   statusByName: Map<string, McpServerStatus>;
   /** Curated directory of popular MCP servers for one-click add. */
   catalog: McpCatalogEntry[];
@@ -34,7 +34,7 @@ export interface McpServerSettingsStore {
 
 export function useMcpServerSettings(): McpServerSettingsStore {
   const serversQ = useListMcpServersQuery(undefined);
-  const [loadStatus, statusQ] = useLazyListMcpServerStatusQuery();
+  const statusQ = useListMcpServerStatusQuery(undefined);
   const catalogQ = useListMcpCatalogQuery(undefined);
   const [upsert] = useUpsertMcpServerMutation();
   const [del] = useDeleteMcpServerMutation();
@@ -86,7 +86,7 @@ export function useMcpServerSettings(): McpServerSettingsStore {
     reconnect,
     refetch: () => {
       void serversQ.refetch();
-      void loadStatus(undefined, false);
+      void statusQ.refetch();
     }
   };
 }

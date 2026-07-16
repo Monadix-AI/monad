@@ -2,6 +2,7 @@ import type { SessionId } from '@monad/protocol';
 
 import { loadAll, loadAuth, saveProfile } from '@monad/home';
 import { createLogger } from '@monad/logger';
+import { newId } from '@monad/protocol';
 
 import { createAgentRuntime } from '#/application/agent-runtime.ts';
 import { createCoreRuntime } from '#/application/core-runtime.ts';
@@ -129,6 +130,17 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     fileMcpConnections: () => [...mcpRuntime.files],
     obscuraStatus: () => getObscuraStatus()
   });
+  const disposeMcpStatusStream = mcpRuntime.onStatusChange(() => {
+    bus.publish({
+      id: newId('evt'),
+      sessionId: newId('ses'),
+      type: 'mcp.status_updated',
+      actorAgentId: null,
+      payload: {},
+      at: new Date().toISOString()
+    });
+  });
+  process.on('exit', disposeMcpStatusStream);
 
   const upgradeInfo = await createUpgradeInfoMonitor(paths);
 

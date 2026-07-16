@@ -9,7 +9,12 @@ import { expect, test } from 'bun:test';
 import { join } from 'node:path';
 import { createDefaultConfig } from '@monad/home';
 
-import { collectMcpStatus, connectMcpServers, reloadConfigMcpServers } from '#/capabilities/mcp/service.ts';
+import {
+  collectMcpStatus,
+  connectMcpServers,
+  reconnectOneMcpServer,
+  reloadConfigMcpServers
+} from '#/capabilities/mcp/service.ts';
 import { AtomPackRegistry } from '#/handlers/atom-pack/index.ts';
 
 const fixture = join(import.meta.dir, '../unit/tools/fixtures/mock-mcp-server.ts');
@@ -84,7 +89,7 @@ test('reloadConfigMcpServers diffs: add connects, remove clears tools, unchanged
   for (const { conn } of handle2.connections.values()) await conn.close();
 });
 
-test('collectMcpStatus reports connected / disabled / failed across config servers', async () => {
+test('collectMcpStatus reports ready / disabled / failed across config servers', async () => {
   const cfg = createDefaultConfig('prn_t00000000000', 't');
   cfg.mcpServers = [
     server('ok'),
@@ -103,16 +108,41 @@ test('collectMcpStatus reports connected / disabled / failed across config serve
   const status = collectMcpStatus({
     cfg,
     config: handle.connections,
+    configStatus: handle.status,
     file: [],
     obscura: { connected: false, tools: [] }
   });
   const by = new Map(status.map((s) => [s.name, s]));
-  expect(by.get('ok')?.state).toBe('connected');
+  expect(by.get('ok')?.state).toBe('ready');
   expect(by.get('ok')?.toolCount ?? 0).toBeGreaterThan(0);
   expect(by.get('off')?.state).toBe('disabled');
   expect(by.get('broken')?.state).toBe('failed'); // spawn fails → never connected
 
   for (const { conn } of handle.connections.values()) await conn.close();
+});
+
+test('collectMcpStatus reports enabled config servers as starting before their handshake finishes', () => {
+  const cfg = createDefaultConfig('prn_t00000000000', 't');
+  cfg.mcpServers = [server('slow')];
+
+  const status = collectMcpStatus({
+    cfg,
+    config: new Map(),
+    configStatus: new Map([['slow', { state: 'starting' as const }]]),
+    file: [],
+    obscura: { connected: false, tools: [] }
+  });
+
+  expect(status).toEqual([
+    {
+      name: 'slow',
+      source: 'config',
+      transport: 'stdio',
+      state: 'starting',
+      toolCount: 0,
+      tools: []
+    }
+  ]);
 });
 
 test('reloadConfigMcpServers reconnects a CHANGED server (new connection, tools re-registered)', async () => {
@@ -133,4 +163,30 @@ test('reloadConfigMcpServers reconnects a CHANGED server (new connection, tools 
   expect(registry.tools.has('a__echo')).toBe(true); // re-registered
 
   for (const { conn } of handle2.connections.values()) await conn.close();
+});
+
+test('reconnectOneMcpServer updates status when a previously ready server is refused', async () => {
+  const cfg = createDefaultConfig('prn_t00000000000', 't');
+  cfg.mcpServers = [server('a')];
+  const registry = new AtomPackRegistry();
+  const handle = await connectMcpServers(cfg, paths, registry);
+
+  expect(handle.connections.has('a')).toBe(true);
+  expect(handle.status.get('a')?.state).toBe('ready');
+
+  const next = createDefaultConfig('prn_t00000000000', 't');
+  next.mcpServers = [
+    {
+      ...server('a'),
+      trust: { autoApproveTools: [], hostEscape: false, pinnedToolHash: 'deadbeef-not-the-real-hash' }
+    }
+  ];
+  const handle2 = await reconnectOneMcpServer('a', handle, next, paths, registry);
+
+  expect(handle2.connections.has('a')).toBe(false);
+  expect(handle2.status.get('a')).toEqual({
+    state: 'failed',
+    error: 'tool set refused by trust policy'
+  });
+  expect(registry.tools.has('a__echo')).toBe(false);
 });

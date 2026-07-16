@@ -23,11 +23,16 @@ import { resolveSecretMap, resolveSecretRef } from '#/config/secrets.ts';
 /** One live config/preset MCP connection plus the spec it was opened from (the spec lets a later
  *  reload tell "unchanged" from "edited" without re-handshaking). */
 export type ConfigMcpEntry = { spec: McpServerConfig; conn: McpConnection };
+export type ConfigMcpStatus = { state: 'starting' | 'ready' | 'failed'; error?: string };
 
 /** Live config.json + preset MCP connections keyed by server name, plus the set of normalized http
  *  URLs they occupy (seeds file-MCP dedup). main.ts holds this so a settings edit can diff-reconnect
  *  rather than restart. */
-export type ConfigMcpHandle = { seenHttp: Set<string>; connections: Map<string, ConfigMcpEntry> };
+export type ConfigMcpHandle = {
+  seenHttp: Set<string>;
+  connections: Map<string, ConfigMcpEntry>;
+  status: Map<string, ConfigMcpStatus>;
+};
 
 /** Per-server registry source tag, so a diff reload drops exactly one server's tools via
  *  `clearToolsFrom` (granular, unlike the shared 'file-mcp' tag). */
@@ -47,6 +52,14 @@ export function resolveConfigMcpSpecs(cfg: MonadConfig): McpServerConfig[] {
     mcpServers.push(buildMonadixMcpServer(cfg.monadix));
   }
   return mcpServers;
+}
+
+export function createPendingConfigMcpHandle(cfg: MonadConfig): ConfigMcpHandle {
+  const status = new Map<string, ConfigMcpStatus>();
+  for (const spec of resolveConfigMcpSpecs(cfg)) {
+    if (spec.enabled) status.set(spec.name, { state: 'starting' });
+  }
+  return { seenHttp: new Set(), connections: new Map(), status };
 }
 
 /** Open ONE config/preset MCP connection over its transport, resolving `${env:}`/`${secret:}` refs
@@ -123,35 +136,44 @@ export async function connectMcpServers(
 ): Promise<ConfigMcpHandle> {
   const seenHttp = new Set<string>();
   const connections = new Map<string, ConfigMcpEntry>();
+  const status = new Map<string, ConfigMcpStatus>();
   for (const spec of resolveConfigMcpSpecs(cfg)) {
     if (!spec.enabled) {
       logger.info(`monad: MCP server "${spec.name}" disabled — skipping`);
       continue;
     }
     if (spec.transport === 'http' && seenHttp.has(normalizeMcpUrl(spec.url))) {
+      status.set(spec.name, {
+        state: 'failed',
+        error: `duplicates already-connected ${normalizeMcpUrl(spec.url)}`
+      });
       logger.info(
         `monad: MCP server "${spec.name}" duplicates already-connected ${normalizeMcpUrl(spec.url)} — skipping`
       );
       continue;
     }
+    status.set(spec.name, { state: 'starting' });
     try {
       const conn = await connectOneMcp(spec, paths, auth, false); // boot: never pop a browser
       if (!registerMcpTools(conn, spec.trust, registry, spec.name, configMcpSource(spec.name))) {
         await conn.close();
+        status.set(spec.name, { state: 'failed', error: 'tool set refused by trust policy' });
         continue;
       }
       if (spec.transport === 'http') seenHttp.add(normalizeMcpUrl(spec.url));
       connections.set(spec.name, { spec, conn });
+      status.set(spec.name, { state: 'ready' });
       logger.info(
         `monad: MCP server "${spec.name}" connected (${conn.tools.length} tool${conn.tools.length === 1 ? '' : 's'})`
       );
     } catch (err) {
+      status.set(spec.name, { state: 'failed', error: err instanceof Error ? err.message : String(err) });
       logger.warn(
         `monad: MCP server "${spec.name}" failed to connect: ${err instanceof Error ? err.message : String(err)}`
       );
     }
   }
-  return { seenHttp, connections };
+  return { seenHttp, connections, status };
 }
 
 /**
@@ -170,15 +192,20 @@ export async function reloadConfigMcpServers(
   auth?: MonadAuth
 ): Promise<ConfigMcpHandle> {
   const seenHttp = new Set<string>();
+  const status = new Map<string, ConfigMcpStatus>();
   const desired = new Map<string, McpServerConfig>();
   for (const spec of resolveConfigMcpSpecs(cfg)) {
     if (!spec.enabled) continue;
     if (spec.transport === 'http') {
       const key = normalizeMcpUrl(spec.url);
-      if (seenHttp.has(key)) continue; // dup url already claimed by an earlier server — skip
+      if (seenHttp.has(key)) {
+        status.set(spec.name, { state: 'failed', error: `duplicates already-connected ${key}` });
+        continue; // dup url already claimed by an earlier server — skip
+      }
       seenHttp.add(key);
     }
     desired.set(spec.name, spec);
+    status.set(spec.name, { state: 'starting' });
   }
 
   const next = new Map<string, ConfigMcpEntry>();
@@ -187,6 +214,7 @@ export async function reloadConfigMcpServers(
     const want = desired.get(name);
     if (want && specEqual(want, entry.spec)) {
       next.set(name, entry);
+      status.set(name, { state: 'ready' });
       continue;
     }
     registry.clearToolsFrom(configMcpSource(name));
@@ -200,32 +228,44 @@ export async function reloadConfigMcpServers(
       const conn = await connectOneMcp(spec, paths, auth, false); // diff-reload: silent (no browser)
       if (!registerMcpTools(conn, spec.trust, registry, name, configMcpSource(name))) {
         await conn.close();
+        status.set(name, { state: 'failed', error: 'tool set refused by trust policy' });
         continue;
       }
       next.set(name, { spec, conn });
+      status.set(name, { state: 'ready' });
       logger.info(
         `monad: MCP server "${name}" connected (${conn.tools.length} tool${conn.tools.length === 1 ? '' : 's'})`
       );
     } catch (err) {
+      status.set(name, { state: 'failed', error: err instanceof Error ? err.message : String(err) });
       logger.warn(`monad: MCP server "${name}" failed to connect: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
-  return { seenHttp, connections: next };
+  return { seenHttp, connections: next, status };
+}
+
+function seenHttpFor(connections: Map<string, ConfigMcpEntry>): Set<string> {
+  const seenHttp = new Set<string>();
+  for (const { spec } of connections.values()) {
+    if (spec.transport === 'http') seenHttp.add(normalizeMcpUrl(spec.url));
+  }
+  return seenHttp;
 }
 
 /** Force-reconnect a SINGLE config/preset MCP server by name (close + clear its tools + reconnect),
  *  leaving every other connection untouched. Used after an OAuth authorize (the spec is unchanged, so
  *  the content diff wouldn't reconnect) and for a manual "retry" on a failed server. Returns the
- *  updated connection map; a removed/disabled server is left disconnected. */
+ *  updated handle; a removed/disabled server is left disconnected. */
 export async function reconnectOneMcpServer(
   name: string,
-  prev: Map<string, ConfigMcpEntry>,
+  prev: ConfigMcpHandle,
   cfg: MonadConfig,
   paths: MonadPaths,
   registry: AtomPackRegistry,
   auth?: MonadAuth
-): Promise<Map<string, ConfigMcpEntry>> {
-  const next = new Map(prev);
+): Promise<ConfigMcpHandle> {
+  const next = new Map(prev.connections);
+  const status = new Map(prev.status);
   const existing = next.get(name);
   if (existing) {
     registry.clearToolsFrom(configMcpSource(name));
@@ -233,25 +273,37 @@ export async function reconnectOneMcpServer(
     next.delete(name);
   }
   const spec = resolveConfigMcpSpecs(cfg).find((s) => s.name === name);
-  if (!spec?.enabled) return next; // removed or disabled → leave disconnected
-  const conn = await connectOneMcp(spec, paths, auth, true); // explicit reconnect: may open the browser
-  if (!registerMcpTools(conn, spec.trust, registry, name, configMcpSource(name))) {
-    await conn.close();
-    return next;
+  if (!spec?.enabled) {
+    status.delete(name);
+    return { seenHttp: seenHttpFor(next), connections: next, status }; // removed or disabled → leave disconnected
   }
-  next.set(name, { spec, conn });
-  logger.info(
-    `monad: MCP server "${name}" reconnected (${conn.tools.length} tool${conn.tools.length === 1 ? '' : 's'})`
-  );
-  return next;
+  status.set(name, { state: 'starting' });
+  try {
+    const conn = await connectOneMcp(spec, paths, auth, true); // explicit reconnect: may open the browser
+    if (!registerMcpTools(conn, spec.trust, registry, name, configMcpSource(name))) {
+      await conn.close();
+      status.set(name, { state: 'failed', error: 'tool set refused by trust policy' });
+      return { seenHttp: seenHttpFor(next), connections: next, status };
+    }
+    next.set(name, { spec, conn });
+    status.set(name, { state: 'ready' });
+    logger.info(
+      `monad: MCP server "${name}" reconnected (${conn.tools.length} tool${conn.tools.length === 1 ? '' : 's'})`
+    );
+  } catch (err) {
+    status.set(name, { state: 'failed', error: err instanceof Error ? err.message : String(err) });
+    logger.warn(`monad: MCP server "${name}" failed to reconnect: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  return { seenHttp: seenHttpFor(next), connections: next, status };
 }
 
 /** Derive live connection health for every MCP server the daemon knows: config.json servers +
- *  synthesized presets (connected / disabled / failed), file/pack atoms, and obscura. Pure — reads the
+ *  synthesized presets (ready / starting / disabled / failed), file/pack atoms, and obscura. Pure — reads the
  *  current config + the live connection maps the caller holds; no I/O. Powers the status endpoint. */
 export function collectMcpStatus(input: {
   cfg: MonadConfig;
   config: Map<string, ConfigMcpEntry>;
+  configStatus?: Map<string, ConfigMcpStatus>;
   file: McpConnection[];
   obscura: { connected: boolean; tools: string[] };
 }): McpServerStatus[] {
@@ -264,11 +316,13 @@ export function collectMcpStatus(input: {
       continue;
     }
     const conn = input.config.get(spec.name)?.conn;
+    const status = input.configStatus?.get(spec.name);
     out.push({
       name: spec.name,
       source,
       transport: spec.transport,
-      state: conn ? 'connected' : 'failed',
+      state: conn ? 'ready' : (status?.state ?? 'failed'),
+      ...(status?.error && !conn ? { error: status.error } : {}),
       toolCount: conn?.tools.length ?? 0,
       tools: conn?.tools.map((t) => t.name) ?? []
     });
@@ -277,7 +331,7 @@ export function collectMcpStatus(input: {
     out.push({
       name: conn.name,
       source: 'file',
-      state: 'connected',
+      state: 'ready',
       toolCount: conn.tools.length,
       tools: conn.tools.map((t) => t.name)
     });
@@ -286,7 +340,7 @@ export function collectMcpStatus(input: {
     out.push({
       name: 'obscura',
       source: 'obscura',
-      state: 'connected',
+      state: 'ready',
       toolCount: input.obscura.tools.length,
       tools: input.obscura.tools
     });

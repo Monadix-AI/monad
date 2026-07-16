@@ -448,7 +448,8 @@ export const RPC_ONLY_METHODS = {
       'task.created',
       'task.progress',
       'task.completed',
-      'task.failed'
+      'task.failed',
+      'mcp.status_updated'
     ] satisfies EventType[]
   },
   'control.unsubscribe': { result: emptyResultSchema },

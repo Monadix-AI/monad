@@ -165,6 +165,7 @@
   "cli.atom.updated": "updated",
   "cli.ok": "ok",
   "cli.failed": "failed",
+  "cli.starting": "starting",
   "cli.defaultSet": "default set",
   "cli.noDefault": "no default set",
   "cli.empty.providers": "no providers",

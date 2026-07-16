@@ -21,11 +21,11 @@ import { ServerForm } from './mcp-servers/server-form';
 
 const envRef = (name: string) => `\${env:${name}}`;
 
-type McpStatusState = NonNullable<McpServerStatus['state']> | 'connecting' | 'disabled';
+type McpStatusState = NonNullable<McpServerStatus['state']>;
 
 const MCP_STATUS_LABEL_KEYS: Record<McpStatusState, WebMessageIdWithoutParams> = {
-  connected: 'web.mcp.state.connected',
-  connecting: 'web.mcp.state.connecting',
+  ready: 'web.mcp.state.ready',
+  starting: 'web.mcp.state.starting',
   disabled: 'web.mcp.state.disabled',
   failed: 'web.mcp.state.failed'
 };
@@ -220,13 +220,13 @@ function McpCatalog({ catalog, onAdd }: { catalog: McpCatalogEntry[]; onAdd: (e:
 
 function McpStatusDot({ status, enabled }: { status?: McpServerStatus; enabled: boolean }) {
   const t = useT();
-  const state = status?.state ?? (enabled ? 'connecting' : 'disabled');
+  const state = status?.state ?? (enabled ? 'starting' : 'disabled');
   const color =
-    state === 'connected'
+    state === 'ready'
       ? 'bg-emerald-500'
       : state === 'failed'
         ? 'bg-destructive'
-        : state === 'connecting'
+        : state === 'starting'
           ? 'bg-amber-500'
           : 'bg-muted-foreground/40';
   const label = t(MCP_STATUS_LABEL_KEYS[state]);
@@ -261,6 +261,8 @@ function McpServerCard({
   const [open, setOpen] = useState(false);
   const { busy, run } = useAsyncAction();
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const state = status?.state ?? (server.enabled ? 'starting' : 'disabled');
+  const statusLabel = t(MCP_STATUS_LABEL_KEYS[state]);
 
   return (
     <div className="rounded-md border">
@@ -291,11 +293,8 @@ function McpServerCard({
           {t('web.mcp.sourceBuiltIn')}
         </Badge>
         <div className="ml-auto flex items-center gap-2 text-muted-foreground text-xs">
-          {status?.state === 'connected' ? (
-            <span>{t('web.mcp.toolCount', { n: status.toolCount })}</span>
-          ) : server.enabled ? null : (
-            <span>{t('web.mcp.disabled')}</span>
-          )}
+          <span>{statusLabel}</span>
+          {status?.state === 'ready' ? <span>{t('web.mcp.toolCount', { n: status.toolCount })}</span> : null}
         </div>
       </button>
 

@@ -23,6 +23,7 @@ import {
 } from '../../src/endpoints/sessions/index.ts';
 import { updateSessionApi } from '../../src/endpoints/sessions/update-session.ts';
 import { channelsApi } from '../../src/endpoints/settings/channels/index.ts';
+import { listMcpServerStatusApi } from '../../src/endpoints/settings/mcp-servers/status-mcp-servers.ts';
 import {
   createMonadStore,
   monadApi,
@@ -193,6 +194,14 @@ function fakeClient(overrides: Record<string, unknown>): MonadClient {
           }
         }),
         settings: {
+          'mcp-servers': {
+            status: {
+              get: async () => {
+                const fn = overrides.listMcpServerStatus as (() => Promise<unknown[]>) | undefined;
+                return ok({ servers: fn ? await fn() : [] });
+              }
+            }
+          },
           model: {
             providers: Object.assign(
               ({ id }: { id: string }) => ({
@@ -825,6 +834,51 @@ test('streamControl invalidates external agent sessions when a managed external 
   await new Promise((r) => setTimeout(r, 0));
 
   expect(externalAgentCalls).toBe(2);
+});
+
+test('streamControl invalidates MCP server status when MCP status changes', async () => {
+  let statusCalls = 0;
+  let controlHandler: ((event: Event) => void) | undefined;
+
+  const client = fakeClient({
+    listMcpServerStatus: async () => {
+      statusCalls++;
+      return [
+        {
+          name: 'fs',
+          source: 'config',
+          transport: 'stdio',
+          state: statusCalls === 1 ? 'starting' : 'ready',
+          toolCount: statusCalls === 1 ? 0 : 1,
+          tools: statusCalls === 1 ? [] : ['fs__read']
+        }
+      ];
+    },
+    subscribeControl: (handler: (event: Event) => void) => {
+      controlHandler = handler;
+      return () => {};
+    }
+  });
+  const store = createMonadStore({ client });
+
+  await store.dispatch(listMcpServerStatusApi.endpoints.listMcpServerStatus.initiate());
+  expect(statusCalls).toBe(1);
+
+  store.dispatch(streamControlApi.endpoints.streamControl.initiate());
+  await new Promise((r) => setTimeout(r, 0));
+
+  controlHandler?.({
+    id: 'evt_mcpstatus000',
+    sessionId: 'ses_mcpstatus000',
+    type: 'mcp.status_updated',
+    actorAgentId: null,
+    payload: {},
+    at: ''
+  });
+  await Promise.resolve();
+  await new Promise((r) => setTimeout(r, 0));
+
+  expect(statusCalls).toBe(2);
 });
 
 test('listChannels caches by the Channels tag', async () => {

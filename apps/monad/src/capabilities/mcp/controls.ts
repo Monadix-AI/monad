@@ -34,6 +34,7 @@ export function createMcpControls(deps: {
     return collectMcpStatus({
       cfg: live,
       config: getConfigMcp().connections,
+      configStatus: getConfigMcp().status,
       file: fileMcpConnections(),
       obscura: obscuraStatus()
     });
@@ -58,10 +59,7 @@ export function createMcpControls(deps: {
     });
     const freshAuth = (await loadAuth(paths.auth)) ?? undefined;
     const configMcp = getConfigMcp();
-    setConfigMcp({
-      ...configMcp,
-      connections: await reconnectOneMcpServer(name, configMcp.connections, live, paths, registry, freshAuth)
-    });
+    setConfigMcp(await reconnectOneMcpServer(name, configMcp, live, paths, registry, freshAuth));
   };
 
   // Manually (re)connect a single config server — retry a server that was down at boot, without a
@@ -70,10 +68,7 @@ export function createMcpControls(deps: {
     const live = (await loadAll(paths.config, paths.profile)) ?? cfg;
     const freshAuth = (await loadAuth(paths.auth)) ?? undefined;
     const configMcp = getConfigMcp();
-    setConfigMcp({
-      ...configMcp,
-      connections: await reconnectOneMcpServer(name, configMcp.connections, live, paths, registry, freshAuth)
-    });
+    setConfigMcp(await reconnectOneMcpServer(name, configMcp, live, paths, registry, freshAuth));
   };
 
   return { getMcpStatus, mcpAuthorize, mcpReconnect };

@@ -129,6 +129,7 @@
   "cli.peer.unknownAction": "未知操作：{{action}}（应为 list|add|token|enable|disable|remove）",
   "cli.ok": "成功",
   "cli.failed": "失败",
+  "cli.starting": "启动中",
   "cli.defaultSet": "已设为默认",
   "cli.noDefault": "未设置默认值",
   "cli.empty.atoms": "没有 Atom pack",

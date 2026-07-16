@@ -3,10 +3,10 @@ import type { McpServerStatus } from '@monad/protocol';
 import { clientOf, runTreaty } from '../../../endpoint-helpers.ts';
 import { sessionsApi } from '../../sessions/index.ts';
 
-// Live connection health (connected / disabled / failed + tools) across config, presets, file/pack
+// Live connection health (disabled / starting / ready / failed + tools) across config, presets, file/pack
 // atoms, and obscura. Tagged 'McpServers' so explicit refreshes and mutations can reconcile it without
 // a timer loop in the panel.
-const listMcpServerStatusApi = sessionsApi.injectEndpoints({
+export const listMcpServerStatusApi = sessionsApi.injectEndpoints({
   overrideExisting: true,
   endpoints: (builder) => ({
     listMcpServerStatus: builder.query<McpServerStatus[], void>({

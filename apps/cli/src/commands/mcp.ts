@@ -52,14 +52,16 @@ export const command: CommandDef = {
         return;
       }
       for (const s of servers) {
-        const dot = s.state === 'connected' ? green('●') : s.state === 'failed' ? red('○') : dim('○');
+        const dot = s.state === 'ready' ? green('●') : s.state === 'failed' ? red('○') : dim('○');
         const meta = dim(`  ${s.source}${s.transport ? `/${s.transport}` : ''}`);
         const tail =
-          s.state === 'connected'
+          s.state === 'ready'
             ? dim(`  ${t('cli.mcp.toolCount', { count: s.toolCount })}`)
             : s.state === 'disabled'
               ? dim(`  ${t('cli.disabled')}`)
-              : red(`  ${t('cli.failed')}`);
+              : s.state === 'starting'
+                ? dim(`  ${t('cli.starting')}`)
+                : red(`  ${t('cli.failed')}`);
         out(`${dot} ${cyan(s.name)}${meta}${tail}`);
       }
       return;

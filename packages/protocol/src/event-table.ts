@@ -21,6 +21,7 @@ import {
   messageAttachmentRefSchema
 } from './external-agent/index.ts';
 import { agentIdSchema, externalAgentSessionIdSchema, messageIdSchema, nativeAgentDeliveryIdSchema } from './ids.ts';
+import { mcpServerStatusSchema } from './mcp-server.ts';
 
 const requestIdSchema = z.string();
 
@@ -74,6 +75,10 @@ export const taskCompletedPayloadSchema = z.object({
 export const taskFailedPayloadSchema = z.object({
   taskId: z.string(),
   error: z.object({ code: z.string(), message: z.string() }).optional()
+});
+
+export const mcpStatusUpdatedPayloadSchema = z.object({
+  servers: z.array(mcpServerStatusSchema).optional()
 });
 
 export const userMessagePayloadSchema = z.object({
@@ -289,6 +294,7 @@ export type SessionUpdatedPayload = z.infer<typeof sessionUpdatedPayloadSchema>;
 export type SessionRestoredPayload = z.infer<typeof sessionRestoredPayloadSchema>;
 export type SessionStreamStartedPayload = z.infer<typeof sessionStreamStartedPayloadSchema>;
 export type SessionStreamEndedPayload = z.infer<typeof sessionStreamEndedPayloadSchema>;
+export type McpStatusUpdatedPayload = z.infer<typeof mcpStatusUpdatedPayloadSchema>;
 export type UserMessagePayload = z.infer<typeof userMessagePayloadSchema>;
 export type AgentErrorPayload = z.infer<typeof agentErrorPayloadSchema>;
 export type AgentTokenPayload = z.infer<typeof agentTokenPayloadSchema>;
@@ -325,6 +331,7 @@ export const EVENT_TABLE = {
   'task.progress': taskProgressPayloadSchema,
   'task.completed': taskCompletedPayloadSchema,
   'task.failed': taskFailedPayloadSchema,
+  'mcp.status_updated': mcpStatusUpdatedPayloadSchema,
   'user.message': userMessagePayloadSchema,
   'agent.message': agentMessagePayloadSchema,
   'agent.token': agentTokenPayloadSchema,
