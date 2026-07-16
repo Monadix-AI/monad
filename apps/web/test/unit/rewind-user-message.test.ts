@@ -1,28 +1,48 @@
+import type { MessageId, SessionId } from '@monad/protocol';
+
 import { expect, test } from 'bun:test';
 
 import { rewindUserMessage } from '../../src/features/session/rewind-user-message.ts';
 
-test('successful rewind preserves the raw composer input used to render chips', async () => {
-  const text = '/help with /global:deploy';
-  const restored = await rewindUserMessage({
-    messageId: 'msg_user00000000',
-    restore: async () => {},
-    sessionId: 'ses_test00000000',
-    text
+const messageId = 'msg_rewind000000' as MessageId;
+const sessionId = 'ses_rewind000000' as SessionId;
+
+test('rewind restores the target before sending its edited replacement', async () => {
+  const calls: string[] = [];
+
+  const succeeded = await rewindUserMessage({
+    messageId,
+    restore: async (request) => {
+      calls.push(`restore:${request.toMessageId}`);
+    },
+    send: async (text) => {
+      calls.push(`send:${text}`);
+    },
+    sessionId,
+    text: 'Edited prompt'
   });
 
-  expect(restored).toBe(text);
+  expect({ calls, succeeded }).toEqual({
+    calls: [`restore:${messageId}`, 'send:Edited prompt'],
+    succeeded: true
+  });
 });
 
-test('failed rewind does not return composer input', async () => {
-  const restored = await rewindUserMessage({
-    messageId: 'msg_user00000000',
+test('rewind does not send when restoring the target fails', async () => {
+  const calls: string[] = [];
+
+  const succeeded = await rewindUserMessage({
+    messageId,
     restore: async () => {
+      calls.push('restore');
       throw new Error('restore failed');
     },
-    sessionId: 'ses_test00000000',
-    text: '/global:deploy'
+    send: async () => {
+      calls.push('send');
+    },
+    sessionId,
+    text: 'Edited prompt'
   });
 
-  expect(restored).toBeNull();
+  expect({ calls, succeeded }).toEqual({ calls: ['restore'], succeeded: false });
 });

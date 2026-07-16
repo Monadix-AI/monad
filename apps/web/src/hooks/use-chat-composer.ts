@@ -118,7 +118,6 @@ export function useChatComposer({
   });
   const input = useSessionUiStore((state) => state.input);
   const clearComposerInput = useSessionUiStore((state) => state.clearComposerInput);
-  const setComposerInput = useSessionUiStore((state) => state.setComposerInput);
   const initialUserMessages = useSessionUiStore((state) =>
     currentId ? (state.initialUserMessagesBySession[currentId] ?? EMPTY_QUEUE) : EMPTY_QUEUE
   );
@@ -204,24 +203,6 @@ export function useChatComposer({
       }).catch(() => null);
     },
     [currentId, branchSession, sendMessage, setSessionUrl, setOptimistic]
-  );
-
-  // Rewind from this user message, then put its raw text back into the composer.
-  const handleRestore = useCallback(
-    async (toMessageId: string, text: string) => {
-      if (!currentId) return;
-      const restoredText = await rewindUserMessage({
-        messageId: toMessageId as MessageId,
-        restore: (request) => restoreSession(request).unwrap(),
-        sessionId: currentId,
-        text
-      });
-      if (restoredText === null) return;
-      setComposerInput(restoredText);
-      setOptimistic([]);
-      jumpToLive();
-    },
-    [currentId, restoreSession, setComposerInput, jumpToLive, setOptimistic]
   );
 
   // React to a host command's structured effect (rich-client behaviour; dumb clients just show text).
@@ -348,6 +329,26 @@ export function useChatComposer({
       setCommandPending,
       assistantLabel
     ]
+  );
+
+  const handleRestore = useCallback(
+    async (toMessageId: string, text: string) => {
+      if (!currentId) return false;
+      const succeeded = await rewindUserMessage({
+        messageId: toMessageId as MessageId,
+        restore: (request) => restoreSession(request).unwrap(),
+        send: async (replacement) => {
+          setOptimistic([]);
+          jumpToLive();
+          void handleSend(replacement);
+        },
+        sessionId: currentId,
+        text
+      });
+      if (!succeeded) return false;
+      return true;
+    },
+    [currentId, handleSend, restoreSession, jumpToLive, setOptimistic]
   );
 
   useEffect(() => {

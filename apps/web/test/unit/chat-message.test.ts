@@ -4,7 +4,11 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import * as ChatMessageModule from '../../src/features/session/ChatMessage.tsx';
-import { Message, shouldRenderDirectiveAsMarkdown } from '../../src/features/session/ChatMessage.tsx';
+import {
+  Message,
+  rewindEditorReducer,
+  shouldRenderDirectiveAsMarkdown
+} from '../../src/features/session/ChatMessage.tsx';
 import { MessageBody, userMessageTokens } from '../../src/features/session/MessageBody.tsx';
 
 test('help directive replies render through markdown instead of the compact directive divider', () => {
@@ -108,19 +112,34 @@ test('rewind is available only on settled user messages', () => {
     createElement(Message, {
       assistantLabel: 'Assistant',
       msg: { id: 'msg_user_rewind', role: 'user', text: 'Try again' },
-      onRestore: () => {}
+      onRestore: async () => true
     })
   );
   const assistantMarkup = renderToStaticMarkup(
     createElement(Message, {
       assistantLabel: 'Assistant',
       msg: { id: 'msg_assistant_rewind', role: 'assistant', text: 'Response' },
-      onRestore: () => {}
+      onRestore: async () => true
     })
   );
 
   expect(userMarkup).toContain('Rewind to here');
   expect(assistantMarkup).not.toContain('Rewind to here');
+});
+
+test('rewind editor keeps the transcript unchanged until an edited message is submitted', () => {
+  const editing = rewindEditorReducer({ draft: '', mode: 'idle' }, { type: 'open', text: 'Original prompt' });
+  const changed = rewindEditorReducer(editing, { type: 'change', text: 'Edited prompt' });
+  const cancelled = rewindEditorReducer(changed, { type: 'cancel' });
+  const submitting = rewindEditorReducer(changed, { type: 'submit' });
+  const retrying = rewindEditorReducer(submitting, { type: 'failed' });
+
+  expect({ cancelled, editing, retrying, submitting }).toEqual({
+    cancelled: { draft: 'Edited prompt', mode: 'idle' },
+    editing: { draft: 'Original prompt', mode: 'editing' },
+    retrying: { draft: 'Edited prompt', mode: 'editing' },
+    submitting: { draft: 'Edited prompt', mode: 'submitting' }
+  });
 });
 
 test('reasoning follows appended content until the user scrolls', () => {

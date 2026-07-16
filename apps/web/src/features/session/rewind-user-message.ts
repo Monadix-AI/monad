@@ -3,6 +3,7 @@ import type { MessageId, SessionId } from '@monad/protocol';
 interface RewindUserMessageArgs {
   messageId: MessageId;
   restore: (request: { id: SessionId; toMessageId: MessageId }) => Promise<unknown>;
+  send: (text: string) => Promise<unknown>;
   sessionId: SessionId;
   text: string;
 }
@@ -10,13 +11,15 @@ interface RewindUserMessageArgs {
 export async function rewindUserMessage({
   messageId,
   restore,
+  send,
   sessionId,
   text
-}: RewindUserMessageArgs): Promise<string | null> {
+}: RewindUserMessageArgs): Promise<boolean> {
   try {
     await restore({ id: sessionId, toMessageId: messageId });
-    return text;
+    await send(text);
+    return true;
   } catch {
-    return null;
+    return false;
   }
 }

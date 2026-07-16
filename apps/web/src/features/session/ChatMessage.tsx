@@ -2,6 +2,8 @@ import type { CommandItem } from '@monad/protocol';
 
 import {
   AlertCircleIcon,
+  ArrowUp01Icon,
+  Cancel01Icon,
   CheckIcon,
   ComputerTerminal01Icon,
   Copy01Icon,
@@ -10,6 +12,7 @@ import {
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
+  Button,
   cn,
   Message as ElementsMessage,
   MessageAction,
@@ -18,9 +21,10 @@ import {
   MessageResponse,
   Reasoning,
   ReasoningContent,
-  ReasoningTrigger
+  ReasoningTrigger,
+  Textarea
 } from '@monad/ui';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useReducer, useRef, useState } from 'react';
 
 import { useT } from '#/components/I18nProvider';
 import { MessageBody } from './MessageBody';
@@ -125,6 +129,32 @@ export function shouldRenderDirectiveAsMarkdown({
   );
 }
 
+type RewindEditorState = {
+  draft: string;
+  mode: 'idle' | 'editing' | 'submitting';
+};
+
+type RewindEditorEvent =
+  | { type: 'open'; text: string }
+  | { type: 'change'; text: string }
+  | { type: 'cancel' | 'failed' | 'submit' | 'succeeded' };
+
+export function rewindEditorReducer(state: RewindEditorState, event: RewindEditorEvent): RewindEditorState {
+  switch (event.type) {
+    case 'open':
+      return { draft: event.text, mode: 'editing' };
+    case 'change':
+      return { ...state, draft: event.text };
+    case 'cancel':
+    case 'succeeded':
+      return { ...state, mode: 'idle' };
+    case 'submit':
+      return state.draft.trim() ? { ...state, mode: 'submitting' } : state;
+    case 'failed':
+      return { ...state, mode: 'editing' };
+  }
+}
+
 export const Message = memo(function Message({
   msg,
   assistantLabel,
@@ -137,13 +167,14 @@ export const Message = memo(function Message({
   commands?: CommandItem[];
   assistantLabel: string;
   onBranch?: (messageId: string) => void;
-  onRestore?: (messageId: string, text: string) => void;
+  onRestore?: (messageId: string, text: string) => Promise<boolean>;
   onSkillPreview?: (id: string) => void;
 }) {
   const t = useT();
   const isUser = msg.role === 'user';
   const label = msg.label ?? assistantLabel;
   const [copied, setCopied] = useState(false);
+  const [rewindEditor, dispatchRewindEditor] = useReducer(rewindEditorReducer, { draft: '', mode: 'idle' });
   const rendersMarkdownDirective = shouldRenderDirectiveAsMarkdown({
     data: msg.data,
     role: msg.role,
@@ -159,6 +190,16 @@ export const Message = memo(function Message({
 
   // Branch/restore target persisted messages, so offer them only on settled (non-streaming) ones.
   const canEdit = !msg.pending && !msg.streaming && !msg.error && msg.type !== 'directive';
+  const isEditing = rewindEditor.mode !== 'idle';
+  const isSubmitting = rewindEditor.mode === 'submitting';
+
+  const submitRewind = async () => {
+    const text = rewindEditor.draft.trim();
+    if (!onRestore || rewindEditor.mode !== 'editing' || !text) return;
+    dispatchRewindEditor({ type: 'submit' });
+    const succeeded = await onRestore(msg.id, text).catch(() => false);
+    dispatchRewindEditor({ type: succeeded ? 'succeeded' : 'failed' });
+  };
 
   if (msg.type === 'directive' && !rendersMarkdownDirective) {
     return (
@@ -230,10 +271,53 @@ export const Message = memo(function Message({
                 msg.type !== 'markdown' &&
                 !rendersMarkdownDirective &&
                 !isUser &&
-                'rounded-(--radius-lg) border border-border/75 bg-card px-4 py-3 shadow-xs'
+                'rounded-(--radius-lg) border border-border/75 bg-card px-4 py-3 shadow-xs',
+              isEditing && 'w-[min(70vw,42rem)] min-w-64'
             )}
           >
-            {msg.type && msg.type !== 'text' && msg.type !== 'markdown' ? (
+            {isUser && isEditing ? (
+              <form
+                className="grid gap-2"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void submitRewind();
+                }}
+              >
+                <Textarea
+                  aria-label={t('web.chat.rewindEdit')}
+                  autoFocus
+                  className="min-h-24 resize-y bg-background text-sm leading-6"
+                  disabled={isSubmitting}
+                  onChange={(event) => dispatchRewindEditor({ type: 'change', text: event.target.value })}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return;
+                    event.preventDefault();
+                    void submitRewind();
+                  }}
+                  value={rewindEditor.draft}
+                />
+                <div className="flex justify-end gap-2">
+                  <Button
+                    disabled={isSubmitting}
+                    onClick={() => dispatchRewindEditor({ type: 'cancel' })}
+                    size="sm"
+                    type="button"
+                    variant="ghost"
+                  >
+                    <HugeiconsIcon icon={Cancel01Icon} />
+                    {t('web.common.cancel')}
+                  </Button>
+                  <Button
+                    disabled={isSubmitting || !rewindEditor.draft.trim()}
+                    size="sm"
+                    type="submit"
+                  >
+                    <HugeiconsIcon icon={ArrowUp01Icon} />
+                    {t('web.chat.send')}
+                  </Button>
+                </div>
+              </form>
+            ) : msg.type && msg.type !== 'text' && msg.type !== 'markdown' ? (
               <MessageBody
                 commands={commands}
                 data={msg.data}
@@ -256,7 +340,7 @@ export const Message = memo(function Message({
             )}
           </MessageContent>
         ))}
-      {!msg.pending && msg.text && (
+      {!msg.pending && msg.text && !isEditing && (
         <MessageActions
           className={cn(
             'message-actions opacity-0 focus-within:opacity-100 group-hover:opacity-100 [@media_(hover:none),_(pointer:coarse)]:opacity-100',
@@ -295,7 +379,7 @@ export const Message = memo(function Message({
           {isUser && canEdit && onRestore && (
             <MessageAction
               className="size-6"
-              onClick={() => onRestore(msg.id, msg.text)}
+              onClick={() => dispatchRewindEditor({ type: 'open', text: msg.text })}
               tooltip={t('web.chat.restoreHere')}
             >
               <HugeiconsIcon

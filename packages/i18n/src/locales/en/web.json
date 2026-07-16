@@ -202,6 +202,7 @@
   "web.chat.readOnly": "Read-only. Send messages from the originating client.",
   "web.chat.restoreConfirm": "Rewind to this message? Later messages will be deleted.",
   "web.chat.restoreHere": "Rewind to here",
+  "web.chat.rewindEdit": "Edit message before rewinding",
   "web.chat.draftCreateFailed": "Draft session failed to create",
   "web.chat.retry": "Retry",
   "web.chat.runningCommand": "Running command…",

@@ -318,7 +318,7 @@ function SummaryTranscriptTurn({
   assistantLabel: string;
   item: SummaryTranscriptTurnViewItem;
   onBranch?: (messageId: string) => void;
-  onRestore?: (messageId: string, text: string) => void;
+  onRestore?: (messageId: string, text: string) => Promise<boolean>;
   sessionId: SessionId;
 }) {
   const running = item.status === 'running';
