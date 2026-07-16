@@ -16,10 +16,9 @@ import type { RoundCache } from '#/services/round-cache.ts';
 import type { SessionSandboxService } from '#/services/session-sandbox.ts';
 import type { Store } from '#/store/db/index.ts';
 
-import { newId } from '@monad/protocol';
-
 import { HandlerError } from '#/handlers/handler-error.ts';
 import { SessionSteerMailbox } from '#/handlers/session/steer-mailbox.ts';
+import { makeEvent } from '#/services/event-bus.ts';
 
 export type Disposer = () => void;
 export type { EventSink };
@@ -129,28 +128,14 @@ export function createSessionContext(deps: SessionDeps): SessionContext {
   function bumpSessionActivity(sessionId: SessionId): void {
     const updated = store.updateSession(sessionId, {});
     if (!updated) return;
-    bus.publish({
-      id: newId('evt'),
-      sessionId,
-      type: 'session.updated',
-      actorAgentId: null,
-      payload: { updatedAt: updated.updatedAt },
-      at: new Date().toISOString()
-    });
+    bus.publish(makeEvent(sessionId, 'session.updated', { updatedAt: updated.updatedAt }));
   }
 
   // Publish-only stream-lifecycle markers (never persisted): they tell clients holding the control
   // stream *when* a turn is generating, so they open/close a per-session SSE subscription on demand.
   // Generation tokens themselves never travel the control/WS plane — only these coarse signals do.
   function emitStreamMarker(sessionId: SessionId, type: 'session.stream_started' | 'session.stream_ended'): void {
-    bus.publish({
-      id: newId('evt'),
-      sessionId,
-      type,
-      actorAgentId: null,
-      payload: {},
-      at: new Date().toISOString()
-    });
+    bus.publish(makeEvent(sessionId, type, {}));
   }
 
   const TRANSIENT_EVENT_TYPES = new Set<EventType>([
@@ -170,14 +155,7 @@ export function createSessionContext(deps: SessionDeps): SessionContext {
   }
 
   function emitLifecycle(sessionId: SessionId, type: EventType, payload: Record<string, unknown>): void {
-    const event: Event = {
-      id: newId('evt'),
-      sessionId,
-      type,
-      actorAgentId: null,
-      payload,
-      at: new Date().toISOString()
-    };
+    const event: Event = makeEvent(sessionId, type, payload);
     store.appendEvents([event]);
     bus.publish(event);
   }

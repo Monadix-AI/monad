@@ -5,6 +5,8 @@ import type { Store } from '#/store/db/index.ts';
 
 import { newId } from '@monad/protocol';
 
+import { makeEvent } from '#/services/event-bus.ts';
+
 // `insertAssistantMessage`/`completeAssistantMessage` are also called with a Workplace Project's own
 // id (services/native-agent/project.ts's `ask()`, for a project's Q&A wall) — a real, still-open
 // class-C usage per the Track B P6b id collapse (see the SessionOrProject TODO in
@@ -35,14 +37,13 @@ export function createTranscriptProjector(deps: { store: Store; bus: EventBus; c
         includeInContext: args.includeInContext,
         streamStatus: args.streamStatus
       });
-      publish({
-        id: newId('evt'),
-        sessionId: args.sessionId as SessionId,
-        type: 'agent.message',
-        actorAgentId: null,
-        payload: { messageId, agentName: args.agentName, text: args.text },
-        at: new Date().toISOString()
-      });
+      publish(
+        makeEvent(args.sessionId as SessionId, 'agent.message', {
+          messageId,
+          agentName: args.agentName,
+          text: args.text
+        })
+      );
       return { messageId };
     },
 
@@ -55,14 +56,13 @@ export function createTranscriptProjector(deps: { store: Store; bus: EventBus; c
       deps.store.setGenStatus(args.sessionId, args.messageId, 'complete', new Date().toISOString(), {
         text: args.text
       });
-      publish({
-        id: newId('evt'),
-        sessionId: args.sessionId as SessionId,
-        type: 'agent.message',
-        actorAgentId: null,
-        payload: { messageId: args.messageId, agentName: args.agentName, text: args.text },
-        at: new Date().toISOString()
-      });
+      publish(
+        makeEvent(args.sessionId as SessionId, 'agent.message', {
+          messageId: args.messageId,
+          agentName: args.agentName,
+          text: args.text
+        })
+      );
     }
   };
 }

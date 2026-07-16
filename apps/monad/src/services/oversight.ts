@@ -8,6 +8,7 @@ import type { ToolGate, ToolGateOutcome, ToolGateRequest } from '#/capabilities/
 import { newId, resourceApprovalPayloadSchema } from '@monad/protocol';
 
 import { HostEscapePersistError, type PolicyEngine } from '#/agent/approvals/engine.ts';
+import { makeEvent } from '#/services/event-bus.ts';
 
 interface Pending {
   resolve: (outcome: ToolGateOutcome) => void;
@@ -203,13 +204,6 @@ export class OversightService {
     type: 'tool.approval_requested' | 'tool.approval_resolved',
     payload: Record<string, unknown>
   ): void {
-    this.publish({
-      id: newId('evt'),
-      sessionId,
-      type,
-      actorAgentId: null,
-      payload,
-      at: new Date().toISOString()
-    });
+    this.publish(makeEvent(sessionId, type, payload));
   }
 }

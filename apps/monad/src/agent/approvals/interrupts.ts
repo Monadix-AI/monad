@@ -3,10 +3,9 @@ import type { Event, SessionId } from '@monad/protocol';
 import type { EventBus } from '#/services/event-bus.ts';
 import type { Store } from '#/store/db/index.ts';
 
-import { newId } from '@monad/protocol';
-
 import { buildOperatorRules, PolicyEngine } from '#/agent/approvals/engine.ts';
 import { ApprovalStore } from '#/agent/approvals/store.ts';
+import { makeEvent } from '#/services/event-bus.ts';
 import { ClarifyService } from '#/services/generation/clarify.ts';
 import { OversightService } from '#/services/oversight.ts';
 
@@ -39,25 +38,21 @@ export async function createInterruptServices(deps: {
     if (d.type === 'approval') {
       if (!d.tool) return [];
       return [
-        {
-          id: newId('evt'),
-          sessionId: d.sessionId as SessionId,
-          type: 'tool.approval_resolved' as const,
-          actorAgentId: null,
-          payload: { requestId: d.requestId, tool: d.tool, allow: false, reason: 'daemon_restarted' },
-          at: now
-        }
+        makeEvent(
+          d.sessionId as SessionId,
+          'tool.approval_resolved',
+          { requestId: d.requestId, tool: d.tool, allow: false, reason: 'daemon_restarted' },
+          { at: now }
+        )
       ];
     }
     return [
-      {
-        id: newId('evt'),
-        sessionId: d.sessionId as SessionId,
-        type: 'clarify.resolved' as const,
-        actorAgentId: null,
-        payload: { requestId: d.requestId, answer: '', reason: 'daemon_restarted' },
-        at: now
-      }
+      makeEvent(
+        d.sessionId as SessionId,
+        'clarify.resolved',
+        { requestId: d.requestId, answer: '', reason: 'daemon_restarted' },
+        { at: now }
+      )
     ];
   });
   if (danglingTombstones.length > 0) {

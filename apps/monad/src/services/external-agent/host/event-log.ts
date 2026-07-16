@@ -2,7 +2,7 @@ import type { Event, SessionId } from '@monad/protocol';
 import type { EventBus } from '#/services/event-bus.ts';
 import type { Store } from '#/store/db/index.ts';
 
-import { newId } from '@monad/protocol';
+import { makeEvent } from '#/services/event-bus.ts';
 
 export interface ExternalAgentEventLogDeps {
   store: Store;
@@ -20,14 +20,7 @@ export class ExternalAgentEventLog {
   // strictly `SessionId` on the wire post-collapse, so this casts; see the class-C note in
   // apps/monad/src/store/db/external-agent-sessions.ts.
   private build(sessionId: string, type: Event['type'], payload: Record<string, unknown>): Event {
-    return {
-      id: newId('evt'),
-      sessionId: sessionId as SessionId,
-      type,
-      actorAgentId: null,
-      payload,
-      at: new Date().toISOString()
-    };
+    return makeEvent(sessionId as SessionId, type, payload);
   }
 
   /** Durable milestone event (started/exited/approval/…): persisted to the event log and published. */

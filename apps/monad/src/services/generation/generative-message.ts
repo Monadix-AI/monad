@@ -10,6 +10,8 @@ import type { Store } from '#/store/db/index.ts';
 
 import { newId, validateMessageData } from '@monad/protocol';
 
+import { makeEvent } from '#/services/event-bus.ts';
+
 export interface GenerativeMessageHandle {
   readonly messageId: MessageId;
   readonly channel: string;
@@ -39,15 +41,6 @@ export function startGenerativeMessage(opts: StartGenerativeMessageOptions): Gen
   let started = false;
   let settled = false;
 
-  const event = (etype: Event['type'], payload: Record<string, unknown>): Event => ({
-    id: newId('evt'),
-    sessionId,
-    type: etype,
-    actorAgentId: null,
-    payload,
-    at: new Date().toISOString()
-  });
-
   // Inserted `pending` so a mid-flight refetch exposes a subscription source. insertMessage snapshots
   // the type's context policy (for atom types) so it stays correct even if the atom pack is unloaded.
   store.insertMessage(messageId, sessionId, '', new Date().toISOString(), 'assistant', {
@@ -64,7 +57,7 @@ export function startGenerativeMessage(opts: StartGenerativeMessageOptions): Gen
         started = true;
         store.setGenStatus(sessionId, messageId, 'streaming', new Date().toISOString());
       }
-      emit(event('message.delta', { messageId, channel, type, delta: text, index: index++ }));
+      emit(makeEvent(sessionId, 'message.delta', { messageId, channel, type, delta: text, index: index++ }));
     },
     complete(result: { text: string; data?: unknown }) {
       if (settled) return;
@@ -75,13 +68,22 @@ export function startGenerativeMessage(opts: StartGenerativeMessageOptions): Gen
         text: result.text,
         data: result.data
       });
-      emit(event('message.complete', { messageId, channel, type, ok: true, text: result.text, data: result.data }));
+      emit(
+        makeEvent(sessionId, 'message.complete', {
+          messageId,
+          channel,
+          type,
+          ok: true,
+          text: result.text,
+          data: result.data
+        })
+      );
     },
     fail(message: string) {
       if (settled) return;
       settled = true;
       store.setGenStatus(sessionId, messageId, 'error', new Date().toISOString(), { text: message });
-      emit(event('message.complete', { messageId, channel, type, ok: false, text: message }));
+      emit(makeEvent(sessionId, 'message.complete', { messageId, channel, type, ok: false, text: message }));
     }
   };
 }

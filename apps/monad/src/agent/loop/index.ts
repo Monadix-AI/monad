@@ -1,4 +1,4 @@
-import type { Cost, Event, EventType, SessionId } from '@monad/protocol';
+import type { Cost, SessionId } from '@monad/protocol';
 import type { Tool } from '#/capabilities/tools/types.ts';
 import type { ModelMessage, ModelUsage, ToolCall, ToolSpec } from '../model/index.ts';
 import type { ExplicitSkill } from './internal/explicit-skill.ts';
@@ -6,6 +6,7 @@ import type { AgentLoopDeps, ChatMessage, ImageAttachment } from './types.ts';
 
 import { finishReasonSchema, newId } from '@monad/protocol';
 
+import { makeEvent } from '#/services/event-bus.ts';
 import { computeCost } from '../model/cost.ts';
 import { BUDGET_EXCEEDED, TOOL_BUDGET_REACHED } from '../prompts.ts';
 import { resolveExplicitSkill, skillModelInput } from './internal/explicit-skill.ts';
@@ -70,7 +71,7 @@ export class AgentLoop {
       deps,
       () => this.availableTools,
       () => this.hookOrchestrator.modelId(),
-      (sessionId, type, payload) => this.deps.emit(this.event(sessionId, type, payload))
+      (sessionId, type, payload) => this.deps.emit(makeEvent(sessionId, type, payload))
     );
     this.toolExecutor = new ToolExecutor(
       deps,
@@ -78,13 +79,13 @@ export class AgentLoop {
       () => this.hookOrchestrator.hooks,
       () => this.hookOrchestrator.hookCwd(),
       () => this.toolGrant.effectiveGate(),
-      (sessionId, type, payload) => this.deps.emit(this.event(sessionId, type, payload)),
+      (sessionId, type, payload) => this.deps.emit(makeEvent(sessionId, type, payload)),
       (context) => this.hookOrchestrator.turnInjectedContext.push(...context),
       (name) => this.toolGrant.activateSkill(name)
     );
     this.writer = new TurnWriter(
       deps,
-      (sessionId, type, payload) => this.deps.emit(this.event(sessionId, type, payload)),
+      (sessionId, type, payload) => this.deps.emit(makeEvent(sessionId, type, payload)),
       () => this.prompt,
       () => this.availableTools,
       () => this.hookOrchestrator.modelId(),
@@ -139,7 +140,7 @@ export class AgentLoop {
           ex.skill.tier,
           ex.skill.name
         );
-        this.deps.emit(this.event(sessionId, 'agent.token', { messageId, delta: result, index: 0 }));
+        this.deps.emit(makeEvent(sessionId, 'agent.token', { messageId, delta: result, index: 0 }));
         await this.writer.finishTurn(sessionId, messageId, result);
       } catch (err) {
         await this.writer.emitError(sessionId, messageId, err);
@@ -435,10 +436,10 @@ export class AgentLoop {
       // visibility. No local execution — the provider already resolved them.
       for (const { call, output } of providerExecuted) {
         this.deps.emit(
-          this.event(sessionId, 'tool.called', { toolCallId: call.toolCallId, tool: call.toolName, input: call.input })
+          makeEvent(sessionId, 'tool.called', { toolCallId: call.toolCallId, tool: call.toolName, input: call.input })
         );
         this.deps.emit(
-          this.event(sessionId, 'tool.result', {
+          makeEvent(sessionId, 'tool.result', {
             toolCallId: call.toolCallId,
             tool: call.toolName,
             ok: true,
@@ -638,16 +639,5 @@ export class AgentLoop {
     const body = renderSkillBody(ex.skill.body, ex.argString, ex.skill.dir);
     this.prompt.setSkillExpansion(body);
     return body;
-  }
-
-  private event(sessionId: SessionId, type: EventType, payload: object): Event {
-    return {
-      id: newId('evt'),
-      sessionId,
-      type,
-      actorAgentId: null,
-      payload: payload as Record<string, unknown>,
-      at: new Date().toISOString()
-    };
   }
 }

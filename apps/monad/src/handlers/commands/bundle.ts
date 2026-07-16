@@ -20,6 +20,7 @@ import type { Store } from '#/store/db/index.ts';
 import { newId } from '@monad/protocol';
 
 import { HANDOFF_PROMPT, renderHandoffUserPrompt, replayHistory } from '#/agent/index.ts';
+import { makeEvent } from '#/services/event-bus.ts';
 
 export interface CommandBundleDeps {
   commandRegistry: CommandRegistry;
@@ -62,14 +63,7 @@ export function createCommandBundle(deps: CommandBundleDeps): CommandBundle {
   } = deps;
 
   const publishSessionUpdated = (sessionId: SessionId): void => {
-    bus.publish({
-      id: newId('evt'),
-      sessionId,
-      type: 'session.updated',
-      actorAgentId: null,
-      payload: {},
-      at: new Date().toISOString()
-    });
+    bus.publish(makeEvent(sessionId, 'session.updated', {}));
   };
 
   // listModels marks the session's effective model (its per-session override, else the daemon
@@ -193,14 +187,12 @@ export function createCommandBundle(deps: CommandBundleDeps): CommandBundle {
       const msgId = newId('msg');
       const now = new Date().toISOString();
       store.insertMessage(msgId, newSessionId as SessionId, firstMessage, now, 'user', { type: 'text' });
-      const evt: Event = {
-        id: newId('evt'),
-        sessionId: newSessionId as SessionId,
-        type: 'user.message',
-        actorAgentId: null,
-        payload: { messageId: msgId, text: firstMessage },
-        at: now
-      };
+      const evt: Event = makeEvent(
+        newSessionId as SessionId,
+        'user.message',
+        { messageId: msgId, text: firstMessage },
+        { at: now }
+      );
       store.appendEvents([evt]);
       bus.publish(evt);
 

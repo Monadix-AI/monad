@@ -10,6 +10,8 @@ import type { FsBackend, TerminalBackend, TerminalExecResult } from '#/capabilit
 
 import { newId } from '@monad/protocol';
 
+import { makeEvent } from '#/services/event-bus.ts';
+
 interface Pending {
   resolve: (result: unknown) => void;
   reject: (err: Error) => void;
@@ -120,14 +122,7 @@ export class DelegationService {
   }
 
   private emit(sessionId: SessionId, type: Event['type'], payload: Record<string, unknown>): void {
-    this.publish({
-      id: newId('evt'),
-      sessionId,
-      type,
-      actorAgentId: null,
-      payload,
-      at: new Date().toISOString()
-    });
+    this.publish(makeEvent(sessionId, type, payload));
   }
 }
 

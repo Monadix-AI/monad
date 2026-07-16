@@ -3,6 +3,8 @@ import type { SessionContext } from '#/handlers/session/context.ts';
 
 import { newId } from '@monad/protocol';
 
+import { makeEvent } from '#/services/event-bus.ts';
+
 export function createManagedExternalAgentMessages(ctx: SessionContext) {
   const {
     deps: { store },
@@ -57,12 +59,8 @@ export function createManagedExternalAgentMessages(ctx: SessionContext) {
     });
     const round: Event[] = [];
     const emit = makeEmit(round);
-    emit({
-      id: newId('evt'),
-      sessionId: sessionId as SessionId,
-      type: 'agent.token',
-      actorAgentId: null,
-      payload: {
+    emit(
+      makeEvent(sessionId as SessionId, 'agent.token', {
         messageId,
         agentName,
         externalAgentSessionId,
@@ -70,24 +68,18 @@ export function createManagedExternalAgentMessages(ctx: SessionContext) {
         delta: '',
         index: 0,
         source: 'managed-external-agent'
-      },
-      at: new Date().toISOString()
-    });
-    emit({
-      id: newId('evt'),
-      sessionId: sessionId as SessionId,
-      type: 'agent.reasoning',
-      actorAgentId: null,
-      payload: {
+      })
+    );
+    emit(
+      makeEvent(sessionId as SessionId, 'agent.reasoning', {
         messageId,
         externalAgentSessionId,
         ...(deliveryId ? { deliveryId } : {}),
         delta: 'Thinking',
         index: 0,
         source: 'managed-external-agent'
-      },
-      at: new Date().toISOString()
-    });
+      })
+    );
     persistAndRetire(sessionId, round);
     return messageId;
   }
@@ -143,12 +135,8 @@ export function createManagedExternalAgentMessages(ctx: SessionContext) {
       });
     }
     const round: Event[] = [];
-    makeEmit(round)({
-      id: newId('evt'),
-      sessionId: sessionId as SessionId,
-      type: 'agent.message',
-      actorAgentId: null,
-      payload: {
+    makeEmit(round)(
+      makeEvent(sessionId as SessionId, 'agent.message', {
         messageId,
         agentName,
         externalAgentSessionId,
@@ -156,9 +144,8 @@ export function createManagedExternalAgentMessages(ctx: SessionContext) {
         text,
         source,
         ...(attachments?.length ? { attachments } : {})
-      },
-      at: new Date().toISOString()
-    });
+      })
+    );
     persistAndRetire(sessionId, round);
     return { messageId };
   }
@@ -182,19 +169,14 @@ export function createManagedExternalAgentMessages(ctx: SessionContext) {
     );
     if (!retired) return null;
     const round: Event[] = [];
-    makeEmit(round)({
-      id: newId('evt'),
-      sessionId: sessionId as SessionId,
-      type: 'agent.message',
-      actorAgentId: null,
-      payload: {
+    makeEmit(round)(
+      makeEvent(sessionId as SessionId, 'agent.message', {
         messageId: pendingMessageId,
         agentName,
         text: '{"visibility":"silent","display":{"kind":"markdown","content":""},"attachments":[],"next":[]}',
         source: 'managed-external-agent'
-      },
-      at: new Date().toISOString()
-    });
+      })
+    );
     persistAndRetire(sessionId, round);
     return pendingMessageId as MessageId;
   }

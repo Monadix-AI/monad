@@ -13,6 +13,7 @@ import { createMcpControls } from '#/capabilities/mcp/controls.ts';
 import { createObscuraController } from '#/capabilities/mcp/obscura.ts';
 import { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
 import { configureDaemonLogging } from '#/runtime/flags.ts';
+import { makeEvent } from '#/services/event-bus.ts';
 import { isToolExposed } from '#/services/generation/agent-persona.ts';
 import { createMonadixProviderManager } from '#/services/monadix/index.ts';
 import { createMonadixTaskRunner } from '#/services/monadix/task-runner.ts';
@@ -129,14 +130,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     obscuraStatus: () => getObscuraStatus()
   });
   const disposeMcpStatusStream = mcpRuntime.onStatusChange(() => {
-    bus.publish({
-      id: newId('evt'),
-      sessionId: newId('ses'),
-      type: 'mcp.status_updated',
-      actorAgentId: null,
-      payload: {},
-      at: new Date().toISOString()
-    });
+    bus.publish(makeEvent(newId('ses'), 'mcp.status_updated', {}));
   });
   process.on('exit', disposeMcpStatusStream);
 

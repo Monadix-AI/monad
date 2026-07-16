@@ -10,6 +10,7 @@ import { composeAcpChannelPrompt } from '#/agent/prompts/channel.ts';
 import { HandlerError } from '#/handlers/handler-error.ts';
 import { channelDelegateMcpServers } from '#/handlers/session/handlers/messaging-members.ts';
 import { acpAuthGuidance, directDelegate } from '#/services/delegation/acp-delegate.ts';
+import { makeEvent } from '#/services/event-bus.ts';
 
 type SandboxRootsFor = (
   sessionId: SessionId,
@@ -85,50 +86,36 @@ export function createForwardAcpHandler(ctx: SessionContext, sandboxRootsFor: Sa
     const emitAcpActivityStart = () => {
       if (acpActivityStarted) return;
       acpActivityStarted = true;
-      emit({
-        id: newId('evt'),
-        sessionId: sessionId as SessionId,
-        type: 'tool.called',
-        actorAgentId: null,
-        payload: { toolCallId: acpToolCallId, tool: `acp:${spec.name}`, input: { agent: spec.name } },
-        at: new Date().toISOString()
-      });
-      emit({
-        id: newId('evt'),
-        sessionId: sessionId as SessionId,
-        type: 'tool.progress',
-        actorAgentId: null,
-        payload: { toolCallId: acpToolCallId, tool: `acp:${spec.name}`, output: 'waiting for response...' },
-        at: new Date().toISOString()
-      });
+      emit(
+        makeEvent(sessionId as SessionId, 'tool.called', {
+          toolCallId: acpToolCallId,
+          tool: `acp:${spec.name}`,
+          input: { agent: spec.name }
+        })
+      );
+      emit(
+        makeEvent(sessionId as SessionId, 'tool.progress', {
+          toolCallId: acpToolCallId,
+          tool: `acp:${spec.name}`,
+          output: 'waiting for response...'
+        })
+      );
     };
     const emitAcpActivityProgress = () => {
       const sections = [
         acpProcessOutput.trim(),
         acpResponseOutput ? `response stream:\n${acpResponseOutput}` : ''
       ].filter(Boolean);
-      emit({
-        id: newId('evt'),
-        sessionId: sessionId as SessionId,
-        type: 'tool.progress',
-        actorAgentId: null,
-        payload: {
+      emit(
+        makeEvent(sessionId as SessionId, 'tool.progress', {
           toolCallId: acpToolCallId,
           tool: `acp:${spec.name}`,
           output: sections.join('\n\n') || 'waiting for response...'
-        },
-        at: new Date().toISOString()
-      });
+        })
+      );
     };
 
-    emit({
-      id: newId('evt'),
-      sessionId: sessionId as SessionId,
-      type: 'user.message',
-      actorAgentId: null,
-      payload: { messageId: userMsgId, text: displayText ?? text },
-      at: new Date().toISOString()
-    });
+    emit(makeEvent(sessionId as SessionId, 'user.message', { messageId: userMsgId, text: displayText ?? text }));
     store.insertMessage(userMsgId, sessionId, displayText ?? text, new Date().toISOString(), 'user');
 
     const rt = runtimeForSession(sessionId);
@@ -143,14 +130,14 @@ export function createForwardAcpHandler(ctx: SessionContext, sandboxRootsFor: Sa
       extraSkills: rt?.extraSkills,
       mcpServers: channelDelegateMcpServers(cfg?.mcpServers, rt?.mcpServers),
       onChunk: (delta) => {
-        emit({
-          id: newId('evt'),
-          sessionId: sessionId as SessionId,
-          type: 'agent.token',
-          actorAgentId: null,
-          payload: { messageId: agentMsgId, agentName: spec.name, delta, index: tokenIndex++ },
-          at: new Date().toISOString()
-        });
+        emit(
+          makeEvent(sessionId as SessionId, 'agent.token', {
+            messageId: agentMsgId,
+            agentName: spec.name,
+            delta,
+            index: tokenIndex++
+          })
+        );
         acpResponseOutput += delta;
         emitAcpActivityProgress();
       },
@@ -164,25 +151,24 @@ export function createForwardAcpHandler(ctx: SessionContext, sandboxRootsFor: Sa
           { sessionId, event: 'session.forward_acp.complete', agentName: spec.name, fullText },
           'forward acp complete'
         );
-        emit({
-          id: newId('evt'),
-          sessionId: sessionId as SessionId,
-          type: 'tool.result',
-          actorAgentId: null,
-          payload: { toolCallId: acpToolCallId, tool: `acp:${spec.name}`, ok: true, result: 'completed' },
-          at: new Date().toISOString()
-        });
+        emit(
+          makeEvent(sessionId as SessionId, 'tool.result', {
+            toolCallId: acpToolCallId,
+            tool: `acp:${spec.name}`,
+            ok: true,
+            result: 'completed'
+          })
+        );
         store.insertMessage(agentMsgId, sessionId, fullText, new Date().toISOString(), 'assistant', {
           data: { agentName: spec.name }
         });
-        emit({
-          id: newId('evt'),
-          sessionId: sessionId as SessionId,
-          type: 'agent.message',
-          actorAgentId: null,
-          payload: { messageId: agentMsgId, agentName: spec.name, text: fullText },
-          at: new Date().toISOString()
-        });
+        emit(
+          makeEvent(sessionId as SessionId, 'agent.message', {
+            messageId: agentMsgId,
+            agentName: spec.name,
+            text: fullText
+          })
+        );
         if (onComplete) {
           try {
             await onComplete(fullText);
@@ -200,14 +186,14 @@ export function createForwardAcpHandler(ctx: SessionContext, sandboxRootsFor: Sa
         );
         const hint = acpAuthGuidance(err, spec, ctx.deps.localeService?.t);
         const errorText = hint ? `${message}\n\n${hint}` : message;
-        emit({
-          id: newId('evt'),
-          sessionId: sessionId as SessionId,
-          type: 'tool.result',
-          actorAgentId: null,
-          payload: { toolCallId: acpToolCallId, tool: `acp:${spec.name}`, ok: false, result: errorText },
-          at: new Date().toISOString()
-        });
+        emit(
+          makeEvent(sessionId as SessionId, 'tool.result', {
+            toolCallId: acpToolCallId,
+            tool: `acp:${spec.name}`,
+            ok: false,
+            result: errorText
+          })
+        );
         store.insertMessage(
           agentMsgId,
           sessionId,
@@ -219,14 +205,14 @@ export function createForwardAcpHandler(ctx: SessionContext, sandboxRootsFor: Sa
             data: { agentName: spec.name }
           }
         );
-        emit({
-          id: newId('evt'),
-          sessionId: sessionId as SessionId,
-          type: 'agent.error',
-          actorAgentId: null,
-          payload: { messageId: agentMsgId, agentName: spec.name, code, message: errorText },
-          at: new Date().toISOString()
-        });
+        emit(
+          makeEvent(sessionId as SessionId, 'agent.error', {
+            messageId: agentMsgId,
+            agentName: spec.name,
+            code,
+            message: errorText
+          })
+        );
         try {
           persistAndRetire(sessionId, round);
         } catch (innerErr) {

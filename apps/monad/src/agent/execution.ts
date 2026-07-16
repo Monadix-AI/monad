@@ -2,7 +2,7 @@
 // the daemon lifetime; each model invocation creates its AgentLoop through `agent.loop(...)`.
 
 import type { MonadConfig, MonadPaths } from '@monad/environment';
-import type { Event, SessionId } from '@monad/protocol';
+import type { SessionId } from '@monad/protocol';
 import type { LoadedSkill } from '#/agent/index.ts';
 import type { UserPromptSlots } from '#/agent/prompts.ts';
 import type { FileObservationStore } from '#/capabilities/tools/types.ts';
@@ -18,7 +18,6 @@ import type { OversightService } from '#/services/oversight.ts';
 import type { Store } from '#/store/db/index.ts';
 
 import { createLogger } from '@monad/logger';
-import { newId } from '@monad/protocol';
 
 import {
   CompositeContextEngine,
@@ -41,6 +40,7 @@ import { register as toolSearchRegister } from '#/capabilities/tools/registry/to
 import { register as ttsRegister } from '#/capabilities/tools/registry/tts.ts';
 import { register as visionRegister } from '#/capabilities/tools/registry/vision.ts';
 import { register as agentDelegateRegister } from '#/services/delegation/agent-delegate.ts';
+import { makeEvent } from '#/services/event-bus.ts';
 import { createInboundApprovalGate, type InboundApprovalMode } from '#/services/inbound-approval.ts';
 
 const log = createLogger('agent:execution');
@@ -212,14 +212,10 @@ export function createAgentExecutionService(deps: AgentDeps): AgentExecutionServ
         .promoteFacts(sessionId as SessionId, foldedText, mode)
         .then((promoted) => {
           if (!promoted || mode !== 'suggest') return;
-          const event: Event = {
-            id: newId('evt'),
-            sessionId: sessionId as SessionId,
-            type: 'memory.suggestion',
-            actorAgentId: null,
-            payload: { scope: promoted.scope, facts: promoted.facts },
-            at: new Date().toISOString()
-          };
+          const event = makeEvent(sessionId as SessionId, 'memory.suggestion', {
+            scope: promoted.scope,
+            facts: promoted.facts
+          });
           store.appendEvents([event]);
           bus.publish(event);
         })

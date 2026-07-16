@@ -17,6 +17,7 @@ import { createMessagingNotifyHandlers } from '#/handlers/session/handlers/messa
 import { createSendProjectMessageHandler } from '#/handlers/session/handlers/messaging/messaging-project.ts';
 import { imageAttachments, messageTextWithAttachments } from '#/handlers/session/handlers/messaging-attachments.ts';
 import { createSubscribeHandlers } from '#/handlers/session/handlers/messaging-subscribe.ts';
+import { makeEvent } from '#/services/event-bus.ts';
 
 // Re-exported for existing import sites (tests import member/channel helpers from this module).
 export {
@@ -175,14 +176,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
       const messageId = newId('msg');
       const round: Event[] = [];
       store.insertMessage(messageId, sessionId, effectiveText, new Date().toISOString(), 'user');
-      makeEmit(round)({
-        id: newId('evt'),
-        sessionId: sessionId as SessionId,
-        type: 'user.message',
-        actorAgentId: null,
-        payload: { messageId, text: effectiveText },
-        at: new Date().toISOString()
-      });
+      makeEmit(round)(makeEvent(sessionId as SessionId, 'user.message', { messageId, text: effectiveText }));
       persistAndRetire(sessionId, round);
       log?.debug(
         { sessionId, event: 'session.send.recorded', messageId, text: effectiveText },

@@ -10,6 +10,7 @@ import { composeAcpChannelPrompt } from '#/agent/prompts/channel.ts';
 import { channelDelegateMcpServers, projectAcpMembers } from '#/handlers/session/handlers/messaging-members.ts';
 import { channelNextPrompt } from '#/handlers/session/handlers/messaging-notices.ts';
 import { acpAuthGuidance, directDelegate } from '#/services/delegation/acp-delegate.ts';
+import { makeEvent } from '#/services/event-bus.ts';
 
 /** Direct-to-ACP-agent delegation for channel `next` targets and project fan-out. */
 export function createAcpChannelDelegation(
@@ -58,28 +59,22 @@ export function createAcpChannelDelegation(
         acpProcessOutput.trim(),
         acpResponseOutput ? `response stream:\n${acpResponseOutput}` : ''
       ].filter(Boolean);
-      emit({
-        id: newId('evt'),
-        sessionId: sessionId as SessionId,
-        type: 'tool.progress',
-        actorAgentId: null,
-        payload: {
+      emit(
+        makeEvent(sessionId as SessionId, 'tool.progress', {
           toolCallId: acpToolCallId,
           tool: `acp:${spec.name}`,
           output: sections.join('\n\n') || 'waiting for response...'
-        },
-        at: new Date().toISOString()
-      });
+        })
+      );
     };
 
-    emit({
-      id: newId('evt'),
-      sessionId: sessionId as SessionId,
-      type: 'tool.called',
-      actorAgentId: null,
-      payload: { toolCallId: acpToolCallId, tool: `acp:${spec.name}`, input: { agent: spec.name } },
-      at: new Date().toISOString()
-    });
+    emit(
+      makeEvent(sessionId as SessionId, 'tool.called', {
+        toolCallId: acpToolCallId,
+        tool: `acp:${spec.name}`,
+        input: { agent: spec.name }
+      })
+    );
     emitAcpActivityProgress();
 
     const rt = runtimeForSession(sessionId);
@@ -93,14 +88,14 @@ export function createAcpChannelDelegation(
       extraSkills: rt?.extraSkills,
       mcpServers,
       onChunk: (delta) => {
-        emit({
-          id: newId('evt'),
-          sessionId: sessionId as SessionId,
-          type: 'agent.token',
-          actorAgentId: null,
-          payload: { messageId: agentMsgId, agentName: spec.name, delta, index: tokenIndex++ },
-          at: new Date().toISOString()
-        });
+        emit(
+          makeEvent(sessionId as SessionId, 'agent.token', {
+            messageId: agentMsgId,
+            agentName: spec.name,
+            delta,
+            index: tokenIndex++
+          })
+        );
         acpResponseOutput += delta;
         emitAcpActivityProgress();
       },
@@ -110,37 +105,36 @@ export function createAcpChannelDelegation(
       }
     })
       .then((fullText) => {
-        emit({
-          id: newId('evt'),
-          sessionId: sessionId as SessionId,
-          type: 'tool.result',
-          actorAgentId: null,
-          payload: { toolCallId: acpToolCallId, tool: `acp:${spec.name}`, ok: true, result: 'completed' },
-          at: new Date().toISOString()
-        });
+        emit(
+          makeEvent(sessionId as SessionId, 'tool.result', {
+            toolCallId: acpToolCallId,
+            tool: `acp:${spec.name}`,
+            ok: true,
+            result: 'completed'
+          })
+        );
         store.insertMessage(agentMsgId, sessionId, fullText, new Date().toISOString(), 'assistant', {
           data: { agentName: spec.name }
         });
-        emit({
-          id: newId('evt'),
-          sessionId: sessionId as SessionId,
-          type: 'agent.message',
-          actorAgentId: null,
-          payload: { messageId: agentMsgId, agentName: spec.name, text: fullText },
-          at: new Date().toISOString()
-        });
+        emit(
+          makeEvent(sessionId as SessionId, 'agent.message', {
+            messageId: agentMsgId,
+            agentName: spec.name,
+            text: fullText
+          })
+        );
         persistAndRetire(sessionId, round);
       })
       .catch((err: unknown) => {
         const { code, message } = extractError(err);
-        emit({
-          id: newId('evt'),
-          sessionId: sessionId as SessionId,
-          type: 'tool.result',
-          actorAgentId: null,
-          payload: { toolCallId: acpToolCallId, tool: `acp:${spec.name}`, ok: false, result: message },
-          at: new Date().toISOString()
-        });
+        emit(
+          makeEvent(sessionId as SessionId, 'tool.result', {
+            toolCallId: acpToolCallId,
+            tool: `acp:${spec.name}`,
+            ok: false,
+            result: message
+          })
+        );
         store.insertMessage(
           agentMsgId,
           sessionId,
@@ -149,14 +143,14 @@ export function createAcpChannelDelegation(
           'assistant',
           { type: 'error', data: { agentName: spec.name } }
         );
-        emit({
-          id: newId('evt'),
-          sessionId: sessionId as SessionId,
-          type: 'agent.error',
-          actorAgentId: null,
-          payload: { messageId: agentMsgId, agentName: spec.name, code, message },
-          at: new Date().toISOString()
-        });
+        emit(
+          makeEvent(sessionId as SessionId, 'agent.error', {
+            messageId: agentMsgId,
+            agentName: spec.name,
+            code,
+            message
+          })
+        );
         persistAndRetire(sessionId, round);
       });
   }
@@ -217,23 +211,21 @@ export function createAcpChannelDelegation(
         let acpProcessOutput = '';
         let acpResponseOutput = '';
         const emitAcpActivityProgress = (output = 'waiting for response...') => {
-          emit({
-            id: newId('evt'),
-            sessionId: session.id as SessionId,
-            type: 'tool.progress',
-            actorAgentId: null,
-            payload: { toolCallId: acpToolCallId, tool: `acp:${spec.name}`, output },
-            at: new Date().toISOString()
-          });
+          emit(
+            makeEvent(session.id as SessionId, 'tool.progress', {
+              toolCallId: acpToolCallId,
+              tool: `acp:${spec.name}`,
+              output
+            })
+          );
         };
-        emit({
-          id: newId('evt'),
-          sessionId: session.id as SessionId,
-          type: 'tool.called',
-          actorAgentId: null,
-          payload: { toolCallId: acpToolCallId, tool: `acp:${spec.name}`, input: { agent: spec.name } },
-          at: new Date().toISOString()
-        });
+        emit(
+          makeEvent(session.id as SessionId, 'tool.called', {
+            toolCallId: acpToolCallId,
+            tool: `acp:${spec.name}`,
+            input: { agent: spec.name }
+          })
+        );
         emitAcpActivityProgress();
         try {
           const rt = runtime.get(session.id);
@@ -247,14 +239,14 @@ export function createAcpChannelDelegation(
             extraSkills: rt?.extraSkills,
             mcpServers: channelDelegateMcpServers(mcpServers, rt?.mcpServers),
             onChunk: (delta) => {
-              emit({
-                id: newId('evt'),
-                sessionId: session.id as SessionId,
-                type: 'agent.token',
-                actorAgentId: null,
-                payload: { messageId: agentMsgId, agentName: spec.name, delta, index: tokenIndex++ },
-                at: new Date().toISOString()
-              });
+              emit(
+                makeEvent(session.id as SessionId, 'agent.token', {
+                  messageId: agentMsgId,
+                  agentName: spec.name,
+                  delta,
+                  index: tokenIndex++
+                })
+              );
               acpResponseOutput += delta;
               const sections = [
                 acpProcessOutput.trim(),
@@ -271,37 +263,36 @@ export function createAcpChannelDelegation(
               emitAcpActivityProgress(sections.join('\n\n') || 'waiting for response...');
             }
           });
-          emit({
-            id: newId('evt'),
-            sessionId: session.id as SessionId,
-            type: 'tool.result',
-            actorAgentId: null,
-            payload: { toolCallId: acpToolCallId, tool: `acp:${spec.name}`, ok: true, result: 'completed' },
-            at: new Date().toISOString()
-          });
+          emit(
+            makeEvent(session.id as SessionId, 'tool.result', {
+              toolCallId: acpToolCallId,
+              tool: `acp:${spec.name}`,
+              ok: true,
+              result: 'completed'
+            })
+          );
           store.insertMessage(agentMsgId, session.id, fullText, new Date().toISOString(), 'assistant', {
             data: { agentName: spec.name }
           });
-          emit({
-            id: newId('evt'),
-            sessionId: session.id as SessionId,
-            type: 'agent.message',
-            actorAgentId: null,
-            payload: { messageId: agentMsgId, agentName: spec.name, text: fullText },
-            at: new Date().toISOString()
-          });
+          emit(
+            makeEvent(session.id as SessionId, 'agent.message', {
+              messageId: agentMsgId,
+              agentName: spec.name,
+              text: fullText
+            })
+          );
         } catch (err) {
           const { code, message } = extractError(err);
           const hint = acpAuthGuidance(err, spec, localeService?.t);
           const errorText = hint ? `${message}\n\n${hint}` : message;
-          emit({
-            id: newId('evt'),
-            sessionId: session.id as SessionId,
-            type: 'tool.result',
-            actorAgentId: null,
-            payload: { toolCallId: acpToolCallId, tool: `acp:${spec.name}`, ok: false, result: errorText },
-            at: new Date().toISOString()
-          });
+          emit(
+            makeEvent(session.id as SessionId, 'tool.result', {
+              toolCallId: acpToolCallId,
+              tool: `acp:${spec.name}`,
+              ok: false,
+              result: errorText
+            })
+          );
           store.insertMessage(
             agentMsgId,
             session.id,
@@ -310,14 +301,14 @@ export function createAcpChannelDelegation(
             'assistant',
             { type: 'error', data: { agentName: spec.name } }
           );
-          emit({
-            id: newId('evt'),
-            sessionId: session.id as SessionId,
-            type: 'agent.error',
-            actorAgentId: null,
-            payload: { messageId: agentMsgId, agentName: spec.name, code, message: errorText },
-            at: new Date().toISOString()
-          });
+          emit(
+            makeEvent(session.id as SessionId, 'agent.error', {
+              messageId: agentMsgId,
+              agentName: spec.name,
+              code,
+              message: errorText
+            })
+          );
         } finally {
           persistAndRetire(session.id, round);
         }

@@ -18,6 +18,7 @@ import type { Store } from '#/store/db/index.ts';
 
 import { newId } from '@monad/protocol';
 
+import { makeEvent } from '#/services/event-bus.ts';
 import { type CommandServices, makeCommandRunContext, type SessionNavigator } from './context.ts';
 import { dispatchCommand } from './dispatch.ts';
 import { type CommandRegistry, type SkillCommandView } from './registry.ts';
@@ -74,7 +75,7 @@ export function emitCommandTurn(
   result: CommandResult
 ): ChatMessage {
   const userId = persistEcho(store, sessionId, text);
-  emit(event(sessionId, 'user.message', { messageId: userId, text }));
+  emit(makeEvent(sessionId, 'user.message', { messageId: userId, text }));
   return emitDirective(store, emit, sessionId, result);
 }
 
@@ -253,7 +254,7 @@ function emitDirective(
   const createdAt = new Date().toISOString();
   const data = result.effect ? { effect: result.effect } : undefined;
   store.insertMessage(id, sessionId, text, createdAt, 'assistant', { type: 'directive', data });
-  emit(event(sessionId, 'agent.message', { messageId: id, text, ...(data !== undefined ? { data } : {}) }));
+  emit(makeEvent(sessionId, 'agent.message', { messageId: id, text, ...(data !== undefined ? { data } : {}) }));
   return {
     id,
     sessionId: sessionId as SessionId,
@@ -264,16 +265,5 @@ function emitDirective(
     stream: { status: 'complete' },
     active: true,
     createdAt
-  };
-}
-
-function event(sessionId: SessionId, type: Event['type'], payload: Record<string, unknown>): Event {
-  return {
-    id: newId('evt'),
-    sessionId: sessionId as SessionId,
-    type,
-    actorAgentId: null,
-    payload,
-    at: new Date().toISOString()
   };
 }

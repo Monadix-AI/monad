@@ -1,8 +1,28 @@
-import type { Event, EventType } from '@monad/protocol';
+import type { Event, EventType, SessionId } from '@monad/protocol';
 
 import { EventEmitter } from 'node:events';
+import { newId } from '@monad/protocol';
 
 export type EventSink = (event: Event) => void;
+
+/** Single constructor for the wire Event envelope — every daemon-emitted event goes through here.
+ *  `payload` is `object` (not `Event['payload']`) so typed payload shapes without an index
+ *  signature pass without a call-site cast; the wire schema validates the record shape anyway. */
+export function makeEvent(
+  sessionId: SessionId,
+  type: EventType,
+  payload: object,
+  opts?: Pick<Partial<Event>, 'actorAgentId' | 'at'>
+): Event {
+  return {
+    id: newId('evt'),
+    sessionId,
+    type,
+    actorAgentId: opts?.actorAgentId ?? null,
+    payload: payload as Event['payload'],
+    at: opts?.at ?? new Date().toISOString()
+  };
+}
 
 /**
  * Event types that describe session-list-level state rather than in-session

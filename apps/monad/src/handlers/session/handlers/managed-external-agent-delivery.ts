@@ -16,6 +16,7 @@ import {
   managedExternalAgentInboxNotice,
   normalizeManagedExternalAgentDirectTarget
 } from '#/handlers/session/handlers/messaging-notices.ts';
+import { makeEvent } from '#/services/event-bus.ts';
 import { managedProjectLaunchMode } from '#/services/external-agent/managed-project.ts';
 
 const MANAGED_EXTERNAL_AGENT_DELIVERY_ERROR_EVENT =
@@ -48,19 +49,14 @@ export function createManagedExternalAgentDelivery(ctx: SessionContext) {
       type: 'error',
       data: { agentName }
     });
-    makeEmit(round)({
-      id: newId('evt'),
-      sessionId: sessionId as SessionId,
-      type: 'agent.error',
-      actorAgentId: null,
-      payload: {
+    makeEmit(round)(
+      makeEvent(sessionId as SessionId, 'agent.error', {
         messageId,
         agentName,
         code: code ?? 'managed_external_agent_delivery_failed',
         message: text
-      },
-      at: new Date().toISOString()
-    });
+      })
+    );
     persistAndRetire(sessionId, round);
   }
 
@@ -134,20 +130,15 @@ export function createManagedExternalAgentDelivery(ctx: SessionContext) {
         if (preflight.state !== 'ready') {
           const round: Event[] = [];
           if (preflight.state === 'not_authenticated' || preflight.state === 'unknown') {
-            makeEmit(round)({
-              id: newId('evt'),
-              sessionId: session.id as SessionId,
-              type: 'external_agent.connection_required',
-              actorAgentId: null,
-              payload: {
+            makeEmit(round)(
+              makeEvent(session.id as SessionId, 'external_agent.connection_required', {
                 agentName: runtimeAgentName,
                 provider: spec.provider,
                 code: 'provider_connection_required',
                 reason: preflight.reason,
                 reconnectIn: 'studio'
-              },
-              at: new Date().toISOString()
-            });
+              })
+            );
             persistAndRetire(session.id, round);
           }
           continue;
@@ -233,20 +224,15 @@ export function createManagedExternalAgentDelivery(ctx: SessionContext) {
       if (preflight.state !== 'ready') {
         const round: Event[] = [];
         if (preflight.state === 'not_authenticated' || preflight.state === 'unknown') {
-          makeEmit(round)({
-            id: newId('evt'),
-            sessionId: session.id as SessionId,
-            type: 'external_agent.connection_required',
-            actorAgentId: null,
-            payload: {
+          makeEmit(round)(
+            makeEvent(session.id as SessionId, 'external_agent.connection_required', {
               agentName: runtimeAgentName,
               provider: spec.provider,
               code: 'provider_connection_required',
               reason: preflight.reason,
               reconnectIn: 'studio'
-            },
-            at: new Date().toISOString()
-          });
+            })
+          );
           persistAndRetire(session.id, round);
         }
         return;

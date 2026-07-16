@@ -11,14 +11,13 @@ import type {
 import type { SessionContext } from '#/handlers/session/context.ts';
 import type { ExternalAgentTargetId } from '#/store/db/external-agent-sessions.ts';
 
-import { newId } from '@monad/protocol';
-
 import { extractError } from '#/agent/index.ts';
 import { HandlerError } from '#/handlers/handler-error.ts';
 import {
   externalAgentInputText,
   managedExternalAgentResumeRecoveryNotice
 } from '#/handlers/session/handlers/messaging-notices.ts';
+import { makeEvent } from '#/services/event-bus.ts';
 
 const MANAGED_EXTERNAL_AGENT_RESUME_FAILED_COLD_START_EVENT =
   'project.managed_external_agent.resume_failed_cold_start' satisfies ManagedExternalAgentLifecycleLogEvent;
@@ -129,21 +128,16 @@ export function createManagedExternalAgentRuntime(ctx: SessionContext) {
         'managed native cli resume failed; cold starting'
       );
       const round: Event[] = [];
-      makeEmit(round)({
-        id: newId('evt'),
-        sessionId: session.id as SessionId,
-        type: 'external_agent.resume_failed',
-        actorAgentId: null,
-        payload: {
+      makeEmit(round)(
+        makeEvent(session.id as SessionId, 'external_agent.resume_failed', {
           agentName: runtimeAgentName,
           provider: spec.provider,
           providerSessionRef,
           code,
           message,
           fallback: 'cold-start'
-        },
-        at: new Date().toISOString()
-      });
+        })
+      );
       persistAndRetire(session.id, round);
       const nativeSession = await externalAgentHost.start(startArgs);
       await externalAgentHost.input(nativeSession.id, {

@@ -11,6 +11,8 @@ import type { ClarifyAsker, ClarifyChoiceMode, Event, SessionId } from '@monad/p
 
 import { newId } from '@monad/protocol';
 
+import { makeEvent } from '#/services/event-bus.ts';
+
 interface Pending {
   resolve: (answer: string) => void;
   timer?: ReturnType<typeof setTimeout>;
@@ -125,15 +127,8 @@ export class ClarifyService {
     type: 'clarify.requested' | 'clarify.resolved',
     payload: Record<string, unknown>
   ): void {
-    this.publish({
-      id: newId('evt'),
-      // TODO(track-b): clarify can be asked from a project-wide fan-out turn (a `prj_` id), so
-      // `sessionId` here is not always a real SessionId — see context.ts's SessionOrProject note.
-      sessionId: sessionId as SessionId,
-      type,
-      actorAgentId: null,
-      payload,
-      at: new Date().toISOString()
-    });
+    // TODO(track-b): clarify can be asked from a project-wide fan-out turn (a `prj_` id), so
+    // `sessionId` here is not always a real SessionId — see context.ts's SessionOrProject note.
+    this.publish(makeEvent(sessionId as SessionId, type, payload));
   }
 }

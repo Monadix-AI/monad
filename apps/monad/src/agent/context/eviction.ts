@@ -17,10 +17,10 @@
 // results it produced — a flat "keep N results" count would protect only the current burst and could
 // even split one concurrent batch (evict some parallel results while keeping their same-age siblings).
 
+import type { SessionId } from '@monad/protocol';
 import type { ModelContentPart, ModelMessage } from '../model/index.ts';
 
-import { newId, type SessionId } from '@monad/protocol';
-
+import { makeEvent } from '#/services/event-bus.ts';
 import { evictedToolResult } from '../prompts.ts';
 import { globalEstimator, type TokenEstimator } from './estimate.ts';
 import { type ContextEngine, type ContextPrepareCtx, effectiveInputTokens } from './index.ts';
@@ -163,14 +163,12 @@ export class ToolResultEvictionContext implements ContextEngine {
         const oldest = this.reclaimed.keys().next().value;
         if (oldest !== undefined) this.reclaimed.delete(oldest);
       }
-      ctx?.emit({
-        id: newId('evt'),
-        sessionId: sessionId as SessionId,
-        type: 'context.evicted',
-        actorAgentId: null,
-        payload: { reclaimedTokens: reclaimable, resultCount: candidates.length },
-        at: new Date().toISOString()
-      });
+      ctx?.emit(
+        makeEvent(sessionId as SessionId, 'context.evicted', {
+          reclaimedTokens: reclaimable,
+          resultCount: candidates.length
+        })
+      );
     }
     return out;
   }

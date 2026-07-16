@@ -11,6 +11,7 @@ import {
   externalAgentProjectMemberSettings,
   managedExternalAgentProjectMembers
 } from '#/handlers/session/handlers/messaging-members.ts';
+import { makeEvent } from '#/services/event-bus.ts';
 import { resolveExternalAgentDefaultLaunchMode } from '#/services/external-agent/index.ts';
 import { managedProjectLaunchMode } from '#/services/external-agent/managed-project.ts';
 
@@ -69,14 +70,7 @@ export function createForwardExternalAgentHandler(
     const userRound: Event[] = [];
     const userEmit = makeEmit(userRound);
     const userMsgId = newId('msg');
-    userEmit({
-      id: newId('evt'),
-      sessionId: sessionId as SessionId,
-      type: 'user.message',
-      actorAgentId: null,
-      payload: { messageId: userMsgId, text: displayText ?? text },
-      at: new Date().toISOString()
-    });
+    userEmit(makeEvent(sessionId as SessionId, 'user.message', { messageId: userMsgId, text: displayText ?? text }));
     store.insertMessage(userMsgId, sessionId, displayText ?? text, new Date().toISOString(), 'user');
     persistAndRetire(sessionId, userRound);
 
@@ -93,14 +87,14 @@ export function createForwardExternalAgentHandler(
         'assistant',
         { type: 'error', data: { agentName } }
       );
-      emit({
-        id: newId('evt'),
-        sessionId: sessionId as SessionId,
-        type: 'agent.error',
-        actorAgentId: null,
-        payload: { messageId: agentMsgId, agentName, code: code ?? fallbackCode, message },
-        at: new Date().toISOString()
-      });
+      emit(
+        makeEvent(sessionId as SessionId, 'agent.error', {
+          messageId: agentMsgId,
+          agentName,
+          code: code ?? fallbackCode,
+          message
+        })
+      );
       persistAndRetire(sessionId, round);
     };
 
@@ -167,31 +161,22 @@ export function createForwardExternalAgentHandler(
         const emit = makeEmit(round);
         const agentMsgId = newId('msg');
         if (preflight.state === 'not_authenticated' || preflight.state === 'unknown') {
-          emit({
-            id: newId('evt'),
-            sessionId: sessionId as SessionId,
-            type: 'external_agent.connection_required',
-            actorAgentId: null,
-            payload: {
+          emit(
+            makeEvent(sessionId as SessionId, 'external_agent.connection_required', {
               agentName,
               provider: spec.provider,
               code: 'provider_connection_required',
               reason,
               reconnectIn: 'studio'
-            },
-            at: new Date().toISOString()
-          });
+            })
+          );
         }
         store.insertMessage(agentMsgId, sessionId, reason, new Date().toISOString(), 'assistant', {
           type: 'error',
           data: { agentName }
         });
-        emit({
-          id: newId('evt'),
-          sessionId: sessionId as SessionId,
-          type: 'agent.error',
-          actorAgentId: null,
-          payload: {
+        emit(
+          makeEvent(sessionId as SessionId, 'agent.error', {
             messageId: agentMsgId,
             agentName,
             code:
@@ -201,9 +186,8 @@ export function createForwardExternalAgentHandler(
                   ? 'provider_unavailable'
                   : 'provider_readiness_unknown',
             message: reason
-          },
-          at: new Date().toISOString()
-        });
+          })
+        );
         persistAndRetire(sessionId, round);
         log?.debug(
           {
