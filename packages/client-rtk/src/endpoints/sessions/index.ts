@@ -20,7 +20,12 @@ export { useSearchSessionsQuery } from './search-sessions.ts';
 export { useSendMessageMutation } from './send-message.ts';
 export { useSpawnSessionMemberMutation } from './spawn-session-member.ts';
 export { streamControlApi, useStreamControlQuery } from './stream-control.ts';
-export { streamSessionApi as sessionsApi, useStreamSessionQuery } from './stream-session.ts';
+export {
+  type ContextNotice,
+  type MemorySuggestion,
+  streamSessionApi as sessionsApi,
+  useStreamSessionQuery
+} from './stream-session.ts';
 export { useStreamUiItemsQuery } from './stream-ui-items.ts';
 export { useUndoDeleteSessionMutation } from './undo-delete-session.ts';
 export { useUpdateSessionMutation } from './update-session.ts';

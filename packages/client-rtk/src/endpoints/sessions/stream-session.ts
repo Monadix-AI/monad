@@ -1,7 +1,10 @@
 import {
   type ChatMessage,
+  type ContextEvictedPayload,
+  type ContextHandoffSuggestedPayload,
   type ContextUsagePayload,
   type Event,
+  type MemorySuggestionPayload,
   parseEventPayload,
   type SessionId,
   type UIToolItem
@@ -60,11 +63,26 @@ interface ToolStep {
   seq?: UIToolItem['seq'];
 }
 
+/** A transient context-plane notice from the live stream. Surfacing policy mirrors the web's
+ *  classifyContextNotice (apps/web/src/features/session/context-notice.ts): clients nudge on
+ *  'handoff'; 'evicted' is routine housekeeping, exposed but not worth interrupting for. */
+export type ContextNotice =
+  | ({ id: string; kind: 'evicted' } & ContextEvictedPayload)
+  | ({ id: string; kind: 'handoff' } & ContextHandoffSuggestedPayload);
+
+/** The latest memory.suggestion awaiting user confirmation — accept by posting each fact via
+ *  addMemoryFact, or dismiss client-side (the daemon never retracts a suggestion). */
+export interface MemorySuggestion extends MemorySuggestionPayload {
+  id: string;
+}
+
 interface SessionStreamState {
   messages: StreamMessage[];
   toolSteps: ToolStep[];
   pendingApprovals: PendingApproval[];
   pendingClarifications: PendingClarification[];
+  contextNotices: ContextNotice[];
+  memorySuggestion?: MemorySuggestion;
   usage?: ContextUsagePayload;
   /** Set when the SSE stream errors; cleared once events flow again. Lets the UI show a
    *  "reconnecting…" / failed state instead of a silently frozen transcript. `fatal` won't retry. */
@@ -74,12 +92,15 @@ interface SessionStreamState {
 // Cap on the live stream cache. History (refetched on each turn's settle) is the canonical store, so
 // this only needs to hold the current turn's in-flight items plus a small bridge — far below the cap.
 const STREAM_MESSAGE_CAP = 100;
+const CONTEXT_NOTICE_CAP = 20;
 
 export const streamSessionApi = sendMessageApi.injectEndpoints({
   overrideExisting: true,
   endpoints: (builder) => ({
     streamSession: builder.query<SessionStreamState, SessionId>({
-      queryFn: () => ({ data: { messages: [], toolSteps: [], pendingApprovals: [], pendingClarifications: [] } }),
+      queryFn: () => ({
+        data: { messages: [], toolSteps: [], pendingApprovals: [], pendingClarifications: [], contextNotices: [] }
+      }),
       async onCacheEntryAdded(
         sessionId: SessionId,
         {
@@ -243,6 +264,24 @@ export const streamSessionApi = sendMessageApi.injectEndpoints({
                     draft.usage = parseEventPayload('context.usage', event.payload);
                     break;
                   }
+                  case 'context.evicted': {
+                    const p = parseEventPayload('context.evicted', event.payload);
+                    if (!draft.contextNotices.some((n) => n.id === event.id)) {
+                      draft.contextNotices.push({ id: event.id, kind: 'evicted', ...p });
+                    }
+                    break;
+                  }
+                  case 'context.handoff_suggested': {
+                    const p = parseEventPayload('context.handoff_suggested', event.payload);
+                    if (!draft.contextNotices.some((n) => n.id === event.id)) {
+                      draft.contextNotices.push({ id: event.id, kind: 'handoff', ...p });
+                    }
+                    break;
+                  }
+                  case 'memory.suggestion': {
+                    draft.memorySuggestion = { id: event.id, ...parseEventPayload('memory.suggestion', event.payload) };
+                    break;
+                  }
                   case 'tool.approval_requested': {
                     const p = parseEventPayload('tool.approval_requested', event.payload);
                     if (!draft.pendingApprovals.some((a) => a.requestId === p.requestId)) {
@@ -290,6 +329,9 @@ export const streamSessionApi = sendMessageApi.injectEndpoints({
                 // on settle), so dropping them frees memory without losing anything from the view.
                 if (draft.messages.length > STREAM_MESSAGE_CAP) {
                   draft.messages.splice(0, draft.messages.length - STREAM_MESSAGE_CAP);
+                }
+                if (draft.contextNotices.length > CONTEXT_NOTICE_CAP) {
+                  draft.contextNotices.splice(0, draft.contextNotices.length - CONTEXT_NOTICE_CAP);
                 }
               });
             },

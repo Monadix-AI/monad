@@ -301,6 +301,8 @@ import { useResetUsageMutation } from './endpoints/usage/reset-usage.ts';
 
 export const monadApi = modelApi;
 
+export type { ContextNotice, MemorySuggestion } from './endpoints/sessions/index.ts';
+
 export {
   acpAgentAdapter,
   acpAgentSelectors,

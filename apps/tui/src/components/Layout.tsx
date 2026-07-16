@@ -10,7 +10,8 @@ import {
   useAbortSessionMutation,
   useListExternalAgentSessionsQuery,
   useSendMessageMutation,
-  useSendProjectMessageMutation
+  useSendProjectMessageMutation,
+  useStreamSessionQuery
 } from '@monad/client-rtk';
 import { Box, Text, useApp, useInput, usePaste, useWindowSize } from 'ink';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -21,6 +22,7 @@ import { InputRouter } from '../input/router.ts';
 import { HostInteractionPrompt, useTuiInteractionPresenter } from '../interactions/presenter.tsx';
 import { t } from '../lib/i18n.ts';
 import { NAV_CAPABILITIES } from '../shell/capabilities.ts';
+import { activeMemorySuggestion } from '../shell/context-notice-model.ts';
 import { globalShortcut } from '../shell/keymap.ts';
 import {
   chatPaneWidths,
@@ -31,6 +33,7 @@ import {
 } from '../shell/layout-model.ts';
 import { enqueueFollowUp, safeErrorMessage } from '../shell/view-model.ts';
 import { addUserMessage, finishTurn, switchSession } from '../store/server.ts';
+import { ContextNudgeLine, MemorySuggestionPrompt } from './ContextNotices.tsx';
 import { type EditorState, edit, insertText } from './editor-model.ts';
 import { InboxScreen } from './InboxScreen.tsx';
 import { ModelSettings } from './ModelSettings.tsx';
@@ -89,6 +92,21 @@ export function Layout({
   const externalAgentSessionsQuery = useListExternalAgentSessionsQuery(currentSessionId ?? ('' as SessionId), {
     skip: mode !== 'wide' || !chatOpen || currentSessionId === null
   });
+  // selectFromResult narrows the subscription: without it every streamed token (which mutates the
+  // stream cache's messages) would re-render the whole Layout tree. Immer structurally shares the
+  // untouched slices, so these refs only change when a notice/suggestion/usage event lands.
+  const contextStream = useStreamSessionQuery(currentSessionId ?? ('' as SessionId), {
+    skip: currentSessionId === null,
+    selectFromResult: ({ data }) => ({
+      contextNotices: data?.contextNotices,
+      latestSuggestion: data?.memorySuggestion,
+      usage: data?.usage
+    })
+  });
+  const [handledSuggestionId, setHandledSuggestionId] = useState<string | null>(null);
+  const memorySuggestion = chatOpen
+    ? activeMemorySuggestion(contextStream.latestSuggestion, handledSuggestionId)
+    : undefined;
   const messageQueueRef = useRef<string[]>([]);
   const previousStreaming = useRef(streaming);
   const exitArmed = useRef(false);
@@ -192,7 +210,7 @@ export function Layout({
   }, [sendText, streaming]);
 
   usePaste((text) => setEditor((state) => insertText(state, text)), {
-    isActive: composerActive && !interactionPresenter.active
+    isActive: composerActive && !interactionPresenter.active && !memorySuggestion
   });
 
   const stopOrExit = useCallback(() => {
@@ -209,8 +227,18 @@ export function Layout({
     }
   }, [abortSession, currentSessionId, dispatch, exit, onExitRequested, streaming]);
 
+  const resolveSuggestion = useCallback((id: string, outcome: 'saved' | 'dismissed') => {
+    setHandledSuggestionId(id);
+    if (outcome === 'saved') setStatus(t('cli.tui.memory.saved'));
+  }, []);
+
   useInput((typed, key) => {
-    if (interactionPresenter.active) return;
+    if (interactionPresenter.active || memorySuggestion) {
+      // Keep Ctrl+C reachable behind the memory prompt: a suggestion can land mid-stream and must
+      // not lock the user out of stopping the run (the prompt itself only handles y/n/enter/esc).
+      if (memorySuggestion && key.ctrl && typed.toLowerCase() === 'c') stopOrExit();
+      return;
+    }
     if (mode === 'too-small') {
       if (overlay === 'help' && (key.escape || typed === '?')) setOverlay('none');
       else if (typed === '?') setOverlay('help');
@@ -497,12 +525,25 @@ export function Layout({
         </Box>
       </Box>
       {chatOpen && currentSessionId && !showInteraction ? (
-        <ShellComposer
-          active={composerActive}
-          busy={streaming}
-          queued={messageQueue.length}
-          state={editor}
-        />
+        <>
+          {memorySuggestion ? (
+            <MemorySuggestionPrompt
+              onResolve={resolveSuggestion}
+              suggestion={memorySuggestion}
+            />
+          ) : (
+            <ContextNudgeLine
+              notices={contextStream.contextNotices}
+              usage={contextStream.usage}
+            />
+          )}
+          <ShellComposer
+            active={composerActive}
+            busy={streaming}
+            queued={messageQueue.length}
+            state={editor}
+          />
+        </>
       ) : null}
       <Box
         borderColor={TUI_THEME.frame}
