@@ -65,6 +65,8 @@ test('RawInspectableCard renders ordered JSONL only while controlled open', () =
     </RawInspectableCard>
   );
 
+  // presence-ok: selectable is the shared projected-card DOM contract.
+  expect(closed).toContain('data-selectable="true"');
   expect(closed).toContain('aria-expanded="false"');
   expect(closed).not.toContain('&quot;type&quot;');
   expect(open).toContain('aria-expanded="true"');

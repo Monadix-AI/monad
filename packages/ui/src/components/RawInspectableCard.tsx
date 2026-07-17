@@ -64,6 +64,7 @@ export function RawInspectableCard({
         className
       )}
       data-open={open}
+      data-selectable="true"
       data-slot="raw-inspectable-card"
     >
       <div
