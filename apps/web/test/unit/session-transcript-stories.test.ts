@@ -41,3 +41,10 @@ test('Session-only transcript cards expose production render boundaries for Stor
   expect(exported(transcript).filter((name) => name === 'SummaryTranscriptTurn')).toEqual(['SummaryTranscriptTurn']);
   expect(exported(externalLogin)).toEqual(['ExternalAgentLoginCardView', 'ExternalAgentLoginCard']);
 });
+
+test('Chat Session stories map every transcript card kind exactly once', () => {
+  const source = readFileSync(new URL('../../stories/session-transcript.stories.tsx', import.meta.url), 'utf8');
+  const ids = [...source.matchAll(/data-story-case="([^"]+)"/g)].map((match) => match[1]);
+
+  expect(ids).toEqual([...SESSION_TRANSCRIPT_STORY_CASES]);
+});
