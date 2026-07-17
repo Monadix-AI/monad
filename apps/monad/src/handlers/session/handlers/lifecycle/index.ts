@@ -24,6 +24,7 @@ import { clearProcessesForSession, disposeSandboxSession, processControlTool } f
 import { HandlerError } from '#/handlers/handler-error.ts';
 import { createManagedExternalAgentJoin } from '#/handlers/session/handlers/managed-external-agent-join.ts';
 import { createSessionMemberObservationHandlers } from '#/handlers/session/handlers/session-member-observation.ts';
+import { createSessionMemberRoster } from '#/handlers/session/handlers/session-member-roster.ts';
 import { createSessionMembersHandlers } from '#/handlers/session/handlers/session-members.ts';
 import { SessionUiProjector } from '#/handlers/session/ui-projection.ts';
 import { clearAcpDelegatesForSession } from '#/services/delegation/acp-delegate.ts';
@@ -72,6 +73,7 @@ export function createLifecycleHandlers(ctx: SessionContext) {
   const sessionDeleteGraceMs = ctx.deps.sessionDeleteGraceMs ?? SESSION_DELETE_BACKEND_GRACE_MS;
 
   const { spawnManagedSessionMember } = createManagedExternalAgentJoin(ctx);
+  const { reconcileProjectSessionMembers } = createSessionMemberRoster(ctx, { spawnManagedSessionMember });
   const { listSessionMembers, inviteSessionMember, spawnSessionMember, removeSessionMember } =
     createSessionMembersHandlers(ctx, { spawnManagedSessionMember });
   const { observeMemberUi, subscribeMemberUiObservation } = createSessionMemberObservationHandlers(ctx);
@@ -88,7 +90,7 @@ export function createLifecycleHandlers(ctx: SessionContext) {
 
   const { listProjects, getProject, createProject, updateProject, deleteProject } = createProjectLifecycleHandlers(
     ctx,
-    { resolveWorkspaceDir }
+    { reconcileProjectSessionMembers, resolveWorkspaceDir }
   );
   const pendingSessionDeletes = new Map<SessionId, ReturnType<typeof setTimeout>>();
 

@@ -1,6 +1,7 @@
 import type { SessionId } from '@monad/protocol';
 
 import { expect, test } from 'bun:test';
+import { newId } from '@monad/protocol';
 
 import { HandlerError } from '#/handlers/handler-error.ts';
 import { createStore } from '#/store/db/index.ts';
@@ -132,6 +133,126 @@ test('createProjectSession clones the project member templates into live session
       }
     }
   ]);
+  store.close();
+});
+
+test('project member updates reconcile only active non-archived session rosters', async () => {
+  const store = createStore();
+  const d = buildHandlers(mockModel(['hi']), undefined, { store });
+  const { projectId } = await d.session.createProject({ title: 'p' });
+  const fable = {
+    id: 'pmem_fable',
+    type: 'external-agent' as const,
+    name: 'claude-code',
+    displayName: 'Fable',
+    settings: { managedProjectAgent: true, modelId: 'fable' }
+  };
+  const gpt = {
+    id: 'pmem_gpt',
+    type: 'external-agent' as const,
+    name: 'codex',
+    displayName: 'GPT',
+    settings: { managedProjectAgent: true, modelId: 'gpt-old' }
+  };
+  await d.session.updateProject({ id: projectId, memberTemplates: [fable, gpt] });
+  const { sessionId: activeId } = await d.session.createProjectSession({ projectId, title: 'active' });
+  const { sessionId: completedId } = await d.session.createProjectSession({ projectId, title: 'completed' });
+  const { sessionId: archivedId } = await d.session.createProjectSession({ projectId, title: 'archived' });
+  await d.session.update({ id: completedId, state: 'completed' });
+  await d.session.update({ id: archivedId, archived: true });
+  const now = new Date().toISOString();
+  store.insertSessionMember({
+    sessionId: activeId,
+    memberId: 'pmem_ad_hoc',
+    templateId: null,
+    type: 'external-agent',
+    data: { name: 'gemini', displayName: 'Ad hoc' },
+    createdAt: now,
+    updatedAt: now
+  });
+  const legacyMessageId = newId('msg');
+  store.insertMessage(legacyMessageId, activeId, 'legacy Fable response', now, 'assistant', {
+    data: { agentName: fable.id, source: 'managed-external-agent' }
+  });
+  const gptEdited = {
+    ...gpt,
+    displayName: 'GPT 5.6 SOL',
+    settings: { managedProjectAgent: true, modelId: 'gpt-5.6-sol' }
+  };
+  const opus = {
+    id: 'pmem_opus',
+    type: 'external-agent' as const,
+    name: 'claude-code',
+    displayName: 'Opus',
+    settings: { managedProjectAgent: true, modelId: 'opus' }
+  };
+
+  await d.session.updateProject({ id: projectId, memberTemplates: [gptEdited, opus] });
+  await d.session.updateProject({ id: projectId, memberTemplates: [gptEdited, opus] });
+
+  const memberContract = (member: ReturnType<typeof store.listSessionMembers>[number]) => ({
+    memberId: member.memberId,
+    templateId: member.templateId,
+    type: member.type,
+    data: member.data
+  });
+  expect(store.listSessionMembers(activeId).map(memberContract)).toEqual([
+    {
+      memberId: 'pmem_gpt',
+      templateId: 'pmem_gpt',
+      type: 'external-agent',
+      data: {
+        name: 'codex',
+        displayName: 'GPT 5.6 SOL',
+        settings: { managedProjectAgent: true, modelId: 'gpt-5.6-sol' }
+      }
+    },
+    {
+      memberId: 'pmem_ad_hoc',
+      templateId: null,
+      type: 'external-agent',
+      data: { name: 'gemini', displayName: 'Ad hoc' }
+    },
+    {
+      memberId: 'pmem_opus',
+      templateId: 'pmem_opus',
+      type: 'external-agent',
+      data: {
+        name: 'claude-code',
+        displayName: 'Opus',
+        settings: { managedProjectAgent: true, modelId: 'opus' }
+      }
+    }
+  ]);
+  const originalRoster = [
+    {
+      memberId: 'pmem_fable',
+      templateId: 'pmem_fable',
+      type: 'external-agent',
+      data: {
+        name: 'claude-code',
+        displayName: 'Fable',
+        settings: { managedProjectAgent: true, modelId: 'fable' }
+      }
+    },
+    {
+      memberId: 'pmem_gpt',
+      templateId: 'pmem_gpt',
+      type: 'external-agent',
+      data: {
+        name: 'codex',
+        displayName: 'GPT',
+        settings: { managedProjectAgent: true, modelId: 'gpt-old' }
+      }
+    }
+  ];
+  expect(store.listSessionMembers(completedId).map(memberContract)).toEqual(originalRoster);
+  expect(store.listSessionMembers(archivedId).map(memberContract)).toEqual(originalRoster);
+  expect(store.getMessage(activeId, legacyMessageId)?.data).toEqual({
+    agentName: 'pmem_fable',
+    agentDisplayName: 'Fable',
+    source: 'managed-external-agent'
+  });
   store.close();
 });
 

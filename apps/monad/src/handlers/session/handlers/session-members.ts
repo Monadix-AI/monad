@@ -6,21 +6,19 @@ import type {
   WorkplaceProjectSessionMember
 } from '@monad/protocol';
 import type { SessionContext } from '#/handlers/session/context.ts';
-import type { ManagedExternalAgentProjectMember } from '#/handlers/session/handlers/messaging-members.ts';
+import type { SessionMemberRosterDeps } from '#/handlers/session/handlers/session-member-roster.ts';
 import type { SessionMember } from '#/store/db/session-members.ts';
 
 import { newId } from '@monad/protocol';
 
 import { HandlerError } from '#/handlers/handler-error.ts';
 import { managedExternalAgentProjectMembers } from '#/handlers/session/handlers/messaging-members.ts';
-import { removeSessionMemberBinding } from '#/handlers/session/handlers/session-member-roster.ts';
+import {
+  createSessionMemberRoster,
+  removeSessionMemberBinding
+} from '#/handlers/session/handlers/session-member-roster.ts';
 
-export interface SessionMembersDeps {
-  spawnManagedSessionMember: (
-    session: Session,
-    member: ManagedExternalAgentProjectMember
-  ) => Promise<{ started: boolean; nativeSessionId?: string }>;
-}
+export type SessionMembersDeps = SessionMemberRosterDeps;
 
 // Access control reads the write policy STORED on the session (origin.writableBy) — mirrors the
 // check in messaging.ts / forward-acp.ts / forward-external-agent.ts (kept local so this module
@@ -62,29 +60,10 @@ function toWireMember(row: SessionMember): WorkplaceProjectSessionMember {
  *  template into two sessions starts two distinct managed-agent runtimes. */
 export function createSessionMembersHandlers(ctx: SessionContext, deps: SessionMembersDeps) {
   const {
-    deps: { store, paths },
+    deps: { store },
     requireSession
   } = ctx;
-  const { spawnManagedSessionMember } = deps;
-
-  async function spawnIfManaged(sessionId: SessionId, memberId: string): Promise<void> {
-    if (!paths) return;
-    const session = requireSession(sessionId);
-    const externalAgents = (ctx.deps.configManager?.get().cfg.externalAgents ?? []).filter(
-      (agent) => agent.enabled !== false
-    );
-    const managed = managedExternalAgentProjectMembers(store, sessionId, externalAgents).find(
-      (candidate) => candidate.runtimeAgentName === memberId
-    );
-    if (!managed) return;
-    const result = await spawnManagedSessionMember(session, managed);
-    if (result.started && result.nativeSessionId) {
-      store.updateSessionMember(sessionId, memberId, {
-        externalAgentSessionId: result.nativeSessionId,
-        updatedAt: new Date().toISOString()
-      });
-    }
-  }
+  const { addProjectSessionMemberBinding } = createSessionMemberRoster(ctx, deps);
 
   return {
     async listSessionMembers({ sessionId }: { sessionId: SessionId }) {
@@ -103,23 +82,7 @@ export function createSessionMembersHandlers(ctx: SessionContext, deps: SessionM
       if (store.getSessionMember(sessionId, templateId)) {
         throw new HandlerError('invalid', `member already invited into this session: ${templateId}`);
       }
-      const now = new Date().toISOString();
-      store.insertSessionMember({
-        sessionId,
-        memberId: templateId,
-        templateId,
-        type: template.type,
-        data: {
-          name: template.name,
-          ...(template.displayName ? { displayName: template.displayName } : {}),
-          ...(template.settings ? { settings: template.settings } : {})
-        },
-        createdAt: now,
-        updatedAt: now
-      });
-      await spawnIfManaged(sessionId, templateId);
-      const member = store.getSessionMember(sessionId, templateId);
-      if (!member) throw new HandlerError('internal', 'invite failed');
+      const member = await addProjectSessionMemberBinding(session, template);
       return { member: toWireMember(member) };
     },
 
@@ -147,7 +110,21 @@ export function createSessionMembersHandlers(ctx: SessionContext, deps: SessionM
         createdAt: now,
         updatedAt: now
       });
-      await spawnIfManaged(sessionId, memberId);
+      const externalAgents = (ctx.deps.configManager?.get().cfg.externalAgents ?? []).filter(
+        (agent) => agent.enabled !== false
+      );
+      const managed = managedExternalAgentProjectMembers(store, sessionId, externalAgents).find(
+        (candidate) => candidate.runtimeAgentName === memberId
+      );
+      if (ctx.deps.paths && managed) {
+        const result = await deps.spawnManagedSessionMember(session, managed);
+        if (result.started && result.nativeSessionId) {
+          store.updateSessionMember(sessionId, memberId, {
+            externalAgentSessionId: result.nativeSessionId,
+            updatedAt: new Date().toISOString()
+          });
+        }
+      }
       const member = store.getSessionMember(sessionId, memberId);
       if (!member) throw new HandlerError('internal', 'spawn failed');
       return { member: toWireMember(member) };

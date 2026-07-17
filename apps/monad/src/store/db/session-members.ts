@@ -36,6 +36,7 @@ export interface SessionMemberInsert {
 }
 
 export interface SessionMemberPatch {
+  type?: string;
   externalAgentSessionId?: string | null;
   data?: Record<string, unknown>;
   updatedAt: string;
@@ -85,6 +86,7 @@ export function getSessionMember(db: Db, sessionId: string, memberId: string): S
 
 export function updateSessionMember(db: Db, sessionId: string, memberId: string, patch: SessionMemberPatch): void {
   const values: Record<string, unknown> = { updatedAt: patch.updatedAt };
+  if (patch.type !== undefined) values.type = patch.type;
   if (patch.externalAgentSessionId !== undefined) values.externalAgentSessionId = patch.externalAgentSessionId;
   if (patch.data !== undefined) values.data = JSON.stringify(patch.data);
   db.update(sessionMembers)

@@ -40,12 +40,13 @@ export function createProjectLifecycleHandlers(
   ctx: SessionContext,
   deps: {
     resolveWorkspaceDir: (cwd: string, base: string | undefined) => string;
+    reconcileProjectSessionMembers: (project: WorkplaceProject) => Promise<void>;
   }
 ) {
   const {
     deps: { store, sessionSandbox, log }
   } = ctx;
-  const { resolveWorkspaceDir } = deps;
+  const { reconcileProjectSessionMembers, resolveWorkspaceDir } = deps;
 
   function requireProject(id: ProjectId): WorkplaceProject {
     const project = store.getWorkplaceProject(id);
@@ -116,6 +117,7 @@ export function createProjectLifecycleHandlers(
         ...(resolvedCwd !== undefined ? { cwd: resolvedCwd } : {})
       });
       if (!project) throw new HandlerError('internal', 'update project failed');
+      if (memberTemplates !== undefined) await reconcileProjectSessionMembers(project);
       return { project: projectView(project) };
     },
 
