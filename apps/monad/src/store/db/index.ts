@@ -127,7 +127,8 @@ import {
   restoreMessages,
   retireManagedExternalAgentStreamingMessage,
   setGenStatus,
-  setMemory
+  setMemory,
+  snapshotAgentDisplayName
 } from './messages.ts';
 import { hasCurrentMigration, migrate } from './migrations.ts';
 import { insertNativeAgentDirectMessage, listNativeAgentDirectMessages } from './native-agent-messages.ts';
@@ -457,6 +458,10 @@ export class Store {
 
   getMessage(transcriptTargetId: string, messageId: string): ChatMessage | null {
     return getMessage(this.sqlite, transcriptTargetId, messageId);
+  }
+
+  snapshotAgentDisplayName(transcriptTargetId: string, agentName: string, agentDisplayName: string): number {
+    return snapshotAgentDisplayName(this.sqlite, transcriptTargetId, agentName, agentDisplayName);
   }
 
   findManagedExternalAgentStreamingMessage(

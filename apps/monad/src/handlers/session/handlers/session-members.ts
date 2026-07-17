@@ -13,6 +13,7 @@ import { newId } from '@monad/protocol';
 
 import { HandlerError } from '#/handlers/handler-error.ts';
 import { managedExternalAgentProjectMembers } from '#/handlers/session/handlers/messaging-members.ts';
+import { removeSessionMemberBinding } from '#/handlers/session/handlers/session-member-roster.ts';
 
 export interface SessionMembersDeps {
   spawnManagedSessionMember: (
@@ -61,7 +62,7 @@ function toWireMember(row: SessionMember): WorkplaceProjectSessionMember {
  *  template into two sessions starts two distinct managed-agent runtimes. */
 export function createSessionMembersHandlers(ctx: SessionContext, deps: SessionMembersDeps) {
   const {
-    deps: { store, paths, externalAgentHost },
+    deps: { store, paths },
     requireSession
   } = ctx;
   const { spawnManagedSessionMember } = deps;
@@ -157,8 +158,7 @@ export function createSessionMembersHandlers(ctx: SessionContext, deps: SessionM
       assertWriteAllowed(session, 'http');
       const member = store.getSessionMember(sessionId, memberId);
       if (!member) throw new HandlerError('not_found', `session member not found: ${memberId}`);
-      if (member.externalAgentSessionId) externalAgentHost?.stop(member.externalAgentSessionId);
-      store.deleteSessionMember(sessionId, memberId);
+      removeSessionMemberBinding(ctx, member);
       return { deleted: true as const };
     }
   };

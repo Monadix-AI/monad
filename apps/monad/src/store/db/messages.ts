@@ -272,6 +272,33 @@ export function getMessage(sqlite: Database, transcriptTargetId: string, message
   } as MessageRow);
 }
 
+export function snapshotAgentDisplayName(
+  sqlite: Database,
+  transcriptTargetId: string,
+  agentName: string,
+  agentDisplayName: string
+): number {
+  const binds = {
+    $target: transcriptTargetId,
+    $agentName: agentName,
+    $agentDisplayName: agentDisplayName
+  };
+  const predicate = `transcript_target_id = $target
+    AND role = 'assistant'
+    AND json_valid(data)
+    AND json_extract(data, '$.agentName') = $agentName
+    AND json_type(data, '$.agentDisplayName') IS NULL`;
+  const row = sqlite.query(`SELECT COUNT(*) AS count FROM messages WHERE ${predicate}`).get(binds) as {
+    count: number;
+  };
+  if (row.count > 0) {
+    sqlite
+      .query(`UPDATE messages SET data = json_set(data, '$.agentDisplayName', $agentDisplayName) WHERE ${predicate}`)
+      .run(binds);
+  }
+  return row.count;
+}
+
 export function findManagedExternalAgentStreamingMessage(
   sqlite: Database,
   transcriptTargetId: string,

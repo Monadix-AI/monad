@@ -221,12 +221,34 @@ test('removeSessionMember stops the runtime when bound and deletes the row', asy
       externalAgentSessionId: 'exa_running00000',
       updatedAt: new Date().toISOString()
     });
+    const legacyMessageId = newId('msg');
+    const snapshottedMessageId = newId('msg');
+    store.insertMessage(legacyMessageId, session.id, 'legacy', new Date().toISOString(), 'assistant', {
+      data: { agentName: codexTemplate.id, source: 'managed-external-agent' }
+    });
+    store.insertMessage(snapshottedMessageId, session.id, 'snapshot', new Date().toISOString(), 'assistant', {
+      data: {
+        agentName: codexTemplate.id,
+        agentDisplayName: 'Original Codex',
+        source: 'managed-external-agent'
+      }
+    });
 
     const result = await handlers.removeSessionMember({ sessionId: session.id, memberId: codexTemplate.id });
 
     expect(result).toEqual({ deleted: true });
     expect(stopCalls).toEqual(['exa_running00000']);
     expect(store.listSessionMembers(session.id)).toEqual([]);
+    expect(store.getMessage(session.id, legacyMessageId)?.data).toEqual({
+      agentName: codexTemplate.id,
+      agentDisplayName: 'Codex',
+      source: 'managed-external-agent'
+    });
+    expect(store.getMessage(session.id, snapshottedMessageId)?.data).toEqual({
+      agentName: codexTemplate.id,
+      agentDisplayName: 'Original Codex',
+      source: 'managed-external-agent'
+    });
   } finally {
     store.close();
   }
