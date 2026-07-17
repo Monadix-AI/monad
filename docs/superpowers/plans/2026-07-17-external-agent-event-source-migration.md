@@ -4,7 +4,7 @@
 
 **Goal:** Replace provider-specific live/history plumbing with one normalized EventSource contract across all six built-in external-agent adapters, the daemon, protocol, client, and Workplace UI.
 
-**Architecture:** Each adapter owns provider wire parsing, history acquisition, stable event identity, and provider cursor semantics. The daemon consumes normalized events, wraps provider cursors in its opaque cursor namespace, maintains the live tail and durable normalized observation journal, and exposes only current-frame, subscribe, and page operations. Clients merge by a stable `dedupeKey` and never inspect provider `raw` fields.
+**Architecture:** Each adapter owns provider wire parsing, history acquisition, stable event identity, and provider cursor semantics. Projection is best effort: recognized records become normalized events and every unrecognized record becomes a shared `unknown` envelope retaining its raw payload. The daemon consumes these events, wraps provider cursors in its opaque cursor namespace, maintains the live tail and durable normalized observation journal, and exposes only current-frame, subscribe, and page operations. Clients merge by a stable `dedupeKey` and never interpret provider `raw` fields.
 
 **Tech Stack:** Bun 1.3.14, TypeScript, Zod, Drizzle SQLite, Elysia/Treaty, RTK Query, React, `bun:test`.
 
@@ -14,7 +14,8 @@
 - Provider-specific APIs, file layouts, event vocabularies, identities, checkpoints, and cursors stay inside adapter modules.
 - `@monad/protocol`, daemon transports, RTK, and UI consume normalized `ExternalAgentObservationEvent` values and opaque cursors only.
 - Generic code must not branch on provider names or inspect `event.raw` for pagination, deduplication, activity, or checkpoint logic.
-- Preserve provider raw payloads only as optional diagnostic/card-rendering data.
+- Preserve provider raw payloads on `unknown` events and as optional diagnostic/card-rendering data on recognized events.
+- Projection may recognize only a subset of provider records, but it must not silently drop unrecognized records. Generic UI may render, collapse, or hide the shared unknown shape; it must not parse provider-specific raw fields.
 - Preserve TCP loopback and Unix-socket parity for every daemon behavior.
 - Add no dependency, environment variable, or user-facing string.
 - Use test-first red/green cycles and quiet Bun test entry points.
@@ -32,6 +33,7 @@
 
 **Interfaces:**
 - Produces `ExternalAgentObservationEvent.dedupeKey: string`.
+- Produces an explicit shared `unknown` classification for unrecognized provider records.
 - Produces `ExternalAgentEventPageRequest`, `ExternalAgentEventPage`, `ExternalAgentEventPageResult`, and `ExternalAgentEventSource`.
 - Produces frame field `historyBefore?: string`; the value is opaque outside the daemon/adapter boundary.
 
@@ -152,6 +154,8 @@ expect(history.events.every((event) => event.dedupeKey.length > 0)).toBe(true); 
 ```
 
 Also assert a page reader's cursor is passed through unchanged and an empty reader result becomes `{ state: 'unavailable', reason: 'not-found' }`.
+
+For every adapter, pass an unrecognized provider record and assert that one event survives with the shared unknown classification, a non-empty `dedupeKey`, and the original payload in `raw`.
 
 - [ ] **Step 2: Run conformance test and verify RED**
 
@@ -453,7 +457,7 @@ bun scripts/bun-test.ts packages/atoms/test/unit/observation-history.test.ts pac
 
 - [ ] **Step 3: Implement opaque pagination and dedupe**
 
-Delete `providerObservationIdentity`, `providerObservationCheckpoint`, and every generic `raw.uuid`/`raw.params.turnId`/`raw.method` check. Load the first page from `historyBefore`; merge using `dedupeKey`; keep `raw` only on rendered events.
+Delete `providerObservationIdentity`, `providerObservationCheckpoint`, and every generic `raw.uuid`/`raw.params.turnId`/`raw.method` check. Load the first page from `historyBefore`; merge using `dedupeKey`; apply one provider-neutral fallback policy to unknown events, with `raw` available only for generic diagnostics.
 
 - [ ] **Step 4: Run tests and verify GREEN**
 
