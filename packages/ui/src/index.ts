@@ -45,6 +45,11 @@ import type {
 } from './components/ComposerEditor';
 import type { ComposerInlineChipProps } from './components/ComposerInlineChip';
 import type { ProductIconColors, ProductIconId, ProductIconProps } from './components/ProductIcon';
+import type {
+  RawEventRecord,
+  RawInspectableCardLabels,
+  RawInspectableCardProps
+} from './components/RawInspectableCard';
 import type { ShortcutChipProps } from './components/ShortcutChip';
 import type { SwitchProps } from './components/Switch';
 
@@ -139,6 +144,7 @@ import { MorphChevron, type MorphChevronProps } from './components/MorphChevron'
 import { Popover, PopoverContent, PopoverTrigger } from './components/Popover';
 import { isProductIconId, ProductIcon } from './components/ProductIcon';
 import { Progress } from './components/Progress';
+import { RawInspectableCard, rawEventRecordsText } from './components/RawInspectableCard';
 import { ScrollArea, ScrollBar } from './components/ScrollArea';
 import {
   Select,
@@ -194,6 +200,9 @@ export type {
   ProductIconColors,
   ProductIconId,
   ProductIconProps,
+  RawEventRecord,
+  RawInspectableCardLabels,
+  RawInspectableCardProps,
   ReasoningContentProps,
   ReasoningLabels,
   ReasoningProps,
@@ -294,9 +303,11 @@ export {
   PopoverTrigger,
   ProductIcon,
   Progress,
+  RawInspectableCard,
   Reasoning,
   ReasoningContent,
   ReasoningTrigger,
+  rawEventRecordsText,
   ScrollArea,
   ScrollBar,
   Select,
