@@ -111,6 +111,13 @@ function providerHistoryPageRequest(
   return { ...rest, ...(cursor.kind === 'provider' ? { before: cursor.value } : {}) };
 }
 
+function providerHistoryPresentationItems(
+  items: unknown[],
+  sortDirection: ExternalAgentHistoryPageRequest['sortDirection']
+): unknown[] {
+  return sortDirection === 'desc' ? [...items].reverse() : items;
+}
+
 const RUNTIME_LIST_DEFAULT_LIMIT = 100;
 
 /** Slices an already-ordered array by an opaque position cursor (`before` = index to stop before).
@@ -808,13 +815,14 @@ export class ExternalAgentHost {
     req: ExternalAgentHistoryPageRequest,
     page: { items: unknown[]; nextCursor?: string }
   ): ExternalAgentHistoryPageResponse {
+    const presentationItems = providerHistoryPresentationItems(page.items, req.sortDirection);
     const output =
       adapter.historyPageOutput?.({
         providerSessionRef,
         workingPath,
         limitBytes: MAX_OUTPUT_SNAPSHOT,
-        page
-      }) ?? page.items.map((item) => (typeof item === 'string' ? item : JSON.stringify(item))).join('\n');
+        page: { items: presentationItems, ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}) }
+      }) ?? presentationItems.map((item) => (typeof item === 'string' ? item : JSON.stringify(item))).join('\n');
     return {
       events: externalAgentStreamItems({
         id: `${id}:history:provider:${req.before ?? '0'}`,
@@ -835,7 +843,7 @@ export class ExternalAgentHost {
     const workingPath = live.initializeContext?.workingPath;
     const historyPageOutput = live.adapter.historyPageOutput;
     if (!providerSessionRef || !workingPath || !historyPageOutput) return undefined;
-    const presentationItems = request.sortDirection === 'desc' ? [...items].reverse() : items;
+    const presentationItems = providerHistoryPresentationItems(items, request.sortDirection);
     return (
       historyPageOutput({
         providerSessionRef,

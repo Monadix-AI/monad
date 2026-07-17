@@ -427,11 +427,16 @@ test('a stored-session provider cursor is stripped before the local adapter hist
   const codexBuiltin = builtinAgentAdapters.find((adapter) => adapter.provider === 'codex');
   if (!codexBuiltin) throw new Error('codex builtin adapter missing');
   const seen: (string | undefined)[] = [];
+  const presented: string[][] = [];
   registerAgentAdapterImpl({
     ...codexBuiltin,
     historyPage: async (context) => {
       seen.push(context.request.before);
-      return { items: ['stored item'], nextCursor: 'offset-4' };
+      return { items: ['newer', 'older'], nextCursor: 'offset-4' };
+    },
+    historyPageOutput: ({ page }) => {
+      presented.push(page.items as string[]);
+      return page.items.join('\n');
     }
   });
   try {
@@ -461,8 +466,11 @@ test('a stored-session provider cursor is stripped before the local adapter hist
 
     const page = await host.historyPage(SESSION_ID, historyRequest({ before: 'provider:offset-2' }));
 
-    expect(seen).toEqual(['offset-2']);
-    expect(page.nextCursor).toBe('provider:offset-4');
+    expect({ seen, presented, nextCursor: page.nextCursor }).toEqual({
+      seen: ['offset-2'],
+      presented: [['older', 'newer']],
+      nextCursor: 'provider:offset-4'
+    });
   } finally {
     registerAgentAdapterImpl(codexBuiltin);
   }
