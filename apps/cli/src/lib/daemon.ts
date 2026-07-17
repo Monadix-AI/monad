@@ -90,12 +90,29 @@ export function releaseDaemonSupervisorSpawnOptions(execPath: string, logPath: s
   };
 }
 
-export async function startDaemon(): Promise<{ alreadyRunning: boolean }> {
+export interface DaemonLifecycleOptions {
+  requireReady?: boolean;
+  silent?: boolean;
+}
+
+export function resolveDaemonPresentation(options: DaemonLifecycleOptions = {}): {
+  relayStartup: boolean;
+  reportLifecycle: boolean;
+} {
+  return options.silent
+    ? { relayStartup: false, reportLifecycle: false }
+    : { relayStartup: true, reportLifecycle: true };
+}
+
+export async function startDaemon(options: DaemonLifecycleOptions = {}): Promise<{ alreadyRunning: boolean }> {
+  const presentation = resolveDaemonPresentation(options);
   // The installer stops any running daemon before overwriting the binary, so a reachable daemon
   // here is an intentional one the caller is reusing — report it and leave it running.
   if (await isDaemonReachable()) {
     const pid = (await readPid()) ?? (await getPortPid());
-    out(yellow(t('cli.daemon.alreadyRunning')) + (pid ? dim(t('cli.daemon.pid', { pid })) : ''));
+    if (presentation.reportLifecycle) {
+      out(yellow(t('cli.daemon.alreadyRunning')) + (pid ? dim(t('cli.daemon.pid', { pid })) : ''));
+    }
     return { alreadyRunning: true };
   }
 
@@ -114,7 +131,9 @@ export async function startDaemon(): Promise<{ alreadyRunning: boolean }> {
   // process), so we fall through and (re)start; the daemon's singleton lock guards a true double-run.
   // Reachability — the same signal `monad status` uses — is the source of truth, never bare liveness.
   if (pid && isAlive(pid) && (await waitForReachable(8000))) {
-    out(yellow(t('cli.daemon.alreadyRunning')) + dim(t('cli.daemon.pid', { pid })));
+    if (presentation.reportLifecycle) {
+      out(yellow(t('cli.daemon.alreadyRunning')) + dim(t('cli.daemon.pid', { pid })));
+    }
     return { alreadyRunning: true };
   }
 
@@ -157,8 +176,11 @@ export async function startDaemon(): Promise<{ alreadyRunning: boolean }> {
   await Bun.write(getPidPath(), String(proc.pid));
   proc.unref();
 
-  if (isDevEntry && proc.stdout instanceof ReadableStream) await relayUntilReady(proc.stdout, proc.pid, logPath);
-  else await waitUntilReady(proc.pid, logPath);
+  const ready =
+    isDevEntry && proc.stdout instanceof ReadableStream
+      ? await relayUntilReady(proc.stdout, proc.pid, logPath, presentation)
+      : await waitUntilReady(proc.pid, logPath, presentation.reportLifecycle);
+  if (!ready && options.requireReady) throw new Error(`${t('cli.daemon.notReady')} (${logPath})`);
   return { alreadyRunning: false };
 }
 
@@ -269,31 +291,51 @@ export async function runDaemonSupervisor(): Promise<void> {
   }
 }
 
-async function waitUntilReady(pid: number, logPath: string): Promise<void> {
+async function waitUntilReady(pid: number, logPath: string, reportLifecycle: boolean): Promise<boolean> {
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
     if (!isAlive(pid)) break;
-    if (await isDaemonReachable()) return;
+    if (await isDaemonReachable()) return true;
     await Bun.sleep(150);
   }
-  out(yellow(t('cli.daemon.notReady')) + dim(` (${logPath})`));
+  if (reportLifecycle) out(yellow(t('cli.daemon.notReady')) + dim(` (${logPath})`));
+  return false;
+}
+
+export async function relayDaemonOutput(
+  stream: ReadableStream<Uint8Array>,
+  forward: boolean,
+  write: (value: Uint8Array) => void = (value) => process.stdout.write(value),
+  signal?: AbortSignal
+): Promise<void> {
+  const reader = stream.getReader();
+  const abort = () => void reader.cancel();
+  if (signal?.aborted) abort();
+  else signal?.addEventListener('abort', abort, { once: true });
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) return;
+      if (forward && value?.length) write(value);
+    }
+  } catch {
+    return;
+  } finally {
+    signal?.removeEventListener('abort', abort);
+    reader.releaseLock();
+  }
 }
 
 /** Relay the detached daemon's stdout (its banner + ready-info) to the user until the daemon is
  *  reachable, then stop — leaving it running in the background. */
-async function relayUntilReady(stream: ReadableStream<Uint8Array>, pid: number, logPath: string): Promise<void> {
-  const reader = stream.getReader();
-  const pump = (async () => {
-    try {
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) return;
-        if (value?.length) process.stdout.write(value);
-      }
-    } catch {
-      /* reader cancelled once we're ready — expected */
-    }
-  })();
+async function relayUntilReady(
+  stream: ReadableStream<Uint8Array>,
+  pid: number,
+  logPath: string,
+  presentation: ReturnType<typeof resolveDaemonPresentation>
+): Promise<boolean> {
+  const relayAbort = new AbortController();
+  const pump = relayDaemonOutput(stream, presentation.relayStartup, undefined, relayAbort.signal);
 
   const deadline = Date.now() + 30_000;
   let ready = false;
@@ -307,11 +349,14 @@ async function relayUntilReady(stream: ReadableStream<Uint8Array>, pid: number, 
   }
   // /health answers the instant the socket is bound, which is just before the banner + ready-info
   // are printed — give them a moment to flush through the pipe before we stop relaying.
-  if (ready) await Bun.sleep(600);
-  else if (isAlive(pid)) out(yellow(t('cli.daemon.notReady')) + dim(` (${logPath})`));
+  if (ready && presentation.relayStartup) await Bun.sleep(600);
+  else if (!ready && isAlive(pid) && presentation.reportLifecycle) {
+    out(yellow(t('cli.daemon.notReady')) + dim(` (${logPath})`));
+  }
 
-  await reader.cancel().catch(() => {});
+  relayAbort.abort();
   await pump;
+  return ready;
 }
 
 function formatConfigValidationError(configPath: string, err: unknown): string {
@@ -331,11 +376,12 @@ function formatConfigValidationError(configPath: string, err: unknown): string {
     .join('\n\n');
 }
 
-export async function stopDaemon(): Promise<void> {
+export async function stopDaemon(options: Pick<DaemonLifecycleOptions, 'silent'> = {}): Promise<void> {
+  const { reportLifecycle } = resolveDaemonPresentation(options);
   let pid = await readPid();
   if (!pid || !isAlive(pid)) pid = await getPortPid();
   if (!pid || !isAlive(pid)) {
-    out(yellow(t('cli.daemon.notRunning')));
+    if (reportLifecycle) out(yellow(t('cli.daemon.notRunning')));
     await unlink(getPidPath()).catch(() => {});
     return;
   }
@@ -364,8 +410,10 @@ export async function stopDaemon(): Promise<void> {
   }
 
   await unlink(getPidPath()).catch(() => {});
-  printGoodbye();
-  out(green(t('cli.daemon.stopped')) + dim(t('cli.daemon.pid', { pid })));
+  if (reportLifecycle) {
+    printGoodbye();
+    out(green(t('cli.daemon.stopped')) + dim(t('cli.daemon.pid', { pid })));
+  }
 
   // Wait for the process to actually exit before returning so callers that open the DB or
   // rewrite config files don't race against the daemon's in-flight shutdown writes.

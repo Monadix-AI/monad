@@ -15,6 +15,7 @@ const mode: OutputMode = {
 };
 
 export const isStructured = (): boolean => mode.format !== 'human';
+export const isHumanOutputEnabled = (): boolean => !mode.quiet && !isStructured();
 
 /** Apply global flags. `--no-color`/`NO_COLOR`/non-TTY → no color; structured output disables color. */
 export function setOutputMode(opts: { color?: boolean; quiet?: boolean; json?: boolean; format?: OutputFormat }): void {
