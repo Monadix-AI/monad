@@ -1,6 +1,6 @@
 # Track B: project ↔ session decoupling
 
-Status: **implemented** — P6/P7 shipped to `main` (`session_members` store layer `271cf0698`, wire schemas `0d24c6c21`, session creation under a project `43ac097be`, id-union collapse to SessionId `2d7b2f03b`/`0d7446b0a`, member-roster materialization `127999a28`, member templates + per-session invite/spawn `d904c8135`). Companion to
+Status: **partially implemented.** P6a (store/protocol foundation — `session_members` table, `sessions.projectId`, id-union collapse to `SessionId`) is shipped to `main` (`271cf0698`, `0d24c6c21`, `2d7b2f03b`/`0d7446b0a`, `127999a28`, `d904c8135`). P6b (daemon/client cutover) is incomplete: the new `/projects/:id/sessions` routes exist alongside the old `/workplace/projects/:id/*` and `/v1/projects/:id/*` routes, which were never removed (`apps/monad/src/handlers/external-agent/index.ts` still has a `TODO(track-b)` on this). P7 (multi-session tab-strip UI) has not been started — no such component exists in `apps/web`. Companion to
 [agent-observation-implementation-order.md](agent-observation-implementation-order.md) (Track B was
 sketched there as P6/P7; this is the full proposal that sketch called for).
 

@@ -194,7 +194,7 @@ Update it when a hardening item lands or is deliberately deferred.
 - `net: 'unrestricted'` leaves egress fully open (default for development convenience).
 - Tests: `apps/monad/test/unit/tools/seatbelt.macos.test.ts` (live kernel, 7 cases).
 
-**Linux — bwrap (preferred, when installed) + Landlock + seccomp-bpf** (`packages/atoms/src/sandbox/bwrap.ts`, `native/sandbox-launcher/main.c`)
+**Linux — bwrap (preferred, when installed) + Landlock + seccomp-bpf** (`packages/sandbox/src/launchers/bwrap.ts`, `native/sandbox-launcher/main.c`)
 
 bwrap launcher — auto-selected when `bwrap` is on PATH:
 - Uses bubblewrap's mount namespace to build an isolated FS view from scratch.
