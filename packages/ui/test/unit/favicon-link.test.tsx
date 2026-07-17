@@ -40,6 +40,13 @@ test('FaviconLink centers the favicon and text in one inline row', () => {
   expect(markup).not.toContain('align-[-2px]');
 });
 
+test('FaviconLink keeps the pointer cursor when the global interactive cursor is disabled', () => {
+  const markup = renderToStaticMarkup(createElement(FaviconLink, { href: 'https://example.com/docs' }, 'Example docs'));
+
+  expect(markup).toContain('cursor-pointer');
+  expect(markup).toContain('data-preserve-cursor="true"');
+});
+
 test('failed favicons are removed from layout', () => {
   const target = { hidden: false };
 

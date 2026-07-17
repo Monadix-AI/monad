@@ -23,7 +23,8 @@ export function FaviconLink({ children, className, href, ...props }: ComponentPr
   return (
     <a
       {...props}
-      className={cn('inline-flex max-w-full items-center gap-1 align-middle', className)}
+      className={cn('inline-flex max-w-full cursor-pointer items-center gap-1 align-middle', className)}
+      data-preserve-cursor="true"
       href={href}
       rel="noopener noreferrer"
       target="_blank"
