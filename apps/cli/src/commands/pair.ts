@@ -51,7 +51,7 @@ export const command: CommandDef = {
     if (!ip) {
       out(
         mode === 'overlay'
-          ? `${yellow('⚠')} no Tailscale address found — is Tailscale running and logged in?`
+          ? `${yellow('⚠')} no Tailscale address found — is Tailscale running and signed in?`
           : `${yellow('⚠')} no LAN IPv4 found — are you on a network?`
       );
     }

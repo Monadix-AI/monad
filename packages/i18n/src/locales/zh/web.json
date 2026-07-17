@@ -792,6 +792,8 @@
   "web.externalAgent.connectHint": "在这个 provider-owned terminal 里完成登录、目录信任或首次初始化。Monad 只转发终端输入和输出。",
   "web.externalAgent.connectTerminalHint": "在终端中使用 CLI。",
   "web.externalAgent.connectTitle": "连接外部 agent",
+  "web.externalAgent.signInRequiredTitle": "{{agentName}} 需要重新登录",
+  "web.externalAgent.signInRequiredAction": "登录",
   "web.externalAgent.create": "注册外部 agent",
   "web.externalAgent.autopilot": "自动驾驶",
   "web.externalAgent.autopilotHint": "默认开启。Agent 会在无人值守时运行，并自行回应审批请求。关闭后由你审阅请求。",

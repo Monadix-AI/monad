@@ -398,7 +398,12 @@ export const eventTypeSchema = z.enum([
   'external_agent.approval_resolved',
   'external_agent.resume_failed',
   'external_agent.exited',
-  'external_agent.turn_settled'
+  'external_agent.turn_settled',
+  // Ephemeral login-nudge pair: published to the session bus only (never persisted), so the
+  // in-chat "agent needs to log in" card exists exactly while the condition holds and
+  // vanishes on reload — re-auth guidance is transient interaction, not transcript history.
+  'external_agent.login_required',
+  'external_agent.login_resolved'
 ]);
 export type EventType = z.infer<typeof eventTypeSchema>;
 

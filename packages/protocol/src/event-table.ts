@@ -330,6 +330,18 @@ export const externalAgentTurnSettledPayloadSchema = z.object({
   error: z.boolean().optional()
 });
 
+export const externalAgentLoginRequiredPayloadSchema = z.object({
+  externalAgentSessionId: z.string().optional(),
+  agentName: z.string(),
+  provider: externalAgentProviderSchema,
+  reason: z.string()
+});
+
+export const externalAgentLoginResolvedPayloadSchema = z.object({
+  agentName: z.string(),
+  provider: externalAgentProviderSchema
+});
+
 export type SessionCreatedPayload = z.infer<typeof sessionCreatedPayloadSchema>;
 export type SessionUpdatedPayload = z.infer<typeof sessionUpdatedPayloadSchema>;
 export type SessionRestoredPayload = z.infer<typeof sessionRestoredPayloadSchema>;
@@ -364,6 +376,8 @@ export type ExternalAgentApprovalResolvedPayload = z.infer<typeof externalAgentA
 export type ExternalAgentResumeFailedPayload = z.infer<typeof externalAgentResumeFailedPayloadSchema>;
 export type ExternalAgentExitedPayload = z.infer<typeof externalAgentExitedPayloadSchema>;
 export type ExternalAgentTurnSettledPayload = z.infer<typeof externalAgentTurnSettledPayloadSchema>;
+export type ExternalAgentLoginRequiredPayload = z.infer<typeof externalAgentLoginRequiredPayloadSchema>;
+export type ExternalAgentLoginResolvedPayload = z.infer<typeof externalAgentLoginResolvedPayloadSchema>;
 
 export const EVENT_TABLE = {
   'session.created': sessionCreatedPayloadSchema,
@@ -404,7 +418,9 @@ export const EVENT_TABLE = {
   'external_agent.approval_resolved': externalAgentApprovalResolvedPayloadSchema,
   'external_agent.resume_failed': externalAgentResumeFailedPayloadSchema,
   'external_agent.exited': externalAgentExitedPayloadSchema,
-  'external_agent.turn_settled': externalAgentTurnSettledPayloadSchema
+  'external_agent.turn_settled': externalAgentTurnSettledPayloadSchema,
+  'external_agent.login_required': externalAgentLoginRequiredPayloadSchema,
+  'external_agent.login_resolved': externalAgentLoginResolvedPayloadSchema
 } as const satisfies Record<EventType, z.ZodTypeAny>;
 
 export type EventPayload<T extends EventType> = z.infer<(typeof EVENT_TABLE)[T]>;

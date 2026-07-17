@@ -56,6 +56,6 @@ export function adapterFailureError(name: string, exitCode: number | null, cause
   const why = cause instanceof Error ? cause.message : String(cause);
   const suffix = isAuthError(cause)
     ? '— API credentials were rejected (the adapter is installed but authentication failed)'
-    : '— ensure the adapter is installed and you are logged in';
+    : '— ensure the adapter is installed and you are signed in';
   return new Error(`failed to run external agent "${name}"${exited}: ${why} ${suffix}`);
 }

@@ -25,12 +25,14 @@ import {
   branchSnapshotItems,
   isBranchSourceItem,
   isCompactCommandItem,
+  isExternalAgentLoginItem,
   isMemorySummaryItem,
   isSummaryTranscriptTurnItem,
   isToolItem,
   type SummaryTranscriptTurnViewItem,
   summaryTranscriptTurns
 } from './chat-view-items';
+import { ExternalAgentLoginCard } from './ExternalAgentLoginCard';
 import { MemorySummaryDivider } from './MemorySummaryDivider';
 import { MessageBody } from './MessageBody';
 import { useSessionContext } from './session-context';
@@ -176,6 +178,8 @@ export function SessionTranscript({ model }: { model: SessionTranscriptModel }) 
             sessionId={identity.currentSessionId}
             step={message}
           />
+        ) : isExternalAgentLoginItem(message) ? (
+          <ExternalAgentLoginCard item={message} />
         ) : isMemorySummaryItem(message) ? (
           <MemorySummaryDivider item={message} />
         ) : isCompactCommandItem(message) ? (
@@ -358,6 +362,11 @@ function SummaryTranscriptTurn({
               item={detail.summary ? { summary: detail.summary } : undefined}
               key={detail.id}
               pending={detail.status === 'pending'}
+            />
+          ) : isExternalAgentLoginItem(detail) ? (
+            <ExternalAgentLoginCard
+              item={detail}
+              key={detail.id}
             />
           ) : isSummaryTranscriptTurnItem(detail) || isBranchSourceItem(detail) ? null : (
             <Message

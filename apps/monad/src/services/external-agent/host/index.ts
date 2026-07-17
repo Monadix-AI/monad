@@ -49,6 +49,7 @@ import { ExternalAgentOutputPipeline } from '#/services/external-agent/host/outp
 import { ExternalAgentProcessLifecycle } from '#/services/external-agent/host/process-lifecycle.ts';
 import { ExternalAgentSessionLauncher } from '#/services/external-agent/host/session-launcher.ts';
 import { getExternalAgentProviderAdapter } from '#/services/external-agent/index.ts';
+import { ExternalAgentLoginNudge } from '#/services/external-agent/login-nudge.ts';
 import {
   cleanupManagedProjectRuntimeToken,
   managedProjectRuntimeWorkspace
@@ -116,6 +117,10 @@ export class ExternalAgentHost {
   /** Provider-login (auth) sessions and one-shot auth/usage probes live in their own host; they share
    *  no state with interactive sessions. Public auth methods below delegate straight through. */
   private readonly authHost: ExternalAgentAuthHost;
+  /** In-chat re-login nudge: verifies a connection_required is a real auth failure, then publishes the
+   *  ephemeral login_required/login_resolved pair. */
+  private readonly loginNudge: ExternalAgentLoginNudge;
+  private readonly disposeLoginNudge: () => void;
   /** Builds and dispatches durable/ephemeral external agent session events. */
   private readonly events: ExternalAgentEventLog;
   /** Owns app-server socket/port allocation and the disconnect→redial→give-up flow. */
@@ -135,7 +140,15 @@ export class ExternalAgentHost {
   private readonly observationResolver: ExternalAgentObservationResolver;
 
   constructor(private readonly deps: ExternalAgentHostDeps) {
-    this.authHost = new ExternalAgentAuthHost(deps);
+    this.loginNudge = new ExternalAgentLoginNudge({
+      bus: deps.bus,
+      authStatus: (agentName) => this.authHost.authStatus(agentName)
+    });
+    this.disposeLoginNudge = this.loginNudge.start();
+    this.authHost = new ExternalAgentAuthHost({
+      ...deps,
+      onAuthenticated: (info) => this.loginNudge.resolveAuthenticated(info)
+    });
     this.events = new ExternalAgentEventLog({ store: deps.store, bus: deps.bus });
     this.appServerConnections = new ExternalAgentAppServerConnectionManager({
       live: this.live,
@@ -592,6 +605,7 @@ export class ExternalAgentHost {
   }
 
   stopAll(): void {
+    this.disposeLoginNudge();
     for (const id of [...this.live.keys()]) {
       try {
         this.stop(id);

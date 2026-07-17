@@ -79,6 +79,9 @@ export interface ExternalAgentAuthHostDeps {
   authProcessRegistryPath?: string;
   authHeartbeatTimeoutMs?: number;
   authStatusTimeoutMs?: number;
+  /** Fires whenever a login session reaches `authenticated` (including the preflight short-circuit),
+   *  so interested daemon services (the in-chat login nudge) can settle without polling. */
+  onAuthenticated?: (info: { agentName: string; provider: string }) => void;
 }
 
 function authToView(session: LiveExternalAgentAuthSession): ExternalAgentAuthSessionView {
@@ -195,6 +198,7 @@ export class ExternalAgentAuthHost {
         kill: () => {}
       };
       this.liveAuth.set(id, live);
+      this.deps.onAuthenticated?.({ agentName: agent.name, provider: agent.provider });
       return authToView(live);
     }
     const launch = resolveExternalAgentLaunchCommand(adapter, buildExternalAgentAuthLaunch(agent));
@@ -289,6 +293,8 @@ export class ExternalAgentAuthHost {
       current.updatedAtMs = Date.now();
       current.exitedAt = current.updatedAt;
       this.publishAuth(current);
+      if (current.authState === 'authenticated')
+        this.deps.onAuthenticated?.({ agentName: current.agentName, provider: current.provider });
     });
     return authToView(live);
   }

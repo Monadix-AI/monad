@@ -120,6 +120,27 @@ export function applyToolEvent(m: ProjectionMutations, event: Event): SessionUiE
       };
       return [{ kind: 'upsert', cursor: event.id, item: m.upsert(next) }];
     }
+    case 'external_agent.login_required': {
+      const p = parseEventPayload('external_agent.login_required', event.payload);
+      return [
+        {
+          kind: 'upsert',
+          cursor: event.id,
+          item: m.upsert({
+            kind: 'custom',
+            id: `external-agent-login-required:${p.agentName}`,
+            name: 'external_agent.login_required',
+            status: 'error',
+            data: p,
+            seq: event.id
+          })
+        }
+      ];
+    }
+    case 'external_agent.login_resolved': {
+      const p = parseEventPayload('external_agent.login_resolved', event.payload);
+      return [m.remove('custom', `external-agent-login-required:${p.agentName}`)];
+    }
     case 'external_agent.connection_required': {
       const p = parseEventPayload('external_agent.connection_required', event.payload);
       return [

@@ -290,12 +290,22 @@ function claudeMessageEvents(message: SDKMessage): ExternalAgentOutputEvent[] {
   }
 }
 
-// The `claude` CLI's `--output-format stream-json` emits one `SDKMessage` per line — the SDK's own wire
-// contract — so each decoded line is narrowed through the SDK's discriminated union directly instead of
-// being re-typed by hand.
-function decodeClaudeMessage(line: string): SDKMessage | undefined {
-  const record = parseJsonObject(line);
-  return record && typeof record.type === 'string' ? (record as SDKMessage) : undefined;
+// The SDKMessage union doesn't model the top-level `error` field the CLI attaches to synthetic
+// failure events (e.g. {"type":"assistant","error":"authentication_failed",...} when the session's
+// credentials expire mid-run), so auth failure is detected on the raw record before narrowing.
+function claudeAuthFailureEvent(record: Record<string, unknown>): ExternalAgentOutputEvent | undefined {
+  if (record.error !== 'authentication_failed') return undefined;
+  const message = record.message as { content?: unknown } | undefined;
+  const text = Array.isArray(message?.content)
+    ? message.content
+        .map((block) => (block && typeof block === 'object' && 'text' in block ? String(block.text) : ''))
+        .join('')
+        .trim()
+    : '';
+  return {
+    type: 'connection_required',
+    payload: { code: 'authentication_failed', reason: text || 'Claude Code session is not signed in' }
+  };
 }
 
 function parseClaudeStreamJson(chunk: string): ExternalAgentOutputEvent[] {
@@ -303,8 +313,14 @@ function parseClaudeStreamJson(chunk: string): ExternalAgentOutputEvent[] {
   for (const rawLine of chunk.split(/\r?\n/)) {
     const line = rawLine.trim();
     if (!line.startsWith('{')) continue;
-    const message = decodeClaudeMessage(line);
-    if (message) events.push(...claudeMessageEvents(message));
+    const record = parseJsonObject(line);
+    if (!record) continue;
+    const authFailure = claudeAuthFailureEvent(record);
+    if (authFailure) {
+      events.push(authFailure);
+      continue;
+    }
+    if (typeof record.type === 'string') events.push(...claudeMessageEvents(record as SDKMessage));
   }
   return events;
 }

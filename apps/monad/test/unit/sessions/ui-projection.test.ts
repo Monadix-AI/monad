@@ -1019,6 +1019,38 @@ test('turn_settled is a no-op when there is no live running tool item', () => {
   expect(settled).toEqual([]);
 });
 
+test('projects login_required as an ephemeral custom card and removes it on login_resolved', () => {
+  const projector = new SessionUiProjector();
+  const payload = {
+    externalAgentSessionId: 'exa_400000000000',
+    agentName: 'claude-code',
+    provider: 'claude-code',
+    reason: 'Not logged in · Please run /login'
+  };
+
+  const [card] = projector.applyEvent(event('external_agent.login_required', payload));
+  expect(card).toMatchObject({
+    kind: 'upsert',
+    item: {
+      kind: 'custom',
+      id: 'external-agent-login-required:claude-code',
+      name: 'external_agent.login_required',
+      status: 'error',
+      data: payload
+    }
+  });
+
+  const [removed] = projector.applyEvent(
+    event('external_agent.login_resolved', { agentName: 'claude-code', provider: 'claude-code' })
+  );
+  expect(removed).toEqual(
+    expect.objectContaining({
+      kind: 'remove',
+      target: { kind: 'custom', id: 'external-agent-login-required:claude-code' }
+    })
+  );
+});
+
 test('projects external agent provider-owned approvals as distinct approval items', () => {
   const projector = new SessionUiProjector();
   const [approval] = projector.applyEvent(
