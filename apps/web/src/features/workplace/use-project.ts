@@ -44,10 +44,6 @@ const EMPTY_PROFILES: ProfileView[] = [];
 const EMPTY_ITEMS: UIItem[] = [];
 const EMPTY_EXTERNAL_AGENT_SESSIONS: ExternalAgentSessionView[] = [];
 
-export function projectSessionCurrentData<T>(query: { currentData?: T }): T | undefined {
-  return query.currentData;
-}
-
 export function useProject(
   projectId: string,
   opts: {
@@ -120,11 +116,11 @@ export function useProject(
 
   // --- live stream + lazy older history ---
   const stream = useStreamUiItemsQuery(activeSessionId ?? ('ses_' as SessionId), { skip: activeSessionId === null });
-  const streamData = projectSessionCurrentData(stream);
+  const streamData = stream.currentData;
   const externalAgentSessionsQ = useListExternalAgentSessionsQuery(activeSessionId ?? ('ses_' as SessionId), {
     skip: activeSessionId === null
   });
-  const externalAgentSessionsData = projectSessionCurrentData(externalAgentSessionsQ);
+  const externalAgentSessionsData = externalAgentSessionsQ.currentData;
   const transcript = useTranscriptHistory({
     sessionId: activeSessionId,
     streamOldestCursor: streamData?.oldestCursor,
