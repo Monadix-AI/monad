@@ -5,7 +5,7 @@
     "": {
       "name": "monad",
       "devDependencies": {
-        "@biomejs/biome": "2.5.4",
+        "@biomejs/biome": "^2.5.4",
         "@commitlint/cli": "^21.2.1",
         "@commitlint/config-conventional": "^21.2.0",
         "@commitlint/cz-commitlint": "^21.2.0",
@@ -17,9 +17,9 @@
         "commitizen": "^4.3.2",
         "knip": "^6.27.0",
         "rulesync": "^12.0.0",
-        "syncpack": "15.3.2",
+        "syncpack": "^15.3.2",
         "turbo": "^2.10.5",
-        "typescript": "7.0.2",
+        "typescript": "^7.0.2",
       },
     },
     "apps/cli": {

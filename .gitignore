@@ -38,8 +38,8 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 .env.production.local
 
 # dev-only seed for `bun run dev` (holds API keys / bot tokens); template is checked in
-packages/home/config.init.json
-packages/home/dev-seed.project-live-stream.json
+packages/environment/config.init.json
+packages/environment/dev-seed.project-live-stream.json
 
 # generated
 packages/environment/*.schema.json
