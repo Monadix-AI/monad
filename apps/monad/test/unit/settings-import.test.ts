@@ -1,7 +1,7 @@
 import type { MonadPaths } from '@monad/environment';
 
 import { expect, test } from 'bun:test';
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { createDefaultConfig, emptyAuth, loadAll, loadAuth, saveAll, saveAuth } from '@monad/environment';
@@ -406,6 +406,38 @@ test('fixture corpus covers Codex, Claude Code, Hermes and OpenClaw shapes', asy
       expect(preview.items.map((i) => i.target)).toContain(c.expected[1]);
       expect(preview.items.every((i) => typeof i.hash === 'string' && i.hash.length > 0)).toBe(true);
     }
+  } finally {
+    await cleanup();
+  }
+});
+
+test('auto-detect ignores product names in the checkout prefix above the import root', async () => {
+  const { dir, cfg, cleanup } = await makeHome();
+  const fixtures = join(import.meta.dir, '..', 'fixtures', 'settings-import');
+  const prefixed = join(dir, 'cursor-projects', 'worktrees', 'history-page-cursor-fix');
+  await mkdir(prefixed, { recursive: true });
+  await cp(join(fixtures, 'codex'), join(prefixed, 'codex'), { recursive: true });
+  try {
+    const preview = await previewSettingsImport({ from: 'auto', path: join(prefixed, 'codex'), replace: false }, cfg);
+    expect(preview.from).toBe('codex');
+    expect(preview.items.map((i) => i.target)).toContain('fixture_stdio');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('auto-detect still finds an exact product segment at any depth', async () => {
+  const { dir, cfg, cleanup } = await makeHome();
+  const nested = join(dir, '.cursor', 'projects', 'foo');
+  await mkdir(nested, { recursive: true });
+  await Bun.write(
+    join(nested, 'config.json'),
+    JSON.stringify({ mcpServers: { deep: { command: 'bun', args: ['deep.ts'] } } })
+  );
+  try {
+    const preview = await previewSettingsImport({ from: 'auto', path: nested, replace: false }, cfg);
+    expect(preview.from).toBe('cursor');
+    expect(preview.items.map((i) => [i.category, i.target, i.action])).toContainEqual(['mcpServers', 'deep', 'add']);
   } finally {
     await cleanup();
   }

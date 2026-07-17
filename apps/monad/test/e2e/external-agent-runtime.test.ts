@@ -311,7 +311,11 @@ async function configureMockCodexApprovalAgent(call: Call, dir: string): Promise
       '      }, 25);',
       '    }',
       '    if (msg.method === "thread/turns/list") {',
-      '      process.stdout.write(JSON.stringify({id:msg.id, result:{data:[{id:"turn_1", items:[]}], nextCursor:"next_cursor", backwardsCursor:null}}) + "\\n");',
+      '      if (msg.params && msg.params.cursor && msg.params.cursor !== "next_cursor") {',
+      '        process.stdout.write(JSON.stringify({id:msg.id, error:{code:-32600, message:"invalid cursor: " + msg.params.cursor}}) + "\\n");',
+      '      } else {',
+      '        process.stdout.write(JSON.stringify({id:msg.id, result:{data:[{id:"turn_1", items:[]}], nextCursor:"next_cursor", backwardsCursor:null}}) + "\\n");',
+      '      }',
       '    }',
       '    if (msg.id === "req_provider_1") process.stdout.write(JSON.stringify({method:"serverRequest/resolved", params:{threadId:"thr_1", requestId:"req_provider_1"}}) + "\\n");',
       '  }',
@@ -1215,7 +1219,7 @@ async function runCodexHistoryPageRuntime(
     events: Array<{ role: string; text: string; source: string; providerEventType: string; raw: unknown }>;
     nextCursor: string;
   };
-  expect(pageBody.nextCursor).toBe('next_cursor');
+  expect(pageBody.nextCursor).toBe('provider:next_cursor');
   // Server-normalized cards: the daemon already knows this session's provider and normalizes with
   // the same adapter used for parseOutput/historyPageOutput — see storedOutputHistoryPage. No
   // separate raw-items array: each event's `raw` carries its source record.
@@ -1243,6 +1247,22 @@ async function runCodexHistoryPageRuntime(
       raw: { method: 'turn/completed', params: { threadId: 'codex-thread-1', turnId: 'turn_1' } }
     }
   ]);
+
+  const secondPage = await call(
+    'GET',
+    `/v1/external-agent-sessions/${nativeSession.id}/history-page?transcriptTargetId=${sessionId}&limit=1&itemsView=summary&sortDirection=desc&before=${encodeURIComponent(pageBody.nextCursor)}`
+  );
+  expect(secondPage.status).toBe(200);
+  expect(((await secondPage.json()) as { nextCursor?: string }).nextCursor).toBe('provider:next_cursor');
+
+  const badCursorPage = await call(
+    'GET',
+    `/v1/external-agent-sessions/${nativeSession.id}/history-page?transcriptTargetId=${sessionId}&limit=1&itemsView=summary&sortDirection=desc&before=${encodeURIComponent('provider:bogus')}`
+  );
+  expect(badCursorPage.status).toBe(502);
+  const badCursorBody = (await badCursorPage.json()) as { error: string; code: string };
+  expect(badCursorBody.code).toBe('provider_protocol_error');
+  expect(badCursorBody.error).toBe('invalid cursor: bogus');
 
   await call('POST', `/v1/external-agent-sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`);
 }

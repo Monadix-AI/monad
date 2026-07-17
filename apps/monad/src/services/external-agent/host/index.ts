@@ -39,6 +39,12 @@ import { ExternalAgentAppServerConnectionManager } from '#/services/external-age
 import { ExternalAgentOneshotRunner } from '#/services/external-agent/host/cli-oneshot.ts';
 import { ExternalAgentEventLog } from '#/services/external-agent/host/event-log.ts';
 import {
+  decodeHistoryCursor,
+  encodeProviderHistoryCursor,
+  encodeStoredHistoryCursor,
+  type HistoryCursor
+} from '#/services/external-agent/host/history-cursor.ts';
+import {
   EXTERNAL_AGENT_IDLE_TIMEOUT_MS,
   HISTORY_PAGE_TIMEOUT_MS
 } from '#/services/external-agent/host/host-constants.ts';
@@ -59,16 +65,15 @@ import { buildExternalAgentSpawnEnv, requireExternalAgent } from '#/services/ext
 
 export type { ExternalAgentHostDeps };
 
-const STORED_HISTORY_CURSOR_PREFIX = 'snapshot:';
-
 function storedOutputHistoryPage(
   output: string,
   req: ExternalAgentHistoryPageRequest,
+  cursor: HistoryCursor,
   id: string,
   provider: ExternalAgentProvider
 ): ExternalAgentHistoryPageResponse {
   const lines = output.split('\n').filter((line) => line.trim().length > 0);
-  const end = storedHistoryCursorEnd(req.before, lines.length);
+  const end = storedHistoryCursorEnd(cursor, lines.length);
   const start = Math.max(0, end - req.limit);
   const pageLines = lines.slice(start, end);
   const pageOutput = pageLines.join('\n');
@@ -82,15 +87,23 @@ function storedOutputHistoryPage(
       output: pageOutput,
       mode: 'history'
     }),
-    ...(start > 0 ? { nextCursor: `${STORED_HISTORY_CURSOR_PREFIX}${start}` } : {})
+    ...(start > 0 ? { nextCursor: encodeStoredHistoryCursor(start) } : {})
   };
 }
 
-function storedHistoryCursorEnd(cursor: string | undefined, fallback: number): number {
-  if (!cursor?.startsWith(STORED_HISTORY_CURSOR_PREFIX)) return fallback;
-  const value = Number.parseInt(cursor.slice(STORED_HISTORY_CURSOR_PREFIX.length), 10);
+function storedHistoryCursorEnd(cursor: HistoryCursor, fallback: number): number {
+  if (cursor.kind !== 'stored') return fallback;
+  const value = Number.parseInt(cursor.value, 10);
   if (!Number.isFinite(value)) return fallback;
   return Math.max(0, Math.min(fallback, value));
+}
+
+function providerHistoryPageRequest(
+  req: ExternalAgentHistoryPageRequest,
+  cursor: HistoryCursor
+): ExternalAgentHistoryPageRequest {
+  const { before: _ignored, ...rest } = req;
+  return { ...rest, ...(cursor.kind === 'provider' ? { before: cursor.value } : {}) };
 }
 
 const RUNTIME_LIST_DEFAULT_LIMIT = 100;
@@ -640,6 +653,15 @@ export class ExternalAgentHost {
   async historyPage(id: string, req: ExternalAgentHistoryPageRequest): Promise<ExternalAgentHistoryPageResponse> {
     const live = this.live.get(id);
     if (!live) return this.storedHistoryPage(id, req);
+    // A stored-snapshot cursor keeps paging the output snapshot even after the session came (back)
+    // live — it indexes snapshot lines, not a provider pagination, and a provider would reject it
+    // (codex: "invalid cursor"). Provider cursors are decoded before reaching an adapter for the
+    // same reason in reverse.
+    const cursor = decodeHistoryCursor(req.before);
+    if (cursor.kind === 'stored') {
+      return storedOutputHistoryPage(live.outputBuffer.snapshot(), req, cursor, id, live.provider);
+    }
+    const providerReq = providerHistoryPageRequest(req, cursor);
     const providerSessionRef = live.providerSessionRef ?? live.initializeContext?.providerSessionRef ?? undefined;
     const workingPath = live.initializeContext?.workingPath;
     if (live.adapter.historyPage && providerSessionRef && workingPath) {
@@ -647,7 +669,7 @@ export class ExternalAgentHost {
         providerSessionRef,
         workingPath,
         limitBytes: MAX_OUTPUT_SNAPSHOT,
-        request: req
+        request: providerReq
       });
       if (page) return this.providerHistoryPageResponse(id, live.adapter, providerSessionRef, workingPath, req, page);
     }
@@ -666,13 +688,13 @@ export class ExternalAgentHost {
       }, HISTORY_PAGE_TIMEOUT_MS);
       live.pendingHistoryPages.set(responseId, {
         timeout,
-        request: req,
+        request: providerReq,
         resolve: (page) =>
           resolve({ events: page.events, ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}) }),
         reject
       });
       try {
-        live.adapter.requestHistoryPage?.({ ...live, nextRequestId: () => requestId }, req);
+        live.adapter.requestHistoryPage?.({ ...live, nextRequestId: () => requestId }, providerReq);
       } catch (error) {
         clearTimeout(timeout);
         live.pendingHistoryPages.delete(responseId);
@@ -686,13 +708,14 @@ export class ExternalAgentHost {
     req: ExternalAgentHistoryPageRequest
   ): Promise<ExternalAgentHistoryPageResponse> {
     const row = this.deps.store.getExternalAgentSession(id);
-    if (row?.providerSessionRef) {
+    const cursor = decodeHistoryCursor(req.before);
+    if (cursor.kind !== 'stored' && row?.providerSessionRef) {
       const adapter = getExternalAgentProviderAdapter(row.provider);
       const page = await adapter.historyPage?.({
         providerSessionRef: row.providerSessionRef,
         workingPath: row.workingPath,
         limitBytes: MAX_OUTPUT_SNAPSHOT,
-        request: req
+        request: providerHistoryPageRequest(req, cursor)
       });
       if (page)
         return this.providerHistoryPageResponse(id, adapter, row.providerSessionRef, row.workingPath, req, page);
@@ -704,7 +727,7 @@ export class ExternalAgentHost {
         access.reason ?? `external agent history unavailable for stopped session: ${id}`
       );
     }
-    return storedOutputHistoryPage(access.output ?? '', req, id, access.provider);
+    return storedOutputHistoryPage(access.output ?? '', req, cursor, id, access.provider);
   }
 
   private providerHistoryPageResponse(
@@ -729,7 +752,7 @@ export class ExternalAgentHost {
         output,
         mode: 'history'
       }),
-      ...(page.nextCursor ? { nextCursor: page.nextCursor } : {})
+      ...(page.nextCursor ? { nextCursor: encodeProviderHistoryCursor(page.nextCursor) } : {})
     };
   }
 

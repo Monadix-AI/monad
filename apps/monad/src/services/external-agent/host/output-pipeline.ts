@@ -14,6 +14,7 @@ import { externalAgentStreamItems } from '@monad/atoms/external-agent-observatio
 import { MAX_OUTPUT_SNAPSHOT } from '#/services/external-agent/constants.ts';
 import { ExternalAgentError } from '#/services/external-agent/errors.ts';
 import { ExternalAgentEventLog } from '#/services/external-agent/host/event-log.ts';
+import { encodeProviderHistoryCursor } from '#/services/external-agent/host/history-cursor.ts';
 import {
   type ExternalAgentOutputStream,
   MAX_STRUCTURED_LINE,
@@ -239,7 +240,9 @@ export class ExternalAgentOutputPipeline {
         events: live
           ? externalAgentStreamItems({ id: `${id}:history:live`, adapter: live.adapter, output: pageOutput })
           : [],
-        ...(typeof event.payload.nextCursor === 'string' ? { nextCursor: event.payload.nextCursor } : {})
+        ...(typeof event.payload.nextCursor === 'string'
+          ? { nextCursor: encodeProviderHistoryCursor(event.payload.nextCursor) }
+          : {})
       });
       return;
     }
@@ -268,6 +271,20 @@ export class ExternalAgentOutputPipeline {
       const live = this.ctx.live.get(id);
       const message =
         typeof event.payload.message === 'string' ? event.payload.message : `${adapter.provider} provider error`;
+      // An error response to an in-flight history-page request must reject that caller immediately —
+      // otherwise the pending promise silently runs into HISTORY_PAGE_TIMEOUT_MS and the client sees a
+      // misleading provider_timeout. It is a request-scoped read failure, not session output, so it is
+      // not mirrored to stderr or the project wall.
+      if (live && event.payload.responseId !== undefined) {
+        const errorResponseId = String(event.payload.responseId);
+        const pendingHistory = live.pendingHistoryPages.get(errorResponseId);
+        if (pendingHistory) {
+          clearTimeout(pendingHistory.timeout);
+          live.pendingHistoryPages.delete(errorResponseId);
+          pendingHistory.reject(new ExternalAgentError('provider_protocol_error', message));
+          return;
+        }
+      }
       if (live?.startup) {
         clearTimeout(live.startup.timeout);
         live.startup.reject(new ExternalAgentError('provider_protocol_error', message));

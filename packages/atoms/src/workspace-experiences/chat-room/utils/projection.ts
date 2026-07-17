@@ -303,6 +303,7 @@ function externalAgentStreamFromSession(
   });
   return {
     id: session.id,
+    transcriptTargetId: session.sessionId,
     agentName: session.agentName,
     ...(agentAliases.get(session.agentName)?.length ? { agentAliases: agentAliases.get(session.agentName) } : {}),
     ...(templateAgentNames.get(session.agentName)

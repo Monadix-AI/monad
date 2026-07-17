@@ -624,6 +624,17 @@ test('external agent streams prefer live activity output over persisted snapshot
   });
 });
 
+test('external agent streams carry their own transcript target for observation/history requests', () => {
+  const stream = firstExternalAgentStream(
+    __workplaceProjectMessageTest.buildExternalAgentStreams(
+      [externalAgentSession({ sessionId: 'ses_01KWOWNER9zQ2' })],
+      []
+    )
+  );
+
+  expect(stream.transcriptTargetId).toBe('ses_01KWOWNER9zQ2');
+});
+
 test('external agent durable running sessions remain observable without marking generation active', () => {
   const stream = firstExternalAgentStream(
     __workplaceProjectMessageTest.buildExternalAgentStreams(

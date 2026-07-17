@@ -116,6 +116,10 @@ export interface AgentTask {
 
 export interface ExternalAgentStreamView {
   id: string;
+  /** The session/project transcript the external agent session belongs to. Observation and
+   *  history requests must be scoped to THIS id — the room's currently active session can be a
+   *  different session of the same project, and the daemon rejects the mismatch (404). */
+  transcriptTargetId?: string;
   agentName: string;
   agentAliases?: string[];
   templateAgentName?: string;

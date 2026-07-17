@@ -552,6 +552,10 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
   const agents = sortedProjectRailAgents(room.railAgents);
   const observedStream = agentObservationStream(observation, room.externalAgentStreams);
   const observedExternalAgentSessionId = observation?.externalAgentSessionId ?? observedStream?.id;
+  // Scope observation/history requests to the transcript the agent session actually belongs to —
+  // the room's active session can be a sibling session of the same project, and the daemon 404s the
+  // mismatch.
+  const observedTranscriptTargetId = observedStream?.transcriptTargetId ?? room.activeSessionId;
   const observedDeliveryId = observation?.deliveryId;
   const observationHistoryResetKey = [observedDeliveryId, observedExternalAgentSessionId].filter(Boolean).join(':');
   const [historyPages, setHistoryPages] = useState<ObservationHistoryPageState | undefined>(undefined);
@@ -561,8 +565,8 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
   // full projected event list every frame, so the panel replaces its list wholesale — no client-side
   // delta re-derivation. Deliveries have no ui-stream twin yet, so they keep the poll + legacy projection.
   const externalAgentUiObservation = useStreamExternalAgentUiObservationQuery(
-    { id: observedExternalAgentSessionId ?? '', transcriptTargetId: (room.activeSessionId ?? '') as SessionId },
-    { skip: !(observedExternalAgentSessionId && observation && !observedDeliveryId && room.activeSessionId) }
+    { id: observedExternalAgentSessionId ?? '', transcriptTargetId: (observedTranscriptTargetId ?? '') as SessionId },
+    { skip: !(observedExternalAgentSessionId && observation && !observedDeliveryId && observedTranscriptTargetId) }
   );
   const deliveryObservation = usePolledValue<ExternalAgentObservationAccessResponse>({
     enabled: Boolean(observedDeliveryId && observation && room.activeSessionId),
@@ -623,7 +627,7 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
 
   const loadHistoryPage = useCallback(
     (before?: string | null) => {
-      if (!observedExternalAgentSessionId || !room.activeSessionId || !liveHistoryBoundaryAt) return;
+      if (!observedExternalAgentSessionId || !observedTranscriptTargetId || !liveHistoryBoundaryAt) return;
       const generation = historyLoadGenerationRef.current;
       setHistoryPages((current) => {
         return current
@@ -636,7 +640,7 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
         load: async (cursor) => {
           const response = await triggerExternalAgentHistoryPage({
             id: observedExternalAgentSessionId,
-            transcriptTargetId: room.activeSessionId as SessionId,
+            transcriptTargetId: observedTranscriptTargetId as SessionId,
             before: cursor,
             limit: 20,
             sortDirection: 'desc'
@@ -673,7 +677,7 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
         }
       );
     },
-    [liveHistoryBoundaryAt, observedExternalAgentSessionId, room.activeSessionId, triggerExternalAgentHistoryPage]
+    [liveHistoryBoundaryAt, observedExternalAgentSessionId, observedTranscriptTargetId, triggerExternalAgentHistoryPage]
   );
 
   const showHistory = useCallback(() => {
