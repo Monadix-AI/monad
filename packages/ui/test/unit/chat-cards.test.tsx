@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
+import { ApprovalResourceCard } from '../../src/components/ApprovalResourceCard';
 import { AttachmentCard } from '../../src/components/AttachmentCard';
 import { CommandCard, CommandCardHeader } from '../../src/components/CommandCard';
 import { FileReadCard, FileReadCardHeader } from '../../src/components/FileReadCard';
@@ -229,4 +230,32 @@ test('AttachmentCard renders metadata, actions, and controlled preview state', (
   expect(markup).toContain('Collapse');
   expect(markup).toContain('Download');
   expect(markup).toContain('first line\nsecond line');
+});
+
+test('ApprovalResourceCard renders resource, operation, subject, and default scope', () => {
+  const network = renderToStaticMarkup(
+    <ApprovalResourceCard
+      defaultScope="session"
+      defaultScopeLabel="Default"
+      resourceLabel="Network access"
+      subject="api.example.com"
+    />
+  );
+  const path = renderToStaticMarkup(
+    <ApprovalResourceCard
+      defaultScope="once"
+      defaultScopeLabel="Default"
+      operation="write"
+      resourceLabel="File access"
+      subject="/workspace/report.md"
+    />
+  );
+
+  expect(network).toContain('Network access');
+  expect(network).toContain('api.example.com');
+  expect(network).toContain('Default: session');
+  expect(path).toContain('File access');
+  expect(path).toContain('write');
+  expect(path).toContain('/workspace/report.md');
+  expect(path).toContain('Default: once');
 });

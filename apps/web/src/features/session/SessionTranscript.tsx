@@ -406,7 +406,7 @@ function ApprovalCard({
           approval.display.resource === 'path' ? (
             t('web.chat.pathAccessTitle')
           ) : (
-            'Network access'
+            t('web.chat.resourceNetworkAccess')
           )
         ) : approval.tool === 'path_access' ? (
           t('web.chat.pathAccessTitle')

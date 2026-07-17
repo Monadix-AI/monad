@@ -17,6 +17,7 @@ import type {
   ToolProps,
   ToolStatusLabels
 } from './components/AIElements';
+import type { ApprovalResourceCardProps } from './components/ApprovalResourceCard';
 import type { AttachmentCardProps } from './components/AttachmentCard';
 import type { CommandCardView } from './components/CommandCard';
 import type {
@@ -82,6 +83,7 @@ import {
   ToolInput,
   ToolOutput
 } from './components/AIElements';
+import { ApprovalResourceCard } from './components/ApprovalResourceCard';
 import { AttachmentCard } from './components/AttachmentCard';
 import { Badge, badgeVariants } from './components/Badge';
 import { Button, buttonVariants } from './components/Button';
@@ -188,6 +190,7 @@ import { WorkspaceMessageCard, WorkspaceSystemEventCard } from './components/Wor
 import { cn } from './lib/utils';
 
 export type {
+  ApprovalResourceCardProps,
   AttachmentCardProps,
   CommandCardView,
   ComposerAccessMode,
@@ -255,6 +258,7 @@ export type {
 
 export {
   AiElementIcons,
+  ApprovalResourceCard,
   AttachmentCard,
   activeMessageOutlineIds,
   Badge,
