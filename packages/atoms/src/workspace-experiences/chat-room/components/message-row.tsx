@@ -3,7 +3,7 @@ import type { Message, MessageAttachment } from '../../experience/types.ts';
 
 import { TerminalIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { ProductIcon, WorkspaceMessageCard } from '@monad/ui';
+import { FaviconLink, ProductIcon, WorkspaceMessageCard } from '@monad/ui';
 import {
   AgentIdentity,
   AgentInstanceAvatar,
@@ -139,7 +139,7 @@ function flattenReactText(node: React.ReactNode): string {
   return '';
 }
 
-const MENTION_MARKDOWN_COMPONENTS: Components = {
+export const messageMarkdownComponents: Components = {
   a: ({ href, children }) => {
     if (typeof href === 'string' && href.startsWith(MENTION_HREF_PREFIX)) {
       const id = decodeURIComponent(href.slice(MENTION_HREF_PREFIX.length));
@@ -150,15 +150,7 @@ const MENTION_MARKDOWN_COMPONENTS: Components = {
         />
       );
     }
-    return (
-      <a
-        href={href}
-        rel="noopener noreferrer"
-        target="_blank"
-      >
-        {children}
-      </a>
-    );
+    return <FaviconLink href={href}>{children}</FaviconLink>;
   }
 };
 
@@ -231,7 +223,7 @@ export function MarkdownWithMentions({ text, streaming }: { text: string; stream
       <style>{MESSAGE_MARKDOWN_CSS}</style>
       <Markdown
         className="workplace-message-markdown !text-current"
-        components={MENTION_MARKDOWN_COMPONENTS}
+        components={messageMarkdownComponents}
         streaming={streaming}
         text={markdownTextWithMentionCapsules(text)}
       />
