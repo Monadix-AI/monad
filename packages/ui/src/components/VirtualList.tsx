@@ -133,6 +133,10 @@ export function anchoredScrollTop(scrollTop: number, anchor: ViewportAnchor, cur
   return anchor.key === current.key ? scrollTop + current.top - anchor.top : scrollTop;
 }
 
+export function canPreserveViewportAnchor(isScrolling: boolean): boolean {
+  return !isScrolling;
+}
+
 // Generic windowed list over react-virtuoso. The custom pinning below exists because
 // virtuoso's built-in `followOutput` does not re-pin when a row grows IN PLACE (a streaming
 // message) — only on item-count changes. We instead pin from `totalListHeightChanged`
@@ -174,6 +178,7 @@ export function VirtualList<T>({
   const pinnedRef = useRef(true);
   const selfScrollRef = useRef(false);
   const userScrolledRef = useRef(false);
+  const isScrollingRef = useRef(false);
   const lastScrollTopRef = useRef<number | null>(null);
   const viewportResizeObserverRef = useRef<ResizeObserver | null>(null);
   const viewportAnchorRef = useRef<ViewportAnchor | null>(null);
@@ -231,7 +236,7 @@ export function VirtualList<T>({
   const preserveViewportAnchor = useCallback(() => {
     const anchor = viewportAnchorRef.current;
     const el = scrollerRef.current;
-    if (!anchor || !el) return false;
+    if (!anchor || !el || !canPreserveViewportAnchor(isScrollingRef.current)) return false;
     const element = [...el.querySelectorAll<HTMLElement>('[data-virtual-list-item-key]')].find(
       (candidate) => candidate.dataset.virtualListItemKey === anchor.key
     );
@@ -314,6 +319,7 @@ export function VirtualList<T>({
   // Pin now, then once more next frame: a freshly appended row reports its real height a
   // frame after it mounts, so a single re-pin catches the residual gap that one pass leaves.
   const pinToBottomSoon = useCallback(() => {
+    if (!canPreserveViewportAnchor(isScrollingRef.current)) return;
     if (preserveLayoutAnchor()) {
       requestAnimationFrame(preserveLayoutAnchor);
       return;
@@ -359,6 +365,14 @@ export function VirtualList<T>({
     [clearBottomSettleTimeout, onAtBottomChange]
   );
 
+  const handleIsScrollingChange = useCallback(
+    (isScrolling: boolean) => {
+      isScrollingRef.current = isScrolling;
+      if (!isScrolling && !pinnedRef.current && !bottomRequestRef.current.active) captureViewportAnchor();
+    },
+    [captureViewportAnchor]
+  );
+
   const handleTotalListHeightChanged = useCallback(() => {
     if (bottomRequestRef.current.active) {
       bottomRequestRef.current = reduceBottomScrollRequest(bottomRequestRef.current, { type: 'height-changed' });
@@ -370,7 +384,8 @@ export function VirtualList<T>({
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: item snapshots trigger post-commit anchor correction
   useLayoutEffect(() => {
-    if (pinnedRef.current || bottomRequestRef.current.active) return;
+    if (pinnedRef.current || bottomRequestRef.current.active || !canPreserveViewportAnchor(isScrollingRef.current))
+      return;
     if (!preserveViewportAnchor()) captureViewportAnchor();
     const frame = requestAnimationFrame(preserveViewportAnchor);
     return () => cancelAnimationFrame(frame);
@@ -515,6 +530,7 @@ export function VirtualList<T>({
       {...paginationProps}
       endReached={onEndReached}
       initialTopMostItemIndex={initialTopMostItemIndex}
+      isScrolling={handleIsScrollingChange}
       itemContent={(_index, item) => (
         <div
           data-virtual-list-item-key={getKey(item)}

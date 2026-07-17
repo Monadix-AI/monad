@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test';
 import { observationFollowResetKey } from '@monad/atoms/workspace-experiences';
 import {
   anchoredScrollTop,
+  canPreserveViewportAnchor,
   indexOfKey,
   initialBottomScrollRequest,
   isAtBottom,
@@ -107,6 +108,11 @@ test('keyed viewport anchor compensates an insertion or height growth above it',
   const anchor = { key: 'message-20', top: 80 };
 
   expect(anchoredScrollTop(640, anchor, { key: 'message-20', top: 200 })).toBe(760);
+});
+
+test('keyed viewport anchor does not fight an active fast scroll', () => {
+  expect(canPreserveViewportAnchor(true)).toBe(false);
+  expect(canPreserveViewportAnchor(false)).toBe(true);
 });
 
 test('keyed viewport anchor ignores unrelated rows and unchanged offsets', () => {
