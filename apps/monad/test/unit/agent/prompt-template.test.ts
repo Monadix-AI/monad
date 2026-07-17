@@ -65,11 +65,13 @@ test('rejects a prompt id registered by another file', async () => {
   await expect(definePrompt({ id: 'test.duplicate-id', sourcePath: secondPath })).rejects.toThrow('already registered');
 });
 
-test.each(['include("other")', 'layout("base")', 'capture(() => {})', 'await fetch("https://example.test")'])(
-  'rejects forbidden Eta code: %s',
-  async (code) => {
-    const sourcePath = await promptFile(`<% ${code} %>prompt`);
+test.each([
+  'include("other")',
+  'layout("base")',
+  'capture(() => {})',
+  'await fetch("https://example.test")'
+])('rejects forbidden Eta code: %s', async (code) => {
+  const sourcePath = await promptFile(`<% ${code} %>prompt`);
 
-    await expect(definePrompt({ id: `test.forbidden.${code}`, sourcePath })).rejects.toThrow('forbidden Eta code');
-  }
-);
+  await expect(definePrompt({ id: `test.forbidden.${code}`, sourcePath })).rejects.toThrow('forbidden Eta code');
+});
