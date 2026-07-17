@@ -97,6 +97,7 @@ export const agentErrorPayloadSchema = z.object({
 export const agentTokenPayloadSchema = z.object({
   messageId: messageIdSchema,
   agentName: z.string().optional(),
+  agentDisplayName: z.string().optional(),
   externalAgentSessionId: externalAgentSessionIdSchema.optional(),
   deliveryId: nativeAgentDeliveryIdSchema.optional(),
   delta: z.string(),
@@ -116,6 +117,7 @@ export const agentReasoningPayloadSchema = z.object({
 export const agentMessagePayloadSchema = z.object({
   messageId: messageIdSchema,
   agentName: z.string().optional(),
+  agentDisplayName: z.string().optional(),
   externalAgentSessionId: externalAgentSessionIdSchema.optional(),
   deliveryId: nativeAgentDeliveryIdSchema.optional(),
   text: z.string(),

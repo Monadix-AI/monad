@@ -559,6 +559,37 @@ test('managed external agent spawn projects joined without a thinking placeholde
   ]);
 });
 
+test('managed message author snapshot wins over current project member metadata', () => {
+  const messages = __workplaceProjectMessageTest.buildProjectMessages({
+    persistedMessages: [],
+    externalAgentSessions: [],
+    liveItems: [
+      {
+        kind: 'message',
+        id: 'msg_fablehistory',
+        role: 'assistant',
+        agentName: 'pmem_claude_fable',
+        agentDisplayName: 'Fable',
+        source: 'managed-external-agent',
+        parts: [{ type: 'text', text: 'Historical response' }],
+        status: 'done',
+        seq: '001'
+      }
+    ],
+    liveTools: [],
+    externalAgentDisplayNames: new Map([['pmem_claude_fable', 'Opus']])
+  });
+
+  expect(messages).toEqual([
+    expect.objectContaining({
+      id: 'msg_fablehistory',
+      authorId: 'pmem_claude_fable',
+      authorName: 'Fable',
+      text: 'Historical response'
+    })
+  ]);
+});
+
 test('managed external agent join stays before its first room message when live tool seq uses event ids', () => {
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [

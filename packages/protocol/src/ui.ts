@@ -52,6 +52,7 @@ export const uiMessageItemSchema = z.object({
   id: z.string(),
   role: uiMessageRoleSchema,
   agentName: z.string().optional(),
+  agentDisplayName: z.string().optional(),
   source: z.enum(['managed-external-agent', 'external-agent-provider']).optional(),
   externalAgentSessionId: externalAgentSessionIdSchema.optional(),
   deliveryId: nativeAgentDeliveryIdSchema.optional(),

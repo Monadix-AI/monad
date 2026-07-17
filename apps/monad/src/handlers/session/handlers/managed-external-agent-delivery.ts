@@ -106,7 +106,7 @@ export function createManagedExternalAgentDelivery(ctx: SessionContext) {
               providerSessionRef: existing.providerSessionRef ?? null
             });
           }
-          emitManagedExternalAgentThinking(session.id, existing.id, runtimeAgentName, deliveryId);
+          emitManagedExternalAgentThinking(session.id, existing.id, runtimeAgentName, deliveryId, displayName);
           if (existing.launchMode === 'cli-oneshot') {
             // cli-oneshot has no persistent process polling the inbox between turns, so every project
             // message must spawn a fresh turn carrying the message itself — the inbox-poll nudge path
@@ -171,7 +171,7 @@ export function createManagedExternalAgentDelivery(ctx: SessionContext) {
         }
         store.markExternalAgentInboxDelivered(nativeSession.id, deliveredSeq);
         store.markExternalAgentInboxVisible(nativeSession.id, deliveredSeq);
-        emitManagedExternalAgentThinking(session.id, nativeSession.id, runtimeAgentName, deliveryId);
+        emitManagedExternalAgentThinking(session.id, nativeSession.id, runtimeAgentName, deliveryId, displayName);
       } catch (err) {
         const { code, message } = extractError(err);
         recordManagedExternalAgentProjectDeliveryError(session.id, runtimeAgentName, code, message);

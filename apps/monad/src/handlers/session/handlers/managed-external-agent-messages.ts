@@ -3,6 +3,7 @@ import type { SessionContext } from '#/handlers/session/context.ts';
 
 import { newId } from '@monad/protocol';
 
+import { externalAgentProjectMemberDisplayNameForAgent } from '#/handlers/session/handlers/messaging-members.ts';
 import { makeEvent } from '#/services/event-bus.ts';
 
 export function createManagedExternalAgentMessages(ctx: SessionContext) {
@@ -30,7 +31,8 @@ export function createManagedExternalAgentMessages(ctx: SessionContext) {
     sessionId: SessionId,
     externalAgentSessionId: string,
     agentName: string,
-    deliveryId?: NativeAgentDeliveryId
+    deliveryId?: NativeAgentDeliveryId,
+    agentDisplayName = externalAgentProjectMemberDisplayNameForAgent(store, sessionId, agentName)
   ): MessageId {
     const pending = pendingManagedExternalAgentWakeMessages.get(externalAgentSessionId);
     const existing =
@@ -49,6 +51,7 @@ export function createManagedExternalAgentMessages(ctx: SessionContext) {
     store.insertMessage(messageId, sessionId, '', new Date().toISOString(), 'assistant', {
       data: {
         agentName,
+        agentDisplayName,
         externalAgentSessionId,
         ...(deliveryId ? { deliveryId } : {}),
         reasoning: 'Thinking',
@@ -63,6 +66,7 @@ export function createManagedExternalAgentMessages(ctx: SessionContext) {
       makeEvent(sessionId as SessionId, 'agent.token', {
         messageId,
         agentName,
+        agentDisplayName,
         externalAgentSessionId,
         ...(deliveryId ? { deliveryId } : {}),
         delta: '',
@@ -88,6 +92,7 @@ export function createManagedExternalAgentMessages(ctx: SessionContext) {
     sessionId,
     externalAgentSessionId,
     agentName,
+    agentDisplayName,
     text,
     threadId,
     attachments,
@@ -97,6 +102,7 @@ export function createManagedExternalAgentMessages(ctx: SessionContext) {
     sessionId: SessionId;
     externalAgentSessionId: string;
     agentName: string;
+    agentDisplayName?: string;
     text: string;
     threadId?: string;
     attachments?: MessageAttachmentRef[];
@@ -110,8 +116,18 @@ export function createManagedExternalAgentMessages(ctx: SessionContext) {
     pendingManagedExternalAgentWakeMessages.delete(externalAgentSessionId);
     const messageId = (pendingMessageId ?? newId('msg')) as MessageId;
     const deliveryId = pending?.deliveryId ?? deliveryIdFromMessageData(sessionId, messageId);
+    const persistedDisplayName = store.getMessage(sessionId, messageId)?.data;
+    const resolvedAgentDisplayName =
+      agentDisplayName ??
+      (persistedDisplayName && typeof persistedDisplayName === 'object'
+        ? (persistedDisplayName as { agentDisplayName?: unknown }).agentDisplayName
+        : undefined) ??
+      externalAgentProjectMemberDisplayNameForAgent(store, sessionId, agentName);
     const data = {
       agentName,
+      ...(typeof resolvedAgentDisplayName === 'string' && resolvedAgentDisplayName
+        ? { agentDisplayName: resolvedAgentDisplayName }
+        : {}),
       externalAgentSessionId,
       ...(deliveryId ? { deliveryId } : {}),
       source,
@@ -140,6 +156,9 @@ export function createManagedExternalAgentMessages(ctx: SessionContext) {
       makeEvent(sessionId as SessionId, 'agent.message', {
         messageId,
         agentName,
+        ...(typeof resolvedAgentDisplayName === 'string' && resolvedAgentDisplayName
+          ? { agentDisplayName: resolvedAgentDisplayName }
+          : {}),
         externalAgentSessionId,
         ...(deliveryId ? { deliveryId } : {}),
         text,

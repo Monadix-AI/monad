@@ -91,7 +91,7 @@ export function createManagedExternalAgentJoin(ctx: SessionContext) {
         providerSessionRef: resumeFrom ?? undefined,
         input: MANAGED_EXTERNAL_AGENT_JOIN_GREETING_PROMPT.render({})
       });
-      emitManagedExternalAgentThinking(session.id, nativeSession.id, runtimeAgentName);
+      emitManagedExternalAgentThinking(session.id, nativeSession.id, runtimeAgentName, undefined, displayName);
       return { started: true, nativeSessionId: nativeSession.id };
     } catch (err) {
       const { message } = extractError(err);

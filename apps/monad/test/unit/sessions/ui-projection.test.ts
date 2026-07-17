@@ -407,6 +407,40 @@ test('reasoning deltas preserve the streaming message agent name', () => {
   });
 });
 
+test('live managed agent messages preserve the author display name snapshot', () => {
+  const projector = new SessionUiProjector();
+  projector.applyEvent(
+    event('agent.token', {
+      messageId: 'msg_snapshot0000',
+      agentName: 'pmem_claude_fable',
+      agentDisplayName: 'Fable',
+      delta: '',
+      index: 0,
+      source: 'managed-external-agent'
+    })
+  );
+  const [completed] = projector.applyEvent(
+    event('agent.message', {
+      messageId: 'msg_snapshot0000',
+      agentName: 'pmem_claude_fable',
+      agentDisplayName: 'Fable',
+      text: 'Done',
+      source: 'managed-external-agent'
+    })
+  );
+
+  expect(completed).toMatchObject({
+    kind: 'upsert',
+    item: {
+      kind: 'message',
+      id: 'msg_snapshot0000',
+      agentName: 'pmem_claude_fable',
+      agentDisplayName: 'Fable',
+      status: 'done'
+    }
+  });
+});
+
 test('hydrates a persisted managed external agent thinking message after refresh', () => {
   const projector = new SessionUiProjector();
   projector.hydrateMessages([
@@ -416,7 +450,12 @@ test('hydrates a persisted managed external agent thinking message after refresh
       role: 'assistant',
       text: '',
       type: 'text',
-      data: { agentName: 'pmem_codex_reviewer', source: 'managed-external-agent', reasoning: 'Thinking' },
+      data: {
+        agentName: 'pmem_codex_reviewer',
+        agentDisplayName: 'Reviewer',
+        source: 'managed-external-agent',
+        reasoning: 'Thinking'
+      },
       stream: { status: 'streaming' },
       active: true,
       createdAt: '2026-06-24T00:00:00.000Z'
@@ -430,6 +469,7 @@ test('hydrates a persisted managed external agent thinking message after refresh
       kind: 'message',
       id: 'msg_thinking0000',
       agentName: 'pmem_codex_reviewer',
+      agentDisplayName: 'Reviewer',
       source: 'managed-external-agent',
       status: 'streaming',
       parts: [{ type: 'reasoning', text: 'Thinking' }]

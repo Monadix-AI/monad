@@ -51,6 +51,11 @@ export function applyMessageEvent(m: ProjectionMutations, event: Event): Session
           id: p.messageId,
           role: 'assistant',
           ...(p.agentName ? { agentName: p.agentName } : existing?.agentName ? { agentName: existing.agentName } : {}),
+          ...(p.agentDisplayName
+            ? { agentDisplayName: p.agentDisplayName }
+            : existing?.agentDisplayName
+              ? { agentDisplayName: existing.agentDisplayName }
+              : {}),
           ...(p.source ? { source: p.source } : existing?.source ? { source: existing.source } : {}),
           ...m.messageObservationPointers(p, existing),
           parts,
@@ -72,6 +77,7 @@ export function applyMessageEvent(m: ProjectionMutations, event: Event): Session
           id: p.messageId,
           role: 'assistant',
           ...(existing?.agentName ? { agentName: existing.agentName } : {}),
+          ...(existing?.agentDisplayName ? { agentDisplayName: existing.agentDisplayName } : {}),
           ...(p.source ? { source: p.source } : existing?.source ? { source: existing.source } : {}),
           ...m.messageObservationPointers(p, existing),
           parts,
@@ -104,6 +110,11 @@ export function applyMessageEvent(m: ProjectionMutations, event: Event): Session
           id: p.messageId,
           role: 'assistant',
           ...(p.agentName ? { agentName: p.agentName } : existing?.agentName ? { agentName: existing.agentName } : {}),
+          ...(p.agentDisplayName
+            ? { agentDisplayName: p.agentDisplayName }
+            : existing?.agentDisplayName
+              ? { agentDisplayName: existing.agentDisplayName }
+              : {}),
           ...(p.source ? { source: p.source } : existing?.source ? { source: existing.source } : {}),
           ...m.messageObservationPointers(p, existing),
           parts,

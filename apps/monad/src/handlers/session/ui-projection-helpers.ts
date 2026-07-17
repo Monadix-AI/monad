@@ -138,6 +138,12 @@ export function agentNameFromData(data: unknown): string | undefined {
   return typeof agentName === 'string' && agentName ? agentName : undefined;
 }
 
+export function agentDisplayNameFromData(data: unknown): string | undefined {
+  if (!data || typeof data !== 'object') return undefined;
+  const agentDisplayName = (data as { agentDisplayName?: unknown }).agentDisplayName;
+  return typeof agentDisplayName === 'string' && agentDisplayName ? agentDisplayName : undefined;
+}
+
 export function sourceFromData(data: unknown): UIMessageItem['source'] | undefined {
   if (!data || typeof data !== 'object') return undefined;
   const source = (data as { source?: unknown }).source;

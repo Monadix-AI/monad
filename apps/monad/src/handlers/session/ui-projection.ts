@@ -13,6 +13,7 @@ import type { ProjectionMutations } from './ui-projection-state.ts';
 import { createI18n, DEFAULT_LOCALE } from '@monad/i18n';
 
 import {
+  agentDisplayNameFromData,
   agentNameFromData,
   deliveryIdFromData,
   displayFromToolResultData,
@@ -270,6 +271,9 @@ export class SessionUiProjector {
         role: message.role,
         ...(message.role === 'assistant' && agentNameFromData(message.data)
           ? { agentName: agentNameFromData(message.data) }
+          : {}),
+        ...(message.role === 'assistant' && agentDisplayNameFromData(message.data)
+          ? { agentDisplayName: agentDisplayNameFromData(message.data) }
           : {}),
         ...(message.role === 'assistant' && sourceFromData(message.data)
           ? { source: sourceFromData(message.data) }

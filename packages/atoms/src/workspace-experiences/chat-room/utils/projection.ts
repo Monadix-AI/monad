@@ -92,9 +92,7 @@ export function messageToView(
   const agent = item.role === 'assistant';
   const rawName = agent ? (item.agentName ?? 'monad') : human.name;
   const displayName = agent
-    ? rawName === 'monad'
-      ? 'Monad'
-      : (externalAgentDisplayNames.get(rawName) ?? rawName)
+    ? (item.agentDisplayName ?? (rawName === 'monad' ? 'Monad' : (externalAgentDisplayNames.get(rawName) ?? rawName)))
     : rawName;
   const icon = agent ? (externalAgentIcons.get(rawName) ?? iconForAgent(displayName)) : undefined;
   const reasoning = agent ? reasoningFromParts(item.parts) : undefined;
