@@ -169,8 +169,7 @@ export class ExternalAgentObservationResolver {
     const row = this.ctx.store.getExternalAgentSession(id);
     if (!row) return base;
     const adapter = getExternalAgentProviderAdapter(row.provider);
-    if (base.state === 'history' && this.hasObservableHistory(id, adapter, base.output ?? ''))
-      return base;
+    if (base.state === 'history' && this.hasObservableHistory(id, adapter, base.output ?? '')) return base;
     if (!isManagedProjectRuntime(row) || !row.providerSessionRef) return base;
     const cliOutput = await providerHistoryOutputViaCli(row, adapter, {
       agents: this.ctx.agents,

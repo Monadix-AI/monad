@@ -1453,7 +1453,12 @@ test('managed external agent observation prefers Codex CLI history over rollout 
 
   try {
     const observation = await host.observeWithProviderHistory(externalAgentSessionId);
-    expect(observation).toMatchObject({ state: 'history', externalAgentSessionId, provider: 'codex' });
+    expect(observation.state).toBe('history');
+    if (observation.state !== 'history') throw new Error(`expected history observation, got ${observation.state}`);
+    expect({ externalAgentSessionId: observation.externalAgentSessionId, provider: observation.provider }).toEqual({
+      externalAgentSessionId,
+      provider: 'codex'
+    });
     expect(providerAttempts).toBe(1);
     expect(observation.output).toContain('restored through codex cli');
     expect(observation.events?.filter((event) => event.role === 'agent').map((event) => event.text)).toEqual([
