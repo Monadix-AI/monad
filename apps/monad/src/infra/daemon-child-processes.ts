@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { roleExecPath } from '@monad/environment';
 
 interface DaemonChildProcessEntry {
   pid: number;
@@ -71,7 +72,9 @@ export function killDaemonProcessTree(pid: number, deps: KillDaemonProcessTreeDe
 export function daemonChildSupervisorArgv(options: DaemonChildSupervisorArgvOptions): string[] {
   const execPath = options.execPath ?? process.execPath;
   const entryPath = options.entryPath ?? process.argv[1];
-  const argv = [execPath];
+  // roleExecPath falls back to execPath by itself when no monad-watchdog sibling was built (dev, or
+  // an install predating this) — independent of whether entryPath needs to be re-passed below.
+  const argv = [roleExecPath(execPath, 'watchdog')];
   if (entryPath && entryPath !== execPath) argv.push(entryPath);
   argv.push(SUPERVISOR_ARG, String(options.parentPid), options.registryPath);
   return argv;

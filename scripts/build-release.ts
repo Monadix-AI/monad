@@ -21,12 +21,13 @@
 
 import type { BunPlugin } from 'bun';
 
-import { copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { $, Glob } from 'bun';
 
 import { generateMigrationAssets } from '../apps/monad/scripts/generate-migration-assets.ts';
 import rootPkg from '../package.json' with { type: 'json' };
+import { MONAD_PROCESS_ROLES } from '../packages/environment/src/process-name.ts';
 import { createPlatformModulePlugin } from './lib/platform-modules.ts';
 import { optionalPeerExternals } from './lib/release-optional-peers.ts';
 import { releasePlatformModuleRules } from './lib/release-platform-modules.ts';
@@ -234,6 +235,20 @@ try {
       throw new Error(`compile failed for ${artifact}`);
     }
     platformModules.assertResolved();
+
+    // ── 2a½. Role-named siblings for process naming ───────────────────────────────
+    // `ps`/Activity Monitor/Task Manager name a process after the executed file itself, not argv or
+    // process.title — so the daemon, its restart supervisor, and its child-process watchdog (which
+    // all self-exec this same binary) get symlinked aliases here. roleExecPath() picks the matching
+    // alias at spawn time, falling back to bin/monad when one is missing (dev, or an older install).
+    // No unprivileged same-volume symlink exists on Windows, so it ships without aliases there —
+    // those roles still spawn, just all displayed as monad.exe.
+    if (!isWindows) {
+      for (const role of MONAD_PROCESS_ROLES) {
+        symlinkSync(binName, join(binDir, `monad-${role}`));
+      }
+      log(`  ✓ process-name aliases (${MONAD_PROCESS_ROLES.map((r) => `monad-${r}`).join(', ')})`);
+    }
 
     // ── 2b. Bundle the Mo desktop sprite (macOS only, for now) ───────────────────
     // Mo is a native GUI (Cocoa), not a Bun module — it can't be compiled into bin/monad, so it

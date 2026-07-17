@@ -1,5 +1,5 @@
-import { expect, test } from 'bun:test';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -51,6 +51,48 @@ test('daemonChildSupervisorArgv re-enters the current daemon entrypoint', () => 
   ).toEqual([
     '/usr/local/bin/bun',
     '/repo/apps/monad/src/main.ts',
+    '--daemon-child-supervisor',
+    '42',
+    '/tmp/daemon-child-processes.json'
+  ]);
+});
+
+test('daemonChildSupervisorArgv self-execs the compiled binary (no entryPath arg) in release, where execPath and entryPath match', () => {
+  expect(
+    daemonChildSupervisorArgv({
+      execPath: '/opt/monad/bin/monad',
+      entryPath: '/opt/monad/bin/monad',
+      parentPid: 42,
+      registryPath: '/tmp/daemon-child-processes.json'
+    })
+  ).toEqual(['/opt/monad/bin/monad', '--daemon-child-supervisor', '42', '/tmp/daemon-child-processes.json']);
+});
+
+// A compiled Bun binary's `import.meta.path` is a virtual `/$bunfs/root/...` path that never equals
+// `process.execPath` — so `entryPath !== execPath` is true in release too, not just dev. argv[0]
+// role selection must not be gated on that comparison, or the sibling rename silently never fires.
+let watchdogDir: string;
+beforeEach(async () => {
+  watchdogDir = await mkdtemp(join(tmpdir(), 'monad-watchdog-'));
+  await writeFile(join(watchdogDir, 'monad'), '', { mode: 0o755 });
+  await symlink('monad', join(watchdogDir, 'monad-watchdog'));
+});
+afterEach(async () => {
+  await rm(watchdogDir, { recursive: true, force: true });
+});
+
+test('daemonChildSupervisorArgv self-execs the role-named sibling even when entryPath is a compiled binary virtual path (always != execPath)', () => {
+  const execPath = join(watchdogDir, 'monad');
+  expect(
+    daemonChildSupervisorArgv({
+      execPath,
+      entryPath: '/$bunfs/root/monad',
+      parentPid: 42,
+      registryPath: '/tmp/daemon-child-processes.json'
+    })
+  ).toEqual([
+    join(watchdogDir, 'monad-watchdog'),
+    '/$bunfs/root/monad',
     '--daemon-child-supervisor',
     '42',
     '/tmp/daemon-child-processes.json'

@@ -2,7 +2,7 @@ import { appendFileSync, closeSync, openSync } from 'node:fs';
 import { mkdir, unlink } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { makeLoopbackHttpsFetcher } from '@monad/client';
-import { getPaths, loadAll, resolveClientConn } from '@monad/environment';
+import { getPaths, loadAll, resolveClientConn, roleExecPath } from '@monad/environment';
 import { rotateDaemonLog } from '@monad/monad/log-maintenance';
 
 import { t } from './i18n.ts';
@@ -83,7 +83,7 @@ async function getPortPid(): Promise<number | null> {
 
 export function releaseDaemonSupervisorSpawnOptions(execPath: string, logPath: string) {
   return {
-    argv: [execPath, 'daemon-supervisor', logPath],
+    argv: [roleExecPath(execPath, 'restart'), 'daemon-supervisor', logPath],
     detached: true as const,
     stdin: 'ignore' as const,
     stdout: 'ignore' as const
@@ -240,7 +240,7 @@ export async function runDaemonSupervisor(): Promise<void> {
 
   while (!stopping) {
     const logFd = openSync(logPath, 'a');
-    child = Bun.spawn([process.execPath, 'daemon', '--start-relay', '--log-file', logPath], {
+    child = Bun.spawn([roleExecPath(process.execPath, 'daemon'), 'daemon', '--start-relay', '--log-file', logPath], {
       stdin: 'ignore',
       stdout: 'ignore',
       stderr: logFd,

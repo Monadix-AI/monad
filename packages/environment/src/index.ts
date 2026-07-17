@@ -7,6 +7,7 @@ export * from './open-native-path.ts';
 export * from './open-url.ts';
 export * from './paths.ts';
 export * from './pick-directory.ts';
+export * from './process-name.ts';
 export * from './remote-access.ts';
 export * from './secret-ref.ts';
 export * from './templates-embed.ts';

@@ -4,6 +4,7 @@ import type { StartupRegistrar } from './startup-platform-contract.ts';
 import { access, mkdir, rm } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname } from 'node:path';
+import { roleExecPath } from '@monad/environment';
 
 import { startupPlatformModule } from './startup-platform.ts';
 import { startupIdentity, type WindowsStartupShortcut } from './startup-platform-common.ts';
@@ -126,5 +127,5 @@ function defaultDaemonCommand(): string[] {
   if (script.endsWith('/apps/monad/src/main.ts') || script.endsWith('\\apps\\monad\\src\\main.ts')) {
     return [process.execPath, script];
   }
-  return [process.execPath, 'daemon'];
+  return [roleExecPath(process.execPath, 'daemon'), 'daemon'];
 }
