@@ -169,7 +169,7 @@ assertions rather than existence checks.
 - [ ] **Step 6: Run transport regression coverage**
 
 ```bash
-bun run scripts/bun-test.ts apps/monad/test/unit/transports/native-agent-cli-bridge.test.ts --only-failures
+bun run scripts/bun-test.ts apps/monad/test/e2e/native-agent-cli-bridge.test.ts --only-failures
 ```
 
 Expected: TCP loopback and Unix-socket cases both pass.
@@ -195,7 +195,7 @@ git commit -m "fix(external-agent): page stopped provider history"
 ```bash
 bun run lint
 bun run typecheck
-bun run scripts/bun-test.ts apps/monad/test/unit/external-agent-history-cursor.test.ts apps/monad/test/unit/external-agent-host.test.ts packages/atoms/test/unit/observation-history.test.ts apps/monad/test/unit/transports/native-agent-cli-bridge.test.ts --only-failures
+bun run scripts/bun-test.ts apps/monad/test/unit/external-agent-history-cursor.test.ts apps/monad/test/unit/external-agent-host.test.ts packages/atoms/test/unit/observation-history.test.ts apps/monad/test/e2e/native-agent-cli-bridge.test.ts --only-failures
 ```
 
 Expected: each command exits zero.

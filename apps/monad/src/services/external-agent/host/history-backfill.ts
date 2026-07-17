@@ -1,3 +1,4 @@
+import type { ExternalAgentHistoryPageRequest } from '@monad/protocol';
 import type { ExternalAgentRuntimeHandle } from '@monad/sdk-atom';
 import type { ExternalAgentHostDeps } from '#/services/external-agent/host/host-types.ts';
 import type { ExternalAgentProcess } from '#/services/external-agent/runtime-types.ts';
@@ -39,14 +40,19 @@ export interface ProviderHistoryViaCliHelpers {
   dropStructuredBuffer(id: string): void;
 }
 
-export async function providerHistoryOutputViaCli(
+export interface ProviderHistoryPage {
+  items: unknown[];
+  nextCursor?: string;
+}
+
+export async function providerHistoryPageViaCli(
   row: ExternalAgentSessionRow,
   adapter: ExternalAgentProviderAdapter,
+  request: ExternalAgentHistoryPageRequest,
   helpers: ProviderHistoryViaCliHelpers
-): Promise<string | null> {
+): Promise<ProviderHistoryPage | null> {
   const providerSessionRef = row.providerSessionRef ?? undefined;
-  const historyPageOutput = adapter.historyPageOutput;
-  if (!providerSessionRef || !adapter.requestHistoryPage || !historyPageOutput) return null;
+  if (!providerSessionRef || !adapter.requestHistoryPage) return null;
   const agent = (await helpers.agents()).find(
     (candidate) => candidate.enabled && (candidate.name === row.agentName || candidate.provider === row.provider)
   );
@@ -102,8 +108,8 @@ export async function providerHistoryOutputViaCli(
     nextRequestId: () => requestSeq++,
     kill: (signal?: NodeJS.Signals) => killExternalAgentProcess(proc.pid, signal)
   };
-  return await new Promise<string | null>((resolve) => {
-    const finish = (output: string | null): void => {
+  return await new Promise<ProviderHistoryPage | null>((resolve) => {
+    const finish = (page: ProviderHistoryPage | null): void => {
       if (settled) return;
       settled = true;
       helpers.dropStructuredBuffer(historyId);
@@ -111,7 +117,7 @@ export async function providerHistoryOutputViaCli(
         void proc.stdin?.end?.();
       } catch {}
       proc.supervision?.stop('manual', 'SIGTERM');
-      resolve(output);
+      resolve(page);
     };
     void proc.supervision?.timeoutElapsed?.then(() => finish(null));
     const requestHistoryPage = adapter.requestHistoryPage;
@@ -127,9 +133,7 @@ export async function providerHistoryOutputViaCli(
       if (handle.deferredThreadFrame) return;
       historyRequested = true;
       try {
-        expectedResponseId = String(
-          requestHistoryPage(handle, { limit: 20, sortDirection: 'desc', itemsView: 'full' })
-        );
+        expectedResponseId = String(requestHistoryPage(handle, request));
       } catch {
         finish(null);
       }
@@ -154,18 +158,12 @@ export async function providerHistoryOutputViaCli(
             }
             if (parsed.data.type !== 'history_page') continue;
             if (expectedResponseId && String(parsed.data.payload.responseId) !== expectedResponseId) continue;
-            const output = historyPageOutput({
-              providerSessionRef,
-              workingPath: row.workingPath,
-              limitBytes: MAX_OUTPUT_SNAPSHOT,
-              page: {
-                items: Array.isArray(parsed.data.payload.items) ? parsed.data.payload.items : [],
-                ...(typeof parsed.data.payload.nextCursor === 'string'
-                  ? { nextCursor: parsed.data.payload.nextCursor }
-                  : {})
-              }
+            finish({
+              items: Array.isArray(parsed.data.payload.items) ? parsed.data.payload.items : [],
+              ...(typeof parsed.data.payload.nextCursor === 'string'
+                ? { nextCursor: parsed.data.payload.nextCursor }
+                : {})
             });
-            finish(output ?? null);
             return;
           }
         }
@@ -190,5 +188,28 @@ export async function providerHistoryOutputViaCli(
     } catch {
       finish(null);
     }
+  });
+}
+
+export async function providerHistoryOutputViaCli(
+  row: ExternalAgentSessionRow,
+  adapter: ExternalAgentProviderAdapter,
+  helpers: ProviderHistoryViaCliHelpers
+): Promise<string | null> {
+  const providerSessionRef = row.providerSessionRef ?? undefined;
+  const historyPageOutput = adapter.historyPageOutput;
+  if (!providerSessionRef || !historyPageOutput) return null;
+  const page = await providerHistoryPageViaCli(
+    row,
+    adapter,
+    { limit: 20, sortDirection: 'desc', itemsView: 'full' },
+    helpers
+  );
+  if (!page) return null;
+  return historyPageOutput({
+    providerSessionRef,
+    workingPath: row.workingPath,
+    limitBytes: MAX_OUTPUT_SNAPSHOT,
+    page
   });
 }

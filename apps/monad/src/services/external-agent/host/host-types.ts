@@ -21,7 +21,7 @@ import type {
   ExternalAgentProviderAdapter
 } from '#/services/external-agent/types.ts';
 import type { ExternalAgentTargetId } from '#/store/db/external-agent-sessions.ts';
-import type { Store } from '#/store/db/index.ts';
+import type { ExternalAgentSessionRow, Store } from '#/store/db/index.ts';
 
 interface ManagedProjectOutput {
   sessionId: ExternalAgentTargetId;
@@ -34,6 +34,11 @@ interface ManagedProjectOutput {
 
 export type ManagedProjectOutputHandler = (output: ManagedProjectOutput) => void | Promise<void>;
 export type ExternalAgentObservationListener = (access: ExternalAgentObservationAccessResponse, done: boolean) => void;
+type StoppedProviderHistoryPage = (
+  row: ExternalAgentSessionRow,
+  adapter: ExternalAgentProviderAdapter,
+  request: ExternalAgentHistoryPageRequest
+) => Promise<{ items: unknown[]; nextCursor?: string } | null>;
 
 export interface LiveExternalAgentSession {
   id: string;
@@ -149,4 +154,5 @@ export interface ExternalAgentHostDeps {
   appServerReconnectBaseMs?: number;
   /** Grace before treating an app-server disconnect as recoverable transport loss. */
   appServerDisconnectGraceMs?: number;
+  stoppedProviderHistoryPage?: StoppedProviderHistoryPage;
 }

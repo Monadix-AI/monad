@@ -43,6 +43,7 @@ import { ExternalAgentError } from '#/services/external-agent/errors.ts';
 import { ExternalAgentAppServerConnectionManager } from '#/services/external-agent/host/app-server-connection.ts';
 import { ExternalAgentOneshotRunner } from '#/services/external-agent/host/cli-oneshot.ts';
 import { ExternalAgentEventLog } from '#/services/external-agent/host/event-log.ts';
+import { providerHistoryPageViaCli } from '#/services/external-agent/host/history-backfill.ts';
 import {
   decodeHistoryCursor,
   encodeProviderHistoryCursor,
@@ -788,14 +789,18 @@ export class ExternalAgentHost {
     const cursor = decodeHistoryCursor(req.before);
     if (cursor.kind !== 'stored' && row?.providerSessionRef) {
       const adapter = getExternalAgentProviderAdapter(row.provider);
+      const providerReq = providerHistoryPageRequest(req, cursor);
       const page = await adapter.historyPage?.({
         providerSessionRef: row.providerSessionRef,
         workingPath: row.workingPath,
         limitBytes: MAX_OUTPUT_SNAPSHOT,
-        request: providerHistoryPageRequest(req, cursor)
+        request: providerReq
       });
       if (page)
         return this.providerHistoryPageResponse(id, adapter, row.providerSessionRef, row.workingPath, req, page);
+      const bridgedPage = await this.stoppedProviderHistoryPage(row, adapter, providerReq);
+      if (bridgedPage)
+        return this.providerHistoryPageResponse(id, adapter, row.providerSessionRef, row.workingPath, req, bridgedPage);
     }
     const access = await this.observeWithProviderHistory(id);
     if (access.state === 'unavailable') {
@@ -805,6 +810,20 @@ export class ExternalAgentHost {
       );
     }
     return storedOutputHistoryPage(access.output ?? '', req, cursor, id, access.provider);
+  }
+
+  private stoppedProviderHistoryPage(
+    row: ExternalAgentSessionRow,
+    adapter: ExternalAgentProviderAdapter,
+    request: ExternalAgentHistoryPageRequest
+  ): Promise<{ items: unknown[]; nextCursor?: string } | null> {
+    if (this.deps.stoppedProviderHistoryPage) return this.deps.stoppedProviderHistoryPage(row, adapter, request);
+    return providerHistoryPageViaCli(row, adapter, request, {
+      agents: this.deps.agents,
+      buildSpawnEnv: (env) => this.buildSpawnEnv(env),
+      takeStructuredLines: (id, stream, chunk) => this.outputPipeline.takeCompleteStructuredLines(id, stream, chunk),
+      dropStructuredBuffer: (id) => this.outputPipeline.dropStructuredBuffer(id)
+    });
   }
 
   private providerHistoryPageResponse(

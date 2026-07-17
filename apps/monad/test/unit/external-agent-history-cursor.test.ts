@@ -475,3 +475,62 @@ test('a stored-session provider cursor is stripped before the local adapter hist
     registerAgentAdapterImpl(codexBuiltin);
   }
 });
+
+test('a stopped runtime preserves one-shot provider paging without forwarding snapshot cursors', async () => {
+  const requests: ExternalAgentHistoryPageRequest[] = [];
+  const store = createStore();
+  const host = new ExternalAgentHost({
+    store,
+    bus: new EventBus(),
+    agents: async () => [],
+    stoppedProviderHistoryPage: async (_row, _adapter, request) => {
+      requests.push(request);
+      return {
+        items: [
+          { id: 'newer', status: 'completed', items: [] },
+          { id: 'older', status: 'completed', items: [] }
+        ],
+        nextCursor: 'turn-0'
+      };
+    }
+  });
+  store.upsertExternalAgentSession({
+    id: SESSION_ID,
+    transcriptTargetId: TARGET_ID,
+    agentName: 'codex',
+    provider: 'codex',
+    workingPath: '/tmp/project',
+    launchMode: 'app-server',
+    runtimeRole: 'interactive',
+    agentRuntimeId: null,
+    agentRuntimeTokenHash: null,
+    lastDeliveredSeq: 0,
+    lastVisibleSeq: 0,
+    state: 'stopped',
+    pid: null,
+    providerSessionRef: 'thread-1',
+    outputSnapshot: 'snapshot-old\nsnapshot-new\n',
+    exitCode: 0,
+    startedAt: '2026-07-06T00:00:00.000Z',
+    updatedAt: '2026-07-06T00:00:00.000Z',
+    exitedAt: '2026-07-06T00:01:00.000Z'
+  });
+
+  const providerPage = await host.historyPage(SESSION_ID, historyRequest({ before: 'provider:turn-20', limit: 20 }));
+  const snapshotPage = await host.historyPage(SESSION_ID, historyRequest({ before: 'snapshot:1' }));
+
+  expect({ requests, providerNextCursor: providerPage.nextCursor, snapshotPage }).toEqual({
+    requests: [{ before: 'turn-20', limit: 20, sortDirection: 'desc', itemsView: 'full' }],
+    providerNextCursor: 'provider:turn-0',
+    snapshotPage: {
+      events: [
+        {
+          id: `${SESSION_ID}:history:0:0`,
+          role: 'agent',
+          text: 'snapshot-old',
+          source: 'plain-text'
+        }
+      ]
+    }
+  });
+});
