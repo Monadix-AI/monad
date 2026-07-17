@@ -2311,6 +2311,38 @@ test('Codex adapter parses lightweight app-server status notifications into a pr
   ]);
 });
 
+test('Codex adapter keeps child status notifications from replacing the managed root thread', () => {
+  const handle = {
+    launchMode: 'app-server' as const,
+    providerSessionRef: 'codex-root-thread',
+    appServer: { send() {}, close() {} },
+    kill() {}
+  };
+
+  const childEvents = codexExternalAgentAdapter.parseOutput(
+    JSON.stringify({
+      method: 'thread/status/changed',
+      params: { threadId: 'codex-child-thread', status: { type: 'idle' } }
+    }),
+    handle
+  );
+  const rootEvents = codexExternalAgentAdapter.parseOutput(
+    JSON.stringify({
+      method: 'thread/status/changed',
+      params: { threadId: 'codex-root-thread', status: { type: 'idle' } }
+    }),
+    handle
+  );
+
+  expect(childEvents).toEqual([]);
+  expect(rootEvents).toEqual([
+    {
+      type: 'session_ref',
+      payload: { providerSessionRef: 'codex-root-thread', status: { type: 'idle' } }
+    }
+  ]);
+});
+
 test('Codex adapter parses app-server provider-owned approval requests and resolutions', () => {
   const chunk = [
     JSON.stringify({

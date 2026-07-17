@@ -99,7 +99,8 @@ function parseCodexResponseItem(item: CodexResponseItemJson): ExternalAgentOutpu
 // a single table entry rather than another branch grafted onto an if-chain.
 type CodexNotificationHandler = (
   record: CodexJsonRpcNotification,
-  params: Record<string, unknown>
+  params: Record<string, unknown>,
+  handle?: ExternalAgentRuntimeHandle
 ) => ExternalAgentOutputEvent[];
 
 const CODEX_APPROVAL_REQUEST_HANDLERS: Record<string, CodexNotificationHandler> = {
@@ -209,8 +210,8 @@ const CODEX_SERVER_NOTIFICATION_HANDLERS: Record<string, CodexNotificationHandle
       })
     }
   ],
-  'thread/status/changed': (_record, p) =>
-    typeof p.threadId === 'string'
+  'thread/status/changed': (_record, p, handle) =>
+    typeof p.threadId === 'string' && (!handle || p.threadId === handle.providerSessionRef)
       ? [{ type: 'session_ref', payload: compactObject({ providerSessionRef: p.threadId, status: p.status }) }]
       : [],
   'serverRequest/resolved': (_record, p) => [
@@ -220,19 +221,23 @@ const CODEX_SERVER_NOTIFICATION_HANDLERS: Record<string, CodexNotificationHandle
 
 function dispatchCodexNotification(
   handlers: Record<string, CodexNotificationHandler>,
-  record: CodexJsonRpcNotification
+  record: CodexJsonRpcNotification,
+  handle?: ExternalAgentRuntimeHandle
 ): ExternalAgentOutputEvent[] {
   const params = recordValue(record.params);
   if (!params) return [];
-  return handlers[record.method]?.(record, params) ?? [];
+  return handlers[record.method]?.(record, params, handle) ?? [];
 }
 
 function parseCodexApprovalRequest(record: CodexJsonRpcNotification): ExternalAgentOutputEvent[] {
   return dispatchCodexNotification(CODEX_APPROVAL_REQUEST_HANDLERS, record);
 }
 
-function parseCodexServerNotification(record: CodexJsonRpcNotification): ExternalAgentOutputEvent[] {
-  return dispatchCodexNotification(CODEX_SERVER_NOTIFICATION_HANDLERS, record);
+function parseCodexServerNotification(
+  record: CodexJsonRpcNotification,
+  handle?: ExternalAgentRuntimeHandle
+): ExternalAgentOutputEvent[] {
+  return dispatchCodexNotification(CODEX_SERVER_NOTIFICATION_HANDLERS, record, handle);
 }
 
 // Codex reports an expired/absent login as a JSON-RPC error (code `Unauthorized`, or an auth phrase
@@ -441,7 +446,7 @@ export function parseCodexSessionJsonl(chunk: string, handle?: ExternalAgentRunt
           continue;
         }
       }
-      const appServerEvents = [...parseCodexApprovalRequest(record), ...parseCodexServerNotification(record)];
+      const appServerEvents = [...parseCodexApprovalRequest(record), ...parseCodexServerNotification(record, handle)];
       if (appServerEvents.length > 0) {
         events.push(...appServerEvents);
         continue;
