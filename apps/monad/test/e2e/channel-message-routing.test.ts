@@ -119,16 +119,27 @@ async function setMemberTemplates(
   return ((await res.json()) as { project: WorkplaceProject }).project;
 }
 
-/** Track B: invite a template into a session as a live member binding (starts the runtime immediately
- *  when the member is a managed external-agent and the session already has a cwd). */
+/** Track B: ensure a template has a live session binding. Project reconciliation may have already
+ *  invited it; an explicit invite still starts it when the binding is absent. */
 async function inviteMember(
   t: TransportHandle,
   sessionId: string,
   templateId: string
 ): Promise<WorkplaceProjectSessionMember> {
   const res = await t.fetch(`/v1/sessions/${sessionId}/members`, json('POST', { templateId }));
-  expect(res.status).toBe(201);
-  return ((await res.json()) as { member: WorkplaceProjectSessionMember }).member;
+  if (res.status === 201) return ((await res.json()) as { member: WorkplaceProjectSessionMember }).member;
+
+  expect(res.status).toBe(400);
+  expect(await res.json()).toEqual({
+    error: `member already invited into this session: ${templateId}`,
+    code: 'VALIDATION'
+  });
+  const listed = await t.fetch(`/v1/sessions/${sessionId}/members`);
+  expect(listed.status).toBe(200);
+  const members = ((await listed.json()) as { members: WorkplaceProjectSessionMember[] }).members;
+  const existing = members.find((member) => member.templateId === templateId);
+  if (!existing) throw new Error(`reconciled member is missing from the session: ${templateId}`);
+  return existing;
 }
 
 /** Build a managed external-agent member template. `id` becomes the runtime agent id (agentName);
@@ -489,7 +500,6 @@ for (const kind of TRANSPORTS) {
       const claude = await configureMockExternalAgent(t, dir, { agentName: 'claude-code' });
       const projectId = await createWorkplaceProject(t, projectDir);
       const sessionId = await createProjectSession(t, projectId, projectDir);
-      await setMemberTemplates(t, projectId, [externalAgentTemplate('codex', 'codex', { launchMode: 'pty' })]);
       const uiStartedP = t.sse(`/v1/sessions/${sessionId}/ui-stream`, {
         until: (event) => {
           const uiEvent = event as unknown as SessionUiEvent;
@@ -503,7 +513,7 @@ for (const kind of TRANSPORTS) {
         timeoutMs: 3000
       });
 
-      await inviteMember(t, sessionId, 'codex');
+      await setMemberTemplates(t, projectId, [externalAgentTemplate('codex', 'codex', { launchMode: 'pty' })]);
       expect((await uiStartedP).some((event) => (event as unknown as SessionUiEvent).kind === 'upsert')).toBe(true);
       const snapshotEvents = await t.sse(`/v1/sessions/${sessionId}/ui-stream`, {
         until: (event) => (event as unknown as SessionUiEvent).kind === 'snapshot',
