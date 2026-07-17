@@ -101,3 +101,62 @@ test('every built-in adapter preserves an unrecognized provider record', () => {
     }))
   );
 });
+
+test('Claude event source keeps only the latest cumulative thinking token estimate', () => {
+  const adapter = builtinAgentAdapters.find((candidate) => candidate.provider === 'claude-code');
+  if (!adapter?.events) throw new Error('Claude event source is required');
+  const estimates = [1, 17, 33, 1120];
+  const records = estimates.map((estimatedTokens, index) => ({
+    type: 'system',
+    subtype: 'thinking_tokens',
+    estimated_tokens: estimatedTokens,
+    estimated_tokens_delta: index === 0 ? estimatedTokens : estimatedTokens - (estimates[index - 1] ?? 0),
+    uuid: `thinking_${index}`,
+    session_id: 'claude_session'
+  }));
+
+  expect(
+    adapter.events.projectLive({
+      id: 'exa_claude000000',
+      output: records.map((record) => JSON.stringify(record)).join('\n')
+    }).events
+  ).toMatchObject([
+    {
+      id: 'exa_claude000000:thinking-tokens',
+      providerEventType: 'thinking_tokens_delta',
+      text: 'Thinking… · 1120 tokens',
+      raw: records
+    }
+  ]);
+});
+
+test('Claude event source starts a new thinking card after a tool boundary', () => {
+  const adapter = builtinAgentAdapters.find((candidate) => candidate.provider === 'claude-code');
+  if (!adapter?.events) throw new Error('Claude event source is required');
+  const output = [
+    { type: 'system', subtype: 'thinking_tokens', estimated_tokens: 25 },
+    { type: 'system', subtype: 'thinking_tokens', estimated_tokens: 80 },
+    {
+      type: 'assistant',
+      message: {
+        role: 'assistant',
+        content: [{ type: 'tool_use', id: 'toolu_1', name: 'Bash', input: { command: 'pwd' } }]
+      }
+    },
+    { type: 'system', subtype: 'thinking_tokens', estimated_tokens: 31 },
+    { type: 'system', subtype: 'thinking_tokens', estimated_tokens: 150 }
+  ]
+    .map((record) => JSON.stringify(record))
+    .join('\n');
+
+  expect(
+    adapter.events.projectLive({ id: 'exa_claude000000', output }).events.map((event) => ({
+      type: event.providerEventType,
+      text: event.text
+    }))
+  ).toEqual([
+    { type: 'thinking_tokens_delta', text: 'Thinking… · 80 tokens' },
+    { type: 'tool_use', text: 'Tool call Bash {"command":"pwd"}' },
+    { type: 'thinking_tokens_delta', text: 'Thinking… · 150 tokens' }
+  ]);
+});

@@ -155,25 +155,36 @@ function mergeStreamingEvents(
   events: ExternalAgentObservationEvent[]
 ): ExternalAgentObservationEvent[] {
   const merged: ExternalAgentObservationEvent[] = [];
-  for (const event of events) {
-    const previous = merged.at(-1);
-    if (
-      previous &&
-      projection.isStreamingFragment?.(previous) &&
-      projection.isStreamingFragment(event) &&
-      previous.role === event.role &&
-      previous.providerEventType === event.providerEventType
-    ) {
-      const next = compactEvent({
-        ...previous,
-        text: `${previous.text}${event.text}`,
-        raw: [previous.raw, event.raw]
+  let run: ExternalAgentObservationEvent[] = [];
+  const settle = () => {
+    if (run.length === 0) return;
+    const first = run[0];
+    if (!first) return;
+    const custom = run.length > 1 ? projection.mergeStreamingRun?.(run) : undefined;
+    const next =
+      custom ??
+      compactEvent({
+        ...first,
+        text: run.map((event) => event.text).join(''),
+        raw: run.length === 1 ? first.raw : run.map((event) => event.raw)
       });
-      merged[merged.length - 1] = { ...next, dedupeKey: eventDedupeKey(provider, next) };
-      continue;
-    }
-    merged.push(event);
+    merged.push({ ...next, dedupeKey: eventDedupeKey(provider, next) });
+    run = [];
+  };
+  for (const event of events) {
+    const first = run[0];
+    const streaming = projection.isStreamingFragment?.(event) ?? false;
+    const sameRun =
+      first &&
+      projection.isStreamingFragment?.(first) &&
+      first.role === event.role &&
+      first.source === event.source &&
+      first.providerEventType === event.providerEventType;
+    if (!streaming || (first && !sameRun)) settle();
+    if (streaming) run.push(event);
+    else merged.push(event);
   }
+  settle();
   return merged;
 }
 
