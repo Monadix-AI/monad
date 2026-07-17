@@ -13,6 +13,7 @@ import { StudioBreadcrumbHeader } from '#/features/studio/StudioBreadcrumbHeader
 import { ExternalAgentAuthModal } from '#/features/workplace/cli/ExternalAgentAuthModal';
 import { useAsyncAction } from '#/hooks/use-async-action';
 import { useExternalAgentSettings } from '#/hooks/use-external-agent-settings';
+import { isResolvedEmptyList } from '#/lib/async-list-state';
 import { AgentForm } from './ExternalAgentForm';
 import { ExternalAgentPresetPanel } from './ExternalAgentPresetPanel';
 import { connectExternalAgent } from './external-agent-connect-agent';
@@ -128,7 +129,7 @@ export function ExternalAgentsSettings({ embedded = false }: { onClose: () => vo
             />
           ) : null}
 
-          {agents.length === 0 && !draft ? (
+          {isResolvedEmptyList({ isLoading: loading, itemCount: agents.length }) && !draft ? (
             <p className="px-1 py-8 text-center text-muted-foreground text-xs">{t('web.externalAgent.empty')}</p>
           ) : null}
 

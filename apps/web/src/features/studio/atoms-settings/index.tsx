@@ -12,12 +12,13 @@ import { useState } from 'react';
 import { useT } from '#/components/I18nProvider';
 import { PanelShell, PanelShellBody } from '#/components/ui/panel-shell';
 import { StudioBreadcrumbHeader } from '#/features/studio/StudioBreadcrumbHeader';
+import { isResolvedEmptyList } from '#/lib/async-list-state';
 import { AtomPackCard, ConflictRow } from './AtomPackCard';
 import { InstallForm } from './InstallForm';
 
 export function AtomsSettings(_props: { onClose: () => void }) {
   const t = useT();
-  const { data, isFetching, refetch } = useListAtomPacksQuery();
+  const { data, isFetching, isLoading, refetch } = useListAtomPacksQuery();
   const { data: kindsData } = useListAtomKindsQuery();
   const [discover, { isLoading: rescanning }] = useDiscoverAtomKindsMutation();
   const [adding, setAdding] = useState(false);
@@ -123,7 +124,7 @@ export function AtomsSettings(_props: { onClose: () => void }) {
             />
           ) : null}
 
-          {packs.length === 0 && !adding ? (
+          {isResolvedEmptyList({ isLoading, itemCount: packs.length }) && !adding ? (
             <p className="px-1 py-8 text-center text-muted-foreground text-xs">{t('web.atoms.empty')}</p>
           ) : null}
 

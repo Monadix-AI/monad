@@ -20,6 +20,7 @@ import { PanelShell, PanelShellBody } from '#/components/ui/panel-shell';
 import { StudioBreadcrumbHeader } from '#/features/studio/StudioBreadcrumbHeader';
 import { useAcpAgentSettings } from '#/hooks/use-acp-agent-settings';
 import { useAsyncAction } from '#/hooks/use-async-action';
+import { isResolvedEmptyList } from '#/lib/async-list-state';
 
 const envRef = (name: string) => `\${env:${name}}`;
 
@@ -183,7 +184,7 @@ export function AcpAgentsSettings({ embedded = false }: { onClose: () => void; e
             />
           ) : null}
 
-          {agents.length === 0 && !draft ? (
+          {isResolvedEmptyList({ isLoading: loading, itemCount: agents.length }) && !draft ? (
             <p className="px-1 py-8 text-center text-muted-foreground text-xs">{t('web.acp.empty')}</p>
           ) : null}
 

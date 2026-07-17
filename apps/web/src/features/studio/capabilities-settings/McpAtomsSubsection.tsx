@@ -28,6 +28,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 
 import { useT } from '#/components/I18nProvider';
+import { isResolvedEmptyList } from '#/lib/async-list-state';
 import { mcpServerFormSchema } from '#/lib/form-validation';
 
 type Mode = 'command' | 'url' | 'binary';
@@ -51,7 +52,7 @@ const MODE_LABEL_KEYS: Record<Mode, WebMessageIdWithoutParams> = {
 // http url, or a prebuilt GitHub-release binary. Mirrors `monad mcp`; connect live, no restart.
 export function McpAtomsSubsection() {
   const t = useT();
-  const { data, isFetching, refetch } = useListInstalledMcpQuery();
+  const { data, isFetching, isLoading, refetch } = useListInstalledMcpQuery();
   const [adding, setAdding] = useState(false);
   const [browseOpen, setBrowseOpen] = useState(false);
   const servers = data?.servers ?? [];
@@ -109,7 +110,7 @@ export function McpAtomsSubsection() {
       {browseOpen ? <BrowsePanel /> : null}
       {adding ? <InstallForm onDone={() => setAdding(false)} /> : null}
 
-      {servers.length === 0 && !adding && !browseOpen ? (
+      {isResolvedEmptyList({ isLoading, itemCount: servers.length }) && !adding && !browseOpen ? (
         <p className="px-1 py-6 text-center text-muted-foreground text-xs">{t('web.mcp.empty')}</p>
       ) : null}
 

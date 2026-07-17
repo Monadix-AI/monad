@@ -12,6 +12,7 @@ import {
 } from '@monad/ui/components/AgentAvatar';
 
 import { useT } from '#/components/I18nProvider';
+import { isResolvedEmptyList } from '#/lib/async-list-state';
 
 type AvailableProjectMember = ProjectController['availableProjectMembers'][number];
 
@@ -87,11 +88,13 @@ function CandidateRow({
 
 export function ProjectAddMemberSection({
   candidates,
+  loading,
   onAdd,
   promoted = false,
   title
 }: {
   candidates: AvailableProjectMember[];
+  loading: boolean;
   onAdd: (candidate: AvailableProjectMember) => void;
   promoted?: boolean;
   title: string;
@@ -109,7 +112,7 @@ export function ProjectAddMemberSection({
           flexDirection: 'column'
         }}
       >
-        {candidates.length === 0 ? (
+        {isResolvedEmptyList({ isLoading: loading, itemCount: candidates.length }) ? (
           <p style={{ margin: 0, padding: 12, fontFamily: sans, fontSize: 13, color: 'var(--muted-foreground)' }}>
             {t('web.workplace.noAvailableMembers')}
           </p>

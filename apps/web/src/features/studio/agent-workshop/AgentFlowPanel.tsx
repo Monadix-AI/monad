@@ -25,6 +25,7 @@ import {
 } from '@monad/ui';
 import { useMemo, useState } from 'react';
 
+import { isResolvedEmptyList } from '#/lib/async-list-state';
 import { type AgentFlowNodeId, type AgentFlowValidation, appendPromptGuidance } from './agent-flow-model';
 
 export interface AgentFlowCapability {
@@ -51,6 +52,7 @@ interface AgentFlowPanelProps {
   atomsAllow: string[];
   atomsMode: 'inherit' | 'allowlist';
   capabilityCatalog: AgentFlowCapability[];
+  capabilityCatalogLoading: boolean;
   description: string;
   errors: AgentFlowValidation['errors'];
   isPublic: boolean;
@@ -345,7 +347,10 @@ function ToolsPanel(props: AgentFlowPanelProps) {
       {props.atomsMode === 'allowlist' ? (
         <div className="space-y-2">
           <div className="font-medium text-sm">Choose capabilities for this agent</div>
-          {catalog.length === 0 ? (
+          {isResolvedEmptyList({
+            isLoading: props.capabilityCatalogLoading,
+            itemCount: catalog.length
+          }) ? (
             <p className="text-muted-foreground text-xs">No enabled Atom Packs or MCP servers are available.</p>
           ) : null}
           {catalog.map((item) => {

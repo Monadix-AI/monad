@@ -18,6 +18,7 @@ export { useModelSettings, useModelSettingsQueryState } from '@monad/client-rtk'
 export interface ProviderDetail {
   credentials: CredentialView[];
   models: ModelInfo[];
+  isLoadingCredentials: boolean;
   isLoadingModels: boolean;
   refreshModels: () => void;
   addCredential: (label: string, accessToken: string) => Promise<void>;
@@ -35,6 +36,7 @@ export function useProviderDetail(providerId: string): ProviderDetail {
   return {
     credentials: credentialSelectors.selectAll(credentialsQ.data ?? credentialAdapter.getInitialState()),
     models: modelSelectors.selectAll(modelsQ.data ?? modelAdapter.getInitialState()),
+    isLoadingCredentials: credentialsQ.isLoading,
     isLoadingModels: modelsQ.isFetching,
     refreshModels: () => void modelsQ.refetch(),
     addCredential: useCallback(

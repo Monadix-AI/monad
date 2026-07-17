@@ -18,6 +18,7 @@ import { useMemo, useState } from 'react';
 
 import { useT } from '#/components/I18nProvider';
 import { useExternalAgentSettings } from '#/hooks/use-external-agent-settings';
+import { isResolvedEmptyList } from '#/lib/async-list-state';
 
 type UsageTab = 'overview' | 'models' | 'ledger';
 
@@ -462,7 +463,7 @@ export function MeshUsage() {
             </Card>
           ))}
         </div>
-        {externalAgent.agents.length === 0 ? (
+        {isResolvedEmptyList({ isLoading: externalAgent.loading, itemCount: externalAgent.agents.length }) ? (
           <p className="px-1 py-2 text-muted-foreground text-sm">{t('web.studio.meshUsageEmpty')}</p>
         ) : (
           <div className="grid gap-2 lg:grid-cols-2">

@@ -27,6 +27,7 @@ import {
 import { useState } from 'react';
 
 import { useT } from '#/components/I18nProvider';
+import { isResolvedEmptyList } from '#/lib/async-list-state';
 import { DataEmpty } from './DataEmpty';
 import { Segmented } from './Segmented';
 
@@ -48,7 +49,7 @@ export function FactsView() {
   const ready = scopeKind === 'global' || effectiveId.length > 0;
   const query = ready ? { scopeKind, scopeId: effectiveId } : skipToken;
 
-  const { data: factData } = useListMemoryFactsQuery(query);
+  const { data: factData, isLoading: factsLoading } = useListMemoryFactsQuery(query);
   const facts = factSelectors.selectAll(factData?.facts ?? { ids: [], entities: {} });
   const { data: core } = useGetMemoryCoreQuery(
     rawOpen && ready && !isMem0 ? { scopeKind, scopeId: effectiveId } : skipToken
@@ -137,7 +138,7 @@ export function FactsView() {
             </Button>
           </div>
 
-          {facts.length === 0 ? (
+          {isResolvedEmptyList({ isLoading: factsLoading, itemCount: facts.length }) ? (
             <DataEmpty
               hint={t('web.memory.noFactsHint')}
               icon={DatabaseIcon}

@@ -14,6 +14,7 @@ import { useMemo } from 'react';
 import { useT } from '#/components/I18nProvider';
 import { PanelShell, PanelShellBody } from '#/components/ui/panel-shell';
 import { StudioBreadcrumbHeader } from '#/features/studio/StudioBreadcrumbHeader';
+import { isResolvedEmptyList } from '#/lib/async-list-state';
 
 interface Props {
   onClose: () => void;
@@ -37,7 +38,7 @@ export function approvalRuleLabel(rule: ApprovalRule, t: Translate): string {
 // scoped to a live session and cleared on its end).
 export function ApprovalsSettings(_props: Props) {
   const t = useT();
-  const { data: ruleData } = useListApprovalsQuery(undefined);
+  const { data: ruleData, isLoading } = useListApprovalsQuery(undefined);
   const rules = useMemo(
     () => approvalRuleSelectors.selectAll(ruleData?.rules ?? { ids: [], entities: {} }),
     [ruleData]
@@ -76,7 +77,7 @@ export function ApprovalsSettings(_props: Props) {
           )}
         </div>
 
-        {rules.length === 0 ? (
+        {isResolvedEmptyList({ isLoading, itemCount: rules.length }) ? (
           <p className="text-muted-foreground text-sm">{t('web.approvals.empty')}</p>
         ) : (
           <div className="flex flex-col gap-1">

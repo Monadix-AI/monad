@@ -22,6 +22,7 @@ import { useState } from 'react';
 
 import { DestructiveConfirmPopover } from '#/components/DestructiveConfirmPopover';
 import { useT } from '#/components/I18nProvider';
+import { isResolvedEmptyList } from '#/lib/async-list-state';
 import { ExternalAgentMemberDialog } from './ExternalAgentMemberDialog';
 
 type ProjectMember = ProjectController['projectMembers'][number];
@@ -106,7 +107,7 @@ export function SessionMembersSection({
   templates: ProjectMember[];
 }): React.ReactElement {
   const t = useT();
-  const { data } = useListSessionMembersQuery(activeSessionId ?? ('ses_' as SessionId), {
+  const { data, isLoading } = useListSessionMembersQuery(activeSessionId ?? ('ses_' as SessionId), {
     skip: activeSessionId === null
   });
   const members = data?.ids.map((id) => data.entities[id]).filter((member) => member !== undefined) ?? [];
@@ -134,7 +135,7 @@ export function SessionMembersSection({
       ) : (
         <>
           <div style={{ border: `1px solid ${'var(--border)'}`, borderRadius: boxR, background: 'var(--card)' }}>
-            {members.length === 0 ? (
+            {isResolvedEmptyList({ isLoading, itemCount: members.length }) ? (
               <p style={{ margin: 0, padding: 12, fontFamily: sans, fontSize: 13, color: 'var(--muted-foreground)' }}>
                 {t('web.workplace.noSessionMembersHint')}
               </p>
@@ -220,7 +221,10 @@ export function SessionMembersSection({
               {t('web.workplace.directSessionMembers')}
             </div>
             <div style={{ border: `1px solid ${'var(--border)'}`, borderRadius: boxR, background: 'var(--card)' }}>
-              {externalAgentCandidates.length === 0 ? (
+              {isResolvedEmptyList({
+                isLoading: room.membersLoading,
+                itemCount: externalAgentCandidates.length
+              }) ? (
                 <p style={{ margin: 0, padding: 12, fontFamily: sans, fontSize: 13, color: 'var(--muted-foreground)' }}>
                   {t('web.workplace.noAvailableMembers')}
                 </p>

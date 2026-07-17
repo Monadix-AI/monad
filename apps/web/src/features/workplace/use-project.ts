@@ -36,6 +36,7 @@ import { useExternalAgentSettings } from '#/hooks/use-external-agent-settings';
 import { useTranscriptHistory } from '#/hooks/use-transcript-history';
 import { normalizedComposerSettings } from '#/lib/composer-settings';
 import { getWorkplaceProjectName } from '#/lib/workspace-sessions';
+import { isChatExperienceReady } from './chat-experience-readiness';
 import { DEV_SYSTEM_MESSAGES_IN_STREAM_ENABLED, useProjectDebugStore } from './debug/project-debug-store';
 import { useWorkspaceProjectExperienceRuntime } from './experiences/project-experience-adapter';
 import { useProjectActions } from './use-project-actions';
@@ -53,7 +54,7 @@ export function useProject(
   } = {}
 ) {
   // --- projects ---
-  const { data: projectData } = useListWorkplaceProjectsQuery(undefined);
+  const { data: projectData, isLoading: projectsLoading } = useListWorkplaceProjectsQuery(undefined);
   const { data: userProfile } = useGetProfileSettingsQuery();
   const { data: appearance } = useGetAppearanceQuery();
   const composerSettings = normalizedComposerSettings(appearance?.composer);
@@ -75,10 +76,11 @@ export function useProject(
   // --- project session resolution (Track B: a project's own id is no longer a conversation id) ---
   // Project sessions are explicit. Opening a project with no sessions leaves the active session empty
   // instead of silently creating a project-name session.
-  const { data: projectSessionData } = useListProjectSessionsQuery(
+  const projectSessionsQuery = useListProjectSessionsQuery(
     { projectId: activeProjectId ?? ('prj_' as ProjectId) },
     { skip: activeProjectId === null }
   );
+  const projectSessionData = projectSessionsQuery.data;
   const projectSessions: Session[] = useMemo(
     () => (projectSessionData ? projectSessionSelectors.selectAll(projectSessionData.sessions) : []),
     [projectSessionData]
@@ -130,6 +132,7 @@ export function useProject(
 
   const acp = useAcpAgentSettings();
   const externalAgent = useExternalAgentSettings();
+  const membersLoading = projectsLoading || acp.loading || externalAgent.loading;
   const externalAgentSessions = useMemo(
     () =>
       externalAgentSessionsData
@@ -167,6 +170,12 @@ export function useProject(
     projects
   } = projection;
   const showDevSystemMessagesInStream = useProjectDebugStore((state) => state.showDevSystemMessagesInStream);
+  const chatExperienceReady = isChatExperienceReady({
+    activeProjectId,
+    activeSessionId,
+    projectSessionsLoading: projectSessionsQuery.isLoading,
+    streamLoading: stream.isLoading
+  });
 
   // The daemon starts a managed member's external-agent session server-side (join / first delivery),
   // so no client mutation ever fires to invalidate `listExternalAgentSessions`'s RTK Query cache — the
@@ -228,12 +237,13 @@ export function useProject(
       activeProjectId,
       activeSessionId,
       projectSessions,
-      ready: activeProjectId !== null,
+      ready: chatExperienceReady,
       // live collections
       projects,
       participants,
       projectParticipants,
       projectMembers,
+      membersLoading,
       availableProjectMembers,
       approvals,
       loadOlder,
@@ -274,6 +284,7 @@ export function useProject(
     [
       activeProjectId,
       activeSessionId,
+      chatExperienceReady,
       projectSessions,
       switchSession,
       closeSession,
@@ -282,6 +293,7 @@ export function useProject(
       participants,
       projectParticipants,
       projectMembers,
+      membersLoading,
       availableProjectMembers,
       approvals,
       loadOlder,

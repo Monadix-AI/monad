@@ -150,6 +150,7 @@ export function AgentWorkshop(props: AgentWorkshopProps) {
         <AgentFlowPanel
           {...props}
           capabilityCatalog={capabilityCatalog}
+          capabilityCatalogLoading={atomData === undefined || mcpQuery.isLoading}
           errors={validation.errors}
           onClose={() => setSelected(null)}
           profiles={profiles}

@@ -20,6 +20,7 @@ import { useT } from '#/components/I18nProvider';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '#/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '#/components/ui/popover';
 import { useModelSettings, useProviderDetail } from '#/hooks/use-model-settings';
+import { isResolvedEmptyList } from '#/lib/async-list-state';
 import { providerFormSchema } from '#/lib/form-validation';
 import { providerLogo, useProviderMeta } from '#/lib/ProviderMeta';
 import { SECRET_INPUT_PASSWORD_MANAGER_PROPS } from '#/lib/secret-input-props';
@@ -556,9 +557,12 @@ export function ProviderDialog({
                     </div>
                   )}
 
-                  {mode === 'edit' && detail.credentials.length === 0 && !addingKey && (
-                    <p className="text-muted-foreground text-xs">{t('web.model.noKeys')}</p>
-                  )}
+                  {mode === 'edit' &&
+                    isResolvedEmptyList({
+                      isLoading: detail.isLoadingCredentials,
+                      itemCount: detail.credentials.length
+                    }) &&
+                    !addingKey && <p className="text-muted-foreground text-xs">{t('web.model.noKeys')}</p>}
 
                   {mode === 'edit' &&
                     detail.credentials.map((c) => {

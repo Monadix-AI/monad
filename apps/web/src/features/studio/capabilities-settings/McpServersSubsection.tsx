@@ -17,6 +17,7 @@ import { useState } from 'react';
 import { I18nTrans, useT } from '#/components/I18nProvider';
 import { useAsyncAction } from '#/hooks/use-async-action';
 import { useMcpServerSettings } from '#/hooks/use-mcp-server-settings';
+import { isResolvedEmptyList } from '#/lib/async-list-state';
 import { ServerForm } from './mcp-servers/server-form';
 
 const envRef = (name: string) => `\${env:${name}}`;
@@ -48,6 +49,7 @@ export function McpServersSubsection() {
     servers,
     statusByName,
     catalog,
+    loading,
     refreshing,
     saveServer,
     removeServer,
@@ -142,7 +144,7 @@ export function McpServersSubsection() {
         />
       ) : null}
 
-      {servers.length === 0 && !adding ? (
+      {isResolvedEmptyList({ isLoading: loading, itemCount: servers.length }) && !adding ? (
         <p className="px-1 py-6 text-center text-muted-foreground text-xs">{t('web.mcp.empty')}</p>
       ) : null}
 

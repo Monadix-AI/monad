@@ -16,6 +16,7 @@ import {
 import { useCallback, useEffect, useState } from 'react';
 
 import { useT } from '#/components/I18nProvider';
+import { isResolvedEmptyList } from '#/lib/async-list-state';
 import { ExternalAgentMemberDialog } from './ExternalAgentMemberDialog';
 import {
   type ExternalAgentMemberDialogState,
@@ -217,7 +218,7 @@ export function ProjectSettings({
                 );
               })}
             </div>
-            {projectParticipants.length === 0 ? (
+            {isResolvedEmptyList({ isLoading: room.membersLoading, itemCount: projectParticipants.length }) ? (
               <p style={{ margin: 0, fontFamily: sans, fontSize: 13, color: 'var(--muted-foreground)' }}>
                 {t('web.workplace.noMembersHint')}
               </p>
@@ -228,12 +229,14 @@ export function ProjectSettings({
             <div style={sectionLabel}>{t('web.workplace.addMembers')}</div>
             <ProjectAddMemberSection
               candidates={regularCandidates}
+              loading={room.membersLoading}
               onAdd={(candidate) => void room.addProjectMember(candidate.type, candidate.name)}
               promoted={initialIntent === 'connect-agent'}
               title={t('web.workplace.agentMembers')}
             />
             <ProjectAddMemberSection
               candidates={externalAgentCandidates}
+              loading={room.membersLoading}
               onAdd={(candidate) =>
                 setExternalAgentInvite({
                   candidate,

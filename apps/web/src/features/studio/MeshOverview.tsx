@@ -27,6 +27,7 @@ import { ShellLink } from '#/components/ShellLink';
 import { PanelShell, PanelShellBody } from '#/components/ui/panel-shell';
 import { studioPath } from '#/features/shell/routing/paths';
 import { useExternalAgentSettings } from '#/hooks/use-external-agent-settings';
+import { isResolvedEmptyList } from '#/lib/async-list-state';
 import { OverviewIllustration } from './OverviewIllustration';
 import { StudioBreadcrumbHeader } from './StudioBreadcrumbHeader';
 import { MeshUsage } from './Usage';
@@ -78,7 +79,7 @@ function groupByTarget(sessions: ExternalAgentSessionView[]): [string, ExternalA
 
 function AgentRuntimesSection({ projects }: { projects: WorkplaceProject[] }) {
   const t = useT();
-  const { data } = useListLiveExternalAgentSessionsQuery(undefined);
+  const { data, isLoading } = useListLiveExternalAgentSessionsQuery(undefined);
   const sessions = data ? externalAgentSessionSelectors.selectAll(data.sessions) : [];
   const { data: sessionData } = useListSessionsQuery(undefined);
   const allSessions = sessionSelectors.selectAll(sessionData?.sessions ?? sessionAdapter.getInitialState());
@@ -100,7 +101,7 @@ function AgentRuntimesSection({ projects }: { projects: WorkplaceProject[] }) {
         </div>
       </div>
       <div className="flex flex-col gap-3 p-3">
-        {sessions.length === 0 ? (
+        {isResolvedEmptyList({ isLoading, itemCount: sessions.length }) ? (
           <p className="px-1 py-2 text-muted-foreground text-sm">{t('web.studio.liveRuntimesEmpty')}</p>
         ) : (
           groupByTarget(sessions).map(([targetId, rows]) => (

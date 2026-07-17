@@ -39,6 +39,7 @@ import { PanelShell, PanelShellBody } from '#/components/ui/panel-shell';
 import { StudioBreadcrumbHeader } from '#/features/studio/StudioBreadcrumbHeader';
 import { useAsyncAction } from '#/hooks/use-async-action';
 import { useChannelSettings } from '#/hooks/use-channel-settings';
+import { isResolvedEmptyList } from '#/lib/async-list-state';
 import { SECRET_INPUT_PASSWORD_MANAGER_PROPS } from '#/lib/secret-input-props';
 
 const KNOWN_TYPES = ['telegram', 'slack', 'discord'];
@@ -91,7 +92,7 @@ export function ChannelsSettings(_props: { onClose: () => void }) {
             />
           ) : null}
 
-          {channels.length === 0 && !adding ? (
+          {isResolvedEmptyList({ isLoading: loading, itemCount: channels.length }) && !adding ? (
             <p className="px-1 py-8 text-center text-muted-foreground text-xs">
               <I18nTrans
                 components={{
@@ -137,6 +138,7 @@ function PairingsPanel({ channelId, t }: { channelId: ChannelId; t: ReturnType<t
   const {
     data: pairingData,
     isFetching,
+    isLoading,
     refetch
   } = useListChannelPairingsQuery(channelId as ChannelId, {
     pollingInterval: 10_000
@@ -174,7 +176,7 @@ function PairingsPanel({ channelId, t }: { channelId: ChannelId; t: ReturnType<t
           />
         </Button>
       </div>
-      {pairings.length === 0 ? (
+      {isResolvedEmptyList({ isLoading, itemCount: pairings.length }) ? (
         <p className="text-muted-foreground text-xs">{t('web.ch.noPairings')}</p>
       ) : (
         <ul className="flex flex-col gap-1">
