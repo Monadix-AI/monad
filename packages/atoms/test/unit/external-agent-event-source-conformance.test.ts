@@ -1,0 +1,79 @@
+import type { ExternalAgentObservationProjector } from '@monad/sdk-atom';
+
+import { expect, test } from 'bun:test';
+
+import { createProjectedEventSource } from '../../src/agent-adapters/event-source.ts';
+import { observation } from '../../src/agent-adapters/observation-projection.ts';
+
+const projection: ExternalAgentObservationProjector = {
+  recordProjectors: [
+    {
+      supports: (record) => record.type === 'message',
+      parse: ({ id, record, recordIndex }) =>
+        observation({
+          id: `${id}:${recordIndex}`,
+          role: 'agent',
+          text: typeof record.text === 'string' ? record.text : undefined,
+          source: 'unknown',
+          providerEventType: 'message',
+          raw: record
+        })
+    }
+  ]
+};
+
+test('projected event source gives live and history records the same stable identity', () => {
+  const source = createProjectedEventSource({ provider: 'codex', projection });
+  const output = JSON.stringify({ type: 'message', text: 'Hello' });
+
+  expect(source.projectLive({ id: 'live', output }).events).toEqual([
+    {
+      id: 'live:0',
+      dedupeKey: 'codex:99a3e357',
+      projection: 'normalized',
+      role: 'agent',
+      text: 'Hello',
+      source: 'unknown',
+      providerEventType: 'message',
+      raw: { type: 'message', text: 'Hello' }
+    }
+  ]);
+  expect(source.projectLive({ id: 'history', output, mode: 'history' }).events[0]?.dedupeKey).toBe(
+    'codex:99a3e357'
+  );
+});
+
+test('projected event source preserves unrecognized provider records as unknown events', () => {
+  const source = createProjectedEventSource({ provider: 'codex', projection });
+  const raw = { method: 'future/provider/event', params: { value: 1 } };
+
+  expect(source.projectLive({ id: 'live', output: JSON.stringify(raw) }).events).toEqual([
+    {
+      id: 'live:unknown:0',
+      dedupeKey: 'codex:741d960e',
+      projection: 'unknown',
+      role: 'system',
+      text: 'future/provider/event',
+      source: 'unknown',
+      providerEventType: 'future/provider/event',
+      raw
+    }
+  ]);
+});
+
+test('projected event source passes history cursors through without interpreting them', async () => {
+  const source = createProjectedEventSource({
+    provider: 'codex',
+    projection,
+    readPage: async (_context, request) => ({
+      state: 'available',
+      events: [],
+      nextCursor: request.before
+    })
+  });
+  const context = { providerSessionRef: 'thread', workingPath: '/tmp/project', limitBytes: 1024 };
+
+  expect(await source.readPage?.(context, { before: 'opaque-provider-cursor', limit: 20, sortDirection: 'desc' })).toEqual(
+    { state: 'available', events: [], nextCursor: 'opaque-provider-cursor' }
+  );
+});
