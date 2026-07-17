@@ -803,6 +803,22 @@ export class ExternalAgentHost {
         limit: req.limit,
         sortDirection: req.sortDirection
       };
+      if (row.launchMode === 'app-server') {
+        const bridged = await providerHistoryPageViaCli(row, adapter, pageRequest, {
+          agents: this.deps.agents,
+          buildSpawnEnv: (env) => this.buildSpawnEnv(env),
+          takeStructuredLines: (structuredId, stream, chunk) =>
+            this.outputPipeline.takeCompleteStructuredLines(structuredId, stream, chunk),
+          dropStructuredBuffer: (structuredId) => this.outputPipeline.dropStructuredBuffer(structuredId)
+        }).catch(() => null);
+        if (bridged?.state === 'available') {
+          this.deps.store.recordExternalAgentObservationEvents(id, bridged.events, new Date().toISOString());
+          return {
+            events: bridged.events,
+            ...(bridged.nextCursor ? { nextCursor: encodeProviderHistoryCursor(bridged.nextCursor) } : {})
+          };
+        }
+      }
       const result = await adapter.events.readPage?.(
         {
           providerSessionRef: row.providerSessionRef,
@@ -816,20 +832,6 @@ export class ExternalAgentHost {
         return {
           events: result.events,
           ...(result.nextCursor ? { nextCursor: encodeProviderHistoryCursor(result.nextCursor) } : {})
-        };
-      }
-      const bridged = await providerHistoryPageViaCli(row, adapter, pageRequest, {
-        agents: this.deps.agents,
-        buildSpawnEnv: (env) => this.buildSpawnEnv(env),
-        takeStructuredLines: (structuredId, stream, chunk) =>
-          this.outputPipeline.takeCompleteStructuredLines(structuredId, stream, chunk),
-        dropStructuredBuffer: (structuredId) => this.outputPipeline.dropStructuredBuffer(structuredId)
-      }).catch(() => null);
-      if (bridged?.state === 'available') {
-        this.deps.store.recordExternalAgentObservationEvents(id, bridged.events, new Date().toISOString());
-        return {
-          events: bridged.events,
-          ...(bridged.nextCursor ? { nextCursor: encodeProviderHistoryCursor(bridged.nextCursor) } : {})
         };
       }
     }

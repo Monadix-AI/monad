@@ -24,6 +24,7 @@ function adapter(options: { throwInModelParser?: boolean } = {}): ExternalAgentP
     provider,
     productIcon: provider,
     label: 'Async Probe Test',
+    events: { projectLive: () => ({ events: [] }) },
     detect: () => ({
       id: provider,
       label: 'Async Probe Test',

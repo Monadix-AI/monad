@@ -810,7 +810,7 @@ async function runJsonStreamRuntime(
         dedupeKey: 'claude-code:c8b65d2d'
       }
     ],
-    nextCursor: 'snapshot:3'
+    nextCursor: undefined
   });
 
   const stop = await call(
@@ -1287,6 +1287,16 @@ async function runCodexHistoryPageRuntime(
   expect(badCursorBody.error).toBe('invalid cursor: bogus');
 
   await call('POST', `/v1/external-agent-sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`);
+  const stoppedPage = await call(
+    'GET',
+    `/v1/external-agent-sessions/${nativeSession.id}/history-page?transcriptTargetId=${sessionId}&limit=1&itemsView=summary&sortDirection=desc&before=${encodeURIComponent('provider:next_cursor')}`
+  );
+  expect(stoppedPage.status).toBe(200);
+  const stoppedBody = (await stoppedPage.json()) as { events: Array<{ text: string }>; nextCursor?: string };
+  expect({ texts: stoppedBody.events.map((event) => event.text), nextCursor: stoppedBody.nextCursor }).toEqual({
+    texts: ['turn/started', 'turn/completed'],
+    nextCursor: 'provider:next_cursor'
+  });
 }
 
 async function runSpawnFailureRuntime(

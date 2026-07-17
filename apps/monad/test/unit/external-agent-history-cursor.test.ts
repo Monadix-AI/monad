@@ -93,6 +93,125 @@ function fakeLive(overrides: Partial<LiveExternalAgentSession> = {}): LiveExtern
   } as LiveExternalAgentSession;
 }
 
+function jsonIdentityEvents() {
+  return {
+    projectLive: ({ id, output }: { id: string; output: string }) => ({
+      events: output
+        .split('\n')
+        .filter(Boolean)
+        .map((line, index) => {
+          const record = JSON.parse(line) as { uuid: string; text?: string };
+          return {
+            id: `${id}:${index}`,
+            dedupeKey: record.uuid,
+            projection: 'normalized' as const,
+            role: 'agent' as const,
+            text: record.text ?? record.uuid,
+            source: 'plain-text' as const,
+            raw: record
+          };
+        })
+    })
+  };
+}
+
+test('input captures event-source history before starting a new live observation epoch', async () => {
+  const store = createStore();
+  const live = fakeLive({
+    observationEpoch: 'oep_previous',
+    observationEpochReady: false,
+    initializeContext: { workingPath: '/tmp/project', providerSessionRef: 'thread-1' },
+    providerSessionRef: 'thread-1'
+  });
+  live.outputBuffer.append('previous runtime output');
+  const sent: Array<{ buffer: string; checkpoint?: string; epoch: string }> = [];
+  live.adapter = {
+    ...live.adapter,
+    events: {
+      ...jsonIdentityEvents(),
+      readPage: async () => ({
+        state: 'available' as const,
+        events: [
+          {
+            id: 'history:1',
+            dedupeKey: 'history-message-1',
+            projection: 'normalized' as const,
+            role: 'agent' as const,
+            text: 'canonical history',
+            source: 'plain-text' as const
+          }
+        ]
+      })
+    },
+    sendInput: () =>
+      sent.push({
+        buffer: live.outputBuffer.snapshot(),
+        checkpoint: live.providerHistoryCheckpoint,
+        epoch: live.observationEpoch
+      })
+  };
+  store.upsertExternalAgentSession({
+    id: SESSION_ID,
+    transcriptTargetId: TARGET_ID,
+    agentName: 'codex',
+    provider: 'codex',
+    workingPath: '/tmp/project',
+    launchMode: 'app-server',
+    runtimeRole: 'interactive',
+    agentRuntimeId: null,
+    agentRuntimeTokenHash: null,
+    lastDeliveredSeq: 0,
+    lastVisibleSeq: 0,
+    state: 'running',
+    pid: null,
+    providerSessionRef: 'thread-1',
+    outputSnapshot: 'previous runtime output',
+    exitCode: null,
+    startedAt: '2026-07-17T00:00:00.000Z',
+    updatedAt: '2026-07-17T00:00:00.000Z',
+    exitedAt: null
+  });
+  const host = hostWithLive(live, store);
+
+  await host.input(SESSION_ID, { input: 'new turn' });
+
+  expect(sent).toEqual([{ buffer: '', checkpoint: 'history-message-1', epoch: expect.stringMatching(/^oep_/) }]);
+  expect(sent[0]?.epoch).not.toBe('oep_previous');
+  expect(store.getExternalAgentSession(SESSION_ID)?.outputSnapshot).toBe('');
+});
+
+test('live overlay trims replay by event-source dedupe key while retaining identical new text', () => {
+  const live = fakeLive({ providerHistoryIdentities: new Set(['message-old']) });
+  live.adapter = { ...live.adapter, events: jsonIdentityEvents(), parseOutput: () => [] };
+  const { pipeline } = buildPipeline(live);
+  const replay = JSON.stringify({ uuid: 'message-old', text: 'Same answer' });
+  const current = JSON.stringify({ uuid: 'message-new', text: 'Same answer' });
+
+  pipeline.output(TARGET_ID, SESSION_ID, replay, 'app-server', live.adapter);
+  pipeline.output(TARGET_ID, SESSION_ID, current, 'app-server', live.adapter);
+
+  expect({ output: live.outputBuffer.snapshot(), checkpoint: live.providerHistoryCheckpoint }).toEqual({
+    output: `${current}\n`,
+    checkpoint: 'message-new'
+  });
+});
+
+test('json-stream replay trimming waits for complete records and removes only dedupe-key matches', () => {
+  const live = fakeLive({ providerHistoryIdentities: new Set(['message-old']) });
+  live.adapter = { ...live.adapter, events: jsonIdentityEvents(), parseOutput: () => [] };
+  const { pipeline } = buildPipeline(live);
+  const replay = JSON.stringify({ uuid: 'message-old', text: 'Same answer' });
+  const current = JSON.stringify({ uuid: 'message-new', text: 'Same answer' });
+
+  pipeline.output(TARGET_ID, SESSION_ID, replay.slice(0, 12), 'stdout', live.adapter);
+  pipeline.output(TARGET_ID, SESSION_ID, `${replay.slice(12)}\n${current}\n`, 'stdout', live.adapter);
+
+  expect({ output: live.outputBuffer.snapshot(), seq: live.outputSeq }).toEqual({
+    output: `${current}\n`,
+    seq: current.length + 1
+  });
+});
+
 function buildPipeline(live: LiveExternalAgentSession) {
   const store = createStore();
   store.upsertExternalAgentSession({
@@ -200,11 +319,14 @@ test('the output pipeline returns the adapter cursor without interpreting it', (
   );
 
   clearTimeout(timeout);
-  expect(resolved?.nextCursor).toBe('{"turnId":"turn_9"}');
+  expect({ nextCursor: resolved?.nextCursor, output: live.outputBuffer.snapshot(), seq: live.outputSeq }).toEqual({
+    nextCursor: '{"turnId":"turn_9"}',
+    output: '',
+    seq: 0
+  });
 });
 
-function hostWithLive(live: LiveExternalAgentSession) {
-  const store = createStore();
+function hostWithLive(live: LiveExternalAgentSession, store = createStore()) {
   const host = new ExternalAgentHost({ store, bus: new EventBus(), agents: async () => [] });
   (host as unknown as { live: Map<string, LiveExternalAgentSession> }).live.set(SESSION_ID, live);
   return host;

@@ -145,7 +145,12 @@ export class ExternalAgentObservationResolver {
 
   async observeWithProviderHistory(id: string): Promise<ExternalAgentObservationAccessResponse> {
     const base = this.observe(id);
-    if (base.state !== 'unavailable') return base;
+    if (base.state === 'live') return base;
+    if (
+      base.state === 'history' &&
+      base.events?.some((event) => event.projection !== 'unknown' && event.role !== 'system')
+    )
+      return base;
     const row = this.ctx.store.getExternalAgentSession(id);
     if (!row || !isManagedProjectRuntime(row) || !row.providerSessionRef) return base;
     const adapter = getExternalAgentProviderAdapter(row.provider);
@@ -156,8 +161,7 @@ export class ExternalAgentObservationResolver {
       {
         agents: this.ctx.agents,
         buildSpawnEnv: (env) => this.ctx.buildSpawnEnv(env),
-        takeStructuredLines: (structuredId, stream, chunk) =>
-          this.ctx.takeStructuredLines(structuredId, stream, chunk),
+        takeStructuredLines: (structuredId, stream, chunk) => this.ctx.takeStructuredLines(structuredId, stream, chunk),
         dropStructuredBuffer: (structuredId) => this.ctx.dropStructuredBuffer(structuredId)
       }
     ).catch(() => null);
@@ -167,7 +171,7 @@ export class ExternalAgentObservationResolver {
         state: 'history',
         externalAgentSessionId: id as ExternalAgentSessionId,
         provider: row.provider,
-        output: '',
+        output: cliPage.events.map((event) => event.text).join('\n'),
         events: cliPage.events,
         historyBefore: encodeJournalHistoryCursor(),
         usageMeter: null,
@@ -181,7 +185,7 @@ export class ExternalAgentObservationResolver {
         state: 'history',
         externalAgentSessionId: id as ExternalAgentSessionId,
         provider: row.provider,
-        output: '',
+        output: localEvents.map((event) => event.text).join('\n'),
         events: localEvents,
         historyBefore: encodeJournalHistoryCursor(),
         usageMeter: null,
