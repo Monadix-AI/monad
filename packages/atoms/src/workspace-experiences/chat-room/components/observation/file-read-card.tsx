@@ -1,35 +1,6 @@
-import type { CSSProperties } from 'react';
-import type { BundledLanguage } from 'shiki';
 import type { FileReadToolView, ObservationItem } from './types.ts';
 
-import { ObservationMeta } from '@monad/ui';
-import { workspaceMono as mono } from '@monad/ui/components/AgentAvatar';
-import { CodeBlock } from '@monad/ui/components/CodeBlock';
-
-export function FileReadToolCard({ view }: { view: FileReadToolView }): React.ReactElement {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
-      <div style={filePathStyle}>{view.path}</div>
-      <CodeBlock
-        className="rounded-md border border-[color-mix(in_srgb,var(--border)_78%,transparent)] bg-[color-mix(in_srgb,var(--background)_82%,black)] text-[11px] [&>div::-webkit-scrollbar]:hidden [&>div]:max-h-72 [&>div]:overflow-auto [&>div]:[scrollbar-width:none] [&_pre]:p-0"
-        code={view.content}
-        language={languageFromPath(view.path)}
-      />
-    </div>
-  );
-}
-
-export function FileReadToolHeader({ view }: { view: FileReadToolView }): React.ReactElement {
-  return (
-    <ObservationMeta
-      compact
-      label="tool call"
-      showSource={false}
-      source={view.provider}
-      title={view.type}
-    />
-  );
-}
+export { FileReadCard as FileReadToolCard, FileReadCardHeader as FileReadToolHeader } from '@monad/ui';
 
 export function fileReadToolView(
   call: ObservationItem,
@@ -117,61 +88,3 @@ function stringFrom(...values: unknown[]): string | undefined {
   }
   return undefined;
 }
-
-function languageFromPath(path: string): BundledLanguage {
-  const suffix = path.split(/[?#]/, 1)[0]?.split('.').pop()?.toLowerCase();
-  switch (suffix) {
-    case 'cjs':
-    case 'js':
-    case 'jsx':
-    case 'mjs':
-      return 'javascript';
-    case 'cts':
-    case 'mts':
-    case 'ts':
-    case 'tsx':
-      return 'typescript';
-    case 'json':
-    case 'jsonc':
-      return 'json';
-    case 'md':
-    case 'mdx':
-      return 'markdown';
-    case 'css':
-      return 'css';
-    case 'html':
-      return 'html';
-    case 'py':
-      return 'python';
-    case 'rb':
-      return 'ruby';
-    case 'rs':
-      return 'rust';
-    case 'go':
-      return 'go';
-    case 'java':
-      return 'java';
-    case 'sh':
-    case 'bash':
-    case 'zsh':
-      return 'bash';
-    case 'sql':
-      return 'sql';
-    case 'yaml':
-    case 'yml':
-      return 'yaml';
-    default:
-      return 'markdown';
-  }
-}
-
-const filePathStyle: CSSProperties = {
-  maxWidth: '100%',
-  minWidth: 0,
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-  whiteSpace: 'nowrap',
-  color: 'var(--muted-foreground)',
-  fontFamily: mono,
-  fontSize: 11
-};

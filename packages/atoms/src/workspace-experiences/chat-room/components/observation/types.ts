@@ -1,3 +1,4 @@
+import type { CommandCardView, FileReadCardView } from '@monad/ui';
 import type React from 'react';
 import type { ExternalAgentStreamView } from '../../../experience/types.ts';
 
@@ -5,25 +6,9 @@ export type ObservationItem = ExternalAgentStreamView['items'][number];
 
 // Neutral events carry no per-event `source`; the observed agent's `provider` is a frame-level fact,
 // threaded in from the stream and used only for the card's source badge.
-export type CommandToolView = {
-  type: string;
-  provider: string;
-  command?: string;
-  commandLanguage?: string;
-  cwd?: string;
-  status?: string;
-  exitCode?: number;
-  durationMs?: number;
-  output?: string;
-  outputLanguage?: string;
-};
+export type CommandToolView = CommandCardView;
 
-export type FileReadToolView = {
-  type: string;
-  provider: string;
-  path: string;
-  content: string;
-};
+export type FileReadToolView = FileReadCardView;
 
 export type PublicObservationCard =
   | { type: 'message'; role: 'user' | 'agent'; item: ObservationItem }

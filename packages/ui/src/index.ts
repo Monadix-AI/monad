@@ -17,6 +17,7 @@ import type {
   ToolProps,
   ToolStatusLabels
 } from './components/AIElements';
+import type { CommandCardView } from './components/CommandCard';
 import type {
   ComposerAccessMode,
   ComposerAccessoryControls,
@@ -44,6 +45,7 @@ import type {
   ComposerSkillToken
 } from './components/ComposerEditor';
 import type { ComposerInlineChipProps } from './components/ComposerInlineChip';
+import type { FileReadCardView } from './components/FileReadCard';
 import type {
   DefaultObservationToolPairProps,
   ObservationCardProps,
@@ -84,6 +86,7 @@ import { ButtonGroup, ButtonGroupText } from './components/ButtonGroup';
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from './components/Card';
 import { ChatInputChrome } from './components/ChatInput';
 import { CodeBlock, CodeInline } from './components/CodeBlock';
+import { CommandCard, CommandCardHeader } from './components/CommandCard';
 import {
   ComposerAccessSelect,
   ComposerContextUsageButton,
@@ -130,6 +133,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from './components/DropdownMenu';
+import { FileReadCard, FileReadCardHeader } from './components/FileReadCard';
 import { ImageZoom, type ImageZoomProps } from './components/ImageZoom';
 import { Input } from './components/Input';
 import {
@@ -180,6 +184,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './comp
 import { cn } from './lib/utils';
 
 export type {
+  CommandCardView,
   ComposerAccessMode,
   ComposerAccessoryControls,
   ComposerAccessoryItem,
@@ -203,6 +208,7 @@ export type {
   ComposerSurfaceProps,
   ComposerVoiceButtonProps,
   DefaultObservationToolPairProps,
+  FileReadCardView,
   ImageZoomProps,
   MessageActionProps,
   MessageActionsProps,
@@ -259,6 +265,8 @@ export {
   ChatInputChrome,
   CodeBlock,
   CodeInline,
+  CommandCard,
+  CommandCardHeader,
   ComposerAccessSelect,
   ComposerAskSheet,
   ComposerContextUsageButton,
@@ -301,6 +309,8 @@ export {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
   defaultToolStatusLabels,
+  FileReadCard,
+  FileReadCardHeader,
   ImageZoom,
   Input,
   InputGroup,

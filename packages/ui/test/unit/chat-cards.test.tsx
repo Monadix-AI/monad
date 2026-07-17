@@ -1,6 +1,8 @@
 import { expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
+import { CommandCard, CommandCardHeader } from '../../src/components/CommandCard';
+import { FileReadCard, FileReadCardHeader } from '../../src/components/FileReadCard';
 import { ObservationCard, ObservationMeta, ObservationText } from '../../src/components/ObservationCard';
 import { RawInspectableCard, rawEventRecordsText } from '../../src/components/RawInspectableCard';
 
@@ -113,4 +115,53 @@ test('ObservationCard renders collapse state supplied by its consumer', () => {
   expect(expanded).toContain('aria-expanded="true"');
   expect(expanded).toContain('package.json');
   expect(expanded).toContain('2026-07-17T00:00:00.000Z');
+});
+
+test('CommandCard renders command metadata and ordered input and output', () => {
+  const view = {
+    command: 'bun test',
+    commandLanguage: 'bash',
+    cwd: '/workspace',
+    durationMs: 1250,
+    exitCode: 0,
+    output: '2 pass\n0 fail',
+    outputLanguage: 'bash',
+    provider: 'codex',
+    status: 'completed',
+    type: 'commandExecution'
+  };
+  const markup = renderToStaticMarkup(
+    <>
+      <CommandCardHeader view={view} />
+      <CommandCard view={view} />
+    </>
+  );
+
+  expect(markup).toContain('commandExecution');
+  expect(markup).toContain('completed');
+  expect(markup).toContain('1.3s');
+  expect(markup).toContain('/workspace');
+  expect(markup).toContain('bun test');
+  expect(markup).toContain('2 pass');
+  expect(markup).toContain('0 fail');
+});
+
+test('FileReadCard renders its path and complete content', () => {
+  const view = {
+    content: 'export const value = 1;',
+    path: '/workspace/src/value.ts',
+    provider: 'claude-code',
+    type: 'Read'
+  };
+  const markup = renderToStaticMarkup(
+    <>
+      <FileReadCardHeader view={view} />
+      <FileReadCard view={view} />
+    </>
+  );
+
+  expect(markup).toContain('Read');
+  expect(markup).toContain('/workspace/src/value.ts');
+  expect(markup).toContain('export');
+  expect(markup).toContain('value');
 });
