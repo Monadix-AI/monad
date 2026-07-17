@@ -227,7 +227,6 @@ git commit -m "fix(external-agent): parallelize fresh preset probes"
 Generate required development artifacts, then run lint, typecheck, and the full test suite sequentially so generated bindings are not removed during a concurrent build.
 
 ```bash
-bun run scripts/generate-route-tree.ts
 bun run scripts/generate-codex-app-server-protocol.ts
 bun run lint
 bun run typecheck

@@ -1,3 +1,4 @@
+import type { ExternalAgentPresetView } from '@monad/protocol';
 import type { ExternalAgentProviderAdapter } from '#/services/external-agent/types.ts';
 
 import { expect, test } from 'bun:test';
@@ -67,6 +68,7 @@ function adapter(options: { throwInModelParser?: boolean } = {}): ExternalAgentP
     parseAuthStatus: () => 'unknown',
     parseOutput: () => [],
     sendInput: () => {},
+    resolveApproval: () => {},
     resize: () => {},
     stop: () => {}
   };
@@ -74,7 +76,11 @@ function adapter(options: { throwInModelParser?: boolean } = {}): ExternalAgentP
 
 const probes = { which: () => '/bin/probe-tool', exists: () => true };
 
-function expectedPreset(options: { modelsLive: boolean; supportLive: boolean }) {
+type ProjectedPreset = ExternalAgentPresetView & {
+  reasoningEffortsByModel?: Record<string, string[]>;
+};
+
+function expectedPreset(options: { modelsLive: boolean; supportLive: boolean }): ProjectedPreset {
   return {
     id: provider,
     label: 'Async Probe Test',
@@ -101,23 +107,27 @@ function expectedPreset(options: { modelsLive: boolean; supportLive: boolean }) 
   };
 }
 
+function testPresets(presets: ExternalAgentPresetView[]): ExternalAgentPresetView[] {
+  return presets.filter((preset) => preset.id === provider);
+}
+
 test('deduplicates equal probes per request and executes a fresh batch on the next request', async () => {
   registerAgentAdapterImpl(adapter());
-  const launches: string[][] = [];
+  const launches: Array<{ argv: string[]; cwd: string }> = [];
   try {
-    const runner = async (launch: { argv: string[] }) => {
-      launches.push(launch.argv);
+    const runner = async (launch: { argv: string[]; cwd: string }) => {
+      if (launch.cwd === '/tmp') launches.push({ argv: launch.argv, cwd: launch.cwd });
       return { stdout: 'valid', stderr: '', exitCode: 0 };
     };
 
     const first = await listExternalAgentPresets(probes, runner);
     const second = await listExternalAgentPresets(probes, runner);
 
-    expect(first).toEqual([expectedPreset({ modelsLive: true, supportLive: true })]);
-    expect(second).toEqual([expectedPreset({ modelsLive: true, supportLive: true })]);
+    expect(testPresets(first)).toEqual([expectedPreset({ modelsLive: true, supportLive: true })]);
+    expect(testPresets(second)).toEqual([expectedPreset({ modelsLive: true, supportLive: true })]);
     expect(launches).toEqual([
-      ['/bin/probe-tool', '--help'],
-      ['/bin/probe-tool', '--help']
+      { argv: ['/bin/probe-tool', '--help'], cwd: '/tmp' },
+      { argv: ['/bin/probe-tool', '--help'], cwd: '/tmp' }
     ]);
   } finally {
     unregisterAgentAdapterImpl(provider);
@@ -152,7 +162,7 @@ test('uses exact static fallbacks when execution or parsing fails', async () => 
     registerAgentAdapterImpl(item.configured);
     try {
       const presets = await listExternalAgentPresets(probes, item.runner);
-      expect(presets).toEqual([item.expected]);
+      expect(testPresets(presets)).toEqual([item.expected]);
     } finally {
       unregisterAgentAdapterImpl(provider);
     }
