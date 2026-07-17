@@ -47,7 +47,8 @@ export function listExternalAgentObservationEvents(
   }>;
   const hasMore = rows.length > request.limit;
   const pageRows = hasMore ? rows.slice(0, request.limit) : rows;
-  const events = pageRows.flatMap((row) => {
+  const displayRows = request.sortDirection === 'desc' ? [...pageRows].reverse() : pageRows;
+  const events = displayRows.flatMap((row) => {
     try {
       const parsed = externalAgentObservationEventSchema.safeParse(JSON.parse(row.event_json));
       return parsed.success ? [parsed.data] : [];

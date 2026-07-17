@@ -36,6 +36,15 @@ test('indexOfKey: finds and misses', () => {
   expect(indexOfKey([], getKey, 'a')).toBe(-1);
 });
 
+test('scroll target uses Virtuoso absolute indexes when history has been prepended', () => {
+  const items = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
+  const getKey = (item: { id: string }) => item.id;
+
+  expect([indexOfKey(items, getKey, 'b', 999_980), indexOfKey(items, getKey, 'missing', 999_980)]).toEqual([
+    999_981, -1
+  ]);
+});
+
 test('reducePinnedOnScroll: a genuine scroll sets pinned from the at-bottom reading', () => {
   // User scrolls up away from the bottom → unpin.
   expect(reducePinnedOnScroll(true, false, false)).toEqual({ pinned: false, selfScrollConsumed: false });

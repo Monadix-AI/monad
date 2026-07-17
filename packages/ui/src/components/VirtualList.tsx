@@ -78,8 +78,9 @@ export function isAtBottom(
 }
 
 /** Position of the item with `key`, or -1. Used by the scrollToKey handle. */
-export function indexOfKey<T>(items: T[], getKey: (item: T) => string, key: string): number {
-  return items.findIndex((item) => getKey(item) === key);
+export function indexOfKey<T>(items: T[], getKey: (item: T) => string, key: string, firstItemIndex = 0): number {
+  const index = items.findIndex((item) => getKey(item) === key);
+  return index < 0 ? -1 : firstItemIndex + index;
 }
 
 /**
@@ -382,7 +383,7 @@ export function VirtualList<T>({
         requestBottomScroll(behavior === 'smooth' ? 'smooth' : 'auto');
       },
       scrollToKey: (key, opts) => {
-        const index = indexOfKey(items, getKey, key);
+        const index = indexOfKey(items, getKey, key, firstItemIndex);
         if (index >= 0) {
           handleRef.current?.scrollToIndex({
             index,
@@ -396,7 +397,7 @@ export function VirtualList<T>({
           handleRef.current?.getState(resolve);
         })
     }),
-    [items, getKey, requestBottomScroll]
+    [items, getKey, requestBottomScroll, firstItemIndex]
   );
 
   // Initial mount lands near — but not exactly at — the bottom because row heights are
