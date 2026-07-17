@@ -9,6 +9,8 @@ export type ExternalAgentObservationRole = z.infer<typeof externalAgentObservati
 
 export const externalAgentObservationEventSchema = z.object({
   id: z.string().min(1),
+  dedupeKey: z.string().min(1).optional(),
+  projection: z.enum(['normalized', 'unknown']).optional(),
   role: externalAgentObservationRoleSchema,
   text: z.string().min(1),
   source: z.enum([
@@ -66,6 +68,7 @@ export const nativeAgentObservationProjectionSchema = z.discriminatedUnion('stat
     turn: nativeAgentTurnPointerSchema.optional(),
     provider: externalAgentProviderSchema,
     events: z.array(externalAgentObservationEventSchema),
+    historyBefore: z.string().min(1).optional(),
     observedAt: z.string()
   }),
   z.object({
@@ -75,6 +78,7 @@ export const nativeAgentObservationProjectionSchema = z.discriminatedUnion('stat
     turn: nativeAgentTurnPointerSchema.optional(),
     provider: externalAgentProviderSchema,
     events: z.array(externalAgentObservationEventSchema),
+    historyBefore: z.string().min(1).optional(),
     observedAt: z.string()
   }),
   z.object({
@@ -116,6 +120,7 @@ export const externalAgentObservationAccessResponseSchema = z.discriminatedUnion
     events: z.array(externalAgentObservationEventSchema).optional(),
     // Same reasoning as `events`, for the provider's usage/rate-limit hints embedded in `output`.
     usageMeter: externalAgentUsageLimitMeterSchema.nullable().optional(),
+    historyBefore: z.string().min(1).optional(),
     observedAt: z.string()
   }),
   z.object({
@@ -127,6 +132,7 @@ export const externalAgentObservationAccessResponseSchema = z.discriminatedUnion
     output: z.string(),
     events: z.array(externalAgentObservationEventSchema).optional(),
     usageMeter: externalAgentUsageLimitMeterSchema.nullable().optional(),
+    historyBefore: z.string().min(1).optional(),
     observedAt: z.string()
   }),
   z.object({
@@ -155,6 +161,7 @@ export const externalAgentUiObservationFrameSchema = z.discriminatedUnion('state
     providerHistoryCheckpoint: z.string().min(1).optional(),
     events: z.array(agentObservationEventSchema),
     seq: z.number().int().nonnegative().optional(),
+    historyBefore: z.string().min(1).optional(),
     observedAt: z.string()
   }),
   z.object({
@@ -164,6 +171,7 @@ export const externalAgentUiObservationFrameSchema = z.discriminatedUnion('state
     turn: nativeAgentTurnPointerSchema.optional(),
     provider: externalAgentProviderSchema,
     events: z.array(agentObservationEventSchema),
+    historyBefore: z.string().min(1).optional(),
     observedAt: z.string()
   }),
   z.object({

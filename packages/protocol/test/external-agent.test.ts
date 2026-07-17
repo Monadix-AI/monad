@@ -7,6 +7,7 @@ import {
   externalAgentAuthSessionViewSchema,
   externalAgentAuthStatusResponseSchema,
   externalAgentHistoryPageResponseSchema,
+  externalAgentObservationEventSchema,
   externalAgentObservationAccessResponseSchema,
   externalAgentPresetSchema,
   externalAgentSessionViewSchema,
@@ -414,6 +415,7 @@ test('native agent observation projection is addressed by pointers and excludes 
     deliveryId: 'deliv_ABC123000000',
     turn: { providerSessionRef: 'provider-session', providerTurnId: 'turn-1' },
     provider: 'codex',
+    historyBefore: 'provider:opaque',
     output: '{"raw":"provider frame"}',
     observedAt: '2026-06-28T00:00:01.000Z',
     events: [
@@ -429,6 +431,7 @@ test('native agent observation projection is addressed by pointers and excludes 
   expect(live.state).toBe('live');
   if (live.state !== 'live') throw new Error('expected live projection');
   expect(live.events).toHaveLength(1);
+  expect(live.historyBefore).toBe('provider:opaque');
   expect(live.turn?.providerTurnId).toBe('turn-1');
   expect('output' in live).toBe(false);
   const access = externalAgentObservationAccessResponseSchema.parse({
@@ -472,6 +475,47 @@ test('live external agent observation frames preserve the daemon runtime epoch',
     output: 'current runtime only',
     seq: 20,
     observedAt: '2026-07-17T06:00:00.000Z'
+  });
+});
+
+test('external agent observation events carry stable identity and explicit unknown projection', () => {
+  expect(
+    externalAgentObservationEventSchema.parse({
+      id: 'evt_render_1',
+      dedupeKey: 'turn_1:item_1',
+      projection: 'normalized',
+      role: 'agent',
+      text: 'done',
+      source: 'codex-app-server'
+    })
+  ).toEqual({
+    id: 'evt_render_1',
+    dedupeKey: 'turn_1:item_1',
+    projection: 'normalized',
+    role: 'agent',
+    text: 'done',
+    source: 'codex-app-server'
+  });
+
+  const raw = { method: 'future/provider/event', params: { value: 1 } };
+  expect(
+    externalAgentObservationEventSchema.parse({
+      id: 'evt_unknown_1',
+      dedupeKey: 'future/provider/event:1',
+      projection: 'unknown',
+      role: 'system',
+      text: 'future/provider/event',
+      source: 'codex-app-server',
+      raw
+    })
+  ).toEqual({
+    id: 'evt_unknown_1',
+    dedupeKey: 'future/provider/event:1',
+    projection: 'unknown',
+    role: 'system',
+    text: 'future/provider/event',
+    source: 'codex-app-server',
+    raw
   });
 });
 

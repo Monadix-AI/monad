@@ -288,6 +288,29 @@ export interface ExternalAgentProviderHistoryPageRequestContext extends External
   request: ExternalAgentHistoryPageRequest;
 }
 
+export interface ExternalAgentEventPageRequest {
+  before?: string;
+  limit: number;
+  sortDirection: 'asc' | 'desc';
+}
+
+export interface ExternalAgentEventPage {
+  events: ExternalAgentObservationEvent[];
+  nextCursor?: string;
+}
+
+export type ExternalAgentEventPageResult =
+  | ({ state: 'available' } & ExternalAgentEventPage)
+  | { state: 'unavailable'; reason: 'unsupported' | 'not-found' | 'temporary' };
+
+export interface ExternalAgentEventSource {
+  projectLive(args: { id: string; output: string; mode?: 'live' | 'history' }): ExternalAgentEventPage;
+  readPage?(
+    context: ExternalAgentProviderHistoryContext,
+    request: ExternalAgentEventPageRequest
+  ): Promise<ExternalAgentEventPageResult>;
+}
+
 export interface ExternalAgentApprovalResolution {
   requestId: string;
   allow: boolean;
@@ -481,6 +504,9 @@ export interface ExternalAgentProviderAdapter {
    *  adapters may decode their own JSONL/history format, but must not return UI components, labels,
    *  cards, or view state. Experience surfaces consume only the resulting protocol events. */
   observation?: ExternalAgentObservationProjector;
+  /** Provider-owned live/history event acquisition and projection. During the built-in adapter
+   *  migration this is optional; all registered built-ins are required to provide it by conformance. */
+  events?: ExternalAgentEventSource;
   /** Declarative operator settings for this adapter. The UI renders these controls dynamically; keys
    *  address fields on `ExternalAgentView` so daemon launch behavior still reads the shared contract. */
   settings?(agent?: ExternalAgentView): ExternalAgentSetting[];
