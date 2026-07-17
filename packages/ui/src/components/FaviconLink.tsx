@@ -23,23 +23,33 @@ export function FaviconLink({ children, className, href, ...props }: ComponentPr
   return (
     <a
       {...props}
-      className={cn(className)}
+      className={cn('inline-flex max-w-full items-center gap-1 align-middle', className)}
       href={href}
       rel="noopener noreferrer"
       target="_blank"
     >
       {favicon ? (
+        // biome-ignore lint/performance/noImgElement: Runtime cross-origin favicons cannot use a framework image optimizer.
         <img
           alt=""
           aria-hidden="true"
-          className="mr-1 inline size-3.5 rounded-[2px] align-[-2px]"
+          className="size-3.5 shrink-0 rounded-[2px]"
           onError={(event) => hideFailedFavicon(event.currentTarget)}
           src={favicon}
         />
       ) : null}
-      {children}
+      <span className="min-w-0 [overflow-wrap:anywhere]">{children}</span>
     </a>
   );
 }
 
-export const faviconMarkdownComponents = { a: FaviconLink } satisfies Components;
+export const faviconMarkdownComponents: Components = {
+  a: ({ children, className, href }) => (
+    <FaviconLink
+      className={className}
+      href={href}
+    >
+      {children}
+    </FaviconLink>
+  )
+};
