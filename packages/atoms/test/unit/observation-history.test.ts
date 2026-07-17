@@ -60,14 +60,14 @@ test('Codex history checkpoint includes the full completed turn rather than stop
   expect(historyItemsThroughCheckpoint(items, 'turn-1')?.map((item) => item.id)).toEqual(['tool', 'completed']);
 });
 
-test('prependObservationHistory preserves chronological page order without ID deduplication', () => {
+test('prependObservationHistory preserves chronological page order with stable ID deduplication', () => {
   const repeated = event('same-render-id', '2026-07-12T14:14:39.000Z');
   const result = prependObservationHistory(
     [event('oldest', '2026-07-12T14:14:38.000Z'), repeated],
     [repeated, event('live', '2026-07-12T14:14:40.000Z')]
   );
 
-  expect(result.map((item) => item.id)).toEqual(['oldest', 'same-render-id', 'same-render-id', 'live']);
+  expect(result.map((item) => item.id)).toEqual(['oldest', 'same-render-id', 'live']);
 });
 
 test('prependObservationHistory replaces live overlay records only by provider identity', () => {
@@ -104,11 +104,29 @@ test('findOlderObservationPage follows newer pages until the checkpoint identity
   expect(result.nextCursor).toBe('older-2');
 });
 
+test('findOlderObservationPage bootstraps stopped history without a live checkpoint', async () => {
+  const cursors: Array<string | undefined> = [];
+  const result = await findOlderObservationPage({
+    load: async (before) => {
+      cursors.push(before);
+      return { items: [providerEvent('restored', 'message-1')], nextCursor: 'older-1' };
+    }
+  });
+
+  expect(cursors).toEqual([undefined]);
+  expect(result.items.map((item) => item.id)).toEqual(['restored']);
+  expect(result.nextCursor).toBe('older-1');
+});
+
 test('observation history load scope is keyed by daemon epoch and canonical checkpoint', () => {
   const scopes = [
     observationHistoryLoadScope({
       externalAgentSessionId: 'exa_running',
       observationEpoch: undefined
+    }),
+    observationHistoryLoadScope({
+      externalAgentSessionId: 'exa_stopped',
+      observationState: 'history'
     }),
     observationHistoryLoadScope({
       externalAgentSessionId: 'exa_running',
@@ -128,5 +146,11 @@ test('observation history load scope is keyed by daemon epoch and canonical chec
     })
   ];
 
-  expect(scopes).toEqual([undefined, 'exa_running:oep_first:message-1', 'exa_running:oep_second:message-1', undefined]);
+  expect(scopes).toEqual([
+    undefined,
+    'exa_stopped:history',
+    'exa_running:oep_first:message-1',
+    'exa_running:oep_second:message-1',
+    undefined
+  ]);
 });

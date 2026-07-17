@@ -1,13 +1,15 @@
-import type { AgentObservationEvent } from '@monad/protocol';
+import type { AgentObservationEvent, ExternalAgentUiObservationFrame } from '@monad/protocol';
 
 export function observationHistoryLoadScope(args: {
   deliveryId?: string;
   externalAgentSessionId?: string;
+  observationState?: ExternalAgentUiObservationFrame['state'];
   observationEpoch?: string;
   providerHistoryCheckpoint?: string;
 }): string | undefined {
-  if (args.deliveryId || !args.externalAgentSessionId || !args.observationEpoch || !args.providerHistoryCheckpoint)
-    return undefined;
+  if (args.deliveryId || !args.externalAgentSessionId) return undefined;
+  if (args.observationState === 'history') return `${args.externalAgentSessionId}:history`;
+  if (!args.observationEpoch || !args.providerHistoryCheckpoint) return undefined;
   return `${args.externalAgentSessionId}:${args.observationEpoch}:${args.providerHistoryCheckpoint}`;
 }
 
@@ -44,12 +46,14 @@ export function prependObservationHistory(
   pageItems: AgentObservationEvent[],
   currentItems: AgentObservationEvent[]
 ): AgentObservationEvent[] {
+  const canonicalIds = new Set(pageItems.map((item) => item.id));
   const canonicalIdentities = new Set(
     pageItems.map(providerObservationIdentity).filter((value) => value !== undefined)
   );
   return [
     ...pageItems,
     ...currentItems.filter((item) => {
+      if (canonicalIds.has(item.id)) return false;
       const identity = providerObservationIdentity(item);
       return !identity || !canonicalIdentities.has(identity);
     })
@@ -67,7 +71,7 @@ export async function findOlderObservationPage(args: {
   load: (before?: string) => Promise<ObservationHistoryPage>;
 }): Promise<ObservationHistoryPage> {
   if (args.before) return args.load(args.before);
-  if (!args.checkpoint) return { items: [] };
+  if (!args.checkpoint) return args.load(undefined);
   let before = args.before;
   const visited = new Set<string>();
   for (;;) {

@@ -610,11 +610,13 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
     : streamWithUiObservationFrame(observedBaseStream, uiFrame);
   const observationEpoch = uiFrame?.state === 'live' ? uiFrame.observationEpoch : undefined;
   const providerHistoryCheckpoint = uiFrame?.state === 'live' ? uiFrame.providerHistoryCheckpoint : undefined;
+  const observationState = uiFrame?.state;
   const providerHistoryCheckpointRef = useRef(providerHistoryCheckpoint);
   providerHistoryCheckpointRef.current = providerHistoryCheckpoint;
   const historyLoadScope = observationHistoryLoadScope({
     deliveryId: observedDeliveryId,
     externalAgentSessionId: observedExternalAgentSessionId,
+    observationState,
     observationEpoch,
     providerHistoryCheckpoint
   });
@@ -640,7 +642,8 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
   const loadHistoryPage = useCallback(
     (before?: string | null) => {
       const checkpoint = providerHistoryCheckpointRef.current;
-      if (!observedExternalAgentSessionId || !observedTranscriptTargetId || !checkpoint) return;
+      if (!observedExternalAgentSessionId || !observedTranscriptTargetId) return;
+      if (!checkpoint && observationState !== 'history') return;
       const generation = historyLoadGenerationRef.current;
       setHistoryPages((current) => {
         return current
@@ -690,7 +693,7 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
         }
       );
     },
-    [observedExternalAgentSessionId, observedTranscriptTargetId, triggerExternalAgentHistoryPage]
+    [observationState, observedExternalAgentSessionId, observedTranscriptTargetId, triggerExternalAgentHistoryPage]
   );
 
   const showHistory = useCallback(() => {
