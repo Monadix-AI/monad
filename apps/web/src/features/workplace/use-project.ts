@@ -44,6 +44,10 @@ const EMPTY_PROFILES: ProfileView[] = [];
 const EMPTY_ITEMS: UIItem[] = [];
 const EMPTY_EXTERNAL_AGENT_SESSIONS: ExternalAgentSessionView[] = [];
 
+export function projectSessionCurrentData<T>(query: { currentData?: T }): T | undefined {
+  return query.currentData;
+}
+
 export function useProject(
   projectId: string,
   opts: {
@@ -116,31 +120,33 @@ export function useProject(
 
   // --- live stream + lazy older history ---
   const stream = useStreamUiItemsQuery(activeSessionId ?? ('ses_' as SessionId), { skip: activeSessionId === null });
+  const streamData = projectSessionCurrentData(stream);
   const externalAgentSessionsQ = useListExternalAgentSessionsQuery(activeSessionId ?? ('ses_' as SessionId), {
     skip: activeSessionId === null
   });
+  const externalAgentSessionsData = projectSessionCurrentData(externalAgentSessionsQ);
   const transcript = useTranscriptHistory({
     sessionId: activeSessionId,
-    streamOldestCursor: stream.data?.oldestCursor,
-    streamHasMore: stream.data?.hasMore ?? false,
-    streamReplacementRevision: stream.data?.replacementRevision
+    streamOldestCursor: streamData?.oldestCursor,
+    streamHasMore: streamData?.hasMore ?? false,
+    streamReplacementRevision: streamData?.replacementRevision
   });
 
   const acp = useAcpAgentSettings();
   const externalAgent = useExternalAgentSettings();
   const externalAgentSessions = useMemo(
     () =>
-      externalAgentSessionsQ.data
-        ? externalAgentSessionSelectors.selectAll(externalAgentSessionsQ.data)
+      externalAgentSessionsData
+        ? externalAgentSessionSelectors.selectAll(externalAgentSessionsData)
         : EMPTY_EXTERNAL_AGENT_SESSIONS,
-    [externalAgentSessionsQ.data]
+    [externalAgentSessionsData]
   );
   const projection = useProjectExperienceProjection({
     acpAgents: acp.agents,
     activeProjectId,
     appearanceAvatarStyle: appearance?.avatarStyle,
     currentProject,
-    liveItems: stream.data?.items ?? EMPTY_ITEMS,
+    liveItems: streamData?.items ?? EMPTY_ITEMS,
     externalAgents: externalAgent.agents,
     externalAgentSessions,
     projectId,
