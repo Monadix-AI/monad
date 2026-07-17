@@ -951,6 +951,8 @@ setInterval(() => {}, 1000);
       state: 'running',
       providerSessionRef: 'thread-1'
     });
+    const suspendedObservation = host.observe(view.id);
+    if (suspendedObservation.state !== 'live') throw new Error('suspended session observation must remain live');
 
     await host.input(view.id, { input: 'wake-up' });
     const wakeDeadline = Date.now() + 10_000;
@@ -963,6 +965,9 @@ setInterval(() => {}, 1000);
     expect((log.match(/^spawn:/gm) ?? []).length).toBeGreaterThanOrEqual(2);
     expect(store.getExternalAgentSession(view.id)?.state).toBe('running');
     expect(store.getExternalAgentSession(view.id)?.pid).toBeNumber();
+    const resumedObservation = host.observe(view.id);
+    if (resumedObservation.state !== 'live') throw new Error('resumed session observation must be live');
+    expect(resumedObservation.observationEpoch).not.toBe(suspendedObservation.observationEpoch);
   } finally {
     host.stop(host.list(projectId).sessions[0]?.id ?? '');
     rmSync(workdir, { recursive: true, force: true });

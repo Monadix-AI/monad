@@ -95,6 +95,9 @@ export function buildAssetMap(files: Array<Blob & { name: string }>): Map<string
     const urlPath = `/${rel}`;
     const headers = new Headers({ 'content-type': contentTypeFor(urlPath) });
     if (gzip) headers.set('content-encoding', 'gzip');
+    if (urlPath.endsWith('.html')) headers.set('cache-control', 'no-cache');
+    else if (urlPath.startsWith('/assets/')) headers.set('cache-control', 'public, max-age=31536000, immutable');
+    if (urlPath === '/favicon.ico') headers.set('cache-control', 'public, max-age=86400');
     assets.set(urlPath, { blob: file, headers });
 
     if (urlPath.endsWith('/index.html')) {
@@ -109,6 +112,9 @@ export function buildAssetMap(files: Array<Blob & { name: string }>): Map<string
 export function serveAssetFromMap(assets: Map<string, EmbeddedAsset>, pathname: string): Response {
   const hit = assets.get(pathname) ?? (pathname === '/' ? assets.get('/index.html') : undefined);
   if (hit) return new Response(hit.blob, { status: 200, headers: hit.headers });
+  if (pathname.startsWith('/assets/')) {
+    return new Response('Not found', { status: 404, headers: { 'content-type': 'text/plain;charset=utf-8' } });
+  }
   // Unknown path: serve SPA shell and let the client router handle it (deep links, /sessions/:id).
   const shell = assets.get('/index.html');
   if (shell) return new Response(shell.blob, { status: 200, headers: shell.headers });

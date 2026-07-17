@@ -16,6 +16,7 @@ declare const __MONAD_WEB_PORT__: string | undefined;
 const ERROR_DETAIL_LIMIT = 3000;
 const UPGRADE_RESTART_SUPPRESS_UNTIL_KEY = 'monad:upgradeRestartSuppressUntil';
 let upgradeReloadWatcher: number | null = null;
+let daemonRestartReloadWatcher: number | null = null;
 
 function truncate(value: string, limit = ERROR_DETAIL_LIMIT): string {
   return value.length > limit ? `${value.slice(0, limit)}\n… truncated` : value;
@@ -134,6 +135,64 @@ export function watchUpgradeRestartAndReload(args: {
       return;
     }
   }, 1000);
+}
+
+export function nextDaemonRestartObservation(
+  sawUnavailable: boolean,
+  healthy: boolean
+): { reload: boolean; sawUnavailable: boolean } {
+  const nextSawUnavailable = sawUnavailable || !healthy;
+  return { reload: healthy && sawUnavailable, sawUnavailable: nextSawUnavailable };
+}
+
+export function watchDaemonRestartAndReload(args: { baseUrl: string; onTimeout?: () => void }): () => void {
+  markUpgradeRestartWindow();
+  if (daemonRestartReloadWatcher !== null) window.clearInterval(daemonRestartReloadWatcher);
+
+  let sawUnavailable = false;
+  let requestInFlight = false;
+  const deadline = Date.now() + 120_000;
+  const stop = () => {
+    if (daemonRestartReloadWatcher !== null) window.clearInterval(daemonRestartReloadWatcher);
+    daemonRestartReloadWatcher = null;
+  };
+
+  daemonRestartReloadWatcher = window.setInterval(async () => {
+    if (requestInFlight) return;
+    if (Date.now() > deadline) {
+      stop();
+      localStorage.removeItem(UPGRADE_RESTART_SUPPRESS_UNTIL_KEY);
+      args.onTimeout?.();
+      return;
+    }
+
+    requestInFlight = true;
+    let healthy = false;
+    try {
+      const response = await fetch(`${args.baseUrl}/health`, {
+        cache: 'no-store',
+        signal: AbortSignal.timeout(1500)
+      });
+      healthy = response.ok;
+    } catch {
+      healthy = false;
+    } finally {
+      requestInFlight = false;
+    }
+
+    const observation = nextDaemonRestartObservation(sawUnavailable, healthy);
+    sawUnavailable = observation.sawUnavailable;
+    if (!observation.reload) return;
+
+    stop();
+    localStorage.removeItem(UPGRADE_RESTART_SUPPRESS_UNTIL_KEY);
+    window.location.reload();
+  }, 500);
+
+  return () => {
+    stop();
+    localStorage.removeItem(UPGRADE_RESTART_SUPPRESS_UNTIL_KEY);
+  };
 }
 
 function shouldSuppressApiErrorDuringUpgrade(err: MonadApiError): boolean {

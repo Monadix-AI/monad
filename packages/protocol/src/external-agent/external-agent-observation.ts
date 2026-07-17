@@ -105,6 +105,8 @@ export const externalAgentObservationAccessResponseSchema = z.discriminatedUnion
     deliveryId: nativeAgentDeliveryIdSchema.optional(),
     turn: nativeAgentTurnPointerSchema.optional(),
     provider: externalAgentProviderSchema,
+    observationEpoch: z.string().min(1),
+    providerHistoryCheckpoint: z.string().min(1).optional(),
     output: z.string().optional(),
     append: z.string().optional(),
     seq: z.number().int().nonnegative().optional(),
@@ -149,6 +151,8 @@ export const externalAgentUiObservationFrameSchema = z.discriminatedUnion('state
     deliveryId: nativeAgentDeliveryIdSchema.optional(),
     turn: nativeAgentTurnPointerSchema.optional(),
     provider: externalAgentProviderSchema,
+    observationEpoch: z.string().min(1),
+    providerHistoryCheckpoint: z.string().min(1).optional(),
     events: z.array(agentObservationEventSchema),
     seq: z.number().int().nonnegative().optional(),
     observedAt: z.string()

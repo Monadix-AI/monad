@@ -9,7 +9,11 @@ import type { ExternalAgentOutputEvent, ExternalAgentProviderAdapter } from '#/s
 import type { ExternalAgentTargetId } from '#/store/db/external-agent-sessions.ts';
 import type { Store } from '#/store/db/index.ts';
 
-import { externalAgentStreamItems } from '@monad/atoms/external-agent-observation';
+import {
+  externalAgentObservationCheckpoint,
+  externalAgentObservationIdentity,
+  externalAgentStreamItems
+} from '@monad/atoms/external-agent-observation';
 
 import { MAX_OUTPUT_SNAPSHOT } from '#/services/external-agent/constants.ts';
 import { ExternalAgentError } from '#/services/external-agent/errors.ts';
@@ -98,10 +102,39 @@ export class ExternalAgentOutputPipeline {
     stream: 'stdout' | 'stderr' | 'pty' | 'app-server',
     adapter: ExternalAgentProviderAdapter
   ): void {
+    if (stream === 'app-server' && isAppServerControlResponse(chunk)) {
+      for (const event of adapter.parseOutput(chunk, this.ctx.live.get(id))) {
+        const parsed = externalAgentOutputEventSchema.safeParse(event);
+        if (parsed.success) this.emitStructuredOutputEvent(transcriptTargetId, id, adapter, parsed.data);
+      }
+      return;
+    }
+    const live = this.ctx.live.get(id);
+    let structuredChunk =
+      stream === 'pty' || stream === 'app-server' ? chunk : this.takeCompleteStructuredLines(id, stream, chunk);
+    const protectsStructuredSeam =
+      !!live?.providerHistoryIdentities?.size && !!adapter.observation && (stream === 'stdout' || stream === 'stderr');
+    if (protectsStructuredSeam && !structuredChunk) return;
+    let observableChunk = protectsStructuredSeam ? structuredChunk : chunk;
+    const providerObservation =
+      live && stream !== 'pty' && structuredChunk
+        ? this.trimProviderHistoryReplay(live, structuredChunk, stream === 'app-server')
+        : undefined;
+    if (providerObservation) {
+      if (!providerObservation.chunk) return;
+      if (protectsStructuredSeam) {
+        observableChunk = providerObservation.chunk;
+        structuredChunk = providerObservation.chunk;
+      }
+    }
+    if (live && providerObservation?.checkpoint) {
+      live.providerHistoryCheckpoint = providerObservation.checkpoint;
+      live.providerHistoryIdentities ??= new Set();
+      for (const identity of providerObservation.identities) live.providerHistoryIdentities.add(identity);
+    }
     // Keep the observation snapshot newline-delimited so the web parser can split records; a ws frame
     // carries no trailing newline of its own.
-    const buffered = stream === 'app-server' ? `${chunk}\n` : chunk;
-    const live = this.ctx.live.get(id);
+    const buffered = stream === 'app-server' ? `${observableChunk}\n` : observableChunk;
     if (live) {
       // Accumulate in memory and flush the bounded snapshot to SQLite on a timer — avoids a
       // per-chunk 256 KB read-modify-write under a chatty agent.
@@ -120,8 +153,6 @@ export class ExternalAgentOutputPipeline {
       stream: stream === 'app-server' ? 'stdout' : stream,
       chunk: buffered
     });
-    const structuredChunk =
-      stream === 'pty' || stream === 'app-server' ? chunk : this.takeCompleteStructuredLines(id, stream, chunk);
     if (!structuredChunk) return;
     if (stream === 'stderr') {
       for (const line of structuredChunk.split('\n')) {
@@ -145,6 +176,47 @@ export class ExternalAgentOutputPipeline {
       if (!parsed.success) continue;
       this.emitStructuredOutputEvent(transcriptTargetId, id, adapter, parsed.data);
     }
+  }
+
+  private providerObservationMetadata(
+    live: LiveExternalAgentSession,
+    chunk: string
+  ): { identities: string[]; checkpoint?: string } {
+    const events = externalAgentStreamItems({ id: `${live.id}:seam`, adapter: live.adapter, output: chunk });
+    const identities = events
+      .map((event) => externalAgentObservationIdentity({ adapter: live.adapter, event }))
+      .filter((identity): identity is string => !!identity);
+    let checkpoint: string | undefined;
+    for (let index = events.length - 1; index >= 0; index--) {
+      const event = events[index];
+      if (!event) continue;
+      checkpoint = externalAgentObservationCheckpoint({ adapter: live.adapter, event });
+      if (checkpoint) break;
+    }
+    return { identities, checkpoint };
+  }
+
+  private trimProviderHistoryReplay(
+    live: LiveExternalAgentSession,
+    chunk: string,
+    framed: boolean
+  ): { chunk: string; identities: string[]; checkpoint?: string } {
+    const records = framed ? [chunk] : chunk.split(/(?<=\n)/).filter(Boolean);
+    const retained: string[] = [];
+    const identities: string[] = [];
+    let checkpoint: string | undefined;
+    for (const record of records) {
+      const metadata = this.providerObservationMetadata(live, record);
+      if (
+        metadata.identities.length > 0 &&
+        metadata.identities.every((identity) => live.providerHistoryIdentities?.has(identity))
+      )
+        continue;
+      retained.push(record);
+      identities.push(...metadata.identities);
+      checkpoint = metadata.checkpoint ?? checkpoint;
+    }
+    return { chunk: retained.join(''), identities, checkpoint };
   }
 
   private scheduleSnapshotFlush(id: string): void {
@@ -414,5 +486,21 @@ export class ExternalAgentOutputPipeline {
         'managed native cli provider output failed to project'
       );
     });
+  }
+}
+
+function isAppServerControlResponse(frame: string): boolean {
+  try {
+    const value = JSON.parse(frame) as Record<string, unknown>;
+    return (
+      value !== null &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      value.id !== undefined &&
+      typeof value.method !== 'string' &&
+      ('result' in value || 'error' in value)
+    );
+  } catch {
+    return false;
   }
 }

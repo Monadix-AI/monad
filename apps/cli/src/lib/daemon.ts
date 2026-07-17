@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path';
 import { makeLoopbackHttpsFetcher } from '@monad/client';
 import { getPaths, loadAll, resolveClientConn, roleExecPath } from '@monad/environment';
 import { rotateDaemonLog } from '@monad/monad/log-maintenance';
+import { DAEMON_RESTART_EXIT_CODE } from '@monad/protocol';
 
 import { t } from './i18n.ts';
 import { bold, cyan, dim, green, out, printGoodbye, red, yellow } from './output.ts';
@@ -86,8 +87,12 @@ export function releaseDaemonSupervisorSpawnOptions(execPath: string, logPath: s
     argv: [roleExecPath(execPath, 'restart'), 'daemon-supervisor', logPath],
     detached: true as const,
     stdin: 'ignore' as const,
-    stdout: 'ignore' as const
+    stdout: 'pipe' as const
   };
+}
+
+export function daemonSupervisorChildStdout(readyOnce: boolean): 'pipe' | 'ignore' {
+  return readyOnce ? 'ignore' : 'pipe';
 }
 
 export interface DaemonLifecycleOptions {
@@ -137,9 +142,9 @@ export async function startDaemon(options: DaemonLifecycleOptions = {}): Promise
     return { alreadyRunning: true };
   }
 
-  // The daemon owns the startup banner + ready-info in dev. In release it is supervised, so startup
-  // readiness is detected by /health instead of stdout relay; otherwise the supervisor would keep a
-  // pipe tied to this short-lived CLI process.
+  // The daemon owns the startup banner + ready-info. Dev relays it directly; release relays the
+  // supervisor's first child only, then disconnects once /health is ready so the background
+  // supervisor is not tied to this short-lived CLI process.
   const logPath = join(getPaths().logs, 'daemon.log');
   await mkdir(getPaths().logs, { recursive: true });
   // Size-cap daemon.log at this start boundary: the CLI's inherited stderr fd (below) pins the file
@@ -177,7 +182,7 @@ export async function startDaemon(options: DaemonLifecycleOptions = {}): Promise
   proc.unref();
 
   const ready =
-    isDevEntry && proc.stdout instanceof ReadableStream
+    proc.stdout instanceof ReadableStream
       ? await relayUntilReady(proc.stdout, proc.pid, logPath, presentation)
       : await waitUntilReady(proc.pid, logPath, presentation.reportLifecycle);
   if (!ready && options.requireReady) throw new Error(`${t('cli.daemon.notReady')} (${logPath})`);
@@ -185,7 +190,7 @@ export async function startDaemon(options: DaemonLifecycleOptions = {}): Promise
 }
 
 type SupervisedProcess = ReturnType<typeof Bun.spawn>;
-type SupervisorAction = { type: 'exit'; code: number } | { type: 'restart' };
+type SupervisorAction = { type: 'exit'; code: number } | { type: 'restart'; requested: boolean };
 
 export function nextDaemonSupervisorAction(args: {
   started: boolean;
@@ -194,7 +199,7 @@ export function nextDaemonSupervisorAction(args: {
 }): SupervisorAction {
   if (!args.started && !args.readyOnce) return { type: 'exit', code: args.exitCode ?? 1 };
   if ((args.exitCode ?? 0) === 0) return { type: 'exit', code: 0 };
-  return { type: 'restart' };
+  return { type: 'restart', requested: args.exitCode === DAEMON_RESTART_EXIT_CODE };
 }
 
 function supervisorLog(logPath: string, message: string, record: Record<string, unknown> = {}, level = 40): void {
@@ -264,14 +269,17 @@ export async function runDaemonSupervisor(): Promise<void> {
     const logFd = openSync(logPath, 'a');
     child = Bun.spawn([roleExecPath(process.execPath, 'daemon'), 'daemon', '--start-relay', '--log-file', logPath], {
       stdin: 'ignore',
-      stdout: 'ignore',
+      stdout: daemonSupervisorChildStdout(readyOnce),
       stderr: logFd,
       env: { ...Bun.env, MONAD_SUPERVISOR_PID: String(process.pid) }
     });
     closeSync(logFd);
+    const startupOutput = child.stdout instanceof ReadableStream ? forwardStartupOutput(child.stdout) : null;
     supervisorLog(logPath, 'daemon supervisor started child', { childPid: child.pid }, 30);
 
     const started = await waitForSupervisorReady(child);
+    if (started && startupOutput) await Bun.sleep(600);
+    await startupOutput?.stop();
     const exitCode = await child.exited.catch(() => 1);
     if (stopping) return;
     const action = nextDaemonSupervisorAction({ started, readyOnce, exitCode });
@@ -281,14 +289,26 @@ export async function runDaemonSupervisor(): Promise<void> {
     }
 
     readyOnce = readyOnce || started;
-    supervisorLog(logPath, 'daemon exited unexpectedly — restarting', {
+    const restartInMs = action.requested ? 500 : backoffMs;
+    supervisorLog(logPath, action.requested ? 'daemon restart requested' : 'daemon exited unexpectedly — restarting', {
       childPid: child.pid,
       exitCode,
-      restartInMs: backoffMs
+      restartInMs
     });
-    await Bun.sleep(backoffMs);
-    backoffMs = Math.min(backoffMs * 2, 5000);
+    await Bun.sleep(restartInMs);
+    if (!action.requested) backoffMs = Math.min(backoffMs * 2, 5000);
   }
+}
+
+function forwardStartupOutput(stream: ReadableStream<Uint8Array>): { stop: () => Promise<void> } {
+  const abort = new AbortController();
+  const pump = relayDaemonOutput(stream, true, undefined, abort.signal);
+  return {
+    stop: async () => {
+      abort.abort();
+      await pump;
+    }
+  };
 }
 
 async function waitUntilReady(pid: number, logPath: string, reportLifecycle: boolean): Promise<boolean> {

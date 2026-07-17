@@ -2,7 +2,7 @@ import type { MonadPaths } from '@monad/environment';
 import type { DeveloperSettings, SetDeveloperSettingsRequest } from '@monad/protocol';
 import type { ConfigAccess } from '#/config/manager.ts';
 
-import { configureDeveloperLogTransport, developerLogsDir } from '#/services/developer-log.ts';
+import { developerLogsDir } from '#/services/developer-log.ts';
 
 export function createDeveloperModule(paths: MonadPaths, config: ConfigAccess) {
   async function getDeveloperSettings(): Promise<DeveloperSettings> {
@@ -14,7 +14,6 @@ export function createDeveloperModule(paths: MonadPaths, config: ConfigAccess) {
     await config.updateConfig((cfg) => {
       cfg.developerMode = req.developerMode;
     });
-    configureDeveloperLogTransport(paths, req.developerMode);
     return getDeveloperSettings();
   }
 

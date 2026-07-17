@@ -1,6 +1,18 @@
 import { expect, test } from 'bun:test';
 
-import { daemonApiUrl, resolveConnection } from '../../src/lib/monad-store.ts';
+import { daemonApiUrl, nextDaemonRestartObservation, resolveConnection } from '../../src/lib/monad-store.ts';
+
+test('daemon restart observation reloads only after an outage followed by recovery', () => {
+  expect([
+    nextDaemonRestartObservation(false, true),
+    nextDaemonRestartObservation(false, false),
+    nextDaemonRestartObservation(true, true)
+  ]).toEqual([
+    { reload: false, sawUnavailable: false },
+    { reload: false, sawUnavailable: true },
+    { reload: true, sawUnavailable: true }
+  ]);
+});
 
 test('resolveConnection requires an explicit browser runtime instead of falling back to a daemon URL', () => {
   const originalWindow = globalThis.window;

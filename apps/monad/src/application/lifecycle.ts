@@ -253,7 +253,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
       },
       moBinaryPath: serveCfg.mo.binaryPath,
       moEnabled: serveCfg.mo.enabled,
-      developerMode: () => runtime.config.get().cfg.developerMode === true,
+      developerMode: serveCfg.developerMode === true,
       i18n: i18nService,
       channelService,
       interactions,

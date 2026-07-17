@@ -27,7 +27,8 @@ import { Badge, Button, ScrollArea, Separator, Skeleton, Switch } from '@monad/u
 import { useEffect, useState } from 'react';
 
 import { useT } from '#/components/I18nProvider';
-import { resolveConnection, watchUpgradeRestartAndReload } from '#/lib/monad-store';
+import { MonadLoading } from '#/components/MonadLoading';
+import { resolveConnection, watchDaemonRestartAndReload, watchUpgradeRestartAndReload } from '#/lib/monad-store';
 
 export function SystemSettings() {
   const t = useT();
@@ -48,6 +49,7 @@ export function SystemSettings() {
   const [clearingAllSessions, setClearingAllSessions] = useState(false);
   const [sessionsCleared, setSessionsCleared] = useState(false);
   const [upgradePolling, setUpgradePolling] = useState(false);
+  const [developerModeRestarting, setDeveloperModeRestarting] = useState(false);
 
   const version = health?.version ?? '—';
   const latestVersion = (health as { latestVersion?: string } | undefined)?.latestVersion;
@@ -88,7 +90,17 @@ export function SystemSettings() {
   }
 
   async function handleDeveloperMode(enabled: boolean) {
-    await setDeveloper({ developerMode: enabled }).unwrap();
+    setDeveloperModeRestarting(true);
+    const cancelRestartWatch = watchDaemonRestartAndReload({
+      baseUrl: resolveConnection().baseUrl,
+      onTimeout: () => setDeveloperModeRestarting(false)
+    });
+    try {
+      await setDeveloper({ developerMode: enabled }).unwrap();
+    } catch {
+      cancelRestartWatch();
+      setDeveloperModeRestarting(false);
+    }
   }
 
   async function handleStartup(enabled: boolean) {
@@ -102,6 +114,15 @@ export function SystemSettings() {
       targetVersion: upgradeStatus?.latestVersion ?? latestVersion
     });
     await startSystemUpgrade().unwrap();
+  }
+
+  if (developerModeRestarting) {
+    return (
+      <MonadLoading
+        className="fixed inset-0 z-50 bg-background"
+        label={t('web.settings.system.upgradeStage.restarting')}
+      />
+    );
   }
 
   return (

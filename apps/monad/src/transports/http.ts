@@ -225,34 +225,37 @@ export function createHttpTransport(
   const encoder = new TextEncoder();
   const idempotencyStore = createInMemoryHttpIdempotencyStore();
   const interactionService = interactions ?? new HostInteractionService();
+  const developerModeEnabled = resolveLiveFlag(developerMode);
 
   let app = new Elysia()
-    .use(serverTiming({ enabled: resolveLiveFlag(developerMode) }))
+    .use(serverTiming({ enabled: developerModeEnabled }))
     .onRequest(({ request }) => {
       requestTimings.set(request, performance.now());
     })
     .onAfterHandle(({ request, responseValue, set }) => {
       const t0 = requestTimings.get(request);
       requestTimings.delete(request);
+      const durationMs = t0 !== undefined ? performance.now() - t0 : undefined;
       const status = responseStatus(responseValue, set.status);
       const url = new URL(request.url);
       logHttpCall(
         request.method,
         url.pathname,
         status,
-        t0 !== undefined ? Math.round(performance.now() - t0) : undefined,
+        durationMs !== undefined ? Math.round(durationMs) : undefined,
         undefined,
-        resolveLiveFlag(developerMode)
+        developerModeEnabled
       );
     })
     .onError(({ code, error, request }) => {
       const t0 = requestTimings.get(request);
       requestTimings.delete(request);
       const url = new URL(request.url);
-      const durationMs = t0 !== undefined ? Math.round(performance.now() - t0) : undefined;
+      const elapsedMs = t0 !== undefined ? performance.now() - t0 : undefined;
+      const durationMs = elapsedMs !== undefined ? Math.round(elapsedMs) : undefined;
       if (error instanceof HandlerError) {
         const { httpStatus, httpCode } = HANDLER_ERROR_MAP[error.kind];
-        logHttpCall(request.method, url.pathname, httpStatus, durationMs, error, resolveLiveFlag(developerMode));
+        logHttpCall(request.method, url.pathname, httpStatus, durationMs, error, developerModeEnabled);
         return jsonResponse(httpStatus, { error: error.message, code: error.code ?? httpCode }, request);
       }
       if (error instanceof HostInteractionError) {
@@ -266,12 +269,12 @@ export function createHttpTransport(
                 : error.code === 'source_limit'
                   ? 429
                   : 409;
-        logHttpCall(request.method, url.pathname, status, durationMs, error, resolveLiveFlag(developerMode));
+        logHttpCall(request.method, url.pathname, status, durationMs, error, developerModeEnabled);
         return jsonResponse(status, { error: error.message, code: error.code }, request);
       }
       // Client-shaped errors: normalize to JSON so every failure has the same envelope.
       if (code === 'NOT_FOUND') {
-        logHttpCall(request.method, url.pathname, 404, durationMs, undefined, resolveLiveFlag(developerMode));
+        logHttpCall(request.method, url.pathname, 404, durationMs, undefined, developerModeEnabled);
         return jsonResponse(404, { error: 'not found', code: 'NOT_FOUND' }, request);
       }
       if (code === 'VALIDATION' || code === 'PARSE') {
@@ -282,7 +285,7 @@ export function createHttpTransport(
           400,
           durationMs,
           error instanceof Error ? error : new Error(msg),
-          resolveLiveFlag(developerMode)
+          developerModeEnabled
         );
         return jsonResponse(400, { error: msg, code: 'VALIDATION' }, request);
       }
@@ -293,7 +296,7 @@ export function createHttpTransport(
         500,
         durationMs,
         error instanceof Error ? error : new Error(String(error)),
-        resolveLiveFlag(developerMode)
+        developerModeEnabled
       );
       return jsonResponse(500, { error: 'internal server error', code: 'INTERNAL' }, request);
     });

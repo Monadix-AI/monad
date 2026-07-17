@@ -14,7 +14,14 @@ import type {
 import type { ModelProviderRegistry } from '../provider.ts';
 import type { GatewayDeps } from './index.ts';
 
-import { buildChain, errInfo, modelCreds, resolveProvider } from './gateway-routing.ts';
+import {
+  buildChain,
+  errInfo,
+  modelCreds,
+  noCredentialsError,
+  resolveProvider,
+  unsupportedCapabilityError
+} from './gateway-routing.ts';
 
 export async function generateImage(
   deps: GatewayDeps,
@@ -25,12 +32,12 @@ export async function generateImage(
   for (const attempt of buildChain(deps, { model: req.model, messages: [] })) {
     const creds = modelCreds(deps, attempt.provider);
     if (creds.length === 0) {
-      errors.push(new Error(`no credentials configured for provider "${attempt.provider}"`));
+      errors.push(noCredentialsError(attempt.provider));
       continue;
     }
     const { provider, impl } = resolveProvider(deps, registry, attempt.provider);
     if (!impl.generateImage) {
-      errors.push(new Error(`provider "${attempt.provider}" does not support image generation`));
+      errors.push(unsupportedCapabilityError(attempt.provider, 'image generation'));
       continue;
     }
     for (const cred of creds) {
@@ -65,12 +72,12 @@ export async function generateSpeech(
   for (const attempt of buildChain(deps, { model: req.model, messages: [] })) {
     const creds = modelCreds(deps, attempt.provider);
     if (creds.length === 0) {
-      errors.push(new Error(`no credentials configured for provider "${attempt.provider}"`));
+      errors.push(noCredentialsError(attempt.provider));
       continue;
     }
     const { provider, impl } = resolveProvider(deps, registry, attempt.provider);
     if (!impl.generateSpeech) {
-      errors.push(new Error(`provider "${attempt.provider}" does not support text-to-speech`));
+      errors.push(unsupportedCapabilityError(attempt.provider, 'text-to-speech'));
       continue;
     }
     for (const cred of creds) {
@@ -104,12 +111,12 @@ export async function generateVideo(
   for (const attempt of buildChain(deps, { model: req.model, messages: [] })) {
     const creds = modelCreds(deps, attempt.provider);
     if (creds.length === 0) {
-      errors.push(new Error(`no credentials configured for provider "${attempt.provider}"`));
+      errors.push(noCredentialsError(attempt.provider));
       continue;
     }
     const { provider, impl } = resolveProvider(deps, registry, attempt.provider);
     if (!impl.generateVideo) {
-      errors.push(new Error(`provider "${attempt.provider}" does not support video generation`));
+      errors.push(unsupportedCapabilityError(attempt.provider, 'video generation'));
       continue;
     }
     for (const cred of creds) {
@@ -149,12 +156,12 @@ export async function transcribe(
   for (const attempt of buildChain(deps, { model: req.model, messages: [] })) {
     const creds = modelCreds(deps, attempt.provider);
     if (creds.length === 0) {
-      errors.push(new Error(`no credentials configured for provider "${attempt.provider}"`));
+      errors.push(noCredentialsError(attempt.provider));
       continue;
     }
     const { provider, impl } = resolveProvider(deps, registry, attempt.provider);
     if (!impl.transcribe) {
-      errors.push(new Error(`provider "${attempt.provider}" does not support audio transcription`));
+      errors.push(unsupportedCapabilityError(attempt.provider, 'audio transcription'));
       continue;
     }
     for (const cred of creds) {
@@ -189,12 +196,12 @@ export async function rerank(
   for (const attempt of buildChain(deps, { model: req.model, messages: [] })) {
     const creds = modelCreds(deps, attempt.provider);
     if (creds.length === 0) {
-      errors.push(new Error(`no credentials configured for provider "${attempt.provider}"`));
+      errors.push(noCredentialsError(attempt.provider));
       continue;
     }
     const { provider, impl } = resolveProvider(deps, registry, attempt.provider);
     if (!impl.rerank) {
-      errors.push(new Error(`provider "${attempt.provider}" does not support reranking`));
+      errors.push(unsupportedCapabilityError(attempt.provider, 'reranking'));
       continue;
     }
     for (const cred of creds) {

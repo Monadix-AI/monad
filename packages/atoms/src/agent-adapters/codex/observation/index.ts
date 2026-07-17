@@ -1,3 +1,4 @@
+import type { ExternalAgentObservationEvent } from '@monad/protocol';
 import type {
   ExternalAgentObservationJsonRecordEntry,
   ExternalAgentObservationProjector
@@ -59,7 +60,20 @@ function codexHistoryEntries(
   return entries.filter((entry) => !isCodexIntermediateHistoryRecord(entry.record, completedItemIds));
 }
 
+function codexObservationIdentity(event: ExternalAgentObservationEvent): string | undefined {
+  const raw = recordValue(event.raw);
+  const params = recordValue(raw?.params);
+  return textValue(params?.turnId, recordValue(params?.turn)?.id);
+}
+
+function codexObservationCheckpoint(event: ExternalAgentObservationEvent): string | undefined {
+  const raw = recordValue(event.raw);
+  return textValue(raw?.method) === 'turn/completed' ? codexObservationIdentity(event) : undefined;
+}
+
 export const codexObservationProjection = {
+  checkpoint: codexObservationCheckpoint,
+  identity: codexObservationIdentity,
   historyEntries: codexHistoryEntries,
   usageRecords: codexUsageRecordsFromRecord,
   messageGroup: codexObservationMessageGroupAdapter,

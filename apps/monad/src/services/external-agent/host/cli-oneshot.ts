@@ -7,6 +7,7 @@ import type { ExternalAgentTargetId } from '#/store/db/external-agent-sessions.t
 import type { ExternalAgentSessionRow, Store } from '#/store/db/index.ts';
 
 import { createLogger } from '@monad/logger';
+import { newId } from '@monad/protocol';
 
 import { daemonTrackedSpawnOptions, supervisedSpawn } from '#/infra/spawn-supervisor.ts';
 import { BoundedOutputBuffer } from '#/services/external-agent/bounded-output-buffer.ts';
@@ -91,6 +92,8 @@ export class ExternalAgentOneshotRunner {
       pendingRequests: new Map(),
       startup: undefined,
       outputBuffer: new BoundedOutputBuffer(MAX_OUTPUT_SNAPSHOT),
+      observationEpoch: newId('oep'),
+      observationEpochReady: false,
       outputSeq: 0,
       snapshotFlushTimer: null,
       nextRequestId: () => 0,

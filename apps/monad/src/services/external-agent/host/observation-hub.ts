@@ -16,7 +16,7 @@ export class ExternalAgentObservationHub {
   private readonly flush = new Map<string, ReturnType<typeof setTimeout>>();
   /** Per-session `outputSeq` already delivered to the observation stream, so the next tick emits only
    *  the delta beyond it. Seeded to the buffer position when the first listener subscribes. */
-  private readonly emitted = new Map<string, number>();
+  private readonly emitted = new Map<string, { epoch: string; seq: number }>();
 
   constructor(private readonly ctx: ObservationHubContext) {}
 
@@ -57,16 +57,19 @@ export class ExternalAgentObservationHub {
       }
       return;
     }
-    const emitted = this.emitted.get(id) ?? live.outputSeq;
-    const deltaLen = live.outputSeq - emitted;
-    if (deltaLen <= 0 && !done) return; // nothing new since the last tick
+    const emitted = this.emitted.get(id) ?? { epoch: live.observationEpoch, seq: live.outputSeq };
+    const epochChanged = emitted.epoch !== live.observationEpoch;
+    const deltaLen = live.outputSeq - emitted.seq;
+    if (!epochChanged && deltaLen <= 0 && !done) return; // nothing new since the last tick
     const snapshot = live.outputBuffer.snapshot();
     const access: ExternalAgentObservationAccessResponse =
-      deltaLen > 0 && deltaLen <= snapshot.length
+      !epochChanged && deltaLen > 0 && deltaLen <= snapshot.length
         ? {
             state: 'live',
             externalAgentSessionId: id as ExternalAgentSessionId,
             provider: live.provider,
+            observationEpoch: live.observationEpoch,
+            ...(live.providerHistoryCheckpoint ? { providerHistoryCheckpoint: live.providerHistoryCheckpoint } : {}),
             append: snapshot.slice(snapshot.length - deltaLen),
             seq: live.outputSeq,
             observedAt: new Date().toISOString()
@@ -75,11 +78,13 @@ export class ExternalAgentObservationHub {
             state: 'live',
             externalAgentSessionId: id as ExternalAgentSessionId,
             provider: live.provider,
+            observationEpoch: live.observationEpoch,
+            ...(live.providerHistoryCheckpoint ? { providerHistoryCheckpoint: live.providerHistoryCheckpoint } : {}),
             output: snapshot,
             seq: live.outputSeq,
             observedAt: new Date().toISOString()
           };
-    this.emitted.set(id, live.outputSeq);
+    this.emitted.set(id, { epoch: live.observationEpoch, seq: live.outputSeq });
     for (const listener of listeners) listener(access, done);
     if (done) {
       this.listeners.delete(id);
@@ -108,7 +113,11 @@ export class ExternalAgentObservationHub {
       this.listeners.set(id, listeners);
       // Seed the delta cursor at this subscriber's snapshot position; a later subscriber gets a fresh
       // full snapshot and its client trims any overlap with the shared delta stream.
-      this.emitted.set(id, this.ctx.getLive(id)?.outputSeq ?? 0);
+      const current = this.ctx.getLive(id);
+      this.emitted.set(id, {
+        epoch: current?.observationEpoch ?? access.observationEpoch,
+        seq: current?.outputSeq ?? access.seq ?? 0
+      });
     }
     listeners.add(listener);
     return {

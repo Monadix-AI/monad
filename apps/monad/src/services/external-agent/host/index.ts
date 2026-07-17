@@ -29,8 +29,13 @@ import type { ExternalAgentTargetId } from '#/store/db/external-agent-sessions.t
 import type { ExternalAgentSessionRow } from '#/store/db/index.ts';
 
 import { dirname } from 'node:path';
-import { externalAgentStreamItems } from '@monad/atoms/external-agent-observation';
+import {
+  externalAgentObservationCheckpoint,
+  externalAgentObservationIdentity,
+  externalAgentStreamItems
+} from '@monad/atoms/external-agent-observation';
 import { createLogger } from '@monad/logger';
+import { newId } from '@monad/protocol';
 
 import { ExternalAgentAuthHost, type ExternalAgentAuthListener } from '#/services/external-agent/auth-host.ts';
 import { MAX_OUTPUT_SNAPSHOT } from '#/services/external-agent/constants.ts';
@@ -330,6 +335,7 @@ export class ExternalAgentHost {
           throw new ExternalAgentError('unsupported_capability', `external agent cannot resume: ${live.id}`);
         await live.restartRuntime();
       }
+      await this.prepareObservationEpoch(live);
       this.armIdleSuspend(live);
       live.adapter.sendInput(live, input);
     };
@@ -341,6 +347,69 @@ export class ExternalAgentHost {
       const message = error instanceof Error ? error.message : String(error);
       this.outputPipeline.output(live.transcriptTargetId, live.id, message, 'stderr', live.adapter);
       throw error;
+    }
+  }
+
+  private async prepareObservationEpoch(live: LiveExternalAgentSession): Promise<void> {
+    if (live.observationEpochReady) return;
+    if (live.observationEpochPreparation) return live.observationEpochPreparation;
+    const prepare = async () => {
+      let checkpoint: string | undefined;
+      const identities = new Set<string>();
+      const providerSessionRef = live.providerSessionRef ?? live.initializeContext?.providerSessionRef ?? undefined;
+      const workingPath = live.initializeContext?.workingPath;
+      if (providerSessionRef && workingPath && live.adapter.historyOutput) {
+        try {
+          const output = await live.adapter.historyOutput({
+            providerSessionRef,
+            workingPath,
+            limitBytes: MAX_OUTPUT_SNAPSHOT
+          });
+          if (output) {
+            const events = externalAgentStreamItems({
+              id: `${live.id}:checkpoint`,
+              adapter: live.adapter,
+              output,
+              mode: 'history'
+            });
+            for (let index = events.length - 1; index >= 0; index--) {
+              const event = events[index];
+              if (!event) continue;
+              checkpoint = externalAgentObservationCheckpoint({ adapter: live.adapter, event });
+              if (checkpoint) break;
+            }
+            for (const event of events) {
+              const identity = externalAgentObservationIdentity({ adapter: live.adapter, event });
+              if (identity) identities.add(identity);
+            }
+          }
+        } catch (error) {
+          this.log.debug(
+            {
+              event: 'external_agent.history_checkpoint_failed',
+              externalAgentSessionId: live.id,
+              provider: live.provider,
+              err: error instanceof Error ? error.message : String(error)
+            },
+            'provider history checkpoint unavailable'
+          );
+        }
+      }
+      live.providerHistoryCheckpoint = checkpoint;
+      live.providerHistoryIdentities = identities;
+      live.outputBuffer.clear();
+      live.outputSeq = 0;
+      this.outputPipeline.flushSnapshot(live.id);
+      live.observationEpoch = newId('oep');
+      live.observationEpochReady = true;
+      this.observation.publish(live.id);
+    };
+    const pending = prepare();
+    live.observationEpochPreparation = pending;
+    try {
+      await pending;
+    } finally {
+      if (live.observationEpochPreparation === pending) live.observationEpochPreparation = undefined;
     }
   }
 
@@ -406,6 +475,7 @@ export class ExternalAgentHost {
         `external agent app-server is reconnecting, cannot send input: ${id}`
       );
     }
+    await this.prepareObservationEpoch(live);
     this.armIdleSuspend(live);
     live.adapter.sendInput(live, req.input);
   }

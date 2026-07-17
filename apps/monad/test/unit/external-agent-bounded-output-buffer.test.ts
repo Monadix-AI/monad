@@ -64,3 +64,16 @@ test('BoundedOutputBuffer drops an oversized frame without replacing the last va
 
   expect(buffer.snapshot()).toBe(valid);
 });
+
+test('BoundedOutputBuffer.clear starts an empty live observation epoch', () => {
+  const buffer = new BoundedOutputBuffer(64);
+  buffer.append('history from the previous runtime');
+
+  buffer.clear();
+  buffer.append('current epoch');
+
+  expect({ length: buffer.length, snapshot: buffer.snapshot() }).toEqual({
+    length: 13,
+    snapshot: 'current epoch'
+  });
+});

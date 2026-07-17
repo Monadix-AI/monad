@@ -44,6 +44,8 @@ export class ExternalAgentObservationResolver {
           state: 'live',
           externalAgentSessionId: id as ExternalAgentSessionId,
           provider: live.provider,
+          observationEpoch: live.observationEpoch,
+          ...(live.providerHistoryCheckpoint ? { providerHistoryCheckpoint: live.providerHistoryCheckpoint } : {}),
           append: snapshot.slice(snapshot.length - (live.outputSeq - afterSeq)),
           seq: live.outputSeq,
           observedAt: new Date().toISOString()
@@ -53,6 +55,8 @@ export class ExternalAgentObservationResolver {
         state: 'live',
         externalAgentSessionId: id as ExternalAgentSessionId,
         provider: live.provider,
+        observationEpoch: live.observationEpoch,
+        ...(live.providerHistoryCheckpoint ? { providerHistoryCheckpoint: live.providerHistoryCheckpoint } : {}),
         output: snapshot,
         events: externalAgentStreamItems({ id, adapter: live.adapter, output: snapshot }),
         usageMeter: externalAgentUsageLimitMeter({ adapter: live.adapter, output: snapshot }),
@@ -98,6 +102,8 @@ export class ExternalAgentObservationResolver {
         state: 'live',
         externalAgentSessionId: id as ExternalAgentSessionId,
         provider: live.provider,
+        observationEpoch: live.observationEpoch,
+        ...(live.providerHistoryCheckpoint ? { providerHistoryCheckpoint: live.providerHistoryCheckpoint } : {}),
         events: externalAgentNeutralStreamItems({ id, adapter: live.adapter, output: snapshot }),
         seq: live.outputSeq,
         observedAt: new Date().toISOString()

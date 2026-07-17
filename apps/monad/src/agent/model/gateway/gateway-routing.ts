@@ -132,6 +132,14 @@ function mergeParams(base: GenerationParams, over: GenerationParams | undefined)
   return merged;
 }
 
+export function noCredentialsError(providerId: string): Error {
+  return new Error(`no credentials configured for provider "${providerId}"`);
+}
+
+export function unsupportedCapabilityError(providerId: string, capability: string): Error {
+  return new Error(`provider "${providerId}" does not support ${capability}`);
+}
+
 export function errInfo(err: unknown): { code?: string; message?: string } {
   const e = err as { statusCode?: number; code?: string; message?: string } | undefined;
   return {

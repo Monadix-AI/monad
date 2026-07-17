@@ -4,10 +4,10 @@ import { expect, test } from 'bun:test';
 
 import {
   findOlderObservationPage,
-  historyItemsBefore,
+  historyItemsThroughCheckpoint,
   observationHistoryLoadScope,
-  oldestObservationTimestamp,
-  prependObservationHistory
+  prependObservationHistory,
+  providerObservationIdentity
 } from '../../src/workspace-experiences/chat-room/utils/observation-history.ts';
 
 function event(id: string, at?: string): AgentObservationEvent {
@@ -20,28 +20,44 @@ function event(id: string, at?: string): AgentObservationEvent {
   };
 }
 
-test('oldestObservationTimestamp returns the earliest valid provider time', () => {
-  expect(
-    oldestObservationTimestamp([
-      event('latest', '2026-07-12T14:17:48.887Z'),
-      event('untimed'),
-      event('earliest', '2026-07-12T14:14:40.000Z')
-    ])
-  ).toBe('2026-07-12T14:14:40.000Z');
+function providerEvent(id: string, identity: string): AgentObservationEvent {
+  return {
+    ...event(id),
+    raw: { type: 'assistant', uuid: identity }
+  };
+}
+
+test('providerObservationIdentity reads Claude UUID and Codex turn identity on every event', () => {
+  expect([
+    providerObservationIdentity(providerEvent('claude', 'message-1')),
+    providerObservationIdentity({
+      ...event('codex-tool'),
+      raw: { method: 'item/completed', params: { turnId: 'turn-1' } }
+    }),
+    providerObservationIdentity({
+      ...event('codex'),
+      raw: { method: 'turn/completed', params: { turn: { id: 'turn-1' } } }
+    })
+  ]).toEqual(['message-1', 'turn-1', 'turn-1']);
 });
 
-test('historyItemsBefore keeps only timestamped observations strictly before the live seam', () => {
+test('historyItemsThroughCheckpoint keeps the canonical prefix by provider identity', () => {
   expect(
-    historyItemsBefore(
-      [
-        event('older', '2026-07-12T14:14:39.999Z'),
-        event('seam', '2026-07-12T14:14:40.000Z'),
-        event('overlap', '2026-07-12T14:17:48.887Z'),
-        event('untimed')
-      ],
-      '2026-07-12T14:14:40.000Z'
-    ).map((item) => item.id)
-  ).toEqual(['older']);
+    historyItemsThroughCheckpoint(
+      [providerEvent('older', 'message-1'), providerEvent('seam', 'message-2'), providerEvent('new', 'message-3')],
+      'message-2'
+    )?.map((item) => item.id)
+  ).toEqual(['older', 'seam']);
+});
+
+test('Codex history checkpoint includes the full completed turn rather than stopping at its first item', () => {
+  const items = [
+    { ...event('tool'), raw: { method: 'item/completed', params: { turnId: 'turn-1' } } },
+    { ...event('completed'), raw: { method: 'turn/completed', params: { turnId: 'turn-1' } } },
+    { ...event('newer'), raw: { method: 'turn/started', params: { turnId: 'turn-2' } } }
+  ];
+
+  expect(historyItemsThroughCheckpoint(items, 'turn-1')?.map((item) => item.id)).toEqual(['tool', 'completed']);
 });
 
 test('prependObservationHistory preserves chronological page order without ID deduplication', () => {
@@ -54,51 +70,63 @@ test('prependObservationHistory preserves chronological page order without ID de
   expect(result.map((item) => item.id)).toEqual(['oldest', 'same-render-id', 'same-render-id', 'live']);
 });
 
-test('findOlderObservationPage follows overlap-only cursors until an older page exists', async () => {
+test('prependObservationHistory replaces live overlay records only by provider identity', () => {
+  const result = prependObservationHistory(
+    [providerEvent('canonical-turn', 'turn-1')],
+    [providerEvent('live-replay', 'turn-1'), providerEvent('same-text-new-turn', 'turn-2')]
+  );
+
+  expect(result.map((item) => item.id)).toEqual(['canonical-turn', 'same-text-new-turn']);
+});
+
+test('findOlderObservationPage follows newer pages until the checkpoint identity appears', async () => {
   const cursors: Array<string | undefined> = [];
   const result = await findOlderObservationPage({
     before: undefined,
-    liveBoundaryAt: '2026-07-12T14:14:40.000Z',
+    checkpoint: 'message-2',
     load: async (before) => {
       cursors.push(before);
       if (!before) {
         return {
-          items: [event('overlap', '2026-07-12T14:17:48.887Z')],
+          items: [providerEvent('new', 'message-3')],
           nextCursor: 'older-1'
         };
       }
       return {
-        items: [event('older', '2026-07-12T14:14:39.000Z')],
+        items: [providerEvent('older', 'message-1'), providerEvent('seam', 'message-2')],
         nextCursor: 'older-2'
       };
     }
   });
 
   expect(cursors).toEqual([undefined, 'older-1']);
-  expect(result.items.map((item) => item.id)).toEqual(['older']);
+  expect(result.items.map((item) => item.id)).toEqual(['older', 'seam']);
   expect(result.nextCursor).toBe('older-2');
 });
 
-test('observation history keeps one load scope while the bounded live seam advances', () => {
+test('observation history load scope is keyed by daemon epoch and canonical checkpoint', () => {
   const scopes = [
     observationHistoryLoadScope({
       externalAgentSessionId: 'exa_running',
-      liveBoundaryAt: undefined
+      observationEpoch: undefined
     }),
     observationHistoryLoadScope({
       externalAgentSessionId: 'exa_running',
-      liveBoundaryAt: '2026-07-17T05:39:45.999Z'
+      observationEpoch: 'oep_first',
+      providerHistoryCheckpoint: 'message-1'
     }),
     observationHistoryLoadScope({
       externalAgentSessionId: 'exa_running',
-      liveBoundaryAt: '2026-07-17T05:44:08.059Z'
+      observationEpoch: 'oep_second',
+      providerHistoryCheckpoint: 'message-1'
     }),
     observationHistoryLoadScope({
       deliveryId: 'deliv_current',
       externalAgentSessionId: 'exa_running',
-      liveBoundaryAt: '2026-07-17T05:44:08.059Z'
+      observationEpoch: 'oep_second',
+      providerHistoryCheckpoint: 'message-1'
     })
   ];
 
-  expect(scopes).toEqual([undefined, 'exa_running', 'exa_running', undefined]);
+  expect(scopes).toEqual([undefined, 'exa_running:oep_first:message-1', 'exa_running:oep_second:message-1', undefined]);
 });

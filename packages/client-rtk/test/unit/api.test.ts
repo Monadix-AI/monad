@@ -443,6 +443,7 @@ test('getExternalAgentObservation uses the typed external agent observation trea
         state: 'live',
         externalAgentSessionId: id,
         provider: 'codex',
+        observationEpoch: 'oep_clientRtkObservation',
         output: '{"type":"agent_message","message":"ok"}',
         observedAt: '2026-07-03T00:00:00.000Z'
       };
@@ -481,6 +482,7 @@ test('streamExternalAgentUiObservation caches full neutral frames verbatim (no d
     state: 'live',
     externalAgentSessionId: 'exa_100000000000',
     provider: 'codex',
+    observationEpoch: 'oep_clientRtkStream',
     events: [{ id: 'e1', kind: 'assistant-message', streaming: true, text: 'hi' }],
     seq: 12,
     observedAt: '2026-07-07T00:00:00.000Z'

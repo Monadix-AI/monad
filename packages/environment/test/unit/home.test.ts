@@ -528,6 +528,17 @@ describe('loadConfig', () => {
     expect(cfg?.model.default).toBe('');
   });
 
+  test('release configuration defaults Developer Mode off', () => {
+    const originalNodeEnv = Bun.env.NODE_ENV;
+    Bun.env.NODE_ENV = 'production';
+    try {
+      expect(createDefaultConfig('User').developerMode).toBe(false);
+    } finally {
+      if (originalNodeEnv === undefined) delete Bun.env.NODE_ENV;
+      else Bun.env.NODE_ENV = originalNodeEnv;
+    }
+  });
+
   test('defaults developerMode on when initialized in development', async () => {
     const originalNodeEnv = Bun.env.NODE_ENV;
     Bun.env.NODE_ENV = 'development';

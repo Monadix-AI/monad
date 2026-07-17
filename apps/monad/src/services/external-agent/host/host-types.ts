@@ -106,6 +106,11 @@ export interface LiveExternalAgentSession {
    *  instead of read-modify-writing the 256 KB column on every output chunk. Chunk-list backed so a
    *  per-token append stays O(chunk), not O(buffer). */
   outputBuffer: BoundedOutputBuffer;
+  observationEpoch: string;
+  observationEpochReady?: boolean;
+  observationEpochPreparation?: Promise<void>;
+  providerHistoryCheckpoint?: string;
+  providerHistoryIdentities?: Set<string>;
   /** Cumulative length of all output ever appended (monotonic, unbounded — unlike `outputBuffer`,
    *  which keeps only the tail). Serves as the observation cursor so the stream can push deltas. */
   outputSeq: number;

@@ -1,4 +1,4 @@
-import type { MonadConfig, MonadPaths } from '@monad/environment';
+import type { MonadConfig } from '@monad/environment';
 import type { Logger } from '@monad/logger';
 import type { ChannelService } from '#/channels/channel.ts';
 import type { ConfigSnapshot } from '#/config/manager.ts';
@@ -14,12 +14,10 @@ import { emptyAuth } from '@monad/environment';
 import { applyAcpDelegateTool } from '#/agent/delegation/acp-tool.ts';
 import { configureToolBackends } from '#/capabilities/tools/configure-backends.ts';
 import { acpAgentCandidatesFromAdapters } from '#/services/delegation/presets.ts';
-import { configureDeveloperLogTransport } from '#/services/developer-log.ts';
 
 // Wire the ConfigManager hot-reload subscriber now that all services are in scope. The bus fires on both
 // file-watcher events (disk edits) and in-process commit() calls (settings API).
 export function createHotReload(deps: {
-  paths: MonadPaths;
   store: Store;
   agentPersona: AgentPersonaService;
   embeddingIndexer: EmbeddingIndexer;
@@ -36,7 +34,6 @@ export function createHotReload(deps: {
   runMonadixSync?: (cfg: MonadConfig) => Promise<void>;
 }): (snapshot: ConfigSnapshot) => Promise<void> {
   const {
-    paths,
     store,
     agentPersona,
     embeddingIndexer,
@@ -53,7 +50,6 @@ export function createHotReload(deps: {
   } = deps;
 
   return async ({ cfg: freshCfg, auth: freshAuth }) => {
-    configureDeveloperLogTransport(paths, freshCfg.developerMode === true);
     // Hot-apply the inbound-delegation approval policy (the agent gate reads this live).
     setInboundApprovalMode(freshCfg.openaiCompat.approval);
     // Agents may have been created/renamed/deleted — re-read their personas against the fresh config.

@@ -61,7 +61,6 @@ import {
 import {
   findOlderObservationPage,
   observationHistoryLoadScope,
-  oldestObservationTimestamp,
   prependObservationHistory
 } from '../utils/observation-history.ts';
 import { ExternalAgentObservationPanel } from './observation/panel.tsx';
@@ -609,13 +608,15 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
           : undefined
       )
     : streamWithUiObservationFrame(observedBaseStream, uiFrame);
-  const liveHistoryBoundaryAt = oldestObservationTimestamp(observedAccessStream?.items ?? []);
-  const liveHistoryBoundaryRef = useRef(liveHistoryBoundaryAt);
-  liveHistoryBoundaryRef.current = liveHistoryBoundaryAt;
+  const observationEpoch = uiFrame?.state === 'live' ? uiFrame.observationEpoch : undefined;
+  const providerHistoryCheckpoint = uiFrame?.state === 'live' ? uiFrame.providerHistoryCheckpoint : undefined;
+  const providerHistoryCheckpointRef = useRef(providerHistoryCheckpoint);
+  providerHistoryCheckpointRef.current = providerHistoryCheckpoint;
   const historyLoadScope = observationHistoryLoadScope({
     deliveryId: observedDeliveryId,
     externalAgentSessionId: observedExternalAgentSessionId,
-    liveBoundaryAt: liveHistoryBoundaryAt
+    observationEpoch,
+    providerHistoryCheckpoint
   });
   const observedHistoryStream = streamWithHistoryPages(
     observedAccessStream,
@@ -638,8 +639,8 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
 
   const loadHistoryPage = useCallback(
     (before?: string | null) => {
-      const liveBoundaryAt = liveHistoryBoundaryRef.current;
-      if (!observedExternalAgentSessionId || !observedTranscriptTargetId || !liveBoundaryAt) return;
+      const checkpoint = providerHistoryCheckpointRef.current;
+      if (!observedExternalAgentSessionId || !observedTranscriptTargetId || !checkpoint) return;
       const generation = historyLoadGenerationRef.current;
       setHistoryPages((current) => {
         return current
@@ -648,7 +649,7 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
       });
       void findOlderObservationPage({
         before: before ?? undefined,
-        liveBoundaryAt,
+        checkpoint,
         load: async (cursor) => {
           const response = await triggerExternalAgentHistoryPage({
             id: observedExternalAgentSessionId,
@@ -698,11 +699,12 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
   }, [historyPages?.items.length, historyRequested]);
 
   useEffect(() => {
+    void historyLoadScope;
     void observationHistoryResetKey;
     historyLoadGenerationRef.current += 1;
     setHistoryPages(undefined);
     setHistoryRequested(false);
-  }, [observationHistoryResetKey]);
+  }, [historyLoadScope, observationHistoryResetKey]);
 
   useEffect(() => {
     if (!historyLoadScope) return;

@@ -79,7 +79,7 @@ export interface ServeDeps {
   tlsCert?: { certPath: string; keyPath: string };
   tlsFingerprint?: string;
   resolveTlsSetupForNetwork?: (https: MonadConfig['network']['https']) => Promise<TlsSetup>;
-  developerMode: boolean | (() => boolean);
+  developerMode: boolean;
   i18n: I18nService;
   channelService: ChannelService;
   onNetworkReloadReady?: (reload: (snapshot: ConfigSnapshot) => Promise<void>) => void;
@@ -135,10 +135,6 @@ export function daemonWebUiUrl(opts: {
 
 export function shouldEnableDeveloperDocs(opts: { developerMode: boolean; stdoutRpc: boolean }): boolean {
   return opts.developerMode && !opts.stdoutRpc;
-}
-
-function resolveDeveloperMode(value: boolean | (() => boolean)): boolean {
-  return typeof value === 'function' ? value() : value;
 }
 
 export function resolveServeDeveloperMode(opts: {
@@ -327,15 +323,13 @@ export async function serveDaemon(deps: ServeDeps): Promise<void> {
   } = deps;
   const { devMode, devSilent, stdoutRpc, stdioMode, useMock } = flags;
 
-  const liveDeveloperMode = () =>
-    resolveServeDeveloperMode({ configured: resolveDeveloperMode(developerMode), devMode, devSilent });
-  const activeDeveloperMode = liveDeveloperMode();
+  const activeDeveloperMode = resolveServeDeveloperMode({ configured: developerMode, devMode, devSilent });
   const developerDocs = shouldEnableDeveloperDocs({ developerMode: activeDeveloperMode, stdoutRpc });
 
   const remoteAccessState = createRemoteAccessState(remoteAccess);
   const httpApp = createHttpTransport(handlers, {
     docs: developerDocs,
-    developerMode: liveDeveloperMode,
+    developerMode: activeDeveloperMode,
     remoteAccess: remoteAccessState,
     openaiCompatConfig,
     interactions
@@ -497,17 +491,17 @@ export async function serveDaemon(deps: ServeDeps): Promise<void> {
   // fires synchronously), stops the unix servers, and disposes timers. Idempotent: a second
   // signal during teardown is ignored.
   let shuttingDown = false;
-  const gracefulShutdown = async (farewell: boolean): Promise<void> => {
+  const gracefulShutdown = async (farewell: boolean, exitCode = 0): Promise<void> => {
     if (shuttingDown) return;
     shuttingDown = true;
     if (farewell) printGoodbye();
     await deps.onShutdown?.();
-    process.exit(0);
+    process.exit(exitCode);
   };
   // Expose graceful shutdown to the HTTP layer (used by POST /v1/daemon/stop on Windows, where
   // SIGTERM cannot be caught on a detached process). Must be registered before the signal handlers
   // below so the HTTP route is ready the instant the daemon starts accepting connections.
-  shutdownBus.register(() => void gracefulShutdown(false));
+  shutdownBus.register((request) => void gracefulShutdown(false, request.exitCode));
 
   // SIGINT (Ctrl-C in a terminal `monad daemon`, all platforms) prints the farewell banner.
   process.once('SIGINT', () => void gracefulShutdown(true));

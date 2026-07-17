@@ -103,11 +103,6 @@ function textValue(...values: unknown[]): string | undefined {
   return undefined;
 }
 
-function resultMarkerText(record: Record<string, unknown>): string {
-  const subtype = textValue(record.subtype) ?? (record.is_error ? 'error' : 'completed');
-  const stopReason = textValue(record.stop_reason);
-  return stopReason ? `Result: ${subtype} (${stopReason})` : `Result: ${subtype}`;
-}
 function rawJsonObservation(
   id: string,
   rawLine: string,
@@ -196,37 +191,6 @@ function parsedJsonEvents(args: {
   });
 }
 
-function removeAdjacentDuplicateObservations(
-  events: ExternalAgentObservationEvent[],
-  adapterObservation: ExternalAgentObservationAdapterProjection | undefined
-): ExternalAgentObservationEvent[] {
-  const out: ExternalAgentObservationEvent[] = [];
-  for (const event of events) {
-    const previous = out.at(-1);
-    if (
-      previous &&
-      previous.role === event.role &&
-      previous.source === event.source &&
-      previous.text.trim() === event.text.trim()
-    ) {
-      // A turn-end whose text just repeats the assistant message it settles still marks a query
-      // boundary — keep it as a compact marker instead of dropping it. "Is this a turn-end?" is the
-      // adapter's call, not a providerEventType string check here.
-      if (
-        adapterObservation?.classifyActivity?.(event) === 'turn-end' &&
-        event.raw &&
-        typeof event.raw === 'object' &&
-        !Array.isArray(event.raw)
-      ) {
-        out.push({ ...event, text: resultMarkerText(event.raw as Record<string, unknown>) });
-      }
-      continue;
-    }
-    out.push(event);
-  }
-  return out;
-}
-
 function rawObservationLine(raw: unknown): string {
   if (typeof raw === 'string') return raw;
   try {
@@ -287,6 +251,19 @@ function mergeAdjacentChunkObservations(
   });
 }
 
+function keepFirstObservationByProviderEventId(
+  events: ExternalAgentObservationEvent[]
+): ExternalAgentObservationEvent[] {
+  const seen = new Set<string>();
+  const observations: ExternalAgentObservationEvent[] = [];
+  for (const event of events) {
+    if (seen.has(event.id)) continue;
+    seen.add(event.id);
+    observations.push(event);
+  }
+  return observations;
+}
+
 function externalAgentObservationEvents(args: {
   id: string;
   provider?: ExternalAgentProvider | string;
@@ -304,12 +281,11 @@ function externalAgentObservationEvents(args: {
       args.mode === 'history' && adapterObservation?.historyEntries
         ? adapterObservation.historyEntries(entries)
         : entries;
-    return removeAdjacentDuplicateObservations(
+    return keepFirstObservationByProviderEventId(
       mergeAdjacentChunkObservations(
         parsedJsonEvents({ id: args.id, provider: args.provider, adapterObservation, entries: projectionEntries }),
         adapterObservation
-      ),
-      adapterObservation
+      )
     );
   }
   if (
@@ -343,6 +319,22 @@ export function externalAgentStreamItems(args: {
       text: part,
       source: 'plain-text' as const
     }));
+}
+
+export function externalAgentObservationIdentity(args: {
+  adapter?: ExternalAgentObservationAdapter;
+  event: ExternalAgentObservationEvent;
+  provider?: ExternalAgentProvider | string;
+}): string | undefined {
+  return observationAdapter(args)?.observation?.identity?.(args.event);
+}
+
+export function externalAgentObservationCheckpoint(args: {
+  adapter?: ExternalAgentObservationAdapter;
+  event: ExternalAgentObservationEvent;
+  provider?: ExternalAgentProvider | string;
+}): string | undefined {
+  return observationAdapter(args)?.observation?.checkpoint?.(args.event);
 }
 
 /** Neutral projection of the full output: the same records `externalAgentStreamItems` produces, mapped

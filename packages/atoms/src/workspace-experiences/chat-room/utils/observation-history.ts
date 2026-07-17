@@ -3,42 +3,57 @@ import type { AgentObservationEvent } from '@monad/protocol';
 export function observationHistoryLoadScope(args: {
   deliveryId?: string;
   externalAgentSessionId?: string;
-  liveBoundaryAt?: string;
+  observationEpoch?: string;
+  providerHistoryCheckpoint?: string;
 }): string | undefined {
-  if (args.deliveryId || !args.externalAgentSessionId || !args.liveBoundaryAt) return undefined;
-  return args.externalAgentSessionId;
+  if (args.deliveryId || !args.externalAgentSessionId || !args.observationEpoch || !args.providerHistoryCheckpoint)
+    return undefined;
+  return `${args.externalAgentSessionId}:${args.observationEpoch}:${args.providerHistoryCheckpoint}`;
 }
 
-function observationTime(item: AgentObservationEvent): number | undefined {
-  if (!item.at) return undefined;
-  const value = Date.parse(item.at);
-  return Number.isNaN(value) ? undefined : value;
+function record(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined;
 }
 
-export function oldestObservationTimestamp(items: AgentObservationEvent[]): string | undefined {
-  let oldest: { at: string; value: number } | undefined;
-  for (const item of items) {
-    const value = observationTime(item);
-    if (value === undefined || (oldest && value >= oldest.value)) continue;
-    oldest = { at: item.at as string, value };
-  }
-  return oldest?.at;
+export function providerObservationIdentity(item: AgentObservationEvent): string | undefined {
+  const raw = record(item.raw);
+  if (!raw) return undefined;
+  if (typeof raw.uuid === 'string' && raw.uuid) return raw.uuid;
+  const params = record(raw.params);
+  const turn = record(params?.turn);
+  if (typeof params?.turnId === 'string' && params.turnId) return params.turnId;
+  return typeof turn?.id === 'string' && turn.id ? turn.id : undefined;
 }
 
-export function historyItemsBefore(items: AgentObservationEvent[], liveBoundaryAt: string): AgentObservationEvent[] {
-  const boundary = Date.parse(liveBoundaryAt);
-  if (Number.isNaN(boundary)) return [];
-  return items.filter((item) => {
-    const value = observationTime(item);
-    return value !== undefined && value < boundary;
-  });
+function providerObservationCheckpoint(item: AgentObservationEvent): string | undefined {
+  const raw = record(item.raw);
+  if (!raw) return undefined;
+  if (typeof raw.uuid === 'string' && raw.uuid) return raw.uuid;
+  return raw.method === 'turn/completed' ? providerObservationIdentity(item) : undefined;
+}
+
+export function historyItemsThroughCheckpoint(
+  items: AgentObservationEvent[],
+  checkpoint: string
+): AgentObservationEvent[] | undefined {
+  const index = items.findIndex((item) => providerObservationCheckpoint(item) === checkpoint);
+  return index < 0 ? undefined : items.slice(0, index + 1);
 }
 
 export function prependObservationHistory(
   pageItems: AgentObservationEvent[],
   currentItems: AgentObservationEvent[]
 ): AgentObservationEvent[] {
-  return [...pageItems, ...currentItems];
+  const canonicalIdentities = new Set(
+    pageItems.map(providerObservationIdentity).filter((value) => value !== undefined)
+  );
+  return [
+    ...pageItems,
+    ...currentItems.filter((item) => {
+      const identity = providerObservationIdentity(item);
+      return !identity || !canonicalIdentities.has(identity);
+    })
+  ];
 }
 
 export interface ObservationHistoryPage {
@@ -48,9 +63,11 @@ export interface ObservationHistoryPage {
 
 export async function findOlderObservationPage(args: {
   before?: string;
-  liveBoundaryAt: string;
+  checkpoint?: string;
   load: (before?: string) => Promise<ObservationHistoryPage>;
 }): Promise<ObservationHistoryPage> {
+  if (args.before) return args.load(args.before);
+  if (!args.checkpoint) return { items: [] };
   let before = args.before;
   const visited = new Set<string>();
   for (;;) {
@@ -59,8 +76,9 @@ export async function findOlderObservationPage(args: {
     visited.add(marker);
 
     const page = await args.load(before);
-    const items = historyItemsBefore(page.items, args.liveBoundaryAt);
-    if (items.length > 0 || !page.nextCursor) return { items, nextCursor: page.nextCursor };
+    const items = historyItemsThroughCheckpoint(page.items, args.checkpoint);
+    if (items) return { items, nextCursor: page.nextCursor };
+    if (!page.nextCursor) return { items: [] };
     before = page.nextCursor;
   }
 }

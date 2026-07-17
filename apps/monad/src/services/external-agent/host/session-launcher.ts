@@ -486,6 +486,8 @@ export class ExternalAgentSessionLauncher {
       pendingRequests: new Map(),
       startup: undefined,
       outputBuffer: new BoundedOutputBuffer(MAX_OUTPUT_SNAPSHOT),
+      observationEpoch: newId('oep'),
+      observationEpochReady: false,
       outputSeq: 0,
       snapshotFlushTimer: null,
       nextRequestId: () => requestSeq++,
@@ -693,6 +695,7 @@ export class ExternalAgentSessionLauncher {
             throw error;
           }
           live.suspended = false;
+          live.observationEpochReady = false;
           this.ctx.updateExternalAgentPid(id, nextProc.pid);
           this.ctx.observation.publish(id);
           this.ctx.log.debug(

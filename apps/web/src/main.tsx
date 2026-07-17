@@ -3,7 +3,10 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { setShellRouter } from './hooks/use-shell-location';
+import { installPreloadErrorRecovery } from './lib/preload-error-recovery';
 import { routeTree } from './routeTree.gen';
+
+installPreloadErrorRecovery();
 
 const router = createRouter({
   routeTree,

@@ -88,21 +88,28 @@ test('HTTP transport scopes session and channel request logs for developer trace
   );
 });
 
-test('HTTP transport writes access logs to the primary log only while Developer Mode is live', async () => {
+test('HTTP transport captures Developer Mode for primary access logs when it starts', async () => {
   let developerMode = false;
   const records = captureLogs('info');
-  const app = createHttpTransport(buildHandlers(mockModel()), { developerMode: () => developerMode }).get(
+  const disabledApp = createHttpTransport(buildHandlers(mockModel()), { developerMode: () => developerMode }).get(
     '/v1/projects/:id/unit-primary-log',
     () => ({ ok: true })
   );
 
-  await app.handle(new Request('http://localhost/v1/projects/ses_100000000000/unit-primary-log'));
+  await disabledApp.handle(new Request('http://localhost/v1/projects/ses_100000000000/unit-primary-log'));
   expect(records).toEqual([]);
 
   developerMode = true;
-  await app.handle(new Request('http://localhost/v1/projects/ses_100000000000/unit-primary-log'));
+  await disabledApp.handle(new Request('http://localhost/v1/projects/ses_100000000000/unit-primary-log'));
+  expect(records).toEqual([]);
 
-  expect(records).toContainEqual(
+  const enabledApp = createHttpTransport(buildHandlers(mockModel()), { developerMode }).get(
+    '/v1/projects/:id/unit-primary-log',
+    () => ({ ok: true })
+  );
+  await enabledApp.handle(new Request('http://localhost/v1/projects/ses_100000000000/unit-primary-log'));
+
+  expect(records).toEqual([
     expect.objectContaining({
       event: 'http.request',
       method: 'GET',
@@ -110,7 +117,7 @@ test('HTTP transport writes access logs to the primary log only while Developer 
       sessionId: 'ses_100000000000',
       status: 200
     })
-  );
+  ]);
 });
 
 test('JSON-RPC transport logs handler exceptions with exception stacks', async () => {

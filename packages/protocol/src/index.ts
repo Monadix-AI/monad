@@ -15,6 +15,7 @@ export * from './channel.ts';
 export * from './clarify.ts';
 export * from './command.ts';
 export * from './computer-preset.ts';
+export * from './daemon.ts';
 export * from './developer-log.ts';
 export * from './domain.ts';
 export * from './event-table.ts';

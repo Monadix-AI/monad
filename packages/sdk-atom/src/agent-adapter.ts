@@ -372,6 +372,8 @@ export type ExternalAgentObservationActivity =
   | 'turn-end';
 
 export type ExternalAgentObservationProjector = ExternalAgentObservationUsageProjector & {
+  identity?(event: ExternalAgentObservationEvent): string | undefined;
+  checkpoint?(event: ExternalAgentObservationEvent): string | undefined;
   historyEntries?(entries: ExternalAgentObservationJsonRecordEntry[]): ExternalAgentObservationJsonRecordEntry[];
   messageGroup?: ExternalAgentObservationMessageGroupProjector;
   recordProjectors: ExternalAgentObservationRecordProjector[];

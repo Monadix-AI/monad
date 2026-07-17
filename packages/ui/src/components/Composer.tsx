@@ -691,6 +691,7 @@ export function ComposerSurface({
                 if (ariaBusy) event.preventDefault();
               }}
               style={{
+                minHeight: 56,
                 opacity: ariaBusy ? 0.72 : 1,
                 pointerEvents: ariaBusy ? 'none' : undefined
               }}

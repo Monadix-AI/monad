@@ -55,6 +55,13 @@ export class BoundedOutputBuffer {
     return s;
   }
 
+  clear(): void {
+    this.chunks = [];
+    this.len = 0;
+    this.joined = '';
+    this.framed = false;
+  }
+
   get length(): number {
     return this.len;
   }

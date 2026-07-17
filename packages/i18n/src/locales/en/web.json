@@ -1104,7 +1104,7 @@
   "web.settings.system.upgradeStage.failed": "Update failed. View logs and try again.",
   "web.settings.system.developer": "Developer",
   "web.settings.system.developerMode": "Developer mode",
-  "web.settings.system.developerModeDesc": "Enable developer logs, Scalar API docs, and local OpenTelemetry export.",
+  "web.settings.system.developerModeDesc": "Changing this setting restarts Monad. Enables developer logs, Scalar API docs, and local OpenTelemetry export.",
   "web.settings.system.startup": "Startup",
   "web.settings.system.launchAtLogin": "Launch at login",
   "web.settings.system.launchAtLoginDesc": "Start the Monad daemon automatically when you sign in.",

@@ -188,7 +188,6 @@ export async function createAgentRuntime(core: DaemonCore, endpoint: { host: str
 
   reloadTargets.setApplication(
     createHotReload({
-      paths,
       store,
       agentPersona,
       embeddingIndexer,

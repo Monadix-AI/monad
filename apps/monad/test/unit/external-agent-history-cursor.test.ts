@@ -72,12 +72,210 @@ function fakeLive(overrides: Partial<LiveExternalAgentSession> = {}): LiveExtern
     pendingRequests: new Map(),
     nextRequestId: () => requestSeq++,
     outputBuffer: new BoundedOutputBuffer(64 * 1024),
+    observationEpoch: 'oep_previous',
     outputSeq: 0,
     snapshotFlushTimer: null,
     kill: () => {},
     ...overrides
   } as LiveExternalAgentSession;
 }
+
+test('input captures provider history checkpoint before starting the live observation epoch', async () => {
+  const live = fakeLive({
+    initializeContext: { workingPath: '/tmp/project', providerSessionRef: 'thread-1' },
+    providerSessionRef: 'thread-1'
+  });
+  const originalEpoch = live.observationEpoch;
+  const sent: Array<{ buffer: string; checkpoint?: string; epoch: string }> = [];
+  live.outputBuffer.append('previous runtime output');
+  live.adapter = {
+    ...live.adapter,
+    observation: {
+      checkpoint: (event: { raw?: unknown }) =>
+        event.raw && typeof event.raw === 'object' && !Array.isArray(event.raw)
+          ? String((event.raw as { uuid?: unknown }).uuid ?? '') || undefined
+          : undefined,
+      identity: (event: { raw?: unknown }) =>
+        event.raw && typeof event.raw === 'object' && !Array.isArray(event.raw)
+          ? String((event.raw as { uuid?: unknown }).uuid ?? '') || undefined
+          : undefined,
+      recordProjectors: [
+        {
+          parse: ({ id, record }: { id: string; record: Record<string, unknown> }) => [
+            {
+              id: `${id}:history`,
+              role: 'agent' as const,
+              text: 'canonical history',
+              source: 'claude-code-sdk' as const,
+              raw: record
+            }
+          ]
+        }
+      ]
+    },
+    historyOutput: async () => JSON.stringify({ type: 'assistant', uuid: 'history-message-1' }),
+    sendInput: () => {
+      sent.push({
+        buffer: live.outputBuffer.snapshot(),
+        checkpoint: Reflect.get(live, 'providerHistoryCheckpoint'),
+        epoch: live.observationEpoch
+      });
+    }
+  } as ExternalAgentProviderAdapter;
+  const store = createStore();
+  store.upsertExternalAgentSession({
+    id: SESSION_ID,
+    transcriptTargetId: TARGET_ID,
+    agentName: 'codex',
+    provider: 'codex',
+    workingPath: '/tmp/project',
+    launchMode: 'app-server',
+    runtimeRole: 'interactive',
+    agentRuntimeId: null,
+    agentRuntimeTokenHash: null,
+    lastDeliveredSeq: 0,
+    lastVisibleSeq: 0,
+    state: 'running',
+    pid: null,
+    providerSessionRef: 'thread-1',
+    outputSnapshot: 'previous runtime output',
+    exitCode: null,
+    startedAt: '2026-07-17T00:00:00.000Z',
+    updatedAt: '2026-07-17T00:00:00.000Z',
+    exitedAt: null
+  });
+  const host = hostWithLive(live, store);
+
+  await host.input(SESSION_ID, { input: 'new turn' });
+
+  expect({ originalEpoch, sent }).toEqual({
+    originalEpoch: 'oep_previous',
+    sent: [{ buffer: '', checkpoint: 'history-message-1', epoch: expect.stringMatching(/^oep_/) }]
+  });
+  expect(sent[0]?.epoch).not.toBe(originalEpoch);
+  expect(store.getExternalAgentSession(SESSION_ID)?.outputSnapshot).toBe('');
+});
+
+test('live overlay trims provider replay by identity while preserving identical new messages', () => {
+  const live = fakeLive();
+  Reflect.set(live, 'providerHistoryIdentities', new Set(['message-old']));
+  live.adapter = {
+    ...live.adapter,
+    parseOutput: () => [],
+    observation: {
+      identity: (event: { raw?: unknown }) =>
+        event.raw && typeof event.raw === 'object' && !Array.isArray(event.raw)
+          ? String((event.raw as { uuid?: unknown }).uuid ?? '') || undefined
+          : undefined,
+      recordProjectors: [
+        {
+          parse: ({ id, record }: { id: string; record: Record<string, unknown> }) => [
+            {
+              id: `${id}:${String(record.uuid)}`,
+              role: 'agent' as const,
+              text: String(record.text),
+              source: 'claude-code-sdk' as const,
+              raw: record
+            }
+          ]
+        }
+      ]
+    }
+  } as ExternalAgentProviderAdapter;
+  const { pipeline } = buildPipeline(live);
+  const replay = JSON.stringify({ method: 'message', uuid: 'message-old', text: 'Same answer' });
+  const current = JSON.stringify({ method: 'message', uuid: 'message-new', text: 'Same answer' });
+
+  pipeline.output(TARGET_ID, SESSION_ID, replay, 'app-server', live.adapter);
+  pipeline.output(TARGET_ID, SESSION_ID, current, 'app-server', live.adapter);
+
+  expect({ output: live.outputBuffer.snapshot(), seq: live.outputSeq }).toEqual({
+    output: `${current}\n`,
+    seq: current.length + 1
+  });
+});
+
+test('json-stream replay trimming waits for complete records and removes only canonical identities', () => {
+  const live = fakeLive();
+  live.providerHistoryIdentities = new Set(['message-old']);
+  live.adapter = {
+    ...live.adapter,
+    parseOutput: () => [],
+    observation: {
+      identity: (event: { raw?: unknown }) =>
+        event.raw && typeof event.raw === 'object' && !Array.isArray(event.raw)
+          ? String((event.raw as { uuid?: unknown }).uuid ?? '') || undefined
+          : undefined,
+      recordProjectors: [
+        {
+          parse: ({ id, record }: { id: string; record: Record<string, unknown> }) => [
+            {
+              id: `${id}:${String(record.uuid)}`,
+              role: 'agent' as const,
+              text: String(record.text),
+              source: 'claude-code-sdk' as const,
+              raw: record
+            }
+          ]
+        }
+      ]
+    }
+  } as ExternalAgentProviderAdapter;
+  const { pipeline } = buildPipeline(live);
+  const replay = JSON.stringify({ type: 'assistant', uuid: 'message-old', text: 'Same answer' });
+  const current = JSON.stringify({ type: 'assistant', uuid: 'message-new', text: 'Same answer' });
+
+  pipeline.output(TARGET_ID, SESSION_ID, replay.slice(0, 12), 'stdout', live.adapter);
+  pipeline.output(TARGET_ID, SESSION_ID, `${replay.slice(12)}\n${current}\n`, 'stdout', live.adapter);
+
+  expect({ output: live.outputBuffer.snapshot(), seq: live.outputSeq }).toEqual({
+    output: `${current}\n`,
+    seq: current.length + 1
+  });
+});
+
+test('a committed provider turn advances the canonical checkpoint before publishing live output', () => {
+  const live = fakeLive({ providerHistoryCheckpoint: 'turn-old' });
+  live.adapter = {
+    ...live.adapter,
+    parseOutput: () => [],
+    observation: {
+      identity: (event: { raw?: unknown }) => {
+        const raw = event.raw as { params?: { turnId?: string } } | undefined;
+        return raw?.params?.turnId;
+      },
+      checkpoint: (event: { raw?: unknown }) => {
+        const raw = event.raw as { method?: string; params?: { turnId?: string } } | undefined;
+        return raw?.method === 'turn/completed' ? raw.params?.turnId : undefined;
+      },
+      recordProjectors: [
+        {
+          parse: ({ id, record }: { id: string; record: Record<string, unknown> }) => [
+            {
+              id: `${id}:turn`,
+              role: 'system' as const,
+              text: 'Completed',
+              source: 'codex-app-server' as const,
+              raw: record
+            }
+          ]
+        }
+      ]
+    }
+  } as ExternalAgentProviderAdapter;
+  const { pipeline } = buildPipeline(live);
+  const completed = JSON.stringify({ method: 'turn/completed', params: { turnId: 'turn-new' } });
+
+  pipeline.output(TARGET_ID, SESSION_ID, completed, 'app-server', live.adapter);
+
+  expect({
+    checkpoint: live.providerHistoryCheckpoint,
+    identities: [...(live.providerHistoryIdentities ?? [])]
+  }).toEqual({
+    checkpoint: 'turn-new',
+    identities: ['turn-new']
+  });
+});
 
 function buildPipeline(live: LiveExternalAgentSession) {
   const store = createStore();
@@ -143,7 +341,7 @@ test('a provider error response rejects the pending history page immediately ins
   expect(timedOut).toBe(false);
 });
 
-test('a live history page response comes back with a provider-namespaced nextCursor', () => {
+test('a live history page control response bypasses the observation buffer', () => {
   const live = fakeLive();
   const { pipeline } = buildPipeline(live);
   let resolved: { nextCursor?: string } | undefined;
@@ -162,17 +360,22 @@ test('a live history page response comes back with a provider-namespaced nextCur
   pipeline.output(
     TARGET_ID,
     SESSION_ID,
-    JSON.stringify({ id: 7, result: { data: [], nextCursor: '{"turnId":"turn_9"}' } }),
+    JSON.stringify({ id: 7, result: { data: ['x'.repeat(48 * 1024)], nextCursor: '{"turnId":"turn_9"}' } }),
     'app-server',
     live.adapter
   );
 
   clearTimeout(timeout);
-  expect(resolved?.nextCursor).toBe('provider:{"turnId":"turn_9"}');
+  expect({ buffer: live.outputBuffer.snapshot(), nextCursor: resolved?.nextCursor, outputSeq: live.outputSeq }).toEqual(
+    {
+      buffer: '',
+      nextCursor: 'provider:{"turnId":"turn_9"}',
+      outputSeq: 0
+    }
+  );
 });
 
-function hostWithLive(live: LiveExternalAgentSession) {
-  const store = createStore();
+function hostWithLive(live: LiveExternalAgentSession, store = createStore()) {
   const host = new ExternalAgentHost({ store, bus: new EventBus(), agents: async () => [] });
   (host as unknown as { live: Map<string, LiveExternalAgentSession> }).live.set(SESSION_ID, live);
   return host;

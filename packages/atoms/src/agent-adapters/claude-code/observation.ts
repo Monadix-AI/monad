@@ -77,7 +77,7 @@ function isClaudeSystemMessage(record: ClaudeObservationMessage): record is Clau
 }
 
 function claudeResultText(record: ClaudeResultMessage): string {
-  return textValue(record.result) ?? textValue(record.response) ?? resultMarkerText(record);
+  return textValue(record.result, record.response) ?? resultMarkerText(record);
 }
 
 function claudeContentEvents(args: {
@@ -280,6 +280,8 @@ export function claudeRecordEvents(
 }
 
 export const claudeCodeObservationProjection = {
+  checkpoint: (event: ExternalAgentObservationEvent) => textValue(recordValue(event.raw)?.uuid),
+  identity: (event: ExternalAgentObservationEvent) => textValue(recordValue(event.raw)?.uuid),
   usageRecords: claudeUsageRecordsFromRecord,
   classifyActivity: classifyObservationActivity,
   isStreamingFragment: isStreamingObservationFragment,

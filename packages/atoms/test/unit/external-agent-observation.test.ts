@@ -57,6 +57,7 @@ test('observation access is adapted to projection events without carrying raw ou
     state: 'live',
     externalAgentSessionId: 'exa_codex0000000',
     provider: 'codex',
+    observationEpoch: 'oep_test1',
     output: raw,
     // The daemon normalizes `output` into `events` with the same adapter before sending the access
     // response — the client never re-derives this from raw output (see observeFromStore/
@@ -91,6 +92,7 @@ test('live SSE frame without events derives them from the folded output', () => 
     state: 'live',
     externalAgentSessionId: 'exa_codex0000000',
     provider: 'codex',
+    observationEpoch: 'oep_test2',
     output,
     observedAt: '2026-07-07T00:00:00.000Z'
   });
@@ -118,6 +120,7 @@ test('delivery observation access keeps the delivery pointer on the projection',
         state: 'live',
         externalAgentSessionId: 'exa_codex0000000',
         provider: 'codex',
+        observationEpoch: 'oep_test3',
         deliveryId: 'deliv_01KWEBDErrBa',
         turn: { providerSessionRef: 'provider-session-1', providerTurnId: 'turn-1' },
         output: '',
@@ -207,6 +210,7 @@ test('observation rail usage fallback reads raw access output before projected d
       state: 'live',
       externalAgentSessionId: 'exa_codex0000000',
       provider: 'codex',
+      observationEpoch: 'oep_test4',
       output: raw,
       // Server-normalized, same as `events` — the daemon computes this from `raw`, the client never
       // re-derives it from `stream.output` when an access response is present.
@@ -220,7 +224,7 @@ test('observation rail usage fallback reads raw access output before projected d
   expect(meter?.rows).toMatchObject([{ id: 'primary', percent: 70 }]);
 });
 
-test('Claude Code observation keeps a result marker without repeating assistant text', () => {
+test('Claude Code observation preserves assistant and result identities even when their text matches', () => {
   const output = [
     JSON.stringify({
       type: 'assistant',
@@ -238,7 +242,7 @@ test('Claude Code observation keeps a result marker without repeating assistant 
 
   expect(
     externalAgentStreamItems({ id: 'exa_claude000000', provider: 'claude-code', output }).map((item) => item.text)
-  ).toEqual(['Joined the project and posted status.', 'Result: success']);
+  ).toEqual(['Joined the project and posted status.', 'Joined the project and posted status.']);
 });
 
 test('Claude Code observation maps server errors to readable system events', () => {
@@ -313,7 +317,7 @@ test('Qwen Code observation uses SDK-shaped assistant and result messages', () =
   ).toEqual([
     { role: 'system', source: 'qwen-code-sdk', type: 'system', text: 'session_start' },
     { role: 'agent', source: 'qwen-code-sdk', type: 'assistant', text: 'I will inspect the project first.' },
-    { role: 'agent', source: 'qwen-code-sdk', type: 'result', text: 'Result: success' }
+    { role: 'agent', source: 'qwen-code-sdk', type: 'result', text: 'I will inspect the project first.' }
   ]);
 });
 
@@ -796,6 +800,45 @@ test('Codex app-server observation keeps provider events in timeline order', () 
     'codex-app-server',
     'codex-app-server',
     'codex-app-server'
+  ]);
+});
+
+test('observation preserves identical provider messages with different identities', () => {
+  const output = [
+    JSON.stringify({
+      type: 'assistant',
+      uuid: 'message-1',
+      message: { content: [{ type: 'text', text: 'Same answer' }] }
+    }),
+    JSON.stringify({
+      type: 'assistant',
+      uuid: 'message-2',
+      message: { content: [{ type: 'text', text: 'Same answer' }] }
+    })
+  ].join('\n');
+
+  expect(
+    externalAgentStreamItems({ id: 'exa_claude000000', provider: 'claude-code', output }).map((item) => ({
+      raw: item.raw,
+      text: item.text
+    }))
+  ).toEqual([
+    {
+      raw: {
+        type: 'assistant',
+        uuid: 'message-1',
+        message: { content: [{ type: 'text', text: 'Same answer' }] }
+      },
+      text: 'Same answer'
+    },
+    {
+      raw: {
+        type: 'assistant',
+        uuid: 'message-2',
+        message: { content: [{ type: 'text', text: 'Same answer' }] }
+      },
+      text: 'Same answer'
+    }
   ]);
 });
 
@@ -1710,10 +1753,10 @@ test('Claude Code observation keeps result-delimited SDK queries in timeline ord
   expect(items.map((item) => item.text)).toEqual([
     'init',
     'First response',
-    'Result: success',
+    'First response',
     'init',
     'Second response',
-    'Result: success'
+    'Second response'
   ]);
   expect(items.map((item) => item.source)).toEqual([
     'claude-code-sdk',

@@ -15,6 +15,25 @@ test('Developer Mode adds Server-Timing headers', async () => {
   expect(res.headers.get('server-timing')).toContain('total');
 });
 
+test('Server-Timing captures Developer Mode when the transport is created', async () => {
+  let developerMode = true;
+  const app = createHttpTransport(buildHandlers(mockModel(['hello'])), {
+    developerMode: () => developerMode
+  });
+
+  const enabled = await app.handle(new Request('http://localhost/health'));
+  developerMode = false;
+  const stillEnabled = await app.handle(new Request('http://localhost/health'));
+
+  expect({
+    enabled: enabled.headers.get('server-timing'),
+    stillEnabled: stillEnabled.headers.get('server-timing')
+  }).toEqual({
+    enabled: expect.stringMatching(/^request\..*,total;dur=/),
+    stillEnabled: expect.stringMatching(/^request\..*,total;dur=/)
+  });
+});
+
 test('Server-Timing headers are disabled by default', async () => {
   const app = buildApp();
   const res = await app.handle(new Request('http://localhost/health'));

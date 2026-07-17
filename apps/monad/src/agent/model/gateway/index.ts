@@ -33,7 +33,15 @@ import {
   rerank as rerankAttempt,
   transcribe as transcribeAttempt
 } from './gateway-media.ts';
-import { buildCall, buildChain, errInfo, modelCreds, resolveProvider } from './gateway-routing.ts';
+import {
+  buildCall,
+  buildChain,
+  errInfo,
+  modelCreds,
+  noCredentialsError,
+  resolveProvider,
+  unsupportedCapabilityError
+} from './gateway-routing.ts';
 
 export { fetchProviderModels, listProviderModels } from './gateway-models.ts';
 
@@ -78,12 +86,12 @@ export class GatewayModelRouter implements ModelRouter {
     for (const attempt of buildChain(this.deps, req)) {
       const creds = modelCreds(this.deps, attempt.provider);
       if (creds.length === 0) {
-        errors.push(new Error(`no credentials configured for provider "${attempt.provider}"`));
+        errors.push(noCredentialsError(attempt.provider));
         continue;
       }
       const { provider, impl } = resolveProvider(this.deps, this.registry, attempt.provider);
       if (!impl.stream) {
-        errors.push(new Error(`provider "${attempt.provider}" does not support text generation`));
+        errors.push(unsupportedCapabilityError(attempt.provider, 'text generation'));
         continue;
       }
       for (const cred of creds) {
@@ -161,14 +169,14 @@ export class GatewayModelRouter implements ModelRouter {
     for (const attempt of buildChain(this.deps, req)) {
       const creds = modelCreds(this.deps, attempt.provider);
       if (creds.length === 0) {
-        errors.push(new Error(`no credentials configured for provider "${attempt.provider}"`));
+        errors.push(noCredentialsError(attempt.provider));
         continue;
       }
       const { provider, impl } = resolveProvider(this.deps, this.registry, attempt.provider);
       const complete = impl.complete;
       const stream = impl.stream;
       if (!complete && !stream) {
-        errors.push(new Error(`provider "${attempt.provider}" does not support text generation`));
+        errors.push(unsupportedCapabilityError(attempt.provider, 'text generation'));
         continue;
       }
       for (const cred of creds) {
@@ -180,7 +188,7 @@ export class GatewayModelRouter implements ModelRouter {
           } else if (stream) {
             result = await aggregate(stream(call));
           } else {
-            throw new Error(`provider "${attempt.provider}" does not support text generation`);
+            throw unsupportedCapabilityError(attempt.provider, 'text generation');
           }
           this.deps.reportCredential?.(attempt.provider, cred.id, true);
           log.debug(
@@ -273,7 +281,7 @@ export class GatewayModelRouter implements ModelRouter {
     for (const attempt of buildChain(this.deps, { model: spec, messages: [] })) {
       const { provider, impl } = resolveProvider(this.deps, this.registry, attempt.provider);
       if (!impl.embed) {
-        errors.push(new Error(`provider "${attempt.provider}" does not support embeddings`));
+        errors.push(unsupportedCapabilityError(attempt.provider, 'embeddings'));
         continue;
       }
       for (const cred of modelCreds(this.deps, attempt.provider)) {

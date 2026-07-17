@@ -453,6 +453,28 @@ test('native agent observation projection is addressed by pointers and excludes 
   expect(unavailable.reason).toBe('Provider history unavailable');
 });
 
+test('live external agent observation frames preserve the daemon runtime epoch', () => {
+  const access = externalAgentObservationAccessResponseSchema.parse({
+    state: 'live',
+    externalAgentSessionId: 'exa_100000000000',
+    provider: 'codex',
+    observationEpoch: 'epoch-2',
+    output: 'current runtime only',
+    seq: 20,
+    observedAt: '2026-07-17T06:00:00.000Z'
+  });
+
+  expect(access).toEqual({
+    state: 'live',
+    externalAgentSessionId: 'exa_100000000000',
+    provider: 'codex',
+    observationEpoch: 'epoch-2',
+    output: 'current runtime only',
+    seq: 20,
+    observedAt: '2026-07-17T06:00:00.000Z'
+  });
+});
+
 test('external agent history page response carries server-normalized events, not raw items', () => {
   const event = {
     id: 'exa_1:json:0:status',
