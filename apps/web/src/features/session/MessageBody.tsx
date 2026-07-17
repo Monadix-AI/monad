@@ -2,7 +2,7 @@ import type { Card, ClientRenderCaps, CommandItem } from '@monad/protocol';
 import type { ComponentType, ReactNode } from 'react';
 
 import { isHttpUrl, pickRepresentation } from '@monad/protocol';
-import { Button, cn } from '@monad/ui';
+import { Button, cn, faviconMarkdownComponents } from '@monad/ui';
 import { ComposerInlineChip } from '@monad/ui/components/ComposerInlineChip';
 import { Markdown } from '@monad/ui/components/Markdown';
 import { MentionText } from '@monad/ui/components/MentionText';
@@ -37,7 +37,10 @@ function CardRenderer({ data, text }: RichRendererProps) {
   return (
     <div className="flex flex-col gap-2">
       {card.title && <div className="font-semibold text-sm">{card.title}</div>}
-      <Markdown text={card.body ?? text} />
+      <Markdown
+        components={faviconMarkdownComponents}
+        text={card.body ?? text}
+      />
       {actions.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {actions.map((a) => {
@@ -119,7 +122,12 @@ export function MessageBody({
         text={text}
       />
     );
-  return <Markdown text={text} />;
+  return (
+    <Markdown
+      components={faviconMarkdownComponents}
+      text={text}
+    />
+  );
 }
 
 function skillLabel(id: string): string {

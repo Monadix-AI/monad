@@ -15,6 +15,7 @@ import {
   Button,
   cn,
   Message as ElementsMessage,
+  faviconMarkdownComponents,
   MessageAction,
   MessageActions,
   MessageContent,
@@ -336,7 +337,7 @@ export const Message = memo(function Message({
                 type={msg.type}
               />
             ) : (
-              <MessageResponse>{msg.text}</MessageResponse>
+              <MessageResponse components={faviconMarkdownComponents}>{msg.text}</MessageResponse>
             )}
           </MessageContent>
         ))}

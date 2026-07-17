@@ -107,6 +107,26 @@ test('user message bubble does not render a username label', () => {
   expect(markup).toContain('Hello');
 });
 
+test('regular session messages render favicons before human and assistant URLs', () => {
+  const user = renderToStaticMarkup(
+    createElement(MessageBody, {
+      isUser: true,
+      text: 'Open https://example.com/docs.'
+    })
+  );
+  const assistant = renderToStaticMarkup(
+    createElement(Message, {
+      assistantLabel: 'Assistant',
+      msg: { id: 'msg_link', role: 'assistant', text: '[Example](https://example.com/docs)' }
+    })
+  );
+
+  expect(user).toContain('src="https://example.com/favicon.ico"');
+  expect(user).toContain('href="https://example.com/docs"');
+  expect(assistant).toContain('src="https://example.com/favicon.ico"');
+  expect(assistant).toContain('Example');
+});
+
 test('rewind is available only on settled user messages', () => {
   const userMarkup = renderToStaticMarkup(
     createElement(Message, {
