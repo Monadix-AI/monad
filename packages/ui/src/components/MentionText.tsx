@@ -1,5 +1,6 @@
 import { cn } from '../lib/utils.ts';
 import { ComposerInlineChip } from './ComposerInlineChip';
+import { FaviconLink, faviconHref } from './FaviconLink';
 
 export interface MentionToken {
   name: string;
@@ -9,8 +10,11 @@ export interface MentionToken {
 }
 
 export type MentionSegment = { kind: 'text'; text: string } | { kind: 'mention'; name: string; id: string };
+export type MessageTextSegment = MentionSegment | { kind: 'url'; href: string; text: string };
 
 const MENTION_TOKEN_RE = /@\[name="((?:\\.|[^"\\])*)"\s+id="((?:\\.|[^"\\])*)"\]/g;
+const WEB_URL_RE = /https?:\/\/[^\s<]+/gi;
+const TRAILING_URL_PUNCTUATION_RE = /[.,!?;:]+$/;
 
 function unescapeMentionValue(value: string): string {
   return value.replace(/\\(["\\])/g, '$1');
@@ -45,6 +49,37 @@ export function mentionSegments(text: string): MentionSegment[] {
   return segments;
 }
 
+function pushTextSegment(segments: MessageTextSegment[], text: string): void {
+  if (!text) return;
+  const previous = segments.at(-1);
+  if (previous?.kind === 'text') previous.text += text;
+  else segments.push({ kind: 'text', text });
+}
+
+function linkifiedTextSegments(text: string): MessageTextSegment[] {
+  const segments: MessageTextSegment[] = [];
+  let cursor = 0;
+  for (const match of text.matchAll(WEB_URL_RE)) {
+    const start = match.index ?? 0;
+    const matched = match[0];
+    const punctuation = TRAILING_URL_PUNCTUATION_RE.exec(matched)?.[0] ?? '';
+    const href = punctuation ? matched.slice(0, -punctuation.length) : matched;
+    if (start > cursor) pushTextSegment(segments, text.slice(cursor, start));
+    if (faviconHref(href)) segments.push({ kind: 'url', href, text: href });
+    else pushTextSegment(segments, href);
+    pushTextSegment(segments, punctuation);
+    cursor = start + matched.length;
+  }
+  if (cursor < text.length) pushTextSegment(segments, text.slice(cursor));
+  return segments;
+}
+
+export function messageTextSegments(text: string): MessageTextSegment[] {
+  return mentionSegments(text).flatMap((segment) =>
+    segment.kind === 'mention' ? [segment] : linkifiedTextSegments(segment.text)
+  );
+}
+
 export function MentionCapsule({ id, name }: { id: string; name: string }) {
   return (
     <ComposerInlineChip
@@ -59,7 +94,7 @@ export function MentionText({ text, className }: { text: string; className?: str
   let offset = 0;
   return (
     <span className={cn('whitespace-pre-wrap break-words [overflow-wrap:anywhere]', className)}>
-      {mentionSegments(text).map((segment) => {
+      {messageTextSegments(text).map((segment) => {
         const key = `${segment.kind}:${offset}`;
         offset += segment.kind === 'mention' ? mentionToken(segment).length : segment.text.length;
         return segment.kind === 'mention' ? (
@@ -68,6 +103,13 @@ export function MentionText({ text, className }: { text: string; className?: str
             key={key}
             name={segment.name}
           />
+        ) : segment.kind === 'url' ? (
+          <FaviconLink
+            href={segment.href}
+            key={key}
+          >
+            {segment.text}
+          </FaviconLink>
         ) : (
           <span
             className="[overflow-wrap:anywhere]"

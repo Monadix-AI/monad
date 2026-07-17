@@ -138,6 +138,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from './components/DropdownMenu';
+import { FaviconLink, faviconHref, faviconMarkdownComponents, hideFailedFavicon } from './components/FaviconLink';
 import { FileReadCard, FileReadCardHeader } from './components/FileReadCard';
 import { ImageZoom, type ImageZoomProps } from './components/ImageZoom';
 import { Input } from './components/Input';
@@ -321,8 +322,12 @@ export {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
   defaultToolStatusLabels,
+  FaviconLink,
   FileReadCard,
   FileReadCardHeader,
+  faviconHref,
+  faviconMarkdownComponents,
+  hideFailedFavicon,
   ImageZoom,
   Input,
   InputGroup,
