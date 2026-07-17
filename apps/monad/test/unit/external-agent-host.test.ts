@@ -1279,12 +1279,13 @@ test('managed external agent observation restores Codex provider history from pe
   });
   const projectId = 'ses_01KWHOSTmAx8';
   const externalAgentSessionId = 'exa_hostunavarpU';
+  const providerSessionRef = crypto.randomUUID();
   const testRun = `monad-external-agent-host-${Date.now()}`;
   const rolloutDir = join(homedir(), '.codex', 'sessions', '2099', '01', testRun);
   mkdirSync(rolloutDir, { recursive: true });
   writeFileSync(
-    join(rolloutDir, 'rollout-2099-01-01T00-00-00-provider-session-1.jsonl'),
-    `${JSON.stringify({ type: 'session_meta', payload: { id: 'provider-session-1' } })}\n${JSON.stringify({
+    join(rolloutDir, `rollout-2099-01-01T00-00-00-${providerSessionRef}.jsonl`),
+    `${JSON.stringify({ type: 'session_meta', payload: { id: providerSessionRef } })}\n${JSON.stringify({
       type: 'event_msg',
       payload: { type: 'agent_message', message: 'restored from provider history' }
     })}\n`
@@ -1303,7 +1304,7 @@ test('managed external agent observation restores Codex provider history from pe
     lastVisibleSeq: 0,
     state: 'exited',
     pid: null,
-    providerSessionRef: 'provider-session-1',
+    providerSessionRef,
     outputSnapshot: '',
     exitCode: 0,
     startedAt: '2026-07-02T00:00:00.000Z',
@@ -1320,6 +1321,57 @@ test('managed external agent observation restores Codex provider history from pe
   } finally {
     rmSync(rolloutDir, { recursive: true, force: true });
   }
+});
+
+test('managed external agent observation keeps a parseable stored snapshot without provider fallback', async () => {
+  const store = createStore();
+  let providerAttempts = 0;
+  const host = new ExternalAgentHost({
+    store,
+    bus: new EventBus(),
+    agents: async () => {
+      providerAttempts += 1;
+      return [];
+    }
+  });
+  const projectId = 'ses_01KWHOSTmAy1';
+  const externalAgentSessionId = 'exa_hostsnapK8uP';
+  const outputSnapshot = `${JSON.stringify({
+    type: 'event_msg',
+    payload: { type: 'agent_message', message: 'snapshot remains authoritative' }
+  })}\n`;
+  store.upsertExternalAgentSession({
+    id: externalAgentSessionId,
+    transcriptTargetId: projectId,
+    agentName: 'codex',
+    provider: 'codex',
+    workingPath: '/tmp/project',
+    launchMode: 'app-server',
+    runtimeRole: 'managed-project-agent',
+    agentRuntimeId: externalAgentSessionId,
+    agentRuntimeTokenHash: null,
+    lastDeliveredSeq: 0,
+    lastVisibleSeq: 0,
+    state: 'exited',
+    pid: null,
+    providerSessionRef: 'provider-session-snapshot',
+    outputSnapshot,
+    exitCode: 0,
+    startedAt: '2026-07-02T00:00:00.000Z',
+    updatedAt: '2026-07-02T00:00:01.000Z',
+    exitedAt: '2026-07-02T00:00:01.000Z'
+  });
+
+  const observation = await host.observeWithProviderHistory(externalAgentSessionId);
+
+  expect(observation).toMatchObject({
+    state: 'history',
+    externalAgentSessionId,
+    provider: 'codex',
+    output: outputSnapshot,
+    events: [expect.objectContaining({ text: 'snapshot remains authoritative' })]
+  });
+  expect(providerAttempts).toBe(0);
 });
 
 test('managed external agent observation prefers Codex CLI history over rollout fallback', async () => {
@@ -1368,10 +1420,14 @@ test('managed external agent observation prefers Codex CLI history over rollout 
     allowAutopilot: false,
     approvalOwnership: 'provider-owned'
   };
+  let providerAttempts = 0;
   const host = new ExternalAgentHost({
     store,
     bus: new EventBus(),
-    agents: async () => [agent]
+    agents: async () => {
+      providerAttempts += 1;
+      return [agent];
+    }
   });
   store.upsertExternalAgentSession({
     id: externalAgentSessionId,
@@ -1388,7 +1444,7 @@ test('managed external agent observation prefers Codex CLI history over rollout 
     state: 'exited',
     pid: null,
     providerSessionRef: 'provider-session-cli',
-    outputSnapshot: '',
+    outputSnapshot: '{"id":1,"result":{"data":[]}}',
     exitCode: 0,
     startedAt: '2026-07-02T00:00:00.000Z',
     updatedAt: '2026-07-02T00:00:01.000Z',
@@ -1397,11 +1453,12 @@ test('managed external agent observation prefers Codex CLI history over rollout 
 
   try {
     const observation = await host.observeWithProviderHistory(externalAgentSessionId);
-    expect(observation).toMatchObject({
-      state: 'history',
-      externalAgentSessionId,
-      provider: 'codex'
-    });
+    expect(observation).toMatchObject({ state: 'history', externalAgentSessionId, provider: 'codex' });
+    expect(providerAttempts).toBe(1);
+    expect(observation.output).toContain('restored through codex cli');
+    expect(observation.events?.filter((event) => event.role === 'agent').map((event) => event.text)).toEqual([
+      'restored through codex cli'
+    ]);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
