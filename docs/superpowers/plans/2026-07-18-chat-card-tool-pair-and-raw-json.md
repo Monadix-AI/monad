@@ -220,3 +220,89 @@ git commit -m "fix(chat): pair Claude tool results and highlight raw JSON"
 ```
 
 Expected: commit hooks pass and the implementation commit is created on `main`.
+
+---
+
+### Task 4: Project shell commands and ordered raw records
+
+**Files:**
+- Modify: `packages/atoms/test/unit/external-agent-observation.test.ts`
+- Modify: `packages/atoms/src/workspace-experiences/chat-room/components/observation/command-card.tsx`
+- Modify: `packages/atoms/src/workspace-experiences/chat-room/components/observation/timeline.tsx`
+
+**Interfaces:**
+- Produces: `Bash`, `bash`, and `shell` structured input `{ command: string }` as Bash source text.
+- Produces: paired timeline raw data as `[call.raw, result.raw]` in provider order.
+
+- [ ] Add failing exact projections for a Bash input object and two-element paired raw array.
+- [ ] Run `bun scripts/bun-test.ts packages/atoms/test/unit/external-agent-observation.test.ts --only-failures`; expect JSON input and synthetic `{ call, result }` raw to fail.
+- [ ] Add `shellCommandInput(name, input)` that returns a trimmed `command` only for the three shell aliases, set its language to `bash`, and change paired raw to an ordered array.
+- [ ] Rerun the focused test; expect zero failures.
+
+### Task 5: Format and render each raw record independently
+
+**Files:**
+- Modify: `packages/ui/test/unit/chat-cards.test.tsx`
+- Modify: `packages/ui/src/components/RawInspectableCard.tsx`
+
+**Interfaces:**
+- Preserves: `rawEventRecordsText(records)` as unformatted JSONL copy text.
+- Produces: `formattedRawEventRecordText(text)` using `JSON.parse` and two-space `JSON.stringify`, falling back to the original text.
+
+- [ ] Add failing tests for formatted JSON, invalid-text fallback, two `data-language="json"` blocks, and unchanged copy text.
+- [ ] Run `bun scripts/bun-test.ts packages/ui/test/unit/chat-cards.test.tsx --only-failures`; expect compact single-block rendering to fail.
+- [ ] Export the formatting helper and map records to separate keyed `CodeBlock` components.
+- [ ] Rerun the focused UI test; expect zero failures.
+
+### Task 6: Aggregate Claude thinking token progress and settle shimmer
+
+**Files:**
+- Modify: `packages/sdk-atom/src/agent-adapter.ts`
+- Modify: `packages/atoms/src/agent-adapters/claude-code/observation.ts`
+- Modify: `packages/atoms/src/workspace-experiences/experience/external-agent-observation/external-agent-observation.ts`
+- Modify: `packages/atoms/src/workspace-experiences/chat-room/components/observation/timeline.tsx`
+- Modify: `packages/atoms/src/workspace-experiences/chat-room/components/observation/panel.tsx`
+- Modify: `packages/atoms/test/unit/external-agent-observation.test.ts`
+
+**Interfaces:**
+- Adds: optional `mergeStreamingRun(events)` on `ExternalAgentObservationProjector` for provider-owned latest-value streaming runs.
+- Produces: Claude `thinking_tokens` as reasoning text `Thinking… · N tokens`, with latest cumulative value and ordered raw records.
+- Changes: `observationTimelineEntries(items, provider, active)` marks only a latest streaming reasoning item active.
+
+- [ ] Add failing adapter tests for two token records becoming one reasoning item with the latest count and two raw records.
+- [ ] Add failing rendering tests for running/latest shimmer, superseded no-shimmer, and stopped no-shimmer.
+- [ ] Run the focused atoms test and verify failures match missing parsing and active-state behavior.
+- [ ] Add the projector hook, implement Claude latest-value merging, parse `thinking_tokens_delta`, and pass panel activity into timeline projection.
+- [ ] Rerun the focused atoms test; expect zero failures.
+
+### Task 7: Render Codex ERROR and WARN diagnostics
+
+**Files:**
+- Modify: `packages/protocol/src/agent-observation.ts`
+- Modify: `packages/protocol/src/external-agent/external-agent-observation.ts`
+- Modify: `packages/atoms/src/agent-adapters/observation-projection.ts`
+- Modify: `packages/atoms/src/agent-adapters/neutral-observation.ts`
+- Create: `packages/atoms/src/agent-adapters/codex/observation/observation-log.ts`
+- Modify: `packages/atoms/src/agent-adapters/codex/observation/index.ts`
+- Modify: `packages/ui/src/components/ObservationCard.tsx`
+- Modify: `packages/atoms/src/workspace-experiences/chat-room/components/observation/types.ts`
+- Modify: `packages/atoms/src/workspace-experiences/chat-room/components/observation/adapters.ts`
+- Modify: `packages/atoms/src/workspace-experiences/chat-room/components/observation/timeline.tsx`
+- Modify: `packages/atoms/test/unit/external-agent-observation.test.ts`
+
+**Interfaces:**
+- Adds: `AgentObservationDiagnostic { severity: 'warning' | 'error'; message; detail?; target? }` as optional event metadata.
+- Produces: Codex ERROR/WARN log records as system observations with diagnostic metadata and provider timestamp.
+- Preserves: INFO and lower levels as ordinary raw observations; diagnostics never become turn-end events.
+
+- [ ] Add failing exact adapter projections for ERROR, WARN, and INFO samples plus rendered severity/message/detail/target assertions.
+- [ ] Run focused protocol and atoms tests; expect missing diagnostic metadata/card failures.
+- [ ] Add the schema metadata, map it through legacy and neutral projections, add the Codex log projector, and render diagnostic system cards with error/warning visual roles.
+- [ ] Rerun focused tests; expect zero failures.
+
+### Task 8: Final verification and commit
+
+- [ ] Run focused protocol, atoms, and UI tests with `--only-failures`.
+- [ ] Run `bun run lint`, `bun run typecheck`, and `bun run test` sequentially.
+- [ ] Run `git diff --check` and `bun run check:test-assertions`.
+- [ ] Commit all production and regression-test changes with `fix(chat): enrich observation cards`.
