@@ -390,6 +390,7 @@ async function configureMockCodexOversizedLineAgent(call: Call, dir: string): Pr
       '    if (msg.method === "initialize") { process.stdout.write(JSON.stringify({id:msg.id, result:{userAgent:"mock"}}) + "\\n"); continue; }',
       '    if (msg.method === "initialized") continue;',
       '    if (msg.method !== "thread/start" && msg.method !== "thread/resume") continue;',
+      '    process.stdout.write(JSON.stringify({id:msg.id, result:{thread:{id:"codex-thread-light"}}}) + "\\n");',
       '    process.stdout.write(JSON.stringify({method:"thread/status/changed", params:{threadId:"codex-thread-light", status:{type:"idle"}}}) + "\\n");',
       '    process.stdout.write("{\\"huge\\":\\"" + "x".repeat(3 * 1024 * 1024));',
       '    setTimeout(() => {',
