@@ -42,6 +42,33 @@ test('projected event source gives live and history records the same stable iden
   expect(source.projectLive({ id: 'history', output, mode: 'history' }).events[0]?.dedupeKey).toBe('codex:99a3e357');
 });
 
+test('projected event source deduplicates provider records with the same stable uuid across envelope shapes', () => {
+  const source = createProjectedEventSource({ provider: 'claude-code', projection });
+  const live = {
+    type: 'message',
+    uuid: 'provider-event-1',
+    text: 'Hello',
+    session_id: 'session-1',
+    tool_use_result: { stdout: 'done' }
+  };
+  const history = {
+    type: 'message',
+    uuid: 'provider-event-1',
+    text: 'Hello',
+    sessionId: 'session-1',
+    cwd: '/workspace',
+    toolUseResult: { stdout: 'done' }
+  };
+
+  expect([
+    source.projectLive({ id: 'live', output: JSON.stringify(live) }).events[0]?.dedupeKey,
+    source.projectLive({ id: 'history', output: JSON.stringify(history), mode: 'history' }).events[0]?.dedupeKey
+  ]).toEqual([
+    'claude-code:provider-event-1:message:agent:message',
+    'claude-code:provider-event-1:message:agent:message'
+  ]);
+});
+
 test('projected event source preserves unrecognized provider records as unknown events', () => {
   const source = createProjectedEventSource({ provider: 'codex', projection });
   const raw = { method: 'future/provider/event', params: { value: 1 } };

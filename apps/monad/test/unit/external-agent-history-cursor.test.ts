@@ -421,3 +421,73 @@ test('a stored-session provider cursor is stripped before the local adapter hist
     registerAgentAdapterImpl(codexBuiltin);
   }
 });
+
+test('a stored session starts history from the provider instead of a stale journal snapshot', async () => {
+  const codexBuiltin = builtinAgentAdapters.find((adapter) => adapter.provider === 'codex');
+  if (!codexBuiltin) throw new Error('codex builtin adapter missing');
+  const seen: (string | undefined)[] = [];
+  const providerEvent = {
+    id: 'provider:newest',
+    dedupeKey: 'provider:newest',
+    projection: 'normalized' as const,
+    role: 'agent' as const,
+    text: 'provider history',
+    source: 'codex-app-server' as const
+  };
+  registerAgentAdapterImpl({
+    ...codexBuiltin,
+    events: {
+      ...codexBuiltin.events,
+      readPage: async (_context, request) => {
+        seen.push(request.before);
+        return { state: 'available', events: [providerEvent], nextCursor: 'offset-2' };
+      }
+    }
+  });
+  try {
+    const store = createStore();
+    const host = new ExternalAgentHost({ store, bus: new EventBus(), agents: async () => [] });
+    store.upsertExternalAgentSession({
+      id: SESSION_ID,
+      transcriptTargetId: TARGET_ID,
+      agentName: 'codex',
+      provider: 'codex',
+      workingPath: '/tmp/project',
+      launchMode: 'pty',
+      runtimeRole: 'interactive',
+      agentRuntimeId: null,
+      agentRuntimeTokenHash: null,
+      lastDeliveredSeq: 0,
+      lastVisibleSeq: 0,
+      state: 'stopped',
+      pid: null,
+      providerSessionRef: 'thread-1',
+      outputSnapshot: 'stored-line\n',
+      exitCode: 0,
+      startedAt: '2026-07-06T00:00:00.000Z',
+      updatedAt: '2026-07-06T00:00:00.000Z',
+      exitedAt: '2026-07-06T00:01:00.000Z'
+    });
+    store.recordExternalAgentObservationEvents(
+      SESSION_ID,
+      [
+        {
+          ...providerEvent,
+          id: 'journal:stale',
+          dedupeKey: 'legacy-envelope-key',
+          text: 'stale journal history'
+        }
+      ],
+      '2026-07-06T00:02:00.000Z'
+    );
+
+    const page = await host.historyPage(SESSION_ID, historyRequest({ before: 'journal:' }));
+
+    expect({ seen, page }).toEqual({
+      seen: [undefined],
+      page: { events: [providerEvent], nextCursor: 'provider:offset-2' }
+    });
+  } finally {
+    registerAgentAdapterImpl(codexBuiltin);
+  }
+});

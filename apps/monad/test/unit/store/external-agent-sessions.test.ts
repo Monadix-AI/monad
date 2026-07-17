@@ -74,6 +74,26 @@ test('external agent observation journal deduplicates overlapping live and histo
   });
 });
 
+test('external agent observation journal returns a newest page in chronological display order', () => {
+  store.upsertExternalAgentSession(row);
+  const events = ['oldest', 'middle', 'newest'].map((id) => ({
+    id,
+    dedupeKey: `provider:${id}`,
+    projection: 'normalized' as const,
+    role: 'agent' as const,
+    text: id,
+    source: 'codex-app-server' as const
+  }));
+  store.recordExternalAgentObservationEvents(row.id, events, '2026-06-28T00:00:01.000Z');
+
+  const page = store.listExternalAgentObservationEvents(row.id, { limit: 2, sortDirection: 'desc' });
+
+  expect({
+    events: page.events.map((event) => event.id),
+    hasNextCursor: typeof page.nextCursor === 'string'
+  }).toEqual({ events: ['middle', 'newest'], hasNextCursor: true });
+});
+
 test('closeExternalAgentSession does not overwrite terminal external agent session state', () => {
   store.upsertExternalAgentSession(row);
   store.closeExternalAgentSession('exa_100000000000', '2026-06-28T00:00:01.000Z', null, 'stopped');

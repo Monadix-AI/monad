@@ -28,7 +28,35 @@ function hash(value: string): string {
   return (result >>> 0).toString(16).padStart(8, '0');
 }
 
+function providerRecordIds(raw: unknown): string[] {
+  if (Array.isArray(raw)) return raw.flatMap(providerRecordIds);
+  if (raw === null || typeof raw !== 'object') return [];
+  const uuid = (raw as Record<string, unknown>).uuid;
+  return typeof uuid === 'string' && uuid.length > 0 ? [uuid] : [];
+}
+
+function projectedEventPart(id: string): string | undefined {
+  return /:json:\d+:(.+)$/.exec(id)?.[1];
+}
+
 function eventDedupeKey(provider: ExternalAgentProvider, event: ExternalAgentObservationEvent): string {
+  const recordIds = providerRecordIds(event.raw);
+  if (recordIds.length > 0) {
+    const rawType =
+      event.raw && !Array.isArray(event.raw) && typeof event.raw === 'object'
+        ? (event.raw as Record<string, unknown>).type
+        : undefined;
+    const discriminator = [
+      typeof rawType === 'string' ? rawType : undefined,
+      event.role,
+      event.providerEventType,
+      projectedEventPart(event.id)
+    ]
+      .filter((value): value is string => typeof value === 'string' && value.length > 0)
+      .join(':');
+    const recordIdentity = recordIds.length === 1 ? recordIds[0] : hash(recordIds.join(':'));
+    return `${provider}:${recordIdentity}:${discriminator}`;
+  }
   const identity = event.raw ?? {
     role: event.role,
     text: event.text,

@@ -710,21 +710,6 @@ export class ExternalAgentHost {
     if (cursor.kind === 'stored') {
       return storedOutputHistoryPage(live.outputBuffer.snapshot(), req, cursor, id, live.provider);
     }
-    if (cursor.kind === 'journal') {
-      const journal = this.deps.store.listExternalAgentObservationEvents(id, {
-        before: cursor.value || undefined,
-        limit: req.limit,
-        sortDirection: req.sortDirection
-      });
-      if (journal.events.length > 0) {
-        return {
-          events: journal.events,
-          nextCursor: journal.nextCursor
-            ? encodeJournalHistoryCursor(journal.nextCursor)
-            : encodeProviderHistoryCursor('')
-        };
-      }
-    }
     const providerReq = providerHistoryPageRequest(req, cursor);
     const providerSessionRef = live.providerSessionRef ?? live.initializeContext?.providerSessionRef ?? undefined;
     const workingPath = live.initializeContext?.workingPath;
@@ -743,6 +728,21 @@ export class ExternalAgentHost {
         return {
           events: result.events,
           ...(result.nextCursor ? { nextCursor: encodeProviderHistoryCursor(result.nextCursor) } : {})
+        };
+      }
+    }
+    if (cursor.kind === 'journal') {
+      const journal = this.deps.store.listExternalAgentObservationEvents(id, {
+        before: cursor.value || undefined,
+        limit: req.limit,
+        sortDirection: req.sortDirection
+      });
+      if (journal.events.length > 0) {
+        return {
+          events: journal.events,
+          nextCursor: journal.nextCursor
+            ? encodeJournalHistoryCursor(journal.nextCursor)
+            : encodeProviderHistoryCursor('')
         };
       }
     }
@@ -781,21 +781,6 @@ export class ExternalAgentHost {
   ): Promise<ExternalAgentHistoryPageResponse> {
     const row = this.deps.store.getExternalAgentSession(id);
     const cursor = decodeHistoryCursor(req.before);
-    if (cursor.kind === 'journal') {
-      const journal = this.deps.store.listExternalAgentObservationEvents(id, {
-        before: cursor.value || undefined,
-        limit: req.limit,
-        sortDirection: req.sortDirection
-      });
-      if (journal.events.length > 0) {
-        return {
-          events: journal.events,
-          nextCursor: journal.nextCursor
-            ? encodeJournalHistoryCursor(journal.nextCursor)
-            : encodeProviderHistoryCursor('')
-        };
-      }
-    }
     if (cursor.kind !== 'stored' && row?.providerSessionRef) {
       const adapter = getExternalAgentProviderAdapter(row.provider);
       const pageRequest = {
@@ -832,6 +817,21 @@ export class ExternalAgentHost {
         return {
           events: result.events,
           ...(result.nextCursor ? { nextCursor: encodeProviderHistoryCursor(result.nextCursor) } : {})
+        };
+      }
+    }
+    if (cursor.kind === 'journal') {
+      const journal = this.deps.store.listExternalAgentObservationEvents(id, {
+        before: cursor.value || undefined,
+        limit: req.limit,
+        sortDirection: req.sortDirection
+      });
+      if (journal.events.length > 0) {
+        return {
+          events: journal.events,
+          nextCursor: journal.nextCursor
+            ? encodeJournalHistoryCursor(journal.nextCursor)
+            : encodeProviderHistoryCursor('')
         };
       }
     }
