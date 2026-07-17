@@ -4,6 +4,7 @@ import type { ProjectExperienceRuntimeSource } from '../../src/workspace-experie
 
 import { expect, test } from 'bun:test';
 
+import { renderChatRoomWorkspaceExperience } from '../../src/workspace-experiences/chat-room/ui.tsx';
 import { toChatRoomCanvas } from '../../src/workspace-experiences/chat-room/utils/canvas.ts';
 import {
   requestSpawnAgentMemberDialog,
@@ -126,6 +127,20 @@ test('ChatRoomExperienceView: spawn member asks the host through the project dia
     open: true,
     type: 'project-settings'
   });
+});
+
+test('ChatRoomExperienceView: remounts session-local optimistic state when the routed session changes', () => {
+  const first = createProjectExperienceRuntime(runtimeSource({ activeSessionId: 'ses_first111111' }), {
+    switchExperience: () => {}
+  });
+  const second = createProjectExperienceRuntime(runtimeSource({ activeSessionId: 'ses_second22222' }), {
+    switchExperience: () => {}
+  });
+
+  expect([
+    renderChatRoomWorkspaceExperience({ runtime: first.views['chat-room'] }).key,
+    renderChatRoomWorkspaceExperience({ runtime: second.views['chat-room'] }).key
+  ]).toEqual(['chat-room:ses_first111111', 'chat-room:ses_second22222']);
 });
 
 test('createProjectExperienceRuntime: publishes an empty activity graph when live tools are absent', () => {
