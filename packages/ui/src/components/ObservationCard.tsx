@@ -1,10 +1,9 @@
 import type { ReactNode } from 'react';
 
-import { ChevronDownIcon } from '@hugeicons/core-free-icons';
-import { HugeiconsIcon } from '@hugeicons/react';
 import { cva, type VariantProps } from 'class-variance-authority';
 
 import { cn } from '../lib/utils';
+import { MorphChevron } from './MorphChevron';
 
 export type ObservationVisualRole = 'user' | 'agent' | 'tool' | 'system';
 
@@ -52,10 +51,9 @@ export function ObservationCard({
         onClick={() => onCollapsedChange(!collapsed)}
         type="button"
       >
-        <HugeiconsIcon
-          aria-hidden="true"
-          className={cn('size-3.5 shrink-0 transition-transform', collapsed && '-rotate-90')}
-          icon={ChevronDownIcon}
+        <MorphChevron
+          className="size-3.5 shrink-0"
+          expanded={!collapsed}
         />
         {header ? <div className="min-w-0 flex-1">{header}</div> : <span className="min-w-0 flex-1" />}
         {timestamp ? (

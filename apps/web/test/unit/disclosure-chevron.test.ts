@@ -10,9 +10,9 @@ const disclosureSources = [
   '../../src/features/studio/memory-settings/FactsView.tsx',
   '../../src/features/studio/memory-settings/LawsView.tsx',
   '../../src/features/studio/third-party-agents/AcpAgentsSettings.tsx',
-  '../../../../packages/atoms/src/workspace-experiences/chat-room/components/observation/card-shell.tsx',
   '../../../../packages/atoms/src/workspace-experiences/chat-room/components/observation/timeline.tsx',
-  '../../../../packages/ui/src/components/AIElements.tsx'
+  '../../../../packages/ui/src/components/AIElements.tsx',
+  '../../../../packages/ui/src/components/ObservationCard.tsx'
 ] as const;
 
 test('disclosure controls use the shared down-up morph without rotation or right chevrons', () => {
