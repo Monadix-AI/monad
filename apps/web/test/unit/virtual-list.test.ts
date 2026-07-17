@@ -2,7 +2,9 @@ import { expect, test } from 'bun:test';
 import { observationFollowResetKey } from '@monad/atoms/workspace-experiences';
 import {
   indexOfKey,
+  initialBottomScrollRequest,
   isAtBottom,
+  reduceBottomScrollRequest,
   reducePinnedOnScroll,
   scrollTopPreservingAnchor,
   shouldPinToBottom
@@ -56,6 +58,33 @@ test('shouldPinToBottom: follows viewport changes unless the user is parked abov
   expect(shouldPinToBottom(true, true)).toBe(true);
   expect(shouldPinToBottom(true, false)).toBe(false);
   expect(shouldPinToBottom(false, true)).toBe(false);
+});
+
+test('bottom request smooth-scrolls first and auto-corrects after virtual height changes', () => {
+  const requested = reduceBottomScrollRequest(initialBottomScrollRequest, {
+    type: 'request',
+    behavior: 'smooth'
+  });
+
+  expect(requested).toEqual({ active: true, behavior: 'smooth' });
+  expect(reduceBottomScrollRequest(requested, { type: 'height-changed' })).toEqual({
+    active: true,
+    behavior: 'auto'
+  });
+  expect(reduceBottomScrollRequest(requested, { type: 'settle-timeout' })).toEqual({
+    active: true,
+    behavior: 'auto'
+  });
+});
+
+test('bottom request completes only at the true bottom and cancels on upward user scroll', () => {
+  const requested = reduceBottomScrollRequest(initialBottomScrollRequest, {
+    type: 'request',
+    behavior: 'smooth'
+  });
+
+  expect(reduceBottomScrollRequest(requested, { type: 'at-bottom' })).toEqual(initialBottomScrollRequest);
+  expect(reduceBottomScrollRequest(requested, { type: 'user-scroll-up' })).toEqual(initialBottomScrollRequest);
 });
 
 test('scrollTopPreservingAnchor: offsets list scrolling so an expanded title keeps its viewport position', () => {

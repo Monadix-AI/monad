@@ -103,6 +103,22 @@ export function shouldPinToBottom(stickToBottom: boolean, pinned: boolean): bool
   return stickToBottom && pinned;
 }
 
+export type BottomScrollRequest = { active: boolean; behavior: 'auto' | 'smooth' };
+export type BottomScrollEvent =
+  | { type: 'request'; behavior: 'auto' | 'smooth' }
+  | { type: 'height-changed' | 'settle-timeout' | 'at-bottom' | 'user-scroll-up' };
+
+export const initialBottomScrollRequest: BottomScrollRequest = { active: false, behavior: 'auto' };
+
+export function reduceBottomScrollRequest(state: BottomScrollRequest, event: BottomScrollEvent): BottomScrollRequest {
+  if (event.type === 'request') return { active: true, behavior: event.behavior };
+  if ((event.type === 'height-changed' || event.type === 'settle-timeout') && state.active) {
+    return { active: true, behavior: 'auto' };
+  }
+  if (event.type === 'at-bottom' || event.type === 'user-scroll-up') return initialBottomScrollRequest;
+  return state;
+}
+
 export function scrollTopPreservingAnchor(scrollTop: number, previousTop: number, currentTop: number): number {
   return scrollTop + currentTop - previousTop;
 }
@@ -138,6 +154,8 @@ export function VirtualList<T>({
   const scrollerRef = useRef<HTMLElement | null>(null);
   const bounceOffsetRef = useRef(0);
   const bounceSettleTimeoutRef = useRef<number | undefined>(undefined);
+  const bottomRequestRef = useRef<BottomScrollRequest>(initialBottomScrollRequest);
+  const bottomSettleTimeoutRef = useRef<number | undefined>(undefined);
   // `pinnedRef` tracks whether we keep following the bottom. Detection rests on one fact:
   // content growth (a row expanding, new rows) does NOT fire a scroll event — only the user
   // and our own pinning move the scrollbar. So we read "is the user at the bottom" purely
@@ -149,6 +167,16 @@ export function VirtualList<T>({
   const lastScrollTopRef = useRef<number | null>(null);
   const viewportResizeObserverRef = useRef<ResizeObserver | null>(null);
   const layoutAnchorRef = useRef<{ element: HTMLElement; top: number; expiresAt: number } | null>(null);
+
+  const clearBottomSettleTimeout = useCallback(() => {
+    window.clearTimeout(bottomSettleTimeoutRef.current);
+    bottomSettleTimeoutRef.current = undefined;
+  }, []);
+
+  const scrollToLast = useCallback((behavior: 'auto' | 'smooth') => {
+    selfScrollRef.current = true;
+    handleRef.current?.scrollToIndex({ index: 'LAST', align: 'end', behavior });
+  }, []);
 
   const captureLayoutAnchor = useCallback((target: EventTarget | null) => {
     if (!(target instanceof Element)) return;
@@ -182,11 +210,21 @@ export function VirtualList<T>({
     const direction =
       previousTop === null ? 'none' : el.scrollTop < previousTop ? 'up' : el.scrollTop > previousTop ? 'down' : 'none';
     lastScrollTopRef.current = el.scrollTop;
+    if (bottomRequestRef.current.active) {
+      if (direction === 'up') {
+        bottomRequestRef.current = reduceBottomScrollRequest(bottomRequestRef.current, { type: 'user-scroll-up' });
+        clearBottomSettleTimeout();
+        selfScrollRef.current = false;
+        userScrolledRef.current = true;
+        pinnedRef.current = false;
+      }
+      return;
+    }
     if (!selfScrollRef.current && direction !== 'none') userScrolledRef.current = true;
     const next = reducePinnedOnScroll(pinnedRef.current, selfScrollRef.current, isAtBottom(el), direction);
     pinnedRef.current = next.pinned;
     if (next.selfScrollConsumed) selfScrollRef.current = false;
-  }, []);
+  }, [clearBottomSettleTimeout]);
 
   const pinToBottom = useCallback(() => {
     if (!shouldPinToBottom(stickToBottom, pinnedRef.current)) return;
@@ -233,24 +271,50 @@ export function VirtualList<T>({
     requestAnimationFrame(pinToBottom);
   }, [pinToBottom, preserveLayoutAnchor]);
 
+  const requestBottomScroll = useCallback(
+    (behavior: 'auto' | 'smooth') => {
+      clearBottomSettleTimeout();
+      pinnedRef.current = true;
+      userScrolledRef.current = false;
+      layoutAnchorRef.current = null;
+      bottomRequestRef.current = reduceBottomScrollRequest(bottomRequestRef.current, { type: 'request', behavior });
+      scrollToLast(behavior);
+      if (behavior !== 'smooth') return;
+      bottomSettleTimeoutRef.current = window.setTimeout(() => {
+        if (!bottomRequestRef.current.active) return;
+        bottomRequestRef.current = reduceBottomScrollRequest(bottomRequestRef.current, { type: 'settle-timeout' });
+        scrollToLast('auto');
+      }, 600);
+    },
+    [clearBottomSettleTimeout, scrollToLast]
+  );
+
+  const handleAtBottomChange = useCallback(
+    (nextAtBottom: boolean) => {
+      if (nextAtBottom) {
+        bottomRequestRef.current = reduceBottomScrollRequest(bottomRequestRef.current, { type: 'at-bottom' });
+        clearBottomSettleTimeout();
+        selfScrollRef.current = false;
+      }
+      onAtBottomChange?.(nextAtBottom);
+    },
+    [clearBottomSettleTimeout, onAtBottomChange]
+  );
+
+  const handleTotalListHeightChanged = useCallback(() => {
+    if (bottomRequestRef.current.active) {
+      bottomRequestRef.current = reduceBottomScrollRequest(bottomRequestRef.current, { type: 'height-changed' });
+      scrollToLast(bottomRequestRef.current.behavior);
+      return;
+    }
+    pinToBottomSoon();
+  }, [pinToBottomSoon, scrollToLast]);
+
   useImperativeHandle(
     controlRef,
     () => ({
       scrollToBottom: (behavior = 'auto') => {
-        pinnedRef.current = true;
-        // Scroll now, then re-settle over the next two frames: rows below the old viewport
-        // report their real heights a frame after they mount, so one pass lands short.
-        const go = () => {
-          const el = scrollerRef.current;
-          if (!el) return;
-          selfScrollRef.current = true;
-          el.scrollTo({ top: el.scrollHeight, behavior });
-        };
-        go();
-        requestAnimationFrame(() => {
-          go();
-          requestAnimationFrame(go);
-        });
+        requestBottomScroll(behavior === 'smooth' ? 'smooth' : 'auto');
       },
       scrollToKey: (key, opts) => {
         const index = indexOfKey(items, getKey, key);
@@ -267,7 +331,7 @@ export function VirtualList<T>({
           handleRef.current?.getState(resolve);
         })
     }),
-    [items, getKey]
+    [items, getKey, requestBottomScroll]
   );
 
   // Initial mount lands near — but not exactly at — the bottom because row heights are
@@ -357,8 +421,9 @@ export function VirtualList<T>({
       scrollerRef.current?.removeEventListener('keydown', handleAnchorKeyDown);
       viewportResizeObserverRef.current?.disconnect();
       viewportResizeObserverRef.current = null;
+      clearBottomSettleTimeout();
     },
-    [handleAnchorKeyDown, handleAnchorPointerDown]
+    [clearBottomSettleTimeout, handleAnchorKeyDown, handleAnchorPointerDown]
   );
 
   // Only forward firstItemIndex when paginating: Virtuoso computes `data-item-index` as
@@ -373,7 +438,7 @@ export function VirtualList<T>({
 
   return (
     <Virtuoso<T, SlotContext>
-      atBottomStateChange={onAtBottomChange}
+      atBottomStateChange={handleAtBottomChange}
       atBottomThreshold={STICK_THRESHOLD}
       className={className}
       components={VIRTUOSO_COMPONENTS}
@@ -392,7 +457,7 @@ export function VirtualList<T>({
       scrollerRef={setScroller}
       startReached={onStartReached}
       style={style}
-      totalListHeightChanged={pinToBottomSoon}
+      totalListHeightChanged={handleTotalListHeightChanged}
     />
   );
 }
