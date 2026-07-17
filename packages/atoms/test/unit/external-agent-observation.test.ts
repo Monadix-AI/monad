@@ -1531,6 +1531,41 @@ test('observation card projection maps Codex and Claude command tools to the sha
   expect(claudeEntries).toMatchObject([{ kind: 'public', card: { type: 'command-tool' } }]);
 });
 
+test('Claude Code observation pairs nested SDK tool result with its call', () => {
+  const command = 'git status';
+  const result = 'On branch main';
+  const output = [
+    JSON.stringify({
+      type: 'assistant',
+      message: {
+        role: 'assistant',
+        content: [{ type: 'tool_use', id: 'toolu_1', name: 'Bash', input: { command } }]
+      }
+    }),
+    JSON.stringify({
+      type: 'user',
+      message: {
+        role: 'user',
+        content: [{ type: 'tool_result', tool_use_id: 'toolu_1', content: result }]
+      }
+    })
+  ].join('\n');
+
+  const items = externalAgentNeutralStreamItems({ id: 'exa_claude000000', provider: 'claude-code', output });
+  expect(
+    items.map((item) => ({
+      kind: item.kind,
+      name: item.kind === 'tool-call' || item.kind === 'tool-result' ? item.tool?.name : undefined
+    }))
+  ).toEqual([
+    { kind: 'tool-call', name: 'Bash' },
+    { kind: 'tool-result', name: 'tool' }
+  ]);
+
+  const entries = observationTimelineEntries(items, 'claude-code');
+  expect(entries.map((entry) => (entry.kind === 'public' ? entry.card.type : entry.kind))).toEqual(['command-tool']);
+});
+
 test('observation card projection maps generic tool pairs to the shared command card', () => {
   const entries = renderTimeline([
     {

@@ -6,6 +6,7 @@ import { useId } from 'react';
 
 import { cn } from '../lib/utils';
 import { Button } from './Button';
+import { CodeBlock } from './CodeBlock';
 import { Tooltip, TooltipContent, TooltipTrigger } from './Tooltip';
 
 export interface RawEventRecord {
@@ -118,9 +119,11 @@ export function RawInspectableCard({
               </Tooltip>
             ) : null}
           </div>
-          <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed">
-            <code>{text}</code>
-          </pre>
+          <CodeBlock
+            className="max-h-64 overflow-auto border-0 bg-transparent [&_pre]:p-0 [&_pre]:text-[11px] [&_pre]:leading-relaxed"
+            code={text}
+            language="json"
+          />
         </section>
       ) : null}
     </div>

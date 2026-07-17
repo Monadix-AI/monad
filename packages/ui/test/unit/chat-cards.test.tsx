@@ -68,7 +68,9 @@ test('RawInspectableCard renders ordered JSONL only while controlled open', () =
   expect(closed).toContain('aria-expanded="false"');
   expect(closed).not.toContain('&quot;type&quot;');
   expect(open).toContain('aria-expanded="true"');
-  expect(open).toContain('{&quot;type&quot;:&quot;call&quot;}\n{&quot;type&quot;:&quot;result&quot;}');
+  expect(open).toContain('data-language="json"');
+  expect(open).toContain('{&quot;type&quot;:&quot;call&quot;}');
+  expect(open).toContain('{&quot;type&quot;:&quot;result&quot;}');
 });
 
 test('ObservationCard renders collapse state supplied by its consumer', () => {

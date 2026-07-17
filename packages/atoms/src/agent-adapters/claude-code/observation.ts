@@ -134,7 +134,7 @@ function claudeContentEvents(args: {
         role: 'tool',
         text: `Tool call ${tool}${inputText}`,
         source: 'claude-code-sdk',
-        providerEventType: args.providerEventType,
+        providerEventType: 'tool_use',
         createdAt: args.createdAt,
         raw: args.raw
       });
@@ -145,7 +145,7 @@ function claudeContentEvents(args: {
         role: 'tool',
         text: textValue(item.content) ?? JSON.stringify(item.content ?? item),
         source: 'claude-code-sdk',
-        providerEventType: args.providerEventType,
+        providerEventType: 'tool_result',
         createdAt: args.createdAt,
         raw: args.raw
       });
