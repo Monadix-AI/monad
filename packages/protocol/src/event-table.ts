@@ -320,6 +320,16 @@ export const externalAgentExitedPayloadSchema = z.object({
   state: z.enum(['exited', 'failed', 'stopped'])
 });
 
+// The underlying provider process stays alive across turns for a managed-project/provider agent, so
+// this signals "the current turn finished" without implying the process exited — distinct from
+// external_agent.exited, which is process lifecycle. Flips the live tool card off 'running' so
+// presence projection (externalAgentIsGenerating) settles back to idle for notification-style
+// completions that never streamed raw stdout/pty output.
+export const externalAgentTurnSettledPayloadSchema = z.object({
+  externalAgentSessionId: z.string(),
+  error: z.boolean().optional()
+});
+
 export type SessionCreatedPayload = z.infer<typeof sessionCreatedPayloadSchema>;
 export type SessionUpdatedPayload = z.infer<typeof sessionUpdatedPayloadSchema>;
 export type SessionRestoredPayload = z.infer<typeof sessionRestoredPayloadSchema>;
@@ -353,6 +363,7 @@ export type ExternalAgentApprovalRequestedPayload = z.infer<typeof externalAgent
 export type ExternalAgentApprovalResolvedPayload = z.infer<typeof externalAgentApprovalResolvedPayloadSchema>;
 export type ExternalAgentResumeFailedPayload = z.infer<typeof externalAgentResumeFailedPayloadSchema>;
 export type ExternalAgentExitedPayload = z.infer<typeof externalAgentExitedPayloadSchema>;
+export type ExternalAgentTurnSettledPayload = z.infer<typeof externalAgentTurnSettledPayloadSchema>;
 
 export const EVENT_TABLE = {
   'session.created': sessionCreatedPayloadSchema,
@@ -392,7 +403,8 @@ export const EVENT_TABLE = {
   'external_agent.approval_requested': externalAgentApprovalRequestedPayloadSchema,
   'external_agent.approval_resolved': externalAgentApprovalResolvedPayloadSchema,
   'external_agent.resume_failed': externalAgentResumeFailedPayloadSchema,
-  'external_agent.exited': externalAgentExitedPayloadSchema
+  'external_agent.exited': externalAgentExitedPayloadSchema,
+  'external_agent.turn_settled': externalAgentTurnSettledPayloadSchema
 } as const satisfies Record<EventType, z.ZodTypeAny>;
 
 export type EventPayload<T extends EventType> = z.infer<(typeof EVENT_TABLE)[T]>;

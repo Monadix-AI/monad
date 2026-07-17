@@ -397,7 +397,8 @@ export const eventTypeSchema = z.enum([
   'external_agent.approval_requested',
   'external_agent.approval_resolved',
   'external_agent.resume_failed',
-  'external_agent.exited'
+  'external_agent.exited',
+  'external_agent.turn_settled'
 ]);
 export type EventType = z.infer<typeof eventTypeSchema>;
 

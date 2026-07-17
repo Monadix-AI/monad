@@ -135,7 +135,8 @@ export function createManagedExternalAgentMessages(ctx: SessionContext) {
       });
     }
     const round: Event[] = [];
-    makeEmit(round)(
+    const emit = makeEmit(round);
+    emit(
       makeEvent(sessionId as SessionId, 'agent.message', {
         messageId,
         agentName,
@@ -144,6 +145,12 @@ export function createManagedExternalAgentMessages(ctx: SessionContext) {
         text,
         source,
         ...(attachments?.length ? { attachments } : {})
+      })
+    );
+    emit(
+      makeEvent(sessionId as SessionId, 'external_agent.turn_settled', {
+        externalAgentSessionId,
+        ...(error ? { error: true } : {})
       })
     );
     persistAndRetire(sessionId, round);

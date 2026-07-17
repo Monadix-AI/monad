@@ -181,6 +181,17 @@ export function applyToolEvent(m: ProjectionMutations, event: Event): SessionUiE
         }
       ];
     }
+    case 'external_agent.turn_settled': {
+      const p = parseEventPayload('external_agent.turn_settled', event.payload);
+      const existing = m.items.get(itemKey('tool', p.externalAgentSessionId));
+      if (existing?.kind !== 'tool' || existing.status !== 'running') return [];
+      const next: Extract<UIItem, { kind: 'tool' }> = {
+        ...existing,
+        status: p.error ? 'error' : 'ok',
+        seq: existing.seq
+      };
+      return [{ kind: 'upsert', cursor: event.id, item: m.upsert(next) }];
+    }
     case 'external_agent.exited': {
       const p = parseEventPayload('external_agent.exited', event.payload);
       const existing = m.items.get(itemKey('tool', p.externalAgentSessionId));

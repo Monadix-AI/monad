@@ -964,6 +964,61 @@ test('does not project raw external agent PTY output into chat tool text', () =>
   });
 });
 
+test('settles a running external agent tool item on turn_settled without touching output', () => {
+  const projector = new SessionUiProjector();
+  const externalAgentSessionId = 'exa_200000000000';
+  projector.applyEvent(
+    event('external_agent.started', {
+      externalAgentSessionId,
+      agentName: 'claude-code',
+      provider: 'claude-code',
+      launchMode: 'pty',
+      workingPath: '/Users/test/Projects/monad',
+      pid: 123
+    })
+  );
+  projector.applyEvent(event('external_agent.output', { externalAgentSessionId, stream: 'pty', chunk: 'working...' }));
+
+  const settled = projector.applyEvent(event('external_agent.turn_settled', { externalAgentSessionId }));
+
+  expect(settled).toHaveLength(1);
+  expect(settled[0]).toMatchObject({
+    kind: 'upsert',
+    item: { kind: 'tool', id: externalAgentSessionId, status: 'ok', output: 'working...' }
+  });
+});
+
+test('turn_settled with error marks the tool item errored', () => {
+  const projector = new SessionUiProjector();
+  const externalAgentSessionId = 'exa_300000000000';
+  projector.applyEvent(
+    event('external_agent.started', {
+      externalAgentSessionId,
+      agentName: 'claude-code',
+      provider: 'claude-code',
+      launchMode: 'pty',
+      workingPath: '/Users/test/Projects/monad',
+      pid: 123
+    })
+  );
+
+  const settled = projector.applyEvent(event('external_agent.turn_settled', { externalAgentSessionId, error: true }));
+
+  expect(settled).toHaveLength(1);
+  expect(settled[0]).toMatchObject({
+    kind: 'upsert',
+    item: { kind: 'tool', id: externalAgentSessionId, status: 'error' }
+  });
+});
+
+test('turn_settled is a no-op when there is no live running tool item', () => {
+  const projector = new SessionUiProjector();
+  const settled = projector.applyEvent(
+    event('external_agent.turn_settled', { externalAgentSessionId: 'exa_missing00000' })
+  );
+  expect(settled).toEqual([]);
+});
+
 test('projects external agent provider-owned approvals as distinct approval items', () => {
   const projector = new SessionUiProjector();
   const [approval] = projector.applyEvent(

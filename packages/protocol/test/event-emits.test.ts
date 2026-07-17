@@ -45,7 +45,8 @@ const SSE_GENERATION_EMITS: readonly EventType[] = [
   'external_agent.approval_requested',
   'external_agent.approval_resolved',
   'external_agent.resume_failed',
-  'external_agent.exited'
+  'external_agent.exited',
+  'external_agent.turn_settled'
 ];
 
 function declaredEmits(): Set<string> {
