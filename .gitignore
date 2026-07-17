@@ -52,7 +52,6 @@ packages/i18n/src/paraglide-input/
 packages/atoms/generated/
 packages/protocol/generated/
 packages/protocol/vendor/
-packages/home/profile.schema.json
 apps/mo/native/common/atlas.h
 .tanstack
 apps/web/src/routeTree.gen.ts
