@@ -40,7 +40,7 @@ export function classifyObservationActivity(
 ): ExternalAgentObservationActivity | undefined {
   const type = event.providerEventType?.toLowerCase() ?? '';
   if (event.providerEventType && TERMINAL_EVENT_TYPES.has(event.providerEventType)) return 'turn-end';
-  if (event.providerEventType === 'thread/status/changed') return threadStatusIsIdle(event.raw) ? 'turn-end' : 'system';
+  if (event.providerEventType === 'thread/status/changed') return threadStatusIsIdle(event.raw) ? 'turn-end' : 'status';
   if (event.role === 'tool') {
     return event.providerEventType && TOOL_RESULT_EVENT_TYPES.has(event.providerEventType)
       ? 'tool-result'

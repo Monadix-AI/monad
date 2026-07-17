@@ -807,9 +807,10 @@ test('external agent projection ignores startup prose before stream-json objects
     )
   );
 
-  // The `system` init notice has no neutral representation (no system kind) and is dropped; the result
-  // survives as a turn-end that keeps its final text.
+  // The `system` init notice now surfaces as a `system` kind (session lifecycle notices, e.g. login,
+  // must stay visible in backfilled history); the result survives as a turn-end with its final text.
   expect(observationFields(stream.items)).toEqual([
+    { id: 'exa_mixedclaude0:json:0:system', text: 'init' },
     { id: 'exa_mixedclaude0:json:1:result', text: 'Need approval before posting.' }
   ]);
 });
@@ -853,9 +854,13 @@ test('external agent app-server JSON-RPC output is projected as readable observa
     )
   );
 
-  // The `thread/started` system notice has no neutral representation and is dropped; the mcp status is
-  // a tool event and survives.
+  // The `thread/started` system notice now surfaces as a `system` kind; the mcp status is a tool
+  // event and survives.
   expect(observationFields(stream.items)).toEqual([
+    {
+      id: 'exa_appserveQWB9:json:0:thread-started',
+      text: 'Thread started in /Users/test/project/.dev/.monad/workplace-agents/project/test'
+    },
     { id: 'exa_appserveQWB9:json:1:mcp-status', text: 'node_repl starting' }
   ]);
 });

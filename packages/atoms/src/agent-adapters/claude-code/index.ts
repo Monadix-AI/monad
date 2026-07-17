@@ -431,15 +431,29 @@ export function createClaudeSdkHistoryPageReader(deps: ClaudeSdkHistoryPageDeps)
 
 const readClaudeHistoryPage = createClaudeSdkHistoryPageReader({ getSessionInfo, getSessionMessages });
 
+const CLAUDE_HISTORY_PAGE_SIZE = 200;
+
 async function readClaudeHistoryOutput(context: ExternalAgentProviderHistoryContext): Promise<string | null> {
   try {
     const info = await getSessionInfo(context.providerSessionRef, { dir: context.workingPath });
     if ((info?.fileSize ?? 0) > context.limitBytes) return claudeTranscriptFallback(context);
-    const messages = await getSessionMessages(context.providerSessionRef, {
-      dir: context.workingPath,
-      limit: 200,
-      includeSystemMessages: true
-    });
+    // A single `getSessionMessages` call caps at its own `limit`; a session with more messages than
+    // that would silently lose everything past the cap, so page through until exhausted. The file-size
+    // guard above already routes oversized sessions to the raw-transcript fallback.
+    const messages: SessionMessage[] = [];
+    let offset = 0;
+    while (true) {
+      const page = await getSessionMessages(context.providerSessionRef, {
+        dir: context.workingPath,
+        limit: CLAUDE_HISTORY_PAGE_SIZE,
+        offset,
+        includeSystemMessages: true
+      });
+      if (page.length === 0) break;
+      messages.push(...page);
+      offset += page.length;
+      if (page.length < CLAUDE_HISTORY_PAGE_SIZE) break;
+    }
     return claudeSdkMessagesOutput(messages, info) ?? claudeTranscriptFallback(context);
   } catch {
     return claudeTranscriptFallback(context);

@@ -50,9 +50,13 @@ export function externalAgentFacingCommandPhase(
 
 function newestExternalAgentSession(sessions: ExternalAgentSessionView[]): ExternalAgentSessionView | undefined {
   return [...sessions].sort((a, b) => {
+    const aLive = a.state === 'running' || a.state === 'starting';
+    const bLive = b.state === 'running' || b.state === 'starting';
+    if (aLive !== bLive) return bLive ? 1 : -1;
     const bTime = b.updatedAt || b.startedAt;
     const aTime = a.updatedAt || a.startedAt;
-    return bTime.localeCompare(aTime);
+    const byTime = bTime.localeCompare(aTime);
+    return byTime === 0 ? b.id.localeCompare(a.id) : byTime;
   })[0];
 }
 

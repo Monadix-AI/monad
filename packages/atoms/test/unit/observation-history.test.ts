@@ -5,6 +5,7 @@ import { expect, test } from 'bun:test';
 import {
   findOlderObservationPage,
   historyItemsBefore,
+  observationHistoryLoadScope,
   oldestObservationTimestamp,
   prependObservationHistory
 } from '../../src/workspace-experiences/chat-room/utils/observation-history.ts';
@@ -76,4 +77,28 @@ test('findOlderObservationPage follows overlap-only cursors until an older page 
   expect(cursors).toEqual([undefined, 'older-1']);
   expect(result.items.map((item) => item.id)).toEqual(['older']);
   expect(result.nextCursor).toBe('older-2');
+});
+
+test('observation history keeps one load scope while the bounded live seam advances', () => {
+  const scopes = [
+    observationHistoryLoadScope({
+      externalAgentSessionId: 'exa_running',
+      liveBoundaryAt: undefined
+    }),
+    observationHistoryLoadScope({
+      externalAgentSessionId: 'exa_running',
+      liveBoundaryAt: '2026-07-17T05:39:45.999Z'
+    }),
+    observationHistoryLoadScope({
+      externalAgentSessionId: 'exa_running',
+      liveBoundaryAt: '2026-07-17T05:44:08.059Z'
+    }),
+    observationHistoryLoadScope({
+      deliveryId: 'deliv_current',
+      externalAgentSessionId: 'exa_running',
+      liveBoundaryAt: '2026-07-17T05:44:08.059Z'
+    })
+  ];
+
+  expect(scopes).toEqual([undefined, 'exa_running', 'exa_running', undefined]);
 });

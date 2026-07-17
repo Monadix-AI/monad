@@ -245,6 +245,32 @@ test('a settled live tool clears working/phase even while the session snapshot s
   ).toBe('working');
 });
 
+test('a live managed runtime wins over a newer terminal sibling while its turn is active', () => {
+  const olderStopped = externalAgentSession({
+    id: 'exa_stopped',
+    state: 'stopped',
+    updatedAt: '2026-07-17T05:46:10.100Z',
+    exitedAt: '2026-07-17T05:46:10.100Z'
+  });
+  const running = externalAgentSession({
+    id: 'exa_running',
+    outputSnapshot: [
+      '{"method":"turn/started","params":{}}',
+      '{"method":"item/agentMessage/delta","params":{"delta":"Working"}}'
+    ].join('\n'),
+    updatedAt: '2026-07-17T05:46:10.000Z'
+  });
+
+  expect(
+    __workplaceProjectMessageTest.externalAgentMemberPresence({
+      agentName: 'pmem_codex_active',
+      enabled: true,
+      externalAgentSessions: [olderStopped, running],
+      liveTools: []
+    })
+  ).toBe('working');
+});
+
 test('external agent activity phase treats provider tool calls as tooling', () => {
   expect(
     __workplaceProjectMessageTest.externalAgentMemberActivityPhase({

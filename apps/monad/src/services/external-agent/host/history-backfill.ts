@@ -1,3 +1,4 @@
+import type { ExternalAgentRuntimeHandle } from '@monad/sdk-atom';
 import type { ExternalAgentHostDeps } from '#/services/external-agent/host/host-types.ts';
 import type { ExternalAgentProcess } from '#/services/external-agent/runtime-types.ts';
 import type { ExternalAgentProviderAdapter } from '#/services/external-agent/types.ts';
@@ -89,11 +90,12 @@ export async function providerHistoryOutputViaCli(
   ) as ExternalAgentProcess;
   let requestSeq = 0;
   let settled = false;
+  let historyRequested = false;
   let expectedResponseId: string | null = null;
   const historyId = `history:${row.id}:${Date.now()}`;
   const decoder = createStreamingTextDecoder();
-  const handle = {
-    launchMode: 'app-server' as const,
+  const handle: ExternalAgentRuntimeHandle = {
+    launchMode: 'app-server',
     appServer: connectAppServerStdio(proc.stdin),
     providerSessionRef,
     pendingRequests: new Map<string | number, string>(),
@@ -112,6 +114,26 @@ export async function providerHistoryOutputViaCli(
       resolve(output);
     };
     void proc.supervision?.timeoutElapsed?.then(() => finish(null));
+    const requestHistoryPage = adapter.requestHistoryPage;
+    if (!requestHistoryPage) {
+      finish(null);
+      return null;
+    }
+    // Some adapters (Codex) don't resume their thread until an async handshake settles — sending
+    // `requestHistoryPage` right after `initialize()` races the thread not being loaded yet, so the
+    // history request is deferred until the adapter's own output confirms the thread is ready.
+    const tryRequestHistory = (): void => {
+      if (historyRequested) return;
+      if (handle.deferredThreadFrame) return;
+      historyRequested = true;
+      try {
+        expectedResponseId = String(
+          requestHistoryPage(handle, { limit: 20, sortDirection: 'desc', itemsView: 'full' })
+        );
+      } catch {
+        finish(null);
+      }
+    };
     void (async () => {
       try {
         for await (const data of proc.stdout ?? []) {
@@ -121,7 +143,16 @@ export async function providerHistoryOutputViaCli(
           if (!structured) continue;
           for (const event of adapter.parseOutput(structured, handle)) {
             const parsed = externalAgentOutputEventSchema.safeParse(event);
-            if (!parsed.success || parsed.data.type !== 'history_page') continue;
+            if (!parsed.success) continue;
+            if (parsed.data.type === 'connection_required') {
+              finish(null);
+              return;
+            }
+            if (parsed.data.type === 'session_ref') {
+              tryRequestHistory();
+              continue;
+            }
+            if (parsed.data.type !== 'history_page') continue;
             if (expectedResponseId && String(parsed.data.payload.responseId) !== expectedResponseId) continue;
             const output = historyPageOutput({
               providerSessionRef,
@@ -153,12 +184,9 @@ export async function providerHistoryOutputViaCli(
     })();
     try {
       adapter.initialize?.(handle, { workingPath: row.workingPath, providerSessionRef });
-      const requestHistoryPage = adapter.requestHistoryPage;
-      if (!requestHistoryPage) {
-        finish(null);
-        return;
-      }
-      expectedResponseId = String(requestHistoryPage(handle, { limit: 20, sortDirection: 'desc', itemsView: 'full' }));
+      // Non-Codex adapters resolve the thread synchronously in `initialize()` (no `deferredThreadFrame`),
+      // so this fires immediately for them; Codex's fires once `session_ref` arrives above.
+      tryRequestHistory();
     } catch {
       finish(null);
     }

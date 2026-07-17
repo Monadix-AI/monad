@@ -14,7 +14,8 @@ export const agentObservationKindSchema = z.enum([
   'tool-call',
   'tool-result',
   'assistant-message',
-  'turn-end'
+  'turn-end',
+  'system'
 ]);
 export type AgentObservationKind = z.infer<typeof agentObservationKindSchema>;
 

@@ -18,8 +18,6 @@ import {
 // turn-start), so the neutral decode detects them here to fill the `turn-start` kind.
 const TURN_START_EVENT_TYPES = new Set(['turn/started', 'turn_started', 'turn-start']);
 
-// Only the kinds a neutral consumer renders. `system` (a non-terminal status notice) has no neutral
-// representation — generating state is derived elsewhere — so it maps to `undefined` and is dropped.
 function neutralKindFromActivity(
   activity: ExternalAgentObservationActivity | undefined
 ): AgentObservationKind | undefined {
@@ -36,6 +34,10 @@ function neutralKindFromActivity(
       return 'user-message';
     case 'turn-end':
       return 'turn-end';
+    case 'system':
+      return 'system';
+    case 'status':
+      return undefined;
     default:
       return undefined;
   }

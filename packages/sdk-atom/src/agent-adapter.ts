@@ -366,6 +366,9 @@ export type ExternalAgentObservationActivity =
   | 'tool-result'
   | 'user'
   | 'system'
+  // A transient in-flight status ping (e.g. a thread going working/idle mid-turn), distinct from
+  // `system`'s one-time session notices (login, init, rate limits) — never worth its own UI card.
+  | 'status'
   | 'turn-end';
 
 export type ExternalAgentObservationProjector = ExternalAgentObservationUsageProjector & {

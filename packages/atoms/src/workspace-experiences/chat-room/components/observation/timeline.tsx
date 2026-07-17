@@ -117,9 +117,10 @@ export function observationTimelineEntries(
   return entries;
 }
 
-function visualRoleFromKind(kind: ObservationItem['kind']): 'user' | 'agent' | 'tool' {
+function visualRoleFromKind(kind: ObservationItem['kind']): 'user' | 'agent' | 'tool' | 'system' {
   if (kind === 'user-message') return 'user';
   if (kind === 'tool-call' || kind === 'tool-result') return 'tool';
+  if (kind === 'system') return 'system';
   return 'agent';
 }
 

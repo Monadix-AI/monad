@@ -1,5 +1,14 @@
 import type { AgentObservationEvent } from '@monad/protocol';
 
+export function observationHistoryLoadScope(args: {
+  deliveryId?: string;
+  externalAgentSessionId?: string;
+  liveBoundaryAt?: string;
+}): string | undefined {
+  if (args.deliveryId || !args.externalAgentSessionId || !args.liveBoundaryAt) return undefined;
+  return args.externalAgentSessionId;
+}
+
 function observationTime(item: AgentObservationEvent): number | undefined {
   if (!item.at) return undefined;
   const value = Date.parse(item.at);

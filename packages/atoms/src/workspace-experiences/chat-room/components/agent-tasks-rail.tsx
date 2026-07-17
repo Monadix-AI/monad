@@ -60,6 +60,7 @@ import {
 } from '../utils/agent-rail-model.ts';
 import {
   findOlderObservationPage,
+  observationHistoryLoadScope,
   oldestObservationTimestamp,
   prependObservationHistory
 } from '../utils/observation-history.ts';
@@ -606,6 +607,13 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
       )
     : streamWithUiObservationFrame(observedBaseStream, uiFrame);
   const liveHistoryBoundaryAt = oldestObservationTimestamp(observedAccessStream?.items ?? []);
+  const liveHistoryBoundaryRef = useRef(liveHistoryBoundaryAt);
+  liveHistoryBoundaryRef.current = liveHistoryBoundaryAt;
+  const historyLoadScope = observationHistoryLoadScope({
+    deliveryId: observedDeliveryId,
+    externalAgentSessionId: observedExternalAgentSessionId,
+    liveBoundaryAt: liveHistoryBoundaryAt
+  });
   const observedHistoryStream = streamWithHistoryPages(
     observedAccessStream,
     historyRequested ? historyPages : undefined
@@ -627,7 +635,8 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
 
   const loadHistoryPage = useCallback(
     (before?: string | null) => {
-      if (!observedExternalAgentSessionId || !observedTranscriptTargetId || !liveHistoryBoundaryAt) return;
+      const liveBoundaryAt = liveHistoryBoundaryRef.current;
+      if (!observedExternalAgentSessionId || !observedTranscriptTargetId || !liveBoundaryAt) return;
       const generation = historyLoadGenerationRef.current;
       setHistoryPages((current) => {
         return current
@@ -636,7 +645,7 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
       });
       void findOlderObservationPage({
         before: before ?? undefined,
-        liveBoundaryAt: liveHistoryBoundaryAt,
+        liveBoundaryAt,
         load: async (cursor) => {
           const response = await triggerExternalAgentHistoryPage({
             id: observedExternalAgentSessionId,
@@ -677,7 +686,7 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
         }
       );
     },
-    [liveHistoryBoundaryAt, observedExternalAgentSessionId, observedTranscriptTargetId, triggerExternalAgentHistoryPage]
+    [observedExternalAgentSessionId, observedTranscriptTargetId, triggerExternalAgentHistoryPage]
   );
 
   const showHistory = useCallback(() => {
@@ -690,9 +699,12 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
     historyLoadGenerationRef.current += 1;
     setHistoryPages(undefined);
     setHistoryRequested(false);
-    if (observedDeliveryId || !liveHistoryBoundaryAt) return;
+  }, [observationHistoryResetKey]);
+
+  useEffect(() => {
+    if (!historyLoadScope) return;
     loadHistoryPage(null);
-  }, [liveHistoryBoundaryAt, loadHistoryPage, observationHistoryResetKey, observedDeliveryId]);
+  }, [historyLoadScope, loadHistoryPage]);
 
   useEffect(() => {
     const storedWidth = window.localStorage.getItem(RAIL_WIDTH_STORAGE_KEY);

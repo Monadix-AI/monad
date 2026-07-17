@@ -118,7 +118,7 @@ export const codexExternalAgentAdapter: ExternalAgentProviderAdapter = {
     const structured = parseStructuredAuthState(output);
     if (structured) return structured;
     if (exitCode === 0) return 'authenticated';
-    if (exitCode !== null) return 'unauthenticated';
+    if (exitCode === 1) return 'unauthenticated';
     return 'unknown';
   },
   initialize: initializeCodex,
