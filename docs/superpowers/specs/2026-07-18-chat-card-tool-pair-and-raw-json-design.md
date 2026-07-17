@@ -28,9 +28,13 @@ The existing timeline behavior remains unchanged: an adjacent `tool-call` follow
 
 This change does not add non-adjacent matching or reorder events. Matching by tool ID can be considered separately if provider streams later require it.
 
+For shell tools named `Bash`, `bash`, or `shell`, the command card extracts the string `command` field from a structured input object. The input is highlighted as Bash rather than showing the entire input object as JSON. Non-JSON output is also highlighted as Bash; valid JSON output retains JSON formatting and highlighting.
+
 ### Raw JSON highlighting
 
-`RawInspectableCard` will render its exact joined JSONL string through the shared `CodeBlock` with JSON syntax highlighting. Opening, closing, accessibility labels, record order, and copied text remain unchanged.
+Paired tool events will pass their two raw provider records as an ordered array instead of wrapping them in a synthetic `{ call, result }` object. `RawInspectableCard` will render each raw record in its own shared `CodeBlock`.
+
+Each record is parsed independently for presentation. Valid JSON is pretty-printed with two-space indentation and highlighted as JSON. Invalid JSON remains unchanged. Opening, closing, accessibility labels, record order, and copied text remain unchanged; copying still returns the original unformatted JSONL rather than the formatted presentation.
 
 ## Error handling
 
@@ -39,11 +43,12 @@ Malformed or non-JSON raw records continue to display as their original text. Hi
 ## Tests
 
 - Add an adapter regression using an assistant `tool_use` record followed by a user `tool_result` record. Assert the neutral events are a call and result and the timeline produces one paired card with the expected input and output.
-- Update the raw inspection test to assert the expanded panel uses the JSON code renderer while preserving the exact ordered JSONL text.
+- Add a shell command projection regression that asserts structured Bash input becomes the command text and both input and non-JSON output use Bash highlighting.
+- Update the raw inspection tests to assert multiple records render as separate, formatted JSON code blocks while preserving exact ordered JSONL copy text.
 - Run the focused atoms and UI tests, then the applicable lint and typecheck scopes.
 
 ## Out of scope
 
 - Pairing non-adjacent tool events.
-- Reformatting raw provider JSON.
+- Reformatting the copied raw provider JSON.
 - Changing tool card visual structure beyond combining the correctly classified call and result.
