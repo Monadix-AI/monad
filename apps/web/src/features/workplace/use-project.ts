@@ -17,12 +17,14 @@ import {
   externalAgentSessionSelectors,
   profileSelectors,
   projectSessionSelectors,
+  sessionMemberSelectors,
   useDeleteSessionMutation,
   useGetAppearanceQuery,
   useGetProfileSettingsQuery,
   useListExternalAgentSessionsQuery,
   useListProfilesQuery,
   useListProjectSessionsQuery,
+  useListSessionMembersQuery,
   useListWorkplaceProjectsQuery,
   useStreamUiItemsQuery,
   workplaceProjectAdapter,
@@ -123,6 +125,13 @@ export function useProject(
     skip: activeSessionId === null
   });
   const externalAgentSessionsData = externalAgentSessionsQ.currentData;
+  const sessionMembersQ = useListSessionMembersQuery(activeSessionId ?? ('ses_' as SessionId), {
+    skip: activeSessionId === null
+  });
+  const sessionMembers = useMemo(
+    () => (sessionMembersQ.currentData ? sessionMemberSelectors.selectAll(sessionMembersQ.currentData) : []),
+    [sessionMembersQ.currentData]
+  );
   const transcript = useTranscriptHistory({
     sessionId: activeSessionId,
     streamOldestCursor: streamData?.oldestCursor,
@@ -143,6 +152,7 @@ export function useProject(
   const projection = useProjectExperienceProjection({
     acpAgents: acp.agents,
     activeProjectId,
+    activeSessionId,
     appearanceAvatarStyle: appearance?.avatarStyle,
     currentProject,
     liveItems: streamData?.items ?? EMPTY_ITEMS,
@@ -150,6 +160,7 @@ export function useProject(
     externalAgentSessions,
     projectId,
     projectName: getWorkplaceProjectName,
+    sessionMembers,
     userAvatarDataUrl: userProfile?.avatarDataUrl ?? undefined,
     userDisplayName: userProfile?.displayName,
     workplaceProjects
@@ -167,6 +178,7 @@ export function useProject(
     participants,
     projectParticipants,
     projectMembers,
+    experienceProjectMembers,
     projects
   } = projection;
   const showDevSystemMessagesInStream = useProjectDebugStore((state) => state.showDevSystemMessagesInStream);
@@ -174,7 +186,8 @@ export function useProject(
     activeProjectId,
     activeSessionId,
     projectSessionsLoading: projectSessionsQuery.isLoading,
-    streamLoading: stream.isLoading
+    streamLoading: stream.isLoading,
+    streamSnapshotReceived: streamData?.snapshotReceived
   });
 
   // The daemon starts a managed member's external-agent session server-side (join / first delivery),
@@ -327,7 +340,11 @@ export function useProject(
       stopExternalAgent
     ]
   );
-  const experienceRuntime = useWorkspaceProjectExperienceRuntime(controller, opts);
+  const experienceController = useMemo(
+    () => ({ ...controller, projectMembers: experienceProjectMembers }),
+    [controller, experienceProjectMembers]
+  );
+  const experienceRuntime = useWorkspaceProjectExperienceRuntime(experienceController, opts);
 
   return useMemo(() => {
     return {

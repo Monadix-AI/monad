@@ -1,4 +1,8 @@
-import type { ExternalAgentProvider, WorkplaceProjectMemberTemplate } from '@monad/protocol';
+import type {
+  ExternalAgentProvider,
+  WorkplaceProjectMemberTemplate,
+  WorkplaceProjectSessionMember
+} from '@monad/protocol';
 import type {
   WorkspaceExperienceAddMemberOptions,
   WorkspaceExperienceMember,
@@ -30,6 +34,25 @@ export function parseProjectMembers(memberTemplates: readonly WorkplaceProjectMe
     ...(template.displayName ? { displayName: template.displayName } : {}),
     ...(template.settings ? { settings: template.settings } : {})
   }));
+}
+
+function parseSessionMembers(sessionMembers: readonly WorkplaceProjectSessionMember[]): ProjectMember[] {
+  return sessionMembers.map((member) => ({
+    id: member.id,
+    type: member.type,
+    name: member.name,
+    ...(member.type === 'external-agent' ? { templateName: member.name, instanceId: member.id } : {}),
+    ...(member.displayName ? { displayName: member.displayName } : {}),
+    ...(member.settings ? { settings: member.settings } : {})
+  }));
+}
+
+export function resolveExperienceProjectMembers(args: {
+  activeSessionId: string | null;
+  memberTemplates: readonly WorkplaceProjectMemberTemplate[];
+  sessionMembers: readonly WorkplaceProjectSessionMember[];
+}): ProjectMember[] {
+  return args.activeSessionId ? parseSessionMembers(args.sessionMembers) : parseProjectMembers(args.memberTemplates);
 }
 
 function safeExternalAgentInstanceSegment(value: string): string {

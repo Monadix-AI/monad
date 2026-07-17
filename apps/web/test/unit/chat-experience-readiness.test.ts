@@ -32,7 +32,15 @@ test('chat experience becomes ready only after the lists needed to decide emptin
       activeProjectId: 'prj_1',
       activeSessionId: 'ses_1',
       projectSessionsLoading: false,
-      streamLoading: false
+      streamLoading: false,
+      streamSnapshotReceived: false
+    }),
+    isChatExperienceReady({
+      activeProjectId: 'prj_1',
+      activeSessionId: 'ses_1',
+      projectSessionsLoading: false,
+      streamLoading: false,
+      streamSnapshotReceived: true
     })
-  ]).toEqual([false, false, false, true, true]);
+  ]).toEqual([false, false, false, true, false, true]);
 });

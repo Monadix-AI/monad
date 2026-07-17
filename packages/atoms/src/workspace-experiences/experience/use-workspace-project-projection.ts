@@ -5,14 +5,15 @@ import type {
   ExternalAgentView,
   ProjectId,
   UIItem,
-  WorkplaceProject
+  WorkplaceProject,
+  WorkplaceProjectSessionMember
 } from '@monad/protocol';
 import type { ProjectMember } from './project-members.ts';
 import type { ApprovalView, Participant, Project } from './types.ts';
 
 import { useMemo } from 'react';
 
-import { parseProjectMembers } from './project-members.ts';
+import { parseProjectMembers, resolveExperienceProjectMembers } from './project-members.ts';
 import {
   activeExternalAgentNames,
   externalAgentStreamingAgentNames,
@@ -40,12 +41,14 @@ export interface WorkspaceProjectProjection {
   participants: Participant[];
   projectParticipants: Participant[];
   projectMembers: ProjectMember[];
+  experienceProjectMembers: ProjectMember[];
   projects: Project[];
 }
 
 export function useWorkspaceProjectProjection(args: {
   acpAgents: readonly AcpAgentView[];
   activeProjectId: ProjectId | null;
+  activeSessionId: string | null;
   appearanceAvatarStyle?: AvatarStyle;
   currentProject: WorkplaceProject | null;
   liveItems: readonly UIItem[] | undefined;
@@ -55,11 +58,21 @@ export function useWorkspaceProjectProjection(args: {
   projectName: (project: WorkplaceProject) => string;
   userAvatarDataUrl?: string;
   userDisplayName?: string;
+  sessionMembers: readonly WorkplaceProjectSessionMember[];
   workplaceProjects: readonly WorkplaceProject[];
 }): WorkspaceProjectProjection {
   const projectMembers = useMemo(
     () => parseProjectMembers(args.currentProject?.memberTemplates ?? []),
     [args.currentProject?.memberTemplates]
+  );
+  const experienceProjectMembers = useMemo(
+    () =>
+      resolveExperienceProjectMembers({
+        activeSessionId: args.activeSessionId,
+        memberTemplates: args.currentProject?.memberTemplates ?? [],
+        sessionMembers: args.sessionMembers
+      }),
+    [args.activeSessionId, args.currentProject?.memberTemplates, args.sessionMembers]
   );
   const human = useMemo(
     () =>
@@ -75,9 +88,9 @@ export function useWorkspaceProjectProjection(args: {
       projectExternalAgentMetadataMaps({
         externalAgents: args.externalAgents,
         projectId: args.currentProject?.id ?? args.projectId,
-        projectMembers
+        projectMembers: experienceProjectMembers
       }),
-    [args.currentProject?.id, args.externalAgents, args.projectId, projectMembers]
+    [args.currentProject?.id, args.externalAgents, args.projectId, experienceProjectMembers]
   );
   const liveItems = args.liveItems ?? [];
   const liveTools = useMemo(() => toolItems(liveItems), [liveItems]);
@@ -113,7 +126,7 @@ export function useWorkspaceProjectProjection(args: {
         externalAgents: args.externalAgents,
         externalAgentAvatarSeeds: externalAgentMetadata.avatarSeeds,
         externalAgentSessions: args.externalAgentSessions,
-        projectMembers,
+        projectMembers: experienceProjectMembers,
         runningDelegations
       }),
     [
@@ -126,7 +139,7 @@ export function useWorkspaceProjectProjection(args: {
       args.externalAgents,
       externalAgentMetadata.avatarSeeds,
       args.externalAgentSessions,
-      projectMembers,
+      experienceProjectMembers,
       runningDelegations
     ]
   );
@@ -158,6 +171,7 @@ export function useWorkspaceProjectProjection(args: {
     participants,
     projectParticipants: participants.filter((participant) => participant.kind === 'agent'),
     projectMembers,
+    experienceProjectMembers,
     projects
   };
 }

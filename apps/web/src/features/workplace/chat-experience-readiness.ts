@@ -3,7 +3,8 @@ export function isChatExperienceReady(state: {
   activeSessionId: string | null;
   projectSessionsLoading: boolean;
   streamLoading: boolean;
+  streamSnapshotReceived?: boolean;
 }): boolean {
   if (state.activeProjectId === null || state.projectSessionsLoading) return false;
-  return state.activeSessionId === null || !state.streamLoading;
+  return state.activeSessionId === null || (!state.streamLoading && state.streamSnapshotReceived === true);
 }
