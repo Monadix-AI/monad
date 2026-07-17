@@ -1,6 +1,7 @@
 import type { ExternalAgentStreamView } from '../../../experience/types.ts';
 import type { ObservationItem, ObservationTimelineEntry, PublicObservationCard } from './types.ts';
 
+import { DefaultObservationToolPair, ObservationMeta, ObservationText } from '@monad/ui';
 import { workspaceMono as mono } from '@monad/ui/components/AgentAvatar';
 import { MorphChevron } from '@monad/ui/components/MorphChevron';
 import { memo, useEffect, useState } from 'react';
@@ -11,13 +12,7 @@ import {
   projectPublicObservationPair,
   renderPrivateObservationCard
 } from './adapters.ts';
-import {
-  DefaultToolPairContent,
-  ObservationCardShell,
-  type ObservationCollapseCommand,
-  ObservationMeta,
-  ObservationText
-} from './card-shell.tsx';
+import { ObservationCardShell, type ObservationCollapseCommand, toolCallSummary } from './card-shell.tsx';
 import { CommandToolCard, CommandToolHeader } from './command-card.tsx';
 import { FileReadToolCard, FileReadToolHeader } from './file-read-card.tsx';
 
@@ -178,10 +173,12 @@ function ObservationTimelineCard({
         timestamp={entry.timestamp}
         visualRole="tool"
       >
-        <DefaultToolPairContent
-          call={entry.card.call}
+        <DefaultObservationToolPair
+          callText={toolCallSummary(entry.card.call.text ?? '')}
+          callTool={entry.card.call.tool?.name}
           provider={provider}
-          result={entry.card.result}
+          resultText={entry.card.result.text ?? ''}
+          resultTool={entry.card.result.tool?.name}
         />
       </ObservationCardShell>
     );

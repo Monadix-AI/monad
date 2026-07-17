@@ -44,6 +44,13 @@ import type {
   ComposerSkillToken
 } from './components/ComposerEditor';
 import type { ComposerInlineChipProps } from './components/ComposerInlineChip';
+import type {
+  DefaultObservationToolPairProps,
+  ObservationCardProps,
+  ObservationMetaProps,
+  ObservationTextProps,
+  ObservationVisualRole
+} from './components/ObservationCard';
 import type { ProductIconColors, ProductIconId, ProductIconProps } from './components/ProductIcon';
 import type {
   RawEventRecord,
@@ -141,6 +148,13 @@ import {
   type MessageOutlineProps
 } from './components/MessageOutline';
 import { MorphChevron, type MorphChevronProps } from './components/MorphChevron';
+import {
+  DefaultObservationToolPair,
+  ObservationCard,
+  ObservationMeta,
+  ObservationText,
+  observationCardVariants
+} from './components/ObservationCard';
 import { Popover, PopoverContent, PopoverTrigger } from './components/Popover';
 import { isProductIconId, ProductIcon } from './components/ProductIcon';
 import { Progress } from './components/Progress';
@@ -188,6 +202,7 @@ export type {
   ComposerSubmitButtonProps,
   ComposerSurfaceProps,
   ComposerVoiceButtonProps,
+  DefaultObservationToolPairProps,
   ImageZoomProps,
   MessageActionProps,
   MessageActionsProps,
@@ -197,6 +212,10 @@ export type {
   MessageProps,
   MessageResponseProps,
   MorphChevronProps,
+  ObservationCardProps,
+  ObservationMetaProps,
+  ObservationTextProps,
+  ObservationVisualRole,
   ProductIconColors,
   ProductIconId,
   ProductIconProps,
@@ -255,6 +274,7 @@ export {
   ComposerVoiceButton,
   ComposerVoiceUnavailableContent,
   cn,
+  DefaultObservationToolPair,
   Dialog,
   DialogClose,
   DialogContent,
@@ -298,6 +318,10 @@ export {
   MessageOutline,
   MessageResponse,
   MorphChevron,
+  ObservationCard,
+  ObservationMeta,
+  ObservationText,
+  observationCardVariants,
   Popover,
   PopoverContent,
   PopoverTrigger,

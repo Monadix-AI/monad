@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
+import { ObservationCard, ObservationMeta, ObservationText } from '../../src/components/ObservationCard';
 import { RawInspectableCard, rawEventRecordsText } from '../../src/components/RawInspectableCard';
 
 const labels = {
@@ -63,4 +64,53 @@ test('RawInspectableCard renders ordered JSONL only while controlled open', () =
   expect(closed).not.toContain('&quot;type&quot;');
   expect(open).toContain('aria-expanded="true"');
   expect(open).toContain('{&quot;type&quot;:&quot;call&quot;}\n{&quot;type&quot;:&quot;result&quot;}');
+});
+
+test('ObservationCard renders collapse state supplied by its consumer', () => {
+  const collapsed = renderToStaticMarkup(
+    <ObservationCard
+      collapsed
+      header={
+        <ObservationMeta
+          label="tool"
+          source="codex"
+          title="Read file"
+        />
+      }
+      onCollapsedChange={() => {}}
+      timestamp="2026-07-17T00:00:00.000Z"
+      visualRole="tool"
+    >
+      <ObservationText
+        observationRole="tool"
+        text="package.json"
+      />
+    </ObservationCard>
+  );
+  const expanded = renderToStaticMarkup(
+    <ObservationCard
+      collapsed={false}
+      header={
+        <ObservationMeta
+          label="tool"
+          source="codex"
+          title="Read file"
+        />
+      }
+      onCollapsedChange={() => {}}
+      timestamp="2026-07-17T00:00:00.000Z"
+      visualRole="tool"
+    >
+      <ObservationText
+        observationRole="tool"
+        text="package.json"
+      />
+    </ObservationCard>
+  );
+
+  expect(collapsed).toContain('aria-expanded="false"');
+  expect(collapsed).not.toContain('package.json');
+  expect(expanded).toContain('aria-expanded="true"');
+  expect(expanded).toContain('package.json');
+  expect(expanded).toContain('2026-07-17T00:00:00.000Z');
 });

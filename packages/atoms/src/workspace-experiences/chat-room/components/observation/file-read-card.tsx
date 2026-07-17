@@ -2,10 +2,9 @@ import type { CSSProperties } from 'react';
 import type { BundledLanguage } from 'shiki';
 import type { FileReadToolView, ObservationItem } from './types.ts';
 
+import { ObservationMeta } from '@monad/ui';
 import { workspaceMono as mono } from '@monad/ui/components/AgentAvatar';
 import { CodeBlock } from '@monad/ui/components/CodeBlock';
-
-import { ObservationMeta } from './card-shell.tsx';
 
 export function FileReadToolCard({ view }: { view: FileReadToolView }): React.ReactElement {
   return (

@@ -51,9 +51,10 @@ export function RawInspectableCard({
   return (
     <div
       className={cn(
-        'group/raw-card relative overflow-hidden rounded-lg border border-border bg-card text-card-foreground',
+        'group/raw-card relative text-card-foreground data-[open=true]:[&>[data-slot]:first-of-type]:rounded-b-none',
         className
       )}
+      data-open={open}
       data-slot="raw-inspectable-card"
     >
       <div
@@ -88,7 +89,7 @@ export function RawInspectableCard({
       {open ? (
         <section
           aria-label={labels.show}
-          className="border-border border-t bg-background/55 p-3"
+          className="-mt-px rounded-b-lg border border-border bg-background/55 p-3"
           id={panelId}
         >
           <div className="mb-2 flex items-center justify-between gap-2">

@@ -2,10 +2,9 @@ import type { CSSProperties } from 'react';
 import type { BundledLanguage } from 'shiki';
 import type { CommandToolView, ObservationItem } from './types.ts';
 
+import { ObservationMeta } from '@monad/ui';
 import { workspaceMono as mono } from '@monad/ui/components/AgentAvatar';
 import { CodeBlock } from '@monad/ui/components/CodeBlock';
-
-import { ObservationMeta } from './card-shell.tsx';
 
 export function CommandToolCard({ view }: { view: CommandToolView }): React.ReactElement {
   return (
