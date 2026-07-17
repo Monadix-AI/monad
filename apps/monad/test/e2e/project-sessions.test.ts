@@ -72,6 +72,54 @@ for (const kind of TRANSPORTS) {
       expect(body.sessions.map((s) => s.title).sort()).toEqual(['session a', 'session b']);
     });
 
+    test('project member updates replace the active session roster', async () => {
+      const { projectId } = (await (await json('POST', '/v1/workplace/projects', { title: 'member sync' })).json()) as {
+        projectId: string;
+      };
+      await json('PATCH', `/v1/workplace/projects/${projectId}`, {
+        memberTemplates: [
+          {
+            id: 'pmem_fable',
+            type: 'external-agent',
+            name: 'claude-code',
+            displayName: 'Fable',
+            settings: { managedProjectAgent: true, modelId: 'fable' }
+          }
+        ]
+      });
+      const { sessionId } = (await (
+        await json('POST', `/v1/projects/${projectId}/sessions`, { title: 'active session' })
+      ).json()) as { sessionId: string };
+
+      const update = await json('PATCH', `/v1/workplace/projects/${projectId}`, {
+        memberTemplates: [
+          {
+            id: 'pmem_opus',
+            type: 'external-agent',
+            name: 'claude-code',
+            displayName: 'Opus',
+            settings: { managedProjectAgent: true, modelId: 'opus' }
+          }
+        ]
+      });
+      const members = await t.fetch(`/v1/sessions/${sessionId}/members`);
+
+      expect(update.status).toBe(200);
+      expect(members.status).toBe(200);
+      expect(await members.json()).toEqual({
+        members: [
+          {
+            id: 'pmem_opus',
+            templateId: 'pmem_opus',
+            type: 'external-agent',
+            name: 'claude-code',
+            displayName: 'Opus',
+            settings: { managedProjectAgent: true, modelId: 'opus' }
+          }
+        ]
+      });
+    });
+
     test('creating a session for an unknown project 404s', async () => {
       const res = await json('POST', '/v1/projects/prj_ZZZZZZZZZZZZ/sessions', { title: 'x' });
       expect(res.status).toBe(404);
