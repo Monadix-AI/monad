@@ -1212,8 +1212,8 @@ test('Gemini adapter keeps yolo approval mode behind dangerous mode opt-in', () 
   );
 });
 
-test('external agent presets detect Codex, Claude Code, Gemini, and Qwen as direct client commands', () => {
-  const presets = listExternalAgentPresets({ which: (name) => `/bin/${name}`, exists: () => false });
+test('external agent presets detect Codex, Claude Code, Gemini, and Qwen as direct client commands', async () => {
+  const presets = await listExternalAgentPresets({ which: (name) => `/bin/${name}`, exists: () => false });
   const expectedIds = ['claude-code', 'codex', 'gemini', 'hermes', 'openclaw', 'qwen'];
 
   expect(

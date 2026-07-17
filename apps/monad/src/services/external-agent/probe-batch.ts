@@ -8,9 +8,7 @@ export interface ExternalAgentProbeResult {
   exitCode: number | null;
 }
 
-export type ExternalAgentProbeRunner = (
-  launch: ExternalAgentLaunchSpec
-) => Promise<ExternalAgentProbeResult>;
+export type ExternalAgentProbeRunner = (launch: ExternalAgentLaunchSpec) => Promise<ExternalAgentProbeResult>;
 
 export function externalAgentProbeKey(launch: ExternalAgentLaunchSpec): string {
   return JSON.stringify([
@@ -52,7 +50,11 @@ export async function runExternalAgentProbeBatch(
   const executions = new Map<string, Promise<ExternalAgentProbeResult | null>>();
   for (const launch of launches) {
     const key = externalAgentProbeKey(launch);
-    if (!executions.has(key)) executions.set(key, runner(launch).catch(() => null));
+    if (!executions.has(key))
+      executions.set(
+        key,
+        runner(launch).catch(() => null)
+      );
   }
   return new Map(await Promise.all([...executions].map(async ([key, result]) => [key, await result] as const)));
 }

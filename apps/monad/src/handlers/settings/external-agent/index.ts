@@ -102,8 +102,8 @@ export function createExternalAgentSettingsModule({ config, externalAgentSession
       return { agent: toView(found) };
     },
 
-    listExternalAgentPresets(): ListExternalAgentPresetsResponse {
-      return { presets: listExternalAgentPresets() };
+    async listExternalAgentPresets(): Promise<ListExternalAgentPresetsResponse> {
+      return { presets: await listExternalAgentPresets() };
     },
 
     async upsertExternalAgent({ agent }: UpsertExternalAgentRequest): Promise<OkResponse> {

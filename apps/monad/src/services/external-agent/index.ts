@@ -6,6 +6,7 @@ import type {
   ExternalAgentView
 } from '@monad/protocol';
 import type { BinProbes } from '#/infra/resolve-binary.ts';
+import type { ExternalAgentProbeResult, ExternalAgentProbeRunner } from '#/services/external-agent/probe-batch.ts';
 import type {
   BuildExternalAgentLaunchOptions,
   ExternalAgentArgumentSupport,
@@ -19,6 +20,11 @@ import { spawnSync } from 'node:child_process';
 import { isAbsolute } from 'node:path';
 
 import { defaultBinProbes } from '#/infra/resolve-binary.ts';
+import {
+  externalAgentProbeKey,
+  runExternalAgentProbe,
+  runExternalAgentProbeBatch
+} from '#/services/external-agent/probe-batch.ts';
 
 export type { ExternalAgentLaunchSpec, ExternalAgentProviderAdapter } from '#/services/external-agent/types.ts';
 
@@ -269,28 +275,87 @@ function presetAgentView(preset: ExternalAgentPresetView): ExternalAgentView {
   };
 }
 
-export function listExternalAgentPresets(probes: BinProbes = defaultBinProbes): ExternalAgentPresetView[] {
-  return [...ADAPTERS.values()]
-    .map((adapter) => {
-      const preset = adapter.detect(probes);
-      return {
-        ...preset,
-        settings: preset.settings ?? adapter.settings?.(presetAgentView(preset))
-      };
-    })
-    .map((preset) => {
-      const agentView = presetAgentView(preset);
-      // reasoningEfforts/reasoningEffortsByModel share one argument-support probe (both derive from
-      // the same `<cli> --help`-style spawn) — probe once here instead of letting each of
-      // listExternalAgentReasoningEfforts/listExternalAgentReasoningEffortsByModel call it
-      // independently, which spawned the provider CLI twice per adapter for one settings-page load.
-      const support = probeExternalAgentArgumentSupport(agentView, probes);
-      const modelOptions = resolveExternalAgentModelOptions(agentView, probes);
-      return {
-        ...preset,
-        ...modelOptions,
-        reasoningEfforts: support?.reasoningEfforts ?? [],
-        reasoningEffortsByModel: support?.reasoningEffortsByModel
-      };
-    });
+type ResolvedPresetProbe<T> = {
+  launch: ExternalAgentLaunchSpec;
+  parse(output: string, exitCode: number | null): T;
+};
+
+type PlannedPreset = {
+  adapter: ExternalAgentProviderAdapter;
+  agentView: ExternalAgentView;
+  preset: ExternalAgentPresetView;
+  supportProbe?: ResolvedPresetProbe<ExternalAgentArgumentSupport>;
+  modelProbe?: ResolvedPresetProbe<ExternalAgentModelOption[]>;
+};
+
+function resolvePresetProbe<T>(
+  adapter: ExternalAgentProviderAdapter,
+  probe: ResolvedPresetProbe<T> | undefined,
+  probes: BinProbes
+): ResolvedPresetProbe<T> | undefined {
+  if (!probe) return undefined;
+  try {
+    return { ...probe, launch: resolveExternalAgentLaunchCommand(adapter, probe.launch, probes) };
+  } catch {
+    return undefined;
+  }
+}
+
+function parsePresetProbe<T>(
+  probe: ResolvedPresetProbe<T> | undefined,
+  results: ReadonlyMap<string, ExternalAgentProbeResult | null>
+): T | undefined {
+  if (!probe) return undefined;
+  const result = results.get(externalAgentProbeKey(probe.launch));
+  if (result?.exitCode !== 0) return undefined;
+  try {
+    return probe.parse(`${result.stdout}\n${result.stderr}`, result.exitCode);
+  } catch {
+    return undefined;
+  }
+}
+
+function planPreset(adapter: ExternalAgentProviderAdapter, probes: BinProbes): PlannedPreset {
+  const detected = adapter.detect(probes);
+  const preset = {
+    ...detected,
+    settings: detected.settings ?? adapter.settings?.(presetAgentView(detected))
+  };
+  const agentView = presetAgentView(preset);
+  return {
+    adapter,
+    agentView,
+    preset,
+    supportProbe: resolvePresetProbe(adapter, adapter.argumentSupport?.(agentView), probes),
+    modelProbe: resolvePresetProbe(adapter, adapter.modelOptions?.(agentView), probes)
+  };
+}
+
+export async function listExternalAgentPresets(
+  probes: BinProbes = defaultBinProbes,
+  runner: ExternalAgentProbeRunner = runExternalAgentProbe
+): Promise<ExternalAgentPresetView[]> {
+  const planned = [...ADAPTERS.values()].map((adapter) => planPreset(adapter, probes));
+  const results = await runExternalAgentProbeBatch(
+    planned.flatMap(({ supportProbe, modelProbe }) =>
+      [supportProbe?.launch, modelProbe?.launch].filter(
+        (launch): launch is ExternalAgentLaunchSpec => launch !== undefined
+      )
+    ),
+    runner
+  );
+  return planned.map(({ adapter, agentView, preset, supportProbe, modelProbe }) => {
+    const support = parsePresetProbe(supportProbe, results);
+    const models = parsePresetProbe(modelProbe, results);
+    const modelOptions =
+      models && models.length > 0
+        ? modelOptionsFromProbe(models)
+        : { modelOptions: adapter.listSupportedModels(agentView) };
+    return {
+      ...preset,
+      ...modelOptions,
+      reasoningEfforts: support?.reasoningEfforts ?? [],
+      reasoningEffortsByModel: support?.reasoningEffortsByModel
+    };
+  });
 }

@@ -3,9 +3,9 @@ import type { ExternalAgentLaunchSpec } from '#/services/external-agent/types.ts
 import { expect, test } from 'bun:test';
 
 import {
+  type ExternalAgentProbeResult,
   externalAgentProbeKey,
-  runExternalAgentProbeBatch,
-  type ExternalAgentProbeResult
+  runExternalAgentProbeBatch
 } from '#/services/external-agent/probe-batch.ts';
 
 function launch(command: string): ExternalAgentLaunchSpec {
