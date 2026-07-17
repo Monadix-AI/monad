@@ -9,6 +9,7 @@ import { cn } from '@monad/ui';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { isRuntimeReady } from '#/features/init/init-readiness';
+import { SessionUiInstanceHost, type SessionUiSurface } from '#/features/session/SessionUiInstanceHost';
 import { useSessionRouteModel } from '#/features/session/use-session-route-model';
 import { AppShellSidebarReveal } from '#/features/shell/AppShellSidebarReveal';
 import { CommandPaletteDialog } from '#/features/shell/CommandPalette';
@@ -240,6 +241,46 @@ export function ShellRouteProvider({ children }: { children: ReactNode }) {
       workspaceProjects
     ]
   );
+  const activeSessionIds = useMemo(() => {
+    const ids = new Set<string>(sessions.map((session) => session.id));
+    for (const project of workspaceProjects) {
+      for (const session of project.sessions) ids.add(session.id);
+    }
+    return ids;
+  }, [sessions, workspaceProjects]);
+  const activeSessionUiSurface = useMemo<SessionUiSurface | null>(() => {
+    if (currentId && sessionRouteModel && currentSession && !currentSession.archived && !currentSession.projectId) {
+      return {
+        key: `chat:${currentId}`,
+        kind: 'chat',
+        model: sessionRouteModel,
+        sessionId: currentId
+      };
+    }
+    if (!activeProjectId || !routedProjectSessionId || isProjectSettingsRoute) return null;
+    const project = workspaceProjects.find((candidate) => candidate.id === activeProjectId);
+    if (!project?.sessions.some((session) => session.id === routedProjectSessionId)) return null;
+    return {
+      key: `project:${activeProjectId}:session:${routedProjectSessionId}`,
+      kind: 'project',
+      props: {
+        ...workspaceRouteProps,
+        activeProjectId,
+        activeProjectSessionId: routedProjectSessionId,
+        activeProjectSurface: 'workplace'
+      },
+      sessionId: routedProjectSessionId
+    };
+  }, [
+    activeProjectId,
+    currentId,
+    currentSession,
+    isProjectSettingsRoute,
+    routedProjectSessionId,
+    sessionRouteModel,
+    workspaceProjects,
+    workspaceRouteProps
+  ]);
 
   const sidebarProps = useMemo<ComponentProps<typeof SessionSidebar>>(
     () => ({
@@ -449,7 +490,12 @@ export function ShellRouteProvider({ children }: { children: ReactNode }) {
                 reserveHeaderLeading && 'app-main-sidebar-collapsed'
               )}
             >
-              {children}
+              <SessionUiInstanceHost
+                active={activeSessionUiSurface}
+                activeSessionIds={activeSessionIds}
+              >
+                {children}
+              </SessionUiInstanceHost>
             </div>
           </main>
           <RightPanel />

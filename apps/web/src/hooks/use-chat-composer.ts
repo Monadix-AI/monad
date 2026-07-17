@@ -16,7 +16,7 @@ import { branchFromMessage } from '#/features/session/branch-from-message';
 import { type Msg } from '#/features/session/ChatMessage';
 import { viewItemKey } from '#/features/session/chat-view-items';
 import { rewindUserMessage } from '#/features/session/rewind-user-message';
-import { useSessionUiStore } from '#/features/session/session-ui-store';
+import { useSessionUiStoreForSession } from '#/features/session/session-ui-store';
 import { countServerUserMessagesByText, reconcileOptimisticMessages } from '#/features/session/session-view';
 
 type CommandEffect = { type: string; sessionId?: string; compacted?: number; mode?: 'detail' | 'summary' };
@@ -116,14 +116,17 @@ export function useChatComposer({
     isEmpty: isEmptyQueue,
     sessionId: currentId
   });
-  const input = useSessionUiStore((state) => state.input);
-  const clearComposerInput = useSessionUiStore((state) => state.clearComposerInput);
-  const initialUserMessages = useSessionUiStore((state) =>
+  const input = useSessionUiStoreForSession(currentId, (state) => state.input);
+  const clearComposerInput = useSessionUiStoreForSession(currentId, (state) => state.clearComposerInput);
+  const initialUserMessages = useSessionUiStoreForSession(currentId, (state) =>
     currentId ? (state.initialUserMessagesBySession[currentId] ?? EMPTY_QUEUE) : EMPTY_QUEUE
   );
-  const clearInitialUserMessages = useSessionUiStore((state) => state.clearInitialUserMessages);
-  const setHiddenViewItemKeysBySession = useSessionUiStore((state) => state.setHiddenViewItemKeysBySession);
-  const setTranscriptRenderMode = useSessionUiStore((state) => state.setTranscriptRenderMode);
+  const clearInitialUserMessages = useSessionUiStoreForSession(currentId, (state) => state.clearInitialUserMessages);
+  const setHiddenViewItemKeysBySession = useSessionUiStoreForSession(
+    currentId,
+    (state) => state.setHiddenViewItemKeysBySession
+  );
+  const setTranscriptRenderMode = useSessionUiStoreForSession(currentId, (state) => state.setTranscriptRenderMode);
   const messageQueueRef = useRef<string[]>([]);
   const prevBusyRef = useRef(false);
   const submitBusyRef = useRef(false);

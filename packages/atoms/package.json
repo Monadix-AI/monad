@@ -47,7 +47,8 @@
     "./commands/builtins": "./src/commands/builtins.ts",
     "./providers/registry": "./src/providers/registry.ts",
     "./workspace-experiences": "./src/workspace-experiences/ui.tsx",
-    "./workspace-experiences/host-context": "./src/workspace-experiences/host-context.tsx"
+    "./workspace-experiences/host-context": "./src/workspace-experiences/host-context.tsx",
+    "./workspace-experiences/session-ui-store": "./src/workspace-experiences/chat-room/store.ts"
   },
   "module": "src/index.ts",
   "peerDependencies": {

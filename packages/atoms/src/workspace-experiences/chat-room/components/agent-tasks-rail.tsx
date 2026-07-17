@@ -44,7 +44,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { toAgentObservationEvent } from '../../../agent-adapters/neutral-observation.ts';
 import { workspaceExperienceT } from '../../i18n.ts';
-import { useChatRoomExperienceStore } from '../store.ts';
+import { projectSessionUiKey, useChatRoomExperienceStore } from '../store.ts';
 import {
   agentObservationStream,
   isActiveRailAgent,
@@ -545,11 +545,14 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
   const dragStartRef = useRef({ pointerX: 0, width: DEFAULT_RAIL_WIDTH });
   const suppressMouseResizeRef = useRef(false);
   const effectiveRailWidth = railWidth;
-  const observation = useChatRoomExperienceStore((state) =>
-    state.railObservation?.projectId === room.projectId ? state.railObservation : null
-  );
+  const uiKey = projectSessionUiKey(room.projectId, room.activeSessionId);
+  const observation = useChatRoomExperienceStore((state) => state.railObservationBySession[uiKey] ?? null);
   const observeProjectAgent = useChatRoomExperienceStore((state) => state.observeProjectAgent);
-  const closeRailObservation = useChatRoomExperienceStore((state) => state.closeRailObservation);
+  const closeRailObservationForSession = useChatRoomExperienceStore((state) => state.closeRailObservation);
+  const closeRailObservation = useCallback(
+    () => closeRailObservationForSession(uiKey),
+    [closeRailObservationForSession, uiKey]
+  );
   const agents = sortedProjectRailAgents(room.railAgents);
   const observedStream = agentObservationStream(observation, room.externalAgentStreams);
   const observedExternalAgentSessionId = observation?.externalAgentSessionId ?? observedStream?.id;
@@ -800,9 +803,9 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
 
   const observeAgent = useCallback(
     (agent: Participant) => {
-      observeProjectAgent(room.projectId, { agentId: agent.id, agentName: agent.name });
+      observeProjectAgent(uiKey, room.projectId, { agentId: agent.id, agentName: agent.name });
     },
-    [observeProjectAgent, room.projectId]
+    [observeProjectAgent, room.projectId, uiKey]
   );
 
   const renderAgent = (agent: Participant) => {

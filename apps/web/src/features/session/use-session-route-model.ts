@@ -22,7 +22,7 @@ import {
   type SessionCommandMenuItem,
   shouldActivateSlashCommandDiscovery
 } from '#/features/session/command-menu';
-import { useSessionUiStore } from '#/features/session/session-ui-store';
+import { useSessionUiStoreForSession } from '#/features/session/session-ui-store';
 import { useContextNotices } from '#/features/session/use-context-notices';
 import { audioBlobToBase64 } from '#/features/session/voice-transcription';
 import { studioPath } from '#/features/shell/routing/paths';
@@ -89,15 +89,18 @@ export function useSessionRouteModel({
   );
   const removeDraftChatSession = useWorkspaceShellStore((state: WorkspaceShellState) => state.removeDraftChatSession);
   const failDraftChatSession = useWorkspaceShellStore((state: WorkspaceShellState) => state.failDraftChatSession);
-  const hiddenViewItemKeysBySession = useSessionUiStore((state) => state.hiddenViewItemKeysBySession);
-  const enqueueInitialUserMessage = useSessionUiStore((state) => state.enqueueInitialUserMessage);
-  const input = useSessionUiStore((state) => state.input);
-  const activeSkill = useSessionUiStore((state) => state.activeSkill);
-  const applyCommandInsert = useSessionUiStore((state) => state.applyCommandInsert);
-  const clearComposerInput = useSessionUiStore((state) => state.clearComposerInput);
-  const setActiveSkill = useSessionUiStore((state) => state.setActiveSkill);
-  const skillMenuDismissed = useSessionUiStore((state) => state.skillMenuDismissed);
-  const setSkillMenuDismissed = useSessionUiStore((state) => state.setSkillMenuDismissed);
+  const hiddenViewItemKeysBySession = useSessionUiStoreForSession(
+    currentId,
+    (state) => state.hiddenViewItemKeysBySession
+  );
+  const enqueueInitialUserMessage = useSessionUiStoreForSession(currentId, (state) => state.enqueueInitialUserMessage);
+  const input = useSessionUiStoreForSession(currentId, (state) => state.input);
+  const activeSkill = useSessionUiStoreForSession(currentId, (state) => state.activeSkill);
+  const applyCommandInsert = useSessionUiStoreForSession(currentId, (state) => state.applyCommandInsert);
+  const clearComposerInput = useSessionUiStoreForSession(currentId, (state) => state.clearComposerInput);
+  const setActiveSkill = useSessionUiStoreForSession(currentId, (state) => state.setActiveSkill);
+  const skillMenuDismissed = useSessionUiStoreForSession(currentId, (state) => state.skillMenuDismissed);
+  const setSkillMenuDismissed = useSessionUiStoreForSession(currentId, (state) => state.setSkillMenuDismissed);
   const transcriptRef = useRef<VirtualListHandle>(null);
   const slashDiscoveryActive = shouldActivateSlashCommandDiscovery(input);
   const commands = commandsQuery.data?.commands ?? [];

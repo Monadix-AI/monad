@@ -527,23 +527,35 @@ test('project rail includes explicitly invited Monad members', () => {
   ).toEqual(['monad', 'codex']);
 });
 
-test('chatroom experience store opens the same observation view from follow and agent rows', () => {
-  useChatRoomExperienceStore.getState().closeRailObservation();
+test('chatroom experience store isolates rail observations by project session instance', () => {
+  const firstKey = 'project:project-1:session:ses_first';
+  const secondKey = 'project:project-1:session:ses_second';
 
-  useChatRoomExperienceStore.getState().followExternalAgentSession('project-1', 'ncli:codex');
-  expect(useChatRoomExperienceStore.getState().railObservation).toEqual({
-    projectId: 'project-1',
-    externalAgentSessionId: 'ncli:codex'
-  });
-
-  useChatRoomExperienceStore.getState().observeProjectAgent('project-1', {
+  useChatRoomExperienceStore.getState().followExternalAgentSession(firstKey, 'project-1', 'ncli:codex');
+  useChatRoomExperienceStore.getState().observeProjectAgent(secondKey, 'project-1', {
     agentId: 'external-agent:codex',
     agentName: 'codex'
   });
-  expect(useChatRoomExperienceStore.getState().railObservation).toEqual({
-    projectId: 'project-1',
-    agentId: 'external-agent:codex',
-    agentName: 'codex'
+
+  expect(useChatRoomExperienceStore.getState().railObservationBySession).toEqual({
+    [firstKey]: {
+      projectId: 'project-1',
+      externalAgentSessionId: 'ncli:codex'
+    },
+    [secondKey]: {
+      projectId: 'project-1',
+      agentId: 'external-agent:codex',
+      agentName: 'codex'
+    }
+  });
+
+  useChatRoomExperienceStore.getState().closeRailObservation(firstKey);
+  expect(useChatRoomExperienceStore.getState().railObservationBySession).toEqual({
+    [secondKey]: {
+      projectId: 'project-1',
+      agentId: 'external-agent:codex',
+      agentName: 'codex'
+    }
   });
 });
 

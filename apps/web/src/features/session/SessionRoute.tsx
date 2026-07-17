@@ -13,9 +13,17 @@ import { SessionHeader } from './SessionHeader';
 import { SessionInspectorRegion } from './SessionInspectorRegion';
 import { SessionTranscript } from './SessionTranscript';
 import { SessionProvider } from './session-context';
-import { useSessionUiStore } from './session-ui-store';
+import { getSessionUiStore, SessionUiStoreContext, useSessionUiStore } from './session-ui-store';
 
 export function SessionRoute({ model }: { model: SessionRouteModel }) {
+  return (
+    <SessionUiStoreContext.Provider value={getSessionUiStore(model.identity.currentSessionId)}>
+      <SessionRouteContent model={model} />
+    </SessionUiStoreContext.Provider>
+  );
+}
+
+function SessionRouteContent({ model }: { model: SessionRouteModel }) {
   const t = useT();
   const { client: monadClient } = useMonadRuntime();
   const skillPreview = useSessionUiStore((state) => state.skillPreview);

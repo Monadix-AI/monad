@@ -1,6 +1,30 @@
 import { expect, test } from 'bun:test';
 
-import { useSessionUiStore } from '../../src/features/session/session-ui-store.ts';
+import {
+  getSessionUiStore,
+  removeSessionUiStore,
+  useSessionUiStore
+} from '../../src/features/session/session-ui-store.ts';
+
+test('session UI stores isolate composer and interaction state by session instance', () => {
+  const first = getSessionUiStore('ses_first');
+  const second = getSessionUiStore('ses_second');
+
+  first.getState().setComposerInput('draft A');
+  second.getState().setComposerInput('draft B');
+  removeSessionUiStore('ses_first');
+  const recreated = getSessionUiStore('ses_first');
+
+  expect({
+    first: first.getState().input,
+    recreated: recreated.getState().input,
+    second: second.getState().input
+  }).toEqual({
+    first: 'draft A',
+    recreated: '',
+    second: 'draft B'
+  });
+});
 
 test('applyCommandInsert replaces the active token when a range is provided', () => {
   useSessionUiStore.setState({ input: '/me' });

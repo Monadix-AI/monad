@@ -1,9 +1,11 @@
 import type { SessionId } from '@monad/protocol';
 import type { SetStateAction } from 'react';
+import type { StoreApi } from 'zustand';
 import type { SkillEditorState } from '#/features/studio/skills-settings/types';
 import type { SessionTranscriptRenderMode } from './session-route-contract';
 
-import { create } from 'zustand';
+import { createContext, useContext } from 'react';
+import { createStore, useStore } from 'zustand';
 
 type CommandInsertItem = {
   insert: string;
@@ -38,60 +40,94 @@ export interface SessionUiState {
   setSkillMenuDismissed: (dismissed: SetStateAction<boolean>) => void;
 }
 
-export const useSessionUiStore = create<SessionUiState>()((set) => ({
-  input: '',
-  accessMode: 'auto',
-  atBottom: true,
-  activeSkill: 0,
-  transcriptRenderMode: 'detail',
-  hiddenViewItemKeysBySession: {},
-  initialUserMessagesBySession: {},
-  skillPreview: null,
-  skillMenuDismissed: false,
-  setComposerInput: (value) => set({ input: value }),
-  clearComposerInput: () => set({ input: '' }),
-  appendVoiceText: (text) =>
-    set((state) => ({
-      input: state.input.length > 0 ? `${state.input} ${text}` : text
-    })),
-  applyCommandInsert: (item) =>
-    set((state) => {
-      if (item.replace) {
+function createSessionUiStore(): StoreApi<SessionUiState> {
+  return createStore<SessionUiState>()((set) => ({
+    input: '',
+    accessMode: 'auto',
+    atBottom: true,
+    activeSkill: 0,
+    transcriptRenderMode: 'detail',
+    hiddenViewItemKeysBySession: {},
+    initialUserMessagesBySession: {},
+    skillPreview: null,
+    skillMenuDismissed: false,
+    setComposerInput: (value) => set({ input: value }),
+    clearComposerInput: () => set({ input: '' }),
+    appendVoiceText: (text) =>
+      set((state) => ({
+        input: state.input.length > 0 ? `${state.input} ${text}` : text
+      })),
+    applyCommandInsert: (item) =>
+      set((state) => {
+        if (item.replace) {
+          return {
+            input: `${state.input.slice(0, item.replace.start)}${item.insert}${state.input.slice(item.replace.end)}`
+          };
+        }
         return {
-          input: `${state.input.slice(0, item.replace.start)}${item.insert}${state.input.slice(item.replace.end)}`
+          input: state.input.length > 0 ? `${state.input}${item.insert}` : item.insert
         };
-      }
-      return {
-        input: state.input.length > 0 ? `${state.input}${item.insert}` : item.insert
-      };
-    }),
-  enqueueInitialUserMessage: (sessionId, text) =>
-    set((state) => ({
-      initialUserMessagesBySession: {
-        ...state.initialUserMessagesBySession,
-        [sessionId]: [...(state.initialUserMessagesBySession[sessionId] ?? []), text]
-      }
-    })),
-  clearInitialUserMessages: (sessionId) =>
-    set((state) => {
-      const next = { ...state.initialUserMessagesBySession };
-      delete next[sessionId];
-      return { initialUserMessagesBySession: next };
-    }),
-  setAccessMode: (mode) => set({ accessMode: mode }),
-  setAtBottom: (value) => set({ atBottom: value }),
-  setActiveSkill: (skill) =>
-    set((state) => ({
-      activeSkill: typeof skill === 'function' ? skill(state.activeSkill) : skill
-    })),
-  setTranscriptRenderMode: (mode) => set({ transcriptRenderMode: mode }),
-  setHiddenViewItemKeysBySession: (updater) =>
-    set((state) => ({
-      hiddenViewItemKeysBySession: updater(state.hiddenViewItemKeysBySession)
-    })),
-  setSkillPreview: (preview) => set({ skillPreview: preview }),
-  setSkillMenuDismissed: (dismissed) =>
-    set((state) => ({
-      skillMenuDismissed: typeof dismissed === 'function' ? dismissed(state.skillMenuDismissed) : dismissed
-    }))
-}));
+      }),
+    enqueueInitialUserMessage: (sessionId, text) =>
+      set((state) => ({
+        initialUserMessagesBySession: {
+          ...state.initialUserMessagesBySession,
+          [sessionId]: [...(state.initialUserMessagesBySession[sessionId] ?? []), text]
+        }
+      })),
+    clearInitialUserMessages: (sessionId) =>
+      set((state) => {
+        const next = { ...state.initialUserMessagesBySession };
+        delete next[sessionId];
+        return { initialUserMessagesBySession: next };
+      }),
+    setAccessMode: (mode) => set({ accessMode: mode }),
+    setAtBottom: (value) => set({ atBottom: value }),
+    setActiveSkill: (skill) =>
+      set((state) => ({
+        activeSkill: typeof skill === 'function' ? skill(state.activeSkill) : skill
+      })),
+    setTranscriptRenderMode: (mode) => set({ transcriptRenderMode: mode }),
+    setHiddenViewItemKeysBySession: (updater) =>
+      set((state) => ({
+        hiddenViewItemKeysBySession: updater(state.hiddenViewItemKeysBySession)
+      })),
+    setSkillPreview: (preview) => set({ skillPreview: preview }),
+    setSkillMenuDismissed: (dismissed) =>
+      set((state) => ({
+        skillMenuDismissed: typeof dismissed === 'function' ? dismissed(state.skillMenuDismissed) : dismissed
+      }))
+  }));
+}
+
+const fallbackSessionUiStore = createSessionUiStore();
+const sessionUiStores = new Map<string, StoreApi<SessionUiState>>();
+
+export const SessionUiStoreContext = createContext<StoreApi<SessionUiState> | null>(null);
+
+export function getSessionUiStore(sessionId: string): StoreApi<SessionUiState> {
+  const existing = sessionUiStores.get(sessionId);
+  if (existing) return existing;
+  const store = createSessionUiStore();
+  sessionUiStores.set(sessionId, store);
+  return store;
+}
+
+export function removeSessionUiStore(sessionId: string): void {
+  sessionUiStores.delete(sessionId);
+}
+
+function useContextSessionUiStore<T>(selector: (state: SessionUiState) => T): T {
+  const store = useContext(SessionUiStoreContext) ?? fallbackSessionUiStore;
+  return useStore(store, selector);
+}
+
+export const useSessionUiStore = Object.assign(useContextSessionUiStore, {
+  getState: fallbackSessionUiStore.getState,
+  setState: fallbackSessionUiStore.setState,
+  subscribe: fallbackSessionUiStore.subscribe
+});
+
+export function useSessionUiStoreForSession<T>(sessionId: SessionId | null, selector: (state: SessionUiState) => T): T {
+  return useStore(sessionId ? getSessionUiStore(sessionId) : fallbackSessionUiStore, selector);
+}
