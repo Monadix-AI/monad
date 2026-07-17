@@ -1,10 +1,8 @@
 import type { MessageAttachment } from '../../experience/types.ts';
 
-import { Attachment01Icon, Download04Icon, EyeIcon } from '@hugeicons/core-free-icons';
-import { HugeiconsIcon } from '@hugeicons/react';
 import { isPreviewableAttachmentMime } from '@monad/protocol';
 import { useDownloadAttachmentMutation, useLazyGetAttachmentQuery } from '@monad/sdk-experience/react';
-import { workspaceMono as mono, workspaceSans as sans } from '@monad/ui/components/AgentAvatar';
+import { AttachmentCard } from '@monad/ui';
 import { useState } from 'react';
 
 import { workspaceExperienceT } from '../../i18n.ts';
@@ -59,91 +57,23 @@ export function AttachmentChip({ attachment }: { attachment: MessageAttachment }
       setExpanded(true);
     }
   };
-  const actionStyle: React.CSSProperties = {
-    alignItems: 'center',
-    background: 'transparent',
-    border: 'none',
-    color: 'var(--accent-blue)',
-    display: 'inline-flex',
-    fontFamily: sans,
-    fontSize: 12,
-    gap: 4,
-    padding: 0,
-    textDecoration: 'none'
-  };
   return (
-    <div
-      style={{
-        background: 'var(--card)',
-        border: '1px solid var(--border)',
-        borderRadius: 8,
-        color: 'var(--foreground)',
-        fontFamily: sans,
-        fontSize: 13,
-        marginTop: 8,
-        padding: '8px 10px'
-      }}
-    >
-      <div style={{ alignItems: 'center', display: 'flex', flexWrap: 'wrap', gap: 10, minWidth: 0 }}>
-        <HugeiconsIcon
-          icon={Attachment01Icon}
-          size={14}
-          style={{ color: 'var(--muted-foreground)', flexShrink: 0 }}
-        />
-        <span
-          style={{ fontWeight: 600, overflowWrap: 'anywhere' }}
-          title={attachment.path}
-        >
-          {attachment.name}
-        </span>
-        <span style={{ color: 'var(--muted-foreground)', fontFamily: mono, fontSize: 11 }}>
-          {formatAttachmentSize(attachment.bytes)}
-        </span>
-        {previewable ? (
-          <button
-            onClick={() => void togglePreview()}
-            style={actionStyle}
-            type="button"
-          >
-            <HugeiconsIcon
-              icon={EyeIcon}
-              size={13}
-            />
-            {expanded ? t('web.workplace.attachmentCollapse') : t('web.workplace.attachmentPreview')}
-          </button>
-        ) : null}
-        <button
-          onClick={() => void download()}
-          style={actionStyle}
-          type="button"
-        >
-          <HugeiconsIcon
-            icon={Download04Icon}
-            size={13}
-          />
-          {t('web.workplace.attachmentDownload')}
-        </button>
-      </div>
-      {expanded ? (
-        <pre
-          style={{
-            background: 'var(--secondary)',
-            border: '1px solid var(--border)',
-            borderRadius: 6,
-            fontFamily: mono,
-            fontSize: 12,
-            lineHeight: 1.5,
-            margin: '8px 0 0',
-            maxHeight: '40vh',
-            overflow: 'auto',
-            padding: '8px 10px',
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word'
-          }}
-        >
-          {error ? t('web.workplace.attachmentLoadError') : loading || content === null ? '...' : content}
-        </pre>
-      ) : null}
-    </div>
+    <AttachmentCard
+      downloadLabel={t('web.workplace.attachmentDownload')}
+      error={error}
+      errorContent={t('web.workplace.attachmentLoadError')}
+      expanded={expanded}
+      loading={loading || content === null}
+      loadingContent="..."
+      name={attachment.name}
+      onDownload={() => void download()}
+      onPreviewChange={() => void togglePreview()}
+      path={attachment.path}
+      previewable={previewable}
+      previewCollapseLabel={t('web.workplace.attachmentCollapse')}
+      previewContent={content}
+      previewExpandLabel={t('web.workplace.attachmentPreview')}
+      sizeLabel={formatAttachmentSize(attachment.bytes)}
+    />
   );
 }

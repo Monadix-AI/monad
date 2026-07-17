@@ -3,12 +3,11 @@ import type { Message, MessageAttachment } from '../../experience/types.ts';
 
 import { TerminalIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { ProductIcon } from '@monad/ui';
+import { ProductIcon, WorkspaceMessageCard } from '@monad/ui';
 import {
   AgentIdentity,
   AgentInstanceAvatar,
   Avatar,
-  workspaceBoxRadius as boxR,
   workspaceMono as mono,
   resolveProductIcon,
   workspaceSans as sans,
@@ -22,20 +21,12 @@ import { SystemMessageRow, TIME_STYLE } from './system-message-row.tsx';
 
 export type MessageRowLabels = {
   observe?: string;
+  retry?: string;
   working?: string;
 };
 
 export type MessageAttachmentComponent = ComponentType<{ attachment: MessageAttachment }>;
 
-const ROW_STYLE: React.CSSProperties = {
-  boxSizing: 'border-box',
-  display: 'flex',
-  gap: 10,
-  marginBottom: 16,
-  maxWidth: '100%',
-  minWidth: 0,
-  width: '100%'
-};
 const NAME_STYLE: React.CSSProperties = { fontFamily: sans, fontSize: 14, fontWeight: 600 };
 const RETRY_BUTTON_STYLE: React.CSSProperties = {
   alignItems: 'center',
@@ -250,13 +241,11 @@ export function MarkdownWithMentions({ text, streaming }: { text: string; stream
 
 function MessageBubbleContent({
   agent,
-  Attachment,
   hasText,
   labels,
   msg
 }: {
   agent: boolean;
-  Attachment?: MessageAttachmentComponent;
   hasText: boolean;
   labels?: MessageRowLabels;
   msg: Message;
@@ -297,14 +286,6 @@ function MessageBubbleContent({
           {labels?.working ?? 'Working'}
         </span>
       ) : null}
-      {Attachment
-        ? msg.attachments?.map((attachment) => (
-            <Attachment
-              attachment={attachment}
-              key={attachment.id}
-            />
-          ))
-        : null}
     </>
   );
 }
@@ -347,68 +328,49 @@ export const MessageRow = memo(function MessageRow({
       size={34}
     />
   );
-  const messageStack = (
-    <div
-      style={{
-        alignItems: agent ? 'flex-start' : 'flex-end',
-        display: 'flex',
-        flexDirection: 'column',
-        maxWidth: 'min(72ch, calc(100% - 44px))',
-        minWidth: 0
-      }}
-    >
-      <MessageHeader
-        align={agent ? 'left' : 'right'}
-        msg={msg}
-      />
-      <div
-        style={{
-          background: agent ? 'var(--secondary)' : 'var(--foreground)',
-          border: `1px solid ${agent ? 'var(--border)' : 'var(--foreground)'}`,
-          borderRadius: agent ? boxR : '12px 12px 4px 12px',
-          color: agent ? 'var(--foreground)' : 'var(--background)',
-          fontFamily: sans,
-          fontSize: 15,
-          lineHeight: 1.55,
-          maxWidth: '100%',
-          overflowWrap: 'anywhere',
-          padding: '10px 14px',
-          opacity: sending ? 0.72 : 1,
-          wordBreak: 'break-word'
-        }}
-      >
+  return (
+    <WorkspaceMessageCard
+      align={agent ? 'start' : 'end'}
+      attachments={
+        Attachment
+          ? msg.attachments?.map((attachment) => (
+              <Attachment
+                attachment={attachment}
+                key={attachment.id}
+              />
+            ))
+          : undefined
+      }
+      avatar={avatar}
+      body={
         <MessageBubbleContent
-          Attachment={Attachment}
           agent={agent}
           hasText={hasText}
           labels={labels}
           msg={msg}
         />
-      </div>
-    </div>
-  );
-  return (
-    <div
-      style={{
-        ...ROW_STYLE,
-        alignItems: failed && !agent ? 'center' : undefined,
-        flexDirection: 'row',
-        justifyContent: agent ? 'flex-start' : 'flex-end'
-      }}
-    >
-      {failed && !agent ? (
-        <button
-          aria-label="Retry message"
-          onClick={msg.retrySend}
-          style={RETRY_BUTTON_STYLE}
-          title="Retry message"
-          type="button"
-        >
-          !
-        </button>
-      ) : null}
-      {agent ? avatar : messageStack}
-      {agent ? messageStack : avatar}
-    </div>
+      }
+      header={
+        <MessageHeader
+          align={agent ? 'left' : 'right'}
+          msg={msg}
+        />
+      }
+      retryAction={
+        failed && !agent ? (
+          <button
+            aria-label={labels?.retry}
+            onClick={msg.retrySend}
+            style={RETRY_BUTTON_STYLE}
+            title={labels?.retry}
+            type="button"
+          >
+            !
+          </button>
+        ) : undefined
+      }
+      sending={sending}
+      tone={agent ? 'agent' : 'human'}
+    />
   );
 });

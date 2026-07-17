@@ -1503,6 +1503,7 @@
   "web.workplace.otherPlaceholder": "Other…",
   "web.workplace.observe": "Observe",
   "web.workplace.working": "working…",
+  "web.workplace.retryMessage": "Retry message",
   "web.workplace.jumpLatest": "Jump to latest messages",
   "web.workplace.copyRawJson": "Copy raw JSON",
   "web.workplace.hideRawJsonl": "Hide raw JSONL",

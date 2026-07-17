@@ -198,6 +198,7 @@ export function ChatRoomExperienceView({ runtime }: { runtime: ChatRoomExperienc
             jumpLatest: t('web.workplace.jumpLatest'),
             messageOutline: t('web.chat.messageOutline'),
             observe: t('web.workplace.observe'),
+            retry: t('web.workplace.retryMessage'),
             spawnAgentMember: t('web.workplace.emptySpawnAgentMember'),
             timeUnavailable: t('web.chat.timeUnavailable'),
             working: t('web.workplace.working')

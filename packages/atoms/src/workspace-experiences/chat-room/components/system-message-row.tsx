@@ -1,6 +1,6 @@
 import type { Message } from '../../experience/types.ts';
 
-import { ProductIcon } from '@monad/ui';
+import { ProductIcon, WorkspaceSystemEventCard } from '@monad/ui';
 import {
   AgentIdentity,
   AgentInstanceAvatar,
@@ -10,40 +10,6 @@ import {
 } from '@monad/ui/components/AgentAvatar';
 
 export const TIME_STYLE: React.CSSProperties = { fontFamily: mono, fontSize: 11, color: 'var(--muted-foreground)' };
-
-const SYSTEM_EVENT_CSS = `
-.workplace-system-event {
-  max-width: min(620px, 100%);
-  display: inline-grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 7px;
-  border-radius: 12px;
-  background: var(--card);
-  color: var(--muted-foreground);
-  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
-  font-size: 13px;
-  line-height: 1.35;
-  padding: 6px 8px;
-}
-
-.workplace-system-agent {
-  min-width: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--foreground);
-  font-weight: 650;
-}
-
-.workplace-system-copy {
-  min-width: 0;
-  color: var(--muted-foreground);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-`;
 
 export function SystemMessageRow({
   msg,
@@ -55,21 +21,12 @@ export function SystemMessageRow({
   const developer = msg.kind === 'developer' || msg.developerOnly === true;
   const agentProductIcon = msg.agentChip ? resolveProductIcon(msg.agentChip) : null;
   return (
-    <div
-      style={{
-        display: 'flex',
-        justifyContent: 'center',
-        marginBottom: 12
-      }}
-    >
-      <style>{SYSTEM_EVENT_CSS}</style>
-      <div className="workplace-system-event">
-        {developer ? <TagChip tag="DEV" /> : null}
-        {msg.agentChip ? (
+    <WorkspaceSystemEventCard
+      actor={
+        msg.agentChip ? (
           <button
-            className="workplace-action workplace-system-agent"
+            className="workplace-action inline-flex min-w-0 items-center gap-1.5 rounded-full px-1.5 py-0.5 font-semibold text-foreground"
             onClick={() => onAgentClick?.(msg.agentChip?.id ?? '')}
-            style={{ borderRadius: 999, padding: '2px 6px 2px 2px', margin: '-2px -6px -2px -2px' }}
             type="button"
           >
             <AgentInstanceAvatar
@@ -92,9 +49,13 @@ export function SystemMessageRow({
               nameStyle={{ maxWidth: 210, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
             />
           </button>
-        ) : null}
-        {msg.fanoutAgents?.length ? (
-          <span className="workplace-system-agent">
+        ) : undefined
+      }
+      badge={developer ? <TagChip tag="DEV" /> : undefined}
+      body={msg.text ? <span className="min-w-0 truncate text-muted-foreground">{msg.text}</span> : undefined}
+      fanout={
+        msg.fanoutAgents?.length ? (
+          <span className="inline-flex min-w-0 items-center gap-1.5 text-foreground">
             {msg.fanoutAgents.map((agent) => (
               <AgentInstanceAvatar
                 agent={agent}
@@ -104,10 +65,9 @@ export function SystemMessageRow({
               />
             ))}
           </span>
-        ) : null}
-        {msg.text ? <span className="workplace-system-copy">{msg.text}</span> : null}
-        {msg.time ? <span style={TIME_STYLE}>{msg.time}</span> : null}
-      </div>
-    </div>
+        ) : undefined
+      }
+      timestamp={msg.time ? <span style={TIME_STYLE}>{msg.time}</span> : undefined}
+    />
   );
 }

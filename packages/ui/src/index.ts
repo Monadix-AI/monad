@@ -17,6 +17,7 @@ import type {
   ToolProps,
   ToolStatusLabels
 } from './components/AIElements';
+import type { AttachmentCardProps } from './components/AttachmentCard';
 import type { CommandCardView } from './components/CommandCard';
 import type {
   ComposerAccessMode,
@@ -61,6 +62,7 @@ import type {
 } from './components/RawInspectableCard';
 import type { ShortcutChipProps } from './components/ShortcutChip';
 import type { SwitchProps } from './components/Switch';
+import type { WorkspaceMessageCardProps, WorkspaceSystemEventCardProps } from './components/WorkspaceMessageCard';
 
 import {
   AiElementIcons,
@@ -80,6 +82,7 @@ import {
   ToolInput,
   ToolOutput
 } from './components/AIElements';
+import { AttachmentCard } from './components/AttachmentCard';
 import { Badge, badgeVariants } from './components/Badge';
 import { Button, buttonVariants } from './components/Button';
 import { ButtonGroup, ButtonGroupText } from './components/ButtonGroup';
@@ -181,9 +184,11 @@ import { Switch } from './components/Switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/Tabs';
 import { Textarea } from './components/Textarea';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './components/Tooltip';
+import { WorkspaceMessageCard, WorkspaceSystemEventCard } from './components/WorkspaceMessageCard';
 import { cn } from './lib/utils';
 
 export type {
+  AttachmentCardProps,
   CommandCardView,
   ComposerAccessMode,
   ComposerAccessoryControls,
@@ -243,11 +248,14 @@ export type {
   ToolProps,
   ToolStatusLabels,
   UnifiedComposerControls,
-  UnifiedComposerProps
+  UnifiedComposerProps,
+  WorkspaceMessageCardProps,
+  WorkspaceSystemEventCardProps
 };
 
 export {
   AiElementIcons,
+  AttachmentCard,
   activeMessageOutlineIds,
   Badge,
   Button,
@@ -372,5 +380,7 @@ export {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-  UnifiedComposer
+  UnifiedComposer,
+  WorkspaceMessageCard,
+  WorkspaceSystemEventCard
 };

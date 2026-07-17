@@ -1,10 +1,12 @@
 import { expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
+import { AttachmentCard } from '../../src/components/AttachmentCard';
 import { CommandCard, CommandCardHeader } from '../../src/components/CommandCard';
 import { FileReadCard, FileReadCardHeader } from '../../src/components/FileReadCard';
 import { ObservationCard, ObservationMeta, ObservationText } from '../../src/components/ObservationCard';
 import { RawInspectableCard, rawEventRecordsText } from '../../src/components/RawInspectableCard';
+import { WorkspaceMessageCard, WorkspaceSystemEventCard } from '../../src/components/WorkspaceMessageCard';
 
 const labels = {
   copy: 'Copy raw JSON',
@@ -164,4 +166,67 @@ test('FileReadCard renders its path and complete content', () => {
   expect(markup).toContain('/workspace/src/value.ts');
   expect(markup).toContain('export');
   expect(markup).toContain('value');
+});
+
+test('WorkspaceMessageCard renders consumer-provided identity, body, state, and attachment slots', () => {
+  const markup = renderToStaticMarkup(
+    <WorkspaceMessageCard
+      align="end"
+      attachments={<span>design.pdf · 12 KB</span>}
+      avatar={<span>ZE</span>}
+      body={<span>Ship the shared cards</span>}
+      header={<span>Zeke · User · 10:30</span>}
+      retryAction={<button type="button">Retry message</button>}
+      sending
+      tone="human"
+    />
+  );
+
+  expect(markup).toContain('Zeke · User · 10:30');
+  expect(markup).toContain('Ship the shared cards');
+  expect(markup).toContain('design.pdf · 12 KB');
+  expect(markup).toContain('Retry message');
+  expect(markup).toContain('opacity-70');
+});
+
+test('WorkspaceSystemEventCard renders supplied actor, event, and timestamp', () => {
+  const markup = renderToStaticMarkup(
+    <WorkspaceSystemEventCard
+      actor={<button type="button">Codex · CLI</button>}
+      badge={<span>DEV</span>}
+      body={<span>joined the project</span>}
+      timestamp={<span>10:31</span>}
+    />
+  );
+
+  expect(markup).toContain('DEV');
+  expect(markup).toContain('Codex · CLI');
+  expect(markup).toContain('joined the project');
+  expect(markup).toContain('10:31');
+});
+
+test('AttachmentCard renders metadata, actions, and controlled preview state', () => {
+  const markup = renderToStaticMarkup(
+    <AttachmentCard
+      downloadLabel="Download"
+      error={false}
+      expanded
+      loading={false}
+      name="notes.txt"
+      onDownload={() => {}}
+      onPreviewChange={() => {}}
+      path="/workspace/notes.txt"
+      previewable
+      previewCollapseLabel="Collapse"
+      previewContent={'first line\nsecond line'}
+      previewExpandLabel="Preview"
+      sizeLabel="24 B"
+    />
+  );
+
+  expect(markup).toContain('notes.txt');
+  expect(markup).toContain('24 B');
+  expect(markup).toContain('Collapse');
+  expect(markup).toContain('Download');
+  expect(markup).toContain('first line\nsecond line');
 });
