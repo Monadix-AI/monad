@@ -44,6 +44,14 @@ Consecutive token progress records form one streaming run. The Claude adapter ke
 
 The thinking label shimmers only while the agent stream is running and the streaming reasoning item is the latest timeline item. A later tool, assistant, system, or turn-end event settles the card. A stopped stream also settles it even when no later provider event arrived. Existing `prefers-reduced-motion` behavior continues to disable the animation.
 
+### Provider diagnostic cards
+
+Codex JSON log records shaped as `timestamp`, `level`, `fields`, and `target` will project to provider-neutral diagnostic metadata on a system observation. `ERROR` normalizes to error severity and `WARN` normalizes to warning severity. Other log levels retain the existing ordinary raw/system behavior.
+
+Each diagnostic record renders as its own card. The card title is `fields.message`; an optional `fields.error` string renders as multiline detail; `target` and `timestamp` render as metadata. Error cards use destructive styling and warning cards use warning styling. The complete record remains available through the raw inspector.
+
+Diagnostics are operational notices, not turn outcomes. They do not emit `turn-end`, change the agent session to failed, or stop later observations from streaming.
+
 ## Error handling
 
 Malformed or non-JSON raw records continue to display as their original text. Highlighting is presentational and must not parse, rewrite, or reject provider output.
@@ -55,6 +63,8 @@ Malformed or non-JSON raw records continue to display as their original text. Hi
 - Update the raw inspection tests to assert multiple records render as separate, formatted JSON code blocks while preserving exact ordered JSONL copy text.
 - Add Claude regressions for latest-value `thinking_tokens` aggregation, ordered raw retention, and reasoning projection.
 - Add timeline rendering regressions that distinguish an active latest thinking item from a settled or superseded one.
+- Add Codex adapter regressions for ERROR and WARN log normalization and for ignoring INFO as a diagnostic.
+- Add shared diagnostic-card rendering regressions for severity styling, message, optional detail, target, and timestamp.
 - Run the focused atoms and UI tests, then the applicable lint and typecheck scopes.
 
 ## Out of scope
@@ -63,3 +73,4 @@ Malformed or non-JSON raw records continue to display as their original text. Hi
 - Reformatting the copied raw provider JSON.
 - Changing tool card visual structure beyond combining the correctly classified call and result.
 - Displaying `estimated_tokens_delta`; the card shows only the latest cumulative `estimated_tokens` value.
+- Treating provider diagnostic logs as turn failures or merging separate log records.
