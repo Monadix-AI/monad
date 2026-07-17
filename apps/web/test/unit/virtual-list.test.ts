@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import { observationFollowResetKey } from '@monad/atoms/workspace-experiences';
 import {
+  anchoredScrollTop,
   indexOfKey,
   initialBottomScrollRequest,
   isAtBottom,
@@ -91,6 +92,19 @@ test('scrollTopPreservingAnchor: offsets list scrolling so an expanded title kee
   expect(scrollTopPreservingAnchor(640, 120, 72)).toBe(592);
   expect(scrollTopPreservingAnchor(640, 120, 120)).toBe(640);
   expect(scrollTopPreservingAnchor(640, 120, 168)).toBe(688);
+});
+
+test('keyed viewport anchor compensates an insertion or height growth above it', () => {
+  const anchor = { key: 'message-20', top: 80 };
+
+  expect(anchoredScrollTop(640, anchor, { key: 'message-20', top: 200 })).toBe(760);
+});
+
+test('keyed viewport anchor ignores unrelated rows and unchanged offsets', () => {
+  const anchor = { key: 'message-20', top: 80 };
+
+  expect(anchoredScrollTop(640, anchor, { key: 'message-21', top: 200 })).toBe(640);
+  expect(anchoredScrollTop(640, anchor, { key: 'message-20', top: 80 })).toBe(640);
 });
 
 test('observationFollowResetKey: streaming text changes do not request an imperative scroll reset', () => {
