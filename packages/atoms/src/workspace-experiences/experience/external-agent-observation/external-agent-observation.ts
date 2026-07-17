@@ -215,12 +215,18 @@ function mergeAdjacentChunkObservations(
   const isChunkObservation = (event: ExternalAgentObservationEvent): boolean =>
     adapterObservation?.isStreamingFragment?.(event) ?? false;
   const out: ExternalAgentObservationEvent[] = [];
+  let runEvents: ExternalAgentObservationEvent[] = [];
   let runTexts: string[] = [];
   let runRaws: unknown[] = [];
   const settleRun = () => {
     if (runTexts.length < 2) return;
     const previous = out.at(-1);
-    if (previous) out[out.length - 1] = { ...previous, text: runTexts.join(''), raw: runRaws.map(rawObservationLine) };
+    if (!previous) return;
+    out[out.length - 1] = adapterObservation?.mergeStreamingRun?.(runEvents) ?? {
+      ...previous,
+      text: runTexts.join(''),
+      raw: runRaws.map(rawObservationLine)
+    };
   };
   for (const event of events) {
     const previous = out.at(-1);
@@ -234,12 +240,14 @@ function mergeAdjacentChunkObservations(
     ) {
       runTexts.push(event.text);
       runRaws.push(event.raw);
+      runEvents.push(event);
       continue;
     }
     settleRun();
     out.push(event);
     runTexts = isChunkObservation(event) ? [event.text] : [];
     runRaws = isChunkObservation(event) ? [event.raw] : [];
+    runEvents = isChunkObservation(event) ? [event] : [];
   }
   settleRun();
   // Deltas were kept verbatim to preserve internal boundary whitespace; trim the

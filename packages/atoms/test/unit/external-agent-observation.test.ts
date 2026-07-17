@@ -10,6 +10,7 @@ import { toAgentObservationEvent } from '../../src/agent-adapters/neutral-observ
 import { rawJsonText } from '../../src/workspace-experiences/chat-room/components/observation/card-shell.tsx';
 import { ExternalAgentObservationPanel } from '../../src/workspace-experiences/chat-room/components/observation/panel.tsx';
 import {
+  ObservationTimelineRowView,
   observationTimelineEntries,
   observationTimelineRows
 } from '../../src/workspace-experiences/chat-room/components/observation/timeline.tsx';
@@ -429,6 +430,124 @@ test('external agent observation merges streaming thinking deltas', () => {
       text: 'Checking state.'
     }
   ]);
+});
+
+test('Claude Code observation keeps the latest thinking token estimate in one reasoning item', () => {
+  const first = {
+    type: 'system',
+    subtype: 'thinking_tokens',
+    estimated_tokens: 42,
+    estimated_tokens_delta: 42,
+    uuid: 'thinking_1',
+    session_id: 'claude_session'
+  };
+  const latest = {
+    type: 'system',
+    subtype: 'thinking_tokens',
+    estimated_tokens: 151,
+    estimated_tokens_delta: 109,
+    uuid: 'thinking_2',
+    session_id: 'claude_session'
+  };
+  const items = externalAgentNeutralStreamItems({
+    id: 'exa_claude000000',
+    provider: 'claude-code',
+    output: [JSON.stringify(first), JSON.stringify(latest)].join('\n')
+  });
+
+  expect(items).toEqual([
+    {
+      id: 'exa_claude000000:thinking-tokens',
+      kind: 'reasoning',
+      streaming: true,
+      text: 'Thinking… · 151 tokens',
+      raw: [first, latest]
+    }
+  ]);
+});
+
+test('thinking shimmer is limited to the latest reasoning item of a running stream', () => {
+  const reasoning = {
+    id: 'thinking_1',
+    kind: 'reasoning' as const,
+    streaming: true,
+    text: 'Thinking… · 151 tokens'
+  };
+  const render = (items: ExternalAgentStreamView['items'], active: boolean) => {
+    const row = observationTimelineRows(observationTimelineEntries(items, 'claude-code', active))[0];
+    if (!row) throw new Error('Expected a thinking timeline row');
+    return renderToStaticMarkup(React.createElement(ObservationTimelineRowView, { provider: 'claude-code', row }));
+  };
+
+  expect(render([reasoning], true)).toContain('data-streaming="true"');
+  expect(
+    render([reasoning, { id: 'answer_1', kind: 'assistant-message', streaming: false, text: 'Done' }], true)
+  ).not.toContain('data-streaming="true"');
+  expect(render([reasoning], false)).not.toContain('data-streaming="true"');
+});
+
+test('Codex WARN and ERROR logs project to diagnostic cards without ending the turn', () => {
+  const errorRecord = {
+    timestamp: '2026-07-17T12:40:09.794106Z',
+    level: 'ERROR',
+    fields: { message: 'failed to refresh available models: timeout waiting for child process to exit' },
+    target: 'codex_models_manager::manager'
+  };
+  const warningRecord = {
+    timestamp: '2026-07-17T12:38:05.227290Z',
+    level: 'WARN',
+    fields: {
+      message: 'failed to warm remote plugin catalog cache',
+      error:
+        'failed to parse remote plugin catalog response from https://chatgpt.com/backend-api/ps/plugins/list: EOF while parsing a value at line 1 column 0'
+    },
+    target: 'codex_core_plugins::manager'
+  };
+  const items = externalAgentNeutralStreamItems({
+    id: 'exa_codex0000000',
+    provider: 'codex',
+    output: [JSON.stringify(errorRecord), JSON.stringify(warningRecord)].join('\n')
+  });
+
+  expect(items).toEqual([
+    {
+      id: 'exa_codex0000000:diagnostic',
+      kind: 'system',
+      streaming: false,
+      text: 'failed to refresh available models: timeout waiting for child process to exit',
+      diagnostic: {
+        severity: 'error',
+        message: 'failed to refresh available models: timeout waiting for child process to exit',
+        target: 'codex_models_manager::manager'
+      },
+      raw: errorRecord,
+      at: '2026-07-17T12:40:09.794Z'
+    },
+    {
+      id: 'exa_codex0000000:json:1:diagnostic',
+      kind: 'system',
+      streaming: false,
+      text: 'failed to warm remote plugin catalog cache',
+      diagnostic: {
+        severity: 'warning',
+        message: 'failed to warm remote plugin catalog cache',
+        detail:
+          'failed to parse remote plugin catalog response from https://chatgpt.com/backend-api/ps/plugins/list: EOF while parsing a value at line 1 column 0',
+        target: 'codex_core_plugins::manager'
+      },
+      raw: warningRecord,
+      at: '2026-07-17T12:38:05.227Z'
+    }
+  ]);
+
+  const markup = observationTimelineRows(observationTimelineEntries(items, 'codex'))
+    .map((row) => renderToStaticMarkup(React.createElement(ObservationTimelineRowView, { provider: 'codex', row })))
+    .join('');
+  expect(markup).toContain('border-destructive/45');
+  expect(markup).toContain('border-warning/45');
+  expect(markup).toContain('codex_models_manager::manager');
+  expect(markup).toContain('failed to warm remote plugin catalog cache');
+  expect(markup).toContain('EOF while parsing a value at line 1 column 0');
 });
 
 test('Qwen Code observation merges partial stream-json deltas', () => {
@@ -1534,22 +1653,21 @@ test('observation card projection maps Codex and Claude command tools to the sha
 test('Claude Code observation pairs nested SDK tool result with its call', () => {
   const command = 'git status';
   const result = 'On branch main';
-  const output = [
-    JSON.stringify({
-      type: 'assistant',
-      message: {
-        role: 'assistant',
-        content: [{ type: 'tool_use', id: 'toolu_1', name: 'Bash', input: { command } }]
-      }
-    }),
-    JSON.stringify({
-      type: 'user',
-      message: {
-        role: 'user',
-        content: [{ type: 'tool_result', tool_use_id: 'toolu_1', content: result }]
-      }
-    })
-  ].join('\n');
+  const callRecord = {
+    type: 'assistant',
+    message: {
+      role: 'assistant',
+      content: [{ type: 'tool_use', id: 'toolu_1', name: 'Bash', input: { command } }]
+    }
+  };
+  const resultRecord = {
+    type: 'user',
+    message: {
+      role: 'user',
+      content: [{ type: 'tool_result', tool_use_id: 'toolu_1', content: result }]
+    }
+  };
+  const output = [JSON.stringify(callRecord), JSON.stringify(resultRecord)].join('\n');
 
   const items = externalAgentNeutralStreamItems({ id: 'exa_claude000000', provider: 'claude-code', output });
   expect(
@@ -1563,7 +1681,29 @@ test('Claude Code observation pairs nested SDK tool result with its call', () =>
   ]);
 
   const entries = observationTimelineEntries(items, 'claude-code');
-  expect(entries.map((entry) => (entry.kind === 'public' ? entry.card.type : entry.kind))).toEqual(['command-tool']);
+  expect(
+    entries.map((entry) =>
+      entry.kind === 'public' && entry.card.type === 'command-tool'
+        ? {
+            type: entry.card.type,
+            command: entry.card.view.command,
+            commandLanguage: entry.card.view.commandLanguage,
+            output: entry.card.view.output,
+            outputLanguage: entry.card.view.outputLanguage,
+            raw: entry.raw
+          }
+        : { type: entry.kind }
+    )
+  ).toEqual([
+    {
+      type: 'command-tool',
+      command,
+      commandLanguage: 'bash',
+      output: result,
+      outputLanguage: 'bash',
+      raw: [callRecord, resultRecord]
+    }
+  ]);
 });
 
 test('observation card projection maps generic tool pairs to the shared command card', () => {

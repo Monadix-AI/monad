@@ -1,4 +1,4 @@
-import type { ExternalAgentObservationEvent } from '@monad/protocol';
+import type { AgentObservationDiagnostic, ExternalAgentObservationEvent } from '@monad/protocol';
 import type {
   ExternalAgentObservationActivity,
   ExternalAgentObservationJsonRecordEntry,
@@ -87,6 +87,7 @@ export function observation(args: {
   text?: string;
   source: ObservationSource;
   providerEventType?: string;
+  diagnostic?: AgentObservationDiagnostic;
   createdAt?: string;
   raw?: unknown;
   preserveWhitespace?: boolean;
@@ -99,6 +100,7 @@ export function observation(args: {
     text,
     source: args.source,
     providerEventType: args.providerEventType,
+    diagnostic: args.diagnostic,
     createdAt: args.createdAt,
     raw: args.raw
   });

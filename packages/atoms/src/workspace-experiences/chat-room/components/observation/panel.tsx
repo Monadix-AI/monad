@@ -166,8 +166,8 @@ export function ExternalAgentObservationPanel({
   const [usageOpen, setUsageOpen] = useState(false);
   const timelineProvider = stream?.provider ?? '';
   const timelineRows = useMemo(
-    () => observationTimelineRows(observationTimelineEntries(stream?.items ?? [], timelineProvider)),
-    [stream?.items, timelineProvider]
+    () => observationTimelineRows(observationTimelineEntries(stream?.items ?? [], timelineProvider, active)),
+    [active, stream?.items, timelineProvider]
   );
   const summaryTurns = useMemo(
     () => summaryObservationTurns(stream?.items ?? [], timelineProvider),

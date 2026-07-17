@@ -13,6 +13,12 @@ function isThinkingObservation(item: ObservationItem): boolean {
   return item.kind === 'reasoning';
 }
 
+const diagnosticCardAdapter: PublicObservationCardAdapter = {
+  projectItem(item) {
+    return item.kind === 'system' && item.diagnostic ? { type: 'diagnostic', item } : null;
+  }
+};
+
 const thinkingCardAdapter: PublicObservationCardAdapter = {
   projectItem(item) {
     return isThinkingObservation(item) ? { type: 'thinking', item } : null;
@@ -38,6 +44,7 @@ const fileReadToolCardAdapter: PublicObservationCardAdapter = {
 };
 
 const publicObservationCardAdapters: PublicObservationCardAdapter[] = [
+  diagnosticCardAdapter,
   thinkingCardAdapter,
   fileReadToolCardAdapter,
   commandToolCardAdapter

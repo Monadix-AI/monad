@@ -150,6 +150,7 @@ export function toAgentObservationEvent(
     kind,
     streaming: projector?.isStreamingFragment?.(event) ?? isStreamingObservationFragment(event)
   };
+  if (event.diagnostic !== undefined) event_.diagnostic = event.diagnostic;
   if (event.raw !== undefined) event_.raw = event.raw;
   if (event.createdAt !== undefined) event_.at = event.createdAt;
 

@@ -411,6 +411,7 @@ export type ExternalAgentObservationProjector = ExternalAgentObservationUsagePro
    *  Consumers use it to merge adjacent fragments and to drive streaming affordances, without knowing
    *  this provider's delta event names. */
   isStreamingFragment?(event: ExternalAgentObservationEvent): boolean;
+  mergeStreamingRun?(events: ExternalAgentObservationEvent[]): ExternalAgentObservationEvent | undefined;
 };
 
 export interface ExternalAgentArgumentSupport {

@@ -267,6 +267,18 @@ export function claudeRecordEvents(
     }
   }
   if (isClaudeSystemMessage(record)) {
+    if (loose.subtype === 'thinking_tokens') {
+      const estimatedTokens = numberValue(loose.estimated_tokens);
+      if (estimatedTokens !== undefined) {
+        return thinkingObservation({
+          id: `${id}:thinking-tokens`,
+          text: `Thinking… · ${Math.trunc(estimatedTokens)} tokens`,
+          source: 'claude-code-sdk',
+          providerEventType: 'thinking_tokens_delta',
+          raw: record
+        });
+      }
+    }
     return observation({
       id: `${id}:json:${recordIndex}:system`,
       role: 'system',
@@ -285,6 +297,12 @@ export const claudeCodeObservationProjection = {
   usageRecords: claudeUsageRecordsFromRecord,
   classifyActivity: classifyObservationActivity,
   isStreamingFragment: isStreamingObservationFragment,
+  mergeStreamingRun: (events: ExternalAgentObservationEvent[]) => {
+    const first = events[0];
+    const latest = events.at(-1);
+    if (!first || !latest || first.providerEventType !== 'thinking_tokens_delta') return undefined;
+    return { ...latest, id: first.id, raw: events.map((event) => event.raw) };
+  },
   recordProjectors: [
     {
       supports: isClaudeObservationMessage,

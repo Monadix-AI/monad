@@ -5,15 +5,17 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '../lib/utils';
 import { MorphChevron } from './MorphChevron';
 
-export type ObservationVisualRole = 'user' | 'agent' | 'tool' | 'system';
+export type ObservationVisualRole = 'user' | 'agent' | 'tool' | 'system' | 'warning' | 'error';
 
 const observationCardVariants = cva('w-full min-w-0 max-w-full rounded-lg border px-3 py-2.5', {
   variants: {
     visualRole: {
       agent: 'border-primary/30 bg-primary/[0.04]',
+      error: 'border-destructive/45 bg-destructive/[0.06]',
       system: 'border-border bg-background',
       tool: 'border-warning/40 bg-warning/[0.04]',
-      user: 'border-border bg-background'
+      user: 'border-border bg-background',
+      warning: 'border-warning/45 bg-warning/[0.06]'
     }
   },
   defaultVariants: {
@@ -106,7 +108,9 @@ export function ObservationMeta({
             label === 'tool' || label === 'result' || label === 'tool call'
               ? 'bg-warning/10 text-foreground'
               : 'bg-primary/10 text-foreground',
-            label === 'system' && 'text-muted-foreground'
+            label === 'system' && 'text-muted-foreground',
+            label === 'error' && 'border-destructive/40 bg-destructive/10 text-destructive',
+            label === 'warning' && 'border-warning/40 bg-warning/10 text-foreground'
           )}
         >
           {label}

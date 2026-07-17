@@ -35,6 +35,14 @@ export function rawEventRecordsText(records: readonly RawEventRecord[]): string 
   return records.map((record) => record.text).join('\n');
 }
 
+export function formattedRawEventRecordText(text: string): string {
+  try {
+    return JSON.stringify(JSON.parse(text) as unknown, null, 2);
+  } catch {
+    return text;
+  }
+}
+
 export function RawInspectableCard({
   children,
   className,
@@ -119,11 +127,16 @@ export function RawInspectableCard({
               </Tooltip>
             ) : null}
           </div>
-          <CodeBlock
-            className="max-h-64 overflow-auto border-0 bg-transparent [&_pre]:p-0 [&_pre]:text-[11px] [&_pre]:leading-relaxed"
-            code={text}
-            language="json"
-          />
+          <div className="grid max-h-64 gap-2 overflow-auto">
+            {records.map((record) => (
+              <CodeBlock
+                className="border-0 bg-transparent [&_pre]:p-0 [&_pre]:text-[11px] [&_pre]:leading-relaxed"
+                code={formattedRawEventRecordText(record.text)}
+                key={record.id}
+                language="json"
+              />
+            ))}
+          </div>
         </section>
       ) : null}
     </div>

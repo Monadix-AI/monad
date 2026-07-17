@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { agentObservationEventSchema } from '../agent-observation.ts';
+import { agentObservationDiagnosticSchema, agentObservationEventSchema } from '../agent-observation.ts';
 import { externalAgentSessionIdSchema, nativeAgentDeliveryIdSchema } from '../ids.ts';
 import { externalAgentProviderSchema } from './external-agent-config.ts';
 
@@ -23,6 +23,7 @@ export const externalAgentObservationEventSchema = z.object({
     'unknown'
   ]),
   providerEventType: z.string().optional(),
+  diagnostic: agentObservationDiagnosticSchema.optional(),
   createdAt: z.string().optional(),
   raw: z.unknown().optional()
 });

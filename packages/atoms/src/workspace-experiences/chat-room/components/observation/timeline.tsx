@@ -66,7 +66,8 @@ export type ObservationTimelineRow = {
 
 export function observationTimelineEntries(
   items: readonly ExternalAgentStreamView['items'][number][],
-  provider: string
+  provider: string,
+  active = false
 ): ObservationTimelineEntry[] {
   const entries: ObservationTimelineEntry[] = [];
   for (let index = 0; index < items.length; index += 1) {
@@ -78,40 +79,42 @@ export function observationTimelineEntries(
         kind: 'public',
         card: projectPublicObservationPair(item, next, provider) ?? { type: 'tool-pair', call: item, result: next },
         timestamp: observationTimestampLabel(next),
-        raw: { call: item.raw, result: next.raw }
+        raw: [item.raw, next.raw]
       });
       index += 1;
       continue;
     }
     if (!item) continue;
-    const publicCard = projectPublicObservationItem(item, provider);
+    const timelineItem =
+      item.kind === 'reasoning' ? { ...item, streaming: active && index === items.length - 1 && item.streaming } : item;
+    const publicCard = projectPublicObservationItem(timelineItem, provider);
     if (publicCard) {
       entries.push({
         id: item.id,
         kind: 'public',
         card: publicCard,
-        timestamp: observationTimestampLabel(item),
-        raw: item.raw
+        timestamp: observationTimestampLabel(timelineItem),
+        raw: timelineItem.raw
       });
       continue;
     }
-    const privateCard = privateObservationCard(item);
+    const privateCard = privateObservationCard(timelineItem);
     if (privateCard) {
       entries.push({
         id: item.id,
         kind: 'private',
         card: privateCard,
-        timestamp: observationTimestampLabel(item),
-        raw: item.raw
+        timestamp: observationTimestampLabel(timelineItem),
+        raw: timelineItem.raw
       });
       continue;
     }
     entries.push({
       id: item.id,
       kind: 'public',
-      card: { type: 'message', role: item.kind === 'user-message' ? 'user' : 'agent', item },
-      timestamp: observationTimestampLabel(item),
-      raw: item.raw
+      card: { type: 'message', role: timelineItem.kind === 'user-message' ? 'user' : 'agent', item: timelineItem },
+      timestamp: observationTimestampLabel(timelineItem),
+      raw: timelineItem.raw
     });
   }
   return entries;
@@ -209,6 +212,34 @@ function ObservationTimelineCard({
         visualRole="tool"
       >
         <FileReadToolCard view={entry.card.view} />
+      </ObservationCardShell>
+    );
+  }
+  if (entry.kind === 'public' && entry.card.type === 'diagnostic' && entry.card.item.diagnostic) {
+    const diagnostic = entry.card.item.diagnostic;
+    return (
+      <ObservationCardShell
+        collapseCommand={collapseCommand}
+        header={
+          <ObservationMeta
+            compact
+            label={diagnostic.severity}
+            showSource={!!diagnostic.target}
+            source={diagnostic.target ?? provider}
+            title={diagnostic.message}
+          />
+        }
+        raw={entry.raw}
+        timestamp={entry.timestamp}
+        visualRole={diagnostic.severity}
+      >
+        {diagnostic.detail ? (
+          <ObservationText
+            contained
+            observationRole={diagnostic.severity}
+            text={diagnostic.detail}
+          />
+        ) : null}
       </ObservationCardShell>
     );
   }

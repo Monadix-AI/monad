@@ -140,12 +140,14 @@ export function ObservationExample({
   visualRole: ObservationVisualRole;
 }) {
   const [collapsed, setCollapsed] = useState(initialCollapsed);
-  const text = {
+  const text: Record<ObservationVisualRole, string> = {
     agent: 'I am comparing the two transcript render paths.',
+    error: 'Provider model refresh failed.',
     system: 'Provider session resumed from persisted history.',
     tool: 'Tool call `repo_search` for shared card consumers.',
-    user: 'Keep behavior controlled by the consumer.'
-  }[visualRole];
+    user: 'Keep behavior controlled by the consumer.',
+    warning: 'Provider plugin catalog warmup failed.'
+  };
   return (
     <ObservationCard
       collapsed={collapsed}
@@ -163,7 +165,7 @@ export function ObservationExample({
     >
       <ObservationText
         observationRole={visualRole}
-        text={text}
+        text={text[visualRole]}
       />
     </ObservationCard>
   );

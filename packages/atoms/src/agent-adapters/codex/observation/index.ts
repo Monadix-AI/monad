@@ -16,6 +16,7 @@ import {
 } from './observation-app-server-items.ts';
 import { codexAppServerRecordEvents } from './observation-app-server-notification.ts';
 import { codexExecRecordEvents } from './observation-exec.ts';
+import { codexLogRecordEvents, isCodexLogRecord } from './observation-log.ts';
 import { codexObservationMessageGroupAdapter } from './observation-message-group.ts';
 import { codexUsageRecordsFromRecord } from './observation-usage.ts';
 
@@ -80,6 +81,10 @@ export const codexObservationProjection = {
   classifyActivity: classifyObservationActivity,
   isStreamingFragment: isStreamingObservationFragment,
   recordProjectors: [
+    {
+      supports: isCodexLogRecord,
+      parse: ({ id, record, recordIndex }) => codexLogRecordEvents(id, record, recordIndex)
+    },
     {
       supports: isCodexObservationNotification,
       parse: ({ id, record, recordIndex }) =>

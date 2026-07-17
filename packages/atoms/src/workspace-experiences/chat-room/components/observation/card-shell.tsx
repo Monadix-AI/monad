@@ -1,4 +1,4 @@
-import type { RawEventRecord } from '@monad/ui';
+import type { ObservationVisualRole, RawEventRecord } from '@monad/ui';
 
 import { ObservationCard, RawInspectableCard } from '@monad/ui';
 import { useEffect, useState } from 'react';
@@ -24,7 +24,7 @@ export function ObservationCardShell({
   header?: React.ReactNode;
   raw: unknown;
   timestamp?: string;
-  visualRole: 'user' | 'agent' | 'tool' | 'system';
+  visualRole: ObservationVisualRole;
 }): React.ReactElement {
   const t = workspaceExperienceT();
   const [collapsed, setCollapsedState] = useState(collapseCommand?.collapsed ?? defaultCollapsed);

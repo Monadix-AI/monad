@@ -42,6 +42,14 @@ export const agentObservationToolSchema = z.object({
 });
 export type AgentObservationTool = z.infer<typeof agentObservationToolSchema>;
 
+export const agentObservationDiagnosticSchema = z.object({
+  severity: z.enum(['warning', 'error']),
+  message: z.string().min(1),
+  detail: z.string().min(1).optional(),
+  target: z.string().min(1).optional()
+});
+export type AgentObservationDiagnostic = z.infer<typeof agentObservationDiagnosticSchema>;
+
 // One flat shape keyed by `kind`; field presence is by kind (the adapter decode sets only what a
 // kind carries): `text` for reasoning / user-message / assistant-message, `tool` for
 // tool-call / tool-result, `reason` for turn-end. `turn-start` carries none of them.
@@ -55,6 +63,7 @@ export const agentObservationEventSchema = z.object({
   // Raw model text — never pre-formatted for a specific surface.
   text: z.string().optional(),
   tool: agentObservationToolSchema.optional(),
+  diagnostic: agentObservationDiagnosticSchema.optional(),
   reason: agentObservationTurnEndReasonSchema.optional(),
   // The provider-raw frame this event was decoded from, stripped of daemon metadata. Absent on
   // synthesized events (e.g. a turn-start the daemon infers rather than the provider emitting).

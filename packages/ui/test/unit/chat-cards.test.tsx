@@ -41,7 +41,7 @@ test('RawInspectableCard omits inspection controls without records', () => {
 
 test('RawInspectableCard renders ordered JSONL only while controlled open', () => {
   const records = [
-    { id: '1', text: '{"type":"call"}' },
+    { id: '1', text: '{"type":"call","input":{"command":"pwd"}}' },
     { id: '2', text: '{"type":"result"}' }
   ];
   const closed = renderToStaticMarkup(
@@ -68,9 +68,11 @@ test('RawInspectableCard renders ordered JSONL only while controlled open', () =
   expect(closed).toContain('aria-expanded="false"');
   expect(closed).not.toContain('&quot;type&quot;');
   expect(open).toContain('aria-expanded="true"');
-  expect(open).toContain('data-language="json"');
-  expect(open).toContain('{&quot;type&quot;:&quot;call&quot;}');
-  expect(open).toContain('{&quot;type&quot;:&quot;result&quot;}');
+  expect(open.match(/data-language="json"/g)).toHaveLength(2);
+  expect(open).toContain('  &quot;type&quot;: &quot;call&quot;');
+  expect(open).toContain('  &quot;type&quot;: &quot;result&quot;');
+  expect(open).toContain('  &quot;input&quot;: {');
+  expect(open).toContain('    &quot;command&quot;: &quot;pwd&quot;');
 });
 
 test('ObservationCard renders collapse state supplied by its consumer', () => {

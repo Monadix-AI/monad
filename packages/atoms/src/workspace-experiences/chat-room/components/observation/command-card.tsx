@@ -13,16 +13,17 @@ export function commandToolView(
     standaloneResult && result.tool?.name === 'tool' ? 'tool-result' : (call.tool?.name ?? result.tool?.name);
   if (!name) return null;
   const tool = result.tool ?? call.tool;
+  const shellCommand = shellCommandInput(name, call.tool?.input ?? result.tool?.input);
   const command = standaloneResult
     ? structuredText(result.tool?.input)
-    : (structuredText(call.tool?.input ?? result.tool?.input) ?? toolCallTextInput(call.text));
+    : (shellCommand ?? structuredText(call.tool?.input ?? result.tool?.input) ?? toolCallTextInput(call.text));
   const output = structuredText(result.tool?.output) ?? result.text;
   const jsonOutput = output ? jsonCodeText(output) : null;
   return {
     type: name,
     provider,
     command,
-    commandLanguage: command && jsonCodeText(command) ? 'json' : 'bash',
+    commandLanguage: shellCommand ? 'bash' : command && jsonCodeText(command) ? 'json' : 'bash',
     cwd: tool?.cwd,
     status: tool?.status ?? statusFromResultText(output),
     exitCode: tool?.exitCode,
@@ -30,6 +31,13 @@ export function commandToolView(
     output: tool?.status ? output : (jsonOutput ?? output),
     outputLanguage: jsonOutput ? 'json' : commandOutputLanguage(output)
   };
+}
+
+function shellCommandInput(name: string, input: unknown): string | undefined {
+  if (!['bash', 'shell'].includes(name.toLowerCase())) return undefined;
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return undefined;
+  const command = (input as Record<string, unknown>).command;
+  return typeof command === 'string' && command.trim() ? command.trim() : undefined;
 }
 
 function toolCallTextInput(text: string | undefined): string | undefined {

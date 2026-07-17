@@ -12,6 +12,7 @@ export type FileReadToolView = FileReadCardView;
 
 export type PublicObservationCard =
   | { type: 'message'; role: 'user' | 'agent'; item: ObservationItem }
+  | { type: 'diagnostic'; item: ObservationItem }
   | { type: 'thinking'; item: ObservationItem }
   | { type: 'tool-pair'; call: ObservationItem; result: ObservationItem }
   | { type: 'command-tool'; view: CommandToolView }
