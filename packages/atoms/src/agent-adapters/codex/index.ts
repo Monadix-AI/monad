@@ -3,6 +3,7 @@ import type { ExternalAgentProviderAdapter } from '@monad/sdk-atom';
 import { defaultBinProbes, resolveBinary } from '@monad/sdk-atom';
 
 import { parseStructuredAuthState } from '../adapter-shared.ts';
+import { createAppServerHistoryEventSource, createOutputHistoryEventSource } from '../event-source.ts';
 import { externalAgentAdapterSettings } from '../settings.ts';
 import { createCodexSettingsImport } from '../settings-import/index.ts';
 import { parseCodexSessionJsonl } from './events.ts';
@@ -35,6 +36,17 @@ export const codexExternalAgentAdapter: ExternalAgentProviderAdapter = {
   productIcon: 'codex',
   label: 'Codex',
   observation: codexObservationProjection,
+  events: createAppServerHistoryEventSource({
+    provider: 'codex',
+    projection: codexObservationProjection,
+    requestPage: requestCodexHistoryPage,
+    pageOutput: codexHistoryPageOutput,
+    fallback: createOutputHistoryEventSource({
+      provider: 'codex',
+      projection: codexObservationProjection,
+      readOutput: readCodexHistoryOutput
+    })
+  }),
   settings: () =>
     externalAgentAdapterSettings({
       launchModes: ['pty', 'app-server', 'remote-control'],
@@ -123,9 +135,6 @@ export const codexExternalAgentAdapter: ExternalAgentProviderAdapter = {
   },
   initialize: initializeCodex,
   parseOutput: parseCodexSessionJsonl,
-  requestHistoryPage: requestCodexHistoryPage,
-  historyPageOutput: codexHistoryPageOutput,
-  historyOutput: readCodexHistoryOutput,
   sendInput: sendCodexInput,
   supportsApprovalResolution: (launchMode) => launchMode === 'app-server',
   resolveApproval: resolveCodexApproval,

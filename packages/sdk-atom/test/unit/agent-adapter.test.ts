@@ -1,6 +1,6 @@
-import { expect, test } from 'bun:test';
-
 import type { ExternalAgentEventSource, ExternalAgentProviderHistoryContext } from '../../src/agent-adapter.ts';
+
+import { expect, test } from 'bun:test';
 
 test('external agent event source returns normalized pages through one contract', async () => {
   const source: ExternalAgentEventSource = {

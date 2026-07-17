@@ -39,8 +39,8 @@ const fileReadToolCardAdapter: PublicObservationCardAdapter = {
 
 const publicObservationCardAdapters: PublicObservationCardAdapter[] = [
   thinkingCardAdapter,
-  commandToolCardAdapter,
-  fileReadToolCardAdapter
+  fileReadToolCardAdapter,
+  commandToolCardAdapter
 ];
 const privateObservationCardAdapters: PrivateObservationCardAdapter[] = [];
 

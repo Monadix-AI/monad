@@ -276,6 +276,9 @@ export interface ExternalAgentProviderHistoryContext {
   providerSessionRef: string;
   workingPath: string;
   limitBytes: number;
+  requestProviderPage?(
+    send: (handle: ExternalAgentRuntimeHandle) => string | number
+  ): Promise<{ items: unknown[]; nextCursor?: string }>;
 }
 
 export interface ExternalAgentProviderHistoryPageContext extends ExternalAgentProviderHistoryContext {
@@ -504,9 +507,9 @@ export interface ExternalAgentProviderAdapter {
    *  adapters may decode their own JSONL/history format, but must not return UI components, labels,
    *  cards, or view state. Experience surfaces consume only the resulting protocol events. */
   observation?: ExternalAgentObservationProjector;
-  /** Provider-owned live/history event acquisition and projection. During the built-in adapter
-   *  migration this is optional; all registered built-ins are required to provide it by conformance. */
-  events?: ExternalAgentEventSource;
+  /** Provider-owned live/history event acquisition and projection. Unrecognized provider records
+   *  must survive as shared unknown envelopes rather than being dropped. */
+  events: ExternalAgentEventSource;
   /** Declarative operator settings for this adapter. The UI renders these controls dynamically; keys
    *  address fields on `ExternalAgentView` so daemon launch behavior still reads the shared contract. */
   settings?(agent?: ExternalAgentView): ExternalAgentSetting[];
@@ -535,12 +538,6 @@ export interface ExternalAgentProviderAdapter {
   argumentSupport?(agent: ExternalAgentView): ExternalAgentArgumentSupportProbe;
   usage?(agent: ExternalAgentView): ExternalAgentUsageProbe;
   parseAuthStatus(output: string, exitCode: number | null): ExternalAgentAuthState;
-  historyPage?(
-    context: ExternalAgentProviderHistoryPageRequestContext
-  ): Promise<ExternalAgentProviderHistoryPageContext['page'] | null>;
-  requestHistoryPage?(handle: ExternalAgentRuntimeHandle, request: ExternalAgentHistoryPageRequest): string | number;
-  historyPageOutput?(context: ExternalAgentProviderHistoryPageContext): string | null;
-  historyOutput?(context: ExternalAgentProviderHistoryContext): string | null | Promise<string | null>;
   initialize?(handle: ExternalAgentRuntimeHandle, context: ExternalAgentInitializeContext): void;
   /** `handle`, when present, gives per-session JSON-RPC context: the request→kind ledger for by-id
    *  response dispatch and a stdin sink for replying to unhandled server-initiated requests. Adapters

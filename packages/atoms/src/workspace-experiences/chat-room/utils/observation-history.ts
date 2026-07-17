@@ -1,63 +1,26 @@
-import type { AgentObservationEvent, ExternalAgentUiObservationFrame } from '@monad/protocol';
+import type { AgentObservationEvent } from '@monad/protocol';
 
 export function observationHistoryLoadScope(args: {
   deliveryId?: string;
   externalAgentSessionId?: string;
-  observationState?: ExternalAgentUiObservationFrame['state'];
+  historyBefore?: string;
   observationEpoch?: string;
-  providerHistoryCheckpoint?: string;
 }): string | undefined {
-  if (args.deliveryId || !args.externalAgentSessionId) return undefined;
-  if (args.observationState === 'history') return `${args.externalAgentSessionId}:history`;
-  if (!args.observationEpoch || !args.providerHistoryCheckpoint) return undefined;
-  return `${args.externalAgentSessionId}:${args.observationEpoch}:${args.providerHistoryCheckpoint}`;
-}
-
-function record(value: unknown): Record<string, unknown> | undefined {
-  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined;
-}
-
-export function providerObservationIdentity(item: AgentObservationEvent): string | undefined {
-  const raw = record(item.raw);
-  if (!raw) return undefined;
-  if (typeof raw.uuid === 'string' && raw.uuid) return raw.uuid;
-  const params = record(raw.params);
-  const turn = record(params?.turn);
-  if (typeof params?.turnId === 'string' && params.turnId) return params.turnId;
-  return typeof turn?.id === 'string' && turn.id ? turn.id : undefined;
-}
-
-function providerObservationCheckpoint(item: AgentObservationEvent): string | undefined {
-  const raw = record(item.raw);
-  if (!raw) return undefined;
-  if (typeof raw.uuid === 'string' && raw.uuid) return raw.uuid;
-  return raw.method === 'turn/completed' ? providerObservationIdentity(item) : undefined;
-}
-
-export function historyItemsThroughCheckpoint(
-  items: AgentObservationEvent[],
-  checkpoint: string
-): AgentObservationEvent[] | undefined {
-  const index = items.findIndex((item) => providerObservationCheckpoint(item) === checkpoint);
-  return index < 0 ? undefined : items.slice(0, index + 1);
+  if (args.deliveryId || !args.externalAgentSessionId || !args.historyBefore) return undefined;
+  return [args.externalAgentSessionId, args.observationEpoch, args.historyBefore].filter(Boolean).join(':');
 }
 
 export function prependObservationHistory(
   pageItems: AgentObservationEvent[],
   currentItems: AgentObservationEvent[]
 ): AgentObservationEvent[] {
-  const canonicalIds = new Set(pageItems.map((item) => item.id));
-  const canonicalIdentities = new Set(
-    pageItems.map(providerObservationIdentity).filter((value) => value !== undefined)
-  );
-  return [
-    ...pageItems,
-    ...currentItems.filter((item) => {
-      if (canonicalIds.has(item.id)) return false;
-      const identity = providerObservationIdentity(item);
-      return !identity || !canonicalIdentities.has(identity);
-    })
-  ];
+  const seen = new Set<string>();
+  return [...pageItems, ...currentItems].filter((item) => {
+    const identity = item.dedupeKey ?? item.id;
+    if (seen.has(identity)) return false;
+    seen.add(identity);
+    return true;
+  });
 }
 
 export interface ObservationHistoryPage {
@@ -67,11 +30,9 @@ export interface ObservationHistoryPage {
 
 export async function findOlderObservationPage(args: {
   before?: string;
-  checkpoint?: string;
+  currentItems: AgentObservationEvent[];
   load: (before?: string) => Promise<ObservationHistoryPage>;
 }): Promise<ObservationHistoryPage> {
-  if (args.before) return args.load(args.before);
-  if (!args.checkpoint) return args.load(undefined);
   let before = args.before;
   const visited = new Set<string>();
   for (;;) {
@@ -80,9 +41,9 @@ export async function findOlderObservationPage(args: {
     visited.add(marker);
 
     const page = await args.load(before);
-    const items = historyItemsThroughCheckpoint(page.items, args.checkpoint);
-    if (items) return { items, nextCursor: page.nextCursor };
-    if (!page.nextCursor) return { items: [] };
+    const currentKeys = new Set(args.currentItems.map((item) => item.dedupeKey ?? item.id));
+    const items = page.items.filter((item) => !currentKeys.has(item.dedupeKey ?? item.id));
+    if (items.length > 0 || !page.nextCursor) return { items, nextCursor: page.nextCursor };
     before = page.nextCursor;
   }
 }

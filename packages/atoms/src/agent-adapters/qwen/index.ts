@@ -13,6 +13,7 @@ import { defaultBinProbes, resolveBinary } from '@monad/sdk-atom';
 
 import { hasFlag, parseStructuredAuthState, uniqueModelNames } from '../adapter-shared.ts';
 import { parseExternalAgentArgumentSupport } from '../argument-support.ts';
+import { createOutputHistoryEventSource } from '../event-source.ts';
 import { readProviderHistoryFile } from '../history-files.ts';
 import { resizePty, sendPtyInput, stopPty } from '../pty.ts';
 import { externalAgentAdapterSettings } from '../settings.ts';
@@ -174,6 +175,11 @@ export const qwenExternalAgentAdapter: ExternalAgentProviderAdapter = {
   productIcon: 'qwen',
   label: 'Qwen Code',
   observation: qwenObservationProjection,
+  events: createOutputHistoryEventSource({
+    provider: 'qwen',
+    projection: qwenObservationProjection,
+    readOutput: readQwenHistoryOutput
+  }),
   settings: () => externalAgentAdapterSettings({ launchModes: ['pty', 'json-stream'] }),
   settingsImport: createBasicSettingsImport('qwen', 'Qwen Code', 'qwen', '.qwen'),
   managedRuntime: {
@@ -240,7 +246,6 @@ export const qwenExternalAgentAdapter: ExternalAgentProviderAdapter = {
     void exitCode;
     return 'unknown';
   },
-  historyOutput: readQwenHistoryOutput,
   initialize: initializeQwenStreamJson,
   parseOutput: parseQwenStreamJson,
   sendInput: sendQwenInput,

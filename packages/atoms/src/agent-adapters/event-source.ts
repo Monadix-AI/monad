@@ -2,7 +2,9 @@ import type { ExternalAgentObservationEvent, ExternalAgentProvider } from '@mona
 import type {
   ExternalAgentEventSource,
   ExternalAgentObservationJsonRecordEntry,
-  ExternalAgentObservationProjector
+  ExternalAgentObservationProjector,
+  ExternalAgentProviderHistoryPageContext,
+  ExternalAgentRuntimeHandle
 } from '@monad/sdk-atom';
 
 import { jsonRecordEntries, textValue } from './observation-projection.ts';
@@ -37,7 +39,9 @@ function eventDedupeKey(provider: ExternalAgentProvider, event: ExternalAgentObs
 }
 
 function compactEvent(event: ExternalAgentObservationEvent): ExternalAgentObservationEvent {
-  return Object.fromEntries(Object.entries(event).filter(([, value]) => value !== undefined)) as ExternalAgentObservationEvent;
+  return Object.fromEntries(
+    Object.entries(event).filter(([, value]) => value !== undefined)
+  ) as ExternalAgentObservationEvent;
 }
 
 function unknownEvent(args: {
@@ -91,7 +95,8 @@ function projectedEntries(args: {
   projection: ExternalAgentObservationProjector;
   entries: ExternalAgentObservationJsonRecordEntry[];
 }): ExternalAgentObservationEvent[] {
-  const timeline: Array<{ kind: 'events'; events: ExternalAgentObservationEvent[] } | { kind: 'group'; key: string }> = [];
+  const timeline: Array<{ kind: 'events'; events: ExternalAgentObservationEvent[] } | { kind: 'group'; key: string }> =
+    [];
   const groups = new Map<string, { state: unknown; entries: ExternalAgentObservationJsonRecordEntry[] }>();
   const groupProjector = args.projection.messageGroup;
 
@@ -144,6 +149,34 @@ function plainTextEvents(provider: ExternalAgentProvider, id: string, output: st
     });
 }
 
+function mergeStreamingEvents(
+  provider: ExternalAgentProvider,
+  projection: ExternalAgentObservationProjector,
+  events: ExternalAgentObservationEvent[]
+): ExternalAgentObservationEvent[] {
+  const merged: ExternalAgentObservationEvent[] = [];
+  for (const event of events) {
+    const previous = merged.at(-1);
+    if (
+      previous &&
+      projection.isStreamingFragment?.(previous) &&
+      projection.isStreamingFragment(event) &&
+      previous.role === event.role &&
+      previous.providerEventType === event.providerEventType
+    ) {
+      const next = compactEvent({
+        ...previous,
+        text: `${previous.text}${event.text}`,
+        raw: [previous.raw, event.raw]
+      });
+      merged[merged.length - 1] = { ...next, dedupeKey: eventDedupeKey(provider, next) };
+      continue;
+    }
+    merged.push(event);
+  }
+  return merged;
+}
+
 export function createProjectedEventSource(args: {
   provider: ExternalAgentProvider;
   projection: ExternalAgentObservationProjector;
@@ -153,9 +186,88 @@ export function createProjectedEventSource(args: {
     projectLive: ({ id, output, mode }) => {
       const entries = jsonRecordEntries(output);
       if (entries.length === 0) return { events: plainTextEvents(args.provider, id, output) };
-      const projected = mode === 'history' && args.projection.historyEntries ? args.projection.historyEntries(entries) : entries;
-      return { events: projectedEntries({ id, provider: args.provider, projection: args.projection, entries: projected }) };
+      const projected =
+        mode === 'history' && args.projection.historyEntries ? args.projection.historyEntries(entries) : entries;
+      return {
+        events: mergeStreamingEvents(
+          args.provider,
+          args.projection,
+          projectedEntries({ id, provider: args.provider, projection: args.projection, entries: projected })
+        )
+      };
     },
     ...(args.readPage ? { readPage: args.readPage } : {})
+  };
+}
+
+export function createOutputHistoryEventSource(args: {
+  provider: ExternalAgentProvider;
+  projection: ExternalAgentObservationProjector;
+  readOutput(
+    context: Parameters<NonNullable<ExternalAgentEventSource['readPage']>>[0]
+  ): string | null | Promise<string | null>;
+}): ExternalAgentEventSource {
+  const source = createProjectedEventSource({
+    provider: args.provider,
+    projection: args.projection
+  });
+  return {
+    ...source,
+    readPage: async (context, request) => {
+      const output = await args.readOutput(context);
+      if (!output) return { state: 'unavailable', reason: 'not-found' };
+      const events = source.projectLive({ id: context.providerSessionRef, output, mode: 'history' }).events;
+      const offset = request.before ? Number.parseInt(request.before, 10) : 0;
+      const start = Number.isFinite(offset) && offset > 0 ? offset : 0;
+      const pageEvents =
+        request.sortDirection === 'desc'
+          ? events.slice(Math.max(0, events.length - start - request.limit), events.length - start)
+          : events.slice(start, start + request.limit);
+      const hasMore =
+        request.sortDirection === 'desc'
+          ? events.length - start - pageEvents.length > 0
+          : start + pageEvents.length < events.length;
+      return {
+        state: 'available',
+        events: pageEvents,
+        ...(hasMore ? { nextCursor: String(start + pageEvents.length) } : {})
+      };
+    }
+  };
+}
+
+export function createAppServerHistoryEventSource(args: {
+  provider: ExternalAgentProvider;
+  projection: ExternalAgentObservationProjector;
+  requestPage(
+    handle: ExternalAgentRuntimeHandle,
+    request: { before?: string; limit: number; sortDirection: 'asc' | 'desc'; itemsView: 'full' }
+  ): string | number;
+  pageOutput?(context: ExternalAgentProviderHistoryPageContext): string | null;
+  fallback?: ExternalAgentEventSource;
+}): ExternalAgentEventSource {
+  const source = createProjectedEventSource({ provider: args.provider, projection: args.projection });
+  return {
+    ...source,
+    readPage: async (context, request) => {
+      if (!context.requestProviderPage) {
+        return (await args.fallback?.readPage?.(context, request)) ?? { state: 'unavailable', reason: 'unsupported' };
+      }
+      const page = await context.requestProviderPage((handle) =>
+        args.requestPage(handle, { ...request, itemsView: 'full' })
+      );
+      const presentationPage = {
+        ...page,
+        items: request.sortDirection === 'desc' ? [...page.items].reverse() : page.items
+      };
+      const output =
+        args.pageOutput?.({ ...context, page: presentationPage }) ??
+        presentationPage.items.map((item) => (typeof item === 'string' ? item : JSON.stringify(item))).join('\n');
+      return {
+        state: 'available',
+        events: source.projectLive({ id: context.providerSessionRef, output, mode: 'history' }).events,
+        ...(page.nextCursor ? { nextCursor: page.nextCursor } : {})
+      };
+    }
   };
 }

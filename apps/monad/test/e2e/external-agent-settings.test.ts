@@ -52,6 +52,7 @@ const agentView = () => ({
 const THIRD_PARTY_IMPORT_PATH = join(tmpdir(), 'monad-third-party-migrator-settings');
 
 const thirdPartyMigrationAdapter: ExternalAgentProviderAdapter = {
+  events: { projectLive: () => ({ events: [] }) },
   provider: 'third-party-migrator',
   productIcon: 'third-party-migrator',
   label: 'Third Party Migrator',

@@ -120,7 +120,7 @@ export function observationTimelineEntries(
 function visualRoleFromKind(kind: ObservationItem['kind']): 'user' | 'agent' | 'tool' | 'system' {
   if (kind === 'user-message') return 'user';
   if (kind === 'tool-call' || kind === 'tool-result') return 'tool';
-  if (kind === 'system') return 'system';
+  if (kind === 'system' || kind === 'unknown') return 'system';
   return 'agent';
 }
 
@@ -311,6 +311,7 @@ function GenericObservationCard({
   return (
     <ObservationCardShell
       collapseCommand={collapseCommand}
+      defaultCollapsed={item.kind === 'unknown'}
       header={header}
       raw={entry.raw}
       timestamp={entry.timestamp}
@@ -462,23 +463,7 @@ function toolPairName(item: ObservationItem): string {
   if (item.tool?.name) return item.tool.name;
   const textName = /^Tool call\s+([^\s]+)/.exec((item.text ?? '').trim())?.[1];
   if (textName) return textName;
-  return toolNameFromRaw(item.raw) ?? 'tool';
-}
-
-function toolNameFromRaw(raw: unknown): string | undefined {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
-  const record = raw as Record<string, unknown>;
-  const direct = record.name ?? record.tool ?? record.type;
-  if (typeof direct === 'string' && direct.trim()) return direct.trim();
-  const params = record.params;
-  if (!params || typeof params !== 'object' || Array.isArray(params)) return undefined;
-  const item = (params as Record<string, unknown>).item;
-  if (!item || typeof item !== 'object' || Array.isArray(item)) return undefined;
-  const nested =
-    (item as Record<string, unknown>).name ??
-    (item as Record<string, unknown>).tool ??
-    (item as Record<string, unknown>).type;
-  return typeof nested === 'string' && nested.trim() ? nested.trim() : undefined;
+  return 'tool';
 }
 
 function isToolCallEvent(item: ObservationItem): boolean {

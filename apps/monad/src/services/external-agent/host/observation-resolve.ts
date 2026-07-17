@@ -4,19 +4,15 @@ import type {
   ExternalAgentUiObservationFrame
 } from '@monad/protocol';
 import type { ExternalAgentHostDeps, LiveExternalAgentSession } from '#/services/external-agent/host/host-types.ts';
-import type { ExternalAgentProviderAdapter } from '#/services/external-agent/types.ts';
-import type { ExternalAgentSessionRow } from '#/store/db/index.ts';
+
+import { toAgentObservationEvent } from '@monad/atoms/agent-observation';
+import { externalAgentUsageLimitMeter } from '@monad/atoms/external-agent-observation';
 
 import {
-  externalAgentNeutralStreamItems,
-  externalAgentStreamItems,
-  externalAgentUsageLimitMeter
-} from '@monad/atoms/external-agent-observation';
-
-import {
-  providerHistoryOutputFromLocal,
-  providerHistoryOutputViaCli
+  providerHistoryEventsFromLocal,
+  providerHistoryPageViaCli
 } from '#/services/external-agent/host/history-backfill.ts';
+import { encodeJournalHistoryCursor } from '#/services/external-agent/host/history-cursor.ts';
 import { isManagedProjectRuntime } from '#/services/external-agent/host/host-helpers.ts';
 import { getExternalAgentProviderAdapter } from '#/services/external-agent/index.ts';
 
@@ -34,12 +30,6 @@ export interface ExternalAgentObservationResolveContext {
  *  the subscription/publish side owned by `ExternalAgentObservationHub`. */
 export class ExternalAgentObservationResolver {
   constructor(private readonly ctx: ExternalAgentObservationResolveContext) {}
-
-  private hasObservableHistory(id: string, adapter: ExternalAgentProviderAdapter, output: string): boolean {
-    return externalAgentNeutralStreamItems({ id, adapter, output, mode: 'history' }).some(
-      (event) => event.kind !== 'system'
-    );
-  }
 
   observe(id: string, afterSeq?: number): ExternalAgentObservationAccessResponse {
     const live = this.ctx.live.get(id);
@@ -66,7 +56,8 @@ export class ExternalAgentObservationResolver {
         observationEpoch: live.observationEpoch,
         ...(live.providerHistoryCheckpoint ? { providerHistoryCheckpoint: live.providerHistoryCheckpoint } : {}),
         output: snapshot,
-        events: externalAgentStreamItems({ id, adapter: live.adapter, output: snapshot }),
+        events: live.adapter.events.projectLive({ id, output: snapshot }).events,
+        historyBefore: encodeJournalHistoryCursor(),
         usageMeter: externalAgentUsageLimitMeter({ adapter: live.adapter, output: snapshot }),
         seq: live.outputSeq,
         observedAt: new Date().toISOString()
@@ -87,7 +78,8 @@ export class ExternalAgentObservationResolver {
         externalAgentSessionId: id as ExternalAgentSessionId,
         provider: row.provider,
         output: row.outputSnapshot,
-        events: externalAgentStreamItems({ id, adapter, output: row.outputSnapshot, mode: 'history' }),
+        events: adapter.events.projectLive({ id, output: row.outputSnapshot, mode: 'history' }).events,
+        historyBefore: encodeJournalHistoryCursor(),
         usageMeter: externalAgentUsageLimitMeter({ adapter, output: row.outputSnapshot }),
         observedAt: row.updatedAt
       };
@@ -112,7 +104,11 @@ export class ExternalAgentObservationResolver {
         provider: live.provider,
         observationEpoch: live.observationEpoch,
         ...(live.providerHistoryCheckpoint ? { providerHistoryCheckpoint: live.providerHistoryCheckpoint } : {}),
-        events: externalAgentNeutralStreamItems({ id, adapter: live.adapter, output: snapshot }),
+        events: live.adapter.events
+          .projectLive({ id, output: snapshot })
+          .events.map((event) => toAgentObservationEvent(event, live.adapter.observation))
+          .filter((event) => event !== null),
+        historyBefore: encodeJournalHistoryCursor(),
         seq: live.outputSeq,
         observedAt: new Date().toISOString()
       };
@@ -131,7 +127,11 @@ export class ExternalAgentObservationResolver {
         state: 'history',
         externalAgentSessionId: id as ExternalAgentSessionId,
         provider: row.provider,
-        events: externalAgentNeutralStreamItems({ id, adapter, output: row.outputSnapshot, mode: 'history' }),
+        events: adapter.events
+          .projectLive({ id, output: row.outputSnapshot, mode: 'history' })
+          .events.map((event) => toAgentObservationEvent(event, adapter.observation))
+          .filter((event) => event !== null),
+        historyBefore: encodeJournalHistoryCursor(),
         observedAt: row.updatedAt
       };
     }
@@ -143,43 +143,51 @@ export class ExternalAgentObservationResolver {
     };
   }
 
-  private historyAccessFromOutput(
-    id: string,
-    row: ExternalAgentSessionRow,
-    adapter: ExternalAgentProviderAdapter,
-    output: string | null
-  ): ExternalAgentObservationAccessResponse | null {
-    if (!output) return null;
-    if (!this.hasObservableHistory(id, adapter, output)) return null;
-    const events = externalAgentStreamItems({ id, adapter, output, mode: 'history' });
-    return {
-      state: 'history',
-      externalAgentSessionId: id as ExternalAgentSessionId,
-      provider: row.provider,
-      output,
-      events,
-      usageMeter: externalAgentUsageLimitMeter({ adapter, output }),
-      observedAt: row.updatedAt
-    };
-  }
-
   async observeWithProviderHistory(id: string): Promise<ExternalAgentObservationAccessResponse> {
     const base = this.observe(id);
-    if (base.state === 'live') return base;
+    if (base.state !== 'unavailable') return base;
     const row = this.ctx.store.getExternalAgentSession(id);
-    if (!row) return base;
+    if (!row || !isManagedProjectRuntime(row) || !row.providerSessionRef) return base;
     const adapter = getExternalAgentProviderAdapter(row.provider);
-    if (base.state === 'history' && this.hasObservableHistory(id, adapter, base.output ?? '')) return base;
-    if (!isManagedProjectRuntime(row) || !row.providerSessionRef) return base;
-    const cliOutput = await providerHistoryOutputViaCli(row, adapter, {
-      agents: this.ctx.agents,
-      buildSpawnEnv: (env) => this.ctx.buildSpawnEnv(env),
-      takeStructuredLines: (structuredId, stream, chunk) => this.ctx.takeStructuredLines(structuredId, stream, chunk),
-      dropStructuredBuffer: (structuredId) => this.ctx.dropStructuredBuffer(structuredId)
-    }).catch(() => null);
-    const cliAccess = this.historyAccessFromOutput(id, row, adapter, cliOutput);
-    if (cliAccess) return cliAccess;
-    const localOutput = await providerHistoryOutputFromLocal(row, adapter);
-    return this.historyAccessFromOutput(id, row, adapter, localOutput) ?? base;
+    const cliPage = await providerHistoryPageViaCli(
+      row,
+      adapter,
+      { limit: 100, sortDirection: 'desc' },
+      {
+        agents: this.ctx.agents,
+        buildSpawnEnv: (env) => this.ctx.buildSpawnEnv(env),
+        takeStructuredLines: (structuredId, stream, chunk) =>
+          this.ctx.takeStructuredLines(structuredId, stream, chunk),
+        dropStructuredBuffer: (structuredId) => this.ctx.dropStructuredBuffer(structuredId)
+      }
+    ).catch(() => null);
+    if (cliPage?.state === 'available' && cliPage.events.length > 0) {
+      this.ctx.store.recordExternalAgentObservationEvents(id, cliPage.events, row.updatedAt);
+      return {
+        state: 'history',
+        externalAgentSessionId: id as ExternalAgentSessionId,
+        provider: row.provider,
+        output: '',
+        events: cliPage.events,
+        historyBefore: encodeJournalHistoryCursor(),
+        usageMeter: null,
+        observedAt: row.updatedAt
+      };
+    }
+    const localEvents = await providerHistoryEventsFromLocal(row, adapter);
+    if (localEvents) {
+      this.ctx.store.recordExternalAgentObservationEvents(id, localEvents, row.updatedAt);
+      return {
+        state: 'history',
+        externalAgentSessionId: id as ExternalAgentSessionId,
+        provider: row.provider,
+        output: '',
+        events: localEvents,
+        historyBefore: encodeJournalHistoryCursor(),
+        usageMeter: null,
+        observedAt: row.updatedAt
+      };
+    }
+    return base;
   }
 }

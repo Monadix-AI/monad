@@ -7,8 +7,9 @@
 // forwarding a foreign cursor to a provider.
 const STORED_HISTORY_CURSOR_PREFIX = 'snapshot:';
 const PROVIDER_HISTORY_CURSOR_PREFIX = 'provider:';
+const JOURNAL_HISTORY_CURSOR_PREFIX = 'journal:';
 
-export type HistoryCursor = { kind: 'stored' | 'provider'; value: string } | { kind: 'none' };
+export type HistoryCursor = { kind: 'stored' | 'provider' | 'journal'; value: string } | { kind: 'none' };
 
 export function decodeHistoryCursor(before: string | undefined): HistoryCursor {
   if (!before) return { kind: 'none' };
@@ -17,6 +18,9 @@ export function decodeHistoryCursor(before: string | undefined): HistoryCursor {
   }
   if (before.startsWith(PROVIDER_HISTORY_CURSOR_PREFIX)) {
     return { kind: 'provider', value: before.slice(PROVIDER_HISTORY_CURSOR_PREFIX.length) };
+  }
+  if (before.startsWith(JOURNAL_HISTORY_CURSOR_PREFIX)) {
+    return { kind: 'journal', value: before.slice(JOURNAL_HISTORY_CURSOR_PREFIX.length) };
   }
   return { kind: 'none' };
 }
@@ -27,4 +31,8 @@ export function encodeStoredHistoryCursor(lineOffset: number): string {
 
 export function encodeProviderHistoryCursor(cursor: string): string {
   return `${PROVIDER_HISTORY_CURSOR_PREFIX}${cursor}`;
+}
+
+export function encodeJournalHistoryCursor(cursor = ''): string {
+  return `${JOURNAL_HISTORY_CURSOR_PREFIX}${cursor}`;
 }

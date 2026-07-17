@@ -56,12 +56,7 @@ test('Claude Code adapter reads paged history through the Agent SDK', async () =
   });
   expect(page?.nextCursor).toBe('4');
 
-  const output = claudeCodeExternalAgentAdapter.historyPageOutput?.({
-    providerSessionRef: 'claude-session-1',
-    workingPath: '/tmp/project',
-    limitBytes: 8192,
-    page: page ?? { items: [] }
-  });
+  const output = page?.items.map((item) => JSON.stringify(item)).join('\n') ?? '';
 
   const events = claudeCodeExternalAgentAdapter.parseOutput(output ?? '');
   expect(events).toEqual([

@@ -2112,7 +2112,7 @@ test('Codex adapter echoes a numeric approval request id back to the app server'
   expect(JSON.parse(writes[0] ?? '')).toEqual({ id: 17, result: { decision: 'accept' } });
 });
 
-test('Codex adapter requests and parses paged app-server history without rollout files', () => {
+test('Codex event source requests and projects paged app-server history without rollout files', async () => {
   const writes: string[] = [];
   const handle = {
     launchMode: 'app-server' as const,
@@ -2127,12 +2127,19 @@ test('Codex adapter requests and parses paged app-server history without rollout
     kill() {}
   };
 
-  const responseId = codexExternalAgentAdapter.requestHistoryPage?.(handle, {
-    limit: 3,
-    before: 'cursor-1',
-    sortDirection: 'desc',
-    itemsView: 'summary'
-  });
+  let responseId: string | number | undefined;
+  const page = await codexExternalAgentAdapter.events.readPage?.(
+    {
+      providerSessionRef: 'codex-thread-1',
+      workingPath: '/tmp/project',
+      limitBytes: 8192,
+      requestProviderPage: async (send) => {
+        responseId = send(handle);
+        return { items: [{ id: 'turn-1', items: [] }], nextCursor: 'next-1' };
+      }
+    },
+    { limit: 3, before: 'cursor-1', sortDirection: 'desc' }
+  );
   expect(responseId).toBe(9);
   expect(JSON.parse(writes[0] ?? '')).toEqual({
     method: 'thread/turns/list',
@@ -2142,7 +2149,7 @@ test('Codex adapter requests and parses paged app-server history without rollout
       limit: 3,
       cursor: 'cursor-1',
       sortDirection: 'desc',
-      itemsView: 'summary'
+      itemsView: 'full'
     }
   });
 
@@ -2168,39 +2175,35 @@ test('Codex adapter requests and parses paged app-server history without rollout
       }
     }
   ]);
+  expect(page).toMatchObject({ state: 'available', nextCursor: 'next-1' });
 });
 
-test('Codex adapter projects paged history as completed turn items only', () => {
-  const output = codexExternalAgentAdapter.historyPageOutput?.({
-    providerSessionRef: 'codex-thread-1',
-    workingPath: '/tmp/project',
-    limitBytes: 8192,
-    page: {
-      items: [
-        {
-          id: 'turn-1',
-          status: 'completed',
-          startedAt: '2026-07-06T00:00:00.000Z',
-          completedAt: '2026-07-06T00:00:01.000Z',
-          durationMs: 1000,
-          items: [
-            { id: 'item-1', type: 'userMessage', text: 'hi' },
-            { id: 'item-2', type: 'agentMessage', text: 'hello' }
-          ]
-        }
-      ]
-    }
-  });
-
-  const records = (output ?? '').split('\n').map((line) => JSON.parse(line));
-  expect(records.map((record) => record.method)).toEqual([
-    'turn/started',
-    'item/completed',
-    'item/completed',
-    'turn/completed'
-  ]);
-  expect(records.some((record) => String(record.method).includes('/delta'))).toBe(false);
-  expect(records.some((record) => record.method === 'item/started')).toBe(false);
+test('Codex event source projects paged history as completed turn items only', async () => {
+  const page = await codexExternalAgentAdapter.events.readPage?.(
+    {
+      providerSessionRef: 'codex-thread-1',
+      workingPath: '/tmp/project',
+      limitBytes: 8192,
+      requestProviderPage: async () => ({
+        items: [
+          {
+            id: 'turn-1',
+            status: 'completed',
+            startedAt: '2026-07-06T00:00:00.000Z',
+            completedAt: '2026-07-06T00:00:01.000Z',
+            durationMs: 1000,
+            items: [
+              { id: 'item-1', type: 'userMessage', text: 'hi' },
+              { id: 'item-2', type: 'agentMessage', text: 'hello' }
+            ]
+          }
+        ]
+      })
+    },
+    { limit: 20, sortDirection: 'desc' }
+  );
+  const providerEventTypes = page?.state === 'available' ? page.events.map((event) => event.providerEventType) : [];
+  expect(providerEventTypes).toEqual(['turn/started', 'item/userMessage', 'item/agentMessage', 'turn/completed']);
 });
 
 test('Codex history observation folds realtime item lifecycle into final events', () => {
@@ -2964,7 +2967,7 @@ test('OpenClaw adapter sends a turn and resolves an approval over the app-server
   });
 });
 
-test('OpenClaw adapter requests provider-owned chat history over the gateway', () => {
+test('OpenClaw event source requests provider-owned chat history over the gateway', async () => {
   const writes: string[] = [];
   const handle = {
     launchMode: 'app-server' as const,
@@ -2980,11 +2983,19 @@ test('OpenClaw adapter requests provider-owned chat history over the gateway', (
     kill() {}
   };
 
-  const responseId = openClawExternalAgentAdapter.requestHistoryPage?.(handle, {
-    limit: 5,
-    sortDirection: 'desc',
-    itemsView: 'full'
-  });
+  let responseId: string | number | undefined;
+  await openClawExternalAgentAdapter.events.readPage?.(
+    {
+      providerSessionRef: 'agent:dev:oc-9',
+      workingPath: '/tmp/project',
+      limitBytes: 8192,
+      requestProviderPage: async (send) => {
+        responseId = send(handle);
+        return { items: [] };
+      }
+    },
+    { limit: 5, sortDirection: 'desc' }
+  );
 
   expect(responseId).toBe('8');
   expect(JSON.parse(writes[0] ?? '')).toEqual({
@@ -3234,18 +3245,18 @@ test('Hermes adapter prefers the provider HTTP messages API for history backfill
   });
   Bun.env[apiEnv] = `http://127.0.0.1:${server.port}`;
   try {
-    const page = await hermesExternalAgentAdapter.historyPage?.({
-      providerSessionRef: 'api-session',
-      workingPath: '/tmp/project',
-      limitBytes: 8192,
-      request: { limit: 10, sortDirection: 'asc', itemsView: 'full' }
-    });
-    expect(page?.items.map((item) => [(item as { role: string }).role, (item as { content: string }).content])).toEqual(
-      [
-        ['user', 'api user'],
-        ['assistant', 'api answer']
-      ]
+    const page = await hermesExternalAgentAdapter.events.readPage?.(
+      {
+        providerSessionRef: 'api-session',
+        workingPath: '/tmp/project',
+        limitBytes: 8192
+      },
+      { limit: 10, sortDirection: 'asc' }
     );
+    expect(page?.state === 'available' ? page.events.map((event) => [event.role, event.text]) : []).toEqual([
+      ['user', 'api user'],
+      ['agent', 'api answer']
+    ]);
   } finally {
     server.stop(true);
     if (previousApi === undefined) delete Bun.env[apiEnv];
@@ -3285,16 +3296,16 @@ test('Hermes adapter falls back to provider CLI export before reading the SQLite
   Bun.env[apiEnv] = 'http://127.0.0.1:9';
   Bun.env[pathEnv] = binDir;
   try {
-    const page = await hermesExternalAgentAdapter.historyPage?.({
-      providerSessionRef: 'agent:dev:hermes:key-export',
-      workingPath: '/tmp/project',
-      limitBytes: 8192,
-      request: { limit: 1, sortDirection: 'desc', itemsView: 'full' }
-    });
-    expect(page?.items.map((item) => [(item as { id: number }).id, (item as { content: string }).content])).toEqual([
-      [3, 'export answer']
-    ]);
-    expect(page?.nextCursor).toBe('1');
+    const page = await hermesExternalAgentAdapter.events.readPage?.(
+      {
+        providerSessionRef: 'agent:dev:hermes:key-export',
+        workingPath: '/tmp/project',
+        limitBytes: 8192
+      },
+      { limit: 1, sortDirection: 'desc' }
+    );
+    expect(page?.state === 'available' ? page.events.map((event) => event.text) : []).toEqual(['export answer']);
+    expect(page?.state === 'available' ? page.nextCursor : undefined).toBe('1');
   } finally {
     if (previousApi === undefined) delete Bun.env[apiEnv];
     else Bun.env[apiEnv] = previousApi;
@@ -3373,42 +3384,41 @@ test('Hermes adapter uses the local SQLite session store only as a final history
     db.close();
     dbClosed = true;
 
-    const firstPage = await hermesExternalAgentAdapter.historyPage?.({
-      providerSessionRef: 'agent:dev:hermes:key-1',
-      workingPath: '/tmp/project',
-      limitBytes: 8192,
-      request: { limit: 3, sortDirection: 'desc', itemsView: 'full' }
-    });
-    expect(firstPage?.nextCursor).toBe('3');
-    expect(firstPage?.items.map((item) => (item as { id: number }).id)).toEqual([2, 3, 4]);
+    const firstPage = await hermesExternalAgentAdapter.events.readPage?.(
+      {
+        providerSessionRef: 'agent:dev:hermes:key-1',
+        workingPath: '/tmp/project',
+        limitBytes: 8192
+      },
+      { limit: 3, sortDirection: 'desc' }
+    );
+    expect(firstPage?.state === 'available' ? firstPage.nextCursor : undefined).toBe('3');
+    expect(firstPage?.state === 'available' ? firstPage.events.map((event) => event.text) : []).toEqual([
+      'Tool call terminal {"command":"ls"}',
+      'tool output',
+      'done'
+    ]);
 
-    const secondPage = await hermesExternalAgentAdapter.historyPage?.({
-      providerSessionRef: 'parent-session',
-      workingPath: '/tmp/project',
-      limitBytes: 8192,
-      request: { limit: 3, before: '3', sortDirection: 'desc', itemsView: 'full' }
-    });
-    expect(secondPage?.items.map((item) => (item as { id: number }).id)).toEqual([1]);
-    expect(secondPage?.nextCursor).toBeUndefined();
+    const secondPage = await hermesExternalAgentAdapter.events.readPage?.(
+      {
+        providerSessionRef: 'parent-session',
+        workingPath: '/tmp/project',
+        limitBytes: 8192
+      },
+      { limit: 3, before: '3', sortDirection: 'desc' }
+    );
+    expect(secondPage?.state === 'available' ? secondPage.events.map((event) => event.text) : []).toEqual(['inspect']);
+    expect(secondPage?.state === 'available' ? secondPage.nextCursor : undefined).toBeUndefined();
 
-    const fullPage = await hermesExternalAgentAdapter.historyPage?.({
-      providerSessionRef: 'parent-session',
-      workingPath: '/tmp/project',
-      limitBytes: 8192,
-      request: { limit: 10, sortDirection: 'asc', itemsView: 'full' }
-    });
-    const output = hermesExternalAgentAdapter.historyPageOutput?.({
-      providerSessionRef: 'parent-session',
-      workingPath: '/tmp/project',
-      limitBytes: 8192,
-      page: fullPage ?? { items: [] }
-    });
-    const events = externalAgentStreamItems({
-      id: 'exa_hermes:history',
-      adapter: hermesExternalAgentAdapter,
-      output: output ?? '',
-      mode: 'history'
-    });
+    const fullPage = await hermesExternalAgentAdapter.events.readPage?.(
+      {
+        providerSessionRef: 'parent-session',
+        workingPath: '/tmp/project',
+        limitBytes: 8192
+      },
+      { limit: 10, sortDirection: 'asc' }
+    );
+    const events = fullPage?.state === 'available' ? fullPage.events : [];
     expect(events.map((event) => [event.role, event.text, event.providerEventType])).toEqual([
       ['user', 'inspect', 'message'],
       ['tool', 'Tool call terminal {"command":"ls"}', 'tool_call'],

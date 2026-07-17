@@ -33,6 +33,7 @@ import {
   textFromContentParts
 } from '../adapter-shared.ts';
 import { parseExternalAgentArgumentSupport } from '../argument-support.ts';
+import { createOutputHistoryEventSource } from '../event-source.ts';
 import { readProviderHistoryFile } from '../history-files.ts';
 import { resizePty, sendPtyInput, stopPty } from '../pty.ts';
 import { externalAgentAdapterSettings } from '../settings.ts';
@@ -344,12 +345,6 @@ function claudeSdkMessageToJsonLine(message: SessionMessage): string {
   });
 }
 
-function claudeHistoryItemToJsonLine(item: unknown): string | null {
-  if (typeof item === 'string') return item;
-  if (!item || typeof item !== 'object') return null;
-  return JSON.stringify(item);
-}
-
 function claudeSdkMessagesOutput(messages: SessionMessage[], info: SDKSessionInfo | undefined): string | null {
   const records = messages.map(claudeSdkMessageToJsonLine);
   if (records.length === 0) return null;
@@ -364,14 +359,6 @@ function claudeSdkMessagesOutput(messages: SessionMessage[], info: SDKSessionInf
     );
   }
   return records.join('\n');
-}
-
-function claudeSdkHistoryPageOutput(context: ExternalAgentProviderHistoryPageContext): string | null {
-  const records = context.page.items.flatMap((item) => {
-    const line = claudeHistoryItemToJsonLine(item);
-    return line ? [line] : [];
-  });
-  return records.length > 0 ? records.join('\n') : null;
 }
 
 function claudeHistoryOffset(cursor: string | undefined): number {
@@ -428,8 +415,6 @@ export function createClaudeSdkHistoryPageReader(deps: ClaudeSdkHistoryPageDeps)
     }
   };
 }
-
-const readClaudeHistoryPage = createClaudeSdkHistoryPageReader({ getSessionInfo, getSessionMessages });
 
 const CLAUDE_HISTORY_PAGE_SIZE = 200;
 
@@ -504,6 +489,11 @@ export const claudeCodeExternalAgentAdapter: ExternalAgentProviderAdapter = {
   productIcon: 'claude-code',
   label: 'Claude Code',
   observation: claudeCodeObservationProjection,
+  events: createOutputHistoryEventSource({
+    provider: 'claude-code',
+    projection: claudeCodeObservationProjection,
+    readOutput: readClaudeHistoryOutput
+  }),
   settings: () => [
     ...externalAgentAdapterSettings({ launchModes: ['pty', 'json-stream', 'remote-control'] }),
     {
@@ -592,9 +582,6 @@ export const claudeCodeExternalAgentAdapter: ExternalAgentProviderAdapter = {
     if (exitCode === 1) return 'unauthenticated';
     return 'unknown';
   },
-  historyPage: readClaudeHistoryPage,
-  historyPageOutput: claudeSdkHistoryPageOutput,
-  historyOutput: readClaudeHistoryOutput,
   parseOutput: parseClaudeStreamJson,
   sendInput: sendClaudeInput,
   resolveApproval: resolveClaudeApproval,

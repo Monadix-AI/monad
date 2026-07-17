@@ -4,6 +4,7 @@ import { ExternalAgentError } from '@monad/sdk-atom';
 
 import { parseStructuredAuthState } from '../adapter-shared.ts';
 import { makeAppServerCliAdapter } from '../app-server-jsonrpc.ts';
+import { createProjectedEventSource } from '../event-source.ts';
 import { createFrameworkSettingsImport } from '../settings-import/index.ts';
 import { hermesAppServerHooks } from './app-server.ts';
 import { hermesHistoryPage, hermesHistoryPageOutput } from './history.ts';
@@ -79,8 +80,30 @@ const baseHermesExternalAgentAdapter = makeAppServerCliAdapter({
 
 export const hermesExternalAgentAdapter: ExternalAgentProviderAdapter = {
   ...baseHermesExternalAgentAdapter,
-  historyPage: hermesHistoryPage,
-  historyPageOutput: hermesHistoryPageOutput,
+  events: createProjectedEventSource({
+    provider: 'hermes',
+    projection: hermesObservationProjection,
+    readPage: async (context, request) => {
+      const page = await hermesHistoryPage({
+        ...context,
+        request: {
+          before: request.before,
+          limit: request.limit,
+          sortDirection: request.sortDirection,
+          itemsView: 'full'
+        }
+      });
+      if (!page) return { state: 'unavailable', reason: 'not-found' };
+      const output = hermesHistoryPageOutput({ ...context, page });
+      if (!output) return { state: 'unavailable', reason: 'not-found' };
+      const source = createProjectedEventSource({ provider: 'hermes', projection: hermesObservationProjection });
+      return {
+        state: 'available',
+        events: source.projectLive({ id: context.providerSessionRef, output, mode: 'history' }).events,
+        ...(page.nextCursor ? { nextCursor: page.nextCursor } : {})
+      };
+    }
+  }),
   observation: hermesObservationProjection,
   settingsImport: createFrameworkSettingsImport('hermes', 'Hermes'),
   // Hermes's app-server gateway has a real, working `approval.request`/`approval.respond` channel

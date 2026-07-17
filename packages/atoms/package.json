@@ -42,6 +42,7 @@
     "./agent-adapters/openclaw/device-identity": "./src/agent-adapters/openclaw/device-identity.ts",
     "./agent-adapters/pty": "./src/agent-adapters/pty.ts",
     "./external-agent-observation": "./src/workspace-experiences/experience/external-agent-observation/external-agent-observation.ts",
+    "./agent-observation": "./src/agent-adapters/neutral-observation.ts",
     "./external-agent-observation-setup": "./src/external-agent-observation-setup.ts",
     "./channels/telegram": "./src/channels/telegram.ts",
     "./commands/builtins": "./src/commands/builtins.ts",

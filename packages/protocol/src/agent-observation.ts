@@ -34,7 +34,11 @@ export type AgentObservationTurnEndReason = z.infer<typeof agentObservationTurnE
 export const agentObservationToolSchema = z.object({
   name: z.string().min(1),
   input: z.unknown().optional(),
-  output: z.unknown().optional()
+  output: z.unknown().optional(),
+  cwd: z.string().optional(),
+  status: z.string().optional(),
+  exitCode: z.number().int().optional(),
+  durationMs: z.number().nonnegative().optional()
 });
 export type AgentObservationTool = z.infer<typeof agentObservationToolSchema>;
 
@@ -43,6 +47,7 @@ export type AgentObservationTool = z.infer<typeof agentObservationToolSchema>;
 // tool-call / tool-result, `reason` for turn-end. `turn-start` carries none of them.
 export const agentObservationEventSchema = z.object({
   id: z.string().min(1),
+  dedupeKey: z.string().min(1).optional(),
   kind: agentObservationKindSchema,
   // A streaming fragment (a token/delta of a larger message) vs a settled event. Consumers
   // coalesce consecutive streaming fragments of the same kind into one rendered block.

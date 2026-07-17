@@ -19,6 +19,9 @@ import { createStore } from '#/store/db/index.ts';
 // register the built-ins up front (mirrors the daemon's registration path).
 for (const adapter of builtinAgentAdapters) registerAgentAdapterImpl(adapter);
 
+const testEvents = builtinAgentAdapters[0]?.events;
+if (!testEvents) throw new Error('built-in external agent event source is required');
+
 async function waitForExternalAgentSession(
   store: ReturnType<typeof createStore>,
   id: string,
@@ -369,6 +372,7 @@ test('managed external agent output persists a bounded snapshot for refresh and 
     exitedAt: null
   });
   const adapter = {
+    events: testEvents,
     provider: 'codex',
     productIcon: 'openai',
     parseOutput: () => []
@@ -474,6 +478,7 @@ test('external agent observation stream pushes incremental deltas the client can
     exitedAt: null
   });
   const adapter = {
+    events: testEvents,
     provider: 'codex',
     productIcon: 'openai',
     parseOutput: () => []
@@ -538,6 +543,7 @@ test('external agent observation resume returns only the delta past the client c
   const host = new ExternalAgentHost({ store: createStore(), bus: new EventBus(), agents: async () => [] });
   const id = 'exa_resumeseED9Q';
   const adapter = {
+    events: testEvents,
     provider: 'codex',
     productIcon: 'openai',
     parseOutput: () => []
@@ -864,6 +870,7 @@ setInterval(() => {}, 1000);
   chmodSync(mockCli, 0o755);
   const provider = `idle-json-${Date.now()}`;
   const adapter = {
+    events: testEvents,
     provider,
     productIcon: 'codex',
     label: 'Idle JSON',
@@ -998,6 +1005,7 @@ setInterval(() => {}, 1000);
   const provider = `idle-app-server-${Date.now()}`;
   const initRefs: Array<string | undefined> = [];
   const adapter = {
+    events: testEvents,
     provider,
     productIcon: 'codex',
     label: 'Idle App Server',
@@ -1165,6 +1173,7 @@ setInterval(() => {}, 1000);
   chmodSync(mockCli, 0o755);
   const provider = `idle-fallback-${Date.now()}`;
   const adapter = {
+    events: testEvents,
     provider,
     productIcon: 'codex',
     label: 'Idle Fallback',
@@ -1827,6 +1836,7 @@ function seedApprovalLiveSession(
   });
   const resolveCalls: { allow: boolean; reason?: string }[] = [];
   const adapter = {
+    events: testEvents,
     provider: 'codex',
     productIcon: 'codex',
     parseOutput: (): unknown[] => [

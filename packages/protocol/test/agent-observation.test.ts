@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 
 import { agentObservationEventSchema, agentObservationKindSchema, agentObservationUsageSchema } from '../src/index.ts';
 
-test('kind enum is exactly the neutral turn lifecycle plus one-time session notices, with no ui/error kinds', () => {
+test('kind enum is exactly the neutral turn lifecycle, unknown passthrough, and one-time session notices', () => {
   expect(new Set(agentObservationKindSchema.options)).toEqual(
     new Set([
       'turn-start',
@@ -12,7 +12,8 @@ test('kind enum is exactly the neutral turn lifecycle plus one-time session noti
       'tool-result',
       'assistant-message',
       'turn-end',
-      'system'
+      'system',
+      'unknown'
     ])
   );
 });

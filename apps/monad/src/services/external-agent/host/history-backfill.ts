@@ -1,5 +1,9 @@
-import type { ExternalAgentHistoryPageRequest } from '@monad/protocol';
-import type { ExternalAgentRuntimeHandle } from '@monad/sdk-atom';
+import type { ExternalAgentObservationEvent } from '@monad/protocol';
+import type {
+  ExternalAgentEventPageRequest,
+  ExternalAgentEventPageResult,
+  ExternalAgentRuntimeHandle
+} from '@monad/sdk-atom';
 import type { ExternalAgentHostDeps } from '#/services/external-agent/host/host-types.ts';
 import type { ExternalAgentProcess } from '#/services/external-agent/runtime-types.ts';
 import type { ExternalAgentProviderAdapter } from '#/services/external-agent/types.ts';
@@ -19,18 +23,20 @@ import { externalAgentOutputEventSchema } from '#/services/external-agent/types.
 
 const log = createLogger('external-agent');
 
-export async function providerHistoryOutputFromLocal(
+export async function providerHistoryEventsFromLocal(
   row: ExternalAgentSessionRow,
   adapter: ExternalAgentProviderAdapter
-): Promise<string | null> {
-  if (!row.providerSessionRef) return null;
-  return (
-    (await adapter.historyOutput?.({
+): Promise<ExternalAgentObservationEvent[] | null> {
+  if (!row.providerSessionRef || !adapter.events.readPage) return null;
+  const result = await adapter.events.readPage(
+    {
       providerSessionRef: row.providerSessionRef,
       workingPath: row.workingPath,
       limitBytes: MAX_OUTPUT_SNAPSHOT
-    })) ?? null
+    },
+    { limit: 100, sortDirection: 'desc' }
   );
+  return result.state === 'available' && result.events.length > 0 ? result.events : null;
 }
 
 export interface ProviderHistoryViaCliHelpers {
@@ -40,19 +46,15 @@ export interface ProviderHistoryViaCliHelpers {
   dropStructuredBuffer(id: string): void;
 }
 
-export interface ProviderHistoryPage {
-  items: unknown[];
-  nextCursor?: string;
-}
-
 export async function providerHistoryPageViaCli(
   row: ExternalAgentSessionRow,
   adapter: ExternalAgentProviderAdapter,
-  request: ExternalAgentHistoryPageRequest,
+  request: ExternalAgentEventPageRequest,
   helpers: ProviderHistoryViaCliHelpers
-): Promise<ProviderHistoryPage | null> {
+): Promise<ExternalAgentEventPageResult | null> {
   const providerSessionRef = row.providerSessionRef ?? undefined;
-  if (!providerSessionRef || !adapter.requestHistoryPage) return null;
+  if (!providerSessionRef || !adapter.events.readPage) return null;
+  const readPage = adapter.events.readPage;
   const agent = (await helpers.agents()).find(
     (candidate) => candidate.enabled && (candidate.name === row.agentName || candidate.provider === row.provider)
   );
@@ -69,14 +71,7 @@ export async function providerHistoryPageViaCli(
   const spawnEnv = await helpers.buildSpawnEnv(launch.env);
   const proc = supervisedSpawn(
     launch.argv,
-    {
-      cwd: launch.cwd,
-      env: spawnEnv,
-      detached: true,
-      stdin: 'pipe',
-      stdout: 'pipe',
-      stderr: 'pipe'
-    },
+    { cwd: launch.cwd, env: spawnEnv, detached: true, stdin: 'pipe', stdout: 'pipe', stderr: 'pipe' },
     {
       ...daemonTrackedSpawnOptions({
         event: 'external_agent.history_spawn',
@@ -96,8 +91,10 @@ export async function providerHistoryPageViaCli(
   ) as ExternalAgentProcess;
   let requestSeq = 0;
   let settled = false;
-  let historyRequested = false;
+  let historyStarted = false;
   let expectedResponseId: string | null = null;
+  let resolveProviderPage: ((page: { items: unknown[]; nextCursor?: string }) => void) | undefined;
+  let rejectProviderPage: ((error: Error) => void) | undefined;
   const historyId = `history:${row.id}:${Date.now()}`;
   const decoder = createStreamingTextDecoder();
   const handle: ExternalAgentRuntimeHandle = {
@@ -108,36 +105,47 @@ export async function providerHistoryPageViaCli(
     nextRequestId: () => requestSeq++,
     kill: (signal?: NodeJS.Signals) => killExternalAgentProcess(proc.pid, signal)
   };
-  return await new Promise<ProviderHistoryPage | null>((resolve) => {
-    const finish = (page: ProviderHistoryPage | null): void => {
+
+  return await new Promise<ExternalAgentEventPageResult | null>((resolve) => {
+    const finish = (result: ExternalAgentEventPageResult | null): void => {
       if (settled) return;
       settled = true;
       helpers.dropStructuredBuffer(historyId);
+      rejectProviderPage?.(new Error('external agent history reader closed'));
       try {
         void proc.stdin?.end?.();
       } catch {}
       proc.supervision?.stop('manual', 'SIGTERM');
-      resolve(page);
+      resolve(result);
     };
     void proc.supervision?.timeoutElapsed?.then(() => finish(null));
-    const requestHistoryPage = adapter.requestHistoryPage;
-    if (!requestHistoryPage) {
-      finish(null);
-      return null;
-    }
-    // Some adapters (Codex) don't resume their thread until an async handshake settles — sending
-    // `requestHistoryPage` right after `initialize()` races the thread not being loaded yet, so the
-    // history request is deferred until the adapter's own output confirms the thread is ready.
-    const tryRequestHistory = (): void => {
-      if (historyRequested) return;
-      if (handle.deferredThreadFrame) return;
-      historyRequested = true;
-      try {
-        expectedResponseId = String(requestHistoryPage(handle, request));
-      } catch {
-        finish(null);
-      }
+
+    const startHistory = (): void => {
+      if (historyStarted || handle.deferredThreadFrame) return;
+      historyStarted = true;
+      void readPage(
+        {
+          providerSessionRef,
+          workingPath: row.workingPath,
+          limitBytes: MAX_OUTPUT_SNAPSHOT,
+          requestProviderPage: (send) =>
+            new Promise((resolvePage, rejectPage) => {
+              resolveProviderPage = resolvePage;
+              rejectProviderPage = rejectPage;
+              try {
+                expectedResponseId = String(send(handle));
+              } catch (error) {
+                rejectPage(error instanceof Error ? error : new Error(String(error)));
+              }
+            })
+        },
+        request
+      ).then(
+        (result) => finish(result),
+        () => finish(null)
+      );
     };
+
     void (async () => {
       try {
         for await (const data of proc.stdout ?? []) {
@@ -148,27 +156,24 @@ export async function providerHistoryPageViaCli(
           for (const event of adapter.parseOutput(structured, handle)) {
             const parsed = externalAgentOutputEventSchema.safeParse(event);
             if (!parsed.success) continue;
-            if (parsed.data.type === 'connection_required') {
+            if (parsed.data.type === 'connection_required' || parsed.data.type === 'provider_error') {
               finish(null);
               return;
             }
             if (parsed.data.type === 'session_ref') {
-              tryRequestHistory();
+              startHistory();
               continue;
             }
             if (parsed.data.type !== 'history_page') continue;
             if (expectedResponseId && String(parsed.data.payload.responseId) !== expectedResponseId) continue;
-            finish({
+            resolveProviderPage?.({
               items: Array.isArray(parsed.data.payload.items) ? parsed.data.payload.items : [],
               ...(typeof parsed.data.payload.nextCursor === 'string'
                 ? { nextCursor: parsed.data.payload.nextCursor }
                 : {})
             });
-            return;
           }
         }
-        const remaining = decoder.flush();
-        if (remaining) helpers.takeStructuredLines(historyId, 'stdout', remaining);
         finish(null);
       } catch {
         finish(null);
@@ -182,34 +187,9 @@ export async function providerHistoryPageViaCli(
     })();
     try {
       adapter.initialize?.(handle, { workingPath: row.workingPath, providerSessionRef });
-      // Non-Codex adapters resolve the thread synchronously in `initialize()` (no `deferredThreadFrame`),
-      // so this fires immediately for them; Codex's fires once `session_ref` arrives above.
-      tryRequestHistory();
+      startHistory();
     } catch {
       finish(null);
     }
-  });
-}
-
-export async function providerHistoryOutputViaCli(
-  row: ExternalAgentSessionRow,
-  adapter: ExternalAgentProviderAdapter,
-  helpers: ProviderHistoryViaCliHelpers
-): Promise<string | null> {
-  const providerSessionRef = row.providerSessionRef ?? undefined;
-  const historyPageOutput = adapter.historyPageOutput;
-  if (!providerSessionRef || !historyPageOutput) return null;
-  const page = await providerHistoryPageViaCli(
-    row,
-    adapter,
-    { limit: 20, sortDirection: 'desc', itemsView: 'full' },
-    helpers
-  );
-  if (!page) return null;
-  return historyPageOutput({
-    providerSessionRef,
-    workingPath: row.workingPath,
-    limitBytes: MAX_OUTPUT_SNAPSHOT,
-    page
   });
 }

@@ -12,6 +12,7 @@ import { defaultBinProbes, resolveBinary } from '@monad/sdk-atom';
 
 import { hasFlag, parseJsonObject, parseStructuredAuthState } from '../adapter-shared.ts';
 import { parseExternalAgentArgumentSupport } from '../argument-support.ts';
+import { createOutputHistoryEventSource } from '../event-source.ts';
 import { readProviderHistoryFile } from '../history-files.ts';
 import { resizePty, sendPtyInput, stopPty } from '../pty.ts';
 import { externalAgentAdapterSettings } from '../settings.ts';
@@ -229,6 +230,11 @@ export const geminiExternalAgentAdapter: ExternalAgentProviderAdapter = {
   productIcon: 'gemini',
   label: 'Gemini CLI',
   observation: geminiObservationProjection,
+  events: createOutputHistoryEventSource({
+    provider: 'gemini',
+    projection: geminiObservationProjection,
+    readOutput: readGeminiHistoryOutput
+  }),
   settings: () => externalAgentAdapterSettings({ launchModes: ['pty', 'json-stream'] }),
   settingsImport: createBasicSettingsImport('gemini', 'Gemini CLI', 'gemini', '.gemini'),
   managedRuntime: {
@@ -292,7 +298,6 @@ export const geminiExternalAgentAdapter: ExternalAgentProviderAdapter = {
     void exitCode;
     return 'unknown';
   },
-  historyOutput: readGeminiHistoryOutput,
   parseOutput: parseGeminiStreamJson,
   sendInput: sendGeminiInput,
   resolveApproval: resolveGeminiApproval,

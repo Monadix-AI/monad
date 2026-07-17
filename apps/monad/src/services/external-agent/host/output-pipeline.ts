@@ -1,5 +1,4 @@
 import type { Logger } from '@monad/logger';
-import type { ExternalAgentHistoryPageRequest } from '@monad/protocol';
 import type {
   LiveExternalAgentSession,
   ManagedProjectOutputHandler
@@ -9,16 +8,9 @@ import type { ExternalAgentOutputEvent, ExternalAgentProviderAdapter } from '#/s
 import type { ExternalAgentTargetId } from '#/store/db/external-agent-sessions.ts';
 import type { Store } from '#/store/db/index.ts';
 
-import {
-  externalAgentObservationCheckpoint,
-  externalAgentObservationIdentity,
-  externalAgentStreamItems
-} from '@monad/atoms/external-agent-observation';
-
 import { MAX_OUTPUT_SNAPSHOT } from '#/services/external-agent/constants.ts';
 import { ExternalAgentError } from '#/services/external-agent/errors.ts';
 import { ExternalAgentEventLog } from '#/services/external-agent/host/event-log.ts';
-import { encodeProviderHistoryCursor } from '#/services/external-agent/host/history-cursor.ts';
 import {
   type ExternalAgentOutputStream,
   MAX_STRUCTURED_LINE,
@@ -40,6 +32,7 @@ export interface ExternalAgentOutputPipelineContext {
     | 'updateExternalAgentSessionRef'
     | 'hasUnconsumedExternalAgentInbox'
     | 'markExternalAgentInboxConsumed'
+    | 'recordExternalAgentObservationEvents'
   >;
   events: ExternalAgentEventLog;
   observation: ExternalAgentObservationHub;
@@ -48,14 +41,6 @@ export interface ExternalAgentOutputPipelineContext {
   log: Logger;
   /** Reset the session's idle-suspend timer — output is activity, same as user input. */
   armIdleSuspend(live: LiveExternalAgentSession): void;
-  /** Reshape raw provider history-page items into the live-JSONL-mimicking output string the adapter's
-   *  `parseOutput`/`externalAgentStreamItems` normalize — same adapter the host already resolved for this
-   *  session. Returns undefined when the adapter/session don't support it (falls back to raw-line join). */
-  historyPageOutput(
-    live: LiveExternalAgentSession,
-    request: ExternalAgentHistoryPageRequest,
-    items: unknown[]
-  ): string | undefined;
 }
 
 /** Owns the child-process output path end to end: draining stdio into text, buffering/flushing the
@@ -113,22 +98,20 @@ export class ExternalAgentOutputPipeline {
     let structuredChunk =
       stream === 'pty' || stream === 'app-server' ? chunk : this.takeCompleteStructuredLines(id, stream, chunk);
     const protectsStructuredSeam =
-      !!live?.providerHistoryIdentities?.size && !!adapter.observation && (stream === 'stdout' || stream === 'stderr');
+      !!live?.providerHistoryIdentities?.size && (stream === 'stdout' || stream === 'stderr');
     if (protectsStructuredSeam && !structuredChunk) return;
     let observableChunk = protectsStructuredSeam ? structuredChunk : chunk;
     const providerObservation =
       live && stream !== 'pty' && structuredChunk
         ? this.trimProviderHistoryReplay(live, structuredChunk, stream === 'app-server')
         : undefined;
-    if (providerObservation) {
+    if (live && providerObservation) {
       if (!providerObservation.chunk) return;
       if (protectsStructuredSeam) {
         observableChunk = providerObservation.chunk;
         structuredChunk = providerObservation.chunk;
       }
-    }
-    if (live && providerObservation?.checkpoint) {
-      live.providerHistoryCheckpoint = providerObservation.checkpoint;
+      live.providerHistoryCheckpoint = providerObservation.checkpoint ?? live.providerHistoryCheckpoint;
       live.providerHistoryIdentities ??= new Set();
       for (const identity of providerObservation.identities) live.providerHistoryIdentities.add(identity);
     }
@@ -154,6 +137,12 @@ export class ExternalAgentOutputPipeline {
       chunk: buffered
     });
     if (!structuredChunk) return;
+    const projected = adapter.events
+      .projectLive({ id, output: structuredChunk })
+      .events.filter((event) => !adapter.observation?.isStreamingFragment?.(event));
+    if (projected.length > 0) {
+      this.ctx.store.recordExternalAgentObservationEvents(id, projected, new Date().toISOString());
+    }
     if (stream === 'stderr') {
       for (const line of structuredChunk.split('\n')) {
         const record = nativeAgentMcpToolError(line.trim());
@@ -178,24 +167,6 @@ export class ExternalAgentOutputPipeline {
     }
   }
 
-  private providerObservationMetadata(
-    live: LiveExternalAgentSession,
-    chunk: string
-  ): { identities: string[]; checkpoint?: string } {
-    const events = externalAgentStreamItems({ id: `${live.id}:seam`, adapter: live.adapter, output: chunk });
-    const identities = events
-      .map((event) => externalAgentObservationIdentity({ adapter: live.adapter, event }))
-      .filter((identity): identity is string => !!identity);
-    let checkpoint: string | undefined;
-    for (let index = events.length - 1; index >= 0; index--) {
-      const event = events[index];
-      if (!event) continue;
-      checkpoint = externalAgentObservationCheckpoint({ adapter: live.adapter, event });
-      if (checkpoint) break;
-    }
-    return { identities, checkpoint };
-  }
-
   private trimProviderHistoryReplay(
     live: LiveExternalAgentSession,
     chunk: string,
@@ -206,15 +177,12 @@ export class ExternalAgentOutputPipeline {
     const identities: string[] = [];
     let checkpoint: string | undefined;
     for (const record of records) {
-      const metadata = this.providerObservationMetadata(live, record);
-      if (
-        metadata.identities.length > 0 &&
-        metadata.identities.every((identity) => live.providerHistoryIdentities?.has(identity))
-      )
-        continue;
+      const events = live.adapter.events.projectLive({ id: `${live.id}:seam`, output: record }).events;
+      const keys = events.map((event) => event.dedupeKey).filter((value): value is string => !!value);
+      if (keys.length > 0 && keys.every((identity) => live.providerHistoryIdentities?.has(identity))) continue;
       retained.push(record);
-      identities.push(...metadata.identities);
-      checkpoint = metadata.checkpoint ?? checkpoint;
+      identities.push(...keys);
+      checkpoint = events.findLast((event) => event.dedupeKey)?.dedupeKey ?? checkpoint;
     }
     return { chunk: retained.join(''), identities, checkpoint };
   }
@@ -302,19 +270,9 @@ export class ExternalAgentOutputPipeline {
       clearTimeout(pending.timeout);
       live?.pendingHistoryPages.delete(responseId);
       const items = Array.isArray(event.payload.items) ? event.payload.items : [];
-      const output = live ? this.ctx.historyPageOutput(live, pending.request, items) : undefined;
-      // The daemon already knows `live.provider`/`live.adapter`, so normalize here instead of shipping
-      // raw items for the client to guess a provider for. Raw JSONL isn't shipped separately: each
-      // event's `raw` already carries its source record(s).
-      const pageOutput =
-        output ?? items.map((item) => (typeof item === 'string' ? item : JSON.stringify(item))).join('\n');
       pending.resolve({
-        events: live
-          ? externalAgentStreamItems({ id: `${id}:history:live`, adapter: live.adapter, output: pageOutput })
-          : [],
-        ...(typeof event.payload.nextCursor === 'string'
-          ? { nextCursor: encodeProviderHistoryCursor(event.payload.nextCursor) }
-          : {})
+        items,
+        ...(typeof event.payload.nextCursor === 'string' ? { nextCursor: event.payload.nextCursor } : {})
       });
       return;
     }

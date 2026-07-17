@@ -545,9 +545,11 @@ async function runRuntime(call: Call, projectDir: string, handlers: ReturnType<t
   const uiFrame = (await res.json()) as {
     state: string;
     seq?: number;
+    historyBefore?: string;
     events: Array<{ kind: string; role?: unknown }>;
   };
   expect(uiFrame.state).toBe('live');
+  expect(uiFrame.historyBefore).toBe('journal:');
   expect(typeof uiFrame.seq).toBe('number');
   expect(Array.isArray(uiFrame.events)).toBe(true);
   // The neutral plane emits `kind`-tagged events and never leaks the legacy `role`/providerEventType.
@@ -784,12 +786,32 @@ async function runJsonStreamRuntime(
   });
   await waitFor(() => (logs.seen.some((record) => record.event === 'external_agent.input') ? true : undefined));
 
-  const unsupportedHistory = await call(
+  const history = await call(
     'GET',
     `/v1/external-agent-sessions/${nativeSession.id}/history-page?transcriptTargetId=${sessionId}&limit=1`
   );
-  expect(unsupportedHistory.status).toBe(200);
-  expect(await unsupportedHistory.json()).toEqual({ events: [] });
+  expect(history.status).toBe(200);
+  const historyBody = (await history.json()) as {
+    events: Array<{ projection?: string; text: string; dedupeKey?: string }>;
+    nextCursor?: string;
+  };
+  expect({
+    events: historyBody.events.map((event) => ({
+      projection: event.projection,
+      text: event.text,
+      dedupeKey: event.dedupeKey
+    })),
+    nextCursor: historyBody.nextCursor
+  }).toEqual({
+    events: [
+      {
+        projection: 'normalized',
+        text: 'echo-json:hello-json',
+        dedupeKey: 'claude-code:c8b65d2d'
+      }
+    ],
+    nextCursor: 'snapshot:3'
+  });
 
   const stop = await call(
     'POST',

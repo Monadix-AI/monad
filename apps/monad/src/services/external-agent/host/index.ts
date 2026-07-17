@@ -24,16 +24,11 @@ import type {
   LiveExternalAgentSession,
   ManagedProjectOutputHandler
 } from '#/services/external-agent/host/host-types.ts';
-import type { ExternalAgentProviderAdapter, ExternalAgentStartPreflight } from '#/services/external-agent/types.ts';
+import type { ExternalAgentStartPreflight } from '#/services/external-agent/types.ts';
 import type { ExternalAgentTargetId } from '#/store/db/external-agent-sessions.ts';
 import type { ExternalAgentSessionRow } from '#/store/db/index.ts';
 
 import { dirname } from 'node:path';
-import {
-  externalAgentObservationCheckpoint,
-  externalAgentObservationIdentity,
-  externalAgentStreamItems
-} from '@monad/atoms/external-agent-observation';
 import { createLogger } from '@monad/logger';
 import { newId } from '@monad/protocol';
 
@@ -46,6 +41,7 @@ import { ExternalAgentEventLog } from '#/services/external-agent/host/event-log.
 import { providerHistoryPageViaCli } from '#/services/external-agent/host/history-backfill.ts';
 import {
   decodeHistoryCursor,
+  encodeJournalHistoryCursor,
   encodeProviderHistoryCursor,
   encodeStoredHistoryCursor,
   type HistoryCursor
@@ -78,6 +74,7 @@ function storedOutputHistoryPage(
   id: string,
   provider: ExternalAgentProvider
 ): ExternalAgentHistoryPageResponse {
+  const adapter = getExternalAgentProviderAdapter(provider);
   const lines = output.split('\n').filter((line) => line.trim().length > 0);
   const end = storedHistoryCursorEnd(cursor, lines.length);
   const start = Math.max(0, end - req.limit);
@@ -85,14 +82,9 @@ function storedOutputHistoryPage(
   const pageOutput = pageLines.join('\n');
   return {
     // The daemon already knows `provider` unambiguously (the session row) — normalize with the same
-    // adapter used for parseOutput/historyPageOutput instead of making the client re-derive it. Raw
+    // adapter EventSource used for live projection instead of making the client re-derive it. Raw
     // JSONL isn't shipped separately: each event's `raw` already carries its source record(s).
-    events: externalAgentStreamItems({
-      id: `${id}:history:${start}`,
-      adapter: getExternalAgentProviderAdapter(provider),
-      output: pageOutput,
-      mode: 'history'
-    }),
+    events: adapter.events.projectLive({ id: `${id}:history:${start}`, output: pageOutput, mode: 'history' }).events,
     ...(start > 0 ? { nextCursor: encodeStoredHistoryCursor(start) } : {})
   };
 }
@@ -109,14 +101,7 @@ function providerHistoryPageRequest(
   cursor: HistoryCursor
 ): ExternalAgentHistoryPageRequest {
   const { before: _ignored, ...rest } = req;
-  return { ...rest, ...(cursor.kind === 'provider' ? { before: cursor.value } : {}) };
-}
-
-function providerHistoryPresentationItems(
-  items: unknown[],
-  sortDirection: ExternalAgentHistoryPageRequest['sortDirection']
-): unknown[] {
-  return sortDirection === 'desc' ? [...items].reverse() : items;
+  return { ...rest, ...(cursor.kind === 'provider' && cursor.value ? { before: cursor.value } : {}) };
 }
 
 const RUNTIME_LIST_DEFAULT_LIMIT = 100;
@@ -192,8 +177,7 @@ export class ExternalAgentHost {
       stop: (id) => this.stop(id),
       getManagedProjectOutputHandler: () => this.managedProjectOutputHandler,
       log: this.log,
-      armIdleSuspend: (live) => this.armIdleSuspend(live),
-      historyPageOutput: (live, request, items) => this.historyPageOutput(live, request, items)
+      armIdleSuspend: (live) => this.armIdleSuspend(live)
     });
     this.processLifecycle = new ExternalAgentProcessLifecycle({
       store: deps.store,
@@ -366,30 +350,17 @@ export class ExternalAgentHost {
       const identities = new Set<string>();
       const providerSessionRef = live.providerSessionRef ?? live.initializeContext?.providerSessionRef ?? undefined;
       const workingPath = live.initializeContext?.workingPath;
-      if (providerSessionRef && workingPath && live.adapter.historyOutput) {
+      if (providerSessionRef && workingPath && live.adapter.events.readPage) {
         try {
-          const output = await live.adapter.historyOutput({
-            providerSessionRef,
-            workingPath,
-            limitBytes: MAX_OUTPUT_SNAPSHOT
-          });
-          if (output) {
-            const events = externalAgentStreamItems({
-              id: `${live.id}:checkpoint`,
-              adapter: live.adapter,
-              output,
-              mode: 'history'
-            });
-            for (let index = events.length - 1; index >= 0; index--) {
-              const event = events[index];
-              if (!event) continue;
-              checkpoint = externalAgentObservationCheckpoint({ adapter: live.adapter, event });
-              if (checkpoint) break;
+          const result = await live.adapter.events.readPage(
+            { providerSessionRef, workingPath, limitBytes: MAX_OUTPUT_SNAPSHOT },
+            { limit: 100, sortDirection: 'desc' }
+          );
+          if (result.state === 'available') {
+            for (const event of result.events) {
+              if (event.dedupeKey) identities.add(event.dedupeKey);
             }
-            for (const event of events) {
-              const identity = externalAgentObservationIdentity({ adapter: live.adapter, event });
-              if (identity) identities.add(identity);
-            }
+            checkpoint = result.events.findLast((event) => event.dedupeKey)?.dedupeKey;
           }
         } catch (error) {
           this.log.debug(
@@ -739,45 +710,68 @@ export class ExternalAgentHost {
     if (cursor.kind === 'stored') {
       return storedOutputHistoryPage(live.outputBuffer.snapshot(), req, cursor, id, live.provider);
     }
+    if (cursor.kind === 'journal') {
+      const journal = this.deps.store.listExternalAgentObservationEvents(id, {
+        before: cursor.value || undefined,
+        limit: req.limit,
+        sortDirection: req.sortDirection
+      });
+      if (journal.events.length > 0) {
+        return {
+          events: journal.events,
+          nextCursor: journal.nextCursor
+            ? encodeJournalHistoryCursor(journal.nextCursor)
+            : encodeProviderHistoryCursor('')
+        };
+      }
+    }
     const providerReq = providerHistoryPageRequest(req, cursor);
     const providerSessionRef = live.providerSessionRef ?? live.initializeContext?.providerSessionRef ?? undefined;
     const workingPath = live.initializeContext?.workingPath;
-    if (live.adapter.historyPage && providerSessionRef && workingPath) {
-      const page = await live.adapter.historyPage({
-        providerSessionRef,
-        workingPath,
-        limitBytes: MAX_OUTPUT_SNAPSHOT,
-        request: providerReq
-      });
-      if (page) return this.providerHistoryPageResponse(id, live.adapter, providerSessionRef, workingPath, req, page);
-    }
-    if (!live.adapter.requestHistoryPage) {
-      throw new ExternalAgentError(
-        'unsupported_capability',
-        `external agent provider does not support paged history: ${id}`
+    if (live.adapter.events.readPage && providerSessionRef && workingPath) {
+      const result = await live.adapter.events.readPage(
+        {
+          providerSessionRef,
+          workingPath,
+          limitBytes: MAX_OUTPUT_SNAPSHOT,
+          requestProviderPage: (send) => this.requestProviderHistoryPage(live, send)
+        },
+        { before: providerReq.before, limit: providerReq.limit, sortDirection: providerReq.sortDirection }
       );
+      if (result.state === 'available') {
+        this.deps.store.recordExternalAgentObservationEvents(id, result.events, new Date().toISOString());
+        return {
+          events: result.events,
+          ...(result.nextCursor ? { nextCursor: encodeProviderHistoryCursor(result.nextCursor) } : {})
+        };
+      }
     }
-    const requestId = live.nextRequestId();
-    const responseId = String(requestId);
+    return storedOutputHistoryPage(live.outputBuffer.snapshot(), req, { kind: 'none' }, id, live.provider);
+  }
+
+  private requestProviderHistoryPage(
+    live: LiveExternalAgentSession,
+    send: (handle: LiveExternalAgentSession) => string | number
+  ): Promise<{ items: unknown[]; nextCursor?: string }> {
     return new Promise((resolve, reject) => {
+      let responseId: string;
+      try {
+        responseId = String(send(live));
+      } catch (error) {
+        reject(error instanceof Error ? error : new Error(String(error)));
+        return;
+      }
       const timeout = setTimeout(() => {
         live.pendingHistoryPages.delete(responseId);
-        reject(new ExternalAgentError('provider_timeout', `timed out waiting for external agent history page: ${id}`));
+        reject(
+          new ExternalAgentError('provider_timeout', `timed out waiting for external agent history page: ${live.id}`)
+        );
       }, HISTORY_PAGE_TIMEOUT_MS);
       live.pendingHistoryPages.set(responseId, {
         timeout,
-        request: providerReq,
-        resolve: (page) =>
-          resolve({ events: page.events, ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}) }),
+        resolve,
         reject
       });
-      try {
-        live.adapter.requestHistoryPage?.({ ...live, nextRequestId: () => requestId }, providerReq);
-      } catch (error) {
-        clearTimeout(timeout);
-        live.pendingHistoryPages.delete(responseId);
-        reject(error instanceof Error ? error : new Error(String(error)));
-      }
     });
   }
 
@@ -787,20 +781,57 @@ export class ExternalAgentHost {
   ): Promise<ExternalAgentHistoryPageResponse> {
     const row = this.deps.store.getExternalAgentSession(id);
     const cursor = decodeHistoryCursor(req.before);
+    if (cursor.kind === 'journal') {
+      const journal = this.deps.store.listExternalAgentObservationEvents(id, {
+        before: cursor.value || undefined,
+        limit: req.limit,
+        sortDirection: req.sortDirection
+      });
+      if (journal.events.length > 0) {
+        return {
+          events: journal.events,
+          nextCursor: journal.nextCursor
+            ? encodeJournalHistoryCursor(journal.nextCursor)
+            : encodeProviderHistoryCursor('')
+        };
+      }
+    }
     if (cursor.kind !== 'stored' && row?.providerSessionRef) {
       const adapter = getExternalAgentProviderAdapter(row.provider);
-      const providerReq = providerHistoryPageRequest(req, cursor);
-      const page = await adapter.historyPage?.({
-        providerSessionRef: row.providerSessionRef,
-        workingPath: row.workingPath,
-        limitBytes: MAX_OUTPUT_SNAPSHOT,
-        request: providerReq
-      });
-      if (page)
-        return this.providerHistoryPageResponse(id, adapter, row.providerSessionRef, row.workingPath, req, page);
-      const bridgedPage = await this.stoppedProviderHistoryPage(row, adapter, providerReq);
-      if (bridgedPage)
-        return this.providerHistoryPageResponse(id, adapter, row.providerSessionRef, row.workingPath, req, bridgedPage);
+      const pageRequest = {
+        before: cursor.kind === 'provider' && cursor.value ? cursor.value : undefined,
+        limit: req.limit,
+        sortDirection: req.sortDirection
+      };
+      const result = await adapter.events.readPage?.(
+        {
+          providerSessionRef: row.providerSessionRef,
+          workingPath: row.workingPath,
+          limitBytes: MAX_OUTPUT_SNAPSHOT
+        },
+        pageRequest
+      );
+      if (result?.state === 'available') {
+        this.deps.store.recordExternalAgentObservationEvents(id, result.events, new Date().toISOString());
+        return {
+          events: result.events,
+          ...(result.nextCursor ? { nextCursor: encodeProviderHistoryCursor(result.nextCursor) } : {})
+        };
+      }
+      const bridged = await providerHistoryPageViaCli(row, adapter, pageRequest, {
+        agents: this.deps.agents,
+        buildSpawnEnv: (env) => this.buildSpawnEnv(env),
+        takeStructuredLines: (structuredId, stream, chunk) =>
+          this.outputPipeline.takeCompleteStructuredLines(structuredId, stream, chunk),
+        dropStructuredBuffer: (structuredId) => this.outputPipeline.dropStructuredBuffer(structuredId)
+      }).catch(() => null);
+      if (bridged?.state === 'available') {
+        this.deps.store.recordExternalAgentObservationEvents(id, bridged.events, new Date().toISOString());
+        return {
+          events: bridged.events,
+          ...(bridged.nextCursor ? { nextCursor: encodeProviderHistoryCursor(bridged.nextCursor) } : {})
+        };
+      }
     }
     const access = await this.observeWithProviderHistory(id);
     if (access.state === 'unavailable') {
@@ -810,70 +841,6 @@ export class ExternalAgentHost {
       );
     }
     return storedOutputHistoryPage(access.output ?? '', req, cursor, id, access.provider);
-  }
-
-  private stoppedProviderHistoryPage(
-    row: ExternalAgentSessionRow,
-    adapter: ExternalAgentProviderAdapter,
-    request: ExternalAgentHistoryPageRequest
-  ): Promise<{ items: unknown[]; nextCursor?: string } | null> {
-    if (this.deps.stoppedProviderHistoryPage) return this.deps.stoppedProviderHistoryPage(row, adapter, request);
-    return providerHistoryPageViaCli(row, adapter, request, {
-      agents: this.deps.agents,
-      buildSpawnEnv: (env) => this.buildSpawnEnv(env),
-      takeStructuredLines: (id, stream, chunk) => this.outputPipeline.takeCompleteStructuredLines(id, stream, chunk),
-      dropStructuredBuffer: (id) => this.outputPipeline.dropStructuredBuffer(id)
-    });
-  }
-
-  private providerHistoryPageResponse(
-    id: string,
-    adapter: ExternalAgentProviderAdapter,
-    providerSessionRef: string,
-    workingPath: string,
-    req: ExternalAgentHistoryPageRequest,
-    page: { items: unknown[]; nextCursor?: string }
-  ): ExternalAgentHistoryPageResponse {
-    const presentationItems = providerHistoryPresentationItems(page.items, req.sortDirection);
-    const output =
-      adapter.historyPageOutput?.({
-        providerSessionRef,
-        workingPath,
-        limitBytes: MAX_OUTPUT_SNAPSHOT,
-        page: { items: presentationItems, ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}) }
-      }) ?? presentationItems.map((item) => (typeof item === 'string' ? item : JSON.stringify(item))).join('\n');
-    return {
-      events: externalAgentStreamItems({
-        id: `${id}:history:provider:${req.before ?? '0'}`,
-        adapter,
-        output,
-        mode: 'history'
-      }),
-      ...(page.nextCursor ? { nextCursor: encodeProviderHistoryCursor(page.nextCursor) } : {})
-    };
-  }
-
-  private historyPageOutput(
-    live: LiveExternalAgentSession,
-    request: ExternalAgentHistoryPageRequest,
-    items: unknown[]
-  ): string | undefined {
-    const providerSessionRef = live.providerSessionRef ?? live.initializeContext?.providerSessionRef ?? undefined;
-    const workingPath = live.initializeContext?.workingPath;
-    const historyPageOutput = live.adapter.historyPageOutput;
-    if (!providerSessionRef || !workingPath || !historyPageOutput) return undefined;
-    const presentationItems = providerHistoryPresentationItems(items, request.sortDirection);
-    return (
-      historyPageOutput({
-        providerSessionRef,
-        workingPath,
-        limitBytes: MAX_OUTPUT_SNAPSHOT,
-        page: {
-          items: presentationItems,
-          nextCursor: undefined
-        }
-      }) ?? undefined
-    );
   }
 
   startAuth(agentName: string): Promise<ExternalAgentAuthSessionView> {

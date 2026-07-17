@@ -69,7 +69,17 @@ export const MIGRATIONS: MigrationMeta[] = [
     "bps": true,
     "folderMillis": 1784139452695,
     "hash": "60e311db225abad53357805d7914bab5e209a2e560ee2484d1e8dd886c4151e5"
+  },
+  {
+    "sql": [
+      "CREATE TABLE `external_agent_observation_events` (\n\t`seq` integer PRIMARY KEY AUTOINCREMENT NOT NULL,\n\t`external_agent_session_id` text NOT NULL,\n\t`dedupe_key` text NOT NULL,\n\t`event_json` text NOT NULL,\n\t`observed_at` text NOT NULL,\n\tFOREIGN KEY (`external_agent_session_id`) REFERENCES `external_agent_sessions`(`id`) ON UPDATE no action ON DELETE cascade\n);\n",
+      "\nCREATE UNIQUE INDEX `idx_external_agent_observation_dedupe` ON `external_agent_observation_events` (`external_agent_session_id`,`dedupe_key`);",
+      "\nCREATE INDEX `idx_external_agent_observation_page` ON `external_agent_observation_events` (`external_agent_session_id`,`seq`);"
+    ],
+    "bps": true,
+    "folderMillis": 1784281678637,
+    "hash": "311c0c6643e97dc3e09d0c2bc0022f0c7a355de7ec4c667822e806e1f429e8bf"
   }
 ];
 
-export const LATEST_MIGRATION_TIMESTAMP = 1784139452695;
+export const LATEST_MIGRATION_TIMESTAMP = 1784281678637;

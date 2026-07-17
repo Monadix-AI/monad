@@ -84,6 +84,10 @@ import {
   markExternalAgentInboxVisible
 } from './external-agent-inbox.ts';
 import {
+  listExternalAgentObservationEvents,
+  recordExternalAgentObservationEvents
+} from './external-agent-observations.ts';
+import {
   appendExternalAgentOutput,
   clearExternalAgentSessionRef,
   closeExternalAgentSession,
@@ -678,6 +682,21 @@ export class Store {
 
   appendExternalAgentOutput(id: string, chunk: string, maxSnapshotBytes = 256 * 1024): boolean {
     return appendExternalAgentOutput(this.sqlite, id, chunk, maxSnapshotBytes);
+  }
+
+  recordExternalAgentObservationEvents(
+    id: string,
+    events: import('@monad/protocol').ExternalAgentObservationEvent[],
+    observedAt = new Date().toISOString()
+  ): void {
+    recordExternalAgentObservationEvents(this.sqlite, id, events, observedAt);
+  }
+
+  listExternalAgentObservationEvents(
+    id: string,
+    request: { before?: string; limit: number; sortDirection: 'asc' | 'desc' }
+  ): { events: import('@monad/protocol').ExternalAgentObservationEvent[]; nextCursor?: string } {
+    return listExternalAgentObservationEvents(this.sqlite, id, request);
   }
 
   /** Overwrite the whole snapshot (no read-modify-write). The host buffers output in memory and

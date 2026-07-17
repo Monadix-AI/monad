@@ -71,13 +71,51 @@ function turnEndReason(event: ExternalAgentObservationEvent): AgentObservationTu
 function neutralTool(event: ExternalAgentObservationEvent, kind: 'tool-call' | 'tool-result'): AgentObservationTool {
   const raw = recordValue(event.raw);
   const params = recordValue(raw?.params);
-  const name = textValue(raw?.name, raw?.tool, raw?.tool_name, params?.name, params?.tool) ?? 'tool';
+  const item = recordValue(params?.item) ?? recordValue(raw?.item);
+  const message = recordValue(raw?.message);
+  const content = Array.isArray(message?.content) ? message.content : Array.isArray(raw?.content) ? raw.content : [];
+  const toolUse = content.find(
+    (part) =>
+      part && typeof part === 'object' && !Array.isArray(part) && (part as Record<string, unknown>).type === 'tool_use'
+  ) as Record<string, unknown> | undefined;
+  const name =
+    textValue(
+      toolUse?.name,
+      item?.tool,
+      item?.name,
+      item?.type === 'commandExecution' ? item.type : undefined,
+      raw?.name,
+      raw?.tool,
+      raw?.tool_name,
+      params?.name,
+      params?.tool
+    ) ?? 'tool';
+  const metadata = {
+    ...(textValue(item?.cwd) ? { cwd: textValue(item?.cwd) } : {}),
+    ...(textValue(item?.status) ? { status: textValue(item?.status) } : {}),
+    ...(typeof item?.exitCode === 'number' ? { exitCode: item.exitCode } : {}),
+    ...(typeof item?.durationMs === 'number' ? { durationMs: item.durationMs } : {})
+  };
+  const input =
+    toolUse?.input ?? item?.input ?? item?.command ?? raw?.input ?? raw?.args ?? raw?.arguments ?? params?.input;
   if (kind === 'tool-call') {
-    const input = raw?.input ?? raw?.args ?? raw?.arguments ?? params?.input;
-    return input === undefined ? { name } : { name, input };
+    return input === undefined ? { name, ...metadata } : { name, input, ...metadata };
   }
-  const output = raw?.output ?? raw?.result ?? raw?.content ?? params?.output ?? event.text;
-  return output === undefined ? { name } : { name, output };
+  const output =
+    item?.aggregatedOutput ??
+    item?.output ??
+    item?.result ??
+    raw?.output ??
+    raw?.result ??
+    raw?.content ??
+    params?.output ??
+    event.text;
+  return {
+    name,
+    ...(input === undefined ? {} : { input }),
+    ...(output === undefined ? {} : { output }),
+    ...metadata
+  };
 }
 
 /**
@@ -89,6 +127,17 @@ export function toAgentObservationEvent(
   event: ExternalAgentObservationEvent,
   projector?: Pick<ExternalAgentObservationProjector, 'classifyActivity' | 'isStreamingFragment'>
 ): AgentObservationEvent | null {
+  if (event.projection === 'unknown') {
+    return {
+      id: event.id,
+      ...(event.dedupeKey ? { dedupeKey: event.dedupeKey } : {}),
+      kind: 'unknown',
+      streaming: false,
+      text: event.text,
+      ...(event.raw !== undefined ? { raw: event.raw } : {}),
+      ...(event.createdAt ? { at: event.createdAt } : {})
+    };
+  }
   const isTurnStart = event.providerEventType !== undefined && TURN_START_EVENT_TYPES.has(event.providerEventType);
   const kind = isTurnStart
     ? 'turn-start'
@@ -97,6 +146,7 @@ export function toAgentObservationEvent(
 
   const event_: AgentObservationEvent = {
     id: event.id,
+    ...(event.dedupeKey ? { dedupeKey: event.dedupeKey } : {}),
     kind,
     streaming: projector?.isStreamingFragment?.(event) ?? isStreamingObservationFragment(event)
   };

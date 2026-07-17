@@ -1,6 +1,7 @@
 import type { ExternalAgentProviderAdapter } from '@monad/sdk-atom';
 
 import { makeAppServerCliAdapter } from '../app-server-jsonrpc.ts';
+import { createAppServerHistoryEventSource } from '../event-source.ts';
 import { createFrameworkSettingsImport } from '../settings-import/index.ts';
 import { openClawAppServerHooks, requestOpenClawHistoryPage } from './app-server.ts';
 import { openClawObservationProjection } from './observation.ts';
@@ -75,6 +76,11 @@ const baseOpenClawExternalAgentAdapter = makeAppServerCliAdapter({
 export const openClawExternalAgentAdapter: ExternalAgentProviderAdapter = {
   ...baseOpenClawExternalAgentAdapter,
   observation: openClawObservationProjection,
+  events: createAppServerHistoryEventSource({
+    provider: 'openclaw',
+    projection: openClawObservationProjection,
+    requestPage: requestOpenClawHistoryPage
+  }),
   settingsImport: createFrameworkSettingsImport('openclaw', 'OpenClaw'),
   // OpenClaw's managed runtime is app-server, whose JSON-RPC channel projects + resolves approvals —
   // so it can delegate provider approvals to the human. (Hermes shares the factory but has no
@@ -93,6 +99,5 @@ export const openClawExternalAgentAdapter: ExternalAgentProviderAdapter = {
         settingsImport: true
       }
     };
-  },
-  requestHistoryPage: requestOpenClawHistoryPage
+  }
 };

@@ -15,6 +15,13 @@
       "when": 1784139452695,
       "tag": "0001_message-fts",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1784281678637,
+      "tag": "0002_true_iron_monger",
+      "breakpoints": true
     }
   ]
 }

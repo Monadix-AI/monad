@@ -55,6 +55,25 @@ test('external agent session lifecycle stores output snapshots and exit status',
   expect(rows[0]?.exitCode).toBe(0);
 });
 
+test('external agent observation journal deduplicates overlapping live and history events', () => {
+  store.upsertExternalAgentSession(row);
+  const event = {
+    id: 'render-live',
+    dedupeKey: 'provider:turn-1:item-1',
+    projection: 'normalized' as const,
+    role: 'agent' as const,
+    text: 'Done',
+    source: 'codex-app-server' as const
+  };
+
+  store.recordExternalAgentObservationEvents(row.id, [event], '2026-06-28T00:00:01.000Z');
+  store.recordExternalAgentObservationEvents(row.id, [{ ...event, id: 'render-history' }], '2026-06-28T00:00:02.000Z');
+
+  expect(store.listExternalAgentObservationEvents(row.id, { limit: 20, sortDirection: 'asc' })).toEqual({
+    events: [event]
+  });
+});
+
 test('closeExternalAgentSession does not overwrite terminal external agent session state', () => {
   store.upsertExternalAgentSession(row);
   store.closeExternalAgentSession('exa_100000000000', '2026-06-28T00:00:01.000Z', null, 'stopped');

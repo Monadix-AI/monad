@@ -114,7 +114,9 @@ export interface MakeAppServerCliAdapterOptions {
 /** Build a full `ExternalAgentProviderAdapter` for a coding CLI whose app-server launch mode is a
  *  persistent gateway process reached over WebSocket (OpenClaw, Hermes), plus pty/cli-oneshot
  *  fallbacks. */
-export function makeAppServerCliAdapter(options: MakeAppServerCliAdapterOptions): ExternalAgentProviderAdapter {
+export function makeAppServerCliAdapter(
+  options: MakeAppServerCliAdapterOptions
+): Omit<ExternalAgentProviderAdapter, 'events'> {
   const appServerTransports = ['ws'] as const;
 
   function skipApprovalArgs(args: string[], skipProviderApprovals: boolean): string[] {
@@ -210,7 +212,7 @@ export function makeAppServerCliAdapter(options: MakeAppServerCliAdapterOptions)
     return chunk.length > 0 ? [{ type: 'agent_message', payload: { text: chunk } }] : [];
   }
 
-  const adapter: ExternalAgentProviderAdapter = {
+  const adapter: Omit<ExternalAgentProviderAdapter, 'events'> = {
     provider: options.provider,
     productIcon: options.productIcon,
     label: options.label,

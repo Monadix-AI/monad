@@ -1,4 +1,5 @@
-import type { ExternalAgentProviderAdapter } from '@monad/sdk-atom';
+import type { ExternalAgentHistoryPageRequest } from '@monad/protocol';
+import type { ExternalAgentProviderAdapter, ExternalAgentRuntimeHandle } from '@monad/sdk-atom';
 
 import { ExternalAgentError } from '@monad/sdk-atom';
 
@@ -100,8 +101,8 @@ export function steerCodex(
 }
 
 export function requestCodexHistoryPage(
-  handle: Parameters<NonNullable<ExternalAgentProviderAdapter['requestHistoryPage']>>[0],
-  request: Parameters<NonNullable<ExternalAgentProviderAdapter['requestHistoryPage']>>[1]
+  handle: ExternalAgentRuntimeHandle,
+  request: ExternalAgentHistoryPageRequest
 ): string | number {
   if (handle.launchMode !== 'app-server') {
     throw new ExternalAgentError('unsupported_capability', 'Codex history paging requires app-server mode');
