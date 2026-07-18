@@ -30,6 +30,13 @@ export type LiveRawPage = {
   nextBefore?: number;
 };
 
+export class LiveRawCursorExpiredError extends Error {
+  constructor() {
+    super('live observation epoch is no longer available');
+    this.name = 'LiveRawCursorExpiredError';
+  }
+}
+
 type InsertResult = { lastInsertRowid: number | bigint };
 
 function liveStoreName(sessionId: string, epoch: string): string {
@@ -123,7 +130,7 @@ export class LiveRawStore {
     const match = /^live:([^:]+):(\d+)$/.exec(cursor);
     if (!match) throw new Error('invalid live observation cursor');
     if (decodeURIComponent(match[1] ?? '') !== this.epoch) {
-      throw new Error('live observation epoch is no longer available');
+      throw new LiveRawCursorExpiredError();
     }
     return Number(match[2]);
   }

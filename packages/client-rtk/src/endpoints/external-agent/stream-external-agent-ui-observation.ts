@@ -44,9 +44,9 @@ export const streamExternalAgentUiObservationApi = sessionsApi.injectEndpoints({
             },
             {
               onError: (error) => {
-                if (error.kind !== 'fatal') return;
                 updateCachedData((draft) => {
-                  draft.fatalError = true;
+                  draft.fatalError = error.kind === 'fatal';
+                  draft.frame = null;
                 });
               }
             }

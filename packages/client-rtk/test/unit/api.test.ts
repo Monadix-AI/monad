@@ -522,8 +522,24 @@ test('streamExternalAgentUiObservation caches full neutral frames verbatim (no d
   );
   expect(failed.data).toMatchObject({
     fatalError: true,
-    frame: { state: 'live', events: [{ kind: 'assistant-message' }] }
+    frame: null
   });
+
+  push?.({
+    state: 'live',
+    externalAgentSessionId: 'exa_100000000000',
+    provider: 'codex',
+    observationEpoch: 'oep_clientRtkStream2',
+    events: [{ id: 'e2', kind: 'assistant-message', streaming: false, text: 'back' }],
+    seq: 1,
+    observedAt: '2026-07-07T00:01:00.000Z'
+  });
+  reportError?.({ kind: 'transient', message: 'daemon reconnecting' });
+  await new Promise((r) => setTimeout(r, 0));
+  const reconnecting = streamExternalAgentUiObservationApi.endpoints.streamExternalAgentUiObservation.select(arg)(
+    store.getState() as never
+  );
+  expect(reconnecting.data).toEqual({ fatalError: false, frame: null });
 });
 
 test('a query delegates to the client and caches by tag', async () => {

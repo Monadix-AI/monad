@@ -13,6 +13,7 @@ import { ExternalAgentHost } from '#/services/external-agent/host/index.ts';
 import { ExternalAgentObservationHub } from '#/services/external-agent/host/observation-hub.ts';
 import { ExternalAgentOutputPipeline } from '#/services/external-agent/host/output-pipeline.ts';
 import { registerAgentAdapterImpl } from '#/services/external-agent/index.ts';
+import { LiveRawCursorExpiredError } from '#/services/external-agent/live-raw-store.ts';
 import { createStore } from '#/store/db/index.ts';
 
 for (const adapter of builtinAgentAdapters) registerAgentAdapterImpl(adapter);
@@ -420,6 +421,39 @@ test('a live cursor pages committed raw frames without a provider round-trip', a
         provenance: { rawEvents: ['line-one\nline-two\n'] }
       }
     ]
+  });
+});
+
+test('an expired live cursor restarts from provider history instead of failing the request', async () => {
+  const seen: (string | undefined)[] = [];
+  const providerEvent = {
+    id: 'provider:newest',
+    dedupeKey: 'provider:newest',
+    projection: 'normalized' as const,
+    role: 'agent' as const,
+    text: 'provider history',
+    source: 'codex-app-server' as const,
+    provenance: { rawEvents: [{ method: 'item/agentMessage', params: { text: 'provider history' } }] }
+  };
+  const live = fakeLive({
+    providerSessionRef: 'thread-1',
+    initializeContext: { workingPath: '/tmp/project', providerSessionRef: 'thread-1' }
+  });
+  if (!live.liveRawStore) throw new Error('live raw store missing');
+  live.liveRawStore.parseCursor = () => {
+    throw new LiveRawCursorExpiredError();
+  };
+  live.adapter.events.readPage = async (_context, request) => {
+    seen.push(request.before);
+    return { state: 'available', events: [providerEvent], nextCursor: 'offset-2' };
+  };
+  const host = hostWithLive(live);
+
+  const page = await host.historyPage(SESSION_ID, historyRequest({ before: 'live:oep_retired:12' }));
+
+  expect({ seen, page }).toEqual({
+    seen: [undefined],
+    page: { events: [providerEvent], nextCursor: 'provider:offset-2' }
   });
 });
 

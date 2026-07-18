@@ -58,6 +58,7 @@ import { ExternalAgentSessionLauncher } from '#/services/external-agent/host/ses
 import { getExternalAgentProviderAdapter } from '#/services/external-agent/index.ts';
 import {
   cleanupStaleLiveRawStores,
+  LiveRawCursorExpiredError,
   LiveRawStore,
   liveRawRowsOutput
 } from '#/services/external-agent/live-raw-store.ts';
@@ -721,22 +722,26 @@ export class ExternalAgentHost {
     const live = this.live.get(id);
     if (!live) return this.storedHistoryPage(id, req);
     if (req.before?.startsWith('live:') && live.liveRawStore && !live.suspended) {
-      const before = live.liveRawStore.parseCursor(req.before);
-      const page = live.liveRawStore.page({
-        before,
-        limit: req.limit,
-        maxBytes: MAX_OUTPUT_SNAPSHOT,
-        sortDirection: 'desc'
-      });
-      const output = liveRawRowsOutput(page.rows);
-      return {
-        events: live.adapter.events.projectLive({ id, output, mode: 'history' }).events,
-        ...(page.nextBefore !== undefined
-          ? { nextCursor: live.liveRawStore.cursorBefore(page.nextBefore) }
-          : live.providerSessionRef
-            ? { nextCursor: encodeProviderHistoryCursor('') }
-            : {})
-      };
+      try {
+        const before = live.liveRawStore.parseCursor(req.before);
+        const page = live.liveRawStore.page({
+          before,
+          limit: req.limit,
+          maxBytes: MAX_OUTPUT_SNAPSHOT,
+          sortDirection: 'desc'
+        });
+        const output = liveRawRowsOutput(page.rows);
+        return {
+          events: live.adapter.events.projectLive({ id, output, mode: 'history' }).events,
+          ...(page.nextBefore !== undefined
+            ? { nextCursor: live.liveRawStore.cursorBefore(page.nextBefore) }
+            : live.providerSessionRef
+              ? { nextCursor: encodeProviderHistoryCursor('') }
+              : {})
+        };
+      } catch (error) {
+        if (!(error instanceof LiveRawCursorExpiredError)) throw error;
+      }
     }
     const cursor = decodeHistoryCursor(req.before);
     const providerSessionRef = live.providerSessionRef ?? live.initializeContext?.providerSessionRef ?? undefined;

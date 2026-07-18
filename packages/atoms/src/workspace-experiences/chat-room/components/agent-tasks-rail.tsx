@@ -587,7 +587,7 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
       }).unwrap(),
     resetKey: `${room.activeSessionId ?? ''}:${observedDeliveryId ?? ''}`
   });
-  const uiObservationState = observedDeliveryId ? undefined : externalAgentUiObservation.data;
+  const uiObservationState = observedDeliveryId ? undefined : externalAgentUiObservation.currentData;
   const uiFrame = uiObservationState?.frame ?? undefined;
   const observationLoading = Boolean(
     observedExternalAgentSessionId && observation && !observedDeliveryId && !uiFrame && !uiObservationState?.fatalError
