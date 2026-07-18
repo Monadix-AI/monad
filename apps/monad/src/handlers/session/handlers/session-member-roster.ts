@@ -82,7 +82,6 @@ export function createSessionMemberRoster(ctx: SessionContext, deps: SessionMemb
     for (const session of sessions) {
       const members = store.listSessionMembers(session.id);
       const bound = members.filter((member) => member.templateId !== null);
-      const existingTemplateIds = new Set(bound.map((member) => member.templateId));
       for (const member of bound) {
         const template = desired.get(member.templateId as string);
         if (!template) {
@@ -94,9 +93,6 @@ export function createSessionMemberRoster(ctx: SessionContext, deps: SessionMemb
           data: templateData(template),
           updatedAt: new Date().toISOString()
         });
-      }
-      for (const template of project.memberTemplates) {
-        if (!existingTemplateIds.has(template.id)) await addProjectSessionMemberBinding(session, template);
       }
     }
   }
