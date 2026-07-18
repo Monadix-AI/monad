@@ -21,7 +21,7 @@ import type {
 
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { getSessionInfo, getSessionMessages } from '@anthropic-ai/claude-agent-sdk';
+import { getSessionMessages } from '@anthropic-ai/claude-agent-sdk';
 import { defaultBinProbes, resolveBinary } from '@monad/sdk-atom';
 
 import {
@@ -365,11 +365,11 @@ function claudeHistoryOffset(cursor: string | undefined): number {
   return Number.isFinite(offset) && offset > 0 ? offset : 0;
 }
 
-interface ClaudeSdkHistoryPageDeps {
+interface ClaudeSdkHistoryDeps {
   getSessionMessages: typeof getSessionMessages;
 }
 
-export function createClaudeSdkHistoryPageReader(deps: ClaudeSdkHistoryPageDeps) {
+export function createClaudeSdkHistoryPageReader(deps: ClaudeSdkHistoryDeps) {
   return async function readClaudeHistoryPage(
     context: ExternalAgentProviderHistoryPageRequestContext
   ): Promise<ExternalAgentProviderHistoryPageContext['page'] | null> {
@@ -399,33 +399,26 @@ export function createClaudeSdkHistoryPageReader(deps: ClaudeSdkHistoryPageDeps)
   };
 }
 
-const CLAUDE_HISTORY_PAGE_SIZE = 200;
-
-async function readClaudeHistoryOutput(context: ExternalAgentProviderHistoryContext): Promise<string | null> {
-  try {
-    const info = await getSessionInfo(context.providerSessionRef, { dir: context.workingPath });
-    if ((info?.fileSize ?? 0) > context.limitBytes) return claudeTranscriptFallback(context);
-    // A single `getSessionMessages` call caps at its own `limit`; a session with more messages than
-    // that would silently lose everything past the cap, so page through until exhausted. The file-size
-    // guard above already routes oversized sessions to the raw-transcript fallback.
-    const messages: SessionMessage[] = [];
-    let offset = 0;
-    while (true) {
-      const page = await getSessionMessages(context.providerSessionRef, {
+export function createClaudeSdkHistoryOutputReader(deps: ClaudeSdkHistoryDeps) {
+  return async function readClaudeSdkHistoryOutput(
+    context: ExternalAgentProviderHistoryContext
+  ): Promise<string | null> {
+    try {
+      const messages = await deps.getSessionMessages(context.providerSessionRef, {
         dir: context.workingPath,
-        limit: CLAUDE_HISTORY_PAGE_SIZE,
-        offset,
         includeSystemMessages: true
       });
-      if (page.length === 0) break;
-      messages.push(...page);
-      offset += page.length;
-      if (page.length < CLAUDE_HISTORY_PAGE_SIZE) break;
+      return claudeSdkMessagesOutput(messages);
+    } catch {
+      return null;
     }
-    return claudeSdkMessagesOutput(messages) ?? claudeTranscriptFallback(context);
-  } catch {
-    return claudeTranscriptFallback(context);
-  }
+  };
+}
+
+const readClaudeSdkHistoryOutput = createClaudeSdkHistoryOutputReader({ getSessionMessages });
+
+async function readClaudeHistoryOutput(context: ExternalAgentProviderHistoryContext): Promise<string | null> {
+  return (await readClaudeSdkHistoryOutput(context)) ?? claudeTranscriptFallback(context);
 }
 
 function buildClaudeStreamJsonUserMessage(input: string): SDKUserMessage {
