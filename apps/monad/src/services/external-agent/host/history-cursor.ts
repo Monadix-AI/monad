@@ -28,3 +28,7 @@ export function decodeHistoryCursor(before: string | undefined): HistoryCursor {
 export function encodeProviderHistoryCursor(cursor: string): string {
   return `${PROVIDER_HISTORY_CURSOR_PREFIX}${cursor}`;
 }
+
+export function encodeStoredHistoryCursor(cursor: string): string {
+  return `${STORED_HISTORY_CURSOR_PREFIX}${cursor}`;
+}

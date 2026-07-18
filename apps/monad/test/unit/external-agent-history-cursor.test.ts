@@ -423,7 +423,7 @@ test('a live cursor pages committed raw frames without a provider round-trip', a
   });
 });
 
-test('a stored-session provider cursor is stripped before the local adapter history reader', async () => {
+test('a stored-session provider cursor never falls through to the local adapter history reader', async () => {
   const codexBuiltin = builtinAgentAdapters.find((adapter) => adapter.provider === 'codex');
   if (!codexBuiltin) throw new Error('codex builtin adapter missing');
   const seen: (string | undefined)[] = [];
@@ -446,7 +446,7 @@ test('a stored-session provider cursor is stripped before the local adapter hist
       agentName: 'codex',
       provider: 'codex',
       workingPath: '/tmp/project',
-      launchMode: 'app-server',
+      launchMode: 'pty',
       runtimeRole: 'interactive',
       agentRuntimeId: null,
       agentRuntimeTokenHash: null,
@@ -462,16 +462,90 @@ test('a stored-session provider cursor is stripped before the local adapter hist
       exitedAt: '2026-07-06T00:01:00.000Z'
     });
 
-    const page = await host.historyPage(SESSION_ID, historyRequest({ before: 'provider:offset-2' }));
+    const result = await host.historyPage(SESSION_ID, historyRequest({ before: 'provider:offset-2' })).then(
+      (page) => ({ page }),
+      (error: unknown) => ({
+        error:
+          error instanceof ExternalAgentError
+            ? { code: error.code, message: error.message }
+            : { code: 'unknown', message: String(error) }
+      })
+    );
 
-    expect(seen).toEqual(['offset-2']);
-    expect(page.nextCursor).toBe('provider:offset-4');
+    expect({ result, seen }).toEqual({
+      result: {
+        error: {
+          code: 'unsupported_capability',
+          message: `provider history unavailable for stopped session: ${SESSION_ID}`
+        }
+      },
+      seen: []
+    });
   } finally {
     registerAgentAdapterImpl(codexBuiltin);
   }
 });
 
-test('a retired journal cursor restarts history from the provider', async () => {
+test('a local Codex history offset stays in the snapshot cursor domain across pages', async () => {
+  const codexBuiltin = builtinAgentAdapters.find((adapter) => adapter.provider === 'codex');
+  if (!codexBuiltin) throw new Error('codex builtin adapter missing');
+  const localBefore: (string | undefined)[] = [];
+  let providerBridgeCalls = 0;
+  registerAgentAdapterImpl({
+    ...codexBuiltin,
+    events: {
+      ...codexBuiltin.events,
+      readPage: async (context, request) => {
+        if (context.requestProviderPage) providerBridgeCalls += 1;
+        else localBefore.push(request.before);
+        return {
+          state: 'available',
+          events: [],
+          ...(request.before ? {} : { nextCursor: '100' })
+        };
+      }
+    }
+  });
+  try {
+    const store = createStore();
+    const host = new ExternalAgentHost({ store, bus: new EventBus(), agents: async () => [] });
+    store.upsertExternalAgentSession({
+      id: SESSION_ID,
+      transcriptTargetId: TARGET_ID,
+      agentName: 'codex',
+      provider: 'codex',
+      workingPath: '/tmp/project',
+      launchMode: 'pty',
+      runtimeRole: 'interactive',
+      agentRuntimeId: null,
+      agentRuntimeTokenHash: null,
+      lastDeliveredSeq: 0,
+      lastVisibleSeq: 0,
+      state: 'stopped',
+      pid: null,
+      providerSessionRef: 'thread-1',
+      outputSnapshot: '',
+      exitCode: 0,
+      startedAt: '2026-07-06T00:00:00.000Z',
+      updatedAt: '2026-07-06T00:00:00.000Z',
+      exitedAt: '2026-07-06T00:01:00.000Z'
+    });
+
+    const first = await host.historyPage(SESSION_ID, historyRequest({ limit: 100 }));
+    expect(first).toEqual({ events: [], nextCursor: 'snapshot:100' });
+
+    const second = await host.historyPage(SESSION_ID, historyRequest({ before: first.nextCursor, limit: 100 }));
+    expect({ localBefore, providerBridgeCalls, second }).toEqual({
+      localBefore: [undefined, '100'],
+      providerBridgeCalls: 0,
+      second: { events: [] }
+    });
+  } finally {
+    registerAgentAdapterImpl(codexBuiltin);
+  }
+});
+
+test('a retired journal cursor restarts history in the available local cursor domain', async () => {
   const codexBuiltin = builtinAgentAdapters.find((adapter) => adapter.provider === 'codex');
   if (!codexBuiltin) throw new Error('codex builtin adapter missing');
   const seen: (string | undefined)[] = [];
@@ -522,7 +596,7 @@ test('a retired journal cursor restarts history from the provider', async () => 
 
     expect({ seen, page }).toEqual({
       seen: [undefined],
-      page: { events: [providerEvent], nextCursor: 'provider:offset-2' }
+      page: { events: [providerEvent], nextCursor: 'snapshot:offset-2' }
     });
   } finally {
     registerAgentAdapterImpl(codexBuiltin);

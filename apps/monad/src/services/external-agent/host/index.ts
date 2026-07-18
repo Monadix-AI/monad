@@ -42,6 +42,7 @@ import { providerHistoryPageViaCli } from '#/services/external-agent/host/histor
 import {
   decodeHistoryCursor,
   encodeProviderHistoryCursor,
+  encodeStoredHistoryCursor,
   type HistoryCursor
 } from '#/services/external-agent/host/history-cursor.ts';
 import {
@@ -738,9 +739,22 @@ export class ExternalAgentHost {
       };
     }
     const cursor = decodeHistoryCursor(req.before);
-    const providerReq = providerHistoryPageRequest(req, cursor);
     const providerSessionRef = live.providerSessionRef ?? live.initializeContext?.providerSessionRef ?? undefined;
     const workingPath = live.initializeContext?.workingPath;
+    if (cursor.kind === 'stored' && live.adapter.events.readPage && providerSessionRef && workingPath) {
+      const result = await live.adapter.events.readPage(
+        { providerSessionRef, workingPath, limitBytes: MAX_OUTPUT_SNAPSHOT },
+        { before: cursor.value, limit: req.limit, sortDirection: req.sortDirection }
+      );
+      if (result.state === 'available') {
+        return {
+          events: result.events,
+          ...(result.nextCursor ? { nextCursor: encodeStoredHistoryCursor(result.nextCursor) } : {})
+        };
+      }
+      throw new ExternalAgentError('unsupported_capability', `local history unavailable for live session: ${id}`);
+    }
+    const providerReq = providerHistoryPageRequest(req, cursor);
     if (live.adapter.events.readPage && providerSessionRef && workingPath) {
       const result = await live.adapter.events.readPage(
         {
@@ -793,8 +807,25 @@ export class ExternalAgentHost {
   ): Promise<ExternalAgentHistoryPageResponse> {
     const row = this.deps.store.getExternalAgentSession(id);
     const cursor = decodeHistoryCursor(req.before);
-    if (cursor.kind !== 'stored' && row?.providerSessionRef) {
+    if (row?.providerSessionRef) {
       const adapter = getExternalAgentProviderAdapter(row.provider);
+      if (cursor.kind === 'stored') {
+        const result = await adapter.events.readPage?.(
+          {
+            providerSessionRef: row.providerSessionRef,
+            workingPath: row.workingPath,
+            limitBytes: MAX_OUTPUT_SNAPSHOT
+          },
+          { before: cursor.value, limit: req.limit, sortDirection: req.sortDirection }
+        );
+        if (result?.state === 'available') {
+          return {
+            events: result.events,
+            ...(result.nextCursor ? { nextCursor: encodeStoredHistoryCursor(result.nextCursor) } : {})
+          };
+        }
+        throw new ExternalAgentError('unsupported_capability', `local history unavailable for stopped session: ${id}`);
+      }
       const pageRequest = {
         before: cursor.kind === 'provider' && cursor.value ? cursor.value : undefined,
         limit: req.limit,
@@ -807,7 +838,10 @@ export class ExternalAgentHost {
           takeStructuredLines: (structuredId, stream, chunk) =>
             this.outputPipeline.takeCompleteStructuredLines(structuredId, stream, chunk),
           dropStructuredBuffer: (structuredId) => this.outputPipeline.dropStructuredBuffer(structuredId)
-        }).catch(() => null);
+        }).catch((error) => {
+          if (cursor.kind === 'provider') throw error;
+          return null;
+        });
         if (bridged?.state === 'available') {
           return {
             events: bridged.events,
@@ -815,18 +849,24 @@ export class ExternalAgentHost {
           };
         }
       }
+      if (cursor.kind === 'provider') {
+        throw new ExternalAgentError(
+          'unsupported_capability',
+          `provider history unavailable for stopped session: ${id}`
+        );
+      }
       const result = await adapter.events.readPage?.(
         {
           providerSessionRef: row.providerSessionRef,
           workingPath: row.workingPath,
           limitBytes: MAX_OUTPUT_SNAPSHOT
         },
-        pageRequest
+        { before: undefined, limit: pageRequest.limit, sortDirection: pageRequest.sortDirection }
       );
       if (result?.state === 'available') {
         return {
           events: result.events,
-          ...(result.nextCursor ? { nextCursor: encodeProviderHistoryCursor(result.nextCursor) } : {})
+          ...(result.nextCursor ? { nextCursor: encodeStoredHistoryCursor(result.nextCursor) } : {})
         };
       }
     }
