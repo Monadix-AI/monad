@@ -66,6 +66,48 @@ test('live raw store pages newest rows in display order without materializing ol
   });
 });
 
+test('live raw store returns the same newest page on repeated reads', async () => {
+  await withTempDirectory(async (directory) => {
+    const store = LiveRawStore.open({ directory, sessionId: 'exa_test', epoch: 'oep_repeat_newest' });
+    for (let index = 1; index <= 5; index += 1) {
+      store.append({ stream: 'stdout', payload: `frame-${index}`, observedAt: `2026-07-18T01:00:0${index}.000Z` });
+    }
+
+    const expected = {
+      rows: [
+        { seq: 4, stream: 'stdout' as const, payload: 'frame-4', observedAt: '2026-07-18T01:00:04.000Z' },
+        { seq: 5, stream: 'stdout' as const, payload: 'frame-5', observedAt: '2026-07-18T01:00:05.000Z' }
+      ],
+      nextBefore: 4
+    };
+
+    expect(store.page({ limit: 2, sortDirection: 'desc' })).toEqual(expected);
+    expect(store.page({ limit: 2, sortDirection: 'desc' })).toEqual(expected);
+    await store.closeAndDelete();
+  });
+});
+
+test('live raw store returns the same cursor page on repeated reads', async () => {
+  await withTempDirectory(async (directory) => {
+    const store = LiveRawStore.open({ directory, sessionId: 'exa_test', epoch: 'oep_repeat_before' });
+    for (let index = 1; index <= 5; index += 1) {
+      store.append({ stream: 'stdout', payload: `frame-${index}`, observedAt: `2026-07-18T01:00:0${index}.000Z` });
+    }
+
+    const expected = {
+      rows: [
+        { seq: 3, stream: 'stdout' as const, payload: 'frame-3', observedAt: '2026-07-18T01:00:03.000Z' },
+        { seq: 4, stream: 'stdout' as const, payload: 'frame-4', observedAt: '2026-07-18T01:00:04.000Z' }
+      ],
+      nextBefore: 3
+    };
+
+    expect(store.page({ before: 5, limit: 2, sortDirection: 'desc' })).toEqual(expected);
+    expect(store.page({ before: 5, limit: 2, sortDirection: 'desc' })).toEqual(expected);
+    await store.closeAndDelete();
+  });
+});
+
 test('live raw store bounds pages by encoded payload bytes without dropping an oversized frame', async () => {
   await withTempDirectory(async (directory) => {
     const store = LiveRawStore.open({ directory, sessionId: 'exa_test', epoch: 'oep_bytes' });

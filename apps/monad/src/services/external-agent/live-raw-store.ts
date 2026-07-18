@@ -67,17 +67,17 @@ export class LiveRawStore {
     this.insertStatement = this.database.prepare<InsertResult, [LiveRawStream, string, string]>(
       'INSERT INTO raw_frames (stream, payload, observed_at) VALUES (?1, ?2, ?3)'
     );
-    this.oldestStatement = this.database.prepare<LiveRawRow, []>(
-      'SELECT seq, stream, payload, observed_at AS observedAt FROM raw_frames ORDER BY seq ASC'
+    this.oldestStatement = this.database.prepare<LiveRawRow, [number]>(
+      'SELECT seq, stream, payload, observed_at AS observedAt FROM raw_frames ORDER BY seq ASC LIMIT ?1'
     );
-    this.afterStatement = this.database.prepare<LiveRawRow, [number]>(
-      'SELECT seq, stream, payload, observed_at AS observedAt FROM raw_frames WHERE seq > ?1 ORDER BY seq ASC'
+    this.afterStatement = this.database.prepare<LiveRawRow, [number, number]>(
+      'SELECT seq, stream, payload, observed_at AS observedAt FROM raw_frames WHERE seq > ?1 ORDER BY seq ASC LIMIT ?2'
     );
-    this.newestStatement = this.database.prepare<LiveRawRow, []>(
-      'SELECT seq, stream, payload, observed_at AS observedAt FROM raw_frames ORDER BY seq DESC'
+    this.newestStatement = this.database.prepare<LiveRawRow, [number]>(
+      'SELECT seq, stream, payload, observed_at AS observedAt FROM raw_frames ORDER BY seq DESC LIMIT ?1'
     );
-    this.beforeStatement = this.database.prepare<LiveRawRow, [number]>(
-      'SELECT seq, stream, payload, observed_at AS observedAt FROM raw_frames WHERE seq < ?1 ORDER BY seq DESC'
+    this.beforeStatement = this.database.prepare<LiveRawRow, [number, number]>(
+      'SELECT seq, stream, payload, observed_at AS observedAt FROM raw_frames WHERE seq < ?1 ORDER BY seq DESC LIMIT ?2'
     );
   }
 
@@ -95,13 +95,18 @@ export class LiveRawStore {
     this.assertOpen();
     const limit = Math.max(1, Math.trunc(request.limit));
     const maxBytes = request.maxBytes === undefined ? Number.POSITIVE_INFINITY : Math.max(1, request.maxBytes);
+    const queryLimit = limit + 1;
     if (request.sortDirection === 'asc') {
       const source =
-        request.after === undefined ? this.oldestStatement.iterate() : this.afterStatement.iterate(request.after);
+        request.after === undefined
+          ? this.oldestStatement.all(queryLimit)
+          : this.afterStatement.all(request.after, queryLimit);
       return { rows: takeBoundedRows(source, limit, maxBytes).rows };
     }
     const source =
-      request.before === undefined ? this.newestStatement.iterate() : this.beforeStatement.iterate(request.before);
+      request.before === undefined
+        ? this.newestStatement.all(queryLimit)
+        : this.beforeStatement.all(request.before, queryLimit);
     const bounded = takeBoundedRows(source, limit, maxBytes);
     const rows = bounded.rows.reverse();
     return {
