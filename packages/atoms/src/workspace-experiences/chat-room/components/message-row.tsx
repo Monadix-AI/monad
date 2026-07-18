@@ -13,10 +13,12 @@ import {
   workspaceSans as sans,
   TagChip
 } from '@monad/ui/components/AgentAvatar';
+import { FileIcon } from '@monad/ui/components/FileIcon';
 import { type Components, Markdown } from '@monad/ui/components/Markdown';
 import { MentionCapsule, MentionText, parseMentionTokens } from '@monad/ui/components/MentionText';
 import { memo } from 'react';
 
+import { resolveLocalFileReference } from '../utils/local-file-reference.ts';
 import { SystemMessageRow, TIME_STYLE } from './system-message-row.tsx';
 
 export type MessageRowLabels = {
@@ -139,20 +141,69 @@ function flattenReactText(node: React.ReactNode): string {
   return '';
 }
 
-export const messageMarkdownComponents: Components = {
-  a: ({ href, children }) => {
-    if (typeof href === 'string' && href.startsWith(MENTION_HREF_PREFIX)) {
-      const id = decodeURIComponent(href.slice(MENTION_HREF_PREFIX.length));
-      return (
-        <MentionCapsule
-          id={id}
-          name={flattenReactText(children).replace(/^@/, '')}
-        />
-      );
+export function createMessageMarkdownComponents({
+  attachments = [],
+  onOpenAttachment
+}: {
+  attachments?: readonly MessageAttachment[];
+  onOpenAttachment?: (attachment: MessageAttachment, line?: number) => void;
+} = {}): Components {
+  return {
+    a: ({ href, children, title }) => {
+      if (typeof href === 'string' && href.startsWith(MENTION_HREF_PREFIX)) {
+        const id = decodeURIComponent(href.slice(MENTION_HREF_PREFIX.length));
+        return (
+          <MentionCapsule
+            id={id}
+            name={flattenReactText(children).replace(/^@/, '')}
+          />
+        );
+      }
+      if (title === 'monad:file' && typeof href === 'string') {
+        const reference = resolveLocalFileReference(href, attachments);
+        const content = (
+          <>
+            <FileIcon
+              className="size-3.5 shrink-0 self-center"
+              contentType={reference.attachment?.mime}
+              fileName={reference.attachment?.name ?? reference.path}
+            />
+            <span className="min-w-0 [overflow-wrap:anywhere]">{children}</span>
+          </>
+        );
+        if (!reference.attachment) {
+          return (
+            <button
+              aria-disabled="true"
+              className="inline-flex max-w-full items-baseline gap-1 border-0 bg-transparent p-0 align-baseline font-[inherit] text-muted-foreground leading-[inherit]"
+              data-inline-link="file"
+              disabled
+              title="File unavailable"
+              type="button"
+            >
+              {content}
+            </button>
+          );
+        }
+        const attachment = reference.attachment;
+        return (
+          <button
+            className="inline-flex max-w-full cursor-pointer items-baseline gap-1 border-0 bg-transparent p-0 align-baseline font-[inherit] leading-[inherit] text-accent-blue"
+            data-inline-link="file"
+            onClick={() => onOpenAttachment?.(attachment, reference.line)}
+            title={attachment.path}
+            type="button"
+          >
+            {content}
+          </button>
+        );
+      }
+      return <FaviconLink href={href}>{children}</FaviconLink>;
     }
-    return <FaviconLink href={href}>{children}</FaviconLink>;
-  }
-};
+  };
+}
+
+export const messageMarkdownComponents: Components = createMessageMarkdownComponents();
 
 function messageAgentBadge(msg: Message): React.ReactNode {
   if (msg.tag === 'AI') return <TagChip tag={msg.tag} />;
