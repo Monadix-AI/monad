@@ -1060,6 +1060,8 @@
   "web.workplace.attachmentPreview": "预览",
   "web.workplace.attachmentCollapse": "收起",
   "web.workplace.attachmentLoadError": "无法加载附件。请重试。",
+  "web.workplace.attachmentPreviewTruncated": "预览内容已截断",
+  "web.workplace.attachmentPreviewUnsupported": "此文件类型暂不支持预览。",
   "web.workplace.emptyChatTitle": "这个聊天室还没有 agent。",
   "web.workplace.emptyChatDescription": "先在 Studio 里连接外部 agent，或者为当前项目生成一个专属成员，让这里的消息有人响应。",
   "web.workplace.emptyConnectInStudio": "去 Studio 连接",

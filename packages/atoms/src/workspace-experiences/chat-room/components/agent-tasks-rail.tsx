@@ -63,6 +63,7 @@ import {
   observationHistoryLoadScope,
   prependObservationHistory
 } from '../utils/observation-history.ts';
+import { FilePreviewPanel } from './file-preview-panel.tsx';
 import { ExternalAgentObservationPanel } from './observation/panel.tsx';
 
 const RAIL_WIDTH_STORAGE_KEY = 'monad.workplace.agentRail.width';
@@ -545,6 +546,8 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
   const suppressMouseResizeRef = useRef(false);
   const effectiveRailWidth = railWidth;
   const uiKey = projectSessionUiKey(room.projectId, room.activeSessionId);
+  const filePreview = useChatRoomExperienceStore((state) => state.filePreviewBySession[uiKey] ?? null);
+  const closeFilePreviewForSession = useChatRoomExperienceStore((state) => state.closeFilePreview);
   const observation = useChatRoomExperienceStore((state) => state.railObservationBySession[uiKey] ?? null);
   const observeProjectAgent = useChatRoomExperienceStore((state) => state.observeProjectAgent);
   const closeRailObservationForSession = useChatRoomExperienceStore((state) => state.closeRailObservation);
@@ -552,6 +555,7 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
     () => closeRailObservationForSession(uiKey),
     [closeRailObservationForSession, uiKey]
   );
+  const closeFilePreview = useCallback(() => closeFilePreviewForSession(uiKey), [closeFilePreviewForSession, uiKey]);
   const agents = sortedProjectRailAgents(room.railAgents);
   const observedStream = agentObservationStream(observation, room.externalAgentStreams);
   const observedExternalAgentSessionId = observation?.externalAgentSessionId ?? observedStream?.id;
@@ -983,7 +987,12 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
         onPointerDown={onResizePointerDown}
         tabIndex={0}
       />
-      {observation ? (
+      {filePreview ? (
+        <FilePreviewPanel
+          onBack={closeFilePreview}
+          preview={filePreview}
+        />
+      ) : observation ? (
         <ExternalAgentObservationPanel
           agent={observedAgent}
           agentName={observedAgent?.name ?? observation.agentName}

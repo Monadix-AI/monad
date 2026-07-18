@@ -761,6 +761,8 @@
   "web.workplace.attachmentPreview": "Preview",
   "web.workplace.attachmentCollapse": "Collapse",
   "web.workplace.attachmentLoadError": "Cannot load the attachment. Try again.",
+  "web.workplace.attachmentPreviewTruncated": "Preview truncated",
+  "web.workplace.attachmentPreviewUnsupported": "Preview is not available for this file type.",
   "web.workplace.emptyChatTitle": "No agents in this room yet.",
   "web.workplace.emptyChatDescription": "Connect an external agent in Studio, or spawn a project-local member so messages here have someone to answer.",
   "web.workplace.emptyConnectInStudio": "Connect in Studio",
