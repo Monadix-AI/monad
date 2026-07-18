@@ -1569,3 +1569,79 @@ test('external_agent.resume_failed system notice renders from the i18n catalog',
     'Codex 恢复 provider 会话 thread-42 失败，已冷启动新的运行时。'
   );
 });
+
+test('external agent idle lifecycle notices preserve actors and render action-only localized copy', () => {
+  const suspendedPayload = {
+    externalAgentSessionId: 'exa_idle00000000',
+    agentName: 'reviewer',
+    idleTimeoutMs: 300
+  };
+  const resumedPayload = {
+    externalAgentSessionId: 'exa_idle00000000',
+    agentName: 'reviewer'
+  };
+
+  const en = new SessionUiProjector();
+  const suspendedEvent = event('external_agent.idle_suspended', suspendedPayload);
+  const resumedEvent = event('external_agent.idle_resumed', resumedPayload);
+  expect(en.applyEvent(suspendedEvent)).toEqual([
+    {
+      kind: 'upsert',
+      cursor: suspendedEvent.id,
+      item: {
+        kind: 'system',
+        id: `external-agent-idle-suspended:reviewer:${suspendedEvent.id}`,
+        text: 'fell asleep.',
+        actor: { id: 'reviewer', kind: 'external-agent' },
+        level: 'info',
+        seq: suspendedEvent.id
+      }
+    }
+  ]);
+  expect(en.applyEvent(resumedEvent)).toEqual([
+    {
+      kind: 'upsert',
+      cursor: resumedEvent.id,
+      item: {
+        kind: 'system',
+        id: `external-agent-idle-resumed:reviewer:${resumedEvent.id}`,
+        text: 'woke up.',
+        actor: { id: 'reviewer', kind: 'external-agent' },
+        level: 'info',
+        seq: resumedEvent.id
+      }
+    }
+  ]);
+
+  const zh = new SessionUiProjector({ t: createI18n({ locale: 'zh', packs: [] }).t });
+  const zhSuspendedEvent = event('external_agent.idle_suspended', suspendedPayload);
+  const zhResumedEvent = event('external_agent.idle_resumed', resumedPayload);
+  expect(zh.applyEvent(zhSuspendedEvent)).toEqual([
+    {
+      kind: 'upsert',
+      cursor: zhSuspendedEvent.id,
+      item: {
+        kind: 'system',
+        id: `external-agent-idle-suspended:reviewer:${zhSuspendedEvent.id}`,
+        text: '睡着了。',
+        actor: { id: 'reviewer', kind: 'external-agent' },
+        level: 'info',
+        seq: zhSuspendedEvent.id
+      }
+    }
+  ]);
+  expect(zh.applyEvent(zhResumedEvent)).toEqual([
+    {
+      kind: 'upsert',
+      cursor: zhResumedEvent.id,
+      item: {
+        kind: 'system',
+        id: `external-agent-idle-resumed:reviewer:${zhResumedEvent.id}`,
+        text: '醒来了。',
+        actor: { id: 'reviewer', kind: 'external-agent' },
+        level: 'info',
+        seq: zhResumedEvent.id
+      }
+    }
+  ]);
+});

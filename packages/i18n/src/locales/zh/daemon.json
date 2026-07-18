@@ -4,6 +4,8 @@
   "daemon.ready.cli": "命令行：",
   "daemon.ready.configure": "配置 model provider：",
   "daemon.singleton.alreadyRunning": "Monad Daemon 已在运行，请先运行 `monad stop` 停止它。",
+  "daemon.session.externalAgentIdleSuspended": "睡着了。",
+  "daemon.session.externalAgentIdleResumed": "醒来了。",
   "daemon.session.externalAgentResumeFailed": "{{label}} 恢复 provider 会话 {{ref}} 失败，已冷启动新的运行时。",
   "daemon.session.contextEvicted_other": "已从上下文清理约 {{tokens}} 个 token（{{count}} 个工具结果）。",
   "daemon.session.contextHandoffSuggested": "上下文已使用 {{pct}}%，建议开启新会话。"

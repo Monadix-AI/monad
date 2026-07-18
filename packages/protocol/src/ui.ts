@@ -118,10 +118,17 @@ export const uiMemorySummaryItemSchema = z.object({
 });
 export type UIMemorySummaryItem = z.infer<typeof uiMemorySummaryItemSchema>;
 
+export const uiSystemActorSchema = z.object({
+  id: z.string().min(1),
+  kind: z.literal('external-agent')
+});
+export type UISystemActor = z.infer<typeof uiSystemActorSchema>;
+
 export const uiSystemItemSchema = z.object({
   kind: z.literal('system'),
   id: z.string(),
   text: z.string(),
+  actor: uiSystemActorSchema.optional(),
   level: z.enum(['info', 'warn', 'error']).optional(),
   seq: z.string()
 });

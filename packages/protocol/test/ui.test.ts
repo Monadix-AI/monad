@@ -33,6 +33,38 @@ test('sessionUiEventSchema accepts snapshot and upsert payloads', () => {
   ).toBe('upsert');
 });
 
+test('system items preserve optional external-agent actor references', () => {
+  const current = sessionUiEventSchema.parse({
+    kind: 'upsert',
+    item: {
+      kind: 'system',
+      id: 'external-agent-idle-suspended:pmem_codex_1:evt_1',
+      text: 'fell asleep.',
+      actor: { id: 'pmem_codex_1', kind: 'external-agent' },
+      seq: 'evt_1'
+    }
+  });
+  const legacy = sessionUiEventSchema.parse({
+    kind: 'upsert',
+    item: { kind: 'system', id: 'legacy', text: 'Legacy notice', seq: 'evt_0' }
+  });
+
+  expect(current).toEqual({
+    kind: 'upsert',
+    item: {
+      kind: 'system',
+      id: 'external-agent-idle-suspended:pmem_codex_1:evt_1',
+      text: 'fell asleep.',
+      actor: { id: 'pmem_codex_1', kind: 'external-agent' },
+      seq: 'evt_1'
+    }
+  });
+  expect(legacy).toEqual({
+    kind: 'upsert',
+    item: { kind: 'system', id: 'legacy', text: 'Legacy notice', seq: 'evt_0' }
+  });
+});
+
 test('sessionUiEventSchema preserves authoritative transcript replacement snapshots', () => {
   expect(
     uiSnapshotEventSchema.parse({ kind: 'snapshot', items: [], replacesTranscript: true }).replacesTranscript

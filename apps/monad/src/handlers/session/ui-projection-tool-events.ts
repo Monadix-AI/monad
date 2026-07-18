@@ -185,6 +185,40 @@ export function applyToolEvent(m: ProjectionMutations, event: Event): SessionUiE
       const p = parseEventPayload('external_agent.approval_resolved', event.payload);
       return [m.remove('approval', p.requestId)];
     }
+    case 'external_agent.idle_suspended': {
+      const p = parseEventPayload('external_agent.idle_suspended', event.payload);
+      return [
+        {
+          kind: 'upsert',
+          cursor: event.id,
+          item: m.upsert({
+            kind: 'system',
+            id: `external-agent-idle-suspended:${p.agentName}:${event.id}`,
+            text: m.t('daemon.session.externalAgentIdleSuspended'),
+            actor: { id: p.agentName, kind: 'external-agent' },
+            level: 'info',
+            seq: event.id
+          })
+        }
+      ];
+    }
+    case 'external_agent.idle_resumed': {
+      const p = parseEventPayload('external_agent.idle_resumed', event.payload);
+      return [
+        {
+          kind: 'upsert',
+          cursor: event.id,
+          item: m.upsert({
+            kind: 'system',
+            id: `external-agent-idle-resumed:${p.agentName}:${event.id}`,
+            text: m.t('daemon.session.externalAgentIdleResumed'),
+            actor: { id: p.agentName, kind: 'external-agent' },
+            level: 'info',
+            seq: event.id
+          })
+        }
+      ];
+    }
     case 'external_agent.resume_failed': {
       const p = parseEventPayload('external_agent.resume_failed', event.payload);
       const label = findExternalAgentProviderAdapter(p.provider)?.label ?? p.provider;
