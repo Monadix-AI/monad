@@ -50,7 +50,8 @@ export function codexAppServerRecordEvents(
     const error = textValue(p.error);
     return observation({
       id: `${id}:json:${recordIndex}:mcp-status`,
-      role: error ? 'system' : 'tool',
+      projection: 'unknown',
+      role: 'system',
       text: error ? `${name} ${status}: ${error}` : `${name} ${status}`,
       source: 'codex-app-server',
       providerEventType: method,

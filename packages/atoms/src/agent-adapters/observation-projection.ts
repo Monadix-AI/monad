@@ -83,6 +83,7 @@ export function providerIsoTimestamp(value: string | undefined): string | undefi
 
 export function observation(args: {
   id: string;
+  projection?: ExternalAgentObservationEvent['projection'];
   role: ObservationRole;
   text?: string;
   source: ObservationSource;
@@ -96,6 +97,7 @@ export function observation(args: {
   if (!text) return [];
   const parsed = externalAgentObservationEventSchema.safeParse({
     id: args.id,
+    projection: args.projection,
     role: args.role,
     text,
     source: args.source,
