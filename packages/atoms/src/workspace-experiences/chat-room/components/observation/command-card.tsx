@@ -9,6 +9,7 @@ export function commandToolView(
   provider: string
 ): CommandToolView | null {
   const standaloneResult = call === result && result.kind === 'tool-result';
+  const standaloneCall = call === result && call.kind === 'tool-call';
   const name =
     standaloneResult && result.tool?.name === 'tool' ? 'tool-result' : (call.tool?.name ?? result.tool?.name);
   if (!name) return null;
@@ -17,7 +18,7 @@ export function commandToolView(
   const command = standaloneResult
     ? structuredText(result.tool?.input)
     : (shellCommand ?? structuredText(call.tool?.input ?? result.tool?.input) ?? toolCallTextInput(call.text));
-  const output = structuredText(result.tool?.output) ?? result.text;
+  const output = standaloneCall ? undefined : (structuredText(result.tool?.output) ?? result.text);
   const jsonOutput = output ? jsonCodeText(output) : null;
   return {
     type: name,
@@ -25,7 +26,7 @@ export function commandToolView(
     command,
     commandLanguage: shellCommand ? 'bash' : command && jsonCodeText(command) ? 'json' : 'bash',
     cwd: tool?.cwd,
-    status: tool?.status ?? statusFromResultText(output),
+    status: tool?.status,
     exitCode: tool?.exitCode,
     durationMs: tool?.durationMs,
     output: tool?.status ? output : (jsonOutput ?? output),
@@ -78,9 +79,4 @@ function jsonCodeText(text: string): string | null {
   } catch {
     return null;
   }
-}
-
-function statusFromResultText(text: string | undefined): string | undefined {
-  if (!text) return undefined;
-  return /(?:error|failed|denied|blocked|exit code [1-9])/i.test(text) ? 'failed' : 'completed';
 }

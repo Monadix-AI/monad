@@ -49,10 +49,10 @@ test('a tool-call decodes to a structured tool payload, not pre-formatted text',
     id: 'e2',
     kind: 'tool-call',
     streaming: false,
-    tool: { name: 'bash', input: { cmd: 'ls' } },
+    tool: { name: 'bash', callId: 'toolu_1', input: { cmd: 'ls' } },
     provenance
   });
-  expect(parsed.tool).toEqual({ name: 'bash', input: { cmd: 'ls' } });
+  expect(parsed.tool).toEqual({ name: 'bash', callId: 'toolu_1', input: { cmd: 'ls' } });
 });
 
 test('turn-end validates its reason against the closed set', () => {

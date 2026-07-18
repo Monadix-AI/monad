@@ -78,6 +78,13 @@ function neutralTool(event: ExternalAgentObservationEvent, kind: 'tool-call' | '
     (part) =>
       part && typeof part === 'object' && !Array.isArray(part) && (part as Record<string, unknown>).type === 'tool_use'
   ) as Record<string, unknown> | undefined;
+  const toolResult = content.find(
+    (part) =>
+      part &&
+      typeof part === 'object' &&
+      !Array.isArray(part) &&
+      (part as Record<string, unknown>).type === 'tool_result'
+  ) as Record<string, unknown> | undefined;
   const name =
     textValue(
       toolUse?.name,
@@ -90,9 +97,29 @@ function neutralTool(event: ExternalAgentObservationEvent, kind: 'tool-call' | '
       params?.name,
       params?.tool
     ) ?? 'tool';
+  const callId = textValue(
+    toolUse?.id,
+    toolResult?.tool_use_id,
+    item?.callId,
+    item?.call_id,
+    raw?.callId,
+    raw?.call_id,
+    raw?.tool_use_id,
+    params?.callId,
+    params?.call_id
+  );
+  const explicitStatus = textValue(item?.status, raw?.status, params?.status);
+  const claudeResultStatus =
+    kind === 'tool-result' &&
+    (toolResult !== undefined || (event.source === 'claude-code-sdk' && raw?.type === 'tool_result'))
+      ? toolResult?.is_error === true || raw?.is_error === true
+        ? 'failed'
+        : 'completed'
+      : undefined;
   const metadata = {
+    ...(callId ? { callId } : {}),
     ...(textValue(item?.cwd) ? { cwd: textValue(item?.cwd) } : {}),
-    ...(textValue(item?.status) ? { status: textValue(item?.status) } : {}),
+    ...((explicitStatus ?? claudeResultStatus) ? { status: explicitStatus ?? claudeResultStatus } : {}),
     ...(typeof item?.exitCode === 'number' ? { exitCode: item.exitCode } : {}),
     ...(typeof item?.durationMs === 'number' ? { durationMs: item.durationMs } : {})
   };

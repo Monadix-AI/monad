@@ -2098,6 +2098,133 @@ test('Claude Code observation pairs nested SDK tool result with its call', () =>
   ]);
 });
 
+test('Claude Code observation pairs a tool result across intervening events by call id', () => {
+  const callId = 'toolu_interleaved';
+  const output = "throw new Error('This is file content, not a tool failure');";
+  const callRecord = {
+    type: 'assistant',
+    message: {
+      role: 'assistant',
+      content: [{ type: 'tool_use', id: callId, name: 'Bash', input: { command: 'cat example.ts' } }]
+    }
+  };
+  const progressRecord = { type: 'system', subtype: 'task_progress' };
+  const resultRecord = {
+    type: 'user',
+    message: {
+      role: 'user',
+      content: [{ type: 'tool_result', tool_use_id: callId, content: output }]
+    }
+  };
+  const items = externalAgentNeutralStreamItems({
+    id: 'exa_claude000000',
+    provider: 'claude-code',
+    output: [callRecord, progressRecord, resultRecord].map((record) => JSON.stringify(record)).join('\n')
+  });
+
+  expect(
+    items.map((item) => ({
+      kind: item.kind,
+      callId: item.tool?.callId,
+      status: item.tool?.status
+    }))
+  ).toEqual([
+    { kind: 'tool-call', callId, status: undefined },
+    { kind: 'system', callId: undefined, status: undefined },
+    { kind: 'tool-result', callId, status: 'completed' }
+  ]);
+  expect(
+    observationTimelineEntries(items, 'claude-code').map((entry) =>
+      entry.kind === 'public' && entry.card.type === 'command-tool'
+        ? {
+            id: entry.id,
+            type: entry.card.type,
+            command: entry.card.view.command,
+            output: entry.card.view.output,
+            status: entry.card.view.status,
+            rawEvents: observationContractRawEvents(entry.contractEvents)
+          }
+        : entry.kind === 'public' && entry.card.type === 'message'
+          ? { id: entry.id, type: entry.card.item.kind, text: entry.card.item.text }
+          : { id: entry.id, type: entry.kind }
+    )
+  ).toEqual([
+    {
+      id: 'exa_claude000000:json:0:tool:0',
+      type: 'command-tool',
+      command: 'cat example.ts',
+      output,
+      status: 'completed',
+      rawEvents: [callRecord, resultRecord]
+    },
+    {
+      id: 'exa_claude000000:json:1:system',
+      type: 'system',
+      text: 'task_progress'
+    }
+  ]);
+});
+
+test('Claude Code marks a tool result failed only when the provider sets is_error', () => {
+  const callId = 'toolu_failed';
+  const items = externalAgentNeutralStreamItems({
+    id: 'exa_claude000000',
+    provider: 'claude-code',
+    output: [
+      {
+        type: 'assistant',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'tool_use', id: callId, name: 'Bash', input: { command: 'false' } }]
+        }
+      },
+      {
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [
+            { type: 'tool_result', tool_use_id: callId, is_error: true, content: 'provider rejected execution' }
+          ]
+        }
+      }
+    ]
+      .map((record) => JSON.stringify(record))
+      .join('\n')
+  });
+
+  expect(
+    observationTimelineEntries(items, 'claude-code').map((entry) =>
+      entry.kind === 'public' && entry.card.type === 'command-tool'
+        ? { type: entry.card.type, output: entry.card.view.output, status: entry.card.view.status }
+        : { type: entry.kind }
+    )
+  ).toEqual([{ type: 'command-tool', output: 'provider rejected execution', status: 'failed' }]);
+});
+
+test('an unpaired tool call does not render its call summary as output', () => {
+  const entries = observationTimelineEntries(
+    [
+      {
+        id: 'call-only',
+        kind: 'tool-call',
+        streaming: false,
+        text: 'Tool call Read {"file_path":"/tmp/example.ts"}',
+        tool: { name: 'Read', callId: 'toolu_call_only', input: { file_path: '/tmp/example.ts' } },
+        provenance: { contractEvents: [{ type: 'tool_use' }] }
+      }
+    ],
+    'claude-code'
+  );
+
+  expect(
+    entries.map((entry) =>
+      entry.kind === 'public' && entry.card.type === 'command-tool'
+        ? { type: entry.card.type, output: entry.card.view.output, status: entry.card.view.status }
+        : { type: entry.kind }
+    )
+  ).toEqual([{ type: 'command-tool', output: undefined, status: undefined }]);
+});
+
 test('observation card projection maps generic tool pairs to the shared command card', () => {
   const entries = renderTimeline([
     {

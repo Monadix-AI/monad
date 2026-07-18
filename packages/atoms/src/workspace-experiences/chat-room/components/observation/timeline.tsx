@@ -80,9 +80,11 @@ export function observationTimelineEntries(
   active = false
 ): ObservationTimelineEntry[] {
   const entries: ObservationTimelineEntry[] = [];
+  const resultIndexByCallIndex = toolPairResultIndexes(items);
+  const pairedResultIndexes = new Set(resultIndexByCallIndex.values());
   for (let index = 0; index < items.length; index += 1) {
     const item = items[index];
-    const next = items[index + 1];
+    if (pairedResultIndexes.has(index)) continue;
     const startupUpdate = item ? codexMcpStartupUpdate(item) : null;
     if (item && startupUpdate) {
       const startupItems = [item];
@@ -106,17 +108,17 @@ export function observationTimelineEntries(
       });
       continue;
     }
-    if (item && next && isToolCallEvent(item) && isToolResultEvent(next)) {
+    const resultIndex = resultIndexByCallIndex.get(index);
+    const result = resultIndex === undefined ? undefined : items[resultIndex];
+    if (item && result && isToolCallEvent(item) && isToolResultEvent(result)) {
       const itemId = observationItemIdentity(item);
-      const nextId = observationItemIdentity(next);
       entries.push({
-        id: `${itemId}:pair:${nextId}`,
+        id: itemId,
         kind: 'public',
-        card: projectPublicObservationPair(item, next, provider) ?? { type: 'tool-pair', call: item, result: next },
-        timestamp: observationTimestampLabel(next),
-        contractEvents: [...item.provenance.contractEvents, ...next.provenance.contractEvents]
+        card: projectPublicObservationPair(item, result, provider) ?? { type: 'tool-pair', call: item, result },
+        timestamp: observationTimestampLabel(result),
+        contractEvents: [...item.provenance.contractEvents, ...result.provenance.contractEvents]
       });
-      index += 1;
       continue;
     }
     if (!item) continue;
@@ -154,6 +156,45 @@ export function observationTimelineEntries(
     });
   }
   return entries;
+}
+
+function toolPairResultIndexes(items: readonly ExternalAgentStreamView['items'][number][]): Map<number, number> {
+  const resultIndexesByCallId = new Map<string, number[]>();
+  for (let index = 0; index < items.length; index += 1) {
+    const item = items[index];
+    const callId = item && isToolResultEvent(item) ? item.tool?.callId : undefined;
+    if (!callId) continue;
+    const indexes = resultIndexesByCallId.get(callId) ?? [];
+    indexes.push(index);
+    resultIndexesByCallId.set(callId, indexes);
+  }
+
+  const resultIndexByCallIndex = new Map<number, number>();
+  const pairedResultIndexes = new Set<number>();
+  for (let index = 0; index < items.length; index += 1) {
+    const item = items[index];
+    if (!item || !isToolCallEvent(item) || !item.tool?.callId) continue;
+    const resultIndex = resultIndexesByCallId
+      .get(item.tool.callId)
+      ?.find((candidateIndex) => !pairedResultIndexes.has(candidateIndex));
+    if (resultIndex === undefined) continue;
+    resultIndexByCallIndex.set(index, resultIndex);
+    pairedResultIndexes.add(resultIndex);
+  }
+
+  for (let index = 0; index < items.length - 1; index += 1) {
+    if (resultIndexByCallIndex.has(index)) continue;
+    const call = items[index];
+    const result = items[index + 1];
+    if (!call || !result || !isToolCallEvent(call) || !isToolResultEvent(result)) continue;
+    if (pairedResultIndexes.has(index + 1)) continue;
+    const callId = call.tool?.callId;
+    const resultId = result.tool?.callId;
+    if (callId && resultId && callId !== resultId) continue;
+    resultIndexByCallIndex.set(index, index + 1);
+    pairedResultIndexes.add(index + 1);
+  }
+  return resultIndexByCallIndex;
 }
 
 function visualRoleFromKind(kind: ObservationItem['kind']): 'user' | 'agent' | 'tool' | 'system' {

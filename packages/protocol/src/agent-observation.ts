@@ -39,6 +39,7 @@ export type AgentObservationTurnEndReason = z.infer<typeof agentObservationTurnE
 
 export const agentObservationToolSchema = z.object({
   name: z.string().min(1),
+  callId: z.string().min(1).optional(),
   input: z.unknown().optional(),
   output: z.unknown().optional(),
   cwd: z.string().optional(),
