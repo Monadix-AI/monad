@@ -1,4 +1,5 @@
 import type { AgentObservationEvent, ExternalAgentObservationEvent } from '@monad/protocol';
+import type { ObservationTimelineEntry } from '../../src/workspace-experiences/chat-room/components/observation/types.ts';
 import type { ExternalAgentStreamView } from '../../src/workspace-experiences/experience/types.ts';
 
 import { expect, test } from 'bun:test';
@@ -463,6 +464,37 @@ test('Claude Code observation keeps the latest thinking token estimate in one re
       text: 'Thinking… · 151 tokens',
       raw: [first, latest]
     }
+  ]);
+});
+
+test('thinking timeline rows use dedupe identity and keep each run raw', () => {
+  const firstRaw = [{ type: 'system', subtype: 'thinking_tokens', estimated_tokens: 25, uuid: 'think-a' }];
+  const secondRaw = [{ type: 'system', subtype: 'thinking_tokens', estimated_tokens: 80, uuid: 'think-b' }];
+  const entries = observationTimelineEntries(
+    [
+      {
+        id: 'exa_claude:thinking-tokens',
+        dedupeKey: 'claude-code:think-a:agent:thinking_tokens_delta',
+        kind: 'reasoning',
+        streaming: true,
+        text: 'Thinking… · 25 tokens',
+        raw: firstRaw
+      },
+      {
+        id: 'exa_claude:thinking-tokens',
+        dedupeKey: 'claude-code:think-b:agent:thinking_tokens_delta',
+        kind: 'reasoning',
+        streaming: true,
+        text: 'Thinking… · 80 tokens',
+        raw: secondRaw
+      }
+    ],
+    'claude-code'
+  );
+
+  expect(entries.map(({ id, raw }) => ({ id, raw }))).toEqual([
+    { id: 'claude-code:think-a:agent:thinking_tokens_delta', raw: firstRaw },
+    { id: 'claude-code:think-b:agent:thinking_tokens_delta', raw: secondRaw }
   ]);
 });
 
@@ -1778,6 +1810,35 @@ test('observation timeline rows keep consecutive tool cards grouped for virtual 
   ]);
 
   expect(observationTimelineRows(entries).map((row) => row.entries.length)).toEqual([1, 2, 1]);
+});
+
+test('prepending adjacent tools preserves the existing tool group key', () => {
+  const toolEntry = (id: string): ObservationTimelineEntry => ({
+    id,
+    kind: 'public',
+    card: {
+      type: 'command-tool',
+      view: {
+        command: id,
+        commandLanguage: 'shell',
+        provider: 'claude-code',
+        status: 'completed',
+        type: 'Bash'
+      }
+    },
+    raw: { id }
+  });
+  const current = observationTimelineRows([toolEntry('call-newer'), toolEntry('call-latest')]);
+  const prepended = observationTimelineRows([
+    toolEntry('call-oldest'),
+    toolEntry('call-newer'),
+    toolEntry('call-latest')
+  ]);
+
+  expect({ current: current[0]?.id, prepended: prepended[0]?.id }).toEqual({
+    current: 'tool-group:call-latest',
+    prepended: 'tool-group:call-latest'
+  });
 });
 
 test('observation card projection normalizes JSON-like generic tool output', () => {

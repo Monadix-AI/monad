@@ -64,6 +64,10 @@ export type ObservationTimelineRow = {
   entries: ObservationTimelineEntry[];
 };
 
+export function observationItemIdentity(item: ObservationItem): string {
+  return item.dedupeKey ?? item.id;
+}
+
 export function observationTimelineEntries(
   items: readonly ExternalAgentStreamView['items'][number][],
   provider: string,
@@ -74,8 +78,10 @@ export function observationTimelineEntries(
     const item = items[index];
     const next = items[index + 1];
     if (item && next && isToolCallEvent(item) && isToolResultEvent(next)) {
+      const itemId = observationItemIdentity(item);
+      const nextId = observationItemIdentity(next);
       entries.push({
-        id: `${item.id}:pair:${next.id}`,
+        id: `${itemId}:pair:${nextId}`,
         kind: 'public',
         card: projectPublicObservationPair(item, next, provider) ?? { type: 'tool-pair', call: item, result: next },
         timestamp: observationTimestampLabel(next),
@@ -85,12 +91,13 @@ export function observationTimelineEntries(
       continue;
     }
     if (!item) continue;
+    const itemId = observationItemIdentity(item);
     const timelineItem =
       item.kind === 'reasoning' ? { ...item, streaming: active && index === items.length - 1 && item.streaming } : item;
     const publicCard = projectPublicObservationItem(timelineItem, provider);
     if (publicCard) {
       entries.push({
-        id: item.id,
+        id: itemId,
         kind: 'public',
         card: publicCard,
         timestamp: observationTimestampLabel(timelineItem),
@@ -101,7 +108,7 @@ export function observationTimelineEntries(
     const privateCard = privateObservationCard(timelineItem);
     if (privateCard) {
       entries.push({
-        id: item.id,
+        id: itemId,
         kind: 'private',
         card: privateCard,
         timestamp: observationTimestampLabel(timelineItem),
@@ -110,7 +117,7 @@ export function observationTimelineEntries(
       continue;
     }
     entries.push({
-      id: item.id,
+      id: itemId,
       kind: 'public',
       card: { type: 'message', role: timelineItem.kind === 'user-message' ? 'user' : 'agent', item: timelineItem },
       timestamp: observationTimestampLabel(timelineItem),
@@ -375,7 +382,7 @@ export function observationTimelineRows(entries: ObservationTimelineEntry[]): Ob
     if (toolEntries.length === 1) {
       rows.push({ id: entry.id, entries: [entry] });
     } else {
-      rows.push({ id: `tool-group:${toolEntries[0]?.id}`, entries: toolEntries });
+      rows.push({ id: `tool-group:${toolEntries.at(-1)?.id ?? entry.id}`, entries: toolEntries });
     }
   }
   return rows;
