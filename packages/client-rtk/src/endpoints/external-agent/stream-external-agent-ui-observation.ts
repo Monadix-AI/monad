@@ -3,14 +3,19 @@ import type { ExternalAgentUiObservationFrame, SessionId } from '@monad/protocol
 import { clientOf } from '../../endpoint-helpers.ts';
 import { sessionsApi } from '../sessions/index.ts';
 
+export interface ExternalAgentUiObservationStreamState {
+  fatalError: boolean;
+  frame: ExternalAgentUiObservationFrame | null;
+}
+
 export const streamExternalAgentUiObservationApi = sessionsApi.injectEndpoints({
   overrideExisting: true,
   endpoints: (builder) => ({
     streamExternalAgentUiObservation: builder.query<
-      ExternalAgentUiObservationFrame | null,
+      ExternalAgentUiObservationStreamState,
       { id: string; transcriptTargetId: SessionId }
     >({
-      queryFn: () => ({ data: null }),
+      queryFn: () => ({ data: { fatalError: false, frame: null } }),
       async onCacheEntryAdded(
         { id, transcriptTargetId },
         {
@@ -21,18 +26,31 @@ export const streamExternalAgentUiObservationApi = sessionsApi.injectEndpoints({
         }: {
           cacheDataLoaded: Promise<unknown>;
           cacheEntryRemoved: Promise<unknown>;
-          updateCachedData: (
-            fn: (draft: ExternalAgentUiObservationFrame | null) => ExternalAgentUiObservationFrame
-          ) => void;
+          updateCachedData: (fn: (draft: ExternalAgentUiObservationStreamState) => void) => void;
           extra: unknown;
         }
       ) {
         let dispose: (() => void) | undefined;
         try {
           await cacheDataLoaded;
-          dispose = clientOf({ extra }).streamExternalAgentUiObservation(id, transcriptTargetId, (frame) => {
-            updateCachedData(() => frame);
-          });
+          dispose = clientOf({ extra }).streamExternalAgentUiObservation(
+            id,
+            transcriptTargetId,
+            (frame) => {
+              updateCachedData((draft) => {
+                draft.fatalError = false;
+                draft.frame = frame;
+              });
+            },
+            {
+              onError: (error) => {
+                if (error.kind !== 'fatal') return;
+                updateCachedData((draft) => {
+                  draft.fatalError = true;
+                });
+              }
+            }
+          );
         } catch {}
         await cacheEntryRemoved;
         dispose?.();

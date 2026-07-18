@@ -1633,9 +1633,33 @@ test('observation panel shows a usage limits entry when the stream has limit dat
   expect(html).toContain('aria-label="Show usage remaining"');
 });
 
-test('observation panel distinguishes unavailable provider history from empty live activity', () => {
+test('observation panel renders bootstrap loading outside the observation timeline', () => {
   const html = renderToStaticMarkup(
     React.createElement(ExternalAgentObservationPanel, {
+      observationLoading: true,
+      onStop: () => {},
+      stream: {
+        id: 'exa_codex0000000',
+        agentName: 'codex',
+        provider: 'codex',
+        tag: 'Codex',
+        status: 'ok',
+        output: '',
+        items: []
+      }
+    })
+  );
+  expect(html).toContain('data-observation-state="loading"');
+  expect(html).toContain('Loading history…');
+  expect(html).not.toContain('Agent currently not running');
+  expect(html).not.toContain('No activity yet.');
+  expect(html).not.toContain('role="log"');
+});
+
+test('observation panel only shows unavailable provider history from explicit transport state', () => {
+  const html = renderToStaticMarkup(
+    React.createElement(ExternalAgentObservationPanel, {
+      observationUnavailable: true,
       onStop: () => {},
       stream: {
         id: 'exa_codex0000000',

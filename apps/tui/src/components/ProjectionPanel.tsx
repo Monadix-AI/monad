@@ -24,7 +24,8 @@ export function ProjectionPanel({ active, sessionId }: { active: boolean; sessio
     { id: observed?.id ?? '', transcriptTargetId: sessionId },
     { skip: !observed }
   );
-  const frame = observation.data;
+  const streamState = observation.data;
+  const frame = streamState?.frame;
   const [loadHistory, historyQuery] = useLazyGetExternalAgentHistoryPageQuery();
   const [history, setHistory] = useState<ExternalAgentObservationEvent[]>([]);
   const [before, setBefore] = useState<string | null | undefined>(undefined);
@@ -86,7 +87,11 @@ export function ProjectionPanel({ active, sessionId }: { active: boolean; sessio
           {observed.agentName} · {observed.provider} · {observed.state}
         </Text>
       ) : null}
-      {frame?.state === 'unavailable' ? <Text color={TUI_THEME.warning}>{frame.reason}</Text> : null}
+      {streamState?.fatalError ? (
+        <Text color={TUI_THEME.warning}>{t('cli.tui.projection.historyUnavailable')}</Text>
+      ) : frame?.state === 'unavailable' ? (
+        <Text color={TUI_THEME.warning}>{frame.reason}</Text>
+      ) : null}
       {events.slice(-18).map((event) => (
         <Box key={event.id}>
           <Text color={'kind' in event && event.kind === 'reasoning' ? TUI_THEME.dim : TUI_THEME.accent}>

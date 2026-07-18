@@ -115,6 +115,8 @@ export function ExternalAgentObservationPanel({
   defaultRenderMode = 'detail',
   historyActive,
   loadingOlderHistory,
+  observationLoading,
+  observationUnavailable,
   renderMode: controlledRenderMode,
   showHistoryButton,
   stream,
@@ -128,6 +130,8 @@ export function ExternalAgentObservationPanel({
   historyActive?: boolean;
   icon?: ExternalAgentStreamView['icon'];
   loadingOlderHistory?: boolean;
+  observationLoading?: boolean;
+  observationUnavailable?: boolean;
   onBack?: () => void;
   onClose?: () => void;
   onLoadOlderHistory?: () => void;
@@ -151,7 +155,6 @@ export function ExternalAgentObservationPanel({
   const productIcon = resolveProductIcon(displayAgent);
   const active = stream?.status === 'running';
   const hasItems = (stream?.items.length ?? 0) > 0;
-  const providerHistoryUnavailable = !!stream && stream.status !== 'running' && !stream.output && !hasItems;
   // The daemon already normalizes the usage meter with the same adapter it uses for parseOutput (see
   // observeFromStore/observeWithProviderHistory) — the caller passes it via `usageMeter`; this
   // component never falls back to client-side re-derivation.
@@ -558,6 +561,7 @@ export function ExternalAgentObservationPanel({
           </div>
         ) : (
           <div
+            data-observation-state={observationLoading ? 'loading' : observationUnavailable ? 'unavailable' : 'empty'}
             style={{
               alignItems: 'center',
               boxSizing: 'border-box',
@@ -576,7 +580,11 @@ export function ExternalAgentObservationPanel({
           >
             {historyHeader}
             <div style={{ maxWidth: 180 }}>
-              {providerHistoryUnavailable ? 'Agent currently not running' : 'No activity yet.'}
+              {observationLoading
+                ? t('web.workplace.loadingHistory')
+                : observationUnavailable
+                  ? 'Agent currently not running'
+                  : 'No activity yet.'}
             </div>
           </div>
         )}

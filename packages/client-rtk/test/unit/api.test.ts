@@ -49,12 +49,18 @@ function fakeClient(overrides: Record<string, unknown>): MonadClient {
     streamExternalAgentUiObservation: (
       id: string,
       transcriptTargetId: string,
-      onFrame: (frame: unknown) => void
+      onFrame: (frame: unknown) => void,
+      opts?: { onError?: (error: { kind: 'fatal' | 'transient'; message: string }) => void }
     ): (() => void) => {
       const fn = overrides.streamExternalAgentUiObservation as
-        | ((id: string, transcriptTargetId: string, onFrame: (frame: unknown) => void) => void)
+        | ((
+            id: string,
+            transcriptTargetId: string,
+            onFrame: (frame: unknown) => void,
+            opts?: { onError?: (error: { kind: 'fatal' | 'transient'; message: string }) => void }
+          ) => void)
         | undefined;
-      fn?.(id, transcriptTargetId, onFrame);
+      fn?.(id, transcriptTargetId, onFrame, opts);
       return () => {};
     },
     treaty: {
@@ -467,9 +473,16 @@ test('getExternalAgentObservation uses the typed external agent observation trea
 
 test('streamExternalAgentUiObservation caches full neutral frames verbatim (no delta fold)', async () => {
   let push: ((frame: unknown) => void) | undefined;
+  let reportError: ((error: { kind: 'fatal' | 'transient'; message: string }) => void) | undefined;
   const client = fakeClient({
-    streamExternalAgentUiObservation: (_id: string, _target: string, onFrame: (frame: unknown) => void) => {
+    streamExternalAgentUiObservation: (
+      _id: string,
+      _target: string,
+      onFrame: (frame: unknown) => void,
+      opts?: { onError?: (error: { kind: 'fatal' | 'transient'; message: string }) => void }
+    ) => {
       push = onFrame;
+      reportError = opts?.onError;
     }
   });
   const store = createMonadStore({ client });
@@ -477,6 +490,11 @@ test('streamExternalAgentUiObservation caches full neutral frames verbatim (no d
 
   store.dispatch(streamExternalAgentUiObservationApi.endpoints.streamExternalAgentUiObservation.initiate(arg));
   await new Promise((r) => setTimeout(r, 0));
+
+  const pending = streamExternalAgentUiObservationApi.endpoints.streamExternalAgentUiObservation.select(arg)(
+    store.getState() as never
+  );
+  expect(pending.data).toEqual({ fatalError: false, frame: null });
 
   push?.({
     state: 'live',
@@ -492,8 +510,20 @@ test('streamExternalAgentUiObservation caches full neutral frames verbatim (no d
   const cached = streamExternalAgentUiObservationApi.endpoints.streamExternalAgentUiObservation.select(arg)(
     store.getState() as never
   );
-  expect(cached.data?.state).toBe('live');
-  expect(cached.data?.state === 'live' ? cached.data.events[0]?.kind : undefined).toBe('assistant-message');
+  expect(cached.data).toMatchObject({
+    fatalError: false,
+    frame: { state: 'live', events: [{ kind: 'assistant-message' }] }
+  });
+
+  reportError?.({ kind: 'fatal', message: 'stream rejected' });
+  await new Promise((r) => setTimeout(r, 0));
+  const failed = streamExternalAgentUiObservationApi.endpoints.streamExternalAgentUiObservation.select(arg)(
+    store.getState() as never
+  );
+  expect(failed.data).toMatchObject({
+    fatalError: true,
+    frame: { state: 'live', events: [{ kind: 'assistant-message' }] }
+  });
 });
 
 test('a query delegates to the client and caches by tag', async () => {

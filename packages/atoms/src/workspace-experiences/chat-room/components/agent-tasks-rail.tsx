@@ -583,7 +583,12 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
       }).unwrap(),
     resetKey: `${room.activeSessionId ?? ''}:${observedDeliveryId ?? ''}`
   });
-  const uiFrame = observedDeliveryId ? undefined : (externalAgentUiObservation.data ?? undefined);
+  const uiObservationState = observedDeliveryId ? undefined : externalAgentUiObservation.data;
+  const uiFrame = uiObservationState?.frame ?? undefined;
+  const observationLoading = Boolean(
+    observedExternalAgentSessionId && observation && !observedDeliveryId && !uiFrame && !uiObservationState?.fatalError
+  );
+  const observationUnavailable = Boolean(uiObservationState?.fatalError || uiFrame?.state === 'unavailable');
   const deliveryAccess = observedDeliveryId ? deliveryObservation : undefined;
   const observedBaseStream: ExternalAgentStreamView | undefined =
     observedStream ??
@@ -994,6 +999,8 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
           historyActive={historyRequested}
           icon={observedAgent?.icon ?? observedHistoryStream?.icon}
           loadingOlderHistory={historyRequested && Boolean(historyPages?.loading)}
+          observationLoading={observationLoading}
+          observationUnavailable={observationUnavailable}
           onBack={closeRailObservation}
           onLoadOlderHistory={() => loadHistoryPage(historyPages?.nextCursor)}
           onShowHistory={showHistory}
