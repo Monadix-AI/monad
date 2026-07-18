@@ -59,9 +59,7 @@ export function ChatSessionList() {
             onRename={(title) => actions.renameSession(session.id, title)}
             sidebarSession
             title={session.title}
-          >
-            <span className="block truncate">{session.title}</span>
-          </WorkspaceTreeItem>
+          />
         );
       })}
       <SidebarMoreLessControls

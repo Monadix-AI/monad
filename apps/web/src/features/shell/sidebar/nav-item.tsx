@@ -94,8 +94,18 @@ export function SidebarActionVisibilityRules() {
   return (
     <style>{`
       [data-sidebar-tree-item="true"]:hover > .sidebar-item-action,
+      [data-sidebar-tree-item="true"]:hover [data-sidebar-session-actions="true"] > .sidebar-item-action,
+      [data-sidebar-tree-item="true"]:focus-within > .sidebar-item-action,
+      [data-sidebar-tree-item="true"]:focus-within [data-sidebar-session-actions="true"] > .sidebar-item-action,
       [data-sidebar-tree-item="true"] > .sidebar-item-action[data-state="open"] {
         opacity: 1;
+      }
+      [data-sidebar-tree-item="true"] [data-sidebar-session-actions="true"] > .sidebar-item-action[data-state="open"] {
+        opacity: 1;
+      }
+      [data-sidebar-tree-item="true"]:hover > [data-sidebar-session-actions="true"],
+      [data-sidebar-tree-item="true"]:focus-within > [data-sidebar-session-actions="true"] {
+        pointer-events: auto;
       }
       [data-sidebar-tree-item="true"]:hover [data-sidebar-shortcut-chip="true"] {
         opacity: 0;

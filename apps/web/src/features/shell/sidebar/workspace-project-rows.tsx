@@ -210,9 +210,7 @@ export function ProjectSessionTreeRow({
       onRename={renameSession}
       sidebarSession
       title={session.title}
-    >
-      <span className="block truncate">{session.title}</span>
-    </WorkspaceTreeItem>
+    />
   );
 }
 
@@ -290,8 +288,6 @@ export function PinnedSessionTreeRow({
       onRename={renameSession}
       sidebarSession
       title={`${projectName}: ${session.title}`}
-    >
-      <span className="block min-w-0 flex-1 truncate will-change-auto">{session.title}</span>
-    </WorkspaceTreeItem>
+    />
   );
 }
