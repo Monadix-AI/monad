@@ -34,7 +34,9 @@ import {
   type ObservationTimelineRow,
   ObservationTimelineRowView,
   observationTimelineEntries,
-  observationTimelineRows
+  observationTimelineRows,
+  reconcileObservationItems,
+  reconcileObservationTimelineRows
 } from './timeline.tsx';
 
 const observationRowId = (row: ObservationTimelineRow): string => row.id;
@@ -48,8 +50,20 @@ type SummaryObservationTurn = {
   rows: ObservationTimelineRow[];
 };
 
-export function observationFollowResetKey(stream?: { id?: string; status?: string }): string {
-  return `${stream?.id ?? ''}:${stream?.status ?? ''}`;
+export function observationFollowResetKey(stream?: {
+  id?: string;
+  status?: string;
+  items?: readonly { dedupeKey?: string; id?: string; text?: string; streaming?: boolean }[];
+}): string {
+  const tail = stream?.items?.at(-1);
+  return JSON.stringify([
+    stream?.id ?? '',
+    stream?.status ?? '',
+    stream?.items?.length ?? 0,
+    tail?.dedupeKey ?? tail?.id ?? '',
+    tail?.streaming ?? false,
+    tail?.text ?? ''
+  ]);
 }
 
 const observationAvatarRingCss = `
@@ -174,13 +188,28 @@ export function ExternalAgentObservationPanel({
   const followResetKey = observationFollowResetKey(stream);
   const [usageOpen, setUsageOpen] = useState(false);
   const timelineProvider = stream?.provider ?? '';
-  const timelineRows = useMemo(
-    () => observationTimelineRows(observationTimelineEntries(stream?.items ?? [], timelineProvider, active)),
-    [active, stream?.items, timelineProvider]
-  );
+  const itemCacheRef = useRef<{ streamId?: string; items: ExternalAgentStreamView['items'] }>({ items: [] });
+  const streamItems = stream?.items;
+  const stableItems = useMemo(() => {
+    const previous = itemCacheRef.current;
+    const items =
+      previous.streamId === streamId
+        ? reconcileObservationItems(previous.items, streamItems ?? [])
+        : [...(streamItems ?? [])];
+    itemCacheRef.current = { streamId, items };
+    return items;
+  }, [streamId, streamItems]);
+  const rowCacheRef = useRef<{ streamId?: string; rows: ObservationTimelineRow[] }>({ rows: [] });
+  const timelineRows = useMemo(() => {
+    const nextRows = observationTimelineRows(observationTimelineEntries(stableItems, timelineProvider, active));
+    const previous = rowCacheRef.current;
+    const rows = previous.streamId === streamId ? reconcileObservationTimelineRows(previous.rows, nextRows) : nextRows;
+    rowCacheRef.current = { streamId, rows };
+    return rows;
+  }, [active, stableItems, streamId, timelineProvider]);
   const summaryTurns = useMemo(
-    () => summaryObservationTurns(stream?.items ?? [], timelineProvider),
-    [stream?.items, timelineProvider]
+    () => summaryObservationTurns(stableItems, timelineProvider),
+    [stableItems, timelineProvider]
   );
   const firstItemIndex = useFirstItemIndex(timelineRows, observationRowId);
   const showHistoryHeader = showHistoryButton || historyActive;
@@ -560,7 +589,7 @@ export function ExternalAgentObservationPanel({
             overscan={600}
             renderItem={renderObservationRow}
             role="log"
-            stickToBottom
+            stickToBottom={follow}
             style={{
               boxSizing: 'border-box',
               height: '100%',

@@ -74,6 +74,49 @@ function observationItemIdentity(item: ObservationItem): string {
   return item.dedupeKey ?? item.id;
 }
 
+function sameObservationItem(left: ObservationItem, right: ObservationItem): boolean {
+  if (
+    left.id !== right.id ||
+    left.dedupeKey !== right.dedupeKey ||
+    left.kind !== right.kind ||
+    left.streaming !== right.streaming ||
+    left.text !== right.text ||
+    left.reason !== right.reason ||
+    left.at !== right.at
+  )
+    return false;
+  return (
+    JSON.stringify([left.tool, left.diagnostic, left.provenance]) ===
+    JSON.stringify([right.tool, right.diagnostic, right.provenance])
+  );
+}
+
+export function reconcileObservationItems(
+  previous: readonly ObservationItem[],
+  next: readonly ObservationItem[]
+): ObservationItem[] {
+  if (previous.length === 0) return next as ObservationItem[];
+  const sharedLength = Math.min(previous.length, next.length);
+  const reconciled = [...next];
+  let changed = previous.length !== next.length;
+  for (let index = 0; index < sharedLength; index += 1) {
+    const previousItem = previous[index];
+    const nextItem = next[index];
+    if (!previousItem || !nextItem || observationItemIdentity(previousItem) !== observationItemIdentity(nextItem)) {
+      changed = true;
+      continue;
+    }
+    const atMutableBoundary = index === sharedLength - 1;
+    if (atMutableBoundary && !sameObservationItem(previousItem, nextItem)) {
+      changed = true;
+      continue;
+    }
+    reconciled[index] = previousItem;
+  }
+  if (!changed && reconciled.every((item, index) => item === previous[index])) return previous as ObservationItem[];
+  return reconciled;
+}
+
 export function observationTimelineEntries(
   items: readonly ExternalAgentStreamView['items'][number][],
   provider: string,
@@ -478,6 +521,42 @@ export function observationTimelineRows(entries: ObservationTimelineEntry[]): Ob
     }
   }
   return rows;
+}
+
+function sameObservationEntrySource(left: ObservationTimelineEntry, right: ObservationTimelineEntry): boolean {
+  if (left.id !== right.id || left.kind !== right.kind || left.card.type !== right.card.type) return false;
+  if (left.kind === 'private' && right.kind === 'private') return left.card.item === right.card.item;
+  if (left.kind !== 'public' || right.kind !== 'public') return false;
+  if (left.card.type === 'tool-pair' && right.card.type === 'tool-pair')
+    return left.card.call === right.card.call && left.card.result === right.card.result;
+  if (
+    (left.card.type === 'message' && right.card.type === 'message') ||
+    (left.card.type === 'thinking' && right.card.type === 'thinking') ||
+    (left.card.type === 'diagnostic' && right.card.type === 'diagnostic')
+  )
+    return left.card.item === right.card.item;
+  return left.contractEvents === right.contractEvents;
+}
+
+export function reconcileObservationTimelineRows(
+  previous: readonly ObservationTimelineRow[],
+  next: readonly ObservationTimelineRow[]
+): ObservationTimelineRow[] {
+  if (previous.length === 0) return next as ObservationTimelineRow[];
+  const reusable = new Map(previous.map((row) => [row.id, row]));
+  const reconciled = next.map((row) => {
+    const candidate = reusable.get(row.id);
+    if (!candidate || candidate.entries.length !== row.entries.length) return row;
+    return candidate.entries.every((entry, index) => {
+      const nextEntry = row.entries[index];
+      return nextEntry ? sameObservationEntrySource(entry, nextEntry) : false;
+    })
+      ? candidate
+      : row;
+  });
+  if (reconciled.length === previous.length && reconciled.every((row, index) => row === previous[index]))
+    return previous as ObservationTimelineRow[];
+  return reconciled;
 }
 
 function ObservationTimelineRowViewImpl({

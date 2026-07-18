@@ -17,7 +17,9 @@ import {
 import {
   ObservationTimelineRowView,
   observationTimelineEntries,
-  observationTimelineRows
+  observationTimelineRows,
+  reconcileObservationItems,
+  reconcileObservationTimelineRows
 } from '../../src/workspace-experiences/chat-room/components/observation/timeline.tsx';
 import {
   observationProjectionFromAccess,
@@ -2328,6 +2330,96 @@ test('prepending adjacent tools preserves the existing tool group key', () => {
     current: 'tool-group:call-latest',
     prepended: 'tool-group:call-latest'
   });
+});
+
+test('full observation frames retain unchanged item references and replace only the streaming tail', () => {
+  const item = (id: string, text: string, streaming = false): AgentObservationEvent => ({
+    id,
+    kind: 'assistant-message',
+    streaming,
+    text,
+    provenance: { contractEvents: [{ id, text }] }
+  });
+  const previous = [item('history', 'settled'), item('tail', 'Hello', true)];
+  const repeated = reconcileObservationItems(previous, [item('history', 'settled'), item('tail', 'Hello', true)]);
+  const updated = reconcileObservationItems(repeated, [item('history', 'settled'), item('tail', 'Hello world', true)]);
+
+  expect({
+    repeatedArray: repeated === previous,
+    repeatedHistory: repeated[0] === previous[0],
+    repeatedTail: repeated[1] === previous[1],
+    updatedHistory: updated[0] === previous[0],
+    updatedTail: updated[1] === previous[1],
+    updatedText: updated[1]?.text
+  }).toEqual({
+    repeatedArray: true,
+    repeatedHistory: true,
+    repeatedTail: true,
+    updatedHistory: true,
+    updatedTail: false,
+    updatedText: 'Hello world'
+  });
+});
+
+test('timeline reconciliation preserves historical rows while a streaming tail grows', () => {
+  const entry = (id: string, text: string): ObservationTimelineEntry => ({
+    id,
+    kind: 'public',
+    card: {
+      type: 'message',
+      role: 'agent',
+      item: {
+        id,
+        kind: 'assistant-message',
+        streaming: id === 'tail',
+        text,
+        provenance: { contractEvents: [{ id, text }] }
+      }
+    },
+    contractEvents: [{ id, text }]
+  });
+  const history = entry('history', 'settled');
+  const previous = observationTimelineRows([history, entry('tail', 'Hello')]);
+  const next = observationTimelineRows([history, entry('tail', 'Hello world')]);
+  const reconciled = reconcileObservationTimelineRows(previous, next);
+
+  expect({
+    historyReused: reconciled[0] === previous[0],
+    tailReused: reconciled[1] === previous[1],
+    tailText:
+      reconciled[1]?.entries[0]?.kind === 'public' && reconciled[1].entries[0].card.type === 'message'
+        ? reconciled[1].entries[0].card.item.text
+        : undefined
+  }).toEqual({ historyReused: true, tailReused: false, tailText: 'Hello world' });
+});
+
+test('timeline reconciliation appends a settled row without replacing existing message rows', () => {
+  const entry = (id: string): ObservationTimelineEntry => {
+    const item: AgentObservationEvent = {
+      id,
+      kind: 'assistant-message',
+      streaming: false,
+      text: id,
+      provenance: { contractEvents: [{ id }] }
+    };
+    return {
+      id,
+      kind: 'public',
+      card: { type: 'message', role: 'agent', item },
+      contractEvents: item.provenance.contractEvents
+    };
+  };
+  const history = entry('history');
+  const tail = entry('tail');
+  const previous = observationTimelineRows([history, tail]);
+  const next = observationTimelineRows([history, tail, entry('appended')]);
+  const reconciled = reconcileObservationTimelineRows(previous, next);
+
+  expect({
+    historyReused: reconciled[0] === previous[0],
+    tailReused: reconciled[1] === previous[1],
+    appendedId: reconciled[2]?.id
+  }).toEqual({ historyReused: true, tailReused: true, appendedId: 'appended' });
 });
 
 test('observation card projection normalizes JSON-like generic tool output', () => {

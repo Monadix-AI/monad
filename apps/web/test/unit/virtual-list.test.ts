@@ -173,9 +173,7 @@ test('scrollTopPreservingAnchor: offsets list scrolling so an expanded title kee
   expect(scrollTopPreservingAnchor(640, 120, 168)).toBe(688);
 });
 
-test('observationFollowResetKey: streaming text changes do not request an imperative scroll reset', () => {
-  // `observationFollowResetKey` only keys off `id`/`status`; callers pass the full stream (with
-  // `items`), so the fixture is typed as the wider shape to prove extra fields don't affect the key.
+test('observationFollowResetKey: streaming text changes request a follow scroll without resetting other streams', () => {
   const base: { id: string; status: string; items: { id: string; text: string }[] } = {
     id: 'exa_codex0000000',
     status: 'running',
@@ -184,6 +182,8 @@ test('observationFollowResetKey: streaming text changes do not request an impera
   const streamingUpdate: typeof base = { ...base, items: [{ id: 'item_1', text: 'hello world' }] };
   const otherStream: typeof base = { ...base, id: 'exa_other0000000' };
 
-  expect(observationFollowResetKey(streamingUpdate)).toBe(observationFollowResetKey(base));
-  expect(observationFollowResetKey(otherStream)).not.toBe(observationFollowResetKey(base));
+  expect({
+    streamingTextChanged: observationFollowResetKey(streamingUpdate) !== observationFollowResetKey(base),
+    streamChanged: observationFollowResetKey(otherStream) !== observationFollowResetKey(base)
+  }).toEqual({ streamingTextChanged: true, streamChanged: true });
 });
