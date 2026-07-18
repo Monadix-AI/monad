@@ -28,6 +28,20 @@ export interface ObservationHistoryPage {
   nextCursor?: string;
 }
 
+export function observationHistoryPresentation(args: {
+  deliveryId?: string;
+  hasPages: boolean;
+  historyRequested: boolean;
+}): { active: boolean; includePages: boolean; showButton: boolean } {
+  const requiresReveal = Boolean(args.deliveryId);
+  const includePages = requiresReveal ? args.historyRequested : true;
+  return {
+    active: args.hasPages && includePages,
+    includePages,
+    showButton: requiresReveal && args.hasPages && !args.historyRequested
+  };
+}
+
 export async function findOlderObservationPage(args: {
   before?: string;
   currentItems: AgentObservationEvent[];

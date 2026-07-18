@@ -5,6 +5,7 @@ import { expect, test } from 'bun:test';
 import {
   findOlderObservationPage,
   observationHistoryLoadScope,
+  observationHistoryPresentation,
   prependObservationHistory
 } from '../../src/workspace-experiences/chat-room/utils/observation-history.ts';
 import {
@@ -94,4 +95,18 @@ test('observation history is exhausted only after a successful page without a ne
   expect(completeObservationHistoryLoad(beginObservationHistoryLoad(undefined, 'provider:100'), { items: [] })).toEqual(
     { error: false, exhausted: true, items: [], loading: false, nextCursor: null }
   );
+});
+
+test('external agent history pages are continuous while delivery history keeps its reveal gate', () => {
+  expect([
+    observationHistoryPresentation({ hasPages: false, historyRequested: false }),
+    observationHistoryPresentation({ hasPages: true, historyRequested: false }),
+    observationHistoryPresentation({ deliveryId: 'deliv_current', hasPages: true, historyRequested: false }),
+    observationHistoryPresentation({ deliveryId: 'deliv_current', hasPages: true, historyRequested: true })
+  ]).toEqual([
+    { active: false, includePages: true, showButton: false },
+    { active: true, includePages: true, showButton: false },
+    { active: false, includePages: false, showButton: true },
+    { active: true, includePages: true, showButton: false }
+  ]);
 });

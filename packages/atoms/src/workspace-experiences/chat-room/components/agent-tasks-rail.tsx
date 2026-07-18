@@ -61,6 +61,7 @@ import {
 import {
   findOlderObservationPage,
   observationHistoryLoadScope,
+  observationHistoryPresentation,
   prependObservationHistory
 } from '../utils/observation-history.ts';
 import {
@@ -624,9 +625,14 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
     historyBefore,
     observationEpoch
   });
+  const historyPresentation = observationHistoryPresentation({
+    deliveryId: observedDeliveryId,
+    hasPages: Boolean(historyPages),
+    historyRequested
+  });
   const observedHistoryStream = streamWithHistoryPages(
     observedAccessStream,
-    historyRequested ? historyPages : undefined
+    historyPresentation.includePages ? historyPages : undefined
   );
   const observedUsageAgentName = observedAccessStream?.templateAgentName;
   const usage = usePolledValue<ExternalAgentUsageResponse>({
@@ -977,13 +983,16 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
           agent={observedAgent}
           agentName={observedAgent?.name ?? observation.agentName}
           canLoadOlderHistory={
-            historyRequested && Boolean(historyPages?.nextCursor) && !historyPages?.loading && !historyPages?.exhausted
+            historyPresentation.active &&
+            Boolean(historyPages?.nextCursor) &&
+            !historyPages?.loading &&
+            !historyPages?.exhausted
           }
           focusTurnId={observation.turnId}
-          historyActive={historyRequested}
-          historyLoadError={historyRequested && Boolean(historyPages?.error)}
+          historyActive={historyPresentation.active}
+          historyLoadError={historyPresentation.active && Boolean(historyPages?.error)}
           icon={observedAgent?.icon ?? observedHistoryStream?.icon}
-          loadingOlderHistory={historyRequested && Boolean(historyPages?.loading)}
+          loadingOlderHistory={historyPresentation.active && Boolean(historyPages?.loading)}
           observationLoading={observationLoading}
           observationUnavailable={observationUnavailable}
           onBack={closeRailObservation}
@@ -991,7 +1000,7 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
           onRetryOlderHistory={() => loadHistoryPage(historyPages?.nextCursor)}
           onShowHistory={showHistory}
           onStop={(id) => void room.stopExternalAgent(id)}
-          showHistoryButton={!historyRequested && Boolean(historyPages?.items.length)}
+          showHistoryButton={historyPresentation.showButton}
           stream={observedHistoryStream}
           usageMeter={usageMeter}
         />
