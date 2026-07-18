@@ -7,6 +7,7 @@ import type {
   ProjectId
 } from '@monad/protocol';
 import type { ExternalAgentHostDeps, LiveExternalAgentSession } from '#/services/external-agent/host/host-types.ts';
+import type { LiveRawStore } from '#/services/external-agent/live-raw-store.ts';
 import type { ExternalAgentProcess, ExternalAgentTerminal } from '#/services/external-agent/runtime-types.ts';
 import type { ExternalAgentLaunchSpec } from '#/services/external-agent/types.ts';
 import type { ExternalAgentTargetId } from '#/store/db/external-agent-sessions.ts';
@@ -25,8 +26,6 @@ import {
   dialAppServerWs,
   dialAppServerWsWithRetry
 } from '#/services/external-agent/app-server-ws.ts';
-import { BoundedOutputBuffer } from '#/services/external-agent/bounded-output-buffer.ts';
-import { MAX_OUTPUT_SNAPSHOT } from '#/services/external-agent/constants.ts';
 import { ExternalAgentAppServerConnectionManager } from '#/services/external-agent/host/app-server-connection.ts';
 import { ExternalAgentOneshotRunner } from '#/services/external-agent/host/cli-oneshot.ts';
 import { ExternalAgentEventLog } from '#/services/external-agent/host/event-log.ts';
@@ -80,6 +79,7 @@ export interface ExternalAgentSessionLauncherContext {
   armIdleSuspend(live: LiveExternalAgentSession): void;
   idleTimeoutMs(): number;
   updateExternalAgentPid(id: string, pid: number | null): void;
+  openLiveRawStore(id: string, epoch: string): LiveRawStore;
 }
 
 /** Builds a fresh external agent session: resolves the agent + launch spec, spawns the child process (or
@@ -284,6 +284,8 @@ export class ExternalAgentSessionLauncher {
       });
     }
     let spawnEnv = await this.ctx.buildSpawnEnv(launch.env);
+    const observationEpoch = newId('oep');
+    const liveRawStore = this.ctx.openLiveRawStore(id, observationEpoch);
     // ws/unix app-server: codex listens on a socket and speaks the protocol over it, so the daemon
     // ignores stdin and treats stdout/stderr as logs (for ws, stderr also carries the listen port).
     let isAppServerWs = launch.launchMode === 'app-server' && launch.appServerTransport === 'ws';
@@ -403,6 +405,7 @@ export class ExternalAgentSessionLauncher {
         proc = spawnPipeMode();
       }
     } catch (error) {
+      void liveRawStore.closeAndDelete();
       if (managed) cleanupManagedProjectRuntimeToken(managed.workspace);
       const failedAt = new Date().toISOString();
       this.ctx.deps.store.upsertExternalAgentSession({
@@ -486,11 +489,10 @@ export class ExternalAgentSessionLauncher {
       pendingHistoryPages: new Map(),
       pendingRequests: new Map(),
       startup: undefined,
-      outputBuffer: new BoundedOutputBuffer(MAX_OUTPUT_SNAPSHOT),
-      observationEpoch: newId('oep'),
+      liveRawStore,
+      observationEpoch,
       observationEpochReady: false,
       outputSeq: 0,
-      snapshotFlushTimer: null,
       nextRequestId: () => requestSeq++,
       kill: (signal) => {
         if (!live.proc) return;
@@ -640,7 +642,7 @@ export class ExternalAgentSessionLauncher {
         remainingText = remainingText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
         if (remainingText) this.ctx.outputPipeline.output(args.transcriptTargetId, id, remainingText, 'pty', adapter);
         if (pendingCR) this.ctx.outputPipeline.output(args.transcriptTargetId, id, '\n', 'pty', adapter);
-        this.ctx.outputPipeline.flushSnapshot(id);
+        void live.liveRawStore?.closeAndDelete();
         this.ctx.live.delete(id);
         if (runtimeRole === 'managed-project-agent' && managed) cleanupManagedProjectRuntimeToken(managed.workspace);
         this.ctx.outputPipeline.dropStructuredBuffer(id);

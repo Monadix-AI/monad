@@ -8,7 +8,6 @@ import { join } from 'node:path';
 import { builtinAgentAdapters } from '@monad/atoms/agent-adapters';
 
 import { EventBus } from '#/services/event-bus.ts';
-import { BoundedOutputBuffer } from '#/services/external-agent/bounded-output-buffer.ts';
 import { AUTH_STATUS_TIMEOUT_MS } from '#/services/external-agent/constants.ts';
 import { ExternalAgentHost } from '#/services/external-agent/host/index.ts';
 import { resolveExternalAgentManagedServerUrl } from '#/services/external-agent/host/session-launcher.ts';
@@ -21,6 +20,35 @@ for (const adapter of builtinAgentAdapters) registerAgentAdapterImpl(adapter);
 
 const testEvents = builtinAgentAdapters[0]?.events;
 if (!testEvents) throw new Error('built-in external agent event source is required');
+
+function createMemoryLiveRawStore(epoch = 'oep_test') {
+  const rows: Array<{
+    seq: number;
+    stream: 'app-server' | 'pty' | 'stderr' | 'stdout';
+    payload: string;
+    observedAt: string;
+  }> = [];
+  return {
+    append(frame: Omit<(typeof rows)[number], 'seq'>) {
+      const row = { seq: rows.length + 1, ...frame };
+      rows.push(row);
+      return row;
+    },
+    page(request: { after?: number; before?: number; limit: number; sortDirection: 'asc' | 'desc' }) {
+      const selected = rows.filter(
+        (row) =>
+          (request.after === undefined || row.seq > request.after) &&
+          (request.before === undefined || row.seq < request.before)
+      );
+      if (request.sortDirection === 'asc') return { rows: selected.slice(0, request.limit) };
+      const page = selected.slice(-request.limit);
+      return { rows: page, ...(selected.length > page.length && page[0] ? { nextBefore: page[0].seq } : {}) };
+    },
+    cursorBefore: (seq: number) => `live:${epoch}:${seq}`,
+    parseCursor: (cursor: string) => Number(cursor.split(':').at(-1)),
+    async closeAndDelete() {}
+  };
+}
 
 async function waitForExternalAgentSession(
   store: ReturnType<typeof createStore>,
@@ -189,9 +217,7 @@ test('external agent host can stop every live session during daemon shutdown', (
       pendingHistoryPages: new Map(),
       pendingRequests: new Map(),
       nextRequestId: () => 0,
-      outputBuffer: new BoundedOutputBuffer(1024),
       outputSeq: 0,
-      snapshotFlushTimer: null,
       kill: (signal?: NodeJS.Signals) => killed.push(`${id}:${signal ?? 'SIGTERM'}`)
     });
   }
@@ -255,9 +281,9 @@ test('external agent host stops live sessions for a disconnected provider adapte
     pendingApprovals: new Map(),
     pendingHistoryPages: new Map(),
     pendingRequests: new Map(),
-    outputBuffer: new BoundedOutputBuffer(256 * 1024),
+    liveRawStore: createMemoryLiveRawStore(),
+    observationEpoch: 'oep_test',
     outputSeq: 0,
-    snapshotFlushTimer: null,
     nextRequestId: () => 0,
     kill: () => {}
   });
@@ -341,7 +367,7 @@ test('managed provider final can retire a consumed inbox turn without auto-posti
   ]);
 });
 
-test('managed external agent output persists a bounded snapshot for refresh and observation history', async () => {
+test('managed external agent output is observable only while its live raw store exists', async () => {
   const store = createStore();
   const host = new ExternalAgentHost({
     store,
@@ -390,9 +416,9 @@ test('managed external agent output persists a bounded snapshot for refresh and 
     pendingApprovals: new Map(),
     pendingHistoryPages: new Map(),
     pendingRequests: new Map(),
-    outputBuffer: new BoundedOutputBuffer(256 * 1024),
+    liveRawStore: createMemoryLiveRawStore(),
+    observationEpoch: 'oep_test',
     outputSeq: 0,
-    snapshotFlushTimer: null,
     nextRequestId: () => 0,
     kill: () => {}
   };
@@ -437,17 +463,17 @@ test('managed external agent output persists a bounded snapshot for refresh and 
     externalAgentSessionId,
     provider: 'codex'
   });
-  expect(store.getExternalAgentSession(externalAgentSessionId)?.outputSnapshot).toContain('"type":"result"');
+  expect(store.getExternalAgentSession(externalAgentSessionId)?.outputSnapshot).toBe('');
   (
     host as unknown as {
       live: Map<string, unknown>;
     }
   ).live.delete(externalAgentSessionId);
   expect(host.observe(externalAgentSessionId)).toMatchObject({
-    state: 'history',
+    state: 'unavailable',
     externalAgentSessionId,
     provider: 'codex',
-    output: expect.stringContaining('"type":"result"')
+    reason: 'provider history unavailable'
   });
 });
 
@@ -495,9 +521,9 @@ test('external agent observation stream pushes incremental deltas the client can
     providerSessionRef: null,
     pendingApprovals: new Map(),
     pendingHistoryPages: new Map(),
-    outputBuffer: new BoundedOutputBuffer(256 * 1024),
+    liveRawStore: createMemoryLiveRawStore(),
+    observationEpoch: 'oep_test',
     outputSeq: 0,
-    snapshotFlushTimer: null,
     nextRequestId: () => 0,
     kill: () => {}
   };
@@ -532,7 +558,7 @@ test('external agent observation stream pushes incremental deltas the client can
     const seq = f.seq ?? 0;
     const append = f.append ?? '';
     if (seq <= cursor) continue;
-    text += append.slice(Math.max(0, append.length - (seq - cursor)));
+    text += append;
     cursor = seq;
   }
   expect(text).toBe('Hello, world!');
@@ -561,9 +587,9 @@ test('external agent observation resume returns only the delta past the client c
     pendingApprovals: new Map(),
     pendingHistoryPages: new Map(),
     pendingRequests: new Map(),
-    outputBuffer: new BoundedOutputBuffer(256 * 1024),
+    liveRawStore: createMemoryLiveRawStore(),
+    observationEpoch: 'oep_test',
     outputSeq: 0,
-    snapshotFlushTimer: null,
     nextRequestId: () => 0,
     kill: () => {}
   };
@@ -578,12 +604,10 @@ test('external agent observation resume returns only the delta past the client c
   internal.outputPipeline.output(live.transcriptTargetId, id, 'world!', 'stdout', adapter);
 
   // No cursor → full snapshot.
-  expect(host.observe(id)).toMatchObject({ state: 'live', output: 'Hello, world!', seq: 13 });
-  // Cursor mid-stream → only the delta beyond it, no full output.
-  const resume = host.observe(id, 7);
-  expect(resume).toMatchObject({ state: 'live', append: 'world!', seq: 13 });
-  // Cursor at head → nothing new, full snapshot.
-  expect(host.observe(id, 13)).toMatchObject({ state: 'live', output: 'Hello, world!', seq: 13 });
+  expect(host.observe(id)).toMatchObject({ state: 'live', output: 'Hello, world!', seq: 2 });
+  const resume = host.observe(id, 1);
+  expect(resume).toMatchObject({ state: 'live', append: 'world!', seq: 2 });
+  expect(host.observe(id, 2)).toMatchObject({ state: 'live', append: '', seq: 2 });
 });
 
 test('external agent app-server reconnect re-dials the socket and resumes the thread', async () => {
@@ -624,9 +648,7 @@ test('external agent app-server reconnect re-dials the socket and resumes the th
     pendingApprovals: new Map(),
     pendingHistoryPages: new Map(),
     pendingRequests: new Map([[1, 'turn']]),
-    outputBuffer: new BoundedOutputBuffer(256 * 1024),
     outputSeq: 0,
-    snapshotFlushTimer: null,
     nextRequestId: () => 0,
     kill: () => {}
   };
@@ -704,9 +726,7 @@ test('external agent app-server gives up instead of reconnecting forever when th
     pendingApprovals: new Map(),
     pendingHistoryPages: new Map(),
     pendingRequests: new Map(),
-    outputBuffer: new BoundedOutputBuffer(256 * 1024),
     outputSeq: 0,
-    snapshotFlushTimer: null,
     nextRequestId: () => 0,
     kill: () => {}
   };
@@ -778,9 +798,7 @@ test('external agent app-server disconnect during initial startup redials before
     pendingApprovals: new Map(),
     pendingHistoryPages: new Map(),
     pendingRequests: new Map(),
-    outputBuffer: new BoundedOutputBuffer(256 * 1024),
     outputSeq: 0,
-    snapshotFlushTimer: null,
     nextRequestId: () => 0,
     kill: () => {}
   };
@@ -834,9 +852,7 @@ test('external agent input throws instead of silently vanishing into a stale con
     pendingApprovals: new Map(),
     pendingHistoryPages: new Map(),
     pendingRequests: new Map(),
-    outputBuffer: new BoundedOutputBuffer(256 * 1024),
     outputSeq: 0,
-    snapshotFlushTimer: null,
     nextRequestId: () => 0,
     kill: () => {}
   };
@@ -979,7 +995,10 @@ setInterval(() => {}, 1000);
       }
     ]);
     const suspendedObservation = host.observe(view.id);
-    if (suspendedObservation.state !== 'live') throw new Error('suspended session observation must remain live');
+    expect(suspendedObservation).toMatchObject({ state: 'unavailable', reason: 'provider history unavailable' });
+    const suspendedEpoch = (host as unknown as { live: Map<string, { observationEpoch: string }> }).live.get(
+      view.id
+    )?.observationEpoch;
 
     await host.input(view.id, { input: 'wake-up' });
     const wakeDeadline = Date.now() + 10_000;
@@ -994,7 +1013,7 @@ setInterval(() => {}, 1000);
     expect(store.getExternalAgentSession(view.id)?.pid).toBeNumber();
     const resumedObservation = host.observe(view.id);
     if (resumedObservation.state !== 'live') throw new Error('resumed session observation must be live');
-    expect(resumedObservation.observationEpoch).not.toBe(suspendedObservation.observationEpoch);
+    expect(resumedObservation.observationEpoch).not.toBe(suspendedEpoch);
     expect(lifecycleEvents.map(({ type, payload }) => ({ type, payload }))).toEqual([
       {
         type: 'external_agent.idle_suspended',
@@ -1165,9 +1184,9 @@ test('external agent idle suspend unlinks an app-server unix socket before later
     pendingApprovals: new Map(),
     pendingHistoryPages: new Map(),
     pendingRequests: new Map(),
-    outputBuffer: new BoundedOutputBuffer(256 * 1024),
+    liveRawStore: createMemoryLiveRawStore(),
+    observationEpoch: 'oep_test',
     outputSeq: 0,
-    snapshotFlushTimer: null,
     nextRequestId: () => 0,
     idleTimeoutMs: 1,
     restartRuntime: async () => {},
@@ -1372,7 +1391,7 @@ test('managed external agent observation restores Codex provider history from pe
   }
 });
 
-test('managed external agent observation keeps a parseable stored snapshot without provider fallback', async () => {
+test('managed external agent observation ignores legacy snapshots and requires provider history', async () => {
   const store = createStore();
   let providerAttempts = 0;
   const host = new ExternalAgentHost({
@@ -1403,7 +1422,7 @@ test('managed external agent observation keeps a parseable stored snapshot witho
     lastVisibleSeq: 0,
     state: 'exited',
     pid: null,
-    providerSessionRef: 'provider-session-snapshot',
+    providerSessionRef: crypto.randomUUID(),
     outputSnapshot,
     exitCode: 0,
     startedAt: '2026-07-02T00:00:00.000Z',
@@ -1413,14 +1432,13 @@ test('managed external agent observation keeps a parseable stored snapshot witho
 
   const observation = await host.observeWithProviderHistory(externalAgentSessionId);
 
-  expect(observation).toMatchObject({
-    state: 'history',
+  expect(observation).toEqual({
+    state: 'unavailable',
     externalAgentSessionId,
     provider: 'codex',
-    output: outputSnapshot,
-    events: [expect.objectContaining({ text: 'snapshot remains authoritative' })]
+    reason: 'provider history unavailable'
   });
-  expect(providerAttempts).toBe(0);
+  expect(providerAttempts).toBe(1);
 });
 
 test('managed external agent observation prefers Codex CLI history over rollout fallback', async () => {
@@ -1900,9 +1918,9 @@ function seedApprovalLiveSession(
     pendingApprovals: new Map<string, unknown>(),
     pendingHistoryPages: new Map(),
     pendingRequests: new Map(),
-    outputBuffer: new BoundedOutputBuffer(256 * 1024),
+    liveRawStore: createMemoryLiveRawStore(),
+    observationEpoch: 'oep_test',
     outputSeq: 0,
-    snapshotFlushTimer: null,
     nextRequestId: () => 0,
     kill: () => {}
   };

@@ -7,7 +7,6 @@ import { builtinAgentAdapters } from '@monad/atoms/agent-adapters';
 import { createLogger } from '@monad/logger';
 
 import { EventBus } from '#/services/event-bus.ts';
-import { BoundedOutputBuffer } from '#/services/external-agent/bounded-output-buffer.ts';
 import { ExternalAgentError } from '#/services/external-agent/errors.ts';
 import { ExternalAgentEventLog } from '#/services/external-agent/host/event-log.ts';
 import { ExternalAgentHost } from '#/services/external-agent/host/index.ts';
@@ -20,6 +19,52 @@ for (const adapter of builtinAgentAdapters) registerAgentAdapterImpl(adapter);
 
 const SESSION_ID = 'exa_cursorTest00';
 const TARGET_ID = 'ses_cursorTest00';
+
+class MemoryLiveRawStore {
+  readonly epoch = 'oep_test';
+  readonly rows: Array<{
+    seq: number;
+    stream: 'app-server' | 'pty' | 'stderr' | 'stdout';
+    payload: string;
+    observedAt: string;
+  }> = [];
+
+  append(frame: Omit<(typeof this.rows)[number], 'seq'>) {
+    const row = { seq: this.rows.length + 1, ...frame };
+    this.rows.push(row);
+    return row;
+  }
+
+  page(request: { after?: number; before?: number; limit: number; sortDirection: 'asc' | 'desc' }) {
+    const selected = this.rows.filter(
+      (row) =>
+        (request.after === undefined || row.seq > request.after) &&
+        (request.before === undefined || row.seq < request.before)
+    );
+    if (request.sortDirection === 'asc') return { rows: selected.slice(0, request.limit) };
+    const rows = selected.slice(-request.limit);
+    return { rows, ...(selected.length > rows.length && rows[0] ? { nextBefore: rows[0].seq } : {}) };
+  }
+
+  cursorBefore(seq: number) {
+    return `live:${this.epoch}:${seq}`;
+  }
+
+  parseCursor(cursor: string) {
+    return Number(cursor.split(':').at(-1));
+  }
+
+  async closeAndDelete() {}
+}
+
+function rawOutput(live: LiveExternalAgentSession): string {
+  return (
+    live.liveRawStore
+      ?.page({ limit: 10_000, sortDirection: 'asc' })
+      .rows.map((row) => row.payload)
+      .join('') ?? ''
+  );
+}
 
 function jsonRpcParseOutput(chunk: string): ExternalAgentOutputEvent[] {
   const record = JSON.parse(chunk) as {
@@ -86,9 +131,9 @@ function fakeLive(overrides: Partial<LiveExternalAgentSession> = {}): LiveExtern
     pendingHistoryPages: new Map(),
     pendingRequests: new Map(),
     nextRequestId: () => requestSeq++,
-    outputBuffer: new BoundedOutputBuffer(64 * 1024),
+    liveRawStore: new MemoryLiveRawStore(),
+    observationEpoch: 'oep_test',
     outputSeq: 0,
-    snapshotFlushTimer: null,
     kill: () => {},
     ...overrides
   } as LiveExternalAgentSession;
@@ -124,7 +169,6 @@ test('input captures event-source history before starting a new live observation
     initializeContext: { workingPath: '/tmp/project', providerSessionRef: 'thread-1' },
     providerSessionRef: 'thread-1'
   });
-  live.outputBuffer.append('previous runtime output');
   const sent: Array<{ buffer: string; checkpoint?: string; epoch: string }> = [];
   live.adapter = {
     ...live.adapter,
@@ -147,7 +191,7 @@ test('input captures event-source history before starting a new live observation
     },
     sendInput: () =>
       sent.push({
-        buffer: live.outputBuffer.snapshot(),
+        buffer: rawOutput(live),
         checkpoint: live.providerHistoryCheckpoint,
         epoch: live.observationEpoch
       })
@@ -192,8 +236,8 @@ test('live overlay trims replay by event-source dedupe key while retaining ident
   pipeline.output(TARGET_ID, SESSION_ID, replay, 'app-server', live.adapter);
   pipeline.output(TARGET_ID, SESSION_ID, current, 'app-server', live.adapter);
 
-  expect({ output: live.outputBuffer.snapshot(), checkpoint: live.providerHistoryCheckpoint }).toEqual({
-    output: `${current}\n`,
+  expect({ output: rawOutput(live), checkpoint: live.providerHistoryCheckpoint }).toEqual({
+    output: `${replay}${current}`,
     checkpoint: 'message-new'
   });
 });
@@ -208,9 +252,9 @@ test('json-stream replay trimming waits for complete records and removes only de
   pipeline.output(TARGET_ID, SESSION_ID, replay.slice(0, 12), 'stdout', live.adapter);
   pipeline.output(TARGET_ID, SESSION_ID, `${replay.slice(12)}\n${current}\n`, 'stdout', live.adapter);
 
-  expect({ output: live.outputBuffer.snapshot(), seq: live.outputSeq }).toEqual({
-    output: `${current}\n`,
-    seq: current.length + 1
+  expect({ output: rawOutput(live), seq: live.outputSeq }).toEqual({
+    output: `${replay}\n${current}\n`,
+    seq: 2
   });
 });
 
@@ -321,10 +365,10 @@ test('the output pipeline returns the adapter cursor without interpreting it', (
   );
 
   clearTimeout(timeout);
-  expect({ nextCursor: resolved?.nextCursor, output: live.outputBuffer.snapshot(), seq: live.outputSeq }).toEqual({
+  expect({ nextCursor: resolved?.nextCursor, output: rawOutput(live), seq: live.outputSeq }).toEqual({
     nextCursor: '{"turnId":"turn_9"}',
-    output: '',
-    seq: 0
+    output: JSON.stringify({ id: 7, result: { data: [], nextCursor: '{"turnId":"turn_9"}' } }),
+    seq: 1
   });
 });
 
@@ -352,26 +396,28 @@ test('a provider-namespaced cursor is stripped before it reaches the adapter req
   expect(seen).toEqual(['{"turnId":"turn_3"}', undefined]);
 });
 
-test('a stored snapshot cursor pages the output snapshot of a live session without a provider round-trip', async () => {
+test('a live cursor pages committed raw frames without a provider round-trip', async () => {
   const live = fakeLive();
-  live.outputBuffer.append('line-one\n\nline-two\n\nline-three\n\nline-four\n');
+  for (const payload of ['line-one\n', 'line-two\n', 'line-three\n', 'line-four\n']) {
+    live.liveRawStore?.append({ stream: 'stdout', payload, observedAt: '2026-07-18T01:00:00.000Z' });
+  }
   live.adapter.events.readPage = async () => {
     throw new Error('a snapshot cursor must not reach the provider');
   };
   const host = hostWithLive(live);
 
-  const page = await host.historyPage(SESSION_ID, historyRequest({ before: 'snapshot:2' }));
+  const page = await host.historyPage(SESSION_ID, historyRequest({ before: 'live:oep_test:3' }));
 
   expect(page).toEqual({
     events: [
       {
-        id: `${SESSION_ID}:history:0:0`,
-        dedupeKey: 'codex:83230891',
+        id: `${SESSION_ID}:0`,
+        dedupeKey: 'plain:line-one\nline-two\n',
         projection: 'normalized',
         role: 'agent',
-        text: 'line-one\nline-two',
+        text: 'line-one\nline-two\n',
         source: 'plain-text',
-        provenance: { rawEvents: ['line-one\nline-two'] }
+        provenance: { rawEvents: ['line-one\nline-two\n'] }
       }
     ]
   });
@@ -425,7 +471,7 @@ test('a stored-session provider cursor is stripped before the local adapter hist
   }
 });
 
-test('a stored session starts history from the provider instead of a stale journal snapshot', async () => {
+test('a retired journal cursor restarts history from the provider', async () => {
   const codexBuiltin = builtinAgentAdapters.find((adapter) => adapter.provider === 'codex');
   if (!codexBuiltin) throw new Error('codex builtin adapter missing');
   const seen: (string | undefined)[] = [];
@@ -472,19 +518,6 @@ test('a stored session starts history from the provider instead of a stale journ
       updatedAt: '2026-07-06T00:00:00.000Z',
       exitedAt: '2026-07-06T00:01:00.000Z'
     });
-    store.recordExternalAgentObservationEvents(
-      SESSION_ID,
-      [
-        {
-          ...providerEvent,
-          id: 'journal:stale',
-          dedupeKey: 'legacy-envelope-key',
-          text: 'stale journal history'
-        }
-      ],
-      '2026-07-06T00:02:00.000Z'
-    );
-
     const page = await host.historyPage(SESSION_ID, historyRequest({ before: 'journal:' }));
 
     expect({ seen, page }).toEqual({

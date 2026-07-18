@@ -79,7 +79,16 @@ export const MIGRATIONS: MigrationMeta[] = [
     "bps": true,
     "folderMillis": 1784281678637,
     "hash": "311c0c6643e97dc3e09d0c2bc0022f0c7a355de7ec4c667822e806e1f429e8bf"
+  },
+  {
+    "sql": [
+      "DROP TABLE `external_agent_observation_events`;",
+      "\nALTER TABLE `external_agent_sessions` DROP COLUMN `output_snapshot`;"
+    ],
+    "bps": true,
+    "folderMillis": 1784353777546,
+    "hash": "de63d7e115541ae8dbce768e2506493e941a4a4f41acb487df2b71d15ae30383"
   }
 ];
 
-export const LATEST_MIGRATION_TIMESTAMP = 1784281678637;
+export const LATEST_MIGRATION_TIMESTAMP = 1784353777546;

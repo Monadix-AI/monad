@@ -2,7 +2,6 @@ import type {
   SDKAssistantMessage,
   SDKMessage,
   SDKPermissionDenial,
-  SDKSessionInfo,
   SDKSystemMessage,
   SDKUserMessage,
   SessionMessage
@@ -354,19 +353,9 @@ function claudeSdkMessageToJsonLine(message: SessionMessage): string {
   });
 }
 
-function claudeSdkMessagesOutput(messages: SessionMessage[], info: SDKSessionInfo | undefined): string | null {
+function claudeSdkMessagesOutput(messages: SessionMessage[]): string | null {
   const records = messages.map(claudeSdkMessageToJsonLine);
   if (records.length === 0) return null;
-  if (info?.cwd) {
-    records.unshift(
-      JSON.stringify({
-        type: 'system',
-        subtype: 'init',
-        session_id: info.sessionId,
-        cwd: info.cwd
-      })
-    );
-  }
   return records.join('\n');
 }
 
@@ -377,7 +366,6 @@ function claudeHistoryOffset(cursor: string | undefined): number {
 }
 
 interface ClaudeSdkHistoryPageDeps {
-  getSessionInfo: typeof getSessionInfo;
   getSessionMessages: typeof getSessionMessages;
 }
 
@@ -387,33 +375,19 @@ export function createClaudeSdkHistoryPageReader(deps: ClaudeSdkHistoryPageDeps)
   ): Promise<ExternalAgentProviderHistoryPageContext['page'] | null> {
     try {
       const offset = claudeHistoryOffset(context.request.before);
-      const [info, messages] = await Promise.all([
-        deps.getSessionInfo(context.providerSessionRef, { dir: context.workingPath }),
-        deps.getSessionMessages(context.providerSessionRef, {
-          dir: context.workingPath,
-          limit: context.request.limit,
-          offset,
-          includeSystemMessages: true
-        })
-      ]);
-      const items: unknown[] = [];
-      if (info?.cwd) {
-        items.push({
-          type: 'system',
-          subtype: 'init',
-          session_id: info.sessionId,
-          cwd: info.cwd
-        });
-      }
-      items.push(
-        ...messages.map((message) => ({
-          type: message.type,
-          uuid: message.uuid,
-          session_id: message.session_id,
-          message: message.message,
-          parent_tool_use_id: message.parent_tool_use_id
-        }))
-      );
+      const messages = await deps.getSessionMessages(context.providerSessionRef, {
+        dir: context.workingPath,
+        limit: context.request.limit,
+        offset,
+        includeSystemMessages: true
+      });
+      const items: unknown[] = messages.map((message) => ({
+        type: message.type,
+        uuid: message.uuid,
+        session_id: message.session_id,
+        message: message.message,
+        parent_tool_use_id: message.parent_tool_use_id
+      }));
       if (items.length === 0) return null;
       return {
         items,
@@ -448,7 +422,7 @@ async function readClaudeHistoryOutput(context: ExternalAgentProviderHistoryCont
       offset += page.length;
       if (page.length < CLAUDE_HISTORY_PAGE_SIZE) break;
     }
-    return claudeSdkMessagesOutput(messages, info) ?? claudeTranscriptFallback(context);
+    return claudeSdkMessagesOutput(messages) ?? claudeTranscriptFallback(context);
   } catch {
     return claudeTranscriptFallback(context);
   }

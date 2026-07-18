@@ -66,6 +66,42 @@ test('live raw store pages newest rows in display order without materializing ol
   });
 });
 
+test('live raw store bounds pages by encoded payload bytes without dropping an oversized frame', async () => {
+  await withTempDirectory(async (directory) => {
+    const store = LiveRawStore.open({ directory, sessionId: 'exa_test', epoch: 'oep_bytes' });
+    store.append({ stream: 'stdout', payload: 'é', observedAt: '2026-07-18T01:00:01.000Z' });
+    store.append({ stream: 'stdout', payload: 'two', observedAt: '2026-07-18T01:00:02.000Z' });
+    store.append({ stream: 'stdout', payload: 'oversized', observedAt: '2026-07-18T01:00:03.000Z' });
+
+    expect(store.page({ limit: 10, maxBytes: 4, sortDirection: 'desc' })).toEqual({
+      rows: [{ seq: 3, stream: 'stdout', payload: 'oversized', observedAt: '2026-07-18T01:00:03.000Z' }],
+      nextBefore: 3
+    });
+    expect(store.page({ before: 3, limit: 10, maxBytes: 4, sortDirection: 'desc' })).toEqual({
+      rows: [{ seq: 2, stream: 'stdout', payload: 'two', observedAt: '2026-07-18T01:00:02.000Z' }],
+      nextBefore: 2
+    });
+    await store.closeAndDelete();
+  });
+});
+
+test('live raw store reads exact committed rows after a sequence cursor', async () => {
+  await withTempDirectory(async (directory) => {
+    const store = LiveRawStore.open({ directory, sessionId: 'exa_test', epoch: 'oep_after' });
+    for (let index = 1; index <= 4; index += 1) {
+      store.append({ stream: 'stdout', payload: `frame-${index}`, observedAt: `2026-07-18T01:00:0${index}.000Z` });
+    }
+
+    expect(store.page({ after: 2, limit: 10, sortDirection: 'asc' })).toEqual({
+      rows: [
+        { seq: 3, stream: 'stdout', payload: 'frame-3', observedAt: '2026-07-18T01:00:03.000Z' },
+        { seq: 4, stream: 'stdout', payload: 'frame-4', observedAt: '2026-07-18T01:00:04.000Z' }
+      ]
+    });
+    await store.closeAndDelete();
+  });
+});
+
 test('live raw cursors are scoped to the runtime epoch', async () => {
   await withTempDirectory(async (directory) => {
     const first = LiveRawStore.open({ directory, sessionId: 'exa_test', epoch: 'oep_first' });

@@ -100,6 +100,7 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
     },
     resolveAgentEnv: async (env) => resolveExternalAgentEnv(env, deps.configManager.get().auth ?? undefined),
     externalAgentProcessRegistryPath: `${paths.runtime}/external-agent-processes.json`,
+    externalAgentLiveStoreDirectory: `${paths.runtime}/external-agent-live-observation`,
     authProcessRegistryPath: `${paths.runtime}/external-agent-auth-processes.json`,
     authHeartbeatTimeoutMs: deps.externalAgentAuthHeartbeatTimeoutMs,
     authStatusTimeoutMs: deps.externalAgentAuthStatusTimeoutMs

@@ -1,14 +1,6 @@
 import { expect, mock, test } from 'bun:test';
 import { claudeCodeExternalAgentAdapter, createClaudeSdkHistoryPageReader } from '@monad/atoms/agent-adapters';
 
-const getSessionInfo = mock(async () => ({
-  sessionId: 'claude-session-1',
-  cwd: '/tmp/project',
-  fileSize: 4096,
-  summary: 'session summary',
-  lastModified: new Date('2026-07-06T00:00:00.000Z')
-}));
-
 const getSessionMessages = mock(async () => [
   {
     type: 'assistant',
@@ -37,7 +29,6 @@ const getSessionMessages = mock(async () => [
 
 test('Claude Code adapter reads paged history through the Agent SDK', async () => {
   const readHistoryPage = createClaudeSdkHistoryPageReader({
-    getSessionInfo,
     getSessionMessages
   } as unknown as Parameters<typeof createClaudeSdkHistoryPageReader>[0]);
   const page = await readHistoryPage({
@@ -47,7 +38,6 @@ test('Claude Code adapter reads paged history through the Agent SDK', async () =
     request: { limit: 2, before: '2', sortDirection: 'desc', itemsView: 'full' }
   });
 
-  expect(getSessionInfo).toHaveBeenCalledWith('claude-session-1', { dir: '/tmp/project' });
   expect(getSessionMessages).toHaveBeenCalledWith('claude-session-1', {
     dir: '/tmp/project',
     limit: 2,
@@ -60,10 +50,6 @@ test('Claude Code adapter reads paged history through the Agent SDK', async () =
 
   const events = claudeCodeExternalAgentAdapter.parseOutput(output ?? '');
   expect(events).toEqual([
-    {
-      type: 'session_ref',
-      payload: { providerSessionRef: 'claude-session-1', cwd: '/tmp/project' }
-    },
     { type: 'agent_message', payload: { text: 'checking' } },
     {
       type: 'tool_call',

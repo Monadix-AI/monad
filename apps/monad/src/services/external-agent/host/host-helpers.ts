@@ -17,11 +17,7 @@ export function isManagedProjectRuntime(
 // apps/monad/src/store/db/external-agent-sessions.ts's `ExternalAgentTargetId`) is still genuinely
 // `SessionId | ProjectId` internally, so a project-scoped runtime's view cast here is a real,
 // pre-existing lossy narrowing this pass does not resolve (open class-C question).
-export function toView(
-  row: ExternalAgentSessionRow,
-  pendingApprovalCount = 0,
-  live?: LiveExternalAgentSession
-): ExternalAgentSessionView {
+export function toView(row: ExternalAgentSessionRow, pendingApprovalCount = 0): ExternalAgentSessionView {
   const { transcriptTargetId, ...view } = row;
   return {
     ...view,
@@ -30,7 +26,7 @@ export function toView(
     productIcon: getExternalAgentProviderAdapter(row.provider).productIcon,
     pendingApprovalCount,
     approvalOwnership: 'provider-owned',
-    outputSnapshot: live ? live.outputBuffer.snapshot() : row.outputSnapshot
+    outputSnapshot: ''
   };
 }
 

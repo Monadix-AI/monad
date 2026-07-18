@@ -1,4 +1,4 @@
-import type { ExternalAgentObservationAccessResponse, ExternalAgentSessionId } from '@monad/protocol';
+import type { ExternalAgentObservationAccessResponse } from '@monad/protocol';
 import type {
   ExternalAgentObservationListener,
   LiveExternalAgentSession
@@ -14,15 +14,10 @@ interface ObservationHubContext {
 export class ExternalAgentObservationHub {
   private readonly listeners = new Map<string, Set<ExternalAgentObservationListener>>();
   private readonly flush = new Map<string, ReturnType<typeof setTimeout>>();
-  /** Per-session `outputSeq` already delivered to the observation stream, so the next tick emits only
-   *  the delta beyond it. Seeded to the buffer position when the first listener subscribes. */
   private readonly emitted = new Map<string, { epoch: string; seq: number }>();
 
   constructor(private readonly ctx: ObservationHubContext) {}
 
-  /** Notify live observers of the current output snapshot. Non-terminal pushes are coalesced to one
-   *  per OBSERVATION_THROTTLE_MS (the trailing fire reads the latest full buffer, so no update is
-   *  lost); a `done` push fires immediately and cancels any pending timer. */
   publish(id: string, done = false): void {
     if (done) {
       this.clearFlush(id);
@@ -30,7 +25,7 @@ export class ExternalAgentObservationHub {
       return;
     }
     if (!this.listeners.get(id)?.size) return;
-    if (this.flush.has(id)) return; // an update is already scheduled; it reads the latest buffer
+    if (this.flush.has(id)) return;
     this.flush.set(
       id,
       setTimeout(() => {
@@ -40,10 +35,6 @@ export class ExternalAgentObservationHub {
     );
   }
 
-  /** Push an observation update to live listeners. Between snapshots this sends only the delta since
-   *  the last tick (`append` + cursor `seq`), not the whole 256 KB buffer — the consumer accumulates.
-   *  If a listener fell so far behind that the delta is no longer wholly in the bounded tail, it falls
-   *  back to a full snapshot (resync). The terminal `done` push always fires so the stream can close. */
   private emit(id: string, done: boolean): void {
     const listeners = this.listeners.get(id);
     if (!listeners?.size) return;
@@ -59,33 +50,12 @@ export class ExternalAgentObservationHub {
     }
     const emitted = this.emitted.get(id) ?? { epoch: live.observationEpoch, seq: live.outputSeq };
     const epochChanged = emitted.epoch !== live.observationEpoch;
-    const deltaLen = live.outputSeq - emitted.seq;
-    if (!epochChanged && deltaLen <= 0 && !done) return; // nothing new since the last tick
-    const snapshot = live.outputBuffer.snapshot();
-    const access: ExternalAgentObservationAccessResponse =
-      !epochChanged && deltaLen > 0 && deltaLen <= snapshot.length
-        ? {
-            state: 'live',
-            externalAgentSessionId: id as ExternalAgentSessionId,
-            provider: live.provider,
-            observationEpoch: live.observationEpoch,
-            ...(live.providerHistoryCheckpoint ? { providerHistoryCheckpoint: live.providerHistoryCheckpoint } : {}),
-            append: snapshot.slice(snapshot.length - deltaLen),
-            seq: live.outputSeq,
-            observedAt: new Date().toISOString()
-          }
-        : {
-            state: 'live',
-            externalAgentSessionId: id as ExternalAgentSessionId,
-            provider: live.provider,
-            observationEpoch: live.observationEpoch,
-            ...(live.providerHistoryCheckpoint ? { providerHistoryCheckpoint: live.providerHistoryCheckpoint } : {}),
-            output: snapshot,
-            seq: live.outputSeq,
-            observedAt: new Date().toISOString()
-          };
-    this.emitted.set(id, { epoch: live.observationEpoch, seq: live.outputSeq });
+    if (!epochChanged && live.outputSeq <= emitted.seq && !done) return;
+    const access = this.ctx.observe(id, epochChanged ? undefined : emitted.seq);
+    const seq = access.state === 'live' ? (access.seq ?? emitted.seq) : emitted.seq;
+    this.emitted.set(id, { epoch: live.observationEpoch, seq });
     for (const listener of listeners) listener(access, done);
+    if (!done && seq < live.outputSeq) this.publish(id);
     if (done) {
       this.listeners.delete(id);
       this.emitted.delete(id);
@@ -111,15 +81,15 @@ export class ExternalAgentObservationHub {
     if (!listeners) {
       listeners = new Set();
       this.listeners.set(id, listeners);
-      // Seed the delta cursor at this subscriber's snapshot position; a later subscriber gets a fresh
-      // full snapshot and its client trims any overlap with the shared delta stream.
       const current = this.ctx.getLive(id);
       this.emitted.set(id, {
         epoch: current?.observationEpoch ?? access.observationEpoch,
-        seq: current?.outputSeq ?? access.seq ?? 0
+        seq: access.seq ?? 0
       });
     }
     listeners.add(listener);
+    const current = this.ctx.getLive(id);
+    if ((access.seq ?? 0) < (current?.outputSeq ?? 0)) this.publish(id);
     return {
       access,
       live: true,

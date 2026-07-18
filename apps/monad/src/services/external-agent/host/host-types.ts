@@ -6,7 +6,7 @@ import type {
   ExternalAgentView
 } from '@monad/protocol';
 import type { EventBus } from '#/services/event-bus.ts';
-import type { BoundedOutputBuffer } from '#/services/external-agent/bounded-output-buffer.ts';
+import type { LiveRawStore } from '#/services/external-agent/live-raw-store.ts';
 import type {
   ExternalAgentProcess,
   ExternalAgentStdin,
@@ -100,19 +100,14 @@ export interface LiveExternalAgentSession {
     reject(error: Error): void;
     timeout: Timer;
   };
-  /** In-memory tail-bounded output snapshot, flushed to SQLite on a timer (see scheduleSnapshotFlush)
-   *  instead of read-modify-writing the 256 KB column on every output chunk. Chunk-list backed so a
-   *  per-token append stays O(chunk), not O(buffer). */
-  outputBuffer: BoundedOutputBuffer;
+  liveRawStore: Pick<LiveRawStore, 'append' | 'closeAndDelete' | 'cursorBefore' | 'page' | 'parseCursor'>;
   observationEpoch: string;
   observationEpochReady?: boolean;
   observationEpochPreparation?: Promise<void>;
   providerHistoryCheckpoint?: string;
   providerHistoryIdentities?: Set<string>;
-  /** Cumulative length of all output ever appended (monotonic, unbounded — unlike `outputBuffer`,
-   *  which keeps only the tail). Serves as the observation cursor so the stream can push deltas. */
+  /** Last committed raw-store row sequence in the current observation epoch. */
   outputSeq: number;
-  snapshotFlushTimer: Timer | null;
   /** JSON-RPC request→kind ledger for app-server sessions: the adapter records what each outbound
    *  request id was for so a response can be dispatched by id rather than by guessing its shape. */
   pendingRequests: Map<string | number, string>;
@@ -138,6 +133,7 @@ export interface ExternalAgentHostDeps {
    *  absent (tests) the env is used verbatim. */
   resolveAgentEnv?: (env?: Record<string, string>) => Promise<Record<string, string> | undefined>;
   externalAgentProcessRegistryPath?: string;
+  externalAgentLiveStoreDirectory?: string;
   authProcessRegistryPath?: string;
   authHeartbeatTimeoutMs?: number;
   authStatusTimeoutMs?: number;

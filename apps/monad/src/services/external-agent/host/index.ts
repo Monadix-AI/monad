@@ -8,7 +8,6 @@ import type {
   ExternalAgentInputRequest,
   ExternalAgentLaunchMode,
   ExternalAgentObservationAccessResponse,
-  ExternalAgentProvider,
   ExternalAgentResizeRequest,
   ExternalAgentSessionView,
   ExternalAgentUiObservationFrame,
@@ -28,7 +27,8 @@ import type { ExternalAgentStartPreflight } from '#/services/external-agent/type
 import type { ExternalAgentTargetId } from '#/store/db/external-agent-sessions.ts';
 import type { ExternalAgentSessionRow } from '#/store/db/index.ts';
 
-import { dirname } from 'node:path';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
 import { createLogger } from '@monad/logger';
 import { newId } from '@monad/protocol';
 
@@ -41,9 +41,7 @@ import { ExternalAgentEventLog } from '#/services/external-agent/host/event-log.
 import { providerHistoryPageViaCli } from '#/services/external-agent/host/history-backfill.ts';
 import {
   decodeHistoryCursor,
-  encodeJournalHistoryCursor,
   encodeProviderHistoryCursor,
-  encodeStoredHistoryCursor,
   type HistoryCursor
 } from '#/services/external-agent/host/history-cursor.ts';
 import {
@@ -57,6 +55,11 @@ import { ExternalAgentOutputPipeline } from '#/services/external-agent/host/outp
 import { ExternalAgentProcessLifecycle } from '#/services/external-agent/host/process-lifecycle.ts';
 import { ExternalAgentSessionLauncher } from '#/services/external-agent/host/session-launcher.ts';
 import { getExternalAgentProviderAdapter } from '#/services/external-agent/index.ts';
+import {
+  cleanupStaleLiveRawStores,
+  LiveRawStore,
+  liveRawRowsOutput
+} from '#/services/external-agent/live-raw-store.ts';
 import { ExternalAgentLoginNudge } from '#/services/external-agent/login-nudge.ts';
 import {
   cleanupManagedProjectRuntimeToken,
@@ -66,35 +69,6 @@ import { killExternalAgentProcess } from '#/services/external-agent/process.ts';
 import { buildExternalAgentSpawnEnv, requireExternalAgent } from '#/services/external-agent/spawn-support.ts';
 
 export type { ExternalAgentHostDeps };
-
-function storedOutputHistoryPage(
-  output: string,
-  req: ExternalAgentHistoryPageRequest,
-  cursor: HistoryCursor,
-  id: string,
-  provider: ExternalAgentProvider
-): ExternalAgentHistoryPageResponse {
-  const adapter = getExternalAgentProviderAdapter(provider);
-  const lines = output.split('\n').filter((line) => line.trim().length > 0);
-  const end = storedHistoryCursorEnd(cursor, lines.length);
-  const start = Math.max(0, end - req.limit);
-  const pageLines = lines.slice(start, end);
-  const pageOutput = pageLines.join('\n');
-  return {
-    // The daemon already knows `provider` unambiguously (the session row) — normalize with the same
-    // adapter EventSource used for live projection instead of making the client re-derive it. Raw
-    // JSONL isn't shipped separately: each event's `raw` already carries its source record(s).
-    events: adapter.events.projectLive({ id: `${id}:history:${start}`, output: pageOutput, mode: 'history' }).events,
-    ...(start > 0 ? { nextCursor: encodeStoredHistoryCursor(start) } : {})
-  };
-}
-
-function storedHistoryCursorEnd(cursor: HistoryCursor, fallback: number): number {
-  if (cursor.kind !== 'stored') return fallback;
-  const value = Number.parseInt(cursor.value, 10);
-  if (!Number.isFinite(value)) return fallback;
-  return Math.max(0, Math.min(fallback, value));
-}
 
 function providerHistoryPageRequest(
   req: ExternalAgentHistoryPageRequest,
@@ -136,7 +110,7 @@ export class ExternalAgentHost {
   private readonly events: ExternalAgentEventLog;
   /** Owns app-server socket/port allocation and the disconnect→redial→give-up flow. */
   private readonly appServerConnections: ExternalAgentAppServerConnectionManager;
-  /** Owns the child-process output path: buffering, snapshot flush, and structured-event decoding. */
+  /** Owns lossless live capture and structured-event decoding for child-process output. */
   private readonly outputPipeline: ExternalAgentOutputPipeline;
   /** Runs `cli-oneshot` sessions: a logical session with no persistent process. */
   private readonly oneshotRunner: ExternalAgentOneshotRunner;
@@ -146,11 +120,24 @@ export class ExternalAgentHost {
   /** Builds and spawns a fresh external agent session (agent/launch resolution, process spawn, stream
    *  wiring, exit/idle-resume bookkeeping). */
   private readonly sessionLauncher: ExternalAgentSessionLauncher;
-  /** Resolves a session's current observable state (live buffer / durable snapshot / provider
-   *  history), independent of the observation subscription/publish side above. */
+  /** Resolves observation from the ephemeral live store or provider history. */
   private readonly observationResolver: ExternalAgentObservationResolver;
+  private readonly liveRawStoreDirectory: string;
+  private readonly liveRawStoreCleanup: Promise<Error | undefined>;
 
   constructor(private readonly deps: ExternalAgentHostDeps) {
+    this.liveRawStoreDirectory =
+      deps.externalAgentLiveStoreDirectory ?? join(tmpdir(), `monad-external-agent-live-${process.pid}`);
+    this.liveRawStoreCleanup = cleanupStaleLiveRawStores(this.liveRawStoreDirectory)
+      .then(() => undefined)
+      .catch((error) => {
+        const failure = error instanceof Error ? error : new Error(String(error));
+        this.log.error(
+          { event: 'external_agent.live_observation_cleanup_failed', err: failure.message },
+          'stale native cli live observation cleanup failed'
+        );
+        return failure;
+      });
     this.loginNudge = new ExternalAgentLoginNudge({
       bus: deps.bus,
       authStatus: (agentName) => this.authHost.authStatus(agentName)
@@ -167,7 +154,8 @@ export class ExternalAgentHost {
       stop: (id) => this.stop(id),
       log: this.log,
       reconnectBaseMs: deps.appServerReconnectBaseMs,
-      disconnectGraceMs: deps.appServerDisconnectGraceMs
+      disconnectGraceMs: deps.appServerDisconnectGraceMs,
+      rotateLiveCapture: (live) => this.rotateLiveCapture(live)
     });
     this.outputPipeline = new ExternalAgentOutputPipeline({
       live: this.live,
@@ -192,7 +180,8 @@ export class ExternalAgentHost {
       outputPipeline: this.outputPipeline,
       buildSpawnEnv: (env) => this.buildSpawnEnv(env),
       trackProcess: (pid) => this.processLifecycle.track(pid),
-      untrackProcess: (pid) => this.processLifecycle.untrack(pid)
+      untrackProcess: (pid) => this.processLifecycle.untrack(pid),
+      openLiveRawStore: (id, epoch) => this.openLiveRawStore(id, epoch)
     });
     this.sessionLauncher = new ExternalAgentSessionLauncher({
       deps,
@@ -209,7 +198,8 @@ export class ExternalAgentHost {
       untrackProcess: (pid) => this.processLifecycle.untrack(pid),
       armIdleSuspend: (live) => this.armIdleSuspend(live),
       idleTimeoutMs: () => this.idleTimeoutMs(),
-      updateExternalAgentPid: (id, pid) => this.updateExternalAgentPid(id, pid)
+      updateExternalAgentPid: (id, pid) => this.updateExternalAgentPid(id, pid),
+      openLiveRawStore: (id, epoch) => this.openLiveRawStore(id, epoch)
     });
     this.observationResolver = new ExternalAgentObservationResolver({
       live: this.live,
@@ -219,6 +209,19 @@ export class ExternalAgentHost {
       takeStructuredLines: (id, stream, chunk) => this.outputPipeline.takeCompleteStructuredLines(id, stream, chunk),
       dropStructuredBuffer: (id) => this.outputPipeline.dropStructuredBuffer(id)
     });
+  }
+
+  private openLiveRawStore(id: string, epoch: string): LiveRawStore {
+    return LiveRawStore.open({ directory: this.liveRawStoreDirectory, sessionId: id, epoch });
+  }
+
+  private rotateLiveCapture(live: LiveExternalAgentSession): void {
+    void live.liveRawStore?.closeAndDelete();
+    live.outputSeq = 0;
+    live.observationEpoch = newId('oep');
+    live.liveRawStore = this.openLiveRawStore(live.id, live.observationEpoch);
+    live.observationEpochReady = false;
+    this.observation.publish(live.id);
   }
 
   setManagedProjectOutputHandler(handler: ManagedProjectOutputHandler): void {
@@ -313,7 +316,7 @@ export class ExternalAgentHost {
     live.appServerReconnecting = false;
     live.pendingRequests.clear();
     this.appServerConnections.unlinkSocket(live.appServerSocketPath);
-    this.outputPipeline.flushSnapshot(id);
+    void live.liveRawStore?.closeAndDelete();
     this.updateExternalAgentPid(id, null);
     this.observation.publish(id);
     this.events.emit(live.transcriptTargetId, 'external_agent.idle_suspended', {
@@ -384,10 +387,10 @@ export class ExternalAgentHost {
       }
       live.providerHistoryCheckpoint = checkpoint;
       live.providerHistoryIdentities = identities;
-      live.outputBuffer.clear();
       live.outputSeq = 0;
-      this.outputPipeline.flushSnapshot(live.id);
+      void live.liveRawStore?.closeAndDelete();
       live.observationEpoch = newId('oep');
+      live.liveRawStore = this.openLiveRawStore(live.id, live.observationEpoch);
       live.observationEpochReady = true;
       this.observation.publish(live.id);
     };
@@ -404,7 +407,7 @@ export class ExternalAgentHost {
     return this.processLifecycle.reconcileOrphanedSessions();
   }
 
-  start(args: {
+  async start(args: {
     transcriptTargetId: ExternalAgentTargetId;
     agentName: string;
     displayName?: string;
@@ -424,6 +427,8 @@ export class ExternalAgentHost {
      *  to the human instead of running unattended. */
     allowAutopilot?: boolean;
   }): Promise<ExternalAgentSessionView> {
+    const cleanupFailure = await this.liveRawStoreCleanup;
+    if (cleanupFailure) throw cleanupFailure;
     return this.sessionLauncher.start(args);
   }
 
@@ -499,14 +504,14 @@ export class ExternalAgentHost {
     const row = this.deps.store.getExternalAgentSession(id);
     if (!row) throw new Error(`external agent session not found: ${id}`);
     const live = this.live.get(id);
-    return toView(row, live?.pendingApprovals.size ?? 0, live);
+    return toView(row, live?.pendingApprovals.size ?? 0);
   }
 
   list(transcriptTargetId: ExternalAgentTargetId): ListExternalAgentSessionsResponse {
     return {
       sessions: this.deps.store.listExternalAgentSessionsForTranscriptTarget(transcriptTargetId).map((row) => {
         const live = this.live.get(row.id);
-        return toView(row, live?.pendingApprovals.size ?? 0, live);
+        return toView(row, live?.pendingApprovals.size ?? 0);
       })
     };
   }
@@ -516,7 +521,7 @@ export class ExternalAgentHost {
   listAllSummaries(query: ListExternalAgentRuntimesQuery = {}): ListExternalAgentRuntimesResponse {
     const views = this.deps.store.listExternalAgentSessions().map((row) => {
       const live = this.live.get(row.id);
-      return { ...toView(row, live?.pendingApprovals.size ?? 0, live), outputSnapshot: '' };
+      return toView(row, live?.pendingApprovals.size ?? 0);
     });
     const { page, nextCursor } = sliceByCursor(views, query);
     return { sessions: page, ...(nextCursor ? { nextCursor } : {}) };
@@ -529,7 +534,7 @@ export class ExternalAgentHost {
   listLive(query: ListExternalAgentRuntimesQuery = {}): ListExternalAgentRuntimesResponse {
     const views = this.deps.store.listLiveExternalAgentSessions().map((row) => {
       const live = this.live.get(row.id);
-      return { ...toView(row, live?.pendingApprovals.size ?? 0, live), outputSnapshot: '' };
+      return toView(row, live?.pendingApprovals.size ?? 0);
     });
     const { page, nextCursor } = sliceByCursor(views, query);
     return { sessions: page, ...(nextCursor ? { nextCursor } : {}) };
@@ -553,6 +558,10 @@ export class ExternalAgentHost {
 
   observeUi(id: string): ExternalAgentUiObservationFrame {
     return this.observationResolver.observeUi(id);
+  }
+
+  observeUiWithProviderHistory(id: string): Promise<ExternalAgentUiObservationFrame> {
+    return this.observationResolver.observeUiWithProviderHistory(id);
   }
 
   /** UI plane subscription: rides the raw observation hub (its throttle + lifecycle) but re-projects
@@ -645,7 +654,7 @@ export class ExternalAgentHost {
       }
       live.oneshotTurnProc = undefined;
     }
-    this.outputPipeline.flushSnapshot(id);
+    void live.liveRawStore?.closeAndDelete();
     this.live.delete(id);
     const row = this.deps.store.getExternalAgentSession(id);
     if (row?.runtimeRole === 'managed-project-agent')
@@ -710,14 +719,25 @@ export class ExternalAgentHost {
   async historyPage(id: string, req: ExternalAgentHistoryPageRequest): Promise<ExternalAgentHistoryPageResponse> {
     const live = this.live.get(id);
     if (!live) return this.storedHistoryPage(id, req);
-    // A stored-snapshot cursor keeps paging the output snapshot even after the session came (back)
-    // live — it indexes snapshot lines, not a provider pagination, and a provider would reject it
-    // (codex: "invalid cursor"). Provider cursors are decoded before reaching an adapter for the
-    // same reason in reverse.
-    const cursor = decodeHistoryCursor(req.before);
-    if (cursor.kind === 'stored') {
-      return storedOutputHistoryPage(live.outputBuffer.snapshot(), req, cursor, id, live.provider);
+    if (req.before?.startsWith('live:') && live.liveRawStore && !live.suspended) {
+      const before = live.liveRawStore.parseCursor(req.before);
+      const page = live.liveRawStore.page({
+        before,
+        limit: req.limit,
+        maxBytes: MAX_OUTPUT_SNAPSHOT,
+        sortDirection: 'desc'
+      });
+      const output = liveRawRowsOutput(page.rows);
+      return {
+        events: live.adapter.events.projectLive({ id, output, mode: 'history' }).events,
+        ...(page.nextBefore !== undefined
+          ? { nextCursor: live.liveRawStore.cursorBefore(page.nextBefore) }
+          : live.providerSessionRef
+            ? { nextCursor: encodeProviderHistoryCursor('') }
+            : {})
+      };
     }
+    const cursor = decodeHistoryCursor(req.before);
     const providerReq = providerHistoryPageRequest(req, cursor);
     const providerSessionRef = live.providerSessionRef ?? live.initializeContext?.providerSessionRef ?? undefined;
     const workingPath = live.initializeContext?.workingPath;
@@ -732,29 +752,13 @@ export class ExternalAgentHost {
         { before: providerReq.before, limit: providerReq.limit, sortDirection: providerReq.sortDirection }
       );
       if (result.state === 'available') {
-        this.deps.store.recordExternalAgentObservationEvents(id, result.events, new Date().toISOString());
         return {
           events: result.events,
           ...(result.nextCursor ? { nextCursor: encodeProviderHistoryCursor(result.nextCursor) } : {})
         };
       }
     }
-    if (cursor.kind === 'journal') {
-      const journal = this.deps.store.listExternalAgentObservationEvents(id, {
-        before: cursor.value || undefined,
-        limit: req.limit,
-        sortDirection: req.sortDirection
-      });
-      if (journal.events.length > 0) {
-        return {
-          events: journal.events,
-          nextCursor: journal.nextCursor
-            ? encodeJournalHistoryCursor(journal.nextCursor)
-            : encodeProviderHistoryCursor('')
-        };
-      }
-    }
-    return storedOutputHistoryPage(live.outputBuffer.snapshot(), req, { kind: 'none' }, id, live.provider);
+    throw new ExternalAgentError('unsupported_capability', `provider history unavailable for live session: ${id}`);
   }
 
   private requestProviderHistoryPage(
@@ -805,7 +809,6 @@ export class ExternalAgentHost {
           dropStructuredBuffer: (structuredId) => this.outputPipeline.dropStructuredBuffer(structuredId)
         }).catch(() => null);
         if (bridged?.state === 'available') {
-          this.deps.store.recordExternalAgentObservationEvents(id, bridged.events, new Date().toISOString());
           return {
             events: bridged.events,
             ...(bridged.nextCursor ? { nextCursor: encodeProviderHistoryCursor(bridged.nextCursor) } : {})
@@ -821,25 +824,9 @@ export class ExternalAgentHost {
         pageRequest
       );
       if (result?.state === 'available') {
-        this.deps.store.recordExternalAgentObservationEvents(id, result.events, new Date().toISOString());
         return {
           events: result.events,
           ...(result.nextCursor ? { nextCursor: encodeProviderHistoryCursor(result.nextCursor) } : {})
-        };
-      }
-    }
-    if (cursor.kind === 'journal') {
-      const journal = this.deps.store.listExternalAgentObservationEvents(id, {
-        before: cursor.value || undefined,
-        limit: req.limit,
-        sortDirection: req.sortDirection
-      });
-      if (journal.events.length > 0) {
-        return {
-          events: journal.events,
-          nextCursor: journal.nextCursor
-            ? encodeJournalHistoryCursor(journal.nextCursor)
-            : encodeProviderHistoryCursor('')
         };
       }
     }
@@ -850,7 +837,7 @@ export class ExternalAgentHost {
         access.reason ?? `external agent history unavailable for stopped session: ${id}`
       );
     }
-    return storedOutputHistoryPage(access.output ?? '', req, cursor, id, access.provider);
+    return { events: access.events ?? [] };
   }
 
   startAuth(agentName: string): Promise<ExternalAgentAuthSessionView> {

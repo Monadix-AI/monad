@@ -303,7 +303,6 @@ export const externalAgentSessions = sqliteTable(
     state: text('state').notNull(),
     pid: integer('pid'),
     providerSessionRef: text('provider_session_ref'),
-    outputSnapshot: text('output_snapshot').notNull().default(''),
     exitCode: integer('exit_code'),
     startedAt: text('started_at').notNull(),
     updatedAt: text('updated_at').notNull(),
@@ -315,23 +314,6 @@ export const externalAgentSessions = sqliteTable(
     uniqueIndex('idx_external_agent_sessions_provider_ref')
       .on(table.transcriptTargetId, table.provider, table.providerSessionRef)
       .where(providerSessionRefNotNull)
-  ]
-);
-
-export const externalAgentObservationEvents = sqliteTable(
-  'external_agent_observation_events',
-  {
-    seq: integer('seq').primaryKey({ autoIncrement: true }),
-    externalAgentSessionId: text('external_agent_session_id')
-      .notNull()
-      .references(() => externalAgentSessions.id, { onDelete: 'cascade' }),
-    dedupeKey: text('dedupe_key').notNull(),
-    eventJson: text('event_json').notNull(),
-    observedAt: text('observed_at').notNull()
-  },
-  (table) => [
-    uniqueIndex('idx_external_agent_observation_dedupe').on(table.externalAgentSessionId, table.dedupeKey),
-    index('idx_external_agent_observation_page').on(table.externalAgentSessionId, table.seq)
   ]
 );
 

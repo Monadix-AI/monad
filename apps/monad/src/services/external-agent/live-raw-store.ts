@@ -13,9 +13,15 @@ export type LiveRawFrame = {
 
 export type LiveRawRow = LiveRawFrame & { seq: number };
 
+export function liveRawRowsOutput(rows: LiveRawRow[]): string {
+  return rows.map((row) => (row.stream === 'app-server' ? `${row.payload}\n` : row.payload)).join('');
+}
+
 export type LiveRawPageRequest = {
+  after?: number;
   before?: number;
   limit: number;
+  maxBytes?: number;
   sortDirection: 'asc' | 'desc';
 };
 
@@ -38,6 +44,7 @@ export class LiveRawStore {
   private readonly database: Database;
   private readonly insertStatement;
   private readonly oldestStatement;
+  private readonly afterStatement;
   private readonly newestStatement;
   private readonly beforeStatement;
 
@@ -60,14 +67,17 @@ export class LiveRawStore {
     this.insertStatement = this.database.prepare<InsertResult, [LiveRawStream, string, string]>(
       'INSERT INTO raw_frames (stream, payload, observed_at) VALUES (?1, ?2, ?3)'
     );
-    this.oldestStatement = this.database.prepare<LiveRawRow, [number]>(
-      'SELECT seq, stream, payload, observed_at AS observedAt FROM raw_frames ORDER BY seq ASC LIMIT ?1'
+    this.oldestStatement = this.database.prepare<LiveRawRow, []>(
+      'SELECT seq, stream, payload, observed_at AS observedAt FROM raw_frames ORDER BY seq ASC'
     );
-    this.newestStatement = this.database.prepare<LiveRawRow, [number]>(
-      'SELECT seq, stream, payload, observed_at AS observedAt FROM raw_frames ORDER BY seq DESC LIMIT ?1'
+    this.afterStatement = this.database.prepare<LiveRawRow, [number]>(
+      'SELECT seq, stream, payload, observed_at AS observedAt FROM raw_frames WHERE seq > ?1 ORDER BY seq ASC'
     );
-    this.beforeStatement = this.database.prepare<LiveRawRow, [number, number]>(
-      'SELECT seq, stream, payload, observed_at AS observedAt FROM raw_frames WHERE seq < ?1 ORDER BY seq DESC LIMIT ?2'
+    this.newestStatement = this.database.prepare<LiveRawRow, []>(
+      'SELECT seq, stream, payload, observed_at AS observedAt FROM raw_frames ORDER BY seq DESC'
+    );
+    this.beforeStatement = this.database.prepare<LiveRawRow, [number]>(
+      'SELECT seq, stream, payload, observed_at AS observedAt FROM raw_frames WHERE seq < ?1 ORDER BY seq DESC'
     );
   }
 
@@ -84,17 +94,19 @@ export class LiveRawStore {
   page(request: LiveRawPageRequest): LiveRawPage {
     this.assertOpen();
     const limit = Math.max(1, Math.trunc(request.limit));
+    const maxBytes = request.maxBytes === undefined ? Number.POSITIVE_INFINITY : Math.max(1, request.maxBytes);
     if (request.sortDirection === 'asc') {
-      return { rows: this.oldestStatement.all(limit) };
+      const source =
+        request.after === undefined ? this.oldestStatement.iterate() : this.afterStatement.iterate(request.after);
+      return { rows: takeBoundedRows(source, limit, maxBytes).rows };
     }
-    const descending = request.before
-      ? this.beforeStatement.all(request.before, limit + 1)
-      : this.newestStatement.all(limit + 1);
-    const hasOlder = descending.length > limit;
-    const rows = descending.slice(0, limit).reverse();
+    const source =
+      request.before === undefined ? this.newestStatement.iterate() : this.beforeStatement.iterate(request.before);
+    const bounded = takeBoundedRows(source, limit, maxBytes);
+    const rows = bounded.rows.reverse();
     return {
       rows,
-      ...(hasOlder && rows[0] ? { nextBefore: rows[0].seq } : {})
+      ...(bounded.hasMore && rows[0] ? { nextBefore: rows[0].seq } : {})
     };
   }
 
@@ -126,6 +138,27 @@ export class LiveRawStore {
   private assertOpen(): void {
     if (this.closed) throw new Error('live raw store is closed');
   }
+}
+
+function takeBoundedRows(
+  source: Iterable<LiveRawRow>,
+  limit: number,
+  maxBytes: number
+): {
+  rows: LiveRawRow[];
+  hasMore: boolean;
+} {
+  const rows: LiveRawRow[] = [];
+  let bytes = 0;
+  for (const row of source) {
+    const rowBytes = Buffer.byteLength(row.payload);
+    if (rows.length >= limit || (rows.length > 0 && bytes + rowBytes > maxBytes)) {
+      return { rows, hasMore: true };
+    }
+    rows.push(row);
+    bytes += rowBytes;
+  }
+  return { rows, hasMore: false };
 }
 
 export async function cleanupStaleLiveRawStores(directory: string): Promise<{ deleted: number }> {

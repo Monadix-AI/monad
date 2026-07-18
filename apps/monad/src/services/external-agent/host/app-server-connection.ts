@@ -23,6 +23,7 @@ export interface ExternalAgentAppServerConnectionContext {
   log: Logger;
   reconnectBaseMs?: number;
   disconnectGraceMs?: number;
+  rotateLiveCapture?(live: LiveExternalAgentSession): void;
 }
 
 /** Owns the app-server byte-channel lifecycle for `unix`/`ws` sessions: socket/port allocation,
@@ -150,6 +151,7 @@ export class ExternalAgentAppServerConnectionManager {
         },
         'native cli app-server socket dropped while the process is still alive'
       );
+      this.ctx.rotateLiveCapture?.(current);
       // A gateway can close the socket on its very first handshake attempt (for example, rejecting
       // `connect` with `retryable:true` while sidecar plugins are still loading, then dropping the
       // connection) — redial first if the launch mode supports it, even while `live.startup` is still

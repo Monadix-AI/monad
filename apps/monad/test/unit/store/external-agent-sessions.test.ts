@@ -41,59 +41,17 @@ const row: ExternalAgentSessionRow = {
   exitedAt: null
 };
 
-test('external agent session lifecycle stores output snapshots and exit status', () => {
-  store.upsertExternalAgentSession(row);
-  store.appendExternalAgentOutput('exa_100000000000', 'hello', 32);
+test('external agent session lifecycle stores provider mapping and exit status without observation output', () => {
+  store.upsertExternalAgentSession({ ...row, outputSnapshot: 'must not persist' });
   store.updateExternalAgentSessionRef('exa_100000000000', 'provider-session-1');
   store.closeExternalAgentSession('exa_100000000000', '2026-06-28T00:00:01.000Z', 0);
 
   const rows = store.listExternalAgentSessionsForTranscriptTarget('ses_project00000');
   expect(rows).toHaveLength(1);
-  expect(rows[0]?.outputSnapshot).toBe('hello');
+  expect(rows[0]?.outputSnapshot).toBe('');
   expect(rows[0]?.providerSessionRef).toBe('provider-session-1');
   expect(rows[0]?.state).toBe('exited');
   expect(rows[0]?.exitCode).toBe(0);
-});
-
-test('external agent observation journal deduplicates overlapping live and history events', () => {
-  store.upsertExternalAgentSession(row);
-  const event = {
-    id: 'render-live',
-    dedupeKey: 'provider:turn-1:item-1',
-    projection: 'normalized' as const,
-    role: 'agent' as const,
-    text: 'Done',
-    source: 'codex-app-server' as const,
-    provenance: { rawEvents: [{ method: 'item/agentMessage', params: { text: 'Done' } }] }
-  };
-
-  store.recordExternalAgentObservationEvents(row.id, [event], '2026-06-28T00:00:01.000Z');
-  store.recordExternalAgentObservationEvents(row.id, [{ ...event, id: 'render-history' }], '2026-06-28T00:00:02.000Z');
-
-  expect(store.listExternalAgentObservationEvents(row.id, { limit: 20, sortDirection: 'asc' })).toEqual({
-    events: [event]
-  });
-});
-
-test('external agent observation journal returns a newest page in chronological display order', () => {
-  store.upsertExternalAgentSession(row);
-  const events = ['oldest', 'middle', 'newest'].map((id) => ({
-    id,
-    dedupeKey: `provider:${id}`,
-    projection: 'normalized' as const,
-    role: 'agent' as const,
-    text: id,
-    source: 'codex-app-server' as const,
-    provenance: { rawEvents: [{ method: 'item/agentMessage', params: { text: id } }] }
-  }));
-  store.recordExternalAgentObservationEvents(row.id, events, '2026-06-28T00:00:01.000Z');
-
-  const page = store.listExternalAgentObservationEvents(row.id, { limit: 2, sortDirection: 'desc' });
-
-  expect({
-    events: page.events.map((event) => event.id),
-    hasNextCursor: typeof page.nextCursor === 'string'
-  }).toEqual({ events: ['middle', 'newest'], hasNextCursor: true });
 });
 
 test('closeExternalAgentSession does not overwrite terminal external agent session state', () => {

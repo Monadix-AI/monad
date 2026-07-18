@@ -8,14 +8,9 @@ import type { ExternalAgentOutputEvent, ExternalAgentProviderAdapter } from '#/s
 import type { ExternalAgentTargetId } from '#/store/db/external-agent-sessions.ts';
 import type { Store } from '#/store/db/index.ts';
 
-import { MAX_OUTPUT_SNAPSHOT } from '#/services/external-agent/constants.ts';
 import { ExternalAgentError } from '#/services/external-agent/errors.ts';
 import { ExternalAgentEventLog } from '#/services/external-agent/host/event-log.ts';
-import {
-  type ExternalAgentOutputStream,
-  MAX_STRUCTURED_LINE,
-  SNAPSHOT_FLUSH_MS
-} from '#/services/external-agent/host/host-constants.ts';
+import { type ExternalAgentOutputStream, MAX_STRUCTURED_LINE } from '#/services/external-agent/host/host-constants.ts';
 import { externalAgentApprovalText, nativeAgentMcpToolError } from '#/services/external-agent/host/host-helpers.ts';
 import { ExternalAgentObservationHub } from '#/services/external-agent/host/observation-hub.ts';
 import { createStreamingTextDecoder } from '#/services/external-agent/stream-decoder.ts';
@@ -27,12 +22,9 @@ export interface ExternalAgentOutputPipelineContext {
   store: Pick<
     Store,
     | 'getExternalAgentSession'
-    | 'appendExternalAgentOutput'
-    | 'setExternalAgentOutputSnapshot'
     | 'updateExternalAgentSessionRef'
     | 'hasUnconsumedExternalAgentInbox'
     | 'markExternalAgentInboxConsumed'
-    | 'recordExternalAgentObservationEvents'
   >;
   events: ExternalAgentEventLog;
   observation: ExternalAgentObservationHub;
@@ -87,6 +79,29 @@ export class ExternalAgentOutputPipeline {
     stream: 'stdout' | 'stderr' | 'pty' | 'app-server',
     adapter: ExternalAgentProviderAdapter
   ): void {
+    const live = this.ctx.live.get(id);
+    if (!live) return;
+    const capturedPayload = chunk;
+    try {
+      if (!live.liveRawStore) throw new Error('live observation store is unavailable');
+      live.outputSeq = live.liveRawStore.append({
+        stream,
+        payload: capturedPayload,
+        observedAt: new Date().toISOString()
+      }).seq;
+    } catch (error) {
+      this.ctx.log.error(
+        {
+          event: 'external_agent.live_observation_store_write_failed',
+          externalAgentSessionId: id,
+          provider: live.provider,
+          err: error instanceof Error ? { message: error.message, stack: error.stack } : String(error)
+        },
+        'native cli live observation capture failed'
+      );
+      this.ctx.stop(id);
+      throw error;
+    }
     if (stream === 'app-server' && isAppServerControlResponse(chunk)) {
       for (const event of adapter.parseOutput(chunk, this.ctx.live.get(id))) {
         const parsed = externalAgentOutputEventSchema.safeParse(event);
@@ -94,7 +109,6 @@ export class ExternalAgentOutputPipeline {
       }
       return;
     }
-    const live = this.ctx.live.get(id);
     let structuredChunk =
       stream === 'pty' || stream === 'app-server' ? chunk : this.takeCompleteStructuredLines(id, stream, chunk);
     const protectsStructuredSeam =
@@ -118,31 +132,14 @@ export class ExternalAgentOutputPipeline {
     // Keep the observation snapshot newline-delimited so the web parser can split records; a ws frame
     // carries no trailing newline of its own.
     const buffered = stream === 'app-server' ? `${observableChunk}\n` : observableChunk;
-    if (live) {
-      // Accumulate in memory and flush the bounded snapshot to SQLite on a timer — avoids a
-      // per-chunk 256 KB read-modify-write under a chatty agent.
-      if (stream === 'app-server') live.outputBuffer.appendFrame(buffered);
-      else live.outputBuffer.append(buffered);
-      live.outputSeq += buffered.length;
-      this.scheduleSnapshotFlush(id);
-      this.ctx.observation.publish(id);
-      this.ctx.armIdleSuspend(live);
-    } else {
-      const row = this.ctx.store.getExternalAgentSession(id);
-      if (row) this.ctx.store.appendExternalAgentOutput(id, buffered, MAX_OUTPUT_SNAPSHOT);
-    }
+    this.ctx.observation.publish(id);
+    this.ctx.armIdleSuspend(live);
     this.ctx.events.publish(transcriptTargetId, 'external_agent.output', {
       externalAgentSessionId: id,
       stream: stream === 'app-server' ? 'stdout' : stream,
       chunk: buffered
     });
     if (!structuredChunk) return;
-    const projected = adapter.events
-      .projectLive({ id, output: structuredChunk })
-      .events.filter((event) => !adapter.observation?.isStreamingFragment?.(event));
-    if (projected.length > 0) {
-      this.ctx.store.recordExternalAgentObservationEvents(id, projected, new Date().toISOString());
-    }
     if (stream === 'stderr') {
       for (const line of structuredChunk.split('\n')) {
         const record = nativeAgentMcpToolError(line.trim());
@@ -185,28 +182,6 @@ export class ExternalAgentOutputPipeline {
       checkpoint = events.findLast((event) => event.dedupeKey)?.dedupeKey ?? checkpoint;
     }
     return { chunk: retained.join(''), identities, checkpoint };
-  }
-
-  private scheduleSnapshotFlush(id: string): void {
-    const live = this.ctx.live.get(id);
-    if (!live || live.snapshotFlushTimer) return;
-    live.snapshotFlushTimer = setTimeout(() => {
-      const current = this.ctx.live.get(id);
-      if (current) current.snapshotFlushTimer = null;
-      this.flushSnapshot(id);
-    }, SNAPSHOT_FLUSH_MS);
-  }
-
-  /** Persist the in-memory snapshot now and cancel any pending flush. Called on the timer and once
-   *  more on exit/stop so the final output isn't lost. */
-  flushSnapshot(id: string): void {
-    const live = this.ctx.live.get(id);
-    if (!live) return;
-    if (live.snapshotFlushTimer) {
-      clearTimeout(live.snapshotFlushTimer);
-      live.snapshotFlushTimer = null;
-    }
-    this.ctx.store.setExternalAgentOutputSnapshot(id, live.outputBuffer.snapshot(), MAX_OUTPUT_SNAPSHOT);
   }
 
   takeCompleteStructuredLines(id: string, stream: 'stdout' | 'stderr', chunk: string): string {

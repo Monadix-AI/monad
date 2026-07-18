@@ -84,11 +84,6 @@ import {
   markExternalAgentInboxVisible
 } from './external-agent-inbox.ts';
 import {
-  listExternalAgentObservationEvents,
-  recordExternalAgentObservationEvents
-} from './external-agent-observations.ts';
-import {
-  appendExternalAgentOutput,
   clearExternalAgentSessionRef,
   closeExternalAgentSession,
   type ExternalAgentSessionRow,
@@ -99,7 +94,6 @@ import {
   pruneExitedExternalAgentSessions,
   reconcileOrphanedExternalAgentSessions,
   setExternalAgentDeliveredCursor,
-  setExternalAgentOutputSnapshot,
   setExternalAgentVisibleCursor,
   updateExternalAgentSessionRef,
   upsertExternalAgentSession
@@ -685,33 +679,6 @@ export class Store {
     return listLiveExternalAgentSessions(this.sqlite);
   }
 
-  appendExternalAgentOutput(id: string, chunk: string, maxSnapshotBytes = 256 * 1024): boolean {
-    return appendExternalAgentOutput(this.sqlite, id, chunk, maxSnapshotBytes);
-  }
-
-  recordExternalAgentObservationEvents(
-    id: string,
-    events: import('@monad/protocol').ExternalAgentObservationEvent[],
-    observedAt = new Date().toISOString()
-  ): void {
-    recordExternalAgentObservationEvents(this.sqlite, id, events, observedAt);
-  }
-
-  listExternalAgentObservationEvents(
-    id: string,
-    request: { before?: string; limit: number; sortDirection: 'asc' | 'desc' }
-  ): { events: import('@monad/protocol').ExternalAgentObservationEvent[]; nextCursor?: string } {
-    return listExternalAgentObservationEvents(this.sqlite, id, request);
-  }
-
-  /** Overwrite the whole snapshot (no read-modify-write). The host buffers output in memory and
-   *  flushes the bounded snapshot here on a timer, so the per-chunk path never touches SQLite. */
-  setExternalAgentOutputSnapshot(id: string, snapshot: string, maxSnapshotBytes = 256 * 1024): boolean {
-    return setExternalAgentOutputSnapshot(this.sqlite, id, snapshot, maxSnapshotBytes);
-  }
-
-  /** Delete terminal (exited/failed/stopped) sessions older than `olderThanMs`. Bounds table growth
-   *  — one row per CLI launch, each carrying up to 256 KB of snapshot. Returns deleted count. */
   pruneExitedExternalAgentSessions(olderThanMs = 7 * 24 * 60 * 60 * 1000): number {
     return pruneExitedExternalAgentSessions(this.sqlite, olderThanMs);
   }

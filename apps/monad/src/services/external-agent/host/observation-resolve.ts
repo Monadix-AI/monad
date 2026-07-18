@@ -7,14 +7,15 @@ import type { ExternalAgentHostDeps, LiveExternalAgentSession } from '#/services
 
 import { toAgentObservationEvent } from '@monad/atoms/agent-observation';
 import { externalAgentUsageLimitMeter } from '@monad/atoms/external-agent-observation';
+import { EXTERNAL_AGENT_OUTPUT_SNAPSHOT_MAX } from '@monad/protocol';
 
 import {
   providerHistoryEventsFromLocal,
   providerHistoryPageViaCli
 } from '#/services/external-agent/host/history-backfill.ts';
-import { encodeJournalHistoryCursor } from '#/services/external-agent/host/history-cursor.ts';
-import { isManagedProjectRuntime } from '#/services/external-agent/host/host-helpers.ts';
+import { encodeProviderHistoryCursor } from '#/services/external-agent/host/history-cursor.ts';
 import { getExternalAgentProviderAdapter } from '#/services/external-agent/index.ts';
+import { liveRawRowsOutput } from '#/services/external-agent/live-raw-store.ts';
 
 export interface ExternalAgentObservationResolveContext {
   live: Map<string, LiveExternalAgentSession>;
@@ -25,30 +26,42 @@ export interface ExternalAgentObservationResolveContext {
   dropStructuredBuffer(id: string): void;
 }
 
-/** Resolves a session's current observable state — from the live output buffer, the durable
- *  snapshot column, or (for managed-project runtimes) the provider's own history — independent of
- *  the subscription/publish side owned by `ExternalAgentObservationHub`. */
+const LIVE_OBSERVATION_PAGE_ROWS = 2_000;
+
+/** Resolves a session from the ephemeral live store or the provider's own history. */
 export class ExternalAgentObservationResolver {
   constructor(private readonly ctx: ExternalAgentObservationResolveContext) {}
 
   observe(id: string, afterSeq?: number): ExternalAgentObservationAccessResponse {
     const live = this.ctx.live.get(id);
-    if (live) {
-      const snapshot = live.outputBuffer.snapshot();
-      // Resume: if the caller's cursor is still within the bounded tail, hand back only the delta
-      // beyond it instead of the whole snapshot (a reconnecting client backfills from last-event-id).
-      if (afterSeq !== undefined && live.outputSeq > afterSeq && live.outputSeq - afterSeq <= snapshot.length) {
+    if (live?.liveRawStore && !live.suspended) {
+      if (afterSeq !== undefined) {
+        const page = live.liveRawStore.page({
+          after: afterSeq,
+          limit: LIVE_OBSERVATION_PAGE_ROWS,
+          maxBytes: EXTERNAL_AGENT_OUTPUT_SNAPSHOT_MAX,
+          sortDirection: 'asc'
+        });
+        const last = page.rows.at(-1);
         return {
           state: 'live',
           externalAgentSessionId: id as ExternalAgentSessionId,
           provider: live.provider,
           observationEpoch: live.observationEpoch,
           ...(live.providerHistoryCheckpoint ? { providerHistoryCheckpoint: live.providerHistoryCheckpoint } : {}),
-          append: snapshot.slice(snapshot.length - (live.outputSeq - afterSeq)),
-          seq: live.outputSeq,
-          observedAt: new Date().toISOString()
+          append: liveRawRowsOutput(page.rows),
+          seq: last?.seq ?? afterSeq,
+          observedAt: last?.observedAt ?? new Date().toISOString()
         };
       }
+      const page = live.liveRawStore.page({
+        limit: LIVE_OBSERVATION_PAGE_ROWS,
+        maxBytes: EXTERNAL_AGENT_OUTPUT_SNAPSHOT_MAX,
+        sortDirection: 'desc'
+      });
+      const snapshot = liveRawRowsOutput(page.rows);
+      const first = page.rows[0];
+      const last = page.rows.at(-1);
       return {
         state: 'live',
         externalAgentSessionId: id as ExternalAgentSessionId,
@@ -57,10 +70,14 @@ export class ExternalAgentObservationResolver {
         ...(live.providerHistoryCheckpoint ? { providerHistoryCheckpoint: live.providerHistoryCheckpoint } : {}),
         output: snapshot,
         events: live.adapter.events.projectLive({ id, output: snapshot }).events,
-        historyBefore: encodeJournalHistoryCursor(),
+        ...(page.nextBefore !== undefined && first
+          ? { historyBefore: live.liveRawStore.cursorBefore(first.seq) }
+          : live.providerSessionRef
+            ? { historyBefore: encodeProviderHistoryCursor('') }
+            : {}),
         usageMeter: externalAgentUsageLimitMeter({ adapter: live.adapter, output: snapshot }),
-        seq: live.outputSeq,
-        observedAt: new Date().toISOString()
+        seq: last?.seq ?? 0,
+        observedAt: last?.observedAt ?? new Date().toISOString()
       };
     }
     const row = this.ctx.store.getExternalAgentSession(id);
@@ -69,19 +86,6 @@ export class ExternalAgentObservationResolver {
         state: 'unavailable',
         externalAgentSessionId: id as ExternalAgentSessionId,
         reason: 'external agent session not found'
-      };
-    }
-    if (row.outputSnapshot) {
-      const adapter = getExternalAgentProviderAdapter(row.provider);
-      return {
-        state: 'history',
-        externalAgentSessionId: id as ExternalAgentSessionId,
-        provider: row.provider,
-        output: row.outputSnapshot,
-        events: adapter.events.projectLive({ id, output: row.outputSnapshot, mode: 'history' }).events,
-        historyBefore: encodeJournalHistoryCursor(),
-        usageMeter: externalAgentUsageLimitMeter({ adapter, output: row.outputSnapshot }),
-        observedAt: row.updatedAt
       };
     }
     return {
@@ -96,8 +100,15 @@ export class ExternalAgentObservationResolver {
    *  from the whole snapshot every call (never a delta), so a consumer replaces its list wholesale. */
   observeUi(id: string): ExternalAgentUiObservationFrame {
     const live = this.ctx.live.get(id);
-    if (live) {
-      const snapshot = live.outputBuffer.snapshot();
+    if (live?.liveRawStore && !live.suspended) {
+      const page = live.liveRawStore.page({
+        limit: LIVE_OBSERVATION_PAGE_ROWS,
+        maxBytes: EXTERNAL_AGENT_OUTPUT_SNAPSHOT_MAX,
+        sortDirection: 'desc'
+      });
+      const snapshot = liveRawRowsOutput(page.rows);
+      const first = page.rows[0];
+      const last = page.rows.at(-1);
       return {
         state: 'live',
         externalAgentSessionId: id as ExternalAgentSessionId,
@@ -108,9 +119,13 @@ export class ExternalAgentObservationResolver {
           .projectLive({ id, output: snapshot })
           .events.map((event) => toAgentObservationEvent(event, live.adapter.observation))
           .filter((event) => event !== null),
-        historyBefore: encodeJournalHistoryCursor(),
-        seq: live.outputSeq,
-        observedAt: new Date().toISOString()
+        ...(page.nextBefore !== undefined && first
+          ? { historyBefore: live.liveRawStore.cursorBefore(first.seq) }
+          : live.providerSessionRef
+            ? { historyBefore: encodeProviderHistoryCursor('') }
+            : {}),
+        seq: last?.seq ?? 0,
+        observedAt: last?.observedAt ?? new Date().toISOString()
       };
     }
     const row = this.ctx.store.getExternalAgentSession(id);
@@ -119,20 +134,6 @@ export class ExternalAgentObservationResolver {
         state: 'unavailable',
         externalAgentSessionId: id as ExternalAgentSessionId,
         reason: 'external agent session not found'
-      };
-    }
-    if (row.outputSnapshot) {
-      const adapter = getExternalAgentProviderAdapter(row.provider);
-      return {
-        state: 'history',
-        externalAgentSessionId: id as ExternalAgentSessionId,
-        provider: row.provider,
-        events: adapter.events
-          .projectLive({ id, output: row.outputSnapshot, mode: 'history' })
-          .events.map((event) => toAgentObservationEvent(event, adapter.observation))
-          .filter((event) => event !== null),
-        historyBefore: encodeJournalHistoryCursor(),
-        observedAt: row.updatedAt
       };
     }
     return {
@@ -152,7 +153,7 @@ export class ExternalAgentObservationResolver {
     )
       return base;
     const row = this.ctx.store.getExternalAgentSession(id);
-    if (!row || !isManagedProjectRuntime(row) || !row.providerSessionRef) return base;
+    if (!row?.providerSessionRef) return base;
     const adapter = getExternalAgentProviderAdapter(row.provider);
     const cliPage = await providerHistoryPageViaCli(
       row,
@@ -166,32 +167,48 @@ export class ExternalAgentObservationResolver {
       }
     ).catch(() => null);
     if (cliPage?.state === 'available' && cliPage.events.length > 0) {
-      this.ctx.store.recordExternalAgentObservationEvents(id, cliPage.events, row.updatedAt);
       return {
         state: 'history',
         externalAgentSessionId: id as ExternalAgentSessionId,
         provider: row.provider,
         output: cliPage.events.map((event) => event.text).join('\n'),
         events: cliPage.events,
-        historyBefore: encodeJournalHistoryCursor(),
+        ...(cliPage.nextCursor ? { historyBefore: encodeProviderHistoryCursor(cliPage.nextCursor) } : {}),
         usageMeter: null,
         observedAt: row.updatedAt
       };
     }
     const localEvents = await providerHistoryEventsFromLocal(row, adapter);
     if (localEvents) {
-      this.ctx.store.recordExternalAgentObservationEvents(id, localEvents, row.updatedAt);
       return {
         state: 'history',
         externalAgentSessionId: id as ExternalAgentSessionId,
         provider: row.provider,
         output: localEvents.map((event) => event.text).join('\n'),
         events: localEvents,
-        historyBefore: encodeJournalHistoryCursor(),
         usageMeter: null,
         observedAt: row.updatedAt
       };
     }
     return base;
+  }
+
+  async observeUiWithProviderHistory(id: string): Promise<ExternalAgentUiObservationFrame> {
+    const live = this.observeUi(id);
+    if (live.state === 'live') return live;
+    const access = await this.observeWithProviderHistory(id);
+    if (access.state === 'unavailable') return access;
+    const row = this.ctx.store.getExternalAgentSession(id);
+    const adapter = getExternalAgentProviderAdapter(access.provider);
+    return {
+      state: 'history',
+      externalAgentSessionId: id as ExternalAgentSessionId,
+      provider: access.provider,
+      events: (access.events ?? [])
+        .map((event) => toAgentObservationEvent(event, adapter.observation))
+        .filter((event) => event !== null),
+      ...(access.historyBefore ? { historyBefore: access.historyBefore } : {}),
+      observedAt: access.observedAt ?? row?.updatedAt ?? new Date().toISOString()
+    };
   }
 }

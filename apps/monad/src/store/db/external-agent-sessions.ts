@@ -1,6 +1,5 @@
-// External agent session ledger: one row per CLI launch, its bounded output snapshot, delivery/visible
-// cursors, and startup orphan reconciliation. Split out of index.ts — every function takes the raw
-// bun:sqlite handle.
+// External agent session ledger: one row per CLI launch, provider mapping, delivery/visible cursors,
+// and startup orphan reconciliation.
 
 import type { Database } from 'bun:sqlite';
 import type {
@@ -55,7 +54,7 @@ function rowToExternalAgentSession(r: Record<string, unknown>): ExternalAgentSes
     state: r.state as ExternalAgentSessionState,
     pid: (r.pid as number | null) ?? null,
     providerSessionRef: (r.provider_session_ref as string | null) ?? null,
-    outputSnapshot: (r.output_snapshot as string | null) ?? '',
+    outputSnapshot: '',
     exitCode: (r.exit_code as number | null) ?? null,
     startedAt: r.started_at as string,
     updatedAt: r.updated_at as string,
@@ -69,10 +68,10 @@ export function upsertExternalAgentSession(sqlite: Database, row: ExternalAgentS
       `INSERT INTO external_agent_sessions
          (id, transcript_target_id, agent_name, provider, working_path, launch_mode, state,
           runtime_role, agent_runtime_id, agent_runtime_token_hash, last_delivered_seq, last_visible_seq, pid,
-          provider_session_ref, output_snapshot, exit_code, started_at, updated_at, exited_at)
+          provider_session_ref, exit_code, started_at, updated_at, exited_at)
        VALUES ($id, $transcriptTargetId, $agentName, $provider, $workingPath, $launchMode, $state,
                $runtimeRole, $agentRuntimeId, $agentRuntimeTokenHash, $lastDeliveredSeq, $lastVisibleSeq, $pid,
-               $providerSessionRef, $outputSnapshot, $exitCode, $startedAt, $updatedAt, $exitedAt)
+               $providerSessionRef, $exitCode, $startedAt, $updatedAt, $exitedAt)
        ON CONFLICT(id) DO UPDATE SET
          transcript_target_id = excluded.transcript_target_id,
          agent_name           = excluded.agent_name,
@@ -87,7 +86,6 @@ export function upsertExternalAgentSession(sqlite: Database, row: ExternalAgentS
          state                = excluded.state,
          pid                  = excluded.pid,
          provider_session_ref = excluded.provider_session_ref,
-         output_snapshot      = excluded.output_snapshot,
          exit_code            = excluded.exit_code,
          updated_at           = excluded.updated_at,
          exited_at            = excluded.exited_at`
@@ -107,7 +105,6 @@ export function upsertExternalAgentSession(sqlite: Database, row: ExternalAgentS
       $state: row.state,
       $pid: row.pid,
       $providerSessionRef: row.providerSessionRef,
-      $outputSnapshot: row.outputSnapshot,
       $exitCode: row.exitCode,
       $startedAt: row.startedAt,
       $updatedAt: row.updatedAt,
@@ -150,36 +147,7 @@ export function listLiveExternalAgentSessions(sqlite: Database): ExternalAgentSe
   ).map(rowToExternalAgentSession);
 }
 
-export function appendExternalAgentOutput(
-  sqlite: Database,
-  id: string,
-  chunk: string,
-  maxSnapshotBytes = 256 * 1024
-): boolean {
-  const current = getExternalAgentSession(sqlite, id);
-  if (!current) return false;
-  const next = `${current.outputSnapshot}${chunk}`;
-  const outputSnapshot = next.length > maxSnapshotBytes ? next.slice(-maxSnapshotBytes) : next;
-  return setExternalAgentOutputSnapshot(sqlite, id, outputSnapshot);
-}
-
-/** Overwrite the whole snapshot (no read-modify-write). The host buffers output in memory and
- *  flushes the bounded snapshot here on a timer, so the per-chunk path never touches SQLite. */
-export function setExternalAgentOutputSnapshot(
-  sqlite: Database,
-  id: string,
-  snapshot: string,
-  maxSnapshotBytes = 256 * 1024
-): boolean {
-  const bounded = snapshot.length > maxSnapshotBytes ? snapshot.slice(-maxSnapshotBytes) : snapshot;
-  const result = sqlite
-    .query('UPDATE external_agent_sessions SET output_snapshot = ?, updated_at = ? WHERE id = ?')
-    .run(bounded, new Date().toISOString(), id);
-  return result.changes > 0;
-}
-
-/** Delete terminal (exited/failed/stopped) sessions older than `olderThanMs`. Bounds table growth
- *  — one row per CLI launch, each carrying up to 256 KB of snapshot. Returns deleted count. */
+/** Delete terminal (exited/failed/stopped) sessions older than `olderThanMs`. */
 export function pruneExitedExternalAgentSessions(sqlite: Database, olderThanMs = 7 * 24 * 60 * 60 * 1000): number {
   const cutoff = new Date(Date.now() - olderThanMs).toISOString();
   return sqlite

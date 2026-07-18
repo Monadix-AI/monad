@@ -194,7 +194,9 @@ export function createExternalAgentModule({ host, store, config }: ExternalAgent
       transcriptTargetId: ExternalAgentTargetId;
     }): Promise<ExternalAgentObservationAccessResponse> {
       requireExternalAgentSessionScope(id, transcriptTargetId);
-      return Promise.resolve(externalAgentObservationAccessResponseSchema.parse(host.observe(id)));
+      return host
+        .observeWithProviderHistory(id)
+        .then((observation) => externalAgentObservationAccessResponseSchema.parse(observation));
     },
 
     observeUi({
@@ -205,7 +207,9 @@ export function createExternalAgentModule({ host, store, config }: ExternalAgent
       transcriptTargetId: ExternalAgentTargetId;
     }): Promise<ExternalAgentUiObservationFrame> {
       requireExternalAgentSessionScope(id, transcriptTargetId);
-      return Promise.resolve(externalAgentUiObservationFrameSchema.parse(host.observeUi(id)));
+      return host
+        .observeUiWithProviderHistory(id)
+        .then((observation) => externalAgentUiObservationFrameSchema.parse(observation));
     },
 
     subscribeUiObservation({

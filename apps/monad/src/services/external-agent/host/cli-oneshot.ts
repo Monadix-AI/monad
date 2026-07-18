@@ -1,5 +1,6 @@
 import type { ExternalAgentSessionView } from '@monad/protocol';
 import type { LiveExternalAgentSession } from '#/services/external-agent/host/host-types.ts';
+import type { LiveRawStore } from '#/services/external-agent/live-raw-store.ts';
 import type { prepareManagedProjectRuntime } from '#/services/external-agent/managed-project.ts';
 import type { ExternalAgentProcess } from '#/services/external-agent/runtime-types.ts';
 import type { ExternalAgentLaunchSpec, ExternalAgentProviderAdapter } from '#/services/external-agent/types.ts';
@@ -10,8 +11,6 @@ import { createLogger } from '@monad/logger';
 import { newId } from '@monad/protocol';
 
 import { daemonTrackedSpawnOptions, supervisedSpawn } from '#/infra/spawn-supervisor.ts';
-import { BoundedOutputBuffer } from '#/services/external-agent/bounded-output-buffer.ts';
-import { MAX_OUTPUT_SNAPSHOT } from '#/services/external-agent/constants.ts';
 import { ExternalAgentEventLog } from '#/services/external-agent/host/event-log.ts';
 import { toView } from '#/services/external-agent/host/host-helpers.ts';
 import { ExternalAgentOutputPipeline } from '#/services/external-agent/host/output-pipeline.ts';
@@ -28,6 +27,7 @@ export interface ExternalAgentOneshotRunnerContext {
   buildSpawnEnv(launchEnv?: Record<string, string>): Promise<Record<string, string>>;
   trackProcess(pid: number): void;
   untrackProcess(pid: number): void;
+  openLiveRawStore(id: string, epoch: string): LiveRawStore;
 }
 
 /** Runs `cli-oneshot` sessions: a logical session backed by NO persistent process — each turn spawns
@@ -51,6 +51,8 @@ export class ExternalAgentOneshotRunner {
     startedAt: string;
   }): ExternalAgentSessionView {
     const { id, transcriptTargetId, agentName, provider, workingPath, runtimeRole, launch, adapter, managed } = args;
+    const observationEpoch = newId('oep');
+    const liveRawStore = this.ctx.openLiveRawStore(id, observationEpoch);
     const row: ExternalAgentSessionRow = {
       id,
       transcriptTargetId,
@@ -91,11 +93,10 @@ export class ExternalAgentOneshotRunner {
       pendingHistoryPages: new Map(),
       pendingRequests: new Map(),
       startup: undefined,
-      outputBuffer: new BoundedOutputBuffer(MAX_OUTPUT_SNAPSHOT),
-      observationEpoch: newId('oep'),
+      liveRawStore,
+      observationEpoch,
       observationEpochReady: false,
       outputSeq: 0,
-      snapshotFlushTimer: null,
       nextRequestId: () => 0,
       kill: (signal) => {
         const l = this.ctx.live.get(id);
@@ -164,7 +165,6 @@ export class ExternalAgentOneshotRunner {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.ctx.outputPipeline.output(live.transcriptTargetId, live.id, message, 'stderr', live.adapter);
-      this.ctx.outputPipeline.flushSnapshot(live.id);
       return;
     }
     live.oneshotTurnProc = proc;
@@ -187,7 +187,6 @@ export class ExternalAgentOneshotRunner {
     const code = await proc.exited;
     await drains;
     if (live.oneshotTurnProc === proc) live.oneshotTurnProc = undefined;
-    this.ctx.outputPipeline.flushSnapshot(live.id);
     if (code !== 0) {
       this.ctx.outputPipeline.output(
         live.transcriptTargetId,

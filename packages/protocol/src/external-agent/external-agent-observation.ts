@@ -79,17 +79,13 @@ export const nativeAgentObservationProjectionSchema = z.discriminatedUnion('stat
 ]);
 export type NativeAgentObservationProjection = z.infer<typeof nativeAgentObservationProjectionSchema>;
 
-/** Bytes retained from an external agent output snapshot. The daemon bounds its in-memory buffer and the
- *  SQLite column to this, and a client that folds `append` deltas must bound its accumulator to the
- *  same cap so it never renders more tail than the daemon retains. Cross-tier contract. */
+/** Maximum raw bytes projected into one live observation frame. The ephemeral live store is not
+ *  truncated; older committed frames remain available through history pagination. */
 export const EXTERNAL_AGENT_OUTPUT_SNAPSHOT_MAX = 256 * 1024;
 
 export const externalAgentObservationAccessResponseSchema = z.discriminatedUnion('state', [
-  // A live observation frame is either a full snapshot (`output`, sent first and on resync) or an
-  // incremental delta (`append`, the text produced since `seq - append.length`). `seq` is the
-  // cumulative output length after this frame — the consumer's cursor: it replaces on `output`, and
-  // on `append` applies only the tail past its current cursor (deltas may overlap a just-taken
-  // snapshot). This lets the stream push per-token deltas instead of the whole 256 KB buffer each tick.
+  // A live observation frame is either a latest bounded page (`output`) or the exact committed raw
+  // rows after the caller's cursor (`append`). `seq` is the last included raw-store row sequence.
   z.object({
     state: z.literal('live'),
     externalAgentSessionId: externalAgentSessionIdSchema,
