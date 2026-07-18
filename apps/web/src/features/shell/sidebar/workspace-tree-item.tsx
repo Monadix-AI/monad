@@ -20,6 +20,7 @@ import {
   sidebarIconButtonClass,
   sidebarItemContainerClass
 } from './nav-item';
+import { SidebarSessionTitle } from './sidebar-session-title';
 
 export type TreeItemMenuAction = {
   icon: typeof PencilEdit01Icon;
@@ -73,6 +74,18 @@ export function WorkspaceTreeItem({
 }) {
   const [editing, setEditing] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const sessionActionsRef = useRef<HTMLDivElement | null>(null);
+  const [sessionActionWidth, setSessionActionWidth] = useState(0);
+
+  useEffect(() => {
+    const element = sessionActionsRef.current;
+    if (!sidebarSession || !element) return;
+    const updateWidth = () => setSessionActionWidth(element.getBoundingClientRect().width);
+    updateWidth();
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [sidebarSession]);
 
   const startEditing = useCallback(() => {
     if (!onRename) return;
@@ -100,6 +113,21 @@ export function WorkspaceTreeItem({
     [active, editableOnDoubleClick, startEditing]
   );
 
+  const rowActions = (
+    <>
+      {actions}
+      {resolvedMenuActions?.length ? (
+        <SidebarItemMenu
+          actions={resolvedMenuActions}
+          label={menuLabel ?? title}
+          onOpenChange={setMenuOpen}
+          open={menuOpen}
+        />
+      ) : null}
+      {trailingActions}
+    </>
+  );
+
   return (
     <div
       className={sidebarItemContainerClass({ active, className: 'gap-0.5' })}
@@ -124,7 +152,7 @@ export function WorkspaceTreeItem({
           title={title}
         >
           {icon}
-          <span className={cn(SIDEBAR_ITEM_LABEL_CLASS, contentClassName)}>
+          <span className={cn(sidebarSession ? 'min-w-0 flex-1' : SIDEBAR_ITEM_LABEL_CLASS, contentClassName)}>
             <SidebarEditableTitle
               editing={editing}
               label={label}
@@ -132,7 +160,15 @@ export function WorkspaceTreeItem({
               onEditingChange={setEditing}
               title={title}
             >
-              {children}
+              {sidebarSession ? (
+                <SidebarSessionTitle
+                  actionWidth={sessionActionWidth}
+                  disabled={editing || menuOpen}
+                  label={label}
+                />
+              ) : (
+                children
+              )}
             </SidebarEditableTitle>
           </span>
           {sidebarSession ? <SidebarSessionShortcutChip /> : null}
@@ -149,7 +185,7 @@ export function WorkspaceTreeItem({
           type="button"
         >
           {icon}
-          <span className={cn(SIDEBAR_ITEM_LABEL_CLASS, contentClassName)}>
+          <span className={cn(sidebarSession ? 'min-w-0 flex-1' : SIDEBAR_ITEM_LABEL_CLASS, contentClassName)}>
             <SidebarEditableTitle
               editing={editing}
               label={label}
@@ -157,22 +193,34 @@ export function WorkspaceTreeItem({
               onEditingChange={setEditing}
               title={title}
             >
-              {children}
+              {sidebarSession ? (
+                <SidebarSessionTitle
+                  actionWidth={sessionActionWidth}
+                  disabled={editing || menuOpen}
+                  label={label}
+                />
+              ) : (
+                children
+              )}
             </SidebarEditableTitle>
           </span>
           {sidebarSession ? <SidebarSessionShortcutChip /> : null}
         </button>
       )}
-      {actions}
-      {resolvedMenuActions?.length ? (
-        <SidebarItemMenu
-          actions={resolvedMenuActions}
-          label={menuLabel ?? title}
-          onOpenChange={setMenuOpen}
-          open={menuOpen}
-        />
-      ) : null}
-      {trailingActions}
+      {sidebarSession ? (
+        <div
+          className={cn(
+            'pointer-events-none absolute inset-y-0 right-1 z-10 flex items-center gap-0.5 [@media_(hover:none),_(pointer:coarse)]:pointer-events-auto',
+            editing && 'hidden'
+          )}
+          data-sidebar-session-actions="true"
+          ref={sessionActionsRef}
+        >
+          {rowActions}
+        </div>
+      ) : (
+        rowActions
+      )}
     </div>
   );
 }

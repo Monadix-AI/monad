@@ -472,6 +472,75 @@ test.describe('workspace sidebar interactions', () => {
     await expect(page.getByRole('link', { name: 'Chat Session 6' })).toBeVisible();
   });
 
+  test('marquees overflowing session titles without letting actions consume title width', async ({ page }) => {
+    const longTitle = 'Openclaw monadix provider plugin architecture and implementation details';
+    const state = createSidebarState();
+    const chatSession = state.sessions.find((session) => session.id === CHAT_SESSION_ID);
+    if (!chatSession) throw new Error('Expected the sidebar chat session fixture');
+    chatSession.title = longTitle;
+
+    await installSidebarMock(page, state);
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await page.goto('/');
+    await expect(page.getByTestId('daemon-menu-trigger')).toBeVisible();
+
+    const link = page.getByRole('link', { name: longTitle });
+    const row = link.locator('xpath=..');
+    const viewport = row.locator('[data-sidebar-session-title-viewport]');
+    const track = row.locator('[data-sidebar-session-title-track]');
+    const actions = row.locator('[data-sidebar-session-actions]');
+
+    await expect(viewport).toBeVisible();
+    expect(await actions.evaluate((element) => getComputedStyle(element).position)).toBe('absolute');
+    const widths = await row.evaluate((element) => {
+      const rowWidth = element.getBoundingClientRect().width;
+      const linkWidth = element.querySelector('a')?.getBoundingClientRect().width ?? 0;
+      return { linkWidth, rowWidth };
+    });
+    expect(Math.abs(widths.rowWidth - widths.linkWidth)).toBeLessThan(1);
+    expect(await track.evaluate((element) => getComputedStyle(element).textOverflow)).not.toBe('ellipsis');
+    expect(await viewport.evaluate((element) => getComputedStyle(element).maskImage)).not.toBe('none');
+
+    await viewport.hover();
+    await page.waitForTimeout(300);
+    await expect(track).toHaveAttribute('data-marquee-state', 'idle');
+    await expect(track).toHaveAttribute('data-marquee-state', 'moving', { timeout: 600 });
+    await expect
+      .poll(() => track.evaluate((element) => getComputedStyle(element).transform))
+      .not.toBe('matrix(1, 0, 0, 1, 0, 0)');
+
+    await page.mouse.move(800, 400);
+    await expect(track).toHaveAttribute('data-marquee-state', 'idle');
+    expect(await track.evaluate((element) => getComputedStyle(element).transform)).toBe('matrix(1, 0, 0, 1, 0, 0)');
+
+    await row.hover();
+    const menuButton = row.getByRole('button', { name: 'Item actions' });
+    await expect.poll(() => menuButton.evaluate((element) => getComputedStyle(element).opacity)).toBe('1');
+    await menuButton.click();
+    await expect(page.getByRole('menuitem', { name: 'Rename session' })).toBeVisible();
+  });
+
+  test('keeps overflowing session titles stationary when reduced motion is requested', async ({ page }) => {
+    const longTitle = 'A deliberately long sidebar session title that cannot fit inside the available row width';
+    const state = createSidebarState();
+    const chatSession = state.sessions.find((session) => session.id === CHAT_SESSION_ID);
+    if (!chatSession) throw new Error('Expected the sidebar chat session fixture');
+    chatSession.title = longTitle;
+
+    await installSidebarMock(page, state);
+    await page.goto('/');
+    await expect(page.getByTestId('daemon-menu-trigger')).toBeVisible();
+
+    const row = page.getByRole('link', { name: longTitle }).locator('xpath=..');
+    const viewport = row.locator('[data-sidebar-session-title-viewport]');
+    const track = row.locator('[data-sidebar-session-title-track]');
+    await viewport.hover();
+    await page.waitForTimeout(750);
+
+    await expect(track).toHaveAttribute('data-marquee-state', 'idle');
+    expect(await track.evaluate((element) => getComputedStyle(element).transform)).toBe('matrix(1, 0, 0, 1, 0, 0)');
+  });
+
   test('routes create-session entry points through the New Chat home prefill', async ({ page }) => {
     await installSidebarMock(page);
     await page.goto(`/workspace/${PROJECT_ID}`);
