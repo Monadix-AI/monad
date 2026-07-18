@@ -84,7 +84,7 @@
     "start:dev": "NODE_ENV=development bun --env-file=../../.env.local --watch ../cli/src/bin.ts daemon --dev",
     "test": "bun run test:unit && bun run test:e2e:hermetic",
     "test:e2e": "bun run test:e2e:hermetic",
-    "test:e2e:hermetic": "bun ../../scripts/bun-test.ts test/e2e/ --monad-suite=hermetic-e2e --only-failures",
+    "test:e2e:hermetic": "bun ../../scripts/bun-test.ts test/e2e/ --monad-suite=hermetic-e2e --monad-shards=auto --only-failures",
     "test:e2e:loud": "bun ../../scripts/bun-test.ts test/e2e/ --monad-suite=hermetic-e2e --loud",
     "test:loud": "bun run test:unit:loud && bun run test:e2e:loud",
     "test:unit": "bun ../../scripts/bun-test.ts test/unit/ --only-failures",

@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 
 import { type FailedTestFile, groupFailedCases, parseFailedCases } from './lib/test-failure-rerun.ts';
+import { collectTestFiles, parseMonadTestShardArgs, runShardedTestFiles, shardableTargets } from './lib/test-shard.ts';
 import { parseMonadTestSuiteArgs } from './lib/test-suite.ts';
 
 /**
@@ -74,9 +75,11 @@ if (process.env.MONAD_TEST_CONTAINER_DEPS !== '1') {
 const parsedSuiteArgs = parseMonadTestSuiteArgs(process.argv.slice(2));
 for (const pattern of parsedSuiteArgs.ignorePatterns) ignore.push('--path-ignore-patterns', pattern);
 
+const parsedShardArgs = parseMonadTestShardArgs(parsedSuiteArgs.args, navigator.hardwareConcurrency);
+
 const coverage = process.env.MONAD_TEST_COVERAGE === '1' ? ['--coverage'] : [];
 const rerunLimit = 10;
-const rawArgs = parsedSuiteArgs.args;
+const rawArgs = parsedShardArgs.args;
 if (
   process.env.MONAD_TEST_CONTAINER_DEPS !== '1' &&
   rawArgs.some((arg) => /\.container(?:\.[^.]+)?\.test\.[cm]?[tj]sx?$/.test(arg))
@@ -96,16 +99,15 @@ const reporter = !loud && junitPath ? ['--reporter=junit', `--reporter-outfile=$
 let _debugPreloadPath: string | undefined;
 const loudPreload = loud ? ['--preload', debugPreloadPath()] : [];
 
-const proc = Bun.spawn(['bun', 'test', ...loudPreload, ...args, ...coverage, ...ignore, ...reporter], {
-  stdout: 'inherit',
-  stderr: 'inherit',
-  stdin: 'inherit',
-  env
-});
-const exitCode = await proc.exited;
+const shardTargets =
+  parsedShardArgs.shards > 1 && !loud && ownsReporter && tempDir ? shardableTargets(args) : undefined;
+const shardFiles = shardTargets ? await collectTestFiles(shardTargets, ignorePatterns()) : [];
 
-if (exitCode !== 0 && junitPath && existsSync(junitPath)) {
-  const failed = groupFailedCases(parseFailedCases(readFileSync(junitPath, 'utf8')));
+const { exitCode, junitReports } =
+  shardTargets && shardFiles.length > 1 ? await runSharded(shardFiles) : await runSingleProcess();
+
+if (exitCode !== 0 && junitReports.length > 0) {
+  const failed = groupFailedCases(junitReports.flatMap((path) => parseFailedCases(readFileSync(path, 'utf8'))));
   const selected = failed.slice(0, rerunLimit);
   if (selected.length > 0) {
     process.stderr.write('\n[monad-test] Re-running failed files with logger output enabled\n');
@@ -122,6 +124,57 @@ if (exitCode !== 0 && junitPath && existsSync(junitPath)) {
 
 if (tempDir) rmSync(tempDir, { recursive: true, force: true });
 process.exit(exitCode);
+
+/** Sharding resolves files itself, so it must apply the caller's own `--path-ignore-patterns` too —
+ *  those never reach `bun test` in a useful form once each shard is handed one explicit file. */
+function ignorePatterns(): string[] {
+  const patterns = ignore.filter((_, index) => index % 2 === 1);
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i] ?? '';
+    if (arg.startsWith('--path-ignore-patterns=')) patterns.push(arg.slice('--path-ignore-patterns='.length));
+    else if (arg === '--path-ignore-patterns' && args[i + 1]) patterns.push(args[i + 1] as string);
+  }
+  return patterns;
+}
+
+async function runSingleProcess(): Promise<{ exitCode: number; junitReports: string[] }> {
+  const proc = Bun.spawn(['bun', 'test', ...loudPreload, ...args, ...coverage, ...ignore, ...reporter], {
+    stdout: 'inherit',
+    stderr: 'inherit',
+    stdin: 'inherit',
+    env
+  });
+  const code = await proc.exited;
+  return { exitCode: code, junitReports: junitPath && existsSync(junitPath) ? [junitPath] : [] };
+}
+
+async function runSharded(files: string[]): Promise<{ exitCode: number; junitReports: string[] }> {
+  const junitReports: string[] = [];
+  process.stderr.write(`[monad-test] ${files.length} files across ${parsedShardArgs.shards} shards\n`);
+  const code = await runShardedTestFiles({
+    files,
+    shards: parsedShardArgs.shards,
+    junitDir: tempDir as string,
+    env,
+    buildCommand: (file, shardJunitPath) => [
+      'bun',
+      'test',
+      file,
+      ...args.filter((arg) => !files.includes(arg) && !(shardTargets ?? []).includes(arg)),
+      ...coverage,
+      ...ignore,
+      '--reporter=junit',
+      `--reporter-outfile=${shardJunitPath}`
+    ],
+    // A shard's output is buffered and flushed whole so concurrent processes cannot interleave
+    // mid-line; only failing shards are printed, matching the unsharded run's quiet default.
+    onResult: (result) => {
+      if (existsSync(result.junitPath)) junitReports.push(result.junitPath);
+      if (result.exitCode !== 0) process.stderr.write(result.output);
+    }
+  });
+  return { exitCode: code, junitReports };
+}
 
 async function rerunFailedFile(testFile: FailedTestFile): Promise<void> {
   const file = resolve(testFile.file);
