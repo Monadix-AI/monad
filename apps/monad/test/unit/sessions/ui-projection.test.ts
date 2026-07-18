@@ -1697,7 +1697,7 @@ test('external agent idle lifecycle notices preserve typed events and render act
         text: 'fell asleep.',
         event: suspendedPayload,
         level: 'info',
-        seq: suspendedEvent.id
+        seq: suspendedEvent.at
       }
     }
   ]);
@@ -1711,7 +1711,7 @@ test('external agent idle lifecycle notices preserve typed events and render act
         text: 'woke up.',
         event: resumedPayload,
         level: 'info',
-        seq: resumedEvent.id
+        seq: resumedEvent.at
       }
     }
   ]);
@@ -1729,7 +1729,7 @@ test('external agent idle lifecycle notices preserve typed events and render act
         text: '睡着了。',
         event: suspendedPayload,
         level: 'info',
-        seq: zhSuspendedEvent.id
+        seq: zhSuspendedEvent.at
       }
     }
   ]);
@@ -1743,8 +1743,64 @@ test('external agent idle lifecycle notices preserve typed events and render act
         text: '醒来了。',
         event: resumedPayload,
         level: 'info',
-        seq: zhResumedEvent.id
+        seq: zhResumedEvent.at
       }
+    }
+  ]);
+});
+
+test('external agent idle lifecycle notices sort by event time instead of random event id', () => {
+  const projector = new SessionUiProjector();
+  const suspendedAt = '2026-07-18T14:00:00.000Z';
+  const resumedAt = '2026-07-18T14:01:00.000Z';
+  const suspended = {
+    ...event(
+      'external_agent.idle_suspended',
+      {
+        agentId: 'pmem_reviewer_1',
+        agentName: 'Reviewer',
+        type: 'idle_suspended',
+        payload: { externalAgentSessionId: 'exa_idle00000000', idleTimeoutMs: 300 }
+      },
+      suspendedAt
+    ),
+    id: 'evt_zzzzzzzzzzzz'
+  } as Event;
+  const resumed = {
+    ...event(
+      'external_agent.idle_resumed',
+      {
+        agentId: 'pmem_reviewer_1',
+        agentName: 'Reviewer',
+        type: 'idle_resumed',
+        payload: { externalAgentSessionId: 'exa_idle00000000' }
+      },
+      resumedAt
+    ),
+    id: 'evt_000000000000'
+  } as Event;
+
+  projector.applyEvent(suspended);
+  projector.applyEvent(resumed);
+
+  const snapshot = projector.snapshot();
+  if (snapshot.kind !== 'snapshot') throw new Error('expected snapshot');
+  expect(
+    snapshot.items.map((item) => ({
+      eventType: item.kind === 'system' ? item.event?.type : undefined,
+      id: item.id,
+      seq: item.seq
+    }))
+  ).toEqual([
+    {
+      eventType: 'idle_suspended',
+      id: 'external-agent-idle-suspended:pmem_reviewer_1:evt_zzzzzzzzzzzz',
+      seq: suspendedAt
+    },
+    {
+      eventType: 'idle_resumed',
+      id: 'external-agent-idle-resumed:pmem_reviewer_1:evt_000000000000',
+      seq: resumedAt
     }
   ]);
 });

@@ -218,7 +218,7 @@ export function applyToolEvent(m: ProjectionMutations, event: Event): SessionUiE
             text: m.t('daemon.session.externalAgentIdleSuspended'),
             event: p,
             level: 'info',
-            seq: event.id
+            seq: event.at
           })
         }
       ];
@@ -235,7 +235,7 @@ export function applyToolEvent(m: ProjectionMutations, event: Event): SessionUiE
             text: m.t('daemon.session.externalAgentIdleResumed'),
             event: p,
             level: 'info',
-            seq: event.id
+            seq: event.at
           })
         }
       ];
