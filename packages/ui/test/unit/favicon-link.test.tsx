@@ -31,14 +31,16 @@ test('FaviconLink renders a decorative favicon before the original link label', 
   expect(markup.indexOf('<img')).toBeLessThan(markup.indexOf('Example docs'));
 });
 
-test('FaviconLink centers the favicon and text in one inline row', () => {
+test('FaviconLink aligns the favicon and text to the surrounding text baseline', () => {
   const markup = renderToStaticMarkup(
     createElement(FaviconLink, { href: 'https://github.com/org/repo' }, 'Hermes channel_prompts PR #10564')
   );
 
   expect(markup).toContain('inline-flex');
-  expect(markup).toContain('items-center');
-  expect(markup).not.toContain('align-[-2px]');
+  expect(markup).toContain('items-baseline');
+  expect(markup).toContain('align-baseline');
+  expect(markup).toContain('leading-[inherit]');
+  expect(markup).toContain('data-inline-link="web"');
 });
 
 test('FaviconLink keeps a fixed fallback icon when no favicon is available', () => {

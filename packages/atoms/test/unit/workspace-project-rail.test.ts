@@ -559,6 +559,38 @@ test('chatroom experience store isolates rail observations by project session in
   });
 });
 
+test('chatroom file preview is session scoped and replaces observation detail', () => {
+  const firstKey = 'project:project-file:session:ses_first';
+  const secondKey = 'project:project-file:session:ses_second';
+  const attachment = {
+    id: 'att_100000000000',
+    path: '/workspace/report.ts',
+    name: 'report.ts',
+    mime: 'application/typescript',
+    bytes: 42,
+    createdAt: '2026-07-18T00:00:00.000Z'
+  } as const;
+
+  useChatRoomExperienceStore.getState().observeProjectAgent(firstKey, 'project-file', {
+    agentId: 'external-agent:codex',
+    agentName: 'codex'
+  });
+  useChatRoomExperienceStore.getState().openFilePreview(firstKey, { attachment, line: 12 });
+
+  expect(useChatRoomExperienceStore.getState().railObservationBySession[firstKey]).toBeUndefined();
+  expect(useChatRoomExperienceStore.getState().filePreviewBySession).toEqual({
+    [firstKey]: { attachment, line: 12 }
+  });
+  expect(useChatRoomExperienceStore.getState().filePreviewBySession[secondKey]).toBeUndefined();
+
+  useChatRoomExperienceStore.getState().observeProjectAgent(firstKey, 'project-file', {
+    agentId: 'external-agent:claude',
+    agentName: 'claude'
+  });
+  expect(useChatRoomExperienceStore.getState().filePreviewBySession[firstKey]).toBeUndefined();
+  useChatRoomExperienceStore.getState().removeSessionUiState(firstKey);
+});
+
 test('agent observation selects the currently running external agent stream by instance id', () => {
   const streams = [
     {

@@ -107,26 +107,19 @@ export function SystemEventExample({ developer = false }: { developer?: boolean 
   );
 }
 
-export type AttachmentStoryState = 'collapsed' | 'error' | 'expanded' | 'loading';
+export type AttachmentStoryState = 'download-only' | 'previewable';
 
-export function AttachmentExample({ state = 'collapsed' }: { state?: AttachmentStoryState }) {
-  const [expanded, setExpanded] = useState(state !== 'collapsed');
+export function AttachmentExample({ state = 'previewable' }: { state?: AttachmentStoryState }) {
   return (
     <AttachmentCard
       downloadLabel="Download"
-      error={state === 'error'}
-      errorContent="Could not load attachment"
-      expanded={expanded}
-      loading={state === 'loading'}
-      loadingContent="Loading preview…"
+      mime="text/plain"
       name="verification.log"
       onDownload={() => {}}
-      onPreviewChange={setExpanded}
+      onPreview={() => {}}
       path="/workspace/verification.log"
-      previewable
-      previewCollapseLabel="Collapse"
-      previewContent={'18 tests passed\n0 tests failed'}
-      previewExpandLabel="Preview"
+      previewable={state === 'previewable'}
+      previewLabel="Preview"
       sizeLabel="2.4 KB"
     />
   );
@@ -309,7 +302,7 @@ export function CompleteExperienceExample() {
       <HumanMessageExample />
       <SystemEventExample />
       <AgentMessageExample />
-      <AttachmentExample state="expanded" />
+      <AttachmentExample />
       <SystemEventExample developer />
       <ObservationExample visualRole="user" />
       <ObservationExample visualRole="agent" />

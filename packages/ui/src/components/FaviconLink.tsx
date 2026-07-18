@@ -23,7 +23,11 @@ export function FaviconLink({ children, className, href, ...props }: ComponentPr
   return (
     <a
       {...props}
-      className={cn('inline-flex max-w-full cursor-pointer items-center gap-1 align-middle', className)}
+      className={cn(
+        'inline-flex max-w-full cursor-pointer items-baseline gap-1 align-baseline leading-[inherit]',
+        className
+      )}
+      data-inline-link="web"
       data-preserve-cursor="true"
       href={href}
       rel="noopener noreferrer"
@@ -31,7 +35,7 @@ export function FaviconLink({ children, className, href, ...props }: ComponentPr
     >
       <span
         aria-hidden="true"
-        className="relative inline-flex size-3.5 shrink-0 items-center justify-center text-muted-foreground"
+        className="relative inline-flex size-3.5 shrink-0 items-center justify-center self-center text-muted-foreground"
         data-favicon-fallback="true"
       >
         <svg

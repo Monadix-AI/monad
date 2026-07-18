@@ -1,4 +1,4 @@
-import type { Message, TypingIndicator } from '../../experience/types.ts';
+import type { Message, MessageAttachment, TypingIndicator } from '../../experience/types.ts';
 import type { MessageRowLabels } from './message-row.tsx';
 
 import { ArrowDown01Icon } from '@hugeicons/core-free-icons';
@@ -8,6 +8,7 @@ import { VirtualList, type VirtualListHandle } from '@monad/ui/components/Virtua
 import { useFirstItemIndex } from '@monad/ui/hooks/use-first-item-index';
 import { type CSSProperties, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
+import { projectSessionUiKey, useChatRoomExperienceStore } from '../store.ts';
 import { AttachmentChip } from './attachment-chip.tsx';
 import { MarkdownWithMentions, MessageRow } from './message-row.tsx';
 import { TypingRow } from './transcript-skeleton.tsx';
@@ -63,9 +64,11 @@ export function shouldFollowLatestMessage(atBottom: boolean, localStatus?: Messa
 }
 
 export type ChatMessageListRoom = {
+  activeSessionId: string | null;
   loadOlder: () => void;
   messages: Message[];
   openAgentCard?: (id: string) => void;
+  projectId: string;
   typing: TypingIndicator | null;
 };
 
@@ -88,6 +91,12 @@ export function ChatMessageList({
   const [outlineTop, setOutlineTop] = useState<string>('50%');
   const firstItemIndex = useFirstItemIndex(room.messages, messageRenderKey);
   const lastMessage = room.messages.at(-1);
+  const uiKey = projectSessionUiKey(room.projectId, room.activeSessionId);
+  const openFilePreview = useChatRoomExperienceStore((state) => state.openFilePreview);
+  const onOpenAttachment = useCallback(
+    (attachment: MessageAttachment, line?: number) => openFilePreview(uiKey, { attachment, line }),
+    [openFilePreview, uiKey]
+  );
   const lastMessageKey = lastMessage ? messageRenderKey(lastMessage) : undefined;
   const outlineItems = useMemo(
     () => workspaceMessageOutlineItems(room.messages, labels.timeUnavailable),
@@ -130,10 +139,11 @@ export function ChatMessageList({
           labels={labels}
           msg={msg}
           onAgentClick={room.openAgentCard}
+          onOpenAttachment={onOpenAttachment}
         />
       </div>
     ),
-    [labels, room.openAgentCard]
+    [labels, onOpenAttachment, room.openAgentCard]
   );
   useLayoutEffect(() => {
     if (!lastMessageKey) return;
