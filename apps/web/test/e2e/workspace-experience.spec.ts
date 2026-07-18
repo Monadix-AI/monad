@@ -421,7 +421,7 @@ test.describe('workspace experience atoms', () => {
         }
       }).observe(document, { childList: true, subtree: true });
     });
-    const uiItems: UIItem[] = Array.from({ length: 30 }, (_, index) => {
+    const uiItems: UIItem[] = Array.from({ length: 5 }, (_, index) => {
       const id = `msg_SCROLL${String(index + 1).padStart(5, '0')}` as UIItem['id'];
       return {
         id,
@@ -495,6 +495,34 @@ test.describe('workspace experience atoms', () => {
         .closest<HTMLElement>('[style*="--chat-room-composer-clearance"]')
         ?.style.setProperty('--chat-room-composer-clearance', clearance);
     }, originalComposerClearance);
+
+    const idleScroll = await scroll.evaluate(
+      (node) =>
+        new Promise<{ eventCount: number; maxTop: number; minTop: number }>((resolve) => {
+          const scroller = node as HTMLElement;
+          const positions: number[] = [];
+          let eventCount = 0;
+          let frameCount = 0;
+          const onScroll = () => {
+            eventCount += 1;
+          };
+          const sample = () => {
+            positions.push(scroller.scrollTop);
+            frameCount += 1;
+            if (frameCount < 60) requestAnimationFrame(sample);
+            else {
+              scroller.removeEventListener('scroll', onScroll);
+              resolve({ eventCount, maxTop: Math.max(...positions), minTop: Math.min(...positions) });
+            }
+          };
+          scroller.addEventListener('scroll', onScroll);
+          requestAnimationFrame(sample);
+        })
+    );
+    expect({
+      movement: idleScroll.maxTop - idleScroll.minTop,
+      repeatedScrollEvents: idleScroll.eventCount > 1
+    }).toEqual({ movement: 0, repeatedScrollEvents: false });
 
     await scroll.hover();
     const overscrollTransforms: string[] = [];

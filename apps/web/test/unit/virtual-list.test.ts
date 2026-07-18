@@ -114,6 +114,20 @@ test('bottom request cancels only on upward user scroll', () => {
   expect(reduceBottomScrollRequest(requested, { type: 'user-scroll-up' })).toEqual(initialBottomScrollRequest);
 });
 
+test('bottom request ends after the true bottom stays stable', () => {
+  const requested = reduceBottomScrollRequest(initialBottomScrollRequest, {
+    type: 'request',
+    behavior: 'auto'
+  });
+  const measuring = reduceBottomScrollRequest(requested, { type: 'height-changed' });
+
+  expect(
+    reduceBottomScrollRequest(measuring, {
+      type: 'stable-at-bottom'
+    })
+  ).toEqual(initialBottomScrollRequest);
+});
+
 test('bottom state hides transient non-bottom measurements while the list is still pinned', () => {
   expect([
     shouldPublishAtBottomChange(false, true, false),

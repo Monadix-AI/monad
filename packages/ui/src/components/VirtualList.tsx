@@ -62,6 +62,7 @@ const VIRTUOSO_COMPONENTS = { Header: HeaderSlot, Footer: FooterSlot };
 /** Px from the true bottom within which the user still counts as "pinned". */
 const STICK_THRESHOLD = 32;
 const TRUE_BOTTOM_THRESHOLD = 1;
+const BOTTOM_QUIESCENCE_MS = 120;
 const USER_SCROLL_INTENT_MS = 300;
 const SCROLL_KEYS = new Set(['ArrowDown', 'ArrowUp', 'End', 'Home', 'PageDown', 'PageUp', ' ']);
 
@@ -107,7 +108,7 @@ export function shouldPublishAtBottomChange(nextAtBottom: boolean, pinned: boole
 export type BottomScrollRequest = { active: boolean; behavior: 'auto' | 'smooth' };
 export type BottomScrollEvent =
   | { type: 'request'; behavior: 'auto' | 'smooth' }
-  | { type: 'height-changed' | 'settle-timeout' | 'user-scroll-up' };
+  | { type: 'height-changed' | 'settle-timeout' | 'stable-at-bottom' | 'user-scroll-up' };
 
 export const initialBottomScrollRequest: BottomScrollRequest = { active: false, behavior: 'auto' };
 
@@ -124,7 +125,7 @@ export function reduceBottomScrollRequest(state: BottomScrollRequest, event: Bot
   if ((event.type === 'height-changed' || event.type === 'settle-timeout') && state.active) {
     return { active: true, behavior: 'auto' };
   }
-  if (event.type === 'user-scroll-up') return initialBottomScrollRequest;
+  if (event.type === 'stable-at-bottom' || event.type === 'user-scroll-up') return initialBottomScrollRequest;
   return state;
 }
 
@@ -164,6 +165,7 @@ export function VirtualList<T>({
     initialBottomScrollRequestFor(stickToBottom, Boolean(restoreStateFrom), items.length)
   );
   const bottomSettleTimeoutRef = useRef<number | undefined>(undefined);
+  const bottomQuiescenceTimeoutRef = useRef<number | undefined>(undefined);
   // `pinnedRef` tracks whether we keep following the bottom. Detection rests on one fact:
   // content growth (a row expanding, new rows) does NOT fire a scroll event — only the user
   // and our own pinning move the scrollbar. So we read "is the user at the bottom" purely
@@ -182,6 +184,11 @@ export function VirtualList<T>({
     bottomSettleTimeoutRef.current = undefined;
   }, []);
 
+  const clearBottomQuiescenceTimeout = useCallback(() => {
+    window.clearTimeout(bottomQuiescenceTimeoutRef.current);
+    bottomQuiescenceTimeoutRef.current = undefined;
+  }, []);
+
   const scrollToLast = useCallback((behavior: 'auto' | 'smooth') => {
     selfScrollRef.current = true;
     const scroller = scrollerRef.current;
@@ -191,6 +198,24 @@ export function VirtualList<T>({
     }
     handleRef.current?.scrollToIndex({ index: 'LAST', align: 'end', behavior });
   }, []);
+
+  const scheduleBottomSettlementCompletion = useCallback(() => {
+    clearBottomQuiescenceTimeout();
+    const settle = () => {
+      if (!bottomRequestRef.current.active) return;
+      const scroller = scrollerRef.current;
+      if (!scroller || !isAtBottom(scroller, TRUE_BOTTOM_THRESHOLD)) {
+        scrollToLast('auto');
+        bottomQuiescenceTimeoutRef.current = window.setTimeout(settle, BOTTOM_QUIESCENCE_MS);
+        return;
+      }
+      bottomRequestRef.current = reduceBottomScrollRequest(bottomRequestRef.current, { type: 'stable-at-bottom' });
+      clearBottomSettleTimeout();
+      selfScrollRef.current = false;
+      onAtBottomChange?.(true);
+    };
+    bottomQuiescenceTimeoutRef.current = window.setTimeout(settle, BOTTOM_QUIESCENCE_MS);
+  }, [clearBottomQuiescenceTimeout, clearBottomSettleTimeout, onAtBottomChange, scrollToLast]);
 
   const markUserScrollIntent = useCallback(() => {
     userScrollIntentUntilRef.current = performance.now() + USER_SCROLL_INTENT_MS;
@@ -234,10 +259,12 @@ export function VirtualList<T>({
       if (isAtBottom(el, TRUE_BOTTOM_THRESHOLD)) {
         selfScrollRef.current = false;
         onAtBottomChange?.(true);
+        scheduleBottomSettlementCompletion();
         return;
       }
       if (direction === 'up' && performance.now() <= userScrollIntentUntilRef.current) {
         bottomRequestRef.current = reduceBottomScrollRequest(bottomRequestRef.current, { type: 'user-scroll-up' });
+        clearBottomQuiescenceTimeout();
         clearBottomSettleTimeout();
         selfScrollRef.current = false;
         userScrolledRef.current = true;
@@ -249,7 +276,7 @@ export function VirtualList<T>({
     const next = reducePinnedOnScroll(pinnedRef.current, selfScrollRef.current, isAtBottom(el), direction);
     pinnedRef.current = next.pinned;
     if (next.selfScrollConsumed) selfScrollRef.current = false;
-  }, [clearBottomSettleTimeout, onAtBottomChange]);
+  }, [clearBottomQuiescenceTimeout, clearBottomSettleTimeout, onAtBottomChange, scheduleBottomSettlementCompletion]);
 
   const pinToBottom = useCallback(() => {
     if (!shouldPinToBottom(stickToBottom, pinnedRef.current)) return;
@@ -298,6 +325,7 @@ export function VirtualList<T>({
 
   const requestBottomScroll = useCallback(
     (behavior: 'auto' | 'smooth') => {
+      clearBottomQuiescenceTimeout();
       clearBottomSettleTimeout();
       pinnedRef.current = true;
       userScrolledRef.current = false;
@@ -312,7 +340,7 @@ export function VirtualList<T>({
         scrollToLast('auto');
       }, 600);
     },
-    [clearBottomSettleTimeout, scrollToLast]
+    [clearBottomQuiescenceTimeout, clearBottomSettleTimeout, scrollToLast]
   );
 
   const handleAtBottomChange = useCallback(
@@ -325,6 +353,7 @@ export function VirtualList<T>({
         }
         selfScrollRef.current = false;
         onAtBottomChange?.(true);
+        if (bottomRequestRef.current.active) scheduleBottomSettlementCompletion();
         return;
       }
       if (!shouldPublishAtBottomChange(false, pinnedRef.current, userScrolledRef.current)) {
@@ -333,17 +362,19 @@ export function VirtualList<T>({
       }
       onAtBottomChange?.(false);
     },
-    [onAtBottomChange, pinToBottomSoon]
+    [onAtBottomChange, pinToBottomSoon, scheduleBottomSettlementCompletion]
   );
 
   const handleTotalListHeightChanged = useCallback(() => {
     if (bottomRequestRef.current.active) {
+      clearBottomQuiescenceTimeout();
       bottomRequestRef.current = reduceBottomScrollRequest(bottomRequestRef.current, { type: 'height-changed' });
       scrollToLast(bottomRequestRef.current.behavior);
+      scheduleBottomSettlementCompletion();
       return;
     }
     pinToBottomSoon();
-  }, [pinToBottomSoon, scrollToLast]);
+  }, [clearBottomQuiescenceTimeout, pinToBottomSoon, scheduleBottomSettlementCompletion, scrollToLast]);
 
   useImperativeHandle(
     controlRef,
@@ -423,9 +454,16 @@ export function VirtualList<T>({
       scrollerRef.current?.removeEventListener('touchmove', markUserScrollIntent);
       viewportResizeObserverRef.current?.disconnect();
       viewportResizeObserverRef.current = null;
+      clearBottomQuiescenceTimeout();
       clearBottomSettleTimeout();
     },
-    [clearBottomSettleTimeout, handleAnchorKeyDown, handleAnchorPointerDown, markUserScrollIntent]
+    [
+      clearBottomQuiescenceTimeout,
+      clearBottomSettleTimeout,
+      handleAnchorKeyDown,
+      handleAnchorPointerDown,
+      markUserScrollIntent
+    ]
   );
 
   // Only forward firstItemIndex when paginating: Virtuoso computes `data-item-index` as
