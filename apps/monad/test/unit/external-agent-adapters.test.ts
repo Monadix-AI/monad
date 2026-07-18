@@ -2215,7 +2215,7 @@ test('Codex event source requests and projects paged app-server history without 
   expect(page).toMatchObject({ state: 'available', nextCursor: 'next-1' });
 });
 
-test('Codex event source projects paged history as completed turn items only', async () => {
+test('Codex event source projects paged history without fabricating notification raw events', async () => {
   const page = await codexExternalAgentAdapter.events.readPage?.(
     {
       providerSessionRef: 'codex-thread-1',
@@ -2239,8 +2239,29 @@ test('Codex event source projects paged history as completed turn items only', a
     },
     { limit: 20, sortDirection: 'desc' }
   );
-  const providerEventTypes = page?.state === 'available' ? page.events.map((event) => event.providerEventType) : [];
-  expect(providerEventTypes).toEqual(['turn/started', 'item/userMessage', 'item/agentMessage', 'turn/completed']);
+  const projected =
+    page?.state === 'available'
+      ? page.events.map((event) => ({
+          providerEventType: event.providerEventType,
+          rawEvents: event.provenance.rawEvents,
+          role: event.role,
+          text: event.text
+        }))
+      : [];
+  expect(projected).toEqual([
+    {
+      providerEventType: 'item/userMessage',
+      rawEvents: [{ id: 'item-1', type: 'userMessage', text: 'hi' }],
+      role: 'user',
+      text: 'hi'
+    },
+    {
+      providerEventType: 'item/agentMessage',
+      rawEvents: [{ id: 'item-2', type: 'agentMessage', text: 'hello' }],
+      role: 'agent',
+      text: 'hello'
+    }
+  ]);
 });
 
 test('Codex history observation folds realtime item lifecycle into final events', () => {

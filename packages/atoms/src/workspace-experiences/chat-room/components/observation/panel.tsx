@@ -158,7 +158,7 @@ export function ExternalAgentObservationPanel({
   };
   const productIcon = resolveProductIcon(displayAgent);
   const active = stream?.status === 'running';
-  const hasItems = (stream?.items.length ?? 0) > 0;
+  const hasItems = !observationLoading && (stream?.items.length ?? 0) > 0;
   // The daemon already normalizes the usage meter with the same adapter it uses for parseOutput (see
   // observeFromStore/observeWithProviderHistory) — the caller passes it via `usageMeter`; this
   // component never falls back to client-side re-derivation.

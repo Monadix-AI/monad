@@ -1634,6 +1634,10 @@ test('observation panel shows a usage limits entry when the stream has limit dat
 });
 
 test('observation panel renders bootstrap loading outside the observation timeline', () => {
+  const staleOutput = JSON.stringify({
+    method: 'turn/started',
+    params: { status: 'interrupted', threadId: 'thread-1', turnId: 'turn-1' }
+  });
   const html = renderToStaticMarkup(
     React.createElement(ExternalAgentObservationPanel, {
       observationLoading: true,
@@ -1644,8 +1648,8 @@ test('observation panel renders bootstrap loading outside the observation timeli
         provider: 'codex',
         tag: 'Codex',
         status: 'ok',
-        output: '',
-        items: []
+        output: staleOutput,
+        items: externalAgentNeutralStreamItems({ id: 'exa_codex0000000', provider: 'codex', output: staleOutput })
       }
     })
   );
@@ -1653,6 +1657,7 @@ test('observation panel renders bootstrap loading outside the observation timeli
   expect(html).toContain('Loading history…');
   expect(html).not.toContain('Agent history unavailable');
   expect(html).not.toContain('No activity yet.');
+  expect(html).not.toContain('interrupted');
   expect(html).not.toContain('role="log"');
 });
 
