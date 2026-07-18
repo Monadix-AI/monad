@@ -102,6 +102,23 @@ test('external-agent system events reject mismatched lifecycle payloads', () => 
   ).toThrow();
 });
 
+test('idle suspension requires a positive integer timeout', () => {
+  const event = {
+    agentId: 'pmem_codex_1',
+    agentName: 'Reviewer',
+    type: 'idle_suspended',
+    payload: { externalAgentSessionId: 'exa_idle00000000', idleTimeoutMs: 0 }
+  };
+
+  expect(() => externalAgentSystemEventSchema.parse(event)).toThrow();
+  expect(() =>
+    externalAgentSystemEventSchema.parse({
+      ...event,
+      payload: { ...event.payload, idleTimeoutMs: 1.5 }
+    })
+  ).toThrow();
+});
+
 test('sessionUiEventSchema preserves authoritative transcript replacement snapshots', () => {
   expect(
     uiSnapshotEventSchema.parse({ kind: 'snapshot', items: [], replacesTranscript: true }).replacesTranscript

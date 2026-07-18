@@ -8,7 +8,7 @@ export const externalAgentIdleSuspendedSystemEventSchema = z
     payload: z
       .object({
         externalAgentSessionId: z.string(),
-        idleTimeoutMs: z.number()
+        idleTimeoutMs: z.number().int().positive()
       })
       .strict()
   })
