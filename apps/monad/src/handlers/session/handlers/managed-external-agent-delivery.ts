@@ -85,14 +85,14 @@ export function createManagedExternalAgentDelivery(ctx: SessionContext) {
           }
         : sender;
     if (!externalAgentHost || !session.cwd) return;
+    const deliveredSeq = store.maxMessageSeq(session.id);
+    const triggerMessageId =
+      deliveredSeq > 0 ? (store.messageIdForSeq(session.id as SessionId, deliveredSeq) ?? undefined) : undefined;
     for (const member of managedMembers) {
       const { spec, runtimeAgentName, templateAgentName, displayName, configuredDisplayName, settings } = member;
       if (runtimeAgentName === exceptAgentName) continue;
       try {
         const notice = managedExternalAgentInboxNotice(member, text, resolvedSender);
-        const deliveredSeq = store.maxMessageSeq(session.id);
-        const triggerMessageId =
-          deliveredSeq > 0 ? (store.messageIdForSeq(session.id as SessionId, deliveredSeq) ?? undefined) : undefined;
         const deliveryId = deliveredSeq > 0 ? newId('deliv') : undefined;
         const managedSessions = managedExternalAgentSessionsForAgent(session.id, runtimeAgentName);
         const existing = managedSessions.find((candidate) => candidate.state === 'running');
