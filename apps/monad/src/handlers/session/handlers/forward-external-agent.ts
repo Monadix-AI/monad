@@ -7,7 +7,7 @@ import { newId } from '@monad/protocol';
 import { extractError } from '#/agent/index.ts';
 import { HandlerError } from '#/handlers/handler-error.ts';
 import {
-  externalAgentProjectMemberDisplayNameForAgent,
+  externalAgentProjectMemberConfiguredDisplayNameForAgent,
   externalAgentProjectMemberSettings,
   managedExternalAgentProjectMembers
 } from '#/handlers/session/handlers/messaging-members.ts';
@@ -20,7 +20,7 @@ type StartManagedExternalAgentRuntimeWithRecovery = (args: {
   spec: ExternalAgentConfig;
   runtimeAgentName: string;
   templateAgentName: string;
-  displayName: string;
+  displayName?: string;
   modelName?: string;
   modelId?: string;
   reasoningEffort?: string;
@@ -214,7 +214,7 @@ export function createForwardExternalAgentHandler(
               spec,
               runtimeAgentName,
               templateAgentName,
-              displayName: externalAgentProjectMemberDisplayNameForAgent(store, sessionId, runtimeAgentName),
+              displayName: externalAgentProjectMemberConfiguredDisplayNameForAgent(store, sessionId, runtimeAgentName),
               reasoningEffort: memberSettings.reasoningEffort,
               modelId: memberSettings.modelId ?? memberSettings.modelName,
               speed: memberSettings.speed,

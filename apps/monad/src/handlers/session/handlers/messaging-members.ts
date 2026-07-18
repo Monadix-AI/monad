@@ -142,6 +142,19 @@ export function externalAgentProjectMemberDisplayNameForAgent(
   return member ? externalAgentProjectMemberDisplayName(member) : agentName;
 }
 
+export function externalAgentProjectMemberConfiguredDisplayNameForAgent(
+  store: Store,
+  sessionId: SessionId,
+  agentName: string
+): string | undefined {
+  return workplaceProjectMembers(store, sessionId).find(
+    (candidate) =>
+      candidate.type === 'external-agent' &&
+      (externalAgentProjectMemberRuntimeName(candidate) === agentName ||
+        externalAgentProjectMemberTemplateName(candidate) === agentName)
+  )?.displayName;
+}
+
 export function managedExternalAgentProjectMembers(
   store: Store,
   sessionId: SessionId,

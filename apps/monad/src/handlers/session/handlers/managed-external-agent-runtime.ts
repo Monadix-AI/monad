@@ -36,7 +36,7 @@ export type StartManagedExternalAgentRuntimeArgs = {
   spec: ExternalAgentConfig;
   runtimeAgentName: string;
   templateAgentName: string;
-  displayName: string;
+  displayName?: string;
   modelName?: string;
   modelId?: string;
   reasoningEffort?: string;

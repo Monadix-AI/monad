@@ -949,8 +949,9 @@ setInterval(() => {}, 1000);
   try {
     const view = await host.start({
       transcriptTargetId: projectId,
-      agentName: provider,
+      agentName: 'pmem_idle_reviewer',
       displayName: 'Idle Reviewer',
+      templateAgentName: provider,
       workingPath: workdir,
       launchMode: 'json-stream'
     });
@@ -970,7 +971,7 @@ setInterval(() => {}, 1000);
       {
         type: 'external_agent.idle_suspended',
         payload: {
-          agentId: provider,
+          agentId: 'pmem_idle_reviewer',
           agentName: 'Idle Reviewer',
           type: 'idle_suspended',
           payload: { externalAgentSessionId: view.id, idleTimeoutMs: 300 }
@@ -998,7 +999,7 @@ setInterval(() => {}, 1000);
       {
         type: 'external_agent.idle_suspended',
         payload: {
-          agentId: provider,
+          agentId: 'pmem_idle_reviewer',
           agentName: 'Idle Reviewer',
           type: 'idle_suspended',
           payload: { externalAgentSessionId: view.id, idleTimeoutMs: 300 }
@@ -1007,7 +1008,7 @@ setInterval(() => {}, 1000);
       {
         type: 'external_agent.idle_resumed',
         payload: {
-          agentId: provider,
+          agentId: 'pmem_idle_reviewer',
           agentName: 'Idle Reviewer',
           type: 'idle_resumed',
           payload: { externalAgentSessionId: view.id }
