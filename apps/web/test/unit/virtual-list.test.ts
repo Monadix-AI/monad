@@ -3,11 +3,13 @@ import { observationFollowResetKey } from '@monad/atoms/workspace-experiences';
 import {
   indexOfKey,
   initialBottomScrollRequest,
+  initialBottomScrollRequestFor,
   isAtBottom,
   reduceBottomScrollRequest,
   reducePinnedOnScroll,
   scrollTopPreservingAnchor,
-  shouldPinToBottom
+  shouldPinToBottom,
+  shouldPublishAtBottomChange
 } from '@monad/ui/components/VirtualList';
 
 test('isAtBottom: at the exact bottom', () => {
@@ -89,14 +91,59 @@ test('bottom request smooth-scrolls first and auto-corrects after virtual height
   });
 });
 
-test('bottom request completes only at the true bottom and cancels on upward user scroll', () => {
+test('non-empty bottom-following lists start with an active settlement request', () => {
+  expect([
+    initialBottomScrollRequestFor(true, false, 30),
+    initialBottomScrollRequestFor(true, true, 30),
+    initialBottomScrollRequestFor(true, false, 0),
+    initialBottomScrollRequestFor(false, false, 30)
+  ]).toEqual([
+    { active: true, behavior: 'auto' },
+    initialBottomScrollRequest,
+    initialBottomScrollRequest,
+    initialBottomScrollRequest
+  ]);
+});
+
+test('bottom request cancels only on upward user scroll', () => {
   const requested = reduceBottomScrollRequest(initialBottomScrollRequest, {
     type: 'request',
     behavior: 'smooth'
   });
 
-  expect(reduceBottomScrollRequest(requested, { type: 'at-bottom' })).toEqual(initialBottomScrollRequest);
   expect(reduceBottomScrollRequest(requested, { type: 'user-scroll-up' })).toEqual(initialBottomScrollRequest);
+});
+
+test('bottom state hides transient non-bottom measurements while the list is still pinned', () => {
+  expect([
+    shouldPublishAtBottomChange(false, true, false),
+    shouldPublishAtBottomChange(false, true, true),
+    shouldPublishAtBottomChange(false, false, false)
+  ]).toEqual([false, false, false]);
+});
+
+test('bottom state publishes true arrivals and genuine user departures', () => {
+  expect([shouldPublishAtBottomChange(true, true, false), shouldPublishAtBottomChange(false, false, true)]).toEqual([
+    true,
+    true
+  ]);
+});
+
+test('chat experience uses a stationary overscroll boundary without transform bounce', async () => {
+  const [messageListSource, globalStyles] = await Promise.all([
+    Bun.file(
+      new URL(
+        '../../../../packages/atoms/src/workspace-experiences/chat-room/components/message-list.tsx',
+        import.meta.url
+      )
+    ).text(),
+    Bun.file(new URL('../../src/styles/globals.css', import.meta.url)).text()
+  ]);
+
+  expect({
+    enablesBounce: /\s bounce(?:\s|\n)/.test(messageListSource),
+    overscrollRule: globalStyles.match(/\.scwf-scroll\s*\{[^}]*overscroll-behavior-y:\s*([^;]+);/s)?.[1]
+  }).toEqual({ enablesBounce: false, overscrollRule: 'none' });
 });
 
 test('scrollTopPreservingAnchor: offsets list scrolling so an expanded title keeps its viewport position', () => {

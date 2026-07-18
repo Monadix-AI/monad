@@ -113,6 +113,7 @@ export function ExternalAgentObservationPanel({
   onStop,
   canLoadOlderHistory,
   defaultRenderMode = 'detail',
+  historyActive,
   loadingOlderHistory,
   renderMode: controlledRenderMode,
   showHistoryButton,
@@ -124,6 +125,7 @@ export function ExternalAgentObservationPanel({
   canLoadOlderHistory?: boolean;
   defaultRenderMode?: ObservationRenderMode;
   focusTurnId?: string;
+  historyActive?: boolean;
   icon?: ExternalAgentStreamView['icon'];
   loadingOlderHistory?: boolean;
   onBack?: () => void;
@@ -174,13 +176,22 @@ export function ExternalAgentObservationPanel({
     [stream?.items, timelineProvider]
   );
   const firstItemIndex = useFirstItemIndex(timelineRows, observationRowId);
-  const showHistoryHeader = showHistoryButton || loadingOlderHistory;
+  const showHistoryHeader = showHistoryButton || historyActive;
+  const historyState = showHistoryButton
+    ? 'available'
+    : loadingOlderHistory
+      ? 'loading'
+      : canLoadOlderHistory
+        ? 'more'
+        : 'start';
   const historyHeader = showHistoryHeader ? (
     <div
+      data-history-state={historyState}
       data-observation-list-placeholder="history"
       style={{
         boxSizing: 'border-box',
         display: 'flex',
+        height: 40,
         justifyContent: 'center',
         padding: '10px 14px 0'
       }}
@@ -205,10 +216,11 @@ export function ExternalAgentObservationPanel({
           }}
           type="button"
         >
-          {loadingOlderHistory ? 'Loading history…' : 'Show history'}
+          {t('web.workplace.showHistory')}
         </button>
       ) : (
         <div
+          role="status"
           style={{
             color: 'var(--muted-foreground)',
             fontFamily: sans,
@@ -217,7 +229,11 @@ export function ExternalAgentObservationPanel({
             textAlign: 'center'
           }}
         >
-          Loading history…
+          {historyState === 'loading'
+            ? t('web.workplace.loadingHistory')
+            : historyState === 'more'
+              ? t('web.workplace.loadEarlierHistory')
+              : t('web.workplace.historyStart')}
         </div>
       )}
     </div>

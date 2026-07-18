@@ -411,4 +411,123 @@ test.describe('workspace experience atoms', () => {
     await expect(outline).toBeVisible();
     await expect(outline.getByRole('button', { name: /outline message 6/ })).toBeVisible();
   });
+
+  test('settles chat at the true bottom and keeps downward overscroll stationary', async ({ page }) => {
+    await page.addInitScript(() => {
+      Reflect.set(window, '__jumpLatestAppearedDuringInitialLoad', false);
+      new MutationObserver(() => {
+        if (document.querySelector('button[aria-label="Jump to latest messages"]')) {
+          Reflect.set(window, '__jumpLatestAppearedDuringInitialLoad', true);
+        }
+      }).observe(document, { childList: true, subtree: true });
+    });
+    const uiItems: UIItem[] = Array.from({ length: 30 }, (_, index) => {
+      const id = `msg_SCROLL${String(index + 1).padStart(5, '0')}` as UIItem['id'];
+      return {
+        id,
+        kind: 'message',
+        parts: [
+          {
+            text: `scroll stability message ${index + 1} ${'with enough content to produce a measured transcript row. '.repeat((index % 3) + 1)}`,
+            type: 'text'
+          }
+        ],
+        role: index % 2 === 0 ? 'user' : 'assistant',
+        seq: id,
+        status: 'done'
+      };
+    });
+    await mockWorkplaceApi(page, [chatRoomExperience], { uiItems });
+    await page.goto(`/workspace/${projectRouteId}/${alphaSessionRouteId}`);
+    await expect(page.locator('.project-topbar-name', { hasText: 'Mock Project' })).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator('[contenteditable][aria-label="Message agents"]')).toBeVisible();
+
+    const scroll = page.locator('.scwf-scroll[role="log"]');
+    const jumpLatest = page.getByRole('button', { name: 'Jump to latest messages' });
+    await expect
+      .poll(() =>
+        scroll.evaluate((node) => {
+          const scroller = node as HTMLElement;
+          return Math.abs(scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop);
+        })
+      )
+      .toBeLessThanOrEqual(1);
+    // presence-ok: initial bottom settlement must keep the jump-to-latest control hidden.
+    await expect(jumpLatest).toBeHidden();
+    expect(await page.evaluate(() => Reflect.get(window, '__jumpLatestAppearedDuringInitialLoad'))).toBe(false);
+
+    const initialLayout = await scroll.evaluate((node) => {
+      const scroller = node as HTMLElement;
+      const composer = document.querySelector<HTMLElement>('[aria-label="Message composer"]');
+      const style = getComputedStyle(scroller);
+      return {
+        composerMinHeight: composer ? getComputedStyle(composer).minBlockSize : '',
+        overscrollBehaviorY: style.overscrollBehaviorY,
+        scrollTop: scroller.scrollTop,
+        transform: style.transform
+      };
+    });
+    expect(initialLayout).toEqual({
+      composerMinHeight: '104px',
+      overscrollBehaviorY: 'none',
+      scrollTop: expect.any(Number),
+      transform: 'none'
+    });
+
+    const originalComposerClearance = await scroll.evaluate((node) => {
+      const transcript = node.closest<HTMLElement>('[style*="--chat-room-composer-clearance"]');
+      const clearance = transcript?.style.getPropertyValue('--chat-room-composer-clearance') ?? '';
+      transcript?.style.setProperty('--chat-room-composer-clearance', '260px');
+      return clearance;
+    });
+    await expect
+      .poll(() =>
+        scroll.evaluate((node) => {
+          const scroller = node as HTMLElement;
+          return Math.abs(scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop);
+        })
+      )
+      .toBeLessThanOrEqual(1);
+    // presence-ok: resizing the composer buffer while pinned must not expose the jump control.
+    await expect(jumpLatest).toBeHidden();
+    await scroll.evaluate((node, clearance) => {
+      node
+        .closest<HTMLElement>('[style*="--chat-room-composer-clearance"]')
+        ?.style.setProperty('--chat-room-composer-clearance', clearance);
+    }, originalComposerClearance);
+
+    await scroll.hover();
+    const overscrollTransforms: string[] = [];
+    for (let index = 0; index < 3; index += 1) {
+      await page.mouse.wheel(0, 600);
+      overscrollTransforms.push(await scroll.evaluate((node) => getComputedStyle(node).transform));
+    }
+    expect(overscrollTransforms).toEqual(['none', 'none', 'none']);
+    await expect
+      .poll(() =>
+        scroll.evaluate((node) => {
+          const scroller = node as HTMLElement;
+          return {
+            atBottom: Math.abs(scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop) <= 1,
+            transform: getComputedStyle(scroller).transform
+          };
+        })
+      )
+      .toEqual({ atBottom: true, transform: 'none' });
+
+    await page.mouse.wheel(0, -600);
+    // presence-ok: leaving the bottom must expose the jump-to-latest control.
+    await expect(jumpLatest).toBeVisible();
+    await jumpLatest.click();
+    await expect
+      .poll(() =>
+        scroll.evaluate((node) => {
+          const scroller = node as HTMLElement;
+          return Math.abs(scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop);
+        })
+      )
+      .toBeLessThanOrEqual(1);
+    // presence-ok: returning to the true bottom must hide the jump-to-latest control.
+    await expect(jumpLatest).toBeHidden();
+  });
 });

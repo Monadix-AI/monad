@@ -1,15 +1,8 @@
 import type { ExternalAgentSessionId, ExternalAgentSessionView, SessionId } from '@monad/protocol';
-import type { LiveExternalAgentSession } from '#/services/external-agent/host/host-types.ts';
 import type { ExternalAgentOutputEvent } from '#/services/external-agent/types.ts';
 import type { ExternalAgentSessionRow } from '#/store/db/index.ts';
 
 import { getExternalAgentProviderAdapter } from '#/services/external-agent/index.ts';
-
-export function isManagedProjectRuntime(
-  runtime: Pick<ExternalAgentSessionRow | LiveExternalAgentSession, 'runtimeRole'>
-): boolean {
-  return runtime.runtimeRole === 'managed-project-agent';
-}
 
 // TODO(track-b): `ExternalAgentSessionView.sessionId` is now strictly a `SessionId` on the wire
 // (packages/protocol/src/external-agent/external-agent-session.ts) — the Track B P6b id collapse

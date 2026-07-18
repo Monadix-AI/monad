@@ -1681,6 +1681,57 @@ test('observation panel renders show history as the first list placeholder when 
   expect(html.indexOf('data-observation-list-placeholder="history"')).toBeGreaterThan(html.indexOf('role="log"'));
 });
 
+test('observation history header keeps a fixed footprint throughout the active history lifecycle', () => {
+  const stream = {
+    id: 'exa_codex0000000',
+    agentName: 'codex',
+    provider: 'codex',
+    tag: 'Codex',
+    status: 'ok',
+    output: 'Current activity',
+    items: [
+      {
+        id: 'evt_100000000000',
+        kind: 'assistant-message',
+        streaming: false,
+        text: 'Current activity',
+        provenance: { contractEvents: [{ id: 'source_1' }] }
+      }
+    ]
+  } satisfies ExternalAgentStreamView;
+  const renderHistoryState = (props: {
+    canLoadOlderHistory?: boolean;
+    historyActive?: boolean;
+    loadingOlderHistory?: boolean;
+    showHistoryButton?: boolean;
+  }) =>
+    renderToStaticMarkup(
+      React.createElement(ExternalAgentObservationPanel, {
+        ...props,
+        onShowHistory: () => {},
+        onStop: () => {},
+        stream
+      })
+    );
+
+  const states = [
+    [renderHistoryState({ showHistoryButton: true }), 'available', 'Show history'],
+    [renderHistoryState({ historyActive: true, loadingOlderHistory: true }), 'loading', 'Loading history…'],
+    [renderHistoryState({ historyActive: true, canLoadOlderHistory: true }), 'more', 'Scroll up to load earlier'],
+    [renderHistoryState({ historyActive: true }), 'start', 'Start of history']
+  ] as const;
+
+  for (const [html, state, label] of states) {
+    expect(html).toContain(
+      `data-history-state="${state}" data-observation-list-placeholder="history" style="box-sizing:border-box;display:flex;height:40px;justify-content:center;padding:10px 14px 0"`
+    );
+    expect(html).toContain(label);
+  }
+
+  // presence-ok: panels without available or active history must not reserve a blank status strip.
+  expect(renderHistoryState({})).not.toContain('data-observation-list-placeholder="history"');
+});
+
 test('observation panel summary mode folds turn details and shows only the final output summary', () => {
   const html = renderToStaticMarkup(
     React.createElement(ExternalAgentObservationPanel, {

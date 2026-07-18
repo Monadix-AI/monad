@@ -991,6 +991,7 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
             historyRequested && Boolean(historyPages?.nextCursor) && !historyPages?.loading && !historyPages?.exhausted
           }
           focusTurnId={observation.turnId}
+          historyActive={historyRequested}
           icon={observedAgent?.icon ?? observedHistoryStream?.icon}
           loadingOlderHistory={historyRequested && Boolean(historyPages?.loading)}
           onBack={closeRailObservation}

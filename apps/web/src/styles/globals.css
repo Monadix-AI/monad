@@ -586,7 +586,7 @@
   }
 
   .scwf-scroll {
-    overscroll-behavior-y: contain;
+    overscroll-behavior-y: none;
     scrollbar-color: transparent transparent;
     scrollbar-width: thin;
   }

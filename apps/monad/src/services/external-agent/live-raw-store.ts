@@ -3,7 +3,7 @@ import { mkdirSync } from 'node:fs';
 import { mkdir, readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 
-export type LiveRawStream = 'app-server' | 'pty' | 'stderr' | 'stdout';
+type LiveRawStream = 'app-server' | 'pty' | 'stderr' | 'stdout';
 
 export type LiveRawFrame = {
   stream: LiveRawStream;

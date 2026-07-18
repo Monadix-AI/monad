@@ -178,7 +178,6 @@ export function ChatMessageList({
       />
       <VirtualList
         ariaLive="polite"
-        bounce
         className="scwf-scroll"
         controlRef={listRef}
         firstItemIndex={firstItemIndex}

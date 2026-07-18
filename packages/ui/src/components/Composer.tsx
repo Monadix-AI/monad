@@ -589,7 +589,9 @@ export function UnifiedComposer({
       aria-label={ariaLabel}
       style={{
         border: 0,
+        flexShrink: 0,
         margin: 0,
+        minBlockSize: 'var(--shared-composer-min-height, 104px)',
         minInlineSize: 0,
         padding: 0
       }}
