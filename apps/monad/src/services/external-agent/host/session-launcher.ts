@@ -504,7 +504,7 @@ export class ExternalAgentSessionLauncher {
     // Awaited so the durable process registry is on disk before the caller reports the session as
     // started (crash-safety: a daemon restart right after this point can still find and reap it).
     await proc.supervision?.tracked;
-    const waitForAppServerStartup =
+    const waitForAppServerThread = () =>
       launch.launchMode === 'app-server'
         ? new Promise<string>((resolve, reject) => {
             live.startup = {
@@ -517,6 +517,7 @@ export class ExternalAgentSessionLauncher {
             };
           })
         : null;
+    const waitForAppServerStartup = waitForAppServerThread();
     const makeInitializeContext = () => {
       const providerSessionRef = live.providerSessionRef ?? args.providerSessionRef;
       return {
@@ -691,14 +692,21 @@ export class ExternalAgentSessionLauncher {
           const nextProc = spawnPipeMode();
           await nextProc.supervision?.tracked;
           attachExitHandler(nextProc);
+          const waitForAppServerResume = waitForAppServerThread();
           try {
             await attachRuntimeStreams(nextProc);
+            if (waitForAppServerResume) await waitForAppServerResume;
           } catch (error) {
+            if (live.startup) {
+              clearTimeout(live.startup.timeout);
+              live.startup.reject(error instanceof Error ? error : new Error(String(error)));
+              live.startup = undefined;
+            }
+            if (waitForAppServerResume) await waitForAppServerResume.catch(() => undefined);
             nextProc.supervision?.stop('manual', 'SIGTERM');
             throw error;
           }
           live.suspended = false;
-          live.observationEpochReady = false;
           this.ctx.updateExternalAgentPid(id, nextProc.pid);
           this.ctx.observation.publish(id);
           this.ctx.events.emit(live.transcriptTargetId, 'external_agent.idle_resumed', {

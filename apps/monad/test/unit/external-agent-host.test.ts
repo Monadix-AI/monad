@@ -1041,7 +1041,7 @@ setInterval(() => {}, 1000);
   }
 });
 
-test('external agent idle resume passes the latest provider session ref to app-server initialize', async () => {
+test('external agent idle resume waits for app-server thread readiness before sending input', async () => {
   const store = createStore();
   const workdir = mkdtempSync(join(tmpdir(), 'monad-external-agent-app-server-idle-'));
   const logPath = join(workdir, 'runtime.log');
@@ -1051,8 +1051,15 @@ test('external agent idle resume passes the latest provider session ref to app-s
     `
 const fs = require('node:fs');
 const logPath = process.argv[2];
-fs.appendFileSync(logPath, 'spawn:' + process.pid + '\\n');
-console.log('SESSION_REF:thread-stdio');
+const previous = fs.existsSync(logPath) ? fs.readFileSync(logPath, 'utf8') : '';
+const spawn = (previous.match(/^spawn:/gm) ?? []).length + 1;
+fs.appendFileSync(logPath, 'spawn:' + spawn + '\\n');
+const ready = () => {
+  fs.appendFileSync(logPath, 'ready:' + spawn + '\\n');
+  console.log('SESSION_REF:thread-stdio');
+};
+if (spawn === 1) ready();
+else setTimeout(ready, 200);
 process.stdin.setEncoding('utf8');
 process.stdin.on('data', (chunk) => {
   fs.appendFileSync(logPath, 'input:' + chunk.trim() + '\\n');
@@ -1150,6 +1157,15 @@ setInterval(() => {}, 1000);
       await Bun.sleep(25);
     }
     expect(initRefs).toEqual([undefined, 'thread-stdio']);
+    let lifecycle: string[] = [];
+    for (let i = 0; i < 40 && lifecycle.length < 3; i++) {
+      lifecycle = (await Bun.file(logPath).text())
+        .trim()
+        .split('\n')
+        .filter((line) => line.startsWith('ready:') || line.startsWith('input:'));
+      if (lifecycle.length < 3) await Bun.sleep(25);
+    }
+    expect(lifecycle).toEqual(['ready:1', 'ready:2', 'input:wake-app-server']);
   } finally {
     host.stop(host.list(projectId).sessions[0]?.id ?? '');
     rmSync(workdir, { recursive: true, force: true });

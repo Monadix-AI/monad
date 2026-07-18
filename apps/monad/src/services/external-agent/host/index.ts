@@ -338,9 +338,11 @@ export class ExternalAgentHost {
       if (live.suspended) {
         if (!live.restartRuntime)
           throw new ExternalAgentError('unsupported_capability', `external agent cannot resume: ${live.id}`);
+        await this.prepareObservationEpoch(live);
         await live.restartRuntime();
+      } else {
+        await this.prepareObservationEpoch(live);
       }
-      await this.prepareObservationEpoch(live);
       this.armIdleSuspend(live);
       live.adapter.sendInput(live, input);
     };
