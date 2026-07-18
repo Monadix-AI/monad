@@ -395,7 +395,18 @@ async function waitForFile(path: string, expected: string): Promise<string> {
     if (text.includes(expected)) return text;
     await Bun.sleep(25);
   }
-  return readFile(path, 'utf8');
+  // Returning the file instead of throwing lets an expectation that can never be satisfied pass on
+  // unrelated earlier content, at the cost of a silent 3s stall on every such call.
+  throw new Error(`timed out waiting for ${JSON.stringify(expected)} in ${path}`);
+}
+
+async function waitForValue<T>(read: () => T | undefined, label: string): Promise<T> {
+  for (let i = 0; i < 120; i++) {
+    const value = read();
+    if (value !== undefined) return value;
+    await Bun.sleep(25);
+  }
+  throw new Error(`timed out waiting for ${label}`);
 }
 
 function _uiMessageText(item: UIMessageItem): string {
@@ -685,7 +696,13 @@ for (const kind of TRANSPORTS) {
         )
       ]);
       await inviteMember(t, sessionId, 'pmem_codex_reviewer');
-      await waitForFile(stdinLog, 'You are a Monad-managed external agent participating in a Workplace Project.');
+      await waitForValue(
+        () =>
+          handlers.store
+            .listExternalAgentSessionsForTranscriptTarget(sessionId)
+            .find((candidate) => candidate.runtimeRole === 'managed-project-agent'),
+        'managed project member runtime'
+      );
 
       await setMemberTemplates(t, projectId, [
         externalAgentTemplate(
@@ -1047,7 +1064,8 @@ for (const kind of TRANSPORTS) {
       if (post.status !== 200) throw new Error(await post.text());
       expect(post.status).toBe(200);
 
-      const claudeInput = await waitForFile(claudeStdinLog, 'codex public reply');
+      // The post body itself stays in the inbox; the fan-out only writes a sender-tagged notice.
+      const claudeInput = await waitForFile(claudeStdinLog, 'Sender name: codex');
       expect(claudeInput).toContain('The message body is in your project inbox.');
       expect(claudeInput).toContain('Sender kind: external-agent');
       expect(claudeInput).toContain('Sender name: codex');
