@@ -19,9 +19,34 @@ The lifecycle events do not introduce a new card type or lifecycle-specific avat
 
 ## Contract and Data Flow
 
-`UISystemItem` gains an optional structured actor reference. External-agent idle suspend and resume projections populate it with the external-agent member identifier already present in the source event. Existing system items may omit the actor and remain backward compatible.
+External-agent lifecycle notices use a protocol-owned discriminated system-event contract:
 
-The chat-room projection resolves the actor reference through the existing project-member metadata maps. It uses the same identity inputs as the member-join system event:
+```ts
+type ExternalAgentSystemEvent =
+  | {
+      agentId: string;
+      agentName: string;
+      type: 'idle_suspended';
+      payload: {
+        externalAgentSessionId: string;
+        idleTimeoutMs: number;
+      };
+    }
+  | {
+      agentId: string;
+      agentName: string;
+      type: 'idle_resumed';
+      payload: {
+        externalAgentSessionId: string;
+      };
+    };
+```
+
+The schema is a strict `z.discriminatedUnion('type', ...)`, so each event type accepts only its matching payload. The same variant schemas are reused by the daemon event table and by `UISystemItem.event`; consumers do not redeclare the shapes.
+
+`agentId` is the stable `pmem_*` runtime identity. `agentName` is the configured display name and falls back to `agentId` only when no display name is configured. The host emits this shape at the lifecycle boundary, and the daemon projection carries it unchanged into the system item while localizing only the action text.
+
+The chat-room projection resolves `event.agentId` through the existing project-member metadata maps. It uses the same identity inputs as the member-join system event:
 
 - member display name;
 - configured avatar seed and avatar style;
@@ -30,19 +55,21 @@ The chat-room projection resolves the actor reference through the existing proje
 
 The projected message sets `agentChip`, allowing the existing `SystemMessageRow` actor slot to render the identity without renderer changes. The message body uses the localized action-only text from the system item.
 
-If current member metadata is unavailable, projection falls back to the actor identifier, existing icon inference, and a deterministic generated avatar. The notice remains visible, but configured metadata always wins when present.
+Display-name resolution prefers the external-agent display-name map, then member metadata, then `event.agentName`, then `event.agentId`. If current member metadata is unavailable, projection falls back to the event identity, existing icon inference, and a deterministic generated avatar. The notice remains visible, but configured metadata always wins when present.
 
 ## Compatibility
 
-The actor field is optional, so persisted and live system items without it continue to parse and render as today. Identity is no longer inferred from the lifecycle system-item ID for new sleep/awake events. Existing lifecycle items that lack an actor may retain the legacy fallback during migration.
+The `event` field is optional, so persisted and live system items without it continue to parse and render as today. Identity is no longer inferred from the lifecycle system-item ID for new sleep/awake events. Existing lifecycle items that lack an event may retain the legacy ID-prefix fallback during migration.
 
 ## Testing
 
 Tests cover:
 
-- the exact `UISystemItem` contract emitted for suspend and resume, including the structured actor;
+- strict parsing of the exact suspend/resume union variants and rejection of mismatched payloads;
+- the exact `UISystemItem` contract emitted for suspend and resume, including the structured event;
+- configured-name and missing-name host emission, including `agentName === agentId` fallback;
 - English and Chinese action-only copy;
-- projection from a `pmem_*` actor to the configured project-member display name, avatar, product icon, and tag;
+- projection from a `pmem_*` event identity to the configured project-member display name, avatar, product icon, and tag;
 - `agentChip` output matching the member-join system-event identity shape;
 - fallback behavior when project-member metadata is unavailable;
-- continued parsing of system items without an actor.
+- continued rendering of legacy lifecycle system items without a structured event.
