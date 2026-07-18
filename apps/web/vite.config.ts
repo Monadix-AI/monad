@@ -51,7 +51,7 @@ export function readDaemonEndpoint(
     } catch {}
   }
 
-  return { port: String(envPort ?? 52749), scheme };
+  return { port: String(envPort ?? 47749), scheme };
 }
 
 type DestroySoonSocket = {

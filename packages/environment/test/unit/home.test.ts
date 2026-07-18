@@ -404,7 +404,7 @@ describe('migrateConfig', () => {
   test('fills local HTTP fallback defaults when the network block is absent', async () => {
     const cfg = await migrateConfig(CONFIG_V1_FIXTURE);
     expect(cfg.network.https).toEqual({ enabled: true });
-    expect(cfg.network.localHttpFallback).toEqual({ enabled: false, port: 52780 });
+    expect(cfg.network.localHttpFallback).toEqual({ enabled: false, port: 47780 });
     expect('allowInsecureHttp' in cfg.network.remoteAccess).toBe(false);
   });
 
@@ -810,7 +810,7 @@ describe('network.transport', () => {
     const cfg = createDefaultConfig('x');
     expect(cfg.network.host).toBe('127.0.0.1');
     expect(cfg.network.https).toEqual({ enabled: true });
-    expect(cfg.network.localHttpFallback).toEqual({ enabled: false, port: 52780 });
+    expect(cfg.network.localHttpFallback).toEqual({ enabled: false, port: 47780 });
     expect('allowInsecureHttp' in cfg.network.remoteAccess).toBe(false);
   });
 

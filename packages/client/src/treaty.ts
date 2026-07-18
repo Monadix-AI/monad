@@ -4,7 +4,7 @@ import type { App } from '@monad/monad';
 import { treaty } from '@elysiajs/eden';
 
 export interface MonadTreatyOptions {
-  /** Daemon base URL, e.g. "https://127.0.0.1:52749". */
+  /** Daemon base URL, e.g. "https://127.0.0.1:47749". */
   baseUrl: string;
   /** Bearer token for the control API (header only — never in the URL). */
   token?: string;

@@ -85,7 +85,7 @@ The core machinery that runs an agentic session end-to-end.
 
 ### Daemon
 
-The single long-running process (`apps/monad/`) that owns all state. It binds loopback-only by default (TCP `127.0.0.1:52749` **and** a Unix-domain socket at `~/.monad/run/monad.sock`) and exposes a REST + SSE API. All clients — CLI, web UI, TUI, editor ACP bridge, IM channels — talk to the daemon; they carry no agent logic themselves. State lives under `~/.monad/` (config, sessions DB, memory, atom packs, credentials).
+The single long-running process (`apps/monad/`) that owns all state. It binds loopback-only by default (TCP `127.0.0.1:47749` **and** a Unix-domain socket at `~/.monad/run/monad.sock`) and exposes a REST + SSE API. All clients — CLI, web UI, TUI, editor ACP bridge, IM channels — talk to the daemon; they carry no agent logic themselves. State lives under `~/.monad/` (config, sessions DB, memory, atom packs, credentials).
 
 See [`docs/internals/runtime.md`](internals/runtime.md) and [`docs/internals/daemon-architecture.md`](internals/daemon-architecture.md).
 

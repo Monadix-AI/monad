@@ -2,7 +2,7 @@ import type { MonadConfig } from './config/index.ts';
 
 export const DEFAULT_DAEMON_HOST = '127.0.0.1';
 export const DEFAULT_REMOTE_DAEMON_HOST = '0.0.0.0';
-export const DEFAULT_DAEMON_PORT = 52749;
+export const DEFAULT_DAEMON_PORT = 47749;
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
 
 type NetworkConfig = MonadConfig['network'];

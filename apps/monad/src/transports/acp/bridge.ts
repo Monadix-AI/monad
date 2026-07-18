@@ -24,7 +24,7 @@ import { eventSchema, readTypedSseStream } from '@monad/protocol';
 const log = createLogger('transport:acp:bridge');
 
 export interface BridgeOptions {
-  /** Daemon base URL (e.g. https://127.0.0.1:52749). With `unixSocket` set, the host/port is only
+  /** Daemon base URL (e.g. https://127.0.0.1:47749). With `unixSocket` set, the host/port is only
    * used to build the URL + Host header; requests dial the socket. */
   baseUrl: string;
   /** TCP fallback base URL. When omitted, fallback reuses `baseUrl`. */

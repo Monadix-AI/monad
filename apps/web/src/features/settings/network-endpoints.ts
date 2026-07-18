@@ -16,6 +16,6 @@ export function localHttpFallbackState(settings: NetworkSettings | undefined): L
 
 export function localHttpFallbackUrl(settings: NetworkSettings | undefined): string | null {
   return localHttpFallbackState(settings) === 'listening'
-    ? `http://127.0.0.1:${settings?.localHttpFallback.port ?? 52780}`
+    ? `http://127.0.0.1:${settings?.localHttpFallback.port ?? 47780}`
     : null;
 }

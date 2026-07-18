@@ -27,7 +27,7 @@ import { EventSocket } from './event-socket.ts';
 import { createMonadTreaty, makeLoopbackHttpsFetcher, makeUnixFetcher } from './treaty.ts';
 
 export interface MonadClientOptions {
-  /** Daemon base URL, e.g. "https://127.0.0.1:52749". */
+  /** Daemon base URL, e.g. "https://127.0.0.1:47749". */
   baseUrl: string;
   /** Bearer token for the control API (header only — never in the URL). */
   token?: string;

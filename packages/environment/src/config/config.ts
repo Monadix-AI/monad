@@ -67,7 +67,7 @@ export function getConfigSchemaUrl(): string {
  * unix-socket option — and the web UI needs a port), so this only picks the CLI's REST/SSE path.
  */
 export const DEFAULT_TRANSPORT = 'uds' as const;
-export const DEFAULT_LOCAL_HTTP_FALLBACK_PORT = 52780;
+export const DEFAULT_LOCAL_HTTP_FALLBACK_PORT = 47780;
 
 export const moConfigSchema = z
   .object({
@@ -109,7 +109,7 @@ const httpsSchema = z.object({
 
 const networkConfigSchema = z
   .object({
-    port: z.number().int().min(1).max(65535).default(52749),
+    port: z.number().int().min(1).max(65535).default(47749),
     host: z.string().min(1).default('127.0.0.1'),
     // Which socket the LOCAL client dials — daemon always serves both; WS push is always TCP.
     transport: z.enum(['tcp', 'uds']).default(DEFAULT_TRANSPORT),
@@ -127,7 +127,7 @@ const networkConfigSchema = z
     })
   })
   .default(() => ({
-    port: 52749,
+    port: 47749,
     host: '127.0.0.1',
     transport: DEFAULT_TRANSPORT,
     https: { enabled: true },

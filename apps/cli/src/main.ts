@@ -219,7 +219,7 @@ export async function main(): Promise<void> {
     await startDaemon();
     const statusResult = await client.treaty.v1.init.status.get();
     if (statusResult.data && !statusResult.data.initialized) {
-      const port = parseInt(new URL(conn.baseUrl).port || '52749', 10);
+      const port = parseInt(new URL(conn.baseUrl).port || '47749', 10);
       await runBrowserInit(client, port);
     } else {
       const url = `${conn.baseUrl.replace(/\/$/, '')}/`;
@@ -266,7 +266,7 @@ function applyConnOverride(
   const raw = globals.host ?? '127.0.0.1';
   const url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `http://${raw}`);
   if (globals.port !== undefined) url.port = String(globals.port);
-  else if (!url.port) url.port = new URL(conn.baseUrl).port || '52749';
+  else if (!url.port) url.port = new URL(conn.baseUrl).port || '47749';
   return { baseUrl: url.origin, unixSocket: undefined };
 }
 

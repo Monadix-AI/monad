@@ -7,7 +7,7 @@ function usage(): never {
   process.stderr.write(
     `${[
       'Usage:',
-      '  bun run smoke:external-agent-managed -- --agent <name> --cwd <project-dir> [--server https://127.0.0.1:52749]',
+      '  bun run smoke:external-agent-managed -- --agent <name> --cwd <project-dir> [--server https://127.0.0.1:47749]',
       '',
       'This is an opt-in smoke test for already-installed provider CLIs.',
       'It does not install provider CLIs, perform provider login, or bypass provider-owned approvals.'

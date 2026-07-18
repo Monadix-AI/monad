@@ -309,7 +309,7 @@ grep -E '^(MONAD_PORT|WEB_PORT|MONAD_KV_UI_PORT)=' .env.local
 | `MONAD_KV_UI_PORT` | Dev-only KV debug UI port. | 6400–7399 |
 
 The daemon binds `MONAD_PORT`; the web app, TUI, and CLI all resolve the same value, so
-in-worktree clients connect automatically. **Never hardcode `52749` or `3000`** — those
+in-worktree clients connect automatically. **Never hardcode `47749` or `3000`** — those
 are only the fallbacks for a checkout that hasn't been set up.
 
 ## Verifying it came up

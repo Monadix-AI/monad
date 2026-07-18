@@ -64,7 +64,7 @@ async function getPortPid(): Promise<number | null> {
   const port = new URL(baseUrl).port;
   try {
     if (process.platform === 'win32') {
-      // netstat -ano lines: "  TCP  0.0.0.0:52749  0.0.0.0:0  LISTENING  1234"
+      // netstat -ano lines: "  TCP  0.0.0.0:47749  0.0.0.0:0  LISTENING  1234"
       const result = Bun.spawnSync(['netstat', '-ano', '-p', 'TCP'], { stderr: 'ignore' });
       if (result.exitCode !== 0) return null;
       for (const line of new TextDecoder().decode(result.stdout).split('\n')) {

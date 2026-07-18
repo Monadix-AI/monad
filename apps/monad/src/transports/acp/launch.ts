@@ -15,7 +15,7 @@ const log = createLogger('transport:acp:launch');
 
 // Cosmetic only when dialing the Unix socket (used for the URL + Host header). Matches the daemon's
 // configured default; overridden by cfg.network.port / MONAD_PORT when available.
-const DEFAULT_PORT = 52749;
+const DEFAULT_PORT = 47749;
 const SPAWN_TIMEOUT_MS = 20_000;
 const POLL_INTERVAL_MS = 200;
 

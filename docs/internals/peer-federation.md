@@ -53,7 +53,7 @@ token never sits in `config.json`; it lives in `auth.json` behind a `${secret:pe
   {
     "id": "peer_HOME00000000",
     "label": "home-node",
-    "baseUrl": "https://home.example:52749/openai",  // the peer's OpenAI-compat base (no /v1)
+    "baseUrl": "https://home.example:47749/openai",  // the peer's OpenAI-compat base (no /v1)
     "defaultAgent": "default",                        // target agent when the model names none
     "tokenRef": "${secret:peer/peer_HOME00000000/token}",
     "enabled": true
