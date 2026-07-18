@@ -112,6 +112,11 @@ export type {
   UpsertExternalAgentRequest
 } from './external-agent-session.ts';
 export type {
+  ExternalAgentIdleResumedSystemEvent,
+  ExternalAgentIdleSuspendedSystemEvent,
+  ExternalAgentSystemEvent
+} from './external-agent-system-event.ts';
+export type {
   InviteSessionMemberRequest,
   ListSessionMembersResponse,
   RemoveSessionMemberResponse,
@@ -249,6 +254,11 @@ export {
   startExternalAgentResponseSchema,
   upsertExternalAgentRequestSchema
 } from './external-agent-session.ts';
+export {
+  externalAgentIdleResumedSystemEventSchema,
+  externalAgentIdleSuspendedSystemEventSchema,
+  externalAgentSystemEventSchema
+} from './external-agent-system-event.ts';
 export {
   defaultWorkplaceProjectMemberSettings,
   externalAgentProductDisplayName,

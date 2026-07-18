@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { clarifyAskerSchema, clarifyChoiceModeSchema } from './clarify.ts';
 import { contextUsagePayloadSchema } from './event-table.ts';
+import { externalAgentSystemEventSchema } from './external-agent/index.ts';
 import { eventIdSchema, externalAgentSessionIdSchema, messageIdSchema, nativeAgentDeliveryIdSchema } from './ids.ts';
 import { resourceApprovalDisplaySchema } from './resource-approval.ts';
 import { listMessagesQuerySchema } from './rpc/control.ts';
@@ -118,17 +119,11 @@ export const uiMemorySummaryItemSchema = z.object({
 });
 export type UIMemorySummaryItem = z.infer<typeof uiMemorySummaryItemSchema>;
 
-export const uiSystemActorSchema = z.object({
-  id: z.string().min(1),
-  kind: z.literal('external-agent')
-});
-export type UISystemActor = z.infer<typeof uiSystemActorSchema>;
-
 export const uiSystemItemSchema = z.object({
   kind: z.literal('system'),
   id: z.string(),
   text: z.string(),
-  actor: uiSystemActorSchema.optional(),
+  event: externalAgentSystemEventSchema.optional(),
   level: z.enum(['info', 'warn', 'error']).optional(),
   seq: z.string()
 });

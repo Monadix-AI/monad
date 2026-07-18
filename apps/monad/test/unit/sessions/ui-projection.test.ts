@@ -1570,15 +1570,18 @@ test('external_agent.resume_failed system notice renders from the i18n catalog',
   );
 });
 
-test('external agent idle lifecycle notices preserve actors and render action-only localized copy', () => {
+test('external agent idle lifecycle notices preserve typed events and render action-only localized copy', () => {
   const suspendedPayload = {
-    externalAgentSessionId: 'exa_idle00000000',
-    agentName: 'reviewer',
-    idleTimeoutMs: 300
+    agentId: 'pmem_reviewer_1',
+    agentName: 'Reviewer',
+    type: 'idle_suspended' as const,
+    payload: { externalAgentSessionId: 'exa_idle00000000', idleTimeoutMs: 300 }
   };
   const resumedPayload = {
-    externalAgentSessionId: 'exa_idle00000000',
-    agentName: 'reviewer'
+    agentId: 'pmem_reviewer_1',
+    agentName: 'Reviewer',
+    type: 'idle_resumed' as const,
+    payload: { externalAgentSessionId: 'exa_idle00000000' }
   };
 
   const en = new SessionUiProjector();
@@ -1590,9 +1593,9 @@ test('external agent idle lifecycle notices preserve actors and render action-on
       cursor: suspendedEvent.id,
       item: {
         kind: 'system',
-        id: `external-agent-idle-suspended:reviewer:${suspendedEvent.id}`,
+        id: `external-agent-idle-suspended:pmem_reviewer_1:${suspendedEvent.id}`,
         text: 'fell asleep.',
-        actor: { id: 'reviewer', kind: 'external-agent' },
+        event: suspendedPayload,
         level: 'info',
         seq: suspendedEvent.id
       }
@@ -1604,9 +1607,9 @@ test('external agent idle lifecycle notices preserve actors and render action-on
       cursor: resumedEvent.id,
       item: {
         kind: 'system',
-        id: `external-agent-idle-resumed:reviewer:${resumedEvent.id}`,
+        id: `external-agent-idle-resumed:pmem_reviewer_1:${resumedEvent.id}`,
         text: 'woke up.',
-        actor: { id: 'reviewer', kind: 'external-agent' },
+        event: resumedPayload,
         level: 'info',
         seq: resumedEvent.id
       }
@@ -1622,9 +1625,9 @@ test('external agent idle lifecycle notices preserve actors and render action-on
       cursor: zhSuspendedEvent.id,
       item: {
         kind: 'system',
-        id: `external-agent-idle-suspended:reviewer:${zhSuspendedEvent.id}`,
+        id: `external-agent-idle-suspended:pmem_reviewer_1:${zhSuspendedEvent.id}`,
         text: '睡着了。',
-        actor: { id: 'reviewer', kind: 'external-agent' },
+        event: suspendedPayload,
         level: 'info',
         seq: zhSuspendedEvent.id
       }
@@ -1636,9 +1639,9 @@ test('external agent idle lifecycle notices preserve actors and render action-on
       cursor: zhResumedEvent.id,
       item: {
         kind: 'system',
-        id: `external-agent-idle-resumed:reviewer:${zhResumedEvent.id}`,
+        id: `external-agent-idle-resumed:pmem_reviewer_1:${zhResumedEvent.id}`,
         text: '醒来了。',
-        actor: { id: 'reviewer', kind: 'external-agent' },
+        event: resumedPayload,
         level: 'info',
         seq: zhResumedEvent.id
       }

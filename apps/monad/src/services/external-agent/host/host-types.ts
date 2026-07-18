@@ -37,6 +37,7 @@ export interface LiveExternalAgentSession {
   id: string;
   transcriptTargetId: ExternalAgentTargetId;
   agentName: string;
+  displayName?: string;
   provider: ExternalAgentView['provider'];
   runtimeRole: ExternalAgentSessionView['runtimeRole'];
   /** True when this managed session delegates provider approvals to the human (autopilot off + adapter

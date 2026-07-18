@@ -193,9 +193,9 @@ export function applyToolEvent(m: ProjectionMutations, event: Event): SessionUiE
           cursor: event.id,
           item: m.upsert({
             kind: 'system',
-            id: `external-agent-idle-suspended:${p.agentName}:${event.id}`,
+            id: `external-agent-idle-suspended:${p.agentId}:${event.id}`,
             text: m.t('daemon.session.externalAgentIdleSuspended'),
-            actor: { id: p.agentName, kind: 'external-agent' },
+            event: p,
             level: 'info',
             seq: event.id
           })
@@ -210,9 +210,9 @@ export function applyToolEvent(m: ProjectionMutations, event: Event): SessionUiE
           cursor: event.id,
           item: m.upsert({
             kind: 'system',
-            id: `external-agent-idle-resumed:${p.agentName}:${event.id}`,
+            id: `external-agent-idle-resumed:${p.agentId}:${event.id}`,
             text: m.t('daemon.session.externalAgentIdleResumed'),
-            actor: { id: p.agentName, kind: 'external-agent' },
+            event: p,
             level: 'info',
             seq: event.id
           })

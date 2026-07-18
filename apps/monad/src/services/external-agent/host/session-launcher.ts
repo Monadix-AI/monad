@@ -471,6 +471,7 @@ export class ExternalAgentSessionLauncher {
       id,
       transcriptTargetId: args.transcriptTargetId,
       agentName: runtimeAgentName,
+      displayName: args.displayName,
       provider: agent.provider,
       runtimeRole,
       proxyApprovals,
@@ -698,6 +699,12 @@ export class ExternalAgentSessionLauncher {
           live.observationEpochReady = false;
           this.ctx.updateExternalAgentPid(id, nextProc.pid);
           this.ctx.observation.publish(id);
+          this.ctx.events.emit(live.transcriptTargetId, 'external_agent.idle_resumed', {
+            agentId: live.agentName,
+            agentName: live.displayName ?? live.agentName,
+            type: 'idle_resumed',
+            payload: { externalAgentSessionId: live.id }
+          });
           this.ctx.log.debug(
             { sessionId: live.transcriptTargetId, event: 'external_agent.idle_resumed', externalAgentSessionId: id },
             'native cli idle resumed'

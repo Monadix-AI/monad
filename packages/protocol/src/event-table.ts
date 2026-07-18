@@ -15,6 +15,8 @@ import { z } from 'zod';
 import { clarifyAskerSchema, clarifyChoiceModeSchema } from './clarify.ts';
 import { costSchema, type EventType, finishReasonSchema, messageTypeSchema, tokenUsageSchema } from './domain.ts';
 import {
+  externalAgentIdleResumedSystemEventSchema,
+  externalAgentIdleSuspendedSystemEventSchema,
   externalAgentLaunchModeSchema,
   externalAgentProductIconSchema,
   externalAgentProviderSchema,
@@ -307,6 +309,9 @@ export const externalAgentApprovalResolvedPayloadSchema = z.object({
   reason: z.string().optional()
 });
 
+export const externalAgentIdleSuspendedPayloadSchema = externalAgentIdleSuspendedSystemEventSchema;
+export const externalAgentIdleResumedPayloadSchema = externalAgentIdleResumedSystemEventSchema;
+
 export const externalAgentResumeFailedPayloadSchema = z.object({
   agentName: z.string(),
   provider: externalAgentProviderSchema,
@@ -375,6 +380,8 @@ export type ExternalAgentOutputPayload = z.infer<typeof externalAgentOutputPaylo
 export type ExternalAgentConnectionRequiredPayload = z.infer<typeof externalAgentConnectionRequiredPayloadSchema>;
 export type ExternalAgentApprovalRequestedPayload = z.infer<typeof externalAgentApprovalRequestedPayloadSchema>;
 export type ExternalAgentApprovalResolvedPayload = z.infer<typeof externalAgentApprovalResolvedPayloadSchema>;
+export type ExternalAgentIdleSuspendedPayload = z.infer<typeof externalAgentIdleSuspendedPayloadSchema>;
+export type ExternalAgentIdleResumedPayload = z.infer<typeof externalAgentIdleResumedPayloadSchema>;
 export type ExternalAgentResumeFailedPayload = z.infer<typeof externalAgentResumeFailedPayloadSchema>;
 export type ExternalAgentExitedPayload = z.infer<typeof externalAgentExitedPayloadSchema>;
 export type ExternalAgentTurnSettledPayload = z.infer<typeof externalAgentTurnSettledPayloadSchema>;
@@ -418,6 +425,8 @@ export const EVENT_TABLE = {
   'external_agent.connection_required': externalAgentConnectionRequiredPayloadSchema,
   'external_agent.approval_requested': externalAgentApprovalRequestedPayloadSchema,
   'external_agent.approval_resolved': externalAgentApprovalResolvedPayloadSchema,
+  'external_agent.idle_suspended': externalAgentIdleSuspendedPayloadSchema,
+  'external_agent.idle_resumed': externalAgentIdleResumedPayloadSchema,
   'external_agent.resume_failed': externalAgentResumeFailedPayloadSchema,
   'external_agent.exited': externalAgentExitedPayloadSchema,
   'external_agent.turn_settled': externalAgentTurnSettledPayloadSchema,

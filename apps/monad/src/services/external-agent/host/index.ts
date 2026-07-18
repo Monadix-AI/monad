@@ -285,6 +285,8 @@ export class ExternalAgentHost {
   private suspendIdleRuntime(id: string): void {
     const live = this.live.get(id);
     if (!live || !this.canIdleSuspend(live)) return;
+    const idleTimeoutMs = live.idleTimeoutMs;
+    if (idleTimeoutMs === undefined) return;
     live.suspended = true;
     if (live.idleTimer) {
       clearTimeout(live.idleTimer);
@@ -314,6 +316,12 @@ export class ExternalAgentHost {
     this.outputPipeline.flushSnapshot(id);
     this.updateExternalAgentPid(id, null);
     this.observation.publish(id);
+    this.events.emit(live.transcriptTargetId, 'external_agent.idle_suspended', {
+      agentId: live.agentName,
+      agentName: live.displayName ?? live.agentName,
+      type: 'idle_suspended',
+      payload: { externalAgentSessionId: live.id, idleTimeoutMs }
+    });
     this.log.debug(
       { sessionId: live.transcriptTargetId, event: 'external_agent.idle_suspended', externalAgentSessionId: id },
       'native cli idle suspended'

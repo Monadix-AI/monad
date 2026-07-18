@@ -1,5 +1,7 @@
 import { expect, test } from 'bun:test';
 
+import { externalAgentIdleResumedPayloadSchema, externalAgentIdleSuspendedPayloadSchema } from '../src/event-table.ts';
+import { externalAgentSystemEventSchema } from '../src/external-agent/index.ts';
 import { listUiItemsResponseSchema, sessionUiEventSchema, uiSnapshotEventSchema } from '../src/ui.ts';
 
 test('sessionUiEventSchema accepts snapshot and upsert payloads', () => {
@@ -33,14 +35,26 @@ test('sessionUiEventSchema accepts snapshot and upsert payloads', () => {
   ).toBe('upsert');
 });
 
-test('system items preserve optional external-agent actor references', () => {
+test('external-agent system events preserve exact typed variants and legacy system items', () => {
+  const suspended = {
+    agentId: 'pmem_codex_1',
+    agentName: 'Reviewer',
+    type: 'idle_suspended' as const,
+    payload: { externalAgentSessionId: 'exa_idle00000000', idleTimeoutMs: 300 }
+  };
+  const resumed = {
+    agentId: 'pmem_codex_1',
+    agentName: 'Reviewer',
+    type: 'idle_resumed' as const,
+    payload: { externalAgentSessionId: 'exa_idle00000000' }
+  };
   const current = sessionUiEventSchema.parse({
     kind: 'upsert',
     item: {
       kind: 'system',
       id: 'external-agent-idle-suspended:pmem_codex_1:evt_1',
       text: 'fell asleep.',
-      actor: { id: 'pmem_codex_1', kind: 'external-agent' },
+      event: suspended,
       seq: 'evt_1'
     }
   });
@@ -49,13 +63,17 @@ test('system items preserve optional external-agent actor references', () => {
     item: { kind: 'system', id: 'legacy', text: 'Legacy notice', seq: 'evt_0' }
   });
 
+  expect(externalAgentSystemEventSchema.parse(suspended)).toEqual(suspended);
+  expect(externalAgentSystemEventSchema.parse(resumed)).toEqual(resumed);
+  expect(externalAgentIdleSuspendedPayloadSchema.parse(suspended)).toEqual(suspended);
+  expect(externalAgentIdleResumedPayloadSchema.parse(resumed)).toEqual(resumed);
   expect(current).toEqual({
     kind: 'upsert',
     item: {
       kind: 'system',
       id: 'external-agent-idle-suspended:pmem_codex_1:evt_1',
       text: 'fell asleep.',
-      actor: { id: 'pmem_codex_1', kind: 'external-agent' },
+      event: suspended,
       seq: 'evt_1'
     }
   });
@@ -63,6 +81,25 @@ test('system items preserve optional external-agent actor references', () => {
     kind: 'upsert',
     item: { kind: 'system', id: 'legacy', text: 'Legacy notice', seq: 'evt_0' }
   });
+});
+
+test('external-agent system events reject mismatched lifecycle payloads', () => {
+  expect(() =>
+    externalAgentSystemEventSchema.parse({
+      agentId: 'pmem_codex_1',
+      agentName: 'Reviewer',
+      type: 'idle_resumed',
+      payload: { externalAgentSessionId: 'exa_idle00000000', idleTimeoutMs: 300 }
+    })
+  ).toThrow();
+  expect(() =>
+    externalAgentSystemEventSchema.parse({
+      agentId: 'pmem_codex_1',
+      agentName: 'Reviewer',
+      type: 'idle_suspended',
+      payload: { externalAgentSessionId: 'exa_idle00000000' }
+    })
+  ).toThrow();
 });
 
 test('sessionUiEventSchema preserves authoritative transcript replacement snapshots', () => {

@@ -1,4 +1,4 @@
-import type { ExternalAgentSessionState, ExternalAgentView } from '@monad/protocol';
+import type { Event, ExternalAgentSessionState, ExternalAgentView } from '@monad/protocol';
 import type { ExternalAgentProviderAdapter } from '#/services/external-agent/types.ts';
 
 import { expect, test } from 'bun:test';
@@ -931,18 +931,26 @@ setInterval(() => {}, 1000);
     allowAutopilot: false,
     approvalOwnership: 'provider-owned'
   };
+  const projectId = 'ses_01KWHOSTxRoW';
+  const bus = new EventBus();
+  const lifecycleEvents: Event[] = [];
+  bus.subscribe(projectId, (event) => {
+    if (event.type === 'external_agent.idle_suspended' || event.type === 'external_agent.idle_resumed') {
+      lifecycleEvents.push(event);
+    }
+  });
   const host = new ExternalAgentHost({
     store,
-    bus: new EventBus(),
+    bus,
     agents: async () => [agent],
     externalAgentIdleTimeoutMs: 300
   });
-  const projectId = 'ses_01KWHOSTxRoW';
 
   try {
     const view = await host.start({
       transcriptTargetId: projectId,
       agentName: provider,
+      displayName: 'Idle Reviewer',
       workingPath: workdir,
       launchMode: 'json-stream'
     });
@@ -958,6 +966,17 @@ setInterval(() => {}, 1000);
       state: 'running',
       providerSessionRef: 'thread-1'
     });
+    expect(lifecycleEvents.map(({ type, payload }) => ({ type, payload }))).toEqual([
+      {
+        type: 'external_agent.idle_suspended',
+        payload: {
+          agentId: provider,
+          agentName: 'Idle Reviewer',
+          type: 'idle_suspended',
+          payload: { externalAgentSessionId: view.id, idleTimeoutMs: 300 }
+        }
+      }
+    ]);
     const suspendedObservation = host.observe(view.id);
     if (suspendedObservation.state !== 'live') throw new Error('suspended session observation must remain live');
 
@@ -975,6 +994,26 @@ setInterval(() => {}, 1000);
     const resumedObservation = host.observe(view.id);
     if (resumedObservation.state !== 'live') throw new Error('resumed session observation must be live');
     expect(resumedObservation.observationEpoch).not.toBe(suspendedObservation.observationEpoch);
+    expect(lifecycleEvents.map(({ type, payload }) => ({ type, payload }))).toEqual([
+      {
+        type: 'external_agent.idle_suspended',
+        payload: {
+          agentId: provider,
+          agentName: 'Idle Reviewer',
+          type: 'idle_suspended',
+          payload: { externalAgentSessionId: view.id, idleTimeoutMs: 300 }
+        }
+      },
+      {
+        type: 'external_agent.idle_resumed',
+        payload: {
+          agentId: provider,
+          agentName: 'Idle Reviewer',
+          type: 'idle_resumed',
+          payload: { externalAgentSessionId: view.id }
+        }
+      }
+    ]);
   } finally {
     host.stop(host.list(projectId).sessions[0]?.id ?? '');
     rmSync(workdir, { recursive: true, force: true });
