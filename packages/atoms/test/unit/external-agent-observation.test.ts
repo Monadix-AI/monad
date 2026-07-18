@@ -880,6 +880,30 @@ test('Codex app-server observation keeps a lone chunk raw record unwrapped', () 
   expect(items[0]?.raw).toEqual(record);
 });
 
+test('Codex MCP startup status stays unknown instead of becoming a tool call', () => {
+  const raw = {
+    method: 'mcpServer/startupStatus/updated',
+    params: {
+      threadId: 'thread_1',
+      name: 'codex-security',
+      status: 'ready',
+      error: null
+    }
+  };
+
+  expect(
+    externalAgentNeutralStreamItems({ id: 'exa_codex0000000', provider: 'codex', output: JSON.stringify(raw) })
+  ).toEqual([
+    {
+      id: 'exa_codex0000000:json:0:mcp-status',
+      kind: 'unknown',
+      streaming: false,
+      text: 'codex-security ready',
+      raw
+    }
+  ]);
+});
+
 test('Codex app-server observation concatenates deltas verbatim without injecting spaces', () => {
   const output = [
     JSON.stringify({ method: 'item/agentMessage/delta', params: { delta: 'impl' } }),
