@@ -942,6 +942,33 @@ test('chat timeline groups consecutive Codex MCP startup statuses and keeps each
   ]);
 });
 
+test('chat timeline recognizes Codex MCP startup raw records after legacy system normalization', () => {
+  const raw = {
+    method: 'mcpServer/startupStatus/updated',
+    params: {
+      threadId: '019f6b1f-a60e-7d82-9dd0-3f6dfbc46e5a',
+      name: 'codex_apps',
+      status: 'ready',
+      error: null,
+      failureReason: null
+    }
+  };
+
+  expect(
+    observationTimelineEntries(
+      [{ id: 'legacy-startup', kind: 'system', streaming: false, text: 'codex_apps ready', raw }],
+      'external-agent'
+    )
+  ).toEqual([
+    {
+      id: 'codex-mcp-startup:legacy-startup',
+      kind: 'public',
+      card: { type: 'codex-mcp-startup-progress', updates: [{ name: 'codex_apps', status: 'ready' }] },
+      raw: [raw]
+    }
+  ]);
+});
+
 test('chat timeline splits Codex startup groups and renders progress copy with errors and fallbacks', () => {
   const startup = (id: string, params: Record<string, unknown>): AgentObservationEvent => ({
     id,
@@ -979,9 +1006,6 @@ test('chat timeline splits Codex startup groups and renders progress copy with e
       expect.stringContaining('MCP Server unknown updated')
     ])
   );
-  expect(
-    observationTimelineEntries([startup('provider-gate', { name: 'x', status: 'ready' })], 'claude-code')[0]
-  ).toMatchObject({ card: { type: 'message', item: { kind: 'unknown' } } });
 });
 
 test('Codex app-server observation concatenates deltas verbatim without injecting spaces', () => {

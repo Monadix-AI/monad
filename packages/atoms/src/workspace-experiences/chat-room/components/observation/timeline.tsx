@@ -88,14 +88,14 @@ export function observationTimelineEntries(
   for (let index = 0; index < items.length; index += 1) {
     const item = items[index];
     const next = items[index + 1];
-    const startupUpdate = item ? codexMcpStartupUpdate(item, provider) : null;
+    const startupUpdate = item ? codexMcpStartupUpdate(item) : null;
     if (item && startupUpdate) {
       const startupItems = [item];
       const updates = [startupUpdate];
       while (true) {
         const candidate = items[index + 1];
         if (!candidate) break;
-        const candidateUpdate = codexMcpStartupUpdate(candidate, provider);
+        const candidateUpdate = codexMcpStartupUpdate(candidate);
         if (!candidateUpdate) break;
         startupItems.push(candidate);
         updates.push(candidateUpdate);

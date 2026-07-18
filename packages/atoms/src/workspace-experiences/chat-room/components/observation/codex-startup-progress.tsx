@@ -16,8 +16,7 @@ function textValue(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
-export function codexMcpStartupUpdate(item: AgentObservationEvent, provider: string): CodexMcpStartupUpdate | null {
-  if (provider !== 'codex' || item.kind !== 'unknown') return null;
+export function codexMcpStartupUpdate(item: AgentObservationEvent): CodexMcpStartupUpdate | null {
   const raw = recordValue(item.raw);
   if (raw?.method !== 'mcpServer/startupStatus/updated') return null;
   const params = recordValue(raw.params);
