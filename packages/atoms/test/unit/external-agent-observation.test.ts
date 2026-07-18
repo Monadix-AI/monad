@@ -904,6 +904,86 @@ test('Codex MCP startup status stays unknown instead of becoming a tool call', (
   ]);
 });
 
+test('chat timeline groups consecutive Codex MCP startup statuses and keeps each server latest state', () => {
+  const securityStarting = {
+    method: 'mcpServer/startupStatus/updated',
+    params: { name: 'codex-security', status: 'starting', error: null }
+  };
+  const nodeReady = {
+    method: 'mcpServer/startupStatus/updated',
+    params: { name: 'node_repl', status: 'ready', error: null }
+  };
+  const securityReady = {
+    method: 'mcpServer/startupStatus/updated',
+    params: { name: 'codex-security', status: 'ready', error: null }
+  };
+  const items: AgentObservationEvent[] = [securityStarting, nodeReady, securityReady].map((raw, index) => ({
+    id: `startup_${index}`,
+    kind: 'unknown',
+    streaming: false,
+    text: `${raw.params.name} ${raw.params.status}`,
+    raw,
+    at: `2026-07-18T10:00:0${index}.000Z`
+  }));
+
+  expect(observationTimelineEntries(items, 'codex')).toMatchObject([
+    {
+      kind: 'public',
+      card: {
+        type: 'codex-mcp-startup-progress',
+        updates: [
+          { name: 'codex-security', status: 'ready' },
+          { name: 'node_repl', status: 'ready' }
+        ]
+      },
+      raw: [securityStarting, nodeReady, securityReady],
+      timestamp: '10:00:02'
+    }
+  ]);
+});
+
+test('chat timeline splits Codex startup groups and renders progress copy with errors and fallbacks', () => {
+  const startup = (id: string, params: Record<string, unknown>): AgentObservationEvent => ({
+    id,
+    kind: 'unknown',
+    streaming: false,
+    text: id,
+    raw: { method: 'mcpServer/startupStatus/updated', params }
+  });
+  const entries = observationTimelineEntries(
+    [
+      startup('first', { name: 'codex-security', status: 'failed', error: 'timeout' }),
+      { id: 'message', kind: 'assistant-message', streaming: false, text: 'Continuing.' },
+      startup('second', {})
+    ],
+    'codex'
+  );
+  const rows = observationTimelineRows(entries);
+
+  expect(entries.map((entry) => (entry.kind === 'public' ? entry.card.type : entry.kind))).toEqual([
+    'codex-mcp-startup-progress',
+    'message',
+    'codex-mcp-startup-progress'
+  ]);
+  expect(
+    rows
+      .filter((row) => row.entries[0]?.kind === 'public' && row.entries[0].card.type === 'codex-mcp-startup-progress')
+      .map((row) => renderToStaticMarkup(React.createElement(ObservationTimelineRowView, { provider: 'codex', row })))
+      .join('\n')
+  ).toContain('Startup progress');
+  expect(
+    rows.map((row) => renderToStaticMarkup(React.createElement(ObservationTimelineRowView, { provider: 'codex', row })))
+  ).toEqual(
+    expect.arrayContaining([
+      expect.stringContaining('MCP Server codex-security failed: timeout'),
+      expect.stringContaining('MCP Server unknown updated')
+    ])
+  );
+  expect(
+    observationTimelineEntries([startup('provider-gate', { name: 'x', status: 'ready' })], 'claude-code')[0]
+  ).toMatchObject({ card: { type: 'message', item: { kind: 'unknown' } } });
+});
+
 test('Codex app-server observation concatenates deltas verbatim without injecting spaces', () => {
   const output = [
     JSON.stringify({ method: 'item/agentMessage/delta', params: { delta: 'impl' } }),

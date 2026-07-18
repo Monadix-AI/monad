@@ -13,6 +13,11 @@ import {
   renderPrivateObservationCard
 } from './adapters.ts';
 import { ObservationCardShell, type ObservationCollapseCommand, toolCallSummary } from './card-shell.tsx';
+import {
+  CodexMcpStartupProgressCard,
+  codexMcpStartupUpdate,
+  collapseCodexMcpStartupUpdates
+} from './codex-startup-progress.tsx';
 import { CommandToolCard, CommandToolHeader } from './command-card.tsx';
 import { FileReadToolCard, FileReadToolHeader } from './file-read-card.tsx';
 
@@ -77,6 +82,29 @@ export function observationTimelineEntries(
   for (let index = 0; index < items.length; index += 1) {
     const item = items[index];
     const next = items[index + 1];
+    const startupUpdate = item ? codexMcpStartupUpdate(item, provider) : null;
+    if (item && startupUpdate) {
+      const startupItems = [item];
+      const updates = [startupUpdate];
+      while (true) {
+        const candidate = items[index + 1];
+        if (!candidate) break;
+        const candidateUpdate = codexMcpStartupUpdate(candidate, provider);
+        if (!candidateUpdate) break;
+        startupItems.push(candidate);
+        updates.push(candidateUpdate);
+        index += 1;
+      }
+      const latest = startupItems.at(-1) ?? item;
+      entries.push({
+        id: `codex-mcp-startup:${observationItemIdentity(item)}`,
+        kind: 'public',
+        card: { type: 'codex-mcp-startup-progress', updates: collapseCodexMcpStartupUpdates(updates) },
+        timestamp: observationTimestampLabel(latest),
+        raw: startupItems.map((startupItem) => startupItem.raw)
+      });
+      continue;
+    }
     if (item && next && isToolCallEvent(item) && isToolResultEvent(next)) {
       const itemId = observationItemIdentity(item);
       const nextId = observationItemIdentity(next);
@@ -247,6 +275,26 @@ function ObservationTimelineCard({
             text={diagnostic.detail}
           />
         ) : null}
+      </ObservationCardShell>
+    );
+  }
+  if (entry.kind === 'public' && entry.card.type === 'codex-mcp-startup-progress') {
+    return (
+      <ObservationCardShell
+        collapseCommand={collapseCommand}
+        header={
+          <ObservationMeta
+            compact
+            label="system"
+            source={provider}
+            title="Startup progress"
+          />
+        }
+        raw={entry.raw}
+        timestamp={entry.timestamp}
+        visualRole="system"
+      >
+        <CodexMcpStartupProgressCard updates={entry.card.updates} />
       </ObservationCardShell>
     );
   }

@@ -1,6 +1,7 @@
 import type { CommandCardView, FileReadCardView } from '@monad/ui';
 import type React from 'react';
 import type { ExternalAgentStreamView } from '../../../experience/types.ts';
+import type { CodexMcpStartupUpdate } from './codex-startup-progress.tsx';
 
 export type ObservationItem = ExternalAgentStreamView['items'][number];
 
@@ -12,6 +13,7 @@ export type FileReadToolView = FileReadCardView;
 
 export type PublicObservationCard =
   | { type: 'message'; role: 'user' | 'agent'; item: ObservationItem }
+  | { type: 'codex-mcp-startup-progress'; updates: CodexMcpStartupUpdate[] }
   | { type: 'diagnostic'; item: ObservationItem }
   | { type: 'thinking'; item: ObservationItem }
   | { type: 'tool-pair'; call: ObservationItem; result: ObservationItem }
