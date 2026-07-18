@@ -9,7 +9,14 @@ import {
 } from '../../src/workspace-experiences/chat-room/utils/observation-history.ts';
 
 function event(id: string, dedupeKey = id): AgentObservationEvent {
-  return { id, dedupeKey, kind: 'assistant-message', streaming: false, text: id };
+  return {
+    id,
+    dedupeKey,
+    kind: 'assistant-message',
+    streaming: false,
+    text: id,
+    provenance: { contractEvents: [{ id }] }
+  };
 }
 
 test('prependObservationHistory removes live and history overlap by stable dedupe key', () => {

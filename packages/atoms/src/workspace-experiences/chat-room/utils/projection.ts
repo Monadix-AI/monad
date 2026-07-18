@@ -268,7 +268,7 @@ function externalAgentSessionErrorMessageView(
     orderKey: `${session.updatedAt || session.startedAt}:error:${item.id}`,
     systemTone: 'error',
     systemDetail: item.text,
-    systemRaw: item.raw
+    systemRaw: item.provenance.rawEvents
   };
 }
 

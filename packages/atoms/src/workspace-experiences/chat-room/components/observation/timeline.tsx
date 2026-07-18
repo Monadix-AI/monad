@@ -12,7 +12,7 @@ import {
   projectPublicObservationPair,
   renderPrivateObservationCard
 } from './adapters.ts';
-import { ObservationCardShell, type ObservationCollapseCommand, rawJsonText, toolCallSummary } from './card-shell.tsx';
+import { ObservationCardShell, type ObservationCollapseCommand, toolCallSummary } from './card-shell.tsx';
 import {
   CodexMcpStartupProgressCard,
   codexMcpStartupUpdate,
@@ -20,6 +20,7 @@ import {
 } from './codex-startup-progress.tsx';
 import { CommandToolCard, CommandToolHeader } from './command-card.tsx';
 import { FileReadToolCard, FileReadToolHeader } from './file-read-card.tsx';
+import { observationContractRawEvents } from './provenance.ts';
 
 const THINKING_LABEL_CSS = `
 @keyframes workplace-observation-thinking-sheen {
@@ -73,12 +74,6 @@ function observationItemIdentity(item: ObservationItem): string {
   return item.dedupeKey ?? item.id;
 }
 
-function observationPairRaw(callRaw: unknown, resultRaw: unknown): unknown {
-  if (callRaw === undefined) return resultRaw;
-  if (resultRaw === undefined) return callRaw;
-  return rawJsonText(callRaw) === rawJsonText(resultRaw) ? callRaw : [callRaw, resultRaw];
-}
-
 export function observationTimelineEntries(
   items: readonly ExternalAgentStreamView['items'][number][],
   provider: string,
@@ -107,7 +102,7 @@ export function observationTimelineEntries(
         kind: 'public',
         card: { type: 'codex-mcp-startup-progress', updates: collapseCodexMcpStartupUpdates(updates) },
         timestamp: observationTimestampLabel(latest),
-        raw: startupItems.map((startupItem) => startupItem.raw)
+        contractEvents: startupItems.flatMap((startupItem) => startupItem.provenance.contractEvents)
       });
       continue;
     }
@@ -119,7 +114,7 @@ export function observationTimelineEntries(
         kind: 'public',
         card: projectPublicObservationPair(item, next, provider) ?? { type: 'tool-pair', call: item, result: next },
         timestamp: observationTimestampLabel(next),
-        raw: observationPairRaw(item.raw, next.raw)
+        contractEvents: [...item.provenance.contractEvents, ...next.provenance.contractEvents]
       });
       index += 1;
       continue;
@@ -135,7 +130,7 @@ export function observationTimelineEntries(
         kind: 'public',
         card: publicCard,
         timestamp: observationTimestampLabel(timelineItem),
-        raw: timelineItem.raw
+        contractEvents: timelineItem.provenance.contractEvents
       });
       continue;
     }
@@ -146,7 +141,7 @@ export function observationTimelineEntries(
         kind: 'private',
         card: privateCard,
         timestamp: observationTimestampLabel(timelineItem),
-        raw: timelineItem.raw
+        contractEvents: timelineItem.provenance.contractEvents
       });
       continue;
     }
@@ -155,7 +150,7 @@ export function observationTimelineEntries(
       kind: 'public',
       card: { type: 'message', role: timelineItem.kind === 'user-message' ? 'user' : 'agent', item: timelineItem },
       timestamp: observationTimestampLabel(timelineItem),
-      raw: timelineItem.raw
+      contractEvents: timelineItem.provenance.contractEvents
     });
   }
   return entries;
@@ -177,6 +172,7 @@ function ObservationTimelineCard({
   entry: ObservationTimelineEntry;
   provider: string;
 }): React.ReactElement {
+  const raw = observationContractRawEvents(entry.contractEvents);
   if (entry.kind === 'private') {
     const rendered = renderPrivateObservationCard(entry.card);
     if (rendered) {
@@ -191,7 +187,7 @@ function ObservationTimelineCard({
               type={entry.card.type}
             />
           }
-          raw={entry.raw}
+          raw={raw}
           timestamp={entry.timestamp}
           visualRole="tool"
         >
@@ -214,7 +210,7 @@ function ObservationTimelineCard({
             title={toolPairName(entry.card.call)}
           />
         }
-        raw={entry.raw}
+        raw={raw}
         timestamp={entry.timestamp}
         visualRole="tool"
       >
@@ -234,7 +230,7 @@ function ObservationTimelineCard({
         collapseCommand={collapseCommand}
         defaultCollapsed
         header={<CommandToolHeader view={entry.card.view} />}
-        raw={entry.raw}
+        raw={raw}
         timestamp={entry.timestamp}
         visualRole="tool"
       >
@@ -248,7 +244,7 @@ function ObservationTimelineCard({
         collapseCommand={collapseCommand}
         defaultCollapsed
         header={<FileReadToolHeader view={entry.card.view} />}
-        raw={entry.raw}
+        raw={raw}
         timestamp={entry.timestamp}
         visualRole="tool"
       >
@@ -270,7 +266,7 @@ function ObservationTimelineCard({
             title={diagnostic.message}
           />
         }
-        raw={entry.raw}
+        raw={raw}
         timestamp={entry.timestamp}
         visualRole={diagnostic.severity}
       >
@@ -296,7 +292,7 @@ function ObservationTimelineCard({
             title="Startup progress"
           />
         }
-        raw={entry.raw}
+        raw={raw}
         timestamp={entry.timestamp}
         visualRole="system"
       >
@@ -324,7 +320,7 @@ function ObservationTimelineCard({
             </span>
           </ObservationMeta>
         }
-        raw={entry.raw}
+        raw={raw}
         timestamp={entry.timestamp}
         visualRole="agent"
       >
@@ -367,7 +363,7 @@ function ObservationTimelineCard({
           type="unsupported"
         />
       }
-      raw={entry.raw}
+      raw={raw}
       timestamp={entry.timestamp}
       visualRole="system"
     >
@@ -390,6 +386,7 @@ function GenericObservationCard({
   item: ObservationItem;
   provider: string;
 }): React.ReactElement {
+  const raw = observationContractRawEvents(entry.contractEvents);
   const role = visualRoleFromKind(item.kind);
   const header =
     role === 'user' ? null : (
@@ -405,7 +402,7 @@ function GenericObservationCard({
       collapseCommand={collapseCommand}
       defaultCollapsed={item.kind === 'unknown'}
       header={header}
-      raw={entry.raw}
+      raw={raw}
       timestamp={entry.timestamp}
       visualRole={role}
     >

@@ -120,9 +120,9 @@ describe('toAgentObservationEvent', () => {
     expect(toAgentObservationEvent(event)).toBeNull();
   });
 
-  test('carries the domain event as raw', () => {
+  test('carries the domain event as its contract provenance', () => {
     const event = fixtureEvent({ type: 'user.message', payload: { messageId: 'msg_100000000000', text: 'hi' } });
-    expect(toAgentObservationEvent(event)?.raw).toBe(event);
+    expect(toAgentObservationEvent(event)?.provenance.contractEvents).toEqual([event]);
   });
 });
 

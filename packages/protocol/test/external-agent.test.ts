@@ -423,7 +423,8 @@ test('native agent observation projection is addressed by pointers and excludes 
         id: 'obs_1',
         role: 'agent',
         text: 'Working on it.',
-        source: 'codex-app-server'
+        source: 'codex-app-server',
+        provenance: { rawEvents: [{ method: 'item/agentMessage', params: { text: 'Working on it.' } }] }
       }
     ]
   });
@@ -486,7 +487,8 @@ test('external agent observation events carry stable identity and explicit unkno
       projection: 'normalized',
       role: 'agent',
       text: 'done',
-      source: 'codex-app-server'
+      source: 'codex-app-server',
+      provenance: { rawEvents: [{ method: 'item/completed', params: { item: { id: 'item-1' } } }] }
     })
   ).toEqual({
     id: 'evt_render_1',
@@ -494,7 +496,8 @@ test('external agent observation events carry stable identity and explicit unkno
     projection: 'normalized',
     role: 'agent',
     text: 'done',
-    source: 'codex-app-server'
+    source: 'codex-app-server',
+    provenance: { rawEvents: [{ method: 'item/completed', params: { item: { id: 'item-1' } } }] }
   });
 
   const raw = { method: 'future/provider/event', params: { value: 1 } };
@@ -506,7 +509,7 @@ test('external agent observation events carry stable identity and explicit unkno
       role: 'system',
       text: 'future/provider/event',
       source: 'codex-app-server',
-      raw
+      provenance: { rawEvents: [raw] }
     })
   ).toEqual({
     id: 'evt_unknown_1',
@@ -515,8 +518,47 @@ test('external agent observation events carry stable identity and explicit unkno
     role: 'system',
     text: 'future/provider/event',
     source: 'codex-app-server',
-    raw
+    provenance: { rawEvents: [raw] }
   });
+});
+
+test('external agent observation events require exact non-empty raw provenance', () => {
+  const rawEvents = [
+    { type: 'assistant', uuid: 'evt-1', message: { role: 'assistant', content: [] } },
+    { type: 'system', subtype: 'thinking_tokens', estimated_tokens: 42, uuid: 'evt-2' }
+  ];
+  expect(
+    externalAgentObservationEventSchema.parse({
+      id: 'evt_with_sources',
+      role: 'agent',
+      text: 'Thinking… · 42 tokens',
+      source: 'claude-code-sdk',
+      provenance: { rawEvents }
+    })
+  ).toEqual({
+    id: 'evt_with_sources',
+    role: 'agent',
+    text: 'Thinking… · 42 tokens',
+    source: 'claude-code-sdk',
+    provenance: { rawEvents }
+  });
+  expect(() =>
+    externalAgentObservationEventSchema.parse({
+      id: 'evt_without_sources',
+      role: 'agent',
+      text: 'fabricated',
+      source: 'claude-code-sdk'
+    })
+  ).toThrow();
+  expect(() =>
+    externalAgentObservationEventSchema.parse({
+      id: 'evt_with_empty_sources',
+      role: 'agent',
+      text: 'fabricated',
+      source: 'claude-code-sdk',
+      provenance: { rawEvents: [] }
+    })
+  ).toThrow();
 });
 
 test('external agent history page response carries server-normalized events, not raw items', () => {
@@ -526,7 +568,7 @@ test('external agent history page response carries server-normalized events, not
     text: 'turn/started',
     source: 'codex-app-server' as const,
     providerEventType: 'turn/started',
-    raw: { method: 'turn/started', params: { turnId: 'turn-1' } }
+    provenance: { rawEvents: [{ method: 'turn/started', params: { turnId: 'turn-1' } }] }
   };
   const parsed = externalAgentHistoryPageResponseSchema.parse({ events: [event], nextCursor: 'older-1' });
 

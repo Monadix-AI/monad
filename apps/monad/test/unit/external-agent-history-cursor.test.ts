@@ -61,7 +61,8 @@ function fakeLive(overrides: Partial<LiveExternalAgentSession> = {}): LiveExtern
             projection: 'normalized' as const,
             role: 'agent' as const,
             text: output,
-            source: 'plain-text' as const
+            source: 'plain-text' as const,
+            provenance: { rawEvents: [output] }
           }
         ]
       })
@@ -108,7 +109,7 @@ function jsonIdentityEvents() {
             role: 'agent' as const,
             text: record.text ?? record.uuid,
             source: 'plain-text' as const,
-            raw: record
+            provenance: { rawEvents: [record] }
           };
         })
     })
@@ -138,7 +139,8 @@ test('input captures event-source history before starting a new live observation
             projection: 'normalized' as const,
             role: 'agent' as const,
             text: 'canonical history',
-            source: 'plain-text' as const
+            source: 'plain-text' as const,
+            provenance: { rawEvents: [{ uuid: 'history-message-1', text: 'canonical history' }] }
           }
         ]
       })
@@ -364,11 +366,12 @@ test('a stored snapshot cursor pages the output snapshot of a live session witho
     events: [
       {
         id: `${SESSION_ID}:history:0:0`,
-        dedupeKey: 'codex:ff7ab6f7',
+        dedupeKey: 'codex:83230891',
         projection: 'normalized',
         role: 'agent',
         text: 'line-one\nline-two',
-        source: 'plain-text'
+        source: 'plain-text',
+        provenance: { rawEvents: ['line-one\nline-two'] }
       }
     ]
   });
@@ -432,7 +435,8 @@ test('a stored session starts history from the provider instead of a stale journ
     projection: 'normalized' as const,
     role: 'agent' as const,
     text: 'provider history',
-    source: 'codex-app-server' as const
+    source: 'codex-app-server' as const,
+    provenance: { rawEvents: [{ method: 'item/agentMessage', params: { text: 'provider history' } }] }
   };
   registerAgentAdapterImpl({
     ...codexBuiltin,

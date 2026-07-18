@@ -1,33 +1,19 @@
 import { z } from 'zod';
 
-import { agentObservationDiagnosticSchema, agentObservationEventSchema } from '../agent-observation.ts';
+import { agentObservationEventSchema } from '../agent-observation.ts';
 import { externalAgentSessionIdSchema, nativeAgentDeliveryIdSchema } from '../ids.ts';
 import { externalAgentProviderSchema } from './external-agent-config.ts';
+import { externalAgentObservationEventSchema } from './external-agent-observation-event.ts';
 
-export const externalAgentObservationRoleSchema = z.enum(['agent', 'system', 'tool', 'user']);
-export type ExternalAgentObservationRole = z.infer<typeof externalAgentObservationRoleSchema>;
+export type {
+  ExternalAgentObservationEvent,
+  ExternalAgentObservationRole
+} from './external-agent-observation-event.ts';
 
-export const externalAgentObservationEventSchema = z.object({
-  id: z.string().min(1),
-  dedupeKey: z.string().min(1).optional(),
-  projection: z.enum(['normalized', 'unknown']).optional(),
-  role: externalAgentObservationRoleSchema,
-  text: z.string().min(1),
-  source: z.enum([
-    'codex-exec',
-    'codex-app-server',
-    'claude-code-sdk',
-    'qwen-code-sdk',
-    'gemini-cli',
-    'plain-text',
-    'unknown'
-  ]),
-  providerEventType: z.string().optional(),
-  diagnostic: agentObservationDiagnosticSchema.optional(),
-  createdAt: z.string().optional(),
-  raw: z.unknown().optional()
-});
-export type ExternalAgentObservationEvent = z.infer<typeof externalAgentObservationEventSchema>;
+export {
+  externalAgentObservationEventSchema,
+  externalAgentObservationRoleSchema
+} from './external-agent-observation-event.ts';
 
 export const externalAgentUsageLimitMeterRowSchema = z.object({
   id: z.string(),

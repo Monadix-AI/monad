@@ -18,6 +18,7 @@ const event = (over: Partial<ExternalAgentObservationEvent>): ExternalAgentObser
   role: 'agent',
   text: 't',
   source: 'codex-app-server',
+  provenance: { rawEvents: [{ type: 'test' }] },
   ...over
 });
 
@@ -46,7 +47,7 @@ test('shared classifier maps provider events to a uniform activity kind', () => 
       event({
         providerEventType: 'thread/status/changed',
         role: 'system',
-        raw: { params: { status: { type: 'idle' } } }
+        provenance: { rawEvents: [{ params: { status: { type: 'idle' } } }] }
       })
     )
   ).toBe('turn-end');

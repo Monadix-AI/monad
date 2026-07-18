@@ -8,7 +8,7 @@ import { parseEventPayload } from '@monad/protocol';
  *  `toAgentObservationEvent` in `@monad/atoms`. Unlike an external adapter, monad's own events are
  *  already structured (no raw-text decode needed) — this is a field reshape, not a parser. */
 export function toAgentObservationEvent(event: Event): AgentObservationEvent | null {
-  const base = { id: event.id, at: event.at, raw: event };
+  const base = { id: event.id, at: event.at, provenance: { contractEvents: [event] as [Event] } };
   switch (event.type) {
     case 'user.message': {
       const payload = parseEventPayload('user.message', event.payload);

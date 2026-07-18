@@ -40,11 +40,13 @@ function projectedEventPart(id: string): string | undefined {
 }
 
 function eventDedupeKey(provider: ExternalAgentProvider, event: ExternalAgentObservationEvent): string {
-  const recordIds = providerRecordIds(event.raw);
+  const rawEvents = event.provenance.rawEvents;
+  const recordIds = providerRecordIds(rawEvents);
   if (recordIds.length > 0) {
+    const firstRaw = rawEvents[0];
     const rawType =
-      event.raw && !Array.isArray(event.raw) && typeof event.raw === 'object'
-        ? (event.raw as Record<string, unknown>).type
+      firstRaw && !Array.isArray(firstRaw) && typeof firstRaw === 'object'
+        ? (firstRaw as Record<string, unknown>).type
         : undefined;
     const discriminator = [
       typeof rawType === 'string' ? rawType : undefined,
@@ -57,12 +59,7 @@ function eventDedupeKey(provider: ExternalAgentProvider, event: ExternalAgentObs
     const recordIdentity = recordIds.length === 1 ? recordIds[0] : hash(recordIds.join(':'));
     return `${provider}:${recordIdentity}:${discriminator}`;
   }
-  const identity = event.raw ?? {
-    role: event.role,
-    text: event.text,
-    providerEventType: event.providerEventType,
-    createdAt: event.createdAt
-  };
+  const identity = rawEvents.length === 1 ? rawEvents[0] : rawEvents;
   return `${provider}:${hash(canonicalJson(identity))}`;
 }
 
@@ -86,7 +83,7 @@ function unknownEvent(args: {
     text: providerEventType ?? args.entry.raw,
     source: 'unknown',
     ...(providerEventType ? { providerEventType } : {}),
-    raw: args.entry.record
+    provenance: { rawEvents: [args.entry.record] }
   };
   return { ...event, dedupeKey: eventDedupeKey(args.provider, event) };
 }
@@ -149,8 +146,8 @@ function projectedEntries(args: {
     const group = groups.get(item.key);
     if (!group || !groupProjector) return [];
     return groupProjector.render(args.id, group.state).map((event) => {
-      const raw = group.entries.map((entry) => entry.record);
-      const withRaw = event.raw === undefined ? { ...event, raw } : event;
+      const rawEvents = group.entries.map((entry) => entry.record);
+      const withRaw = event.provenance.rawEvents.length === 0 ? { ...event, provenance: { rawEvents } } : event;
       return {
         ...withRaw,
         dedupeKey: eventDedupeKey(args.provider, withRaw),
@@ -171,7 +168,8 @@ function plainTextEvents(provider: ExternalAgentProvider, id: string, output: st
         projection: 'normalized',
         role: text.startsWith('tool:') ? 'tool' : 'agent',
         text,
-        source: 'plain-text'
+        source: 'plain-text',
+        provenance: { rawEvents: [text] }
       };
       return { ...event, dedupeKey: eventDedupeKey(provider, event) };
     });
@@ -194,7 +192,7 @@ function mergeStreamingEvents(
       compactEvent({
         ...first,
         text: run.map((event) => event.text).join(''),
-        raw: run.length === 1 ? first.raw : run.map((event) => event.raw)
+        provenance: { rawEvents: run.flatMap((event) => event.provenance.rawEvents) }
       });
     merged.push({ ...next, dedupeKey: eventDedupeKey(provider, next) });
     run = [];

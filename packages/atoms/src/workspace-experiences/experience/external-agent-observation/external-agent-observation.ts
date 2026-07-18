@@ -50,6 +50,7 @@ function observation(args: {
   providerEventType?: string;
   createdAt?: string;
   raw?: unknown;
+  rawEvents?: unknown[];
   preserveWhitespace?: boolean;
 }): ExternalAgentObservationEvent[] {
   const text = args.preserveWhitespace ? args.text : args.text?.trim();
@@ -62,7 +63,7 @@ function observation(args: {
       source: args.source,
       ...(args.providerEventType ? { providerEventType: args.providerEventType } : {}),
       ...(args.createdAt ? { createdAt: args.createdAt } : {}),
-      ...(args.raw !== undefined ? { raw: args.raw } : {})
+      provenance: { rawEvents: args.rawEvents ?? [args.raw] }
     }
   ];
 }
@@ -191,15 +192,6 @@ function parsedJsonEvents(args: {
   });
 }
 
-function rawObservationLine(raw: unknown): string {
-  if (typeof raw === 'string') return raw;
-  try {
-    return JSON.stringify(raw);
-  } catch {
-    return String(raw);
-  }
-}
-
 // Streaming deltas are emitted to be concatenated verbatim: each already carries its own
 // boundary whitespace (codex sends " the", " CLI"; a mid-word split sends "impl" then
 // "ementation"). Guessing a space between two alphanumeric edges corrupts both cases —
@@ -225,7 +217,7 @@ function mergeAdjacentChunkObservations(
     out[out.length - 1] = adapterObservation?.mergeStreamingRun?.(runEvents) ?? {
       ...previous,
       text: runTexts.join(''),
-      raw: runRaws.map(rawObservationLine)
+      provenance: { rawEvents: runRaws }
     };
   };
   for (const event of events) {
@@ -239,14 +231,14 @@ function mergeAdjacentChunkObservations(
       previous.providerEventType === event.providerEventType
     ) {
       runTexts.push(event.text);
-      runRaws.push(event.raw);
+      runRaws.push(...event.provenance.rawEvents);
       runEvents.push(event);
       continue;
     }
     settleRun();
     out.push(event);
     runTexts = isChunkObservation(event) ? [event.text] : [];
-    runRaws = isChunkObservation(event) ? [event.raw] : [];
+    runRaws = isChunkObservation(event) ? [...event.provenance.rawEvents] : [];
     runEvents = isChunkObservation(event) ? [event] : [];
   }
   settleRun();
@@ -325,7 +317,8 @@ export function externalAgentStreamItems(args: {
       id: `${args.id}:${index}`,
       role: part.startsWith('tool:') ? ('tool' as const) : ('agent' as const),
       text: part,
-      source: 'plain-text' as const
+      source: 'plain-text' as const,
+      provenance: { rawEvents: [part] }
     }));
 }
 

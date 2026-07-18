@@ -36,7 +36,7 @@ test('projected event source gives live and history records the same stable iden
       text: 'Hello',
       source: 'unknown',
       providerEventType: 'message',
-      raw: { type: 'message', text: 'Hello' }
+      provenance: { rawEvents: [{ type: 'message', text: 'Hello' }] }
     }
   ]);
   expect(source.projectLive({ id: 'history', output, mode: 'history' }).events[0]?.dedupeKey).toBe('codex:99a3e357');
@@ -82,7 +82,7 @@ test('projected event source preserves unrecognized provider records as unknown 
       text: 'future/provider/event',
       source: 'unknown',
       providerEventType: 'future/provider/event',
-      raw
+      provenance: { rawEvents: [raw] }
     }
   ]);
 });
@@ -123,7 +123,7 @@ test('every built-in adapter preserves an unrecognized provider record', () => {
         text: 'future/provider/event',
         source: 'unknown',
         providerEventType: 'future/provider/event',
-        raw
+        provenance: { rawEvents: [raw] }
       }
     }))
   );
@@ -152,7 +152,7 @@ test('Claude event source keeps only the latest cumulative thinking token estima
       id: 'exa_claude000000:thinking-tokens',
       providerEventType: 'thinking_tokens_delta',
       text: 'Thinking… · 1120 tokens',
-      raw: records
+      provenance: { rawEvents: records }
     }
   ]);
 });

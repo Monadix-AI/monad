@@ -2,6 +2,8 @@ import type { AgentObservationEvent } from '@monad/protocol';
 
 import { ObservationText } from '@monad/ui';
 
+import { observationRawEvents } from './provenance.ts';
+
 export type CodexMcpStartupUpdate = {
   name: string;
   status: string;
@@ -17,7 +19,7 @@ function textValue(value: unknown): string | undefined {
 }
 
 export function codexMcpStartupUpdate(item: AgentObservationEvent): CodexMcpStartupUpdate | null {
-  const raw = recordValue(item.raw);
+  const raw = recordValue(observationRawEvents(item)[0]);
   if (raw?.method !== 'mcpServer/startupStatus/updated') return null;
   const params = recordValue(raw.params);
   if (!params) return null;

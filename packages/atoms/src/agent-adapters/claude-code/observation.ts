@@ -292,8 +292,8 @@ export function claudeRecordEvents(
 }
 
 export const claudeCodeObservationProjection = {
-  checkpoint: (event: ExternalAgentObservationEvent) => textValue(recordValue(event.raw)?.uuid),
-  identity: (event: ExternalAgentObservationEvent) => textValue(recordValue(event.raw)?.uuid),
+  checkpoint: (event: ExternalAgentObservationEvent) => textValue(recordValue(event.provenance.rawEvents[0])?.uuid),
+  identity: (event: ExternalAgentObservationEvent) => textValue(recordValue(event.provenance.rawEvents[0])?.uuid),
   usageRecords: claudeUsageRecordsFromRecord,
   classifyActivity: classifyObservationActivity,
   isStreamingFragment: isStreamingObservationFragment,
@@ -301,7 +301,11 @@ export const claudeCodeObservationProjection = {
     const first = events[0];
     const latest = events.at(-1);
     if (!first || !latest || first.providerEventType !== 'thinking_tokens_delta') return undefined;
-    return { ...latest, id: first.id, raw: events.map((event) => event.raw) };
+    return {
+      ...latest,
+      id: first.id,
+      provenance: { rawEvents: events.flatMap((event) => event.provenance.rawEvents) }
+    };
   },
   recordProjectors: [
     {

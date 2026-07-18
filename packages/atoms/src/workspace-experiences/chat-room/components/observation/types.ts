@@ -27,8 +27,8 @@ export type PrivateObservationCard = {
 };
 
 type ObservationCardView =
-  | { id: string; kind: 'public'; card: PublicObservationCard; timestamp?: string; raw?: unknown }
-  | { id: string; kind: 'private'; card: PrivateObservationCard; timestamp?: string; raw?: unknown };
+  | { id: string; kind: 'public'; card: PublicObservationCard; timestamp?: string; contractEvents: unknown[] }
+  | { id: string; kind: 'private'; card: PrivateObservationCard; timestamp?: string; contractEvents: unknown[] };
 
 export type ObservationTimelineEntry = ObservationCardView;
 

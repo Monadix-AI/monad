@@ -62,13 +62,13 @@ function codexHistoryEntries(
 }
 
 function codexObservationIdentity(event: ExternalAgentObservationEvent): string | undefined {
-  const raw = recordValue(event.raw);
+  const raw = recordValue(event.provenance.rawEvents[0]);
   const params = recordValue(raw?.params);
   return textValue(params?.turnId, recordValue(params?.turn)?.id);
 }
 
 function codexObservationCheckpoint(event: ExternalAgentObservationEvent): string | undefined {
-  const raw = recordValue(event.raw);
+  const raw = recordValue(event.provenance.rawEvents[0]);
   return textValue(raw?.method) === 'turn/completed' ? codexObservationIdentity(event) : undefined;
 }
 

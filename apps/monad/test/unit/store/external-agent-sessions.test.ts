@@ -63,7 +63,8 @@ test('external agent observation journal deduplicates overlapping live and histo
     projection: 'normalized' as const,
     role: 'agent' as const,
     text: 'Done',
-    source: 'codex-app-server' as const
+    source: 'codex-app-server' as const,
+    provenance: { rawEvents: [{ method: 'item/agentMessage', params: { text: 'Done' } }] }
   };
 
   store.recordExternalAgentObservationEvents(row.id, [event], '2026-06-28T00:00:01.000Z');
@@ -82,7 +83,8 @@ test('external agent observation journal returns a newest page in chronological 
     projection: 'normalized' as const,
     role: 'agent' as const,
     text: id,
-    source: 'codex-app-server' as const
+    source: 'codex-app-server' as const,
+    provenance: { rawEvents: [{ method: 'item/agentMessage', params: { text: id } }] }
   }));
   store.recordExternalAgentObservationEvents(row.id, events, '2026-06-28T00:00:01.000Z');
 

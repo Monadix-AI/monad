@@ -2,6 +2,18 @@ import { expect, test } from 'bun:test';
 
 import { agentObservationEventSchema, agentObservationKindSchema, agentObservationUsageSchema } from '../src/index.ts';
 
+const provenance = {
+  contractEvents: [
+    {
+      id: 'external-source',
+      role: 'agent' as const,
+      text: 'provider source',
+      source: 'codex-app-server' as const,
+      provenance: { rawEvents: [{ method: 'item/completed' }] }
+    }
+  ]
+};
+
 test('kind enum is exactly the neutral turn lifecycle, unknown passthrough, and one-time session notices', () => {
   expect(new Set(agentObservationKindSchema.options)).toEqual(
     new Set([
@@ -24,7 +36,7 @@ test('a streaming assistant fragment carries text and no tool/reason', () => {
     kind: 'assistant-message',
     streaming: true,
     text: 'hel',
-    raw: { type: 'content_block_delta' }
+    provenance
   });
   expect(parsed.streaming).toBe(true);
   expect(parsed.text).toBe('hel');
@@ -37,17 +49,19 @@ test('a tool-call decodes to a structured tool payload, not pre-formatted text',
     id: 'e2',
     kind: 'tool-call',
     streaming: false,
-    tool: { name: 'bash', input: { cmd: 'ls' } }
+    tool: { name: 'bash', input: { cmd: 'ls' } },
+    provenance
   });
   expect(parsed.tool).toEqual({ name: 'bash', input: { cmd: 'ls' } });
 });
 
 test('turn-end validates its reason against the closed set', () => {
   expect(
-    agentObservationEventSchema.parse({ id: 'e3', kind: 'turn-end', streaming: false, reason: 'completed' }).reason
+    agentObservationEventSchema.parse({ id: 'e3', kind: 'turn-end', streaming: false, reason: 'completed', provenance })
+      .reason
   ).toBe('completed');
   expect(() =>
-    agentObservationEventSchema.parse({ id: 'e4', kind: 'turn-end', streaming: false, reason: 'crashed' })
+    agentObservationEventSchema.parse({ id: 'e4', kind: 'turn-end', streaming: false, reason: 'crashed', provenance })
   ).toThrow();
 });
 
@@ -57,6 +71,36 @@ test('streaming is required — an event without it is rejected', () => {
 
 test('an unknown kind is rejected (version-skew is dropped, not coerced)', () => {
   expect(() => agentObservationEventSchema.parse({ id: 'e6', kind: 'web-search', streaming: false })).toThrow();
+});
+
+test('neutral observation events require one or more contract sources', () => {
+  const contractEvents = [
+    {
+      id: 'external-1',
+      role: 'agent' as const,
+      text: 'done',
+      source: 'codex-app-server' as const,
+      provenance: { rawEvents: [{ method: 'item/completed', params: { item: { id: 'item-1' } } }] }
+    }
+  ];
+  expect(
+    agentObservationEventSchema.parse({
+      id: 'neutral-1',
+      kind: 'assistant-message',
+      streaming: false,
+      text: 'done',
+      provenance: { contractEvents }
+    })
+  ).toEqual({
+    id: 'neutral-1',
+    kind: 'assistant-message',
+    streaming: false,
+    text: 'done',
+    provenance: { contractEvents }
+  });
+  expect(() =>
+    agentObservationEventSchema.parse({ id: 'neutral-without-source', kind: 'assistant-message', streaming: false })
+  ).toThrow();
 });
 
 test('usage is a separate frame: token counts plus provider limits, no event kind', () => {

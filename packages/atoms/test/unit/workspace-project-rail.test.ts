@@ -577,7 +577,15 @@ test('agent observation selects the currently running external agent stream by i
       tag: 'Codex',
       status: 'running' as const,
       output: 'thinking',
-      items: [{ id: 'item_1', kind: 'assistant-message' as const, streaming: false, text: 'Thinking' }]
+      items: [
+        {
+          id: 'item_1',
+          kind: 'assistant-message' as const,
+          streaming: false,
+          text: 'Thinking',
+          provenance: { contractEvents: [{ id: 'source_1' }] }
+        }
+      ]
     },
     {
       id: 'exa_otherproject',
@@ -644,7 +652,15 @@ test('agent observation matches external agent stream aliases for template-backe
       tag: 'Codex',
       status: 'running' as const,
       output: 'projected activity',
-      items: [{ id: 'item_1', kind: 'assistant-message' as const, streaming: false, text: 'Projected activity' }]
+      items: [
+        {
+          id: 'item_1',
+          kind: 'assistant-message' as const,
+          streaming: false,
+          text: 'Projected activity',
+          provenance: { contractEvents: [{ id: 'source_1' }] }
+        }
+      ]
     }
   ];
 

@@ -11,6 +11,10 @@ import { toAgentObservationEvent } from '../../src/agent-adapters/neutral-observ
 import { rawJsonText } from '../../src/workspace-experiences/chat-room/components/observation/card-shell.tsx';
 import { ExternalAgentObservationPanel } from '../../src/workspace-experiences/chat-room/components/observation/panel.tsx';
 import {
+  observationContractRawEvents,
+  observationRawEvents
+} from '../../src/workspace-experiences/chat-room/components/observation/provenance.ts';
+import {
   ObservationTimelineRowView,
   observationTimelineEntries,
   observationTimelineRows
@@ -42,6 +46,16 @@ const renderTimeline = (items: ExternalAgentObservationEvent[], provider = 'code
       .filter((event): event is AgentObservationEvent => event !== null),
     provider
   );
+
+const externalSnapshot = (event: ExternalAgentObservationEvent) => {
+  const { provenance, ...rest } = event;
+  return { ...rest, rawEvents: provenance.rawEvents };
+};
+
+const neutralSnapshot = (event: AgentObservationEvent) => {
+  const { provenance, ...rest } = event;
+  return { ...rest, rawEvents: observationRawEvents(event) };
+};
 
 test('observation access is adapted to projection events without carrying raw output forward', () => {
   const raw = JSON.stringify({ method: 'item/agentMessage/delta', params: { delta: 'Projected update' } });
@@ -145,7 +159,15 @@ test('history observation access with normalized events projects immediately', (
         externalAgentSessionId: 'exa_codex0000000',
         provider: 'codex',
         output: '',
-        events: [{ id: 'event_1', role: 'agent', source: 'codex-app-server', text: 'Projected history' }],
+        events: [
+          {
+            id: 'event_1',
+            role: 'agent',
+            source: 'codex-app-server',
+            text: 'Projected history',
+            provenance: { rawEvents: [{ method: 'item/agentMessage' }] }
+          }
+        ],
         observedAt: '2026-07-06T00:00:00.000Z'
       },
       historyRequested: false
@@ -256,20 +278,24 @@ test('Claude Code observation maps server errors to readable system events', () 
     session_id: 'claude-session'
   });
 
-  expect(externalAgentStreamItems({ id: 'exa_claude000000', provider: 'claude-code', output })).toEqual([
+  expect(
+    externalAgentStreamItems({ id: 'exa_claude000000', provider: 'claude-code', output }).map(externalSnapshot)
+  ).toEqual([
     {
       id: 'exa_claude000000:result',
       role: 'system',
       text: 'API Error: overloaded_error. Claude Code is currently overloaded.',
       source: 'claude-code-sdk',
       providerEventType: 'server_error',
-      raw: {
-        type: 'result',
-        subtype: 'server_error',
-        is_error: true,
-        result: 'API Error: overloaded_error. Claude Code is currently overloaded.',
-        session_id: 'claude-session'
-      }
+      rawEvents: [
+        {
+          type: 'result',
+          subtype: 'server_error',
+          is_error: true,
+          result: 'API Error: overloaded_error. Claude Code is currently overloaded.',
+          session_id: 'claude-session'
+        }
+      ]
     }
   ]);
 });
@@ -456,13 +482,13 @@ test('Claude Code observation keeps the latest thinking token estimate in one re
     output: [JSON.stringify(first), JSON.stringify(latest)].join('\n')
   });
 
-  expect(items).toEqual([
+  expect(items.map(neutralSnapshot)).toEqual([
     {
       id: 'exa_claude000000:thinking-tokens',
       kind: 'reasoning',
       streaming: true,
       text: 'Thinking… · 151 tokens',
-      raw: [first, latest]
+      rawEvents: [first, latest]
     }
   ]);
 });
@@ -478,7 +504,7 @@ test('thinking timeline rows use dedupe identity and keep each run raw', () => {
         kind: 'reasoning',
         streaming: true,
         text: 'Thinking… · 25 tokens',
-        raw: firstRaw
+        provenance: { contractEvents: firstRaw }
       },
       {
         id: 'exa_claude:thinking-tokens',
@@ -486,15 +512,17 @@ test('thinking timeline rows use dedupe identity and keep each run raw', () => {
         kind: 'reasoning',
         streaming: true,
         text: 'Thinking… · 80 tokens',
-        raw: secondRaw
+        provenance: { contractEvents: secondRaw }
       }
     ],
     'claude-code'
   );
 
-  expect(entries.map(({ id, raw }) => ({ id, raw }))).toEqual([
-    { id: 'claude-code:think-a:agent:thinking_tokens_delta', raw: firstRaw },
-    { id: 'claude-code:think-b:agent:thinking_tokens_delta', raw: secondRaw }
+  expect(
+    entries.map(({ id, contractEvents }) => ({ id, rawEvents: observationContractRawEvents(contractEvents) }))
+  ).toEqual([
+    { id: 'claude-code:think-a:agent:thinking_tokens_delta', rawEvents: firstRaw },
+    { id: 'claude-code:think-b:agent:thinking_tokens_delta', rawEvents: secondRaw }
   ]);
 });
 
@@ -503,7 +531,8 @@ test('thinking shimmer is limited to the latest reasoning item of a running stre
     id: 'thinking_1',
     kind: 'reasoning' as const,
     streaming: true,
-    text: 'Thinking… · 151 tokens'
+    text: 'Thinking… · 151 tokens',
+    provenance: { contractEvents: [{ type: 'system', subtype: 'thinking_tokens', estimated_tokens: 151 }] }
   };
   const render = (items: ExternalAgentStreamView['items'], active: boolean) => {
     const row = observationTimelineRows(observationTimelineEntries(items, 'claude-code', active))[0];
@@ -513,7 +542,19 @@ test('thinking shimmer is limited to the latest reasoning item of a running stre
 
   expect(render([reasoning], true)).toContain('data-streaming="true"');
   expect(
-    render([reasoning, { id: 'answer_1', kind: 'assistant-message', streaming: false, text: 'Done' }], true)
+    render(
+      [
+        reasoning,
+        {
+          id: 'answer_1',
+          kind: 'assistant-message',
+          streaming: false,
+          text: 'Done',
+          provenance: { contractEvents: [{ type: 'assistant', text: 'Done' }] }
+        }
+      ],
+      true
+    )
   ).not.toContain('data-streaming="true"');
   expect(render([reasoning], false)).not.toContain('data-streaming="true"');
 });
@@ -541,7 +582,7 @@ test('Codex WARN and ERROR logs project to diagnostic cards without ending the t
     output: [JSON.stringify(errorRecord), JSON.stringify(warningRecord)].join('\n')
   });
 
-  expect(items).toEqual([
+  expect(items.map(neutralSnapshot)).toEqual([
     {
       id: 'exa_codex0000000:diagnostic',
       kind: 'system',
@@ -552,7 +593,7 @@ test('Codex WARN and ERROR logs project to diagnostic cards without ending the t
         message: 'failed to refresh available models: timeout waiting for child process to exit',
         target: 'codex_models_manager::manager'
       },
-      raw: errorRecord,
+      rawEvents: [errorRecord],
       at: '2026-07-17T12:40:09.794Z'
     },
     {
@@ -567,7 +608,7 @@ test('Codex WARN and ERROR logs project to diagnostic cards without ending the t
           'failed to parse remote plugin catalog response from https://chatgpt.com/backend-api/ps/plugins/list: EOF while parsing a value at line 1 column 0',
         target: 'codex_core_plugins::manager'
       },
-      raw: warningRecord,
+      rawEvents: [warningRecord],
       at: '2026-07-17T12:38:05.227Z'
     }
   ]);
@@ -613,14 +654,16 @@ test('Qwen Code observation merges partial stream-json deltas', () => {
 test('observation preserves unparsed JSONL records verbatim', () => {
   const raw = '{"type":"unexpected_event","payload":{"value":42}}';
 
-  expect(externalAgentStreamItems({ id: 'exa_unknown00000', provider: 'claude-code', output: raw })).toEqual([
+  expect(
+    externalAgentStreamItems({ id: 'exa_unknown00000', provider: 'claude-code', output: raw }).map(externalSnapshot)
+  ).toEqual([
     {
       id: 'exa_unknown00000:json:0:raw',
       role: 'system',
       text: raw,
       source: 'unknown',
       providerEventType: 'raw_json',
-      raw: { type: 'unexpected_event', payload: { value: 42 } }
+      rawEvents: [{ type: 'unexpected_event', payload: { value: 42 } }]
     }
   ]);
 });
@@ -651,7 +694,8 @@ test('observation does not promote embedded JSON fragments to raw cards', () => 
       id: 'exa_codex0000000:0',
       role: 'agent',
       text: output,
-      source: 'plain-text'
+      source: 'plain-text',
+      provenance: { rawEvents: [output] }
     }
   ]);
 });
@@ -686,8 +730,8 @@ test('Codex app-server observation collects merged chunk raw JSONL lines into a 
 
   expect(items).toHaveLength(1);
   expect(items[0]?.text).toBe('abc');
-  expect(items[0]?.raw).toEqual(rawLines);
-  expect(rawJsonText(items[0]?.raw)).toBe(output);
+  expect(items[0]?.provenance.rawEvents).toEqual(records);
+  expect(rawJsonText(items[0]?.provenance.rawEvents)).toBe(output);
 });
 
 test('Codex app-server observation groups one agent message item lifecycle into one card', () => {
@@ -737,8 +781,8 @@ test('Codex app-server observation groups one agent message item lifecycle into 
     providerEventType: 'item/agentMessage',
     text: "I'll fetch zeke's pending message now."
   });
-  expect(items[0]?.raw).toEqual(rawLines);
-  expect(rawJsonText(items[0]?.raw)).toBe(output);
+  expect(items[0]?.provenance.rawEvents).toEqual(records);
+  expect(rawJsonText(items[0]?.provenance.rawEvents)).toBe(output);
 });
 
 test('Codex app-server observation groups one user message item lifecycle into one card', () => {
@@ -785,8 +829,8 @@ test('Codex app-server observation groups one user message item lifecycle into o
     providerEventType: 'item/userMessage',
     text: 'You have just joined this Workplace Project.\nUse project_post for the public status message.'
   });
-  expect(items[0]?.raw).toEqual(rawLines);
-  expect(rawJsonText(items[0]?.raw)).toBe(output);
+  expect(items[0]?.provenance.rawEvents).toEqual(records);
+  expect(rawJsonText(items[0]?.provenance.rawEvents)).toBe(output);
 });
 
 test('Codex app-server observation expands batch item envelopes', () => {
@@ -877,7 +921,7 @@ test('Codex app-server observation keeps a lone chunk raw record unwrapped', () 
   const items = externalAgentStreamItems({ id: 'exa_codex0000000', provider: 'codex', output: JSON.stringify(record) });
 
   expect(items).toHaveLength(1);
-  expect(items[0]?.raw).toEqual(record);
+  expect(items[0]?.provenance.rawEvents).toEqual([record]);
 });
 
 test('Codex MCP startup status stays unknown instead of becoming a tool call', () => {
@@ -892,14 +936,16 @@ test('Codex MCP startup status stays unknown instead of becoming a tool call', (
   };
 
   expect(
-    externalAgentNeutralStreamItems({ id: 'exa_codex0000000', provider: 'codex', output: JSON.stringify(raw) })
+    externalAgentNeutralStreamItems({ id: 'exa_codex0000000', provider: 'codex', output: JSON.stringify(raw) }).map(
+      neutralSnapshot
+    )
   ).toEqual([
     {
       id: 'exa_codex0000000:json:0:mcp-status',
       kind: 'unknown',
       streaming: false,
       text: 'codex-security ready',
-      raw
+      rawEvents: [raw]
     }
   ]);
 });
@@ -922,11 +968,12 @@ test('chat timeline groups consecutive Codex MCP startup statuses and keeps each
     kind: 'unknown',
     streaming: false,
     text: `${raw.params.name} ${raw.params.status}`,
-    raw,
+    provenance: { contractEvents: [raw] },
     at: `2026-07-18T10:00:0${index}.000Z`
   }));
 
-  expect(observationTimelineEntries(items, 'codex')).toMatchObject([
+  const entries = observationTimelineEntries(items, 'codex');
+  expect(entries).toMatchObject([
     {
       kind: 'public',
       card: {
@@ -936,9 +983,13 @@ test('chat timeline groups consecutive Codex MCP startup statuses and keeps each
           { name: 'node_repl', status: 'ready' }
         ]
       },
-      raw: [securityStarting, nodeReady, securityReady],
       timestamp: '10:00:02'
     }
+  ]);
+  expect(observationContractRawEvents(entries[0]?.contractEvents ?? [])).toEqual([
+    securityStarting,
+    nodeReady,
+    securityReady
   ]);
 });
 
@@ -956,7 +1007,15 @@ test('chat timeline recognizes Codex MCP startup raw records after legacy system
 
   expect(
     observationTimelineEntries(
-      [{ id: 'legacy-startup', kind: 'system', streaming: false, text: 'codex_apps ready', raw }],
+      [
+        {
+          id: 'legacy-startup',
+          kind: 'system',
+          streaming: false,
+          text: 'codex_apps ready',
+          provenance: { contractEvents: [raw] }
+        }
+      ],
       'external-agent'
     )
   ).toEqual([
@@ -964,7 +1023,7 @@ test('chat timeline recognizes Codex MCP startup raw records after legacy system
       id: 'codex-mcp-startup:legacy-startup',
       kind: 'public',
       card: { type: 'codex-mcp-startup-progress', updates: [{ name: 'codex_apps', status: 'ready' }] },
-      raw: [raw]
+      contractEvents: [raw]
     }
   ]);
 });
@@ -975,12 +1034,18 @@ test('chat timeline splits Codex startup groups and renders progress copy with e
     kind: 'unknown',
     streaming: false,
     text: id,
-    raw: { method: 'mcpServer/startupStatus/updated', params }
+    provenance: { contractEvents: [{ method: 'mcpServer/startupStatus/updated', params }] }
   });
   const entries = observationTimelineEntries(
     [
       startup('first', { name: 'codex-security', status: 'failed', error: 'timeout' }),
-      { id: 'message', kind: 'assistant-message', streaming: false, text: 'Continuing.' },
+      {
+        id: 'message',
+        kind: 'assistant-message',
+        streaming: false,
+        text: 'Continuing.',
+        provenance: { contractEvents: [{ type: 'assistant', text: 'Continuing.' }] }
+      },
       startup('second', {})
     ],
     'codex'
@@ -1098,24 +1163,28 @@ test('observation preserves identical provider messages with different identitie
 
   expect(
     externalAgentStreamItems({ id: 'exa_claude000000', provider: 'claude-code', output }).map((item) => ({
-      raw: item.raw,
+      rawEvents: item.provenance.rawEvents,
       text: item.text
     }))
   ).toEqual([
     {
-      raw: {
-        type: 'assistant',
-        uuid: 'message-1',
-        message: { content: [{ type: 'text', text: 'Same answer' }] }
-      },
+      rawEvents: [
+        {
+          type: 'assistant',
+          uuid: 'message-1',
+          message: { content: [{ type: 'text', text: 'Same answer' }] }
+        }
+      ],
       text: 'Same answer'
     },
     {
-      raw: {
-        type: 'assistant',
-        uuid: 'message-2',
-        message: { content: [{ type: 'text', text: 'Same answer' }] }
-      },
+      rawEvents: [
+        {
+          type: 'assistant',
+          uuid: 'message-2',
+          message: { content: [{ type: 'text', text: 'Same answer' }] }
+        }
+      ],
       text: 'Same answer'
     }
   ]);
@@ -1274,9 +1343,9 @@ test('Codex app-server observation projects completed MCP tool calls with argume
   expect(
     renderTimeline(items).map((entry) => ({
       type: entry.card?.type,
-      raw: entry.raw
+      rawEvents: observationContractRawEvents(entry.contractEvents)
     }))
-  ).toEqual([{ type: 'command-tool', raw }]);
+  ).toEqual([{ type: 'command-tool', rawEvents: [raw] }]);
 });
 
 test('Codex app-server observation projects turns page responses', () => {
@@ -1596,7 +1665,15 @@ test('observation panel renders show history as the first list placeholder when 
         tag: 'Codex',
         status: 'ok',
         output: 'Agent output',
-        items: [{ id: 'evt_100000000000', kind: 'assistant-message', streaming: false, text: 'Agent output' }]
+        items: [
+          {
+            id: 'evt_100000000000',
+            kind: 'assistant-message',
+            streaming: false,
+            text: 'Agent output',
+            provenance: { contractEvents: [{ id: 'source_1' }] }
+          }
+        ]
       }
     })
   );
@@ -1617,34 +1694,44 @@ test('observation panel summary mode folds turn details and shows only the final
         status: 'ok',
         output: '',
         items: [
-          { id: 'evt_1', kind: 'turn-start', streaming: false, at: '2026-07-15T00:00:00.000Z' },
+          {
+            id: 'evt_1',
+            kind: 'turn-start',
+            streaming: false,
+            at: '2026-07-15T00:00:00.000Z',
+            provenance: { contractEvents: [{ id: 'source_1' }] }
+          },
           {
             id: 'evt_2',
             kind: 'reasoning',
             streaming: false,
             text: 'private thinking',
-            at: '2026-07-15T00:00:12.000Z'
+            at: '2026-07-15T00:00:12.000Z',
+            provenance: { contractEvents: [{ id: 'source_2' }] }
           },
           {
             id: 'evt_3',
             kind: 'assistant-message',
             streaming: false,
             text: 'first draft output',
-            at: '2026-07-15T00:00:30.000Z'
+            at: '2026-07-15T00:00:30.000Z',
+            provenance: { contractEvents: [{ id: 'source_3' }] }
           },
           {
             id: 'evt_4',
             kind: 'assistant-message',
             streaming: false,
             text: 'final answer output',
-            at: '2026-07-15T00:01:10.000Z'
+            at: '2026-07-15T00:01:10.000Z',
+            provenance: { contractEvents: [{ id: 'source_4' }] }
           },
           {
             id: 'evt_5',
             kind: 'turn-end',
             streaming: false,
             reason: 'completed',
-            at: '2026-07-15T00:01:12.000Z'
+            at: '2026-07-15T00:01:12.000Z',
+            provenance: { contractEvents: [{ id: 'source_5' }] }
           }
         ]
       }
@@ -1671,13 +1758,20 @@ test('observation panel accepts a controlled render mode command', () => {
         status: 'running',
         output: '',
         items: [
-          { id: 'evt_1', kind: 'turn-start', streaming: false, at: '2026-07-15T00:00:00.000Z' },
+          {
+            id: 'evt_1',
+            kind: 'turn-start',
+            streaming: false,
+            at: '2026-07-15T00:00:00.000Z',
+            provenance: { contractEvents: [{ id: 'source_1' }] }
+          },
           {
             id: 'evt_2',
             kind: 'assistant-message',
             streaming: false,
             text: 'live output',
-            at: '2026-07-15T00:00:05.000Z'
+            at: '2026-07-15T00:00:05.000Z',
+            provenance: { contractEvents: [{ id: 'source_2' }] }
           }
         ]
       }
@@ -1745,9 +1839,9 @@ test('Codex app-server observation renders a standalone commandExecution result 
       text: JSON.stringify(raw.params.item),
       source: 'codex-app-server',
       providerEventType: 'function_call_output',
-      raw,
+      provenance: { rawEvents: [raw] },
       createdAt: '2026-07-03T06:28:03.751Z'
-    } as never
+    }
   ]);
 
   expect(entries).toMatchObject([
@@ -1776,16 +1870,20 @@ test('observation card projection maps Codex and Claude command tools to the sha
       text: '{"type":"commandExecution","command":"bun test","aggregatedOutput":"pass"}',
       source: 'codex-app-server',
       providerEventType: 'function_call_output',
-      raw: {
-        method: 'item/completed',
-        params: {
-          item: {
-            type: 'commandExecution',
-            command: 'bun test',
-            status: 'completed',
-            aggregatedOutput: 'pass'
+      provenance: {
+        rawEvents: [
+          {
+            method: 'item/completed',
+            params: {
+              item: {
+                type: 'commandExecution',
+                command: 'bun test',
+                status: 'completed',
+                aggregatedOutput: 'pass'
+              }
+            }
           }
-        }
+        ]
       }
     }
   ]);
@@ -1796,10 +1894,14 @@ test('observation card projection maps Codex and Claude command tools to the sha
       text: 'Tool call Bash',
       source: 'claude-code-sdk',
       providerEventType: 'tool_use',
-      raw: {
-        message: {
-          content: [{ type: 'tool_use', name: 'Bash', input: { command: 'git status' } }]
-        }
+      provenance: {
+        rawEvents: [
+          {
+            message: {
+              content: [{ type: 'tool_use', name: 'Bash', input: { command: 'git status' } }]
+            }
+          }
+        ]
       }
     },
     {
@@ -1808,7 +1910,7 @@ test('observation card projection maps Codex and Claude command tools to the sha
       text: 'On branch main',
       source: 'claude-code-sdk',
       providerEventType: 'tool_result',
-      raw: { type: 'tool_result', output: 'On branch main' }
+      provenance: { rawEvents: [{ type: 'tool_result', output: 'On branch main' }] }
     }
   ]);
 
@@ -1856,7 +1958,7 @@ test('Claude Code observation pairs nested SDK tool result with its call', () =>
             commandLanguage: entry.card.view.commandLanguage,
             output: entry.card.view.output,
             outputLanguage: entry.card.view.outputLanguage,
-            raw: entry.raw
+            rawEvents: observationContractRawEvents(entry.contractEvents)
           }
         : { type: entry.kind }
     )
@@ -1867,7 +1969,7 @@ test('Claude Code observation pairs nested SDK tool result with its call', () =>
       commandLanguage: 'bash',
       output: result,
       outputLanguage: 'bash',
-      raw: [callRecord, resultRecord]
+      rawEvents: [callRecord, resultRecord]
     }
   ]);
 });
@@ -1880,7 +1982,7 @@ test('observation card projection maps generic tool pairs to the shared command 
       text: 'Tool call Search {"query":"monad"}',
       source: 'unknown',
       providerEventType: 'tool_use',
-      raw: { name: 'Search' }
+      provenance: { rawEvents: [{ name: 'Search' }] }
     },
     {
       id: 'result',
@@ -1888,7 +1990,7 @@ test('observation card projection maps generic tool pairs to the shared command 
       text: 'No results',
       source: 'unknown',
       providerEventType: 'tool_result',
-      raw: { output: 'No results' }
+      provenance: { rawEvents: [{ output: 'No results' }] }
     }
   ]);
 
@@ -1901,7 +2003,8 @@ test('observation timeline rows keep consecutive tool cards grouped for virtual 
       id: 'message-before',
       role: 'agent',
       text: 'Before tools',
-      source: 'codex-app-server'
+      source: 'codex-app-server',
+      provenance: { rawEvents: [{ type: 'assistant', text: 'Before tools' }] }
     },
     {
       id: 'call-one',
@@ -1909,7 +2012,7 @@ test('observation timeline rows keep consecutive tool cards grouped for virtual 
       text: 'Tool call Search {"query":"monad"}',
       source: 'unknown',
       providerEventType: 'tool_use',
-      raw: { name: 'Search' }
+      provenance: { rawEvents: [{ name: 'Search' }] }
     },
     {
       id: 'result-one',
@@ -1917,7 +2020,7 @@ test('observation timeline rows keep consecutive tool cards grouped for virtual 
       text: 'No results',
       source: 'unknown',
       providerEventType: 'tool_result',
-      raw: { output: 'No results' }
+      provenance: { rawEvents: [{ output: 'No results' }] }
     },
     {
       id: 'call-two',
@@ -1925,7 +2028,7 @@ test('observation timeline rows keep consecutive tool cards grouped for virtual 
       text: 'Tool call Bash',
       source: 'unknown',
       providerEventType: 'tool_use',
-      raw: { name: 'Bash' }
+      provenance: { rawEvents: [{ name: 'Bash' }] }
     },
     {
       id: 'result-two',
@@ -1933,13 +2036,14 @@ test('observation timeline rows keep consecutive tool cards grouped for virtual 
       text: 'done',
       source: 'unknown',
       providerEventType: 'tool_result',
-      raw: { output: 'done' }
+      provenance: { rawEvents: [{ output: 'done' }] }
     },
     {
       id: 'message-after',
       role: 'agent',
       text: 'After tools',
-      source: 'codex-app-server'
+      source: 'codex-app-server',
+      provenance: { rawEvents: [{ type: 'assistant', text: 'After tools' }] }
     }
   ]);
 
@@ -1960,7 +2064,7 @@ test('prepending adjacent tools preserves the existing tool group key', () => {
         type: 'Bash'
       }
     },
-    raw: { id }
+    contractEvents: [{ id }]
   });
   const current = observationTimelineRows([toolEntry('call-newer'), toolEntry('call-latest')]);
   const prepended = observationTimelineRows([
@@ -1983,7 +2087,7 @@ test('observation card projection normalizes JSON-like generic tool output', () 
       text: 'Tool call Search {"query":"monad"}',
       source: 'codex-app-server',
       providerEventType: 'function_call',
-      raw: { name: 'Search' }
+      provenance: { rawEvents: [{ name: 'Search' }] }
     },
     {
       id: 'result',
@@ -1991,7 +2095,7 @@ test('observation card projection normalizes JSON-like generic tool output', () 
       text: '\n"{\\"ok\\":true}"\n',
       source: 'codex-app-server',
       providerEventType: 'function_call_output',
-      raw: { output: '\n"{\\"ok\\":true}"\n' }
+      provenance: { rawEvents: [{ output: '\n"{\\"ok\\":true}"\n' }] }
     }
   ]);
 
@@ -2028,18 +2132,22 @@ test('observation card projection maps standalone Codex function call output to 
       }),
       source: 'codex-app-server',
       providerEventType: 'function_call_output',
-      raw: {
-        output: JSON.stringify({
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                items: [{ message: { role: 'assistant', text: 'ok' } }],
-                seq: 102
-              })
-            }
-          ]
-        })
+      provenance: {
+        rawEvents: [
+          {
+            output: JSON.stringify({
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    items: [{ message: { role: 'assistant', text: 'ok' } }],
+                    seq: 102
+                  })
+                }
+              ]
+            })
+          }
+        ]
       }
     }
   ]);
@@ -2068,10 +2176,14 @@ test('Claude Code Read tool result renders as a file read card', () => {
       text: 'Tool call Read',
       source: 'claude-code-sdk',
       providerEventType: 'tool_use',
-      raw: {
-        message: {
-          content: [{ type: 'tool_use', name: 'Read', input: { file_path: '/tmp/example.tsx' } }]
-        }
+      provenance: {
+        rawEvents: [
+          {
+            message: {
+              content: [{ type: 'tool_use', name: 'Read', input: { file_path: '/tmp/example.tsx' } }]
+            }
+          }
+        ]
       }
     },
     {
@@ -2080,7 +2192,9 @@ test('Claude Code Read tool result renders as a file read card', () => {
       text: 'export function Example() { return <div />; }',
       source: 'claude-code-sdk',
       providerEventType: 'tool_result',
-      raw: { type: 'tool_result', output: 'export function Example() { return <div />; }' }
+      provenance: {
+        rawEvents: [{ type: 'tool_result', output: 'export function Example() { return <div />; }' }]
+      }
     }
   ] as const;
   const entries = renderTimeline(items as never);

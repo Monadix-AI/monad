@@ -45,7 +45,7 @@ function neutralKindFromActivity(
 
 function turnEndReason(event: ExternalAgentObservationEvent): AgentObservationTurnEndReason {
   if (event.providerEventType === 'error' || event.providerEventType === 'server_error') return 'error';
-  const raw = recordValue(event.raw);
+  const raw = recordValue(event.provenance.rawEvents[0]);
   if (raw?.is_error === true) return 'error';
   switch (textValue(raw?.subtype, raw?.stop_reason, recordValue(raw?.params)?.reason)) {
     case 'error':
@@ -69,7 +69,7 @@ function turnEndReason(event: ExternalAgentObservationEvent): AgentObservationTu
 // Best-effort structured tool extraction across provider raw shapes. The adapter's record projector
 // already normalized the human `text`; here we surface the machine fields a neutral renderer needs.
 function neutralTool(event: ExternalAgentObservationEvent, kind: 'tool-call' | 'tool-result'): AgentObservationTool {
-  const raw = recordValue(event.raw);
+  const raw = recordValue(event.provenance.rawEvents[0]);
   const params = recordValue(raw?.params);
   const item = recordValue(params?.item) ?? recordValue(raw?.item);
   const message = recordValue(raw?.message);
@@ -134,7 +134,7 @@ export function toAgentObservationEvent(
       kind: 'unknown',
       streaming: false,
       text: event.text,
-      ...(event.raw !== undefined ? { raw: event.raw } : {}),
+      provenance: { contractEvents: [event] },
       ...(event.createdAt ? { at: event.createdAt } : {})
     };
   }
@@ -148,10 +148,10 @@ export function toAgentObservationEvent(
     id: event.id,
     ...(event.dedupeKey ? { dedupeKey: event.dedupeKey } : {}),
     kind,
-    streaming: projector?.isStreamingFragment?.(event) ?? isStreamingObservationFragment(event)
+    streaming: projector?.isStreamingFragment?.(event) ?? isStreamingObservationFragment(event),
+    provenance: { contractEvents: [event] }
   };
   if (event.diagnostic !== undefined) event_.diagnostic = event.diagnostic;
-  if (event.raw !== undefined) event_.raw = event.raw;
   if (event.createdAt !== undefined) event_.at = event.createdAt;
 
   if (kind === 'tool-call' || kind === 'tool-result') {

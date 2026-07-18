@@ -110,7 +110,7 @@ function codexMessageGroupEvent(id: string, group: CodexMessageGroup): ExternalA
     source: 'codex-app-server',
     providerEventType: group.kind === 'agent' ? 'item/agentMessage' : 'item/userMessage',
     createdAt: group.completedAt ?? group.startedAt,
-    raw: group.rawLines.length > 1 ? group.rawLines : (group.raw[0] ?? group.rawLines[0])
+    rawEvents: group.raw
   });
 }
 

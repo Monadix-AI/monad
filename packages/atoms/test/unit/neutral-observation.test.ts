@@ -9,6 +9,7 @@ const event = (over: Partial<ExternalAgentObservationEvent>): ExternalAgentObser
   role: 'agent',
   text: 't',
   source: 'codex-app-server',
+  provenance: { rawEvents: [{ method: 'item/agentMessage', params: { text: 't' } }] },
   ...over
 });
 
@@ -33,7 +34,7 @@ test('a tool call decodes structured name+input from raw, not just the formatted
       role: 'tool',
       providerEventType: 'function_call',
       text: 'Tool call bash {"cmd":"ls"}',
-      raw: { name: 'bash', input: { cmd: 'ls' } }
+      provenance: { rawEvents: [{ name: 'bash', input: { cmd: 'ls' } }] }
     })
   );
   expect(neutral).toMatchObject({ kind: 'tool-call', streaming: false, tool: { name: 'bash', input: { cmd: 'ls' } } });
@@ -41,7 +42,11 @@ test('a tool call decodes structured name+input from raw, not just the formatted
 
 test('a tool result decodes an output payload', () => {
   const neutral = toAgentObservationEvent(
-    event({ role: 'tool', providerEventType: 'function_call_output', raw: { name: 'bash', output: 'ok' } })
+    event({
+      role: 'tool',
+      providerEventType: 'function_call_output',
+      provenance: { rawEvents: [{ name: 'bash', output: 'ok' }] }
+    })
   );
   expect(neutral).toMatchObject({ kind: 'tool-result', tool: { name: 'bash', output: 'ok' } });
 });
@@ -53,12 +58,17 @@ test('a terminal record becomes turn-end and derives its reason from the provide
   });
   expect(
     toAgentObservationEvent(
-      event({ providerEventType: 'result', role: 'agent', raw: { subtype: 'error', is_error: true } })
+      event({
+        providerEventType: 'result',
+        role: 'agent',
+        provenance: { rawEvents: [{ subtype: 'error', is_error: true }] }
+      })
     )
   ).toMatchObject({ kind: 'turn-end', reason: 'error' });
   expect(
-    toAgentObservationEvent(event({ providerEventType: 'result', role: 'agent', raw: { stop_reason: 'max_tokens' } }))
-      ?.reason
+    toAgentObservationEvent(
+      event({ providerEventType: 'result', role: 'agent', provenance: { rawEvents: [{ stop_reason: 'max_tokens' }] } })
+    )?.reason
   ).toBe('length');
 });
 
@@ -73,15 +83,27 @@ test('a non-terminal system status notice has no neutral representation and is d
     event({
       providerEventType: 'thread/status/changed',
       role: 'system',
-      raw: { params: { status: { type: 'working' } } }
+      provenance: { rawEvents: [{ params: { status: { type: 'working' } } }] }
     })
   );
   expect(idle).toBeNull();
 });
 
 test('provider raw and timestamp pass through, stripped to the neutral shape', () => {
+  const provenance = { rawEvents: [{ a: 1 }, { b: 2 }] };
   const neutral = toAgentObservationEvent(
-    event({ providerEventType: 'item/agentMessage', text: 'done', createdAt: '2026-07-07T00:00:00Z', raw: { a: 1 } })
+    event({ providerEventType: 'item/agentMessage', text: 'done', createdAt: '2026-07-07T00:00:00Z', provenance })
   );
-  expect(neutral).toMatchObject({ kind: 'assistant-message', at: '2026-07-07T00:00:00Z', raw: { a: 1 } });
+  expect(neutral).toEqual({
+    id: 'e',
+    kind: 'assistant-message',
+    streaming: false,
+    text: 'done',
+    at: '2026-07-07T00:00:00Z',
+    provenance: {
+      contractEvents: [
+        event({ providerEventType: 'item/agentMessage', text: 'done', createdAt: '2026-07-07T00:00:00Z', provenance })
+      ]
+    }
+  });
 });

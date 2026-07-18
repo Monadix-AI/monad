@@ -245,8 +245,8 @@ function qwenHistoryEntries(
 }
 
 export const qwenObservationProjection = {
-  checkpoint: (event: ExternalAgentObservationEvent) => textValue(recordValue(event.raw)?.uuid),
-  identity: (event: ExternalAgentObservationEvent) => textValue(recordValue(event.raw)?.uuid),
+  checkpoint: (event: ExternalAgentObservationEvent) => textValue(recordValue(event.provenance.rawEvents[0])?.uuid),
+  identity: (event: ExternalAgentObservationEvent) => textValue(recordValue(event.provenance.rawEvents[0])?.uuid),
   historyEntries: qwenHistoryEntries,
   classifyActivity: classifyObservationActivity,
   isStreamingFragment: isStreamingObservationFragment,
