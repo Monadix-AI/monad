@@ -212,30 +212,29 @@ test('WorkspaceSystemEventCard renders supplied actor, event, and timestamp', ()
   expect(markup).toContain('10:31');
 });
 
-test('AttachmentCard renders metadata, actions, and controlled preview state', () => {
+test('AttachmentCard renders file identity and metadata actions on separate rows', () => {
   const markup = renderToStaticMarkup(
     <AttachmentCard
       downloadLabel="Download"
-      error={false}
-      expanded
-      loading={false}
+      mime="text/plain"
       name="notes.txt"
       onDownload={() => {}}
-      onPreviewChange={() => {}}
+      onPreview={() => {}}
       path="/workspace/notes.txt"
       previewable
-      previewCollapseLabel="Collapse"
-      previewContent={'first line\nsecond line'}
-      previewExpandLabel="Preview"
+      previewLabel="Preview"
       sizeLabel="24 B"
     />
   );
 
+  expect(markup).toContain('data-attachment-row="identity"');
+  expect(markup).toContain('data-attachment-row="actions"');
+  expect(markup).toContain('data-file-icon="text"');
   expect(markup).toContain('notes.txt');
   expect(markup).toContain('24 B');
-  expect(markup).toContain('Collapse');
+  expect(markup).toContain('Preview');
   expect(markup).toContain('Download');
-  expect(markup).toContain('first line\nsecond line');
+  expect(markup).not.toContain('<pre');
 });
 
 test('ApprovalResourceCard renders resource, operation, subject, and default scope', () => {

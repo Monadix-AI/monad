@@ -1,9 +1,8 @@
 import type { MessageAttachment } from '../../experience/types.ts';
 
 import { isPreviewableAttachmentMime } from '@monad/protocol';
-import { useDownloadAttachmentMutation, useLazyGetAttachmentQuery } from '@monad/sdk-experience/react';
+import { useDownloadAttachmentMutation } from '@monad/sdk-experience/react';
 import { AttachmentCard } from '@monad/ui';
-import { useState } from 'react';
 
 import { workspaceExperienceT } from '../../i18n.ts';
 
@@ -15,34 +14,16 @@ function formatAttachmentSize(bytes: number): string {
   return `${mb.toFixed(mb < 10 ? 1 : 0)} MB`;
 }
 
-export function AttachmentChip({ attachment }: { attachment: MessageAttachment }): React.ReactElement {
+export function AttachmentChip({
+  attachment,
+  onPreview
+}: {
+  attachment: MessageAttachment;
+  onPreview?: (attachment: MessageAttachment, line?: number) => void;
+}): React.ReactElement {
   const t = workspaceExperienceT();
-  const [expanded, setExpanded] = useState(false);
-  const [content, setContent] = useState<string | null>(null);
-  const [error, setError] = useState(false);
-  const [loading, setLoading] = useState(false);
   const previewable = isPreviewableAttachmentMime(attachment.mime);
-  const [triggerGetAttachment] = useLazyGetAttachmentQuery();
   const [downloadAttachment] = useDownloadAttachmentMutation();
-  const togglePreview = async () => {
-    if (expanded) {
-      setExpanded(false);
-      return;
-    }
-    setExpanded(true);
-    if (content !== null || loading) return;
-    setLoading(true);
-    setError(false);
-    try {
-      const body = await triggerGetAttachment({ id: attachment.id }).unwrap();
-      const text = typeof body.text === 'string' ? body.text : '';
-      setContent(body.truncated ? `${text}...` : text);
-    } catch {
-      setError(true);
-    } finally {
-      setLoading(false);
-    }
-  };
   const download = async () => {
     try {
       const { blob } = await downloadAttachment({ id: attachment.id }).unwrap();
@@ -53,26 +34,19 @@ export function AttachmentChip({ attachment }: { attachment: MessageAttachment }
       anchor.click();
       URL.revokeObjectURL(blobUrl);
     } catch {
-      setError(true);
-      setExpanded(true);
+      return;
     }
   };
   return (
     <AttachmentCard
       downloadLabel={t('web.workplace.attachmentDownload')}
-      error={error}
-      errorContent={t('web.workplace.attachmentLoadError')}
-      expanded={expanded}
-      loading={loading || content === null}
-      loadingContent="..."
+      mime={attachment.mime}
       name={attachment.name}
       onDownload={() => void download()}
-      onPreviewChange={() => void togglePreview()}
+      onPreview={() => onPreview?.(attachment)}
       path={attachment.path}
       previewable={previewable}
-      previewCollapseLabel={t('web.workplace.attachmentCollapse')}
-      previewContent={content}
-      previewExpandLabel={t('web.workplace.attachmentPreview')}
+      previewLabel={t('web.workplace.attachmentPreview')}
       sizeLabel={formatAttachmentSize(attachment.bytes)}
     />
   );

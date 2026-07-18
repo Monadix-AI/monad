@@ -78,7 +78,7 @@ export const Attachment: Story = {
   render: () => (
     <StoryCase>
       <div data-story-case="attachment">
-        <AttachmentExample state="expanded" />
+        <AttachmentExample />
       </div>
     </StoryCase>
   )
@@ -190,9 +190,7 @@ export const AttachmentStates: Story = {
     <StoryCase>
       <div className="grid gap-4">
         <AttachmentExample />
-        <AttachmentExample state="loading" />
-        <AttachmentExample state="expanded" />
-        <AttachmentExample state="error" />
+        <AttachmentExample state="download-only" />
       </div>
     </StoryCase>
   )
