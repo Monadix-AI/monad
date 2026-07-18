@@ -24,6 +24,30 @@ function event(type: Event['type'], payload: Record<string, unknown>, at = new D
   };
 }
 
+test('hydrates persisted messages by creation time instead of insertion order', () => {
+  const projector = new SessionUiProjector();
+  const message = (id: ChatMessage['id'], createdAt: string): ChatMessage => ({
+    id,
+    sessionId,
+    role: 'assistant',
+    text: id,
+    type: 'text',
+    stream: { status: 'complete' },
+    active: true,
+    createdAt
+  });
+
+  projector.hydrateMessages([
+    message('msg_130517000000', '2026-07-18T13:05:17.000Z'),
+    message('msg_130344000000', '2026-07-18T13:03:44.000Z'),
+    message('msg_130443000000', '2026-07-18T13:04:43.000Z')
+  ]);
+
+  const snapshot = projector.snapshot();
+  if (snapshot.kind !== 'snapshot') throw new Error('expected snapshot');
+  expect(snapshot.items.map((item) => item.id)).toEqual(['msg_130344000000', 'msg_130443000000', 'msg_130517000000']);
+});
+
 test('hydrates persisted tool calls into one tool item', () => {
   const projector = new SessionUiProjector();
   const messages: ChatMessage[] = [

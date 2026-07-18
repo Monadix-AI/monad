@@ -184,6 +184,7 @@ export class SessionUiProjector {
 
   hydrateMessages(messages: ChatMessage[], memorySummary?: MemorySummaryProjection | null): void {
     this.oldestMessageId = messages[0]?.id;
+    const orderedMessages = [...messages].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
     const tools = new Map<string, Extract<UIItem, { kind: 'tool' }>>();
     let summaryInserted = false;
     const insertSummary = () => {
@@ -198,7 +199,7 @@ export class SessionUiProjector {
       });
     };
     if (memorySummary && !messages.some((message) => message.id === memorySummary.uptoMessageId)) insertSummary();
-    for (const message of messages) {
+    for (const message of orderedMessages) {
       if (message.type === 'tool_call') {
         const data = message.data as { toolCallId?: string; toolName?: string; input?: unknown } | undefined;
         const id = data?.toolCallId ?? message.id;

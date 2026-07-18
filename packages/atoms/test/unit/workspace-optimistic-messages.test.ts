@@ -1,4 +1,4 @@
-import type { Participant } from '../../src/workspace-experiences/experience/types.ts';
+import type { Message, Participant } from '../../src/workspace-experiences/experience/types.ts';
 
 import { expect, test } from 'bun:test';
 
@@ -114,6 +114,40 @@ test('server echoes consume optimistic render keys one-to-one', () => {
   expect(mergeOptimisticMessages([firstEcho, secondEcho], [first, second]).map((message) => message.renderKey)).toEqual(
     ['optimistic-1', 'optimistic-2']
   );
+});
+
+test('unmatched optimistic user messages keep chronological order before later Q&A replies', () => {
+  const optimistic = createOptimisticUserMessage({
+    createdAt: '2026-07-18T13:03:30.000Z',
+    human: {
+      id: 'me',
+      av: 'OP',
+      name: 'Operator',
+      kind: 'human',
+      tag: 'User',
+      presence: 'online'
+    },
+    id: 'optimistic-1',
+    retry: () => {},
+    status: 'sent',
+    text: 'Write the introduction'
+  });
+  const qAndA: Message = {
+    id: 'msg_qanda0000000',
+    authorId: 'agent',
+    authorName: 'GPT',
+    av: 'GP',
+    kind: 'agent',
+    tag: 'Codex',
+    time: '',
+    text: 'Q: Which structure?\nA: Progressive disclosure',
+    orderKey: '2026-07-18T13:03:44.000Z'
+  };
+
+  expect(mergeOptimisticMessages([qAndA], [optimistic]).map((message) => message.id)).toEqual([
+    'optimistic-1',
+    'msg_qanda0000000'
+  ]);
 });
 
 test('optimistic user messages use the current human identity', () => {

@@ -1,5 +1,7 @@
 import type { Message, Participant } from '../../experience/types.ts';
 
+import { sortMessagesOldestFirst } from './projection.ts';
+
 export type OptimisticMessageStatus = 'sending' | 'sent' | 'failed';
 export type OptimisticChatMessage = Message & {
   kind: 'human';
@@ -58,5 +60,5 @@ export function mergeOptimisticMessages(messages: Message[], optimisticMessages:
     return optimisticMessage ? { ...message, renderKey: optimisticMessage.renderKey ?? optimisticMessage.id } : message;
   });
   const remaining = optimisticMessages.filter((optimisticMessage) => !matchedOptimisticIds.has(optimisticMessage.id));
-  return [...merged, ...remaining];
+  return sortMessagesOldestFirst([...merged, ...remaining]);
 }

@@ -290,7 +290,7 @@ function externalAgentSessionErrorMessages(
     );
 }
 
-function sortMessagesOldestFirst(messages: Message[]): Message[] {
+export function sortMessagesOldestFirst(messages: Message[]): Message[] {
   return [...messages].sort((a, b) => {
     const order = (a.orderKey || a.id).localeCompare(b.orderKey || b.id);
     return order === 0 ? a.id.localeCompare(b.id) : order;
