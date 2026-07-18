@@ -50,18 +50,18 @@
 - Modify: `packages/atoms/src/workspace-experiences/chat-room/utils/projection.ts`
 - Test: `packages/atoms/test/unit/workspace-project-messages.test.ts`
 
-- [ ] Add failing suspend/resume tests for structured `UISystemItem.event`.
-- [ ] Resolve `event.agentId` with the member-join identity helper.
-- [ ] Prefer display-name map, member name, event name, then stable ID.
-- [ ] Reuse avatar seed/style, product icon, and tag resolution.
-- [ ] Produce `agentChip` while retaining exact action-only text.
-- [ ] Cover missing metadata fallback.
-- [ ] Retain legacy ID-prefix behavior only for event-less lifecycle items.
-- [ ] Run focused atoms tests and review the task-only diff without committing pre-existing WIP.
+- [x] Add failing suspend/resume tests for structured `UISystemItem.event`.
+- [x] Resolve `event.agentId` with the member-join identity helper.
+- [x] Prefer display-name map, member name, event name, then stable ID.
+- [x] Reuse avatar seed/style, product icon, and tag resolution.
+- [x] Produce `agentChip` while retaining exact action-only text.
+- [x] Cover missing metadata fallback.
+- [x] Retain legacy ID-prefix behavior only for event-less lifecycle items.
+- [x] Run focused atoms tests and review the task-only diff without committing pre-existing WIP.
 
 ### Task 3: Verify and hand off
 
-- [ ] Run focused protocol, daemon, and atoms test scopes.
-- [ ] Run applicable typechecks and formatting checks.
-- [ ] Review the complete feature diff for contract duplication and weak assertions.
-- [ ] Restore every temporarily isolated user WIP patch and report any unrelated baseline failures separately.
+- [x] Run focused protocol, daemon, and atoms test scopes.
+- [x] Run applicable typechecks and formatting checks.
+- [x] Review the complete feature diff for contract duplication and weak assertions.
+- [x] Restore every temporarily isolated user WIP patch and report any unrelated baseline failures separately.
