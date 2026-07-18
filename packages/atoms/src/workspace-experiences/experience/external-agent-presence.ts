@@ -8,6 +8,7 @@ import type {
 import {
   classifyExternalAgentActivity,
   externalAgentEventsAreGenerating,
+  externalAgentNeutralStreamItems,
   externalAgentStreamItems,
   externalAgentStructuredEvents
 } from './external-agent-observation/external-agent-observation.ts';
@@ -24,6 +25,30 @@ function hasExternalAgentLoginNeed(text: string | undefined): boolean {
     normalized.includes('unauthenticated') ||
     normalized.includes('sign in')
   );
+}
+
+function externalAgentOutputNeedsLogin(args: { id: string; output?: string; provider?: string }): boolean {
+  if (!args.output) return false;
+  const structured = externalAgentStructuredEvents({ id: args.id, provider: args.provider, output: args.output });
+  if (structured === undefined) return hasExternalAgentLoginNeed(args.output);
+  const items = externalAgentNeutralStreamItems({ id: args.id, provider: args.provider, output: args.output });
+  for (let index = items.length - 1; index >= 0; index--) {
+    const item = items[index];
+    if (!item) continue;
+    if (item.kind === 'system' || item.kind === 'unknown' || item.kind === 'turn-end') {
+      if (hasExternalAgentLoginNeed(item.text)) return true;
+      continue;
+    }
+    if (
+      item.kind === 'assistant-message' ||
+      item.kind === 'tool-call' ||
+      item.kind === 'tool-result' ||
+      item.kind === 'user-message'
+    ) {
+      return false;
+    }
+  }
+  return false;
 }
 
 export function externalAgentFacingCommandPhase(
@@ -197,7 +222,14 @@ export function externalAgentMemberPresence({
 }): WorkspaceExperiencePresence {
   const liveTool = matchingLiveExternalAgentTool(agentName, liveTools);
   if (liveTool?.status === 'running') {
-    if (hasExternalAgentLoginNeed(liveTool.output)) return 'needs-login';
+    if (
+      externalAgentOutputNeedsLogin({
+        id: liveTool.id,
+        output: liveTool.output,
+        provider: liveTool.tool.slice('external-agent:'.length)
+      })
+    )
+      return 'needs-login';
   }
   if (activeAgentNames?.has(agentName)) return 'working';
   const latest = newestExternalAgentSession(externalAgentSessions.filter((session) => session.agentName === agentName));
@@ -206,7 +238,14 @@ export function externalAgentMemberPresence({
   if (externalAgentIsGenerating(agentName, liveTools, latest)) return 'working';
   if (latest.state === 'running') return 'online';
   if (latest.state === 'starting') return 'working';
-  if (hasExternalAgentLoginNeed(latest.outputSnapshot)) return 'needs-login';
+  if (
+    externalAgentOutputNeedsLogin({
+      id: latest.id,
+      output: latest.outputSnapshot,
+      provider: latest.provider
+    })
+  )
+    return 'needs-login';
   if (latest.state === 'failed') return 'failed';
   if (latest.state === 'stopped' || latest.state === 'exited') return enabled ? 'online' : 'stopped';
   return enabled ? 'online' : 'idle';

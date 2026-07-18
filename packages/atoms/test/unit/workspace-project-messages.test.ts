@@ -1013,6 +1013,58 @@ test('external agent project member presence treats spawned runtime as online un
   ).toBe('online');
 });
 
+test('external agent presence ignores login phrases inside Claude tool results', () => {
+  const session = externalAgentSession({
+    agentName: 'pmem_claude',
+    provider: 'claude-code',
+    state: 'stopped',
+    outputSnapshot: JSON.stringify({
+      type: 'user',
+      message: {
+        role: 'user',
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: 'toolu_1',
+            content: "installHint: 'Install OpenClaw, then sign in with openclaw models auth login.'"
+          }
+        ]
+      }
+    })
+  });
+
+  expect(
+    __workplaceProjectMessageTest.externalAgentMemberPresence({
+      agentName: 'pmem_claude',
+      enabled: true,
+      externalAgentSessions: [session],
+      liveTools: []
+    })
+  ).toBe('online');
+});
+
+test('external agent presence keeps structured authentication failures', () => {
+  const session = externalAgentSession({
+    agentName: 'pmem_claude',
+    provider: 'claude-code',
+    state: 'stopped',
+    outputSnapshot: JSON.stringify({
+      type: 'system',
+      subtype: 'connection_required',
+      error: 'Please sign in'
+    })
+  });
+
+  expect(
+    __workplaceProjectMessageTest.externalAgentMemberPresence({
+      agentName: 'pmem_claude',
+      enabled: true,
+      externalAgentSessions: [session],
+      liveTools: []
+    })
+  ).toBe('needs-login');
+});
+
 test('external agent project member presence treats lifecycle tools as stand-by availability', () => {
   expect(
     __workplaceProjectMessageTest.externalAgentMemberPresence({
