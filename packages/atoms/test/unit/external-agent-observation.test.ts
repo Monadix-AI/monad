@@ -1651,7 +1651,7 @@ test('observation panel renders bootstrap loading outside the observation timeli
   );
   expect(html).toContain('data-observation-state="loading"');
   expect(html).toContain('Loading history…');
-  expect(html).not.toContain('Agent currently not running');
+  expect(html).not.toContain('Agent history unavailable');
   expect(html).not.toContain('No activity yet.');
   expect(html).not.toContain('role="log"');
 });
@@ -1672,8 +1672,40 @@ test('observation panel only shows unavailable provider history from explicit tr
       }
     })
   );
-  expect(html).toContain('Agent currently not running');
+  expect(html).toContain('Agent history unavailable');
   expect(html).not.toContain('No activity yet.');
+});
+
+test('observation panel exposes a retry action after an earlier-history page fails', () => {
+  const html = renderToStaticMarkup(
+    React.createElement(ExternalAgentObservationPanel, {
+      historyActive: true,
+      historyLoadError: true,
+      onRetryOlderHistory: () => {},
+      onStop: () => {},
+      stream: {
+        id: 'exa_codex0000000',
+        agentName: 'codex',
+        provider: 'codex',
+        tag: 'Codex',
+        status: 'ok',
+        output: 'Current activity',
+        items: [
+          {
+            id: 'evt_current',
+            kind: 'assistant-message',
+            streaming: false,
+            text: 'Current activity',
+            provenance: { contractEvents: [{ id: 'source_current' }] }
+          }
+        ]
+      }
+    })
+  );
+  expect(html).toContain('data-history-state="error"');
+  expect(html).toContain('Earlier history failed to load');
+  expect(html).toContain('>Retry<');
+  expect(html).not.toContain('Start of history');
 });
 
 test('observation panel renders show history as the first list placeholder when activity exists', () => {

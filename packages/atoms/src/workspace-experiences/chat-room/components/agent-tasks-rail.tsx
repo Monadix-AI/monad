@@ -63,6 +63,12 @@ import {
   observationHistoryLoadScope,
   prependObservationHistory
 } from '../utils/observation-history.ts';
+import {
+  beginObservationHistoryLoad,
+  completeObservationHistoryLoad,
+  failObservationHistoryLoad,
+  type ObservationHistoryPageState
+} from '../utils/observation-history-state.ts';
 import { ExternalAgentObservationPanel } from './observation/panel.tsx';
 
 const RAIL_WIDTH_STORAGE_KEY = 'monad.workplace.agentRail.width';
@@ -108,13 +114,6 @@ function usePolledValue<T>(args: {
   }, [args.enabled, args.intervalMs]);
   return value;
 }
-
-type ObservationHistoryPageState = {
-  items: ExternalAgentStreamView['items'];
-  nextCursor: string | null;
-  loading: boolean;
-  exhausted: boolean;
-};
 
 function streamWithHistoryPages(
   stream: ExternalAgentStreamView | undefined,
@@ -648,11 +647,7 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
     (before?: string | null) => {
       if (!observedExternalAgentSessionId || !observedTranscriptTargetId || !before) return;
       const generation = historyLoadGenerationRef.current;
-      setHistoryPages((current) => {
-        return current
-          ? { ...current, loading: true }
-          : { items: [], nextCursor: null, loading: true, exhausted: false };
-      });
+      setHistoryPages((current) => beginObservationHistoryLoad(current, before));
       void findOlderObservationPage({
         before: before ?? undefined,
         currentItems: [...liveItemsRef.current, ...historyItemsRef.current],
@@ -675,24 +670,13 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
         (page) => {
           if (historyLoadGenerationRef.current !== generation) return;
           setHistoryPages((current) => {
-            const existing = current?.items ?? [];
-            const nextItems = before ? prependObservationHistory(page.items, existing) : page.items;
-            return {
-              items: nextItems,
-              nextCursor: page.nextCursor ?? null,
-              loading: false,
-              exhausted: !page.nextCursor
-            };
+            if (!current) return current;
+            return completeObservationHistoryLoad(current, page);
           });
         },
         () => {
           if (historyLoadGenerationRef.current !== generation) return;
-          setHistoryPages((current) => ({
-            items: current?.items ?? [],
-            nextCursor: current?.nextCursor ?? null,
-            loading: false,
-            exhausted: true
-          }));
+          setHistoryPages((current) => (current ? failObservationHistoryLoad(current) : current));
         }
       );
     },
@@ -997,12 +981,14 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
           }
           focusTurnId={observation.turnId}
           historyActive={historyRequested}
+          historyLoadError={historyRequested && Boolean(historyPages?.error)}
           icon={observedAgent?.icon ?? observedHistoryStream?.icon}
           loadingOlderHistory={historyRequested && Boolean(historyPages?.loading)}
           observationLoading={observationLoading}
           observationUnavailable={observationUnavailable}
           onBack={closeRailObservation}
           onLoadOlderHistory={() => loadHistoryPage(historyPages?.nextCursor)}
+          onRetryOlderHistory={() => loadHistoryPage(historyPages?.nextCursor)}
           onShowHistory={showHistory}
           onStop={(id) => void room.stopExternalAgent(id)}
           showHistoryButton={!historyRequested && Boolean(historyPages?.items.length)}

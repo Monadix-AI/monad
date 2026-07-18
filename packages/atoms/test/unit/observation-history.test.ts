@@ -7,6 +7,11 @@ import {
   observationHistoryLoadScope,
   prependObservationHistory
 } from '../../src/workspace-experiences/chat-room/utils/observation-history.ts';
+import {
+  beginObservationHistoryLoad,
+  completeObservationHistoryLoad,
+  failObservationHistoryLoad
+} from '../../src/workspace-experiences/chat-room/utils/observation-history-state.ts';
 
 function event(id: string, dedupeKey = id): AgentObservationEvent {
   return {
@@ -59,4 +64,34 @@ test('observation history load scope requires the daemon-provided history cursor
       historyBefore: 'provider:'
     })
   ]).toEqual([undefined, 'exa_running:provider:', 'exa_running:epoch-2:provider:', undefined]);
+});
+
+test('observation history failure retains the attempted cursor for retry and is not exhaustion', () => {
+  const loading = beginObservationHistoryLoad(undefined, 'provider:100');
+  const failed = failObservationHistoryLoad(loading);
+  if (!failed.nextCursor) throw new Error('Expected the failed history cursor to remain retryable');
+  const retried = beginObservationHistoryLoad(failed, failed.nextCursor);
+  const completed = completeObservationHistoryLoad(retried, {
+    items: [event('older')],
+    nextCursor: 'provider:120'
+  });
+
+  expect([loading, failed, retried, completed]).toEqual([
+    { error: false, exhausted: false, items: [], loading: true, nextCursor: 'provider:100' },
+    { error: true, exhausted: false, items: [], loading: false, nextCursor: 'provider:100' },
+    { error: false, exhausted: false, items: [], loading: true, nextCursor: 'provider:100' },
+    {
+      error: false,
+      exhausted: false,
+      items: [event('older')],
+      loading: false,
+      nextCursor: 'provider:120'
+    }
+  ]);
+});
+
+test('observation history is exhausted only after a successful page without a next cursor', () => {
+  expect(completeObservationHistoryLoad(beginObservationHistoryLoad(undefined, 'provider:100'), { items: [] })).toEqual(
+    { error: false, exhausted: true, items: [], loading: false, nextCursor: null }
+  );
 });

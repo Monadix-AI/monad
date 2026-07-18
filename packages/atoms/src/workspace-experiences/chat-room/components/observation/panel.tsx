@@ -109,11 +109,13 @@ export function ExternalAgentObservationPanel({
   onClose,
   onLoadOlderHistory,
   onRenderModeChange,
+  onRetryOlderHistory,
   onShowHistory,
   onStop,
   canLoadOlderHistory,
   defaultRenderMode = 'detail',
   historyActive,
+  historyLoadError,
   loadingOlderHistory,
   observationLoading,
   observationUnavailable,
@@ -128,6 +130,7 @@ export function ExternalAgentObservationPanel({
   defaultRenderMode?: ObservationRenderMode;
   focusTurnId?: string;
   historyActive?: boolean;
+  historyLoadError?: boolean;
   icon?: ExternalAgentStreamView['icon'];
   loadingOlderHistory?: boolean;
   observationLoading?: boolean;
@@ -136,6 +139,7 @@ export function ExternalAgentObservationPanel({
   onClose?: () => void;
   onLoadOlderHistory?: () => void;
   onRenderModeChange?: (mode: ObservationRenderMode) => void;
+  onRetryOlderHistory?: () => void;
   onShowHistory?: () => void;
   onStop: (id: string) => void;
   renderMode?: ObservationRenderMode;
@@ -182,11 +186,13 @@ export function ExternalAgentObservationPanel({
   const showHistoryHeader = showHistoryButton || historyActive;
   const historyState = showHistoryButton
     ? 'available'
-    : loadingOlderHistory
-      ? 'loading'
-      : canLoadOlderHistory
-        ? 'more'
-        : 'start';
+    : historyLoadError
+      ? 'error'
+      : loadingOlderHistory
+        ? 'loading'
+        : canLoadOlderHistory
+          ? 'more'
+          : 'start';
   const historyHeader = showHistoryHeader ? (
     <div
       data-history-state={historyState}
@@ -221,6 +227,37 @@ export function ExternalAgentObservationPanel({
         >
           {t('web.workplace.showHistory')}
         </button>
+      ) : historyLoadError ? (
+        <div
+          role="status"
+          style={{
+            alignItems: 'center',
+            color: 'var(--muted-foreground)',
+            display: 'flex',
+            fontFamily: sans,
+            fontSize: 11,
+            gap: 8,
+            lineHeight: '30px'
+          }}
+        >
+          <span>{t('web.workplace.historyLoadFailed')}</span>
+          <button
+            className="workplace-action"
+            onClick={onRetryOlderHistory}
+            style={{
+              border: 0,
+              background: 'transparent',
+              color: 'var(--primary)',
+              cursor: 'pointer',
+              font: 'inherit',
+              fontWeight: 650,
+              padding: 0
+            }}
+            type="button"
+          >
+            {t('web.workplace.retryHistory')}
+          </button>
+        </div>
       ) : (
         <div
           role="status"
@@ -583,8 +620,8 @@ export function ExternalAgentObservationPanel({
               {observationLoading
                 ? t('web.workplace.loadingHistory')
                 : observationUnavailable
-                  ? 'Agent currently not running'
-                  : 'No activity yet.'}
+                  ? t('web.workplace.historyUnavailable')
+                  : t('web.workplace.noObservationActivity')}
             </div>
           </div>
         )}
