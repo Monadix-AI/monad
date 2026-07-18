@@ -319,8 +319,7 @@ export function ExternalAgentObservationPanel({
 
   const scrollToTop = () => {
     setFollow(false);
-    const firstRow = timelineRows[0];
-    if (firstRow) listRef.current?.scrollToKey(firstRow.id, { align: 'start', behavior: 'smooth' });
+    listRef.current?.scrollToTop('smooth');
   };
   const scrollToBottom = () => {
     setFollow(false);

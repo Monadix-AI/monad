@@ -5,6 +5,8 @@ import { useCallback, useEffect, useImperativeHandle, useMemo, useRef } from 're
 import { Virtuoso } from 'react-virtuoso';
 
 export interface VirtualListHandle {
+  /** Jump to the physical top of the currently loaded rows. */
+  scrollToTop: (behavior?: ScrollBehavior) => void;
   /** Jump to the latest row (and re-arm bottom-following). */
   scrollToBottom: (behavior?: ScrollBehavior) => void;
   /** Scroll a specific item into view by its key (e.g. a mentioned/searched message). */
@@ -72,6 +74,13 @@ export function isAtBottom(
   threshold = STICK_THRESHOLD
 ): boolean {
   return metrics.scrollHeight - metrics.scrollTop - metrics.clientHeight <= threshold;
+}
+
+export function scrollBoundaryTop(
+  metrics: { scrollHeight: number; clientHeight: number },
+  boundary: 'top' | 'bottom'
+): number {
+  return boundary === 'top' ? 0 : Math.max(0, metrics.scrollHeight - metrics.clientHeight);
 }
 
 /** Position of the item with `key`, or -1. Used by the scrollToKey handle. */
@@ -193,7 +202,7 @@ export function VirtualList<T>({
     selfScrollRef.current = true;
     const scroller = scrollerRef.current;
     if (scroller) {
-      scroller.scrollTo({ behavior, top: scroller.scrollHeight });
+      scroller.scrollTo({ behavior, top: scrollBoundaryTop(scroller, 'bottom') });
       return;
     }
     handleRef.current?.scrollToIndex({ index: 'LAST', align: 'end', behavior });
@@ -379,6 +388,29 @@ export function VirtualList<T>({
   useImperativeHandle(
     controlRef,
     () => ({
+      scrollToTop: (behavior = 'auto') => {
+        clearBottomQuiescenceTimeout();
+        clearBottomSettleTimeout();
+        bottomRequestRef.current = initialBottomScrollRequest;
+        pinnedRef.current = false;
+        userScrolledRef.current = true;
+        layoutAnchorRef.current = null;
+        userScrollIntentUntilRef.current = 0;
+        selfScrollRef.current = true;
+        const scroller = scrollerRef.current;
+        if (scroller) {
+          scroller.scrollTo({
+            behavior: behavior === 'smooth' ? 'smooth' : 'auto',
+            top: scrollBoundaryTop(scroller, 'top')
+          });
+          return;
+        }
+        handleRef.current?.scrollToIndex({
+          index: firstItemIndex ?? 0,
+          align: 'start',
+          behavior: behavior === 'smooth' ? 'smooth' : 'auto'
+        });
+      },
       scrollToBottom: (behavior = 'auto') => {
         requestBottomScroll(behavior === 'smooth' ? 'smooth' : 'auto');
       },
@@ -399,7 +431,7 @@ export function VirtualList<T>({
           handleRef.current?.getState(resolve);
         })
     }),
-    [items, getKey, requestBottomScroll, firstItemIndex]
+    [clearBottomQuiescenceTimeout, clearBottomSettleTimeout, firstItemIndex, getKey, items, requestBottomScroll]
   );
 
   // Initial mount lands near — but not exactly at — the bottom because row heights are

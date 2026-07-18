@@ -1578,6 +1578,18 @@ test('non-Claude providers do not parse Claude rate limit events by field shape'
   expect(externalAgentUsageLimitMeter({ provider: 'codex', output })).toBeNull();
 });
 
+test('observation boundary buttons use the virtual list physical top and bottom controls', async () => {
+  const source = await Bun.file(
+    new URL('../../src/workspace-experiences/chat-room/components/observation/panel.tsx', import.meta.url)
+  ).text();
+
+  expect({
+    bottom: source.includes("listRef.current?.scrollToBottom('smooth');"),
+    indexedTop: source.includes('listRef.current?.scrollToKey(firstRow.id'),
+    top: source.includes("listRef.current?.scrollToTop('smooth');")
+  }).toEqual({ bottom: true, indexedTop: false, top: true });
+});
+
 test('observation panel shows a token usage meter entry when Codex reports token usage', () => {
   const output = JSON.stringify({
     method: 'thread/tokenUsage/updated',

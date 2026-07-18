@@ -7,10 +7,17 @@ import {
   isAtBottom,
   reduceBottomScrollRequest,
   reducePinnedOnScroll,
+  scrollBoundaryTop,
   scrollTopPreservingAnchor,
   shouldPinToBottom,
   shouldPublishAtBottomChange
 } from '@monad/ui/components/VirtualList';
+
+test('boundary controls target the physical top and bottom of the loaded list', () => {
+  const metrics = { scrollHeight: 2_400, clientHeight: 600 };
+
+  expect([scrollBoundaryTop(metrics, 'top'), scrollBoundaryTop(metrics, 'bottom')]).toEqual([0, 1_800]);
+});
 
 test('isAtBottom: at the exact bottom', () => {
   expect(isAtBottom({ scrollHeight: 1000, scrollTop: 500, clientHeight: 500 })).toBe(true);
