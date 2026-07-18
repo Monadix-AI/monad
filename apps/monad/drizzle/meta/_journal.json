@@ -5,29 +5,15 @@
     {
       "idx": 0,
       "version": "6",
-      "when": 1784030043899,
+      "when": 1784356322575,
       "tag": "0000_initial-schema",
       "breakpoints": true
     },
     {
       "idx": 1,
       "version": "6",
-      "when": 1784139452695,
+      "when": 1784356344140,
       "tag": "0001_message-fts",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "6",
-      "when": 1784281678637,
-      "tag": "0002_true_iron_monger",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "6",
-      "when": 1784353777546,
-      "tag": "0003_bent_obadiah_stane",
       "breakpoints": true
     }
   ]

@@ -105,6 +105,7 @@ test('generated migrations exactly embed the source Drizzle history', () => {
   const newest = journal.entries.at(-1);
   if (!newest) throw new Error('Drizzle migration journal has no entries');
 
+  expect(journal.entries.map((entry) => entry.tag)).toEqual(['0000_initial-schema', '0001_message-fts']);
   expect(LATEST_MIGRATION_TIMESTAMP).toBe(newest.when);
   expect(MIGRATIONS).toEqual(
     journal.entries.map((entry) => {
@@ -145,6 +146,44 @@ test('runtime migrator records Drizzle hashes and the current journal state', ()
 test('runtime migrator creates the regular schema and partial indexes', () => {
   const sqlite = new Database(':memory:');
   migrateSqlite(sqlite);
+
+  const externalAgentSessionColumns = (
+    sqlite.prepare('PRAGMA table_info(external_agent_sessions)').all() as { name: string }[]
+  ).map((row) => row.name);
+  expect(externalAgentSessionColumns).toEqual([
+    'id',
+    'transcript_target_id',
+    'agent_name',
+    'provider',
+    'working_path',
+    'launch_mode',
+    'runtime_role',
+    'agent_runtime_id',
+    'agent_runtime_token_hash',
+    'last_delivered_seq',
+    'last_visible_seq',
+    'state',
+    'pid',
+    'provider_session_ref',
+    'exit_code',
+    'started_at',
+    'updated_at',
+    'exited_at'
+  ]);
+
+  expect(
+    sqlite
+      .prepare(
+        "SELECT name, type FROM sqlite_master WHERE name IN ('messages_fts', 'messages_fts_trigram', 'messages_ai', 'messages_ad', 'messages_au') ORDER BY name"
+      )
+      .all()
+  ).toEqual([
+    { name: 'messages_ad', type: 'trigger' },
+    { name: 'messages_ai', type: 'trigger' },
+    { name: 'messages_au', type: 'trigger' },
+    { name: 'messages_fts', type: 'table' },
+    { name: 'messages_fts_trigram', type: 'table' }
+  ]);
 
   const embeddingColumns = (sqlite.prepare('PRAGMA table_info(message_embeddings)').all() as { name: string }[]).map(
     (row) => row.name

@@ -1,8 +1,8 @@
 {
+  "id": "a230666c-1201-402f-8105-7e9621f33026",
+  "prevId": "b5bd2ab8-6ef0-4ff2-b0d8-9c57eac2a357",
   "version": "6",
   "dialect": "sqlite",
-  "id": "85e4f4d9-a38c-466f-9a71-b07062a61400",
-  "prevId": "b00bda4f-6ea9-4437-88f4-083d0da281ae",
   "tables": {
     "acp_delegates": {
       "name": "acp_delegates",
@@ -96,8 +96,8 @@
         "idx_acp_delegates_live": {
           "name": "idx_acp_delegates_live",
           "columns": ["evicted_at"],
-          "isUnique": false,
-          "where": "evicted_at IS NULL"
+          "where": "evicted_at IS NULL",
+          "isUnique": false
         }
       },
       "foreignKeys": {},
@@ -594,8 +594,8 @@
         "idx_external_agent_inbox_delivery_id": {
           "name": "idx_external_agent_inbox_delivery_id",
           "columns": ["delivery_id"],
-          "isUnique": true,
-          "where": "delivery_id IS NOT NULL"
+          "where": "delivery_id IS NOT NULL",
+          "isUnique": true
         },
         "idx_external_agent_inbox_project_trigger": {
           "name": "idx_external_agent_inbox_project_trigger",
@@ -722,14 +722,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "output_snapshot": {
-          "name": "output_snapshot",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "''"
-        },
         "exit_code": {
           "name": "exit_code",
           "type": "integer",
@@ -768,14 +760,14 @@
         "idx_external_agent_sessions_live": {
           "name": "idx_external_agent_sessions_live",
           "columns": ["state"],
-          "isUnique": false,
-          "where": "state IN ('starting', 'running')"
+          "where": "state IN ('starting', 'running')",
+          "isUnique": false
         },
         "idx_external_agent_sessions_provider_ref": {
           "name": "idx_external_agent_sessions_provider_ref",
           "columns": ["transcript_target_id", "provider", "provider_session_ref"],
-          "isUnique": true,
-          "where": "provider_session_ref IS NOT NULL"
+          "where": "provider_session_ref IS NOT NULL",
+          "isUnique": true
         }
       },
       "foreignKeys": {},
@@ -1743,9 +1735,9 @@
   "views": {},
   "enums": {},
   "_meta": {
+    "columns": {},
     "schemas": {},
-    "tables": {},
-    "columns": {}
+    "tables": {}
   },
   "internal": {
     "indexes": {}

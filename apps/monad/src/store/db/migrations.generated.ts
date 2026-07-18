@@ -25,7 +25,7 @@ export const MIGRATIONS: MigrationMeta[] = [
       "\nCREATE UNIQUE INDEX `idx_external_agent_inbox_delivery_id` ON `external_agent_inbox_items` (`delivery_id`) WHERE delivery_id IS NOT NULL;",
       "\nCREATE INDEX `idx_external_agent_inbox_project_trigger` ON `external_agent_inbox_items` (`project_id`,`trigger_message_id`);",
       "\nCREATE INDEX `idx_external_agent_inbox_member_state` ON `external_agent_inbox_items` (`project_id`,`member_instance_id`,`state`);",
-      "\nCREATE TABLE `external_agent_sessions` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`transcript_target_id` text NOT NULL,\n\t`agent_name` text NOT NULL,\n\t`provider` text NOT NULL,\n\t`working_path` text NOT NULL,\n\t`launch_mode` text NOT NULL,\n\t`runtime_role` text DEFAULT 'interactive' NOT NULL,\n\t`agent_runtime_id` text,\n\t`agent_runtime_token_hash` text,\n\t`last_delivered_seq` integer DEFAULT 0 NOT NULL,\n\t`last_visible_seq` integer DEFAULT 0 NOT NULL,\n\t`state` text NOT NULL,\n\t`pid` integer,\n\t`provider_session_ref` text,\n\t`output_snapshot` text DEFAULT '' NOT NULL,\n\t`exit_code` integer,\n\t`started_at` text NOT NULL,\n\t`updated_at` text NOT NULL,\n\t`exited_at` text\n);\n",
+      "\nCREATE TABLE `external_agent_sessions` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`transcript_target_id` text NOT NULL,\n\t`agent_name` text NOT NULL,\n\t`provider` text NOT NULL,\n\t`working_path` text NOT NULL,\n\t`launch_mode` text NOT NULL,\n\t`runtime_role` text DEFAULT 'interactive' NOT NULL,\n\t`agent_runtime_id` text,\n\t`agent_runtime_token_hash` text,\n\t`last_delivered_seq` integer DEFAULT 0 NOT NULL,\n\t`last_visible_seq` integer DEFAULT 0 NOT NULL,\n\t`state` text NOT NULL,\n\t`pid` integer,\n\t`provider_session_ref` text,\n\t`exit_code` integer,\n\t`started_at` text NOT NULL,\n\t`updated_at` text NOT NULL,\n\t`exited_at` text\n);\n",
       "\nCREATE INDEX `idx_external_agent_sessions_transcript_target` ON `external_agent_sessions` (`transcript_target_id`);",
       "\nCREATE INDEX `idx_external_agent_sessions_live` ON `external_agent_sessions` (`state`) WHERE state IN ('starting', 'running');",
       "\nCREATE UNIQUE INDEX `idx_external_agent_sessions_provider_ref` ON `external_agent_sessions` (`transcript_target_id`,`provider`,`provider_session_ref`) WHERE provider_session_ref IS NOT NULL;",
@@ -47,14 +47,14 @@ export const MIGRATIONS: MigrationMeta[] = [
       "\nCREATE INDEX `idx_sessions_project` ON `sessions` (`project_id`);",
       "\nCREATE TABLE `tasks` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`session_id` text NOT NULL,\n\t`title` text NOT NULL,\n\t`assignee_agent_id` text,\n\t`depends_on` text DEFAULT '[]' NOT NULL,\n\t`state` text NOT NULL,\n\t`version` integer DEFAULT 0 NOT NULL,\n\t`result` text,\n\t`error` text,\n\t`created_at` text NOT NULL,\n\t`updated_at` text NOT NULL\n);\n",
       "\nCREATE INDEX `idx_tasks_session` ON `tasks` (`session_id`);",
+      "\nCREATE TABLE `tool_raw_outputs` (\n\t`transcript_target_id` text NOT NULL,\n\t`tool_call_id` text NOT NULL,\n\t`output` text NOT NULL,\n\t`created_at` text NOT NULL,\n\tPRIMARY KEY(`transcript_target_id`, `tool_call_id`)\n);\n",
       "\nCREATE TABLE `usage_ledger` (\n\t`day` text NOT NULL,\n\t`provider` text NOT NULL,\n\t`model` text NOT NULL,\n\t`category` text DEFAULT 'chat' NOT NULL,\n\t`input_tokens` integer DEFAULT 0 NOT NULL,\n\t`output_tokens` integer DEFAULT 0 NOT NULL,\n\t`cache_read_tokens` integer DEFAULT 0 NOT NULL,\n\t`cache_write_tokens` integer DEFAULT 0 NOT NULL,\n\t`reasoning_tokens` integer DEFAULT 0 NOT NULL,\n\t`cost_usd` real DEFAULT 0 NOT NULL,\n\t`updated_at` text NOT NULL,\n\tPRIMARY KEY(`day`, `provider`, `model`, `category`)\n);\n",
       "\nCREATE TABLE `workplace_projects` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`title` text NOT NULL,\n\t`state` text NOT NULL,\n\t`archived` integer DEFAULT 0 NOT NULL,\n\t`model` text,\n\t`cwd` text,\n\t`origin` text,\n\t`member_templates` text DEFAULT '[]' NOT NULL,\n\t`created_at` text NOT NULL,\n\t`updated_at` text NOT NULL\n);\n",
-      "\nCREATE INDEX `idx_workplace_projects_state` ON `workplace_projects` (`state`,`archived`);\n",
-      "\nCREATE TABLE `tool_raw_outputs` (\n\t`transcript_target_id` text NOT NULL,\n\t`tool_call_id` text NOT NULL,\n\t`output` text NOT NULL,\n\t`created_at` text NOT NULL,\n\tPRIMARY KEY(`transcript_target_id`, `tool_call_id`)\n);\n"
+      "\nCREATE INDEX `idx_workplace_projects_state` ON `workplace_projects` (`state`,`archived`);"
     ],
     "bps": true,
-    "folderMillis": 1784030043899,
-    "hash": "d07aaeeb913440a7e5d9bad3d47ffe95ebc546f63dea06347d6b25f4c48a5926"
+    "folderMillis": 1784356322575,
+    "hash": "77c22744202ad7a6310debebaa42a8ce04b0a5cd6303c807fdbff7d6e664a7ff"
   },
   {
     "sql": [
@@ -67,28 +67,9 @@ export const MIGRATIONS: MigrationMeta[] = [
       "\nINSERT INTO messages_fts_trigram(messages_fts_trigram) VALUES ('rebuild');\n"
     ],
     "bps": true,
-    "folderMillis": 1784139452695,
+    "folderMillis": 1784356344140,
     "hash": "60e311db225abad53357805d7914bab5e209a2e560ee2484d1e8dd886c4151e5"
-  },
-  {
-    "sql": [
-      "CREATE TABLE `external_agent_observation_events` (\n\t`seq` integer PRIMARY KEY AUTOINCREMENT NOT NULL,\n\t`external_agent_session_id` text NOT NULL,\n\t`dedupe_key` text NOT NULL,\n\t`event_json` text NOT NULL,\n\t`observed_at` text NOT NULL,\n\tFOREIGN KEY (`external_agent_session_id`) REFERENCES `external_agent_sessions`(`id`) ON UPDATE no action ON DELETE cascade\n);\n",
-      "\nCREATE UNIQUE INDEX `idx_external_agent_observation_dedupe` ON `external_agent_observation_events` (`external_agent_session_id`,`dedupe_key`);",
-      "\nCREATE INDEX `idx_external_agent_observation_page` ON `external_agent_observation_events` (`external_agent_session_id`,`seq`);"
-    ],
-    "bps": true,
-    "folderMillis": 1784281678637,
-    "hash": "311c0c6643e97dc3e09d0c2bc0022f0c7a355de7ec4c667822e806e1f429e8bf"
-  },
-  {
-    "sql": [
-      "DROP TABLE `external_agent_observation_events`;",
-      "\nALTER TABLE `external_agent_sessions` DROP COLUMN `output_snapshot`;"
-    ],
-    "bps": true,
-    "folderMillis": 1784353777546,
-    "hash": "de63d7e115541ae8dbce768e2506493e941a4a4f41acb487df2b71d15ae30383"
   }
 ];
 
-export const LATEST_MIGRATION_TIMESTAMP = 1784353777546;
+export const LATEST_MIGRATION_TIMESTAMP = 1784356344140;

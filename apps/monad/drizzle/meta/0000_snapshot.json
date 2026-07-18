@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "b00bda4f-6ea9-4437-88f4-083d0da281ae",
+  "id": "b5bd2ab8-6ef0-4ff2-b0d8-9c57eac2a357",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "acp_delegates": {
@@ -721,14 +721,6 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
-        },
-        "output_snapshot": {
-          "name": "output_snapshot",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "''"
         },
         "exit_code": {
           "name": "exit_code",

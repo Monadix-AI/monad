@@ -116,7 +116,6 @@ CREATE TABLE `external_agent_sessions` (
 	`state` text NOT NULL,
 	`pid` integer,
 	`provider_session_ref` text,
-	`output_snapshot` text DEFAULT '' NOT NULL,
 	`exit_code` integer,
 	`started_at` text NOT NULL,
 	`updated_at` text NOT NULL,
@@ -244,6 +243,14 @@ CREATE TABLE `tasks` (
 );
 --> statement-breakpoint
 CREATE INDEX `idx_tasks_session` ON `tasks` (`session_id`);--> statement-breakpoint
+CREATE TABLE `tool_raw_outputs` (
+	`transcript_target_id` text NOT NULL,
+	`tool_call_id` text NOT NULL,
+	`output` text NOT NULL,
+	`created_at` text NOT NULL,
+	PRIMARY KEY(`transcript_target_id`, `tool_call_id`)
+);
+--> statement-breakpoint
 CREATE TABLE `usage_ledger` (
 	`day` text NOT NULL,
 	`provider` text NOT NULL,
@@ -273,11 +280,3 @@ CREATE TABLE `workplace_projects` (
 );
 --> statement-breakpoint
 CREATE INDEX `idx_workplace_projects_state` ON `workplace_projects` (`state`,`archived`);
---> statement-breakpoint
-CREATE TABLE `tool_raw_outputs` (
-	`transcript_target_id` text NOT NULL,
-	`tool_call_id` text NOT NULL,
-	`output` text NOT NULL,
-	`created_at` text NOT NULL,
-	PRIMARY KEY(`transcript_target_id`, `tool_call_id`)
-);
