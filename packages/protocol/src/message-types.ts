@@ -49,6 +49,11 @@ export const branchSourceSchema = z.object({
 });
 export type BranchSource = z.infer<typeof branchSourceSchema>;
 
+export const providerConfigErrorSchema = z.object({
+  providerId: z.string().optional()
+});
+export type ProviderConfigError = z.infer<typeof providerConfigErrorSchema>;
+
 export const BUILTIN_MESSAGE_TYPES: Record<string, MessageTypeDescriptor> = Object.freeze({
   text: { type: 'text', dataSchema: z.unknown(), fallbacks: ['text'], includeInContext: true },
   markdown: { type: 'markdown', dataSchema: z.unknown(), fallbacks: ['markdown', 'text'], includeInContext: true },
@@ -73,7 +78,16 @@ export const BUILTIN_MESSAGE_TYPES: Record<string, MessageTypeDescriptor> = Obje
     includeInContext: false
   },
   // UI-only: a surfaced failure — never replayed, counted, or summarized.
-  error: { type: 'error', dataSchema: z.unknown(), fallbacks: ['text'], includeInContext: false }
+  error: { type: 'error', dataSchema: z.unknown(), fallbacks: ['text'], includeInContext: false },
+  // UI-only: a generation failure specifically caused by provider/credential setup (missing
+  // credentials, or the provider doesn't support the requested capability) — never replayed,
+  // counted, or summarized. Renders a dedicated card pointing at provider settings.
+  provider_config_error: {
+    type: 'provider_config_error',
+    dataSchema: providerConfigErrorSchema,
+    fallbacks: ['data', 'text'],
+    includeInContext: false
+  }
 });
 
 /** Unknown / unregistered types degrade to text and keep the historical pass-through behaviour

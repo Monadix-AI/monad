@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 
 import { extractError } from '#/agent/loop/index.ts';
+import { noCredentialsError, unsupportedCapabilityError } from '#/agent/model/gateway/gateway-routing.ts';
 
 // Simulate AI_APICallError shape from @ai-sdk/provider-utils
 function apiCallError(opts: { statusCode: number; data: unknown; message?: string }): Error {
@@ -131,6 +132,36 @@ test('AggregateError with no sub-errors: uses aggregate message', () => {
   const err = new AggregateError([], 'gateway: all model attempts failed');
   const { message } = extractError(err);
   expect(message).toBe('gateway: all model attempts failed');
+});
+
+test('AggregateError: every attempt failed on provider config — surfaces code + providerId', () => {
+  const err = new AggregateError(
+    [noCredentialsError('anthropic'), unsupportedCapabilityError('openrouter', 'text generation')],
+    'gateway: all model attempts failed'
+  );
+  const { code, message, providerId } = extractError(err);
+  expect(code).toBe('provider_config');
+  expect(message).toBe('no credentials configured for provider "anthropic"');
+  expect(providerId).toBe('anthropic');
+});
+
+test('AggregateError: one real attempt among config failures — falls back to first sub-error', () => {
+  const realErr = apiCallError({
+    statusCode: 429,
+    data: { error: { message: 'Rate limit.', type: 'requests', code: 'rate_limit_exceeded' } }
+  });
+  const err = new AggregateError([realErr, noCredentialsError('anthropic')], 'gateway: all model attempts failed');
+  const { code, message, providerId } = extractError(err);
+  expect(code).toBe('rate_limit_exceeded');
+  expect(message).toBe('Rate limit.');
+  expect(providerId).toBeUndefined();
+});
+
+test('single provider-config error (no aggregate wrapper): surfaces code + providerId', () => {
+  const { code, message, providerId } = extractError(noCredentialsError('openai'));
+  expect(code).toBe('provider_config');
+  expect(message).toBe('no credentials configured for provider "openai"');
+  expect(providerId).toBe('openai');
 });
 
 // ── Fallbacks ────────────────────────────────────────────────────────────────

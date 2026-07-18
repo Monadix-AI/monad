@@ -1,19 +1,22 @@
 import type { Card, ClientRenderCaps, CommandItem } from '@monad/protocol';
 import type { ComponentType, ReactNode } from 'react';
 
-import { isHttpUrl, pickRepresentation } from '@monad/protocol';
+import { isHttpUrl, type ProviderConfigError, pickRepresentation } from '@monad/protocol';
 import { Button, cn, faviconMarkdownComponents } from '@monad/ui';
 import { ComposerInlineChip } from '@monad/ui/components/ComposerInlineChip';
 import { Markdown } from '@monad/ui/components/Markdown';
 import { MentionText } from '@monad/ui/components/MentionText';
 
+import { useT } from '#/components/I18nProvider';
+import { ShellLink } from '#/components/ShellLink';
+import { studioPath } from '#/features/shell/routing/paths';
 import { useOptionalSessionContext } from './session-context';
 
 // Tool calls/results are NOT here — they are paired into inline ToolStepView items upstream in
-// chat.tsx's viewMessages and never reach MessageBody. This client owns the `card` renderer;
-// everything else degrades to markdown/text via the shared registry.
+// chat.tsx's viewMessages and never reach MessageBody. This client owns the `card` and
+// `provider_config_error` renderers; everything else degrades to markdown/text via the shared registry.
 const WEB_RENDER_CAPS: ClientRenderCaps = {
-  richTypes: new Set(['card']),
+  richTypes: new Set(['card', 'provider_config_error']),
   markdown: true,
   interactions: new Set(['buttons', 'links'])
 };
@@ -77,9 +80,41 @@ function CardRenderer({ data, text }: RichRendererProps) {
   );
 }
 
+// Generation failed because the model provider isn't set up (missing credentials, or the
+// provider doesn't support the requested capability) — not something the user can retry their
+// way out of. The specific cause is intentionally not distinguished here: it's in `text` below.
+function ProviderConfigErrorRenderer({ data, text }: RichRendererProps) {
+  const t = useT();
+  const { providerId } = (data ?? {}) as ProviderConfigError;
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="font-semibold text-sm">{t('web.providerConfigError.title')}</div>
+      <p className="text-foreground/85">
+        {providerId ? t('web.providerConfigError.bodyWithProvider', { providerId }) : t('web.providerConfigError.body')}
+      </p>
+      <div>
+        <Button
+          asChild
+          size="sm"
+          variant="secondary"
+        >
+          <ShellLink href={studioPath('models')}>{t('web.providerConfigError.action')}</ShellLink>
+        </Button>
+      </div>
+      {text && (
+        <details className="text-muted-foreground text-xs">
+          <summary className="cursor-pointer select-none">{t('web.providerConfigError.detailsLabel')}</summary>
+          <pre className="mt-1 whitespace-pre-wrap break-words font-mono">{text}</pre>
+        </details>
+      )}
+    </div>
+  );
+}
+
 /** type → rich `data` renderer. Keyed by the message `type` (built-in or `atomPackId:type`). */
 const MESSAGE_RENDERERS: Record<string, ComponentType<RichRendererProps>> = {
-  card: CardRenderer
+  card: CardRenderer,
+  provider_config_error: ProviderConfigErrorRenderer
 };
 
 /** Render a message body, degrading by type against this client's capabilities. `data` + `markdown`

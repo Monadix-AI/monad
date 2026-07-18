@@ -93,7 +93,9 @@ export const agentErrorPayloadSchema = z.object({
   messageId: messageIdSchema.optional(),
   agentName: z.string().optional(),
   code: z.string().optional(),
-  message: z.string()
+  message: z.string(),
+  // Set when `code === 'provider_config'` — the provider a card CTA should point settings at.
+  providerId: z.string().optional()
 });
 
 export const agentTokenPayloadSchema = z.object({

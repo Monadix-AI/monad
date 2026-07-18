@@ -332,6 +332,37 @@ test('streams reasoning and text onto the same message item', () => {
   expect(final.item.status).toBe('done');
 });
 
+test('agent.error with a provider_config code renders as a provider-config-error artifact', () => {
+  const projector = new SessionUiProjector();
+  const [errEvent] = projector.applyEvent(
+    event('agent.error', {
+      messageId: 'msg_100000000000',
+      code: 'provider_config',
+      message: 'no credentials configured for provider "anthropic"',
+      providerId: 'anthropic'
+    })
+  );
+  if (errEvent?.kind !== 'upsert' || errEvent.item.kind !== 'message') throw new Error('expected message upsert');
+  expect(errEvent.item.status).toBe('error');
+  expect(errEvent.item.parts).toEqual([
+    {
+      type: 'artifact',
+      messageType: 'provider_config_error',
+      text: '[provider_config] no credentials configured for provider "anthropic"',
+      data: { providerId: 'anthropic' }
+    }
+  ]);
+});
+
+test('agent.error with a non-config code renders as plain text', () => {
+  const projector = new SessionUiProjector();
+  const [errEvent] = projector.applyEvent(
+    event('agent.error', { messageId: 'msg_100000000000', code: 'rate_limit_exceeded', message: 'Rate limit.' })
+  );
+  if (errEvent?.kind !== 'upsert' || errEvent.item.kind !== 'message') throw new Error('expected message upsert');
+  expect(errEvent.item.parts).toEqual([{ type: 'text', text: '[rate_limit_exceeded] Rate limit.' }]);
+});
+
 test('settles a pre-tool reasoning segment when a tool call starts', () => {
   const projector = new SessionUiProjector();
   projector.applyEvent(

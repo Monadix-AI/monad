@@ -3,6 +3,7 @@ import type { ProjectionMutations } from './ui-projection-state.ts';
 
 import { channelDisplayText, channelStructuredVisibility, parseEventPayload } from '@monad/protocol';
 
+import { PROVIDER_CONFIG_ERROR_CODE } from '#/agent/model/gateway/gateway-routing.ts';
 import { CHANNEL_REPARSE_MIN_DELTA, channelPartialDisplayText } from './ui-projection-helpers.ts';
 
 export function applyMessageEvent(m: ProjectionMutations, event: Event): SessionUiEvent[] | undefined {
@@ -130,12 +131,19 @@ export function applyMessageEvent(m: ProjectionMutations, event: Event): Session
         m.rawStreamingText.delete(p.messageId);
         m.channelDisplayCache.delete(p.messageId);
       }
+      const text = p.code ? `[${p.code}] ${p.message}` : p.message;
+      // A provider-config failure (missing credentials, unsupported capability) gets an `artifact`
+      // part so the client renders its dedicated "fix provider settings" card instead of plain text.
+      const parts: UIPart[] =
+        p.code === PROVIDER_CONFIG_ERROR_CODE
+          ? [{ type: 'artifact', messageType: 'provider_config_error', text, data: { providerId: p.providerId } }]
+          : [{ type: 'text', text }];
       return [
         m.setMessage({
           kind: 'message',
           id,
           role: 'assistant',
-          parts: [{ type: 'text', text: p.code ? `[${p.code}] ${p.message}` : p.message }],
+          parts,
           status: 'error',
           seq: (p.messageId ? m.findMessage(p.messageId)?.seq : undefined) ?? event.at
         })

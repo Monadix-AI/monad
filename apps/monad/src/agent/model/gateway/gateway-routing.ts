@@ -132,12 +132,27 @@ function mergeParams(base: GenerationParams, over: GenerationParams | undefined)
   return merged;
 }
 
-export function noCredentialsError(providerId: string): Error {
-  return new Error(`no credentials configured for provider "${providerId}"`);
+/** Marks an error as caused by provider/credential *setup* (missing credentials, or the provider
+ *  doesn't implement the requested capability) rather than a call that actually reached the
+ *  provider and failed there. `extractError` uses this to surface a dedicated "check provider
+ *  settings" signal instead of a raw API error. */
+export const PROVIDER_CONFIG_ERROR_CODE = 'provider_config';
+
+export interface ProviderConfigError extends Error {
+  code: typeof PROVIDER_CONFIG_ERROR_CODE;
+  providerId: string;
 }
 
-export function unsupportedCapabilityError(providerId: string, capability: string): Error {
-  return new Error(`provider "${providerId}" does not support ${capability}`);
+function providerConfigError(message: string, providerId: string): ProviderConfigError {
+  return Object.assign(new Error(message), { code: PROVIDER_CONFIG_ERROR_CODE, providerId }) as ProviderConfigError;
+}
+
+export function noCredentialsError(providerId: string): ProviderConfigError {
+  return providerConfigError(`no credentials configured for provider "${providerId}"`, providerId);
+}
+
+export function unsupportedCapabilityError(providerId: string, capability: string): ProviderConfigError {
+  return providerConfigError(`provider "${providerId}" does not support ${capability}`, providerId);
 }
 
 export function errInfo(err: unknown): { code?: string; message?: string } {

@@ -5,6 +5,7 @@ import { expect, test } from 'bun:test';
 import { newId } from '@monad/protocol';
 
 import { AgentLoop, type ImageAttachment, InMemoryMessageRepo, type ModelRouter } from '#/agent/index.ts';
+import { noCredentialsError } from '#/agent/model/gateway/gateway-routing.ts';
 import { buildMockModel } from '../../fixtures/mock-model.ts';
 
 function mockModel(deltas: string[]): ModelRouter {
@@ -291,6 +292,42 @@ test('runStream emits agent.error and re-throws when model fails', async () => {
   const errorMsg = messages.list(sessionId).find((m) => m.type === 'error');
   expect(errorMsg?.role).toBe('assistant');
   expect(errorMsg?.text).toBe('upstream 503');
+});
+
+test('runStream emits a provider_config_error message + providerId when the gateway has no credentials', async () => {
+  const modelError = new AggregateError([noCredentialsError('anthropic')], 'gateway: all model attempts failed');
+  const events: Event[] = [];
+  const messages = new InMemoryMessageRepo();
+  const loop = new AgentLoop({
+    model: {
+      async *stream() {
+        yield undefined;
+        throw modelError;
+      },
+      async complete() {
+        throw modelError;
+      }
+    } as unknown as ModelRouter,
+    tools: [],
+    messages,
+    defaultModel: 'mock',
+    emit: (e) => events.push(e)
+  });
+  const sessionId = newId('ses') as SessionId;
+
+  await expect(loop.runStream(sessionId, 'hi')).rejects.toThrow();
+
+  const errEvents = events.filter((e) => e.type === 'agent.error');
+  expect(errEvents).toHaveLength(1);
+  expect(errEvents[0]?.payload).toMatchObject({
+    code: 'provider_config',
+    providerId: 'anthropic',
+    message: 'no credentials configured for provider "anthropic"'
+  });
+
+  const errorMsg = messages.list(sessionId).find((m) => m.type === 'provider_config_error');
+  expect(errorMsg?.role).toBe('assistant');
+  expect(errorMsg?.data).toEqual({ providerId: 'anthropic' });
 });
 
 test('image attachments are folded into the last user message as multimodal content', async () => {

@@ -6,6 +6,7 @@ import type { PromptBuilder } from './prompt-builder.ts';
 
 import { newId } from '@monad/protocol';
 
+import { PROVIDER_CONFIG_ERROR_CODE } from '../../model/gateway/gateway-routing.ts';
 import { extractError } from '../extract-error.ts';
 
 /**
@@ -173,18 +174,23 @@ export class TurnWriter {
   }
 
   async emitError(sessionId: SessionId, messageId: string, err: unknown): Promise<void> {
-    const { code, message } = extractError(err);
+    const { code, message, providerId } = extractError(err);
     const text = code ? `[${code}] ${message}` : message;
+    // Provider-config failures (missing credentials, unsupported capability) get their own message
+    // type + `providerId` so the UI can render a "fix provider settings" card instead of a raw error.
+    const isProviderConfig = code === PROVIDER_CONFIG_ERROR_CODE;
     // Persist the failure as an assistant message so it survives in history and is visible even when
-    // the live event stream can't deliver. Tagged `error` so buildPrompt never replays it back to
-    // the model. Settle the row opened in beginTurn (→ error); repos without the lifecycle append it.
+    // the live event stream can't deliver. Tagged `error`/`provider_config_error` so buildPrompt
+    // never replays it back to the model. Settle the row opened in beginTurn (→ error); repos
+    // without the lifecycle append it.
     const errMessage: ChatMessage = {
       id: messageId,
       sessionId,
       role: 'assistant',
       text,
       createdAt: new Date().toISOString(),
-      type: 'error'
+      type: isProviderConfig ? 'provider_config_error' : 'error',
+      ...(isProviderConfig ? { data: { providerId } } : {})
     };
     try {
       const settled = this.deps.messages.settle ? await this.deps.messages.settle(errMessage, 'error') : false;
@@ -194,7 +200,12 @@ export class TurnWriter {
       // effects). Re-using the same messageId must not crash the daemon on a duplicate insert.
       if (!String(appendErr).includes('UNIQUE constraint failed: messages.id')) throw appendErr;
     }
-    this.emitEvent(sessionId, 'agent.error', { messageId, code, message });
+    this.emitEvent(sessionId, 'agent.error', {
+      messageId,
+      code,
+      message,
+      ...(isProviderConfig ? { providerId } : {})
+    });
     // AfterTurn also fires when a turn ends in failure (the success path fires it via runStopHook).
     // Observe-only here — the turn already errored; a hook can log/notify but not rewrite the answer.
     await this.hooks().run({
