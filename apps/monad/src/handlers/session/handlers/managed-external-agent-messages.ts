@@ -186,25 +186,24 @@ export function createManagedExternalAgentMessages(ctx: SessionContext) {
       pending?.messageId ??
       store.findManagedExternalAgentStreamingMessage(sessionId, externalAgentSessionId, agentName);
     pendingManagedExternalAgentWakeMessages.delete(externalAgentSessionId);
-    if (!pendingMessageId) return null;
-    const retired = store.retireManagedExternalAgentStreamingMessage(
-      sessionId,
-      pendingMessageId,
-      externalAgentSessionId,
-      agentName
-    );
-    if (!retired) return null;
+    const retired = pendingMessageId
+      ? store.retireManagedExternalAgentStreamingMessage(sessionId, pendingMessageId, externalAgentSessionId, agentName)
+      : false;
     const round: Event[] = [];
-    makeEmit(round)(
-      makeEvent(sessionId as SessionId, 'agent.message', {
-        messageId: pendingMessageId,
-        agentName,
-        text: '{"visibility":"silent","display":{"kind":"markdown","content":""},"attachments":[],"next":[]}',
-        source: 'managed-external-agent'
-      })
-    );
+    const emit = makeEmit(round);
+    if (retired && pendingMessageId) {
+      emit(
+        makeEvent(sessionId as SessionId, 'agent.message', {
+          messageId: pendingMessageId,
+          agentName,
+          text: '{"visibility":"silent","display":{"kind":"markdown","content":""},"attachments":[],"next":[]}',
+          source: 'managed-external-agent'
+        })
+      );
+    }
+    emit(makeEvent(sessionId as SessionId, 'external_agent.turn_settled', { externalAgentSessionId }));
     persistAndRetire(sessionId, round);
-    return pendingMessageId as MessageId;
+    return retired ? (pendingMessageId as MessageId) : null;
   }
 
   return {
