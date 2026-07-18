@@ -191,5 +191,6 @@ jobs:
           bun test
           apps/monad/test/e2e/live-model.test.ts
           apps/monad/test/e2e/live-approvals.test.ts
+          apps/monad/test/e2e/live-hooks.test.ts
           apps/monad/test/e2e/live-scenarios.test.ts
           apps/monad/test/e2e/live-resilience.test.ts

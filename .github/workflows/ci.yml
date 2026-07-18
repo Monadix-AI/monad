@@ -43,14 +43,55 @@ jobs:
       - run: bun run quality:check
       - run: git diff --exit-code
 
-  # Cross-OS coverage: the daemon/CLI ship to all three (build-release --all emits
-  # darwin/linux/windows). Unix-socket paths differ per OS — Linux & macOS use the
-  # UDS HTTP path, Windows falls back to TCP loopback — so each must run the suite.
-  test:
-    name: test (${{ matrix.os }})
+  # Unit tests have no transport, provider-process, or live-network dependencies. Keep them in a
+  # separate failure domain and collect coverage only on Linux so instrumentation cannot distort
+  # E2E timing.
+  unit:
+    name: unit (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     if: "!startsWith(github.event.head_commit.message, 'chore(main): release')"
-    # One red OS shouldn't cancel the others — we want the full cross-OS picture.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Test unit
+        env:
+          MONAD_TEST_COVERAGE: ${{ runner.os == 'Linux' && '1' || '0' }}
+        run: bun run test:unit
+
+      - name: Upload coverage
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: |
+            apps/*/coverage/lcov.info
+            packages/*/coverage/lcov.info
+          if-no-files-found: ignore
+
+  # Hermetic daemon E2E uses real HTTP/SSE/stdio transports and local subprocess fixtures, but
+  # excludes live providers, host-installed provider sessions, and dependency-container tests
+  # before Bun loads those files.
+  hermetic-e2e:
+    name: hermetic e2e (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    if: "!startsWith(github.event.head_commit.message, 'chore(main): release')"
     strategy:
       fail-fast: false
       matrix:
@@ -105,22 +146,8 @@ jobs:
         if: runner.os == 'macOS'
         run: bash apps/mo/native/macos/build.sh /tmp/Mo.app
 
-      - name: Test
-        run: bun run test
-
-      - name: Test standalone migration binary
-        if: runner.os == 'Linux'
-        run: bun test scripts/test/unit/build-release-migrations.test.ts
-
-      - name: Upload coverage
-        if: runner.os == 'Linux'
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage
-          path: |
-            apps/*/coverage/lcov.info
-            packages/*/coverage/lcov.info
-          if-no-files-found: ignore
+      - name: Test hermetic daemon E2E
+        run: bun run test:e2e:daemon
 
   # Real third-party dependency tests. The normal e2e suite uses mocks/local fixtures; tests that need
   # provider CLIs or host archive binaries run inside a cached container image with those dependencies

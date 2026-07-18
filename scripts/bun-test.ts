@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 
 import { type FailedTestFile, groupFailedCases, parseFailedCases } from './lib/test-failure-rerun.ts';
+import { parseMonadTestSuiteArgs } from './lib/test-suite.ts';
 
 /**
  * Platform-aware test runner. Passes through all arguments to `bun test` and
@@ -10,6 +11,9 @@ import { type FailedTestFile, groupFailedCases, parseFailedCases } from './lib/t
  * so non-matching platform files are never loaded (no runtime skip needed).
  * Files named *.container.test.ts or *.container.<platform>.test.ts require
  * preinstalled third-party binaries and only run when MONAD_TEST_CONTAINER_DEPS=1.
+ * `--monad-suite=hermetic-e2e` additionally excludes live-provider and local-session files before
+ * module loading. Coverage is explicit (`MONAD_TEST_COVERAGE=1`) so E2E timing is not changed merely
+ * because a command runs in CI.
  *
  * Suffix → platforms where the file SHOULD run:
  *   .unix.test.ts    → darwin + linux
@@ -67,9 +71,12 @@ if (process.env.MONAD_TEST_CONTAINER_DEPS !== '1') {
   ignore.push('--path-ignore-patterns', '**/*.container.*.test.ts');
 }
 
-const coverage = process.env.CI ? ['--coverage'] : [];
+const parsedSuiteArgs = parseMonadTestSuiteArgs(process.argv.slice(2));
+for (const pattern of parsedSuiteArgs.ignorePatterns) ignore.push('--path-ignore-patterns', pattern);
+
+const coverage = process.env.MONAD_TEST_COVERAGE === '1' ? ['--coverage'] : [];
 const rerunLimit = 10;
-const rawArgs = process.argv.slice(2);
+const rawArgs = parsedSuiteArgs.args;
 if (
   process.env.MONAD_TEST_CONTAINER_DEPS !== '1' &&
   rawArgs.some((arg) => /\.container(?:\.[^.]+)?\.test\.[cm]?[tj]sx?$/.test(arg))

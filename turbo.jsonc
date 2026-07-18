@@ -2,7 +2,7 @@
   "$schema": "./node_modules/turbo/schema.json",
   "ui": "tui",
   "globalDependencies": [".env*", "tsconfig*", "biome*"],
-  "globalEnv": ["NEXT_OUTPUT", "NODE_ENV"],
+  "globalEnv": ["MONAD_TEST_COVERAGE", "NEXT_OUTPUT", "NODE_ENV"],
   "globalPassThroughEnv": [
     // Monad runtime and local state roots.
     "AI_SDK_DEVTOOLS_PORT",
