@@ -1,8 +1,6 @@
 import { expect, test } from 'bun:test';
 import { observationFollowResetKey } from '@monad/atoms/workspace-experiences';
 import {
-  anchoredScrollTop,
-  canPreserveViewportAnchor,
   indexOfKey,
   initialBottomScrollRequest,
   isAtBottom,
@@ -54,7 +52,10 @@ test('reducePinnedOnScroll: a genuine scroll sets pinned from the at-bottom read
 });
 
 test('reducePinnedOnScroll: upward user scroll unpins even within the bottom threshold', () => {
-  expect(reducePinnedOnScroll(true, false, true, 'up')).toEqual({ pinned: false, selfScrollConsumed: false });
+  expect([reducePinnedOnScroll(true, false, true, 'up'), reducePinnedOnScroll(true, false, false, 'up')]).toEqual([
+    { pinned: false, selfScrollConsumed: false },
+    { pinned: false, selfScrollConsumed: false }
+  ]);
 });
 
 test('reducePinnedOnScroll: our own pinning scroll is ignored and consumes the flag', () => {
@@ -102,24 +103,6 @@ test('scrollTopPreservingAnchor: offsets list scrolling so an expanded title kee
   expect(scrollTopPreservingAnchor(640, 120, 72)).toBe(592);
   expect(scrollTopPreservingAnchor(640, 120, 120)).toBe(640);
   expect(scrollTopPreservingAnchor(640, 120, 168)).toBe(688);
-});
-
-test('keyed viewport anchor compensates an insertion or height growth above it', () => {
-  const anchor = { key: 'message-20', top: 80 };
-
-  expect(anchoredScrollTop(640, anchor, { key: 'message-20', top: 200 })).toBe(760);
-});
-
-test('keyed viewport anchor does not fight an active fast scroll', () => {
-  expect(canPreserveViewportAnchor(true)).toBe(false);
-  expect(canPreserveViewportAnchor(false)).toBe(true);
-});
-
-test('keyed viewport anchor ignores unrelated rows and unchanged offsets', () => {
-  const anchor = { key: 'message-20', top: 80 };
-
-  expect(anchoredScrollTop(640, anchor, { key: 'message-21', top: 200 })).toBe(640);
-  expect(anchoredScrollTop(640, anchor, { key: 'message-20', top: 80 })).toBe(640);
 });
 
 test('observationFollowResetKey: streaming text changes do not request an imperative scroll reset', () => {

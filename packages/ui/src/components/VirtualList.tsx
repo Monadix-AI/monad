@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactNode, Ref } from 'react';
 import type { StateSnapshot, VirtuosoHandle } from 'react-virtuoso';
 
-import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useImperativeHandle, useMemo, useRef } from 'react';
 import { Virtuoso } from 'react-virtuoso';
 
 export interface VirtualListHandle {
@@ -124,19 +124,6 @@ export function scrollTopPreservingAnchor(scrollTop: number, previousTop: number
   return scrollTop + currentTop - previousTop;
 }
 
-export interface ViewportAnchor {
-  key: string;
-  top: number;
-}
-
-export function anchoredScrollTop(scrollTop: number, anchor: ViewportAnchor, current: ViewportAnchor): number {
-  return anchor.key === current.key ? scrollTop + current.top - anchor.top : scrollTop;
-}
-
-export function canPreserveViewportAnchor(isScrolling: boolean): boolean {
-  return !isScrolling;
-}
-
 // Generic windowed list over react-virtuoso. The custom pinning below exists because
 // virtuoso's built-in `followOutput` does not re-pin when a row grows IN PLACE (a streaming
 // message) — only on item-count changes. We instead pin from `totalListHeightChanged`
@@ -178,10 +165,8 @@ export function VirtualList<T>({
   const pinnedRef = useRef(true);
   const selfScrollRef = useRef(false);
   const userScrolledRef = useRef(false);
-  const isScrollingRef = useRef(false);
   const lastScrollTopRef = useRef<number | null>(null);
   const viewportResizeObserverRef = useRef<ResizeObserver | null>(null);
-  const viewportAnchorRef = useRef<ViewportAnchor | null>(null);
   const layoutAnchorRef = useRef<{ element: HTMLElement; top: number; expiresAt: number } | null>(null);
 
   const clearBottomSettleTimeout = useCallback(() => {
@@ -219,45 +204,6 @@ export function VirtualList<T>({
     [captureLayoutAnchor]
   );
 
-  const captureViewportAnchor = useCallback(() => {
-    const el = scrollerRef.current;
-    if (!el) return false;
-    const scrollerRect = el.getBoundingClientRect();
-    const element = [...el.querySelectorAll<HTMLElement>('[data-virtual-list-item-key]')].find((candidate) => {
-      const rect = candidate.getBoundingClientRect();
-      return rect.bottom > scrollerRect.top && rect.top < scrollerRect.bottom;
-    });
-    const key = element?.dataset.virtualListItemKey;
-    if (!element || !key) return false;
-    viewportAnchorRef.current = { key, top: element.getBoundingClientRect().top - scrollerRect.top };
-    return true;
-  }, []);
-
-  const preserveViewportAnchor = useCallback(() => {
-    const anchor = viewportAnchorRef.current;
-    const el = scrollerRef.current;
-    if (!anchor || !el || !canPreserveViewportAnchor(isScrollingRef.current)) return false;
-    const element = [...el.querySelectorAll<HTMLElement>('[data-virtual-list-item-key]')].find(
-      (candidate) => candidate.dataset.virtualListItemKey === anchor.key
-    );
-    if (!element) {
-      viewportAnchorRef.current = null;
-      captureViewportAnchor();
-      return false;
-    }
-    const current = {
-      key: anchor.key,
-      top: element.getBoundingClientRect().top - el.getBoundingClientRect().top
-    };
-    const nextScrollTop = anchoredScrollTop(el.scrollTop, anchor, current);
-    if (Math.abs(nextScrollTop - el.scrollTop) > 0.5) {
-      selfScrollRef.current = true;
-      el.scrollTop = nextScrollTop;
-      lastScrollTopRef.current = el.scrollTop;
-    }
-    return true;
-  }, [captureViewportAnchor]);
-
   const measurePinned = useCallback(() => {
     const el = scrollerRef.current;
     if (!el) return;
@@ -272,7 +218,6 @@ export function VirtualList<T>({
         selfScrollRef.current = false;
         userScrolledRef.current = true;
         pinnedRef.current = false;
-        captureViewportAnchor();
       }
       return;
     }
@@ -280,8 +225,7 @@ export function VirtualList<T>({
     const next = reducePinnedOnScroll(pinnedRef.current, selfScrollRef.current, isAtBottom(el), direction);
     pinnedRef.current = next.pinned;
     if (next.selfScrollConsumed) selfScrollRef.current = false;
-    else if (!next.pinned && direction !== 'none') captureViewportAnchor();
-  }, [captureViewportAnchor, clearBottomSettleTimeout]);
+  }, [clearBottomSettleTimeout]);
 
   const pinToBottom = useCallback(() => {
     if (!shouldPinToBottom(stickToBottom, pinnedRef.current)) return;
@@ -319,19 +263,14 @@ export function VirtualList<T>({
   // Pin now, then once more next frame: a freshly appended row reports its real height a
   // frame after it mounts, so a single re-pin catches the residual gap that one pass leaves.
   const pinToBottomSoon = useCallback(() => {
-    if (!canPreserveViewportAnchor(isScrollingRef.current)) return;
     if (preserveLayoutAnchor()) {
       requestAnimationFrame(preserveLayoutAnchor);
-      return;
-    }
-    if (!pinnedRef.current && preserveViewportAnchor()) {
-      requestAnimationFrame(preserveViewportAnchor);
       return;
     }
     if (userScrolledRef.current && !pinnedRef.current) return;
     pinToBottom();
     requestAnimationFrame(pinToBottom);
-  }, [pinToBottom, preserveLayoutAnchor, preserveViewportAnchor]);
+  }, [pinToBottom, preserveLayoutAnchor]);
 
   const requestBottomScroll = useCallback(
     (behavior: 'auto' | 'smooth') => {
@@ -339,7 +278,6 @@ export function VirtualList<T>({
       pinnedRef.current = true;
       userScrolledRef.current = false;
       layoutAnchorRef.current = null;
-      viewportAnchorRef.current = null;
       bottomRequestRef.current = reduceBottomScrollRequest(bottomRequestRef.current, { type: 'request', behavior });
       scrollToLast(behavior);
       if (behavior !== 'smooth') return;
@@ -358,19 +296,10 @@ export function VirtualList<T>({
         bottomRequestRef.current = reduceBottomScrollRequest(bottomRequestRef.current, { type: 'at-bottom' });
         clearBottomSettleTimeout();
         selfScrollRef.current = false;
-        viewportAnchorRef.current = null;
       }
       onAtBottomChange?.(nextAtBottom);
     },
     [clearBottomSettleTimeout, onAtBottomChange]
-  );
-
-  const handleIsScrollingChange = useCallback(
-    (isScrolling: boolean) => {
-      isScrollingRef.current = isScrolling;
-      if (!isScrolling && !pinnedRef.current && !bottomRequestRef.current.active) captureViewportAnchor();
-    },
-    [captureViewportAnchor]
   );
 
   const handleTotalListHeightChanged = useCallback(() => {
@@ -381,15 +310,6 @@ export function VirtualList<T>({
     }
     pinToBottomSoon();
   }, [pinToBottomSoon, scrollToLast]);
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: item snapshots trigger post-commit anchor correction
-  useLayoutEffect(() => {
-    if (pinnedRef.current || bottomRequestRef.current.active || !canPreserveViewportAnchor(isScrollingRef.current))
-      return;
-    if (!preserveViewportAnchor()) captureViewportAnchor();
-    const frame = requestAnimationFrame(preserveViewportAnchor);
-    return () => cancelAnimationFrame(frame);
-  }, [items, captureViewportAnchor, preserveViewportAnchor]);
 
   useImperativeHandle(
     controlRef,
@@ -530,14 +450,8 @@ export function VirtualList<T>({
       {...paginationProps}
       endReached={onEndReached}
       initialTopMostItemIndex={initialTopMostItemIndex}
-      isScrolling={handleIsScrollingChange}
       itemContent={(_index, item) => (
-        <div
-          data-virtual-list-item-key={getKey(item)}
-          style={{ boxSizing: 'border-box', minWidth: 0, width: '100%' }}
-        >
-          {renderItem(item)}
-        </div>
+        <div style={{ boxSizing: 'border-box', minWidth: 0, width: '100%' }}>{renderItem(item)}</div>
       )}
       onScroll={measurePinned}
       rangeChanged={onRangeChange}

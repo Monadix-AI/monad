@@ -1,7 +1,31 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 
 /** Large base so the index stays positive as older rows are prepended. */
 const FIRST_ITEM_BASE = 1_000_000;
+
+export interface FirstItemIndexState {
+  firstId: string | null;
+  value: number;
+}
+
+export const initialFirstItemIndexState: FirstItemIndexState = {
+  firstId: null,
+  value: FIRST_ITEM_BASE
+};
+
+export function nextFirstItemIndexState<T>(
+  state: FirstItemIndexState,
+  items: T[],
+  getId: (item: T) => string
+): FirstItemIndexState {
+  const firstId = items[0] === undefined ? null : getId(items[0]);
+  if (firstId === state.firstId) return state;
+  const previousOffset = state.firstId === null ? -1 : items.findIndex((item) => getId(item) === state.firstId);
+  return {
+    firstId,
+    value: previousOffset > 0 ? state.value - previousOffset : previousOffset === -1 ? FIRST_ITEM_BASE : state.value
+  };
+}
 
 /**
  * Tracks Virtuoso's `firstItemIndex` for a reverse-infinite list. When older rows are prepended,
@@ -11,19 +35,10 @@ const FIRST_ITEM_BASE = 1_000_000;
  * when the anchor disappears (wholesale change, e.g. switching sessions).
  */
 export function useFirstItemIndex<T>(items: T[], getId: (item: T) => string): number {
-  const [firstItemIndex, setFirstItemIndex] = useState(FIRST_ITEM_BASE);
-  const prevFirstIdRef = useRef<string | null>(null);
-  const getIdRef = useRef(getId);
-  getIdRef.current = getId;
-  useLayoutEffect(() => {
-    const newFirst = items.length > 0 ? getIdRef.current(items[0] as T) : null;
-    const prevFirst = prevFirstIdRef.current;
-    if (prevFirst !== null && newFirst !== prevFirst) {
-      const idx = items.findIndex((item) => getIdRef.current(item) === prevFirst);
-      if (idx > 0) setFirstItemIndex((f) => f - idx);
-      else if (idx === -1) setFirstItemIndex(FIRST_ITEM_BASE);
-    }
-    prevFirstIdRef.current = newFirst;
-  }, [items]);
-  return firstItemIndex;
+  const firstId = items[0] === undefined ? null : getId(items[0]);
+  const [state, setState] = useState<FirstItemIndexState>({ firstId, value: FIRST_ITEM_BASE });
+  if (state.firstId === firstId) return state.value;
+  const next = nextFirstItemIndexState(state, items, getId);
+  setState(next);
+  return next.value;
 }
