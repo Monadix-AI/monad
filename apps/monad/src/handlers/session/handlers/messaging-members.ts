@@ -21,6 +21,7 @@ export interface ManagedExternalAgentProjectMember {
   runtimeAgentName: string;
   templateAgentName: string;
   displayName: string;
+  configuredDisplayName?: string;
   settings: Pick<
     WorkplaceProjectMemberSettings,
     | 'managedProjectAgent'
@@ -174,6 +175,7 @@ export function managedExternalAgentProjectMembers(
           runtimeAgentName: externalAgentProjectMemberRuntimeName(member),
           templateAgentName,
           displayName: externalAgentProjectMemberDisplayName(member),
+          configuredDisplayName: member.displayName,
           settings: {
             managedProjectAgent: true,
             ...(member.settings?.launchMode ? { launchMode: member.settings.launchMode } : {}),

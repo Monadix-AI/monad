@@ -86,7 +86,7 @@ export function createManagedExternalAgentDelivery(ctx: SessionContext) {
         : sender;
     if (!externalAgentHost || !session.cwd) return;
     for (const member of managedMembers) {
-      const { spec, runtimeAgentName, templateAgentName, displayName, settings } = member;
+      const { spec, runtimeAgentName, templateAgentName, displayName, configuredDisplayName, settings } = member;
       if (runtimeAgentName === exceptAgentName) continue;
       try {
         const notice = managedExternalAgentInboxNotice(member, text, resolvedSender);
@@ -149,7 +149,7 @@ export function createManagedExternalAgentDelivery(ctx: SessionContext) {
           spec,
           runtimeAgentName,
           templateAgentName,
-          displayName,
+          displayName: configuredDisplayName,
           reasoningEffort: settings.reasoningEffort,
           modelId: settings.modelId ?? settings.modelName,
           speed: settings.speed,
@@ -208,7 +208,7 @@ export function createManagedExternalAgentDelivery(ctx: SessionContext) {
       (candidate) => candidate.runtimeAgentName === targetName
     );
     if (!member) return;
-    const { spec, runtimeAgentName, templateAgentName, displayName, settings } = member;
+    const { spec, runtimeAgentName, templateAgentName, configuredDisplayName, settings } = member;
     if (!externalAgentHost || !session.cwd) return;
     try {
       const notice = managedExternalAgentDirectNotice({ member, fromAgentName, text });
@@ -243,7 +243,7 @@ export function createManagedExternalAgentDelivery(ctx: SessionContext) {
         spec,
         runtimeAgentName,
         templateAgentName,
-        displayName,
+        displayName: configuredDisplayName,
         reasoningEffort: settings.reasoningEffort,
         modelId: settings.modelId ?? settings.modelName,
         speed: settings.speed,

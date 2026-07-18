@@ -51,7 +51,7 @@ export function createManagedExternalAgentJoin(ctx: SessionContext) {
     member: ManagedExternalAgentProjectMember
   ): Promise<{ started: boolean; nativeSessionId?: string }> {
     if (!externalAgentHost || !paths || !session.cwd) return { started: false };
-    const { spec, runtimeAgentName, templateAgentName, displayName, settings } = member;
+    const { spec, runtimeAgentName, templateAgentName, displayName, configuredDisplayName, settings } = member;
     const managedSessions = externalAgentHost
       .list(session.id)
       .sessions.filter(
@@ -80,7 +80,7 @@ export function createManagedExternalAgentJoin(ctx: SessionContext) {
         spec,
         runtimeAgentName,
         templateAgentName,
-        displayName,
+        displayName: configuredDisplayName,
         modelName: settings.modelName ?? settings.modelId,
         modelId: settings.modelId,
         reasoningEffort: settings.reasoningEffort,
