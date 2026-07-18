@@ -311,6 +311,16 @@ export class SessionUiProjector {
     }
   }
 
+  hydrateExternalAgentLoginEvents(events: Event[]): void {
+    for (const event of events) {
+      const isLoginEvent =
+        event.type === 'external_agent.login_required' ||
+        event.type === 'external_agent.login_resolved' ||
+        (event.type === 'external_agent.connection_required' && event.payload.code === 'authentication_failed');
+      if (isLoginEvent) this.applyEvent(event);
+    }
+  }
+
   /** Insert `key` into the display order at the first position whose item sorts after `seq`
    *  (memory-summary markers are skipped — their seq is a message id, not a timestamp). */
   private insertOrdered(key: string, seq: string): void {

@@ -428,14 +428,15 @@ export function createLifecycleHandlers(ctx: SessionContext) {
           cliSessions.filter((s) => s.startedAt >= oldestTs && s.startedAt <= newestTs)
         );
       }
-      const snapshot = projector.snapshot();
-      const items = snapshot.kind === 'snapshot' ? snapshot.items : [];
       const oldest = messages.at(0)?.id;
       const newest = messages.at(-1)?.id;
       const hasOlder =
         oldest !== undefined && store.listMessages(id, { before: oldest, includeInactive, limit: 1 }).length > 0;
       const hasNewer =
         newest !== undefined && store.listMessages(id, { after: newest, includeInactive, limit: 1 }).length > 0;
+      if (!hasNewer) projector.hydrateExternalAgentLoginEvents(store.listEvents(id));
+      const snapshot = projector.snapshot();
+      const items = snapshot.kind === 'snapshot' ? snapshot.items : [];
       return {
         items,
         ...(hasOlder ? { olderCursor: oldest as `msg_${string}` } : {}),

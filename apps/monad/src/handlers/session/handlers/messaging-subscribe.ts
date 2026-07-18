@@ -72,6 +72,7 @@ export function createSubscribeHandlers(ctx: SessionContext) {
               s.startedAt >= oldestTs
           )
       );
+      next.hydrateExternalAgentLoginEvents(store.listEvents(sessionId));
       return { projector: next, hasMore: recent.length === LIVE_SNAPSHOT_LIMIT };
     };
     let { projector, hasMore } = hydrateProjector();
