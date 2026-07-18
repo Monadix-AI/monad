@@ -2,11 +2,13 @@
 
 ## Status
 
-Approved for implementation on 2026-07-18.
+Revised on 2026-07-18; pending written-spec review.
 
 ## Goal
 
-Make the provider's live or native-session history the only source of observation data. Monad may persist the mapping needed to locate that native session and may persist chat messages produced while processing contract events, but it must not persist provider raw events, observation contract events, or observation UI projections.
+Make the provider's live transport or native-session history the only source of observation data. Monad may persist the mapping needed to locate that native session and may persist chat messages produced while processing contract events. It must not durably persist provider raw events, observation contract events, or observation UI projections.
+
+While a native runtime is connected, Monad may use an ephemeral raw transport spool to bound memory without losing live frames. The spool is not a history source: it is deleted when that runtime disconnects, is never used after daemon restart, and cannot replace provider history backfill.
 
 ## Invariants
 
@@ -27,16 +29,19 @@ provider raw events (1..N)
 
 ## Data Flow
 
-While an agent is live, its bounded in-memory raw buffer feeds temporary contract events. Those events have two consumers:
+While an agent is live, its transport frames are appended to an ephemeral raw spool unless the adapter exposes authoritative active history containing transient events. A fixed-size decode window reads the selected live source and feeds temporary contract events. Those events have two consumers:
 
 1. The chat-record generator may produce normal persisted chat messages.
 2. The observation projector may produce ephemeral UI entries for users currently observing the agent.
 
 ```text
-provider live/history raw events
-  -> ephemeral contract events
-      -> chat-record generator -> persisted chat messages
-      -> ephemeral UI projection -> observation UI
+provider live frames -> ephemeral raw spool ---------> ephemeral contract events
+provider authoritative active history --------------> ephemeral contract events
+                                                       -> chat-record generator -> persisted chat messages
+                                                       -> ephemeral UI projection -> observation UI
+
+provider stopped-session history --------------------> ephemeral contract events
+                                                       -> ephemeral UI projection -> observation UI
 ```
 
 Persisted chat messages are an independent business record. They remain readable even when the provider-native session is gone, but they must never be used to reconstruct observation history.
@@ -83,9 +88,16 @@ Monad may persist:
 - chat messages and their normal business metadata;
 - runtime-control metadata unrelated to observation payloads.
 
-Monad must not persist:
+During one connected native-runtime epoch, Monad may temporarily write:
 
-- provider raw events or raw output snapshots;
+- the exact provider frames received from the live transport;
+- storage framing metadata such as byte ranges, source stream, and receive order, provided it cannot be projected as an event by itself.
+
+This temporary spool is transport buffering, not durable observation persistence. It must not survive the runtime epoch as an available data source.
+
+Monad must not durably persist or cache:
+
+- provider raw events or raw output snapshots outside the connected runtime epoch's spool;
 - decoded observation contract events;
 - neutral observation events;
 - UI observation events, cards, timeline entries, or merged thinking state;
@@ -93,19 +105,48 @@ Monad must not persist:
 
 The existing `external_agent_sessions.output_snapshot` persistence and `external_agent_observation_events` journal violate this boundary. Implementation removes their writes, reads, fallback behavior, and stored payloads. Existing persisted observation payloads are deleted rather than migrated.
 
-An in-memory live buffer remains allowed. It is bounded, belongs to the active runtime, is never flushed to SQLite, and is discarded when the live runtime ends.
+The spool must not use SQLite or another application database. It lives in a private runtime directory, is excluded from backups and indexes, and uses owner-only directory and file permissions. It does not require `fsync` because crash recovery from it is forbidden.
+
+Monad keeps only fixed-size in-memory state for decoding incomplete frames, indexing the current segment, and applying write backpressure. Neither the raw stream nor projected events may accumulate with session length.
+
+Each session and the daemon as a whole have hard spool quotas. Quota enforcement removes only complete raw frames or segments. Older observation may instead be read from provider history; when neither spool nor provider history contains it, Monad reports that observation range as unavailable rather than manufacturing a replacement event.
+
+On graceful stop, process exit, or transport disconnect, Monad closes and deletes the runtime epoch's spool synchronously. A daemon crash can leave files behind, but startup treats every pre-existing spool as stale and removes it asynchronously. Startup cleanup never exposes stale spool data to observation requests.
+
+## Provider History Capabilities
+
+History support is an explicit adapter capability rather than an assumption inferred from the presence of a JSONL file:
+
+```ts
+type ProviderHistoryCapability = {
+  stoppedRead: 'authoritative' | 'best-effort' | 'unsupported';
+  activeRead: 'authoritative' | 'best-effort' | 'unsupported';
+  includesTransientEvents: boolean;
+};
+```
+
+- `authoritative` means the provider documents a stable read contract and cursor semantics for that lifecycle state.
+- `best-effort` may be used for diagnostics or fallback projection, but it cannot justify deleting live spool data that has no authoritative provider copy.
+- `includesTransientEvents` is true only when active history can reproduce live-only deltas such as thinking-token updates and command-output fragments.
+
+Codex App Server currently supports reading stored active threads, but its turn and item pagination methods are experimental and persisted items do not replace live delta notifications. Claude Agent SDK `getSessionMessages` reconstructs a conversation chain rather than returning every raw transcript event; it cannot reproduce the complete observation stream. Direct Codex or Claude JSONL reads therefore remain provider-specific, best-effort readers unless the provider supplies a stronger contract.
+
+An adapter with authoritative active history that includes transient events may read the provider directly instead of creating a spool. This is an optimization of the live source, not a separate fallback source. All other adapters use the spool while connected.
 
 ## Live Observation
 
 For an active provider runtime:
 
 1. Read provider frames from the live transport.
-2. Keep only a bounded in-memory buffer needed to project the current live frame.
-3. Decode raw frames to provenance-bearing contract events.
-4. Generate persisted chat records when applicable.
-5. Generate ephemeral UI frames for active observation subscribers.
+2. If the adapter has authoritative active history including transient events, read observation pages from that provider interface. Otherwise append the exact frames to the runtime epoch's spool.
+3. Apply backpressure through a fixed-size write queue; never grow memory with output length.
+4. Decode raw frames to provenance-bearing contract events.
+5. Generate persisted chat records when applicable.
+6. Generate ephemeral UI frames for active observation subscribers.
 
-The live raw buffer is not a durable history source. A daemon restart must use the provider-native session mapping and provider history API to reconstruct observation.
+The live spool is not a durable history source. A daemon restart must discard stale spools and use the provider-native session mapping and provider history reader to reconstruct observation.
+
+Provider refresh reads may be used to serve settled or older ranges while the runtime is active. They do not replace spool frames until the adapter can prove that the provider copy is authoritative for those exact source events. Deduplication uses real provider identities such as UUIDs or item identifiers; Monad does not synthesize identity events.
 
 ## Stopped-Session Observation
 
@@ -130,7 +171,9 @@ The same rule applies to every adapter and daemon projector: metadata may help r
 
 A provider without structured envelopes may still support live observation. The adapter defines a stable frame boundary, and the exact original string frame becomes the raw provenance event. The contract projector may derive kind, text, and tool fields from it.
 
-If that provider cannot later read its native-session history, observation becomes unavailable after the live runtime ends. Monad does not persist the text frames to compensate.
+If that provider cannot later read its native-session history, observation becomes unavailable after the live runtime ends. Monad does not durably persist the text frames to compensate.
+
+While the runtime remains connected, those text frames may use the same ephemeral spool as structured providers. Disconnect still deletes them.
 
 ## Failure Semantics
 
@@ -148,6 +191,10 @@ Chat history remains available independently. Observation availability never con
 Implementation will:
 
 - stop flushing live output buffers to SQLite;
+- replace the session-length in-memory raw buffer with an ephemeral, segmented raw transport spool and fixed-size decode/write state;
+- add synchronous per-runtime spool deletion and asynchronous startup cleanup of stale spool files;
+- add per-session and global spool quotas plus write backpressure;
+- declare active and stopped history capabilities on provider adapters;
 - remove persisted output snapshots from external-agent session views and storage paths;
 - remove observation-journal inserts and reads;
 - remove journal and stored-snapshot history cursors;
@@ -172,8 +219,16 @@ Tests must prove:
 - stopped-session observation reads provider-native history on every request;
 - a deleted or unreadable provider-native session returns unavailable even when persisted chat messages exist;
 - daemon restart reconstruction uses only the native-session mapping and provider history;
+- stale spool files are deleted on startup and are never exposed to reconstruction;
+- graceful stop, process exit, and transport disconnect delete the matching runtime epoch's spool;
+- the live write queue and decoder remain within fixed memory bounds under arbitrarily long output;
+- per-session and global spool quotas cannot remove partial frames or create replacement events;
+- quota loss without provider coverage returns an unavailable range;
+- only an adapter with authoritative active history including transient events may skip the live spool;
+- Claude `getSessionMessages` is not treated as complete raw observation history;
+- direct JSONL readers are classified as best-effort unless backed by an explicit provider contract;
 - no runtime path writes raw snapshots, contract events, or UI events to SQLite;
 - the obsolete observation journal and stored snapshot data are removed by migration;
-- live observation continues to work from the bounded in-memory buffer.
+- live observation continues to work from the ephemeral spool with bounded memory.
 
 All affected provider adapters, TCP and Unix daemon transports, history pagination, and observation UI projections must retain equivalent behavior under this source-of-truth change.
