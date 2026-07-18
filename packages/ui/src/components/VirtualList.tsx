@@ -215,8 +215,10 @@ export function VirtualList<T>({
       const scroller = scrollerRef.current;
       if (!scroller || !isAtBottom(scroller, TRUE_BOTTOM_THRESHOLD)) {
         scrollToLast('auto');
-        bottomQuiescenceTimeoutRef.current = window.setTimeout(settle, BOTTOM_QUIESCENCE_MS);
-        return;
+        if (!scroller || !isAtBottom(scroller)) {
+          bottomQuiescenceTimeoutRef.current = window.setTimeout(settle, BOTTOM_QUIESCENCE_MS);
+          return;
+        }
       }
       bottomRequestRef.current = reduceBottomScrollRequest(bottomRequestRef.current, { type: 'stable-at-bottom' });
       clearBottomSettleTimeout();
@@ -358,7 +360,7 @@ export function VirtualList<T>({
         const scroller = scrollerRef.current;
         if (!scroller || !isAtBottom(scroller, TRUE_BOTTOM_THRESHOLD)) {
           pinToBottomSoon();
-          return;
+          if (!scroller || !isAtBottom(scroller)) return;
         }
         selfScrollRef.current = false;
         onAtBottomChange?.(true);

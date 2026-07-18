@@ -557,5 +557,50 @@ test.describe('workspace experience atoms', () => {
       .toBeLessThanOrEqual(1);
     // presence-ok: returning to the true bottom must hide the jump-to-latest control.
     await expect(jumpLatest).toBeHidden();
+
+    await page.mouse.wheel(0, -600);
+    await expect(jumpLatest).toBeVisible();
+    await scroll.evaluate((node) => {
+      const scroller = node as HTMLElement;
+      const descriptor = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollTop');
+      if (!descriptor?.get || !descriptor.set) throw new Error('scrollTop descriptor unavailable');
+      Object.defineProperty(scroller, 'scrollTop', {
+        configurable: true,
+        get: () => Math.max(0, (descriptor.get?.call(scroller) as number) - 2),
+        set: (value: number) => descriptor.set?.call(scroller, value)
+      });
+    });
+
+    await jumpLatest.click();
+    // presence-ok: a sub-threshold browser rounding residual must still complete bottom settlement.
+    await expect(jumpLatest).toBeHidden();
+    const roundedBottomIdle = await scroll.evaluate(
+      (node) =>
+        new Promise<{ eventCount: number; gap: number; movement: number }>((resolve) => {
+          const scroller = node as HTMLElement;
+          const positions: number[] = [];
+          let eventCount = 0;
+          let frameCount = 0;
+          const onScroll = () => {
+            eventCount += 1;
+          };
+          const sample = () => {
+            positions.push(scroller.scrollTop);
+            frameCount += 1;
+            if (frameCount < 60) requestAnimationFrame(sample);
+            else {
+              scroller.removeEventListener('scroll', onScroll);
+              resolve({
+                eventCount,
+                gap: scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop,
+                movement: Math.max(...positions) - Math.min(...positions)
+              });
+            }
+          };
+          scroller.addEventListener('scroll', onScroll);
+          requestAnimationFrame(sample);
+        })
+    );
+    expect(roundedBottomIdle).toEqual({ eventCount: 0, gap: 2, movement: 0 });
   });
 });
