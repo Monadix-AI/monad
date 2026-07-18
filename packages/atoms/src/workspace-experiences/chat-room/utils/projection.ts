@@ -6,6 +6,7 @@ import type {
   UIMessageItem,
   UIPart
 } from '@monad/protocol';
+import type { ProjectMember } from '../../experience/project-members.ts';
 import type {
   ActivityRow,
   ExternalAgentStreamView,
@@ -128,10 +129,6 @@ export function messageToView(
   };
 }
 
-function externalAgentSessionMessage(session: ExternalAgentSessionView): Message {
-  return externalAgentSessionMessageView(session, session.agentName);
-}
-
 function externalAgentAvatarUrl(
   displayName: string,
   externalAgentAvatarSeeds = new Map<string, string>(),
@@ -140,36 +137,76 @@ function externalAgentAvatarUrl(
   return entityAvatarUrl(externalAgentAvatarSeeds.get(displayName) ?? `external-agent:${displayName}`, avatarStyle);
 }
 
-function externalAgentSessionMessageView(
-  session: ExternalAgentSessionView,
+function externalAgentSystemActorView({
+  actorId,
+  actorName,
+  projectMembers,
+  externalAgentDisplayNames,
+  externalAgentAvatarSeeds,
+  externalAgentIcons,
+  externalAgentTags,
+  avatarStyle
+}: {
+  actorId: string;
+  actorName?: string;
+  projectMembers: readonly ProjectMember[];
+  externalAgentDisplayNames: Map<string, string>;
+  externalAgentAvatarSeeds: Map<string, string>;
+  externalAgentIcons: Map<string, Message['icon']>;
+  externalAgentTags: Map<string, string>;
+  avatarStyle?: AvatarStyle;
+}): Pick<Message, 'authorId' | 'authorName' | 'av' | 'icon' | 'avatarUrl' | 'tag' | 'agentChip'> {
+  const member = projectMembers.find((candidate) => candidate.type === 'external-agent' && candidate.id === actorId);
+  const displayName = externalAgentDisplayNames.get(actorId) ?? member?.displayName ?? actorName ?? actorId;
+  const avatarUrl = externalAgentAvatarUrl(displayName, externalAgentAvatarSeeds, avatarStyle);
+  const icon =
+    externalAgentIcons.get(actorId) ??
+    (member ? externalAgentIcons.get(member.name) : undefined) ??
+    iconForAgent(displayName);
+  const tag = externalAgentTags.get(actorId) ?? (member ? externalAgentTags.get(member.name) : undefined) ?? 'CLI';
+  return {
+    authorId: actorId,
+    authorName: displayName,
+    av: avatarForAgent(displayName),
+    icon,
+    avatarUrl,
+    tag,
+    agentChip: {
+      id: actorId,
+      name: displayName,
+      icon,
+      avatarUrl,
+      tag
+    }
+  };
+}
+
+function projectMemberJoinMessageView(
+  member: ProjectMember & { joinedAt: string },
   displayName: string,
+  externalAgentTags = new Map<string, string>(),
+  externalAgentIcons = new Map<string, Message['icon']>(),
   externalAgentAvatarSeeds = new Map<string, string>(),
   avatarStyle?: AvatarStyle
 ): Message {
-  const avatarUrl = externalAgentAvatarUrl(displayName, externalAgentAvatarSeeds, avatarStyle);
-  const text = session.state === 'failed' ? 'failed to join the project' : 'joined the project';
+  const actor = externalAgentSystemActorView({
+    actorId: member.id,
+    actorName: displayName,
+    projectMembers: [member],
+    externalAgentDisplayNames: new Map([[member.id, displayName]]),
+    externalAgentAvatarSeeds,
+    externalAgentIcons,
+    externalAgentTags,
+    avatarStyle
+  });
   return {
-    id: `external-agent-session:${session.id}`,
-    authorId: session.agentName,
-    authorName: displayName,
-    av: avatarForAgent(displayName),
-    icon: productIcon(session.productIcon),
-    avatarUrl,
+    id: `project-member-joined:${member.id}`,
+    ...actor,
     kind: 'system',
-    tag: externalAgentTag(session.provider),
-    time: fmtTime(session.startedAt),
-    text,
-    agentChip: {
-      id: session.agentName,
-      name: displayName,
-      icon: productIcon(session.productIcon),
-      avatarUrl,
-      tag: externalAgentTag(session.provider)
-    },
-    externalAgentSessionId: session.id,
+    time: fmtTime(member.joinedAt),
+    text: 'joined the project',
     streaming: false,
-    orderKey: session.startedAt,
-    ...(session.state === 'failed' ? { systemTone: 'error' as const } : {})
+    orderKey: member.joinedAt
   };
 }
 
@@ -261,18 +298,17 @@ function sortMessagesOldestFirst(messages: Message[]): Message[] {
 }
 
 function keepManagedExternalAgentRepliesAfterJoin(messages: Map<string, Message>): void {
-  const joinOrderByAgent = new Map<string, string>();
+  const joinByAgent = new Map<string, string>();
   for (const message of messages.values()) {
-    if (message.kind !== 'system' || !message.externalAgentSessionId || !message.orderKey) continue;
-    if (message.text !== 'joined the project' && message.text !== 'failed to join the project') continue;
-    const existing = joinOrderByAgent.get(message.authorId);
-    if (!existing || message.orderKey < existing) joinOrderByAgent.set(message.authorId, message.orderKey);
+    if (message.kind !== 'system' || !message.id.startsWith('project-member-joined:') || !message.orderKey) continue;
+    const existing = joinByAgent.get(message.authorId);
+    if (!existing || message.orderKey < existing) joinByAgent.set(message.authorId, message.orderKey);
   }
   for (const [id, message] of messages) {
     if (message.kind !== 'agent' || !message.orderKey) continue;
-    const joinOrder = joinOrderByAgent.get(message.authorId);
-    if (!joinOrder || message.orderKey > joinOrder) continue;
-    messages.set(id, { ...message, orderKey: `${joinOrder}:message:${message.orderKey}` });
+    const joinOrderKey = joinByAgent.get(message.authorId);
+    if (!joinOrderKey || message.orderKey > joinOrderKey) continue;
+    messages.set(id, { ...message, orderKey: `${joinOrderKey}:message:${message.orderKey}` });
   }
 }
 
@@ -374,6 +410,17 @@ function acpAgentNameFromTool(item: Extract<UIItem, { kind: 'tool' }>): string |
   return name || undefined;
 }
 
+function externalAgentSystemAgentName(id: string): string | undefined {
+  for (const prefix of [
+    'external-agent-resume-failed:',
+    'external-agent-idle-resumed:',
+    'external-agent-idle-suspended:'
+  ]) {
+    if (id.startsWith(prefix)) return id.slice(prefix.length).split(':')[0];
+  }
+  return undefined;
+}
+
 export function acpProgressText(output: string | undefined): string {
   const text = output?.trim() ?? '';
   if (!text || text === 'waiting for response...') return '';
@@ -388,6 +435,7 @@ export function acpProgressText(output: string | undefined): string {
 
 interface BuildProjectMessagesInput {
   persistedMessages: Message[];
+  projectMembers?: readonly ProjectMember[];
   externalAgentSessions: ExternalAgentSessionView[];
   liveItems: readonly UIItem[];
   liveTools: readonly Extract<UIItem, { kind: 'tool' }>[];
@@ -402,6 +450,7 @@ interface BuildProjectMessagesInput {
 
 export function buildProjectMessages({
   persistedMessages,
+  projectMembers = [],
   externalAgentSessions,
   liveItems,
   liveTools,
@@ -427,15 +476,24 @@ export function buildProjectMessages({
       avatarStyle
     );
   for (const view of persistedMessages) byId.set(view.id, view);
+  for (const member of projectMembers) {
+    if (member.type !== 'external-agent' || !member.joinedAt) continue;
+    const displayName = externalAgentDisplayNames.get(member.id) ?? member.displayName ?? member.name;
+    byId.set(
+      `project-member-joined:${member.id}`,
+      projectMemberJoinMessageView(
+        member as ProjectMember & { joinedAt: string },
+        displayName,
+        externalAgentTags,
+        externalAgentIcons,
+        externalAgentAvatarSeeds,
+        avatarStyle
+      )
+    );
+  }
   const currentExternalAgentSessions = currentExternalAgentSessionsByAgent(externalAgentSessions);
-  const currentExternalAgentNames = new Set(currentExternalAgentSessions.map((session) => session.agentName));
-  const projectedExternalAgentNames = new Set(currentExternalAgentNames);
   for (const session of currentExternalAgentSessions) {
     const displayName = externalAgentDisplayNames.get(session.agentName) ?? session.agentName;
-    byId.set(
-      `external-agent-session:${session.id}`,
-      externalAgentSessionMessageView(session, displayName, externalAgentAvatarSeeds, avatarStyle)
-    );
     for (const message of externalAgentSessionErrorMessages(
       session,
       displayName,
@@ -453,21 +511,39 @@ export function buildProjectMessages({
   }
   for (const item of liveItems) {
     if (item.kind === 'system') {
-      const externalAgentResumeAgent = item.id.startsWith('external-agent-resume-failed:')
-        ? item.id.slice('external-agent-resume-failed:'.length).split(':')[0]
-        : undefined;
-      const authorName = externalAgentResumeAgent || 'Monad';
+      if (item.event) {
+        byId.set(item.id, {
+          id: item.id,
+          ...externalAgentSystemActorView({
+            actorId: item.event.agentId,
+            actorName: item.event.agentName,
+            projectMembers,
+            externalAgentDisplayNames,
+            externalAgentAvatarSeeds,
+            externalAgentIcons,
+            externalAgentTags,
+            avatarStyle
+          }),
+          kind: 'system',
+          time: '',
+          text: item.text,
+          orderKey: item.seq
+        });
+        continue;
+      }
+      const externalAgentLifecycleAgent = externalAgentSystemAgentName(item.id);
+      const authorName = externalAgentLifecycleAgent || 'Monad';
       byId.set(item.id, {
         id: item.id,
         authorId: authorName,
         authorName,
         av: avatarForAgent(authorName),
         icon: iconForAgent(authorName),
-        avatarUrl: externalAgentResumeAgent
+        avatarUrl: externalAgentLifecycleAgent
           ? entityAvatarUrl(`external-agent-resume:${authorName}`, avatarStyle)
           : undefined,
         kind: 'system',
-        tag: externalAgentResumeAgent ? 'CLI' : 'SYS',
+        tag: externalAgentLifecycleAgent ? 'CLI' : 'SYS',
         time: '',
         text: item.text,
         orderKey: item.seq
@@ -510,40 +586,13 @@ export function buildProjectMessages({
     const input = item.input as { agent?: unknown; productIcon?: unknown; provider?: unknown } | undefined;
     if (typeof input?.agent !== 'string') continue;
     const displayName = externalAgentDisplayNames.get(input.agent) ?? input.agent;
-    const icon = productIcon(input.productIcon);
-    if (!projectedExternalAgentNames.has(input.agent)) {
-      projectedExternalAgentNames.add(input.agent);
-      const provider = typeof input.provider === 'string' ? input.provider : item.tool.slice('external-agent:'.length);
-      byId.set(`external-agent-session:${item.id}`, {
-        id: `external-agent-session:${item.id}`,
-        authorId: input.agent,
-        authorName: displayName,
-        av: avatarForAgent(displayName),
-        icon,
-        avatarUrl: externalAgentAvatarUrl(displayName, externalAgentAvatarSeeds, avatarStyle),
-        kind: 'system',
-        tag: externalAgentTag(provider),
-        time: '',
-        text: 'joined the project',
-        agentChip: {
-          id: input.agent,
-          name: displayName,
-          icon,
-          avatarUrl: externalAgentAvatarUrl(displayName, externalAgentAvatarSeeds, avatarStyle),
-          tag: externalAgentTag(provider)
-        },
-        externalAgentSessionId: item.id,
-        streaming: false,
-        orderKey: item.seq
-      });
-    }
     if (shouldShowDeveloperOnlyMessages && item.output) {
       byId.set(`external-agent-session-developer:${item.id}`, {
         id: `external-agent-session-developer:${item.id}`,
         authorId: input.agent,
         authorName: displayName,
         av: avatarForAgent(displayName),
-        icon,
+        icon: productIcon(input.productIcon),
         avatarUrl: externalAgentAvatarUrl(displayName, externalAgentAvatarSeeds, avatarStyle),
         kind: 'developer',
         tag: 'DEV',
@@ -571,7 +620,7 @@ export const __workplaceProjectMessageTest = {
   externalAgentFacingCommandPhase,
   externalAgentProductDisplayName,
   externalAgentSessionIsGenerating,
-  externalAgentSessionMessage,
+  projectMemberJoinMessageView,
   externalAgentSessionDeveloperMessage,
   parseProjectMembers,
   renameExternalAgentProjectMemberDisplayName,

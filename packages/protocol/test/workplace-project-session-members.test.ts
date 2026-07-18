@@ -33,10 +33,17 @@ test('a session member invited from a template carries the templateId link', () 
     templateId: 'tpl_codex_reviewer',
     type: 'external-agent',
     name: 'codex',
-    displayName: 'Codex'
+    displayName: 'Codex',
+    joinedAt: '2026-07-18T08:00:00.000Z'
   });
-  expect(member.templateId).toBe('tpl_codex_reviewer');
-  expect(member.externalAgentSessionId).toBeUndefined();
+  expect(member).toEqual({
+    id: 'pmem_codex_a',
+    templateId: 'tpl_codex_reviewer',
+    type: 'external-agent',
+    name: 'codex',
+    displayName: 'Codex',
+    joinedAt: '2026-07-18T08:00:00.000Z'
+  });
 });
 
 test('an ad-hoc spawned session member has no templateId', () => {

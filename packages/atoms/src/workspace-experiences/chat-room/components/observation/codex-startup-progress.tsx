@@ -45,7 +45,7 @@ export function collapseCodexMcpStartupUpdates(updates: readonly CodexMcpStartup
   return collapsed;
 }
 
-export function codexMcpStartupText(update: CodexMcpStartupUpdate): string {
+function codexMcpStartupText(update: CodexMcpStartupUpdate): string {
   const text = `MCP Server ${update.name} ${update.status}`;
   return update.error ? `${text}: ${update.error}` : text;
 }

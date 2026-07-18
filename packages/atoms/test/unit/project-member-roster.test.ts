@@ -22,7 +22,8 @@ test('active chat projects the session roster instead of newer project templates
           type: 'external-agent',
           name: 'claude-code',
           displayName: 'Fable',
-          settings: { modelId: 'fable' }
+          settings: { modelId: 'fable' },
+          joinedAt: '2026-07-18T08:00:00.000Z'
         }
       ]
     })
@@ -34,7 +35,8 @@ test('active chat projects the session roster instead of newer project templates
       templateName: 'claude-code',
       instanceId: 'pmem_fable',
       displayName: 'Fable',
-      settings: { modelId: 'fable' }
+      settings: { modelId: 'fable' },
+      joinedAt: '2026-07-18T08:00:00.000Z'
     }
   ]);
 });

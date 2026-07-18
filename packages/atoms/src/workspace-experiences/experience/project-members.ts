@@ -43,7 +43,8 @@ function parseSessionMembers(sessionMembers: readonly WorkplaceProjectSessionMem
     name: member.name,
     ...(member.type === 'external-agent' ? { templateName: member.name, instanceId: member.id } : {}),
     ...(member.displayName ? { displayName: member.displayName } : {}),
-    ...(member.settings ? { settings: member.settings } : {})
+    ...(member.settings ? { settings: member.settings } : {}),
+    ...(member.joinedAt ? { joinedAt: member.joinedAt } : {})
   }));
 }
 

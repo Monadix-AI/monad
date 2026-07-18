@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { agentObservationEventSchema } from '../agent-observation.ts';
-import { externalAgentSessionIdSchema, sessionIdSchema } from '../ids.ts';
+import { externalAgentSessionIdSchema, iso8601Schema, sessionIdSchema } from '../ids.ts';
 import {
   type ExternalAgentProvider,
   externalAgentAppServerTransportSchema,
@@ -191,7 +191,8 @@ export const workplaceProjectSessionMemberSchema = z.object({
   name: externalAgentNameSchema,
   displayName: externalAgentNameSchema.optional(),
   settings: workplaceProjectMemberSettingsSchema.optional(),
-  externalAgentSessionId: externalAgentSessionIdSchema.optional()
+  externalAgentSessionId: externalAgentSessionIdSchema.optional(),
+  joinedAt: iso8601Schema.optional()
 });
 export type WorkplaceProjectSessionMember = z.infer<typeof workplaceProjectSessionMemberSchema>;
 

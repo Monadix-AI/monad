@@ -47,7 +47,7 @@ export interface WorkspaceExperienceWorkdir {
   set: (path: string) => Promise<void>;
 }
 
-export type WorkspaceExperienceMember = WorkplaceProjectMemberView;
+export type WorkspaceExperienceMember = WorkplaceProjectMemberView & { joinedAt?: string };
 export type WorkspaceExperienceMemberType = WorkplaceProjectMemberType;
 export type WorkspaceExperienceMemberSettings = WorkplaceProjectMemberSettings;
 

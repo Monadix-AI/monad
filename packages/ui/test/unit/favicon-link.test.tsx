@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
@@ -40,6 +41,23 @@ test('FaviconLink centers the favicon and text in one inline row', () => {
   expect(markup).not.toContain('align-[-2px]');
 });
 
+test('FaviconLink keeps a fixed fallback icon when no favicon is available', () => {
+  const markup = renderToStaticMarkup(createElement(FaviconLink, { href: 'mailto:team@example.com' }, 'Email team'));
+
+  expect(markup).toContain('data-favicon-fallback="true"');
+  expect(markup).toContain('size-3.5');
+  expect(markup).toContain('<svg');
+  expect(markup).not.toContain('<img');
+});
+
+test('inline favicons are excluded from Markdown body image spacing', () => {
+  const markup = renderToStaticMarkup(createElement(FaviconLink, { href: 'https://example.com/docs' }, 'Example docs'));
+  const markdownRenderer = readFileSync(new URL('../../src/components/MarkdownRenderer.tsx', import.meta.url), 'utf8');
+
+  expect(markup).toContain('data-inline-favicon="true"');
+  expect(markdownRenderer).toContain('_img:not([data-inline-favicon])');
+});
+
 test('FaviconLink keeps the pointer cursor when the global interactive cursor is disabled', () => {
   const markup = renderToStaticMarkup(createElement(FaviconLink, { href: 'https://example.com/docs' }, 'Example docs'));
 
@@ -47,7 +65,7 @@ test('FaviconLink keeps the pointer cursor when the global interactive cursor is
   expect(markup).toContain('data-preserve-cursor="true"');
 });
 
-test('failed favicons are removed from layout', () => {
+test('failed favicon images are hidden to reveal the fallback icon', () => {
   const target = { hidden: false };
 
   hideFailedFavicon(target);

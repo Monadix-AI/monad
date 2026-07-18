@@ -653,7 +653,7 @@ test('agent observation matches external agent stream aliases for template-backe
   );
 });
 
-test('project messages bind an external agent member to the newest session for that project member', () => {
+test('project messages do not bind membership joins to runtime sessions', () => {
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
     externalAgentSessions: [
@@ -678,18 +678,22 @@ test('project messages bind an external agent member to the newest session for t
     externalAgentDisplayNames: new Map([['pmem_codex_one', 'Codex']])
   });
 
-  expect(
-    messages.find((message) => message.id === 'external-agent-session:exa_new000000000')?.externalAgentSessionId
-  ).toBe('exa_new000000000');
-  expect(messages.some((message) => message.id === 'external-agent-session:undefined')).toBe(false);
+  expect(messages).toEqual([]);
 });
 
-test('external agent live launch join message renders settled immediately and stays after the agent replies', () => {
-  // The tool.input payload for `external_agent.started` already carries the agent's display identity
-  // (name/icon/avatar), so the join notice never needs a "loading" placeholder — it renders with real
-  // content from the first live-tool frame, exactly like the REST-session-derived join view.
+test('external agent member join renders from the invitation and stays after the agent replies', () => {
   const pendingMessages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
+    projectMembers: [
+      {
+        id: 'pmem_codex_one',
+        type: 'external-agent',
+        name: 'codex',
+        instanceId: 'pmem_codex_one',
+        displayName: 'Codex',
+        joinedAt: '2026-07-06T08:59:00.000Z'
+      }
+    ],
     externalAgentSessions: [],
     liveItems: [],
     liveTools: [
@@ -705,10 +709,10 @@ test('external agent live launch join message renders settled immediately and st
     externalAgentDisplayNames: new Map([['pmem_codex_one', 'Codex']])
   });
 
-  const joinMessage = pendingMessages.find((message) => message.id === 'external-agent-session:exa_toollaunch01');
+  const joinMessage = pendingMessages.find((message) => message.id === 'project-member-joined:pmem_codex_one');
   expect(joinMessage).toEqual(
     expect.objectContaining({
-      id: 'external-agent-session:exa_toollaunch01',
+      id: 'project-member-joined:pmem_codex_one',
       kind: 'system',
       text: 'joined the project'
     })
@@ -717,6 +721,16 @@ test('external agent live launch join message renders settled immediately and st
 
   const mergedMessages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
+    projectMembers: [
+      {
+        id: 'pmem_codex_one',
+        type: 'external-agent',
+        name: 'codex',
+        instanceId: 'pmem_codex_one',
+        displayName: 'Codex',
+        joinedAt: '2026-07-06T08:59:00.000Z'
+      }
+    ],
     externalAgentSessions: [],
     liveItems: [
       {
@@ -744,13 +758,23 @@ test('external agent live launch join message renders settled immediately and st
     externalAgentDisplayNames: new Map([['pmem_codex_one', 'Codex']])
   });
 
-  expect(mergedMessages.some((message) => message.id === 'external-agent-session:exa_toollaunch01')).toBe(true);
+  expect(mergedMessages.some((message) => message.id === 'project-member-joined:pmem_codex_one')).toBe(true);
   expect(mergedMessages.find((message) => message.id === 'msg_externali36l')?.text).toBe('Ready.');
 });
 
-test('external agent session join history stays visible after agent content arrives', () => {
+test('external agent member join history stays visible after agent content arrives', () => {
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
+    projectMembers: [
+      {
+        id: 'pmem_codex_one',
+        type: 'external-agent',
+        name: 'codex',
+        instanceId: 'pmem_codex_one',
+        displayName: 'Codex',
+        joinedAt: '2026-07-06T08:59:00.000Z'
+      }
+    ],
     externalAgentSessions: [externalAgentSession({ agentName: 'pmem_codex_one', id: 'exa_history00000' })],
     liveItems: [
       {
@@ -769,7 +793,7 @@ test('external agent session join history stays visible after agent content arri
     externalAgentDisplayNames: new Map([['pmem_codex_one', 'Codex']])
   });
 
-  const joinMessage = messages.find((message) => message.id === 'external-agent-session:exa_history00000');
+  const joinMessage = messages.find((message) => message.id === 'project-member-joined:pmem_codex_one');
   expect(joinMessage).toEqual(
     expect.objectContaining({
       kind: 'system',

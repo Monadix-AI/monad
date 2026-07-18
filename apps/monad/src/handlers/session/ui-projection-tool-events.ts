@@ -143,6 +143,27 @@ export function applyToolEvent(m: ProjectionMutations, event: Event): SessionUiE
     }
     case 'external_agent.connection_required': {
       const p = parseEventPayload('external_agent.connection_required', event.payload);
+      if (p.code === 'authentication_failed') {
+        return [
+          {
+            kind: 'upsert',
+            cursor: event.id,
+            item: m.upsert({
+              kind: 'custom',
+              id: `external-agent-login-required:${p.agentName}`,
+              name: 'external_agent.login_required',
+              status: 'error',
+              data: {
+                ...(p.externalAgentSessionId ? { externalAgentSessionId: p.externalAgentSessionId } : {}),
+                agentName: p.agentName,
+                provider: p.provider,
+                reason: p.reason
+              },
+              seq: event.id
+            })
+          }
+        ];
+      }
       return [
         {
           kind: 'upsert',

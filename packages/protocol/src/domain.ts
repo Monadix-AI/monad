@@ -397,6 +397,8 @@ export const eventTypeSchema = z.enum([
   'external_agent.approval_requested',
   'external_agent.approval_resolved',
   'external_agent.resume_failed',
+  'external_agent.idle_resumed',
+  'external_agent.idle_suspended',
   'external_agent.exited',
   'external_agent.turn_settled',
   // Ephemeral login-nudge pair: published to the session bus only (never persisted), so the

@@ -46,6 +46,7 @@ function toWireMember(row: SessionMember): WorkplaceProjectSessionMember {
     name: data.name ?? row.memberId,
     ...(data.displayName ? { displayName: data.displayName } : {}),
     ...(data.settings ? { settings: data.settings } : {}),
+    joinedAt: row.createdAt,
     ...(row.externalAgentSessionId
       ? {
           externalAgentSessionId: row.externalAgentSessionId as WorkplaceProjectSessionMember['externalAgentSessionId']

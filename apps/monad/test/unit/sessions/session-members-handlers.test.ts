@@ -99,13 +99,16 @@ test('inviteSessionMember creates a session_members row from a project memberTem
     const { handlers } = buildHarness(store);
 
     const { member } = await handlers.inviteSessionMember({ sessionId: session.id, templateId: codexTemplate.id });
+    const stored = store.getSessionMember(session.id, codexTemplate.id);
+    if (!stored) throw new Error('expected stored session member');
 
-    expect(member).toMatchObject({
+    expect(member).toEqual({
       id: codexTemplate.id,
       templateId: codexTemplate.id,
       type: 'external-agent',
       name: 'codex',
-      displayName: 'Codex'
+      displayName: 'Codex',
+      joinedAt: stored.createdAt
     });
     expect(store.listSessionMembers(session.id)).toHaveLength(1);
   } finally {

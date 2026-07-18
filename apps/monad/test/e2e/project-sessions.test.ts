@@ -3,6 +3,8 @@
 // all-transports rule in AGENTS.md. Additive: does not touch the existing /workplace/projects/*
 // or /projects/:id/messages behavior, which stays untouched by this slice.
 
+import type { ListSessionMembersResponse } from '@monad/protocol';
+
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 
 import { createHttpTransport } from '#/transports/http.ts';
@@ -106,7 +108,10 @@ for (const kind of TRANSPORTS) {
 
       expect(update.status).toBe(200);
       expect(members.status).toBe(200);
-      expect(await members.json()).toEqual({
+      const memberBody = (await members.json()) as ListSessionMembersResponse;
+      const joinedAt = memberBody.members[0]?.joinedAt;
+      if (!joinedAt) throw new Error('expected session member invitation timestamp');
+      expect(memberBody).toEqual({
         members: [
           {
             id: 'pmem_opus',
@@ -114,7 +119,8 @@ for (const kind of TRANSPORTS) {
             type: 'external-agent',
             name: 'claude-code',
             displayName: 'Opus',
-            settings: { managedProjectAgent: true, modelId: 'opus' }
+            settings: { managedProjectAgent: true, modelId: 'opus' },
+            joinedAt
           }
         ]
       });

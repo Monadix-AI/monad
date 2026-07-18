@@ -600,22 +600,59 @@ test('Codex argument support probe extracts reasoning efforts from model catalog
   });
 });
 
-test('Codex adapter surfaces a reconnect prompt when a thread start/resume fails', () => {
+test('Codex adapter retries one transient thread-not-found response before requiring reconnect', async () => {
+  const sent: string[] = [];
+  let requestId = 5;
   const handle = {
     launchMode: 'app-server' as const,
-    pendingRequests: new Map<string | number, string>([[5, 'threadResume']]),
-    appServer: { send() {}, close() {} },
-    nextRequestId: () => 6,
+    pendingRequests: new Map<string | number, string>(),
+    appServer: {
+      send(frame: string) {
+        sent.push(frame);
+      },
+      close() {}
+    },
+    nextRequestId: () => requestId++,
     kill() {}
   };
-  // An error response to the resume request means the thread is gone (e.g. codex dropped it after a
-  // reconnect) → reconnect prompt, not a provider_error that leaves a dead session "running".
+  codexExternalAgentAdapter.initialize?.(handle, {
+    workingPath: '/Users/test/Projects/monad',
+    providerSessionRef: '019f6b1f-a60e-7d82-9dd0-3f6dfbc46e5a'
+  });
+  codexExternalAgentAdapter.parseOutput(JSON.stringify({ id: 5, result: {} }), handle);
+  sent.length = 0;
+
   expect(
     codexExternalAgentAdapter.parseOutput(
-      JSON.stringify({ id: 5, error: { code: 'ThreadNotFound', message: 'thread not found' } }),
+      JSON.stringify({ id: 6, error: { code: -32600, message: 'thread not found: 019f6b1f' } }),
       handle
     )
-  ).toEqual([{ type: 'connection_required', payload: { code: 'ThreadNotFound', reason: 'thread not found' } }]);
+  ).toEqual([]);
+  await Bun.sleep(150);
+  expect(sent.map((frame) => JSON.parse(frame))).toEqual([
+    {
+      id: 7,
+      method: 'thread/resume',
+      params: {
+        threadId: '019f6b1f-a60e-7d82-9dd0-3f6dfbc46e5a',
+        cwd: '/Users/test/Projects/monad',
+        excludeTurns: true,
+        initialTurnsPage: { limit: 20, sortDirection: 'desc', itemsView: 'summary' }
+      }
+    }
+  ]);
+
+  expect(
+    codexExternalAgentAdapter.parseOutput(
+      JSON.stringify({ id: 7, error: { code: -32600, message: 'thread not found: 019f6b1f' } }),
+      handle
+    )
+  ).toEqual([
+    {
+      type: 'connection_required',
+      payload: { reason: 'thread not found: 019f6b1f' }
+    }
+  ]);
 });
 
 test('external agent adapters expose provider argument support probes', () => {

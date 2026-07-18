@@ -27,7 +27,7 @@ const MARKDOWN_CLASSES = [
   '[&_table]:my-3 [&_table]:w-full [&_table]:border-collapse [&_table]:overflow-hidden [&_table]:rounded-md [&_table]:text-sm',
   '[&_th]:border [&_th]:bg-muted/40 [&_th]:px-2.5 [&_th]:py-1.5 [&_th]:text-left [&_th]:font-medium',
   '[&_td]:border [&_td]:px-2.5 [&_td]:py-1.5 [&_td]:align-top',
-  '[&_img]:my-3 [&_img]:max-h-[42vh] [&_img]:max-w-full [&_img]:rounded-md [&_img]:border [&_img]:object-contain'
+  '[&_img:not([data-inline-favicon])]:my-3 [&_img:not([data-inline-favicon])]:max-h-[42vh] [&_img:not([data-inline-favicon])]:max-w-full [&_img:not([data-inline-favicon])]:rounded-md [&_img:not([data-inline-favicon])]:border [&_img:not([data-inline-favicon])]:object-contain'
 ];
 
 const MARKDOWN_VARIANTS = {

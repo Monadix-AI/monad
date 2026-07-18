@@ -12,7 +12,7 @@ import {
   projectPublicObservationPair,
   renderPrivateObservationCard
 } from './adapters.ts';
-import { ObservationCardShell, type ObservationCollapseCommand, toolCallSummary } from './card-shell.tsx';
+import { ObservationCardShell, type ObservationCollapseCommand, rawJsonText, toolCallSummary } from './card-shell.tsx';
 import {
   CodexMcpStartupProgressCard,
   codexMcpStartupUpdate,
@@ -69,8 +69,14 @@ export type ObservationTimelineRow = {
   entries: ObservationTimelineEntry[];
 };
 
-export function observationItemIdentity(item: ObservationItem): string {
+function observationItemIdentity(item: ObservationItem): string {
   return item.dedupeKey ?? item.id;
+}
+
+function observationPairRaw(callRaw: unknown, resultRaw: unknown): unknown {
+  if (callRaw === undefined) return resultRaw;
+  if (resultRaw === undefined) return callRaw;
+  return rawJsonText(callRaw) === rawJsonText(resultRaw) ? callRaw : [callRaw, resultRaw];
 }
 
 export function observationTimelineEntries(
@@ -113,7 +119,7 @@ export function observationTimelineEntries(
         kind: 'public',
         card: projectPublicObservationPair(item, next, provider) ?? { type: 'tool-pair', call: item, result: next },
         timestamp: observationTimestampLabel(next),
-        raw: [item.raw, next.raw]
+        raw: observationPairRaw(item.raw, next.raw)
       });
       index += 1;
       continue;

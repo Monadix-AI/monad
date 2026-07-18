@@ -367,6 +367,19 @@ function parseCodexClientResponse(
 
   const error = recordValue(record.error);
   if (error) {
+    const isTransientThreadNotFound =
+      kind === 'threadResume' &&
+      (error.code === 'ThreadNotFound' ||
+        (typeof error.message === 'string' && /^thread not found(?::|$)/i.test(error.message)));
+    const retry = handle?.threadResumeRetry;
+    if (isTransientThreadNotFound && retry && retry.attempts < 1 && handle?.appServer) {
+      retry.attempts += 1;
+      const retryId = handle.nextRequestId?.() ?? Date.now();
+      handle.pendingRequests?.set(retryId, 'threadResume');
+      const retryFrame = jsonRpcRequest('thread/resume', retryId, retry.params);
+      setTimeout(() => handle.appServer?.send(retryFrame), 100);
+      return [];
+    }
     // A failed thread start/resume means the session has no live thread — including after a reconnect
     // where codex has since dropped the thread. Surface a reconnect prompt (which tears the session
     // down) rather than a provider_error that leaves it "running" over a thread that no longer exists.
@@ -409,7 +422,10 @@ function parseCodexClientResponse(
   // Dispatch by the recorded request kind when the per-session ledger is available; fall back to
   // result-shape sniffing for contexts with no ledger (unit tests, the one-shot CLI history probe).
   if (kind === 'historyPage') return codexHistoryPageEvent(record.id, result);
-  if (kind === 'thread' || kind === 'threadResume') return codexThreadRefEvent(record.id, result);
+  if (kind === 'thread' || kind === 'threadResume') {
+    if (handle) handle.threadResumeRetry = undefined;
+    return codexThreadRefEvent(record.id, result);
+  }
   if (kind === 'turn') return [];
   if (Array.isArray(result.data) && 'nextCursor' in result && 'backwardsCursor' in result) {
     return codexHistoryPageEvent(record.id, result);

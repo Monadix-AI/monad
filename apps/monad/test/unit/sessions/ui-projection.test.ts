@@ -1091,6 +1091,51 @@ test('projects login_required as an ephemeral custom card and removes it on logi
   );
 });
 
+test('projects persisted authentication failures as the removable login card', () => {
+  const projector = new SessionUiProjector();
+  const payload = {
+    externalAgentSessionId: 'exa_400000000001',
+    agentName: 'claude-code',
+    provider: 'claude-code',
+    code: 'authentication_failed',
+    reason: 'Not logged in · Please run /login',
+    reconnectIn: 'studio'
+  };
+
+  const connectionEvent = event('external_agent.connection_required', payload);
+  expect(projector.applyEvent(connectionEvent)).toEqual([
+    {
+      kind: 'upsert',
+      cursor: connectionEvent.id,
+      item: {
+        kind: 'custom',
+        id: 'external-agent-login-required:claude-code',
+        name: 'external_agent.login_required',
+        status: 'error',
+        data: {
+          externalAgentSessionId: payload.externalAgentSessionId,
+          agentName: payload.agentName,
+          provider: payload.provider,
+          reason: payload.reason
+        },
+        seq: connectionEvent.id
+      }
+    }
+  ]);
+
+  const resolvedEvent = event('external_agent.login_resolved', {
+    agentName: 'claude-code',
+    provider: 'claude-code'
+  });
+  expect(projector.applyEvent(resolvedEvent)).toEqual([
+    {
+      kind: 'remove',
+      cursor: resolvedEvent.id,
+      target: { kind: 'custom', id: 'external-agent-login-required:claude-code' }
+    }
+  ]);
+});
+
 test('projects external agent provider-owned approvals as distinct approval items', () => {
   const projector = new SessionUiProjector();
   const [approval] = projector.applyEvent(

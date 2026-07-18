@@ -19,8 +19,8 @@ export function initializeCodex(
   handle.pendingRequests?.set(initializeId, 'initialize');
   const modelParam = context.modelId ?? context.modelName;
   handle.pendingRequests?.set(threadId, context.providerSessionRef ? 'threadResume' : 'thread');
-  const threadFrame = context.providerSessionRef
-    ? jsonRpcRequest('thread/resume', threadId, {
+  const threadParams = context.providerSessionRef
+    ? {
         threadId: context.providerSessionRef,
         cwd: context.workingPath,
         ...(modelParam ? { model: modelParam } : {}),
@@ -28,13 +28,17 @@ export function initializeCodex(
         ...(context.developerInstructions ? { developerInstructions: context.developerInstructions } : {}),
         excludeTurns: true,
         initialTurnsPage: buildCodexInitialTurnsPage()
-      })
-    : jsonRpcRequest('thread/start', threadId, {
+      }
+    : {
         cwd: context.workingPath,
         ...(modelParam ? { model: modelParam } : {}),
         ...(context.reasoningEffort ? { modelReasoningEffort: context.reasoningEffort } : {}),
         ...(context.developerInstructions ? { developerInstructions: context.developerInstructions } : {})
-      });
+      };
+  const threadFrame = context.providerSessionRef
+    ? jsonRpcRequest('thread/resume', threadId, threadParams)
+    : jsonRpcRequest('thread/start', threadId, threadParams);
+  handle.threadResumeRetry = context.providerSessionRef ? { params: threadParams, attempts: 0 } : undefined;
   // Park the thread request until the initialize response arrives (see parseCodexClientResponse); send
   // only the handshake now. A handle with no by-id ledger (single-shot probes) can't route the
   // response back, so fall back to the original send-it-all ordering there.

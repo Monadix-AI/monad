@@ -260,6 +260,10 @@ export interface ExternalAgentRuntimeHandle {
    *  so the handshake is ordered per the protocol (requests before `initialized` are rejected). The
    *  adapter stashes it on init and flushes it when it dispatches the initialize response. */
   deferredThreadFrame?: string;
+  threadResumeRetry?: {
+    params: Record<string, unknown>;
+    attempts: number;
+  };
   /** app-server: id of the turn currently in flight, tracked from turn lifecycle notifications so the
    *  adapter can address `interrupt`/`steer` at it. Undefined between turns. */
   currentTurnId?: string;

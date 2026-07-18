@@ -295,14 +295,18 @@ function claudeMessageEvents(message: SDKMessage): ExternalAgentOutputEvent[] {
 // failure events (e.g. {"type":"assistant","error":"authentication_failed",...} when the session's
 // credentials expire mid-run), so auth failure is detected on the raw record before narrowing.
 function claudeAuthFailureEvent(record: Record<string, unknown>): ExternalAgentOutputEvent | undefined {
-  if (record.error !== 'authentication_failed') return undefined;
+  const resultText = typeof record.result === 'string' ? record.result.trim() : '';
+  const isErrorResult =
+    record.type === 'result' && record.is_error === true && /(?:not logged in|please run\s+\/login)/i.test(resultText);
+  if (record.error !== 'authentication_failed' && !isErrorResult) return undefined;
   const message = record.message as { content?: unknown } | undefined;
-  const text = Array.isArray(message?.content)
+  const messageText = Array.isArray(message?.content)
     ? message.content
         .map((block) => (block && typeof block === 'object' && 'text' in block ? String(block.text) : ''))
         .join('')
         .trim()
     : '';
+  const text = messageText || resultText;
   return {
     type: 'connection_required',
     payload: { code: 'authentication_failed', reason: text || 'Claude Code session is not signed in' }
@@ -311,6 +315,7 @@ function claudeAuthFailureEvent(record: Record<string, unknown>): ExternalAgentO
 
 function parseClaudeStreamJson(chunk: string): ExternalAgentOutputEvent[] {
   const events: ExternalAgentOutputEvent[] = [];
+  const authFailures = new Set<string>();
   for (const rawLine of chunk.split(/\r?\n/)) {
     const line = rawLine.trim();
     if (!line.startsWith('{')) continue;
@@ -318,7 +323,11 @@ function parseClaudeStreamJson(chunk: string): ExternalAgentOutputEvent[] {
     if (!record) continue;
     const authFailure = claudeAuthFailureEvent(record);
     if (authFailure) {
-      events.push(authFailure);
+      const key = `${String(authFailure.payload.code)}:${String(authFailure.payload.reason)}`;
+      if (!authFailures.has(key)) {
+        authFailures.add(key);
+        events.push(authFailure);
+      }
       continue;
     }
     if (typeof record.type === 'string') events.push(...claudeMessageEvents(record as SDKMessage));

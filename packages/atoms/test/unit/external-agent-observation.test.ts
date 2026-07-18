@@ -1207,7 +1207,7 @@ test('Codex observation keeps item ids stable when older records leave the snaps
 });
 
 test('Codex app-server observation projects completed MCP tool calls with arguments and result', () => {
-  const output = JSON.stringify({
+  const raw = {
     method: 'item/completed',
     params: {
       item: {
@@ -1229,7 +1229,8 @@ test('Codex app-server observation projects completed MCP tool calls with argume
         }
       }
     }
-  });
+  };
+  const output = JSON.stringify(raw);
 
   const items = externalAgentStreamItems({ id: 'exa_codex0000000', provider: 'codex', output });
 
@@ -1246,7 +1247,12 @@ test('Codex app-server observation projects completed MCP tool calls with argume
     }
   ]);
 
-  expect(renderTimeline(items).map((entry) => entry.card?.type)).toEqual(['command-tool']);
+  expect(
+    renderTimeline(items).map((entry) => ({
+      type: entry.card?.type,
+      raw: entry.raw
+    }))
+  ).toEqual([{ type: 'command-tool', raw }]);
 });
 
 test('Codex app-server observation projects turns page responses', () => {

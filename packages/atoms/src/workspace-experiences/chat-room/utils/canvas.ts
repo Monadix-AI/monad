@@ -94,6 +94,7 @@ export function toChatRoomCanvas(
     );
   const messages = buildProjectMessages({
     persistedMessages,
+    projectMembers: c.projectMembers,
     externalAgentSessions: source.externalAgentSessions,
     liveItems,
     liveTools,
