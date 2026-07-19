@@ -5,7 +5,6 @@
 import type { ChannelInstanceConfig, MonadAuth, MonadConfig } from '@monad/environment';
 import type {
   AgentId,
-  AgentMessagePayload,
   ChannelId,
   ChannelInbound,
   ChannelPairingRequest,
@@ -335,14 +334,15 @@ export class ChannelService {
       t: this.channelT,
       renderMode: this.getRenderMode(c.id, key)
     });
-    let finalMessage: AgentMessagePayload | undefined;
+    let finalMessageText: string | undefined;
     try {
       await this.deps.session.sendInline(
         { sessionId, text: m.text },
         (event) => {
           renderer.consume(event);
-          if (event.type === 'agent.message') {
-            finalMessage = parseEventPayload('agent.message', event.payload);
+          if (event.type === 'session.message.completed') {
+            const { message } = parseEventPayload('session.message.completed', event.payload);
+            if (message.role === 'assistant') finalMessageText = message.text;
           }
         },
         { transport: 'channel' }
@@ -351,7 +351,7 @@ export class ChannelService {
     } finally {
       this.activeDispatches.delete(sessionId);
     }
-    const displayText = finalMessage?.text ? channelDisplayText(finalMessage.text) : undefined;
+    const displayText = finalMessageText ? channelDisplayText(finalMessageText) : undefined;
     return displayText;
   }
 

@@ -4,7 +4,7 @@
 
 import type { ChatMessage, MessageType, Session, SessionState, StreamStatus, WorkplaceProject } from '@monad/protocol';
 
-import { sessionOriginSchema } from '@monad/protocol';
+import { sessionOriginSchema, transcriptTargetIdSchema } from '@monad/protocol';
 
 import { messages, sessions, workplaceProjects } from './schema.ts';
 import { parseSessionModelSelection } from './session-model-selection.ts';
@@ -124,14 +124,12 @@ export function rowToWorkplaceProject(row: WorkplaceProjectRow): WorkplaceProjec
 
 export function rowToMessage(row: MessageRow): ChatMessage {
   const status = row.streamStatus as StreamStatus;
-  const sessionId = row.transcriptTargetId as ChatMessage['sessionId'];
+  const sessionId = transcriptTargetIdSchema.parse(row.transcriptTargetId);
   const messageId = row.id as ChatMessage['id'];
   const type = row.type as MessageType;
-  // `source` is not persisted; reconstruct it for live rows so a UI can subscribe. The assistant's
-  // prose turn streams over the default `agent.token` channel (undefined); any other generative
-  // message (a card, an atom type) streams over `message:<id>` (the convention its producer sets).
+  // `source` is not persisted; reconstruct it for live rows so a client can open the message-scoped
+  // generation subscription.
   const live = status === 'pending' || status === 'streaming';
-  const prose = row.role === 'assistant' && (type === 'text' || type === 'markdown');
   return {
     id: messageId,
     sessionId,
@@ -141,7 +139,7 @@ export function rowToMessage(row: MessageRow): ChatMessage {
     data: row.data != null ? (JSON.parse(row.data) as unknown) : undefined,
     stream: {
       status,
-      source: live ? { sessionId, messageId, channel: prose ? undefined : `message:${messageId}` } : undefined
+      source: live ? { transcriptTargetId: sessionId, messageId } : undefined
     },
     active: row.active === 1,
     ...(row.includeInContext != null ? { includeInContext: row.includeInContext === 1 } : {}),

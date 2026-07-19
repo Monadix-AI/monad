@@ -30,9 +30,9 @@ P0 rename ─┬─► P1 schema ─► P2 adapter-decode ─► P3 split-stream
 
 ### P5a — Monad built-in agent (this branch)
 
-- **What:** the daemon's own agent-loop turn (`user.message` / `agent.token` / `agent.reasoning` /
-  `agent.message` / `agent.error` / `tool.called` / `tool.progress` / `tool.result`, plus the
-  publish-only `session.stream_started`/`session.stream_ended` turn-boundary markers) is now mapped to
+- **What:** the daemon's own agent-loop turn (`session.message.created` /
+  `session.message.delta.appended` / `session.message.completed` / `session.message.failed` /
+  `tool.called` / `tool.progress` / `tool.result`, plus the `session.run.*` turn boundaries) is mapped to
   the neutral `AgentObservationEvent` plane, the same one external-agent adapters already emit. No new
   raw decode was needed — Monad's own domain `Event`s are already structured, so this is a field reshape
   (`toAgentObservationEvent` in `apps/monad/src/agent/observation.ts`), not a parser, confirming the
@@ -50,7 +50,7 @@ P0 rename ─┬─► P1 schema ─► P2 adapter-decode ─► P3 split-stream
   `createSessionMemberObservationHandlers` (`apps/Monad/src/handlers/session/handlers/
   session-member-observation.ts`) and a new `SessionMemberUiObservationFrame` schema in
   `@monad/protocol`. The GET snapshot merges persisted history (`store.listEvents`) with the active
-  round's un-persisted tail (`RoundCache`, since `agent.token`/`agent.reasoning` are bus-only); the SSE
+  round's un-persisted tail (`RoundCache`, since message deltas are bus-only); the SSE
   stream layers a `bus.subscribe` filter+map on top, so a `history`-state member can still start streaming
   once a fresh turn begins (unlike the external-agent SSE, which force-closes on any non-`live` frame).
 - **Explicitly not built:** observation-card rendering for these events (separate, already-deferred task)

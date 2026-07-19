@@ -11,7 +11,7 @@ import {
   useListExternalAgentSessionsQuery,
   useSendMessageMutation,
   useSendProjectMessageMutation,
-  useStreamSessionQuery
+  useStreamUiItemsQuery
 } from '@monad/client-rtk';
 import { Box, Text, useApp, useInput, usePaste, useWindowSize } from 'ink';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -31,6 +31,7 @@ import {
   shouldShowProjection,
   transcriptOffsetAfterWheel
 } from '../shell/layout-model.ts';
+import { projectUiItems } from '../shell/stream-model.ts';
 import { enqueueFollowUp, safeErrorMessage } from '../shell/view-model.ts';
 import { addUserMessage, finishTurn, switchSession } from '../store/server.ts';
 import { ContextNudgeLine, MemorySuggestionPrompt } from './ContextNotices.tsx';
@@ -92,16 +93,16 @@ export function Layout({
   const externalAgentSessionsQuery = useListExternalAgentSessionsQuery(currentSessionId ?? ('' as SessionId), {
     skip: mode !== 'wide' || !chatOpen || currentSessionId === null
   });
-  // selectFromResult narrows the subscription: without it every streamed token (which mutates the
-  // stream cache's messages) would re-render the whole Layout tree. Immer structurally shares the
-  // untouched slices, so these refs only change when a notice/suggestion/usage event lands.
-  const contextStream = useStreamSessionQuery(currentSessionId ?? ('' as SessionId), {
+  const contextStream = useStreamUiItemsQuery(currentSessionId ?? ('' as SessionId), {
     skip: currentSessionId === null,
-    selectFromResult: ({ data }) => ({
-      contextNotices: data?.contextNotices,
-      latestSuggestion: data?.memorySuggestion,
-      usage: data?.usage
-    })
+    selectFromResult: ({ data }) => {
+      const projected = projectUiItems(data?.items ?? []);
+      return {
+        handoffText: projected.handoffText,
+        latestSuggestion: projected.memorySuggestion,
+        usage: projected.usage
+      };
+    }
   });
   const [handledSuggestionId, setHandledSuggestionId] = useState<string | null>(null);
   const memorySuggestion = chatOpen
@@ -532,10 +533,7 @@ export function Layout({
               suggestion={memorySuggestion}
             />
           ) : (
-            <ContextNudgeLine
-              notices={contextStream.contextNotices}
-              usage={contextStream.usage}
-            />
+            <ContextNudgeLine text={contextStream.handoffText} />
           )}
           <ShellComposer
             active={composerActive}

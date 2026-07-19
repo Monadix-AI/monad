@@ -13,6 +13,7 @@ import {
   executeCommand,
   type SessionNavigator
 } from '#/handlers/commands/index.ts';
+import { createMessageIngress } from '#/services/messages/ingress.ts';
 
 const CHANNEL_BLOCKED_COMMANDS = new Set(['workdir']);
 
@@ -73,7 +74,7 @@ export async function runCommand(
     host.setRenderMode(c.id, key, result.effect.mode);
   }
 
-  // Render the directive reply to IM (renderer turns the agent.message event into adapter.send),
+  // Render the directive reply to IM from the canonical message lifecycle,
   // and publish to the bus so cross-client viewers see the same turn.
   const renderer = createRenderer({
     adapter: inst.adapter,
@@ -83,12 +84,9 @@ export async function runCommand(
     t: host.channelT,
     renderMode: host.getRenderMode(c.id, key)
   });
-  emitCommandTurn(
-    host.deps.store,
-    (e) => {
-      host.deps.bus.publish(e);
-      renderer.consume(e);
-    },
+  await emitCommandTurn(
+    host.deps.messageIngress ?? createMessageIngress({ store: host.deps.store, bus: host.deps.bus }),
+    (event) => renderer.consume(event),
     sessionId,
     text,
     result

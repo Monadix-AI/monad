@@ -2,6 +2,7 @@ import type { MonadPaths } from '@monad/environment';
 import type {
   DeveloperLogRecord,
   ExternalAgentAuthSessionView,
+  ExternalAgentRawFrame,
   ExternalAgentSessionView,
   SessionId,
   SessionUiEvent
@@ -218,6 +219,27 @@ async function waitFor<T>(fn: () => T | undefined | Promise<T | undefined>, time
     await Bun.sleep(25);
   }
   throw new Error('timed out waiting for condition');
+}
+
+async function waitForRawOutput(
+  handlers: ReturnType<typeof buildHandlers>,
+  sessionId: SessionId,
+  externalAgentSessionId: string,
+  needles: readonly string[]
+): Promise<ExternalAgentRawFrame[]> {
+  return waitFor(() => {
+    const subscription = handlers.externalAgent.subscribeRawObservation({
+      id: externalAgentSessionId,
+      transcriptTargetId: sessionId,
+      onFrame: () => {},
+      onDone: () => {}
+    });
+    subscription.dispose();
+    const text = subscription.frames
+      .map((frame) => (typeof frame.data === 'string' ? frame.data : JSON.stringify(frame.data)))
+      .join('\n');
+    return needles.every((needle) => text.includes(needle)) ? subscription.frames : undefined;
+  });
 }
 
 async function createSession(call: Call, cwd: string): Promise<SessionId> {
@@ -533,10 +555,7 @@ async function runRuntime(call: Call, projectDir: string, handlers: ReturnType<t
     nativeSession.id
   );
 
-  await waitFor(() => {
-    const row = handlers.store.getExternalAgentSession(nativeSession.id);
-    return row?.outputSnapshot.includes('ready') ? row : undefined;
-  });
+  await waitForRawOutput(handlers, sessionId, nativeSession.id, ['ready']);
 
   res = await call(
     'GET',
@@ -546,11 +565,9 @@ async function runRuntime(call: Call, projectDir: string, handlers: ReturnType<t
   const uiFrame = (await res.json()) as {
     state: string;
     seq?: number;
-    historyBefore?: string;
     events: Array<{ kind: string; role?: unknown }>;
   };
   expect(uiFrame.state).toBe('live');
-  expect(uiFrame.historyBefore).toBe('journal:');
   expect(typeof uiFrame.seq).toBe('number');
   expect(Array.isArray(uiFrame.events)).toBe(true);
   // The neutral plane emits `kind`-tagged events and never leaks the legacy `role`/providerEventType.
@@ -563,10 +580,7 @@ async function runRuntime(call: Call, projectDir: string, handlers: ReturnType<t
     input: 'hello\n'
   });
   expect(res.status).toBe(200);
-  await waitFor(() => {
-    const row = handlers.store.getExternalAgentSession(nativeSession.id);
-    return row?.outputSnapshot.includes('echo:hello') ? row : undefined;
-  });
+  await waitForRawOutput(handlers, sessionId, nativeSession.id, ['echo:hello']);
 
   res = await call('POST', `/v1/external-agent-sessions/${nativeSession.id}/resize?transcriptTargetId=${sessionId}`, {
     cols: 120,
@@ -609,10 +623,7 @@ async function runInterruptSteerRuntime(
   handlers: ReturnType<typeof buildHandlers>
 ): Promise<void> {
   const { sessionId, nativeSession } = await startMockExternalAgentSession(call, projectDir);
-  await waitFor(() => {
-    const row = handlers.store.getExternalAgentSession(nativeSession.id);
-    return row?.outputSnapshot.includes('ready') ? row : undefined;
-  });
+  await waitForRawOutput(handlers, sessionId, nativeSession.id, ['ready']);
 
   // steer is app-server-only; a pty/json-stream provider has no steer hook, so the route exists
   // (not 404) but rejects the request rather than silently succeeding.
@@ -644,10 +655,7 @@ async function runSessionResetStopsExternalAgentRuntime(
   handlers: ReturnType<typeof buildHandlers>
 ): Promise<void> {
   const { sessionId, nativeSession } = await startMockExternalAgentSession(call, projectDir);
-  await waitFor(() => {
-    const row = handlers.store.getExternalAgentSession(nativeSession.id);
-    return row?.outputSnapshot.includes('ready') ? row : undefined;
-  });
+  await waitForRawOutput(handlers, sessionId, nativeSession.id, ['ready']);
 
   const reset = await call('POST', `/v1/sessions/${sessionId}/reset`);
   expect(reset.status).toBe(200);
@@ -670,10 +678,7 @@ async function runSessionDeleteStopsExternalAgentRuntime(
   handlers: ReturnType<typeof buildHandlers>
 ): Promise<void> {
   const { sessionId, nativeSession } = await startMockExternalAgentSession(call, projectDir);
-  await waitFor(() => {
-    const row = handlers.store.getExternalAgentSession(nativeSession.id);
-    return row?.outputSnapshot.includes('ready') ? row : undefined;
-  });
+  await waitForRawOutput(handlers, sessionId, nativeSession.id, ['ready']);
 
   const deleted = await call('DELETE', `/v1/sessions/${sessionId}`);
   expect(deleted.status).toBe(200);
@@ -743,25 +748,20 @@ async function runJsonStreamRuntime(
   expect(nativeSession.provider).toBe('claude-code');
   expect(nativeSession.launchMode).toBe('json-stream');
 
-  await waitFor(() => {
-    const row = handlers.store.getExternalAgentSession(nativeSession.id);
-    return row?.providerSessionRef === 'claude-session-1' &&
-      row.outputSnapshot.includes('ready-json') &&
-      row.outputSnapshot.includes('stderr-json')
-      ? row
-      : undefined;
-  });
+  await waitFor(() =>
+    handlers.store.getExternalAgentSession(nativeSession.id)?.providerSessionRef === 'claude-session-1'
+      ? true
+      : undefined
+  );
+  await waitForRawOutput(handlers, sessionId, nativeSession.id, ['ready-json', 'stderr-json']);
 
-  // external_agent.output chunks are delivered live and captured in the bounded output snapshot, but are
-  // NOT persisted as durable event rows (one row per chunk would grow the log without bound). The
-  // milestone events (started/exited) stay durable.
+  // Live output stays in the epoch-scoped raw plane (asserted above), never in durable domain-event rows.
+  // The milestone events (started/exited) stay durable.
   let events = handlers.store.listEvents(sessionId);
-  expect(events.some((event) => event.type === 'external_agent.output')).toBe(false);
   expect(events.some((event) => event.type === 'external_agent.started')).toBe(true);
 
-  // A fresh UI subscription rebuilds the external agent tool card from the durable snapshot, so the
-  // terminal output survives a page refresh even though the per-chunk events aren't persisted. The
-  // snapshot is delivered synchronously during subscribe, so it is captured by the time await resolves.
+  // A fresh UI subscription rebuilds the external-agent lifecycle card. Provider output remains in the
+  // separate observation plane, so the session UI snapshot carries status rather than raw chunks.
   let hydrated: SessionUiEvent | undefined;
   const sub = await handlers.session.subscribeUi({ sessionId }, (event) => {
     if (!hydrated && event.kind === 'snapshot') hydrated = event;
@@ -770,9 +770,10 @@ async function runJsonStreamRuntime(
   if (hydrated?.kind !== 'snapshot') throw new Error('expected hydrated snapshot');
   const card = hydrated.items.find((item) => item.kind === 'tool' && item.id === nativeSession.id);
   if (card?.kind !== 'tool') throw new Error('expected external agent tool card in hydrated snapshot');
-  expect(card.tool).toBe('external-agent:claude-code');
-  expect(card.output).toContain('ready-json');
-  expect(card.output).toContain('stderr-json');
+  expect({ tool: card.tool, status: card.status }).toEqual({
+    tool: 'external-agent:claude-code',
+    status: 'ok'
+  });
   await waitFor(() => (logs.seen.some((record) => record.event === 'external_agent.launch') ? true : undefined));
 
   const input = await call(
@@ -781,38 +782,8 @@ async function runJsonStreamRuntime(
     { input: 'hello-json' }
   );
   expect(input.status).toBe(200);
-  await waitFor(() => {
-    const row = handlers.store.getExternalAgentSession(nativeSession.id);
-    return row?.outputSnapshot.includes('echo-json:hello-json') ? row : undefined;
-  });
+  await waitForRawOutput(handlers, sessionId, nativeSession.id, ['echo-json:hello-json']);
   await waitFor(() => (logs.seen.some((record) => record.event === 'external_agent.input') ? true : undefined));
-
-  const history = await call(
-    'GET',
-    `/v1/external-agent-sessions/${nativeSession.id}/history-page?transcriptTargetId=${sessionId}&limit=1`
-  );
-  expect(history.status).toBe(200);
-  const historyBody = (await history.json()) as {
-    events: Array<{ projection?: string; text: string; dedupeKey?: string }>;
-    nextCursor?: string;
-  };
-  expect({
-    events: historyBody.events.map((event) => ({
-      projection: event.projection,
-      text: event.text,
-      dedupeKey: event.dedupeKey
-    })),
-    nextCursor: historyBody.nextCursor
-  }).toEqual({
-    events: [
-      {
-        projection: 'normalized',
-        text: 'echo-json:hello-json',
-        dedupeKey: 'claude-code:c8b65d2d'
-      }
-    ],
-    nextCursor: undefined
-  });
 
   const stop = await call(
     'POST',
@@ -1046,9 +1017,15 @@ async function runCodexOversizedStructuredLineRuntime(
       )
       ? row
       : undefined;
-  });
-  const row = handlers.store.getExternalAgentSession(nativeSession.id);
-  expect(row?.outputSnapshot.length).toBeLessThanOrEqual(256 * 1024);
+  }, 5_000);
+  const rawFrames = await waitForRawOutput(handlers, sessionId, nativeSession.id, ['req_after_huge']);
+  expect(
+    rawFrames.reduce(
+      (bytes, frame) =>
+        bytes + (typeof frame.data === 'string' ? frame.data.length : JSON.stringify(frame.data).length),
+      0
+    )
+  ).toBeGreaterThan(3 * 1024 * 1024);
 
   await call('POST', `/v1/external-agent-sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`);
 }
@@ -1235,52 +1212,34 @@ async function runCodexHistoryPageRuntime(
 
   const page = await call(
     'GET',
-    `/v1/external-agent-sessions/${nativeSession.id}/history-page?transcriptTargetId=${sessionId}&limit=1&itemsView=summary&sortDirection=desc`
+    `/v1/external-agent-sessions/${nativeSession.id}/history/raw?transcriptTargetId=${sessionId}&limit=1&sortDirection=desc`
   );
   expect(page.status).toBe(200);
   const pageBody = (await page.json()) as {
-    events: Array<{ role: string; text: string; source: string; providerEventType: string; raw: unknown }>;
+    coverage: string;
+    records: Array<{ data: unknown }>;
     nextCursor: string;
   };
-  expect(pageBody.nextCursor).toBe('provider:next_cursor');
-  // Server-normalized cards: the daemon already knows this session's provider and normalizes with
-  // the same adapter used for parseOutput/historyPageOutput — see storedOutputHistoryPage. No
-  // separate raw-items array: each event's `raw` carries its source record.
-  expect(
-    pageBody.events.map(({ role, text, source, providerEventType, raw }) => ({
-      role,
-      text,
-      source,
-      providerEventType,
-      raw
-    }))
-  ).toEqual([
-    {
-      role: 'system',
-      text: 'turn/started',
-      source: 'codex-app-server',
-      providerEventType: 'turn/started',
-      raw: { method: 'turn/started', params: { threadId: 'codex-thread-1', turnId: 'turn_1' } }
-    },
-    {
-      role: 'system',
-      text: 'turn/completed',
-      source: 'codex-app-server',
-      providerEventType: 'turn/completed',
-      raw: { method: 'turn/completed', params: { threadId: 'codex-thread-1', turnId: 'turn_1' } }
-    }
-  ]);
+  expect({
+    coverage: pageBody.coverage,
+    records: pageBody.records.map((record) => record.data),
+    nextCursor: pageBody.nextCursor
+  }).toEqual({
+    coverage: 'exact',
+    records: [{ id: 'turn_1', items: [] }],
+    nextCursor: 'next_cursor'
+  });
 
   const secondPage = await call(
     'GET',
-    `/v1/external-agent-sessions/${nativeSession.id}/history-page?transcriptTargetId=${sessionId}&limit=1&itemsView=summary&sortDirection=desc&before=${encodeURIComponent(pageBody.nextCursor)}`
+    `/v1/external-agent-sessions/${nativeSession.id}/history/raw?transcriptTargetId=${sessionId}&limit=1&sortDirection=desc&before=${encodeURIComponent(pageBody.nextCursor)}`
   );
   expect(secondPage.status).toBe(200);
-  expect(((await secondPage.json()) as { nextCursor?: string }).nextCursor).toBe('provider:next_cursor');
+  expect(((await secondPage.json()) as { nextCursor?: string }).nextCursor).toBe('next_cursor');
 
   const badCursorPage = await call(
     'GET',
-    `/v1/external-agent-sessions/${nativeSession.id}/history-page?transcriptTargetId=${sessionId}&limit=1&itemsView=summary&sortDirection=desc&before=${encodeURIComponent('provider:bogus')}`
+    `/v1/external-agent-sessions/${nativeSession.id}/history/raw?transcriptTargetId=${sessionId}&limit=1&sortDirection=desc&before=${encodeURIComponent('bogus')}`
   );
   expect(badCursorPage.status).toBe(502);
   const badCursorBody = (await badCursorPage.json()) as { error: string; code: string };
@@ -1290,13 +1249,34 @@ async function runCodexHistoryPageRuntime(
   await call('POST', `/v1/external-agent-sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`);
   const stoppedPage = await call(
     'GET',
-    `/v1/external-agent-sessions/${nativeSession.id}/history-page?transcriptTargetId=${sessionId}&limit=1&itemsView=summary&sortDirection=desc&before=${encodeURIComponent('provider:next_cursor')}`
+    `/v1/external-agent-sessions/${nativeSession.id}/history/raw?transcriptTargetId=${sessionId}&limit=1&sortDirection=desc&before=${encodeURIComponent('next_cursor')}`
   );
   expect(stoppedPage.status).toBe(200);
-  const stoppedBody = (await stoppedPage.json()) as { events: Array<{ text: string }>; nextCursor?: string };
-  expect({ texts: stoppedBody.events.map((event) => event.text), nextCursor: stoppedBody.nextCursor }).toEqual({
-    texts: ['turn/started', 'turn/completed'],
-    nextCursor: 'provider:next_cursor'
+  const stoppedBody = (await stoppedPage.json()) as {
+    coverage: string;
+    records: Array<{ data: unknown }>;
+    nextCursor?: string;
+  };
+  expect({
+    coverage: stoppedBody.coverage,
+    records: stoppedBody.records.map((record) => record.data),
+    nextCursor: stoppedBody.nextCursor
+  }).toEqual({
+    coverage: 'settled',
+    records: [
+      {
+        type: 'event_msg',
+        payload: {
+          type: 'task_complete',
+          turn_id: 'test-task-001',
+          last_agent_message: 'Codex notification test - this should trigger a notification!',
+          completed_at: 1780568410,
+          duration_ms: 10000
+        },
+        timestamp: '2026-06-04T15:30:10.000Z'
+      }
+    ],
+    nextCursor: '1'
   });
 }
 
@@ -1316,10 +1296,9 @@ async function runSpawnFailureRuntime(
   expect(res.status).toBeGreaterThanOrEqual(400);
 
   const failed = await waitFor(() => {
-    const row = handlers.store
+    return handlers.store
       .listExternalAgentSessionsForTranscriptTarget(sessionId)
       .find((candidate) => candidate.state === 'failed');
-    return row?.outputSnapshot.includes('/definitely/not/a/external-agent-provider') ? row : undefined;
   });
   expect(failed.pid).toBeNull();
   expect(Date.parse(failed.exitedAt ?? '')).toBeGreaterThan(0);
@@ -1409,7 +1388,7 @@ for (const kind of TRANSPORTS) {
       }
     });
 
-    test('starts a Claude Code style json-stream session and indexes structured output', async () => {
+    test('starts a Claude Code style json-stream session and streams structured output', async () => {
       const { dir, projectDir, app, handlers } = await setup();
       const t = serveTransport(kind, app);
       try {

@@ -13,6 +13,7 @@ import {
   eventIdSchema,
   listUiItemsQuerySchema,
   listUiItemsResponseSchema,
+  messageIdSchema,
   okResponseSchema,
   responseInstanceSchema,
   sessionIdSchema,
@@ -31,6 +32,7 @@ import { createPushSseResponse, encodeSseFrame } from '#/transports/http/session
 import {
   createSessionEventsSseResponse,
   createSessionLogsSseResponse,
+  createSessionMessageGenerationSseResponse,
   createSessionMessageSseResponse,
   createSessionUiEventsSseResponse,
   wantsInlineSessionStream
@@ -41,6 +43,7 @@ import {
 // JSON-RPC twin, so they don't belong in daemonHttpContract (which mirrors the universal METHOD_TABLE
 // methods). Mirrors `/external-agent-sessions/:id/ui-observation{,-stream}` in transports/http/external-agent.ts.
 const sessionParams = z.object({ id: sessionIdSchema });
+const sessionMessageParams = sessionParams.extend({ messageId: messageIdSchema });
 const sessionMemberParams = z.object({ id: sessionIdSchema, memberId: z.string().min(1) });
 
 // The neutral UI plane for a session member with no `externalAgentSessionId` of its own (today, the
@@ -538,6 +541,28 @@ export function createSessionsController(
             tags: ['http-only'],
             summary: 'Stream session events',
             description: 'Streams session events over Server-Sent Events with resume support.'
+          }
+        }
+      )
+      .get(
+        '/sessions/:id/messages/:messageId/stream',
+        async ({ params, headers, query }) =>
+          createSessionMessageGenerationSseResponse({
+            handlers,
+            sessionId: params.id,
+            messageId: params.messageId,
+            afterEventId: headers['last-event-id'] ?? query.after,
+            encoder
+          }),
+        {
+          params: sessionMessageParams,
+          query: z.object({ after: eventIdSchema.optional() }),
+          headers: z.looseObject({ 'last-event-id': eventIdSchema.optional() }),
+          response: { 200: responseInstanceSchema },
+          detail: {
+            tags: ['http-only'],
+            summary: 'Stream message generation',
+            description: 'Streams one generated message snapshot, deltas, and terminal event over Server-Sent Events.'
           }
         }
       )

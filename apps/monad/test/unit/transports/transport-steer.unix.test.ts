@@ -75,9 +75,9 @@ describe('transport parity - steer', () => {
         });
         expect(handlers.store.listMessages(sessionId).map((message) => message.text)).toEqual([
           'initial request',
-          'first answer',
           'change direction',
           'keep it concise',
+          'first answer',
           'steered answer'
         ]);
       } finally {

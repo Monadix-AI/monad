@@ -11,7 +11,7 @@ import type { EmbeddingCreateParams } from 'openai/resources/embeddings';
 import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
 
 import { timingSafeEqual } from 'node:crypto';
-import { newId, parseEventPayload } from '@monad/protocol';
+import { costSchema, finishReasonSchema, newId, parseEventPayload, tokenUsageSchema } from '@monad/protocol';
 import { Elysia } from 'elysia';
 
 import { definePrompt } from '#/agent/prompt-template.ts';
@@ -144,6 +144,15 @@ function buildXMonad(
     cache_read_tokens: p.usage?.cacheReadTokens,
     cache_write_tokens: p.usage?.cacheWriteTokens,
     reasoning_tokens: p.usage?.reasoningTokens
+  };
+}
+
+function terminalMetadata(data: unknown) {
+  const value = typeof data === 'object' && data !== null ? (data as Record<string, unknown>) : {};
+  return {
+    cost: costSchema.safeParse(value.cost).data,
+    finishReason: finishReasonSchema.safeParse(value.finishReason).data,
+    usage: tokenUsageSchema.safeParse(value.usage).data
   };
 }
 
@@ -460,13 +469,18 @@ export function createOpenAiCompatController(
           const stream = new ReadableStream<Uint8Array>({
             async start(ctrl) {
               let dropped = false;
+              let terminalErrorEmitted = false;
               try {
                 await handlers.session.sendInline(
                   { sessionId, text },
                   (event) => {
                     if (dropped || ctrl.desiredSize === null) return;
-                    if (event.type === 'agent.token') {
-                      const p = parseEventPayload('agent.token', event.payload as Record<string, unknown>);
+                    if (event.type === 'session.message.delta.appended') {
+                      const p = parseEventPayload(
+                        'session.message.delta.appended',
+                        event.payload as Record<string, unknown>
+                      );
+                      if (p.channel !== 'answer') return;
                       const chunk: OAIChatChunk = {
                         id: completionId,
                         object: 'chat.completion.chunk',
@@ -475,8 +489,12 @@ export function createOpenAiCompatController(
                         choices: [{ index: 0, delta: { role: 'assistant', content: p.delta }, finish_reason: null }]
                       };
                       ctrl.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
-                    } else if (event.type === 'agent.message') {
-                      const p = parseEventPayload('agent.message', event.payload as Record<string, unknown>);
+                    } else if (event.type === 'session.message.completed') {
+                      const { message } = parseEventPayload(
+                        'session.message.completed',
+                        event.payload as Record<string, unknown>
+                      );
+                      const { cost, finishReason, usage } = terminalMetadata(message.data);
                       const finalChunk: OAIChatChunk = {
                         id: completionId,
                         object: 'chat.completion.chunk',
@@ -486,13 +504,23 @@ export function createOpenAiCompatController(
                           {
                             index: 0,
                             delta: {},
-                            finish_reason: (p.finishReason ?? 'stop') as ChatCompletionChunk.Choice['finish_reason']
+                            finish_reason: (finishReason ?? 'stop') as ChatCompletionChunk.Choice['finish_reason']
                           }
                         ],
-                        usage: buildUsage(p.usage),
-                        x_monad: buildXMonad(sessionId, agentId, p)
+                        usage: buildUsage(usage),
+                        x_monad: buildXMonad(sessionId, agentId, { usage, cost })
                       };
                       ctrl.enqueue(encoder.encode(`data: ${JSON.stringify(finalChunk)}\n\ndata: [DONE]\n\n`));
+                    } else if (event.type === 'session.message.failed') {
+                      const { message } = parseEventPayload(
+                        'session.message.failed',
+                        event.payload as Record<string, unknown>
+                      );
+                      terminalErrorEmitted = true;
+                      const errChunk = JSON.stringify({
+                        error: { message: message.text, type: 'api_error', code: 'generation_failed' }
+                      });
+                      ctrl.enqueue(encoder.encode(`data: ${errChunk}\n\ndata: [DONE]\n\n`));
                     }
                     if (!dropped && (ctrl.desiredSize ?? 0) < -MAX_STREAMING_BACKLOG) {
                       dropped = true;
@@ -506,9 +534,13 @@ export function createOpenAiCompatController(
                 );
               } catch (err) {
                 try {
-                  const msg = err instanceof HandlerError ? err.message : 'An internal error occurred.';
-                  const errChunk = JSON.stringify({ error: { message: msg, type: 'api_error', code: 'stream_error' } });
-                  ctrl.enqueue(encoder.encode(`data: ${errChunk}\n\ndata: [DONE]\n\n`));
+                  if (!terminalErrorEmitted) {
+                    const msg = err instanceof HandlerError ? err.message : 'An internal error occurred.';
+                    const errChunk = JSON.stringify({
+                      error: { message: msg, type: 'api_error', code: 'stream_error' }
+                    });
+                    ctrl.enqueue(encoder.encode(`data: ${errChunk}\n\ndata: [DONE]\n\n`));
+                  }
                 } catch {}
               } finally {
                 if (!dropped) {
@@ -525,22 +557,32 @@ export function createOpenAiCompatController(
           return new Response(stream, { headers: { ...SSE_RESPONSE_HEADERS, ...CORS_HEADERS } });
         }
 
-        // Non-streaming: collect agent.message and return JSON
         let resultText = '';
         let resultUsage: CompletionUsage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
         let resultXMonad: OAIMonadExt = { session_id: sessionId, agent_id: agentId };
         let finishReason: ChatCompletion.Choice['finish_reason'] = 'stop';
+        let failureText: string | undefined;
 
         try {
           await handlers.session.sendInline(
             { sessionId, text },
             (event) => {
-              if (event.type === 'agent.message') {
-                const p = parseEventPayload('agent.message', event.payload as Record<string, unknown>);
-                resultText = p.text;
-                resultUsage = buildUsage(p.usage);
-                resultXMonad = buildXMonad(sessionId, agentId, p);
-                finishReason = (p.finishReason ?? 'stop') as ChatCompletion.Choice['finish_reason'];
+              if (event.type === 'session.message.completed') {
+                const { message } = parseEventPayload(
+                  'session.message.completed',
+                  event.payload as Record<string, unknown>
+                );
+                const { cost, finishReason: terminalFinishReason, usage } = terminalMetadata(message.data);
+                resultText = message.text;
+                resultUsage = buildUsage(usage);
+                resultXMonad = buildXMonad(sessionId, agentId, { usage, cost });
+                finishReason = (terminalFinishReason ?? 'stop') as ChatCompletion.Choice['finish_reason'];
+              } else if (event.type === 'session.message.failed') {
+                const { message } = parseEventPayload(
+                  'session.message.failed',
+                  event.payload as Record<string, unknown>
+                );
+                failureText = message.text;
               }
             },
             { transport: 'http', ambientContext }
@@ -548,6 +590,8 @@ export function createOpenAiCompatController(
         } catch (err) {
           return handlerErrorToOai(err);
         }
+
+        if (failureText) return oaiErrorResponse(failureText, 500, 'api_error', 'generation_failed');
 
         const completion: OAIChatCompletion = {
           id: completionId,

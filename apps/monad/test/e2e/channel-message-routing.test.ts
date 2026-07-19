@@ -504,7 +504,7 @@ for (const kind of TRANSPORTS) {
       expect(modelRequests).toHaveLength(1);
     });
 
-    test('adding a managed external agent project member starts only that member runtime', async () => {
+    test('inviting a managed external agent project member starts only that member runtime', async () => {
       const projectDir = join(dir, 'project-add-member');
       await mkdir(projectDir, { recursive: true });
       const codex = await configureMockExternalAgent(t, dir, { agentName: 'codex' });
@@ -525,6 +525,7 @@ for (const kind of TRANSPORTS) {
       });
 
       await setMemberTemplates(t, projectId, [externalAgentTemplate('codex', 'codex', { launchMode: 'pty' })]);
+      await inviteMember(t, sessionId, 'codex');
       expect((await uiStartedP).some((event) => (event as unknown as SessionUiEvent).kind === 'upsert')).toBe(true);
       const snapshotEvents = await t.sse(`/v1/sessions/${sessionId}/ui-stream`, {
         until: (event) => (event as unknown as SessionUiEvent).kind === 'snapshot',
@@ -1120,8 +1121,7 @@ for (const kind of TRANSPORTS) {
 
       const eventsP = t.sse(`/v1/sessions/${sessionId}/events`, {
         until: (event) =>
-          event.type === 'external_agent.output' &&
-          String((event.payload as { chunk?: unknown }).chunk).includes('inspect repo'),
+          event.type === 'external_agent.started' && (event.payload as { agentName?: unknown }).agentName === 'codex',
         timeoutMs: 3000
       });
       const send = await t.fetch(

@@ -35,7 +35,7 @@ export const MIGRATIONS: MigrationMeta[] = [
       "\nCREATE TABLE `message_attachments` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`project_id` text NOT NULL,\n\t`path` text NOT NULL,\n\t`name` text NOT NULL,\n\t`mime` text NOT NULL,\n\t`bytes` integer NOT NULL,\n\t`preview` text NOT NULL,\n\t`created_by` text,\n\t`created_at` text NOT NULL\n);\n",
       "\nCREATE INDEX `idx_message_attachments_project` ON `message_attachments` (`project_id`);",
       "\nCREATE TABLE `message_embeddings` (\n\t`message_id` text PRIMARY KEY NOT NULL,\n\t`dim` integer NOT NULL,\n\t`vec` blob NOT NULL,\n\t`model` text\n);\n",
-      "\nCREATE TABLE `messages` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`transcript_target_id` text NOT NULL,\n\t`role` text NOT NULL,\n\t`text` text NOT NULL,\n\t`type` text DEFAULT 'text' NOT NULL,\n\t`data` text,\n\t`stream_status` text DEFAULT 'settled' NOT NULL,\n\t`active` integer DEFAULT 1 NOT NULL,\n\t`include_in_context` integer,\n\t`created_at` text NOT NULL,\n\t`updated_at` text\n);\n",
+      "\nCREATE TABLE `messages` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`transcript_target_id` text NOT NULL,\n\t`role` text NOT NULL,\n\t`text` text NOT NULL,\n\t`type` text DEFAULT 'text' NOT NULL,\n\t`data` text,\n\t`stream_status` text DEFAULT 'settled' NOT NULL,\n\t`active` integer DEFAULT 1 NOT NULL,\n\t`include_in_context` integer,\n\t`created_at` text NOT NULL,\n\t`updated_at` text,\n\t`idempotency_key` text,\n\t`command_fingerprint` text\n);\n",
       "\nCREATE INDEX `idx_messages_transcript_target` ON `messages` (`transcript_target_id`);",
       "\nCREATE INDEX `idx_messages_active` ON `messages` (`transcript_target_id`,`active`);",
       "\nCREATE TABLE `native_agent_direct_messages` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`project_id` text NOT NULL,\n\t`external_agent_session_id` text NOT NULL,\n\t`from_agent` text,\n\t`peer` text NOT NULL,\n\t`text` text NOT NULL,\n\t`attachment_ids` text,\n\t`created_at` text NOT NULL\n);\n",
@@ -50,11 +50,14 @@ export const MIGRATIONS: MigrationMeta[] = [
       "\nCREATE TABLE `tool_raw_outputs` (\n\t`transcript_target_id` text NOT NULL,\n\t`tool_call_id` text NOT NULL,\n\t`output` text NOT NULL,\n\t`created_at` text NOT NULL,\n\tPRIMARY KEY(`transcript_target_id`, `tool_call_id`)\n);\n",
       "\nCREATE TABLE `usage_ledger` (\n\t`day` text NOT NULL,\n\t`provider` text NOT NULL,\n\t`model` text NOT NULL,\n\t`category` text DEFAULT 'chat' NOT NULL,\n\t`input_tokens` integer DEFAULT 0 NOT NULL,\n\t`output_tokens` integer DEFAULT 0 NOT NULL,\n\t`cache_read_tokens` integer DEFAULT 0 NOT NULL,\n\t`cache_write_tokens` integer DEFAULT 0 NOT NULL,\n\t`reasoning_tokens` integer DEFAULT 0 NOT NULL,\n\t`cost_usd` real DEFAULT 0 NOT NULL,\n\t`updated_at` text NOT NULL,\n\tPRIMARY KEY(`day`, `provider`, `model`, `category`)\n);\n",
       "\nCREATE TABLE `workplace_projects` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`title` text NOT NULL,\n\t`state` text NOT NULL,\n\t`archived` integer DEFAULT 0 NOT NULL,\n\t`model` text,\n\t`cwd` text,\n\t`origin` text,\n\t`member_templates` text DEFAULT '[]' NOT NULL,\n\t`created_at` text NOT NULL,\n\t`updated_at` text NOT NULL\n);\n",
-      "\nCREATE INDEX `idx_workplace_projects_state` ON `workplace_projects` (`state`,`archived`);"
+      "\nCREATE INDEX `idx_workplace_projects_state` ON `workplace_projects` (`state`,`archived`);",
+      "\nCREATE TABLE `message_mutations` (\n\t`transcript_target_id` text NOT NULL,\n\t`idempotency_key` text NOT NULL,\n\t`command_fingerprint` text NOT NULL,\n\t`message_id` text NOT NULL,\n\t`message_revision` integer NOT NULL,\n\t`result_message` text NOT NULL,\n\tPRIMARY KEY(`transcript_target_id`, `idempotency_key`)\n);\n",
+      "\nCREATE TABLE `transcript_message_revisions` (\n\t`transcript_target_id` text PRIMARY KEY NOT NULL,\n\t`revision` integer DEFAULT 0 NOT NULL\n);\n",
+      "\nCREATE UNIQUE INDEX `idx_messages_target_idempotency` ON `messages` (`transcript_target_id`,`idempotency_key`);"
     ],
     "bps": true,
     "folderMillis": 1784356322575,
-    "hash": "77c22744202ad7a6310debebaa42a8ce04b0a5cd6303c807fdbff7d6e664a7ff"
+    "hash": "07a225cf83da892479055b447e288190c4ed2d967ae54370c467c901b3f3d9c5"
   },
   {
     "sql": [

@@ -104,6 +104,9 @@ export interface LiveExternalAgentSession {
   observationEpoch: string;
   observationEpochReady?: boolean;
   observationEpochPreparation?: Promise<void>;
+  /** True while an `external_agent.session.connection.opened` has fired for the current epoch without a
+   *  matching `closed` — makes the open/close emit idempotent so a late teardown can't double-close. */
+  connectionOpen?: boolean;
   providerHistoryCheckpoint?: string;
   providerHistoryIdentities?: Set<string>;
   /** Last committed raw-store row sequence in the current observation epoch. */

@@ -123,7 +123,7 @@ describe.skipIf(!KEY)(`live model approvals (${MODEL})`, () => {
     const eventsP = t.sse(`/v1/sessions/${sessionId}/events`, {
       until: (e: Event) => {
         if (e.type === 'tool.approval_requested') respond?.(reqId(e));
-        return e.type === 'agent.message';
+        return e.type === 'session.message.completed';
       },
       timeoutMs: TIMEOUT
     });
@@ -178,7 +178,7 @@ describe.skipIf(!KEY)(`live model approvals (${MODEL})`, () => {
           expect(resolved.length).toBeGreaterThan(0);
           expect(allowOf(resolved[0] as Event)).toBe(false);
           expect(runs).not.toContain('DENIED'); // denied → run() never reached
-          expect(events.some((e) => e.type === 'agent.message')).toBe(true); // round still completes
+          expect(events.some((e) => e.type === 'session.message.completed')).toBe(true); // round still completes
         },
         { timeout: TIMEOUT, retry: 2 }
       );
@@ -279,7 +279,7 @@ describe.skipIf(!KEY)(`live model approvals (${MODEL})`, () => {
           // Deny-wins resolves at the policy layer: the gate never prompts the human…
           expect(events.some((e) => e.type === 'tool.approval_requested')).toBe(false);
           expect(runs).not.toContain('BLOCKED'); // …and the tool never executes
-          expect(events.some((e) => e.type === 'agent.message')).toBe(true); // round still completes
+          expect(events.some((e) => e.type === 'session.message.completed')).toBe(true); // round still completes
         },
         { timeout: TIMEOUT, retry: 2 }
       );

@@ -1,13 +1,18 @@
 import type {
+  AgentObservationEvent,
   ExternalAgentApprovalResolutionRequest,
   ExternalAgentAppServerTransport,
   ExternalAgentAuthSessionView,
   ExternalAgentAuthStatusResponse,
+  ExternalAgentConnectionSnapshot,
+  ExternalAgentConvenienceFrame,
   ExternalAgentHistoryPageRequest,
   ExternalAgentHistoryPageResponse,
   ExternalAgentInputRequest,
   ExternalAgentLaunchMode,
   ExternalAgentObservationAccessResponse,
+  ExternalAgentRawFrame,
+  ExternalAgentRawHistoryPage,
   ExternalAgentResizeRequest,
   ExternalAgentSessionView,
   ExternalAgentUiObservationFrame,
@@ -23,12 +28,17 @@ import type {
   LiveExternalAgentSession,
   ManagedProjectOutputHandler
 } from '#/services/external-agent/host/host-types.ts';
+import type {
+  ExternalAgentConvenienceObservationResult,
+  ExternalAgentRawObservationResult
+} from '#/services/external-agent/host/observation-resolve.ts';
 import type { ExternalAgentStartPreflight } from '#/services/external-agent/types.ts';
 import type { ExternalAgentTargetId } from '#/store/db/external-agent-sessions.ts';
 import type { ExternalAgentSessionRow } from '#/store/db/index.ts';
 
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { toAgentObservationEvent } from '@monad/atoms/agent-observation';
 import { createLogger } from '@monad/logger';
 import { newId } from '@monad/protocol';
 
@@ -50,6 +60,7 @@ import {
   HISTORY_PAGE_TIMEOUT_MS
 } from '#/services/external-agent/host/host-constants.ts';
 import { toView } from '#/services/external-agent/host/host-helpers.ts';
+import { convenienceFramesFromEvents } from '#/services/external-agent/host/observation-dual.ts';
 import { ExternalAgentObservationHub } from '#/services/external-agent/host/observation-hub.ts';
 import { ExternalAgentObservationResolver } from '#/services/external-agent/host/observation-resolve.ts';
 import { ExternalAgentOutputPipeline } from '#/services/external-agent/host/output-pipeline.ts';
@@ -81,6 +92,12 @@ function providerHistoryPageRequest(
 }
 
 const RUNTIME_LIST_DEFAULT_LIMIT = 100;
+
+/** The resume cursor for the raw plane is the last frame's `cursor`, which is `String(row.seq)`. */
+function lastRawSeq(frames: ExternalAgentRawFrame[]): number | undefined {
+  const last = frames.at(-1);
+  return last ? Number(last.cursor) : undefined;
+}
 
 /** Slices an already-ordered array by an opaque position cursor (`before` = index to stop before).
  *  Used by the daemon-wide runtime overview lists, which are in-memory/SQLite arrays, not a keyset
@@ -201,7 +218,8 @@ export class ExternalAgentHost {
       armIdleSuspend: (live) => this.armIdleSuspend(live),
       idleTimeoutMs: () => this.idleTimeoutMs(),
       updateExternalAgentPid: (id, pid) => this.updateExternalAgentPid(id, pid),
-      openLiveRawStore: (id, epoch) => this.openLiveRawStore(id, epoch)
+      openLiveRawStore: (id, epoch) => this.openLiveRawStore(id, epoch),
+      emitConnectionClosed: (live, reason) => this.emitConnectionClosed(live, reason)
     });
     this.observationResolver = new ExternalAgentObservationResolver({
       live: this.live,
@@ -319,6 +337,7 @@ export class ExternalAgentHost {
     live.pendingRequests.clear();
     this.appServerConnections.unlinkSocket(live.appServerSocketPath);
     void live.liveRawStore?.closeAndDelete();
+    this.emitConnectionClosed(live, 'disconnected');
     this.updateExternalAgentPid(id, null);
     this.observation.publish(id);
     this.events.emit(live.transcriptTargetId, 'external_agent.idle_suspended', {
@@ -357,6 +376,33 @@ export class ExternalAgentHost {
     }
   }
 
+  // Provider connectivity (observation-source readiness), distinct from process lifecycle. These are
+  // transient control-plane facts the Observation panel keys its subscription on; `connectionOpen`
+  // makes the pair idempotent. Emitted here (Observation Task 5) since the epoch lifecycle is owned by
+  // the host, not the launcher.
+  private emitConnectionOpened(live: LiveExternalAgentSession): void {
+    live.connectionOpen = true;
+    this.events.publish(live.transcriptTargetId, 'external_agent.session.connection.opened', {
+      externalAgentSessionId: live.id,
+      provider: live.provider,
+      observationEpoch: live.observationEpoch
+    });
+  }
+
+  private emitConnectionClosed(
+    live: LiveExternalAgentSession,
+    reason: 'exited' | 'failed' | 'stopped' | 'disconnected'
+  ): void {
+    if (!live.connectionOpen) return;
+    live.connectionOpen = false;
+    this.events.publish(live.transcriptTargetId, 'external_agent.session.connection.closed', {
+      externalAgentSessionId: live.id,
+      provider: live.provider,
+      observationEpoch: live.observationEpoch,
+      reason
+    });
+  }
+
   private async prepareObservationEpoch(live: LiveExternalAgentSession): Promise<void> {
     if (live.observationEpochReady) return;
     if (live.observationEpochPreparation) return live.observationEpochPreparation;
@@ -392,10 +438,12 @@ export class ExternalAgentHost {
       live.providerHistoryCheckpoint = checkpoint;
       live.providerHistoryIdentities = identities;
       live.outputSeq = 0;
+      this.emitConnectionClosed(live, 'disconnected');
       void live.liveRawStore?.closeAndDelete();
       live.observationEpoch = newId('oep');
       live.liveRawStore = this.openLiveRawStore(live.id, live.observationEpoch);
       live.observationEpochReady = true;
+      this.emitConnectionOpened(live);
       this.observation.publish(live.id);
     };
     const pending = prepare();
@@ -585,6 +633,140 @@ export class ExternalAgentHost {
     return { frame, live: true, dispose: sub.dispose };
   }
 
+  observeRaw(id: string, afterSeq?: number): ExternalAgentRawObservationResult {
+    return this.observationResolver.observeRaw(id, afterSeq);
+  }
+
+  observeConvenience(id: string): ExternalAgentConvenienceObservationResult {
+    return this.observationResolver.observeConvenience(id);
+  }
+
+  connectionSnapshot(id: string): ExternalAgentConnectionSnapshot {
+    return this.observationResolver.connectionSnapshot(id);
+  }
+
+  /** The raw diagnostic plane over SSE: rides the observation hub's throttle/lifecycle but, on every
+   *  tick, reads only the committed raw rows AFTER the last delivered cursor, so a subscriber receives
+   *  each verbatim provider frame exactly once and in order (never a re-derived list). */
+  subscribeRawObservation(
+    id: string,
+    handlers: { onFrame: (frame: ExternalAgentRawFrame) => void; onDone: () => void }
+  ): { frames: ExternalAgentRawFrame[]; live: boolean; dispose: () => void } {
+    const initial = this.observeRaw(id);
+    if (initial.state !== 'live') return { frames: [], live: false, dispose: () => {} };
+    let lastEpoch = initial.observationEpoch;
+    let lastSeq = lastRawSeq(initial.frames);
+    const initialFrames = [...initial.frames];
+    while (lastSeq !== undefined) {
+      const next = this.observeRaw(id, lastSeq);
+      if (next.state !== 'live' || next.frames.length === 0) break;
+      initialFrames.push(...next.frames);
+      const seq = lastRawSeq(next.frames);
+      if (seq === undefined || seq === lastSeq) break;
+      lastSeq = seq;
+    }
+    const sub = this.observation.subscribe(id, (access, done) => {
+      // An epoch rotation (idle resume / reconnect) restarts the row cursor from 1, so a `seq` from the
+      // previous epoch would skip the new epoch's opening frames — re-read the whole epoch instead.
+      const epoch = access.state === 'live' ? access.observationEpoch : undefined;
+      const epochChanged = epoch !== undefined && epoch !== lastEpoch;
+      let next = this.observeRaw(id, epochChanged ? undefined : lastSeq);
+      while (next.state === 'live') {
+        for (const frame of next.frames) handlers.onFrame(frame);
+        lastEpoch = next.observationEpoch;
+        const seq = lastRawSeq(next.frames);
+        if (seq === undefined) {
+          if (epochChanged) lastSeq = undefined;
+          break;
+        }
+        if (seq === lastSeq) break;
+        lastSeq = seq;
+        next = this.observeRaw(id, lastSeq);
+      }
+      if (done) handlers.onDone();
+    });
+    if (!sub.live) return { frames: initialFrames, live: false, dispose: () => {} };
+    return { frames: initialFrames, live: true, dispose: sub.dispose };
+  }
+
+  /** The convenience plane over SSE: emits a `ready` handshake then incremental `upsert`s. Each tick
+   *  re-derives the projection from the whole snapshot and forwards only the non-`ready` frames (a
+   *  consumer merges them idempotently by cursor). On disconnect it emits a terminal `unavailable`. */
+  subscribeConvenienceObservation(
+    id: string,
+    onFrame: (frame: ExternalAgentConvenienceFrame, done: boolean) => void
+  ): { frames: ExternalAgentConvenienceFrame[]; live: boolean; dispose: () => void } {
+    const initial = this.observeConvenience(id);
+    if (initial.state !== 'live')
+      return { frames: [{ kind: 'unavailable', reason: initial.reason }], live: false, dispose: () => {} };
+    const sub = this.observation.subscribe(id, (_access, done) => {
+      const next = this.observeConvenience(id);
+      if (next.state === 'live') {
+        for (const frame of next.frames) if (frame.kind !== 'ready') onFrame(frame, false);
+      }
+      if (done) onFrame({ kind: 'unavailable', reason: `external agent disconnected: ${id}` }, true);
+    });
+    if (!sub.live) return { frames: initial.frames, live: false, dispose: () => {} };
+    return { frames: initial.frames, live: true, dispose: sub.dispose };
+  }
+
+  /** A page of EXACT provider-native history records (before any projection/merge/dedupe), from the
+   *  live app-server thread when connected, else the stopped session's provider history. */
+  async rawHistoryPage(id: string, req: ExternalAgentHistoryPageRequest): Promise<ExternalAgentRawHistoryPage> {
+    const live = this.live.get(id);
+    if (live && !live.suspended) {
+      const providerSessionRef = live.providerSessionRef ?? live.initializeContext?.providerSessionRef ?? undefined;
+      const workingPath = live.initializeContext?.workingPath;
+      if (live.adapter.events.readRawHistoryPage && providerSessionRef && workingPath) {
+        const result = await live.adapter.events.readRawHistoryPage(
+          {
+            providerSessionRef,
+            workingPath,
+            limitBytes: MAX_OUTPUT_SNAPSHOT,
+            requestProviderPage: (send) => this.requestProviderHistoryPage(live, send)
+          },
+          { before: req.before, limit: req.limit, sortDirection: req.sortDirection }
+        );
+        if (!('state' in result)) return result;
+      }
+      return { records: [], coverage: 'settled' };
+    }
+    const row = this.deps.store.getExternalAgentSession(id);
+    if (row?.providerSessionRef) {
+      const adapter = getExternalAgentProviderAdapter(row.provider);
+      if (adapter.events.readRawHistoryPage) {
+        const result = await adapter.events.readRawHistoryPage(
+          { providerSessionRef: row.providerSessionRef, workingPath: row.workingPath, limitBytes: MAX_OUTPUT_SNAPSHOT },
+          { before: req.before, limit: req.limit, sortDirection: req.sortDirection }
+        );
+        if (!('state' in result)) return result;
+      }
+    }
+    return { records: [], coverage: 'settled' };
+  }
+
+  /** Provider history projected into the neutral convenience plane: the same normalized events the
+   *  history page returns, mapped to `upsert` frames a consumer merges into its timeline. */
+  async convenienceHistoryPage(
+    id: string,
+    req: ExternalAgentHistoryPageRequest
+  ): Promise<ExternalAgentConvenienceFrame[]> {
+    const provider = this.live.get(id)?.provider ?? this.deps.store.getExternalAgentSession(id)?.provider;
+    if (!provider) return [];
+    let page: ExternalAgentHistoryPageResponse;
+    try {
+      page = await this.historyPage(id, req);
+    } catch (error) {
+      if (error instanceof ExternalAgentError && error.code === 'unsupported_capability') return [];
+      throw error;
+    }
+    const adapter = getExternalAgentProviderAdapter(provider);
+    const events = page.events
+      .map((event) => toAgentObservationEvent(event, adapter.observation))
+      .filter((event): event is AgentObservationEvent => event !== null);
+    return convenienceFramesFromEvents(events);
+  }
+
   resize(id: string, req: ExternalAgentResizeRequest): void {
     const live = this.live.get(id);
     if (!live) throw new Error(`external agent session is not running: ${id}`);
@@ -673,6 +855,7 @@ export class ExternalAgentHost {
     this.outputPipeline.dropStructuredBuffer(id);
     this.appServerConnections.unlinkSocket(live.appServerSocketPath);
     const exitedAt = new Date().toISOString();
+    this.emitConnectionClosed(live, 'stopped');
     this.deps.store.closeExternalAgentSession(id, exitedAt, null, 'stopped');
     this.events.emit(live.transcriptTargetId, 'external_agent.exited', {
       externalAgentSessionId: id,

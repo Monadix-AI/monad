@@ -165,13 +165,34 @@ export const messages = sqliteTable(
     streamStatus: text('stream_status').notNull().default('settled'),
     active: integer('active').notNull().default(1),
     includeInContext: integer('include_in_context'),
+    idempotencyKey: text('idempotency_key'),
+    commandFingerprint: text('command_fingerprint'),
     createdAt: text('created_at').notNull(),
     updatedAt: text('updated_at')
   },
   (table) => [
     index('idx_messages_transcript_target').on(table.transcriptTargetId),
-    index('idx_messages_active').on(table.transcriptTargetId, table.active)
+    index('idx_messages_active').on(table.transcriptTargetId, table.active),
+    uniqueIndex('idx_messages_target_idempotency').on(table.transcriptTargetId, table.idempotencyKey)
   ]
+);
+
+export const transcriptMessageRevisions = sqliteTable('transcript_message_revisions', {
+  transcriptTargetId: text('transcript_target_id').primaryKey(),
+  revision: integer('revision').notNull().default(0)
+});
+
+export const messageMutations = sqliteTable(
+  'message_mutations',
+  {
+    transcriptTargetId: text('transcript_target_id').notNull(),
+    idempotencyKey: text('idempotency_key').notNull(),
+    commandFingerprint: text('command_fingerprint').notNull(),
+    messageId: text('message_id').notNull(),
+    messageRevision: integer('message_revision').notNull(),
+    resultMessage: text('result_message').notNull()
+  },
+  (table) => [primaryKey({ columns: [table.transcriptTargetId, table.idempotencyKey] })]
 );
 
 export const memory = sqliteTable(

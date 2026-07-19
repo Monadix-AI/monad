@@ -26,6 +26,7 @@ export async function createAgentRuntime(core: DaemonCore, endpoint: { host: str
 
   await configureToolBackends(cfg, startupAuth);
   const bus = new EventBus();
+  const messageIngress = createMessageIngress({ store, bus });
   const cache = new RoundCache();
   const { oversight, clarify, reloadApprovalPolicy } = await createInterruptServices({ paths, cfg, store, bus });
   startStartupHousekeeping({ paths, store, logger });
@@ -131,6 +132,7 @@ export async function createAgentRuntime(core: DaemonCore, endpoint: { host: str
     baseTools: (): Tool[] => registry.toolList(),
     toolsVersion: () => registry.toolRevision,
     bus,
+    messageIngress,
     memoryService: memory.memoryService,
     extraTools: [
       ...buildServiceTools({
@@ -171,6 +173,7 @@ export async function createAgentRuntime(core: DaemonCore, endpoint: { host: str
     oversight,
     i18n: i18nService,
     bus,
+    messageIngress,
     sessionGateway: session.read,
     logger
   });
@@ -179,6 +182,7 @@ export async function createAgentRuntime(core: DaemonCore, endpoint: { host: str
     store,
     registry: core.atoms.channelRegistry,
     bus,
+    messageIngress,
     i18n: i18nService,
     commands: commandBundle,
     logger,
@@ -208,6 +212,7 @@ export async function createAgentRuntime(core: DaemonCore, endpoint: { host: str
 
   return {
     bus,
+    messageIngress,
     cache,
     oversight,
     clarify,
@@ -257,6 +262,7 @@ import { EventBus } from '#/services/event-bus.ts';
 import { createLocaleService } from '#/services/i18n-loader.ts';
 import { createGraphQueryTools } from '#/services/memory/graph/query-tools.ts';
 import { createMemoryAgentTools } from '#/services/memory/tools.ts';
+import { createMessageIngress } from '#/services/messages/ingress.ts';
 import { RoundCache } from '#/services/round-cache.ts';
 import { ScheduleService } from '#/services/scheduling/schedule.ts';
 import { warnIfNotInitialized } from '#/store/home/init-status.ts';

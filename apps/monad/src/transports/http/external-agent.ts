@@ -1,5 +1,7 @@
 import type {
   ExternalAgentAuthSessionView,
+  ExternalAgentConvenienceFrame,
+  ExternalAgentRawFrame,
   ExternalAgentSessionId,
   ExternalAgentUiObservationFrame
 } from '@monad/protocol';
@@ -8,10 +10,13 @@ import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
 import {
   externalAgentApprovalResolutionRequestSchema,
   externalAgentAuthStatusResponseSchema,
+  externalAgentConnectionSnapshotSchema,
+  externalAgentConvenienceFrameSchema,
   externalAgentHistoryPageRequestSchema,
   externalAgentHistoryPageResponseSchema,
   externalAgentInputRequestSchema,
   externalAgentObservationAccessResponseSchema,
+  externalAgentRawHistoryPageSchema,
   externalAgentResizeRequestSchema,
   externalAgentUiObservationFrameSchema,
   externalAgentUsageResponseSchema,
@@ -31,7 +36,13 @@ import {
 import { Elysia } from 'elysia';
 import { z } from 'zod';
 
-import { createPushSseResponse, encodeSseFrame } from '#/transports/http/sessions/sse.ts';
+import {
+  createBoundedSseEncoderSink,
+  createPushSseResponse,
+  createSseResponse,
+  encodeSseFrame,
+  startSseHeartbeat
+} from '#/transports/http/sessions/sse.ts';
 
 const sessionParams = z.object({ id: z.string() });
 const externalAgentParams = z.object({ id: z.string() });
@@ -123,6 +134,90 @@ function createExternalAgentUiObservationSseResponse(
   });
 }
 
+// The raw diagnostic plane: verbatim provider frames delivered in order, each resumable by its
+// `cursor`. Unlike the UI/convenience planes there is no terminal frame in the raw contract, so this
+// builder closes the stream explicitly on disconnect (`onDone`) rather than emitting a marker.
+function createExternalAgentRawObservationSseResponse(
+  handlers: ReturnType<typeof createDaemonHandlers>,
+  id: string,
+  transcriptTargetId: `ses_${string}`,
+  encoder: TextEncoder
+): Response {
+  const encode = (frame: ExternalAgentRawFrame): Uint8Array =>
+    encodeSseFrame({ id: frame.cursor, event: 'external_agent.raw_observation', data: frame }, encoder);
+  let stopHeartbeat: (() => void) | undefined;
+  let disposeHub: () => void = () => {};
+  let closed = false;
+  const stream = new ReadableStream<Uint8Array>({
+    start(ctrl) {
+      stopHeartbeat = startSseHeartbeat(ctrl, encoder);
+      const close = (): void => {
+        if (closed) return;
+        closed = true;
+        stopHeartbeat?.();
+        disposeHub();
+        try {
+          ctrl.close();
+        } catch {
+          // already closed/errored — nothing to do
+        }
+      };
+      const sink = createBoundedSseEncoderSink<ExternalAgentRawFrame>(ctrl, encode, () => {
+        stopHeartbeat?.();
+        disposeHub();
+      });
+      try {
+        const sub = handlers.externalAgent.subscribeRawObservation({
+          id,
+          transcriptTargetId,
+          onFrame: (frame) => sink(frame),
+          onDone: () => close()
+        });
+        disposeHub = sub.dispose;
+        for (const frame of sub.frames) sink(frame);
+        if (!sub.live) close();
+      } catch {
+        close();
+      }
+    },
+    cancel() {
+      closed = true;
+      stopHeartbeat?.();
+      disposeHub();
+    }
+  });
+  return createSseResponse(stream);
+}
+
+// The convenience plane: a `ready` handshake then incremental `upsert`s of neutral events, terminated
+// by an `unavailable` frame on disconnect. Rides the generic push helper because its terminal state is
+// a real frame in the contract.
+function createExternalAgentConvenienceObservationSseResponse(
+  handlers: ReturnType<typeof createDaemonHandlers>,
+  id: string,
+  transcriptTargetId: `ses_${string}`,
+  encoder: TextEncoder
+): Response {
+  return createPushSseResponse<ExternalAgentConvenienceFrame>({
+    encoder,
+    encode: (frame) => encodeSseFrame({ event: 'external_agent.convenience_observation', data: frame }, encoder),
+    subscribe: (emit) => {
+      const sub = handlers.externalAgent.subscribeConvenienceObservation({
+        id,
+        transcriptTargetId,
+        onFrame: (frame, done) => emit(frame, done)
+      });
+      if (!sub.live) {
+        const terminal = sub.frames[0];
+        if (terminal) emit(terminal, true);
+        return { dispose: sub.dispose };
+      }
+      for (const frame of sub.frames) emit(frame, false);
+      return { dispose: sub.dispose };
+    }
+  });
+}
+
 export function createExternalAgentController(handlers: ReturnType<typeof createDaemonHandlers>) {
   const encoder = new TextEncoder();
   return new Elysia()
@@ -194,6 +289,62 @@ export function createExternalAgentController(handlers: ReturnType<typeof create
         params: externalAgentParams,
         query: externalAgentScopeQuery,
         detail: { summary: 'Stream neutral (projected) external agent observation frames', tags: ['http-only'] }
+      }
+    )
+    .get(
+      '/external-agent-sessions/:id/stream/raw',
+      ({ params, query }) =>
+        createExternalAgentRawObservationSseResponse(handlers, params.id, query.transcriptTargetId, encoder),
+      {
+        params: externalAgentParams,
+        query: externalAgentScopeQuery,
+        detail: { summary: 'Stream verbatim raw external agent observation frames', tags: ['http-only'] }
+      }
+    )
+    .get(
+      '/external-agent-sessions/:id/stream/convenience',
+      ({ params, query }) =>
+        createExternalAgentConvenienceObservationSseResponse(handlers, params.id, query.transcriptTargetId, encoder),
+      {
+        params: externalAgentParams,
+        query: externalAgentScopeQuery,
+        detail: { summary: 'Stream incremental convenience external agent observation frames', tags: ['http-only'] }
+      }
+    )
+    .get(
+      '/external-agent-sessions/:id/history/raw',
+      ({ params, query }) => {
+        const { transcriptTargetId, ...request } = query;
+        return handlers.externalAgent.observeRawHistory({ id: params.id, transcriptTargetId, request });
+      },
+      {
+        params: externalAgentParams,
+        query: externalAgentHistoryPageQuery,
+        response: { 200: externalAgentRawHistoryPageSchema },
+        detail: { summary: 'Load a page of exact provider-native external agent history records', tags: ['http-only'] }
+      }
+    )
+    .get(
+      '/external-agent-sessions/:id/history/convenience',
+      ({ params, query }) => {
+        const { transcriptTargetId, ...request } = query;
+        return handlers.externalAgent.observeConvenienceHistory({ id: params.id, transcriptTargetId, request });
+      },
+      {
+        params: externalAgentParams,
+        query: externalAgentHistoryPageQuery,
+        response: { 200: z.array(externalAgentConvenienceFrameSchema) },
+        detail: { summary: 'Load external agent history projected into convenience frames', tags: ['http-only'] }
+      }
+    )
+    .get(
+      '/external-agent-sessions/:id/connection',
+      ({ params, query }) => handlers.externalAgent.connectionSnapshot({ id: params.id, ...query }),
+      {
+        params: externalAgentParams,
+        query: externalAgentScopeQuery,
+        response: { 200: externalAgentConnectionSnapshotSchema },
+        detail: { summary: 'Read the external agent observation connection snapshot', tags: ['http-only'] }
       }
     )
     .get(

@@ -1,6 +1,8 @@
 import type { ExperienceWorker, ProjectExperienceEvent, WorkspaceExperienceApiContext } from '@monad/sdk-atom';
 import type { ExecutionRun, ProjectTask } from './domain.ts';
 
+import { parseEventPayload } from '@monad/protocol';
+
 import { KanbanStore } from './store.ts';
 
 const DEFAULT_CONCURRENCY = 3;
@@ -172,7 +174,8 @@ export const kanbanWorker: ExperienceWorker = {
       return;
     }
 
-    if (event.type === 'agent.error' && current.stage === 'execution') {
+    if (event.type === 'session.message.failed' && current.stage === 'execution') {
+      parseEventPayload('session.message.failed', event.payload);
       const runs = current.runs.map((run, index) =>
         index === current.runs.length - 1
           ? { ...run, status: 'failed' as const, hostEventIds: [...run.hostEventIds, event.id] }
@@ -188,7 +191,7 @@ export const kanbanWorker: ExperienceWorker = {
     }
 
     if (
-      event.type === 'session.stream_ended' &&
+      event.type === 'session.run.completed' &&
       current.stage === 'execution' &&
       (current.executionState === 'running' || current.executionState === 'waiting_approval')
     ) {

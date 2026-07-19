@@ -1,10 +1,8 @@
 import type { Components } from 'streamdown';
 
-import { lazy, memo, Suspense } from 'react';
+import { memo } from 'react';
 
-const MarkdownRenderer = lazy(() =>
-  import('./MarkdownRenderer.tsx').then((module) => ({ default: module.MarkdownRenderer }))
-);
+import { MarkdownRenderer } from './MarkdownRenderer.tsx';
 
 export type { Components };
 
@@ -17,9 +15,5 @@ export type MarkdownProps = {
 };
 
 export const Markdown = memo(function Markdown(props: MarkdownProps) {
-  return (
-    <Suspense fallback={<span className={props.className}>{props.text}</span>}>
-      <MarkdownRenderer {...props} />
-    </Suspense>
-  );
+  return <MarkdownRenderer {...props} />;
 });

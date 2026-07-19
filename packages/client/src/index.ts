@@ -3,8 +3,15 @@ import type {
   Event,
   EventId,
   ExternalAgentAuthSessionView,
+  ExternalAgentConnectionSnapshot,
+  ExternalAgentConvenienceFrame,
+  ExternalAgentHistoryPageRequest,
+  ExternalAgentRawFrame,
+  ExternalAgentRawHistoryPage,
   ExternalAgentUiObservationFrame,
   InteractionEvent,
+  MessageGenerationFrame,
+  MessageId,
   ProjectId,
   SendMessageResponse,
   SessionId,
@@ -17,7 +24,13 @@ import {
   developerLogRecordSchema,
   eventSchema,
   externalAgentAuthSessionViewSchema,
+  externalAgentConnectionSnapshotSchema,
+  externalAgentConvenienceFrameSchema,
+  externalAgentHistoryPageRequestSchema,
+  externalAgentRawFrameSchema,
+  externalAgentRawHistoryPageSchema,
   externalAgentUiObservationFrameSchema,
+  messageGenerationFrameSchema,
   readTypedSseStream,
   SSE_IDLE_TIMEOUT_MS,
   sessionUiEventSchema
@@ -51,8 +64,11 @@ export type EventHandler = (event: Event) => void;
 export type UiEventHandler = (event: SessionUiEvent) => void;
 export type LogRecordHandler = (record: DeveloperLogRecord) => void;
 export type ExternalAgentAuthSessionHandler = (session: ExternalAgentAuthSessionView) => void;
+export type ExternalAgentRawFrameHandler = (frame: ExternalAgentRawFrame) => void;
+export type ExternalAgentConvenienceFrameHandler = (frame: ExternalAgentConvenienceFrame) => void;
 export type ExternalAgentUiObservationHandler = (frame: ExternalAgentUiObservationFrame) => void;
 export type InteractionEventHandler = (event: InteractionEvent) => void;
+export type MessageGenerationFrameHandler = (frame: MessageGenerationFrame) => void;
 
 interface SsePayloadSchema<T> {
   parse(value: unknown): T;
@@ -72,6 +88,10 @@ function transcriptStreamPath(id: SessionId | ProjectId, leaf: 'events' | 'ui-st
 /** Append a query param, choosing `?` or `&` based on whether the path already has a query string. */
 function appendQuery(path: string, key: string, value: string): string {
   return `${path}${path.includes('?') ? '&' : '?'}${key}=${encodeURIComponent(value)}`;
+}
+
+function externalAgentObservationPath(id: string, leaf: string, transcriptTargetId: SessionId): string {
+  return `/${CONTROL_API_VERSION}/external-agent-sessions/${encodeURIComponent(id)}/${leaf}?transcriptTargetId=${encodeURIComponent(transcriptTargetId)}`;
 }
 
 /**
@@ -171,85 +191,6 @@ export class MonadClient {
     return this.eventSocket().subscribeControl(onEvent);
   }
 
-  /**
-   * Watch a session for its whole life, honoring the control/SSE split. The session outlives any
-   * single turn, so this holds the WS **control** stream to learn *when* the session is generating
-   * (`session.stream_started` / `session.stream_ended`) and opens a per-session **SSE** generation
-   * subscription only while a turn is in flight, closing it between turns. Generation tokens never
-   * travel the control plane — only SSE carries them. Events from both planes are merged and
-   * de-duplicated by id, so `onEvent` sees each event exactly once.
-   *
-   * Returns a disposer that tears down both subscriptions. Use this instead of `subscribe` (the
-   * deprecated per-session WS path) for "observe a session" UIs and the CLI `session watch`.
-   */
-  watchSession(
-    sessionId: SessionId,
-    onEvent: EventHandler,
-    opts?: { afterEventId?: EventId; onError?: (err: StreamError) => void }
-  ): () => void {
-    let closed = false;
-    let sseDispose: (() => void) | undefined;
-    let lastEventId = opts?.afterEventId;
-
-    // Bounded de-dup: the control (lifecycle) and SSE (session) topics overlap on a few
-    // session-scoped events (`session.updated`, the stream markers), which would otherwise
-    // reach onEvent twice. Idempotent by id — drop anything already forwarded.
-    const seen = new Set<EventId>();
-    const order: EventId[] = [];
-    const forward = (event: Event): void => {
-      const id = event.id;
-      if (seen.has(id)) return;
-      seen.add(id);
-      order.push(id);
-      if (order.length > 2048) {
-        const evicted = order.shift();
-        if (evicted) seen.delete(evicted);
-      }
-      onEvent(event);
-    };
-
-    const openSse = (): void => {
-      if (closed || sseDispose) return;
-      sseDispose = this.streamEvents(
-        sessionId,
-        (event) => {
-          lastEventId = event.id;
-          forward(event);
-        },
-        { afterEventId: lastEventId, onError: opts?.onError }
-      );
-    };
-    const closeSse = (): void => {
-      sseDispose?.();
-      sseDispose = undefined;
-    };
-
-    const unsubControl = this.subscribeControl((event) => {
-      if (event.sessionId !== sessionId) return;
-      if (event.type === 'session.stream_started') {
-        openSse();
-        return;
-      }
-      if (event.type === 'session.stream_ended') {
-        forward(event);
-        closeSse();
-        return;
-      }
-      forward(event);
-    });
-
-    // A turn may already be in flight when watching begins (the start marker has already fired and
-    // won't replay), so open the SSE once up front to catch it. The next `stream_ended` closes it,
-    // and `stream_started` reopens it for subsequent turns.
-    openSse();
-
-    return () => {
-      closed = true;
-      unsubControl();
-      closeSse();
-    };
-  }
-
   dispose(): void {
     this.socket?.dispose();
     this.socket = undefined;
@@ -289,6 +230,30 @@ export class MonadClient {
       ...opts,
       resume: true
     });
+  }
+
+  streamMessageGeneration(
+    sessionId: SessionId,
+    messageId: MessageId,
+    onFrame: MessageGenerationFrameHandler,
+    opts?: { afterEventId?: EventId; onOpen?: () => void; onError?: (err: StreamError) => void }
+  ): () => void {
+    return this.stream(
+      `/${CONTROL_API_VERSION}/sessions/${encodeURIComponent(sessionId)}/messages/${encodeURIComponent(messageId)}/stream`,
+      messageGenerationFrameSchema,
+      onFrame,
+      {
+        afterEventId: opts?.afterEventId,
+        resume: true,
+        isTerminal: (frame) =>
+          frame.kind === 'snapshot'
+            ? frame.message.stream.status === 'complete' || frame.message.stream.status === 'error'
+            : frame.event.type === 'session.message.completed' || frame.event.type === 'session.message.failed',
+        onOpen: opts?.onOpen,
+        onError: opts?.onError,
+        onInvalid: () => opts?.onError?.({ kind: 'fatal', cause: new Error('invalid message generation frame') })
+      }
+    );
   }
 
   streamInteractionEvents(
@@ -344,6 +309,85 @@ export class MonadClient {
     );
   }
 
+  streamExternalAgentRaw(
+    id: string,
+    transcriptTargetId: SessionId,
+    onFrame: ExternalAgentRawFrameHandler,
+    opts?: { afterCursor?: string; onOpen?: () => void; onError?: (err: StreamError) => void }
+  ): () => void {
+    return this.stream(
+      externalAgentObservationPath(id, 'stream/raw', transcriptTargetId),
+      externalAgentRawFrameSchema,
+      onFrame,
+      { afterEventId: opts?.afterCursor, resume: true, onOpen: opts?.onOpen, onError: opts?.onError }
+    );
+  }
+
+  streamExternalAgentConvenience(
+    id: string,
+    transcriptTargetId: SessionId,
+    onFrame: ExternalAgentConvenienceFrameHandler,
+    opts?: { afterCursor?: string; onOpen?: () => void; onError?: (err: StreamError) => void }
+  ): () => void {
+    return this.stream(
+      externalAgentObservationPath(id, 'stream/convenience', transcriptTargetId),
+      externalAgentConvenienceFrameSchema,
+      onFrame,
+      {
+        afterEventId: opts?.afterCursor,
+        resume: true,
+        isTerminal: (frame) => frame.kind === 'unavailable',
+        onOpen: opts?.onOpen,
+        onError: opts?.onError
+      }
+    );
+  }
+
+  async externalAgentRawHistory(
+    id: string,
+    transcriptTargetId: SessionId,
+    request: ExternalAgentHistoryPageRequest
+  ): Promise<ExternalAgentRawHistoryPage> {
+    return this.fetchExternalAgentObservation(
+      externalAgentObservationPath(id, 'history/raw', transcriptTargetId),
+      request,
+      externalAgentRawHistoryPageSchema
+    );
+  }
+
+  async externalAgentConvenienceHistory(
+    id: string,
+    transcriptTargetId: SessionId,
+    request: ExternalAgentHistoryPageRequest
+  ): Promise<ExternalAgentConvenienceFrame[]> {
+    return this.fetchExternalAgentObservation(
+      externalAgentObservationPath(id, 'history/convenience', transcriptTargetId),
+      request,
+      externalAgentConvenienceFrameSchema.array()
+    );
+  }
+
+  async externalAgentConnection(id: string, transcriptTargetId: SessionId): Promise<ExternalAgentConnectionSnapshot> {
+    const response = await this.fetch(externalAgentObservationPath(id, 'connection', transcriptTargetId));
+    if (!response.ok) throw new Error(`external agent observation request failed: ${response.status}`);
+    return externalAgentConnectionSnapshotSchema.parse(await response.json());
+  }
+
+  private async fetchExternalAgentObservation<T>(
+    path: string,
+    request: ExternalAgentHistoryPageRequest,
+    schema: SsePayloadSchema<T>
+  ): Promise<T> {
+    const query = externalAgentHistoryPageRequestSchema.parse(request);
+    let url = path;
+    for (const [key, value] of Object.entries(query)) {
+      if (value !== undefined) url = appendQuery(url, key, String(value));
+    }
+    const response = await this.fetch(url);
+    if (!response.ok) throw new Error(`external agent observation request failed: ${response.status}`);
+    return schema.parse(await response.json());
+  }
+
   /**
    * The single, business-agnostic SSE consumer behind every `stream*` method. Everything
    * stream-specific arrives as arguments — the `path`, the frame `schema`, whether to `resume` via
@@ -366,11 +410,12 @@ export class MonadClient {
     schema: SsePayloadSchema<T>,
     onEvent: (value: T) => void,
     opts?: {
-      afterEventId?: EventId;
+      afterEventId?: string;
       resume?: boolean;
       isTerminal?: (value: T) => boolean;
       onOpen?: () => void;
       onError?: (err: StreamError) => void;
+      onInvalid?: (error: string) => void;
       /** Override the no-bytes idle timeout (default SSE_IDLE_TIMEOUT_MS); mainly a test seam. */
       idleTimeoutMs?: number;
     }
@@ -390,6 +435,7 @@ export class MonadClient {
         controller.signal.addEventListener('abort', onParentAbort, { once: true });
         let idle: ReturnType<typeof setTimeout> | undefined;
         let idleAborted = false;
+        let validationRejected = false;
         const armIdle = (): void => {
           if (idle) clearTimeout(idle);
           idle = setTimeout(() => {
@@ -420,12 +466,24 @@ export class MonadClient {
                 reader,
                 schema,
                 (value: T) => {
-                  onEvent(value);
+                  if (terminal || validationRejected) return;
                   if (opts?.isTerminal?.(value)) terminal = true;
+                  onEvent(value);
                 },
-                { signal: attempt.signal, onActivity: armIdle } // any bytes (incl. `:` heartbeats) re-arm it
+                {
+                  signal: attempt.signal,
+                  onActivity: armIdle,
+                  onInvalid: (error) => {
+                    if (!opts?.onInvalid) return;
+                    validationRejected = true;
+                    try {
+                      opts.onInvalid(error);
+                    } catch {}
+                    attempt.abort();
+                  }
+                } // any bytes (incl. `:` heartbeats) re-arm it
               );
-              if (terminal) return; // the source signalled completion
+              if (terminal || validationRejected) return;
               if (resume && lastId) afterEventId = lastId as EventId;
             }
             delay = 1_000; // reset backoff after a clean read
@@ -434,7 +492,7 @@ export class MonadClient {
           // A real dispose exits the loop. An idle-driven abort is proactive maintenance, not a
           // failure, so it reconnects silently; only a genuine network/read error surfaces onError.
           if (controller.signal.aborted) return;
-          if (!idleAborted) opts?.onError?.({ kind: 'transient', cause: err });
+          if (!idleAborted && !validationRejected) opts?.onError?.({ kind: 'transient', cause: err });
         } finally {
           if (idle) clearTimeout(idle);
           controller.signal.removeEventListener('abort', onParentAbort);

@@ -28,7 +28,7 @@ import type {
   ResumeSessionRequest,
   ResumeSessionResponse
 } from '@agentclientprotocol/sdk';
-import type { AgentErrorPayload, AgentId, Event, FinishReason, MessageId, SessionId } from '@monad/protocol';
+import type { AgentId, Event, FinishReason, MessageId, SessionId } from '@monad/protocol';
 import type { McpServerSpec } from '#/capabilities/tools';
 import type { ToolBackends } from '#/capabilities/tools/types.ts';
 import type { AcpSession, Handlers } from '#/transports/acp/types.ts';
@@ -45,6 +45,7 @@ import { bridgeClarify, bridgeDelegation, bridgePermission } from '#/transports/
 import { applyRangeEdit, renderOpenDocs } from '#/transports/acp/documents.ts';
 import { acpExt, MONAD_EXT_METHODS, monadMeta, toMcpSpec } from '#/transports/acp/meta.ts';
 import {
+  canonicalTerminalMetadata,
   eventToPlanUpdate,
   eventToSessionUpdate,
   finishReasonToStopReason,
@@ -362,7 +363,7 @@ export class MonadAcpAgent {
     if (session) session.cancelled = false;
 
     let finishReason: FinishReason | undefined;
-    let agentError: AgentErrorPayload | undefined;
+    let agentError: { code?: string; message: string } | undefined;
     const sink = (event: Event) => {
       if (event.type === 'tool.approval_requested') {
         void bridgePermission(this.conn, this.handlers, sessionId, event);
@@ -376,18 +377,21 @@ export class MonadAcpAgent {
         void bridgeDelegation(this.handlers, this.sessions.get(sessionId)?.backends, event);
         return;
       }
-      if (event.type === 'agent.error') {
+      if (event.type === 'session.message.failed') {
         // Surface the failure in the transcript AND remember it so the turn ends as an error,
         // not a silent end_turn, even when the loop unwinds without throwing.
-        agentError = parseEventPayload('agent.error', event.payload);
+        const { message } = parseEventPayload('session.message.failed', event.payload);
+        const code = (message.data as { code?: unknown } | undefined)?.code;
+        agentError = { ...(typeof code === 'string' ? { code } : {}), message: message.text };
         void this.conn.client.notify('session/update', {
           sessionId,
           update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: `\n⚠ ${agentError.message}` } }
         });
         return;
       }
-      if (event.type === 'agent.message') {
-        finishReason = parseEventPayload('agent.message', event.payload).finishReason;
+      if (event.type === 'session.message.completed') {
+        const { message } = parseEventPayload('session.message.completed', event.payload);
+        finishReason = canonicalTerminalMetadata(message.data).finishReason;
       }
       const update = eventToSessionUpdate(event);
       // Notifications are queued in emit order by the connection; fire-and-forget preserves it.

@@ -1,6 +1,7 @@
-import type { AgentMessagePayload, AgentTokenPayload, Event } from '@monad/protocol';
+import type { Event } from '@monad/protocol';
 
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { parseEventPayload } from '@monad/protocol';
 
 import { createHttpTransport } from '#/transports/http.ts';
 import { buildHandlers, mockModel, serveTransport, TRANSPORTS, type TransportHandle } from '../helpers.ts';
@@ -112,28 +113,32 @@ for (const kind of TRANSPORTS) {
       expect((await res.json()) as { items: unknown[] }).toEqual({ items: [] });
     });
 
-    test('streaming: SSE delivers ordered agent.token events then a final agent.message', async () => {
+    test('streaming: SSE delivers ordered message deltas then a completed message', async () => {
       const sessionId = await createSession('stream');
 
       // Subscribe first, then send, so we observe the whole round.
       const eventsP = t.sse(`/v1/sessions/${sessionId}/events`, {
-        until: (e) => e.type === 'agent.message',
+        until: (e) => e.type === 'session.message.completed',
         timeoutMs: 3000
       });
       await Bun.sleep(50); // let the subscription attach
       await send(sessionId, 'hi');
 
       const events = await eventsP;
-      const tokens = events.filter((e) => e.type === 'agent.token');
-      const finals = events.filter((e) => e.type === 'agent.message');
+      const tokens = events.filter((e) => e.type === 'session.message.delta.appended');
+      const finals = events.filter((e) => e.type === 'session.message.completed');
 
       expect(tokens.length).toBeGreaterThan(0);
       // token deltas concatenate to the full reply, in order
-      const text = tokens.map((e) => (e.payload as unknown as AgentTokenPayload).delta).join('');
+      const text = tokens.map((e) => parseEventPayload('session.message.delta.appended', e.payload).delta).join('');
       expect(text).toBe('Hello world');
-      expect(tokens.map((e) => (e.payload as unknown as AgentTokenPayload).index)).toEqual(tokens.map((_e, i) => i));
+      expect(tokens.map((e) => parseEventPayload('session.message.delta.appended', e.payload).index)).toEqual(
+        tokens.map((_e, i) => i)
+      );
       expect(finals).toHaveLength(1);
-      expect((finals[0]?.payload as unknown as AgentMessagePayload | undefined)?.text).toBe('Hello world');
+      const final = finals[0];
+      if (!final) throw new Error('missing completed message');
+      expect(parseEventPayload('session.message.completed', final.payload).message.text).toBe('Hello world');
     });
 
     test('block: POST .../messages/block returns the full assistant message synchronously', async () => {
@@ -154,7 +159,9 @@ for (const kind of TRANSPORTS) {
 
       // Reader A: attach, send, then bail out after the 2nd token (mid-stream).
       const firstLeg = t.sse(`/v1/sessions/${sessionId}/events`, {
-        until: (e) => e.type === 'agent.token' && (e.payload as unknown as AgentTokenPayload).index === 1,
+        until: (e) =>
+          e.type === 'session.message.delta.appended' &&
+          parseEventPayload('session.message.delta.appended', e.payload).index === 1,
         timeoutMs: 3000
       });
       await Bun.sleep(50);
@@ -163,24 +170,25 @@ for (const kind of TRANSPORTS) {
       const cursor = seenA[seenA.length - 1]?.id;
       expect(cursor).toMatch(/^evt_/);
 
-      // Reader B: resume from the cursor; must reach the final agent.message.
+      // Reader B: resume from the cursor; must reach the completed message.
       const seenB = await t.sse(`/v1/sessions/${sessionId}/events`, {
         headers: { 'Last-Event-ID': cursor as string },
-        until: (e) => e.type === 'agent.message',
+        until: (e) => e.type === 'session.message.completed',
         timeoutMs: 3000
       });
 
       // The terminal message is always delivered on resume, carrying the full text…
-      const finalB = seenB.find((e) => e.type === 'agent.message') as Event | undefined;
-      expect((finalB?.payload as unknown as AgentMessagePayload | undefined)?.text).toBe('Hello world');
+      const finalB = seenB.find((e) => e.type === 'session.message.completed');
+      if (!finalB) throw new Error('missing completed message after resume');
+      expect(parseEventPayload('session.message.completed', finalB.payload).message.text).toBe('Hello world');
 
       // …and token deltas are never gapped or duplicated across the reconnect: B's tokens
       // are exactly the ones A had not yet seen (resumed from the hot buffer), or none at
       // all (round already finished → recovered via the terminal message). Either way the
       // token streams are disjoint and together prefix the full reply.
-      const tokenIndex = (e: Event) => (e.payload as unknown as AgentTokenPayload).index;
-      const aTokens = seenA.filter((e) => e.type === 'agent.token').map(tokenIndex);
-      const bTokens = seenB.filter((e) => e.type === 'agent.token').map(tokenIndex);
+      const tokenIndex = (e: Event) => parseEventPayload('session.message.delta.appended', e.payload).index;
+      const aTokens = seenA.filter((e) => e.type === 'session.message.delta.appended').map(tokenIndex);
+      const bTokens = seenB.filter((e) => e.type === 'session.message.delta.appended').map(tokenIndex);
       expect(aTokens).toEqual([0, 1]);
       expect(bTokens.some((i) => aTokens.includes(i))).toBe(false); // no duplicate tokens
       // contiguous: A's tokens then B's tokens form a gap-free prefix 0,1,2,…

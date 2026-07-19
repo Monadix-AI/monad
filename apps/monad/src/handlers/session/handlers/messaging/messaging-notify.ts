@@ -1,5 +1,5 @@
 import type { ExternalAgentConfig } from '@monad/environment';
-import type { MessageAttachmentRef, SessionId } from '@monad/protocol';
+import type { MessageAttachmentRef, MessageId, SessionId } from '@monad/protocol';
 import type { SessionContext } from '#/handlers/session/context.ts';
 import type { createManagedExternalAgentDelivery } from '#/handlers/session/handlers/managed-external-agent-delivery.ts';
 import type { ManagedExternalAgentProjectMessageSender } from '#/handlers/session/handlers/messaging-notices.ts';
@@ -23,11 +23,13 @@ export function createMessagingNotifyHandlers(
       sessionId,
       text,
       sender,
+      triggerMessageId,
       exceptAgentName
     }: {
       sessionId: SessionId;
       text: string;
       sender?: ManagedExternalAgentProjectMessageSender;
+      triggerMessageId?: MessageId;
       exceptAgentName?: string;
     }) {
       const session = requireSession(sessionId);
@@ -39,6 +41,7 @@ export function createMessagingNotifyHandlers(
         externalAgents,
         text,
         sender,
+        triggerMessageId,
         exceptAgentName
       });
       return { accepted: true as const };
@@ -104,10 +107,10 @@ export function createMessagingNotifyHandlers(
       post?: boolean;
     }) {
       if (!post && !error) {
-        const messageId = retireManagedExternalAgentThinking(sessionId, externalAgentSessionId, agentName);
+        const messageId = await retireManagedExternalAgentThinking(sessionId, externalAgentSessionId, agentName);
         return { messageId };
       }
-      const completed = completeManagedExternalAgentThinking({
+      const completed = await completeManagedExternalAgentThinking({
         sessionId,
         externalAgentSessionId,
         agentName,

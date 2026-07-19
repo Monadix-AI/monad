@@ -1,4 +1,4 @@
-import type { ChatMessage, Event, SessionId, UIItem } from '@monad/protocol';
+import type { ChatMessage, Event, MessageProducer, SessionId, UIItem } from '@monad/protocol';
 import type { ExternalAgentSessionSnapshot } from '#/handlers/session/ui-projection.ts';
 
 import { expect, test } from 'bun:test';
@@ -10,6 +10,7 @@ import { SessionUiProjector } from '#/handlers/session/ui-projection.ts';
 import { registerAgentAdapterImpl } from '#/services/external-agent/index.ts';
 
 const sessionId = 'ses_test00000000' as SessionId;
+const agentProducer = { kind: 'agent', agentId: 'agt_test00000000' } satisfies MessageProducer;
 
 for (const adapter of builtinAgentAdapters) registerAgentAdapterImpl(adapter);
 
@@ -22,6 +23,71 @@ function event(type: Event['type'], payload: Record<string, unknown>, at = new D
     payload,
     at
   };
+}
+
+function liveMessage(
+  id: ChatMessage['id'],
+  role: 'user' | 'assistant',
+  text: string,
+  data?: unknown,
+  at = new Date().toISOString()
+): ChatMessage {
+  return {
+    id,
+    sessionId,
+    role,
+    text,
+    type: 'text',
+    ...(data !== undefined ? { data } : {}),
+    stream: { status: role === 'user' ? 'complete' : 'pending' },
+    active: true,
+    createdAt: at
+  };
+}
+
+function created(message: ChatMessage, producer: MessageProducer = agentProducer, at = message.createdAt): Event {
+  return event('session.message.created', { transcriptTargetId: sessionId, producer, message, messageRevision: 1 }, at);
+}
+
+function delta(
+  messageId: ChatMessage['id'],
+  text: string,
+  index: number,
+  channel = 'content',
+  producer: MessageProducer = agentProducer,
+  at?: string
+): Event {
+  return event(
+    'session.message.delta.appended',
+    { transcriptTargetId: sessionId, producer, messageId, channel, index, delta: text },
+    at
+  );
+}
+
+function completed(
+  message: ChatMessage,
+  producer: MessageProducer = agentProducer,
+  at = new Date().toISOString()
+): Event {
+  return event(
+    'session.message.completed',
+    {
+      transcriptTargetId: sessionId,
+      producer,
+      message: { ...message, stream: { status: 'complete' } },
+      messageRevision: 2
+    },
+    at
+  );
+}
+
+function failed(message: ChatMessage, producer: MessageProducer = agentProducer): Event {
+  return event('session.message.failed', {
+    transcriptTargetId: sessionId,
+    producer,
+    message: { ...message, stream: { status: 'settled' } },
+    messageRevision: 2
+  });
 }
 
 test('hydrates persisted messages by creation time instead of insertion order', () => {
@@ -345,9 +411,11 @@ test('hydrates durable memory summary at the compaction boundary', () => {
 
 test('streams reasoning and text onto the same message item', () => {
   const projector = new SessionUiProjector();
-  projector.applyEvent(event('agent.reasoning', { messageId: 'msg_100000000000', delta: 'think', index: 0 }));
-  projector.applyEvent(event('agent.token', { messageId: 'msg_100000000000', delta: 'hello', index: 0 }));
-  const [final] = projector.applyEvent(event('agent.message', { messageId: 'msg_100000000000', text: 'hello' }));
+  const message = liveMessage('msg_100000000000', 'assistant', '');
+  projector.applyEvent(created(message));
+  projector.applyEvent(delta(message.id, 'think', 0, 'reasoning'));
+  projector.applyEvent(delta(message.id, 'hello', 0));
+  const [final] = projector.applyEvent(completed({ ...message, text: 'hello', data: { reasoning: 'think' } }));
   if (final?.kind !== 'upsert' || final.item.kind !== 'message') throw new Error('expected message upsert');
   expect(final.item.parts).toEqual([
     { type: 'reasoning', text: 'think' },
@@ -356,51 +424,105 @@ test('streams reasoning and text onto the same message item', () => {
   expect(final.item.status).toBe('done');
 });
 
-test('agent.error with a provider_config code renders as a provider-config-error artifact', () => {
+test('projects canonical message lifecycle', () => {
   const projector = new SessionUiProjector();
-  const [errEvent] = projector.applyEvent(
-    event('agent.error', {
-      messageId: 'msg_100000000000',
-      code: 'provider_config',
-      message: 'no credentials configured for provider "anthropic"',
-      providerId: 'anthropic'
+  const message: ChatMessage = {
+    id: 'msg_100000000000',
+    sessionId,
+    role: 'assistant',
+    text: '',
+    type: 'text',
+    data: { agentName: 'codex' },
+    stream: { status: 'pending' },
+    active: true,
+    createdAt: '2026-07-18T00:00:00.000Z'
+  };
+  projector.applyEvent(
+    event('session.message.created', {
+      transcriptTargetId: sessionId,
+      producer: agentProducer,
+      message,
+      messageRevision: 1
     })
   );
+  projector.applyEvent(
+    event('session.message.delta.appended', {
+      transcriptTargetId: sessionId,
+      producer: agentProducer,
+      messageId: message.id,
+      channel: 'content',
+      index: 0,
+      delta: 'hello'
+    })
+  );
+  const [settled] = projector.applyEvent(
+    event('session.message.completed', {
+      transcriptTargetId: sessionId,
+      producer: agentProducer,
+      message: { ...message, text: 'hello', stream: { status: 'complete' } },
+      messageRevision: 3
+    })
+  );
+
+  if (settled?.kind !== 'upsert' || settled.item.kind !== 'message') throw new Error('expected message upsert');
+  expect(settled.item).toEqual({
+    kind: 'message',
+    id: message.id,
+    role: 'assistant',
+    agentName: 'codex',
+    parts: [{ type: 'text', text: 'hello' }],
+    status: 'done',
+    seq: message.createdAt
+  });
+});
+
+test('canonical provider config failures render as provider-config-error artifacts', () => {
+  const projector = new SessionUiProjector();
+  const message: ChatMessage = {
+    ...liveMessage('msg_100000000000', 'assistant', 'no credentials configured for provider "anthropic"', {
+      providerId: 'anthropic'
+    }),
+    type: 'provider_config_error'
+  };
+  const [errEvent] = projector.applyEvent(failed(message));
   if (errEvent?.kind !== 'upsert' || errEvent.item.kind !== 'message') throw new Error('expected message upsert');
   expect(errEvent.item.status).toBe('error');
   expect(errEvent.item.parts).toEqual([
     {
       type: 'artifact',
       messageType: 'provider_config_error',
-      text: '[provider_config] no credentials configured for provider "anthropic"',
+      text: 'no credentials configured for provider "anthropic"',
       data: { providerId: 'anthropic' }
     }
   ]);
 });
 
-test('agent.error with a non-config code renders as plain text', () => {
+test('canonical non-config failures render as plain text', () => {
   const projector = new SessionUiProjector();
-  const [errEvent] = projector.applyEvent(
-    event('agent.error', { messageId: 'msg_100000000000', code: 'rate_limit_exceeded', message: 'Rate limit.' })
-  );
+  const message = {
+    ...liveMessage('msg_100000000000', 'assistant', 'Rate limit.', { code: 'rate_limit_exceeded' }),
+    type: 'error' as const
+  };
+  const [errEvent] = projector.applyEvent(failed(message));
   if (errEvent?.kind !== 'upsert' || errEvent.item.kind !== 'message') throw new Error('expected message upsert');
-  expect(errEvent.item.parts).toEqual([{ type: 'text', text: '[rate_limit_exceeded] Rate limit.' }]);
+  expect(errEvent.item.parts).toEqual([{ type: 'text', text: 'Rate limit.' }]);
 });
 
 test('settles a pre-tool reasoning segment when a tool call starts', () => {
   const projector = new SessionUiProjector();
-  projector.applyEvent(
-    event('agent.reasoning', { messageId: 'msg_100000000000', delta: 'I will use a tool.', index: 0 })
-  );
+  const beforeTool = liveMessage('msg_100000000000', 'assistant', '');
+  projector.applyEvent(created(beforeTool));
+  projector.applyEvent(delta(beforeTool.id, 'I will use a tool.', 0, 'reasoning'));
 
   projector.applyEvent(event('tool.called', { toolCallId: 'call_1', tool: 'file_write', input: { path: 'test.md' } }));
   projector.applyEvent(
     event('tool.result', { toolCallId: 'call_1', tool: 'file_write', ok: true, result: 'wrote test.md' })
   );
-  projector.applyEvent(
-    event('agent.reasoning', { messageId: 'msg_200000000000', delta: 'The file was written.', index: 0 })
-  );
-  projector.applyEvent(event('agent.message', { messageId: 'msg_200000000000', text: 'Done.' }));
+  const afterTool = liveMessage('msg_200000000000', 'assistant', '');
+  projector.applyEvent(completed({ ...beforeTool, data: { reasoning: 'I will use a tool.' } }));
+  projector.applyEvent(created(afterTool));
+  projector.applyEvent(delta(afterTool.id, 'The file was written.', 0, 'reasoning'));
+  projector.applyEvent(completed({ ...afterTool, text: 'Done.', data: { reasoning: 'The file was written.' } }));
 
   const snapshot = projector.snapshot();
   if (snapshot.kind !== 'snapshot') throw new Error('expected snapshot');
@@ -412,39 +534,36 @@ test('settles a pre-tool reasoning segment when a tool call starts', () => {
 
 test('accumulates streamed text deltas across tokens (non-channel session)', () => {
   const projector = new SessionUiProjector();
-  projector.applyEvent(event('agent.token', { messageId: 'msg_100000000000', delta: 'Hello', index: 0 }));
-  const [second] = projector.applyEvent(
-    event('agent.token', { messageId: 'msg_100000000000', delta: ' world', index: 1 })
-  );
+  const message = liveMessage('msg_100000000000', 'assistant', '');
+  projector.applyEvent(created(message));
+  projector.applyEvent(delta(message.id, 'Hello', 0));
+  const [second] = projector.applyEvent(delta(message.id, ' world', 1));
   if (second?.kind !== 'upsert' || second.item.kind !== 'message') throw new Error('expected message upsert');
   expect(second.item.parts).toEqual([{ type: 'text', text: 'Hello world' }]);
   expect(second.item.status).toBe('streaming');
 
-  const [third] = projector.applyEvent(event('agent.token', { messageId: 'msg_100000000000', delta: '!', index: 2 }));
+  const [third] = projector.applyEvent(delta(message.id, '!', 2));
   if (third?.kind !== 'upsert' || third.item.kind !== 'message') throw new Error('expected message upsert');
   expect(third.item.parts).toEqual([{ type: 'text', text: 'Hello world!' }]);
 });
 
 test('clears accumulated streaming text after the message settles', () => {
   const projector = new SessionUiProjector();
-  projector.applyEvent(event('agent.token', { messageId: 'msg_100000000000', delta: 'draft', index: 0 }));
-  projector.applyEvent(event('agent.message', { messageId: 'msg_100000000000', text: 'final' }));
+  const message = liveMessage('msg_100000000000', 'assistant', '');
+  projector.applyEvent(created(message));
+  projector.applyEvent(delta(message.id, 'draft', 0));
+  projector.applyEvent(completed({ ...message, text: 'final' }));
   // A reused messageId must not resume from the prior message's accumulated buffer.
-  const [restart] = projector.applyEvent(
-    event('agent.token', { messageId: 'msg_100000000000', delta: 'fresh', index: 0 })
-  );
+  const [restart] = projector.applyEvent(delta(message.id, 'fresh', 0));
   if (restart?.kind !== 'upsert' || restart.item.kind !== 'message') throw new Error('expected message upsert');
   expect(restart.item.parts).toEqual([{ type: 'text', text: 'fresh' }]);
 });
 
 test('reasoning deltas preserve the streaming message agent name', () => {
   const projector = new SessionUiProjector();
-  projector.applyEvent(
-    event('agent.token', { messageId: 'msg_100000000000', agentName: 'codex', delta: '', index: 0 })
-  );
-  const [reasoning] = projector.applyEvent(
-    event('agent.reasoning', { messageId: 'msg_100000000000', delta: 'Thinking', index: 0 })
-  );
+  const message = liveMessage('msg_100000000000', 'assistant', '', { agentName: 'codex' });
+  projector.applyEvent(created(message));
+  const [reasoning] = projector.applyEvent(delta(message.id, 'Thinking', 0, 'reasoning'));
 
   expect(reasoning).toMatchObject({
     kind: 'upsert',
@@ -464,27 +583,15 @@ test('reasoning deltas preserve the streaming message agent name', () => {
 
 test('live managed agent messages preserve the author display name snapshot', () => {
   const projector = new SessionUiProjector();
-  projector.applyEvent(
-    event('agent.token', {
-      messageId: 'msg_snapshot0000',
-      agentName: 'pmem_claude_fable',
-      agentDisplayName: 'Fable',
-      delta: '',
-      index: 0,
-      source: 'managed-external-agent'
-    })
-  );
-  const [completed] = projector.applyEvent(
-    event('agent.message', {
-      messageId: 'msg_snapshot0000',
-      agentName: 'pmem_claude_fable',
-      agentDisplayName: 'Fable',
-      text: 'Done',
-      source: 'managed-external-agent'
-    })
-  );
+  const message = liveMessage('msg_snapshot0000', 'assistant', '', {
+    agentName: 'pmem_claude_fable',
+    agentDisplayName: 'Fable',
+    source: 'managed-external-agent'
+  });
+  projector.applyEvent(created(message));
+  const [completedEvent] = projector.applyEvent(completed({ ...message, text: 'Done' }));
 
-  expect(completed).toMatchObject({
+  expect(completedEvent).toMatchObject({
     kind: 'upsert',
     item: {
       kind: 'message',
@@ -573,20 +680,15 @@ test('managed external agent completion moves live order to completion time', ()
   const projector = new SessionUiProjector();
   const startedAt = '2026-06-24T00:00:01.000Z';
   const completedAt = '2026-06-24T00:00:09.000Z';
-  projector.applyEvent(
-    event(
-      'agent.token',
-      { messageId: 'msg_CLI000000000', agentName: 'codex', delta: '', index: 0, source: 'managed-external-agent' },
-      startedAt
-    )
+  const message = liveMessage(
+    'msg_CLI000000000',
+    'assistant',
+    '',
+    { agentName: 'codex', source: 'managed-external-agent' },
+    startedAt
   );
-  projector.applyEvent(
-    event(
-      'agent.message',
-      { messageId: 'msg_CLI000000000', agentName: 'codex', text: 'done', source: 'managed-external-agent' },
-      completedAt
-    )
-  );
+  projector.applyEvent(created(message));
+  projector.applyEvent(completed({ ...message, text: 'done' }, agentProducer, completedAt));
 
   const snapshot = projector.snapshot();
   if (snapshot.kind !== 'snapshot') throw new Error('expected snapshot');
@@ -603,27 +705,14 @@ test('managed external agent completion moves live order to completion time', ()
 test('managed external agent message projections retain delivery observation pointers', () => {
   const deliveryId = newId('deliv');
   const live = new SessionUiProjector();
-  live.applyEvent(
-    event('agent.token', {
-      messageId: 'msg_CLI000000000',
-      agentName: 'codex',
-      externalAgentSessionId: 'exa_codex0000000',
-      deliveryId,
-      delta: '',
-      index: 0,
-      source: 'managed-external-agent'
-    })
-  );
-  const [settled] = live.applyEvent(
-    event('agent.message', {
-      messageId: 'msg_CLI000000000',
-      agentName: 'codex',
-      externalAgentSessionId: 'exa_codex0000000',
-      deliveryId,
-      text: 'done',
-      source: 'managed-external-agent'
-    })
-  );
+  const message = liveMessage('msg_CLI000000000', 'assistant', '', {
+    agentName: 'codex',
+    externalAgentSessionId: 'exa_codex0000000',
+    deliveryId,
+    source: 'managed-external-agent'
+  });
+  live.applyEvent(created(message));
+  const [settled] = live.applyEvent(completed({ ...message, text: 'done' }));
 
   expect(settled?.kind === 'upsert' && settled.item.kind === 'message' ? settled.item : undefined).toMatchObject({
     externalAgentSessionId: 'exa_codex0000000',
@@ -660,28 +749,17 @@ test('managed external agent message projections retain delivery observation poi
 
 test('live user messages keep chronological order before later managed external agent replies', () => {
   const projector = new SessionUiProjector();
-  projector.applyEvent(
-    event('user.message', { messageId: 'msg_USER00000000', text: 'hi all' }, '2026-06-24T10:00:00.000Z')
+  const user = liveMessage('msg_USER00000000', 'user', 'hi all', undefined, '2026-06-24T10:00:00.000Z');
+  const reply = liveMessage(
+    'msg_CLI000000000',
+    'assistant',
+    '',
+    { agentName: 'claude', source: 'managed-external-agent' },
+    '2026-06-24T10:00:01.000Z'
   );
-  projector.applyEvent(
-    event(
-      'agent.token',
-      { messageId: 'msg_CLI000000000', agentName: 'claude', delta: '', index: 0, source: 'managed-external-agent' },
-      '2026-06-24T10:00:01.000Z'
-    )
-  );
-  projector.applyEvent(
-    event(
-      'agent.message',
-      {
-        messageId: 'msg_CLI000000000',
-        agentName: 'claude',
-        text: 'I can take this.',
-        source: 'managed-external-agent'
-      },
-      '2026-06-24T10:00:02.000Z'
-    )
-  );
+  projector.applyEvent(created(user, { kind: 'user' }));
+  projector.applyEvent(created(reply));
+  projector.applyEvent(completed({ ...reply, text: 'I can take this.' }, agentProducer, '2026-06-24T10:00:02.000Z'));
 
   const snapshot = projector.snapshot();
   if (snapshot.kind !== 'snapshot') throw new Error('expected snapshot');
@@ -690,28 +768,18 @@ test('live user messages keep chronological order before later managed external 
 
 test('channel projector streams only structured display content', () => {
   const projector = new SessionUiProjector({ channelStructured: true });
-  const first = projector.applyEvent(
-    event('agent.token', {
-      messageId: 'msg_100000000000',
-      delta: '{"display":{"kind":"markdown","content":"visible',
-      index: 0
-    })
-  );
+  const message = liveMessage('msg_100000000000', 'assistant', '');
+  projector.applyEvent(created(message));
+  const first = projector.applyEvent(delta(message.id, '{"display":{"kind":"markdown","content":"visible', 0));
   const firstItem = first.at(-1);
   const firstText =
     firstItem?.kind === 'upsert' && firstItem.item.kind === 'message' && firstItem.item.parts[0]?.type === 'text'
       ? firstItem.item.parts[0].text
       : undefined;
-  const second = projector.applyEvent(
-    event('agent.token', {
-      messageId: 'msg_100000000000',
-      delta: ' update"},"attachments":[],"next":[]}',
-      index: 1
-    })
-  );
+  const second = projector.applyEvent(delta(message.id, ' update"},"attachments":[],"next":[]}', 1));
   const [final] = projector.applyEvent(
-    event('agent.message', {
-      messageId: 'msg_100000000000',
+    completed({
+      ...message,
       text: '{"display":{"kind":"markdown","content":"visible update"},"attachments":[{"kind":"note","text":"metadata"}],"next":[]}'
     })
   );
@@ -729,13 +797,9 @@ test('channel projector streams only structured display content', () => {
 
 test('channel projector parses fenced partial structured content', () => {
   const projector = new SessionUiProjector({ channelStructured: true });
-  const first = projector.applyEvent(
-    event('agent.token', {
-      messageId: 'msg_100000000000',
-      delta: '```json\n{"display":{"kind":"markdown","content":"fenced',
-      index: 0
-    })
-  );
+  const message = liveMessage('msg_100000000000', 'assistant', '');
+  projector.applyEvent(created(message));
+  const first = projector.applyEvent(delta(message.id, '```json\n{"display":{"kind":"markdown","content":"fenced', 0));
   const firstItem = first.at(-1);
   const firstText =
     firstItem?.kind === 'upsert' && firstItem.item.kind === 'message' && firstItem.item.parts[0]?.type === 'text'
@@ -747,12 +811,10 @@ test('channel projector parses fenced partial structured content', () => {
 
 test('channel projector hides a silent reply mid-stream before the JSON closes', () => {
   const projector = new SessionUiProjector({ channelStructured: true });
+  const message = liveMessage('msg_100000000000', 'assistant', '');
+  projector.applyEvent(created(message));
   const out = projector.applyEvent(
-    event('agent.token', {
-      messageId: 'msg_100000000000',
-      delta: '{"visibility":"silent","display":{"kind":"markdown","content":"secret',
-      index: 0
-    })
+    delta(message.id, '{"visibility":"silent","display":{"kind":"markdown","content":"secret', 0)
   );
   const item = out.at(-1);
   const text =
@@ -764,6 +826,8 @@ test('channel projector hides a silent reply mid-stream before the JSON closes',
 
 test('channel projector throttles re-parse across small tokens yet stays correct at boundaries', () => {
   const projector = new SessionUiProjector({ channelStructured: true });
+  const message = liveMessage('msg_100000000000', 'assistant', '');
+  projector.applyEvent(created(message));
   const textOf = (events: ReturnType<SessionUiProjector['applyEvent']>): string | undefined => {
     const item = events.at(-1);
     return item?.kind === 'upsert' && item.item.kind === 'message' && item.item.parts[0]?.type === 'text'
@@ -771,19 +835,13 @@ test('channel projector throttles re-parse across small tokens yet stays correct
       : undefined;
   };
   // Opening + first content parses (no cache yet).
-  textOf(
-    projector.applyEvent(
-      event('agent.token', { messageId: 'msg_100000000000', delta: '{"display":{"content":"a', index: 0 })
-    )
-  );
+  textOf(projector.applyEvent(delta(message.id, '{"display":{"content":"a', 0)));
   // Several tiny content tokens (each < 32 chars, no `}`) — these reuse the cached parse.
   for (let i = 1; i <= 5; i++) {
-    textOf(projector.applyEvent(event('agent.token', { messageId: 'msg_100000000000', delta: 'b', index: i })));
+    textOf(projector.applyEvent(delta(message.id, 'b', i)));
   }
   // A delta carrying `}` (structural close) forces a re-parse: the full content is now rendered.
-  const closed = textOf(
-    projector.applyEvent(event('agent.token', { messageId: 'msg_100000000000', delta: 'c"},"next":[]}', index: 6 }))
-  );
+  const closed = textOf(projector.applyEvent(delta(message.id, 'c"},"next":[]}', 6)));
   expect(closed).toBe('abbbbbc');
 });
 
@@ -840,16 +898,14 @@ test('channel projector hides silent structured channel replies', () => {
   if (snapshot.kind !== 'snapshot') throw new Error('expected snapshot');
 
   const liveMessageId = newId('msg');
+  const live = liveMessage(liveMessageId, 'assistant', '');
+  projector.applyEvent(created(live));
   projector.applyEvent(
-    event('agent.token', {
-      messageId: liveMessageId,
-      delta: '{"visibility":"silent","display":{"kind":"markdown","content":""},"attachments":[],"next":[]}',
-      index: 0
-    })
+    delta(live.id, '{"visibility":"silent","display":{"kind":"markdown","content":""},"attachments":[],"next":[]}', 0)
   );
   const [final] = projector.applyEvent(
-    event('agent.message', {
-      messageId: liveMessageId,
+    completed({
+      ...live,
       text: '{"visibility":"silent","display":{"kind":"markdown","content":""},"attachments":[],"next":[]}'
     })
   );
@@ -859,13 +915,13 @@ test('channel projector hides silent structured channel replies', () => {
 test('projects command directive events with effect data', () => {
   const projector = new SessionUiProjector();
   const messageId = newId('msg');
-  const [final] = projector.applyEvent(
-    event('agent.message', {
-      messageId,
-      text: 'Context compacted.',
-      data: { effect: { type: 'compacted', compacted: 3, summary: 'Earlier context.' } }
-    })
-  );
+  const message: ChatMessage = {
+    ...liveMessage(messageId, 'assistant', 'Context compacted.', {
+      effect: { type: 'compacted', compacted: 3, summary: 'Earlier context.' }
+    }),
+    type: 'directive'
+  };
+  const [final] = projector.applyEvent(completed(message, { kind: 'system', subsystem: 'command' }));
   if (final?.kind !== 'upsert' || final.item.kind !== 'message') throw new Error('expected message upsert');
   expect(final.item.parts).toEqual([
     {
@@ -1018,48 +1074,7 @@ test('keeps tool progress on the standard tool item', () => {
   expect(progress.item).toMatchObject({ id: 'call_1', tool: 'shell', status: 'running', output: 'running' });
 });
 
-test('does not project raw external agent PTY output into chat tool text', () => {
-  const projector = new SessionUiProjector();
-  const externalAgentSessionId = 'exa_100000000000';
-  projector.applyEvent(
-    event('external_agent.started', {
-      externalAgentSessionId,
-      agentName: 'claude-code',
-      provider: 'claude-code',
-      launchMode: 'pty',
-      workingPath: '/Users/test/Projects/monad',
-      pid: 123
-    })
-  );
-
-  const out = projector.applyEvent(
-    event('external_agent.output', {
-      externalAgentSessionId,
-      stream: 'pty',
-      chunk: '\u001b[?25l\u001b[38;2;255;193;7mNew MCP server found\u001b[39m'
-    })
-  );
-
-  expect(out).toHaveLength(1);
-  expect(out[0]).toMatchObject({
-    kind: 'upsert',
-    item: {
-      kind: 'tool',
-      id: externalAgentSessionId,
-      output: '\u001b[?25l\u001b[38;2;255;193;7mNew MCP server found\u001b[39m'
-    }
-  });
-  const snapshot = projector.snapshot();
-  if (snapshot.kind !== 'snapshot') throw new Error('expected snapshot');
-  expect(snapshot.items[0]).toMatchObject({
-    kind: 'tool',
-    id: externalAgentSessionId,
-    output: '\u001b[?25l\u001b[38;2;255;193;7mNew MCP server found\u001b[39m',
-    status: 'running'
-  });
-});
-
-test('settles a running external agent tool item on turn_settled without touching output', () => {
+test('settles a running external agent tool item on turn_settled', () => {
   const projector = new SessionUiProjector();
   const externalAgentSessionId = 'exa_200000000000';
   projector.applyEvent(
@@ -1072,14 +1087,13 @@ test('settles a running external agent tool item on turn_settled without touchin
       pid: 123
     })
   );
-  projector.applyEvent(event('external_agent.output', { externalAgentSessionId, stream: 'pty', chunk: 'working...' }));
 
   const settled = projector.applyEvent(event('external_agent.turn_settled', { externalAgentSessionId }));
 
   expect(settled).toHaveLength(1);
   expect(settled[0]).toMatchObject({
     kind: 'upsert',
-    item: { kind: 'tool', id: externalAgentSessionId, status: 'ok', output: 'working...' }
+    item: { kind: 'tool', id: externalAgentSessionId, status: 'ok' }
   });
 });
 
@@ -1273,7 +1287,7 @@ test('projects unsupported ui events as custom extension items', () => {
 
 test('reset session update clears projected items', () => {
   const projector = new SessionUiProjector();
-  projector.applyEvent(event('user.message', { messageId: 'msg_100000000000', text: 'hello' }));
+  projector.applyEvent(created(liveMessage('msg_100000000000', 'user', 'hello'), { kind: 'user' }));
   const [snapshot] = projector.applyEvent(event('session.updated', { reset: true }));
   expect(snapshot).toEqual(
     expect.objectContaining({
@@ -1388,39 +1402,6 @@ test('hydrateExternalAgentSessions settles a running process after provider end 
   expect(snap.items[0].status).toBe('ok');
 });
 
-test('external agent output settles the live tool card after provider end turn', () => {
-  const projector = new SessionUiProjector();
-  projector.applyEvent(
-    event('external_agent.started', {
-      externalAgentSessionId: 'exa_live00000000',
-      agentName: 'pmem_claude',
-      provider: 'claude-code',
-      workingPath: '/w',
-      launchMode: 'pty',
-      pid: 123
-    })
-  );
-  projector.applyEvent(
-    event('external_agent.output', {
-      externalAgentSessionId: 'exa_live00000000',
-      stream: 'stdout',
-      chunk:
-        '{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"Working"}}}\n'
-    })
-  );
-  projector.applyEvent(
-    event('external_agent.output', {
-      externalAgentSessionId: 'exa_live00000000',
-      stream: 'stdout',
-      chunk: '{"type":"result","subtype":"success","is_error":false,"stop_reason":"end_turn"}\n'
-    })
-  );
-  const snap = projector.snapshot();
-  const tool = snap.kind === 'snapshot' ? snap.items.find((item) => item.id === 'exa_live00000000') : undefined;
-  if (tool?.kind !== 'tool') throw new Error('expected tool');
-  expect(tool.status).toBe('ok');
-});
-
 test('hydrateExternalAgentSessions maps terminal state and appends the exit line', () => {
   const failed = new SessionUiProjector();
   failed.hydrateExternalAgentSessions([cliSession({ id: 'exa_f00000000000', state: 'failed', exitCode: 1 })]);
@@ -1474,10 +1455,12 @@ test('live streaming evicts oldest settled items past the cap but keeps active a
   projector.snapshot(); // commit the initial view → enable live eviction
   // A pending approval and a still-streaming assistant message, both inserted early.
   projector.applyEvent(event('tool.approval_requested', { requestId: 'req_1', tool: 'shell_exec', input: {} }));
-  projector.applyEvent(event('agent.token', { messageId: 'msg_LIVE00000000', delta: 'streaming', index: 0 }));
+  const streaming = liveMessage('msg_LIVE00000000', 'assistant', '');
+  projector.applyEvent(created(streaming));
+  projector.applyEvent(delta(streaming.id, 'streaming', 0));
   // Flood with settled user messages well past MAX_LIVE_UI_ITEMS (1000).
   for (let i = 0; i < 1100; i++) {
-    projector.applyEvent(event('user.message', { messageId: `msg_${String(i).padStart(12, '0')}`, text: `m${i}` }));
+    projector.applyEvent(created(liveMessage(`msg_${String(i).padStart(12, '0')}`, 'user', `m${i}`), { kind: 'user' }));
   }
   const snap = projector.snapshot();
   if (snap.kind !== 'snapshot') throw new Error('expected snapshot');
@@ -1507,14 +1490,19 @@ function messageView(item: UIItem): { role?: string; agent?: string; text?: stri
 
 test('two agents streaming concurrently keep per-bubble order and content (no cross-contamination)', () => {
   const p = new SessionUiProjector();
-  p.applyEvent(event('user.message', { messageId: 'msg_U00000000000', text: 'review please' }));
+  const user = liveMessage('msg_U00000000000', 'user', 'review please');
+  const codex = liveMessage('msg_A00000000000', 'assistant', '', { agentName: 'codex' });
+  const claude = liveMessage('msg_B00000000000', 'assistant', '', { agentName: 'claude' });
+  p.applyEvent(created(user, { kind: 'user' }));
+  p.applyEvent(created(codex));
+  p.applyEvent(created(claude));
   // codex and claude stream at the same time, tokens interleaved; claude settles before codex.
-  p.applyEvent(event('agent.token', { messageId: 'msg_A00000000000', agentName: 'codex', delta: 'Look', index: 0 }));
-  p.applyEvent(event('agent.token', { messageId: 'msg_B00000000000', agentName: 'claude', delta: 'I dis', index: 0 }));
-  p.applyEvent(event('agent.token', { messageId: 'msg_A00000000000', agentName: 'codex', delta: 'ing', index: 1 }));
-  p.applyEvent(event('agent.token', { messageId: 'msg_B00000000000', agentName: 'claude', delta: 'agree', index: 1 }));
-  p.applyEvent(event('agent.message', { messageId: 'msg_B00000000000', agentName: 'claude', text: 'I disagree' }));
-  p.applyEvent(event('agent.message', { messageId: 'msg_A00000000000', agentName: 'codex', text: 'Looking good' }));
+  p.applyEvent(delta(codex.id, 'Look', 0));
+  p.applyEvent(delta(claude.id, 'I dis', 0));
+  p.applyEvent(delta(codex.id, 'ing', 1));
+  p.applyEvent(delta(claude.id, 'agree', 1));
+  p.applyEvent(completed({ ...claude, text: 'I disagree' }));
+  p.applyEvent(completed({ ...codex, text: 'Looking good' }));
   const snap = p.snapshot();
   if (snap.kind !== 'snapshot') throw new Error('expected snapshot');
   // Order is by first appearance (U, then A, then B) regardless of which settles first; text is the
@@ -1528,7 +1516,7 @@ test('two agents streaming concurrently keep per-bubble order and content (no cr
 
 test('agent join, its output card, and its wall reply project in chronological order', () => {
   const p = new SessionUiProjector();
-  p.applyEvent(event('user.message', { messageId: 'msg_U00000000000', text: 'please review' }));
+  p.applyEvent(created(liveMessage('msg_U00000000000', 'user', 'please review'), { kind: 'user' }));
   p.applyEvent(
     event('external_agent.started', {
       externalAgentSessionId: 'exa_100000000000',
@@ -1539,37 +1527,18 @@ test('agent join, its output card, and its wall reply project in chronological o
       pid: 123
     })
   );
-  p.applyEvent(
-    event('external_agent.output', {
-      externalAgentSessionId: 'exa_100000000000',
-      stream: 'stdout',
-      chunk: 'analyzing repo'
-    })
-  );
   // The reply reaching the wall: a Thinking placeholder that settles into the posted text.
+  const reply = liveMessage('msg_R00000000000', 'assistant', '', {
+    agentName: 'codex',
+    source: 'managed-external-agent'
+  });
+  p.applyEvent(created(reply));
+  p.applyEvent(delta(reply.id, 'Thinking', 0, 'reasoning'));
   p.applyEvent(
-    event('agent.token', {
-      messageId: 'msg_R00000000000',
-      agentName: 'codex',
-      delta: '',
-      index: 0,
-      source: 'managed-external-agent'
-    })
-  );
-  p.applyEvent(
-    event('agent.reasoning', {
-      messageId: 'msg_R00000000000',
-      delta: 'Thinking',
-      index: 0,
-      source: 'managed-external-agent'
-    })
-  );
-  p.applyEvent(
-    event('agent.message', {
-      messageId: 'msg_R00000000000',
-      agentName: 'codex',
+    completed({
+      ...reply,
       text: 'looks good to me',
-      source: 'managed-external-agent'
+      data: { agentName: 'codex', source: 'managed-external-agent', reasoning: 'Thinking' }
     })
   );
   const snap = p.snapshot();
@@ -1582,11 +1551,11 @@ test('agent join, its output card, and its wall reply project in chronological o
   const card = snap.items.find((i) => i.kind === 'tool');
   if (card?.kind !== 'tool') throw new Error('expected tool card');
   expect(card.tool).toBe('external-agent:codex');
-  const reply = snap.items.find((i) => i.id === 'msg_R00000000000');
-  if (reply?.kind !== 'message') throw new Error('expected reply message');
-  expect(reply.status).toBe('done');
+  const replyItem = snap.items.find((i) => i.id === 'msg_R00000000000');
+  if (replyItem?.kind !== 'message') throw new Error('expected reply message');
+  expect(replyItem.status).toBe('done');
   expect(
-    reply.parts.find((x) => x.type === 'text')?.type === 'text' && reply.parts.find((x) => x.type === 'text')
+    replyItem.parts.find((x) => x.type === 'text')?.type === 'text' && replyItem.parts.find((x) => x.type === 'text')
   ).toMatchObject({ text: 'looks good to me' });
 });
 
@@ -1611,8 +1580,10 @@ test('projects context.evicted as a localized info-level system notice', () => {
 
 test('projects context.handoff_suggested as a localized warn-level system notice', () => {
   const projector = new SessionUiProjector();
-  const [upsert] = projector.applyEvent(event('context.handoff_suggested', { usedFraction: 0.85, atFraction: 0.7 }));
+  const source = event('context.handoff_suggested', { usedFraction: 0.85, atFraction: 0.7 });
+  const [upsert] = projector.applyEvent(source);
   if (upsert?.kind !== 'upsert' || upsert.item.kind !== 'system') throw new Error('expected system item');
+  expect(upsert.item.id).toBe(`context-handoff:${source.id}`);
   expect(upsert.item.level).toBe('warn');
   expect(upsert.item.text).toBe('Context is 85% full — consider starting a fresh session.');
 

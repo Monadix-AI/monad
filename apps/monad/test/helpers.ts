@@ -455,7 +455,12 @@ export interface TransportHandle {
   /** Read an SSE stream over this transport (TCP or unix). */
   sse: (
     path: string,
-    opts: { headers?: Record<string, string>; until: (e: Event) => boolean; timeoutMs?: number }
+    opts: {
+      headers?: Record<string, string>;
+      until: (e: Event) => boolean;
+      timeoutMs?: number;
+      onConnected?: () => void;
+    }
   ) => Promise<Event[]>;
   stop: () => Promise<void>;
 }

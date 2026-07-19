@@ -4,7 +4,7 @@ import type { Tool, ToolBackends } from '#/capabilities/tools/types.ts';
 import type { CommandBundle, LifecycleOps } from '#/handlers/commands/index.ts';
 import type { EventSink, SessionContext } from '#/handlers/session/context.ts';
 
-import { newId } from '@monad/protocol';
+import { newId, parseEventPayload } from '@monad/protocol';
 
 import { extractError } from '#/agent/index.ts';
 import { emitCommandTurn, executeSessionCommand, tryRunSessionCommand } from '#/handlers/commands/index.ts';
@@ -17,7 +17,6 @@ import { createMessagingNotifyHandlers } from '#/handlers/session/handlers/messa
 import { createSendProjectMessageHandler } from '#/handlers/session/handlers/messaging/messaging-project.ts';
 import { imageAttachments, messageTextWithAttachments } from '#/handlers/session/handlers/messaging-attachments.ts';
 import { createSubscribeHandlers } from '#/handlers/session/handlers/messaging-subscribe.ts';
-import { makeEvent } from '#/services/event-bus.ts';
 
 // Re-exported for existing import sites (tests import member/channel helpers from this module).
 export {
@@ -56,14 +55,10 @@ function composeFilter(a?: ToolFilter, b?: ToolFilter): ToolFilter | undefined {
   return (name) => a(name) && b(name);
 }
 
-function lastAgentMessageText(round: Event[]): string | null {
-  for (let i = round.length - 1; i >= 0; i -= 1) {
-    const event = round[i];
-    if (event?.type !== 'agent.message') continue;
-    const text = (event.payload as { text?: unknown }).text;
-    return typeof text === 'string' ? text : null;
-  }
-  return null;
+function completedAssistantText(event: Event): string | null {
+  if (event.type !== 'session.message.completed') return null;
+  const message = parseEventPayload('session.message.completed', event.payload).message;
+  return message.role === 'assistant' ? message.text : null;
 }
 
 export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingCommandDeps) {
@@ -76,8 +71,10 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
     enqueueSteers,
     trackRun,
     makeEmit,
+    touchSession,
     persistAndRetire,
-    requireSession
+    requireSession,
+    messageIngress
   } = ctx;
 
   // Effective fs/shell sandbox roots for a turn, single precedence chain so every call site agrees:
@@ -96,7 +93,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
     rt?.sandboxRoots ??
     (cwd ? [cwd] : sessionId.startsWith('ses_') ? agentSandboxRoots?.(sessionId as SessionId) : undefined);
 
-  const runner = cmd ? { store, bus, lifecycle: cmd.lifecycle, commands: cmd.commands } : null;
+  const runner = cmd ? { store, messageIngress, lifecycle: cmd.lifecycle, commands: cmd.commands } : null;
 
   const managedExternalAgentDelivery = createManagedExternalAgentDelivery(ctx);
   const { deliverProjectMessageToManagedExternalAgentMembers, startManagedExternalAgentRuntimeWithRecovery } =
@@ -107,7 +104,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
 
   const forwardToAcp = createForwardAcpHandler(ctx, sandboxRootsFor);
   const forwardToExternalAgent = createForwardExternalAgentHandler(ctx, startManagedExternalAgentRuntimeWithRecovery);
-  const { subscribe, subscribeUi, subscribeControl } = createSubscribeHandlers(ctx);
+  const { subscribe, subscribeUi, subscribeControl, subscribeMessageGeneration } = createSubscribeHandlers(ctx);
 
   const runtimeForSession = (sessionId: SessionId) => runtime.get(sessionId);
   const agentToolFilterForSession = (sessionId: SessionId) =>
@@ -148,6 +145,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
     if (steer && (continueFromHistory || generate === false || attachments?.length)) {
       throw new HandlerError('invalid', 'steer accepts text only and cannot continue history');
     }
+    touchSession(sessionId);
     if (steer && enqueueSteers(sessionId, requestedSteers)) {
       return { accepted: true as const };
     }
@@ -173,11 +171,15 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
     )
       return { accepted: true as const };
     if (generate === false) {
-      const messageId = newId('msg');
-      const round: Event[] = [];
-      store.insertMessage(messageId, sessionId, effectiveText, new Date().toISOString(), 'user');
-      makeEmit(round)(makeEvent(sessionId as SessionId, 'user.message', { messageId, text: effectiveText }));
-      persistAndRetire(sessionId, round);
+      const message = await messageIngress.deliver({
+        transcriptTargetId: sessionId,
+        idempotencyKey: newId('idem'),
+        producer: { kind: 'user' },
+        role: 'user',
+        type: 'text',
+        text: effectiveText
+      });
+      const messageId = message.id;
       log?.debug(
         { sessionId, event: 'session.send.recorded', messageId, text: effectiveText },
         'session send recorded'
@@ -186,6 +188,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
     }
     const { round, signal } = beginRun(sessionId);
     const rt = runtimeForSession(sessionId);
+    let finalText: string | null = null;
     const loop = agent.loop(makeEmit(round), {
       modelOverride: session.model,
       generationParams: session.reasoningEffort ? { reasoningEffort: session.reasoningEffort } : undefined,
@@ -196,14 +199,17 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
       extraTools: rt?.extraTools,
       extraSkills: rt?.extraSkills,
       steers: steers.get(sessionId),
-      toolFilter: composeFilter(rt?.toolFilter, agentToolFilterForSession(sessionId))
+      toolFilter: composeFilter(rt?.toolFilter, agentToolFilterForSession(sessionId)),
+      messageFanout: (event) => {
+        cache.append(event);
+        finalText = completedAssistantText(event) ?? finalText;
+      }
     });
     const run = continueFromHistory
       ? loop.runStreamFromHistory(sessionId as SessionId, signal)
       : loop.runStream(sessionId as SessionId, effectiveText, signal, modelAttachments);
     const execution = run
       .then(async () => {
-        const finalText = lastAgentMessageText(round);
         persistAndRetire(sessionId, round);
         log?.debug({ sessionId, event: 'session.send.complete', finalText }, 'session send complete');
         if (finalText && onComplete) {
@@ -274,6 +280,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
     ) {
       const session = requireSession(sessionId);
       assertWriteAllowed(session, runOpts?.transport ?? 'acp');
+      touchSession(sessionId);
       if (continueFromHistory) {
         if (text) throw new HandlerError('invalid', 'history continuation cannot include a new user message');
         const lastMessage = trailingContextMessage(sessionId);
@@ -313,7 +320,11 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
           sandboxRoots,
           defaultCwd: session.cwd,
           modelOverride: session.model,
-          generationParams: session.reasoningEffort ? { reasoningEffort: session.reasoningEffort } : undefined
+          generationParams: session.reasoningEffort ? { reasoningEffort: session.reasoningEffort } : undefined,
+          messageFanout: (event) => {
+            cache.append(event);
+            sink(event);
+          }
         }
       );
       // Oversight (tool.approval_requested) and clarify (clarify.requested) are emitted by their
@@ -349,14 +360,12 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
     async generate({ sessionId, text }: { sessionId: SessionId } & SendMessageRequest) {
       const session = requireSession(sessionId);
       assertWriteAllowed(session, 'http');
+      touchSession(sessionId);
       log?.debug({ sessionId, event: 'session.generate.start', text }, 'session generate start');
       if (runner) {
         const result = await executeSessionCommand(runner, session, text, { busy: aborts.has(sessionId) });
         if (result !== null) {
-          const round: Event[] = [];
-          const message = emitCommandTurn(store, makeEmit(round), sessionId, text, result);
-          store.appendEvents(round);
-          cache.retire(sessionId);
+          const message = await emitCommandTurn(messageIngress, undefined, sessionId, text, result);
           return { message };
         }
       }
@@ -370,7 +379,8 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
         defaultCwd: session.cwd,
         extraTools: rt?.extraTools,
         extraSkills: rt?.extraSkills,
-        toolFilter: composeFilter(rt?.toolFilter, agentToolFilterForSession(sessionId))
+        toolFilter: composeFilter(rt?.toolFilter, agentToolFilterForSession(sessionId)),
+        messageFanout: (event) => cache.append(event)
       });
       const execution = (async () => {
         try {
@@ -404,6 +414,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
     subscribe,
     subscribeUi,
     subscribeControl,
+    subscribeMessageGeneration,
 
     forwardToAcp,
     forwardToExternalAgent

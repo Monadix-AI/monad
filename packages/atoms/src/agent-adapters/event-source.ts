@@ -1,4 +1,8 @@
-import type { ExternalAgentObservationEvent, ExternalAgentProvider } from '@monad/protocol';
+import type {
+  ExternalAgentObservationEvent,
+  ExternalAgentProvider,
+  ExternalAgentRawHistoryRecord
+} from '@monad/protocol';
 import type {
   ExternalAgentEventSource,
   ExternalAgentObservationJsonRecordEntry,
@@ -269,6 +273,28 @@ export function createOutputHistoryEventSource(args: {
         events: pageEvents,
         ...(hasMore ? { nextCursor: String(start + pageEvents.length) } : {})
       };
+    },
+    // Output-derived history yields `coverage: 'settled'`: the provider exposes the settled record
+    // set (via readOutput) but not necessarily every transient transport delta. `data` is the exact
+    // parsed provider record before projection.
+    readRawHistoryPage: async (context, request) => {
+      const output = await args.readOutput(context);
+      if (!output) return { state: 'unavailable', reason: 'not-found' };
+      const entries = jsonRecordEntries(output);
+      const ordered = request.sortDirection === 'desc' ? [...entries].reverse() : entries;
+      const offset = request.before ? Number.parseInt(request.before, 10) : 0;
+      const start = Number.isFinite(offset) && offset > 0 ? offset : 0;
+      const pageEntries = ordered.slice(start, start + request.limit);
+      const records: ExternalAgentRawHistoryRecord[] = pageEntries.map((entry, index) => {
+        const providerIdentity = providerRecordIds(entry.record)[0];
+        return {
+          data: entry.record,
+          cursor: providerIdentity ?? `${start + index}`,
+          ...(providerIdentity ? { providerIdentity } : {})
+        };
+      });
+      const hasMore = start + pageEntries.length < ordered.length;
+      return { records, coverage: 'settled', ...(hasMore ? { nextCursor: String(start + pageEntries.length) } : {}) };
     }
   };
 }
@@ -305,6 +331,29 @@ export function createAppServerHistoryEventSource(args: {
         events: source.projectLive({ id: context.providerSessionRef, output, mode: 'history' }).events,
         ...(page.nextCursor ? { nextCursor: page.nextCursor } : {})
       };
+    },
+    readRawHistoryPage: async (context, request) => {
+      if (!context.requestProviderPage) {
+        return (
+          (await args.fallback?.readRawHistoryPage?.(context, request)) ?? {
+            state: 'unavailable',
+            reason: 'unsupported'
+          }
+        );
+      }
+      const page = await context.requestProviderPage((handle) =>
+        args.requestPage(handle, { ...request, itemsView: 'full' })
+      );
+      const ordered = request.sortDirection === 'desc' ? [...page.items].reverse() : page.items;
+      const records: ExternalAgentRawHistoryRecord[] = ordered.map((item, index) => {
+        const providerIdentity = providerRecordIds(item)[0];
+        return {
+          data: item,
+          cursor: providerIdentity ?? `${request.before ?? ''}:${index}`,
+          ...(providerIdentity ? { providerIdentity } : {})
+        };
+      });
+      return { records, coverage: 'exact', ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}) };
     }
   };
 }

@@ -14,20 +14,30 @@ export async function streamReply(
   text: string,
   signal?: AbortSignal
 ): Promise<void> {
-  let started = false;
+  let activeMessageId: string | undefined;
   await client.sendStreamable(
     sessionId,
     text,
     (event: Event) => {
-      if (event.type === 'agent.token') {
-        if (!started) {
+      if (event.type === 'session.message.delta.appended') {
+        const payload = parseEventPayload('session.message.delta.appended', event.payload);
+        if (payload.channel !== 'answer') return;
+        if (!activeMessageId) {
           process.stdout.write(cyan('Monad ▸ '));
-          started = true;
         }
-        process.stdout.write(parseEventPayload('agent.token', event.payload).delta);
-      } else if (event.type === 'agent.message') {
-        if (!started) process.stdout.write(cyan('Monad ▸ ') + parseEventPayload('agent.message', event.payload).text);
+        activeMessageId = payload.messageId;
+        process.stdout.write(payload.delta);
+      } else if (event.type === 'session.message.completed') {
+        const { message } = parseEventPayload('session.message.completed', event.payload);
+        if (activeMessageId !== message.id) process.stdout.write(cyan('Monad ▸ ') + message.text);
         process.stdout.write('\n');
+        if (activeMessageId === message.id) activeMessageId = undefined;
+      } else if (event.type === 'session.message.failed') {
+        const { message } = parseEventPayload('session.message.failed', event.payload);
+        if (activeMessageId === message.id) {
+          process.stdout.write('\n');
+          activeMessageId = undefined;
+        }
       }
     },
     signal

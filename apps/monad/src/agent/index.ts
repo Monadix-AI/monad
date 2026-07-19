@@ -136,6 +136,7 @@ export interface Agent {
        *  for this loop only; global skill hot-reload still applies to the shared portion. */
       extraSkills?: LoadedSkill[];
       steers?: AgentLoopDeps['steers'];
+      messageFanout?: AgentLoopDeps['messageFanout'];
     }
   ): AgentLoop;
 }
@@ -290,6 +291,7 @@ export function createAgent(config: AgentConfig): Agent {
         defaultModel: opts?.modelOverride ?? defaultModel,
         generationParams: opts?.generationParams,
         emit,
+        messageFanout: opts?.messageFanout,
         steers: opts?.steers,
         sandboxRoots: opts?.sandboxRoots ?? config.sandboxRoots,
         agentId: opts?.agentId,

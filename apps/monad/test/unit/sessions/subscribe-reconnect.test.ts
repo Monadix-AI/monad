@@ -11,6 +11,53 @@ function evt(sessionId: SessionId, type: Event['type'], payload: Record<string, 
   return { id: newId('evt'), sessionId, type, actorAgentId: null, payload, at: new Date().toISOString() };
 }
 
+function userCreated(sessionId: SessionId, text: string, messageId = newId('msg')): Event {
+  return evt(sessionId, 'session.message.created', {
+    transcriptTargetId: sessionId,
+    producer: { kind: 'user' },
+    message: {
+      id: messageId,
+      sessionId,
+      role: 'user',
+      text,
+      type: 'text',
+      stream: { status: 'settled' },
+      active: true,
+      createdAt: '2026-07-19T00:00:00.000Z'
+    },
+    messageRevision: 1
+  });
+}
+
+function assistantCompleted(sessionId: SessionId, text: string, messageId = newId('msg')): Event {
+  return evt(sessionId, 'session.message.completed', {
+    transcriptTargetId: sessionId,
+    producer: { kind: 'agent', agentId: 'agt_100000000000' },
+    message: {
+      id: messageId,
+      sessionId,
+      role: 'assistant',
+      text,
+      type: 'text',
+      stream: { status: 'complete' },
+      active: true,
+      createdAt: '2026-07-19T00:00:00.000Z'
+    },
+    messageRevision: 2
+  });
+}
+
+function assistantDelta(sessionId: SessionId, messageId: `msg_${string}`, delta: string, index: number): Event {
+  return evt(sessionId, 'session.message.delta.appended', {
+    transcriptTargetId: sessionId,
+    producer: { kind: 'agent', agentId: 'agt_100000000000' },
+    messageId,
+    channel: 'answer',
+    delta,
+    index
+  });
+}
+
 async function collect(
   handlers: ReturnType<typeof buildHandlers>,
   transcriptTargetId: SessionId,
@@ -29,15 +76,16 @@ test('reconnect from a persisted cursor merges missed durable rounds with the in
   const handlers = buildHandlers(buildMockModel().text(['x']).build(), undefined, { cache });
   const sessionId = newId('ses') as SessionId;
 
-  // Round 1 is fully persisted (agent.token/reasoning are never persisted, so it settles as messages).
-  const r1User = evt(sessionId, 'user.message', { messageId: newId('msg'), text: 'hi' });
-  const r1Msg = evt(sessionId, 'agent.message', { messageId: newId('msg'), text: 'one' });
+  // Round 1 is fully persisted; transient deltas are absent once it settles as durable messages.
+  const r1User = userCreated(sessionId, 'hi');
+  const r1Msg = assistantCompleted(sessionId, 'one');
   handlers.store.appendEvents([r1User, r1Msg]);
 
   // Round 2 is in flight — only the RoundCache holds it (un-persisted).
-  const r2User = evt(sessionId, 'user.message', { messageId: newId('msg'), text: 'again' });
-  const r2Tok1 = evt(sessionId, 'agent.token', { messageId: newId('msg'), delta: 'tw', index: 0 });
-  const r2Tok2 = evt(sessionId, 'agent.token', { messageId: r2Tok1.payload.messageId, delta: 'o', index: 1 });
+  const r2User = userCreated(sessionId, 'again');
+  const r2MessageId = newId('msg');
+  const r2Tok1 = assistantDelta(sessionId, r2MessageId, 'tw', 0);
+  const r2Tok2 = assistantDelta(sessionId, r2MessageId, 'o', 1);
   for (const e of [r2User, r2Tok1, r2Tok2]) cache.append(e);
 
   // Client last saw r1User (persisted). It must receive the rest of round 1 AND all of round 2.
@@ -52,10 +100,11 @@ test('reconnect from an un-persisted live cursor resumes the active round withou
   const handlers = buildHandlers(buildMockModel().text(['x']).build(), undefined, { cache });
   const sessionId = newId('ses') as SessionId;
 
-  handlers.store.appendEvents([evt(sessionId, 'agent.message', { messageId: newId('msg'), text: 'old round' })]);
+  handlers.store.appendEvents([assistantCompleted(sessionId, 'old round')]);
 
-  const tok1 = evt(sessionId, 'agent.token', { messageId: newId('msg'), delta: 'a', index: 0 });
-  const tok2 = evt(sessionId, 'agent.token', { messageId: tok1.payload.messageId, delta: 'b', index: 1 });
+  const messageId = newId('msg');
+  const tok1 = assistantDelta(sessionId, messageId, 'a', 0);
+  const tok2 = assistantDelta(sessionId, messageId, 'b', 1);
   for (const e of [tok1, tok2]) cache.append(e);
 
   // tok1 is an un-persisted token id. listEvents(tok1) would fall back to the whole session; the fix
@@ -70,8 +119,8 @@ test('idle reconnect (no active round) replays durable events after the cursor',
   const handlers = buildHandlers(buildMockModel().text(['x']).build());
   const sessionId = newId('ses') as SessionId;
 
-  const a = evt(sessionId, 'agent.message', { messageId: newId('msg'), text: 'one' });
-  const b = evt(sessionId, 'agent.message', { messageId: newId('msg'), text: 'two' });
+  const a = assistantCompleted(sessionId, 'one');
+  const b = assistantCompleted(sessionId, 'two');
   handlers.store.appendEvents([a, b]);
 
   const received = await collect(handlers, sessionId, a.id);
@@ -89,7 +138,7 @@ test('subscribeUi reconnect with an un-persisted cursor does not full-replay the
   // buggy full-replay of the event log would surface it as a ghost tool card.
   handlers.store.appendEvents([evt(sessionId, 'tool.called', { toolCallId: 'call_ghost', tool: 'shell_exec' })]);
 
-  // Reconnect: no active round buffered, cursor is an un-persisted (agent.token-shaped) event id.
+  // Reconnect: no active round buffered, cursor is an un-persisted generation event id.
   let snap: SessionUiEvent | undefined;
   const { dispose } = await handlers.session.subscribeUi({ sessionId, afterEventId: newId('evt') }, (e) => {
     if (!snap && e.kind === 'snapshot') snap = e;

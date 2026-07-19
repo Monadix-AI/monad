@@ -49,8 +49,8 @@ test('session send accepts steer into the active run without aborting its curren
   expect(prompts[1]?.at(-1)).toMatchObject({ role: 'user', content: 'change direction' });
   expect(handlers.store.listMessages(sessionId).map((message) => message.text)).toEqual([
     'initial request',
-    'first answer',
     'change direction',
+    'first answer',
     'steered answer'
   ]);
   handlers.store.close();
@@ -104,9 +104,9 @@ test('session send accepts a steer batch as separate user messages before one mo
   });
   expect(handlers.store.listMessages(sessionId).map((message) => message.text)).toEqual([
     'initial request',
-    'first answer',
     'first adjustment',
     'second adjustment',
+    'first answer',
     'steered answer'
   ]);
   handlers.store.close();

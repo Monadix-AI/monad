@@ -174,7 +174,9 @@ CREATE TABLE `messages` (
 	`active` integer DEFAULT 1 NOT NULL,
 	`include_in_context` integer,
 	`created_at` text NOT NULL,
-	`updated_at` text
+	`updated_at` text,
+	`idempotency_key` text,
+	`command_fingerprint` text
 );
 --> statement-breakpoint
 CREATE INDEX `idx_messages_transcript_target` ON `messages` (`transcript_target_id`);--> statement-breakpoint
@@ -279,4 +281,20 @@ CREATE TABLE `workplace_projects` (
 	`updated_at` text NOT NULL
 );
 --> statement-breakpoint
-CREATE INDEX `idx_workplace_projects_state` ON `workplace_projects` (`state`,`archived`);
+CREATE INDEX `idx_workplace_projects_state` ON `workplace_projects` (`state`,`archived`);--> statement-breakpoint
+CREATE TABLE `message_mutations` (
+	`transcript_target_id` text NOT NULL,
+	`idempotency_key` text NOT NULL,
+	`command_fingerprint` text NOT NULL,
+	`message_id` text NOT NULL,
+	`message_revision` integer NOT NULL,
+	`result_message` text NOT NULL,
+	PRIMARY KEY(`transcript_target_id`, `idempotency_key`)
+);
+--> statement-breakpoint
+CREATE TABLE `transcript_message_revisions` (
+	`transcript_target_id` text PRIMARY KEY NOT NULL,
+	`revision` integer DEFAULT 0 NOT NULL
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `idx_messages_target_idempotency` ON `messages` (`transcript_target_id`,`idempotency_key`);

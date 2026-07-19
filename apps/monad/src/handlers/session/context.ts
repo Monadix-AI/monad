@@ -11,14 +11,18 @@ import type { EventBus, EventSink } from '#/services/event-bus.ts';
 import type { ExternalAgentHost } from '#/services/external-agent/host/index.ts';
 import type { I18nService } from '#/services/i18n.ts';
 import type { KvService } from '#/services/kv.ts';
+import type { MessageIngress } from '#/services/messages/types.ts';
 import type { OversightService } from '#/services/oversight.ts';
 import type { RoundCache } from '#/services/round-cache.ts';
 import type { SessionSandboxService } from '#/services/session-sandbox.ts';
 import type { Store } from '#/store/db/index.ts';
 
+import { eventDefinition } from '@monad/protocol';
+
 import { HandlerError } from '#/handlers/handler-error.ts';
 import { SessionSteerMailbox } from '#/handlers/session/steer-mailbox.ts';
 import { makeEvent } from '#/services/event-bus.ts';
+import { createMessageIngress } from '#/services/messages/ingress.ts';
 
 export type Disposer = () => void;
 export type { EventSink };
@@ -58,6 +62,7 @@ export interface SessionDeps {
    * applied). Returns undefined when there's no override → the caller inherits the daemon default. */
   agentSandboxRoots?: (sessionId: SessionId) => string[] | undefined;
   externalAgentHost?: Pick<ExternalAgentHost, 'preflight' | 'input' | 'list' | 'start' | 'stop' | 'stopSession'>;
+  messageIngress?: MessageIngress;
 }
 
 /** Execution config applied to every turn of a session, set out-of-band (the ACP bridge pushes the
@@ -82,12 +87,14 @@ interface SessionRuntime {
 
 export interface SessionContext {
   deps: SessionDeps;
+  messageIngress: MessageIngress;
   aborts: Map<SessionId, AbortController>;
   steers: Map<SessionId, SessionSteerMailbox>;
   /** Per-transcript execution config (see {@link SessionRuntime}); keyed by session or project id. */
   runtime: Map<SessionId, SessionRuntime>;
   requireSession(id: SessionId): Session;
   makeEmit(round: Event[]): (event: Event) => void;
+  touchSession(sessionId: SessionId): void;
   persistAndRetire(sessionId: SessionId, round: Event[]): void;
   emitLifecycle(sessionId: SessionId, type: EventType, payload: Record<string, unknown>): void;
   beginRun(sessionId: SessionId): { round: Event[]; signal: AbortSignal };
@@ -102,6 +109,7 @@ export function createSessionContext(deps: SessionDeps): SessionContext {
   const activeRuns = new Map<SessionId, Promise<void>>();
   const steers = new Map<SessionId, SessionSteerMailbox>();
   const runtime = new Map<SessionId, SessionRuntime>();
+  const messageIngress = deps.messageIngress ?? createMessageIngress({ store, bus });
 
   function requireSession(id: SessionId): Session {
     const session = store.getSession(id);
@@ -114,11 +122,6 @@ export function createSessionContext(deps: SessionDeps): SessionContext {
       cache.append(event);
       round.push(event);
       bus.publish(event);
-      // A turn starting (user/channel message accepted) is the session's last activity — bump
-      // updatedAt and fan a sessions.updated delta to the control stream so every client's session
-      // list re-sorts to the top, even ones not viewing this session. Channel-originated turns flow
-      // through here too, so a Telegram message bubbles the session up in the web sidebar live.
-      if (event.type === 'user.message') bumpSessionActivity(event.sessionId);
     };
   }
 
@@ -131,27 +134,17 @@ export function createSessionContext(deps: SessionDeps): SessionContext {
     bus.publish(makeEvent(sessionId, 'session.updated', { updatedAt: updated.updatedAt }));
   }
 
-  // Publish-only stream-lifecycle markers (never persisted): they tell clients holding the control
-  // stream *when* a turn is generating, so they open/close a per-session SSE subscription on demand.
-  // Generation tokens themselves never travel the control/WS plane — only these coarse signals do.
-  function emitStreamMarker(sessionId: SessionId, type: 'session.stream_started' | 'session.stream_ended'): void {
-    bus.publish(makeEvent(sessionId, type, {}));
+  function emitRunMarker(
+    sessionId: SessionId,
+    type: 'session.run.started' | 'session.run.completed' | 'session.run.failed' | 'session.run.cancelled',
+    payload: Record<string, unknown> = {}
+  ): void {
+    bus.publish(makeEvent(sessionId, type, { transcriptTargetId: sessionId, ...payload }));
   }
 
-  const TRANSIENT_EVENT_TYPES = new Set<EventType>([
-    'agent.token',
-    'agent.reasoning',
-    'context.evicted',
-    'context.handoff_suggested'
-  ]);
-
   function persistAndRetire(sessionId: SessionId, round: Event[]): void {
-    // agent.token / agent.reasoning are transient stream deltas — delivered live over the bus,
-    // never persisted as event rows (the final agent.message carries the durable text).
-    // context.evicted / context.handoff_suggested are transient notices — never persisted.
-    store.appendEvents(round.filter((e) => !TRANSIENT_EVENT_TYPES.has(e.type)));
+    store.appendEvents(round.filter((event) => eventDefinition(event.type).persistence === 'durable'));
     cache.retire(sessionId);
-    emitStreamMarker(sessionId, 'session.stream_ended');
   }
 
   function emitLifecycle(sessionId: SessionId, type: EventType, payload: Record<string, unknown>): void {
@@ -165,14 +158,21 @@ export function createSessionContext(deps: SessionDeps): SessionContext {
     const controller = new AbortController();
     aborts.set(sessionId, controller);
     steers.set(sessionId, new SessionSteerMailbox());
-    emitStreamMarker(sessionId, 'session.stream_started');
+    emitRunMarker(sessionId, 'session.run.started');
     return { round, signal: controller.signal };
   }
 
   function trackRun<T>(sessionId: SessionId, signal: AbortSignal, run: Promise<T>): Promise<T> {
     const settled = run.then(
-      () => {},
-      () => {}
+      () => emitRunMarker(sessionId, 'session.run.completed'),
+      (error: unknown) => {
+        if (signal.aborted) {
+          emitRunMarker(sessionId, 'session.run.cancelled', { reason: String(signal.reason ?? 'aborted') });
+          return;
+        }
+        const message = error instanceof Error ? error.message : String(error);
+        emitRunMarker(sessionId, 'session.run.failed', { error: { code: 'run_failed', message } });
+      }
     );
     activeRuns.set(sessionId, settled);
     void settled.then(() => {
@@ -196,11 +196,13 @@ export function createSessionContext(deps: SessionDeps): SessionContext {
 
   return {
     deps,
+    messageIngress,
     aborts,
     steers,
     runtime,
     requireSession,
     makeEmit,
+    touchSession: bumpSessionActivity,
     persistAndRetire,
     emitLifecycle,
     beginRun,

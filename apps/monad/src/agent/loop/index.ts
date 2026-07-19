@@ -140,8 +140,10 @@ export class AgentLoop {
           ex.skill.tier,
           ex.skill.name
         );
-        this.deps.emit(makeEvent(sessionId, 'agent.token', { messageId, delta: result, index: 0 }));
-        await this.writer.finishTurn(sessionId, messageId, result);
+        const segment = this.writer.beginSegment(sessionId, messageId, 0);
+        segment.emitToken(result);
+        await segment.settle(result);
+        await this.writer.finishBookkeeping(sessionId, messageId, result);
       } catch (err) {
         await this.writer.emitError(sessionId, messageId, err);
         throw err;
@@ -213,7 +215,6 @@ export class AgentLoop {
       this.prompt.noteUsage(usage);
       // AfterModel fires immediately after each model call (here the single streamed response).
       text = await this.hookOrchestrator.afterModel(sessionId, text);
-      if (!(await seg.settle(text, reasoning))) await this.writer.appendEmptyAnswer(sessionId, messageId);
       // No tool loop here, so a Stop hook can only observe + rewrite the final text (no continuation).
       const stop = await this.hookOrchestrator.runStopHook(
         sessionId,
@@ -221,7 +222,10 @@ export class AgentLoop {
         usage,
         signal?.aborted ? 'aborted' : 'completed'
       );
-      if (stop.text !== text) await this.writer.repersistFinalText(sessionId, messageId, stop.text);
+      const terminalData = this.writer.terminalData(sessionId, usage, undefined, reasoning);
+      if (!(await seg.settle(stop.text, undefined, terminalData))) {
+        await this.writer.appendEmptyAnswer(sessionId, messageId, terminalData);
+      }
       await this.writer.finishBookkeeping(sessionId, messageId, stop.text, usage);
     } catch (err) {
       await this.writer.emitError(sessionId, messageId, err);
@@ -381,8 +385,8 @@ export class AgentLoop {
   } // budget-exhausted single answer — afterModel + runStopHook fire once on this final response
 
   /**
-   * Streaming tool loop. Each step streams a model turn natively: text deltas stream live as
-   * `agent.token`, tool-call parts are collected. While a step yields tool-calls, execute them
+   * Streaming tool loop. Each step streams a model turn natively as canonical message deltas;
+   * tool-call parts are collected. While a step yields tool-calls, execute them
    * (gate + sandbox via invokeTool), feed structured results back, and re-prompt — up to a step
    * budget. The first step with no tool-calls is the final answer. runStream uses this when
    * tools are registered.
@@ -430,7 +434,8 @@ export class AgentLoop {
       const isFinal = signal?.aborted || calls.length === 0;
       // Settle this step's text as its own row, BEFORE its tool rows are appended — so the turn's
       // text↔tool sequence persists in order instead of one flattened assistant row.
-      const wrote = await seg.settle(text, reasoning);
+      let wrote = false;
+      if (!isFinal) wrote = await seg.settle(text, reasoning);
 
       // Persist provider-executed steps (e.g. Anthropic/OpenAI native web_search) for UI
       // visibility. No local execution — the provider already resolved them.
@@ -455,6 +460,7 @@ export class AgentLoop {
           content: text || '(continuing)'
         });
         if (steeredSegmentId) {
+          if (!wrote) await seg.settle(text, reasoning);
           segmentId = steeredSegmentId;
           continue;
         }
@@ -467,6 +473,7 @@ export class AgentLoop {
           signal?.aborted ? 'aborted' : 'completed'
         );
         if (stop.continueReason) {
+          if (!wrote) await seg.settle(text, reasoning);
           // Record this (already-settled) answer in the model context, inject the continue
           // instruction, and re-enter with a fresh segment.
           messages.push({ role: 'assistant', content: text || '(continuing)' });
@@ -476,8 +483,9 @@ export class AgentLoop {
           continue;
         }
         // The final step IS the answer. Ensure an assistant row exists even for an empty answer.
-        if (!wrote) await this.writer.appendEmptyAnswer(sessionId, segmentId);
-        if (stop.text !== text) await this.writer.repersistFinalText(sessionId, segmentId, stop.text);
+        const terminalData = this.writer.terminalData(sessionId, lastUsage, undefined, reasoning);
+        wrote = await seg.settle(stop.text, undefined, terminalData);
+        if (!wrote) await this.writer.appendEmptyAnswer(sessionId, segmentId, terminalData);
         await this.writer.finishBookkeeping(sessionId, segmentId, stop.text, lastUsage);
         return;
       }
@@ -509,13 +517,13 @@ export class AgentLoop {
         finalText += chunk.token;
         seg.emitToken(chunk.token);
       }
-      if (!(await seg.settle(finalText))) await this.writer.appendEmptyAnswer(sessionId, segmentId);
       const processedText = await this.hookOrchestrator.afterModel(sessionId, finalText);
       const steeredSegmentId = await this.consumeSteers(sessionId, messages, true, {
         role: 'assistant',
         content: processedText || '(continuing)'
       });
       if (steeredSegmentId) {
+        await seg.settle(processedText);
         segmentId = steeredSegmentId;
         continue;
       }
@@ -525,8 +533,12 @@ export class AgentLoop {
         finalUsage ?? lastUsage,
         signal?.aborted ? 'aborted' : 'completed'
       );
-      if (stop.text !== finalText) await this.writer.repersistFinalText(sessionId, segmentId, stop.text);
-      await this.writer.finishBookkeeping(sessionId, segmentId, stop.text, finalUsage ?? lastUsage);
+      const terminalUsage = finalUsage ?? lastUsage;
+      const terminalData = this.writer.terminalData(sessionId, terminalUsage);
+      if (!(await seg.settle(stop.text, undefined, terminalData))) {
+        await this.writer.appendEmptyAnswer(sessionId, segmentId, terminalData);
+      }
+      await this.writer.finishBookkeeping(sessionId, segmentId, stop.text, terminalUsage);
       return;
     }
   }

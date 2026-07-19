@@ -21,7 +21,7 @@ export function createSessionMemberObservationHandlers(ctx: SessionContext) {
   }
 
   // Full point-in-time projection: persisted history plus the active round's un-persisted tail
-  // (`agent.token`/`agent.reasoning` deltas live only in the round cache — see `RoundCache`/
+  // (canonical message deltas live only in the round cache — see `RoundCache`/
   // `persistAndRetire` in `handlers/session/context.ts`), merged in emission order. Re-derived on every
   // call, mirroring `ExternalAgentObservationResolver.observeUi`'s "re-derive from the whole snapshot,
   // never a delta" contract so a consumer always replaces its list wholesale.

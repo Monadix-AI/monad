@@ -23,7 +23,7 @@ daemon A                                             daemon B (the peer)
   agent.loop                                           POST /openai/v1/chat/completions
    └─ agent_peer_delegate tool ──HTTP(SSE)──▶          └─ session.create + sendInline
        (services/peer-delegate.ts)                         └─ agent.loop runs on B's OWN tools/creds
-   ◀──────── streamed answer (tool result) ─────────────── agent.token … agent.message
+   ◀──────── streamed answer (tool result) ───── session.message.delta.appended … completed
 ```
 
 Both daemons run their **own** agent loop. A's outbound call carries the peer's bearer token; B

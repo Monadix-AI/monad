@@ -8,6 +8,7 @@ import type { HookConfig } from '#/hooks/runner.ts';
 import { expect, test } from 'bun:test';
 import { tmpdir } from 'node:os';
 import { createLogger } from '@monad/logger';
+import { parseEventPayload } from '@monad/protocol';
 
 import { createHookRunner } from '#/hooks/runner.ts';
 import { MOCK_REPLY } from '#/infra/mock-model.ts';
@@ -21,7 +22,7 @@ function appWithHooks(config: HookConfig) {
   return createHttpTransport(buildHandlers(mockModel(), stubModelDeps(), { hooks, hookCwd: tmpdir() }));
 }
 
-/** Create a session, send one message, and return the turn's final agent.message text. */
+/** Create a session, send one message, and return the turn's completed assistant text. */
 async function runTurn(tr: ReturnType<typeof serveTransport>, text: string): Promise<string | undefined> {
   const created = (await (
     await tr.fetch('/v1/sessions', {
@@ -37,10 +38,11 @@ async function runTurn(tr: ReturnType<typeof serveTransport>, text: string): Pro
     body: JSON.stringify({ text })
   });
   const events = await tr.sse(`/v1/sessions/${sid}/events`, {
-    until: (e) => e.type === 'agent.message',
+    until: (e) => e.type === 'session.message.completed',
     timeoutMs: 4000
   });
-  return events.find((e) => e.type === 'agent.message')?.payload.text as string | undefined;
+  const completed = events.find((e) => e.type === 'session.message.completed');
+  return completed ? parseEventPayload('session.message.completed', completed.payload).message.text : undefined;
 }
 
 for (const kind of TRANSPORTS) {

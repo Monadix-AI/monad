@@ -16,7 +16,7 @@ import {
 import { FileIcon } from '@monad/ui/components/FileIcon';
 import { type Components, Markdown } from '@monad/ui/components/Markdown';
 import { MentionCapsule, MentionText, parseMentionTokens } from '@monad/ui/components/MentionText';
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 
 import { resolveLocalFileReference } from '../utils/local-file-reference.ts';
 import { SystemMessageRow, TIME_STYLE } from './system-message-row.tsx';
@@ -282,14 +282,19 @@ export function MarkdownWithMentions({
   text: string;
   streaming?: boolean;
 }): React.ReactElement {
+  const components = useMemo(
+    () => createMessageMarkdownComponents({ attachments, onOpenAttachment }),
+    [attachments, onOpenAttachment]
+  );
+  const markdownText = useMemo(() => markdownTextWithMentionCapsules(text), [text]);
   return (
     <>
       <style>{MESSAGE_MARKDOWN_CSS}</style>
       <Markdown
         className="workplace-message-markdown !text-current"
-        components={createMessageMarkdownComponents({ attachments, onOpenAttachment })}
+        components={components}
         streaming={streaming}
-        text={markdownTextWithMentionCapsules(text)}
+        text={markdownText}
       />
     </>
   );

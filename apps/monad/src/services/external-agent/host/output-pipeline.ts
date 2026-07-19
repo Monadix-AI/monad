@@ -114,7 +114,6 @@ export class ExternalAgentOutputPipeline {
     const protectsStructuredSeam =
       !!live?.providerHistoryIdentities?.size && (stream === 'stdout' || stream === 'stderr');
     if (protectsStructuredSeam && !structuredChunk) return;
-    let observableChunk = protectsStructuredSeam ? structuredChunk : chunk;
     const providerObservation =
       live && stream !== 'pty' && structuredChunk
         ? this.trimProviderHistoryReplay(live, structuredChunk, stream === 'app-server')
@@ -122,23 +121,14 @@ export class ExternalAgentOutputPipeline {
     if (live && providerObservation) {
       if (!providerObservation.chunk) return;
       if (protectsStructuredSeam) {
-        observableChunk = providerObservation.chunk;
         structuredChunk = providerObservation.chunk;
       }
       live.providerHistoryCheckpoint = providerObservation.checkpoint ?? live.providerHistoryCheckpoint;
       live.providerHistoryIdentities ??= new Set();
       for (const identity of providerObservation.identities) live.providerHistoryIdentities.add(identity);
     }
-    // Keep the observation snapshot newline-delimited so the web parser can split records; a ws frame
-    // carries no trailing newline of its own.
-    const buffered = stream === 'app-server' ? `${observableChunk}\n` : observableChunk;
     this.ctx.observation.publish(id);
     this.ctx.armIdleSuspend(live);
-    this.ctx.events.publish(transcriptTargetId, 'external_agent.output', {
-      externalAgentSessionId: id,
-      stream: stream === 'app-server' ? 'stdout' : stream,
-      chunk: buffered
-    });
     if (!structuredChunk) return;
     if (stream === 'stderr') {
       for (const line of structuredChunk.split('\n')) {
@@ -295,14 +285,6 @@ export class ExternalAgentOutputPipeline {
         live.startup.reject(new ExternalAgentError('provider_protocol_error', message));
         live.startup = undefined;
       }
-      this.ctx.events.emit(transcriptTargetId, 'external_agent.output', {
-        externalAgentSessionId: id,
-        stream: 'stderr',
-        chunk: message,
-        provider: adapter.provider,
-        code: event.payload.code,
-        responseId: event.payload.responseId
-      });
       this.emitManagedProjectOutput(transcriptTargetId, id, message, true);
       return;
     }

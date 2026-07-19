@@ -12,6 +12,7 @@ import type {
   ExternalAgentPresetView,
   ExternalAgentProductIcon,
   ExternalAgentProvider,
+  ExternalAgentRawHistoryPage,
   ExternalAgentSetting,
   ExternalAgentUsageRecord,
   ExternalAgentView
@@ -310,12 +311,24 @@ export type ExternalAgentEventPageResult =
   | ({ state: 'available' } & ExternalAgentEventPage)
   | { state: 'unavailable'; reason: 'unsupported' | 'not-found' | 'temporary' };
 
+export type ExternalAgentRawHistoryPageResult =
+  | ExternalAgentRawHistoryPage
+  | { state: 'unavailable'; reason: 'unsupported' | 'not-found' | 'temporary' };
+
 export interface ExternalAgentEventSource {
   projectLive(args: { id: string; output: string; mode?: 'live' | 'history' }): ExternalAgentEventPage;
   readPage?(
     context: ExternalAgentProviderHistoryContext,
     request: ExternalAgentEventPageRequest
   ): Promise<ExternalAgentEventPageResult>;
+  /** Read a page of EXACT provider-native history records — the payloads before any projection, merge,
+   *  or dedupe. Each record's `data` is the verbatim provider frame; Monad adds only cursor/identity
+   *  ordering metadata. Separate from `readPage` (which projects) so the raw diagnostic plane and the
+   *  convenience projection are distinct capabilities on one source. */
+  readRawHistoryPage?(
+    context: ExternalAgentProviderHistoryContext,
+    request: ExternalAgentEventPageRequest
+  ): Promise<ExternalAgentRawHistoryPageResult>;
 }
 
 export interface ExternalAgentApprovalResolution {

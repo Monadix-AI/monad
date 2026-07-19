@@ -1,6 +1,8 @@
-import type { Event, SessionId } from '@monad/protocol';
+import type { Event } from '@monad/protocol';
 import type { EventBus } from '#/services/event-bus.ts';
 import type { Store } from '#/store/db/index.ts';
+
+import { transcriptTargetIdSchema } from '@monad/protocol';
 
 import { makeEvent } from '#/services/event-bus.ts';
 
@@ -15,12 +17,8 @@ export interface ExternalAgentEventLogDeps {
 export class ExternalAgentEventLog {
   constructor(private readonly deps: ExternalAgentEventLogDeps) {}
 
-  // TODO(track-b): `sessionId` here is really an ExternalAgentTargetId (SessionId | ProjectId) — an
-  // external agent may be scoped to a Workplace Project, not only a chat session. `Event.sessionId` is
-  // strictly `SessionId` on the wire post-collapse, so this casts; see the class-C note in
-  // apps/monad/src/store/db/external-agent-sessions.ts.
   private build(sessionId: string, type: Event['type'], payload: Record<string, unknown>): Event {
-    return makeEvent(sessionId as SessionId, type, payload);
+    return makeEvent(transcriptTargetIdSchema.parse(sessionId), type, payload);
   }
 
   /** Durable milestone event (started/exited/approval/…): persisted to the event log and published. */
@@ -30,10 +28,10 @@ export class ExternalAgentEventLog {
     this.deps.bus.publish(event);
   }
 
-  /** Publish-only (never persisted). For high-frequency `external_agent.output` chunks: delivered live over
-   *  the bus and captured in the bounded per-session output snapshot, so one durable row per chunk would
-   *  grow the event log without bound. Hydration rebuilds the tool card from that snapshot instead
-   *  (see SessionUiProjector.hydrateExternalAgentSessions), so no durable output rows are needed. */
+  /** Publish-only (never persisted). For high-frequency transient signals delivered live over the bus
+   *  where one durable row per event would grow the event log without bound. Live external-agent output
+   *  is captured in the bounded per-session output snapshot instead, and hydration rebuilds the tool card
+   *  from that snapshot (see SessionUiProjector.hydrateExternalAgentSessions), so no durable rows are needed. */
   publish(sessionId: string, type: Event['type'], payload: Record<string, unknown>): void {
     this.deps.bus.publish(this.build(sessionId, type, payload));
   }

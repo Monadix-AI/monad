@@ -2,15 +2,18 @@ import type { Session, SessionId } from '@monad/protocol';
 import type { SessionContext } from '#/handlers/session/context.ts';
 
 import { expect, test } from 'bun:test';
+import { newId } from '@monad/protocol';
 
 import { createForwardExternalAgentHandler } from '#/handlers/session/handlers/forward-external-agent.ts';
+import { EventBus } from '#/services/event-bus.ts';
+import { createMessageIngress } from '#/services/messages/ingress.ts';
 import { createStore } from '#/store/db/index.ts';
 
 test('managed forwarding preserves an absent configured display name for the runtime fallback', async () => {
   const store = createStore();
   const now = new Date().toISOString();
   const session = {
-    id: 'ses_forward000001' as SessionId,
+    id: newId('ses') as SessionId,
     title: 'Workplace: Test',
     state: 'active',
     agentIds: [],
@@ -71,6 +74,7 @@ test('managed forwarding preserves an absent configured display name for the run
       }
     },
     requireSession: () => session,
+    messageIngress: createMessageIngress({ store, bus: new EventBus() }),
     makeEmit: (round: unknown[]) => (event: unknown) => round.push(event),
     persistAndRetire: () => {}
   } as unknown as SessionContext;

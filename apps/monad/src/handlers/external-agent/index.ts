@@ -3,10 +3,14 @@ import type {
   ExternalAgentApprovalResolutionRequest,
   ExternalAgentAuthSessionView,
   ExternalAgentAuthStatusResponse,
+  ExternalAgentConnectionSnapshot,
+  ExternalAgentConvenienceFrame,
   ExternalAgentHistoryPageRequest,
   ExternalAgentHistoryPageResponse,
   ExternalAgentInputRequest,
   ExternalAgentObservationAccessResponse,
+  ExternalAgentRawFrame,
+  ExternalAgentRawHistoryPage,
   ExternalAgentResizeRequest,
   ExternalAgentUiObservationFrame,
   ExternalAgentUsageResponse,
@@ -30,7 +34,11 @@ import type { Store } from '#/store/db/index.ts';
 import { realpathSync } from 'node:fs';
 import { isAbsolute, relative, resolve } from 'node:path';
 import {
+  externalAgentConnectionSnapshotSchema,
+  externalAgentConvenienceFrameSchema,
   externalAgentObservationAccessResponseSchema,
+  externalAgentRawFrameSchema,
+  externalAgentRawHistoryPageSchema,
   externalAgentUiObservationFrameSchema,
   getExternalAgentSessionResponseSchema,
   getNativeAgentDeliveryResponseSchema,
@@ -229,6 +237,88 @@ export function createExternalAgentModule({ host, store, config }: ExternalAgent
       return host.subscribeUiObservation(id, (frame, done) =>
         onFrame(externalAgentUiObservationFrameSchema.parse(frame), done)
       );
+    },
+
+    connectionSnapshot({
+      id,
+      transcriptTargetId
+    }: {
+      id: string;
+      transcriptTargetId: ExternalAgentTargetId;
+    }): ExternalAgentConnectionSnapshot {
+      requireExternalAgentSessionScope(id, transcriptTargetId);
+      return externalAgentConnectionSnapshotSchema.parse(host.connectionSnapshot(id));
+    },
+
+    async observeRawHistory({
+      id,
+      transcriptTargetId,
+      request
+    }: {
+      id: string;
+      transcriptTargetId: ExternalAgentTargetId;
+      request: ExternalAgentHistoryPageRequest;
+    }): Promise<ExternalAgentRawHistoryPage> {
+      try {
+        requireExternalAgentSessionScope(id, transcriptTargetId);
+        return await host.rawHistoryPage(id, request).then((page) => externalAgentRawHistoryPageSchema.parse(page));
+      } catch (error) {
+        mapExternalAgentError(error);
+      }
+    },
+
+    async observeConvenienceHistory({
+      id,
+      transcriptTargetId,
+      request
+    }: {
+      id: string;
+      transcriptTargetId: ExternalAgentTargetId;
+      request: ExternalAgentHistoryPageRequest;
+    }): Promise<ExternalAgentConvenienceFrame[]> {
+      try {
+        requireExternalAgentSessionScope(id, transcriptTargetId);
+        return await host
+          .convenienceHistoryPage(id, request)
+          .then((frames) => frames.map((frame) => externalAgentConvenienceFrameSchema.parse(frame)));
+      } catch (error) {
+        mapExternalAgentError(error);
+      }
+    },
+
+    subscribeRawObservation({
+      id,
+      transcriptTargetId,
+      onFrame,
+      onDone
+    }: {
+      id: string;
+      transcriptTargetId: ExternalAgentTargetId;
+      onFrame: (frame: ExternalAgentRawFrame) => void;
+      onDone: () => void;
+    }): { frames: ExternalAgentRawFrame[]; live: boolean; dispose: () => void } {
+      requireExternalAgentSessionScope(id, transcriptTargetId);
+      const sub = host.subscribeRawObservation(id, {
+        onFrame: (frame) => onFrame(externalAgentRawFrameSchema.parse(frame)),
+        onDone
+      });
+      return { ...sub, frames: sub.frames.map((frame) => externalAgentRawFrameSchema.parse(frame)) };
+    },
+
+    subscribeConvenienceObservation({
+      id,
+      transcriptTargetId,
+      onFrame
+    }: {
+      id: string;
+      transcriptTargetId: ExternalAgentTargetId;
+      onFrame: (frame: ExternalAgentConvenienceFrame, done: boolean) => void;
+    }): { frames: ExternalAgentConvenienceFrame[]; live: boolean; dispose: () => void } {
+      requireExternalAgentSessionScope(id, transcriptTargetId);
+      const sub = host.subscribeConvenienceObservation(id, (frame, done) =>
+        onFrame(externalAgentConvenienceFrameSchema.parse(frame), done)
+      );
+      return { ...sub, frames: sub.frames.map((frame) => externalAgentConvenienceFrameSchema.parse(frame)) };
     },
 
     delivery({

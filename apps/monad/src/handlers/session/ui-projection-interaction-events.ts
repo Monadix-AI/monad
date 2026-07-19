@@ -138,7 +138,7 @@ export function applyInteractionEvent(m: ProjectionMutations, event: Event): Ses
           cursor: event.id,
           item: m.upsert({
             kind: 'system',
-            id: event.id,
+            id: `context-handoff:${event.id}`,
             text: m.t('daemon.session.contextHandoffSuggested', { pct: Math.round(p.usedFraction * 100) }),
             level: 'warn',
             seq: event.id

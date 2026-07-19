@@ -20,6 +20,7 @@ import { ProjectMemberDialog } from './project-shell/ProjectMemberDialog';
 import { ProjectSettings } from './project-shell/ProjectSettings';
 import { SessionSettings } from './project-shell/SessionSettings';
 import { useProject } from './use-project';
+import { VisibleMessageGenerationStreams } from './VisibleMessageGenerationStreams';
 import { useWorkplaceUiStore } from './workplace-ui-store';
 
 const noopSwitchExperience = () => {};
@@ -185,6 +186,10 @@ export const Workplace = memo(function Workplace({
           position: 'relative'
         }}
       >
+        <VisibleMessageGenerationStreams
+          items={project.source.liveItems}
+          sessionId={project.activeSessionId}
+        />
         <div
           className="workplace-layout"
           style={{

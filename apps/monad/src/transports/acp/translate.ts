@@ -2,10 +2,30 @@
 // Kept side-effect-free so it can be unit-tested without a live connection.
 
 import type { ContentBlock, PlanEntry, SessionUpdate, StopReason, ToolKind } from '@agentclientprotocol/sdk';
-import type { Event, FinishReason } from '@monad/protocol';
+import type { Event, FinishReason, TokenUsage } from '@monad/protocol';
 import type { ImageAttachment } from '#/agent/index.ts';
 
-import { parseEventPayload } from '@monad/protocol';
+import { finishReasonSchema, parseEventPayload, tokenUsageSchema } from '@monad/protocol';
+
+export function canonicalTerminalMetadata(data: unknown): { finishReason?: FinishReason; usage?: TokenUsage } {
+  if (!data || typeof data !== 'object') return {};
+  const candidate = data as { finishReason?: unknown; usage?: unknown };
+  const finishReason = finishReasonSchema.safeParse(candidate.finishReason);
+  const usage = tokenUsageSchema.safeParse(candidate.usage);
+  return {
+    ...(finishReason.success ? { finishReason: finishReason.data } : {}),
+    ...(usage.success ? { usage: usage.data } : {})
+  };
+}
+
+function usageUpdate(usage: TokenUsage | undefined): SessionUpdate | null {
+  if (!usage) return null;
+  return {
+    sessionUpdate: 'usage_update',
+    used: usage.totalTokens ?? (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0),
+    size: usage.totalTokens ?? 0
+  };
+}
 
 /** Flatten an ACP prompt (content blocks) into the plain text monad's loop consumes.
  * Non-text blocks are rendered as a stable textual placeholder so the model still sees
@@ -92,26 +112,18 @@ export function eventToPlanUpdate(event: Event): SessionUpdate | null {
  */
 export function eventToSessionUpdate(event: Event): SessionUpdate | null {
   switch (event.type) {
-    case 'agent.token': {
-      const { delta, messageId } = parseEventPayload('agent.token', event.payload);
+    case 'session.message.delta.appended': {
+      const { channel, delta, messageId } = parseEventPayload('session.message.delta.appended', event.payload);
       if (!delta) return null;
-      return { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: delta }, messageId };
-    }
-    case 'agent.reasoning': {
-      // Extended-thinking deltas → a separate chunk type so clients render them apart from the answer.
-      const { delta, messageId } = parseEventPayload('agent.reasoning', event.payload);
-      if (!delta) return null;
-      return { sessionUpdate: 'agent_thought_chunk', content: { type: 'text', text: delta }, messageId };
-    }
-    case 'agent.message': {
-      // Prose already streamed via agent.token chunks; surface only token usage here.
-      const { usage } = parseEventPayload('agent.message', event.payload);
-      if (!usage) return null;
       return {
-        sessionUpdate: 'usage_update',
-        used: usage.totalTokens ?? (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0),
-        size: usage.totalTokens ?? 0
+        sessionUpdate: channel === 'reasoning' ? 'agent_thought_chunk' : 'agent_message_chunk',
+        content: { type: 'text', text: delta },
+        messageId
       };
+    }
+    case 'session.message.completed': {
+      const { message } = parseEventPayload('session.message.completed', event.payload);
+      return usageUpdate(canonicalTerminalMetadata(message.data).usage);
     }
     case 'tool.called': {
       const { toolCallId, tool, input } = parseEventPayload('tool.called', event.payload);

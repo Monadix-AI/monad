@@ -7,6 +7,7 @@ import {
   type Event,
   nativeAgentRuntimeInfoResponseSchema,
   type ProjectId,
+  parseEventPayload,
   type SessionId,
   type SessionUiEvent
 } from '@monad/protocol';
@@ -456,7 +457,7 @@ for (const kind of TRANSPORTS) {
       expect(wall).toEqual(['codex: looks good', 'claude: I agree']);
     });
 
-    test('replies posted out of fan-out order hydrate in post order rather than thinking-start order', async () => {
+    test('replies posted out of fan-out order keep their stable thinking-placeholder order', async () => {
       const handlers = buildHandlers(mockModel());
       t = serveTransport(kind, createHttpTransport(handlers));
       const sessionId = await createSession(t);
@@ -503,8 +504,8 @@ for (const kind of TRANSPORTS) {
       );
       expect(codexPost.status).toBe(200);
 
-      // A late viewer's hydrated wall orders by post time (the projection's seq), so claude's reply
-      // precedes the codex reply that answers it — even though codex's placeholder was reserved first.
+      // The canonical terminal update keeps the placeholder's message id and creation timestamp, so a
+      // late viewer sees the same stable order as the live wall instead of messages jumping on settle.
       const events = await t.sse(`/v1/sessions/${sessionId}/ui-stream`, {
         until: (e) => (e as unknown as SessionUiEvent).kind === 'snapshot',
         timeoutMs: 3000
@@ -517,7 +518,7 @@ for (const kind of TRANSPORTS) {
         .sort((a, b) => (a.kind === 'message' && b.kind === 'message' ? a.seq.localeCompare(b.seq) : 0))
         .map((i) => (i.kind === 'message' ? i.parts.find((p) => p.type === 'text') : undefined))
         .map((p) => (p?.type === 'text' ? p.text : undefined));
-      expect(wall).toEqual(['plan the split', 'claude: here is the split', 'codex: that split matches mine']);
+      expect(wall).toEqual(['plan the split', 'codex: that split matches mine', 'claude: here is the split']);
     });
 
     test('project post is streamed live even without a pending wake placeholder', async () => {
@@ -525,12 +526,28 @@ for (const kind of TRANSPORTS) {
       t = serveTransport(kind, createHttpTransport(handlers));
       const sessionId = await createSession(t);
       createManagedNativeSession(handlers, sessionId);
+      let eventReady!: () => void;
+      let uiReady!: () => void;
+      const eventConnected = new Promise<void>((resolve) => {
+        eventReady = resolve;
+      });
+      const uiConnected = new Promise<void>((resolve) => {
+        uiReady = resolve;
+      });
       const eventP = t.sse(`/v1/sessions/${sessionId}/events`, {
-        until: (event) =>
-          event.type === 'agent.message' &&
-          (event.payload as { agentName?: unknown; text?: unknown }).agentName === 'codex' &&
-          (event.payload as { text?: unknown }).text === 'live managed reply',
-        timeoutMs: 3000
+        until: (event) => {
+          if (event.type !== 'session.message.created') return false;
+          const message = parseEventPayload('session.message.created', event.payload).message;
+          return (
+            message.text === 'live managed reply' &&
+            typeof message.data === 'object' &&
+            message.data !== null &&
+            'agentName' in message.data &&
+            message.data.agentName === 'codex'
+          );
+        },
+        timeoutMs: 3000,
+        onConnected: eventReady
       });
       const uiP = t.sse(`/v1/sessions/${sessionId}/ui-stream`, {
         until: (event) => {
@@ -543,8 +560,10 @@ for (const kind of TRANSPORTS) {
             uiEvent.item.parts.some((part) => part.type === 'text' && part.text === 'live managed reply')
           );
         },
-        timeoutMs: 3000
+        timeoutMs: 3000,
+        onConnected: uiReady
       });
+      await Promise.all([eventConnected, uiConnected]);
 
       const res = await t.fetch(
         '/v1/internal/native-agent/project/post',
@@ -552,7 +571,7 @@ for (const kind of TRANSPORTS) {
       );
 
       expect(res.status).toBe(200);
-      expect((await eventP).some((event) => event.type === 'agent.message')).toBe(true);
+      expect((await eventP).some((event) => event.type === 'session.message.created')).toBe(true);
       expect((await uiP).some((event) => (event as unknown as SessionUiEvent).kind === 'upsert')).toBe(true);
       expect(await messages(t, sessionId)).toEqual([{ role: 'assistant', text: 'live managed reply' }]);
     });
@@ -865,11 +884,18 @@ for (const kind of TRANSPORTS) {
       handlers.store.insertMessage('msg_ACK100000000', sessionId, 'ack me', '2026-06-30T00:00:01.000Z', 'user');
       handlers.store.enqueueExternalAgentInboxItem('exa_ack000000000', 1);
 
+      const visible = await t.fetch(
+        '/v1/internal/native-agent/project/inbox',
+        json({ sessionId }, bindingHeaders(sessionId, 'exa_ack000000000'))
+      );
+      expect(visible.status).toBe(200);
+
       const ack = await t.fetch(
         '/v1/internal/native-agent/project/inbox/ack',
         json({ sessionId }, bindingHeaders(sessionId, 'exa_ack000000000'))
       );
       expect(ack.status).toBe(200);
+      expect(await ack.json()).toEqual({ ok: true, sessionId, cursor: 1 });
 
       const inbox = await t.fetch(
         '/v1/internal/native-agent/project/inbox',
@@ -877,6 +903,67 @@ for (const kind of TRANSPORTS) {
       );
       expect(inbox.status).toBe(200);
       expect(((await inbox.json()) as { items: unknown[] }).items).toEqual([]);
+    });
+
+    test('project inbox ack without a cursor cannot hide a message whose fanout is enqueued later', async () => {
+      const handlers = buildHandlers(mockModel());
+      t = serveTransport(kind, createHttpTransport(handlers));
+      const sessionId = await createSession(t);
+      createManagedNativeSession(handlers, sessionId, 'exa_ackrace00000');
+      handlers.store.insertMessage(
+        'msg_ACKRACE10000',
+        sessionId,
+        'first assignment',
+        '2026-07-19T01:46:42.000Z',
+        'user'
+      );
+      handlers.store.enqueueExternalAgentInboxItem('exa_ackrace00000', 1);
+
+      const firstInbox = await t.fetch(
+        '/v1/internal/native-agent/project/inbox',
+        json({ sessionId }, bindingHeaders(sessionId, 'exa_ackrace00000'))
+      );
+      expect(firstInbox.status).toBe(200);
+      expect(
+        (await firstInbox.json()) as { cursor: number; items: Array<{ seq: number; message: { text: string } }> }
+      ).toMatchObject({ cursor: 1, items: [{ seq: 1, message: { text: 'first assignment' } }] });
+
+      handlers.store.insertMessage(
+        'msg_ACKRACE20000',
+        sessionId,
+        'delayed fanout',
+        '2026-07-19T01:47:21.000Z',
+        'assistant'
+      );
+      const ack = await t.fetch(
+        '/v1/internal/native-agent/project/inbox/ack',
+        json({ sessionId }, bindingHeaders(sessionId, 'exa_ackrace00000'))
+      );
+      expect(ack.status).toBe(200);
+      expect(await ack.json()).toEqual({ ok: true, sessionId, cursor: 1 });
+
+      handlers.store.enqueueExternalAgentInboxItem('exa_ackrace00000', 2);
+      const delayedInbox = await t.fetch(
+        '/v1/internal/native-agent/project/inbox',
+        json({ sessionId }, bindingHeaders(sessionId, 'exa_ackrace00000'))
+      );
+      expect(delayedInbox.status).toBe(200);
+      const delayedBody = (await delayedInbox.json()) as {
+        cursor: number;
+        items: Array<{ seq: number; deliveryState: string; message: { role: string; text: string } }>;
+      };
+      expect({
+        cursor: delayedBody.cursor,
+        items: delayedBody.items.map((item) => ({
+          seq: item.seq,
+          deliveryState: item.deliveryState,
+          role: item.message.role,
+          text: item.message.text
+        }))
+      }).toEqual({
+        cursor: 2,
+        items: [{ seq: 2, deliveryState: 'queued', role: 'assistant', text: 'delayed fanout' }]
+      });
     });
 
     test('runtime info exposes managed inbox cursor diagnostics', async () => {
@@ -944,10 +1031,14 @@ for (const kind of TRANSPORTS) {
       });
     });
 
-    test('external agent observation endpoint uses persisted managed output before provider history', async () => {
+    test('external agent observation endpoint no longer falls back to persisted managed output', async () => {
       const handlers = buildHandlers(mockModel());
       t = serveTransport(kind, createHttpTransport(handlers));
       const sessionId = await createSession(t);
+      // A stopped managed session that has persisted output: the removed outputSnapshot fallback used
+      // to surface it as `state:'history'`. The raw/convenience observation planes replaced that path,
+      // so with no reachable provider history the endpoint now reports unavailable — the persisted
+      // output is deliberately not used as an observation source.
       createManagedNativeSession(
         handlers,
         sessionId,
@@ -963,11 +1054,11 @@ for (const kind of TRANSPORTS) {
       );
 
       expect(res.status).toBe(200);
-      expect(await res.json()).toMatchObject({
-        state: 'history',
+      expect(await res.json()).toEqual({
+        state: 'unavailable',
         externalAgentSessionId: 'exa_observes7pOD',
         provider: 'codex',
-        output: expect.stringContaining('"type":"result"')
+        reason: 'provider history unavailable'
       });
     });
   });

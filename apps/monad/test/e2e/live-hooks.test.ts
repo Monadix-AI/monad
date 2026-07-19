@@ -79,7 +79,7 @@ describe.skipIf(!KEY)(`live model hooks (${MODEL})`, () => {
 
   function runTurn(t: TransportHandle, sessionId: string, text: string): Promise<Event[]> {
     const eventsP = t.sse(`/v1/sessions/${sessionId}/events`, {
-      until: (e: Event) => e.type === 'agent.message',
+      until: (e: Event) => e.type === 'session.message.completed',
       timeoutMs: TIMEOUT
     });
     return Bun.sleep(50)
@@ -116,7 +116,7 @@ describe.skipIf(!KEY)(`live model hooks (${MODEL})`, () => {
         const sid = await createSession(t, 'live-hooks');
         const evs = await runTurn(t, sid, 'Call the echo_value tool with value set to exactly HELLO. Then say done.');
 
-        expect(evs.some((e) => e.type === 'agent.message')).toBe(true);
+        expect(evs.some((e) => e.type === 'session.message.completed')).toBe(true);
         expect(runs).toContain('HELLO'); // the real model actually called the tool
         // Lifecycle hooks fired around it — including the tool-path hooks the mock can't reach.
         for (const e of events) expect(seen).toContain(e);
@@ -137,7 +137,7 @@ describe.skipIf(!KEY)(`live model hooks (${MODEL})`, () => {
         const sid = await createSession(t, 'live-hooks-deny');
         const evs = await runTurn(t, sid, 'Call the echo_value tool with value set to exactly NOPE. Then say done.');
 
-        expect(evs.some((e) => e.type === 'agent.message')).toBe(true); // the round still completes
+        expect(evs.some((e) => e.type === 'session.message.completed')).toBe(true); // the round still completes
         expect(runs).not.toContain('NOPE'); // BeforeTool denied → the tool never executed
       },
       { timeout: TIMEOUT, retry: 2 }

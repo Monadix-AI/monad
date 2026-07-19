@@ -3,12 +3,13 @@
 // schema-typed insert or lineage walk is needed, the drizzle handle (`db`).
 
 import type { Database } from 'bun:sqlite';
-import type { ChatMessage, MessageId, MessageType, SessionId, StreamStatus } from '@monad/protocol';
+import type { ChatMessage, MessageId, MessageType, SessionId, StreamStatus, TranscriptTargetId } from '@monad/protocol';
 import type { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite';
 
 import { newId, persistedIncludeInContext } from '@monad/protocol';
 
 import { clearFileObservationsIfObservedSince } from './file-observations.ts';
+import { getMessageRevision, type MessageListSnapshot } from './message-mutations.ts';
 import { type MessageRow, rowToMessage, toIntFlag } from './row-mappers.ts';
 import { messages } from './schema.ts';
 
@@ -30,6 +31,22 @@ export interface ListMessagesOptions {
   /** Return a `limit`-sized window centred on (and INCLUDING) this message id — for deep-linking
       to a message in the middle of history. Overrides before/after/latest. */
   around?: string;
+}
+
+function decodeMessageRow(row: Record<string, unknown>): ChatMessage {
+  return rowToMessage({
+    id: row.id as string,
+    transcriptTargetId: row.transcript_target_id as string,
+    role: row.role as string,
+    text: row.text as string,
+    type: row.type as string,
+    data: (row.data ?? null) as string | null,
+    streamStatus: row.stream_status as string,
+    active: row.active as number,
+    includeInContext: (row.include_in_context ?? null) as number | null,
+    createdAt: row.created_at as string,
+    updatedAt: (row.updated_at ?? null) as string | null
+  } as MessageRow);
 }
 
 export function insertMessage(
@@ -235,21 +252,18 @@ export function listMessages(
   }
   const rows = sqlite.query(q).all(binds) as Array<Record<string, unknown>>;
   if (reverse) rows.reverse();
-  return rows.map((r) =>
-    rowToMessage({
-      id: r.id as string,
-      transcriptTargetId: r.transcript_target_id as string,
-      role: r.role as string,
-      text: r.text as string,
-      type: r.type as string,
-      data: (r.data ?? null) as string | null,
-      streamStatus: r.stream_status as string,
-      active: r.active as number,
-      includeInContext: (r.include_in_context ?? null) as number | null,
-      createdAt: r.created_at as string,
-      updatedAt: (r.updated_at ?? null) as string | null
-    } as MessageRow)
-  );
+  return rows.map(decodeMessageRow);
+}
+
+export function listMessagesSnapshot(
+  sqlite: Database,
+  transcriptTargetId: TranscriptTargetId,
+  opts: ListMessagesOptions = {}
+): MessageListSnapshot {
+  return {
+    messages: listMessages(sqlite, transcriptTargetId, opts),
+    messageRevision: getMessageRevision(sqlite, transcriptTargetId)
+  };
 }
 
 export function getMessage(sqlite: Database, transcriptTargetId: string, messageId: string): ChatMessage | null {
@@ -257,19 +271,7 @@ export function getMessage(sqlite: Database, transcriptTargetId: string, message
     .query('SELECT * FROM messages WHERE id = ? AND transcript_target_id = ?')
     .get(messageId, transcriptTargetId) as Record<string, unknown> | null;
   if (!row) return null;
-  return rowToMessage({
-    id: row.id as string,
-    transcriptTargetId: row.transcript_target_id as string,
-    role: row.role as string,
-    text: row.text as string,
-    type: row.type as string,
-    data: (row.data ?? null) as string | null,
-    streamStatus: row.stream_status as string,
-    active: row.active as number,
-    includeInContext: (row.include_in_context ?? null) as number | null,
-    createdAt: row.created_at as string,
-    updatedAt: (row.updated_at ?? null) as string | null
-  } as MessageRow);
+  return decodeMessageRow(row);
 }
 
 export function snapshotAgentDisplayName(

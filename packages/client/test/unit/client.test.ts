@@ -1,4 +1,13 @@
-import type { CreateSessionResponse, Event, InteractionEvent, SessionId, SessionUiEvent } from '@monad/protocol';
+import type {
+  ChatMessage,
+  CreateSessionResponse,
+  EventId,
+  InteractionEvent,
+  MessageGenerationEvent,
+  MessageGenerationFrame,
+  SessionId,
+  SessionUiEvent
+} from '@monad/protocol';
 
 import { afterEach, expect, test } from 'bun:test';
 import { tmpdir } from 'node:os';
@@ -141,14 +150,21 @@ test('unixSocket: a dead socket falls back to TCP and sticks for later requests'
 test('streamEvents delivers live SSE events by draining the raw fetch Response body', async () => {
   // streamEvents now runs on the generic stream<T> engine over a raw fetch (no Eden Treaty for the
   // SSE routes), so the body is a real `Response` whose reader we drain frame by frame. Guards the
-  // live-token path that once silently degraded to block-style.
+  // live-event path that once silently degraded to block-style.
   const sessionId = 'ses_STREAMTEST00' as const;
   const mkEvent = (i: number, delta: string) => ({
     id: `evt_STREAMTEST0${i}`,
     sessionId,
-    type: 'agent.token',
+    type: 'session.message.delta.appended',
     actorAgentId: null,
-    payload: { messageId: 'msg_STREAMTEST00', delta, index: i },
+    payload: {
+      transcriptTargetId: sessionId,
+      producer: { kind: 'system', subsystem: 'client-test' },
+      messageId: 'msg_STREAMTEST00',
+      channel: 'answer',
+      delta,
+      index: i
+    },
     at: '2026-01-01T00:00:00.000Z'
   });
   const frame = (e: ReturnType<typeof mkEvent>) => `id: ${e.id}\nevent: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`;
@@ -282,6 +298,202 @@ test('streamUiEvents dispose stops consuming without surfacing a transient error
   expect(capturedSignal?.aborted).toBe(true);
 });
 
+const generationSessionId = 'ses_100000000000' as SessionId;
+const generationMessage: ChatMessage = {
+  id: 'msg_100000000000',
+  sessionId: generationSessionId,
+  role: 'assistant',
+  text: '',
+  type: 'markdown',
+  stream: {
+    status: 'streaming',
+    source: { transcriptTargetId: generationSessionId, messageId: 'msg_100000000000' }
+  },
+  active: true,
+  createdAt: '2026-07-19T00:00:00.000Z'
+};
+
+function generationEvent(
+  id: EventId,
+  type: 'session.message.delta.appended' | 'session.message.completed'
+): MessageGenerationEvent {
+  return {
+    id,
+    sessionId: generationSessionId,
+    type,
+    actorAgentId: null,
+    payload:
+      type === 'session.message.delta.appended'
+        ? {
+            transcriptTargetId: generationSessionId,
+            producer: { kind: 'system', subsystem: 'client-test' },
+            messageId: generationMessage.id,
+            channel: 'answer',
+            index: 0,
+            delta: 'hello'
+          }
+        : {
+            transcriptTargetId: generationSessionId,
+            producer: { kind: 'system', subsystem: 'client-test' },
+            message: { ...generationMessage, text: 'hello', stream: { status: 'complete' } },
+            messageRevision: 2
+          },
+    at: '2026-07-19T00:00:01.000Z'
+  } as MessageGenerationEvent;
+}
+
+function sseGenerationFrame(frame: MessageGenerationFrame): string {
+  const id = frame.kind === 'event' ? `id: ${frame.event.id}\n` : '';
+  return `${id}data: ${JSON.stringify(frame)}\n\n`;
+}
+
+test('streamMessageGeneration validates frames and stops delivery at the terminal event', async () => {
+  const snapshot: MessageGenerationFrame = {
+    kind: 'snapshot',
+    message: generationMessage,
+    messageRevision: 1,
+    deltas: []
+  };
+  const delta: MessageGenerationFrame = {
+    kind: 'event',
+    event: generationEvent('evt_100000000001', 'session.message.delta.appended')
+  };
+  const terminal: MessageGenerationFrame = {
+    kind: 'event',
+    event: generationEvent('evt_100000000002', 'session.message.completed')
+  };
+  const late: MessageGenerationFrame = {
+    kind: 'event',
+    event: generationEvent('evt_100000000003', 'session.message.delta.appended')
+  };
+  globalThis.fetch = (async () =>
+    new Response(
+      sseGenerationFrame(snapshot) +
+        sseGenerationFrame(delta) +
+        sseGenerationFrame(terminal) +
+        sseGenerationFrame(late),
+      {
+        headers: { 'content-type': 'text/event-stream' }
+      }
+    )) as unknown as typeof fetch;
+
+  const client = new MonadClient({ baseUrl: 'http://127.0.0.1:52749' });
+  const received: MessageGenerationFrame[] = [];
+  await new Promise<void>((resolve) => {
+    client.streamMessageGeneration(generationSessionId, generationMessage.id, (frame) => {
+      received.push(frame);
+      if (frame.kind === 'event' && frame.event.type === 'session.message.completed') setTimeout(resolve, 0);
+    });
+    setTimeout(resolve, 2000);
+  });
+
+  expect(received).toEqual([snapshot, delta, terminal]);
+});
+
+test('streamMessageGeneration treats an authoritative settled snapshot as terminal', async () => {
+  const settledSnapshot: MessageGenerationFrame = {
+    kind: 'snapshot',
+    message: { ...generationMessage, text: 'already done', stream: { status: 'complete' } },
+    messageRevision: 2,
+    deltas: []
+  };
+  const late: MessageGenerationFrame = {
+    kind: 'event',
+    event: generationEvent('evt_100000000004', 'session.message.delta.appended')
+  };
+  globalThis.fetch = (async () =>
+    new Response(sseGenerationFrame(settledSnapshot) + sseGenerationFrame(late), {
+      headers: { 'content-type': 'text/event-stream' }
+    })) as unknown as typeof fetch;
+
+  const client = new MonadClient({ baseUrl: 'http://127.0.0.1:52749' });
+  const received: MessageGenerationFrame[] = [];
+  await new Promise<void>((resolve) => {
+    client.streamMessageGeneration(generationSessionId, generationMessage.id, (frame) => {
+      received.push(frame);
+      setTimeout(resolve, 0);
+    });
+    setTimeout(resolve, 2000);
+  });
+
+  expect(received).toEqual([settledSnapshot]);
+});
+
+test('streamMessageGeneration rejects a malformed frame without delivering later data', async () => {
+  const snapshot: MessageGenerationFrame = {
+    kind: 'snapshot',
+    message: generationMessage,
+    messageRevision: 1,
+    deltas: []
+  };
+  const validAfterMalformed: MessageGenerationFrame = {
+    kind: 'event',
+    event: generationEvent('evt_100000000005', 'session.message.delta.appended')
+  };
+  const malformed = {
+    kind: 'event',
+    event: {
+      id: 'evt_100000000006',
+      sessionId: generationSessionId,
+      type: 'session.message.delta.appended',
+      actorAgentId: null,
+      payload: { messageId: generationMessage.id },
+      at: '2026-07-19T00:00:01.000Z'
+    }
+  };
+  globalThis.fetch = (async () =>
+    new Response(
+      `${sseGenerationFrame(snapshot)}data: ${JSON.stringify(malformed)}\n\n${sseGenerationFrame(validAfterMalformed)}`,
+      { headers: { 'content-type': 'text/event-stream' } }
+    )) as unknown as typeof fetch;
+
+  const client = new MonadClient({ baseUrl: 'http://127.0.0.1:52749' });
+  const received: MessageGenerationFrame[] = [];
+  const errors: StreamError[] = [];
+  await new Promise<void>((resolve) => {
+    client.streamMessageGeneration(generationSessionId, generationMessage.id, (frame) => received.push(frame), {
+      onError: (error) => {
+        errors.push(error);
+        resolve();
+      }
+    });
+    setTimeout(resolve, 2000);
+  });
+
+  expect(received).toEqual([snapshot]);
+  expect(
+    errors.map(({ kind, cause }) => ({ kind, message: cause instanceof Error ? cause.message : undefined }))
+  ).toEqual([{ kind: 'fatal', message: 'invalid message generation frame' }]);
+});
+
+test('streamMessageGeneration resumes with both cursor forms and its disposer aborts the request', async () => {
+  let captured: { signal?: AbortSignal; url: URL; headers: Headers } | undefined;
+  globalThis.fetch = (async (input: string, init?: RequestInit) => {
+    captured = { signal: init?.signal ?? undefined, url: new URL(String(input)), headers: new Headers(init?.headers) };
+    return new Response(new ReadableStream<Uint8Array>({ start() {} }), {
+      headers: { 'content-type': 'text/event-stream' }
+    });
+  }) as typeof fetch;
+  const client = new MonadClient({ baseUrl: 'http://127.0.0.1:52749' });
+  const dispose = client.streamMessageGeneration(generationSessionId, generationMessage.id, () => {}, {
+    afterEventId: 'evt_100000000007'
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  dispose();
+
+  expect({
+    path: captured?.url.pathname,
+    after: captured?.url.searchParams.get('after'),
+    lastEventId: captured?.headers.get('last-event-id'),
+    aborted: captured?.signal?.aborted
+  }).toEqual({
+    path: '/v1/sessions/ses_100000000000/messages/msg_100000000000/stream',
+    after: 'evt_100000000007',
+    lastEventId: 'evt_100000000007',
+    aborted: true
+  });
+});
+
 test('streamInteractionEvents subscribes over the control websocket', async () => {
   const interaction: InteractionEvent = {
     type: 'upsert',
@@ -359,57 +571,129 @@ test('streamInteractionEvents subscribes over the control websocket', async () =
   expect(received).toEqual([interaction]);
 });
 
-test('watchSession: opens SSE on stream_started, closes on stream_ended, de-dupes both planes', () => {
+test('external-agent observation clients validate history and connection responses', async () => {
+  const urls: URL[] = [];
+  globalThis.fetch = (async (input: string) => {
+    const url = new URL(String(input));
+    urls.push(url);
+    if (url.pathname.endsWith('/history/raw')) {
+      return Response.json({ records: [{ cursor: 'raw:1', data: { native: true } }], coverage: 'exact' });
+    }
+    if (url.pathname.endsWith('/history/convenience')) {
+      return Response.json([{ kind: 'ready', observationEpoch: 'epoch_1' }]);
+    }
+    return Response.json({
+      state: 'connected',
+      externalAgentSessionId: 'exa_100000000000',
+      provider: 'codex',
+      observationEpoch: 'epoch_1',
+      revision: 3
+    });
+  }) as typeof fetch;
+
+  const client = new MonadClient({ baseUrl: 'http://127.0.0.1:52749', token: 'secret' });
+  const target = 'ses_100000000000' as SessionId;
+
+  expect(
+    await client.externalAgentRawHistory('exa_100000000000', target, {
+      limit: 5,
+      before: 'cursor:0',
+      sortDirection: 'desc',
+      itemsView: 'summary'
+    })
+  ).toEqual({
+    records: [{ cursor: 'raw:1', data: { native: true } }],
+    coverage: 'exact'
+  });
+  expect(
+    await client.externalAgentConvenienceHistory('exa_100000000000', target, {
+      limit: 20,
+      sortDirection: 'desc',
+      itemsView: 'summary'
+    })
+  ).toEqual([{ kind: 'ready', observationEpoch: 'epoch_1' }]);
+  expect(await client.externalAgentConnection('exa_100000000000', target)).toEqual({
+    state: 'connected',
+    externalAgentSessionId: 'exa_100000000000',
+    provider: 'codex',
+    observationEpoch: 'epoch_1',
+    revision: 3
+  });
+  expect(
+    urls.map((url) => ({
+      path: url.pathname,
+      query: Object.fromEntries(url.searchParams.entries())
+    }))
+  ).toEqual([
+    {
+      path: '/v1/external-agent-sessions/exa_100000000000/history/raw',
+      query: {
+        transcriptTargetId: target,
+        limit: '5',
+        before: 'cursor:0',
+        sortDirection: 'desc',
+        itemsView: 'summary'
+      }
+    },
+    {
+      path: '/v1/external-agent-sessions/exa_100000000000/history/convenience',
+      query: { transcriptTargetId: target, limit: '20', sortDirection: 'desc', itemsView: 'summary' }
+    },
+    {
+      path: '/v1/external-agent-sessions/exa_100000000000/connection',
+      query: { transcriptTargetId: target }
+    }
+  ]);
+});
+
+test('external-agent observation streams use resumable schemas and convenience terminal frames', () => {
   const client = new MonadClient({ baseUrl: 'http://127.0.0.1:52749' });
-
-  let controlHandler: EventHandlerFn | undefined;
-  let sseHandler: EventHandlerFn | undefined;
-  let sseOpens = 0;
-  let sseDisposed = 0;
-
-  // Drive the state machine through controllable fakes for the two transport primitives it
-  // composes (both are covered by their own tests above).
-  type EventHandlerFn = (e: Event) => void;
+  const calls: Array<{ path: string; parsed: unknown; terminal?: boolean; afterEventId?: string }> = [];
+  const target = 'ses_100000000000' as SessionId;
   const c = client as unknown as {
-    subscribeControl: (fn: EventHandlerFn) => () => void;
-    streamEvents: (sid: SessionId, fn: EventHandlerFn) => () => void;
+    stream: (
+      path: string,
+      schema: { parse(value: unknown): unknown },
+      onFrame: (value: never) => void,
+      opts: { afterEventId?: string; isTerminal?: (value: never) => boolean }
+    ) => () => void;
   };
-  c.subscribeControl = (fn) => {
-    controlHandler = fn;
-    return () => {
-      controlHandler = undefined;
-    };
+  c.stream = (path, schema, _onFrame, opts) => {
+    const value = path.endsWith('/raw?transcriptTargetId=ses_100000000000')
+      ? {
+          externalAgentSessionId: 'exa_100000000000',
+          provider: 'codex',
+          origin: 'live',
+          cursor: 'raw:1',
+          data: { native: true }
+        }
+      : { kind: 'unavailable', reason: 'closed' };
+    const parsed = schema.parse(value) as never;
+    calls.push({ path, parsed, afterEventId: opts.afterEventId, terminal: opts.isTerminal?.(parsed) });
+    return () => {};
   };
-  c.streamEvents = (_sid, fn) => {
-    sseOpens += 1;
-    sseHandler = fn;
-    return () => {
-      sseDisposed += 1;
-      sseHandler = undefined;
-    };
-  };
 
-  const ev = (id: string, type: string, sessionId = 'ses_W00000000000'): Event =>
-    ({ id, sessionId, type, actorAgentId: null, payload: {}, at: '' }) as unknown as Event;
+  client.streamExternalAgentRaw('exa_100000000000', target, () => {}, { afterCursor: 'raw:0' });
+  client.streamExternalAgentConvenience('exa_100000000000', target, () => {});
 
-  const seen: string[] = [];
-  const dispose = client.watchSession('ses_W00000000000' as SessionId, (e) => seen.push(e.id));
-
-  expect(sseOpens).toBe(1); // opened up-front to catch an in-flight turn
-
-  controlHandler?.(ev('e1', 'session.stream_ended'));
-  expect(sseDisposed).toBe(1); // turn settled → SSE closed
-  controlHandler?.(ev('e2', 'session.stream_started'));
-  expect(sseOpens).toBe(2); // next turn → SSE reopened
-
-  sseHandler?.(ev('tok1', 'agent.token')); // generation over SSE
-  controlHandler?.(ev('tok1', 'agent.token')); // overlap on the other plane → de-duped
-  controlHandler?.(ev('upd', 'session.updated')); // lifecycle forwarded
-  controlHandler?.(ev('x', 'agent.token', 'ses_OTHER0000000')); // other session → ignored
-
-  // stream_ended is forwarded; stream_started is consumed internally (drives open, not surfaced).
-  expect(seen).toEqual(['e1', 'tok1', 'upd']);
-
-  dispose();
-  expect(sseDisposed).toBe(2); // disposer tears down the open SSE
+  expect(calls).toEqual([
+    {
+      path: '/v1/external-agent-sessions/exa_100000000000/stream/raw?transcriptTargetId=ses_100000000000',
+      parsed: {
+        externalAgentSessionId: 'exa_100000000000',
+        provider: 'codex',
+        origin: 'live',
+        cursor: 'raw:1',
+        data: { native: true }
+      },
+      afterEventId: 'raw:0',
+      terminal: undefined
+    },
+    {
+      path: '/v1/external-agent-sessions/exa_100000000000/stream/convenience?transcriptTargetId=ses_100000000000',
+      parsed: { kind: 'unavailable', reason: 'closed' },
+      afterEventId: undefined,
+      terminal: true
+    }
+  ]);
 });

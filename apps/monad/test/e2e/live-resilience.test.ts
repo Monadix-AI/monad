@@ -10,6 +10,7 @@
 import type { Event } from '@monad/protocol';
 
 import { afterEach, describe, expect, test } from 'bun:test';
+import { parseEventPayload } from '@monad/protocol';
 
 import { createHttpTransport } from '#/transports/http.ts';
 import {
@@ -96,7 +97,7 @@ describe.skipIf(!KEY)(`live model resilience (${MODEL})`, () => {
     );
 
     test(
-      'invalid model: an unresolvable model surfaces agent.error and the daemon stays healthy',
+      'invalid model: an unresolvable model fails the message and the daemon stays healthy',
       async () => {
         const built = liveModelDeps(KEY as string, BOGUS_MODEL); // no fallback → the chain is exhausted
         const t = serve('tcp', built);
@@ -105,9 +106,9 @@ describe.skipIf(!KEY)(`live model resilience (${MODEL})`, () => {
           t,
           sid,
           'Say hello.',
-          (e) => e.type === 'agent.error' || e.type === 'agent.message'
+          (e) => e.type === 'session.message.failed' || e.type === 'session.message.completed'
         );
-        expect(events.some((e) => e.type === 'agent.error')).toBe(true); // error surfaced, not swallowed
+        expect(events.some((e) => e.type === 'session.message.failed')).toBe(true); // error surfaced, not swallowed
         const health = (await (await t.fetch('/health')).json()) as { status: string };
         expect(health.status).toBe('ok'); // a model failure doesn't take the daemon down
       },
@@ -146,13 +147,23 @@ describe.skipIf(!KEY)(`live model resilience (${MODEL})`, () => {
           const t = serve(kind, built);
           const sid = await createSession(t, 'unicode');
           const cjk = '法国的首都是哪座城市？请用中文或英文回答。🗼';
-          const events = await runStream(t, sid, cjk, (e) => e.type === 'agent.message' || e.type === 'agent.error');
-          // Deterministic: the echoed user.message must equal the input byte-for-byte — proof the CJK
+          const events = await runStream(
+            t,
+            sid,
+            cjk,
+            (e) => e.type === 'session.message.completed' || e.type === 'session.message.failed'
+          );
+          // Deterministic: the created user message must equal the input byte-for-byte — proof the CJK
           // (+ emoji) survived POST → store → SSE intact. (We don't assert the model's ANSWER: the
           // free router's reply quality is non-deterministic; the pipe's encoding is what's tested.)
-          const echoed = events.find((e) => e.type === 'user.message');
-          expect((echoed?.payload as { text: string } | undefined)?.text).toBe(cjk);
-          expect(events.some((e) => e.type === 'agent.message')).toBe(true); // the round completed, not errored
+          const echoed = events.find(
+            (e) =>
+              e.type === 'session.message.created' &&
+              parseEventPayload('session.message.created', e.payload).message.role === 'user'
+          );
+          if (!echoed) throw new Error('missing created user message');
+          expect(parseEventPayload('session.message.created', echoed.payload).message.text).toBe(cjk);
+          expect(events.some((e) => e.type === 'session.message.completed')).toBe(true); // the round completed, not errored
         },
         { timeout: TIMEOUT, retry: 2 }
       );

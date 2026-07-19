@@ -67,6 +67,7 @@ import {
   externalAgentSessionSelectors,
   useApproveExternalAgentSessionMutation,
   useGetExternalAgentAuthQuery,
+  useGetExternalAgentConnectionQuery,
   useGetExternalAgentObservationQuery,
   useGetExternalAgentSessionQuery,
   useGetExternalAgentUsageQuery,
@@ -76,8 +77,11 @@ import {
   useInputExternalAgentAuthMutation,
   useInputExternalAgentSessionMutation,
   useLazyGetExternalAgentAuthStatusQuery,
+  useLazyGetExternalAgentConnectionQuery,
+  useLazyGetExternalAgentConvenienceHistoryQuery,
   useLazyGetExternalAgentHistoryPageQuery,
   useLazyGetExternalAgentObservationQuery,
+  useLazyGetExternalAgentRawHistoryQuery,
   useLazyGetExternalAgentUsageQuery,
   useLazyGetNativeAgentDeliveryObservationQuery,
   useListExternalAgentSessionSummariesQuery,
@@ -89,6 +93,8 @@ import {
   useStartExternalAgentMutation,
   useStopExternalAgentAuthMutation,
   useStopExternalAgentSessionMutation,
+  useStreamExternalAgentConvenienceQuery,
+  useStreamExternalAgentRawQuery,
   useStreamExternalAgentUiObservationQuery
 } from './endpoints/external-agent/index.ts';
 import { graphApi, useGetGraphQuery } from './endpoints/graph/index.ts';
@@ -148,7 +154,7 @@ import {
   useSendMessageMutation,
   useSpawnSessionMemberMutation,
   useStreamControlQuery,
-  useStreamSessionQuery,
+  useStreamMessageGenerationQuery,
   useStreamUiItemsQuery,
   useUndoDeleteSessionMutation,
   useUpdateSessionMutation,
@@ -301,7 +307,7 @@ import { useResetUsageMutation } from './endpoints/usage/reset-usage.ts';
 
 export const monadApi = modelApi;
 
-export type { ContextNotice, MemorySuggestion } from './endpoints/sessions/index.ts';
+export type { MessageGenerationStreamState, StreamMessageGenerationArg } from './endpoints/sessions/index.ts';
 
 export {
   acpAgentAdapter,
@@ -402,6 +408,7 @@ export {
   useGetDefaultQuery,
   useGetDeveloperQuery,
   useGetExternalAgentAuthQuery,
+  useGetExternalAgentConnectionQuery,
   useGetExternalAgentObservationQuery,
   useGetExternalAgentSessionQuery,
   useGetExternalAgentUsageQuery,
@@ -446,8 +453,11 @@ export {
   useLazyFetchSkillDetailQuery,
   useLazyGetAttachmentQuery,
   useLazyGetExternalAgentAuthStatusQuery,
+  useLazyGetExternalAgentConnectionQuery,
+  useLazyGetExternalAgentConvenienceHistoryQuery,
   useLazyGetExternalAgentHistoryPageQuery,
   useLazyGetExternalAgentObservationQuery,
+  useLazyGetExternalAgentRawHistoryQuery,
   useLazyGetExternalAgentUsageQuery,
   useLazyGetNativeAgentDeliveryObservationQuery,
   useLazyGetSkillContentQuery,
@@ -555,8 +565,10 @@ export {
   useStopExternalAgentAuthMutation,
   useStopExternalAgentSessionMutation,
   useStreamControlQuery,
+  useStreamExternalAgentConvenienceQuery,
+  useStreamExternalAgentRawQuery,
   useStreamExternalAgentUiObservationQuery,
-  useStreamSessionQuery,
+  useStreamMessageGenerationQuery,
   useStreamUiItemsQuery,
   useTestConnectionMutation,
   useTestCredentialMutation,

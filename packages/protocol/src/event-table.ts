@@ -13,18 +13,18 @@
 import { z } from 'zod';
 
 import { clarifyAskerSchema, clarifyChoiceModeSchema } from './clarify.ts';
-import { costSchema, type EventType, finishReasonSchema, messageTypeSchema, tokenUsageSchema } from './domain.ts';
+import { chatMessageSchema, type EventType } from './domain.ts';
 import {
   externalAgentIdleResumedSystemEventSchema,
   externalAgentIdleSuspendedSystemEventSchema,
   externalAgentLaunchModeSchema,
   externalAgentProductIconSchema,
-  externalAgentProviderSchema,
-  messageAttachmentRefSchema
+  externalAgentProviderSchema
 } from './external-agent/index.ts';
-import { agentIdSchema, externalAgentSessionIdSchema, messageIdSchema, nativeAgentDeliveryIdSchema } from './ids.ts';
+import { agentIdSchema, externalAgentSessionIdSchema, messageIdSchema, transcriptTargetIdSchema } from './ids.ts';
 import { mcpServerStatusSchema } from './mcp-server.ts';
 import { memoryScopeSchema } from './memory.ts';
+import { messageProducerSchema } from './message-ingress.ts';
 
 const requestIdSchema = z.string();
 
@@ -41,22 +41,47 @@ export const sessionUpdatedPayloadSchema = z.object({
 
 export const sessionDeletedPayloadSchema = z.object({});
 
-// Stream lifecycle (publish-only, never persisted): a turn began / settled. These ride the
-// control topic so a client watching the session list learns *when* to open or close a
-// per-session SSE generation subscription — generation tokens themselves never travel the WS.
-export const sessionStreamStartedPayloadSchema = z.object({
-  // The id of the latest event before this turn, so a late subscriber can resume the SSE
-  // stream from here and backfill tokens already emitted. Absent ⇒ resume from the client's
-  // own last-seen id (or from now for a fresh watcher).
-  afterEventId: z.string().optional()
-});
-
-export const sessionStreamEndedPayloadSchema = z.object({});
-
 export const sessionRestoredPayloadSchema = z.object({
   toMessageId: messageIdSchema,
   restoredCount: z.number().int().nonnegative(),
   newHeadMessageId: messageIdSchema.nullable()
+});
+
+const transcriptEventIdentitySchema = z.object({ transcriptTargetId: transcriptTargetIdSchema });
+
+const messageEventIdentitySchema = transcriptEventIdentitySchema.extend({ producer: messageProducerSchema });
+
+const messageRevisionSchema = z.number().int().nonnegative();
+
+const durableMessagePayloadSchema = messageEventIdentitySchema.extend({
+  message: chatMessageSchema,
+  messageRevision: messageRevisionSchema
+});
+
+export const sessionMessageCreatedPayloadSchema = durableMessagePayloadSchema;
+export const sessionMessageUpdatedPayloadSchema = durableMessagePayloadSchema;
+export const sessionMessageCompletedPayloadSchema = durableMessagePayloadSchema;
+export const sessionMessageFailedPayloadSchema = durableMessagePayloadSchema;
+
+export const sessionMessageDeletedPayloadSchema = messageEventIdentitySchema.extend({
+  messageId: messageIdSchema,
+  messageRevision: messageRevisionSchema
+});
+
+export const sessionMessageDeltaAppendedPayloadSchema = messageEventIdentitySchema.extend({
+  messageId: messageIdSchema,
+  channel: z.string().min(1),
+  index: z.number().int().nonnegative(),
+  delta: z.string()
+});
+
+export const sessionRunStartedPayloadSchema = transcriptEventIdentitySchema;
+export const sessionRunCompletedPayloadSchema = transcriptEventIdentitySchema;
+export const sessionRunFailedPayloadSchema = transcriptEventIdentitySchema.extend({
+  error: z.object({ code: z.string().min(1), message: z.string().min(1) })
+});
+export const sessionRunCancelledPayloadSchema = transcriptEventIdentitySchema.extend({
+  reason: z.string().min(1).optional()
 });
 
 export const taskCreatedPayloadSchema = z.object({
@@ -82,74 +107,6 @@ export const taskFailedPayloadSchema = z.object({
 
 export const mcpStatusUpdatedPayloadSchema = z.object({
   servers: z.array(mcpServerStatusSchema).optional()
-});
-
-export const userMessagePayloadSchema = z.object({
-  messageId: messageIdSchema,
-  text: z.string()
-});
-
-export const agentErrorPayloadSchema = z.object({
-  messageId: messageIdSchema.optional(),
-  agentName: z.string().optional(),
-  code: z.string().optional(),
-  message: z.string(),
-  // Set when `code === 'provider_config'` — the provider a card CTA should point settings at.
-  providerId: z.string().optional()
-});
-
-export const agentTokenPayloadSchema = z.object({
-  messageId: messageIdSchema,
-  agentName: z.string().optional(),
-  agentDisplayName: z.string().optional(),
-  externalAgentSessionId: externalAgentSessionIdSchema.optional(),
-  deliveryId: nativeAgentDeliveryIdSchema.optional(),
-  delta: z.string(),
-  index: z.number().int().nonnegative(),
-  source: z.enum(['managed-external-agent', 'external-agent-provider']).optional()
-});
-
-export const agentReasoningPayloadSchema = z.object({
-  messageId: messageIdSchema,
-  externalAgentSessionId: externalAgentSessionIdSchema.optional(),
-  deliveryId: nativeAgentDeliveryIdSchema.optional(),
-  delta: z.string(),
-  index: z.number().int().nonnegative(),
-  source: z.enum(['managed-external-agent', 'external-agent-provider']).optional()
-});
-
-export const agentMessagePayloadSchema = z.object({
-  messageId: messageIdSchema,
-  agentName: z.string().optional(),
-  agentDisplayName: z.string().optional(),
-  externalAgentSessionId: externalAgentSessionIdSchema.optional(),
-  deliveryId: nativeAgentDeliveryIdSchema.optional(),
-  text: z.string(),
-  data: z.unknown().optional(),
-  // File references shared with the message — lets live UI projections render the attachment
-  // chips without reloading the persisted message row.
-  attachments: z.array(messageAttachmentRefSchema).optional(),
-  source: z.enum(['managed-external-agent', 'external-agent-provider']).optional(),
-  usage: tokenUsageSchema.optional(),
-  cost: costSchema.optional(),
-  finishReason: finishReasonSchema.optional()
-});
-
-export const messageDeltaPayloadSchema = z.object({
-  messageId: messageIdSchema,
-  channel: z.string(),
-  type: messageTypeSchema,
-  delta: z.string(),
-  index: z.number().int().nonnegative()
-});
-
-export const messageCompletePayloadSchema = z.object({
-  messageId: messageIdSchema,
-  channel: z.string(),
-  type: messageTypeSchema,
-  ok: z.boolean(),
-  text: z.string(),
-  data: z.unknown().optional()
 });
 
 export const toolCalledPayloadSchema = z.object({
@@ -226,7 +183,7 @@ export const contextUsagePayloadSchema = z.object({
   reclaimed: z.number().int().nonnegative().optional()
 });
 
-// Publish-only, never persisted (like the session.stream_started/ended markers): fires the moment
+// Publish-only, never persisted: fires the moment
 // ToolResultEvictionContext actually reclaims space, so a client can show a transient "freed ~62K
 // clearing 7 tool results" notice without it becoming a permanent transcript row.
 export const contextEvictedPayloadSchema = z.object({
@@ -280,10 +237,15 @@ export const externalAgentStartedPayloadSchema = z.object({
   pid: z.number().int().nullable()
 });
 
-export const externalAgentOutputPayloadSchema = z.object({
-  externalAgentSessionId: z.string(),
-  stream: z.enum(['stdout', 'stderr', 'pty']),
-  chunk: z.string()
+const externalAgentConnectionIdentitySchema = z.object({
+  externalAgentSessionId: externalAgentSessionIdSchema,
+  provider: externalAgentProviderSchema,
+  observationEpoch: z.string().min(1)
+});
+
+export const externalAgentSessionConnectionOpenedPayloadSchema = externalAgentConnectionIdentitySchema;
+export const externalAgentSessionConnectionClosedPayloadSchema = externalAgentConnectionIdentitySchema.extend({
+  reason: z.enum(['exited', 'failed', 'stopped', 'disconnected'])
 });
 
 export const externalAgentConnectionRequiredPayloadSchema = z.object({
@@ -354,16 +316,7 @@ export const externalAgentLoginResolvedPayloadSchema = z.object({
 export type SessionCreatedPayload = z.infer<typeof sessionCreatedPayloadSchema>;
 export type SessionUpdatedPayload = z.infer<typeof sessionUpdatedPayloadSchema>;
 export type SessionRestoredPayload = z.infer<typeof sessionRestoredPayloadSchema>;
-export type SessionStreamStartedPayload = z.infer<typeof sessionStreamStartedPayloadSchema>;
-export type SessionStreamEndedPayload = z.infer<typeof sessionStreamEndedPayloadSchema>;
 export type McpStatusUpdatedPayload = z.infer<typeof mcpStatusUpdatedPayloadSchema>;
-export type UserMessagePayload = z.infer<typeof userMessagePayloadSchema>;
-export type AgentErrorPayload = z.infer<typeof agentErrorPayloadSchema>;
-export type AgentTokenPayload = z.infer<typeof agentTokenPayloadSchema>;
-export type AgentReasoningPayload = z.infer<typeof agentReasoningPayloadSchema>;
-export type AgentMessagePayload = z.infer<typeof agentMessagePayloadSchema>;
-export type MessageDeltaPayload = z.infer<typeof messageDeltaPayloadSchema>;
-export type MessageCompletePayload = z.infer<typeof messageCompletePayloadSchema>;
 export type ToolCalledPayload = z.infer<typeof toolCalledPayloadSchema>;
 export type ToolResultPayload = z.infer<typeof toolResultPayloadSchema>;
 export type ToolProgressPayload = z.infer<typeof toolProgressPayloadSchema>;
@@ -378,7 +331,6 @@ export type MemorySuggestionPayload = z.infer<typeof memorySuggestionPayloadSche
 export type DelegationFsRequestPayload = z.infer<typeof delegationFsRequestPayloadSchema>;
 export type DelegationTerminalRequestPayload = z.infer<typeof delegationTerminalRequestPayloadSchema>;
 export type ExternalAgentStartedPayload = z.infer<typeof externalAgentStartedPayloadSchema>;
-export type ExternalAgentOutputPayload = z.infer<typeof externalAgentOutputPayloadSchema>;
 export type ExternalAgentConnectionRequiredPayload = z.infer<typeof externalAgentConnectionRequiredPayloadSchema>;
 export type ExternalAgentApprovalRequestedPayload = z.infer<typeof externalAgentApprovalRequestedPayloadSchema>;
 export type ExternalAgentApprovalResolvedPayload = z.infer<typeof externalAgentApprovalResolvedPayloadSchema>;
@@ -390,53 +342,99 @@ export type ExternalAgentTurnSettledPayload = z.infer<typeof externalAgentTurnSe
 export type ExternalAgentLoginRequiredPayload = z.infer<typeof externalAgentLoginRequiredPayloadSchema>;
 export type ExternalAgentLoginResolvedPayload = z.infer<typeof externalAgentLoginResolvedPayloadSchema>;
 
-export const EVENT_TABLE = {
-  'session.created': sessionCreatedPayloadSchema,
-  'session.updated': sessionUpdatedPayloadSchema,
-  'session.deleted': sessionDeletedPayloadSchema,
-  'session.restored': sessionRestoredPayloadSchema,
-  'session.stream_started': sessionStreamStartedPayloadSchema,
-  'session.stream_ended': sessionStreamEndedPayloadSchema,
-  'task.created': taskCreatedPayloadSchema,
-  'task.progress': taskProgressPayloadSchema,
-  'task.completed': taskCompletedPayloadSchema,
-  'task.failed': taskFailedPayloadSchema,
-  'mcp.status_updated': mcpStatusUpdatedPayloadSchema,
-  'user.message': userMessagePayloadSchema,
-  'agent.message': agentMessagePayloadSchema,
-  'agent.token': agentTokenPayloadSchema,
-  'agent.reasoning': agentReasoningPayloadSchema,
-  'agent.error': agentErrorPayloadSchema,
-  'message.delta': messageDeltaPayloadSchema,
-  'message.complete': messageCompletePayloadSchema,
-  'tool.called': toolCalledPayloadSchema,
-  'tool.result': toolResultPayloadSchema,
-  'tool.progress': toolProgressPayloadSchema,
-  'tool.approval_requested': toolApprovalRequestedPayloadSchema,
-  'tool.approval_resolved': toolApprovalResolvedPayloadSchema,
-  'clarify.requested': clarifyRequestedPayloadSchema,
-  'clarify.resolved': clarifyResolvedPayloadSchema,
-  'context.usage': contextUsagePayloadSchema,
-  'context.evicted': contextEvictedPayloadSchema,
-  'context.handoff_suggested': contextHandoffSuggestedPayloadSchema,
-  'memory.suggestion': memorySuggestionPayloadSchema,
-  'delegation.fs_request': delegationFsRequestPayloadSchema,
-  'delegation.terminal_request': delegationTerminalRequestPayloadSchema,
-  'external_agent.started': externalAgentStartedPayloadSchema,
-  'external_agent.output': externalAgentOutputPayloadSchema,
-  'external_agent.connection_required': externalAgentConnectionRequiredPayloadSchema,
-  'external_agent.approval_requested': externalAgentApprovalRequestedPayloadSchema,
-  'external_agent.approval_resolved': externalAgentApprovalResolvedPayloadSchema,
-  'external_agent.idle_suspended': externalAgentIdleSuspendedPayloadSchema,
-  'external_agent.idle_resumed': externalAgentIdleResumedPayloadSchema,
-  'external_agent.resume_failed': externalAgentResumeFailedPayloadSchema,
-  'external_agent.exited': externalAgentExitedPayloadSchema,
-  'external_agent.turn_settled': externalAgentTurnSettledPayloadSchema,
-  'external_agent.login_required': externalAgentLoginRequiredPayloadSchema,
-  'external_agent.login_resolved': externalAgentLoginResolvedPayloadSchema
-} as const satisfies Record<EventType, z.ZodTypeAny>;
+export type EventDelivery = 'control' | 'generation' | 'both';
+export type EventPersistence = 'durable' | 'transient';
 
-export type EventPayload<T extends EventType> = z.infer<(typeof EVENT_TABLE)[T]>;
+export interface EventDefinition<TSchema extends z.ZodTypeAny = z.ZodTypeAny> {
+  schema: TSchema;
+  delivery: EventDelivery;
+  persistence: EventPersistence;
+}
+
+function defineEvent<TSchema extends z.ZodTypeAny>(
+  schema: TSchema,
+  delivery: EventDelivery,
+  persistence: EventPersistence
+): EventDefinition<TSchema> {
+  return { schema, delivery, persistence };
+}
+
+export const EVENT_DEFINITIONS = {
+  'session.created': defineEvent(sessionCreatedPayloadSchema, 'control', 'durable'),
+  'session.updated': defineEvent(sessionUpdatedPayloadSchema, 'control', 'durable'),
+  'session.deleted': defineEvent(sessionDeletedPayloadSchema, 'control', 'durable'),
+  'session.restored': defineEvent(sessionRestoredPayloadSchema, 'control', 'durable'),
+  'session.run.started': defineEvent(sessionRunStartedPayloadSchema, 'control', 'transient'),
+  'session.run.completed': defineEvent(sessionRunCompletedPayloadSchema, 'control', 'transient'),
+  'session.run.failed': defineEvent(sessionRunFailedPayloadSchema, 'control', 'transient'),
+  'session.run.cancelled': defineEvent(sessionRunCancelledPayloadSchema, 'control', 'transient'),
+  'session.message.created': defineEvent(sessionMessageCreatedPayloadSchema, 'control', 'durable'),
+  'session.message.updated': defineEvent(sessionMessageUpdatedPayloadSchema, 'control', 'durable'),
+  'session.message.deleted': defineEvent(sessionMessageDeletedPayloadSchema, 'control', 'durable'),
+  'session.message.delta.appended': defineEvent(sessionMessageDeltaAppendedPayloadSchema, 'generation', 'transient'),
+  'session.message.completed': defineEvent(sessionMessageCompletedPayloadSchema, 'both', 'durable'),
+  'session.message.failed': defineEvent(sessionMessageFailedPayloadSchema, 'both', 'durable'),
+  'task.created': defineEvent(taskCreatedPayloadSchema, 'control', 'durable'),
+  'task.progress': defineEvent(taskProgressPayloadSchema, 'control', 'durable'),
+  'task.completed': defineEvent(taskCompletedPayloadSchema, 'control', 'durable'),
+  'task.failed': defineEvent(taskFailedPayloadSchema, 'control', 'durable'),
+  'mcp.status_updated': defineEvent(mcpStatusUpdatedPayloadSchema, 'control', 'transient'),
+  'tool.called': defineEvent(toolCalledPayloadSchema, 'generation', 'durable'),
+  'tool.result': defineEvent(toolResultPayloadSchema, 'generation', 'durable'),
+  'tool.progress': defineEvent(toolProgressPayloadSchema, 'generation', 'transient'),
+  'tool.approval_requested': defineEvent(toolApprovalRequestedPayloadSchema, 'generation', 'durable'),
+  'tool.approval_resolved': defineEvent(toolApprovalResolvedPayloadSchema, 'generation', 'durable'),
+  'clarify.requested': defineEvent(clarifyRequestedPayloadSchema, 'generation', 'durable'),
+  'clarify.resolved': defineEvent(clarifyResolvedPayloadSchema, 'generation', 'durable'),
+  'context.usage': defineEvent(contextUsagePayloadSchema, 'generation', 'transient'),
+  'context.evicted': defineEvent(contextEvictedPayloadSchema, 'generation', 'transient'),
+  'context.handoff_suggested': defineEvent(contextHandoffSuggestedPayloadSchema, 'generation', 'transient'),
+  'memory.suggestion': defineEvent(memorySuggestionPayloadSchema, 'generation', 'durable'),
+  'delegation.fs_request': defineEvent(delegationFsRequestPayloadSchema, 'generation', 'transient'),
+  'delegation.terminal_request': defineEvent(delegationTerminalRequestPayloadSchema, 'generation', 'transient'),
+  'external_agent.started': defineEvent(externalAgentStartedPayloadSchema, 'both', 'durable'),
+  'external_agent.connection_required': defineEvent(
+    externalAgentConnectionRequiredPayloadSchema,
+    'generation',
+    'transient'
+  ),
+  'external_agent.approval_requested': defineEvent(
+    externalAgentApprovalRequestedPayloadSchema,
+    'generation',
+    'durable'
+  ),
+  'external_agent.approval_resolved': defineEvent(externalAgentApprovalResolvedPayloadSchema, 'generation', 'durable'),
+  'external_agent.idle_suspended': defineEvent(externalAgentIdleSuspendedPayloadSchema, 'generation', 'durable'),
+  'external_agent.idle_resumed': defineEvent(externalAgentIdleResumedPayloadSchema, 'generation', 'durable'),
+  'external_agent.resume_failed': defineEvent(externalAgentResumeFailedPayloadSchema, 'generation', 'durable'),
+  'external_agent.exited': defineEvent(externalAgentExitedPayloadSchema, 'both', 'durable'),
+  'external_agent.turn_settled': defineEvent(externalAgentTurnSettledPayloadSchema, 'generation', 'transient'),
+  'external_agent.session.connection.opened': defineEvent(
+    externalAgentSessionConnectionOpenedPayloadSchema,
+    'control',
+    'transient'
+  ),
+  'external_agent.session.connection.closed': defineEvent(
+    externalAgentSessionConnectionClosedPayloadSchema,
+    'control',
+    'transient'
+  ),
+  'external_agent.login_required': defineEvent(externalAgentLoginRequiredPayloadSchema, 'generation', 'transient'),
+  'external_agent.login_resolved': defineEvent(externalAgentLoginResolvedPayloadSchema, 'generation', 'transient')
+} as const satisfies Record<EventType, EventDefinition>;
+
+type EventDefinitions = typeof EVENT_DEFINITIONS;
+type EventTable = { [T in keyof EventDefinitions]: EventDefinitions[T]['schema'] };
+
+export const EVENT_TABLE = Object.fromEntries(
+  Object.entries(EVENT_DEFINITIONS).map(([type, definition]) => [type, definition.schema])
+) as EventTable;
+
+export function eventDefinition<T extends EventType>(type: T): EventDefinitions[T] {
+  return EVENT_DEFINITIONS[type];
+}
+
+export type EventPayload<T extends EventType> = z.infer<EventDefinitions[T]['schema']>;
 
 /**
  * Parse and validate the raw `payload` of an event. Returns a typed payload on

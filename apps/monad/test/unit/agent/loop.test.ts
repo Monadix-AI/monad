@@ -12,6 +12,10 @@ function mockModel(deltas: string[]): ModelRouter {
   return buildMockModel().text(deltas).build();
 }
 
+function eventMessage(event: Event | undefined): { id?: string; text?: string; data?: unknown } | undefined {
+  return (event?.payload as { message?: { id?: string; text?: string; data?: unknown } } | undefined)?.message;
+}
+
 function harness(deltas: string[]) {
   const events: Event[] = [];
   const messages = new InMemoryMessageRepo();
@@ -25,22 +29,28 @@ function harness(deltas: string[]) {
   return { loop, events, messages };
 }
 
-test('runStream emits one agent.token per delta then a final agent.message', async () => {
+test('runStream emits ordered canonical deltas then one completed message', async () => {
   const deltas = ['Hel', 'lo', ' world'];
   const { loop, events, messages } = harness(deltas);
   const sessionId = newId('ses') as SessionId;
 
   await loop.runStream(sessionId, 'hi');
 
-  const tokens = events.filter((e) => e.type === 'agent.token');
-  const finals = events.filter((e) => e.type === 'agent.message');
+  const tokens = events.filter((e) => e.type === 'session.message.delta.appended' && e.payload.channel === 'answer');
+  const finals = events.filter((e) => e.type === 'session.message.completed');
   expect(tokens.map((e) => e.payload.delta)).toEqual(deltas);
   expect(tokens.map((e) => e.payload.index)).toEqual([0, 1, 2]);
+  expect(tokens.map((e) => e.payload.producer)).toEqual([
+    { kind: 'system', subsystem: 'agent-loop' },
+    { kind: 'system', subsystem: 'agent-loop' },
+    { kind: 'system', subsystem: 'agent-loop' }
+  ]);
   expect(finals).toHaveLength(1);
-  expect(finals[0]?.payload.text).toBe('Hello world');
+  expect(finals[0]?.payload.producer).toEqual({ kind: 'system', subsystem: 'agent-loop' });
+  expect(eventMessage(finals[0])?.text).toBe('Hello world');
 
   // tokens and the final message share one messageId
-  const msgId = finals[0]?.payload.messageId;
+  const msgId = eventMessage(finals[0])?.id;
   expect(tokens.every((e) => e.payload.messageId === msgId)).toBe(true);
 
   // history: user turn + persisted assistant turn
@@ -68,7 +78,7 @@ test('runStreamFromHistory generates an assistant response without appending ano
   ]);
 });
 
-test('runBlock returns the full assistant message and emits a single agent.message', async () => {
+test('runBlock returns the full assistant message and emits one canonical completion', async () => {
   const { loop, events, messages } = harness(['Hello', ' world']);
   const sessionId = newId('ses') as SessionId;
 
@@ -76,7 +86,7 @@ test('runBlock returns the full assistant message and emits a single agent.messa
 
   expect(message.role).toBe('assistant');
   expect(message.text).toBe('Hello world');
-  expect(events.filter((e) => e.type === 'agent.message')).toHaveLength(1);
+  expect(events.filter((e) => e.type === 'session.message.completed')).toHaveLength(1);
   expect(messages.list(sessionId).map((m) => m.role)).toEqual(['user', 'assistant']);
 });
 
@@ -103,7 +113,7 @@ test('runBlock passes the session reasoning effort to the model request', async 
   expect(seen).toEqual(['high']);
 });
 
-test('runStream surfaces reasoning deltas on agent.reasoning, separate from agent.token', async () => {
+test('runStream surfaces reasoning deltas on a separate canonical channel', async () => {
   const model = buildMockModel().reasoning(['think a', 'think b']).text(['answer']).build();
   const events: Event[] = [];
   const loop = new AgentLoop({
@@ -116,17 +126,19 @@ test('runStream surfaces reasoning deltas on agent.reasoning, separate from agen
   const sessionId = newId('ses') as SessionId;
   await loop.runStream(sessionId, 'hi');
 
-  const reasoning = events.filter((e) => e.type === 'agent.reasoning');
+  const reasoning = events.filter(
+    (e) => e.type === 'session.message.delta.appended' && e.payload.channel === 'reasoning'
+  );
   expect(reasoning.map((e) => e.payload.delta)).toEqual(['think a', 'think b']);
   expect(reasoning.map((e) => e.payload.index)).toEqual([0, 1]);
   // Reasoning is NOT mixed into the answer tokens or the persisted message text.
   const tokenText = events
-    .filter((e) => e.type === 'agent.token')
+    .filter((e) => e.type === 'session.message.delta.appended' && e.payload.channel === 'answer')
     .map((e) => e.payload.delta)
     .join('');
   expect(tokenText).toBe('answer');
-  const msg = events.find((e) => e.type === 'agent.message');
-  expect(msg?.payload.text).toBe('answer');
+  const msg = events.find((e) => e.type === 'session.message.completed');
+  expect(eventMessage(msg)?.text).toBe('answer');
 });
 
 test('runStream persists the reasoning trace on the assistant message (durable, not just transient)', async () => {
@@ -259,7 +271,7 @@ test('instructions getter is resolved per-turn (hot-reloadable)', async () => {
   expect(seen[2]).toContain('You are an interactive engineering agent.'); // empty getter → DEFAULT_SYSTEM_PROMPT
 });
 
-test('runStream emits agent.error and re-throws when model fails', async () => {
+test('runStream emits a canonical failed message and re-throws when model fails', async () => {
   const modelError = new Error('upstream 503');
   const events: Event[] = [];
   const messages = new InMemoryMessageRepo();
@@ -283,9 +295,9 @@ test('runStream emits agent.error and re-throws when model fails', async () => {
 
   await expect(loop.runStream(sessionId, 'hi')).rejects.toThrow('upstream 503');
 
-  const errEvents = events.filter((e) => e.type === 'agent.error');
+  const errEvents = events.filter((e) => e.type === 'session.message.failed');
   expect(errEvents).toHaveLength(1);
-  expect(errEvents[0]?.payload.message).toBe('upstream 503');
+  expect(eventMessage(errEvents[0])?.text).toBe('upstream 503');
 
   // The failure is persisted as an error-tagged assistant message so it shows in
   // history even when the live event stream can't deliver.
@@ -317,12 +329,12 @@ test('runStream emits a provider_config_error message + providerId when the gate
 
   await expect(loop.runStream(sessionId, 'hi')).rejects.toThrow();
 
-  const errEvents = events.filter((e) => e.type === 'agent.error');
+  const errEvents = events.filter((e) => e.type === 'session.message.failed');
   expect(errEvents).toHaveLength(1);
-  expect(errEvents[0]?.payload).toMatchObject({
-    code: 'provider_config',
-    providerId: 'anthropic',
-    message: 'no credentials configured for provider "anthropic"'
+  expect(eventMessage(errEvents[0])).toMatchObject({
+    type: 'provider_config_error',
+    text: '[provider_config] no credentials configured for provider "anthropic"',
+    data: { providerId: 'anthropic' }
   });
 
   const errorMsg = messages.list(sessionId).find((m) => m.type === 'provider_config_error');
@@ -438,8 +450,8 @@ test('runBlock emits agent.error and re-throws when model fails', async () => {
 
   await expect(loop.runBlock(sessionId, 'hi')).rejects.toThrow();
 
-  const errEvents = events.filter((e) => e.type === 'agent.error');
+  const errEvents = events.filter((e) => e.type === 'session.message.failed');
   expect(errEvents).toHaveLength(1);
-  expect(errEvents[0]?.payload.message).toBe('429 rate limited');
-  expect(errEvents[0]?.payload.code).toBe('429');
+  expect(eventMessage(errEvents[0])?.text).toBe('[429] 429 rate limited');
+  expect(eventMessage(errEvents[0])?.data).toEqual({ code: '429' });
 });

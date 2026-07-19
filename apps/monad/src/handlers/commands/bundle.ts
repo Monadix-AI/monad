@@ -5,22 +5,22 @@
 
 import type { MonadConfig } from '@monad/environment';
 import type { Logger } from '@monad/logger';
-import type { Event, SessionId } from '@monad/protocol';
+import type { SessionId } from '@monad/protocol';
 import type { BeliefExplanation, ConsolidateSummary, ContradictionCheckSummary } from '@monad/sdk-atom';
 import type { DurableSummarizer, ModelRouter } from '#/agent/index.ts';
 import type { SessionGateway } from '#/channels/channel.ts';
 import type { CommandBundle, CommandRegistry, SkillCommandView } from '#/handlers/commands/index.ts';
 import type { EventBus } from '#/services/event-bus.ts';
 import type { I18nService } from '#/services/i18n.ts';
+import type { MessageIngress } from '#/services/messages/types.ts';
 import type { ModelService } from '#/services/model.ts';
 import type { ModelCatalogService } from '#/services/model-catalog.ts';
 import type { OversightService } from '#/services/oversight.ts';
 import type { Store } from '#/store/db/index.ts';
 
-import { newId } from '@monad/protocol';
-
 import { HANDOFF_PROMPT, renderHandoffUserPrompt, replayHistory } from '#/agent/index.ts';
 import { makeEvent } from '#/services/event-bus.ts';
+import { createMessageIngress, messageIdempotencyKey } from '#/services/messages/ingress.ts';
 
 export interface CommandBundleDeps {
   commandRegistry: CommandRegistry;
@@ -37,6 +37,7 @@ export interface CommandBundleDeps {
   oversight: OversightService;
   i18n: I18nService;
   bus: EventBus;
+  messageIngress?: MessageIngress;
   /** Late-bound: the session gateway is wired after handlers exist; /handoff guards on it being set. */
   sessionGateway: () => SessionGateway | null;
   logger: Logger;
@@ -58,9 +59,11 @@ export function createCommandBundle(deps: CommandBundleDeps): CommandBundle {
     oversight,
     i18n,
     bus,
+    messageIngress: providedMessageIngress,
     sessionGateway,
     logger
   } = deps;
+  const messageIngress = providedMessageIngress ?? createMessageIngress({ store, bus });
 
   const publishSessionUpdated = (sessionId: SessionId): void => {
     bus.publish(makeEvent(sessionId, 'session.updated', {}));
@@ -184,18 +187,14 @@ export function createCommandBundle(deps: CommandBundleDeps): CommandBundle {
       const contextBlock = `<handoff-context>\n${handoffSummary}\n</handoff-context>`;
       const safeTask = initialTask?.slice(0, 10_000);
       const firstMessage = safeTask ? `${contextBlock}\n\n${safeTask}` : contextBlock;
-      const msgId = newId('msg');
-      const now = new Date().toISOString();
-      store.insertMessage(msgId, newSessionId as SessionId, firstMessage, now, 'user', { type: 'text' });
-      const evt: Event = makeEvent(
-        newSessionId as SessionId,
-        'user.message',
-        { messageId: msgId, text: firstMessage },
-        { at: now }
-      );
-      store.appendEvents([evt]);
-      bus.publish(evt);
-
+      await messageIngress.deliver({
+        transcriptTargetId: newSessionId as SessionId,
+        idempotencyKey: messageIdempotencyKey('handoff', sessionId, newSessionId, firstMessage),
+        producer: { kind: 'system', subsystem: 'handoff' },
+        role: 'user',
+        type: 'text',
+        text: firstMessage
+      });
       return { sessionId: newSessionId };
     },
     consolidate: (level) => runConsolidate(level),

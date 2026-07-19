@@ -1,6 +1,7 @@
 import type { Event } from '../domain.ts';
-import type { SessionId } from '../ids.ts';
+import type { TranscriptTargetId } from '../ids.ts';
 import type { InteractionEvent } from '../interaction.ts';
+import type { MessageGenerationFrame } from './control.ts';
 
 export interface JsonRpcRequest {
   jsonrpc: '2.0';
@@ -21,12 +22,17 @@ export type JsonRpcNotification =
   | {
       jsonrpc: '2.0';
       method: 'sessions.event';
-      params: { sessionId: SessionId; event: Event };
+      params: { sessionId: TranscriptTargetId; event: Event };
     }
   | {
       jsonrpc: '2.0';
       method: 'interactions.event';
       params: { event: InteractionEvent };
+    }
+  | {
+      jsonrpc: '2.0';
+      method: 'session.messageGeneration.event';
+      params: { sessionId: TranscriptTargetId; messageId: string; frame: MessageGenerationFrame };
     };
 
 export interface JsonRpcError {

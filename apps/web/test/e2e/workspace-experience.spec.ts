@@ -413,22 +413,53 @@ test.describe('workspace experience atoms', () => {
   });
 
   test('settles chat at the true bottom and keeps downward overscroll stationary', async ({ page }) => {
+    await page.setViewportSize({ width: 1_100, height: 1_000 });
+    await page.route('**/MarkdownRenderer.tsx*', async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 2_500));
+      await route.continue();
+    });
     await page.addInitScript(() => {
       Reflect.set(window, '__jumpLatestAppearedDuringInitialLoad', false);
-      new MutationObserver(() => {
+      Reflect.set(window, '__lastMessageMutationCount', 0);
+      Reflect.set(window, '__lastMessageMutations', []);
+      new MutationObserver((records) => {
         if (document.querySelector('button[aria-label="Jump to latest messages"]')) {
           Reflect.set(window, '__jumpLatestAppearedDuringInitialLoad', true);
         }
+        const list = document.querySelector('[data-testid="virtuoso-item-list"]');
+        const lastRow = list?.lastElementChild;
+        if (lastRow && records.some((record) => lastRow.contains(record.target))) {
+          Reflect.set(
+            window,
+            '__lastMessageMutationCount',
+            Number(Reflect.get(window, '__lastMessageMutationCount')) + 1
+          );
+          Reflect.set(
+            window,
+            '__lastMessageMutations',
+            records
+              .filter((record) => lastRow.contains(record.target))
+              .map((record) => ({
+                added: [...record.addedNodes].map((child) => child.nodeName),
+                removed: [...record.removedNodes].map((child) => child.nodeName),
+                target: record.target.nodeName,
+                type: record.type
+              }))
+          );
+        }
       }).observe(document, { childList: true, subtree: true });
     });
-    const uiItems: UIItem[] = Array.from({ length: 5 }, (_, index) => {
+    const uiItems: UIItem[] = Array.from({ length: 60 }, (_, index) => {
       const id = `msg_SCROLL${String(index + 1).padStart(5, '0')}` as UIItem['id'];
       return {
         id,
         kind: 'message',
         parts: [
           {
-            text: `scroll stability message ${index + 1} ${'with enough content to produce a measured transcript row. '.repeat((index % 3) + 1)}`,
+            text:
+              index === 59
+                ? 'Message Tasks 2–3 are GREEN.\n\n- store: `apps/monad/src/store/db/message-mutations.ts`\n- ingress: [event bus](https://example.com/event-bus)\n- verify the durable keys and terminal routing contract.'
+                : `scroll stability message ${index + 1} ${'with enough content to produce a measured transcript row. '.repeat((index % 3) + 1)}`,
             type: 'text'
           }
         ],
@@ -437,6 +468,58 @@ test.describe('workspace experience atoms', () => {
         status: 'done'
       };
     });
+    const lastMessage = uiItems[59];
+    if (lastMessage?.kind !== 'message') throw new Error('expected the last UI item to be a message');
+    const lastMessageText = lastMessage.parts.find((part) => part.type === 'text')?.text ?? '';
+    const streamingUpdates = Array.from({ length: 18 }, (_, index) => ({
+      item: {
+        ...lastMessage,
+        parts: [
+          {
+            text: `${lastMessageText}\n\n${'Additional streamed line that increases the measured message height.\n'.repeat(index + 1)}`,
+            type: 'text' as const
+          }
+        ],
+        status: 'streaming' as const
+      },
+      kind: 'upsert' as const
+    }));
+    await page.addInitScript(
+      ({ sessionId, snapshot, updates }) => {
+        const nativeFetch = window.fetch.bind(window);
+        window.fetch = (async (input, init) => {
+          const url = input instanceof Request ? input.url : String(input);
+          if (!url.includes(`/v1/sessions/${sessionId}/ui-stream`)) return nativeFetch(input, init);
+          const encoder = new TextEncoder();
+          return new Response(
+            new ReadableStream({
+              start(controller) {
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify(snapshot)}\n\n`));
+                Reflect.set(window, '__startStreamingResizeSequence', () => {
+                  let index = 0;
+                  const timer = window.setInterval(() => {
+                    const update = updates[index];
+                    if (!update) {
+                      window.clearInterval(timer);
+                      Reflect.set(window, '__streamingResizeSequenceComplete', true);
+                      return;
+                    }
+                    controller.enqueue(encoder.encode(`data: ${JSON.stringify(update)}\n\n`));
+                    index += 1;
+                  }, 24);
+                });
+              }
+            }),
+            { headers: { 'content-type': 'text/event-stream' }, status: 200 }
+          );
+        }) as typeof window.fetch;
+      },
+      {
+        sessionId: alphaSessionId,
+        snapshot: { kind: 'snapshot' as const, items: uiItems, hasMore: false },
+        updates: streamingUpdates
+      }
+    );
     await mockWorkplaceApi(page, [chatRoomExperience], { uiItems });
     await page.goto(`/workspace/${projectRouteId}/${alphaSessionRouteId}`);
     await expect(page.locator('.project-topbar-name', { hasText: 'Mock Project' })).toBeVisible({ timeout: 20_000 });
@@ -455,6 +538,35 @@ test.describe('workspace experience atoms', () => {
     // presence-ok: initial bottom settlement must keep the jump-to-latest control hidden.
     await expect(jumpLatest).toBeHidden();
     expect(await page.evaluate(() => Reflect.get(window, '__jumpLatestAppearedDuringInitialLoad'))).toBe(false);
+    await page.evaluate(() => {
+      Reflect.set(window, '__jumpLatestAppearedDuringInitialLoad', false);
+      Reflect.set(window, '__lastMessageMutationCount', 0);
+      Reflect.set(window, '__lastMessageMutations', []);
+    });
+    await expect(page.locator('a[href="https://example.com/event-bus"]')).toBeVisible();
+    expect(
+      await page.evaluate(() => ({
+        jumpAppeared: Reflect.get(window, '__jumpLatestAppearedDuringInitialLoad'),
+        lastMessageMutations: Reflect.get(window, '__lastMessageMutationCount'),
+        mutations: Reflect.get(window, '__lastMessageMutations')
+      }))
+    ).toEqual({ jumpAppeared: false, lastMessageMutations: 0, mutations: [] });
+    await page.evaluate(() => {
+      Reflect.set(window, '__jumpLatestAppearedDuringInitialLoad', false);
+      const start = Reflect.get(window, '__startStreamingResizeSequence');
+      if (typeof start === 'function') start();
+    });
+    await expect.poll(() => page.evaluate(() => Reflect.get(window, '__streamingResizeSequenceComplete'))).toBe(true);
+    await expect
+      .poll(() =>
+        scroll.evaluate((node) => {
+          const scroller = node as HTMLElement;
+          return Math.abs(scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop);
+        })
+      )
+      .toBeLessThanOrEqual(1);
+    expect(await page.evaluate(() => Reflect.get(window, '__jumpLatestAppearedDuringInitialLoad'))).toBe(false);
+    await expect(jumpLatest).toBeHidden();
 
     const initialLayout = await scroll.evaluate((node) => {
       const scroller = node as HTMLElement;
@@ -495,7 +607,6 @@ test.describe('workspace experience atoms', () => {
         .closest<HTMLElement>('[style*="--chat-room-composer-clearance"]')
         ?.style.setProperty('--chat-room-composer-clearance', clearance);
     }, originalComposerClearance);
-
     const idleScroll = await scroll.evaluate(
       (node) =>
         new Promise<{ eventCount: number; maxTop: number; minTop: number }>((resolve) => {

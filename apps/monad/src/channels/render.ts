@@ -1,10 +1,10 @@
 // Renders an agent run's Event stream into platform messages on a ChannelAdapter. This is the
 // ONLY place agent Events are turned into outbound calls — the atom pack never sees an Event, just
 // the resulting content strings. Capability-gated: edit-capable channels stream via throttled
-// edits; others buffer to one message per agent.message.
+// edits; others buffer to one message per completed assistant message.
 
 import type { StrictTranslateForNamespace } from '@monad/i18n';
-import type { AgentMessagePayload, AgentTokenPayload, Event } from '@monad/protocol';
+import type { Event } from '@monad/protocol';
 import type { ChannelAdapter, ChannelLog, SentMessage } from '@monad/sdk-atom';
 
 import { channelTextRenderText, parseEventPayload } from '@monad/protocol';
@@ -77,6 +77,7 @@ export function createRenderer({
   let buf = '';
   let lastEditAt = 0;
   let typingStarted = false;
+  const deltaIndices = new Map<string, number>();
 
   const sendNew = (text: string): void => {
     for (const part of splitForLimit(text, maxChars)) {
@@ -86,8 +87,8 @@ export function createRenderer({
     }
   };
 
-  function onToken(p: AgentTokenPayload): void {
-    if (!streaming) return; // buffered mode ignores tokens; agent.message carries the full text
+  function onToken(p: { delta: string }): void {
+    if (!streaming) return;
     buf += p.delta;
     if (!typingStarted && adapter.capabilities.typing && adapter.startTyping) {
       const startTyping = adapter.startTyping;
@@ -113,7 +114,7 @@ export function createRenderer({
     }
   }
 
-  function onMessage(p: AgentMessagePayload): void {
+  function onMessage(p: { text?: string }): void {
     const text = channelTextRenderText(p.text ?? '');
     if (streaming && started) {
       // Finalize the streamed bubble with the first chunk; any overflow goes to fresh messages so
@@ -134,31 +135,50 @@ export function createRenderer({
   return {
     consume(event: Event) {
       switch (event.type) {
-        case 'agent.token':
-          onToken(parseEventPayload('agent.token', event.payload));
+        case 'session.message.created': {
+          const { message } = parseEventPayload('session.message.created', event.payload);
+          if (
+            message.role !== 'assistant' ||
+            message.stream.status === 'pending' ||
+            message.stream.status === 'streaming'
+          )
+            break;
+          if (message.type === 'error') sendNew(t('channel.error', { label: message.text }));
+          else onMessage({ text: message.text });
           break;
-        case 'agent.message':
-          onMessage(parseEventPayload('agent.message', event.payload));
+        }
+        case 'session.message.delta.appended': {
+          const payload = parseEventPayload('session.message.delta.appended', event.payload);
+          if (payload.channel !== 'content' || (deltaIndices.get(payload.messageId) ?? -1) >= payload.index) break;
+          deltaIndices.set(payload.messageId, payload.index);
+          onToken({ delta: payload.delta });
           break;
-        case 'tool.approval_requested':
-          // No trusted approver on a channel — the agent blocks; surface a notice, don't hang silently.
-          sendNew(t('channel.approvalNeeded'));
+        }
+        case 'session.message.completed': {
+          const { message } = parseEventPayload('session.message.completed', event.payload);
+          if (message.role !== 'assistant') break;
+          onMessage({ text: message.text });
           break;
-        case 'agent.error': {
-          const p = event.payload as { message: string; code?: string };
-          const label = p.code ? `${p.code}: ${p.message}` : p.message;
-          sendNew(t('channel.error', { label }));
+        }
+        case 'session.message.failed': {
+          const { message } = parseEventPayload('session.message.failed', event.payload);
+          if (message.role !== 'assistant') break;
+          sendNew(t('channel.error', { label: message.text }));
           started = false;
           handle = undefined;
           buf = '';
           break;
         }
+        case 'tool.approval_requested':
+          // No trusted approver on a channel — the agent blocks; surface a notice, don't hang silently.
+          sendNew(t('channel.approvalNeeded'));
+          break;
         default:
           break;
       }
     },
     async finalize() {
-      // Streaming bubble that never got a terminal agent.message — flush what we have (chunked).
+      // A streaming bubble without a terminal lifecycle event still flushes its buffered text.
       if (streaming && started) {
         const [first = '', ...overflow] = splitForLimit(buf, maxChars);
         enqueue(async () => {

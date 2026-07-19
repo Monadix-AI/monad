@@ -3,12 +3,21 @@ import type { ResponseOutputMessage, ResponseOutputText } from 'openai/resources
 import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
 import type { ResponseObject, ResponsesRequest, StoredResponse } from './types.ts';
 
-import { parseEventPayload } from '@monad/protocol';
+import { costSchema, finishReasonSchema, parseEventPayload, tokenUsageSchema } from '@monad/protocol';
 
 import { HandlerError } from '#/handlers/handler-error.ts';
 import { SSE_RESPONSE_HEADERS } from '#/transports/http/sessions/sse.ts';
 import { buildUsage, computeOutputText } from './input.ts';
 import { CORS_HEADERS, MAX_STORED_RESPONSES, MAX_STREAMING_BACKLOG, sseFrame } from './shared.ts';
+
+function terminalMetadata(data: unknown) {
+  const value = typeof data === 'object' && data !== null ? (data as Record<string, unknown>) : {};
+  return {
+    cost: costSchema.safeParse(value.cost).data,
+    finishReason: finishReasonSchema.safeParse(value.finishReason).data,
+    usage: tokenUsageSchema.safeParse(value.usage).data
+  };
+}
 
 export function buildStreamingResponse(params: {
   handlers: ReturnType<typeof createDaemonHandlers>;
@@ -43,6 +52,7 @@ export function buildStreamingResponse(params: {
     async start(ctrl) {
       let dropped = false;
       let accumulatedText = '';
+      let terminalErrorEmitted = false;
 
       const enqueue = (frame: Uint8Array) => {
         if (!dropped && ctrl.desiredSize !== null) ctrl.enqueue(frame);
@@ -107,8 +117,9 @@ export function buildStreamingResponse(params: {
           (event) => {
             if (dropped || ctrl.desiredSize === null) return;
 
-            if (event.type === 'agent.token') {
-              const p = parseEventPayload('agent.token', event.payload as Record<string, unknown>);
+            if (event.type === 'session.message.delta.appended') {
+              const p = parseEventPayload('session.message.delta.appended', event.payload as Record<string, unknown>);
+              if (p.channel !== 'answer') return;
               accumulatedText += p.delta;
               enqueue(
                 sseFrame(
@@ -123,10 +134,14 @@ export function buildStreamingResponse(params: {
                   encoder
                 )
               );
-            } else if (event.type === 'agent.message') {
-              const p = parseEventPayload('agent.message', event.payload as Record<string, unknown>);
-              accumulatedText = p.text;
-              const isIncomplete = p.finishReason === 'max_tokens';
+            } else if (event.type === 'session.message.completed') {
+              const { message } = parseEventPayload(
+                'session.message.completed',
+                event.payload as Record<string, unknown>
+              );
+              const { cost, finishReason, usage } = terminalMetadata(message.data);
+              accumulatedText = message.text;
+              const isIncomplete = finishReason === 'max_tokens';
 
               // response.output_text.done
               enqueue(
@@ -155,7 +170,7 @@ export function buildStreamingResponse(params: {
                 role: 'assistant',
                 content: [contentPart]
               };
-              const usage = buildUsage(p.usage);
+              const responseUsage = buildUsage(usage);
               const completedResponse: ResponseObject = {
                 id: responseId,
                 object: 'response',
@@ -171,11 +186,11 @@ export function buildStreamingResponse(params: {
                 top_p: body.top_p ?? null,
                 tool_choice: 'auto',
                 tools: [],
-                usage,
+                usage: responseUsage,
                 instructions: body.instructions ?? null,
                 metadata: body.metadata ?? null,
                 previous_response_id: body.previous_response_id ?? null,
-                x_monad: { session_id: sessionId, agent_id: agentId, cost_usd: p.cost?.usd }
+                x_monad: { session_id: sessionId, agent_id: agentId, cost_usd: cost?.usd }
               };
 
               // response.content_part.done
@@ -218,6 +233,16 @@ export function buildStreamingResponse(params: {
                   lastUsed: Date.now()
                 });
               }
+            } else if (event.type === 'session.message.failed') {
+              const { message } = parseEventPayload('session.message.failed', event.payload as Record<string, unknown>);
+              terminalErrorEmitted = true;
+              enqueue(
+                sseFrame(
+                  'error',
+                  { type: 'error', error: { message: message.text, type: 'api_error', code: 'generation_failed' } },
+                  encoder
+                )
+              );
             }
 
             if (!dropped && (ctrl.desiredSize ?? 0) < -MAX_STREAMING_BACKLOG) {
@@ -232,14 +257,16 @@ export function buildStreamingResponse(params: {
         );
       } catch (err) {
         try {
-          const msg = err instanceof HandlerError ? err.message : 'An internal error occurred.';
-          ctrl.enqueue(
-            sseFrame(
-              'error',
-              { type: 'error', error: { message: msg, type: 'api_error', code: 'stream_error' } },
-              encoder
-            )
-          );
+          if (!terminalErrorEmitted) {
+            const msg = err instanceof HandlerError ? err.message : 'An internal error occurred.';
+            ctrl.enqueue(
+              sseFrame(
+                'error',
+                { type: 'error', error: { message: msg, type: 'api_error', code: 'stream_error' } },
+                encoder
+              )
+            );
+          }
         } catch {}
       } finally {
         if (!dropped) {

@@ -11,10 +11,11 @@
 // SHAPE (non-empty reply, ordered token deltas, a tool.called event), never exact text. Keep this a
 // nightly / manual job, not a PR gate (that stays with the mock e2e).
 
-import type { AgentMessagePayload, AgentTokenPayload, Event } from '@monad/protocol';
+import type { Event } from '@monad/protocol';
 import type { Tool } from '#/capabilities/tools/types.ts';
 
 import { beforeAll, describe, expect, test } from 'bun:test';
+import { parseEventPayload } from '@monad/protocol';
 import { z } from 'zod';
 
 import { toolResult } from '#/capabilities/tools/types.ts';
@@ -93,30 +94,34 @@ describe.skipIf(!KEY)(`live model (${MODEL})`, () => {
       );
 
       test(
-        'streaming: ordered token deltas then a final agent.message',
+        'streaming: ordered message deltas then a completed message',
         async () => {
           const sessionId = await createSession('live-stream');
           const eventsP = t.sse(`/v1/sessions/${sessionId}/events`, {
-            until: (e: Event) => e.type === 'agent.message',
+            until: (e: Event) => e.type === 'session.message.completed',
             timeoutMs: TIMEOUT
           });
           await Bun.sleep(50);
           await send(sessionId, 'Reply with a short greeting.');
 
           const events = await eventsP;
-          const tokens = events.filter((e) => e.type === 'agent.token');
-          const finals = events.filter((e) => e.type === 'agent.message');
+          const tokens = events.filter((e) => e.type === 'session.message.delta.appended');
+          const finals = events.filter((e) => e.type === 'session.message.completed');
 
           expect(tokens.length).toBeGreaterThan(0);
           // Token indices form a gap-free 0..n-1 prefix, in order.
-          expect(tokens.map((e) => (e.payload as unknown as AgentTokenPayload).index)).toEqual(
+          expect(tokens.map((e) => parseEventPayload('session.message.delta.appended', e.payload).index)).toEqual(
             tokens.map((_e, i) => i)
           );
           expect(finals).toHaveLength(1);
-          const reply = (finals[0]?.payload as unknown as AgentMessagePayload | undefined)?.text ?? '';
+          const final = finals[0];
+          if (!final) throw new Error('missing completed message');
+          const reply = parseEventPayload('session.message.completed', final.payload).message.text;
           expect(reply.trim().length).toBeGreaterThan(0);
           // The concatenated deltas are a prefix of (or equal to) the final text the model settled on.
-          const streamed = tokens.map((e) => (e.payload as unknown as AgentTokenPayload).delta).join('');
+          const streamed = tokens
+            .map((e) => parseEventPayload('session.message.delta.appended', e.payload).delta)
+            .join('');
           expect(reply.startsWith(streamed) || streamed === reply).toBe(true);
         },
         // retry absorbs transient free-model flakiness (429s, an empty/just-reasoning turn, an
@@ -130,7 +135,7 @@ describe.skipIf(!KEY)(`live model (${MODEL})`, () => {
           calls.length = 0;
           const sessionId = await createSession('live-tool');
           const eventsP = t.sse(`/v1/sessions/${sessionId}/events`, {
-            until: (e: Event) => e.type === 'agent.message',
+            until: (e: Event) => e.type === 'session.message.completed',
             timeoutMs: TIMEOUT
           });
           await Bun.sleep(50);

@@ -3,6 +3,8 @@ import type { ChannelAdapter, ChannelLog } from '@monad/sdk-atom';
 import type { ChannelLogger, ChannelTranslate } from '#/channels/types.ts';
 import type { EventBus } from '#/services/event-bus.ts';
 
+import { parseEventPayload } from '@monad/protocol';
+
 import { errMsg } from '#/channels/helpers.ts';
 import { type ChannelRenderMode, createRenderer } from '#/channels/render.ts';
 
@@ -35,17 +37,40 @@ export function subscribeMirror(
   const log: ChannelLog = (level, msg) => ctx.log[level](`[${channelId}] mirror: ${msg}`);
   const t = ctx.t;
   let currentRenderer: ReturnType<typeof createRenderer> | undefined;
-
   const unsubscribe = ctx.bus.subscribe(sessionId, (event) => {
     if (ctx.activeDispatches.has(sessionId)) return;
     switch (event.type) {
-      case 'user.message':
+      case 'session.message.created': {
+        const { message } = parseEventPayload('session.message.created', event.payload);
+        if (message.role === 'user') {
+          currentRenderer = undefined;
+          break;
+        }
+        if (message.stream.status === 'pending' || message.stream.status === 'streaming') break;
+        if (!currentRenderer) {
+          currentRenderer = createRenderer({
+            adapter,
+            chatId,
+            threadId,
+            log,
+            t,
+            renderMode: ctx.getRenderMode?.(channelId, conversationKey, sessionId)
+          });
+        }
+        currentRenderer.consume(event);
+        const renderer = currentRenderer;
         currentRenderer = undefined;
+        void renderer.finalize().catch((err: unknown) => log('warn', `finalize failed: ${errMsg(err)}`));
         break;
-      case 'agent.token':
-      case 'agent.message':
+      }
+      case 'session.message.delta.appended':
+      case 'session.message.completed':
+      case 'session.message.failed':
       case 'tool.approval_requested':
-      case 'agent.error':
+        if (event.type === 'session.message.completed' || event.type === 'session.message.failed') {
+          const { message } = parseEventPayload(event.type, event.payload);
+          if (message.role !== 'assistant') break;
+        }
         if (!currentRenderer) {
           currentRenderer = createRenderer({
             adapter,
@@ -58,8 +83,8 @@ export function subscribeMirror(
         }
         currentRenderer.consume(event);
         if (
-          event.type === 'agent.message' ||
-          event.type === 'agent.error' ||
+          event.type === 'session.message.completed' ||
+          event.type === 'session.message.failed' ||
           event.type === 'tool.approval_requested'
         ) {
           const r = currentRenderer;

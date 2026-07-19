@@ -4,6 +4,7 @@ import type { AgentId, ChannelType, SessionId, SessionOrigin, SessionTransport }
 import type { ChannelAdapter, ChannelAdapterFactory } from '@monad/sdk-atom';
 import type { CommandBundle } from '#/handlers/commands/index.ts';
 import type { EventBus, EventSink } from '#/services/event-bus.ts';
+import type { MessageIngress } from '#/services/messages/types.ts';
 import type { Store } from '#/store/db/index.ts';
 
 export interface SessionGateway {
@@ -40,6 +41,7 @@ export interface ChannelServiceDeps {
    *  session) render the command + reply live, matching every other transport. Also used to subscribe
    *  to sessions for outbound mirroring (adapter.capabilities.outboundMirror). */
   bus: EventBus;
+  messageIngress?: MessageIngress;
   /** Active-locale translator (hot-reloaded). Localizes channel renderer notices + the rate-limit
    *  reply. A stable function — capture once; it always resolves against the current locale. */
   t: ChannelTranslate;

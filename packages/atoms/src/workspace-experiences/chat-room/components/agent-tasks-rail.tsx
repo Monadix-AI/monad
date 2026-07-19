@@ -12,6 +12,7 @@ import type {
   PointerEvent as ReactPointerEvent
 } from 'react';
 import type { ExternalAgentStreamView, Participant } from '../../experience/types.ts';
+import type { ObservationPanelHooks } from './observation/use-observation-panel.ts';
 
 import {
   BrainIcon,
@@ -28,9 +29,14 @@ import {
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
+  useGetExternalAgentConnectionQuery,
+  useLazyGetExternalAgentConvenienceHistoryQuery,
   useLazyGetExternalAgentHistoryPageQuery,
+  useLazyGetExternalAgentRawHistoryQuery,
   useLazyGetExternalAgentUsageQuery,
   useLazyGetNativeAgentDeliveryObservationQuery,
+  useStreamExternalAgentConvenienceQuery,
+  useStreamExternalAgentRawQuery,
   useStreamExternalAgentUiObservationQuery
 } from '@monad/sdk-experience/react';
 import { ProductIcon, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
@@ -71,12 +77,31 @@ import {
   type ObservationHistoryPageState
 } from '../utils/observation-history-state.ts';
 import { FilePreviewPanel } from './file-preview-panel.tsx';
+import { DualObservationPanel } from './observation/dual-observation-panel.tsx';
 import { ExternalAgentObservationPanel } from './observation/panel.tsx';
 
 const RAIL_WIDTH_STORAGE_KEY = 'monad.workplace.agentRail.width';
 const DEFAULT_RAIL_WIDTH = 296;
 const MIN_RAIL_WIDTH = 260;
 const MAX_RAIL_WIDTH = 620;
+
+function useRawObservationHistory() {
+  const [trigger] = useLazyGetExternalAgentRawHistoryQuery();
+  return [trigger] as const;
+}
+
+function useConvenienceObservationHistory() {
+  const [trigger] = useLazyGetExternalAgentConvenienceHistoryQuery();
+  return [trigger] as const;
+}
+
+const DEFAULT_DUAL_OBSERVATION_HOOKS: ObservationPanelHooks = {
+  useConnection: useGetExternalAgentConnectionQuery,
+  useRawStream: useStreamExternalAgentRawQuery,
+  useConvenienceStream: useStreamExternalAgentConvenienceQuery,
+  useRawHistory: useRawObservationHistory,
+  useConvenienceHistory: useConvenienceObservationHistory
+};
 
 function usePolledValue<T>(args: {
   enabled: boolean;
@@ -533,6 +558,11 @@ type AgentTasksRailRoom = {
   activeSessionId: string | null;
   railAgents: Participant[];
   stopExternalAgent: (id: string) => void;
+  // When supplied, external-agent session observation uses the connection-lifecycle-driven dual
+  // (raw ⇆ convenience) panel instead of the legacy single-plane ui-observation path. The experience
+  // runtime injects the RTK hooks (atoms reach them through `@monad/sdk-experience/react`). Absent →
+  // legacy path, unchanged.
+  dualObservationHooks?: ObservationPanelHooks;
 };
 
 export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.ReactElement {
@@ -987,6 +1017,18 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
           onBack={closeFilePreview}
           preview={filePreview}
         />
+      ) : observation && observedExternalAgentSessionId && observedTranscriptTargetId && !observedDeliveryId ? (
+        <DualObservationPanel
+          agent={observedAgent}
+          agentName={observedAgent?.name ?? observation.agentName ?? 'Agent'}
+          connectionSignal={observedStream?.status}
+          externalAgentSessionId={observedExternalAgentSessionId}
+          hooks={room.dualObservationHooks ?? DEFAULT_DUAL_OBSERVATION_HOOKS}
+          icon={observedAgent?.icon ?? observedHistoryStream?.icon}
+          onBack={closeRailObservation}
+          provider={observedAccessStream?.provider ?? observedStream?.provider ?? 'external-agent'}
+          transcriptTargetId={observedTranscriptTargetId as SessionId}
+        />
       ) : observation ? (
         <ExternalAgentObservationPanel
           agent={observedAgent}
@@ -1008,7 +1050,6 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
           onLoadOlderHistory={() => loadHistoryPage(historyPages?.nextCursor)}
           onRetryOlderHistory={() => loadHistoryPage(historyPages?.nextCursor)}
           onShowHistory={showHistory}
-          onStop={(id) => void room.stopExternalAgent(id)}
           showHistoryButton={historyPresentation.showButton}
           stream={observedHistoryStream}
           usageMeter={usageMeter}

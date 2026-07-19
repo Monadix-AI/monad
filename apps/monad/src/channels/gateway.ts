@@ -4,6 +4,7 @@ import type { ConfigAccess } from '#/config/manager.ts';
 import type { CommandBundle } from '#/handlers/commands/index.ts';
 import type { EventBus } from '#/services/event-bus.ts';
 import type { I18nService } from '#/services/i18n.ts';
+import type { MessageIngress } from '#/services/messages/types.ts';
 import type { Store } from '#/store/db/index.ts';
 
 import { emptyAuth } from '@monad/environment';
@@ -19,13 +20,14 @@ export async function createChannelGateway(deps: {
   store: Store;
   registry: ChannelServiceDeps['registry'];
   bus: EventBus;
+  messageIngress: MessageIngress;
   i18n: I18nService;
   commands: CommandBundle;
   logger: Logger;
   cfg: MonadConfig;
   config: ConfigAccess;
 }): Promise<ChannelService> {
-  const { sessionGateway, store, registry, bus, i18n, commands, logger, cfg, config } = deps;
+  const { sessionGateway, store, registry, bus, messageIngress, i18n, commands, logger, cfg, config } = deps;
   return new ChannelService(
     {
       session: {
@@ -60,6 +62,7 @@ export async function createChannelGateway(deps: {
       store,
       registry,
       bus,
+      messageIngress,
       t: i18n.t,
       commands,
       log: { info: (m) => logger.info(m), warn: (m) => logger.warn(m), error: (m) => logger.error(m) }

@@ -1,35 +1,121 @@
-import type { Event, SessionUiEvent, UIPart } from '@monad/protocol';
+import type { ChatMessage, Event, SessionUiEvent } from '@monad/protocol';
 import type { ProjectionMutations } from './ui-projection-state.ts';
 
-import { channelDisplayText, channelStructuredVisibility, parseEventPayload } from '@monad/protocol';
+import { parseEventPayload } from '@monad/protocol';
 
-import { PROVIDER_CONFIG_ERROR_CODE } from '#/agent/model/gateway/gateway-routing.ts';
-import { CHANNEL_REPARSE_MIN_DELTA, channelPartialDisplayText } from './ui-projection-helpers.ts';
+import {
+  agentDisplayNameFromData,
+  agentNameFromData,
+  CHANNEL_REPARSE_MIN_DELTA,
+  channelPartialDisplayText,
+  deliveryIdFromData,
+  externalAgentSessionIdFromData,
+  isSilentChannelMessage,
+  partsFromMessage,
+  sourceFromData,
+  statusFromMessage
+} from './ui-projection-helpers.ts';
+
+function applyCanonicalMessage(
+  m: ProjectionMutations,
+  event: Event,
+  message: ChatMessage,
+  failed = false
+): SessionUiEvent[] {
+  const existing = m.findMessage(message.id);
+  const agentName = agentNameFromData(message.data);
+  const agentDisplayName = agentDisplayNameFromData(message.data);
+  const source = sourceFromData(message.data);
+  const externalAgentSessionId = externalAgentSessionIdFromData(message.data);
+  const deliveryId = deliveryIdFromData(message.data);
+  m.rawStreamingText.delete(message.id);
+  m.streamingDeltaIndex.delete(`${message.id}:content`);
+  m.streamingDeltaIndex.delete(`${message.id}:reasoning`);
+  m.channelDisplayCache.delete(message.id);
+  if (isSilentChannelMessage(message, m.opts)) return existing ? [m.remove('message', message.id)] : [];
+  return [
+    m.setMessage({
+      kind: 'message',
+      id: message.id,
+      role: message.role === 'user' ? 'user' : 'assistant',
+      ...(agentName ? { agentName } : existing?.agentName ? { agentName: existing.agentName } : {}),
+      ...(agentDisplayName
+        ? { agentDisplayName }
+        : existing?.agentDisplayName
+          ? { agentDisplayName: existing.agentDisplayName }
+          : {}),
+      ...(source ? { source } : existing?.source ? { source: existing.source } : {}),
+      ...m.messageObservationPointers(
+        {
+          ...(externalAgentSessionId ? { externalAgentSessionId } : {}),
+          ...(deliveryId ? { deliveryId } : {})
+        },
+        existing
+      ),
+      parts: partsFromMessage(message, m.opts),
+      status: failed ? 'error' : statusFromMessage(message),
+      seq:
+        event.type === 'session.message.completed' && source === 'managed-external-agent'
+          ? event.at
+          : (existing?.seq ?? message.createdAt ?? event.at)
+    })
+  ];
+}
 
 export function applyMessageEvent(m: ProjectionMutations, event: Event): SessionUiEvent[] | undefined {
   switch (event.type) {
-    case 'user.message': {
-      const p = parseEventPayload('user.message', event.payload);
-      return [
-        m.setMessage({
-          kind: 'message',
-          id: p.messageId,
-          role: 'user',
-          parts: [{ type: 'text', text: p.text }],
-          status: 'done',
-          seq: event.at
-        })
-      ];
+    case 'session.message.created': {
+      return applyCanonicalMessage(m, event, parseEventPayload('session.message.created', event.payload).message);
     }
-    case 'agent.token': {
-      const p = parseEventPayload('agent.token', event.payload);
+    case 'session.message.updated': {
+      return applyCanonicalMessage(m, event, parseEventPayload('session.message.updated', event.payload).message);
+    }
+    case 'session.message.completed': {
+      return applyCanonicalMessage(m, event, parseEventPayload('session.message.completed', event.payload).message);
+    }
+    case 'session.message.failed': {
+      return applyCanonicalMessage(m, event, parseEventPayload('session.message.failed', event.payload).message, true);
+    }
+    case 'session.message.deleted': {
+      const { messageId } = parseEventPayload('session.message.deleted', event.payload);
+      return [m.remove('message', messageId)];
+    }
+    case 'session.message.delta.appended': {
+      const p = parseEventPayload('session.message.delta.appended', event.payload);
+      const key = `${p.messageId}:${p.channel}`;
+      if ((m.streamingDeltaIndex.get(key) ?? -1) >= p.index) return [];
+      if (p.channel === 'reasoning') {
+        m.streamingDeltaIndex.set(key, p.index);
+        const existing = m.findMessage(p.messageId);
+        const reasoning = existing?.parts.find((part) => part.type === 'reasoning');
+        const parts = existing ? existing.parts.slice() : [];
+        if (reasoning?.type === 'reasoning') reasoning.text += p.delta;
+        else parts.unshift({ type: 'reasoning', text: p.delta });
+        return [
+          m.setMessage({
+            kind: 'message',
+            id: p.messageId,
+            role: 'assistant',
+            ...(existing?.agentName ? { agentName: existing.agentName } : {}),
+            ...(existing?.agentDisplayName ? { agentDisplayName: existing.agentDisplayName } : {}),
+            ...(existing?.source ? { source: existing.source } : {}),
+            ...m.messageObservationPointers({}, existing),
+            parts,
+            status: 'streaming',
+            seq: existing?.seq ?? event.at
+          })
+        ];
+      }
+      const contentKey = `${p.messageId}:content`;
+      if ((m.streamingDeltaIndex.get(contentKey) ?? -1) >= p.index) return [];
+      m.streamingDeltaIndex.set(contentKey, p.index);
       const existing = m.findMessage(p.messageId);
       const text = existing?.parts.find((part) => part.type === 'text');
       const parts = existing ? existing.parts.slice() : [];
       // Accumulate the full streamed text for every session, not just channel-structured ones: each
-      // `agent.token` carries only its own delta, so the running text is reassembled here. The
+      // delta event carries only its own delta, so the running text is reassembled here. The
       // existing text part holds *display* text (for a channel session, a filtered projection of the
-      // raw JSON) and can't be appended to directly. Cleared on agent.message / agent.error.
+      // raw JSON) and can't be appended to directly. Cleared when the canonical message settles.
       const rawText = `${m.rawStreamingText.get(p.messageId) ?? ''}${p.delta}`;
       m.rawStreamingText.set(p.messageId, rawText);
       let visibleText: string;
@@ -51,139 +137,13 @@ export function applyMessageEvent(m: ProjectionMutations, event: Event): Session
           kind: 'message',
           id: p.messageId,
           role: 'assistant',
-          ...(p.agentName ? { agentName: p.agentName } : existing?.agentName ? { agentName: existing.agentName } : {}),
-          ...(p.agentDisplayName
-            ? { agentDisplayName: p.agentDisplayName }
-            : existing?.agentDisplayName
-              ? { agentDisplayName: existing.agentDisplayName }
-              : {}),
-          ...(p.source ? { source: p.source } : existing?.source ? { source: existing.source } : {}),
-          ...m.messageObservationPointers(p, existing),
-          parts,
-          status: 'streaming',
-          seq: existing?.seq ?? event.at
-        })
-      ];
-    }
-    case 'agent.reasoning': {
-      const p = parseEventPayload('agent.reasoning', event.payload);
-      const existing = m.findMessage(p.messageId);
-      const reasoning = existing?.parts.find((part) => part.type === 'reasoning');
-      const parts = existing ? existing.parts.slice() : [];
-      if (reasoning?.type === 'reasoning') reasoning.text += p.delta;
-      else parts.unshift({ type: 'reasoning', text: p.delta });
-      return [
-        m.setMessage({
-          kind: 'message',
-          id: p.messageId,
-          role: 'assistant',
           ...(existing?.agentName ? { agentName: existing.agentName } : {}),
           ...(existing?.agentDisplayName ? { agentDisplayName: existing.agentDisplayName } : {}),
-          ...(p.source ? { source: p.source } : existing?.source ? { source: existing.source } : {}),
-          ...m.messageObservationPointers(p, existing),
+          ...(existing?.source ? { source: existing.source } : {}),
+          ...m.messageObservationPointers({}, existing),
           parts,
           status: 'streaming',
           seq: existing?.seq ?? event.at
-        })
-      ];
-    }
-    case 'agent.message': {
-      const p = parseEventPayload('agent.message', event.payload);
-      const existing = m.findMessage(p.messageId);
-      m.rawStreamingText.delete(p.messageId);
-      m.channelDisplayCache.delete(p.messageId);
-      if (m.opts.channelStructured && channelStructuredVisibility(p.text) === 'silent') {
-        return existing ? [m.remove('message', p.messageId)] : [];
-      }
-      const parts: UIPart[] = existing?.parts.filter((part) => part.type !== 'text') ?? [];
-      const text = m.opts.channelStructured ? channelDisplayText(p.text) : p.text;
-      parts.push(
-        p.data !== undefined
-          ? { type: 'artifact', messageType: 'directive', text, data: p.data }
-          : { type: 'text', text }
-      );
-      if (p.attachments?.length && !parts.some((part) => part.type === 'custom' && part.name === 'attachment')) {
-        for (const attachment of p.attachments) parts.push({ type: 'custom', name: 'attachment', data: attachment });
-      }
-      return [
-        m.setMessage({
-          kind: 'message',
-          id: p.messageId,
-          role: 'assistant',
-          ...(p.agentName ? { agentName: p.agentName } : existing?.agentName ? { agentName: existing.agentName } : {}),
-          ...(p.agentDisplayName
-            ? { agentDisplayName: p.agentDisplayName }
-            : existing?.agentDisplayName
-              ? { agentDisplayName: existing.agentDisplayName }
-              : {}),
-          ...(p.source ? { source: p.source } : existing?.source ? { source: existing.source } : {}),
-          ...m.messageObservationPointers(p, existing),
-          parts,
-          status: 'done',
-          seq: p.source === 'managed-external-agent' ? event.at : (existing?.seq ?? event.at)
-        })
-      ];
-    }
-    case 'agent.error': {
-      const p = parseEventPayload('agent.error', event.payload);
-      const id = p.messageId ?? `err-${event.id}`;
-      if (p.messageId) {
-        m.rawStreamingText.delete(p.messageId);
-        m.channelDisplayCache.delete(p.messageId);
-      }
-      const text = p.code ? `[${p.code}] ${p.message}` : p.message;
-      // A provider-config failure (missing credentials, unsupported capability) gets an `artifact`
-      // part so the client renders its dedicated "fix provider settings" card instead of plain text.
-      const parts: UIPart[] =
-        p.code === PROVIDER_CONFIG_ERROR_CODE
-          ? [{ type: 'artifact', messageType: 'provider_config_error', text, data: { providerId: p.providerId } }]
-          : [{ type: 'text', text }];
-      return [
-        m.setMessage({
-          kind: 'message',
-          id,
-          role: 'assistant',
-          parts,
-          status: 'error',
-          seq: (p.messageId ? m.findMessage(p.messageId)?.seq : undefined) ?? event.at
-        })
-      ];
-    }
-    case 'message.delta': {
-      const p = parseEventPayload('message.delta', event.payload);
-      const existing = m.findMessage(p.messageId);
-      const artifact = existing?.parts.find((part) => part.type === 'artifact' && part.messageType === p.type);
-      const parts = existing ? existing.parts.slice() : [];
-      if (artifact?.type === 'artifact') artifact.text = `${artifact.text ?? ''}${p.delta}`;
-      else parts.push({ type: 'artifact', messageType: p.type, text: p.delta });
-      return [
-        m.setMessage({
-          kind: 'message',
-          id: p.messageId,
-          role: 'assistant',
-          parts,
-          status: 'streaming',
-          seq: existing?.seq ?? event.at
-        })
-      ];
-    }
-    case 'message.complete': {
-      const p = parseEventPayload('message.complete', event.payload);
-      return [
-        m.setMessage({
-          kind: 'message',
-          id: p.messageId,
-          role: 'assistant',
-          parts: [
-            {
-              type: 'artifact',
-              messageType: p.type,
-              ...(p.text ? { text: p.text } : {}),
-              ...(p.data !== undefined ? { data: p.data } : {})
-            }
-          ],
-          status: p.ok ? 'done' : 'error',
-          seq: m.findMessage(p.messageId)?.seq ?? event.at
         })
       ];
     }

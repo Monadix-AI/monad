@@ -79,6 +79,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
   const agentRuntime = await createAgentRuntime(core, { host: HOST, port: PORT }, logger);
   const {
     bus,
+    messageIngress,
     cache,
     oversight,
     clarify,
@@ -140,6 +141,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     store,
     agent,
     bus,
+    messageIngress,
     cache,
     paths,
     memoryService,

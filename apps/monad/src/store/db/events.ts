@@ -80,7 +80,7 @@ export function findDanglingInterrupts(sqlite: Database): DanglingInterrupt[] {
 }
 
 /** True when `eventId` is present in the durable event log. Lets callers distinguish a persisted
- *  cursor from an un-persisted live one (e.g. an `agent.token`) before calling {@link listEvents},
+ *  cursor from an un-persisted live message delta before calling {@link listEvents},
  *  whose missing-cursor fallback would otherwise replay the whole session. */
 export function hasEvent(sqlite: Database, eventId: string): boolean {
   return sqlite.query('SELECT 1 FROM events WHERE id = ? LIMIT 1').get(eventId) !== null;

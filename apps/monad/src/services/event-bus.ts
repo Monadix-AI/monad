@@ -1,7 +1,7 @@
-import type { Event, EventType, SessionId } from '@monad/protocol';
+import type { Event, EventType, TranscriptTargetId } from '@monad/protocol';
 
 import { EventEmitter } from 'node:events';
-import { newId } from '@monad/protocol';
+import { eventDefinition, newId } from '@monad/protocol';
 
 export type EventSink = (event: Event) => void;
 
@@ -9,7 +9,7 @@ export type EventSink = (event: Event) => void;
  *  `payload` is `object` (not `Event['payload']`) so typed payload shapes without an index
  *  signature pass without a call-site cast; the wire schema validates the record shape anyway. */
 export function makeEvent(
-  sessionId: SessionId,
+  sessionId: TranscriptTargetId,
   type: EventType,
   payload: object,
   opts?: Pick<Partial<Event>, 'actorAgentId' | 'at'>
@@ -33,25 +33,6 @@ export function makeEvent(
  * In-session detail (`agent.*`, `tool.*`) stays session-scoped: it only matters to
  * a client actively viewing that session, which subscribes by id.
  */
-const CONTROL_EVENT_TYPES: ReadonlySet<EventType> = new Set<EventType>([
-  'session.created',
-  'session.updated',
-  'session.deleted',
-  'session.restored',
-  'session.stream_started',
-  'session.stream_ended',
-  // A external agent session appearing/ending in a project is list-level: a client keeping the
-  // external agent session list live (to observe an agent, drive rail presence) subscribes to control,
-  // not to each project id. Without these on control the list only refreshes on a manual reload.
-  'external_agent.started',
-  'external_agent.exited',
-  'task.created',
-  'task.progress',
-  'task.completed',
-  'task.failed',
-  'mcp.status_updated'
-]);
-
 /**
  * Topic a sink can subscribe to. `session:<id>` carries one session's full event
  * stream; `control` carries the cross-session, list-level slice. Modelled as a
@@ -96,7 +77,8 @@ export class EventBus {
     // List-level events also reach control subscribers. A sink subscribed to both
     // the session and control topics receives the event twice — clients dedupe by
     // `event.id` (events are idempotent by id).
-    if (CONTROL_EVENT_TYPES.has(event.type)) this.emit(CONTROL_TOPIC, event);
+    const delivery = eventDefinition(event.type).delivery;
+    if (delivery === 'control' || delivery === 'both') this.emit(CONTROL_TOPIC, event);
   }
 
   private subscribeTopic(topic: Topic, sink: EventSink): () => void {

@@ -41,7 +41,7 @@ export function registerMemoryHooks(
     event: 'AfterTurn',
     handler: (input) => {
       if (!input.sessionId.startsWith('ses_')) return undefined;
-      memoryService.observeTurn(input.sessionId as SessionId);
+      memoryService.observeTurn(input.sessionId as SessionId, input.response);
       return undefined;
     }
   });

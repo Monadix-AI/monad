@@ -1,27 +1,9 @@
-import type { Event, MessageId, ProjectId, SessionId } from '@monad/protocol';
-import type { EventBus } from '#/services/event-bus.ts';
-import type { RoundCache } from '#/services/round-cache.ts';
-import type { Store } from '#/store/db/index.ts';
+import type { MessageId, TranscriptTargetId } from '@monad/protocol';
+import type { MessageIngress } from '#/services/messages/types.ts';
 
-import { newId } from '@monad/protocol';
+import { messageIdempotencyKey } from '#/services/messages/ingress.ts';
 
-import { makeEvent } from '#/services/event-bus.ts';
-
-// `insertAssistantMessage`/`completeAssistantMessage` are also called with a Workplace Project's own
-// id (services/native-agent/project.ts's `ask()`, for a project's Q&A wall) — a real, still-open
-// class-C usage per the Track B P6b id collapse (see the SessionOrProject TODO in
-// apps/monad/src/handlers/session/context.ts). `Event.sessionId` is strictly `SessionId` on the wire,
-// so the project-id case casts.
-type TranscriptTargetId = SessionId | ProjectId;
-
-export function createTranscriptProjector(deps: { store: Store; bus: EventBus; cache: RoundCache }) {
-  function publish(event: Event): void {
-    deps.cache.append(event);
-    deps.bus.publish(event);
-    deps.store.appendEvents([event]);
-    deps.cache.retire(event.sessionId);
-  }
-
+export function createTranscriptProjector(deps: { messageIngress: MessageIngress }) {
   return {
     insertAssistantMessage(args: {
       sessionId: TranscriptTargetId;
@@ -30,21 +12,20 @@ export function createTranscriptProjector(deps: { store: Store; bus: EventBus; c
       data?: Record<string, unknown>;
       includeInContext?: boolean;
       streamStatus?: 'streaming' | 'complete';
-    }): { messageId: MessageId } {
-      const messageId = newId('msg');
-      deps.store.insertMessage(messageId, args.sessionId, args.text, new Date().toISOString(), 'assistant', {
+    }): Promise<{ messageId: MessageId }> {
+      const command = {
+        transcriptTargetId: args.sessionId,
+        idempotencyKey: messageIdempotencyKey('transcript-projector', args.sessionId, crypto.randomUUID()),
+        producer: { kind: 'system' as const, subsystem: 'transcript-projector' },
+        role: 'assistant' as const,
+        type: 'text' as const,
+        text: args.text,
         data: { agentName: args.agentName, ...args.data },
-        includeInContext: args.includeInContext,
-        streamStatus: args.streamStatus
-      });
-      publish(
-        makeEvent(args.sessionId as SessionId, 'agent.message', {
-          messageId,
-          agentName: args.agentName,
-          text: args.text
-        })
-      );
-      return { messageId };
+        includeInContext: args.includeInContext
+      };
+      const create =
+        args.streamStatus === 'streaming' ? deps.messageIngress.begin(command) : deps.messageIngress.deliver(command);
+      return create.then((message) => ({ messageId: message.id }));
     },
 
     completeAssistantMessage(args: {
@@ -52,17 +33,16 @@ export function createTranscriptProjector(deps: { store: Store; bus: EventBus; c
       messageId: MessageId;
       agentName: string;
       text: string;
-    }): void {
-      deps.store.setGenStatus(args.sessionId, args.messageId, 'complete', new Date().toISOString(), {
-        text: args.text
-      });
-      publish(
-        makeEvent(args.sessionId as SessionId, 'agent.message', {
+    }): Promise<void> {
+      return deps.messageIngress
+        .settle({
+          transcriptTargetId: args.sessionId,
           messageId: args.messageId,
-          agentName: args.agentName,
+          idempotencyKey: messageIdempotencyKey('transcript-projector', args.messageId, 'complete'),
+          producer: { kind: 'system', subsystem: 'transcript-projector' },
           text: args.text
         })
-      );
+        .then(() => {});
     }
   };
 }

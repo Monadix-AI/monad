@@ -18,6 +18,7 @@ import type { Tool } from '#/capabilities/tools/types.ts';
 import type { DelegatableAgent } from '#/services/generation/agent-persona.ts';
 
 import { createLogger } from '@monad/logger';
+import { parseEventPayload } from '@monad/protocol';
 import { z } from 'zod';
 
 import { runSubagent } from '#/capabilities/tools/registry/delegate.ts';
@@ -88,9 +89,11 @@ export function createAgentDelegateTool(deps: AgentDelegateDeps): Tool<DelegateI
       let activity = `▸ ${target.name}\n`;
       const onEvent = (e: Event): void => {
         switch (e.type) {
-          case 'agent.token':
-            activity += (e.payload as { delta?: string }).delta ?? '';
+          case 'session.message.delta.appended': {
+            const payload = parseEventPayload('session.message.delta.appended', e.payload);
+            if (payload.channel !== 'reasoning') activity += payload.delta;
             break;
+          }
           case 'tool.called':
             activity += `\n  ↪ ${(e.payload as { tool?: string }).tool ?? ''}`;
             break;

@@ -22,7 +22,12 @@ import {
   sessionSurfaceSchema,
   sessionTransportSchema
 } from '../domain.ts';
-import { agentIdSchema, messageIdSchema, sessionIdSchema } from '../ids.ts';
+import {
+  sessionMessageCompletedPayloadSchema,
+  sessionMessageDeltaAppendedPayloadSchema,
+  sessionMessageFailedPayloadSchema
+} from '../event-table.ts';
+import { agentIdSchema, eventIdSchema, messageIdSchema, sessionIdSchema } from '../ids.ts';
 import {
   cursorPaginationQuerySchema,
   cursorPaginationResponseSchema,
@@ -407,9 +412,53 @@ export const listMessagesQuerySchema = cursorPaginationQuerySchema.extend({
 export type ListMessagesQuery = z.infer<typeof listMessagesQuerySchema>;
 
 export const listMessagesResponseSchema = cursorPaginationResponseSchema.extend({
-  messages: z.array(chatMessageSchema)
+  messages: z.array(chatMessageSchema),
+  messageRevision: z.number().int().nonnegative()
 });
 export type ListMessagesResponse = z.infer<typeof listMessagesResponseSchema>;
+
+const messageGenerationDeltaEventSchema = eventSchema.extend({
+  type: z.literal('session.message.delta.appended'),
+  payload: sessionMessageDeltaAppendedPayloadSchema
+});
+
+export const messageGenerationEventSchema = z.discriminatedUnion('type', [
+  messageGenerationDeltaEventSchema,
+  eventSchema.extend({
+    type: z.literal('session.message.completed'),
+    payload: sessionMessageCompletedPayloadSchema
+  }),
+  eventSchema.extend({
+    type: z.literal('session.message.failed'),
+    payload: sessionMessageFailedPayloadSchema
+  })
+]);
+export type MessageGenerationEvent = z.infer<typeof messageGenerationEventSchema>;
+
+export const messageGenerationSubscribeRequestSchema = z.object({
+  sessionId: sessionIdSchema,
+  messageId: messageIdSchema,
+  afterEventId: eventIdSchema.optional()
+});
+export type MessageGenerationSubscribeRequest = z.infer<typeof messageGenerationSubscribeRequestSchema>;
+
+export const messageGenerationSnapshotFrameSchema = z.object({
+  kind: z.literal('snapshot'),
+  message: chatMessageSchema,
+  messageRevision: z.number().int().nonnegative(),
+  deltas: z.array(messageGenerationDeltaEventSchema)
+});
+export type MessageGenerationSnapshotFrame = z.infer<typeof messageGenerationSnapshotFrameSchema>;
+
+export const messageGenerationEventFrameSchema = z.object({
+  kind: z.literal('event'),
+  event: messageGenerationEventSchema
+});
+export const messageGenerationFrameSchema = z.discriminatedUnion('kind', [
+  messageGenerationSnapshotFrameSchema,
+  messageGenerationEventFrameSchema
+]);
+export type MessageGenerationFrame = z.infer<typeof messageGenerationFrameSchema>;
 
 export const branchSessionRequestSchema = z.object({
   title: z.string().max(SESSION_TITLE_MAX).optional(),

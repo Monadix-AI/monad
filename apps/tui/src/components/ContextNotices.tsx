@@ -1,5 +1,4 @@
-import type { ContextNotice, MemorySuggestion } from '@monad/client-rtk';
-import type { ContextUsagePayload } from '@monad/protocol';
+import type { TuiMemorySuggestion } from '../shell/stream-model.ts';
 
 import { useAddMemoryFactMutation } from '@monad/client-rtk';
 import { memoryScopeQuerySchema } from '@monad/protocol';
@@ -7,24 +6,14 @@ import { Box, Text, useInput } from 'ink';
 import { useState } from 'react';
 
 import { t } from '../lib/i18n.ts';
-import { latestHandoffNudge } from '../shell/context-notice-model.ts';
 import { safeErrorMessage } from '../shell/view-model.ts';
 import { TUI_GLYPHS, TUI_THEME } from './theme.ts';
 
-export function ContextNudgeLine({
-  notices,
-  usage
-}: {
-  notices: readonly ContextNotice[] | undefined;
-  usage: ContextUsagePayload | undefined;
-}) {
-  const nudge = latestHandoffNudge(notices, usage);
-  if (!nudge) return null;
+export function ContextNudgeLine({ text }: { text: string | undefined }) {
+  if (!text) return null;
   return (
     <Box paddingX={1}>
-      <Text color={TUI_THEME.warning}>
-        {t('cli.tui.context.handoffNudge', { used: Math.round(nudge.usedFraction * 100) })}
-      </Text>
+      <Text color={TUI_THEME.warning}>{text}</Text>
     </Box>
   );
 }
@@ -33,7 +22,7 @@ export function MemorySuggestionPrompt({
   suggestion,
   onResolve
 }: {
-  suggestion: MemorySuggestion;
+  suggestion: TuiMemorySuggestion;
   onResolve: (id: string, outcome: 'saved' | 'dismissed') => void;
 }) {
   const [addMemoryFact] = useAddMemoryFactMutation();

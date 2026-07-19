@@ -4,7 +4,7 @@ import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
 import type { OpenAiCompatConfig } from '#/transports/http/openai-compat.ts';
 import type { ResponseObject, ResponsesRequest, StoredResponse } from './types.ts';
 
-import { newId, parseEventPayload } from '@monad/protocol';
+import { costSchema, finishReasonSchema, newId, parseEventPayload, tokenUsageSchema } from '@monad/protocol';
 import { Elysia } from 'elysia';
 
 import { handleFunctionToolPath } from './function-tools.ts';
@@ -20,6 +20,15 @@ import {
   SESSION_ORIGIN
 } from './shared.ts';
 import { buildStreamingResponse } from './streaming.ts';
+
+function terminalMetadata(data: unknown) {
+  const value = typeof data === 'object' && data !== null ? (data as Record<string, unknown>) : {};
+  return {
+    cost: costSchema.safeParse(value.cost).data,
+    finishReason: finishReasonSchema.safeParse(value.finishReason).data,
+    usage: tokenUsageSchema.safeParse(value.usage).data
+  };
+}
 
 // ── controller factory ────────────────────────────────────────────────────────
 
@@ -194,17 +203,28 @@ export function createResponsesApiController(
         };
         let costUsd: number | undefined;
         let resultFinishReason: string | undefined;
+        let failureText: string | undefined;
 
         try {
           await handlers.session.sendInline(
             { sessionId, text: inputText },
             (event) => {
-              if (event.type === 'agent.message') {
-                const p = parseEventPayload('agent.message', event.payload as Record<string, unknown>);
-                resultText = p.text;
-                resultUsage = buildUsage(p.usage);
-                costUsd = p.cost?.usd;
-                resultFinishReason = p.finishReason;
+              if (event.type === 'session.message.completed') {
+                const { message } = parseEventPayload(
+                  'session.message.completed',
+                  event.payload as Record<string, unknown>
+                );
+                const { cost, finishReason, usage } = terminalMetadata(message.data);
+                resultText = message.text;
+                resultUsage = buildUsage(usage);
+                costUsd = cost?.usd;
+                resultFinishReason = finishReason;
+              } else if (event.type === 'session.message.failed') {
+                const { message } = parseEventPayload(
+                  'session.message.failed',
+                  event.payload as Record<string, unknown>
+                );
+                failureText = message.text;
               }
             },
             { transport: 'http', ambientContext }
@@ -212,6 +232,8 @@ export function createResponsesApiController(
         } catch (err) {
           return handlerErrorToResponse(err);
         }
+
+        if (failureText) return errorResponse(failureText, 500, 'api_error', 'generation_failed');
 
         const isIncomplete = resultFinishReason === 'max_tokens';
         const outputContent: ResponseOutputText = { type: 'output_text', text: resultText, annotations: [] };

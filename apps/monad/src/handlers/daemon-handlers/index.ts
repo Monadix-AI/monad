@@ -65,6 +65,7 @@ import { ExternalAgentHost } from '#/services/external-agent/host/index.ts';
 import { resolveExternalAgentManagedServerUrl } from '#/services/external-agent/host/session-launcher.ts';
 import { externalAgentConfigToView } from '#/services/external-agent/index.ts';
 import { managedProjectRuntimeWorkspace } from '#/services/external-agent/managed-project.ts';
+import { createMessageIngress } from '#/services/messages/ingress.ts';
 import licensesData from '../../../generated/licenses.json';
 import { createInitHandlers } from './handlers-init.ts';
 import {
@@ -109,6 +110,7 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
   process.on('exit', () => externalAgentHost.stopAll());
 
   const init = createInitHandlers(paths, mockMode, deps.log);
+  const messageIngress = deps.messageIngress ?? createMessageIngress({ store: deps.store, bus: deps.bus });
 
   const oversight = createOversightHandlers(deps.oversight);
   const clarify = createClarifyHandlers(deps.clarify);
@@ -278,7 +280,7 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
       return deps.indexerStatus?.() ?? { pending: 0, running: false };
     }
   };
-  const session = createSessionModule({ ...deps, externalAgentHost });
+  const session = createSessionModule({ ...deps, externalAgentHost, messageIngress });
   const experienceCapabilities = {
     state: {
       forPack: (atomPackId: string) => createExperienceStateStore(deps.store, atomPackId)
@@ -339,9 +341,7 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
     wakeTimer.unref();
   }
   const transcriptProjector = createTranscriptProjector({
-    store: deps.store,
-    bus: deps.bus,
-    cache: deps.cache
+    messageIngress
   });
   externalAgentHost.setManagedProjectOutputHandler(async (output) => {
     await session.completeManagedExternalAgentProviderMessage(output);
@@ -461,6 +461,7 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
       ];
     },
     _transcriptProjector: transcriptProjector,
+    _messageIngress: messageIngress,
     memory: createMemoryModule(
       deps.memoryService,
       deps.memorySetBackend,

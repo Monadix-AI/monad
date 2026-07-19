@@ -26,23 +26,26 @@ const MANAGED_EXTERNAL_AGENT_JOIN_GREETING_PROMPT = await definePrompt({
 export function createManagedExternalAgentJoin(ctx: SessionContext) {
   const {
     deps: { store, paths, externalAgentHost, log },
-    emitLifecycle
+    emitLifecycle,
+    messageIngress
   } = ctx;
   const { emitManagedExternalAgentThinking, startManagedExternalAgentRuntimeWithRecovery } =
     createManagedExternalAgentDelivery(ctx);
 
-  function recordManagedExternalAgentProjectError(sessionId: Session['id'], agentName: string, message: string): void {
+  async function recordManagedExternalAgentProjectError(
+    sessionId: Session['id'],
+    agentName: string,
+    message: string
+  ): Promise<void> {
     const text = `${agentName} failed to join the project: ${message}`;
-    const messageId = newId('msg');
-    store.insertMessage(messageId, sessionId, text, new Date().toISOString(), 'assistant', {
+    await messageIngress.deliver({
+      transcriptTargetId: sessionId,
+      idempotencyKey: newId('idem'),
+      producer: { kind: 'system', subsystem: 'managed-external-agent' },
+      role: 'assistant',
       type: 'error',
+      text,
       data: { agentName }
-    });
-    emitLifecycle(sessionId, 'agent.error', {
-      messageId,
-      agentName,
-      code: 'managed_external_agent_start_failed',
-      message: text
     });
   }
 
@@ -91,11 +94,11 @@ export function createManagedExternalAgentJoin(ctx: SessionContext) {
         providerSessionRef: resumeFrom ?? undefined,
         input: MANAGED_EXTERNAL_AGENT_JOIN_GREETING_PROMPT.render({})
       });
-      emitManagedExternalAgentThinking(session.id, nativeSession.id, runtimeAgentName, undefined, displayName);
+      await emitManagedExternalAgentThinking(session.id, nativeSession.id, runtimeAgentName, undefined, displayName);
       return { started: true, nativeSessionId: nativeSession.id };
     } catch (err) {
       const { message } = extractError(err);
-      recordManagedExternalAgentProjectError(session.id, runtimeAgentName, message);
+      await recordManagedExternalAgentProjectError(session.id, runtimeAgentName, message);
       log?.debug(
         {
           sessionId: session.id,

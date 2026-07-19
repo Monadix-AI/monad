@@ -4,6 +4,7 @@
 import type { Event } from '@monad/protocol';
 
 import { afterAll, beforeAll, expect, test } from 'bun:test';
+import { parseEventPayload } from '@monad/protocol';
 
 import { listen, mockModel } from '../helpers.ts';
 
@@ -54,11 +55,13 @@ test('POST /messages with Accept: text/event-stream streams the round inline the
     }
   }
 
-  const tokens = events.filter((e) => e.type === 'agent.token');
-  const finals = events.filter((e) => e.type === 'agent.message');
+  const tokens = events.filter((e) => e.type === 'session.message.delta.appended');
+  const finals = events.filter((e) => e.type === 'session.message.completed');
   expect(tokens.length).toBe(3);
   expect(finals.length).toBe(1);
-  expect((finals[0]?.payload as { text: string } | undefined)?.text).toBe('Hello!');
+  const final = finals[0];
+  if (!final) throw new Error('missing completed message');
+  expect(parseEventPayload('session.message.completed', final.payload).message.text).toBe('Hello!');
 });
 
 test('fire-and-forget POST /messages (no Accept) returns {accepted:true}', async () => {

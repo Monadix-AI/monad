@@ -11,6 +11,7 @@ import type {
   NativeAgentDelivery,
   NativeAgentDeliveryId,
   NativeAgentDirectMessage,
+  ProjectId,
   SearchHit,
   Session,
   SessionId,
@@ -19,6 +20,7 @@ import type {
   Task,
   TaskState,
   TokenUsage,
+  TranscriptTargetId,
   WorkplaceProject
 } from '@monad/protocol';
 import type { ChannelConversation, ChannelConversationSession } from './row-mappers.ts';
@@ -105,6 +107,21 @@ import {
   recordFileObservation
 } from './file-observations.ts';
 import {
+  type CreateMessageInput,
+  createMessage,
+  type FailMessageInput,
+  failCanonicalMessage,
+  getMessageRevision,
+  type MessageListSnapshot,
+  type MessageMutationResult,
+  type RemoveMessageInput,
+  removeCanonicalMessage,
+  type SettleMessageInput,
+  settleCanonicalMessage,
+  type UpdateMessageInput,
+  updateCanonicalMessage
+} from './message-mutations.ts';
+import {
   cloneMessages,
   failOrphanedStreamingMessages,
   findManagedExternalAgentStreamingMessage,
@@ -114,6 +131,7 @@ import {
   insertMessage,
   type ListMessagesOptions,
   listMessages,
+  listMessagesSnapshot,
   maxMessageCreatedAt,
   maxMessageSeq,
   messageIdForSeq,
@@ -445,11 +463,45 @@ export class Store {
     return failOrphanedStreamingMessages(this.sqlite, updatedAt);
   }
 
+  createMessage(input: CreateMessageInput): MessageMutationResult {
+    return createMessage(this.sqlite, input);
+  }
+
+  updateMessage(input: UpdateMessageInput): MessageMutationResult {
+    return updateCanonicalMessage(this.sqlite, input);
+  }
+
+  settleMessage(input: SettleMessageInput): MessageMutationResult {
+    return settleCanonicalMessage(this.sqlite, input);
+  }
+
+  failMessage(input: FailMessageInput): MessageMutationResult {
+    return failCanonicalMessage(this.sqlite, input);
+  }
+
+  removeMessage(input: RemoveMessageInput): MessageMutationResult {
+    return removeCanonicalMessage(this.sqlite, input);
+  }
+
+  getMessageRevision(transcriptTargetId: TranscriptTargetId): number {
+    return getMessageRevision(this.sqlite, transcriptTargetId);
+  }
+
+  listMessagesSnapshot(transcriptTargetId: TranscriptTargetId, opts: ListMessagesOptions = {}): MessageListSnapshot {
+    return listMessagesSnapshot(this.sqlite, transcriptTargetId, opts);
+  }
+
   /** Ordered by sqlite rowid (insertion order). Defaults to active (non-rewound) messages only. */
+  listMessages(transcriptTargetId: SessionId, opts?: ListMessagesOptions): (ChatMessage & { sessionId: SessionId })[];
+  listMessages(transcriptTargetId: ProjectId, opts?: ListMessagesOptions): (ChatMessage & { sessionId: ProjectId })[];
+  listMessages(transcriptTargetId: string, opts?: ListMessagesOptions): ChatMessage[];
   listMessages(transcriptTargetId: string, opts: ListMessagesOptions = {}): ChatMessage[] {
     return listMessages(this.sqlite, transcriptTargetId, opts);
   }
 
+  getMessage(transcriptTargetId: SessionId, messageId: string): (ChatMessage & { sessionId: SessionId }) | null;
+  getMessage(transcriptTargetId: ProjectId, messageId: string): (ChatMessage & { sessionId: ProjectId }) | null;
+  getMessage(transcriptTargetId: string, messageId: string): ChatMessage | null;
   getMessage(transcriptTargetId: string, messageId: string): ChatMessage | null {
     return getMessage(this.sqlite, transcriptTargetId, messageId);
   }
@@ -576,7 +628,7 @@ export class Store {
   }
 
   /** True when `eventId` is present in the durable event log. Lets callers distinguish a persisted
-   *  cursor from an un-persisted live one (e.g. an `agent.token`) before calling {@link listEvents},
+   *  cursor from an un-persisted live message delta before calling {@link listEvents},
    *  whose missing-cursor fallback would otherwise replay the whole session. */
   hasEvent(eventId: string): boolean {
     return hasEvent(this.sqlite, eventId);

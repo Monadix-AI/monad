@@ -32,6 +32,7 @@ export * from './marketplace.ts';
 export * from './mcp-server.ts';
 export * from './mem0-data.ts';
 export * from './memory.ts';
+export * from './message-ingress.ts';
 export * from './message-types.ts';
 export * from './obscura.ts';
 export * from './pagination.ts';

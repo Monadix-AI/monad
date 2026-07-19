@@ -1,4 +1,4 @@
-import type { Event } from '@monad/protocol';
+import type { ChatMessage, Event } from '@monad/protocol';
 
 import { describe, expect, test } from 'bun:test';
 import { newId } from '@monad/protocol';
@@ -15,9 +15,31 @@ function fixtureEvent(over: Partial<Event> & Pick<Event, 'type' | 'payload'>): E
   };
 }
 
+function fixtureMessage(over: Partial<ChatMessage>): ChatMessage {
+  return {
+    id: 'msg_100000000000',
+    sessionId: 'ses_100000000000',
+    role: 'assistant',
+    text: '',
+    type: 'text',
+    stream: { status: 'settled' },
+    active: true,
+    createdAt: '2026-07-09T00:00:00.000Z',
+    ...over
+  };
+}
+
 describe('toAgentObservationEvent', () => {
-  test('maps user.message to a neutral user-message event', () => {
-    const event = fixtureEvent({ type: 'user.message', payload: { messageId: 'msg_100000000000', text: 'hi' } });
+  test('maps a settled user session.message.created to a neutral user-message event', () => {
+    const event = fixtureEvent({
+      type: 'session.message.created',
+      payload: {
+        transcriptTargetId: 'ses_100000000000',
+        producer: { kind: 'user' },
+        message: fixtureMessage({ role: 'user', text: 'hi' }),
+        messageRevision: 1
+      }
+    });
     expect(toAgentObservationEvent(event)).toMatchObject({
       id: event.id,
       kind: 'user-message',
@@ -27,37 +49,72 @@ describe('toAgentObservationEvent', () => {
     });
   });
 
-  test('maps agent.token to a streaming assistant-message fragment', () => {
+  test('returns null for a non-user session.message.created (agent messages surface via delta/completed)', () => {
     const event = fixtureEvent({
-      type: 'agent.token',
-      payload: { messageId: 'msg_100000000000', delta: 'Hel', index: 0 }
+      type: 'session.message.created',
+      payload: {
+        transcriptTargetId: 'ses_100000000000',
+        producer: { kind: 'agent', agentId: 'agt_100000000000' },
+        message: fixtureMessage({ role: 'assistant', text: 'partial', stream: { status: 'streaming' } }),
+        messageRevision: 1
+      }
     });
-    expect(toAgentObservationEvent(event)).toMatchObject({
-      kind: 'assistant-message',
-      streaming: true,
-      text: 'Hel'
-    });
+    expect(toAgentObservationEvent(event)).toBeNull();
   });
 
-  test('maps agent.reasoning to a streaming reasoning fragment', () => {
+  test('maps a content session.message.delta.appended to a streaming assistant-message fragment', () => {
     const event = fixtureEvent({
-      type: 'agent.reasoning',
-      payload: { messageId: 'msg_100000000000', delta: 'thinking...', index: 0 }
+      type: 'session.message.delta.appended',
+      payload: {
+        transcriptTargetId: 'ses_100000000000',
+        producer: { kind: 'agent', agentId: 'agt_100000000000' },
+        messageId: 'msg_100000000000',
+        channel: 'content',
+        index: 0,
+        delta: 'Hel'
+      }
+    });
+    expect(toAgentObservationEvent(event)).toMatchObject({ kind: 'assistant-message', streaming: true, text: 'Hel' });
+  });
+
+  test('maps a reasoning session.message.delta.appended to a streaming reasoning fragment', () => {
+    const event = fixtureEvent({
+      type: 'session.message.delta.appended',
+      payload: {
+        transcriptTargetId: 'ses_100000000000',
+        producer: { kind: 'agent', agentId: 'agt_100000000000' },
+        messageId: 'msg_100000000000',
+        channel: 'reasoning',
+        index: 0,
+        delta: 'thinking...'
+      }
     });
     expect(toAgentObservationEvent(event)).toMatchObject({ kind: 'reasoning', streaming: true, text: 'thinking...' });
   });
 
-  test('maps agent.message to a settled assistant-message event', () => {
-    const event = fixtureEvent({ type: 'agent.message', payload: { messageId: 'msg_100000000000', text: 'done' } });
-    expect(toAgentObservationEvent(event)).toMatchObject({
-      kind: 'assistant-message',
-      streaming: false,
-      text: 'done'
+  test('maps session.message.completed to a settled assistant-message event', () => {
+    const event = fixtureEvent({
+      type: 'session.message.completed',
+      payload: {
+        transcriptTargetId: 'ses_100000000000',
+        producer: { kind: 'agent', agentId: 'agt_100000000000' },
+        message: fixtureMessage({ role: 'assistant', text: 'done' }),
+        messageRevision: 2
+      }
     });
+    expect(toAgentObservationEvent(event)).toMatchObject({ kind: 'assistant-message', streaming: false, text: 'done' });
   });
 
-  test('maps agent.error to a turn-end event with reason error', () => {
-    const event = fixtureEvent({ type: 'agent.error', payload: { message: 'boom' } });
+  test('maps session.message.failed to a turn-end event with reason error', () => {
+    const event = fixtureEvent({
+      type: 'session.message.failed',
+      payload: {
+        transcriptTargetId: 'ses_100000000000',
+        producer: { kind: 'agent', agentId: 'agt_100000000000' },
+        message: fixtureMessage({ role: 'assistant', text: 'boom' }),
+        messageRevision: 2
+      }
+    });
     expect(toAgentObservationEvent(event)).toMatchObject({ kind: 'turn-end', reason: 'error', text: 'boom' });
   });
 
@@ -105,13 +162,19 @@ describe('toAgentObservationEvent', () => {
     expect(toAgentObservationEvent(event)).toMatchObject({ tool: { output: 'raw' } });
   });
 
-  test('maps the publish-only session.stream_started marker to turn-start', () => {
-    const event = fixtureEvent({ type: 'session.stream_started', payload: {} });
+  test('maps the publish-only session.run.started marker to turn-start', () => {
+    const event = fixtureEvent({
+      type: 'session.run.started',
+      payload: { transcriptTargetId: 'ses_100000000000' }
+    });
     expect(toAgentObservationEvent(event)).toMatchObject({ kind: 'turn-start', streaming: false });
   });
 
-  test('maps the publish-only session.stream_ended marker to a completed turn-end', () => {
-    const event = fixtureEvent({ type: 'session.stream_ended', payload: {} });
+  test('maps the publish-only session.run.completed marker to a completed turn-end', () => {
+    const event = fixtureEvent({
+      type: 'session.run.completed',
+      payload: { transcriptTargetId: 'ses_100000000000' }
+    });
     expect(toAgentObservationEvent(event)).toMatchObject({ kind: 'turn-end', reason: 'completed' });
   });
 
@@ -121,30 +184,101 @@ describe('toAgentObservationEvent', () => {
   });
 
   test('carries the domain event as its contract provenance', () => {
-    const event = fixtureEvent({ type: 'user.message', payload: { messageId: 'msg_100000000000', text: 'hi' } });
+    const event = fixtureEvent({
+      type: 'session.message.created',
+      payload: {
+        transcriptTargetId: 'ses_100000000000',
+        producer: { kind: 'user' },
+        message: fixtureMessage({ role: 'user', text: 'hi' }),
+        messageRevision: 1
+      }
+    });
     expect(toAgentObservationEvent(event)?.provenance.contractEvents).toEqual([event]);
   });
 });
 
 describe('isMonadAgentDomainEvent', () => {
-  test('is true for an event with no externalAgentSessionId/deliveryId', () => {
-    const event = fixtureEvent({ type: 'agent.message', payload: { messageId: 'msg_100000000000', text: 'hi' } });
+  function messageEvent(type: Event['type'], producer: unknown, extra: Record<string, unknown>): Event {
+    return fixtureEvent({
+      type,
+      payload: { transcriptTargetId: 'ses_100000000000', producer, messageRevision: 1, ...extra }
+    });
+  }
+
+  test('is true for a monad agent canonical message (agent producer, no external session)', () => {
+    const event = messageEvent(
+      'session.message.completed',
+      { kind: 'agent', agentId: 'agt_100000000000' },
+      {
+        message: fixtureMessage({ role: 'assistant', text: 'hi' })
+      }
+    );
     expect(isMonadAgentDomainEvent(event)).toBe(true);
   });
 
-  test('is false for a managed external-agent member bridged into the same session log', () => {
-    const event = fixtureEvent({
-      type: 'agent.token',
-      payload: { messageId: 'msg_100000000000', delta: 'x', index: 0, externalAgentSessionId: 'exa_abc000000000' }
-    });
+  test('is true for a system producer', () => {
+    const event = messageEvent(
+      'session.message.created',
+      { kind: 'system', subsystem: 'memory' },
+      {
+        message: fixtureMessage({ role: 'system', text: 'note' })
+      }
+    );
+    expect(isMonadAgentDomainEvent(event)).toBe(true);
+  });
+
+  test('is false for an external-agent producer on a created message', () => {
+    const event = messageEvent(
+      'session.message.created',
+      { kind: 'external-agent', externalAgentSessionId: 'exa_abc000000000' },
+      {
+        message: fixtureMessage({ role: 'assistant', text: 'x' })
+      }
+    );
     expect(isMonadAgentDomainEvent(event)).toBe(false);
   });
 
-  test('is false for an event tagged with a native-agent delivery id', () => {
-    const event = fixtureEvent({
-      type: 'agent.message',
-      payload: { messageId: 'msg_100000000000', text: 'hi', deliveryId: 'ndl_abc' }
-    });
+  test('is false for an external-agent producer on a completed message', () => {
+    const event = messageEvent(
+      'session.message.completed',
+      { kind: 'external-agent', externalAgentSessionId: 'exa_abc000000000' },
+      {
+        message: fixtureMessage({ role: 'assistant', text: 'done' })
+      }
+    );
     expect(isMonadAgentDomainEvent(event)).toBe(false);
+  });
+
+  test('is false for an external-agent producer on a delta', () => {
+    const event = messageEvent(
+      'session.message.delta.appended',
+      { kind: 'external-agent', externalAgentSessionId: 'exa_abc000000000' },
+      {
+        messageId: 'msg_100000000000',
+        channel: 'content',
+        index: 0,
+        delta: 'x'
+      }
+    );
+    expect(isMonadAgentDomainEvent(event)).toBe(false);
+  });
+
+  test('is false for an agent producer bound to an external-agent session', () => {
+    const event = messageEvent(
+      'session.message.completed',
+      { kind: 'agent', agentId: 'agt_100000000000', externalAgentSessionId: 'exa_abc000000000' },
+      { message: fixtureMessage({ role: 'assistant', text: 'x' }) }
+    );
+    expect(isMonadAgentDomainEvent(event)).toBe(false);
+  });
+
+  test('a non-message event falls back to the top-level bridge check', () => {
+    const bridged = fixtureEvent({
+      type: 'tool.result',
+      payload: { toolCallId: 'c', tool: 't', ok: true, result: 'r', externalAgentSessionId: 'exa_abc000000000' }
+    });
+    expect(isMonadAgentDomainEvent(bridged)).toBe(false);
+    const own = fixtureEvent({ type: 'tool.result', payload: { toolCallId: 'c', tool: 't', ok: true, result: 'r' } });
+    expect(isMonadAgentDomainEvent(own)).toBe(true);
   });
 });

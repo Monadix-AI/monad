@@ -386,7 +386,7 @@ export function createLifecycleHandlers(ctx: SessionContext) {
       includeInactive?: boolean;
     }) {
       requireSession(id);
-      return { messages: store.listMessages(id, { limit, before, includeInactive }) };
+      return store.listMessagesSnapshot(id, { limit, before, includeInactive });
     },
 
     async uiItems({
@@ -416,7 +416,7 @@ export function createLifecycleHandlers(ctx: SessionContext) {
             : store.listMessages(id, { limit, before, includeInactive, latest: true });
       const projector = new SessionUiProjector(ctx.deps.localeService ? { t: ctx.deps.localeService.t } : {});
       projector.hydrateMessages(messages, parseDurableSummary(store.getMemory(id, 'ctx:summary')));
-      // Rebuild external agent tool cards from their durable snapshots for this window (external_agent.output
+      // Rebuild external agent tool cards from their durable snapshots for this window (live output
       // chunks aren't persisted as events). Scope to the page's time span so a card lands on the page
       // it belongs to; the full lineage view takes them all. Cross-page overlap is harmless — the
       // client merges transcript items by key.
@@ -467,11 +467,15 @@ export function createLifecycleHandlers(ctx: SessionContext) {
         .filter((toolCallId): toolCallId is string => typeof toolCallId === 'string');
       store.cloneToolRawOutputs(id, child.id, snapshotToolCallIds);
       if (target) {
-        const createdAt = new Date().toISOString();
-        store.insertMessage(newId('msg'), child.id, '', createdAt, 'assistant', {
+        await ctx.messageIngress.deliver({
+          transcriptTargetId: child.id,
+          idempotencyKey: newId('idem'),
+          producer: { kind: 'system', subsystem: 'session-branch' },
+          role: 'assistant',
+          text: '',
+          type: 'branch_source',
           data: { sessionTitle: parent.title },
-          includeInContext: false,
-          type: 'branch_source'
+          includeInContext: false
         });
       }
       log.info({ sessionId: child.id, ...originLog(origin) }, 'session branched');

@@ -991,6 +991,63 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
+    "message_mutations": {
+      "name": "message_mutations",
+      "columns": {
+        "transcript_target_id": {
+          "name": "transcript_target_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "command_fingerprint": {
+          "name": "command_fingerprint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "message_id": {
+          "name": "message_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "message_revision": {
+          "name": "message_revision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "result_message": {
+          "name": "result_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "message_mutations_transcript_target_id_idempotency_key_pk": {
+          "columns": ["transcript_target_id", "idempotency_key"],
+          "name": "message_mutations_transcript_target_id_idempotency_key_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
     "messages": {
       "name": "messages",
       "columns": {
@@ -1060,6 +1117,20 @@
           "notNull": false,
           "autoincrement": false
         },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "command_fingerprint": {
+          "name": "command_fingerprint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "text",
@@ -1085,6 +1156,11 @@
           "name": "idx_messages_active",
           "columns": ["transcript_target_id", "active"],
           "isUnique": false
+        },
+        "idx_messages_target_idempotency": {
+          "name": "idx_messages_target_idempotency",
+          "columns": ["transcript_target_id", "idempotency_key"],
+          "isUnique": true
         }
       },
       "foreignKeys": {},
@@ -1541,6 +1617,31 @@
           "name": "tool_raw_outputs_transcript_target_id_tool_call_id_pk"
         }
       },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "transcript_message_revisions": {
+      "name": "transcript_message_revisions",
+      "columns": {
+        "transcript_target_id": {
+          "name": "transcript_target_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "revision": {
+          "name": "revision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
     },

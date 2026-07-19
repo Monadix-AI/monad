@@ -126,6 +126,7 @@ export class HookOrchestrator {
       timestamp: new Date().toISOString(),
       reason,
       ok: reason === 'completed',
+      response: text,
       usage
     });
     const finalText = d.effectiveText ?? text;

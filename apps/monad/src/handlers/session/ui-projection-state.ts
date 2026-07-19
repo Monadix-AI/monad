@@ -19,6 +19,7 @@ export interface ProjectionMutations {
   readonly t: Translate;
   readonly items: Map<string, UIItem>;
   readonly rawStreamingText: Map<string, string>;
+  readonly streamingDeltaIndex: Map<string, number>;
   readonly channelDisplayCache: Map<string, ChannelDisplayCacheEntry>;
   upsert(item: UIItem): UIItem;
   remove(kind: 'message' | 'approval' | 'clarification' | 'custom' | 'tool', id: string): SessionUiEvent;

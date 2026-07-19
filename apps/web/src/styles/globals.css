@@ -1213,7 +1213,7 @@
   .composer-editor-input[contenteditable="false"] {
     color: var(--muted-foreground);
     cursor: not-allowed;
-    background: color-mix(in srgb, var(--chat-input-surface) 92%, var(--muted));
+    background: transparent;
   }
 
   .composer-live-dense {

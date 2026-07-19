@@ -12,12 +12,14 @@ import type { EventBus } from '#/services/event-bus.ts';
 import type { DelegatableAgent } from '#/services/generation/agent-persona.ts';
 import type { ClarifyService } from '#/services/generation/clarify.ts';
 import type { MemoryService } from '#/services/memory/index.ts';
+import type { MessageIngress } from '#/services/messages/types.ts';
 import type { ModelService } from '#/services/model.ts';
 import type { ModelCatalogService } from '#/services/model-catalog.ts';
 import type { OversightService } from '#/services/oversight.ts';
 import type { Store } from '#/store/db/index.ts';
 
 import { createLogger } from '@monad/logger';
+import { messageIdSchema } from '@monad/protocol';
 
 import {
   CompositeContextEngine,
@@ -42,6 +44,7 @@ import { register as visionRegister } from '#/capabilities/tools/registry/vision
 import { register as agentDelegateRegister } from '#/services/delegation/agent-delegate.ts';
 import { makeEvent } from '#/services/event-bus.ts';
 import { createInboundApprovalGate, type InboundApprovalMode } from '#/services/inbound-approval.ts';
+import { messageIdempotencyKey } from '#/services/messages/ingress.ts';
 
 const log = createLogger('agent:execution');
 
@@ -82,6 +85,7 @@ export interface AgentDeps {
   /** For persisting + publishing the memory.suggestion notice from outside a turn's own emit closure
    *  (afterCompact fires from the long-lived DurableSummarizer, not a per-turn AgentLoop). */
   bus: EventBus;
+  messageIngress: MessageIngress;
   /** Extracts + (in `auto` mode) writes durable facts from a compacted span — see
    *  MemoryService.promoteFacts. Absent → memory promotion never runs, regardless of config. */
   memoryService?: MemoryService;
@@ -117,6 +121,7 @@ export function createAgentExecutionService(deps: AgentDeps): AgentExecutionServ
     toolSourceName,
     hookRunner,
     inboundApproval,
+    messageIngress,
     workspacePromptSlots,
     bus,
     memoryService
@@ -382,41 +387,96 @@ export function createAgentExecutionService(deps: AgentDeps): AgentExecutionServ
     },
     messageRepo: {
       list: (sessionId) => store.listMessages(sessionId),
-      append: (m) => {
-        store.insertMessage(m.id, m.sessionId, m.text, m.createdAt, m.role, {
-          type: m.type,
-          // Structured tool-call/tool-result payload, so a later turn can replay the step
-          // as native function-calling instead of degrading it to text.
-          data: m.data,
-          // Tool-step rows and the user turn are static; assistant prose follows the
-          // open → markStreaming → settle lifecycle below. Keep assistant→complete for any
-          // code path that still appends a text row directly.
-          streamStatus: m.role === 'assistant' && (m.type ?? 'text') === 'text' ? 'complete' : 'settled',
-          // Carry a per-message context override through to storage (absent ⇒ registry default).
-          includeInContext: m.includeInContext
-        });
+      publishesCanonicalEvents: true,
+      append: async (m, options) => {
+        await messageIngress.commit(
+          {
+            message: {
+              id: messageIdSchema.parse(m.id),
+              sessionId: m.sessionId,
+              role: m.role,
+              text: m.text,
+              type: m.type ?? 'text',
+              ...(m.data === undefined ? {} : { data: m.data }),
+              stream: {
+                status: m.role === 'assistant' && (m.type ?? 'text') === 'text' ? 'complete' : 'settled'
+              },
+              active: true,
+              ...(m.includeInContext === undefined ? {} : { includeInContext: m.includeInContext }),
+              createdAt: m.createdAt
+            },
+            idempotencyKey: messageIdempotencyKey('agent-loop', 'append', m.sessionId, m.id),
+            producer: { kind: 'system', subsystem: 'agent-loop' }
+          },
+          options
+        );
         embeddingIndexer.kick(); // enqueue the new message for background embedding
       },
       // Open a text segment's row as `pending` at its first token so a mid-turn /messages refetch
       // exposes a live row with a subscription `source` (rowToMessage reconstructs it for live rows).
-      open: (m) =>
-        store.insertMessage(m.id, m.sessionId, m.text, m.createdAt, m.role, {
-          type: m.type,
-          streamStatus: 'pending',
-          includeInContext: m.includeInContext
-        }),
-      markStreaming: (sessionId, messageId) => {
-        store.setGenStatus(sessionId, messageId, 'streaming', new Date().toISOString());
+      open: async (m, options) => {
+        await messageIngress.commit(
+          {
+            message: {
+              id: messageIdSchema.parse(m.id),
+              sessionId: m.sessionId,
+              role: m.role,
+              text: m.text,
+              type: m.type ?? 'text',
+              stream: {
+                status: 'pending',
+                source: { transcriptTargetId: m.sessionId, messageId: messageIdSchema.parse(m.id) }
+              },
+              active: true,
+              ...(m.includeInContext === undefined ? {} : { includeInContext: m.includeInContext }),
+              createdAt: m.createdAt
+            },
+            idempotencyKey: messageIdempotencyKey('agent-loop', 'open', m.sessionId, m.id),
+            producer: { kind: 'system', subsystem: 'agent-loop' }
+          },
+          options
+        );
       },
+      appendDelta: (input, options) =>
+        messageIngress.append(
+          {
+            transcriptTargetId: input.sessionId,
+            messageId: messageIdSchema.parse(input.messageId),
+            producer: { kind: 'system', subsystem: 'agent-loop' },
+            channel: input.channel,
+            index: input.index,
+            delta: input.delta
+          },
+          options
+        ),
+      markStreaming: () => {},
       // Settle the open row in place. No repositioning needed: a segment is opened at its first token,
       // i.e. after any tool rows that ran before it, so it already sorts correctly. Returns whether a
       // row was updated (false ⇒ the caller appends instead — e.g. a non-streaming block turn).
-      settle: (m, status) =>
-        store.setGenStatus(m.sessionId, m.id, status, new Date().toISOString(), {
-          text: m.text,
+      settle: async (m, status, options) => {
+        if (!store.getMessage(m.sessionId, m.id)) return false;
+        const base = {
+          transcriptTargetId: m.sessionId,
+          messageId: messageIdSchema.parse(m.id),
+          idempotencyKey: messageIdempotencyKey('agent-loop', status, m.sessionId, m.id, m.text),
+          producer: { kind: 'system' as const, subsystem: 'agent-loop' },
+          type: m.type,
           data: m.data,
-          type: m.type
-        })
+          includeInContext: m.includeInContext
+        };
+        if (status === 'error') {
+          await messageIngress.fail(
+            {
+              ...base,
+              error: { code: 'agent_error', message: m.text }
+            },
+            options
+          );
+        } else {
+          await messageIngress.settle({ ...base, text: m.text }, options);
+        }
+        return true;
+      }
     },
     defaultModel: cfg.model.default || 'default',
     sandboxRoots,

@@ -11,7 +11,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createLogger } from '@monad/logger';
-import { newId } from '@monad/protocol';
+import { newId, parseEventPayload } from '@monad/protocol';
 
 import { AtomPackRegistry } from '#/handlers/atom-pack/atom-pack-registry.ts';
 import { createHookRunner } from '#/hooks/runner.ts';
@@ -110,10 +110,12 @@ for (const kind of TRANSPORTS) {
         body: JSON.stringify({ text: 'I deploy with Bun' })
       });
       const events = await tr.sse(`/v1/sessions/${sid}/events`, {
-        until: (e) => e.type === 'agent.message',
+        until: (e) => e.type === 'session.message.completed',
         timeoutMs: 4000
       });
-      expect(events.find((e) => e.type === 'agent.message')?.payload.text).toBe(MOCK_REPLY);
+      const completed = events.find((e) => e.type === 'session.message.completed');
+      if (!completed) throw new Error('missing completed message');
+      expect(parseEventPayload('session.message.completed', completed.payload).message.text).toBe(MOCK_REPLY);
 
       // observe is fire-and-forget after AfterTurn — give it a tick to reach the client.
       await Bun.sleep(60);

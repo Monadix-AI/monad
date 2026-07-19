@@ -19,6 +19,7 @@ import { createStore } from '#/store/db/index.ts';
 
 const EMPTY_AUTH: MonadAuth = { version: 1, activeProvider: null, updatedAt: '', credentialPool: {} };
 const t = createI18n({ locale: 'en', packs: [{ locale: 'en', name: 'English', messages: i18nMessages }] }).t;
+const agentProducer = { kind: 'agent', agentId: 'agt_100000000000' } as const;
 
 // Inbound normalization (the Telegram adapter, sections A1–A4) lives with the adapter in
 // @monad/atoms — see packages/atoms/test/telegram.test.ts. This file covers the
@@ -77,9 +78,41 @@ function msgEvent(text: string) {
   return {
     id: newId('evt'),
     sessionId: 'ses_X00000000000' as SessionId,
-    type: 'agent.message' as const,
+    type: 'session.message.completed' as const,
     actorAgentId: null,
-    payload: { messageId: 'msg_X00000000000' as MessageId, text },
+    payload: {
+      transcriptTargetId: 'ses_X00000000000',
+      producer: agentProducer,
+      message: {
+        id: 'msg_X00000000000' as MessageId,
+        sessionId: 'ses_X00000000000',
+        role: 'assistant' as const,
+        text,
+        type: 'text' as const,
+        stream: { status: 'complete' as const },
+        active: true,
+        createdAt: '2026-07-18T00:00:00.000Z'
+      },
+      messageRevision: 2
+    },
+    at: ''
+  };
+}
+
+function deltaEvent(delta: string, index: number) {
+  return {
+    id: newId('evt'),
+    sessionId: 'ses_X00000000000' as SessionId,
+    type: 'session.message.delta.appended' as const,
+    actorAgentId: null,
+    payload: {
+      transcriptTargetId: 'ses_X00000000000',
+      messageId: 'msg_X00000000000' as MessageId,
+      producer: agentProducer,
+      channel: 'content' as const,
+      delta,
+      index
+    },
     at: ''
   };
 }
@@ -98,14 +131,7 @@ test('B-render(buffered): a reply over the limit is sent as multiple chunks', as
 test('B-render(streaming): an over-limit final is edited (first chunk) then overflow sent', async () => {
   const { adapter, sends, edits } = capturingAdapter(true, 100);
   const r = createRenderer({ adapter, chatId: 'c1', log: () => {}, t });
-  r.consume({
-    id: newId('evt'),
-    sessionId: 'ses_X00000000000' as SessionId,
-    type: 'agent.token',
-    actorAgentId: null,
-    payload: { messageId: 'msg_X00000000000' as MessageId, delta: 'start', index: 0 },
-    at: ''
-  });
+  r.consume(deltaEvent('start', 0));
   const long = `${'word '.repeat(60)}`.trim();
   r.consume(msgEvent(long));
   await r.finalize();
@@ -113,22 +139,15 @@ test('B-render(streaming): an over-limit final is edited (first chunk) then over
   expect(sends.every((s) => s.length <= 100)).toBe(true); // overflow messages within limit too
 });
 
-test('B-render(streaming): finalize without agent.message flushes buf, chunking overflow', async () => {
-  // Turn is aborted / stream stops before a terminal agent.message arrives. finalize() flushes
+test('B-render(streaming): finalize without a terminal lifecycle event flushes buf, chunking overflow', async () => {
+  // Turn is aborted / stream stops before a terminal lifecycle event arrives. finalize() flushes
   // what's in the buffer and must respect the platform limit (same chunking as the normal path).
   const { adapter, sends, edits } = capturingAdapter(true, 50);
   const r = createRenderer({ adapter, chatId: 'c1', log: () => {}, t });
-  // Accumulate tokens (simulating a streaming turn with no final agent.message)
+  // Accumulate deltas (simulating a streaming turn with no terminal lifecycle event).
   const long = `${'word '.repeat(20)}`.trim(); // ~100 chars — over the 50-char limit
-  for (const chunk of long.split(' ')) {
-    r.consume({
-      id: newId('evt'),
-      sessionId: 'ses_X00000000000' as SessionId,
-      type: 'agent.token',
-      actorAgentId: null,
-      payload: { messageId: 'msg_X00000000000' as MessageId, delta: `${chunk} `, index: 0 },
-      at: ''
-    });
+  for (const [index, chunk] of long.split(' ').entries()) {
+    r.consume(deltaEvent(`${chunk} `, index));
   }
   await r.finalize();
   // First chunk goes to editMessage; overflow goes to send.

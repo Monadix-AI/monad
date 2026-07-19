@@ -29,19 +29,18 @@ function assertWriteAllowed(session: Session, transport: 'http'): void {
   }
 }
 
-/** Send text directly to a configured ACP agent, bypassing the monad LLM/routing layer entirely.
- *  Emits user.message + streaming agent.token + final agent.message into the session event stream
- *  so the existing session subscriber sees the exchange without any monad turn overhead. */
+/** Send text directly to a configured ACP agent, bypassing the monad LLM/routing layer entirely. */
 export function createForwardAcpHandler(ctx: SessionContext, sandboxRootsFor: SandboxRootsFor) {
   const {
-    deps: { store, log },
+    deps: { log },
     aborts,
     runtime,
     beginRun,
     trackRun,
     makeEmit,
     persistAndRetire,
-    requireSession
+    requireSession,
+    messageIngress
   } = ctx;
 
   const runtimeForSession = (sessionId: SessionId) => runtime.get(sessionId);
@@ -75,13 +74,30 @@ export function createForwardAcpHandler(ctx: SessionContext, sandboxRootsFor: Sa
 
     const { round, signal } = beginRun(sessionId);
     const emit = makeEmit(round);
-    const userMsgId = newId('msg');
-    const agentMsgId = newId('msg');
+    await messageIngress.deliver({
+      transcriptTargetId: sessionId,
+      idempotencyKey: newId('idem'),
+      producer: { kind: 'user' },
+      role: 'user',
+      type: 'text',
+      text: displayText ?? text
+    });
+    const agentMessage = await messageIngress.begin({
+      transcriptTargetId: sessionId,
+      idempotencyKey: newId('idem'),
+      producer: { kind: 'system', subsystem: 'acp' },
+      role: 'assistant',
+      type: 'text',
+      text: '',
+      data: { agentName: spec.name }
+    });
+    const agentMsgId = agentMessage.id;
     const acpToolCallId = newId('tc');
     let tokenIndex = 0;
     let acpActivityStarted = false;
     let acpProcessOutput = '';
     let acpResponseOutput = '';
+    let ingressQueue = Promise.resolve();
 
     const emitAcpActivityStart = () => {
       if (acpActivityStarted) return;
@@ -115,9 +131,6 @@ export function createForwardAcpHandler(ctx: SessionContext, sandboxRootsFor: Sa
       );
     };
 
-    emit(makeEvent(sessionId as SessionId, 'user.message', { messageId: userMsgId, text: displayText ?? text }));
-    store.insertMessage(userMsgId, sessionId, displayText ?? text, new Date().toISOString(), 'user');
-
     const rt = runtimeForSession(sessionId);
     emitAcpActivityStart();
     const run = directDelegate(spec, composeAcpChannelPrompt(text, channelPromptInput), {
@@ -130,12 +143,15 @@ export function createForwardAcpHandler(ctx: SessionContext, sandboxRootsFor: Sa
       extraSkills: rt?.extraSkills,
       mcpServers: channelDelegateMcpServers(cfg?.mcpServers, rt?.mcpServers),
       onChunk: (delta) => {
-        emit(
-          makeEvent(sessionId as SessionId, 'agent.token', {
+        const index = tokenIndex++;
+        ingressQueue = ingressQueue.then(() =>
+          messageIngress.append({
+            transcriptTargetId: sessionId,
             messageId: agentMsgId,
-            agentName: spec.name,
-            delta,
-            index: tokenIndex++
+            producer: { kind: 'system', subsystem: 'acp' },
+            channel: 'content',
+            index,
+            delta
           })
         );
         acpResponseOutput += delta;
@@ -159,16 +175,15 @@ export function createForwardAcpHandler(ctx: SessionContext, sandboxRootsFor: Sa
             result: 'completed'
           })
         );
-        store.insertMessage(agentMsgId, sessionId, fullText, new Date().toISOString(), 'assistant', {
+        await ingressQueue;
+        await messageIngress.settle({
+          transcriptTargetId: sessionId,
+          messageId: agentMsgId,
+          idempotencyKey: newId('idem'),
+          producer: { kind: 'system', subsystem: 'acp' },
+          text: fullText,
           data: { agentName: spec.name }
         });
-        emit(
-          makeEvent(sessionId as SessionId, 'agent.message', {
-            messageId: agentMsgId,
-            agentName: spec.name,
-            text: fullText
-          })
-        );
         if (onComplete) {
           try {
             await onComplete(fullText);
@@ -178,7 +193,7 @@ export function createForwardAcpHandler(ctx: SessionContext, sandboxRootsFor: Sa
         }
         persistAndRetire(sessionId, round);
       })
-      .catch((err: unknown) => {
+      .catch(async (err: unknown) => {
         const { code, message } = extractError(err);
         log?.debug(
           { sessionId, event: 'session.forward_acp.error', agentName: spec.name, code, message },
@@ -194,25 +209,16 @@ export function createForwardAcpHandler(ctx: SessionContext, sandboxRootsFor: Sa
             result: errorText
           })
         );
-        store.insertMessage(
-          agentMsgId,
-          sessionId,
-          code ? `[${code}] ${errorText}` : errorText,
-          new Date().toISOString(),
-          'assistant',
-          {
-            type: 'error',
-            data: { agentName: spec.name }
-          }
-        );
-        emit(
-          makeEvent(sessionId as SessionId, 'agent.error', {
-            messageId: agentMsgId,
-            agentName: spec.name,
-            code,
-            message: errorText
-          })
-        );
+        await ingressQueue;
+        await messageIngress.fail({
+          transcriptTargetId: sessionId,
+          messageId: agentMsgId,
+          idempotencyKey: newId('idem'),
+          producer: { kind: 'system', subsystem: 'acp' },
+          error: { code: code ?? 'acp_failed', message: code ? `[${code}] ${errorText}` : errorText },
+          type: 'error',
+          data: { agentName: spec.name }
+        });
         try {
           persistAndRetire(sessionId, round);
         } catch (innerErr) {

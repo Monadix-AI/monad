@@ -54,7 +54,7 @@ import {
   startExternalAgentRequestSchema,
   startExternalAgentResponseSchema
 } from '../external-agent/index.ts';
-import { agentIdSchema, sessionIdSchema } from '../ids.ts';
+import { agentIdSchema, eventIdSchema, messageIdSchema, sessionIdSchema } from '../ids.ts';
 import { setSkillsSettingsRequestSchema, skillsSettingsResponseSchema } from '../settings/skills-settings.ts';
 import {
   abortSessionResponseSchema,
@@ -80,6 +80,7 @@ import {
   listSessionsResponseSchema,
   listSkillsQuerySchema,
   listSkillsResponseSchema,
+  messageGenerationFrameSchema,
   okResponseSchema,
   resetSessionResponseSchema,
   restoreSessionRequestSchema,
@@ -144,6 +145,10 @@ export type RpcOnlyMethodDef = Omit<MethodDef, 'http'>;
 // as `sessions.event` notifications.
 const subscribeAckSchema = z.object({ subscribed: z.literal(true) });
 const emptyResultSchema = z.object({});
+const messageGenerationSubscribeAckSchema = z.object({
+  subscribed: z.literal(true),
+  initial: z.array(messageGenerationFrameSchema)
+});
 
 const idPath = { id: sessionIdSchema };
 const agentPath = { id: agentIdSchema };
@@ -443,8 +448,17 @@ export const RPC_ONLY_METHODS = {
       'session.updated',
       'session.deleted',
       'session.restored',
-      'session.stream_started',
-      'session.stream_ended',
+      'session.run.started',
+      'session.run.completed',
+      'session.run.failed',
+      'session.run.cancelled',
+      'session.message.created',
+      'session.message.updated',
+      'session.message.deleted',
+      'session.message.completed',
+      'session.message.failed',
+      'external_agent.session.connection.opened',
+      'external_agent.session.connection.closed',
       'task.created',
       'task.progress',
       'task.completed',
@@ -454,30 +468,20 @@ export const RPC_ONLY_METHODS = {
   },
   'control.unsubscribe': { result: emptyResultSchema },
 
-  // Per-session event stream over the WS transport. Pushes the same events as the SSE endpoint
-  // GET /v1/sessions/:id/events — every agent/tool/message event for that session — as
-  // `sessions.event` notifications. Used by native clients (e.g. Mo) that already hold a WS
-  // connection and want a single multiplexed channel instead of a parallel SSE stream.
-  'session.subscribe': {
-    path: idPath,
-    result: subscribeAckSchema,
+  'session.messageGeneration.subscribe': {
+    path: { id: sessionIdSchema, messageId: messageIdSchema },
+    query: z.object({ afterEventId: eventIdSchema.optional() }),
+    result: messageGenerationSubscribeAckSchema,
     emits: [
-      'agent.message',
-      'agent.token',
-      'agent.reasoning',
-      'agent.error',
-      'message.delta',
-      'message.complete',
-      'tool.called',
-      'tool.result',
-      'tool.progress',
-      'tool.approval_requested',
-      'tool.approval_resolved',
-      'session.stream_started',
-      'session.stream_ended'
+      'session.message.delta.appended',
+      'session.message.completed',
+      'session.message.failed'
     ] satisfies EventType[]
   },
-  'session.unsubscribe': { path: idPath, result: emptyResultSchema }
+  'session.messageGeneration.unsubscribe': {
+    path: { id: sessionIdSchema, messageId: messageIdSchema },
+    result: emptyResultSchema
+  }
 } as const satisfies Record<string, RpcOnlyMethodDef>;
 
 export type RpcOnlyMethodName = keyof typeof RPC_ONLY_METHODS;

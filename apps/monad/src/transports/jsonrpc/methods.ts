@@ -9,6 +9,7 @@ import type {
   InteractionEvent,
   JsonRpcNotification,
   JsonRpcResponse,
+  MessageGenerationFrame,
   RpcMethod,
   RpcParams,
   RpcResult
@@ -112,20 +113,43 @@ export const RPC_HANDLERS: RpcHandlerMap = {
     return {};
   },
 
-  'session.subscribe': async ({ id }, h: D, { state, push }) => {
-    if (!state.sessions) state.sessions = new Map();
-    if (!state.sessions.has(id)) {
-      const sink: EventSink = (event) => {
-        push({ jsonrpc: '2.0', method: 'sessions.event', params: { sessionId: id, event } });
-      };
-      const { dispose } = await h.session.subscribe({ sessionId: id }, sink);
-      state.sessions.set(id, dispose);
-    }
-    return { subscribed: true };
+  'session.messageGeneration.subscribe': async ({ id, messageId, afterEventId }, h: D, { state, push }) => {
+    if (!state.messageGenerations) state.messageGenerations = new Map();
+    const key = `message:${id}:${messageId}`;
+    if (state.messageGenerations.has(key)) return { subscribed: true, initial: [] };
+    const initial: MessageGenerationFrame[] = [];
+    let ready = false;
+    const sink = (frame: MessageGenerationFrame): void => {
+      if (!ready) {
+        initial.push(frame);
+        return;
+      }
+      push({
+        jsonrpc: '2.0',
+        method: 'session.messageGeneration.event',
+        params: { sessionId: id, messageId, frame }
+      });
+      if (
+        frame.kind === 'event' &&
+        ['session.message.completed', 'session.message.failed'].includes(frame.event.type)
+      ) {
+        state.messageGenerations?.delete(key);
+      }
+    };
+    const { dispose } = await h.session.subscribeMessageGeneration({ sessionId: id, messageId, afterEventId }, sink);
+    ready = true;
+    const terminal = initial.some(
+      (frame) =>
+        (frame.kind === 'snapshot' && ['complete', 'error'].includes(frame.message.stream.status)) ||
+        (frame.kind === 'event' && ['session.message.completed', 'session.message.failed'].includes(frame.event.type))
+    );
+    if (!terminal) state.messageGenerations.set(key, dispose);
+    return { subscribed: true, initial };
   },
-  'session.unsubscribe': async ({ id }, _h: D, { state }) => {
-    state.sessions?.get(id)?.();
-    state.sessions?.delete(id);
+  'session.messageGeneration.unsubscribe': async ({ id, messageId }, _h: D, { state }) => {
+    const key = `message:${id}:${messageId}`;
+    state.messageGenerations?.get(key)?.();
+    state.messageGenerations?.delete(key);
     return {};
   },
 

@@ -10,7 +10,7 @@ import { Allow, parse as parsePartialJson } from 'partial-json';
 import { findExternalAgentProviderAdapter } from '#/services/external-agent/index.ts';
 
 const TEXT_TYPES = new Set(['text', 'markdown', 'error']);
-export const MAX_EXTERNAL_AGENT_UI_OUTPUT = 64 * 1024;
+const MAX_EXTERNAL_AGENT_UI_OUTPUT = 64 * 1024;
 // Min chars to accumulate before re-running the O(current-length) channel partial-JSON parse. Parses
 // also fire whenever a delta carries a `}` (a structural close — end of the display/visibility object),
 // so completion and `silent` flips are never missed regardless of this throttle.
@@ -18,7 +18,7 @@ export const CHANNEL_REPARSE_MIN_DELTA = 32;
 
 /** Durable per-run projection of an external agent session, used to rebuild its tool card during
  *  hydration (page refresh / reconnect) from the bounded output snapshot rather than from the
- *  per-chunk `external_agent.output` event stream. Structurally satisfied by the store's session row. */
+ *  non-durable live output stream. Structurally satisfied by the store's session row. */
 export interface ExternalAgentSessionSnapshot {
   id: string;
   provider: string;
@@ -48,20 +48,11 @@ export function isEvictable(item: UIItem): boolean {
 // adapter's observation projector (`classifyActivity`); this just parses the snapshot with that adapter
 // and asks. `undefined` = no structured records (a PTY/plain-text run), so a caller can distinguish it
 // from "settled".
-export function externalAgentSnapshotIsGenerating(outputSnapshot: string, provider: string): boolean | undefined {
+function externalAgentSnapshotIsGenerating(outputSnapshot: string, provider: string): boolean | undefined {
   const adapter = findExternalAgentProviderAdapter(provider);
   const events = externalAgentStructuredEvents({ id: '', provider, adapter, output: outputSnapshot });
   if (events === undefined) return undefined;
   return externalAgentEventsAreGenerating(events, { provider, adapter });
-}
-
-export function externalAgentProviderFromToolItem(
-  item: Extract<UIItem, { kind: 'tool' }> | undefined
-): string | undefined {
-  if (!item) return undefined;
-  const inputProvider = (item.input as { provider?: unknown } | undefined)?.provider;
-  if (typeof inputProvider === 'string') return inputProvider;
-  return item.tool.startsWith('external-agent:') ? item.tool.slice('external-agent:'.length) : undefined;
 }
 
 export function externalAgentToolItem(s: ExternalAgentSessionSnapshot): Extract<UIItem, { kind: 'tool' }> {
@@ -183,12 +174,12 @@ function channelStructuredJsonText(text: string): string {
   return (completeFence?.[1] ?? trimmed.replace(/^```(?:json)?\s*/i, '')).trim();
 }
 
-export function appendBoundedText(current: string, chunk: string, maxBytes: number): string {
+function appendBoundedText(current: string, chunk: string, maxBytes: number): string {
   const next = `${current}${chunk}`;
   return next.length > maxBytes ? next.slice(-maxBytes) : next;
 }
 
-// Hot path: invoked per `agent.token` with the full accumulated message text. A single tolerant
+// Hot path: invoked per canonical content delta with the full accumulated message text. A single tolerant
 // partial-JSON parse covers both the mid-stream (incomplete) and completed-JSON cases, so we skip the
 // redundant strict JSON.parse + zod safeParse that previously ran first on every token (it threw on
 // every incomplete chunk and re-validated the whole object once complete). Visibility is honored here

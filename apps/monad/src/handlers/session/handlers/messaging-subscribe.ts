@@ -1,9 +1,98 @@
-import type { Event, SessionId, SessionUiEvent } from '@monad/protocol';
+import type {
+  Event,
+  MessageGenerationEvent,
+  MessageGenerationFrame,
+  MessageGenerationSubscribeRequest,
+  SessionId,
+  SessionUiEvent
+} from '@monad/protocol';
 import type { EventSink, SessionContext } from '#/handlers/session/context.ts';
 
+import { messageGenerationEventSchema, parseEventPayload } from '@monad/protocol';
+
 import { parseDurableSummary } from '#/agent/history.ts';
+import { HandlerError } from '#/handlers/handler-error.ts';
 import { isChannelStructuredSession } from '#/handlers/session/handlers/messaging-members.ts';
 import { SessionUiProjector } from '#/handlers/session/ui-projection.ts';
+
+const MESSAGE_GENERATION_BUFFER_LIMIT = 256;
+const MESSAGE_GENERATION_MESSAGE_LIMIT = 256;
+
+function generationMessageId(event: MessageGenerationEvent): string | undefined {
+  if (event.type === 'session.message.delta.appended') {
+    return parseEventPayload(event.type, event.payload).messageId;
+  }
+  if (event.type !== 'session.message.completed' && event.type !== 'session.message.failed') return undefined;
+  return parseEventPayload(event.type, event.payload).message.id;
+}
+
+function isTerminalGenerationEvent(event: MessageGenerationEvent): boolean {
+  return event.type === 'session.message.completed' || event.type === 'session.message.failed';
+}
+
+class MessageGenerationHub {
+  private readonly entries = new Map<
+    string,
+    { events: MessageGenerationEvent[]; sinks: Set<(event: MessageGenerationEvent) => void> }
+  >();
+
+  constructor(bus: SessionContext['deps']['bus']) {
+    bus.subscribeAll((event) => {
+      if (
+        event.type !== 'session.message.delta.appended' &&
+        event.type !== 'session.message.completed' &&
+        event.type !== 'session.message.failed'
+      )
+        return;
+      const generationEvent = messageGenerationEventSchema.parse(event);
+      const messageId = generationMessageId(generationEvent);
+      if (!messageId) return;
+      const key = this.key(event.sessionId, messageId);
+      const entry = this.touch(key);
+      entry.events.push(generationEvent);
+      if (entry.events.length > MESSAGE_GENERATION_BUFFER_LIMIT) {
+        entry.events.splice(0, entry.events.length - MESSAGE_GENERATION_BUFFER_LIMIT);
+      }
+      for (const sink of [...entry.sinks]) sink(generationEvent);
+      if (isTerminalGenerationEvent(generationEvent)) entry.sinks.clear();
+    });
+  }
+
+  history(sessionId: string, messageId: string): MessageGenerationEvent[] {
+    return [...(this.entries.get(this.key(sessionId, messageId))?.events ?? [])];
+  }
+
+  subscribe(sessionId: string, messageId: string, sink: (event: MessageGenerationEvent) => void): () => void {
+    const entry = this.touch(this.key(sessionId, messageId));
+    entry.sinks.add(sink);
+    return () => entry.sinks.delete(sink);
+  }
+
+  private key(sessionId: string, messageId: string): string {
+    return `${sessionId}:${messageId}`;
+  }
+
+  private touch(key: string) {
+    const existing = this.entries.get(key);
+    if (existing) {
+      this.entries.delete(key);
+      this.entries.set(key, existing);
+      return existing;
+    }
+    const created = {
+      events: [] as MessageGenerationEvent[],
+      sinks: new Set<(event: MessageGenerationEvent) => void>()
+    };
+    this.entries.set(key, created);
+    if (this.entries.size > MESSAGE_GENERATION_MESSAGE_LIMIT) {
+      for (const [candidate, entry] of this.entries) {
+        if (this.entries.size <= MESSAGE_GENERATION_MESSAGE_LIMIT) break;
+        if (entry.sinks.size === 0) this.entries.delete(candidate);
+      }
+    }
+    return created;
+  }
+}
 
 // Size of the live UI snapshot window. Older history is paged lazily over GET /ui-items.
 // Keep ≥ a realistic single agent round so a tool call+result pair never straddles the window.
@@ -17,6 +106,7 @@ export function createSubscribeHandlers(ctx: SessionContext) {
     deps: { bus, cache, store },
     requireSession
   } = ctx;
+  const generationHub = new MessageGenerationHub(bus);
 
   async function subscribe(
     { sessionId, afterEventId }: { sessionId: SessionId; afterEventId?: string },
@@ -79,7 +169,7 @@ export function createSubscribeHandlers(ctx: SessionContext) {
     // Replay only the in-flight (un-persisted) round on top of the hydrated window. This is a
     // snapshot endpoint (the client replaces its view wholesale), so hydration IS the reconnect
     // baseline — every settled round is already in the bounded message window. We must NOT replay
-    // the durable event log here: a reconnect cursor is usually an `agent.token` id that isn't in
+    // the durable event log here: a reconnect cursor is usually a transient message-delta id that isn't in
     // the log, so listEvents would fall back to a full-session replay and scramble the bounded
     // snapshot (breaking oldestCursor/hasMore pagination). The active round lives only in `buffered`.
     const buffered = cache.since(sessionId, afterEventId);
@@ -109,5 +199,72 @@ export function createSubscribeHandlers(ctx: SessionContext) {
     return { subscribed: true as const, dispose };
   }
 
-  return { subscribe, subscribeUi, subscribeControl };
+  async function subscribeMessageGeneration(
+    request: MessageGenerationSubscribeRequest,
+    sink: (frame: MessageGenerationFrame) => void
+  ) {
+    const { sessionId, messageId, afterEventId } = request;
+    requireSession(sessionId);
+    const initialMessage = store.getMessage(sessionId, messageId);
+    if (!initialMessage) throw new HandlerError('invalid', `message not found: ${messageId}`);
+
+    let disposed = false;
+    let ready = false;
+    const pending: MessageGenerationEvent[] = [];
+    const emit = (frame: MessageGenerationFrame): void => {
+      if (disposed) return;
+      try {
+        sink(frame);
+      } catch {
+        dispose();
+      }
+    };
+    const onEvent = (event: MessageGenerationEvent): void => {
+      if (!ready) {
+        pending.push(event);
+        return;
+      }
+      emit({ kind: 'event', event });
+      if (isTerminalGenerationEvent(event)) dispose();
+    };
+    const unsubscribe = generationHub.subscribe(sessionId, messageId, onEvent);
+    const dispose = (): void => {
+      if (disposed) return;
+      disposed = true;
+      unsubscribe();
+    };
+
+    const history = generationHub.history(sessionId, messageId);
+    const cursorIndex = afterEventId === undefined ? -1 : history.findIndex((event) => event.id === afterEventId);
+    if (afterEventId === undefined || cursorIndex === -1) {
+      const message = store.getMessage(sessionId, messageId);
+      if (!message) {
+        dispose();
+        throw new HandlerError('invalid', `message not found: ${messageId}`);
+      }
+      emit({
+        kind: 'snapshot',
+        message,
+        messageRevision: store.getMessageRevision(sessionId),
+        deltas: history.filter((event) => event.type === 'session.message.delta.appended')
+      });
+    } else {
+      for (const event of history.slice(cursorIndex + 1)) {
+        emit({ kind: 'event', event });
+        if (isTerminalGenerationEvent(event)) dispose();
+      }
+    }
+
+    ready = true;
+    const replayed = new Set(history.map((event) => event.id));
+    for (const event of pending) {
+      if (replayed.has(event.id)) continue;
+      emit({ kind: 'event', event });
+      if (isTerminalGenerationEvent(event)) dispose();
+    }
+    if (initialMessage.stream.status === 'complete' || initialMessage.stream.status === 'error') dispose();
+    return { subscribed: true as const, dispose };
+  }
+
+  return { subscribe, subscribeUi, subscribeControl, subscribeMessageGeneration };
 }

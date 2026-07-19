@@ -4,29 +4,26 @@ import { expect, test } from 'bun:test';
 
 import { createManagedExternalAgentMessages } from '#/handlers/session/handlers/managed-external-agent-messages.ts';
 
-test('managed thinking messages persist and emit the author display name snapshot', () => {
-  const inserted: Array<{ data?: unknown }> = [];
-  const emitted: Array<{ payload: unknown }> = [];
+test('managed thinking messages persist and emit the author display name snapshot', async () => {
+  const delivered: unknown[] = [];
   const ctx = {
     deps: {
       store: {
-        findManagedExternalAgentStreamingMessage: () => undefined,
-        insertMessage: (
-          _id: string,
-          _sessionId: string,
-          _text: string,
-          _createdAt: string,
-          _role: string,
-          data: unknown
-        ) => inserted.push(data as { data?: unknown })
+        findManagedExternalAgentStreamingMessage: () => undefined
       }
     },
-    makeEmit: () => (event: { payload: unknown }) => emitted.push(event),
+    messageIngress: {
+      begin: (command: unknown) => {
+        delivered.push(command);
+        return Promise.resolve({ id: 'msg_snapshot0000' });
+      }
+    },
+    makeEmit: () => () => {},
     persistAndRetire: () => {}
   } as unknown as SessionContext;
   const messages = createManagedExternalAgentMessages(ctx);
 
-  messages.emitManagedExternalAgentThinking(
+  await messages.emitManagedExternalAgentThinking(
     'ses_snapshot0000',
     'exa_snapshot0000',
     'pmem_claude_fable',
@@ -34,22 +31,26 @@ test('managed thinking messages persist and emit the author display name snapsho
     'Fable'
   );
 
-  expect(inserted).toEqual([
-    expect.objectContaining({
-      data: expect.objectContaining({
+  expect(delivered).toEqual([
+    {
+      transcriptTargetId: 'ses_snapshot0000',
+      idempotencyKey: expect.stringMatching(/^idem_/),
+      producer: {
+        kind: 'external-agent',
+        externalAgentSessionId: 'exa_snapshot0000',
+        agentName: 'pmem_claude_fable'
+      },
+      role: 'assistant',
+      type: 'text',
+      text: '',
+      data: {
         agentName: 'pmem_claude_fable',
         agentDisplayName: 'Fable',
-        externalAgentSessionId: 'exa_snapshot0000'
-      })
-    })
+        externalAgentSessionId: 'exa_snapshot0000',
+        reasoning: 'Thinking',
+        source: 'managed-external-agent'
+      },
+      includeInContext: false
+    }
   ]);
-  expect(emitted[0]).toEqual(
-    expect.objectContaining({
-      payload: expect.objectContaining({
-        agentName: 'pmem_claude_fable',
-        agentDisplayName: 'Fable',
-        externalAgentSessionId: 'exa_snapshot0000'
-      })
-    })
-  );
 });

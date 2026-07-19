@@ -136,7 +136,7 @@ test('createProjectSession clones the project member templates into live session
   store.close();
 });
 
-test('project member updates reconcile existing bindings without inviting new templates', async () => {
+test('project member updates reconcile active bindings and add each new template once', async () => {
   const store = createStore();
   const d = buildHandlers(mockModel(['hi']), undefined, { store });
   const { projectId } = await d.session.createProject({ title: 'p' });
@@ -212,6 +212,16 @@ test('project member updates reconcile existing bindings without inviting new te
       templateId: null,
       type: 'external-agent',
       data: { name: 'gemini', displayName: 'Ad hoc' }
+    },
+    {
+      memberId: 'pmem_opus',
+      templateId: 'pmem_opus',
+      type: 'external-agent',
+      data: {
+        name: 'claude-code',
+        displayName: 'Opus',
+        settings: { managedProjectAgent: true, modelId: 'opus' }
+      }
     }
   ]);
   const originalRoster = [

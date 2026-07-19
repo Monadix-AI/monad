@@ -6,14 +6,22 @@ import { newId } from '@monad/protocol';
 import { createBoundedSseSink } from '#/transports/http/sessions/sse.ts';
 
 function evt(): Event {
+  const sessionId = newId('ses') as SessionId;
   return {
     id: newId('evt'),
-    sessionId: newId('ses') as SessionId,
-    type: 'agent.token',
+    sessionId,
+    type: 'session.message.delta.appended',
     actorAgentId: newId('agt'),
-    payload: { text: 'x'.repeat(64) },
+    payload: {
+      transcriptTargetId: sessionId,
+      producer: { kind: 'agent', agentId: 'agt_100000000000' },
+      messageId: newId('msg'),
+      channel: 'answer',
+      index: 0,
+      delta: 'x'.repeat(64)
+    },
     at: new Date().toISOString()
-  } as Event;
+  };
 }
 
 test('bounded SSE sink delivers normally while a consumer keeps up', async () => {

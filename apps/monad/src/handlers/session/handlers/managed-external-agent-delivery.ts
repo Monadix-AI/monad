@@ -1,5 +1,5 @@
 import type { ExternalAgentConfig } from '@monad/environment';
-import type { Event, ManagedExternalAgentLifecycleLogEvent, Session, SessionId } from '@monad/protocol';
+import type { Event, ManagedExternalAgentLifecycleLogEvent, MessageId, Session, SessionId } from '@monad/protocol';
 import type { SessionContext } from '#/handlers/session/context.ts';
 import type { ManagedExternalAgentProjectMessageSender } from '#/handlers/session/handlers/messaging-notices.ts';
 
@@ -28,7 +28,8 @@ export function createManagedExternalAgentDelivery(ctx: SessionContext) {
   const {
     deps: { store, log, externalAgentHost },
     makeEmit,
-    persistAndRetire
+    persistAndRetire,
+    messageIngress
   } = ctx;
 
   const { managedExternalAgentSessionsForAgent, startManagedExternalAgentRuntimeWithRecovery } =
@@ -36,28 +37,21 @@ export function createManagedExternalAgentDelivery(ctx: SessionContext) {
   const { emitManagedExternalAgentThinking, completeManagedExternalAgentThinking, retireManagedExternalAgentThinking } =
     createManagedExternalAgentMessages(ctx);
 
-  function recordManagedExternalAgentProjectDeliveryError(
+  async function recordManagedExternalAgentProjectDeliveryError(
     sessionId: SessionId,
     agentName: string,
-    code: string | undefined,
     message: string
-  ): void {
+  ): Promise<void> {
     const text = `${agentName} failed to process the project message: ${message}`;
-    const messageId = newId('msg');
-    const round: Event[] = [];
-    store.insertMessage(messageId, sessionId, text, new Date().toISOString(), 'assistant', {
+    await messageIngress.deliver({
+      transcriptTargetId: sessionId,
+      idempotencyKey: newId('idem'),
+      producer: { kind: 'system', subsystem: 'managed-external-agent' },
+      role: 'assistant',
       type: 'error',
+      text,
       data: { agentName }
     });
-    makeEmit(round)(
-      makeEvent(sessionId as SessionId, 'agent.error', {
-        messageId,
-        agentName,
-        code: code ?? 'managed_external_agent_delivery_failed',
-        message: text
-      })
-    );
-    persistAndRetire(sessionId, round);
   }
 
   async function deliverProjectMessageToManagedExternalAgentMembers({
@@ -65,12 +59,14 @@ export function createManagedExternalAgentDelivery(ctx: SessionContext) {
     externalAgents,
     text,
     sender,
+    triggerMessageId,
     exceptAgentName
   }: {
     session: Session;
     externalAgents: readonly ExternalAgentConfig[];
     text: string;
     sender?: ManagedExternalAgentProjectMessageSender;
+    triggerMessageId?: MessageId;
     exceptAgentName?: string;
   }): Promise<void> {
     const managedMembers = managedExternalAgentProjectMembers(store, session.id, externalAgents);
@@ -85,9 +81,12 @@ export function createManagedExternalAgentDelivery(ctx: SessionContext) {
           }
         : sender;
     if (!externalAgentHost || !session.cwd) return;
-    const deliveredSeq = store.maxMessageSeq(session.id);
-    const triggerMessageId =
-      deliveredSeq > 0 ? (store.messageIdForSeq(session.id as SessionId, deliveredSeq) ?? undefined) : undefined;
+    const deliveredSeq = triggerMessageId
+      ? store.messageSeq(session.id, triggerMessageId)
+      : store.maxMessageSeq(session.id);
+    const resolvedTriggerMessageId =
+      triggerMessageId ??
+      (deliveredSeq > 0 ? (store.messageIdForSeq(session.id as SessionId, deliveredSeq) ?? undefined) : undefined);
     for (const member of managedMembers) {
       const { spec, runtimeAgentName, templateAgentName, displayName, configuredDisplayName, settings } = member;
       if (runtimeAgentName === exceptAgentName) continue;
@@ -97,16 +96,20 @@ export function createManagedExternalAgentDelivery(ctx: SessionContext) {
         const managedSessions = managedExternalAgentSessionsForAgent(session.id, runtimeAgentName);
         const existing = managedSessions.find((candidate) => candidate.state === 'running');
         if (existing) {
+          const shouldWakeReadableInbox =
+            existing.launchMode !== 'cli-oneshot' &&
+            existing.lastDeliveredSeq !== 0 &&
+            store.countExternalAgentInbox(existing.id) === 0;
           if (deliveredSeq > 0) {
             store.enqueueExternalAgentInboxItem(existing.id, deliveredSeq, {
               deliveryId,
               ...(session.projectId ? { projectId: session.projectId } : {}),
               memberInstanceId: runtimeAgentName,
-              triggerMessageId,
+              triggerMessageId: resolvedTriggerMessageId,
               providerSessionRef: existing.providerSessionRef ?? null
             });
           }
-          emitManagedExternalAgentThinking(session.id, existing.id, runtimeAgentName, deliveryId, displayName);
+          await emitManagedExternalAgentThinking(session.id, existing.id, runtimeAgentName, deliveryId, displayName);
           if (existing.launchMode === 'cli-oneshot') {
             // cli-oneshot has no persistent process polling the inbox between turns, so every project
             // message must spawn a fresh turn carrying the message itself — the inbox-poll nudge path
@@ -116,7 +119,7 @@ export function createManagedExternalAgentDelivery(ctx: SessionContext) {
           } else if (existing.lastDeliveredSeq === 0) {
             await externalAgentHost.input(existing.id, { input: externalAgentInputText(notice) });
             if (deliveredSeq > 0) store.markExternalAgentInboxVisible(existing.id, deliveredSeq);
-          } else if (existing.lastDeliveredSeq <= existing.lastVisibleSeq) {
+          } else if (shouldWakeReadableInbox) {
             await externalAgentHost.input(existing.id, {
               input: externalAgentInputText(managedExternalAgentBusyInboxNotice(member, resolvedSender))
             });
@@ -165,16 +168,16 @@ export function createManagedExternalAgentDelivery(ctx: SessionContext) {
             deliveryId,
             ...(session.projectId ? { projectId: session.projectId } : {}),
             memberInstanceId: runtimeAgentName,
-            triggerMessageId,
+            triggerMessageId: resolvedTriggerMessageId,
             providerSessionRef: nativeSession.providerSessionRef ?? null
           });
         }
         store.markExternalAgentInboxDelivered(nativeSession.id, deliveredSeq);
         store.markExternalAgentInboxVisible(nativeSession.id, deliveredSeq);
-        emitManagedExternalAgentThinking(session.id, nativeSession.id, runtimeAgentName, deliveryId, displayName);
+        await emitManagedExternalAgentThinking(session.id, nativeSession.id, runtimeAgentName, deliveryId, displayName);
       } catch (err) {
         const { code, message } = extractError(err);
-        recordManagedExternalAgentProjectDeliveryError(session.id, runtimeAgentName, code, message);
+        await recordManagedExternalAgentProjectDeliveryError(session.id, runtimeAgentName, message);
         log?.debug(
           {
             sessionId: session.id,

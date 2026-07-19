@@ -1,4 +1,4 @@
-import type { AgentMessagePayload, AgentReasoningPayload, EventType, Hooks, SessionId } from '@monad/protocol';
+import type { EventType, FinishReason, Hooks, SessionId, TokenUsage } from '@monad/protocol';
 import type { Tool } from '#/capabilities/tools/types.ts';
 import type { PersistedModelInputOverride } from '../replay.ts';
 import type { AgentLoopDeps, ChatMessage } from '../types.ts';
@@ -16,6 +16,9 @@ import { extractError } from '../extract-error.ts';
  * from prompt assembly and the tool round-trip loop.
  */
 export class TurnWriter {
+  private readonly openedAt = new Map<string, string>();
+  private readonly fallbackRevisions = new Map<SessionId, number>();
+
   constructor(
     private readonly deps: AgentLoopDeps,
     private readonly emitEvent: (sessionId: SessionId, type: EventType, payload: object) => void,
@@ -27,18 +30,83 @@ export class TurnWriter {
     private readonly hookCwd: () => string
   ) {}
 
+  private publishOptions() {
+    return this.deps.messageFanout ? { fanout: this.deps.messageFanout } : undefined;
+  }
+
+  private nextFallbackRevision(sessionId: SessionId): number {
+    const revision = (this.fallbackRevisions.get(sessionId) ?? 0) + 1;
+    this.fallbackRevisions.set(sessionId, revision);
+    return revision;
+  }
+
+  private canonicalSnapshot(message: ChatMessage, status: 'pending' | 'settled' | 'complete' | 'error') {
+    return {
+      id: message.id,
+      sessionId: message.sessionId,
+      role: message.role,
+      text: message.text,
+      type: message.type ?? 'text',
+      ...(message.data === undefined ? {} : { data: message.data }),
+      stream:
+        status === 'pending'
+          ? { status, source: { transcriptTargetId: message.sessionId, messageId: message.id } }
+          : { status },
+      active: true,
+      ...(message.includeInContext === undefined ? {} : { includeInContext: message.includeInContext }),
+      createdAt: message.createdAt
+    };
+  }
+
+  private emitFallbackLifecycle(
+    sessionId: SessionId,
+    type: 'session.message.created' | 'session.message.completed' | 'session.message.failed',
+    message: ChatMessage,
+    status: 'pending' | 'settled' | 'complete' | 'error'
+  ): void {
+    if (this.deps.messages.publishesCanonicalEvents) return;
+    this.emitEvent(sessionId, type, {
+      transcriptTargetId: sessionId,
+      producer: { kind: 'system', subsystem: 'agent-loop' },
+      message: this.canonicalSnapshot(message, status),
+      messageRevision: this.nextFallbackRevision(sessionId)
+    });
+  }
+
+  private async ensureAssistantOpen(sessionId: SessionId, messageId: `msg_${string}`): Promise<string> {
+    const existing = this.openedAt.get(messageId);
+    if (existing) return existing;
+    const createdAt = new Date().toISOString();
+    this.openedAt.set(messageId, createdAt);
+    const message: ChatMessage = { id: messageId, sessionId, role: 'assistant', text: '', createdAt };
+    await this.deps.messages.open?.(message, this.publishOptions());
+    this.emitFallbackLifecycle(sessionId, 'session.message.created', message, 'pending');
+    return createdAt;
+  }
+
   /** Persist an empty assistant row so a turn that ended with no closing text still has an answer
    * message (the UI anchors the turn on it). Excluded from context — an empty assistant turn must
    * not reach the next prompt (some providers reject empty assistant content). */
-  async appendEmptyAnswer(sessionId: SessionId, messageId: `msg_${string}`): Promise<void> {
-    await this.deps.messages.append({
+  async appendEmptyAnswer(
+    sessionId: SessionId,
+    messageId: `msg_${string}`,
+    data?: Record<string, unknown>
+  ): Promise<void> {
+    const createdAt = await this.ensureAssistantOpen(sessionId, messageId);
+    const message: ChatMessage = {
       id: messageId,
       sessionId,
       role: 'assistant',
       text: '',
       includeInContext: false,
-      createdAt: new Date().toISOString()
-    });
+      ...(data ? { data } : {}),
+      createdAt
+    };
+    const settled = this.deps.messages.settle
+      ? await this.deps.messages.settle(message, 'complete', this.publishOptions())
+      : false;
+    if (!settled) await this.deps.messages.append(message, this.publishOptions());
+    this.emitFallbackLifecycle(sessionId, 'session.message.completed', message, 'complete');
   }
 
   async beginTurn(
@@ -47,17 +115,16 @@ export class TurnWriter {
     modelInput?: PersistedModelInputOverride
   ): Promise<`msg_${string}`> {
     const userMessageId = newId('msg');
-    await this.deps.messages.append({
+    const userMessage: ChatMessage = {
       id: userMessageId,
       sessionId,
       role: 'user',
       text: userText,
       data: modelInput,
       createdAt: new Date().toISOString()
-    });
-    // Push the accepted user turn so clients that didn't originate it (other tabs, a Telegram-
-    // started turn) render the bubble now instead of waiting for the end-of-turn history refetch.
-    this.emitEvent(sessionId, 'user.message', { messageId: userMessageId, text: userText });
+    };
+    await this.deps.messages.append(userMessage, this.publishOptions());
+    this.emitFallbackLifecycle(sessionId, 'session.message.created', userMessage, 'settled');
     // The assistant row(s) are NOT opened here. Each assistant text segment is created lazily at its
     // FIRST token (see beginSegment) so it sorts after any tool rows that ran before it. We return
     // the id the first segment will use; a turn with no leading text just never opens it.
@@ -72,38 +139,63 @@ export class TurnWriter {
    */
   beginSegment(sessionId: SessionId, segmentId: `msg_${string}`, reasonBase: number) {
     let opened = false;
+    let emitted = false;
+    let openPromise: Promise<void> | undefined;
+    let ingressQueue = Promise.resolve();
     let tokenIndex = 0;
     let reasonIndex = reasonBase;
+    const ensureOpen = () => {
+      if (opened) return openPromise ?? Promise.resolve();
+      opened = true;
+      openPromise = this.ensureAssistantOpen(sessionId, segmentId).then(() => {});
+      void this.deps.messages.markStreaming?.(sessionId, segmentId);
+      return openPromise;
+    };
+    const appendDelta = (channel: string, index: number, delta: string) => {
+      emitted = true;
+      ingressQueue = ingressQueue.then(async () => {
+        await ensureOpen();
+        if (this.deps.messages.appendDelta) {
+          await this.deps.messages.appendDelta(
+            { sessionId, messageId: segmentId, channel, index, delta },
+            this.publishOptions()
+          );
+          return;
+        }
+        this.emitEvent(sessionId, 'session.message.delta.appended', {
+          transcriptTargetId: sessionId,
+          producer: { kind: 'system', subsystem: 'agent-loop' },
+          messageId: segmentId,
+          channel,
+          index,
+          delta
+        });
+      });
+    };
     return {
       emitToken: (delta: string): void => {
-        if (!opened) {
-          opened = true;
-          // Synchronous for the store-backed repo (bun:sqlite); a no-op for the in-memory repo.
-          void this.deps.messages.open?.({
-            id: segmentId,
-            sessionId,
-            role: 'assistant',
-            text: '',
-            createdAt: new Date().toISOString()
-          });
-          void this.deps.messages.markStreaming?.(sessionId, segmentId);
-        }
-        this.emitEvent(sessionId, 'agent.token', { messageId: segmentId, delta, index: tokenIndex++ });
+        appendDelta('answer', tokenIndex++, delta);
       },
-      emitReasoning: (delta: string): void => this.emitReasoning(sessionId, segmentId, delta, reasonIndex++),
+      emitReasoning: (delta: string): void => appendDelta('reasoning', reasonIndex++, delta),
       reasonIndex: (): number => reasonIndex,
-      settle: async (text: string, reasoning?: string): Promise<boolean> => {
-        if (!opened && text === '') return false;
+      settle: async (text: string, reasoning?: string, terminalData?: Record<string, unknown>): Promise<boolean> => {
+        if (!emitted && text === '') return false;
+        await ensureOpen();
+        await ingressQueue;
+        const createdAt = this.openedAt.get(segmentId) ?? new Date().toISOString();
         const message: ChatMessage = {
           id: segmentId,
           sessionId,
           role: 'assistant',
           text,
-          createdAt: new Date().toISOString(),
-          ...(reasoning ? { data: { reasoning } } : {})
+          createdAt,
+          ...(reasoning || terminalData ? { data: { ...(reasoning ? { reasoning } : {}), ...terminalData } } : {})
         };
-        const settled = this.deps.messages.settle ? await this.deps.messages.settle(message, 'complete') : false;
-        if (!settled) await this.deps.messages.append(message);
+        const settled = this.deps.messages.settle
+          ? await this.deps.messages.settle(message, 'complete', this.publishOptions())
+          : false;
+        if (!settled) await this.deps.messages.append(message, this.publishOptions());
+        this.emitFallbackLifecycle(sessionId, 'session.message.completed', message, 'complete');
         return true;
       }
     };
@@ -113,43 +205,42 @@ export class TurnWriter {
     sessionId: SessionId,
     messageId: `msg_${string}`,
     text: string,
-    usage?: AgentMessagePayload['usage'],
-    finishReason?: AgentMessagePayload['finishReason'],
+    usage?: TokenUsage,
+    finishReason?: FinishReason,
     reasoning?: string
   ): Promise<ChatMessage> {
+    const data = this.terminalData(sessionId, usage, finishReason, reasoning);
+    const createdAt = await this.ensureAssistantOpen(sessionId, messageId);
     const message: ChatMessage = {
       id: messageId,
       sessionId,
       role: 'assistant',
       text,
-      createdAt: new Date().toISOString(),
+      createdAt,
       // Persist the extended-thinking trace alongside the answer so the UI can show it from
-      // history (the live `agent.reasoning` deltas are transient). Carried in `data`, which
+      // history (live reasoning deltas are transient). Carried in `data`, which
       // replayHistory ignores for prose turns — so it never costs prompt tokens on later turns.
-      ...(reasoning ? { data: { reasoning } } : {})
+      ...(data ? { data } : {})
     };
     // Non-streaming (block) turns have no open segment row, so settle finds nothing and we append —
     // landing the assistant row after the turn's tool rows (correct order).
-    const settled = this.deps.messages.settle ? await this.deps.messages.settle(message, 'complete') : false;
-    if (!settled) await this.deps.messages.append(message);
+    const settled = this.deps.messages.settle
+      ? await this.deps.messages.settle(message, 'complete', this.publishOptions())
+      : false;
+    if (!settled) await this.deps.messages.append(message, this.publishOptions());
+    this.emitFallbackLifecycle(sessionId, 'session.message.completed', message, 'complete');
     await this.finishBookkeeping(sessionId, messageId, text, usage, finishReason);
     return message;
   }
 
-  /** Per-turn accounting + events, emitted once after the final assistant content is persisted:
-   * record real usage/cost, self-calibrate the token estimator, emit `agent.message` and the
-   * `context.usage` breakdown. The assistant row itself is written by the segment/finishTurn path. */
+  /** Emit the context-usage breakdown after the terminal assistant snapshot is persisted. */
   async finishBookkeeping(
     sessionId: SessionId,
-    messageId: `msg_${string}`,
-    text: string,
-    usage?: AgentMessagePayload['usage'],
-    finishReason?: AgentMessagePayload['finishReason']
+    _messageId: `msg_${string}`,
+    _text: string,
+    usage?: TokenUsage,
+    _finishReason?: FinishReason
   ): Promise<void> {
-    const cost = usage ? this.deps.recordTurnUsage?.(sessionId, usage, this.modelId()) : undefined;
-    this.prompt().observeEstimator(usage);
-    const payload: AgentMessagePayload = { messageId, text, usage, ...(cost ? { cost } : {}), finishReason };
-    this.emitEvent(sessionId, 'agent.message', payload);
     await this.prompt().emitContextUsage(
       sessionId,
       this.availableTools().length > 0,
@@ -158,19 +249,21 @@ export class TurnWriter {
     );
   }
 
-  /** Best-effort re-persist of a settled segment when a Stop hook rewrote the final text (the
-   * streamed row was already settled with the original). No-op for repos without `settle`. */
-  async repersistFinalText(sessionId: SessionId, messageId: `msg_${string}`, text: string): Promise<void> {
-    await this.deps.messages.settle?.(
-      { id: messageId, sessionId, role: 'assistant', text, createdAt: new Date().toISOString() },
-      'complete'
-    );
-  }
-
-  /** Emit one reasoning/extended-thinking delta on its own channel (transient, not persisted). */
-  emitReasoning(sessionId: SessionId, messageId: `msg_${string}`, delta: string, index: number): void {
-    const payload: AgentReasoningPayload = { messageId, delta, index };
-    this.emitEvent(sessionId, 'agent.reasoning', payload);
+  terminalData(
+    sessionId: SessionId,
+    usage?: TokenUsage,
+    finishReason?: FinishReason,
+    reasoning?: string
+  ): Record<string, unknown> | undefined {
+    const cost = usage ? this.deps.recordTurnUsage?.(sessionId, usage, this.modelId()) : undefined;
+    this.prompt().observeEstimator(usage);
+    const data = {
+      ...(reasoning ? { reasoning } : {}),
+      ...(usage ? { usage } : {}),
+      ...(cost ? { cost } : {}),
+      ...(finishReason ? { finishReason } : {})
+    };
+    return Object.keys(data).length > 0 ? data : undefined;
   }
 
   async emitError(sessionId: SessionId, messageId: string, err: unknown): Promise<void> {
@@ -183,29 +276,27 @@ export class TurnWriter {
     // the live event stream can't deliver. Tagged `error`/`provider_config_error` so buildPrompt
     // never replays it back to the model. Settle the row opened in beginTurn (→ error); repos
     // without the lifecycle append it.
+    const createdAt = await this.ensureAssistantOpen(sessionId, messageId as `msg_${string}`);
     const errMessage: ChatMessage = {
       id: messageId,
       sessionId,
       role: 'assistant',
       text,
-      createdAt: new Date().toISOString(),
+      createdAt,
       type: isProviderConfig ? 'provider_config_error' : 'error',
-      ...(isProviderConfig ? { data: { providerId } } : {})
+      ...(isProviderConfig ? { data: { providerId } } : code ? { data: { code } } : {})
     };
     try {
-      const settled = this.deps.messages.settle ? await this.deps.messages.settle(errMessage, 'error') : false;
-      if (!settled) await this.deps.messages.append(errMessage);
+      const settled = this.deps.messages.settle
+        ? await this.deps.messages.settle(errMessage, 'error', this.publishOptions())
+        : false;
+      if (!settled) await this.deps.messages.append(errMessage, this.publishOptions());
+      this.emitFallbackLifecycle(sessionId, 'session.message.failed', errMessage, 'error');
     } catch (appendErr) {
       // A turn can fail after the assistant row is already persisted (e.g. post-persist side
       // effects). Re-using the same messageId must not crash the daemon on a duplicate insert.
       if (!String(appendErr).includes('UNIQUE constraint failed: messages.id')) throw appendErr;
     }
-    this.emitEvent(sessionId, 'agent.error', {
-      messageId,
-      code,
-      message,
-      ...(isProviderConfig ? { providerId } : {})
-    });
     // AfterTurn also fires when a turn ends in failure (the success path fires it via runStopHook).
     // Observe-only here — the turn already errored; a hook can log/notify but not rewrite the answer.
     await this.hooks().run({

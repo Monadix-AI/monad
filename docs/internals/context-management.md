@@ -279,7 +279,7 @@ SSE — see [realtime-channels.md](realtime-channels.md)):
 
 `context.evicted` / `context.handoff_suggested` are filtered from persistence in
 [handlers/session/context.ts](../../apps/monad/src/handlers/session/context.ts)
-alongside `agent.token` — transient notices, not history.
+alongside `session.message.delta.appended` — transient notices, not history.
 
 **Web.** The composer's context-usage panel shows the `reclaimed` line when > 0.
 `useContextNotices` turns the handoff nudge into a toast and the memory suggestion

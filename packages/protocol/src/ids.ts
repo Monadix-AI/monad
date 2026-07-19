@@ -7,6 +7,7 @@ import { z } from 'zod';
 export type AgentId = `agt_${string}`;
 export type SessionId = `ses_${string}`;
 export type ProjectId = `prj_${string}`;
+export type TranscriptTargetId = SessionId | ProjectId;
 export type TaskId = `tsk_${string}`;
 export type EventId = `evt_${string}`;
 export type MessageId = `msg_${string}`;
@@ -33,6 +34,7 @@ export function prefixedIdSchema<T extends string>(prefix: string): z.ZodType<T>
 export const agentIdSchema: z.ZodType<AgentId> = prefixedIdSchema<AgentId>('agt');
 export const sessionIdSchema: z.ZodType<SessionId> = prefixedIdSchema<SessionId>('ses');
 export const projectIdSchema: z.ZodType<ProjectId> = prefixedIdSchema<ProjectId>('prj');
+export const transcriptTargetIdSchema: z.ZodType<TranscriptTargetId> = z.union([sessionIdSchema, projectIdSchema]);
 export const taskIdSchema: z.ZodType<TaskId> = prefixedIdSchema<TaskId>('tsk');
 export const eventIdSchema: z.ZodType<EventId> = prefixedIdSchema<EventId>('evt');
 export const messageIdSchema: z.ZodType<MessageId> = prefixedIdSchema<MessageId>('msg');

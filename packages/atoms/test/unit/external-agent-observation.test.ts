@@ -1605,7 +1605,6 @@ test('observation panel shows a token usage meter entry when Codex reports token
   });
   const html = renderToStaticMarkup(
     React.createElement(ExternalAgentObservationPanel, {
-      onStop: () => {},
       stream: {
         id: 'exa_codex0000000',
         agentName: 'codex',
@@ -1631,7 +1630,6 @@ test('observation panel shows a usage limits entry when the stream has limit dat
   const usageMeter = externalAgentUsageLimitMeter({ provider: 'codex', output });
   const html = renderToStaticMarkup(
     React.createElement(ExternalAgentObservationPanel, {
-      onStop: () => {},
       stream: {
         id: 'exa_codex0000000',
         agentName: 'codex',
@@ -1655,7 +1653,6 @@ test('observation panel renders bootstrap loading outside the observation timeli
   const html = renderToStaticMarkup(
     React.createElement(ExternalAgentObservationPanel, {
       observationLoading: true,
-      onStop: () => {},
       stream: {
         id: 'exa_codex0000000',
         agentName: 'codex',
@@ -1679,7 +1676,6 @@ test('observation panel only shows unavailable provider history from explicit tr
   const html = renderToStaticMarkup(
     React.createElement(ExternalAgentObservationPanel, {
       observationUnavailable: true,
-      onStop: () => {},
       stream: {
         id: 'exa_codex0000000',
         agentName: 'codex',
@@ -1701,7 +1697,6 @@ test('observation panel exposes a retry action after an earlier-history page fai
       historyActive: true,
       historyLoadError: true,
       onRetryOlderHistory: () => {},
-      onStop: () => {},
       stream: {
         id: 'exa_codex0000000',
         agentName: 'codex',
@@ -1731,7 +1726,6 @@ test('observation panel renders show history as the first list placeholder when 
   const html = renderToStaticMarkup(
     React.createElement(ExternalAgentObservationPanel, {
       onShowHistory: () => {},
-      onStop: () => {},
       showHistoryButton: true,
       stream: {
         id: 'exa_codex0000000',
@@ -1784,7 +1778,6 @@ test('observation history header keeps a fixed footprint throughout the active h
       React.createElement(ExternalAgentObservationPanel, {
         ...props,
         onShowHistory: () => {},
-        onStop: () => {},
         stream
       })
     );
@@ -1811,7 +1804,6 @@ test('observation panel summary mode folds turn details and shows only the final
   const html = renderToStaticMarkup(
     React.createElement(ExternalAgentObservationPanel, {
       defaultRenderMode: 'summary',
-      onStop: () => {},
       stream: {
         id: 'exa_codex0000000',
         agentName: 'codex',
@@ -1874,7 +1866,6 @@ test('observation panel accepts a controlled render mode command', () => {
   const html = renderToStaticMarkup(
     React.createElement(ExternalAgentObservationPanel, {
       onRenderModeChange: () => {},
-      onStop: () => {},
       renderMode: 'summary',
       stream: {
         id: 'exa_codex0000000',
@@ -1907,8 +1898,38 @@ test('observation panel accepts a controlled render mode command', () => {
   expect(html).toContain('Running for');
   expect(html).toContain('live output');
   expect(html).toContain('aria-pressed="true"');
-  expect(html).toContain('Summary observation view');
+  expect(html).toContain('Show individual activity');
   expect(html).toContain('data-observation-turn-mode="summary"');
+});
+
+test('observation header uses content semantics and never exposes runtime stop', () => {
+  const html = renderToStaticMarkup(
+    React.createElement(ExternalAgentObservationPanel, {
+      headerActions: React.createElement('span', { 'data-plane-toggle': true }, 'Activity Raw'),
+      stream: {
+        id: 'exa_codex0000000',
+        agentName: 'Agent Ada',
+        provider: 'codex',
+        tag: 'Codex',
+        status: 'running',
+        output: '',
+        items: [
+          {
+            id: 'evt_1',
+            kind: 'assistant-message',
+            streaming: false,
+            text: 'Working',
+            provenance: { contractEvents: [{ id: 'source_1' }] }
+          }
+        ]
+      }
+    })
+  );
+
+  expect(html).toContain('data-plane-toggle="true"');
+  expect(html).toContain('Collapse all activity');
+  expect(html).toContain('Group activity by turn');
+  expect(html).not.toContain('>Stop<');
 });
 
 test('Claude Code observation projects transcript user events as user message cards', () => {

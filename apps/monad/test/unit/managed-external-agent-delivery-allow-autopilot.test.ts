@@ -12,6 +12,10 @@ import { registerAgentAdapterImpl } from '#/services/external-agent/index.ts';
 // like every other external-agent test — mirrors external-agent-host.test.ts / external-agent-adapters.test.ts.
 for (const adapter of builtinAgentAdapters) registerAgentAdapterImpl(adapter);
 
+async function rejectUnexpectedDeliveryError(command: { text: string }): Promise<never> {
+  throw new Error(`unexpected managed external agent delivery error: ${command.text}`);
+}
+
 // Regression test: `deliverProjectMessageToManagedExternalAgentMembers` (inbox delivery) and
 // `deliverDirectMessageToManagedExternalAgentMember` (direct-message delivery) both build their
 // `startManagedExternalAgentRuntimeWithRecovery` call from the same member `settings` object — they must
@@ -23,7 +27,7 @@ function buildHarness() {
   const externalAgentHost = {
     start: async (args: { agentName: string; allowAutopilot?: boolean }) => {
       startCalls.push({ agentName: args.agentName, allowAutopilot: args.allowAutopilot });
-      return { id: `exa_${args.agentName}`, agentName: args.agentName } as ExternalAgentSessionView;
+      return { id: 'exa_codex0000000', agentName: args.agentName } as unknown as ExternalAgentSessionView;
     },
     input: () => {},
     list: () => ({ sessions: [] }),
@@ -51,6 +55,10 @@ function buildHarness() {
   };
   const ctx = {
     deps: { store, log: undefined, externalAgentHost },
+    messageIngress: {
+      begin: () => Promise.resolve({ id: 'msg_delegated00' }),
+      deliver: rejectUnexpectedDeliveryError
+    },
     makeEmit: () => () => {},
     persistAndRetire: () => {}
   } as unknown as SessionContext;
@@ -96,14 +104,14 @@ test('direct-message delivery threads a delegated member allowAutopilot to host.
 });
 
 test('project-message fan-out keeps every member inbox pinned to the original message', async () => {
-  let maxMessageSeq = 338;
+  let maxMessageSeq = 340;
   const enqueued: Array<{ externalAgentSessionId: string; messageSeq: number; triggerMessageId?: string }> = [];
   const members = ['gpt', 'sonnet'].map((name) => ({
     sessionId: 'ses_fanout000000',
     memberId: name,
     templateId: null,
     type: 'external-agent',
-    externalAgentSessionId: `exa_${name}`,
+    externalAgentSessionId: name === 'gpt' ? 'exa_gpt000000000' : 'exa_sonnet000000',
     data: { name, displayName: name.toUpperCase(), settings: { managedProjectAgent: true } },
     createdAt: '',
     updatedAt: ''
@@ -111,20 +119,20 @@ test('project-message fan-out keeps every member inbox pinned to the original me
   const sessions = ['gpt', 'sonnet'].map(
     (agentName) =>
       ({
-        id: `exa_${agentName}`,
+        id: agentName === 'gpt' ? 'exa_gpt000000000' : 'exa_sonnet000000',
         agentName,
         runtimeRole: 'managed-project-agent',
         state: 'running',
         launchMode: 'app-server',
         lastDeliveredSeq: 0,
         lastVisibleSeq: 0
-      }) as ExternalAgentSessionView
+      }) as unknown as ExternalAgentSessionView
   );
   const store = {
     listSessionMembers: () => members,
     maxMessageSeq: () => maxMessageSeq,
-    messageIdForSeq: (_sessionId: string, messageSeq: number) =>
-      messageSeq === 338 ? 'msg_opus_original' : 'msg_gpt_thinking',
+    messageIdForSeq: () => 'msg_sonnet_thinking',
+    messageSeq: (_sessionId: string, messageId: string) => (messageId === 'msg_opus_original' ? 338 : 0),
     enqueueExternalAgentInboxItem: (
       externalAgentSessionId: string,
       messageSeq: number,
@@ -151,7 +159,8 @@ test('project-message fan-out keeps every member inbox pinned to the original me
       begin: () => {
         maxMessageSeq += 1;
         return Promise.resolve({ id: maxMessageSeq === 339 ? 'msg_gpt_thinking' : 'msg_sonnet_thinking' });
-      }
+      },
+      deliver: rejectUnexpectedDeliveryError
     },
     makeEmit: () => () => {},
     persistAndRetire: () => {}
@@ -174,11 +183,92 @@ test('project-message fan-out keeps every member inbox pinned to the original me
       origin: { client: 'workplace' }
     } as unknown as Session,
     externalAgents: fanoutAgents,
-    text: 'Opus message'
+    text: 'Opus message',
+    triggerMessageId: 'msg_opus_original'
   });
 
   expect(enqueued).toEqual([
-    { externalAgentSessionId: 'exa_gpt', messageSeq: 338, triggerMessageId: 'msg_opus_original' },
-    { externalAgentSessionId: 'exa_sonnet', messageSeq: 338, triggerMessageId: 'msg_opus_original' }
+    { externalAgentSessionId: 'exa_gpt000000000', messageSeq: 338, triggerMessageId: 'msg_opus_original' },
+    { externalAgentSessionId: 'exa_sonnet000000', messageSeq: 338, triggerMessageId: 'msg_opus_original' }
+  ]);
+});
+
+test('a stale unreadable delivery does not suppress the wake for a new readable inbox item', async () => {
+  const inputs: Array<{ id: string; input: string }> = [];
+  const store = {
+    listSessionMembers: () => [
+      {
+        sessionId: 'ses_fanout000000',
+        memberId: 'sonnet',
+        templateId: null,
+        type: 'external-agent',
+        externalAgentSessionId: 'exa_sonnet000000',
+        data: { name: 'sonnet', displayName: 'Sonnet', settings: { managedProjectAgent: true } },
+        createdAt: '',
+        updatedAt: ''
+      }
+    ],
+    messageSeq: (_sessionId: string, messageId: string) => (messageId === 'msg_gpt_reply' ? 345 : 0),
+    countExternalAgentInbox: () => 0,
+    enqueueExternalAgentInboxItem: () => true,
+    markExternalAgentInboxDelivered: () => {},
+    markExternalAgentInboxVisible: () => {},
+    findManagedExternalAgentStreamingMessage: () => undefined
+  };
+  const externalAgentHost = {
+    list: () => ({
+      sessions: [
+        {
+          id: 'exa_sonnet000000',
+          agentName: 'sonnet',
+          runtimeRole: 'managed-project-agent',
+          state: 'running',
+          launchMode: 'app-server',
+          lastDeliveredSeq: 344,
+          lastVisibleSeq: 341
+        } as unknown as ExternalAgentSessionView
+      ]
+    }),
+    input: async (id: string, payload: { input: string }) => {
+      inputs.push({ id, input: payload.input });
+    },
+    preflight: async () => ({ state: 'ready' as const })
+  };
+  const ctx = {
+    deps: { store, log: undefined, externalAgentHost },
+    messageIngress: {
+      begin: () => Promise.resolve({ id: 'msg_sonnet_thinking' }),
+      deliver: rejectUnexpectedDeliveryError
+    },
+    makeEmit: () => () => {},
+    persistAndRetire: () => {}
+  } as unknown as SessionContext;
+
+  await createManagedExternalAgentDelivery(ctx).deliverProjectMessageToManagedExternalAgentMembers({
+    session: {
+      id: 'ses_fanout000000',
+      cwd: '/tmp/prj',
+      origin: { client: 'workplace' }
+    } as unknown as Session,
+    externalAgents: [
+      {
+        name: 'sonnet',
+        provider: 'claude-code',
+        command: 'claude',
+        enabled: true,
+        defaultLaunchMode: 'app-server'
+      } as unknown as ExternalAgentConfig
+    ],
+    text: 'GPT reply',
+    sender: { kind: 'external-agent', name: 'gpt', id: 'gpt' },
+    triggerMessageId: 'msg_gpt_reply'
+  });
+
+  expect(inputs).toEqual([
+    {
+      id: 'exa_sonnet000000',
+      input:
+        'New Workplace Project message is available.\nYou are being woken to process the pending project inbox now.\n\nPending message metadata:\nSender kind: external-agent\nSender name: gpt\nSender id: gpt\nSender mention token: @[name="gpt" id="external-agent:gpt"]\n\nThe message body is in your project inbox. Follow your managed runtime instructions to read it before deciding whether to reply.\n'
+    }
   ]);
 });

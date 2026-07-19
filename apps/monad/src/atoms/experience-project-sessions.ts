@@ -5,6 +5,7 @@ import type { OversightService } from '#/services/oversight.ts';
 import type { Store } from '#/store/db/index.ts';
 
 import { createHash } from 'node:crypto';
+import { ID_BODY_LENGTH } from '@monad/protocol';
 
 const MAX_OBSERVATION_TEXT = 512;
 
@@ -13,18 +14,24 @@ function payloadString(payload: Record<string, unknown>, key: string): string | 
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
+function messageText(payload: Record<string, unknown>): string | undefined {
+  const message = payload.message;
+  return message && typeof message === 'object' ? payloadString(message as Record<string, unknown>, 'text') : undefined;
+}
+
 function observationText(event: { type: string; payload: Record<string, unknown> }): string {
   const tool = payloadString(event.payload, 'tool');
   let text: string;
   switch (event.type) {
-    case 'agent.message':
-      text = payloadString(event.payload, 'text') ?? 'Agent message';
+    case 'session.message.completed':
+      text = messageText(event.payload) ?? 'Agent message';
       break;
-    case 'agent.error':
+    case 'session.message.failed':
       text = 'Agent run failed';
       break;
-    case 'agent.reasoning':
-      text = 'Agent reasoning update';
+    case 'session.message.delta.appended':
+      text =
+        payloadString(event.payload, 'channel') === 'reasoning' ? 'Agent reasoning update' : 'Agent message update';
       break;
     case 'tool.called':
       text = tool ? `Tool called: ${tool}` : 'Tool called';
@@ -38,8 +45,14 @@ function observationText(event: { type: string; payload: Record<string, unknown>
     case 'tool.approval_resolved':
       text = tool ? `Approval resolved: ${tool}` : 'Tool approval resolved';
       break;
-    case 'session.stream_ended':
+    case 'session.run.completed':
       text = 'Session turn ended';
+      break;
+    case 'session.run.failed':
+      text = 'Session turn failed';
+      break;
+    case 'session.run.cancelled':
+      text = 'Session turn cancelled';
       break;
     default:
       text = event.type;
@@ -49,7 +62,7 @@ function observationText(event: { type: string; payload: Record<string, unknown>
 
 function stableSessionId(projectId: string, idempotencyKey: string): SessionId {
   const digest = createHash('sha256').update(`${projectId}\0${idempotencyKey}`).digest('hex');
-  return `ses_${digest.slice(0, 20)}` as SessionId;
+  return `ses_${digest.slice(0, ID_BODY_LENGTH)}` as SessionId;
 }
 
 function assertProject(store: Store, projectId: string) {

@@ -132,7 +132,7 @@ interface PromotedFacts {
 export interface MemoryService {
   /** Per-session-frozen recall injected into the prompt: the index (builtin) or semantic facts (mem0). */
   recallContext(sessionId: SessionId, query: string): Promise<string | undefined>;
-  observeTurn(sessionId: SessionId): void;
+  observeTurn(sessionId: SessionId, assistantText?: string): void;
   endSession(sessionId: SessionId): Promise<void>;
   /** Whether the active backend exposes the agent-facing `memory` tool (built-in does; mem0 is passive). */
   toolsActive(): boolean;
@@ -194,7 +194,7 @@ export function createMemoryService(deps: MemoryServiceDeps): MemoryService {
   const agentOf = (sessionId: SessionId): AgentId | null =>
     (deps.store.getSession(sessionId)?.agentIds[0] as AgentId | undefined) ?? null;
 
-  const lastTurn = (sessionId: SessionId): MemoryTurn | null => {
+  const lastTurn = (sessionId: SessionId, assistantText?: string): MemoryTurn | null => {
     const msgs = deps.store.listMessages(sessionId, {}).slice(-12);
     let user = '';
     let assistant = '';
@@ -202,7 +202,8 @@ export function createMemoryService(deps: MemoryServiceDeps): MemoryService {
       if (m.role === 'user' && m.text) user = m.text;
       if (m.role === 'assistant' && m.text) assistant = m.text;
     }
-    return user || assistant ? { user, assistant } : null;
+    const resolvedAssistant = assistantText ?? assistant;
+    return user || resolvedAssistant ? { user, assistant: resolvedAssistant } : null;
   };
 
   // The workspace scope for a session = `project:<key>` derived from its cwd; null when it has none.
@@ -341,11 +342,11 @@ export function createMemoryService(deps: MemoryServiceDeps): MemoryService {
 
     // Per-turn write path is mem0-only (mem0 is passive — it must see every turn). The built-in
     // backend is agent-driven (the `memory` tool) + manual /consolidate, so it runs no per-turn LLM.
-    observeTurn(sessionId) {
+    observeTurn(sessionId, assistantText) {
       if (deps.backend() !== 'mem0') return;
       const agentId = agentOf(sessionId);
       if (!agentId) return;
-      const turn = lastTurn(sessionId);
+      const turn = lastTurn(sessionId, assistantText);
       if (!turn) return;
       const scope: MemoryScope = { kind: 'agent', id: agentId };
       void getMem0()

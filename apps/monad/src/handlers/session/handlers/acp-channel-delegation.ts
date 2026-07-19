@@ -27,12 +27,13 @@ export function createAcpChannelDelegation(
     runtime,
     makeEmit,
     persistAndRetire,
-    requireSession
+    requireSession,
+    messageIngress
   } = ctx;
 
   const runtimeForSession = (sessionId: SessionId) => runtime.get(sessionId);
 
-  function startAcpAssignedTask({
+  async function startAcpAssignedTask({
     sessionId,
     spec,
     text,
@@ -44,15 +45,25 @@ export function createAcpChannelDelegation(
     text: string;
     channelPromptInput?: BuildChannelContextInput;
     mcpServers?: Parameters<typeof directDelegate>[2]['mcpServers'];
-  }): void {
+  }): Promise<void> {
     const round: Event[] = [];
     const emit = makeEmit(round);
     const controller = new AbortController();
-    const agentMsgId = newId('msg');
+    const agentMessage = await messageIngress.begin({
+      transcriptTargetId: sessionId,
+      idempotencyKey: newId('idem'),
+      producer: { kind: 'system', subsystem: 'acp' },
+      role: 'assistant',
+      type: 'text',
+      text: '',
+      data: { agentName: spec.name }
+    });
+    const agentMsgId = agentMessage.id;
     const acpToolCallId = newId('tc');
     let tokenIndex = 0;
     let acpProcessOutput = '';
     let acpResponseOutput = '';
+    let ingressQueue = Promise.resolve();
 
     const emitAcpActivityProgress = () => {
       const sections = [
@@ -88,12 +99,15 @@ export function createAcpChannelDelegation(
       extraSkills: rt?.extraSkills,
       mcpServers,
       onChunk: (delta) => {
-        emit(
-          makeEvent(sessionId as SessionId, 'agent.token', {
+        const index = tokenIndex++;
+        ingressQueue = ingressQueue.then(() =>
+          messageIngress.append({
+            transcriptTargetId: sessionId,
             messageId: agentMsgId,
-            agentName: spec.name,
-            delta,
-            index: tokenIndex++
+            producer: { kind: 'system', subsystem: 'acp' },
+            channel: 'content',
+            index,
+            delta
           })
         );
         acpResponseOutput += delta;
@@ -104,7 +118,7 @@ export function createAcpChannelDelegation(
         emitAcpActivityProgress();
       }
     })
-      .then((fullText) => {
+      .then(async (fullText) => {
         emit(
           makeEvent(sessionId as SessionId, 'tool.result', {
             toolCallId: acpToolCallId,
@@ -113,19 +127,18 @@ export function createAcpChannelDelegation(
             result: 'completed'
           })
         );
-        store.insertMessage(agentMsgId, sessionId, fullText, new Date().toISOString(), 'assistant', {
+        await ingressQueue;
+        await messageIngress.settle({
+          transcriptTargetId: sessionId,
+          messageId: agentMsgId,
+          idempotencyKey: newId('idem'),
+          producer: { kind: 'system', subsystem: 'acp' },
+          text: fullText,
           data: { agentName: spec.name }
         });
-        emit(
-          makeEvent(sessionId as SessionId, 'agent.message', {
-            messageId: agentMsgId,
-            agentName: spec.name,
-            text: fullText
-          })
-        );
         persistAndRetire(sessionId, round);
       })
-      .catch((err: unknown) => {
+      .catch(async (err: unknown) => {
         const { code, message } = extractError(err);
         emit(
           makeEvent(sessionId as SessionId, 'tool.result', {
@@ -135,22 +148,16 @@ export function createAcpChannelDelegation(
             result: message
           })
         );
-        store.insertMessage(
-          agentMsgId,
-          sessionId,
-          code ? `[${code}] ${message}` : message,
-          new Date().toISOString(),
-          'assistant',
-          { type: 'error', data: { agentName: spec.name } }
-        );
-        emit(
-          makeEvent(sessionId as SessionId, 'agent.error', {
-            messageId: agentMsgId,
-            agentName: spec.name,
-            code,
-            message
-          })
-        );
+        await ingressQueue;
+        await messageIngress.fail({
+          transcriptTargetId: sessionId,
+          messageId: agentMsgId,
+          idempotencyKey: newId('idem'),
+          producer: { kind: 'system', subsystem: 'acp' },
+          error: { code: code ?? 'acp_failed', message: code ? `[${code}] ${message}` : message },
+          type: 'error',
+          data: { agentName: spec.name }
+        });
         persistAndRetire(sessionId, round);
       });
   }
@@ -176,7 +183,7 @@ export function createAcpChannelDelegation(
       const agentName = target.agentId.slice(4);
       const spec = acpByName.get(agentName);
       if (!spec) continue;
-      startAcpAssignedTask({
+      await startAcpAssignedTask({
         sessionId,
         spec,
         text: channelNextPrompt(target),
@@ -205,11 +212,21 @@ export function createAcpChannelDelegation(
       members.map(async (spec) => {
         const round: Event[] = [];
         const emit = makeEmit(round);
-        const agentMsgId = newId('msg');
+        const agentMessage = await messageIngress.begin({
+          transcriptTargetId: session.id,
+          idempotencyKey: newId('idem'),
+          producer: { kind: 'system', subsystem: 'acp' },
+          role: 'assistant',
+          type: 'text',
+          text: '',
+          data: { agentName: spec.name }
+        });
+        const agentMsgId = agentMessage.id;
         const acpToolCallId = newId('tc');
         let tokenIndex = 0;
         let acpProcessOutput = '';
         let acpResponseOutput = '';
+        let ingressQueue = Promise.resolve();
         const emitAcpActivityProgress = (output = 'waiting for response...') => {
           emit(
             makeEvent(session.id as SessionId, 'tool.progress', {
@@ -239,12 +256,15 @@ export function createAcpChannelDelegation(
             extraSkills: rt?.extraSkills,
             mcpServers: channelDelegateMcpServers(mcpServers, rt?.mcpServers),
             onChunk: (delta) => {
-              emit(
-                makeEvent(session.id as SessionId, 'agent.token', {
+              const index = tokenIndex++;
+              ingressQueue = ingressQueue.then(() =>
+                messageIngress.append({
+                  transcriptTargetId: session.id,
                   messageId: agentMsgId,
-                  agentName: spec.name,
-                  delta,
-                  index: tokenIndex++
+                  producer: { kind: 'system', subsystem: 'acp' },
+                  channel: 'content',
+                  index,
+                  delta
                 })
               );
               acpResponseOutput += delta;
@@ -271,16 +291,15 @@ export function createAcpChannelDelegation(
               result: 'completed'
             })
           );
-          store.insertMessage(agentMsgId, session.id, fullText, new Date().toISOString(), 'assistant', {
+          await ingressQueue;
+          await messageIngress.settle({
+            transcriptTargetId: session.id,
+            messageId: agentMsgId,
+            idempotencyKey: newId('idem'),
+            producer: { kind: 'system', subsystem: 'acp' },
+            text: fullText,
             data: { agentName: spec.name }
           });
-          emit(
-            makeEvent(session.id as SessionId, 'agent.message', {
-              messageId: agentMsgId,
-              agentName: spec.name,
-              text: fullText
-            })
-          );
         } catch (err) {
           const { code, message } = extractError(err);
           const hint = acpAuthGuidance(err, spec, localeService?.t);
@@ -293,22 +312,16 @@ export function createAcpChannelDelegation(
               result: errorText
             })
           );
-          store.insertMessage(
-            agentMsgId,
-            session.id,
-            code ? `[${code}] ${errorText}` : errorText,
-            new Date().toISOString(),
-            'assistant',
-            { type: 'error', data: { agentName: spec.name } }
-          );
-          emit(
-            makeEvent(session.id as SessionId, 'agent.error', {
-              messageId: agentMsgId,
-              agentName: spec.name,
-              code,
-              message: errorText
-            })
-          );
+          await ingressQueue;
+          await messageIngress.fail({
+            transcriptTargetId: session.id,
+            messageId: agentMsgId,
+            idempotencyKey: newId('idem'),
+            producer: { kind: 'system', subsystem: 'acp' },
+            error: { code: code ?? 'acp_failed', message: code ? `[${code}] ${errorText}` : errorText },
+            type: 'error',
+            data: { agentName: spec.name }
+          });
         } finally {
           persistAndRetire(session.id, round);
         }

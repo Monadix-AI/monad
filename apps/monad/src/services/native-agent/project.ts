@@ -14,11 +14,10 @@ import type {
 import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
 import type { NativeAgentAttachmentResolver } from './attachments.ts';
 
-import { newId } from '@monad/protocol';
-
 import { definePrompt } from '#/agent/prompt-template.ts';
 import { HandlerError } from '#/handlers/handler-error.ts';
 import { externalAgentProjectMemberDisplayNameForAgent } from '#/handlers/session/handlers/messaging-members.ts';
+import { messageIdempotencyKey } from '#/services/messages/ingress.ts';
 import projectAskSummaryPath from './prompts/project-ask-summary-user.prompt.md' with { type: 'file' };
 
 const PROJECT_ASK_SUMMARY_PROMPT = await definePrompt<{
@@ -121,7 +120,7 @@ export function createNativeAgentProjectCapabilities(
           threadId: args.body.threadId,
           attachments
         });
-        messageId = completed.messageId ?? newId('msg');
+        messageId = completed.messageId;
       } catch (err) {
         store.deleteMessageAttachments(attachments.map((ref) => ref.id));
         throw err;
@@ -132,6 +131,7 @@ export function createNativeAgentProjectCapabilities(
         sessionId: sessionId,
         text: noticeText,
         sender: { kind: 'external-agent', name: args.binding.agentId, id: args.binding.agentId },
+        triggerMessageId: messageId,
         exceptAgentName: args.binding.agentId
       });
       return {
@@ -153,7 +153,7 @@ export function createNativeAgentProjectCapabilities(
     }): Promise<NativeAgentProjectAskResponse> {
       const sessionId = assertSessionBinding(args.binding, args.body.sessionId);
       const askerName = managedExternalAgentDisplayName(store, sessionId, args.binding.agentId);
-      const wall = handlers._transcriptProjector.insertAssistantMessage({
+      const wall = await handlers._transcriptProjector.insertAssistantMessage({
         sessionId: sessionId,
         agentName: askerName,
         text: projectQaWallText({ question: args.body.question, options: args.body.options }),
@@ -172,7 +172,7 @@ export function createNativeAgentProjectCapabilities(
         },
         { signal: args.signal, waitForever: true }
       );
-      handlers._transcriptProjector.completeAssistantMessage({
+      await handlers._transcriptProjector.completeAssistantMessage({
         sessionId: sessionId,
         messageId: wall.messageId,
         agentName: askerName,
@@ -185,8 +185,13 @@ export function createNativeAgentProjectCapabilities(
           options: args.body.options,
           answer: result.answer
         });
-        const summaryMessageId = newId('msg');
-        store.insertMessage(summaryMessageId, sessionId, summary, new Date().toISOString(), 'system', {
+        const summaryMessage = await handlers._messageIngress.deliver({
+          transcriptTargetId: sessionId,
+          idempotencyKey: messageIdempotencyKey('project-ask-summary', sessionId, result.requestId),
+          producer: { kind: 'system', subsystem: 'project-qa' },
+          role: 'system',
+          type: 'text',
+          text: summary,
           data: {
             source: 'managed-external-agent-question',
             requestId: result.requestId,
@@ -195,12 +200,13 @@ export function createNativeAgentProjectCapabilities(
           },
           includeInContext: true
         });
-        const summarySeq = store.messageSeq(sessionId, summaryMessageId);
+        const summarySeq = store.messageSeq(sessionId, summaryMessage.id);
         enqueueProjectSummaryForManagedRuntimes(store, sessionId, summarySeq, args.binding.externalAgentSessionId);
         await handlers.session.notifyManagedExternalAgentProjectMembers({
           sessionId: sessionId,
           text: summary,
           sender: { kind: 'system', name: 'Project Q&A summary', id: 'system:project-qa' },
+          triggerMessageId: summaryMessage.id,
           exceptAgentName: args.binding.agentId
         });
       }
@@ -244,7 +250,8 @@ export function createNativeAgentProjectCapabilities(
       binding: NativeAgentProjectBinding;
     }): NativeAgentProjectInboxAckResponse {
       const sessionId = assertSessionBinding(args.binding, args.body?.sessionId);
-      const cursor = args.body?.cursor ?? store.maxMessageSeq(sessionId);
+      const cursor =
+        args.body?.cursor ?? store.getExternalAgentSession(args.binding.externalAgentSessionId)?.lastVisibleSeq ?? 0;
       store.markExternalAgentInboxConsumed(args.binding.externalAgentSessionId, cursor);
       return { ok: true, sessionId, cursor };
     }

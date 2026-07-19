@@ -1,6 +1,6 @@
 import type { AgentObservationEvent, AgentObservationTurnEndReason, Event } from '@monad/protocol';
 
-import { parseEventPayload } from '@monad/protocol';
+import { messageProducerSchema, parseEventPayload } from '@monad/protocol';
 
 /** Maps monad's own agent-loop domain events (the daemon's session `Event` log — see
  *  `docs/proposals/agent-adapter-observation-layering.md`'s "session raw = domain events" decision) to
@@ -10,25 +10,29 @@ import { parseEventPayload } from '@monad/protocol';
 export function toAgentObservationEvent(event: Event): AgentObservationEvent | null {
   const base = { id: event.id, at: event.at, provenance: { contractEvents: [event] as [Event] } };
   switch (event.type) {
-    case 'user.message': {
-      const payload = parseEventPayload('user.message', event.payload);
-      return { ...base, kind: 'user-message', streaming: false, text: payload.text };
+    case 'session.message.created': {
+      const { message } = parseEventPayload('session.message.created', event.payload);
+      // Only the user's settled prompt maps here; a streaming agent message surfaces through its
+      // delta.appended fragments and the terminal completed/failed event, not its creation.
+      if (message.role !== 'user' || message.stream.status !== 'settled') return null;
+      return { ...base, kind: 'user-message', streaming: false, text: message.text };
     }
-    case 'agent.token': {
-      const payload = parseEventPayload('agent.token', event.payload);
-      return { ...base, kind: 'assistant-message', streaming: true, text: payload.delta };
+    case 'session.message.delta.appended': {
+      const { channel, delta } = parseEventPayload('session.message.delta.appended', event.payload);
+      return {
+        ...base,
+        kind: channel === 'reasoning' ? 'reasoning' : 'assistant-message',
+        streaming: true,
+        text: delta
+      };
     }
-    case 'agent.reasoning': {
-      const payload = parseEventPayload('agent.reasoning', event.payload);
-      return { ...base, kind: 'reasoning', streaming: true, text: payload.delta };
+    case 'session.message.completed': {
+      const { message } = parseEventPayload('session.message.completed', event.payload);
+      return { ...base, kind: 'assistant-message', streaming: false, text: message.text };
     }
-    case 'agent.message': {
-      const payload = parseEventPayload('agent.message', event.payload);
-      return { ...base, kind: 'assistant-message', streaming: false, text: payload.text };
-    }
-    case 'agent.error': {
-      const payload = parseEventPayload('agent.error', event.payload);
-      return { ...base, kind: 'turn-end', streaming: false, reason: 'error', text: payload.message };
+    case 'session.message.failed': {
+      const { message } = parseEventPayload('session.message.failed', event.payload);
+      return { ...base, kind: 'turn-end', streaming: false, reason: 'error', text: message.text };
     }
     case 'tool.called': {
       const payload = parseEventPayload('tool.called', event.payload);
@@ -57,24 +61,37 @@ export function toAgentObservationEvent(event: Event): AgentObservationEvent | n
         tool: { name: payload.tool, output: payload.displayResult ?? payload.result }
       };
     }
-    // Publish-only turn-boundary markers (never persisted — see `emitStreamMarker` in
-    // `handlers/session/context.ts`), carried on the same bus as durable events.
-    case 'session.stream_started':
+    case 'session.run.started':
       return { ...base, kind: 'turn-start', streaming: false };
-    case 'session.stream_ended':
+    case 'session.run.completed':
       return { ...base, kind: 'turn-end', streaming: false, reason: 'completed' as AgentObservationTurnEndReason };
+    case 'session.run.cancelled':
+      return { ...base, kind: 'turn-end', streaming: false, reason: 'cancelled' as AgentObservationTurnEndReason };
+    case 'session.run.failed': {
+      const payload = parseEventPayload('session.run.failed', event.payload);
+      return { ...base, kind: 'turn-end', streaming: false, reason: 'error', text: payload.error.message };
+    }
     default:
       return null;
   }
 }
 
 /** Whether a domain event belongs to the session's own `monad`-typed member, vs. another member's
- *  activity relayed into the same session log (a managed external-agent member's `agent.token` /
- *  `agent.message` are bridged into the transcript carrying `externalAgentSessionId`/`deliveryId`).
- *  ACP-delegated tool events (`forward-acp.ts`, `acp-channel-delegation.ts`) are not yet distinguishable
- *  this way — generalizing observation to ACP agents is left for a follow-up (see the implementation-
- *  order proposal's P5 deviations). */
+ *  activity relayed into the same session log. Canonical `session.message.*` events carry an explicit
+ *  `producer: MessageProducer` — a bridged member is `kind: 'external-agent'` (or an `agent` bound to an
+ *  `externalAgentSessionId`), so those are excluded by the parsed producer. Non-message domain events
+ *  (`tool.*`, `session.run.*`) carry no producer; a bridged member still tags those with a top-level
+ *  `externalAgentSessionId`/`deliveryId`. */
 export function isMonadAgentDomainEvent(event: Event): boolean {
+  const rawProducer = (event.payload as { producer?: unknown }).producer;
+  if (rawProducer !== undefined) {
+    const parsed = messageProducerSchema.safeParse(rawProducer);
+    if (parsed.success) {
+      const { data: producer } = parsed;
+      if (producer.kind === 'external-agent') return false;
+      return !(producer.kind === 'agent' && producer.externalAgentSessionId !== undefined);
+    }
+  }
   const payload = event.payload as { externalAgentSessionId?: unknown; deliveryId?: unknown };
   return typeof payload.externalAgentSessionId !== 'string' && typeof payload.deliveryId !== 'string';
 }

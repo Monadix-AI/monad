@@ -1,89 +1,90 @@
-// Server-side producer for a generative, non-assistant message (e.g. a card). Any caller with the
-// store + an event sink (a tool, an atom pack bridge, a command) can create a message that streams to
-// clients over the general `message.delta` / `message.complete` channel and settles into a persisted
-// row — the producer half of the message-type streaming contract. `complete()` validates the final
-// `data` against the type's registry schema, so a malformed rich payload is rejected at this boundary
-// rather than reaching clients or the prompt.
+// Server-side producer for a generative, non-assistant message (e.g. a card). Any caller with
+// Message Ingress can create a message that streams over its canonical message generation channel
+// and settles into a persisted row. `complete()` validates the final `data` against the type's
+// registry schema, so a malformed rich payload is rejected at this boundary rather than reaching
+// clients or the prompt.
 
-import type { Event, MessageId, MessageType, SessionId } from '@monad/protocol';
-import type { Store } from '#/store/db/index.ts';
+import type { MessageId, MessageType, SessionId } from '@monad/protocol';
+import type { MessageIngress } from '#/services/messages/types.ts';
 
 import { newId, validateMessageData } from '@monad/protocol';
 
-import { makeEvent } from '#/services/event-bus.ts';
+import { messageIdempotencyKey } from '#/services/messages/ingress.ts';
 
 export interface GenerativeMessageHandle {
   readonly messageId: MessageId;
   readonly channel: string;
   /** Stream one text delta; the first delta flips the row pending → streaming. */
-  delta(text: string): void;
+  delta(text: string): Promise<void>;
   /** Settle successfully. Throws if `data` fails the type's schema (nothing is persisted/emitted). */
-  complete(result: { text: string; data?: unknown }): void;
+  complete(result: { text: string; data?: unknown }): Promise<void>;
   /** Settle as an error with a human-facing message. */
-  fail(message: string): void;
+  fail(message: string): Promise<void>;
 }
 
 export interface StartGenerativeMessageOptions {
-  store: Store;
-  /** MUST be the persisted session event sink (EventBus.publish), not a per-request sink: the
-   * `message.delta`/`message.complete` events have to land in the event log so a client that joins or
-   * reconnects mid-generation can replay them via `afterEventId` through the message's StreamRef. */
-  emit: (event: Event) => void;
+  messageIngress: MessageIngress;
   sessionId: SessionId;
   type: MessageType;
 }
 
-export function startGenerativeMessage(opts: StartGenerativeMessageOptions): GenerativeMessageHandle {
-  const { store, emit, sessionId, type } = opts;
-  const messageId = newId('msg');
+export async function startGenerativeMessage(opts: StartGenerativeMessageOptions): Promise<GenerativeMessageHandle> {
+  const { messageIngress, sessionId, type } = opts;
+  const generationId = newId('evt');
+  const message = await messageIngress.begin({
+    transcriptTargetId: sessionId,
+    idempotencyKey: messageIdempotencyKey('generative-message', generationId, 'begin'),
+    producer: { kind: 'system', subsystem: 'generative-message' },
+    role: 'assistant',
+    type,
+    text: ''
+  });
+  const messageId = message.id;
   const channel = `message:${messageId}`;
   let index = 0;
-  let started = false;
   let settled = false;
-
-  // Inserted `pending` so a mid-flight refetch exposes a subscription source. insertMessage snapshots
-  // the type's context policy (for atom types) so it stays correct even if the atom pack is unloaded.
-  store.insertMessage(messageId, sessionId, '', new Date().toISOString(), 'assistant', {
-    type,
-    streamStatus: 'pending'
-  });
 
   return {
     messageId,
     channel,
-    delta(text: string) {
+    async delta(text: string) {
       if (settled) return;
-      if (!started) {
-        started = true;
-        store.setGenStatus(sessionId, messageId, 'streaming', new Date().toISOString());
-      }
-      emit(makeEvent(sessionId, 'message.delta', { messageId, channel, type, delta: text, index: index++ }));
+      const nextIndex = index++;
+      await messageIngress.append({
+        transcriptTargetId: sessionId,
+        messageId,
+        producer: { kind: 'system', subsystem: 'generative-message' },
+        channel,
+        index: nextIndex,
+        delta: text
+      });
     },
-    complete(result: { text: string; data?: unknown }) {
+    async complete(result: { text: string; data?: unknown }) {
       if (settled) return;
       const check = validateMessageData(type, result.data);
       if (!check.ok) throw new Error(`generative message data invalid for type ${type}: ${check.error}`);
       settled = true;
-      store.setGenStatus(sessionId, messageId, 'complete', new Date().toISOString(), {
+      await messageIngress.settle({
+        transcriptTargetId: sessionId,
+        messageId,
+        idempotencyKey: messageIdempotencyKey('generative-message', generationId, 'complete'),
+        producer: { kind: 'system', subsystem: 'generative-message' },
         text: result.text,
+        type,
         data: result.data
       });
-      emit(
-        makeEvent(sessionId, 'message.complete', {
-          messageId,
-          channel,
-          type,
-          ok: true,
-          text: result.text,
-          data: result.data
-        })
-      );
     },
-    fail(message: string) {
+    async fail(message: string) {
       if (settled) return;
       settled = true;
-      store.setGenStatus(sessionId, messageId, 'error', new Date().toISOString(), { text: message });
-      emit(makeEvent(sessionId, 'message.complete', { messageId, channel, type, ok: false, text: message }));
+      await messageIngress.fail({
+        transcriptTargetId: sessionId,
+        messageId,
+        idempotencyKey: messageIdempotencyKey('generative-message', generationId, 'fail'),
+        producer: { kind: 'system', subsystem: 'generative-message' },
+        error: { code: 'generation_failed', message },
+        type
+      });
     }
   };
 }

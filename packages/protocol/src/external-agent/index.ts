@@ -58,6 +58,13 @@ export type {
   NativeAgentTurnPointer
 } from './external-agent-observation.ts';
 export type {
+  ExternalAgentConnectionSnapshot,
+  ExternalAgentConvenienceFrame,
+  ExternalAgentRawFrame,
+  ExternalAgentRawHistoryPage,
+  ExternalAgentRawHistoryRecord
+} from './external-agent-observation-dual.ts';
+export type {
   ExternalAgentInboxDeliveryState,
   ExternalAgentInboxItem,
   GetNativeAgentDeliveryResponse,
@@ -200,6 +207,13 @@ export {
   nativeAgentObservationRequestSchema,
   nativeAgentTurnPointerSchema
 } from './external-agent-observation.ts';
+export {
+  externalAgentConnectionSnapshotSchema,
+  externalAgentConvenienceFrameSchema,
+  externalAgentRawFrameSchema,
+  externalAgentRawHistoryPageSchema,
+  externalAgentRawHistoryRecordSchema
+} from './external-agent-observation-dual.ts';
 export {
   externalAgentInboxDeliveryStateSchema,
   externalAgentInboxItemSchema,

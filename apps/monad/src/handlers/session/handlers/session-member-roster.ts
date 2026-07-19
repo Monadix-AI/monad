@@ -82,17 +82,22 @@ export function createSessionMemberRoster(ctx: SessionContext, deps: SessionMemb
     for (const session of sessions) {
       const members = store.listSessionMembers(session.id);
       const bound = members.filter((member) => member.templateId !== null);
+      const presentTemplateIds = new Set<string>();
       for (const member of bound) {
         const template = desired.get(member.templateId as string);
         if (!template) {
           removeSessionMemberBinding(ctx, member);
           continue;
         }
+        presentTemplateIds.add(template.id);
         store.updateSessionMember(session.id, member.memberId, {
           type: template.type,
           data: templateData(template),
           updatedAt: new Date().toISOString()
         });
+      }
+      for (const template of project.memberTemplates) {
+        if (!presentTemplateIds.has(template.id)) await addProjectSessionMemberBinding(session, template);
       }
     }
   }

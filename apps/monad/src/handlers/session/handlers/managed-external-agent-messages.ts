@@ -1,7 +1,7 @@
 import type { Event, MessageAttachmentRef, MessageId, NativeAgentDeliveryId, SessionId } from '@monad/protocol';
 import type { SessionContext } from '#/handlers/session/context.ts';
 
-import { newId } from '@monad/protocol';
+import { externalAgentSessionIdSchema, newId } from '@monad/protocol';
 
 import { externalAgentProjectMemberDisplayNameForAgent } from '#/handlers/session/handlers/messaging-members.ts';
 import { makeEvent } from '#/services/event-bus.ts';
@@ -10,7 +10,8 @@ export function createManagedExternalAgentMessages(ctx: SessionContext) {
   const {
     deps: { store },
     makeEmit,
-    persistAndRetire
+    persistAndRetire,
+    messageIngress
   } = ctx;
 
   const pendingManagedExternalAgentWakeMessages = new Map<
@@ -27,28 +28,30 @@ export function createManagedExternalAgentMessages(ctx: SessionContext) {
       : undefined;
   }
 
-  function emitManagedExternalAgentThinking(
+  async function emitManagedExternalAgentThinking(
     sessionId: SessionId,
     externalAgentSessionId: string,
     agentName: string,
     deliveryId?: NativeAgentDeliveryId,
     agentDisplayName = externalAgentProjectMemberDisplayNameForAgent(store, sessionId, agentName)
-  ): MessageId {
+  ): Promise<MessageId> {
     const pending = pendingManagedExternalAgentWakeMessages.get(externalAgentSessionId);
     const existing =
       pending?.messageId ??
       store.findManagedExternalAgentStreamingMessage(sessionId, externalAgentSessionId, agentName);
     if (existing) return existing as MessageId;
-    const messageId = newId('msg');
-    if (pendingManagedExternalAgentWakeMessages.size >= 256) {
-      const oldest = pendingManagedExternalAgentWakeMessages.keys().next().value;
-      if (oldest !== undefined) pendingManagedExternalAgentWakeMessages.delete(oldest);
-    }
-    pendingManagedExternalAgentWakeMessages.set(externalAgentSessionId, {
-      messageId,
-      ...(deliveryId ? { deliveryId } : {})
-    });
-    store.insertMessage(messageId, sessionId, '', new Date().toISOString(), 'assistant', {
+    const message = await messageIngress.begin({
+      transcriptTargetId: sessionId,
+      idempotencyKey: newId('idem'),
+      producer: {
+        kind: 'external-agent',
+        externalAgentSessionId: externalAgentSessionIdSchema.parse(externalAgentSessionId),
+        agentName,
+        ...(deliveryId ? { deliveryId } : {})
+      },
+      role: 'assistant',
+      type: 'text',
+      text: '',
       data: {
         agentName,
         agentDisplayName,
@@ -57,38 +60,21 @@ export function createManagedExternalAgentMessages(ctx: SessionContext) {
         reasoning: 'Thinking',
         source: 'managed-external-agent'
       },
-      includeInContext: false,
-      streamStatus: 'streaming'
+      includeInContext: false
     });
-    const round: Event[] = [];
-    const emit = makeEmit(round);
-    emit(
-      makeEvent(sessionId as SessionId, 'agent.token', {
-        messageId,
-        agentName,
-        agentDisplayName,
-        externalAgentSessionId,
-        ...(deliveryId ? { deliveryId } : {}),
-        delta: '',
-        index: 0,
-        source: 'managed-external-agent'
-      })
-    );
-    emit(
-      makeEvent(sessionId as SessionId, 'agent.reasoning', {
-        messageId,
-        externalAgentSessionId,
-        ...(deliveryId ? { deliveryId } : {}),
-        delta: 'Thinking',
-        index: 0,
-        source: 'managed-external-agent'
-      })
-    );
-    persistAndRetire(sessionId, round);
+    const messageId = message.id;
+    if (pendingManagedExternalAgentWakeMessages.size >= 256) {
+      const oldest = pendingManagedExternalAgentWakeMessages.keys().next().value;
+      if (oldest !== undefined) pendingManagedExternalAgentWakeMessages.delete(oldest);
+    }
+    pendingManagedExternalAgentWakeMessages.set(externalAgentSessionId, {
+      messageId,
+      ...(deliveryId ? { deliveryId } : {})
+    });
     return messageId;
   }
 
-  function completeManagedExternalAgentThinking({
+  async function completeManagedExternalAgentThinking({
     sessionId,
     externalAgentSessionId,
     agentName,
@@ -108,15 +94,15 @@ export function createManagedExternalAgentMessages(ctx: SessionContext) {
     attachments?: MessageAttachmentRef[];
     source?: 'managed-external-agent' | 'external-agent-provider';
     error?: boolean;
-  }): { messageId: MessageId } {
+  }): Promise<{ messageId: MessageId }> {
     const pending = pendingManagedExternalAgentWakeMessages.get(externalAgentSessionId);
     const pendingMessageId =
       pending?.messageId ??
       store.findManagedExternalAgentStreamingMessage(sessionId, externalAgentSessionId, agentName);
     pendingManagedExternalAgentWakeMessages.delete(externalAgentSessionId);
-    const messageId = (pendingMessageId ?? newId('msg')) as MessageId;
-    const deliveryId = pending?.deliveryId ?? deliveryIdFromMessageData(sessionId, messageId);
-    const persistedDisplayName = store.getMessage(sessionId, messageId)?.data;
+    const messageId = pendingMessageId as MessageId | undefined;
+    const deliveryId = pending?.deliveryId ?? (messageId ? deliveryIdFromMessageData(sessionId, messageId) : undefined);
+    const persistedDisplayName = messageId ? store.getMessage(sessionId, messageId)?.data : undefined;
     const resolvedAgentDisplayName =
       agentDisplayName ??
       (persistedDisplayName && typeof persistedDisplayName === 'object'
@@ -134,38 +120,39 @@ export function createManagedExternalAgentMessages(ctx: SessionContext) {
       ...(threadId ? { threadId } : {}),
       ...(attachments?.length ? { attachments } : {})
     };
-    const floor = store.maxMessageCreatedAt(sessionId);
-    const now = new Date().toISOString();
-    const completedAt = floor && floor >= now ? new Date(Date.parse(floor) + 1).toISOString() : now;
-    const completed = store.setGenStatus(sessionId, messageId, 'complete', completedAt, {
-      data,
-      ...(error ? { type: 'error' as const } : {}),
-      includeInContext: true,
-      text,
-      createdAt: completedAt
-    });
-    if (!completed && !store.getMessage(sessionId, messageId)) {
-      store.insertMessage(messageId, sessionId, text, completedAt, 'assistant', {
-        ...(error ? { type: 'error' as const } : {}),
-        data
-      });
-    }
+    const completed = messageId
+      ? await messageIngress.settle({
+          transcriptTargetId: sessionId,
+          messageId,
+          idempotencyKey: newId('idem'),
+          producer: {
+            kind: 'external-agent',
+            externalAgentSessionId: externalAgentSessionIdSchema.parse(externalAgentSessionId),
+            agentName,
+            ...(deliveryId ? { deliveryId } : {})
+          },
+          text,
+          type: error ? 'error' : 'text',
+          data,
+          includeInContext: true
+        })
+      : await messageIngress.deliver({
+          transcriptTargetId: sessionId,
+          idempotencyKey: newId('idem'),
+          producer: {
+            kind: 'external-agent',
+            externalAgentSessionId: externalAgentSessionIdSchema.parse(externalAgentSessionId),
+            agentName,
+            ...(deliveryId ? { deliveryId } : {})
+          },
+          role: 'assistant',
+          type: error ? 'error' : 'text',
+          text,
+          data,
+          includeInContext: true
+        });
     const round: Event[] = [];
     const emit = makeEmit(round);
-    emit(
-      makeEvent(sessionId as SessionId, 'agent.message', {
-        messageId,
-        agentName,
-        ...(typeof resolvedAgentDisplayName === 'string' && resolvedAgentDisplayName
-          ? { agentDisplayName: resolvedAgentDisplayName }
-          : {}),
-        externalAgentSessionId,
-        ...(deliveryId ? { deliveryId } : {}),
-        text,
-        source,
-        ...(attachments?.length ? { attachments } : {})
-      })
-    );
     emit(
       makeEvent(sessionId as SessionId, 'external_agent.turn_settled', {
         externalAgentSessionId,
@@ -173,37 +160,36 @@ export function createManagedExternalAgentMessages(ctx: SessionContext) {
       })
     );
     persistAndRetire(sessionId, round);
-    return { messageId };
+    return { messageId: completed.id };
   }
 
-  function retireManagedExternalAgentThinking(
+  async function retireManagedExternalAgentThinking(
     sessionId: SessionId,
     externalAgentSessionId: string,
     agentName: string
-  ): MessageId | null {
+  ): Promise<MessageId | null> {
     const pending = pendingManagedExternalAgentWakeMessages.get(externalAgentSessionId);
     const pendingMessageId =
       pending?.messageId ??
       store.findManagedExternalAgentStreamingMessage(sessionId, externalAgentSessionId, agentName);
     pendingManagedExternalAgentWakeMessages.delete(externalAgentSessionId);
-    const retired = pendingMessageId
-      ? store.retireManagedExternalAgentStreamingMessage(sessionId, pendingMessageId, externalAgentSessionId, agentName)
-      : false;
     const round: Event[] = [];
     const emit = makeEmit(round);
-    if (retired && pendingMessageId) {
-      emit(
-        makeEvent(sessionId as SessionId, 'agent.message', {
-          messageId: pendingMessageId,
-          agentName,
-          text: '{"visibility":"silent","display":{"kind":"markdown","content":""},"attachments":[],"next":[]}',
-          source: 'managed-external-agent'
-        })
-      );
+    if (pendingMessageId) {
+      await messageIngress.remove({
+        transcriptTargetId: sessionId,
+        messageId: pendingMessageId as MessageId,
+        idempotencyKey: newId('idem'),
+        producer: {
+          kind: 'external-agent',
+          externalAgentSessionId: externalAgentSessionIdSchema.parse(externalAgentSessionId),
+          agentName
+        }
+      });
     }
     emit(makeEvent(sessionId as SessionId, 'external_agent.turn_settled', { externalAgentSessionId }));
     persistAndRetire(sessionId, round);
-    return retired ? (pendingMessageId as MessageId) : null;
+    return (pendingMessageId as MessageId | undefined) ?? null;
   }
 
   return {

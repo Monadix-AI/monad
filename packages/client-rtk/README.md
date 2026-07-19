@@ -35,22 +35,30 @@ function Sessions() {
 }
 ```
 
-## Live token streaming
+## Live transcript and generation streaming
 
-`useStreamSessionQuery` opens the SSE/WS event stream for a session and keeps a
-cache entry of assistant messages + the in-flight token text. Subscribe/unsubscribe
-is tied to the hook's lifetime.
+`useStreamUiItemsQuery` maintains the bounded, server-projected transcript for a
+session. While a visible message is generating, `useStreamMessageGenerationQuery`
+opens that message's scoped SSE and closes it immediately when the final subscriber
+leaves.
 
 ```tsx
-import { useStreamSessionQuery, useSendMessageMutation } from '@monad/client-rtk';
+import {
+  useSendMessageMutation,
+  useStreamMessageGenerationQuery,
+  useStreamUiItemsQuery
+} from '@monad/client-rtk';
 
-function Transcript({ sessionId }) {
-  const { data } = useStreamSessionQuery(sessionId);
+function Transcript({ sessionId, streamingMessageId }) {
+  const { data } = useStreamUiItemsQuery(sessionId);
+  useStreamMessageGenerationQuery(
+    { sessionId, messageId: streamingMessageId },
+    { skip: !streamingMessageId }
+  );
   const [send] = useSendMessageMutation();
   return (
     <>
-      {data?.messages.map((m) => <p key={m.id}>{m.text}</p>)}
-      {data?.streamingText && <p>{data.streamingText}▌</p>}
+      {data?.items.map((item) => <p key={`${item.kind}:${item.id}`}>{item.kind}</p>)}
       <button onClick={() => send({ sessionId, text: 'hi' })}>send</button>
     </>
   );

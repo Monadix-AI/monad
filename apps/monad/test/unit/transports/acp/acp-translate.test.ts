@@ -12,6 +12,8 @@ import {
   toolKind
 } from '#/transports/acp/translate.ts';
 
+const producer = { kind: 'agent', agentId: 'agt_100000000000' } as const;
+
 function evt(type: Event['type'], payload: Record<string, unknown>): Event {
   return {
     id: 'evt_100000000000',
@@ -69,8 +71,17 @@ test('toolKind maps monad tool names to ACP kinds', () => {
   expect(toolKind('something.unknown')).toBe('other');
 });
 
-test('agent.token becomes an agent_message_chunk', () => {
-  const u = eventToSessionUpdate(evt('agent.token', { messageId: 'msg_100000000000', delta: 'hi', index: 0 }));
+test('canonical message delta becomes an agent_message_chunk', () => {
+  const u = eventToSessionUpdate(
+    evt('session.message.delta.appended', {
+      transcriptTargetId: 'ses_100000000000',
+      messageId: 'msg_100000000000',
+      producer,
+      channel: 'content',
+      delta: 'hi',
+      index: 0
+    })
+  );
   expect(u).toEqual({
     sessionUpdate: 'agent_message_chunk',
     content: { type: 'text', text: 'hi' },
@@ -78,19 +89,22 @@ test('agent.token becomes an agent_message_chunk', () => {
   });
 });
 
-test('agent.reasoning becomes an agent_thought_chunk', () => {
+test('canonical reasoning delta becomes an agent_thought_chunk', () => {
   const u = eventToSessionUpdate(
-    evt('agent.reasoning', { messageId: 'msg_100000000000', delta: 'pondering', index: 0 })
+    evt('session.message.delta.appended', {
+      transcriptTargetId: 'ses_100000000000',
+      messageId: 'msg_100000000000',
+      producer,
+      channel: 'reasoning',
+      delta: 'pondering',
+      index: 0
+    })
   );
   expect(u).toEqual({
     sessionUpdate: 'agent_thought_chunk',
     content: { type: 'text', text: 'pondering' },
     messageId: 'msg_100000000000'
   });
-});
-
-test('empty agent.token delta yields no update', () => {
-  expect(eventToSessionUpdate(evt('agent.token', { messageId: 'msg_100000000000', delta: '', index: 0 }))).toBeNull();
 });
 
 test('tool.called becomes a tool_call with kind + rawInput', () => {
@@ -140,14 +154,29 @@ test('tool.result becomes a tool_call_update with terminal status + content', ()
   expect((failed as { status: string }).status).toBe('failed');
 });
 
-test('agent.message surfaces usage_update only when usage present', () => {
+test('canonical completed message surfaces persisted terminal usage', () => {
   const u = eventToSessionUpdate(
-    evt('agent.message', {
-      messageId: 'msg_ABC000000000',
-      text: 'x',
-      usage: { inputTokens: 3, outputTokens: 7, totalTokens: 10 }
+    evt('session.message.completed', {
+      transcriptTargetId: 'ses_100000000000',
+      producer,
+      messageRevision: 4,
+      message: {
+        id: 'msg_ABC000000000',
+        sessionId: 'ses_100000000000',
+        role: 'assistant',
+        text: 'done',
+        type: 'text',
+        data: {
+          finishReason: 'max_tokens',
+          usage: { inputTokens: 3, outputTokens: 7, totalTokens: 10 }
+        },
+        stream: { status: 'complete' },
+        active: true,
+        createdAt: '2026-01-01T00:00:00.000Z'
+      }
     })
   );
+
   expect(u).toEqual({ sessionUpdate: 'usage_update', used: 10, size: 10 });
 });
 
@@ -165,15 +194,39 @@ test('sessions.updated with a title becomes a session_info_update', () => {
   // state-only update (no title) → nothing to push.
 });
 
-test('empty agent.reasoning delta yields no update', () => {
+test('empty canonical reasoning delta yields no update', () => {
   expect(
-    eventToSessionUpdate(evt('agent.reasoning', { messageId: 'msg_100000000000', delta: '', index: 0 }))
+    eventToSessionUpdate(
+      evt('session.message.delta.appended', {
+        transcriptTargetId: 'ses_100000000000',
+        messageId: 'msg_100000000000',
+        producer,
+        channel: 'reasoning',
+        delta: '',
+        index: 0
+      })
+    )
   ).toBeNull();
 });
 
-test('agent.message falls back to inputTokens + outputTokens when totalTokens is absent', () => {
+test('canonical completed message falls back to input plus output tokens when total is absent', () => {
   const u = eventToSessionUpdate(
-    evt('agent.message', { messageId: 'msg_ABC000000000', text: 'x', usage: { inputTokens: 10, outputTokens: 5 } })
+    evt('session.message.completed', {
+      transcriptTargetId: 'ses_100000000000',
+      producer,
+      messageRevision: 4,
+      message: {
+        id: 'msg_ABC000000000',
+        sessionId: 'ses_100000000000',
+        role: 'assistant',
+        text: 'done',
+        type: 'text',
+        data: { usage: { inputTokens: 10, outputTokens: 5 } },
+        stream: { status: 'complete' },
+        active: true,
+        createdAt: '2026-01-01T00:00:00.000Z'
+      }
+    })
   );
   expect(u).toMatchObject({ sessionUpdate: 'usage_update', used: 15, size: 0 });
 });

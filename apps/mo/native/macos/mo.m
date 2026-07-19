@@ -312,13 +312,14 @@ static NSString *const kMoFrameName = @"MoWindow";  // NSUserDefaults key for th
   NSString *type = [params[@"event"] isKindOfClass:[NSDictionary class]] ? params[@"event"][@"type"] : nil;
   if (![type isKindOfClass:[NSString class]]) return;
 
-  if ([type isEqualToString:@"session.stream_ended"]) {
+  if ([type isEqualToString:@"session.run.completed"] ||
+      [type isEqualToString:@"session.run.failed"] ||
+      [type isEqualToString:@"session.run.cancelled"]) {
     _sessionActivity = MO_ACT_NONE;
     _lastActivityTime = 0;
-  } else if ([type isEqualToString:@"agent.reasoning"]) {
-    _sessionActivity = MO_ACT_REASONING;
-    _lastActivityTime = CFAbsoluteTimeGetCurrent();
-  } else if ([type hasPrefix:@"agent."] || [type hasPrefix:@"message."] || [type hasPrefix:@"tool."]) {
+  } else if ([type isEqualToString:@"session.run.started"] ||
+             [type hasPrefix:@"session.message."] ||
+             [type hasPrefix:@"tool."]) {
     _sessionActivity = MO_ACT_GENERATING;
     _lastActivityTime = CFAbsoluteTimeGetCurrent();
   }
@@ -357,10 +358,6 @@ static NSString *const kMoFrameName = @"MoWindow";  // NSUserDefaults key for th
   _wsReconnectDelay = 0;
   // Re-subscribe every time we (re)connect — catches daemon restarts.
   [self wsSend:@{@"jsonrpc":@"2.0", @"id":@(++_wsRpcId), @"method":@"control.subscribe", @"params":@{}}];
-  if (self.currentSessionId) {
-    [self wsSend:@{@"jsonrpc":@"2.0", @"id":@(++_wsRpcId),
-                   @"method":@"session.subscribe", @"params":@{@"id":self.currentSessionId}}];
-  }
 }
 
 - (void)URLSession:(NSURLSession *)session
@@ -471,14 +468,7 @@ static NSString *const kMoFrameName = @"MoWindow";  // NSUserDefaults key for th
     NSString *sid = ok ? @(session) : nil;
     dispatch_async(dispatch_get_main_queue(), ^{
       if (ok) {
-        // Unsubscribe the previous session before subscribing the new one.
-        if (self.currentSessionId) {
-          [self wsSend:@{@"jsonrpc":@"2.0", @"id":@(++self->_wsRpcId),
-                         @"method":@"session.unsubscribe", @"params":@{@"id":self.currentSessionId}}];
-        }
         self.currentSessionId = sid;
-        [self wsSend:@{@"jsonrpc":@"2.0", @"id":@(++self->_wsRpcId),
-                       @"method":@"session.subscribe", @"params":@{@"id":sid}}];
         [self enqueueEvent:MO_EV_DROP_OK];
       } else {
         [self enqueueEvent:MO_EV_DROP_FAIL];

@@ -65,7 +65,7 @@ applies to **any** agent in a session: a native-CLI process, an ACP agent, or Mo
 agent. The raw *source* differs by kind, the plane is uniform:
 
 - **external-agent (native-CLI, ACP, …):** raw = the provider's own output stream.
-- **Monad's built-in agent:** raw = its own domain events (`agent.token`/`agent.reasoning`/`tool.called`)
+- **Monad's built-in agent:** raw = its own domain events (`session.message.delta.appended`/`tool.called`)
   — no external decode needed.
 
 **Migration: rename `NativeCli*` → `ExternalAgent*`** across protocol / daemon / atoms / client.
@@ -253,8 +253,8 @@ and "chat session / project session are parallel kinds". The rest is its own pro
 
 ## Resolved decisions
 
-- **`raw` shape:** `session.stream` = domain events (`external_agent.output` carrying the raw chunk +
-  Monad metadata, interleaved with `user.message` etc.); `/sessions/:sid/agents/:agentId/stream` =
+- **`raw` shape:** the session event plane carries canonical message and lifecycle events;
+  `/sessions/:sid/agents/:agentId/stream` =
   **provider-raw** (that agent's chunks, envelope stripped = its pure stdout), framed per provider record
   with a seq cursor.
 - **Runtime event shrinks.** `tool_call` / `tool_result` / `web_search_result` **leave** the runtime

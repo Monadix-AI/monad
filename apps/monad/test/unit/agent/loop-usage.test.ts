@@ -44,9 +44,10 @@ test('finishTurn records real usage via recordTurnUsage and attaches the returne
   expect(recorded[0]?.usage).toEqual(usage);
   expect(recorded[0]?.modelId).toBe('anthropic:claude-x');
 
-  // The cost rides on the agent.message event.
-  const msg = events.find((e) => e.type === 'agent.message');
-  expect((msg?.payload as { cost?: Cost } | undefined)?.cost).toEqual(fakeCost);
+  const msg = events.find((e) => e.type === 'session.message.completed');
+  expect(
+    ((msg?.payload as { message?: { data?: unknown } } | undefined)?.message?.data as { cost?: Cost } | undefined)?.cost
+  ).toEqual(fakeCost);
 });
 
 test('forwards costUsd + resolved provider/modelId on usage to recordTurnUsage', async () => {
@@ -154,8 +155,10 @@ test('no recordTurnUsage configured → no crash, no cost attached', async () =>
     emit: (e) => events.push(e)
   });
   await loop.runStream(newId('ses') as SessionId, 'hi');
-  const msg = events.find((e) => e.type === 'agent.message');
-  expect((msg?.payload as { cost?: Cost } | undefined)?.cost).toBeUndefined();
+  const msg = events.find((e) => e.type === 'session.message.completed');
+  expect(
+    ((msg?.payload as { message?: { data?: unknown } } | undefined)?.message?.data as { cost?: Cost } | undefined)?.cost
+  ).toBeUndefined();
 });
 
 test('the global estimator self-calibrates from a turn with real input tokens', async () => {

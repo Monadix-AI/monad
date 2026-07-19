@@ -80,6 +80,7 @@ export interface ExternalAgentSessionLauncherContext {
   idleTimeoutMs(): number;
   updateExternalAgentPid(id: string, pid: number | null): void;
   openLiveRawStore(id: string, epoch: string): LiveRawStore;
+  emitConnectionClosed(live: LiveExternalAgentSession, reason: 'exited' | 'failed' | 'stopped' | 'disconnected'): void;
 }
 
 /** Builds a fresh external agent session: resolves the agent + launch spec, spawns the child process (or
@@ -650,6 +651,7 @@ export class ExternalAgentSessionLauncher {
         this.ctx.appServerConnections.unlinkSocket(appServerSocketPath);
         const exitedAt = new Date().toISOString();
         const state = code === 0 ? 'exited' : 'failed';
+        this.ctx.emitConnectionClosed(live, state);
         this.ctx.deps.store.closeExternalAgentSession(id, exitedAt, code, state);
         this.ctx.events.emit(args.transcriptTargetId, 'external_agent.exited', {
           externalAgentSessionId: id,

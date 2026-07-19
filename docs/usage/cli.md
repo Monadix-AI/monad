@@ -219,7 +219,7 @@ corrupted:
 monad session list --json | jq -r '.[].id'
 
 # Tail a session as NDJSON, one event per line
-monad session watch ses_abc123 --json | jq -c 'select(.type == "agent.message")'
+monad session watch ses_abc123 --json | jq -c 'select(.type == "session.message.completed")'
 
 # One-shot question from a pipe
 git diff | monad ask -

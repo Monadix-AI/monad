@@ -4,14 +4,7 @@ import type { ProjectionMutations } from './ui-projection-state.ts';
 import { parseEventPayload } from '@monad/protocol';
 
 import { findExternalAgentProviderAdapter } from '#/services/external-agent/index.ts';
-import {
-  appendBoundedText,
-  externalAgentProviderFromToolItem,
-  externalAgentSnapshotIsGenerating,
-  isUnknownToolResult,
-  itemKey,
-  MAX_EXTERNAL_AGENT_UI_OUTPUT
-} from './ui-projection-helpers.ts';
+import { isUnknownToolResult, itemKey } from './ui-projection-helpers.ts';
 
 function settleBuiltInStreamingMessages(m: ProjectionMutations): SessionUiEvent[] {
   const settled: SessionUiEvent[] = [];
@@ -98,27 +91,6 @@ export function applyToolEvent(m: ProjectionMutations, event: Event): SessionUiE
           })
         }
       ];
-    }
-    case 'external_agent.output': {
-      const p = parseEventPayload('external_agent.output', event.payload);
-      const existing = m.items.get(itemKey('tool', p.externalAgentSessionId));
-      const existingTool = existing?.kind === 'tool' ? existing : undefined;
-      const output = existingTool
-        ? appendBoundedText(existingTool.output ?? '', p.chunk, MAX_EXTERNAL_AGENT_UI_OUTPUT)
-        : p.chunk;
-      const provider = externalAgentProviderFromToolItem(existingTool);
-      const generating = provider === undefined ? undefined : externalAgentSnapshotIsGenerating(output, provider);
-      const next: Extract<UIItem, { kind: 'tool' }> = {
-        kind: 'tool',
-        id: p.externalAgentSessionId,
-        tool: existingTool ? existingTool.tool : 'external-agent',
-        ...(existingTool?.input !== undefined ? { input: existingTool.input } : {}),
-        output,
-        status:
-          generating === undefined ? (existingTool ? existingTool.status : 'running') : generating ? 'running' : 'ok',
-        seq: existingTool ? existingTool.seq : event.id
-      };
-      return [{ kind: 'upsert', cursor: event.id, item: m.upsert(next) }];
     }
     case 'external_agent.login_required': {
       const p = parseEventPayload('external_agent.login_required', event.payload);

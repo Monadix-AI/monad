@@ -1,4 +1,11 @@
-import type { DeveloperLogRecord, SessionId, SessionUiEvent } from '@monad/protocol';
+import type {
+  DeveloperLogRecord,
+  EventId,
+  MessageGenerationFrame,
+  MessageId,
+  SessionId,
+  SessionUiEvent
+} from '@monad/protocol';
 
 import { subscribeDeveloperLogRecords } from '@monad/logger';
 import { developerLogRecordSchema } from '@monad/protocol';
@@ -55,7 +62,7 @@ export function createSessionMessageSseResponse(params: {
 export async function createSessionEventsSseResponse(params: {
   handlers: ReturnType<typeof createDaemonHandlers>;
   sessionId: SessionId;
-  afterEventId?: string;
+  afterEventId?: EventId;
   encoder: TextEncoder;
 }): Promise<Response> {
   const { handlers, sessionId, afterEventId, encoder } = params;
@@ -146,6 +153,92 @@ export async function createSessionUiEventsSseResponse(params: {
     }
   });
 
+  return createSseResponse(stream);
+}
+
+export async function createSessionMessageGenerationSseResponse(params: {
+  handlers: ReturnType<typeof createDaemonHandlers>;
+  sessionId: SessionId;
+  messageId: MessageId;
+  afterEventId?: EventId;
+  encoder: TextEncoder;
+}): Promise<Response> {
+  const { handlers, sessionId, messageId, afterEventId, encoder } = params;
+  let disposeRef: (() => void) | undefined;
+  let stopHeartbeat: (() => void) | undefined;
+  let sinkRef: ((frame: MessageGenerationFrame) => void) | undefined;
+  let cancelled = false;
+  const pending: MessageGenerationFrame[] = [];
+  const terminal = (frame: MessageGenerationFrame): boolean =>
+    frame.kind === 'snapshot'
+      ? frame.message.stream.status === 'complete' || frame.message.stream.status === 'error'
+      : frame.event.type === 'session.message.completed' || frame.event.type === 'session.message.failed';
+  const forward = (frame: MessageGenerationFrame): void => {
+    if (cancelled) return;
+    if (!sinkRef) {
+      pending.push(frame);
+      return;
+    }
+    sinkRef(frame);
+    if (terminal(frame)) {
+      stopHeartbeat?.();
+      disposeRef?.();
+      disposeRef = undefined;
+    }
+  };
+  const { dispose } = await handlers.session.subscribeMessageGeneration(
+    { sessionId, messageId, afterEventId },
+    forward
+  );
+  if (cancelled) dispose();
+  else disposeRef = dispose;
+
+  const stream = new ReadableStream<Uint8Array>({
+    start(ctrl) {
+      stopHeartbeat = startSseHeartbeat(ctrl, encoder);
+      const close = (): void => {
+        stopHeartbeat?.();
+        try {
+          ctrl.close();
+        } catch {}
+      };
+      sinkRef = createBoundedSseEncoderSink<MessageGenerationFrame>(
+        ctrl,
+        (frame) => {
+          if (frame.kind === 'snapshot') {
+            return encodeSseFrame({ event: 'session.message.snapshot', data: frame }, encoder);
+          }
+          return encodeSseFrame({ id: frame.event.id, event: frame.event.type, data: frame }, encoder);
+        },
+        () => {
+          stopHeartbeat?.();
+          disposeRef?.();
+          disposeRef = undefined;
+        }
+      );
+      for (const frame of pending.splice(0)) {
+        sinkRef(frame);
+        if (terminal(frame)) {
+          disposeRef?.();
+          disposeRef = undefined;
+          close();
+          return;
+        }
+      }
+      const originalSink = sinkRef;
+      sinkRef = (frame) => {
+        originalSink(frame);
+        if (terminal(frame)) close();
+      };
+    },
+    cancel() {
+      cancelled = true;
+      stopHeartbeat?.();
+      sinkRef = undefined;
+      disposeRef?.();
+      disposeRef = undefined;
+    }
+  });
   return createSseResponse(stream);
 }
 

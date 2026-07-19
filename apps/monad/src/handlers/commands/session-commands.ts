@@ -13,12 +13,12 @@ import type {
   ConsolidateSummary,
   ContradictionCheckSummary
 } from '@monad/sdk-atom';
-import type { EventBus } from '#/services/event-bus.ts';
+import type { MessageIngress } from '#/services/messages/types.ts';
 import type { Store } from '#/store/db/index.ts';
 
 import { newId } from '@monad/protocol';
 
-import { makeEvent } from '#/services/event-bus.ts';
+import { messageIdempotencyKey } from '#/services/messages/ingress.ts';
 import { type CommandServices, makeCommandRunContext, type SessionNavigator } from './context.ts';
 import { dispatchCommand } from './dispatch.ts';
 import { type CommandRegistry, type SkillCommandView } from './registry.ts';
@@ -62,21 +62,43 @@ export async function executeCommand(
   }
 }
 
-/** Persist + publish a command turn (echo + directive reply) via the given emit. Both rows are
+/** Persist + publish a command turn (echo + directive reply). Both rows are
  *  `type:'directive'` → UI-visible but excluded from the model prompt and ContextEngine summary
- *  (replayHistory skips directive), so a command never costs tokens or pollutes context. The emit
- *  fans the events wherever the transport needs them (bus for cross-client; a per-turn sink/renderer
- *  for the originating channel/ACP turn). */
-export function emitCommandTurn(
-  store: Store,
-  emit: (e: Event) => void,
+ *  (replayHistory skips directive), so a command never costs tokens or pollutes context. */
+export async function emitCommandTurn(
+  messageIngress: MessageIngress,
+  fanout: ((event: Event) => void | Promise<void>) | undefined,
   sessionId: SessionId,
   text: string,
   result: CommandResult
-): ChatMessage {
-  const userId = persistEcho(store, sessionId, text);
-  emit(makeEvent(sessionId, 'user.message', { messageId: userId, text }));
-  return emitDirective(store, emit, sessionId, result);
+): Promise<ChatMessage> {
+  const turnId = newId('evt');
+  await messageIngress.deliver(
+    {
+      transcriptTargetId: sessionId,
+      idempotencyKey: messageIdempotencyKey('command', turnId, 'echo'),
+      producer: { kind: 'system', subsystem: 'command' },
+      role: 'user',
+      type: 'directive',
+      text
+    },
+    fanout ? { fanout } : undefined
+  );
+
+  const replyText = result.message ?? '';
+  const data = result.effect ? { effect: result.effect } : undefined;
+  return messageIngress.deliver(
+    {
+      transcriptTargetId: sessionId,
+      idempotencyKey: messageIdempotencyKey('command', turnId, 'reply'),
+      producer: { kind: 'system', subsystem: 'command' },
+      role: 'assistant',
+      type: 'directive',
+      text: replyText,
+      ...(data === undefined ? {} : { data })
+    },
+    fanout ? { fanout } : undefined
+  );
 }
 
 /** Session-lifecycle ops the command bridge needs — satisfied by the lifecycle handlers. */
@@ -109,7 +131,7 @@ export interface CommandBundle {
 
 export interface SessionCommandRunner {
   store: Store;
-  bus: EventBus;
+  messageIngress: MessageIngress;
   lifecycle: LifecycleOps;
   commands: CommandBundle;
 }
@@ -202,68 +224,6 @@ export async function tryRunSessionCommand(
 ): Promise<boolean> {
   const result = await executeSessionCommand(runner, session, text, { busy: opts.busy });
   if (result === null) return false;
-  const { store, bus } = runner;
-  emitCommandTurn(
-    store,
-    (e) => {
-      bus.publish(e);
-      opts.sink?.(e);
-    },
-    session.id,
-    text,
-    result
-  );
+  await emitCommandTurn(runner.messageIngress, opts.sink, session.id, text, result);
   return true;
-}
-
-/** Persist a command turn (echo + directive reply) and return the reply ChatMessage. Used by the
- *  blocking `generate` path, where the reply is the response body. */
-function _directiveMessage(store: Store, sessionId: SessionId, text: string, result: CommandResult): ChatMessage {
-  persistEcho(store, sessionId, text);
-  const id = newId('msg');
-  const createdAt = new Date().toISOString();
-  const data = result.effect ? { effect: result.effect } : undefined;
-  store.insertMessage(id, sessionId, result.message ?? '', createdAt, 'assistant', { type: 'directive', data });
-  return {
-    id,
-    sessionId: sessionId as SessionId,
-    role: 'assistant',
-    text: result.message ?? '',
-    type: 'directive',
-    data,
-    stream: { status: 'complete' },
-    active: true,
-    createdAt
-  };
-}
-
-function persistEcho(store: Store, sessionId: SessionId, text: string): `msg_${string}` {
-  const id = newId('msg');
-  store.insertMessage(id, sessionId, text, new Date().toISOString(), 'user', { type: 'directive' });
-  return id;
-}
-
-function emitDirective(
-  store: Store,
-  emit: (e: Event) => void,
-  sessionId: SessionId,
-  result: CommandResult
-): ChatMessage {
-  const id = newId('msg');
-  const text = result.message ?? '';
-  const createdAt = new Date().toISOString();
-  const data = result.effect ? { effect: result.effect } : undefined;
-  store.insertMessage(id, sessionId, text, createdAt, 'assistant', { type: 'directive', data });
-  emit(makeEvent(sessionId, 'agent.message', { messageId: id, text, ...(data !== undefined ? { data } : {}) }));
-  return {
-    id,
-    sessionId: sessionId as SessionId,
-    role: 'assistant',
-    text,
-    type: 'directive',
-    data,
-    stream: { status: 'complete' },
-    active: true,
-    createdAt
-  };
 }

@@ -19,13 +19,9 @@ const ALL_EVENT_TYPES = new Set(eventTypeSchema.options);
 // Generation/turn-scoped events the SSE endpoint streams from the per-session topic. Keep in
 // sync with docs/internals/realtime-channels.md (data-plane list) — a new generation event type belongs here.
 const SSE_GENERATION_EMITS: readonly EventType[] = [
-  'user.message',
-  'agent.message',
-  'agent.token',
-  'agent.reasoning',
-  'agent.error',
-  'message.delta',
-  'message.complete',
+  'session.message.delta.appended',
+  'session.message.completed',
+  'session.message.failed',
   'tool.called',
   'tool.progress',
   'tool.result',
@@ -40,7 +36,6 @@ const SSE_GENERATION_EMITS: readonly EventType[] = [
   'delegation.fs_request',
   'delegation.terminal_request',
   'external_agent.started',
-  'external_agent.output',
   'external_agent.connection_required',
   'external_agent.approval_requested',
   'external_agent.approval_resolved',

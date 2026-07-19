@@ -9,9 +9,16 @@ function evt(sessionId: SessionId): Event {
   return {
     id: newId('evt'),
     sessionId,
-    type: 'agent.token',
+    type: 'session.message.delta.appended',
     actorAgentId: null,
-    payload: {},
+    payload: {
+      transcriptTargetId: sessionId,
+      producer: { kind: 'agent', agentId: 'agt_100000000000' },
+      messageId: 'msg_100000000000',
+      channel: 'answer',
+      index: 0,
+      delta: 'x'
+    },
     at: new Date().toISOString()
   };
 }

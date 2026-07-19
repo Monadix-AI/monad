@@ -12,6 +12,7 @@ import type { Event } from '@monad/protocol';
 import type { Tool } from '#/capabilities/tools/types.ts';
 
 import { afterEach, describe, expect, test } from 'bun:test';
+import { parseEventPayload } from '@monad/protocol';
 import { z } from 'zod';
 
 import { toolResult } from '#/capabilities/tools/types.ts';
@@ -106,7 +107,7 @@ describe.skipIf(!KEY)(`live model scenarios (${MODEL})`, () => {
     text: string,
     opts?: { onEvent?: (e: Event) => void; until?: (e: Event) => boolean }
   ): Promise<Event[]> {
-    const until = opts?.until ?? ((e: Event) => e.type === 'agent.message');
+    const until = opts?.until ?? ((e: Event) => e.type === 'session.message.completed');
     const eventsP = t.sse(`/v1/sessions/${sid}/events`, {
       until: (e: Event) => {
         opts?.onEvent?.(e);
@@ -150,7 +151,7 @@ describe.skipIf(!KEY)(`live model scenarios (${MODEL})`, () => {
                 (e.payload as { tool: string }).tool === 'unstable_probe' && (e.payload as { ok: boolean }).ok === false
             )
           ).toBe(true);
-          expect(events.some((e) => e.type === 'agent.message')).toBe(true); // recovered, didn't crash the round
+          expect(events.some((e) => e.type === 'session.message.completed')).toBe(true); // recovered, didn't crash the round
         },
         { timeout: TIMEOUT, retry: 2 }
       );
@@ -196,7 +197,7 @@ describe.skipIf(!KEY)(`live model scenarios (${MODEL})`, () => {
           );
           expect(events.some((e) => e.type === 'clarify.requested')).toBe(true);
           expect(events.some((e) => e.type === 'clarify.resolved')).toBe(true);
-          expect(events.some((e) => e.type === 'agent.message')).toBe(true); // continued past the answer
+          expect(events.some((e) => e.type === 'session.message.completed')).toBe(true); // continued past the answer
         },
         { timeout: TIMEOUT, retry: 2 }
       );
@@ -209,15 +210,15 @@ describe.skipIf(!KEY)(`live model scenarios (${MODEL})`, () => {
           let abortP: Promise<{ aborted: boolean }> | undefined;
           const eventsP = t.sse(`/v1/sessions/${sid}/events`, {
             until: (e: Event) => {
-              // Abort on the first streamed token — the round is still in flight, so the cancel lands.
-              if (e.type === 'agent.token' && !abortP) {
+              // Abort on the first streamed delta — the round is still in flight, so the cancel lands.
+              if (e.type === 'session.message.delta.appended' && !abortP) {
                 abortP = t
                   .fetch(`/v1/sessions/${sid}/abort`, { method: 'POST' })
                   .then((r) => r.json() as Promise<{ aborted: boolean }>);
               }
               return (
                 (e.type === 'session.updated' && (e.payload as { state?: string }).state === 'paused') ||
-                e.type === 'agent.message'
+                e.type === 'session.message.completed'
               );
             },
             timeoutMs: TIMEOUT
@@ -227,7 +228,7 @@ describe.skipIf(!KEY)(`live model scenarios (${MODEL})`, () => {
           const events = await eventsP;
           const abort = await (abortP ?? Promise.resolve({ aborted: false }));
 
-          expect(events.some((e) => e.type === 'agent.token')).toBe(true); // we actually saw streaming start
+          expect(events.some((e) => e.type === 'session.message.delta.appended')).toBe(true); // streaming started
           expect(abort.aborted).toBe(true); // the abort landed while the round was running
           expect(
             events.some((e) => e.type === 'session.updated' && (e.payload as { state?: string }).state === 'paused')
@@ -273,9 +274,14 @@ describe.skipIf(!KEY)(`live model scenarios (${MODEL})`, () => {
           const sid = await createSession(t, 'restore');
           // Capture the first turn's user-message id from the stream — restore rewinds to it.
           const first = await runStream(t, sid, 'Reply with exactly: ONE');
-          const firstUserId = (
-            first.find((e) => e.type === 'user.message')?.payload as { messageId: string } | undefined
-          )?.messageId;
+          const firstUser = first.find(
+            (e) =>
+              e.type === 'session.message.created' &&
+              parseEventPayload('session.message.created', e.payload).message.role === 'user'
+          );
+          const firstUserId = firstUser
+            ? parseEventPayload('session.message.created', firstUser.payload).message.id
+            : undefined;
           if (!firstUserId) throw new Error('missing first user message');
           await runStream(t, sid, 'Reply with exactly: TWO');
 

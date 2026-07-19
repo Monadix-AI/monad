@@ -1,7 +1,7 @@
 // RoundCache — in-process hot tier for resumable streaming.
 //
 // The active round's events are buffered in-process so a client reconnecting mid-turn can replay the
-// un-persisted tail (agent.token/agent.reasoning are never written to the durable log). Once the
+// un-persisted tail (canonical message deltas are never written to the durable log). Once the
 // round settles, persistAndRetire drops the buffer and the durable event log is the source of truth.
 
 import type { Event } from '@monad/protocol';

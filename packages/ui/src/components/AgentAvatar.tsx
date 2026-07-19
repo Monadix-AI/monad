@@ -63,21 +63,31 @@ export function Avatar({
     alignItems: 'center',
     justifyContent: 'center',
     fontFamily: workspaceMono,
-    fontSize: Math.max(9, Math.round(size * 0.33))
+    fontSize: Math.max(9, Math.round(size * 0.33)),
+    overflow: 'hidden',
+    position: 'relative'
   };
   const child = avatarUrl
-    ? createElement('span', {
-        'aria-hidden': true,
-        style: {
-          width: '100%',
-          height: '100%',
-          borderRadius: '50%',
-          backgroundImage: `url("${avatarUrl}")`,
-          backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat',
-          backgroundSize: 'cover'
-        }
-      })
+    ? [
+        createElement('span', { 'aria-hidden': true, key: 'fallback' }, av),
+        createElement('img', {
+          'aria-hidden': true,
+          alt: '',
+          key: 'image',
+          onError: (event: React.SyntheticEvent<HTMLImageElement>) => {
+            event.currentTarget.hidden = true;
+          },
+          src: avatarUrl,
+          style: {
+            borderRadius: '50%',
+            height: '100%',
+            inset: 0,
+            objectFit: 'cover',
+            position: 'absolute',
+            width: '100%'
+          }
+        })
+      ]
     : icon === 'monad'
       ? createElement('span', {
           'aria-label': 'Monad',

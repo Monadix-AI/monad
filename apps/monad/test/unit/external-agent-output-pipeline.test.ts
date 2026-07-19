@@ -60,7 +60,7 @@ test('output commits the exact frame before any observable publication', () => {
 
   pipeline.output('ses_output', live.id, '{"method":"turn/started"}', 'app-server', adapter);
 
-  expect(order).toEqual(['commit', 'observation', 'idle', 'event']);
+  expect(order).toEqual(['commit', 'observation', 'idle']);
   expect(live.outputSeq).toBe(1);
 });
 

@@ -12,8 +12,8 @@ export interface ConnectionState {
   control?: Disposer;
   /** Disposer for this connection's host-interaction subscription, if any. */
   interactions?: Disposer;
-  /** Per-session live subscriptions keyed by session id. Used by session.subscribe RPC. */
-  sessions?: Map<string, Disposer>;
+  /** Message-scoped generation subscriptions keyed by session and message id. */
+  messageGenerations?: Map<string, Disposer>;
   /** Per-connection RPC rate limiter. Absent → unlimited (trusted local transports). */
   rateLimiter?: TokenBucket;
   /** Set once a WS consumer is dropped for buffering too much; short-circuits further pushes. */
@@ -31,8 +31,8 @@ export function closeConnection(state: ConnectionState): void {
   state.control = undefined;
   state.interactions?.();
   state.interactions = undefined;
-  state.sessions?.forEach((dispose) => {
+  state.messageGenerations?.forEach((dispose) => {
     dispose();
   });
-  state.sessions = undefined;
+  state.messageGenerations = undefined;
 }

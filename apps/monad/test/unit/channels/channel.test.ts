@@ -16,6 +16,8 @@ import { EventBus } from '#/services/event-bus.ts';
 import { createStore } from '#/store/db/index.ts';
 import { seededCommandRegistry } from '../../helpers.ts';
 
+const agentProducer = { kind: 'agent', agentId: 'agt_100000000000' } as const;
+
 /** A real English translator so command/channel replies read as before (assertions check English). */
 const t = createI18n({ locale: 'en', packs: [{ locale: 'en', name: 'English', messages: i18nMessages }] }).t;
 
@@ -79,9 +81,16 @@ function tokenEvent(delta: string, index: number): Event {
   return {
     id: newId('evt'),
     sessionId: 'ses_X00000000000' as SessionId,
-    type: 'agent.token',
+    type: 'session.message.delta.appended',
     actorAgentId: null,
-    payload: { messageId: 'msg_X00000000000' as MessageId, delta, index },
+    payload: {
+      transcriptTargetId: 'ses_X00000000000',
+      producer: agentProducer,
+      messageId: 'msg_X00000000000' as MessageId,
+      channel: 'content',
+      delta,
+      index
+    },
     at: ''
   };
 }
@@ -89,9 +98,23 @@ function messageEvent(text: string): Event {
   return {
     id: newId('evt'),
     sessionId: 'ses_X00000000000' as SessionId,
-    type: 'agent.message',
+    type: 'session.message.completed',
     actorAgentId: null,
-    payload: { messageId: 'msg_X00000000000' as MessageId, text },
+    payload: {
+      transcriptTargetId: 'ses_X00000000000',
+      producer: agentProducer,
+      message: {
+        id: 'msg_X00000000000' as MessageId,
+        sessionId: 'ses_X00000000000',
+        role: 'assistant',
+        text,
+        type: 'text',
+        stream: { status: 'complete' },
+        active: true,
+        createdAt: '2026-07-18T00:00:00.000Z'
+      },
+      messageRevision: 2
+    },
     at: ''
   };
 }
@@ -130,7 +153,7 @@ function makeCapturingAdapter(edit: boolean): {
   return { adapter, sends, edits };
 }
 
-test('renderer (buffered): emits one message per agent.message', async () => {
+test('renderer (buffered): emits one message per completed assistant message', async () => {
   const { adapter, sends } = makeCapturingAdapter(false);
   const r = createRenderer({ adapter, chatId: 'c1', log: () => {}, t });
   r.consume(tokenEvent('hel', 0)); // ignored in buffered mode
@@ -138,6 +161,46 @@ test('renderer (buffered): emits one message per agent.message', async () => {
   r.consume(messageEvent('hello world'));
   await r.finalize();
   expect(sends).toEqual(['hello world']);
+});
+
+test('renderer consumes canonical lifecycle without duplicating repeated deltas', async () => {
+  const { adapter, sends } = makeCapturingAdapter(false);
+  const r = createRenderer({ adapter, chatId: 'c1', log: () => {}, t });
+  const messageId = 'msg_X00000000000' as MessageId;
+  r.consume({
+    ...tokenEvent('hello', 0),
+    type: 'session.message.delta.appended',
+    payload: {
+      transcriptTargetId: 'ses_X00000000000',
+      producer: agentProducer,
+      messageId,
+      channel: 'content',
+      delta: 'hello',
+      index: 0
+    }
+  });
+  r.consume({
+    ...messageEvent('hello'),
+    type: 'session.message.completed',
+    payload: {
+      transcriptTargetId: 'ses_X00000000000',
+      producer: agentProducer,
+      message: {
+        id: messageId,
+        sessionId: 'ses_X00000000000',
+        role: 'assistant',
+        text: 'hello',
+        type: 'text',
+        stream: { status: 'complete' },
+        active: true,
+        createdAt: '2026-07-18T00:00:00.000Z'
+      },
+      messageRevision: 3
+    }
+  });
+  await r.finalize();
+
+  expect(sends).toEqual(['hello']);
 });
 
 test('renderer: structured channel response renders only display content', async () => {
@@ -186,7 +249,7 @@ test('renderer (summary): edit-capable channels buffer tokens and send only the 
   expect(edits).toEqual([]);
 });
 
-test('renderer: agent.error surfaces an error message and resets stream state', async () => {
+test('renderer: failed assistant message surfaces an error and resets stream state', async () => {
   const { adapter, sends } = makeCapturingAdapter(true);
   const translations = recordingTranslator();
   const r = createRenderer({ adapter, chatId: 'c1', log: () => {}, t: translations.t });
@@ -194,15 +257,29 @@ test('renderer: agent.error surfaces an error message and resets stream state', 
   r.consume({
     id: newId('evt'),
     sessionId: 'ses_X00000000000' as SessionId,
-    type: 'agent.error',
+    type: 'session.message.failed',
     actorAgentId: null,
-    payload: { message: 'upstream 503', code: '503' },
+    payload: {
+      transcriptTargetId: 'ses_X00000000000',
+      producer: agentProducer,
+      message: {
+        id: 'msg_X00000000000',
+        sessionId: 'ses_X00000000000',
+        role: 'assistant',
+        text: '503: upstream 503',
+        type: 'error',
+        stream: { status: 'error' },
+        active: true,
+        createdAt: '2026-07-18T00:00:00.000Z'
+      },
+      messageRevision: 2
+    },
     at: ''
   });
   await r.finalize(); // finalize should not flush the abandoned bubble
   expect(translations.calls).toEqual([{ key: 'channel.error', params: { label: '503: upstream 503' } }]);
   expect(sends).toContain('channel.error');
-  // The next message starts a fresh bubble (stream state was reset by agent.error)
+  // The next message starts a fresh bubble after the failed lifecycle reset.
   const countBefore = sends.length;
   r.consume(tokenEvent('fresh', 0));
   r.consume(messageEvent('fresh message'));
@@ -210,16 +287,30 @@ test('renderer: agent.error surfaces an error message and resets stream state', 
   expect(sends.length).toBeGreaterThan(countBefore); // fresh bubble sent
 });
 
-test('renderer: agent.error without code still includes the message', async () => {
+test('renderer: failed assistant message includes the failure text', async () => {
   const { adapter, sends } = makeCapturingAdapter(false);
   const translations = recordingTranslator();
   const r = createRenderer({ adapter, chatId: 'c1', log: () => {}, t: translations.t });
   r.consume({
     id: newId('evt'),
     sessionId: 'ses_X00000000000' as SessionId,
-    type: 'agent.error',
+    type: 'session.message.failed',
     actorAgentId: null,
-    payload: { message: 'something broke' },
+    payload: {
+      transcriptTargetId: 'ses_X00000000000',
+      producer: agentProducer,
+      message: {
+        id: 'msg_X00000000000',
+        sessionId: 'ses_X00000000000',
+        role: 'assistant',
+        text: 'something broke',
+        type: 'error',
+        stream: { status: 'error' },
+        active: true,
+        createdAt: '2026-07-18T00:00:00.000Z'
+      },
+      messageRevision: 2
+    },
     at: ''
   });
   await r.finalize();
@@ -330,7 +421,20 @@ async function makeHarness(
       session: {
         create: async ({ title, agentId, origin }) => {
           creates.push({ title, agentId, origin });
-          return { sessionId: newId('ses') };
+          const sessionId = newId('ses');
+          const now = new Date().toISOString();
+          store.insertSession({
+            id: sessionId,
+            title,
+            state: 'active',
+            agentIds: agentId ? [agentId] : [],
+            archived: false,
+            restoreCount: 0,
+            origin,
+            createdAt: now,
+            updatedAt: now
+          });
+          return { sessionId };
         },
         sendInline,
         reset: async () => ({ clearedCount: 0 })
@@ -686,18 +790,75 @@ function makeAgentEvent(sessionId: SessionId, type: Event['type'], payload: Reco
   return { id: newId('evt'), sessionId, type, actorAgentId: null, payload, at: '' };
 }
 
+function completedMessageEvent(sessionId: SessionId, text: string, messageId = newId('msg')): Event {
+  return makeAgentEvent(sessionId, 'session.message.completed', {
+    transcriptTargetId: sessionId,
+    producer: agentProducer,
+    message: {
+      id: messageId,
+      sessionId,
+      role: 'assistant',
+      text,
+      type: 'text',
+      stream: { status: 'complete' },
+      active: true,
+      createdAt: '2026-07-18T00:00:00.000Z'
+    },
+    messageRevision: 2
+  });
+}
+
+function userCreatedEvent(sessionId: SessionId, text: string): Event {
+  return makeAgentEvent(sessionId, 'session.message.created', {
+    transcriptTargetId: sessionId,
+    producer: { kind: 'user' },
+    message: {
+      id: newId('msg'),
+      sessionId,
+      role: 'user',
+      text,
+      type: 'text',
+      stream: { status: 'complete' },
+      active: true,
+      createdAt: '2026-07-18T00:00:00.000Z'
+    },
+    messageRevision: 1
+  });
+}
+
+function deltaMessageEvent(sessionId: SessionId, delta: string, index: number, messageId = newId('msg')): Event {
+  return makeAgentEvent(sessionId, 'session.message.delta.appended', {
+    transcriptTargetId: sessionId,
+    producer: agentProducer,
+    messageId,
+    channel: 'content',
+    delta,
+    index
+  });
+}
+
 test('mirror: web-UI agent reply is forwarded to the adapter when outboundMirror is true', async () => {
   const h = await makeMirrorHarness(true);
   const sid = h.sessionId();
   const countBefore = h.sends.length;
 
-  // Simulate a web-UI turn: user message resets state, then agent replies.
-  h.bus.publish(makeAgentEvent(sid, 'user.message', { messageId: newId('msg'), text: 'web hi' }));
-  h.bus.publish(makeAgentEvent(sid, 'agent.message', { messageId: newId('msg'), text: 'web reply' }));
+  h.bus.publish(userCreatedEvent(sid, 'web hi'));
+  h.bus.publish(completedMessageEvent(sid, 'web reply'));
   await h.flush();
 
   expect(h.sends.length).toBeGreaterThan(countBefore);
   expect(h.sends.at(-1)?.content).toBe('web reply');
+});
+
+test('mirror: canonical completion produces one outbound reply', async () => {
+  const h = await makeMirrorHarness(true);
+  const sid = h.sessionId();
+  const countBefore = h.sends.length;
+  const messageId = newId('msg');
+  h.bus.publish(completedMessageEvent(sid, 'web reply', messageId));
+  await h.flush();
+
+  expect(h.sends.slice(countBefore).map((send) => send.content)).toEqual(['web reply']);
 });
 
 test('mirror: no forwarding when outboundMirror is false', async () => {
@@ -705,8 +866,8 @@ test('mirror: no forwarding when outboundMirror is false', async () => {
   const sid = h.sessionId();
   const countBefore = h.sends.length;
 
-  h.bus.publish(makeAgentEvent(sid, 'user.message', { messageId: newId('msg'), text: 'web hi' }));
-  h.bus.publish(makeAgentEvent(sid, 'agent.message', { messageId: newId('msg'), text: 'web reply' }));
+  h.bus.publish(userCreatedEvent(sid, 'web hi'));
+  h.bus.publish(completedMessageEvent(sid, 'web reply'));
   await h.flush();
 
   expect(h.sends.length).toBe(countBefore); // adapter.send never called by the mirror
@@ -738,9 +899,10 @@ test('channel: /view summary makes direct and mirrored channel replies final-mes
 
   const countBeforeMirror = h.sends.length;
   const editsBeforeMirror = h.edits.length;
-  h.bus.publish(makeAgentEvent(sid, 'user.message', { messageId: newId('msg'), text: 'web hi' }));
-  h.bus.publish(makeAgentEvent(sid, 'agent.token', { messageId: newId('msg'), delta: 'draft', index: 0 }));
-  h.bus.publish(makeAgentEvent(sid, 'agent.message', { messageId: newId('msg'), text: 'web final' }));
+  const mirrorMessageId = newId('msg');
+  h.bus.publish(userCreatedEvent(sid, 'web hi'));
+  h.bus.publish(deltaMessageEvent(sid, 'draft', 0, mirrorMessageId));
+  h.bus.publish(completedMessageEvent(sid, 'web final', mirrorMessageId));
   await h.flush();
 
   expect(h.sends.slice(countBeforeMirror).map((s) => s.content)).toEqual(['web final']);

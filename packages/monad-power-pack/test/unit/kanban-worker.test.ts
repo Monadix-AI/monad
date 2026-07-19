@@ -35,7 +35,7 @@ async function fixture() {
     atomPackId: 'monad-power-pack',
     experienceState: memoryState(),
     projectSessions: {
-      create: async (_projectId: string, input: { title: string }) => ({ id: `ses_${input.title}` }),
+      create: async (_projectId: string, input: { title: string }) => ({ id: `ses_${input.title.padEnd(12, '0')}` }),
       runTurn: async (sessionId: string) => {
         runs.push(sessionId);
         return { runId: `run_${sessionId}` };
@@ -100,7 +100,7 @@ test('approval_requested pauses only its matching task', async () => {
   expect((await store.findTask(second.id, 'prj_a')).executionState).toBe('running');
 });
 
-test('session.stream_ended moves a clean run to acceptance without parsing chat', async () => {
+test('session.run.completed moves a clean run to acceptance without parsing chat', async () => {
   const { context, store, tasks } = await fixture();
   await dispatchRunnableTasks(context, 'prj_a', { limit: 1, workerId: 'worker-a', now: '2026-07-14T00:00:02.000Z' });
   const running = (await store.listTasks('prj_a')).find((task) => task.executionState === 'running');
@@ -111,7 +111,7 @@ test('session.stream_ended moves a clean run to acceptance without parsing chat'
       id: 'evt_end',
       projectId: 'prj_a',
       sessionId: running.sessionId,
-      type: 'session.stream_ended',
+      type: 'session.run.completed',
       payload: {},
       createdAt: '2026-07-14T00:00:04.000Z'
     },
@@ -124,7 +124,7 @@ test('session.stream_ended moves a clean run to acceptance without parsing chat'
   expect(tasks).toHaveLength(3);
 });
 
-test('agent error records a failed run and the following stream end does not enter acceptance', async () => {
+test('canonical message failure records a failed run and the following stream end does not enter acceptance', async () => {
   const { context, store, tasks } = await fixture();
   await dispatchRunnableTasks(context, 'prj_a', { limit: 1, workerId: 'worker-a', now: '2026-07-14T00:00:02.000Z' });
   const running = (await store.listTasks('prj_a')).find((task) => task.executionState === 'running');
@@ -135,8 +135,22 @@ test('agent error records a failed run and the following stream end does not ent
       id: 'evt_error',
       projectId: 'prj_a',
       sessionId: running.sessionId,
-      type: 'agent.error',
-      payload: { message: 'model failed' },
+      type: 'session.message.failed',
+      payload: {
+        transcriptTargetId: running.sessionId,
+        producer: { kind: 'agent', agentId: 'agt_100000000000' },
+        messageRevision: 2,
+        message: {
+          id: 'msg_100000000000',
+          sessionId: running.sessionId,
+          role: 'assistant',
+          text: 'model failed',
+          type: 'error',
+          stream: { status: 'error' },
+          active: true,
+          createdAt: '2026-07-14T00:00:03.000Z'
+        }
+      },
       createdAt: '2026-07-14T00:00:03.000Z'
     },
     context
@@ -146,7 +160,7 @@ test('agent error records a failed run and the following stream end does not ent
       id: 'evt_end_after_error',
       projectId: 'prj_a',
       sessionId: running.sessionId,
-      type: 'session.stream_ended',
+      type: 'session.run.completed',
       payload: {},
       createdAt: '2026-07-14T00:00:04.000Z'
     },
@@ -158,4 +172,31 @@ test('agent error records a failed run and the following stream end does not ent
   expect(failed.executionState).toBe('failed');
   expect(failed.runs.at(-1)?.status).toBe('failed');
   expect(tasks).toHaveLength(3);
+});
+
+test('worker rejects malformed canonical message failures before changing task state', async () => {
+  const { context, store } = await fixture();
+  await dispatchRunnableTasks(context, 'prj_a', { limit: 1, workerId: 'worker-a', now: '2026-07-14T00:00:02.000Z' });
+  const running = (await store.listTasks('prj_a')).find((task) => task.executionState === 'running');
+  if (!running) throw new Error('fixture requires a running task');
+
+  await expect(
+    kanbanWorker.onEvent(
+      {
+        id: 'evt_bad_failure',
+        projectId: 'prj_a',
+        sessionId: running.sessionId,
+        type: 'session.message.failed',
+        payload: { transcriptTargetId: running.sessionId },
+        createdAt: '2026-07-14T00:00:03.000Z'
+      },
+      context
+    )
+  ).rejects.toThrow(/"message"/);
+
+  const unchanged = await store.findTask(running.id, 'prj_a');
+  expect({ stage: unchanged.stage, executionState: unchanged.executionState }).toEqual({
+    stage: 'execution',
+    executionState: 'running'
+  });
 });

@@ -19,7 +19,7 @@ import type { PromptReplayCache } from './replay.ts';
 /** A chat message as the loop sees it: a minimal persisted row view derived from @monad/protocol. */
 export type ChatMessage = Pick<WireChatMessage, 'role' | 'text' | 'createdAt' | 'data' | 'includeInContext'> & {
   id: string;
-  sessionId: SessionId;
+  sessionId: WireChatMessage['sessionId'];
   type?: MessageType;
   /** In-flight rows have no settled content yet, so replayHistory skips them from the prompt. */
   stream?: MessageStream;
@@ -27,14 +27,27 @@ export type ChatMessage = Pick<WireChatMessage, 'role' | 'text' | 'createdAt' | 
 
 export interface MessageRepo {
   list(sessionId: string): ChatMessage[] | Promise<ChatMessage[]>;
-  append(message: ChatMessage): void | Promise<void>;
+  append(message: ChatMessage, options?: MessageRepoPublishOptions): void | Promise<void>;
   /**
    * Streaming-message lifecycle. Store-backed repos open an assistant segment on first token, mark
    * it streaming, and settle it in place. In-memory/test repos can omit these and always append.
    */
-  open?(message: ChatMessage): void | Promise<void>;
+  open?(message: ChatMessage, options?: MessageRepoPublishOptions): void | Promise<void>;
+  appendDelta?(
+    input: { sessionId: SessionId; messageId: string; channel: string; index: number; delta: string },
+    options?: MessageRepoPublishOptions
+  ): void | Promise<void>;
   markStreaming?(sessionId: string, messageId: string): void | Promise<void>;
-  settle?(message: ChatMessage, status: 'complete' | 'error'): boolean | Promise<boolean>;
+  settle?(
+    message: ChatMessage,
+    status: 'complete' | 'error',
+    options?: MessageRepoPublishOptions
+  ): boolean | Promise<boolean>;
+  publishesCanonicalEvents?: boolean;
+}
+
+interface MessageRepoPublishOptions {
+  fanout?: (event: Event) => void | Promise<void>;
 }
 
 export interface PendingSteerSource {
@@ -57,6 +70,7 @@ export interface AgentLoopDeps {
   /** Per-run generation parameter overrides supplied by the session. */
   generationParams?: GenerationParams;
   emit(event: Event): void;
+  messageFanout?: MessageRepoPublishOptions['fanout'];
   steers?: PendingSteerSource;
   sandboxRoots?: string[];
   /** The session's bound agent (`session.agentIds[0]`), threaded to the sandbox seam so a per-agent
@@ -97,7 +111,7 @@ export interface AgentLoopDeps {
   persistRawToolOutput?: (sessionId: SessionId, toolCallId: string, output: string) => void;
   /** Active model context-window size for context.usage events. */
   contextLimit?: number;
-  /** Records one turn's real provider usage and returns computed cost for agent.message. */
+  /** Records one turn's real provider usage and returns computed cost for terminal message metadata. */
   recordTurnUsage?: (sessionId: SessionId, usage: ModelUsage, modelId: string) => Cost | undefined;
   context?: ContextEngine;
   /** Optional semantic-retrieval stage (context/retrieval.ts), run ONCE per turn from buildPrompt —

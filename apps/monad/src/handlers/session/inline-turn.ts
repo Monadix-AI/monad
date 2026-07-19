@@ -12,8 +12,8 @@ export interface InlineTurnResult {
  * Drive one inline agent turn and collect its text. `run` receives the event sink to hand to
  * `session.sendInline`; `onToken` (optional) fires on each accumulated token so a caller can stream
  * progress (e.g. A2A status-updates). Returns the final message text, the accumulated token stream
- * (fallback when no discrete `agent.message` arrives), and any error message. Shared by the A2A
- * executor and the Monadix task runner so the token/message/error capture rule lives in one place.
+ * (fallback when no terminal snapshot arrives), and any error message. Shared by the A2A executor
+ * and the Monadix task runner so the delta/completion/failure capture rule lives in one place.
  */
 export async function collectInlineTurn(
   run: (sink: (event: Event) => void) => Promise<void>,
@@ -22,14 +22,28 @@ export async function collectInlineTurn(
   let finalText = '';
   let streamed = '';
   let errorMessage: string | undefined;
+  const deltaIndices = new Map<string, number>();
+  const terminalMessageIds = new Set<string>();
   const sink = (event: Event): void => {
-    if (event.type === 'agent.token') {
-      streamed += parseEventPayload('agent.token', event.payload).delta;
+    if (event.type === 'session.message.delta.appended') {
+      const payload = parseEventPayload('session.message.delta.appended', event.payload);
+      if (payload.channel === 'reasoning') return;
+      if ((deltaIndices.get(payload.messageId) ?? -1) >= payload.index) return;
+      deltaIndices.set(payload.messageId, payload.index);
+      streamed += payload.delta;
       onToken?.(streamed);
-    } else if (event.type === 'agent.message') {
-      finalText = parseEventPayload('agent.message', event.payload).text;
-    } else if (event.type === 'agent.error') {
-      errorMessage = parseEventPayload('agent.error', event.payload).message;
+    } else if (event.type === 'session.message.completed') {
+      const { message } = parseEventPayload('session.message.completed', event.payload);
+      if (message.role === 'assistant' && !terminalMessageIds.has(message.id)) {
+        terminalMessageIds.add(message.id);
+        finalText = message.text;
+      }
+    } else if (event.type === 'session.message.failed') {
+      const { message } = parseEventPayload('session.message.failed', event.payload);
+      if (message.role === 'assistant' && !terminalMessageIds.has(message.id)) {
+        terminalMessageIds.add(message.id);
+        errorMessage = message.text;
+      }
     }
   };
   await run(sink);

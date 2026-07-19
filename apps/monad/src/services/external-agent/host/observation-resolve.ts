@@ -1,5 +1,9 @@
 import type {
+  AgentObservationEvent,
+  ExternalAgentConnectionSnapshot,
+  ExternalAgentConvenienceFrame,
   ExternalAgentObservationAccessResponse,
+  ExternalAgentRawFrame,
   ExternalAgentSessionId,
   ExternalAgentUiObservationFrame
 } from '@monad/protocol';
@@ -14,8 +18,21 @@ import {
   providerHistoryPageViaCli
 } from '#/services/external-agent/host/history-backfill.ts';
 import { encodeProviderHistoryCursor } from '#/services/external-agent/host/history-cursor.ts';
+import {
+  convenienceFramesFromEvents,
+  liveRowsToRawFrames,
+  readyFrame
+} from '#/services/external-agent/host/observation-dual.ts';
 import { getExternalAgentProviderAdapter } from '#/services/external-agent/index.ts';
 import { liveRawRowsOutput } from '#/services/external-agent/live-raw-store.ts';
+
+export type ExternalAgentRawObservationResult =
+  | { state: 'live'; observationEpoch: string; frames: ExternalAgentRawFrame[] }
+  | { state: 'unavailable'; reason: string };
+
+export type ExternalAgentConvenienceObservationResult =
+  | { state: 'live'; observationEpoch: string; frames: ExternalAgentConvenienceFrame[] }
+  | { state: 'unavailable'; reason: string };
 
 export interface ExternalAgentObservationResolveContext {
   live: Map<string, LiveExternalAgentSession>;
@@ -93,6 +110,110 @@ export class ExternalAgentObservationResolver {
       externalAgentSessionId: id as ExternalAgentSessionId,
       provider: row.provider,
       reason: 'provider history unavailable'
+    };
+  }
+
+  /** The raw plane: exact accepted transport frames for the connected epoch, after `afterSeq`. Each
+   *  frame's `data` is the verbatim provider payload — no projection, merge, or dedupe. */
+  observeRaw(id: string, afterSeq?: number): ExternalAgentRawObservationResult {
+    const live = this.ctx.live.get(id);
+    if (!live?.liveRawStore || live.suspended) {
+      const row = this.ctx.store.getExternalAgentSession(id);
+      return {
+        state: 'unavailable',
+        reason: row ? 'provider history unavailable' : 'external agent session not found'
+      };
+    }
+    const page = live.liveRawStore.page({
+      ...(afterSeq !== undefined ? { after: afterSeq } : {}),
+      limit: LIVE_OBSERVATION_PAGE_ROWS,
+      maxBytes: EXTERNAL_AGENT_OUTPUT_SNAPSHOT_MAX,
+      sortDirection: 'asc'
+    });
+    return {
+      state: 'live',
+      observationEpoch: live.observationEpoch,
+      frames: liveRowsToRawFrames(
+        {
+          externalAgentSessionId: id as ExternalAgentSessionId,
+          provider: live.provider,
+          observationEpoch: live.observationEpoch
+        },
+        page.rows
+      )
+    };
+  }
+
+  /** The convenience plane: the neutral event list for the connected epoch, delivered as a `ready`
+   *  frame (epoch + history boundary) followed by one `upsert` per projected event. Same projection
+   *  as `observeUi`, but incremental frames a consumer merges rather than a wholesale replacement. */
+  observeConvenience(id: string): ExternalAgentConvenienceObservationResult {
+    const live = this.ctx.live.get(id);
+    if (!live?.liveRawStore || live.suspended) {
+      const row = this.ctx.store.getExternalAgentSession(id);
+      return {
+        state: 'unavailable',
+        reason: row ? 'provider history unavailable' : 'external agent session not found'
+      };
+    }
+    const page = live.liveRawStore.page({
+      limit: LIVE_OBSERVATION_PAGE_ROWS,
+      maxBytes: EXTERNAL_AGENT_OUTPUT_SNAPSHOT_MAX,
+      sortDirection: 'desc'
+    });
+    const snapshot = liveRawRowsOutput(page.rows);
+    const first = page.rows[0];
+    const historyBefore =
+      page.nextBefore !== undefined && first
+        ? live.liveRawStore.cursorBefore(first.seq)
+        : live.providerSessionRef
+          ? encodeProviderHistoryCursor('')
+          : undefined;
+    const events = live.adapter.events
+      .projectLive({ id, output: snapshot })
+      .events.map((event) => toAgentObservationEvent(event, live.adapter.observation))
+      .filter((event): event is AgentObservationEvent => event !== null);
+    return {
+      state: 'live',
+      observationEpoch: live.observationEpoch,
+      frames: [readyFrame(live.observationEpoch, historyBefore), ...convenienceFramesFromEvents(events)]
+    };
+  }
+
+  /** The race-free bootstrap handshake for the Observation panel: the connected epoch + history/live
+   *  boundary and a monotonic `revision` (the live output cursor) so a subscribe-then-refetch client can
+   *  reconcile against control lifecycle events without assuming arrival order. */
+  connectionSnapshot(id: string): ExternalAgentConnectionSnapshot {
+    const live = this.ctx.live.get(id);
+    if (live?.liveRawStore && !live.suspended) {
+      const page = live.liveRawStore.page({
+        limit: LIVE_OBSERVATION_PAGE_ROWS,
+        maxBytes: EXTERNAL_AGENT_OUTPUT_SNAPSHOT_MAX,
+        sortDirection: 'desc'
+      });
+      const first = page.rows[0];
+      const last = page.rows.at(-1);
+      const historyBefore =
+        page.nextBefore !== undefined && first
+          ? live.liveRawStore.cursorBefore(first.seq)
+          : live.providerSessionRef
+            ? encodeProviderHistoryCursor('')
+            : undefined;
+      return {
+        state: 'connected',
+        externalAgentSessionId: id as ExternalAgentSessionId,
+        provider: live.provider,
+        observationEpoch: live.observationEpoch,
+        ...(historyBefore ? { historyBefore } : {}),
+        revision: last?.seq ?? 0
+      };
+    }
+    const row = this.ctx.store.getExternalAgentSession(id);
+    return {
+      state: 'disconnected',
+      externalAgentSessionId: id as ExternalAgentSessionId,
+      ...(row ? { provider: row.provider } : {}),
+      revision: 0
     };
   }
 

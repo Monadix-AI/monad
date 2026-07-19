@@ -171,9 +171,12 @@ function streamHarness(steps: Step[], opts: { tools?: Tool[]; sandboxRoots?: str
 }
 
 const sid = () => newId('ses') as SessionId;
+const eventMessage = (event: Event | undefined): { text?: string } | undefined =>
+  (event?.payload as { message?: { text?: string } } | undefined)?.message;
 const called = (events: Event[]) => events.filter((e) => e.type === 'tool.called');
 const results = (events: Event[]) => events.filter((e) => e.type === 'tool.result');
-const tokens = (events: Event[]) => events.filter((e) => e.type === 'agent.token');
+const tokens = (events: Event[]) =>
+  events.filter((e) => e.type === 'session.message.delta.appended' && e.payload.channel === 'answer');
 const streamedText = (events: Event[]) =>
   tokens(events)
     .map((e) => e.payload.delta)
@@ -322,7 +325,7 @@ test('inserts steer messages after every parallel tool finishes and before the n
 
   const lastToolResult = events.findLastIndex((event) => event.type === 'tool.result');
   const steerMessage = events.findIndex(
-    (event) => event.type === 'user.message' && event.payload.text === 'adjust the answer'
+    (event) => event.type === 'session.message.created' && eventMessage(event)?.text === 'adjust the answer'
   );
   expect(lastToolResult).toBeGreaterThan(-1);
   expect(steerMessage).toBeGreaterThan(lastToolResult);
@@ -380,9 +383,13 @@ test('accepts a steer submitted during the budget-limited final generation', asy
   expect(seenPrompts).toHaveLength(3);
   expect(seenPrompts[2]?.at(-1)).toMatchObject({ role: 'user', content: 'change the final answer' });
   expect(
-    events.some((event) => event.type === 'user.message' && event.payload.text === 'change the final answer')
+    events.some(
+      (event) => event.type === 'session.message.created' && eventMessage(event)?.text === 'change the final answer'
+    )
   ).toBe(true);
-  expect(events.filter((event) => event.type === 'agent.message').at(-1)?.payload.text).toBe('changed final');
+  expect(eventMessage(events.filter((event) => event.type === 'session.message.completed').at(-1))?.text).toBe(
+    'changed final'
+  );
 });
 
 test('a huge tool result is truncated before being fed back to the model', async () => {
@@ -785,9 +792,9 @@ test('runStream: tool-call step does not stream as text, final prose IS streamed
   expect(streamedText(events)).toBe('the answer is 5');
   expect(called(events)).toHaveLength(1);
   expect(results(events)[0]?.payload).toMatchObject({ tool: 'test.echo', ok: true });
-  const finals = events.filter((e) => e.type === 'agent.message');
+  const finals = events.filter((e) => e.type === 'session.message.completed');
   expect(finals).toHaveLength(1);
-  expect(finals[0]?.payload.text).toBe('the answer is 5');
+  expect(eventMessage(finals[0])?.text).toBe('the answer is 5');
 });
 
 test('runStream: plain prose streams directly with no tool call', async () => {

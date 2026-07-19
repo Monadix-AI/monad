@@ -1,18 +1,23 @@
 import type { SessionId } from '@monad/protocol';
 import type { AppDispatch } from '../store/index.ts';
 
-import { useStreamSessionQuery } from '@monad/client-rtk';
+import { useStreamUiItemsQuery } from '@monad/client-rtk';
 import { useEffect, useRef } from 'react';
 import { batch, useDispatch } from 'react-redux';
 
-import { advanceStreamCursor, type StreamCursor, settledAssistantMessages } from '../shell/stream-model.ts';
+import {
+  advanceStreamCursor,
+  projectUiItems,
+  type StreamCursor,
+  settledAssistantMessages
+} from '../shell/stream-model.ts';
 import { appendToken, commitMessage } from '../store/server.ts';
 import { useUIStore } from '../store/ui.ts';
 
 export function useStream(sessionId: SessionId) {
   const dispatch = useDispatch<AppDispatch>();
   const setConnected = useUIStore((s) => s.setConnected);
-  const stream = useStreamSessionQuery(sessionId);
+  const stream = useStreamUiItemsQuery(sessionId);
   const streamCursorRef = useRef<StreamCursor>({ length: 0, messageId: null });
   const prevMessageCountRef = useRef(0);
 
@@ -26,11 +31,12 @@ export function useStream(sessionId: SessionId) {
   useEffect(() => {
     if (!stream.data) return;
 
-    const streamingMsg = stream.data.messages.find((message) => message.role === 'assistant' && message.streaming);
+    const messages = projectUiItems(stream.data.items).messages;
+    const streamingMsg = messages.find((message) => message.role === 'assistant' && message.streaming);
     const tokenUpdate = advanceStreamCursor(streamCursorRef.current, streamingMsg);
     streamCursorRef.current = tokenUpdate.cursor;
 
-    const settled = settledAssistantMessages(stream.data.messages);
+    const settled = settledAssistantMessages(messages);
     const nextCount = settled.length;
     if (nextCount < prevMessageCountRef.current) {
       prevMessageCountRef.current = 0;

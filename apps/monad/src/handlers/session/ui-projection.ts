@@ -56,6 +56,7 @@ export class SessionUiProjector {
   private readonly items = new Map<string, UIItem>();
   private readonly order: string[] = [];
   private readonly rawStreamingText = new Map<string, string>();
+  private readonly streamingDeltaIndex = new Map<string, number>();
   // Per-message channel-display parse cache: the raw length at the last parse + the text it yielded,
   // so intermediate tokens can reuse it instead of re-parsing the whole accumulated JSON each time.
   private readonly channelDisplayCache = new Map<string, { len: number; text: string }>();
@@ -76,6 +77,7 @@ export class SessionUiProjector {
       t: this.opts.t ?? fallbackT(),
       items: this.items,
       rawStreamingText: this.rawStreamingText,
+      streamingDeltaIndex: this.streamingDeltaIndex,
       channelDisplayCache: this.channelDisplayCache,
       upsert: (item) => this.upsert(item),
       remove: (kind, id) => this.remove(kind, id),
@@ -296,7 +298,7 @@ export class SessionUiProjector {
   /**
    * Rebuild external agent tool cards from their durable output snapshots. Call after {@link hydrateMessages}
    * so a page refresh / reconnect shows a session's terminal output without replaying the (non-durable)
-   * per-chunk `external_agent.output` events. Each card is inserted at its `startedAt` position so it
+   * live output chunks. Each card is inserted at its `startedAt` position so it
    * interleaves with messages in array-order clients; seq-sorting clients order it the same way.
    */
   hydrateExternalAgentSessions(sessions: ExternalAgentSessionSnapshot[]): void {

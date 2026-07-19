@@ -51,7 +51,8 @@ export function createForwardExternalAgentHandler(
     deps: { store, log },
     makeEmit,
     persistAndRetire,
-    requireSession
+    requireSession,
+    messageIngress
   } = ctx;
 
   return async function forwardToExternalAgent({
@@ -67,45 +68,36 @@ export function createForwardExternalAgentHandler(
   }) {
     const session = requireSession(sessionId);
     assertWriteAllowed(session, 'http');
-    const userRound: Event[] = [];
-    const userEmit = makeEmit(userRound);
-    const userMsgId = newId('msg');
-    userEmit(makeEvent(sessionId as SessionId, 'user.message', { messageId: userMsgId, text: displayText ?? text }));
-    store.insertMessage(userMsgId, sessionId, displayText ?? text, new Date().toISOString(), 'user');
-    persistAndRetire(sessionId, userRound);
-
-    const emitExternalAgentError = (err: unknown, fallbackCode?: string) => {
+    await messageIngress.deliver({
+      transcriptTargetId: sessionId,
+      idempotencyKey: newId('idem'),
+      producer: { kind: 'user' },
+      role: 'user',
+      type: 'text',
+      text: displayText ?? text
+    });
+    const emitExternalAgentError = async (err: unknown, fallbackCode?: string) => {
       const { code, message } = extractError(err);
-      const agentMsgId = newId('msg');
-      const round: Event[] = [];
-      const emit = makeEmit(round);
-      store.insertMessage(
-        agentMsgId,
-        sessionId,
-        (code ?? fallbackCode) ? `[${code ?? fallbackCode}] ${message}` : message,
-        new Date().toISOString(),
-        'assistant',
-        { type: 'error', data: { agentName } }
-      );
-      emit(
-        makeEvent(sessionId as SessionId, 'agent.error', {
-          messageId: agentMsgId,
-          agentName,
-          code: code ?? fallbackCode,
-          message
-        })
-      );
-      persistAndRetire(sessionId, round);
+      const errorText = (code ?? fallbackCode) ? `[${code ?? fallbackCode}] ${message}` : message;
+      await messageIngress.deliver({
+        transcriptTargetId: sessionId,
+        idempotencyKey: newId('idem'),
+        producer: { kind: 'system', subsystem: 'external-agent' },
+        role: 'assistant',
+        type: 'error',
+        text: errorText,
+        data: { agentName }
+      });
     };
 
     const cfg = ctx.deps.configManager?.get().cfg;
     if (!cfg) {
-      emitExternalAgentError(new HandlerError('internal', 'daemon config not configured'));
+      await emitExternalAgentError(new HandlerError('internal', 'daemon config not configured'));
       return { accepted: true as const };
     }
     const externalAgentHost = ctx.deps.externalAgentHost;
     if (!externalAgentHost) {
-      emitExternalAgentError(new HandlerError('internal', 'external agent host not configured'));
+      await emitExternalAgentError(new HandlerError('internal', 'external agent host not configured'));
       return { accepted: true as const };
     }
     const configuredExternalAgents = cfg.externalAgents.filter((agent: ExternalAgentConfig) => agent.enabled !== false);
@@ -118,11 +110,11 @@ export function createForwardExternalAgentHandler(
       managedMember?.spec ??
       configuredExternalAgents.find((agent: ExternalAgentConfig) => agent.name === templateAgentName);
     if (!spec) {
-      emitExternalAgentError(new HandlerError('invalid', `external agent "${agentName}" not found or disabled`));
+      await emitExternalAgentError(new HandlerError('invalid', `external agent "${agentName}" not found or disabled`));
       return { accepted: true as const };
     }
     if (!session.cwd) {
-      emitExternalAgentError(
+      await emitExternalAgentError(
         new HandlerError('invalid', `external agent "${agentName}" requires a project working path`)
       );
       return { accepted: true as const };
@@ -159,7 +151,6 @@ export function createForwardExternalAgentHandler(
         const reason = preflight.reason;
         const round: Event[] = [];
         const emit = makeEmit(round);
-        const agentMsgId = newId('msg');
         if (preflight.state === 'not_authenticated' || preflight.state === 'unknown') {
           emit(
             makeEvent(sessionId as SessionId, 'external_agent.connection_required', {
@@ -171,23 +162,15 @@ export function createForwardExternalAgentHandler(
             })
           );
         }
-        store.insertMessage(agentMsgId, sessionId, reason, new Date().toISOString(), 'assistant', {
+        await messageIngress.deliver({
+          transcriptTargetId: sessionId,
+          idempotencyKey: newId('idem'),
+          producer: { kind: 'system', subsystem: 'external-agent' },
+          role: 'assistant',
           type: 'error',
+          text: reason,
           data: { agentName }
         });
-        emit(
-          makeEvent(sessionId as SessionId, 'agent.error', {
-            messageId: agentMsgId,
-            agentName,
-            code:
-              preflight.state === 'not_authenticated'
-                ? 'provider_auth_required'
-                : preflight.state === 'unavailable'
-                  ? 'provider_unavailable'
-                  : 'provider_readiness_unknown',
-            message: reason
-          })
-        );
         persistAndRetire(sessionId, round);
         log?.debug(
           {
@@ -252,7 +235,7 @@ export function createForwardExternalAgentHandler(
         { sessionId, event: 'session.forward_external_agent.error', agentName, code, message },
         'forward native cli error'
       );
-      emitExternalAgentError(err);
+      await emitExternalAgentError(err);
     }
     return { accepted: true as const };
   };

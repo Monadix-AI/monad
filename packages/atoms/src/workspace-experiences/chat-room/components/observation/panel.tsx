@@ -1,7 +1,7 @@
 'use client';
 
 import type { AgentObservationEvent } from '@monad/protocol';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import type { ExternalAgentUsageLimitMeter } from '../../../experience/external-agent-observation/external-agent-observation.ts';
 import type { ExternalAgentStreamView, Participant } from '../../../experience/types.ts';
 import type { ObservationCollapseCommand } from './card-shell.tsx';
@@ -11,9 +11,11 @@ import {
   ArrowUp01Icon,
   Cancel01Icon,
   CircleGaugeIcon,
-  ExpandParagraphIcon,
-  ReduceParagraphIcon,
-  Target01Icon
+  GroupItemsIcon,
+  ListViewIcon,
+  Target01Icon,
+  UnfoldLessIcon,
+  UnfoldMoreIcon
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { ProductIcon } from '@monad/ui';
@@ -118,6 +120,8 @@ const observationAvatarRingCss = `
 export function ExternalAgentObservationPanel({
   agent,
   agentName,
+  content,
+  headerActions,
   icon,
   onBack,
   onClose,
@@ -125,7 +129,6 @@ export function ExternalAgentObservationPanel({
   onRenderModeChange,
   onRetryOlderHistory,
   onShowHistory,
-  onStop,
   canLoadOlderHistory,
   defaultRenderMode = 'detail',
   historyActive,
@@ -135,16 +138,19 @@ export function ExternalAgentObservationPanel({
   observationUnavailable,
   renderMode: controlledRenderMode,
   showHistoryButton,
+  showObservationControls = true,
   stream,
   usageMeter: usageMeterProp
 }: {
   agent?: Participant;
   agentName?: string;
   canLoadOlderHistory?: boolean;
+  content?: ReactNode;
   defaultRenderMode?: ObservationRenderMode;
   focusTurnId?: string;
   historyActive?: boolean;
   historyLoadError?: boolean;
+  headerActions?: ReactNode;
   icon?: ExternalAgentStreamView['icon'];
   loadingOlderHistory?: boolean;
   observationLoading?: boolean;
@@ -155,9 +161,9 @@ export function ExternalAgentObservationPanel({
   onRenderModeChange?: (mode: ObservationRenderMode) => void;
   onRetryOlderHistory?: () => void;
   onShowHistory?: () => void;
-  onStop: (id: string) => void;
   renderMode?: ObservationRenderMode;
   showHistoryButton?: boolean;
+  showObservationControls?: boolean;
   stream?: ExternalAgentStreamView;
   usageMeter?: ExternalAgentUsageLimitMeter | null;
 }): React.ReactElement {
@@ -464,6 +470,7 @@ export function ExternalAgentObservationPanel({
             />
           </div>
         </div>
+        {headerActions}
         {usageMeter ? (
           <button
             aria-expanded={usageOpen}
@@ -493,45 +500,29 @@ export function ExternalAgentObservationPanel({
             />
           </button>
         ) : null}
-        <button
-          aria-label={allExpanded ? 'Collapse all observations' : 'Expand all observations'}
-          className="workplace-action"
-          disabled={!hasItems || renderMode === 'summary'}
-          onClick={toggleAllRows}
-          style={headerIconButtonStyle(allExpanded, !hasItems || renderMode === 'summary')}
-          title={allExpanded ? 'Collapse all observations' : 'Expand all observations'}
-          type="button"
-        >
-          <HugeiconsIcon
-            aria-hidden="true"
-            icon={allExpanded ? ReduceParagraphIcon : ExpandParagraphIcon}
-            size={15}
-            strokeWidth={2}
-          />
-        </button>
-        <ObservationModeIconButton
-          mode={renderMode}
-          onClick={() => setRenderMode(renderMode === 'detail' ? 'summary' : 'detail')}
-        />
-        {stream?.status === 'running' ? (
-          <button
-            className="workplace-action"
-            onClick={() => onStop(stream.id)}
-            style={{
-              border: '1px solid var(--border)',
-              borderRadius: 8,
-              background: 'var(--secondary)',
-              color: 'var(--foreground)',
-              fontFamily: sans,
-              fontSize: 12,
-              fontWeight: 650,
-              padding: '7px 10px',
-              flex: 'none'
-            }}
-            type="button"
-          >
-            Stop
-          </button>
+        {showObservationControls ? (
+          <>
+            <button
+              aria-label={allExpanded ? 'Collapse all activity' : 'Expand all activity'}
+              className="workplace-action"
+              disabled={!hasItems || renderMode === 'summary'}
+              onClick={toggleAllRows}
+              style={headerIconButtonStyle(allExpanded, !hasItems || renderMode === 'summary')}
+              title={allExpanded ? 'Collapse all activity' : 'Expand all activity'}
+              type="button"
+            >
+              <HugeiconsIcon
+                aria-hidden="true"
+                icon={allExpanded ? UnfoldLessIcon : UnfoldMoreIcon}
+                size={15}
+                strokeWidth={2}
+              />
+            </button>
+            <ObservationModeIconButton
+              mode={renderMode}
+              onClick={() => setRenderMode(renderMode === 'detail' ? 'summary' : 'detail')}
+            />
+          </>
         ) : null}
         {onClose ? (
           <button
@@ -574,7 +565,9 @@ export function ExternalAgentObservationPanel({
           overflow: 'hidden'
         }}
       >
-        {hasItems && renderMode === 'detail' ? (
+        {content !== undefined && !observationLoading ? (
+          content
+        ) : hasItems && renderMode === 'detail' ? (
           <VirtualList
             ariaLive="polite"
             className="scwf-scroll"
@@ -653,44 +646,46 @@ export function ExternalAgentObservationPanel({
             </div>
           </div>
         )}
-        <div
-          style={{
-            position: 'absolute',
-            left: '50%',
-            bottom: 14,
-            transform: 'translateX(-50%)',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 7,
-            border: '1px solid color-mix(in srgb, var(--border) 82%, transparent)',
-            borderRadius: 999,
-            background: 'color-mix(in srgb, var(--background) 88%, transparent)',
-            boxShadow: '0 8px 18px color-mix(in srgb, black 18%, transparent)',
-            backdropFilter: 'blur(10px)',
-            padding: 4,
-            zIndex: 2
-          }}
-        >
-          <ObservationScrollButton
-            disabled={!hasItems}
-            icon={ArrowUp01Icon}
-            label="Scroll to top"
-            onClick={scrollToTop}
-          />
-          <ObservationScrollButton
-            disabled={!hasItems}
-            icon={ArrowDown01Icon}
-            label="Scroll to bottom"
-            onClick={scrollToBottom}
-          />
-          <ObservationScrollButton
-            active={follow}
-            disabled={!hasItems}
-            icon={Target01Icon}
-            label={follow ? 'Following latest' : 'Follow latest'}
-            onClick={followLatest}
-          />
-        </div>
+        {content === undefined ? (
+          <div
+            style={{
+              position: 'absolute',
+              left: '50%',
+              bottom: 14,
+              transform: 'translateX(-50%)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 7,
+              border: '1px solid color-mix(in srgb, var(--border) 82%, transparent)',
+              borderRadius: 999,
+              background: 'color-mix(in srgb, var(--background) 88%, transparent)',
+              boxShadow: '0 8px 18px color-mix(in srgb, black 18%, transparent)',
+              backdropFilter: 'blur(10px)',
+              padding: 4,
+              zIndex: 2
+            }}
+          >
+            <ObservationScrollButton
+              disabled={!hasItems}
+              icon={ArrowUp01Icon}
+              label="Scroll to top"
+              onClick={scrollToTop}
+            />
+            <ObservationScrollButton
+              disabled={!hasItems}
+              icon={ArrowDown01Icon}
+              label="Scroll to bottom"
+              onClick={scrollToBottom}
+            />
+            <ObservationScrollButton
+              active={follow}
+              disabled={!hasItems}
+              icon={Target01Icon}
+              label={follow ? 'Following latest' : 'Follow latest'}
+              onClick={followLatest}
+            />
+          </div>
+        ) : null}
       </div>
     </section>
   );
@@ -704,7 +699,7 @@ function ObservationModeIconButton({
   onClick: () => void;
 }): React.ReactElement {
   const summary = mode === 'summary';
-  const label = summary ? 'Switch observation view to Detail' : 'Switch observation view to Summary';
+  const label = summary ? 'Show individual activity' : 'Group activity by turn';
   return (
     <button
       aria-label={label}
@@ -712,12 +707,12 @@ function ObservationModeIconButton({
       className="workplace-action"
       onClick={onClick}
       style={headerIconButtonStyle(summary)}
-      title={summary ? 'Summary observation view' : 'Detail observation view'}
+      title={label}
       type="button"
     >
       <HugeiconsIcon
         aria-hidden="true"
-        icon={summary ? ExpandParagraphIcon : ReduceParagraphIcon}
+        icon={summary ? ListViewIcon : GroupItemsIcon}
         size={15}
         strokeWidth={2}
       />

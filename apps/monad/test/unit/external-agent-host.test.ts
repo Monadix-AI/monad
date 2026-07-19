@@ -2129,7 +2129,7 @@ async function runRealAdapterArgvCapture(opts: {
     approvalOwnership: 'provider-owned'
   };
   const host = new ExternalAgentHost({ store, bus: new EventBus(), agents: async () => [agent], monadHome });
-  const projectId: `ses_${string}` = `ses_${opts.provider.slice(0, 6).toUpperCase().padEnd(6, '0')}01`;
+  const projectId: `ses_${string}` = `ses_${opts.provider.slice(0, 6).toUpperCase().padEnd(6, '0')}000001`;
   try {
     const view = await host.start({
       transcriptTargetId: projectId,

@@ -91,6 +91,42 @@ test('closed loop: A delegates to peer B, B answers, the result returns to A', a
   expect(progress.at(-1)).toBe(MOCK_REPLY);
 });
 
+test('OpenAI-compatible non-streaming completion uses the canonical terminal snapshot', async () => {
+  const response = await fetch(`${peer.baseUrl}/v1/chat/completions`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' },
+    body: JSON.stringify({
+      model: 'default',
+      messages: [{ role: 'user', content: 'answer without streaming' }],
+      stream: false
+    })
+  });
+  const body = (await response.json()) as {
+    choices: Array<{
+      finish_reason: string;
+      index: number;
+      logprobs: null;
+      message: { content: string; refusal: null; role: string };
+    }>;
+    object: string;
+    usage: { completion_tokens: number; prompt_tokens: number; total_tokens: number };
+  };
+
+  expect({ status: response.status, object: body.object, choices: body.choices, usage: body.usage }).toEqual({
+    status: 200,
+    object: 'chat.completion',
+    choices: [
+      {
+        finish_reason: 'stop',
+        index: 0,
+        logprobs: null,
+        message: { content: MOCK_REPLY, refusal: null, role: 'assistant' }
+      }
+    ],
+    usage: { completion_tokens: 0, prompt_tokens: 0, total_tokens: 0 }
+  });
+});
+
 test('resolves the peer by id as well as label', async () => {
   const tool = createPeerDelegateTool({ peers: [target(peer.baseUrl)] });
   const result = await tool.run({ peer: 'peer_B00000000000', instruction: 'hi' }, fakeCtx());
@@ -176,8 +212,8 @@ test("two daemons: A's agent loop delegates to B and answers from B's result", a
   expect(String(result?.result)).toContain(MOCK_REPLY);
   // …and A produced its own final message after the delegation completed.
   expect(
-    byType('agent.message')
-      .map((p) => String(p.text))
+    byType('session.message.completed')
+      .map((p) => String((p.message as { text?: unknown } | undefined)?.text ?? ''))
       .join('')
   ).toContain(FINAL);
 });
@@ -218,7 +254,7 @@ test('HTTP end-to-end: client drives A over HTTP/SSE while A delegates to B over
       sseReady = resolve;
     });
     const eventsP = readSSE(`${baseA}/v1/sessions/${sessionId}/events`, {
-      until: (e) => e.type === 'agent.message',
+      until: (e) => e.type === 'session.message.completed',
       timeoutMs: 10_000,
       onConnected: sseReady
     });
@@ -243,8 +279,8 @@ test('HTTP end-to-end: client drives A over HTTP/SSE while A delegates to B over
     expect(String(result?.result)).toContain(MOCK_REPLY);
     // …and A's final answer arrived over SSE to the client.
     expect(
-      byType('agent.message')
-        .map((p) => String(p.text))
+      byType('session.message.completed')
+        .map((p) => String((p.message as { text?: unknown } | undefined)?.text ?? ''))
         .join('')
     ).toContain(FINAL);
   } finally {

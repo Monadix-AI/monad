@@ -9,7 +9,8 @@ import {
   messageIdSchema,
   projectIdSchema,
   sessionIdSchema,
-  taskIdSchema
+  taskIdSchema,
+  transcriptTargetIdSchema
 } from './ids.ts';
 
 // Schema-first at wire boundaries (HTTP/WS/disk). Types with no runtime boundary yet
@@ -303,15 +304,11 @@ export const messageTypeSchema: z.ZodType<MessageType> = z.string();
 export const streamStatusSchema = z.enum(['settled', 'pending', 'streaming', 'complete', 'error']);
 export type StreamStatus = z.infer<typeof streamStatusSchema>;
 
-/** A subscription handle: how a client replays + tails the live generation of THIS message.
- * `channel` names the event sub-stream (default = the assistant token stream via `agent.token`);
- * a non-assistant generative message streams over `message.delta` keyed by this `channel`.
- * `afterEventId` is the resume cursor. */
+/** The identity of one active generated message. Transport cursors and channels belong to the
+ *  message-scoped subscription, not the durable message row. */
 export const streamRefSchema = z.object({
-  sessionId: sessionIdSchema,
-  messageId: messageIdSchema,
-  channel: z.string().optional(),
-  afterEventId: eventIdSchema.optional()
+  transcriptTargetId: transcriptTargetIdSchema,
+  messageId: messageIdSchema
 });
 export type StreamRef = z.infer<typeof streamRefSchema>;
 
@@ -326,7 +323,7 @@ export type MessageStream = z.infer<typeof messageStreamSchema>;
 // can subscribe to an in-flight assistant turn.
 export const chatMessageSchema = z.object({
   id: messageIdSchema,
-  sessionId: sessionIdSchema,
+  sessionId: transcriptTargetIdSchema,
   role: messageRoleSchema,
   text: z.string(),
   type: messageTypeSchema,
@@ -361,20 +358,21 @@ export const eventTypeSchema = z.enum([
   'session.updated', // title / state / archived changed
   'session.deleted',
   'session.restored',
-  'session.stream_started', // a turn began generating — control-plane signal for clients to open an SSE generation subscription
-  'session.stream_ended', // the turn settled (success/error/abort) — clients close the SSE generation subscription
+  'session.run.started',
+  'session.run.completed',
+  'session.run.failed',
+  'session.run.cancelled',
+  'session.message.created',
+  'session.message.updated',
+  'session.message.deleted',
+  'session.message.delta.appended',
+  'session.message.completed',
+  'session.message.failed',
   'task.created',
   'task.progress',
   'task.completed',
   'task.failed',
   'mcp.status_updated',
-  'user.message', // a human/channel-originated turn was accepted (lets other clients render it live)
-  'agent.message', // agent-to-human note (renderable)
-  'agent.token', // streamed model token chunk
-  'agent.reasoning', // streamed extended-thinking/reasoning delta (separate from the answer)
-  'agent.error', // model or gateway error surfaced to the session
-  'message.delta', // streamed delta of a non-assistant generative message (keyed by messageId + channel)
-  'message.complete', // a generative message reached a terminal state (complete | error)
   'tool.called',
   'tool.progress', // streamed partial output from a running tool (e.g. live shell output)
   'tool.result',
@@ -392,7 +390,6 @@ export const eventTypeSchema = z.enum([
   'delegation.fs_request',
   'delegation.terminal_request',
   'external_agent.started',
-  'external_agent.output',
   'external_agent.connection_required',
   'external_agent.approval_requested',
   'external_agent.approval_resolved',
@@ -401,6 +398,8 @@ export const eventTypeSchema = z.enum([
   'external_agent.idle_suspended',
   'external_agent.exited',
   'external_agent.turn_settled',
+  'external_agent.session.connection.opened',
+  'external_agent.session.connection.closed',
   // Ephemeral login-nudge pair: published to the session bus only (never persisted), so the
   // in-chat "agent needs to log in" card exists exactly while the condition holds and
   // vanishes on reload — re-auth guidance is transient interaction, not transcript history.
@@ -411,7 +410,7 @@ export type EventType = z.infer<typeof eventTypeSchema>;
 
 export const eventSchema = z.object({
   id: eventIdSchema,
-  sessionId: sessionIdSchema,
+  sessionId: transcriptTargetIdSchema,
   type: eventTypeSchema,
   actorAgentId: agentIdSchema.nullable(), // null = system- or human-originated
   taskId: taskIdSchema.optional(),
@@ -428,10 +427,6 @@ export const finishReasonSchema = z.enum(['end_turn', 'max_tokens', 'max_turn_re
 export type FinishReason = z.infer<typeof finishReasonSchema>;
 
 export type {
-  AgentErrorPayload,
-  AgentMessagePayload,
-  AgentReasoningPayload,
-  AgentTokenPayload,
   ClarifyRequestedPayload,
   ClarifyResolvedPayload,
   ContextEvictedPayload,
@@ -439,8 +434,6 @@ export type {
   ContextUsagePayload,
   EventPayload,
   MemorySuggestionPayload,
-  MessageCompletePayload,
-  MessageDeltaPayload,
   SessionCreatedPayload,
   SessionRestoredPayload,
   SessionUpdatedPayload,
@@ -448,8 +441,7 @@ export type {
   ToolApprovalResolvedPayload,
   ToolCalledPayload,
   ToolProgressPayload,
-  ToolResultPayload,
-  UserMessagePayload
+  ToolResultPayload
 } from './event-table.ts';
 
 /** The buckets a context window is attributed to (matches the `/context` command breakdown). */
