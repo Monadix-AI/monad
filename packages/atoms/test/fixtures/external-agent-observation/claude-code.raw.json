@@ -1,0 +1,1073 @@
+{
+  "provider": "claude-code",
+  "page": {
+    "records": [
+      {
+        "cursor": "<id:1>",
+        "providerIdentity": "<id:1>",
+        "data": {
+          "type": "user",
+          "uuid": "<id:1>",
+          "session_id": "<id:2>",
+          "message": {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "<text:1>"
+              }
+            ]
+          },
+          "parent_tool_use_id": null
+        }
+      },
+      {
+        "cursor": "<id:3>",
+        "providerIdentity": "<id:3>",
+        "data": {
+          "type": "assistant",
+          "uuid": "<id:3>",
+          "session_id": "<id:2>",
+          "message": {
+            "model": "<text:2>",
+            "id": "<id:4>",
+            "type": "message",
+            "role": "assistant",
+            "content": [
+              {
+                "type": "thinking",
+                "thinking": "<text:3>",
+                "signature": "<text:4>"
+              }
+            ],
+            "stop_reason": "tool_use",
+            "stop_sequence": null,
+            "stop_details": null,
+            "usage": {
+              "input_tokens": 11733,
+              "cache_creation_input_tokens": 88503,
+              "cache_read_input_tokens": 22895,
+              "output_tokens": 88,
+              "server_tool_use": {
+                "web_search_requests": 0,
+                "web_fetch_requests": 0
+              },
+              "service_tier": "<text:5>",
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 88503,
+                "ephemeral_5m_input_tokens": 0
+              },
+              "inference_geo": "<text:6>",
+              "iterations": [
+                {
+                  "input_tokens": 11733,
+                  "output_tokens": 88,
+                  "cache_read_input_tokens": 22895,
+                  "cache_creation_input_tokens": 88503,
+                  "cache_creation": {
+                    "ephemeral_5m_input_tokens": 0,
+                    "ephemeral_1h_input_tokens": 88503
+                  },
+                  "type": "message"
+                }
+              ],
+              "speed": "<text:5>"
+            },
+            "diagnostics": null
+          },
+          "parent_tool_use_id": null
+        }
+      },
+      {
+        "cursor": "<id:5>",
+        "providerIdentity": "<id:5>",
+        "data": {
+          "type": "assistant",
+          "uuid": "<id:5>",
+          "session_id": "<id:2>",
+          "message": {
+            "model": "<text:2>",
+            "id": "<id:4>",
+            "type": "message",
+            "role": "assistant",
+            "content": [
+              {
+                "type": "tool_use",
+                "id": "<id:6>",
+                "name": "ToolSearch",
+                "input": {
+                  "query": "<text:7>",
+                  "max_results": 5
+                },
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            ],
+            "stop_reason": "tool_use",
+            "stop_sequence": null,
+            "stop_details": null,
+            "usage": {
+              "input_tokens": 11733,
+              "cache_creation_input_tokens": 88503,
+              "cache_read_input_tokens": 22895,
+              "output_tokens": 88,
+              "server_tool_use": {
+                "web_search_requests": 0,
+                "web_fetch_requests": 0
+              },
+              "service_tier": "<text:5>",
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 88503,
+                "ephemeral_5m_input_tokens": 0
+              },
+              "inference_geo": "<text:6>",
+              "iterations": [
+                {
+                  "input_tokens": 11733,
+                  "output_tokens": 88,
+                  "cache_read_input_tokens": 22895,
+                  "cache_creation_input_tokens": 88503,
+                  "cache_creation": {
+                    "ephemeral_5m_input_tokens": 0,
+                    "ephemeral_1h_input_tokens": 88503
+                  },
+                  "type": "message"
+                }
+              ],
+              "speed": "<text:5>"
+            },
+            "diagnostics": null
+          },
+          "parent_tool_use_id": null
+        }
+      },
+      {
+        "cursor": "<id:7>",
+        "providerIdentity": "<id:7>",
+        "data": {
+          "type": "user",
+          "uuid": "<id:7>",
+          "session_id": "<id:2>",
+          "message": {
+            "role": "user",
+            "content": [
+              {
+                "type": "tool_result",
+                "tool_use_id": "<id:6>",
+                "content": "<text:8>"
+              }
+            ]
+          },
+          "parent_tool_use_id": null
+        }
+      },
+      {
+        "cursor": "<id:8>",
+        "providerIdentity": "<id:8>",
+        "data": {
+          "type": "assistant",
+          "uuid": "<id:8>",
+          "session_id": "<id:2>",
+          "message": {
+            "model": "<text:2>",
+            "id": "<id:9>",
+            "type": "message",
+            "role": "assistant",
+            "content": [
+              {
+                "type": "thinking",
+                "thinking": "<text:9>",
+                "signature": "<text:10>"
+              }
+            ],
+            "stop_reason": "tool_use",
+            "stop_sequence": null,
+            "stop_details": null,
+            "usage": {
+              "input_tokens": 2,
+              "cache_creation_input_tokens": 11832,
+              "cache_read_input_tokens": 111398,
+              "output_tokens": 91,
+              "server_tool_use": {
+                "web_search_requests": 0,
+                "web_fetch_requests": 0
+              },
+              "service_tier": "<text:5>",
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 11832,
+                "ephemeral_5m_input_tokens": 0
+              },
+              "inference_geo": "<text:6>",
+              "iterations": [
+                {
+                  "input_tokens": 2,
+                  "output_tokens": 91,
+                  "cache_read_input_tokens": 111398,
+                  "cache_creation_input_tokens": 11832,
+                  "cache_creation": {
+                    "ephemeral_5m_input_tokens": 0,
+                    "ephemeral_1h_input_tokens": 11832
+                  },
+                  "type": "message"
+                }
+              ],
+              "speed": "<text:5>"
+            },
+            "diagnostics": null
+          },
+          "parent_tool_use_id": null
+        }
+      },
+      {
+        "cursor": "<id:10>",
+        "providerIdentity": "<id:10>",
+        "data": {
+          "type": "assistant",
+          "uuid": "<id:10>",
+          "session_id": "<id:2>",
+          "message": {
+            "model": "<text:2>",
+            "id": "<id:9>",
+            "type": "message",
+            "role": "assistant",
+            "content": [
+              {
+                "type": "tool_use",
+                "id": "<id:11>",
+                "name": "ToolSearch",
+                "input": {
+                  "query": "<text:11>",
+                  "max_results": 5
+                },
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            ],
+            "stop_reason": "tool_use",
+            "stop_sequence": null,
+            "stop_details": null,
+            "usage": {
+              "input_tokens": 2,
+              "cache_creation_input_tokens": 11832,
+              "cache_read_input_tokens": 111398,
+              "output_tokens": 91,
+              "server_tool_use": {
+                "web_search_requests": 0,
+                "web_fetch_requests": 0
+              },
+              "service_tier": "<text:5>",
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 11832,
+                "ephemeral_5m_input_tokens": 0
+              },
+              "inference_geo": "<text:6>",
+              "iterations": [
+                {
+                  "input_tokens": 2,
+                  "output_tokens": 91,
+                  "cache_read_input_tokens": 111398,
+                  "cache_creation_input_tokens": 11832,
+                  "cache_creation": {
+                    "ephemeral_5m_input_tokens": 0,
+                    "ephemeral_1h_input_tokens": 11832
+                  },
+                  "type": "message"
+                }
+              ],
+              "speed": "<text:5>"
+            },
+            "diagnostics": null
+          },
+          "parent_tool_use_id": null
+        }
+      },
+      {
+        "cursor": "<id:12>",
+        "providerIdentity": "<id:12>",
+        "data": {
+          "type": "user",
+          "uuid": "<id:12>",
+          "session_id": "<id:2>",
+          "message": {
+            "role": "user",
+            "content": [
+              {
+                "type": "tool_result",
+                "tool_use_id": "<id:11>",
+                "content": [
+                  {
+                    "type": "tool_reference",
+                    "tool_name": "<text:12>"
+                  }
+                ]
+              }
+            ]
+          },
+          "parent_tool_use_id": null
+        }
+      },
+      {
+        "cursor": "<id:13>",
+        "providerIdentity": "<id:13>",
+        "data": {
+          "type": "assistant",
+          "uuid": "<id:13>",
+          "session_id": "<id:2>",
+          "message": {
+            "model": "<text:2>",
+            "id": "<id:14>",
+            "type": "message",
+            "role": "assistant",
+            "content": [
+              {
+                "type": "thinking",
+                "thinking": "<text:13>",
+                "signature": "<text:14>"
+              }
+            ],
+            "stop_reason": "tool_use",
+            "stop_sequence": null,
+            "stop_details": null,
+            "usage": {
+              "input_tokens": 1841,
+              "cache_creation_input_tokens": 100699,
+              "cache_read_input_tokens": 22988,
+              "output_tokens": 223,
+              "server_tool_use": {
+                "web_search_requests": 0,
+                "web_fetch_requests": 0
+              },
+              "service_tier": "<text:5>",
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 100699,
+                "ephemeral_5m_input_tokens": 0
+              },
+              "inference_geo": "<text:6>",
+              "iterations": [
+                {
+                  "input_tokens": 1841,
+                  "output_tokens": 223,
+                  "cache_read_input_tokens": 22988,
+                  "cache_creation_input_tokens": 100699,
+                  "cache_creation": {
+                    "ephemeral_5m_input_tokens": 0,
+                    "ephemeral_1h_input_tokens": 100699
+                  },
+                  "type": "message"
+                }
+              ],
+              "speed": "<text:5>"
+            },
+            "diagnostics": {
+              "cache_miss_reason": {
+                "type": "tools_changed",
+                "cache_missed_input_tokens": 111303
+              }
+            }
+          },
+          "parent_tool_use_id": null
+        }
+      },
+      {
+        "cursor": "<id:15>",
+        "providerIdentity": "<id:15>",
+        "data": {
+          "type": "assistant",
+          "uuid": "<id:15>",
+          "session_id": "<id:2>",
+          "message": {
+            "model": "<text:2>",
+            "id": "<id:14>",
+            "type": "message",
+            "role": "assistant",
+            "content": [
+              {
+                "type": "tool_use",
+                "id": "<id:16>",
+                "name": "mcp__monad__project_post",
+                "input": {
+                  "requestId": "<id:17>",
+                  "text": "<text:15>"
+                },
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            ],
+            "stop_reason": "tool_use",
+            "stop_sequence": null,
+            "stop_details": null,
+            "usage": {
+              "input_tokens": 1841,
+              "cache_creation_input_tokens": 100699,
+              "cache_read_input_tokens": 22988,
+              "output_tokens": 223,
+              "server_tool_use": {
+                "web_search_requests": 0,
+                "web_fetch_requests": 0
+              },
+              "service_tier": "<text:5>",
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 100699,
+                "ephemeral_5m_input_tokens": 0
+              },
+              "inference_geo": "<text:6>",
+              "iterations": [
+                {
+                  "input_tokens": 1841,
+                  "output_tokens": 223,
+                  "cache_read_input_tokens": 22988,
+                  "cache_creation_input_tokens": 100699,
+                  "cache_creation": {
+                    "ephemeral_5m_input_tokens": 0,
+                    "ephemeral_1h_input_tokens": 100699
+                  },
+                  "type": "message"
+                }
+              ],
+              "speed": "<text:5>"
+            },
+            "diagnostics": {
+              "cache_miss_reason": {
+                "type": "tools_changed",
+                "cache_missed_input_tokens": 111303
+              }
+            }
+          },
+          "parent_tool_use_id": null
+        }
+      },
+      {
+        "cursor": "<id:18>",
+        "providerIdentity": "<id:18>",
+        "data": {
+          "type": "user",
+          "uuid": "<id:18>",
+          "session_id": "<id:2>",
+          "message": {
+            "role": "user",
+            "content": [
+              {
+                "tool_use_id": "<id:16>",
+                "type": "tool_result",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "<text:16>"
+                  }
+                ]
+              }
+            ]
+          },
+          "parent_tool_use_id": null
+        }
+      },
+      {
+        "cursor": "<id:19>",
+        "providerIdentity": "<id:19>",
+        "data": {
+          "type": "assistant",
+          "uuid": "<id:19>",
+          "session_id": "<id:2>",
+          "message": {
+            "model": "<text:2>",
+            "id": "<id:20>",
+            "type": "message",
+            "role": "assistant",
+            "content": [
+              {
+                "type": "text",
+                "text": "<text:17>"
+              }
+            ],
+            "stop_reason": "end_turn",
+            "stop_sequence": null,
+            "stop_details": null,
+            "usage": {
+              "input_tokens": 2,
+              "cache_creation_input_tokens": 2185,
+              "cache_read_input_tokens": 123687,
+              "output_tokens": 116,
+              "server_tool_use": {
+                "web_search_requests": 0,
+                "web_fetch_requests": 0
+              },
+              "service_tier": "<text:5>",
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 2185,
+                "ephemeral_5m_input_tokens": 0
+              },
+              "inference_geo": "<text:6>",
+              "iterations": [
+                {
+                  "input_tokens": 2,
+                  "output_tokens": 116,
+                  "cache_read_input_tokens": 123687,
+                  "cache_creation_input_tokens": 2185,
+                  "cache_creation": {
+                    "ephemeral_5m_input_tokens": 0,
+                    "ephemeral_1h_input_tokens": 2185
+                  },
+                  "type": "message"
+                }
+              ],
+              "speed": "<text:5>"
+            },
+            "diagnostics": null
+          },
+          "parent_tool_use_id": null
+        }
+      },
+      {
+        "cursor": "<id:21>",
+        "providerIdentity": "<id:21>",
+        "data": {
+          "type": "system",
+          "uuid": "<id:21>",
+          "session_id": "<id:2>",
+          "parent_tool_use_id": null
+        }
+      },
+      {
+        "cursor": "<id:22>",
+        "providerIdentity": "<id:22>",
+        "data": {
+          "type": "user",
+          "uuid": "<id:22>",
+          "session_id": "<id:2>",
+          "message": {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "<text:18>"
+              }
+            ]
+          },
+          "parent_tool_use_id": null
+        }
+      },
+      {
+        "cursor": "<id:23>",
+        "providerIdentity": "<id:23>",
+        "data": {
+          "type": "assistant",
+          "uuid": "<id:23>",
+          "session_id": "<id:2>",
+          "message": {
+            "model": "<text:2>",
+            "id": "<id:24>",
+            "type": "message",
+            "role": "assistant",
+            "content": [
+              {
+                "type": "tool_use",
+                "id": "<id:25>",
+                "name": "mcp__monad__project_inbox_check",
+                "input": {},
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            ],
+            "stop_reason": "tool_use",
+            "stop_sequence": null,
+            "stop_details": null,
+            "usage": {
+              "input_tokens": 75,
+              "cache_creation_input_tokens": 288,
+              "cache_read_input_tokens": 125872,
+              "output_tokens": 37,
+              "server_tool_use": {
+                "web_search_requests": 0,
+                "web_fetch_requests": 0
+              },
+              "service_tier": "<text:5>",
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 288,
+                "ephemeral_5m_input_tokens": 0
+              },
+              "inference_geo": "<text:6>",
+              "iterations": [
+                {
+                  "input_tokens": 75,
+                  "output_tokens": 37,
+                  "cache_read_input_tokens": 125872,
+                  "cache_creation_input_tokens": 288,
+                  "cache_creation": {
+                    "ephemeral_5m_input_tokens": 0,
+                    "ephemeral_1h_input_tokens": 288
+                  },
+                  "type": "message"
+                }
+              ],
+              "speed": "<text:5>"
+            },
+            "diagnostics": null
+          },
+          "parent_tool_use_id": null
+        }
+      },
+      {
+        "cursor": "<id:26>",
+        "providerIdentity": "<id:26>",
+        "data": {
+          "type": "user",
+          "uuid": "<id:26>",
+          "session_id": "<id:2>",
+          "message": {
+            "role": "user",
+            "content": [
+              {
+                "tool_use_id": "<id:25>",
+                "type": "tool_result",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "<text:19>"
+                  }
+                ]
+              }
+            ]
+          },
+          "parent_tool_use_id": null
+        }
+      },
+      {
+        "cursor": "<id:27>",
+        "providerIdentity": "<id:27>",
+        "data": {
+          "type": "assistant",
+          "uuid": "<id:27>",
+          "session_id": "<id:2>",
+          "message": {
+            "model": "<text:2>",
+            "id": "<id:28>",
+            "type": "message",
+            "role": "assistant",
+            "content": [
+              {
+                "type": "thinking",
+                "thinking": "<text:20>",
+                "signature": "<text:21>"
+              }
+            ],
+            "stop_reason": "tool_use",
+            "stop_sequence": null,
+            "stop_details": null,
+            "usage": {
+              "input_tokens": 2,
+              "cache_creation_input_tokens": 1262,
+              "cache_read_input_tokens": 126160,
+              "output_tokens": 185,
+              "server_tool_use": {
+                "web_search_requests": 0,
+                "web_fetch_requests": 0
+              },
+              "service_tier": "<text:5>",
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 1262,
+                "ephemeral_5m_input_tokens": 0
+              },
+              "inference_geo": "<text:6>",
+              "iterations": [
+                {
+                  "input_tokens": 2,
+                  "output_tokens": 185,
+                  "cache_read_input_tokens": 126160,
+                  "cache_creation_input_tokens": 1262,
+                  "cache_creation": {
+                    "ephemeral_5m_input_tokens": 0,
+                    "ephemeral_1h_input_tokens": 1262
+                  },
+                  "type": "message"
+                }
+              ],
+              "speed": "<text:5>"
+            },
+            "diagnostics": null
+          },
+          "parent_tool_use_id": null
+        }
+      },
+      {
+        "cursor": "<id:29>",
+        "providerIdentity": "<id:29>",
+        "data": {
+          "type": "assistant",
+          "uuid": "<id:29>",
+          "session_id": "<id:2>",
+          "message": {
+            "model": "<text:2>",
+            "id": "<id:28>",
+            "type": "message",
+            "role": "assistant",
+            "content": [
+              {
+                "type": "tool_use",
+                "id": "<id:30>",
+                "name": "mcp__monad__project_inbox_ack",
+                "input": {},
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            ],
+            "stop_reason": "tool_use",
+            "stop_sequence": null,
+            "stop_details": null,
+            "usage": {
+              "input_tokens": 2,
+              "cache_creation_input_tokens": 1262,
+              "cache_read_input_tokens": 126160,
+              "output_tokens": 185,
+              "server_tool_use": {
+                "web_search_requests": 0,
+                "web_fetch_requests": 0
+              },
+              "service_tier": "<text:5>",
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 1262,
+                "ephemeral_5m_input_tokens": 0
+              },
+              "inference_geo": "<text:6>",
+              "iterations": [
+                {
+                  "input_tokens": 2,
+                  "output_tokens": 185,
+                  "cache_read_input_tokens": 126160,
+                  "cache_creation_input_tokens": 1262,
+                  "cache_creation": {
+                    "ephemeral_5m_input_tokens": 0,
+                    "ephemeral_1h_input_tokens": 1262
+                  },
+                  "type": "message"
+                }
+              ],
+              "speed": "<text:5>"
+            },
+            "diagnostics": null
+          },
+          "parent_tool_use_id": null
+        }
+      },
+      {
+        "cursor": "<id:31>",
+        "providerIdentity": "<id:31>",
+        "data": {
+          "type": "user",
+          "uuid": "<id:31>",
+          "session_id": "<id:2>",
+          "message": {
+            "role": "user",
+            "content": [
+              {
+                "tool_use_id": "<id:30>",
+                "type": "tool_result",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "<text:22>"
+                  }
+                ]
+              }
+            ]
+          },
+          "parent_tool_use_id": null
+        }
+      },
+      {
+        "cursor": "<id:32>",
+        "providerIdentity": "<id:32>",
+        "data": {
+          "type": "assistant",
+          "uuid": "<id:32>",
+          "session_id": "<id:2>",
+          "message": {
+            "model": "<text:2>",
+            "id": "<id:33>",
+            "type": "message",
+            "role": "assistant",
+            "content": [
+              {
+                "type": "tool_use",
+                "id": "<id:34>",
+                "name": "mcp__monad__project_post",
+                "input": {
+                  "requestId": "<id:35>",
+                  "threadId": "<id:36>",
+                  "text": "<text:23>"
+                },
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            ],
+            "stop_reason": "tool_use",
+            "stop_sequence": null,
+            "stop_details": null,
+            "usage": {
+              "input_tokens": 2,
+              "cache_creation_input_tokens": 236,
+              "cache_read_input_tokens": 127422,
+              "output_tokens": 144,
+              "server_tool_use": {
+                "web_search_requests": 0,
+                "web_fetch_requests": 0
+              },
+              "service_tier": "<text:5>",
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 236,
+                "ephemeral_5m_input_tokens": 0
+              },
+              "inference_geo": "<text:6>",
+              "iterations": [
+                {
+                  "input_tokens": 2,
+                  "output_tokens": 144,
+                  "cache_read_input_tokens": 127422,
+                  "cache_creation_input_tokens": 236,
+                  "cache_creation": {
+                    "ephemeral_5m_input_tokens": 0,
+                    "ephemeral_1h_input_tokens": 236
+                  },
+                  "type": "message"
+                }
+              ],
+              "speed": "<text:5>"
+            },
+            "diagnostics": null
+          },
+          "parent_tool_use_id": null
+        }
+      },
+      {
+        "cursor": "<id:37>",
+        "providerIdentity": "<id:37>",
+        "data": {
+          "type": "user",
+          "uuid": "<id:37>",
+          "session_id": "<id:2>",
+          "message": {
+            "role": "user",
+            "content": [
+              {
+                "tool_use_id": "<id:34>",
+                "type": "tool_result",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "<text:24>"
+                  }
+                ]
+              }
+            ]
+          },
+          "parent_tool_use_id": null
+        }
+      },
+      {
+        "cursor": "<id:38>",
+        "providerIdentity": "<id:38>",
+        "data": {
+          "type": "assistant",
+          "uuid": "<id:38>",
+          "session_id": "<id:2>",
+          "message": {
+            "model": "<text:2>",
+            "id": "<id:39>",
+            "type": "message",
+            "role": "assistant",
+            "content": [
+              {
+                "type": "thinking",
+                "thinking": "<text:25>",
+                "signature": "<text:26>"
+              }
+            ],
+            "stop_reason": "tool_use",
+            "stop_sequence": null,
+            "stop_details": null,
+            "usage": {
+              "input_tokens": 2,
+              "cache_creation_input_tokens": 274,
+              "cache_read_input_tokens": 127658,
+              "output_tokens": 155,
+              "server_tool_use": {
+                "web_search_requests": 0,
+                "web_fetch_requests": 0
+              },
+              "service_tier": "<text:5>",
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 274,
+                "ephemeral_5m_input_tokens": 0
+              },
+              "inference_geo": "<text:6>",
+              "iterations": [
+                {
+                  "input_tokens": 2,
+                  "output_tokens": 155,
+                  "cache_read_input_tokens": 127658,
+                  "cache_creation_input_tokens": 274,
+                  "cache_creation": {
+                    "ephemeral_5m_input_tokens": 0,
+                    "ephemeral_1h_input_tokens": 274
+                  },
+                  "type": "message"
+                }
+              ],
+              "speed": "<text:5>"
+            },
+            "diagnostics": null
+          },
+          "parent_tool_use_id": null
+        }
+      },
+      {
+        "cursor": "<id:40>",
+        "providerIdentity": "<id:40>",
+        "data": {
+          "type": "assistant",
+          "uuid": "<id:40>",
+          "session_id": "<id:2>",
+          "message": {
+            "model": "<text:2>",
+            "id": "<id:39>",
+            "type": "message",
+            "role": "assistant",
+            "content": [
+              {
+                "type": "tool_use",
+                "id": "<id:41>",
+                "name": "Bash",
+                "input": {
+                  "command": "<text:27>",
+                  "description": "<text:28>"
+                },
+                "caller": {
+                  "type": "direct"
+                }
+              }
+            ],
+            "stop_reason": "tool_use",
+            "stop_sequence": null,
+            "stop_details": null,
+            "usage": {
+              "input_tokens": 2,
+              "cache_creation_input_tokens": 274,
+              "cache_read_input_tokens": 127658,
+              "output_tokens": 155,
+              "server_tool_use": {
+                "web_search_requests": 0,
+                "web_fetch_requests": 0
+              },
+              "service_tier": "<text:5>",
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 274,
+                "ephemeral_5m_input_tokens": 0
+              },
+              "inference_geo": "<text:6>",
+              "iterations": [
+                {
+                  "input_tokens": 2,
+                  "output_tokens": 155,
+                  "cache_read_input_tokens": 127658,
+                  "cache_creation_input_tokens": 274,
+                  "cache_creation": {
+                    "ephemeral_5m_input_tokens": 0,
+                    "ephemeral_1h_input_tokens": 274
+                  },
+                  "type": "message"
+                }
+              ],
+              "speed": "<text:5>"
+            },
+            "diagnostics": null
+          },
+          "parent_tool_use_id": null
+        }
+      },
+      {
+        "cursor": "<id:42>",
+        "providerIdentity": "<id:42>",
+        "data": {
+          "type": "user",
+          "uuid": "<id:42>",
+          "session_id": "<id:2>",
+          "message": {
+            "role": "user",
+            "content": [
+              {
+                "tool_use_id": "<id:41>",
+                "type": "tool_result",
+                "content": "<text:29>",
+                "is_error": false
+              }
+            ]
+          },
+          "parent_tool_use_id": null
+        }
+      },
+      {
+        "cursor": "<id:43>",
+        "providerIdentity": "<id:43>",
+        "data": {
+          "type": "assistant",
+          "uuid": "<id:43>",
+          "session_id": "<id:2>",
+          "message": {
+            "model": "<text:2>",
+            "id": "<id:44>",
+            "type": "message",
+            "role": "assistant",
+            "content": [
+              {
+                "type": "thinking",
+                "thinking": "<text:30>",
+                "signature": "<text:31>"
+              }
+            ],
+            "stop_reason": "tool_use",
+            "stop_sequence": null,
+            "stop_details": null,
+            "usage": {
+              "input_tokens": 2,
+              "cache_creation_input_tokens": 6972,
+              "cache_read_input_tokens": 127932,
+              "output_tokens": 623,
+              "server_tool_use": {
+                "web_search_requests": 0,
+                "web_fetch_requests": 0
+              },
+              "service_tier": "<text:5>",
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 6972,
+                "ephemeral_5m_input_tokens": 0
+              },
+              "inference_geo": "<text:6>",
+              "iterations": [
+                {
+                  "input_tokens": 2,
+                  "output_tokens": 623,
+                  "cache_read_input_tokens": 127932,
+                  "cache_creation_input_tokens": 6972,
+                  "cache_creation": {
+                    "ephemeral_5m_input_tokens": 0,
+                    "ephemeral_1h_input_tokens": 6972
+                  },
+                  "type": "message"
+                }
+              ],
+              "speed": "<text:5>"
+            },
+            "diagnostics": null
+          },
+          "parent_tool_use_id": null
+        }
+      }
+    ],
+    "coverage": "settled"
+  }
+}

@@ -125,9 +125,10 @@ export function codexResponseItem(
       raw
     });
   }
-  if (item.type === 'function_call') {
+  if (item.type === 'function_call' || item.type === 'custom_tool_call') {
     const tool = textValue(item.name) ?? 'tool';
-    const args = typeof item.arguments === 'string' ? item.arguments : JSON.stringify(item.arguments ?? {});
+    const input = item.type === 'custom_tool_call' ? item.input : item.arguments;
+    const args = typeof input === 'string' ? input : JSON.stringify(input ?? {});
     return observation({
       id: `${id}:json:${recordIndex}:function-call`,
       role: 'tool',
@@ -138,7 +139,7 @@ export function codexResponseItem(
       raw
     });
   }
-  if (item.type === 'function_call_output') {
+  if (item.type === 'function_call_output' || item.type === 'custom_tool_call_output') {
     return observation({
       id: `${id}:json:${recordIndex}:function-output`,
       role: 'tool',
