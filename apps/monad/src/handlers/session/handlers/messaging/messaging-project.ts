@@ -15,7 +15,10 @@ import type { createManagedMeshAgentDelivery } from '#/handlers/session/handlers
 
 import { buildChannelTurnContext } from '#/agent/prompts/channel.ts';
 import { routeChannelMessage } from '#/handlers/session/channel-routing.ts';
-import { messageTextWithAttachments } from '#/handlers/session/handlers/messaging-attachments.ts';
+import {
+  messageAttachmentPresentations,
+  messageTextWithAttachments
+} from '#/handlers/session/handlers/messaging-attachments.ts';
 import {
   channelDelegateMcpServers,
   isWorkplaceProjectTarget,
@@ -221,13 +224,15 @@ export function createSendProjectMessageHandler(ctx: SessionContext, deps: SendP
         sessionId,
         agentName: route.agentName,
         text: messageTextWithAttachments(route.text, attachments),
-        displayText: route.displayText
+        displayText: route.displayText,
+        attachments: messageAttachmentPresentations(attachments)
       });
     return forwardToAcp({
       sessionId,
       agentName: route.agentName,
       text: messageTextWithAttachments(route.text, attachments),
       displayText: route.displayText,
+      attachments: messageAttachmentPresentations(attachments),
       ambientContext,
       channelPromptInput,
       onComplete: dispatchStructuredNext

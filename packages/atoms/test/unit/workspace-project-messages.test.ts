@@ -4,13 +4,40 @@ import type { Message } from '../../src/workspace-experiences/experience/types.t
 import { expect, test } from 'bun:test';
 
 import { builtinAgentAdapters } from '../../src/agent-adapters/index.ts';
-import { __workplaceProjectMessageTest } from '../../src/workspace-experiences/chat-room/utils/projection.ts';
+import {
+  __workplaceProjectMessageTest,
+  messageToView
+} from '../../src/workspace-experiences/chat-room/utils/projection.ts';
 import { configureMeshAgentObservationAdapterResolver } from '../../src/workspace-experiences/experience/mesh-agent-observation/mesh-agent-observation.ts';
 import { projectMemberParticipants } from '../../src/workspace-experiences/experience/project-projection.ts';
 
 configureMeshAgentObservationAdapterResolver((provider) =>
   builtinAgentAdapters.find((adapter) => adapter.provider === provider)
 );
+
+test('project message projection preserves display-only attachment metadata', () => {
+  const attachment = {
+    id: 'att_01ABC0000000' as const,
+    name: 'diagram.png',
+    mime: 'image/png',
+    bytes: 4321,
+    createdAt: '2026-07-19T00:00:00.000Z'
+  };
+
+  expect(
+    messageToView({
+      kind: 'message',
+      id: 'msg_01ABC0000000',
+      role: 'user',
+      parts: [
+        { type: 'text', text: 'Review this.' },
+        { type: 'custom', name: 'attachment', data: attachment }
+      ],
+      status: 'done',
+      seq: '2026-07-19T00:00:00.000Z'
+    }).attachments
+  ).toEqual([attachment]);
+});
 
 const meshSession = (overrides: Partial<MeshSessionView> = {}): MeshSessionView => ({
   id: 'mesh_01KWGEMIprD4',

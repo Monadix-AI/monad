@@ -1,5 +1,7 @@
-import type { SendMessageAttachment } from '@monad/protocol';
+import type { MessageAttachment, SendMessageAttachment } from '@monad/protocol';
 import type { ImageAttachment } from '#/agent/index.ts';
+
+import { newId } from '@monad/protocol';
 
 export function imageAttachments(attachments: SendMessageAttachment[] | undefined): ImageAttachment[] | undefined {
   const images = (attachments ?? [])
@@ -11,6 +13,24 @@ export function imageAttachments(attachments: SendMessageAttachment[] | undefine
       mediaType: attachment.mediaType
     }));
   return images.length ? images : undefined;
+}
+
+export function messageAttachmentPresentations(
+  attachments: SendMessageAttachment[] | undefined,
+  deps: {
+    createdAt?: string;
+    newAttachmentId?: (index: number) => MessageAttachment['id'];
+  } = {}
+): MessageAttachment[] {
+  if (!attachments?.length) return [];
+  const createdAt = deps.createdAt ?? new Date().toISOString();
+  return attachments.map((attachment, index) => ({
+    id: deps.newAttachmentId?.(index) ?? newId('att'),
+    name: attachment.name,
+    mime: attachment.mediaType || 'application/octet-stream',
+    bytes: attachment.size,
+    createdAt
+  }));
 }
 
 function attachmentTextContext(attachments: SendMessageAttachment[] | undefined): string {

@@ -1,5 +1,6 @@
 export type {
   AttachmentReadResponse,
+  MessageAttachment,
   MessageAttachmentRef,
   NativeAgentAttachmentInput
 } from './mesh-agent-attachments.ts';
@@ -153,6 +154,7 @@ export {
   attachmentReadResponseSchema,
   isPreviewableAttachmentMime,
   messageAttachmentRefSchema,
+  messageAttachmentSchema,
   NATIVE_AGENT_ATTACHMENT_PREVIEW_MAX,
   NATIVE_AGENT_ATTACHMENTS_MAX,
   NATIVE_AGENT_INLINE_TEXT_MAX,

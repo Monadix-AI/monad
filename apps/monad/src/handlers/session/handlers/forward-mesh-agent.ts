@@ -1,5 +1,12 @@
 import type { MeshAgentConfig } from '@monad/environment';
-import type { Event, MeshAgentLaunchMode, MeshSessionView, Session, SessionId } from '@monad/protocol';
+import type {
+  Event,
+  MeshAgentLaunchMode,
+  MeshSessionView,
+  MessageAttachment,
+  Session,
+  SessionId
+} from '@monad/protocol';
 import type { SessionContext } from '#/handlers/session/context.ts';
 
 import { newId } from '@monad/protocol';
@@ -59,12 +66,14 @@ export function createForwardMeshAgentHandler(
     sessionId,
     agentName,
     text,
-    displayText
+    displayText,
+    attachments
   }: {
     sessionId: SessionId;
     agentName: string;
     text: string;
     displayText?: string;
+    attachments?: MessageAttachment[];
   }) {
     const session = requireSession(sessionId);
     assertWriteAllowed(session, 'http');
@@ -74,7 +83,8 @@ export function createForwardMeshAgentHandler(
       producer: { kind: 'user' },
       role: 'user',
       type: 'text',
-      text: displayText ?? text
+      text: displayText ?? text,
+      ...(attachments?.length ? { data: { attachments } } : {})
     });
     const emitMeshAgentError = async (err: unknown, fallbackCode?: string) => {
       const { code, message } = extractError(err);

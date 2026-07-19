@@ -15,7 +15,11 @@ import { createForwardMeshAgentHandler } from '#/handlers/session/handlers/forwa
 import { createManagedMeshAgentDelivery } from '#/handlers/session/handlers/managed-mesh-agent-delivery.ts';
 import { createMessagingNotifyHandlers } from '#/handlers/session/handlers/messaging/messaging-notify.ts';
 import { createSendProjectMessageHandler } from '#/handlers/session/handlers/messaging/messaging-project.ts';
-import { imageAttachments, messageTextWithAttachments } from '#/handlers/session/handlers/messaging-attachments.ts';
+import {
+  imageAttachments,
+  messageAttachmentPresentations,
+  messageTextWithAttachments
+} from '#/handlers/session/handlers/messaging-attachments.ts';
 import { createSubscribeHandlers } from '#/handlers/session/handlers/messaging-subscribe.ts';
 
 // Re-exported for existing import sites (tests import member/channel helpers from this module).
@@ -132,6 +136,10 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
   }: { sessionId: SessionId; onComplete?: (text: string) => void | Promise<void> } & SendMessageRequest) {
     const effectiveText = messageTextWithAttachments(text, attachments);
     const modelAttachments = imageAttachments(attachments);
+    const presentedAttachments = messageAttachmentPresentations(attachments);
+    const presentation = presentedAttachments.length
+      ? { data: { attachments: presentedAttachments }, text: text.trim() }
+      : undefined;
     const session = requireSession(sessionId);
     assertWriteAllowed(session, 'http');
     log?.debug(
@@ -177,7 +185,8 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
         producer: { kind: 'user' },
         role: 'user',
         type: 'text',
-        text: effectiveText
+        text: presentation?.text ?? effectiveText,
+        ...(presentation?.data ? { data: presentation.data } : {})
       });
       const messageId = message.id;
       log?.debug(
@@ -207,7 +216,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
     });
     const run = continueFromHistory
       ? loop.runStreamFromHistory(sessionId as SessionId, signal)
-      : loop.runStream(sessionId as SessionId, effectiveText, signal, modelAttachments);
+      : loop.runStream(sessionId as SessionId, effectiveText, signal, modelAttachments, presentation);
     const execution = run
       .then(async () => {
         persistAndRetire(sessionId, round);

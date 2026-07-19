@@ -50,6 +50,105 @@ test('optimistic user messages render immediately until the server echo arrives'
   expect(mergeOptimisticMessages([serverEcho], [optimistic])).toEqual([serverEcho]);
 });
 
+test('optimistic user messages expose safe attachment metadata immediately', () => {
+  const optimistic = createOptimisticUserMessage({
+    attachments: [
+      {
+        kind: 'image',
+        name: 'diagram.png',
+        mediaType: 'image/png',
+        size: 4321,
+        dataBase64: 'sensitive-image-payload'
+      }
+    ],
+    createdAt: '2026-07-19T00:00:00.000Z',
+    human: {
+      id: 'me',
+      av: 'OP',
+      name: 'Operator',
+      kind: 'human',
+      tag: 'User',
+      presence: 'online'
+    },
+    id: 'optimistic-attachment',
+    retry: () => {},
+    status: 'sending',
+    text: ''
+  });
+
+  expect(optimistic.attachments).toEqual([
+    {
+      id: 'att_optimisticattachment_0',
+      name: 'diagram.png',
+      mime: 'image/png',
+      bytes: 4321,
+      createdAt: '2026-07-19T00:00:00.000Z'
+    }
+  ]);
+});
+
+test('attachment-only server echoes match optimistic messages by attachment identity', () => {
+  const human: Participant = {
+    id: 'me',
+    av: 'OP',
+    name: 'Operator',
+    kind: 'human',
+    tag: 'User',
+    presence: 'online'
+  };
+  const first = createOptimisticUserMessage({
+    attachments: [{ kind: 'file-meta', name: 'first.zip', mediaType: 'application/zip', size: 10 }],
+    createdAt: '2026-07-19T00:00:00.000Z',
+    human,
+    id: 'optimistic-first',
+    retry: () => {},
+    status: 'sent',
+    text: ''
+  });
+  const second = createOptimisticUserMessage({
+    attachments: [{ kind: 'file-meta', name: 'second.zip', mediaType: 'application/zip', size: 20 }],
+    createdAt: '2026-07-19T00:00:01.000Z',
+    human,
+    id: 'optimistic-second',
+    retry: () => {},
+    status: 'sent',
+    text: ''
+  });
+  const echo = (id: string, name: string, bytes: number, orderKey: string): Message => ({
+    id,
+    authorId: 'me',
+    authorName: 'Operator',
+    av: 'OP',
+    kind: 'human',
+    tag: 'User',
+    time: '',
+    text: '',
+    attachments: [
+      {
+        id: `att_${id}` as `att_${string}`,
+        name,
+        mime: 'application/zip',
+        bytes,
+        createdAt: orderKey
+      }
+    ],
+    orderKey
+  });
+
+  expect(
+    mergeOptimisticMessages(
+      [
+        echo('msg_second', 'second.zip', 20, '2026-07-19T00:00:02.000Z'),
+        echo('msg_first', 'first.zip', 10, '2026-07-19T00:00:03.000Z')
+      ],
+      [first, second]
+    ).map((message) => ({ id: message.id, renderKey: message.renderKey }))
+  ).toEqual([
+    { id: 'msg_second', renderKey: 'optimistic-second' },
+    { id: 'msg_first', renderKey: 'optimistic-first' }
+  ]);
+});
+
 test('server echoes keep the optimistic render key to avoid remount flicker', () => {
   const optimistic = createOptimisticUserMessage({
     createdAt: '2026-07-06T12:00:00.000Z',

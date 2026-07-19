@@ -112,15 +112,22 @@ export class TurnWriter {
   async beginTurn(
     sessionId: SessionId,
     userText: string,
-    modelInput?: PersistedModelInputOverride
+    modelInput?: PersistedModelInputOverride,
+    presentation?: { data?: Record<string, unknown>; text: string }
   ): Promise<`msg_${string}`> {
     const userMessageId = newId('msg');
     const userMessage: ChatMessage = {
       id: userMessageId,
       sessionId,
       role: 'user',
-      text: userText,
-      data: modelInput,
+      text: presentation?.text ?? userText,
+      data:
+        modelInput || presentation?.data
+          ? {
+              ...(modelInput ?? {}),
+              ...(presentation?.data ?? {})
+            }
+          : undefined,
       createdAt: new Date().toISOString()
     };
     await this.deps.messages.append(userMessage, this.publishOptions());

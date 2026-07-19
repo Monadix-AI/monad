@@ -4,13 +4,13 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { FileIcon } from './FileIcon.tsx';
 
 export interface AttachmentCardProps {
-  downloadLabel: string;
+  downloadLabel?: string;
   mime?: string;
   name: string;
-  onDownload: () => void;
-  onPreview: () => void;
+  onDownload?: () => void;
+  onPreview?: () => void;
   path?: string;
-  previewLabel: string;
+  previewLabel?: string;
   previewable: boolean;
   sizeLabel: string;
 }
@@ -52,7 +52,7 @@ export function AttachmentCard({
         data-attachment-row="actions"
       >
         <span className="font-mono text-[11px] text-muted-foreground">{sizeLabel}</span>
-        {previewable ? (
+        {previewable && onPreview ? (
           <button
             className="inline-flex items-center gap-1 border-0 bg-transparent p-0 font-sans text-accent-blue text-xs"
             onClick={onPreview}
@@ -65,17 +65,19 @@ export function AttachmentCard({
             {previewLabel}
           </button>
         ) : null}
-        <button
-          className="inline-flex items-center gap-1 border-0 bg-transparent p-0 font-sans text-accent-blue text-xs"
-          onClick={onDownload}
-          type="button"
-        >
-          <HugeiconsIcon
-            icon={Download04Icon}
-            size={13}
-          />
-          {downloadLabel}
-        </button>
+        {onDownload ? (
+          <button
+            className="inline-flex items-center gap-1 border-0 bg-transparent p-0 font-sans text-accent-blue text-xs"
+            onClick={onDownload}
+            type="button"
+          >
+            <HugeiconsIcon
+              icon={Download04Icon}
+              size={13}
+            />
+            {downloadLabel}
+          </button>
+        ) : null}
       </div>
     </div>
   );

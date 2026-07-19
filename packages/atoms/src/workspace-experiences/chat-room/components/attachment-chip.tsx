@@ -22,9 +22,11 @@ export function AttachmentChip({
   onPreview?: (attachment: MessageAttachment, line?: number) => void;
 }): React.ReactElement {
   const t = workspaceExperienceT();
-  const previewable = isPreviewableAttachmentMime(attachment.mime);
+  const available = attachment.path !== undefined;
+  const previewable = available && isPreviewableAttachmentMime(attachment.mime);
   const [downloadAttachment] = useDownloadAttachmentMutation();
   const download = async () => {
+    if (!available) return;
     try {
       const { blob } = await downloadAttachment({ id: attachment.id }).unwrap();
       const blobUrl = URL.createObjectURL(blob);
@@ -42,8 +44,8 @@ export function AttachmentChip({
       downloadLabel={t('web.workplace.attachmentDownload')}
       mime={attachment.mime}
       name={attachment.name}
-      onDownload={() => void download()}
-      onPreview={() => onPreview?.(attachment)}
+      onDownload={available ? () => void download() : undefined}
+      onPreview={available ? () => onPreview?.(attachment) : undefined}
       path={attachment.path}
       previewable={previewable}
       previewLabel={t('web.workplace.attachmentPreview')}

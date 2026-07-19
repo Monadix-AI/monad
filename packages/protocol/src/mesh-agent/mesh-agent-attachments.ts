@@ -31,15 +31,24 @@ export function isPreviewableAttachmentMime(mime: string): boolean {
  *  read (wall preview/download), never an execution input. The daemon registers the reference and
  *  snapshots metadata at post time; content stays in the file and is read on demand, so a later
  *  edit/delete of the file changes/breaks the preview (reference semantics, by design). */
-export const messageAttachmentRefSchema = z.object({
+const messageAttachmentBaseSchema = z.object({
   id: attachmentIdSchema,
-  /** Absolute path on the daemon host (typically inside the posting agent's workspace). */
-  path: z.string().min(1),
-  name: z.string().min(1).max(200),
   mime: z.string().min(1).max(100),
   /** File size snapshot taken when the reference was registered. */
   bytes: z.number().int().nonnegative(),
   createdAt: z.string()
+});
+
+export const messageAttachmentSchema = messageAttachmentBaseSchema.extend({
+  name: z.string().min(1).max(500),
+  path: z.string().min(1).optional()
+});
+export type MessageAttachment = z.infer<typeof messageAttachmentSchema>;
+
+export const messageAttachmentRefSchema = messageAttachmentBaseSchema.extend({
+  /** Absolute path on the daemon host (typically inside the posting agent's workspace). */
+  path: z.string().min(1),
+  name: z.string().min(1).max(200)
 });
 export type MessageAttachmentRef = z.infer<typeof messageAttachmentRefSchema>;
 

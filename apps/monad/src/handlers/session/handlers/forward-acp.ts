@@ -1,5 +1,5 @@
 import type { AcpAgentConfig } from '@monad/environment';
-import type { Session, SessionId } from '@monad/protocol';
+import type { MessageAttachment, Session, SessionId } from '@monad/protocol';
 import type { BuildChannelContextInput } from '#/agent/prompts/channel.ts';
 import type { SessionContext } from '#/handlers/session/context.ts';
 
@@ -50,6 +50,7 @@ export function createForwardAcpHandler(ctx: SessionContext, sandboxRootsFor: Sa
     agentName,
     text,
     displayText,
+    attachments,
     ambientContext,
     channelPromptInput,
     onComplete
@@ -58,6 +59,7 @@ export function createForwardAcpHandler(ctx: SessionContext, sandboxRootsFor: Sa
     agentName: string;
     text: string;
     displayText?: string;
+    attachments?: MessageAttachment[];
     ambientContext?: string;
     channelPromptInput?: BuildChannelContextInput;
     onComplete?: (text: string) => void | Promise<void>;
@@ -80,7 +82,8 @@ export function createForwardAcpHandler(ctx: SessionContext, sandboxRootsFor: Sa
       producer: { kind: 'user' },
       role: 'user',
       type: 'text',
-      text: displayText ?? text
+      text: displayText ?? text,
+      ...(attachments?.length ? { data: { attachments } } : {})
     });
     const agentMessage = await messageIngress.begin({
       transcriptTargetId: sessionId,

@@ -98,11 +98,16 @@ const persistedToolResultSchema = z.object({
 });
 
 export interface PersistedModelInputOverride {
-  modelInput: {
-    kind: 'skill';
-    skillName: string;
-    text: string;
-  };
+  modelInput:
+    | {
+        kind: 'skill';
+        skillName: string;
+        text: string;
+      }
+    | {
+        kind: 'attachments';
+        text: string;
+      };
 }
 
 function asPersistedToolCall(data: unknown): PersistedToolCall | undefined {
@@ -170,9 +175,9 @@ export function persistToolResultEnvelope(result: ToolResult<unknown>): Persiste
 
 function asModelInputOverride(data: unknown): PersistedModelInputOverride | undefined {
   const d = data as Partial<PersistedModelInputOverride> | null | undefined;
-  return d?.modelInput?.kind === 'skill' &&
-    typeof d.modelInput.skillName === 'string' &&
-    typeof d.modelInput.text === 'string'
+  if (!d?.modelInput || typeof d.modelInput.text !== 'string') return undefined;
+  if (d.modelInput.kind === 'attachments') return d as PersistedModelInputOverride;
+  return d.modelInput.kind === 'skill' && typeof d.modelInput.skillName === 'string'
     ? (d as PersistedModelInputOverride)
     : undefined;
 }

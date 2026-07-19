@@ -22,7 +22,7 @@ import {
   entityAvatarUrl,
   entityAvatarWriteUrl,
   meshAgentProductDisplayName,
-  messageAttachmentRefSchema,
+  messageAttachmentSchema,
   renameMeshAgentProjectMemberDisplayName
 } from '@monad/protocol';
 
@@ -52,7 +52,7 @@ function attachmentsFromParts(parts: UIPart[]): MessageAttachment[] {
   const attachments: MessageAttachment[] = [];
   for (const part of parts) {
     if (part.type !== 'custom' || part.name !== 'attachment') continue;
-    const parsed = messageAttachmentRefSchema.safeParse(part.data);
+    const parsed = messageAttachmentSchema.safeParse(part.data);
     if (parsed.success) attachments.push(parsed.data);
   }
   return attachments;

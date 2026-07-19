@@ -21,6 +21,30 @@ test('replayHistory excludes directive (slash-command) turns from the model prom
   expect(replayed.map((m) => m.content)).toEqual(['hello', 'after the command']);
 });
 
+test('replayHistory restores attachment model context without exposing it as visible message text', () => {
+  const visible = 'Review this.';
+  const modelText = `${visible}\n\n<attachments>\nAttachment 1: diagram.png\n</attachments>`;
+  const history: ChatMessage[] = [
+    {
+      ...msg('m1', visible),
+      data: {
+        attachments: [
+          {
+            id: 'att_01ABC0000000',
+            name: 'diagram.png',
+            mime: 'image/png',
+            bytes: 4321,
+            createdAt: '2026-07-19T00:00:00.000Z'
+          }
+        ],
+        modelInput: { kind: 'attachments', text: modelText }
+      }
+    }
+  ];
+
+  expect(replayHistory(history)).toEqual([{ role: 'user', content: modelText }]);
+});
+
 test('returns the same array reference on a cache hit (identical history)', () => {
   const cache = new PromptReplayCache();
   const history = [msg('m1', 'hello'), msg('m2', 'world', 'assistant')];

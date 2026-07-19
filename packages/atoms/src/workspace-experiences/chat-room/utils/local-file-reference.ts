@@ -1,7 +1,10 @@
+import type { MessageAttachmentRef } from '@monad/protocol';
 import type { MessageAttachment } from '../../experience/types.ts';
 
+import { isMessageAttachmentRef } from '../../experience/types.ts';
+
 export interface LocalFileReference {
-  attachment?: MessageAttachment;
+  attachment?: MessageAttachmentRef;
   line?: number;
   path: string;
 }
@@ -34,7 +37,9 @@ export function resolveLocalFileReference(href: string, attachments: readonly Me
   const fragment = fragmentIndex === -1 ? '' : href.slice(fragmentIndex + 1);
   const path = normalizeLocalFileTarget(target);
   const lineMatch = /^L([1-9]\d*)$/.exec(fragment);
-  const attachment = attachments.find((item) => normalizeLocalFileTarget(item.path) === path);
+  const attachment = attachments.find(
+    (item): item is MessageAttachmentRef => isMessageAttachmentRef(item) && normalizeLocalFileTarget(item.path) === path
+  );
   return {
     ...(attachment ? { attachment } : {}),
     ...(lineMatch ? { line: Number.parseInt(lineMatch[1] ?? '1', 10) } : {}),

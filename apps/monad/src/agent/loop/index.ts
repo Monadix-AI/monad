@@ -2,6 +2,7 @@ import type { Cost, SessionId } from '@monad/protocol';
 import type { Tool } from '#/capabilities/tools/types.ts';
 import type { ModelMessage, ModelUsage, ToolCall, ToolSpec } from '../model/index.ts';
 import type { ExplicitSkill } from './internal/explicit-skill.ts';
+import type { PersistedModelInputOverride } from './replay.ts';
 import type { AgentLoopDeps, ChatMessage, ImageAttachment } from './types.ts';
 
 import { finishReasonSchema, newId } from '@monad/protocol';
@@ -114,7 +115,8 @@ export class AgentLoop {
     sessionId: SessionId,
     userText: string,
     signal?: AbortSignal,
-    attachments?: ImageAttachment[]
+    attachments?: ImageAttachment[],
+    presentation?: { data?: Record<string, unknown>; text: string }
   ): Promise<void> {
     this.prompt.setAttachments(attachments);
     this.prompt.resetSkillExpansion();
@@ -122,7 +124,10 @@ export class AgentLoop {
     if (submit.blocked) {
       // Persist the user's (raw) prompt before the policy reply so the transcript shows what was
       // denied — a denied turn still has a user bubble, not an orphan assistant message.
-      const messageId = await this.writer.beginTurn(sessionId, userText);
+      const modelInput = presentation
+        ? ({ modelInput: { kind: 'attachments', text: userText } } satisfies PersistedModelInputOverride)
+        : undefined;
+      const messageId = await this.writer.beginTurn(sessionId, userText, modelInput, presentation);
       await this.writer.finishTurn(sessionId, messageId, submit.reason);
       return;
     }
@@ -131,7 +136,10 @@ export class AgentLoop {
     // only its result (consistent with the model auto-loading a fork skill).
     const ex = resolveExplicitSkill(this.deps.skills ?? [], userText);
     if (ex?.skill.fork && this.deps.runFork) {
-      const messageId = await this.writer.beginTurn(sessionId, userText);
+      const modelInput = presentation
+        ? ({ modelInput: { kind: 'attachments', text: userText } } satisfies PersistedModelInputOverride)
+        : undefined;
+      const messageId = await this.writer.beginTurn(sessionId, userText, modelInput, presentation);
       this.toolGrant.activateSkill(ex.skill.name);
       try {
         const result = await this.deps.runFork(
@@ -151,8 +159,12 @@ export class AgentLoop {
       return;
     }
 
-    const modelInput = ex ? skillModelInput(ex.skill.name, this.applyNonForkSkill(ex)) : undefined;
-    const messageId = await this.writer.beginTurn(sessionId, userText, modelInput);
+    const modelInput = ex
+      ? skillModelInput(ex.skill.name, this.applyNonForkSkill(ex))
+      : presentation
+        ? ({ modelInput: { kind: 'attachments', text: userText } } satisfies PersistedModelInputOverride)
+        : undefined;
+    const messageId = await this.writer.beginTurn(sessionId, userText, modelInput, presentation);
 
     await this.runAssistantStream(sessionId, messageId, signal);
   }

@@ -51,6 +51,7 @@ export function ChatRoomExperienceView({ runtime }: { runtime: ChatRoomExperienc
       const id = existingId ?? `optimistic:${Date.now()}:${optimisticIdRef.current++}`;
       const retry = () => void sendOptimisticDirective({ attachments, text: trimmed }, id);
       const optimisticMessage = createOptimisticUserMessage({
+        attachments,
         human,
         id,
         retry,

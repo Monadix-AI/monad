@@ -59,6 +59,33 @@ test('runStream emits ordered canonical deltas then one completed message', asyn
   expect(history[1]?.text).toBe('Hello world');
 });
 
+test('runStream persists safe attachment presentation separately from model input text', async () => {
+  const { loop, messages } = harness(['ok']);
+  const sessionId = newId('ses') as SessionId;
+  const modelText = 'Review this.\n\n<attachments>\nAttachment 1: diagram.png\n</attachments>';
+  const attachment = {
+    id: 'att_01ABC0000000' as const,
+    name: 'diagram.png',
+    mime: 'image/png',
+    bytes: 4321,
+    createdAt: '2026-07-19T00:00:00.000Z'
+  };
+
+  await loop.runStream(sessionId, modelText, undefined, undefined, {
+    data: { attachments: [attachment] },
+    text: 'Review this.'
+  });
+
+  expect(messages.list(sessionId)[0]).toMatchObject({
+    role: 'user',
+    text: 'Review this.',
+    data: {
+      attachments: [attachment],
+      modelInput: { kind: 'attachments', text: modelText }
+    }
+  });
+});
+
 test('runStreamFromHistory generates an assistant response without appending another user message', async () => {
   const { loop, messages } = harness(['Alternative response']);
   const sessionId = newId('ses') as SessionId;

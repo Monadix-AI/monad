@@ -1,4 +1,9 @@
-import type { AgentObservationEvent, MessageAttachmentRef, NativeAgentDeliveryId } from '@monad/protocol';
+import type {
+  AgentObservationEvent,
+  MessageAttachmentRef,
+  NativeAgentDeliveryId,
+  MessageAttachment as ProtocolMessageAttachment
+} from '@monad/protocol';
 import type { WorkspaceExperienceIcon, WorkspaceExperienceProject } from '@monad/sdk-experience';
 
 export type { WorkspaceExperienceProductIconId } from '@monad/sdk-experience';
@@ -79,7 +84,11 @@ export interface Message {
   retrySend?: () => void;
 }
 
-export type MessageAttachment = MessageAttachmentRef;
+export type MessageAttachment = ProtocolMessageAttachment;
+
+export function isMessageAttachmentRef(attachment: MessageAttachment): attachment is MessageAttachmentRef {
+  return attachment.path !== undefined;
+}
 
 export interface TypingIndicator {
   av: string;

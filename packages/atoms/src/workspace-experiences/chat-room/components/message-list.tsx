@@ -7,6 +7,7 @@ import { activeMessageOutlineIds, MessageOutline, type MessageOutlineItem } from
 import { VirtualList, type VirtualListHandle } from '@monad/ui/components/VirtualList';
 import { type CSSProperties, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
+import { isMessageAttachmentRef } from '../../experience/types.ts';
 import { projectSessionUiKey, useChatRoomExperienceStore } from '../store.ts';
 import { AttachmentChip } from './attachment-chip.tsx';
 import { MarkdownWithMentions, MessageRow } from './message-row.tsx';
@@ -103,7 +104,9 @@ export function ChatMessageList({
   const uiKey = projectSessionUiKey(room.projectId, room.activeSessionId);
   const openFilePreview = useChatRoomExperienceStore((state) => state.openFilePreview);
   const onOpenAttachment = useCallback(
-    (attachment: MessageAttachment, line?: number) => openFilePreview(uiKey, { attachment, line }),
+    (attachment: MessageAttachment, line?: number) => {
+      if (isMessageAttachmentRef(attachment)) openFilePreview(uiKey, { attachment, line });
+    },
     [openFilePreview, uiKey]
   );
   const lastMessageKey = lastMessage ? messageRenderKey(lastMessage) : undefined;

@@ -18,6 +18,7 @@ import {
   meshConvenienceEventPageSchema,
   meshSessionViewSchema,
   messageAttachmentRefSchema,
+  messageAttachmentSchema,
   NATIVE_AGENT_ATTACHMENT_PREVIEW_MAX,
   NATIVE_AGENT_ATTACHMENTS_MAX,
   NATIVE_AGENT_INLINE_TEXT_MAX,
@@ -771,7 +772,7 @@ test('attachment previews are bounded snippets and never split a surrogate pair'
 
 test('attachment refs and direct messages carry the structured file reference', () => {
   const ref = messageAttachmentRefSchema.parse({
-    id: 'att_01ABC0000000',
+    id: 'att_01ABC0000000' as const,
     path: '/tmp/project/report.md',
     name: 'report.md',
     mime: 'text/markdown',
@@ -789,6 +790,23 @@ test('attachment refs and direct messages carry the structured file reference', 
     createdAt: '2026-06-28T00:00:00.000Z'
   });
   expect(message.attachments?.[0]?.path).toBe('/tmp/project/report.md');
+});
+
+test('message attachment presentations allow metadata without claiming a readable file reference', () => {
+  const presentation = {
+    id: 'att_01ABC0000000' as const,
+    name: 'diagram.png',
+    mime: 'image/png',
+    bytes: 4321,
+    createdAt: '2026-07-19T00:00:00.000Z'
+  };
+
+  expect(messageAttachmentSchema.parse(presentation)).toEqual(presentation);
+  expect(messageAttachmentRefSchema.safeParse(presentation).success).toBe(false);
+  expect(messageAttachmentSchema.parse({ ...presentation, path: '/tmp/diagram.png' })).toEqual({
+    ...presentation,
+    path: '/tmp/diagram.png'
+  });
 });
 
 test('native agent HTTP endpoints are declared in the protocol daemon contract', () => {
