@@ -18,6 +18,7 @@
     "./hook": "./src/hook.ts",
     "./locale": "./src/locale.ts",
     "./message-type": "./src/message-type.ts",
+    "./mesh-agent-session-runtime": "./src/mesh-agent-session-runtime.ts",
     "./model": "./src/model.ts",
     "./sandbox": "./src/sandbox.ts"
   },
