@@ -137,6 +137,15 @@ export type {
   StartMeshAgentResponse,
   UpsertMeshAgentRequest
 } from './mesh-session.ts';
+export type {
+  MeshAgentRuntimeCapabilities,
+  MeshAgentRuntimeFailure,
+  MeshAgentTurnAttachment,
+  MeshAgentTurnInput,
+  MeshConnectionCondition,
+  MeshExecutionActivity,
+  MeshSessionLifecycle
+} from './mesh-session-runtime.ts';
 export type { ObservationCursor, ObservationPosition, ObservationResume } from './observation-cursor.ts';
 
 export {
@@ -149,6 +158,15 @@ export {
   NATIVE_AGENT_INLINE_TEXT_MAX,
   nativeAgentAttachmentInputSchema
 } from './mesh-agent-attachments.ts';
+export {
+  meshAgentRuntimeCapabilitiesSchema,
+  meshAgentRuntimeFailureSchema,
+  meshAgentTurnAttachmentSchema,
+  meshAgentTurnInputSchema,
+  meshConnectionConditionSchema,
+  meshExecutionActivitySchema,
+  meshSessionLifecycleSchema
+} from './mesh-session-runtime.ts';
 export {
   KNOWN_MESH_AGENT_PRODUCT_ICONS,
   KNOWN_MESH_AGENT_PROVIDERS,
