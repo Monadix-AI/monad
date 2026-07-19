@@ -1,13 +1,14 @@
-import { expect, test } from 'bun:test';
 import type { MeshAgentTurnAttachment } from '../src/index.ts';
 
+import { expect, test } from 'bun:test';
+
 import {
-  NATIVE_AGENT_ATTACHMENTS_MAX,
   meshAgentRuntimeCapabilitiesSchema,
   meshAgentTurnInputSchema,
   meshConnectionConditionSchema,
   meshExecutionActivitySchema,
-  meshSessionLifecycleSchema
+  meshSessionLifecycleSchema,
+  NATIVE_AGENT_ATTACHMENTS_MAX
 } from '../src/index.ts';
 
 const attachment = {
@@ -87,7 +88,9 @@ test('turn input preserves bounded registered attachment references', () => {
 
 test('execution activity rejects impossible pid and queue combinations', () => {
   expect(meshExecutionActivitySchema.safeParse({ state: 'idle', pid: null, queuedTurnCount: 1 }).success).toBe(false);
-  expect(meshExecutionActivitySchema.safeParse({ state: 'running', pid: null, queuedTurnCount: 0 }).success).toBe(false);
+  expect(meshExecutionActivitySchema.safeParse({ state: 'running', pid: null, queuedTurnCount: 0 }).success).toBe(
+    false
+  );
 });
 
 test('turn input rejects attachment overflow', () => {

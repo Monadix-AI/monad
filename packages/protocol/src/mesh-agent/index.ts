@@ -159,15 +159,6 @@ export {
   nativeAgentAttachmentInputSchema
 } from './mesh-agent-attachments.ts';
 export {
-  meshAgentRuntimeCapabilitiesSchema,
-  meshAgentRuntimeFailureSchema,
-  meshAgentTurnAttachmentSchema,
-  meshAgentTurnInputSchema,
-  meshConnectionConditionSchema,
-  meshExecutionActivitySchema,
-  meshSessionLifecycleSchema
-} from './mesh-session-runtime.ts';
-export {
   KNOWN_MESH_AGENT_PRODUCT_ICONS,
   KNOWN_MESH_AGENT_PROVIDERS,
   meshAgentAdapterSettingsSchema,
@@ -316,6 +307,15 @@ export {
   startMeshAgentResponseSchema,
   upsertMeshAgentRequestSchema
 } from './mesh-session.ts';
+export {
+  meshAgentRuntimeCapabilitiesSchema,
+  meshAgentRuntimeFailureSchema,
+  meshAgentTurnAttachmentSchema,
+  meshAgentTurnInputSchema,
+  meshConnectionConditionSchema,
+  meshExecutionActivitySchema,
+  meshSessionLifecycleSchema
+} from './mesh-session-runtime.ts';
 export {
   formatObservationCursor,
   observationCursorSchema,

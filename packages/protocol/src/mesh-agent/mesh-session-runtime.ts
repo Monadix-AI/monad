@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { NATIVE_AGENT_ATTACHMENTS_MAX, messageAttachmentRefSchema } from './mesh-agent-attachments.ts';
+import { messageAttachmentRefSchema, NATIVE_AGENT_ATTACHMENTS_MAX } from './mesh-agent-attachments.ts';
 
 export const meshAgentRuntimeFailureSchema = z.object({
   code: z.string().min(1),
