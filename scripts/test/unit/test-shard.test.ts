@@ -5,6 +5,7 @@ import { join } from 'node:path';
 
 import {
   collectTestFiles,
+  nextBatchSize,
   parseMonadTestShardArgs,
   runShardedTestFiles,
   shardableTargets
@@ -81,40 +82,82 @@ describe('collectTestFiles', () => {
       'test/e2e/nested/c.test.tsx',
       'test/e2e/d.windows.test.ts',
       'test/e2e/live-model.test.ts',
-      'test/e2e/helpers.ts'
+      'test/e2e/helpers.ts',
+      'test/e2e/e.spec.ts',
+      'test/e2e/f_test.ts'
     ]);
     const target = join(root, 'test/e2e');
 
     expect(await collectTestFiles([target], ['**/*.windows.test.ts', '**/live-*.test.ts'])).toEqual([
       join(target, 'a.test.ts'),
       join(target, 'b.test.ts'),
+      join(target, 'e.spec.ts'),
+      join(target, 'f_test.ts'),
       join(target, 'nested/c.test.tsx')
     ]);
   });
 });
 
+describe('nextBatchSize', () => {
+  test('front-loads large batches and degrades to single files at the tail', () => {
+    const shards = 4;
+    const sizes: number[] = [];
+    for (let remaining = 61; remaining > 0; remaining -= sizes.at(-1) as number) {
+      sizes.push(Math.min(nextBatchSize(remaining, shards), remaining));
+    }
+
+    expect(sizes).toEqual([8, 7, 6, 5, 5, 4, 4, 3, 3, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1]);
+    expect(sizes.reduce((total, size) => total + size, 0)).toBe(61);
+  });
+
+  test('never returns a zero batch, which would spin the worker loop forever', () => {
+    expect(nextBatchSize(1, 8)).toBe(1);
+  });
+});
+
 describe('runShardedTestFiles', () => {
   test('runs every file exactly once and reports the failing exit code', async () => {
-    const seen: string[] = [];
+    const ran: string[] = [];
     const exitCode = await runShardedTestFiles({
       files: ['ok-1', 'fail-2', 'ok-3', 'ok-4'],
       shards: 2,
       junitDir: '/tmp',
       env: {},
-      buildCommand: (file) => ['bash', '-c', `echo ran ${file}; exit ${file.startsWith('fail') ? 3 : 0}`],
-      onResult: (result) => seen.push(`${result.file}:${result.exitCode}:${result.output.trim()}`)
+      buildCommand: (batch) => [
+        'bash',
+        '-c',
+        `echo ran ${batch.join(' ')}; exit ${batch.some((file) => file.startsWith('fail')) ? 3 : 0}`
+      ],
+      onResult: (result) => ran.push(...result.output.trim().replace('ran ', '').split(' '))
     });
 
     expect(exitCode).toBe(3);
-    expect(seen.sort()).toEqual(['fail-2:3:ran fail-2', 'ok-1:0:ran ok-1', 'ok-3:0:ran ok-3', 'ok-4:0:ran ok-4']);
+    expect(ran.sort()).toEqual(['fail-2', 'ok-1', 'ok-3', 'ok-4']);
+  });
+
+  test('reports the whole batch a failing process covered so its cases can be reattributed', async () => {
+    const results: Array<{ files: string[]; exitCode: number }> = [];
+    await runShardedTestFiles({
+      files: ['a', 'b', 'c', 'd'],
+      shards: 1,
+      junitDir: '/tmp',
+      env: {},
+      buildCommand: () => ['bash', '-c', 'exit 1'],
+      onResult: (result) => results.push({ files: result.files, exitCode: result.exitCode })
+    });
+
+    expect(results).toEqual([
+      { files: ['a', 'b'], exitCode: 1 },
+      { files: ['c'], exitCode: 1 },
+      { files: ['d'], exitCode: 1 }
+    ]);
   });
 
   test('bounds concurrency to the shard count', async () => {
     let running = 0;
     let peak = 0;
-    const files = ['a', 'b', 'c', 'd', 'e', 'f'];
     await runShardedTestFiles({
-      files,
+      files: ['a', 'b', 'c', 'd', 'e', 'f'],
       shards: 2,
       junitDir: '/tmp',
       env: {},

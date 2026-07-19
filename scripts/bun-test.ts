@@ -156,10 +156,10 @@ async function runSharded(files: string[]): Promise<{ exitCode: number; junitRep
     shards: parsedShardArgs.shards,
     junitDir: tempDir as string,
     env,
-    buildCommand: (file, shardJunitPath) => [
+    buildCommand: (batch, shardJunitPath) => [
       'bun',
       'test',
-      file,
+      ...batch,
       ...args.filter((arg) => !files.includes(arg) && !(shardTargets ?? []).includes(arg)),
       ...coverage,
       ...ignore,

@@ -3,7 +3,9 @@ import { join } from 'node:path';
 
 const SHARD_ARG_PREFIX = '--monad-shards=';
 const AUTO_SHARD_CAP = 4;
-const TEST_FILE_GLOB = '**/*.test.{ts,tsx}';
+// Must stay equal to Bun's own default test-file selection, or a sharded run silently skips files
+// that an unsharded run executes.
+const TEST_FILE_GLOB = '**/*{.test,_test,.spec,_spec}.{js,jsx,ts,tsx,mjs,cjs,mts,cts}';
 const NAME_FILTER_FLAGS = new Set(['-t', '--test-name-pattern']);
 
 export interface MonadTestShardArgs {
@@ -12,7 +14,7 @@ export interface MonadTestShardArgs {
 }
 
 export interface ShardedFileResult {
-  file: string;
+  files: string[];
   exitCode: number;
   output: string;
   junitPath: string;
@@ -79,14 +81,23 @@ export async function collectTestFiles(targets: string[], ignorePatterns: string
   return [...files].sort();
 }
 
-/** Runs one `bun test` process per file across a fixed worker pool. Per-file isolation is what makes
- *  this safe: `scripts/test-setup.ts` keys MONAD_HOME by pid and `serveTransport` binds port 0 plus a
- *  pid-scoped socket path, so concurrent shards cannot collide on home state, ports, or sockets. */
+/** Guided self-scheduling: a worker claims `remaining / (shards * 2)` files at a time, so early
+ *  batches are large and the tail degrades to single files. One `bun test` process per file would
+ *  reload the daemon module graph 60+ times (~0.7s each, measured); one batch per worker would
+ *  amortize that but let a single slow file strand a worker. This splits the difference. */
+export function nextBatchSize(remaining: number, shards: number): number {
+  return Math.max(1, Math.ceil(remaining / (shards * 2)));
+}
+
+/** Runs the files through a fixed worker pool of `bun test` processes. Per-process isolation is what
+ *  makes this safe: `scripts/test-setup.ts` keys MONAD_HOME by pid and `serveTransport` binds port 0
+ *  plus a pid-scoped socket path, so concurrent shards cannot collide on home state, ports, or
+ *  sockets. */
 export async function runShardedTestFiles(options: {
   files: string[];
   shards: number;
   junitDir: string;
-  buildCommand: (file: string, junitPath: string) => string[];
+  buildCommand: (files: string[], junitPath: string) => string[];
   env: Record<string, string | undefined>;
   onResult: (result: ShardedFileResult) => void;
 }): Promise<number> {
@@ -95,9 +106,13 @@ export async function runShardedTestFiles(options: {
   let exitCode = 0;
 
   const worker = async (): Promise<void> => {
-    for (let file = queue.shift(); file !== undefined; file = queue.shift()) {
+    for (
+      let batch = queue.splice(0, nextBatchSize(queue.length, options.shards));
+      batch.length > 0;
+      batch = queue.splice(0, nextBatchSize(queue.length, options.shards))
+    ) {
       const junitPath = join(options.junitDir, `junit-${nextJunitId++}.xml`);
-      const proc = Bun.spawn(options.buildCommand(file, junitPath), {
+      const proc = Bun.spawn(options.buildCommand(batch, junitPath), {
         stdout: 'pipe',
         stderr: 'pipe',
         stdin: 'ignore',
@@ -109,7 +124,7 @@ export async function runShardedTestFiles(options: {
         proc.exited
       ]);
       if (code !== 0) exitCode = code;
-      options.onResult({ file, exitCode: code, output: `${stdout}${stderr}`, junitPath });
+      options.onResult({ files: batch, exitCode: code, output: `${stdout}${stderr}`, junitPath });
     }
   };
 
