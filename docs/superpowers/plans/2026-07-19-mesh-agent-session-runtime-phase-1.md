@@ -364,5 +364,7 @@ Update this plan's checkboxes and report the exact test commands and results. Do
 - `bun run --cwd packages/protocol typecheck`: passed.
 - `bun run --cwd packages/sdk-atom typecheck`: passed.
 - `bun run check:test-assertions`: passed with no weak assertions.
+- `bun run test`: 18 package tasks passed.
+- `bun run typecheck`: 18 package tasks passed.
+- `bun run lint`: passed across 2590 files with no fixes applied.
 - Protocol topology leakage check: no runtime-plan or channel discriminant vocabulary found.
-- Full pre-commit quality gate remains blocked by unrelated WIP formatting in `apps/monad/test/unit/mesh-agent-event-pages.test.ts`.
