@@ -1,28 +1,23 @@
+import type { MeshAgentAuthState, MeshAgentProductIcon, MeshAgentProvider, MeshAgentView } from '@monad/protocol';
 import type {
-  ExternalAgentAuthState,
-  ExternalAgentProductIcon,
-  ExternalAgentProvider,
-  ExternalAgentView
-} from '@monad/protocol';
-import type {
-  BuildExternalAgentLaunchOptions,
-  ExternalAgentLaunchSpec,
-  ExternalAgentManagedRuntime,
-  ExternalAgentOutputEvent,
-  ExternalAgentProviderAdapter,
-  ExternalAgentRuntimeHandle
+  BuildMeshAgentLaunchOptions,
+  MeshAgentLaunchSpec,
+  MeshAgentManagedRuntime,
+  MeshAgentOutputEvent,
+  MeshAgentProviderAdapter,
+  MeshAgentRuntimeHandle
 } from '@monad/sdk-atom';
 
 import { homedir } from 'node:os';
-import { defaultBinProbes, ExternalAgentError, resolveBinary } from '@monad/sdk-atom';
+import { defaultBinProbes, MeshAgentError, resolveBinary } from '@monad/sdk-atom';
 
 import { compactObject, hasFlag, parseStructuredAuthState } from './adapter-shared.ts';
-import { parseExternalAgentArgumentSupport } from './argument-support.ts';
+import { parseMeshAgentArgumentSupport } from './argument-support.ts';
 import { resizePty, sendPtyInput, stopPty } from './pty.ts';
-import { externalAgentAdapterSettings } from './settings.ts';
+import { meshAgentAdapterSettings } from './settings.ts';
 
 // CLI-adapter boilerplate (detect/launch-args/auth-probes/pty+oneshot fallback) shared by every
-// external agent provider built from `makeAppServerCliAdapter`. Each provider's real app-server wire
+// MeshAgent provider built from `makeAppServerCliAdapter`. Each provider's real app-server wire
 // protocol is hand-written per-provider (`AppServerCliHooks`, see openclaw/app-server.ts and
 // hermes/app-server.ts) — OpenClaw's gateway wraps every frame in a bespoke `{type, id, ...}` envelope
 // and Hermes wraps every notification as `{method:"event", params:{type,...}}`; neither is a generic
@@ -36,20 +31,20 @@ export function recordValue(value: unknown): Record<string, unknown> | undefined
  *  Hermes). Passed as `appServerHooks` to `makeAppServerCliAdapter`. */
 export interface AppServerCliHooks {
   initialize(
-    handle: ExternalAgentRuntimeHandle,
-    context: Parameters<NonNullable<ExternalAgentProviderAdapter['initialize']>>[1]
+    handle: MeshAgentRuntimeHandle,
+    context: Parameters<NonNullable<MeshAgentProviderAdapter['initialize']>>[1]
   ): void;
-  parseAppServerOutput(chunk: string, handle?: ExternalAgentRuntimeHandle): ExternalAgentOutputEvent[];
-  sendAppServerInput(handle: ExternalAgentRuntimeHandle, input: string): void;
+  parseAppServerOutput(chunk: string, handle?: MeshAgentRuntimeHandle): MeshAgentOutputEvent[];
+  sendAppServerInput(handle: MeshAgentRuntimeHandle, input: string): void;
   resolveAppServerApproval(
-    handle: ExternalAgentRuntimeHandle,
-    resolution: Parameters<ExternalAgentProviderAdapter['resolveApproval']>[1]
+    handle: MeshAgentRuntimeHandle,
+    resolution: Parameters<MeshAgentProviderAdapter['resolveApproval']>[1]
   ): void;
 }
 
 export interface MakeAppServerCliAdapterOptions {
-  provider: ExternalAgentProvider;
-  productIcon: ExternalAgentProductIcon;
+  provider: MeshAgentProvider;
+  productIcon: MeshAgentProductIcon;
   label: string;
   /** Binary name probed on PATH and used as the default command. */
   bin: string;
@@ -73,9 +68,9 @@ export interface MakeAppServerCliAdapterOptions {
    *  `auth` subcommand rejects `--json` (Hermes) — else the probe errors and a signed-in agent is
    *  misreported as unauthenticated. The plain-text exit code (0 = authenticated) is used instead. */
   authStatusJson?: boolean;
-  parseAuthStatus?(output: string, exitCode: number | null): ExternalAgentAuthState;
+  parseAuthStatus?(output: string, exitCode: number | null): MeshAgentAuthState;
   /** Managed project-agent runtime behavior; omit for a non-managed adapter. */
-  managedRuntime?: ExternalAgentManagedRuntime;
+  managedRuntime?: MeshAgentManagedRuntime;
   /** Opt-in `cli-oneshot` launch mode for a provider with no persistent app-server backend (Hermes):
    *  the daemon spawns a fresh process per turn with `turnArgs(input)` appended to the base argv. */
   oneshot?: {
@@ -99,7 +94,7 @@ export interface MakeAppServerCliAdapterOptions {
     usesDaemonAssignedPort?: boolean;
     /** Query-string params built from the agent's config at launch time (e.g. a shared-secret token
      *  read from `agent.env`). */
-    query?(agent: ExternalAgentView): Record<string, string> | undefined;
+    query?(agent: MeshAgentView): Record<string, string> | undefined;
   };
   /** The real CLI flag this provider accepts to bypass its own approval prompts (e.g. Hermes's
    *  `--yolo` — confirmed against its CLI reference: nousresearch/hermes-agent/website/docs/reference/
@@ -111,12 +106,12 @@ export interface MakeAppServerCliAdapterOptions {
   skipApprovalFlag?: string;
 }
 
-/** Build a full `ExternalAgentProviderAdapter` for a coding CLI whose app-server launch mode is a
+/** Build a full `MeshAgentProviderAdapter` for a coding CLI whose app-server launch mode is a
  *  persistent gateway process reached over WebSocket (OpenClaw, Hermes), plus pty/cli-oneshot
  *  fallbacks. */
 export function makeAppServerCliAdapter(
   options: MakeAppServerCliAdapterOptions
-): Omit<ExternalAgentProviderAdapter, 'events'> {
+): Omit<MeshAgentProviderAdapter, 'events'> {
   const appServerTransports = ['ws'] as const;
 
   function skipApprovalArgs(args: string[], skipProviderApprovals: boolean): string[] {
@@ -124,7 +119,7 @@ export function makeAppServerCliAdapter(
     return [...args, options.skipApprovalFlag];
   }
 
-  function buildLaunch(agent: ExternalAgentView, opts: BuildExternalAgentLaunchOptions): ExternalAgentLaunchSpec {
+  function buildLaunch(agent: MeshAgentView, opts: BuildMeshAgentLaunchOptions): MeshAgentLaunchSpec {
     const launchMode = opts.launchMode ?? agent.defaultLaunchMode;
     let args = [...(agent.args ?? [])];
     if (opts.providerSessionRef && !hasFlag(args, '--session-id')) {
@@ -136,11 +131,11 @@ export function makeAppServerCliAdapter(
 
     if (launchMode === 'app-server') {
       if (!options.appServerSubcommand) {
-        throw new ExternalAgentError('unsupported_capability', `${options.label} has no app-server backend`);
+        throw new MeshAgentError('unsupported_capability', `${options.label} has no app-server backend`);
       }
       const transport = opts.appServerTransport ?? agent.appServerTransport ?? 'ws';
       if (!(appServerTransports as readonly string[]).includes(transport)) {
-        throw new ExternalAgentError(
+        throw new MeshAgentError(
           'unsupported_capability',
           `${options.label} app-server transport "${transport}" is not supported; use ${appServerTransports.join(' or ')}`
         );
@@ -168,7 +163,7 @@ export function makeAppServerCliAdapter(
 
     if (launchMode === 'cli-oneshot') {
       if (!options.oneshot) {
-        throw new ExternalAgentError('unsupported_capability', `${options.label} has no cli-oneshot launch mode`);
+        throw new MeshAgentError('unsupported_capability', `${options.label} has no cli-oneshot launch mode`);
       }
       // Base argv only — the per-turn directive is appended by the daemon via `oneshotTurnArgs`. Each
       // turn is a stateless fresh process (no --resume selector), so no `session-resume` capability.
@@ -196,7 +191,7 @@ export function makeAppServerCliAdapter(
     };
   }
 
-  function buildAuthLaunch(agent: ExternalAgentView, args: string[]): ExternalAgentLaunchSpec {
+  function buildAuthLaunch(agent: MeshAgentView, args: string[]): MeshAgentLaunchSpec {
     return {
       argv: [agent.command, ...args],
       cwd: homedir(),
@@ -208,16 +203,16 @@ export function makeAppServerCliAdapter(
     };
   }
 
-  function parseTerminalOutput(chunk: string): ExternalAgentOutputEvent[] {
+  function parseTerminalOutput(chunk: string): MeshAgentOutputEvent[] {
     return chunk.length > 0 ? [{ type: 'agent_message', payload: { text: chunk } }] : [];
   }
 
-  const adapter: Omit<ExternalAgentProviderAdapter, 'events'> = {
+  const adapter: Omit<MeshAgentProviderAdapter, 'events'> = {
     provider: options.provider,
     productIcon: options.productIcon,
     label: options.label,
     settings: () =>
-      externalAgentAdapterSettings({
+      meshAgentAdapterSettings({
         launchModes: [
           'pty',
           ...(options.appServerSubcommand ? (['app-server'] as const) : []),
@@ -253,7 +248,7 @@ export function makeAppServerCliAdapter(
         resolvedBinPath: bin,
         capabilities: {
           auth: 'pty',
-          history: 'none',
+          events: 'none',
           resume: 'pty',
           approval: 'provider-owned'
         }
@@ -283,7 +278,7 @@ export function makeAppServerCliAdapter(
     argumentSupport(agent) {
       return {
         launch: buildAuthLaunch(agent, ['--help']),
-        parse: (output) => parseExternalAgentArgumentSupport(output)
+        parse: (output) => parseMeshAgentArgumentSupport(output)
       };
     },
     parseAuthStatus(output, exitCode) {
@@ -310,7 +305,7 @@ export function makeAppServerCliAdapter(
     },
     resolveApproval(handle, resolution) {
       if (handle.launchMode !== 'app-server') {
-        throw new Error(`${options.label} external agent approval resolution is provider-owned in pty mode`);
+        throw new Error(`${options.label} MeshAgent approval resolution is provider-owned in pty mode`);
       }
       options.appServerHooks?.resolveAppServerApproval(handle, resolution);
     },

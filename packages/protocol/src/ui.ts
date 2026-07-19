@@ -2,8 +2,8 @@ import { z } from 'zod';
 
 import { clarifyAskerSchema, clarifyChoiceModeSchema } from './clarify.ts';
 import { contextUsagePayloadSchema } from './event-table.ts';
-import { externalAgentSystemEventSchema } from './external-agent/index.ts';
-import { eventIdSchema, externalAgentSessionIdSchema, messageIdSchema, nativeAgentDeliveryIdSchema } from './ids.ts';
+import { eventIdSchema, meshSessionIdSchema, messageIdSchema, nativeAgentDeliveryIdSchema } from './ids.ts';
+import { meshAgentSystemEventSchema } from './mesh-agent/index.ts';
 import { resourceApprovalDisplaySchema } from './resource-approval.ts';
 import { listMessagesQuerySchema } from './rpc/control.ts';
 
@@ -54,8 +54,8 @@ export const uiMessageItemSchema = z.object({
   role: uiMessageRoleSchema,
   agentName: z.string().optional(),
   agentDisplayName: z.string().optional(),
-  source: z.enum(['managed-external-agent', 'external-agent-provider']).optional(),
-  externalAgentSessionId: externalAgentSessionIdSchema.optional(),
+  source: z.enum(['managed-mesh-agent', 'mesh-agent-provider']).optional(),
+  meshSessionId: meshSessionIdSchema.optional(),
   deliveryId: nativeAgentDeliveryIdSchema.optional(),
   parts: z.array(uiPartSchema),
   status: uiItemStatusSchema.optional(),
@@ -123,7 +123,7 @@ export const uiSystemItemSchema = z.object({
   kind: z.literal('system'),
   id: z.string(),
   text: z.string(),
-  event: externalAgentSystemEventSchema.optional(),
+  event: meshAgentSystemEventSchema.optional(),
   level: z.enum(['info', 'warn', 'error']).optional(),
   seq: z.string()
 });

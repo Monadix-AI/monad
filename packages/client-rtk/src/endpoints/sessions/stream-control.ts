@@ -13,9 +13,9 @@ const SESSION_LIST_EVENTS: ReadonlySet<Event['type']> = new Set([
   'session.restored'
 ] as const satisfies ReadonlyArray<Event['type']>);
 
-const EXTERNAL_AGENT_SESSION_EVENTS: ReadonlySet<Event['type']> = new Set([
-  'external_agent.started',
-  'external_agent.exited'
+const MESH_SESSION_EVENTS: ReadonlySet<Event['type']> = new Set([
+  'mesh.started',
+  'mesh.exited'
 ] as const satisfies ReadonlyArray<Event['type']>);
 
 const MCP_STATUS_EVENTS: ReadonlySet<Event['type']> = new Set(['mcp.status_updated'] as const satisfies ReadonlyArray<
@@ -40,13 +40,8 @@ export const streamControlApi = apiSlice.injectEndpoints({
             if (SESSION_LIST_EVENTS.has(event.type)) {
               dispatch(apiSlice.util.invalidateTags(['Sessions']));
             }
-            if (EXTERNAL_AGENT_SESSION_EVENTS.has(event.type)) {
-              dispatch(
-                apiSlice.util.invalidateTags([
-                  'ExternalAgentSessions',
-                  { type: 'ExternalAgentSessions', id: event.sessionId }
-                ])
-              );
+            if (MESH_SESSION_EVENTS.has(event.type)) {
+              dispatch(apiSlice.util.invalidateTags(['MeshSessions', { type: 'MeshSessions', id: event.sessionId }]));
             }
             if (MCP_STATUS_EVENTS.has(event.type)) {
               dispatch(apiSlice.util.invalidateTags(['McpServers']));

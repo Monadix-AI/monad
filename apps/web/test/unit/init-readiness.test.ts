@@ -39,6 +39,6 @@ test('runtime overview stays enabled while the other runtime tabs disable until 
   expect(runtimeDisabledSectionIds).toEqual(['agents', 'acpDelegates', 'memory', 'safety']);
   expect(runtimeSectionEnabled('runtime', false)).toBe(true);
   expect(runtimeSectionEnabled('agents', false)).toBe(false);
-  expect(runtimeSectionEnabled('externalAgents', false)).toBe(true);
+  expect(runtimeSectionEnabled('meshAgents', false)).toBe(true);
   expect(runtimeSectionEnabled('agents', true)).toBe(true);
 });

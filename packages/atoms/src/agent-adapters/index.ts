@@ -1,20 +1,37 @@
-import type { ExternalAgentProviderAdapter } from '@monad/sdk-atom';
+import type { MeshAgentProviderAdapter } from '@monad/sdk-atom';
 
-import { claudeCodeExternalAgentAdapter } from './claude-code/index.ts';
-import { codexExternalAgentAdapter } from './codex/index.ts';
-import { geminiExternalAgentAdapter } from './gemini/index.ts';
-import { hermesExternalAgentAdapter } from './hermes/index.ts';
-import { openClawExternalAgentAdapter } from './openclaw/index.ts';
-import { qwenExternalAgentAdapter } from './qwen/index.ts';
+import {
+  meshAgentEventsAreGenerating,
+  meshAgentStructuredEvents,
+  meshAgentUsageLimitMeter
+} from '../workspace-experiences/experience/mesh-agent-observation/mesh-agent-observation.ts';
+import { claudeCodeMeshAgentAdapter } from './claude-code/index.ts';
+import { codexMeshAgentAdapter } from './codex/index.ts';
+import { geminiMeshAgentAdapter } from './gemini/index.ts';
+import { hermesMeshAgentAdapter } from './hermes/index.ts';
+import { toAgentObservationEvent } from './neutral-observation.ts';
+import { openClawMeshAgentAdapter } from './openclaw/index.ts';
+import { qwenMeshAgentAdapter } from './qwen/index.ts';
 
-export { claudeCodeExternalAgentAdapter, createClaudeSdkHistoryPageReader } from './claude-code/index.ts';
+export { claudeCodeMeshAgentAdapter, createClaudeSdkEventPageReader } from './claude-code/index.ts';
 
 /** The built-in native coding-CLI agent adapters, registered as `agent-adapter` atoms. */
-export const builtinAgentAdapters: ExternalAgentProviderAdapter[] = [
-  codexExternalAgentAdapter,
-  claudeCodeExternalAgentAdapter,
-  geminiExternalAgentAdapter,
-  qwenExternalAgentAdapter,
-  openClawExternalAgentAdapter,
-  hermesExternalAgentAdapter
+const adapters: MeshAgentProviderAdapter[] = [
+  codexMeshAgentAdapter,
+  claudeCodeMeshAgentAdapter,
+  geminiMeshAgentAdapter,
+  qwenMeshAgentAdapter,
+  openClawMeshAgentAdapter,
+  hermesMeshAgentAdapter
 ];
+
+for (const adapter of adapters) {
+  adapter.observationRuntime = {
+    toAgentObservationEvent: (event) => toAgentObservationEvent(event, adapter.observation),
+    structuredEvents: (args) => meshAgentStructuredEvents({ ...args, provider: adapter.provider, adapter }),
+    eventsAreGenerating: (events) => meshAgentEventsAreGenerating(events, { provider: adapter.provider, adapter }),
+    usageLimitMeter: (output) => meshAgentUsageLimitMeter({ output, provider: adapter.provider, adapter })
+  };
+}
+
+export const builtinAgentAdapters = adapters;

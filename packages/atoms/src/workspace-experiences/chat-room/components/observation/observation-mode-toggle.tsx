@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 import type { ObservationMode } from './panel-state.ts';
+import type { RawDisplayMode } from './raw-view.ts';
 
 import { workspaceSans as sans } from '@monad/ui/components/AgentAvatar';
 
@@ -47,6 +48,44 @@ export function ObservationModeToggle({
           </button>
         );
       })}
+    </div>
+  );
+}
+
+export function RawDisplayModeToggle({
+  mode,
+  onSelect
+}: {
+  mode: RawDisplayMode;
+  onSelect: (mode: RawDisplayMode) => void;
+}): React.ReactElement {
+  return (
+    <div
+      aria-label="Raw display"
+      role="tablist"
+      style={{
+        border: '1px solid var(--border)',
+        borderRadius: 999,
+        background: 'var(--secondary)',
+        display: 'inline-flex',
+        flex: 'none',
+        gap: 2,
+        padding: 2
+      }}
+    >
+      {(['lines', 'parsed'] as const).map((option) => (
+        <button
+          aria-selected={option === mode}
+          className="workplace-action"
+          key={option}
+          onClick={() => onSelect(option)}
+          role="tab"
+          style={optionStyle(option === mode)}
+          type="button"
+        >
+          {option === 'lines' ? 'Lines' : 'Parsed'}
+        </button>
+      ))}
     </div>
   );
 }

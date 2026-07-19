@@ -21,7 +21,7 @@ describe('layoutMode', () => {
 });
 
 describe('wide chat panes', () => {
-  test('shows projection only for an associated external-agent session', () => {
+  test('shows projection only for an associated mesh-agent session', () => {
     expect(shouldShowProjection('wide', true, true, 0)).toBe(false);
     expect(shouldShowProjection('wide', true, true, 1)).toBe(true);
     expect(shouldShowProjection('medium', true, true, 1)).toBe(false);
@@ -86,7 +86,7 @@ describe('navigation capability registry', () => {
         'workspace.chats',
         'studio.runtime',
         'studio.models',
-        'studio.externalAgents',
+        'studio.meshAgents',
         'studio.memory',
         'settings.connection',
         'settings.preferences',

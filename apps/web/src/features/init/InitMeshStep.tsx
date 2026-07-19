@@ -1,40 +1,40 @@
-import type { ExternalAgentView } from '@monad/protocol';
+import type { MeshAgentView } from '@monad/protocol';
 import type { useT } from '#/components/I18nProvider';
 
-import { useStartExternalAgentAuthMutation } from '@monad/client-rtk';
+import { useStartMeshAgentAuthMutation } from '@monad/client-rtk';
 import { Button } from '@monad/ui';
 import { useState } from 'react';
 
-import { ExternalAgentPresetPanel } from '#/features/studio/third-party-agents/ExternalAgentPresetPanel';
-import { connectExternalAgent } from '#/features/studio/third-party-agents/external-agent-connect-agent';
-import { DETECTING_EXTERNAL_AGENT_PRESETS } from '#/features/studio/third-party-agents/external-agent-default-presets';
-import { ExternalAgentAuthModal } from '#/features/workplace/cli/ExternalAgentAuthModal';
+import { MeshAgentPresetPanel } from '#/features/studio/third-party-agents/MeshAgentPresetPanel';
+import { connectMeshAgent } from '#/features/studio/third-party-agents/mesh-agent-connect-agent';
+import { DETECTING_MESH_AGENT_PRESETS } from '#/features/studio/third-party-agents/mesh-agent-default-presets';
+import { MeshAgentAuthModal } from '#/features/workplace/cli/MeshAgentAuthModal';
 import { useAsyncAction } from '#/hooks/use-async-action';
-import { useExternalAgentSettings } from '#/hooks/use-external-agent-settings';
+import { useMeshAgentSettings } from '#/hooks/use-mesh-agent-settings';
 
 type TFunction = ReturnType<typeof useT>;
 
 export function InitMeshStep({ onBack, onEnter, t }: { onBack: () => void; onEnter: () => void; t: TFunction }) {
-  const { agents, presets, authStates, loading, saveAgent, removeAgent } = useExternalAgentSettings();
-  const [startAuth] = useStartExternalAgentAuthMutation();
+  const { agents, presets, authStates, loading, saveAgent, removeAgent } = useMeshAgentSettings();
+  const [startAuth] = useStartMeshAgentAuthMutation();
   const [connectingAgentName, setConnectingAgentName] = useState<string | null>(null);
   const [authSession, setAuthSession] = useState<{
     id: string;
     controlToken: string;
     agentName: string;
-    agent: ExternalAgentView;
+    agent: MeshAgentView;
   } | null>(null);
   const { error: connectError, run: runConnect } = useAsyncAction();
-  const visiblePresets = presets.length > 0 ? presets : DETECTING_EXTERNAL_AGENT_PRESETS;
+  const visiblePresets = presets.length > 0 ? presets : DETECTING_MESH_AGENT_PRESETS;
   const detectingPresets = loading && presets.length === 0;
   const connectedCount = agents.length;
 
-  const connectAgent = (agent: ExternalAgentView) =>
+  const connectAgent = (agent: MeshAgentView) =>
     runConnect(async () => {
       setAuthSession(null);
       setConnectingAgentName(agent.name);
       try {
-        const { session, persisted } = await connectExternalAgent(agent, {
+        const { session, persisted } = await connectMeshAgent(agent, {
           saveAgent,
           removeAgent,
           startAuth: (agentName) => startAuth(agentName).unwrap()
@@ -66,7 +66,7 @@ export function InitMeshStep({ onBack, onEnter, t }: { onBack: () => void; onEnt
         </p>
       ) : null}
 
-      <ExternalAgentPresetPanel
+      <MeshAgentPresetPanel
         agents={agents}
         authSessionAgentName={authSession?.agentName}
         authStates={authStates}
@@ -95,7 +95,7 @@ export function InitMeshStep({ onBack, onEnter, t }: { onBack: () => void; onEnt
       </div>
 
       {authSession ? (
-        <ExternalAgentAuthModal
+        <MeshAgentAuthModal
           agentName={authSession.agentName}
           controlToken={authSession.controlToken}
           onAuthenticated={async () => {

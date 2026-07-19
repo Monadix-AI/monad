@@ -6,7 +6,7 @@ export const SESSION_TRANSCRIPT_STORY_CASES = [
   'single-tool',
   'parallel-tools',
   'skill-tool',
-  'external-agent-login',
+  'mesh-agent-login',
   'memory-summary',
   'compact',
   'branch-restore',

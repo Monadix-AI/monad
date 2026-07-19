@@ -158,7 +158,7 @@ async function installStudioIaApiMock(page: Page) {
         })
       );
     }
-    if (method === 'GET' && path === '/v1/settings/external-agents') {
+    if (method === 'GET' && path === '/v1/mesh/agents') {
       return route.fulfill(
         json({
           agents: [
@@ -183,10 +183,10 @@ async function installStudioIaApiMock(page: Page) {
         })
       );
     }
-    if (method === 'GET' && path === '/v1/settings/external-agents/presets') {
+    if (method === 'GET' && path === '/v1/mesh/agents/presets') {
       return route.fulfill(json({ presets: [] }));
     }
-    if (method === 'GET' && path === '/v1/external-agents/codex/usage') {
+    if (method === 'GET' && path === '/v1/mesh/agents/codex/usage') {
       return route.fulfill(
         json({
           agentName: 'codex',
@@ -230,7 +230,7 @@ test.describe('Studio IA', () => {
 
     await expect(page).toHaveURL(/\/studio\/mesh$/);
     await expect(page.getByRole('heading', { name: 'Mesh overview' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Connect External Agents' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Connect MeshAgents' })).toBeVisible();
     await expect(page.getByText('Monad Mesh', { exact: true })).toBeVisible();
     await expect(page.getByTestId('studio-mesh-illustration')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Project members' })).toHaveCount(0);

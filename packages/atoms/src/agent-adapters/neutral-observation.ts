@@ -3,9 +3,9 @@ import type {
   AgentObservationKind,
   AgentObservationTool,
   AgentObservationTurnEndReason,
-  ExternalAgentObservationEvent
+  MeshAgentObservationEvent
 } from '@monad/protocol';
-import type { ExternalAgentObservationActivity, ExternalAgentObservationProjector } from '@monad/sdk-atom';
+import type { MeshAgentObservationActivity, MeshAgentObservationProjector } from '@monad/sdk-atom';
 
 import {
   classifyObservationActivity,
@@ -18,9 +18,7 @@ import {
 // turn-start), so the neutral decode detects them here to fill the `turn-start` kind.
 const TURN_START_EVENT_TYPES = new Set(['turn/started', 'turn_started', 'turn-start']);
 
-function neutralKindFromActivity(
-  activity: ExternalAgentObservationActivity | undefined
-): AgentObservationKind | undefined {
+function neutralKindFromActivity(activity: MeshAgentObservationActivity | undefined): AgentObservationKind | undefined {
   switch (activity) {
     case 'thinking':
       return 'reasoning';
@@ -43,7 +41,7 @@ function neutralKindFromActivity(
   }
 }
 
-function turnEndReason(event: ExternalAgentObservationEvent): AgentObservationTurnEndReason {
+function turnEndReason(event: MeshAgentObservationEvent): AgentObservationTurnEndReason {
   if (event.providerEventType === 'error' || event.providerEventType === 'server_error') return 'error';
   const raw = recordValue(event.provenance.rawEvents[0]);
   if (raw?.is_error === true) return 'error';
@@ -68,7 +66,7 @@ function turnEndReason(event: ExternalAgentObservationEvent): AgentObservationTu
 
 // Best-effort structured tool extraction across provider raw shapes. The adapter's record projector
 // already normalized the human `text`; here we surface the machine fields a neutral renderer needs.
-function neutralTool(event: ExternalAgentObservationEvent, kind: 'tool-call' | 'tool-result'): AgentObservationTool {
+function neutralTool(event: MeshAgentObservationEvent, kind: 'tool-call' | 'tool-result'): AgentObservationTool {
   const raw = recordValue(event.provenance.rawEvents[0]);
   const params = recordValue(raw?.params);
   const item = recordValue(params?.item) ?? recordValue(raw?.item);
@@ -151,8 +149,8 @@ function neutralTool(event: ExternalAgentObservationEvent, kind: 'tool-call' | '
  * Returns `null` for an event with no neutral representation (a non-terminal system/status notice).
  */
 export function toAgentObservationEvent(
-  event: ExternalAgentObservationEvent,
-  projector?: Pick<ExternalAgentObservationProjector, 'classifyActivity' | 'isStreamingFragment'>
+  event: MeshAgentObservationEvent,
+  projector?: Pick<MeshAgentObservationProjector, 'classifyActivity' | 'isStreamingFragment'>
 ): AgentObservationEvent | null {
   if (event.projection === 'unknown') {
     return {

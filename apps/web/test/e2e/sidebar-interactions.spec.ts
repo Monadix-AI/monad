@@ -167,8 +167,8 @@ async function installSidebarMock(page: Page, state = createSidebarState(), opti
         })
       );
     }
-    if (method === 'GET' && path === '/v1/settings/external-agents') return route.fulfill(json({ agents: [] }));
-    if (method === 'GET' && path === '/v1/settings/external-agents/presets') {
+    if (method === 'GET' && path === '/v1/mesh/agents') return route.fulfill(json({ agents: [] }));
+    if (method === 'GET' && path === '/v1/mesh/agents/presets') {
       return route.fulfill(json({ presets: [] }));
     }
     if (method === 'GET' && path === '/v1/sessions') {
@@ -277,10 +277,7 @@ async function installSidebarMock(page: Page, state = createSidebarState(), opti
       state.sessions.unshift(makeSession(id, body.title ?? 'created project session', 1, projectId));
       return route.fulfill(json({ sessionId: id }, 201));
     }
-    if (method === 'GET' && /^\/v1\/projects\/[^/]+\/external-agent-sessions$/.test(path)) {
-      return route.fulfill(json({ sessions: [] }));
-    }
-    if (method === 'GET' && /^\/v1\/sessions\/[^/]+\/external-agent-sessions$/.test(path)) {
+    if (method === 'GET' && path === '/v1/mesh/sessions') {
       return route.fulfill(json({ sessions: [] }));
     }
     const sessionUiStreamMatch = path.match(/^\/v1\/sessions\/([^/]+)\/ui-stream$/);

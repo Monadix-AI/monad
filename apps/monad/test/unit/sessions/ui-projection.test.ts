@@ -1,5 +1,5 @@
 import type { ChatMessage, Event, MessageProducer, SessionId, UIItem } from '@monad/protocol';
-import type { ExternalAgentSessionSnapshot } from '#/handlers/session/ui-projection.ts';
+import type { MeshSessionSnapshot } from '#/handlers/session/ui-projection.ts';
 
 import { expect, test } from 'bun:test';
 import { builtinAgentAdapters } from '@monad/atoms/agent-adapters';
@@ -7,7 +7,7 @@ import { createI18n } from '@monad/i18n';
 import { newId } from '@monad/protocol';
 
 import { SessionUiProjector } from '#/handlers/session/ui-projection.ts';
-import { registerAgentAdapterImpl } from '#/services/external-agent/index.ts';
+import { registerAgentAdapterImpl } from '#/services/mesh-agent/index.ts';
 
 const sessionId = 'ses_test00000000' as SessionId;
 const agentProducer = { kind: 'agent', agentId: 'agt_test00000000' } satisfies MessageProducer;
@@ -586,7 +586,7 @@ test('live managed agent messages preserve the author display name snapshot', ()
   const message = liveMessage('msg_snapshot0000', 'assistant', '', {
     agentName: 'pmem_claude_fable',
     agentDisplayName: 'Fable',
-    source: 'managed-external-agent'
+    source: 'managed-mesh-agent'
   });
   projector.applyEvent(created(message));
   const [completedEvent] = projector.applyEvent(completed({ ...message, text: 'Done' }));
@@ -603,7 +603,7 @@ test('live managed agent messages preserve the author display name snapshot', ()
   });
 });
 
-test('hydrates a persisted managed external agent thinking message after refresh', () => {
+test('hydrates a persisted managed MeshAgent thinking message after refresh', () => {
   const projector = new SessionUiProjector();
   projector.hydrateMessages([
     {
@@ -615,7 +615,7 @@ test('hydrates a persisted managed external agent thinking message after refresh
       data: {
         agentName: 'pmem_codex_reviewer',
         agentDisplayName: 'Reviewer',
-        source: 'managed-external-agent',
+        source: 'managed-mesh-agent',
         reasoning: 'Thinking'
       },
       stream: { status: 'streaming' },
@@ -632,14 +632,14 @@ test('hydrates a persisted managed external agent thinking message after refresh
       id: 'msg_thinking0000',
       agentName: 'pmem_codex_reviewer',
       agentDisplayName: 'Reviewer',
-      source: 'managed-external-agent',
+      source: 'managed-mesh-agent',
       status: 'streaming',
       parts: [{ type: 'reasoning', text: 'Thinking' }]
     })
   ]);
 });
 
-test('hydrates external agent provider errors without breaking the UI stream', () => {
+test('hydrates MeshAgent provider errors without breaking the UI stream', () => {
   const projector = new SessionUiProjector();
   projector.hydrateMessages([
     {
@@ -650,9 +650,9 @@ test('hydrates external agent provider errors without breaking the UI stream', (
       type: 'error',
       data: {
         agentName: 'pmem_codex_reviewer',
-        externalAgentSessionId: 'exa_provider5wxW',
+        meshSessionId: 'mesh_provider5wxW',
         deliveryId: 'deliv_providerotf8',
-        source: 'external-agent-provider'
+        source: 'mesh-agent-provider'
       },
       stream: { status: 'settled' },
       active: true,
@@ -667,8 +667,8 @@ test('hydrates external agent provider errors without breaking the UI stream', (
       kind: 'message',
       id: 'msg_providernQrz',
       agentName: 'pmem_codex_reviewer',
-      source: 'external-agent-provider',
-      externalAgentSessionId: 'exa_provider5wxW',
+      source: 'mesh-agent-provider',
+      meshSessionId: 'mesh_provider5wxW',
       deliveryId: 'deliv_providerotf8',
       status: 'error',
       parts: [{ type: 'text', text: 'thread not found: 019f30a7-ddaf-7062-9f89-f3fd90b5397c' }]
@@ -676,7 +676,7 @@ test('hydrates external agent provider errors without breaking the UI stream', (
   ]);
 });
 
-test('managed external agent completion moves live order to completion time', () => {
+test('managed MeshAgent completion moves live order to completion time', () => {
   const projector = new SessionUiProjector();
   const startedAt = '2026-06-24T00:00:01.000Z';
   const completedAt = '2026-06-24T00:00:09.000Z';
@@ -684,7 +684,7 @@ test('managed external agent completion moves live order to completion time', ()
     'msg_CLI000000000',
     'assistant',
     '',
-    { agentName: 'codex', source: 'managed-external-agent' },
+    { agentName: 'codex', source: 'managed-mesh-agent' },
     startedAt
   );
   projector.applyEvent(created(message));
@@ -702,20 +702,20 @@ test('managed external agent completion moves live order to completion time', ()
   ]);
 });
 
-test('managed external agent message projections retain delivery observation pointers', () => {
+test('managed MeshAgent message projections retain delivery observation pointers', () => {
   const deliveryId = newId('deliv');
   const live = new SessionUiProjector();
   const message = liveMessage('msg_CLI000000000', 'assistant', '', {
     agentName: 'codex',
-    externalAgentSessionId: 'exa_codex0000000',
+    meshSessionId: 'mesh_codex0000000',
     deliveryId,
-    source: 'managed-external-agent'
+    source: 'managed-mesh-agent'
   });
   live.applyEvent(created(message));
   const [settled] = live.applyEvent(completed({ ...message, text: 'done' }));
 
   expect(settled?.kind === 'upsert' && settled.item.kind === 'message' ? settled.item : undefined).toMatchObject({
-    externalAgentSessionId: 'exa_codex0000000',
+    meshSessionId: 'mesh_codex0000000',
     deliveryId
   });
 
@@ -729,9 +729,9 @@ test('managed external agent message projections retain delivery observation poi
       type: 'text',
       data: {
         agentName: 'codex',
-        externalAgentSessionId: 'exa_codex0000000',
+        meshSessionId: 'mesh_codex0000000',
         deliveryId,
-        source: 'managed-external-agent'
+        source: 'managed-mesh-agent'
       },
       stream: { status: 'complete' },
       active: true,
@@ -742,19 +742,19 @@ test('managed external agent message projections retain delivery observation poi
   if (snapshot.kind !== 'snapshot') throw new Error('expected snapshot');
   expect(snapshot.items[0]).toMatchObject({
     kind: 'message',
-    externalAgentSessionId: 'exa_codex0000000',
+    meshSessionId: 'mesh_codex0000000',
     deliveryId
   });
 });
 
-test('live user messages keep chronological order before later managed external agent replies', () => {
+test('live user messages keep chronological order before later managed MeshAgent replies', () => {
   const projector = new SessionUiProjector();
   const user = liveMessage('msg_USER00000000', 'user', 'hi all', undefined, '2026-06-24T10:00:00.000Z');
   const reply = liveMessage(
     'msg_CLI000000000',
     'assistant',
     '',
-    { agentName: 'claude', source: 'managed-external-agent' },
+    { agentName: 'claude', source: 'managed-mesh-agent' },
     '2026-06-24T10:00:01.000Z'
   );
   projector.applyEvent(created(user, { kind: 'user' }));
@@ -1074,12 +1074,12 @@ test('keeps tool progress on the standard tool item', () => {
   expect(progress.item).toMatchObject({ id: 'call_1', tool: 'shell', status: 'running', output: 'running' });
 });
 
-test('settles a running external agent tool item on turn_settled', () => {
+test('settles a running MeshAgent tool item on turn_settled', () => {
   const projector = new SessionUiProjector();
-  const externalAgentSessionId = 'exa_200000000000';
+  const meshSessionId = 'mesh_200000000000';
   projector.applyEvent(
-    event('external_agent.started', {
-      externalAgentSessionId,
+    event('mesh.started', {
+      meshSessionId,
       agentName: 'claude-code',
       provider: 'claude-code',
       launchMode: 'pty',
@@ -1088,21 +1088,21 @@ test('settles a running external agent tool item on turn_settled', () => {
     })
   );
 
-  const settled = projector.applyEvent(event('external_agent.turn_settled', { externalAgentSessionId }));
+  const settled = projector.applyEvent(event('mesh.turn_settled', { meshSessionId }));
 
   expect(settled).toHaveLength(1);
   expect(settled[0]).toMatchObject({
     kind: 'upsert',
-    item: { kind: 'tool', id: externalAgentSessionId, status: 'ok' }
+    item: { kind: 'tool', id: meshSessionId, status: 'ok' }
   });
 });
 
 test('turn_settled with error marks the tool item errored', () => {
   const projector = new SessionUiProjector();
-  const externalAgentSessionId = 'exa_300000000000';
+  const meshSessionId = 'mesh_300000000000';
   projector.applyEvent(
-    event('external_agent.started', {
-      externalAgentSessionId,
+    event('mesh.started', {
+      meshSessionId,
       agentName: 'claude-code',
       provider: 'claude-code',
       launchMode: 'pty',
@@ -1111,51 +1111,49 @@ test('turn_settled with error marks the tool item errored', () => {
     })
   );
 
-  const settled = projector.applyEvent(event('external_agent.turn_settled', { externalAgentSessionId, error: true }));
+  const settled = projector.applyEvent(event('mesh.turn_settled', { meshSessionId, error: true }));
 
   expect(settled).toHaveLength(1);
   expect(settled[0]).toMatchObject({
     kind: 'upsert',
-    item: { kind: 'tool', id: externalAgentSessionId, status: 'error' }
+    item: { kind: 'tool', id: meshSessionId, status: 'error' }
   });
 });
 
 test('turn_settled is a no-op when there is no live running tool item', () => {
   const projector = new SessionUiProjector();
-  const settled = projector.applyEvent(
-    event('external_agent.turn_settled', { externalAgentSessionId: 'exa_missing00000' })
-  );
+  const settled = projector.applyEvent(event('mesh.turn_settled', { meshSessionId: 'mesh_missing00000' }));
   expect(settled).toEqual([]);
 });
 
 test('projects login_required as an ephemeral custom card and removes it on login_resolved', () => {
   const projector = new SessionUiProjector();
   const payload = {
-    externalAgentSessionId: 'exa_400000000000',
+    meshSessionId: 'mesh_400000000000',
     agentName: 'claude-code',
     provider: 'claude-code',
     reason: 'Not logged in · Please run /login'
   };
 
-  const [card] = projector.applyEvent(event('external_agent.login_required', payload));
+  const [card] = projector.applyEvent(event('mesh.login_required', payload));
   expect(card).toMatchObject({
     kind: 'upsert',
     item: {
       kind: 'custom',
-      id: 'external-agent-login-required:claude-code',
-      name: 'external_agent.login_required',
+      id: 'mesh-agent-login-required:claude-code',
+      name: 'mesh.login_required',
       status: 'error',
       data: payload
     }
   });
 
   const [removed] = projector.applyEvent(
-    event('external_agent.login_resolved', { agentName: 'claude-code', provider: 'claude-code' })
+    event('mesh.login_resolved', { agentName: 'claude-code', provider: 'claude-code' })
   );
   expect(removed).toEqual(
     expect.objectContaining({
       kind: 'remove',
-      target: { kind: 'custom', id: 'external-agent-login-required:claude-code' }
+      target: { kind: 'custom', id: 'mesh-agent-login-required:claude-code' }
     })
   );
 });
@@ -1163,7 +1161,7 @@ test('projects login_required as an ephemeral custom card and removes it on logi
 test('projects persisted authentication failures as the removable login card', () => {
   const projector = new SessionUiProjector();
   const payload = {
-    externalAgentSessionId: 'exa_400000000001',
+    meshSessionId: 'mesh_400000000001',
     agentName: 'claude-code',
     provider: 'claude-code',
     code: 'authentication_failed',
@@ -1171,18 +1169,18 @@ test('projects persisted authentication failures as the removable login card', (
     reconnectIn: 'studio'
   };
 
-  const connectionEvent = event('external_agent.connection_required', payload);
+  const connectionEvent = event('mesh.connection_required', payload);
   expect(projector.applyEvent(connectionEvent)).toEqual([
     {
       kind: 'upsert',
       cursor: connectionEvent.id,
       item: {
         kind: 'custom',
-        id: 'external-agent-login-required:claude-code',
-        name: 'external_agent.login_required',
+        id: 'mesh-agent-login-required:claude-code',
+        name: 'mesh.login_required',
         status: 'error',
         data: {
-          externalAgentSessionId: payload.externalAgentSessionId,
+          meshSessionId: payload.meshSessionId,
           agentName: payload.agentName,
           provider: payload.provider,
           reason: payload.reason
@@ -1192,7 +1190,7 @@ test('projects persisted authentication failures as the removable login card', (
     }
   ]);
 
-  const resolvedEvent = event('external_agent.login_resolved', {
+  const resolvedEvent = event('mesh.login_resolved', {
     agentName: 'claude-code',
     provider: 'claude-code'
   });
@@ -1200,16 +1198,16 @@ test('projects persisted authentication failures as the removable login card', (
     {
       kind: 'remove',
       cursor: resolvedEvent.id,
-      target: { kind: 'custom', id: 'external-agent-login-required:claude-code' }
+      target: { kind: 'custom', id: 'mesh-agent-login-required:claude-code' }
     }
   ]);
 });
 
-test('projects external agent provider-owned approvals as distinct approval items', () => {
+test('projects MeshAgent provider-owned approvals as distinct approval items', () => {
   const projector = new SessionUiProjector();
   const [approval] = projector.applyEvent(
-    event('external_agent.approval_requested', {
-      externalAgentSessionId: 'exa_gemini000000',
+    event('mesh.approval_requested', {
+      meshSessionId: 'mesh_gemini000000',
       provider: 'gemini',
       requestId: 'gemini:folder-trust',
       text: 'trust this Gemini project folder',
@@ -1228,7 +1226,7 @@ test('projects external agent provider-owned approvals as distinct approval item
       id: 'gemini:folder-trust',
       tool: 'gemini approval',
       input: {
-        externalAgentSessionId: 'exa_gemini000000',
+        meshSessionId: 'mesh_gemini000000',
         provider: 'gemini',
         text: 'trust this Gemini project folder',
         approvalOwnership: 'provider-owned'
@@ -1238,11 +1236,11 @@ test('projects external agent provider-owned approvals as distinct approval item
   });
 });
 
-test('projects external agent reconnect requirements as visible custom items', () => {
+test('projects MeshAgent reconnect requirements as visible custom items', () => {
   const projector = new SessionUiProjector();
   const [connection] = projector.applyEvent(
-    event('external_agent.connection_required', {
-      externalAgentSessionId: 'exa_gemini000000',
+    event('mesh.connection_required', {
+      meshSessionId: 'mesh_gemini000000',
       agentName: 'gemini',
       provider: 'gemini',
       code: 'provider_connection_required',
@@ -1255,11 +1253,11 @@ test('projects external agent reconnect requirements as visible custom items', (
     kind: 'upsert',
     item: {
       kind: 'custom',
-      id: 'external-agent-connection-required:exa_gemini000000',
-      name: 'external_agent.connection_required',
+      id: 'mesh-agent-connection-required:mesh_gemini000000',
+      name: 'mesh.connection_required',
       status: 'error',
       data: {
-        externalAgentSessionId: 'exa_gemini000000',
+        meshSessionId: 'mesh_gemini000000',
         agentName: 'gemini',
         provider: 'gemini',
         code: 'provider_connection_required',
@@ -1345,9 +1343,9 @@ test('snapshot omits oldestCursor when there are no messages', () => {
   if (snap.kind !== 'snapshot') throw new Error('expected snapshot');
 });
 
-function cliSession(overrides: Partial<ExternalAgentSessionSnapshot> = {}): ExternalAgentSessionSnapshot {
+function cliSession(overrides: Partial<MeshSessionSnapshot> = {}): MeshSessionSnapshot {
   return {
-    id: 'exa_100000000000',
+    id: 'mesh_100000000000',
     provider: 'codex',
     agentName: 'codex',
     workingPath: '/w',
@@ -1360,9 +1358,9 @@ function cliSession(overrides: Partial<ExternalAgentSessionSnapshot> = {}): Exte
   };
 }
 
-test('hydrateExternalAgentSessions rebuilds a running tool card from the output snapshot', () => {
+test('hydrateMeshSessions rebuilds a running tool card from the output snapshot', () => {
   const projector = new SessionUiProjector();
-  projector.hydrateExternalAgentSessions([
+  projector.hydrateMeshSessions([
     cliSession({
       outputSnapshot: [
         '{"method":"turn/started","params":{}}',
@@ -1375,8 +1373,8 @@ test('hydrateExternalAgentSessions rebuilds a running tool card from the output 
   expect(snap.items).toHaveLength(1);
   expect(snap.items[0]).toMatchObject({
     kind: 'tool',
-    id: 'exa_100000000000',
-    tool: 'external-agent:codex',
+    id: 'mesh_100000000000',
+    tool: 'mesh-agent:codex',
     status: 'running',
     output: [
       '{"method":"turn/started","params":{}}',
@@ -1386,9 +1384,9 @@ test('hydrateExternalAgentSessions rebuilds a running tool card from the output 
   });
 });
 
-test('hydrateExternalAgentSessions settles a running process after provider end turn', () => {
+test('hydrateMeshSessions settles a running process after provider end turn', () => {
   const projector = new SessionUiProjector();
-  projector.hydrateExternalAgentSessions([
+  projector.hydrateMeshSessions([
     cliSession({
       provider: 'claude-code',
       outputSnapshot: [
@@ -1402,21 +1400,21 @@ test('hydrateExternalAgentSessions settles a running process after provider end 
   expect(snap.items[0].status).toBe('ok');
 });
 
-test('hydrateExternalAgentSessions maps terminal state and appends the exit line', () => {
+test('hydrateMeshSessions maps terminal state and appends the exit line', () => {
   const failed = new SessionUiProjector();
-  failed.hydrateExternalAgentSessions([cliSession({ id: 'exa_f00000000000', state: 'failed', exitCode: 1 })]);
+  failed.hydrateMeshSessions([cliSession({ id: 'mesh_f00000000000', state: 'failed', exitCode: 1 })]);
   const fSnap = failed.snapshot();
   if (fSnap.kind !== 'snapshot' || fSnap.items[0]?.kind !== 'tool') throw new Error('expected tool');
   expect(fSnap.items[0].status).toBe('error');
 
   const exited = new SessionUiProjector();
-  exited.hydrateExternalAgentSessions([cliSession({ id: 'exa_e00000000000', state: 'exited', exitCode: 0 })]);
+  exited.hydrateMeshSessions([cliSession({ id: 'mesh_e00000000000', state: 'exited', exitCode: 0 })]);
   const eSnap = exited.snapshot();
   if (eSnap.kind !== 'snapshot' || eSnap.items[0]?.kind !== 'tool') throw new Error('expected tool');
   expect(eSnap.items[0].status).toBe('ok');
 });
 
-test('hydrateExternalAgentSessions interleaves cards with messages by startedAt', () => {
+test('hydrateMeshSessions interleaves cards with messages by startedAt', () => {
   const projector = new SessionUiProjector();
   const mkMsg = (id: `msg_${string}`, at: string): ChatMessage => ({
     id,
@@ -1433,16 +1431,16 @@ test('hydrateExternalAgentSessions interleaves cards with messages by startedAt'
     mkMsg('msg_a00000000000', '2026-06-24T00:00:00.000Z'),
     mkMsg('msg_b00000000000', '2026-06-24T00:00:01.000Z')
   ]);
-  projector.hydrateExternalAgentSessions([cliSession()]);
+  projector.hydrateMeshSessions([cliSession()]);
   const snap = projector.snapshot();
   if (snap.kind !== 'snapshot') throw new Error('expected snapshot');
-  expect(snap.items.map((i) => i.id)).toEqual(['msg_a00000000000', 'exa_100000000000', 'msg_b00000000000']);
+  expect(snap.items.map((i) => i.id)).toEqual(['msg_a00000000000', 'mesh_100000000000', 'msg_b00000000000']);
 });
 
-test('hydrateExternalAgentSessions updates an existing card in place without duplicating', () => {
+test('hydrateMeshSessions updates an existing card in place without duplicating', () => {
   const projector = new SessionUiProjector();
-  projector.hydrateExternalAgentSessions([cliSession({ outputSnapshot: 'first' })]);
-  projector.hydrateExternalAgentSessions([cliSession({ outputSnapshot: 'second', state: 'stopped' })]);
+  projector.hydrateMeshSessions([cliSession({ outputSnapshot: 'first' })]);
+  projector.hydrateMeshSessions([cliSession({ outputSnapshot: 'second', state: 'stopped' })]);
   const snap = projector.snapshot();
   if (snap.kind !== 'snapshot' || snap.items[0]?.kind !== 'tool') throw new Error('expected tool');
   expect(snap.items).toHaveLength(1);
@@ -1518,8 +1516,8 @@ test('agent join, its output card, and its wall reply project in chronological o
   const p = new SessionUiProjector();
   p.applyEvent(created(liveMessage('msg_U00000000000', 'user', 'please review'), { kind: 'user' }));
   p.applyEvent(
-    event('external_agent.started', {
-      externalAgentSessionId: 'exa_100000000000',
+    event('mesh.started', {
+      meshSessionId: 'mesh_100000000000',
       agentName: 'codex',
       provider: 'codex',
       launchMode: 'pty',
@@ -1530,7 +1528,7 @@ test('agent join, its output card, and its wall reply project in chronological o
   // The reply reaching the wall: a Thinking placeholder that settles into the posted text.
   const reply = liveMessage('msg_R00000000000', 'assistant', '', {
     agentName: 'codex',
-    source: 'managed-external-agent'
+    source: 'managed-mesh-agent'
   });
   p.applyEvent(created(reply));
   p.applyEvent(delta(reply.id, 'Thinking', 0, 'reasoning'));
@@ -1538,19 +1536,19 @@ test('agent join, its output card, and its wall reply project in chronological o
     completed({
       ...reply,
       text: 'looks good to me',
-      data: { agentName: 'codex', source: 'managed-external-agent', reasoning: 'Thinking' }
+      data: { agentName: 'codex', source: 'managed-mesh-agent', reasoning: 'Thinking' }
     })
   );
   const snap = p.snapshot();
   if (snap.kind !== 'snapshot') throw new Error('expected snapshot');
   expect(snap.items.map((i) => `${i.kind}:${i.id}`)).toEqual([
     'message:msg_U00000000000',
-    'tool:exa_100000000000',
+    'tool:mesh_100000000000',
     'message:msg_R00000000000'
   ]);
   const card = snap.items.find((i) => i.kind === 'tool');
   if (card?.kind !== 'tool') throw new Error('expected tool card');
-  expect(card.tool).toBe('external-agent:codex');
+  expect(card.tool).toBe('mesh-agent:codex');
   const replyItem = snap.items.find((i) => i.id === 'msg_R00000000000');
   if (replyItem?.kind !== 'message') throw new Error('expected reply message');
   expect(replyItem.status).toBe('done');
@@ -1606,7 +1604,7 @@ test('projects memory.suggestion as a custom item carrying scope + facts', () =>
   });
 });
 
-test('external_agent.resume_failed system notice renders from the i18n catalog', () => {
+test('mesh.resume_failed system notice renders from the i18n catalog', () => {
   const payload = {
     agentName: 'reviewer',
     provider: 'codex',
@@ -1617,7 +1615,7 @@ test('external_agent.resume_failed system notice renders from the i18n catalog',
   };
 
   const en = new SessionUiProjector();
-  const enEvent = event('external_agent.resume_failed', payload);
+  const enEvent = event('mesh.resume_failed', payload);
   const enOut = en.applyEvent(enEvent);
   expect(enOut).toEqual([
     {
@@ -1625,7 +1623,7 @@ test('external_agent.resume_failed system notice renders from the i18n catalog',
       cursor: enEvent.id as `evt_${string}`,
       item: {
         kind: 'system',
-        id: 'external-agent-resume-failed:reviewer:thread-42',
+        id: 'mesh-agent-resume-failed:reviewer:thread-42',
         text: 'Codex resume failed for provider session thread-42; cold started a new runtime.',
         level: 'warn',
         seq: enEvent.id
@@ -1634,37 +1632,37 @@ test('external_agent.resume_failed system notice renders from the i18n catalog',
   ]);
 
   const zh = new SessionUiProjector({ t: createI18n({ locale: 'zh', packs: [] }).t });
-  const zhEvent = event('external_agent.resume_failed', payload);
+  const zhEvent = event('mesh.resume_failed', payload);
   const zhOut = zh.applyEvent(zhEvent);
   expect(zhOut[0]?.kind === 'upsert' && zhOut[0].item.kind === 'system' ? zhOut[0].item.text : undefined).toBe(
     'Codex 恢复 provider 会话 thread-42 失败，已冷启动新的运行时。'
   );
 });
 
-test('external agent idle lifecycle notices preserve typed events and render action-only localized copy', () => {
+test('MeshAgent idle lifecycle notices preserve typed events and render action-only localized copy', () => {
   const suspendedPayload = {
     agentId: 'pmem_reviewer_1',
     agentName: 'Reviewer',
     type: 'idle_suspended' as const,
-    payload: { externalAgentSessionId: 'exa_idle00000000', idleTimeoutMs: 300 }
+    payload: { meshSessionId: 'mesh_idle00000000', idleTimeoutMs: 300 }
   };
   const resumedPayload = {
     agentId: 'pmem_reviewer_1',
     agentName: 'Reviewer',
     type: 'idle_resumed' as const,
-    payload: { externalAgentSessionId: 'exa_idle00000000' }
+    payload: { meshSessionId: 'mesh_idle00000000' }
   };
 
   const en = new SessionUiProjector();
-  const suspendedEvent = event('external_agent.idle_suspended', suspendedPayload);
-  const resumedEvent = event('external_agent.idle_resumed', resumedPayload);
+  const suspendedEvent = event('mesh.idle_suspended', suspendedPayload);
+  const resumedEvent = event('mesh.idle_resumed', resumedPayload);
   expect(en.applyEvent(suspendedEvent)).toEqual([
     {
       kind: 'upsert',
       cursor: suspendedEvent.id,
       item: {
         kind: 'system',
-        id: `external-agent-idle-suspended:pmem_reviewer_1:${suspendedEvent.id}`,
+        id: `mesh-agent-idle-suspended:pmem_reviewer_1:${suspendedEvent.id}`,
         text: 'fell asleep.',
         event: suspendedPayload,
         level: 'info',
@@ -1678,7 +1676,7 @@ test('external agent idle lifecycle notices preserve typed events and render act
       cursor: resumedEvent.id,
       item: {
         kind: 'system',
-        id: `external-agent-idle-resumed:pmem_reviewer_1:${resumedEvent.id}`,
+        id: `mesh-agent-idle-resumed:pmem_reviewer_1:${resumedEvent.id}`,
         text: 'woke up.',
         event: resumedPayload,
         level: 'info',
@@ -1688,15 +1686,15 @@ test('external agent idle lifecycle notices preserve typed events and render act
   ]);
 
   const zh = new SessionUiProjector({ t: createI18n({ locale: 'zh', packs: [] }).t });
-  const zhSuspendedEvent = event('external_agent.idle_suspended', suspendedPayload);
-  const zhResumedEvent = event('external_agent.idle_resumed', resumedPayload);
+  const zhSuspendedEvent = event('mesh.idle_suspended', suspendedPayload);
+  const zhResumedEvent = event('mesh.idle_resumed', resumedPayload);
   expect(zh.applyEvent(zhSuspendedEvent)).toEqual([
     {
       kind: 'upsert',
       cursor: zhSuspendedEvent.id,
       item: {
         kind: 'system',
-        id: `external-agent-idle-suspended:pmem_reviewer_1:${zhSuspendedEvent.id}`,
+        id: `mesh-agent-idle-suspended:pmem_reviewer_1:${zhSuspendedEvent.id}`,
         text: '睡着了。',
         event: suspendedPayload,
         level: 'info',
@@ -1710,7 +1708,7 @@ test('external agent idle lifecycle notices preserve typed events and render act
       cursor: zhResumedEvent.id,
       item: {
         kind: 'system',
-        id: `external-agent-idle-resumed:pmem_reviewer_1:${zhResumedEvent.id}`,
+        id: `mesh-agent-idle-resumed:pmem_reviewer_1:${zhResumedEvent.id}`,
         text: '醒来了。',
         event: resumedPayload,
         level: 'info',
@@ -1720,18 +1718,18 @@ test('external agent idle lifecycle notices preserve typed events and render act
   ]);
 });
 
-test('external agent idle lifecycle notices sort by event time instead of random event id', () => {
+test('MeshAgent idle lifecycle notices sort by event time instead of random event id', () => {
   const projector = new SessionUiProjector();
   const suspendedAt = '2026-07-18T14:00:00.000Z';
   const resumedAt = '2026-07-18T14:01:00.000Z';
   const suspended = {
     ...event(
-      'external_agent.idle_suspended',
+      'mesh.idle_suspended',
       {
         agentId: 'pmem_reviewer_1',
         agentName: 'Reviewer',
         type: 'idle_suspended',
-        payload: { externalAgentSessionId: 'exa_idle00000000', idleTimeoutMs: 300 }
+        payload: { meshSessionId: 'mesh_idle00000000', idleTimeoutMs: 300 }
       },
       suspendedAt
     ),
@@ -1739,12 +1737,12 @@ test('external agent idle lifecycle notices sort by event time instead of random
   } as Event;
   const resumed = {
     ...event(
-      'external_agent.idle_resumed',
+      'mesh.idle_resumed',
       {
         agentId: 'pmem_reviewer_1',
         agentName: 'Reviewer',
         type: 'idle_resumed',
-        payload: { externalAgentSessionId: 'exa_idle00000000' }
+        payload: { meshSessionId: 'mesh_idle00000000' }
       },
       resumedAt
     ),
@@ -1765,12 +1763,12 @@ test('external agent idle lifecycle notices sort by event time instead of random
   ).toEqual([
     {
       eventType: 'idle_suspended',
-      id: 'external-agent-idle-suspended:pmem_reviewer_1:evt_zzzzzzzzzzzz',
+      id: 'mesh-agent-idle-suspended:pmem_reviewer_1:evt_zzzzzzzzzzzz',
       seq: suspendedAt
     },
     {
       eventType: 'idle_resumed',
-      id: 'external-agent-idle-resumed:pmem_reviewer_1:evt_000000000000',
+      id: 'mesh-agent-idle-resumed:pmem_reviewer_1:evt_000000000000',
       seq: resumedAt
     }
   ]);

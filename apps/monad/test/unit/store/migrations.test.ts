@@ -26,9 +26,9 @@ interface MigrationEntry {
 const drizzleDir = new URL('../../../drizzle/', import.meta.url);
 const partialIndexes = [
   'idx_acp_delegates_live',
-  'idx_external_agent_sessions_live',
-  'idx_external_agent_sessions_provider_ref',
-  'idx_external_agent_inbox_delivery_id'
+  'idx_mesh_sessions_live',
+  'idx_mesh_sessions_provider_ref',
+  'idx_mesh_agent_inbox_delivery_id'
 ];
 
 function loadJournal(): MigrationJournal {
@@ -147,10 +147,10 @@ test('runtime migrator creates the regular schema and partial indexes', () => {
   const sqlite = new Database(':memory:');
   migrateSqlite(sqlite);
 
-  const externalAgentSessionColumns = (
-    sqlite.prepare('PRAGMA table_info(external_agent_sessions)').all() as { name: string }[]
-  ).map((row) => row.name);
-  expect(externalAgentSessionColumns).toEqual([
+  const meshSessionColumns = (sqlite.prepare('PRAGMA table_info(mesh_sessions)').all() as { name: string }[]).map(
+    (row) => row.name
+  );
+  expect(meshSessionColumns).toEqual([
     'id',
     'transcript_target_id',
     'agent_name',
@@ -190,11 +190,11 @@ test('runtime migrator creates the regular schema and partial indexes', () => {
   );
   expect(embeddingColumns).toEqual(['message_id', 'dim', 'vec', 'model']);
 
-  const inboxColumns = (
-    sqlite.prepare('PRAGMA table_info(external_agent_inbox_items)').all() as { name: string }[]
-  ).map((row) => row.name);
+  const inboxColumns = (sqlite.prepare('PRAGMA table_info(mesh_agent_inbox_items)').all() as { name: string }[]).map(
+    (row) => row.name
+  );
   expect(inboxColumns).toEqual([
-    'external_agent_session_id',
+    'mesh_session_id',
     'message_seq',
     'delivery_id',
     'project_id',

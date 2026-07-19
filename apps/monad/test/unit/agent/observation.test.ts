@@ -227,10 +227,10 @@ describe('isMonadAgentDomainEvent', () => {
     expect(isMonadAgentDomainEvent(event)).toBe(true);
   });
 
-  test('is false for an external-agent producer on a created message', () => {
+  test('is false for an mesh-agent producer on a created message', () => {
     const event = messageEvent(
       'session.message.created',
-      { kind: 'external-agent', externalAgentSessionId: 'exa_abc000000000' },
+      { kind: 'mesh-agent', meshSessionId: 'mesh_abc000000000' },
       {
         message: fixtureMessage({ role: 'assistant', text: 'x' })
       }
@@ -238,10 +238,10 @@ describe('isMonadAgentDomainEvent', () => {
     expect(isMonadAgentDomainEvent(event)).toBe(false);
   });
 
-  test('is false for an external-agent producer on a completed message', () => {
+  test('is false for an mesh-agent producer on a completed message', () => {
     const event = messageEvent(
       'session.message.completed',
-      { kind: 'external-agent', externalAgentSessionId: 'exa_abc000000000' },
+      { kind: 'mesh-agent', meshSessionId: 'mesh_abc000000000' },
       {
         message: fixtureMessage({ role: 'assistant', text: 'done' })
       }
@@ -249,10 +249,10 @@ describe('isMonadAgentDomainEvent', () => {
     expect(isMonadAgentDomainEvent(event)).toBe(false);
   });
 
-  test('is false for an external-agent producer on a delta', () => {
+  test('is false for an mesh-agent producer on a delta', () => {
     const event = messageEvent(
       'session.message.delta.appended',
-      { kind: 'external-agent', externalAgentSessionId: 'exa_abc000000000' },
+      { kind: 'mesh-agent', meshSessionId: 'mesh_abc000000000' },
       {
         messageId: 'msg_100000000000',
         channel: 'content',
@@ -263,10 +263,10 @@ describe('isMonadAgentDomainEvent', () => {
     expect(isMonadAgentDomainEvent(event)).toBe(false);
   });
 
-  test('is false for an agent producer bound to an external-agent session', () => {
+  test('is false for an agent producer bound to an mesh-agent session', () => {
     const event = messageEvent(
       'session.message.completed',
-      { kind: 'agent', agentId: 'agt_100000000000', externalAgentSessionId: 'exa_abc000000000' },
+      { kind: 'agent', agentId: 'agt_100000000000', meshSessionId: 'mesh_abc000000000' },
       { message: fixtureMessage({ role: 'assistant', text: 'x' }) }
     );
     expect(isMonadAgentDomainEvent(event)).toBe(false);
@@ -275,7 +275,7 @@ describe('isMonadAgentDomainEvent', () => {
   test('a non-message event falls back to the top-level bridge check', () => {
     const bridged = fixtureEvent({
       type: 'tool.result',
-      payload: { toolCallId: 'c', tool: 't', ok: true, result: 'r', externalAgentSessionId: 'exa_abc000000000' }
+      payload: { toolCallId: 'c', tool: 't', ok: true, result: 'r', meshSessionId: 'mesh_abc000000000' }
     });
     expect(isMonadAgentDomainEvent(bridged)).toBe(false);
     const own = fixtureEvent({ type: 'tool.result', payload: { toolCallId: 'c', tool: 't', ok: true, result: 'r' } });

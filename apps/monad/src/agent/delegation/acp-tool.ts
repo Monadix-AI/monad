@@ -72,7 +72,7 @@ export function applyAcpDelegateTool({
     const before = registry.toolRevision;
     registry.clearToolsFrom(ACP_DELEGATE_SOURCE);
     lastFingerprint.set(registry, fp);
-    if (registry.toolRevision !== before) log.info('acp-delegate tool removed (no enabled external agents)');
+    if (registry.toolRevision !== before) log.info('acp-delegate tool removed (no enabled MeshAgents)');
     return;
   }
   // `mcpServers` is the raw config.json MCP list. Browser/computer PRESET MCP servers (added by

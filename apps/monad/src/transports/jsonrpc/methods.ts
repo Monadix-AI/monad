@@ -177,31 +177,29 @@ export const RPC_HANDLERS: RpcHandlerMap = {
   'agents.default.get': (_params, h: D) => h.agent.getDefaultAgent(),
   'agents.default.set': ({ agentId }, h: D) => h.agent.setDefaultAgent({ agentId }),
 
-  'externalAgent.start': async ({ id, ...request }, h: D) => h.externalAgent.start({ sessionId: id, request }),
-  'externalAgent.list': async ({ id }, h: D) => h.externalAgent.list({ sessionId: id }),
-  'externalAgent.get': async ({ id, sessionId }, h: D) => h.externalAgent.get({ id, transcriptTargetId: sessionId }),
-  'externalAgent.input': async ({ id, sessionId, ...request }, h: D) =>
-    h.externalAgent.input({ id, transcriptTargetId: sessionId, ...request }),
-  'externalAgent.interrupt': async ({ id, sessionId }, h: D) =>
-    h.externalAgent.interrupt({ id, transcriptTargetId: sessionId }),
-  'externalAgent.steer': async ({ id, sessionId, ...request }, h: D) =>
-    h.externalAgent.steer({ id, transcriptTargetId: sessionId, ...request }),
-  'externalAgent.approval': async ({ id, sessionId, ...request }, h: D) =>
-    h.externalAgent.approval({ id, transcriptTargetId: sessionId, ...request }),
-  'externalAgent.resize': async ({ id, sessionId, ...request }, h: D) =>
-    h.externalAgent.resize({ id, transcriptTargetId: sessionId, ...request }),
-  'externalAgent.stop': async ({ id, sessionId }, h: D) => h.externalAgent.stop({ id, transcriptTargetId: sessionId }),
-  'externalAgent.historyPage': async ({ id, sessionId, ...request }, h: D) =>
-    h.externalAgent.historyPage({ id, transcriptTargetId: sessionId, request }),
-  'externalAgent.usage': async ({ name }, h: D) => h.externalAgent.usage({ agentName: name }),
-  'externalAgent.auth.start': async ({ name }, h: D) => h.externalAgent.startAuth({ agentName: name }),
-  'externalAgent.auth.status': async ({ name }, h: D) => h.externalAgent.authStatus({ agentName: name }),
-  'externalAgent.auth.get': async ({ id, controlToken }, h: D) => h.externalAgent.getAuth({ id, controlToken }),
-  'externalAgent.auth.input': async ({ id, controlToken, ...request }, h: D) =>
-    h.externalAgent.inputAuth({ id, controlToken, ...request }),
-  'externalAgent.auth.resize': async ({ id, controlToken, ...request }, h: D) =>
-    h.externalAgent.resizeAuth({ id, controlToken, ...request }),
-  'externalAgent.auth.stop': async ({ id, controlToken }, h: D) => h.externalAgent.stopAuth({ id, controlToken })
+  'mesh.session.start': async (request, h: D) => h.meshAgent.start({ request }),
+  'mesh.session.list': async ({ transcriptTargetId }, h: D) => h.meshAgent.list({ sessionId: transcriptTargetId }),
+  'mesh.session.get': async ({ id, transcriptTargetId }, h: D) => h.meshAgent.get({ id, transcriptTargetId }),
+  'mesh.session.input': async ({ id, transcriptTargetId, ...request }, h: D) =>
+    h.meshAgent.input({ id, transcriptTargetId, ...request }),
+  'mesh.session.interrupt': async ({ id, transcriptTargetId }, h: D) =>
+    h.meshAgent.interrupt({ id, transcriptTargetId }),
+  'mesh.session.steer': async ({ id, transcriptTargetId, ...request }, h: D) =>
+    h.meshAgent.steer({ id, transcriptTargetId, ...request }),
+  'mesh.session.approval': async ({ id, transcriptTargetId, ...request }, h: D) =>
+    h.meshAgent.approval({ id, transcriptTargetId, ...request }),
+  'mesh.session.resize': async ({ id, transcriptTargetId, ...request }, h: D) =>
+    h.meshAgent.resize({ id, transcriptTargetId, ...request }),
+  'mesh.session.stop': async ({ id, transcriptTargetId }, h: D) => h.meshAgent.stop({ id, transcriptTargetId }),
+  'mesh.agent.usage': async ({ name }, h: D) => h.meshAgent.usage({ agentName: name }),
+  'mesh.agent.auth.start': async ({ name }, h: D) => h.meshAgent.startAuth({ agentName: name }),
+  'mesh.agent.auth.status': async ({ name }, h: D) => h.meshAgent.authStatus({ agentName: name }),
+  'mesh.authSession.get': async ({ id, controlToken }, h: D) => h.meshAgent.getAuth({ id, controlToken }),
+  'mesh.authSession.input': async ({ id, controlToken, ...request }, h: D) =>
+    h.meshAgent.inputAuth({ id, controlToken, ...request }),
+  'mesh.authSession.resize': async ({ id, controlToken, ...request }, h: D) =>
+    h.meshAgent.resizeAuth({ id, controlToken, ...request }),
+  'mesh.authSession.stop': async ({ id, controlToken }, h: D) => h.meshAgent.stopAuth({ id, controlToken })
 
   // model/* settings (and the rest of /v1/settings/*) are HTTP-only — no RPC binding by design.
 };

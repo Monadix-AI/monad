@@ -14,16 +14,16 @@ import { z } from 'zod';
 
 import { clarifyAskerSchema, clarifyChoiceModeSchema } from './clarify.ts';
 import { chatMessageSchema, type EventType } from './domain.ts';
-import {
-  externalAgentIdleResumedSystemEventSchema,
-  externalAgentIdleSuspendedSystemEventSchema,
-  externalAgentLaunchModeSchema,
-  externalAgentProductIconSchema,
-  externalAgentProviderSchema
-} from './external-agent/index.ts';
-import { agentIdSchema, externalAgentSessionIdSchema, messageIdSchema, transcriptTargetIdSchema } from './ids.ts';
+import { agentIdSchema, meshSessionIdSchema, messageIdSchema, transcriptTargetIdSchema } from './ids.ts';
 import { mcpServerStatusSchema } from './mcp-server.ts';
 import { memoryScopeSchema } from './memory.ts';
+import {
+  meshAgentIdleResumedSystemEventSchema,
+  meshAgentIdleSuspendedSystemEventSchema,
+  meshAgentLaunchModeSchema,
+  meshAgentProductIconSchema,
+  meshAgentProviderSchema
+} from './mesh-agent/index.ts';
 import { messageProducerSchema } from './message-ingress.ts';
 
 const requestIdSchema = z.string();
@@ -227,90 +227,90 @@ export const delegationTerminalRequestPayloadSchema = z.object({
   timeoutMs: z.number().int().positive().optional()
 });
 
-export const externalAgentStartedPayloadSchema = z.object({
-  externalAgentSessionId: z.string(),
+export const meshAgentStartedPayloadSchema = z.object({
+  meshSessionId: z.string(),
   agentName: z.string(),
-  provider: externalAgentProviderSchema,
-  productIcon: externalAgentProductIconSchema.optional(),
-  launchMode: externalAgentLaunchModeSchema,
+  provider: meshAgentProviderSchema,
+  productIcon: meshAgentProductIconSchema.optional(),
+  launchMode: meshAgentLaunchModeSchema,
   workingPath: z.string(),
   pid: z.number().int().nullable()
 });
 
-const externalAgentConnectionIdentitySchema = z.object({
-  externalAgentSessionId: externalAgentSessionIdSchema,
-  provider: externalAgentProviderSchema,
+const meshAgentConnectionIdentitySchema = z.object({
+  meshSessionId: meshSessionIdSchema,
+  provider: meshAgentProviderSchema,
   observationEpoch: z.string().min(1)
 });
 
-export const externalAgentSessionConnectionOpenedPayloadSchema = externalAgentConnectionIdentitySchema;
-export const externalAgentSessionConnectionClosedPayloadSchema = externalAgentConnectionIdentitySchema.extend({
+export const meshSessionConnectionOpenedPayloadSchema = meshAgentConnectionIdentitySchema;
+export const meshSessionConnectionClosedPayloadSchema = meshAgentConnectionIdentitySchema.extend({
   reason: z.enum(['exited', 'failed', 'stopped', 'disconnected'])
 });
 
-export const externalAgentConnectionRequiredPayloadSchema = z.object({
-  externalAgentSessionId: z.string().optional(),
+export const meshAgentConnectionRequiredPayloadSchema = z.object({
+  meshSessionId: z.string().optional(),
   agentName: z.string(),
-  provider: externalAgentProviderSchema,
+  provider: meshAgentProviderSchema,
   code: z.string().optional(),
   reason: z.string(),
   reconnectIn: z.literal('studio')
 });
 
-export const externalAgentApprovalRequestedPayloadSchema = z.object({
-  externalAgentSessionId: z.string(),
-  provider: externalAgentProviderSchema,
+export const meshAgentApprovalRequestedPayloadSchema = z.object({
+  meshSessionId: z.string(),
+  provider: meshAgentProviderSchema,
   requestId: requestIdSchema,
   text: z.string(),
   data: z.unknown().optional()
 });
 
-export const externalAgentApprovalResolvedPayloadSchema = z.object({
-  externalAgentSessionId: z.string(),
-  provider: externalAgentProviderSchema,
+export const meshAgentApprovalResolvedPayloadSchema = z.object({
+  meshSessionId: z.string(),
+  provider: meshAgentProviderSchema,
   requestId: requestIdSchema,
   allow: z.boolean(),
   reason: z.string().optional()
 });
 
-export const externalAgentIdleSuspendedPayloadSchema = externalAgentIdleSuspendedSystemEventSchema;
-export const externalAgentIdleResumedPayloadSchema = externalAgentIdleResumedSystemEventSchema;
+export const meshAgentIdleSuspendedPayloadSchema = meshAgentIdleSuspendedSystemEventSchema;
+export const meshAgentIdleResumedPayloadSchema = meshAgentIdleResumedSystemEventSchema;
 
-export const externalAgentResumeFailedPayloadSchema = z.object({
+export const meshAgentResumeFailedPayloadSchema = z.object({
   agentName: z.string(),
-  provider: externalAgentProviderSchema,
+  provider: meshAgentProviderSchema,
   providerSessionRef: z.string(),
   code: z.string(),
   message: z.string(),
   fallback: z.literal('cold-start')
 });
 
-export const externalAgentExitedPayloadSchema = z.object({
-  externalAgentSessionId: z.string(),
+export const meshAgentExitedPayloadSchema = z.object({
+  meshSessionId: z.string(),
   exitCode: z.number().int().nullable(),
   state: z.enum(['exited', 'failed', 'stopped'])
 });
 
 // The underlying provider process stays alive across turns for a managed-project/provider agent, so
 // this signals "the current turn finished" without implying the process exited — distinct from
-// external_agent.exited, which is process lifecycle. Flips the live tool card off 'running' so
-// presence projection (externalAgentIsGenerating) settles back to idle for notification-style
+// mesh.exited, which is process lifecycle. Flips the live tool card off 'running' so
+// presence projection (meshAgentIsGenerating) settles back to idle for notification-style
 // completions that never streamed raw stdout/pty output.
-export const externalAgentTurnSettledPayloadSchema = z.object({
-  externalAgentSessionId: z.string(),
+export const meshAgentTurnSettledPayloadSchema = z.object({
+  meshSessionId: z.string(),
   error: z.boolean().optional()
 });
 
-export const externalAgentLoginRequiredPayloadSchema = z.object({
-  externalAgentSessionId: z.string().optional(),
+export const meshAgentLoginRequiredPayloadSchema = z.object({
+  meshSessionId: z.string().optional(),
   agentName: z.string(),
-  provider: externalAgentProviderSchema,
+  provider: meshAgentProviderSchema,
   reason: z.string()
 });
 
-export const externalAgentLoginResolvedPayloadSchema = z.object({
+export const meshAgentLoginResolvedPayloadSchema = z.object({
   agentName: z.string(),
-  provider: externalAgentProviderSchema
+  provider: meshAgentProviderSchema
 });
 
 export type SessionCreatedPayload = z.infer<typeof sessionCreatedPayloadSchema>;
@@ -330,17 +330,17 @@ export type ContextHandoffSuggestedPayload = z.infer<typeof contextHandoffSugges
 export type MemorySuggestionPayload = z.infer<typeof memorySuggestionPayloadSchema>;
 export type DelegationFsRequestPayload = z.infer<typeof delegationFsRequestPayloadSchema>;
 export type DelegationTerminalRequestPayload = z.infer<typeof delegationTerminalRequestPayloadSchema>;
-export type ExternalAgentStartedPayload = z.infer<typeof externalAgentStartedPayloadSchema>;
-export type ExternalAgentConnectionRequiredPayload = z.infer<typeof externalAgentConnectionRequiredPayloadSchema>;
-export type ExternalAgentApprovalRequestedPayload = z.infer<typeof externalAgentApprovalRequestedPayloadSchema>;
-export type ExternalAgentApprovalResolvedPayload = z.infer<typeof externalAgentApprovalResolvedPayloadSchema>;
-export type ExternalAgentIdleSuspendedPayload = z.infer<typeof externalAgentIdleSuspendedPayloadSchema>;
-export type ExternalAgentIdleResumedPayload = z.infer<typeof externalAgentIdleResumedPayloadSchema>;
-export type ExternalAgentResumeFailedPayload = z.infer<typeof externalAgentResumeFailedPayloadSchema>;
-export type ExternalAgentExitedPayload = z.infer<typeof externalAgentExitedPayloadSchema>;
-export type ExternalAgentTurnSettledPayload = z.infer<typeof externalAgentTurnSettledPayloadSchema>;
-export type ExternalAgentLoginRequiredPayload = z.infer<typeof externalAgentLoginRequiredPayloadSchema>;
-export type ExternalAgentLoginResolvedPayload = z.infer<typeof externalAgentLoginResolvedPayloadSchema>;
+export type MeshAgentStartedPayload = z.infer<typeof meshAgentStartedPayloadSchema>;
+export type MeshAgentConnectionRequiredPayload = z.infer<typeof meshAgentConnectionRequiredPayloadSchema>;
+export type MeshAgentApprovalRequestedPayload = z.infer<typeof meshAgentApprovalRequestedPayloadSchema>;
+export type MeshAgentApprovalResolvedPayload = z.infer<typeof meshAgentApprovalResolvedPayloadSchema>;
+export type MeshAgentIdleSuspendedPayload = z.infer<typeof meshAgentIdleSuspendedPayloadSchema>;
+export type MeshAgentIdleResumedPayload = z.infer<typeof meshAgentIdleResumedPayloadSchema>;
+export type MeshAgentResumeFailedPayload = z.infer<typeof meshAgentResumeFailedPayloadSchema>;
+export type MeshAgentExitedPayload = z.infer<typeof meshAgentExitedPayloadSchema>;
+export type MeshAgentTurnSettledPayload = z.infer<typeof meshAgentTurnSettledPayloadSchema>;
+export type MeshAgentLoginRequiredPayload = z.infer<typeof meshAgentLoginRequiredPayloadSchema>;
+export type MeshAgentLoginResolvedPayload = z.infer<typeof meshAgentLoginResolvedPayloadSchema>;
 
 export type EventDelivery = 'control' | 'generation' | 'both';
 export type EventPersistence = 'durable' | 'transient';
@@ -392,35 +392,19 @@ export const EVENT_DEFINITIONS = {
   'memory.suggestion': defineEvent(memorySuggestionPayloadSchema, 'generation', 'durable'),
   'delegation.fs_request': defineEvent(delegationFsRequestPayloadSchema, 'generation', 'transient'),
   'delegation.terminal_request': defineEvent(delegationTerminalRequestPayloadSchema, 'generation', 'transient'),
-  'external_agent.started': defineEvent(externalAgentStartedPayloadSchema, 'both', 'durable'),
-  'external_agent.connection_required': defineEvent(
-    externalAgentConnectionRequiredPayloadSchema,
-    'generation',
-    'transient'
-  ),
-  'external_agent.approval_requested': defineEvent(
-    externalAgentApprovalRequestedPayloadSchema,
-    'generation',
-    'durable'
-  ),
-  'external_agent.approval_resolved': defineEvent(externalAgentApprovalResolvedPayloadSchema, 'generation', 'durable'),
-  'external_agent.idle_suspended': defineEvent(externalAgentIdleSuspendedPayloadSchema, 'generation', 'durable'),
-  'external_agent.idle_resumed': defineEvent(externalAgentIdleResumedPayloadSchema, 'generation', 'durable'),
-  'external_agent.resume_failed': defineEvent(externalAgentResumeFailedPayloadSchema, 'generation', 'durable'),
-  'external_agent.exited': defineEvent(externalAgentExitedPayloadSchema, 'both', 'durable'),
-  'external_agent.turn_settled': defineEvent(externalAgentTurnSettledPayloadSchema, 'generation', 'transient'),
-  'external_agent.session.connection.opened': defineEvent(
-    externalAgentSessionConnectionOpenedPayloadSchema,
-    'control',
-    'transient'
-  ),
-  'external_agent.session.connection.closed': defineEvent(
-    externalAgentSessionConnectionClosedPayloadSchema,
-    'control',
-    'transient'
-  ),
-  'external_agent.login_required': defineEvent(externalAgentLoginRequiredPayloadSchema, 'generation', 'transient'),
-  'external_agent.login_resolved': defineEvent(externalAgentLoginResolvedPayloadSchema, 'generation', 'transient')
+  'mesh.started': defineEvent(meshAgentStartedPayloadSchema, 'both', 'durable'),
+  'mesh.connection_required': defineEvent(meshAgentConnectionRequiredPayloadSchema, 'generation', 'transient'),
+  'mesh.approval_requested': defineEvent(meshAgentApprovalRequestedPayloadSchema, 'generation', 'durable'),
+  'mesh.approval_resolved': defineEvent(meshAgentApprovalResolvedPayloadSchema, 'generation', 'durable'),
+  'mesh.idle_suspended': defineEvent(meshAgentIdleSuspendedPayloadSchema, 'generation', 'durable'),
+  'mesh.idle_resumed': defineEvent(meshAgentIdleResumedPayloadSchema, 'generation', 'durable'),
+  'mesh.resume_failed': defineEvent(meshAgentResumeFailedPayloadSchema, 'generation', 'durable'),
+  'mesh.exited': defineEvent(meshAgentExitedPayloadSchema, 'both', 'durable'),
+  'mesh.turn_settled': defineEvent(meshAgentTurnSettledPayloadSchema, 'generation', 'transient'),
+  'mesh.session.connection.opened': defineEvent(meshSessionConnectionOpenedPayloadSchema, 'control', 'transient'),
+  'mesh.session.connection.closed': defineEvent(meshSessionConnectionClosedPayloadSchema, 'control', 'transient'),
+  'mesh.login_required': defineEvent(meshAgentLoginRequiredPayloadSchema, 'generation', 'transient'),
+  'mesh.login_resolved': defineEvent(meshAgentLoginResolvedPayloadSchema, 'generation', 'transient')
 } as const satisfies Record<EventType, EventDefinition>;
 
 type EventDefinitions = typeof EVENT_DEFINITIONS;

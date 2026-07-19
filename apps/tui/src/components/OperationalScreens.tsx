@@ -2,12 +2,12 @@ import type { NavCapability } from '../shell/capabilities.ts';
 
 import {
   agentSelectors,
-  externalAgentSelectors,
-  externalAgentSessionSelectors,
+  meshAgentSelectors,
+  meshSessionSelectors,
   useInitStatusQuery,
   useListAgentsQuery,
-  useListExternalAgentsQuery,
-  useListLiveExternalAgentSessionsQuery
+  useListLiveMeshSessionsQuery,
+  useListMeshAgentsQuery
 } from '@monad/client-rtk';
 import { openUrl } from '@monad/environment';
 import { Box, Text, useInput } from 'ink';
@@ -17,8 +17,8 @@ import { TUI_THEME } from './theme.ts';
 
 export function RuntimeScreen({ active }: { active: boolean }) {
   const status = useInitStatusQuery();
-  const runtimes = useListLiveExternalAgentSessionsQuery({ limit: 100 });
-  const rows = runtimes.data ? externalAgentSessionSelectors.selectAll(runtimes.data.sessions) : [];
+  const runtimes = useListLiveMeshSessionsQuery({ limit: 100 });
+  const rows = runtimes.data ? meshSessionSelectors.selectAll(runtimes.data.sessions) : [];
   useInput(
     (input) => {
       if (input === 'r') {
@@ -33,7 +33,7 @@ export function RuntimeScreen({ active }: { active: boolean }) {
       <Text color={status.error ? TUI_THEME.danger : TUI_THEME.glow}>
         daemon {status.error ? 'unavailable' : status.isLoading ? 'checking' : 'online'}
       </Text>
-      <Text color={TUI_THEME.dim}>live external-agent runtimes: {rows.length}</Text>
+      <Text color={TUI_THEME.dim}>live mesh-agent runtimes: {rows.length}</Text>
       {rows.map((runtime) => (
         <Text key={runtime.id}>
           · {runtime.agentName}{' '}
@@ -64,18 +64,18 @@ export function AgentsScreen({ active }: { active: boolean }) {
   );
 }
 
-export function ExternalAgentsScreen({ active }: { active: boolean }) {
-  const query = useListExternalAgentsQuery();
-  const rows = query.data ? externalAgentSelectors.selectAll(query.data) : [];
+export function MeshAgentsScreen({ active }: { active: boolean }) {
+  const query = useListMeshAgentsQuery();
+  const rows = query.data ? meshAgentSelectors.selectAll(query.data) : [];
   useInput((input) => input === 'r' && query.refetch(), { isActive: active });
   return (
-    <Screen title="External Agents">
+    <Screen title="MeshAgents">
       {rows.map((agent) => (
         <Text key={agent.name}>
           · {agent.name} <Text color={TUI_THEME.dim}>{agent.provider}</Text>
         </Text>
       ))}
-      {rows.length === 0 ? <Text color={TUI_THEME.dim}>No external agents configured.</Text> : null}
+      {rows.length === 0 ? <Text color={TUI_THEME.dim}>No MeshAgents configured.</Text> : null}
       <Text color={TUI_THEME.dim}>r refresh · runtime processes appear under Runtime</Text>
     </Screen>
   );

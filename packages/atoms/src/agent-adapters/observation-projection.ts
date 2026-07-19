@@ -1,22 +1,22 @@
-import type { AgentObservationDiagnostic, ExternalAgentObservationEvent } from '@monad/protocol';
+import type { AgentObservationDiagnostic, MeshAgentObservationEvent } from '@monad/protocol';
 import type {
-  ExternalAgentObservationActivity,
-  ExternalAgentObservationJsonRecordEntry,
-  ExternalAgentObservationMessageGroupProjector,
-  ExternalAgentObservationProjector,
-  ExternalAgentObservationRecordProjector
+  MeshAgentObservationActivity,
+  MeshAgentObservationJsonRecordEntry,
+  MeshAgentObservationMessageGroupProjector,
+  MeshAgentObservationProjector,
+  MeshAgentObservationRecordProjector
 } from '@monad/sdk-atom';
 
-import { externalAgentObservationEventSchema } from '@monad/protocol';
+import { meshAgentObservationEventSchema } from '@monad/protocol';
 
-export type ObservationRole = ExternalAgentObservationEvent['role'];
-export type ObservationSource = ExternalAgentObservationEvent['source'];
+export type ObservationRole = MeshAgentObservationEvent['role'];
+export type ObservationSource = MeshAgentObservationEvent['source'];
 export type {
-  ExternalAgentObservationActivity,
-  ExternalAgentObservationJsonRecordEntry,
-  ExternalAgentObservationMessageGroupProjector,
-  ExternalAgentObservationProjector,
-  ExternalAgentObservationRecordProjector
+  MeshAgentObservationActivity,
+  MeshAgentObservationJsonRecordEntry,
+  MeshAgentObservationMessageGroupProjector,
+  MeshAgentObservationProjector,
+  MeshAgentObservationRecordProjector
 };
 
 const TERMINAL_EVENT_TYPES = new Set(['turn/completed', 'result', 'error', 'server_error', 'turn-end']);
@@ -36,8 +36,8 @@ function threadStatusIsIdle(raw: unknown): boolean {
  *  strings live HERE (adapter side), never in a consumer. `system` (a turn-start / status notice) still
  *  counts as in-flight for generating but yields no UI phase. */
 export function classifyObservationActivity(
-  event: ExternalAgentObservationEvent
-): ExternalAgentObservationActivity | undefined {
+  event: MeshAgentObservationEvent
+): MeshAgentObservationActivity | undefined {
   const type = event.providerEventType?.toLowerCase() ?? '';
   if (event.providerEventType && TERMINAL_EVENT_TYPES.has(event.providerEventType)) return 'turn-end';
   if (event.providerEventType === 'thread/status/changed')
@@ -55,7 +55,7 @@ export function classifyObservationActivity(
 
 /** Shared default for `isStreamingFragment`: the app-server / stream-json providers all name partial
  *  token events with a `*delta`/`*chunk` suffix. Adapters with a different convention override it. */
-export function isStreamingObservationFragment(event: ExternalAgentObservationEvent): boolean {
+export function isStreamingObservationFragment(event: MeshAgentObservationEvent): boolean {
   const type = event.providerEventType?.toLowerCase() ?? '';
   return type.endsWith('/delta') || type.endsWith('_delta') || type.endsWith('delta') || type.includes('chunk');
 }
@@ -84,7 +84,7 @@ export function providerIsoTimestamp(value: string | undefined): string | undefi
 
 export function observation(args: {
   id: string;
-  projection?: ExternalAgentObservationEvent['projection'];
+  projection?: MeshAgentObservationEvent['projection'];
   role: ObservationRole;
   text?: string;
   source: ObservationSource;
@@ -94,10 +94,10 @@ export function observation(args: {
   raw?: unknown;
   rawEvents?: unknown[];
   preserveWhitespace?: boolean;
-}): ExternalAgentObservationEvent[] {
+}): MeshAgentObservationEvent[] {
   const text = args.preserveWhitespace ? args.text : args.text?.trim();
   if (!text) return [];
-  const parsed = externalAgentObservationEventSchema.safeParse({
+  const parsed = meshAgentObservationEventSchema.safeParse({
     id: args.id,
     projection: args.projection,
     role: args.role,
@@ -119,7 +119,7 @@ export function thinkingObservation(args: {
   createdAt?: string;
   raw?: unknown;
   preserveWhitespace?: boolean;
-}): ExternalAgentObservationEvent[] {
+}): MeshAgentObservationEvent[] {
   return observation({
     ...args,
     role: 'agent',
@@ -139,7 +139,7 @@ function parseJsonObject(value: string): Record<string, unknown> | undefined {
   }
 }
 
-export function jsonRecordEntries(text: string): ExternalAgentObservationJsonRecordEntry[] {
+export function jsonRecordEntries(text: string): MeshAgentObservationJsonRecordEntry[] {
   if (!text.includes('{')) return [];
   const trimmed = text.trim();
   const whole = parseJsonObject(trimmed);
@@ -152,7 +152,7 @@ export function jsonRecordEntries(text: string): ExternalAgentObservationJsonRec
       const record = parseJsonObject(line);
       return record ? { record, raw: line } : undefined;
     })
-    .filter((entry): entry is ExternalAgentObservationJsonRecordEntry => !!entry);
+    .filter((entry): entry is MeshAgentObservationJsonRecordEntry => !!entry);
   if (lineRecords.length > 0) return lineRecords;
   return [];
 }
@@ -217,7 +217,7 @@ export function permissionDenialEvents(
   denials: unknown,
   source: ObservationSource,
   recordIndex?: number
-): ExternalAgentObservationEvent[] {
+): MeshAgentObservationEvent[] {
   if (!Array.isArray(denials)) return [];
   const prefix = recordIndex === undefined ? id : `${id}:json:${recordIndex}`;
   return denials.flatMap((denial, index) => {
@@ -251,7 +251,7 @@ export function contentEvents(args: {
   raw: unknown;
   baseSource?: string;
   textRole?: Extract<ObservationRole, 'agent' | 'user'>;
-}): ExternalAgentObservationEvent[] {
+}): MeshAgentObservationEvent[] {
   const textRole = args.textRole ?? 'agent';
   if (typeof args.content === 'string') {
     return observation({

@@ -22,7 +22,7 @@ import { parseDurableSummary } from '#/agent/history.ts';
 import { canTransition } from '#/agent/index.ts';
 import { clearProcessesForSession, disposeSandboxSession, processControlTool } from '#/capabilities/tools';
 import { HandlerError } from '#/handlers/handler-error.ts';
-import { createManagedExternalAgentJoin } from '#/handlers/session/handlers/managed-external-agent-join.ts';
+import { createManagedMeshAgentJoin } from '#/handlers/session/handlers/managed-mesh-agent-join.ts';
 import { createSessionMemberObservationHandlers } from '#/handlers/session/handlers/session-member-observation.ts';
 import { createSessionMemberRoster } from '#/handlers/session/handlers/session-member-roster.ts';
 import { createSessionMembersHandlers } from '#/handlers/session/handlers/session-members.ts';
@@ -72,7 +72,7 @@ export function createLifecycleHandlers(ctx: SessionContext) {
   } = ctx;
   const sessionDeleteGraceMs = ctx.deps.sessionDeleteGraceMs ?? SESSION_DELETE_BACKEND_GRACE_MS;
 
-  const { spawnManagedSessionMember } = createManagedExternalAgentJoin(ctx);
+  const { spawnManagedSessionMember } = createManagedMeshAgentJoin(ctx);
   const { reconcileProjectSessionMembers } = createSessionMemberRoster(ctx, { spawnManagedSessionMember });
   const { listSessionMembers, inviteSessionMember, spawnSessionMember, removeSessionMember } =
     createSessionMembersHandlers(ctx, { spawnManagedSessionMember });
@@ -121,7 +121,7 @@ export function createLifecycleHandlers(ctx: SessionContext) {
     disposeRuntime(id);
     clearProcessesForSession(id);
     clearAcpDelegatesForSession(id); // kill any reused external ACP adapters held for this session
-    ctx.deps.externalAgentHost?.stopSession(id);
+    ctx.deps.meshAgentHost?.stopSession(id);
     oversight?.cancelSession(id, 'session_deleted');
     delegation?.cancelSession(id, 'session_deleted');
     // SessionEnd fires before teardown (abort only pauses a turn, so it does not end the session).
@@ -354,7 +354,7 @@ export function createLifecycleHandlers(ctx: SessionContext) {
       aborts.delete(id);
       clearProcessesForSession(id);
       clearAcpDelegatesForSession(id); // the sub-agent's continued context no longer matches a reset parent
-      ctx.deps.externalAgentHost?.stopSession(id);
+      ctx.deps.meshAgentHost?.stopSession(id);
       const clearedCount = store.clearMessages(id);
       emitLifecycle(id, 'session.updated', { reset: true });
       return { clearedCount };
@@ -416,17 +416,15 @@ export function createLifecycleHandlers(ctx: SessionContext) {
             : store.listMessages(id, { limit, before, includeInactive, latest: true });
       const projector = new SessionUiProjector(ctx.deps.localeService ? { t: ctx.deps.localeService.t } : {});
       projector.hydrateMessages(messages, parseDurableSummary(store.getMemory(id, 'ctx:summary')));
-      // Rebuild external agent tool cards from their durable snapshots for this window (live output
+      // Rebuild MeshAgent tool cards from their durable snapshots for this window (live output
       // chunks aren't persisted as events). Scope to the page's time span so a card lands on the page
       // it belongs to; the full lineage view takes them all. Cross-page overlap is harmless — the
       // client merges transcript items by key.
-      const cliSessions = store.listExternalAgentSessionsForTranscriptTarget(id);
+      const cliSessions = store.listMeshSessionsForTranscriptTarget(id);
       const oldestTs = messages.at(0)?.createdAt;
       const newestTs = messages.at(-1)?.createdAt;
       if (oldestTs !== undefined && newestTs !== undefined) {
-        projector.hydrateExternalAgentSessions(
-          cliSessions.filter((s) => s.startedAt >= oldestTs && s.startedAt <= newestTs)
-        );
+        projector.hydrateMeshSessions(cliSessions.filter((s) => s.startedAt >= oldestTs && s.startedAt <= newestTs));
       }
       const oldest = messages.at(0)?.id;
       const newest = messages.at(-1)?.id;
@@ -434,7 +432,7 @@ export function createLifecycleHandlers(ctx: SessionContext) {
         oldest !== undefined && store.listMessages(id, { before: oldest, includeInactive, limit: 1 }).length > 0;
       const hasNewer =
         newest !== undefined && store.listMessages(id, { after: newest, includeInactive, limit: 1 }).length > 0;
-      if (!hasNewer) projector.hydrateExternalAgentLoginEvents(store.listEvents(id));
+      if (!hasNewer) projector.hydrateMeshAgentLoginEvents(store.listEvents(id));
       const snapshot = projector.snapshot();
       const items = snapshot.kind === 'snapshot' ? snapshot.items : [];
       return {

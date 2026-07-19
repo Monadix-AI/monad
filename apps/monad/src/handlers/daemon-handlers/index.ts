@@ -31,9 +31,9 @@ import { ExperienceWorkerRegistry } from '#/atoms/experience-workers.ts';
 import { createSkillCatalogs } from '#/capabilities/skills/index.ts';
 import { createWorkspaceExperienceApiContext } from '#/handlers/atom-pack/experience-capabilities.ts';
 import { createAtomPacksModule } from '#/handlers/atom-pack/index.ts';
-import { createExternalAgentModule } from '#/handlers/external-agent/index.ts';
 import { HandlerError } from '#/handlers/handler-error.ts';
 import { createMemoryModule } from '#/handlers/memory/index.ts';
+import { createMeshAgentModule } from '#/handlers/mesh-agent/index.ts';
 import { createSessionModule } from '#/handlers/session/index.ts';
 import { createAcpAgentModule } from '#/handlers/settings/acp-agent/index.ts';
 import { createAgentModule } from '#/handlers/settings/agent/index.ts';
@@ -43,10 +43,10 @@ import { createCapabilityInventoryModule } from '#/handlers/settings/capability-
 import { createChannelModule } from '#/handlers/settings/channel/index.ts';
 import { createComputerPresetModule } from '#/handlers/settings/computer-preset/index.ts';
 import { createDeveloperModule } from '#/handlers/settings/developer/index.ts';
-import { createExternalAgentSettingsModule } from '#/handlers/settings/external-agent/index.ts';
 import { createHooksModule } from '#/handlers/settings/hooks/index.ts';
 import { createSettingsImportModule } from '#/handlers/settings/import/index.ts';
 import { createMcpServerModule } from '#/handlers/settings/mcp-server/index.ts';
+import { createMeshAgentSettingsModule } from '#/handlers/settings/mesh-agent/index.ts';
 import { createModelModule } from '#/handlers/settings/model/index.ts';
 import { createNetworkModule } from '#/handlers/settings/network/index.ts';
 import { createObscuraModule } from '#/handlers/settings/obscura/index.ts';
@@ -60,11 +60,11 @@ import { createToolBackendsModule } from '#/handlers/settings/tool-backends/inde
 import { createSystemUpgradeModule } from '#/handlers/system-upgrade.ts';
 import { createTranscriptProjector } from '#/handlers/transcript/projector.ts';
 import { createConfigSandboxActivationService } from '#/platform/sandbox/activation.ts';
-import { resolveExternalAgentEnv } from '#/services/external-agent/env.ts';
-import { ExternalAgentHost } from '#/services/external-agent/host/index.ts';
-import { resolveExternalAgentManagedServerUrl } from '#/services/external-agent/host/session-launcher.ts';
-import { externalAgentConfigToView } from '#/services/external-agent/index.ts';
-import { managedProjectRuntimeWorkspace } from '#/services/external-agent/managed-project.ts';
+import { resolveMeshAgentEnv } from '#/services/mesh-agent/env.ts';
+import { MeshAgentHost } from '#/services/mesh-agent/host/index.ts';
+import { resolveMeshAgentManagedServerUrl } from '#/services/mesh-agent/host/session-launcher.ts';
+import { meshAgentConfigToView } from '#/services/mesh-agent/index.ts';
+import { managedProjectRuntimeWorkspace } from '#/services/mesh-agent/managed-project.ts';
 import { createMessageIngress } from '#/services/messages/ingress.ts';
 import licensesData from '../../../generated/licenses.json';
 import { createInitHandlers } from './handlers-init.ts';
@@ -87,27 +87,27 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
     await deps.configManager.updateAuth(() => auth);
   });
   const sandboxActivation = createConfigSandboxActivationService(deps.configManager);
-  const externalAgentHost = new ExternalAgentHost({
+  const meshAgentHost = new MeshAgentHost({
     store: deps.store,
     bus: deps.bus,
     monadHome: paths.home,
-    serverUrl: resolveExternalAgentManagedServerUrl({
-      serverUrl: deps.externalAgentServerUrl,
+    serverUrl: resolveMeshAgentManagedServerUrl({
+      serverUrl: deps.meshAgentServerUrl,
       networkHttps: deps.networkHttps
     }),
     networkHttps: deps.networkHttps,
     agents: async () => {
-      return deps.configManager.get().cfg.externalAgents.map(externalAgentConfigToView);
+      return deps.configManager.get().cfg.meshAgents.map(meshAgentConfigToView);
     },
-    resolveAgentEnv: async (env) => resolveExternalAgentEnv(env, deps.configManager.get().auth ?? undefined),
-    externalAgentProcessRegistryPath: `${paths.runtime}/external-agent-processes.json`,
-    externalAgentLiveStoreDirectory: `${paths.runtime}/external-agent-live-observation`,
-    authProcessRegistryPath: `${paths.runtime}/external-agent-auth-processes.json`,
-    authHeartbeatTimeoutMs: deps.externalAgentAuthHeartbeatTimeoutMs,
-    authStatusTimeoutMs: deps.externalAgentAuthStatusTimeoutMs
+    resolveAgentEnv: async (env) => resolveMeshAgentEnv(env, deps.configManager.get().auth ?? undefined),
+    meshAgentProcessRegistryPath: `${paths.runtime}/mesh-agent-processes.json`,
+    meshAgentLiveStoreDirectory: `${paths.runtime}/mesh-agent-live-observation`,
+    authProcessRegistryPath: `${paths.runtime}/mesh-agent-auth-processes.json`,
+    authHeartbeatTimeoutMs: deps.meshAgentAuthHeartbeatTimeoutMs,
+    authStatusTimeoutMs: deps.meshAgentAuthStatusTimeoutMs
   });
-  void externalAgentHost.reconcileOrphanedSessions();
-  process.on('exit', () => externalAgentHost.stopAll());
+  void meshAgentHost.reconcileOrphanedSessions();
+  process.on('exit', () => meshAgentHost.stopAll());
 
   const init = createInitHandlers(paths, mockMode, deps.log);
   const messageIngress = deps.messageIngress ?? createMessageIngress({ store: deps.store, bus: deps.bus });
@@ -280,7 +280,7 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
       return deps.indexerStatus?.() ?? { pending: 0, running: false };
     }
   };
-  const session = createSessionModule({ ...deps, externalAgentHost, messageIngress });
+  const session = createSessionModule({ ...deps, meshAgentHost, messageIngress });
   const experienceCapabilities = {
     state: {
       forPack: (atomPackId: string) => createExperienceStateStore(deps.store, atomPackId)
@@ -343,8 +343,8 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
   const transcriptProjector = createTranscriptProjector({
     messageIngress
   });
-  externalAgentHost.setManagedProjectOutputHandler(async (output) => {
-    await session.completeManagedExternalAgentProviderMessage(output);
+  meshAgentHost.setManagedProjectOutputHandler(async (output) => {
+    await session.completeManagedMeshAgentProviderMessage(output);
   });
 
   return {
@@ -376,9 +376,9 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
     channel: createChannelModule({ channelService: deps.channelService, config: deps.configManager }),
     peer: createPeerModule({ config: deps.configManager }),
     acpAgent: createAcpAgentModule({ config: deps.configManager }),
-    externalAgentSettings: createExternalAgentSettingsModule({
+    meshAgentSettings: createMeshAgentSettingsModule({
       config: deps.configManager,
-      externalAgentSessions: externalAgentHost
+      meshSessions: meshAgentHost
     }),
     mcpServer: createMcpServerModule({
       config: deps.configManager,
@@ -433,9 +433,9 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
       sandboxActivation
     }),
     session,
-    externalAgent: createExternalAgentModule({
+    meshAgent: createMeshAgentModule({
       paths,
-      host: externalAgentHost,
+      host: meshAgentHost,
       store: deps.store,
       config: deps.configManager
     }),
@@ -443,7 +443,7 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
     _nativeAgentAttachmentRoots: (args: { sessionId: string; agentId: string; workingPath?: string | null }) => {
       const nativeSession = args.agentId
         ? deps.store
-            .listExternalAgentSessionsForTranscriptTarget(args.sessionId)
+            .listMeshSessionsForTranscriptTarget(args.sessionId)
             .find((session) => session.agentName === args.agentId)
         : null;
       const workingPath = args.workingPath ?? nativeSession?.workingPath;

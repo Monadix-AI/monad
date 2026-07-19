@@ -7,8 +7,8 @@ import type { ToolGroupItem, ToolItem } from '#/features/session/ToolStepView';
 import { useState } from 'react';
 
 import { Message } from '#/features/session/ChatMessage';
-import { ExternalAgentLoginCardView } from '#/features/session/ExternalAgentLoginCard';
 import { MemorySummaryDivider } from '#/features/session/MemorySummaryDivider';
+import { MeshAgentLoginCardView } from '#/features/session/MeshAgentLoginCard';
 import { ApprovalCard, ClarifyPrompt } from '#/features/session/SessionActionCards';
 import { SummaryTranscriptTurn } from '#/features/session/SessionTranscript';
 import { ToolStepView } from '#/features/session/ToolStepView';
@@ -133,13 +133,13 @@ export function BranchRestoreExample() {
 export function ExternalLoginExample() {
   const [requested, setRequested] = useState(false);
   return (
-    <ExternalAgentLoginCardView
+    <MeshAgentLoginCardView
       error={requested ? 'Story-only sign-in request captured; no network call was made.' : null}
       isLoading={false}
       item={{
         agentName: 'Claude Code',
         id: 'story-login',
-        kind: 'external_agent_login',
+        kind: 'mesh_agent_login',
         provider: 'claude-code',
         reason: 'The provider session requires authentication.',
         seq: '2026-07-17T10:30:00.000Z'

@@ -11,8 +11,8 @@ import { emitCommandTurn, executeSessionCommand, tryRunSessionCommand } from '#/
 import { HandlerError } from '#/handlers/handler-error.ts';
 import { createAcpChannelDelegation } from '#/handlers/session/handlers/acp-channel-delegation.ts';
 import { createForwardAcpHandler } from '#/handlers/session/handlers/forward-acp.ts';
-import { createForwardExternalAgentHandler } from '#/handlers/session/handlers/forward-external-agent.ts';
-import { createManagedExternalAgentDelivery } from '#/handlers/session/handlers/managed-external-agent-delivery.ts';
+import { createForwardMeshAgentHandler } from '#/handlers/session/handlers/forward-mesh-agent.ts';
+import { createManagedMeshAgentDelivery } from '#/handlers/session/handlers/managed-mesh-agent-delivery.ts';
 import { createMessagingNotifyHandlers } from '#/handlers/session/handlers/messaging/messaging-notify.ts';
 import { createSendProjectMessageHandler } from '#/handlers/session/handlers/messaging/messaging-project.ts';
 import { imageAttachments, messageTextWithAttachments } from '#/handlers/session/handlers/messaging-attachments.ts';
@@ -95,15 +95,15 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
 
   const runner = cmd ? { store, messageIngress, lifecycle: cmd.lifecycle, commands: cmd.commands } : null;
 
-  const managedExternalAgentDelivery = createManagedExternalAgentDelivery(ctx);
-  const { deliverProjectMessageToManagedExternalAgentMembers, startManagedExternalAgentRuntimeWithRecovery } =
-    managedExternalAgentDelivery;
+  const managedMeshAgentDelivery = createManagedMeshAgentDelivery(ctx);
+  const { deliverProjectMessageToManagedMeshAgentMembers, startManagedMeshAgentRuntimeWithRecovery } =
+    managedMeshAgentDelivery;
 
   const acpDelegation = createAcpChannelDelegation(ctx, sandboxRootsFor);
   const { dispatchChannelNextTargets, deliverProjectMessageToAcpMembers } = acpDelegation;
 
   const forwardToAcp = createForwardAcpHandler(ctx, sandboxRootsFor);
-  const forwardToExternalAgent = createForwardExternalAgentHandler(ctx, startManagedExternalAgentRuntimeWithRecovery);
+  const forwardToMeshAgent = createForwardMeshAgentHandler(ctx, startManagedMeshAgentRuntimeWithRecovery);
   const { subscribe, subscribeUi, subscribeControl, subscribeMessageGeneration } = createSubscribeHandlers(ctx);
 
   const runtimeForSession = (sessionId: SessionId) => runtime.get(sessionId);
@@ -239,28 +239,28 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
   const { sendProjectMessage, sendChannelMessage } = createSendProjectMessageHandler(ctx, {
     send,
     forwardToAcp,
-    forwardToExternalAgent,
+    forwardToMeshAgent,
     deliverProjectMessageToAcpMembers,
     dispatchChannelNextTargets,
-    deliverProjectMessageToManagedExternalAgentMembers,
+    deliverProjectMessageToManagedMeshAgentMembers,
     runtimeForSession
   });
 
   const {
-    notifyManagedExternalAgentProjectMembers,
-    notifyManagedExternalAgentDirectMessage,
-    completeManagedExternalAgentProjectMessage,
-    completeManagedExternalAgentProviderMessage
-  } = createMessagingNotifyHandlers(ctx, managedExternalAgentDelivery);
+    notifyManagedMeshAgentProjectMembers,
+    notifyManagedMeshAgentDirectMessage,
+    completeManagedMeshAgentProjectMessage,
+    completeManagedMeshAgentProviderMessage
+  } = createMessagingNotifyHandlers(ctx, managedMeshAgentDelivery);
 
   const handlers = {
     send,
     sendProjectMessage,
     sendChannelMessage,
-    notifyManagedExternalAgentProjectMembers,
-    notifyManagedExternalAgentDirectMessage,
-    completeManagedExternalAgentProjectMessage,
-    completeManagedExternalAgentProviderMessage,
+    notifyManagedMeshAgentProjectMembers,
+    notifyManagedMeshAgentDirectMessage,
+    completeManagedMeshAgentProjectMessage,
+    completeManagedMeshAgentProviderMessage,
 
     async sendInline(
       { sessionId, text, continueFromHistory }: { sessionId: SessionId } & SendMessageRequest,
@@ -417,7 +417,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
     subscribeMessageGeneration,
 
     forwardToAcp,
-    forwardToExternalAgent
+    forwardToMeshAgent
   };
   return handlers;
 }

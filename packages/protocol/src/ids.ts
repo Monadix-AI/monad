@@ -15,8 +15,8 @@ export type ChannelId = `chn_${string}`; // a configured channel instance (one b
 export type PeerId = `peer_${string}`; // a configured peer daemon (a delegation target)
 export type AttachmentId = `att_${string}`; // an out-of-band message body (spilled long content)
 export type NativeAgentDeliveryId = `deliv_${string}`;
-export type ExternalAgentSessionId = `exa_${string}`;
-export type ExternalAgentAuthSessionId = `ncliauth_${string}`;
+export type MeshSessionId = `mesh_${string}`;
+export type MeshAgentAuthSessionId = `ncliauth_${string}`;
 export type IdempotencyKey = `idem_${string}`;
 
 export type ISO8601 = string; // always UTC ISO-8601
@@ -43,10 +43,9 @@ export const peerIdSchema: z.ZodType<PeerId> = prefixedIdSchema<PeerId>('peer');
 export const attachmentIdSchema: z.ZodType<AttachmentId> = prefixedIdSchema<AttachmentId>('att');
 export const nativeAgentDeliveryIdSchema: z.ZodType<NativeAgentDeliveryId> =
   prefixedIdSchema<NativeAgentDeliveryId>('deliv');
-export const externalAgentSessionIdSchema: z.ZodType<ExternalAgentSessionId> =
-  prefixedIdSchema<ExternalAgentSessionId>('exa');
-export const externalAgentAuthSessionIdSchema: z.ZodType<ExternalAgentAuthSessionId> =
-  prefixedIdSchema<ExternalAgentAuthSessionId>('ncliauth');
+export const meshSessionIdSchema: z.ZodType<MeshSessionId> = prefixedIdSchema<MeshSessionId>('mesh');
+export const meshAgentAuthSessionIdSchema: z.ZodType<MeshAgentAuthSessionId> =
+  prefixedIdSchema<MeshAgentAuthSessionId>('ncliauth');
 export const idempotencyKeySchema: z.ZodType<IdempotencyKey> = prefixedIdSchema<IdempotencyKey>('idem');
 
 export const iso8601Schema: z.ZodType<ISO8601> = z.union([

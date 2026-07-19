@@ -2,7 +2,7 @@ import type {
   AvatarStyle,
   ComposerFollowUpBehavior,
   ComposerSendShortcut,
-  ExternalAgentSessionView,
+  MeshSessionView,
   ProfileView,
   SessionId,
   UIItem
@@ -13,7 +13,7 @@ import type { Message, Participant } from './types.ts';
 export interface ProjectExperienceCanvasSource {
   projectId: string;
   /** The project's currently-active session (Track B: a project's own id is no longer a
-   *  conversation id — external-agent observation/history/input targets this instead). Null while
+   *  conversation id — mesh-agent observation/history/input targets this instead). Null while
    *  the session is still resolving/being created. */
   activeSessionId: SessionId | null;
   ready: boolean;
@@ -23,12 +23,12 @@ export interface ProjectExperienceCanvasSource {
     transcriptItems: readonly UIItem[];
     liveItems: readonly UIItem[];
     liveTools?: readonly Extract<UIItem, { kind: 'tool' }>[];
-    externalAgentSessions: ExternalAgentSessionView[];
+    meshSessions: MeshSessionView[];
     human: Participant;
-    externalAgentAvatarSeeds: Map<string, string>;
-    externalAgentTags: Map<string, string>;
-    externalAgentDisplayNames: Map<string, string>;
-    externalAgentIcons?: Map<string, Message['icon']>;
+    meshAgentAvatarSeeds: Map<string, string>;
+    meshAgentTags: Map<string, string>;
+    meshAgentDisplayNames: Map<string, string>;
+    meshAgentIcons?: Map<string, Message['icon']>;
     avatarStyle?: AvatarStyle;
     showDeveloperOnlyMessages: boolean;
   };
@@ -40,6 +40,6 @@ export interface ProjectExperienceCanvasSource {
   resolveApproval: (requestId: string, decision: 'approve' | 'reject') => void;
   answerQuestion: (requestId: string, answer: string) => void;
   pauseAll: () => void;
-  sendExternalAgentInput: (id: string, input: string) => Promise<void>;
-  stopExternalAgent: (id: string) => Promise<void>;
+  sendMeshAgentInput: (id: string, input: string) => Promise<void>;
+  stopMeshAgent: (id: string) => Promise<void>;
 }

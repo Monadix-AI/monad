@@ -1,13 +1,15 @@
-import type { ExternalAgentProviderAdapter } from '@monad/sdk-atom';
+import type { MeshAgentProviderAdapter } from '@monad/sdk-atom';
 
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { defaultBinProbes, resolveBinary } from '@monad/sdk-atom';
 
 import { parseStructuredAuthState } from '../adapter-shared.ts';
-import { createAppServerHistoryEventSource, createOutputHistoryEventSource } from '../event-source.ts';
-import { externalAgentAdapterSettings } from '../settings.ts';
+import { createAppServerEventSource, createOutputEventSource } from '../event-source.ts';
+import { meshAgentAdapterSettings } from '../settings.ts';
 import { createCodexSettingsImport } from '../settings-import/index.ts';
+import { codexEventPageOutput, readCodexEventOutput } from './event-pages.ts';
 import { parseCodexSessionJsonl } from './events.ts';
-import { codexHistoryPageOutput, readCodexHistoryOutput } from './history.ts';
 import {
   buildCodexAuthLaunch,
   buildCodexLaunch,
@@ -23,7 +25,7 @@ import { codexObservationProjection } from './observation/index.ts';
 import {
   initializeCodex,
   interruptCodex,
-  requestCodexHistoryPage,
+  requestCodexEventPage,
   resizeCodex,
   resolveCodexApproval,
   sendCodexInput,
@@ -31,24 +33,24 @@ import {
   stopCodex
 } from './runtime.ts';
 
-export const codexExternalAgentAdapter: ExternalAgentProviderAdapter = {
+export const codexMeshAgentAdapter: MeshAgentProviderAdapter = {
   provider: 'codex',
   productIcon: 'codex',
   label: 'Codex',
   observation: codexObservationProjection,
-  events: createAppServerHistoryEventSource({
+  events: createAppServerEventSource({
     provider: 'codex',
     projection: codexObservationProjection,
-    requestPage: requestCodexHistoryPage,
-    pageOutput: codexHistoryPageOutput,
-    fallback: createOutputHistoryEventSource({
+    requestPage: requestCodexEventPage,
+    pageOutput: codexEventPageOutput,
+    fallback: createOutputEventSource({
       provider: 'codex',
       projection: codexObservationProjection,
-      readOutput: readCodexHistoryOutput
+      readOutput: readCodexEventOutput
     })
   }),
   settings: () =>
-    externalAgentAdapterSettings({
+    meshAgentAdapterSettings({
       launchModes: ['pty', 'app-server', 'remote-control'],
       appServerTransports: [...CODEX_APP_SERVER_TRANSPORTS]
     }),
@@ -58,7 +60,10 @@ export const codexExternalAgentAdapter: ExternalAgentProviderAdapter = {
   acp: {
     command: 'npx',
     args: ['-y', '@agentclientprotocol/codex-acp@1.0.0'],
-    env: { OPENAI_API_KEY: '${env:' + 'OPENAI_API_KEY}' }
+    env: { OPENAI_API_KEY: '${env:' + 'OPENAI_API_KEY}' },
+    loginDirectories: [join(homedir(), '.codex')],
+    credentialDirectories: [{ path: join(homedir(), '.codex'), env: 'CODEX_HOME' }],
+    authEnvironmentVariables: ['OPENAI_API_KEY']
   },
   managedRuntime: {
     launchMode: () => 'app-server',
@@ -72,12 +77,12 @@ export const codexExternalAgentAdapter: ExternalAgentProviderAdapter = {
     const installed = codexBin !== undefined;
     return {
       id: 'codex',
-      label: codexExternalAgentAdapter.label,
+      label: codexMeshAgentAdapter.label,
       provider: 'codex',
-      productIcon: codexExternalAgentAdapter.productIcon,
+      productIcon: codexMeshAgentAdapter.productIcon,
       command: 'codex',
       args: [],
-      modelOptions: codexExternalAgentAdapter.listSupportedModels(),
+      modelOptions: codexMeshAgentAdapter.listSupportedModels(),
       defaultLaunchMode: 'pty',
       supportedLaunchModes: ['pty', 'app-server', 'remote-control'],
       supportedAppServerTransports: [...CODEX_APP_SERVER_TRANSPORTS],
@@ -87,7 +92,7 @@ export const codexExternalAgentAdapter: ExternalAgentProviderAdapter = {
       resolvedBinPath: codexBin,
       capabilities: {
         auth: 'pty',
-        history: 'paged',
+        events: 'paged',
         resume: 'structured',
         approval: 'provider-owned',
         approvalProxy: true,
@@ -108,6 +113,7 @@ export const codexExternalAgentAdapter: ExternalAgentProviderAdapter = {
     };
   },
   buildLaunch: buildCodexLaunch,
+  unsafeArgument: (args) => args.find((arg) => arg === '--dangerously-bypass-approvals-and-sandbox'),
   buildAuthLaunch(agent) {
     return buildCodexAuthLaunch(agent, ['login']);
   },
@@ -117,7 +123,7 @@ export const codexExternalAgentAdapter: ExternalAgentProviderAdapter = {
   authStatus(agent) {
     return {
       launch: buildCodexAuthLaunch(agent, ['login', 'status']),
-      parse: (output, exitCode) => codexExternalAgentAdapter.parseAuthStatus(output, exitCode)
+      parse: (output, exitCode) => codexMeshAgentAdapter.parseAuthStatus(output, exitCode)
     };
   },
   argumentSupport(agent) {

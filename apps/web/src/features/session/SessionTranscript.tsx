@@ -15,15 +15,15 @@ import {
   branchSnapshotItems,
   isBranchSourceItem,
   isCompactCommandItem,
-  isExternalAgentLoginItem,
   isMemorySummaryItem,
+  isMeshAgentLoginItem,
   isSummaryTranscriptTurnItem,
   isToolItem,
   type SummaryTranscriptTurnViewItem,
   summaryTranscriptTurns
 } from './chat-view-items';
-import { ExternalAgentLoginCard } from './ExternalAgentLoginCard';
 import { MemorySummaryDivider } from './MemorySummaryDivider';
+import { MeshAgentLoginCard } from './MeshAgentLoginCard';
 import { MessageBody } from './MessageBody';
 import { ApprovalCard, ClarifyPrompt } from './SessionActionCards';
 import { useSessionContext } from './session-context';
@@ -168,8 +168,8 @@ export function SessionTranscript({ model }: { model: SessionTranscriptModel }) 
             sessionId={identity.currentSessionId}
             step={message}
           />
-        ) : isExternalAgentLoginItem(message) ? (
-          <ExternalAgentLoginCard item={message} />
+        ) : isMeshAgentLoginItem(message) ? (
+          <MeshAgentLoginCard item={message} />
         ) : isMemorySummaryItem(message) ? (
           <MemorySummaryDivider item={message} />
         ) : isCompactCommandItem(message) ? (
@@ -352,8 +352,8 @@ export function SummaryTranscriptTurn({
               key={detail.id}
               pending={detail.status === 'pending'}
             />
-          ) : isExternalAgentLoginItem(detail) ? (
-            <ExternalAgentLoginCard
+          ) : isMeshAgentLoginItem(detail) ? (
+            <MeshAgentLoginCard
               item={detail}
               key={detail.id}
             />

@@ -77,7 +77,7 @@ async function spawnDelegate(
       );
     } catch (err) {
       throw new Error(
-        `could not start external agent "${spec.name}" (command "${spec.command}"): ${err instanceof Error ? err.message : String(err)} — is it installed and on PATH?`
+        `could not start MeshAgent "${spec.name}" (command "${spec.command}"): ${err instanceof Error ? err.message : String(err)} — is it installed and on PATH?`
       );
     }
   })();
@@ -167,7 +167,7 @@ async function spawnDelegate(
     killDaemonProcessTree(proc.pid);
     if (handshakeTimedOut) {
       throw new Error(
-        `external agent "${spec.name}" did not complete the ACP handshake within ${HANDSHAKE_TIMEOUT_MS / 1000}s — check it is installed and speaks ACP`
+        `MeshAgent "${spec.name}" did not complete the ACP handshake within ${HANDSHAKE_TIMEOUT_MS / 1000}s — check it is installed and speaks ACP`
       );
     }
     throw adapterFailureError(spec.name, proc.exitCode, err);
@@ -219,7 +219,7 @@ async function promptDelegate(
 ): Promise<string> {
   // This prompt may have waited in the queue behind earlier ones; a concurrent abort or an adapter exit
   // could have evicted the delegate while it waited. Bail BEFORE touching the connection: surface the
-  // abort to the caller, or signal runExternalAgent to re-spawn — never drive a dead connection.
+  // abort to the caller, or signal runMeshAgent to re-spawn — never drive a dead connection.
   if (ctx.signal?.aborted) {
     evictDelegate(key, 'aborted before prompt');
     throw new Error(`delegation to "${d.spec.name}" aborted`);
@@ -284,7 +284,7 @@ async function promptDelegate(
 
 /** Delegate one instruction to an external ACP agent, REUSING a live (session, agent) delegate when one
  *  exists so follow-ups continue the sub-agent's conversation. Returns its accumulated final text. */
-export async function runExternalAgent(
+export async function runMeshAgent(
   spec: AcpAgentConfig,
   instruction: string,
   ctx: ToolContext,

@@ -37,11 +37,11 @@ function runtimeSource(overrides: RuntimeSourceOverrides = {}): ProjectExperienc
       transcriptItems: [],
       liveItems: [],
       liveTools: [],
-      externalAgentSessions: [],
+      meshSessions: [],
       human: participant('you', 'human'),
-      externalAgentAvatarSeeds: new Map(),
-      externalAgentTags: new Map(),
-      externalAgentDisplayNames: new Map(),
+      meshAgentAvatarSeeds: new Map(),
+      meshAgentTags: new Map(),
+      meshAgentDisplayNames: new Map(),
       showDeveloperOnlyMessages: false
     },
     modelProfiles: [],
@@ -54,8 +54,8 @@ function runtimeSource(overrides: RuntimeSourceOverrides = {}): ProjectExperienc
     addProjectMember: async () => {},
     removeProjectMember: async () => {},
     updateProjectMemberSettings: async () => {},
-    sendExternalAgentInput: async () => {},
-    stopExternalAgent: async () => {}
+    sendMeshAgentInput: async () => {},
+    stopMeshAgent: async () => {}
   };
   return { ...base, ...overrides, source: { ...base.source, ...overrides.source } };
 }
@@ -69,8 +69,8 @@ test('toChatRoomCanvas: exposes the chatroom surface without project management 
   expect(typeof canvas.sendDirective).toBe('function');
   expect(typeof canvas.resolveApproval).toBe('function');
   expect(typeof canvas.answerQuestion).toBe('function');
-  expect(typeof canvas.sendExternalAgentInput).toBe('function');
-  expect(typeof canvas.stopExternalAgent).toBe('function');
+  expect(typeof canvas.sendMeshAgentInput).toBe('function');
+  expect(typeof canvas.stopMeshAgent).toBe('function');
   for (const leaked of ['setWorkdir', 'switchProject', 'experience']) {
     expect(leaked in canvas).toBe(false);
   }
@@ -161,10 +161,10 @@ test('createProjectExperienceRuntime: exposes project data and controlled commun
     resolveApproval: (id: string, decision: 'approve' | 'reject') => calls.push(`approval:${id}:${decision}`),
     answerQuestion: (id: string, answer: string) => calls.push(`answer:${id}:${answer}`),
     pauseAll: () => calls.push('pauseAll'),
-    sendExternalAgentInput: async (id: string, input: string) => {
+    sendMeshAgentInput: async (id: string, input: string) => {
       calls.push(`input:${id}:${input}`);
     },
-    stopExternalAgent: async (id: string) => {
+    stopMeshAgent: async (id: string) => {
       calls.push(`stop:${id}`);
     }
   });

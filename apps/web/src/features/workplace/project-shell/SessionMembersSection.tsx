@@ -1,6 +1,6 @@
 import type { SessionId } from '@monad/protocol';
 import type { ProjectController } from '../use-project';
-import type { ExternalAgentMemberDialogState } from './external-agent-member-dialog-model';
+import type { MeshAgentMemberDialogState } from './mesh-agent-member-dialog-model';
 
 import { MinusSignIcon, PlusSignIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
@@ -23,7 +23,7 @@ import { useState } from 'react';
 import { DestructiveConfirmPopover } from '#/components/DestructiveConfirmPopover';
 import { useT } from '#/components/I18nProvider';
 import { isResolvedEmptyList } from '#/lib/async-list-state';
-import { ExternalAgentMemberDialog } from './ExternalAgentMemberDialog';
+import { MeshAgentMemberDialog } from './MeshAgentMemberDialog';
 
 type ProjectMember = ProjectController['projectMembers'][number];
 type AvailableProjectMember = ProjectController['availableProjectMembers'][number];
@@ -114,11 +114,11 @@ export function SessionMembersSection({
   const [inviteSessionMember, inviteState] = useInviteSessionMemberMutation();
   const [spawnSessionMember, spawnState] = useSpawnSessionMemberMutation();
   const [removeSessionMember] = useRemoveSessionMemberMutation();
-  const [externalAgentInvite, setExternalAgentInvite] = useState<ExternalAgentMemberDialogState | null>(null);
+  const [meshAgentInvite, setMeshAgentInvite] = useState<MeshAgentMemberDialogState | null>(null);
 
   const invitedTemplateIds = new Set(members.map((member) => member.templateId).filter((id) => id !== undefined));
   const availableTemplates = templates.filter((template) => !invitedTemplateIds.has(template.id));
-  const externalAgentCandidates = availableProjectMembers.filter((candidate) => candidate.type === 'external-agent');
+  const meshAgentCandidates = availableProjectMembers.filter((candidate) => candidate.type === 'mesh-agent');
 
   return (
     <section style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -223,13 +223,13 @@ export function SessionMembersSection({
             <div style={{ border: `1px solid ${'var(--border)'}`, borderRadius: boxR, background: 'var(--card)' }}>
               {isResolvedEmptyList({
                 isLoading: room.membersLoading,
-                itemCount: externalAgentCandidates.length
+                itemCount: meshAgentCandidates.length
               }) ? (
                 <p style={{ margin: 0, padding: 12, fontFamily: sans, fontSize: 13, color: 'var(--muted-foreground)' }}>
                   {t('web.workplace.noAvailableMembers')}
                 </p>
               ) : null}
-              {externalAgentCandidates.map((candidate, index) => (
+              {meshAgentCandidates.map((candidate, index) => (
                 <div
                   key={candidate.id}
                   style={{
@@ -256,7 +256,7 @@ export function SessionMembersSection({
                     className="workplace-action"
                     disabled={!candidate.enabled || spawnState.isLoading}
                     onClick={() =>
-                      setExternalAgentInvite({
+                      setMeshAgentInvite({
                         candidate,
                         draft: {
                           displayName: candidate.template?.displayName,
@@ -304,14 +304,14 @@ export function SessionMembersSection({
               ))}
             </div>
           </div>
-          <ExternalAgentMemberDialog
-            invite={externalAgentInvite}
-            onChange={setExternalAgentInvite}
-            onClose={() => setExternalAgentInvite(null)}
+          <MeshAgentMemberDialog
+            invite={meshAgentInvite}
+            onChange={setMeshAgentInvite}
+            onClose={() => setMeshAgentInvite(null)}
             onSave={(invite) =>
               spawnSessionMember({
                 sessionId: activeSessionId,
-                type: 'external-agent',
+                type: 'mesh-agent',
                 name: invite.candidate.name,
                 displayName: invite.draft.displayName,
                 settings: {

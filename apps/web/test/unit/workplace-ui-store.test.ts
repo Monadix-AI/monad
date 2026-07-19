@@ -18,13 +18,13 @@ test('workplace UI store keeps session settings and member settings separate', (
   useWorkplaceUiStore.getState().closeProjectMemberSettings();
 
   useWorkplaceUiStore.getState().openSessionSettings('project-1');
-  useWorkplaceUiStore.getState().openProjectMemberSettings('project-1', 'external-agent:codex');
+  useWorkplaceUiStore.getState().openProjectMemberSettings('project-1', 'mesh-agent:codex');
   expect(useWorkplaceUiStore.getState().sessionSettings).toEqual({
     projectId: 'project-1'
   });
   expect(useWorkplaceUiStore.getState().projectMemberSettings).toEqual({
     projectId: 'project-1',
-    memberId: 'external-agent:codex'
+    memberId: 'mesh-agent:codex'
   });
 
   useWorkplaceUiStore.getState().closeSessionSettings();

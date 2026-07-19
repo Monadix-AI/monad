@@ -1,4 +1,4 @@
-import type { ExternalAgentStreamView } from '../../../experience/types.ts';
+import type { MeshAgentStreamView } from '../../../experience/types.ts';
 import type { ObservationItem, ObservationTimelineEntry, PublicObservationCard } from './types.ts';
 
 import { DefaultObservationToolPair, ObservationMeta, ObservationText } from '@monad/ui';
@@ -118,7 +118,7 @@ export function reconcileObservationItems(
 }
 
 export function observationTimelineEntries(
-  items: readonly ExternalAgentStreamView['items'][number][],
+  items: readonly MeshAgentStreamView['items'][number][],
   provider: string,
   active = false
 ): ObservationTimelineEntry[] {
@@ -201,7 +201,7 @@ export function observationTimelineEntries(
   return entries;
 }
 
-function toolPairResultIndexes(items: readonly ExternalAgentStreamView['items'][number][]): Map<number, number> {
+function toolPairResultIndexes(items: readonly MeshAgentStreamView['items'][number][]): Map<number, number> {
   const resultIndexesByCallId = new Map<string, number[]>();
   for (let index = 0; index < items.length; index += 1) {
     const item = items[index];

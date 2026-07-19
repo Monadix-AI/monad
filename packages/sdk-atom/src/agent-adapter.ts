@@ -4,53 +4,54 @@ import type {
   AdapterMigrationCandidate,
   AdapterMigrationPreview,
   AdapterMigrationPreviewRequest,
-  ExternalAgentAppServerTransport,
-  ExternalAgentAuthState,
-  ExternalAgentHistoryPageRequest,
-  ExternalAgentLaunchMode,
-  ExternalAgentObservationEvent,
-  ExternalAgentPresetView,
-  ExternalAgentProductIcon,
-  ExternalAgentProvider,
-  ExternalAgentRawHistoryPage,
-  ExternalAgentSetting,
-  ExternalAgentUsageRecord,
-  ExternalAgentView
+  AgentObservationEvent,
+  MeshAgentAppServerTransport,
+  MeshAgentAuthState,
+  MeshAgentLaunchMode,
+  MeshAgentObservationEvent,
+  MeshAgentPresetView,
+  MeshAgentProductIcon,
+  MeshAgentProvider,
+  MeshAgentSetting,
+  MeshAgentUsageLimitMeter,
+  MeshAgentUsageRecord,
+  MeshAgentView,
+  MeshRawEventPage
 } from '@monad/protocol';
 import type { BinProbes } from './bin-probes.ts';
 
 import { z } from 'zod';
 
-export type ExternalAgentErrorCode =
+export type MeshAgentErrorCode =
   | 'provider_not_installed'
   | 'provider_not_logged_in'
   | 'unsupported_capability'
   | 'provider_timeout'
   | 'provider_protocol_error';
 
-export class ExternalAgentError extends Error {
+export class MeshAgentError extends Error {
   constructor(
-    readonly code: ExternalAgentErrorCode,
+    readonly code: MeshAgentErrorCode,
     message: string
   ) {
     super(message);
-    this.name = 'ExternalAgentError';
+    this.name = 'MeshAgentError';
   }
 }
 
-type ExternalAgentCapability =
-  | ExternalAgentLaunchMode
+type MeshAgentCapability =
+  | MeshAgentLaunchMode
   | 'provider-approval'
   | 'approval-resolution'
   | 'structured-output'
   | 'session-resume'
   | 'rollout-json-fallback';
 
-/** `ws`-transport dial hints a `buildLaunch` can attach to its `ExternalAgentLaunchSpec` when the default
+/** `ws`-transport dial hints a `buildLaunch` can attach to its `MeshAgentLaunchSpec` when the default
  *  "scan the child's stderr for a self-announced `ws://host:port` line" dial strategy doesn't fit the
  *  provider's real gateway (e.g. it prints a differently-shaped announce line, announces on stdout
  *  instead of stderr, serves at a non-root path, or needs query-string auth). */
-interface ExternalAgentAppServerWsHints {
+interface MeshAgentAppServerWsHints {
   /** URL path appended after `ws://host:port` (e.g. `/api/ws`). Root (`''`) by default. */
   path?: string;
   /** Query-string params merged into the dial URL (e.g. a shared-secret token). */
@@ -58,37 +59,37 @@ interface ExternalAgentAppServerWsHints {
   /** When set, the daemon dials this EXACT port directly (retrying until the child accepts, or the
    *  launch timeout elapses) instead of scanning stdout/stderr for a self-announced port — for a
    *  gateway the daemon itself launched with an explicit `--port` flag (see
-   *  `BuildExternalAgentLaunchOptions.appServerPort`). */
+   *  `BuildMeshAgentLaunchOptions.appServerPort`). */
   port?: number;
 }
 
-export interface ExternalAgentLaunchSpec {
+export interface MeshAgentLaunchSpec {
   argv: string[];
   cwd: string;
   env?: Record<string, string>;
-  launchMode: ExternalAgentLaunchMode;
+  launchMode: MeshAgentLaunchMode;
   /** Byte channel for `app-server` launches. Absent (or `stdio`) means the daemon owns the child's
    *  stdin/stdout; `ws`/`unix` mean the child listens and the daemon dials the socket. */
-  appServerTransport?: ExternalAgentAppServerTransport;
+  appServerTransport?: MeshAgentAppServerTransport;
   /** `ws`-transport dial hints; absent → the daemon's default self-announced-port scan. */
-  appServerWs?: ExternalAgentAppServerWsHints;
-  provider: ExternalAgentProvider;
+  appServerWs?: MeshAgentAppServerWsHints;
+  provider: MeshAgentProvider;
   approvalOwnership: 'provider-owned';
-  capabilities: ExternalAgentCapability[];
+  capabilities: MeshAgentCapability[];
 }
 
-export type ExternalAgentStartPreflight =
+export type MeshAgentStartPreflight =
   | {
       state: 'ready';
       agentName: string;
-      provider: ExternalAgentProvider;
+      provider: MeshAgentProvider;
       checkedAt: string;
       providerSessionRef?: string;
     }
   | {
       state: 'not_authenticated';
       agentName: string;
-      provider: ExternalAgentProvider;
+      provider: MeshAgentProvider;
       checkedAt: string;
       action: 'reconnect_in_studio';
       reason: string;
@@ -96,30 +97,30 @@ export type ExternalAgentStartPreflight =
   | {
       state: 'unavailable';
       agentName: string;
-      provider: ExternalAgentProvider;
+      provider: MeshAgentProvider;
       checkedAt: string;
       reason: string;
     }
   | {
       state: 'unknown';
       agentName: string;
-      provider: ExternalAgentProvider;
+      provider: MeshAgentProvider;
       checkedAt: string;
       action: 'manual_check_in_studio';
       reason: string;
     };
 
-export interface BuildExternalAgentLaunchOptions {
+export interface BuildMeshAgentLaunchOptions {
   workingPath: string;
   extraWorkingPaths?: string[];
-  launchMode?: ExternalAgentLaunchMode;
-  appServerTransport?: ExternalAgentAppServerTransport;
+  launchMode?: MeshAgentLaunchMode;
+  appServerTransport?: MeshAgentAppServerTransport;
   /** For `appServerTransport: 'unix'`, the AF_UNIX socket path the daemon allocated for the child to
    *  listen on (`--listen unix://<path>`). Ignored by other transports. */
   appServerSocketPath?: string;
   /** For `appServerTransport: 'ws'` when the daemon pre-allocates the loopback port (rather than
    *  parsing it from the child's announce output) — a `buildLaunch` that uses this must echo it back
-   *  as `ExternalAgentLaunchSpec.appServerWs.port` so the daemon knows to skip announce-scanning. */
+   *  as `MeshAgentLaunchSpec.appServerWs.port` so the daemon knows to skip announce-scanning. */
   appServerPort?: number;
   providerSessionRef?: string;
   systemPromptFile?: string;
@@ -131,13 +132,13 @@ export interface BuildExternalAgentLaunchOptions {
   mcpConfigArgs?: string[];
 }
 
-export interface ExternalAgentOutputEvent {
+export interface MeshAgentOutputEvent {
   type:
     | 'approval_requested'
     | 'approval_resolved'
     | 'agent_message'
     | 'connection_required'
-    | 'history_page'
+    | 'event_page'
     | 'provider_error'
     | 'session_ref'
     | 'tool_call'
@@ -147,25 +148,25 @@ export interface ExternalAgentOutputEvent {
 }
 
 const requestIdSchema = z.union([z.string().min(1), z.number()]);
-const externalAgentOutputPayloadBase = z.object({}).catchall(z.unknown());
+const meshAgentOutputPayloadBase = z.object({}).catchall(z.unknown());
 
-export const externalAgentOutputEventSchema = z.discriminatedUnion('type', [
+export const meshAgentOutputEventSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('session_ref'),
-    payload: externalAgentOutputPayloadBase.extend({
+    payload: meshAgentOutputPayloadBase.extend({
       providerSessionRef: z.string().min(1)
     })
   }),
   z.object({
     type: z.literal('agent_message'),
-    payload: externalAgentOutputPayloadBase.extend({
+    payload: meshAgentOutputPayloadBase.extend({
       text: z.string(),
       final: z.boolean().optional()
     })
   }),
   z.object({
     type: z.literal('tool_call'),
-    payload: externalAgentOutputPayloadBase.extend({
+    payload: meshAgentOutputPayloadBase.extend({
       callId: z.union([z.string().min(1), z.number()]).optional(),
       tool: z.string().min(1).optional(),
       input: z.unknown().optional()
@@ -173,36 +174,36 @@ export const externalAgentOutputEventSchema = z.discriminatedUnion('type', [
   }),
   z.object({
     type: z.literal('tool_result'),
-    payload: externalAgentOutputPayloadBase.extend({
+    payload: meshAgentOutputPayloadBase.extend({
       callId: z.union([z.string().min(1), z.number()]).optional(),
       output: z.unknown().optional()
     })
   }),
   z.object({
     type: z.literal('web_search_result'),
-    payload: externalAgentOutputPayloadBase.extend({
+    payload: meshAgentOutputPayloadBase.extend({
       callId: z.union([z.string().min(1), z.number()]).optional(),
       status: z.string().optional()
     })
   }),
   z.object({
     type: z.literal('connection_required'),
-    payload: externalAgentOutputPayloadBase.extend({
+    payload: meshAgentOutputPayloadBase.extend({
       code: z.string().min(1).optional(),
       reason: z.string().min(1)
     })
   }),
   z.object({
     type: z.literal('provider_error'),
-    payload: externalAgentOutputPayloadBase.extend({
+    payload: meshAgentOutputPayloadBase.extend({
       responseId: z.union([z.string().min(1), z.number()]).optional(),
       code: z.union([z.string().min(1), z.number()]).optional(),
       message: z.string().min(1)
     })
   }),
   z.object({
-    type: z.literal('history_page'),
-    payload: externalAgentOutputPayloadBase.extend({
+    type: z.literal('event_page'),
+    payload: meshAgentOutputPayloadBase.extend({
       responseId: z.union([z.string().min(1), z.number()]),
       items: z.array(z.unknown()),
       nextCursor: z.string().nullable(),
@@ -211,14 +212,14 @@ export const externalAgentOutputEventSchema = z.discriminatedUnion('type', [
   }),
   z.object({
     type: z.literal('approval_requested'),
-    payload: externalAgentOutputPayloadBase.extend({
+    payload: meshAgentOutputPayloadBase.extend({
       requestId: requestIdSchema,
       kind: z.string().min(1)
     })
   }),
   z.object({
     type: z.literal('approval_resolved'),
-    payload: externalAgentOutputPayloadBase.extend({
+    payload: meshAgentOutputPayloadBase.extend({
       requestId: requestIdSchema
     })
   })
@@ -228,12 +229,12 @@ export const externalAgentOutputEventSchema = z.discriminatedUnion('type', [
  *  physical transport backs it (the child's stdin pipe for `stdio`, a WebSocket for `ws`, a socket
  *  for `unix`) and hands the adapter this uniform interface — an adapter frames JSON-RPC and calls
  *  `send`; it never learns whether the bytes travel over a pipe or a socket. */
-export interface ExternalAgentAppServerConnection {
+export interface MeshAgentAppServerConnection {
   send(frame: string): void;
   close(): void;
 }
 
-export interface ExternalAgentRuntimeHandle {
+export interface MeshAgentRuntimeHandle {
   terminal?: {
     write(input: string): void;
     resize(cols: number, rows: number): void;
@@ -249,96 +250,76 @@ export interface ExternalAgentRuntimeHandle {
   };
   /** Frame channel for `app-server` sessions, present regardless of the physical transport the
    *  daemon dialled (stdio/ws/unix). */
-  appServer?: ExternalAgentAppServerConnection;
-  launchMode?: ExternalAgentLaunchMode;
+  appServer?: MeshAgentAppServerConnection;
+  launchMode?: MeshAgentLaunchMode;
   providerSessionRef?: string | null;
   nextRequestId?(): number;
   /** Per-session JSON-RPC request→kind ledger. An adapter records what each outbound request id was
-   *  for (e.g. `thread` / `historyPage`) so a later response can be dispatched by id rather than by
+   *  for (e.g. `thread` / `eventPage`) so a later response can be dispatched by id rather than by
    *  guessing its result shape. Present only for stdio/app-server sessions the host owns. */
   pendingRequests?: Map<string | number, string>;
-  /** app-server: a `thread/start`|`thread/resume` frame parked until the `initialize` response lands,
-   *  so the handshake is ordered per the protocol (requests before `initialized` are rejected). The
-   *  adapter stashes it on init and flushes it when it dispatches the initialize response. */
-  deferredThreadFrame?: string;
-  threadResumeRetry?: {
-    params: Record<string, unknown>;
-    attempts: number;
-  };
-  /** app-server: id of the turn currently in flight, tracked from turn lifecycle notifications so the
-   *  adapter can address `interrupt`/`steer` at it. Undefined between turns. */
-  currentTurnId?: string;
-  /** app-server: text of the last user turn, retained so a context-overflow error can auto-compact
-   *  and re-run it (see the codex adapter's error handling). */
-  lastTurnInput?: string;
-  /** app-server: how many times the current turn has been auto-recovered (e.g. compacted on context
-   *  overflow), to bound the retry loop. Reset when the turn settles. */
-  turnRecoveries?: number;
   kill(signal?: NodeJS.Signals): void;
 }
 
-export interface ExternalAgentProviderHistoryContext {
+export interface MeshAgentProviderEventContext {
   providerSessionRef: string;
   workingPath: string;
   limitBytes: number;
   requestProviderPage?(
-    send: (handle: ExternalAgentRuntimeHandle) => string | number
+    send: (handle: MeshAgentRuntimeHandle) => string | number
   ): Promise<{ items: unknown[]; nextCursor?: string }>;
 }
 
-export interface ExternalAgentProviderHistoryPageContext extends ExternalAgentProviderHistoryContext {
+export interface MeshAgentProviderEventPageContext extends MeshAgentProviderEventContext {
   /** Raw provider records to reshape into the live-JSONL-mimicking output string — not the daemon's
    *  wire response shape (that carries normalized `events`, not raw items). */
   page: { items: unknown[]; nextCursor?: string };
 }
 
-export interface ExternalAgentProviderHistoryPageRequestContext extends ExternalAgentProviderHistoryContext {
-  request: ExternalAgentHistoryPageRequest;
+export interface MeshAgentProviderEventPageRequestContext extends MeshAgentProviderEventContext {
+  request: {
+    before?: string;
+    limit: number;
+    sortDirection: 'asc' | 'desc';
+    itemsView: 'full';
+  };
 }
 
-export interface ExternalAgentEventPageRequest {
+export interface MeshAgentEventPageRequest {
+  view: 'raw' | 'convenience';
   before?: string;
   limit: number;
-  sortDirection: 'asc' | 'desc';
 }
 
-export interface ExternalAgentEventPage {
-  events: ExternalAgentObservationEvent[];
+export interface MeshAgentProjectionPage {
+  events: MeshAgentObservationEvent[];
   nextCursor?: string;
 }
 
-export type ExternalAgentEventPageResult =
-  | ({ state: 'available' } & ExternalAgentEventPage)
+export type MeshAgentEventPageResult =
+  | ({ state: 'available'; view: 'convenience' } & MeshAgentProjectionPage)
+  | ({ state: 'available'; view: 'raw' } & MeshRawEventPage)
   | { state: 'unavailable'; reason: 'unsupported' | 'not-found' | 'temporary' };
 
-export type ExternalAgentRawHistoryPageResult =
-  | ExternalAgentRawHistoryPage
-  | { state: 'unavailable'; reason: 'unsupported' | 'not-found' | 'temporary' };
-
-export interface ExternalAgentEventSource {
-  projectLive(args: { id: string; output: string; mode?: 'live' | 'history' }): ExternalAgentEventPage;
+export interface MeshAgentEventSource {
+  projectLive(args: { id: string; output: string; mode?: 'live' | 'events' }): MeshAgentProjectionPage;
+  createLiveProjector?(args: { id: string }): {
+    advance(delta: string): MeshAgentProjectionPage;
+  };
   readPage?(
-    context: ExternalAgentProviderHistoryContext,
-    request: ExternalAgentEventPageRequest
-  ): Promise<ExternalAgentEventPageResult>;
-  /** Read a page of EXACT provider-native history records — the payloads before any projection, merge,
-   *  or dedupe. Each record's `data` is the verbatim provider frame; Monad adds only cursor/identity
-   *  ordering metadata. Separate from `readPage` (which projects) so the raw diagnostic plane and the
-   *  convenience projection are distinct capabilities on one source. */
-  readRawHistoryPage?(
-    context: ExternalAgentProviderHistoryContext,
-    request: ExternalAgentEventPageRequest
-  ): Promise<ExternalAgentRawHistoryPageResult>;
+    context: MeshAgentProviderEventContext,
+    request: MeshAgentEventPageRequest
+  ): Promise<MeshAgentEventPageResult>;
 }
 
-export interface ExternalAgentApprovalResolution {
+export interface MeshAgentApprovalResolution {
   requestId: string;
   allow: boolean;
   reason?: string;
   request?: Record<string, unknown>;
 }
 
-export interface ExternalAgentInitializeContext {
+export interface MeshAgentInitializeContext {
   workingPath: string;
   providerSessionRef?: string;
   developerInstructions?: string;
@@ -353,56 +334,56 @@ export interface ExternalAgentInitializeContext {
   env?: Record<string, string>;
 }
 
-export interface ExternalAgentAuthStatusProbe {
-  launch: ExternalAgentLaunchSpec;
-  parse(output: string, exitCode: number | null): ExternalAgentAuthState;
+export interface MeshAgentAuthStatusProbe {
+  launch: MeshAgentLaunchSpec;
+  parse(output: string, exitCode: number | null): MeshAgentAuthState;
 }
 
-export interface ExternalAgentModelOption {
+export interface MeshAgentModelOption {
   value: string;
   displayName?: string;
 }
 
-export interface ExternalAgentModelOptionsProbe {
-  launch: ExternalAgentLaunchSpec;
-  parse(output: string, exitCode: number | null): ExternalAgentModelOption[];
+export interface MeshAgentModelOptionsProbe {
+  launch: MeshAgentLaunchSpec;
+  parse(output: string, exitCode: number | null): MeshAgentModelOption[];
 }
 
-export interface ExternalAgentUsageProbe {
-  launch: ExternalAgentLaunchSpec;
-  parse(output: string, exitCode: number | null): ExternalAgentUsageRecord[];
+export interface MeshAgentUsageProbe {
+  launch: MeshAgentLaunchSpec;
+  parse(output: string, exitCode: number | null): MeshAgentUsageRecord[];
 }
 
-export type ExternalAgentObservationJsonRecordEntry = {
+export type MeshAgentObservationJsonRecordEntry = {
   record: Record<string, unknown>;
   raw: string;
 };
 
-export type ExternalAgentObservationMessageGroupProjector = {
-  append(group: unknown, entry: ExternalAgentObservationJsonRecordEntry): void;
+export type MeshAgentObservationMessageGroupProjector = {
+  append(group: unknown, entry: MeshAgentObservationJsonRecordEntry): void;
   create(record: Record<string, unknown>): { key: string; state: unknown } | undefined;
-  render(id: string, group: unknown): ExternalAgentObservationEvent[];
+  render(id: string, group: unknown): MeshAgentObservationEvent[];
 };
 
-export type ExternalAgentObservationRecordProjector = {
+export type MeshAgentObservationRecordProjector = {
   parse(args: {
     id: string;
     provider?: string;
     record: Record<string, unknown>;
     recordIndex: number;
-  }): ExternalAgentObservationEvent[];
+  }): MeshAgentObservationEvent[];
   supports?(record: Record<string, unknown>): boolean;
 };
 
-export type ExternalAgentObservationUsageProjector = {
-  usageRecords?(record: Record<string, unknown>): ExternalAgentUsageRecord[];
+export type MeshAgentObservationUsageProjector = {
+  usageRecords?(record: Record<string, unknown>): MeshAgentUsageRecord[];
 };
 
 /** Provider-agnostic classification of a projected observation event. The adapter (which owns its
  *  provider's event vocabulary) maps each event it produces to one of these kinds; consumers derive
  *  turn/generating state and the UI activity phase from the kind, never from a provider event string.
  *  `turn-end` marks a terminal record (result / turn completed / error). */
-export type ExternalAgentObservationActivity =
+export type MeshAgentObservationActivity =
   | 'thinking'
   | 'message'
   | 'tool-call'
@@ -414,24 +395,36 @@ export type ExternalAgentObservationActivity =
   | 'status'
   | 'turn-end';
 
-export type ExternalAgentObservationProjector = ExternalAgentObservationUsageProjector & {
-  identity?(event: ExternalAgentObservationEvent): string | undefined;
-  checkpoint?(event: ExternalAgentObservationEvent): string | undefined;
-  historyEntries?(entries: ExternalAgentObservationJsonRecordEntry[]): ExternalAgentObservationJsonRecordEntry[];
-  messageGroup?: ExternalAgentObservationMessageGroupProjector;
-  recordProjectors: ExternalAgentObservationRecordProjector[];
+export type MeshAgentObservationProjector = MeshAgentObservationUsageProjector & {
+  identity?(event: MeshAgentObservationEvent): string | undefined;
+  checkpoint?(event: MeshAgentObservationEvent): string | undefined;
+  eventEntries?(entries: MeshAgentObservationJsonRecordEntry[]): MeshAgentObservationJsonRecordEntry[];
+  messageGroup?: MeshAgentObservationMessageGroupProjector;
+  recordProjectors: MeshAgentObservationRecordProjector[];
   /** Classify one event this adapter produced into a provider-agnostic activity kind. Returning
    *  `undefined` means "no signal" (the event doesn't affect generating/phase). Consumers fall back
    *  to a role-only heuristic when an adapter omits this. */
-  classifyActivity?(event: ExternalAgentObservationEvent): ExternalAgentObservationActivity | undefined;
+  classifyActivity?(event: MeshAgentObservationEvent): MeshAgentObservationActivity | undefined;
   /** Whether an event is a partial streaming fragment (a token delta) rather than a settled item.
    *  Consumers use it to merge adjacent fragments and to drive streaming affordances, without knowing
    *  this provider's delta event names. */
-  isStreamingFragment?(event: ExternalAgentObservationEvent): boolean;
-  mergeStreamingRun?(events: ExternalAgentObservationEvent[]): ExternalAgentObservationEvent | undefined;
+  isStreamingFragment?(event: MeshAgentObservationEvent): boolean;
+  mergeStreamingRun?(events: MeshAgentObservationEvent[]): MeshAgentObservationEvent | undefined;
 };
 
-export interface ExternalAgentArgumentSupport {
+export interface MeshAgentObservationRuntime {
+  toAgentObservationEvent(event: MeshAgentObservationEvent): AgentObservationEvent | null;
+  structuredEvents(args: {
+    id: string;
+    output?: string;
+    observedAt?: string;
+    mode?: 'events' | 'live';
+  }): MeshAgentObservationEvent[] | undefined;
+  eventsAreGenerating(events: readonly MeshAgentObservationEvent[]): boolean;
+  usageLimitMeter(output?: string): MeshAgentUsageLimitMeter | null;
+}
+
+export interface MeshAgentArgumentSupport {
   flags: string[];
   reasoningEfforts: string[];
   speeds: string[];
@@ -440,12 +433,12 @@ export interface ExternalAgentArgumentSupport {
   reasoningEffortsByModel?: Record<string, string[]>;
 }
 
-export interface ExternalAgentArgumentSupportProbe {
-  launch: ExternalAgentLaunchSpec;
-  parse(output: string, exitCode: number | null): ExternalAgentArgumentSupport;
+export interface MeshAgentArgumentSupportProbe {
+  launch: MeshAgentLaunchSpec;
+  parse(output: string, exitCode: number | null): MeshAgentArgumentSupport;
 }
 
-export interface ExternalAgentManagedRuntimeContext {
+export interface MeshAgentManagedRuntimeContext {
   monadCliEntry: {
     command: string;
     args: string[];
@@ -453,7 +446,7 @@ export interface ExternalAgentManagedRuntimeContext {
   env: Record<string, string>;
 }
 
-export interface ExternalAgentManagedEnvContext {
+export interface MeshAgentManagedEnvContext {
   /** The managed agent's private workspace directory (already created on disk). A provider whose
    *  autopilot toggle has no CLI-flag equivalent writes its own
    *  config/state files here and points the child at them via env vars, rather than an argv flag. */
@@ -464,17 +457,17 @@ export interface ExternalAgentManagedEnvContext {
   skipProviderApprovals: boolean;
 }
 
-/** Provider-specific behavior for a *managed* project-agent runtime — an external agent that monad spawns
+/** Provider-specific behavior for a *managed* project-agent runtime — an MeshAgent that monad spawns
  *  and supervises as a Workplace project member. Absent → the generic defaults apply, so the daemon's
  *  managed-runtime code stays provider-agnostic and reads intent from the adapter instead of branching
  *  on the provider id. */
-export interface ExternalAgentManagedRuntime {
+export interface MeshAgentManagedRuntime {
   /** Launch-mode override for the managed runtime. */
-  launchMode?(defaultMode: ExternalAgentLaunchMode): ExternalAgentLaunchMode;
+  launchMode?(defaultMode: MeshAgentLaunchMode): MeshAgentLaunchMode;
   /** Env additions for the managed child. */
-  env?(context: ExternalAgentManagedEnvContext): Record<string, string>;
+  env?(context: MeshAgentManagedEnvContext): Record<string, string>;
   /** CLI args wiring monad's managed MCP server into the provider. */
-  mcpConfigArgs?(context: ExternalAgentManagedRuntimeContext): string[];
+  mcpConfigArgs?(context: MeshAgentManagedRuntimeContext): string[];
   /** The provider mounts monad's managed MCP server as its project bridge — drives the MCP prompt
    *  template, the MCP-flavored join greeting, and the MCP tool-usage communication instructions. */
   usesManagedMcpBridge?: boolean;
@@ -489,60 +482,76 @@ export interface ExternalAgentManagedRuntime {
  *  CLI. Present only on agents that ship an ACP wrapper; the daemon's ACP
  *  delegation derives its invite preset + spawn command from this, while the agent's identity and
  *  install detection still come from `detect()` — one adapter, forked by delivery mode. */
-export interface ExternalAgentAcpDelivery {
+export interface MeshAgentAcpDelivery {
   /** Spawn command for the ACP wrapper (e.g. `npx`). */
   command: string;
   /** Args for the ACP wrapper. */
   args: string[];
   /** Optional auth env forwarded to the wrapper as secret refs. */
   env?: Record<string, string>;
+  /** Provider login roots that make the ACP wrapper usable even when the native binary probe misses. */
+  loginDirectories?: string[];
+  /** Provider-owned child-process environment policy. */
+  stripEnvironment?: string[];
+  /** Provider credential/config directories that must remain visible inside an OS sandbox. */
+  credentialDirectories?: Array<{ path: string; env?: string }>;
+  /** API-key environment variables to include in generic authentication recovery guidance. */
+  authEnvironmentVariables?: string[];
 }
 
 export interface AdapterMigration {
   /** Probe adapter-owned default migration sources, returning only paths that currently exist. */
   detect(probes?: BinProbes): AdapterMigrationCandidate[];
+  /** Whether an explicit path belongs to this provider. Used by generic `from:auto` hosts without
+   *  teaching them provider filenames or config markers. */
+  recognizes?(path: string): boolean | Promise<boolean>;
   /** Parse provider-specific settings into Monad's shared preview contract. */
   preview(request: AdapterMigrationPreviewRequest): AdapterMigrationPreview | Promise<AdapterMigrationPreview>;
   /** Optional adapter-side apply hook for out-of-process adapters. The daemon still owns Monad config
    *  writes for built-in migrations and uses this hook only when an adapter needs provider-owned apply. */
   apply?(request: AdapterMigrationApplyRequest): AdapterMigrationApplyResult | Promise<AdapterMigrationApplyResult>;
 }
-export type ExternalAgentSettingsImport = AdapterMigration;
+export type MeshAgentSettingsImport = AdapterMigration;
 
 /** The authoring contract for an agent-adapter atom: a native coding-CLI
  *  wrapped as a monad agent. The daemon owns the process/pty/socket lifecycle and calls these hooks;
  *  the adapter only builds launch specs and translates the provider's wire format to/from
- *  `ExternalAgentOutputEvent`s. Registered through `AtomPackContext.registerAgentAdapter`. */
-export interface ExternalAgentProviderAdapter {
+ *  `MeshAgentOutputEvent`s. Registered through `AtomPackContext.registerAgentAdapter`. */
+export interface MeshAgentProviderAdapter {
   /** Provider-specific managed project-agent runtime behavior; absent → generic defaults. */
-  managedRuntime?: ExternalAgentManagedRuntime;
-  /** ACP delivery variant; absent → this agent has no ACP wrapper (external agent delivery only). */
-  acp?: ExternalAgentAcpDelivery;
+  managedRuntime?: MeshAgentManagedRuntime;
+  /** ACP delivery variant; absent → this agent has no ACP wrapper (MeshAgent delivery only). */
+  acp?: MeshAgentAcpDelivery;
   /** Optional provider-specific migration surface. Current UI entry points may apply only a subset of
-   *  categories (for example external agents) even when the adapter previews broader settings. */
+   *  categories (for example MeshAgents) even when the adapter previews broader settings. */
   settingsImport?: AdapterMigration;
   /** Optional provider-wire transcript projection into Monad protocol events. This is data-only:
    *  adapters may decode their own JSONL/history format, but must not return UI components, labels,
    *  cards, or view state. Experience surfaces consume only the resulting protocol events. */
-  observation?: ExternalAgentObservationProjector;
+  observation?: MeshAgentObservationProjector;
+  /** Provider-neutral observation helpers composed by the atom pack alongside the provider projector. */
+  observationRuntime?: MeshAgentObservationRuntime;
   /** Provider-owned live/history event acquisition and projection. Unrecognized provider records
    *  must survive as shared unknown envelopes rather than being dropped. */
-  events: ExternalAgentEventSource;
+  events: MeshAgentEventSource;
   /** Declarative operator settings for this adapter. The UI renders these controls dynamically; keys
-   *  address fields on `ExternalAgentView` so daemon launch behavior still reads the shared contract. */
-  settings?(agent?: ExternalAgentView): ExternalAgentSetting[];
-  provider: ExternalAgentProvider;
-  productIcon: ExternalAgentProductIcon;
+   *  address fields on `MeshAgentView` so daemon launch behavior still reads the shared contract. */
+  settings?(agent?: MeshAgentView): MeshAgentSetting[];
+  provider: MeshAgentProvider;
+  productIcon: MeshAgentProductIcon;
   /** Human display name — the single source the daemon/UI reads instead
    *  of mapping a provider id to a label. */
   label: string;
-  detect(probes?: BinProbes): ExternalAgentPresetView;
-  listSupportedModels(agent?: ExternalAgentView): string[];
-  modelOptions?(agent: ExternalAgentView): ExternalAgentModelOptionsProbe;
+  detect(probes?: BinProbes): MeshAgentPresetView;
+  listSupportedModels(agent?: MeshAgentView): string[];
+  modelOptions?(agent: MeshAgentView): MeshAgentModelOptionsProbe;
   resolveCommand?(command: string, probes?: BinProbes): string | undefined;
-  buildLaunch(agent: ExternalAgentView, opts: BuildExternalAgentLaunchOptions): ExternalAgentLaunchSpec;
+  buildLaunch(agent: MeshAgentView, opts: BuildMeshAgentLaunchOptions): MeshAgentLaunchSpec;
+  /** Return the first provider-specific argv token that enables an unsafe/unattended mode. The daemon
+   *  owns the `allowAutopilot` decision, while each adapter owns its CLI vocabulary. */
+  unsafeArgument?(args: string[]): string | undefined;
   /** True when this provider's `ws` app-server launches want a daemon-assigned port (see
-   *  `ExternalAgentAppServerWsHints.port`) rather than a self-announced one. The daemon uses this to decide
+   *  `MeshAgentAppServerWsHints.port`) rather than a self-announced one. The daemon uses this to decide
    *  whether pre-allocating a port before `buildLaunch` runs is worth the syscall — a self-announcing ws
    *  provider that doesn't set this never reads the allocated port at all. */
   usesDaemonAssignedAppServerPort?: boolean;
@@ -550,30 +559,30 @@ export interface ExternalAgentProviderAdapter {
    *  selector) appended to the launch spec's base argv each time the daemon spawns a fresh process for
    *  a turn. Absent → the adapter has no one-shot mode. */
   oneshotTurnArgs?(input: string, opts: { providerSessionRef?: string | null }): string[];
-  buildAuthLaunch(agent: ExternalAgentView): ExternalAgentLaunchSpec;
-  buildAuthStatusLaunch(agent: ExternalAgentView): ExternalAgentLaunchSpec;
-  authStatus(agent: ExternalAgentView): ExternalAgentAuthStatusProbe;
-  argumentSupport?(agent: ExternalAgentView): ExternalAgentArgumentSupportProbe;
-  usage?(agent: ExternalAgentView): ExternalAgentUsageProbe;
-  parseAuthStatus(output: string, exitCode: number | null): ExternalAgentAuthState;
-  initialize?(handle: ExternalAgentRuntimeHandle, context: ExternalAgentInitializeContext): void;
+  buildAuthLaunch(agent: MeshAgentView): MeshAgentLaunchSpec;
+  buildAuthStatusLaunch(agent: MeshAgentView): MeshAgentLaunchSpec;
+  authStatus(agent: MeshAgentView): MeshAgentAuthStatusProbe;
+  argumentSupport?(agent: MeshAgentView): MeshAgentArgumentSupportProbe;
+  usage?(agent: MeshAgentView): MeshAgentUsageProbe;
+  parseAuthStatus(output: string, exitCode: number | null): MeshAgentAuthState;
+  initialize?(handle: MeshAgentRuntimeHandle, context: MeshAgentInitializeContext): void;
   /** `handle`, when present, gives per-session JSON-RPC context: the request→kind ledger for by-id
    *  response dispatch and a stdin sink for replying to unhandled server-initiated requests. Adapters
    *  that don't need it (single-shot stdout parsers) ignore it. */
-  parseOutput(chunk: string, handle?: ExternalAgentRuntimeHandle): ExternalAgentOutputEvent[];
-  sendInput(handle: ExternalAgentRuntimeHandle, input: string): void;
+  parseOutput(chunk: string, handle?: MeshAgentRuntimeHandle): MeshAgentOutputEvent[];
+  sendInput(handle: MeshAgentRuntimeHandle, input: string): void;
   /** True when the given launch mode can both project provider approval requests as
    *  `approval_requested` events AND resolve them via `resolveApproval` (a two-way channel exists).
    *  The daemon consults this before dropping the skip-approval flag for a managed agent: only a
    *  resolvable mode may delegate approvals to the human; otherwise it stays full-auto. Absent → the
    *  adapter has no resolvable approval channel in any mode. */
-  supportsApprovalResolution?(launchMode: ExternalAgentLaunchMode): boolean;
-  resolveApproval(handle: ExternalAgentRuntimeHandle, resolution: ExternalAgentApprovalResolution): void;
+  supportsApprovalResolution?(launchMode: MeshAgentLaunchMode): boolean;
+  resolveApproval(handle: MeshAgentRuntimeHandle, resolution: MeshAgentApprovalResolution): void;
   /** Cancel the in-flight turn without tearing down the session/thread (app-server only). Absent →
    *  the provider offers no graceful interrupt; the host falls back to stopping the session. */
-  interrupt?(handle: ExternalAgentRuntimeHandle): void;
+  interrupt?(handle: MeshAgentRuntimeHandle): void;
   /** Inject additional input into the in-flight turn (app-server only). Absent → not supported. */
-  steer?(handle: ExternalAgentRuntimeHandle, input: string): void;
-  resize(handle: ExternalAgentRuntimeHandle, cols: number, rows: number): void;
-  stop(handle: ExternalAgentRuntimeHandle): void;
+  steer?(handle: MeshAgentRuntimeHandle, input: string): void;
+  resize(handle: MeshAgentRuntimeHandle, cols: number, rows: number): void;
+  stop(handle: MeshAgentRuntimeHandle): void;
 }

@@ -7,8 +7,8 @@ import {
   sessionStateSchema,
   sessionSurfaceSchema
 } from './domain.ts';
-import { workplaceProjectMemberTemplatesSchema } from './external-agent/external-agent-workplace.ts';
 import { messageIdSchema, nativeAgentDeliveryIdSchema, projectIdSchema } from './ids.ts';
+import { workplaceProjectMemberTemplatesSchema } from './mesh-agent/mesh-agent-workplace.ts';
 import { offsetPaginationQuerySchema, offsetPaginationResponseSchema, SESSION_TITLE_MAX } from './rpc/control.ts';
 
 export const workplaceProjectSchema = z.object({
@@ -95,7 +95,7 @@ export type UpdateWorkplaceProjectResponse = z.infer<typeof updateWorkplaceProje
 export const deleteWorkplaceProjectResponseSchema = z.object({ deleted: z.literal(true) });
 export type DeleteWorkplaceProjectResponse = z.infer<typeof deleteWorkplaceProjectResponseSchema>;
 
-export const experienceParticipantTransportSchema = z.enum(['monad', 'acp', 'external-agent', 'custom']);
+export const experienceParticipantTransportSchema = z.enum(['monad', 'acp', 'mesh-agent', 'custom']);
 export type ExperienceParticipantTransport = z.infer<typeof experienceParticipantTransportSchema>;
 
 export const experienceFanoutRecipientSchema = z.object({

@@ -155,30 +155,30 @@ describe('observeMemberUi', () => {
     }
   });
 
-  test('returns unavailable for a non-monad member (e.g. external-agent)', () => {
+  test('returns unavailable for a non-monad member (e.g. mesh-agent)', () => {
     const store = createStore();
     try {
       const session = fixtureSession(store);
       const now = new Date().toISOString();
       store.insertSessionMember({
         sessionId: session.id,
-        memberId: 'external-agent:codex',
+        memberId: 'mesh-agent:codex',
         templateId: null,
-        type: 'external-agent',
+        type: 'mesh-agent',
         data: { name: 'codex' },
         createdAt: now,
         updatedAt: now
       });
       const { handlers } = buildHarness(store);
 
-      const frame = handlers.observeMemberUi({ sessionId: session.id, memberId: 'external-agent:codex' });
+      const frame = handlers.observeMemberUi({ sessionId: session.id, memberId: 'mesh-agent:codex' });
       expect(frame.state).toBe('unavailable');
     } finally {
       store.close();
     }
   });
 
-  test('projects persisted history events for the monad member as neutral events, in order', () => {
+  test('projects persisted events for the monad member as neutral events, in order', () => {
     const store = createStore();
     try {
       const session = fixtureSession(store);
@@ -190,14 +190,14 @@ describe('observeMemberUi', () => {
       const { handlers } = buildHarness(store);
 
       const frame = handlers.observeMemberUi({ sessionId: session.id, memberId: 'monad' });
-      expect(frame.state).toBe('history');
+      expect(frame.state).toBe('events');
       expect(eventsOf(frame).map((e) => e.kind)).toEqual(['user-message', 'assistant-message']);
     } finally {
       store.close();
     }
   });
 
-  test('excludes events bridged from a different (managed external-agent) member', () => {
+  test('excludes events bridged from a different (managed mesh-agent) member', () => {
     const store = createStore();
     try {
       const session = fixtureSession(store);
@@ -205,8 +205,8 @@ describe('observeMemberUi', () => {
       store.appendEvents([
         userMessageEvent(session.id, 'msg_100000000000', 'hi'),
         assistantMessageEvent(session.id, 'msg_200000000000', 'from codex', {
-          kind: 'external-agent',
-          externalAgentSessionId: 'exa_abc000000000'
+          kind: 'mesh-agent',
+          meshSessionId: 'mesh_abc000000000'
         })
       ]);
       const { handlers } = buildHarness(store);
@@ -259,8 +259,8 @@ describe('subscribeMemberUiObservation', () => {
       // An event belonging to another member never reaches this subscriber.
       bus.publish(
         assistantMessageEvent(session.id, 'msg_200000000000', 'other', {
-          kind: 'external-agent',
-          externalAgentSessionId: 'exa_abc000000000'
+          kind: 'mesh-agent',
+          meshSessionId: 'mesh_abc000000000'
         })
       );
       expect(frames).toHaveLength(2);

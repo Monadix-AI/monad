@@ -1,6 +1,6 @@
 // P5 (agent-observation-implementation-order.md): the monad built-in agent's own turn, observed as a
-// project-session member through the same neutral AgentObservationEvent plane external-agent members
-// already use (GET /external-agent-sessions/:id/ui-observation{,-stream}) — here the session-member
+// project-session member through the same neutral AgentObservationEvent plane mesh-agent members
+// already use (`/mesh/sessions/:id/events/convenience` and `/stream/convenience`) — here the session-member
 // counterpart, GET /sessions/:id/members/:memberId/ui-observation{,-stream}. Over BOTH transports (TCP
 // loopback + Unix socket), per the all-transports rule in AGENTS.md.
 
@@ -97,7 +97,7 @@ for (const kind of TRANSPORTS) {
       const res = await t.fetch(`/v1/sessions/${sessionId}/members/${memberId}/ui-observation`);
       expect(res.status).toBe(200);
       const frame = (await res.json()) as SessionMemberUiObservationFrame;
-      expect(frame).toMatchObject({ state: 'history', sessionId, memberId, events: [] });
+      expect(frame).toMatchObject({ state: 'events', sessionId, memberId, events: [] });
     });
 
     test('GET ui-observation projects the turn as neutral user-message/assistant-message events', async () => {
@@ -108,7 +108,7 @@ for (const kind of TRANSPORTS) {
 
       const res = await t.fetch(`/v1/sessions/${sessionId}/members/${memberId}/ui-observation`);
       const frame = (await res.json()) as SessionMemberUiObservationFrame;
-      expect(frame.state).toBe('history');
+      expect(frame.state).toBe('events');
       expect(eventsOf(frame)).toMatchObject([
         { kind: 'user-message', streaming: false, text: 'hi' },
         { kind: 'assistant-message', streaming: false, text: 'hello back' }
@@ -119,7 +119,7 @@ for (const kind of TRANSPORTS) {
       const { sessionId, memberId } = await createProjectSessionWithMonadMember();
 
       const { member: codexMember } = (await (
-        await json('POST', `/v1/sessions/${sessionId}/members`, { type: 'external-agent', name: 'codex' })
+        await json('POST', `/v1/sessions/${sessionId}/members`, { type: 'mesh-agent', name: 'codex' })
       ).json()) as { member: { id: string } };
 
       const unknown = await t.fetch(`/v1/sessions/${sessionId}/members/does-not-exist/ui-observation`);
@@ -131,7 +131,7 @@ for (const kind of TRANSPORTS) {
 
       // The monad member is unaffected by the other member existing alongside it.
       const monad = await t.fetch(`/v1/sessions/${sessionId}/members/${memberId}/ui-observation`);
-      expect(((await monad.json()) as SessionMemberUiObservationFrame).state).toBe('history');
+      expect(((await monad.json()) as SessionMemberUiObservationFrame).state).toBe('events');
     });
 
     test('ui-observation-stream pushes a live frame for a message sent after connecting', async () => {
@@ -149,7 +149,7 @@ for (const kind of TRANSPORTS) {
       await json('POST', `/v1/sessions/${sessionId}/messages/block`, { text: 'hi' });
 
       const frames = await framesPromise;
-      expect(frames[0]).toMatchObject({ state: 'history', sessionId, memberId, events: [] });
+      expect(frames[0]).toMatchObject({ state: 'events', sessionId, memberId, events: [] });
       const live = frames.find((f) => f.state === 'live' && eventsOf(f).some((e) => e.kind === 'user-message'));
       expect(live).toMatchObject({ sessionId, memberId, events: [{ kind: 'user-message', text: 'hi' }] });
     });

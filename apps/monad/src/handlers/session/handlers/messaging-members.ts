@@ -1,4 +1,4 @@
-import type { AcpAgentConfig, ExternalAgentConfig, McpServerConfig } from '@monad/environment';
+import type { AcpAgentConfig, McpServerConfig, MeshAgentConfig } from '@monad/environment';
 import type { Session, SessionId, SessionMcpServer, WorkplaceProjectMemberSettings } from '@monad/protocol';
 import type { Store } from '#/store/db/index.ts';
 
@@ -7,7 +7,7 @@ import { sessionMcpServersToAcp, toAcpMcpServers } from '#/services/delegation/a
 const CONTROL_ROOM_SESSION_PREFIX = 'Control Room: ';
 const WORKPLACE_SESSION_PREFIX = 'Workplace: ';
 
-export type ExternalAgentProjectMemberShape = {
+export type MeshAgentProjectMemberShape = {
   type: string;
   name: string;
   templateName?: string;
@@ -16,8 +16,8 @@ export type ExternalAgentProjectMemberShape = {
   settings?: WorkplaceProjectMemberSettings;
 };
 
-export interface ManagedExternalAgentProjectMember {
-  spec: ExternalAgentConfig;
+export interface ManagedMeshAgentProjectMember {
+  spec: MeshAgentConfig;
   runtimeAgentName: string;
   templateAgentName: string;
   displayName: string;
@@ -59,7 +59,7 @@ export function channelDelegateMcpServers(
 /** A session's live member bindings (Track B `session_members`, not the pre-Track-B
  *  `origin.ext` roster hack) shaped like the legacy `WorkplaceProjectMemberView` so the
  *  rest of this module's helpers stay unchanged. */
-export function workplaceProjectMembers(store: Store, sessionId: SessionId): ExternalAgentProjectMemberShape[] {
+export function workplaceProjectMembers(store: Store, sessionId: SessionId): MeshAgentProjectMemberShape[] {
   return store.listSessionMembers(sessionId).map((m) => {
     const data = m.data as {
       name?: string;
@@ -79,19 +79,19 @@ export function workplaceProjectMembers(store: Store, sessionId: SessionId): Ext
   });
 }
 
-export function externalAgentProjectMemberTemplateName(member: ExternalAgentProjectMemberShape): string {
-  return member.type === 'external-agent' ? (member.templateName ?? member.name) : member.name;
+export function meshAgentProjectMemberTemplateName(member: MeshAgentProjectMemberShape): string {
+  return member.type === 'mesh-agent' ? (member.templateName ?? member.name) : member.name;
 }
 
-export function externalAgentProjectMemberRuntimeName(member: ExternalAgentProjectMemberShape): string {
-  return member.type === 'external-agent' ? (member.instanceId ?? member.name) : member.name;
+export function meshAgentProjectMemberRuntimeName(member: MeshAgentProjectMemberShape): string {
+  return member.type === 'mesh-agent' ? (member.instanceId ?? member.name) : member.name;
 }
 
-export function externalAgentProjectMemberDisplayName(member: ExternalAgentProjectMemberShape): string {
-  return member.type === 'external-agent' ? (member.displayName ?? member.name) : member.name;
+export function meshAgentProjectMemberDisplayName(member: MeshAgentProjectMemberShape): string {
+  return member.type === 'mesh-agent' ? (member.displayName ?? member.name) : member.name;
 }
 
-export function externalAgentProjectMemberSettings(
+export function meshAgentProjectMemberSettings(
   store: Store,
   sessionId: SessionId,
   agentName: string
@@ -109,9 +109,9 @@ export function externalAgentProjectMemberSettings(
 > {
   const member = workplaceProjectMembers(store, sessionId).find(
     (candidate) =>
-      candidate.type === 'external-agent' &&
-      (externalAgentProjectMemberRuntimeName(candidate) === agentName ||
-        externalAgentProjectMemberTemplateName(candidate) === agentName)
+      candidate.type === 'mesh-agent' &&
+      (meshAgentProjectMemberRuntimeName(candidate) === agentName ||
+        meshAgentProjectMemberTemplateName(candidate) === agentName)
   );
   if (member?.settings) {
     return {
@@ -129,52 +129,52 @@ export function externalAgentProjectMemberSettings(
   return member ? { managedProjectAgent: true } : { managedProjectAgent: false };
 }
 
-export function externalAgentProjectMemberDisplayNameForAgent(
+export function meshAgentProjectMemberDisplayNameForAgent(
   store: Store,
   sessionId: SessionId,
   agentName: string
 ): string {
   const member = workplaceProjectMembers(store, sessionId).find(
     (candidate) =>
-      candidate.type === 'external-agent' &&
-      (externalAgentProjectMemberRuntimeName(candidate) === agentName ||
-        externalAgentProjectMemberTemplateName(candidate) === agentName)
+      candidate.type === 'mesh-agent' &&
+      (meshAgentProjectMemberRuntimeName(candidate) === agentName ||
+        meshAgentProjectMemberTemplateName(candidate) === agentName)
   );
-  return member ? externalAgentProjectMemberDisplayName(member) : agentName;
+  return member ? meshAgentProjectMemberDisplayName(member) : agentName;
 }
 
-export function externalAgentProjectMemberConfiguredDisplayNameForAgent(
+export function meshAgentProjectMemberConfiguredDisplayNameForAgent(
   store: Store,
   sessionId: SessionId,
   agentName: string
 ): string | undefined {
   return workplaceProjectMembers(store, sessionId).find(
     (candidate) =>
-      candidate.type === 'external-agent' &&
-      (externalAgentProjectMemberRuntimeName(candidate) === agentName ||
-        externalAgentProjectMemberTemplateName(candidate) === agentName)
+      candidate.type === 'mesh-agent' &&
+      (meshAgentProjectMemberRuntimeName(candidate) === agentName ||
+        meshAgentProjectMemberTemplateName(candidate) === agentName)
   )?.displayName;
 }
 
-export function managedExternalAgentProjectMembers(
+export function managedMeshAgentProjectMembers(
   store: Store,
   sessionId: SessionId,
-  externalAgents: readonly ExternalAgentConfig[]
-): ManagedExternalAgentProjectMember[] {
+  meshAgents: readonly MeshAgentConfig[]
+): ManagedMeshAgentProjectMember[] {
   const members = workplaceProjectMembers(store, sessionId);
-  const configured = new Map(externalAgents.map((agent) => [agent.name, agent]));
+  const configured = new Map(meshAgents.map((agent) => [agent.name, agent]));
   return members
-    .filter((member) => member.type === 'external-agent' && member.settings?.managedProjectAgent !== false)
+    .filter((member) => member.type === 'mesh-agent' && member.settings?.managedProjectAgent !== false)
     .flatMap((member) => {
-      const templateAgentName = externalAgentProjectMemberTemplateName(member);
+      const templateAgentName = meshAgentProjectMemberTemplateName(member);
       const spec = configured.get(templateAgentName);
       if (!spec) return [];
       return [
         {
           spec,
-          runtimeAgentName: externalAgentProjectMemberRuntimeName(member),
+          runtimeAgentName: meshAgentProjectMemberRuntimeName(member),
           templateAgentName,
-          displayName: externalAgentProjectMemberDisplayName(member),
+          displayName: meshAgentProjectMemberDisplayName(member),
           configuredDisplayName: member.displayName,
           settings: {
             managedProjectAgent: true,

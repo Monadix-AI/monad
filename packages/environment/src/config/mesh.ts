@@ -1,13 +1,13 @@
 import type { MonadAuth } from './auth.ts';
 
 import {
-  externalAgentAdapterSettingsSchema,
-  externalAgentApprovalOwnershipSchema,
-  externalAgentAppServerTransportSchema,
-  externalAgentNameSchema,
-  externalAgentProjectTemplateSchema,
-  externalAgentProviderSchema,
   httpUrlSchema,
+  meshAgentAdapterSettingsSchema,
+  meshAgentApprovalOwnershipSchema,
+  meshAgentAppServerTransportSchema,
+  meshAgentNameSchema,
+  meshAgentProjectTemplateSchema,
+  meshAgentProviderSchema,
   peerIdSchema
 } from '@monad/protocol';
 import { z } from 'zod';
@@ -29,19 +29,19 @@ export const acpAgentSchema = z.object({
 });
 export type AcpAgentConfig = z.infer<typeof acpAgentSchema>;
 
-export const externalAgentSchema = z
+export const meshAgentSchema = z
   .object({
-    name: externalAgentNameSchema,
-    provider: externalAgentProviderSchema,
+    name: meshAgentNameSchema,
+    provider: meshAgentProviderSchema,
     command: z.string().min(1),
     args: z.array(z.string()).optional(),
     env: z.record(z.string(), z.string()).optional(),
     enabled: z.boolean(),
-    appServerTransport: externalAgentAppServerTransportSchema.optional(),
+    appServerTransport: meshAgentAppServerTransportSchema.optional(),
     allowAutopilot: z.boolean().default(true),
-    approvalOwnership: externalAgentApprovalOwnershipSchema.default('provider-owned'),
-    projectTemplates: z.array(externalAgentProjectTemplateSchema).optional(),
-    adapterSettings: externalAgentAdapterSettingsSchema.optional()
+    approvalOwnership: meshAgentApprovalOwnershipSchema.default('provider-owned'),
+    projectTemplates: z.array(meshAgentProjectTemplateSchema).optional(),
+    adapterSettings: meshAgentAdapterSettingsSchema.optional()
   })
   .superRefine((agent, ctx) => {
     const projectTemplateIds = new Set<string>();
@@ -74,7 +74,7 @@ export const externalAgentSchema = z
       }
     }
   });
-export type ExternalAgentConfig = z.infer<typeof externalAgentSchema>;
+export type MeshAgentConfig = z.infer<typeof meshAgentSchema>;
 
 export const monadixConfigSchema = z
   .object({
@@ -119,7 +119,7 @@ export type PeerConfig = z.infer<typeof peerSchema>;
 export const monadMeshConfigSchema = z.object({
   version: z.literal(CURRENT_MESH_VERSION),
   acpAgents: z.array(acpAgentSchema).default([]),
-  externalAgents: z.array(externalAgentSchema).default([]),
+  meshAgents: z.array(meshAgentSchema).default([]),
   peers: z.array(peerSchema).default([]),
   monadix: monadixConfigSchema
 });

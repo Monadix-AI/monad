@@ -1,25 +1,25 @@
-import type { ExternalAgentConfig } from '@monad/environment';
+import type { MeshAgentConfig } from '@monad/environment';
 import type { MessageAttachmentRef, MessageId, SessionId } from '@monad/protocol';
 import type { SessionContext } from '#/handlers/session/context.ts';
-import type { createManagedExternalAgentDelivery } from '#/handlers/session/handlers/managed-external-agent-delivery.ts';
-import type { ManagedExternalAgentProjectMessageSender } from '#/handlers/session/handlers/messaging-notices.ts';
+import type { createManagedMeshAgentDelivery } from '#/handlers/session/handlers/managed-mesh-agent-delivery.ts';
+import type { ManagedMeshAgentProjectMessageSender } from '#/handlers/session/handlers/messaging-notices.ts';
 
-/** Wraps the managed-external-agent delivery primitives with the project-config lookups the
+/** Wraps the managed-mesh-agent delivery primitives with the project-config lookups the
  *  session handlers need (loading enabled agents, resolving the transcript target). */
 export function createMessagingNotifyHandlers(
   ctx: SessionContext,
-  managedExternalAgentDelivery: ReturnType<typeof createManagedExternalAgentDelivery>
+  managedMeshAgentDelivery: ReturnType<typeof createManagedMeshAgentDelivery>
 ) {
   const { requireSession } = ctx;
   const {
-    completeManagedExternalAgentThinking,
-    retireManagedExternalAgentThinking,
-    deliverProjectMessageToManagedExternalAgentMembers,
-    deliverDirectMessageToManagedExternalAgentMember
-  } = managedExternalAgentDelivery;
+    completeManagedMeshAgentThinking,
+    retireManagedMeshAgentThinking,
+    deliverProjectMessageToManagedMeshAgentMembers,
+    deliverDirectMessageToManagedMeshAgentMember
+  } = managedMeshAgentDelivery;
 
   return {
-    async notifyManagedExternalAgentProjectMembers({
+    async notifyManagedMeshAgentProjectMembers({
       sessionId,
       text,
       sender,
@@ -28,17 +28,17 @@ export function createMessagingNotifyHandlers(
     }: {
       sessionId: SessionId;
       text: string;
-      sender?: ManagedExternalAgentProjectMessageSender;
+      sender?: ManagedMeshAgentProjectMessageSender;
       triggerMessageId?: MessageId;
       exceptAgentName?: string;
     }) {
       const session = requireSession(sessionId);
-      const externalAgents = (ctx.deps.configManager?.get().cfg.externalAgents ?? []).filter(
-        (agent: ExternalAgentConfig) => agent.enabled !== false
+      const meshAgents = (ctx.deps.configManager?.get().cfg.meshAgents ?? []).filter(
+        (agent: MeshAgentConfig) => agent.enabled !== false
       );
-      await deliverProjectMessageToManagedExternalAgentMembers({
+      await deliverProjectMessageToManagedMeshAgentMembers({
         session,
-        externalAgents,
+        meshAgents,
         text,
         sender,
         triggerMessageId,
@@ -47,7 +47,7 @@ export function createMessagingNotifyHandlers(
       return { accepted: true as const };
     },
 
-    async notifyManagedExternalAgentDirectMessage({
+    async notifyManagedMeshAgentDirectMessage({
       sessionId,
       fromAgentName,
       to,
@@ -59,31 +59,31 @@ export function createMessagingNotifyHandlers(
       text: string;
     }) {
       const session = requireSession(sessionId);
-      const externalAgents = (ctx.deps.configManager?.get().cfg.externalAgents ?? []).filter(
-        (agent: ExternalAgentConfig) => agent.enabled !== false
+      const meshAgents = (ctx.deps.configManager?.get().cfg.meshAgents ?? []).filter(
+        (agent: MeshAgentConfig) => agent.enabled !== false
       );
-      await deliverDirectMessageToManagedExternalAgentMember({ session, externalAgents, fromAgentName, to, text });
+      await deliverDirectMessageToManagedMeshAgentMember({ session, meshAgents, fromAgentName, to, text });
       return { accepted: true as const };
     },
 
-    async completeManagedExternalAgentProjectMessage({
+    async completeManagedMeshAgentProjectMessage({
       sessionId,
-      externalAgentSessionId,
+      meshSessionId,
       agentName,
       text,
       threadId,
       attachments
     }: {
       sessionId: SessionId;
-      externalAgentSessionId: string;
+      meshSessionId: string;
       agentName: string;
       text: string;
       threadId?: string;
       attachments?: MessageAttachmentRef[];
     }) {
-      return completeManagedExternalAgentThinking({
+      return completeManagedMeshAgentThinking({
         sessionId,
-        externalAgentSessionId,
+        meshSessionId,
         agentName,
         text,
         threadId,
@@ -91,31 +91,31 @@ export function createMessagingNotifyHandlers(
       });
     },
 
-    async completeManagedExternalAgentProviderMessage({
+    async completeManagedMeshAgentProviderMessage({
       sessionId,
-      externalAgentSessionId,
+      meshSessionId,
       agentName,
       text,
       error,
       post = true
     }: {
       sessionId: SessionId;
-      externalAgentSessionId: string;
+      meshSessionId: string;
       agentName: string;
       text: string;
       error?: boolean;
       post?: boolean;
     }) {
       if (!post && !error) {
-        const messageId = await retireManagedExternalAgentThinking(sessionId, externalAgentSessionId, agentName);
+        const messageId = await retireManagedMeshAgentThinking(sessionId, meshSessionId, agentName);
         return { messageId };
       }
-      const completed = await completeManagedExternalAgentThinking({
+      const completed = await completeManagedMeshAgentThinking({
         sessionId,
-        externalAgentSessionId,
+        meshSessionId,
         agentName,
         text,
-        source: 'external-agent-provider',
+        source: 'mesh-agent-provider',
         error
       });
       return { messageId: completed.messageId };

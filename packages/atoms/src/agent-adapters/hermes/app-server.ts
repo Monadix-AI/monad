@@ -1,8 +1,4 @@
-import type {
-  ExternalAgentOutputEvent,
-  ExternalAgentProviderAdapter,
-  ExternalAgentRuntimeHandle
-} from '@monad/sdk-atom';
+import type { MeshAgentOutputEvent, MeshAgentProviderAdapter, MeshAgentRuntimeHandle } from '@monad/sdk-atom';
 import type { AppServerCliHooks } from '../app-server-jsonrpc.ts';
 
 import { compactObject, parseJsonObject } from '../adapter-shared.ts';
@@ -37,14 +33,14 @@ import { jsonRpcRequest } from '../jsonrpc.ts';
 // `agent.env` both into the spawned process's env (so the gateway reads the same value) and onto the
 // dial URL's query string (see hermes/index.ts's `appServerWs.query`).
 
-const ephemeralSessionIds = new WeakMap<ExternalAgentRuntimeHandle, string>();
+const ephemeralSessionIds = new WeakMap<MeshAgentRuntimeHandle, string>();
 // Hermes has no per-approval id (`approval.respond` is `{session_id, choice}`), but the host dedupes
 // in-flight approvals by `requestId` (packages/atoms/src/agent-adapters/openclaw and callers assume it's
 // unique per pending approval) — a second `approval.request` for the same session while the first is
 // still pending would collide on the bare session id and get silently dropped. Suffix a per-handle
 // counter so overlapping requests get distinct ids; `resolveHermesApproval` never needs to decode this
 // back into a session id (it already tracks that separately via `ephemeralSessionIds`).
-const approvalSeqByHandle = new WeakMap<ExternalAgentRuntimeHandle, number>();
+const approvalSeqByHandle = new WeakMap<MeshAgentRuntimeHandle, number>();
 
 interface HermesFrame extends Record<string, unknown> {
   method?: string;
@@ -59,8 +55,8 @@ function idKeyOf(frame: HermesFrame): string | number | undefined {
 }
 
 export function hermesInitialize(
-  handle: ExternalAgentRuntimeHandle,
-  context: Parameters<NonNullable<ExternalAgentProviderAdapter['initialize']>>[1]
+  handle: MeshAgentRuntimeHandle,
+  context: Parameters<NonNullable<MeshAgentProviderAdapter['initialize']>>[1]
 ): void {
   if (handle.launchMode !== 'app-server' || !handle.appServer) return;
   // No separate handshake step (unlike OpenClaw's `connect`/codex's `initialize`) — the WS upgrade
@@ -81,7 +77,7 @@ export function hermesInitialize(
   );
 }
 
-function responseEvents(frame: HermesFrame, handle?: ExternalAgentRuntimeHandle): ExternalAgentOutputEvent[] {
+function responseEvents(frame: HermesFrame, handle?: MeshAgentRuntimeHandle): MeshAgentOutputEvent[] {
   const idKey = idKeyOf(frame);
   const kind = idKey !== undefined ? handle?.pendingRequests?.get(idKey) : undefined;
   if (idKey !== undefined && kind !== undefined) handle?.pendingRequests?.delete(idKey);
@@ -139,8 +135,8 @@ function eventTypeEvents(
   eventType: string,
   sessionId: string,
   payload: Record<string, unknown>,
-  handle: ExternalAgentRuntimeHandle | undefined
-): ExternalAgentOutputEvent[] {
+  handle: MeshAgentRuntimeHandle | undefined
+): MeshAgentOutputEvent[] {
   switch (eventType) {
     case 'message.delta': {
       const text = payload.text;
@@ -181,7 +177,7 @@ function eventTypeEvents(
   }
 }
 
-export function parseHermesFrame(frame: HermesFrame, handle?: ExternalAgentRuntimeHandle): ExternalAgentOutputEvent[] {
+export function parseHermesFrame(frame: HermesFrame, handle?: MeshAgentRuntimeHandle): MeshAgentOutputEvent[] {
   if ('result' in frame || 'error' in frame) return responseEvents(frame, handle);
   if (frame.method !== 'event') return [];
   const params = recordValue(frame.params) ?? {};
@@ -191,8 +187,8 @@ export function parseHermesFrame(frame: HermesFrame, handle?: ExternalAgentRunti
   return eventTypeEvents(eventType, sessionId, recordValue(params.payload) ?? {}, handle);
 }
 
-export function parseHermesOutput(chunk: string, handle?: ExternalAgentRuntimeHandle): ExternalAgentOutputEvent[] {
-  const events: ExternalAgentOutputEvent[] = [];
+export function parseHermesOutput(chunk: string, handle?: MeshAgentRuntimeHandle): MeshAgentOutputEvent[] {
+  const events: MeshAgentOutputEvent[] = [];
   for (const rawLine of chunk.split(/\r?\n/)) {
     const line = rawLine.trim();
     if (!line.startsWith('{')) continue;
@@ -203,8 +199,8 @@ export function parseHermesOutput(chunk: string, handle?: ExternalAgentRuntimeHa
   return events;
 }
 
-export function sendHermesInput(handle: ExternalAgentRuntimeHandle, input: string): void {
-  if (!handle.appServer) throw new Error('external agent session has no app-server input bridge');
+export function sendHermesInput(handle: MeshAgentRuntimeHandle, input: string): void {
+  if (!handle.appServer) throw new Error('MeshAgent session has no app-server input bridge');
   const sessionId = ephemeralSessionIds.get(handle);
   if (!sessionId) throw new Error('hermes app-server session is not ready');
   const id = handle.nextRequestId?.() ?? Date.now();
@@ -213,10 +209,10 @@ export function sendHermesInput(handle: ExternalAgentRuntimeHandle, input: strin
 }
 
 export function resolveHermesApproval(
-  handle: ExternalAgentRuntimeHandle,
-  resolution: Parameters<ExternalAgentProviderAdapter['resolveApproval']>[1]
+  handle: MeshAgentRuntimeHandle,
+  resolution: Parameters<MeshAgentProviderAdapter['resolveApproval']>[1]
 ): void {
-  if (!handle.appServer) throw new Error('external agent session has no app-server approval bridge');
+  if (!handle.appServer) throw new Error('MeshAgent session has no app-server approval bridge');
   const sessionId = ephemeralSessionIds.get(handle);
   if (!sessionId) throw new Error('hermes app-server session is not ready');
   const id = handle.nextRequestId?.() ?? Date.now();

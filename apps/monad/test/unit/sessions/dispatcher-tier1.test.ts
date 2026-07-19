@@ -68,7 +68,7 @@ test('sessionDelete undo preserves session_members rows', async () => {
     sessionId,
     memberId: 'pmem_codex_a',
     templateId: 'pmem_codex_a',
-    type: 'external-agent',
+    type: 'mesh-agent',
     data: { name: 'codex', instanceId: 'pmem_codex_a' },
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
@@ -111,7 +111,7 @@ test('createProjectSession clones the project member templates into live session
     memberTemplates: [
       {
         id: 'pmem_codex',
-        type: 'external-agent',
+        type: 'mesh-agent',
         name: 'codex',
         displayName: 'Lily',
         settings: { managedProjectAgent: true, launchMode: 'pty' }
@@ -125,7 +125,7 @@ test('createProjectSession clones the project member templates into live session
     {
       memberId: 'pmem_codex',
       templateId: 'pmem_codex',
-      type: 'external-agent',
+      type: 'mesh-agent',
       data: {
         name: 'codex',
         displayName: 'Lily',
@@ -142,14 +142,14 @@ test('project member updates reconcile active bindings and add each new template
   const { projectId } = await d.session.createProject({ title: 'p' });
   const fable = {
     id: 'pmem_fable',
-    type: 'external-agent' as const,
+    type: 'mesh-agent' as const,
     name: 'claude-code',
     displayName: 'Fable',
     settings: { managedProjectAgent: true, modelId: 'fable' }
   };
   const gpt = {
     id: 'pmem_gpt',
-    type: 'external-agent' as const,
+    type: 'mesh-agent' as const,
     name: 'codex',
     displayName: 'GPT',
     settings: { managedProjectAgent: true, modelId: 'gpt-old' }
@@ -165,14 +165,14 @@ test('project member updates reconcile active bindings and add each new template
     sessionId: activeId,
     memberId: 'pmem_ad_hoc',
     templateId: null,
-    type: 'external-agent',
+    type: 'mesh-agent',
     data: { name: 'gemini', displayName: 'Ad hoc' },
     createdAt: now,
     updatedAt: now
   });
   const legacyMessageId = newId('msg');
   store.insertMessage(legacyMessageId, activeId, 'legacy Fable response', now, 'assistant', {
-    data: { agentName: fable.id, source: 'managed-external-agent' }
+    data: { agentName: fable.id, source: 'managed-mesh-agent' }
   });
   const gptEdited = {
     ...gpt,
@@ -181,7 +181,7 @@ test('project member updates reconcile active bindings and add each new template
   };
   const opus = {
     id: 'pmem_opus',
-    type: 'external-agent' as const,
+    type: 'mesh-agent' as const,
     name: 'claude-code',
     displayName: 'Opus',
     settings: { managedProjectAgent: true, modelId: 'opus' }
@@ -200,7 +200,7 @@ test('project member updates reconcile active bindings and add each new template
     {
       memberId: 'pmem_gpt',
       templateId: 'pmem_gpt',
-      type: 'external-agent',
+      type: 'mesh-agent',
       data: {
         name: 'codex',
         displayName: 'GPT 5.6 SOL',
@@ -210,13 +210,13 @@ test('project member updates reconcile active bindings and add each new template
     {
       memberId: 'pmem_ad_hoc',
       templateId: null,
-      type: 'external-agent',
+      type: 'mesh-agent',
       data: { name: 'gemini', displayName: 'Ad hoc' }
     },
     {
       memberId: 'pmem_opus',
       templateId: 'pmem_opus',
-      type: 'external-agent',
+      type: 'mesh-agent',
       data: {
         name: 'claude-code',
         displayName: 'Opus',
@@ -228,7 +228,7 @@ test('project member updates reconcile active bindings and add each new template
     {
       memberId: 'pmem_fable',
       templateId: 'pmem_fable',
-      type: 'external-agent',
+      type: 'mesh-agent',
       data: {
         name: 'claude-code',
         displayName: 'Fable',
@@ -238,7 +238,7 @@ test('project member updates reconcile active bindings and add each new template
     {
       memberId: 'pmem_gpt',
       templateId: 'pmem_gpt',
-      type: 'external-agent',
+      type: 'mesh-agent',
       data: {
         name: 'codex',
         displayName: 'GPT',
@@ -251,7 +251,7 @@ test('project member updates reconcile active bindings and add each new template
   expect(store.getMessage(activeId, legacyMessageId)?.data).toEqual({
     agentName: 'pmem_fable',
     agentDisplayName: 'Fable',
-    source: 'managed-external-agent'
+    source: 'managed-mesh-agent'
   });
   store.close();
 });

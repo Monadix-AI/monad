@@ -5,32 +5,21 @@
 // descriptor. One agent, forked by delivery mode; there is no parallel static list to drift.
 
 import type { AcpAgentConfig } from '@monad/environment';
-import type { ExternalAgentProductIcon, ExternalAgentProvider } from '@monad/protocol';
-
-import { homedir } from 'node:os';
-import { join } from 'node:path';
+import type { MeshAgentProductIcon, MeshAgentProvider } from '@monad/protocol';
 
 import { type BinProbes, defaultBinProbes } from '#/infra/resolve-binary.ts';
-import {
-  findExternalAgentProviderAdapter,
-  listExternalAgentProviderAdapters
-} from '#/services/external-agent/index.ts';
+import { findMeshAgentProviderAdapter, listMeshAgentProviderAdapters } from '#/services/mesh-agent/index.ts';
 
 // ACP invites use the vendor's own npx-run bridge package, never the native `codex`/`claude` binary —
-// so unlike external-agent launch detection (adapter.detect(), which genuinely needs the binary to spawn),
+// so unlike mesh-agent launch detection (adapter.detect(), which genuinely needs the binary to spawn),
 // a login dir alone means the account is set up and auth will just work through it. Scoped to this
 // ACP-specific view rather than the shared adapter.detect() result.
-const ACP_LOGIN_DIRS: Partial<Record<ExternalAgentProvider, string>> = {
-  codex: join(homedir(), '.codex'),
-  'claude-code': join(homedir(), '.claude')
-};
-
 /** A vetted ACP-agent invite preset plus the result of probing this machine for the underlying tool.
  *  Shape mirrors the protocol `AcpAgentPresetView`. */
 export interface AcpAgentPresetStatus {
   id: string;
   label: string;
-  productIcon: ExternalAgentProductIcon;
+  productIcon: MeshAgentProductIcon;
   command: string;
   args: string[];
   env?: Record<string, string>;
@@ -43,11 +32,10 @@ export interface AcpAgentPresetStatus {
  *  Pure read-only (which + existsSync via detect), safe to call often; probes are injectable. */
 export function listAcpAgentPresets(probes: BinProbes = defaultBinProbes): AcpAgentPresetStatus[] {
   const presets: AcpAgentPresetStatus[] = [];
-  for (const adapter of listExternalAgentProviderAdapters()) {
+  for (const adapter of listMeshAgentProviderAdapters()) {
     if (!adapter.acp) continue;
     const view = adapter.detect(probes);
-    const loginDir = ACP_LOGIN_DIRS[view.provider];
-    const installed = view.installed || (loginDir !== undefined && probes.exists(loginDir));
+    const installed = view.installed || (adapter.acp.loginDirectories?.some((path) => probes.exists(path)) ?? false);
     presets.push({
       id: view.id,
       label: view.label,
@@ -63,8 +51,8 @@ export function listAcpAgentPresets(probes: BinProbes = defaultBinProbes): AcpAg
   return presets;
 }
 
-export function productIconForAcpAgent(name: string): ExternalAgentProductIcon | undefined {
-  const adapter = findExternalAgentProviderAdapter(name as ExternalAgentProvider);
+export function productIconForAcpAgent(name: string): MeshAgentProductIcon | undefined {
+  const adapter = findMeshAgentProviderAdapter(name as MeshAgentProvider);
   return adapter?.acp ? adapter.productIcon : undefined;
 }
 

@@ -12,7 +12,7 @@ import type { SessionMember } from '#/store/db/session-members.ts';
 import { newId } from '@monad/protocol';
 
 import { HandlerError } from '#/handlers/handler-error.ts';
-import { managedExternalAgentProjectMembers } from '#/handlers/session/handlers/messaging-members.ts';
+import { managedMeshAgentProjectMembers } from '#/handlers/session/handlers/messaging-members.ts';
 import {
   createSessionMemberRoster,
   removeSessionMemberBinding
@@ -21,7 +21,7 @@ import {
 export type SessionMembersDeps = SessionMemberRosterDeps;
 
 // Access control reads the write policy STORED on the session (origin.writableBy) — mirrors the
-// check in messaging.ts / forward-acp.ts / forward-external-agent.ts (kept local so this module
+// check in messaging.ts / forward-acp.ts / forward-mesh-agent.ts (kept local so this module
 // has no import-cycle back to them). Without this, a session whose policy says only 'acp' or
 // 'channel' may write (e.g. an editor- or IM-bound session) could still have its member roster
 // mutated — and managed-agent runtimes started/stopped — over plain HTTP.
@@ -47,9 +47,9 @@ function toWireMember(row: SessionMember): WorkplaceProjectSessionMember {
     ...(data.displayName ? { displayName: data.displayName } : {}),
     ...(data.settings ? { settings: data.settings } : {}),
     joinedAt: row.createdAt,
-    ...(row.externalAgentSessionId
+    ...(row.meshSessionId
       ? {
-          externalAgentSessionId: row.externalAgentSessionId as WorkplaceProjectSessionMember['externalAgentSessionId']
+          meshSessionId: row.meshSessionId as WorkplaceProjectSessionMember['meshSessionId']
         }
       : {})
   };
@@ -111,17 +111,17 @@ export function createSessionMembersHandlers(ctx: SessionContext, deps: SessionM
         createdAt: now,
         updatedAt: now
       });
-      const externalAgents = (ctx.deps.configManager?.get().cfg.externalAgents ?? []).filter(
+      const meshAgents = (ctx.deps.configManager?.get().cfg.meshAgents ?? []).filter(
         (agent) => agent.enabled !== false
       );
-      const managed = managedExternalAgentProjectMembers(store, sessionId, externalAgents).find(
+      const managed = managedMeshAgentProjectMembers(store, sessionId, meshAgents).find(
         (candidate) => candidate.runtimeAgentName === memberId
       );
       if (ctx.deps.paths && managed) {
         const result = await deps.spawnManagedSessionMember(session, managed);
         if (result.started && result.nativeSessionId) {
           store.updateSessionMember(sessionId, memberId, {
-            externalAgentSessionId: result.nativeSessionId,
+            meshSessionId: result.nativeSessionId,
             updatedAt: new Date().toISOString()
           });
         }

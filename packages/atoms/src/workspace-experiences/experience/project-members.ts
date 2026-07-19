@@ -1,8 +1,4 @@
-import type {
-  ExternalAgentProvider,
-  WorkplaceProjectMemberTemplate,
-  WorkplaceProjectSessionMember
-} from '@monad/protocol';
+import type { MeshAgentProvider, WorkplaceProjectMemberTemplate, WorkplaceProjectSessionMember } from '@monad/protocol';
 import type {
   WorkspaceExperienceAddMemberOptions,
   WorkspaceExperienceMember,
@@ -30,7 +26,7 @@ export function parseProjectMembers(memberTemplates: readonly WorkplaceProjectMe
     id: template.id,
     type: template.type,
     name: template.name,
-    ...(template.type === 'external-agent' ? { templateName: template.name, instanceId: template.id } : {}),
+    ...(template.type === 'mesh-agent' ? { templateName: template.name, instanceId: template.id } : {}),
     ...(template.displayName ? { displayName: template.displayName } : {}),
     ...(template.settings ? { settings: template.settings } : {})
   }));
@@ -41,7 +37,7 @@ function parseSessionMembers(sessionMembers: readonly WorkplaceProjectSessionMem
     id: member.id,
     type: member.type,
     name: member.name,
-    ...(member.type === 'external-agent' ? { templateName: member.name, instanceId: member.id } : {}),
+    ...(member.type === 'mesh-agent' ? { templateName: member.name, instanceId: member.id } : {}),
     ...(member.displayName ? { displayName: member.displayName } : {}),
     ...(member.settings ? { settings: member.settings } : {}),
     ...(member.joinedAt ? { joinedAt: member.joinedAt } : {})
@@ -56,17 +52,17 @@ export function resolveExperienceProjectMembers(args: {
   return args.activeSessionId ? parseSessionMembers(args.sessionMembers) : parseProjectMembers(args.memberTemplates);
 }
 
-function safeExternalAgentInstanceSegment(value: string): string {
+function safeMeshAgentInstanceSegment(value: string): string {
   return value.replace(/[^a-zA-Z0-9_-]/g, '_') || 'cli';
 }
 
-export function safeExternalAgentDisplayName(value: string): string {
+export function safeMeshAgentDisplayName(value: string): string {
   return value.replace(/[\\/:\0]/g, '_').trim() || 'CLI';
 }
 
-export function externalAgentProductDisplayName(
+export function meshAgentProductDisplayName(
   icon: Participant['icon'] | undefined,
-  provider: ExternalAgentProvider | string | undefined,
+  provider: MeshAgentProvider | string | undefined,
   fallback: string
 ): string {
   const product = icon ?? provider;
@@ -85,7 +81,7 @@ export function productIcon(value: unknown): Participant['icon'] | undefined {
   return typeof value === 'string' && PRODUCT_ICON_IDS.has(value) ? (value as Participant['icon']) : undefined;
 }
 
-export function uniqueExternalAgentDisplayName(baseName: string, members: readonly ProjectMember[]): string {
+export function uniqueMeshAgentDisplayName(baseName: string, members: readonly ProjectMember[]): string {
   const used = new Set(members.map((member) => member.displayName ?? member.name));
   if (!used.has(baseName)) return baseName;
   for (let index = 2; index < 1000; index += 1) {
@@ -95,30 +91,30 @@ export function uniqueExternalAgentDisplayName(baseName: string, members: readon
   return `${baseName}-${Date.now().toString(36)}`;
 }
 
-export function newExternalAgentInstanceId(templateName: string): string {
+export function newMeshAgentInstanceId(templateName: string): string {
   const random =
     globalThis.crypto?.randomUUID?.().replace(/-/g, '').slice(0, 12) ??
     `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
-  return `pmem_${safeExternalAgentInstanceSegment(templateName)}_${random}`;
+  return `pmem_${safeMeshAgentInstanceSegment(templateName)}_${random}`;
 }
 
-export function renameExternalAgentProjectMemberDisplayName(member: ProjectMember, value?: string): ProjectMember {
-  if (member.type !== 'external-agent') return member;
-  const displayName = safeExternalAgentDisplayName(value?.trim() || member.displayName || member.name);
+export function renameMeshAgentProjectMemberDisplayName(member: ProjectMember, value?: string): ProjectMember {
+  if (member.type !== 'mesh-agent') return member;
+  const displayName = safeMeshAgentDisplayName(value?.trim() || member.displayName || member.name);
   return { ...member, displayName };
 }
 
-export function externalAgentAvatarSeed(projectId: string, displayName: string): string {
-  return ['external-agent', `project:${projectId}`, `name:${displayName}`].join('|');
+export function meshAgentAvatarSeed(projectId: string, displayName: string): string {
+  return ['mesh-agent', `project:${projectId}`, `name:${displayName}`].join('|');
 }
 
-export function externalAgentProjectMemberAvatarSeed(projectId: string, member: ProjectMember): string {
-  return externalAgentAvatarSeed(projectId, member.displayName ?? member.name);
+export function meshAgentProjectMemberAvatarSeed(projectId: string, member: ProjectMember): string {
+  return meshAgentAvatarSeed(projectId, member.displayName ?? member.name);
 }
 
 export function projectMemberAvatarSeeds(projectId: string, members: readonly ProjectMember[]): string[] {
   return members.flatMap((member) => {
-    if (member.type === 'external-agent') return [externalAgentProjectMemberAvatarSeed(projectId, member)];
+    if (member.type === 'mesh-agent') return [meshAgentProjectMemberAvatarSeed(projectId, member)];
     if (member.type === 'acp') return [`acp:${member.name}`];
     return [];
   });

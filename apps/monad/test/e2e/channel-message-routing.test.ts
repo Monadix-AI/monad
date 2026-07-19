@@ -32,7 +32,7 @@ import {
 } from '../helpers.ts';
 
 const MANAGED_AGENT_TOKEN = 'managed-agent-token';
-const TEST_EXTERNAL_AGENT_SERVER_URL = 'http://127.0.0.1:61234';
+const TEST_MESH_AGENT_SERVER_URL = 'http://127.0.0.1:61234';
 
 function makePaths(base: string): MonadPaths {
   return makeTestPaths(base);
@@ -93,7 +93,7 @@ async function updateWorkplaceProjectCwd(
 }
 
 /** Track B: create a real Session under a Workplace Project. Its id is the conversation id used for
- *  channel messages, events, ui-stream, external-agent-sessions, and the external-agent transcript
+ *  channel messages, events, ui-stream, mesh-sessions, and the mesh-agent transcript
  *  target — the project is only the environment, not the conversation. */
 async function createProjectSession(t: TransportHandle, projectId: string, cwd?: string): Promise<SessionId> {
   const res = await t.fetch(
@@ -142,10 +142,10 @@ async function inviteMember(
   return existing;
 }
 
-/** Build a managed external-agent member template. `id` becomes the runtime agent id (agentName);
- *  `name` selects the registered external-agent config that backs it. Reproduces the pre-Track-B
+/** Build a managed mesh-agent member template. `id` becomes the runtime agent id (agentName);
+ *  `name` selects the registered mesh-agent config that backs it. Reproduces the pre-Track-B
  *  origin.ext member roster entries with matching runtime identity. */
-function externalAgentTemplate(
+function meshAgentTemplate(
   id: string,
   configName: string,
   settings: WorkplaceProjectMemberSettings,
@@ -153,7 +153,7 @@ function externalAgentTemplate(
 ): WorkplaceProjectMemberTemplate {
   return {
     id,
-    type: 'external-agent',
+    type: 'mesh-agent',
     name: configName,
     ...(displayName ? { displayName } : {}),
     settings
@@ -195,29 +195,25 @@ function captureModel(requests: ModelRequest[], replies: string[]): ModelRouter 
 
 const tokenHash = (token = MANAGED_AGENT_TOKEN): string => createHash('sha256').update(token).digest('hex');
 
-function managedBindingHeaders(
-  sessionId: string,
-  externalAgentSessionId: string,
-  agentId: string
-): Record<string, string> {
+function managedBindingHeaders(sessionId: string, meshSessionId: string, agentId: string): Record<string, string> {
   void sessionId;
   void agentId;
   return {
     authorization: `Bearer ${MANAGED_AGENT_TOKEN}`,
-    'x-monad-external-agent-session-id': externalAgentSessionId
+    'x-monad-mesh-session-id': meshSessionId
   };
 }
 
-async function configureMockExternalAgent(
+async function configureMockMeshAgent(
   t: TransportHandle,
   root: string,
   opts: { agentName?: string; authState?: 'authenticated' | 'unauthenticated' | 'unknown' } = {}
 ): Promise<{ argsLog: string; envLog: string; stdinLog: string }> {
   const agentName = opts.agentName ?? 'codex';
-  const script = join(root, `mock-external-agent-${agentName}.js`);
-  const argsLog = join(root, `mock-external-agent-${agentName}-args.log`);
-  const envLog = join(root, `mock-external-agent-${agentName}-env.jsonl`);
-  const stdinLog = join(root, `mock-external-agent-${agentName}-stdin.log`);
+  const script = join(root, `mock-mesh-agent-${agentName}.js`);
+  const argsLog = join(root, `mock-mesh-agent-${agentName}-args.log`);
+  const envLog = join(root, `mock-mesh-agent-${agentName}-env.jsonl`);
+  const stdinLog = join(root, `mock-mesh-agent-${agentName}-stdin.log`);
   const command = process.platform === 'win32' ? process.execPath : script;
   const args = process.platform === 'win32' ? [script] : [];
   await writeFile(
@@ -266,7 +262,7 @@ async function configureMockExternalAgent(
   );
   await chmod(script, 0o755);
   const res = await t.fetch(
-    `/v1/settings/external-agents/${agentName}`,
+    `/v1/mesh/agents/${agentName}`,
     json('PUT', {
       agent: {
         name: agentName,
@@ -326,7 +322,7 @@ async function configureMockCodexResumeFailureAgent(t: TransportHandle, root: st
   );
   await chmod(script, 0o755);
   const res = await t.fetch(
-    '/v1/settings/external-agents/codex-resume-failure',
+    '/v1/mesh/agents/codex-resume-failure',
     json('PUT', {
       agent: {
         name: 'codex-resume-failure',
@@ -372,7 +368,7 @@ async function configureMockCodexStartFailureAgent(t: TransportHandle, root: str
   );
   await chmod(script, 0o755);
   const res = await t.fetch(
-    '/v1/settings/external-agents/codex-start-failure',
+    '/v1/mesh/agents/codex-start-failure',
     json('PUT', {
       agent: {
         name: 'codex-start-failure',
@@ -437,7 +433,7 @@ for (const kind of TRANSPORTS) {
         captureModel(modelRequests, modelReplies),
         { paths, modelService },
         {
-          externalAgentServerUrl: TEST_EXTERNAL_AGENT_SERVER_URL
+          meshAgentServerUrl: TEST_MESH_AGENT_SERVER_URL
         }
       );
       t = serveTransport(kind, createHttpTransport(handlers));
@@ -504,11 +500,11 @@ for (const kind of TRANSPORTS) {
       expect(modelRequests).toHaveLength(1);
     });
 
-    test('inviting a managed external agent project member starts only that member runtime', async () => {
+    test('inviting a managed MeshAgent project member starts only that member runtime', async () => {
       const projectDir = join(dir, 'project-add-member');
       await mkdir(projectDir, { recursive: true });
-      const codex = await configureMockExternalAgent(t, dir, { agentName: 'codex' });
-      const claude = await configureMockExternalAgent(t, dir, { agentName: 'claude-code' });
+      const codex = await configureMockMeshAgent(t, dir, { agentName: 'codex' });
+      const claude = await configureMockMeshAgent(t, dir, { agentName: 'claude-code' });
       const projectId = await createWorkplaceProject(t, projectDir);
       const sessionId = await createProjectSession(t, projectId, projectDir);
       const uiStartedP = t.sse(`/v1/sessions/${sessionId}/ui-stream`, {
@@ -517,14 +513,14 @@ for (const kind of TRANSPORTS) {
           return (
             uiEvent.kind === 'upsert' &&
             uiEvent.item.kind === 'tool' &&
-            uiEvent.item.id.startsWith('exa_') &&
+            uiEvent.item.id.startsWith('mesh_') &&
             (uiEvent.item.input as { agent?: unknown } | undefined)?.agent === 'codex'
           );
         },
         timeoutMs: 3000
       });
 
-      await setMemberTemplates(t, projectId, [externalAgentTemplate('codex', 'codex', { launchMode: 'pty' })]);
+      await setMemberTemplates(t, projectId, [meshAgentTemplate('codex', 'codex', { launchMode: 'pty' })]);
       await inviteMember(t, sessionId, 'codex');
       expect((await uiStartedP).some((event) => (event as unknown as SessionUiEvent).kind === 'upsert')).toBe(true);
       const snapshotEvents = await t.sse(`/v1/sessions/${sessionId}/ui-stream`, {
@@ -542,23 +538,23 @@ for (const kind of TRANSPORTS) {
               item.status === 'streaming'
           )
       ).toBe(true);
-      await waitForFile(codex.envLog, TEST_EXTERNAL_AGENT_SERVER_URL);
+      await waitForFile(codex.envLog, TEST_MESH_AGENT_SERVER_URL);
       expect(await readLogIfExists(claude.envLog)).toBe('');
 
-      const listed = await t.fetch(`/v1/sessions/${sessionId}/external-agent-sessions`);
+      const listed = await t.fetch(`/v1/mesh/sessions?transcriptTargetId=${sessionId}`);
       expect(listed.status).toBe(200);
       const sessions = ((await listed.json()) as { sessions: Array<{ agentName: string }> }).sessions;
       expect(sessions.map((nativeSession) => nativeSession.agentName)).toEqual(['codex']);
     });
 
-    test('project messages wake only external agent members in the project roster', async () => {
+    test('project messages wake only MeshAgent members in the project roster', async () => {
       const projectDir = join(dir, 'project-roster-only');
       await mkdir(projectDir, { recursive: true });
-      const codex = await configureMockExternalAgent(t, dir, { agentName: 'codex' });
-      const claude = await configureMockExternalAgent(t, dir, { agentName: 'claude-code' });
+      const codex = await configureMockMeshAgent(t, dir, { agentName: 'codex' });
+      const claude = await configureMockMeshAgent(t, dir, { agentName: 'claude-code' });
       const projectId = await createWorkplaceProject(t, projectDir);
       const sessionId = await createProjectSession(t, projectId, projectDir);
-      await setMemberTemplates(t, projectId, [externalAgentTemplate('codex', 'codex', { launchMode: 'pty' })]);
+      await setMemberTemplates(t, projectId, [meshAgentTemplate('codex', 'codex', { launchMode: 'pty' })]);
       await inviteMember(t, sessionId, 'codex');
 
       const send = await t.fetch(`/v1/channels/${sessionId}/messages`, json('POST', { text: 'roster scoped task' }));
@@ -571,14 +567,14 @@ for (const kind of TRANSPORTS) {
       expect(await readLogIfExists(claude.stdinLog)).toBe('');
     });
 
-    test('project sessions inherit the Workplace Project cwd for managed external agent fanout', async () => {
+    test('project sessions inherit the Workplace Project cwd for managed MeshAgent fanout', async () => {
       const projectDir = join(dir, 'project-inherited-cwd');
       await mkdir(projectDir, { recursive: true });
-      const { stdinLog } = await configureMockExternalAgent(t, dir, { agentName: 'codex' });
+      const { stdinLog } = await configureMockMeshAgent(t, dir, { agentName: 'codex' });
       const projectId = await createWorkplaceProject(t, projectDir);
       const project = await _getWorkplaceProject(t, projectId);
       const sessionId = await createProjectSession(t, projectId);
-      await setMemberTemplates(t, projectId, [externalAgentTemplate('codex', 'codex', { launchMode: 'pty' })]);
+      await setMemberTemplates(t, projectId, [meshAgentTemplate('codex', 'codex', { launchMode: 'pty' })]);
       await inviteMember(t, sessionId, 'codex');
 
       expect(handlers.store.getSession(sessionId)?.cwd).toBe(project.cwd);
@@ -591,26 +587,26 @@ for (const kind of TRANSPORTS) {
       expect(input).toContain('Process this project message now.');
       expect(input).toContain('inherited cwd task');
       const sessions = handlers.store
-        .listExternalAgentSessionsForTranscriptTarget(sessionId)
+        .listMeshSessionsForTranscriptTarget(sessionId)
         .filter((candidate) => candidate.runtimeRole === 'managed-project-agent');
       expect(sessions.map((nativeSession) => nativeSession.agentName)).toEqual(['codex']);
       expect(sessions[0]?.workingPath).toBe(await realpath(projectDir));
     });
 
-    test('one external agent template can be invited as isolated managed project agents', async () => {
+    test('one MeshAgent template can be invited as isolated managed project agents', async () => {
       const projectDir = join(dir, 'project-template-instances');
       await mkdir(projectDir, { recursive: true });
-      const { stdinLog } = await configureMockExternalAgent(t, dir, { agentName: 'codex' });
+      const { stdinLog } = await configureMockMeshAgent(t, dir, { agentName: 'codex' });
       const projectId = await createWorkplaceProject(t, projectDir);
       const sessionId = await createProjectSession(t, projectId, projectDir);
       await setMemberTemplates(t, projectId, [
-        externalAgentTemplate(
+        meshAgentTemplate(
           'pmem_codex_reviewer',
           'codex',
           { managedProjectAgent: true, launchMode: 'app-server' },
           'codex-reviewer'
         ),
-        externalAgentTemplate(
+        meshAgentTemplate(
           'pmem_codex_tester',
           'codex',
           { managedProjectAgent: true, launchMode: 'app-server' },
@@ -623,7 +619,7 @@ for (const kind of TRANSPORTS) {
       const input = await waitForFile(stdinLog, '"method":"thread/start"');
       expect(input.split('"method":"thread/start"').length - 1).toBeGreaterThanOrEqual(2);
       const sessions = handlers.store
-        .listExternalAgentSessionsForTranscriptTarget(sessionId)
+        .listMeshSessionsForTranscriptTarget(sessionId)
         .filter((candidate) => candidate.runtimeRole === 'managed-project-agent');
       expect(sessions.map((nativeSession) => nativeSession.agentName).sort()).toEqual([
         'pmem_codex_reviewer',
@@ -640,21 +636,18 @@ for (const kind of TRANSPORTS) {
         ).size
       ).toBe(2);
       for (const nativeSession of sessions) {
-        await t.fetch(
-          `/v1/external-agent-sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`,
-          json('POST')
-        );
+        await t.fetch(`/v1/mesh/sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`, json('POST'));
       }
     });
 
-    test('managed external agent project member starts when cwd is set after member add', async () => {
+    test('managed MeshAgent project member starts when cwd is set after member add', async () => {
       const projectDir = join(dir, 'project-member-late-cwd');
       await mkdir(projectDir, { recursive: true });
-      const { stdinLog } = await configureMockExternalAgent(t, dir, { agentName: 'codex' });
+      const { stdinLog } = await configureMockMeshAgent(t, dir, { agentName: 'codex' });
       const projectId = await createWorkplaceProject(t);
       const sessionId = await createProjectSession(t, projectId);
       await setMemberTemplates(t, projectId, [
-        externalAgentTemplate(
+        meshAgentTemplate(
           'pmem_codex_reviewer',
           'codex',
           { managedProjectAgent: true, launchMode: 'app-server' },
@@ -662,7 +655,7 @@ for (const kind of TRANSPORTS) {
         )
       ]);
       await inviteMember(t, sessionId, 'pmem_codex_reviewer');
-      expect(handlers.store.listExternalAgentSessionsForTranscriptTarget(sessionId)).toEqual([]);
+      expect(handlers.store.listMeshSessionsForTranscriptTarget(sessionId)).toEqual([]);
 
       await updateWorkplaceProjectCwd(t, projectId, projectDir);
       await t.fetch(`/v1/sessions/${sessionId}`, json('PATCH', { cwd: projectDir }));
@@ -670,43 +663,35 @@ for (const kind of TRANSPORTS) {
 
       await waitForFile(stdinLog, '"method":"thread/start"');
       const sessions = handlers.store
-        .listExternalAgentSessionsForTranscriptTarget(sessionId)
+        .listMeshSessionsForTranscriptTarget(sessionId)
         .filter((candidate) => candidate.runtimeRole === 'managed-project-agent');
       expect(sessions.map((nativeSession) => nativeSession.agentName)).toEqual(['pmem_codex_reviewer']);
       expect(sessions[0]?.workingPath).toBe(await realpath(projectDir));
       for (const nativeSession of sessions) {
-        await t.fetch(
-          `/v1/external-agent-sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`,
-          json('POST')
-        );
+        await t.fetch(`/v1/mesh/sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`, json('POST'));
       }
     });
 
-    test('renaming a managed external agent project member does not change its runtime identity', async () => {
+    test('renaming a managed MeshAgent project member does not change its runtime identity', async () => {
       const projectDir = join(dir, 'project-member-rename');
       await mkdir(projectDir, { recursive: true });
-      const { stdinLog } = await configureMockExternalAgent(t, dir, { agentName: 'codex' });
+      const { stdinLog } = await configureMockMeshAgent(t, dir, { agentName: 'codex' });
       const projectId = await createWorkplaceProject(t, projectDir);
       const sessionId = await createProjectSession(t, projectId, projectDir);
       await setMemberTemplates(t, projectId, [
-        externalAgentTemplate(
-          'pmem_codex_reviewer',
-          'codex',
-          { managedProjectAgent: true, launchMode: 'pty' },
-          'Reviewer'
-        )
+        meshAgentTemplate('pmem_codex_reviewer', 'codex', { managedProjectAgent: true, launchMode: 'pty' }, 'Reviewer')
       ]);
       await inviteMember(t, sessionId, 'pmem_codex_reviewer');
       await waitForValue(
         () =>
           handlers.store
-            .listExternalAgentSessionsForTranscriptTarget(sessionId)
+            .listMeshSessionsForTranscriptTarget(sessionId)
             .find((candidate) => candidate.runtimeRole === 'managed-project-agent'),
         'managed project member runtime'
       );
 
       await setMemberTemplates(t, projectId, [
-        externalAgentTemplate(
+        meshAgentTemplate(
           'pmem_codex_reviewer',
           'codex',
           { managedProjectAgent: true, launchMode: 'pty' },
@@ -724,24 +709,21 @@ for (const kind of TRANSPORTS) {
       expect(notice).not.toContain('Provider: codex');
 
       const sessions = handlers.store
-        .listExternalAgentSessionsForTranscriptTarget(sessionId)
+        .listMeshSessionsForTranscriptTarget(sessionId)
         .filter((candidate) => candidate.runtimeRole === 'managed-project-agent');
       expect(sessions.map((nativeSession) => nativeSession.agentName)).toEqual(['pmem_codex_reviewer']);
       for (const nativeSession of sessions) {
-        await t.fetch(
-          `/v1/external-agent-sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`,
-          json('POST')
-        );
+        await t.fetch(`/v1/mesh/sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`, json('POST'));
       }
     });
 
-    test('managed external agent project member is started and receives an inbox notice for public project messages', async () => {
+    test('managed MeshAgent project member is started and receives an inbox notice for public project messages', async () => {
       const projectDir = join(dir, 'project');
       await mkdir(projectDir, { recursive: true });
-      const { envLog, stdinLog } = await configureMockExternalAgent(t, dir);
+      const { envLog, stdinLog } = await configureMockMeshAgent(t, dir);
       const projectId = await createWorkplaceProject(t, projectDir);
       const sessionId = await createProjectSession(t, projectId, projectDir);
-      await setMemberTemplates(t, projectId, [externalAgentTemplate('codex', 'codex', { launchMode: 'pty' })]);
+      await setMemberTemplates(t, projectId, [meshAgentTemplate('codex', 'codex', { launchMode: 'pty' })]);
       await inviteMember(t, sessionId, 'codex');
 
       const send = await t.fetch(`/v1/channels/${sessionId}/messages`, json('POST', { text: 'please review this' }));
@@ -772,15 +754,15 @@ for (const kind of TRANSPORTS) {
       expect(notice).not.toContain('Your runtime agent id:');
       expect(notice).not.toContain('Template agent:');
       expect(notice).not.toContain('Provider:');
-      const envText = await waitForFile(envLog, TEST_EXTERNAL_AGENT_SERVER_URL);
+      const envText = await waitForFile(envLog, TEST_MESH_AGENT_SERVER_URL);
       expect(JSON.parse(envText.trim().split(/\n/).at(-1) ?? '{}')).toMatchObject({
-        MONAD_SERVER_URL: TEST_EXTERNAL_AGENT_SERVER_URL
+        MONAD_SERVER_URL: TEST_MESH_AGENT_SERVER_URL
       });
       const messages = await waitForMessages(t, sessionId, 2);
       expect(messages.filter((message) => message.text).map((message) => [message.role, message.text])).toEqual([
         ['user', 'please review this']
       ]);
-      const listed = await t.fetch(`/v1/sessions/${sessionId}/external-agent-sessions`);
+      const listed = await t.fetch(`/v1/mesh/sessions?transcriptTargetId=${sessionId}`);
       expect(listed.status).toBe(200);
       const [nativeSession] = (
         (await listed.json()) as {
@@ -797,28 +779,25 @@ for (const kind of TRANSPORTS) {
       expect(nativeSession?.runtimeRole).toBe('managed-project-agent');
       expect(nativeSession?.lastDeliveredSeq).toBeGreaterThan(0);
       expect(nativeSession?.lastVisibleSeq).toBe(nativeSession?.lastDeliveredSeq);
-      if (!nativeSession) throw new Error('managed external agent session was not started');
-      expect(handlers.store.listExternalAgentInbox(nativeSession.id)).toEqual([]);
+      if (!nativeSession) throw new Error('managed MeshAgent session was not started');
+      expect(handlers.store.listMeshAgentInbox(nativeSession.id)).toEqual([]);
       expect(nativeSession.workingPath).toBe(await realpath(projectDir));
       const agentWorkspace = join(makePaths(dir).home, 'workplace-agents', sessionId, nativeSession.agentName);
       expect(await readFile(join(agentWorkspace, '.monad-agent-token'), 'utf8')).not.toBe('');
-      await t.fetch(
-        `/v1/external-agent-sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`,
-        json('POST')
-      );
+      await t.fetch(`/v1/mesh/sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`, json('POST'));
       expect(await readFile(join(agentWorkspace, '.monad-agent-token'), 'utf8').catch(() => null)).toBeNull();
       const projectMemory = join(makePaths(dir).home, 'workplace-agents', sessionId, 'MEMORY.md');
       expect(await readFile(projectMemory, 'utf8')).toContain('Project memory index');
     });
 
-    test('running managed external agent member receives a busy inbox notice without the full project message body', async () => {
+    test('running managed MeshAgent member receives a busy inbox notice without the full project message body', async () => {
       const projectDir = join(dir, 'project');
       await mkdir(projectDir, { recursive: true });
-      const { stdinLog } = await configureMockExternalAgent(t, dir);
+      const { stdinLog } = await configureMockMeshAgent(t, dir);
       const projectId = await createWorkplaceProject(t, projectDir);
       const sessionId = await createProjectSession(t, projectId, projectDir);
       await setMemberTemplates(t, projectId, [
-        externalAgentTemplate('codex', 'codex', { managedProjectAgent: true, launchMode: 'pty' })
+        meshAgentTemplate('codex', 'codex', { managedProjectAgent: true, launchMode: 'pty' })
       ]);
       await inviteMember(t, sessionId, 'codex');
 
@@ -850,37 +829,34 @@ for (const kind of TRANSPORTS) {
       expect(afterThird.split('You are being woken to process the pending project inbox now.').length - 1).toBe(1);
       expect(afterThird).not.toContain('third secret busy task');
 
-      const [nativeSession] = handlers.store.listExternalAgentSessionsForTranscriptTarget(sessionId);
+      const [nativeSession] = handlers.store.listMeshSessionsForTranscriptTarget(sessionId);
       if (nativeSession) {
         expect(
-          handlers.store.listExternalAgentInbox(nativeSession.id).map((item) => [item.deliveryState, item.message.text])
+          handlers.store.listMeshAgentInbox(nativeSession.id).map((item) => [item.deliveryState, item.message.text])
         ).toEqual([
           ['delivered', 'second secret busy task'],
           ['delivered', 'third secret busy task']
         ]);
       }
       if (nativeSession)
-        await t.fetch(
-          `/v1/external-agent-sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`,
-          json('POST')
-        );
+        await t.fetch(`/v1/mesh/sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`, json('POST'));
     });
 
-    test('managed external agent project member resumes a stored provider session ref', async () => {
+    test('managed MeshAgent project member resumes a stored provider session ref', async () => {
       const projectDir = join(dir, 'project');
       await mkdir(projectDir, { recursive: true });
-      const { argsLog } = await configureMockExternalAgent(t, dir, { agentName: 'claude' });
+      const { argsLog } = await configureMockMeshAgent(t, dir, { agentName: 'claude' });
       const projectId = await createWorkplaceProject(t, projectDir);
       const sessionId = await createProjectSession(t, projectId, projectDir);
-      handlers.store.upsertExternalAgentSession({
-        id: 'exa_oldclaude000',
+      handlers.store.upsertMeshSession({
+        id: 'mesh_oldclaude000',
         transcriptTargetId: sessionId,
         agentName: 'claude',
         provider: 'claude-code',
         workingPath: projectDir,
         launchMode: 'pty',
         runtimeRole: 'managed-project-agent',
-        agentRuntimeId: 'exa_oldclaude000',
+        agentRuntimeId: 'mesh_oldclaude000',
         agentRuntimeTokenHash: tokenHash(),
         lastDeliveredSeq: 0,
         lastVisibleSeq: 0,
@@ -894,7 +870,7 @@ for (const kind of TRANSPORTS) {
         exitedAt: '2026-06-30T00:00:01.000Z'
       });
       await setMemberTemplates(t, projectId, [
-        externalAgentTemplate('claude', 'claude', { managedProjectAgent: true, launchMode: 'pty' })
+        meshAgentTemplate('claude', 'claude', { managedProjectAgent: true, launchMode: 'pty' })
       ]);
       await inviteMember(t, sessionId, 'claude');
 
@@ -904,28 +880,27 @@ for (const kind of TRANSPORTS) {
       const args = await waitForFile(argsLog, '--resume claude-session-resume');
       expect(args).toContain('--append-system-prompt-file');
       const resumed = handlers.store
-        .listExternalAgentSessionsForTranscriptTarget(sessionId)
+        .listMeshSessionsForTranscriptTarget(sessionId)
         .find((candidate) => candidate.agentName === 'claude' && candidate.state === 'running');
       expect(resumed?.providerSessionRef).toBe('claude-session-resume');
-      if (resumed)
-        await t.fetch(`/v1/external-agent-sessions/${resumed.id}/stop?transcriptTargetId=${sessionId}`, json('POST'));
+      if (resumed) await t.fetch(`/v1/mesh/sessions/${resumed.id}/stop?transcriptTargetId=${sessionId}`, json('POST'));
     });
 
-    test('managed external agent project member falls back to a cold start when provider resume fails', async () => {
+    test('managed MeshAgent project member falls back to a cold start when provider resume fails', async () => {
       const projectDir = join(dir, 'project');
       await mkdir(projectDir, { recursive: true });
       const { stdinLog } = await configureMockCodexResumeFailureAgent(t, dir);
       const projectId = await createWorkplaceProject(t, projectDir);
       const sessionId = await createProjectSession(t, projectId, projectDir);
-      handlers.store.upsertExternalAgentSession({
-        id: 'exa_oldcodex0000',
+      handlers.store.upsertMeshSession({
+        id: 'mesh_oldcodex0000',
         transcriptTargetId: sessionId,
         agentName: 'codex-resume-failure',
         provider: 'codex',
         workingPath: projectDir,
         launchMode: 'app-server',
         runtimeRole: 'managed-project-agent',
-        agentRuntimeId: 'exa_oldcodex0000',
+        agentRuntimeId: 'mesh_oldcodex0000',
         agentRuntimeTokenHash: tokenHash(),
         lastDeliveredSeq: 0,
         lastVisibleSeq: 0,
@@ -939,7 +914,7 @@ for (const kind of TRANSPORTS) {
         exitedAt: '2026-06-30T00:00:01.000Z'
       });
       await setMemberTemplates(t, projectId, [
-        externalAgentTemplate('codex-resume-failure', 'codex-resume-failure', {
+        meshAgentTemplate('codex-resume-failure', 'codex-resume-failure', {
           managedProjectAgent: true,
           launchMode: 'app-server'
         })
@@ -947,7 +922,7 @@ for (const kind of TRANSPORTS) {
       await inviteMember(t, sessionId, 'codex-resume-failure');
 
       const resumeFailedP = t.sse(`/v1/sessions/${sessionId}/events`, {
-        until: (event) => event.type === 'external_agent.resume_failed',
+        until: (event) => event.type === 'mesh.resume_failed',
         timeoutMs: 3000
       });
       const send = await t.fetch(
@@ -965,25 +940,22 @@ for (const kind of TRANSPORTS) {
       expect(rpc).toContain('"method":"thread/resume"');
       expect(rpc).toContain('"threadId":"codex-thread-stale"');
       const coldStarted = handlers.store
-        .listExternalAgentSessionsForTranscriptTarget(sessionId)
+        .listMeshSessionsForTranscriptTarget(sessionId)
         .find((candidate) => candidate.agentName === 'codex-resume-failure' && candidate.state === 'running');
       expect(coldStarted?.providerSessionRef).toBe('codex-thread-fresh');
-      expect(handlers.store.getExternalAgentSession('exa_oldcodex0000')?.providerSessionRef).toBeNull();
+      expect(handlers.store.getMeshSession('mesh_oldcodex0000')?.providerSessionRef).toBeNull();
       if (coldStarted)
-        await t.fetch(
-          `/v1/external-agent-sessions/${coldStarted.id}/stop?transcriptTargetId=${sessionId}`,
-          json('POST')
-        );
+        await t.fetch(`/v1/mesh/sessions/${coldStarted.id}/stop?transcriptTargetId=${sessionId}`, json('POST'));
     });
 
-    test('managed external agent project member start failures are written to the project transcript', async () => {
+    test('managed MeshAgent project member start failures are written to the project transcript', async () => {
       const projectDir = join(dir, 'project');
       await mkdir(projectDir, { recursive: true });
       await configureMockCodexStartFailureAgent(t, dir);
       const projectId = await createWorkplaceProject(t, projectDir);
       const sessionId = await createProjectSession(t, projectId, projectDir);
       await setMemberTemplates(t, projectId, [
-        externalAgentTemplate('codex-start-failure', 'codex-start-failure', {
+        meshAgentTemplate('codex-start-failure', 'codex-start-failure', {
           managedProjectAgent: true,
           launchMode: 'app-server'
         })
@@ -996,18 +968,18 @@ for (const kind of TRANSPORTS) {
       expect(messages[0]?.text).toContain('codex-start-failure failed to join the project:');
     });
 
-    test('managed external agent project member requires Studio reconnect when provider auth is unauthenticated', async () => {
+    test('managed MeshAgent project member requires Studio reconnect when provider auth is unauthenticated', async () => {
       const projectDir = join(dir, 'project');
       await mkdir(projectDir, { recursive: true });
-      const { stdinLog } = await configureMockExternalAgent(t, dir, { authState: 'unauthenticated' });
+      const { stdinLog } = await configureMockMeshAgent(t, dir, { authState: 'unauthenticated' });
       const projectId = await createWorkplaceProject(t, projectDir);
       const sessionId = await createProjectSession(t, projectId, projectDir);
       await setMemberTemplates(t, projectId, [
-        externalAgentTemplate('codex', 'codex', { managedProjectAgent: true, launchMode: 'pty' })
+        meshAgentTemplate('codex', 'codex', { managedProjectAgent: true, launchMode: 'pty' })
       ]);
 
       const eventsP = t.sse(`/v1/sessions/${sessionId}/events`, {
-        until: (event) => event.type === 'external_agent.connection_required',
+        until: (event) => event.type === 'mesh.connection_required',
         timeoutMs: 3000
       });
       await inviteMember(t, sessionId, 'codex');
@@ -1024,21 +996,21 @@ for (const kind of TRANSPORTS) {
       expect(await readFile(stdinLog, 'utf8').catch(() => '')).toBe('');
       const messages = await waitForMessages(t, sessionId, 1);
       expect(messages[0]?.text).toBe('please review this');
-      const listed = await t.fetch(`/v1/sessions/${sessionId}/external-agent-sessions`);
+      const listed = await t.fetch(`/v1/mesh/sessions?transcriptTargetId=${sessionId}`);
       expect(listed.status).toBe(200);
       expect(((await listed.json()) as { sessions: unknown[] }).sessions).toEqual([]);
     });
 
-    test('managed external agent project post fans out to other managed external agent members', async () => {
+    test('managed MeshAgent project post fans out to other managed MeshAgent members', async () => {
       const projectDir = join(dir, 'project');
       await mkdir(projectDir, { recursive: true });
-      const { stdinLog: codexStdinLog } = await configureMockExternalAgent(t, dir, { agentName: 'codex' });
-      const { stdinLog: claudeStdinLog } = await configureMockExternalAgent(t, dir, { agentName: 'claude' });
+      const { stdinLog: codexStdinLog } = await configureMockMeshAgent(t, dir, { agentName: 'codex' });
+      const { stdinLog: claudeStdinLog } = await configureMockMeshAgent(t, dir, { agentName: 'claude' });
       const projectId = await createWorkplaceProject(t, projectDir);
       const sessionId = await createProjectSession(t, projectId, projectDir);
       await setMemberTemplates(t, projectId, [
-        externalAgentTemplate('codex', 'codex', { managedProjectAgent: true, launchMode: 'pty' }),
-        externalAgentTemplate('claude', 'claude', { managedProjectAgent: true, launchMode: 'pty' })
+        meshAgentTemplate('codex', 'codex', { managedProjectAgent: true, launchMode: 'pty' }),
+        meshAgentTemplate('claude', 'claude', { managedProjectAgent: true, launchMode: 'pty' })
       ]);
       await inviteMember(t, sessionId, 'codex');
       await inviteMember(t, sessionId, 'claude');
@@ -1048,11 +1020,11 @@ for (const kind of TRANSPORTS) {
       await waitForFile(codexStdinLog, 'initial project task');
       await waitForFile(claudeStdinLog, 'initial project task');
 
-      const nativeSessions = handlers.store.listExternalAgentSessionsForTranscriptTarget(sessionId);
+      const nativeSessions = handlers.store.listMeshSessionsForTranscriptTarget(sessionId);
       const codexSession = nativeSessions.find((candidate) => candidate.agentName === 'codex');
       expect(typeof codexSession?.id).toBe('string');
-      if (!codexSession) throw new Error('codex managed external agent session was not started');
-      handlers.store.upsertExternalAgentSession({ ...codexSession, agentRuntimeTokenHash: tokenHash() });
+      if (!codexSession) throw new Error('codex managed MeshAgent session was not started');
+      handlers.store.upsertMeshSession({ ...codexSession, agentRuntimeTokenHash: tokenHash() });
 
       const post = await t.fetch(
         '/v1/internal/native-agent/project/post',
@@ -1068,10 +1040,10 @@ for (const kind of TRANSPORTS) {
       // The post body itself stays in the inbox; the fan-out only writes a sender-tagged notice.
       const claudeInput = await waitForFile(claudeStdinLog, 'Sender name: codex');
       expect(claudeInput).toContain('The message body is in your project inbox.');
-      expect(claudeInput).toContain('Sender kind: external-agent');
+      expect(claudeInput).toContain('Sender kind: mesh-agent');
       expect(claudeInput).toContain('Sender name: codex');
       expect(claudeInput).toContain('Sender mention token:');
-      expect(claudeInput).toContain('external-agent:codex');
+      expect(claudeInput).toContain('mesh-agent:codex');
       const transcriptMessages = handlers.store
         .listMessages(sessionId, { latest: true })
         .filter((message) => message.text)
@@ -1101,32 +1073,29 @@ for (const kind of TRANSPORTS) {
         2
       );
       for (const nativeSession of nativeSessions) {
-        await t.fetch(
-          `/v1/external-agent-sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`,
-          json('POST')
-        );
+        await t.fetch(`/v1/mesh/sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`, json('POST'));
       }
     });
 
-    test('external agent mention forwards input to the provider-owned CLI session through the channel route', async () => {
+    test('MeshAgent mention forwards input to the provider-owned CLI session through the channel route', async () => {
       const projectDir = join(dir, 'project');
       await mkdir(projectDir, { recursive: true });
-      const { stdinLog } = await configureMockExternalAgent(t, dir);
+      const { stdinLog } = await configureMockMeshAgent(t, dir);
       const projectId = await createWorkplaceProject(t, projectDir);
       const sessionId = await createProjectSession(t, projectId, projectDir);
       await setMemberTemplates(t, projectId, [
-        externalAgentTemplate('codex', 'codex', { managedProjectAgent: false, launchMode: 'pty' })
+        meshAgentTemplate('codex', 'codex', { managedProjectAgent: false, launchMode: 'pty' })
       ]);
       await inviteMember(t, sessionId, 'codex');
 
       const eventsP = t.sse(`/v1/sessions/${sessionId}/events`, {
         until: (event) =>
-          event.type === 'external_agent.started' && (event.payload as { agentName?: unknown }).agentName === 'codex',
+          event.type === 'mesh.started' && (event.payload as { agentName?: unknown }).agentName === 'codex',
         timeoutMs: 3000
       });
       const send = await t.fetch(
         `/v1/channels/${sessionId}/messages`,
-        json('POST', { text: '@[name="codex" id="external-agent:codex"] inspect repo' })
+        json('POST', { text: '@[name="codex" id="mesh-agent:codex"] inspect repo' })
       );
       if (send.status !== 200) throw new Error(await send.text());
       expect(send.status).toBe(200);
@@ -1134,39 +1103,34 @@ for (const kind of TRANSPORTS) {
 
       expect(await waitForFile(stdinLog, 'inspect repo\n')).toContain('inspect repo\n');
       const messages = await waitForMessages(t, sessionId, 1);
-      expect(messages[0]?.text).toBe('@[name="codex" id="external-agent:codex"] inspect repo');
+      expect(messages[0]?.text).toBe('@[name="codex" id="mesh-agent:codex"] inspect repo');
       const events = await eventsP;
-      expect(
-        events.some((event) => event.type === 'external_agent.started' && event.payload.agentName === 'codex')
-      ).toBe(true);
-      const listed = await t.fetch(`/v1/sessions/${sessionId}/external-agent-sessions`);
+      expect(events.some((event) => event.type === 'mesh.started' && event.payload.agentName === 'codex')).toBe(true);
+      const listed = await t.fetch(`/v1/mesh/sessions?transcriptTargetId=${sessionId}`);
       expect(listed.status).toBe(200);
       const nativeSessionId = ((await listed.json()) as { sessions: Array<{ id: string }> }).sessions[0]?.id;
       expect(typeof nativeSessionId).toBe('string');
-      await t.fetch(
-        `/v1/external-agent-sessions/${nativeSessionId}/stop?transcriptTargetId=${sessionId}`,
-        json('POST')
-      );
+      await t.fetch(`/v1/mesh/sessions/${nativeSessionId}/stop?transcriptTargetId=${sessionId}`, json('POST'));
     });
 
-    test('external agent mention requires Studio reconnect when provider auth status is unauthenticated', async () => {
+    test('MeshAgent mention requires Studio reconnect when provider auth status is unauthenticated', async () => {
       const projectDir = join(dir, 'project');
       await mkdir(projectDir, { recursive: true });
-      const { stdinLog } = await configureMockExternalAgent(t, dir, { authState: 'unauthenticated' });
+      const { stdinLog } = await configureMockMeshAgent(t, dir, { authState: 'unauthenticated' });
       const projectId = await createWorkplaceProject(t, projectDir);
       const sessionId = await createProjectSession(t, projectId, projectDir);
       await setMemberTemplates(t, projectId, [
-        externalAgentTemplate('codex', 'codex', { managedProjectAgent: false, launchMode: 'pty' })
+        meshAgentTemplate('codex', 'codex', { managedProjectAgent: false, launchMode: 'pty' })
       ]);
       await inviteMember(t, sessionId, 'codex');
 
       const eventsP = t.sse(`/v1/sessions/${sessionId}/events`, {
-        until: (event) => event.type === 'external_agent.connection_required',
+        until: (event) => event.type === 'mesh.connection_required',
         timeoutMs: 3000
       });
       const send = await t.fetch(
         `/v1/channels/${sessionId}/messages`,
-        json('POST', { text: '@[name="codex" id="external-agent:codex"] inspect repo' })
+        json('POST', { text: '@[name="codex" id="mesh-agent:codex"] inspect repo' })
       );
       if (send.status !== 200) throw new Error(await send.text());
       expect(send.status).toBe(200);
@@ -1181,24 +1145,24 @@ for (const kind of TRANSPORTS) {
       const stdinText = await readFile(stdinLog, 'utf8').catch(() => '');
       expect(stdinText).toBe('');
       const messages = await waitForMessages(t, sessionId, 2);
-      expect(messages[0]?.text).toBe('@[name="codex" id="external-agent:codex"] inspect repo');
+      expect(messages[0]?.text).toBe('@[name="codex" id="mesh-agent:codex"] inspect repo');
       expect(messages[1]?.text).toContain('Reconnect codex in Studio');
     });
 
-    test('external agent mention requires Studio check when provider readiness is unknown', async () => {
+    test('MeshAgent mention requires Studio check when provider readiness is unknown', async () => {
       const projectDir = join(dir, 'project');
       await mkdir(projectDir, { recursive: true });
-      const { stdinLog } = await configureMockExternalAgent(t, dir, { authState: 'unknown' });
+      const { stdinLog } = await configureMockMeshAgent(t, dir, { authState: 'unknown' });
       const projectId = await createWorkplaceProject(t, projectDir);
       const sessionId = await createProjectSession(t, projectId, projectDir);
       await setMemberTemplates(t, projectId, [
-        externalAgentTemplate('codex', 'codex', { managedProjectAgent: false, launchMode: 'pty' })
+        meshAgentTemplate('codex', 'codex', { managedProjectAgent: false, launchMode: 'pty' })
       ]);
       await inviteMember(t, sessionId, 'codex');
 
       const send = await t.fetch(
         `/v1/channels/${sessionId}/messages`,
-        json('POST', { text: '@[name="codex" id="external-agent:codex"] inspect repo' })
+        json('POST', { text: '@[name="codex" id="mesh-agent:codex"] inspect repo' })
       );
       if (send.status !== 200) throw new Error(await send.text());
       expect(await send.json()).toEqual({ accepted: true });
@@ -1206,28 +1170,28 @@ for (const kind of TRANSPORTS) {
       const stdinText = await readFile(stdinLog, 'utf8').catch(() => '');
       expect(stdinText).toBe('');
       const messages = await waitForMessages(t, sessionId, 2);
-      expect(messages[0]?.text).toBe('@[name="codex" id="external-agent:codex"] inspect repo');
+      expect(messages[0]?.text).toBe('@[name="codex" id="mesh-agent:codex"] inspect repo');
       expect(messages[1]?.text).toContain('Check codex connection in Studio');
     });
 
-    test('external agent mention without project working path records user message and visible error', async () => {
-      await configureMockExternalAgent(t, dir);
+    test('MeshAgent mention without project working path records user message and visible error', async () => {
+      await configureMockMeshAgent(t, dir);
       const projectId = await createWorkplaceProject(t);
       const sessionId = await createProjectSession(t, projectId);
       await setMemberTemplates(t, projectId, [
-        externalAgentTemplate('codex', 'codex', { managedProjectAgent: false, launchMode: 'pty' })
+        meshAgentTemplate('codex', 'codex', { managedProjectAgent: false, launchMode: 'pty' })
       ]);
       await inviteMember(t, sessionId, 'codex');
       const send = await t.fetch(
         `/v1/channels/${sessionId}/messages`,
-        json('POST', { text: '@[name="codex" id="external-agent:codex"] inspect repo' })
+        json('POST', { text: '@[name="codex" id="mesh-agent:codex"] inspect repo' })
       );
       expect(send.status).toBe(200);
       expect(await send.json()).toEqual({ accepted: true });
 
       const messages = await waitForMessages(t, sessionId, 2);
       expect(messages.map((message) => message.role)).toEqual(['user', 'assistant']);
-      expect(messages[0]?.text).toBe('@[name="codex" id="external-agent:codex"] inspect repo');
+      expect(messages[0]?.text).toBe('@[name="codex" id="mesh-agent:codex"] inspect repo');
       expect(messages[1]?.text).toContain('requires a project working path');
     });
   });

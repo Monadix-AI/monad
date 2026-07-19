@@ -1,17 +1,11 @@
-import type {
-  AgentObservationEvent,
-  ExternalAgentObservationAccessResponse,
-  ExternalAgentUsageResponse,
-  NativeAgentDeliveryId,
-  SessionId
-} from '@monad/protocol';
+import type { MeshAgentUsageResponse, SessionId } from '@monad/protocol';
 import type {
   CSSProperties,
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent
 } from 'react';
-import type { ExternalAgentStreamView, Participant } from '../../experience/types.ts';
+import type { MeshAgentStreamView, Participant } from '../../experience/types.ts';
 import type { ObservationPanelHooks } from './observation/use-observation-panel.ts';
 
 import {
@@ -28,16 +22,14 @@ import {
   ZapIcon
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
+import { observationCursorSchema } from '@monad/protocol';
 import {
-  useGetExternalAgentConnectionQuery,
-  useLazyGetExternalAgentConvenienceHistoryQuery,
-  useLazyGetExternalAgentHistoryPageQuery,
-  useLazyGetExternalAgentRawHistoryQuery,
-  useLazyGetExternalAgentUsageQuery,
-  useLazyGetNativeAgentDeliveryObservationQuery,
-  useStreamExternalAgentConvenienceQuery,
-  useStreamExternalAgentRawQuery,
-  useStreamExternalAgentUiObservationQuery
+  useGetMeshAgentConnectionQuery,
+  useLazyGetMeshAgentConvenienceEventsQuery,
+  useLazyGetMeshAgentRawEventsQuery,
+  useLazyGetMeshAgentUsageQuery,
+  useStreamMeshAgentConvenienceQuery,
+  useStreamMeshAgentRawQuery
 } from '@monad/sdk-experience/react';
 import { ProductIcon, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
 import {
@@ -48,59 +40,54 @@ import {
 } from '@monad/ui/components/AgentAvatar';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { toAgentObservationEvent } from '../../../agent-adapters/neutral-observation.ts';
 import { workspaceExperienceT } from '../../i18n.ts';
 import { projectSessionUiKey, useChatRoomExperienceStore } from '../store.ts';
 import {
   agentObservationStream,
   isActiveRailAgent,
-  observationProjectionFromAccess,
+  meshAgentUsageMeter,
   observedRailAgent,
   railAgentActivityPhase,
   shouldAnimateRailAgent,
-  shouldProjectObservationAccess,
-  sortedProjectRailAgents,
-  streamWithObservationProjection,
-  streamWithUiObservationFrame,
-  usageMeterFromObservationAccess
+  sortedProjectRailAgents
 } from '../utils/agent-rail-model.ts';
 import {
-  findOlderObservationPage,
-  observationHistoryLoadScope,
-  observationHistoryPresentation,
-  prependObservationHistory
-} from '../utils/observation-history.ts';
+  beginObservationEventLoad,
+  completeObservationEventLoad,
+  failObservationEventLoad,
+  type ObservationEventPageState
+} from '../utils/observation-event-page-state.ts';
 import {
-  beginObservationHistoryLoad,
-  completeObservationHistoryLoad,
-  failObservationHistoryLoad,
-  type ObservationHistoryPageState
-} from '../utils/observation-history-state.ts';
+  findOlderEventPage,
+  observationEventLoadScope,
+  observationEventPresentation,
+  prependObservationEvents
+} from '../utils/observation-events.ts';
 import { FilePreviewPanel } from './file-preview-panel.tsx';
 import { DualObservationPanel } from './observation/dual-observation-panel.tsx';
-import { ExternalAgentObservationPanel } from './observation/panel.tsx';
+import { MeshAgentObservationPanel } from './observation/panel.tsx';
 
 const RAIL_WIDTH_STORAGE_KEY = 'monad.workplace.agentRail.width';
 const DEFAULT_RAIL_WIDTH = 296;
 const MIN_RAIL_WIDTH = 260;
 const MAX_RAIL_WIDTH = 620;
 
-function useRawObservationHistory() {
-  const [trigger] = useLazyGetExternalAgentRawHistoryQuery();
+function useRawObservationEvent() {
+  const [trigger] = useLazyGetMeshAgentRawEventsQuery();
   return [trigger] as const;
 }
 
-function useConvenienceObservationHistory() {
-  const [trigger] = useLazyGetExternalAgentConvenienceHistoryQuery();
+function useConvenienceObservationEvent() {
+  const [trigger] = useLazyGetMeshAgentConvenienceEventsQuery();
   return [trigger] as const;
 }
 
 const DEFAULT_DUAL_OBSERVATION_HOOKS: ObservationPanelHooks = {
-  useConnection: useGetExternalAgentConnectionQuery,
-  useRawStream: useStreamExternalAgentRawQuery,
-  useConvenienceStream: useStreamExternalAgentConvenienceQuery,
-  useRawHistory: useRawObservationHistory,
-  useConvenienceHistory: useConvenienceObservationHistory
+  useConnection: useGetMeshAgentConnectionQuery,
+  useRawStream: useStreamMeshAgentRawQuery,
+  useConvenienceStream: useStreamMeshAgentConvenienceQuery,
+  useRawEvents: useRawObservationEvent,
+  useConvenienceEvents: useConvenienceObservationEvent
 };
 
 function usePolledValue<T>(args: {
@@ -142,14 +129,14 @@ function usePolledValue<T>(args: {
   return value;
 }
 
-function streamWithHistoryPages(
-  stream: ExternalAgentStreamView | undefined,
-  history: ObservationHistoryPageState | undefined
-): ExternalAgentStreamView | undefined {
-  if (!stream || !history || history.items.length === 0) return stream;
+function streamWithEventsPages(
+  stream: MeshAgentStreamView | undefined,
+  events: ObservationEventPageState | undefined
+): MeshAgentStreamView | undefined {
+  if (!stream || !events || events.items.length === 0) return stream;
   return {
     ...stream,
-    items: prependObservationHistory(history.items, stream.items),
+    items: prependObservationEvents(events.items, stream.items),
     output: stream.output
   };
 }
@@ -553,23 +540,19 @@ const agentStatusRingCss = `
 `;
 
 type AgentTasksRailRoom = {
-  externalAgentStreams: ExternalAgentStreamView[];
+  meshAgentStreams: MeshAgentStreamView[];
   projectId: string;
   activeSessionId: string | null;
   railAgents: Participant[];
-  stopExternalAgent: (id: string) => void;
-  // When supplied, external-agent session observation uses the connection-lifecycle-driven dual
-  // (raw ⇆ convenience) panel instead of the legacy single-plane ui-observation path. The experience
-  // runtime injects the RTK hooks (atoms reach them through `@monad/sdk-experience/react`). Absent →
-  // legacy path, unchanged.
+  stopMeshAgent: (id: string) => void;
+  // The experience runtime can inject the RTK hooks; otherwise the standard Mesh event hooks apply.
   dualObservationHooks?: ObservationPanelHooks;
 };
 
 export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.ReactElement {
   const t = workspaceExperienceT();
-  const [triggerNativeAgentDeliveryObservation] = useLazyGetNativeAgentDeliveryObservationQuery();
-  const [triggerExternalAgentHistoryPage] = useLazyGetExternalAgentHistoryPageQuery();
-  const [triggerExternalAgentUsage] = useLazyGetExternalAgentUsageQuery();
+  const [triggerMeshAgentEvents] = useLazyGetMeshAgentConvenienceEventsQuery();
+  const [triggerMeshAgentUsage] = useLazyGetMeshAgentUsageQuery();
   const [railWidth, setRailWidth] = useState(DEFAULT_RAIL_WIDTH);
   const [resizing, setResizing] = useState(false);
   const dragStartRef = useRef({ pointerX: 0, width: DEFAULT_RAIL_WIDTH });
@@ -587,159 +570,125 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
   );
   const closeFilePreview = useCallback(() => closeFilePreviewForSession(uiKey), [closeFilePreviewForSession, uiKey]);
   const agents = sortedProjectRailAgents(room.railAgents);
-  const observedStream = agentObservationStream(observation, room.externalAgentStreams);
-  const observedExternalAgentSessionId = observation?.externalAgentSessionId ?? observedStream?.id;
-  // Scope observation/history requests to the transcript the agent session actually belongs to —
+  const observedStream = agentObservationStream(observation, room.meshAgentStreams);
+  const observedMeshSessionId = observation?.meshSessionId ?? observedStream?.id;
+  // Scope observation/events requests to the transcript the agent session actually belongs to —
   // the room's active session can be a sibling session of the same project, and the daemon 404s the
   // mismatch.
   const observedTranscriptTargetId = observedStream?.transcriptTargetId ?? room.activeSessionId;
   const observedDeliveryId = observation?.deliveryId;
-  const observationHistoryResetKey = [observedDeliveryId, observedExternalAgentSessionId].filter(Boolean).join(':');
-  const [historyPages, setHistoryPages] = useState<ObservationHistoryPageState | undefined>(undefined);
-  const historyItemsRef = useRef<ExternalAgentStreamView['items']>([]);
-  historyItemsRef.current = historyPages?.items ?? [];
-  const [historyRequested, setHistoryRequested] = useState(false);
-  const historyLoadGenerationRef = useRef(0);
-  // The external-agent session observation is the neutral UI plane: a server-pushed SSE that carries the
-  // full projected event list every frame, so the panel replaces its list wholesale — no client-side
-  // delta re-derivation. Deliveries have no ui-stream twin yet, so they keep the poll + legacy projection.
-  const externalAgentUiObservation = useStreamExternalAgentUiObservationQuery(
-    { id: observedExternalAgentSessionId ?? '', transcriptTargetId: (observedTranscriptTargetId ?? '') as SessionId },
-    { skip: !(observedExternalAgentSessionId && observation && !observedDeliveryId && observedTranscriptTargetId) }
-  );
-  const deliveryObservation = usePolledValue<ExternalAgentObservationAccessResponse>({
-    enabled: Boolean(observedDeliveryId && observation && room.activeSessionId),
-    intervalMs: observedStream?.status === 'running' ? 900 : 0,
-    load: () =>
-      triggerNativeAgentDeliveryObservation({
-        id: observedDeliveryId as NativeAgentDeliveryId,
-        transcriptTargetId: room.activeSessionId as SessionId
-      }).unwrap(),
-    resetKey: `${room.activeSessionId ?? ''}:${observedDeliveryId ?? ''}`
-  });
-  const uiObservationState = observedDeliveryId ? undefined : externalAgentUiObservation.currentData;
-  const uiFrame = uiObservationState?.frame ?? undefined;
-  const observationLoading = Boolean(
-    observedExternalAgentSessionId && observation && !observedDeliveryId && !uiFrame && !uiObservationState?.fatalError
-  );
-  const observationUnavailable = Boolean(uiObservationState?.fatalError || uiFrame?.state === 'unavailable');
-  const deliveryAccess = observedDeliveryId ? deliveryObservation : undefined;
-  const observedBaseStream: ExternalAgentStreamView | undefined =
+  const observationEventResetKey = [observedDeliveryId, observedMeshSessionId].filter(Boolean).join(':');
+  const [eventsPages, setEventsPages] = useState<ObservationEventPageState | undefined>(undefined);
+  const eventsItemsRef = useRef<MeshAgentStreamView['items']>([]);
+  eventsItemsRef.current = eventsPages?.items ?? [];
+  const [eventsRequested, setEventsRequested] = useState(false);
+  const eventsLoadGenerationRef = useRef(0);
+  const observationLoading = false;
+  const observationUnavailable = false;
+  const observedBaseStream: MeshAgentStreamView | undefined =
     observedStream ??
-    (observation && observedExternalAgentSessionId
+    (observation && observedMeshSessionId
       ? {
-          id: observedExternalAgentSessionId,
-          agentName:
-            observation.agentName ??
-            uiFrame?.externalAgentSessionId ??
-            deliveryAccess?.externalAgentSessionId ??
-            'Agent',
-          provider: uiFrame?.provider ?? deliveryAccess?.provider ?? 'external-agent',
+          id: observedMeshSessionId,
+          agentName: observation.agentName ?? 'Agent',
+          provider: 'mesh-agent',
           tag: 'Agent',
           status: 'ok',
           output: '',
           items: []
         }
       : undefined);
-  const observedAccessStream = observedDeliveryId
-    ? streamWithObservationProjection(
-        observedBaseStream,
-        shouldProjectObservationAccess({ access: deliveryAccess, deliveryId: observedDeliveryId, historyRequested })
-          ? observationProjectionFromAccess(observedBaseStream, deliveryAccess, observedDeliveryId)
-          : undefined
-      )
-    : streamWithUiObservationFrame(observedBaseStream, uiFrame);
-  const historyBefore = uiFrame?.state === 'live' || uiFrame?.state === 'history' ? uiFrame.historyBefore : undefined;
-  const observationEpoch = uiFrame?.state === 'live' ? uiFrame.observationEpoch : undefined;
+  const observedAccessStream = observedBaseStream;
+  const eventsBefore = undefined;
+  const observationEpoch = undefined;
   const liveItemsRef = useRef(observedAccessStream?.items ?? []);
   liveItemsRef.current = observedAccessStream?.items ?? [];
-  const historyLoadScope = observationHistoryLoadScope({
+  const eventsLoadScope = observationEventLoadScope({
     deliveryId: observedDeliveryId,
-    externalAgentSessionId: observedExternalAgentSessionId,
-    historyBefore,
+    meshSessionId: observedMeshSessionId,
+    eventsBefore,
     observationEpoch
   });
-  const historyPresentation = observationHistoryPresentation({
+  const eventsPresentation = observationEventPresentation({
     deliveryId: observedDeliveryId,
-    hasPages: Boolean(historyPages),
-    historyRequested
+    hasPages: Boolean(eventsPages),
+    eventsRequested
   });
-  const observedHistoryStream = streamWithHistoryPages(
+  const observedEventsStream = streamWithEventsPages(
     observedAccessStream,
-    historyPresentation.includePages ? historyPages : undefined
+    eventsPresentation.includePages ? eventsPages : undefined
   );
   const observedUsageAgentName = observedAccessStream?.templateAgentName;
-  const usage = usePolledValue<ExternalAgentUsageResponse>({
+  const usage = usePolledValue<MeshAgentUsageResponse>({
     enabled: Boolean(observedUsageAgentName),
     intervalMs: observedAccessStream?.status === 'running' ? 15_000 : 0,
-    load: () => triggerExternalAgentUsage(observedUsageAgentName as string).unwrap(),
+    load: () => triggerMeshAgentUsage(observedUsageAgentName as string).unwrap(),
     resetKey: observedUsageAgentName ?? ''
   });
-  const usageMeter = usageMeterFromObservationAccess({
-    access: deliveryAccess,
+  const usageMeter = meshAgentUsageMeter({
     provider: observedAccessStream?.provider,
     stream: observedStream,
     usage
   });
   const observedAgent = observedRailAgent(observation, observedStream, room.railAgents);
 
-  const loadHistoryPage = useCallback(
+  const loadEventPage = useCallback(
     (before?: string | null) => {
-      if (!observedExternalAgentSessionId || !observedTranscriptTargetId || !before) return;
-      const generation = historyLoadGenerationRef.current;
-      setHistoryPages((current) => beginObservationHistoryLoad(current, before));
-      void findOlderObservationPage({
+      if (!observedMeshSessionId || !observedTranscriptTargetId || !before) return;
+      const generation = eventsLoadGenerationRef.current;
+      setEventsPages((current) => beginObservationEventLoad(current, before));
+      void findOlderEventPage({
         before: before ?? undefined,
-        currentItems: [...liveItemsRef.current, ...historyItemsRef.current],
+        currentItems: [...liveItemsRef.current, ...eventsItemsRef.current],
         load: async (cursor) => {
-          const response = await triggerExternalAgentHistoryPage({
-            id: observedExternalAgentSessionId,
+          const response = await triggerMeshAgentEvents({
+            id: observedMeshSessionId,
             transcriptTargetId: observedTranscriptTargetId as SessionId,
-            before: cursor,
-            limit: 20,
-            sortDirection: 'desc'
+            request: { before: observationCursorSchema.parse(cursor), limit: 20 }
           }).unwrap();
           return {
-            items: response.events
-              .map((event) => toAgentObservationEvent(event))
-              .filter((event): event is AgentObservationEvent => event !== null),
+            items: response.frames.flatMap((frame) =>
+              frame.kind === 'patch'
+                ? frame.operations.flatMap((operation) => (operation.op === 'upsert' ? [operation.event] : []))
+                : []
+            ),
             nextCursor: response.nextCursor ?? undefined
           };
         }
       }).then(
         (page) => {
-          if (historyLoadGenerationRef.current !== generation) return;
-          setHistoryPages((current) => {
+          if (eventsLoadGenerationRef.current !== generation) return;
+          setEventsPages((current) => {
             if (!current) return current;
-            return completeObservationHistoryLoad(current, page);
+            return completeObservationEventLoad(current, page);
           });
         },
         () => {
-          if (historyLoadGenerationRef.current !== generation) return;
-          setHistoryPages((current) => (current ? failObservationHistoryLoad(current) : current));
+          if (eventsLoadGenerationRef.current !== generation) return;
+          setEventsPages((current) => (current ? failObservationEventLoad(current) : current));
         }
       );
     },
-    [observedExternalAgentSessionId, observedTranscriptTargetId, triggerExternalAgentHistoryPage]
+    [observedMeshSessionId, observedTranscriptTargetId, triggerMeshAgentEvents]
   );
 
-  const showHistory = useCallback(() => {
-    if (historyRequested || !historyPages?.items.length) return;
-    setHistoryRequested(true);
-  }, [historyPages?.items.length, historyRequested]);
+  const showEvents = useCallback(() => {
+    if (eventsRequested || !eventsPages?.items.length) return;
+    setEventsRequested(true);
+  }, [eventsPages?.items.length, eventsRequested]);
 
   useEffect(() => {
-    void historyLoadScope;
-    void observationHistoryResetKey;
-    historyLoadGenerationRef.current += 1;
-    setHistoryPages(undefined);
-    setHistoryRequested(false);
-  }, [historyLoadScope, observationHistoryResetKey]);
+    void eventsLoadScope;
+    void observationEventResetKey;
+    eventsLoadGenerationRef.current += 1;
+    setEventsPages(undefined);
+    setEventsRequested(false);
+  }, [eventsLoadScope, observationEventResetKey]);
 
   useEffect(() => {
-    if (!historyLoadScope) return;
-    loadHistoryPage(historyBefore);
-  }, [historyBefore, historyLoadScope, loadHistoryPage]);
+    if (!eventsLoadScope) return;
+    loadEventPage(eventsBefore);
+  }, [eventsLoadScope, loadEventPage]);
 
   useEffect(() => {
     const storedWidth = window.localStorage.getItem(RAIL_WIDTH_STORAGE_KEY);
@@ -1017,41 +966,41 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
           onBack={closeFilePreview}
           preview={filePreview}
         />
-      ) : observation && observedExternalAgentSessionId && observedTranscriptTargetId && !observedDeliveryId ? (
+      ) : observation && observedMeshSessionId && observedTranscriptTargetId ? (
         <DualObservationPanel
           agent={observedAgent}
           agentName={observedAgent?.name ?? observation.agentName ?? 'Agent'}
           connectionSignal={observedStream?.status}
-          externalAgentSessionId={observedExternalAgentSessionId}
           hooks={room.dualObservationHooks ?? DEFAULT_DUAL_OBSERVATION_HOOKS}
-          icon={observedAgent?.icon ?? observedHistoryStream?.icon}
+          icon={observedAgent?.icon ?? observedEventsStream?.icon}
+          meshSessionId={observedMeshSessionId}
           onBack={closeRailObservation}
-          provider={observedAccessStream?.provider ?? observedStream?.provider ?? 'external-agent'}
+          provider={observedAccessStream?.provider ?? observedStream?.provider ?? 'mesh-agent'}
           transcriptTargetId={observedTranscriptTargetId as SessionId}
         />
       ) : observation ? (
-        <ExternalAgentObservationPanel
+        <MeshAgentObservationPanel
           agent={observedAgent}
           agentName={observedAgent?.name ?? observation.agentName}
-          canLoadOlderHistory={
-            historyPresentation.active &&
-            Boolean(historyPages?.nextCursor) &&
-            !historyPages?.loading &&
-            !historyPages?.exhausted
+          canLoadOlderEvents={
+            eventsPresentation.active &&
+            Boolean(eventsPages?.nextCursor) &&
+            !eventsPages?.loading &&
+            !eventsPages?.exhausted
           }
+          eventsActive={eventsPresentation.active}
+          eventsLoadError={eventsPresentation.active && Boolean(eventsPages?.error)}
           focusTurnId={observation.turnId}
-          historyActive={historyPresentation.active}
-          historyLoadError={historyPresentation.active && Boolean(historyPages?.error)}
-          icon={observedAgent?.icon ?? observedHistoryStream?.icon}
-          loadingOlderHistory={historyPresentation.active && Boolean(historyPages?.loading)}
+          icon={observedAgent?.icon ?? observedEventsStream?.icon}
+          loadingOlderEvents={eventsPresentation.active && Boolean(eventsPages?.loading)}
           observationLoading={observationLoading}
           observationUnavailable={observationUnavailable}
           onBack={closeRailObservation}
-          onLoadOlderHistory={() => loadHistoryPage(historyPages?.nextCursor)}
-          onRetryOlderHistory={() => loadHistoryPage(historyPages?.nextCursor)}
-          onShowHistory={showHistory}
-          showHistoryButton={historyPresentation.showButton}
-          stream={observedHistoryStream}
+          onLoadOlderEvents={() => loadEventPage(eventsPages?.nextCursor)}
+          onRetryOlderEvents={() => loadEventPage(eventsPages?.nextCursor)}
+          onShowEvents={showEvents}
+          showEventsButton={eventsPresentation.showButton}
+          stream={observedEventsStream}
           usageMeter={usageMeter}
         />
       ) : (

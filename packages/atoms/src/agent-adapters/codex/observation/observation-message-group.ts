@@ -1,5 +1,5 @@
-import type { ExternalAgentObservationEvent } from '@monad/protocol';
-import type { ExternalAgentObservationJsonRecordEntry } from '../../observation-projection.ts';
+import type { MeshAgentObservationEvent } from '@monad/protocol';
+import type { MeshAgentObservationJsonRecordEntry } from '../../observation-projection.ts';
 
 import {
   numberValue,
@@ -90,7 +90,7 @@ function codexMessageGroupInit(key: string, kind: CodexMessageGroup['kind']): Co
   return { key, kind, raw: [], rawLines: [], fragments: [] };
 }
 
-function codexMessageGroupAppend(group: CodexMessageGroup, entry: ExternalAgentObservationJsonRecordEntry): void {
+function codexMessageGroupAppend(group: CodexMessageGroup, entry: MeshAgentObservationJsonRecordEntry): void {
   group.raw.push(entry.record);
   group.rawLines.push(entry.raw);
   const text = codexMessageLifecycleText(entry.record);
@@ -101,7 +101,7 @@ function codexMessageGroupAppend(group: CodexMessageGroup, entry: ExternalAgentO
   if (text.completedAt !== undefined) group.completedAt = text.completedAt;
 }
 
-function codexMessageGroupEvent(id: string, group: CodexMessageGroup): ExternalAgentObservationEvent[] {
+function codexMessageGroupEvent(id: string, group: CodexMessageGroup): MeshAgentObservationEvent[] {
   const text = group.completedText ?? group.startedText ?? group.fragments.join('');
   return observation({
     id: `${id}:json:${group.key}:${group.kind}-message`,
@@ -115,14 +115,14 @@ function codexMessageGroupEvent(id: string, group: CodexMessageGroup): ExternalA
 }
 
 export const codexObservationMessageGroupAdapter = {
-  append(group: unknown, entry: ExternalAgentObservationJsonRecordEntry): void {
+  append(group: unknown, entry: MeshAgentObservationJsonRecordEntry): void {
     codexMessageGroupAppend(group as CodexMessageGroup, entry);
   },
   create(record: Record<string, unknown>): { key: string; state: CodexMessageGroup } | undefined {
     const group = codexMessageGroup(record);
     return group ? { key: group.key, state: codexMessageGroupInit(group.key, group.kind) } : undefined;
   },
-  render(id: string, group: unknown): ExternalAgentObservationEvent[] {
+  render(id: string, group: unknown): MeshAgentObservationEvent[] {
     return codexMessageGroupEvent(id, group as CodexMessageGroup);
   }
 };

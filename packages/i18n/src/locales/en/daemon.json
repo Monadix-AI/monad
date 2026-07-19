@@ -4,9 +4,9 @@
   "daemon.ready.cli": "CLI:",
   "daemon.ready.configure": "Configure providers:",
   "daemon.singleton.alreadyRunning": "Monad daemon is already running. Run `monad stop` to stop it first.",
-  "daemon.session.externalAgentIdleSuspended": "fell asleep.",
-  "daemon.session.externalAgentIdleResumed": "woke up.",
-  "daemon.session.externalAgentResumeFailed": "{{label}} resume failed for provider session {{ref}}; cold started a new runtime.",
+  "daemon.session.meshAgentIdleSuspended": "fell asleep.",
+  "daemon.session.meshAgentIdleResumed": "woke up.",
+  "daemon.session.meshAgentResumeFailed": "{{label}} resume failed for provider session {{ref}}; cold started a new runtime.",
   "daemon.session.contextEvicted_one": "Cleared ~{{tokens}} tokens ({{count}} tool result) from context.",
   "daemon.session.contextEvicted_other": "Cleared ~{{tokens}} tokens ({{count}} tool results) from context.",
   "daemon.session.contextHandoffSuggested": "Context is {{pct}}% full — consider starting a fresh session."

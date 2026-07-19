@@ -14,12 +14,12 @@ import {
   AtomsStudioLoading,
   CapabilitiesStudioLoading,
   ChannelsStudioLoading,
-  ExternalAgentsStudioLoading,
   HooksStudioLoading,
   ImportStudioLoading,
   MemoryGraphStudioLoading,
   MemoryMem0StudioLoading,
   MemorySettingsStudioLoading,
+  MeshAgentsStudioLoading,
   ModelsStudioLoading,
   SkillsStudioLoading
 } from './StudioLoading';
@@ -118,7 +118,7 @@ export const STUDIO_SECTION_COMPONENTS: Record<StudioSectionId, StudioSectionCom
   mem0: Mem0MemorySettings,
   memory: MemorySettings,
   models: ModelSettings,
-  externalAgents: ExternalAgentsSection,
+  meshAgents: MeshAgentsSection,
   orchestration: OrchestrationSection,
   projectMembers: ProjectMembersSection,
   runtime: RuntimeOverview,
@@ -132,23 +132,23 @@ export const STUDIO_SECTION_COMPONENTS: Record<StudioSectionId, StudioSectionCom
   workplaceProjects: WorkplaceProjectsSection
 };
 
-function ExternalAgentsSection(props: StudioSectionProps) {
-  return <ThirdPartyExternalAgents {...props} />;
+function MeshAgentsSection(props: StudioSectionProps) {
+  return <ThirdPartyMeshAgents {...props} />;
 }
 
-const ThirdPartyExternalAgents = lazyComponent(
+const ThirdPartyMeshAgents = lazyComponent(
   () =>
-    import('./third-party-agents/ExternalAgentsSettings').then((m) => {
-      return function ExternalAgentsPage(props: StudioSectionProps) {
+    import('./third-party-agents/MeshAgentsSettings').then((m) => {
+      return function MeshAgentsPage(props: StudioSectionProps) {
         return (
-          <m.ExternalAgentsSettings
+          <m.MeshAgentsSettings
             {...props}
             embedded={false}
           />
         );
       };
     }),
-  ExternalAgentsStudioLoading
+  MeshAgentsStudioLoading
 );
 
 function WorkplaceProjectsSection() {

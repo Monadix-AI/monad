@@ -1,24 +1,29 @@
 import type {
   AgentObservationEvent,
   Event,
-  ExternalAgentConnectionSnapshot,
-  ExternalAgentConvenienceFrame,
-  ExternalAgentRawFrame,
-  ExternalAgentRawHistoryPage,
+  MeshConnectionSnapshot,
+  MeshConvenienceEventPage,
+  MeshConvenienceFrame,
+  MeshRawEvent,
+  MeshRawEventPage,
   SessionId
 } from '@monad/protocol';
-import type { ExternalAgentStreamView } from '../../../experience/types.ts';
+import type { MeshAgentStreamView } from '../../../experience/types.ts';
 import type { ObservationMode } from './panel-state.ts';
 import type { RawFrameRow } from './raw-view.ts';
 
+import { observationCursorSchema } from '@monad/protocol';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 
 import {
   connectionControlAction,
-  convenienceHistoryRequest,
-  foldConvenienceHistory,
+  convenienceEventsRequest,
+  foldConvenienceEvents,
   foldRawFrame,
-  rawHistoryRows
+  observationEventBootstrap,
+  observationPanelLoading,
+  prependRawEventsRows,
+  rawEventsRows
 } from './observation-panel-orchestration.ts';
 import { initialObservationPanelState, observationPanelReducer, observationSubscription } from './panel-state.ts';
 import { emptyObservationTimeline, mergeConvenienceFrame, type ObservationTimeline } from './timeline-merge.ts';
@@ -28,22 +33,22 @@ import { emptyObservationTimeline, mergeConvenienceFrame, type ObservationTimeli
 // single, testable seam and no direct client-package dependency. Types are structural — a superset of
 // the RTK results the container reads — so the concrete hooks satisfy them without adaptation.
 export interface ObservationConnectionQueryResult {
-  currentData?: ExternalAgentConnectionSnapshot;
+  currentData?: MeshConnectionSnapshot;
   isLoading?: boolean;
   refetch: () => void;
 }
 export interface ObservationRawStreamResult {
-  currentData?: { fatalError: boolean; frames: ExternalAgentRawFrame[]; frameOffset: number };
+  currentData?: { fatalError: boolean; frames: MeshRawEvent[]; frameOffset: number };
 }
 export interface ObservationConvenienceStreamResult {
-  currentData?: { fatalError: boolean; frames: ExternalAgentConvenienceFrame[]; frameOffset: number };
+  currentData?: { fatalError: boolean; frames: MeshConvenienceFrame[]; frameOffset: number };
 }
 export type ObservationLazyTrigger<Arg, Result> = (arg: Arg) => { unwrap: () => Promise<Result> };
 
-export interface ObservationHistoryPageArg {
+export interface ObservationEventPageArg {
   id: string;
   transcriptTargetId: SessionId;
-  request: ReturnType<typeof convenienceHistoryRequest>;
+  request: ReturnType<typeof convenienceEventsRequest>;
 }
 
 export interface ObservationPanelHooks {
@@ -59,18 +64,16 @@ export interface ObservationPanelHooks {
     arg: { id: string; transcriptTargetId: SessionId; afterCursor?: string },
     options: { skip: boolean }
   ) => ObservationConvenienceStreamResult;
-  useRawHistory: () => readonly [ObservationLazyTrigger<ObservationHistoryPageArg, ExternalAgentRawHistoryPage>];
-  useConvenienceHistory: () => readonly [
-    ObservationLazyTrigger<ObservationHistoryPageArg, ExternalAgentConvenienceFrame[]>
-  ];
+  useRawEvents: () => readonly [ObservationLazyTrigger<ObservationEventPageArg, MeshRawEventPage>];
+  useConvenienceEvents: () => readonly [ObservationLazyTrigger<ObservationEventPageArg, MeshConvenienceEventPage>];
 }
 
 export interface UseObservationPanelArgs {
-  externalAgentSessionId: string;
+  meshSessionId: string;
   transcriptTargetId: SessionId;
   agentName: string;
   provider: string;
-  icon?: ExternalAgentStreamView['icon'];
+  icon?: MeshAgentStreamView['icon'];
   hooks: ObservationPanelHooks;
   // A source-derived signal (e.g. the observed stream's running status) that flips on connect/disconnect.
   // A change refetches the connection snapshot — the subscribe-first-then-refetch repair for the WS
@@ -92,20 +95,27 @@ export interface ObservationPanelController {
   events: AgentObservationEvent[];
   rawRows: RawFrameRow[];
   loading: boolean;
+  canLoadOlderEvents: boolean;
+  loadingOlderEvents: boolean;
+  loadOlderEvents: () => void;
+  retryOlderEvents: () => void;
   unavailableReason: string | null;
 }
 
-const EMPTY_RAW_FRAMES: ExternalAgentRawFrame[] = [];
-const EMPTY_CONVENIENCE_FRAMES: ExternalAgentConvenienceFrame[] = [];
+const EMPTY_RAW_FRAMES: MeshRawEvent[] = [];
+const EMPTY_CONVENIENCE_FRAMES: MeshConvenienceFrame[] = [];
 
 export function useObservationPanel(args: UseObservationPanelArgs): ObservationPanelController {
-  const { externalAgentSessionId, transcriptTargetId, hooks, connectionSignal, controlEvent } = args;
-  const [state, dispatch] = useReducer(observationPanelReducer, initialObservationPanelState);
+  const { meshSessionId, transcriptTargetId, hooks, connectionSignal, controlEvent } = args;
+  const [state, dispatch] = useReducer(observationPanelReducer, {
+    ...initialObservationPanelState,
+    panelOpen: true
+  });
   const subscription = observationSubscription(state);
 
   const connection = hooks.useConnection(
-    { id: externalAgentSessionId, transcriptTargetId },
-    { skip: !state.panelOpen || !externalAgentSessionId }
+    { id: meshSessionId, transcriptTargetId },
+    { skip: !state.panelOpen || !meshSessionId }
   );
 
   const snapshot = connection.currentData;
@@ -121,11 +131,11 @@ export function useObservationPanel(args: UseObservationPanelArgs): ObservationP
 
   useEffect(() => {
     if (!controlEvent) return;
-    const action = connectionControlAction(controlEvent, externalAgentSessionId);
+    const action = connectionControlAction(controlEvent, meshSessionId);
     if (!action) return;
     if (action.kind === 'refetch') refetchConnection();
     else dispatch(action.event);
-  }, [controlEvent, externalAgentSessionId, refetchConnection]);
+  }, [controlEvent, meshSessionId, refetchConnection]);
 
   const rawActive = subscription.active && subscription.mode === 'raw';
   const convenienceActive = subscription.active && subscription.mode === 'convenience';
@@ -134,21 +144,26 @@ export function useObservationPanel(args: UseObservationPanelArgs): ObservationP
   // flips `active` false→true, so the stream is disposed and re-subscribed (the client resumes each leg
   // from its own last-event-id). `scopeKey` below drops the accumulated plane so no stale-epoch frame
   // survives the gap.
-  const rawStream = hooks.useRawStream({ id: externalAgentSessionId, transcriptTargetId }, { skip: !rawActive });
+  const rawStream = hooks.useRawStream({ id: meshSessionId, transcriptTargetId }, { skip: !rawActive });
   const convenienceStream = hooks.useConvenienceStream(
-    { id: externalAgentSessionId, transcriptTargetId },
+    { id: meshSessionId, transcriptTargetId },
     { skip: !convenienceActive }
   );
 
-  const [rawHistoryTrigger] = hooks.useRawHistory();
-  const [convenienceHistoryTrigger] = hooks.useConvenienceHistory();
+  const [rawEventsTrigger] = hooks.useRawEvents();
+  const [convenienceEventsTrigger] = hooks.useConvenienceEvents();
 
   const [rawRows, setRawRows] = useState<RawFrameRow[]>([]);
   const [timeline, setTimeline] = useState<ObservationTimeline>(emptyObservationTimeline);
-  const [historyLoading, setHistoryLoading] = useState(false);
-  const [historyFailed, setHistoryFailed] = useState(false);
-  const [loadedHistoryBoundary, setLoadedHistoryBoundary] = useState<string | null>(null);
-  const historyLoadGenerationRef = useRef(0);
+  const [eventsLoading, setEventsLoading] = useState(false);
+  const [eventsLoadingKind, setEventsLoadingKind] = useState<'bootstrap' | 'older' | null>(null);
+  const [eventsFailed, setEventsFailed] = useState(false);
+  const [loadedEventsKey, setLoadedEventsKey] = useState<string | null>(null);
+  const [eventNextCursor, setEventsNextCursor] = useState<string | null>(null);
+  const eventsLoadGenerationRef = useRef(0);
+  const eventsInFlightGenerationRef = useRef<number | null>(null);
+  const lastEventRequestCursorRef = useRef<string | null>(null);
+  const lastEventRequestKindRef = useRef<'bootstrap' | 'older'>('bootstrap');
   const rawFrameCountRef = useRef(0);
   const convenienceFrameCountRef = useRef(0);
 
@@ -159,10 +174,13 @@ export function useObservationPanel(args: UseObservationPanelArgs): ObservationP
   useEffect(() => {
     setRawRows([]);
     setTimeline(emptyObservationTimeline);
-    setHistoryLoading(false);
-    setHistoryFailed(false);
-    setLoadedHistoryBoundary(null);
-    historyLoadGenerationRef.current += 1;
+    setEventsLoading(false);
+    setEventsLoadingKind(null);
+    setEventsFailed(false);
+    setLoadedEventsKey(null);
+    setEventsNextCursor(null);
+    eventsLoadGenerationRef.current += 1;
+    eventsInFlightGenerationRef.current = null;
     rawFrameCountRef.current = 0;
     convenienceFrameCountRef.current = 0;
   }, [scopeKey]);
@@ -199,65 +217,88 @@ export function useObservationPanel(args: UseObservationPanelArgs): ObservationP
     setTimeline((current) => nextFrames.reduce(mergeConvenienceFrame, current));
   }, [convenienceActive, convenienceFrames, convenienceFrameOffset]);
 
-  const snapshotHistoryBefore = snapshot?.state === 'connected' ? (snapshot.historyBefore ?? null) : null;
-  const historyBefore = timeline.historyBefore ?? snapshotHistoryBefore;
-  const backfilledBoundaryRef = useRef<string | null>(null);
+  const snapshotEventsBefore = snapshot?.state === 'connected' ? (snapshot.eventsBefore ?? null) : null;
+  const eventsBefore = timeline.eventsBefore ?? snapshotEventsBefore;
+  const eventBootstrap = useMemo(
+    () =>
+      observationEventBootstrap({
+        panelOpen: state.panelOpen,
+        connectionKnown: snapshot !== undefined,
+        connected: state.connected,
+        eventsBefore
+      }),
+    [state.panelOpen, state.connected, snapshot, eventsBefore]
+  );
+  const backfilledEventsKeyRef = useRef<string | null>(null);
   // biome-ignore lint/correctness/useExhaustiveDependencies: scopeKey is the reset trigger, not read in the body.
   useEffect(() => {
-    backfilledBoundaryRef.current = null;
+    backfilledEventsKeyRef.current = null;
   }, [scopeKey]);
+  const loadEventPage = useCallback(
+    (
+      before: string | null,
+      bootstrapKey?: string,
+      requestKind: 'bootstrap' | 'older' = bootstrapKey ? 'bootstrap' : 'older'
+    ) => {
+      if (eventsInFlightGenerationRef.current !== null) return;
+      lastEventRequestCursorRef.current = before;
+      lastEventRequestKindRef.current = requestKind;
+      setEventsLoading(true);
+      setEventsLoadingKind(requestKind);
+      setEventsFailed(false);
+      const generation = eventsLoadGenerationRef.current;
+      eventsInFlightGenerationRef.current = generation;
+      const arg: ObservationEventPageArg = {
+        id: meshSessionId,
+        transcriptTargetId,
+        request: convenienceEventsRequest(before ? observationCursorSchema.parse(before) : null)
+      };
+      if (subscription.mode === 'convenience') {
+        void convenienceEventsTrigger(arg)
+          .unwrap()
+          .then((page) => {
+            if (eventsLoadGenerationRef.current !== generation) return;
+            setTimeline((current) => foldConvenienceEvents(current, page.frames));
+            setEventsNextCursor(page.nextCursor ?? null);
+          })
+          .catch(() => {
+            if (eventsLoadGenerationRef.current === generation) setEventsFailed(true);
+          })
+          .finally(() => {
+            if (eventsInFlightGenerationRef.current === generation) eventsInFlightGenerationRef.current = null;
+            if (eventsLoadGenerationRef.current !== generation) return;
+            if (bootstrapKey) setLoadedEventsKey(bootstrapKey);
+            setEventsLoading(false);
+            setEventsLoadingKind(null);
+          });
+      } else {
+        void rawEventsTrigger(arg)
+          .unwrap()
+          .then((page) => {
+            if (eventsLoadGenerationRef.current !== generation) return;
+            setRawRows((rows) => prependRawEventsRows(rawEventsRows(page), rows));
+            setEventsNextCursor(page.nextCursor ?? null);
+          })
+          .catch(() => {
+            if (eventsLoadGenerationRef.current === generation) setEventsFailed(true);
+          })
+          .finally(() => {
+            if (eventsInFlightGenerationRef.current === generation) eventsInFlightGenerationRef.current = null;
+            if (eventsLoadGenerationRef.current !== generation) return;
+            if (bootstrapKey) setLoadedEventsKey(bootstrapKey);
+            setEventsLoading(false);
+            setEventsLoadingKind(null);
+          });
+      }
+    },
+    [subscription.mode, meshSessionId, transcriptTargetId, convenienceEventsTrigger, rawEventsTrigger]
+  );
   useEffect(() => {
-    if (!subscription.active || !historyBefore) return;
-    if (backfilledBoundaryRef.current === historyBefore) return;
-    backfilledBoundaryRef.current = historyBefore;
-    setHistoryLoading(true);
-    setHistoryFailed(false);
-    const generation = historyLoadGenerationRef.current;
-    const arg: ObservationHistoryPageArg = {
-      id: externalAgentSessionId,
-      transcriptTargetId,
-      request: convenienceHistoryRequest(historyBefore)
-    };
-    if (subscription.mode === 'convenience') {
-      void convenienceHistoryTrigger(arg)
-        .unwrap()
-        .then((frames) => {
-          if (historyLoadGenerationRef.current !== generation) return;
-          setTimeline((current) => foldConvenienceHistory(current, frames));
-        })
-        .catch(() => {
-          if (historyLoadGenerationRef.current === generation) setHistoryFailed(true);
-        })
-        .finally(() => {
-          if (historyLoadGenerationRef.current !== generation) return;
-          setLoadedHistoryBoundary(historyBefore);
-          setHistoryLoading(false);
-        });
-    } else {
-      void rawHistoryTrigger(arg)
-        .unwrap()
-        .then((page) => {
-          if (historyLoadGenerationRef.current !== generation) return;
-          setRawRows((rows) => [...rawHistoryRows(page), ...rows]);
-        })
-        .catch(() => {
-          if (historyLoadGenerationRef.current === generation) setHistoryFailed(true);
-        })
-        .finally(() => {
-          if (historyLoadGenerationRef.current !== generation) return;
-          setLoadedHistoryBoundary(historyBefore);
-          setHistoryLoading(false);
-        });
-    }
-  }, [
-    subscription.active,
-    subscription.mode,
-    historyBefore,
-    externalAgentSessionId,
-    transcriptTargetId,
-    convenienceHistoryTrigger,
-    rawHistoryTrigger
-  ]);
+    if (!eventBootstrap) return;
+    if (backfilledEventsKeyRef.current === eventBootstrap.key) return;
+    backfilledEventsKeyRef.current = eventBootstrap.key;
+    loadEventPage(eventBootstrap.request.before ?? null, eventBootstrap.key);
+  }, [eventBootstrap, loadEventPage]);
 
   const open = useCallback(() => dispatch({ type: 'panelOpened' }), []);
   const close = useCallback(() => dispatch({ type: 'panelClosed' }), []);
@@ -269,12 +310,22 @@ export function useObservationPanel(args: UseObservationPanelArgs): ObservationP
   const events = useMemo(() => (streamFatal ? [] : timeline.events), [streamFatal, timeline.events]);
   const waitingForConvenienceReady =
     convenienceActive && !streamFatal && !timeline.unavailableReason && timeline.epoch !== subscription.epoch;
-  const waitingForHistory = Boolean(historyBefore && loadedHistoryBoundary !== historyBefore);
-  const loading =
-    state.panelOpen &&
-    (connection.isLoading === true ||
-      !snapshot ||
-      (subscription.active && !streamFatal && (waitingForConvenienceReady || waitingForHistory || historyLoading)));
+  const waitingForEvents = Boolean(eventBootstrap && loadedEventsKey !== eventBootstrap.key);
+  const loading = observationPanelLoading({
+    panelOpen: state.panelOpen,
+    contentAvailable: subscription.mode === 'raw' ? rawRows.length > 0 : timeline.events.length > 0,
+    connectionLoading: connection.isLoading === true,
+    connectionKnown: snapshot !== undefined,
+    liveWaiting: subscription.active && !streamFatal && waitingForConvenienceReady,
+    eventsWaiting: waitingForEvents,
+    eventsLoading
+  });
+  const loadOlderEvents = useCallback(() => {
+    if (eventNextCursor) loadEventPage(eventNextCursor);
+  }, [eventNextCursor, loadEventPage]);
+  const retryOlderEvents = useCallback(() => {
+    loadEventPage(lastEventRequestCursorRef.current, undefined, lastEventRequestKindRef.current);
+  }, [loadEventPage]);
 
   return {
     mode: state.mode,
@@ -287,8 +338,12 @@ export function useObservationPanel(args: UseObservationPanelArgs): ObservationP
     events,
     rawRows: streamFatal ? [] : rawRows,
     loading,
+    canLoadOlderEvents: eventNextCursor !== null && !eventsFailed,
+    loadingOlderEvents: eventsLoading && eventsLoadingKind === 'older',
+    loadOlderEvents,
+    retryOlderEvents,
     unavailableReason:
       timeline.unavailableReason ??
-      (streamFatal ? 'observation stream unavailable' : historyFailed ? 'provider history unavailable' : null)
+      (streamFatal ? 'observation stream unavailable' : eventsFailed ? 'provider events unavailable' : null)
   };
 }

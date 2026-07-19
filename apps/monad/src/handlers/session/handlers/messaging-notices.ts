@@ -1,5 +1,5 @@
 import type { ChannelResponseNextTarget } from '@monad/protocol';
-import type { ManagedExternalAgentProjectMember } from '#/handlers/session/handlers/messaging-members.ts';
+import type { ManagedMeshAgentProjectMember } from '#/handlers/session/handlers/messaging-members.ts';
 
 import { definePrompt } from '#/agent/prompt-template.ts';
 import channelNextPath from '../prompts/channel-next-user.prompt.md' with { type: 'file' };
@@ -30,18 +30,18 @@ const RESUME_RECOVERY_NOTICE_PROMPT = await definePrompt<{ notice: string }>({
   sourcePath: resumeRecoveryNoticePath
 });
 
-export interface ManagedExternalAgentProjectMessageSender {
-  kind: 'human' | 'external-agent' | 'agent' | 'system';
+export interface ManagedMeshAgentProjectMessageSender {
+  kind: 'human' | 'mesh-agent' | 'agent' | 'system';
   name: string;
   id?: string;
 }
 
-export function externalAgentInputText(input: string): string {
+export function meshAgentInputText(input: string): string {
   return input.endsWith('\n') ? input : `${input}\n`;
 }
 
-export function normalizeManagedExternalAgentDirectTarget(to: string): string {
-  return to.startsWith('external-agent:') ? to.slice('external-agent:'.length) : to;
+export function normalizeManagedMeshAgentDirectTarget(to: string): string {
+  return to.startsWith('mesh-agent:') ? to.slice('mesh-agent:'.length) : to;
 }
 
 export function channelNextPrompt(target: ChannelResponseNextTarget): string {
@@ -52,9 +52,9 @@ function mentionTokenValue(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 }
 
-function managedExternalAgentSenderMentionId(sender: ManagedExternalAgentProjectMessageSender): string {
-  if (sender.kind === 'external-agent') {
-    return sender.id?.startsWith('external-agent:') ? sender.id : `external-agent:${sender.id ?? sender.name}`;
+function managedMeshAgentSenderMentionId(sender: ManagedMeshAgentProjectMessageSender): string {
+  if (sender.kind === 'mesh-agent') {
+    return sender.id?.startsWith('mesh-agent:') ? sender.id : `mesh-agent:${sender.id ?? sender.name}`;
   }
   if (sender.kind === 'agent') {
     return sender.id?.startsWith('agent:') ? sender.id : `agent:${sender.id ?? sender.name}`;
@@ -63,18 +63,18 @@ function managedExternalAgentSenderMentionId(sender: ManagedExternalAgentProject
   return sender.id ?? sender.name;
 }
 
-function managedExternalAgentSenderMentionToken(sender?: ManagedExternalAgentProjectMessageSender): string | null {
+function managedMeshAgentSenderMentionToken(sender?: ManagedMeshAgentProjectMessageSender): string | null {
   if (!sender?.name) return null;
-  const id = managedExternalAgentSenderMentionId(sender);
+  const id = managedMeshAgentSenderMentionId(sender);
   return `@[name="${mentionTokenValue(sender.name)}" id="${mentionTokenValue(id)}"]`;
 }
 
-export function managedExternalAgentInboxNotice(
-  _member: ManagedExternalAgentProjectMember,
+export function managedMeshAgentInboxNotice(
+  _member: ManagedMeshAgentProjectMember,
   text: string,
-  sender?: ManagedExternalAgentProjectMessageSender
+  sender?: ManagedMeshAgentProjectMessageSender
 ): string {
-  const senderMention = managedExternalAgentSenderMentionToken(sender);
+  const senderMention = managedMeshAgentSenderMentionToken(sender);
   return INBOX_NOTICE_PROMPT.render({
     text,
     senderKind: sender?.kind ?? 'unknown',
@@ -84,11 +84,11 @@ export function managedExternalAgentInboxNotice(
   });
 }
 
-export function managedExternalAgentBusyInboxNotice(
-  _member: ManagedExternalAgentProjectMember,
-  sender?: ManagedExternalAgentProjectMessageSender
+export function managedMeshAgentBusyInboxNotice(
+  _member: ManagedMeshAgentProjectMember,
+  sender?: ManagedMeshAgentProjectMessageSender
 ): string {
-  const senderMention = managedExternalAgentSenderMentionToken(sender);
+  const senderMention = managedMeshAgentSenderMentionToken(sender);
   return BUSY_INBOX_NOTICE_PROMPT.render({
     senderKind: sender?.kind ?? 'unknown',
     senderName: sender?.name ?? 'unknown',
@@ -97,19 +97,19 @@ export function managedExternalAgentBusyInboxNotice(
   });
 }
 
-export function managedExternalAgentDirectNotice({
+export function managedMeshAgentDirectNotice({
   member: _member,
   fromAgentName,
   text
 }: {
-  member: ManagedExternalAgentProjectMember;
+  member: ManagedMeshAgentProjectMember;
   fromAgentName: string;
   text: string;
 }): string {
   return DIRECT_NOTICE_PROMPT.render({ fromAgentName, text });
 }
 
-export function managedExternalAgentResumeRecoveryNotice(provider: string, notice: string): string {
+export function managedMeshAgentResumeRecoveryNotice(provider: string, notice: string): string {
   void provider;
   return RESUME_RECOVERY_NOTICE_PROMPT.render({ notice });
 }

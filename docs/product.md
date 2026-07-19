@@ -110,7 +110,7 @@ splitting state across products.
 ## Product boundaries
 
 Monad already provides the foundations of this model: a daemon/API boundary,
-persistent sessions, Workplace collaboration, external-agent and ACP delegation,
+persistent sessions, Workplace collaboration, mesh-agent and ACP delegation,
 peer federation, approval gates, activity records, and Workspace Experience
 extensions. These are enabling primitives for Monad Mesh.
 

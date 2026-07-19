@@ -37,25 +37,25 @@ test('control subscriber sees list-level events from sessions it never subscribe
   expect(control).toEqual(['session.created', 'task.completed']);
 });
 
-test('external-agent lifecycle fans out to control so the session list stays live without a reload', () => {
+test('mesh-agent lifecycle fans out to control so the session list stays live without a reload', () => {
   const bus = new EventBus();
   const control: EventType[] = [];
   bus.subscribeControl((e) => control.push(e.type));
 
-  bus.publish(ev('external_agent.started', 'prj_a00000000000'));
-  bus.publish(ev('external_agent.turn_settled', 'prj_a00000000000'));
-  bus.publish(ev('external_agent.exited', 'prj_a00000000000'));
+  bus.publish(ev('mesh.started', 'prj_a00000000000'));
+  bus.publish(ev('mesh.turn_settled', 'prj_a00000000000'));
+  bus.publish(ev('mesh.exited', 'prj_a00000000000'));
 
   // started/exited are list-level (a session appeared/ended); per-turn detail stays session-scoped.
-  expect(control).toEqual(['external_agent.started', 'external_agent.exited']);
+  expect(control).toEqual(['mesh.started', 'mesh.exited']);
 });
 
-test('external-agent connection lifecycle reaches session and control subscribers as the same event', () => {
+test('mesh-agent connection lifecycle reaches session and control subscribers as the same event', () => {
   const bus = new EventBus();
   const session: Event[] = [];
   const control: Event[] = [];
-  const opened = ev('external_agent.session.connection.opened', 'ses_connection0000');
-  const closed = ev('external_agent.session.connection.closed', 'ses_connection0000');
+  const opened = ev('mesh.session.connection.opened', 'ses_connection0000');
+  const closed = ev('mesh.session.connection.closed', 'ses_connection0000');
   bus.subscribe('ses_connection0000' as SessionId, (event) => session.push(event));
   bus.subscribeControl((event) => control.push(event));
 

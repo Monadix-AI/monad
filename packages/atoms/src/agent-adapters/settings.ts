@@ -1,9 +1,9 @@
-import type { ExternalAgentAppServerTransport, ExternalAgentLaunchMode, ExternalAgentSetting } from '@monad/protocol';
+import type { MeshAgentAppServerTransport, MeshAgentLaunchMode, MeshAgentSetting } from '@monad/protocol';
 
-export function externalAgentAdapterSettings(options: {
-  launchModes: ExternalAgentLaunchMode[];
-  appServerTransports?: ExternalAgentAppServerTransport[];
-}): ExternalAgentSetting[] {
+export function meshAgentAdapterSettings(options: {
+  launchModes: MeshAgentLaunchMode[];
+  appServerTransports?: MeshAgentAppServerTransport[];
+}): MeshAgentSetting[] {
   return [
     {
       key: 'defaultLaunchMode',

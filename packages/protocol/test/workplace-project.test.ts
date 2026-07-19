@@ -11,17 +11,17 @@ test('experience fanout request keeps project membership separate from transport
     recipients: [
       { participantId: 'monad', displayName: 'Monad', transport: 'monad' },
       {
-        participantId: 'external-agent:codex',
+        participantId: 'mesh-agent:codex',
         displayName: 'Codex',
-        transport: 'external-agent',
-        runtimeId: 'exa_100000000000'
+        transport: 'mesh-agent',
+        runtimeId: 'mesh_100000000000'
       },
       { participantId: 'acp:reviewer', displayName: 'Reviewer', transport: 'acp' }
     ],
     createdAt: '2026-06-28T00:00:00.000Z'
   });
 
-  expect(parsed.recipients.map((recipient) => recipient.transport)).toEqual(['monad', 'external-agent', 'acp']);
+  expect(parsed.recipients.map((recipient) => recipient.transport)).toEqual(['monad', 'mesh-agent', 'acp']);
   expect(experienceFanoutRequestSchema.safeParse({ ...parsed, recipients: [] }).success).toBe(false);
 });
 
@@ -32,10 +32,10 @@ test('experience projection event is ordered projection state, not provider raw 
     experienceId: 'chat-room',
     kind: 'thinking',
     orderKey: 12,
-    participantId: 'external-agent:codex',
+    participantId: 'mesh-agent:codex',
     sourceDeliveryId: 'deliv_ABC123000000',
     payload: {
-      fanoutAgents: ['external-agent:codex', 'external-agent:claude-code'],
+      fanoutAgents: ['mesh-agent:codex', 'mesh-agent:claude-code'],
       text: 'Agents are working'
     },
     output: '{"raw":"provider frame"}',
@@ -44,7 +44,7 @@ test('experience projection event is ordered projection state, not provider raw 
 
   expect(parsed.kind).toBe('thinking');
   expect(parsed.payload).toEqual({
-    fanoutAgents: ['external-agent:codex', 'external-agent:claude-code'],
+    fanoutAgents: ['mesh-agent:codex', 'mesh-agent:claude-code'],
     text: 'Agents are working'
   });
   expect('output' in parsed).toBe(false);

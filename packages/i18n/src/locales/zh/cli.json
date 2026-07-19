@@ -357,7 +357,7 @@
   "cli.tui.composer.busyHint": "Enter 排队 · Ctrl+Enter 引导 · Ctrl+C 停止{{queued}}",
   "cli.tui.composer.focusHint": "按 Tab 开始输入……",
   "cli.tui.projection.title": "External agent 过程投影",
-  "cli.tui.projection.empty": "当前 session 没有 external-agent 活动。",
+  "cli.tui.projection.empty": "当前 session 没有 mesh-agent 活动。",
   "cli.tui.projection.readOnly": "只读 · h/PageUp 加载历史 · provider 输出由 daemon 归一化",
   "cli.tui.projection.historyLoading": "正在加载更早的投影……",
   "cli.tui.projection.historyUnavailable": "此 runtime 不支持历史投影。"

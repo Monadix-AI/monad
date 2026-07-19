@@ -413,7 +413,7 @@ export async function serveDaemon(deps: ServeDeps): Promise<void> {
       fetch: (req: Request) => httpApp.handle(req),
       maxRequestBodySize: MAX_REQUEST_BODY_BYTES,
       // Elysia's own Bun adapter defaults idleTimeout to 30s for the TCP listener above; Bun.serve's
-      // own default is 10s. Match it here so a slow-but-legitimate request (e.g. the 20s external agent
+      // own default is 10s. Match it here so a slow-but-legitimate request (e.g. the 20s MeshAgent
       // auth-status probe) doesn't get killed over the Unix socket while it succeeds over TCP.
       // bun-types omits `idleTimeout` from the unix-socket overload even though the runtime honors it
       // (verified: a 15s handler completes fine with this set) — cast around the type gap.

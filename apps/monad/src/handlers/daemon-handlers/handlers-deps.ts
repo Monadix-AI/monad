@@ -111,13 +111,13 @@ export interface DaemonHandlerDeps extends SessionDeps, ModelDeps {
   certExpiry?: string;
   /** Live ISO-8601 expiry of the active TLS cert after HTTPS is enabled by hot reload. */
   getCertExpiry?: () => string | undefined;
-  /** Test/runtime override for browser-attached external agent auth connect heartbeat pruning. */
-  externalAgentAuthHeartbeatTimeoutMs?: number;
-  /** Test/runtime override for one-shot external agent auth/usage probe timeout. */
-  externalAgentAuthStatusTimeoutMs?: number;
-  /** Loopback URL that managed external agent runtimes use to call the daemon. */
-  externalAgentServerUrl?: string;
-  /** Current daemon HTTPS switch. Used only when externalAgentServerUrl is not supplied. */
+  /** Test/runtime override for browser-attached MeshAgent auth connect heartbeat pruning. */
+  meshAgentAuthHeartbeatTimeoutMs?: number;
+  /** Test/runtime override for one-shot MeshAgent auth/usage probe timeout. */
+  meshAgentAuthStatusTimeoutMs?: number;
+  /** Loopback URL that managed MeshAgent runtimes use to call the daemon. */
+  meshAgentServerUrl?: string;
+  /** Current daemon HTTPS switch. Used only when meshAgentServerUrl is not supplied. */
   networkHttps?: MonadConfig['network']['https'];
   /** Getter for background upgrade check result — populated asynchronously after startup. */
   getUpgradeInfo?: () => { latestVersion: string; latestVersionCheckedAt: string } | null;

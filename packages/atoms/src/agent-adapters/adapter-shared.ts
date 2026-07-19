@@ -1,4 +1,4 @@
-import type { ExternalAgentAuthState } from '@monad/protocol';
+import type { MeshAgentAuthState } from '@monad/protocol';
 
 /** Parse one JSON object literal; `undefined` for non-objects, arrays, or parse errors. */
 export function parseJsonObject(value: string): Record<string, unknown> | undefined {
@@ -44,7 +44,7 @@ export function uniqueModelNames(names: string[]): string[] {
 }
 
 /** Read a structured auth-state line (`{ state | authenticated | loggedIn }`) from a provider's `--json` output. */
-export function parseStructuredAuthState(output: string): ExternalAgentAuthState | undefined {
+export function parseStructuredAuthState(output: string): MeshAgentAuthState | undefined {
   for (const rawLine of output.split(/\r?\n/)) {
     const record = parseJsonObject(rawLine.trim());
     if (!record) continue;

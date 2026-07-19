@@ -6,9 +6,9 @@ import type { NavCapability, TuiSurface } from '../shell/capabilities.ts';
 import type { RootState } from '../store/index.ts';
 
 import {
-  externalAgentSessionSelectors,
+  meshSessionSelectors,
   useAbortSessionMutation,
-  useListExternalAgentSessionsQuery,
+  useListMeshSessionsQuery,
   useSendMessageMutation,
   useSendProjectMessageMutation,
   useStreamUiItemsQuery
@@ -42,7 +42,7 @@ import {
   AgentsScreen,
   ConnectionScreen,
   DegradedScreen,
-  ExternalAgentsScreen,
+  MeshAgentsScreen,
   PreferencesScreen,
   RuntimeScreen
 } from './OperationalScreens.tsx';
@@ -90,7 +90,7 @@ export function Layout({
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [transcriptOffset, setTranscriptOffset] = useState(0);
   const [messageQueue, setMessageQueue] = useState<string[]>([]);
-  const externalAgentSessionsQuery = useListExternalAgentSessionsQuery(currentSessionId ?? ('' as SessionId), {
+  const meshSessionsQuery = useListMeshSessionsQuery(currentSessionId ?? ('' as SessionId), {
     skip: mode !== 'wide' || !chatOpen || currentSessionId === null
   });
   const contextStream = useStreamUiItemsQuery(currentSessionId ?? ('' as SessionId), {
@@ -116,10 +116,8 @@ export function Layout({
   const composerActive = focus === 'composer' && chatOpen && overlay === 'none';
   const showNav = mode === 'wide' || (mode === 'medium' && sidebarOpen);
   const navigationWidth = showNav ? (mode === 'wide' ? sidebarWidth : 26) : 0;
-  const externalAgentCount = externalAgentSessionsQuery.data
-    ? externalAgentSessionSelectors.selectAll(externalAgentSessionsQuery.data).length
-    : 0;
-  const showProjection = shouldShowProjection(mode, chatOpen, currentSessionId !== null, externalAgentCount);
+  const meshAgentCount = meshSessionsQuery.data ? meshSessionSelectors.selectAll(meshSessionsQuery.data).length : 0;
+  const showProjection = shouldShowProjection(mode, chatOpen, currentSessionId !== null, meshAgentCount);
   const chatWidths = chatPaneWidths(columns, navigationWidth, showProjection);
 
   const openSession = useCallback(
@@ -660,8 +658,8 @@ function CapabilityContent({
       return <ModelSettings active={active} />;
     case 'studio.agents':
       return <AgentsScreen active={active} />;
-    case 'studio.externalAgents':
-      return <ExternalAgentsScreen active={active} />;
+    case 'studio.meshAgents':
+      return <MeshAgentsScreen active={active} />;
     case 'studio.approvals':
       return (
         <InboxScreen

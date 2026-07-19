@@ -147,7 +147,7 @@ test('a missing adapter command fails with an actionable message, not a bare ENO
     ]
   });
   await expect(tool.run({ agent: 'mock', instruction: 'x' }, fakeCtx())).rejects.toThrow(
-    /could not start external agent "mock".*installed and on PATH/s
+    /could not start MeshAgent "mock".*installed and on PATH/s
   );
 });
 
@@ -166,7 +166,7 @@ test('an adapter that exits before the ACP handshake fails with a clear error (n
     ]
   });
   await expect(tool.run({ agent: 'mock', instruction: 'x' }, fakeCtx())).rejects.toThrow(
-    /failed to run external agent "mock"/
+    /failed to run MeshAgent "mock"/
   );
 });
 

@@ -6,17 +6,17 @@ import type {
   SDKUserMessage,
   SessionMessage
 } from '@anthropic-ai/claude-agent-sdk';
-import type { ExternalAgentView } from '@monad/protocol';
+import type { MeshAgentView } from '@monad/protocol';
 import type {
-  BuildExternalAgentLaunchOptions,
-  ExternalAgentLaunchSpec,
-  ExternalAgentManagedRuntimeContext,
-  ExternalAgentModelOption,
-  ExternalAgentOutputEvent,
-  ExternalAgentProviderAdapter,
-  ExternalAgentProviderHistoryContext,
-  ExternalAgentProviderHistoryPageContext,
-  ExternalAgentProviderHistoryPageRequestContext
+  BuildMeshAgentLaunchOptions,
+  MeshAgentLaunchSpec,
+  MeshAgentManagedRuntimeContext,
+  MeshAgentModelOption,
+  MeshAgentOutputEvent,
+  MeshAgentProviderAdapter,
+  MeshAgentProviderEventContext,
+  MeshAgentProviderEventPageContext,
+  MeshAgentProviderEventPageRequestContext
 } from '@monad/sdk-atom';
 
 import { homedir } from 'node:os';
@@ -31,11 +31,11 @@ import {
   parseStructuredAuthState,
   textFromContentParts
 } from '../adapter-shared.ts';
-import { parseExternalAgentArgumentSupport } from '../argument-support.ts';
-import { createOutputHistoryEventSource } from '../event-source.ts';
-import { readProviderHistoryFile } from '../history-files.ts';
+import { parseMeshAgentArgumentSupport } from '../argument-support.ts';
+import { readProviderEventFile } from '../event-files.ts';
+import { createOutputEventSource } from '../event-source.ts';
 import { resizePty, sendPtyInput, stopPty } from '../pty.ts';
-import { externalAgentAdapterSettings } from '../settings.ts';
+import { meshAgentAdapterSettings } from '../settings.ts';
 import { createClaudeCodeSettingsImport } from '../settings-import/index.ts';
 import { claudeCodeObservationProjection } from './observation.ts';
 
@@ -104,7 +104,7 @@ function withClaudeThinkingDisplayArgs(args: string[], showThinkingSummary: bool
   return [...args, '--thinking-display', showThinkingSummary ? 'summarized' : 'omitted'];
 }
 
-function claudeManagedMcpConfigArgs(context: ExternalAgentManagedRuntimeContext): string[] {
+function claudeManagedMcpConfigArgs(context: MeshAgentManagedRuntimeContext): string[] {
   return [
     '--mcp-config',
     JSON.stringify({
@@ -120,7 +120,7 @@ function claudeManagedMcpConfigArgs(context: ExternalAgentManagedRuntimeContext)
   ];
 }
 
-function buildClaudeLaunch(agent: ExternalAgentView, opts: BuildExternalAgentLaunchOptions): ExternalAgentLaunchSpec {
+function buildClaudeLaunch(agent: MeshAgentView, opts: BuildMeshAgentLaunchOptions): MeshAgentLaunchSpec {
   const launchMode = opts.launchMode ?? agent.defaultLaunchMode;
   let args = [...(agent.args ?? [])];
   if (opts.providerSessionRef && !args.includes('--resume') && !args.includes('-r')) {
@@ -155,7 +155,7 @@ function buildClaudeLaunch(agent: ExternalAgentView, opts: BuildExternalAgentLau
   };
 }
 
-function buildClaudeAuthLaunch(agent: ExternalAgentView, args: string[]): ExternalAgentLaunchSpec {
+function buildClaudeAuthLaunch(agent: MeshAgentView, args: string[]): MeshAgentLaunchSpec {
   return {
     argv: [agent.command, ...args],
     cwd: homedir(),
@@ -174,7 +174,7 @@ function claudeModelDisplayName(model: string): string {
     .join(' ');
 }
 
-export function parseClaudeModelOptions(output: string): ExternalAgentModelOption[] {
+export function parseClaudeModelOptions(output: string): MeshAgentModelOption[] {
   const lines = output.split(/\r?\n/);
   let modelWindow = '';
   for (let index = 0; index < lines.length; index += 1) {
@@ -213,9 +213,9 @@ function stringifyToolResultContent(content: ClaudeToolResultContent): string | 
   return content === undefined ? undefined : JSON.stringify(content);
 }
 
-function parseClaudeContentBlocks(content: ClaudeMessageContent): ExternalAgentOutputEvent[] {
+function parseClaudeContentBlocks(content: ClaudeMessageContent): MeshAgentOutputEvent[] {
   if (typeof content === 'string') return [];
-  const events: ExternalAgentOutputEvent[] = [];
+  const events: MeshAgentOutputEvent[] = [];
   let text = '';
   for (const block of content) {
     switch (block.type) {
@@ -239,7 +239,7 @@ function parseClaudeContentBlocks(content: ClaudeMessageContent): ExternalAgentO
   return text ? [{ type: 'agent_message', payload: { text } }, ...events] : events;
 }
 
-function claudePermissionDenialEvents(denials: SDKPermissionDenial[], result: string): ExternalAgentOutputEvent[] {
+function claudePermissionDenialEvents(denials: SDKPermissionDenial[], result: string): MeshAgentOutputEvent[] {
   const messages = denials
     .map((denial) => {
       const command = typeof denial.tool_input.command === 'string' ? denial.tool_input.command : undefined;
@@ -257,7 +257,7 @@ function claudePermissionDenialEvents(denials: SDKPermissionDenial[], result: st
   ];
 }
 
-function claudeSystemInitEvents(message: SDKSystemMessage): ExternalAgentOutputEvent[] {
+function claudeSystemInitEvents(message: SDKSystemMessage): MeshAgentOutputEvent[] {
   return [
     {
       type: 'session_ref',
@@ -271,7 +271,7 @@ function claudeSystemInitEvents(message: SDKSystemMessage): ExternalAgentOutputE
   ];
 }
 
-function claudeMessageEvents(message: SDKMessage): ExternalAgentOutputEvent[] {
+function claudeMessageEvents(message: SDKMessage): MeshAgentOutputEvent[] {
   switch (message.type) {
     case 'system':
       return message.subtype === 'init' ? claudeSystemInitEvents(message) : [];
@@ -293,7 +293,7 @@ function claudeMessageEvents(message: SDKMessage): ExternalAgentOutputEvent[] {
 // The SDKMessage union doesn't model the top-level `error` field the CLI attaches to synthetic
 // failure events (e.g. {"type":"assistant","error":"authentication_failed",...} when the session's
 // credentials expire mid-run), so auth failure is detected on the raw record before narrowing.
-function claudeAuthFailureEvent(record: Record<string, unknown>): ExternalAgentOutputEvent | undefined {
+function claudeAuthFailureEvent(record: Record<string, unknown>): MeshAgentOutputEvent | undefined {
   const resultText = typeof record.result === 'string' ? record.result.trim() : '';
   const isErrorResult =
     record.type === 'result' && record.is_error === true && /(?:not logged in|please run\s+\/login)/i.test(resultText);
@@ -312,8 +312,8 @@ function claudeAuthFailureEvent(record: Record<string, unknown>): ExternalAgentO
   };
 }
 
-function parseClaudeStreamJson(chunk: string): ExternalAgentOutputEvent[] {
-  const events: ExternalAgentOutputEvent[] = [];
+function parseClaudeStreamJson(chunk: string): MeshAgentOutputEvent[] {
+  const events: MeshAgentOutputEvent[] = [];
   const authFailures = new Set<string>();
   for (const rawLine of chunk.split(/\r?\n/)) {
     const line = rawLine.trim();
@@ -334,8 +334,8 @@ function parseClaudeStreamJson(chunk: string): ExternalAgentOutputEvent[] {
   return events;
 }
 
-function claudeTranscriptFallback(context: ExternalAgentProviderHistoryContext): string | null {
-  return readProviderHistoryFile({
+function claudeTranscriptFallback(context: MeshAgentProviderEventContext): string | null {
+  return readProviderEventFile({
     roots: [join(homedir(), '.claude', 'projects')],
     providerSessionRef: context.providerSessionRef,
     extensions: ['.jsonl'],
@@ -369,10 +369,10 @@ interface ClaudeSdkHistoryDeps {
   getSessionMessages: typeof getSessionMessages;
 }
 
-export function createClaudeSdkHistoryPageReader(deps: ClaudeSdkHistoryDeps) {
-  return async function readClaudeHistoryPage(
-    context: ExternalAgentProviderHistoryPageRequestContext
-  ): Promise<ExternalAgentProviderHistoryPageContext['page'] | null> {
+export function createClaudeSdkEventPageReader(deps: ClaudeSdkHistoryDeps) {
+  return async function readClaudeEventPage(
+    context: MeshAgentProviderEventPageRequestContext
+  ): Promise<MeshAgentProviderEventPageContext['page'] | null> {
     try {
       const offset = claudeHistoryOffset(context.request.before);
       const messages = await deps.getSessionMessages(context.providerSessionRef, {
@@ -400,9 +400,7 @@ export function createClaudeSdkHistoryPageReader(deps: ClaudeSdkHistoryDeps) {
 }
 
 export function createClaudeSdkHistoryOutputReader(deps: ClaudeSdkHistoryDeps) {
-  return async function readClaudeSdkHistoryOutput(
-    context: ExternalAgentProviderHistoryContext
-  ): Promise<string | null> {
+  return async function readClaudeSdkHistoryOutput(context: MeshAgentProviderEventContext): Promise<string | null> {
     try {
       const messages = await deps.getSessionMessages(context.providerSessionRef, {
         dir: context.workingPath,
@@ -417,7 +415,7 @@ export function createClaudeSdkHistoryOutputReader(deps: ClaudeSdkHistoryDeps) {
 
 const readClaudeSdkHistoryOutput = createClaudeSdkHistoryOutputReader({ getSessionMessages });
 
-async function readClaudeHistoryOutput(context: ExternalAgentProviderHistoryContext): Promise<string | null> {
+async function readClaudeHistoryOutput(context: MeshAgentProviderEventContext): Promise<string | null> {
   return (await readClaudeSdkHistoryOutput(context)) ?? claudeTranscriptFallback(context);
 }
 
@@ -432,22 +430,22 @@ function buildClaudeStreamJsonUserMessage(input: string): SDKUserMessage {
   };
 }
 
-function sendClaudeInput(handle: Parameters<ExternalAgentProviderAdapter['sendInput']>[0], input: string): void {
+function sendClaudeInput(handle: Parameters<MeshAgentProviderAdapter['sendInput']>[0], input: string): void {
   if (handle.launchMode !== 'json-stream') {
     sendPtyInput(handle, input);
     return;
   }
-  if (!handle.stdin) throw new Error('external agent session has no stream-json input bridge');
+  if (!handle.stdin) throw new Error('MeshAgent session has no stream-json input bridge');
   handle.stdin.write(`${JSON.stringify(buildClaudeStreamJsonUserMessage(input))}\n`);
   void handle.stdin.flush?.();
 }
 
-function resizeClaude(handle: Parameters<ExternalAgentProviderAdapter['resize']>[0], cols: number, rows: number): void {
+function resizeClaude(handle: Parameters<MeshAgentProviderAdapter['resize']>[0], cols: number, rows: number): void {
   if (handle.launchMode === 'json-stream') return;
   resizePty(handle, cols, rows);
 }
 
-function stopClaude(handle: Parameters<ExternalAgentProviderAdapter['stop']>[0]): void {
+function stopClaude(handle: Parameters<MeshAgentProviderAdapter['stop']>[0]): void {
   if (handle.launchMode === 'json-stream') {
     void handle.stdin?.end?.();
     handle.kill('SIGTERM');
@@ -457,21 +455,21 @@ function stopClaude(handle: Parameters<ExternalAgentProviderAdapter['stop']>[0])
 }
 
 function resolveClaudeApproval(): void {
-  throw new Error('Claude Code external agent approval resolution is not supported in json-stream mode');
+  throw new Error('Claude Code MeshAgent approval resolution is not supported in json-stream mode');
 }
 
-export const claudeCodeExternalAgentAdapter: ExternalAgentProviderAdapter = {
+export const claudeCodeMeshAgentAdapter: MeshAgentProviderAdapter = {
   provider: 'claude-code',
   productIcon: 'claude-code',
   label: 'Claude Code',
   observation: claudeCodeObservationProjection,
-  events: createOutputHistoryEventSource({
+  events: createOutputEventSource({
     provider: 'claude-code',
     projection: claudeCodeObservationProjection,
     readOutput: readClaudeHistoryOutput
   }),
   settings: () => [
-    ...externalAgentAdapterSettings({ launchModes: ['pty', 'json-stream', 'remote-control'] }),
+    ...meshAgentAdapterSettings({ launchModes: ['pty', 'json-stream', 'remote-control'] }),
     {
       key: 'showThinkingSummary',
       label: 'Show thinking summary',
@@ -481,12 +479,18 @@ export const claudeCodeExternalAgentAdapter: ExternalAgentProviderAdapter = {
     }
   ],
   settingsImport: createClaudeCodeSettingsImport(),
+  unsafeArgument: (args) =>
+    args.find((arg) => arg === '--dangerously-skip-permissions' || arg === '--allow-dangerously-skip-permissions'),
   // ACP delivery variant: same Claude Code agent, launched as an external ACP sub-agent via the
   // claude-agent-acp wrapper. Version-pinned so `npx -y <pkg>@<ver>` resolves a known build.
   acp: {
     command: 'npx',
     args: ['-y', '@agentclientprotocol/claude-agent-acp@0.49.0'],
-    env: { ANTHROPIC_API_KEY: '${env:' + 'ANTHROPIC_API_KEY}' }
+    env: { ANTHROPIC_API_KEY: '${env:' + 'ANTHROPIC_API_KEY}' },
+    loginDirectories: [join(homedir(), '.claude')],
+    stripEnvironment: ['CLAUDECODE', 'CLAUDE_CODE_ENTRYPOINT'],
+    credentialDirectories: [{ path: join(homedir(), '.claude'), env: 'CLAUDE_CONFIG_DIR' }],
+    authEnvironmentVariables: ['ANTHROPIC_API_KEY']
   },
   managedRuntime: {
     launchMode: () => 'json-stream',
@@ -499,12 +503,12 @@ export const claudeCodeExternalAgentAdapter: ExternalAgentProviderAdapter = {
     const installed = claudeBin !== undefined;
     return {
       id: 'claude-code',
-      label: claudeCodeExternalAgentAdapter.label,
+      label: claudeCodeMeshAgentAdapter.label,
       provider: 'claude-code',
-      productIcon: claudeCodeExternalAgentAdapter.productIcon,
+      productIcon: claudeCodeMeshAgentAdapter.productIcon,
       command: 'claude',
       args: [],
-      modelOptions: claudeCodeExternalAgentAdapter.listSupportedModels(),
+      modelOptions: claudeCodeMeshAgentAdapter.listSupportedModels(),
       defaultLaunchMode: 'pty',
       supportedLaunchModes: ['pty', 'json-stream', 'remote-control'],
       installHint: 'Install Claude Code, then sign in with claude auth.',
@@ -513,7 +517,7 @@ export const claudeCodeExternalAgentAdapter: ExternalAgentProviderAdapter = {
       resolvedBinPath: claudeBin,
       capabilities: {
         auth: 'pty',
-        history: 'provider-owned',
+        events: 'provider-owned',
         resume: 'pty',
         approval: 'provider-owned',
         settingsImport: true
@@ -542,13 +546,13 @@ export const claudeCodeExternalAgentAdapter: ExternalAgentProviderAdapter = {
   authStatus(agent) {
     return {
       launch: buildClaudeAuthLaunch(agent, ['auth', 'status', '--json']),
-      parse: (output, exitCode) => claudeCodeExternalAgentAdapter.parseAuthStatus(output, exitCode)
+      parse: (output, exitCode) => claudeCodeMeshAgentAdapter.parseAuthStatus(output, exitCode)
     };
   },
   argumentSupport(agent) {
     return {
       launch: buildClaudeAuthLaunch(agent, ['--help']),
-      parse: (output) => parseExternalAgentArgumentSupport(output)
+      parse: (output) => parseMeshAgentArgumentSupport(output)
     };
   },
   parseAuthStatus(output, exitCode) {

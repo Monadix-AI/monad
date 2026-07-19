@@ -29,7 +29,7 @@ export type StudioSectionId =
   | 'acpDelegates'
   | 'acpAgents'
   | 'mesh'
-  | 'externalAgents'
+  | 'meshAgents'
   | 'workplaceProjects'
   | 'projectMembers'
   | 'meshTasks'
@@ -58,7 +58,7 @@ const STUDIO_SECTION_IDS = [
   'acpDelegates',
   'acpAgents',
   'mesh',
-  'externalAgents',
+  'meshAgents',
   'workplaceProjects',
   'projectMembers',
   'meshTasks',
@@ -99,7 +99,7 @@ export const STUDIO_RUNTIME_SECTIONS: StudioSectionItem[] = [
 
 export const STUDIO_MESH_SECTIONS: StudioSectionItem[] = [
   { id: 'mesh', icon: NeuralNetworkIcon, i18nKey: 'web.studio.meshOverview' },
-  { id: 'externalAgents', icon: TerminalIcon, i18nKey: 'web.studio.externalAgents' },
+  { id: 'meshAgents', icon: TerminalIcon, i18nKey: 'web.studio.meshAgents' },
   { id: 'workplaceProjects', icon: MessageSquareCodeIcon, i18nKey: 'web.studio.workplaceProjects' }
 ];
 

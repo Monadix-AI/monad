@@ -35,17 +35,17 @@ const SSE_GENERATION_EMITS: readonly EventType[] = [
   'memory.suggestion',
   'delegation.fs_request',
   'delegation.terminal_request',
-  'external_agent.started',
-  'external_agent.connection_required',
-  'external_agent.approval_requested',
-  'external_agent.approval_resolved',
-  'external_agent.idle_resumed',
-  'external_agent.idle_suspended',
-  'external_agent.resume_failed',
-  'external_agent.exited',
-  'external_agent.turn_settled',
-  'external_agent.login_required',
-  'external_agent.login_resolved'
+  'mesh.started',
+  'mesh.connection_required',
+  'mesh.approval_requested',
+  'mesh.approval_resolved',
+  'mesh.idle_resumed',
+  'mesh.idle_suspended',
+  'mesh.resume_failed',
+  'mesh.exited',
+  'mesh.turn_settled',
+  'mesh.login_required',
+  'mesh.login_resolved'
 ];
 
 function declaredEmits(): Set<string> {

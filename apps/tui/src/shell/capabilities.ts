@@ -26,7 +26,7 @@ export const NAV_CAPABILITIES: NavCapability[] = [
   item('studio', 'runtime', 'Runtime', 'native', '/studio/runtime'),
   item('studio', 'models', 'Models & Providers', 'native', '/studio/models'),
   item('studio', 'agents', 'Monad Agents', 'native', '/studio/agents'),
-  item('studio', 'externalAgents', 'External Agents', 'native', '/studio/externalAgents'),
+  item('studio', 'meshAgents', 'MeshAgents', 'native', '/studio/meshAgents'),
   item('studio', 'approvals', 'Approvals', 'native', '/studio/approvals'),
   item('studio', 'capabilities', 'Capabilities', 'summary', '/studio/capabilities'),
   item('studio', 'acpDelegates', 'ACP Delegates', 'summary', '/studio/acpDelegates'),

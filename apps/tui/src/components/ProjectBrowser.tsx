@@ -2,14 +2,14 @@ import type { ProjectId, SessionId, WorkplaceProjectMemberTemplate } from '@mona
 
 import {
   acpAgentSelectors,
-  externalAgentSelectors,
+  meshAgentSelectors,
   projectSessionSelectors,
   useCreateProjectSessionMutation,
   useCreateWorkplaceProjectMutation,
   useDeleteSessionMutation,
   useDeleteWorkplaceProjectMutation,
   useListAcpAgentsQuery,
-  useListExternalAgentsQuery,
+  useListMeshAgentsQuery,
   useListProjectSessionsQuery,
   useListWorkplaceProjectsQuery,
   useUpdateSessionMutation,
@@ -67,8 +67,8 @@ export function ProjectBrowser({
   const sessions = sessionsQuery.data ? projectSessionSelectors.selectAll(sessionsQuery.data.sessions) : [];
   const acpAgentsQuery = useListAcpAgentsQuery();
   const acpAgents = acpAgentsQuery.data ? acpAgentSelectors.selectAll(acpAgentsQuery.data) : [];
-  const externalAgentsQuery = useListExternalAgentsQuery();
-  const externalAgents = externalAgentsQuery.data ? externalAgentSelectors.selectAll(externalAgentsQuery.data) : [];
+  const meshAgentsQuery = useListMeshAgentsQuery();
+  const meshAgents = meshAgentsQuery.data ? meshAgentSelectors.selectAll(meshAgentsQuery.data) : [];
   const memberCandidates = [
     { type: 'monad' as const, name: 'monad', label: 'Monad' },
     ...acpAgents
@@ -81,10 +81,10 @@ export function ProjectBrowser({
         osSandbox: agent.osSandbox,
         forwardMcp: agent.forwardMcp
       })),
-    ...externalAgents
+    ...meshAgents
       .filter((agent) => agent.enabled)
       .map((agent) => ({
-        type: 'external-agent' as const,
+        type: 'mesh-agent' as const,
         name: agent.name,
         label: `External · ${agent.name}`,
         defaultLaunchMode: agent.defaultLaunchMode,
@@ -411,7 +411,7 @@ export function ProjectBrowser({
           active={active}
           candidates={memberCandidates}
           cursor={cursor}
-          loading={acpAgentsQuery.isLoading || externalAgentsQuery.isLoading}
+          loading={acpAgentsQuery.isLoading || meshAgentsQuery.isLoading}
         />
       ) : (
         <>

@@ -46,7 +46,7 @@ test('traceProjectDebugOperation records input and output around an async call',
   clearProjectDebugTrace();
 
   const result = await traceProjectDebugOperation(
-    { layer: 'web', label: 'external-agent.input', sessionId: 'ses_100000000000', data: { id: 'exa_100000000000' } },
+    { layer: 'web', label: 'mesh-agent.input', sessionId: 'ses_100000000000', data: { id: 'mesh_100000000000' } },
     async () => ({ ok: true })
   );
 

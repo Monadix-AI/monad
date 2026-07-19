@@ -209,7 +209,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     getCertFingerprint: () => networkRuntime.tls().fingerprint,
     getCertExpiry: () => networkRuntime.tls().expiry,
     networkHttps: cfg.network.https,
-    externalAgentServerUrl: endpoint.localUrl,
+    meshAgentServerUrl: endpoint.localUrl,
     getUpgradeInfo: upgradeInfo.getUpgradeInfo,
     log: logger
   });

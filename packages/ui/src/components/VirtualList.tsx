@@ -86,6 +86,37 @@ export function averageMeasuredRowHeight(sizes: Iterable<number>, fallback = EST
   return count === 0 ? fallback : Math.max(1, Math.round(sum / count));
 }
 
+/** Estimates retained per row key beyond the current row count before stale keys are dropped. */
+const ESTIMATE_CACHE_SLACK = 4;
+
+/**
+ * An unmeasured row's estimate, frozen at the first value it was given. The virtualizer re-runs
+ * `estimateSize` for every unmeasured row on each measurement pass and does NOT compensate the
+ * scroll position for what it returns — only a row RESIZE goes through that compensation. So a
+ * running average, recomputed as rows measure, silently re-heights every unmeasured row above the
+ * viewport and jumps the content the reader is looking at. Freezing per key keeps the average's
+ * benefit (a page of newly loaded rows is estimated from real data) without ever moving a row that
+ * is already positioned.
+ */
+export function stableEstimate(cache: Map<string, number>, key: string, estimate: number): number {
+  const cached = cache.get(key);
+  if (cached !== undefined) return cached;
+  cache.set(key, estimate);
+  return estimate;
+}
+
+/** Drop estimates for keys no longer in the list; the cache must not grow with session length. */
+export function pruneEstimateCache(
+  cache: Map<string, number>,
+  liveKeys: Set<string>,
+  slack = ESTIMATE_CACHE_SLACK
+): void {
+  if (cache.size <= liveKeys.size + slack) return;
+  for (const key of cache.keys()) {
+    if (!liveKeys.has(key)) cache.delete(key);
+  }
+}
+
 /** The row set changed at an edge when the first or last key differs from the previous render. */
 export function edgeKeysOf<T>(
   items: T[],
@@ -153,11 +184,17 @@ export function VirtualList<T>({
     publish(next);
   }, []);
 
-  // Estimate = running average of the rows measured so far. Updated outside React state on
-  // purpose: the value only matters the next time measurements recompute (a count change re-runs
-  // `estimateSize` for every unmeasured row), so re-rendering for it would be pure churn.
+  // Estimate = running average of the rows measured so far, handed to each row once (see
+  // `stableEstimate`). Updated outside React state on purpose: it only matters the next time a row
+  // is first estimated, so re-rendering for it would be pure churn.
   const estimatedRowHeightRef = useRef(ESTIMATED_ROW_HEIGHT);
   const measuredRowCountRef = useRef(0);
+  const estimateCacheRef = useRef(new Map<string, number>());
+
+  const keyOfIndex = useCallback((index: number): string => {
+    const item = latestRef.current.items[index];
+    return item === undefined ? String(index) : latestRef.current.getKey(item);
+  }, []);
 
   const virtualizer = useVirtualizer({
     // `anchorTo: 'end'` keeps the viewport still when the row set changes at either edge (older
@@ -166,12 +203,9 @@ export function VirtualList<T>({
     // who is already parked within `scrollEndThreshold` of the bottom.
     anchorTo: stickToBottom ? 'end' : 'start',
     count: items.length,
-    estimateSize: () => estimatedRowHeightRef.current,
+    estimateSize: (index) => stableEstimate(estimateCacheRef.current, keyOfIndex(index), estimatedRowHeightRef.current),
     followOnAppend: stickToBottom ? 'auto' : false,
-    getItemKey: (index) => {
-      const item = latestRef.current.items[index];
-      return item === undefined ? index : latestRef.current.getKey(item);
-    },
+    getItemKey: keyOfIndex,
     getScrollElement: () => scrollerRef.current,
     onChange: (instance) => {
       if (instance.itemSizeCache.size !== measuredRowCountRef.current) {
@@ -235,23 +269,28 @@ export function VirtualList<T>({
     // running the full scroll handler here would read a still-measuring list as "not at the
     // bottom" and cancel following before the first paint. Timer, not rAF: rAF never fires while
     // the document is hidden.
-    const timer = window.setTimeout(evaluateEdges, HIDDEN_SETTLE_INTERVAL_MS);
+    const timer = window.setTimeout(() => {
+      if (scroller.scrollHeight <= scroller.clientHeight) evaluateEdges();
+    }, HIDDEN_SETTLE_INTERVAL_MS);
     return () => {
       cancelSettle?.();
       window.clearTimeout(timer);
     };
   }, [scrollerReady]);
 
-  // A page of older (or newer) rows re-arms its edge and is evaluated once: the reader may still
-  // be inside the zone, and if that page was shorter than the zone no scroll event would follow to
-  // continue paging.
+  // A changed boundary row re-arms its edge. Do not evaluate it in the same layout pass: prepend
+  // anchoring has not settled yet, so reading the old top position here can chain-load every page.
   const { firstKey, lastKey } = edgeKeysOf(items, getKey);
   // biome-ignore lint/correctness/useExhaustiveDependencies: edge keys are the trigger, not a read
   useLayoutEffect(() => {
     if (!scrollerReady) return;
     armEdges();
-    evaluateEdges();
-  }, [armEdges, evaluateEdges, firstKey, lastKey, scrollerReady]);
+  }, [armEdges, firstKey, lastKey, scrollerReady]);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the row count is the trigger, not a read
+  useLayoutEffect(() => {
+    pruneEstimateCache(estimateCacheRef.current, new Set(latestRef.current.items.map(latestRef.current.getKey)));
+  }, [items.length]);
 
   // Re-pin after a React commit that changed the measured height (rows added or removed, a new
   // range measured). In-place growth of an existing row is NOT covered here — `directDomUpdates`
@@ -271,6 +310,7 @@ export function VirtualList<T>({
         pinnedRef.current = true;
         follow.userScrolledRef.current = false;
         scrollToBottomNow(behavior === 'smooth' ? 'smooth' : 'auto');
+        settleAtBottom();
       },
       scrollToKey: (key, opts) => {
         const index = indexOfKey(latestRef.current.items, latestRef.current.getKey, key);
@@ -280,7 +320,7 @@ export function VirtualList<T>({
         virtualizer.scrollToIndex(index, { align: opts?.align ?? 'center', behavior: opts?.behavior });
       }
     }),
-    [follow, markSelfScroll, pinnedRef, scrollToBottomNow, virtualizer]
+    [follow, markSelfScroll, pinnedRef, scrollToBottomNow, settleAtBottom, virtualizer]
   );
 
   return (

@@ -3,8 +3,8 @@ import { z } from 'zod';
 import { messageRoleSchema, messageTypeSchema } from './domain.ts';
 import {
   agentIdSchema,
-  externalAgentSessionIdSchema,
   idempotencyKeySchema,
+  meshSessionIdSchema,
   messageIdSchema,
   nativeAgentDeliveryIdSchema,
   transcriptTargetIdSchema
@@ -13,15 +13,15 @@ import {
 export const messageProducerSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('user'), userId: z.string().min(1).optional() }),
   z.object({
-    kind: z.literal('external-agent'),
-    externalAgentSessionId: externalAgentSessionIdSchema,
+    kind: z.literal('mesh-agent'),
+    meshSessionId: meshSessionIdSchema,
     agentName: z.string().min(1).optional(),
     deliveryId: nativeAgentDeliveryIdSchema.optional()
   }),
   z.object({
     kind: z.literal('agent'),
     agentId: agentIdSchema,
-    externalAgentSessionId: externalAgentSessionIdSchema.optional()
+    meshSessionId: meshSessionIdSchema.optional()
   }),
   z.object({
     kind: z.literal('agent-facing-mcp'),

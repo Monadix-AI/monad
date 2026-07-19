@@ -32,8 +32,7 @@ const IDEMPOTENCY_CACHE_LIMIT = 256;
 
 function runtimeHeaders(): Record<string, string> {
   const headers: Record<string, string> = {};
-  if (Bun.env.MONAD_EXTERNAL_AGENT_SESSION_ID)
-    headers['x-monad-external-agent-session-id'] = Bun.env.MONAD_EXTERNAL_AGENT_SESSION_ID;
+  if (Bun.env.MONAD_MESH_SESSION_ID) headers['x-monad-mesh-session-id'] = Bun.env.MONAD_MESH_SESSION_ID;
   return headers;
 }
 
@@ -130,7 +129,7 @@ function logNativeAgentMcpError(toolName: string, error: unknown): void {
   const record = {
     event: 'native_agent_mcp_tool_error',
     toolName,
-    externalAgentSessionId: Bun.env.MONAD_EXTERNAL_AGENT_SESSION_ID,
+    meshSessionId: Bun.env.MONAD_MESH_SESSION_ID,
     serverUrl: Bun.env.MONAD_SERVER_URL,
     message,
     ...(stack ? { stack } : {})
@@ -196,12 +195,12 @@ const tools: ToolDef[] = [
   },
   {
     name: 'project_inbox_check',
-    description: 'Read pending project inbox items for this managed external agent.',
+    description: 'Read pending project inbox items for this managed MeshAgent.',
     inputSchema: schema({})
   },
   {
     name: 'project_inbox_ack',
-    description: 'Advance the visible inbox cursor for this managed external agent.',
+    description: 'Advance the visible inbox cursor for this managed MeshAgent.',
     inputSchema: schema({ cursor: { type: 'number' } })
   },
   {
@@ -236,7 +235,7 @@ const tools: ToolDef[] = [
   },
   {
     name: 'runtime_info',
-    description: 'Show the current managed external agent runtime binding.',
+    description: 'Show the current managed MeshAgent runtime binding.',
     inputSchema: schema({})
   }
 ];

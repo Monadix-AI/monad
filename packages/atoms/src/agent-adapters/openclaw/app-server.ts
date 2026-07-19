@@ -1,8 +1,8 @@
-import type { ExternalAgentHistoryPageRequest } from '@monad/protocol';
 import type {
-  ExternalAgentOutputEvent,
-  ExternalAgentProviderAdapter,
-  ExternalAgentRuntimeHandle
+  MeshAgentOutputEvent,
+  MeshAgentProviderAdapter,
+  MeshAgentProviderEventPageRequestContext,
+  MeshAgentRuntimeHandle
 } from '@monad/sdk-atom';
 import type { AppServerCliHooks } from '../app-server-jsonrpc.ts';
 
@@ -64,18 +64,19 @@ interface OpenClawConnectState {
   connectId: string;
   /** Shared gateway token (or `''`); part of both `auth` and the signed payload — see device-identity. */
   token: string;
+  sessionFrame: string;
 }
 
 // Per-session signing state, populated by `openClawInitialize` and consumed when the gateway's
 // `connect.challenge` frame arrives (the nonce is required in the signed payload, so the `connect`
 // request can't be sent until then). Keyed by handle so a reconnect — which re-invokes `initialize`
 // with a fresh identity — is naturally independent. A WeakMap avoids widening the runtime-handle type.
-const connectStates = new WeakMap<ExternalAgentRuntimeHandle, OpenClawConnectState>();
+const connectStates = new WeakMap<MeshAgentRuntimeHandle, OpenClawConnectState>();
 
 let nextFrameSeq = 0;
 /** Frame ids must be strings (`RequestFrameSchema.id: TString`); `handle.nextRequestId()` returns a
  *  number, so every id that crosses the wire is stringified here rather than at each call site. */
-function frameId(handle: ExternalAgentRuntimeHandle): string {
+function frameId(handle: MeshAgentRuntimeHandle): string {
   return String(handle.nextRequestId?.() ?? nextFrameSeq++);
 }
 
@@ -84,8 +85,8 @@ function req(method: string, id: string, params: Record<string, unknown>): strin
 }
 
 export function openClawInitialize(
-  handle: ExternalAgentRuntimeHandle,
-  context: Parameters<NonNullable<ExternalAgentProviderAdapter['initialize']>>[1]
+  handle: MeshAgentRuntimeHandle,
+  context: Parameters<NonNullable<MeshAgentProviderAdapter['initialize']>>[1]
 ): void {
   if (handle.launchMode !== 'app-server' || !handle.appServer) return;
   const connectId = frameId(handle);
@@ -105,7 +106,6 @@ export function openClawInitialize(
     sessionId,
     context.providerSessionRef ? { key: context.providerSessionRef, ...sessionParams } : sessionParams
   );
-  handle.deferredThreadFrame = sessionFrame;
 
   // The `connect` request carries an Ed25519 device signature over a nonce the gateway issues in a
   // `connect.challenge` event on socket open — so it can't be built here; `handleConnectChallenge`
@@ -122,7 +122,8 @@ export function openClawInitialize(
   connectStates.set(handle, {
     identity: createOpenClawDeviceIdentity(),
     connectId,
-    token: context.env?.OPENCLAW_GATEWAY_TOKEN ?? ''
+    token: context.env?.OPENCLAW_GATEWAY_TOKEN ?? '',
+    sessionFrame
   });
 }
 
@@ -138,8 +139,8 @@ export function openClawInitialize(
  *  distinction. */
 function handleConnectChallenge(
   payload: Record<string, unknown>,
-  handle: ExternalAgentRuntimeHandle | undefined
-): ExternalAgentOutputEvent[] {
+  handle: MeshAgentRuntimeHandle | undefined
+): MeshAgentOutputEvent[] {
   const state = handle ? connectStates.get(handle) : undefined;
   const nonce = typeof payload.nonce === 'string' ? payload.nonce : undefined;
   if (!handle?.appServer || !state || !nonce) return [];
@@ -181,7 +182,7 @@ function handleConnectChallenge(
   return [];
 }
 
-function responseEvents(frame: OpenClawEnvelope, handle?: ExternalAgentRuntimeHandle): ExternalAgentOutputEvent[] {
+function responseEvents(frame: OpenClawEnvelope, handle?: MeshAgentRuntimeHandle): MeshAgentOutputEvent[] {
   const idKey = typeof frame.id === 'string' ? frame.id : undefined;
   const kind = idKey !== undefined ? handle?.pendingRequests?.get(idKey) : undefined;
   if (idKey !== undefined && kind !== undefined) handle?.pendingRequests?.delete(idKey);
@@ -233,11 +234,11 @@ function responseEvents(frame: OpenClawEnvelope, handle?: ExternalAgentRuntimeHa
   const payload = recordValue(frame.payload);
 
   if (kind === 'initialize') {
-    if (handle) connectStates.delete(handle); // connect succeeded — no more retries needed
-    if (handle?.deferredThreadFrame && handle.appServer) {
-      handle.appServer.send(handle.deferredThreadFrame);
-      handle.deferredThreadFrame = undefined;
+    const state = handle ? connectStates.get(handle) : undefined;
+    if (state?.sessionFrame && handle?.appServer) {
+      handle.appServer.send(state.sessionFrame);
     }
+    if (handle) connectStates.delete(handle); // connect succeeded — no more retries needed
     return [];
   }
 
@@ -249,10 +250,10 @@ function responseEvents(frame: OpenClawEnvelope, handle?: ExternalAgentRuntimeHa
       ? [{ type: 'session_ref', payload: compactObject({ providerSessionRef: key, responseId: idKey }) }]
       : [];
   }
-  if (kind === 'historyPage') {
+  if (kind === 'eventPage') {
     return [
       {
-        type: 'history_page',
+        type: 'event_page',
         payload: {
           responseId: idKey as string | number,
           items: Array.isArray(payload?.messages) ? payload.messages : [],
@@ -265,7 +266,7 @@ function responseEvents(frame: OpenClawEnvelope, handle?: ExternalAgentRuntimeHa
   return [];
 }
 
-function approvalRequestedEvent(payload: Record<string, unknown>): ExternalAgentOutputEvent[] {
+function approvalRequestedEvent(payload: Record<string, unknown>): MeshAgentOutputEvent[] {
   // Not live-observed — inferred from ExecApprovalRequestParamsSchema (id/command/systemRunPlan) plus
   // the confirmed `id` field name from ExecApprovalResolveParamsSchema.
   const requestId = payload.id;
@@ -285,7 +286,7 @@ function approvalRequestedEvent(payload: Record<string, unknown>): ExternalAgent
   ];
 }
 
-function eventFrameEvents(eventName: string, payload: Record<string, unknown>): ExternalAgentOutputEvent[] {
+function eventFrameEvents(eventName: string, payload: Record<string, unknown>): MeshAgentOutputEvent[] {
   switch (eventName) {
     case 'exec.approval.requested':
       return approvalRequestedEvent(payload);
@@ -323,10 +324,7 @@ function eventFrameEvents(eventName: string, payload: Record<string, unknown>): 
   }
 }
 
-export function parseOpenClawFrame(
-  frame: OpenClawEnvelope,
-  handle?: ExternalAgentRuntimeHandle
-): ExternalAgentOutputEvent[] {
+export function parseOpenClawFrame(frame: OpenClawEnvelope, handle?: MeshAgentRuntimeHandle): MeshAgentOutputEvent[] {
   if (frame.type === 'res') return responseEvents(frame, handle);
   if (frame.type === 'event' && typeof frame.event === 'string') {
     // `connect.challenge` is answered by sending the signed `connect` request (needs the handle to
@@ -337,8 +335,8 @@ export function parseOpenClawFrame(
   return [];
 }
 
-export function parseOpenClawOutput(chunk: string, handle?: ExternalAgentRuntimeHandle): ExternalAgentOutputEvent[] {
-  const events: ExternalAgentOutputEvent[] = [];
+export function parseOpenClawOutput(chunk: string, handle?: MeshAgentRuntimeHandle): MeshAgentOutputEvent[] {
+  const events: MeshAgentOutputEvent[] = [];
   for (const rawLine of chunk.split(/\r?\n/)) {
     const line = rawLine.trim();
     if (!line.startsWith('{')) continue;
@@ -349,9 +347,9 @@ export function parseOpenClawOutput(chunk: string, handle?: ExternalAgentRuntime
   return events;
 }
 
-export function sendOpenClawInput(handle: ExternalAgentRuntimeHandle, input: string): void {
-  if (!handle.appServer) throw new Error('external agent session has no app-server input bridge');
-  if (!handle.providerSessionRef) throw new Error('external agent app-server session is not ready');
+export function sendOpenClawInput(handle: MeshAgentRuntimeHandle, input: string): void {
+  if (!handle.appServer) throw new Error('MeshAgent session has no app-server input bridge');
+  if (!handle.providerSessionRef) throw new Error('MeshAgent app-server session is not ready');
   const id = frameId(handle);
   handle.pendingRequests?.set(id, 'turn');
   // Live-confirmed params (SessionsSendParamsSchema): {key, message, ...}. An earlier draft of this
@@ -359,14 +357,14 @@ export function sendOpenClawInput(handle: ExternalAgentRuntimeHandle, input: str
   handle.appServer.send(req('sessions.send', id, { key: handle.providerSessionRef, message: input }));
 }
 
-export function requestOpenClawHistoryPage(
-  handle: ExternalAgentRuntimeHandle,
-  request: ExternalAgentHistoryPageRequest
+export function requestOpenClawEventPage(
+  handle: MeshAgentRuntimeHandle,
+  request: MeshAgentProviderEventPageRequestContext['request']
 ): string | number {
-  if (!handle.appServer) throw new Error('external agent session has no app-server input bridge');
-  if (!handle.providerSessionRef) throw new Error('external agent app-server session is not ready');
+  if (!handle.appServer) throw new Error('MeshAgent session has no app-server input bridge');
+  if (!handle.providerSessionRef) throw new Error('MeshAgent app-server session is not ready');
   const id = frameId(handle);
-  handle.pendingRequests?.set(id, 'historyPage');
+  handle.pendingRequests?.set(id, 'eventPage');
   // ChatHistoryParamsSchema: {sessionKey, limit?, maxChars?}. The provider API has no cursor, so this
   // intentionally requests the latest `limit` messages and returns no nextCursor.
   handle.appServer.send(req('chat.history', id, { sessionKey: handle.providerSessionRef, limit: request.limit }));
@@ -374,10 +372,10 @@ export function requestOpenClawHistoryPage(
 }
 
 export function resolveOpenClawApproval(
-  handle: ExternalAgentRuntimeHandle,
-  resolution: Parameters<ExternalAgentProviderAdapter['resolveApproval']>[1]
+  handle: MeshAgentRuntimeHandle,
+  resolution: Parameters<MeshAgentProviderAdapter['resolveApproval']>[1]
 ): void {
-  if (!handle.appServer) throw new Error('external agent session has no app-server approval bridge');
+  if (!handle.appServer) throw new Error('MeshAgent session has no app-server approval bridge');
   const id = frameId(handle);
   // ExecApprovalResolveParamsSchema: {id, decision}. ExecApprovalDecision (openclaw's own exported
   // type) is `"allow-once" | "allow-always" | "deny"` — a 3-way choice our binary `allow` maps onto the

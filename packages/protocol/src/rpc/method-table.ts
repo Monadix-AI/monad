@@ -39,22 +39,20 @@ import {
   revokeApprovalRequestSchema
 } from '../approvals.ts';
 import { commandsListQuerySchema, commandsListResponseSchema } from '../command.ts';
-import {
-  externalAgentApprovalResolutionRequestSchema,
-  externalAgentAuthStatusResponseSchema,
-  externalAgentHistoryPageRequestSchema,
-  externalAgentHistoryPageResponseSchema,
-  externalAgentInputRequestSchema,
-  externalAgentResizeRequestSchema,
-  externalAgentUsageResponseSchema,
-  getExternalAgentAuthSessionResponseSchema,
-  getExternalAgentSessionResponseSchema,
-  listExternalAgentSessionsResponseSchema,
-  startExternalAgentAuthResponseSchema,
-  startExternalAgentRequestSchema,
-  startExternalAgentResponseSchema
-} from '../external-agent/index.ts';
 import { agentIdSchema, eventIdSchema, messageIdSchema, sessionIdSchema } from '../ids.ts';
+import {
+  getMeshAgentAuthSessionResponseSchema,
+  getMeshSessionResponseSchema,
+  listMeshSessionsResponseSchema,
+  meshAgentApprovalResolutionRequestSchema,
+  meshAgentAuthStatusResponseSchema,
+  meshAgentInputRequestSchema,
+  meshAgentResizeRequestSchema,
+  meshAgentUsageResponseSchema,
+  startMeshAgentAuthResponseSchema,
+  startMeshAgentRequestSchema,
+  startMeshAgentResponseSchema
+} from '../mesh-agent/index.ts';
 import { setSkillsSettingsRequestSchema, skillsSettingsResponseSchema } from '../settings/skills-settings.ts';
 import {
   abortSessionResponseSchema,
@@ -152,10 +150,10 @@ const messageGenerationSubscribeAckSchema = z.object({
 
 const idPath = { id: sessionIdSchema };
 const agentPath = { id: agentIdSchema };
-const externalAgentSessionPath = { id: z.string().min(1) };
-const externalAgentSessionScopeQuery = z.object({ sessionId: sessionIdSchema });
-const externalAgentAuthScopeQuery = z.object({ controlToken: z.string().min(32) });
-const externalAgentNamePath = { name: z.string().min(1) };
+const meshSessionPath = { id: z.string().min(1) };
+const meshSessionScopeQuery = z.object({ transcriptTargetId: sessionIdSchema });
+const meshAgentAuthScopeQuery = z.object({ controlToken: z.string().min(32) });
+const meshAgentNamePath = { name: z.string().min(1) };
 
 export const UNIVERSAL_METHODS = {
   // Intentionally unversioned — liveness probes need a stable URL across API version bumps.
@@ -320,108 +318,101 @@ export const UNIVERSAL_METHODS = {
     result: okResponseSchema
   },
 
-  'externalAgent.start': {
-    http: { verb: 'POST', template: '/v1/sessions/:id/external-agents/start' },
-    path: idPath,
-    body: startExternalAgentRequestSchema,
-    result: startExternalAgentResponseSchema
+  'mesh.session.start': {
+    http: { verb: 'POST', template: '/v1/mesh/sessions' },
+    body: startMeshAgentRequestSchema,
+    result: startMeshAgentResponseSchema
   },
-  'externalAgent.list': {
-    http: { verb: 'GET', template: '/v1/sessions/:id/external-agent-sessions' },
-    path: idPath,
-    result: listExternalAgentSessionsResponseSchema
+  'mesh.session.list': {
+    http: { verb: 'GET', template: '/v1/mesh/sessions' },
+    query: z.object({ transcriptTargetId: sessionIdSchema }),
+    result: listMeshSessionsResponseSchema
   },
-  'externalAgent.get': {
-    http: { verb: 'GET', template: '/v1/external-agent-sessions/:id' },
-    path: externalAgentSessionPath,
-    query: externalAgentSessionScopeQuery,
-    result: getExternalAgentSessionResponseSchema
+  'mesh.session.get': {
+    http: { verb: 'GET', template: '/v1/mesh/sessions/:id' },
+    path: meshSessionPath,
+    query: meshSessionScopeQuery,
+    result: getMeshSessionResponseSchema
   },
-  'externalAgent.input': {
-    http: { verb: 'POST', template: '/v1/external-agent-sessions/:id/input' },
-    path: externalAgentSessionPath,
-    query: externalAgentSessionScopeQuery,
-    body: externalAgentInputRequestSchema,
+  'mesh.session.input': {
+    http: { verb: 'POST', template: '/v1/mesh/sessions/:id/input' },
+    path: meshSessionPath,
+    query: meshSessionScopeQuery,
+    body: meshAgentInputRequestSchema,
     result: okResponseSchema
   },
-  'externalAgent.interrupt': {
-    http: { verb: 'POST', template: '/v1/external-agent-sessions/:id/interrupt' },
-    path: externalAgentSessionPath,
-    query: externalAgentSessionScopeQuery,
+  'mesh.session.interrupt': {
+    http: { verb: 'POST', template: '/v1/mesh/sessions/:id/interrupt' },
+    path: meshSessionPath,
+    query: meshSessionScopeQuery,
     result: okResponseSchema
   },
-  'externalAgent.steer': {
-    http: { verb: 'POST', template: '/v1/external-agent-sessions/:id/steer' },
-    path: externalAgentSessionPath,
-    query: externalAgentSessionScopeQuery,
-    body: externalAgentInputRequestSchema,
+  'mesh.session.steer': {
+    http: { verb: 'POST', template: '/v1/mesh/sessions/:id/steer' },
+    path: meshSessionPath,
+    query: meshSessionScopeQuery,
+    body: meshAgentInputRequestSchema,
     result: okResponseSchema
   },
-  'externalAgent.approval': {
-    http: { verb: 'POST', template: '/v1/external-agent-sessions/:id/approval' },
-    path: externalAgentSessionPath,
-    query: externalAgentSessionScopeQuery,
-    body: externalAgentApprovalResolutionRequestSchema,
+  'mesh.session.approval': {
+    http: { verb: 'POST', template: '/v1/mesh/sessions/:id/approval' },
+    path: meshSessionPath,
+    query: meshSessionScopeQuery,
+    body: meshAgentApprovalResolutionRequestSchema,
     result: okResponseSchema
   },
-  'externalAgent.resize': {
-    http: { verb: 'POST', template: '/v1/external-agent-sessions/:id/resize' },
-    path: externalAgentSessionPath,
-    query: externalAgentSessionScopeQuery,
-    body: externalAgentResizeRequestSchema,
+  'mesh.session.resize': {
+    http: { verb: 'POST', template: '/v1/mesh/sessions/:id/resize' },
+    path: meshSessionPath,
+    query: meshSessionScopeQuery,
+    body: meshAgentResizeRequestSchema,
     result: okResponseSchema
   },
-  'externalAgent.stop': {
-    http: { verb: 'POST', template: '/v1/external-agent-sessions/:id/stop' },
-    path: externalAgentSessionPath,
-    query: externalAgentSessionScopeQuery,
+  'mesh.session.stop': {
+    http: { verb: 'POST', template: '/v1/mesh/sessions/:id/stop' },
+    path: meshSessionPath,
+    query: meshSessionScopeQuery,
     result: okResponseSchema
   },
-  'externalAgent.historyPage': {
-    http: { verb: 'GET', template: '/v1/external-agent-sessions/:id/history-page' },
-    path: externalAgentSessionPath,
-    query: externalAgentSessionScopeQuery.merge(externalAgentHistoryPageRequestSchema),
-    result: externalAgentHistoryPageResponseSchema
+  'mesh.agent.auth.start': {
+    http: { verb: 'POST', template: '/v1/mesh/agents/:name/auth/start' },
+    path: meshAgentNamePath,
+    result: startMeshAgentAuthResponseSchema
   },
-  'externalAgent.auth.start': {
-    http: { verb: 'POST', template: '/v1/external-agents/:name/auth/start' },
-    path: externalAgentNamePath,
-    result: startExternalAgentAuthResponseSchema
+  'mesh.agent.auth.status': {
+    http: { verb: 'GET', template: '/v1/mesh/agents/:name/auth/status' },
+    path: meshAgentNamePath,
+    result: meshAgentAuthStatusResponseSchema
   },
-  'externalAgent.auth.status': {
-    http: { verb: 'GET', template: '/v1/external-agents/:name/auth/status' },
-    path: externalAgentNamePath,
-    result: externalAgentAuthStatusResponseSchema
+  'mesh.agent.usage': {
+    http: { verb: 'GET', template: '/v1/mesh/agents/:name/usage' },
+    path: meshAgentNamePath,
+    result: meshAgentUsageResponseSchema
   },
-  'externalAgent.usage': {
-    http: { verb: 'GET', template: '/v1/external-agents/:name/usage' },
-    path: externalAgentNamePath,
-    result: externalAgentUsageResponseSchema
+  'mesh.authSession.get': {
+    http: { verb: 'GET', template: '/v1/mesh/auth-sessions/:id' },
+    path: meshSessionPath,
+    query: meshAgentAuthScopeQuery,
+    result: getMeshAgentAuthSessionResponseSchema
   },
-  'externalAgent.auth.get': {
-    http: { verb: 'GET', template: '/v1/external-agent-auth-sessions/:id' },
-    path: externalAgentSessionPath,
-    query: externalAgentAuthScopeQuery,
-    result: getExternalAgentAuthSessionResponseSchema
-  },
-  'externalAgent.auth.input': {
-    http: { verb: 'POST', template: '/v1/external-agent-auth-sessions/:id/input' },
-    path: externalAgentSessionPath,
-    query: externalAgentAuthScopeQuery,
-    body: externalAgentInputRequestSchema,
+  'mesh.authSession.input': {
+    http: { verb: 'POST', template: '/v1/mesh/auth-sessions/:id/input' },
+    path: meshSessionPath,
+    query: meshAgentAuthScopeQuery,
+    body: meshAgentInputRequestSchema,
     result: okResponseSchema
   },
-  'externalAgent.auth.resize': {
-    http: { verb: 'POST', template: '/v1/external-agent-auth-sessions/:id/resize' },
-    path: externalAgentSessionPath,
-    query: externalAgentAuthScopeQuery,
-    body: externalAgentResizeRequestSchema,
+  'mesh.authSession.resize': {
+    http: { verb: 'POST', template: '/v1/mesh/auth-sessions/:id/resize' },
+    path: meshSessionPath,
+    query: meshAgentAuthScopeQuery,
+    body: meshAgentResizeRequestSchema,
     result: okResponseSchema
   },
-  'externalAgent.auth.stop': {
-    http: { verb: 'POST', template: '/v1/external-agent-auth-sessions/:id/stop' },
-    path: externalAgentSessionPath,
-    query: externalAgentAuthScopeQuery,
+  'mesh.authSession.stop': {
+    http: { verb: 'POST', template: '/v1/mesh/auth-sessions/:id/stop' },
+    path: meshSessionPath,
+    query: meshAgentAuthScopeQuery,
     result: okResponseSchema
   }
 
@@ -457,8 +448,8 @@ export const RPC_ONLY_METHODS = {
       'session.message.deleted',
       'session.message.completed',
       'session.message.failed',
-      'external_agent.session.connection.opened',
-      'external_agent.session.connection.closed',
+      'mesh.session.connection.opened',
+      'mesh.session.connection.closed',
       'task.created',
       'task.progress',
       'task.completed',

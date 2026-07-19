@@ -30,7 +30,7 @@ import { z } from 'zod';
 
 import { toolResult } from '#/capabilities/tools/types.ts';
 import { setDelegateStore } from './acp-registry.ts';
-import { runExternalAgent } from './acp-spawn.ts';
+import { runMeshAgent } from './acp-spawn.ts';
 
 export { adapterSpawnEnv } from './acp-env.ts';
 export { acpAuthGuidance } from './acp-errors.ts';
@@ -85,7 +85,7 @@ export async function directDelegate(spec: AcpAgentConfig, text: string, opts: D
     log: (level, msg, fields) => log[level]({ ...fields }, msg)
   };
   const mcpServers = spec.forwardMcp === true ? (opts.mcpServers ?? []) : [];
-  return runExternalAgent(spec, text, ctx, undefined, mcpServers, opts.onChunk, opts.onActivity);
+  return runMeshAgent(spec, text, ctx, undefined, mcpServers, opts.onChunk, opts.onActivity);
 }
 
 /** Build the `agent_acp_delegate` tool from the configured external ACP agents (enabled only). */
@@ -97,9 +97,9 @@ export function createAcpDelegateTool(deps: AcpDelegateDeps): Tool<DelegateInput
     name: 'agent_acp_delegate',
     description:
       'Delegate a self-contained subtask to an external ACP agent, returning its final answer. ' +
-      `Available agents: ${names.join(', ')}. Use for work better handled by a specialised external agent.`,
+      `Available agents: ${names.join(', ')}. Use for work better handled by a specialised MeshAgent.`,
     scopes: [{ resource: 'agent:delegate' }],
-    // Spawning an external agent is a real escalation → route through the oversight gate once.
+    // Spawning an MeshAgent is a real escalation → route through the oversight gate once.
     highRisk: true,
     inputSchema: delegateInput,
     run: async ({ agent, instruction }, ctx) => {
@@ -108,7 +108,7 @@ export function createAcpDelegateTool(deps: AcpDelegateDeps): Tool<DelegateInput
       log.info({ agent }, 'delegating to external ACP agent');
       // Per-agent opt-in: only forward monad's MCP servers to agents that asked for them (forwardMcp).
       const mcpServers = spec.forwardMcp === true ? (deps.mcpServers ?? []) : [];
-      const text = await runExternalAgent(spec, instruction, ctx, deps.gate, mcpServers);
+      const text = await runMeshAgent(spec, instruction, ctx, deps.gate, mcpServers);
       return toolResult({ text });
     }
   };

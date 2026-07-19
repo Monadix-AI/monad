@@ -26,10 +26,7 @@ async function installCapabilitiesApiMock(page: Page) {
     }
     if (method === 'GET' && path === '/v1/workplace/projects') return json({ projects: [] });
     if (method === 'GET' && path === '/v1/commands') return json({ commands: [] });
-    if (
-      method === 'GET' &&
-      (path === '/v1/external-agent-runtimes' || path === '/v1/external-agent-session-summaries')
-    ) {
+    if (method === 'GET' && (path === '/v1/mesh/runtimes' || path === '/v1/mesh/session-summaries')) {
       return json({ sessions: [] });
     }
     if (method === 'GET' && path === '/v1/settings/model/profiles') {

@@ -24,10 +24,10 @@ export function inboxOpenTarget(item: { projectId?: ProjectId; sessionId: Sessio
 
 import {
   defaultWorkplaceProjectMemberSettings,
-  externalAgentProductDisplayName,
-  newExternalAgentInstanceId,
-  safeExternalAgentDisplayName,
-  uniqueExternalAgentDisplayName,
+  meshAgentProductDisplayName,
+  newMeshAgentInstanceId,
+  safeMeshAgentDisplayName,
+  uniqueMeshAgentDisplayName,
   workplaceProjectMemberId
 } from '@monad/protocol';
 
@@ -91,7 +91,7 @@ export function addProjectMemberTemplate(
   candidate: ProjectMemberCandidate
 ): { added: boolean; members: WorkplaceProjectMemberTemplate[] } {
   if (
-    candidate.type !== 'external-agent' &&
+    candidate.type !== 'mesh-agent' &&
     existing.some((member) => member.type === candidate.type && member.name === candidate.name)
   ) {
     return { added: false, members: [...existing] };
@@ -99,17 +99,17 @@ export function addProjectMemberTemplate(
 
   const settings = defaultWorkplaceProjectMemberSettings(candidate.type, candidate);
   const settingsField = Object.keys(settings).length > 0 ? { settings } : {};
-  if (candidate.type === 'external-agent') {
-    const defaultName = externalAgentProductDisplayName(candidate.productIcon, candidate.provider, candidate.name);
-    const displayName = safeExternalAgentDisplayName(
-      uniqueExternalAgentDisplayName(candidate.displayName?.trim() || defaultName, existing)
+  if (candidate.type === 'mesh-agent') {
+    const defaultName = meshAgentProductDisplayName(candidate.productIcon, candidate.provider, candidate.name);
+    const displayName = safeMeshAgentDisplayName(
+      uniqueMeshAgentDisplayName(candidate.displayName?.trim() || defaultName, existing)
     );
     return {
       added: true,
       members: [
         ...existing,
         {
-          id: newExternalAgentInstanceId(candidate.name),
+          id: newMeshAgentInstanceId(candidate.name),
           type: candidate.type,
           name: candidate.name,
           displayName,

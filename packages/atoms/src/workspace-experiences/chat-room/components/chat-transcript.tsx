@@ -126,8 +126,8 @@ export function ChatTranscript({
                   maxWidth: 440
                 }}
               >
-                Connect an external agent in Studio, then bring it into this room. You can also spawn a project-local
-                member when you want Monad to manage the session.
+                Connect an MeshAgent in Studio, then bring it into this room. You can also spawn a project-local member
+                when you want Monad to manage the session.
               </div>
             </div>
           </div>
@@ -154,7 +154,7 @@ export function ChatTranscript({
           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, marginTop: 20 }}>
             <button
               className="workplace-action"
-              onClick={() => host.openStudio('externalAgents')}
+              onClick={() => host.openStudio('meshAgents')}
               style={{
                 minHeight: 38,
                 display: 'inline-flex',
@@ -171,7 +171,7 @@ export function ChatTranscript({
               }}
               type="button"
             >
-              Set up external agents
+              Set up MeshAgents
             </button>
             <button
               className="workplace-action"

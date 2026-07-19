@@ -178,13 +178,13 @@ test('memory tool: project scope records to a Workplace Project workspace withou
   expect(
     (
       await svc.memoryTool('prj_project00000' as unknown as SessionId, 'record', {
-        fact: 'Project uses external agents',
+        fact: 'Project uses MeshAgents',
         scope: 'project'
       })
     ).ok
   ).toBe(true);
   expect((await svc.listFacts('project', projectKey('/work/workplace'))).map((f) => f.content)).toEqual([
-    'Project uses external agents'
+    'Project uses MeshAgents'
   ]);
 });
 

@@ -64,7 +64,7 @@ export interface Message {
     avatarUrl?: string;
     tag: string;
   }>;
-  externalAgentSessionId?: string;
+  meshSessionId?: string;
   deliveryId?: NativeAgentDeliveryId;
   developerOnly?: boolean;
   systemTone?: 'error';
@@ -114,9 +114,9 @@ export interface AgentTask {
   status: ActivityStatus;
 }
 
-export interface ExternalAgentStreamView {
+export interface MeshAgentStreamView {
   id: string;
-  /** The session/project transcript the external agent session belongs to. Observation and
+  /** The session/project transcript the MeshAgent session belongs to. Observation and
    *  history requests must be scoped to THIS id — the room's currently active session can be a
    *  different session of the same project, and the daemon rejects the mismatch (404). */
   transcriptTargetId?: string;
@@ -135,7 +135,7 @@ export interface ExternalAgentStreamView {
 
 export interface ApprovalView {
   id: string;
-  externalAgentSessionId?: string;
+  meshSessionId?: string;
   approvalOwnership?: 'provider-owned';
   av: string;
   name: string;

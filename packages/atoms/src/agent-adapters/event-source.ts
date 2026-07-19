@@ -1,14 +1,10 @@
+import type { MeshAgentObservationEvent, MeshAgentProvider, MeshRawEventRecord } from '@monad/protocol';
 import type {
-  ExternalAgentObservationEvent,
-  ExternalAgentProvider,
-  ExternalAgentRawHistoryRecord
-} from '@monad/protocol';
-import type {
-  ExternalAgentEventSource,
-  ExternalAgentObservationJsonRecordEntry,
-  ExternalAgentObservationProjector,
-  ExternalAgentProviderHistoryPageContext,
-  ExternalAgentRuntimeHandle
+  MeshAgentEventSource,
+  MeshAgentObservationJsonRecordEntry,
+  MeshAgentObservationProjector,
+  MeshAgentProviderEventPageContext,
+  MeshAgentRuntimeHandle
 } from '@monad/sdk-atom';
 
 import { jsonRecordEntries, textValue } from './observation-projection.ts';
@@ -35,15 +31,16 @@ function hash(value: string): string {
 function providerRecordIds(raw: unknown): string[] {
   if (Array.isArray(raw)) return raw.flatMap(providerRecordIds);
   if (raw === null || typeof raw !== 'object') return [];
-  const uuid = (raw as Record<string, unknown>).uuid;
-  return typeof uuid === 'string' && uuid.length > 0 ? [uuid] : [];
+  const record = raw as Record<string, unknown>;
+  const identity = typeof record.uuid === 'string' ? record.uuid : record.id;
+  return typeof identity === 'string' && identity.length > 0 ? [identity] : [];
 }
 
 function projectedEventPart(id: string): string | undefined {
   return /:json:\d+:(.+)$/.exec(id)?.[1];
 }
 
-function eventDedupeKey(provider: ExternalAgentProvider, event: ExternalAgentObservationEvent): string {
+function eventDedupeKey(provider: MeshAgentProvider, event: MeshAgentObservationEvent): string {
   const rawEvents = event.provenance.rawEvents;
   const recordIds = providerRecordIds(rawEvents);
   if (recordIds.length > 0) {
@@ -67,20 +64,20 @@ function eventDedupeKey(provider: ExternalAgentProvider, event: ExternalAgentObs
   return `${provider}:${hash(canonicalJson(identity))}`;
 }
 
-function compactEvent(event: ExternalAgentObservationEvent): ExternalAgentObservationEvent {
+function compactEvent(event: MeshAgentObservationEvent): MeshAgentObservationEvent {
   return Object.fromEntries(
     Object.entries(event).filter(([, value]) => value !== undefined)
-  ) as ExternalAgentObservationEvent;
+  ) as MeshAgentObservationEvent;
 }
 
 function unknownEvent(args: {
   id: string;
-  provider: ExternalAgentProvider;
-  entry: ExternalAgentObservationJsonRecordEntry;
+  provider: MeshAgentProvider;
+  entry: MeshAgentObservationJsonRecordEntry;
   recordIndex: number;
-}): ExternalAgentObservationEvent {
+}): MeshAgentObservationEvent {
   const providerEventType = textValue(args.entry.record.method, args.entry.record.type, args.entry.record.event);
-  const event: ExternalAgentObservationEvent = {
+  const event: MeshAgentObservationEvent = {
     id: `${args.id}:unknown:${args.recordIndex}`,
     projection: 'unknown',
     role: 'system',
@@ -94,11 +91,11 @@ function unknownEvent(args: {
 
 function projectedRecordEvents(args: {
   id: string;
-  provider: ExternalAgentProvider;
-  projection: ExternalAgentObservationProjector;
-  entry: ExternalAgentObservationJsonRecordEntry;
+  provider: MeshAgentProvider;
+  projection: MeshAgentObservationProjector;
+  entry: MeshAgentObservationJsonRecordEntry;
   recordIndex: number;
-}): ExternalAgentObservationEvent[] {
+}): MeshAgentObservationEvent[] {
   const events = args.projection.recordProjectors.flatMap((projector) => {
     if (projector.supports && !projector.supports(args.entry.record)) return [];
     return projector.parse({
@@ -120,13 +117,12 @@ function projectedRecordEvents(args: {
 
 function projectedEntries(args: {
   id: string;
-  provider: ExternalAgentProvider;
-  projection: ExternalAgentObservationProjector;
-  entries: ExternalAgentObservationJsonRecordEntry[];
-}): ExternalAgentObservationEvent[] {
-  const timeline: Array<{ kind: 'events'; events: ExternalAgentObservationEvent[] } | { kind: 'group'; key: string }> =
-    [];
-  const groups = new Map<string, { state: unknown; entries: ExternalAgentObservationJsonRecordEntry[] }>();
+  provider: MeshAgentProvider;
+  projection: MeshAgentObservationProjector;
+  entries: MeshAgentObservationJsonRecordEntry[];
+}): MeshAgentObservationEvent[] {
+  const timeline: Array<{ kind: 'events'; events: MeshAgentObservationEvent[] } | { kind: 'group'; key: string }> = [];
+  const groups = new Map<string, { state: unknown; entries: MeshAgentObservationJsonRecordEntry[] }>();
   const groupProjector = args.projection.messageGroup;
 
   args.entries.forEach((entry, recordIndex) => {
@@ -161,13 +157,13 @@ function projectedEntries(args: {
   });
 }
 
-function plainTextEvents(provider: ExternalAgentProvider, id: string, output: string): ExternalAgentObservationEvent[] {
+function plainTextEvents(provider: MeshAgentProvider, id: string, output: string): MeshAgentObservationEvent[] {
   return output
     .split(/\n{2,}/)
     .map((text) => text.trim())
     .filter(Boolean)
     .map((text, index) => {
-      const event: ExternalAgentObservationEvent = {
+      const event: MeshAgentObservationEvent = {
         id: `${id}:${index}`,
         projection: 'normalized',
         role: text.startsWith('tool:') ? 'tool' : 'agent',
@@ -180,12 +176,12 @@ function plainTextEvents(provider: ExternalAgentProvider, id: string, output: st
 }
 
 function mergeStreamingEvents(
-  provider: ExternalAgentProvider,
-  projection: ExternalAgentObservationProjector,
-  events: ExternalAgentObservationEvent[]
-): ExternalAgentObservationEvent[] {
-  const merged: ExternalAgentObservationEvent[] = [];
-  let run: ExternalAgentObservationEvent[] = [];
+  provider: MeshAgentProvider,
+  projection: MeshAgentObservationProjector,
+  events: MeshAgentObservationEvent[]
+): MeshAgentObservationEvent[] {
+  const merged: MeshAgentObservationEvent[] = [];
+  let run: MeshAgentObservationEvent[] = [];
   const settle = () => {
     if (run.length === 0) return;
     const first = run[0];
@@ -219,35 +215,102 @@ function mergeStreamingEvents(
 }
 
 export function createProjectedEventSource(args: {
-  provider: ExternalAgentProvider;
-  projection: ExternalAgentObservationProjector;
-  readPage?: ExternalAgentEventSource['readPage'];
-}): ExternalAgentEventSource {
+  provider: MeshAgentProvider;
+  projection: MeshAgentObservationProjector;
+  readPage?: MeshAgentEventSource['readPage'];
+}): MeshAgentEventSource {
+  const projectEntries = (id: string, entries: MeshAgentObservationJsonRecordEntry[]) => ({
+    events: mergeStreamingEvents(
+      args.provider,
+      args.projection,
+      projectedEntries({ id, provider: args.provider, projection: args.projection, entries })
+    )
+  });
   return {
     projectLive: ({ id, output, mode }) => {
       const entries = jsonRecordEntries(output);
       if (entries.length === 0) return { events: plainTextEvents(args.provider, id, output) };
       const projected =
-        mode === 'history' && args.projection.historyEntries ? args.projection.historyEntries(entries) : entries;
+        mode === 'events' && args.projection.eventEntries ? args.projection.eventEntries(entries) : entries;
+      return projectEntries(id, projected);
+    },
+    createLiveProjector: ({ id }) => {
+      const timeline: Array<{ kind: 'events'; events: MeshAgentObservationEvent[] } | { kind: 'group'; key: string }> =
+        [];
+      const groups = new Map<
+        string,
+        {
+          state: unknown;
+          entries: MeshAgentObservationJsonRecordEntry[];
+          events: MeshAgentObservationEvent[];
+        }
+      >();
+      const groupProjector = args.projection.messageGroup;
+      let output = '';
+      let carry = '';
+      let recordIndex = 0;
       return {
-        events: mergeStreamingEvents(
-          args.provider,
-          args.projection,
-          projectedEntries({ id, provider: args.provider, projection: args.projection, entries: projected })
-        )
+        advance: (delta) => {
+          output += delta;
+          carry += delta;
+          const lines = carry.split(/\r?\n/);
+          carry = lines.pop() ?? '';
+          for (const line of lines) {
+            for (const entry of jsonRecordEntries(line)) {
+              const created = groupProjector?.create(entry.record);
+              if (created && groupProjector) {
+                let group = groups.get(created.key);
+                if (!group) {
+                  group = { state: created.state, entries: [], events: [] };
+                  groups.set(created.key, group);
+                  timeline.push({ kind: 'group', key: created.key });
+                }
+                group.entries.push(entry);
+                groupProjector.append(group.state, entry);
+                group.events = groupProjector.render(id, group.state).map((event) => {
+                  const rawEvents = group.entries.map((item) => item.record);
+                  const withRaw =
+                    event.provenance.rawEvents.length === 0 ? { ...event, provenance: { rawEvents } } : event;
+                  return {
+                    ...withRaw,
+                    dedupeKey: eventDedupeKey(args.provider, withRaw),
+                    projection: 'normalized' as const
+                  };
+                });
+              } else {
+                timeline.push({
+                  kind: 'events',
+                  events: projectedRecordEvents({
+                    id,
+                    provider: args.provider,
+                    projection: args.projection,
+                    entry,
+                    recordIndex
+                  })
+                });
+              }
+              recordIndex += 1;
+            }
+          }
+          if (timeline.length === 0) return { events: plainTextEvents(args.provider, id, output) };
+          const events = timeline.flatMap((item) =>
+            item.kind === 'events' ? item.events : (groups.get(item.key)?.events ?? [])
+          );
+          return { events: mergeStreamingEvents(args.provider, args.projection, events) };
+        }
       };
     },
     ...(args.readPage ? { readPage: args.readPage } : {})
   };
 }
 
-export function createOutputHistoryEventSource(args: {
-  provider: ExternalAgentProvider;
-  projection: ExternalAgentObservationProjector;
+export function createOutputEventSource(args: {
+  provider: MeshAgentProvider;
+  projection: MeshAgentObservationProjector;
   readOutput(
-    context: Parameters<NonNullable<ExternalAgentEventSource['readPage']>>[0]
+    context: Parameters<NonNullable<MeshAgentEventSource['readPage']>>[0]
   ): string | null | Promise<string | null>;
-}): ExternalAgentEventSource {
+}): MeshAgentEventSource {
   const source = createProjectedEventSource({
     provider: args.provider,
     projection: args.projection
@@ -257,35 +320,23 @@ export function createOutputHistoryEventSource(args: {
     readPage: async (context, request) => {
       const output = await args.readOutput(context);
       if (!output) return { state: 'unavailable', reason: 'not-found' };
-      const events = source.projectLive({ id: context.providerSessionRef, output, mode: 'history' }).events;
       const offset = request.before ? Number.parseInt(request.before, 10) : 0;
       const start = Number.isFinite(offset) && offset > 0 ? offset : 0;
-      const pageEvents =
-        request.sortDirection === 'desc'
-          ? events.slice(Math.max(0, events.length - start - request.limit), events.length - start)
-          : events.slice(start, start + request.limit);
-      const hasMore =
-        request.sortDirection === 'desc'
-          ? events.length - start - pageEvents.length > 0
-          : start + pageEvents.length < events.length;
-      return {
-        state: 'available',
-        events: pageEvents,
-        ...(hasMore ? { nextCursor: String(start + pageEvents.length) } : {})
-      };
-    },
-    // Output-derived history yields `coverage: 'settled'`: the provider exposes the settled record
-    // set (via readOutput) but not necessarily every transient transport delta. `data` is the exact
-    // parsed provider record before projection.
-    readRawHistoryPage: async (context, request) => {
-      const output = await args.readOutput(context);
-      if (!output) return { state: 'unavailable', reason: 'not-found' };
+      if (request.view === 'convenience') {
+        const events = source.projectLive({ id: context.providerSessionRef, output, mode: 'events' }).events;
+        const pageEvents = events.slice(Math.max(0, events.length - start - request.limit), events.length - start);
+        const hasMore = events.length - start - pageEvents.length > 0;
+        return {
+          state: 'available',
+          view: 'convenience',
+          events: pageEvents,
+          ...(hasMore ? { nextCursor: String(start + pageEvents.length) } : {})
+        };
+      }
       const entries = jsonRecordEntries(output);
-      const ordered = request.sortDirection === 'desc' ? [...entries].reverse() : entries;
-      const offset = request.before ? Number.parseInt(request.before, 10) : 0;
-      const start = Number.isFinite(offset) && offset > 0 ? offset : 0;
+      const ordered = [...entries].reverse();
       const pageEntries = ordered.slice(start, start + request.limit);
-      const records: ExternalAgentRawHistoryRecord[] = pageEntries.map((entry, index) => {
+      const records: MeshRawEventRecord[] = pageEntries.map((entry, index) => {
         const providerIdentity = providerRecordIds(entry.record)[0];
         return {
           data: entry.record,
@@ -294,21 +345,27 @@ export function createOutputHistoryEventSource(args: {
         };
       });
       const hasMore = start + pageEntries.length < ordered.length;
-      return { records, coverage: 'settled', ...(hasMore ? { nextCursor: String(start + pageEntries.length) } : {}) };
+      return {
+        state: 'available',
+        view: 'raw',
+        records,
+        coverage: 'settled',
+        ...(hasMore ? { nextCursor: String(start + pageEntries.length) } : {})
+      };
     }
   };
 }
 
-export function createAppServerHistoryEventSource(args: {
-  provider: ExternalAgentProvider;
-  projection: ExternalAgentObservationProjector;
+export function createAppServerEventSource(args: {
+  provider: MeshAgentProvider;
+  projection: MeshAgentObservationProjector;
   requestPage(
-    handle: ExternalAgentRuntimeHandle,
-    request: { before?: string; limit: number; sortDirection: 'asc' | 'desc'; itemsView: 'full' }
+    handle: MeshAgentRuntimeHandle,
+    request: { before?: string; limit: number; sortDirection: 'desc'; itemsView: 'full' }
   ): string | number;
-  pageOutput?(context: ExternalAgentProviderHistoryPageContext): string | null;
-  fallback?: ExternalAgentEventSource;
-}): ExternalAgentEventSource {
+  pageOutput?(context: MeshAgentProviderEventPageContext): string | null;
+  fallback?: MeshAgentEventSource;
+}): MeshAgentEventSource {
   const source = createProjectedEventSource({ provider: args.provider, projection: args.projection });
   return {
     ...source,
@@ -317,43 +374,44 @@ export function createAppServerHistoryEventSource(args: {
         return (await args.fallback?.readPage?.(context, request)) ?? { state: 'unavailable', reason: 'unsupported' };
       }
       const page = await context.requestProviderPage((handle) =>
-        args.requestPage(handle, { ...request, itemsView: 'full' })
+        args.requestPage(handle, {
+          ...(request.before ? { before: request.before } : {}),
+          limit: request.limit,
+          sortDirection: 'desc',
+          itemsView: 'full'
+        })
       );
+      if (request.view === 'raw') {
+        const orderedItems = [...page.items].reverse();
+        const records: MeshRawEventRecord[] = orderedItems.map((item, index) => {
+          const providerIdentity = providerRecordIds(item)[0];
+          return {
+            data: item,
+            cursor: providerIdentity ?? `${request.before ?? ''}:${index}`,
+            ...(providerIdentity ? { providerIdentity } : {})
+          };
+        });
+        return {
+          state: 'available',
+          view: 'raw',
+          records,
+          coverage: 'exact',
+          ...(page.nextCursor ? { nextCursor: page.nextCursor } : {})
+        };
+      }
       const presentationPage = {
         ...page,
-        items: request.sortDirection === 'desc' ? [...page.items].reverse() : page.items
+        items: [...page.items].reverse()
       };
       const output =
         args.pageOutput?.({ ...context, page: presentationPage }) ??
         presentationPage.items.map((item) => (typeof item === 'string' ? item : JSON.stringify(item))).join('\n');
       return {
         state: 'available',
-        events: source.projectLive({ id: context.providerSessionRef, output, mode: 'history' }).events,
+        view: 'convenience',
+        events: source.projectLive({ id: context.providerSessionRef, output, mode: 'events' }).events,
         ...(page.nextCursor ? { nextCursor: page.nextCursor } : {})
       };
-    },
-    readRawHistoryPage: async (context, request) => {
-      if (!context.requestProviderPage) {
-        return (
-          (await args.fallback?.readRawHistoryPage?.(context, request)) ?? {
-            state: 'unavailable',
-            reason: 'unsupported'
-          }
-        );
-      }
-      const page = await context.requestProviderPage((handle) =>
-        args.requestPage(handle, { ...request, itemsView: 'full' })
-      );
-      const ordered = request.sortDirection === 'desc' ? [...page.items].reverse() : page.items;
-      const records: ExternalAgentRawHistoryRecord[] = ordered.map((item, index) => {
-        const providerIdentity = providerRecordIds(item)[0];
-        return {
-          data: item,
-          cursor: providerIdentity ?? `${request.before ?? ''}:${index}`,
-          ...(providerIdentity ? { providerIdentity } : {})
-        };
-      });
-      return { records, coverage: 'exact', ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}) };
     }
   };
 }

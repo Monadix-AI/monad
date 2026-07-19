@@ -1,4 +1,4 @@
-import type { ExternalAgentConnectionSnapshot } from '@monad/protocol';
+import type { MeshConnectionSnapshot } from '@monad/protocol';
 
 export type ObservationMode = 'raw' | 'convenience';
 
@@ -16,7 +16,7 @@ export interface ObservationPanelState {
 export type ObservationPanelEvent =
   | { type: 'panelOpened' }
   | { type: 'panelClosed' }
-  | { type: 'connectionSnapshot'; snapshot: ExternalAgentConnectionSnapshot }
+  | { type: 'connectionSnapshot'; snapshot: MeshConnectionSnapshot }
   | { type: 'connectionOpened'; epoch: string; revision: number }
   | { type: 'connectionClosed'; epoch: string }
   | { type: 'modeSelected'; mode: ObservationMode };

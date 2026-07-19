@@ -40,11 +40,11 @@ import { wecomChannelAtom } from './channels/wecom.ts';
 import { whatsappChannelAtom } from './channels/whatsapp.ts';
 import { BUILTIN_COMMANDS } from './commands/builtins.ts';
 import { builtinConnectors } from './connectors/registry.ts';
-import { configureBuiltinExternalAgentObservationAdapters } from './external-agent-observation-setup.ts';
+import { configureBuiltinMeshAgentObservationAdapters } from './mesh-agent-observation-setup.ts';
 import { builtinModelProviders } from './providers/registry.ts';
 import { builtinWorkspaceExperiences } from './workspace-experiences/registry.ts';
 
-configureBuiltinExternalAgentObservationAdapters();
+configureBuiltinMeshAgentObservationAdapters();
 
 export default defineAtomPack({
   manifest: {

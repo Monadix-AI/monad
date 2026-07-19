@@ -3,15 +3,15 @@ import type { Agent, ProfileView, Session } from '@monad/protocol';
 import {
   agentAdapter,
   agentSelectors,
-  externalAgentSessionSelectors,
+  meshSessionSelectors,
   profileSelectors,
   sessionAdapter,
   sessionSelectors,
   useGetHealthQuery,
   useGetRolesQuery,
   useListAgentsQuery,
-  useListExternalAgentSessionSummariesQuery,
-  useListLiveExternalAgentSessionsQuery,
+  useListLiveMeshSessionsQuery,
+  useListMeshSessionSummariesQuery,
   useListProfilesQuery,
   useListSessionsQuery,
   useListWorkplaceProjectsQuery,
@@ -70,8 +70,8 @@ export function useAppShellData({ loadModelData = true }: { loadModelData?: bool
   const { data: archivedSessionData, isLoading: archivedSessionsLoading } = useListSessionsQuery({ archived: true });
   const { data: projectData, isLoading: projectsLoading } = useListWorkplaceProjectsQuery(undefined);
   const { data: agentData } = useListAgentsQuery(undefined, { skip: !loadModelData });
-  const { data: liveExternalAgentSessionData } = useListLiveExternalAgentSessionsQuery(undefined);
-  const { data: externalAgentSessionSummaryData } = useListExternalAgentSessionSummariesQuery(undefined);
+  const { data: liveMeshSessionData } = useListLiveMeshSessionsQuery(undefined);
+  const { data: meshSessionSummaryData } = useListMeshSessionSummariesQuery(undefined);
   const serverSessions = sessionSelectors.selectAll(sessionData?.sessions ?? sessionAdapter.getInitialState());
   const archivedSessions = sessionSelectors.selectAll(
     archivedSessionData?.sessions ?? sessionAdapter.getInitialState()
@@ -88,19 +88,13 @@ export function useAppShellData({ loadModelData = true }: { loadModelData?: bool
     () => workplaceProjectSelectors.selectAll(projectData?.projects ?? workplaceProjectAdapter.getInitialState()),
     [projectData]
   );
-  const liveExternalAgentSessions = useMemo(
-    () =>
-      liveExternalAgentSessionData
-        ? externalAgentSessionSelectors.selectAll(liveExternalAgentSessionData.sessions)
-        : [],
-    [liveExternalAgentSessionData]
+  const liveMeshSessions = useMemo(
+    () => (liveMeshSessionData ? meshSessionSelectors.selectAll(liveMeshSessionData.sessions) : []),
+    [liveMeshSessionData]
   );
-  const externalAgentSessionSummaries = useMemo(
-    () =>
-      externalAgentSessionSummaryData
-        ? externalAgentSessionSelectors.selectAll(externalAgentSessionSummaryData.sessions)
-        : [],
-    [externalAgentSessionSummaryData]
+  const meshSessionSummaries = useMemo(
+    () => (meshSessionSummaryData ? meshSessionSelectors.selectAll(meshSessionSummaryData.sessions) : []),
+    [meshSessionSummaryData]
   );
   const pinnedSessionIds = useWorkspaceShellStore((state: WorkspaceShellState) => state.pinnedSessionIds);
   const pinnedSessionIdSet = useMemo(() => new Set(pinnedSessionIds), [pinnedSessionIds]);
@@ -108,11 +102,11 @@ export function useAppShellData({ loadModelData = true }: { loadModelData?: bool
     () =>
       buildWorkspaceProjects(projectRows, {
         sessions,
-        liveExternalAgentSessions,
-        externalAgentSessions: externalAgentSessionSummaries,
+        liveMeshSessions,
+        meshSessions: meshSessionSummaries,
         pinnedSessionIds: pinnedSessionIdSet
       }),
-    [sessions, liveExternalAgentSessions, externalAgentSessionSummaries, pinnedSessionIdSet, projectRows]
+    [sessions, liveMeshSessions, meshSessionSummaries, pinnedSessionIdSet, projectRows]
   );
 
   useStreamControlQuery(undefined);

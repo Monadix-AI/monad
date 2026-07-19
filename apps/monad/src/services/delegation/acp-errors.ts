@@ -4,6 +4,8 @@ import type { LocalePack, Translate } from '@monad/i18n';
 import { createI18n } from '@monad/i18n';
 import { enMessages, zhMessages } from '@monad/i18n/messages';
 
+import { findMeshAgentProviderAdapter } from '#/services/mesh-agent/index.ts';
+
 const ACP_GUIDANCE_LOCALE_PACKS: LocalePack[] = [
   { locale: 'en', name: 'English', messages: enMessages },
   { locale: 'zh', name: '简体中文', messages: zhMessages }
@@ -31,22 +33,10 @@ function isAuthError(err: unknown): boolean {
 export function acpAuthGuidance(err: unknown, spec: AcpAgentConfig, translate?: Translate): string | null {
   if (!isAuthError(err)) return null;
   const t = translate ?? defaultAcpGuidanceT;
-  const name = spec.name;
-  const isClaude = name === 'claude-code' || /\bclaude\b/i.test(spec.command);
-  const isCodex = name === 'codex' || /\bcodex\b/i.test(spec.command);
-  const lines: string[] = [];
+  const authEnvironmentVariables = findMeshAgentProviderAdapter(spec.name)?.acp?.authEnvironmentVariables ?? [];
+  const lines: string[] = [t('web.acp.authGuidance.generic')];
   const envRefExample = (key: string) => t('web.acp.authGuidance.envRef', { key, ref: `\${env:${key}}` });
-  if (isClaude) {
-    lines.push(t('web.acp.authGuidance.claudeIntro'));
-    lines.push(envRefExample('ANTHROPIC_API_KEY'));
-    lines.push(t('web.acp.authGuidance.claudeLogin'));
-  } else if (isCodex) {
-    lines.push(t('web.acp.authGuidance.codexIntro'));
-    lines.push(envRefExample('OPENAI_API_KEY'));
-    lines.push(t('web.acp.authGuidance.codexLogin'));
-  } else {
-    lines.push(t('web.acp.authGuidance.generic'));
-  }
+  lines.push(...authEnvironmentVariables.map(envRefExample));
   return lines.join('\n');
 }
 
@@ -57,5 +47,5 @@ export function adapterFailureError(name: string, exitCode: number | null, cause
   const suffix = isAuthError(cause)
     ? '— API credentials were rejected (the adapter is installed but authentication failed)'
     : '— ensure the adapter is installed and you are signed in';
-  return new Error(`failed to run external agent "${name}"${exited}: ${why} ${suffix}`);
+  return new Error(`failed to run MeshAgent "${name}"${exited}: ${why} ${suffix}`);
 }

@@ -1,4 +1,4 @@
-import type { ExternalAgentObservationEvent } from '@monad/protocol';
+import type { MeshAgentObservationEvent } from '@monad/protocol';
 import type { ObservationSource } from '../../observation-projection.ts';
 
 import { observation, textValue, thinkingObservation } from '../../observation-projection.ts';
@@ -19,7 +19,7 @@ function codexResponseMessageContentEvents(args: {
   providerEventType: string;
   createdAt?: string;
   raw: unknown;
-}): ExternalAgentObservationEvent[] {
+}): MeshAgentObservationEvent[] {
   if (typeof args.content === 'string') {
     return observation({
       id: `${args.id}:json:${args.recordIndex}:message`,
@@ -92,7 +92,7 @@ export function codexResponseItem(
   source: ObservationSource,
   raw: unknown,
   createdAt?: string
-): ExternalAgentObservationEvent[] {
+): MeshAgentObservationEvent[] {
   if (item.type === 'agent_message') {
     return observation({
       id: `${id}:json:${recordIndex}:agent-message`,

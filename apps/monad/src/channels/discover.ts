@@ -22,9 +22,9 @@ import type {
   ChannelAdapterFactory,
   Connector,
   ExperienceWorker,
-  ExternalAgentProviderAdapter,
   HookDefinition,
   ManifestAtomPack,
+  MeshAgentProviderAdapter,
   ModelProvider,
   SandboxLauncher,
   WorkspaceExperienceApi,
@@ -63,7 +63,7 @@ export async function discoverChannelAdapters(
     onCommand?: (atomName: string, command: unknown) => void;
     onProvider?: (provider: ModelProvider) => void;
     onHook?: (hook: HookDefinition) => void;
-    onAgentAdapter?: (adapter: ExternalAgentProviderAdapter) => void;
+    onAgentAdapter?: (adapter: MeshAgentProviderAdapter) => void;
     /** Receives each sandbox launcher a discovered pack registers (e.g. a cloud e2b/Vercel
      *  launcher) — routed to the daemon's sandbox registry, preferred over built-ins on select. */
     onSandbox?: (launcher: SandboxLauncher, atomPackId: string) => void;

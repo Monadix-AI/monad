@@ -5,7 +5,7 @@ import { routeChannelMessage } from '#/handlers/session/channel-routing.ts';
 import { isChannelStructuredSession } from '#/handlers/session/handlers/messaging/index.ts';
 
 const acpAgentNames = ['planner', 'reviewer'];
-const externalAgentNames = ['codex', 'claude-code'];
+const meshAgentNames = ['codex', 'claude-code'];
 const plannerMention = '@[name="planner" id="acp:planner"]';
 const reviewerMention = '@[name="reviewer" id="acp:reviewer"]';
 
@@ -58,18 +58,18 @@ test('channel routing sends a single inline ACP mention directly to that ACP age
   });
 });
 
-test('channel routing sends a single external agent mention directly to that external agent', () => {
+test('channel routing sends a single MeshAgent mention directly to that MeshAgent', () => {
   expect(
     routeChannelMessage({
-      text: '@[name="codex" id="external-agent:codex"] inspect repo',
+      text: '@[name="codex" id="mesh-agent:codex"] inspect repo',
       acpAgentNames,
-      externalAgentNames
+      meshAgentNames
     })
   ).toEqual({
-    kind: 'forward-external-agent',
+    kind: 'forward-mesh-agent',
     agentName: 'codex',
     text: 'inspect repo',
-    displayText: '@[name="codex" id="external-agent:codex"] inspect repo',
+    displayText: '@[name="codex" id="mesh-agent:codex"] inspect repo',
     direct: true
   });
 });

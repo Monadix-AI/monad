@@ -1,4 +1,4 @@
-import type { ExternalAgentSessionState, ExternalAgentSessionView, WorkplaceProject } from '@monad/protocol';
+import type { MeshSessionState, MeshSessionView, WorkplaceProject } from '@monad/protocol';
 
 import {
   ArrowRight01Icon,
@@ -11,10 +11,10 @@ import {
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
-  externalAgentSessionSelectors,
+  meshSessionSelectors,
   sessionAdapter,
   sessionSelectors,
-  useListLiveExternalAgentSessionsQuery,
+  useListLiveMeshSessionsQuery,
   useListSessionsQuery,
   useListWorkplaceProjectsQuery,
   workplaceProjectAdapter,
@@ -26,13 +26,13 @@ import { useT } from '#/components/I18nProvider';
 import { ShellLink } from '#/components/ShellLink';
 import { PanelShell, PanelShellBody } from '#/components/ui/panel-shell';
 import { studioPath } from '#/features/shell/routing/paths';
-import { useExternalAgentSettings } from '#/hooks/use-external-agent-settings';
+import { useMeshAgentSettings } from '#/hooks/use-mesh-agent-settings';
 import { isResolvedEmptyList } from '#/lib/async-list-state';
 import { OverviewIllustration } from './OverviewIllustration';
 import { StudioBreadcrumbHeader } from './StudioBreadcrumbHeader';
 import { MeshUsage } from './Usage';
 
-const AGENT_STATE_STYLE: Record<ExternalAgentSessionState, string> = {
+const AGENT_STATE_STYLE: Record<MeshSessionState, string> = {
   running:
     'bg-[color-mix(in_srgb,var(--success,var(--accent-green))_16%,transparent)] text-[color-mix(in_srgb,var(--success,var(--accent-green))_72%,var(--foreground))]',
   starting:
@@ -42,11 +42,11 @@ const AGENT_STATE_STYLE: Record<ExternalAgentSessionState, string> = {
   failed: 'bg-destructive/12 text-destructive'
 };
 
-function agentStateLabel(t: ReturnType<typeof useT>, state: ExternalAgentSessionState): string {
+function agentStateLabel(t: ReturnType<typeof useT>, state: MeshSessionState): string {
   return t(`web.studio.agentState.${state}` as const);
 }
 
-function AgentRuntimeRow({ session }: { session: ExternalAgentSessionView }) {
+function AgentRuntimeRow({ session }: { session: MeshSessionView }) {
   const t = useT();
   return (
     <div className="flex items-center gap-2.5 rounded-lg border bg-background px-3 py-2">
@@ -67,8 +67,8 @@ function AgentRuntimeRow({ session }: { session: ExternalAgentSessionView }) {
   );
 }
 
-function groupByTarget(sessions: ExternalAgentSessionView[]): [string, ExternalAgentSessionView[]][] {
-  const groups = new Map<string, ExternalAgentSessionView[]>();
+function groupByTarget(sessions: MeshSessionView[]): [string, MeshSessionView[]][] {
+  const groups = new Map<string, MeshSessionView[]>();
   for (const session of sessions) {
     const list = groups.get(session.sessionId);
     if (list) list.push(session);
@@ -79,8 +79,8 @@ function groupByTarget(sessions: ExternalAgentSessionView[]): [string, ExternalA
 
 function AgentRuntimesSection({ projects }: { projects: WorkplaceProject[] }) {
   const t = useT();
-  const { data, isLoading } = useListLiveExternalAgentSessionsQuery(undefined);
-  const sessions = data ? externalAgentSessionSelectors.selectAll(data.sessions) : [];
+  const { data, isLoading } = useListLiveMeshSessionsQuery(undefined);
+  const sessions = data ? meshSessionSelectors.selectAll(data.sessions) : [];
   const { data: sessionData } = useListSessionsQuery(undefined);
   const allSessions = sessionSelectors.selectAll(sessionData?.sessions ?? sessionAdapter.getInitialState());
   const titleFor = (targetId: string): string => {
@@ -159,9 +159,9 @@ function MeshAction({
 
 export function MeshOverview() {
   const t = useT();
-  const externalAgent = useExternalAgentSettings();
+  const meshAgent = useMeshAgentSettings();
   const projects = useListWorkplaceProjectsQuery(undefined);
-  const externalAgentCount = externalAgent.agents.length;
+  const meshAgentCount = meshAgent.agents.length;
   const projectList = workplaceProjectSelectors.selectAll(
     projects.data?.projects ?? workplaceProjectAdapter.getInitialState()
   );
@@ -181,7 +181,7 @@ export function MeshOverview() {
                     asChild
                     size="sm"
                   >
-                    <ShellLink href={studioPath('externalAgents')}>{t('web.studio.connectExternalAgent')}</ShellLink>
+                    <ShellLink href={studioPath('meshAgents')}>{t('web.studio.connectMeshAgent')}</ShellLink>
                   </Button>
                   <Button
                     asChild
@@ -206,13 +206,13 @@ export function MeshOverview() {
               <div className="grid gap-1 p-2">
                 <MeshAction
                   body={
-                    externalAgentCount > 0
-                      ? t('web.studio.externalAgentReady', { count: externalAgentCount })
-                      : t('web.studio.externalAgentNeeded')
+                    meshAgentCount > 0
+                      ? t('web.studio.meshAgentReady', { count: meshAgentCount })
+                      : t('web.studio.meshAgentNeeded')
                   }
-                  href={studioPath('externalAgents')}
+                  href={studioPath('meshAgents')}
                   icon={TerminalIcon}
-                  title={t('web.studio.externalAgents')}
+                  title={t('web.studio.meshAgents')}
                 />
                 <MeshAction
                   body={

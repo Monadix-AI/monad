@@ -1,4 +1,4 @@
-import { configureBuiltinExternalAgentObservationAdapters } from '@monad/atoms/external-agent-observation-setup';
+import { configureBuiltinMeshAgentObservationAdapters } from '@monad/atoms/mesh-agent-observation-setup';
 import { TooltipProvider } from '@monad/ui';
 import { lazy, type ReactNode, Suspense } from 'react';
 
@@ -14,7 +14,7 @@ const DevToolsWidget =
     ? null
     : lazy(() => import('#/features/shell/DevToolsWidget').then((m) => ({ default: m.DevToolsWidget })));
 
-configureBuiltinExternalAgentObservationAdapters();
+configureBuiltinMeshAgentObservationAdapters();
 
 export function AppProviders({ children }: { children: ReactNode }) {
   return (

@@ -4,7 +4,7 @@ import { clientOf, runTreaty } from '../../endpoint-helpers.ts';
 import { createSessionApi } from '../sessions/create-session.ts';
 
 // Routes through the session-scoped channel-message-routing path (fan-out to project members,
-// direct ACP/external-agent targets) — the only surviving HTTP entry point to sendProjectMessage
+// direct ACP/mesh-agent targets) — the only surviving HTTP entry point to sendProjectMessage
 // after Track B P6b removed /projects/:id/messages (a project has no transcript of its own).
 const sendProjectMessageApi = createSessionApi.injectEndpoints({
   overrideExisting: true,

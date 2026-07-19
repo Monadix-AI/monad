@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { externalAgentProductIconSchema } from './external-agent/index.ts';
+import { meshAgentProductIconSchema } from './mesh-agent/index.ts';
 
 // Settings-UI view of a configured external ACP agent (the registry monad delegates subtasks to via
 // the `agent_acp_delegate` tool). Mirrors @monad/environment's acpAgentSchema field-for-field; no secret
@@ -8,7 +8,7 @@ import { externalAgentProductIconSchema } from './external-agent/index.ts';
 // SYSTEM config (config.json); edits re-apply the agent_acp_delegate tool live (no restart).
 export const acpAgentViewSchema = z.object({
   name: z.string().min(1),
-  productIcon: externalAgentProductIconSchema.optional(),
+  productIcon: meshAgentProductIconSchema.optional(),
   command: z.string().min(1),
   args: z.array(z.string()).optional(),
   env: z.record(z.string(), z.string()).optional(),
@@ -39,7 +39,7 @@ export type SetAcpAgentEnabledRequest = z.infer<typeof setAcpAgentEnabledRequest
 export const acpAgentPresetSchema = z.object({
   id: z.string(),
   label: z.string(),
-  productIcon: externalAgentProductIconSchema,
+  productIcon: meshAgentProductIconSchema,
   command: z.string(),
   args: z.array(z.string()),
   env: z.record(z.string(), z.string()).optional(),

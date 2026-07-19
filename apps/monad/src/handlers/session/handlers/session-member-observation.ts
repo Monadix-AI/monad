@@ -4,8 +4,8 @@ import type { SessionContext } from '#/handlers/session/context.ts';
 import { isMonadAgentDomainEvent, toAgentObservationEvent } from '#/agent/observation.ts';
 
 /** Neutral observation for a `monad`-typed session member (Track B `session_members`): the daemon's own
- *  built-in agent has no `externalAgentSessionId`, so it can't ride the `/external-agent-sessions/:id/
- *  ui-observation` plane — its raw source is the session's own domain `Event` log (see
+ *  built-in agent has no `meshSessionId`, so it can't ride the `/mesh/sessions/:id/events/convenience`
+ *  plane — its raw source is the session's own domain `Event` log (see
  *  `apps/monad/src/agent/observation.ts`), filtered to the events that member itself produced. Scoped to
  *  the `monad` member only; ACP-typed members are not yet observable this way (see the implementation-
  *  order proposal's P5 deviations). */
@@ -20,10 +20,10 @@ export function createSessionMemberObservationHandlers(ctx: SessionContext) {
     return store.getSessionMember(sessionId, memberId)?.type === 'monad';
   }
 
-  // Full point-in-time projection: persisted history plus the active round's un-persisted tail
+  // Full point-in-time projection: persisted events plus the active round's unpersisted tail
   // (canonical message deltas live only in the round cache — see `RoundCache`/
   // `persistAndRetire` in `handlers/session/context.ts`), merged in emission order. Re-derived on every
-  // call, mirroring `ExternalAgentObservationResolver.observeUi`'s "re-derive from the whole snapshot,
+  // call, mirroring `MeshAgentObservationResolver.observeUi`'s "re-derive from the whole snapshot,
   // never a delta" contract so a consumer always replaces its list wholesale.
   function projectEvents(sessionId: SessionId): AgentObservationEvent[] {
     const events: AgentObservationEvent[] = [];
@@ -51,7 +51,7 @@ export function createSessionMemberObservationHandlers(ctx: SessionContext) {
       return unavailableFrame(sessionId, memberId, 'observation is only wired for the monad built-in agent member');
     }
     return {
-      state: aborts.has(sessionId) ? 'live' : 'history',
+      state: aborts.has(sessionId) ? 'live' : 'events',
       sessionId,
       memberId,
       events: projectEvents(sessionId),
@@ -69,7 +69,7 @@ export function createSessionMemberObservationHandlers(ctx: SessionContext) {
       return { dispose: () => {} };
     }
     sink({
-      state: aborts.has(sessionId) ? 'live' : 'history',
+      state: aborts.has(sessionId) ? 'live' : 'events',
       sessionId,
       memberId,
       events: projectEvents(sessionId),

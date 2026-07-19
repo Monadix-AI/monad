@@ -9,8 +9,8 @@ import {
   CHANNEL_REPARSE_MIN_DELTA,
   channelPartialDisplayText,
   deliveryIdFromData,
-  externalAgentSessionIdFromData,
   isSilentChannelMessage,
+  meshSessionIdFromData,
   partsFromMessage,
   sourceFromData,
   statusFromMessage
@@ -26,7 +26,7 @@ function applyCanonicalMessage(
   const agentName = agentNameFromData(message.data);
   const agentDisplayName = agentDisplayNameFromData(message.data);
   const source = sourceFromData(message.data);
-  const externalAgentSessionId = externalAgentSessionIdFromData(message.data);
+  const meshSessionId = meshSessionIdFromData(message.data);
   const deliveryId = deliveryIdFromData(message.data);
   m.rawStreamingText.delete(message.id);
   m.streamingDeltaIndex.delete(`${message.id}:content`);
@@ -47,7 +47,7 @@ function applyCanonicalMessage(
       ...(source ? { source } : existing?.source ? { source: existing.source } : {}),
       ...m.messageObservationPointers(
         {
-          ...(externalAgentSessionId ? { externalAgentSessionId } : {}),
+          ...(meshSessionId ? { meshSessionId } : {}),
           ...(deliveryId ? { deliveryId } : {})
         },
         existing
@@ -55,7 +55,7 @@ function applyCanonicalMessage(
       parts: partsFromMessage(message, m.opts),
       status: failed ? 'error' : statusFromMessage(message),
       seq:
-        event.type === 'session.message.completed' && source === 'managed-external-agent'
+        event.type === 'session.message.completed' && source === 'managed-mesh-agent'
           ? event.at
           : (existing?.seq ?? message.createdAt ?? event.at)
     })

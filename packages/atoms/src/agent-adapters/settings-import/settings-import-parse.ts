@@ -39,9 +39,27 @@ export function sanitizeId(value: string): string {
 }
 
 export async function pathInfo(inputPath: string): Promise<{ root: string; isDir: boolean }> {
-  const root = resolve(inputPath.startsWith('~/') ? join(homedir(), inputPath.slice(2)) : inputPath);
-  const info = await stat(root);
-  return { root, isDir: info.isDirectory() };
+  let expanded = inputPath;
+  if (expanded === '~' || expanded.startsWith('~/') || expanded.startsWith('~\\')) {
+    expanded = join(homedir(), expanded.slice(2));
+  }
+  expanded = expanded.replace(/%([A-Za-z_][A-Za-z0-9_]*)%/g, (match, name) => process.env[name] ?? match);
+  expanded = expanded.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g, (match, braced, bare) => {
+    const name = (braced ?? bare) as string;
+    return process.env[name] ?? match;
+  });
+  const candidates = new Set([expanded, expanded.replace(/\\/g, '/'), expanded.replace(/\//g, '\\')]);
+  let lastError: unknown;
+  for (const candidate of candidates) {
+    const root = resolve(candidate);
+    try {
+      const info = await stat(root);
+      return { root, isDir: info.isDirectory() };
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
 }
 
 export async function readConfigObject(

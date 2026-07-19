@@ -90,18 +90,18 @@ describe('Project member templates', () => {
     ]);
   });
 
-  test('allows multiple External Agent instances with unique identities', () => {
+  test('allows multiple MeshAgent instances with unique identities', () => {
     const first = addProjectMemberTemplate([], {
       name: 'codex-cli',
       productIcon: 'codex',
       provider: 'codex',
-      type: 'external-agent'
+      type: 'mesh-agent'
     }).members;
     const second = addProjectMemberTemplate(first, {
       name: 'codex-cli',
       productIcon: 'codex',
       provider: 'codex',
-      type: 'external-agent'
+      type: 'mesh-agent'
     }).members;
 
     expect(second).toHaveLength(2);

@@ -353,7 +353,7 @@ export function useAppShellNavigation({
         () => setStudioUrl('skills'),
         () => setStudioUrl('channels'),
         () => setStudioUrl('acpAgents'),
-        () => setStudioUrl('externalAgents'),
+        () => setStudioUrl('meshAgents'),
         () => setStudioUrl('capabilities')
       ];
     }

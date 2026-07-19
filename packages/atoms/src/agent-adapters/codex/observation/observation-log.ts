@@ -1,4 +1,4 @@
-import type { ExternalAgentObservationEvent } from '@monad/protocol';
+import type { MeshAgentObservationEvent } from '@monad/protocol';
 
 import { observation, providerIsoTimestamp, recordValue, textValue } from '../../observation-projection.ts';
 
@@ -10,7 +10,7 @@ export function codexLogRecordEvents(
   id: string,
   record: Record<string, unknown>,
   recordIndex: number
-): ExternalAgentObservationEvent[] {
+): MeshAgentObservationEvent[] {
   const severity = record.level === 'ERROR' ? 'error' : record.level === 'WARN' ? 'warning' : undefined;
   const fields = recordValue(record.fields);
   const message = textValue(fields?.message);

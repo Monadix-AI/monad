@@ -7,7 +7,7 @@
 //
 // Run:  MONAD_LIVE_AGENTS=1 bun test apps/monad/test/e2e/agent-adapters-real.local.test.ts
 
-import type { ExternalAgentSessionView } from '@monad/protocol';
+import type { MeshSessionView } from '@monad/protocol';
 
 import { describe, expect, test } from 'bun:test';
 import crypto from 'node:crypto';
@@ -17,42 +17,42 @@ import { join } from 'node:path';
 import { builtinAgentAdapters } from '@monad/atoms/agent-adapters';
 
 import { EventBus } from '#/services/event-bus.ts';
-import { ExternalAgentHost } from '#/services/external-agent/host/index.ts';
-import { registerAgentAdapterImpl } from '#/services/external-agent/index.ts';
+import { MeshAgentHost } from '#/services/mesh-agent/host/index.ts';
+import { registerAgentAdapterImpl } from '#/services/mesh-agent/index.ts';
 import { createStore } from '#/store/db/index.ts';
 
 for (const adapter of builtinAgentAdapters) registerAgentAdapterImpl(adapter);
 
 function builtinAdapter(provider: 'hermes' | 'openclaw') {
   const adapter = builtinAgentAdapters.find((candidate) => candidate.provider === provider);
-  if (!adapter) throw new Error(`missing built-in external agent adapter: ${provider}`);
+  if (!adapter) throw new Error(`missing built-in MeshAgent adapter: ${provider}`);
   return adapter;
 }
 
-const hermesExternalAgentAdapter = builtinAdapter('hermes');
-const openClawExternalAgentAdapter = builtinAdapter('openclaw');
+const hermesMeshAgentAdapter = builtinAdapter('hermes');
+const openClawMeshAgentAdapter = builtinAdapter('openclaw');
 
 const LIVE = process.env.MONAD_LIVE_AGENTS === '1';
 const LIVE_OPENCLAW = process.env.MONAD_LIVE_OPENCLAW === '1';
 // A prompt that should elicit a short, matchable reply from any model.
 const PING_PROMPT = 'Reply with exactly the single uppercase word PONG and nothing else.';
 
-/** Drive one turn through the real ExternalAgentHost (real binary + adapter + host lifecycle) and return
+/** Drive one turn through the real MeshAgentHost (real binary + adapter + host lifecycle) and return
  *  the observed transcript output once it appears (or after the timeout). */
 async function runTurn(args: {
   provider: 'hermes' | 'openclaw';
   command: string;
-  launchMode: ExternalAgentSessionView['launchMode'];
+  launchMode: MeshSessionView['launchMode'];
   prompt: string;
   timeoutMs: number;
   /** Operator-configured agent env — forwarded to both the spawned child and the adapter's initialize
    *  (e.g. OpenClaw's `OPENCLAW_GATEWAY_TOKEN`, which puts the spawned gateway in token mode AND is read
    *  back for the signed connect frame). */
   env?: Record<string, string>;
-}): Promise<{ view: ExternalAgentSessionView; output: string; host: ExternalAgentHost; cleanup: () => void }> {
+}): Promise<{ view: MeshSessionView; output: string; host: MeshAgentHost; cleanup: () => void }> {
   const store = createStore();
   const workdir = mkdtempSync(join(tmpdir(), `live-${args.provider}-`));
-  const host = new ExternalAgentHost({
+  const host = new MeshAgentHost({
     store,
     bus: new EventBus(),
     agents: async () => [
@@ -70,8 +70,8 @@ async function runTurn(args: {
   });
   const projectId = 'ses_01KWLIVEQJ21';
   const observed = (id: string): string => {
-    const obs = host.observe(id);
-    return obs && 'output' in obs ? (obs.output ?? '') : '';
+    const observation = host.observeRaw(id);
+    return observation.state === 'live' ? observation.frames.map((frame) => String(frame.data)).join('') : '';
   };
   const view = await host.start({
     transcriptTargetId: projectId,
@@ -101,7 +101,7 @@ async function runTurn(args: {
 
 describe.skipIf(!LIVE)('real agent-adapter binaries: detect', () => {
   test('Hermes binary is installed and offers pty + app-server + cli-oneshot', () => {
-    const preset = hermesExternalAgentAdapter.detect();
+    const preset = hermesMeshAgentAdapter.detect();
     expect(preset.installed).toBe(true);
     // `hermes serve` became a real WS gateway in v0.18.0 (was absent in v0.14.0), so app-server is back
     // alongside the cli-oneshot managed default.
@@ -110,13 +110,13 @@ describe.skipIf(!LIVE)('real agent-adapter binaries: detect', () => {
   });
 
   test('OpenClaw binary is installed and offers pty + app-server', () => {
-    const preset = openClawExternalAgentAdapter.detect();
+    const preset = openClawMeshAgentAdapter.detect();
     expect(preset.installed).toBe(true);
     expect(preset.supportedLaunchModes).toContain('app-server');
   });
 
   test('Hermes auth-status probe reports the real signed-in state (plain-text, no --json error)', async () => {
-    const probe = hermesExternalAgentAdapter.authStatus({
+    const probe = hermesMeshAgentAdapter.authStatus({
       name: 'hermes',
       provider: 'hermes',
       command: 'hermes',

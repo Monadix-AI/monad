@@ -5,20 +5,18 @@
 // codex-appserver-turn.ts (which covers interrupt). Requires a local codex signed in enough to *start*
 // a turn; exits 0 (skipped) when codex is absent or can't run a turn (auth/quota).
 //   run: bun test/smoke/codex-appserver-steer.ts
-import type {
-  ExternalAgentOutputEvent,
-  ExternalAgentRuntimeHandle
-} from '../../apps/monad/src/services/external-agent/types.ts';
+import type { MeshAgentOutputEvent, MeshAgentRuntimeHandle } from '../../apps/monad/src/services/mesh-agent/types.ts';
 
-import { connectAppServerWs } from '../../apps/monad/src/services/external-agent/app-server-ws.ts';
+import { connectAppServerWs } from '../../apps/monad/src/services/mesh-agent/app-server-ws.ts';
 import {
-  buildExternalAgentLaunch,
+  buildMeshAgentLaunch,
   registerAgentAdapterImpl,
-  resolveExternalAgentLaunchCommand
-} from '../../apps/monad/src/services/external-agent/index.ts';
-import { codexExternalAgentAdapter } from '../../packages/atoms/src/agent-adapters/codex/index.ts';
+  resolveMeshAgentLaunchCommand
+} from '../../apps/monad/src/services/mesh-agent/index.ts';
+import { codexMeshAgentAdapter } from '../../packages/atoms/src/agent-adapters/codex/index.ts';
+import { codexRuntimeState } from '../../packages/atoms/src/agent-adapters/codex/state.ts';
 
-registerAgentAdapterImpl(codexExternalAgentAdapter);
+registerAgentAdapterImpl(codexMeshAgentAdapter);
 
 function fail(message: string): never {
   console.error(`FAIL: ${message}`);
@@ -45,11 +43,11 @@ const holds = async (predicate: () => boolean, forMs: number): Promise<boolean> 
   return predicate();
 };
 
-if (!codexExternalAgentAdapter.detect().installed) skip('codex not installed');
+if (!codexMeshAgentAdapter.detect().installed) skip('codex not installed');
 
-const launch = resolveExternalAgentLaunchCommand(
-  codexExternalAgentAdapter,
-  buildExternalAgentLaunch(
+const launch = resolveMeshAgentLaunchCommand(
+  codexMeshAgentAdapter,
+  buildMeshAgentLaunch(
     {
       name: 'codex',
       provider: 'codex',
@@ -76,21 +74,22 @@ const cleanup = (): void => {
 
 let requestSeq = 0;
 let ready = false;
-let failure: ExternalAgentOutputEvent | undefined;
-const getFailure = (): ExternalAgentOutputEvent | undefined => failure;
-const handle: ExternalAgentRuntimeHandle = {
+let failure: MeshAgentOutputEvent | undefined;
+const getFailure = (): MeshAgentOutputEvent | undefined => failure;
+const handle: MeshAgentRuntimeHandle = {
   launchMode: 'app-server',
   providerSessionRef: null,
   pendingRequests: new Map(),
   nextRequestId: () => requestSeq++,
   kill: cleanup
 };
+const runtimeState = codexRuntimeState(handle);
 
 void (async () => {
   const connection = await connectAppServerWs({
     stderr: proc.stderr,
     onMessage: (text) => {
-      for (const event of codexExternalAgentAdapter.parseOutput(`${text}\n`, handle)) {
+      for (const event of codexMeshAgentAdapter.parseOutput(`${text}\n`, handle)) {
         if (event.type === 'session_ref' && typeof event.payload.providerSessionRef === 'string' && !ready) {
           handle.providerSessionRef = event.payload.providerSessionRef;
           ready = true;
@@ -102,7 +101,7 @@ void (async () => {
     timeoutMs: 10_000
   });
   handle.appServer = connection;
-  codexExternalAgentAdapter.initialize?.(handle, { workingPath: process.cwd() });
+  codexMeshAgentAdapter.initialize?.(handle, { workingPath: process.cwd() });
 })().catch((error) => fail(`ws connect failed: ${String(error)}`));
 
 if (!(await until(() => ready, 12_000))) {
@@ -111,25 +110,25 @@ if (!(await until(() => ready, 12_000))) {
 }
 
 // Send a slow, long-running turn so there is a window to steer it.
-codexExternalAgentAdapter.sendInput(handle, 'Count slowly from 1 to 60, one number per line, pausing between each.');
+codexMeshAgentAdapter.sendInput(handle, 'Count slowly from 1 to 60, one number per line, pausing between each.');
 
-const inFlight = await until(() => handle.currentTurnId !== undefined || failure !== undefined, 20_000);
+const inFlight = await until(() => runtimeState.currentTurnId !== undefined || failure !== undefined, 20_000);
 if (failure) {
   cleanup();
   skip(`codex could not run a turn (${String(failure.payload.code ?? failure.type)})`);
 }
-if (!inFlight || handle.currentTurnId === undefined) {
+if (!inFlight || runtimeState.currentTurnId === undefined) {
   cleanup();
   fail('turn never went in-flight (no turn/started)');
 }
-const steeredTurn = handle.currentTurnId;
+const steeredTurn = runtimeState.currentTurnId;
 console.log(`turn in-flight: ${steeredTurn}`);
 
 // Steer the in-flight turn. Unlike interrupt, steer amends the turn — it must NOT end it.
-codexExternalAgentAdapter.steer?.(handle, 'Also, after each number, write its square.');
+codexMeshAgentAdapter.steer?.(handle, 'Also, after each number, write its square.');
 
 // The same turn stays in flight through the steer (no early settle, no connection-killing error).
-const survived = await holds(() => handle.currentTurnId === steeredTurn && failure === undefined, 3_000);
+const survived = await holds(() => runtimeState.currentTurnId === steeredTurn && failure === undefined, 3_000);
 if (!survived) {
   cleanup();
   const failureAtCheck = getFailure();
@@ -139,8 +138,8 @@ if (!survived) {
 console.log('turn survived steer, still in-flight');
 
 // Clean up: interrupt settles the steered turn.
-codexExternalAgentAdapter.interrupt?.(handle);
-const settled = await until(() => handle.currentTurnId === undefined, 15_000);
+codexMeshAgentAdapter.interrupt?.(handle);
+const settled = await until(() => runtimeState.currentTurnId === undefined, 15_000);
 cleanup();
 await proc.exited;
 

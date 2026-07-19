@@ -4,7 +4,7 @@ import { messageProducerSchema, parseEventPayload } from '@monad/protocol';
 
 /** Maps monad's own agent-loop domain events (the daemon's session `Event` log — see
  *  `docs/proposals/agent-adapter-observation-layering.md`'s "session raw = domain events" decision) to
- *  the agent-kind-neutral `AgentObservationEvent` plane external-agent adapters already produce via
+ *  the agent-kind-neutral `AgentObservationEvent` plane mesh-agent adapters already produce via
  *  `toAgentObservationEvent` in `@monad/atoms`. Unlike an external adapter, monad's own events are
  *  already structured (no raw-text decode needed) — this is a field reshape, not a parser. */
 export function toAgentObservationEvent(event: Event): AgentObservationEvent | null {
@@ -78,20 +78,20 @@ export function toAgentObservationEvent(event: Event): AgentObservationEvent | n
 
 /** Whether a domain event belongs to the session's own `monad`-typed member, vs. another member's
  *  activity relayed into the same session log. Canonical `session.message.*` events carry an explicit
- *  `producer: MessageProducer` — a bridged member is `kind: 'external-agent'` (or an `agent` bound to an
- *  `externalAgentSessionId`), so those are excluded by the parsed producer. Non-message domain events
+ *  `producer: MessageProducer` — a bridged member is `kind: 'mesh-agent'` (or an `agent` bound to an
+ *  `meshSessionId`), so those are excluded by the parsed producer. Non-message domain events
  *  (`tool.*`, `session.run.*`) carry no producer; a bridged member still tags those with a top-level
- *  `externalAgentSessionId`/`deliveryId`. */
+ *  `meshSessionId`/`deliveryId`. */
 export function isMonadAgentDomainEvent(event: Event): boolean {
   const rawProducer = (event.payload as { producer?: unknown }).producer;
   if (rawProducer !== undefined) {
     const parsed = messageProducerSchema.safeParse(rawProducer);
     if (parsed.success) {
       const { data: producer } = parsed;
-      if (producer.kind === 'external-agent') return false;
-      return !(producer.kind === 'agent' && producer.externalAgentSessionId !== undefined);
+      if (producer.kind === 'mesh-agent') return false;
+      return !(producer.kind === 'agent' && producer.meshSessionId !== undefined);
     }
   }
-  const payload = event.payload as { externalAgentSessionId?: unknown; deliveryId?: unknown };
-  return typeof payload.externalAgentSessionId !== 'string' && typeof payload.deliveryId !== 'string';
+  const payload = event.payload as { meshSessionId?: unknown; deliveryId?: unknown };
+  return typeof payload.meshSessionId !== 'string' && typeof payload.deliveryId !== 'string';
 }

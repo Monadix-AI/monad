@@ -1,13 +1,6 @@
 import type { Translate } from '@monad/i18n';
-import type {
-  ChatMessage,
-  Event,
-  ExternalAgentSessionId,
-  SessionUiEvent,
-  UIItem,
-  UIMessageItem
-} from '@monad/protocol';
-import type { ExternalAgentSessionSnapshot } from './ui-projection-helpers.ts';
+import type { ChatMessage, Event, MeshSessionId, SessionUiEvent, UIItem, UIMessageItem } from '@monad/protocol';
+import type { MeshSessionSnapshot } from './ui-projection-helpers.ts';
 import type { ProjectionMutations } from './ui-projection-state.ts';
 
 import { createI18n, DEFAULT_LOCALE } from '@monad/i18n';
@@ -17,12 +10,12 @@ import {
   agentNameFromData,
   deliveryIdFromData,
   displayFromToolResultData,
-  externalAgentSessionIdFromData,
-  externalAgentToolItem,
   isEvictable,
   isSilentChannelMessage,
   isUnknownToolResult,
   itemKey,
+  meshAgentToolItem,
+  meshSessionIdFromData,
   partsFromMessage,
   sourceFromData,
   statusFromMessage
@@ -31,7 +24,7 @@ import { applyInteractionEvent } from './ui-projection-interaction-events.ts';
 import { applyMessageEvent } from './ui-projection-message-events.ts';
 import { applyToolEvent } from './ui-projection-tool-events.ts';
 
-export type { ExternalAgentSessionSnapshot } from './ui-projection-helpers.ts';
+export type { MeshSessionSnapshot } from './ui-projection-helpers.ts';
 
 // Ceiling on live-streamed items a single held-open subscription's projector retains. Well above the
 // hydration window (LIVE_SNAPSHOT_LIMIT); only a very long-lived viewer streaming thousands of turns
@@ -140,14 +133,14 @@ export class SessionUiProjector {
   }
 
   private messageObservationPointers(
-    payload: { externalAgentSessionId?: ExternalAgentSessionId; deliveryId?: `deliv_${string}` },
+    payload: { meshSessionId?: MeshSessionId; deliveryId?: `deliv_${string}` },
     existing?: UIMessageItem
-  ): Pick<UIMessageItem, 'externalAgentSessionId' | 'deliveryId'> {
+  ): Pick<UIMessageItem, 'meshSessionId' | 'deliveryId'> {
     return {
-      ...(payload.externalAgentSessionId
-        ? { externalAgentSessionId: payload.externalAgentSessionId }
-        : existing?.externalAgentSessionId
-          ? { externalAgentSessionId: existing.externalAgentSessionId }
+      ...(payload.meshSessionId
+        ? { meshSessionId: payload.meshSessionId }
+        : existing?.meshSessionId
+          ? { meshSessionId: existing.meshSessionId }
           : {}),
       ...(payload.deliveryId
         ? { deliveryId: payload.deliveryId }
@@ -281,8 +274,8 @@ export class SessionUiProjector {
         ...(message.role === 'assistant' && sourceFromData(message.data)
           ? { source: sourceFromData(message.data) }
           : {}),
-        ...(message.role === 'assistant' && externalAgentSessionIdFromData(message.data)
-          ? { externalAgentSessionId: externalAgentSessionIdFromData(message.data) }
+        ...(message.role === 'assistant' && meshSessionIdFromData(message.data)
+          ? { meshSessionId: meshSessionIdFromData(message.data) }
           : {}),
         ...(message.role === 'assistant' && deliveryIdFromData(message.data)
           ? { deliveryId: deliveryIdFromData(message.data) }
@@ -296,14 +289,14 @@ export class SessionUiProjector {
   }
 
   /**
-   * Rebuild external agent tool cards from their durable output snapshots. Call after {@link hydrateMessages}
+   * Rebuild MeshAgent tool cards from their durable output snapshots. Call after {@link hydrateMessages}
    * so a page refresh / reconnect shows a session's terminal output without replaying the (non-durable)
    * live output chunks. Each card is inserted at its `startedAt` position so it
    * interleaves with messages in array-order clients; seq-sorting clients order it the same way.
    */
-  hydrateExternalAgentSessions(sessions: ExternalAgentSessionSnapshot[]): void {
+  hydrateMeshSessions(sessions: MeshSessionSnapshot[]): void {
     for (const session of sessions) {
-      const item = externalAgentToolItem(session);
+      const item = meshAgentToolItem(session);
       const key = itemKey('tool', item.id);
       if (this.items.has(key)) {
         this.items.set(key, item);
@@ -314,12 +307,12 @@ export class SessionUiProjector {
     }
   }
 
-  hydrateExternalAgentLoginEvents(events: Event[]): void {
+  hydrateMeshAgentLoginEvents(events: Event[]): void {
     for (const event of events) {
       const isLoginEvent =
-        event.type === 'external_agent.login_required' ||
-        event.type === 'external_agent.login_resolved' ||
-        (event.type === 'external_agent.connection_required' && event.payload.code === 'authentication_failed');
+        event.type === 'mesh.login_required' ||
+        event.type === 'mesh.login_resolved' ||
+        (event.type === 'mesh.connection_required' && event.payload.code === 'authentication_failed');
       if (isLoginEvent) this.applyEvent(event);
     }
   }

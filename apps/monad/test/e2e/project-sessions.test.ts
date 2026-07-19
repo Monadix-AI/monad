@@ -82,7 +82,7 @@ for (const kind of TRANSPORTS) {
         memberTemplates: [
           {
             id: 'pmem_fable',
-            type: 'external-agent',
+            type: 'mesh-agent',
             name: 'claude-code',
             displayName: 'Fable',
             settings: { managedProjectAgent: true, modelId: 'fable' }
@@ -97,7 +97,7 @@ for (const kind of TRANSPORTS) {
         memberTemplates: [
           {
             id: 'pmem_opus',
-            type: 'external-agent',
+            type: 'mesh-agent',
             name: 'claude-code',
             displayName: 'Opus',
             settings: { managedProjectAgent: true, modelId: 'opus' }
@@ -116,7 +116,7 @@ for (const kind of TRANSPORTS) {
           {
             id: 'pmem_opus',
             templateId: 'pmem_opus',
-            type: 'external-agent',
+            type: 'mesh-agent',
             name: 'claude-code',
             displayName: 'Opus',
             settings: { managedProjectAgent: true, modelId: 'opus' },

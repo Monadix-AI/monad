@@ -4,6 +4,7 @@ import { expect, test } from 'bun:test';
 import { cp, mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
+import { builtinAgentAdapters } from '@monad/atoms/agent-adapters';
 import { createDefaultConfig, emptyAuth, loadAll, loadAuth, saveAll, saveAuth } from '@monad/environment';
 import { ModelProviderType } from '@monad/protocol';
 
@@ -14,7 +15,10 @@ import {
   createSettingsImportModule,
   previewSettingsImport
 } from '#/handlers/settings/import/index.ts';
+import { registerAgentAdapterImpl } from '#/services/mesh-agent/index.ts';
 import { createTestConfigManager } from '../helpers.ts';
+
+for (const adapter of builtinAgentAdapters) registerAgentAdapterImpl(adapter);
 
 function pathsFor(dir: string): MonadPaths {
   return {
@@ -67,6 +71,44 @@ async function makeHome() {
   await saveAuth(paths.auth, emptyAuth());
   return { dir, paths, cfg, cleanup: () => rm(dir, { recursive: true, force: true }) };
 }
+
+test('provider settings import dispatches parsing through the registered adapter', async () => {
+  const { dir, cfg, cleanup } = await makeHome();
+  const codex = builtinAgentAdapters.find((adapter) => adapter.provider === 'codex');
+  if (!codex) throw new Error('missing Codex adapter');
+  registerAgentAdapterImpl({
+    ...codex,
+    settingsImport: {
+      detect: () => [],
+      preview: async ({ path }) => ({
+        provider: 'codex',
+        path: path ?? dir,
+        sources: [{ path: path ?? dir, scope: 'manual' }],
+        items: [
+          {
+            id: 'plugins:adapter-owned',
+            hash: 'adapter-owned-hash',
+            category: 'plugins',
+            source: path ?? dir,
+            target: 'adapter-owned',
+            action: 'manual',
+            reason: 'parsed by adapter',
+            risk: 'medium',
+            payload: { kind: 'manual' }
+          }
+        ],
+        warnings: []
+      })
+    }
+  });
+  try {
+    const preview = await previewSettingsImport({ from: 'codex', path: dir, replace: false }, cfg);
+    expect(preview.items.map((item) => item.target)).toEqual(['adapter-owned']);
+  } finally {
+    registerAgentAdapterImpl(codex);
+    await cleanup();
+  }
+});
 
 test('Codex preview maps model, MCP, sandbox and plugins without exposing secrets', async () => {
   const { dir, cfg, cleanup } = await makeHome();

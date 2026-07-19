@@ -389,22 +389,22 @@ export const eventTypeSchema = z.enum([
   // (and streams terminal output via `delegation.output`). Bus-only (never persisted) — ephemeral RPC.
   'delegation.fs_request',
   'delegation.terminal_request',
-  'external_agent.started',
-  'external_agent.connection_required',
-  'external_agent.approval_requested',
-  'external_agent.approval_resolved',
-  'external_agent.resume_failed',
-  'external_agent.idle_resumed',
-  'external_agent.idle_suspended',
-  'external_agent.exited',
-  'external_agent.turn_settled',
-  'external_agent.session.connection.opened',
-  'external_agent.session.connection.closed',
+  'mesh.started',
+  'mesh.connection_required',
+  'mesh.approval_requested',
+  'mesh.approval_resolved',
+  'mesh.resume_failed',
+  'mesh.idle_resumed',
+  'mesh.idle_suspended',
+  'mesh.exited',
+  'mesh.turn_settled',
+  'mesh.session.connection.opened',
+  'mesh.session.connection.closed',
   // Ephemeral login-nudge pair: published to the session bus only (never persisted), so the
   // in-chat "agent needs to log in" card exists exactly while the condition holds and
   // vanishes on reload — re-auth guidance is transient interaction, not transcript history.
-  'external_agent.login_required',
-  'external_agent.login_resolved'
+  'mesh.login_required',
+  'mesh.login_resolved'
 ]);
 export type EventType = z.infer<typeof eventTypeSchema>;
 

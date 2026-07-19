@@ -3,7 +3,7 @@ import { sql } from 'drizzle-orm';
 import { blob, index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 const providerSessionRefNotNull = sql`provider_session_ref IS NOT NULL`;
-const liveExternalAgentSession = sql`state IN ('starting', 'running')`;
+const liveMeshSession = sql`state IN ('starting', 'running')`;
 const liveAcpDelegate = sql`evicted_at IS NULL`;
 const deliveryIdNotNull = sql`delivery_id IS NOT NULL`;
 
@@ -40,7 +40,7 @@ export const sessionMembers = sqliteTable(
     memberId: text('member_id').notNull(),
     templateId: text('template_id'),
     type: text('type').notNull(),
-    externalAgentSessionId: text('external_agent_session_id'),
+    meshSessionId: text('mesh_session_id'),
     data: text('data').notNull().default('{}'),
     createdAt: text('created_at').notNull(),
     updatedAt: text('updated_at').notNull()
@@ -307,8 +307,8 @@ export const acpDelegates = sqliteTable(
   ]
 );
 
-export const externalAgentSessions = sqliteTable(
-  'external_agent_sessions',
+export const meshSessions = sqliteTable(
+  'mesh_sessions',
   {
     id: text('id').primaryKey(),
     transcriptTargetId: text('transcript_target_id').notNull(),
@@ -330,9 +330,9 @@ export const externalAgentSessions = sqliteTable(
     exitedAt: text('exited_at')
   },
   (table) => [
-    index('idx_external_agent_sessions_transcript_target').on(table.transcriptTargetId),
-    index('idx_external_agent_sessions_live').on(table.state).where(liveExternalAgentSession),
-    uniqueIndex('idx_external_agent_sessions_provider_ref')
+    index('idx_mesh_sessions_transcript_target').on(table.transcriptTargetId),
+    index('idx_mesh_sessions_live').on(table.state).where(liveMeshSession),
+    uniqueIndex('idx_mesh_sessions_provider_ref')
       .on(table.transcriptTargetId, table.provider, table.providerSessionRef)
       .where(providerSessionRefNotNull)
   ]
@@ -359,7 +359,7 @@ export const nativeAgentDirectMessages = sqliteTable(
   {
     id: text('id').primaryKey(),
     projectId: text('project_id').notNull(),
-    externalAgentSessionId: text('external_agent_session_id').notNull(),
+    meshSessionId: text('mesh_session_id').notNull(),
     fromAgent: text('from_agent'),
     peer: text('peer').notNull(),
     text: text('text').notNull(),
@@ -367,11 +367,7 @@ export const nativeAgentDirectMessages = sqliteTable(
     createdAt: text('created_at').notNull()
   },
   (table) => [
-    index('idx_native_agent_direct_messages_session_peer').on(
-      table.externalAgentSessionId,
-      table.peer,
-      table.createdAt
-    ),
+    index('idx_native_agent_direct_messages_session_peer').on(table.meshSessionId, table.peer, table.createdAt),
     index('idx_native_agent_direct_messages_project_pair').on(
       table.projectId,
       table.fromAgent,
@@ -381,10 +377,10 @@ export const nativeAgentDirectMessages = sqliteTable(
   ]
 );
 
-export const externalAgentInboxItems = sqliteTable(
-  'external_agent_inbox_items',
+export const meshAgentInboxItems = sqliteTable(
+  'mesh_agent_inbox_items',
   {
-    externalAgentSessionId: text('external_agent_session_id').notNull(),
+    meshSessionId: text('mesh_session_id').notNull(),
     messageSeq: integer('message_seq').notNull(),
     deliveryId: text('delivery_id'),
     projectId: text('project_id'),
@@ -401,10 +397,10 @@ export const externalAgentInboxItems = sqliteTable(
     updatedAt: text('updated_at')
   },
   (table) => [
-    primaryKey({ columns: [table.externalAgentSessionId, table.messageSeq] }),
-    index('idx_external_agent_inbox_items_pending').on(table.externalAgentSessionId, table.state, table.messageSeq),
-    uniqueIndex('idx_external_agent_inbox_delivery_id').on(table.deliveryId).where(deliveryIdNotNull),
-    index('idx_external_agent_inbox_project_trigger').on(table.projectId, table.triggerMessageId),
-    index('idx_external_agent_inbox_member_state').on(table.projectId, table.memberInstanceId, table.state)
+    primaryKey({ columns: [table.meshSessionId, table.messageSeq] }),
+    index('idx_mesh_agent_inbox_items_pending').on(table.meshSessionId, table.state, table.messageSeq),
+    uniqueIndex('idx_mesh_agent_inbox_delivery_id').on(table.deliveryId).where(deliveryIdNotNull),
+    index('idx_mesh_agent_inbox_project_trigger').on(table.projectId, table.triggerMessageId),
+    index('idx_mesh_agent_inbox_member_state').on(table.projectId, table.memberInstanceId, table.state)
   ]
 );

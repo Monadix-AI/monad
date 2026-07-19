@@ -1,8 +1,5 @@
-import type { ExternalAgentObservationEvent } from '@monad/protocol';
-import type {
-  ExternalAgentObservationJsonRecordEntry,
-  ExternalAgentObservationProjector
-} from '../observation-projection.ts';
+import type { MeshAgentObservationEvent } from '@monad/protocol';
+import type { MeshAgentObservationJsonRecordEntry, MeshAgentObservationProjector } from '../observation-projection.ts';
 
 import {
   classifyObservationActivity,
@@ -17,7 +14,7 @@ export function geminiRecordEvents(
   id: string,
   record: Record<string, unknown>,
   recordIndex: number
-): ExternalAgentObservationEvent[] {
+): MeshAgentObservationEvent[] {
   const type = record.type;
   const createdAt = providerIsoTimestamp(textValue(record.timestamp));
   if (type === 'message') {
@@ -99,19 +96,17 @@ function assistantMessageText(record: Record<string, unknown>): string | undefin
 }
 
 function geminiHistoryEntryFromAssistant(
-  entry: ExternalAgentObservationJsonRecordEntry,
+  entry: MeshAgentObservationJsonRecordEntry,
   text: string
-): ExternalAgentObservationJsonRecordEntry {
+): MeshAgentObservationJsonRecordEntry {
   const { delta: _delta, ...record } = entry.record;
   const foldedRecord = { ...record, content: text };
   return { record: foldedRecord, raw: JSON.stringify(foldedRecord) };
 }
 
-function geminiHistoryEntries(
-  entries: ExternalAgentObservationJsonRecordEntry[]
-): ExternalAgentObservationJsonRecordEntry[] {
-  const folded: ExternalAgentObservationJsonRecordEntry[] = [];
-  let pendingEntry: ExternalAgentObservationJsonRecordEntry | undefined;
+function geminiHistoryEntries(entries: MeshAgentObservationJsonRecordEntry[]): MeshAgentObservationJsonRecordEntry[] {
+  const folded: MeshAgentObservationJsonRecordEntry[] = [];
+  let pendingEntry: MeshAgentObservationJsonRecordEntry | undefined;
   let pendingText = '';
 
   const flushAssistant = () => {
@@ -148,8 +143,8 @@ function geminiHistoryEntries(
 }
 
 export const geminiObservationProjection = {
-  historyEntries: geminiHistoryEntries,
+  eventEntries: geminiHistoryEntries,
   classifyActivity: classifyObservationActivity,
   isStreamingFragment: isStreamingObservationFragment,
   recordProjectors: [{ parse: ({ id, record, recordIndex }) => geminiRecordEvents(id, record, recordIndex) }]
-} satisfies ExternalAgentObservationProjector;
+} satisfies MeshAgentObservationProjector;

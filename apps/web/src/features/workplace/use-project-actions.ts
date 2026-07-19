@@ -1,6 +1,6 @@
 import type {
   AvatarStyle,
-  ExternalAgentAppServerTransport,
+  MeshAgentAppServerTransport,
   ProjectId,
   SendMessageAttachment,
   SessionId,
@@ -10,28 +10,28 @@ import type {
   WorkplaceProjectMemberView
 } from '@monad/protocol';
 import type { useAcpAgentSettings } from '#/hooks/use-acp-agent-settings';
-import type { useExternalAgentSettings } from '#/hooks/use-external-agent-settings';
+import type { useMeshAgentSettings } from '#/hooks/use-mesh-agent-settings';
 
 import {
   useAbortSessionMutation,
-  useApproveExternalAgentSessionMutation,
+  useApproveMeshSessionMutation,
   useApproveToolMutation,
   useClarifyRespondMutation,
   useDeleteWorkplaceProjectMutation,
-  useInputExternalAgentSessionMutation,
+  useInputMeshSessionMutation,
   useInviteSessionMemberMutation,
   useSendProjectMessageMutation,
-  useStopExternalAgentSessionMutation,
+  useStopMeshSessionMutation,
   useUpdateWorkplaceProjectMutation
 } from '@monad/client-rtk';
 import {
   defaultWorkplaceProjectMemberSettings,
   entityAvatarWriteUrl,
-  externalAgentProductDisplayName,
-  newExternalAgentInstanceId,
-  renameExternalAgentProjectMemberDisplayName,
-  safeExternalAgentDisplayName,
-  uniqueExternalAgentDisplayName,
+  meshAgentProductDisplayName,
+  newMeshAgentInstanceId,
+  renameMeshAgentProjectMemberDisplayName,
+  safeMeshAgentDisplayName,
+  uniqueMeshAgentDisplayName,
   workplaceProjectMemberAvatarSeeds,
   workplaceProjectMemberId
 } from '@monad/protocol';
@@ -44,7 +44,7 @@ export type ApprovalDecision = 'approve' | 'reject';
 type ProjectApprovalActionView = {
   id: string;
   approvalOwnership?: 'provider-owned';
-  externalAgentSessionId?: string;
+  meshSessionId?: string;
 };
 
 type AddProjectMemberOptions = {
@@ -53,7 +53,7 @@ type AddProjectMemberOptions = {
   modelId?: string;
   reasoningEffort?: string;
   speed?: 'standard' | 'fast';
-  appServerTransport?: ExternalAgentAppServerTransport;
+  appServerTransport?: MeshAgentAppServerTransport;
   customPrompt?: string;
 };
 
@@ -83,7 +83,7 @@ export function useProjectActions(args: {
   currentProject: WorkplaceProject | null;
   projectMembers: WorkplaceProjectMemberView[];
   acpAgents: ReturnType<typeof useAcpAgentSettings>['agents'];
-  externalAgents: ReturnType<typeof useExternalAgentSettings>['agents'];
+  meshAgents: ReturnType<typeof useMeshAgentSettings>['agents'];
   avatarStyle?: AvatarStyle;
 }) {
   const {
@@ -93,20 +93,20 @@ export function useProjectActions(args: {
     currentProject,
     projectMembers,
     acpAgents,
-    externalAgents,
+    meshAgents,
     avatarStyle
   } = args;
 
   const [sendProjectMessage] = useSendProjectMessageMutation();
   const [approveTool] = useApproveToolMutation();
   const [clarifyRespond] = useClarifyRespondMutation();
-  const [approveExternalAgentSession] = useApproveExternalAgentSessionMutation();
+  const [approveMeshSession] = useApproveMeshSessionMutation();
   const [abortSession] = useAbortSessionMutation();
   const [updateWorkplaceProject] = useUpdateWorkplaceProjectMutation();
   const [deleteWorkplaceProject] = useDeleteWorkplaceProjectMutation();
-  const [inputExternalAgentSession] = useInputExternalAgentSessionMutation();
+  const [inputMeshSession] = useInputMeshSessionMutation();
   const [inviteSessionMember] = useInviteSessionMemberMutation();
-  const [stopExternalAgentSession] = useStopExternalAgentSessionMutation();
+  const [stopMeshSession] = useStopMeshSessionMutation();
 
   const sendDirective = useCallback(
     async (directive: string | { attachments?: SendMessageAttachment[]; text: string }) => {
@@ -124,17 +124,17 @@ export function useProjectActions(args: {
   const resolveApproval = useCallback(
     (requestId: string, decision: ApprovalDecision) => {
       const approval = approvals.find((candidate) => candidate.id === requestId);
-      if (activeSessionId && approval?.approvalOwnership === 'provider-owned' && approval.externalAgentSessionId) {
+      if (activeSessionId && approval?.approvalOwnership === 'provider-owned' && approval.meshSessionId) {
         void traceProjectDebugOperation(
           {
             layer: 'web',
-            label: 'external-agent.approval.resolve',
-            sessionId: approval.externalAgentSessionId,
+            label: 'mesh-agent.approval.resolve',
+            sessionId: approval.meshSessionId,
             data: { requestId, decision }
           },
           () =>
-            approveExternalAgentSession({
-              id: approval.externalAgentSessionId as string,
+            approveMeshSession({
+              id: approval.meshSessionId as string,
               transcriptTargetId: activeSessionId,
               requestId,
               allow: decision === 'approve',
@@ -159,7 +159,7 @@ export function useProjectActions(args: {
           }).unwrap()
       );
     },
-    [activeSessionId, approveExternalAgentSession, approveTool, approvals]
+    [activeSessionId, approveMeshSession, approveTool, approvals]
   );
 
   const answerQuestion = useCallback(
@@ -211,10 +211,10 @@ export function useProjectActions(args: {
 
   const addProjectMember = useCallback(
     async (type: WorkplaceProjectMemberType, name: string, options: AddProjectMemberOptions = {}) => {
-      if (type !== 'external-agent' && projectMembers.some((member) => member.type === type && member.name === name))
+      if (type !== 'mesh-agent' && projectMembers.some((member) => member.type === type && member.name === name))
         return;
       const acpAgent = type === 'acp' ? acpAgents.find((agent) => agent.name === name) : undefined;
-      const nativeAgent = type === 'external-agent' ? externalAgents.find((agent) => agent.name === name) : undefined;
+      const nativeAgent = type === 'mesh-agent' ? meshAgents.find((agent) => agent.name === name) : undefined;
       const settings = {
         ...defaultWorkplaceProjectMemberSettings(type, type === 'acp' ? acpAgent : nativeAgent),
         ...(options.modelId ? { modelId: options.modelId } : {}),
@@ -223,16 +223,12 @@ export function useProjectActions(args: {
         ...(options.appServerTransport ? { appServerTransport: options.appServerTransport } : {}),
         ...(options.customPrompt ? { customPrompt: options.customPrompt } : {})
       };
-      if (type === 'external-agent') {
-        const defaultDisplayName = externalAgentProductDisplayName(
-          nativeAgent?.productIcon,
-          nativeAgent?.provider,
-          name
+      if (type === 'mesh-agent') {
+        const defaultDisplayName = meshAgentProductDisplayName(nativeAgent?.productIcon, nativeAgent?.provider, name);
+        const displayName = safeMeshAgentDisplayName(
+          uniqueMeshAgentDisplayName(options.displayName?.trim() || defaultDisplayName, projectMembers)
         );
-        const displayName = safeExternalAgentDisplayName(
-          uniqueExternalAgentDisplayName(options.displayName?.trim() || defaultDisplayName, projectMembers)
-        );
-        const instanceId = newExternalAgentInstanceId(name);
+        const instanceId = newMeshAgentInstanceId(name);
         await persistProjectMemberAndInvite({
           activeSessionId,
           memberId: instanceId,
@@ -260,7 +256,7 @@ export function useProjectActions(args: {
         invite: (request) => inviteSessionMember(request).unwrap()
       });
     },
-    [acpAgents, activeSessionId, externalAgents, inviteSessionMember, projectMembers, updateProjectMembers]
+    [acpAgents, activeSessionId, meshAgents, inviteSessionMember, projectMembers, updateProjectMembers]
   );
 
   const removeProjectMember = useCallback(
@@ -286,32 +282,31 @@ export function useProjectActions(args: {
       await updateProjectMembers(
         projectMembers.map((member) => {
           if (member.id !== id) return member;
-          return renameExternalAgentProjectMemberDisplayName(member, patch.displayName);
+          return renameMeshAgentProjectMemberDisplayName(member, patch.displayName);
         })
       );
     },
     [projectMembers, updateProjectMembers]
   );
 
-  const sendExternalAgentInput = useCallback(
+  const sendMeshAgentInput = useCallback(
     async (id: string, input: string) => {
       if (!activeSessionId) return;
       await traceProjectDebugOperation(
-        { layer: 'web', label: 'external-agent.input', sessionId: id, data: { id, input } },
-        () => inputExternalAgentSession({ id, transcriptTargetId: activeSessionId, input }).unwrap()
+        { layer: 'web', label: 'mesh-agent.input', sessionId: id, data: { id, input } },
+        () => inputMeshSession({ id, transcriptTargetId: activeSessionId, input }).unwrap()
       );
     },
-    [activeSessionId, inputExternalAgentSession]
+    [activeSessionId, inputMeshSession]
   );
-  const stopExternalAgent = useCallback(
+  const stopMeshAgent = useCallback(
     async (id: string) => {
       if (!activeSessionId) return;
-      await traceProjectDebugOperation(
-        { layer: 'web', label: 'external-agent.stop', sessionId: id, data: { id } },
-        () => stopExternalAgentSession({ id, transcriptTargetId: activeSessionId }).unwrap()
+      await traceProjectDebugOperation({ layer: 'web', label: 'mesh-agent.stop', sessionId: id, data: { id } }, () =>
+        stopMeshSession({ id, transcriptTargetId: activeSessionId }).unwrap()
       );
     },
-    [activeSessionId, stopExternalAgentSession]
+    [activeSessionId, stopMeshSession]
   );
 
   const setWorkdir = useCallback(
@@ -332,8 +327,8 @@ export function useProjectActions(args: {
     removeProjectMember,
     updateProjectMemberSettings,
     updateProjectMemberIdentity,
-    sendExternalAgentInput,
-    stopExternalAgent,
+    sendMeshAgentInput,
+    stopMeshAgent,
     setWorkdir
   };
 }

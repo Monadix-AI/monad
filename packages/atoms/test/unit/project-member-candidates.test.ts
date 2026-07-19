@@ -2,11 +2,11 @@ import { expect, test } from 'bun:test';
 
 import { projectMemberCandidates } from '../../src/workspace-experiences/experience/project-projection.ts';
 
-test('project member candidates include project templates defined on external agents', () => {
+test('project member candidates include project templates defined on MeshAgents', () => {
   const candidates = projectMemberCandidates({
     acpAgents: [],
     projectMembers: [],
-    externalAgents: [
+    meshAgents: [
       {
         name: 'codex',
         provider: 'codex',
@@ -35,8 +35,8 @@ test('project member candidates include project templates defined on external ag
 
   expect(candidates).toContainEqual(
     expect.objectContaining({
-      id: 'external-agent-template:codex:reviewer',
-      type: 'external-agent',
+      id: 'mesh-agent-template:codex:reviewer',
+      type: 'mesh-agent',
       name: 'codex',
       label: 'Reviewer',
       tag: 'Codex',

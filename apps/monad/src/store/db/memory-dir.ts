@@ -7,7 +7,7 @@
 //   <home>/memory/MEMORY_agent_<agentId>.md  ← persists for that agent across sessions
 //   <home>/memory/MEMORY_session_<sid>.md    ← session-local; dropped with the session
 //
-// Each scope file carries frontmatter (name/description/metadata) in the same shape the external agent uses;
+// Each scope file carries frontmatter (name/description/metadata) in the same shape the MeshAgent uses;
 // the agent supplies only fact text, the store stamps provenance (scope/updated/count). A fact's
 // identity is the hash of its trimmed content — stable across reads, since the MD world has no event id.
 

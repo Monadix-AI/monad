@@ -4,9 +4,9 @@ Run `monad tui` for a keyboard-first client backed by the same daemon APIs as th
 
 ## Workspace scope
 
-Workspace supports standalone chats, project sessions, Inbox mentions and approvals, and read-only external-agent process projection. It is a text-chat surface: it does not discover, load, or render Experience extensions, Web Components, or custom Experiences.
+Workspace supports standalone chats, project sessions, Inbox mentions and approvals, and read-only mesh-agent process projection. It is a text-chat surface: it does not discover, load, or render Experience extensions, Web Components, or custom Experiences.
 
-The projection consumes daemon-normalized live observation frames and history pages. It never parses provider-specific output and cannot send input to an external agent.
+The projection consumes daemon-normalized live observation frames and history pages. It never parses provider-specific output and cannot send input to an MeshAgent.
 
 ## Layout
 

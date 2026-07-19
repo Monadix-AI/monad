@@ -1,15 +1,11 @@
-import type { ExternalAgentView } from '@monad/protocol';
-import type {
-  BuildExternalAgentLaunchOptions,
-  ExternalAgentLaunchSpec,
-  ExternalAgentModelOption
-} from '@monad/sdk-atom';
+import type { MeshAgentView } from '@monad/protocol';
+import type { BuildMeshAgentLaunchOptions, MeshAgentLaunchSpec, MeshAgentModelOption } from '@monad/sdk-atom';
 
 import { homedir } from 'node:os';
-import { ExternalAgentError } from '@monad/sdk-atom';
+import { MeshAgentError } from '@monad/sdk-atom';
 
 import { hasFlag, parseJsonObject, uniqueModelNames } from '../adapter-shared.ts';
-import { parseExternalAgentArgumentSupport } from '../argument-support.ts';
+import { parseMeshAgentArgumentSupport } from '../argument-support.ts';
 
 export const CODEX_APP_BIN = '/Applications/Codex.app/Contents/Resources/codex';
 export const CODEX_NON_INTERACTIVE_ENV = { CODEX_NON_INTERACTIVE: '1' };
@@ -41,7 +37,7 @@ function codexNonInteractiveEnv(env?: Record<string, string>): Record<string, st
   return { ...(env ?? {}), ...CODEX_NON_INTERACTIVE_ENV };
 }
 
-export function parseCodexModelOptions(output: string): ExternalAgentModelOption[] {
+export function parseCodexModelOptions(output: string): MeshAgentModelOption[] {
   const catalog = parseJsonObject(output);
   const models = Array.isArray(catalog?.models) ? catalog.models : [];
   const options = models
@@ -54,7 +50,7 @@ export function parseCodexModelOptions(output: string): ExternalAgentModelOption
         ...(typeof item.display_name === 'string' && item.display_name ? { displayName: item.display_name } : {})
       };
     })
-    .filter((option): option is ExternalAgentModelOption => !!option);
+    .filter((option): option is MeshAgentModelOption => !!option);
   const seen = new Set<string>();
   return options.filter((option) => {
     if (seen.has(option.value)) return false;
@@ -63,7 +59,7 @@ export function parseCodexModelOptions(output: string): ExternalAgentModelOption
   });
 }
 
-export function parseCodexArgumentSupport(output: string): ReturnType<typeof parseExternalAgentArgumentSupport> {
+export function parseCodexArgumentSupport(output: string): ReturnType<typeof parseMeshAgentArgumentSupport> {
   const catalog = parseJsonObject(output);
   const models = Array.isArray(catalog?.models) ? catalog.models : [];
   const reasoningEfforts = uniqueModelNames(
@@ -107,10 +103,10 @@ export function parseCodexArgumentSupport(output: string): ReturnType<typeof par
     );
     if (efforts.length > 0) reasoningEffortsByModel[item.slug] = efforts;
   }
-  return { ...parseExternalAgentArgumentSupport(output), reasoningEfforts, speeds, reasoningEffortsByModel };
+  return { ...parseMeshAgentArgumentSupport(output), reasoningEfforts, speeds, reasoningEffortsByModel };
 }
 
-export function buildCodexAuthLaunch(agent: ExternalAgentView, args: string[]): ExternalAgentLaunchSpec {
+export function buildCodexAuthLaunch(agent: MeshAgentView, args: string[]): MeshAgentLaunchSpec {
   return {
     argv: [agent.command, ...args],
     cwd: homedir(),
@@ -122,10 +118,7 @@ export function buildCodexAuthLaunch(agent: ExternalAgentView, args: string[]): 
   };
 }
 
-export function buildCodexLaunch(
-  agent: ExternalAgentView,
-  opts: BuildExternalAgentLaunchOptions
-): ExternalAgentLaunchSpec {
+export function buildCodexLaunch(agent: MeshAgentView, opts: BuildMeshAgentLaunchOptions): MeshAgentLaunchSpec {
   let args = [...(agent.args ?? [])];
   const launchMode = opts.launchMode ?? agent.defaultLaunchMode;
   if (launchMode === 'app-server') {
@@ -133,7 +126,7 @@ export function buildCodexLaunch(
     if (!(CODEX_APP_SERVER_TRANSPORTS as readonly string[]).includes(transport)) {
       // unix has quirky directory/path semantics we don't launch yet (schema keeps it for future
       // providers); the supported set is declared once in CODEX_APP_SERVER_TRANSPORTS.
-      throw new ExternalAgentError(
+      throw new MeshAgentError(
         'unsupported_capability',
         `codex app-server transport "${transport}" is not supported yet; use ${CODEX_APP_SERVER_TRANSPORTS.join(' or ')}`
       );
@@ -147,7 +140,7 @@ export function buildCodexLaunch(
     // non-loopback deployments; the daemon only ever dials `ws://127.0.0.1:<port>`, and codex's own
     // guidance is that plain (unauthenticated) `ws://` is fine on loopback.
     if (transport === 'unix' && !opts.appServerSocketPath) {
-      throw new ExternalAgentError('provider_protocol_error', 'codex app-server unix transport requires a socket path');
+      throw new MeshAgentError('provider_protocol_error', 'codex app-server unix transport requires a socket path');
     }
     const transportArgs =
       transport === 'ws'

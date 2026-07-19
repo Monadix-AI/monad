@@ -7,7 +7,7 @@ import channelContextPath from './channel-context.prompt.md' with { type: 'file'
 export interface ChannelParticipant {
   id: string;
   name: string;
-  kind: 'studio' | 'acp' | 'external-agent' | 'human';
+  kind: 'studio' | 'acp' | 'mesh-agent' | 'human';
   description?: string;
 }
 
@@ -22,7 +22,7 @@ export interface BuildChannelContextInput {
     id: string;
     name: string;
     agentName?: string;
-    externalAgentName?: string;
+    meshAgentName?: string;
   };
 }
 

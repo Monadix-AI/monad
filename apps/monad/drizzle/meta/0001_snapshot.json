@@ -475,11 +475,11 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "external_agent_inbox_items": {
-      "name": "external_agent_inbox_items",
+    "mesh_agent_inbox_items": {
+      "name": "mesh_agent_inbox_items",
       "columns": {
-        "external_agent_session_id": {
-          "name": "external_agent_session_id",
+        "mesh_session_id": {
+          "name": "mesh_session_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -586,40 +586,40 @@
         }
       },
       "indexes": {
-        "idx_external_agent_inbox_items_pending": {
-          "name": "idx_external_agent_inbox_items_pending",
-          "columns": ["external_agent_session_id", "state", "message_seq"],
+        "idx_mesh_agent_inbox_items_pending": {
+          "name": "idx_mesh_agent_inbox_items_pending",
+          "columns": ["mesh_session_id", "state", "message_seq"],
           "isUnique": false
         },
-        "idx_external_agent_inbox_delivery_id": {
-          "name": "idx_external_agent_inbox_delivery_id",
+        "idx_mesh_agent_inbox_delivery_id": {
+          "name": "idx_mesh_agent_inbox_delivery_id",
           "columns": ["delivery_id"],
           "isUnique": true,
           "where": "delivery_id IS NOT NULL"
         },
-        "idx_external_agent_inbox_project_trigger": {
-          "name": "idx_external_agent_inbox_project_trigger",
+        "idx_mesh_agent_inbox_project_trigger": {
+          "name": "idx_mesh_agent_inbox_project_trigger",
           "columns": ["project_id", "trigger_message_id"],
           "isUnique": false
         },
-        "idx_external_agent_inbox_member_state": {
-          "name": "idx_external_agent_inbox_member_state",
+        "idx_mesh_agent_inbox_member_state": {
+          "name": "idx_mesh_agent_inbox_member_state",
           "columns": ["project_id", "member_instance_id", "state"],
           "isUnique": false
         }
       },
       "foreignKeys": {},
       "compositePrimaryKeys": {
-        "external_agent_inbox_items_external_agent_session_id_message_seq_pk": {
-          "columns": ["external_agent_session_id", "message_seq"],
-          "name": "external_agent_inbox_items_external_agent_session_id_message_seq_pk"
+        "mesh_agent_inbox_items_mesh_session_id_message_seq_pk": {
+          "columns": ["mesh_session_id", "message_seq"],
+          "name": "mesh_agent_inbox_items_mesh_session_id_message_seq_pk"
         }
       },
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "external_agent_sessions": {
-      "name": "external_agent_sessions",
+    "mesh_sessions": {
+      "name": "mesh_sessions",
       "columns": {
         "id": {
           "name": "id",
@@ -752,19 +752,19 @@
         }
       },
       "indexes": {
-        "idx_external_agent_sessions_transcript_target": {
-          "name": "idx_external_agent_sessions_transcript_target",
+        "idx_mesh_sessions_transcript_target": {
+          "name": "idx_mesh_sessions_transcript_target",
           "columns": ["transcript_target_id"],
           "isUnique": false
         },
-        "idx_external_agent_sessions_live": {
-          "name": "idx_external_agent_sessions_live",
+        "idx_mesh_sessions_live": {
+          "name": "idx_mesh_sessions_live",
           "columns": ["state"],
           "isUnique": false,
           "where": "state IN ('starting', 'running')"
         },
-        "idx_external_agent_sessions_provider_ref": {
-          "name": "idx_external_agent_sessions_provider_ref",
+        "idx_mesh_sessions_provider_ref": {
+          "name": "idx_mesh_sessions_provider_ref",
           "columns": ["transcript_target_id", "provider", "provider_session_ref"],
           "isUnique": true,
           "where": "provider_session_ref IS NOT NULL"
@@ -1185,8 +1185,8 @@
           "notNull": true,
           "autoincrement": false
         },
-        "external_agent_session_id": {
-          "name": "external_agent_session_id",
+        "mesh_session_id": {
+          "name": "mesh_session_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -1231,7 +1231,7 @@
       "indexes": {
         "idx_native_agent_direct_messages_session_peer": {
           "name": "idx_native_agent_direct_messages_session_peer",
-          "columns": ["external_agent_session_id", "peer", "created_at"],
+          "columns": ["mesh_session_id", "peer", "created_at"],
           "isUnique": false
         },
         "idx_native_agent_direct_messages_project_pair": {
@@ -1276,8 +1276,8 @@
           "notNull": true,
           "autoincrement": false
         },
-        "external_agent_session_id": {
-          "name": "external_agent_session_id",
+        "mesh_session_id": {
+          "name": "mesh_session_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false,

@@ -1,5 +1,5 @@
-import type { ExternalAgentObservationEvent } from '@monad/protocol';
-import type { ExternalAgentObservationProjector, ObservationRole } from '../observation-projection.ts';
+import type { MeshAgentObservationEvent } from '@monad/protocol';
+import type { MeshAgentObservationProjector, ObservationRole } from '../observation-projection.ts';
 
 import {
   classifyObservationActivity,
@@ -31,11 +31,7 @@ function textFromContent(content: unknown): string | undefined {
   return text.trim() ? text : undefined;
 }
 
-function toolCallEvents(
-  id: string,
-  record: Record<string, unknown>,
-  recordIndex: number
-): ExternalAgentObservationEvent[] {
+function toolCallEvents(id: string, record: Record<string, unknown>, recordIndex: number): MeshAgentObservationEvent[] {
   const calls = Array.isArray(record.tool_calls) ? record.tool_calls : [];
   return calls.flatMap((call, callIndex) => {
     if (!call || typeof call !== 'object' || Array.isArray(call)) return [];
@@ -59,7 +55,7 @@ export function hermesRecordEvents(
   id: string,
   record: Record<string, unknown>,
   recordIndex: number
-): ExternalAgentObservationEvent[] {
+): MeshAgentObservationEvent[] {
   if (typeof record.role !== 'string') return [];
 
   const contentText =
@@ -80,4 +76,4 @@ export const hermesObservationProjection = {
   classifyActivity: classifyObservationActivity,
   isStreamingFragment: isStreamingObservationFragment,
   recordProjectors: [{ parse: ({ id, record, recordIndex }) => hermesRecordEvents(id, record, recordIndex) }]
-} satisfies ExternalAgentObservationProjector;
+} satisfies MeshAgentObservationProjector;

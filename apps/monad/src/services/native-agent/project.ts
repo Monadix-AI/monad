@@ -16,7 +16,7 @@ import type { NativeAgentAttachmentResolver } from './attachments.ts';
 
 import { definePrompt } from '#/agent/prompt-template.ts';
 import { HandlerError } from '#/handlers/handler-error.ts';
-import { externalAgentProjectMemberDisplayNameForAgent } from '#/handlers/session/handlers/messaging-members.ts';
+import { meshAgentProjectMemberDisplayNameForAgent } from '#/handlers/session/handlers/messaging-members.ts';
 import { messageIdempotencyKey } from '#/services/messages/ingress.ts';
 import projectAskSummaryPath from './prompts/project-ask-summary-user.prompt.md' with { type: 'file' };
 
@@ -30,7 +30,7 @@ const PROJECT_ASK_SUMMARY_PROMPT = await definePrompt<{
 export interface NativeAgentProjectBinding {
   agentId: string;
   sessionId: SessionId;
-  externalAgentSessionId: string;
+  meshSessionId: string;
 }
 
 function assertSessionBinding(
@@ -44,12 +44,12 @@ function assertSessionBinding(
   return sessionId;
 }
 
-function managedExternalAgentDisplayName(
+function managedMeshAgentDisplayName(
   store: ReturnType<typeof createDaemonHandlers>['_nativeAgentStore'],
   sessionId: SessionId,
   agentId: string
 ): string {
-  return externalAgentProjectMemberDisplayNameForAgent(store, sessionId, agentId);
+  return meshAgentProjectMemberDisplayNameForAgent(store, sessionId, agentId);
 }
 
 function readableAnswer(answer: string): string {
@@ -84,12 +84,12 @@ function enqueueProjectSummaryForManagedRuntimes(
   store: ReturnType<typeof createDaemonHandlers>['_nativeAgentStore'],
   sessionId: SessionId,
   summarySeq: number,
-  exceptExternalAgentSessionId: string
+  exceptMeshSessionId: string
 ): void {
-  for (const session of store.listExternalAgentSessionsForTranscriptTarget(sessionId)) {
-    if (session.id === exceptExternalAgentSessionId) continue;
+  for (const session of store.listMeshSessionsForTranscriptTarget(sessionId)) {
+    if (session.id === exceptMeshSessionId) continue;
     if (session.runtimeRole !== 'managed-project-agent') continue;
-    store.enqueueExternalAgentInboxItem(session.id, summarySeq);
+    store.enqueueMeshAgentInboxItem(session.id, summarySeq);
   }
 }
 
@@ -112,9 +112,9 @@ export function createNativeAgentProjectCapabilities(
       );
       let messageId: `msg_${string}`;
       try {
-        const completed = await handlers.session.completeManagedExternalAgentProjectMessage({
+        const completed = await handlers.session.completeManagedMeshAgentProjectMessage({
           sessionId: sessionId,
-          externalAgentSessionId: args.binding.externalAgentSessionId,
+          meshSessionId: args.binding.meshSessionId,
           agentName: args.binding.agentId,
           text,
           threadId: args.body.threadId,
@@ -126,11 +126,11 @@ export function createNativeAgentProjectCapabilities(
         throw err;
       }
       const createdAt = new Date().toISOString();
-      store.markExternalAgentInboxConsumed(args.binding.externalAgentSessionId, store.maxMessageSeq(sessionId));
-      await handlers.session.notifyManagedExternalAgentProjectMembers({
+      store.markMeshAgentInboxConsumed(args.binding.meshSessionId, store.maxMessageSeq(sessionId));
+      await handlers.session.notifyManagedMeshAgentProjectMembers({
         sessionId: sessionId,
         text: noticeText,
-        sender: { kind: 'external-agent', name: args.binding.agentId, id: args.binding.agentId },
+        sender: { kind: 'mesh-agent', name: args.binding.agentId, id: args.binding.agentId },
         triggerMessageId: messageId,
         exceptAgentName: args.binding.agentId
       });
@@ -152,7 +152,7 @@ export function createNativeAgentProjectCapabilities(
       signal?: AbortSignal;
     }): Promise<NativeAgentProjectAskResponse> {
       const sessionId = assertSessionBinding(args.binding, args.body.sessionId);
-      const askerName = managedExternalAgentDisplayName(store, sessionId, args.binding.agentId);
+      const askerName = managedMeshAgentDisplayName(store, sessionId, args.binding.agentId);
       const wall = await handlers._transcriptProjector.insertAssistantMessage({
         sessionId: sessionId,
         agentName: askerName,
@@ -193,16 +193,16 @@ export function createNativeAgentProjectCapabilities(
           type: 'text',
           text: summary,
           data: {
-            source: 'managed-external-agent-question',
+            source: 'managed-mesh-agent-question',
             requestId: result.requestId,
             agentName: args.binding.agentId,
-            externalAgentSessionId: args.binding.externalAgentSessionId
+            meshSessionId: args.binding.meshSessionId
           },
           includeInContext: true
         });
         const summarySeq = store.messageSeq(sessionId, summaryMessage.id);
-        enqueueProjectSummaryForManagedRuntimes(store, sessionId, summarySeq, args.binding.externalAgentSessionId);
-        await handlers.session.notifyManagedExternalAgentProjectMembers({
+        enqueueProjectSummaryForManagedRuntimes(store, sessionId, summarySeq, args.binding.meshSessionId);
+        await handlers.session.notifyManagedMeshAgentProjectMembers({
           sessionId: sessionId,
           text: summary,
           sender: { kind: 'system', name: 'Project Q&A summary', id: 'system:project-qa' },
@@ -228,7 +228,7 @@ export function createNativeAgentProjectCapabilities(
       });
       if (!args.body.threadId && !args.body.before && !args.body.after && !args.body.around) {
         const visibleSeq = store.maxMessageSeq(sessionId);
-        if (visibleSeq > 0) store.markExternalAgentInboxVisible(args.binding.externalAgentSessionId, visibleSeq);
+        if (visibleSeq > 0) store.markMeshAgentInboxVisible(args.binding.meshSessionId, visibleSeq);
       }
       return { messages };
     },
@@ -239,9 +239,9 @@ export function createNativeAgentProjectCapabilities(
       lastVisibleSeq: number;
     }): NativeAgentProjectInboxResponse {
       const sessionId = assertSessionBinding(args.binding, args.body?.sessionId);
-      const items = store.listExternalAgentInbox(args.binding.externalAgentSessionId);
+      const items = store.listMeshAgentInbox(args.binding.meshSessionId);
       const cursor = items.at(-1)?.seq ?? args.lastVisibleSeq;
-      if (items.length > 0) store.markExternalAgentInboxVisible(args.binding.externalAgentSessionId, cursor);
+      if (items.length > 0) store.markMeshAgentInboxVisible(args.binding.meshSessionId, cursor);
       return { items, sessionId, cursor };
     },
 
@@ -250,9 +250,8 @@ export function createNativeAgentProjectCapabilities(
       binding: NativeAgentProjectBinding;
     }): NativeAgentProjectInboxAckResponse {
       const sessionId = assertSessionBinding(args.binding, args.body?.sessionId);
-      const cursor =
-        args.body?.cursor ?? store.getExternalAgentSession(args.binding.externalAgentSessionId)?.lastVisibleSeq ?? 0;
-      store.markExternalAgentInboxConsumed(args.binding.externalAgentSessionId, cursor);
+      const cursor = args.body?.cursor ?? store.getMeshSession(args.binding.meshSessionId)?.lastVisibleSeq ?? 0;
+      store.markMeshAgentInboxConsumed(args.binding.meshSessionId, cursor);
       return { ok: true, sessionId, cursor };
     }
   };

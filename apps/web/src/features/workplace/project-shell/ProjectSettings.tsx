@@ -17,11 +17,8 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { useT } from '#/components/I18nProvider';
 import { isResolvedEmptyList } from '#/lib/async-list-state';
-import { ExternalAgentMemberDialog } from './ExternalAgentMemberDialog';
-import {
-  type ExternalAgentMemberDialogState,
-  externalAgentMemberDialogStateForMember
-} from './external-agent-member-dialog-model';
+import { MeshAgentMemberDialog } from './MeshAgentMemberDialog';
+import { type MeshAgentMemberDialogState, meshAgentMemberDialogStateForMember } from './mesh-agent-member-dialog-model';
 import { ProjectAddMemberSection } from './ProjectAddMemberSection';
 import { ProjectMemberSettingsDialog } from './ProjectMemberSettingsDialog';
 
@@ -30,7 +27,7 @@ type ProjectMember = ProjectController['projectMembers'][number];
 
 function removeLabel(id: string, t: Translate): string {
   if (id === 'monad') return t('web.workplace.removeAcpMember');
-  if (id.startsWith('external-agent:')) return t('web.workplace.removeCliMember');
+  if (id.startsWith('mesh-agent:')) return t('web.workplace.removeCliMember');
   if (id.startsWith('acp:')) return t('web.workplace.removeAcpMember');
   return t('web.workplace.managedByMonad');
 }
@@ -50,18 +47,16 @@ export function ProjectSettings({
   const [memberSettings, setMemberSettings] = useState<ProjectMember | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [externalAgentInvite, setExternalAgentInvite] = useState<ExternalAgentMemberDialogState | null>(null);
+  const [meshAgentInvite, setMeshAgentInvite] = useState<MeshAgentMemberDialogState | null>(null);
   const projectParticipants = room.projectParticipants;
-  const regularCandidates = room.availableProjectMembers.filter((candidate) => candidate.type !== 'external-agent');
-  const externalAgentCandidates = room.availableProjectMembers.filter(
-    (candidate) => candidate.type === 'external-agent'
-  );
+  const regularCandidates = room.availableProjectMembers.filter((candidate) => candidate.type !== 'mesh-agent');
+  const meshAgentCandidates = room.availableProjectMembers.filter((candidate) => candidate.type === 'mesh-agent');
 
-  const openExternalAgentMemberSettings = useCallback(
+  const openMeshAgentMemberSettings = useCallback(
     (member: ProjectMember) => {
-      const invite = externalAgentMemberDialogStateForMember(room, member);
+      const invite = meshAgentMemberDialogStateForMember(room, member);
       if (!invite) return false;
-      setExternalAgentInvite(invite);
+      setMeshAgentInvite(invite);
       return true;
     },
     [room]
@@ -71,9 +66,9 @@ export function ProjectSettings({
     if (!initialMemberId) return;
     const member = room.projectMembers.find((candidate) => candidate.id === initialMemberId);
     if (!member) return;
-    if (openExternalAgentMemberSettings(member)) return;
+    if (openMeshAgentMemberSettings(member)) return;
     setMemberSettings(member);
-  }, [initialMemberId, openExternalAgentMemberSettings, room.projectMembers]);
+  }, [initialMemberId, openMeshAgentMemberSettings, room.projectMembers]);
 
   const deleteProject = async () => {
     if (!confirmDelete) {
@@ -170,7 +165,7 @@ export function ProjectSettings({
                       disabled={!member}
                       onClick={() => {
                         if (!member) return;
-                        if (openExternalAgentMemberSettings(member)) return;
+                        if (openMeshAgentMemberSettings(member)) return;
                         setMemberSettings(member);
                       }}
                       style={{
@@ -235,10 +230,10 @@ export function ProjectSettings({
               title={t('web.workplace.agentMembers')}
             />
             <ProjectAddMemberSection
-              candidates={externalAgentCandidates}
+              candidates={meshAgentCandidates}
               loading={room.membersLoading}
               onAdd={(candidate) =>
-                setExternalAgentInvite({
+                setMeshAgentInvite({
                   candidate,
                   draft: {
                     displayName: candidate.template?.displayName,
@@ -253,7 +248,7 @@ export function ProjectSettings({
                 })
               }
               promoted={initialIntent === 'spawn-agent'}
-              title={t('web.workplace.externalAgentMembers')}
+              title={t('web.workplace.meshAgentMembers')}
             />
           </section>
 
@@ -315,10 +310,10 @@ export function ProjectSettings({
         onClose={() => setMemberSettings(null)}
         room={room}
       />
-      <ExternalAgentMemberDialog
-        invite={externalAgentInvite}
-        onChange={setExternalAgentInvite}
-        onClose={() => setExternalAgentInvite(null)}
+      <MeshAgentMemberDialog
+        invite={meshAgentInvite}
+        onChange={setMeshAgentInvite}
+        onClose={() => setMeshAgentInvite(null)}
         room={room}
       />
     </>

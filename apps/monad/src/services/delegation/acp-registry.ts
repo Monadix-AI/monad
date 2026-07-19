@@ -28,7 +28,7 @@ export const delegateKey = (sessionId: string, agent: string): string => `${sess
 export const isAlive = (d: LiveDelegate): boolean => d.proc.exitCode === null && d.proc.signalCode === null;
 
 // Thrown when a QUEUED prompt finds its delegate was evicted out from under it (a concurrent delegation
-// to the same agent aborted, or the adapter exited) before the prompt got to run — runExternalAgent
+// to the same agent aborted, or the adapter exited) before the prompt got to run — runMeshAgent
 // catches this specific signal and re-spawns a fresh delegate rather than driving a dead connection.
 export class DelegateEvictedError extends Error {}
 

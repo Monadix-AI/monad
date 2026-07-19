@@ -17,7 +17,7 @@ const EXTERNAL_DEPENDENCY_ROUTES = new Set([
   '/v1/skills/search',
   '/v1/settings/mcp-servers/catalog',
   '/v1/settings/mcp-servers/registry/search',
-  '/v1/settings/external-agents/presets'
+  '/v1/mesh/agents/presets'
 ]);
 const STREAMING_ROUTES = new Set(['/v1/interactions/events']);
 

@@ -1,9 +1,9 @@
 'use client';
 
 import type { AgentObservationEvent } from '@monad/protocol';
-import type { CSSProperties, ReactNode } from 'react';
-import type { ExternalAgentUsageLimitMeter } from '../../../experience/external-agent-observation/external-agent-observation.ts';
-import type { ExternalAgentStreamView, Participant } from '../../../experience/types.ts';
+import type { CSSProperties, ReactNode, RefObject } from 'react';
+import type { MeshAgentUsageLimitMeter } from '../../../experience/mesh-agent-observation/mesh-agent-observation.ts';
+import type { MeshAgentStreamView, Participant } from '../../../experience/types.ts';
 import type { ObservationCollapseCommand } from './card-shell.tsx';
 
 import {
@@ -28,7 +28,7 @@ import {
   workspaceSans as sans
 } from '@monad/ui/components/AgentAvatar';
 import { VirtualList, type VirtualListHandle } from '@monad/ui/components/VirtualList';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { workspaceExperienceT } from '../../../i18n.ts';
 import {
@@ -42,6 +42,7 @@ import {
 
 const observationRowId = (row: ObservationTimelineRow): string => row.id;
 type ObservationRenderMode = 'detail' | 'summary';
+type ObservationBoundaryHandle = Pick<VirtualListHandle, 'scrollToTop' | 'scrollToBottom'>;
 
 type SummaryObservationTurn = {
   id: string;
@@ -66,6 +67,11 @@ const observationAvatarRingCss = `
     opacity: 0;
     transform: scale(1.65);
   }
+}
+
+@keyframes workplace-observation-skeleton-pulse {
+  0%, 100% { opacity: 0.42; }
+  50% { opacity: 0.78; }
 }
 
 .workplace-observation-avatar {
@@ -100,55 +106,59 @@ const observationAvatarRingCss = `
 }
 `;
 
-export function ExternalAgentObservationPanel({
+export function MeshAgentObservationPanel({
   agent,
   agentName,
   content,
+  contentControlRef,
+  contentHasItems = false,
   headerActions,
   icon,
   onBack,
   onClose,
-  onLoadOlderHistory,
+  onLoadOlderEvents,
   onRenderModeChange,
-  onRetryOlderHistory,
-  onShowHistory,
-  canLoadOlderHistory,
+  onRetryOlderEvents,
+  onShowEvents,
+  canLoadOlderEvents,
   defaultRenderMode = 'detail',
-  historyActive,
-  historyLoadError,
-  loadingOlderHistory,
+  eventsActive,
+  eventsLoadError,
+  loadingOlderEvents,
   observationLoading,
   observationUnavailable,
   renderMode: controlledRenderMode,
-  showHistoryButton,
+  showEventsButton,
   showObservationControls = true,
   stream,
   usageMeter: usageMeterProp
 }: {
   agent?: Participant;
   agentName?: string;
-  canLoadOlderHistory?: boolean;
+  canLoadOlderEvents?: boolean;
   content?: ReactNode;
+  contentControlRef?: RefObject<ObservationBoundaryHandle | null>;
+  contentHasItems?: boolean;
   defaultRenderMode?: ObservationRenderMode;
   focusTurnId?: string;
-  historyActive?: boolean;
-  historyLoadError?: boolean;
+  eventsActive?: boolean;
+  eventsLoadError?: boolean;
   headerActions?: ReactNode;
-  icon?: ExternalAgentStreamView['icon'];
-  loadingOlderHistory?: boolean;
+  icon?: MeshAgentStreamView['icon'];
+  loadingOlderEvents?: boolean;
   observationLoading?: boolean;
   observationUnavailable?: boolean;
   onBack?: () => void;
   onClose?: () => void;
-  onLoadOlderHistory?: () => void;
+  onLoadOlderEvents?: () => void;
   onRenderModeChange?: (mode: ObservationRenderMode) => void;
-  onRetryOlderHistory?: () => void;
-  onShowHistory?: () => void;
+  onRetryOlderEvents?: () => void;
+  onShowEvents?: () => void;
   renderMode?: ObservationRenderMode;
-  showHistoryButton?: boolean;
+  showEventsButton?: boolean;
   showObservationControls?: boolean;
-  stream?: ExternalAgentStreamView;
-  usageMeter?: ExternalAgentUsageLimitMeter | null;
+  stream?: MeshAgentStreamView;
+  usageMeter?: MeshAgentUsageLimitMeter | null;
 }): React.ReactElement {
   const t = workspaceExperienceT();
   const displayAgent = agent ?? {
@@ -162,11 +172,16 @@ export function ExternalAgentObservationPanel({
   const productIcon = resolveProductIcon(displayAgent);
   const active = stream?.status === 'running';
   const hasItems = !observationLoading && (stream?.items.length ?? 0) > 0;
-  // The daemon already normalizes the usage meter with the same adapter it uses for parseOutput (see
-  // observeFromStore/observeWithProviderHistory) — the caller passes it via `usageMeter`; this
-  // component never falls back to client-side re-derivation.
+  const hasScrollableItems = content !== undefined ? contentHasItems : hasItems;
+  // Usage arrives through the dedicated MeshAgent usage resource or the caller's adapter fallback.
   const usageMeter = usageMeterProp ?? null;
   const listRef = useRef<VirtualListHandle>(null);
+  const summaryListRef = useRef<HTMLDivElement>(null);
+  const summaryStartArmedRef = useRef(true);
+  const summaryLayoutRef = useRef<{ firstKey: string | null; height: number; streamId?: string }>({
+    firstKey: null,
+    height: 0
+  });
   const [follow, setFollow] = useState(true);
   const [allExpanded, setAllExpanded] = useState(true);
   const [collapseCommand, setCollapseCommand] = useState<ObservationCollapseCommand>({ collapsed: false });
@@ -175,7 +190,7 @@ export function ExternalAgentObservationPanel({
   const streamId = stream?.id;
   const [usageOpen, setUsageOpen] = useState(false);
   const timelineProvider = stream?.provider ?? '';
-  const itemCacheRef = useRef<{ streamId?: string; items: ExternalAgentStreamView['items'] }>({ items: [] });
+  const itemCacheRef = useRef<{ streamId?: string; items: MeshAgentStreamView['items'] }>({ items: [] });
   const streamItems = stream?.items;
   const stableItems = useMemo(() => {
     const previous = itemCacheRef.current;
@@ -198,20 +213,20 @@ export function ExternalAgentObservationPanel({
     () => summaryObservationTurns(stableItems, timelineProvider),
     [stableItems, timelineProvider]
   );
-  const showHistoryHeader = showHistoryButton || historyActive;
-  const historyState = showHistoryButton
+  const showEventsHeader = showEventsButton || eventsActive;
+  const eventsState = showEventsButton
     ? 'available'
-    : historyLoadError
+    : eventsLoadError
       ? 'error'
-      : loadingOlderHistory
+      : loadingOlderEvents
         ? 'loading'
-        : canLoadOlderHistory
+        : canLoadOlderEvents
           ? 'more'
           : 'start';
-  const historyHeader = showHistoryHeader ? (
+  const eventsHeader = showEventsHeader ? (
     <div
-      data-history-state={historyState}
-      data-observation-list-placeholder="history"
+      data-events-state={eventsState}
+      data-observation-list-placeholder="events"
       style={{
         boxSizing: 'border-box',
         display: 'flex',
@@ -220,11 +235,11 @@ export function ExternalAgentObservationPanel({
         padding: '10px 14px 0'
       }}
     >
-      {showHistoryButton ? (
+      {showEventsButton ? (
         <button
           className="workplace-action"
-          disabled={loadingOlderHistory}
-          onClick={onShowHistory}
+          disabled={loadingOlderEvents}
+          onClick={onShowEvents}
           style={{
             border: '1px solid var(--border)',
             borderRadius: 999,
@@ -235,14 +250,14 @@ export function ExternalAgentObservationPanel({
             fontWeight: 650,
             lineHeight: 1,
             minHeight: 30,
-            opacity: loadingOlderHistory ? 0.62 : 1,
+            opacity: loadingOlderEvents ? 0.62 : 1,
             padding: '0 12px'
           }}
           type="button"
         >
-          {t('web.workplace.showHistory')}
+          {t('web.workplace.showEvents')}
         </button>
-      ) : historyLoadError ? (
+      ) : eventsLoadError ? (
         <div
           role="status"
           style={{
@@ -255,10 +270,10 @@ export function ExternalAgentObservationPanel({
             lineHeight: '30px'
           }}
         >
-          <span>{t('web.workplace.historyLoadFailed')}</span>
+          <span>{t('web.workplace.eventsLoadFailed')}</span>
           <button
             className="workplace-action"
-            onClick={onRetryOlderHistory}
+            onClick={onRetryOlderEvents}
             style={{
               border: 0,
               background: 'transparent',
@@ -270,7 +285,7 @@ export function ExternalAgentObservationPanel({
             }}
             type="button"
           >
-            {t('web.workplace.retryHistory')}
+            {t('web.workplace.retryEvents')}
           </button>
         </div>
       ) : (
@@ -284,18 +299,18 @@ export function ExternalAgentObservationPanel({
             textAlign: 'center'
           }}
         >
-          {historyState === 'loading'
-            ? t('web.workplace.loadingHistory')
-            : historyState === 'more'
-              ? t('web.workplace.loadEarlierHistory')
-              : t('web.workplace.historyStart')}
+          {eventsState === 'loading'
+            ? t('web.workplace.loadingEvents')
+            : eventsState === 'more'
+              ? t('web.workplace.loadEarlierEvents')
+              : t('web.workplace.eventsStart')}
         </div>
       )}
     </div>
   ) : null;
   const listHeader = (
     <>
-      {historyHeader}
+      {eventsHeader}
       <div style={{ boxSizing: 'border-box', height: 14 }} />
     </>
   );
@@ -309,9 +324,21 @@ export function ExternalAgentObservationPanel({
     setCollapseCommand({ collapsed: false });
   }, [streamId]);
 
-  const loadOlderObservationHistory = useCallback(() => {
-    if (canLoadOlderHistory && !loadingOlderHistory) onLoadOlderHistory?.();
-  }, [canLoadOlderHistory, loadingOlderHistory, onLoadOlderHistory]);
+  const loadOlderObservationEvent = useCallback(() => {
+    if (canLoadOlderEvents && !loadingOlderEvents) onLoadOlderEvents?.();
+  }, [canLoadOlderEvents, loadingOlderEvents, onLoadOlderEvents]);
+
+  const firstSummaryTurnId = summaryTurns[0]?.id;
+  useLayoutEffect(() => {
+    const scroller = summaryListRef.current;
+    if (!scroller) return;
+    const previous = summaryLayoutRef.current;
+    if (previous.streamId === streamId && previous.firstKey && firstSummaryTurnId !== previous.firstKey) {
+      summaryStartArmedRef.current = false;
+      scroller.scrollTop += scroller.scrollHeight - previous.height;
+    }
+    summaryLayoutRef.current = { firstKey: firstSummaryTurnId ?? null, height: scroller.scrollHeight, streamId };
+  }, [firstSummaryTurnId, streamId]);
 
   const renderObservationRow = useCallback(
     (row: ObservationTimelineRow) => (
@@ -328,15 +355,28 @@ export function ExternalAgentObservationPanel({
 
   const scrollToTop = () => {
     setFollow(false);
-    listRef.current?.scrollToTop('smooth');
+    if (content !== undefined) contentControlRef?.current?.scrollToTop('auto');
+    else if (renderMode === 'detail') listRef.current?.scrollToTop('auto');
+    else if (summaryListRef.current) summaryListRef.current.scrollTop = 0;
+    loadOlderObservationEvent();
   };
   const scrollToBottom = () => {
-    setFollow(false);
-    listRef.current?.scrollToBottom('smooth');
+    setFollow(true);
+    if (content !== undefined) contentControlRef?.current?.scrollToBottom('auto');
+    else if (renderMode === 'detail') listRef.current?.scrollToBottom('auto');
+    else {
+      const scroller = summaryListRef.current;
+      if (scroller) scroller.scrollTop = scroller.scrollHeight;
+    }
   };
   const followLatest = () => {
     setFollow(true);
-    listRef.current?.scrollToBottom('smooth');
+    if (content !== undefined) contentControlRef?.current?.scrollToBottom('smooth');
+    else if (renderMode === 'detail') listRef.current?.scrollToBottom('smooth');
+    else {
+      const scroller = summaryListRef.current;
+      scroller?.scrollTo({ behavior: 'smooth', top: scroller.scrollHeight });
+    }
   };
   const toggleAllRows = () => {
     const nextCollapsed = allExpanded;
@@ -444,7 +484,6 @@ export function ExternalAgentObservationPanel({
             />
           </div>
         </div>
-        {headerActions}
         {usageMeter ? (
           <button
             aria-expanded={usageOpen}
@@ -498,6 +537,7 @@ export function ExternalAgentObservationPanel({
             />
           </>
         ) : null}
+        {headerActions}
         {onClose ? (
           <button
             aria-label={t('web.workplace.closeObservation')}
@@ -551,7 +591,7 @@ export function ExternalAgentObservationPanel({
             header={listHeader}
             items={timelineRows}
             onAtBottomChange={setFollow}
-            onStartReached={loadOlderObservationHistory}
+            onStartReached={loadOlderObservationEvent}
             overscan={600}
             renderItem={renderObservationRow}
             role="log"
@@ -568,6 +608,16 @@ export function ExternalAgentObservationPanel({
           <div
             aria-live="polite"
             className="scwf-scroll"
+            onScroll={(event) => {
+              const atStart = event.currentTarget.scrollTop <= 240;
+              if (atStart && summaryStartArmedRef.current) {
+                summaryStartArmedRef.current = false;
+                loadOlderObservationEvent();
+              } else if (!atStart) {
+                summaryStartArmedRef.current = true;
+              }
+            }}
+            ref={summaryListRef}
             role="log"
             style={{
               boxSizing: 'border-box',
@@ -579,7 +629,7 @@ export function ExternalAgentObservationPanel({
               width: '100%'
             }}
           >
-            {historyHeader}
+            {eventsHeader}
             <div style={{ display: 'grid', gap: 10 }}>
               {summaryTurns.map((turn) => (
                 <SummaryObservationTurnView
@@ -590,9 +640,11 @@ export function ExternalAgentObservationPanel({
               ))}
             </div>
           </div>
+        ) : observationLoading ? (
+          <ObservationLoadingSkeleton label={t('web.workplace.loadingEvents')} />
         ) : (
           <div
-            data-observation-state={observationLoading ? 'loading' : observationUnavailable ? 'unavailable' : 'empty'}
+            data-observation-state={observationUnavailable ? 'unavailable' : 'empty'}
             style={{
               alignItems: 'center',
               boxSizing: 'border-box',
@@ -602,65 +654,116 @@ export function ExternalAgentObservationPanel({
               fontFamily: sans,
               fontSize: 13,
               height: '100%',
-              justifyContent: historyHeader ? 'flex-start' : 'center',
+              justifyContent: eventsHeader ? 'flex-start' : 'center',
               lineHeight: 1.5,
               padding: 14,
               textAlign: 'center',
               width: '100%'
             }}
           >
-            {historyHeader}
+            {eventsHeader}
             <div style={{ maxWidth: 180 }}>
-              {observationLoading
-                ? t('web.workplace.loadingHistory')
-                : observationUnavailable
-                  ? t('web.workplace.historyUnavailable')
-                  : t('web.workplace.noObservationActivity')}
+              {observationUnavailable ? t('web.workplace.eventsUnavailable') : t('web.workplace.noObservationActivity')}
             </div>
           </div>
         )}
-        {content === undefined ? (
-          <div
-            style={{
-              position: 'absolute',
-              left: '50%',
-              bottom: 14,
-              transform: 'translateX(-50%)',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 7,
-              border: '1px solid color-mix(in srgb, var(--border) 82%, transparent)',
-              borderRadius: 999,
-              background: 'color-mix(in srgb, var(--background) 88%, transparent)',
-              boxShadow: '0 8px 18px color-mix(in srgb, black 18%, transparent)',
-              backdropFilter: 'blur(10px)',
-              padding: 4,
-              zIndex: 2
-            }}
-          >
-            <ObservationScrollButton
-              disabled={!hasItems}
-              icon={ArrowUp01Icon}
-              label="Scroll to top"
-              onClick={scrollToTop}
-            />
-            <ObservationScrollButton
-              disabled={!hasItems}
-              icon={ArrowDown01Icon}
-              label="Scroll to bottom"
-              onClick={scrollToBottom}
-            />
-            <ObservationScrollButton
-              active={follow}
-              disabled={!hasItems}
-              icon={Target01Icon}
-              label={follow ? 'Following latest' : 'Follow latest'}
-              onClick={followLatest}
-            />
-          </div>
-        ) : null}
+        <div
+          style={{
+            position: 'absolute',
+            left: '50%',
+            bottom: 14,
+            transform: 'translateX(-50%)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 7,
+            border: '1px solid color-mix(in srgb, var(--border) 82%, transparent)',
+            borderRadius: 999,
+            background: 'color-mix(in srgb, var(--background) 88%, transparent)',
+            boxShadow: '0 8px 18px color-mix(in srgb, black 18%, transparent)',
+            backdropFilter: 'blur(10px)',
+            padding: 4,
+            zIndex: 2
+          }}
+        >
+          <ObservationScrollButton
+            disabled={!hasScrollableItems}
+            icon={ArrowUp01Icon}
+            label="Scroll to top"
+            onClick={scrollToTop}
+          />
+          <ObservationScrollButton
+            disabled={!hasScrollableItems}
+            icon={ArrowDown01Icon}
+            label="Scroll to bottom"
+            onClick={scrollToBottom}
+          />
+          <ObservationScrollButton
+            active={follow}
+            disabled={!hasScrollableItems}
+            icon={Target01Icon}
+            label={follow ? 'Following latest' : 'Follow latest'}
+            onClick={followLatest}
+          />
+        </div>
       </div>
     </section>
+  );
+}
+
+const OBSERVATION_SKELETON_WIDTHS = ['72%', '88%', '58%', '81%'] as const;
+
+function ObservationLoadingSkeleton({ label }: { label: string }): React.ReactElement {
+  return (
+    <div
+      aria-busy="true"
+      aria-label={label}
+      data-observation-skeleton="true"
+      data-observation-state="loading"
+      role="status"
+      style={{
+        alignContent: 'start',
+        boxSizing: 'border-box',
+        display: 'grid',
+        gap: 10,
+        height: '100%',
+        padding: 14,
+        width: '100%'
+      }}
+    >
+      {OBSERVATION_SKELETON_WIDTHS.map((width) => (
+        <div
+          key={width}
+          style={{
+            border: '1px solid color-mix(in srgb, var(--border) 72%, transparent)',
+            borderRadius: 8,
+            display: 'grid',
+            gap: 9,
+            padding: 12
+          }}
+        >
+          <span
+            style={{
+              animation: 'workplace-observation-skeleton-pulse 1.4s ease-in-out infinite',
+              background: 'color-mix(in srgb, var(--muted-foreground) 18%, transparent)',
+              borderRadius: 999,
+              display: 'block',
+              height: 9,
+              width: '28%'
+            }}
+          />
+          <span
+            style={{
+              animation: 'workplace-observation-skeleton-pulse 1.4s ease-in-out infinite',
+              background: 'color-mix(in srgb, var(--muted-foreground) 14%, transparent)',
+              borderRadius: 999,
+              display: 'block',
+              height: 11,
+              width
+            }}
+          />
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -896,7 +999,7 @@ function formatTurnDuration(durationMs: number): string {
   return `${seconds}s`;
 }
 
-function UsageLimitPopover({ meter }: { meter: ExternalAgentUsageLimitMeter }): React.ReactElement {
+function UsageLimitPopover({ meter }: { meter: MeshAgentUsageLimitMeter }): React.ReactElement {
   return (
     <aside
       style={{

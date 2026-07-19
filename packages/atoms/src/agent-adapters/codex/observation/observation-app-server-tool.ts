@@ -1,4 +1,4 @@
-import type { ExternalAgentObservationEvent } from '@monad/protocol';
+import type { MeshAgentObservationEvent } from '@monad/protocol';
 
 import { compactJson, observation, rawTextValue, recordValue, textValue } from '../../observation-projection.ts';
 
@@ -73,7 +73,7 @@ export function codexAppServerToolCallObservation(args: {
   record: unknown;
   item: Record<string, unknown>;
   createdAt?: string;
-}): ExternalAgentObservationEvent[] {
+}): MeshAgentObservationEvent[] {
   const recordKey = textValue(args.item.id) ?? String(args.recordIndex);
   const tool = codexAppServerToolName(args.item);
   const input = codexAppServerToolInput(args.item);
@@ -97,7 +97,7 @@ export function codexAppServerToolResultObservation(args: {
   record: unknown;
   item: Record<string, unknown>;
   createdAt?: string;
-}): ExternalAgentObservationEvent[] {
+}): MeshAgentObservationEvent[] {
   const recordKey = textValue(args.item.id) ?? String(args.recordIndex);
   const output =
     textValue(

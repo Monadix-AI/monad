@@ -1,10 +1,10 @@
 import type {
   ChatMessage,
   Event,
-  ExternalAgentInboxItem,
   GetStatsResponse,
   InboxItem,
   LedgerCategory,
+  MeshAgentInboxItem,
   MessageAttachmentRef,
   MessageId,
   MessageType,
@@ -74,38 +74,38 @@ import {
   scheduleExperienceWorkerWakeup
 } from './experience-worker-wakeups.ts';
 import {
-  countExternalAgentInbox,
-  type EnqueueExternalAgentInboxOptions,
-  enqueueExternalAgentInboxItem,
-  getNativeAgentDelivery,
-  hasUnconsumedExternalAgentInbox,
-  listExternalAgentInbox,
-  listMentionInbox,
-  markExternalAgentInboxConsumed,
-  markExternalAgentInboxDelivered,
-  markExternalAgentInboxVisible
-} from './external-agent-inbox.ts';
-import {
-  clearExternalAgentSessionRef,
-  closeExternalAgentSession,
-  type ExternalAgentSessionRow,
-  getExternalAgentSession,
-  listExternalAgentSessions,
-  listExternalAgentSessionsForTranscriptTarget,
-  listLiveExternalAgentSessions,
-  pruneExitedExternalAgentSessions,
-  reconcileOrphanedExternalAgentSessions,
-  setExternalAgentDeliveredCursor,
-  setExternalAgentVisibleCursor,
-  updateExternalAgentSessionRef,
-  upsertExternalAgentSession
-} from './external-agent-sessions.ts';
-import {
   clearFileObservations,
   type FileObservationRow,
   getFileObservation,
   recordFileObservation
 } from './file-observations.ts';
+import {
+  countMeshAgentInbox,
+  type EnqueueMeshAgentInboxOptions,
+  enqueueMeshAgentInboxItem,
+  getNativeAgentDelivery,
+  hasUnconsumedMeshAgentInbox,
+  listMentionInbox,
+  listMeshAgentInbox,
+  markMeshAgentInboxConsumed,
+  markMeshAgentInboxDelivered,
+  markMeshAgentInboxVisible
+} from './mesh-agent-inbox.ts';
+import {
+  clearMeshSessionRef,
+  closeMeshSession,
+  getMeshSession,
+  listLiveMeshSessions,
+  listMeshSessions,
+  listMeshSessionsForTranscriptTarget,
+  type MeshSessionRow,
+  pruneExitedMeshSessions,
+  reconcileOrphanedMeshSessions,
+  setMeshAgentDeliveredCursor,
+  setMeshAgentVisibleCursor,
+  updateMeshSessionRef,
+  upsertMeshSession
+} from './mesh-sessions.ts';
 import {
   type CreateMessageInput,
   createMessage,
@@ -124,7 +124,7 @@ import {
 import {
   cloneMessages,
   failOrphanedStreamingMessages,
-  findManagedExternalAgentStreamingMessage,
+  findManagedMeshAgentStreamingMessage,
   getMemory,
   getMessage,
   getMessageText,
@@ -137,7 +137,7 @@ import {
   messageIdForSeq,
   messageSeq,
   restoreMessages,
-  retireManagedExternalAgentStreamingMessage,
+  retireManagedMeshAgentStreamingMessage,
   setGenStatus,
   setMemory,
   snapshotAgentDisplayName
@@ -200,9 +200,9 @@ export type { ChatMessage } from '@monad/protocol';
 export type { AcpDelegateRow } from './acp-delegates.ts';
 export type { ExperienceStateEventRecord, ExperienceStateRecord } from './experience-state.ts';
 export type { ExperienceWorkerWakeupRecord } from './experience-worker-wakeups.ts';
-export type { EnqueueExternalAgentInboxOptions } from './external-agent-inbox.ts';
-export type { ExternalAgentSessionRow } from './external-agent-sessions.ts';
 export type { FileObservationRow } from './file-observations.ts';
+export type { EnqueueMeshAgentInboxOptions } from './mesh-agent-inbox.ts';
+export type { MeshSessionRow } from './mesh-sessions.ts';
 export type { ListMessagesOptions } from './messages.ts';
 export type { ChannelConversation, ChannelConversationSession } from './row-mappers.ts';
 export type { SearchOptions } from './search.ts';
@@ -510,26 +510,26 @@ export class Store {
     return snapshotAgentDisplayName(this.sqlite, transcriptTargetId, agentName, agentDisplayName);
   }
 
-  findManagedExternalAgentStreamingMessage(
+  findManagedMeshAgentStreamingMessage(
     transcriptTargetId: string,
-    externalAgentSessionId: string,
+    meshSessionId: string,
     agentName: string
   ): string | null {
-    return findManagedExternalAgentStreamingMessage(this.sqlite, transcriptTargetId, externalAgentSessionId, agentName);
+    return findManagedMeshAgentStreamingMessage(this.sqlite, transcriptTargetId, meshSessionId, agentName);
   }
 
-  retireManagedExternalAgentStreamingMessage(
+  retireManagedMeshAgentStreamingMessage(
     transcriptTargetId: string,
     messageId: string,
-    externalAgentSessionId: string,
+    meshSessionId: string,
     agentName: string,
     updatedAt = new Date().toISOString()
   ): boolean {
-    return retireManagedExternalAgentStreamingMessage(
+    return retireManagedMeshAgentStreamingMessage(
       this.sqlite,
       transcriptTargetId,
       messageId,
-      externalAgentSessionId,
+      meshSessionId,
       agentName,
       updatedAt
     );
@@ -711,80 +711,68 @@ export class Store {
 
   // ── External agent Session Ledger ─────────────────────────────────────────────────────────────────
 
-  upsertExternalAgentSession(row: ExternalAgentSessionRow): void {
-    upsertExternalAgentSession(this.sqlite, row);
+  upsertMeshSession(row: MeshSessionRow): void {
+    upsertMeshSession(this.sqlite, row);
   }
 
-  getExternalAgentSession(id: string): ExternalAgentSessionRow | null {
-    return getExternalAgentSession(this.sqlite, id);
+  getMeshSession(id: string): MeshSessionRow | null {
+    return getMeshSession(this.sqlite, id);
   }
 
-  listExternalAgentSessionsForTranscriptTarget(transcriptTargetId: string): ExternalAgentSessionRow[] {
-    return listExternalAgentSessionsForTranscriptTarget(this.sqlite, transcriptTargetId);
+  listMeshSessionsForTranscriptTarget(transcriptTargetId: string): MeshSessionRow[] {
+    return listMeshSessionsForTranscriptTarget(this.sqlite, transcriptTargetId);
   }
 
-  listExternalAgentSessions(): ExternalAgentSessionRow[] {
-    return listExternalAgentSessions(this.sqlite);
+  listMeshSessions(): MeshSessionRow[] {
+    return listMeshSessions(this.sqlite);
   }
 
-  listLiveExternalAgentSessions(): ExternalAgentSessionRow[] {
-    return listLiveExternalAgentSessions(this.sqlite);
+  listLiveMeshSessions(): MeshSessionRow[] {
+    return listLiveMeshSessions(this.sqlite);
   }
 
-  pruneExitedExternalAgentSessions(olderThanMs = 7 * 24 * 60 * 60 * 1000): number {
-    return pruneExitedExternalAgentSessions(this.sqlite, olderThanMs);
+  pruneExitedMeshSessions(olderThanMs = 7 * 24 * 60 * 60 * 1000): number {
+    return pruneExitedMeshSessions(this.sqlite, olderThanMs);
   }
 
-  updateExternalAgentSessionRef(id: string, providerSessionRef: string): boolean {
-    return updateExternalAgentSessionRef(this.sqlite, id, providerSessionRef);
+  updateMeshSessionRef(id: string, providerSessionRef: string): boolean {
+    return updateMeshSessionRef(this.sqlite, id, providerSessionRef);
   }
 
-  clearExternalAgentSessionRef(id: string): boolean {
-    return clearExternalAgentSessionRef(this.sqlite, id);
+  clearMeshSessionRef(id: string): boolean {
+    return clearMeshSessionRef(this.sqlite, id);
   }
 
-  setExternalAgentVisibleCursor(id: string, seq: number): boolean {
-    return setExternalAgentVisibleCursor(this.sqlite, id, seq);
+  setMeshAgentVisibleCursor(id: string, seq: number): boolean {
+    return setMeshAgentVisibleCursor(this.sqlite, id, seq);
   }
 
-  setExternalAgentDeliveredCursor(id: string, seq: number): boolean {
-    return setExternalAgentDeliveredCursor(this.sqlite, id, seq);
+  setMeshAgentDeliveredCursor(id: string, seq: number): boolean {
+    return setMeshAgentDeliveredCursor(this.sqlite, id, seq);
   }
 
-  enqueueExternalAgentInboxItem(
-    externalAgentSessionId: string,
+  enqueueMeshAgentInboxItem(
+    meshSessionId: string,
     messageSeq: number,
-    createdAtOrOptions: string | EnqueueExternalAgentInboxOptions = new Date().toISOString()
+    createdAtOrOptions: string | EnqueueMeshAgentInboxOptions = new Date().toISOString()
   ): boolean {
-    return enqueueExternalAgentInboxItem(this.sqlite, externalAgentSessionId, messageSeq, createdAtOrOptions);
+    return enqueueMeshAgentInboxItem(this.sqlite, meshSessionId, messageSeq, createdAtOrOptions);
   }
 
-  markExternalAgentInboxDelivered(
-    externalAgentSessionId: string,
-    cursor: number,
-    at = new Date().toISOString()
-  ): boolean {
-    return markExternalAgentInboxDelivered(this.sqlite, externalAgentSessionId, cursor, at);
+  markMeshAgentInboxDelivered(meshSessionId: string, cursor: number, at = new Date().toISOString()): boolean {
+    return markMeshAgentInboxDelivered(this.sqlite, meshSessionId, cursor, at);
   }
 
-  markExternalAgentInboxVisible(
-    externalAgentSessionId: string,
-    cursor: number,
-    at = new Date().toISOString()
-  ): boolean {
-    return markExternalAgentInboxVisible(this.sqlite, externalAgentSessionId, cursor, at);
+  markMeshAgentInboxVisible(meshSessionId: string, cursor: number, at = new Date().toISOString()): boolean {
+    return markMeshAgentInboxVisible(this.sqlite, meshSessionId, cursor, at);
   }
 
-  markExternalAgentInboxConsumed(
-    externalAgentSessionId: string,
-    cursor: number,
-    at = new Date().toISOString()
-  ): boolean {
-    return markExternalAgentInboxConsumed(this.sqlite, externalAgentSessionId, cursor, at);
+  markMeshAgentInboxConsumed(meshSessionId: string, cursor: number, at = new Date().toISOString()): boolean {
+    return markMeshAgentInboxConsumed(this.sqlite, meshSessionId, cursor, at);
   }
 
-  hasUnconsumedExternalAgentInbox(externalAgentSessionId: string, cursor?: number): boolean {
-    return hasUnconsumedExternalAgentInbox(this.sqlite, externalAgentSessionId, cursor);
+  hasUnconsumedMeshAgentInbox(meshSessionId: string, cursor?: number): boolean {
+    return hasUnconsumedMeshAgentInbox(this.sqlite, meshSessionId, cursor);
   }
 
   maxMessageSeq(sessionId: string): number {
@@ -799,16 +787,16 @@ export class Store {
     return messageIdForSeq(this.sqlite, transcriptTargetId, seq);
   }
 
-  listExternalAgentInbox(externalAgentSessionId: string, limit = 50): ExternalAgentInboxItem[] {
-    return listExternalAgentInbox(this.sqlite, externalAgentSessionId, limit);
+  listMeshAgentInbox(meshSessionId: string, limit = 50): MeshAgentInboxItem[] {
+    return listMeshAgentInbox(this.sqlite, meshSessionId, limit);
   }
 
   listMentionInbox(limit = 100): InboxItem[] {
     return listMentionInbox(this.sqlite, limit);
   }
 
-  countExternalAgentInbox(externalAgentSessionId: string): number {
-    return countExternalAgentInbox(this.sqlite, externalAgentSessionId);
+  countMeshAgentInbox(meshSessionId: string): number {
+    return countMeshAgentInbox(this.sqlite, meshSessionId);
   }
 
   getNativeAgentDelivery(deliveryId: NativeAgentDeliveryId): NativeAgentDelivery | null {
@@ -847,26 +835,24 @@ export class Store {
   }
 
   listNativeAgentDirectMessages(
-    externalAgentSessionId: string,
+    meshSessionId: string,
     peer: string,
     opts: { before?: string; after?: string; limit?: number } = {}
   ): NativeAgentDirectMessage[] {
-    return listNativeAgentDirectMessages(this.sqlite, externalAgentSessionId, peer, opts);
+    return listNativeAgentDirectMessages(this.sqlite, meshSessionId, peer, opts);
   }
 
-  closeExternalAgentSession(
+  closeMeshSession(
     id: string,
     exitedAt: string,
     exitCode: number | null,
     state: 'exited' | 'failed' | 'stopped' = 'exited'
   ): boolean {
-    return closeExternalAgentSession(this.sqlite, id, exitedAt, exitCode, state);
+    return closeMeshSession(this.sqlite, id, exitedAt, exitCode, state);
   }
 
-  reconcileOrphanedExternalAgentSessions(
-    killPid: (pid: number) => void = (pid) => process.kill(pid, 'SIGTERM')
-  ): number {
-    return reconcileOrphanedExternalAgentSessions(this.sqlite, killPid);
+  reconcileOrphanedMeshSessions(killPid: (pid: number) => void = (pid) => process.kill(pid, 'SIGTERM')): number {
+    return reconcileOrphanedMeshSessions(this.sqlite, killPid);
   }
 
   close(): void {

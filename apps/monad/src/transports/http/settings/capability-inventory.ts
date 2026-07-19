@@ -12,7 +12,7 @@ export function createCapabilityInventorySettingsController(handlers: ReturnType
       detail: {
         tags: ['http-only'],
         summary: 'List discovered capabilities',
-        description: 'Read-only inventory of skills and MCP servers discovered in Monad and external agent locations.'
+        description: 'Read-only inventory of skills and MCP servers discovered in Monad and MeshAgent locations.'
       }
     })
     .post('/capability-inventory/open-location', async ({ body }) => handlers.capabilityInventory.openLocation(body), {

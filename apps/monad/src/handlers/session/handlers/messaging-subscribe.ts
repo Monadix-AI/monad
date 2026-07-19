@@ -150,9 +150,9 @@ export function createSubscribeHandlers(ctx: SessionContext) {
       });
       const oldestTs = recent[0]?.createdAt;
       next.hydrateMessages(recent, parseDurableSummary(store.getMemory(sessionId, 'ctx:summary')));
-      next.hydrateExternalAgentSessions(
+      next.hydrateMeshSessions(
         store
-          .listExternalAgentSessionsForTranscriptTarget(sessionId)
+          .listMeshSessionsForTranscriptTarget(sessionId)
           .filter(
             (s) =>
               s.runtimeRole === 'managed-project-agent' ||
@@ -162,7 +162,7 @@ export function createSubscribeHandlers(ctx: SessionContext) {
               s.startedAt >= oldestTs
           )
       );
-      next.hydrateExternalAgentLoginEvents(store.listEvents(sessionId));
+      next.hydrateMeshAgentLoginEvents(store.listEvents(sessionId));
       return { projector: next, hasMore: recent.length === LIVE_SNAPSHOT_LIMIT };
     };
     let { projector, hasMore } = hydrateProjector();

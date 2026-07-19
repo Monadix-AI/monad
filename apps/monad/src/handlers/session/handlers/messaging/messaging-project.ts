@@ -1,4 +1,4 @@
-import type { AcpAgentConfig, ExternalAgentConfig } from '@monad/environment';
+import type { AcpAgentConfig, MeshAgentConfig } from '@monad/environment';
 import type {
   SendMessageAttachment,
   SendMessageRequest,
@@ -10,18 +10,18 @@ import type { BuildChannelContextInput, ChannelParticipant } from '#/agent/promp
 import type { SessionContext } from '#/handlers/session/context.ts';
 import type { createAcpChannelDelegation } from '#/handlers/session/handlers/acp-channel-delegation.ts';
 import type { createForwardAcpHandler } from '#/handlers/session/handlers/forward-acp.ts';
-import type { createForwardExternalAgentHandler } from '#/handlers/session/handlers/forward-external-agent.ts';
-import type { createManagedExternalAgentDelivery } from '#/handlers/session/handlers/managed-external-agent-delivery.ts';
+import type { createForwardMeshAgentHandler } from '#/handlers/session/handlers/forward-mesh-agent.ts';
+import type { createManagedMeshAgentDelivery } from '#/handlers/session/handlers/managed-mesh-agent-delivery.ts';
 
 import { buildChannelTurnContext } from '#/agent/prompts/channel.ts';
 import { routeChannelMessage } from '#/handlers/session/channel-routing.ts';
 import { messageTextWithAttachments } from '#/handlers/session/handlers/messaging-attachments.ts';
 import {
   channelDelegateMcpServers,
-  externalAgentProjectMemberDisplayName,
-  externalAgentProjectMemberRuntimeName,
-  externalAgentProjectMemberTemplateName,
   isWorkplaceProjectTarget,
+  meshAgentProjectMemberDisplayName,
+  meshAgentProjectMemberRuntimeName,
+  meshAgentProjectMemberTemplateName,
   workplaceProjectMembers
 } from '#/handlers/session/handlers/messaging-members.ts';
 
@@ -32,17 +32,17 @@ type SendHandler = (
 export interface SendProjectMessageDeps {
   send: SendHandler;
   forwardToAcp: ReturnType<typeof createForwardAcpHandler>;
-  forwardToExternalAgent: ReturnType<typeof createForwardExternalAgentHandler>;
+  forwardToMeshAgent: ReturnType<typeof createForwardMeshAgentHandler>;
   deliverProjectMessageToAcpMembers: ReturnType<typeof createAcpChannelDelegation>['deliverProjectMessageToAcpMembers'];
   dispatchChannelNextTargets: ReturnType<typeof createAcpChannelDelegation>['dispatchChannelNextTargets'];
-  deliverProjectMessageToManagedExternalAgentMembers: ReturnType<
-    typeof createManagedExternalAgentDelivery
-  >['deliverProjectMessageToManagedExternalAgentMembers'];
+  deliverProjectMessageToManagedMeshAgentMembers: ReturnType<
+    typeof createManagedMeshAgentDelivery
+  >['deliverProjectMessageToManagedMeshAgentMembers'];
   runtimeForSession: (sessionId: SessionId) => { mcpServers?: readonly SessionMcpServer[] } | undefined;
 }
 
 /** Routes an inbound channel/project message to the right recipient — the session's bound agent,
- *  a direct ACP/external agent target, or a project-wide fan-out — and wires up the
+ *  a direct ACP/MeshAgent target, or a project-wide fan-out — and wires up the
  *  channel `next`-target dispatch once the turn completes. */
 export function createSendProjectMessageHandler(ctx: SessionContext, deps: SendProjectMessageDeps) {
   const {
@@ -52,10 +52,10 @@ export function createSendProjectMessageHandler(ctx: SessionContext, deps: SendP
   const {
     send,
     forwardToAcp,
-    forwardToExternalAgent,
+    forwardToMeshAgent,
     deliverProjectMessageToAcpMembers,
     dispatchChannelNextTargets,
-    deliverProjectMessageToManagedExternalAgentMembers,
+    deliverProjectMessageToManagedMeshAgentMembers,
     runtimeForSession
   } = deps;
 
@@ -72,20 +72,20 @@ export function createSendProjectMessageHandler(ctx: SessionContext, deps: SendP
     const session = requireSession(sessionId);
     const cfg = ctx.deps.configManager?.get().cfg;
     const acpAgents = (cfg?.acpAgents ?? []).filter((agent: AcpAgentConfig) => agent.enabled !== false);
-    const externalAgents = (cfg?.externalAgents ?? []).filter((agent: ExternalAgentConfig) => agent.enabled !== false);
+    const meshAgents = (cfg?.meshAgents ?? []).filter((agent: MeshAgentConfig) => agent.enabled !== false);
     const isWorkplaceProject = isWorkplaceProjectTarget(session);
     const projectMembers = isWorkplaceProject ? workplaceProjectMembers(store, session.id) : [];
     const projectAcpAgentNames = projectMembers.filter((member) => member.type === 'acp').map((member) => member.name);
-    const projectExternalAgentNames = projectMembers
-      .filter((member) => member.type === 'external-agent')
-      .map((member) => externalAgentProjectMemberRuntimeName(member));
+    const projectMeshAgentNames = projectMembers
+      .filter((member) => member.type === 'mesh-agent')
+      .map((member) => meshAgentProjectMemberRuntimeName(member));
     const hasMonadMember = projectMembers.some((member) => member.type === 'monad');
     const route = routeChannelMessage({
       text: routeSeedText,
       acpAgentNames: isWorkplaceProject ? projectAcpAgentNames : acpAgents.map((agent: AcpAgentConfig) => agent.name),
-      externalAgentNames: isWorkplaceProject
-        ? projectExternalAgentNames
-        : externalAgents.map((agent: ExternalAgentConfig) => agent.name)
+      meshAgentNames: isWorkplaceProject
+        ? projectMeshAgentNames
+        : meshAgents.map((agent: MeshAgentConfig) => agent.name)
     });
     if (route.kind === 'none') return { accepted: true as const };
     ctx.deps.log?.debug(
@@ -100,22 +100,22 @@ export function createSendProjectMessageHandler(ctx: SessionContext, deps: SendP
     );
     const responseMode = route.direct ? 'direct_structured' : 'worker_plain';
     const studioAgents = cfg?.agent.agents ?? [];
-    const externalAgentParticipants: ChannelParticipant[] = isWorkplaceProject
+    const meshAgentParticipants: ChannelParticipant[] = isWorkplaceProject
       ? projectMembers
-          .filter((member) => member.type === 'external-agent')
+          .filter((member) => member.type === 'mesh-agent')
           .map((member) => {
-            const templateName = externalAgentProjectMemberTemplateName(member);
+            const templateName = meshAgentProjectMemberTemplateName(member);
             return {
-              id: `external-agent:${externalAgentProjectMemberRuntimeName(member)}`,
-              name: externalAgentProjectMemberDisplayName(member),
-              kind: 'external-agent' as const,
+              id: `mesh-agent:${meshAgentProjectMemberRuntimeName(member)}`,
+              name: meshAgentProjectMemberDisplayName(member),
+              kind: 'mesh-agent' as const,
               description: `template:${templateName}`
             };
           })
-      : externalAgents.map((agent: ExternalAgentConfig) => ({
-          id: `external-agent:${agent.name}`,
+      : meshAgents.map((agent: MeshAgentConfig) => ({
+          id: `mesh-agent:${agent.name}`,
           name: agent.name,
-          kind: 'external-agent' as const
+          kind: 'mesh-agent' as const
         }));
     const participants: ChannelParticipant[] = [
       { id: 'human', name: cfg?.user.displayName ?? 'User', kind: 'human' },
@@ -130,7 +130,7 @@ export function createSendProjectMessageHandler(ctx: SessionContext, deps: SendP
         name: agent.name,
         kind: 'acp' as const
       })),
-      ...externalAgentParticipants
+      ...meshAgentParticipants
     ];
     const channelPromptInput: BuildChannelContextInput | undefined =
       route.kind === 'send' && route.generate === false
@@ -181,9 +181,9 @@ export function createSendProjectMessageHandler(ctx: SessionContext, deps: SendP
           : await send({ sessionId, text: route.text, attachments, generate: false });
         const humanSender = { kind: 'human' as const, name: cfg?.user.displayName ?? 'User', id: 'human' };
         await Promise.all([
-          deliverProjectMessageToManagedExternalAgentMembers({
+          deliverProjectMessageToManagedMeshAgentMembers({
             session,
-            externalAgents,
+            meshAgents,
             text: messageTextWithAttachments(route.text, attachments),
             sender: humanSender
           }),
@@ -207,17 +207,17 @@ export function createSendProjectMessageHandler(ctx: SessionContext, deps: SendP
         onComplete: dispatchStructuredNext
       });
       if (!route.direct && route.generate === false) {
-        await deliverProjectMessageToManagedExternalAgentMembers({
+        await deliverProjectMessageToManagedMeshAgentMembers({
           session,
-          externalAgents,
+          meshAgents,
           text: messageTextWithAttachments(route.text, attachments),
           sender: { kind: 'human', name: cfg?.user.displayName ?? 'User', id: 'human' }
         });
       }
       return result;
     }
-    if (route.kind === 'forward-external-agent')
-      return forwardToExternalAgent({
+    if (route.kind === 'forward-mesh-agent')
+      return forwardToMeshAgent({
         sessionId,
         agentName: route.agentName,
         text: messageTextWithAttachments(route.text, attachments),

@@ -6,8 +6,8 @@ import type {
   SDKSystemMessage,
   SDKUserMessage
 } from '@anthropic-ai/claude-agent-sdk';
-import type { ExternalAgentObservationEvent, ExternalAgentUsageRecord } from '@monad/protocol';
-import type { ExternalAgentObservationProjector, ObservationRole } from '../observation-projection.ts';
+import type { MeshAgentObservationEvent, MeshAgentUsageRecord } from '@monad/protocol';
+import type { MeshAgentObservationProjector, ObservationRole } from '../observation-projection.ts';
 
 import {
   classifyObservationActivity,
@@ -42,7 +42,7 @@ function resetIso(value: unknown): string | undefined {
   return new Date(timestampMs).toISOString();
 }
 
-export function claudeUsageRecordsFromRecord(record: Record<string, unknown>): ExternalAgentUsageRecord[] {
+export function claudeUsageRecordsFromRecord(record: Record<string, unknown>): MeshAgentUsageRecord[] {
   if (record.type !== 'rate_limit_event') return [];
   const info = recordValue(record.rate_limit_info ?? record.rateLimitInfo);
   const id = textValue(info?.rateLimitType, info?.rate_limit_type);
@@ -88,7 +88,7 @@ function claudeContentEvents(args: {
   createdAt?: string;
   raw: unknown;
   textRole: Extract<ObservationRole, 'agent' | 'user'>;
-}): ExternalAgentObservationEvent[] {
+}): MeshAgentObservationEvent[] {
   if (typeof args.content === 'string') {
     return observation({
       id: `${args.id}:json:${args.recordIndex}:message`,
@@ -158,7 +158,7 @@ export function claudeRecordEvents(
   id: string,
   record: ClaudeObservationMessage,
   recordIndex: number
-): ExternalAgentObservationEvent[] {
+): MeshAgentObservationEvent[] {
   const base = recordIndex === 0 ? id : `${id}:json:${recordIndex}`;
   if (record.type === 'rate_limit_event') {
     return observation({
@@ -292,12 +292,12 @@ export function claudeRecordEvents(
 }
 
 export const claudeCodeObservationProjection = {
-  checkpoint: (event: ExternalAgentObservationEvent) => textValue(recordValue(event.provenance.rawEvents[0])?.uuid),
-  identity: (event: ExternalAgentObservationEvent) => textValue(recordValue(event.provenance.rawEvents[0])?.uuid),
+  checkpoint: (event: MeshAgentObservationEvent) => textValue(recordValue(event.provenance.rawEvents[0])?.uuid),
+  identity: (event: MeshAgentObservationEvent) => textValue(recordValue(event.provenance.rawEvents[0])?.uuid),
   usageRecords: claudeUsageRecordsFromRecord,
   classifyActivity: classifyObservationActivity,
   isStreamingFragment: isStreamingObservationFragment,
-  mergeStreamingRun: (events: ExternalAgentObservationEvent[]) => {
+  mergeStreamingRun: (events: MeshAgentObservationEvent[]) => {
     const first = events[0];
     const latest = events.at(-1);
     if (!first || !latest || first.providerEventType !== 'thinking_tokens_delta') return undefined;
@@ -314,4 +314,4 @@ export const claudeCodeObservationProjection = {
         isClaudeObservationMessage(record) ? claudeRecordEvents(id, record, recordIndex) : []
     }
   ]
-} satisfies ExternalAgentObservationProjector;
+} satisfies MeshAgentObservationProjector;

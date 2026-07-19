@@ -13,7 +13,7 @@ test('removed message and raw-output event names are rejected', () => {
     'agent.error',
     'message.delta',
     'message.complete',
-    'external_agent.output'
+    'mesh.output'
   ];
   expect(removed.map((type) => eventTypeSchema.safeParse(type).success)).toEqual([
     false,
@@ -33,9 +33,9 @@ test('every EVENT_TABLE entry is a ZodType', () => {
   }
 });
 
-test('external agent connection required events carry provider reconnect guidance', () => {
-  const payload = parseEventPayload('external_agent.connection_required', {
-    externalAgentSessionId: 'exa_100000000000',
+test('MeshAgent connection required events carry provider reconnect guidance', () => {
+  const payload = parseEventPayload('mesh.connection_required', {
+    meshSessionId: 'mesh_100000000000',
     agentName: 'gemini',
     provider: 'gemini',
     reason: 'Gemini CLI is waiting for provider authentication to complete.',
@@ -43,7 +43,7 @@ test('external agent connection required events carry provider reconnect guidanc
   });
 
   expect(payload).toEqual({
-    externalAgentSessionId: 'exa_100000000000',
+    meshSessionId: 'mesh_100000000000',
     agentName: 'gemini',
     provider: 'gemini',
     reason: 'Gemini CLI is waiting for provider authentication to complete.',
@@ -63,8 +63,8 @@ const message = {
 } as const;
 
 const externalProducer = {
-  kind: 'external-agent',
-  externalAgentSessionId: 'exa_100000000000',
+  kind: 'mesh-agent',
+  meshSessionId: 'mesh_100000000000',
   agentName: 'reviewer'
 } as const;
 
@@ -147,21 +147,21 @@ test('canonical run and provider connection payloads are exact', () => {
     error: { code: 'provider_error', message: 'Provider failed' }
   });
   expect(
-    parseEventPayload('external_agent.session.connection.opened', {
-      externalAgentSessionId: 'exa_100000000000',
+    parseEventPayload('mesh.session.connection.opened', {
+      meshSessionId: 'mesh_100000000000',
       provider: 'codex',
       observationEpoch: 'epoch-1'
     })
-  ).toEqual({ externalAgentSessionId: 'exa_100000000000', provider: 'codex', observationEpoch: 'epoch-1' });
+  ).toEqual({ meshSessionId: 'mesh_100000000000', provider: 'codex', observationEpoch: 'epoch-1' });
   expect(
-    parseEventPayload('external_agent.session.connection.closed', {
-      externalAgentSessionId: 'exa_100000000000',
+    parseEventPayload('mesh.session.connection.closed', {
+      meshSessionId: 'mesh_100000000000',
       provider: 'codex',
       observationEpoch: 'epoch-1',
       reason: 'disconnected'
     })
   ).toEqual({
-    externalAgentSessionId: 'exa_100000000000',
+    meshSessionId: 'mesh_100000000000',
     provider: 'codex',
     observationEpoch: 'epoch-1',
     reason: 'disconnected'
@@ -185,8 +185,8 @@ test('event definitions are exhaustive and own delivery metadata', () => {
     delivery: 'both',
     persistence: 'durable'
   });
-  expect(eventDefinition('external_agent.session.connection.opened')).toEqual({
-    schema: EVENT_TABLE['external_agent.session.connection.opened'],
+  expect(eventDefinition('mesh.session.connection.opened')).toEqual({
+    schema: EVENT_TABLE['mesh.session.connection.opened'],
     delivery: 'control',
     persistence: 'transient'
   });

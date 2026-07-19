@@ -3,11 +3,11 @@ import type { GetStatsResponse, GetUsageResponse, StatsRange } from '@monad/prot
 import { Delete02Icon, LoaderPinwheelIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
-  externalAgentSessionSelectors,
-  useGetExternalAgentUsageQuery,
+  meshSessionSelectors,
+  useGetMeshAgentUsageQuery,
   useGetStatsQuery,
   useGetUsageQuery,
-  useListLiveExternalAgentSessionsQuery,
+  useListLiveMeshSessionsQuery,
   useListWorkplaceProjectsQuery,
   useResetUsageMutation,
   workplaceProjectAdapter,
@@ -17,7 +17,7 @@ import { Button, Card, cn, Skeleton } from '@monad/ui';
 import { useMemo, useState } from 'react';
 
 import { useT } from '#/components/I18nProvider';
-import { useExternalAgentSettings } from '#/hooks/use-external-agent-settings';
+import { useMeshAgentSettings } from '#/hooks/use-mesh-agent-settings';
 import { isResolvedEmptyList } from '#/lib/async-list-state';
 
 type UsageTab = 'overview' | 'models' | 'ledger';
@@ -379,9 +379,9 @@ export function MonadAgentUsage() {
   );
 }
 
-function ExternalAgentUsageRows({ agentName }: { agentName: string }) {
+function MeshAgentUsageRows({ agentName }: { agentName: string }) {
   const t = useT();
-  const { data, isLoading } = useGetExternalAgentUsageQuery(agentName, { pollingInterval: 60_000 });
+  const { data, isLoading } = useGetMeshAgentUsageQuery(agentName, { pollingInterval: 60_000 });
   if (isLoading) {
     return (
       <HugeiconsIcon
@@ -431,13 +431,13 @@ function ExternalAgentUsageRows({ agentName }: { agentName: string }) {
 
 export function MeshUsage() {
   const t = useT();
-  const externalAgent = useExternalAgentSettings();
+  const meshAgent = useMeshAgentSettings();
   const projects = useListWorkplaceProjectsQuery(undefined);
-  const sessions = useListLiveExternalAgentSessionsQuery(undefined);
+  const sessions = useListLiveMeshSessionsQuery(undefined);
   const projectList = workplaceProjectSelectors.selectAll(
     projects.data?.projects ?? workplaceProjectAdapter.getInitialState()
   );
-  const sessionList = sessions.data ? externalAgentSessionSelectors.selectAll(sessions.data.sessions) : [];
+  const sessionList = sessions.data ? meshSessionSelectors.selectAll(sessions.data.sessions) : [];
   const activeAgents = useMemo(() => new Set(sessionList.map((session) => session.agentName)), [sessionList]);
 
   return (
@@ -449,7 +449,7 @@ export function MeshUsage() {
       <div className="flex flex-col gap-3 p-3">
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {[
-            { label: t('web.studio.meshUsageConnectedAgents'), value: externalAgent.agents.length.toLocaleString() },
+            { label: t('web.studio.meshUsageConnectedAgents'), value: meshAgent.agents.length.toLocaleString() },
             { label: t('web.studio.meshUsageActiveRuntimes'), value: sessionList.length.toLocaleString() },
             { label: t('web.studio.meshUsageActiveAgents'), value: activeAgents.size.toLocaleString() },
             { label: t('web.studio.meshUsageProjects'), value: projectList.length.toLocaleString() }
@@ -463,11 +463,11 @@ export function MeshUsage() {
             </Card>
           ))}
         </div>
-        {isResolvedEmptyList({ isLoading: externalAgent.loading, itemCount: externalAgent.agents.length }) ? (
+        {isResolvedEmptyList({ isLoading: meshAgent.loading, itemCount: meshAgent.agents.length }) ? (
           <p className="px-1 py-2 text-muted-foreground text-sm">{t('web.studio.meshUsageEmpty')}</p>
         ) : (
           <div className="grid gap-2 lg:grid-cols-2">
-            {externalAgent.agents.map((agent) => (
+            {meshAgent.agents.map((agent) => (
               <Card
                 className="flex flex-col gap-3 p-3"
                 key={agent.name}
@@ -486,7 +486,7 @@ export function MeshUsage() {
                     {activeAgents.has(agent.name) ? t('web.studio.meshUsageActive') : t('web.studio.meshUsageIdle')}
                   </span>
                 </div>
-                <ExternalAgentUsageRows agentName={agent.name} />
+                <MeshAgentUsageRows agentName={agent.name} />
               </Card>
             ))}
           </div>

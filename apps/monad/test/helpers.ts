@@ -43,20 +43,20 @@ import { type ModelDeps, ModelService } from '#/handlers/settings/model/index.ts
 import { mockModel } from '#/infra/mock-model.ts';
 import { DelegationService } from '#/services/delegation/delegation.ts';
 import { EventBus } from '#/services/event-bus.ts';
-import { registerAgentAdapterImpl } from '#/services/external-agent/index.ts';
 import { ClarifyService } from '#/services/generation/clarify.ts';
 import { I18nService } from '#/services/i18n.ts';
 import { GraphStore } from '#/services/memory/graph/store.ts';
 import { createMemoryService, type MemoryService } from '#/services/memory/index.ts';
+import { registerAgentAdapterImpl } from '#/services/mesh-agent/index.ts';
 import { ModelCatalogService } from '#/services/model-catalog.ts';
 import { OversightService } from '#/services/oversight.ts';
 import { RoundCache } from '#/services/round-cache.ts';
 import { createStore } from '#/store/db/index.ts';
 import { createHttpTransport } from '#/transports/http.ts';
 
-// Production populates the external agent adapter registry at boot via the gated atom-pack path
+// Production populates the MeshAgent adapter registry at boot via the gated atom-pack path
 // (onAgentAdapter → registerAgentAdapterImpl); this harness builds handlers directly, so register the
-// built-in agent-adapter atoms once for every daemon e2e that drives external agent runtimes.
+// built-in agent-adapter atoms once for every daemon e2e that drives MeshAgent runtimes.
 for (const adapter of builtinAgentAdapters) registerAgentAdapterImpl(adapter);
 
 export { mockModel };
@@ -265,14 +265,14 @@ export function buildHandlers(
     graphStore?: GraphStore;
     /** Upgrade metadata exposed by /health; defaults to absent. */
     getUpgradeInfo?: () => { latestVersion: string; latestVersionCheckedAt: string } | null;
-    /** Override external agent auth connect heartbeat pruning for fast e2e coverage. */
-    externalAgentAuthHeartbeatTimeoutMs?: number;
-    /** Override external agent auth/usage probe timeout for fast timeout-path coverage. */
-    externalAgentAuthStatusTimeoutMs?: number;
+    /** Override MeshAgent auth connect heartbeat pruning for fast e2e coverage. */
+    meshAgentAuthHeartbeatTimeoutMs?: number;
+    /** Override MeshAgent auth/usage probe timeout for fast timeout-path coverage. */
+    meshAgentAuthStatusTimeoutMs?: number;
     /** Override the session-delete undo grace for lifecycle tests. */
     sessionDeleteGraceMs?: number;
-    /** Override the loopback URL injected into managed external agent runtimes. */
-    externalAgentServerUrl?: string;
+    /** Override the loopback URL injected into managed MeshAgent runtimes. */
+    meshAgentServerUrl?: string;
     /** Dynamic workspace experience API route resolver for atom HTTP tests. */
     getWorkspaceExperienceApiHandler?: (
       experienceId: string,
@@ -412,10 +412,10 @@ export function buildHandlers(
       memorySetBackend: async () => {},
       memorySetMem0Models: async () => {},
       memorySetGraph: async () => {},
-      externalAgentAuthHeartbeatTimeoutMs: opts?.externalAgentAuthHeartbeatTimeoutMs,
-      externalAgentAuthStatusTimeoutMs: opts?.externalAgentAuthStatusTimeoutMs,
+      meshAgentAuthHeartbeatTimeoutMs: opts?.meshAgentAuthHeartbeatTimeoutMs,
+      meshAgentAuthStatusTimeoutMs: opts?.meshAgentAuthStatusTimeoutMs,
       sessionDeleteGraceMs: opts?.sessionDeleteGraceMs,
-      externalAgentServerUrl: opts?.externalAgentServerUrl,
+      meshAgentServerUrl: opts?.meshAgentServerUrl,
       log: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} } as never,
       ...modelDeps
     }),
@@ -482,7 +482,7 @@ export function serveTransport(kind: TransportKind, app: ReturnType<typeof creat
   const sock = join(tmpdir(), `monad-tr-${process.pid}-${Date.now()}.sock`);
   // idleTimeout matches production's Unix-socket bind (apps/monad/src/transports/lifecycle.ts) and
   // Elysia's own Bun adapter default for the TCP listener above — otherwise a legitimately slow
-  // request (e.g. the 20s external agent auth-status probe) hits Bun.serve's 10s default here without
+  // request (e.g. the 20s MeshAgent auth-status probe) hits Bun.serve's 10s default here without
   // ever exercising the code path this transport is supposed to test. bun-types omits `idleTimeout`
   // from the unix-socket overload even though the runtime honors it — cast around the type gap.
   const server = Bun.serve({

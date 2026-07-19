@@ -11,8 +11,8 @@
     "items": [
       {
         "kind": "tool",
-        "id": "exa_01KWV7N0NGY7",
-        "tool": "external-agent:codex",
+        "id": "mesh_01KWV7N0NGY7",
+        "tool": "mesh-agent:codex",
         "input": {
           "agent": "pmem_codex_4f745c7343e2",
           "provider": "codex",
@@ -28,8 +28,8 @@
         "id": "msg_01KWV7N1X9X1",
         "role": "assistant",
         "agentName": "pmem_codex_4f745c7343e2",
-        "source": "managed-external-agent",
-        "externalAgentSessionId": "exa_01KWV7N0NGY7",
+        "source": "managed-mesh-agent",
+        "meshSessionId": "mesh_01KWV7N0NGY7",
         "parts": [
           {
             "type": "text",
@@ -41,8 +41,8 @@
       },
       {
         "kind": "tool",
-        "id": "exa_01KWV7NHS524",
-        "tool": "external-agent:claude-code",
+        "id": "mesh_01KWV7NHS524",
+        "tool": "mesh-agent:claude-code",
         "input": {
           "agent": "pmem_claude-code_e59584f30f83",
           "provider": "claude-code",
@@ -58,8 +58,8 @@
         "id": "msg_01KWV7NHS8ZG",
         "role": "assistant",
         "agentName": "pmem_claude-code_e59584f30f83",
-        "source": "managed-external-agent",
-        "externalAgentSessionId": "exa_01KWV7NHS524",
+        "source": "managed-mesh-agent",
+        "meshSessionId": "mesh_01KWV7NHS524",
         "parts": [
           {
             "type": "reasoning",
@@ -71,8 +71,8 @@
       },
       {
         "kind": "tool",
-        "id": "exa_01KWV7NHZNY2",
-        "tool": "external-agent:claude-code",
+        "id": "mesh_01KWV7NHZNY2",
+        "tool": "mesh-agent:claude-code",
         "input": {
           "agent": "pmem_claude-code_e59584f30f83",
           "provider": "claude-code",
@@ -88,8 +88,8 @@
         "id": "msg_01KWV7NHZRPQ",
         "role": "assistant",
         "agentName": "pmem_claude-code_e59584f30f83",
-        "source": "managed-external-agent",
-        "externalAgentSessionId": "exa_01KWV7NHZNY2",
+        "source": "managed-mesh-agent",
+        "meshSessionId": "mesh_01KWV7NHZNY2",
         "deliveryId": "deliv_01KWV7NHR0V8",
         "parts": [
           {
@@ -105,8 +105,8 @@
         "id": "msg_01KWV7P46EHH",
         "role": "assistant",
         "agentName": "pmem_codex_4f745c7343e2",
-        "source": "managed-external-agent",
-        "externalAgentSessionId": "exa_01KWV7N0NGY7",
+        "source": "managed-mesh-agent",
+        "meshSessionId": "mesh_01KWV7N0NGY7",
         "deliveryId": "deliv_01KWV7P46EZ3",
         "parts": [
           {
@@ -125,8 +125,8 @@
     "items": [
       {
         "kind": "tool",
-        "id": "exa_01KWV7N0NGY7",
-        "tool": "external-agent:codex",
+        "id": "mesh_01KWV7N0NGY7",
+        "tool": "mesh-agent:codex",
         "input": {
           "agent": "pmem_codex_4f745c7343e2",
           "provider": "codex",
@@ -142,8 +142,8 @@
         "id": "msg_01KWV7N1X9X1",
         "role": "assistant",
         "agentName": "pmem_codex_4f745c7343e2",
-        "source": "managed-external-agent",
-        "externalAgentSessionId": "exa_01KWV7N0NGY7",
+        "source": "managed-mesh-agent",
+        "meshSessionId": "mesh_01KWV7N0NGY7",
         "parts": [
           {
             "type": "text",
@@ -155,8 +155,8 @@
       },
       {
         "kind": "tool",
-        "id": "exa_01KWV7NHS524",
-        "tool": "external-agent:claude-code",
+        "id": "mesh_01KWV7NHS524",
+        "tool": "mesh-agent:claude-code",
         "input": {
           "agent": "pmem_claude-code_e59584f30f83",
           "provider": "claude-code",
@@ -169,8 +169,8 @@
       },
       {
         "kind": "tool",
-        "id": "exa_01KWV7NHZNY2",
-        "tool": "external-agent:claude-code",
+        "id": "mesh_01KWV7NHZNY2",
+        "tool": "mesh-agent:claude-code",
         "input": {
           "agent": "pmem_claude-code_e59584f30f83",
           "provider": "claude-code",
@@ -186,8 +186,8 @@
         "id": "msg_01KWV7NHZRPQ",
         "role": "assistant",
         "agentName": "pmem_claude-code_e59584f30f83",
-        "source": "managed-external-agent",
-        "externalAgentSessionId": "exa_01KWV7NHZNY2",
+        "source": "managed-mesh-agent",
+        "meshSessionId": "mesh_01KWV7NHZNY2",
         "deliveryId": "deliv_01KWV7NHR0V8",
         "parts": [
           {
@@ -203,8 +203,8 @@
         "id": "msg_01KWV7P46EHH",
         "role": "assistant",
         "agentName": "pmem_codex_4f745c7343e2",
-        "source": "managed-external-agent",
-        "externalAgentSessionId": "exa_01KWV7N0NGY7",
+        "source": "managed-mesh-agent",
+        "meshSessionId": "mesh_01KWV7N0NGY7",
         "deliveryId": "deliv_01KWV7P46EZ3",
         "parts": [
           {

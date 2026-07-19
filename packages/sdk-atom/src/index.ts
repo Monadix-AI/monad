@@ -15,14 +15,14 @@ import type {
   CommandItemType,
   CommandSource,
   CommandSubcommand,
-  ExternalAgentRawHistoryPage,
-  ExternalAgentRawHistoryRecord,
   GenerationParams,
   HookEvent,
   HookInput,
   HookOutput,
   InteractionRequest,
   InteractionResult,
+  MeshRawEventPage,
+  MeshRawEventRecord,
   MessageTypeDescriptor,
   ModelInfo,
   ModelKind,
@@ -37,41 +37,41 @@ import type {
 } from '@monad/protocol';
 import type {
   AdapterMigration,
-  BuildExternalAgentLaunchOptions,
-  ExternalAgentAcpDelivery,
-  ExternalAgentApprovalResolution,
-  ExternalAgentAppServerConnection,
-  ExternalAgentArgumentSupport,
-  ExternalAgentArgumentSupportProbe,
-  ExternalAgentAuthStatusProbe,
-  ExternalAgentErrorCode,
-  ExternalAgentEventPage,
-  ExternalAgentEventPageRequest,
-  ExternalAgentEventPageResult,
-  ExternalAgentEventSource,
-  ExternalAgentInitializeContext,
-  ExternalAgentLaunchSpec,
-  ExternalAgentManagedEnvContext,
-  ExternalAgentManagedRuntime,
-  ExternalAgentManagedRuntimeContext,
-  ExternalAgentModelOption,
-  ExternalAgentModelOptionsProbe,
-  ExternalAgentObservationActivity,
-  ExternalAgentObservationJsonRecordEntry,
-  ExternalAgentObservationMessageGroupProjector,
-  ExternalAgentObservationProjector,
-  ExternalAgentObservationRecordProjector,
-  ExternalAgentObservationUsageProjector,
-  ExternalAgentOutputEvent,
-  ExternalAgentProviderAdapter,
-  ExternalAgentProviderHistoryContext,
-  ExternalAgentProviderHistoryPageContext,
-  ExternalAgentProviderHistoryPageRequestContext,
-  ExternalAgentRawHistoryPageResult,
-  ExternalAgentRuntimeHandle,
-  ExternalAgentSettingsImport,
-  ExternalAgentStartPreflight,
-  ExternalAgentUsageProbe
+  BuildMeshAgentLaunchOptions,
+  MeshAgentAcpDelivery,
+  MeshAgentApprovalResolution,
+  MeshAgentAppServerConnection,
+  MeshAgentArgumentSupport,
+  MeshAgentArgumentSupportProbe,
+  MeshAgentAuthStatusProbe,
+  MeshAgentErrorCode,
+  MeshAgentEventPageRequest,
+  MeshAgentEventPageResult,
+  MeshAgentEventSource,
+  MeshAgentInitializeContext,
+  MeshAgentLaunchSpec,
+  MeshAgentManagedEnvContext,
+  MeshAgentManagedRuntime,
+  MeshAgentManagedRuntimeContext,
+  MeshAgentModelOption,
+  MeshAgentModelOptionsProbe,
+  MeshAgentObservationActivity,
+  MeshAgentObservationJsonRecordEntry,
+  MeshAgentObservationMessageGroupProjector,
+  MeshAgentObservationProjector,
+  MeshAgentObservationRecordProjector,
+  MeshAgentObservationRuntime,
+  MeshAgentObservationUsageProjector,
+  MeshAgentOutputEvent,
+  MeshAgentProjectionPage,
+  MeshAgentProviderAdapter,
+  MeshAgentProviderEventContext,
+  MeshAgentProviderEventPageContext,
+  MeshAgentProviderEventPageRequestContext,
+  MeshAgentRuntimeHandle,
+  MeshAgentSettingsImport,
+  MeshAgentStartPreflight,
+  MeshAgentUsageProbe
 } from './agent-adapter.ts';
 import type { BinProbes } from './bin-probes.ts';
 import type {
@@ -149,7 +149,8 @@ import type {
   SandboxViolation
 } from './sandbox.ts';
 
-import { ExternalAgentError, externalAgentOutputEventSchema } from './agent-adapter.ts';
+import { MeshAgentError, meshAgentOutputEventSchema } from './agent-adapter.ts';
+import { toFallbackAgentObservationEvent } from './agent-observation.ts';
 import { defaultBinProbes, resolveBinary } from './bin-probes.ts';
 import { assertChannelInbound, createChannelTestHarness, defineChannel, parseChannelManifest } from './channel.ts';
 import { defineCommand } from './command.ts';
@@ -170,7 +171,7 @@ export type {
   BeliefExplanation,
   BeliefMatch,
   BinProbes,
-  BuildExternalAgentLaunchOptions,
+  BuildMeshAgentLaunchOptions,
   ChannelAdapter,
   ChannelAdapterFactory,
   ChannelAtomConfig,
@@ -205,42 +206,6 @@ export type {
   ContradictionCheckSummary,
   EmbedCall,
   EmbedResult,
-  ExternalAgentAcpDelivery,
-  ExternalAgentApprovalResolution,
-  ExternalAgentAppServerConnection,
-  ExternalAgentArgumentSupport,
-  ExternalAgentArgumentSupportProbe,
-  ExternalAgentAuthStatusProbe,
-  ExternalAgentErrorCode,
-  ExternalAgentEventPage,
-  ExternalAgentEventPageRequest,
-  ExternalAgentEventPageResult,
-  ExternalAgentEventSource,
-  ExternalAgentInitializeContext,
-  ExternalAgentLaunchSpec,
-  ExternalAgentManagedEnvContext,
-  ExternalAgentManagedRuntime,
-  ExternalAgentManagedRuntimeContext,
-  ExternalAgentModelOption,
-  ExternalAgentModelOptionsProbe,
-  ExternalAgentObservationActivity,
-  ExternalAgentObservationJsonRecordEntry,
-  ExternalAgentObservationMessageGroupProjector,
-  ExternalAgentObservationProjector,
-  ExternalAgentObservationRecordProjector,
-  ExternalAgentObservationUsageProjector,
-  ExternalAgentOutputEvent,
-  ExternalAgentProviderAdapter,
-  ExternalAgentProviderHistoryContext,
-  ExternalAgentProviderHistoryPageContext,
-  ExternalAgentProviderHistoryPageRequestContext,
-  ExternalAgentRawHistoryPage,
-  ExternalAgentRawHistoryPageResult,
-  ExternalAgentRawHistoryRecord,
-  ExternalAgentRuntimeHandle,
-  ExternalAgentSettingsImport,
-  ExternalAgentStartPreflight,
-  ExternalAgentUsageProbe,
   GenerationParams,
   HookDefinition,
   HookEvent,
@@ -250,6 +215,42 @@ export type {
   ImageCall,
   ImageResult,
   LocalePack,
+  MeshAgentAcpDelivery,
+  MeshAgentApprovalResolution,
+  MeshAgentAppServerConnection,
+  MeshAgentArgumentSupport,
+  MeshAgentArgumentSupportProbe,
+  MeshAgentAuthStatusProbe,
+  MeshAgentErrorCode,
+  MeshAgentEventPageRequest,
+  MeshAgentEventPageResult,
+  MeshAgentEventSource,
+  MeshAgentInitializeContext,
+  MeshAgentLaunchSpec,
+  MeshAgentManagedEnvContext,
+  MeshAgentManagedRuntime,
+  MeshAgentManagedRuntimeContext,
+  MeshAgentModelOption,
+  MeshAgentModelOptionsProbe,
+  MeshAgentObservationActivity,
+  MeshAgentObservationJsonRecordEntry,
+  MeshAgentObservationMessageGroupProjector,
+  MeshAgentObservationProjector,
+  MeshAgentObservationRecordProjector,
+  MeshAgentObservationRuntime,
+  MeshAgentObservationUsageProjector,
+  MeshAgentOutputEvent,
+  MeshAgentProjectionPage,
+  MeshAgentProviderAdapter,
+  MeshAgentProviderEventContext,
+  MeshAgentProviderEventPageContext,
+  MeshAgentProviderEventPageRequestContext,
+  MeshAgentRuntimeHandle,
+  MeshAgentSettingsImport,
+  MeshAgentStartPreflight,
+  MeshAgentUsageProbe,
+  MeshRawEventPage,
+  MeshRawEventRecord,
   MessageTypeDescriptor,
   ModelCall,
   ModelChunk,
@@ -310,10 +311,10 @@ export {
   defineCommand,
   defineLocalLauncher,
   defineProvider,
-  ExternalAgentError,
-  externalAgentOutputEventSchema,
   extractCacheWrite,
   extractProviderCost,
+  MeshAgentError,
+  meshAgentOutputEventSchema,
   noneLauncher,
   parseChannelManifest,
   resolveBinary,
@@ -321,6 +322,7 @@ export {
   sandboxCredential,
   sandboxLauncherDescriptorSchema,
   sandboxSettingsSchema,
+  toFallbackAgentObservationEvent,
   usageFromProviderMetadataJson
 };
 
@@ -456,8 +458,8 @@ export interface AtomPackContext {
   registerProvider(provider: ModelProvider): void;
   registerHook(hook: HookDefinition): void;
   /** Register a native coding-CLI agent adapter. The daemon collects them
-   *  into the external agent registry keyed by provider and owns the process/pty/socket lifecycle. */
-  registerAgentAdapter(adapter: ExternalAgentProviderAdapter): void;
+   *  into the MeshAgent registry keyed by provider and owns the process/pty/socket lifecycle. */
+  registerAgentAdapter(adapter: MeshAgentProviderAdapter): void;
   /** Register an OS/remote sandbox launcher. The daemon collects launchers into a registry and
    *  selects one per platform at boot — the LLM-facing tools (code_execute/…) are unchanged. */
   registerSandbox(launcher: SandboxLauncher): void;
@@ -487,7 +489,7 @@ export interface ManifestAtomPackHost {
   /** Optional: hosts that don't support lifecycle hooks omit it; a hook registration then throws. */
   registerHook?(hook: HookDefinition): void;
   /** Optional: hosts that don't support agent adapters omit it; registration then throws. */
-  registerAgentAdapter?(adapter: ExternalAgentProviderAdapter): void;
+  registerAgentAdapter?(adapter: MeshAgentProviderAdapter): void;
   /** Optional: hosts that don't support sandbox launchers omit it; a sandbox registration then throws. */
   registerSandbox?(launcher: SandboxLauncher): void;
   /** Optional: hosts that don't support workspace experiences omit it; registration then throws. */
@@ -511,7 +513,7 @@ export function defineAtomPack(spec: {
   messageTypes?: MessageTypeDescriptor[];
   providers?: ModelProvider[];
   hooks?: HookDefinition[];
-  agentAdapters?: ExternalAgentProviderAdapter[];
+  agentAdapters?: MeshAgentProviderAdapter[];
   sandboxes?: SandboxLauncher[];
   workspaceExperienceApis?: WorkspaceExperienceApi[];
   workspaceExperiences?: WorkspaceExperienceDefinition[];

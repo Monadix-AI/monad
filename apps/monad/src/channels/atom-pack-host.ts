@@ -22,10 +22,10 @@ import type {
   ChannelDefinition,
   Connector,
   ExperienceWorker,
-  ExternalAgentProviderAdapter,
   HookDefinition,
   ManifestAtomPack,
   ManifestAtomPackHost,
+  MeshAgentProviderAdapter,
   ModelProvider,
   SandboxLauncher,
   WorkspaceExperienceApi,
@@ -47,8 +47,8 @@ interface ChannelAtomPackHostOptions {
   onProvider?: (provider: ModelProvider) => void;
   /** Receives each lifecycle hook an atom pack registers (atom-kind-gated like the others). */
   onHook?: (hook: HookDefinition) => void;
-  /** Receives each external agent provider adapter an atom pack registers. */
-  onAgentAdapter?: (adapter: ExternalAgentProviderAdapter) => void;
+  /** Receives each MeshAgent provider adapter an atom pack registers. */
+  onAgentAdapter?: (adapter: MeshAgentProviderAdapter) => void;
   /** Receives each sandbox launcher an atom pack registers (atom-kind-gated like the others). The
    *  daemon collects them into a registry and selects one per platform — no namespace/first-wins
    *  here (selection is by platform + availability, third-party preferred over built-in). */

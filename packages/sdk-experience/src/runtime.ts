@@ -1,7 +1,7 @@
 import type {
-  ExternalAgentAppServerTransport,
-  ExternalAgentProjectTemplate,
-  ExternalAgentProvider,
+  MeshAgentAppServerTransport,
+  MeshAgentProjectTemplate,
+  MeshAgentProvider,
   ProfileView,
   ProjectId,
   SendMessageAttachment,
@@ -57,7 +57,7 @@ export interface WorkspaceExperienceAddMemberOptions {
   modelId?: string;
   reasoningEffort?: string;
   speed?: 'standard' | 'fast';
-  appServerTransport?: ExternalAgentAppServerTransport;
+  appServerTransport?: MeshAgentAppServerTransport;
   customPrompt?: string;
 }
 
@@ -72,9 +72,9 @@ export interface WorkspaceExperienceMemberCandidate {
   modelOptionDisplayNames?: Record<string, string>;
   reasoningEfforts: string[];
   icon?: WorkspaceExperienceIcon;
-  provider?: ExternalAgentProvider;
-  supportedAppServerTransports?: ExternalAgentAppServerTransport[];
-  template?: ExternalAgentProjectTemplate;
+  provider?: MeshAgentProvider;
+  supportedAppServerTransports?: MeshAgentAppServerTransport[];
+  template?: MeshAgentProjectTemplate;
 }
 
 /** A live participant node in the activity graph (the human + each project agent), with presence so a
@@ -131,8 +131,8 @@ export interface WorkspaceExperienceActions {
   ) => Promise<void>;
   removeProjectMember: (id: string) => Promise<void>;
   updateProjectMemberSettings: (id: string, patch: WorkspaceExperienceMemberSettings) => Promise<void>;
-  sendExternalAgentInput: (id: string, input: string) => Promise<void>;
-  stopExternalAgent: (id: string) => Promise<void>;
+  sendMeshAgentInput: (id: string, input: string) => Promise<void>;
+  stopMeshAgent: (id: string) => Promise<void>;
   switchExperience: (id: string) => void;
   /** Navigate from an Experience-owned task to the host's full project-session view. */
   openProjectSession?: (sessionId: string) => void;

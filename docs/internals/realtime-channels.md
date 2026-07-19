@@ -15,7 +15,7 @@ For physical TCP/Unix transport details, see [runtime.md](runtime.md). The wire 
 | SSE `/v1/sessions/:id/ui-stream` | one visible transcript | neutral `SessionUiEvent` snapshots/upserts/removals for app presentation | provider-native raw observation |
 | Inline SSE `POST /v1/sessions/:id/messages` | one caller-owned turn | events needed to render the submitted turn | passive observation of later turns |
 
-External-agent diagnostics use their own raw and convenience observation streams. They are not chat-generation channels; see [external-agents.md](../usage/external-agents.md).
+MeshAgent diagnostics use their own raw and convenience observation streams. They are not chat-generation channels; see [mesh-agents.md](../usage/mesh-agents.md).
 
 ## Canonical message lifecycle
 
@@ -81,7 +81,7 @@ The UI stream is a presentation projection, not the canonical message log. It em
 
 Canonical message state still lives in message history and Message Ingress. Restore/reset may send a replacement UI snapshot; clients must replace their projected window instead of patching multiple caches independently.
 
-Provider-raw output never enters this stream. External-agent raw/convenience observation has separate authorization, history, cursor, and connection-epoch semantics.
+Provider-raw output never enters this stream. MeshAgent raw/convenience observation has separate authorization, event pagination, cursor, and connection-epoch semantics. See [Use MeshAgents and build adapters](../usage/mesh-agents.md).
 
 ## Shared SSE engine
 

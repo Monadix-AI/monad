@@ -7,12 +7,9 @@ import type { Event } from '@monad/protocol';
 
 import { expect, test } from 'bun:test';
 
-import { getExternalAgentObservationApi } from '../../src/endpoints/external-agent/get-external-agent-observation.ts';
-import { getExternalAgentUsageApi } from '../../src/endpoints/external-agent/get-external-agent-usage.ts';
-import { getNativeAgentDeliveryApi } from '../../src/endpoints/external-agent/get-native-agent-delivery.ts';
-import { getNativeAgentDeliveryObservationApi } from '../../src/endpoints/external-agent/get-native-agent-delivery-observation.ts';
-import { listExternalAgentSessionsApi } from '../../src/endpoints/external-agent/list-external-agent-sessions.ts';
-import { streamExternalAgentUiObservationApi } from '../../src/endpoints/external-agent/stream-external-agent-ui-observation.ts';
+import { getMeshAgentUsageApi } from '../../src/endpoints/mesh-agent/get-mesh-agent-usage.ts';
+import { getNativeAgentDeliveryApi } from '../../src/endpoints/mesh-agent/get-native-agent-delivery.ts';
+import { listMeshSessionsApi } from '../../src/endpoints/mesh-agent/list-mesh-sessions.ts';
 import {
   getUiItemsApi,
   listSessionsApi,
@@ -27,17 +24,15 @@ import { listMcpServerStatusApi } from '../../src/endpoints/settings/mcp-servers
 import {
   createMonadStore,
   monadApi,
-  useGetExternalAgentAuthQuery,
-  useGetExternalAgentObservationQuery,
-  useGetExternalAgentUsageQuery,
-  useGetNativeAgentDeliveryObservationQuery,
+  useGetMeshAgentAuthQuery,
+  useGetMeshAgentUsageQuery,
   useGetNativeAgentDeliveryQuery,
-  useInputExternalAgentAuthMutation,
-  useLazyGetExternalAgentAuthStatusQuery,
-  useLazyGetExternalAgentUsageQuery,
+  useInputMeshAgentAuthMutation,
+  useLazyGetMeshAgentAuthStatusQuery,
+  useLazyGetMeshAgentUsageQuery,
   useLazyListCommandsQuery,
-  useStartExternalAgentAuthMutation,
-  useStopExternalAgentAuthMutation
+  useStartMeshAgentAuthMutation,
+  useStopMeshAgentAuthMutation
 } from '../../src/index.ts';
 
 function ok<T>(data: T): { data: T; status: number } {
@@ -46,23 +41,6 @@ function ok<T>(data: T): { data: T; status: number } {
 
 function fakeClient(overrides: Record<string, unknown>): MonadClient {
   const client = {
-    streamExternalAgentUiObservation: (
-      id: string,
-      transcriptTargetId: string,
-      onFrame: (frame: unknown) => void,
-      opts?: { onError?: (error: { kind: 'fatal' | 'transient'; message: string }) => void }
-    ): (() => void) => {
-      const fn = overrides.streamExternalAgentUiObservation as
-        | ((
-            id: string,
-            transcriptTargetId: string,
-            onFrame: (frame: unknown) => void,
-            opts?: { onError?: (error: { kind: 'fatal' | 'transient'; message: string }) => void }
-          ) => void)
-        | undefined;
-      fn?.(id, transcriptTargetId, onFrame, opts);
-      return () => {};
-    },
     treaty: {
       v1: {
         sessions: Object.assign(
@@ -99,14 +77,6 @@ function fakeClient(overrides: Record<string, unknown>): MonadClient {
                 return ok({ items: fn ? await fn(id) : [], nextCursor: undefined });
               }
             },
-            'external-agent-sessions': {
-              get: async () => {
-                const fn = overrides.listExternalAgentSessions as
-                  | ((sessionId: string) => Promise<unknown[]>)
-                  | undefined;
-                return ok({ sessions: fn ? await fn(id) : [] });
-              }
-            },
             reset: {
               post: async () => {
                 const fn = overrides.resetSession as
@@ -130,75 +100,53 @@ function fakeClient(overrides: Record<string, unknown>): MonadClient {
             }
           }
         ),
-        'external-agent-sessions': ({ id }: { id: string }) => ({
-          observation: {
-            get: async () => {
-              const fn = overrides.getExternalAgentObservation as ((id: string) => Promise<unknown>) | undefined;
-              return ok(
-                fn
-                  ? await fn(id)
-                  : {
-                      state: 'unavailable',
-                      externalAgentSessionId: id,
-                      reason: 'provider history unavailable'
-                    }
-              );
-            }
-          }
-        }),
-        'external-agents': ({ name }: { name: string }) => ({
-          usage: {
-            get: async () => {
-              const fn = overrides.getExternalAgentUsage as ((name: string) => Promise<unknown>) | undefined;
-              return ok(
-                fn
-                  ? await fn(name)
-                  : {
-                      agentName: name,
-                      provider: 'codex',
-                      checkedAt: '2026-07-03T00:00:00.000Z',
-                      records: []
-                    }
-              );
-            }
-          }
-        }),
-        'native-agent-deliveries': ({ id }: { id: string }) => ({
-          observation: {
-            get: async () => {
-              const fn = overrides.getNativeAgentDeliveryObservation as ((id: string) => Promise<unknown>) | undefined;
-              return ok(
-                fn
-                  ? await fn(id)
-                  : {
-                      state: 'unavailable',
-                      externalAgentSessionId: 'exa_100000000000',
-                      reason: 'provider history unavailable'
-                    }
-              );
+        mesh: {
+          sessions: {
+            get: async ({ query }: { query: { transcriptTargetId: string } }) => {
+              const fn = overrides.listMeshSessions as ((sessionId: string) => Promise<unknown[]>) | undefined;
+              return ok({ sessions: fn ? await fn(query.transcriptTargetId) : [] });
             }
           },
-          get: async () => {
-            const fn = overrides.getNativeAgentDelivery as ((id: string) => Promise<unknown>) | undefined;
-            return ok(
-              fn
-                ? await fn(id)
-                : {
-                    delivery: {
-                      id,
-                      sessionId: 'ses_01KDEFAUObDk',
-                      memberInstanceId: 'pmem_codex',
-                      externalAgentSessionId: 'exa_100000000000',
-                      triggerMessageSeq: 1,
-                      state: 'queued',
-                      turn: {},
-                      errorSummary: null,
-                      createdAt: '2026-07-03T00:00:00.000Z'
+          agents: ({ name }: { name: string }) => ({
+            usage: {
+              get: async () => {
+                const fn = overrides.getMeshAgentUsage as ((name: string) => Promise<unknown>) | undefined;
+                return ok(
+                  fn
+                    ? await fn(name)
+                    : {
+                        agentName: name,
+                        provider: 'codex',
+                        checkedAt: '2026-07-03T00:00:00.000Z',
+                        records: []
+                      }
+                );
+              }
+            }
+          }),
+          deliveries: ({ id }: { id: string }) => ({
+            get: async () => {
+              const fn = overrides.getNativeAgentDelivery as ((id: string) => Promise<unknown>) | undefined;
+              return ok(
+                fn
+                  ? await fn(id)
+                  : {
+                      delivery: {
+                        id,
+                        sessionId: 'ses_01KDEFAUObDk',
+                        memberInstanceId: 'pmem_codex',
+                        meshSessionId: 'mesh_100000000000',
+                        triggerMessageSeq: 1,
+                        state: 'queued',
+                        turn: {},
+                        errorSummary: null,
+                        createdAt: '2026-07-03T00:00:00.000Z'
+                      }
                     }
-                  }
-            );
-          }
-        }),
+              );
+            }
+          })
+        },
         settings: {
           'mcp-servers': {
             status: {
@@ -316,24 +264,22 @@ function fakeClient(overrides: Record<string, unknown>): MonadClient {
   return client as unknown as MonadClient;
 }
 
-test('external agent auth hooks are exported from the package API', () => {
+test('MeshAgent auth hooks are exported from the package API', () => {
   expect(typeof useGetNativeAgentDeliveryQuery).toBe('function');
-  expect(typeof useGetNativeAgentDeliveryObservationQuery).toBe('function');
-  expect(typeof useGetExternalAgentAuthQuery).toBe('function');
-  expect(typeof useGetExternalAgentObservationQuery).toBe('function');
-  expect(typeof useGetExternalAgentUsageQuery).toBe('function');
-  expect(typeof useInputExternalAgentAuthMutation).toBe('function');
-  expect(typeof useLazyGetExternalAgentAuthStatusQuery).toBe('function');
+  expect(typeof useGetMeshAgentAuthQuery).toBe('function');
+  expect(typeof useGetMeshAgentUsageQuery).toBe('function');
+  expect(typeof useInputMeshAgentAuthMutation).toBe('function');
+  expect(typeof useLazyGetMeshAgentAuthStatusQuery).toBe('function');
   expect(typeof useLazyListCommandsQuery).toBe('function');
-  expect(typeof useLazyGetExternalAgentUsageQuery).toBe('function');
-  expect(typeof useStartExternalAgentAuthMutation).toBe('function');
-  expect(typeof useStopExternalAgentAuthMutation).toBe('function');
+  expect(typeof useLazyGetMeshAgentUsageQuery).toBe('function');
+  expect(typeof useStartMeshAgentAuthMutation).toBe('function');
+  expect(typeof useStopMeshAgentAuthMutation).toBe('function');
 });
 
-test('getExternalAgentUsage uses the typed external agent usage treaty route', async () => {
+test('getMeshAgentUsage uses the typed MeshAgent usage treaty route', async () => {
   const seen: string[] = [];
   const client = fakeClient({
-    getExternalAgentUsage: async (name: string) => {
+    getMeshAgentUsage: async (name: string) => {
       seen.push(name);
       return {
         agentName: name,
@@ -347,12 +293,12 @@ test('getExternalAgentUsage uses the typed external agent usage treaty route', a
 
   const res = await store.dispatch(
     (
-      getExternalAgentUsageApi.endpoints as typeof getExternalAgentUsageApi.endpoints & {
-        getExternalAgentUsage: {
-          initiate: typeof getExternalAgentUsageApi.endpoints.getExternalAgentUsage.initiate;
+      getMeshAgentUsageApi.endpoints as typeof getMeshAgentUsageApi.endpoints & {
+        getMeshAgentUsage: {
+          initiate: typeof getMeshAgentUsageApi.endpoints.getMeshAgentUsage.initiate;
         };
       }
-    ).getExternalAgentUsage.initiate('codex')
+    ).getMeshAgentUsage.initiate('codex')
   );
 
   expect(seen).toEqual(['codex']);
@@ -369,7 +315,7 @@ test('getNativeAgentDelivery uses the typed native agent delivery treaty route',
           id,
           sessionId: 'ses_01KCLIENcYUg',
           memberInstanceId: 'pmem_codex_1',
-          externalAgentSessionId: 'exa_100000000000',
+          meshSessionId: 'mesh_100000000000',
           triggerMessageSeq: 7,
           state: 'delivered',
           turn: { providerSessionRef: 'provider-session-1', providerTurnId: 'turn-1' },
@@ -398,148 +344,6 @@ test('getNativeAgentDelivery uses the typed native agent delivery treaty route',
   expect(seen).toEqual(['deliv_01KCLIENU7u7']);
   expect('data' in res && res.data?.delivery.state).toBe('delivered');
   expect('data' in res && res.data?.delivery.turn.providerTurnId).toBe('turn-1');
-});
-
-test('getNativeAgentDeliveryObservation uses the typed delivery observation treaty route', async () => {
-  const seen: string[] = [];
-  const client = fakeClient({
-    getNativeAgentDeliveryObservation: async (id: string) => {
-      seen.push(id);
-      return {
-        state: 'history',
-        externalAgentSessionId: 'exa_fromdelivery',
-        deliveryId: id,
-        turn: { providerSessionRef: 'provider-session-1', providerTurnId: 'turn-1' },
-        provider: 'codex',
-        output: '{"method":"turn/completed","params":{}}',
-        observedAt: '2026-07-03T00:00:00.000Z'
-      };
-    }
-  });
-  const store = createMonadStore({ client });
-
-  const res = await store.dispatch(
-    (
-      getNativeAgentDeliveryObservationApi.endpoints as typeof getNativeAgentDeliveryObservationApi.endpoints & {
-        getNativeAgentDeliveryObservation: {
-          initiate: typeof getNativeAgentDeliveryObservationApi.endpoints.getNativeAgentDeliveryObservation.initiate;
-        };
-      }
-    ).getNativeAgentDeliveryObservation.initiate({
-      id: 'deliv_01KCLIENp373',
-      transcriptTargetId: 'ses_01KCLIENNVUa'
-    })
-  );
-
-  expect(seen).toEqual(['deliv_01KCLIENp373']);
-  expect('data' in res && res.data?.state).toBe('history');
-  if ('data' in res && res.data?.state === 'history') {
-    expect(res.data.externalAgentSessionId).toBe('exa_fromdelivery');
-    expect(res.data.deliveryId).toBe('deliv_01KCLIENp373');
-    expect(res.data.turn?.providerTurnId).toBe('turn-1');
-  }
-});
-
-test('getExternalAgentObservation uses the typed external agent observation treaty route', async () => {
-  const seen: string[] = [];
-  const client = fakeClient({
-    getExternalAgentObservation: async (id: string) => {
-      seen.push(id);
-      return {
-        state: 'live',
-        externalAgentSessionId: id,
-        provider: 'codex',
-        observationEpoch: 'oep_clientRtkObservation',
-        output: '{"type":"agent_message","message":"ok"}',
-        observedAt: '2026-07-03T00:00:00.000Z'
-      };
-    }
-  });
-  const store = createMonadStore({ client });
-
-  const res = await store.dispatch(
-    (
-      getExternalAgentObservationApi.endpoints as typeof getExternalAgentObservationApi.endpoints & {
-        getExternalAgentObservation: {
-          initiate: typeof getExternalAgentObservationApi.endpoints.getExternalAgentObservation.initiate;
-        };
-      }
-    ).getExternalAgentObservation.initiate({ id: 'exa_100000000000', transcriptTargetId: 'ses_01KCLIENNVUa' })
-  );
-
-  expect(seen).toEqual(['exa_100000000000']);
-  expect('data' in res && res.data?.state).toBe('live');
-});
-
-test('streamExternalAgentUiObservation caches full neutral frames verbatim (no delta fold)', async () => {
-  let push: ((frame: unknown) => void) | undefined;
-  let reportError: ((error: { kind: 'fatal' | 'transient'; message: string }) => void) | undefined;
-  const client = fakeClient({
-    streamExternalAgentUiObservation: (
-      _id: string,
-      _target: string,
-      onFrame: (frame: unknown) => void,
-      opts?: { onError?: (error: { kind: 'fatal' | 'transient'; message: string }) => void }
-    ) => {
-      push = onFrame;
-      reportError = opts?.onError;
-    }
-  });
-  const store = createMonadStore({ client });
-  const arg = { id: 'exa_100000000000', transcriptTargetId: 'ses_01KCLIENNVUa' as const };
-
-  store.dispatch(streamExternalAgentUiObservationApi.endpoints.streamExternalAgentUiObservation.initiate(arg));
-  await new Promise((r) => setTimeout(r, 0));
-
-  const pending = streamExternalAgentUiObservationApi.endpoints.streamExternalAgentUiObservation.select(arg)(
-    store.getState() as never
-  );
-  expect(pending.data).toEqual({ fatalError: false, frame: null });
-
-  push?.({
-    state: 'live',
-    externalAgentSessionId: 'exa_100000000000',
-    provider: 'codex',
-    observationEpoch: 'oep_clientRtkStream',
-    events: [{ id: 'e1', kind: 'assistant-message', streaming: true, text: 'hi' }],
-    seq: 12,
-    observedAt: '2026-07-07T00:00:00.000Z'
-  });
-  await new Promise((r) => setTimeout(r, 0));
-
-  const cached = streamExternalAgentUiObservationApi.endpoints.streamExternalAgentUiObservation.select(arg)(
-    store.getState() as never
-  );
-  expect(cached.data).toMatchObject({
-    fatalError: false,
-    frame: { state: 'live', events: [{ kind: 'assistant-message' }] }
-  });
-
-  reportError?.({ kind: 'fatal', message: 'stream rejected' });
-  await new Promise((r) => setTimeout(r, 0));
-  const failed = streamExternalAgentUiObservationApi.endpoints.streamExternalAgentUiObservation.select(arg)(
-    store.getState() as never
-  );
-  expect(failed.data).toMatchObject({
-    fatalError: true,
-    frame: null
-  });
-
-  push?.({
-    state: 'live',
-    externalAgentSessionId: 'exa_100000000000',
-    provider: 'codex',
-    observationEpoch: 'oep_clientRtkStream2',
-    events: [{ id: 'e2', kind: 'assistant-message', streaming: false, text: 'back' }],
-    seq: 1,
-    observedAt: '2026-07-07T00:01:00.000Z'
-  });
-  reportError?.({ kind: 'transient', message: 'daemon reconnecting' });
-  await new Promise((r) => setTimeout(r, 0));
-  const reconnecting = streamExternalAgentUiObservationApi.endpoints.streamExternalAgentUiObservation.select(arg)(
-    store.getState() as never
-  );
-  expect(reconnecting.data).toEqual({ fatalError: false, frame: null });
 });
 
 test('a query delegates to the client and caches by tag', async () => {
@@ -671,15 +475,15 @@ test('client errors surface on the RTKQ error branch, not as throws', async () =
   expect((res.error as { message?: string } | undefined)?.message).toBe('boom');
 });
 
-test('listExternalAgentSessions uses the typed session treaty route', async () => {
+test('listMeshSessions uses the typed session treaty route', async () => {
   const seen: string[] = [];
   const now = new Date().toISOString();
   const client = fakeClient({
-    listExternalAgentSessions: async (sessionId: string) => {
+    listMeshSessions: async (sessionId: string) => {
       seen.push(sessionId);
       return [
         {
-          id: 'exa_100000000000',
+          id: 'mesh_100000000000',
           sessionId: sessionId,
           agentName: 'codex',
           provider: 'codex',
@@ -701,18 +505,16 @@ test('listExternalAgentSessions uses the typed session treaty route', async () =
 
   const res = await store.dispatch(
     (
-      listExternalAgentSessionsApi.endpoints as typeof listExternalAgentSessionsApi.endpoints & {
-        listExternalAgentSessions: {
-          initiate: (
-            id: string
-          ) => ReturnType<typeof listExternalAgentSessionsApi.endpoints.listExternalAgentSessions.initiate>;
+      listMeshSessionsApi.endpoints as typeof listMeshSessionsApi.endpoints & {
+        listMeshSessions: {
+          initiate: (id: string) => ReturnType<typeof listMeshSessionsApi.endpoints.listMeshSessions.initiate>;
         };
       }
-    ).listExternalAgentSessions.initiate('ses_100000000000')
+    ).listMeshSessions.initiate('ses_100000000000')
   );
 
   expect(seen).toEqual(['ses_100000000000']);
-  expect('data' in res && res.data?.ids).toEqual(['exa_100000000000']);
+  expect('data' in res && res.data?.ids).toEqual(['mesh_100000000000']);
 });
 
 test('credential mutations invalidate that provider’s credential list', async () => {
@@ -818,17 +620,17 @@ test('streamControl subscribes to the control stream and invalidates Sessions on
   expect(listCalls).toBe(2);
 });
 
-test('streamControl invalidates external agent sessions when a managed external agent runtime starts', async () => {
-  let externalAgentCalls = 0;
+test('streamControl invalidates MeshAgent sessions when a managed MeshAgent runtime starts', async () => {
+  let meshAgentCalls = 0;
   let controlHandler: ((event: Event) => void) | undefined;
   const now = new Date().toISOString();
 
   const client = fakeClient({
-    listExternalAgentSessions: async (sessionId: string) => {
-      externalAgentCalls++;
+    listMeshSessions: async (sessionId: string) => {
+      meshAgentCalls++;
       return [
         {
-          id: 'exa_100000000000',
+          id: 'mesh_100000000000',
           sessionId: sessionId,
           agentName: 'pmem_codex_reviewer',
           provider: 'codex',
@@ -854,16 +656,14 @@ test('streamControl invalidates external agent sessions when a managed external 
 
   await store.dispatch(
     (
-      listExternalAgentSessionsApi.endpoints as typeof listExternalAgentSessionsApi.endpoints & {
-        listExternalAgentSessions: {
-          initiate: (
-            id: string
-          ) => ReturnType<typeof listExternalAgentSessionsApi.endpoints.listExternalAgentSessions.initiate>;
+      listMeshSessionsApi.endpoints as typeof listMeshSessionsApi.endpoints & {
+        listMeshSessions: {
+          initiate: (id: string) => ReturnType<typeof listMeshSessionsApi.endpoints.listMeshSessions.initiate>;
         };
       }
-    ).listExternalAgentSessions.initiate('ses_100000000000')
+    ).listMeshSessions.initiate('ses_100000000000')
   );
-  expect(externalAgentCalls).toBe(1);
+  expect(meshAgentCalls).toBe(1);
 
   store.dispatch(streamControlApi.endpoints.streamControl.initiate());
   await new Promise((r) => setTimeout(r, 0));
@@ -871,15 +671,15 @@ test('streamControl invalidates external agent sessions when a managed external 
   controlHandler?.({
     id: 'evt_externals3NK',
     sessionId: 'ses_100000000000',
-    type: 'external_agent.started',
+    type: 'mesh.started',
     actorAgentId: null,
-    payload: { externalAgentSessionId: 'exa_100000000000' },
+    payload: { meshSessionId: 'mesh_100000000000' },
     at: ''
   });
   await Promise.resolve();
   await new Promise((r) => setTimeout(r, 0));
 
-  expect(externalAgentCalls).toBe(2);
+  expect(meshAgentCalls).toBe(2);
 });
 
 test('streamControl invalidates MCP server status when MCP status changes', async () => {

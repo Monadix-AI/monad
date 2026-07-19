@@ -2,14 +2,14 @@ import type {
   DeveloperLogRecord,
   Event,
   EventId,
-  ExternalAgentAuthSessionView,
-  ExternalAgentConnectionSnapshot,
-  ExternalAgentConvenienceFrame,
-  ExternalAgentHistoryPageRequest,
-  ExternalAgentRawFrame,
-  ExternalAgentRawHistoryPage,
-  ExternalAgentUiObservationFrame,
   InteractionEvent,
+  MeshAgentAuthSessionView,
+  MeshConnectionSnapshot,
+  MeshConvenienceEventPage,
+  MeshConvenienceFrame,
+  MeshEventPageRequest,
+  MeshRawEvent,
+  MeshRawEventPage,
   MessageGenerationFrame,
   MessageId,
   ProjectId,
@@ -23,13 +23,13 @@ import {
   CONTROL_API_VERSION,
   developerLogRecordSchema,
   eventSchema,
-  externalAgentAuthSessionViewSchema,
-  externalAgentConnectionSnapshotSchema,
-  externalAgentConvenienceFrameSchema,
-  externalAgentHistoryPageRequestSchema,
-  externalAgentRawFrameSchema,
-  externalAgentRawHistoryPageSchema,
-  externalAgentUiObservationFrameSchema,
+  meshAgentAuthSessionViewSchema,
+  meshConnectionSnapshotSchema,
+  meshConvenienceEventPageSchema,
+  meshConvenienceFrameSchema,
+  meshEventPageRequestSchema,
+  meshRawEventPageSchema,
+  meshRawEventSchema,
   messageGenerationFrameSchema,
   readTypedSseStream,
   SSE_IDLE_TIMEOUT_MS,
@@ -63,10 +63,9 @@ export interface MonadClientOptions {
 export type EventHandler = (event: Event) => void;
 export type UiEventHandler = (event: SessionUiEvent) => void;
 export type LogRecordHandler = (record: DeveloperLogRecord) => void;
-export type ExternalAgentAuthSessionHandler = (session: ExternalAgentAuthSessionView) => void;
-export type ExternalAgentRawFrameHandler = (frame: ExternalAgentRawFrame) => void;
-export type ExternalAgentConvenienceFrameHandler = (frame: ExternalAgentConvenienceFrame) => void;
-export type ExternalAgentUiObservationHandler = (frame: ExternalAgentUiObservationFrame) => void;
+export type MeshAgentAuthSessionHandler = (session: MeshAgentAuthSessionView) => void;
+export type MeshRawEventHandler = (frame: MeshRawEvent) => void;
+export type MeshConvenienceFrameHandler = (frame: MeshConvenienceFrame) => void;
 export type InteractionEventHandler = (event: InteractionEvent) => void;
 export type MessageGenerationFrameHandler = (frame: MessageGenerationFrame) => void;
 
@@ -90,8 +89,8 @@ function appendQuery(path: string, key: string, value: string): string {
   return `${path}${path.includes('?') ? '&' : '?'}${key}=${encodeURIComponent(value)}`;
 }
 
-function externalAgentObservationPath(id: string, leaf: string, transcriptTargetId: SessionId): string {
-  return `/${CONTROL_API_VERSION}/external-agent-sessions/${encodeURIComponent(id)}/${leaf}?transcriptTargetId=${encodeURIComponent(transcriptTargetId)}`;
+function meshAgentObservationPath(id: string, leaf: string, transcriptTargetId: SessionId): string {
+  return `/${CONTROL_API_VERSION}/mesh/sessions/${encodeURIComponent(id)}/${leaf}?transcriptTargetId=${encodeURIComponent(transcriptTargetId)}`;
 }
 
 /**
@@ -278,60 +277,43 @@ export class MonadClient {
     return this.stream(`/${CONTROL_API_VERSION}/sessions/${sessionId}/logs`, developerLogRecordSchema, onRecord, opts);
   }
 
-  streamExternalAgentAuth(
+  streamMeshAgentAuth(
     id: string,
     controlToken: string,
-    onSession: ExternalAgentAuthSessionHandler,
+    onSession: MeshAgentAuthSessionHandler,
     opts?: { onError?: (err: StreamError) => void }
   ): () => void {
     return this.stream(
-      `/${CONTROL_API_VERSION}/external-agent-auth-sessions/${id}/events?controlToken=${encodeURIComponent(controlToken)}`,
-      externalAgentAuthSessionViewSchema,
+      `/${CONTROL_API_VERSION}/mesh/auth-sessions/${id}/events?controlToken=${encodeURIComponent(controlToken)}`,
+      meshAgentAuthSessionViewSchema,
       onSession,
       opts
     );
   }
 
-  /** The neutral UI plane. Each frame already carries the full projected event list, so there is no
-   *  delta to fold — the handler receives frames verbatim. A non-'live' frame is terminal (the session
-   *  exited); any other close reconnects. */
-  streamExternalAgentUiObservation(
-    id: string,
-    transcriptTargetId: SessionId | ProjectId,
-    onFrame: ExternalAgentUiObservationHandler,
-    opts?: { onError?: (err: StreamError) => void }
-  ): () => void {
-    return this.stream(
-      `/${CONTROL_API_VERSION}/external-agent-sessions/${id}/ui-observation-stream?transcriptTargetId=${encodeURIComponent(transcriptTargetId)}`,
-      externalAgentUiObservationFrameSchema,
-      (frame) => onFrame(frame),
-      { ...opts, resume: true, isTerminal: (frame) => frame.state !== 'live' }
-    );
-  }
-
-  streamExternalAgentRaw(
+  streamMeshAgentRaw(
     id: string,
     transcriptTargetId: SessionId,
-    onFrame: ExternalAgentRawFrameHandler,
+    onFrame: MeshRawEventHandler,
+    opts?: { afterCursor?: string; onOpen?: () => void; onError?: (err: StreamError) => void }
+  ): () => void {
+    return this.stream(meshAgentObservationPath(id, 'stream/raw', transcriptTargetId), meshRawEventSchema, onFrame, {
+      afterEventId: opts?.afterCursor,
+      resume: true,
+      onOpen: opts?.onOpen,
+      onError: opts?.onError
+    });
+  }
+
+  streamMeshAgentConvenience(
+    id: string,
+    transcriptTargetId: SessionId,
+    onFrame: MeshConvenienceFrameHandler,
     opts?: { afterCursor?: string; onOpen?: () => void; onError?: (err: StreamError) => void }
   ): () => void {
     return this.stream(
-      externalAgentObservationPath(id, 'stream/raw', transcriptTargetId),
-      externalAgentRawFrameSchema,
-      onFrame,
-      { afterEventId: opts?.afterCursor, resume: true, onOpen: opts?.onOpen, onError: opts?.onError }
-    );
-  }
-
-  streamExternalAgentConvenience(
-    id: string,
-    transcriptTargetId: SessionId,
-    onFrame: ExternalAgentConvenienceFrameHandler,
-    opts?: { afterCursor?: string; onOpen?: () => void; onError?: (err: StreamError) => void }
-  ): () => void {
-    return this.stream(
-      externalAgentObservationPath(id, 'stream/convenience', transcriptTargetId),
-      externalAgentConvenienceFrameSchema,
+      meshAgentObservationPath(id, 'stream/convenience', transcriptTargetId),
+      meshConvenienceFrameSchema,
       onFrame,
       {
         afterEventId: opts?.afterCursor,
@@ -343,48 +325,48 @@ export class MonadClient {
     );
   }
 
-  async externalAgentRawHistory(
+  async meshAgentRawEvents(
     id: string,
     transcriptTargetId: SessionId,
-    request: ExternalAgentHistoryPageRequest
-  ): Promise<ExternalAgentRawHistoryPage> {
-    return this.fetchExternalAgentObservation(
-      externalAgentObservationPath(id, 'history/raw', transcriptTargetId),
+    request: Omit<MeshEventPageRequest, 'view'>
+  ): Promise<MeshRawEventPage> {
+    return this.fetchMeshAgentObservation(
+      meshAgentObservationPath(id, 'events/raw', transcriptTargetId),
       request,
-      externalAgentRawHistoryPageSchema
+      meshRawEventPageSchema
     );
   }
 
-  async externalAgentConvenienceHistory(
+  async meshAgentConvenienceEvents(
     id: string,
     transcriptTargetId: SessionId,
-    request: ExternalAgentHistoryPageRequest
-  ): Promise<ExternalAgentConvenienceFrame[]> {
-    return this.fetchExternalAgentObservation(
-      externalAgentObservationPath(id, 'history/convenience', transcriptTargetId),
+    request: Omit<MeshEventPageRequest, 'view'>
+  ): Promise<MeshConvenienceEventPage> {
+    return this.fetchMeshAgentObservation(
+      meshAgentObservationPath(id, 'events/convenience', transcriptTargetId),
       request,
-      externalAgentConvenienceFrameSchema.array()
+      meshConvenienceEventPageSchema
     );
   }
 
-  async externalAgentConnection(id: string, transcriptTargetId: SessionId): Promise<ExternalAgentConnectionSnapshot> {
-    const response = await this.fetch(externalAgentObservationPath(id, 'connection', transcriptTargetId));
-    if (!response.ok) throw new Error(`external agent observation request failed: ${response.status}`);
-    return externalAgentConnectionSnapshotSchema.parse(await response.json());
+  async meshAgentConnection(id: string, transcriptTargetId: SessionId): Promise<MeshConnectionSnapshot> {
+    const response = await this.fetch(meshAgentObservationPath(id, 'connection', transcriptTargetId));
+    if (!response.ok) throw new Error(`MeshAgent observation request failed: ${response.status}`);
+    return meshConnectionSnapshotSchema.parse(await response.json());
   }
 
-  private async fetchExternalAgentObservation<T>(
+  private async fetchMeshAgentObservation<T>(
     path: string,
-    request: ExternalAgentHistoryPageRequest,
+    request: Omit<MeshEventPageRequest, 'view'>,
     schema: SsePayloadSchema<T>
   ): Promise<T> {
-    const query = externalAgentHistoryPageRequestSchema.parse(request);
+    const { view: _view, ...query } = meshEventPageRequestSchema.parse({ ...request, view: 'raw' });
     let url = path;
     for (const [key, value] of Object.entries(query)) {
       if (value !== undefined) url = appendQuery(url, key, String(value));
     }
     const response = await this.fetch(url);
-    if (!response.ok) throw new Error(`external agent observation request failed: ${response.status}`);
+    if (!response.ok) throw new Error(`MeshAgent observation request failed: ${response.status}`);
     return schema.parse(await response.json());
   }
 

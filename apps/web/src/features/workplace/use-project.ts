@@ -2,8 +2,8 @@
 // Experience-specific transcript, rail, and composer projections live in atoms.
 
 import type {
-  ExternalAgentSessionId,
-  ExternalAgentSessionView,
+  MeshSessionId,
+  MeshSessionView,
   ProfileView,
   ProjectId,
   Session,
@@ -14,14 +14,14 @@ import type {
 
 import { useProjectExperienceProjection } from '@monad/atoms/workspace-experiences';
 import {
-  externalAgentSessionSelectors,
+  meshSessionSelectors,
   profileSelectors,
   projectSessionSelectors,
   sessionMemberSelectors,
   useDeleteSessionMutation,
   useGetAppearanceQuery,
   useGetProfileSettingsQuery,
-  useListExternalAgentSessionsQuery,
+  useListMeshSessionsQuery,
   useListProfilesQuery,
   useListProjectSessionsQuery,
   useListSessionMembersQuery,
@@ -30,11 +30,11 @@ import {
   workplaceProjectAdapter,
   workplaceProjectSelectors
 } from '@monad/client-rtk';
-import { externalAgentSessionIdSchema } from '@monad/protocol';
+import { meshSessionIdSchema } from '@monad/protocol';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useAcpAgentSettings } from '#/hooks/use-acp-agent-settings';
-import { useExternalAgentSettings } from '#/hooks/use-external-agent-settings';
+import { useMeshAgentSettings } from '#/hooks/use-mesh-agent-settings';
 import { useTranscriptHistory } from '#/hooks/use-transcript-history';
 import { normalizedComposerSettings } from '#/lib/composer-settings';
 import { getWorkplaceProjectName } from '#/lib/workspace-sessions';
@@ -45,7 +45,7 @@ import { useProjectActions } from './use-project-actions';
 
 const EMPTY_PROFILES: ProfileView[] = [];
 const EMPTY_ITEMS: UIItem[] = [];
-const EMPTY_EXTERNAL_AGENT_SESSIONS: ExternalAgentSessionView[] = [];
+const EMPTY_MESH_SESSIONS: MeshSessionView[] = [];
 
 export function useProject(
   projectId: string,
@@ -121,10 +121,10 @@ export function useProject(
   // --- live stream + lazy older history ---
   const stream = useStreamUiItemsQuery(activeSessionId ?? ('ses_' as SessionId), { skip: activeSessionId === null });
   const streamData = stream.currentData;
-  const externalAgentSessionsQ = useListExternalAgentSessionsQuery(activeSessionId ?? ('ses_' as SessionId), {
+  const meshSessionsQ = useListMeshSessionsQuery(activeSessionId ?? ('ses_' as SessionId), {
     skip: activeSessionId === null
   });
-  const externalAgentSessionsData = externalAgentSessionsQ.currentData;
+  const meshSessionsData = meshSessionsQ.currentData;
   const sessionMembersQ = useListSessionMembersQuery(activeSessionId ?? ('ses_' as SessionId), {
     skip: activeSessionId === null
   });
@@ -140,14 +140,11 @@ export function useProject(
   });
 
   const acp = useAcpAgentSettings();
-  const externalAgent = useExternalAgentSettings();
-  const membersLoading = projectsLoading || acp.loading || externalAgent.loading;
-  const externalAgentSessions = useMemo(
-    () =>
-      externalAgentSessionsData
-        ? externalAgentSessionSelectors.selectAll(externalAgentSessionsData)
-        : EMPTY_EXTERNAL_AGENT_SESSIONS,
-    [externalAgentSessionsData]
+  const meshAgent = useMeshAgentSettings();
+  const membersLoading = projectsLoading || acp.loading || meshAgent.loading;
+  const meshSessions = useMemo(
+    () => (meshSessionsData ? meshSessionSelectors.selectAll(meshSessionsData) : EMPTY_MESH_SESSIONS),
+    [meshSessionsData]
   );
   const projection = useProjectExperienceProjection({
     acpAgents: acp.agents,
@@ -156,8 +153,8 @@ export function useProject(
     appearanceAvatarStyle: appearance?.avatarStyle,
     currentProject,
     liveItems: streamData?.items ?? EMPTY_ITEMS,
-    externalAgents: externalAgent.agents,
-    externalAgentSessions,
+    meshAgents: meshAgent.agents,
+    meshSessions,
     projectId,
     projectName: getWorkplaceProjectName,
     sessionMembers,
@@ -171,10 +168,10 @@ export function useProject(
     human,
     liveItems,
     liveTools,
-    externalAgentAvatarSeeds,
-    externalAgentDisplayNames,
-    externalAgentIcons,
-    externalAgentTags,
+    meshAgentAvatarSeeds,
+    meshAgentDisplayNames,
+    meshAgentIcons,
+    meshAgentTags,
     participants,
     projectParticipants,
     projectMembers,
@@ -190,33 +187,30 @@ export function useProject(
     streamSnapshotReceived: streamData?.snapshotReceived
   });
 
-  // The daemon starts a managed member's external-agent session server-side (join / first delivery),
-  // so no client mutation ever fires to invalidate `listExternalAgentSessions`'s RTK Query cache — the
+  // The daemon starts a managed member's mesh-agent session server-side (join / first delivery),
+  // so no client mutation ever fires to invalidate `listMeshSessions`'s RTK Query cache — the
   // join notice would otherwise only ever be backed by the bounded live-items window and vanish once a
   // long turn's events push the launch record out of it. Refetch the durable session list the moment a
-  // new external-agent session id shows up live, so the REST-backed join view takes over before that
+  // new mesh-agent session id shows up live, so the REST-backed join view takes over before that
   // happens. Tracked in a ref (not state) so this never re-renders on its own.
-  const refetchedExternalAgentSessionIds = useRef(new Set<ExternalAgentSessionId>());
-  const refetchExternalAgentSessions = externalAgentSessionsQ.refetch;
-  const knownExternalAgentSessionIds = useMemo(
-    () => new Set(externalAgentSessions.map((session) => session.id)),
-    [externalAgentSessions]
-  );
+  const refetchedMeshSessionIds = useRef(new Set<MeshSessionId>());
+  const refetchMeshSessions = meshSessionsQ.refetch;
+  const knownMeshSessionIds = useMemo(() => new Set(meshSessions.map((session) => session.id)), [meshSessions]);
   useEffect(() => {
-    refetchedExternalAgentSessionIds.current.clear();
+    refetchedMeshSessionIds.current.clear();
   }, []);
   useEffect(() => {
     for (const tool of liveTools) {
-      if (!tool.tool.startsWith('external-agent:')) continue;
-      const parsedId = externalAgentSessionIdSchema.safeParse(tool.id);
+      if (!tool.tool.startsWith('mesh-agent:')) continue;
+      const parsedId = meshSessionIdSchema.safeParse(tool.id);
       if (!parsedId.success) continue;
-      if (knownExternalAgentSessionIds.has(parsedId.data)) continue;
-      if (refetchedExternalAgentSessionIds.current.has(parsedId.data)) continue;
-      refetchedExternalAgentSessionIds.current.add(parsedId.data);
-      void refetchExternalAgentSessions();
+      if (knownMeshSessionIds.has(parsedId.data)) continue;
+      if (refetchedMeshSessionIds.current.has(parsedId.data)) continue;
+      refetchedMeshSessionIds.current.add(parsedId.data);
+      void refetchMeshSessions();
       return;
     }
-  }, [liveTools, knownExternalAgentSessionIds, refetchExternalAgentSessions]);
+  }, [liveTools, knownMeshSessionIds, refetchMeshSessions]);
 
   const loadOlder = transcript.loadOlder;
 
@@ -230,8 +224,8 @@ export function useProject(
     removeProjectMember,
     updateProjectMemberSettings,
     updateProjectMemberIdentity,
-    sendExternalAgentInput,
-    stopExternalAgent,
+    sendMeshAgentInput,
+    stopMeshAgent,
     setWorkdir
   } = useProjectActions({
     activeProjectId,
@@ -240,7 +234,7 @@ export function useProject(
     projectMembers,
     approvals,
     acpAgents: acp.agents,
-    externalAgents: externalAgent.agents,
+    meshAgents: meshAgent.agents,
     avatarStyle: appearance?.avatarStyle
   });
 
@@ -268,13 +262,13 @@ export function useProject(
         transcriptItems: transcript.items,
         liveItems,
         liveTools,
-        externalAgentSessions,
+        meshSessions,
         human,
         avatarStyle: appearance?.avatarStyle,
-        externalAgentAvatarSeeds,
-        externalAgentTags,
-        externalAgentDisplayNames,
-        externalAgentIcons,
+        meshAgentAvatarSeeds,
+        meshAgentTags,
+        meshAgentDisplayNames,
+        meshAgentIcons,
         showDeveloperOnlyMessages: DEV_SYSTEM_MESSAGES_IN_STREAM_ENABLED && showDevSystemMessagesInStream
       },
       workdir: { path: currentProject?.cwd, set: setWorkdir },
@@ -289,8 +283,8 @@ export function useProject(
       removeProjectMember,
       updateProjectMemberSettings,
       updateProjectMemberIdentity,
-      sendExternalAgentInput,
-      stopExternalAgent,
+      sendMeshAgentInput,
+      stopMeshAgent,
       switchSession,
       closeSession
     }),
@@ -317,13 +311,13 @@ export function useProject(
       transcript.items,
       liveItems,
       liveTools,
-      externalAgentSessions,
+      meshSessions,
       human,
       appearance?.avatarStyle,
-      externalAgentAvatarSeeds,
-      externalAgentTags,
-      externalAgentDisplayNames,
-      externalAgentIcons,
+      meshAgentAvatarSeeds,
+      meshAgentTags,
+      meshAgentDisplayNames,
+      meshAgentIcons,
       showDevSystemMessagesInStream,
       currentProject?.cwd,
       setWorkdir,
@@ -336,8 +330,8 @@ export function useProject(
       removeProjectMember,
       updateProjectMemberSettings,
       updateProjectMemberIdentity,
-      sendExternalAgentInput,
-      stopExternalAgent
+      sendMeshAgentInput,
+      stopMeshAgent
     ]
   );
   const experienceController = useMemo(

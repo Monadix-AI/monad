@@ -51,9 +51,9 @@ test('supervisedSpawn records process lifecycle without logging env', async () =
       detached: true
     },
     {
-      event: 'external_agent.spawn',
+      event: 'mesh.spawn',
       log,
-      context: { externalAgentSessionId: 'exa_test000000' },
+      context: { meshSessionId: 'mesh_test000000' },
       spawn
     }
   );
@@ -63,8 +63,8 @@ test('supervisedSpawn records process lifecycle without logging env', async () =
   const pidRecord = recordAt(records, 1);
   expect(startRecord).toMatchObject({ level: 'debug', msg: 'process spawn' });
   expect(startRecord.obj).toMatchObject({
-    event: 'external_agent.spawn.start',
-    externalAgentSessionId: 'exa_test000000',
+    event: 'mesh.spawn.start',
+    meshSessionId: 'mesh_test000000',
     argv: ['provider-cli', '[redacted]'],
     cwd: '/tmp/work',
     stdio: { stdin: 'ignore', stdout: 'pipe', stderr: 'pipe', terminal: false },
@@ -73,8 +73,8 @@ test('supervisedSpawn records process lifecycle without logging env', async () =
   expect(startRecord.obj).not.toHaveProperty('env');
   expect(pidRecord).toMatchObject({ level: 'debug', msg: 'process spawned' });
   expect(pidRecord.obj).toMatchObject({
-    event: 'external_agent.spawn.pid',
-    externalAgentSessionId: 'exa_test000000',
+    event: 'mesh.spawn.pid',
+    meshSessionId: 'mesh_test000000',
     pid: 1234
   });
 
@@ -85,8 +85,8 @@ test('supervisedSpawn records process lifecycle without logging env', async () =
   const exitRecord = recordAt(records, 2);
   expect(exitRecord).toMatchObject({ level: 'debug', msg: 'process exited' });
   expect(exitRecord.obj).toMatchObject({
-    event: 'external_agent.spawn.exit',
-    externalAgentSessionId: 'exa_test000000',
+    event: 'mesh.spawn.exit',
+    meshSessionId: 'mesh_test000000',
     pid: 1234,
     exitCode: 7
   });
@@ -272,7 +272,7 @@ test('supervisedSpawn tracks successful children and untracks them on exit', asy
       event: 'tracked.spawn',
       log,
       spawn,
-      trackLabel: 'external-agent-test',
+      trackLabel: 'mesh-agent-test',
       tracker: {
         track: (pid, label, kill) => {
           tracked.push({ pid, label, kill });
@@ -287,7 +287,7 @@ test('supervisedSpawn tracks successful children and untracks them on exit', asy
 
   expect(tracked).toHaveLength(1);
   expect(tracked[0]?.pid).toBe(2468);
-  expect(tracked[0]?.label).toBe('external-agent-test');
+  expect(tracked[0]?.label).toBe('mesh-agent-test');
   tracked[0]?.kill();
   expect(killed).toEqual(['SIGTERM']);
 

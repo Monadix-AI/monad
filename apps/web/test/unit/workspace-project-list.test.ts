@@ -1,4 +1,4 @@
-import type { ExternalAgentSessionView, Session, WorkplaceProject } from '@monad/protocol';
+import type { MeshSessionView, Session, WorkplaceProject } from '@monad/protocol';
 
 import { expect, test } from 'bun:test';
 
@@ -38,11 +38,7 @@ test('workspace project list keeps duplicate project names as separate projects'
   ]);
 });
 
-const externalAgentSession = (
-  id: string,
-  sessionId: string,
-  overrides: Partial<ExternalAgentSessionView> = {}
-): ExternalAgentSessionView =>
+const meshSession = (id: string, sessionId: string, overrides: Partial<MeshSessionView> = {}): MeshSessionView =>
   ({
     id,
     sessionId,
@@ -65,14 +61,14 @@ const externalAgentSession = (
     updatedAt: '2026-07-02T00:00:00.000Z',
     exitedAt: null,
     ...overrides
-  }) as ExternalAgentSessionView;
+  }) as MeshSessionView;
 
 test('workspace project list summarizes live runtime and unread native cli messages', () => {
   expect(
     buildWorkspaceProjects([project('prj_ACTIVE000000', 'active')], {
       sessions: [session('ses_ACTIVE000000', 'prj_ACTIVE000000', 'ses_ACTIVE000000', '2026-07-02T00:00:00.000Z')],
-      liveExternalAgentSessions: [
-        externalAgentSession('exa_ONE000000000', 'ses_ACTIVE000000', {
+      liveMeshSessions: [
+        meshSession('mesh_ONE000000000', 'ses_ACTIVE000000', {
           lastDeliveredSeq: 6,
           lastVisibleSeq: 4,
           pendingApprovalCount: 1
@@ -95,8 +91,8 @@ test('workspace project list keeps unread messages from stopped native cli sessi
   expect(
     buildWorkspaceProjects([project('prj_STOPPED00000', 'stopped')], {
       sessions: [session('ses_STOPPED00000', 'prj_STOPPED00000', 'ses_STOPPED00000', '2026-07-02T00:00:00.000Z')],
-      externalAgentSessions: [
-        externalAgentSession('exa_STOPPED00000', 'ses_STOPPED00000', {
+      meshSessions: [
+        meshSession('mesh_STOPPED00000', 'ses_STOPPED00000', {
           lastDeliveredSeq: 8,
           lastVisibleSeq: 5,
           state: 'stopped'

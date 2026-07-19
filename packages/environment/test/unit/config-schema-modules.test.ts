@@ -45,16 +45,18 @@ describe('config schema module ownership', () => {
   });
 
   test('mesh owns Workspace collaborators and cross-node connections', async () => {
-    const { acpAgentSchema, externalAgentSchema, monadixConfigSchema, peerSchema } = await import(
+    const { acpAgentSchema, meshAgentSchema, monadixConfigSchema, peerSchema } = await import(
       '../../src/config/mesh.ts'
     );
     expect(acpAgentSchema.parse({ name: 'reviewer', command: 'review-agent' })).toMatchObject({
       name: 'reviewer',
       enabled: true
     });
-    expect(
-      externalAgentSchema.parse({ name: 'codex', provider: 'codex', command: 'codex', enabled: true })
-    ).toMatchObject({ name: 'codex', provider: 'codex', allowAutopilot: true });
+    expect(meshAgentSchema.parse({ name: 'codex', provider: 'codex', command: 'codex', enabled: true })).toMatchObject({
+      name: 'codex',
+      provider: 'codex',
+      allowAutopilot: true
+    });
     expect(
       peerSchema.parse({
         id: 'peer_000000000001',
@@ -83,6 +85,6 @@ describe('config schema module ownership', () => {
     expect(config.user).toEqual({ displayName: 'Operator', avatarDataUrl: null });
     expect(config.agent.agents).toEqual([]);
     expect(config.channels).toEqual([]);
-    expect(config.externalAgents).toEqual([]);
+    expect(config.meshAgents).toEqual([]);
   });
 });

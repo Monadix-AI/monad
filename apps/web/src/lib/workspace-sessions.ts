@@ -1,4 +1,4 @@
-import type { ExternalAgentSessionView, Session, WorkplaceProject } from '@monad/protocol';
+import type { MeshSessionView, Session, WorkplaceProject } from '@monad/protocol';
 
 type WorkspaceProjectSessionListItem = { id: Session['id']; title: string };
 
@@ -29,12 +29,12 @@ export interface WorkspaceProjectListItem {
 }
 
 export interface BuildWorkspaceProjectsOptions {
-  /** Every session (chat or project-bound) — used to resolve which project an external-agent
+  /** Every session (chat or project-bound) — used to resolve which project an mesh-agent
    *  session's sessionId belongs to, now that a project session's own id is distinct from its
    *  project's id (Track B). */
   sessions?: readonly Pick<Session, 'id' | 'projectId' | 'title' | 'updatedAt'>[];
-  liveExternalAgentSessions?: readonly ExternalAgentSessionView[];
-  externalAgentSessions?: readonly ExternalAgentSessionView[];
+  liveMeshSessions?: readonly MeshSessionView[];
+  meshSessions?: readonly MeshSessionView[];
   pinnedSessionIds?: ReadonlySet<string>;
 }
 
@@ -52,8 +52,8 @@ export const buildWorkspaceProjects = (
   }
   const activityByProjectId = projectActivityById({
     sessionProjectId,
-    liveExternalAgentSessions: options.liveExternalAgentSessions ?? [],
-    externalAgentSessions: options.externalAgentSessions ?? options.liveExternalAgentSessions ?? []
+    liveMeshSessions: options.liveMeshSessions ?? [],
+    meshSessions: options.meshSessions ?? options.liveMeshSessions ?? []
   });
   return projects
     .map((project, index) => {
@@ -80,15 +80,15 @@ export const buildWorkspaceProjects = (
 
 function projectActivityById({
   sessionProjectId,
-  liveExternalAgentSessions,
-  externalAgentSessions
+  liveMeshSessions,
+  meshSessions
 }: {
   sessionProjectId: ReadonlyMap<string, string | undefined>;
-  liveExternalAgentSessions: readonly ExternalAgentSessionView[];
-  externalAgentSessions: readonly ExternalAgentSessionView[];
+  liveMeshSessions: readonly MeshSessionView[];
+  meshSessions: readonly MeshSessionView[];
 }) {
   const activity = new Map<string, { hasRunningAgent: boolean; unreadCount: number }>();
-  for (const session of externalAgentSessions) {
+  for (const session of meshSessions) {
     const projectId = sessionProjectId.get(session.sessionId);
     if (!projectId) continue;
     const current = activity.get(projectId) ?? { hasRunningAgent: false, unreadCount: 0 };
@@ -96,7 +96,7 @@ function projectActivityById({
       Math.max(0, session.lastDeliveredSeq - session.lastVisibleSeq) + session.pendingApprovalCount;
     activity.set(projectId, current);
   }
-  for (const session of liveExternalAgentSessions) {
+  for (const session of liveMeshSessions) {
     const projectId = sessionProjectId.get(session.sessionId);
     if (!projectId) continue;
     const current = activity.get(projectId) ?? { hasRunningAgent: false, unreadCount: 0 };

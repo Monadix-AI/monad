@@ -3,7 +3,7 @@ import type { ProjectionMutations } from './ui-projection-state.ts';
 
 import { parseEventPayload } from '@monad/protocol';
 
-import { findExternalAgentProviderAdapter } from '#/services/external-agent/index.ts';
+import { findMeshAgentProviderAdapter } from '#/services/mesh-agent/index.ts';
 import { isUnknownToolResult, itemKey } from './ui-projection-helpers.ts';
 
 function settleBuiltInStreamingMessages(m: ProjectionMutations): SessionUiEvent[] {
@@ -68,16 +68,16 @@ export function applyToolEvent(m: ProjectionMutations, event: Event): SessionUiE
       };
       return [{ kind: 'upsert', cursor: event.id, item: m.upsert(next) }];
     }
-    case 'external_agent.started': {
-      const p = parseEventPayload('external_agent.started', event.payload);
+    case 'mesh.started': {
+      const p = parseEventPayload('mesh.started', event.payload);
       return [
         {
           kind: 'upsert',
           cursor: event.id,
           item: m.upsert({
             kind: 'tool',
-            id: p.externalAgentSessionId,
-            tool: `external-agent:${p.provider}`,
+            id: p.meshSessionId,
+            tool: `mesh-agent:${p.provider}`,
             input: {
               agent: p.agentName,
               provider: p.provider,
@@ -92,16 +92,16 @@ export function applyToolEvent(m: ProjectionMutations, event: Event): SessionUiE
         }
       ];
     }
-    case 'external_agent.login_required': {
-      const p = parseEventPayload('external_agent.login_required', event.payload);
+    case 'mesh.login_required': {
+      const p = parseEventPayload('mesh.login_required', event.payload);
       return [
         {
           kind: 'upsert',
           cursor: event.id,
           item: m.upsert({
             kind: 'custom',
-            id: `external-agent-login-required:${p.agentName}`,
-            name: 'external_agent.login_required',
+            id: `mesh-agent-login-required:${p.agentName}`,
+            name: 'mesh.login_required',
             status: 'error',
             data: p,
             seq: event.id
@@ -109,12 +109,12 @@ export function applyToolEvent(m: ProjectionMutations, event: Event): SessionUiE
         }
       ];
     }
-    case 'external_agent.login_resolved': {
-      const p = parseEventPayload('external_agent.login_resolved', event.payload);
-      return [m.remove('custom', `external-agent-login-required:${p.agentName}`)];
+    case 'mesh.login_resolved': {
+      const p = parseEventPayload('mesh.login_resolved', event.payload);
+      return [m.remove('custom', `mesh-agent-login-required:${p.agentName}`)];
     }
-    case 'external_agent.connection_required': {
-      const p = parseEventPayload('external_agent.connection_required', event.payload);
+    case 'mesh.connection_required': {
+      const p = parseEventPayload('mesh.connection_required', event.payload);
       if (p.code === 'authentication_failed') {
         return [
           {
@@ -122,11 +122,11 @@ export function applyToolEvent(m: ProjectionMutations, event: Event): SessionUiE
             cursor: event.id,
             item: m.upsert({
               kind: 'custom',
-              id: `external-agent-login-required:${p.agentName}`,
-              name: 'external_agent.login_required',
+              id: `mesh-agent-login-required:${p.agentName}`,
+              name: 'mesh.login_required',
               status: 'error',
               data: {
-                ...(p.externalAgentSessionId ? { externalAgentSessionId: p.externalAgentSessionId } : {}),
+                ...(p.meshSessionId ? { meshSessionId: p.meshSessionId } : {}),
                 agentName: p.agentName,
                 provider: p.provider,
                 reason: p.reason
@@ -142,8 +142,8 @@ export function applyToolEvent(m: ProjectionMutations, event: Event): SessionUiE
           cursor: event.id,
           item: m.upsert({
             kind: 'custom',
-            id: `external-agent-connection-required:${p.externalAgentSessionId ?? p.agentName}`,
-            name: 'external_agent.connection_required',
+            id: `mesh-agent-connection-required:${p.meshSessionId ?? p.agentName}`,
+            name: 'mesh.connection_required',
             status: 'error',
             data: p,
             seq: event.id
@@ -151,8 +151,8 @@ export function applyToolEvent(m: ProjectionMutations, event: Event): SessionUiE
         }
       ];
     }
-    case 'external_agent.approval_requested': {
-      const p = parseEventPayload('external_agent.approval_requested', event.payload);
+    case 'mesh.approval_requested': {
+      const p = parseEventPayload('mesh.approval_requested', event.payload);
       return [
         {
           kind: 'upsert',
@@ -162,7 +162,7 @@ export function applyToolEvent(m: ProjectionMutations, event: Event): SessionUiE
             id: p.requestId,
             tool: `${p.provider} approval`,
             input: {
-              externalAgentSessionId: p.externalAgentSessionId,
+              meshSessionId: p.meshSessionId,
               provider: p.provider,
               text: p.text,
               data: p.data,
@@ -174,20 +174,20 @@ export function applyToolEvent(m: ProjectionMutations, event: Event): SessionUiE
         }
       ];
     }
-    case 'external_agent.approval_resolved': {
-      const p = parseEventPayload('external_agent.approval_resolved', event.payload);
+    case 'mesh.approval_resolved': {
+      const p = parseEventPayload('mesh.approval_resolved', event.payload);
       return [m.remove('approval', p.requestId)];
     }
-    case 'external_agent.idle_suspended': {
-      const p = parseEventPayload('external_agent.idle_suspended', event.payload);
+    case 'mesh.idle_suspended': {
+      const p = parseEventPayload('mesh.idle_suspended', event.payload);
       return [
         {
           kind: 'upsert',
           cursor: event.id,
           item: m.upsert({
             kind: 'system',
-            id: `external-agent-idle-suspended:${p.agentId}:${event.id}`,
-            text: m.t('daemon.session.externalAgentIdleSuspended'),
+            id: `mesh-agent-idle-suspended:${p.agentId}:${event.id}`,
+            text: m.t('daemon.session.meshAgentIdleSuspended'),
             event: p,
             level: 'info',
             seq: event.at
@@ -195,16 +195,16 @@ export function applyToolEvent(m: ProjectionMutations, event: Event): SessionUiE
         }
       ];
     }
-    case 'external_agent.idle_resumed': {
-      const p = parseEventPayload('external_agent.idle_resumed', event.payload);
+    case 'mesh.idle_resumed': {
+      const p = parseEventPayload('mesh.idle_resumed', event.payload);
       return [
         {
           kind: 'upsert',
           cursor: event.id,
           item: m.upsert({
             kind: 'system',
-            id: `external-agent-idle-resumed:${p.agentId}:${event.id}`,
-            text: m.t('daemon.session.externalAgentIdleResumed'),
+            id: `mesh-agent-idle-resumed:${p.agentId}:${event.id}`,
+            text: m.t('daemon.session.meshAgentIdleResumed'),
             event: p,
             level: 'info',
             seq: event.at
@@ -212,26 +212,26 @@ export function applyToolEvent(m: ProjectionMutations, event: Event): SessionUiE
         }
       ];
     }
-    case 'external_agent.resume_failed': {
-      const p = parseEventPayload('external_agent.resume_failed', event.payload);
-      const label = findExternalAgentProviderAdapter(p.provider)?.label ?? p.provider;
+    case 'mesh.resume_failed': {
+      const p = parseEventPayload('mesh.resume_failed', event.payload);
+      const label = findMeshAgentProviderAdapter(p.provider)?.label ?? p.provider;
       return [
         {
           kind: 'upsert',
           cursor: event.id,
           item: m.upsert({
             kind: 'system',
-            id: `external-agent-resume-failed:${p.agentName}:${p.providerSessionRef}`,
-            text: m.t('daemon.session.externalAgentResumeFailed', { label, ref: p.providerSessionRef }),
+            id: `mesh-agent-resume-failed:${p.agentName}:${p.providerSessionRef}`,
+            text: m.t('daemon.session.meshAgentResumeFailed', { label, ref: p.providerSessionRef }),
             level: 'warn',
             seq: event.id
           })
         }
       ];
     }
-    case 'external_agent.turn_settled': {
-      const p = parseEventPayload('external_agent.turn_settled', event.payload);
-      const existing = m.items.get(itemKey('tool', p.externalAgentSessionId));
+    case 'mesh.turn_settled': {
+      const p = parseEventPayload('mesh.turn_settled', event.payload);
+      const existing = m.items.get(itemKey('tool', p.meshSessionId));
       if (existing?.kind !== 'tool' || existing.status !== 'running') return [];
       const next: Extract<UIItem, { kind: 'tool' }> = {
         ...existing,
@@ -240,14 +240,14 @@ export function applyToolEvent(m: ProjectionMutations, event: Event): SessionUiE
       };
       return [{ kind: 'upsert', cursor: event.id, item: m.upsert(next) }];
     }
-    case 'external_agent.exited': {
-      const p = parseEventPayload('external_agent.exited', event.payload);
-      const existing = m.items.get(itemKey('tool', p.externalAgentSessionId));
+    case 'mesh.exited': {
+      const p = parseEventPayload('mesh.exited', event.payload);
+      const existing = m.items.get(itemKey('tool', p.meshSessionId));
       const exitText = p.exitCode === null ? `\n${p.state}` : `\n${p.state} (${p.exitCode})`;
       const next: Extract<UIItem, { kind: 'tool' }> = {
         kind: 'tool',
-        id: p.externalAgentSessionId,
-        tool: existing?.kind === 'tool' ? existing.tool : 'external-agent',
+        id: p.meshSessionId,
+        tool: existing?.kind === 'tool' ? existing.tool : 'mesh-agent',
         ...(existing?.kind === 'tool' && existing.input !== undefined ? { input: existing.input } : {}),
         output: `${existing?.kind === 'tool' && existing.output ? existing.output : ''}${exitText}`,
         status: p.state === 'failed' ? 'error' : 'ok',

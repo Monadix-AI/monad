@@ -16,9 +16,9 @@ import { createStore } from '#/store/db/index.ts';
 
 // spawnIfManaged (session-members.ts) requires a real config file match to reach
 // spawnManagedSessionMember at all — that resolution path is exercised by the existing
-// managed-external-agent-join/delivery tests. These tests cover the new handler logic itself:
+// managed-mesh-agent-join/delivery tests. These tests cover the new handler logic itself:
 // CRUD, guard rails, and — via a direct store assertion — that a successful spawn's
-// externalAgentSessionId is persisted onto the *session-scoped* row, never shared across sessions.
+// meshSessionId is persisted onto the *session-scoped* row, never shared across sessions.
 
 function fixtureSession(store: ReturnType<typeof createStore>, over: Partial<Session> = {}): Session {
   const now = new Date().toISOString();
@@ -68,7 +68,7 @@ function buildHarness(store: ReturnType<typeof createStore>) {
     deps: {
       store,
       paths: undefined,
-      externalAgentHost: { stop: (id: string) => stopCalls.push(id) }
+      meshAgentHost: { stop: (id: string) => stopCalls.push(id) }
     },
     requireSession: (id: SessionId) => {
       const session = store.getSession(id);
@@ -86,7 +86,7 @@ function buildHarness(store: ReturnType<typeof createStore>) {
 
 const codexTemplate: WorkplaceProjectMemberTemplate = {
   id: 'tmpl_codex',
-  type: 'external-agent',
+  type: 'mesh-agent',
   name: 'codex',
   displayName: 'Codex'
 };
@@ -105,7 +105,7 @@ test('inviteSessionMember creates a session_members row from a project memberTem
     expect(member).toEqual({
       id: codexTemplate.id,
       templateId: codexTemplate.id,
-      type: 'external-agent',
+      type: 'mesh-agent',
       name: 'codex',
       displayName: 'Codex',
       joinedAt: stored.createdAt
@@ -175,16 +175,16 @@ test('inviting the same template into two different sessions produces two indepe
     // Each session's own session_members row — never shared. Simulate what a successful spawn would
     // persist for each (spawnIfManaged writes exactly this shape via store.updateSessionMember).
     store.updateSessionMember(sessionA.id, codexTemplate.id, {
-      externalAgentSessionId: 'exa_a00000000000',
+      meshSessionId: 'mesh_a00000000000',
       updatedAt: new Date().toISOString()
     });
     store.updateSessionMember(sessionB.id, codexTemplate.id, {
-      externalAgentSessionId: 'exa_b00000000000',
+      meshSessionId: 'mesh_b00000000000',
       updatedAt: new Date().toISOString()
     });
 
-    expect(store.getSessionMember(sessionA.id, codexTemplate.id)?.externalAgentSessionId).toBe('exa_a00000000000');
-    expect(store.getSessionMember(sessionB.id, codexTemplate.id)?.externalAgentSessionId).toBe('exa_b00000000000');
+    expect(store.getSessionMember(sessionA.id, codexTemplate.id)?.meshSessionId).toBe('mesh_a00000000000');
+    expect(store.getSessionMember(sessionB.id, codexTemplate.id)?.meshSessionId).toBe('mesh_b00000000000');
   } finally {
     store.close();
   }
@@ -199,7 +199,7 @@ test('spawnSessionMember creates an ad-hoc member with no templateId and never t
 
     const { member } = await handlers.spawnSessionMember({
       sessionId: session.id,
-      type: 'external-agent',
+      type: 'mesh-agent',
       name: 'claude-code',
       displayName: 'Ad hoc Claude'
     });
@@ -221,36 +221,36 @@ test('removeSessionMember stops the runtime when bound and deletes the row', asy
 
     await handlers.inviteSessionMember({ sessionId: session.id, templateId: codexTemplate.id });
     store.updateSessionMember(session.id, codexTemplate.id, {
-      externalAgentSessionId: 'exa_running00000',
+      meshSessionId: 'mesh_running00000',
       updatedAt: new Date().toISOString()
     });
     const legacyMessageId = newId('msg');
     const snapshottedMessageId = newId('msg');
     store.insertMessage(legacyMessageId, session.id, 'legacy', new Date().toISOString(), 'assistant', {
-      data: { agentName: codexTemplate.id, source: 'managed-external-agent' }
+      data: { agentName: codexTemplate.id, source: 'managed-mesh-agent' }
     });
     store.insertMessage(snapshottedMessageId, session.id, 'snapshot', new Date().toISOString(), 'assistant', {
       data: {
         agentName: codexTemplate.id,
         agentDisplayName: 'Original Codex',
-        source: 'managed-external-agent'
+        source: 'managed-mesh-agent'
       }
     });
 
     const result = await handlers.removeSessionMember({ sessionId: session.id, memberId: codexTemplate.id });
 
     expect(result).toEqual({ deleted: true });
-    expect(stopCalls).toEqual(['exa_running00000']);
+    expect(stopCalls).toEqual(['mesh_running00000']);
     expect(store.listSessionMembers(session.id)).toEqual([]);
     expect(store.getMessage(session.id, legacyMessageId)?.data).toEqual({
       agentName: codexTemplate.id,
       agentDisplayName: 'Codex',
-      source: 'managed-external-agent'
+      source: 'managed-mesh-agent'
     });
     expect(store.getMessage(session.id, snapshottedMessageId)?.data).toEqual({
       agentName: codexTemplate.id,
       agentDisplayName: 'Original Codex',
-      source: 'managed-external-agent'
+      source: 'managed-mesh-agent'
     });
   } finally {
     store.close();
@@ -290,7 +290,7 @@ test('inviteSessionMember/spawnSessionMember/removeSessionMember reject http on 
       /cannot write/
     );
     await expect(
-      handlers.spawnSessionMember({ sessionId: session.id, type: 'external-agent', name: 'claude-code' })
+      handlers.spawnSessionMember({ sessionId: session.id, type: 'mesh-agent', name: 'claude-code' })
     ).rejects.toThrow(/cannot write/);
     await expect(handlers.removeSessionMember({ sessionId: session.id, memberId: codexTemplate.id })).rejects.toThrow(
       /cannot write/

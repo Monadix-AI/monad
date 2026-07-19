@@ -1,25 +1,21 @@
-import type { ChatMessage, ExternalAgentSessionId, UIItem, UIMessageItem, UIPart } from '@monad/protocol';
+import type { ChatMessage, MeshSessionId, UIItem, UIMessageItem, UIPart } from '@monad/protocol';
 
-import {
-  externalAgentEventsAreGenerating,
-  externalAgentStructuredEvents
-} from '@monad/atoms/external-agent-observation';
 import { channelDisplayText, channelStructuredVisibility } from '@monad/protocol';
 import { Allow, parse as parsePartialJson } from 'partial-json';
 
-import { findExternalAgentProviderAdapter } from '#/services/external-agent/index.ts';
+import { findMeshAgentProviderAdapter } from '#/services/mesh-agent/index.ts';
 
 const TEXT_TYPES = new Set(['text', 'markdown', 'error']);
-const MAX_EXTERNAL_AGENT_UI_OUTPUT = 64 * 1024;
+const MAX_MESH_AGENT_UI_OUTPUT = 64 * 1024;
 // Min chars to accumulate before re-running the O(current-length) channel partial-JSON parse. Parses
 // also fire whenever a delta carries a `}` (a structural close — end of the display/visibility object),
 // so completion and `silent` flips are never missed regardless of this throttle.
 export const CHANNEL_REPARSE_MIN_DELTA = 32;
 
-/** Durable per-run projection of an external agent session, used to rebuild its tool card during
+/** Durable per-run projection of a MeshAgent session, used to rebuild its tool card during
  *  hydration (page refresh / reconnect) from the bounded output snapshot rather than from the
  *  non-durable live output stream. Structurally satisfied by the store's session row. */
-export interface ExternalAgentSessionSnapshot {
+export interface MeshSessionSnapshot {
   id: string;
   provider: string;
   agentName: string;
@@ -44,33 +40,34 @@ export function isEvictable(item: UIItem): boolean {
   return false;
 }
 
-// Whether an external agent output snapshot shows a turn in flight. Provider event vocabulary lives in each
+// Whether a MeshAgent output snapshot shows a turn in flight. Provider event vocabulary lives in each
 // adapter's observation projector (`classifyActivity`); this just parses the snapshot with that adapter
 // and asks. `undefined` = no structured records (a PTY/plain-text run), so a caller can distinguish it
 // from "settled".
-function externalAgentSnapshotIsGenerating(outputSnapshot: string, provider: string): boolean | undefined {
-  const adapter = findExternalAgentProviderAdapter(provider);
-  const events = externalAgentStructuredEvents({ id: '', provider, adapter, output: outputSnapshot });
+function meshAgentSnapshotIsGenerating(outputSnapshot: string, provider: string): boolean | undefined {
+  const runtime = findMeshAgentProviderAdapter(provider)?.observationRuntime;
+  if (!runtime) return undefined;
+  const events = runtime.structuredEvents({ id: '', output: outputSnapshot });
   if (events === undefined) return undefined;
-  return externalAgentEventsAreGenerating(events, { provider, adapter });
+  return runtime.eventsAreGenerating(events);
 }
 
-export function externalAgentToolItem(s: ExternalAgentSessionSnapshot): Extract<UIItem, { kind: 'tool' }> {
+export function meshAgentToolItem(s: MeshSessionSnapshot): Extract<UIItem, { kind: 'tool' }> {
   const status =
     s.state === 'failed'
       ? 'error'
       : s.state === 'starting' ||
-          (s.state === 'running' && externalAgentSnapshotIsGenerating(s.outputSnapshot, s.provider) !== false)
+          (s.state === 'running' && meshAgentSnapshotIsGenerating(s.outputSnapshot, s.provider) !== false)
         ? 'running'
         : 'ok';
-  // Mirror the live `external_agent.exited` decoration so a refreshed terminal run reads the same as one
+  // Mirror the live `mesh.exited` decoration so a refreshed terminal run reads the same as one
   // watched live; keep the running state undecorated.
   const exitText = status === 'running' ? '' : s.exitCode === null ? `\n${s.state}` : `\n${s.state} (${s.exitCode})`;
-  const output = appendBoundedText(s.outputSnapshot, exitText, MAX_EXTERNAL_AGENT_UI_OUTPUT);
+  const output = appendBoundedText(s.outputSnapshot, exitText, MAX_MESH_AGENT_UI_OUTPUT);
   return {
     kind: 'tool',
     id: s.id,
-    tool: `external-agent:${s.provider}`,
+    tool: `mesh-agent:${s.provider}`,
     input: {
       agent: s.agentName,
       provider: s.provider,
@@ -138,14 +135,14 @@ export function agentDisplayNameFromData(data: unknown): string | undefined {
 export function sourceFromData(data: unknown): UIMessageItem['source'] | undefined {
   if (!data || typeof data !== 'object') return undefined;
   const source = (data as { source?: unknown }).source;
-  return source === 'managed-external-agent' || source === 'external-agent-provider' ? source : undefined;
+  return source === 'managed-mesh-agent' || source === 'mesh-agent-provider' ? source : undefined;
 }
 
-export function externalAgentSessionIdFromData(data: unknown): ExternalAgentSessionId | undefined {
+export function meshSessionIdFromData(data: unknown): MeshSessionId | undefined {
   if (!data || typeof data !== 'object') return undefined;
-  const externalAgentSessionId = (data as { externalAgentSessionId?: unknown }).externalAgentSessionId;
-  return typeof externalAgentSessionId === 'string' && externalAgentSessionId.startsWith('exa_')
-    ? (externalAgentSessionId as ExternalAgentSessionId)
+  const meshSessionId = (data as { meshSessionId?: unknown }).meshSessionId;
+  return typeof meshSessionId === 'string' && meshSessionId.startsWith('mesh_')
+    ? (meshSessionId as MeshSessionId)
     : undefined;
 }
 

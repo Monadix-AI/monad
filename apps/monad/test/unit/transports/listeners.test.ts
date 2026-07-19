@@ -201,7 +201,7 @@ test('daemon TCP runtime records last apply failures and preserves the previous 
   runtime.stop();
 });
 
-test('daemonLoopbackUrl follows the HTTPS setting for external agent callbacks', () => {
+test('daemonLoopbackUrl follows the HTTPS setting for MeshAgent callbacks', () => {
   expect(daemonLoopbackUrl({ https: { enabled: true }, port: 52749 })).toBe('https://127.0.0.1:52749');
   expect(daemonLoopbackUrl({ https: { enabled: false }, port: 52749 })).toBe('http://127.0.0.1:52749');
 });

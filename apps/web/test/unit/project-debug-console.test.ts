@@ -22,9 +22,9 @@ const entry = (overrides: Partial<ProjectDebugTraceEntry>): ProjectDebugTraceEnt
 test('project debug console filters trace entries by layer and label', () => {
   const entries = [
     entry({ layer: 'http', label: 'POST /v1/projects/undefined/messages' }),
-    entry({ layer: 'sse', label: 'external_agent.output' }),
-    entry({ layer: 'log', label: 'external-agent.input', direction: 'input' }),
-    entry({ layer: 'sse', label: 'external_agent.approval_requested' }),
+    entry({ layer: 'sse', label: 'mesh.output' }),
+    entry({ layer: 'log', label: 'mesh.input', direction: 'input' }),
+    entry({ layer: 'sse', label: 'mesh.approval_requested' }),
     entry({ layer: 'http', label: 'POST /x', direction: 'error' })
   ];
 
@@ -32,15 +32,13 @@ test('project debug console filters trace entries by layer and label', () => {
     'POST /v1/projects/undefined/messages',
     'POST /x'
   ]);
-  expect(filterDebugTraceEntries(entries, 'external-agent').map((item) => item.label)).toEqual([
-    'external_agent.output',
-    'external-agent.input',
-    'external_agent.approval_requested'
+  expect(filterDebugTraceEntries(entries, 'mesh-agent').map((item) => item.label)).toEqual([
+    'mesh.output',
+    'mesh.input',
+    'mesh.approval_requested'
   ]);
-  expect(filterDebugTraceEntries(entries, 'approval').map((item) => item.label)).toEqual([
-    'external_agent.approval_requested'
-  ]);
-  expect(filterDebugTraceEntries(entries, 'log').map((item) => item.label)).toEqual(['external-agent.input']);
+  expect(filterDebugTraceEntries(entries, 'approval').map((item) => item.label)).toEqual(['mesh.approval_requested']);
+  expect(filterDebugTraceEntries(entries, 'log').map((item) => item.label)).toEqual(['mesh.input']);
   expect(filterDebugTraceEntries(entries, 'error').map((item) => item.label)).toEqual(['POST /x']);
 });
 
@@ -60,20 +58,20 @@ test('project debug console maps logger records to log trace entries', () => {
   expect(
     logRecordToDebugTrace({
       level: 20,
-      event: 'external_agent.started',
+      event: 'mesh.started',
       sessionId: 'ses_100000000000',
-      externalAgentSessionId: 'exa_100000000000',
+      meshSessionId: 'mesh_100000000000',
       msg: 'native cli started'
     })
   ).toEqual({
     direction: 'internal',
     layer: 'log',
-    label: 'external_agent.started',
+    label: 'mesh.started',
     data: {
       level: 20,
-      event: 'external_agent.started',
+      event: 'mesh.started',
       sessionId: 'ses_100000000000',
-      externalAgentSessionId: 'exa_100000000000',
+      meshSessionId: 'mesh_100000000000',
       msg: 'native cli started'
     }
   });

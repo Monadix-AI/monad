@@ -19,7 +19,7 @@ test('a session member persists its template link, type, and data blob', () => {
     sessionId: 'ses_100000000000',
     memberId: 'pmem_codex_a',
     templateId: 'tpl_codex',
-    type: 'external-agent',
+    type: 'mesh-agent',
     data: { name: 'codex', displayName: 'Codex' },
     createdAt: now,
     updatedAt: now
@@ -30,8 +30,8 @@ test('a session member persists its template link, type, and data blob', () => {
     sessionId: 'ses_100000000000',
     memberId: 'pmem_codex_a',
     templateId: 'tpl_codex',
-    type: 'external-agent',
-    externalAgentSessionId: null,
+    type: 'mesh-agent',
+    meshSessionId: null,
     data: { name: 'codex', displayName: 'Codex' },
     createdAt: now,
     updatedAt: now
@@ -42,7 +42,7 @@ test('an ad-hoc spawned member has no template link', () => {
   store.insertSessionMember({
     sessionId: 'ses_100000000000',
     memberId: 'pmem_ad_hoc',
-    type: 'external-agent',
+    type: 'mesh-agent',
     data: { name: 'claude' },
     createdAt: now,
     updatedAt: now
@@ -56,7 +56,7 @@ test('the same template invited into two different sessions produces two indepen
     sessionId: 'ses_100000000000',
     memberId: 'pmem_codex_a',
     templateId: 'tpl_codex',
-    type: 'external-agent',
+    type: 'mesh-agent',
     data: {},
     createdAt: now,
     updatedAt: now
@@ -65,29 +65,29 @@ test('the same template invited into two different sessions produces two indepen
     sessionId: 'ses_200000000000',
     memberId: 'pmem_codex_a',
     templateId: 'tpl_codex',
-    type: 'external-agent',
+    type: 'mesh-agent',
     data: {},
     createdAt: now,
     updatedAt: now
   });
   store.updateSessionMember('ses_100000000000', 'pmem_codex_a', {
-    externalAgentSessionId: 'exa_ses100000000',
+    meshSessionId: 'mesh_ses100000000',
     updatedAt: now
   });
   store.updateSessionMember('ses_200000000000', 'pmem_codex_a', {
-    externalAgentSessionId: 'exa_ses200000000',
+    meshSessionId: 'mesh_ses200000000',
     updatedAt: now
   });
 
-  expect(store.getSessionMember('ses_100000000000', 'pmem_codex_a')?.externalAgentSessionId).toBe('exa_ses100000000');
-  expect(store.getSessionMember('ses_200000000000', 'pmem_codex_a')?.externalAgentSessionId).toBe('exa_ses200000000');
+  expect(store.getSessionMember('ses_100000000000', 'pmem_codex_a')?.meshSessionId).toBe('mesh_ses100000000');
+  expect(store.getSessionMember('ses_200000000000', 'pmem_codex_a')?.meshSessionId).toBe('mesh_ses200000000');
 });
 
 test('listSessionMembers scopes strictly to one session', () => {
   store.insertSessionMember({
     sessionId: 'ses_100000000000',
     memberId: 'pmem_a',
-    type: 'external-agent',
+    type: 'mesh-agent',
     data: {},
     createdAt: now,
     updatedAt: now
@@ -103,7 +103,7 @@ test('listSessionMembers scopes strictly to one session', () => {
   store.insertSessionMember({
     sessionId: 'ses_200000000000',
     memberId: 'pmem_c',
-    type: 'external-agent',
+    type: 'mesh-agent',
     data: {},
     createdAt: now,
     updatedAt: now
@@ -117,7 +117,7 @@ test('deleteSessionMember removes exactly one binding; deleteSessionMembers clea
   store.insertSessionMember({
     sessionId: 'ses_100000000000',
     memberId: 'pmem_a',
-    type: 'external-agent',
+    type: 'mesh-agent',
     data: {},
     createdAt: now,
     updatedAt: now
@@ -125,7 +125,7 @@ test('deleteSessionMember removes exactly one binding; deleteSessionMembers clea
   store.insertSessionMember({
     sessionId: 'ses_100000000000',
     memberId: 'pmem_b',
-    type: 'external-agent',
+    type: 'mesh-agent',
     data: {},
     createdAt: now,
     updatedAt: now

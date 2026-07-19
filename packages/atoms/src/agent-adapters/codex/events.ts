@@ -1,4 +1,4 @@
-import type { ExternalAgentOutputEvent, ExternalAgentRuntimeHandle } from '@monad/sdk-atom';
+import type { MeshAgentOutputEvent, MeshAgentRuntimeHandle } from '@monad/sdk-atom';
 import type {
   CodexAppServerNotification,
   CodexAppServerResponseItem,
@@ -9,6 +9,7 @@ import type {
 
 import { compactObject, parseJsonObject } from '../adapter-shared.ts';
 import { jsonRpcErrorResponse, jsonRpcRequest } from '../jsonrpc.ts';
+import { codexRuntimeState, findCodexRuntimeState } from './state.ts';
 
 export type CodexJsonRpcResponse = {
   id?: unknown;
@@ -56,7 +57,7 @@ function textFromCodexContent(content: unknown): string | undefined {
   return text || undefined;
 }
 
-function parseCodexResponseItem(item: CodexResponseItemJson): ExternalAgentOutputEvent[] {
+function parseCodexResponseItem(item: CodexResponseItemJson): MeshAgentOutputEvent[] {
   if (item.type === 'message' && item.role === 'assistant') {
     const text = textFromCodexContent(item.content);
     return text ? [{ type: 'agent_message', payload: { text } }] : [];
@@ -100,8 +101,8 @@ function parseCodexResponseItem(item: CodexResponseItemJson): ExternalAgentOutpu
 type CodexNotificationHandler = (
   record: CodexJsonRpcNotification,
   params: Record<string, unknown>,
-  handle?: ExternalAgentRuntimeHandle
-) => ExternalAgentOutputEvent[];
+  handle?: MeshAgentRuntimeHandle
+) => MeshAgentOutputEvent[];
 
 const CODEX_APPROVAL_REQUEST_HANDLERS: Record<string, CodexNotificationHandler> = {
   'item/commandExecution/requestApproval': (record, p) => [
@@ -222,21 +223,21 @@ const CODEX_SERVER_NOTIFICATION_HANDLERS: Record<string, CodexNotificationHandle
 function dispatchCodexNotification(
   handlers: Record<string, CodexNotificationHandler>,
   record: CodexJsonRpcNotification,
-  handle?: ExternalAgentRuntimeHandle
-): ExternalAgentOutputEvent[] {
+  handle?: MeshAgentRuntimeHandle
+): MeshAgentOutputEvent[] {
   const params = recordValue(record.params);
   if (!params) return [];
   return handlers[record.method]?.(record, params, handle) ?? [];
 }
 
-function parseCodexApprovalRequest(record: CodexJsonRpcNotification): ExternalAgentOutputEvent[] {
+function parseCodexApprovalRequest(record: CodexJsonRpcNotification): MeshAgentOutputEvent[] {
   return dispatchCodexNotification(CODEX_APPROVAL_REQUEST_HANDLERS, record);
 }
 
 function parseCodexServerNotification(
   record: CodexJsonRpcNotification,
-  handle?: ExternalAgentRuntimeHandle
-): ExternalAgentOutputEvent[] {
+  handle?: MeshAgentRuntimeHandle
+): MeshAgentOutputEvent[] {
   return dispatchCodexNotification(CODEX_SERVER_NOTIFICATION_HANDLERS, record, handle);
 }
 
@@ -274,7 +275,7 @@ function codexErrorInfoKind(info: unknown): string | undefined {
 // Turn-level errors arrive as an `error` notification carrying a `TurnError`. Triage the codex error
 // code: unauthorized → reconnect; everything else → a provider_error tagged with the code so the UI
 // can distinguish context-overflow / usage-limit / transient stream failures from a generic error.
-function codexTurnErrorEvents(turnError: Record<string, unknown>): ExternalAgentOutputEvent[] {
+function codexTurnErrorEvents(turnError: Record<string, unknown>): MeshAgentOutputEvent[] {
   const kind = codexErrorInfoKind(turnError.codexErrorInfo);
   const message =
     typeof turnError.message === 'string' && turnError.message.length > 0
@@ -295,23 +296,24 @@ const CODEX_MAX_TURN_RECOVERIES = 1;
 // codex retries transient failures itself (`willRetry`), so those are suppressed rather than shown.
 function handleCodexTurnError(
   record: CodexJsonRpcNotification,
-  handle?: ExternalAgentRuntimeHandle
-): ExternalAgentOutputEvent[] | undefined {
+  handle?: MeshAgentRuntimeHandle
+): MeshAgentOutputEvent[] | undefined {
   const params = recordValue(record.params);
   const turnError = recordValue(params?.error);
   if (!turnError) return undefined;
   const kind = codexErrorInfoKind(turnError.codexErrorInfo);
   const willRetry = params?.willRetry === true;
+  const state = findCodexRuntimeState(handle);
 
   if (
     kind === 'contextWindowExceeded' &&
     !willRetry &&
     handle?.appServer &&
     handle.providerSessionRef &&
-    handle.lastTurnInput &&
-    (handle.turnRecoveries ?? 0) < CODEX_MAX_TURN_RECOVERIES
+    state?.lastTurnInput &&
+    state.turnRecoveries < CODEX_MAX_TURN_RECOVERIES
   ) {
-    handle.turnRecoveries = (handle.turnRecoveries ?? 0) + 1;
+    state.turnRecoveries += 1;
     handle.appServer.send(
       jsonRpcRequest('thread/compact/start', handle.nextRequestId?.() ?? Date.now(), {
         threadId: handle.providerSessionRef
@@ -322,7 +324,7 @@ function handleCodexTurnError(
     handle.appServer.send(
       jsonRpcRequest('turn/start', turnId, {
         threadId: handle.providerSessionRef,
-        input: [{ type: 'text', text: handle.lastTurnInput }]
+        input: [{ type: 'text', text: state.lastTurnInput }]
       })
     );
     return [];
@@ -332,10 +334,10 @@ function handleCodexTurnError(
   return codexTurnErrorEvents(turnError);
 }
 
-function codexHistoryPageEvent(id: unknown, r: Record<string, unknown>): ExternalAgentOutputEvent[] {
+function codexEventPageEvent(id: unknown, r: Record<string, unknown>): MeshAgentOutputEvent[] {
   return [
     {
-      type: 'history_page',
+      type: 'event_page',
       payload: {
         responseId: id as string | number,
         items: Array.isArray(r.data) ? r.data : [],
@@ -346,7 +348,7 @@ function codexHistoryPageEvent(id: unknown, r: Record<string, unknown>): Externa
   ];
 }
 
-function codexThreadRefEvent(id: unknown, r: Record<string, unknown>): ExternalAgentOutputEvent[] {
+function codexThreadRefEvent(id: unknown, r: Record<string, unknown>): MeshAgentOutputEvent[] {
   const thread = recordValue(r.thread);
   const threadId = thread?.id;
   if (typeof threadId !== 'string') return [];
@@ -359,8 +361,8 @@ export function jsonRpcIdKey(id: unknown): string | number | undefined {
 
 function parseCodexClientResponse(
   record: CodexJsonRpcResponse,
-  handle?: ExternalAgentRuntimeHandle
-): ExternalAgentOutputEvent[] {
+  handle?: MeshAgentRuntimeHandle
+): MeshAgentOutputEvent[] {
   const idKey = jsonRpcIdKey(record.id);
   const kind = idKey !== undefined ? handle?.pendingRequests?.get(idKey) : undefined;
   if (idKey !== undefined && kind !== undefined) handle?.pendingRequests?.delete(idKey);
@@ -371,7 +373,7 @@ function parseCodexClientResponse(
       kind === 'threadResume' &&
       (error.code === 'ThreadNotFound' ||
         (typeof error.message === 'string' && /^thread not found(?::|$)/i.test(error.message)));
-    const retry = handle?.threadResumeRetry;
+    const retry = findCodexRuntimeState(handle)?.threadResumeRetry;
     if (isTransientThreadNotFound && retry && retry.attempts < 1 && handle?.appServer) {
       retry.attempts += 1;
       const retryId = handle.nextRequestId?.() ?? Date.now();
@@ -413,28 +415,29 @@ function parseCodexClientResponse(
   // The `initialize` response is the handshake gate: only once it lands is the server ready for
   // requests, so flush the parked `thread/start`|`thread/resume` frame now (protocol ordering).
   if (kind === 'initialize') {
-    if (handle?.deferredThreadFrame && handle.appServer) {
-      handle.appServer.send(handle.deferredThreadFrame);
-      handle.deferredThreadFrame = undefined;
+    const state = findCodexRuntimeState(handle);
+    if (state?.deferredThreadFrame && handle?.appServer) {
+      handle.appServer.send(state.deferredThreadFrame);
+      state.deferredThreadFrame = undefined;
     }
     return [];
   }
   // Dispatch by the recorded request kind when the per-session ledger is available; fall back to
-  // result-shape sniffing for contexts with no ledger (unit tests, the one-shot CLI history probe).
-  if (kind === 'historyPage') return codexHistoryPageEvent(record.id, result);
+  // result-shape sniffing for contexts with no ledger (unit tests, the one-shot CLI event probe).
+  if (kind === 'eventPage') return codexEventPageEvent(record.id, result);
   if (kind === 'thread' || kind === 'threadResume') {
-    if (handle) handle.threadResumeRetry = undefined;
+    if (handle) codexRuntimeState(handle).threadResumeRetry = undefined;
     return codexThreadRefEvent(record.id, result);
   }
   if (kind === 'turn') return [];
   if (Array.isArray(result.data) && 'nextCursor' in result && 'backwardsCursor' in result) {
-    return codexHistoryPageEvent(record.id, result);
+    return codexEventPageEvent(record.id, result);
   }
   return codexThreadRefEvent(record.id, result);
 }
 
-export function parseCodexSessionJsonl(chunk: string, handle?: ExternalAgentRuntimeHandle): ExternalAgentOutputEvent[] {
-  const events: ExternalAgentOutputEvent[] = [];
+export function parseCodexSessionJsonl(chunk: string, handle?: MeshAgentRuntimeHandle): MeshAgentOutputEvent[] {
+  const events: MeshAgentOutputEvent[] = [];
   for (const rawLine of chunk.split(/\r?\n/)) {
     const line = rawLine.trim();
     if (!line.startsWith('{')) continue;
@@ -452,8 +455,9 @@ export function parseCodexSessionJsonl(chunk: string, handle?: ExternalAgentRunt
       // Track the in-flight turn so interrupt/steer can address it. turn/started opens it, turn/completed closes it.
       if (handle && (record.method === 'turn/started' || record.method === 'turn/completed')) {
         const turn = recordValue(recordValue(record.params)?.turn);
-        handle.currentTurnId = record.method === 'turn/started' && typeof turn?.id === 'string' ? turn.id : undefined;
-        if (record.method === 'turn/completed') handle.turnRecoveries = 0;
+        const state = codexRuntimeState(handle);
+        state.currentTurnId = record.method === 'turn/started' && typeof turn?.id === 'string' ? turn.id : undefined;
+        if (record.method === 'turn/completed') state.turnRecoveries = 0;
       }
       if (record.method === 'error') {
         const errorEvents = handleCodexTurnError(record, handle);

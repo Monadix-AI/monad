@@ -331,6 +331,7 @@ export function useBottomFollow({
     lastScrollTopRef.current = scrollTop;
 
     const now = performance.now();
+    const readerIntent = now <= userIntentUntilRef.current;
     const scrollHeight = scroller.scrollHeight;
     const previousHeight = lastScrollHeightRef.current;
     lastScrollHeightRef.current = scrollHeight;
@@ -339,11 +340,7 @@ export function useBottomFollow({
       consumeSelfTarget(selfTargetsRef.current, scrollTop, now, scrollHeight - scroller.clientHeight) ||
       now <= selfScrollUntilRef.current;
     const notTheReader =
-      selfScroll ||
-      isLayoutInducedScroll(
-        now <= userIntentUntilRef.current,
-        previousHeight !== null && previousHeight !== scrollHeight
-      );
+      selfScroll || isLayoutInducedScroll(readerIntent, previousHeight !== null && previousHeight !== scrollHeight);
     if (!notTheReader && direction !== 'none') userScrolledRef.current = true;
     const atBottom = isAtBottom(scroller);
     const next = reducePinnedOnScroll(pinnedRef.current, notTheReader, atBottom, direction);
@@ -356,7 +353,7 @@ export function useBottomFollow({
       publishAtBottom(atBottom);
     }
 
-    evaluateEdges();
+    if (readerIntent && !notTheReader) evaluateEdges();
   }, [evaluateEdges, publishAtBottom, scrollerRef]);
 
   const scrollToTop = useCallback(
@@ -366,9 +363,13 @@ export function useBottomFollow({
       pinnedRef.current = false;
       userScrolledRef.current = true;
       markSelfScroll(behavior, 0);
-      scroller.scrollTo({ behavior, top: scrollBoundaryTop(scroller, 'top') });
+      if (behavior === 'auto') {
+        setScrollTopNow(scroller, scrollBoundaryTop(scroller, 'top'));
+        return;
+      }
+      scroller.scrollTo({ behavior: 'smooth', top: scrollBoundaryTop(scroller, 'top') });
     },
-    [markSelfScroll, scrollerRef]
+    [markSelfScroll, scrollerRef, setScrollTopNow]
   );
 
   /** Hand control to the reader: stop following without moving the viewport. */

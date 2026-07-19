@@ -88,7 +88,7 @@ function addSessionMember(
     sessionId,
     memberId: agentName,
     templateId: null,
-    type: 'external-agent',
+    type: 'mesh-agent',
     data: { name: agentName, displayName, settings: { managedProjectAgent: true } },
     createdAt: now,
     updatedAt: now
@@ -97,25 +97,25 @@ function addSessionMember(
 
 function bindingHeaders(
   _sessionId: SessionId,
-  externalAgentSessionId = 'exa_test00000000',
+  meshSessionId = 'mesh_test00000000',
   _agentId = 'codex'
 ): Record<string, string> {
   return {
     authorization: `Bearer ${AGENT_TOKEN}`,
-    'x-monad-external-agent-session-id': externalAgentSessionId
+    'x-monad-mesh-session-id': meshSessionId
   };
 }
 
 function createManagedNativeSession(
   handlers: ReturnType<typeof buildHandlers>,
   sessionId: SessionId,
-  id = 'exa_test00000000',
+  id = 'mesh_test00000000',
   agentName = 'codex',
   state: 'running' | 'stopped' = 'running',
   workingPath = '/tmp/project',
   outputSnapshot = ''
 ): void {
-  handlers.store.upsertExternalAgentSession({
+  handlers.store.upsertMeshSession({
     id,
     transcriptTargetId: sessionId,
     agentName,
@@ -168,7 +168,7 @@ for (const kind of TRANSPORTS) {
       // realpath: attachment refs are canonicalized, and registration confines paths to the
       // runtime's working directory — the session's workingPath must be the (real) test dir.
       const dir = await realpath(await mkdtemp(join(tmpdir(), 'monad-attachment-')));
-      createManagedNativeSession(handlers, sessionId, 'exa_test00000000', 'codex', 'running', dir);
+      createManagedNativeSession(handlers, sessionId, 'mesh_test00000000', 'codex', 'running', dir);
       try {
         const longBody = `START ${'x'.repeat(150_000)} END`;
         const filePath = join(dir, 'report.md');
@@ -226,7 +226,7 @@ for (const kind of TRANSPORTS) {
       t = serveTransport(kind, createHttpTransport(handlers));
       const sessionId = await createSession(t);
       const dir = await realpath(await mkdtemp(join(tmpdir(), 'monad-attachment-')));
-      createManagedNativeSession(handlers, sessionId, 'exa_test00000000', 'codex', 'running', dir);
+      createManagedNativeSession(handlers, sessionId, 'mesh_test00000000', 'codex', 'running', dir);
       try {
         const filePath = join(dir, '项目报告.md');
         await writeFile(filePath, '# 报告', 'utf8');
@@ -253,7 +253,7 @@ for (const kind of TRANSPORTS) {
       const sessionId = await createSession(t);
       const dir = await realpath(await mkdtemp(join(tmpdir(), 'monad-attachment-')));
       const outsideDir = await realpath(await mkdtemp(join(tmpdir(), 'monad-outside-')));
-      createManagedNativeSession(handlers, sessionId, 'exa_test00000000', 'codex', 'running', dir);
+      createManagedNativeSession(handlers, sessionId, 'mesh_test00000000', 'codex', 'running', dir);
       try {
         // The web endpoint is id-gated: unregistered ids never resolve to file reads.
         expect((await t.fetch('/v1/attachments/att_UNKNOWN')).status).toBe(404);
@@ -293,7 +293,7 @@ for (const kind of TRANSPORTS) {
       const agentName = 'pmem_claude-code_123';
       const managedWorkspace = join(dir, 'workplace-agents', sessionId, agentName);
       await mkdir(managedWorkspace, { recursive: true });
-      createManagedNativeSession(handlers, sessionId, 'exa_test00000000', agentName, 'running', projectDir);
+      createManagedNativeSession(handlers, sessionId, 'mesh_test00000000', agentName, 'running', projectDir);
       try {
         const filePath = join(managedWorkspace, 'proposal.md');
         await writeFile(filePath, '# Proposal', 'utf8');
@@ -321,7 +321,7 @@ for (const kind of TRANSPORTS) {
       t = serveTransport(kind, createHttpTransport(handlers));
       const sessionId = await createSession(t);
       const dir = await realpath(await mkdtemp(join(tmpdir(), 'monad-attachment-')));
-      createManagedNativeSession(handlers, sessionId, 'exa_test00000000', 'codex', 'running', dir);
+      createManagedNativeSession(handlers, sessionId, 'mesh_test00000000', 'codex', 'running', dir);
       try {
         const longBody = `PRIVATE ${'y'.repeat(140_000)}`;
         const filePath = join(dir, 'private-note.txt');
@@ -358,7 +358,7 @@ for (const kind of TRANSPORTS) {
       addSessionMember(handlers, sessionId, 'codex', 'Lily');
       addSessionMember(handlers, sessionId, 'claude', 'Steve');
       createManagedNativeSession(handlers, sessionId);
-      createManagedNativeSession(handlers, sessionId, 'exa_peer00000000', 'claude');
+      createManagedNativeSession(handlers, sessionId, 'mesh_peer00000000', 'claude');
       const requested = t.sse(`/v1/sessions/${sessionId}/events`, {
         until: (event) => event.type === 'clarify.requested',
         timeoutMs: 3000
@@ -408,7 +408,7 @@ for (const kind of TRANSPORTS) {
 
       const peerInbox = await t.fetch(
         '/v1/internal/native-agent/project/inbox',
-        json({ sessionId }, bindingHeaders(sessionId, 'exa_peer00000000', 'claude'))
+        json({ sessionId }, bindingHeaders(sessionId, 'mesh_peer00000000', 'claude'))
       );
       expect(peerInbox.status).toBe(200);
       expect(
@@ -422,18 +422,18 @@ for (const kind of TRANSPORTS) {
       const handlers = buildHandlers(mockModel());
       t = serveTransport(kind, createHttpTransport(handlers));
       const sessionId = await createSession(t);
-      createManagedNativeSession(handlers, sessionId, 'exa_codex0000000', 'codex');
-      createManagedNativeSession(handlers, sessionId, 'exa_claude000000', 'claude');
+      createManagedNativeSession(handlers, sessionId, 'mesh_codex0000000', 'codex');
+      createManagedNativeSession(handlers, sessionId, 'mesh_claude000000', 'claude');
 
       // Two agents post to the wall in sequence.
       const first = await t.fetch(
         '/v1/internal/native-agent/project/post',
-        json({ sessionId, text: 'codex: looks good' }, bindingHeaders(sessionId, 'exa_codex0000000', 'codex'))
+        json({ sessionId, text: 'codex: looks good' }, bindingHeaders(sessionId, 'mesh_codex0000000', 'codex'))
       );
       expect(first.status).toBe(200);
       const second = await t.fetch(
         '/v1/internal/native-agent/project/post',
-        json({ sessionId, text: 'claude: I agree' }, bindingHeaders(sessionId, 'exa_claude000000', 'claude'))
+        json({ sessionId, text: 'claude: I agree' }, bindingHeaders(sessionId, 'mesh_claude000000', 'claude'))
       );
       expect(second.status).toBe(200);
 
@@ -461,8 +461,8 @@ for (const kind of TRANSPORTS) {
       const handlers = buildHandlers(mockModel());
       t = serveTransport(kind, createHttpTransport(handlers));
       const sessionId = await createSession(t);
-      createManagedNativeSession(handlers, sessionId, 'exa_codex0000000', 'codex');
-      createManagedNativeSession(handlers, sessionId, 'exa_claude000000', 'claude');
+      createManagedNativeSession(handlers, sessionId, 'mesh_codex0000000', 'codex');
+      createManagedNativeSession(handlers, sessionId, 'mesh_claude000000', 'claude');
 
       // A human message fans out to both agents; each reserves a "thinking" placeholder at fan-out
       // time — codex a hair before claude (loop order), stamped in the far past to stand apart from
@@ -471,9 +471,9 @@ for (const kind of TRANSPORTS) {
       handlers.store.insertMessage('msg_CODEX0000000', sessionId, '', '2020-01-01T00:00:02.000Z', 'assistant', {
         data: {
           agentName: 'codex',
-          externalAgentSessionId: 'exa_codex0000000',
+          meshSessionId: 'mesh_codex0000000',
           reasoning: 'Thinking',
-          source: 'managed-external-agent'
+          source: 'managed-mesh-agent'
         },
         includeInContext: false,
         streamStatus: 'streaming'
@@ -481,9 +481,9 @@ for (const kind of TRANSPORTS) {
       handlers.store.insertMessage('msg_CLAUDE000000', sessionId, '', '2020-01-01T00:00:03.000Z', 'assistant', {
         data: {
           agentName: 'claude',
-          externalAgentSessionId: 'exa_claude000000',
+          meshSessionId: 'mesh_claude000000',
           reasoning: 'Thinking',
-          source: 'managed-external-agent'
+          source: 'managed-mesh-agent'
         },
         includeInContext: false,
         streamStatus: 'streaming'
@@ -492,14 +492,14 @@ for (const kind of TRANSPORTS) {
       // claude posts FIRST, codex SECOND — the reverse of the fan-out (placeholder) order.
       const claudePost = await t.fetch(
         '/v1/internal/native-agent/project/post',
-        json({ sessionId, text: 'claude: here is the split' }, bindingHeaders(sessionId, 'exa_claude000000', 'claude'))
+        json({ sessionId, text: 'claude: here is the split' }, bindingHeaders(sessionId, 'mesh_claude000000', 'claude'))
       );
       expect(claudePost.status).toBe(200);
       const codexPost = await t.fetch(
         '/v1/internal/native-agent/project/post',
         json(
           { sessionId, text: 'codex: that split matches mine' },
-          bindingHeaders(sessionId, 'exa_codex0000000', 'codex')
+          bindingHeaders(sessionId, 'mesh_codex0000000', 'codex')
         )
       );
       expect(codexPost.status).toBe(200);
@@ -599,7 +599,7 @@ for (const kind of TRANSPORTS) {
       ]);
     });
 
-    test('provider completion without a project post clears the managed external agent thinking placeholder', async () => {
+    test('provider completion without a project post clears the managed MeshAgent thinking placeholder', async () => {
       const handlers = buildHandlers(mockModel());
       t = serveTransport(kind, createHttpTransport(handlers));
       const sessionId = await createSession(t);
@@ -608,29 +608,27 @@ for (const kind of TRANSPORTS) {
       handlers.store.insertMessage('msg_THINKING0000', sessionId, '', '2026-06-30T00:00:02.000Z', 'assistant', {
         data: {
           agentName: 'codex',
-          externalAgentSessionId: 'exa_test00000000',
+          meshSessionId: 'mesh_test00000000',
           reasoning: 'Thinking',
-          source: 'managed-external-agent'
+          source: 'managed-mesh-agent'
         },
         includeInContext: false,
         streamStatus: 'streaming'
       });
-      handlers.store.enqueueExternalAgentInboxItem('exa_test00000000', handlers.store.maxMessageSeq(sessionId));
-      handlers.store.markExternalAgentInboxDelivered('exa_test00000000', handlers.store.maxMessageSeq(sessionId));
-      handlers.store.markExternalAgentInboxConsumed('exa_test00000000', handlers.store.maxMessageSeq(sessionId));
+      handlers.store.enqueueMeshAgentInboxItem('mesh_test00000000', handlers.store.maxMessageSeq(sessionId));
+      handlers.store.markMeshAgentInboxDelivered('mesh_test00000000', handlers.store.maxMessageSeq(sessionId));
+      handlers.store.markMeshAgentInboxConsumed('mesh_test00000000', handlers.store.maxMessageSeq(sessionId));
 
-      await handlers.session.completeManagedExternalAgentProviderMessage({
+      await handlers.session.completeManagedMeshAgentProviderMessage({
         sessionId,
-        externalAgentSessionId: 'exa_test00000000',
+        meshSessionId: 'mesh_test00000000',
         agentName: 'codex',
         text: 'No action needed.',
         post: false
       });
 
       expect(await messages(t, sessionId)).toEqual([{ role: 'user', text: 'hi' }]);
-      expect(
-        handlers.store.findManagedExternalAgentStreamingMessage(sessionId, 'exa_test00000000', 'codex')
-      ).toBeNull();
+      expect(handlers.store.findManagedMeshAgentStreamingMessage(sessionId, 'mesh_test00000000', 'codex')).toBeNull();
     });
 
     test('agent send stays out of the Workplace Project transcript', async () => {
@@ -676,18 +674,18 @@ for (const kind of TRANSPORTS) {
       const handlers = buildHandlers(mockModel());
       t = serveTransport(kind, createHttpTransport(handlers));
       const sessionId = await createSession(t);
-      createManagedNativeSession(handlers, sessionId, 'exa_codex0000000', 'codex');
-      createManagedNativeSession(handlers, sessionId, 'exa_claude000000', 'claude');
+      createManagedNativeSession(handlers, sessionId, 'mesh_codex0000000', 'codex');
+      createManagedNativeSession(handlers, sessionId, 'mesh_claude000000', 'claude');
 
       const sent = await t.fetch(
         '/v1/internal/native-agent/agent/send',
-        json({ to: 'claude', text: 'private handoff' }, bindingHeaders(sessionId, 'exa_codex0000000', 'codex'))
+        json({ to: 'claude', text: 'private handoff' }, bindingHeaders(sessionId, 'mesh_codex0000000', 'codex'))
       );
       expect(sent.status).toBe(200);
 
       const readByClaude = await t.fetch(
         '/v1/internal/native-agent/agent/read',
-        json({ with: 'codex' }, bindingHeaders(sessionId, 'exa_claude000000', 'claude'))
+        json({ with: 'codex' }, bindingHeaders(sessionId, 'mesh_claude000000', 'claude'))
       );
 
       expect(readByClaude.status).toBe(200);
@@ -712,7 +710,7 @@ for (const kind of TRANSPORTS) {
         { data: { threadId: 'msg_ROOT00000000', agentName: 'codex' } }
       );
       handlers.store.insertMessage('msg_OTHER0000000', sessionId, 'unrelated', '2026-06-30T00:00:03.000Z', 'user');
-      handlers.store.enqueueExternalAgentInboxItem('exa_test00000000', 3);
+      handlers.store.enqueueMeshAgentInboxItem('mesh_test00000000', 3);
 
       const read = await t.fetch(
         '/v1/internal/native-agent/project/read',
@@ -741,7 +739,7 @@ for (const kind of TRANSPORTS) {
       const res = await t.fetch('/v1/internal/native-agent/project/post', json({ sessionId, text: 'should fail' }));
 
       expect(res.status).toBe(403);
-      expect(await responseError(res)).toMatchObject({ code: 'NOT_MANAGED_EXTERNAL_AGENT' });
+      expect(await responseError(res)).toMatchObject({ code: 'NOT_MANAGED_MESH_AGENT' });
       expect(await messages(t, sessionId)).toEqual([]);
     });
 
@@ -755,7 +753,7 @@ for (const kind of TRANSPORTS) {
       );
 
       expect(res.status).toBe(404);
-      expect(await responseError(res)).toMatchObject({ code: 'EXTERNAL_AGENT_SESSION_NOT_FOUND' });
+      expect(await responseError(res)).toMatchObject({ code: 'MESH_SESSION_NOT_FOUND' });
       expect(await messages(t, sessionId)).toEqual([]);
     });
 
@@ -779,15 +777,15 @@ for (const kind of TRANSPORTS) {
       const handlers = buildHandlers(mockModel());
       t = serveTransport(kind, createHttpTransport(handlers));
       const sessionId = await createSession(t);
-      createManagedNativeSession(handlers, sessionId, 'exa_stopped00000', 'codex', 'stopped');
+      createManagedNativeSession(handlers, sessionId, 'mesh_stopped00000', 'codex', 'stopped');
 
       const res = await t.fetch(
         '/v1/internal/native-agent/project/post',
-        json({ sessionId, text: 'should fail' }, bindingHeaders(sessionId, 'exa_stopped00000'))
+        json({ sessionId, text: 'should fail' }, bindingHeaders(sessionId, 'mesh_stopped00000'))
       );
 
       expect(res.status).toBe(403);
-      expect(await responseError(res)).toMatchObject({ code: 'EXTERNAL_AGENT_SESSION_NOT_ACTIVE' });
+      expect(await responseError(res)).toMatchObject({ code: 'MESH_SESSION_NOT_ACTIVE' });
       expect(await messages(t, sessionId)).toEqual([]);
     });
 
@@ -809,11 +807,11 @@ for (const kind of TRANSPORTS) {
       expect(await messages(t, otherSessionId)).toEqual([]);
     });
 
-    test('project inbox advances the managed external agent visible cursor', async () => {
+    test('project inbox advances the managed MeshAgent visible cursor', async () => {
       const handlers = buildHandlers(mockModel());
       t = serveTransport(kind, createHttpTransport(handlers));
       const sessionId = await createSession(t);
-      createManagedNativeSession(handlers, sessionId, 'exa_inbox0000000');
+      createManagedNativeSession(handlers, sessionId, 'mesh_inbox0000000');
       handlers.store.insertMessage(
         'msg_INBOX1000000',
         sessionId,
@@ -821,11 +819,11 @@ for (const kind of TRANSPORTS) {
         '2026-06-30T00:00:01.000Z',
         'user'
       );
-      handlers.store.enqueueExternalAgentInboxItem('exa_inbox0000000', 1);
+      handlers.store.enqueueMeshAgentInboxItem('mesh_inbox0000000', 1);
 
       const first = await t.fetch(
         '/v1/internal/native-agent/project/inbox',
-        json({ sessionId }, bindingHeaders(sessionId, 'exa_inbox0000000'))
+        json({ sessionId }, bindingHeaders(sessionId, 'mesh_inbox0000000'))
       );
       expect(first.status).toBe(200);
       const firstBody = (await first.json()) as { items: Array<{ deliveryId?: string; message: { text: string } }> };
@@ -833,13 +831,13 @@ for (const kind of TRANSPORTS) {
       expect(firstBody.items[0]?.deliveryId?.startsWith('deliv_')).toBe(true);
       const deliveryId = firstBody.items[0]?.deliveryId;
       if (!deliveryId) throw new Error('expected delivery id');
-      const deliveryRes = await t.fetch(`/v1/native-agent-deliveries/${deliveryId}?transcriptTargetId=${sessionId}`);
+      const deliveryRes = await t.fetch(`/v1/mesh/deliveries/${deliveryId}?transcriptTargetId=${sessionId}`);
       expect(deliveryRes.status).toBe(200);
       const deliveryBody = (await deliveryRes.json()) as {
         delivery: {
           id: string;
           sessionId: string;
-          externalAgentSessionId: string;
+          meshSessionId: string;
           triggerMessageSeq: number;
           state: string;
           outputSnapshot?: string;
@@ -849,57 +847,50 @@ for (const kind of TRANSPORTS) {
       expect(deliveryBody.delivery).toMatchObject({
         id: deliveryId,
         sessionId,
-        externalAgentSessionId: 'exa_inbox0000000',
+        meshSessionId: 'mesh_inbox0000000',
         triggerMessageSeq: 1,
         state: 'visible'
       });
       expect(deliveryBody.delivery.outputSnapshot).toBeUndefined();
       expect(deliveryBody.delivery.output).toBeUndefined();
-      const observationRes = await t.fetch(
-        `/v1/native-agent-deliveries/${deliveryId}/observation?transcriptTargetId=${sessionId}`
+      const eventsRes = await t.fetch(
+        `/v1/mesh/sessions/${deliveryBody.delivery.meshSessionId}/events/convenience?transcriptTargetId=${sessionId}`
       );
-      expect(observationRes.status).toBe(200);
-      expect(await observationRes.json()).toMatchObject({
-        state: 'unavailable',
-        externalAgentSessionId: 'exa_inbox0000000',
-        deliveryId,
-        turn: { providerSessionRef: null, providerTurnId: null },
-        provider: 'codex',
-        reason: 'provider history unavailable'
-      });
+      expect(eventsRes.status).toBe(200);
+      expect(await eventsRes.json()).toEqual({ frames: [] });
 
       const second = await t.fetch(
         '/v1/internal/native-agent/project/inbox',
-        json({ sessionId }, bindingHeaders(sessionId, 'exa_inbox0000000'))
+        json({ sessionId }, bindingHeaders(sessionId, 'mesh_inbox0000000'))
       );
       expect(second.status).toBe(200);
       expect(((await second.json()) as { items: unknown[] }).items).toEqual([]);
     });
 
-    test('project inbox ack advances the managed external agent visible cursor without returning messages', async () => {
+    test('project inbox ack advances the managed MeshAgent visible cursor without returning messages', async () => {
       const handlers = buildHandlers(mockModel());
       t = serveTransport(kind, createHttpTransport(handlers));
       const sessionId = await createSession(t);
-      createManagedNativeSession(handlers, sessionId, 'exa_ack000000000');
+      createManagedNativeSession(handlers, sessionId, 'mesh_ack000000000');
       handlers.store.insertMessage('msg_ACK100000000', sessionId, 'ack me', '2026-06-30T00:00:01.000Z', 'user');
-      handlers.store.enqueueExternalAgentInboxItem('exa_ack000000000', 1);
+      handlers.store.enqueueMeshAgentInboxItem('mesh_ack000000000', 1);
 
       const visible = await t.fetch(
         '/v1/internal/native-agent/project/inbox',
-        json({ sessionId }, bindingHeaders(sessionId, 'exa_ack000000000'))
+        json({ sessionId }, bindingHeaders(sessionId, 'mesh_ack000000000'))
       );
       expect(visible.status).toBe(200);
 
       const ack = await t.fetch(
         '/v1/internal/native-agent/project/inbox/ack',
-        json({ sessionId }, bindingHeaders(sessionId, 'exa_ack000000000'))
+        json({ sessionId }, bindingHeaders(sessionId, 'mesh_ack000000000'))
       );
       expect(ack.status).toBe(200);
       expect(await ack.json()).toEqual({ ok: true, sessionId, cursor: 1 });
 
       const inbox = await t.fetch(
         '/v1/internal/native-agent/project/inbox',
-        json({ sessionId }, bindingHeaders(sessionId, 'exa_ack000000000'))
+        json({ sessionId }, bindingHeaders(sessionId, 'mesh_ack000000000'))
       );
       expect(inbox.status).toBe(200);
       expect(((await inbox.json()) as { items: unknown[] }).items).toEqual([]);
@@ -909,7 +900,7 @@ for (const kind of TRANSPORTS) {
       const handlers = buildHandlers(mockModel());
       t = serveTransport(kind, createHttpTransport(handlers));
       const sessionId = await createSession(t);
-      createManagedNativeSession(handlers, sessionId, 'exa_ackrace00000');
+      createManagedNativeSession(handlers, sessionId, 'mesh_ackrace00000');
       handlers.store.insertMessage(
         'msg_ACKRACE10000',
         sessionId,
@@ -917,11 +908,11 @@ for (const kind of TRANSPORTS) {
         '2026-07-19T01:46:42.000Z',
         'user'
       );
-      handlers.store.enqueueExternalAgentInboxItem('exa_ackrace00000', 1);
+      handlers.store.enqueueMeshAgentInboxItem('mesh_ackrace00000', 1);
 
       const firstInbox = await t.fetch(
         '/v1/internal/native-agent/project/inbox',
-        json({ sessionId }, bindingHeaders(sessionId, 'exa_ackrace00000'))
+        json({ sessionId }, bindingHeaders(sessionId, 'mesh_ackrace00000'))
       );
       expect(firstInbox.status).toBe(200);
       expect(
@@ -937,15 +928,15 @@ for (const kind of TRANSPORTS) {
       );
       const ack = await t.fetch(
         '/v1/internal/native-agent/project/inbox/ack',
-        json({ sessionId }, bindingHeaders(sessionId, 'exa_ackrace00000'))
+        json({ sessionId }, bindingHeaders(sessionId, 'mesh_ackrace00000'))
       );
       expect(ack.status).toBe(200);
       expect(await ack.json()).toEqual({ ok: true, sessionId, cursor: 1 });
 
-      handlers.store.enqueueExternalAgentInboxItem('exa_ackrace00000', 2);
+      handlers.store.enqueueMeshAgentInboxItem('mesh_ackrace00000', 2);
       const delayedInbox = await t.fetch(
         '/v1/internal/native-agent/project/inbox',
-        json({ sessionId }, bindingHeaders(sessionId, 'exa_ackrace00000'))
+        json({ sessionId }, bindingHeaders(sessionId, 'mesh_ackrace00000'))
       );
       expect(delayedInbox.status).toBe(200);
       const delayedBody = (await delayedInbox.json()) as {
@@ -970,15 +961,15 @@ for (const kind of TRANSPORTS) {
       const handlers = buildHandlers(mockModel());
       t = serveTransport(kind, createHttpTransport(handlers));
       const sessionId = await createSession(t);
-      createManagedNativeSession(handlers, sessionId, 'exa_runtimeinfo0');
+      createManagedNativeSession(handlers, sessionId, 'mesh_runtimeinfo0');
       handlers.store.insertMessage('msg_INFO10000000', sessionId, 'first pending', '2026-06-30T00:00:01.000Z', 'user');
       handlers.store.insertMessage('msg_INFO20000000', sessionId, 'second pending', '2026-06-30T00:00:02.000Z', 'user');
-      handlers.store.enqueueExternalAgentInboxItem('exa_runtimeinfo0', 1);
-      handlers.store.enqueueExternalAgentInboxItem('exa_runtimeinfo0', 2);
-      handlers.store.markExternalAgentInboxDelivered('exa_runtimeinfo0', handlers.store.maxMessageSeq(sessionId));
+      handlers.store.enqueueMeshAgentInboxItem('mesh_runtimeinfo0', 1);
+      handlers.store.enqueueMeshAgentInboxItem('mesh_runtimeinfo0', 2);
+      handlers.store.markMeshAgentInboxDelivered('mesh_runtimeinfo0', handlers.store.maxMessageSeq(sessionId));
 
       const res = await t.fetch('/v1/internal/native-agent/runtime/info', {
-        headers: bindingHeaders(sessionId, 'exa_runtimeinfo0')
+        headers: bindingHeaders(sessionId, 'mesh_runtimeinfo0')
       });
 
       expect(res.status).toBe(200);
@@ -986,20 +977,20 @@ for (const kind of TRANSPORTS) {
       expect(body).toMatchObject({
         agentId: 'codex',
         sessionId,
-        externalAgentSessionId: 'exa_runtimeinfo0',
+        meshSessionId: 'mesh_runtimeinfo0',
         lastDeliveredSeq: 2,
         lastVisibleSeq: 0,
         pendingInboxCount: 2
       });
       expect(body.runtime).toMatchObject({
-        id: 'exa_runtimeinfo0',
+        id: 'mesh_runtimeinfo0',
         sessionId,
         agentName: 'codex',
         provider: 'codex',
         workingPath: '/tmp/project',
         launchMode: 'app-server',
         runtimeRole: 'managed-project-agent',
-        agentRuntimeId: 'exa_runtimeinfo0',
+        agentRuntimeId: 'mesh_runtimeinfo0',
         state: 'running',
         session: { providerSessionRef: null },
         lastDeliveredSeq: 2,
@@ -1012,37 +1003,31 @@ for (const kind of TRANSPORTS) {
       expect(body.runtime && 'exitCode' in body.runtime).toBe(false);
     });
 
-    test('external agent observation endpoint reports unavailable for persisted managed sessions without history', async () => {
+    test('MeshAgent events endpoint returns an empty page for persisted managed sessions without provider events', async () => {
       const handlers = buildHandlers(mockModel());
       t = serveTransport(kind, createHttpTransport(handlers));
       const sessionId = await createSession(t);
-      createManagedNativeSession(handlers, sessionId, 'exa_observeuqrOV', 'codex', 'stopped');
+      createManagedNativeSession(handlers, sessionId, 'mesh_observeuqrOV', 'codex', 'stopped');
 
       const res = await t.fetch(
-        `/v1/external-agent-sessions/exa_observeuqrOV/observation?transcriptTargetId=${sessionId}`
+        `/v1/mesh/sessions/mesh_observeuqrOV/events/convenience?transcriptTargetId=${sessionId}`
       );
 
       expect(res.status).toBe(200);
-      expect(await res.json()).toMatchObject({
-        state: 'unavailable',
-        externalAgentSessionId: 'exa_observeuqrOV',
-        provider: 'codex',
-        reason: 'provider history unavailable'
-      });
+      expect(await res.json()).toEqual({ frames: [] });
     });
 
-    test('external agent observation endpoint no longer falls back to persisted managed output', async () => {
+    test('MeshAgent events endpoint does not fall back to persisted managed output', async () => {
       const handlers = buildHandlers(mockModel());
       t = serveTransport(kind, createHttpTransport(handlers));
       const sessionId = await createSession(t);
-      // A stopped managed session that has persisted output: the removed outputSnapshot fallback used
-      // to surface it as `state:'history'`. The raw/convenience observation planes replaced that path,
-      // so with no reachable provider history the endpoint now reports unavailable — the persisted
-      // output is deliberately not used as an observation source.
+      // A stopped managed session can retain output for diagnostics, but event pages read only the
+      // adapter-owned event source. Without reachable provider events the page is empty; persisted
+      // output is deliberately not reused as an event source.
       createManagedNativeSession(
         handlers,
         sessionId,
-        'exa_observes7pOD',
+        'mesh_observes7pOD',
         'codex',
         'stopped',
         '/tmp/project',
@@ -1050,16 +1035,11 @@ for (const kind of TRANSPORTS) {
       );
 
       const res = await t.fetch(
-        `/v1/external-agent-sessions/exa_observes7pOD/observation?transcriptTargetId=${sessionId}`
+        `/v1/mesh/sessions/mesh_observes7pOD/events/convenience?transcriptTargetId=${sessionId}`
       );
 
       expect(res.status).toBe(200);
-      expect(await res.json()).toEqual({
-        state: 'unavailable',
-        externalAgentSessionId: 'exa_observes7pOD',
-        provider: 'codex',
-        reason: 'provider history unavailable'
-      });
+      expect(await res.json()).toEqual({ frames: [] });
     });
   });
 }
@@ -1079,7 +1059,7 @@ describe('native agent CLI bridge real CLI process', () => {
     t = serveTransport('tcp', createHttpTransport(handlers));
     if (!t.baseUrl) throw new Error('tcp transport did not expose baseUrl');
     const sessionId = await createSession(t);
-    createManagedNativeSession(handlers, sessionId, 'exa_cli000000000');
+    createManagedNativeSession(handlers, sessionId, 'mesh_cli000000000');
     const tokenFile = join(dir, '.monad-agent-token');
     await writeFile(tokenFile, AGENT_TOKEN);
 
@@ -1091,7 +1071,7 @@ describe('native agent CLI bridge real CLI process', () => {
         MONAD_HOME: join(dir, 'home'),
         MONAD_SERVER_URL: t.baseUrl,
         MONAD_AGENT_TOKEN_FILE: tokenFile,
-        MONAD_EXTERNAL_AGENT_SESSION_ID: 'exa_cli000000000'
+        MONAD_MESH_SESSION_ID: 'mesh_cli000000000'
       },
       stdout: 'pipe',
       stderr: 'pipe'
@@ -1112,8 +1092,8 @@ describe('native agent CLI bridge real CLI process', () => {
     t = serveTransport('tcp', createHttpTransport(handlers));
     if (!t.baseUrl) throw new Error('tcp transport did not expose baseUrl');
     const sessionId = await createSession(t);
-    createManagedNativeSession(handlers, sessionId, 'exa_cli000000000', 'codex');
-    createManagedNativeSession(handlers, sessionId, 'exa_peer00000000', 'claude');
+    createManagedNativeSession(handlers, sessionId, 'mesh_cli000000000', 'codex');
+    createManagedNativeSession(handlers, sessionId, 'mesh_peer00000000', 'claude');
     const tokenFile = join(dir, '.monad-agent-token');
     await writeFile(tokenFile, AGENT_TOKEN);
 
@@ -1123,7 +1103,7 @@ describe('native agent CLI bridge real CLI process', () => {
       MONAD_HOME: join(dir, 'home'),
       MONAD_SERVER_URL: t.baseUrl,
       MONAD_AGENT_TOKEN_FILE: tokenFile,
-      MONAD_EXTERNAL_AGENT_SESSION_ID: 'exa_cli000000000'
+      MONAD_MESH_SESSION_ID: 'mesh_cli000000000'
     };
     const sent = Bun.spawn(['bun', 'apps/cli/src/main.ts', 'agent', 'send', '--to', 'claude', 'private cli note'], {
       cwd: repoRoot,

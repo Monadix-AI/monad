@@ -76,8 +76,8 @@ export function createProjectExperienceRuntime(
       addProjectMember: source.addProjectMember,
       removeProjectMember: source.removeProjectMember,
       updateProjectMemberSettings: source.updateProjectMemberSettings,
-      sendExternalAgentInput: source.sendExternalAgentInput,
-      stopExternalAgent: source.stopExternalAgent,
+      sendMeshAgentInput: source.sendMeshAgentInput,
+      stopMeshAgent: source.stopMeshAgent,
       switchExperience: opts.switchExperience
     }
   };

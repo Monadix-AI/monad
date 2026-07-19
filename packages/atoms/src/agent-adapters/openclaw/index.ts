@@ -1,9 +1,9 @@
-import type { ExternalAgentProviderAdapter } from '@monad/sdk-atom';
+import type { MeshAgentProviderAdapter } from '@monad/sdk-atom';
 
 import { makeAppServerCliAdapter } from '../app-server-jsonrpc.ts';
-import { createAppServerHistoryEventSource } from '../event-source.ts';
+import { createAppServerEventSource } from '../event-source.ts';
 import { createFrameworkSettingsImport } from '../settings-import/index.ts';
-import { openClawAppServerHooks, requestOpenClawHistoryPage } from './app-server.ts';
+import { openClawAppServerHooks, requestOpenClawEventPage } from './app-server.ts';
 import { openClawObservationProjection } from './observation.ts';
 
 // OpenClaw ships no models-list command; these are the models its docs advertise for `--model`.
@@ -35,7 +35,7 @@ const OPENCLAW_SUPPORTED_MODELS = ['openclaw-default'];
 
 // Real `gateway` app-server backend (verified live, see openclaw/app-server.ts) — uses `appServerHooks`
 // rather than `protocol` because OpenClaw's wire envelope isn't generic JSON-RPC.
-const baseOpenClawExternalAgentAdapter = makeAppServerCliAdapter({
+const baseOpenClawMeshAgentAdapter = makeAppServerCliAdapter({
   provider: 'openclaw',
   productIcon: 'openclaw',
   label: 'OpenClaw',
@@ -73,13 +73,13 @@ const baseOpenClawExternalAgentAdapter = makeAppServerCliAdapter({
   }
 });
 
-export const openClawExternalAgentAdapter: ExternalAgentProviderAdapter = {
-  ...baseOpenClawExternalAgentAdapter,
+export const openClawMeshAgentAdapter: MeshAgentProviderAdapter = {
+  ...baseOpenClawMeshAgentAdapter,
   observation: openClawObservationProjection,
-  events: createAppServerHistoryEventSource({
+  events: createAppServerEventSource({
     provider: 'openclaw',
     projection: openClawObservationProjection,
-    requestPage: requestOpenClawHistoryPage
+    requestPage: requestOpenClawEventPage
   }),
   settingsImport: createFrameworkSettingsImport('openclaw', 'OpenClaw'),
   // OpenClaw's managed runtime is app-server, whose JSON-RPC channel projects + resolves approvals —
@@ -87,12 +87,12 @@ export const openClawExternalAgentAdapter: ExternalAgentProviderAdapter = {
   // app-server backend, so it deliberately doesn't opt in.)
   supportsApprovalResolution: (launchMode) => launchMode === 'app-server',
   detect(probes) {
-    const preset = baseOpenClawExternalAgentAdapter.detect(probes);
+    const preset = baseOpenClawMeshAgentAdapter.detect(probes);
     return {
       ...preset,
       capabilities: {
         auth: preset.capabilities?.auth ?? 'pty',
-        history: 'provider-owned',
+        events: 'provider-owned',
         resume: preset.capabilities?.resume ?? 'pty',
         approval: preset.capabilities?.approval ?? 'provider-owned',
         approvalProxy: true,

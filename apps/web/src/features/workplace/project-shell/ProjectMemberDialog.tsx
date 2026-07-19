@@ -2,11 +2,8 @@ import type { ProjectController } from '../use-project';
 
 import { useEffect, useState } from 'react';
 
-import { ExternalAgentMemberDialog } from './ExternalAgentMemberDialog';
-import {
-  type ExternalAgentMemberDialogState,
-  externalAgentMemberDialogStateForMember
-} from './external-agent-member-dialog-model';
+import { MeshAgentMemberDialog } from './MeshAgentMemberDialog';
+import { type MeshAgentMemberDialogState, meshAgentMemberDialogStateForMember } from './mesh-agent-member-dialog-model';
 import { ProjectMemberSettingsDialog } from './ProjectMemberSettingsDialog';
 
 type ProjectMember = ProjectController['projectMembers'][number];
@@ -21,22 +18,22 @@ export function ProjectMemberDialog({
   room: ProjectController;
 }): React.ReactElement | null {
   const member = memberId ? room.projectMembers.find((candidate) => candidate.id === memberId) : undefined;
-  const [externalAgentInvite, setExternalAgentInvite] = useState<ExternalAgentMemberDialogState | null>(null);
+  const [meshAgentInvite, setMeshAgentInvite] = useState<MeshAgentMemberDialogState | null>(null);
 
   useEffect(() => {
     if (!member) {
-      setExternalAgentInvite(null);
+      setMeshAgentInvite(null);
       return;
     }
-    setExternalAgentInvite(externalAgentMemberDialogStateForMember(room, member));
+    setMeshAgentInvite(meshAgentMemberDialogStateForMember(room, member));
   }, [member, room]);
 
   if (!member) return null;
-  if (member.type === 'external-agent') {
+  if (member.type === 'mesh-agent') {
     return (
-      <ExternalAgentMemberDialog
-        invite={externalAgentInvite}
-        onChange={setExternalAgentInvite}
+      <MeshAgentMemberDialog
+        invite={meshAgentInvite}
+        onChange={setMeshAgentInvite}
         onClose={onClose}
         room={room}
       />

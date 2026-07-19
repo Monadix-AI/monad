@@ -1,19 +1,24 @@
-import type { ExternalAgentHistoryPageRequest } from '@monad/protocol';
-import type { ExternalAgentProviderAdapter, ExternalAgentRuntimeHandle } from '@monad/sdk-atom';
+import type {
+  MeshAgentProviderAdapter,
+  MeshAgentProviderEventPageRequestContext,
+  MeshAgentRuntimeHandle
+} from '@monad/sdk-atom';
 
-import { ExternalAgentError } from '@monad/sdk-atom';
+import { MeshAgentError } from '@monad/sdk-atom';
 
 import { compactObject } from '../adapter-shared.ts';
 import { jsonRpcNotification, jsonRpcRequest, jsonRpcResponse, jsonRpcResponseId } from '../jsonrpc.ts';
 import { resizePty, sendPtyInput, stopPty } from '../pty.ts';
-import { buildCodexInitialTurnsPage } from './history.ts';
+import { buildCodexInitialTurnsPage } from './event-pages.ts';
+import { codexRuntimeState } from './state.ts';
 
 export function initializeCodex(
-  handle: Parameters<NonNullable<ExternalAgentProviderAdapter['initialize']>>[0],
-  context: Parameters<NonNullable<ExternalAgentProviderAdapter['initialize']>>[1]
+  handle: Parameters<NonNullable<MeshAgentProviderAdapter['initialize']>>[0],
+  context: Parameters<NonNullable<MeshAgentProviderAdapter['initialize']>>[1]
 ): void {
   if (handle.launchMode !== 'app-server') return;
-  if (!handle.appServer) throw new Error('external agent session has no app-server initialization bridge');
+  if (!handle.appServer) throw new Error('MeshAgent session has no app-server initialization bridge');
+  const state = codexRuntimeState(handle);
   const initializeId = handle.nextRequestId?.() ?? 0;
   const threadId = handle.nextRequestId?.() ?? 1;
   handle.pendingRequests?.set(initializeId, 'initialize');
@@ -38,11 +43,11 @@ export function initializeCodex(
   const threadFrame = context.providerSessionRef
     ? jsonRpcRequest('thread/resume', threadId, threadParams)
     : jsonRpcRequest('thread/start', threadId, threadParams);
-  handle.threadResumeRetry = context.providerSessionRef ? { params: threadParams, attempts: 0 } : undefined;
+  state.threadResumeRetry = context.providerSessionRef ? { params: threadParams, attempts: 0 } : undefined;
   // Park the thread request until the initialize response arrives (see parseCodexClientResponse); send
   // only the handshake now. A handle with no by-id ledger (single-shot probes) can't route the
   // response back, so fall back to the original send-it-all ordering there.
-  handle.deferredThreadFrame = threadFrame;
+  state.deferredThreadFrame = threadFrame;
   const handshake = [
     jsonRpcRequest('initialize', initializeId, {
       clientInfo: { name: 'monad', title: 'Monad', version: '0.1.0' },
@@ -55,19 +60,20 @@ export function initializeCodex(
     jsonRpcNotification('initialized')
   ];
   const frames = handle.pendingRequests ? handshake : [...handshake, threadFrame];
-  if (!handle.pendingRequests) handle.deferredThreadFrame = undefined;
+  if (!handle.pendingRequests) state.deferredThreadFrame = undefined;
   for (const frame of frames) handle.appServer.send(frame);
 }
 
-export function sendCodexInput(handle: Parameters<ExternalAgentProviderAdapter['sendInput']>[0], input: string): void {
+export function sendCodexInput(handle: Parameters<MeshAgentProviderAdapter['sendInput']>[0], input: string): void {
   if (handle.launchMode !== 'app-server') {
     sendPtyInput(handle, input);
     return;
   }
-  if (!handle.appServer) throw new Error('external agent session has no app-server input bridge');
-  if (!handle.providerSessionRef) throw new Error('external agent app-server thread is not ready');
-  handle.lastTurnInput = input;
-  handle.turnRecoveries = 0;
+  if (!handle.appServer) throw new Error('MeshAgent session has no app-server input bridge');
+  if (!handle.providerSessionRef) throw new Error('MeshAgent app-server thread is not ready');
+  const state = codexRuntimeState(handle);
+  state.lastTurnInput = input;
+  state.turnRecoveries = 0;
   const turnId = handle.nextRequestId?.() ?? Date.now();
   handle.pendingRequests?.set(turnId, 'turn');
   handle.appServer.send(
@@ -78,46 +84,45 @@ export function sendCodexInput(handle: Parameters<ExternalAgentProviderAdapter['
   );
 }
 
-export function interruptCodex(handle: Parameters<NonNullable<ExternalAgentProviderAdapter['interrupt']>>[0]): void {
+export function interruptCodex(handle: Parameters<NonNullable<MeshAgentProviderAdapter['interrupt']>>[0]): void {
   if (handle.launchMode !== 'app-server' || !handle.appServer) return;
-  if (!handle.providerSessionRef || !handle.currentTurnId) return;
+  const currentTurnId = codexRuntimeState(handle).currentTurnId;
+  if (!handle.providerSessionRef || !currentTurnId) return;
   handle.appServer.send(
     jsonRpcRequest('turn/interrupt', handle.nextRequestId?.() ?? Date.now(), {
       threadId: handle.providerSessionRef,
-      turnId: handle.currentTurnId
+      turnId: currentTurnId
     })
   );
 }
 
-export function steerCodex(
-  handle: Parameters<NonNullable<ExternalAgentProviderAdapter['steer']>>[0],
-  input: string
-): void {
+export function steerCodex(handle: Parameters<NonNullable<MeshAgentProviderAdapter['steer']>>[0], input: string): void {
   if (handle.launchMode !== 'app-server' || !handle.appServer) return;
-  if (!handle.providerSessionRef || !handle.currentTurnId) return;
+  const currentTurnId = codexRuntimeState(handle).currentTurnId;
+  if (!handle.providerSessionRef || !currentTurnId) return;
   handle.appServer.send(
     jsonRpcRequest('turn/steer', handle.nextRequestId?.() ?? Date.now(), {
       threadId: handle.providerSessionRef,
-      expectedTurnId: handle.currentTurnId,
+      expectedTurnId: currentTurnId,
       input: [{ type: 'text', text: input }]
     })
   );
 }
 
-export function requestCodexHistoryPage(
-  handle: ExternalAgentRuntimeHandle,
-  request: ExternalAgentHistoryPageRequest
+export function requestCodexEventPage(
+  handle: MeshAgentRuntimeHandle,
+  request: MeshAgentProviderEventPageRequestContext['request']
 ): string | number {
   if (handle.launchMode !== 'app-server') {
-    throw new ExternalAgentError('unsupported_capability', 'Codex history paging requires app-server mode');
+    throw new MeshAgentError('unsupported_capability', 'Codex event paging requires app-server mode');
   }
   if (!handle.appServer)
-    throw new ExternalAgentError('provider_protocol_error', 'external agent session has no app-server history bridge');
+    throw new MeshAgentError('provider_protocol_error', 'MeshAgent session has no app-server event bridge');
   if (!handle.providerSessionRef) {
-    throw new ExternalAgentError('provider_not_logged_in', 'external agent app-server thread is not ready');
+    throw new MeshAgentError('provider_not_logged_in', 'MeshAgent app-server thread is not ready');
   }
   const id = handle.nextRequestId?.() ?? Date.now();
-  handle.pendingRequests?.set(id, 'historyPage');
+  handle.pendingRequests?.set(id, 'eventPage');
   handle.appServer.send(
     jsonRpcRequest(
       'thread/turns/list',
@@ -158,16 +163,16 @@ function buildCodexApprovalResponse(
 }
 
 export function resolveCodexApproval(
-  handle: Parameters<ExternalAgentProviderAdapter['resolveApproval']>[0],
-  resolution: Parameters<ExternalAgentProviderAdapter['resolveApproval']>[1]
+  handle: Parameters<MeshAgentProviderAdapter['resolveApproval']>[0],
+  resolution: Parameters<MeshAgentProviderAdapter['resolveApproval']>[1]
 ): void {
   if (handle.launchMode !== 'app-server') return;
-  if (!handle.appServer) throw new Error('external agent session has no app-server approval bridge');
+  if (!handle.appServer) throw new Error('MeshAgent session has no app-server approval bridge');
   handle.appServer.send(buildCodexApprovalResponse(resolution.requestId, resolution.request, resolution.allow));
 }
 
 export function resizeCodex(
-  handle: Parameters<ExternalAgentProviderAdapter['resize']>[0],
+  handle: Parameters<MeshAgentProviderAdapter['resize']>[0],
   cols: number,
   rows: number
 ): void {
@@ -175,7 +180,7 @@ export function resizeCodex(
   resizePty(handle, cols, rows);
 }
 
-export function stopCodex(handle: Parameters<ExternalAgentProviderAdapter['stop']>[0]): void {
+export function stopCodex(handle: Parameters<MeshAgentProviderAdapter['stop']>[0]): void {
   if (handle.launchMode === 'app-server') {
     handle.appServer?.close();
     handle.kill('SIGTERM');

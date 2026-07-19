@@ -36,7 +36,7 @@ export function getPath(root: unknown, path: string[]): unknown {
   return cur;
 }
 
-export function recordAt(root: unknown, path: string[]): Record<string, unknown> | undefined {
+function _recordAt(root: unknown, path: string[]): Record<string, unknown> | undefined {
   const value = getPath(root, path);
   return isRecord(value) ? value : undefined;
 }

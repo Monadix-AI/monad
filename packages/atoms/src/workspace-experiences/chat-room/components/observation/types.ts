@@ -1,9 +1,9 @@
 import type { CommandCardView, FileReadCardView } from '@monad/ui';
 import type React from 'react';
-import type { ExternalAgentStreamView } from '../../../experience/types.ts';
+import type { MeshAgentStreamView } from '../../../experience/types.ts';
 import type { CodexMcpStartupUpdate } from './codex-startup-progress.tsx';
 
-export type ObservationItem = ExternalAgentStreamView['items'][number];
+export type ObservationItem = MeshAgentStreamView['items'][number];
 
 // Neutral events carry no per-event `source`; the observed agent's `provider` is a frame-level fact,
 // threaded in from the stream and used only for the card's source badge.

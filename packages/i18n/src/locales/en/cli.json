@@ -358,7 +358,7 @@
   "cli.tui.composer.busyHint": "Enter queue · Ctrl+Enter steer · Ctrl+C stop{{queued}}",
   "cli.tui.composer.focusHint": "Tab to compose…",
   "cli.tui.projection.title": "External agent projection",
-  "cli.tui.projection.empty": "No external-agent activity in this session.",
+  "cli.tui.projection.empty": "No mesh-agent activity in this session.",
   "cli.tui.projection.readOnly": "read-only · h/PageUp history · provider output is normalized by daemon",
   "cli.tui.projection.historyLoading": "Loading older projection…",
   "cli.tui.projection.historyUnavailable": "History is unavailable for this runtime."

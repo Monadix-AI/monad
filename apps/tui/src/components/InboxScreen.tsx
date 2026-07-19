@@ -1,10 +1,6 @@
 import type { ApprovalInboxItem, InboxItem, ProjectId, SessionId } from '@monad/protocol';
 
-import {
-  useApproveExternalAgentSessionMutation,
-  useApproveToolMutation,
-  useListMentionInboxQuery
-} from '@monad/client-rtk';
+import { useApproveMeshSessionMutation, useApproveToolMutation, useListMentionInboxQuery } from '@monad/client-rtk';
 import { Box, Text, useInput } from 'ink';
 import { useEffect, useState } from 'react';
 
@@ -34,17 +30,17 @@ export function InboxScreen({
   const [pending, setPending] = useState<PendingResolution | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [approveTool] = useApproveToolMutation();
-  const [approveExternalAgent] = useApproveExternalAgentSessionMutation();
+  const [approveMeshAgent] = useApproveMeshSessionMutation();
   useEffect(() => setCursor((value) => Math.min(value, Math.max(0, items.length - 1))), [items.length]);
 
   const resolve = async (resolution: PendingResolution) => {
     setError(null);
     const { allow, item } = resolution;
     try {
-      if (item.approvalKind === 'external-agent' && item.externalAgentSessionId) {
-        await approveExternalAgent({
+      if (item.approvalKind === 'mesh-agent' && item.meshSessionId) {
+        await approveMeshAgent({
           allow,
-          id: item.externalAgentSessionId,
+          id: item.meshSessionId,
           requestId: item.id,
           transcriptTargetId: item.sessionId,
           ...(allow || !resolution.reason.trim() ? {} : { reason: resolution.reason.trim() })

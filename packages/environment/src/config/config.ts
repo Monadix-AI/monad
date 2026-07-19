@@ -243,7 +243,7 @@ export function createDefaultConfig(displayName: string): MonadConfig {
     },
     mcpServers: [],
     acpAgents: [],
-    externalAgents: [],
+    meshAgents: [],
     peers: [],
     browser: { enabled: false, vision: false, headless: true },
     computer: { enabled: false, command: 'uvx', args: ['computer-control-mcp@latest'] },

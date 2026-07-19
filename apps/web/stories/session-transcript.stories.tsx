@@ -113,10 +113,10 @@ export const SkillTool: Story = {
   )
 };
 
-export const ExternalAgentLogin: Story = {
+export const MeshAgentLogin: Story = {
   render: () => (
     <StoryCase>
-      <div data-story-case="external-agent-login">
+      <div data-story-case="mesh-agent-login">
         <ExternalLoginExample />
       </div>
     </StoryCase>

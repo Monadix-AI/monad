@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { claudeCodeExternalAgentAdapter } from '../../src/agent-adapters/claude-code/index.ts';
+import { claudeCodeMeshAgentAdapter } from '../../src/agent-adapters/claude-code/index.ts';
 
 const authFailureLine = JSON.stringify({
   type: 'assistant',
@@ -15,7 +15,7 @@ const authFailureLine = JSON.stringify({
 });
 
 test('maps a top-level authentication_failed stream event to connection_required', () => {
-  const events = claudeCodeExternalAgentAdapter.parseOutput?.(`${authFailureLine}\n`) ?? [];
+  const events = claudeCodeMeshAgentAdapter.parseOutput?.(`${authFailureLine}\n`) ?? [];
   expect(events).toEqual([
     {
       type: 'connection_required',
@@ -26,7 +26,7 @@ test('maps a top-level authentication_failed stream event to connection_required
 
 test('auth failure without content text falls back to a fixed reason', () => {
   const line = JSON.stringify({ type: 'assistant', message: { content: [] }, error: 'authentication_failed' });
-  const events = claudeCodeExternalAgentAdapter.parseOutput?.(`${line}\n`) ?? [];
+  const events = claudeCodeMeshAgentAdapter.parseOutput?.(`${line}\n`) ?? [];
   expect(events).toEqual([
     {
       type: 'connection_required',
@@ -43,7 +43,7 @@ test('maps an error result with a success subtype to connection_required', () =>
     result: 'Not logged in · Please run /login',
     permission_denials: []
   });
-  const events = claudeCodeExternalAgentAdapter.parseOutput?.(`${line}\n`) ?? [];
+  const events = claudeCodeMeshAgentAdapter.parseOutput?.(`${line}\n`) ?? [];
   expect(events).toEqual([
     {
       type: 'connection_required',
@@ -60,7 +60,7 @@ test('deduplicates matching assistant and result authentication failures', () =>
     result: 'Not logged in · Please run /login',
     permission_denials: []
   });
-  const events = claudeCodeExternalAgentAdapter.parseOutput?.(`${authFailureLine}\n${resultLine}\n`) ?? [];
+  const events = claudeCodeMeshAgentAdapter.parseOutput?.(`${authFailureLine}\n${resultLine}\n`) ?? [];
   expect(events).toEqual([
     {
       type: 'connection_required',
@@ -76,6 +76,6 @@ test('ordinary assistant events keep flowing as agent output, not connection_req
     result: 'done',
     permission_denials: []
   });
-  const events = claudeCodeExternalAgentAdapter.parseOutput?.(`${line}\n`) ?? [];
+  const events = claudeCodeMeshAgentAdapter.parseOutput?.(`${line}\n`) ?? [];
   expect(events).toEqual([{ type: 'agent_message', payload: { text: 'done', final: true } }]);
 });

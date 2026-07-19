@@ -15,9 +15,9 @@ test('mentionSegments extracts strict agent mention tokens', () => {
   ]);
 });
 
-test('mentionSegments extracts leading external agent mentions before message text', () => {
-  expect(mentionSegments('@[name="codex" id="external-agent:codex"] inspect repo')).toEqual([
-    { kind: 'mention', name: 'codex', id: 'external-agent:codex' },
+test('mentionSegments extracts leading MeshAgent mentions before message text', () => {
+  expect(mentionSegments('@[name="codex" id="mesh-agent:codex"] inspect repo')).toEqual([
+    { kind: 'mention', name: 'codex', id: 'mesh-agent:codex' },
     { kind: 'text', text: ' inspect repo' }
   ]);
 });
@@ -35,12 +35,10 @@ test('mentionToken escapes metadata values', () => {
 
 test('messageTextSegments preserves mentions and links bare web URLs without sentence punctuation', () => {
   expect(
-    messageTextSegments(
-      'Ask @[name="codex" id="external-agent:codex"] to open https://docs.example.com/a?q=1, then reply.'
-    )
+    messageTextSegments('Ask @[name="codex" id="mesh-agent:codex"] to open https://docs.example.com/a?q=1, then reply.')
   ).toEqual([
     { kind: 'text', text: 'Ask ' },
-    { kind: 'mention', name: 'codex', id: 'external-agent:codex' },
+    { kind: 'mention', name: 'codex', id: 'mesh-agent:codex' },
     { kind: 'text', text: ' to open ' },
     { kind: 'url', href: 'https://docs.example.com/a?q=1', text: 'https://docs.example.com/a?q=1' },
     { kind: 'text', text: ', then reply.' }

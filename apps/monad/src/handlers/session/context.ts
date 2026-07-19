@@ -8,9 +8,9 @@ import type { ConfigAccess } from '#/config/manager.ts';
 import type { CommandBundle } from '#/handlers/commands/index.ts';
 import type { DelegationService } from '#/services/delegation/delegation.ts';
 import type { EventBus, EventSink } from '#/services/event-bus.ts';
-import type { ExternalAgentHost } from '#/services/external-agent/host/index.ts';
 import type { I18nService } from '#/services/i18n.ts';
 import type { KvService } from '#/services/kv.ts';
+import type { MeshAgentHost } from '#/services/mesh-agent/host/index.ts';
 import type { MessageIngress } from '#/services/messages/types.ts';
 import type { OversightService } from '#/services/oversight.ts';
 import type { RoundCache } from '#/services/round-cache.ts';
@@ -61,7 +61,7 @@ export interface SessionDeps {
   /** Per-session fs sandbox roots from the bound Studio agent's `sandbox` override (global ceiling
    * applied). Returns undefined when there's no override → the caller inherits the daemon default. */
   agentSandboxRoots?: (sessionId: SessionId) => string[] | undefined;
-  externalAgentHost?: Pick<ExternalAgentHost, 'preflight' | 'input' | 'list' | 'start' | 'stop' | 'stopSession'>;
+  meshAgentHost?: Pick<MeshAgentHost, 'preflight' | 'input' | 'list' | 'start' | 'stop' | 'stopSession'>;
   messageIngress?: MessageIngress;
 }
 

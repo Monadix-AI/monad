@@ -61,7 +61,7 @@ describe('stream transcript reconciliation', () => {
         data: { scope: { kind: 'agent', id: 'agt_old' }, facts: ['old'] },
         seq: '2'
       },
-      { kind: 'system', id: 'external-agent-warning:1', text: 'Do not treat as context.', seq: '3' },
+      { kind: 'system', id: 'mesh-agent-warning:1', text: 'Do not treat as context.', seq: '3' },
       { kind: 'system', id: 'context-handoff:1', text: 'Move this turn to a fresh session.', seq: '4' },
       { kind: 'context', id: 'context', usage: usage(900), seq: '5' },
       {

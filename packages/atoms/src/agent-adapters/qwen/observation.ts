@@ -1,7 +1,7 @@
-import type { ExternalAgentObservationEvent } from '@monad/protocol';
+import type { MeshAgentObservationEvent } from '@monad/protocol';
 import type {
-  ExternalAgentObservationJsonRecordEntry,
-  ExternalAgentObservationProjector,
+  MeshAgentObservationJsonRecordEntry,
+  MeshAgentObservationProjector,
   ObservationRole
 } from '../observation-projection.ts';
 
@@ -68,7 +68,7 @@ function qwenContentEvents(args: {
   providerEventType: string;
   raw: unknown;
   textRole: Extract<ObservationRole, 'agent' | 'user'>;
-}): ExternalAgentObservationEvent[] {
+}): MeshAgentObservationEvent[] {
   if (typeof args.content === 'string') {
     return observation({
       id: `${args.id}:json:${args.recordIndex}:message`,
@@ -133,7 +133,7 @@ export function qwenRecordEvents(
   id: string,
   record: QwenObservationMessage,
   recordIndex: number
-): ExternalAgentObservationEvent[] {
+): MeshAgentObservationEvent[] {
   const base = recordIndex === 0 ? id : `${id}:json:${recordIndex}`;
   if (isQwenResultMessage(record)) {
     const subtype = textValue(record.subtype);
@@ -238,16 +238,14 @@ export function qwenRecordEvents(
   return [];
 }
 
-function qwenHistoryEntries(
-  entries: ExternalAgentObservationJsonRecordEntry[]
-): ExternalAgentObservationJsonRecordEntry[] {
+function qwenHistoryEntries(entries: MeshAgentObservationJsonRecordEntry[]): MeshAgentObservationJsonRecordEntry[] {
   return entries.filter((entry) => entry.record.type !== 'stream_event');
 }
 
 export const qwenObservationProjection = {
-  checkpoint: (event: ExternalAgentObservationEvent) => textValue(recordValue(event.provenance.rawEvents[0])?.uuid),
-  identity: (event: ExternalAgentObservationEvent) => textValue(recordValue(event.provenance.rawEvents[0])?.uuid),
-  historyEntries: qwenHistoryEntries,
+  checkpoint: (event: MeshAgentObservationEvent) => textValue(recordValue(event.provenance.rawEvents[0])?.uuid),
+  identity: (event: MeshAgentObservationEvent) => textValue(recordValue(event.provenance.rawEvents[0])?.uuid),
+  eventEntries: qwenHistoryEntries,
   classifyActivity: classifyObservationActivity,
   isStreamingFragment: isStreamingObservationFragment,
   recordProjectors: [
@@ -257,4 +255,4 @@ export const qwenObservationProjection = {
         isQwenObservationMessage(record) ? qwenRecordEvents(id, record, recordIndex) : []
     }
   ]
-} satisfies ExternalAgentObservationProjector;
+} satisfies MeshAgentObservationProjector;

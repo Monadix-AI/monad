@@ -74,7 +74,7 @@
     "quality:fix": "bun run scripts/quality-gate.ts fix",
     "quality:precommit": "bun run scripts/quality-gate.ts precommit",
     "setup": "bun run scripts/dev-init.ts",
-    "smoke:external-agent-managed": "bun run scripts/external-agent-managed-smoke.ts",
+    "smoke:mesh-agent-managed": "bun run scripts/mesh-agent-managed-smoke.ts",
     "storybook": "bun run storybook:web",
     "storybook:ui": "bun run --cwd packages/ui storybook",
     "storybook:web": "bun run --cwd apps/web storybook",

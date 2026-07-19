@@ -63,10 +63,10 @@ async function installInitOnboardingApiMock(page: Page) {
     if (method === 'GET' && path === '/v1/workplace/projects') {
       return route.fulfill(json({ projects: [], total: 0, hasMore: false }));
     }
-    if (method === 'GET' && path === '/v1/settings/external-agents') {
+    if (method === 'GET' && path === '/v1/mesh/agents') {
       return route.fulfill(json({ agents: [] }));
     }
-    if (method === 'GET' && path === '/v1/settings/external-agents/presets') {
+    if (method === 'GET' && path === '/v1/mesh/agents/presets') {
       return route.fulfill(
         json({
           presets: [
@@ -118,7 +118,7 @@ test.describe('init onboarding', () => {
 
     await page.goto('/init');
     await page.getByRole('button', { name: /Configure Monad Mesh/ }).click();
-    await expect(page.getByRole('heading', { name: 'Connect external agents' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Connect MeshAgents' })).toBeVisible();
     await expect(page.getByText('Codex', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Skip for now' }).click();
     await expect(page).toHaveURL(/\/$/);
@@ -134,9 +134,9 @@ test.describe('init onboarding', () => {
     await expect(page).toHaveURL(/\/studio\/runtime$/);
     await expect(page.getByRole('heading', { name: 'Runtime overview' })).toBeVisible();
 
-    await page.goto('/studio/externalAgents');
+    await page.goto('/studio/meshAgents');
 
-    await expect(page).toHaveURL(/\/studio\/externalAgents$/);
+    await expect(page).toHaveURL(/\/studio\/meshAgents$/);
     await expect(page.getByText('Codex', { exact: true })).toBeVisible();
   });
 });

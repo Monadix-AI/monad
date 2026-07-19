@@ -1,7 +1,7 @@
-import type { ExternalAgentObservationEvent } from '@monad/protocol';
+import type { MeshAgentObservationEvent } from '@monad/protocol';
 import type {
-  ExternalAgentObservationJsonRecordEntry,
-  ExternalAgentObservationProjector
+  MeshAgentObservationJsonRecordEntry,
+  MeshAgentObservationProjector
 } from '../../observation-projection.ts';
 
 import {
@@ -33,7 +33,7 @@ function codexHistoryItemId(record: Record<string, unknown>): string | undefined
   return textValue(params?.itemId, recordValue(params?.item)?.id);
 }
 
-function codexCompletedHistoryItemIds(entries: ExternalAgentObservationJsonRecordEntry[]): Set<string> {
+function codexCompletedHistoryItemIds(entries: MeshAgentObservationJsonRecordEntry[]): Set<string> {
   const completed = new Set<string>();
   for (const entry of entries) {
     if (textValue(entry.record.method) !== 'item/completed') continue;
@@ -53,21 +53,19 @@ function isCodexIntermediateHistoryRecord(record: Record<string, unknown>, compl
   );
 }
 
-function codexHistoryEntries(
-  entries: ExternalAgentObservationJsonRecordEntry[]
-): ExternalAgentObservationJsonRecordEntry[] {
+function codexHistoryEntries(entries: MeshAgentObservationJsonRecordEntry[]): MeshAgentObservationJsonRecordEntry[] {
   const completedItemIds = codexCompletedHistoryItemIds(entries);
   if (completedItemIds.size === 0) return entries;
   return entries.filter((entry) => !isCodexIntermediateHistoryRecord(entry.record, completedItemIds));
 }
 
-function codexObservationIdentity(event: ExternalAgentObservationEvent): string | undefined {
+function codexObservationIdentity(event: MeshAgentObservationEvent): string | undefined {
   const raw = recordValue(event.provenance.rawEvents[0]);
   const params = recordValue(raw?.params);
   return textValue(params?.turnId, recordValue(params?.turn)?.id);
 }
 
-function codexObservationCheckpoint(event: ExternalAgentObservationEvent): string | undefined {
+function codexObservationCheckpoint(event: MeshAgentObservationEvent): string | undefined {
   const raw = recordValue(event.provenance.rawEvents[0]);
   return textValue(raw?.method) === 'turn/completed' ? codexObservationIdentity(event) : undefined;
 }
@@ -75,7 +73,7 @@ function codexObservationCheckpoint(event: ExternalAgentObservationEvent): strin
 export const codexObservationProjection = {
   checkpoint: codexObservationCheckpoint,
   identity: codexObservationIdentity,
-  historyEntries: codexHistoryEntries,
+  eventEntries: codexHistoryEntries,
   usageRecords: codexUsageRecordsFromRecord,
   messageGroup: codexObservationMessageGroupAdapter,
   classifyActivity: classifyObservationActivity,
@@ -94,4 +92,4 @@ export const codexObservationProjection = {
     { parse: ({ id, record, recordIndex }) => codexAppServerTurnsPageRecordEvents(id, record, recordIndex) },
     { parse: ({ id, record, recordIndex }) => codexExecRecordEvents(id, record, recordIndex) }
   ]
-} satisfies ExternalAgentObservationProjector;
+} satisfies MeshAgentObservationProjector;

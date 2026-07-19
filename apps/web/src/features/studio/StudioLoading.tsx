@@ -568,7 +568,7 @@ export function AcpAgentsStudioLoading() {
   );
 }
 
-export function ExternalAgentsStudioLoading() {
+export function MeshAgentsStudioLoading() {
   return (
     <PanelFrame>
       <StudioHeaderSkeleton
@@ -577,7 +577,7 @@ export function ExternalAgentsStudioLoading() {
       />
       <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden p-4">
         <PresetPanelSkeleton />
-        {keys('external-agent', 3).map((key) => (
+        {keys('mesh-agent', 3).map((key) => (
           <ListCardSkeleton
             accessory="toggle"
             key={key}
@@ -628,7 +628,7 @@ const STUDIO_LOADING_COMPONENTS: Partial<Record<StudioSectionId, ComponentType>>
   atoms: AtomsStudioLoading,
   capabilities: CapabilitiesStudioLoading,
   channels: ChannelsStudioLoading,
-  externalAgents: ExternalAgentsStudioLoading,
+  meshAgents: MeshAgentsStudioLoading,
   graph: MemoryGraphStudioLoading,
   hooks: HooksStudioLoading,
   import: ImportStudioLoading,

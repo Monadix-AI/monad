@@ -1,24 +1,13 @@
-import type {
-  AgentObservationEvent,
-  ExternalAgentObservationAccessResponse,
-  ExternalAgentUiObservationFrame,
-  ExternalAgentUsageResponse,
-  NativeAgentDeliveryId,
-  NativeAgentObservationProjection
-} from '@monad/protocol';
-import type { ExternalAgentUsageLimitMeter } from '../../experience/external-agent-observation/external-agent-observation.ts';
-import type { ExternalAgentStreamView, Participant } from '../../experience/types.ts';
+import type { MeshAgentUsageResponse, NativeAgentDeliveryId } from '@monad/protocol';
+import type { MeshAgentUsageLimitMeter } from '../../experience/mesh-agent-observation/mesh-agent-observation.ts';
+import type { MeshAgentStreamView, Participant } from '../../experience/types.ts';
 
-import { nativeAgentObservationProjectionSchema } from '@monad/protocol';
-
-import { toAgentObservationEvent } from '../../../agent-adapters/neutral-observation.ts';
 import {
-  externalAgentStreamItems,
-  externalAgentUsageLimitMeter,
-  externalAgentUsageLimitMeterFromResponse
-} from '../../experience/external-agent-observation/external-agent-observation.ts';
+  meshAgentUsageLimitMeter,
+  meshAgentUsageLimitMeterFromResponse
+} from '../../experience/mesh-agent-observation/mesh-agent-observation.ts';
 
-function newestStream(streams: ExternalAgentStreamView[]): ExternalAgentStreamView | undefined {
+function newestStream(streams: MeshAgentStreamView[]): MeshAgentStreamView | undefined {
   return [...streams].sort((a, b) => {
     const byObservedAt = (b.observedAt ?? '').localeCompare(a.observedAt ?? '');
     return byObservedAt === 0 ? b.id.localeCompare(a.id) : byObservedAt;
@@ -31,19 +20,19 @@ export function agentObservationStream(
         agentId?: string;
         agentName?: string;
         deliveryId?: NativeAgentDeliveryId;
-        externalAgentSessionId?: string;
+        meshSessionId?: string;
       }
     | null
     | undefined,
-  streams: readonly ExternalAgentStreamView[]
-): ExternalAgentStreamView | undefined {
+  streams: readonly MeshAgentStreamView[]
+): MeshAgentStreamView | undefined {
   if (!observation) return undefined;
-  if (observation.externalAgentSessionId) {
-    return streams.find((stream) => stream.id === observation.externalAgentSessionId);
+  if (observation.meshSessionId) {
+    return streams.find((stream) => stream.id === observation.meshSessionId);
   }
   const names = [observation.agentId, observation.agentName].filter((value): value is string => Boolean(value));
   if (names.length === 0) return undefined;
-  const matchesAgent = (stream: ExternalAgentStreamView) => {
+  const matchesAgent = (stream: MeshAgentStreamView) => {
     const streamNames = [stream.agentName, stream.templateAgentName, ...(stream.agentAliases ?? [])].filter(
       (value): value is string => Boolean(value)
     );
@@ -59,11 +48,11 @@ export function observedRailAgent(
         agentId?: string;
         agentName?: string;
         deliveryId?: NativeAgentDeliveryId;
-        externalAgentSessionId?: string;
+        meshSessionId?: string;
       }
     | null
     | undefined,
-  observedStream: ExternalAgentStreamView | undefined,
+  observedStream: MeshAgentStreamView | undefined,
   agents: readonly Participant[]
 ): Participant | undefined {
   if (!observation) return undefined;
@@ -108,106 +97,14 @@ export function sortedProjectRailAgents(agents: readonly Participant[]): Partici
   });
 }
 
-export function observationProjectionFromAccess(
-  stream: ExternalAgentStreamView | undefined,
-  access: ExternalAgentObservationAccessResponse | undefined,
-  deliveryId?: NativeAgentDeliveryId
-): NativeAgentObservationProjection | undefined {
-  if (!stream || !access) return undefined;
-  const projectedDeliveryId = access.deliveryId ?? deliveryId;
-  if (access.state === 'unavailable') {
-    return nativeAgentObservationProjectionSchema.parse({
-      state: 'unavailable',
-      externalAgentSessionId: stream.id,
-      ...(projectedDeliveryId ? { deliveryId: projectedDeliveryId } : {}),
-      ...(access.turn ? { turn: access.turn } : {}),
-      provider: access.provider,
-      reason: access.reason
-    });
-  }
-  // The daemon includes normalized `events` on full snapshots (the poll path, and the SSE's first
-  // frame). The SSE hub's steady-state pushes carry only the folded `output` and no `events`, so
-  // re-derive them from `output` with the same client parser — otherwise every delta frame would
-  // blank the panel until the next full snapshot.
-  const events =
-    access.events && access.events.length > 0
-      ? access.events
-      : access.output
-        ? externalAgentStreamItems({
-            id: stream.id,
-            provider: access.provider ?? stream.provider,
-            output: access.output
-          })
-        : [];
-  return nativeAgentObservationProjectionSchema.parse({
-    state: access.state,
-    externalAgentSessionId: stream.id,
-    ...(projectedDeliveryId ? { deliveryId: projectedDeliveryId } : {}),
-    ...(access.turn ? { turn: access.turn } : {}),
-    provider: access.provider,
-    observedAt: access.observedAt,
-    events
-  });
-}
-
-export function shouldProjectObservationAccess(args: {
-  access?: ExternalAgentObservationAccessResponse;
-  deliveryId?: NativeAgentDeliveryId;
-  historyRequested: boolean;
-}): boolean {
-  return (
-    Boolean(args.deliveryId) ||
-    args.access?.state !== 'history' ||
-    args.historyRequested ||
-    Boolean(args.access?.state === 'history' && args.access.events?.length)
-  );
-}
-
-export function streamWithObservationProjection(
-  stream: ExternalAgentStreamView | undefined,
-  projection: NativeAgentObservationProjection | undefined
-): ExternalAgentStreamView | undefined {
-  if (!stream || !projection) return stream;
-  if (projection.state === 'unavailable') return { ...stream, output: '', items: [] };
-  return {
-    ...stream,
-    output: projection.events.map((event) => event.text).join('\n\n'),
-    items: projection.events
-      .map((event) => toAgentObservationEvent(event))
-      .filter((event): event is AgentObservationEvent => event !== null)
-  };
-}
-
-/** The neutral UI plane feeds the stream directly: each ui frame already carries the full projected
- *  event list, so there is nothing to re-derive — set `items` to the frame's events verbatim. This is
- *  what retires the client-side delta re-derivation the raw-access path still does. */
-export function streamWithUiObservationFrame(
-  stream: ExternalAgentStreamView | undefined,
-  frame: ExternalAgentUiObservationFrame | undefined
-): ExternalAgentStreamView | undefined {
-  if (!stream || !frame) return stream;
-  if (frame.state === 'unavailable') return { ...stream, output: '', items: [] };
-  return {
-    ...stream,
-    output: frame.events.map((event) => event.text ?? '').join('\n\n'),
-    items: frame.events
-  };
-}
-
-export function usageMeterFromObservationAccess(args: {
-  access?: ExternalAgentObservationAccessResponse;
-  provider?: ExternalAgentStreamView['provider'];
-  stream?: ExternalAgentStreamView;
-  usage?: ExternalAgentUsageResponse;
-}): ExternalAgentUsageLimitMeter | null {
-  const fromUsageEndpoint = externalAgentUsageLimitMeterFromResponse(args.usage);
+export function meshAgentUsageMeter(args: {
+  provider?: MeshAgentStreamView['provider'];
+  stream?: MeshAgentStreamView;
+  usage?: MeshAgentUsageResponse;
+}): MeshAgentUsageLimitMeter | null {
+  const fromUsageEndpoint = meshAgentUsageLimitMeterFromResponse(args.usage);
   if (fromUsageEndpoint) return fromUsageEndpoint;
-  // The daemon already normalizes the usage/rate-limit meter with the same adapter it uses for
-  // parseOutput (see observeFromStore/observeWithProviderHistory) — no client-side re-derivation
-  // when an access response is present. `stream`-only callers (no polled access response yet, e.g.
-  // a session-list-built ExternalAgentStreamView) still parse client-side as a fallback.
-  if (args.access && args.access.state !== 'unavailable') return args.access.usageMeter ?? null;
-  return externalAgentUsageLimitMeter({
+  return meshAgentUsageLimitMeter({
     output: args.stream?.output,
     provider: args.provider ?? args.stream?.provider
   });

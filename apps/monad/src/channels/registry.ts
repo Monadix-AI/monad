@@ -8,9 +8,9 @@ import type {
   ChannelAdapterFactory,
   Connector,
   ExperienceWorker,
-  ExternalAgentProviderAdapter,
   HookDefinition,
   ManifestAtomPack,
+  MeshAgentProviderAdapter,
   ModelProvider,
   SandboxLauncher,
   WorkspaceExperienceApi,
@@ -36,7 +36,7 @@ export function builtinChannelAdapters(
     onCommand?: (atomPackName: string, command: unknown) => void;
     onProvider?: (provider: ModelProvider) => void;
     onHook?: (hook: HookDefinition) => void;
-    onAgentAdapter?: (adapter: ExternalAgentProviderAdapter) => void;
+    onAgentAdapter?: (adapter: MeshAgentProviderAdapter) => void;
     onSandbox?: (launcher: SandboxLauncher, atomPackId: string) => void;
     onWorkspaceExperience?: (experience: WorkspaceExperienceDefinition, atomPackName: string) => void;
     onWorkspaceExperienceApi?: (

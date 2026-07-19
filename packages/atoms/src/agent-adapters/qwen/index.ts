@@ -1,9 +1,9 @@
-import type { ExternalAgentView } from '@monad/protocol';
+import type { MeshAgentView } from '@monad/protocol';
 import type {
-  BuildExternalAgentLaunchOptions,
-  ExternalAgentLaunchSpec,
-  ExternalAgentProviderAdapter,
-  ExternalAgentProviderHistoryContext
+  BuildMeshAgentLaunchOptions,
+  MeshAgentLaunchSpec,
+  MeshAgentProviderAdapter,
+  MeshAgentProviderEventContext
 } from '@monad/sdk-atom';
 
 import { readFileSync } from 'node:fs';
@@ -12,11 +12,11 @@ import { join } from 'node:path';
 import { defaultBinProbes, resolveBinary } from '@monad/sdk-atom';
 
 import { hasFlag, parseStructuredAuthState, uniqueModelNames } from '../adapter-shared.ts';
-import { parseExternalAgentArgumentSupport } from '../argument-support.ts';
-import { createOutputHistoryEventSource } from '../event-source.ts';
-import { readProviderHistoryFile } from '../history-files.ts';
+import { parseMeshAgentArgumentSupport } from '../argument-support.ts';
+import { readProviderEventFile } from '../event-files.ts';
+import { createOutputEventSource } from '../event-source.ts';
 import { resizePty, sendPtyInput, stopPty } from '../pty.ts';
-import { externalAgentAdapterSettings } from '../settings.ts';
+import { meshAgentAdapterSettings } from '../settings.ts';
 import { createBasicSettingsImport } from '../settings-import/index.ts';
 import { qwenObservationProjection } from './observation.ts';
 import {
@@ -85,7 +85,7 @@ function withQwenSystemPromptArgs(args: string[], systemPromptFile: string | und
   return [...args, '--append-system-prompt', readFileSync(systemPromptFile, 'utf8')];
 }
 
-function buildQwenLaunch(agent: ExternalAgentView, opts: BuildExternalAgentLaunchOptions): ExternalAgentLaunchSpec {
+function buildQwenLaunch(agent: MeshAgentView, opts: BuildMeshAgentLaunchOptions): MeshAgentLaunchSpec {
   const launchMode = opts.launchMode ?? agent.defaultLaunchMode;
   let args = [...(agent.args ?? [])];
   if (opts.providerSessionRef && !hasFlag(args, '--resume') && !hasFlag(args, '-r')) {
@@ -117,7 +117,7 @@ function buildQwenLaunch(agent: ExternalAgentView, opts: BuildExternalAgentLaunc
   };
 }
 
-function buildQwenAuthLaunch(agent: ExternalAgentView, args: string[]): ExternalAgentLaunchSpec {
+function buildQwenAuthLaunch(agent: MeshAgentView, args: string[]): MeshAgentLaunchSpec {
   return {
     argv: [agent.command, ...args],
     cwd: homedir(),
@@ -129,8 +129,8 @@ function buildQwenAuthLaunch(agent: ExternalAgentView, args: string[]): External
   };
 }
 
-function readQwenHistoryOutput(context: ExternalAgentProviderHistoryContext): string | null {
-  const raw = readProviderHistoryFile({
+function readQwenHistoryOutput(context: MeshAgentProviderEventContext): string | null {
+  const raw = readProviderEventFile({
     roots: [join(homedir(), '.qwen')],
     providerSessionRef: context.providerSessionRef,
     extensions: ['.jsonl', '.json'],
@@ -140,7 +140,7 @@ function readQwenHistoryOutput(context: ExternalAgentProviderHistoryContext): st
   return raw && hasQwenStreamJsonMessages(raw) ? raw : null;
 }
 
-function sendQwenInput(handle: Parameters<ExternalAgentProviderAdapter['sendInput']>[0], input: string): void {
+function sendQwenInput(handle: Parameters<MeshAgentProviderAdapter['sendInput']>[0], input: string): void {
   if (handle.launchMode !== 'json-stream') {
     sendPtyInput(handle, input);
     return;
@@ -148,12 +148,12 @@ function sendQwenInput(handle: Parameters<ExternalAgentProviderAdapter['sendInpu
   sendQwenStreamJsonInput(handle, input);
 }
 
-function resizeQwen(handle: Parameters<ExternalAgentProviderAdapter['resize']>[0], cols: number, rows: number): void {
+function resizeQwen(handle: Parameters<MeshAgentProviderAdapter['resize']>[0], cols: number, rows: number): void {
   if (handle.launchMode === 'json-stream') return;
   resizePty(handle, cols, rows);
 }
 
-function stopQwen(handle: Parameters<ExternalAgentProviderAdapter['stop']>[0]): void {
+function stopQwen(handle: Parameters<MeshAgentProviderAdapter['stop']>[0]): void {
   if (handle.launchMode === 'json-stream') {
     void handle.stdin?.end?.();
     handle.kill('SIGTERM');
@@ -163,25 +163,30 @@ function stopQwen(handle: Parameters<ExternalAgentProviderAdapter['stop']>[0]): 
 }
 
 function resolveQwenApproval(
-  handle: Parameters<ExternalAgentProviderAdapter['resolveApproval']>[0],
-  resolution: Parameters<ExternalAgentProviderAdapter['resolveApproval']>[1]
+  handle: Parameters<MeshAgentProviderAdapter['resolveApproval']>[0],
+  resolution: Parameters<MeshAgentProviderAdapter['resolveApproval']>[1]
 ): void {
   if (handle.launchMode !== 'json-stream') return;
   resolveQwenStreamJsonApproval(handle, resolution);
 }
 
-export const qwenExternalAgentAdapter: ExternalAgentProviderAdapter = {
+export const qwenMeshAgentAdapter: MeshAgentProviderAdapter = {
   provider: 'qwen',
   productIcon: 'qwen',
   label: 'Qwen Code',
   observation: qwenObservationProjection,
-  events: createOutputHistoryEventSource({
+  events: createOutputEventSource({
     provider: 'qwen',
     projection: qwenObservationProjection,
     readOutput: readQwenHistoryOutput
   }),
-  settings: () => externalAgentAdapterSettings({ launchModes: ['pty', 'json-stream'] }),
+  settings: () => meshAgentAdapterSettings({ launchModes: ['pty', 'json-stream'] }),
   settingsImport: createBasicSettingsImport('qwen', 'Qwen Code', 'qwen', '.qwen'),
+  unsafeArgument: (args) =>
+    args.find(
+      (arg, index) =>
+        arg === '--yolo' || arg === '--approval-mode=yolo' || (arg === '--approval-mode' && args[index + 1] === 'yolo')
+    ),
   managedRuntime: {
     launchMode: () => 'json-stream',
     usesSystemPromptFile: true
@@ -191,12 +196,12 @@ export const qwenExternalAgentAdapter: ExternalAgentProviderAdapter = {
     const installed = qwenBin !== undefined;
     return {
       id: 'qwen',
-      label: qwenExternalAgentAdapter.label,
+      label: qwenMeshAgentAdapter.label,
       provider: 'qwen',
-      productIcon: qwenExternalAgentAdapter.productIcon,
+      productIcon: qwenMeshAgentAdapter.productIcon,
       command: 'qwen',
       args: [],
-      modelOptions: qwenExternalAgentAdapter.listSupportedModels(),
+      modelOptions: qwenMeshAgentAdapter.listSupportedModels(),
       defaultLaunchMode: 'pty',
       supportedLaunchModes: ['pty', 'json-stream'],
       installHint: 'Install Qwen Code, then complete its provider-owned authentication flow.',
@@ -205,7 +210,7 @@ export const qwenExternalAgentAdapter: ExternalAgentProviderAdapter = {
       resolvedBinPath: qwenBin,
       capabilities: {
         auth: 'pty',
-        history: 'provider-owned',
+        events: 'provider-owned',
         resume: 'pty',
         approval: 'provider-owned',
         approvalProxy: true,
@@ -231,13 +236,13 @@ export const qwenExternalAgentAdapter: ExternalAgentProviderAdapter = {
   authStatus(agent) {
     return {
       launch: buildQwenAuthLaunch(agent, ['--list-sessions']),
-      parse: (output, exitCode) => qwenExternalAgentAdapter.parseAuthStatus(output, exitCode)
+      parse: (output, exitCode) => qwenMeshAgentAdapter.parseAuthStatus(output, exitCode)
     };
   },
   argumentSupport(agent) {
     return {
       launch: buildQwenAuthLaunch(agent, ['--help']),
-      parse: (output) => parseExternalAgentArgumentSupport(output)
+      parse: (output) => parseMeshAgentArgumentSupport(output)
     };
   },
   parseAuthStatus(output, exitCode) {

@@ -1,13 +1,13 @@
-import type { ExternalAgentProviderAdapter } from '@monad/sdk-atom';
+import type { MeshAgentProviderAdapter } from '@monad/sdk-atom';
 
-import { ExternalAgentError } from '@monad/sdk-atom';
+import { MeshAgentError } from '@monad/sdk-atom';
 
 import { parseStructuredAuthState } from '../adapter-shared.ts';
 import { makeAppServerCliAdapter } from '../app-server-jsonrpc.ts';
 import { createProjectedEventSource } from '../event-source.ts';
 import { createFrameworkSettingsImport } from '../settings-import/index.ts';
 import { hermesAppServerHooks } from './app-server.ts';
-import { hermesHistoryPage, hermesHistoryPageOutput } from './history.ts';
+import { hermesEventPage, hermesEventPageOutput } from './event-pages.ts';
 import { hermesObservationProjection } from './observation.ts';
 
 // Hermes ships no models-list command; this fallback is the model its docs advertise for `--model`.
@@ -25,7 +25,7 @@ const HERMES_SUPPORTED_MODELS = ['hermes-4'];
 // `managedRuntime` stays on `cli-oneshot` — proven end-to-end with a real LLM turn
 // (apps/monad/test/e2e/agent-adapters-real.local.test.ts) — rather than switching the managed-member
 // default to the newly-real app-server path untested in that role.
-const baseHermesExternalAgentAdapter = makeAppServerCliAdapter({
+const baseHermesMeshAgentAdapter = makeAppServerCliAdapter({
   provider: 'hermes',
   productIcon: 'hermes',
   label: 'Hermes',
@@ -68,7 +68,7 @@ const baseHermesExternalAgentAdapter = makeAppServerCliAdapter({
     query: (agent) => {
       const token = agent.env?.HERMES_DASHBOARD_SESSION_TOKEN;
       if (!token) {
-        throw new ExternalAgentError(
+        throw new MeshAgentError(
           'provider_not_logged_in',
           'Hermes app-server requires agent.env.HERMES_DASHBOARD_SESSION_TOKEN to be configured'
         );
@@ -78,28 +78,42 @@ const baseHermesExternalAgentAdapter = makeAppServerCliAdapter({
   }
 });
 
-export const hermesExternalAgentAdapter: ExternalAgentProviderAdapter = {
-  ...baseHermesExternalAgentAdapter,
+export const hermesMeshAgentAdapter: MeshAgentProviderAdapter = {
+  ...baseHermesMeshAgentAdapter,
+  unsafeArgument: (args) => args.find((arg) => arg === '--yolo'),
   events: createProjectedEventSource({
     provider: 'hermes',
     projection: hermesObservationProjection,
     readPage: async (context, request) => {
-      const page = await hermesHistoryPage({
+      const page = await hermesEventPage({
         ...context,
         request: {
           before: request.before,
           limit: request.limit,
-          sortDirection: request.sortDirection,
+          sortDirection: 'desc',
           itemsView: 'full'
         }
       });
       if (!page) return { state: 'unavailable', reason: 'not-found' };
-      const output = hermesHistoryPageOutput({ ...context, page });
+      if (request.view === 'raw') {
+        return {
+          state: 'available',
+          view: 'raw',
+          records: [...page.items].reverse().map((data, index) => ({
+            data,
+            cursor: `${request.before ?? ''}:${index}`
+          })),
+          coverage: 'exact',
+          ...(page.nextCursor ? { nextCursor: page.nextCursor } : {})
+        };
+      }
+      const output = hermesEventPageOutput({ ...context, page });
       if (!output) return { state: 'unavailable', reason: 'not-found' };
       const source = createProjectedEventSource({ provider: 'hermes', projection: hermesObservationProjection });
       return {
         state: 'available',
-        events: source.projectLive({ id: context.providerSessionRef, output, mode: 'history' }).events,
+        view: 'convenience',
+        events: source.projectLive({ id: context.providerSessionRef, output, mode: 'events' }).events,
         ...(page.nextCursor ? { nextCursor: page.nextCursor } : {})
       };
     }
@@ -116,12 +130,12 @@ export const hermesExternalAgentAdapter: ExternalAgentProviderAdapter = {
   // delegate its approvals instead of silently staying full-auto.
   supportsApprovalResolution: (launchMode) => launchMode === 'app-server',
   detect(probes) {
-    const preset = baseHermesExternalAgentAdapter.detect(probes);
+    const preset = baseHermesMeshAgentAdapter.detect(probes);
     return {
       ...preset,
       capabilities: {
         auth: preset.capabilities?.auth ?? 'pty',
-        history: 'provider-owned',
+        events: 'provider-owned',
         resume: preset.capabilities?.resume ?? 'pty',
         approval: preset.capabilities?.approval ?? 'provider-owned',
         settingsImport: true

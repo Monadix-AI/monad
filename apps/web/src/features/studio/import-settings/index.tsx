@@ -59,7 +59,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   tools: 'Tools',
   channels: 'Channels',
   plugins: 'Plugins',
-  externalAgents: 'External agents'
+  meshAgents: 'External agents'
 };
 
 const ACTION_TONE: Record<ImportSettingsAction, string> = {

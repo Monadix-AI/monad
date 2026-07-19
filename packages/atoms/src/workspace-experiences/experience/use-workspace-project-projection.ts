@@ -1,8 +1,8 @@
 import type {
   AcpAgentView,
   AvatarStyle,
-  ExternalAgentSessionView,
-  ExternalAgentView,
+  MeshAgentView,
+  MeshSessionView,
   ProjectId,
   UIItem,
   WorkplaceProject,
@@ -15,18 +15,18 @@ import { useMemo } from 'react';
 
 import { parseProjectMembers, resolveExperienceProjectMembers } from './project-members.ts';
 import {
-  activeExternalAgentNames,
-  externalAgentStreamingAgentNames,
+  activeMeshAgentNames,
   humanParticipant,
+  meshAgentStreamingAgentNames,
   projectApprovalViews,
-  projectExternalAgentMetadataMaps,
   projectList,
   projectMemberCandidates,
+  projectMeshAgentMetadataMaps,
   projectParticipants,
   runningDelegationAgentNames,
   toolItems
 } from './project-projection.ts';
-import { useExternalAgentActivityOverrides } from './use-external-agent-activity-overrides.ts';
+import { useMeshAgentActivityOverrides } from './use-mesh-agent-activity-overrides.ts';
 
 export interface WorkspaceProjectProjection {
   approvals: ApprovalView[];
@@ -34,10 +34,10 @@ export interface WorkspaceProjectProjection {
   human: Participant;
   liveItems: readonly UIItem[];
   liveTools: Extract<UIItem, { kind: 'tool' }>[];
-  externalAgentAvatarSeeds: Map<string, string>;
-  externalAgentDisplayNames: Map<string, string>;
-  externalAgentIcons: Map<string, Participant['icon']>;
-  externalAgentTags: Map<string, string>;
+  meshAgentAvatarSeeds: Map<string, string>;
+  meshAgentDisplayNames: Map<string, string>;
+  meshAgentIcons: Map<string, Participant['icon']>;
+  meshAgentTags: Map<string, string>;
   participants: Participant[];
   projectParticipants: Participant[];
   projectMembers: ProjectMember[];
@@ -52,8 +52,8 @@ export function useWorkspaceProjectProjection(args: {
   appearanceAvatarStyle?: AvatarStyle;
   currentProject: WorkplaceProject | null;
   liveItems: readonly UIItem[] | undefined;
-  externalAgents: readonly ExternalAgentView[];
-  externalAgentSessions: ExternalAgentSessionView[];
+  meshAgents: readonly MeshAgentView[];
+  meshSessions: MeshSessionView[];
   projectId: string;
   projectName: (project: WorkplaceProject) => string;
   userAvatarDataUrl?: string;
@@ -83,35 +83,35 @@ export function useWorkspaceProjectProjection(args: {
       }),
     [args.appearanceAvatarStyle, args.userAvatarDataUrl, args.userDisplayName]
   );
-  const externalAgentMetadata = useMemo(
+  const meshAgentMetadata = useMemo(
     () =>
-      projectExternalAgentMetadataMaps({
-        externalAgents: args.externalAgents,
+      projectMeshAgentMetadataMaps({
+        meshAgents: args.meshAgents,
         projectId: args.currentProject?.id ?? args.projectId,
         projectMembers: experienceProjectMembers
       }),
-    [args.currentProject?.id, args.externalAgents, args.projectId, experienceProjectMembers]
+    [args.currentProject?.id, args.meshAgents, args.projectId, experienceProjectMembers]
   );
   const liveItems = args.liveItems ?? [];
   const liveTools = useMemo(() => toolItems(liveItems), [liveItems]);
-  const externalAgentActivityOverrides = useExternalAgentActivityOverrides(liveTools);
-  const streamingExternalAgentNames = useMemo(() => externalAgentStreamingAgentNames(liveItems), [liveItems]);
+  const meshAgentActivityOverrides = useMeshAgentActivityOverrides(liveTools);
+  const streamingMeshAgentNames = useMemo(() => meshAgentStreamingAgentNames(liveItems), [liveItems]);
   const activeAgentNames = useMemo(
     () =>
-      activeExternalAgentNames({
-        activityOverrideAgentNames: Object.keys(externalAgentActivityOverrides),
+      activeMeshAgentNames({
+        activityOverrideAgentNames: Object.keys(meshAgentActivityOverrides),
         liveTools,
-        externalAgentSessions: args.externalAgentSessions,
-        streamingAgentNames: streamingExternalAgentNames
+        meshSessions: args.meshSessions,
+        streamingAgentNames: streamingMeshAgentNames
       }),
-    [liveTools, externalAgentActivityOverrides, args.externalAgentSessions, streamingExternalAgentNames]
+    [liveTools, meshAgentActivityOverrides, args.meshSessions, streamingMeshAgentNames]
   );
   const runningDelegations = useMemo(() => runningDelegationAgentNames(liveTools), [liveTools]);
   const participants = useMemo(
     () =>
       projectParticipants({
         acpAgents: args.acpAgents,
-        activeExternalAgentNames: activeAgentNames,
+        activeMeshAgentNames: activeAgentNames,
         avatarStyle: args.appearanceAvatarStyle,
         liveTools,
         monadStreaming: liveItems.some(
@@ -120,12 +120,12 @@ export function useWorkspaceProjectProjection(args: {
             item.status === 'streaming' &&
             item.role === 'assistant' &&
             (item.agentName === undefined || item.agentName === 'monad') &&
-            item.source !== 'managed-external-agent'
+            item.source !== 'managed-mesh-agent'
         ),
-        externalAgentActivityOverrides,
-        externalAgents: args.externalAgents,
-        externalAgentAvatarSeeds: externalAgentMetadata.avatarSeeds,
-        externalAgentSessions: args.externalAgentSessions,
+        meshAgentActivityOverrides,
+        meshAgents: args.meshAgents,
+        meshAgentAvatarSeeds: meshAgentMetadata.avatarSeeds,
+        meshSessions: args.meshSessions,
         projectMembers: experienceProjectMembers,
         runningDelegations
       }),
@@ -135,10 +135,10 @@ export function useWorkspaceProjectProjection(args: {
       args.appearanceAvatarStyle,
       liveTools,
       liveItems,
-      externalAgentActivityOverrides,
-      args.externalAgents,
-      externalAgentMetadata.avatarSeeds,
-      args.externalAgentSessions,
+      meshAgentActivityOverrides,
+      args.meshAgents,
+      meshAgentMetadata.avatarSeeds,
+      args.meshSessions,
       experienceProjectMembers,
       runningDelegations
     ]
@@ -152,10 +152,10 @@ export function useWorkspaceProjectProjection(args: {
     () =>
       projectMemberCandidates({
         acpAgents: args.acpAgents,
-        externalAgents: args.externalAgents,
+        meshAgents: args.meshAgents,
         projectMembers
       }),
-    [args.acpAgents, args.externalAgents, projectMembers]
+    [args.acpAgents, args.meshAgents, projectMembers]
   );
 
   return {
@@ -164,10 +164,10 @@ export function useWorkspaceProjectProjection(args: {
     human,
     liveItems,
     liveTools,
-    externalAgentAvatarSeeds: externalAgentMetadata.avatarSeeds,
-    externalAgentDisplayNames: externalAgentMetadata.displayNames,
-    externalAgentIcons: externalAgentMetadata.icons,
-    externalAgentTags: externalAgentMetadata.tags,
+    meshAgentAvatarSeeds: meshAgentMetadata.avatarSeeds,
+    meshAgentDisplayNames: meshAgentMetadata.displayNames,
+    meshAgentIcons: meshAgentMetadata.icons,
+    meshAgentTags: meshAgentMetadata.tags,
     participants,
     projectParticipants: participants.filter((participant) => participant.kind === 'agent'),
     projectMembers,

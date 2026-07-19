@@ -571,20 +571,23 @@ test('streamInteractionEvents subscribes over the control websocket', async () =
   expect(received).toEqual([interaction]);
 });
 
-test('external-agent observation clients validate history and connection responses', async () => {
+test('mesh-agent observation clients validate history and connection responses', async () => {
   const urls: URL[] = [];
   globalThis.fetch = (async (input: string) => {
     const url = new URL(String(input));
     urls.push(url);
-    if (url.pathname.endsWith('/history/raw')) {
+    if (url.pathname.endsWith('/events/raw')) {
       return Response.json({ records: [{ cursor: 'raw:1', data: { native: true } }], coverage: 'exact' });
     }
-    if (url.pathname.endsWith('/history/convenience')) {
-      return Response.json([{ kind: 'ready', observationEpoch: 'epoch_1' }]);
+    if (url.pathname.endsWith('/events/convenience')) {
+      return Response.json({
+        frames: [{ kind: 'ready', observationEpoch: 'epoch_1' }],
+        nextCursor: 'provider:older'
+      });
     }
     return Response.json({
       state: 'connected',
-      externalAgentSessionId: 'exa_100000000000',
+      meshSessionId: 'mesh_100000000000',
       provider: 'codex',
       observationEpoch: 'epoch_1',
       revision: 3
@@ -595,26 +598,25 @@ test('external-agent observation clients validate history and connection respons
   const target = 'ses_100000000000' as SessionId;
 
   expect(
-    await client.externalAgentRawHistory('exa_100000000000', target, {
+    await client.meshAgentRawEvents('mesh_100000000000', target, {
       limit: 5,
-      before: 'cursor:0',
-      sortDirection: 'desc',
-      itemsView: 'summary'
+      before: 'provider:0'
     })
   ).toEqual({
     records: [{ cursor: 'raw:1', data: { native: true } }],
     coverage: 'exact'
   });
   expect(
-    await client.externalAgentConvenienceHistory('exa_100000000000', target, {
-      limit: 20,
-      sortDirection: 'desc',
-      itemsView: 'summary'
+    await client.meshAgentConvenienceEvents('mesh_100000000000', target, {
+      limit: 20
     })
-  ).toEqual([{ kind: 'ready', observationEpoch: 'epoch_1' }]);
-  expect(await client.externalAgentConnection('exa_100000000000', target)).toEqual({
+  ).toEqual({
+    frames: [{ kind: 'ready', observationEpoch: 'epoch_1' }],
+    nextCursor: 'provider:older'
+  });
+  expect(await client.meshAgentConnection('mesh_100000000000', target)).toEqual({
     state: 'connected',
-    externalAgentSessionId: 'exa_100000000000',
+    meshSessionId: 'mesh_100000000000',
     provider: 'codex',
     observationEpoch: 'epoch_1',
     revision: 3
@@ -626,27 +628,25 @@ test('external-agent observation clients validate history and connection respons
     }))
   ).toEqual([
     {
-      path: '/v1/external-agent-sessions/exa_100000000000/history/raw',
+      path: '/v1/mesh/sessions/mesh_100000000000/events/raw',
       query: {
         transcriptTargetId: target,
         limit: '5',
-        before: 'cursor:0',
-        sortDirection: 'desc',
-        itemsView: 'summary'
+        before: 'provider:0'
       }
     },
     {
-      path: '/v1/external-agent-sessions/exa_100000000000/history/convenience',
-      query: { transcriptTargetId: target, limit: '20', sortDirection: 'desc', itemsView: 'summary' }
+      path: '/v1/mesh/sessions/mesh_100000000000/events/convenience',
+      query: { transcriptTargetId: target, limit: '20' }
     },
     {
-      path: '/v1/external-agent-sessions/exa_100000000000/connection',
+      path: '/v1/mesh/sessions/mesh_100000000000/connection',
       query: { transcriptTargetId: target }
     }
   ]);
 });
 
-test('external-agent observation streams use resumable schemas and convenience terminal frames', () => {
+test('mesh-agent observation streams use resumable schemas and convenience terminal frames', () => {
   const client = new MonadClient({ baseUrl: 'http://127.0.0.1:52749' });
   const calls: Array<{ path: string; parsed: unknown; terminal?: boolean; afterEventId?: string }> = [];
   const target = 'ses_100000000000' as SessionId;
@@ -661,10 +661,10 @@ test('external-agent observation streams use resumable schemas and convenience t
   c.stream = (path, schema, _onFrame, opts) => {
     const value = path.endsWith('/raw?transcriptTargetId=ses_100000000000')
       ? {
-          externalAgentSessionId: 'exa_100000000000',
+          meshSessionId: 'mesh_100000000000',
           provider: 'codex',
           origin: 'live',
-          cursor: 'raw:1',
+          cursor: 'live:oep_1:1',
           data: { native: true }
         }
       : { kind: 'unavailable', reason: 'closed' };
@@ -673,24 +673,24 @@ test('external-agent observation streams use resumable schemas and convenience t
     return () => {};
   };
 
-  client.streamExternalAgentRaw('exa_100000000000', target, () => {}, { afterCursor: 'raw:0' });
-  client.streamExternalAgentConvenience('exa_100000000000', target, () => {});
+  client.streamMeshAgentRaw('mesh_100000000000', target, () => {}, { afterCursor: 'live:oep_1:0' });
+  client.streamMeshAgentConvenience('mesh_100000000000', target, () => {});
 
   expect(calls).toEqual([
     {
-      path: '/v1/external-agent-sessions/exa_100000000000/stream/raw?transcriptTargetId=ses_100000000000',
+      path: '/v1/mesh/sessions/mesh_100000000000/stream/raw?transcriptTargetId=ses_100000000000',
       parsed: {
-        externalAgentSessionId: 'exa_100000000000',
+        meshSessionId: 'mesh_100000000000',
         provider: 'codex',
         origin: 'live',
-        cursor: 'raw:1',
+        cursor: 'live:oep_1:1',
         data: { native: true }
       },
-      afterEventId: 'raw:0',
+      afterEventId: 'live:oep_1:0',
       terminal: undefined
     },
     {
-      path: '/v1/external-agent-sessions/exa_100000000000/stream/convenience?transcriptTargetId=ses_100000000000',
+      path: '/v1/mesh/sessions/mesh_100000000000/stream/convenience?transcriptTargetId=ses_100000000000',
       parsed: { kind: 'unavailable', reason: 'closed' },
       afterEventId: undefined,
       terminal: true

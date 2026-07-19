@@ -6,7 +6,7 @@ export interface ChatRoomRailObservation {
   projectId: string;
   agentId?: string;
   agentName?: string;
-  externalAgentSessionId?: string;
+  meshSessionId?: string;
   deliveryId?: NativeAgentDeliveryId;
   turnId?: string;
 }
@@ -19,7 +19,7 @@ export interface ChatRoomFilePreview {
 interface ChatRoomExperienceState {
   filePreviewBySession: Record<string, ChatRoomFilePreview>;
   railObservationBySession: Record<string, ChatRoomRailObservation>;
-  followExternalAgentSession: (
+  followMeshSession: (
     uiKey: string,
     projectId: string,
     sessionId: string,
@@ -36,7 +36,7 @@ interface ChatRoomExperienceState {
 export const useChatRoomExperienceStore = create<ChatRoomExperienceState>((set) => ({
   filePreviewBySession: {},
   railObservationBySession: {},
-  followExternalAgentSession: (uiKey, projectId, sessionId, turnId, deliveryId) =>
+  followMeshSession: (uiKey, projectId, sessionId, turnId, deliveryId) =>
     set((state) => {
       const filePreviews = { ...state.filePreviewBySession };
       delete filePreviews[uiKey];
@@ -46,7 +46,7 @@ export const useChatRoomExperienceStore = create<ChatRoomExperienceState>((set) 
           ...state.railObservationBySession,
           [uiKey]: {
             projectId,
-            externalAgentSessionId: sessionId,
+            meshSessionId: sessionId,
             ...(turnId ? { turnId } : {}),
             ...(deliveryId ? { deliveryId } : {})
           }

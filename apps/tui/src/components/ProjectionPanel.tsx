@@ -1,10 +1,10 @@
-import type { AgentObservationEvent, ExternalAgentObservationEvent, SessionId } from '@monad/protocol';
+import type { AgentObservationEvent, ObservationCursor, SessionId } from '@monad/protocol';
 
 import {
-  externalAgentSessionSelectors,
-  useLazyGetExternalAgentHistoryPageQuery,
-  useListExternalAgentSessionsQuery,
-  useStreamExternalAgentUiObservationQuery
+  meshSessionSelectors,
+  useLazyGetMeshAgentConvenienceEventsQuery,
+  useListMeshSessionsQuery,
+  useStreamMeshAgentConvenienceQuery
 } from '@monad/client-rtk';
 import { Box, Text, useInput } from 'ink';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -13,22 +13,19 @@ import { t } from '../lib/i18n.ts';
 import { mergeById } from '../shell/view-model.ts';
 import { TUI_THEME } from './theme.ts';
 
-type ProjectionEvent = AgentObservationEvent | ExternalAgentObservationEvent;
-
 export function ProjectionPanel({ active, sessionId }: { active: boolean; sessionId: SessionId }) {
-  const sessionsQuery = useListExternalAgentSessionsQuery(sessionId);
-  const sessions = sessionsQuery.data ? externalAgentSessionSelectors.selectAll(sessionsQuery.data) : [];
+  const sessionsQuery = useListMeshSessionsQuery(sessionId);
+  const sessions = sessionsQuery.data ? meshSessionSelectors.selectAll(sessionsQuery.data) : [];
   const observed =
     sessions.find((session) => session.state === 'running' || session.state === 'starting') ?? sessions[0];
-  const observation = useStreamExternalAgentUiObservationQuery(
+  const observation = useStreamMeshAgentConvenienceQuery(
     { id: observed?.id ?? '', transcriptTargetId: sessionId },
     { skip: !observed }
   );
   const streamState = observation.data;
-  const frame = streamState?.frame;
-  const [loadHistory, historyQuery] = useLazyGetExternalAgentHistoryPageQuery();
-  const [history, setHistory] = useState<ExternalAgentObservationEvent[]>([]);
-  const [before, setBefore] = useState<string | null | undefined>(undefined);
+  const [loadEvents, historyQuery] = useLazyGetMeshAgentConvenienceEventsQuery();
+  const [history, setHistory] = useState<AgentObservationEvent[]>([]);
+  const [before, setBefore] = useState<ObservationCursor | null | undefined>(undefined);
   const [historyUnavailable, setHistoryUnavailable] = useState(false);
   const historySession = useRef<string | undefined>(undefined);
   useEffect(() => {
@@ -38,23 +35,34 @@ export function ProjectionPanel({ active, sessionId }: { active: boolean; sessio
     setBefore(undefined);
     setHistoryUnavailable(false);
   }, [observed?.id]);
-  const events = useMemo(
-    () => mergeById<ProjectionEvent>(history, frame && frame.state !== 'unavailable' ? frame.events : []),
-    [frame, history]
-  );
+  const liveEvents = useMemo(() => {
+    const byId = new Map<string, AgentObservationEvent>();
+    for (const frame of streamState?.frames ?? []) {
+      if (frame.kind !== 'patch') continue;
+      for (const operation of frame.operations) {
+        if (operation.op === 'remove') byId.delete(operation.eventId);
+        else byId.set(operation.event.id, operation.event);
+      }
+    }
+    return [...byId.values()];
+  }, [streamState?.frames]);
+  const events = useMemo(() => mergeById(history, liveEvents), [history, liveEvents]);
+  const unavailable = streamState?.frames.findLast((candidate) => candidate.kind === 'unavailable');
 
   const loadOlder = async () => {
     if (!observed || historyQuery.isFetching || before === null || historyUnavailable) return;
     try {
-      const page = await loadHistory({
-        ...(before ? { before } : {}),
+      const page = await loadEvents({
         id: observed.id,
-        itemsView: 'full',
-        limit: 20,
-        sortDirection: 'desc',
-        transcriptTargetId: sessionId
+        transcriptTargetId: sessionId,
+        request: { ...(before ? { before } : {}), limit: 20 }
       }).unwrap();
-      setHistory((current) => mergeById(page.events, current));
+      const older = page.frames.flatMap((candidate) =>
+        candidate.kind === 'patch'
+          ? candidate.operations.flatMap((operation) => (operation.op === 'upsert' ? [operation.event] : []))
+          : []
+      );
+      setHistory((current) => mergeById(older, current));
       setBefore(page.nextCursor ?? null);
     } catch {
       setHistoryUnavailable(true);
@@ -89,8 +97,8 @@ export function ProjectionPanel({ active, sessionId }: { active: boolean; sessio
       ) : null}
       {streamState?.fatalError ? (
         <Text color={TUI_THEME.warning}>{t('cli.tui.projection.historyUnavailable')}</Text>
-      ) : frame?.state === 'unavailable' ? (
-        <Text color={TUI_THEME.warning}>{frame.reason}</Text>
+      ) : unavailable?.kind === 'unavailable' ? (
+        <Text color={TUI_THEME.warning}>{unavailable.reason}</Text>
       ) : null}
       {events.slice(-18).map((event) => (
         <Box key={event.id}>
@@ -106,8 +114,7 @@ export function ProjectionPanel({ active, sessionId }: { active: boolean; sessio
   );
 }
 
-function renderEvent(event: ProjectionEvent): string {
-  if (!('kind' in event)) return `· [${event.role}] ${event.text}`;
+function renderEvent(event: AgentObservationEvent): string {
   if (event.kind === 'tool-call') return `├ ${event.tool?.name ?? 'tool'} ${stringify(event.tool?.input)}`;
   if (event.kind === 'tool-result') return `└ ${event.tool?.name ?? 'result'} ${stringify(event.tool?.output)}`;
   return `${event.streaming ? '…' : '·'} ${event.text ?? event.reason ?? event.kind}`;

@@ -11,9 +11,9 @@ export function shouldShowProjection(
   mode: TuiLayoutMode,
   chatOpen: boolean,
   hasSession: boolean,
-  externalAgentCount: number
+  meshAgentCount: number
 ): boolean {
-  return mode === 'wide' && chatOpen && hasSession && externalAgentCount > 0;
+  return mode === 'wide' && chatOpen && hasSession && meshAgentCount > 0;
 }
 
 export function chatPaneWidths(

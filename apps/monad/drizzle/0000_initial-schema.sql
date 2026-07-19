@@ -78,8 +78,8 @@ CREATE TABLE `experience_worker_wakeups` (
 );
 --> statement-breakpoint
 CREATE INDEX `idx_experience_worker_wakeups_due` ON `experience_worker_wakeups` (`run_at`);--> statement-breakpoint
-CREATE TABLE `external_agent_inbox_items` (
-	`external_agent_session_id` text NOT NULL,
+CREATE TABLE `mesh_agent_inbox_items` (
+	`mesh_session_id` text NOT NULL,
 	`message_seq` integer NOT NULL,
 	`delivery_id` text,
 	`project_id` text,
@@ -94,14 +94,14 @@ CREATE TABLE `external_agent_inbox_items` (
 	`visible_at` text,
 	`consumed_at` text,
 	`updated_at` text,
-	PRIMARY KEY(`external_agent_session_id`, `message_seq`)
+	PRIMARY KEY(`mesh_session_id`, `message_seq`)
 );
 --> statement-breakpoint
-CREATE INDEX `idx_external_agent_inbox_items_pending` ON `external_agent_inbox_items` (`external_agent_session_id`,`state`,`message_seq`);--> statement-breakpoint
-CREATE UNIQUE INDEX `idx_external_agent_inbox_delivery_id` ON `external_agent_inbox_items` (`delivery_id`) WHERE delivery_id IS NOT NULL;--> statement-breakpoint
-CREATE INDEX `idx_external_agent_inbox_project_trigger` ON `external_agent_inbox_items` (`project_id`,`trigger_message_id`);--> statement-breakpoint
-CREATE INDEX `idx_external_agent_inbox_member_state` ON `external_agent_inbox_items` (`project_id`,`member_instance_id`,`state`);--> statement-breakpoint
-CREATE TABLE `external_agent_sessions` (
+CREATE INDEX `idx_mesh_agent_inbox_items_pending` ON `mesh_agent_inbox_items` (`mesh_session_id`,`state`,`message_seq`);--> statement-breakpoint
+CREATE UNIQUE INDEX `idx_mesh_agent_inbox_delivery_id` ON `mesh_agent_inbox_items` (`delivery_id`) WHERE delivery_id IS NOT NULL;--> statement-breakpoint
+CREATE INDEX `idx_mesh_agent_inbox_project_trigger` ON `mesh_agent_inbox_items` (`project_id`,`trigger_message_id`);--> statement-breakpoint
+CREATE INDEX `idx_mesh_agent_inbox_member_state` ON `mesh_agent_inbox_items` (`project_id`,`member_instance_id`,`state`);--> statement-breakpoint
+CREATE TABLE `mesh_sessions` (
 	`id` text PRIMARY KEY NOT NULL,
 	`transcript_target_id` text NOT NULL,
 	`agent_name` text NOT NULL,
@@ -122,9 +122,9 @@ CREATE TABLE `external_agent_sessions` (
 	`exited_at` text
 );
 --> statement-breakpoint
-CREATE INDEX `idx_external_agent_sessions_transcript_target` ON `external_agent_sessions` (`transcript_target_id`);--> statement-breakpoint
-CREATE INDEX `idx_external_agent_sessions_live` ON `external_agent_sessions` (`state`) WHERE state IN ('starting', 'running');--> statement-breakpoint
-CREATE UNIQUE INDEX `idx_external_agent_sessions_provider_ref` ON `external_agent_sessions` (`transcript_target_id`,`provider`,`provider_session_ref`) WHERE provider_session_ref IS NOT NULL;--> statement-breakpoint
+CREATE INDEX `idx_mesh_sessions_transcript_target` ON `mesh_sessions` (`transcript_target_id`);--> statement-breakpoint
+CREATE INDEX `idx_mesh_sessions_live` ON `mesh_sessions` (`state`) WHERE state IN ('starting', 'running');--> statement-breakpoint
+CREATE UNIQUE INDEX `idx_mesh_sessions_provider_ref` ON `mesh_sessions` (`transcript_target_id`,`provider`,`provider_session_ref`) WHERE provider_session_ref IS NOT NULL;--> statement-breakpoint
 CREATE TABLE `file_observations` (
 	`session_id` text NOT NULL,
 	`path` text NOT NULL,
@@ -184,7 +184,7 @@ CREATE INDEX `idx_messages_active` ON `messages` (`transcript_target_id`,`active
 CREATE TABLE `native_agent_direct_messages` (
 	`id` text PRIMARY KEY NOT NULL,
 	`project_id` text NOT NULL,
-	`external_agent_session_id` text NOT NULL,
+	`mesh_session_id` text NOT NULL,
 	`from_agent` text,
 	`peer` text NOT NULL,
 	`text` text NOT NULL,
@@ -192,14 +192,14 @@ CREATE TABLE `native_agent_direct_messages` (
 	`created_at` text NOT NULL
 );
 --> statement-breakpoint
-CREATE INDEX `idx_native_agent_direct_messages_session_peer` ON `native_agent_direct_messages` (`external_agent_session_id`,`peer`,`created_at`);--> statement-breakpoint
+CREATE INDEX `idx_native_agent_direct_messages_session_peer` ON `native_agent_direct_messages` (`mesh_session_id`,`peer`,`created_at`);--> statement-breakpoint
 CREATE INDEX `idx_native_agent_direct_messages_project_pair` ON `native_agent_direct_messages` (`project_id`,`from_agent`,`peer`,`created_at`);--> statement-breakpoint
 CREATE TABLE `session_members` (
 	`session_id` text NOT NULL,
 	`member_id` text NOT NULL,
 	`template_id` text,
 	`type` text NOT NULL,
-	`external_agent_session_id` text,
+	`mesh_session_id` text,
 	`data` text DEFAULT '{}' NOT NULL,
 	`created_at` text NOT NULL,
 	`updated_at` text NOT NULL,

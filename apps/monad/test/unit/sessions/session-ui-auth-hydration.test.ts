@@ -14,10 +14,10 @@ async function authFailureHarness() {
   const authFailure: Event = {
     id: newId('evt'),
     sessionId: sessionId as SessionId,
-    type: 'external_agent.connection_required',
+    type: 'mesh.connection_required',
     actorAgentId: null,
     payload: {
-      externalAgentSessionId: 'exa_authfailure1',
+      meshSessionId: 'mesh_authfailure1',
       agentName: 'opus',
       provider: 'claude-code',
       code: 'authentication_failed',
@@ -31,7 +31,7 @@ async function authFailureHarness() {
 }
 
 function loginCard(items: UIItem[]) {
-  return items.find((item) => item.kind === 'custom' && item.name === 'external_agent.login_required');
+  return items.find((item) => item.kind === 'custom' && item.name === 'mesh.login_required');
 }
 
 test('uiItems restores a persisted authentication failure as a login card', async () => {
@@ -41,11 +41,11 @@ test('uiItems restores a persisted authentication failure as a login card', asyn
 
   expect(loginCard(response.items)).toEqual({
     kind: 'custom',
-    id: 'external-agent-login-required:opus',
-    name: 'external_agent.login_required',
+    id: 'mesh-agent-login-required:opus',
+    name: 'mesh.login_required',
     status: 'error',
     data: {
-      externalAgentSessionId: 'exa_authfailure1',
+      meshSessionId: 'mesh_authfailure1',
       agentName: 'opus',
       provider: 'claude-code',
       reason: 'Not logged in · Please run /login'
@@ -65,11 +65,11 @@ test('subscribeUi restores a persisted authentication failure as a login card', 
 
   expect(loginCard(snapshots[0] ?? [])).toEqual({
     kind: 'custom',
-    id: 'external-agent-login-required:opus',
-    name: 'external_agent.login_required',
+    id: 'mesh-agent-login-required:opus',
+    name: 'mesh.login_required',
     status: 'error',
     data: {
-      externalAgentSessionId: 'exa_authfailure1',
+      meshSessionId: 'mesh_authfailure1',
       agentName: 'opus',
       provider: 'claude-code',
       reason: 'Not logged in · Please run /login'

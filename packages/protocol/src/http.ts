@@ -15,6 +15,12 @@ import {
 import { browserPresetResponseSchema, setBrowserPresetRequestSchema } from './browser-preset.ts';
 import { commandsListQuerySchema, commandsListResponseSchema } from './command.ts';
 import { computerPresetResponseSchema, setComputerPresetRequestSchema } from './computer-preset.ts';
+import { getGraphResponseSchema } from './graph.ts';
+import { agentIdSchema, projectIdSchema, sessionIdSchema } from './ids.ts';
+import { listMentionInboxQuerySchema, listMentionInboxResponseSchema } from './inbox.ts';
+import { getLicensesResponseSchema } from './licenses.ts';
+import { getMem0DataResponseSchema } from './mem0-data.ts';
+import { getLawsResponseSchema } from './memory.ts';
 import {
   attachmentReadResponseSchema,
   inviteSessionMemberRequestSchema,
@@ -37,13 +43,7 @@ import {
   removeSessionMemberResponseSchema,
   sessionMemberResponseSchema,
   spawnSessionMemberRequestSchema
-} from './external-agent/index.ts';
-import { getGraphResponseSchema } from './graph.ts';
-import { agentIdSchema, projectIdSchema, sessionIdSchema } from './ids.ts';
-import { listMentionInboxQuerySchema, listMentionInboxResponseSchema } from './inbox.ts';
-import { getLicensesResponseSchema } from './licenses.ts';
-import { getMem0DataResponseSchema } from './mem0-data.ts';
-import { getLawsResponseSchema } from './memory.ts';
+} from './mesh-agent/index.ts';
 import { obscuraStatusResponseSchema, setObscuraRequestSchema } from './obscura.ts';
 import { pickDirectoryRequestSchema, pickDirectoryResponseSchema } from './pick-directory.ts';
 import {

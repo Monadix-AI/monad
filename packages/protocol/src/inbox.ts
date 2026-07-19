@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { chatMessageSchema } from './domain.ts';
-import { externalAgentSessionIdSchema, projectIdSchema, sessionIdSchema } from './ids.ts';
+import { meshSessionIdSchema, projectIdSchema, sessionIdSchema } from './ids.ts';
 
 const inboxContextSchema = z.object({
   projectId: projectIdSchema.optional(),
@@ -22,11 +22,11 @@ export type MentionInboxItem = z.infer<typeof mentionInboxItemSchema>;
 export const approvalInboxItemSchema = inboxContextSchema.extend({
   kind: z.literal('approval'),
   id: z.string().min(1),
-  approvalKind: z.enum(['tool', 'external-agent']),
+  approvalKind: z.enum(['tool', 'mesh-agent']),
   tool: z.string().optional(),
   input: z.unknown().optional(),
   key: z.string().optional(),
-  externalAgentSessionId: externalAgentSessionIdSchema.optional(),
+  meshSessionId: meshSessionIdSchema.optional(),
   provider: z.string().optional(),
   text: z.string().optional()
 });

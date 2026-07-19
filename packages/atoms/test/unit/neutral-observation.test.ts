@@ -1,10 +1,10 @@
-import type { ExternalAgentObservationEvent } from '@monad/protocol';
+import type { MeshAgentObservationEvent } from '@monad/protocol';
 
 import { expect, test } from 'bun:test';
 
 import { toAgentObservationEvent } from '../../src/agent-adapters/neutral-observation.ts';
 
-const event = (over: Partial<ExternalAgentObservationEvent>): ExternalAgentObservationEvent => ({
+const event = (over: Partial<MeshAgentObservationEvent>): MeshAgentObservationEvent => ({
   id: 'e',
   role: 'agent',
   text: 't',

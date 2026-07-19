@@ -1,4 +1,4 @@
-import type { ExternalAgentObservationEvent } from '@monad/protocol';
+import type { MeshAgentObservationEvent } from '@monad/protocol';
 import type { CodexObservationNotification } from './index.ts';
 
 import {
@@ -26,7 +26,7 @@ export function codexAppServerRecordEvents(
   id: string,
   record: CodexObservationNotification,
   recordIndex: number
-): ExternalAgentObservationEvent[] {
+): MeshAgentObservationEvent[] {
   const method = record.method;
   if (!method) return [];
   const params =

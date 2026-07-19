@@ -18,7 +18,7 @@ export interface SessionMember {
   memberId: string;
   templateId: string | null;
   type: string;
-  externalAgentSessionId: string | null;
+  meshSessionId: string | null;
   data: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
@@ -29,7 +29,7 @@ export interface SessionMemberInsert {
   memberId: string;
   templateId?: string | null;
   type: string;
-  externalAgentSessionId?: string | null;
+  meshSessionId?: string | null;
   data?: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
@@ -37,7 +37,7 @@ export interface SessionMemberInsert {
 
 export interface SessionMemberPatch {
   type?: string;
-  externalAgentSessionId?: string | null;
+  meshSessionId?: string | null;
   data?: Record<string, unknown>;
   updatedAt: string;
 }
@@ -48,7 +48,7 @@ function rowToSessionMember(row: SessionMemberRow): SessionMember {
     memberId: row.memberId,
     templateId: row.templateId ?? null,
     type: row.type,
-    externalAgentSessionId: row.externalAgentSessionId ?? null,
+    meshSessionId: row.meshSessionId ?? null,
     data: JSON.parse(row.data) as Record<string, unknown>,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt
@@ -62,7 +62,7 @@ export function insertSessionMember(db: Db, m: SessionMemberInsert): void {
       memberId: m.memberId,
       templateId: m.templateId ?? null,
       type: m.type,
-      externalAgentSessionId: m.externalAgentSessionId ?? null,
+      meshSessionId: m.meshSessionId ?? null,
       data: JSON.stringify(m.data ?? {}),
       createdAt: m.createdAt,
       updatedAt: m.updatedAt
@@ -87,7 +87,7 @@ export function getSessionMember(db: Db, sessionId: string, memberId: string): S
 export function updateSessionMember(db: Db, sessionId: string, memberId: string, patch: SessionMemberPatch): void {
   const values: Record<string, unknown> = { updatedAt: patch.updatedAt };
   if (patch.type !== undefined) values.type = patch.type;
-  if (patch.externalAgentSessionId !== undefined) values.externalAgentSessionId = patch.externalAgentSessionId;
+  if (patch.meshSessionId !== undefined) values.meshSessionId = patch.meshSessionId;
   if (patch.data !== undefined) values.data = JSON.stringify(patch.data);
   db.update(sessionMembers)
     .set(values)

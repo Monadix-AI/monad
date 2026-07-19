@@ -9,7 +9,7 @@ export { agentObservationDiagnosticSchema } from './agent-observation-diagnostic
 // Agent-kind-neutral observation event: the single contract an adapter's decode step produces
 // (a raw provider frame → this) and every observation experience renders. It serves external
 // agents today and generalizes to the monad built-in agent and ACP agents — hence "agent", not
-// "external-agent". Deliberately UI-agnostic: no display roles, no pre-formatted text, no
+// "mesh-agent". Deliberately UI-agnostic: no display roles, no pre-formatted text, no
 // provider event-type strings. System/transport failure is signalled by the stream terminating
 // (onError / terminal frame), never an in-band event, so there is no `error`/`system` kind.
 

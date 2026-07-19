@@ -1,6 +1,6 @@
 import type { NativeAgentRuntime, NativeAgentRuntimeInfoResponse, SessionId } from '@monad/protocol';
 import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
-import type { ExternalAgentSessionRow } from '#/store/db/index.ts';
+import type { MeshSessionRow } from '#/store/db/index.ts';
 
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { nativeAgentRuntimeSchema } from '@monad/protocol';
@@ -10,7 +10,7 @@ import { HandlerError } from '#/handlers/handler-error.ts';
 export interface NativeAgentRuntimeBinding {
   agentId: string;
   sessionId: SessionId;
-  externalAgentSessionId: string;
+  meshSessionId: string;
 }
 
 function hashToken(token: string): string {
@@ -23,7 +23,7 @@ function tokenMatchesHash(providedToken: string, expectedHash: string): boolean 
   return provided.length === expected.length && timingSafeEqual(provided, expected);
 }
 
-function runtimeSummary(nativeSession: ExternalAgentSessionRow): NativeAgentRuntime {
+function runtimeSummary(nativeSession: MeshSessionRow): NativeAgentRuntime {
   return nativeAgentRuntimeSchema.parse({
     id: nativeSession.id,
     sessionId: nativeSession.transcriptTargetId,
@@ -49,47 +49,39 @@ export function createNativeAgentRuntimeService(handlers: ReturnType<typeof crea
   return {
     requireManagedBinding(headers: Headers): {
       binding: NativeAgentRuntimeBinding;
-      nativeSession: ExternalAgentSessionRow;
+      nativeSession: MeshSessionRow;
     } {
-      const externalAgentSessionId = headers.get('x-monad-external-agent-session-id');
-      if (!externalAgentSessionId) {
+      const meshSessionId = headers.get('x-monad-mesh-session-id');
+      if (!meshSessionId) {
         throw new HandlerError(
           'forbidden',
-          'current runtime is not a project-managed external agent',
-          'NOT_MANAGED_EXTERNAL_AGENT'
+          'current runtime is not a project-managed MeshAgent',
+          'NOT_MANAGED_MESH_AGENT'
         );
       }
-      const nativeSession = store.getExternalAgentSession(externalAgentSessionId);
+      const nativeSession = store.getMeshSession(meshSessionId);
       if (!nativeSession) {
-        throw new HandlerError(
-          'not_found',
-          `external agent session not found: ${externalAgentSessionId}`,
-          'EXTERNAL_AGENT_SESSION_NOT_FOUND'
-        );
+        throw new HandlerError('not_found', `MeshAgent session not found: ${meshSessionId}`, 'MESH_SESSION_NOT_FOUND');
       }
       if (nativeSession.runtimeRole !== 'managed-project-agent') {
         throw new HandlerError(
           'forbidden',
-          'current runtime is not a project-managed external agent',
-          'NOT_MANAGED_EXTERNAL_AGENT'
+          'current runtime is not a project-managed MeshAgent',
+          'NOT_MANAGED_MESH_AGENT'
         );
       }
       if (nativeSession.state !== 'running') {
-        throw new HandlerError(
-          'forbidden',
-          'managed external agent session is not active',
-          'EXTERNAL_AGENT_SESSION_NOT_ACTIVE'
-        );
+        throw new HandlerError('forbidden', 'managed MeshAgent session is not active', 'MESH_SESSION_NOT_ACTIVE');
       }
       const token = headers.get('authorization')?.match(/^Bearer\s+(.+)$/i)?.[1] ?? '';
       if (!nativeSession.agentRuntimeTokenHash || !tokenMatchesHash(token, nativeSession.agentRuntimeTokenHash)) {
-        throw new HandlerError('forbidden', 'invalid managed external agent token', 'INVALID_NATIVE_AGENT_TOKEN');
+        throw new HandlerError('forbidden', 'invalid managed MeshAgent token', 'INVALID_NATIVE_AGENT_TOKEN');
       }
       return {
         binding: {
           agentId: nativeSession.agentName,
           sessionId: nativeSession.transcriptTargetId,
-          externalAgentSessionId
+          meshSessionId
         },
         nativeSession
       };
@@ -97,7 +89,7 @@ export function createNativeAgentRuntimeService(handlers: ReturnType<typeof crea
 
     info(args: {
       binding: NativeAgentRuntimeBinding;
-      nativeSession: ExternalAgentSessionRow;
+      nativeSession: MeshSessionRow;
       serverUrl: string;
     }): NativeAgentRuntimeInfoResponse {
       return {
@@ -108,7 +100,7 @@ export function createNativeAgentRuntimeService(handlers: ReturnType<typeof crea
         providerSessionRef: args.nativeSession.providerSessionRef,
         lastDeliveredSeq: args.nativeSession.lastDeliveredSeq,
         lastVisibleSeq: args.nativeSession.lastVisibleSeq,
-        pendingInboxCount: store.countExternalAgentInbox(args.binding.externalAgentSessionId)
+        pendingInboxCount: store.countMeshAgentInbox(args.binding.meshSessionId)
       };
     }
   };

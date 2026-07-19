@@ -41,13 +41,13 @@ import {
 // The HTTP-only routes in this otherwise-universal controller (SSE events, member ui-observation,
 // out-of-band runtime config) declare their contracts inline from protocol leaf schemas — they have no
 // JSON-RPC twin, so they don't belong in daemonHttpContract (which mirrors the universal METHOD_TABLE
-// methods). Mirrors `/external-agent-sessions/:id/ui-observation{,-stream}` in transports/http/external-agent.ts.
+// methods). MeshAgent observation instead lives under `/mesh/sessions/:id/*`.
 const sessionParams = z.object({ id: sessionIdSchema });
 const sessionMessageParams = sessionParams.extend({ messageId: messageIdSchema });
 const sessionMemberParams = z.object({ id: sessionIdSchema, memberId: z.string().min(1) });
 
-// The neutral UI plane for a session member with no `externalAgentSessionId` of its own (today, the
-// `monad` built-in-agent member) — see `session-member-observation.ts`. Unlike the external-agent SSE
+// The neutral UI plane for a session member with no `meshSessionId` of its own (today, the
+// `monad` built-in-agent member) — see `session-member-observation.ts`. Unlike the mesh-agent SSE
 // (which force-closes on any non-`live` frame, since a stopped provider session never resumes), a
 // `history`/idle monad member can still start a fresh turn later, so only the terminal `unavailable`
 // state (unknown member) ends the stream.
@@ -485,9 +485,9 @@ export function createSessionsController(
             tags: ['http-only'],
             summary: 'Read a session member’s neutral (projected) observation frame',
             description:
-              'The `AgentObservationEvent` plane for a session member with no `externalAgentSessionId` of ' +
+              'The `AgentObservationEvent` plane for a session member with no `meshSessionId` of ' +
               'its own (today, the monad built-in agent) — the session-member counterpart to ' +
-              'GET /external-agent-sessions/:id/ui-observation.'
+              'GET /mesh/sessions/:id/events/convenience.'
           }
         }
       )
@@ -499,7 +499,7 @@ export function createSessionsController(
           detail: {
             tags: ['http-only'],
             summary: 'Stream a session member’s neutral (projected) observation frames',
-            description: 'The session-member counterpart to GET /external-agent-sessions/:id/ui-observation-stream.'
+            description: 'The session-member counterpart to GET /mesh/sessions/:id/stream/convenience.'
           }
         }
       )

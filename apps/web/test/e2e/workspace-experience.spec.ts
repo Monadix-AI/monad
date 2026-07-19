@@ -181,11 +181,11 @@ async function mockWorkplaceApi(
     }
     if (method === 'GET' && path === '/v1/settings/acp-agents') return route.fulfill(json({ agents: [] }));
     if (method === 'GET' && path === '/v1/settings/acp-agents/presets') return route.fulfill(json({ presets: [] }));
-    if (method === 'GET' && path === '/v1/settings/external-agents') return route.fulfill(json({ agents: [] }));
-    if (method === 'GET' && path === '/v1/settings/external-agents/presets') {
+    if (method === 'GET' && path === '/v1/mesh/agents') return route.fulfill(json({ agents: [] }));
+    if (method === 'GET' && path === '/v1/mesh/agents/presets') {
       return route.fulfill(json({ presets: [] }));
     }
-    if (method === 'GET' && path === `/v1/projects/${projectId}/external-agent-sessions`) {
+    if (method === 'GET' && path === '/v1/mesh/sessions') {
       return route.fulfill(json({ sessions: [] }));
     }
     if (method === 'GET' && path === `/v1/projects/${projectId}/sessions`) {
@@ -193,10 +193,6 @@ async function mockWorkplaceApi(
     }
     if (method === 'POST' && path === `/v1/projects/${projectId}/sessions`) {
       return route.fulfill(json({ sessionId: alphaSessionId }, 201));
-    }
-    const sessionExternalAgentMatch = path.match(/^\/v1\/sessions\/([^/]+)\/external-agent-sessions$/);
-    if (method === 'GET' && sessionExternalAgentMatch) {
-      return route.fulfill(json({ sessions: [] }));
     }
     if (method === 'GET' && path === `/v1/sessions/${alphaSessionId}/ui-stream`) {
       return route.fulfill(sse({ kind: 'snapshot', items: options.uiItems ?? [], hasMore: false }));

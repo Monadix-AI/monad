@@ -4,7 +4,7 @@ import type { ToolGroupItem, ToolItem, ToolViewItem } from './ToolStepView';
 import {
   branchSourceSchema,
   channelDisplayText,
-  externalAgentLoginRequiredPayloadSchema,
+  meshAgentLoginRequiredPayloadSchema,
   type UIItem,
   type UIMessageItem,
   type UIPart
@@ -33,8 +33,8 @@ export interface SummaryTranscriptTurnViewItem {
   details: ViewItem[];
 }
 
-export interface ExternalAgentLoginViewItem {
-  kind: 'external_agent_login';
+export interface MeshAgentLoginViewItem {
+  kind: 'mesh_agent_login';
   id: string;
   agentName: string;
   provider: string;
@@ -49,7 +49,7 @@ export type ViewItem =
   | CompactCommandViewItem
   | BranchSourceViewItem
   | SummaryTranscriptTurnViewItem
-  | ExternalAgentLoginViewItem;
+  | MeshAgentLoginViewItem;
 
 export const isToolItem = (m: ViewItem): m is ToolViewItem =>
   'kind' in m && (m.kind === 'tool' || m.kind === 'toolGroup');
@@ -62,8 +62,8 @@ export const isCompactCommandItem = (m: ViewItem): m is CompactCommandViewItem =
 
 export const isBranchSourceItem = (m: ViewItem): m is BranchSourceViewItem => 'kind' in m && m.kind === 'branch_source';
 
-export const isExternalAgentLoginItem = (m: ViewItem): m is ExternalAgentLoginViewItem =>
-  'kind' in m && m.kind === 'external_agent_login';
+export const isMeshAgentLoginItem = (m: ViewItem): m is MeshAgentLoginViewItem =>
+  'kind' in m && m.kind === 'mesh_agent_login';
 
 export const isSummaryTranscriptTurnItem = (m: ViewItem): m is SummaryTranscriptTurnViewItem =>
   'kind' in m && m.kind === 'summary_transcript_turn';
@@ -201,16 +201,16 @@ function toolFromUi(item: Extract<UIItem, { kind: 'tool' }>): ToolItem {
 }
 
 export function viewItemKey(item: UIItem): string | null {
-  if (item.kind === 'custom' && item.name === 'external_agent.login_required') return `custom:${item.id}`;
+  if (item.kind === 'custom' && item.name === 'mesh.login_required') return `custom:${item.id}`;
   if (item.kind !== 'message' && item.kind !== 'tool' && item.kind !== 'memory_summary') return null;
   return `${item.kind}:${item.id}`;
 }
 
-function externalAgentLoginFromUi(item: Extract<UIItem, { kind: 'custom' }>): ExternalAgentLoginViewItem | null {
-  const payload = externalAgentLoginRequiredPayloadSchema.safeParse(item.data);
+function meshAgentLoginFromUi(item: Extract<UIItem, { kind: 'custom' }>): MeshAgentLoginViewItem | null {
+  const payload = meshAgentLoginRequiredPayloadSchema.safeParse(item.data);
   if (!payload.success) return null;
   return {
-    kind: 'external_agent_login',
+    kind: 'mesh_agent_login',
     id: item.id,
     agentName: payload.data.agentName,
     provider: payload.data.provider,
@@ -220,7 +220,7 @@ function externalAgentLoginFromUi(item: Extract<UIItem, { kind: 'custom' }>): Ex
 }
 
 export function viewItemFromUi(item: UIItem): ViewItem | null {
-  if (item.kind === 'custom' && item.name === 'external_agent.login_required') return externalAgentLoginFromUi(item);
+  if (item.kind === 'custom' && item.name === 'mesh.login_required') return meshAgentLoginFromUi(item);
   if (item.kind === 'message') {
     const sourcePart = item.parts.find(
       (part): part is Extract<UIPart, { type: 'artifact' }> =>

@@ -12,7 +12,7 @@ test('Chat Session story catalog covers every transcript card kind', () => {
     'single-tool',
     'parallel-tools',
     'skill-tool',
-    'external-agent-login',
+    'mesh-agent-login',
     'memory-summary',
     'compact',
     'branch-restore',
@@ -31,7 +31,7 @@ test('Session-only transcript cards expose production render boundaries for Stor
   );
   const transcript = readFileSync(new URL('../../src/features/session/SessionTranscript.tsx', import.meta.url), 'utf8');
   const externalLogin = readFileSync(
-    new URL('../../src/features/session/ExternalAgentLoginCard.tsx', import.meta.url),
+    new URL('../../src/features/session/MeshAgentLoginCard.tsx', import.meta.url),
     'utf8'
   );
   const exported = (source: string) =>
@@ -39,7 +39,7 @@ test('Session-only transcript cards expose production render boundaries for Stor
 
   expect(exported(actionCards)).toEqual(['ApprovalCard', 'ClarifyPrompt']);
   expect(exported(transcript).filter((name) => name === 'SummaryTranscriptTurn')).toEqual(['SummaryTranscriptTurn']);
-  expect(exported(externalLogin)).toEqual(['ExternalAgentLoginCardView', 'ExternalAgentLoginCard']);
+  expect(exported(externalLogin)).toEqual(['MeshAgentLoginCardView', 'MeshAgentLoginCard']);
 });
 
 test('Chat Session stories map every transcript card kind exactly once', () => {

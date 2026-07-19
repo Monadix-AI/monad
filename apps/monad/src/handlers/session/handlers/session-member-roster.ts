@@ -1,16 +1,16 @@
 import type { Session, WorkplaceProject } from '@monad/protocol';
 import type { SessionContext } from '#/handlers/session/context.ts';
-import type { ManagedExternalAgentProjectMember } from '#/handlers/session/handlers/messaging-members.ts';
+import type { ManagedMeshAgentProjectMember } from '#/handlers/session/handlers/messaging-members.ts';
 import type { SessionMember } from '#/store/db/session-members.ts';
 
-import { managedExternalAgentProjectMembers } from '#/handlers/session/handlers/messaging-members.ts';
+import { managedMeshAgentProjectMembers } from '#/handlers/session/handlers/messaging-members.ts';
 
 type ProjectMemberTemplate = WorkplaceProject['memberTemplates'][number];
 
 export interface SessionMemberRosterDeps {
   spawnManagedSessionMember: (
     session: Session,
-    member: ManagedExternalAgentProjectMember
+    member: ManagedMeshAgentProjectMember
   ) => Promise<{ started: boolean; nativeSessionId?: string }>;
 }
 
@@ -24,12 +24,12 @@ function templateData(template: ProjectMemberTemplate): Record<string, unknown> 
 
 export function removeSessionMemberBinding(ctx: SessionContext, member: SessionMember): void {
   const {
-    deps: { store, externalAgentHost }
+    deps: { store, meshAgentHost }
   } = ctx;
   const data = member.data as { name?: string; displayName?: string };
   const displayName = data.displayName ?? data.name ?? member.memberId;
   store.snapshotAgentDisplayName(member.sessionId, member.memberId, displayName);
-  if (member.externalAgentSessionId) externalAgentHost?.stop(member.externalAgentSessionId);
+  if (member.meshSessionId) meshAgentHost?.stop(member.meshSessionId);
   store.deleteSessionMember(member.sessionId, member.memberId);
 }
 
@@ -40,17 +40,15 @@ export function createSessionMemberRoster(ctx: SessionContext, deps: SessionMemb
 
   async function spawnIfManaged(session: Session, memberId: string): Promise<void> {
     if (!paths) return;
-    const externalAgents = (ctx.deps.configManager?.get().cfg.externalAgents ?? []).filter(
-      (agent) => agent.enabled !== false
-    );
-    const managed = managedExternalAgentProjectMembers(store, session.id, externalAgents).find(
+    const meshAgents = (ctx.deps.configManager?.get().cfg.meshAgents ?? []).filter((agent) => agent.enabled !== false);
+    const managed = managedMeshAgentProjectMembers(store, session.id, meshAgents).find(
       (candidate) => candidate.runtimeAgentName === memberId
     );
     if (!managed) return;
     const result = await deps.spawnManagedSessionMember(session, managed);
     if (result.started && result.nativeSessionId) {
       store.updateSessionMember(session.id, memberId, {
-        externalAgentSessionId: result.nativeSessionId,
+        meshSessionId: result.nativeSessionId,
         updatedAt: new Date().toISOString()
       });
     }

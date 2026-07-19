@@ -86,7 +86,7 @@ function extractMesh(cfg: MonadConfig): MonadMeshConfig {
   return monadMeshConfigSchema.parse({
     version: CURRENT_MESH_VERSION,
     acpAgents: cfg.acpAgents,
-    externalAgents: cfg.externalAgents,
+    meshAgents: cfg.meshAgents,
     peers: cfg.peers,
     monadix: cfg.monadix
   });

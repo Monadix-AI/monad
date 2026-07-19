@@ -1,5 +1,11 @@
 import { expect, test } from 'bun:test';
-import { averageMeasuredRowHeight, indexOfKey, overscanRowCount } from '@monad/ui/components/VirtualList';
+import {
+  averageMeasuredRowHeight,
+  indexOfKey,
+  overscanRowCount,
+  pruneEstimateCache,
+  stableEstimate
+} from '@monad/ui/components/VirtualList';
 import {
   consumeSelfTarget,
   isAtBottom,
@@ -153,6 +159,40 @@ test('averageMeasuredRowHeight: unmeasured lists fall back, measured lists avera
     averageMeasuredRowHeight([106, 300, 1545, 1797], 96),
     averageMeasuredRowHeight([100, 101], 96)
   ]).toEqual([96, 937, 101]);
+});
+
+test('a row keeps the estimate it was first given even as the running average moves', () => {
+  const cache = new Map<string, number>();
+  expect([
+    stableEstimate(cache, 'msg_a', 96),
+    stableEstimate(cache, 'msg_b', 96),
+    stableEstimate(cache, 'msg_a', 937),
+    stableEstimate(cache, 'msg_c', 937)
+  ]).toEqual([96, 96, 96, 937]);
+});
+
+test('estimate cache drops keys that left the list once it outgrows the slack', () => {
+  const cache = new Map([
+    ['gone_1', 96],
+    ['gone_2', 96],
+    ['live_1', 400],
+    ['live_2', 500]
+  ]);
+  const live = new Set(['live_1', 'live_2']);
+
+  pruneEstimateCache(cache, live, 2);
+  expect([...cache]).toEqual([
+    ['gone_1', 96],
+    ['gone_2', 96],
+    ['live_1', 400],
+    ['live_2', 500]
+  ]);
+
+  pruneEstimateCache(cache, live, 1);
+  expect([...cache]).toEqual([
+    ['live_1', 400],
+    ['live_2', 500]
+  ]);
 });
 
 test('settle loop stops after consecutive corrected frames, and a correction restarts the count', () => {

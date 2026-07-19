@@ -1,10 +1,6 @@
 import type { ApprovalInboxItem, InboxItem } from '@monad/protocol';
 
-import {
-  useApproveExternalAgentSessionMutation,
-  useApproveToolMutation,
-  useListMentionInboxQuery
-} from '@monad/client-rtk';
+import { useApproveMeshSessionMutation, useApproveToolMutation, useListMentionInboxQuery } from '@monad/client-rtk';
 import { cn } from '@monad/ui';
 import { MentionText } from '@monad/ui/components/MentionText';
 import { useState } from 'react';
@@ -32,7 +28,7 @@ function formatInboxTime(value: string): string {
 function approvalPreview(item: ApprovalInboxItem): string {
   if (item.text) return item.text;
   if (item.tool) return item.tool;
-  return item.approvalKind === 'external-agent' ? 'External agent approval' : 'Tool approval';
+  return item.approvalKind === 'mesh-agent' ? 'External agent approval' : 'Tool approval';
 }
 
 function InboxItemRow({
@@ -47,7 +43,7 @@ function InboxItemRow({
   const t = useT();
   const title = item.projectName ?? item.sessionTitle ?? t('web.inbox.unknownContext');
   const actor =
-    item.kind === 'mention' ? item.agentName : item.approvalKind === 'external-agent' ? item.provider : item.tool;
+    item.kind === 'mention' ? item.agentName : item.approvalKind === 'mesh-agent' ? item.provider : item.tool;
   const subtitle = [item.sessionTitle, actor ? `@${actor}` : null].filter(Boolean).join(' · ');
   const body = (
     <>
@@ -125,7 +121,7 @@ export function InboxRoute() {
   const t = useT();
   const { data, error, isLoading, isFetching, refetch } = useListMentionInboxQuery({ limit: 100 });
   const [approveTool] = useApproveToolMutation();
-  const [approveExternalAgentSession] = useApproveExternalAgentSessionMutation();
+  const [approveMeshSession] = useApproveMeshSessionMutation();
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const items = data?.items ?? [];
@@ -134,9 +130,9 @@ export function InboxRoute() {
     setResolvingId(item.id);
     setActionError(null);
     try {
-      if (item.approvalKind === 'external-agent' && item.externalAgentSessionId) {
-        await approveExternalAgentSession({
-          id: item.externalAgentSessionId,
+      if (item.approvalKind === 'mesh-agent' && item.meshSessionId) {
+        await approveMeshSession({
+          id: item.meshSessionId,
           transcriptTargetId: item.sessionId,
           requestId: item.id,
           allow,

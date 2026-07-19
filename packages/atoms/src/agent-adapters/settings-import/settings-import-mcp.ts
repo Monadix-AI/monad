@@ -1,14 +1,13 @@
-import type { ExternalAgentProvider, ExternalAgentSettingsImportItem } from '@monad/protocol';
+import type { MeshAgentProvider, MeshAgentSettingsImportItem } from '@monad/protocol';
 
 import { previewItem } from './settings-import-items.ts';
-import { asString, asStringArray, isRecord, recordAt } from './settings-import-parse.ts';
+import { asString, asStringArray, getPath, isRecord } from './settings-import-parse.ts';
 
-function secretEnvRefs(raw: unknown): Record<string, string> | undefined {
+function mcpEnv(raw: unknown): Record<string, string> | undefined {
   if (!isRecord(raw)) return undefined;
-  const entries = Object.keys(raw)
-    .filter((key) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(key))
-    .sort()
-    .map((key) => [key, `\${env:${key}}`]);
+  const entries = Object.entries(raw).filter(
+    (entry): entry is [string, string] => /^[A-Za-z_][A-Za-z0-9_]*$/.test(entry[0]) && typeof entry[1] === 'string'
+  );
   return entries.length > 0 ? Object.fromEntries(entries) : undefined;
 }
 
@@ -29,7 +28,7 @@ function mcpPayload(name: string, raw: unknown): { summary?: string; payload: un
   const url = asString(raw.url) ?? asString(raw.endpoint);
   if (command) {
     const args = asStringArray(raw.args) ?? [];
-    const env = secretEnvRefs(raw.env);
+    const env = mcpEnv(raw.env);
     return {
       summary: command,
       payload: {
@@ -64,13 +63,13 @@ function mcpPayload(name: string, raw: unknown): { summary?: string; payload: un
 }
 
 export function addMcpItems(
-  items: ExternalAgentSettingsImportItem[],
+  items: MeshAgentSettingsImportItem[],
   sourcePath: string,
   data: Record<string, unknown>,
-  provider: ExternalAgentProvider
+  provider: MeshAgentProvider
 ): void {
   const servers =
-    recordAt(data, ['mcp_servers']) ?? recordAt(data, ['mcpServers']) ?? recordAt(data, ['mcp', 'servers']) ?? {};
+    getPath(data, ['mcp_servers']) ?? getPath(data, ['mcpServers']) ?? getPath(data, ['mcp', 'servers']) ?? {};
   for (const [name, raw] of mcpEntries(servers)) {
     const mapped = mcpPayload(name, raw);
     items.push(
@@ -82,7 +81,7 @@ export function addMcpItems(
         mapped?.payload ?? { kind: 'manual' },
         {
           action: mapped ? 'add' : 'manual',
-          risk: mapped?.summary === 'npx' || mapped?.payload ? 'medium' : 'medium',
+          risk: mapped && isRecord(raw) && !asString(raw.command) ? 'low' : 'medium',
           summary: mapped?.summary
         }
       )

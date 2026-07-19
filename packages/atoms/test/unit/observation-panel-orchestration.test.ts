@@ -1,29 +1,32 @@
 // Observation Task 5: the pure orchestration that turns control notifications, stream frames, and
-// history pages into the panel's rendered planes. React glue (useObservationPanel) is a thin wrapper
+// events pages into the panel's rendered planes. React glue (useObservationPanel) is a thin wrapper
 // over these; testing them here keeps the decision logic verifiable without a DOM.
 
 import type {
   AgentObservationEvent,
   Event,
-  ExternalAgentConvenienceFrame,
-  ExternalAgentRawFrame,
-  ExternalAgentRawHistoryPage
+  MeshConvenienceFrame,
+  MeshRawEvent,
+  MeshRawEventPage
 } from '@monad/protocol';
 
 import { expect, test } from 'bun:test';
 
 import {
   connectionControlAction,
-  convenienceHistoryRequest,
+  convenienceEventsRequest,
   convenienceStreamView,
-  foldConvenienceHistory,
+  foldConvenienceEvents,
   foldRawFrame,
-  rawHistoryRows
+  observationEventBootstrap,
+  observationPanelLoading,
+  prependRawEventsRows,
+  rawEventsRows
 } from '../../src/workspace-experiences/chat-room/components/observation/observation-panel-orchestration.ts';
 import { emptyObservationTimeline } from '../../src/workspace-experiences/chat-room/components/observation/timeline-merge.ts';
 
-const SESSION = 'exa_000000000001';
-const OTHER = 'exa_000000000002';
+const SESSION = 'mesh_000000000001';
+const OTHER = 'mesh_000000000002';
 
 function controlEvent(type: Event['type'], payload: Record<string, unknown>): Event {
   return {
@@ -36,15 +39,15 @@ function controlEvent(type: Event['type'], payload: Record<string, unknown>): Ev
   } as Event;
 }
 
-function rawFrame(cursor: string, data: unknown, stream?: ExternalAgentRawFrame['stream']): ExternalAgentRawFrame {
+function rawFrame(cursor: string, data: unknown, stream?: MeshRawEvent['stream']): MeshRawEvent {
   return {
-    externalAgentSessionId: SESSION,
+    meshSessionId: SESSION,
     provider: 'codex',
     origin: 'live',
     cursor,
     ...(stream ? { stream } : {}),
     data
-  } as ExternalAgentRawFrame;
+  } as MeshRawEvent;
 }
 
 function observationEvent(id: string, text: string): AgentObservationEvent {
@@ -59,8 +62,8 @@ function observationEvent(id: string, text: string): AgentObservationEvent {
 
 test('connection.opened for the observed session requests a snapshot refetch', () => {
   const action = connectionControlAction(
-    controlEvent('external_agent.session.connection.opened', {
-      externalAgentSessionId: SESSION,
+    controlEvent('mesh.session.connection.opened', {
+      meshSessionId: SESSION,
       provider: 'codex',
       observationEpoch: 'e1'
     }),
@@ -71,8 +74,8 @@ test('connection.opened for the observed session requests a snapshot refetch', (
 
 test('connection.closed for the observed session tears down the matching epoch', () => {
   const action = connectionControlAction(
-    controlEvent('external_agent.session.connection.closed', {
-      externalAgentSessionId: SESSION,
+    controlEvent('mesh.session.connection.closed', {
+      meshSessionId: SESSION,
       provider: 'codex',
       observationEpoch: 'e2',
       reason: 'exited'
@@ -84,8 +87,8 @@ test('connection.closed for the observed session tears down the matching epoch',
 
 test('a connection notification for a different session is ignored', () => {
   const action = connectionControlAction(
-    controlEvent('external_agent.session.connection.opened', {
-      externalAgentSessionId: OTHER,
+    controlEvent('mesh.session.connection.opened', {
+      meshSessionId: OTHER,
       provider: 'codex',
       observationEpoch: 'e1'
     }),
@@ -95,16 +98,13 @@ test('a connection notification for a different session is ignored', () => {
 });
 
 test('a non-connection event yields no action', () => {
-  const action = connectionControlAction(
-    controlEvent('external_agent.exited', { externalAgentSessionId: SESSION }),
-    SESSION
-  );
+  const action = connectionControlAction(controlEvent('mesh.exited', { meshSessionId: SESSION }), SESSION);
   expect(action).toBeNull();
 });
 
 test('a connection notification with a malformed payload yields no action', () => {
   const action = connectionControlAction(
-    controlEvent('external_agent.session.connection.closed', { externalAgentSessionId: SESSION }),
+    controlEvent('mesh.session.connection.closed', { meshSessionId: SESSION }),
     SESSION
   );
   expect(action).toBeNull();
@@ -115,49 +115,118 @@ test('raw frames accumulate in order and dedupe a re-delivered cursor', () => {
   rows = foldRawFrame(rows, rawFrame('c2', 'second', 'stderr'));
   rows = foldRawFrame(rows, rawFrame('c1', 'first-updated', 'stdout'));
   expect(rows).toEqual([
-    { cursor: 'c1', stream: 'stdout', preview: 'first-updated' },
-    { cursor: 'c2', stream: 'stderr', preview: 'second' }
+    { identity: 'c1', cursor: 'c1', stream: 'stdout', preview: 'first-updated' },
+    { identity: 'c2', cursor: 'c2', stream: 'stderr', preview: 'second' }
   ]);
 });
 
 test('a raw frame with no stream classification renders as unknown, structured data serialized', () => {
   const rows = foldRawFrame([], rawFrame('c9', { a: 1 }));
-  expect(rows).toEqual([{ cursor: 'c9', stream: 'unknown', preview: '{"a":1}' }]);
+  expect(rows).toEqual([{ identity: 'c9', cursor: 'c9', stream: 'unknown', preview: '{"a":1}' }]);
 });
 
-test('raw history records map to rows verbatim; a missing cursor collapses to empty', () => {
-  const page: ExternalAgentRawHistoryPage = {
+test('raw events records map to rows verbatim; a missing cursor collapses to empty', () => {
+  const page: MeshRawEventPage = {
     coverage: 'exact',
     records: [{ cursor: 'h1', data: 'raw-text' }, { data: { k: 'v' } }]
   };
-  expect(rawHistoryRows(page)).toEqual([
-    { cursor: 'h1', stream: 'unknown', preview: 'raw-text' },
-    { cursor: '', stream: 'unknown', preview: '{"k":"v"}' }
+  expect(rawEventsRows(page)).toEqual([
+    { identity: 'h1', cursor: 'h1', stream: 'unknown', preview: 'raw-text' },
+    { identity: 'events:1', cursor: '', stream: 'unknown', preview: '{"k":"v"}' }
   ]);
 });
 
-test('convenience history folds ahead of the live timeline and records the epoch boundary', () => {
-  const frames: ExternalAgentConvenienceFrame[] = [
-    { kind: 'ready', observationEpoch: 'e1', historyBefore: 'b1' },
-    { kind: 'upsert', cursor: 'c1', event: observationEvent('o1', 'hello') }
+test('raw events prepend keeps older rows first and removes the overlapping boundary row', () => {
+  const older = rawEventsRows({ coverage: 'exact', records: [{ cursor: 'h1', data: 'older' }] });
+  const current = rawEventsRows({
+    coverage: 'exact',
+    records: [
+      { cursor: 'h1', data: 'overlap' },
+      { cursor: 'h2', data: 'newer' }
+    ]
+  });
+  expect(prependRawEventsRows(older, current).map((row) => row.cursor)).toEqual(['h1', 'h2']);
+});
+
+test('convenience events folds ahead of the live timeline and records the epoch boundary', () => {
+  const frames: MeshConvenienceFrame[] = [
+    { kind: 'ready', observationEpoch: 'e1', cursor: 'live:e1:3', eventsBefore: 'provider:b1' },
+    { kind: 'patch', cursor: 'provider:b1', operations: [{ op: 'upsert', event: observationEvent('o1', 'hello') }] }
   ];
-  const timeline = foldConvenienceHistory(emptyObservationTimeline, frames);
+  const timeline = foldConvenienceEvents(emptyObservationTimeline, frames);
   expect(timeline).toEqual({
     events: [observationEvent('o1', 'hello')],
     epoch: 'e1',
-    historyBefore: 'b1',
+    cursor: 'provider:b1',
+    eventsBefore: 'provider:b1',
     unavailableReason: null
   });
 });
 
-test('convenience history request carries the boundary cursor and descending paging', () => {
-  expect(convenienceHistoryRequest('b1')).toEqual({
+test('older convenience events is prepended ahead of already received live events', () => {
+  const current = {
+    ...emptyObservationTimeline,
+    events: [observationEvent('live', 'newer')]
+  };
+  const frames: MeshConvenienceFrame[] = [
+    {
+      kind: 'patch',
+      cursor: 'provider:older',
+      operations: [{ op: 'upsert', event: observationEvent('events', 'older') }]
+    }
+  ];
+
+  expect(foldConvenienceEvents(current, frames).events.map((event) => event.id)).toEqual(['events', 'live']);
+});
+
+test('convenience event request carries the boundary cursor', () => {
+  expect(convenienceEventsRequest('provider:b1')).toEqual({
     limit: 20,
-    sortDirection: 'desc',
-    itemsView: 'summary',
-    before: 'b1'
+    before: 'provider:b1'
   });
-  expect(convenienceHistoryRequest(null)).toEqual({ limit: 20, sortDirection: 'desc', itemsView: 'summary' });
+  expect(convenienceEventsRequest(null)).toEqual({ limit: 20 });
+});
+
+test('opening a disconnected observation panel bootstraps the latest provider events page', () => {
+  expect(
+    observationEventBootstrap({
+      panelOpen: true,
+      connectionKnown: true,
+      connected: false,
+      eventsBefore: null
+    })
+  ).toEqual({
+    key: 'disconnected:latest',
+    request: { limit: 20 }
+  });
+});
+
+test('disconnected provider events keeps the panel loading until bootstrap settles', () => {
+  expect(
+    observationPanelLoading({
+      panelOpen: true,
+      contentAvailable: false,
+      connectionLoading: false,
+      connectionKnown: true,
+      liveWaiting: false,
+      eventsWaiting: true,
+      eventsLoading: true
+    })
+  ).toBe(true);
+});
+
+test('loading an older events page keeps already rendered activity visible', () => {
+  expect(
+    observationPanelLoading({
+      panelOpen: true,
+      contentAvailable: true,
+      connectionLoading: false,
+      connectionKnown: true,
+      liveWaiting: false,
+      eventsWaiting: false,
+      eventsLoading: true
+    })
+  ).toBe(false);
 });
 
 test('convenience stream view exposes folded events and a running status while connected', () => {

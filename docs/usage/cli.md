@@ -169,7 +169,7 @@ inline in the terminal.
 ```
 monad project <post|ask|read|inbox>       post to or read the current Workplace Project room
 monad agent <send|read>                   direct private messages with an agent or human
-monad runtime info                        show the managed external agent runtime binding
+monad runtime info                        show the managed MeshAgent runtime binding
 monad usage [--reset] [--by-day] [--by-category]   show cumulative token/cost usage
 ```
 

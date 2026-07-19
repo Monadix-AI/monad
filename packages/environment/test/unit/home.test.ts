@@ -106,13 +106,13 @@ describe('initMonadHome', () => {
     expect(cfg?.sandbox.mode).toBe('workspace');
   });
 
-  test('external agents are stored in system config and merged into loadAll', async () => {
+  test('MeshAgents are stored in system config and merged into loadAll', async () => {
     await initMonadHome(paths);
     const cfg = await loadAll(paths);
     if (!cfg) throw new Error('config missing');
     await saveMesh(paths.mesh, {
       ...cfg,
-      externalAgents: [
+      meshAgents: [
         {
           name: 'codex',
           provider: 'codex',
@@ -124,8 +124,8 @@ describe('initMonadHome', () => {
       ]
     });
 
-    expect((await loadConfig(paths))?.externalAgents).toHaveLength(1);
-    expect((await loadAll(paths))?.externalAgents[0]?.provider).toBe('codex');
+    expect((await loadConfig(paths))?.meshAgents).toHaveLength(1);
+    expect((await loadAll(paths))?.meshAgents[0]?.provider).toBe('codex');
   });
 
   test('preserves profile displayName across re-runs (idempotent)', async () => {

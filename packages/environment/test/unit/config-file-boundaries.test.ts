@@ -65,7 +65,7 @@ describe('config file boundaries', () => {
       'skills',
       'version'
     ]);
-    expect(Object.keys(mesh).sort()).toEqual(['$schema', 'acpAgents', 'externalAgents', 'monadix', 'peers', 'version']);
+    expect(Object.keys(mesh).sort()).toEqual(['$schema', 'acpAgents', 'meshAgents', 'monadix', 'peers', 'version']);
     expect((config.$schema as string).endsWith('/config.schema.json')).toBe(true);
     expect((agents.$schema as string).endsWith('/agents.schema.json')).toBe(true);
     expect((mesh.$schema as string).endsWith('/mesh.schema.json')).toBe(true);
@@ -111,14 +111,7 @@ describe('config file boundaries', () => {
       'skills',
       'version'
     ]);
-    expect(keys(MESH_SCHEMA_CONTENT)).toEqual([
-      '$schema',
-      'acpAgents',
-      'externalAgents',
-      'monadix',
-      'peers',
-      'version'
-    ]);
+    expect(keys(MESH_SCHEMA_CONTENT)).toEqual(['$schema', 'acpAgents', 'meshAgents', 'monadix', 'peers', 'version']);
     expect(keys(AUTH_SCHEMA_CONTENT)).toEqual([
       '$schema',
       'activeProvider',

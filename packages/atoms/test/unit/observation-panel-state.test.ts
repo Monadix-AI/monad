@@ -4,7 +4,7 @@
 // ignored so a late event from an older connection cannot resurrect a subscription. See the design's
 // Observation-panel state machine.
 
-import type { ExternalAgentConnectionSnapshot } from '@monad/protocol';
+import type { MeshConnectionSnapshot } from '@monad/protocol';
 
 import { expect, test } from 'bun:test';
 
@@ -14,10 +14,10 @@ import {
   observationSubscription
 } from '../../src/workspace-experiences/chat-room/components/observation/panel-state.ts';
 
-const SESSION = 'exa_000000000001' as const;
+const SESSION = 'mesh_000000000001' as const;
 
-function connected(epoch: string, revision: number): ExternalAgentConnectionSnapshot {
-  return { state: 'connected', externalAgentSessionId: SESSION, provider: 'codex', observationEpoch: epoch, revision };
+function connected(epoch: string, revision: number): MeshConnectionSnapshot {
+  return { state: 'connected', meshSessionId: SESSION, provider: 'codex', observationEpoch: epoch, revision };
 }
 
 test('a fresh panel holds no subscription', () => {
@@ -39,7 +39,7 @@ test('a disconnected snapshot deactivates the subscription', () => {
   state = observationPanelReducer(state, { type: 'connectionSnapshot', snapshot: connected('e1', 3) });
   state = observationPanelReducer(state, {
     type: 'connectionSnapshot',
-    snapshot: { state: 'disconnected', externalAgentSessionId: SESSION, revision: 4 }
+    snapshot: { state: 'disconnected', meshSessionId: SESSION, revision: 4 }
   });
   expect(observationSubscription(state).active).toBe(false);
 });

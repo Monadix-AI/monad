@@ -95,8 +95,8 @@ async function installShellMock(page: Page) {
         })
       );
     }
-    if (method === 'GET' && path === '/v1/settings/external-agents') return route.fulfill(json({ agents: [] }));
-    if (method === 'GET' && path === '/v1/settings/external-agents/presets') {
+    if (method === 'GET' && path === '/v1/mesh/agents') return route.fulfill(json({ agents: [] }));
+    if (method === 'GET' && path === '/v1/mesh/agents/presets') {
       return route.fulfill(json({ presets: [] }));
     }
     if (method === 'GET' && path === '/v1/sessions') {

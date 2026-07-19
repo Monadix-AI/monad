@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 
-import { externalAgentIdleResumedPayloadSchema, externalAgentIdleSuspendedPayloadSchema } from '../src/event-table.ts';
-import { externalAgentSystemEventSchema } from '../src/external-agent/index.ts';
+import { meshAgentIdleResumedPayloadSchema, meshAgentIdleSuspendedPayloadSchema } from '../src/event-table.ts';
+import { meshAgentSystemEventSchema } from '../src/mesh-agent/index.ts';
 import { listUiItemsResponseSchema, sessionUiEventSchema, uiSnapshotEventSchema } from '../src/ui.ts';
 
 test('sessionUiEventSchema accepts snapshot and upsert payloads', () => {
@@ -35,24 +35,24 @@ test('sessionUiEventSchema accepts snapshot and upsert payloads', () => {
   ).toBe('upsert');
 });
 
-test('external-agent system events preserve exact typed variants and legacy system items', () => {
+test('mesh-agent system events preserve exact typed variants and legacy system items', () => {
   const suspended = {
     agentId: 'pmem_codex_1',
     agentName: 'Reviewer',
     type: 'idle_suspended' as const,
-    payload: { externalAgentSessionId: 'exa_idle00000000', idleTimeoutMs: 300 }
+    payload: { meshSessionId: 'mesh_idle00000000', idleTimeoutMs: 300 }
   };
   const resumed = {
     agentId: 'pmem_codex_1',
     agentName: 'Reviewer',
     type: 'idle_resumed' as const,
-    payload: { externalAgentSessionId: 'exa_idle00000000' }
+    payload: { meshSessionId: 'mesh_idle00000000' }
   };
   const current = sessionUiEventSchema.parse({
     kind: 'upsert',
     item: {
       kind: 'system',
-      id: 'external-agent-idle-suspended:pmem_codex_1:evt_1',
+      id: 'mesh-agent-idle-suspended:pmem_codex_1:evt_1',
       text: 'fell asleep.',
       event: suspended,
       seq: 'evt_1'
@@ -63,15 +63,15 @@ test('external-agent system events preserve exact typed variants and legacy syst
     item: { kind: 'system', id: 'legacy', text: 'Legacy notice', seq: 'evt_0' }
   });
 
-  expect(externalAgentSystemEventSchema.parse(suspended)).toEqual(suspended);
-  expect(externalAgentSystemEventSchema.parse(resumed)).toEqual(resumed);
-  expect(externalAgentIdleSuspendedPayloadSchema.parse(suspended)).toEqual(suspended);
-  expect(externalAgentIdleResumedPayloadSchema.parse(resumed)).toEqual(resumed);
+  expect(meshAgentSystemEventSchema.parse(suspended)).toEqual(suspended);
+  expect(meshAgentSystemEventSchema.parse(resumed)).toEqual(resumed);
+  expect(meshAgentIdleSuspendedPayloadSchema.parse(suspended)).toEqual(suspended);
+  expect(meshAgentIdleResumedPayloadSchema.parse(resumed)).toEqual(resumed);
   expect(current).toEqual({
     kind: 'upsert',
     item: {
       kind: 'system',
-      id: 'external-agent-idle-suspended:pmem_codex_1:evt_1',
+      id: 'mesh-agent-idle-suspended:pmem_codex_1:evt_1',
       text: 'fell asleep.',
       event: suspended,
       seq: 'evt_1'
@@ -83,21 +83,21 @@ test('external-agent system events preserve exact typed variants and legacy syst
   });
 });
 
-test('external-agent system events reject mismatched lifecycle payloads', () => {
+test('mesh-agent system events reject mismatched lifecycle payloads', () => {
   expect(() =>
-    externalAgentSystemEventSchema.parse({
+    meshAgentSystemEventSchema.parse({
       agentId: 'pmem_codex_1',
       agentName: 'Reviewer',
       type: 'idle_resumed',
-      payload: { externalAgentSessionId: 'exa_idle00000000', idleTimeoutMs: 300 }
+      payload: { meshSessionId: 'mesh_idle00000000', idleTimeoutMs: 300 }
     })
   ).toThrow();
   expect(() =>
-    externalAgentSystemEventSchema.parse({
+    meshAgentSystemEventSchema.parse({
       agentId: 'pmem_codex_1',
       agentName: 'Reviewer',
       type: 'idle_suspended',
-      payload: { externalAgentSessionId: 'exa_idle00000000' }
+      payload: { meshSessionId: 'mesh_idle00000000' }
     })
   ).toThrow();
 });
@@ -107,12 +107,12 @@ test('idle suspension requires a positive integer timeout', () => {
     agentId: 'pmem_codex_1',
     agentName: 'Reviewer',
     type: 'idle_suspended',
-    payload: { externalAgentSessionId: 'exa_idle00000000', idleTimeoutMs: 0 }
+    payload: { meshSessionId: 'mesh_idle00000000', idleTimeoutMs: 0 }
   };
 
-  expect(() => externalAgentSystemEventSchema.parse(event)).toThrow();
+  expect(() => meshAgentSystemEventSchema.parse(event)).toThrow();
   expect(() =>
-    externalAgentSystemEventSchema.parse({
+    meshAgentSystemEventSchema.parse({
       ...event,
       payload: { ...event.payload, idleTimeoutMs: 1.5 }
     })

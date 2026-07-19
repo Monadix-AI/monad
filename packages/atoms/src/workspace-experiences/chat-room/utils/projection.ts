@@ -1,7 +1,7 @@
 import type {
   AvatarStyle,
-  ExternalAgentObservationEvent,
-  ExternalAgentSessionView,
+  MeshAgentObservationEvent,
+  MeshSessionView,
   UIItem,
   UIMessageItem,
   UIPart
@@ -9,7 +9,7 @@ import type {
 import type { ProjectMember } from '../../experience/project-members.ts';
 import type {
   ActivityRow,
-  ExternalAgentStreamView,
+  MeshAgentStreamView,
   Message,
   MessageAttachment,
   Participant
@@ -21,25 +21,25 @@ import {
   defaultWorkplaceProjectMemberSettings,
   entityAvatarUrl,
   entityAvatarWriteUrl,
-  externalAgentProductDisplayName,
+  meshAgentProductDisplayName,
   messageAttachmentRefSchema,
-  renameExternalAgentProjectMemberDisplayName
+  renameMeshAgentProjectMemberDisplayName
 } from '@monad/protocol';
 
 import {
-  externalAgentNeutralStreamItems,
-  externalAgentStreamItems
-} from '../../experience/external-agent-observation/external-agent-observation.ts';
+  meshAgentNeutralStreamItems,
+  meshAgentStreamItems
+} from '../../experience/mesh-agent-observation/mesh-agent-observation.ts';
 import {
-  externalAgentFacingCommandPhase,
-  externalAgentMemberActivityPhase,
-  externalAgentMemberPresence,
-  externalAgentSessionIsGenerating
-} from '../../experience/external-agent-presence.ts';
+  meshAgentFacingCommandPhase,
+  meshAgentMemberActivityPhase,
+  meshAgentMemberPresence,
+  meshSessionIsGenerating
+} from '../../experience/mesh-agent-presence.ts';
 import { parseProjectMembers, productIcon } from '../../experience/project-members.ts';
-import { avatarForAgent, externalAgentTag, fmtTime, HUMAN, iconForAgent } from '../../experience/project-projection.ts';
+import { avatarForAgent, fmtTime, HUMAN, iconForAgent, meshAgentTag } from '../../experience/project-projection.ts';
 
-const EXTERNAL_AGENT_FOLLOW_TEXT = 'CLI stream available';
+const MESH_AGENT_FOLLOW_TEXT = 'CLI stream available';
 
 function textFromParts(parts: UIPart[]): string {
   return parts
@@ -71,9 +71,9 @@ function displayTextFromMessage(item: UIMessageItem): string {
   return item.role === 'assistant' ? channelDisplayText(text) : text;
 }
 
-export function isManagedExternalAgentReasoningOnlyMessage(item: UIMessageItem): boolean {
+export function isManagedMeshAgentReasoningOnlyMessage(item: UIMessageItem): boolean {
   return (
-    item.source === 'managed-external-agent' &&
+    item.source === 'managed-mesh-agent' &&
     item.role === 'assistant' &&
     !textFromParts(item.parts).trim() &&
     reasoningFromParts(item.parts) !== undefined
@@ -83,27 +83,27 @@ export function isManagedExternalAgentReasoningOnlyMessage(item: UIMessageItem):
 export function messageToView(
   item: UIMessageItem,
   time = '',
-  externalAgentAvatarSeeds = new Map<string, string>(),
-  externalAgentTags = new Map<string, string>(),
-  externalAgentDisplayNames = new Map<string, string>(),
-  externalAgentIcons = new Map<string, Message['icon']>(),
+  meshAgentAvatarSeeds = new Map<string, string>(),
+  meshAgentTags = new Map<string, string>(),
+  meshAgentDisplayNames = new Map<string, string>(),
+  meshAgentIcons = new Map<string, Message['icon']>(),
   human = HUMAN,
   avatarStyle?: AvatarStyle
 ): Message {
   const agent = item.role === 'assistant';
   const rawName = agent ? (item.agentName ?? 'monad') : human.name;
   const displayName = agent
-    ? (item.agentDisplayName ?? (rawName === 'monad' ? 'Monad' : (externalAgentDisplayNames.get(rawName) ?? rawName)))
+    ? (item.agentDisplayName ?? (rawName === 'monad' ? 'Monad' : (meshAgentDisplayNames.get(rawName) ?? rawName)))
     : rawName;
-  const icon = agent ? (externalAgentIcons.get(rawName) ?? iconForAgent(displayName)) : undefined;
+  const icon = agent ? (meshAgentIcons.get(rawName) ?? iconForAgent(displayName)) : undefined;
   const reasoning = agent ? reasoningFromParts(item.parts) : undefined;
   const attachments = attachmentsFromParts(item.parts);
   const agentAvatarSeed =
-    externalAgentAvatarSeeds.get(displayName) ??
+    meshAgentAvatarSeeds.get(displayName) ??
     (displayName === 'Monad'
       ? undefined
-      : item.source === 'managed-external-agent'
-        ? `external-agent:${displayName}`
+      : item.source === 'managed-mesh-agent'
+        ? `mesh-agent:${displayName}`
         : `agent:${displayName}`);
   return {
     id: item.id,
@@ -116,12 +116,12 @@ export function messageToView(
     tag: agent
       ? displayName === 'Monad'
         ? 'AI'
-        : (externalAgentTags.get(rawName) ?? externalAgentTags.get(displayName) ?? 'ACP')
+        : (meshAgentTags.get(rawName) ?? meshAgentTags.get(displayName) ?? 'ACP')
       : human.tag,
     time,
     text: displayTextFromMessage(item),
     orderKey: item.seq,
-    ...(item.externalAgentSessionId ? { externalAgentSessionId: item.externalAgentSessionId } : {}),
+    ...(item.meshSessionId ? { meshSessionId: item.meshSessionId } : {}),
     ...(item.deliveryId ? { deliveryId: item.deliveryId } : {}),
     ...(reasoning ? { reasoning } : {}),
     ...(attachments.length ? { attachments } : {}),
@@ -129,41 +129,39 @@ export function messageToView(
   };
 }
 
-function externalAgentAvatarUrl(
+function meshAgentAvatarUrl(
   displayName: string,
-  externalAgentAvatarSeeds = new Map<string, string>(),
+  meshAgentAvatarSeeds = new Map<string, string>(),
   avatarStyle?: AvatarStyle
 ): string {
-  return entityAvatarUrl(externalAgentAvatarSeeds.get(displayName) ?? `external-agent:${displayName}`, avatarStyle);
+  return entityAvatarUrl(meshAgentAvatarSeeds.get(displayName) ?? `mesh-agent:${displayName}`, avatarStyle);
 }
 
-function externalAgentSystemActorView({
+function meshAgentSystemActorView({
   actorId,
   actorName,
   projectMembers,
-  externalAgentDisplayNames,
-  externalAgentAvatarSeeds,
-  externalAgentIcons,
-  externalAgentTags,
+  meshAgentDisplayNames,
+  meshAgentAvatarSeeds,
+  meshAgentIcons,
+  meshAgentTags,
   avatarStyle
 }: {
   actorId: string;
   actorName?: string;
   projectMembers: readonly ProjectMember[];
-  externalAgentDisplayNames: Map<string, string>;
-  externalAgentAvatarSeeds: Map<string, string>;
-  externalAgentIcons: Map<string, Message['icon']>;
-  externalAgentTags: Map<string, string>;
+  meshAgentDisplayNames: Map<string, string>;
+  meshAgentAvatarSeeds: Map<string, string>;
+  meshAgentIcons: Map<string, Message['icon']>;
+  meshAgentTags: Map<string, string>;
   avatarStyle?: AvatarStyle;
 }): Pick<Message, 'authorId' | 'authorName' | 'av' | 'icon' | 'avatarUrl' | 'tag' | 'agentChip'> {
-  const member = projectMembers.find((candidate) => candidate.type === 'external-agent' && candidate.id === actorId);
-  const displayName = externalAgentDisplayNames.get(actorId) ?? member?.displayName ?? actorName ?? actorId;
-  const avatarUrl = externalAgentAvatarUrl(displayName, externalAgentAvatarSeeds, avatarStyle);
+  const member = projectMembers.find((candidate) => candidate.type === 'mesh-agent' && candidate.id === actorId);
+  const displayName = meshAgentDisplayNames.get(actorId) ?? member?.displayName ?? actorName ?? actorId;
+  const avatarUrl = meshAgentAvatarUrl(displayName, meshAgentAvatarSeeds, avatarStyle);
   const icon =
-    externalAgentIcons.get(actorId) ??
-    (member ? externalAgentIcons.get(member.name) : undefined) ??
-    iconForAgent(displayName);
-  const tag = externalAgentTags.get(actorId) ?? (member ? externalAgentTags.get(member.name) : undefined) ?? 'CLI';
+    meshAgentIcons.get(actorId) ?? (member ? meshAgentIcons.get(member.name) : undefined) ?? iconForAgent(displayName);
+  const tag = meshAgentTags.get(actorId) ?? (member ? meshAgentTags.get(member.name) : undefined) ?? 'CLI';
   return {
     authorId: actorId,
     authorName: displayName,
@@ -184,19 +182,19 @@ function externalAgentSystemActorView({
 function projectMemberJoinMessageView(
   member: ProjectMember & { joinedAt: string },
   displayName: string,
-  externalAgentTags = new Map<string, string>(),
-  externalAgentIcons = new Map<string, Message['icon']>(),
-  externalAgentAvatarSeeds = new Map<string, string>(),
+  meshAgentTags = new Map<string, string>(),
+  meshAgentIcons = new Map<string, Message['icon']>(),
+  meshAgentAvatarSeeds = new Map<string, string>(),
   avatarStyle?: AvatarStyle
 ): Message {
-  const actor = externalAgentSystemActorView({
+  const actor = meshAgentSystemActorView({
     actorId: member.id,
     actorName: displayName,
     projectMembers: [member],
-    externalAgentDisplayNames: new Map([[member.id, displayName]]),
-    externalAgentAvatarSeeds,
-    externalAgentIcons,
-    externalAgentTags,
+    meshAgentDisplayNames: new Map([[member.id, displayName]]),
+    meshAgentAvatarSeeds,
+    meshAgentIcons,
+    meshAgentTags,
     avatarStyle
   });
   return {
@@ -210,51 +208,51 @@ function projectMemberJoinMessageView(
   };
 }
 
-function externalAgentSessionDeveloperMessage(session: ExternalAgentSessionView): Message {
-  return externalAgentSessionDeveloperMessageView(session, session.agentName);
+function meshSessionDeveloperMessage(session: MeshSessionView): Message {
+  return meshSessionDeveloperMessageView(session, session.agentName);
 }
 
-function externalAgentSessionDeveloperMessageView(
-  session: ExternalAgentSessionView,
+function meshSessionDeveloperMessageView(
+  session: MeshSessionView,
   displayName: string,
-  externalAgentAvatarSeeds = new Map<string, string>(),
+  meshAgentAvatarSeeds = new Map<string, string>(),
   avatarStyle?: AvatarStyle
 ): Message {
   return {
-    id: `external-agent-session-developer:${session.id}`,
+    id: `mesh-session-developer:${session.id}`,
     authorId: session.agentName,
     authorName: displayName,
     av: avatarForAgent(displayName),
     icon: productIcon(session.productIcon),
-    avatarUrl: externalAgentAvatarUrl(displayName, externalAgentAvatarSeeds, avatarStyle),
+    avatarUrl: meshAgentAvatarUrl(displayName, meshAgentAvatarSeeds, avatarStyle),
     kind: 'developer',
     tag: 'DEV',
     time: fmtTime(session.startedAt),
-    text: EXTERNAL_AGENT_FOLLOW_TEXT,
-    externalAgentSessionId: session.id,
+    text: MESH_AGENT_FOLLOW_TEXT,
+    meshSessionId: session.id,
     developerOnly: true,
     orderKey: `${session.startedAt}:developer`
   };
 }
 
-function externalAgentSessionErrorMessageView(
-  session: ExternalAgentSessionView,
+function meshSessionErrorMessageView(
+  session: MeshSessionView,
   displayName: string,
-  item: ExternalAgentObservationEvent,
-  externalAgentAvatarSeeds = new Map<string, string>(),
+  item: MeshAgentObservationEvent,
+  meshAgentAvatarSeeds = new Map<string, string>(),
   avatarStyle?: AvatarStyle
 ): Message {
   const icon = productIcon(session.productIcon);
-  const avatarUrl = externalAgentAvatarUrl(displayName, externalAgentAvatarSeeds, avatarStyle);
+  const avatarUrl = meshAgentAvatarUrl(displayName, meshAgentAvatarSeeds, avatarStyle);
   return {
-    id: `external-agent-session-error:${session.id}:${item.id}`,
+    id: `mesh-session-error:${session.id}:${item.id}`,
     authorId: session.agentName,
     authorName: displayName,
     av: avatarForAgent(displayName),
     icon,
     avatarUrl,
     kind: 'system',
-    tag: externalAgentTag(session.provider),
+    tag: meshAgentTag(session.provider),
     time: fmtTime(session.updatedAt || session.startedAt),
     text: 'encountered an error',
     agentChip: {
@@ -262,9 +260,9 @@ function externalAgentSessionErrorMessageView(
       name: displayName,
       icon,
       avatarUrl,
-      tag: externalAgentTag(session.provider)
+      tag: meshAgentTag(session.provider)
     },
-    externalAgentSessionId: session.id,
+    meshSessionId: session.id,
     orderKey: `${session.updatedAt || session.startedAt}:error:${item.id}`,
     systemTone: 'error',
     systemDetail: item.text,
@@ -272,22 +270,20 @@ function externalAgentSessionErrorMessageView(
   };
 }
 
-function externalAgentSessionErrorMessages(
-  session: ExternalAgentSessionView,
+function meshSessionErrorMessages(
+  session: MeshSessionView,
   displayName: string,
-  externalAgentAvatarSeeds = new Map<string, string>(),
+  meshAgentAvatarSeeds = new Map<string, string>(),
   avatarStyle?: AvatarStyle
 ): Message[] {
-  return externalAgentStreamItems({
+  return meshAgentStreamItems({
     id: session.id,
     provider: session.provider,
     output: session.outputSnapshot,
     observedAt: session.updatedAt || session.startedAt
   })
     .filter((item) => item.providerEventType === 'server_error')
-    .map((item) =>
-      externalAgentSessionErrorMessageView(session, displayName, item, externalAgentAvatarSeeds, avatarStyle)
-    );
+    .map((item) => meshSessionErrorMessageView(session, displayName, item, meshAgentAvatarSeeds, avatarStyle));
 }
 
 export function sortMessagesOldestFirst(messages: Message[]): Message[] {
@@ -297,7 +293,7 @@ export function sortMessagesOldestFirst(messages: Message[]): Message[] {
   });
 }
 
-function keepManagedExternalAgentRepliesAfterJoin(messages: Map<string, Message>): void {
+function keepManagedMeshAgentRepliesAfterJoin(messages: Map<string, Message>): void {
   const joinByAgent = new Map<string, string>();
   for (const message of messages.values()) {
     if (message.kind !== 'system' || !message.id.startsWith('project-member-joined:') || !message.orderKey) continue;
@@ -312,8 +308,8 @@ function keepManagedExternalAgentRepliesAfterJoin(messages: Map<string, Message>
   }
 }
 
-function currentExternalAgentSessionsByAgent(sessions: ExternalAgentSessionView[]): ExternalAgentSessionView[] {
-  const current = new Map<string, ExternalAgentSessionView>();
+function currentMeshSessionsByAgent(sessions: MeshSessionView[]): MeshSessionView[] {
+  const current = new Map<string, MeshSessionView>();
   for (const session of [...sessions].sort((a, b) => {
     const byUpdatedAt = (b.updatedAt || b.startedAt).localeCompare(a.updatedAt || a.startedAt);
     return byUpdatedAt === 0 ? b.id.localeCompare(a.id) : byUpdatedAt;
@@ -324,12 +320,12 @@ function currentExternalAgentSessionsByAgent(sessions: ExternalAgentSessionView[
   return [...current.values()];
 }
 
-function externalAgentStreamFromSession(
-  session: ExternalAgentSessionView,
+function meshAgentStreamFromSession(
+  session: MeshSessionView,
   templateAgentNames = new Map<string, string>(),
   agentAliases = new Map<string, string[]>()
-): ExternalAgentStreamView {
-  const items = externalAgentNeutralStreamItems({
+): MeshAgentStreamView {
+  const items = meshAgentNeutralStreamItems({
     id: session.id,
     provider: session.provider,
     output: session.outputSnapshot,
@@ -344,7 +340,7 @@ function externalAgentStreamFromSession(
       ? { templateAgentName: templateAgentNames.get(session.agentName) }
       : {}),
     provider: session.provider,
-    tag: externalAgentTag(session.provider),
+    tag: meshAgentTag(session.provider),
     icon: productIcon(session.productIcon),
     status: session.state === 'failed' ? 'error' : 'ok',
     workingPath: session.workingPath,
@@ -354,39 +350,39 @@ function externalAgentStreamFromSession(
   };
 }
 
-function externalAgentStreamFromActivity(
+function meshAgentStreamFromActivity(
   row: ActivityRow,
   templateAgentNames = new Map<string, string>(),
   agentAliases = new Map<string, string[]>()
-): ExternalAgentStreamView | undefined {
-  if (!row.tool.startsWith('external-agent:')) return undefined;
-  const provider = row.tool.slice('external-agent:'.length);
+): MeshAgentStreamView | undefined {
+  if (!row.tool.startsWith('mesh-agent:')) return undefined;
+  const provider = row.tool.slice('mesh-agent:'.length);
   const agentName = row.agentName ?? row.detail ?? provider;
-  const items = externalAgentNeutralStreamItems({ id: row.id, provider, output: row.output });
+  const items = meshAgentNeutralStreamItems({ id: row.id, provider, output: row.output });
   return {
     id: row.id,
     agentName,
     ...(agentAliases.get(agentName)?.length ? { agentAliases: agentAliases.get(agentName) } : {}),
     ...(templateAgentNames.get(agentName) ? { templateAgentName: templateAgentNames.get(agentName) } : {}),
     provider,
-    tag: externalAgentTag(provider),
+    tag: meshAgentTag(provider),
     status: row.status,
     output: row.output ?? '',
     items
   };
 }
 
-export function buildExternalAgentStreams(
-  externalAgentSessions: ExternalAgentSessionView[],
+export function buildMeshAgentStreams(
+  meshSessions: MeshSessionView[],
   activity: ActivityRow[],
   templateAgentNames = new Map<string, string>(),
   agentAliases = new Map<string, string[]>()
-): ExternalAgentStreamView[] {
-  const byId = new Map<string, ExternalAgentStreamView>();
-  for (const session of externalAgentSessions)
-    byId.set(session.id, externalAgentStreamFromSession(session, templateAgentNames, agentAliases));
+): MeshAgentStreamView[] {
+  const byId = new Map<string, MeshAgentStreamView>();
+  for (const session of meshSessions)
+    byId.set(session.id, meshAgentStreamFromSession(session, templateAgentNames, agentAliases));
   for (const row of activity) {
-    const stream = externalAgentStreamFromActivity(row, templateAgentNames, agentAliases);
+    const stream = meshAgentStreamFromActivity(row, templateAgentNames, agentAliases);
     if (!stream) continue;
     const existing = byId.get(stream.id);
     byId.set(stream.id, {
@@ -410,12 +406,8 @@ function acpAgentNameFromTool(item: Extract<UIItem, { kind: 'tool' }>): string |
   return name || undefined;
 }
 
-function externalAgentSystemAgentName(id: string): string | undefined {
-  for (const prefix of [
-    'external-agent-resume-failed:',
-    'external-agent-idle-resumed:',
-    'external-agent-idle-suspended:'
-  ]) {
+function meshAgentSystemAgentName(id: string): string | undefined {
+  for (const prefix of ['mesh-agent-resume-failed:', 'mesh-agent-idle-resumed:', 'mesh-agent-idle-suspended:']) {
     if (id.startsWith(prefix)) return id.slice(prefix.length).split(':')[0];
   }
   return undefined;
@@ -436,13 +428,13 @@ export function acpProgressText(output: string | undefined): string {
 interface BuildProjectMessagesInput {
   persistedMessages: Message[];
   projectMembers?: readonly ProjectMember[];
-  externalAgentSessions: ExternalAgentSessionView[];
+  meshSessions: MeshSessionView[];
   liveItems: readonly UIItem[];
   liveTools: readonly Extract<UIItem, { kind: 'tool' }>[];
-  externalAgentAvatarSeeds?: Map<string, string>;
-  externalAgentTags?: Map<string, string>;
-  externalAgentDisplayNames?: Map<string, string>;
-  externalAgentIcons?: Map<string, Message['icon']>;
+  meshAgentAvatarSeeds?: Map<string, string>;
+  meshAgentTags?: Map<string, string>;
+  meshAgentDisplayNames?: Map<string, string>;
+  meshAgentIcons?: Map<string, Message['icon']>;
   human?: Participant;
   avatarStyle?: AvatarStyle;
   showDeveloperOnlyMessages?: boolean;
@@ -451,13 +443,13 @@ interface BuildProjectMessagesInput {
 export function buildProjectMessages({
   persistedMessages,
   projectMembers = [],
-  externalAgentSessions,
+  meshSessions,
   liveItems,
   liveTools,
-  externalAgentAvatarSeeds = new Map(),
-  externalAgentTags = new Map(),
-  externalAgentDisplayNames = new Map(),
-  externalAgentIcons = new Map(),
+  meshAgentAvatarSeeds = new Map(),
+  meshAgentTags = new Map(),
+  meshAgentDisplayNames = new Map(),
+  meshAgentIcons = new Map(),
   human = HUMAN,
   avatarStyle,
   showDeveloperOnlyMessages = false
@@ -468,44 +460,39 @@ export function buildProjectMessages({
     messageToView(
       item,
       '',
-      externalAgentAvatarSeeds,
-      externalAgentTags,
-      externalAgentDisplayNames,
-      externalAgentIcons,
+      meshAgentAvatarSeeds,
+      meshAgentTags,
+      meshAgentDisplayNames,
+      meshAgentIcons,
       human,
       avatarStyle
     );
   for (const view of persistedMessages) byId.set(view.id, view);
   for (const member of projectMembers) {
-    if (member.type !== 'external-agent' || !member.joinedAt) continue;
-    const displayName = externalAgentDisplayNames.get(member.id) ?? member.displayName ?? member.name;
+    if (member.type !== 'mesh-agent' || !member.joinedAt) continue;
+    const displayName = meshAgentDisplayNames.get(member.id) ?? member.displayName ?? member.name;
     byId.set(
       `project-member-joined:${member.id}`,
       projectMemberJoinMessageView(
         member as ProjectMember & { joinedAt: string },
         displayName,
-        externalAgentTags,
-        externalAgentIcons,
-        externalAgentAvatarSeeds,
+        meshAgentTags,
+        meshAgentIcons,
+        meshAgentAvatarSeeds,
         avatarStyle
       )
     );
   }
-  const currentExternalAgentSessions = currentExternalAgentSessionsByAgent(externalAgentSessions);
-  for (const session of currentExternalAgentSessions) {
-    const displayName = externalAgentDisplayNames.get(session.agentName) ?? session.agentName;
-    for (const message of externalAgentSessionErrorMessages(
-      session,
-      displayName,
-      externalAgentAvatarSeeds,
-      avatarStyle
-    )) {
+  const currentMeshSessions = currentMeshSessionsByAgent(meshSessions);
+  for (const session of currentMeshSessions) {
+    const displayName = meshAgentDisplayNames.get(session.agentName) ?? session.agentName;
+    for (const message of meshSessionErrorMessages(session, displayName, meshAgentAvatarSeeds, avatarStyle)) {
       byId.set(message.id, message);
     }
     if (shouldShowDeveloperOnlyMessages) {
       byId.set(
-        `external-agent-session-developer:${session.id}`,
-        externalAgentSessionDeveloperMessageView(session, displayName, externalAgentAvatarSeeds, avatarStyle)
+        `mesh-session-developer:${session.id}`,
+        meshSessionDeveloperMessageView(session, displayName, meshAgentAvatarSeeds, avatarStyle)
       );
     }
   }
@@ -514,14 +501,14 @@ export function buildProjectMessages({
       if (item.event) {
         byId.set(item.id, {
           id: item.id,
-          ...externalAgentSystemActorView({
+          ...meshAgentSystemActorView({
             actorId: item.event.agentId,
             actorName: item.event.agentName,
             projectMembers,
-            externalAgentDisplayNames,
-            externalAgentAvatarSeeds,
-            externalAgentIcons,
-            externalAgentTags,
+            meshAgentDisplayNames,
+            meshAgentAvatarSeeds,
+            meshAgentIcons,
+            meshAgentTags,
             avatarStyle
           }),
           kind: 'system',
@@ -531,19 +518,19 @@ export function buildProjectMessages({
         });
         continue;
       }
-      const externalAgentLifecycleAgent = externalAgentSystemAgentName(item.id);
-      const authorName = externalAgentLifecycleAgent || 'Monad';
+      const meshAgentLifecycleAgent = meshAgentSystemAgentName(item.id);
+      const authorName = meshAgentLifecycleAgent || 'Monad';
       byId.set(item.id, {
         id: item.id,
         authorId: authorName,
         authorName,
         av: avatarForAgent(authorName),
         icon: iconForAgent(authorName),
-        avatarUrl: externalAgentLifecycleAgent
-          ? entityAvatarUrl(`external-agent-resume:${authorName}`, avatarStyle)
+        avatarUrl: meshAgentLifecycleAgent
+          ? entityAvatarUrl(`mesh-agent-resume:${authorName}`, avatarStyle)
           : undefined,
         kind: 'system',
-        tag: externalAgentLifecycleAgent ? 'CLI' : 'SYS',
+        tag: meshAgentLifecycleAgent ? 'CLI' : 'SYS',
         time: '',
         text: item.text,
         orderKey: item.seq
@@ -551,7 +538,7 @@ export function buildProjectMessages({
       continue;
     }
     if (item.kind !== 'message') continue;
-    if (isManagedExternalAgentReasoningOnlyMessage(item)) continue;
+    if (isManagedMeshAgentReasoningOnlyMessage(item)) continue;
     const text = displayTextFromMessage(item);
     const reasoning = item.role === 'assistant' ? reasoningFromParts(item.parts) : undefined;
     if (text || reasoning || item.status !== 'streaming') byId.set(item.id, toView(item));
@@ -582,47 +569,47 @@ export function buildProjectMessages({
     });
   }
   for (const item of liveTools) {
-    if (item.status !== 'running' || !item.tool.startsWith('external-agent:')) continue;
+    if (item.status !== 'running' || !item.tool.startsWith('mesh-agent:')) continue;
     const input = item.input as { agent?: unknown; productIcon?: unknown; provider?: unknown } | undefined;
     if (typeof input?.agent !== 'string') continue;
-    const displayName = externalAgentDisplayNames.get(input.agent) ?? input.agent;
+    const displayName = meshAgentDisplayNames.get(input.agent) ?? input.agent;
     if (shouldShowDeveloperOnlyMessages && item.output) {
-      byId.set(`external-agent-session-developer:${item.id}`, {
-        id: `external-agent-session-developer:${item.id}`,
+      byId.set(`mesh-session-developer:${item.id}`, {
+        id: `mesh-session-developer:${item.id}`,
         authorId: input.agent,
         authorName: displayName,
         av: avatarForAgent(displayName),
         icon: productIcon(input.productIcon),
-        avatarUrl: externalAgentAvatarUrl(displayName, externalAgentAvatarSeeds, avatarStyle),
+        avatarUrl: meshAgentAvatarUrl(displayName, meshAgentAvatarSeeds, avatarStyle),
         kind: 'developer',
         tag: 'DEV',
         time: '',
-        text: EXTERNAL_AGENT_FOLLOW_TEXT,
-        externalAgentSessionId: item.id,
+        text: MESH_AGENT_FOLLOW_TEXT,
+        meshSessionId: item.id,
         developerOnly: true,
         orderKey: `${item.seq}:developer`
       });
     }
   }
-  keepManagedExternalAgentRepliesAfterJoin(byId);
+  keepManagedMeshAgentRepliesAfterJoin(byId);
   return sortMessagesOldestFirst([...byId.values()]);
 }
 
 export const __workplaceProjectMessageTest = {
   buildProjectMessages,
-  buildExternalAgentStreams,
+  buildMeshAgentStreams,
   avatarCacheKey,
   defaultProjectMemberSettings: defaultWorkplaceProjectMemberSettings,
   entityAvatarUrl,
   entityAvatarWriteUrl,
-  externalAgentMemberPresence,
-  externalAgentMemberActivityPhase,
-  externalAgentFacingCommandPhase,
-  externalAgentProductDisplayName,
-  externalAgentSessionIsGenerating,
+  meshAgentMemberPresence,
+  meshAgentMemberActivityPhase,
+  meshAgentFacingCommandPhase,
+  meshAgentProductDisplayName,
+  meshSessionIsGenerating,
   projectMemberJoinMessageView,
-  externalAgentSessionDeveloperMessage,
+  meshSessionDeveloperMessage,
   parseProjectMembers,
-  renameExternalAgentProjectMemberDisplayName,
+  renameMeshAgentProjectMemberDisplayName,
   sortMessagesOldestFirst
 };

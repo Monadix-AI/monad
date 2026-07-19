@@ -2,7 +2,7 @@ interface ChannelTargetMention {
   id: string;
   name: string;
   agentName?: string;
-  externalAgentName?: string;
+  meshAgentName?: string;
 }
 
 export type ChannelRouteAction =
@@ -24,7 +24,7 @@ export type ChannelRouteAction =
       targetMention?: ChannelTargetMention;
     }
   | {
-      kind: 'forward-external-agent';
+      kind: 'forward-mesh-agent';
       agentName: string;
       text: string;
       displayText?: string;
@@ -35,18 +35,18 @@ export type ChannelRouteAction =
 export function routeChannelMessage({
   text,
   acpAgentNames,
-  externalAgentNames = []
+  meshAgentNames = []
 }: {
   text: string;
   acpAgentNames: readonly string[];
-  externalAgentNames?: readonly string[];
+  meshAgentNames?: readonly string[];
 }): ChannelRouteAction {
   const trimmed = text.trim();
   if (!trimmed) return { kind: 'none' };
 
   const mentions = channelMentions(trimmed);
   const singleMention = mentions.length === 1 ? mentions[0] : undefined;
-  const singleTarget = singleMention ? targetMention(singleMention, acpAgentNames, externalAgentNames) : undefined;
+  const singleTarget = singleMention ? targetMention(singleMention, acpAgentNames, meshAgentNames) : undefined;
 
   if (singleTarget) {
     const rest = singleMention ? withoutMention(trimmed, singleMention).trim() : '';
@@ -59,10 +59,10 @@ export function routeChannelMessage({
         direct: true
       };
     }
-    if (singleTarget.externalAgentName) {
+    if (singleTarget.meshAgentName) {
       return {
-        kind: 'forward-external-agent',
-        agentName: singleTarget.externalAgentName,
+        kind: 'forward-mesh-agent',
+        agentName: singleTarget.meshAgentName,
         text: rest || trimmed,
         displayText: trimmed,
         direct: true
@@ -77,15 +77,13 @@ export function routeChannelMessage({
 function targetMention(
   mention: { name: string; id: string },
   acpAgentNames: readonly string[],
-  externalAgentNames: readonly string[]
+  meshAgentNames: readonly string[]
 ): ChannelTargetMention | undefined {
   const acpName = mention.id.startsWith('acp:') ? mention.id.slice(4) : undefined;
   if (acpName && acpAgentNames.includes(acpName)) return { id: mention.id, name: mention.name, agentName: acpName };
-  const externalAgentName = mention.id.startsWith('external-agent:')
-    ? mention.id.slice('external-agent:'.length)
-    : undefined;
-  if (externalAgentName && externalAgentNames.includes(externalAgentName)) {
-    return { id: mention.id, name: mention.name, externalAgentName: externalAgentName };
+  const meshAgentName = mention.id.startsWith('mesh-agent:') ? mention.id.slice('mesh-agent:'.length) : undefined;
+  if (meshAgentName && meshAgentNames.includes(meshAgentName)) {
+    return { id: mention.id, name: mention.name, meshAgentName: meshAgentName };
   }
   if (mention.id === 'monad' || mention.id.startsWith('agent:')) return { id: mention.id, name: mention.name };
   return undefined;

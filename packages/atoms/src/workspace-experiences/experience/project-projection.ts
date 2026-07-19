@@ -1,10 +1,10 @@
 import type {
   AcpAgentView,
   AvatarStyle,
-  ExternalAgentAppServerTransport,
-  ExternalAgentProvider,
-  ExternalAgentSessionView,
-  ExternalAgentView,
+  MeshAgentAppServerTransport,
+  MeshAgentProvider,
+  MeshAgentView,
+  MeshSessionView,
   UIItem,
   WorkplaceProject
 } from '@monad/protocol';
@@ -13,17 +13,13 @@ import type { AgentActivityOverride, ApprovalView, Participant, Project, Questio
 
 import {
   entityAvatarUrl,
-  externalAgentProductDisplayName,
+  meshAgentProductDisplayName,
   workplaceProjectMemberAvatarSeed,
   workplaceProjectMemberId,
   workplaceProjectMemberStableId
 } from '@monad/protocol';
 
-import {
-  externalAgentIsGenerating,
-  externalAgentMemberActivityPhase,
-  externalAgentMemberPresence
-} from './external-agent-presence.ts';
+import { meshAgentIsGenerating, meshAgentMemberActivityPhase, meshAgentMemberPresence } from './mesh-agent-presence.ts';
 import { productIcon } from './project-members.ts';
 
 export const HUMAN: Participant = {
@@ -58,7 +54,7 @@ export function projectMemberParticipants(participants: readonly Participant[]):
   return participants.filter((participant) => participant.kind === 'agent');
 }
 
-export function externalAgentTag(provider: ExternalAgentProvider | string | undefined): string {
+export function meshAgentTag(provider: MeshAgentProvider | string | undefined): string {
   if (provider === 'codex') return 'Codex';
   if (provider === 'claude-code') return 'Claude';
   if (provider === 'gemini') return 'Gemini';
@@ -66,7 +62,7 @@ export function externalAgentTag(provider: ExternalAgentProvider | string | unde
   return 'CLI';
 }
 
-export function externalAgentApprovalName(provider: ExternalAgentProvider | string | undefined): string {
+export function meshAgentApprovalName(provider: MeshAgentProvider | string | undefined): string {
   if (provider === 'codex') return 'Codex approval';
   if (provider === 'claude-code') return 'Claude Code approval';
   if (provider === 'gemini') return 'Gemini approval';
@@ -94,7 +90,7 @@ export function monadIsStreaming(items: readonly UIItem[]): boolean {
       item.status === 'streaming' &&
       item.role === 'assistant' &&
       (item.agentName === undefined || item.agentName === 'monad') &&
-      item.source !== 'managed-external-agent'
+      item.source !== 'managed-mesh-agent'
   );
 }
 
@@ -137,20 +133,20 @@ export function summarizeTool(tool: string, input: unknown): string {
 
 export function projectParticipants(args: {
   acpAgents: readonly AcpAgentView[];
-  activeExternalAgentNames?: ReadonlySet<string>;
+  activeMeshAgentNames?: ReadonlySet<string>;
   avatarStyle?: AvatarStyle;
   liveTools?: readonly Extract<UIItem, { kind: 'tool' }>[];
   monadStreaming?: boolean;
-  externalAgentActivityOverrides?: Record<string, AgentActivityOverride>;
-  externalAgents: readonly ExternalAgentView[];
-  externalAgentAvatarSeeds: ReadonlyMap<string, string>;
-  externalAgentSessions: ExternalAgentSessionView[];
+  meshAgentActivityOverrides?: Record<string, AgentActivityOverride>;
+  meshAgents: readonly MeshAgentView[];
+  meshAgentAvatarSeeds: ReadonlyMap<string, string>;
+  meshSessions: MeshSessionView[];
   projectMembers: readonly ProjectMember[];
   runningDelegations?: ReadonlySet<string>;
 }): Participant[] {
-  const activeExternalAgentNames = args.activeExternalAgentNames ?? new Set<string>();
+  const activeMeshAgentNames = args.activeMeshAgentNames ?? new Set<string>();
   const liveTools = args.liveTools ?? [];
-  const externalAgentActivityOverrides = args.externalAgentActivityOverrides ?? {};
+  const meshAgentActivityOverrides = args.meshAgentActivityOverrides ?? {};
   const runningDelegations = args.runningDelegations ?? new Set<string>();
   return args.projectMembers.map((member) => {
     if (member.type === 'monad') {
@@ -166,38 +162,38 @@ export function projectParticipants(args: {
         activityPhase: args.monadStreaming ? 'thinking' : undefined
       };
     }
-    if (member.type === 'external-agent') {
+    if (member.type === 'mesh-agent') {
       const templateName = member.templateName ?? member.name;
       const displayName = member.displayName ?? member.name;
-      const agent = args.externalAgents.find((candidate) => candidate.name === templateName);
+      const agent = args.meshAgents.find((candidate) => candidate.name === templateName);
       const template = agent?.projectTemplates?.find((candidate) => candidate.id === member.projectTemplateId);
       const stableAgentName = workplaceProjectMemberStableId(member);
-      const presence = externalAgentMemberPresence({
-        activeAgentNames: activeExternalAgentNames,
+      const presence = meshAgentMemberPresence({
+        activeAgentNames: activeMeshAgentNames,
         agentName: stableAgentName,
         enabled: agent?.enabled ?? false,
-        externalAgentSessions: args.externalAgentSessions,
+        meshSessions: args.meshSessions,
         liveTools
       });
-      const activityOverride = externalAgentActivityOverrides[stableAgentName];
+      const activityOverride = meshAgentActivityOverrides[stableAgentName];
       const activityPhase =
         activityOverride?.phase ??
-        externalAgentMemberActivityPhase({
+        meshAgentMemberActivityPhase({
           agentName: stableAgentName,
           liveTools,
-          externalAgentSessions: args.externalAgentSessions
+          meshSessions: args.meshSessions
         });
       return {
         id: member.id,
         av: initials(displayName),
         icon: productIcon(agent?.productIcon),
         avatarUrl: entityAvatarUrl(
-          args.externalAgentAvatarSeeds.get(displayName) ?? `external-agent:${displayName}`,
+          args.meshAgentAvatarSeeds.get(displayName) ?? `mesh-agent:${displayName}`,
           args.avatarStyle
         ),
         name: displayName,
         kind: 'agent',
-        tag: externalAgentTag(agent?.provider),
+        tag: meshAgentTag(agent?.provider),
         role: 'CLI',
         presence,
         activityPhase,
@@ -229,20 +225,20 @@ export function projectParticipants(args: {
 
 export function projectMemberCandidates(args: {
   acpAgents: readonly AcpAgentView[];
-  externalAgents: readonly ExternalAgentView[];
+  meshAgents: readonly MeshAgentView[];
   projectMembers: readonly ProjectMember[];
 }): ProjectMemberCandidate[] {
   const current = new Set(args.projectMembers.map((member) => member.id));
-  const emptyTransports: ExternalAgentAppServerTransport[] = [];
-  const externalAgentCandidates = args.externalAgents.flatMap((agent) => {
+  const emptyTransports: MeshAgentAppServerTransport[] = [];
+  const meshAgentCandidates = args.meshAgents.flatMap((agent) => {
     const templates = agent.projectTemplates ?? [];
     if (templates.length > 0) {
       return templates.map((template) => ({
-        id: `external-agent-template:${agent.name}:${template.id}`,
-        type: 'external-agent' as const,
+        id: `mesh-agent-template:${agent.name}:${template.id}`,
+        type: 'mesh-agent' as const,
         name: agent.name,
         label: template.displayName,
-        tag: externalAgentTag(agent.provider),
+        tag: meshAgentTag(agent.provider),
         enabled: agent.enabled,
         provider: agent.provider,
         modelOptions: agent.modelOptions ?? [],
@@ -255,11 +251,11 @@ export function projectMemberCandidates(args: {
     }
     return [
       {
-        id: `external-agent-template:${agent.name}`,
-        type: 'external-agent' as const,
+        id: `mesh-agent-template:${agent.name}`,
+        type: 'mesh-agent' as const,
         name: agent.name,
-        label: externalAgentProductDisplayName(productIcon(agent.productIcon), agent.provider, agent.name),
-        tag: externalAgentTag(agent.provider),
+        label: meshAgentProductDisplayName(productIcon(agent.productIcon), agent.provider, agent.name),
+        tag: meshAgentTag(agent.provider),
         enabled: agent.enabled,
         provider: agent.provider,
         modelOptions: agent.modelOptions ?? [],
@@ -301,7 +297,7 @@ export function projectMemberCandidates(args: {
         supportedAppServerTransports: emptyTransports,
         icon: productIcon(agent.productIcon)
       })),
-    ...externalAgentCandidates
+    ...meshAgentCandidates
   ];
 }
 
@@ -310,11 +306,10 @@ export function projectApprovalViews(items: readonly UIItem[]): ApprovalView[] {
     .filter((item): item is Extract<UIItem, { kind: 'approval' }> => item.kind === 'approval')
     .map((a) => ({
       id: a.id,
-      externalAgentSessionId:
-        (a.input as { approvalOwnership?: unknown; externalAgentSessionId?: unknown } | undefined)
-          ?.approvalOwnership === 'provider-owned' &&
-        typeof (a.input as { externalAgentSessionId?: unknown } | undefined)?.externalAgentSessionId === 'string'
-          ? (a.input as { externalAgentSessionId: string }).externalAgentSessionId
+      meshSessionId:
+        (a.input as { approvalOwnership?: unknown; meshSessionId?: unknown } | undefined)?.approvalOwnership ===
+          'provider-owned' && typeof (a.input as { meshSessionId?: unknown } | undefined)?.meshSessionId === 'string'
+          ? (a.input as { meshSessionId: string }).meshSessionId
           : undefined,
       approvalOwnership:
         (a.input as { approvalOwnership?: unknown } | undefined)?.approvalOwnership === 'provider-owned'
@@ -328,7 +323,7 @@ export function projectApprovalViews(items: readonly UIItem[]): ApprovalView[] {
       name:
         (a.input as { approvalOwnership?: unknown; provider?: unknown } | undefined)?.approvalOwnership ===
           'provider-owned' && typeof (a.input as { provider?: unknown } | undefined)?.provider === 'string'
-          ? externalAgentApprovalName((a.input as { provider: string }).provider)
+          ? meshAgentApprovalName((a.input as { provider: string }).provider)
           : 'monad',
       tag:
         (a.input as { approvalOwnership?: unknown } | undefined)?.approvalOwnership === 'provider-owned' ? 'CLI' : 'AI',
@@ -355,8 +350,8 @@ export function projectQuestionViews(items: readonly UIItem[]): QuestionView[] {
     }));
 }
 
-export function projectExternalAgentMetadataMaps(args: {
-  externalAgents: readonly ExternalAgentView[];
+export function projectMeshAgentMetadataMaps(args: {
+  meshAgents: readonly MeshAgentView[];
   projectId: string;
   projectMembers: readonly ProjectMember[];
 }): {
@@ -370,13 +365,13 @@ export function projectExternalAgentMetadataMaps(args: {
   const icons = new Map<string, Participant['icon']>();
   const tags = new Map<string, string>();
   for (const member of args.projectMembers) {
-    if (member.type !== 'external-agent') continue;
+    if (member.type !== 'mesh-agent') continue;
     const templateName = member.templateName ?? member.name;
     const displayName = member.displayName ?? member.name;
-    const agent = args.externalAgents.find((candidate) => candidate.name === templateName);
+    const agent = args.meshAgents.find((candidate) => candidate.name === templateName);
     const stableId = workplaceProjectMemberStableId(member);
     const icon = productIcon(agent?.productIcon);
-    const tag = externalAgentTag(agent?.provider);
+    const tag = meshAgentTag(agent?.provider);
     avatarSeeds.set(displayName, workplaceProjectMemberAvatarSeed(args.projectId, member));
     displayNames.set(stableId, displayName);
     displayNames.set(member.name, displayName);
@@ -390,28 +385,28 @@ export function projectExternalAgentMetadataMaps(args: {
   return { avatarSeeds, displayNames, icons, tags };
 }
 
-export function externalAgentStreamingAgentNames(items: readonly UIItem[]): Set<string> {
+export function meshAgentStreamingAgentNames(items: readonly UIItem[]): Set<string> {
   const names = new Set<string>();
   for (const item of items) {
     if (item.kind !== 'message') continue;
-    if (item.source !== 'managed-external-agent' || item.status !== 'streaming') continue;
+    if (item.source !== 'managed-mesh-agent' || item.status !== 'streaming') continue;
     if (item.agentName) names.add(item.agentName);
   }
   return names;
 }
 
-export function activeExternalAgentNames(args: {
+export function activeMeshAgentNames(args: {
   activityOverrideAgentNames: readonly string[];
   liveTools: readonly Extract<UIItem, { kind: 'tool' }>[];
-  externalAgentSessions: readonly ExternalAgentSessionView[];
+  meshSessions: readonly MeshSessionView[];
   streamingAgentNames: ReadonlySet<string>;
 }): Set<string> {
   const names = new Set(args.streamingAgentNames);
   for (const agentName of args.activityOverrideAgentNames) names.add(agentName);
-  for (const session of args.externalAgentSessions) {
+  for (const session of args.meshSessions) {
     // Live tool status is authoritative when present (it clears at turn end); the frozen session
-    // snapshot is only the fallback — see externalAgentIsGenerating.
-    if (externalAgentIsGenerating(session.agentName, args.liveTools, session)) names.add(session.agentName);
+    // snapshot is only the fallback — see meshAgentIsGenerating.
+    if (meshAgentIsGenerating(session.agentName, args.liveTools, session)) names.add(session.agentName);
   }
   return names;
 }

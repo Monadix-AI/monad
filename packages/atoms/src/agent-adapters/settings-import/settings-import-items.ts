@@ -1,10 +1,10 @@
 import type {
   AdapterMigrationSource,
-  ExternalAgentProvider,
-  ExternalAgentSettingsImportCandidate,
-  ExternalAgentSettingsImportItem,
-  ExternalAgentSettingsImportPreview,
-  ExternalAgentView
+  MeshAgentProvider,
+  MeshAgentSettingsImportCandidate,
+  MeshAgentSettingsImportItem,
+  MeshAgentSettingsImportPreview,
+  MeshAgentView
 } from '@monad/protocol';
 import type { BinProbes } from '@monad/sdk-atom';
 
@@ -16,11 +16,11 @@ import { withHash } from './settings-import-hash.ts';
 import { asString, getPath, isRecord, recordAt, sanitizeId } from './settings-import-parse.ts';
 
 export function defaultCandidates(
-  provider: ExternalAgentProvider,
+  provider: MeshAgentProvider,
   label: string,
-  paths: Array<{ path: string; scope: ExternalAgentSettingsImportCandidate['scope']; label?: string }>,
+  paths: Array<{ path: string; scope: MeshAgentSettingsImportCandidate['scope']; label?: string }>,
   probes: BinProbes | undefined
-): ExternalAgentSettingsImportCandidate[] {
+): MeshAgentSettingsImportCandidate[] {
   return paths
     .filter(({ path }) => probes?.exists(path) ?? false)
     .map(({ path, scope, label: candidateLabel }) => ({
@@ -35,16 +35,16 @@ export function defaultCandidates(
 export function agentItem(
   source: string,
   target: string,
-  agent: ExternalAgentView,
+  agent: MeshAgentView,
   summary?: string
-): ExternalAgentSettingsImportItem {
+): MeshAgentSettingsImportItem {
   return withHash({
-    id: `externalAgents:${target}`,
-    category: 'externalAgents',
+    id: `meshAgents:${target}`,
+    category: 'meshAgents',
     source,
     target,
     action: 'add',
-    reason: 'provider settings can be represented as a Monad external agent',
+    reason: 'provider settings can be represented as a Monad MeshAgent',
     risk: 'low',
     ...(summary ? { summary } : {}),
     agent
@@ -52,17 +52,17 @@ export function agentItem(
 }
 
 export function previewItem(
-  category: ExternalAgentSettingsImportItem['category'],
+  category: MeshAgentSettingsImportItem['category'],
   source: string,
   target: string,
   reason: string,
   payload: unknown,
   options: {
-    action?: ExternalAgentSettingsImportItem['action'];
-    risk?: ExternalAgentSettingsImportItem['risk'];
+    action?: MeshAgentSettingsImportItem['action'];
+    risk?: MeshAgentSettingsImportItem['risk'];
     summary?: string;
   } = {}
-): ExternalAgentSettingsImportItem {
+): MeshAgentSettingsImportItem {
   return withHash({
     id: `${category}:${target}`,
     category,
@@ -76,11 +76,7 @@ export function previewItem(
   });
 }
 
-export async function addSkillItems(
-  items: ExternalAgentSettingsImportItem[],
-  source: string,
-  root: string
-): Promise<void> {
+export async function addSkillItems(items: MeshAgentSettingsImportItem[], source: string, root: string): Promise<void> {
   try {
     const entries = await readdir(root, { withFileTypes: true, encoding: 'utf8' });
     for (const entry of entries) {
@@ -122,10 +118,10 @@ export function providerTypeFromName(name: string): ModelProviderType | null {
 }
 
 export function addModelItems(
-  items: ExternalAgentSettingsImportItem[],
+  items: MeshAgentSettingsImportItem[],
   sourcePath: string,
   data: Record<string, unknown>,
-  provider: ExternalAgentProvider
+  provider: MeshAgentProvider
 ): void {
   const model = asString(getPath(data, ['model', 'default'])) ?? asString(data.default_model) ?? asString(data.model);
   const providerId =
@@ -179,10 +175,10 @@ export function addModelItems(
 }
 
 export function addChannelItems(
-  items: ExternalAgentSettingsImportItem[],
+  items: MeshAgentSettingsImportItem[],
   sourcePath: string,
   data: Record<string, unknown>,
-  provider: ExternalAgentProvider
+  provider: MeshAgentProvider
 ): void {
   const channels = recordAt(data, ['channels']) ?? {};
   for (const [name, raw] of Object.entries(channels)) {
@@ -206,10 +202,10 @@ export function addChannelItems(
 }
 
 export function addMonadAgentItem(
-  items: ExternalAgentSettingsImportItem[],
+  items: MeshAgentSettingsImportItem[],
   sourcePath: string,
   data: Record<string, unknown>,
-  provider: ExternalAgentProvider
+  provider: MeshAgentProvider
 ): void {
   const agent = recordAt(data, ['agent']);
   if (!agent) return;
@@ -234,18 +230,18 @@ export function sourcesForRequest(
   return [];
 }
 
-export function targetForScope(provider: ExternalAgentProvider, scope: AdapterMigrationSource['scope']): string {
+export function targetForScope(provider: MeshAgentProvider, scope: AdapterMigrationSource['scope']): string {
   if (scope === 'workspace') return `${provider}-workspace`;
   if (scope === 'profile') return `${provider}-profile`;
   return provider;
 }
 
 export function mergePreview(
-  provider: ExternalAgentProvider,
+  provider: MeshAgentProvider,
   sources: AdapterMigrationSource[],
-  items: ExternalAgentSettingsImportItem[],
+  items: MeshAgentSettingsImportItem[],
   warnings: string[]
-): ExternalAgentSettingsImportPreview {
+): MeshAgentSettingsImportPreview {
   return {
     provider,
     path: sources[0]?.path ?? '',

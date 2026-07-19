@@ -1,4 +1,4 @@
-import type { ExternalAgentOutputEvent, ExternalAgentRuntimeHandle } from '@monad/sdk-atom';
+import type { MeshAgentOutputEvent, MeshAgentRuntimeHandle } from '@monad/sdk-atom';
 
 import { z } from 'zod';
 
@@ -176,7 +176,7 @@ export type QwenStreamJsonLine = z.infer<typeof qwenStreamJsonLineSchema>;
 // Qwen Code's `--output-format stream-json` emits one Claude-Code-compatible `SDKMessage` per line and,
 // under `--input-format stream-json`, exchanges a `control_request`/`control_response` plane for
 // permission prompts. Every line is validated against the `@monad/protocol` schema — the single source
-// of truth for the wire shape — and mapped to the daemon's external agent output contract through a
+// of truth for the wire shape — and mapped to the daemon's MeshAgent output contract through a
 // type-keyed dispatch table, mirroring the codex adapter's notification handlers: a future message
 // type is one table entry, not another `if` branch.
 
@@ -211,12 +211,9 @@ function stringifyToolResultContent(content: unknown): string | undefined {
 
 // `emitText` is false for `user` messages: their text is the CLI echoing our own prompt back, and
 // surfacing it would double the input as agent output. Only `assistant` text becomes an agent_message.
-function contentBlockEvents(
-  content: string | QwenStreamJsonContentBlock[],
-  emitText: boolean
-): ExternalAgentOutputEvent[] {
+function contentBlockEvents(content: string | QwenStreamJsonContentBlock[], emitText: boolean): MeshAgentOutputEvent[] {
   if (typeof content === 'string') return [];
-  const events: ExternalAgentOutputEvent[] = [];
+  const events: MeshAgentOutputEvent[] = [];
   let text = '';
   for (const block of content) {
     if (block.type === 'text') {
@@ -237,7 +234,7 @@ function contentBlockEvents(
   return events;
 }
 
-function systemEvents(message: QwenStreamJsonSystem): ExternalAgentOutputEvent[] {
+function systemEvents(message: QwenStreamJsonSystem): MeshAgentOutputEvent[] {
   if (!message.session_id) return [];
   return [
     {
@@ -252,7 +249,7 @@ function systemEvents(message: QwenStreamJsonSystem): ExternalAgentOutputEvent[]
   ];
 }
 
-function permissionDenialEvents(result: QwenStreamJsonResult): ExternalAgentOutputEvent[] {
+function permissionDenialEvents(result: QwenStreamJsonResult): MeshAgentOutputEvent[] {
   const denials = result.permission_denials ?? [];
   const commands = denials
     .map((denial) => {
@@ -274,7 +271,7 @@ function permissionDenialEvents(result: QwenStreamJsonResult): ExternalAgentOutp
   ];
 }
 
-function resultEvents(message: QwenStreamJsonResult): ExternalAgentOutputEvent[] {
+function resultEvents(message: QwenStreamJsonResult): MeshAgentOutputEvent[] {
   if (message.subtype?.startsWith('error')) {
     return [
       {
@@ -296,7 +293,7 @@ function resultEvents(message: QwenStreamJsonResult): ExternalAgentOutputEvent[]
 // controller subtype (mcp_message, hook_callback, …) is one we never opt into, so it is auto-declined
 // with an error `control_response` — mirroring the codex adapter — so an unexpected request can't hang
 // the turn waiting on a reply we would never send.
-function controlRequestEvents(message: QwenControlRequest, stdin?: QwenStdin): ExternalAgentOutputEvent[] {
+function controlRequestEvents(message: QwenControlRequest, stdin?: QwenStdin): MeshAgentOutputEvent[] {
   if (message.request.subtype === 'can_use_tool') {
     const request = message.request as Record<string, unknown>;
     return [
@@ -327,7 +324,7 @@ function controlRequestEvents(message: QwenControlRequest, stdin?: QwenStdin): E
   return [];
 }
 
-function lineEvents(line: QwenStreamJsonLine, stdin?: QwenStdin): ExternalAgentOutputEvent[] {
+function lineEvents(line: QwenStreamJsonLine, stdin?: QwenStdin): MeshAgentOutputEvent[] {
   switch (line.type) {
     case 'system':
       return systemEvents(line);
@@ -346,11 +343,11 @@ function lineEvents(line: QwenStreamJsonLine, stdin?: QwenStdin): ExternalAgentO
   }
 }
 
-/** Parse a Qwen Code stream-json chunk (one or more complete JSONL lines) into external agent output
+/** Parse a Qwen Code stream-json chunk (one or more complete JSONL lines) into MeshAgent output
  *  events. `handle.stdin`, when present, lets the parser auto-decline unsupported control requests. */
-export function parseQwenStreamJson(chunk: string, handle?: ExternalAgentRuntimeHandle): ExternalAgentOutputEvent[] {
+export function parseQwenStreamJson(chunk: string, handle?: MeshAgentRuntimeHandle): MeshAgentOutputEvent[] {
   const stdin = handle?.stdin;
-  const events: ExternalAgentOutputEvent[] = [];
+  const events: MeshAgentOutputEvent[] = [];
   for (const rawLine of chunk.split(/\r?\n/)) {
     const line = rawLine.trim();
     if (!line.startsWith('{')) continue;
@@ -368,7 +365,7 @@ export function parseQwenStreamJson(chunk: string, handle?: ExternalAgentRuntime
 }
 
 /** Whether a raw buffer holds at least one recognizable Qwen stream-json message — used to pick the
- *  stream-json history format over a provider-internal transcript. */
+ *  stream-json event format over a provider-internal transcript. */
 export function hasQwenStreamJsonMessages(raw: string): boolean {
   for (const rawLine of raw.split(/\r?\n/)) {
     const line = rawLine.trim();
@@ -382,7 +379,7 @@ export function hasQwenStreamJsonMessages(raw: string): boolean {
 
 // Qwen's SDK sends `initialize` before the first turn (Query.initialize). We register no hooks or SDK
 // MCP servers, so the payload is minimal; the CLI's reply is a `control_response` the parser ignores.
-export function initializeQwenStreamJson(handle: ExternalAgentRuntimeHandle): void {
+export function initializeQwenStreamJson(handle: MeshAgentRuntimeHandle): void {
   if (handle.launchMode !== 'json-stream' || !handle.stdin) return;
   writeLine(handle.stdin, {
     type: 'control_request',
@@ -392,8 +389,8 @@ export function initializeQwenStreamJson(handle: ExternalAgentRuntimeHandle): vo
 }
 
 /** Frame a turn as the SDK's `SDKUserMessage` envelope and write it to the CLI's stream-json stdin. */
-export function sendQwenStreamJsonInput(handle: ExternalAgentRuntimeHandle, input: string): void {
-  if (!handle.stdin) throw new Error('external agent session has no stream-json input bridge');
+export function sendQwenStreamJsonInput(handle: MeshAgentRuntimeHandle, input: string): void {
+  if (!handle.stdin) throw new Error('MeshAgent session has no stream-json input bridge');
   writeLine(handle.stdin, {
     type: 'user',
     session_id: handle.providerSessionRef ?? '',
@@ -405,10 +402,10 @@ export function sendQwenStreamJsonInput(handle: ExternalAgentRuntimeHandle, inpu
 /** Answer a `can_use_tool` permission request over the control plane. `behavior` is the CLI's wire
  *  shape (`allow` echoes the original tool input; `deny` carries a message), not `PermissionApproval`. */
 export function resolveQwenStreamJsonApproval(
-  handle: ExternalAgentRuntimeHandle,
+  handle: MeshAgentRuntimeHandle,
   resolution: { requestId: string; allow: boolean; reason?: string; request?: Record<string, unknown> }
 ): void {
-  if (!handle.stdin) throw new Error('external agent session has no stream-json approval bridge');
+  if (!handle.stdin) throw new Error('MeshAgent session has no stream-json approval bridge');
   const response = resolution.allow
     ? { behavior: 'allow', updatedInput: resolution.request?.input ?? {} }
     : { behavior: 'deny', message: resolution.reason ?? 'Denied' };

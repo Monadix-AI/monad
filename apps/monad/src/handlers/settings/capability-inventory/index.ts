@@ -7,7 +7,7 @@ import type {
   CapabilityInventoryRoot,
   CapabilityInventoryScope,
   CapabilityInventorySource,
-  ExternalAgentProvider
+  MeshAgentProvider
 } from '@monad/protocol';
 
 import { createHash } from 'node:crypto';
@@ -18,7 +18,7 @@ import { basename, dirname, extname, join, resolve } from 'node:path';
 import { openNativePath } from '@monad/environment';
 
 import { defaultBinProbes } from '#/infra/resolve-binary.ts';
-import { listExternalAgentProviderAdapters } from '#/services/external-agent/index.ts';
+import { listMeshAgentProviderAdapters } from '#/services/mesh-agent/index.ts';
 
 const MAX_CONFIG_BYTES = 5 * 1024 * 1024;
 const MAX_SKILL_MD_BYTES = 1024 * 1024;
@@ -30,7 +30,7 @@ interface RootSpec {
   kind: CapabilityInventoryRoot['kind'];
   path: string;
   shared?: boolean;
-  provider?: ExternalAgentProvider;
+  provider?: MeshAgentProvider;
 }
 
 interface MappedMcpServer {
@@ -736,7 +736,7 @@ function mcpRoots(paths: MonadPaths, home: string): RootSpec[] {
   ]);
 }
 
-function sourceForAgentProvider(provider: ExternalAgentProvider): CapabilityInventorySource {
+function sourceForAgentProvider(provider: MeshAgentProvider): CapabilityInventorySource {
   switch (provider) {
     case 'codex':
       return 'codex';
@@ -772,7 +772,7 @@ function modelProviderRoots(): RootSpec[] {
 
 function providerConfigRoots(kind: Extract<CapabilityInventoryRoot['kind'], 'agents' | 'modelProviders'>): RootSpec[] {
   return uniqueSpecs(
-    listExternalAgentProviderAdapters().flatMap((adapter) => {
+    listMeshAgentProviderAdapters().flatMap((adapter) => {
       const candidates = adapter.settingsImport?.detect(defaultBinProbes) ?? [];
       return candidates.map((candidate) => ({
         source: sourceForAgentProvider(adapter.provider),

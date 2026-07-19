@@ -127,7 +127,7 @@ test('runDaemonChildSupervisor kills persisted children once the daemon pid is g
   await writeFile(
     registryPath,
     JSON.stringify([
-      { pid: 111, label: 'external-agent' },
+      { pid: 111, label: 'mesh-agent' },
       { pid: 222, label: 'mcp:stdio' }
     ])
   );

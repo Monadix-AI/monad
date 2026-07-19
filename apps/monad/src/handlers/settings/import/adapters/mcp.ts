@@ -2,7 +2,7 @@ import type { McpServerConfig } from '@monad/environment';
 
 import { asBoolean, asRecordArray, asString, asStringArray, isRecord } from './shared.ts';
 
-export function envValue(value: string): string {
+function _envValue(value: string): string {
   const match = /^\$\{env:([A-Za-z_][A-Za-z0-9_]*)\}$/.exec(value);
   if (match) return value;
   return /^[A-Za-z_][A-Za-z0-9_]*$/.test(value) ? `\${env:${value}}` : value;

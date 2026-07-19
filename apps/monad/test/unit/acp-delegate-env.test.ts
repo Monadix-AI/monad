@@ -5,11 +5,15 @@
 import { expect, test } from 'bun:test';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { builtinAgentAdapters } from '@monad/atoms/agent-adapters';
 
 import { adapterSpawnEnv } from '#/services/delegation/acp-delegate.ts';
+import { registerAgentAdapterImpl } from '#/services/mesh-agent/index.ts';
 
-const spec = (osSandbox: boolean) => ({
-  name: 'x',
+for (const adapter of builtinAgentAdapters) registerAgentAdapterImpl(adapter);
+
+const spec = (osSandbox: boolean, name = 'x') => ({
+  name,
   command: 'npx',
   args: [],
   enabled: true,
@@ -17,9 +21,19 @@ const spec = (osSandbox: boolean) => ({
   forwardMcp: false
 });
 
-test('strips Claude Code session markers regardless of osSandbox', () => {
+test('ACP spawn env applies only the selected adapter credential and env policy', () => {
+  const codexHome = join(homedir(), '.codex');
+  const { env, credentialDirs } = adapterSpawnEnv(spec(true, 'codex'), {
+    CLAUDECODE: 'parent-session'
+  });
+  expect(env).toMatchObject({ CODEX_HOME: codexHome, CLAUDECODE: 'parent-session' });
+  expect(env.CLAUDE_CONFIG_DIR).toBeUndefined();
+  expect(credentialDirs).toEqual([codexHome]);
+});
+
+test('Claude Code adapter strips its nested-session markers regardless of osSandbox', () => {
   for (const osSandbox of [false, true]) {
-    const { env } = adapterSpawnEnv(spec(osSandbox), {
+    const { env } = adapterSpawnEnv(spec(osSandbox, 'claude-code'), {
       CLAUDECODE: '1',
       CLAUDE_CODE_ENTRYPOINT: 'cli',
       PATH: '/usr/bin'
@@ -38,17 +52,22 @@ test('osSandbox off → no credential-dir injection, no extra writable roots', (
   expect(credentialDirs).toEqual([]);
 });
 
-test('osSandbox on → pins config dirs to the REAL home and exposes them as writable roots', () => {
-  const { env, credentialDirs } = adapterSpawnEnv(spec(true), {});
+test('osSandbox exposes only the selected adapter credential directory', () => {
   const codexHome = join(homedir(), '.codex');
   const claudeDir = join(homedir(), '.claude');
-  expect(env.CODEX_HOME).toBe(codexHome);
-  expect(env.CLAUDE_CONFIG_DIR).toBe(claudeDir);
-  expect(credentialDirs).toEqual([codexHome, claudeDir]); // so the adapter can also write session state
+  expect(adapterSpawnEnv(spec(true, 'codex'), {})).toMatchObject({
+    env: { CODEX_HOME: codexHome },
+    credentialDirs: [codexHome]
+  });
+  expect(adapterSpawnEnv(spec(true, 'claude-code'), {})).toMatchObject({
+    env: { CLAUDE_CONFIG_DIR: claudeDir },
+    credentialDirs: [claudeDir]
+  });
 });
 
 test('an explicit operator-set CODEX_HOME wins over the injected default', () => {
-  const { env } = adapterSpawnEnv(spec(true), { CODEX_HOME: '/custom/codex' });
+  const { env, credentialDirs } = adapterSpawnEnv(spec(true, 'codex'), { CODEX_HOME: '/custom/codex' });
   expect(env.CODEX_HOME).toBe('/custom/codex');
-  expect(env.CLAUDE_CONFIG_DIR).toBe(join(homedir(), '.claude')); // the unset one still gets the default
+  expect(env.CLAUDE_CONFIG_DIR).toBeUndefined();
+  expect(credentialDirs).toEqual([join(homedir(), '.codex')]);
 });

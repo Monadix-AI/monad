@@ -1,19 +1,19 @@
-import type { ExternalAgentSessionView } from '@monad/protocol';
+import type { MeshSessionView } from '@monad/protocol';
 import type { Message } from '../../src/workspace-experiences/experience/types.ts';
 
 import { expect, test } from 'bun:test';
 
 import { builtinAgentAdapters } from '../../src/agent-adapters/index.ts';
 import { __workplaceProjectMessageTest } from '../../src/workspace-experiences/chat-room/utils/projection.ts';
-import { configureExternalAgentObservationAdapterResolver } from '../../src/workspace-experiences/experience/external-agent-observation/external-agent-observation.ts';
+import { configureMeshAgentObservationAdapterResolver } from '../../src/workspace-experiences/experience/mesh-agent-observation/mesh-agent-observation.ts';
 import { projectMemberParticipants } from '../../src/workspace-experiences/experience/project-projection.ts';
 
-configureExternalAgentObservationAdapterResolver((provider) =>
+configureMeshAgentObservationAdapterResolver((provider) =>
   builtinAgentAdapters.find((adapter) => adapter.provider === provider)
 );
 
-const externalAgentSession = (overrides: Partial<ExternalAgentSessionView> = {}): ExternalAgentSessionView => ({
-  id: 'exa_01KWGEMIprD4',
+const meshSession = (overrides: Partial<MeshSessionView> = {}): MeshSessionView => ({
+  id: 'mesh_01KWGEMIprD4',
   sessionId: 'ses_01KWPROJ2tDh',
   agentName: 'gemini',
   provider: 'gemini',
@@ -22,7 +22,7 @@ const externalAgentSession = (overrides: Partial<ExternalAgentSessionView> = {})
   launchMode: 'pty',
   approvalOwnership: 'provider-owned',
   runtimeRole: 'managed-project-agent',
-  agentRuntimeId: 'exa_01KWGEMIprD4',
+  agentRuntimeId: 'mesh_01KWGEMIprD4',
   lastDeliveredSeq: 0,
   lastVisibleSeq: 0,
   state: 'running',
@@ -38,32 +38,32 @@ const externalAgentSession = (overrides: Partial<ExternalAgentSessionView> = {})
 });
 
 const observationFields = (
-  items: NonNullable<ReturnType<typeof __workplaceProjectMessageTest.buildExternalAgentStreams>[number]>['items']
+  items: NonNullable<ReturnType<typeof __workplaceProjectMessageTest.buildMeshAgentStreams>[number]>['items']
 ) => items.map(({ id, text }) => ({ id, text }));
 
-function firstExternalAgentStream(streams: ReturnType<typeof __workplaceProjectMessageTest.buildExternalAgentStreams>) {
+function firstMeshAgentStream(streams: ReturnType<typeof __workplaceProjectMessageTest.buildMeshAgentStreams>) {
   const stream = streams[0];
-  if (!stream) throw new Error('expected an external agent stream');
+  if (!stream) throw new Error('expected an MeshAgent stream');
   return stream;
 }
 
-test('external agent member invitations project to durable chat messages', () => {
+test('MeshAgent member invitations project to durable chat messages', () => {
   const [message] = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
     projectMembers: [
       {
         id: 'pmem_gemini',
-        type: 'external-agent',
+        type: 'mesh-agent',
         name: 'gemini',
         instanceId: 'pmem_gemini',
         joinedAt: '2026-06-29T10:00:00.000Z'
       }
     ],
-    externalAgentSessions: [],
+    meshSessions: [],
     liveItems: [],
     liveTools: [],
-    externalAgentIcons: new Map([['pmem_gemini', 'gemini']]),
-    externalAgentTags: new Map([['pmem_gemini', 'Gemini']])
+    meshAgentIcons: new Map([['pmem_gemini', 'gemini']]),
+    meshAgentTags: new Map([['pmem_gemini', 'Gemini']])
   });
 
   expect(message).toMatchObject({
@@ -116,15 +116,15 @@ test('Monad project member parses as a normal project member', () => {
   ]);
 });
 
-test('external agent developer messages expose only a follow entry', () => {
-  const message = __workplaceProjectMessageTest.externalAgentSessionDeveloperMessage(externalAgentSession());
+test('MeshAgent developer messages expose only a follow entry', () => {
+  const message = __workplaceProjectMessageTest.meshSessionDeveloperMessage(meshSession());
 
   expect(message).toMatchObject({
-    id: 'external-agent-session-developer:exa_01KWGEMIprD4',
+    id: 'mesh-session-developer:mesh_01KWGEMIprD4',
     kind: 'developer',
     tag: 'DEV',
     text: 'CLI stream available',
-    externalAgentSessionId: 'exa_01KWGEMIprD4',
+    meshSessionId: 'mesh_01KWGEMIprD4',
     developerOnly: true,
     orderKey: '2026-06-29T10:00:00.000Z:developer'
   });
@@ -136,30 +136,30 @@ test('member invitation projects one join message across runtime restarts', () =
     projectMembers: [
       {
         id: 'pmem_gemini_reviewer',
-        type: 'external-agent',
+        type: 'mesh-agent',
         name: 'gemini',
         instanceId: 'pmem_gemini_reviewer',
         displayName: 'Reviewer',
         joinedAt: '2026-06-29T09:59:00.000Z'
       }
     ],
-    externalAgentSessions: [
-      externalAgentSession({
-        id: 'exa_oldruntime001',
+    meshSessions: [
+      meshSession({
+        id: 'mesh_oldruntime001',
         agentName: 'pmem_gemini_reviewer',
         startedAt: '2026-06-29T10:00:00.000Z'
       }),
-      externalAgentSession({
-        id: 'exa_newruntime001',
+      meshSession({
+        id: 'mesh_newruntime001',
         agentName: 'pmem_gemini_reviewer',
         startedAt: '2026-06-29T11:00:00.000Z'
       })
     ],
     liveItems: [],
     liveTools: [],
-    externalAgentDisplayNames: new Map([['pmem_gemini_reviewer', 'Reviewer']]),
-    externalAgentIcons: new Map([['pmem_gemini_reviewer', 'gemini']]),
-    externalAgentTags: new Map([['pmem_gemini_reviewer', 'Gemini']])
+    meshAgentDisplayNames: new Map([['pmem_gemini_reviewer', 'Reviewer']]),
+    meshAgentIcons: new Map([['pmem_gemini_reviewer', 'gemini']]),
+    meshAgentTags: new Map([['pmem_gemini_reviewer', 'Gemini']])
   });
 
   expect(messages).toHaveLength(1);
@@ -178,13 +178,13 @@ test('runtime startup without a member invitation does not project a join messag
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
     projectMembers: [],
-    externalAgentSessions: [externalAgentSession()],
+    meshSessions: [meshSession()],
     liveItems: [],
     liveTools: [
       {
-        id: 'exa_live00000000',
+        id: 'mesh_live00000000',
         kind: 'tool',
-        tool: 'external-agent:gemini',
+        tool: 'mesh-agent:gemini',
         input: { agent: 'gemini', provider: 'gemini', productIcon: 'gemini' },
         status: 'running',
         seq: '002'
@@ -198,9 +198,9 @@ test('runtime startup without a member invitation does not project a join messag
 test('Claude server errors project as agent-scoped system messages', () => {
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
-    externalAgentSessions: [
-      externalAgentSession({
-        id: 'exa_claudeerror0',
+    meshSessions: [
+      meshSession({
+        id: 'mesh_claudeerror0',
         agentName: 'pmem_claude_1234',
         provider: 'claude-code',
         productIcon: 'claude-code',
@@ -217,18 +217,18 @@ test('Claude server errors project as agent-scoped system messages', () => {
     ],
     liveItems: [],
     liveTools: [],
-    externalAgentDisplayNames: new Map([['pmem_claude_1234', 'Steve']])
+    meshAgentDisplayNames: new Map([['pmem_claude_1234', 'Steve']])
   });
 
   expect(messages.map((message) => [message.id, message.text])).toEqual([
-    ['external-agent-session-error:exa_claudeerror0:exa_claudeerror0:result', 'encountered an error']
+    ['mesh-session-error:mesh_claudeerror0:mesh_claudeerror0:result', 'encountered an error']
   ]);
   expect(messages[0]).toMatchObject({
     authorId: 'pmem_claude_1234',
     authorName: 'Steve',
     kind: 'system',
     tag: 'Claude',
-    externalAgentSessionId: 'exa_claudeerror0',
+    meshSessionId: 'mesh_claudeerror0',
     systemTone: 'error',
     systemDetail: 'API Error: overloaded_error. Claude Code is currently overloaded.',
     agentChip: {
@@ -240,16 +240,16 @@ test('Claude server errors project as agent-scoped system messages', () => {
   });
 });
 
-test('external agent developer messages are projected only when explicitly enabled', () => {
+test('MeshAgent developer messages are projected only when explicitly enabled', () => {
   const hidden = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
-    externalAgentSessions: [],
+    meshSessions: [],
     liveItems: [],
     liveTools: [
       {
-        id: 'exa_live00000000',
+        id: 'mesh_live00000000',
         kind: 'tool',
-        tool: 'external-agent:codex',
+        tool: 'mesh-agent:codex',
         input: { agent: 'codex', provider: 'codex', productIcon: 'codex' },
         output: 'raw terminal output',
         status: 'running',
@@ -259,13 +259,13 @@ test('external agent developer messages are projected only when explicitly enabl
   });
   const visible = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
-    externalAgentSessions: [],
+    meshSessions: [],
     liveItems: [],
     liveTools: [
       {
-        id: 'exa_live00000000',
+        id: 'mesh_live00000000',
         kind: 'tool',
-        tool: 'external-agent:codex',
+        tool: 'mesh-agent:codex',
         input: { agent: 'codex', provider: 'codex', productIcon: 'codex' },
         output: 'raw terminal output',
         status: 'running',
@@ -279,12 +279,12 @@ test('external agent developer messages are projected only when explicitly enabl
   expect(visible.map((message) => [message.kind, message.text])).toEqual([['developer', 'CLI stream available']]);
 });
 
-test('external agent runtime lifecycle does not project member joins', () => {
+test('MeshAgent runtime lifecycle does not project member joins', () => {
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
-    externalAgentSessions: [
-      externalAgentSession({
-        id: 'exa_first0000000',
+    meshSessions: [
+      meshSession({
+        id: 'mesh_first0000000',
         agentName: 'codex',
         provider: 'codex',
         productIcon: 'codex',
@@ -293,8 +293,8 @@ test('external agent runtime lifecycle does not project member joins', () => {
         updatedAt: '2026-06-29T10:01:00.000Z',
         exitedAt: '2026-06-29T10:01:00.000Z'
       }),
-      externalAgentSession({
-        id: 'exa_second000000',
+      meshSession({
+        id: 'mesh_second000000',
         agentName: 'codex',
         provider: 'codex',
         productIcon: 'codex',
@@ -311,14 +311,14 @@ test('external agent runtime lifecycle does not project member joins', () => {
   expect(messages).toEqual([]);
 });
 
-test('managed external agent timeline messages use display names instead of runtime ids', () => {
+test('managed MeshAgent timeline messages use display names instead of runtime ids', () => {
   const displayNames = new Map([['pmem_codex_abcd1234', 'codex-reviewer']]);
-  const avatarSeeds = new Map([['codex-reviewer', 'external-agent:codex-reviewer']]);
+  const avatarSeeds = new Map([['codex-reviewer', 'mesh-agent:codex-reviewer']]);
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
-    externalAgentSessions: [
-      externalAgentSession({
-        id: 'exa_display00000',
+    meshSessions: [
+      meshSession({
+        id: 'mesh_display00000',
         agentName: 'pmem_codex_abcd1234',
         provider: 'codex',
         productIcon: 'codex'
@@ -330,15 +330,15 @@ test('managed external agent timeline messages use display names instead of runt
         id: 'msg_clireply0000',
         role: 'assistant',
         agentName: 'pmem_codex_abcd1234',
-        source: 'managed-external-agent',
+        source: 'managed-mesh-agent',
         parts: [{ type: 'text', text: 'Ready.' }],
         status: 'done',
         seq: '2026-06-29T10:00:01.000Z'
       }
     ],
     liveTools: [],
-    externalAgentAvatarSeeds: avatarSeeds,
-    externalAgentDisplayNames: displayNames,
+    meshAgentAvatarSeeds: avatarSeeds,
+    meshAgentDisplayNames: displayNames,
     showDeveloperOnlyMessages: false
   });
 
@@ -346,60 +346,60 @@ test('managed external agent timeline messages use display names instead of runt
   expect(messages.map((message) => message.authorId)).toEqual(['pmem_codex_abcd1234']);
 });
 
-test('managed external agent reasoning-only streaming messages stay off the transcript wall', () => {
+test('managed MeshAgent reasoning-only streaming messages stay off the transcript wall', () => {
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
-    externalAgentSessions: [],
+    meshSessions: [],
     liveItems: [
       {
         kind: 'message',
         id: 'msg_codexthi658B',
         role: 'assistant',
         agentName: 'pmem_codex_abcd1234',
-        source: 'managed-external-agent',
+        source: 'managed-mesh-agent',
         parts: [{ type: 'reasoning', text: 'Thinking' }],
         status: 'streaming',
         seq: '002'
       }
     ],
     liveTools: [],
-    externalAgentDisplayNames: new Map([['pmem_codex_abcd1234', 'codex-reviewer']])
+    meshAgentDisplayNames: new Map([['pmem_codex_abcd1234', 'codex-reviewer']])
   });
   expect(messages).toEqual([]);
 });
 
-test('managed external agent terminal reasoning-only messages stay off the transcript wall', () => {
+test('managed MeshAgent terminal reasoning-only messages stay off the transcript wall', () => {
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
-    externalAgentSessions: [],
+    meshSessions: [],
     liveItems: [
       {
         kind: 'message',
         id: 'msg_codexorpsSFT',
         role: 'assistant',
         agentName: 'pmem_codex_abcd1234',
-        source: 'managed-external-agent',
+        source: 'managed-mesh-agent',
         parts: [{ type: 'reasoning', text: 'Thinking' }],
         status: 'error',
         seq: '002'
       }
     ],
     liveTools: [],
-    externalAgentDisplayNames: new Map([['pmem_codex_abcd1234', 'codex-reviewer']])
+    meshAgentDisplayNames: new Map([['pmem_codex_abcd1234', 'codex-reviewer']])
   });
   expect(messages).toEqual([]);
 });
 
-test('external agent live start exposes developer follow without projecting a join', () => {
+test('MeshAgent live start exposes developer follow without projecting a join', () => {
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
-    externalAgentSessions: [],
+    meshSessions: [],
     liveItems: [],
     liveTools: [
       {
-        id: 'exa_live00000000',
+        id: 'mesh_live00000000',
         kind: 'tool',
-        tool: 'external-agent:claude-code',
+        tool: 'mesh-agent:claude-code',
         input: { agent: 'claude-code', provider: 'claude-code', productIcon: 'claude-code' },
         output: 'started claude-code\n\\x1b[38;2;255;193;7mraw terminal output',
         status: 'running',
@@ -412,42 +412,42 @@ test('external agent live start exposes developer follow without projecting a jo
   const developer = messages.find((message) => message.kind === 'developer');
   expect(messages.filter((message) => message.kind === 'system')).toEqual([]);
   expect(developer).toMatchObject({
-    id: 'external-agent-session-developer:exa_live00000000',
+    id: 'mesh-session-developer:mesh_live00000000',
     text: 'CLI stream available',
-    externalAgentSessionId: 'exa_live00000000'
+    meshSessionId: 'mesh_live00000000'
   });
 });
 
-test('external agent live starts do not project member joins', () => {
+test('MeshAgent live starts do not project member joins', () => {
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
-    externalAgentSessions: [],
+    meshSessions: [],
     liveItems: [],
     liveTools: [
       {
-        id: 'exa_first0000000',
+        id: 'mesh_first0000000',
         kind: 'tool',
-        tool: 'external-agent:codex',
+        tool: 'mesh-agent:codex',
         input: { agent: 'pmem_codex_a', provider: 'codex', productIcon: 'codex' },
         status: 'running',
         seq: '001'
       } as never,
       {
-        id: 'exa_second000000',
+        id: 'mesh_second000000',
         kind: 'tool',
-        tool: 'external-agent:codex',
+        tool: 'mesh-agent:codex',
         input: { agent: 'pmem_codex_a', provider: 'codex', productIcon: 'codex' },
         status: 'running',
         seq: '002'
       } as never
     ],
-    externalAgentDisplayNames: new Map([['pmem_codex_a', 'A']])
+    meshAgentDisplayNames: new Map([['pmem_codex_a', 'A']])
   });
 
   expect(messages).toEqual([]);
 });
 
-test('managed external agent reasoning-only fanout does not project a system divider', () => {
+test('managed MeshAgent reasoning-only fanout does not project a system divider', () => {
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [
       {
@@ -462,14 +462,14 @@ test('managed external agent reasoning-only fanout does not project a system div
         orderKey: '001'
       }
     ],
-    externalAgentSessions: [],
+    meshSessions: [],
     liveItems: [
       {
         kind: 'message',
         id: 'msg_codexthi658B',
         role: 'assistant',
         agentName: 'codex',
-        source: 'managed-external-agent',
+        source: 'managed-mesh-agent',
         parts: [{ type: 'reasoning', text: 'Thinking' }],
         status: 'streaming',
         seq: '002'
@@ -479,7 +479,7 @@ test('managed external agent reasoning-only fanout does not project a system div
         id: 'msg_claudethDTNA',
         role: 'assistant',
         agentName: 'claude-code',
-        source: 'managed-external-agent',
+        source: 'managed-mesh-agent',
         parts: [{ type: 'reasoning', text: 'Thinking' }],
         status: 'streaming',
         seq: '003'
@@ -492,7 +492,7 @@ test('managed external agent reasoning-only fanout does not project a system div
   expect(messages.map((message) => message.id)).toEqual(['msg_user00000000']);
 });
 
-test('managed external agent finished replies render without a thinking placeholder', () => {
+test('managed MeshAgent finished replies render without a thinking placeholder', () => {
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [
       {
@@ -507,14 +507,14 @@ test('managed external agent finished replies render without a thinking placehol
         orderKey: '001'
       }
     ],
-    externalAgentSessions: [],
+    meshSessions: [],
     liveItems: [
       {
         kind: 'message',
         id: 'msg_codexreply00',
         role: 'assistant',
         agentName: 'codex',
-        source: 'managed-external-agent',
+        source: 'managed-mesh-agent',
         parts: [{ type: 'text', text: 'Done.' }],
         status: 'done',
         seq: '002'
@@ -524,7 +524,7 @@ test('managed external agent finished replies render without a thinking placehol
         id: 'msg_claudethDTNA',
         role: 'assistant',
         agentName: 'claude-code',
-        source: 'managed-external-agent',
+        source: 'managed-mesh-agent',
         parts: [{ type: 'reasoning', text: 'Thinking' }],
         status: 'streaming',
         seq: '003'
@@ -536,18 +536,18 @@ test('managed external agent finished replies render without a thinking placehol
   expect(messages.map((message) => message.id)).toEqual(['msg_user00000000', 'msg_codexreply00']);
 });
 
-test('managed external agent finished replies retain delivery observation pointers', () => {
+test('managed MeshAgent finished replies retain delivery observation pointers', () => {
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
-    externalAgentSessions: [],
+    meshSessions: [],
     liveItems: [
       {
         kind: 'message',
         id: 'msg_codexreply00',
         role: 'assistant',
         agentName: 'pmem_codex_abcd1234',
-        source: 'managed-external-agent',
-        externalAgentSessionId: 'exa_codexdelTeTK',
+        source: 'managed-mesh-agent',
+        meshSessionId: 'mesh_codexdelTeTK',
         deliveryId: 'deliv_01KWEBDErrBa',
         parts: [{ type: 'text', text: 'Done.' }],
         status: 'done',
@@ -555,27 +555,27 @@ test('managed external agent finished replies retain delivery observation pointe
       }
     ],
     liveTools: [],
-    externalAgentDisplayNames: new Map([['pmem_codex_abcd1234', 'codex-reviewer']])
+    meshAgentDisplayNames: new Map([['pmem_codex_abcd1234', 'codex-reviewer']])
   });
 
   expect(messages[0]).toMatchObject({
     id: 'msg_codexreply00',
-    externalAgentSessionId: 'exa_codexdelTeTK',
+    meshSessionId: 'mesh_codexdelTeTK',
     deliveryId: 'deliv_01KWEBDErrBa'
   });
 });
 
-test('managed external agent spawn does not project a join or thinking placeholder', () => {
+test('managed MeshAgent spawn does not project a join or thinking placeholder', () => {
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
-    externalAgentSessions: [],
+    meshSessions: [],
     liveItems: [
       {
         kind: 'message',
         id: 'msg_stevethi6Vch',
         role: 'assistant',
         agentName: 'pmem_steve',
-        source: 'managed-external-agent',
+        source: 'managed-mesh-agent',
         parts: [{ type: 'reasoning', text: 'Thinking' }],
         status: 'streaming',
         seq: '001'
@@ -584,14 +584,14 @@ test('managed external agent spawn does not project a join or thinking placehold
     liveTools: [
       {
         kind: 'tool',
-        id: 'exa_steve0000000',
-        tool: 'external-agent:codex',
+        id: 'mesh_steve0000000',
+        tool: 'mesh-agent:codex',
         input: { agent: 'pmem_steve', provider: 'codex', productIcon: 'codex' },
         status: 'running',
         seq: '002'
       }
     ],
-    externalAgentDisplayNames: new Map([['pmem_steve', 'Steve']])
+    meshAgentDisplayNames: new Map([['pmem_steve', 'Steve']])
   });
 
   expect(messages).toEqual([]);
@@ -600,7 +600,7 @@ test('managed external agent spawn does not project a join or thinking placehold
 test('managed message author snapshot wins over current project member metadata', () => {
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
-    externalAgentSessions: [],
+    meshSessions: [],
     liveItems: [
       {
         kind: 'message',
@@ -608,14 +608,14 @@ test('managed message author snapshot wins over current project member metadata'
         role: 'assistant',
         agentName: 'pmem_claude_fable',
         agentDisplayName: 'Fable',
-        source: 'managed-external-agent',
+        source: 'managed-mesh-agent',
         parts: [{ type: 'text', text: 'Historical response' }],
         status: 'done',
         seq: '001'
       }
     ],
     liveTools: [],
-    externalAgentDisplayNames: new Map([['pmem_claude_fable', 'Opus']])
+    meshAgentDisplayNames: new Map([['pmem_claude_fable', 'Opus']])
   });
 
   expect(messages).toEqual([
@@ -628,7 +628,7 @@ test('managed message author snapshot wins over current project member metadata'
   ]);
 });
 
-test('managed external agent join stays before its first room message when live tool seq uses event ids', () => {
+test('managed MeshAgent join stays before its first room message when live tool seq uses event ids', () => {
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [
       {
@@ -647,26 +647,26 @@ test('managed external agent join stays before its first room message when live 
     projectMembers: [
       {
         id: 'pmem_codex_a',
-        type: 'external-agent',
+        type: 'mesh-agent',
         name: 'codex',
         instanceId: 'pmem_codex_a',
         displayName: 'A',
         joinedAt: '2026-07-02T10:00:01.000Z'
       }
     ],
-    externalAgentSessions: [],
+    meshSessions: [],
     liveItems: [],
     liveTools: [
       {
         kind: 'tool',
-        id: 'exa_a00000000000',
-        tool: 'external-agent:codex',
+        id: 'mesh_a00000000000',
+        tool: 'mesh-agent:codex',
         input: { agent: 'pmem_codex_a', provider: 'codex', productIcon: 'codex' },
         status: 'running',
         seq: 'evt_01KWHJOIN000'
       }
     ],
-    externalAgentDisplayNames: new Map([['pmem_codex_a', 'A']])
+    meshAgentDisplayNames: new Map([['pmem_codex_a', 'A']])
   });
 
   expect(messages.map((message) => [message.id, message.text])).toEqual([
@@ -675,7 +675,7 @@ test('managed external agent join stays before its first room message when live 
   ]);
 });
 
-test('managed external agent restart does not move replies from an earlier runtime', () => {
+test('managed MeshAgent restart does not move replies from an earlier runtime', () => {
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [
       {
@@ -698,7 +698,7 @@ test('managed external agent restart does not move replies from an earlier runti
         tag: 'Claude',
         time: '',
         text: 'Here is the explanation',
-        externalAgentSessionId: 'exa_oldruntime000',
+        meshSessionId: 'mesh_oldruntime000',
         orderKey: '2026-07-17T16:35:12.128Z'
       },
       {
@@ -713,10 +713,10 @@ test('managed external agent restart does not move replies from an earlier runti
         orderKey: '2026-07-17T17:02:01.987Z'
       }
     ],
-    externalAgentSessions: [
-      externalAgentSession({
-        id: 'exa_newruntime000',
-        agentRuntimeId: 'exa_newruntime000',
+    meshSessions: [
+      meshSession({
+        id: 'mesh_newruntime000',
+        agentRuntimeId: 'mesh_newruntime000',
         agentName: 'pmem_claude_a',
         provider: 'claude-code',
         productIcon: 'claude-code',
@@ -735,15 +735,15 @@ test('managed external agent restart does not move replies from an earlier runti
   ]);
 });
 
-test('external agent streams prefer live activity output over persisted snapshot', () => {
-  const stream = firstExternalAgentStream(
-    __workplaceProjectMessageTest.buildExternalAgentStreams(
-      [externalAgentSession({ outputSnapshot: 'old snapshot' })],
+test('MeshAgent streams prefer live activity output over persisted snapshot', () => {
+  const stream = firstMeshAgentStream(
+    __workplaceProjectMessageTest.buildMeshAgentStreams(
+      [meshSession({ outputSnapshot: 'old snapshot' })],
       [
         {
-          id: 'exa_01KWGEMIprD4',
+          id: 'mesh_01KWGEMIprD4',
           av: 'GE',
-          tool: 'external-agent:gemini',
+          tool: 'mesh-agent:gemini',
           detail: 'native cli activity',
           output: 'live output',
           status: 'running'
@@ -753,55 +753,52 @@ test('external agent streams prefer live activity output over persisted snapshot
   );
 
   expect(stream).toMatchObject({
-    id: 'exa_01KWGEMIprD4',
+    id: 'mesh_01KWGEMIprD4',
     agentName: 'gemini',
     provider: 'gemini',
     tag: 'Gemini',
     output: 'live output',
-    items: [{ id: 'exa_01KWGEMIprD4:0', kind: 'assistant-message', text: 'live output' }],
+    items: [{ id: 'mesh_01KWGEMIprD4:0', kind: 'assistant-message', text: 'live output' }],
     status: 'running'
   });
 });
 
-test('external agent streams carry their own transcript target for observation/history requests', () => {
-  const stream = firstExternalAgentStream(
-    __workplaceProjectMessageTest.buildExternalAgentStreams(
-      [externalAgentSession({ sessionId: 'ses_01KWOWNER9zQ2' })],
-      []
-    )
+test('MeshAgent streams carry their own transcript target for observation/history requests', () => {
+  const stream = firstMeshAgentStream(
+    __workplaceProjectMessageTest.buildMeshAgentStreams([meshSession({ sessionId: 'ses_01KWOWNER9zQ2' })], [])
   );
 
   expect(stream.transcriptTargetId).toBe('ses_01KWOWNER9zQ2');
 });
 
-test('external agent durable running sessions remain observable without marking generation active', () => {
-  const stream = firstExternalAgentStream(
-    __workplaceProjectMessageTest.buildExternalAgentStreams(
-      [externalAgentSession({ outputSnapshot: 'previous turn output', state: 'running' })],
+test('MeshAgent durable running sessions remain observable without marking generation active', () => {
+  const stream = firstMeshAgentStream(
+    __workplaceProjectMessageTest.buildMeshAgentStreams(
+      [meshSession({ outputSnapshot: 'previous turn output', state: 'running' })],
       []
     )
   );
 
   expect(stream).toMatchObject({
-    id: 'exa_01KWGEMIprD4',
+    id: 'mesh_01KWGEMIprD4',
     agentName: 'gemini',
     output: 'previous turn output',
     status: 'ok',
-    items: [{ id: 'exa_01KWGEMIprD4:0', kind: 'assistant-message', text: 'previous turn output' }]
+    items: [{ id: 'mesh_01KWGEMIprD4:0', kind: 'assistant-message', text: 'previous turn output' }]
   });
 });
 
-test('external agent live activity streams keep the managed agent identity', () => {
-  const stream = firstExternalAgentStream(
-    __workplaceProjectMessageTest.buildExternalAgentStreams(
+test('MeshAgent live activity streams keep the managed agent identity', () => {
+  const stream = firstMeshAgentStream(
+    __workplaceProjectMessageTest.buildMeshAgentStreams(
       [],
       [
         {
-          id: 'exa_livecodex000',
+          id: 'mesh_livecodex000',
           av: 'CO',
           agentName: 'codex',
-          tool: 'external-agent:codex',
-          detail: 'external-agent:codex',
+          tool: 'mesh-agent:codex',
+          detail: 'mesh-agent:codex',
           output: 'thinking about the project message',
           status: 'running'
         }
@@ -810,19 +807,19 @@ test('external agent live activity streams keep the managed agent identity', () 
   );
 
   expect(stream).toMatchObject({
-    id: 'exa_livecodex000',
+    id: 'mesh_livecodex000',
     agentName: 'codex',
     status: 'running',
-    items: [{ id: 'exa_livecodex000:0', kind: 'assistant-message', text: 'thinking about the project message' }]
+    items: [{ id: 'mesh_livecodex000:0', kind: 'assistant-message', text: 'thinking about the project message' }]
   });
 });
 
-test('managed external agent streams retain template agent names for host usage queries', () => {
-  const stream = firstExternalAgentStream(
-    __workplaceProjectMessageTest.buildExternalAgentStreams(
+test('managed MeshAgent streams retain template agent names for host usage queries', () => {
+  const stream = firstMeshAgentStream(
+    __workplaceProjectMessageTest.buildMeshAgentStreams(
       [
-        externalAgentSession({
-          id: 'exa_codexrev9zCF',
+        meshSession({
+          id: 'mesh_codexrev9zCF',
           agentName: 'pmem_codex_reviewer',
           provider: 'codex',
           productIcon: 'codex'
@@ -834,23 +831,23 @@ test('managed external agent streams retain template agent names for host usage 
   );
 
   expect(stream).toMatchObject({
-    id: 'exa_codexrev9zCF',
+    id: 'mesh_codexrev9zCF',
     agentName: 'pmem_codex_reviewer',
     templateAgentName: 'codex'
   });
 });
 
-test('external agent structured result output is projected as readable observation items', () => {
-  const stream = firstExternalAgentStream(
-    __workplaceProjectMessageTest.buildExternalAgentStreams(
+test('MeshAgent structured result output is projected as readable observation items', () => {
+  const stream = firstMeshAgentStream(
+    __workplaceProjectMessageTest.buildMeshAgentStreams(
       [],
       [
         {
-          id: 'exa_structuryOpn',
+          id: 'mesh_structuryOpn',
           av: 'CO',
           agentName: 'codex',
-          tool: 'external-agent:codex',
-          detail: 'external-agent:codex',
+          tool: 'mesh-agent:codex',
+          detail: 'mesh-agent:codex',
           output: JSON.stringify({
             type: 'result',
             subtype: 'success',
@@ -872,12 +869,12 @@ test('external agent structured result output is projected as readable observati
   );
 
   expect(observationFields(stream.items)).toEqual([
-    { id: 'exa_structuryOpn:result', text: '仍被拦截，无法发出。卡点未变：`monad project` 命令需要你批准。' },
-    { id: 'exa_structuryOpn:denial:0', text: 'Permission blocked Bash: monad project post "你好！"' }
+    { id: 'mesh_structuryOpn:result', text: '仍被拦截，无法发出。卡点未变：`monad project` 命令需要你批准。' },
+    { id: 'mesh_structuryOpn:denial:0', text: 'Permission blocked Bash: monad project post "你好！"' }
   ]);
 });
 
-test('external agent stream-json events are projected as readable observation items', () => {
+test('MeshAgent stream-json events are projected as readable observation items', () => {
   const output = [
     JSON.stringify({
       type: 'assistant',
@@ -896,16 +893,16 @@ test('external agent stream-json events are projected as readable observation it
     JSON.stringify({ type: 'result', response: 'Done.' })
   ].join('\n');
 
-  const stream = firstExternalAgentStream(
-    __workplaceProjectMessageTest.buildExternalAgentStreams(
+  const stream = firstMeshAgentStream(
+    __workplaceProjectMessageTest.buildMeshAgentStreams(
       [],
       [
         {
-          id: 'exa_streamevents',
+          id: 'mesh_streamevents',
           av: 'CO',
           agentName: 'claude-code',
-          tool: 'external-agent:claude-code',
-          detail: 'external-agent:claude-code',
+          tool: 'mesh-agent:claude-code',
+          detail: 'mesh-agent:claude-code',
           output,
           status: 'running'
         }
@@ -914,31 +911,31 @@ test('external agent stream-json events are projected as readable observation it
   );
 
   expect(observationFields(stream.items)).toEqual([
-    { id: 'exa_streamevents:json:0:message:0', text: 'I can help.' },
-    { id: 'exa_streamevents:json:0:tool:1', text: 'Tool call Bash' },
-    { id: 'exa_streamevents:json:1:delta', text: 'Streaming text.' },
-    { id: 'exa_streamevents:json:2:tool-result', text: 'command output' },
-    { id: 'exa_streamevents:json:3:result', text: 'Done.' }
+    { id: 'mesh_streamevents:json:0:message:0', text: 'I can help.' },
+    { id: 'mesh_streamevents:json:0:tool:1', text: 'Tool call Bash' },
+    { id: 'mesh_streamevents:json:1:delta', text: 'Streaming text.' },
+    { id: 'mesh_streamevents:json:2:tool-result', text: 'command output' },
+    { id: 'mesh_streamevents:json:3:result', text: 'Done.' }
   ]);
 });
 
-test('external agent projection ignores startup prose before stream-json objects', () => {
+test('MeshAgent projection ignores startup prose before stream-json objects', () => {
   const output = [
     'started claude-code in /Users/test/.monad/workplace-agents/project/claude-code',
     JSON.stringify({ type: 'system', subtype: 'init', session_id: 'claude-session' }),
     JSON.stringify({ type: 'result', result: 'Need approval before posting.' })
   ].join('\n');
 
-  const stream = firstExternalAgentStream(
-    __workplaceProjectMessageTest.buildExternalAgentStreams(
+  const stream = firstMeshAgentStream(
+    __workplaceProjectMessageTest.buildMeshAgentStreams(
       [],
       [
         {
-          id: 'exa_mixedclaude0',
+          id: 'mesh_mixedclaude0',
           av: 'CL',
           agentName: 'claude-code',
-          tool: 'external-agent:claude-code',
-          detail: 'external-agent:claude-code',
+          tool: 'mesh-agent:claude-code',
+          detail: 'mesh-agent:claude-code',
           output,
           status: 'running'
         }
@@ -949,12 +946,12 @@ test('external agent projection ignores startup prose before stream-json objects
   // The `system` init notice now surfaces as a `system` kind (session lifecycle notices, e.g. login,
   // must stay visible in backfilled history); the result survives as a turn-end with its final text.
   expect(observationFields(stream.items)).toEqual([
-    { id: 'exa_mixedclaude0:json:0:system', text: 'init' },
-    { id: 'exa_mixedclaude0:json:1:result', text: 'Need approval before posting.' }
+    { id: 'mesh_mixedclaude0:json:0:system', text: 'init' },
+    { id: 'mesh_mixedclaude0:json:1:result', text: 'Need approval before posting.' }
   ]);
 });
 
-test('external agent app-server JSON-RPC output is projected as readable observation items', () => {
+test('MeshAgent app-server JSON-RPC output is projected as readable observation items', () => {
   const output = [
     JSON.stringify({
       method: 'thread/started',
@@ -976,16 +973,16 @@ test('external agent app-server JSON-RPC output is projected as readable observa
     })
   ].join('\n');
 
-  const stream = firstExternalAgentStream(
-    __workplaceProjectMessageTest.buildExternalAgentStreams(
+  const stream = firstMeshAgentStream(
+    __workplaceProjectMessageTest.buildMeshAgentStreams(
       [],
       [
         {
-          id: 'exa_appserveQWB9',
+          id: 'mesh_appserveQWB9',
           av: 'CO',
           agentName: 'test',
-          tool: 'external-agent:codex',
-          detail: 'external-agent:codex',
+          tool: 'mesh-agent:codex',
+          detail: 'mesh-agent:codex',
           output,
           status: 'running'
         }
@@ -997,27 +994,27 @@ test('external agent app-server JSON-RPC output is projected as readable observa
   // event and survives.
   expect(observationFields(stream.items)).toEqual([
     {
-      id: 'exa_appserveQWB9:json:0:thread-started',
+      id: 'mesh_appserveQWB9:json:0:thread-started',
       text: 'Thread started in /Users/test/project/.dev/.monad/workplace-agents/project/test'
     },
-    { id: 'exa_appserveQWB9:json:1:mcp-status', text: 'node_repl starting' }
+    { id: 'mesh_appserveQWB9:json:1:mcp-status', text: 'node_repl starting' }
   ]);
 });
 
-test('external agent follow streams restore persisted terminal snapshots', () => {
-  const stream = firstExternalAgentStream(
-    __workplaceProjectMessageTest.buildExternalAgentStreams(
-      [externalAgentSession({ outputSnapshot: '\\x1b[38;2;255;193;7mraw terminal output' })],
+test('MeshAgent follow streams restore persisted terminal snapshots', () => {
+  const stream = firstMeshAgentStream(
+    __workplaceProjectMessageTest.buildMeshAgentStreams(
+      [meshSession({ outputSnapshot: '\\x1b[38;2;255;193;7mraw terminal output' })],
       []
     )
   );
 
   expect(stream).toMatchObject({
-    id: 'exa_01KWGEMIprD4',
+    id: 'mesh_01KWGEMIprD4',
     output: '\\x1b[38;2;255;193;7mraw terminal output',
     items: [
       {
-        id: 'exa_01KWGEMIprD4:0',
+        id: 'mesh_01KWGEMIprD4:0',
         kind: 'assistant-message',
         text: '\\x1b[38;2;255;193;7mraw terminal output'
       }
@@ -1026,42 +1023,42 @@ test('external agent follow streams restore persisted terminal snapshots', () =>
 });
 
 test('typed idle suspension uses the configured project member identity', () => {
-  const avatarUrl = __workplaceProjectMessageTest.entityAvatarUrl('external-agent-instance:reviewer');
+  const avatarUrl = __workplaceProjectMessageTest.entityAvatarUrl('mesh-agent-instance:reviewer');
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
     projectMembers: [
       {
         id: 'pmem_codex_reviewer',
-        type: 'external-agent',
+        type: 'mesh-agent',
         name: 'codex',
         displayName: 'Reviewer'
       }
     ],
-    externalAgentSessions: [],
+    meshSessions: [],
     liveItems: [
       {
         kind: 'system',
-        id: 'external-agent-idle-suspended:pmem_codex_reviewer',
+        id: 'mesh-agent-idle-suspended:pmem_codex_reviewer',
         text: 'fell asleep.',
         event: {
           agentId: 'pmem_codex_reviewer',
           agentName: 'Reviewer',
           type: 'idle_suspended',
-          payload: { externalAgentSessionId: 'exa_codexreviewer', idleTimeoutMs: 300_000 }
+          payload: { meshSessionId: 'mesh_codexreviewer', idleTimeoutMs: 300_000 }
         },
         seq: 'evt_idle_suspended'
       }
     ],
     liveTools: [],
-    externalAgentDisplayNames: new Map([['pmem_codex_reviewer', 'Review Lead']]),
-    externalAgentAvatarSeeds: new Map([['Review Lead', 'external-agent-instance:reviewer']]),
-    externalAgentIcons: new Map([['pmem_codex_reviewer', 'codex']]),
-    externalAgentTags: new Map([['pmem_codex_reviewer', 'Codex']])
+    meshAgentDisplayNames: new Map([['pmem_codex_reviewer', 'Review Lead']]),
+    meshAgentAvatarSeeds: new Map([['Review Lead', 'mesh-agent-instance:reviewer']]),
+    meshAgentIcons: new Map([['pmem_codex_reviewer', 'codex']]),
+    meshAgentTags: new Map([['pmem_codex_reviewer', 'Codex']])
   });
 
   expect(messages).toEqual([
     {
-      id: 'external-agent-idle-suspended:pmem_codex_reviewer',
+      id: 'mesh-agent-idle-suspended:pmem_codex_reviewer',
       authorId: 'pmem_codex_reviewer',
       authorName: 'Review Lead',
       av: 'RL',
@@ -1084,42 +1081,42 @@ test('typed idle suspension uses the configured project member identity', () => 
 });
 
 test('typed idle resumption keeps the configured project member identity', () => {
-  const avatarUrl = __workplaceProjectMessageTest.entityAvatarUrl('external-agent-instance:reviewer');
+  const avatarUrl = __workplaceProjectMessageTest.entityAvatarUrl('mesh-agent-instance:reviewer');
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
     projectMembers: [
       {
         id: 'pmem_codex_reviewer',
-        type: 'external-agent',
+        type: 'mesh-agent',
         name: 'codex',
         displayName: 'Reviewer'
       }
     ],
-    externalAgentSessions: [],
+    meshSessions: [],
     liveItems: [
       {
         kind: 'system',
-        id: 'external-agent-idle-resumed:pmem_codex_reviewer',
+        id: 'mesh-agent-idle-resumed:pmem_codex_reviewer',
         text: 'woke up.',
         event: {
           agentId: 'pmem_codex_reviewer',
           agentName: 'Reviewer',
           type: 'idle_resumed',
-          payload: { externalAgentSessionId: 'exa_codexreviewer' }
+          payload: { meshSessionId: 'mesh_codexreviewer' }
         },
         seq: 'evt_idle_resumed'
       }
     ],
     liveTools: [],
-    externalAgentDisplayNames: new Map([['pmem_codex_reviewer', 'Review Lead']]),
-    externalAgentAvatarSeeds: new Map([['Review Lead', 'external-agent-instance:reviewer']]),
-    externalAgentIcons: new Map([['pmem_codex_reviewer', 'codex']]),
-    externalAgentTags: new Map([['pmem_codex_reviewer', 'Codex']])
+    meshAgentDisplayNames: new Map([['pmem_codex_reviewer', 'Review Lead']]),
+    meshAgentAvatarSeeds: new Map([['Review Lead', 'mesh-agent-instance:reviewer']]),
+    meshAgentIcons: new Map([['pmem_codex_reviewer', 'codex']]),
+    meshAgentTags: new Map([['pmem_codex_reviewer', 'Codex']])
   });
 
   expect(messages).toEqual([
     {
-      id: 'external-agent-idle-resumed:pmem_codex_reviewer',
+      id: 'mesh-agent-idle-resumed:pmem_codex_reviewer',
       authorId: 'pmem_codex_reviewer',
       authorName: 'Review Lead',
       av: 'RL',
@@ -1142,20 +1139,20 @@ test('typed idle resumption keeps the configured project member identity', () =>
 });
 
 test('typed lifecycle event falls back to its actor name and generated identity', () => {
-  const avatarUrl = __workplaceProjectMessageTest.entityAvatarUrl('external-agent:Monad');
+  const avatarUrl = __workplaceProjectMessageTest.entityAvatarUrl('mesh-agent:Monad');
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
-    externalAgentSessions: [],
+    meshSessions: [],
     liveItems: [
       {
         kind: 'system',
-        id: 'external-agent-idle-suspended:pmem_codex_unconfigured',
+        id: 'mesh-agent-idle-suspended:pmem_codex_unconfigured',
         text: 'fell asleep.',
         event: {
           agentId: 'pmem_codex_unconfigured',
           agentName: 'Monad',
           type: 'idle_suspended',
-          payload: { externalAgentSessionId: 'exa_codexunknown', idleTimeoutMs: 300_000 }
+          payload: { meshSessionId: 'mesh_codexunknown', idleTimeoutMs: 300_000 }
         },
         seq: 'evt_idle_unconfigured'
       }
@@ -1165,7 +1162,7 @@ test('typed lifecycle event falls back to its actor name and generated identity'
 
   expect(messages).toEqual([
     {
-      id: 'external-agent-idle-suspended:pmem_codex_unconfigured',
+      id: 'mesh-agent-idle-suspended:pmem_codex_unconfigured',
       authorId: 'pmem_codex_unconfigured',
       authorName: 'Monad',
       av: 'MO',
@@ -1187,15 +1184,15 @@ test('typed lifecycle event falls back to its actor name and generated identity'
   ]);
 });
 
-test('external agent resume failure without a typed event keeps the legacy ID fallback', () => {
-  const avatarUrl = __workplaceProjectMessageTest.entityAvatarUrl('external-agent-resume:codex');
+test('MeshAgent resume failure without a typed event keeps the legacy ID fallback', () => {
+  const avatarUrl = __workplaceProjectMessageTest.entityAvatarUrl('mesh-agent-resume:codex');
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
-    externalAgentSessions: [],
+    meshSessions: [],
     liveItems: [
       {
         kind: 'system',
-        id: 'external-agent-resume-failed:codex',
+        id: 'mesh-agent-resume-failed:codex',
         text: 'Codex resume failed for provider session codex-thread-stale; cold started a new runtime.',
         level: 'warn',
         seq: 'evt_resumefailed'
@@ -1207,7 +1204,7 @@ test('external agent resume failure without a typed event keeps the legacy ID fa
 
   expect(messages).toEqual([
     {
-      id: 'external-agent-resume-failed:codex',
+      id: 'mesh-agent-resume-failed:codex',
       authorId: 'codex',
       authorName: 'codex',
       av: 'C',
@@ -1222,26 +1219,26 @@ test('external agent resume failure without a typed event keeps the legacy ID fa
   ]);
 });
 
-test('external agent project member presence treats spawned runtime as online until it generates', () => {
+test('MeshAgent project member presence treats spawned runtime as online until it generates', () => {
   expect(
-    __workplaceProjectMessageTest.externalAgentMemberPresence({
+    __workplaceProjectMessageTest.meshAgentMemberPresence({
       agentName: 'gemini',
       enabled: true,
-      externalAgentSessions: [],
+      meshSessions: [],
       liveTools: []
     })
   ).toBe('online');
 
   expect(
-    __workplaceProjectMessageTest.externalAgentMemberPresence({
+    __workplaceProjectMessageTest.meshAgentMemberPresence({
       agentName: 'gemini',
       enabled: true,
-      externalAgentSessions: [],
+      meshSessions: [],
       liveTools: [
         {
           id: 'tool_observation',
           kind: 'tool',
-          tool: 'external-agent:gemini',
+          tool: 'mesh-agent:gemini',
           input: { agent: 'gemini' },
           output: 'provider runtime output',
           status: 'running',
@@ -1252,15 +1249,15 @@ test('external agent project member presence treats spawned runtime as online un
   ).toBe('online');
 
   expect(
-    __workplaceProjectMessageTest.externalAgentMemberPresence({
+    __workplaceProjectMessageTest.meshAgentMemberPresence({
       agentName: 'gemini',
       enabled: true,
-      externalAgentSessions: [],
+      meshSessions: [],
       liveTools: [
         {
           id: 'tool_login',
           kind: 'tool',
-          tool: 'external-agent:gemini',
+          tool: 'mesh-agent:gemini',
           input: { agent: 'gemini' },
           output: 'connection_required: sign in',
           status: 'running',
@@ -1271,26 +1268,26 @@ test('external agent project member presence treats spawned runtime as online un
   ).toBe('needs-login');
 
   expect(
-    __workplaceProjectMessageTest.externalAgentMemberPresence({
+    __workplaceProjectMessageTest.meshAgentMemberPresence({
       agentName: 'gemini',
       enabled: true,
-      externalAgentSessions: [externalAgentSession({ state: 'failed', outputSnapshot: 'process exited 1' })],
+      meshSessions: [meshSession({ state: 'failed', outputSnapshot: 'process exited 1' })],
       liveTools: []
     })
   ).toBe('failed');
 
   expect(
-    __workplaceProjectMessageTest.externalAgentMemberPresence({
+    __workplaceProjectMessageTest.meshAgentMemberPresence({
       agentName: 'gemini',
       enabled: true,
-      externalAgentSessions: [externalAgentSession({ state: 'stopped' })],
+      meshSessions: [meshSession({ state: 'stopped' })],
       liveTools: []
     })
   ).toBe('online');
 });
 
-test('external agent presence ignores login phrases inside Claude tool results', () => {
-  const session = externalAgentSession({
+test('MeshAgent presence ignores login phrases inside Claude tool results', () => {
+  const session = meshSession({
     agentName: 'pmem_claude',
     provider: 'claude-code',
     state: 'stopped',
@@ -1310,17 +1307,17 @@ test('external agent presence ignores login phrases inside Claude tool results',
   });
 
   expect(
-    __workplaceProjectMessageTest.externalAgentMemberPresence({
+    __workplaceProjectMessageTest.meshAgentMemberPresence({
       agentName: 'pmem_claude',
       enabled: true,
-      externalAgentSessions: [session],
+      meshSessions: [session],
       liveTools: []
     })
   ).toBe('online');
 });
 
-test('external agent presence keeps structured authentication failures', () => {
-  const session = externalAgentSession({
+test('MeshAgent presence keeps structured authentication failures', () => {
+  const session = meshSession({
     agentName: 'pmem_claude',
     provider: 'claude-code',
     state: 'stopped',
@@ -1332,26 +1329,26 @@ test('external agent presence keeps structured authentication failures', () => {
   });
 
   expect(
-    __workplaceProjectMessageTest.externalAgentMemberPresence({
+    __workplaceProjectMessageTest.meshAgentMemberPresence({
       agentName: 'pmem_claude',
       enabled: true,
-      externalAgentSessions: [session],
+      meshSessions: [session],
       liveTools: []
     })
   ).toBe('needs-login');
 });
 
-test('external agent project member presence treats lifecycle tools as stand-by availability', () => {
+test('MeshAgent project member presence treats lifecycle tools as stand-by availability', () => {
   expect(
-    __workplaceProjectMessageTest.externalAgentMemberPresence({
+    __workplaceProjectMessageTest.meshAgentMemberPresence({
       agentName: 'gemini',
       enabled: true,
-      externalAgentSessions: [],
+      meshSessions: [],
       liveTools: [
         {
-          id: 'exa_session00000',
+          id: 'mesh_session00000',
           kind: 'tool',
-          tool: 'external-agent:gemini',
+          tool: 'mesh-agent:gemini',
           input: { agent: 'gemini' },
           status: 'running',
           seq: '002'
@@ -1361,44 +1358,44 @@ test('external agent project member presence treats lifecycle tools as stand-by 
   ).toBe('online');
 });
 
-test('external agent project member presence treats streaming managed messages as active generation', () => {
+test('MeshAgent project member presence treats streaming managed messages as active generation', () => {
   expect(
-    __workplaceProjectMessageTest.externalAgentMemberPresence({
+    __workplaceProjectMessageTest.meshAgentMemberPresence({
       agentName: 'gemini',
       enabled: true,
-      externalAgentSessions: [],
+      meshSessions: [],
       liveTools: [],
       activeAgentNames: new Set(['gemini'])
     })
   ).toBe('working');
 });
 
-test('external agent project member presence shows running sessions with provider approvals as working', () => {
+test('MeshAgent project member presence shows running sessions with provider approvals as working', () => {
   expect(
-    __workplaceProjectMessageTest.externalAgentMemberPresence({
+    __workplaceProjectMessageTest.meshAgentMemberPresence({
       agentName: 'gemini',
       enabled: true,
-      externalAgentSessions: [
-        externalAgentSession({
+      meshSessions: [
+        meshSession({
           pendingApprovalCount: 1
-        } as Partial<ExternalAgentSessionView> & { pendingApprovalCount: number })
+        } as Partial<MeshSessionView> & { pendingApprovalCount: number })
       ],
       liveTools: []
     })
   ).toBe('working');
 });
 
-test('external agent project member presence is scoped by managed member instance id', () => {
+test('MeshAgent project member presence is scoped by managed member instance id', () => {
   expect(
-    __workplaceProjectMessageTest.externalAgentMemberPresence({
+    __workplaceProjectMessageTest.meshAgentMemberPresence({
       agentName: 'pmem_codex_reviewer',
       enabled: true,
-      externalAgentSessions: [],
+      meshSessions: [],
       liveTools: [
         {
           id: 'tool_other_codex',
           kind: 'tool',
-          tool: 'external-agent:codex',
+          tool: 'mesh-agent:codex',
           input: { agent: 'pmem_codex_writer' },
           status: 'running',
           seq: '002'
@@ -1408,19 +1405,19 @@ test('external agent project member presence is scoped by managed member instanc
   ).toBe('online');
 
   expect(
-    __workplaceProjectMessageTest.externalAgentMemberPresence({
+    __workplaceProjectMessageTest.meshAgentMemberPresence({
       agentName: 'pmem_codex_reviewer',
       enabled: true,
-      externalAgentSessions: [],
+      meshSessions: [],
       liveTools: [],
       activeAgentNames: new Set(['pmem_codex_reviewer'])
     })
   ).toBe('working');
 });
 
-test('external agent project members default to managed project runtime', () => {
+test('MeshAgent project members default to managed project runtime', () => {
   expect(
-    __workplaceProjectMessageTest.defaultProjectMemberSettings('external-agent', {
+    __workplaceProjectMessageTest.defaultProjectMemberSettings('mesh-agent', {
       defaultLaunchMode: 'pty'
     })
   ).toEqual({
@@ -1429,11 +1426,11 @@ test('external agent project members default to managed project runtime', () => 
   });
 });
 
-test('external agent project members derive template and instance identity from the template itself', () => {
+test('MeshAgent project members derive template and instance identity from the template itself', () => {
   const [member] = __workplaceProjectMessageTest.parseProjectMembers([
     {
       id: 'pmem_codex_reviewer',
-      type: 'external-agent',
+      type: 'mesh-agent',
       name: 'codex',
       displayName: 'codex-reviewer',
       settings: {
@@ -1449,7 +1446,7 @@ test('external agent project members derive template and instance identity from 
 
   expect(member).toMatchObject({
     id: 'pmem_codex_reviewer',
-    type: 'external-agent',
+    type: 'mesh-agent',
     name: 'codex',
     templateName: 'codex',
     displayName: 'codex-reviewer',
@@ -1463,22 +1460,20 @@ test('external agent project members derive template and instance identity from 
   });
 });
 
-test('external agent product display names use official client names', () => {
-  expect(__workplaceProjectMessageTest.externalAgentProductDisplayName('codex', 'codex', 'codex')).toBe('OpenAI Codex');
-  expect(
-    __workplaceProjectMessageTest.externalAgentProductDisplayName('claude-code', 'claude-code', 'claude-code')
-  ).toBe('Claude Code');
-  expect(__workplaceProjectMessageTest.externalAgentProductDisplayName('gemini', 'gemini', 'gemini')).toBe(
-    'Gemini CLI'
+test('MeshAgent product display names use official client names', () => {
+  expect(__workplaceProjectMessageTest.meshAgentProductDisplayName('codex', 'codex', 'codex')).toBe('OpenAI Codex');
+  expect(__workplaceProjectMessageTest.meshAgentProductDisplayName('claude-code', 'claude-code', 'claude-code')).toBe(
+    'Claude Code'
   );
-  expect(__workplaceProjectMessageTest.externalAgentProductDisplayName('qwen', 'qwen', 'qwen')).toBe('Qwen Code');
+  expect(__workplaceProjectMessageTest.meshAgentProductDisplayName('gemini', 'gemini', 'gemini')).toBe('Gemini CLI');
+  expect(__workplaceProjectMessageTest.meshAgentProductDisplayName('qwen', 'qwen', 'qwen')).toBe('Qwen Code');
 });
 
-test('external agent project member rename preserves runtime identity fields', () => {
-  const member = __workplaceProjectMessageTest.renameExternalAgentProjectMemberDisplayName(
+test('MeshAgent project member rename preserves runtime identity fields', () => {
+  const member = __workplaceProjectMessageTest.renameMeshAgentProjectMemberDisplayName(
     {
       id: 'pmem_codex_reviewer',
-      type: 'external-agent',
+      type: 'mesh-agent',
       name: 'codex-reviewer',
       templateName: 'codex',
       displayName: 'Reviewer',
@@ -1490,7 +1485,7 @@ test('external agent project member rename preserves runtime identity fields', (
 
   expect(member).toMatchObject({
     id: 'pmem_codex_reviewer',
-    type: 'external-agent',
+    type: 'mesh-agent',
     name: 'codex-reviewer',
     templateName: 'codex',
     displayName: 'Renamed reviewer',
@@ -1511,52 +1506,50 @@ test('generated avatars use local cache URLs keyed by stable seeds', () => {
     __workplaceProjectMessageTest.projectMemberJoinMessageView(
       {
         id: 'codex-reviewer',
-        type: 'external-agent',
+        type: 'mesh-agent',
         name: 'codex-reviewer',
         joinedAt: '2026-06-29T10:00:00.000Z'
       },
       'codex-reviewer'
     )
   ).toMatchObject({
-    avatarUrl: __workplaceProjectMessageTest.entityAvatarUrl('external-agent:codex-reviewer'),
+    avatarUrl: __workplaceProjectMessageTest.entityAvatarUrl('mesh-agent:codex-reviewer'),
     agentChip: {
-      avatarUrl: __workplaceProjectMessageTest.entityAvatarUrl('external-agent:codex-reviewer')
+      avatarUrl: __workplaceProjectMessageTest.entityAvatarUrl('mesh-agent:codex-reviewer')
     }
   });
 });
 
-test('external agent system and assistant messages share the same instance avatar url', () => {
-  const avatarUrl = __workplaceProjectMessageTest.entityAvatarUrl('external-agent-instance:reviewer');
+test('MeshAgent system and assistant messages share the same instance avatar url', () => {
+  const avatarUrl = __workplaceProjectMessageTest.entityAvatarUrl('mesh-agent-instance:reviewer');
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
     projectMembers: [
       {
         id: 'pmem_codex_reviewer',
-        type: 'external-agent',
+        type: 'mesh-agent',
         name: 'codex',
         instanceId: 'pmem_codex_reviewer',
         displayName: 'Reviewer',
         joinedAt: '2026-06-29T10:00:00.000Z'
       }
     ],
-    externalAgentSessions: [
-      externalAgentSession({ agentName: 'pmem_codex_reviewer', productIcon: 'codex', provider: 'codex' })
-    ],
+    meshSessions: [meshSession({ agentName: 'pmem_codex_reviewer', productIcon: 'codex', provider: 'codex' })],
     liveItems: [
       {
         id: 'msg_reply0000000',
         kind: 'message',
         role: 'assistant',
         agentName: 'pmem_codex_reviewer',
-        source: 'managed-external-agent',
+        source: 'managed-mesh-agent',
         parts: [{ type: 'text', text: 'Done' }],
         status: 'complete',
         seq: '002'
       }
     ] as never,
     liveTools: [],
-    externalAgentDisplayNames: new Map([['pmem_codex_reviewer', 'Reviewer']]),
-    externalAgentAvatarSeeds: new Map([['Reviewer', 'external-agent-instance:reviewer']])
+    meshAgentDisplayNames: new Map([['pmem_codex_reviewer', 'Reviewer']]),
+    meshAgentAvatarSeeds: new Map([['Reviewer', 'mesh-agent-instance:reviewer']])
   });
 
   const joined = messages.find((message) => message.id.startsWith('project-member-joined:'));
@@ -1567,28 +1560,26 @@ test('external agent system and assistant messages share the same instance avata
   expect(reply?.avatarUrl).toBe(avatarUrl);
 });
 
-test('external agent assistant messages keep provider icon when display name is custom', () => {
+test('MeshAgent assistant messages keep provider icon when display name is custom', () => {
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
-    externalAgentSessions: [
-      externalAgentSession({ agentName: 'pmem_codex_reviewer', productIcon: 'codex', provider: 'codex' })
-    ],
+    meshSessions: [meshSession({ agentName: 'pmem_codex_reviewer', productIcon: 'codex', provider: 'codex' })],
     liveItems: [
       {
         id: 'msg_reply0000000',
         kind: 'message',
         role: 'assistant',
         agentName: 'pmem_codex_reviewer',
-        source: 'managed-external-agent',
+        source: 'managed-mesh-agent',
         parts: [{ type: 'text', text: 'Done' }],
         status: 'complete',
         seq: '002'
       }
     ] as never,
     liveTools: [],
-    externalAgentDisplayNames: new Map([['pmem_codex_reviewer', 'Lily']]),
-    externalAgentIcons: new Map([['pmem_codex_reviewer', 'codex']]),
-    externalAgentTags: new Map([['pmem_codex_reviewer', 'Codex']])
+    meshAgentDisplayNames: new Map([['pmem_codex_reviewer', 'Lily']]),
+    meshAgentIcons: new Map([['pmem_codex_reviewer', 'codex']]),
+    meshAgentTags: new Map([['pmem_codex_reviewer', 'Codex']])
   });
 
   expect(messages.find((message) => message.id === 'msg_reply0000000')).toMatchObject({

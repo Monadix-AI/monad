@@ -1,9 +1,9 @@
-import type { ExternalAgentView } from '@monad/protocol';
+import type { MeshAgentView } from '@monad/protocol';
 import type {
-  BuildExternalAgentLaunchOptions,
-  ExternalAgentLaunchSpec,
-  ExternalAgentProviderAdapter,
-  ExternalAgentProviderHistoryContext
+  BuildMeshAgentLaunchOptions,
+  MeshAgentLaunchSpec,
+  MeshAgentProviderAdapter,
+  MeshAgentProviderEventContext
 } from '@monad/sdk-atom';
 
 import { homedir } from 'node:os';
@@ -11,11 +11,11 @@ import { join } from 'node:path';
 import { defaultBinProbes, resolveBinary } from '@monad/sdk-atom';
 
 import { hasFlag, parseJsonObject, parseStructuredAuthState } from '../adapter-shared.ts';
-import { parseExternalAgentArgumentSupport } from '../argument-support.ts';
-import { createOutputHistoryEventSource } from '../event-source.ts';
-import { readProviderHistoryFile } from '../history-files.ts';
+import { parseMeshAgentArgumentSupport } from '../argument-support.ts';
+import { readProviderEventFile } from '../event-files.ts';
+import { createOutputEventSource } from '../event-source.ts';
 import { resizePty, sendPtyInput, stopPty } from '../pty.ts';
-import { externalAgentAdapterSettings } from '../settings.ts';
+import { meshAgentAdapterSettings } from '../settings.ts';
 import { createBasicSettingsImport } from '../settings-import/index.ts';
 import { geminiObservationProjection } from './observation.ts';
 import { hasGeminiStreamJsonEvents, parseGeminiStreamJson } from './stream-json.ts';
@@ -49,13 +49,13 @@ function geminiExtraWorkingPathArgs(paths: string[] | undefined): string[] {
 }
 
 function geminiLaunchEnv(
-  agent: ExternalAgentView,
+  agent: MeshAgentView,
   systemPromptFile: string | undefined
 ): Record<string, string> | undefined {
   return systemPromptFile ? { ...agent.env, GEMINI_SYSTEM_MD: systemPromptFile } : agent.env;
 }
 
-function buildGeminiLaunch(agent: ExternalAgentView, opts: BuildExternalAgentLaunchOptions): ExternalAgentLaunchSpec {
+function buildGeminiLaunch(agent: MeshAgentView, opts: BuildMeshAgentLaunchOptions): MeshAgentLaunchSpec {
   const launchMode = opts.launchMode ?? agent.defaultLaunchMode;
   let args = [...(agent.args ?? [])];
   if (opts.providerSessionRef && !hasFlag(args, '--resume') && !hasFlag(args, '-r')) {
@@ -79,7 +79,7 @@ function buildGeminiLaunch(agent: ExternalAgentView, opts: BuildExternalAgentLau
   };
 }
 
-function buildGeminiAuthLaunch(agent: ExternalAgentView, args: string[]): ExternalAgentLaunchSpec {
+function buildGeminiAuthLaunch(agent: MeshAgentView, args: string[]): MeshAgentLaunchSpec {
   return {
     argv: [agent.command, ...args],
     cwd: homedir(),
@@ -96,7 +96,7 @@ function buildGeminiAuthLaunch(agent: ExternalAgentView, args: string[]): Extern
   };
 }
 
-function buildGeminiAuthStatusLaunch(agent: ExternalAgentView): ExternalAgentLaunchSpec {
+function buildGeminiAuthStatusLaunch(agent: MeshAgentView): MeshAgentLaunchSpec {
   void agent;
   const script = String.raw`
 const { existsSync, readFileSync } = require('node:fs');
@@ -152,7 +152,7 @@ function geminiCheckpointText(content: unknown): string {
     .join('');
 }
 
-function geminiCheckpointOutput(context: ExternalAgentProviderHistoryContext, raw: string): string | null {
+function geminiCheckpointOutput(context: MeshAgentProviderEventContext, raw: string): string | null {
   const records: Record<string, unknown>[] = [];
   for (const rawLine of raw.split(/\r?\n/)) {
     const line = rawLine.trim();
@@ -178,8 +178,8 @@ function geminiCheckpointOutput(context: ExternalAgentProviderHistoryContext, ra
   return records.length > 0 ? records.map((record) => JSON.stringify(record)).join('\n') : null;
 }
 
-function readGeminiHistoryOutput(context: ExternalAgentProviderHistoryContext): string | null {
-  const raw = readProviderHistoryFile({
+function readGeminiHistoryOutput(context: MeshAgentProviderEventContext): string | null {
+  const raw = readProviderEventFile({
     roots: [join(homedir(), '.gemini', 'tmp'), join(homedir(), '.gemini', 'history')],
     providerSessionRef: context.providerSessionRef,
     extensions: ['.jsonl', '.json'],
@@ -191,22 +191,22 @@ function readGeminiHistoryOutput(context: ExternalAgentProviderHistoryContext): 
   return geminiCheckpointOutput(context, raw);
 }
 
-function sendGeminiInput(handle: Parameters<ExternalAgentProviderAdapter['sendInput']>[0], input: string): void {
+function sendGeminiInput(handle: Parameters<MeshAgentProviderAdapter['sendInput']>[0], input: string): void {
   if (handle.launchMode !== 'json-stream') {
     sendPtyInput(handle, input);
     return;
   }
-  if (!handle.stdin) throw new Error('external agent session has no stream-json input bridge');
+  if (!handle.stdin) throw new Error('MeshAgent session has no stream-json input bridge');
   handle.stdin.write(input);
   void handle.stdin.flush?.();
 }
 
-function resizeGemini(handle: Parameters<ExternalAgentProviderAdapter['resize']>[0], cols: number, rows: number): void {
+function resizeGemini(handle: Parameters<MeshAgentProviderAdapter['resize']>[0], cols: number, rows: number): void {
   if (handle.launchMode === 'json-stream') return;
   resizePty(handle, cols, rows);
 }
 
-function stopGemini(handle: Parameters<ExternalAgentProviderAdapter['stop']>[0]): void {
+function stopGemini(handle: Parameters<MeshAgentProviderAdapter['stop']>[0]): void {
   if (handle.launchMode === 'json-stream') {
     void handle.stdin?.end?.();
     handle.kill('SIGTERM');
@@ -216,27 +216,32 @@ function stopGemini(handle: Parameters<ExternalAgentProviderAdapter['stop']>[0])
 }
 
 function resolveGeminiApproval(
-  handle: Parameters<ExternalAgentProviderAdapter['resolveApproval']>[0],
-  resolution: Parameters<ExternalAgentProviderAdapter['resolveApproval']>[1]
+  handle: Parameters<MeshAgentProviderAdapter['resolveApproval']>[0],
+  resolution: Parameters<MeshAgentProviderAdapter['resolveApproval']>[1]
 ): void {
   void resolution;
   if (handle.launchMode === 'json-stream') {
-    throw new Error('Gemini external agent approval resolution is provider-owned and not supported over stream-json');
+    throw new Error('Gemini MeshAgent approval resolution is provider-owned and not supported over stream-json');
   }
 }
 
-export const geminiExternalAgentAdapter: ExternalAgentProviderAdapter = {
+export const geminiMeshAgentAdapter: MeshAgentProviderAdapter = {
   provider: 'gemini',
   productIcon: 'gemini',
   label: 'Gemini CLI',
   observation: geminiObservationProjection,
-  events: createOutputHistoryEventSource({
+  events: createOutputEventSource({
     provider: 'gemini',
     projection: geminiObservationProjection,
     readOutput: readGeminiHistoryOutput
   }),
-  settings: () => externalAgentAdapterSettings({ launchModes: ['pty', 'json-stream'] }),
+  settings: () => meshAgentAdapterSettings({ launchModes: ['pty', 'json-stream'] }),
   settingsImport: createBasicSettingsImport('gemini', 'Gemini CLI', 'gemini', '.gemini'),
+  unsafeArgument: (args) =>
+    args.find(
+      (arg, index) =>
+        arg === '--yolo' || arg === '--approval-mode=yolo' || (arg === '--approval-mode' && args[index + 1] === 'yolo')
+    ),
   managedRuntime: {
     launchMode: () => 'json-stream',
     usesSystemPromptFile: true
@@ -246,12 +251,12 @@ export const geminiExternalAgentAdapter: ExternalAgentProviderAdapter = {
     const installed = geminiBin !== undefined;
     return {
       id: 'gemini',
-      label: geminiExternalAgentAdapter.label,
+      label: geminiMeshAgentAdapter.label,
       provider: 'gemini',
-      productIcon: geminiExternalAgentAdapter.productIcon,
+      productIcon: geminiMeshAgentAdapter.productIcon,
       command: 'gemini',
       args: [],
-      modelOptions: geminiExternalAgentAdapter.listSupportedModels(),
+      modelOptions: geminiMeshAgentAdapter.listSupportedModels(),
       defaultLaunchMode: 'pty',
       supportedLaunchModes: ['pty', 'json-stream'],
       installHint: 'Install Gemini CLI, then complete its provider-owned authentication flow.',
@@ -260,7 +265,7 @@ export const geminiExternalAgentAdapter: ExternalAgentProviderAdapter = {
       resolvedBinPath: geminiBin,
       capabilities: {
         auth: 'pty',
-        history: 'provider-owned',
+        events: 'provider-owned',
         resume: 'pty',
         approval: 'provider-owned',
         settingsImport: true
@@ -283,13 +288,13 @@ export const geminiExternalAgentAdapter: ExternalAgentProviderAdapter = {
   authStatus(agent) {
     return {
       launch: buildGeminiAuthStatusLaunch(agent),
-      parse: (output, exitCode) => geminiExternalAgentAdapter.parseAuthStatus(output, exitCode)
+      parse: (output, exitCode) => geminiMeshAgentAdapter.parseAuthStatus(output, exitCode)
     };
   },
   argumentSupport(agent) {
     return {
       launch: buildGeminiAuthLaunch(agent, ['--help']),
-      parse: (output) => parseExternalAgentArgumentSupport(output)
+      parse: (output) => parseMeshAgentArgumentSupport(output)
     };
   },
   parseAuthStatus(output, exitCode) {

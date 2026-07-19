@@ -9,7 +9,7 @@ test('active chat projects the session roster instead of newer project templates
       memberTemplates: [
         {
           id: 'pmem_opus',
-          type: 'external-agent',
+          type: 'mesh-agent',
           name: 'claude-code',
           displayName: 'Opus',
           settings: { modelId: 'opus' }
@@ -19,7 +19,7 @@ test('active chat projects the session roster instead of newer project templates
         {
           id: 'pmem_fable',
           templateId: 'pmem_fable',
-          type: 'external-agent',
+          type: 'mesh-agent',
           name: 'claude-code',
           displayName: 'Fable',
           settings: { modelId: 'fable' },
@@ -30,7 +30,7 @@ test('active chat projects the session roster instead of newer project templates
   ).toEqual([
     {
       id: 'pmem_fable',
-      type: 'external-agent',
+      type: 'mesh-agent',
       name: 'claude-code',
       templateName: 'claude-code',
       instanceId: 'pmem_fable',

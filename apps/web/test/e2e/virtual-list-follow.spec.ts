@@ -10,6 +10,7 @@ type HarnessState = {
   scrollTop: number;
   topVisibleRowId: string | null;
   topVisibleRowOffset: number | null;
+  topLoadCount: number;
 };
 
 async function openHarness(page: Page): Promise<void> {
@@ -168,6 +169,65 @@ test('prepending older rows leaves the reader on the same row', async ({ page })
   expect(after.topVisibleRowId).toBe(before.topVisibleRowId);
   expect(Math.abs((after.topVisibleRowOffset ?? 0) - (before.topVisibleRowOffset ?? 0))).toBeLessThanOrEqual(2);
   expect(after.scrollTop).toBeGreaterThan(before.scrollTop);
+});
+
+test('one jump to the loaded top requests one page and keeps the previous first row anchored', async ({ page }) => {
+  await page.goto(`${HARNESS}?topPaging=1`);
+  await page.locator('[role="log"] [data-index]').first().waitFor();
+  await expectSettledAtBottom(page);
+
+  await page.evaluate(() => window.harness.jumpToLoadedTop());
+  await expect.poll(async () => (await state(page)).topLoadCount).toBe(1);
+  await page.waitForTimeout(300);
+
+  const after = await state(page);
+  expect({ topLoadCount: after.topLoadCount, topVisibleRowId: after.topVisibleRowId }).toEqual({
+    topLoadCount: 1,
+    topVisibleRowId: 'row_0'
+  });
+});
+
+// Observation-specific: prepended history can MERGE INTO the row already at the viewport top rather
+// than only inserting above it (adjacent tool entries regroup into one `tool-group:*` row). That
+// replaces the top row's key and makes it taller in the same commit — an identity change the generic
+// prepend case never produces, and the shape that breaks a key-pinned scroll anchor.
+test('history that merges into the top row keeps the reader in place', async ({ page }) => {
+  await openHarness(page);
+  // Reaching the top is what triggers loading older history, so that is where the merge lands.
+  await page.evaluate(() => window.harness.scrollToKey('row_0'));
+  await waitForStableScrollHeight(page);
+  const before = await state(page);
+  const mergedInto = before.topVisibleRowId;
+  expect(mergedInto).toBe('row_0');
+
+  await page.evaluate(() => window.harness.prependMergingToolRows(3));
+  await waitForStableScrollHeight(page);
+
+  const after = await state(page);
+  // The old key is gone (it was absorbed), so the anchor cannot have been held by key alone.
+  expect(after.topVisibleRowId).toBe(`tool-group:${mergedInto}`);
+  await expect(page.locator(`[data-row-id="${mergedInto}"]`)).toHaveCount(0);
+  // The reader still sees the same content at the same place: the merged row's own growth plus the
+  // rows inserted above it were absorbed by the scroll position, not shown as a jump.
+  expect(Math.abs((after.topVisibleRowOffset ?? 0) - (before.topVisibleRowOffset ?? 0))).toBeLessThanOrEqual(2);
+  expect(after.atBottom).toBe(false);
+});
+
+test('a live append after a merging prepend does not drag the reader back to the bottom', async ({ page }) => {
+  await openHarness(page);
+  await page.evaluate(() => window.harness.scrollToKey('row_0'));
+  await waitForStableScrollHeight(page);
+  await page.evaluate(() => window.harness.prependMergingToolRows(3));
+  await waitForStableScrollHeight(page);
+  const anchored = await state(page);
+
+  await page.evaluate(() => window.harness.appendRow());
+  await waitForStableScrollHeight(page);
+
+  const after = await state(page);
+  expect(after.atBottom).toBe(false);
+  expect(after.topVisibleRowId).toBe(anchored.topVisibleRowId);
+  expect(Math.abs((after.topVisibleRowOffset ?? 0) - (anchored.topVisibleRowOffset ?? 0))).toBeLessThanOrEqual(2);
 });
 
 test('scrollToKey brings an off-screen row into view and hands control to the reader', async ({ page }) => {

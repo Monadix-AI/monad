@@ -119,7 +119,7 @@ export function ProjectAddMemberSection({
         ) : null}
         {candidates.map((candidate, index) => (
           <CandidateRow
-            actionLabel={candidate.type === 'external-agent' ? t('web.workplace.spawnAgentMember') : null}
+            actionLabel={candidate.type === 'mesh-agent' ? t('web.workplace.spawnAgentMember') : null}
             candidate={candidate}
             index={index}
             key={candidate.id}

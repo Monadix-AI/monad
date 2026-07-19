@@ -1,4 +1,4 @@
-import type { ExternalAgentSettingsImportItem } from '@monad/protocol';
+import type { MeshAgentSettingsImportItem } from '@monad/protocol';
 
 import { createHash } from 'node:crypto';
 
@@ -17,17 +17,15 @@ function sha256(value: string): string {
   return createHash('sha256').update(value).digest('hex');
 }
 
-export function publicItemWithoutHash(
-  item: ExternalAgentSettingsImportItem
-): Omit<ExternalAgentSettingsImportItem, 'hash'> {
+export function publicItemWithoutHash(item: MeshAgentSettingsImportItem): Omit<MeshAgentSettingsImportItem, 'hash'> {
   const { hash: _hash, ...rest } = item;
   return rest;
 }
 
-export function externalAgentSettingsImportItemHash(item: Omit<ExternalAgentSettingsImportItem, 'hash'>): string {
+export function meshAgentSettingsImportItemHash(item: Omit<MeshAgentSettingsImportItem, 'hash'>): string {
   return sha256(stableJson(item));
 }
 
-export function withHash(item: Omit<ExternalAgentSettingsImportItem, 'hash'>): ExternalAgentSettingsImportItem {
-  return { ...item, hash: externalAgentSettingsImportItemHash(item) };
+export function withHash(item: Omit<MeshAgentSettingsImportItem, 'hash'>): MeshAgentSettingsImportItem {
+  return { ...item, hash: meshAgentSettingsImportItemHash(item) };
 }
