@@ -4,7 +4,7 @@ import { existsSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-import { meshAgentStripKeys } from '#/services/mesh-agent/env.ts';
+import { meshAgentStripKeys, stripEnvKeys } from '#/services/mesh-agent/env.ts';
 import { findMeshAgentProviderAdapter } from '#/services/mesh-agent/index.ts';
 
 // Non-interactive spawns (Bun.spawn) don't source the login shell, so version-manager
@@ -68,6 +68,6 @@ export function adapterSpawnEnv(
       credentialDirs.push(credential.path);
     }
   }
-  for (const key of meshAgentStripKeys(adapter?.environment, delivery?.environment)) delete env[key];
+  stripEnvKeys(env, meshAgentStripKeys(adapter?.environment, delivery?.environment));
   return { env, credentialDirs };
 }

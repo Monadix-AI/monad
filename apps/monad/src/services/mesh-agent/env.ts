@@ -44,6 +44,23 @@ export function meshAgentStripKeys(...policies: Array<MeshAgentEnvironmentPolicy
   return keys;
 }
 
+// Windows resolves environment names case-insensitively, so an exact-case delete would leave a
+// differently-cased marker (`Claudecode`) readable by the child through `getenv("CLAUDECODE")`. POSIX
+// names are genuinely distinct by case — `PATH` and `path` are two variables — so folding there would
+// over-delete. The fold therefore tracks the platform's own semantics instead of being unconditional.
+const ENV_NAMES_ARE_CASE_INSENSITIVE = process.platform === 'win32';
+
+/** Enforce a strip set against a built env, matching the host's environment-name case semantics. */
+export function stripEnvKeys(env: Record<string, string | undefined>, stripKeys: ReadonlySet<string>): void {
+  if (!ENV_NAMES_ARE_CASE_INSENSITIVE) {
+    for (const key of stripKeys) delete env[key];
+    return;
+  }
+  const folded = new Set<string>();
+  for (const key of stripKeys) folded.add(key.toUpperCase());
+  for (const key of Object.keys(env)) if (folded.has(key.toUpperCase())) delete env[key];
+}
+
 /**
  * Build the child CLI's environment. Two policies with different shapes, applied at different points:
  * `ENV_INJECT_DENYLIST` is a WRITE permission — operator config may not set a loader key, but one
@@ -60,7 +77,7 @@ export function mergeMeshAgentChildEnv(
   for (const [key, value] of Object.entries(agentEnv ?? {})) {
     if (!ENV_INJECT_DENYLIST.has(key.toUpperCase())) env[key] = value;
   }
-  for (const key of stripKeys) delete env[key];
+  stripEnvKeys(env, stripKeys);
   return env;
 }
 
