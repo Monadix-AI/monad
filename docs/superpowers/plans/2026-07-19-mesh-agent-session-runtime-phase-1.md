@@ -34,7 +34,7 @@
 - Consumes: `messageAttachmentRefSchema` from `mesh-agent-attachments.ts`.
 - Produces: `MeshSessionLifecycle`, `MeshExecutionActivity`, `MeshConnectionCondition`, `MeshAgentRuntimeCapabilities`, `MeshAgentRuntimeFailure`, and `MeshAgentTurnInput`, with matching Zod schemas.
 
-- [ ] **Step 1: Write exact failing schema tests**
+- [x] **Step 1: Write exact failing schema tests**
 
 Create `packages/protocol/test/mesh-session-runtime.test.ts` with fixtures for all discriminants. Assert full parsed values for `active + idle`, `terminal + failed`, `reconnecting`, exact capabilities, and a text-plus-attachment turn. Assert that idle rejects nonzero `queuedTurnCount`, running rejects a null PID, and turn input rejects more than `NATIVE_AGENT_ATTACHMENTS_MAX` attachments.
 
@@ -87,13 +87,13 @@ test('session runtime schemas preserve terminal failure and reconnect detail', (
 });
 ```
 
-- [ ] **Step 2: Run the focused test and verify the missing exports fail**
+- [x] **Step 2: Run the focused test and verify the missing exports fail**
 
 Run: `bun scripts/bun-test.ts packages/protocol/test/mesh-session-runtime.test.ts --only-failures`
 
 Expected: FAIL because the new schemas are not exported.
 
-- [ ] **Step 3: Implement the schema-first runtime state module**
+- [x] **Step 3: Implement the schema-first runtime state module**
 
 Create discriminated unions with these exact shapes:
 
@@ -141,19 +141,19 @@ export const meshExecutionActivitySchema = z.discriminatedUnion('state', [
 
 Add `meshConnectionConditionSchema`, `meshAgentRuntimeCapabilitiesSchema`, and `meshAgentTurnInputSchema`. Define turn attachments by reusing `messageAttachmentRefSchema`; do not redeclare its fields. Export every schema and inferred type from `packages/protocol/src/mesh-agent/index.ts`.
 
-- [ ] **Step 4: Run focused protocol tests**
+- [x] **Step 4: Run focused protocol tests**
 
 Run: `bun scripts/bun-test.ts packages/protocol/test/mesh-session-runtime.test.ts --only-failures`
 
 Expected: PASS.
 
-- [ ] **Step 5: Run protocol typecheck**
+- [x] **Step 5: Run protocol typecheck**
 
 Run: `bun run --cwd packages/protocol typecheck`
 
 Expected: exit 0.
 
-- [ ] **Step 6: Commit only Task 1 paths**
+- [x] **Step 6: Commit only Task 1 paths**
 
 ```bash
 git add -f packages/protocol/src/mesh-agent/mesh-session-runtime.ts packages/protocol/test/mesh-session-runtime.test.ts
@@ -173,7 +173,7 @@ git commit --only packages/protocol/src/mesh-agent/mesh-session-runtime.ts packa
 - Consumes: `MeshAgentRuntimeCapabilities`, `MeshAgentTurnInput`, and `MeshAgentRuntimeFailure` from `@monad/protocol`.
 - Produces: `SessionEventRuntimeDefinition`, `ResidentSessionEventPlan`, `PerTurnSessionEventPlan`, `MeshAgentProviderDriver`, and all packet/channel/control support types.
 
-- [ ] **Step 1: Write compile-time contract fixtures**
+- [x] **Step 1: Write compile-time contract fixtures**
 
 Create a Bun test that constructs one resident definition and one per-turn definition with `satisfies SessionEventRuntimeDefinition`, then asserts their exact discriminants at runtime. Add `@ts-expect-error` fixtures proving resident drivers require `attachChannel` and `sendTurn`, per-turn drivers require `attachTurnChannel` and `completeTurn`, and a channel plan cannot carry `host`, `port`, or `path`.
 
@@ -184,13 +184,13 @@ test('runtime definitions preserve their process-model discriminants', () => {
 });
 ```
 
-- [ ] **Step 2: Run the focused SDK test and verify the missing module fails**
+- [x] **Step 2: Run the focused SDK test and verify the missing module fails**
 
 Run: `bun scripts/bun-test.ts packages/sdk-atom/test/unit/mesh-agent-session-runtime.test.ts --only-failures`
 
 Expected: FAIL because the new runtime types are not exported.
 
-- [ ] **Step 3: Implement the type-only runtime module**
+- [x] **Step 3: Implement the type-only runtime module**
 
 Define these exact boundaries in `mesh-agent-session-runtime.ts`:
 
@@ -232,7 +232,7 @@ Define `ProviderDriverBase.accept(packet, sink): Promise<void>` with an awaitabl
 
 Export the module from the package root and add `./mesh-agent-session-runtime` to `package.json` exports.
 
-- [ ] **Step 4: Run focused SDK tests and typecheck**
+- [x] **Step 4: Run focused SDK tests and typecheck**
 
 Run: `bun scripts/bun-test.ts packages/sdk-atom/test/unit/mesh-agent-session-runtime.test.ts --only-failures`
 
@@ -242,7 +242,7 @@ Run: `bun run --cwd packages/sdk-atom typecheck`
 
 Expected: exit 0, including all `@ts-expect-error` checks.
 
-- [ ] **Step 5: Commit only Task 2 paths**
+- [x] **Step 5: Commit only Task 2 paths**
 
 ```bash
 git add -f packages/sdk-atom/src/mesh-agent-session-runtime.ts packages/sdk-atom/test/unit/mesh-agent-session-runtime.test.ts
@@ -261,17 +261,17 @@ git commit --only packages/sdk-atom/src/mesh-agent-session-runtime.ts packages/s
 - Consumes: `SessionEventRuntimeDefinition` from Task 2.
 - Produces: optional `MeshAgentProviderAdapter.createSessionRuntime(agent, context)` for phased provider migration.
 
-- [ ] **Step 1: Add a compile-time adapter fixture using the new hook**
+- [x] **Step 1: Add a compile-time adapter fixture using the new hook**
 
 Add a fixture to `agent-adapter.test.ts` whose `createSessionRuntime` returns a valid per-turn definition. Assert the factory is invoked with the exact provider session reference and working path. Existing adapter fixtures must remain unchanged and continue compiling without the hook.
 
-- [ ] **Step 2: Run typecheck and verify the missing hook fails**
+- [x] **Step 2: Run typecheck and verify the missing hook fails**
 
 Run: `bun run --cwd packages/sdk-atom typecheck`
 
 Expected: FAIL because `createSessionRuntime` is not part of `MeshAgentProviderAdapter`.
 
-- [ ] **Step 3: Add the optional additive hook**
+- [x] **Step 3: Add the optional additive hook**
 
 Add these types without changing `buildLaunch` or existing methods:
 
@@ -295,7 +295,7 @@ export interface MeshAgentProviderAdapter {
 
 Import the runtime definition as a type-only dependency. Export `MeshAgentSessionRuntimeContext` from the package root. Do not wire the daemon to this hook in Phase 1.
 
-- [ ] **Step 4: Run SDK unit tests and typecheck**
+- [x] **Step 4: Run SDK unit tests and typecheck**
 
 Run: `bun scripts/bun-test.ts packages/sdk-atom/test/unit/ --only-failures`
 
@@ -305,7 +305,7 @@ Run: `bun run --cwd packages/sdk-atom typecheck`
 
 Expected: exit 0.
 
-- [ ] **Step 5: Commit only Task 3 paths**
+- [x] **Step 5: Commit only Task 3 paths**
 
 ```bash
 git add packages/sdk-atom/src/agent-adapter.ts packages/sdk-atom/src/index.ts packages/sdk-atom/test/unit/agent-adapter.test.ts
@@ -321,19 +321,19 @@ git commit --only packages/sdk-atom/src/agent-adapter.ts packages/sdk-atom/src/i
 - Consumes: all Phase 1 contracts.
 - Produces: a passing additive contract baseline for Phase 2.
 
-- [ ] **Step 1: Run complete applicable test scopes once**
+- [x] **Step 1: Run complete applicable test scopes once**
 
 Run: `bun scripts/bun-test.ts packages/protocol/test/ packages/sdk-atom/test/ --only-failures`
 
 Expected: PASS. Collect every failure before editing if it does not pass.
 
-- [ ] **Step 2: Run complete applicable static gates once**
+- [x] **Step 2: Run complete applicable static gates once**
 
 Run: `bun run --cwd packages/protocol typecheck && bun run --cwd packages/sdk-atom typecheck && bun run check:test-assertions`
 
 Expected: exit 0.
 
-- [ ] **Step 3: Verify no public topology leakage was added**
+- [x] **Step 3: Verify no public topology leakage was added**
 
 Run:
 
@@ -343,7 +343,7 @@ rg -n "SessionEventRuntimePlan|processModel|child-stdio|daemon-loopback|daemon-r
 
 Expected: no matches. Runtime-plan vocabulary belongs only to `@monad/sdk-atom` and later daemon internals.
 
-- [ ] **Step 4: Audit the diff and dirty-tree boundary**
+- [x] **Step 4: Audit the diff and dirty-tree boundary**
 
 Run:
 
@@ -354,6 +354,15 @@ git status --short
 
 Expected: the scoped diff contains only Phase 1 contracts/tests; all unrelated pre-existing WIP remains present and uncommitted by these tasks.
 
-- [ ] **Step 5: Record Phase 1 completion**
+- [x] **Step 5: Record Phase 1 completion**
 
 Update this plan's checkboxes and report the exact test commands and results. Do not claim the full migration complete: Phase 2 generic executor, provider conversions, state/UI cutover, compatibility release, and deletion remain separate plans.
+
+## Completion record
+
+- `bun scripts/bun-test.ts packages/protocol/test/ packages/sdk-atom/test/ --only-failures`: 214 passed, 0 failed.
+- `bun run --cwd packages/protocol typecheck`: passed.
+- `bun run --cwd packages/sdk-atom typecheck`: passed.
+- `bun run check:test-assertions`: passed with no weak assertions.
+- Protocol topology leakage check: no runtime-plan or channel discriminant vocabulary found.
+- Full pre-commit quality gate remains blocked by unrelated WIP formatting in `apps/monad/test/unit/mesh-agent-event-pages.test.ts`.

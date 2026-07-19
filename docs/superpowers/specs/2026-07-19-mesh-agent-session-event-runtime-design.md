@@ -1,7 +1,7 @@
 # MeshAgent Session Event Runtime Design
 
 Date: 2026-07-19  
-Status: reviewed design, pending implementation plan
+Status: reviewed design; Phase 1 additive contracts implemented
 
 ## Summary
 
