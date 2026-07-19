@@ -498,7 +498,6 @@ function SingleToolView({ step, sessionId }: { step: ToolItem; sessionId?: Sessi
       <ToolHeader
         aria-label={isSkill && statusLabel ? `${title} · ${statusLabel}` : title}
         className={cn(TOOL_EVENT_HEADER_CLASS, step.status === 'running' && '[&>div>svg]:motion-safe:animate-pulse')}
-        data-virtual-list-anchor="true"
         icon={isSkill ? PackageIcon : undefined}
         showStatus={false}
         state={toolState(step.status)}
@@ -600,7 +599,6 @@ function ToolGroupView({ step, sessionId }: { step: ToolGroupItem; sessionId?: S
     >
       <ToolHeader
         className={TOOL_EVENT_HEADER_CLASS}
-        data-virtual-list-anchor="true"
         showStatus={false}
         state={toolState(status)}
         title={t('web.tools.concurrentCalls', { count: step.steps.length })}

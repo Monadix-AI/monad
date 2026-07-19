@@ -2,7 +2,7 @@ import type { Message, Participant } from '../../src/workspace-experiences/exper
 
 import { expect, test } from 'bun:test';
 
-import { shouldFollowLatestMessage } from '../../src/workspace-experiences/chat-room/components/message-list.tsx';
+import { shouldJumpToOwnMessage } from '../../src/workspace-experiences/chat-room/components/message-list.tsx';
 import {
   createOptimisticUserMessage,
   mergeOptimisticMessages,
@@ -178,11 +178,21 @@ test('optimistic user messages use the current human identity', () => {
   });
 });
 
-test('latest local optimistic messages re-arm bottom following', () => {
-  expect(shouldFollowLatestMessage(true)).toBe(true);
-  expect(shouldFollowLatestMessage(false)).toBe(false);
-  expect(shouldFollowLatestMessage(false, 'sending')).toBe(true);
-  expect(shouldFollowLatestMessage(false, 'failed')).toBe(true);
+test("sending a message jumps to the bottom once; status changes and others' messages do not", () => {
+  expect({
+    ownMessageAppears: shouldJumpToOwnMessage('optimistic-1', undefined, 'sending'),
+    // 'sending' -> 'sent' on the same message must not drag a reader who scrolled up after sending.
+    sameMessageResolves: shouldJumpToOwnMessage('optimistic-1', 'optimistic-1', 'sent'),
+    ownMessageFails: shouldJumpToOwnMessage('optimistic-2', 'optimistic-1', 'failed'),
+    incomingMessage: shouldJumpToOwnMessage('msg_from_agent', 'optimistic-1', undefined),
+    emptyList: shouldJumpToOwnMessage(undefined, undefined, 'sending')
+  }).toEqual({
+    ownMessageAppears: true,
+    sameMessageResolves: false,
+    ownMessageFails: true,
+    incomingMessage: false,
+    emptyList: false
+  });
 });
 
 test('failed optimistic user messages stay retryable when no server echo exists', () => {

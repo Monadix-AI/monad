@@ -27,14 +27,12 @@ export type MessageOutlineProps<T extends MessageOutlineItem = MessageOutlineIte
 export function activeMessageOutlineIds(
   items: MessageOutlineItem[],
   visibleRange: { endIndex: number; startIndex: number } | null,
-  firstItemIndex: number | undefined,
   totalItemCount: number
 ): Set<string> {
   if (items.length === 0) return new Set();
   if (!visibleRange) return new Set([items.at(-1)?.id].filter((id): id is string => Boolean(id)));
-  const offset = firstItemIndex ?? 0;
-  const start = Math.max(0, visibleRange.startIndex - offset);
-  const end = Math.min(totalItemCount - 1, visibleRange.endIndex - offset);
+  const start = Math.max(0, visibleRange.startIndex);
+  const end = Math.min(totalItemCount - 1, visibleRange.endIndex);
   return new Set(
     items
       .filter((item, index) => {

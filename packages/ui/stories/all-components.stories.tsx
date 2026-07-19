@@ -594,14 +594,7 @@ export const AskSheetAndLists: Story = {
               <VirtualList
                 getKey={(item) => item.id}
                 items={items}
-                renderItem={(item) => (
-                  <div
-                    className="border-b px-3 py-2 text-sm"
-                    data-virtual-list-anchor="true"
-                  >
-                    {item.text}
-                  </div>
-                )}
+                renderItem={(item) => <div className="border-b px-3 py-2 text-sm">{item.text}</div>}
               />
             </div>
           </div>

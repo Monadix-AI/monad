@@ -82,7 +82,6 @@ const ReasoningBubble = memo(function ReasoningBubble({ text, streaming }: { tex
       isStreaming={streaming}
     >
       <ReasoningTrigger
-        data-virtual-list-anchor="true"
         labels={{
           thinking: t('web.reasoning.thinking'),
           thoughtFew: t('web.reasoning.thoughtFew'),

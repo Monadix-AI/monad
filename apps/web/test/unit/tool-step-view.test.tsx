@@ -140,23 +140,6 @@ test('tool calls use the flat skill event style and reveal details on expand', (
   expect(runningMarkup).toContain('Parameters');
 });
 
-test('tool call trigger marks itself as the viewport anchor for user toggles', () => {
-  const markup = renderToStaticMarkup(
-    createElement(ToolStepView, {
-      step: {
-        id: 'tool_anchor',
-        input: { command: 'pwd' },
-        kind: 'tool',
-        output: '/workspace',
-        status: 'ok',
-        tool: 'shell'
-      }
-    })
-  );
-
-  expect(markup).toContain('data-virtual-list-anchor="true"');
-});
-
 test('tool error details have no colored background', () => {
   const markup = renderToStaticMarkup(
     createElement(ToolStepView, {

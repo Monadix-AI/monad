@@ -1,17 +1,16 @@
 import { expect, test } from 'bun:test';
-import { observationFollowResetKey } from '@monad/atoms/workspace-experiences';
+import { averageMeasuredRowHeight, indexOfKey, overscanRowCount } from '@monad/ui/components/VirtualList';
 import {
-  indexOfKey,
-  initialBottomScrollRequest,
-  initialBottomScrollRequestFor,
+  consumeSelfTarget,
   isAtBottom,
-  reduceBottomScrollRequest,
+  isLayoutInducedScroll,
   reducePinnedOnScroll,
+  reduceSettleStability,
   scrollBoundaryTop,
-  scrollTopPreservingAnchor,
+  shouldFireEdge,
   shouldPinToBottom,
   shouldPublishAtBottomChange
-} from '@monad/ui/components/VirtualList';
+} from '@monad/ui/hooks/use-bottom-follow';
 
 test('boundary controls target the physical top and bottom of the loaded list', () => {
   const metrics = { scrollHeight: 2_400, clientHeight: 600 };
@@ -44,20 +43,20 @@ test('indexOfKey: finds and misses', () => {
   expect(indexOfKey([], getKey, 'a')).toBe(-1);
 });
 
-test('scroll target uses Virtuoso absolute indexes when history has been prepended', () => {
-  const items = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
-  const getKey = (item: { id: string }) => item.id;
-
-  expect([indexOfKey(items, getKey, 'b', 999_980), indexOfKey(items, getKey, 'missing', 999_980)]).toEqual([
-    999_981, -1
-  ]);
+test('reducePinnedOnScroll: a genuine move sets pinned from the at-bottom reading', () => {
+  // User scrolls down but not to the bottom → unpin.
+  expect(reducePinnedOnScroll(true, false, false, 'down')).toEqual({ pinned: false, selfScrollConsumed: false });
+  // User scrolls back down to the bottom → re-pin.
+  expect(reducePinnedOnScroll(false, false, true, 'down')).toEqual({ pinned: true, selfScrollConsumed: false });
 });
 
-test('reducePinnedOnScroll: a genuine scroll sets pinned from the at-bottom reading', () => {
-  // User scrolls up away from the bottom → unpin.
-  expect(reducePinnedOnScroll(true, false, false)).toEqual({ pinned: false, selfScrollConsumed: false });
-  // User scrolls back to the bottom → re-pin.
-  expect(reducePinnedOnScroll(false, false, true)).toEqual({ pinned: true, selfScrollConsumed: false });
+test('reducePinnedOnScroll: a zero-displacement event never changes pinned', () => {
+  // Our own jump's scroll event arriving after the self-scroll window, evaluated while unmeasured
+  // rows make the viewport read as "not at bottom" — following must survive.
+  expect([reducePinnedOnScroll(true, false, false, 'none'), reducePinnedOnScroll(false, false, true, 'none')]).toEqual([
+    { pinned: true, selfScrollConsumed: false },
+    { pinned: false, selfScrollConsumed: false }
+  ]);
 });
 
 test('reducePinnedOnScroll: upward user scroll unpins even within the bottom threshold', () => {
@@ -81,58 +80,93 @@ test('shouldPinToBottom: follows viewport changes unless the user is parked abov
   expect(shouldPinToBottom(false, true)).toBe(false);
 });
 
-test('bottom request smooth-scrolls first and auto-corrects after virtual height changes', () => {
-  const requested = reduceBottomScrollRequest(initialBottomScrollRequest, {
-    type: 'request',
-    behavior: 'smooth'
-  });
+test('overscanRowCount: px of overscan become whole rows, never zero', () => {
+  expect([overscanRowCount(400, 96), overscanRowCount(600, 96), overscanRowCount(10, 96)]).toEqual([5, 7, 1]);
+});
 
-  expect(requested).toEqual({ active: true, behavior: 'smooth' });
-  expect(reduceBottomScrollRequest(requested, { type: 'height-changed' })).toEqual({
-    active: true,
-    behavior: 'auto'
-  });
-  expect(reduceBottomScrollRequest(requested, { type: 'settle-timeout' })).toEqual({
-    active: true,
-    behavior: 'auto'
+test('consumeSelfTarget: a late event at a queued destination reads as our own scroll', () => {
+  const targets = [
+    { top: 5424, expiresAt: 1_000 },
+    { top: 6621, expiresAt: 1_000 }
+  ];
+
+  expect({
+    hit: consumeSelfTarget(targets, 6620.6, 500),
+    remainingAfterHit: [...targets],
+    miss: consumeSelfTarget(targets, 3000, 500),
+    remainingAfterMiss: [...targets]
+  }).toEqual({
+    // Matching 6621 also drops the stale 5424 whose event was coalesced away.
+    hit: true,
+    remainingAfterHit: [],
+    miss: false,
+    remainingAfterMiss: []
   });
 });
 
-test('non-empty bottom-following lists start with an active settlement request', () => {
+test('consumeSelfTarget: a scroll clamped by shrinking content still matches its destination', () => {
+  // scrollTo(6477) issued, then measurements shrank the list so the max became 6081: the browser
+  // clamps to 6081 and the event reports that. It must read as ours, not as the user scrolling up.
+  expect({
+    clampedHit: consumeSelfTarget([{ top: 6477, expiresAt: 1_000 }], 6081, 500, 6081),
+    userAboveMax: consumeSelfTarget([{ top: 6477, expiresAt: 1_000 }], 5000, 500, 6081)
+  }).toEqual({ clampedHit: true, userAboveMax: false });
+});
+
+test('consumeSelfTarget: an expired destination cannot claim the user arriving at that position', () => {
+  // The reader reaches the bottom with no gesture event to clear the queue (Tab focus moving into
+  // the last row, find-in-page). A destination whose own event never arrived must not swallow that
+  // arrival, or the list reports "at bottom" while silently no longer following.
+  const stale = [{ top: 6621, expiresAt: 900 }];
+
+  expect({
+    beforeExpiry: consumeSelfTarget([{ top: 6621, expiresAt: 900 }], 6621, 800, 6621),
+    afterExpiry: consumeSelfTarget(stale, 6621, 1_500, 6621),
+    prunedQueue: stale
+  }).toEqual({ beforeExpiry: true, afterExpiry: false, prunedQueue: [] });
+});
+
+test('isLayoutInducedScroll: content resizing moves the scroll position, and that is not the reader', () => {
+  expect({
+    // A row shrinking from its estimate makes the browser clamp the scroll it can no longer honour;
+    // read as a user scroll it would unpin a reader who never touched anything.
+    clampAfterShrink: isLayoutInducedScroll(false, true),
+    // While the reader is actually scrolling, streaming content must not disguise their gesture.
+    gestureDuringStreaming: isLayoutInducedScroll(true, true),
+    // Same height: whatever moved the position, it was not the layout.
+    steadyLayout: isLayoutInducedScroll(false, false)
+  }).toEqual({ clampAfterShrink: true, gestureDuringStreaming: false, steadyLayout: false });
+});
+
+test('shouldFireEdge: fires on entering the zone, then only after the boundary row set changed', () => {
+  expect({
+    enteringZone: shouldFireEdge(true, true),
+    stillInZoneDisarmed: shouldFireEdge(true, false),
+    outsideZone: shouldFireEdge(false, true),
+    reArmedByShortPage: shouldFireEdge(true, true)
+  }).toEqual({ enteringZone: true, stillInZoneDisarmed: false, outsideZone: false, reArmedByShortPage: true });
+});
+
+test('averageMeasuredRowHeight: unmeasured lists fall back, measured lists average and round', () => {
   expect([
-    initialBottomScrollRequestFor(true, false, 30),
-    initialBottomScrollRequestFor(true, true, 30),
-    initialBottomScrollRequestFor(true, false, 0),
-    initialBottomScrollRequestFor(false, false, 30)
-  ]).toEqual([
-    { active: true, behavior: 'auto' },
-    initialBottomScrollRequest,
-    initialBottomScrollRequest,
-    initialBottomScrollRequest
-  ]);
+    averageMeasuredRowHeight([], 96),
+    averageMeasuredRowHeight([106, 300, 1545, 1797], 96),
+    averageMeasuredRowHeight([100, 101], 96)
+  ]).toEqual([96, 937, 101]);
 });
 
-test('bottom request cancels only on upward user scroll', () => {
-  const requested = reduceBottomScrollRequest(initialBottomScrollRequest, {
-    type: 'request',
-    behavior: 'smooth'
+test('settle loop stops after consecutive corrected frames, and a correction restarts the count', () => {
+  const first = reduceSettleStability(0, true);
+  const second = reduceSettleStability(first.stableFrames, true);
+  const third = reduceSettleStability(second.stableFrames, true);
+  const interrupted = reduceSettleStability(second.stableFrames, false);
+
+  expect({ first, second, third, interrupted }).toEqual({
+    first: { stableFrames: 1, settled: false },
+    second: { stableFrames: 2, settled: false },
+    third: { stableFrames: 3, settled: true },
+    interrupted: { stableFrames: 0, settled: false }
   });
-
-  expect(reduceBottomScrollRequest(requested, { type: 'user-scroll-up' })).toEqual(initialBottomScrollRequest);
-});
-
-test('bottom request ends after the true bottom stays stable', () => {
-  const requested = reduceBottomScrollRequest(initialBottomScrollRequest, {
-    type: 'request',
-    behavior: 'auto'
-  });
-  const measuring = reduceBottomScrollRequest(requested, { type: 'height-changed' });
-
-  expect(
-    reduceBottomScrollRequest(measuring, {
-      type: 'stable-at-bottom'
-    })
-  ).toEqual(initialBottomScrollRequest);
 });
 
 test('bottom state hides transient non-bottom measurements while the list is still pinned', () => {
@@ -165,25 +199,4 @@ test('chat experience uses a stationary overscroll boundary without transform bo
     enablesBounce: /\s bounce(?:\s|\n)/.test(messageListSource),
     overscrollRule: globalStyles.match(/\.scwf-scroll\s*\{[^}]*overscroll-behavior-y:\s*([^;]+);/s)?.[1]
   }).toEqual({ enablesBounce: false, overscrollRule: 'none' });
-});
-
-test('scrollTopPreservingAnchor: offsets list scrolling so an expanded title keeps its viewport position', () => {
-  expect(scrollTopPreservingAnchor(640, 120, 72)).toBe(592);
-  expect(scrollTopPreservingAnchor(640, 120, 120)).toBe(640);
-  expect(scrollTopPreservingAnchor(640, 120, 168)).toBe(688);
-});
-
-test('observationFollowResetKey: streaming text changes request a follow scroll without resetting other streams', () => {
-  const base: { id: string; status: string; items: { id: string; text: string }[] } = {
-    id: 'exa_codex0000000',
-    status: 'running',
-    items: [{ id: 'item_1', text: 'hello' }]
-  };
-  const streamingUpdate: typeof base = { ...base, items: [{ id: 'item_1', text: 'hello world' }] };
-  const otherStream: typeof base = { ...base, id: 'exa_other0000000' };
-
-  expect({
-    streamingTextChanged: observationFollowResetKey(streamingUpdate) !== observationFollowResetKey(base),
-    streamChanged: observationFollowResetKey(otherStream) !== observationFollowResetKey(base)
-  }).toEqual({ streamingTextChanged: true, streamChanged: true });
 });

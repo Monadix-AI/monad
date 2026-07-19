@@ -28,7 +28,6 @@ import {
   workspaceSans as sans
 } from '@monad/ui/components/AgentAvatar';
 import { VirtualList, type VirtualListHandle } from '@monad/ui/components/VirtualList';
-import { useFirstItemIndex } from '@monad/ui/hooks/use-first-item-index';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { workspaceExperienceT } from '../../../i18n.ts';
@@ -51,22 +50,6 @@ type SummaryObservationTurn = {
   summaryText?: string;
   rows: ObservationTimelineRow[];
 };
-
-export function observationFollowResetKey(stream?: {
-  id?: string;
-  status?: string;
-  items?: readonly { dedupeKey?: string; id?: string; text?: string; streaming?: boolean }[];
-}): string {
-  const tail = stream?.items?.at(-1);
-  return JSON.stringify([
-    stream?.id ?? '',
-    stream?.status ?? '',
-    stream?.items?.length ?? 0,
-    tail?.dedupeKey ?? tail?.id ?? '',
-    tail?.streaming ?? false,
-    tail?.text ?? ''
-  ]);
-}
 
 const observationAvatarRingCss = `
 @keyframes workplace-observation-avatar-breathe {
@@ -190,8 +173,6 @@ export function ExternalAgentObservationPanel({
   const [uncontrolledRenderMode, setUncontrolledRenderMode] = useState<ObservationRenderMode>(defaultRenderMode);
   const renderMode = controlledRenderMode ?? uncontrolledRenderMode;
   const streamId = stream?.id;
-  const streamStatus = stream?.status;
-  const followResetKey = observationFollowResetKey(stream);
   const [usageOpen, setUsageOpen] = useState(false);
   const timelineProvider = stream?.provider ?? '';
   const itemCacheRef = useRef<{ streamId?: string; items: ExternalAgentStreamView['items'] }>({ items: [] });
@@ -217,7 +198,6 @@ export function ExternalAgentObservationPanel({
     () => summaryObservationTurns(stableItems, timelineProvider),
     [stableItems, timelineProvider]
   );
-  const firstItemIndex = useFirstItemIndex(timelineRows, observationRowId);
   const showHistoryHeader = showHistoryButton || historyActive;
   const historyState = showHistoryButton
     ? 'available'
@@ -328,12 +308,6 @@ export function ExternalAgentObservationPanel({
     setAllExpanded(true);
     setCollapseCommand({ collapsed: false });
   }, [streamId]);
-
-  useEffect(() => {
-    if (!followResetKey) return;
-    if (!follow || streamStatus !== 'running') return;
-    listRef.current?.scrollToBottom('auto');
-  }, [follow, followResetKey, streamStatus]);
 
   const loadOlderObservationHistory = useCallback(() => {
     if (canLoadOlderHistory && !loadingOlderHistory) onLoadOlderHistory?.();
@@ -572,7 +546,6 @@ export function ExternalAgentObservationPanel({
             ariaLive="polite"
             className="scwf-scroll"
             controlRef={listRef}
-            firstItemIndex={firstItemIndex}
             footer={listFooter}
             getKey={observationRowId}
             header={listHeader}

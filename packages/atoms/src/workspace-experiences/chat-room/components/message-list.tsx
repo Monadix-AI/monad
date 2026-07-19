@@ -5,7 +5,6 @@ import { ArrowDown01Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { activeMessageOutlineIds, MessageOutline, type MessageOutlineItem } from '@monad/ui/components/MessageOutline';
 import { VirtualList, type VirtualListHandle } from '@monad/ui/components/VirtualList';
-import { useFirstItemIndex } from '@monad/ui/hooks/use-first-item-index';
 import { type CSSProperties, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { projectSessionUiKey, useChatRoomExperienceStore } from '../store.ts';
@@ -59,8 +58,18 @@ export function workspaceMessageOutlineItems(
   });
 }
 
-export function shouldFollowLatestMessage(atBottom: boolean, localStatus?: Message['localStatus']): boolean {
-  return atBottom || Boolean(localStatus);
+/**
+ * The list follows appends and in-place growth by itself while the reader is at the bottom, so the
+ * only jump left to force is the reader's OWN message: sending from a scrolled-up position should
+ * bring them back to see it. Once per message — a later `sending` -> `sent` transition on the same
+ * message must not yank a reader who has since scrolled up to re-read something.
+ */
+export function shouldJumpToOwnMessage(
+  messageKey: string | undefined,
+  alreadyJumpedKey: string | undefined,
+  localStatus?: Message['localStatus']
+): boolean {
+  return Boolean(messageKey) && messageKey !== alreadyJumpedKey && Boolean(localStatus);
 }
 
 export type ChatMessageListRoom = {
@@ -86,10 +95,10 @@ export function ChatMessageList({
 }): React.ReactElement {
   const shellRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<VirtualListHandle>(null);
+  const jumpedMessageKeyRef = useRef<string | undefined>(undefined);
   const [atBottom, setAtBottom] = useState(true);
   const [visibleRange, setVisibleRange] = useState<{ endIndex: number; startIndex: number } | null>(null);
   const [outlineTop, setOutlineTop] = useState<string>('50%');
-  const firstItemIndex = useFirstItemIndex(room.messages, messageRenderKey);
   const lastMessage = room.messages.at(-1);
   const uiKey = projectSessionUiKey(room.projectId, room.activeSessionId);
   const openFilePreview = useChatRoomExperienceStore((state) => state.openFilePreview);
@@ -122,8 +131,8 @@ export function ChatMessageList({
     };
   }, []);
   const activeOutlineIds = useMemo(
-    () => activeMessageOutlineIds(outlineItems, visibleRange, firstItemIndex, room.messages.length),
-    [firstItemIndex, outlineItems, room.messages.length, visibleRange]
+    () => activeMessageOutlineIds(outlineItems, visibleRange, room.messages.length),
+    [outlineItems, room.messages.length, visibleRange]
   );
   const scrollToOutlineItem = useCallback((id: string) => {
     listRef.current?.scrollToKey(id, { align: 'start', behavior: 'smooth' });
@@ -146,9 +155,10 @@ export function ChatMessageList({
     [labels, onOpenAttachment, room.openAgentCard]
   );
   useLayoutEffect(() => {
-    if (!lastMessageKey) return;
-    if (shouldFollowLatestMessage(atBottom, lastMessage?.localStatus)) listRef.current?.scrollToBottom('auto');
-  }, [atBottom, lastMessage?.localStatus, lastMessageKey]);
+    if (!shouldJumpToOwnMessage(lastMessageKey, jumpedMessageKeyRef.current, lastMessage?.localStatus)) return;
+    jumpedMessageKeyRef.current = lastMessageKey;
+    listRef.current?.scrollToBottom('auto');
+  }, [lastMessage?.localStatus, lastMessageKey]);
   const footer = useMemo(
     () => (
       <>
@@ -190,7 +200,6 @@ export function ChatMessageList({
         ariaLive="polite"
         className="scwf-scroll"
         controlRef={listRef}
-        firstItemIndex={firstItemIndex}
         footer={footer}
         getKey={messageRenderKey}
         header={HEADER_SPACER}

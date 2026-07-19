@@ -1,8 +1,14 @@
 import type { CSSProperties, ReactNode, Ref } from 'react';
-import type { StateSnapshot, VirtuosoHandle } from 'react-virtuoso';
 
-import { useCallback, useEffect, useImperativeHandle, useMemo, useRef } from 'react';
-import { Virtuoso } from 'react-virtuoso';
+import { elementScroll, useVirtualizer } from '@tanstack/react-virtual';
+import { useCallback, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
+
+import {
+  HIDDEN_SETTLE_INTERVAL_MS,
+  STICK_THRESHOLD,
+  shouldPinToBottom,
+  useBottomFollow
+} from '../hooks/use-bottom-follow';
 
 export interface VirtualListHandle {
   /** Jump to the physical top of the currently loaded rows. */
@@ -11,8 +17,6 @@ export interface VirtualListHandle {
   scrollToBottom: (behavior?: ScrollBehavior) => void;
   /** Scroll a specific item into view by its key (e.g. a mentioned/searched message). */
   scrollToKey: (key: string, opts?: { align?: 'start' | 'center' | 'end'; behavior?: 'auto' | 'smooth' }) => void;
-  /** Capture the current scroll position so it can be restored later via `restoreStateFrom`. */
-  getState: () => Promise<StateSnapshot>;
 }
 
 export interface VirtualListProps<T> {
@@ -27,21 +31,16 @@ export interface VirtualListProps<T> {
   footer?: ReactNode;
   /** Rendered before the rows, inside the scroll area. */
   header?: ReactNode;
-  /** Imperative control (scrollToBottom/scrollToKey/getState). */
+  /** Imperative control (scrollToTop/scrollToBottom/scrollToKey). */
   controlRef?: Ref<VirtualListHandle>;
   /** Fired when the viewport crosses into/out of the bottom — drive a "jump to latest" affordance. */
   onAtBottomChange?: (atBottom: boolean) => void;
-  /** Index of `items[0]` in the full virtual list. Decrement it when prepending older rows so the
-      viewport stays anchored instead of jumping (chat history pagination). */
-  firstItemIndex?: number;
   /** Fired when the user scrolls near the top — load older rows here. */
   onStartReached?: () => void;
   /** Fired when the user scrolls near the bottom — load newer rows here (history-mode paging). */
   onEndReached?: () => void;
   /** Fired when the virtualized viewport range changes. */
   onRangeChange?: (range: { endIndex: number; startIndex: number }) => void;
-  /** Restore a position captured earlier via the handle's `getState` (e.g. across route changes). */
-  restoreStateFrom?: StateSnapshot;
   /** ARIA role for the scroll region (e.g. "log" for a chat transcript). */
   role?: string;
   /** ARIA live politeness for the scroll region. */
@@ -50,103 +49,64 @@ export interface VirtualListProps<T> {
   style?: CSSProperties;
 }
 
-interface SlotContext {
-  header?: ReactNode;
-  footer?: ReactNode;
-}
+/** Assumed row height until at least one row has been measured. */
+const ESTIMATED_ROW_HEIGHT = 96;
 
-// Stable component identities (Virtuoso remounts the slots if these change each render);
-// the actual nodes ride along via `context`, which can update freely.
-const HeaderSlot = ({ context }: { context?: SlotContext }) => <>{context?.header ?? null}</>;
-const FooterSlot = ({ context }: { context?: SlotContext }) => <>{context?.footer ?? null}</>;
-const VIRTUOSO_COMPONENTS = { Header: HeaderSlot, Footer: FooterSlot };
-
-/** Px from the true bottom within which the user still counts as "pinned". */
-const STICK_THRESHOLD = 32;
-const TRUE_BOTTOM_THRESHOLD = 1;
-const BOTTOM_QUIESCENCE_MS = 120;
-const USER_SCROLL_INTENT_MS = 300;
-const SCROLL_KEYS = new Set(['ArrowDown', 'ArrowUp', 'End', 'Home', 'PageDown', 'PageUp', ' ']);
-
-/** True when the scroll position is within `threshold` px of the very bottom. */
-export function isAtBottom(
-  metrics: { scrollHeight: number; scrollTop: number; clientHeight: number },
-  threshold = STICK_THRESHOLD
-): boolean {
-  return metrics.scrollHeight - metrics.scrollTop - metrics.clientHeight <= threshold;
-}
-
-export function scrollBoundaryTop(
-  metrics: { scrollHeight: number; clientHeight: number },
-  boundary: 'top' | 'bottom'
-): number {
-  return boundary === 'top' ? 0 : Math.max(0, metrics.scrollHeight - metrics.clientHeight);
-}
+const ROW_STYLE_BASE: CSSProperties = {
+  boxSizing: 'border-box',
+  left: 0,
+  minWidth: 0,
+  position: 'absolute',
+  top: 0,
+  width: '100%'
+};
 
 /** Position of the item with `key`, or -1. Used by the scrollToKey handle. */
-export function indexOfKey<T>(items: T[], getKey: (item: T) => string, key: string, firstItemIndex = 0): number {
-  const index = items.findIndex((item) => getKey(item) === key);
-  return index < 0 ? -1 : firstItemIndex + index;
+export function indexOfKey<T>(items: T[], getKey: (item: T) => string, key: string): number {
+  return items.findIndex((item) => getKey(item) === key);
+}
+
+/** Props express overscan in px; the virtualizer counts rows. */
+export function overscanRowCount(overscanPx: number, estimatedRowHeight = ESTIMATED_ROW_HEIGHT): number {
+  return Math.max(1, Math.ceil(overscanPx / estimatedRowHeight));
 }
 
 /**
- * Decide the next pinned state for a scroll event. The crux: a scroll event we caused
- * ourselves (pinning to the bottom) must be ignored — it would otherwise read as the user
- * arriving at the bottom and re-arm following they may have just cancelled. Genuine scroll
- * events set pinned purely from whether the viewport is at the bottom.
+ * Average measured row height, used to estimate rows not yet measured. A fixed guess is off by an
+ * order of magnitude on real chat rows (~100px vs ~1800px), which mis-sizes the total scroll
+ * height — the scrollbar visibly re-scales as rows measure in.
  */
-export function reducePinnedOnScroll(
-  prevPinned: boolean,
-  selfScroll: boolean,
-  atBottom: boolean,
-  direction: 'up' | 'down' | 'none' = 'none'
-): { pinned: boolean; selfScrollConsumed: boolean } {
-  if (selfScroll) return { pinned: prevPinned, selfScrollConsumed: true };
-  if (direction === 'up') return { pinned: false, selfScrollConsumed: false };
-  return { pinned: atBottom, selfScrollConsumed: false };
-}
-
-export function shouldPinToBottom(stickToBottom: boolean, pinned: boolean): boolean {
-  return stickToBottom && pinned;
-}
-
-export function shouldPublishAtBottomChange(nextAtBottom: boolean, pinned: boolean, userScrolled: boolean): boolean {
-  return nextAtBottom || (!pinned && userScrolled);
-}
-
-export type BottomScrollRequest = { active: boolean; behavior: 'auto' | 'smooth' };
-export type BottomScrollEvent =
-  | { type: 'request'; behavior: 'auto' | 'smooth' }
-  | { type: 'height-changed' | 'settle-timeout' | 'stable-at-bottom' | 'user-scroll-up' };
-
-export const initialBottomScrollRequest: BottomScrollRequest = { active: false, behavior: 'auto' };
-
-export function initialBottomScrollRequestFor(
-  stickToBottom: boolean,
-  restoring: boolean,
-  itemCount: number
-): BottomScrollRequest {
-  return stickToBottom && !restoring && itemCount > 0 ? { active: true, behavior: 'auto' } : initialBottomScrollRequest;
-}
-
-export function reduceBottomScrollRequest(state: BottomScrollRequest, event: BottomScrollEvent): BottomScrollRequest {
-  if (event.type === 'request') return { active: true, behavior: event.behavior };
-  if ((event.type === 'height-changed' || event.type === 'settle-timeout') && state.active) {
-    return { active: true, behavior: 'auto' };
+export function averageMeasuredRowHeight(sizes: Iterable<number>, fallback = ESTIMATED_ROW_HEIGHT): number {
+  let sum = 0;
+  let count = 0;
+  for (const size of sizes) {
+    sum += size;
+    count += 1;
   }
-  if (event.type === 'stable-at-bottom' || event.type === 'user-scroll-up') return initialBottomScrollRequest;
-  return state;
+  return count === 0 ? fallback : Math.max(1, Math.round(sum / count));
 }
 
-export function scrollTopPreservingAnchor(scrollTop: number, previousTop: number, currentTop: number): number {
-  return scrollTop + currentTop - previousTop;
+/** The row set changed at an edge when the first or last key differs from the previous render. */
+export function edgeKeysOf<T>(
+  items: T[],
+  getKey: (item: T) => string
+): { firstKey: string | null; lastKey: string | null } {
+  const first = items[0];
+  const last = items.at(-1);
+  return {
+    firstKey: first === undefined ? null : getKey(first),
+    lastKey: last === undefined ? null : getKey(last)
+  };
 }
 
-// Generic windowed list over react-virtuoso. The custom pinning below exists because
-// virtuoso's built-in `followOutput` does not re-pin when a row grows IN PLACE (a streaming
-// message) — only on item-count changes. We instead pin from `totalListHeightChanged`
-// (fires on append, initial measurement settling, and in-place growth), gated by a
-// self-measured at-bottom check so we never fight a user who has scrolled up.
+/**
+ * Generic windowed list over @tanstack/react-virtual.
+ *
+ * Rows measure themselves (`measureElement` observes every mounted row), so a message growing IN
+ * PLACE while it streams reflows without any item-count change. Holding the viewport steady
+ * through that growth is the library's job (`anchorTo`/`followOnAppend`); whether the READER still
+ * wants to sit at the bottom is `useBottomFollow`'s.
+ */
 export function VirtualList<T>({
   items,
   getKey,
@@ -157,383 +117,210 @@ export function VirtualList<T>({
   header,
   controlRef,
   onAtBottomChange,
-  firstItemIndex,
   onStartReached,
   onEndReached,
   onRangeChange,
-  restoreStateFrom,
   role,
   ariaLive,
   className,
   style
 }: VirtualListProps<T>): React.ReactElement {
-  const context = useMemo<SlotContext>(() => ({ header, footer }), [header, footer]);
-  const handleRef = useRef<VirtuosoHandle>(null);
-  const scrollerRef = useRef<HTMLElement | null>(null);
-  const bottomRequestRef = useRef<BottomScrollRequest>(
-    initialBottomScrollRequestFor(stickToBottom, Boolean(restoreStateFrom), items.length)
-  );
-  const bottomSettleTimeoutRef = useRef<number | undefined>(undefined);
-  const bottomQuiescenceTimeoutRef = useRef<number | undefined>(undefined);
-  // `pinnedRef` tracks whether we keep following the bottom. Detection rests on one fact:
-  // content growth (a row expanding, new rows) does NOT fire a scroll event — only the user
-  // and our own pinning move the scrollbar. So we read "is the user at the bottom" purely
-  // from genuine scroll events, and ignore the scroll events our own pinning generates
-  // (flagged via `selfScrollRef`) so a streaming pin never looks like the user arriving.
-  const pinnedRef = useRef(true);
-  const selfScrollRef = useRef(false);
-  const userScrolledRef = useRef(false);
-  const userScrollIntentUntilRef = useRef(0);
-  const lastScrollTopRef = useRef<number | null>(null);
-  const viewportResizeObserverRef = useRef<ResizeObserver | null>(null);
-  const layoutAnchorRef = useRef<{ element: HTMLElement; top: number; expiresAt: number } | null>(null);
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
+  const footerRef = useRef<HTMLDivElement>(null);
+  // Header content sits above the rows in normal flow, so every item start must be offset by its
+  // height (the virtualizer's `scrollMargin`).
+  const [headerHeight, setHeaderHeight] = useState(0);
+  // Rows must not mount before the virtualizer has adopted the scroll element: its ResizeObserver
+  // only exists once that happens, and a row whose ref runs earlier is cached as observed while
+  // never actually being watched — its later growth (a streaming message) would go unmeasured.
+  const [scrollerReady, setScrollerReady] = useState(false);
 
-  const clearBottomSettleTimeout = useCallback(() => {
-    window.clearTimeout(bottomSettleTimeoutRef.current);
-    bottomSettleTimeoutRef.current = undefined;
+  const follow = useBottomFollow({ onAtBottomChange, onEndReached, onStartReached, scrollerRef, stickToBottom });
+  const { armEdges, evaluateEdges, markSelfScroll, pinnedRef, scrollToBottomNow, settleAtBottom } = follow;
+
+  const lastRangeRef = useRef<{ endIndex: number; startIndex: number } | null>(null);
+  const latestRef = useRef({ getKey, items, onRangeChange });
+  latestRef.current = { getKey, items, onRangeChange };
+
+  const emitRange = useCallback((range: { endIndex: number; startIndex: number } | null) => {
+    const publish = latestRef.current.onRangeChange;
+    if (!publish || !range) return;
+    const next = { endIndex: range.endIndex, startIndex: range.startIndex };
+    const previous = lastRangeRef.current;
+    if (previous && previous.startIndex === next.startIndex && previous.endIndex === next.endIndex) return;
+    lastRangeRef.current = next;
+    publish(next);
   }, []);
 
-  const clearBottomQuiescenceTimeout = useCallback(() => {
-    window.clearTimeout(bottomQuiescenceTimeoutRef.current);
-    bottomQuiescenceTimeoutRef.current = undefined;
+  // Estimate = running average of the rows measured so far. Updated outside React state on
+  // purpose: the value only matters the next time measurements recompute (a count change re-runs
+  // `estimateSize` for every unmeasured row), so re-rendering for it would be pure churn.
+  const estimatedRowHeightRef = useRef(ESTIMATED_ROW_HEIGHT);
+  const measuredRowCountRef = useRef(0);
+
+  const virtualizer = useVirtualizer({
+    // `anchorTo: 'end'` keeps the viewport still when the row set changes at either edge (older
+    // history prepended, a row settling from its estimate) and re-pins the bottom when a row grows
+    // IN PLACE while streaming; `followOnAppend` follows newly appended rows, but only for a user
+    // who is already parked within `scrollEndThreshold` of the bottom.
+    anchorTo: stickToBottom ? 'end' : 'start',
+    count: items.length,
+    estimateSize: () => estimatedRowHeightRef.current,
+    followOnAppend: stickToBottom ? 'auto' : false,
+    getItemKey: (index) => {
+      const item = latestRef.current.items[index];
+      return item === undefined ? index : latestRef.current.getKey(item);
+    },
+    getScrollElement: () => scrollerRef.current,
+    onChange: (instance) => {
+      if (instance.itemSizeCache.size !== measuredRowCountRef.current) {
+        measuredRowCountRef.current = instance.itemSizeCache.size;
+        estimatedRowHeightRef.current = averageMeasuredRowHeight(instance.itemSizeCache.values());
+      }
+      emitRange(instance.range);
+    },
+    // Scroll-only updates write row transforms and the container size straight to the DOM and
+    // skip the React re-render; React still re-renders when the visible range changes.
+    directDomUpdates: true,
+    overscan: overscanRowCount(overscan, estimatedRowHeightRef.current),
+    scrollEndThreshold: STICK_THRESHOLD,
+    scrollMargin: headerHeight,
+    // Every library-driven scroll — anchor corrections while rows measure, follow-on-append,
+    // scrollToIndex — funnels through here. Flag it BEFORE it fires so the scroll handler never
+    // reads a correction as the user scrolling away (which would silently cancel following).
+    scrollToFn: (offset, scrollOptions, instance) => {
+      markSelfScroll(
+        scrollOptions.behavior === 'smooth' ? 'smooth' : 'auto',
+        offset + (scrollOptions.adjustments ?? 0)
+      );
+      elementScroll(offset, scrollOptions, instance);
+    }
+  });
+
+  const totalSize = virtualizer.getTotalSize();
+  const virtualItems = virtualizer.getVirtualItems();
+
+  useLayoutEffect(() => {
+    setScrollerReady(true);
   }, []);
 
-  const scrollToLast = useCallback((behavior: 'auto' | 'smooth') => {
-    selfScrollRef.current = true;
+  // Header and footer sit outside the virtualized rows, so neither the total row height nor the
+  // library's anchoring notices when they resize — yet both move the bottom.
+  useLayoutEffect(() => {
+    const headerNode = headerRef.current;
+    const footerNode = footerRef.current;
+    if (!headerNode || !footerNode || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => {
+      setHeaderHeight(headerNode.offsetHeight);
+      if (shouldPinToBottom(stickToBottom, pinnedRef.current)) scrollToBottomNow('auto');
+    });
+    observer.observe(headerNode);
+    observer.observe(footerNode);
+    return () => observer.disconnect();
+  }, [pinnedRef, scrollToBottomNow, stickToBottom]);
+
+  // Land on the bottom as soon as the first rows exist.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs once, when the rows first mount
+  useLayoutEffect(() => {
     const scroller = scrollerRef.current;
-    if (scroller) {
-      scroller.scrollTo({ behavior, top: scrollBoundaryTop(scroller, 'bottom') });
-      return;
+    if (!scroller || !scrollerReady) return;
+    let cancelSettle: (() => void) | undefined;
+    if (stickToBottom && items.length > 0) {
+      scrollToBottomNow('auto');
+      cancelSettle = settleAtBottom();
     }
-    handleRef.current?.scrollToIndex({ index: 'LAST', align: 'end', behavior });
-  }, []);
-
-  const scheduleBottomSettlementCompletion = useCallback(() => {
-    clearBottomQuiescenceTimeout();
-    const settle = () => {
-      if (!bottomRequestRef.current.active) return;
-      const scroller = scrollerRef.current;
-      if (!scroller || !isAtBottom(scroller, TRUE_BOTTOM_THRESHOLD)) {
-        scrollToLast('auto');
-        if (!scroller || !isAtBottom(scroller)) {
-          bottomQuiescenceTimeoutRef.current = window.setTimeout(settle, BOTTOM_QUIESCENCE_MS);
-          return;
-        }
-      }
-      bottomRequestRef.current = reduceBottomScrollRequest(bottomRequestRef.current, { type: 'stable-at-bottom' });
-      clearBottomSettleTimeout();
-      selfScrollRef.current = false;
-      onAtBottomChange?.(true);
+    // A list too short to scroll never emits a scroll event, so its edges are evaluated once the
+    // initial position has settled — otherwise reverse pagination could never start. Edges only:
+    // running the full scroll handler here would read a still-measuring list as "not at the
+    // bottom" and cancel following before the first paint. Timer, not rAF: rAF never fires while
+    // the document is hidden.
+    const timer = window.setTimeout(evaluateEdges, HIDDEN_SETTLE_INTERVAL_MS);
+    return () => {
+      cancelSettle?.();
+      window.clearTimeout(timer);
     };
-    bottomQuiescenceTimeoutRef.current = window.setTimeout(settle, BOTTOM_QUIESCENCE_MS);
-  }, [clearBottomQuiescenceTimeout, clearBottomSettleTimeout, onAtBottomChange, scrollToLast]);
+  }, [scrollerReady]);
 
-  const markUserScrollIntent = useCallback(() => {
-    userScrollIntentUntilRef.current = performance.now() + USER_SCROLL_INTENT_MS;
-  }, []);
+  // A page of older (or newer) rows re-arms its edge and is evaluated once: the reader may still
+  // be inside the zone, and if that page was shorter than the zone no scroll event would follow to
+  // continue paging.
+  const { firstKey, lastKey } = edgeKeysOf(items, getKey);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: edge keys are the trigger, not a read
+  useLayoutEffect(() => {
+    if (!scrollerReady) return;
+    armEdges();
+    evaluateEdges();
+  }, [armEdges, evaluateEdges, firstKey, lastKey, scrollerReady]);
 
-  const captureLayoutAnchor = useCallback((target: EventTarget | null) => {
-    if (!(target instanceof Element)) return;
-    const element = target.closest<HTMLElement>('[data-virtual-list-anchor="true"]');
-    if (!element) return;
-    layoutAnchorRef.current = {
-      element,
-      top: element.getBoundingClientRect().top,
-      expiresAt: performance.now() + 500
-    };
-  }, []);
-
-  const handleAnchorPointerDown = useCallback(
-    (event: PointerEvent) => {
-      if (event.target === scrollerRef.current) markUserScrollIntent();
-      captureLayoutAnchor(event.target);
-    },
-    [captureLayoutAnchor, markUserScrollIntent]
-  );
-
-  const handleAnchorKeyDown = useCallback(
-    (event: KeyboardEvent) => {
-      if (SCROLL_KEYS.has(event.key)) markUserScrollIntent();
-      if (event.key === 'Enter' || event.key === ' ') captureLayoutAnchor(event.target);
-    },
-    [captureLayoutAnchor, markUserScrollIntent]
-  );
-
-  const measurePinned = useCallback(() => {
-    const el = scrollerRef.current;
-    if (!el) return;
-    const previousTop = lastScrollTopRef.current;
-    const direction =
-      previousTop === null ? 'none' : el.scrollTop < previousTop ? 'up' : el.scrollTop > previousTop ? 'down' : 'none';
-    lastScrollTopRef.current = el.scrollTop;
-    if (bottomRequestRef.current.active) {
-      if (isAtBottom(el, TRUE_BOTTOM_THRESHOLD)) {
-        selfScrollRef.current = false;
-        onAtBottomChange?.(true);
-        scheduleBottomSettlementCompletion();
-        return;
-      }
-      if (direction === 'up' && performance.now() <= userScrollIntentUntilRef.current) {
-        bottomRequestRef.current = reduceBottomScrollRequest(bottomRequestRef.current, { type: 'user-scroll-up' });
-        clearBottomQuiescenceTimeout();
-        clearBottomSettleTimeout();
-        selfScrollRef.current = false;
-        userScrolledRef.current = true;
-        pinnedRef.current = false;
-      }
-      return;
-    }
-    if (!selfScrollRef.current && direction !== 'none') userScrolledRef.current = true;
-    const next = reducePinnedOnScroll(pinnedRef.current, selfScrollRef.current, isAtBottom(el), direction);
-    pinnedRef.current = next.pinned;
-    if (next.selfScrollConsumed) selfScrollRef.current = false;
-  }, [clearBottomQuiescenceTimeout, clearBottomSettleTimeout, onAtBottomChange, scheduleBottomSettlementCompletion]);
-
-  const pinToBottom = useCallback(() => {
+  // Re-pin after a React commit that changed the measured height (rows added or removed, a new
+  // range measured). In-place growth of an existing row is NOT covered here — `directDomUpdates`
+  // skips the commit for it — and does not need to be: the virtualizer's own end-anchoring keeps
+  // the viewport on the bottom through it.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: totalSize is the trigger, not a read
+  useLayoutEffect(() => {
     if (!shouldPinToBottom(stickToBottom, pinnedRef.current)) return;
-    const el = scrollerRef.current;
-    if (!el) return;
-    const max = el.scrollHeight - el.clientHeight;
-    if (el.scrollTop < max) {
-      selfScrollRef.current = true;
-      el.scrollTop = el.scrollHeight;
-      lastScrollTopRef.current = el.scrollTop;
-    }
-  }, [stickToBottom]);
-
-  const preserveLayoutAnchor = useCallback(() => {
-    const anchor = layoutAnchorRef.current;
-    const el = scrollerRef.current;
-    if (!anchor || !el) return false;
-    if (!anchor.element.isConnected || performance.now() > anchor.expiresAt) {
-      layoutAnchorRef.current = null;
-      return false;
-    }
-    const nextScrollTop = scrollTopPreservingAnchor(
-      el.scrollTop,
-      anchor.top,
-      anchor.element.getBoundingClientRect().top
-    );
-    if (Math.abs(nextScrollTop - el.scrollTop) > 0.5) {
-      selfScrollRef.current = true;
-      el.scrollTop = nextScrollTop;
-      lastScrollTopRef.current = el.scrollTop;
-    }
-    return true;
-  }, []);
-
-  // Pin now, then once more next frame: a freshly appended row reports its real height a
-  // frame after it mounts, so a single re-pin catches the residual gap that one pass leaves.
-  const pinToBottomSoon = useCallback(() => {
-    if (preserveLayoutAnchor()) {
-      requestAnimationFrame(preserveLayoutAnchor);
-      return;
-    }
-    if (userScrolledRef.current && !pinnedRef.current) return;
-    pinToBottom();
-    requestAnimationFrame(pinToBottom);
-  }, [pinToBottom, preserveLayoutAnchor]);
-
-  const requestBottomScroll = useCallback(
-    (behavior: 'auto' | 'smooth') => {
-      clearBottomQuiescenceTimeout();
-      clearBottomSettleTimeout();
-      pinnedRef.current = true;
-      userScrolledRef.current = false;
-      layoutAnchorRef.current = null;
-      bottomRequestRef.current = reduceBottomScrollRequest(bottomRequestRef.current, { type: 'request', behavior });
-      userScrollIntentUntilRef.current = 0;
-      scrollToLast(behavior);
-      if (behavior !== 'smooth') return;
-      bottomSettleTimeoutRef.current = window.setTimeout(() => {
-        if (!bottomRequestRef.current.active) return;
-        bottomRequestRef.current = reduceBottomScrollRequest(bottomRequestRef.current, { type: 'settle-timeout' });
-        scrollToLast('auto');
-      }, 600);
-    },
-    [clearBottomQuiescenceTimeout, clearBottomSettleTimeout, scrollToLast]
-  );
-
-  const handleAtBottomChange = useCallback(
-    (nextAtBottom: boolean) => {
-      if (nextAtBottom) {
-        const scroller = scrollerRef.current;
-        if (!scroller || !isAtBottom(scroller, TRUE_BOTTOM_THRESHOLD)) {
-          pinToBottomSoon();
-          if (!scroller || !isAtBottom(scroller)) return;
-        }
-        selfScrollRef.current = false;
-        onAtBottomChange?.(true);
-        if (bottomRequestRef.current.active) scheduleBottomSettlementCompletion();
-        return;
-      }
-      if (!shouldPublishAtBottomChange(false, pinnedRef.current, userScrolledRef.current)) {
-        pinToBottomSoon();
-        return;
-      }
-      onAtBottomChange?.(false);
-    },
-    [onAtBottomChange, pinToBottomSoon, scheduleBottomSettlementCompletion]
-  );
-
-  const handleTotalListHeightChanged = useCallback(() => {
-    if (bottomRequestRef.current.active) {
-      clearBottomQuiescenceTimeout();
-      bottomRequestRef.current = reduceBottomScrollRequest(bottomRequestRef.current, { type: 'height-changed' });
-      scrollToLast(bottomRequestRef.current.behavior);
-      scheduleBottomSettlementCompletion();
-      return;
-    }
-    pinToBottomSoon();
-  }, [clearBottomQuiescenceTimeout, pinToBottomSoon, scheduleBottomSettlementCompletion, scrollToLast]);
+    return settleAtBottom();
+  }, [pinnedRef, settleAtBottom, stickToBottom, totalSize]);
 
   useImperativeHandle(
     controlRef,
     () => ({
-      scrollToTop: (behavior = 'auto') => {
-        clearBottomQuiescenceTimeout();
-        clearBottomSettleTimeout();
-        bottomRequestRef.current = initialBottomScrollRequest;
-        pinnedRef.current = false;
-        userScrolledRef.current = true;
-        layoutAnchorRef.current = null;
-        userScrollIntentUntilRef.current = 0;
-        selfScrollRef.current = true;
-        const scroller = scrollerRef.current;
-        if (scroller) {
-          scroller.scrollTo({
-            behavior: behavior === 'smooth' ? 'smooth' : 'auto',
-            top: scrollBoundaryTop(scroller, 'top')
-          });
-          return;
-        }
-        handleRef.current?.scrollToIndex({
-          index: firstItemIndex ?? 0,
-          align: 'start',
-          behavior: behavior === 'smooth' ? 'smooth' : 'auto'
-        });
-      },
+      scrollToTop: (behavior = 'auto') => follow.scrollToTop(behavior === 'smooth' ? 'smooth' : 'auto'),
       scrollToBottom: (behavior = 'auto') => {
-        requestBottomScroll(behavior === 'smooth' ? 'smooth' : 'auto');
+        pinnedRef.current = true;
+        follow.userScrolledRef.current = false;
+        scrollToBottomNow(behavior === 'smooth' ? 'smooth' : 'auto');
       },
       scrollToKey: (key, opts) => {
-        const index = indexOfKey(items, getKey, key, firstItemIndex);
-        if (index >= 0) {
-          pinnedRef.current = false;
-          userScrolledRef.current = true;
-          handleRef.current?.scrollToIndex({
-            index,
-            align: opts?.align ?? 'center',
-            behavior: opts?.behavior
-          });
-        }
-      },
-      getState: () =>
-        new Promise<StateSnapshot>((resolve) => {
-          handleRef.current?.getState(resolve);
-        })
-    }),
-    [clearBottomQuiescenceTimeout, clearBottomSettleTimeout, firstItemIndex, getKey, items, requestBottomScroll]
-  );
-
-  // Initial mount lands near — but not exactly at — the bottom because row heights are
-  // still being measured (estimates resolve over the first few frames). Re-pin across a
-  // short window so we settle on the true bottom; bail the moment the user scrolls away.
-  // Skipped when restoring a saved position. Mount-only by design: VirtualList mounts already
-  // populated, and every later change is handled by totalListHeightChanged.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional run-once-on-mount
-  useEffect(() => {
-    if (!stickToBottom || restoreStateFrom || items.length === 0) return;
-    let raf = 0;
-    const deadline = performance.now() + 700;
-    const tick = () => {
-      if (userScrolledRef.current) return;
-      pinToBottom();
-      if (pinnedRef.current && performance.now() < deadline) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, []);
-
-  const setScroller = useCallback(
-    (el: HTMLElement | Window | null) => {
-      scrollerRef.current?.removeEventListener('pointerdown', handleAnchorPointerDown);
-      scrollerRef.current?.removeEventListener('keydown', handleAnchorKeyDown);
-      scrollerRef.current?.removeEventListener('wheel', markUserScrollIntent);
-      scrollerRef.current?.removeEventListener('touchmove', markUserScrollIntent);
-      viewportResizeObserverRef.current?.disconnect();
-      viewportResizeObserverRef.current = null;
-      const node = el instanceof HTMLElement ? el : null;
-      scrollerRef.current = node;
-      if (!node) return;
-      node.addEventListener('pointerdown', handleAnchorPointerDown);
-      node.addEventListener('keydown', handleAnchorKeyDown);
-      node.addEventListener('wheel', markUserScrollIntent, { passive: true });
-      node.addEventListener('touchmove', markUserScrollIntent, { passive: true });
-      if (typeof ResizeObserver !== 'undefined') {
-        viewportResizeObserverRef.current = new ResizeObserver(pinToBottomSoon);
-        viewportResizeObserverRef.current.observe(node);
+        const index = indexOfKey(latestRef.current.items, latestRef.current.getKey, key);
+        if (index < 0) return;
+        follow.releaseToUser();
+        markSelfScroll(opts?.behavior === 'smooth' ? 'smooth' : 'auto');
+        virtualizer.scrollToIndex(index, { align: opts?.align ?? 'center', behavior: opts?.behavior });
       }
-      if (role) node.setAttribute('role', role);
-      if (ariaLive) node.setAttribute('aria-live', ariaLive);
-    },
-    [role, ariaLive, handleAnchorKeyDown, handleAnchorPointerDown, markUserScrollIntent, pinToBottomSoon]
+    }),
+    [follow, markSelfScroll, pinnedRef, scrollToBottomNow, virtualizer]
   );
-
-  useEffect(
-    () => () => {
-      scrollerRef.current?.removeEventListener('pointerdown', handleAnchorPointerDown);
-      scrollerRef.current?.removeEventListener('keydown', handleAnchorKeyDown);
-      scrollerRef.current?.removeEventListener('wheel', markUserScrollIntent);
-      scrollerRef.current?.removeEventListener('touchmove', markUserScrollIntent);
-      viewportResizeObserverRef.current?.disconnect();
-      viewportResizeObserverRef.current = null;
-      clearBottomQuiescenceTimeout();
-      clearBottomSettleTimeout();
-    },
-    [
-      clearBottomQuiescenceTimeout,
-      clearBottomSettleTimeout,
-      handleAnchorKeyDown,
-      handleAnchorPointerDown,
-      markUserScrollIntent
-    ]
-  );
-
-  // Only forward firstItemIndex when paginating: Virtuoso computes `data-item-index` as
-  // firstItemIndex + offset, so an explicit `undefined` yields NaN attributes.
-  const paginationProps = firstItemIndex === undefined ? {} : { firstItemIndex };
-  const initialTopMostItemIndex =
-    restoreStateFrom || items.length === 0
-      ? undefined
-      : stickToBottom
-        ? { index: 'LAST' as const, align: 'end' as const }
-        : 0;
 
   return (
-    <Virtuoso<T, SlotContext>
-      atBottomStateChange={handleAtBottomChange}
-      atBottomThreshold={STICK_THRESHOLD}
+    // biome-ignore lint/a11y/noStaticElementInteractions: scroll-intent detection on the scroll container
+    <div
+      aria-live={ariaLive}
       className={className}
-      components={VIRTUOSO_COMPONENTS}
-      computeItemKey={(_index, item) => getKey(item)}
-      context={context}
-      data={items}
-      increaseViewportBy={overscan}
-      {...paginationProps}
-      endReached={onEndReached}
-      initialTopMostItemIndex={initialTopMostItemIndex}
-      itemContent={(_index, item) => (
-        <div style={{ boxSizing: 'border-box', minWidth: 0, width: '100%' }}>{renderItem(item)}</div>
-      )}
-      onScroll={measurePinned}
-      rangeChanged={onRangeChange}
-      ref={handleRef}
-      restoreStateFrom={restoreStateFrom}
-      scrollerRef={setScroller}
-      startReached={onStartReached}
-      style={style}
-      totalListHeightChanged={handleTotalListHeightChanged}
-    />
+      onKeyDown={follow.handleKeyDown}
+      onPointerDown={follow.handlePointerDown}
+      onScroll={follow.handleScroll}
+      onTouchMove={follow.markUserScrollIntent}
+      onWheel={follow.markUserScrollIntent}
+      ref={scrollerRef}
+      role={role}
+      style={{ height: '100%', overflowAnchor: 'none', overflowY: 'auto', ...style }}
+    >
+      <div ref={headerRef}>{header}</div>
+      {/* The virtualizer owns this container's height and each row's transform (directDomUpdates);
+          setting either here would fight those direct writes. */}
+      <div
+        ref={virtualizer.containerRef}
+        style={{ position: 'relative', width: '100%' }}
+      >
+        {scrollerReady &&
+          virtualItems.map((virtualRow) => {
+            const item = items[virtualRow.index];
+            if (item === undefined) return null;
+            return (
+              <div
+                data-index={virtualRow.index}
+                key={virtualRow.key}
+                ref={virtualizer.measureElement}
+                style={ROW_STYLE_BASE}
+              >
+                {renderItem(item)}
+              </div>
+            );
+          })}
+      </div>
+      <div ref={footerRef}>{footer}</div>
+    </div>
   );
 }

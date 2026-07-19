@@ -4,9 +4,6 @@ import type { ProjectExperienceRuntime, ProjectExperienceRuntimeSource } from '.
 import { useMemo } from 'react';
 
 import { renderChatRoomWorkspaceExperience } from './chat-room/ui.tsx';
-
-export { observationFollowResetKey } from './chat-room/components/observation/panel.tsx';
-
 import {
   useWorkspaceProjectProjection as useProjection,
   type WorkspaceProjectProjection

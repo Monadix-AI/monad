@@ -9,9 +9,10 @@ const outlineItems: MessageOutlineItem[] = [
   { id: 'u3', index: 6, label: 'Third', time: 'Now' }
 ];
 
-test('activeMessageOutlineIds maps paginated visible rows to user-message sections', () => {
-  expect(activeMessageOutlineIds(outlineItems, { startIndex: 12, endIndex: 14 }, 10, 8)).toEqual(new Set(['u1', 'u2']));
-  expect(activeMessageOutlineIds(outlineItems, null, 10, 8)).toEqual(new Set(['u3']));
+test('activeMessageOutlineIds maps visible rows to the user-message sections they belong to', () => {
+  // Rows 2-4 span the section opened by u1 (rows 0-2) and the one opened by u2 (rows 3-5).
+  expect(activeMessageOutlineIds(outlineItems, { startIndex: 2, endIndex: 4 }, 8)).toEqual(new Set(['u1', 'u2']));
+  expect(activeMessageOutlineIds(outlineItems, null, 8)).toEqual(new Set(['u3']));
 });
 
 test('MessageOutline renders only after five items and marks active sections', () => {

@@ -466,7 +466,6 @@ export const defaultToolStatusLabels: Record<ToolState, string> = {
 
 export type ToolHeaderProps = {
   'aria-label'?: string;
-  'data-virtual-list-anchor'?: string;
   title?: string;
   className?: string;
   type: ToolPart['type'];
@@ -551,7 +550,6 @@ export const ToolHeader = ({
   return (
     <CollapsibleTrigger
       className={cn('group/trigger flex w-full items-center justify-between gap-4 p-3', className)}
-      data-virtual-list-anchor="true"
       {...props}
     >
       <div className="flex items-center gap-2">

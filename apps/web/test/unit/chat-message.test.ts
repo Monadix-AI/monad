@@ -55,23 +55,6 @@ test('reasoning is collapsed by default while the assistant message is streaming
   expect(markup).not.toContain('Internal reasoning details');
 });
 
-test('reasoning trigger marks itself as the viewport anchor for user toggles', () => {
-  const markup = renderToStaticMarkup(
-    createElement(Message, {
-      assistantLabel: 'Assistant',
-      msg: {
-        id: 'msg_reasoning_anchor',
-        reasoning: 'Internal reasoning details',
-        role: 'assistant',
-        streaming: false,
-        text: ''
-      }
-    })
-  );
-
-  expect(markup).toContain('data-virtual-list-anchor="true"');
-});
-
 test('pending assistant activity renders the agent label with shimmer state', () => {
   const markup = renderToStaticMarkup(
     createElement(Message, {

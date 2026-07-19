@@ -7,7 +7,6 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { Button, cn, MorphChevron, Skeleton } from '@monad/ui';
 import { activeMessageOutlineIds, MessageOutline } from '@monad/ui/components/MessageOutline';
 import { VirtualList } from '@monad/ui/components/VirtualList';
-import { useFirstItemIndex } from '@monad/ui/hooks/use-first-item-index';
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useT } from '#/components/I18nProvider';
@@ -63,7 +62,6 @@ export function SessionTranscript({ model }: { model: SessionTranscriptModel }) 
     () => (renderMode === 'summary' ? summaryTranscriptTurns(visibleMessages) : visibleMessages),
     [renderMode, visibleMessages]
   );
-  const firstItemIndex = useFirstItemIndex(renderedMessages, sessionMessageKey);
   const pendingActionCount = model.pendingApprovals.length + model.pendingClarifications.length;
   const outlineItems = useMemo(
     () =>
@@ -75,8 +73,8 @@ export function SessionTranscript({ model }: { model: SessionTranscriptModel }) 
     [renderedMessages, t]
   );
   const activeOutlineIds = useMemo(
-    () => activeMessageOutlineIds(outlineItems, visibleRange, firstItemIndex, renderedMessages.length),
-    [firstItemIndex, outlineItems, renderedMessages.length, visibleRange]
+    () => activeMessageOutlineIds(outlineItems, visibleRange, renderedMessages.length),
+    [outlineItems, renderedMessages.length, visibleRange]
   );
 
   useEffect(() => {
@@ -231,7 +229,6 @@ export function SessionTranscript({ model }: { model: SessionTranscriptModel }) 
       <VirtualList
         ariaLive="polite"
         controlRef={model.transcriptRef}
-        firstItemIndex={firstItemIndex}
         footer={footer}
         getKey={sessionMessageKey}
         header={header}
