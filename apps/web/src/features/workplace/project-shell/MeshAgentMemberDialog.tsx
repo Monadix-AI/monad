@@ -1,4 +1,3 @@
-import type { MeshAgentAppServerTransport } from '@monad/protocol';
 import type { ProjectController } from '../use-project';
 import type { MeshAgentDraft, MeshAgentMemberDialogState } from './mesh-agent-member-dialog-model';
 
@@ -76,7 +75,6 @@ export function MeshAgentMemberDialog({
           modelId: invite.draft.modelId,
           reasoningEffort: invite.draft.reasoningEffort,
           speed: invite.draft.speed,
-          appServerTransport: invite.draft.appServerTransport,
           customPrompt: invite.draft.customPrompt
         })
       ])
@@ -270,34 +268,6 @@ export function MeshAgentMemberDialog({
                   padding: 10
                 }}
               >
-                {(invite.candidate.supportedAppServerTransports ?? []).length > 1 ? (
-                  <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                    <span style={{ fontFamily: mono, fontSize: 10, color: 'var(--muted-foreground)' }}>
-                      {t('web.workplace.appServerTransport')}
-                    </span>
-                    <select
-                      onChange={(event) =>
-                        updateDraft({
-                          appServerTransport: (event.target.value || undefined) as
-                            | MeshAgentAppServerTransport
-                            | undefined
-                        })
-                      }
-                      style={field}
-                      value={invite.draft.appServerTransport ?? ''}
-                    >
-                      <option value="">{t('web.workplace.appServerTransportDefault')}</option>
-                      {(invite.candidate.supportedAppServerTransports ?? []).map((transport) => (
-                        <option
-                          key={transport}
-                          value={transport}
-                        >
-                          {transport}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                ) : null}
                 <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                   <span style={{ fontFamily: mono, fontSize: 10, color: 'var(--muted-foreground)' }}>
                     {t('web.workplace.customPrompt')}

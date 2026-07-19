@@ -41,6 +41,7 @@ declare global {
   interface Window {
     harness: {
       appendRow: () => void;
+      dragScrollbarToTop: (holdMs?: number) => Promise<void>;
       /** Remember where a given row sits in the viewport, to measure later drift against. */
       anchor: () => { id: string | null; offset: number | null };
       /** How far the anchored row has moved in the viewport since `anchor()` — non-zero is a jump. */
@@ -59,6 +60,7 @@ declare global {
         renderedCount: number;
         scrollHeight: number;
         scrollTop: number;
+        topLoading: boolean;
         topVisibleRowId: string | null;
         topVisibleRowOffset: number | null;
         topLoadCount: number;
@@ -73,18 +75,34 @@ function Harness(): React.ReactElement {
   const listRef = useRef<VirtualListHandle>(null);
   const nextPrependRef = useRef(-1);
   const topLoadCountRef = useRef(0);
+  const topLoadingRef = useRef(false);
+  const [topLoading, setTopLoading] = useState(false);
   const anchorRef = useRef<{ id: string; offset: number; scrollTop: number } | null>(null);
-  const topPaging = new URLSearchParams(window.location.search).get('topPaging') === '1';
+  const topPagingMode = new URLSearchParams(window.location.search).get('topPaging');
+  const topPaging = topPagingMode === '1' || topPagingMode === 'merge';
 
   const loadOlderAtTop = useCallback(() => {
-    if (!topPaging || topLoadCountRef.current >= 5) return;
-    topLoadCountRef.current += 1;
-    setRows((previous) => {
-      const next = makeRow(nextPrependRef.current);
-      nextPrependRef.current -= 1;
-      return [next, ...previous];
-    });
-  }, [topPaging]);
+    if (!topPaging || topLoadingRef.current || topLoadCountRef.current >= 5) return;
+    topLoadingRef.current = true;
+    setTopLoading(true);
+    window.setTimeout(() => {
+      topLoadCountRef.current += 1;
+      setRows((previous) => {
+        if (topPagingMode === 'merge') {
+          const [firstRow, ...rest] = previous;
+          if (!firstRow) return previous;
+          const next = makeRow(nextPrependRef.current);
+          nextPrependRef.current -= 1;
+          return [{ ...firstRow, text: `${next.text} ${firstRow.text}` }, ...rest];
+        }
+        const next = makeRow(nextPrependRef.current);
+        nextPrependRef.current -= 1;
+        return [next, ...previous];
+      });
+      topLoadingRef.current = false;
+      setTopLoading(false);
+    }, 150);
+  }, [topPaging, topPagingMode]);
 
   const renderItem = useCallback(
     (row: Row) => (
@@ -132,6 +150,15 @@ function Harness(): React.ReactElement {
       return offset === null ? 0 : offset - anchored.offset;
     },
     appendRow: () => setRows((previous) => [...previous, makeRow(previous.length)]),
+    dragScrollbarToTop: async (holdMs = 400) => {
+      const scroller = document.querySelector<HTMLElement>('[role="log"]');
+      if (!scroller) return;
+      scroller.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+      scroller.scrollTop = 0;
+      scroller.dispatchEvent(new Event('scroll'));
+      await new Promise((resolve) => setTimeout(resolve, holdMs));
+      scroller.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+    },
     growLastRow: (times = 1) =>
       setRows((previous) => {
         const last = previous.at(-1);
@@ -149,12 +176,8 @@ function Harness(): React.ReactElement {
       spacer.style.height = `${px}px`;
       last.append(spacer);
     },
-    // Observation regroups ADJACENT tool entries into one `tool-group:<lastEntryId>` row, so older
-    // history arriving above a lone tool row does not merely insert above it — it MERGES INTO it:
-    // the row keyed `t1` is replaced by a taller row keyed `tool-group:t1`, and `t1` disappears.
-    // The generic prepend case only ever inserts rows with fresh keys above a stable top row, so it
-    // cannot catch an anchor that is pinned to a key rather than to a position. (The grouping rule
-    // itself is unit-covered in @monad/atoms; what this reproduces is the resulting key transition.)
+    // Observation can merge older adjacent tool entries into the first loaded row. The row keeps
+    // its persistent key, while its measured height grows upward from the loaded boundary.
     prependMergingToolRows: (count = 3) =>
       setRows((previous) => {
         const [firstRow, ...rest] = previous;
@@ -164,10 +187,7 @@ function Harness(): React.ReactElement {
           older.unshift({ id: `tool_${nextPrependRef.current}`, text: `older tool call ${nextPrependRef.current}` });
           nextPrependRef.current -= 1;
         }
-        const merged: Row = {
-          id: `tool-group:${firstRow.id}`,
-          text: `${older.map((row) => row.text).join(' ')} ${firstRow.text}`
-        };
+        const merged: Row = { id: firstRow.id, text: `${older.map((row) => row.text).join(' ')} ${firstRow.text}` };
         return [merged, ...rest];
       }),
     prependRows: (count = 5) =>
@@ -181,8 +201,10 @@ function Harness(): React.ReactElement {
       }),
     jumpToLatest: (behavior = 'auto') => listRef.current?.scrollToBottom(behavior),
     jumpToLoadedTop: () => {
+      // Only scroll to the physical top of the loaded rows. Loading the next page is the scroll
+      // control's job: landing at the top must re-arm and evaluate the start edge, which fires
+      // `onStartReached` exactly once. No explicit load here — a second trigger source is the bug.
       listRef.current?.scrollToTop('auto');
-      loadOlderAtTop();
     },
     jumpToTop: (behavior = 'auto') => listRef.current?.scrollToTop(behavior),
     scrollToKey: (key) => listRef.current?.scrollToKey(key, { align: 'start' }),
@@ -195,6 +217,7 @@ function Harness(): React.ReactElement {
           renderedCount: 0,
           scrollHeight: -1,
           scrollTop: -1,
+          topLoading,
           topVisibleRowId: null,
           topVisibleRowOffset: null,
           topLoadCount: topLoadCountRef.current
@@ -210,6 +233,7 @@ function Harness(): React.ReactElement {
         renderedCount: rendered.length,
         scrollHeight: scroller.scrollHeight,
         scrollTop: Math.round(scroller.scrollTop),
+        topLoading,
         topVisibleRowId: topVisible?.dataset.rowId ?? null,
         topVisibleRowOffset: topVisible ? Math.round(topVisible.getBoundingClientRect().top - viewportTop) : null,
         topLoadCount: topLoadCountRef.current
@@ -223,6 +247,11 @@ function Harness(): React.ReactElement {
         <VirtualList
           controlRef={listRef}
           getKey={(row) => row.id}
+          header={
+            topPaging ? (
+              <div data-top-loading={topLoading ? 'true' : 'false'}>{topLoading ? 'Loading earlier rows…' : ''}</div>
+            ) : undefined
+          }
           items={rows}
           onAtBottomChange={setAtBottom}
           onStartReached={topPaging ? loadOlderAtTop : undefined}

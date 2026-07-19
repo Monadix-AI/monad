@@ -1,10 +1,11 @@
 import type { MeshAgentView } from '@monad/protocol';
 import type {
-  BuildMeshAgentLaunchOptions,
-  MeshAgentLaunchSpec,
   MeshAgentProviderAdapter,
-  MeshAgentProviderEventContext
+  MeshAgentProviderEventContext,
+  MeshAgentSessionRuntimeContext,
+  SessionEventRuntimeDefinition
 } from '@monad/sdk-atom';
+import type { LegacyProviderLaunchOptions, LegacyProviderLaunchSpec } from '../legacy/runtime.ts';
 
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -14,11 +15,11 @@ import { hasFlag, parseJsonObject, parseStructuredAuthState } from '../adapter-s
 import { parseMeshAgentArgumentSupport } from '../argument-support.ts';
 import { readProviderEventFile } from '../event-files.ts';
 import { createOutputEventSource } from '../event-source.ts';
-import { resizePty, sendPtyInput, stopPty } from '../pty.ts';
+import { SessionEventJsonlDriver } from '../session-event-jsonl-driver.ts';
 import { meshAgentAdapterSettings } from '../settings.ts';
 import { createBasicSettingsImport } from '../settings-import/index.ts';
 import { geminiObservationProjection } from './observation.ts';
-import { hasGeminiStreamJsonEvents, parseGeminiStreamJson } from './stream-json.ts';
+import { createGeminiStreamJsonParser, hasGeminiStreamJsonEvents } from './stream-json.ts';
 
 // Unlike codex (`debug models --bundled` prints a JSON catalog) and qwen (models are readable from
 // `~/.qwen/settings.json`), the installed `gemini` CLI has no models-list command or flag (`gemini
@@ -55,8 +56,8 @@ function geminiLaunchEnv(
   return systemPromptFile ? { ...agent.env, GEMINI_SYSTEM_MD: systemPromptFile } : agent.env;
 }
 
-function buildGeminiLaunch(agent: MeshAgentView, opts: BuildMeshAgentLaunchOptions): MeshAgentLaunchSpec {
-  const launchMode = opts.launchMode ?? agent.defaultLaunchMode;
+function buildGeminiLaunch(agent: MeshAgentView, opts: LegacyProviderLaunchOptions): LegacyProviderLaunchSpec {
+  const launchMode = opts.launchMode ?? 'json-stream';
   let args = [...(agent.args ?? [])];
   if (opts.providerSessionRef && !hasFlag(args, '--resume') && !hasFlag(args, '-r')) {
     args.push('--resume', opts.providerSessionRef);
@@ -79,7 +80,47 @@ function buildGeminiLaunch(agent: MeshAgentView, opts: BuildMeshAgentLaunchOptio
   };
 }
 
-function buildGeminiAuthLaunch(agent: MeshAgentView, args: string[]): MeshAgentLaunchSpec {
+function createGeminiSessionRuntime(
+  agent: MeshAgentView,
+  context: MeshAgentSessionRuntimeContext
+): SessionEventRuntimeDefinition {
+  const turnText = (input: { text: string; attachments: readonly { name: string; path: string }[] }): string => {
+    if (input.attachments.length === 0) return input.text;
+    const refs = input.attachments.map((attachment) => `- ${attachment.name}: ${attachment.path}`).join('\n');
+    return `${input.text}\n\nAttachments available in the workspace:\n${refs}`;
+  };
+  return {
+    plan: {
+      processModel: 'per-turn',
+      buildTurnLaunch: ({ providerSessionRef }) => {
+        const launch = buildGeminiLaunch(agent, {
+          workingPath: context.workingPath,
+          extraWorkingPaths: context.extraWorkingPaths,
+          launchMode: 'json-stream',
+          providerSessionRef,
+          systemPromptFile: context.systemPromptFile,
+          skipProviderApprovals: context.skipProviderApprovals,
+          modelName: context.modelName,
+          modelId: context.modelId
+        });
+        return {
+          args: launch.argv.slice(1),
+          cwd: launch.cwd,
+          ...(context.env || launch.env ? { env: { ...(launch.env ?? {}), ...(context.env ?? {}) } } : {})
+        };
+      },
+      encodeTurnInput: (input) => ({
+        delivery: 'stdin',
+        bytes: new TextEncoder().encode(turnText(input))
+      }),
+      startup: { timeoutMs: 20_000 },
+      continuation: { strategy: 'provider-session-ref' }
+    },
+    driver: new SessionEventJsonlDriver({ parseOutput: createGeminiStreamJsonParser() })
+  };
+}
+
+function buildGeminiAuthLaunch(agent: MeshAgentView, args: string[]): LegacyProviderLaunchSpec {
   return {
     argv: [agent.command, ...args],
     cwd: homedir(),
@@ -96,7 +137,7 @@ function buildGeminiAuthLaunch(agent: MeshAgentView, args: string[]): MeshAgentL
   };
 }
 
-function buildGeminiAuthStatusLaunch(agent: MeshAgentView): MeshAgentLaunchSpec {
+function buildGeminiAuthStatusLaunch(agent: MeshAgentView): LegacyProviderLaunchSpec {
   void agent;
   const script = String.raw`
 const { existsSync, readFileSync } = require('node:fs');
@@ -183,46 +224,11 @@ function readGeminiHistoryOutput(context: MeshAgentProviderEventContext): string
     roots: [join(homedir(), '.gemini', 'tmp'), join(homedir(), '.gemini', 'history')],
     providerSessionRef: context.providerSessionRef,
     extensions: ['.jsonl', '.json'],
-    limitBytes: context.limitBytes,
     maxDepth: 8
   });
   if (!raw) return null;
   if (hasGeminiStreamJsonEvents(raw)) return raw;
   return geminiCheckpointOutput(context, raw);
-}
-
-function sendGeminiInput(handle: Parameters<MeshAgentProviderAdapter['sendInput']>[0], input: string): void {
-  if (handle.launchMode !== 'json-stream') {
-    sendPtyInput(handle, input);
-    return;
-  }
-  if (!handle.stdin) throw new Error('MeshAgent session has no stream-json input bridge');
-  handle.stdin.write(input);
-  void handle.stdin.flush?.();
-}
-
-function resizeGemini(handle: Parameters<MeshAgentProviderAdapter['resize']>[0], cols: number, rows: number): void {
-  if (handle.launchMode === 'json-stream') return;
-  resizePty(handle, cols, rows);
-}
-
-function stopGemini(handle: Parameters<MeshAgentProviderAdapter['stop']>[0]): void {
-  if (handle.launchMode === 'json-stream') {
-    void handle.stdin?.end?.();
-    handle.kill('SIGTERM');
-    return;
-  }
-  stopPty(handle);
-}
-
-function resolveGeminiApproval(
-  handle: Parameters<MeshAgentProviderAdapter['resolveApproval']>[0],
-  resolution: Parameters<MeshAgentProviderAdapter['resolveApproval']>[1]
-): void {
-  void resolution;
-  if (handle.launchMode === 'json-stream') {
-    throw new Error('Gemini MeshAgent approval resolution is provider-owned and not supported over stream-json');
-  }
 }
 
 export const geminiMeshAgentAdapter: MeshAgentProviderAdapter = {
@@ -235,7 +241,7 @@ export const geminiMeshAgentAdapter: MeshAgentProviderAdapter = {
     projection: geminiObservationProjection,
     readOutput: readGeminiHistoryOutput
   }),
-  settings: () => meshAgentAdapterSettings({ launchModes: ['pty', 'json-stream'] }),
+  settings: () => meshAgentAdapterSettings(),
   settingsImport: createBasicSettingsImport('gemini', 'Gemini CLI', 'gemini', '.gemini'),
   unsafeArgument: (args) =>
     args.find(
@@ -243,7 +249,6 @@ export const geminiMeshAgentAdapter: MeshAgentProviderAdapter = {
         arg === '--yolo' || arg === '--approval-mode=yolo' || (arg === '--approval-mode' && args[index + 1] === 'yolo')
     ),
   managedRuntime: {
-    launchMode: () => 'json-stream',
     usesSystemPromptFile: true
   },
   detect(probes = defaultBinProbes) {
@@ -257,8 +262,6 @@ export const geminiMeshAgentAdapter: MeshAgentProviderAdapter = {
       command: 'gemini',
       args: [],
       modelOptions: geminiMeshAgentAdapter.listSupportedModels(),
-      defaultLaunchMode: 'pty',
-      supportedLaunchModes: ['pty', 'json-stream'],
       installHint: 'Install Gemini CLI, then complete its provider-owned authentication flow.',
       installUrl: 'https://github.com/google-gemini/gemini-cli',
       installed,
@@ -278,7 +281,7 @@ export const geminiMeshAgentAdapter: MeshAgentProviderAdapter = {
   listSupportedModels(agent) {
     return agent?.modelOptions?.length ? agent.modelOptions : GEMINI_SUPPORTED_MODELS;
   },
-  buildLaunch: buildGeminiLaunch,
+  createSessionRuntime: createGeminiSessionRuntime,
   buildAuthLaunch(agent) {
     return buildGeminiAuthLaunch(agent, []);
   },
@@ -302,10 +305,5 @@ export const geminiMeshAgentAdapter: MeshAgentProviderAdapter = {
     if (structured) return structured;
     void exitCode;
     return 'unknown';
-  },
-  parseOutput: parseGeminiStreamJson,
-  sendInput: sendGeminiInput,
-  resolveApproval: resolveGeminiApproval,
-  resize: resizeGemini,
-  stop: stopGemini
+  }
 };

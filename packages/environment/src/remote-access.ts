@@ -15,21 +15,26 @@ export function generateRemoteToken(): string {
  */
 export async function enableRemoteAccess(
   paths: ConfigFilePaths,
-  opts?: { rotate?: boolean }
+  opts?: { confirmInsecureRemoteAccess?: boolean; https?: boolean; rotate?: boolean }
 ): Promise<{ token: string; changed: boolean }> {
   const cfg = await loadConfig(paths);
   if (!cfg) throw new Error('monad: config not found — run `monad init` first');
 
   const existing = cfg.network.remoteAccess;
+  const httpsEnabled = opts?.https ?? (existing.enabled ? cfg.network.https.enabled : true);
+  if (!httpsEnabled && opts?.confirmInsecureRemoteAccess !== true) {
+    throw new Error('Plain HTTP remote access requires explicit confirmation');
+  }
   const needToken = !existing.token || opts?.rotate === true;
   const token = needToken ? generateRemoteToken() : (existing.token ?? generateRemoteToken());
-  const changed = !existing.enabled || needToken;
+  const changed = !existing.enabled || needToken || cfg.network.https.enabled !== httpsEnabled;
 
   if (changed) {
     await saveConfig(paths.config, {
       ...cfg,
       network: {
         ...cfg.network,
+        https: { ...cfg.network.https, enabled: httpsEnabled },
         remoteAccess: { ...existing, enabled: true, token }
       }
     });

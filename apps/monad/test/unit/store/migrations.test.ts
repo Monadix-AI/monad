@@ -156,7 +156,6 @@ test('runtime migrator creates the regular schema and partial indexes', () => {
     'agent_name',
     'provider',
     'working_path',
-    'launch_mode',
     'runtime_role',
     'agent_runtime_id',
     'agent_runtime_token_hash',

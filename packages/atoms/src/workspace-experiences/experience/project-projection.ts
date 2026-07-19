@@ -1,7 +1,6 @@
 import type {
   AcpAgentView,
   AvatarStyle,
-  MeshAgentAppServerTransport,
   MeshAgentProvider,
   MeshAgentView,
   MeshSessionView,
@@ -229,7 +228,6 @@ export function projectMemberCandidates(args: {
   projectMembers: readonly ProjectMember[];
 }): ProjectMemberCandidate[] {
   const current = new Set(args.projectMembers.map((member) => member.id));
-  const emptyTransports: MeshAgentAppServerTransport[] = [];
   const meshAgentCandidates = args.meshAgents.flatMap((agent) => {
     const templates = agent.projectTemplates ?? [];
     if (templates.length > 0) {
@@ -244,7 +242,6 @@ export function projectMemberCandidates(args: {
         modelOptions: agent.modelOptions ?? [],
         modelOptionDisplayNames: agent.modelOptionDisplayNames,
         reasoningEfforts: agent.reasoningEfforts ?? [],
-        supportedAppServerTransports: emptyTransports,
         icon: productIcon(agent.productIcon),
         template
       }));
@@ -261,7 +258,6 @@ export function projectMemberCandidates(args: {
         modelOptions: agent.modelOptions ?? [],
         modelOptionDisplayNames: agent.modelOptionDisplayNames,
         reasoningEfforts: agent.reasoningEfforts ?? [],
-        supportedAppServerTransports: emptyTransports,
         icon: productIcon(agent.productIcon)
       }
     ];
@@ -279,7 +275,6 @@ export function projectMemberCandidates(args: {
             enabled: true,
             modelOptions: [],
             reasoningEfforts: [],
-            supportedAppServerTransports: emptyTransports,
             icon: 'monad' as const
           }
         ]),
@@ -294,7 +289,6 @@ export function projectMemberCandidates(args: {
         enabled: agent.enabled,
         modelOptions: [],
         reasoningEfforts: [],
-        supportedAppServerTransports: emptyTransports,
         icon: productIcon(agent.productIcon)
       })),
     ...meshAgentCandidates

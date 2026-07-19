@@ -64,6 +64,7 @@ export function DualObservationPanel(props: DualObservationPanelProps): React.Re
             canLoadOlderEvents={controller.canLoadOlderEvents}
             controlRef={rawListRef}
             displayMode={rawDisplayMode}
+            key={meshSessionId}
             loadingOlderEvents={controller.loadingOlderEvents}
             onLoadOlderEvents={controller.loadOlderEvents}
             rows={controller.rawRows}

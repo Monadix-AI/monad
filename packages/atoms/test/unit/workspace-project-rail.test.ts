@@ -25,30 +25,55 @@ const agent = (name: string, presence: Participant['presence']): Participant => 
   presence
 });
 
-const meshSession = (overrides: Partial<MeshSessionView> = {}): MeshSessionView => ({
-  id: 'mesh_codexrunning',
-  sessionId: 'ses_01KWPROJ2tDh',
-  agentName: 'pmem_codex_active',
-  provider: 'codex',
-  productIcon: 'codex',
-  workingPath: '/Users/test/Projects/monad',
-  launchMode: 'app-server',
-  approvalOwnership: 'provider-owned',
-  runtimeRole: 'managed-project-agent',
-  agentRuntimeId: 'mesh_codexrunning',
-  lastDeliveredSeq: 0,
-  lastVisibleSeq: 0,
-  state: 'running',
-  pid: 12345,
-  providerSessionRef: 'codex-thread',
-  outputSnapshot: '',
-  exitCode: null,
-  pendingApprovalCount: 0,
-  startedAt: '2026-06-29T10:00:00.000Z',
-  updatedAt: '2026-06-29T10:01:00.000Z',
-  exitedAt: null,
-  ...overrides
-});
+type LegacySessionOverrides = Partial<MeshSessionView> & {
+  state?: 'starting' | 'running' | 'exited' | 'failed' | 'stopped';
+  pid?: number | null;
+  outputSnapshot?: string;
+  exitCode?: number | null;
+  exitedAt?: string | null;
+};
+
+const meshSession = (overrides: LegacySessionOverrides = {}): MeshSessionView => {
+  const { state, pid, outputSnapshot, exitCode, exitedAt, ...current } = overrides;
+  void outputSnapshot;
+  const at = exitedAt ?? '2026-06-29T10:01:00.000Z';
+  return {
+    id: 'mesh_codexrunning',
+    sessionId: 'ses_01KWPROJ2tDh',
+    agentName: 'pmem_codex_active',
+    provider: 'codex',
+    productIcon: 'codex',
+    workingPath: '/Users/test/Projects/monad',
+    approvalOwnership: 'provider-owned',
+    runtimeRole: 'managed-project-agent',
+    agentRuntimeId: 'mesh_codexrunning',
+    lastDeliveredSeq: 0,
+    lastVisibleSeq: 0,
+    lifecycle:
+      state && state !== 'running' && state !== 'starting'
+        ? { state: 'terminal', termination: { kind: state, at, ...(exitCode != null ? { exitCode } : {}) } }
+        : { state: state === 'starting' ? 'starting' : 'active' },
+    activity:
+      state === 'starting'
+        ? { state: 'starting', pid: pid ?? null, queuedTurnCount: 0 }
+        : { state: 'idle', pid: null, queuedTurnCount: 0 },
+    connection: { state: 'connected' },
+    capabilities: {
+      input: true,
+      steer: true,
+      interrupt: true,
+      approvalResolution: true,
+      providerSessionContinuation: true,
+      runtimeRestoration: true,
+      sessionReopen: true
+    },
+    providerSessionRef: 'codex-thread',
+    pendingApprovalCount: 0,
+    startedAt: '2026-06-29T10:00:00.000Z',
+    updatedAt: '2026-06-29T10:01:00.000Z',
+    ...current
+  };
+};
 
 const claudeSession = (records: Record<string, unknown>[]): MeshSessionView =>
   meshSession({
@@ -66,6 +91,7 @@ test('claude-code stream-json (no deltas) is detected as generating until the re
     { type: 'system', subtype: 'init' },
     claudeAssistant({ type: 'text', text: 'On it' })
   ]);
+  inFlight.activity = { state: 'running', pid: 12345, queuedTurnCount: 0 };
   const settled = claudeSession([
     { type: 'system', subtype: 'init' },
     claudeAssistant({ type: 'text', text: 'Done' }),
@@ -80,8 +106,20 @@ test('claude-code activity phase maps assistant/tool/thinking/post records', () 
   const phaseOf = (part: Record<string, unknown>) =>
     __workplaceProjectMessageTest.meshAgentMemberActivityPhase({
       agentName: 'pmem_claude',
-      meshSessions: [claudeSession([{ type: 'system', subtype: 'init' }, claudeAssistant(part)])],
-      liveTools: []
+      meshSessions: [],
+      liveTools: [
+        {
+          kind: 'tool',
+          id: 'tool_claude',
+          tool: 'mesh-agent:claude-code',
+          input: { agent: 'pmem_claude' },
+          output: [{ type: 'system', subtype: 'init' }, claudeAssistant(part)]
+            .map((record) => JSON.stringify(record))
+            .join('\n'),
+          status: 'running',
+          seq: '1'
+        }
+      ]
     });
 
   expect(phaseOf({ type: 'text', text: 'Writing the reply' })).toBe('writing');
@@ -94,9 +132,7 @@ test('claude-code activity phase maps assistant/tool/thinking/post records', () 
   expect(
     __workplaceProjectMessageTest.meshAgentMemberActivityPhase({
       agentName: 'pmem_claude',
-      meshSessions: [
-        claudeSession([claudeAssistant({ type: 'text', text: 'Done' }), { type: 'result', subtype: 'success' }])
-      ],
+      meshSessions: [claudeSession([])],
       liveTools: []
     })
   ).toBeUndefined();
@@ -183,15 +219,21 @@ test('MeshAgent activity phase reads the running tool output, not a flat tooling
   expect(
     __workplaceProjectMessageTest.meshAgentMemberActivityPhase({
       agentName: 'pmem_codex_active',
-      meshSessions: [
-        meshSession({
-          outputSnapshot: [
+      meshSessions: [],
+      liveTools: [
+        {
+          kind: 'tool',
+          id: 'tool_codex_writing',
+          tool: 'mesh-agent:codex',
+          input: { agent: 'pmem_codex_active' },
+          output: [
             '{"method":"turn/started","params":{}}',
             '{"method":"item/agentMessage/delta","params":{"delta":"Working"}}'
-          ].join('\n')
-        })
-      ],
-      liveTools: []
+          ].join('\n'),
+          status: 'running',
+          seq: '4'
+        }
+      ]
     })
   ).toBe('writing');
 });
@@ -201,6 +243,7 @@ test('a settled live tool clears working/phase even while the session snapshot s
   // managed agent's turn ends. The live tool card (ui-stream) flips to non-running at turn end and must
   // win — otherwise the avatar is stuck on 'working' forever.
   const generatingSnapshot = meshSession({
+    activity: { state: 'running', pid: 12345, queuedTurnCount: 0 },
     outputSnapshot: [
       '{"method":"turn/started","params":{}}',
       '{"method":"item/agentMessage/delta","params":{"delta":"Working"}}'
@@ -254,6 +297,7 @@ test('a live managed runtime wins over a newer terminal sibling while its turn i
   });
   const running = meshSession({
     id: 'mesh_running',
+    activity: { state: 'running', pid: 12345, queuedTurnCount: 0 },
     outputSnapshot: [
       '{"method":"turn/started","params":{}}',
       '{"method":"item/agentMessage/delta","params":{"delta":"Working"}}'
@@ -275,15 +319,21 @@ test('MeshAgent activity phase treats provider tool calls as tooling', () => {
   expect(
     __workplaceProjectMessageTest.meshAgentMemberActivityPhase({
       agentName: 'pmem_codex_active',
-      meshSessions: [
-        meshSession({
-          outputSnapshot: [
+      meshSessions: [],
+      liveTools: [
+        {
+          kind: 'tool',
+          id: 'tool_codex_call',
+          tool: 'mesh-agent:codex',
+          input: { agent: 'pmem_codex_active' },
+          output: [
             '{"method":"turn/started","params":{}}',
             '{"method":"item/started","params":{"item":{"id":"call_1","type":"function_call","name":"exec_command"}}}'
-          ].join('\n')
-        })
-      ],
-      liveTools: []
+          ].join('\n'),
+          status: 'running',
+          seq: '5'
+        }
+      ]
     })
   ).toBe('tooling');
 });
@@ -292,15 +342,21 @@ test('MeshAgent activity phase treats provider reasoning as thinking', () => {
   expect(
     __workplaceProjectMessageTest.meshAgentMemberActivityPhase({
       agentName: 'pmem_codex_active',
-      meshSessions: [
-        meshSession({
-          outputSnapshot: [
+      meshSessions: [],
+      liveTools: [
+        {
+          kind: 'tool',
+          id: 'tool_codex_reasoning',
+          tool: 'mesh-agent:codex',
+          input: { agent: 'pmem_codex_active' },
+          output: [
             '{"method":"turn/started","params":{}}',
             '{"method":"item/reasoning/textDelta","params":{"delta":"Need inspect."}}'
-          ].join('\n')
-        })
-      ],
-      liveTools: []
+          ].join('\n'),
+          status: 'running',
+          seq: '6'
+        }
+      ]
     })
   ).toBe('thinking');
 });
@@ -340,78 +396,22 @@ test('MeshAgent-facing project commands map to short activity phases', () => {
   );
 });
 
-test('MeshAgent activity phase treats a recent user message as reading for five seconds', () => {
-  const recentUserMessage = meshSession({
-    updatedAt: '2026-07-06T10:00:04.000Z',
-    outputSnapshot: JSON.stringify({
-      items: [
-        {
-          id: 'item-user-1',
-          text: 'Can you check the project?',
-          type: 'userMessage',
-          createdAtMs: 1783332000000
-        }
-      ]
-    })
-  });
-  const staleUserMessage = meshSession({
-    updatedAt: '2026-07-06T10:00:06.000Z',
-    outputSnapshot: JSON.stringify({
-      items: [
-        {
-          id: 'item-user-1',
-          text: 'Can you check the project?',
-          type: 'userMessage',
-          createdAtMs: 1783332000000
-        }
-      ]
-    })
-  });
-
-  expect(
-    __workplaceProjectMessageTest.meshAgentMemberActivityPhase({
-      agentName: 'pmem_codex_active',
-      meshSessions: [recentUserMessage],
-      liveTools: []
-    })
-  ).toBe('reading');
-  expect(
-    __workplaceProjectMessageTest.meshAgentMemberActivityPhase({
-      agentName: 'pmem_codex_active',
-      meshSessions: [staleUserMessage],
-      liveTools: []
-    })
-  ).toBeUndefined();
-});
-
 test('MeshAgent stopped sessions remain available when the template is enabled', () => {
   const presence = __workplaceProjectMessageTest.meshAgentMemberPresence({
     agentName: 'pmem_codex_available',
     enabled: true,
     meshSessions: [
-      {
+      meshSession({
         id: 'mesh_stopped00000',
-        sessionId: 'ses_01KWPROJ2tDh',
         agentName: 'pmem_codex_available',
-        provider: 'codex',
-        productIcon: 'codex',
-        workingPath: '/Users/test/Projects/monad',
-        launchMode: 'app-server',
-        approvalOwnership: 'provider-owned',
-        runtimeRole: 'managed-project-agent',
         agentRuntimeId: 'mesh_stopped00000',
-        lastDeliveredSeq: 0,
-        lastVisibleSeq: 0,
         state: 'stopped',
         pid: null,
         providerSessionRef: 'codex-thread',
-        outputSnapshot: '',
         exitCode: 0,
-        pendingApprovalCount: 0,
-        startedAt: '2026-06-29T10:00:00.000Z',
         updatedAt: '2026-06-29T10:01:00.000Z',
         exitedAt: '2026-06-29T10:01:00.000Z'
-      }
+      })
     ],
     liveTools: []
   });
@@ -419,40 +419,17 @@ test('MeshAgent stopped sessions remain available when the template is enabled',
   expect(presence).toBe('online');
 });
 
-test('MeshAgent generating flag tracks snapshot changes for the same session id', () => {
-  const generatingOutput = [
-    '{"method":"turn/started","params":{}}',
-    '{"method":"item/agentMessage/delta","params":{"delta":"Working"}}'
-  ].join('\n');
-  const idleOutput = [generatingOutput, '{"method":"turn/completed","params":{}}'].join('\n');
+test('MeshAgent generating flag follows execution activity for the same session id', () => {
+  const running = meshSession({ activity: { state: 'running', pid: 12345, queuedTurnCount: 0 } });
+  const idle = meshSession({ activity: { state: 'idle', pid: null, queuedTurnCount: 0 } });
 
-  expect(__workplaceProjectMessageTest.meshSessionIsGenerating(meshSession({ outputSnapshot: generatingOutput }))).toBe(
-    true
-  );
-  expect(__workplaceProjectMessageTest.meshSessionIsGenerating(meshSession({ outputSnapshot: idleOutput }))).toBe(
-    false
-  );
-  expect(__workplaceProjectMessageTest.meshSessionIsGenerating(meshSession({ outputSnapshot: generatingOutput }))).toBe(
-    true
-  );
-  expect(__workplaceProjectMessageTest.meshSessionIsGenerating(meshSession({ outputSnapshot: generatingOutput }))).toBe(
-    true
-  );
+  expect(__workplaceProjectMessageTest.meshSessionIsGenerating(running)).toBe(true);
+  expect(__workplaceProjectMessageTest.meshSessionIsGenerating(idle)).toBe(false);
 });
 
 test('MeshAgent presence follows provider turn activity before a project message streams', () => {
-  const generatingOutput = [
-    '{"method":"turn/started","params":{}}',
-    '{"method":"item/agentMessage/delta","params":{"delta":"Working"}}'
-  ].join('\n');
-  const idleOutput = [
-    generatingOutput,
-    '{"method":"thread/status/changed","params":{"status":{"type":"idle"}}}',
-    '{"method":"turn/completed","params":{}}'
-  ].join('\n');
-
-  const generatingSession = meshSession({ outputSnapshot: generatingOutput });
-  const idleSession = meshSession({ outputSnapshot: idleOutput });
+  const generatingSession = meshSession({ activity: { state: 'running', pid: 12345, queuedTurnCount: 0 } });
+  const idleSession = meshSession({ activity: { state: 'idle', pid: null, queuedTurnCount: 0 } });
 
   expect(__workplaceProjectMessageTest.meshSessionIsGenerating(generatingSession)).toBe(true);
   expect(
@@ -476,29 +453,15 @@ test('MeshAgent presence follows provider turn activity before a project message
 });
 
 test('MeshAgent presence returns to online after Claude Code result', () => {
-  const generatingOutput = [
-    JSON.stringify({
-      type: 'stream_event',
-      event: {
-        type: 'content_block_delta',
-        delta: { type: 'text_delta', text: 'Working' }
-      }
-    })
-  ].join('\n');
-  const idleOutput = [
-    generatingOutput,
-    JSON.stringify({ type: 'result', subtype: 'success', is_error: false, stop_reason: 'end_turn' })
-  ].join('\n');
-
   const generatingSession = meshSession({
     provider: 'claude-code',
     productIcon: 'claude-code',
-    outputSnapshot: generatingOutput
+    activity: { state: 'running', pid: 12345, queuedTurnCount: 0 }
   });
   const idleSession = meshSession({
     provider: 'claude-code',
     productIcon: 'claude-code',
-    outputSnapshot: idleOutput
+    activity: { state: 'idle', pid: null, queuedTurnCount: 0 }
   });
 
   expect(__workplaceProjectMessageTest.meshSessionIsGenerating(generatingSession)).toBe(true);

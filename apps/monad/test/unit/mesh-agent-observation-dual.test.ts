@@ -17,7 +17,7 @@ const CTX = {
 };
 
 const rows: LiveRawRow[] = [
-  { seq: 1, stream: 'app-server', payload: '{"type":"item","uuid":"a"}', observedAt: '2026-07-18T00:00:01.000Z' },
+  { seq: 1, stream: 'stdout', payload: '{"type":"item","uuid":"a"}', observedAt: '2026-07-18T00:00:01.000Z' },
   { seq: 2, stream: 'stdout', payload: 'plain bytes\n', observedAt: '2026-07-18T00:00:02.000Z' }
 ];
 
@@ -29,7 +29,7 @@ test('liveRowsToRawFrames maps each row to a verbatim raw frame keyed by an epoc
       observationEpoch: 'epoch-1',
       origin: 'live',
       cursor: 'live:epoch-1:1',
-      stream: 'app-server',
+      stream: 'stdout',
       data: '{"type":"item","uuid":"a"}',
       observedAt: '2026-07-18T00:00:01.000Z'
     },

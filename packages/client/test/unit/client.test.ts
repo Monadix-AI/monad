@@ -596,11 +596,12 @@ test('mesh-agent observation clients validate history and connection responses',
 
   const client = new MonadClient({ baseUrl: 'http://127.0.0.1:52749', token: 'secret' });
   const target = 'ses_100000000000' as SessionId;
+  const providerCursor = 'provider:{"turnId":"019f741c-70a5-7df2-a5f4-04132750aace","includeAnchor":false}';
 
   expect(
     await client.meshAgentRawEvents('mesh_100000000000', target, {
       limit: 5,
-      before: 'provider:0'
+      before: providerCursor
     })
   ).toEqual({
     records: [{ cursor: 'raw:1', data: { native: true } }],
@@ -632,7 +633,7 @@ test('mesh-agent observation clients validate history and connection responses',
       query: {
         transcriptTargetId: target,
         limit: '5',
-        before: 'provider:0'
+        before: providerCursor
       }
     },
     {
@@ -644,6 +645,10 @@ test('mesh-agent observation clients validate history and connection responses',
       query: { transcriptTargetId: target }
     }
   ]);
+  expect(urls[0]?.href).toContain(
+    'before=provider%3A%7B%22turnId%22%3A%22019f741c-70a5-7df2-a5f4-04132750aace%22%2C%22includeAnchor%22%3Afalse%7D'
+  );
+  expect(urls[0]?.searchParams.getAll('before')).toEqual([providerCursor]);
 });
 
 test('mesh-agent observation streams use resumable schemas and convenience terminal frames', () => {

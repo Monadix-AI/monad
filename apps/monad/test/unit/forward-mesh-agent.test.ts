@@ -41,7 +41,7 @@ test('managed forwarding preserves an absent configured display name for the run
     data: {
       name: 'codex',
       instanceId: 'pmem_codex_1',
-      settings: { managedProjectAgent: true, launchMode: 'app-server' }
+      settings: { managedProjectAgent: true }
     },
     createdAt: now,
     updatedAt: now
@@ -60,7 +60,6 @@ test('managed forwarding preserves an absent configured display name for the run
                 productIcon: 'codex',
                 command: 'codex',
                 enabled: true,
-                defaultLaunchMode: 'app-server',
                 allowAutopilot: false,
                 approvalOwnership: 'provider-owned'
               }
@@ -95,7 +94,6 @@ test('managed forwarding preserves an absent configured display name for the run
           productIcon: 'codex',
           command: 'codex',
           enabled: true,
-          defaultLaunchMode: 'app-server',
           allowAutopilot: false,
           approvalOwnership: 'provider-owned'
         },
@@ -106,7 +104,6 @@ test('managed forwarding preserves an absent configured display name for the run
         modelId: undefined,
         speed: undefined,
         customPrompt: undefined,
-        launchMode: 'app-server',
         allowAutopilot: undefined,
         providerSessionRef: undefined,
         input: 'review this'

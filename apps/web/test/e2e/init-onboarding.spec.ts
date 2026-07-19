@@ -77,8 +77,6 @@ async function installInitOnboardingApiMock(page: Page) {
               productIcon: 'codex',
               command: 'codex',
               args: [],
-              defaultLaunchMode: 'pty',
-              supportedLaunchModes: ['pty'],
               installHint: 'Install Codex',
               installUrl: 'https://developers.openai.com/codex/cli',
               installed: true

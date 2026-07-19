@@ -5,14 +5,14 @@
     {
       "idx": 0,
       "version": "6",
-      "when": 1784356322575,
+      "when": 1784472030662,
       "tag": "0000_initial-schema",
       "breakpoints": true
     },
     {
       "idx": 1,
       "version": "6",
-      "when": 1784356344140,
+      "when": 1784472067634,
       "tag": "0001_message-fts",
       "breakpoints": true
     }

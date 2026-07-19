@@ -12,19 +12,6 @@ export const KNOWN_MESH_AGENT_PRODUCT_ICONS = ['codex', 'claude-code', 'gemini',
 export type MeshAgentProductIcon = (typeof KNOWN_MESH_AGENT_PRODUCT_ICONS)[number] | (string & {});
 export const meshAgentProductIconSchema: z.ZodType<MeshAgentProductIcon> = z.string().min(1);
 
-// `cli-oneshot`: the daemon spawns a fresh CLI process PER TURN with the directive baked into argv
-// (e.g. `hermes -z <prompt>`), captures its stdout as the reply, and the process exits — for providers
-// that have no persistent session/app-server backend. Multi-turn context is kept via the provider's
-// own `--resume`/session selector. All other modes drive ONE long-lived process per session.
-export const meshAgentLaunchModeSchema = z.enum(['pty', 'json-stream', 'app-server', 'cli-oneshot']);
-export type MeshAgentLaunchMode = z.infer<typeof meshAgentLaunchModeSchema>;
-
-// Byte channel between the daemon and a provider's app-server. `stdio` (newline-delimited JSON over
-// the child's stdin/stdout) is the canonical embedded transport; `ws`/`unix` have the provider listen
-// on a WebSocket / Unix-domain socket the daemon then dials. Only meaningful for `app-server` launches.
-export const meshAgentAppServerTransportSchema = z.enum(['stdio', 'ws', 'unix']);
-export type MeshAgentAppServerTransport = z.infer<typeof meshAgentAppServerTransportSchema>;
-
 export const meshAgentNameSchema = z
   .string()
   .min(1)
@@ -110,8 +97,6 @@ export const meshAgentViewSchema = z
     reasoningEfforts: z.array(z.string().min(1)).optional(),
     reasoningEffortsByModel: z.record(z.string(), z.array(z.string().min(1))).optional(),
     enabled: z.boolean(),
-    defaultLaunchMode: meshAgentLaunchModeSchema.default('pty'),
-    appServerTransport: meshAgentAppServerTransportSchema.optional(),
     allowAutopilot: z.boolean().default(true),
     approvalOwnership: meshAgentApprovalOwnershipSchema.default('provider-owned'),
     capabilities: meshAgentCapabilitiesSchema.optional(),
@@ -162,9 +147,6 @@ export const meshAgentPresetSchema = z.object({
   modelOptions: z.array(z.string().min(1)).optional(),
   modelOptionDisplayNames: z.record(z.string(), z.string().min(1)).optional(),
   reasoningEfforts: z.array(z.string().min(1)).optional(),
-  defaultLaunchMode: meshAgentLaunchModeSchema,
-  supportedLaunchModes: z.array(meshAgentLaunchModeSchema),
-  supportedAppServerTransports: z.array(meshAgentAppServerTransportSchema).optional(),
   installHint: z.string(),
   installUrl: z.string().url(),
   installed: z.boolean(),

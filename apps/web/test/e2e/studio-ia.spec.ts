@@ -169,7 +169,6 @@ async function installStudioIaApiMock(page: Page) {
               command: 'codex',
               args: [],
               enabled: true,
-              launchMode: 'pty',
               approvalOwnership: 'provider',
               runtimeRole: 'workplace',
               capabilities: {

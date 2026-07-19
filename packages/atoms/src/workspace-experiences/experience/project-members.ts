@@ -128,9 +128,7 @@ export function defaultProjectMemberSettings(
         osSandbox?: boolean;
         forwardMcp?: boolean;
       }
-    | {
-        defaultLaunchMode?: ProjectMemberSettings['launchMode'];
-      }
+    | Record<never, never>
     | undefined
 ): ProjectMemberSettings {
   if (type === 'monad') return {};
@@ -141,10 +139,5 @@ export function defaultProjectMemberSettings(
       ...(agent && 'forwardMcp' in agent && agent.forwardMcp !== undefined ? { forwardMcp: agent.forwardMcp } : {})
     };
   }
-  return {
-    ...(agent && 'defaultLaunchMode' in agent && agent.defaultLaunchMode
-      ? { launchMode: agent.defaultLaunchMode }
-      : {}),
-    managedProjectAgent: true
-  };
+  return { managedProjectAgent: true };
 }

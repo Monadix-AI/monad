@@ -1,5 +1,4 @@
 import type {
-  MeshAgentAppServerTransport,
   MeshAgentProjectTemplate,
   MeshAgentProvider,
   ProfileView,
@@ -57,7 +56,6 @@ export interface WorkspaceExperienceAddMemberOptions {
   modelId?: string;
   reasoningEffort?: string;
   speed?: 'standard' | 'fast';
-  appServerTransport?: MeshAgentAppServerTransport;
   customPrompt?: string;
 }
 
@@ -73,7 +71,6 @@ export interface WorkspaceExperienceMemberCandidate {
   reasoningEfforts: string[];
   icon?: WorkspaceExperienceIcon;
   provider?: MeshAgentProvider;
-  supportedAppServerTransports?: MeshAgentAppServerTransport[];
   template?: MeshAgentProjectTemplate;
 }
 

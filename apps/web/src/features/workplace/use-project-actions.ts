@@ -1,6 +1,5 @@
 import type {
   AvatarStyle,
-  MeshAgentAppServerTransport,
   ProjectId,
   SendMessageAttachment,
   SessionId,
@@ -53,7 +52,6 @@ type AddProjectMemberOptions = {
   modelId?: string;
   reasoningEffort?: string;
   speed?: 'standard' | 'fast';
-  appServerTransport?: MeshAgentAppServerTransport;
   customPrompt?: string;
 };
 
@@ -220,7 +218,6 @@ export function useProjectActions(args: {
         ...(options.modelId ? { modelId: options.modelId } : {}),
         ...(options.reasoningEffort ? { reasoningEffort: options.reasoningEffort } : {}),
         ...(options.speed ? { speed: options.speed } : {}),
-        ...(options.appServerTransport ? { appServerTransport: options.appServerTransport } : {}),
         ...(options.customPrompt ? { customPrompt: options.customPrompt } : {})
       };
       if (type === 'mesh-agent') {

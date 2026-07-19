@@ -71,14 +71,10 @@ export function parseObservationAfter(
   return position?.kind === 'live' ? position : undefined;
 }
 
-/** The earlier-events paging position is an adapter-native token. A
- *  live position is never valid here — it names a row in an ephemeral store the provider knows nothing
- *  about. An absent value is the legal, explicit spelling of "start from the latest page". */
-export function parseObservationBefore(
-  cursor: string | undefined
-): Extract<ObservationPosition, { kind: 'provider' }> | undefined {
-  const position = parseObservationCursor(cursor);
-  return position?.kind === 'provider' ? position : undefined;
+/** The event-page position accepts both cursor domains. The daemon consumes a live position from its
+ *  current ephemeral store or forwards a provider position's token to the adapter. */
+export function parseObservationPageBefore(cursor: string | undefined): ObservationPosition | undefined {
+  return parseObservationCursor(cursor);
 }
 
 export type ObservationResume = { kind: 'after'; seq: number } | { kind: 'epoch-start' };

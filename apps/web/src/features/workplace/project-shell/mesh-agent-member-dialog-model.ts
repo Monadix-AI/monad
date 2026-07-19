@@ -1,4 +1,3 @@
-import type { MeshAgentAppServerTransport } from '@monad/protocol';
 import type { ProjectController } from '../use-project';
 
 type AvailableProjectMember = ProjectController['availableProjectMembers'][number];
@@ -10,7 +9,6 @@ export type MeshAgentDraft = {
   modelId?: string;
   reasoningEffort?: string;
   speed?: 'standard' | 'fast';
-  appServerTransport?: MeshAgentAppServerTransport;
   customPrompt?: string;
 };
 
@@ -43,7 +41,6 @@ export function meshAgentMemberDialogStateForMember(
       modelId: settings.modelId,
       reasoningEffort: settings.reasoningEffort,
       speed: settings.speed,
-      appServerTransport: settings.appServerTransport,
       customPrompt: settings.customPrompt
     }
   };

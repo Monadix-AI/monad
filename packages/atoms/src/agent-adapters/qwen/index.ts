@@ -1,10 +1,11 @@
 import type { MeshAgentView } from '@monad/protocol';
 import type {
-  BuildMeshAgentLaunchOptions,
-  MeshAgentLaunchSpec,
   MeshAgentProviderAdapter,
-  MeshAgentProviderEventContext
+  MeshAgentProviderEventContext,
+  MeshAgentSessionRuntimeContext,
+  SessionEventRuntimeDefinition
 } from '@monad/sdk-atom';
+import type { LegacyProviderLaunchOptions, LegacyProviderLaunchSpec } from '../legacy/runtime.ts';
 
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -15,17 +16,11 @@ import { hasFlag, parseStructuredAuthState, uniqueModelNames } from '../adapter-
 import { parseMeshAgentArgumentSupport } from '../argument-support.ts';
 import { readProviderEventFile } from '../event-files.ts';
 import { createOutputEventSource } from '../event-source.ts';
-import { resizePty, sendPtyInput, stopPty } from '../pty.ts';
 import { meshAgentAdapterSettings } from '../settings.ts';
 import { createBasicSettingsImport } from '../settings-import/index.ts';
 import { qwenObservationProjection } from './observation.ts';
-import {
-  hasQwenStreamJsonMessages,
-  initializeQwenStreamJson,
-  parseQwenStreamJson,
-  resolveQwenStreamJsonApproval,
-  sendQwenStreamJsonInput
-} from './stream-json.ts';
+import { QwenSessionEventDriver } from './session-runtime.ts';
+import { hasQwenStreamJsonMessages } from './stream-json.ts';
 
 const QWEN_SUPPORTED_MODELS = ['qwen3-coder-plus', 'qwen3-coder-flash'];
 
@@ -85,8 +80,8 @@ function withQwenSystemPromptArgs(args: string[], systemPromptFile: string | und
   return [...args, '--append-system-prompt', readFileSync(systemPromptFile, 'utf8')];
 }
 
-function buildQwenLaunch(agent: MeshAgentView, opts: BuildMeshAgentLaunchOptions): MeshAgentLaunchSpec {
-  const launchMode = opts.launchMode ?? agent.defaultLaunchMode;
+function buildQwenLaunch(agent: MeshAgentView, opts: LegacyProviderLaunchOptions): LegacyProviderLaunchSpec {
+  const launchMode = opts.launchMode ?? 'json-stream';
   let args = [...(agent.args ?? [])];
   if (opts.providerSessionRef && !hasFlag(args, '--resume') && !hasFlag(args, '-r')) {
     args.push('--resume', opts.providerSessionRef);
@@ -117,7 +112,36 @@ function buildQwenLaunch(agent: MeshAgentView, opts: BuildMeshAgentLaunchOptions
   };
 }
 
-function buildQwenAuthLaunch(agent: MeshAgentView, args: string[]): MeshAgentLaunchSpec {
+function createQwenSessionRuntime(
+  agent: MeshAgentView,
+  context: MeshAgentSessionRuntimeContext
+): SessionEventRuntimeDefinition {
+  const launch = buildQwenLaunch(agent, {
+    workingPath: context.workingPath,
+    extraWorkingPaths: context.extraWorkingPaths,
+    launchMode: 'json-stream',
+    providerSessionRef: context.providerSessionRef,
+    systemPromptFile: context.systemPromptFile,
+    skipProviderApprovals: context.skipProviderApprovals,
+    modelName: context.modelName,
+    modelId: context.modelId
+  });
+  return {
+    plan: {
+      processModel: 'resident',
+      launch: {
+        args: launch.argv.slice(1),
+        cwd: launch.cwd,
+        ...(context.env || launch.env ? { env: { ...(launch.env ?? {}), ...(context.env ?? {}) } } : {})
+      },
+      channel: { kind: 'child-stdio' },
+      startup: { timeoutMs: 20_000 }
+    },
+    driver: new QwenSessionEventDriver()
+  };
+}
+
+function buildQwenAuthLaunch(agent: MeshAgentView, args: string[]): LegacyProviderLaunchSpec {
   return {
     argv: [agent.command, ...args],
     cwd: homedir(),
@@ -134,40 +158,9 @@ function readQwenHistoryOutput(context: MeshAgentProviderEventContext): string |
     roots: [join(homedir(), '.qwen')],
     providerSessionRef: context.providerSessionRef,
     extensions: ['.jsonl', '.json'],
-    limitBytes: context.limitBytes,
     maxDepth: 8
   });
   return raw && hasQwenStreamJsonMessages(raw) ? raw : null;
-}
-
-function sendQwenInput(handle: Parameters<MeshAgentProviderAdapter['sendInput']>[0], input: string): void {
-  if (handle.launchMode !== 'json-stream') {
-    sendPtyInput(handle, input);
-    return;
-  }
-  sendQwenStreamJsonInput(handle, input);
-}
-
-function resizeQwen(handle: Parameters<MeshAgentProviderAdapter['resize']>[0], cols: number, rows: number): void {
-  if (handle.launchMode === 'json-stream') return;
-  resizePty(handle, cols, rows);
-}
-
-function stopQwen(handle: Parameters<MeshAgentProviderAdapter['stop']>[0]): void {
-  if (handle.launchMode === 'json-stream') {
-    void handle.stdin?.end?.();
-    handle.kill('SIGTERM');
-    return;
-  }
-  stopPty(handle);
-}
-
-function resolveQwenApproval(
-  handle: Parameters<MeshAgentProviderAdapter['resolveApproval']>[0],
-  resolution: Parameters<MeshAgentProviderAdapter['resolveApproval']>[1]
-): void {
-  if (handle.launchMode !== 'json-stream') return;
-  resolveQwenStreamJsonApproval(handle, resolution);
 }
 
 export const qwenMeshAgentAdapter: MeshAgentProviderAdapter = {
@@ -180,7 +173,7 @@ export const qwenMeshAgentAdapter: MeshAgentProviderAdapter = {
     projection: qwenObservationProjection,
     readOutput: readQwenHistoryOutput
   }),
-  settings: () => meshAgentAdapterSettings({ launchModes: ['pty', 'json-stream'] }),
+  settings: () => meshAgentAdapterSettings(),
   settingsImport: createBasicSettingsImport('qwen', 'Qwen Code', 'qwen', '.qwen'),
   unsafeArgument: (args) =>
     args.find(
@@ -188,7 +181,6 @@ export const qwenMeshAgentAdapter: MeshAgentProviderAdapter = {
         arg === '--yolo' || arg === '--approval-mode=yolo' || (arg === '--approval-mode' && args[index + 1] === 'yolo')
     ),
   managedRuntime: {
-    launchMode: () => 'json-stream',
     usesSystemPromptFile: true
   },
   detect(probes = defaultBinProbes) {
@@ -202,8 +194,6 @@ export const qwenMeshAgentAdapter: MeshAgentProviderAdapter = {
       command: 'qwen',
       args: [],
       modelOptions: qwenMeshAgentAdapter.listSupportedModels(),
-      defaultLaunchMode: 'pty',
-      supportedLaunchModes: ['pty', 'json-stream'],
       installHint: 'Install Qwen Code, then complete its provider-owned authentication flow.',
       installUrl: 'https://qwenlm.github.io/qwen-code-docs/en/users/quickstart/',
       installed,
@@ -226,7 +216,7 @@ export const qwenMeshAgentAdapter: MeshAgentProviderAdapter = {
     const configured = readQwenConfiguredModels();
     return configured.length > 0 ? configured : QWEN_SUPPORTED_MODELS;
   },
-  buildLaunch: buildQwenLaunch,
+  createSessionRuntime: createQwenSessionRuntime,
   buildAuthLaunch(agent) {
     return buildQwenAuthLaunch(agent, []);
   },
@@ -250,12 +240,5 @@ export const qwenMeshAgentAdapter: MeshAgentProviderAdapter = {
     if (structured) return structured;
     void exitCode;
     return 'unknown';
-  },
-  initialize: initializeQwenStreamJson,
-  parseOutput: parseQwenStreamJson,
-  sendInput: sendQwenInput,
-  supportsApprovalResolution: (launchMode) => launchMode === 'json-stream',
-  resolveApproval: resolveQwenApproval,
-  resize: resizeQwen,
-  stop: stopQwen
+  }
 };

@@ -157,7 +157,7 @@ export function planTcpListeners(opts: {
   port: number;
   localHttpFallback: MonadConfig['network']['localHttpFallback'];
 }): TcpListenerPlan[] {
-  validateDaemonNetworkSecurity({ host: opts.host, https: opts.https, remoteAccess: opts.remoteAccess });
+  validateDaemonNetworkSecurity({ host: opts.host, remoteAccess: opts.remoteAccess });
   const primaryScheme = opts.https.enabled ? 'https' : 'http';
   const listeners: TcpListenerPlan[] = [{ scheme: primaryScheme, host: opts.host, port: opts.port }];
   if (opts.localHttpFallback.enabled) {

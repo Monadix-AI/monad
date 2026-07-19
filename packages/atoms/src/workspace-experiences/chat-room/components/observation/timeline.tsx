@@ -514,11 +514,7 @@ export function observationTimelineRows(entries: ObservationTimelineEntry[]): Ob
       toolEntries.push(next);
       index += 1;
     }
-    if (toolEntries.length === 1) {
-      rows.push({ id: entry.id, entries: [entry] });
-    } else {
-      rows.push({ id: `tool-group:${toolEntries.at(-1)?.id ?? entry.id}`, entries: toolEntries });
-    }
+    rows.push({ id: `tool-group:${toolEntries.at(-1)?.id ?? entry.id}`, entries: toolEntries });
   }
   return rows;
 }

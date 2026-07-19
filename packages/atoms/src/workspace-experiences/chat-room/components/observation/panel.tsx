@@ -44,6 +44,16 @@ const observationRowId = (row: ObservationTimelineRow): string => row.id;
 type ObservationRenderMode = 'detail' | 'summary';
 type ObservationBoundaryHandle = Pick<VirtualListHandle, 'scrollToTop' | 'scrollToBottom'>;
 
+export function jumpSummaryToLoadedTop(
+  scroller: { scrollTop: number },
+  startArmed: { current: boolean },
+  loadOlder: () => void
+): void {
+  startArmed.current = false;
+  scroller.scrollTop = 0;
+  loadOlder();
+}
+
 type SummaryObservationTurn = {
   id: string;
   done: boolean;
@@ -352,13 +362,13 @@ export function MeshAgentObservationPanel({
     ),
     [collapseCommand, timelineProvider]
   );
-
   const scrollToTop = () => {
     setFollow(false);
     if (content !== undefined) contentControlRef?.current?.scrollToTop('auto');
     else if (renderMode === 'detail') listRef.current?.scrollToTop('auto');
-    else if (summaryListRef.current) summaryListRef.current.scrollTop = 0;
-    loadOlderObservationEvent();
+    else if (summaryListRef.current) {
+      jumpSummaryToLoadedTop(summaryListRef.current, summaryStartArmedRef, loadOlderObservationEvent);
+    }
   };
   const scrollToBottom = () => {
     setFollow(true);
@@ -590,12 +600,13 @@ export function MeshAgentObservationPanel({
             getKey={observationRowId}
             header={listHeader}
             items={timelineRows}
+            key={streamId ?? 'observation-detail'}
             onAtBottomChange={setFollow}
             onStartReached={loadOlderObservationEvent}
             overscan={600}
             renderItem={renderObservationRow}
             role="log"
-            stickToBottom={follow}
+            stickToBottom
             style={{
               boxSizing: 'border-box',
               height: '100%',
@@ -608,6 +619,7 @@ export function MeshAgentObservationPanel({
           <div
             aria-live="polite"
             className="scwf-scroll"
+            key={streamId ?? 'observation-summary'}
             onScroll={(event) => {
               const atStart = event.currentTarget.scrollTop <= 240;
               if (atStart && summaryStartArmedRef.current) {

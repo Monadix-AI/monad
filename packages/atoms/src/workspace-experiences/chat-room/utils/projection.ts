@@ -1,11 +1,4 @@
-import type {
-  AvatarStyle,
-  MeshAgentObservationEvent,
-  MeshSessionView,
-  UIItem,
-  UIMessageItem,
-  UIPart
-} from '@monad/protocol';
+import type { AvatarStyle, MeshSessionView, UIItem, UIMessageItem, UIPart } from '@monad/protocol';
 import type { ProjectMember } from '../../experience/project-members.ts';
 import type {
   ActivityRow,
@@ -26,10 +19,7 @@ import {
   renameMeshAgentProjectMemberDisplayName
 } from '@monad/protocol';
 
-import {
-  meshAgentNeutralStreamItems,
-  meshAgentStreamItems
-} from '../../experience/mesh-agent-observation/mesh-agent-observation.ts';
+import { meshAgentNeutralStreamItems } from '../../experience/mesh-agent-observation/mesh-agent-observation.ts';
 import {
   meshAgentFacingCommandPhase,
   meshAgentMemberActivityPhase,
@@ -235,55 +225,17 @@ function meshSessionDeveloperMessageView(
   };
 }
 
-function meshSessionErrorMessageView(
-  session: MeshSessionView,
-  displayName: string,
-  item: MeshAgentObservationEvent,
-  meshAgentAvatarSeeds = new Map<string, string>(),
-  avatarStyle?: AvatarStyle
-): Message {
-  const icon = productIcon(session.productIcon);
-  const avatarUrl = meshAgentAvatarUrl(displayName, meshAgentAvatarSeeds, avatarStyle);
-  return {
-    id: `mesh-session-error:${session.id}:${item.id}`,
-    authorId: session.agentName,
-    authorName: displayName,
-    av: avatarForAgent(displayName),
-    icon,
-    avatarUrl,
-    kind: 'system',
-    tag: meshAgentTag(session.provider),
-    time: fmtTime(session.updatedAt || session.startedAt),
-    text: 'encountered an error',
-    agentChip: {
-      id: session.agentName,
-      name: displayName,
-      icon,
-      avatarUrl,
-      tag: meshAgentTag(session.provider)
-    },
-    meshSessionId: session.id,
-    orderKey: `${session.updatedAt || session.startedAt}:error:${item.id}`,
-    systemTone: 'error',
-    systemDetail: item.text,
-    systemRaw: item.provenance.rawEvents
-  };
-}
-
 function meshSessionErrorMessages(
   session: MeshSessionView,
   displayName: string,
   meshAgentAvatarSeeds = new Map<string, string>(),
   avatarStyle?: AvatarStyle
 ): Message[] {
-  return meshAgentStreamItems({
-    id: session.id,
-    provider: session.provider,
-    output: session.outputSnapshot,
-    observedAt: session.updatedAt || session.startedAt
-  })
-    .filter((item) => item.providerEventType === 'server_error')
-    .map((item) => meshSessionErrorMessageView(session, displayName, item, meshAgentAvatarSeeds, avatarStyle));
+  void session;
+  void displayName;
+  void meshAgentAvatarSeeds;
+  void avatarStyle;
+  return [];
 }
 
 export function sortMessagesOldestFirst(messages: Message[]): Message[] {
@@ -325,12 +277,7 @@ function meshAgentStreamFromSession(
   templateAgentNames = new Map<string, string>(),
   agentAliases = new Map<string, string[]>()
 ): MeshAgentStreamView {
-  const items = meshAgentNeutralStreamItems({
-    id: session.id,
-    provider: session.provider,
-    output: session.outputSnapshot,
-    observedAt: session.updatedAt || session.startedAt
-  });
+  const items: ReturnType<typeof meshAgentNeutralStreamItems> = [];
   return {
     id: session.id,
     transcriptTargetId: session.sessionId,
@@ -342,10 +289,10 @@ function meshAgentStreamFromSession(
     provider: session.provider,
     tag: meshAgentTag(session.provider),
     icon: productIcon(session.productIcon),
-    status: session.state === 'failed' ? 'error' : 'ok',
+    status: session.lifecycle.state === 'terminal' && session.lifecycle.termination.kind === 'failed' ? 'error' : 'ok',
     workingPath: session.workingPath,
     observedAt: session.updatedAt || session.startedAt,
-    output: session.outputSnapshot,
+    output: '',
     items
   };
 }

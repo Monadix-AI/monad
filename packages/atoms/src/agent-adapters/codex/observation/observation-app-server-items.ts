@@ -125,21 +125,47 @@ export function codexAppServerTurnsPageRecordEvents(
   const result = recordValue(record.result);
   if (!result || !Array.isArray(result.data)) return [];
   let itemOffset = 0;
-  return result.data.flatMap((turn) => {
+  return result.data.flatMap((turn, turnIndex) => {
     if (!turn || typeof turn !== 'object' || Array.isArray(turn)) return [];
-    const items = (turn as Record<string, unknown>).items;
+    const turnRecord = turn as Record<string, unknown>;
+    const items = turnRecord.items;
     if (!Array.isArray(items)) return [];
-    return items.flatMap((item) => {
-      if (!item || typeof item !== 'object' || Array.isArray(item)) return [];
-      const currentItemIndex = itemOffset;
-      itemOffset += 1;
-      return codexAppServerItemEvents({
-        id,
-        record,
-        item: item as Record<string, unknown>,
-        itemIndex: currentItemIndex,
-        recordIndex
-      });
-    });
+    const turnKey = textValue(turnRecord.id, turnRecord.turnId) ?? String(turnIndex);
+    const startedAt = providerEpochMsTimestamp(numberValue(turnRecord.startedAtMs, turnRecord.createdAtMs));
+    const completedAt = providerEpochMsTimestamp(
+      numberValue(turnRecord.completedAtMs, turnRecord.updatedAtMs, turnRecord.finishedAtMs)
+    );
+    return [
+      ...observation({
+        id: `${id}:json:${recordIndex}:turn:${turnKey}:start`,
+        role: 'system',
+        text: 'Turn started',
+        source: 'codex-app-server',
+        providerEventType: 'turn-start',
+        createdAt: startedAt,
+        raw: turnRecord
+      }),
+      ...items.flatMap((item) => {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) return [];
+        const currentItemIndex = itemOffset;
+        itemOffset += 1;
+        return codexAppServerItemEvents({
+          id,
+          record,
+          item: item as Record<string, unknown>,
+          itemIndex: currentItemIndex,
+          recordIndex
+        });
+      }),
+      ...observation({
+        id: `${id}:json:${recordIndex}:turn:${turnKey}:end`,
+        role: 'system',
+        text: 'Turn completed',
+        source: 'codex-app-server',
+        providerEventType: 'turn-end',
+        createdAt: completedAt,
+        raw: turnRecord
+      })
+    ];
   });
 }

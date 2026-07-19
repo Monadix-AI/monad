@@ -121,7 +121,6 @@ export function createCodexSettingsImport(): MeshAgentSettingsImport {
           args: [],
           ...(model ? { modelOptions: [model] } : {}),
           enabled: true,
-          defaultLaunchMode: 'pty',
           allowAutopilot: false,
           approvalOwnership: 'provider-owned'
         };
@@ -255,7 +254,6 @@ export function createClaudeCodeSettingsImport(): MeshAgentSettingsImport {
           ...(env && Object.keys(env).length > 0 ? { env } : {}),
           ...(modelOptions ? { modelOptions } : {}),
           enabled: true,
-          defaultLaunchMode: 'pty',
           allowAutopilot: false,
           approvalOwnership: 'provider-owned'
         };
@@ -340,7 +338,6 @@ export function createFrameworkSettingsImport(provider: 'hermes' | 'openclaw', l
           command: provider,
           args: [],
           enabled: true,
-          defaultLaunchMode: 'pty',
           allowAutopilot: false,
           approvalOwnership: 'provider-owned'
         };
@@ -382,7 +379,6 @@ export function createBasicSettingsImport(
           command,
           args: [],
           enabled: true,
-          defaultLaunchMode: 'pty',
           allowAutopilot: false,
           approvalOwnership: 'provider-owned'
         };

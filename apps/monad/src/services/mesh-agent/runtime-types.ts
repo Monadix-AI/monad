@@ -8,7 +8,7 @@ export interface MeshAgentTerminal {
   close(): void;
 }
 
-export interface MeshAgentStdin {
+interface MeshAgentStdin {
   write(input: string): void;
   flush?(): void | Promise<void>;
   end?(): void | Promise<void>;

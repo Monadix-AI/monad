@@ -1,9 +1,10 @@
 import type { CommandDef } from './types.ts';
 
-import { getPaths, loadConfig, saveAll } from '@monad/environment';
+import { generateRemoteToken, getPaths, loadConfig, saveAll } from '@monad/environment';
 
 import { t } from '../lib/i18n.ts';
-import { bold, cyan, dim, green, json, out, red } from '../lib/output.ts';
+import { confirmInsecureRemoteAccess } from '../lib/network-security.ts';
+import { bold, cyan, dim, green, json, out, red, yellow } from '../lib/output.ts';
 import { CliError, EXIT } from './types.ts';
 
 type Json = Record<string, unknown>;
@@ -52,7 +53,7 @@ export const command: CommandDef = {
   synopsis: 'config <get|set|list|path|edit> [key] [value]',
   description: 'read or write configuration (e.g. monad config set network.transport uds)',
   descriptionKey: 'cli.cmd.config.desc',
-  async run({ positionals }) {
+  async run({ globals, positionals }) {
     const [action, key, value] = positionals;
     const paths = getPaths();
 
@@ -81,7 +82,24 @@ export const command: CommandDef = {
       case 'set': {
         if (!key || value === undefined) throw new CliError('usage: monad config set <key> <value>', EXIT.USAGE);
         const cfg = await load();
+        const network = cfg.network as Json;
+        const remoteAccess = network.remoteAccess as Json;
+        const https = network.https as Json;
+        const wasRemoteEnabled = remoteAccess.enabled === true;
+        const wasInsecureRemote = wasRemoteEnabled && https.enabled === false;
         setByPath(cfg, key, value);
+        if (key === 'network.remoteAccess.enabled' && value === 'true' && !wasRemoteEnabled) {
+          https.enabled = true;
+          if (typeof remoteAccess.token !== 'string' || !remoteAccess.token) remoteAccess.token = generateRemoteToken();
+        }
+        const enablesInsecureRemote = remoteAccess.enabled === true && https.enabled === false && !wasInsecureRemote;
+        if (enablesInsecureRemote) {
+          out(`${red(bold(t('cli.pair.httpWarningTitle')))}  ${t('cli.pair.httpWarning')}`);
+          if (!(await confirmInsecureRemoteAccess(globals.yes))) {
+            out(yellow(t('cli.aborted')));
+            return;
+          }
+        }
         try {
           await saveAll(paths, cfg as never);
         } catch (err) {

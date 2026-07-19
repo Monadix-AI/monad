@@ -124,7 +124,6 @@ export function createMeshAgentModule({ host, store, config }: MeshAgentDeps) {
         transcriptTargetId: sessionId,
         agentName: request.agentName,
         workingPath: request.workingPath,
-        launchMode: request.launchMode,
         runtimeRole: request.runtimeRole,
         providerSessionRef: request.providerSessionRef
       });

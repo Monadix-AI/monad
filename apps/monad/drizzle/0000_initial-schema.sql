@@ -78,6 +78,24 @@ CREATE TABLE `experience_worker_wakeups` (
 );
 --> statement-breakpoint
 CREATE INDEX `idx_experience_worker_wakeups_due` ON `experience_worker_wakeups` (`run_at`);--> statement-breakpoint
+CREATE TABLE `file_observations` (
+	`session_id` text NOT NULL,
+	`path` text NOT NULL,
+	`hash` text NOT NULL,
+	`coverage` text NOT NULL,
+	`observed_at` text NOT NULL,
+	`tool_call_id` text,
+	PRIMARY KEY(`session_id`, `path`)
+);
+--> statement-breakpoint
+CREATE INDEX `idx_file_observations_session` ON `file_observations` (`session_id`);--> statement-breakpoint
+CREATE TABLE `memory` (
+	`session_id` text NOT NULL,
+	`key` text NOT NULL,
+	`value` text NOT NULL,
+	PRIMARY KEY(`session_id`, `key`)
+);
+--> statement-breakpoint
 CREATE TABLE `mesh_agent_inbox_items` (
 	`mesh_session_id` text NOT NULL,
 	`message_seq` integer NOT NULL,
@@ -107,7 +125,6 @@ CREATE TABLE `mesh_sessions` (
 	`agent_name` text NOT NULL,
 	`provider` text NOT NULL,
 	`working_path` text NOT NULL,
-	`launch_mode` text NOT NULL,
 	`runtime_role` text DEFAULT 'interactive' NOT NULL,
 	`agent_runtime_id` text,
 	`agent_runtime_token_hash` text,
@@ -125,24 +142,6 @@ CREATE TABLE `mesh_sessions` (
 CREATE INDEX `idx_mesh_sessions_transcript_target` ON `mesh_sessions` (`transcript_target_id`);--> statement-breakpoint
 CREATE INDEX `idx_mesh_sessions_live` ON `mesh_sessions` (`state`) WHERE state IN ('starting', 'running');--> statement-breakpoint
 CREATE UNIQUE INDEX `idx_mesh_sessions_provider_ref` ON `mesh_sessions` (`transcript_target_id`,`provider`,`provider_session_ref`) WHERE provider_session_ref IS NOT NULL;--> statement-breakpoint
-CREATE TABLE `file_observations` (
-	`session_id` text NOT NULL,
-	`path` text NOT NULL,
-	`hash` text NOT NULL,
-	`coverage` text NOT NULL,
-	`observed_at` text NOT NULL,
-	`tool_call_id` text,
-	PRIMARY KEY(`session_id`, `path`)
-);
---> statement-breakpoint
-CREATE INDEX `idx_file_observations_session` ON `file_observations` (`session_id`);--> statement-breakpoint
-CREATE TABLE `memory` (
-	`session_id` text NOT NULL,
-	`key` text NOT NULL,
-	`value` text NOT NULL,
-	PRIMARY KEY(`session_id`, `key`)
-);
---> statement-breakpoint
 CREATE TABLE `message_attachments` (
 	`id` text PRIMARY KEY NOT NULL,
 	`project_id` text NOT NULL,
@@ -163,6 +162,16 @@ CREATE TABLE `message_embeddings` (
 	`model` text
 );
 --> statement-breakpoint
+CREATE TABLE `message_mutations` (
+	`transcript_target_id` text NOT NULL,
+	`idempotency_key` text NOT NULL,
+	`command_fingerprint` text NOT NULL,
+	`message_id` text NOT NULL,
+	`message_revision` integer NOT NULL,
+	`result_message` text NOT NULL,
+	PRIMARY KEY(`transcript_target_id`, `idempotency_key`)
+);
+--> statement-breakpoint
 CREATE TABLE `messages` (
 	`id` text PRIMARY KEY NOT NULL,
 	`transcript_target_id` text NOT NULL,
@@ -173,14 +182,15 @@ CREATE TABLE `messages` (
 	`stream_status` text DEFAULT 'settled' NOT NULL,
 	`active` integer DEFAULT 1 NOT NULL,
 	`include_in_context` integer,
-	`created_at` text NOT NULL,
-	`updated_at` text,
 	`idempotency_key` text,
-	`command_fingerprint` text
+	`command_fingerprint` text,
+	`created_at` text NOT NULL,
+	`updated_at` text
 );
 --> statement-breakpoint
 CREATE INDEX `idx_messages_transcript_target` ON `messages` (`transcript_target_id`);--> statement-breakpoint
 CREATE INDEX `idx_messages_active` ON `messages` (`transcript_target_id`,`active`);--> statement-breakpoint
+CREATE UNIQUE INDEX `idx_messages_target_idempotency` ON `messages` (`transcript_target_id`,`idempotency_key`);--> statement-breakpoint
 CREATE TABLE `native_agent_direct_messages` (
 	`id` text PRIMARY KEY NOT NULL,
 	`project_id` text NOT NULL,
@@ -253,6 +263,11 @@ CREATE TABLE `tool_raw_outputs` (
 	PRIMARY KEY(`transcript_target_id`, `tool_call_id`)
 );
 --> statement-breakpoint
+CREATE TABLE `transcript_message_revisions` (
+	`transcript_target_id` text PRIMARY KEY NOT NULL,
+	`revision` integer DEFAULT 0 NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE `usage_ledger` (
 	`day` text NOT NULL,
 	`provider` text NOT NULL,
@@ -281,20 +296,4 @@ CREATE TABLE `workplace_projects` (
 	`updated_at` text NOT NULL
 );
 --> statement-breakpoint
-CREATE INDEX `idx_workplace_projects_state` ON `workplace_projects` (`state`,`archived`);--> statement-breakpoint
-CREATE TABLE `message_mutations` (
-	`transcript_target_id` text NOT NULL,
-	`idempotency_key` text NOT NULL,
-	`command_fingerprint` text NOT NULL,
-	`message_id` text NOT NULL,
-	`message_revision` integer NOT NULL,
-	`result_message` text NOT NULL,
-	PRIMARY KEY(`transcript_target_id`, `idempotency_key`)
-);
---> statement-breakpoint
-CREATE TABLE `transcript_message_revisions` (
-	`transcript_target_id` text PRIMARY KEY NOT NULL,
-	`revision` integer DEFAULT 0 NOT NULL
-);
---> statement-breakpoint
-CREATE UNIQUE INDEX `idx_messages_target_idempotency` ON `messages` (`transcript_target_id`,`idempotency_key`);
+CREATE INDEX `idx_workplace_projects_state` ON `workplace_projects` (`state`,`archived`);

@@ -69,21 +69,27 @@ export function prependRawEventsRows(older: RawFrameRow[], current: RawFrameRow[
   });
 }
 
-// Fold convenience events (older) ahead of the live timeline. `upsert` is by stable event id, so a
-// later live delta updates the same row an event page already placed — earlier/live join is
-// duplicate-free at the event boundary.
+// Fold convenience events (older) ahead of the live timeline. The join key is the provider-derived
+// `dedupeKey` when the projection carries one: an event page is projected from its own window, so the
+// same provider record reached through a page and through live delivery gets two positional ids and
+// only the dedupe key recognizes them as one row.
+function observationJoinKey(event: AgentObservationEvent): string {
+  return event.dedupeKey ?? event.id;
+}
+
 export function foldConvenienceEvents(
   timeline: ObservationTimeline,
   earlierFrames: MeshConvenienceFrame[]
 ): ObservationTimeline {
   const earlier = mergeConvenienceFrames(emptyObservationTimeline, earlierFrames);
-  const currentById = new Map(timeline.events.map((event) => [event.id, event]));
+  const currentByKey = new Map(timeline.events.map((event) => [observationJoinKey(event), event]));
   const seen = new Set<string>();
   const events = [...earlier.events, ...timeline.events]
-    .map((event) => currentById.get(event.id) ?? event)
+    .map((event) => currentByKey.get(observationJoinKey(event)) ?? event)
     .filter((event) => {
-      if (seen.has(event.id)) return false;
-      seen.add(event.id);
+      const key = observationJoinKey(event);
+      if (seen.has(key)) return false;
+      seen.add(key);
       return true;
     });
   return {

@@ -49,8 +49,24 @@ describe('enableRemoteAccess', () => {
     expect(token).toMatch(/^[A-Za-z0-9_-]{43}$/);
 
     const cfg = await loadConfig(paths);
-    expect(cfg?.network.remoteAccess.enabled).toBe(true);
-    expect(cfg?.network.remoteAccess.token).toBe(token);
+    expect(cfg?.network).toMatchObject({
+      https: { enabled: true },
+      remoteAccess: { enabled: true, token }
+    });
+  });
+
+  test('requires acknowledgment before enabling remote access over HTTP', async () => {
+    await expect(enableRemoteAccess(paths, { https: false })).rejects.toThrow(
+      'Plain HTTP remote access requires explicit confirmation'
+    );
+
+    await enableRemoteAccess(paths, { confirmInsecureRemoteAccess: true, https: false });
+
+    const cfg = await loadConfig(paths);
+    expect(cfg?.network).toMatchObject({
+      https: { enabled: false },
+      remoteAccess: { enabled: true, token: expect.any(String) }
+    });
   });
 
   test('is idempotent: second call returns changed=false and same token', async () => {

@@ -1,18 +1,15 @@
 import type { MeshAgentConfig } from '@monad/environment';
-import type { MeshAgentLaunchMode, MeshAgentPresetView, MeshAgentProvider, MeshAgentView } from '@monad/protocol';
+import type { MeshAgentPresetView, MeshAgentProvider, MeshAgentView } from '@monad/protocol';
 import type { BinProbes } from '#/infra/resolve-binary.ts';
 import type { MeshAgentProbeResult, MeshAgentProbeRunner } from '#/services/mesh-agent/probe-batch.ts';
 import type {
-  BuildMeshAgentLaunchOptions,
   MeshAgentArgumentSupport,
-  MeshAgentArgumentSupportProbe,
   MeshAgentLaunchSpec,
   MeshAgentModelOption,
   MeshAgentProviderAdapter
 } from '#/services/mesh-agent/types.ts';
 
 import { spawnSync } from 'node:child_process';
-import { isAbsolute } from 'node:path';
 
 import { defaultBinProbes } from '#/infra/resolve-binary.ts';
 import { meshAgentProbeKey, runMeshAgentProbe, runMeshAgentProbeBatch } from '#/services/mesh-agent/probe-batch.ts';
@@ -55,14 +52,6 @@ function assertCommandShape(agent: MeshAgentView): void {
   }
 }
 
-export function buildMeshAgentLaunch(agent: MeshAgentView, opts: BuildMeshAgentLaunchOptions): MeshAgentLaunchSpec {
-  const adapter = adapterFor(agent.provider);
-  assertSafeArgs(agent, adapter);
-  if (!isAbsolute(opts.workingPath)) throw new Error('workingPath must be absolute');
-  assertCommandShape(agent);
-  return adapter.buildLaunch(agent, opts);
-}
-
 export function resolveMeshAgentLaunchCommand(
   adapter: MeshAgentProviderAdapter,
   launch: MeshAgentLaunchSpec,
@@ -70,12 +59,31 @@ export function resolveMeshAgentLaunchCommand(
 ): MeshAgentLaunchSpec {
   const command = launch.argv[0];
   if (!command) throw new Error(`MeshAgent provider "${adapter.provider}": launch argv must include a command`);
-  const resolvedCommand = adapter.resolveCommand?.(command, probes) ?? probes.which(command);
-  if (!resolvedCommand) {
-    throw new Error(`Executable not found in $PATH or known ${adapter.provider} install locations: "${command}"`);
-  }
+  const resolvedCommand = resolveProviderExecutable(adapter, command, probes);
   if (resolvedCommand === command) return launch;
   return { ...launch, argv: [resolvedCommand, ...launch.argv.slice(1)] };
+}
+
+function resolveProviderExecutable(
+  adapter: MeshAgentProviderAdapter,
+  command: string,
+  probes: BinProbes = defaultBinProbes
+): string {
+  const resolved = adapter.resolveCommand?.(command, probes) ?? probes.which(command);
+  if (!resolved) {
+    throw new Error(`Executable not found in $PATH or known ${adapter.provider} install locations: "${command}"`);
+  }
+  return resolved;
+}
+
+export function resolveMeshAgentExecutable(
+  agent: MeshAgentView,
+  adapter: MeshAgentProviderAdapter,
+  probes: BinProbes = defaultBinProbes
+): string {
+  assertSafeArgs(agent, adapter);
+  assertCommandShape(agent);
+  return resolveProviderExecutable(adapter, agent.command, probes);
 }
 
 export function buildMeshAgentAuthLaunch(agent: MeshAgentView): MeshAgentLaunchSpec {
@@ -83,24 +91,6 @@ export function buildMeshAgentAuthLaunch(agent: MeshAgentView): MeshAgentLaunchS
   assertSafeArgs(agent, adapter);
   assertCommandShape(agent);
   return adapter.buildAuthLaunch(agent);
-}
-
-export function buildMeshAgentAuthStatusLaunch(agent: MeshAgentView): MeshAgentLaunchSpec {
-  const adapter = adapterFor(agent.provider);
-  assertSafeArgs(agent, adapter);
-  assertCommandShape(agent);
-  return adapter.authStatus(agent).launch;
-}
-
-export function buildMeshAgentArgumentSupportProbe(agent: MeshAgentView): MeshAgentArgumentSupportProbe | undefined {
-  const adapter = adapterFor(agent.provider);
-  assertSafeArgs(agent, adapter);
-  assertCommandShape(agent);
-  return adapter.argumentSupport?.(agent);
-}
-
-export function resolveMeshAgentDefaultLaunchMode(provider: MeshAgentProvider): MeshAgentLaunchMode {
-  return adapterFor(provider).detect().defaultLaunchMode;
 }
 
 export function meshAgentConfigToView(agent: MeshAgentConfig): MeshAgentView {
@@ -113,17 +103,11 @@ export function meshAgentConfigToView(agent: MeshAgentConfig): MeshAgentView {
     args: agent.args,
     env: agent.env,
     enabled: agent.enabled,
-    defaultLaunchMode: adapter.detect().defaultLaunchMode,
-    appServerTransport: agent.appServerTransport,
     allowAutopilot: agent.allowAutopilot,
     approvalOwnership: 'provider-owned',
     projectTemplates: agent.projectTemplates,
     adapterSettings: agent.adapterSettings
   };
-}
-
-export function listMeshAgentModelOptions(agent: MeshAgentView, probes: BinProbes = defaultBinProbes): string[] {
-  return resolveMeshAgentModelOptions(agent, probes).modelOptions ?? [];
 }
 
 export function resolveMeshAgentModelOptions(
@@ -231,7 +215,6 @@ function presetAgentView(preset: MeshAgentPresetView): MeshAgentView {
     command: preset.command,
     args: preset.args,
     enabled: preset.installed,
-    defaultLaunchMode: preset.defaultLaunchMode,
     allowAutopilot: false,
     approvalOwnership: 'provider-owned',
     settings: preset.settings

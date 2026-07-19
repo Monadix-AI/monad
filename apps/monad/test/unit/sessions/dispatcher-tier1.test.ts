@@ -114,7 +114,7 @@ test('createProjectSession clones the project member templates into live session
         type: 'mesh-agent',
         name: 'codex',
         displayName: 'Lily',
-        settings: { managedProjectAgent: true, launchMode: 'pty' }
+        settings: { managedProjectAgent: true }
       }
     ]
   });
@@ -129,7 +129,7 @@ test('createProjectSession clones the project member templates into live session
       data: {
         name: 'codex',
         displayName: 'Lily',
-        settings: { managedProjectAgent: true, launchMode: 'pty' }
+        settings: { managedProjectAgent: true }
       }
     }
   ]);

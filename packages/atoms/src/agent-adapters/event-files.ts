@@ -1,11 +1,10 @@
-import { closeSync, existsSync, openSync, readdirSync, readSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 export interface MeshAgentEventFileSearch {
   roots: string[];
   providerSessionRef: string;
   extensions: string[];
-  limitBytes: number;
   maxDepth?: number;
 }
 
@@ -14,20 +13,7 @@ interface EventFileCandidate {
   mtimeMs: number;
 }
 
-function readTail(path: string, limitBytes: number): string {
-  const fd = openSync(path, 'r');
-  try {
-    const size = statSync(path).size;
-    const length = Math.min(size, limitBytes);
-    const buffer = Buffer.alloc(length);
-    readSync(fd, buffer, 0, length, size - length);
-    return buffer.toString('utf8');
-  } finally {
-    closeSync(fd);
-  }
-}
-
-function findLatestEventFile(args: Omit<MeshAgentEventFileSearch, 'limitBytes'>): string | null {
+function findLatestEventFile(args: MeshAgentEventFileSearch): string | null {
   let best: EventFileCandidate | null = null;
   const nameFragments = [args.providerSessionRef, args.providerSessionRef.split('-')[0]].filter(
     (fragment): fragment is string => !!fragment
@@ -55,5 +41,5 @@ function findLatestEventFile(args: Omit<MeshAgentEventFileSearch, 'limitBytes'>)
 
 export function readProviderEventFile(args: MeshAgentEventFileSearch): string | null {
   const file = findLatestEventFile(args);
-  return file ? readTail(file, args.limitBytes) : null;
+  return file ? readFileSync(file, 'utf8') : null;
 }

@@ -1,18 +1,22 @@
+import type { NetworkSettings, SetNetworkSettingsRequest } from '@monad/protocol';
 import type { NavCapability } from '../shell/capabilities.ts';
 
 import {
   agentSelectors,
   meshAgentSelectors,
   meshSessionSelectors,
+  useGetNetworkQuery,
   useInitStatusQuery,
   useListAgentsQuery,
   useListLiveMeshSessionsQuery,
-  useListMeshAgentsQuery
+  useListMeshAgentsQuery,
+  useSetNetworkMutation
 } from '@monad/client-rtk';
 import { openUrl } from '@monad/environment';
 import { Box, Text, useInput } from 'ink';
 import { useState } from 'react';
 
+import { t } from '../lib/i18n.ts';
 import { TUI_THEME } from './theme.ts';
 
 export function RuntimeScreen({ active }: { active: boolean }) {
@@ -38,7 +42,8 @@ export function RuntimeScreen({ active }: { active: boolean }) {
         <Text key={runtime.id}>
           · {runtime.agentName}{' '}
           <Text color={TUI_THEME.dim}>
-            {runtime.provider} · {runtime.state}
+            {runtime.provider} ·{' '}
+            {runtime.lifecycle.state === 'terminal' ? runtime.lifecycle.termination.kind : runtime.lifecycle.state}
           </Text>
         </Text>
       ))}
@@ -107,12 +112,98 @@ export function DegradedScreen({
   );
 }
 
-export function ConnectionScreen({ baseUrl }: { baseUrl: string }) {
+export type ConnectionInputAction =
+  | { kind: 'cancel' }
+  | { kind: 'confirm' }
+  | { kind: 'none' }
+  | { kind: 'request'; request: SetNetworkSettingsRequest };
+
+export function connectionInputAction(
+  input: string,
+  settings: NetworkSettings,
+  confirmingRemoteHttp: boolean
+): ConnectionInputAction {
+  const key = input.toLowerCase();
+  if (confirmingRemoteHttp) {
+    if (key === 'y') {
+      return {
+        kind: 'request',
+        request: { confirmInsecureRemoteAccess: true, https: { enabled: false } }
+      };
+    }
+    if (key === 'n' || key === '\u001b') return { kind: 'cancel' };
+    return { kind: 'none' };
+  }
+  if (key === 'h') {
+    if (settings.https.enabled && settings.remoteAccess.enabled) return { kind: 'confirm' };
+    return { kind: 'request', request: { https: { enabled: !settings.https.enabled } } };
+  }
+  return { kind: 'none' };
+}
+
+export function ConnectionScreen({ active, baseUrl }: { active: boolean; baseUrl: string }) {
+  const network = useGetNetworkQuery(undefined);
+  const [setNetwork, mutation] = useSetNetworkMutation();
+  const [confirmingRemoteHttp, setConfirmingRemoteHttp] = useState(false);
+  const [status, setStatus] = useState('');
+  const settings = network.data;
+
+  useInput(
+    (input, key) => {
+      if (!settings || mutation.isLoading) return;
+      const action = connectionInputAction(key.escape ? '\u001b' : input, settings, confirmingRemoteHttp);
+      if (action.kind === 'confirm') {
+        setConfirmingRemoteHttp(true);
+        return;
+      }
+      if (action.kind === 'cancel') {
+        setConfirmingRemoteHttp(false);
+        setStatus('');
+        return;
+      }
+      if (action.kind !== 'request') return;
+      setConfirmingRemoteHttp(false);
+      void setNetwork(action.request)
+        .unwrap()
+        .then(() => setStatus(t('cli.tui.connection.saved')))
+        .catch((error) => setStatus(error instanceof Error ? error.message : String(error)));
+    },
+    { isActive: active }
+  );
+
   return (
     <Screen title="Connection">
       <Text color={TUI_THEME.glow}>daemon connected</Text>
       <Text>{baseUrl}</Text>
-      <Text color={TUI_THEME.dim}>Connection switching and remote-daemon credentials remain available in Web.</Text>
+      {settings ? (
+        <>
+          <Text>
+            {t('cli.tui.connection.httpsLabel')}{' '}
+            <Text color={settings.https.enabled ? TUI_THEME.glow : TUI_THEME.warning}>
+              {t(settings.https.enabled ? 'cli.enabled' : 'cli.disabled')}
+            </Text>
+          </Text>
+          {!settings.https.enabled && settings.remoteAccess.enabled ? (
+            <Text
+              bold
+              color={TUI_THEME.danger}
+            >
+              {t('cli.tui.connection.remoteHttpWarning')}
+            </Text>
+          ) : null}
+          {confirmingRemoteHttp ? (
+            <>
+              <Text color={TUI_THEME.danger}>{t('cli.tui.connection.remoteHttpConfirm')}</Text>
+              <Text color={TUI_THEME.warning}>{t('cli.tui.connection.confirmHint')}</Text>
+            </>
+          ) : (
+            <Text color={TUI_THEME.dim}>{t('cli.tui.connection.keys')}</Text>
+          )}
+        </>
+      ) : (
+        <Text color={TUI_THEME.dim}>{t('cli.tui.connection.loading')}</Text>
+      )}
+      {status ? <Text color={TUI_THEME.warning}>{status}</Text> : null}
     </Screen>
   );
 }

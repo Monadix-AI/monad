@@ -24,11 +24,7 @@ test('live raw store preserves committed frames byte-for-byte in one global orde
         observedAt: '2026-07-18T01:00:00.000Z'
       },
       { stream: 'stderr' as const, payload: 'warning: 保真\n', observedAt: '2026-07-18T01:00:00.001Z' },
-      {
-        stream: 'app-server' as const,
-        payload: '{"method":"item/completed","params":{}}',
-        observedAt: '2026-07-18T01:00:00.002Z'
-      }
+      { stream: 'stdout' as const, payload: '{"type":"turn.completed"}', observedAt: '2026-07-18T01:00:00.002Z' }
     ];
 
     expect(frames.map((frame) => store.append(frame))).toEqual(
@@ -144,13 +140,11 @@ test('live raw store reads exact committed rows after a sequence cursor', async 
   });
 });
 
-test('live raw cursors are scoped to the runtime epoch', async () => {
+test('live raw cursors include the runtime epoch', async () => {
   await withTempDirectory(async (directory) => {
     const first = LiveRawStore.open({ directory, sessionId: 'mesh_test', epoch: 'oep_first' });
     first.append({ stream: 'stdout', payload: 'first', observedAt: '2026-07-18T01:00:00.000Z' });
     expect(first.cursorBefore(1)).toBe('live:oep_first:1');
-    expect(first.parseCursor('live:oep_first:1')).toBe(1);
-    expect(() => first.parseCursor('live:oep_other:1')).toThrow('live observation epoch is no longer available');
     await first.closeAndDelete();
   });
 });

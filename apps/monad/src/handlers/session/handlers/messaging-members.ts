@@ -24,15 +24,7 @@ export interface ManagedMeshAgentProjectMember {
   configuredDisplayName?: string;
   settings: Pick<
     WorkplaceProjectMemberSettings,
-    | 'managedProjectAgent'
-    | 'launchMode'
-    | 'appServerTransport'
-    | 'allowAutopilot'
-    | 'modelName'
-    | 'modelId'
-    | 'reasoningEffort'
-    | 'speed'
-    | 'customPrompt'
+    'managedProjectAgent' | 'allowAutopilot' | 'modelName' | 'modelId' | 'reasoningEffort' | 'speed' | 'customPrompt'
   >;
 }
 
@@ -97,15 +89,7 @@ export function meshAgentProjectMemberSettings(
   agentName: string
 ): Pick<
   WorkplaceProjectMemberSettings,
-  | 'managedProjectAgent'
-  | 'launchMode'
-  | 'appServerTransport'
-  | 'allowAutopilot'
-  | 'modelName'
-  | 'modelId'
-  | 'reasoningEffort'
-  | 'speed'
-  | 'customPrompt'
+  'managedProjectAgent' | 'allowAutopilot' | 'modelName' | 'modelId' | 'reasoningEffort' | 'speed' | 'customPrompt'
 > {
   const member = workplaceProjectMembers(store, sessionId).find(
     (candidate) =>
@@ -116,8 +100,6 @@ export function meshAgentProjectMemberSettings(
   if (member?.settings) {
     return {
       managedProjectAgent: member.settings.managedProjectAgent !== false,
-      ...(member.settings.launchMode ? { launchMode: member.settings.launchMode } : {}),
-      ...(member.settings.appServerTransport ? { appServerTransport: member.settings.appServerTransport } : {}),
       ...(member.settings.allowAutopilot !== undefined ? { allowAutopilot: member.settings.allowAutopilot } : {}),
       ...(member.settings.modelName ? { modelName: member.settings.modelName } : {}),
       ...(member.settings.modelId ? { modelId: member.settings.modelId } : {}),
@@ -178,8 +160,6 @@ export function managedMeshAgentProjectMembers(
           configuredDisplayName: member.displayName,
           settings: {
             managedProjectAgent: true,
-            ...(member.settings?.launchMode ? { launchMode: member.settings.launchMode } : {}),
-            ...(member.settings?.appServerTransport ? { appServerTransport: member.settings.appServerTransport } : {}),
             ...(member.settings?.allowAutopilot !== undefined
               ? { allowAutopilot: member.settings.allowAutopilot }
               : {}),

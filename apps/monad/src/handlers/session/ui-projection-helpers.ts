@@ -20,7 +20,6 @@ export interface MeshSessionSnapshot {
   provider: string;
   agentName: string;
   workingPath: string;
-  launchMode: string;
   state: 'starting' | 'running' | 'exited' | 'failed' | 'stopped';
   exitCode: number | null;
   outputSnapshot: string;
@@ -72,7 +71,6 @@ export function meshAgentToolItem(s: MeshSessionSnapshot): Extract<UIItem, { kin
       agent: s.agentName,
       provider: s.provider,
       workingPath: s.workingPath,
-      launchMode: s.launchMode,
       approvalOwnership: 'provider-owned'
     },
     ...(output ? { output } : {}),

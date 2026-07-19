@@ -16,7 +16,6 @@ function seedRunning(store: ReturnType<typeof createStore>, id: string, startedA
     agentName: 'codex',
     provider: 'codex',
     workingPath: '/tmp/p',
-    launchMode: 'app-server',
     runtimeRole: 'managed-project-agent',
     agentRuntimeId: id,
     agentRuntimeTokenHash: null,

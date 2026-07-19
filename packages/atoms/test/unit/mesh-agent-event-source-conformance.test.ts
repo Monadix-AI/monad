@@ -98,7 +98,7 @@ test('projected event source passes event cursors through without interpreting t
       nextCursor: request.before
     })
   });
-  const context = { providerSessionRef: 'thread', workingPath: '/tmp/project', limitBytes: 1024 };
+  const context = { providerSessionRef: 'thread', workingPath: '/tmp/project' };
 
   expect(
     await source.readPage?.(context, { view: 'convenience', before: 'opaque-provider-cursor', limit: 20 })
@@ -111,7 +111,7 @@ test('one adapter page capability returns raw or convenience events by requested
     projection,
     readOutput: () => `${JSON.stringify({ type: 'message', text: 'Hello' })}\n`
   });
-  const context = { providerSessionRef: 'thread', workingPath: '/tmp/project', limitBytes: 1024 };
+  const context = { providerSessionRef: 'thread', workingPath: '/tmp/project' };
 
   expect(await source.readPage?.(context, { view: 'raw', limit: 20 })).toEqual({
     state: 'available',

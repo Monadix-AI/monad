@@ -3,6 +3,7 @@ import type { CommandDef } from './types.ts';
 import { enableRemoteAccess, getLanIp, getPaths, getTailscaleIp, loadConfig } from '@monad/environment';
 
 import { t } from '../lib/i18n.ts';
+import { confirmInsecureRemoteAccess } from '../lib/network-security.ts';
 import { bold, cyan, dim, green, out, red, yellow } from '../lib/output.ts';
 
 // qrcode-terminal has no @types package; the API is stable and narrow.
@@ -25,11 +26,13 @@ export const command: CommandDef = {
   flags: {
     rotate: { type: 'boolean', description: 'force a new token even if one already exists' },
     'show-token': { type: 'boolean', description: 'print the full token instead of masking it' },
+    http: { type: 'boolean', description: 'expose remote access over plain HTTP after confirmation' },
     mode: { type: 'string', description: 'address mode: lan (default) or overlay (Tailscale)' }
   },
   async run(ctx) {
     const rotate = Boolean(ctx.flags.rotate);
     const showToken = Boolean(ctx.flags['show-token']);
+    const useHttp = Boolean(ctx.flags.http);
     const mode = (ctx.flags.mode as Mode | undefined) ?? 'lan';
 
     if (!MODES.includes(mode)) {
@@ -44,7 +47,19 @@ export const command: CommandDef = {
       process.exit(1);
     }
 
-    const { token, changed } = await enableRemoteAccess(paths, { rotate });
+    if (useHttp) {
+      out(`${red(bold(t('cli.pair.httpWarningTitle')))}  ${t('cli.pair.httpWarning')}`);
+      if (!(await confirmInsecureRemoteAccess(ctx.globals.yes))) {
+        out(yellow(t('cli.aborted')));
+        return;
+      }
+    }
+
+    const { token, changed } = await enableRemoteAccess(paths, {
+      confirmInsecureRemoteAccess: useHttp,
+      https: !useHttp,
+      rotate
+    });
     const port = cfg.network.port;
 
     const ip = mode === 'overlay' ? getTailscaleIp() : getLanIp();
@@ -56,7 +71,7 @@ export const command: CommandDef = {
       );
     }
 
-    const baseUrl = ip ? `http://${ip}:${port}` : null;
+    const baseUrl = ip ? `${useHttp ? 'http' : 'https'}://${ip}:${port}` : null;
     const masked = showToken ? token : `${token.slice(0, 6)}…${dim(t('cli.pair.showTokenHint'))}`;
 
     out('');

@@ -1,28 +1,8 @@
-import type { MeshAgentAppServerTransport, MeshAgentLaunchMode } from '@monad/protocol';
-
 import { mkdir, readFile, stat, unlink, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
-export type MeshAgentKillFn = (pid: number, signal: NodeJS.Signals) => void;
-export type MeshAgentTreeKillFn = (pid: number) => void;
-
-/** Non-pty launch mode to retry with when Bun's pty (`terminal:`) spawn throws — e.g. ConPTY
- *  unavailable on the host. `json-stream` is preferred (keeps stdin/stdout structured); `app-server`
- *  over the `stdio` transport (no socket/port setup needed) is the fallback for providers with no
- *  json-stream mode — but only when the adapter actually offers `stdio` (some app-server providers
- *  are `ws`-only, so falling back to a `stdio` launch for them would just throw `unsupported_capability`
- *  a step later, replacing the real pty error with a confusing one). `undefined` means the provider has
- *  no non-pty mode to degrade to — the caller should let the original pty error propagate. */
-export function pickPtyFallbackLaunchMode(
-  supportedLaunchModes: MeshAgentLaunchMode[],
-  supportedAppServerTransports: MeshAgentAppServerTransport[] = []
-): MeshAgentLaunchMode | undefined {
-  if (supportedLaunchModes.includes('json-stream')) return 'json-stream';
-  if (supportedLaunchModes.includes('app-server') && supportedAppServerTransports.includes('stdio')) {
-    return 'app-server';
-  }
-  return undefined;
-}
+type MeshAgentKillFn = (pid: number, signal: NodeJS.Signals) => void;
+type MeshAgentTreeKillFn = (pid: number) => void;
 
 // Windows has no process groups, so a single kill only signals the leader and leaves the CLI's own
 // child processes orphaned. taskkill /T /F terminates the whole tree.

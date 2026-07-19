@@ -61,3 +61,15 @@ test('Mesh event pages select raw or convenience without exposing provider stora
     cursor: 'live:epoch_1:0'
   });
 });
+
+test('Mesh event pages preserve a comma-bearing provider cursor split by the HTTP parser', () => {
+  const cursor = 'provider:{"turnId":"019f741c-70a5-7df2-a5f4-04132750aace","includeAnchor":false}';
+
+  expect(
+    meshContracts.meshEventPageRequestSchema.parse({
+      view: 'convenience',
+      before: ['provider:{"turnId":"019f741c-70a5-7df2-a5f4-04132750aace"', '"includeAnchor":false}'],
+      limit: '20'
+    })
+  ).toEqual({ view: 'convenience', before: cursor, limit: 20 });
+});

@@ -12,8 +12,7 @@ import type {
 
 import { expect, test } from 'bun:test';
 
-import { codexMeshAgentAdapter } from '../../src/agent-adapters/codex/index.ts';
-import { createAppServerEventSource, createOutputEventSource } from '../../src/agent-adapters/event-source.ts';
+import { createOutputEventSource } from '../../src/agent-adapters/event-source.ts';
 import { toAgentObservationEvent } from '../../src/agent-adapters/neutral-observation.ts';
 import { observation } from '../../src/agent-adapters/observation-projection.ts';
 
@@ -25,119 +24,12 @@ function rawEventReader(source: MeshAgentEventSource) {
   return reader;
 }
 
-// requestPage is only invoked inside context.requestProviderPage; the mock context below bypasses it.
-function appServerSource() {
-  return createAppServerEventSource({
-    provider: 'codex',
-    projection: emptyProjection,
-    requestPage: () => 0
-  });
-}
-
-function eventContext(items: unknown[], nextCursor?: string): MeshAgentProviderEventContext {
-  return {
-    providerSessionRef: 'ref-1',
-    workingPath: '/tmp/ws',
-    limitBytes: 1_000_000,
-    requestProviderPage: async () => ({ items, ...(nextCursor ? { nextCursor } : {}) })
-  };
-}
-
 const noPageContext: MeshAgentProviderEventContext = {
   providerSessionRef: 'ref-1',
-  workingPath: '/tmp/ws',
-  limitBytes: 1_000_000
+  workingPath: '/tmp/ws'
 };
 
-test('raw event reader returns provider items verbatim with uuid as provider identity and cursor', async () => {
-  const items = [
-    { type: 'item/started', uuid: 'u1', payload: { text: 'hi' } },
-    { type: 'item/completed', uuid: 'u2', nested: [1, { deep: true }] }
-  ];
-  const source = appServerSource();
-  const result = await rawEventReader(source)(eventContext(items, 'next-7'), {
-    view: 'raw',
-    limit: 10
-  });
-  expect(result).toEqual({
-    state: 'available',
-    view: 'raw',
-    records: [
-      { data: items[1], cursor: 'u2', providerIdentity: 'u2' },
-      { data: items[0], cursor: 'u1', providerIdentity: 'u1' }
-    ],
-    nextCursor: 'next-7',
-    coverage: 'exact'
-  });
-});
-
-test('raw event reader falls back to a positional cursor when a record has no provider identity', async () => {
-  const items = [{ type: 'plain', text: 'no uuid here' }];
-  const source = appServerSource();
-  const result = await rawEventReader(source)(eventContext(items), {
-    before: '5',
-    view: 'raw',
-    limit: 10
-  });
-  expect(result).toEqual({
-    state: 'available',
-    view: 'raw',
-    records: [{ data: items[0], cursor: '5:0' }],
-    coverage: 'exact'
-  });
-});
-
-test('Codex raw events preserve stable provider-native turns when older turns are prepended', async () => {
-  const turn = {
-    id: 'turn-2',
-    items: [
-      { id: 'item-8', type: 'userMessage', text: 'second turn' },
-      { type: 'agentMessage', text: 'reply' }
-    ]
-  };
-  const reader = rawEventReader(codexMeshAgentAdapter.events);
-  const first = await reader(eventContext([turn]), { view: 'raw', limit: 20 });
-  const afterPrepend = await reader(eventContext([{ id: 'turn-1', items: [] }, turn]), {
-    view: 'raw',
-    limit: 20
-  });
-
-  expect(first).toEqual({
-    state: 'available',
-    view: 'raw',
-    records: [{ data: turn, cursor: 'turn-2', providerIdentity: 'turn-2' }],
-    coverage: 'exact'
-  });
-  expect(afterPrepend).toEqual({
-    state: 'available',
-    view: 'raw',
-    records: [
-      { data: turn, cursor: 'turn-2', providerIdentity: 'turn-2' },
-      { data: { id: 'turn-1', items: [] }, cursor: 'turn-1', providerIdentity: 'turn-1' }
-    ],
-    coverage: 'exact'
-  });
-});
-
-test('raw event reader reverses record order for a descending request', async () => {
-  const items = [
-    { uuid: 'a', n: 1 },
-    { uuid: 'b', n: 2 }
-  ];
-  const source = appServerSource();
-  const result = await rawEventReader(source)(eventContext(items), { view: 'raw', limit: 10 });
-  if (result.state !== 'available' || result.view !== 'raw') throw new Error('expected a page');
-  expect(result.records.map((r) => r.providerIdentity)).toEqual(['b', 'a']);
-  expect(result.records.map((r) => r.data)).toEqual([items[1], items[0]]);
-});
-
-test('raw event reader reports unavailable when the provider cannot page', async () => {
-  const source = appServerSource();
-  const result = await rawEventReader(source)(noPageContext, { view: 'raw', limit: 10 });
-  expect(result).toEqual({ state: 'unavailable', reason: 'unsupported' });
-});
-
-test('output event reader parses provider records with settled coverage', async () => {
+test('output event reader returns provider records oldest-first with settled coverage', async () => {
   const output = '{"uuid":"r1","type":"message","text":"a"}\n{"uuid":"r2","type":"reasoning","text":"b"}';
   const source = createOutputEventSource({
     provider: 'codex',
@@ -149,8 +41,35 @@ test('output event reader parses provider records with settled coverage', async 
     state: 'available',
     view: 'raw',
     records: [
-      { data: { uuid: 'r2', type: 'reasoning', text: 'b' }, cursor: 'r2', providerIdentity: 'r2' },
-      { data: { uuid: 'r1', type: 'message', text: 'a' }, cursor: 'r1', providerIdentity: 'r1' }
+      { data: { uuid: 'r1', type: 'message', text: 'a' }, cursor: 'r1', providerIdentity: 'r1' },
+      { data: { uuid: 'r2', type: 'reasoning', text: 'b' }, cursor: 'r2', providerIdentity: 'r2' }
+    ],
+    coverage: 'settled'
+  });
+});
+
+test('output event reader keys Codex rollout records by turn and turn-local index', async () => {
+  const turnId = 'turn-019f';
+  const records = [
+    { type: 'turn_context', payload: { turn_id: turnId } },
+    { type: 'response_item', payload: { type: 'reasoning' } },
+    { type: 'event_msg', payload: { type: 'token_count' } }
+  ];
+  const source = createOutputEventSource({
+    provider: 'codex',
+    projection: emptyProjection,
+    readOutput: () => records.map((record) => JSON.stringify(record)).join('\n')
+  });
+
+  const result = await rawEventReader(source)(noPageContext, { view: 'raw', limit: 10 });
+
+  expect(result).toEqual({
+    state: 'available',
+    view: 'raw',
+    records: [
+      { data: records[0], cursor: `${turnId}:0`, providerIdentity: `${turnId}:0` },
+      { data: records[1], cursor: `${turnId}:1`, providerIdentity: `${turnId}:1` },
+      { data: records[2], cursor: `${turnId}:2`, providerIdentity: `${turnId}:2` }
     ],
     coverage: 'settled'
   });

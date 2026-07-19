@@ -7,7 +7,6 @@ import { builtinAgentAdapters } from '@monad/atoms/agent-adapters';
 import { registerAgentAdapterImpl } from '#/services/mesh-agent/index.ts';
 import {
   cleanupManagedProjectOrphanTokens,
-  managedProjectLaunchMode,
   prepareManagedProjectRuntime
 } from '#/services/mesh-agent/managed-project.ts';
 
@@ -213,14 +212,6 @@ test('managed project runtime renders the current CLI entry in non-MCP communica
 
   expect(prepared.prompt).toContain(`${command} project post -`);
   expect(prepared.prompt).toContain(`${command} project inbox check`);
-});
-
-test('managed project runtime prefers structured launch modes over interactive PTY', () => {
-  expect(managedProjectLaunchMode({ provider: 'codex', defaultLaunchMode: 'pty' }, 'pty')).toBe('app-server');
-  expect(managedProjectLaunchMode({ provider: 'claude-code', defaultLaunchMode: 'pty' }, 'pty')).toBe('json-stream');
-  expect(managedProjectLaunchMode({ provider: 'gemini', defaultLaunchMode: 'pty' }, 'pty')).toBe('json-stream');
-  expect(managedProjectLaunchMode({ provider: 'qwen', defaultLaunchMode: 'pty' }, 'pty')).toBe('json-stream');
-  expect(managedProjectLaunchMode({ provider: 'codex', defaultLaunchMode: 'pty' }, 'app-server')).toBe('app-server');
 });
 
 test('managed project runtime rejects agent names that escape the project workspace', async () => {

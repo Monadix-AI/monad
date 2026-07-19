@@ -6,6 +6,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { nativeAgentRuntimeSchema } from '@monad/protocol';
 
 import { HandlerError } from '#/handlers/handler-error.ts';
+import { toView } from '#/services/mesh-agent/host/host-helpers.ts';
 
 export interface NativeAgentRuntimeBinding {
   agentId: string;
@@ -24,23 +25,10 @@ function tokenMatchesHash(providedToken: string, expectedHash: string): boolean 
 }
 
 function runtimeSummary(nativeSession: MeshSessionRow): NativeAgentRuntime {
+  const view = toView(nativeSession);
   return nativeAgentRuntimeSchema.parse({
-    id: nativeSession.id,
-    sessionId: nativeSession.transcriptTargetId,
-    agentName: nativeSession.agentName,
-    provider: nativeSession.provider,
-    workingPath: nativeSession.workingPath,
-    launchMode: nativeSession.launchMode,
-    runtimeRole: nativeSession.runtimeRole,
-    agentRuntimeId: nativeSession.agentRuntimeId,
-    state: nativeSession.state,
-    session: { providerSessionRef: nativeSession.providerSessionRef },
-    lastDeliveredSeq: nativeSession.lastDeliveredSeq,
-    lastVisibleSeq: nativeSession.lastVisibleSeq,
-    pendingApprovalCount: 0,
-    startedAt: nativeSession.startedAt,
-    updatedAt: nativeSession.updatedAt,
-    exitedAt: nativeSession.exitedAt
+    ...view,
+    session: { providerSessionRef: nativeSession.providerSessionRef }
   });
 }
 

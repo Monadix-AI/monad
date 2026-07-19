@@ -39,7 +39,6 @@ function startArgs(input: string, runtimeAgentName = 'codex') {
     runtimeAgentName,
     templateAgentName: 'codex',
     displayName: 'Codex',
-    launchMode: 'app-server' as const,
     input
   };
 }

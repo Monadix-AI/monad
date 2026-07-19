@@ -1,14 +1,7 @@
 import type { CSSProperties, ReactNode, Ref } from 'react';
 
-import { elementScroll, useVirtualizer } from '@tanstack/react-virtual';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { useCallback, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
-
-import {
-  HIDDEN_SETTLE_INTERVAL_MS,
-  STICK_THRESHOLD,
-  shouldPinToBottom,
-  useBottomFollow
-} from '../hooks/use-bottom-follow';
 
 export interface VirtualListHandle {
   /** Jump to the physical top of the currently loaded rows. */
@@ -51,7 +44,9 @@ export interface VirtualListProps<T> {
 
 /** Assumed row height until at least one row has been measured. */
 const ESTIMATED_ROW_HEIGHT = 96;
-
+const START_REACHED_THRESHOLD = 240;
+const END_REACHED_THRESHOLD = 240;
+const AT_END_THRESHOLD = 32;
 const ROW_STYLE_BASE: CSSProperties = {
   boxSizing: 'border-box',
   left: 0,
@@ -59,6 +54,19 @@ const ROW_STYLE_BASE: CSSProperties = {
   position: 'absolute',
   top: 0,
   width: '100%'
+};
+
+type VirtualizerBoundaryState = {
+  getDistanceFromEnd: () => number;
+  isAtEnd: (threshold?: number) => boolean;
+  range: { endIndex: number; startIndex: number } | null;
+  scrollOffset: number | null;
+};
+
+type ScrollBoundaryMetrics = {
+  clientHeight: number;
+  scrollHeight: number;
+  scrollTop: number;
 };
 
 /** Position of the item with `key`, or -1. Used by the scrollToKey handle. */
@@ -72,71 +80,10 @@ export function overscanRowCount(overscanPx: number, estimatedRowHeight = ESTIMA
 }
 
 /**
- * Average measured row height, used to estimate rows not yet measured. A fixed guess is off by an
- * order of magnitude on real chat rows (~100px vs ~1800px), which mis-sizes the total scroll
- * height — the scrollbar visibly re-scales as rows measure in.
- */
-export function averageMeasuredRowHeight(sizes: Iterable<number>, fallback = ESTIMATED_ROW_HEIGHT): number {
-  let sum = 0;
-  let count = 0;
-  for (const size of sizes) {
-    sum += size;
-    count += 1;
-  }
-  return count === 0 ? fallback : Math.max(1, Math.round(sum / count));
-}
-
-/** Estimates retained per row key beyond the current row count before stale keys are dropped. */
-const ESTIMATE_CACHE_SLACK = 4;
-
-/**
- * An unmeasured row's estimate, frozen at the first value it was given. The virtualizer re-runs
- * `estimateSize` for every unmeasured row on each measurement pass and does NOT compensate the
- * scroll position for what it returns — only a row RESIZE goes through that compensation. So a
- * running average, recomputed as rows measure, silently re-heights every unmeasured row above the
- * viewport and jumps the content the reader is looking at. Freezing per key keeps the average's
- * benefit (a page of newly loaded rows is estimated from real data) without ever moving a row that
- * is already positioned.
- */
-export function stableEstimate(cache: Map<string, number>, key: string, estimate: number): number {
-  const cached = cache.get(key);
-  if (cached !== undefined) return cached;
-  cache.set(key, estimate);
-  return estimate;
-}
-
-/** Drop estimates for keys no longer in the list; the cache must not grow with session length. */
-export function pruneEstimateCache(
-  cache: Map<string, number>,
-  liveKeys: Set<string>,
-  slack = ESTIMATE_CACHE_SLACK
-): void {
-  if (cache.size <= liveKeys.size + slack) return;
-  for (const key of cache.keys()) {
-    if (!liveKeys.has(key)) cache.delete(key);
-  }
-}
-
-/** The row set changed at an edge when the first or last key differs from the previous render. */
-export function edgeKeysOf<T>(
-  items: T[],
-  getKey: (item: T) => string
-): { firstKey: string | null; lastKey: string | null } {
-  const first = items[0];
-  const last = items.at(-1);
-  return {
-    firstKey: first === undefined ? null : getKey(first),
-    lastKey: last === undefined ? null : getKey(last)
-  };
-}
-
-/**
  * Generic windowed list over @tanstack/react-virtual.
  *
- * Rows measure themselves (`measureElement` observes every mounted row), so a message growing IN
- * PLACE while it streams reflows without any item-count change. Holding the viewport steady
- * through that growth is the library's job (`anchorTo`/`followOnAppend`); whether the READER still
- * wants to sit at the bottom is `useBottomFollow`'s.
+ * TanStack Virtual owns dynamic measurement, prepend anchoring, append following, and imperative
+ * scrolling. This component only adds product callbacks for entering the loaded start/end zones.
  */
 export function VirtualList<T>({
   items,
@@ -158,7 +105,6 @@ export function VirtualList<T>({
 }: VirtualListProps<T>): React.ReactElement {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
-  const footerRef = useRef<HTMLDivElement>(null);
   // Header content sits above the rows in normal flow, so every item start must be offset by its
   // height (the virtualizer's `scrollMargin`).
   const [headerHeight, setHeaderHeight] = useState(0);
@@ -167,12 +113,17 @@ export function VirtualList<T>({
   // never actually being watched — its later growth (a streaming message) would go unmeasured.
   const [scrollerReady, setScrollerReady] = useState(false);
 
-  const follow = useBottomFollow({ onAtBottomChange, onEndReached, onStartReached, scrollerRef, stickToBottom });
-  const { armEdges, evaluateEdges, markSelfScroll, pinnedRef, scrollToBottomNow, settleAtBottom } = follow;
-
   const lastRangeRef = useRef<{ endIndex: number; startIndex: number } | null>(null);
-  const latestRef = useRef({ getKey, items, onRangeChange });
-  latestRef.current = { getKey, items, onRangeChange };
+  const lastAtEndRef = useRef<boolean | null>(null);
+  const startArmedRef = useRef(true);
+  const endArmedRef = useRef(true);
+  const previousLastKeyRef = useRef<string | null>(null);
+  const latestRef = useRef({ getKey, items, onAtBottomChange, onEndReached, onRangeChange, onStartReached });
+  latestRef.current = { getKey, items, onAtBottomChange, onEndReached, onRangeChange, onStartReached };
+
+  const hasFooter = footer !== undefined && footer !== null;
+  const lastItem = items.at(-1);
+  const lastItemKey = lastItem === undefined ? null : getKey(lastItem);
 
   const emitRange = useCallback((range: { endIndex: number; startIndex: number } | null) => {
     const publish = latestRef.current.onRangeChange;
@@ -184,53 +135,74 @@ export function VirtualList<T>({
     publish(next);
   }, []);
 
-  // Estimate = running average of the rows measured so far, handed to each row once (see
-  // `stableEstimate`). Updated outside React state on purpose: it only matters the next time a row
-  // is first estimated, so re-rendering for it would be pure churn.
-  const estimatedRowHeightRef = useRef(ESTIMATED_ROW_HEIGHT);
-  const measuredRowCountRef = useRef(0);
-  const estimateCacheRef = useRef(new Map<string, number>());
+  const evaluateBoundaries = useCallback(
+    (instance: VirtualizerBoundaryState, metrics?: ScrollBoundaryMetrics) => {
+      emitRange(instance.range);
+
+      const scrollOffset = Math.max(metrics?.scrollTop ?? instance.scrollOffset ?? 0, 0);
+      const atStart = scrollOffset <= START_REACHED_THRESHOLD;
+      if (atStart && startArmedRef.current) {
+        startArmedRef.current = false;
+        latestRef.current.onStartReached?.();
+      } else if (!atStart) {
+        startArmedRef.current = true;
+      }
+
+      const distanceFromEnd = metrics
+        ? Math.max(metrics.scrollHeight - metrics.scrollTop - metrics.clientHeight, 0)
+        : instance.getDistanceFromEnd();
+      const atEndEdge = distanceFromEnd <= END_REACHED_THRESHOLD;
+      if (atEndEdge && endArmedRef.current) {
+        endArmedRef.current = false;
+        latestRef.current.onEndReached?.();
+      } else if (!atEndEdge) {
+        endArmedRef.current = true;
+      }
+
+      const atEnd = instance.isAtEnd(AT_END_THRESHOLD);
+      if (lastAtEndRef.current !== atEnd) {
+        lastAtEndRef.current = atEnd;
+        latestRef.current.onAtBottomChange?.(atEnd);
+      }
+    },
+    [emitRange]
+  );
 
   const keyOfIndex = useCallback((index: number): string => {
     const item = latestRef.current.items[index];
-    return item === undefined ? String(index) : latestRef.current.getKey(item);
+    if (item !== undefined) return latestRef.current.getKey(item);
+    const last = latestRef.current.items.at(-1);
+    return `virtual-list-footer:${last === undefined ? 'empty' : latestRef.current.getKey(last)}`;
   }, []);
+  const handleVirtualizerChange = useCallback(
+    (instance: VirtualizerBoundaryState) => evaluateBoundaries(instance),
+    [evaluateBoundaries]
+  );
+
+  const shouldFollowCommittedAppend =
+    scrollerReady &&
+    stickToBottom &&
+    lastItemKey !== null &&
+    previousLastKeyRef.current !== lastItemKey &&
+    lastAtEndRef.current !== false;
 
   const virtualizer = useVirtualizer({
-    // `anchorTo: 'end'` keeps the viewport still when the row set changes at either edge (older
-    // history prepended, a row settling from its estimate) and re-pins the bottom when a row grows
-    // IN PLACE while streaming; `followOnAppend` follows newly appended rows, but only for a user
-    // who is already parked within `scrollEndThreshold` of the bottom.
     anchorTo: stickToBottom ? 'end' : 'start',
-    count: items.length,
-    estimateSize: (index) => stableEstimate(estimateCacheRef.current, keyOfIndex(index), estimatedRowHeightRef.current),
-    followOnAppend: stickToBottom ? 'auto' : false,
+    count: items.length + (hasFooter ? 1 : 0),
+    estimateSize: () => ESTIMATED_ROW_HEIGHT,
+    followOnAppend: stickToBottom,
     getItemKey: keyOfIndex,
     getScrollElement: () => scrollerRef.current,
-    onChange: (instance) => {
-      if (instance.itemSizeCache.size !== measuredRowCountRef.current) {
-        measuredRowCountRef.current = instance.itemSizeCache.size;
-        estimatedRowHeightRef.current = averageMeasuredRowHeight(instance.itemSizeCache.values());
-      }
-      emitRange(instance.range);
-    },
-    // Scroll-only updates write row transforms and the container size straight to the DOM and
-    // skip the React re-render; React still re-renders when the visible range changes.
-    directDomUpdates: true,
-    overscan: overscanRowCount(overscan, estimatedRowHeightRef.current),
-    scrollEndThreshold: STICK_THRESHOLD,
-    scrollMargin: headerHeight,
-    // Every library-driven scroll — anchor corrections while rows measure, follow-on-append,
-    // scrollToIndex — funnels through here. Flag it BEFORE it fires so the scroll handler never
-    // reads a correction as the user scrolling away (which would silently cancel following).
-    scrollToFn: (offset, scrollOptions, instance) => {
-      markSelfScroll(
-        scrollOptions.behavior === 'smooth' ? 'smooth' : 'auto',
-        offset + (scrollOptions.adjustments ?? 0)
-      );
-      elementScroll(offset, scrollOptions, instance);
-    }
+    onChange: handleVirtualizerChange,
+    overscan: overscanRowCount(overscan),
+    scrollEndThreshold: AT_END_THRESHOLD,
+    scrollMargin: headerHeight
   });
+  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item, _delta, instance) => {
+    const scrollOffset = instance.scrollOffset ?? 0;
+    if (item.index === 0 && scrollOffset <= START_REACHED_THRESHOLD) return true;
+    return item.start < scrollOffset && instance.scrollDirection !== 'backward';
+  };
 
   const totalSize = virtualizer.getTotalSize();
   const virtualItems = virtualizer.getVirtualItems();
@@ -239,128 +211,97 @@ export function VirtualList<T>({
     setScrollerReady(true);
   }, []);
 
-  // Header and footer sit outside the virtualized rows, so neither the total row height nor the
-  // library's anchoring notices when they resize — yet both move the bottom.
   useLayoutEffect(() => {
     const headerNode = headerRef.current;
-    const footerNode = footerRef.current;
-    if (!headerNode || !footerNode || typeof ResizeObserver === 'undefined') return;
+    if (!headerNode) return;
+    setHeaderHeight((height) => (height === headerNode.offsetHeight ? height : headerNode.offsetHeight));
+    if (typeof ResizeObserver === 'undefined') return;
     const observer = new ResizeObserver(() => {
-      setHeaderHeight(headerNode.offsetHeight);
-      if (shouldPinToBottom(stickToBottom, pinnedRef.current)) scrollToBottomNow('auto');
+      setHeaderHeight((height) => (height === headerNode.offsetHeight ? height : headerNode.offsetHeight));
     });
     observer.observe(headerNode);
-    observer.observe(footerNode);
     return () => observer.disconnect();
-  }, [pinnedRef, scrollToBottomNow, stickToBottom]);
+  }, []);
 
-  // Land on the bottom as soon as the first rows exist.
   // biome-ignore lint/correctness/useExhaustiveDependencies: runs once, when the rows first mount
   useLayoutEffect(() => {
-    const scroller = scrollerRef.current;
-    if (!scroller || !scrollerReady) return;
-    let cancelSettle: (() => void) | undefined;
-    if (stickToBottom && items.length > 0) {
-      scrollToBottomNow('auto');
-      cancelSettle = settleAtBottom();
-    }
-    // A list too short to scroll never emits a scroll event, so its edges are evaluated once the
-    // initial position has settled — otherwise reverse pagination could never start. Edges only:
-    // running the full scroll handler here would read a still-measuring list as "not at the
-    // bottom" and cancel following before the first paint. Timer, not rAF: rAF never fires while
-    // the document is hidden.
-    const timer = window.setTimeout(() => {
-      if (scroller.scrollHeight <= scroller.clientHeight) evaluateEdges();
-    }, HIDDEN_SETTLE_INTERVAL_MS);
-    return () => {
-      cancelSettle?.();
-      window.clearTimeout(timer);
-    };
+    if (!scrollerReady) return;
+    if (stickToBottom && items.length > 0) virtualizer.scrollToEnd();
   }, [scrollerReady]);
 
-  // A changed boundary row re-arms its edge. Do not evaluate it in the same layout pass: prepend
-  // anchoring has not settled yet, so reading the old top position here can chain-load every page.
-  const { firstKey, lastKey } = edgeKeysOf(items, getKey);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: edge keys are the trigger, not a read
   useLayoutEffect(() => {
-    if (!scrollerReady) return;
-    armEdges();
-  }, [armEdges, firstKey, lastKey, scrollerReady]);
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: the row count is the trigger, not a read
-  useLayoutEffect(() => {
-    pruneEstimateCache(estimateCacheRef.current, new Set(latestRef.current.items.map(latestRef.current.getKey)));
-  }, [items.length]);
-
-  // Re-pin after a React commit that changed the measured height (rows added or removed, a new
-  // range measured). In-place growth of an existing row is NOT covered here — `directDomUpdates`
-  // skips the commit for it — and does not need to be: the virtualizer's own end-anchoring keeps
-  // the viewport on the bottom through it.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: totalSize is the trigger, not a read
-  useLayoutEffect(() => {
-    if (!shouldPinToBottom(stickToBottom, pinnedRef.current)) return;
-    return settleAtBottom();
-  }, [pinnedRef, settleAtBottom, stickToBottom, totalSize]);
+    previousLastKeyRef.current = lastItemKey;
+    // followOnAppend may evaluate before React commits the new total height. Repeat the library's
+    // end scroll after that commit only when the previous viewport was still pinned to the end.
+    if (shouldFollowCommittedAppend) virtualizer.scrollToEnd();
+  }, [lastItemKey, shouldFollowCommittedAppend, virtualizer]);
 
   useImperativeHandle(
     controlRef,
     () => ({
-      scrollToTop: (behavior = 'auto') => follow.scrollToTop(behavior === 'smooth' ? 'smooth' : 'auto'),
+      scrollToTop: (behavior = 'auto') => {
+        startArmedRef.current = true;
+        virtualizer.scrollToOffset(0, { behavior });
+        requestAnimationFrame(() => {
+          const scroller = scrollerRef.current;
+          evaluateBoundaries(
+            virtualizer,
+            scroller
+              ? {
+                  clientHeight: scroller.clientHeight,
+                  scrollHeight: scroller.scrollHeight,
+                  scrollTop: scroller.scrollTop
+                }
+              : undefined
+          );
+        });
+      },
       scrollToBottom: (behavior = 'auto') => {
-        pinnedRef.current = true;
-        follow.userScrolledRef.current = false;
-        scrollToBottomNow(behavior === 'smooth' ? 'smooth' : 'auto');
-        settleAtBottom();
+        virtualizer.scrollToEnd({ behavior });
       },
       scrollToKey: (key, opts) => {
         const index = indexOfKey(latestRef.current.items, latestRef.current.getKey, key);
         if (index < 0) return;
-        follow.releaseToUser();
-        markSelfScroll(opts?.behavior === 'smooth' ? 'smooth' : 'auto');
         virtualizer.scrollToIndex(index, { align: opts?.align ?? 'center', behavior: opts?.behavior });
       }
     }),
-    [follow, markSelfScroll, pinnedRef, scrollToBottomNow, settleAtBottom, virtualizer]
+    [evaluateBoundaries, virtualizer]
   );
 
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: scroll-intent detection on the scroll container
     <div
       aria-live={ariaLive}
       className={className}
-      onKeyDown={follow.handleKeyDown}
-      onPointerDown={follow.handlePointerDown}
-      onScroll={follow.handleScroll}
-      onTouchMove={follow.markUserScrollIntent}
-      onWheel={follow.markUserScrollIntent}
+      onScroll={(event) =>
+        evaluateBoundaries(virtualizer, {
+          clientHeight: event.currentTarget.clientHeight,
+          scrollHeight: event.currentTarget.scrollHeight,
+          scrollTop: event.currentTarget.scrollTop
+        })
+      }
       ref={scrollerRef}
       role={role}
       style={{ height: '100%', overflowAnchor: 'none', overflowY: 'auto', ...style }}
     >
       <div ref={headerRef}>{header}</div>
-      {/* The virtualizer owns this container's height and each row's transform (directDomUpdates);
-          setting either here would fight those direct writes. */}
-      <div
-        ref={virtualizer.containerRef}
-        style={{ position: 'relative', width: '100%' }}
-      >
+      <div style={{ height: totalSize, position: 'relative', width: '100%' }}>
         {scrollerReady &&
           virtualItems.map((virtualRow) => {
             const item = items[virtualRow.index];
-            if (item === undefined) return null;
+            const content = item === undefined && hasFooter ? footer : item === undefined ? null : renderItem(item);
+            if (content === null) return null;
             return (
               <div
                 data-index={virtualRow.index}
                 key={virtualRow.key}
                 ref={virtualizer.measureElement}
-                style={ROW_STYLE_BASE}
+                style={{ ...ROW_STYLE_BASE, transform: `translateY(${virtualRow.start - headerHeight}px)` }}
               >
-                {renderItem(item)}
+                {content}
               </div>
             );
           })}
       </div>
-      <div ref={footerRef}>{footer}</div>
     </div>
   );
 }

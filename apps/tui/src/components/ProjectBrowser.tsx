@@ -87,7 +87,6 @@ export function ProjectBrowser({
         type: 'mesh-agent' as const,
         name: agent.name,
         label: `External · ${agent.name}`,
-        defaultLaunchMode: agent.defaultLaunchMode,
         provider: agent.provider,
         productIcon: agent.productIcon
       }))

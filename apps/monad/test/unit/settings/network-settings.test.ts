@@ -27,10 +27,43 @@ test('network settings apply through config bus without requiring a daemon resta
     const mod = createNetworkModule(paths, config);
     const result = await mod.setNetworkSettings({ remoteAccess: { enabled: true } });
 
-    expect(result.remoteAccess.enabled).toBe(true);
-    expect(result.remoteAccess.token).toBeString();
-    expect(result.restartRequired).toBe(false);
+    expect(result).toMatchObject({
+      https: { enabled: true },
+      remoteAccess: { enabled: true, token: expect.any(String) },
+      restartRequired: false
+    });
     expect(published).toEqual([true]);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('network settings require an explicit acknowledgment before exposing remote HTTP', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'monad-network-settings-'));
+  try {
+    const paths = makeTestPaths(dir);
+    await initMonadHome(paths);
+    const config = await createTestConfigManager(paths);
+    const mod = createNetworkModule(paths, config);
+
+    await expect(
+      mod.setNetworkSettings({
+        https: { enabled: false },
+        remoteAccess: { enabled: true }
+      })
+    ).rejects.toThrow('Plain HTTP remote access requires explicit confirmation');
+
+    const result = await mod.setNetworkSettings({
+      confirmInsecureRemoteAccess: true,
+      https: { enabled: false },
+      remoteAccess: { enabled: true }
+    });
+
+    expect(result).toMatchObject({
+      https: { enabled: false },
+      remoteAccess: { enabled: true, token: expect.any(String) },
+      remoteUrls: expect.arrayContaining([expect.objectContaining({ url: expect.stringMatching(/^http:\/\//) })])
+    });
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -52,11 +85,11 @@ test('network HTTPS scheme changes publish after the settings response returns',
     });
 
     const mod = createNetworkModule(paths, config);
-    const result = await mod.setNetworkSettings({ https: { enabled: false } });
+    const result = await mod.setNetworkSettings({ https: { enabled: true } });
 
-    expect(result.https.enabled).toBe(false);
+    expect(result.https.enabled).toBe(true);
     expect(result.restartRequired).toBe(false);
-    expect(published).toEqual([false]);
+    expect(published).toEqual([true]);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

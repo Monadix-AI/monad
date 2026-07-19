@@ -37,8 +37,8 @@
   // attached to the bun plugin explicitly.
   "workspaces": {
     ".": {
-      "entry": ["scripts/**/*.ts", "test/**/*.ts"],
-      "project": ["scripts/**/*.ts", "test/**/*.ts"]
+      "entry": ["scripts/**/*.ts"],
+      "project": ["scripts/**/*.ts"]
     },
     "apps/*": { "bun": { "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"] } },
     "packages/*": { "bun": { "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"] } },

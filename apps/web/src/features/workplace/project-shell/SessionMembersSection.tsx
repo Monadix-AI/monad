@@ -318,7 +318,6 @@ export function SessionMembersSection({
                   ...(invite.draft.modelId ? { modelId: invite.draft.modelId } : {}),
                   ...(invite.draft.reasoningEffort ? { reasoningEffort: invite.draft.reasoningEffort } : {}),
                   ...(invite.draft.speed ? { speed: invite.draft.speed } : {}),
-                  ...(invite.draft.appServerTransport ? { appServerTransport: invite.draft.appServerTransport } : {}),
                   ...(invite.draft.customPrompt ? { customPrompt: invite.draft.customPrompt } : {})
                 }
               }).unwrap()

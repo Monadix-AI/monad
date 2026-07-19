@@ -3,7 +3,7 @@ import type { MeshRawEvent } from '@monad/protocol';
 export interface RawFrameRow {
   identity: string;
   cursor: string;
-  stream: 'stdout' | 'stderr' | 'pty' | 'app-server' | 'unknown';
+  stream: 'stdout' | 'stderr' | 'unknown';
   preview: string;
 }
 
@@ -32,7 +32,7 @@ export function rawDisplayEntries(data: unknown, mode: RawDisplayMode): string[]
 }
 
 // A string payload is the exact accepted transport frame — show it verbatim. A structured payload
-// (an app-server record) is serialized to compact JSON for display; the raw plane never normalizes
+// A structured provider record is serialized to compact JSON for display; the raw plane never normalizes
 // the underlying value, this is presentation only.
 export function rawFrameRow(frame: MeshRawEvent): RawFrameRow {
   const preview = typeof frame.data === 'string' ? frame.data : JSON.stringify(frame.data);

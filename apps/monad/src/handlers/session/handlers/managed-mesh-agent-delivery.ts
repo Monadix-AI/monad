@@ -10,14 +10,12 @@ import { createManagedMeshAgentMessages } from '#/handlers/session/handlers/mana
 import { createManagedMeshAgentRuntime } from '#/handlers/session/handlers/managed-mesh-agent-runtime.ts';
 import { managedMeshAgentProjectMembers } from '#/handlers/session/handlers/messaging-members.ts';
 import {
-  managedMeshAgentBusyInboxNotice,
   managedMeshAgentDirectNotice,
   managedMeshAgentInboxNotice,
   meshAgentInputText,
   normalizeManagedMeshAgentDirectTarget
 } from '#/handlers/session/handlers/messaging-notices.ts';
 import { makeEvent } from '#/services/event-bus.ts';
-import { managedProjectLaunchMode } from '#/services/mesh-agent/managed-project.ts';
 
 const MANAGED_MESH_AGENT_DELIVERY_ERROR_EVENT =
   'project.managed_mesh.delivery_error' satisfies ManagedMeshAgentLifecycleLogEvent;
@@ -93,12 +91,8 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
         const notice = managedMeshAgentInboxNotice(member, text, resolvedSender);
         const deliveryId = deliveredSeq > 0 ? newId('deliv') : undefined;
         const managedSessions = managedMeshSessionsForAgent(session.id, runtimeAgentName);
-        const existing = managedSessions.find((candidate) => candidate.state === 'running');
+        const existing = managedSessions.find((candidate) => candidate.lifecycle.state === 'active');
         if (existing) {
-          const shouldWakeReadableInbox =
-            existing.launchMode !== 'cli-oneshot' &&
-            existing.lastDeliveredSeq !== 0 &&
-            store.countMeshAgentInbox(existing.id) === 0;
           if (deliveredSeq > 0) {
             store.enqueueMeshAgentInboxItem(existing.id, deliveredSeq, {
               deliveryId,
@@ -109,20 +103,8 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
             });
           }
           await emitManagedMeshAgentThinking(session.id, existing.id, runtimeAgentName, deliveryId, displayName);
-          if (existing.launchMode === 'cli-oneshot') {
-            // cli-oneshot has no persistent process polling the inbox between turns, so every project
-            // message must spawn a fresh turn carrying the message itself — the inbox-poll nudge path
-            // (used by persistent members) would silently drop it.
-            await meshAgentHost.input(existing.id, { input: meshAgentInputText(notice) });
-            if (deliveredSeq > 0) store.markMeshAgentInboxVisible(existing.id, deliveredSeq);
-          } else if (existing.lastDeliveredSeq === 0) {
-            await meshAgentHost.input(existing.id, { input: meshAgentInputText(notice) });
-            if (deliveredSeq > 0) store.markMeshAgentInboxVisible(existing.id, deliveredSeq);
-          } else if (shouldWakeReadableInbox) {
-            await meshAgentHost.input(existing.id, {
-              input: meshAgentInputText(managedMeshAgentBusyInboxNotice(member, resolvedSender))
-            });
-          }
+          await meshAgentHost.input(existing.id, { input: meshAgentInputText(notice) });
+          if (deliveredSeq > 0) store.markMeshAgentInboxVisible(existing.id, deliveredSeq);
           store.markMeshAgentInboxDelivered(existing.id, deliveredSeq);
           continue;
         }
@@ -156,8 +138,6 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
           modelId: settings.modelId ?? settings.modelName,
           speed: settings.speed,
           customPrompt: settings.customPrompt,
-          launchMode: managedProjectLaunchMode(spec, settings.launchMode),
-          appServerTransport: settings.appServerTransport,
           allowAutopilot: settings.allowAutopilot,
           providerSessionRef: resumeFrom ?? undefined,
           input: notice
@@ -215,7 +195,7 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
     try {
       const notice = managedMeshAgentDirectNotice({ member, fromAgentName, text });
       const managedSessions = managedMeshSessionsForAgent(session.id, runtimeAgentName);
-      const existing = managedSessions.find((candidate) => candidate.state === 'running');
+      const existing = managedSessions.find((candidate) => candidate.lifecycle.state === 'active');
       if (existing) {
         await meshAgentHost.input(existing.id, { input: meshAgentInputText(notice) });
         return;
@@ -250,8 +230,6 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
         modelId: settings.modelId ?? settings.modelName,
         speed: settings.speed,
         customPrompt: settings.customPrompt,
-        launchMode: managedProjectLaunchMode(spec, settings.launchMode),
-        appServerTransport: settings.appServerTransport,
         allowAutopilot: settings.allowAutopilot,
         providerSessionRef: resumeFrom ?? undefined,
         input: notice

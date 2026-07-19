@@ -5,8 +5,8 @@ import {
   observationCursorSchema,
   observationResume,
   parseObservationAfter,
-  parseObservationBefore,
-  parseObservationCursor
+  parseObservationCursor,
+  parseObservationPageBefore
 } from '../src/mesh-agent/observation-cursor.ts';
 
 describe('observation cursor codec', () => {
@@ -75,15 +75,20 @@ describe('use-site variants', () => {
     expect(parseObservationAfter('provider:turn_1')).toBeUndefined();
   });
 
-  test('an earlier-events paging position accepts only a provider cursor', () => {
-    expect(parseObservationBefore('provider:turn_1')).toEqual({ kind: 'provider', token: 'turn_1' });
-    expect(parseObservationBefore('live:oep_abc:42')).toBeUndefined();
-    // Absent is the explicit spelling of "start from the latest page", not an error.
-    expect(parseObservationBefore(undefined)).toBeUndefined();
+  test('an event-page before position accepts live and provider cursors', () => {
+    expect(parseObservationPageBefore('live:oep_abc:42')).toEqual({
+      kind: 'live',
+      observationEpoch: 'oep_abc',
+      seq: 42
+    });
+    expect(parseObservationPageBefore('provider:turn_1')).toEqual({ kind: 'provider', token: 'turn_1' });
+    expect(parseObservationPageBefore(undefined)).toBeUndefined();
+    expect(parseObservationPageBefore('journal:')).toBeUndefined();
   });
 
-  test('an empty provider token means "provider events, latest page first"', () => {
-    expect(parseObservationBefore('provider:')).toEqual({ kind: 'provider', token: '' });
+  test('an empty or percent-encoded provider token survives page-before parsing', () => {
+    expect(parseObservationPageBefore('provider:')).toEqual({ kind: 'provider', token: '' });
+    expect(parseObservationPageBefore('provider:turn%3A17')).toEqual({ kind: 'provider', token: 'turn:17' });
     expect(observationCursorSchema.safeParse('provider:').success).toBe(true);
   });
 });

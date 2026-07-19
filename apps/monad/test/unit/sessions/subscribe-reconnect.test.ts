@@ -169,7 +169,6 @@ test('subscribeUi keeps managed MeshAgent joins after newer transcript messages'
     agentName: 'pmem_codex_test',
     provider: 'codex',
     workingPath: process.cwd(),
-    launchMode: 'app-server',
     runtimeRole: 'managed-project-agent',
     agentRuntimeId: 'mesh_managedsL5l3',
     agentRuntimeTokenHash: null,

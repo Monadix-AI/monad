@@ -6,7 +6,7 @@ import { transcriptTargetIdSchema } from '@monad/protocol';
 
 import { makeEvent } from '#/services/event-bus.ts';
 
-export interface MeshAgentEventLogDeps {
+interface MeshAgentEventLogDeps {
   store: Store;
   bus: EventBus;
 }

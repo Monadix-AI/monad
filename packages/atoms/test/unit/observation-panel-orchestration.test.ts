@@ -179,6 +179,37 @@ test('older convenience events is prepended ahead of already received live event
   expect(foldConvenienceEvents(current, frames).events.map((event) => event.id)).toEqual(['events', 'live']);
 });
 
+test('an older page whose positional id differs joins the live row it duplicates by dedupe key', () => {
+  const live: AgentObservationEvent = {
+    ...observationEvent('mesh:json:0:message', 'shared'),
+    dedupeKey: 'codex:shared'
+  };
+  const older: AgentObservationEvent = {
+    ...observationEvent('mesh@oep:9:json:0:message', 'shared'),
+    dedupeKey: 'codex:shared'
+  };
+  const current = { ...emptyObservationTimeline, events: [live] };
+  const frames: MeshConvenienceFrame[] = [
+    { kind: 'patch', cursor: 'live:oep:9', operations: [{ op: 'upsert', event: older }] }
+  ];
+
+  expect(foldConvenienceEvents(current, frames).events).toEqual([live]);
+});
+
+test('older page events with their own dedupe keys prepend ahead of the live rows', () => {
+  const live: AgentObservationEvent = { ...observationEvent('mesh:json:0:message', 'newer'), dedupeKey: 'codex:newer' };
+  const older: AgentObservationEvent = {
+    ...observationEvent('mesh@oep:9:json:0:message', 'older'),
+    dedupeKey: 'codex:older'
+  };
+  const current = { ...emptyObservationTimeline, events: [live] };
+  const frames: MeshConvenienceFrame[] = [
+    { kind: 'patch', cursor: 'live:oep:9', operations: [{ op: 'upsert', event: older }] }
+  ];
+
+  expect(foldConvenienceEvents(current, frames).events.map((event) => event.text)).toEqual(['older', 'newer']);
+});
+
 test('convenience event request carries the boundary cursor', () => {
   expect(convenienceEventsRequest('provider:b1')).toEqual({
     limit: 20,

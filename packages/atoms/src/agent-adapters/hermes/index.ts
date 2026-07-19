@@ -3,11 +3,11 @@ import type { MeshAgentProviderAdapter } from '@monad/sdk-atom';
 import { MeshAgentError } from '@monad/sdk-atom';
 
 import { parseStructuredAuthState } from '../adapter-shared.ts';
-import { makeAppServerCliAdapter } from '../app-server-jsonrpc.ts';
 import { createProjectedEventSource } from '../event-source.ts';
+import { makeGatewayCliAdapter } from '../legacy/gateway-cli-adapter.ts';
 import { createFrameworkSettingsImport } from '../settings-import/index.ts';
-import { hermesAppServerHooks } from './app-server.ts';
 import { hermesEventPage, hermesEventPageOutput } from './event-pages.ts';
+import { hermesGatewayHooks } from './gateway/index.ts';
 import { hermesObservationProjection } from './observation.ts';
 
 // Hermes ships no models-list command; this fallback is the model its docs advertise for `--model`.
@@ -16,21 +16,21 @@ const HERMES_SUPPORTED_MODELS = ['hermes-4'];
 
 // `hermes serve` was NOT a real command in the previously-installed v0.14.0 (hence the earlier
 // pty+cli-oneshot-only cut) but IS real as of v0.18.0 — a genuine JSON-RPC/WebSocket gateway at
-// `/api/ws` (see hermes/app-server.ts for the full verification trail). It's wired here as a real,
-// working `app-server` launch mode via `appServerHooks` (its event-wrapping quirk doesn't fit a generic
-// JSON-RPC dispatcher) + `appServerWs` (non-root path, daemon-assigned port — Hermes's
+// `/api/ws` (see hermes/gateway for the full verification trail). It's wired here as a real,
+// working gateway mode via provider-owned hooks (its event-wrapping quirk doesn't fit a generic
+// JSON-RPC dispatcher) plus WebSocket dial hints (non-root path, daemon-assigned port — Hermes's
 // `HERMES_DASHBOARD_READY port=N` announce line doesn't match the generic `ws://host:port` scan, and
 // its WS auth is a URL query param, not a JSON handshake field).
 //
 // `managedRuntime` stays on `cli-oneshot` — proven end-to-end with a real LLM turn
 // (apps/monad/test/e2e/agent-adapters-real.local.test.ts) — rather than switching the managed-member
-// default to the newly-real app-server path untested in that role.
-const baseHermesMeshAgentAdapter = makeAppServerCliAdapter({
+// default to the newly-real gateway path untested in that role.
+const baseHermesMeshAgentAdapter = makeGatewayCliAdapter({
   provider: 'hermes',
   productIcon: 'hermes',
   label: 'Hermes',
   bin: 'hermes',
-  appServerSubcommand: ['serve', '--skip-build'],
+  gatewaySubcommand: ['serve', '--skip-build'],
   // Confirmed against the official CLI reference (nousresearch/hermes-agent/website/docs/reference/
   // cli-commands.md): "--yolo bypasses dangerous-command approval prompts" across commands, including
   // `serve`/pty — not just the `-z` one-shot mode `oneshotTurnArgs` already uses it for below.
@@ -51,26 +51,23 @@ const baseHermesMeshAgentAdapter = makeAppServerCliAdapter({
     if (!normalized) return 'unknown';
     return 'authenticated';
   },
-  managedRuntime: {
-    launchMode: () => 'cli-oneshot'
-  },
   oneshot: {
     turnArgs: (input) => ['--yolo', '-z', input]
   },
-  appServerHooks: hermesAppServerHooks,
-  appServerWs: {
+  gatewayHooks: hermesGatewayHooks,
+  gatewayWs: {
     path: '/api/ws',
     usesDaemonAssignedPort: true,
     // Hermes's gateway enforces its ws-upgrade token even on loopback (unlike OpenClaw) — a connect with
     // no token is GUARANTEED to be rejected, and a WS-upgrade rejection is indistinguishable from
-    // "not listening yet" at the transport layer, so it would otherwise retry for the full app-server
+    // "not listening yet" at the transport layer, so it would otherwise retry for the full gateway
     // startup timeout before surfacing an opaque error. Fail fast here instead, before ever dialing.
     query: (agent) => {
       const token = agent.env?.HERMES_DASHBOARD_SESSION_TOKEN;
       if (!token) {
         throw new MeshAgentError(
           'provider_not_logged_in',
-          'Hermes app-server requires agent.env.HERMES_DASHBOARD_SESSION_TOKEN to be configured'
+          'Hermes gateway requires agent.env.HERMES_DASHBOARD_SESSION_TOKEN to be configured'
         );
       }
       return { token };
@@ -120,15 +117,14 @@ export const hermesMeshAgentAdapter: MeshAgentProviderAdapter = {
   }),
   observation: hermesObservationProjection,
   settingsImport: createFrameworkSettingsImport('hermes', 'Hermes'),
-  // Hermes's app-server gateway has a real, working `approval.request`/`approval.respond` channel
-  // (see hermes/app-server.ts's `resolveHermesApproval`) — transport-agnostic, so ws vs stdio doesn't
+  // Hermes's gateway has a real, working `approval.request`/`approval.respond` channel
+  // (see hermes/gateway's `resolveHermesApproval`) — transport-agnostic, so ws vs stdio doesn't
   // matter here, only launch mode does. But `managedRuntime.launchMode` above pins managed members to
-  // `cli-oneshot` (untested in the app-server role for that role), which has no channel at all. So
+  // `cli-oneshot` (untested in the gateway role for that role), which has no channel at all. So
   // `capabilities.approvalProxy` deliberately stays unset below — the simple per-template UI toggle
   // would be misleading for the common case — while this still lets a member whose `launchMode` is
-  // explicitly overridden to `app-server` (managedProjectLaunchMode respects that override) correctly
+  // explicitly overridden to the gateway mode correctly
   // delegate its approvals instead of silently staying full-auto.
-  supportsApprovalResolution: (launchMode) => launchMode === 'app-server',
   detect(probes) {
     const preset = baseHermesMeshAgentAdapter.detect(probes);
     return {

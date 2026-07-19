@@ -1,5 +1,6 @@
 import type { MeshAgentView } from '@monad/protocol';
-import type { BuildMeshAgentLaunchOptions, MeshAgentLaunchSpec, MeshAgentModelOption } from '@monad/sdk-atom';
+import type { MeshAgentModelOption } from '@monad/sdk-atom';
+import type { CodexLegacyLaunchOptions, CodexLegacyLaunchSpec } from './app-server/runtime.ts';
 
 import { homedir } from 'node:os';
 import { MeshAgentError } from '@monad/sdk-atom';
@@ -106,7 +107,7 @@ export function parseCodexArgumentSupport(output: string): ReturnType<typeof par
   return { ...parseMeshAgentArgumentSupport(output), reasoningEfforts, speeds, reasoningEffortsByModel };
 }
 
-export function buildCodexAuthLaunch(agent: MeshAgentView, args: string[]): MeshAgentLaunchSpec {
+export function buildCodexAuthLaunch(agent: MeshAgentView, args: string[]): CodexLegacyLaunchSpec {
   return {
     argv: [agent.command, ...args],
     cwd: homedir(),
@@ -118,11 +119,11 @@ export function buildCodexAuthLaunch(agent: MeshAgentView, args: string[]): Mesh
   };
 }
 
-export function buildCodexLaunch(agent: MeshAgentView, opts: BuildMeshAgentLaunchOptions): MeshAgentLaunchSpec {
+export function buildCodexLaunch(agent: MeshAgentView, opts: CodexLegacyLaunchOptions): CodexLegacyLaunchSpec {
   let args = [...(agent.args ?? [])];
-  const launchMode = opts.launchMode ?? agent.defaultLaunchMode;
+  const launchMode = opts.launchMode ?? 'app-server';
   if (launchMode === 'app-server') {
-    const transport = opts.appServerTransport ?? agent.appServerTransport ?? 'stdio';
+    const transport = opts.appServerTransport ?? 'stdio';
     if (!(CODEX_APP_SERVER_TRANSPORTS as readonly string[]).includes(transport)) {
       // unix has quirky directory/path semantics we don't launch yet (schema keeps it for future
       // providers); the supported set is declared once in CODEX_APP_SERVER_TRANSPORTS.

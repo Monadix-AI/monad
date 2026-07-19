@@ -4,7 +4,6 @@ import { meshAgentAuthSessionIdSchema, meshSessionIdSchema, sessionIdSchema } fr
 import { cursorPaginationQuerySchema, cursorPaginationResponseSchema } from '../pagination.ts';
 import {
   meshAgentApprovalOwnershipSchema,
-  meshAgentLaunchModeSchema,
   meshAgentNameSchema,
   meshAgentPresetSchema,
   meshAgentProductIconSchema,
@@ -13,6 +12,12 @@ import {
   meshAgentViewSchema
 } from './mesh-agent-config.ts';
 import { absolutePathSchema } from './mesh-agent-paths.ts';
+import {
+  meshAgentRuntimeCapabilitiesSchema,
+  meshConnectionConditionSchema,
+  meshExecutionActivitySchema,
+  meshSessionLifecycleSchema
+} from './mesh-session-runtime.ts';
 
 export const meshSessionStateSchema = z.enum(['starting', 'running', 'exited', 'failed', 'stopped']);
 export type MeshSessionState = z.infer<typeof meshSessionStateSchema>;
@@ -61,26 +66,21 @@ export const meshSessionViewSchema = z.object({
   provider: meshAgentProviderSchema,
   productIcon: meshAgentProductIconSchema.optional(),
   workingPath: z.string(),
-  launchMode: meshAgentLaunchModeSchema,
   approvalOwnership: meshAgentApprovalOwnershipSchema.default('provider-owned'),
   runtimeRole: meshAgentRuntimeRoleSchema.default('interactive'),
   agentRuntimeId: z.string().nullable().optional(),
   lastDeliveredSeq: z.number().int().nonnegative().default(0),
   lastVisibleSeq: z.number().int().nonnegative().default(0),
   pendingApprovalCount: z.number().int().nonnegative().default(0),
-  state: meshSessionStateSchema,
-  pid: z.number().int().nullable(),
+  lifecycle: meshSessionLifecycleSchema,
+  activity: meshExecutionActivitySchema,
+  connection: meshConnectionConditionSchema,
+  capabilities: meshAgentRuntimeCapabilitiesSchema,
   providerSessionRef: z.string().nullable().optional(),
-  outputSnapshot: z.string().default(''),
-  exitCode: z.number().int().nullable(),
   startedAt: z.string(),
-  updatedAt: z.string(),
-  exitedAt: z.string().nullable()
+  updatedAt: z.string()
 });
 export type MeshSessionView = z.infer<typeof meshSessionViewSchema>;
-
-export const nativeAgentRuntimeStateSchema = meshSessionStateSchema;
-export type NativeAgentRuntimeState = z.infer<typeof nativeAgentRuntimeStateSchema>;
 
 export const nativeAgentSessionPointerSchema = z.object({
   providerSessionRef: z.string().nullable().optional()
@@ -94,18 +94,19 @@ export const nativeAgentRuntimeSchema = z.object({
   provider: meshAgentProviderSchema,
   productIcon: meshAgentProductIconSchema.optional(),
   workingPath: z.string(),
-  launchMode: meshAgentLaunchModeSchema,
   approvalOwnership: meshAgentApprovalOwnershipSchema.default('provider-owned'),
   runtimeRole: meshAgentRuntimeRoleSchema.default('interactive'),
   agentRuntimeId: z.string().nullable().optional(),
-  state: nativeAgentRuntimeStateSchema,
+  lifecycle: meshSessionLifecycleSchema,
+  activity: meshExecutionActivitySchema,
+  connection: meshConnectionConditionSchema,
+  capabilities: meshAgentRuntimeCapabilitiesSchema,
   session: nativeAgentSessionPointerSchema.default({}),
   lastDeliveredSeq: z.number().int().nonnegative().default(0),
   lastVisibleSeq: z.number().int().nonnegative().default(0),
   pendingApprovalCount: z.number().int().nonnegative().default(0),
   startedAt: z.string(),
-  updatedAt: z.string(),
-  exitedAt: z.string().nullable()
+  updatedAt: z.string()
 });
 export type NativeAgentRuntime = z.infer<typeof nativeAgentRuntimeSchema>;
 
@@ -125,7 +126,6 @@ export const startMeshAgentRequestSchema = z.object({
   transcriptTargetId: sessionIdSchema,
   agentName: meshAgentNameSchema,
   workingPath: absolutePathSchema,
-  launchMode: meshAgentLaunchModeSchema.optional(),
   runtimeRole: meshAgentRuntimeRoleSchema.optional(),
   providerSessionRef: z.string().min(1).optional()
 });

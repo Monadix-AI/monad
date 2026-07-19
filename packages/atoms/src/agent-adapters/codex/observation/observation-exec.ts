@@ -1,6 +1,12 @@
 import type { MeshAgentObservationEvent } from '@monad/protocol';
 
-import { observation, permissionDenialEvents, textValue } from '../../observation-projection.ts';
+import {
+  numberValue,
+  observation,
+  permissionDenialEvents,
+  providerEpochSecondsTimestamp,
+  textValue
+} from '../../observation-projection.ts';
 import { codexResponseItem, isCodexObservationResponseItem } from './observation-response-item.ts';
 
 export function codexExecRecordEvents(
@@ -38,6 +44,19 @@ export function codexExecRecordEvents(
     const payload = record.payload;
     if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
       const p = payload as Record<string, unknown>;
+      const eventType = textValue(p.type);
+      if (eventType === 'task_started' || eventType === 'task_complete') {
+        const started = eventType === 'task_started';
+        return observation({
+          id: `${base}:${started ? 'turn-start' : 'turn-end'}`,
+          role: 'system',
+          text: started ? 'Turn started' : 'Turn completed',
+          source: 'codex-exec',
+          providerEventType: started ? 'turn-start' : 'turn-end',
+          createdAt: providerEpochSecondsTimestamp(numberValue(started ? p.started_at : p.completed_at)),
+          raw: record
+        });
+      }
       const text = p.type === 'agent_message' ? textValue(p.message) : undefined;
       return observation({
         id: `${id}:json:${recordIndex}:event-message`,

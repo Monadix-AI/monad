@@ -45,21 +45,27 @@ const meshSession = (id: string, sessionId: string, overrides: Partial<MeshSessi
     agentName: 'codex',
     provider: 'codex',
     workingPath: '/tmp/demo',
-    launchMode: 'pty',
     approvalOwnership: 'provider-owned',
     runtimeRole: 'managed-project-agent',
     agentRuntimeId: null,
     lastDeliveredSeq: 0,
     lastVisibleSeq: 0,
     pendingApprovalCount: 0,
-    state: 'running',
-    pid: 123,
+    lifecycle: { state: 'active' },
+    activity: { state: 'running', pid: 123, queuedTurnCount: 0 },
+    connection: { state: 'connected' },
+    capabilities: {
+      input: true,
+      steer: false,
+      interrupt: false,
+      approvalResolution: false,
+      providerSessionContinuation: true,
+      runtimeRestoration: true,
+      sessionReopen: true
+    },
     providerSessionRef: null,
-    outputSnapshot: '',
-    exitCode: null,
     startedAt: '2026-07-02T00:00:00.000Z',
     updatedAt: '2026-07-02T00:00:00.000Z',
-    exitedAt: null,
     ...overrides
   }) as MeshSessionView;
 
@@ -95,7 +101,10 @@ test('workspace project list keeps unread messages from stopped native cli sessi
         meshSession('mesh_STOPPED00000', 'ses_STOPPED00000', {
           lastDeliveredSeq: 8,
           lastVisibleSeq: 5,
-          state: 'stopped'
+          lifecycle: {
+            state: 'terminal',
+            termination: { kind: 'stopped', at: '2026-07-02T00:00:00.000Z' }
+          }
         })
       ]
     })

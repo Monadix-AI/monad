@@ -1,4 +1,5 @@
-import type { MeshAgentOutputEvent, MeshAgentRuntimeHandle } from '@monad/sdk-atom';
+import type { MeshAgentOutputEvent } from '@monad/sdk-atom';
+import type { LegacyProviderRuntimeHandle } from '../legacy/runtime.ts';
 
 import { z } from 'zod';
 
@@ -126,7 +127,7 @@ interface StreamJsonAccumulator {
   reset(): void;
 }
 
-function accumulatorFor(handle: MeshAgentRuntimeHandle | undefined): StreamJsonAccumulator {
+function accumulatorFor(handle: LegacyProviderRuntimeHandle | undefined): StreamJsonAccumulator {
   if (handle) {
     return {
       get: () => turnTextByHandle.get(handle) ?? '',
@@ -221,7 +222,7 @@ const GEMINI_STREAM_JSON_HANDLERS: Record<GeminiStreamJsonEvent['type'], StreamJ
 
 /** Parse a Gemini CLI stream-json chunk (one or more complete JSONL lines) into MeshAgent output
  *  events. The `qwen` adapter does NOT use this — Qwen Code emits a different (Claude-Code) protocol. */
-export function parseGeminiStreamJson(chunk: string, handle?: MeshAgentRuntimeHandle): MeshAgentOutputEvent[] {
+export function parseGeminiStreamJson(chunk: string, handle?: LegacyProviderRuntimeHandle): MeshAgentOutputEvent[] {
   const acc = accumulatorFor(handle);
   const events: MeshAgentOutputEvent[] = [];
   for (const rawLine of chunk.split(/\r?\n/)) {
@@ -238,6 +239,11 @@ export function parseGeminiStreamJson(chunk: string, handle?: MeshAgentRuntimeHa
     events.push(...GEMINI_STREAM_JSON_HANDLERS[parsed.data.type](parsed.data, acc));
   }
   return events;
+}
+
+export function createGeminiStreamJsonParser(): (chunk: string) => MeshAgentOutputEvent[] {
+  const handle = { kill() {} } as LegacyProviderRuntimeHandle;
+  return (chunk) => parseGeminiStreamJson(chunk, handle);
 }
 
 /** Whether a raw buffer contains at least one recognizable Gemini stream-json event — used to pick

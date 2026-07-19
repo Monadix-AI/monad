@@ -83,7 +83,6 @@ export function applyToolEvent(m: ProjectionMutations, event: Event): SessionUiE
               provider: p.provider,
               productIcon: p.productIcon,
               workingPath: p.workingPath,
-              launchMode: p.launchMode,
               approvalOwnership: 'provider-owned'
             },
             status: 'running',

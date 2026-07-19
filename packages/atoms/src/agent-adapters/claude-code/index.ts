@@ -8,16 +8,17 @@ import type {
 } from '@anthropic-ai/claude-agent-sdk';
 import type { MeshAgentView } from '@monad/protocol';
 import type {
-  BuildMeshAgentLaunchOptions,
-  MeshAgentLaunchSpec,
   MeshAgentManagedRuntimeContext,
   MeshAgentModelOption,
   MeshAgentOutputEvent,
   MeshAgentProviderAdapter,
   MeshAgentProviderEventContext,
   MeshAgentProviderEventPageContext,
-  MeshAgentProviderEventPageRequestContext
+  MeshAgentProviderEventPageRequestContext,
+  MeshAgentSessionRuntimeContext,
+  SessionEventRuntimeDefinition
 } from '@monad/sdk-atom';
+import type { LegacyProviderLaunchSpec } from '../legacy/runtime.ts';
 
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -34,7 +35,7 @@ import {
 import { parseMeshAgentArgumentSupport } from '../argument-support.ts';
 import { readProviderEventFile } from '../event-files.ts';
 import { createOutputEventSource } from '../event-source.ts';
-import { resizePty, sendPtyInput, stopPty } from '../pty.ts';
+import { SessionEventJsonlDriver } from '../session-event-jsonl-driver.ts';
 import { meshAgentAdapterSettings } from '../settings.ts';
 import { createClaudeCodeSettingsImport } from '../settings-import/index.ts';
 import { claudeCodeObservationProjection } from './observation.ts';
@@ -120,42 +121,7 @@ function claudeManagedMcpConfigArgs(context: MeshAgentManagedRuntimeContext): st
   ];
 }
 
-function buildClaudeLaunch(agent: MeshAgentView, opts: BuildMeshAgentLaunchOptions): MeshAgentLaunchSpec {
-  const launchMode = opts.launchMode ?? agent.defaultLaunchMode;
-  let args = [...(agent.args ?? [])];
-  if (opts.providerSessionRef && !args.includes('--resume') && !args.includes('-r')) {
-    args.push('--resume', opts.providerSessionRef);
-  }
-  const modelId = opts.modelId ?? opts.modelName;
-  if (modelId && !hasFlag(args, '--model')) {
-    args.push('--model', modelId);
-  }
-  if (opts.reasoningEffort === 'ultracode') {
-    args = applyClaudeUltracodeSetting(args);
-  } else if (opts.reasoningEffort && !hasFlag(args, '--effort')) {
-    args.push('--effort', opts.reasoningEffort);
-  }
-  if (opts.systemPromptFile && !args.includes('--append-system-prompt-file')) {
-    args.push('--append-system-prompt-file', opts.systemPromptFile);
-  }
-  args = allowManagedBridgeTools(args, !!opts.systemPromptFile);
-  args = withClaudeSkipApprovalArgs(args, !!opts.skipProviderApprovals);
-  args = withClaudeThinkingDisplayArgs(args, agent.adapterSettings?.showThinkingSummary !== false);
-  args = [...args, ...claudeExtraWorkingPathArgs(opts.extraWorkingPaths)];
-  args = [...args, ...(opts.mcpConfigArgs ?? [])];
-  const launchArgs = launchMode === 'json-stream' ? withClaudeStreamJsonArgs(args) : args;
-  return {
-    argv: [agent.command, ...launchArgs],
-    cwd: opts.workingPath,
-    env: agent.env,
-    launchMode,
-    provider: 'claude-code',
-    approvalOwnership: 'provider-owned',
-    capabilities: ['pty', 'json-stream', 'provider-approval', 'structured-output', 'session-resume']
-  };
-}
-
-function buildClaudeAuthLaunch(agent: MeshAgentView, args: string[]): MeshAgentLaunchSpec {
+function buildClaudeAuthLaunch(agent: MeshAgentView, args: string[]): LegacyProviderLaunchSpec {
   return {
     argv: [agent.command, ...args],
     cwd: homedir(),
@@ -312,7 +278,7 @@ function claudeAuthFailureEvent(record: Record<string, unknown>): MeshAgentOutpu
   };
 }
 
-function parseClaudeStreamJson(chunk: string): MeshAgentOutputEvent[] {
+export function parseClaudeStreamJson(chunk: string): MeshAgentOutputEvent[] {
   const events: MeshAgentOutputEvent[] = [];
   const authFailures = new Set<string>();
   for (const rawLine of chunk.split(/\r?\n/)) {
@@ -338,8 +304,7 @@ function claudeTranscriptFallback(context: MeshAgentProviderEventContext): strin
   return readProviderEventFile({
     roots: [join(homedir(), '.claude', 'projects')],
     providerSessionRef: context.providerSessionRef,
-    extensions: ['.jsonl'],
-    limitBytes: context.limitBytes
+    extensions: ['.jsonl']
   });
 }
 
@@ -430,32 +395,49 @@ function buildClaudeStreamJsonUserMessage(input: string): SDKUserMessage {
   };
 }
 
-function sendClaudeInput(handle: Parameters<MeshAgentProviderAdapter['sendInput']>[0], input: string): void {
-  if (handle.launchMode !== 'json-stream') {
-    sendPtyInput(handle, input);
-    return;
+function claudeTurnText(input: { text: string; attachments: readonly { name: string; path: string }[] }): string {
+  if (input.attachments.length === 0) return input.text;
+  const references = input.attachments.map((attachment) => `- ${attachment.name}: ${attachment.path}`).join('\n');
+  return `${input.text}\n\nAttachments available in the workspace:\n${references}`;
+}
+
+function createClaudeSessionRuntime(
+  agent: MeshAgentView,
+  context: MeshAgentSessionRuntimeContext
+): SessionEventRuntimeDefinition {
+  let args = withClaudeStreamJsonArgs(agent.args ?? []);
+  const model = context.modelId ?? context.modelName;
+  if (model && !hasFlag(args, '--model')) args.push('--model', model);
+  if (context.reasoningEffort === 'ultracode') {
+    args = applyClaudeUltracodeSetting(args);
+  } else if (context.reasoningEffort && !hasFlag(args, '--effort')) {
+    args.push('--effort', context.reasoningEffort);
   }
-  if (!handle.stdin) throw new Error('MeshAgent session has no stream-json input bridge');
-  handle.stdin.write(`${JSON.stringify(buildClaudeStreamJsonUserMessage(input))}\n`);
-  void handle.stdin.flush?.();
-}
-
-function resizeClaude(handle: Parameters<MeshAgentProviderAdapter['resize']>[0], cols: number, rows: number): void {
-  if (handle.launchMode === 'json-stream') return;
-  resizePty(handle, cols, rows);
-}
-
-function stopClaude(handle: Parameters<MeshAgentProviderAdapter['stop']>[0]): void {
-  if (handle.launchMode === 'json-stream') {
-    void handle.stdin?.end?.();
-    handle.kill('SIGTERM');
-    return;
+  if (context.systemPromptFile && !args.includes('--append-system-prompt-file')) {
+    args.push('--append-system-prompt-file', context.systemPromptFile);
   }
-  stopPty(handle);
-}
-
-function resolveClaudeApproval(): void {
-  throw new Error('Claude Code MeshAgent approval resolution is not supported in json-stream mode');
+  args = allowManagedBridgeTools(args, !!context.systemPromptFile);
+  args = withClaudeSkipApprovalArgs(args, !!context.skipProviderApprovals);
+  args = [...args, ...claudeExtraWorkingPathArgs(context.extraWorkingPaths)];
+  args = [...args, ...(context.mcpConfigArgs ?? [])];
+  args = withClaudeThinkingDisplayArgs(args, agent.adapterSettings?.showThinkingSummary !== false);
+  return {
+    plan: {
+      processModel: 'per-turn',
+      buildTurnLaunch: ({ providerSessionRef }) => ({
+        args: [...args, ...(providerSessionRef ? ['--resume', providerSessionRef] : [])],
+        cwd: context.workingPath,
+        ...(context.env || agent.env ? { env: { ...(agent.env ?? {}), ...(context.env ?? {}) } } : {})
+      }),
+      encodeTurnInput: (input) => ({
+        delivery: 'stdin',
+        bytes: new TextEncoder().encode(`${JSON.stringify(buildClaudeStreamJsonUserMessage(claudeTurnText(input)))}\n`)
+      }),
+      startup: { timeoutMs: 20_000 },
+      continuation: { strategy: 'provider-session-ref' }
+    },
+    driver: new SessionEventJsonlDriver({ parseOutput: parseClaudeStreamJson })
+  };
 }
 
 export const claudeCodeMeshAgentAdapter: MeshAgentProviderAdapter = {
@@ -469,7 +451,7 @@ export const claudeCodeMeshAgentAdapter: MeshAgentProviderAdapter = {
     readOutput: readClaudeHistoryOutput
   }),
   settings: () => [
-    ...meshAgentAdapterSettings({ launchModes: ['pty', 'json-stream'] }),
+    ...meshAgentAdapterSettings(),
     {
       key: 'showThinkingSummary',
       label: 'Show thinking summary',
@@ -492,7 +474,6 @@ export const claudeCodeMeshAgentAdapter: MeshAgentProviderAdapter = {
     authEnvironmentVariables: ['ANTHROPIC_API_KEY']
   },
   managedRuntime: {
-    launchMode: () => 'json-stream',
     mcpConfigArgs: claudeManagedMcpConfigArgs,
     usesManagedMcpBridge: true,
     usesSystemPromptFile: true
@@ -508,8 +489,6 @@ export const claudeCodeMeshAgentAdapter: MeshAgentProviderAdapter = {
       command: 'claude',
       args: [],
       modelOptions: claudeCodeMeshAgentAdapter.listSupportedModels(),
-      defaultLaunchMode: 'pty',
-      supportedLaunchModes: ['pty', 'json-stream'],
       installHint: 'Install Claude Code, then sign in with claude auth.',
       installUrl: 'https://docs.anthropic.com/en/docs/claude-code/setup',
       installed,
@@ -535,7 +514,7 @@ export const claudeCodeMeshAgentAdapter: MeshAgentProviderAdapter = {
       parse: (output) => parseClaudeModelOptions(output)
     };
   },
-  buildLaunch: buildClaudeLaunch,
+  createSessionRuntime: createClaudeSessionRuntime,
   buildAuthLaunch(agent) {
     return buildClaudeAuthLaunch(agent, ['auth', 'login']);
   },
@@ -560,10 +539,5 @@ export const claudeCodeMeshAgentAdapter: MeshAgentProviderAdapter = {
     if (exitCode === 0) return 'authenticated';
     if (exitCode === 1) return 'unauthenticated';
     return 'unknown';
-  },
-  parseOutput: parseClaudeStreamJson,
-  sendInput: sendClaudeInput,
-  resolveApproval: resolveClaudeApproval,
-  resize: resizeClaude,
-  stop: stopClaude
+  }
 };

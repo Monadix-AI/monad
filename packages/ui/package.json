@@ -50,8 +50,7 @@
     ".": "./src/index.ts",
     "./lib/utils": "./src/lib/utils.ts",
     "./styles.css": "./src/styles.css",
-    "./components/*": "./src/components/*.tsx",
-    "./hooks/*": "./src/hooks/*.ts"
+    "./components/*": "./src/components/*.tsx"
   },
   "module": "src/index.ts",
   "peerDependencies": {

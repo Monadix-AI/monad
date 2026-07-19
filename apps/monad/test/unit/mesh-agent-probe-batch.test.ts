@@ -12,11 +12,7 @@ function launch(command: string): MeshAgentLaunchSpec {
   return {
     argv: [command, '--help'],
     cwd: '/tmp',
-    env: { PROFILE: 'test' },
-    launchMode: 'pty',
-    provider: 'codex',
-    approvalOwnership: 'provider-owned',
-    capabilities: []
+    env: { PROFILE: 'test' }
   };
 }
 

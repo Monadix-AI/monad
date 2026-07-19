@@ -11,7 +11,6 @@ const agent: MeshAgentView = {
   args: [],
   modelOptions: [],
   enabled: true,
-  defaultLaunchMode: 'pty',
   allowAutopilot: false,
   approvalOwnership: 'provider-owned'
 };

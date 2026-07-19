@@ -9,7 +9,10 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { builtinAgentAdapters } from '../../src/agent-adapters/index.ts';
 import { toAgentObservationEvent } from '../../src/agent-adapters/neutral-observation.ts';
 import { rawJsonText } from '../../src/workspace-experiences/chat-room/components/observation/card-shell.tsx';
-import { MeshAgentObservationPanel } from '../../src/workspace-experiences/chat-room/components/observation/panel.tsx';
+import {
+  jumpSummaryToLoadedTop,
+  MeshAgentObservationPanel
+} from '../../src/workspace-experiences/chat-room/components/observation/panel.tsx';
 import {
   observationContractRawEvents,
   observationRawEvents
@@ -32,6 +35,140 @@ import {
 configureMeshAgentObservationAdapterResolver((provider) =>
   builtinAgentAdapters.find((adapter) => adapter.provider === provider)
 );
+
+test('Codex live and history records project the same turn boundaries', () => {
+  const live = meshAgentNeutralStreamItems({
+    id: 'mesh_codex_live',
+    provider: 'codex',
+    mode: 'events',
+    output: [
+      JSON.stringify({ method: 'turn/started', params: { turn: { id: 'turn_1', startedAt: 1_784_000_000 } } }),
+      JSON.stringify({ method: 'turn/completed', params: { turn: { id: 'turn_1', completedAt: 1_784_000_030 } } })
+    ].join('\n')
+  });
+  const history = meshAgentNeutralStreamItems({
+    id: 'mesh_codex_history',
+    provider: 'codex',
+    mode: 'events',
+    output: [
+      JSON.stringify({
+        type: 'event_msg',
+        payload: { type: 'task_started', turn_id: 'turn_1', started_at: 1_784_000_000 }
+      }),
+      JSON.stringify({
+        type: 'event_msg',
+        payload: { type: 'task_complete', turn_id: 'turn_1', completed_at: 1_784_000_030 }
+      })
+    ].join('\n')
+  });
+
+  expect({
+    history: history.map(({ at, kind, reason }) => ({ at, kind, reason })),
+    live: live.map(({ at, kind, reason }) => ({ at, kind, reason }))
+  }).toEqual({
+    history: [
+      { at: '2026-07-14T03:33:20.000Z', kind: 'turn-start', reason: undefined },
+      { at: '2026-07-14T03:33:50.000Z', kind: 'turn-end', reason: 'completed' }
+    ],
+    live: [
+      { at: '2026-07-14T03:33:20.000Z', kind: 'turn-start', reason: undefined },
+      { at: '2026-07-14T03:33:50.000Z', kind: 'turn-end', reason: 'completed' }
+    ]
+  });
+});
+
+test('Claude history starts on text prompts, not tool results, and ends on the settled assistant message', () => {
+  const events = meshAgentNeutralStreamItems({
+    id: 'mesh_claude_history',
+    provider: 'claude-code',
+    mode: 'events',
+    output: [
+      JSON.stringify({
+        type: 'user',
+        sessionId: 'session_1',
+        timestamp: '2026-07-14T08:53:20.000Z',
+        uuid: 'user_1',
+        message: { role: 'user', content: [{ type: 'text', text: 'Inspect the repository.' }] }
+      }),
+      JSON.stringify({
+        type: 'assistant',
+        sessionId: 'session_1',
+        uuid: 'assistant_tool',
+        message: {
+          id: 'msg_tool',
+          role: 'assistant',
+          stop_reason: 'tool_use',
+          content: [{ type: 'tool_use', id: 'tool_1', name: 'Read', input: { file_path: 'README.md' } }]
+        }
+      }),
+      JSON.stringify({
+        type: 'user',
+        sessionId: 'session_1',
+        uuid: 'tool_result_1',
+        message: {
+          role: 'user',
+          content: [{ type: 'tool_result', tool_use_id: 'tool_1', content: 'repository read' }]
+        }
+      }),
+      JSON.stringify({
+        type: 'assistant',
+        sessionId: 'session_1',
+        timestamp: '2026-07-14T08:53:50.000Z',
+        uuid: 'assistant_final',
+        message: {
+          id: 'msg_final',
+          role: 'assistant',
+          stop_reason: 'end_turn',
+          content: [{ type: 'text', text: 'Inspection complete.' }]
+        }
+      })
+    ].join('\n')
+  });
+
+  expect(events.map(({ kind, reason, text }) => ({ kind, reason, text }))).toEqual([
+    { kind: 'turn-start', reason: undefined, text: 'Turn started' },
+    { kind: 'user-message', reason: undefined, text: 'Inspect the repository.' },
+    { kind: 'tool-call', reason: undefined, text: 'Tool call Read {"file_path":"README.md"}' },
+    { kind: 'tool-result', reason: undefined, text: 'repository read' },
+    { kind: 'assistant-message', reason: undefined, text: 'Inspection complete.' },
+    { kind: 'turn-end', reason: 'completed', text: 'Turn completed' }
+  ]);
+});
+
+test('Claude live output ends once from result instead of also ending on its assistant snapshot', () => {
+  const events = meshAgentNeutralStreamItems({
+    id: 'mesh_claude_live',
+    provider: 'claude-code',
+    mode: 'live',
+    output: [
+      JSON.stringify({
+        type: 'user',
+        session_id: 'session_1',
+        uuid: 'user_live',
+        message: { role: 'user', content: [{ type: 'text', text: 'Inspect the repository.' }] }
+      }),
+      JSON.stringify({
+        type: 'assistant',
+        session_id: 'session_1',
+        uuid: 'assistant_live',
+        message: {
+          id: 'msg_final',
+          role: 'assistant',
+          stop_reason: 'end_turn',
+          content: [{ type: 'text', text: 'Inspection complete.' }]
+        }
+      }),
+      JSON.stringify({ type: 'result', session_id: 'session_1', subtype: 'success', result: 'Inspection complete.' })
+    ].join('\n')
+  });
+
+  expect(events.map(({ kind, reason }) => ({ kind, reason }))).toEqual([
+    { kind: 'turn-start', reason: undefined },
+    { kind: 'user-message', reason: undefined },
+    { kind: 'assistant-message', reason: undefined },
+    { kind: 'turn-end', reason: 'completed' }
+  ]);
+});
 
 // The timeline renders neutral AgentObservationEvent[]; these tests build legacy events (via
 // meshAgentStreamItems), so convert them the same way the daemon's ui plane does before rendering.
@@ -1053,6 +1190,111 @@ test('Codex app-server observation projects raw response tool calls and results'
   ]);
 });
 
+test('Codex raw response tool call and output pair into one command timeline card by call id', () => {
+  const output = [
+    JSON.stringify({
+      method: 'rawResponseItem/completed',
+      params: {
+        item: {
+          type: 'function_call',
+          name: 'Bash',
+          call_id: 'call_pair_1',
+          arguments: JSON.stringify({ command: 'git status' })
+        }
+      }
+    }),
+    JSON.stringify({
+      method: 'rawResponseItem/completed',
+      params: {
+        item: {
+          type: 'function_call_output',
+          call_id: 'call_pair_1',
+          output: 'On branch main'
+        }
+      }
+    })
+  ].join('\n');
+
+  const entries = observationTimelineEntries(
+    meshAgentNeutralStreamItems({ id: 'mesh_codex0000000', provider: 'codex', output }),
+    'codex'
+  );
+
+  expect(
+    entries.map((entry) =>
+      entry.kind === 'public' && entry.card.type === 'command-tool'
+        ? {
+            type: entry.card.type,
+            command: entry.card.view.command,
+            output: entry.card.view.output,
+            rawEvents: observationContractRawEvents(entry.contractEvents)
+          }
+        : { type: entry.kind }
+    )
+  ).toEqual([
+    {
+      type: 'command-tool',
+      command: '{\n  "command": "git status"\n}',
+      output: 'On branch main',
+      rawEvents: [
+        {
+          method: 'rawResponseItem/completed',
+          params: {
+            item: {
+              type: 'function_call',
+              name: 'Bash',
+              call_id: 'call_pair_1',
+              arguments: '{"command":"git status"}'
+            }
+          }
+        },
+        {
+          method: 'rawResponseItem/completed',
+          params: {
+            item: {
+              type: 'function_call_output',
+              call_id: 'call_pair_1',
+              output: 'On branch main'
+            }
+          }
+        }
+      ]
+    }
+  ]);
+});
+
+test('Codex turns page history projects explicit turn boundaries around each returned turn', () => {
+  const output = JSON.stringify({
+    result: {
+      data: [
+        {
+          id: 'turn_1',
+          startedAtMs: 1_784_000_000_000,
+          completedAtMs: 1_784_000_005_000,
+          items: [{ type: 'agentMessage', id: 'msg_1', text: 'first turn answer' }]
+        },
+        {
+          id: 'turn_2',
+          startedAtMs: 1_784_000_010_000,
+          completedAtMs: 1_784_000_015_000,
+          items: [{ type: 'agentMessage', id: 'msg_2', text: 'second turn answer' }]
+        }
+      ]
+    }
+  });
+
+  const items = meshAgentNeutralStreamItems({ id: 'mesh_codex0000000', provider: 'codex', output });
+
+  expect(items.map(({ at, kind, reason, text }) => ({ at, kind, reason, text }))).toEqual([
+    { at: '2026-07-14T03:33:20.000Z', kind: 'turn-start', reason: undefined, text: 'Turn started' },
+    { at: undefined, kind: 'assistant-message', reason: undefined, text: 'first turn answer' },
+    { at: '2026-07-14T03:33:25.000Z', kind: 'turn-end', reason: 'completed', text: 'Turn completed' },
+    { at: '2026-07-14T03:33:30.000Z', kind: 'turn-start', reason: undefined, text: 'Turn started' },
+    { at: undefined, kind: 'assistant-message', reason: undefined, text: 'second turn answer' },
+    { at: '2026-07-14T03:33:35.000Z', kind: 'turn-end', reason: 'completed', text: 'Turn completed' }
+  ]);
+});
+
 test('Codex app-server observation projects item tool lifecycle and output deltas', () => {
   const output = [
     JSON.stringify({
@@ -1206,6 +1448,7 @@ test('Codex app-server observation projects turns page responses', () => {
   const items = meshAgentStreamItems({ id: 'mesh_codex0000000', provider: 'codex', output });
 
   expect(items.map((item) => ({ role: item.role, type: item.providerEventType, text: item.text }))).toEqual([
+    { role: 'system', type: 'turn-start', text: 'Turn started' },
     { role: 'user', type: 'item/userMessage', text: 'Inspect MeshAgent settings' },
     {
       role: 'tool',
@@ -1217,9 +1460,16 @@ test('Codex app-server observation projects turns page responses', () => {
       type: 'function_call_output',
       text: 'Found settings code.'
     },
-    { role: 'agent', type: 'item/agentMessage', text: 'The settings form owns this surface.' }
+    { role: 'agent', type: 'item/agentMessage', text: 'The settings form owns this surface.' },
+    { role: 'system', type: 'turn-end', text: 'Turn completed' }
   ]);
-  expect(renderTimeline(items).map((entry) => entry.card?.type)).toEqual(['message', 'command-tool', 'message']);
+  expect(renderTimeline(items).map((entry) => entry.card?.type)).toEqual([
+    'message',
+    'message',
+    'command-tool',
+    'message',
+    'message'
+  ]);
 });
 
 test('Codex app-server observation projects web search and compaction items', () => {
@@ -1404,19 +1654,20 @@ test('non-Claude providers do not parse Claude rate limit events by field shape'
   expect(meshAgentUsageLimitMeter({ provider: 'codex', output })).toBeNull();
 });
 
-test('observation boundary buttons use the virtual list physical top and bottom controls', async () => {
-  const source = await Bun.file(
-    new URL('../../src/workspace-experiences/chat-room/components/observation/panel.tsx', import.meta.url)
-  ).text();
+test('summary jump-to-top disarms its scroll edge before requesting one page', () => {
+  const scroller = { scrollTop: 480 };
+  const startArmed = { current: true };
+  let loadCalls = 0;
 
-  expect({
-    bottom: source.includes("listRef.current?.scrollToBottom('auto');"),
-    indexedTop: source.includes('listRef.current?.scrollToKey(firstRow.id'),
-    top: source.includes("listRef.current?.scrollToTop('auto');"),
-    topLoadsOnePage:
-      source.includes("listRef.current?.scrollToTop('auto');\n    else") &&
-      source.includes('    loadOlderObservationEvent();')
-  }).toEqual({ bottom: true, indexedTop: false, top: true, topLoadsOnePage: true });
+  jumpSummaryToLoadedTop(scroller, startArmed, () => {
+    loadCalls += 1;
+  });
+
+  expect({ loadCalls, scrollTop: scroller.scrollTop, startArmed: startArmed.current }).toEqual({
+    loadCalls: 1,
+    scrollTop: 0,
+    startArmed: false
+  });
 });
 
 test('observation panel shows a token usage meter entry when Codex reports token usage', () => {
@@ -1777,17 +2028,24 @@ test('Claude Code observation projects transcript user events as user message ca
   });
   const entries = renderTimeline(meshAgentStreamItems({ id: 'mesh_claude000000', provider: 'claude-code', output }));
 
-  expect(entries).toMatchObject([
+  expect(
+    entries.map((entry) =>
+      entry.kind === 'public' && entry.card.type === 'message'
+        ? {
+            kind: entry.card.item.kind,
+            role: entry.card.role,
+            text: entry.card.item.text,
+            type: entry.card.type
+          }
+        : { kind: entry.kind, type: entry.card.type }
+    )
+  ).toEqual([
+    { kind: 'turn-start', role: 'agent', text: 'Turn started', type: 'message' },
     {
-      card: {
-        item: {
-          kind: 'user-message',
-          text: 'New Workplace Project message is available.'
-        },
-        role: 'user',
-        type: 'message'
-      },
-      kind: 'public'
+      kind: 'user-message',
+      role: 'user',
+      text: 'New Workplace Project message is available.',
+      type: 'message'
     }
   ]);
 });
@@ -2177,6 +2435,25 @@ test('prepending adjacent tools preserves the existing tool group key', () => {
   expect({ current: current[0]?.id, prepended: prepended[0]?.id }).toEqual({
     current: 'tool-group:call-latest',
     prepended: 'tool-group:call-latest'
+  });
+});
+
+test('a single tool already uses its stable group key before older adjacent tools arrive', () => {
+  const toolEntry = (id: string): ObservationTimelineEntry => ({
+    id,
+    kind: 'public',
+    card: {
+      type: 'command-tool',
+      view: { command: id, commandLanguage: 'shell', provider: 'claude-code', status: 'completed', type: 'Bash' }
+    },
+    contractEvents: [{ id }]
+  });
+  const single = observationTimelineRows([toolEntry('call-latest')]);
+  const prepended = observationTimelineRows([toolEntry('call-older'), toolEntry('call-latest')]);
+
+  expect({ prepended: prepended[0]?.id, single: single[0]?.id }).toEqual({
+    prepended: 'tool-group:call-latest',
+    single: 'tool-group:call-latest'
   });
 });
 

@@ -7,7 +7,6 @@ import { newId } from '@monad/protocol';
 import { extractError } from '#/agent/index.ts';
 import { definePrompt } from '#/agent/prompt-template.ts';
 import { createManagedMeshAgentDelivery } from '#/handlers/session/handlers/managed-mesh-agent-delivery.ts';
-import { managedProjectLaunchMode } from '#/services/mesh-agent/managed-project.ts';
 import managedProjectJoinGreetingNoticePath from '#/services/mesh-agent/prompts/managed-project-join-greeting-user.prompt.md' with {
   type: 'file'
 };
@@ -60,7 +59,7 @@ export function createManagedMeshAgentJoin(ctx: SessionContext) {
       .sessions.filter(
         (candidate) => candidate.agentName === runtimeAgentName && candidate.runtimeRole === 'managed-project-agent'
       );
-    if (managedSessions.some((candidate) => candidate.state === 'running')) return { started: false };
+    if (managedSessions.some((candidate) => candidate.lifecycle.state === 'active')) return { started: false };
     try {
       const resumeCandidate = managedSessions.find((candidate) => candidate.providerSessionRef);
       const resumeFrom = resumeCandidate?.providerSessionRef;
@@ -89,7 +88,6 @@ export function createManagedMeshAgentJoin(ctx: SessionContext) {
         reasoningEffort: settings.reasoningEffort,
         speed: settings.speed,
         customPrompt: settings.customPrompt,
-        launchMode: managedProjectLaunchMode(spec, settings.launchMode),
         allowAutopilot: settings.allowAutopilot,
         providerSessionRef: resumeFrom ?? undefined,
         input: MANAGED_MESH_AGENT_JOIN_GREETING_PROMPT.render({})

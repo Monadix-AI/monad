@@ -669,7 +669,12 @@ function CapabilityContent({
         />
       );
     case 'settings.connection':
-      return <ConnectionScreen baseUrl={baseUrl} />;
+      return (
+        <ConnectionScreen
+          active={active}
+          baseUrl={baseUrl}
+        />
+      );
     case 'settings.preferences':
       return <PreferencesScreen />;
     default:

@@ -12,11 +12,7 @@ import {
 const provider = 'async-probe-test';
 const probeLaunch = {
   argv: ['probe-tool', '--help'],
-  cwd: '/tmp',
-  launchMode: 'pty' as const,
-  provider,
-  approvalOwnership: 'provider-owned' as const,
-  capabilities: []
+  cwd: '/tmp'
 };
 
 function adapter(options: { throwInModelParser?: boolean } = {}): MeshAgentProviderAdapter {
@@ -32,8 +28,6 @@ function adapter(options: { throwInModelParser?: boolean } = {}): MeshAgentProvi
       productIcon: provider,
       command: 'probe-tool',
       args: [],
-      defaultLaunchMode: 'pty',
-      supportedLaunchModes: ['pty'],
       installHint: 'Install probe-tool',
       installUrl: 'https://example.com/probe-tool',
       installed: true,
@@ -62,16 +56,10 @@ function adapter(options: { throwInModelParser?: boolean } = {}): MeshAgentProvi
         speeds: []
       })
     }),
-    buildLaunch: () => probeLaunch,
     buildAuthLaunch: () => probeLaunch,
     buildAuthStatusLaunch: () => probeLaunch,
     authStatus: () => ({ launch: probeLaunch, parse: () => 'unknown' }),
-    parseAuthStatus: () => 'unknown',
-    parseOutput: () => [],
-    sendInput: () => {},
-    resolveApproval: () => {},
-    resize: () => {},
-    stop: () => {}
+    parseAuthStatus: () => 'unknown'
   };
 }
 
@@ -89,8 +77,6 @@ function expectedPreset(options: { modelsLive: boolean; supportLive: boolean }):
     productIcon: provider,
     command: 'probe-tool',
     args: [],
-    defaultLaunchMode: 'pty',
-    supportedLaunchModes: ['pty'],
     installHint: 'Install probe-tool',
     installUrl: 'https://example.com/probe-tool',
     installed: true,

@@ -5,16 +5,13 @@ import { join } from 'node:path';
 import { defaultBinProbes, resolveBinary } from '@monad/sdk-atom';
 
 import { parseStructuredAuthState } from '../adapter-shared.ts';
-import { createAppServerEventSource, createOutputEventSource } from '../event-source.ts';
+import { createOutputEventSource } from '../event-source.ts';
 import { meshAgentAdapterSettings } from '../settings.ts';
 import { createCodexSettingsImport } from '../settings-import/index.ts';
-import { codexEventPageOutput, readCodexEventOutput } from './event-pages.ts';
-import { parseCodexSessionJsonl } from './events.ts';
+import { readCodexEventOutput } from './event-pages.ts';
 import {
   buildCodexAuthLaunch,
-  buildCodexLaunch,
   CODEX_APP_BIN,
-  CODEX_APP_SERVER_TRANSPORTS,
   CODEX_NON_INTERACTIVE_ENV,
   CODEX_SUPPORTED_MODELS,
   codexManagedMcpConfigArgs,
@@ -22,38 +19,19 @@ import {
   parseCodexModelOptions
 } from './launch.ts';
 import { codexObservationProjection } from './observation/index.ts';
-import {
-  initializeCodex,
-  interruptCodex,
-  requestCodexEventPage,
-  resizeCodex,
-  resolveCodexApproval,
-  sendCodexInput,
-  steerCodex,
-  stopCodex
-} from './runtime.ts';
+import { createCodexSessionRuntime } from './session-runtime.ts';
 
 export const codexMeshAgentAdapter: MeshAgentProviderAdapter = {
   provider: 'codex',
   productIcon: 'codex',
   label: 'Codex',
   observation: codexObservationProjection,
-  events: createAppServerEventSource({
+  events: createOutputEventSource({
     provider: 'codex',
     projection: codexObservationProjection,
-    requestPage: requestCodexEventPage,
-    pageOutput: codexEventPageOutput,
-    fallback: createOutputEventSource({
-      provider: 'codex',
-      projection: codexObservationProjection,
-      readOutput: readCodexEventOutput
-    })
+    readOutput: readCodexEventOutput
   }),
-  settings: () =>
-    meshAgentAdapterSettings({
-      launchModes: ['pty', 'app-server'],
-      appServerTransports: [...CODEX_APP_SERVER_TRANSPORTS]
-    }),
+  settings: () => meshAgentAdapterSettings(),
   settingsImport: createCodexSettingsImport(),
   // ACP delivery variant: same Codex agent, launched as an external ACP sub-agent via the codex-acp
   // wrapper. Version-pinned so `npx -y <pkg>@<ver>` resolves a known build, not a silent `latest`.
@@ -66,7 +44,6 @@ export const codexMeshAgentAdapter: MeshAgentProviderAdapter = {
     authEnvironmentVariables: ['OPENAI_API_KEY']
   },
   managedRuntime: {
-    launchMode: () => 'app-server',
     env: () => ({ ...CODEX_NON_INTERACTIVE_ENV }),
     mcpConfigArgs: (ctx) => codexManagedMcpConfigArgs(ctx.monadCliEntry, ctx.env),
     usesManagedMcpBridge: true,
@@ -83,9 +60,6 @@ export const codexMeshAgentAdapter: MeshAgentProviderAdapter = {
       command: 'codex',
       args: [],
       modelOptions: codexMeshAgentAdapter.listSupportedModels(),
-      defaultLaunchMode: 'pty',
-      supportedLaunchModes: ['pty', 'app-server'],
-      supportedAppServerTransports: [...CODEX_APP_SERVER_TRANSPORTS],
       installHint: 'Install Codex CLI or Codex.app, then sign in with codex login.',
       installUrl: 'https://developers.openai.com/codex/cli',
       installed,
@@ -112,7 +86,7 @@ export const codexMeshAgentAdapter: MeshAgentProviderAdapter = {
       parse: (output) => parseCodexModelOptions(output)
     };
   },
-  buildLaunch: buildCodexLaunch,
+  createSessionRuntime: createCodexSessionRuntime,
   unsafeArgument: (args) => args.find((arg) => arg === '--dangerously-bypass-approvals-and-sandbox'),
   buildAuthLaunch(agent) {
     return buildCodexAuthLaunch(agent, ['login']);
@@ -138,14 +112,5 @@ export const codexMeshAgentAdapter: MeshAgentProviderAdapter = {
     if (exitCode === 0) return 'authenticated';
     if (exitCode === 1) return 'unauthenticated';
     return 'unknown';
-  },
-  initialize: initializeCodex,
-  parseOutput: parseCodexSessionJsonl,
-  sendInput: sendCodexInput,
-  supportsApprovalResolution: (launchMode) => launchMode === 'app-server',
-  resolveApproval: resolveCodexApproval,
-  interrupt: interruptCodex,
-  steer: steerCodex,
-  resize: resizeCodex,
-  stop: stopCodex
+  }
 };

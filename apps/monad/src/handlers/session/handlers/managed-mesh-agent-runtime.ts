@@ -1,13 +1,5 @@
 import type { MeshAgentConfig } from '@monad/environment';
-import type {
-  Event,
-  ManagedMeshAgentLifecycleLogEvent,
-  MeshAgentAppServerTransport,
-  MeshAgentLaunchMode,
-  MeshSessionView,
-  Session,
-  SessionId
-} from '@monad/protocol';
+import type { Event, ManagedMeshAgentLifecycleLogEvent, MeshSessionView, Session, SessionId } from '@monad/protocol';
 import type { SessionContext } from '#/handlers/session/context.ts';
 import type { MeshAgentTargetId } from '#/store/db/mesh-sessions.ts';
 
@@ -39,8 +31,6 @@ export type StartManagedMeshAgentRuntimeArgs = {
   reasoningEffort?: string;
   speed?: 'standard' | 'fast';
   customPrompt?: string;
-  launchMode: MeshAgentLaunchMode;
-  appServerTransport?: MeshAgentAppServerTransport;
   allowAutopilot?: boolean;
   providerSessionRef?: string;
   input: string;
@@ -75,8 +65,6 @@ export function createManagedMeshAgentRuntime(ctx: SessionContext) {
     reasoningEffort,
     speed,
     customPrompt,
-    launchMode,
-    appServerTransport,
     allowAutopilot,
     providerSessionRef,
     input
@@ -89,8 +77,6 @@ export function createManagedMeshAgentRuntime(ctx: SessionContext) {
       displayName,
       templateAgentName,
       workingPath: session.cwd,
-      launchMode,
-      appServerTransport,
       allowAutopilot,
       runtimeRole: 'managed-project-agent' as const,
       modelName,

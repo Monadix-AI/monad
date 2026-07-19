@@ -100,7 +100,7 @@ function projectActivityById({
     const projectId = sessionProjectId.get(session.sessionId);
     if (!projectId) continue;
     const current = activity.get(projectId) ?? { hasRunningAgent: false, unreadCount: 0 };
-    current.hasRunningAgent ||= session.state === 'starting' || session.state === 'running';
+    current.hasRunningAgent ||= session.lifecycle.state !== 'terminal';
     activity.set(projectId, current);
   }
   return activity;

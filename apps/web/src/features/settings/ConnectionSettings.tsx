@@ -1,4 +1,4 @@
-import type { NetworkSettings } from '@monad/protocol';
+import type { NetworkSettings, SetNetworkSettingsRequest } from '@monad/protocol';
 
 import { Alert01Icon, Copy01Icon, GlobeIcon, RotateLeft01Icon, Shield01Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
@@ -10,6 +10,7 @@ import { useNetworkSettings } from '#/hooks/use-network-settings';
 import { REMOTE_URL_KEY } from '#/lib/monad-store';
 import { SECRET_INPUT_PASSWORD_MANAGER_PROPS } from '#/lib/secret-input-props';
 import { localHttpFallbackState, localHttpFallbackUrl } from './network-endpoints';
+import { isExpectedSchemeDisconnect, schemeTargetUrl } from './network-scheme-transition';
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -73,11 +74,50 @@ export function ConnectionSettings() {
   const [httpsTransition, setHttpsTransition] = useState<'idle' | 'to-https' | 'to-http' | 'error'>('idle');
   const [httpsTransitionError, setHttpsTransitionError] = useState<string | undefined>();
 
+  async function applySchemeTransition(enabled: boolean, request: SetNetworkSettingsRequest) {
+    const current = network.settings;
+    if (!current) return;
+    setHttpsTransition(enabled ? 'to-https' : 'to-http');
+    setHttpsTransitionError(undefined);
+    let target = new URL(schemeTargetUrl(window.location.href, { enabled, host: current.host, port: current.port }));
+    let next: NetworkSettings;
+    try {
+      next = await network.set(request);
+    } catch (err) {
+      if (isExpectedSchemeDisconnect(enabled, err)) {
+        if (!enabled) await sleep(750);
+        window.location.replace(target.toString());
+        return;
+      }
+      setHttpsTransition('error');
+      setHttpsTransitionError(err instanceof Error ? err.message : String(err));
+      return;
+    }
+    try {
+      target = new URL(schemeTargetUrl(window.location.href, { enabled, host: next.host, port: next.port }));
+      if (enabled) await waitForHttpsReady(next, target);
+    } catch (err) {
+      setHttpsTransition('error');
+      setHttpsTransitionError(err instanceof Error ? err.message : String(err));
+      return;
+    }
+    if (!enabled) await sleep(750);
+    window.location.replace(target.toString());
+  }
+
   async function toggleRemoteAccess(enabled: boolean) {
+    if (enabled && network.settings?.https.enabled === false) {
+      await applySchemeTransition(true, { remoteAccess: { enabled: true } });
+      return;
+    }
     await network.set({ remoteAccess: { enabled } });
   }
 
   async function toggleHttps(enabled: boolean) {
+    if (!enabled && network.settings?.remoteAccess.enabled) {
+      const confirmed = window.confirm(t('web.settings.system.remoteHttpConfirmDescription'));
+      if (!confirmed) return;
+    }
     const changingScheme = enabled !== (network.settings?.https.enabled !== false);
     if (!changingScheme) {
       setHttpsTransition('idle');
@@ -85,25 +125,10 @@ export function ConnectionSettings() {
       await network.set({ https: { enabled } });
       return;
     }
-
-    setHttpsTransition(enabled ? 'to-https' : 'to-http');
-    setHttpsTransitionError(undefined);
-    try {
-      const next = await network.set({
-        https: { enabled },
-        ...(!enabled && network.settings?.remoteAccess.enabled ? { remoteAccess: { enabled: false } } : {})
-      });
-      const target = new URL(window.location.href);
-      target.protocol = enabled ? 'https:' : 'http:';
-      target.hostname = next.host === '0.0.0.0' ? window.location.hostname : next.host;
-      target.port = String(next.port);
-      if (enabled) await waitForHttpsReady(next, target);
-      else await sleep(750);
-      window.location.replace(target.toString());
-    } catch (err) {
-      setHttpsTransition('error');
-      setHttpsTransitionError(err instanceof Error ? err.message : String(err));
-    }
+    await applySchemeTransition(enabled, {
+      https: { enabled },
+      ...(!enabled && network.settings?.remoteAccess.enabled ? { confirmInsecureRemoteAccess: true } : {})
+    });
   }
 
   async function toggleLocalHttpFallback(enabled: boolean) {

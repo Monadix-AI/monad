@@ -1082,7 +1082,6 @@ test('settles a running MeshAgent tool item on turn_settled', () => {
       meshSessionId,
       agentName: 'claude-code',
       provider: 'claude-code',
-      launchMode: 'pty',
       workingPath: '/Users/test/Projects/monad',
       pid: 123
     })
@@ -1105,7 +1104,6 @@ test('turn_settled with error marks the tool item errored', () => {
       meshSessionId,
       agentName: 'claude-code',
       provider: 'claude-code',
-      launchMode: 'pty',
       workingPath: '/Users/test/Projects/monad',
       pid: 123
     })
@@ -1349,7 +1347,6 @@ function cliSession(overrides: Partial<MeshSessionSnapshot> = {}): MeshSessionSn
     provider: 'codex',
     agentName: 'codex',
     workingPath: '/w',
-    launchMode: 'app-server',
     state: 'running',
     exitCode: null,
     outputSnapshot: 'line one\nline two',
@@ -1380,7 +1377,7 @@ test('hydrateMeshSessions rebuilds a running tool card from the output snapshot'
       '{"method":"turn/started","params":{}}',
       '{"method":"item/agentMessage/delta","params":{"delta":"Working"}}'
     ].join('\n'),
-    input: { agent: 'codex', provider: 'codex', launchMode: 'app-server' }
+    input: { agent: 'codex', provider: 'codex' }
   });
 });
 
@@ -1520,7 +1517,6 @@ test('agent join, its output card, and its wall reply project in chronological o
       meshSessionId: 'mesh_100000000000',
       agentName: 'codex',
       provider: 'codex',
-      launchMode: 'pty',
       workingPath: '/w',
       pid: 123
     })

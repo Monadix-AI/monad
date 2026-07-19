@@ -2,13 +2,7 @@
 // and startup orphan reconciliation.
 
 import type { Database } from 'bun:sqlite';
-import type {
-  MeshAgentLaunchMode,
-  MeshAgentProvider,
-  MeshAgentRuntimeRole,
-  MeshSessionState,
-  SessionId
-} from '@monad/protocol';
+import type { MeshAgentProvider, MeshAgentRuntimeRole, MeshSessionState, SessionId } from '@monad/protocol';
 
 // A native-CLI runtime is always launched under a specific session's own id (Track B P6b:
 // every conversation — chat or project-bound — is a real Session; a project itself hosts no
@@ -22,7 +16,6 @@ export interface MeshSessionRow {
   agentName: string;
   provider: MeshAgentProvider;
   workingPath: string;
-  launchMode: MeshAgentLaunchMode;
   runtimeRole: MeshAgentRuntimeRole;
   agentRuntimeId: string | null;
   agentRuntimeTokenHash: string | null;
@@ -45,7 +38,6 @@ function rowToMeshSession(r: Record<string, unknown>): MeshSessionRow {
     agentName: r.agent_name as string,
     provider: r.provider as MeshAgentProvider,
     workingPath: r.working_path as string,
-    launchMode: r.launch_mode as MeshAgentLaunchMode,
     runtimeRole: ((r.runtime_role as string | null) ?? 'interactive') as MeshAgentRuntimeRole,
     agentRuntimeId: (r.agent_runtime_id as string | null) ?? null,
     agentRuntimeTokenHash: (r.agent_runtime_token_hash as string | null) ?? null,
@@ -66,10 +58,10 @@ export function upsertMeshSession(sqlite: Database, row: MeshSessionRow): void {
   sqlite
     .query(
       `INSERT INTO mesh_sessions
-         (id, transcript_target_id, agent_name, provider, working_path, launch_mode, state,
+         (id, transcript_target_id, agent_name, provider, working_path, state,
           runtime_role, agent_runtime_id, agent_runtime_token_hash, last_delivered_seq, last_visible_seq, pid,
           provider_session_ref, exit_code, started_at, updated_at, exited_at)
-       VALUES ($id, $transcriptTargetId, $agentName, $provider, $workingPath, $launchMode, $state,
+       VALUES ($id, $transcriptTargetId, $agentName, $provider, $workingPath, $state,
                $runtimeRole, $agentRuntimeId, $agentRuntimeTokenHash, $lastDeliveredSeq, $lastVisibleSeq, $pid,
                $providerSessionRef, $exitCode, $startedAt, $updatedAt, $exitedAt)
        ON CONFLICT(id) DO UPDATE SET
@@ -77,7 +69,6 @@ export function upsertMeshSession(sqlite: Database, row: MeshSessionRow): void {
          agent_name           = excluded.agent_name,
          provider             = excluded.provider,
          working_path         = excluded.working_path,
-         launch_mode          = excluded.launch_mode,
          runtime_role         = excluded.runtime_role,
          agent_runtime_id     = excluded.agent_runtime_id,
          agent_runtime_token_hash = excluded.agent_runtime_token_hash,
@@ -96,7 +87,6 @@ export function upsertMeshSession(sqlite: Database, row: MeshSessionRow): void {
       $agentName: row.agentName,
       $provider: row.provider,
       $workingPath: row.workingPath,
-      $launchMode: row.launchMode,
       $runtimeRole: row.runtimeRole ?? 'interactive',
       $agentRuntimeId: row.agentRuntimeId ?? null,
       $agentRuntimeTokenHash: row.agentRuntimeTokenHash ?? null,

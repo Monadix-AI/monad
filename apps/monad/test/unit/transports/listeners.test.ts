@@ -91,8 +91,8 @@ test('planTcpListeners turns the primary listener into HTTP when HTTPS is disabl
   ).toEqual([{ scheme: 'http', host: '127.0.0.1', port: 52749 }]);
 });
 
-test('planTcpListeners rejects remote access over HTTP when the emergency HTTPS switch is disabled', () => {
-  expect(() =>
+test('planTcpListeners allows acknowledged remote access over HTTP', () => {
+  expect(
     planTcpListeners({
       host: '0.0.0.0',
       https: { enabled: false },
@@ -100,7 +100,10 @@ test('planTcpListeners rejects remote access over HTTP when the emergency HTTPS 
       port: 52749,
       localHttpFallback: { enabled: true, port: 52780 }
     })
-  ).toThrow(/network\.https\.enabled=false/);
+  ).toEqual([
+    { scheme: 'http', host: '0.0.0.0', port: 52749 },
+    { scheme: 'http', host: '127.0.0.1', port: 52780 }
+  ]);
 });
 
 test('planTcpListeners rejects non-loopback primary hosts without remote access', () => {

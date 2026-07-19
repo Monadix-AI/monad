@@ -488,15 +488,25 @@ test('listMeshSessions uses the typed session treaty route', async () => {
           agentName: 'codex',
           provider: 'codex',
           workingPath: '/tmp/project',
-          launchMode: 'app-server',
+          approvalOwnership: 'provider-owned',
           runtimeRole: 'managed-project-agent',
-          state: 'running',
-          pid: 123,
-          outputSnapshot: '',
-          exitCode: null,
+          lastDeliveredSeq: 0,
+          lastVisibleSeq: 0,
+          pendingApprovalCount: 0,
+          lifecycle: { state: 'active' },
+          activity: { state: 'running', pid: 123, queuedTurnCount: 0 },
+          connection: { state: 'connected' },
+          capabilities: {
+            input: true,
+            steer: false,
+            interrupt: false,
+            approvalResolution: false,
+            providerSessionContinuation: true,
+            runtimeRestoration: true,
+            sessionReopen: true
+          },
           startedAt: now,
-          updatedAt: now,
-          exitedAt: null
+          updatedAt: now
         }
       ];
     }
@@ -635,15 +645,25 @@ test('streamControl invalidates MeshAgent sessions when a managed MeshAgent runt
           agentName: 'pmem_codex_reviewer',
           provider: 'codex',
           workingPath: '/tmp/project',
-          launchMode: 'app-server',
+          approvalOwnership: 'provider-owned',
           runtimeRole: 'managed-project-agent',
-          state: 'running',
-          pid: 123,
-          outputSnapshot: '',
-          exitCode: null,
+          lastDeliveredSeq: 0,
+          lastVisibleSeq: 0,
+          pendingApprovalCount: 0,
+          lifecycle: { state: 'active' },
+          activity: { state: 'running', pid: 123, queuedTurnCount: 0 },
+          connection: { state: 'connected' },
+          capabilities: {
+            input: true,
+            steer: false,
+            interrupt: false,
+            approvalResolution: false,
+            providerSessionContinuation: true,
+            runtimeRestoration: true,
+            sessionReopen: true
+          },
           startedAt: now,
-          updatedAt: now,
-          exitedAt: null
+          updatedAt: now
         }
       ];
     },

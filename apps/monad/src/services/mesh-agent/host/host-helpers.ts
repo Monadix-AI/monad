@@ -1,4 +1,12 @@
-import type { MeshSessionId, MeshSessionView, SessionId } from '@monad/protocol';
+import type {
+  MeshAgentRuntimeCapabilities,
+  MeshExecutionActivity,
+  MeshSessionId,
+  MeshSessionLifecycle,
+  MeshSessionView,
+  SessionId
+} from '@monad/protocol';
+import type { SessionEventRuntimeSnapshot } from '#/services/mesh-agent/session-event-runtime/types.ts';
 import type { MeshAgentOutputEvent } from '#/services/mesh-agent/types.ts';
 import type { MeshSessionRow } from '#/store/db/index.ts';
 
@@ -10,28 +18,61 @@ import { getMeshAgentProviderAdapter } from '#/services/mesh-agent/index.ts';
 // apps/monad/src/store/db/mesh-sessions.ts's `MeshAgentTargetId`) is still genuinely
 // `SessionId | ProjectId` internally, so a project-scoped runtime's view cast here is a real,
 // pre-existing lossy narrowing this pass does not resolve (open class-C question).
-export function toView(row: MeshSessionRow, pendingApprovalCount = 0): MeshSessionView {
-  const { transcriptTargetId, ...view } = row;
+const NO_RUNTIME_CAPABILITIES: MeshAgentRuntimeCapabilities = {
+  input: false,
+  steer: false,
+  interrupt: false,
+  approvalResolution: false,
+  providerSessionContinuation: false,
+  runtimeRestoration: false,
+  sessionReopen: false
+};
+
+function lifecycleOf(row: MeshSessionRow): MeshSessionLifecycle {
+  if (row.state === 'starting') return { state: 'starting' };
+  if (row.state === 'running') return { state: 'active' };
   return {
-    ...view,
-    id: view.id as MeshSessionId,
-    sessionId: transcriptTargetId as SessionId,
-    productIcon: getMeshAgentProviderAdapter(row.provider).productIcon,
-    pendingApprovalCount,
-    approvalOwnership: 'provider-owned',
-    outputSnapshot: ''
+    state: 'terminal',
+    termination: {
+      kind: row.state,
+      at: row.exitedAt ?? row.updatedAt,
+      ...(row.exitCode !== null ? { exitCode: row.exitCode } : {})
+    }
   };
 }
 
-export function nativeAgentMcpToolError(line: string): Record<string, unknown> | null {
-  try {
-    const parsed = JSON.parse(line) as unknown;
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
-    const record = parsed as Record<string, unknown>;
-    return record.event === 'native_agent_mcp_tool_error' ? record : null;
-  } catch {
-    return null;
-  }
+function activityOf(row: MeshSessionRow): MeshExecutionActivity {
+  return row.state === 'running' && row.pid
+    ? { state: 'running', pid: row.pid, queuedTurnCount: 0 }
+    : { state: 'idle', pid: null, queuedTurnCount: 0 };
+}
+
+export function toView(
+  row: MeshSessionRow,
+  pendingApprovalCount = 0,
+  runtime?: SessionEventRuntimeSnapshot
+): MeshSessionView {
+  return {
+    id: row.id as MeshSessionId,
+    sessionId: row.transcriptTargetId as SessionId,
+    agentName: row.agentName,
+    provider: row.provider,
+    productIcon: getMeshAgentProviderAdapter(row.provider).productIcon,
+    workingPath: row.workingPath,
+    runtimeRole: row.runtimeRole,
+    agentRuntimeId: row.agentRuntimeId,
+    lastDeliveredSeq: row.lastDeliveredSeq,
+    lastVisibleSeq: row.lastVisibleSeq,
+    pendingApprovalCount,
+    approvalOwnership: 'provider-owned',
+    lifecycle: runtime?.lifecycle ?? lifecycleOf(row),
+    activity: runtime?.activity ?? activityOf(row),
+    connection: runtime?.connection ?? { state: 'inactive' },
+    capabilities: runtime?.capabilities ?? NO_RUNTIME_CAPABILITIES,
+    providerSessionRef: runtime?.providerSessionRef ?? row.providerSessionRef,
+    startedAt: row.startedAt,
+    updatedAt: row.updatedAt
+  };
 }
 
 export function meshAgentApprovalText(event: MeshAgentOutputEvent): string {

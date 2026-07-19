@@ -2,9 +2,7 @@ import type { MeshAgentObservationEvent, MeshAgentProvider, MeshRawEventRecord }
 import type {
   MeshAgentEventSource,
   MeshAgentObservationJsonRecordEntry,
-  MeshAgentObservationProjector,
-  MeshAgentProviderEventPageContext,
-  MeshAgentRuntimeHandle
+  MeshAgentObservationProjector
 } from '@monad/sdk-atom';
 
 import { jsonRecordEntries, textValue } from './observation-projection.ts';
@@ -34,6 +32,29 @@ function providerRecordIds(raw: unknown): string[] {
   const record = raw as Record<string, unknown>;
   const identity = typeof record.uuid === 'string' ? record.uuid : record.id;
   return typeof identity === 'string' && identity.length > 0 ? [identity] : [];
+}
+
+// A Codex rollout record carries no per-record id of its own, so the raw plane would have nothing
+// stable to key a row on. The turn it belongs to plus its position inside that turn is the only
+// identity the file itself exposes, and it stays stable across re-reads of the same rollout.
+function outputRecordIdentities(entries: MeshAgentObservationJsonRecordEntry[]): Array<string | undefined> {
+  let turnId: string | undefined;
+  let turnIndex = 0;
+  return entries.map((entry) => {
+    const record = entry.record;
+    const payload = record.payload;
+    if (record.type === 'turn_context' && payload && typeof payload === 'object' && !Array.isArray(payload)) {
+      const nextTurnId = (payload as Record<string, unknown>).turn_id;
+      if (typeof nextTurnId === 'string' && nextTurnId.length > 0) {
+        turnId = nextTurnId;
+        turnIndex = 0;
+      }
+    }
+    if (!turnId) return providerRecordIds(record)[0];
+    const identity = `${turnId}:${turnIndex}`;
+    turnIndex += 1;
+    return identity;
+  });
 }
 
 function projectedEventPart(id: string): string | undefined {
@@ -320,98 +341,44 @@ export function createOutputEventSource(args: {
     readPage: async (context, request) => {
       const output = await args.readOutput(context);
       if (!output) return { state: 'unavailable', reason: 'not-found' };
-      const offset = request.before ? Number.parseInt(request.before, 10) : 0;
-      const start = Number.isFinite(offset) && offset > 0 ? offset : 0;
       if (request.view === 'convenience') {
         const events = source.projectLive({ id: context.providerSessionRef, output, mode: 'events' }).events;
-        const pageEvents = events.slice(Math.max(0, events.length - start - request.limit), events.length - start);
-        const hasMore = events.length - start - pageEvents.length > 0;
+        const range = linePageRange(events.length, request.before, request.limit);
+        const pageEvents = events.slice(range.start, range.end);
         return {
           state: 'available',
           view: 'convenience',
           events: pageEvents,
-          ...(hasMore ? { nextCursor: String(start + pageEvents.length) } : {})
+          ...(range.nextCursor ? { nextCursor: range.nextCursor } : {})
         };
       }
       const entries = jsonRecordEntries(output);
-      const ordered = [...entries].reverse();
-      const pageEntries = ordered.slice(start, start + request.limit);
-      const records: MeshRawEventRecord[] = pageEntries.map((entry, index) => {
-        const providerIdentity = providerRecordIds(entry.record)[0];
+      const identities = outputRecordIdentities(entries);
+      const ordered = entries.map((entry, index) => ({ entry, providerIdentity: identities[index] }));
+      const range = linePageRange(ordered.length, request.before, request.limit);
+      const pageEntries = ordered.slice(range.start, range.end);
+      const records: MeshRawEventRecord[] = pageEntries.map(({ entry, providerIdentity }, index) => {
         return {
           data: entry.record,
-          cursor: providerIdentity ?? `${start + index}`,
+          cursor: providerIdentity ?? `${range.start + index}`,
           ...(providerIdentity ? { providerIdentity } : {})
         };
       });
-      const hasMore = start + pageEntries.length < ordered.length;
       return {
         state: 'available',
         view: 'raw',
         records,
         coverage: 'settled',
-        ...(hasMore ? { nextCursor: String(start + pageEntries.length) } : {})
+        ...(range.nextCursor ? { nextCursor: range.nextCursor } : {})
       };
     }
   };
 }
 
-export function createAppServerEventSource(args: {
-  provider: MeshAgentProvider;
-  projection: MeshAgentObservationProjector;
-  requestPage(
-    handle: MeshAgentRuntimeHandle,
-    request: { before?: string; limit: number; sortDirection: 'desc'; itemsView: 'full' }
-  ): string | number;
-  pageOutput?(context: MeshAgentProviderEventPageContext): string | null;
-  fallback?: MeshAgentEventSource;
-}): MeshAgentEventSource {
-  const source = createProjectedEventSource({ provider: args.provider, projection: args.projection });
-  return {
-    ...source,
-    readPage: async (context, request) => {
-      if (!context.requestProviderPage) {
-        return (await args.fallback?.readPage?.(context, request)) ?? { state: 'unavailable', reason: 'unsupported' };
-      }
-      const page = await context.requestProviderPage((handle) =>
-        args.requestPage(handle, {
-          ...(request.before ? { before: request.before } : {}),
-          limit: request.limit,
-          sortDirection: 'desc',
-          itemsView: 'full'
-        })
-      );
-      if (request.view === 'raw') {
-        const orderedItems = [...page.items].reverse();
-        const records: MeshRawEventRecord[] = orderedItems.map((item, index) => {
-          const providerIdentity = providerRecordIds(item)[0];
-          return {
-            data: item,
-            cursor: providerIdentity ?? `${request.before ?? ''}:${index}`,
-            ...(providerIdentity ? { providerIdentity } : {})
-          };
-        });
-        return {
-          state: 'available',
-          view: 'raw',
-          records,
-          coverage: 'exact',
-          ...(page.nextCursor ? { nextCursor: page.nextCursor } : {})
-        };
-      }
-      const presentationPage = {
-        ...page,
-        items: [...page.items].reverse()
-      };
-      const output =
-        args.pageOutput?.({ ...context, page: presentationPage }) ??
-        presentationPage.items.map((item) => (typeof item === 'string' ? item : JSON.stringify(item))).join('\n');
-      return {
-        state: 'available',
-        view: 'convenience',
-        events: source.projectLive({ id: context.providerSessionRef, output, mode: 'events' }).events,
-        ...(page.nextCursor ? { nextCursor: page.nextCursor } : {})
-      };
-    }
-  };
+function linePageRange(total: number, before: string | undefined, limit: number) {
+  const match = before?.match(/^line:(\d+)$/);
+  const parsed = match?.[1] ? Number.parseInt(match[1], 10) : total;
+  const end = Number.isSafeInteger(parsed) ? Math.min(total, Math.max(0, parsed)) : total;
+  const start = Math.max(0, end - limit);
+  return { start, end, ...(start > 0 ? { nextCursor: `line:${start}` } : {}) };
 }

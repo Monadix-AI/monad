@@ -104,7 +104,7 @@ const localHttpFallbackSchema = z.object({
 });
 
 const httpsSchema = z.object({
-  enabled: z.boolean().default(true)
+  enabled: z.boolean().default(false)
 });
 
 const networkConfigSchema = z
@@ -113,10 +113,10 @@ const networkConfigSchema = z
     host: z.string().min(1).default('127.0.0.1'),
     // Which socket the LOCAL client dials — daemon always serves both; WS push is always TCP.
     transport: z.enum(['tcp', 'uds']).default(DEFAULT_TRANSPORT),
-    // Global HTTPS switch. Keep enabled unless TLS provisioning is broken on this machine.
-    https: httpsSchema.default({ enabled: true }),
+    // HTTPS is independent from remote access. Remote-access enable flows opt into it by default.
+    https: httpsSchema.default({ enabled: false }),
     remoteAccess: z.object({
-      // When true, daemon binds HTTPS to 0.0.0.0 and requires a Bearer token for non-localhost requests.
+      // When true, daemon binds the primary TCP listener to 0.0.0.0 and requires a Bearer token remotely.
       enabled: z.boolean(),
       token: z.string().nullable()
     }),
@@ -130,7 +130,7 @@ const networkConfigSchema = z
     port: 47749,
     host: '127.0.0.1',
     transport: DEFAULT_TRANSPORT,
-    https: { enabled: true },
+    https: { enabled: false },
     remoteAccess: { enabled: false, token: null },
     localHttpFallback: { enabled: false, port: DEFAULT_LOCAL_HTTP_FALLBACK_PORT }
   }));
@@ -237,7 +237,7 @@ export function createDefaultConfig(displayName: string): MonadConfig {
       port: 52749,
       host: '127.0.0.1',
       transport: DEFAULT_TRANSPORT,
-      https: { enabled: true },
+      https: { enabled: false },
       remoteAccess: { enabled: false, token: null },
       localHttpFallback: { enabled: false, port: DEFAULT_LOCAL_HTTP_FALLBACK_PORT }
     },

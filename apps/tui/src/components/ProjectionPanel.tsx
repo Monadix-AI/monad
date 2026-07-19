@@ -16,8 +16,7 @@ import { TUI_THEME } from './theme.ts';
 export function ProjectionPanel({ active, sessionId }: { active: boolean; sessionId: SessionId }) {
   const sessionsQuery = useListMeshSessionsQuery(sessionId);
   const sessions = sessionsQuery.data ? meshSessionSelectors.selectAll(sessionsQuery.data) : [];
-  const observed =
-    sessions.find((session) => session.state === 'running' || session.state === 'starting') ?? sessions[0];
+  const observed = sessions.find((session) => session.lifecycle.state !== 'terminal') ?? sessions[0];
   const observation = useStreamMeshAgentConvenienceQuery(
     { id: observed?.id ?? '', transcriptTargetId: sessionId },
     { skip: !observed }
@@ -92,7 +91,8 @@ export function ProjectionPanel({ active, sessionId }: { active: boolean; sessio
       {!observed ? <Text color={TUI_THEME.dim}>{t('cli.tui.projection.empty')}</Text> : null}
       {observed ? (
         <Text color={TUI_THEME.dim}>
-          {observed.agentName} · {observed.provider} · {observed.state}
+          {observed.agentName} · {observed.provider} ·{' '}
+          {observed.lifecycle.state === 'terminal' ? observed.lifecycle.termination.kind : observed.lifecycle.state}
         </Text>
       ) : null}
       {streamState?.fatalError ? (

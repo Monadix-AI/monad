@@ -9,7 +9,6 @@ import {
   meshAgentApprovalResolutionRequestSchema,
   meshAgentAuthSessionViewSchema,
   meshAgentAuthStatusResponseSchema,
-  meshAgentLaunchModeSchema,
   meshAgentObservationEventSchema,
   meshAgentPresetSchema,
   meshAgentSettingSchema,
@@ -44,10 +43,6 @@ import {
   workplaceProjectMembersExtSchema
 } from '../src/mesh-agent/index.ts';
 
-test('MeshAgent launch modes exclude the defunct remote-control mode', () => {
-  expect(meshAgentLaunchModeSchema.options).toEqual(['pty', 'json-stream', 'app-server', 'cli-oneshot']);
-});
-
 test('MeshAgent view requires provider-owned full-capability defaults', () => {
   const parsed = meshAgentViewSchema.parse({
     name: 'codex',
@@ -55,13 +50,11 @@ test('MeshAgent view requires provider-owned full-capability defaults', () => {
     command: 'codex',
     reasoningEfforts: ['low', 'medium', 'high'],
     enabled: true,
-    defaultLaunchMode: 'pty',
     allowAutopilot: false
   });
 
   expect(parsed.provider).toBe('codex');
   expect(parsed.reasoningEfforts).toEqual(['low', 'medium', 'high']);
-  expect(parsed.defaultLaunchMode).toBe('pty');
   expect(parsed.approvalOwnership).toBe('provider-owned');
 });
 
@@ -74,7 +67,6 @@ test('MeshAgent view accepts Gemini as a provider-owned MeshAgent provider', () 
   });
 
   expect(parsed.provider).toBe('gemini');
-  expect(parsed.defaultLaunchMode).toBe('pty');
   expect(parsed.approvalOwnership).toBe('provider-owned');
 });
 
@@ -87,7 +79,6 @@ test('MeshAgent view accepts Qwen as a provider-owned MeshAgent provider', () =>
   });
 
   expect(parsed.provider).toBe('qwen');
-  expect(parsed.defaultLaunchMode).toBe('pty');
   expect(parsed.approvalOwnership).toBe('provider-owned');
 });
 
@@ -175,8 +166,6 @@ test('MeshAgent preset view includes a provider install page', () => {
     productIcon: 'codex',
     command: 'codex',
     args: [],
-    defaultLaunchMode: 'pty',
-    supportedLaunchModes: ['pty'],
     reasoningEfforts: ['low', 'medium', 'high'],
     installHint: 'Install Codex.',
     installUrl: 'https://developers.openai.com/codex/cli',
@@ -213,37 +202,35 @@ test('MeshAgent adapter settings are declared as text, switch, or closed select 
     productIcon: 'codex',
     command: 'codex',
     args: [],
-    defaultLaunchMode: 'pty',
-    supportedLaunchModes: ['pty', 'app-server'],
     installHint: 'Install Codex.',
     installUrl: 'https://developers.openai.com/codex/cli',
     installed: false,
     settings: [
       {
-        key: 'defaultLaunchMode',
-        label: 'Launch mode',
+        key: 'configProfile',
+        label: 'Configuration profile',
         kind: 'select',
         options: [
-          { value: 'pty', label: 'PTY' },
-          { value: 'app-server', label: 'App server' }
+          { value: 'work', label: 'Work' },
+          { value: 'personal', label: 'Personal' }
         ]
       }
     ]
   });
 
   expect(preset.settings?.[0]).toEqual({
-    key: 'defaultLaunchMode',
-    label: 'Launch mode',
+    key: 'configProfile',
+    label: 'Configuration profile',
     kind: 'select',
     options: [
-      { value: 'pty', label: 'PTY' },
-      { value: 'app-server', label: 'App server' }
+      { value: 'work', label: 'Work' },
+      { value: 'personal', label: 'Personal' }
     ]
   });
   expect(
     meshAgentSettingSchema.safeParse({
-      key: 'defaultLaunchMode',
-      label: 'Launch mode',
+      key: 'configProfile',
+      label: 'Configuration profile',
       kind: 'select',
       options: []
     }).success
@@ -305,28 +292,49 @@ test('start request requires an absolute working path', () => {
 });
 
 test('MeshAgent session view preserves provider session lifecycle fields', () => {
+  const capabilities = {
+    input: true,
+    steer: false,
+    interrupt: true,
+    approvalResolution: false,
+    providerSessionContinuation: true,
+    runtimeRestoration: true,
+    sessionReopen: true
+  };
   const parsed = meshSessionViewSchema.parse({
     id: 'mesh_100000000000',
     sessionId: 'ses_SESSION00000',
     agentName: 'claude-code',
     provider: 'claude-code',
     workingPath: '/tmp/project',
-    launchMode: 'pty',
-    state: 'running',
-    pid: 123,
+    lifecycle: { state: 'active' },
+    activity: { state: 'running', pid: 123, queuedTurnCount: 0 },
+    connection: { state: 'connected' },
+    capabilities,
     providerSessionRef: 'abc',
-    outputSnapshot: 'hello',
-    exitCode: null,
     startedAt: '2026-06-28T00:00:00.000Z',
-    updatedAt: '2026-06-28T00:00:01.000Z',
-    exitedAt: null
+    updatedAt: '2026-06-28T00:00:01.000Z'
   });
 
-  expect(parsed.approvalOwnership).toBe('provider-owned');
-  expect(parsed.sessionId).toBe('ses_SESSION00000');
-  expect('projectSessionId' in parsed).toBe(false);
-  expect('projectId' in parsed).toBe(false);
-  expect(parsed.runtimeRole).toBe('interactive');
+  expect(parsed).toEqual({
+    id: 'mesh_100000000000',
+    sessionId: 'ses_SESSION00000',
+    agentName: 'claude-code',
+    provider: 'claude-code',
+    workingPath: '/tmp/project',
+    approvalOwnership: 'provider-owned',
+    runtimeRole: 'interactive',
+    lastDeliveredSeq: 0,
+    lastVisibleSeq: 0,
+    pendingApprovalCount: 0,
+    lifecycle: { state: 'active' },
+    activity: { state: 'running', pid: 123, queuedTurnCount: 0 },
+    connection: { state: 'connected' },
+    capabilities,
+    providerSessionRef: 'abc',
+    startedAt: '2026-06-28T00:00:00.000Z',
+    updatedAt: '2026-06-28T00:00:01.000Z'
+  });
 });
 
 test('MeshAgent session view carries managed project runtime fields', () => {
@@ -336,19 +344,25 @@ test('MeshAgent session view carries managed project runtime fields', () => {
     agentName: 'codex',
     provider: 'codex',
     workingPath: '/tmp/project',
-    launchMode: 'app-server',
     runtimeRole: 'managed-project-agent',
     agentRuntimeId: 'nclirt_codex_project',
     lastDeliveredSeq: 42,
     lastVisibleSeq: 40,
-    state: 'running',
-    pid: 123,
+    lifecycle: { state: 'active' },
+    activity: { state: 'idle', pid: null, queuedTurnCount: 0 },
+    connection: { state: 'inactive' },
+    capabilities: {
+      input: true,
+      steer: false,
+      interrupt: true,
+      approvalResolution: false,
+      providerSessionContinuation: true,
+      runtimeRestoration: true,
+      sessionReopen: true
+    },
     providerSessionRef: 'provider-thread',
-    outputSnapshot: '',
-    exitCode: null,
     startedAt: '2026-06-28T00:00:00.000Z',
-    updatedAt: '2026-06-28T00:00:01.000Z',
-    exitedAt: null
+    updatedAt: '2026-06-28T00:00:01.000Z'
   });
 
   expect(parsed.runtimeRole).toBe('managed-project-agent');
@@ -393,20 +407,26 @@ test('native agent runtime contract is a raw-output-free host summary', () => {
     agentName: 'codex',
     provider: 'codex',
     workingPath: '/tmp/project',
-    launchMode: 'app-server',
     runtimeRole: 'managed-project-agent',
     agentRuntimeId: 'nclirt_codex_project',
-    state: 'running',
+    lifecycle: { state: 'active' },
+    activity: { state: 'running', pid: 123, queuedTurnCount: 0 },
+    connection: { state: 'connected' },
+    capabilities: {
+      input: true,
+      steer: false,
+      interrupt: true,
+      approvalResolution: false,
+      providerSessionContinuation: true,
+      runtimeRestoration: true,
+      sessionReopen: true
+    },
     session: { providerSessionRef: 'provider-thread' },
     lastDeliveredSeq: 42,
     lastVisibleSeq: 40,
     pendingApprovalCount: 0,
-    outputSnapshot: '{"raw":"provider event"}',
-    pid: 123,
-    exitCode: null,
     startedAt: '2026-06-28T00:00:00.000Z',
-    updatedAt: '2026-06-28T00:00:01.000Z',
-    exitedAt: null
+    updatedAt: '2026-06-28T00:00:01.000Z'
   });
 
   expect(parsed.session.providerSessionRef).toBe('provider-thread');
@@ -520,17 +540,13 @@ test('workplace project members ext schema is shared by web and daemon', () => {
     {
       type: 'mesh-agent',
       name: 'codex',
-      settings: { launchMode: 'app-server', managedProjectAgent: true, osSandbox: false }
+      settings: { managedProjectAgent: true, osSandbox: false }
     }
   ]);
 
   expect(workplaceProjectMembersExtKey).toBe('workplaceProjectMembers');
-  expect(parsed[1]?.settings?.launchMode).toBe('app-server');
+  expect(parsed[1]?.settings).toEqual({ managedProjectAgent: true, osSandbox: false });
   expect(workplaceProjectMembersExtSchema.safeParse([{ type: 'mesh-agent', name: '' }]).success).toBe(false);
-  expect(
-    workplaceProjectMembersExtSchema.safeParse([{ type: 'mesh-agent', name: 'codex', settings: { launchMode: 'bad' } }])
-      .success
-  ).toBe(false);
 });
 
 test('workplace MeshAgent members can be instantiated multiple times from one template', () => {
@@ -836,8 +852,7 @@ const startReq = (workingPath: string) =>
   startMeshAgentRequestSchema.safeParse({
     transcriptTargetId: 'ses_100000000000',
     agentName: 'codex',
-    workingPath,
-    launchMode: 'pty'
+    workingPath
   });
 
 test('startMeshAgentRequest accepts POSIX absolute working paths', () => {

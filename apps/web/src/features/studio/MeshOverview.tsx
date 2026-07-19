@@ -1,4 +1,4 @@
-import type { MeshSessionState, MeshSessionView, WorkplaceProject } from '@monad/protocol';
+import type { MeshSessionView, WorkplaceProject } from '@monad/protocol';
 
 import {
   ArrowRight01Icon,
@@ -32,8 +32,10 @@ import { OverviewIllustration } from './OverviewIllustration';
 import { StudioBreadcrumbHeader } from './StudioBreadcrumbHeader';
 import { MeshUsage } from './Usage';
 
-const AGENT_STATE_STYLE: Record<MeshSessionState, string> = {
-  running:
+type AgentState = 'starting' | 'active' | 'exited' | 'stopped' | 'failed';
+
+const AGENT_STATE_STYLE: Record<AgentState, string> = {
+  active:
     'bg-[color-mix(in_srgb,var(--success,var(--accent-green))_16%,transparent)] text-[color-mix(in_srgb,var(--success,var(--accent-green))_72%,var(--foreground))]',
   starting:
     'bg-[color-mix(in_srgb,var(--accent-blue)_14%,transparent)] text-[color-mix(in_srgb,var(--accent-blue)_70%,var(--foreground))]',
@@ -42,12 +44,13 @@ const AGENT_STATE_STYLE: Record<MeshSessionState, string> = {
   failed: 'bg-destructive/12 text-destructive'
 };
 
-function agentStateLabel(t: ReturnType<typeof useT>, state: MeshSessionState): string {
+function agentStateLabel(t: ReturnType<typeof useT>, state: AgentState): string {
   return t(`web.studio.agentState.${state}` as const);
 }
 
 function AgentRuntimeRow({ session }: { session: MeshSessionView }) {
   const t = useT();
+  const state = session.lifecycle.state === 'terminal' ? session.lifecycle.termination.kind : session.lifecycle.state;
   return (
     <div className="flex items-center gap-2.5 rounded-lg border bg-background px-3 py-2">
       <span className="flex size-7 shrink-0 items-center justify-center rounded-md border bg-card">
@@ -60,8 +63,8 @@ function AgentRuntimeRow({ session }: { session: MeshSessionView }) {
         <span className="block truncate font-medium text-sm">{session.agentName}</span>
         <span className="block truncate text-muted-foreground text-xs">{session.provider}</span>
       </span>
-      <span className={`shrink-0 rounded-full px-2 py-0.5 font-medium text-[11px] ${AGENT_STATE_STYLE[session.state]}`}>
-        {agentStateLabel(t, session.state)}
+      <span className={`shrink-0 rounded-full px-2 py-0.5 font-medium text-[11px] ${AGENT_STATE_STYLE[state]}`}>
+        {agentStateLabel(t, state)}
       </span>
     </div>
   );

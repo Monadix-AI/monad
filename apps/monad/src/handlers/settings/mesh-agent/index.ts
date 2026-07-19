@@ -76,7 +76,6 @@ const fromView = (v: MeshAgentView, stored?: MeshAgentConfig): MeshAgentConfig =
   args: v.args,
   env: restoreRedactedEnv(v.env, stored?.env),
   enabled: v.enabled,
-  appServerTransport: v.appServerTransport,
   allowAutopilot: v.allowAutopilot,
   approvalOwnership: 'provider-owned',
   projectTemplates: v.projectTemplates,

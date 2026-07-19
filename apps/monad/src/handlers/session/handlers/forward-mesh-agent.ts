@@ -1,12 +1,5 @@
 import type { MeshAgentConfig } from '@monad/environment';
-import type {
-  Event,
-  MeshAgentLaunchMode,
-  MeshSessionView,
-  MessageAttachment,
-  Session,
-  SessionId
-} from '@monad/protocol';
+import type { Event, MeshSessionView, MessageAttachment, Session, SessionId } from '@monad/protocol';
 import type { SessionContext } from '#/handlers/session/context.ts';
 
 import { newId } from '@monad/protocol';
@@ -19,8 +12,6 @@ import {
   meshAgentProjectMemberSettings
 } from '#/handlers/session/handlers/messaging-members.ts';
 import { makeEvent } from '#/services/event-bus.ts';
-import { resolveMeshAgentDefaultLaunchMode } from '#/services/mesh-agent/index.ts';
-import { managedProjectLaunchMode } from '#/services/mesh-agent/managed-project.ts';
 
 type StartManagedMeshAgentRuntimeWithRecovery = (args: {
   session: Session;
@@ -33,7 +24,6 @@ type StartManagedMeshAgentRuntimeWithRecovery = (args: {
   reasoningEffort?: string;
   speed?: 'standard' | 'fast';
   customPrompt?: string;
-  launchMode: MeshAgentLaunchMode;
   allowAutopilot?: boolean;
   providerSessionRef?: string;
   input: string;
@@ -136,7 +126,7 @@ export function createForwardMeshAgentHandler(
         .sessions.filter(
           (candidate) => candidate.agentName === runtimeAgentName && candidate.runtimeRole === runtimeRole
         );
-      const existing = nativeSessions.find((candidate) => candidate.state === 'running');
+      const existing = nativeSessions.find((candidate) => candidate.lifecycle.state === 'active');
       if (existing) {
         await meshAgentHost.input(existing.id, { input: text.endsWith('\n') ? text : `${text}\n` });
         log?.debug(
@@ -206,7 +196,6 @@ export function createForwardMeshAgentHandler(
               modelId: memberSettings.modelId ?? memberSettings.modelName,
               speed: memberSettings.speed,
               customPrompt: memberSettings.customPrompt,
-              launchMode: managedProjectLaunchMode(spec, memberSettings.launchMode),
               allowAutopilot: memberSettings.allowAutopilot,
               providerSessionRef: resumeFrom ?? undefined,
               input: text
@@ -216,8 +205,6 @@ export function createForwardMeshAgentHandler(
               agentName: runtimeAgentName,
               templateAgentName,
               workingPath: session.cwd,
-              launchMode: memberSettings.launchMode ?? resolveMeshAgentDefaultLaunchMode(spec.provider),
-              appServerTransport: memberSettings.appServerTransport,
               allowAutopilot: memberSettings.allowAutopilot,
               runtimeRole
             });

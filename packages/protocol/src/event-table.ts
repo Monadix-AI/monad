@@ -20,7 +20,6 @@ import { memoryScopeSchema } from './memory.ts';
 import {
   meshAgentIdleResumedSystemEventSchema,
   meshAgentIdleSuspendedSystemEventSchema,
-  meshAgentLaunchModeSchema,
   meshAgentProductIconSchema,
   meshAgentProviderSchema
 } from './mesh-agent/index.ts';
@@ -232,7 +231,6 @@ export const meshAgentStartedPayloadSchema = z.object({
   agentName: z.string(),
   provider: meshAgentProviderSchema,
   productIcon: meshAgentProductIconSchema.optional(),
-  launchMode: meshAgentLaunchModeSchema,
   workingPath: z.string(),
   pid: z.number().int().nullable()
 });

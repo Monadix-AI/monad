@@ -315,7 +315,6 @@ export const meshSessions = sqliteTable(
     agentName: text('agent_name').notNull(),
     provider: text('provider').notNull(),
     workingPath: text('working_path').notNull(),
-    launchMode: text('launch_mode').notNull(),
     runtimeRole: text('runtime_role').notNull().default('interactive'),
     agentRuntimeId: text('agent_runtime_id'),
     agentRuntimeTokenHash: text('agent_runtime_token_hash'),

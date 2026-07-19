@@ -2,12 +2,7 @@ import { z } from 'zod';
 
 import { agentObservationEventSchema } from '../agent-observation.ts';
 import { iso8601Schema, meshSessionIdSchema, sessionIdSchema } from '../ids.ts';
-import {
-  type MeshAgentProvider,
-  meshAgentAppServerTransportSchema,
-  meshAgentLaunchModeSchema,
-  meshAgentNameSchema
-} from './mesh-agent-config.ts';
+import { type MeshAgentProvider, meshAgentNameSchema } from './mesh-agent-config.ts';
 
 export const workplaceProjectMembersExtKey = 'workplaceProjectMembers';
 export const workplaceProjectMemberTypeSchema = z.enum(['monad', 'acp', 'mesh-agent']);
@@ -17,8 +12,6 @@ export const workplaceProjectMemberSettingsSchema = z.object({
   cwd: z.string().optional(),
   osSandbox: z.boolean().optional(),
   forwardMcp: z.boolean().optional(),
-  launchMode: meshAgentLaunchModeSchema.optional(),
-  appServerTransport: meshAgentAppServerTransportSchema.optional(),
   // Per-member override of the agent template's autopilot setting. Off (false) + a proxy-capable
   // adapter makes this managed member delegate its provider approvals to the human instead of
   // running unattended.
@@ -139,9 +132,7 @@ export function defaultWorkplaceProjectMemberSettings(
         osSandbox?: boolean;
         forwardMcp?: boolean;
       }
-    | {
-        defaultLaunchMode?: WorkplaceProjectMemberSettings['launchMode'];
-      }
+    | Record<never, never>
     | undefined
 ): WorkplaceProjectMemberSettings {
   if (type === 'monad') return {};
@@ -152,12 +143,7 @@ export function defaultWorkplaceProjectMemberSettings(
       ...(agent && 'forwardMcp' in agent && agent.forwardMcp !== undefined ? { forwardMcp: agent.forwardMcp } : {})
     };
   }
-  return {
-    ...(agent && 'defaultLaunchMode' in agent && agent.defaultLaunchMode
-      ? { launchMode: agent.defaultLaunchMode }
-      : {}),
-    managedProjectAgent: true
-  };
+  return { managedProjectAgent: true };
 }
 
 // --- Track B: project-level member templates + session-level member bindings ---

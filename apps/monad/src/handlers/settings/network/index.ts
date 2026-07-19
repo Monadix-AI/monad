@@ -67,6 +67,8 @@ export function createNetworkModule(paths: MonadPaths, config: ConfigAccess, dep
 
   async function setNetworkSettings(req: SetNetworkSettingsRequest): Promise<NetworkSettings> {
     const cfg = structuredClone(config.get().cfg);
+    const wasHttpsEnabled = cfg.network.https.enabled;
+    const wasInsecureRemote = cfg.network.remoteAccess.enabled && !wasHttpsEnabled;
     if (req.host !== undefined) {
       cfg.network.host = req.host;
     }
@@ -80,6 +82,9 @@ export function createNetworkModule(paths: MonadPaths, config: ConfigAccess, dep
     if (req.remoteAccess) {
       const remote = cfg.network.remoteAccess;
       if (req.remoteAccess.enabled !== undefined) {
+        if (req.remoteAccess.enabled && !remote.enabled && req.https?.enabled === undefined) {
+          cfg.network.https.enabled = true;
+        }
         remote.enabled = req.remoteAccess.enabled;
         if (req.remoteAccess.enabled && (!remote.token || req.remoteAccess.rotateToken)) {
           remote.token = generateRemoteToken();
@@ -91,6 +96,11 @@ export function createNetworkModule(paths: MonadPaths, config: ConfigAccess, dep
       } else if (req.remoteAccess.rotateToken && remote.enabled) {
         remote.token = generateRemoteToken();
       }
+    }
+
+    const enablesInsecureRemote = cfg.network.remoteAccess.enabled && !cfg.network.https.enabled && !wasInsecureRemote;
+    if (enablesInsecureRemote && req.confirmInsecureRemoteAccess !== true) {
+      throw new HandlerError('invalid', 'Plain HTTP remote access requires explicit confirmation');
     }
     if (req.localHttpFallback) {
       if (req.localHttpFallback.enabled !== undefined) {
@@ -104,7 +114,6 @@ export function createNetworkModule(paths: MonadPaths, config: ConfigAccess, dep
     try {
       validateDaemonNetworkSecurity({
         host: cfg.network.host,
-        https: cfg.network.https,
         remoteAccess: cfg.network.remoteAccess
       });
     } catch (err) {
@@ -114,7 +123,7 @@ export function createNetworkModule(paths: MonadPaths, config: ConfigAccess, dep
     // Validate TLS can actually be set up BEFORE persisting https.enabled=true. Otherwise the
     // config saves as HTTPS-enabled but the hot-reload apply (and next boot) fails to make a
     // cert, leaving the daemon in a broken/fail-closed state with no rollback.
-    if (req.https?.enabled === true) {
+    if (!wasHttpsEnabled && cfg.network.https.enabled) {
       try {
         await resolveTlsSetupForNetwork({ https: cfg.network.https, tlsDir: paths.tls });
       } catch (err) {

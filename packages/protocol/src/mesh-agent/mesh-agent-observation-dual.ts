@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { agentObservationEventSchema } from '../agent-observation.ts';
 import { meshSessionIdSchema } from '../ids.ts';
+import { normalizeQueryStringValue } from '../pagination.ts';
 import { meshAgentProviderSchema } from './mesh-agent-config.ts';
 import { observationCursorSchema } from './observation-cursor.ts';
 
@@ -19,7 +20,7 @@ export const meshRawEventSchema = z.object({
   origin: z.enum(['live', 'events']),
   cursor: observationCursorSchema,
   providerIdentity: z.string().min(1).optional(),
-  stream: z.enum(['stdout', 'stderr', 'pty', 'app-server']).optional(),
+  stream: z.enum(['stdout', 'stderr']).optional(),
   data: z.custom<unknown>((value) => value !== undefined),
   observedAt: z.string().optional()
 });
@@ -114,7 +115,7 @@ export type MeshConnectionSnapshot = z.infer<typeof meshConnectionSnapshotSchema
 
 export const meshEventPageRequestSchema = z.object({
   view: z.enum(['raw', 'convenience']),
-  before: observationCursorSchema.optional(),
+  before: z.preprocess(normalizeQueryStringValue, observationCursorSchema).optional(),
   limit: z.coerce.number().int().positive().max(100).default(20)
 });
 export type MeshEventPageRequest = z.infer<typeof meshEventPageRequestSchema>;

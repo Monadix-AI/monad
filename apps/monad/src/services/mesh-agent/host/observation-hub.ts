@@ -34,7 +34,7 @@ export class MeshAgentObservationHub {
     const listeners = this.listeners.get(id);
     if (!listeners?.size) return;
     const live = this.ctx.getLive(id);
-    if (!live?.liveRawStore || live.suspended) {
+    if (!live?.liveRawStore) {
       for (const listener of listeners) listener({ state: 'unavailable' }, done);
       if (done) {
         this.listeners.delete(id);
@@ -70,7 +70,7 @@ export class MeshAgentObservationHub {
     afterSeq?: number
   ): { live: boolean; dispose: () => void } {
     const live = this.ctx.getLive(id);
-    if (!live?.liveRawStore || live.suspended) return { live: false, dispose: () => {} };
+    if (!live?.liveRawStore) return { live: false, dispose: () => {} };
     let listeners = this.listeners.get(id);
     if (!listeners) {
       listeners = new Set();

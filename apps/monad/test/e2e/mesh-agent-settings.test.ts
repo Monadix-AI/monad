@@ -44,7 +44,6 @@ const agentView = () => ({
     useExperimentalGateway: true
   },
   enabled: true,
-  defaultLaunchMode: 'pty',
   allowAutopilot: false,
   approvalOwnership: 'provider-owned'
 });
@@ -63,8 +62,6 @@ const thirdPartyMigrationAdapter: MeshAgentProviderAdapter = {
     productIcon: 'third-party-migrator',
     command: 'third-party',
     args: [],
-    defaultLaunchMode: 'pty',
-    supportedLaunchModes: ['pty'],
     installHint: 'Install third-party',
     installUrl: 'https://example.com/third-party',
     installed: true,
@@ -77,47 +74,16 @@ const thirdPartyMigrationAdapter: MeshAgentProviderAdapter = {
     }
   }),
   listSupportedModels: () => [],
-  buildLaunch: () => ({
-    argv: ['third-party'],
-    cwd: process.cwd(),
-    launchMode: 'pty',
-    provider: 'third-party-migrator',
-    approvalOwnership: 'provider-owned',
-    capabilities: []
-  }),
-  buildAuthLaunch: () => ({
-    argv: ['third-party'],
-    cwd: process.cwd(),
-    launchMode: 'pty',
-    provider: 'third-party-migrator',
-    approvalOwnership: 'provider-owned',
-    capabilities: []
-  }),
-  buildAuthStatusLaunch: () => ({
-    argv: ['third-party'],
-    cwd: process.cwd(),
-    launchMode: 'pty',
-    provider: 'third-party-migrator',
-    approvalOwnership: 'provider-owned',
-    capabilities: []
-  }),
+  buildAuthLaunch: () => ({ argv: ['third-party'], cwd: process.cwd() }),
+  buildAuthStatusLaunch: () => ({ argv: ['third-party'], cwd: process.cwd() }),
   authStatus: () => ({
     launch: {
       argv: ['third-party'],
-      cwd: process.cwd(),
-      launchMode: 'pty',
-      provider: 'third-party-migrator',
-      approvalOwnership: 'provider-owned',
-      capabilities: []
+      cwd: process.cwd()
     },
     parse: () => 'unknown'
   }),
   parseAuthStatus: () => 'unknown',
-  parseOutput: () => [],
-  sendInput: () => {},
-  resolveApproval: () => {},
-  resize: () => {},
-  stop: () => {},
   settingsImport: {
     detect: (probes) =>
       probes?.exists(THIRD_PARTY_IMPORT_PATH)
@@ -153,7 +119,6 @@ const thirdPartyMigrationAdapter: MeshAgentProviderAdapter = {
             command: 'third-party',
             args: ['--profile', 'default'],
             enabled: true,
-            defaultLaunchMode: 'pty',
             allowAutopilot: false,
             approvalOwnership: 'provider-owned'
           }
@@ -217,7 +182,6 @@ async function runCrud(call: Call, paths: MonadPaths): Promise<void> {
   });
 
   expect((await loadConfig(paths))?.meshAgents).toHaveLength(1);
-  expect(agents[0]?.defaultLaunchMode).toBe('pty');
   expect((await loadConfig(paths))?.meshAgents[0]?.adapterSettings).toEqual({
     configProfile: 'work',
     useExperimentalGateway: true
@@ -276,7 +240,6 @@ async function runPresets(call: Call): Promise<void> {
     presets: {
       id: string;
       command: string;
-      defaultLaunchMode: string;
       settings?: Array<{ key: string; kind: string }>;
     }[];
   };
@@ -284,15 +247,11 @@ async function runPresets(call: Call): Promise<void> {
   for (const id of ['claude-code', 'codex', 'gemini', 'hermes', 'openclaw', 'qwen']) {
     expect(presetIds).toContain(id);
   }
-  expect(presets.every((p) => p.defaultLaunchMode === 'pty')).toBe(true);
   expect(presets.find((p) => p.id === 'codex')?.command).toBe('codex');
   expect(presets.find((p) => p.id === 'gemini')?.command).toBe('gemini');
   expect(presets.find((p) => p.id === 'qwen')?.command).toBe('qwen');
   expect(presets.find((p) => p.id === 'openclaw')?.command).toBe('openclaw');
   expect(presets.find((p) => p.id === 'hermes')?.command).toBe('hermes');
-  expect(presets.find((p) => p.id === 'codex')?.settings?.map((setting) => [setting.key, setting.kind])).toContainEqual(
-    ['defaultLaunchMode', 'select']
-  );
   expect(presets.find((p) => p.id === 'codex')?.settings?.map((setting) => [setting.key, setting.kind])).toContainEqual(
     ['allowAutopilot', 'switch']
   );

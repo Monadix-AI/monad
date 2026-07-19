@@ -1,20 +1,12 @@
 import type { MonadPaths } from '@monad/environment';
-import type {
-  DeveloperLogRecord,
-  MeshAgentAuthSessionView,
-  MeshRawEvent,
-  MeshSessionView,
-  SessionId,
-  SessionUiEvent
-} from '@monad/protocol';
+import type { MeshAgentAuthSessionView, MeshSessionView, SessionId } from '@monad/protocol';
 
 import { describe, expect, test } from 'bun:test';
-import { chmod, mkdir, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import { builtinAgentAdapters } from '@monad/atoms/agent-adapters';
 import { initMonadHome, loadAuth, loadConfig } from '@monad/environment';
-import { setLogLevel } from '@monad/logger';
 
 import { ModelService } from '#/handlers/settings/model/index.ts';
 import { registerAgentAdapterImpl } from '#/services/mesh-agent/index.ts';
@@ -28,36 +20,15 @@ import {
   TRANSPORTS
 } from '../helpers.ts';
 
-// Production populates the MeshAgent registry at boot via the gated atom-pack path
-// (onAgentAdapter → registerAgentAdapterImpl); this harness builds handlers directly, so register the
-// built-in adapters up front.
 for (const adapter of builtinAgentAdapters) registerAgentAdapterImpl(adapter);
 
 type Call = (method: string, path: string, body?: unknown) => Promise<Response>;
-type FetchPath = (path: string, init?: RequestInit) => Promise<Response>;
-
-interface DeveloperLogStream {
-  connected: Promise<void>;
-  done: Promise<DeveloperLogRecord[]>;
-  seen: DeveloperLogRecord[];
-  stop(): void;
-}
-
-interface MeshAgentAuthStream {
-  connected: Promise<void>;
-  done: Promise<MeshAgentAuthSessionView[]>;
-  seen: MeshAgentAuthSessionView[];
-  stop(): void;
-}
 
 function makePaths(base: string): MonadPaths {
   return makeTestPaths(base);
 }
 
-async function setup(opts?: {
-  meshAgentAuthHeartbeatTimeoutMs?: number;
-  meshAgentAuthStatusTimeoutMs?: number;
-}): Promise<{
+async function setup(): Promise<{
   dir: string;
   projectDir: string;
   app: ReturnType<typeof createHttpTransport>;
@@ -70,138 +41,9 @@ async function setup(opts?: {
   await initMonadHome(paths);
   const cfg = await loadConfig(paths);
   if (!cfg) throw new Error('config missing after init');
-  setLogLevel('debug');
   const modelService = new ModelService(paths.auth, cfg, await loadAuth(paths.auth), seededProviderRegistry());
-  const handlers = buildHandlers(mockModel(), { paths, modelService }, { sessionDeleteGraceMs: 5, ...opts });
-  const app = createHttpTransport(handlers);
-  return { dir, projectDir, app, handlers };
-}
-
-function streamSessionLogs(
-  fetchPath: FetchPath,
-  sessionId: SessionId,
-  until: (record: DeveloperLogRecord) => boolean,
-  timeoutMs = 2_000
-): DeveloperLogStream {
-  const controller = new AbortController();
-  const seen: DeveloperLogRecord[] = [];
-  let resolveConnected: () => void = () => {};
-  const connected = new Promise<void>((resolve) => {
-    resolveConnected = resolve;
-  });
-
-  const done = (async () => {
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      const res = await fetchPath(`/v1/sessions/${sessionId}/logs`, {
-        headers: { accept: 'text/event-stream' },
-        signal: controller.signal
-      });
-      resolveConnected();
-      if (!res.ok) throw new Error(`logs stream failed with ${res.status}`);
-      const reader = res.body?.getReader();
-      if (!reader) return seen;
-      const decoder = new TextDecoder();
-      let buf = '';
-      for (;;) {
-        const { done: streamDone, value } = await reader.read();
-        if (streamDone) break;
-        buf += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
-        let sep = buf.indexOf('\n\n');
-        while (sep !== -1) {
-          const frame = buf.slice(0, sep);
-          buf = buf.slice(sep + 2);
-          const dataLine = frame.split('\n').find((line) => line.startsWith('data: '));
-          if (dataLine) {
-            const record = JSON.parse(dataLine.slice(6)) as DeveloperLogRecord;
-            seen.push(record);
-            if (until(record)) {
-              controller.abort();
-              return seen;
-            }
-          }
-          sep = buf.indexOf('\n\n');
-        }
-      }
-    } catch {
-      return seen;
-    } finally {
-      clearTimeout(timer);
-      resolveConnected();
-    }
-    return seen;
-  })();
-
-  return {
-    connected,
-    done,
-    seen,
-    stop: () => controller.abort()
-  };
-}
-
-function streamMeshAgentAuth(
-  fetchPath: FetchPath,
-  id: string,
-  controlToken: string,
-  until: (session: MeshAgentAuthSessionView) => boolean,
-  timeoutMs = 2_000
-): MeshAgentAuthStream {
-  const controller = new AbortController();
-  const seen: MeshAgentAuthSessionView[] = [];
-  let resolveConnected: () => void = () => {};
-  const connected = new Promise<void>((resolve) => {
-    resolveConnected = resolve;
-  });
-
-  const done = (async () => {
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      const res = await fetchPath(`/v1/mesh/auth-sessions/${id}/events?controlToken=${controlToken}`, {
-        headers: { accept: 'text/event-stream' },
-        signal: controller.signal
-      });
-      resolveConnected();
-      if (!res.ok) throw new Error(`MeshAgent auth stream failed with ${res.status}`);
-      const reader = res.body?.getReader();
-      if (!reader) return seen;
-      const decoder = new TextDecoder();
-      let buf = '';
-      for (;;) {
-        const { done: streamDone, value } = await reader.read();
-        if (streamDone) break;
-        buf += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
-        let sep = buf.indexOf('\n\n');
-        while (sep !== -1) {
-          const frame = buf.slice(0, sep);
-          buf = buf.slice(sep + 2);
-          const dataLine = frame.split('\n').find((line) => line.startsWith('data: '));
-          if (dataLine) {
-            const session = JSON.parse(dataLine.slice(6)) as MeshAgentAuthSessionView;
-            seen.push(session);
-            if (until(session)) {
-              controller.abort();
-              return seen;
-            }
-          }
-          sep = buf.indexOf('\n\n');
-        }
-      }
-    } catch {
-      return seen;
-    } finally {
-      clearTimeout(timer);
-      resolveConnected();
-    }
-    return seen;
-  })();
-
-  return {
-    connected,
-    done,
-    seen,
-    stop: () => controller.abort()
-  };
+  const handlers = buildHandlers(mockModel(), { paths, modelService }, { sessionDeleteGraceMs: 5 });
+  return { dir, projectDir, handlers, app: createHttpTransport(handlers) };
 }
 
 const jsonInit = (method: string, body?: unknown): RequestInit => ({
@@ -209,1293 +51,249 @@ const jsonInit = (method: string, body?: unknown): RequestInit => ({
   headers: { 'content-type': 'application/json' },
   body: body === undefined ? undefined : JSON.stringify(body)
 });
-const SESSION_DELETE_TEST_TIMEOUT_MS = 5_000;
 
-async function waitFor<T>(fn: () => T | undefined | Promise<T | undefined>, timeoutMs = 2_000): Promise<T> {
+async function waitFor<T>(read: () => T | undefined | Promise<T | undefined>, timeoutMs = 2_000): Promise<T> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const value = await fn();
+    const value = await read();
     if (value !== undefined) return value;
     await Bun.sleep(25);
   }
   throw new Error('timed out waiting for condition');
 }
 
-async function waitForRawOutput(
-  handlers: ReturnType<typeof buildHandlers>,
-  sessionId: SessionId,
-  meshSessionId: string,
-  needles: readonly string[]
-): Promise<MeshRawEvent[]> {
-  return waitFor(() => {
-    const subscription = handlers.meshAgent.subscribeRawObservation({
-      id: meshSessionId,
-      transcriptTargetId: sessionId,
-      onFrame: () => {},
-      onDone: () => {}
-    });
-    subscription.dispose();
-    const text = subscription.frames
-      .map((frame) => (typeof frame.data === 'string' ? frame.data : JSON.stringify(frame.data)))
-      .join('\n');
-    return needles.every((needle) => text.includes(needle)) ? subscription.frames : undefined;
-  });
-}
-
 async function createSession(call: Call, cwd: string): Promise<SessionId> {
-  const res = await call('POST', '/v1/sessions', {
-    title: 'native cli runtime',
-    cwd
-  });
-  expect(res.status).toBe(201);
-  return ((await res.json()) as { sessionId: SessionId }).sessionId;
+  const response = await call('POST', '/v1/sessions', { title: 'session-event runtime', cwd });
+  expect(response.status).toBe(201);
+  return ((await response.json()) as { sessionId: SessionId }).sessionId;
 }
 
-async function configureMockAgent(call: Call): Promise<void> {
-  const res = await call('PUT', '/v1/mesh/agents/mock-cli', {
+async function configureSessionEventAgent(call: Call, dir: string): Promise<void> {
+  const script = join(dir, 'mock-session-event-cli.js');
+  await writeFile(
+    script,
+    [
+      '#!/usr/bin/env bun',
+      'const args = process.argv.slice(2).join(" ");',
+      'if (args === "auth status --json") { process.stdout.write(JSON.stringify({ state: "authenticated" }) + "\\n"); process.exit(0); }',
+      'let input = "";',
+      'process.stdin.on("data", (chunk) => { input += chunk.toString(); });',
+      'process.stdin.on("end", () => {',
+      '  process.stdout.write(JSON.stringify({ type: "system", subtype: "init", session_id: "mock-session-1", cwd: process.cwd() }) + "\\n");',
+      '  process.stdout.write(JSON.stringify({ type: "assistant", session_id: "mock-session-1", message: { role: "assistant", content: [{ type: "text", text: "echo:" + input }] } }) + "\\n");',
+      '  process.stdout.write(JSON.stringify({ type: "result", subtype: "success", result: "", permission_denials: [] }) + "\\n");',
+      '});'
+    ].join('\n')
+  );
+  await chmod(script, 0o755);
+  const response = await call('PUT', '/v1/mesh/agents/mock-cli', {
     agent: {
       name: 'mock-cli',
       provider: 'claude-code',
-      command: 'bun',
-      args: [
-        '-e',
-        'process.stdout.write("ready\\n"); process.stdin.on("data", (d) => process.stdout.write("echo:" + d)); setInterval(() => {}, 1000);'
-      ],
+      command: script,
+      args: [],
       enabled: true,
-      defaultLaunchMode: 'pty',
       allowAutopilot: false,
       approvalOwnership: 'provider-owned'
     }
   });
-  expect(res.status).toBe(200);
+  expect(response.status).toBe(200);
 }
 
-async function configureMockJsonStreamAgent(call: Call, dir: string): Promise<void> {
-  const script = join(dir, 'mock-claude-json.js');
-  await writeFile(
-    script,
-    [
-      '#!/usr/bin/env bun',
-      'const init = JSON.stringify({type:"system", subtype:"init", session_id:"claude-session-1", cwd:process.cwd()}) + "\\n";',
-      'process.stdout.write(init.slice(0, Math.floor(init.length / 2)));',
-      'setTimeout(() => {',
-      '  process.stdout.write(init.slice(Math.floor(init.length / 2)));',
-      '  process.stdout.write(JSON.stringify({type:"assistant", session_id:"claude-session-1", message:{role:"assistant", content:[{type:"text", text:"ready-json"}]}}) + "\\n");',
-      '  process.stderr.write("stderr-json\\n");',
-      '}, 25);',
-      'process.stdin.on("data", (d) => {',
-      '  const text = d.toString().trim().split(/\\n+/).map((line) => JSON.parse(line).message.content[0].text).join("\\n");',
-      '  process.stdout.write(JSON.stringify({type:"assistant", session_id:"claude-session-1", message:{role:"assistant", content:[{type:"text", text:"echo-json:" + text}]}}) + "\\n");',
-      '});',
-      'setInterval(() => {}, 1000);'
-    ].join('\n')
-  );
-  await chmod(script, 0o755);
-  const res = await call('PUT', '/v1/mesh/agents/mock-claude-json', {
-    agent: {
-      name: 'mock-claude-json',
-      provider: 'claude-code',
-      command: script,
-      args: [],
-      enabled: true,
-      defaultLaunchMode: 'json-stream',
-      allowAutopilot: false,
-      approvalOwnership: 'provider-owned'
-    }
+async function startSessionEventRuntime(call: Call, dir: string, projectDir: string) {
+  await configureSessionEventAgent(call, dir);
+  const sessionId = await createSession(call, projectDir);
+  const response = await call('POST', '/v1/mesh/sessions', {
+    transcriptTargetId: sessionId,
+    agentName: 'mock-cli',
+    workingPath: projectDir
   });
-  expect(res.status).toBe(200);
-}
-
-async function configureMockCodexApprovalAgent(call: Call, dir: string): Promise<void> {
-  const script = join(dir, 'mock-codex-approval.js');
-  const stdinLog = join(dir, 'mock-codex-stdin.jsonl');
-  await writeFile(
-    script,
-    [
-      '#!/usr/bin/env bun',
-      'import { appendFileSync } from "node:fs";',
-      `const stdinLog = ${JSON.stringify(stdinLog)};`,
-      'process.stdin.on("data", (d) => {',
-      '  appendFileSync(stdinLog, d.toString());',
-      '  for (const line of d.toString().trim().split(/\\n+/)) {',
-      '    if (!line) continue;',
-      '    const msg = JSON.parse(line);',
-      '    if (msg.method === "initialize") { process.stdout.write(JSON.stringify({id:msg.id, result:{userAgent:"mock"}}) + "\\n"); continue; }',
-      '    if (msg.method === "initialized") continue;',
-      '    if (msg.method === "thread/start" || msg.method === "thread/resume") {',
-      '      process.stdout.write(JSON.stringify({id:msg.id, result:{thread:{id:"codex-thread-1"}}}) + "\\n");',
-      '      const request = JSON.stringify({method:"item/commandExecution/requestApproval", id:"req_provider_1", params:{threadId:"thr_1", turnId:"turn_1", itemId:"item_1", startedAtMs:1790610000000, environmentId:"env_1", reason:"network access", command:"curl https://example.com", cwd:process.cwd()}}) + "\\n";',
-      '      setTimeout(() => {',
-      '        process.stdout.write(request.slice(0, 18));',
-      '        setTimeout(() => {',
-      '          process.stdout.write(request.slice(18));',
-      '        }, 25);',
-      '      }, 25);',
-      '    }',
-      '    if (msg.method === "thread/turns/list") {',
-      '      if (msg.params && msg.params.cursor && msg.params.cursor !== "next_cursor") {',
-      '        process.stdout.write(JSON.stringify({id:msg.id, error:{code:-32600, message:"invalid cursor: " + msg.params.cursor}}) + "\\n");',
-      '      } else {',
-      '        process.stdout.write(JSON.stringify({id:msg.id, result:{data:[{id:"turn_1", items:[]}], nextCursor:"next_cursor", backwardsCursor:null}}) + "\\n");',
-      '      }',
-      '    }',
-      '    if (msg.id === "req_provider_1") process.stdout.write(JSON.stringify({method:"serverRequest/resolved", params:{threadId:"thr_1", requestId:"req_provider_1"}}) + "\\n");',
-      '  }',
-      '});',
-      'setInterval(() => {}, 1000);'
-    ].join('\n')
-  );
-  await chmod(script, 0o755);
-  const res = await call('PUT', '/v1/mesh/agents/mock-codex-approval', {
-    agent: {
-      name: 'mock-codex-approval',
-      provider: 'codex',
-      command: script,
-      args: [],
-      enabled: true,
-      defaultLaunchMode: 'app-server',
-      allowAutopilot: true,
-      approvalOwnership: 'provider-owned'
-    }
-  });
-  expect(res.status).toBe(200);
-  return;
-}
-
-async function configureMockSlowCodexAppServerAgent(call: Call, dir: string): Promise<void> {
-  const script = join(dir, 'mock-codex-slow-app-server.js');
-  await writeFile(
-    script,
-    [
-      '#!/usr/bin/env bun',
-      'process.stdin.on("data", (d) => {',
-      '  for (const line of d.toString().trim().split(/\\n+/)) {',
-      '    if (!line) continue;',
-      '    const msg = JSON.parse(line);',
-      '    if (msg.method === "initialize") { process.stdout.write(JSON.stringify({id:msg.id, result:{userAgent:"mock"}}) + "\\n"); continue; }',
-      '    if (msg.method === "initialized") continue;',
-      '    if (msg.method !== "thread/start" && msg.method !== "thread/resume") continue;',
-      '    setTimeout(() => {',
-      '      process.stdout.write(JSON.stringify({id:msg.id, result:{thread:{id:"codex-thread-slow"}}}) + "\\n");',
-      '    }, 1500);',
-      '  }',
-      '});',
-      'setInterval(() => {}, 1000);'
-    ].join('\n')
-  );
-  await chmod(script, 0o755);
-  const res = await call('PUT', '/v1/mesh/agents/mock-codex-slow-app-server', {
-    agent: {
-      name: 'mock-codex-slow-app-server',
-      provider: 'codex',
-      command: script,
-      args: [],
-      enabled: true,
-      defaultLaunchMode: 'app-server',
-      allowAutopilot: false,
-      approvalOwnership: 'provider-owned'
-    }
-  });
-  expect(res.status).toBe(200);
-}
-
-async function configureMockCodexOversizedLineAgent(call: Call, dir: string): Promise<void> {
-  const script = join(dir, 'mock-codex-oversized-line.js');
-  await writeFile(
-    script,
-    [
-      '#!/usr/bin/env bun',
-      'process.stdin.on("data", (d) => {',
-      '  for (const line of d.toString().trim().split(/\\n+/)) {',
-      '    if (!line) continue;',
-      '    const msg = JSON.parse(line);',
-      '    if (msg.method === "initialize") { process.stdout.write(JSON.stringify({id:msg.id, result:{userAgent:"mock"}}) + "\\n"); continue; }',
-      '    if (msg.method === "initialized") continue;',
-      '    if (msg.method !== "thread/start" && msg.method !== "thread/resume") continue;',
-      '    process.stdout.write(JSON.stringify({id:msg.id, result:{thread:{id:"codex-thread-light"}}}) + "\\n");',
-      '    process.stdout.write(JSON.stringify({method:"thread/status/changed", params:{threadId:"codex-thread-light", status:{type:"idle"}}}) + "\\n");',
-      '    process.stdout.write("{\\"huge\\":\\"" + "x".repeat(3 * 1024 * 1024));',
-      '    setTimeout(() => {',
-      '      process.stdout.write("\\"}\\n");',
-      '      process.stdout.write(JSON.stringify({method:"item/commandExecution/requestApproval", id:"req_after_huge", params:{threadId:"codex-thread-light", turnId:"turn_1", itemId:"item_1", startedAtMs:1790610000000, reason:"after huge line", command:"echo ok", cwd:process.cwd()}}) + "\\n");',
-      '    }, 25);',
-      '  }',
-      '});',
-      'setInterval(() => {}, 1000);'
-    ].join('\n')
-  );
-  await chmod(script, 0o755);
-  const res = await call('PUT', '/v1/mesh/agents/mock-codex-oversized-line', {
-    agent: {
-      name: 'mock-codex-oversized-line',
-      provider: 'codex',
-      command: script,
-      args: [],
-      enabled: true,
-      defaultLaunchMode: 'app-server',
-      allowAutopilot: false,
-      approvalOwnership: 'provider-owned'
-    }
-  });
-  expect(res.status).toBe(200);
-}
-
-async function configureMockAuthAgent(
-  call: Call,
-  dir: string,
-  opts: { initiallyAuthenticated?: boolean; loginAuthenticates?: boolean } = {}
-): Promise<void> {
-  const script = join(dir, 'mock-native-auth.js');
-  const authMarker = join(dir, 'mock-native-authenticated');
-  const loginMarker = join(dir, 'mock-native-login-started');
-  if (opts.initiallyAuthenticated) await writeFile(authMarker, '1');
-  await writeFile(
-    script,
-    [
-      '#!/usr/bin/env bun',
-      'import { existsSync, writeFileSync } from "node:fs";',
-      `const authMarker = ${JSON.stringify(authMarker)};`,
-      `const loginMarker = ${JSON.stringify(loginMarker)};`,
-      `const loginAuthenticates = ${JSON.stringify(opts.loginAuthenticates ?? true)};`,
-      'const args = process.argv.slice(2).join(" ");',
-      'if (args.startsWith("auth status")) {',
-      '  process.stdout.write(JSON.stringify({ state: existsSync(authMarker) ? "authenticated" : "unauthenticated" }) + "\\n");',
-      '  process.exit(0);',
-      '}',
-      'if (args.startsWith("auth login")) {',
-      '  writeFileSync(loginMarker, "1");',
-      '  if (loginAuthenticates) writeFileSync(authMarker, "1");',
-      '  process.stdout.write("Open https://provider.example/login and enter code ABCD\\n");',
-      '  process.stdin.on("data", (d) => process.stdout.write("auth-input:" + d));',
-      '  setInterval(() => {}, 1000);',
-      '}'
-    ].join('\n')
-  );
-  await chmod(script, 0o755);
-  const res = await call('PUT', '/v1/mesh/agents/mock-native-auth', {
-    agent: {
-      name: 'mock-native-auth',
-      provider: 'claude-code',
-      command: script,
-      args: [],
-      enabled: true,
-      defaultLaunchMode: 'pty',
-      allowAutopilot: false,
-      approvalOwnership: 'provider-owned'
-    }
-  });
-  expect(res.status).toBe(200);
-}
-
-async function configureHangingAuthStatusAgent(call: Call, dir: string): Promise<void> {
-  const script = join(dir, 'mock-hanging-auth-status.js');
-  await writeFile(
-    script,
-    [
-      '#!/usr/bin/env bun',
-      'const args = process.argv.slice(2).join(" ");',
-      'if (args.startsWith("auth status")) setInterval(() => {}, 1000);'
-    ].join('\n')
-  );
-  await chmod(script, 0o755);
-  const res = await call('PUT', '/v1/mesh/agents/mock-hanging-auth-status', {
-    agent: {
-      name: 'mock-hanging-auth-status',
-      provider: 'claude-code',
-      command: script,
-      args: [],
-      enabled: true,
-      defaultLaunchMode: 'pty',
-      allowAutopilot: false,
-      approvalOwnership: 'provider-owned'
-    }
-  });
-  expect(res.status).toBe(200);
+  expect(response.status).toBe(200);
+  return { sessionId, meshSession: ((await response.json()) as { session: MeshSessionView }).session };
 }
 
 async function configureMissingBinaryAgent(call: Call): Promise<void> {
-  const res = await call('PUT', '/v1/mesh/agents/missing-cli', {
+  const response = await call('PUT', '/v1/mesh/agents/missing-cli', {
     agent: {
       name: 'missing-cli',
       provider: 'claude-code',
       command: '/definitely/not/a/mesh-agent-provider',
       args: [],
       enabled: true,
-      defaultLaunchMode: 'json-stream',
       allowAutopilot: false,
       approvalOwnership: 'provider-owned'
     }
   });
-  expect(res.status).toBe(200);
+  expect(response.status).toBe(200);
 }
 
-async function runRuntime(call: Call, projectDir: string, handlers: ReturnType<typeof buildHandlers>): Promise<void> {
-  await configureMockAgent(call);
-  const sessionId = await createSession(call, projectDir);
-
-  let res = await call('POST', '/v1/mesh/sessions', {
-    transcriptTargetId: sessionId,
-    agentName: 'mock-cli',
-    workingPath: projectDir,
-    launchMode: 'pty'
-  });
-  expect(res.status).toBe(200);
-  const nativeSession = ((await res.json()) as { session: MeshSessionView }).session;
-  expect(nativeSession.provider).toBe('claude-code');
-  expect(nativeSession.workingPath).toBe(await realpath(projectDir));
-  expect(nativeSession.state).toBe('running');
-  expect(await Bun.file(join(dirname(projectDir), 'mesh-agent-processes.json')).exists()).toBe(true);
-
-  res = await call('GET', `/v1/mesh/sessions/${nativeSession.id}?transcriptTargetId=${sessionId}`);
-  expect(res.status).toBe(200);
-  expect(((await res.json()) as { session: MeshSessionView }).session.id).toBe(nativeSession.id);
-
-  res = await call('GET', `/v1/mesh/sessions?transcriptTargetId=${sessionId}`);
-  expect(res.status).toBe(200);
-  expect(((await res.json()) as { sessions: MeshSessionView[] }).sessions.map((s) => s.id)).toContain(nativeSession.id);
-
-  await waitForRawOutput(handlers, sessionId, nativeSession.id, ['ready']);
-
-  res = await call('GET', `/v1/mesh/sessions/${nativeSession.id}/connection?transcriptTargetId=${sessionId}`);
-  expect(res.status).toBe(200);
-  const connection = (await res.json()) as {
-    state: string;
-    meshSessionId: string;
-    provider: string;
-    observationEpoch: string;
-    revision: number;
-  };
-  expect(connection).toEqual({
-    state: 'connected',
-    meshSessionId: nativeSession.id,
-    provider: 'claude-code',
-    observationEpoch: connection.observationEpoch,
-    revision: connection.revision
-  });
-  expect(connection.observationEpoch.startsWith('oep_')).toBe(true);
-  expect(connection.revision).toBeGreaterThan(0);
-
-  res = await call('POST', `/v1/mesh/sessions/${nativeSession.id}/input?transcriptTargetId=${sessionId}`, {
-    input: 'hello\n'
-  });
-  expect(res.status).toBe(200);
-  await waitForRawOutput(handlers, sessionId, nativeSession.id, ['echo:hello']);
-
-  res = await call('POST', `/v1/mesh/sessions/${nativeSession.id}/resize?transcriptTargetId=${sessionId}`, {
-    cols: 120,
-    rows: 40
-  });
-  expect(res.status).toBe(200);
-
-  res = await call('POST', `/v1/mesh/sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`);
-  expect(res.status).toBe(200);
-  const stopped = await waitFor(() => {
-    const row = handlers.store.getMeshSession(nativeSession.id);
-    return row?.state === 'stopped' ? row : undefined;
-  });
-  expect(stopped.exitCode).toBeNull();
-  await waitFor(
-    async () => ((await Bun.file(join(dirname(projectDir), 'mesh-agent-processes.json')).exists()) ? undefined : true),
-    2_000
-  );
-}
-
-async function startMockMeshSession(
-  call: Call,
-  projectDir: string
-): Promise<{ sessionId: SessionId; nativeSession: MeshSessionView }> {
-  await configureMockAgent(call);
-  const sessionId = await createSession(call, projectDir);
-  const res = await call('POST', '/v1/mesh/sessions', {
-    transcriptTargetId: sessionId,
-    agentName: 'mock-cli',
-    workingPath: projectDir,
-    launchMode: 'pty'
-  });
-  expect(res.status).toBe(200);
-  return { sessionId, nativeSession: ((await res.json()) as { session: MeshSessionView }).session };
-}
-
-async function runInterruptSteerRuntime(
-  call: Call,
-  projectDir: string,
-  handlers: ReturnType<typeof buildHandlers>
-): Promise<void> {
-  const { sessionId, nativeSession } = await startMockMeshSession(call, projectDir);
-  await waitForRawOutput(handlers, sessionId, nativeSession.id, ['ready']);
-
-  // steer is app-server-only; a pty/json-stream provider has no steer hook, so the route exists
-  // (not 404) but rejects the request rather than silently succeeding.
-  const steer = await call('POST', `/v1/mesh/sessions/${nativeSession.id}/steer?transcriptTargetId=${sessionId}`, {
-    input: 'and also run the tests'
-  });
-  expect(steer.status).not.toBe(404);
-  expect(steer.status).not.toBe(200);
-
-  // interrupt has no provider hook here either, so it falls back to stopping the session.
-  const interrupt = await call(
-    'POST',
-    `/v1/mesh/sessions/${nativeSession.id}/interrupt?transcriptTargetId=${sessionId}`
-  );
-  expect(interrupt.status).toBe(200);
-  await waitFor(() => {
-    const row = handlers.store.getMeshSession(nativeSession.id);
-    return row?.state === 'stopped' ? row : undefined;
-  });
-}
-
-async function runSessionResetStopsMeshAgentRuntime(
-  call: Call,
-  projectDir: string,
-  handlers: ReturnType<typeof buildHandlers>
-): Promise<void> {
-  const { sessionId, nativeSession } = await startMockMeshSession(call, projectDir);
-  await waitForRawOutput(handlers, sessionId, nativeSession.id, ['ready']);
-
-  const reset = await call('POST', `/v1/sessions/${sessionId}/reset`);
-  expect(reset.status).toBe(200);
-
-  const stopped = await waitFor(() => {
-    const row = handlers.store.getMeshSession(nativeSession.id);
-    return row?.state === 'stopped' ? row : undefined;
-  });
-  expect(stopped.exitCode).toBeNull();
-  await waitFor(
-    async () => ((await Bun.file(join(dirname(projectDir), 'mesh-agent-processes.json')).exists()) ? undefined : true),
-    2_000
-  );
-}
-
-async function runSessionDeleteStopsMeshAgentRuntime(
-  call: Call,
-  projectDir: string,
-  handlers: ReturnType<typeof buildHandlers>
-): Promise<void> {
-  const { sessionId, nativeSession } = await startMockMeshSession(call, projectDir);
-  await waitForRawOutput(handlers, sessionId, nativeSession.id, ['ready']);
-
-  const deleted = await call('DELETE', `/v1/sessions/${sessionId}`);
-  expect(deleted.status).toBe(200);
-
-  await waitFor(
-    async () => ((await Bun.file(join(dirname(projectDir), 'mesh-agent-processes.json')).exists()) ? undefined : true),
-    2_000
-  );
-  expect(handlers.store.getMeshSession(nativeSession.id)).toBeNull();
-}
-
-async function runWorkingPathRealpathRuntime(call: Call, dir: string, projectDir: string): Promise<void> {
-  await configureMockAgent(call);
-  const linkDir = join(dir, 'project-link');
-  await symlink(projectDir, linkDir, 'dir');
-  const sessionId = await createSession(call, projectDir);
-
-  const res = await call('POST', '/v1/mesh/sessions', {
-    transcriptTargetId: sessionId,
-    agentName: 'mock-cli',
-    workingPath: linkDir,
-    launchMode: 'pty'
-  });
-  expect(res.status).toBe(200);
-  const nativeSession = ((await res.json()) as { session: MeshSessionView }).session;
-  expect(nativeSession.workingPath).toBe(await realpath(projectDir));
-
-  await call('POST', `/v1/mesh/sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`);
-}
-
-async function runWorkingPathBoundaryRuntime(call: Call, dir: string, projectDir: string): Promise<void> {
-  await configureMockAgent(call);
-  const outsideDir = join(dir, 'outside-project');
-  await mkdir(outsideDir, { recursive: true });
-  const sessionId = await createSession(call, projectDir);
-
-  const res = await call('POST', '/v1/mesh/sessions', {
-    transcriptTargetId: sessionId,
-    agentName: 'mock-cli',
-    workingPath: outsideDir,
-    launchMode: 'pty'
-  });
-  expect(res.status).toBe(400);
-  expect((await res.json()) as { error: string }).toMatchObject({
-    error: expect.stringContaining('workingPath must be within the project working directory')
-  });
-}
-
-async function runJsonStreamRuntime(
-  call: Call,
-  fetchPath: FetchPath,
-  dir: string,
-  projectDir: string,
-  handlers: ReturnType<typeof buildHandlers>
-): Promise<void> {
-  await configureMockJsonStreamAgent(call, dir);
-  const sessionId = await createSession(call, projectDir);
-  const logs = streamSessionLogs(fetchPath, sessionId, (record) => record.event === 'mesh.stop');
-  await logs.connected;
-
-  const res = await call('POST', '/v1/mesh/sessions', {
-    transcriptTargetId: sessionId,
-    agentName: 'mock-claude-json',
-    workingPath: projectDir,
-    launchMode: 'json-stream'
-  });
-  expect(res.status).toBe(200);
-  const nativeSession = ((await res.json()) as { session: MeshSessionView }).session;
-  expect(nativeSession.provider).toBe('claude-code');
-  expect(nativeSession.launchMode).toBe('json-stream');
-
-  await waitFor(() =>
-    handlers.store.getMeshSession(nativeSession.id)?.providerSessionRef === 'claude-session-1' ? true : undefined
-  );
-  await waitForRawOutput(handlers, sessionId, nativeSession.id, ['ready-json', 'stderr-json']);
-
-  // Live output stays in the epoch-scoped raw plane (asserted above), never in durable domain-event rows.
-  // The milestone events (started/exited) stay durable.
-  let events = handlers.store.listEvents(sessionId);
-  expect(events.some((event) => event.type === 'mesh.started')).toBe(true);
-
-  // A fresh UI subscription rebuilds the mesh-agent lifecycle card. Provider output remains in the
-  // separate observation plane, so the session UI snapshot carries status rather than raw chunks.
-  let hydrated: SessionUiEvent | undefined;
-  const sub = await handlers.session.subscribeUi({ sessionId }, (event) => {
-    if (!hydrated && event.kind === 'snapshot') hydrated = event;
-  });
-  sub.dispose();
-  if (hydrated?.kind !== 'snapshot') throw new Error('expected hydrated snapshot');
-  const card = hydrated.items.find((item) => item.kind === 'tool' && item.id === nativeSession.id);
-  if (card?.kind !== 'tool') throw new Error('expected MeshAgent tool card in hydrated snapshot');
-  expect({ tool: card.tool, status: card.status }).toEqual({
-    tool: 'mesh-agent:claude-code',
-    status: 'ok'
-  });
-  await waitFor(() => (logs.seen.some((record) => record.event === 'mesh.launch') ? true : undefined));
-
-  const input = await call('POST', `/v1/mesh/sessions/${nativeSession.id}/input?transcriptTargetId=${sessionId}`, {
-    input: 'hello-json'
-  });
-  expect(input.status).toBe(200);
-  await waitForRawOutput(handlers, sessionId, nativeSession.id, ['echo-json:hello-json']);
-  await waitFor(() => (logs.seen.some((record) => record.event === 'mesh.input') ? true : undefined));
-
-  const stop = await call('POST', `/v1/mesh/sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`);
-  expect(stop.status).toBe(200);
-  events = handlers.store.listEvents(sessionId);
-  expect(events.some((event) => event.type === 'mesh.exited')).toBe(true);
-  expect((await logs.done).some((record) => record.event === 'mesh.stop')).toBe(true);
-  await Bun.sleep(50);
-  expect(handlers.store.getMeshSession(nativeSession.id)?.state).toBe('stopped');
-}
-
-async function runProviderApprovalRuntime(
-  call: Call,
-  dir: string,
-  projectDir: string,
-  handlers: ReturnType<typeof buildHandlers>
-): Promise<void> {
-  await configureMockCodexApprovalAgent(call, dir);
-  const sessionId = await createSession(call, projectDir);
-
-  const res = await call('POST', '/v1/mesh/sessions', {
-    transcriptTargetId: sessionId,
-    agentName: 'mock-codex-approval',
-    workingPath: projectDir,
-    launchMode: 'app-server'
-  });
-  expect(res.status).toBe(200);
-  const nativeSession = ((await res.json()) as { session: MeshSessionView }).session;
-
-  await waitFor(() => {
-    const events = handlers.store.listEvents(sessionId);
-    return events.some((event) => event.type === 'mesh.approval_requested') &&
-      handlers.store.getMeshSession(nativeSession.id)?.providerSessionRef === 'codex-thread-1'
-      ? events
-      : undefined;
-  });
-
-  const input = await call('POST', `/v1/mesh/sessions/${nativeSession.id}/input?transcriptTargetId=${sessionId}`, {
-    input: 'summarize'
-  });
-  expect(input.status).toBe(200);
-  await waitFor(() => {
-    const text = Bun.file(join(dir, 'mock-codex-stdin.jsonl'))
-      .text()
-      .catch(() => '');
-    return text.then((value) => (value.includes('summarize') ? true : undefined));
-  });
-  const stdinLines = (await readFile(join(dir, 'mock-codex-stdin.jsonl'), 'utf8'))
-    .trim()
-    .split(/\n+/)
-    .map((line) => JSON.parse(line) as { id?: number | string; method?: string; params?: Record<string, unknown> });
-  expect(stdinLines.some((line) => line.method === 'initialize')).toBe(true);
-  expect(stdinLines.some((line) => line.method === 'initialized')).toBe(true);
-  expect(stdinLines.some((line) => line.method === 'thread/start')).toBe(true);
-  expect(
-    stdinLines.some(
-      (line) =>
-        line.method === 'turn/start' &&
-        typeof line.id === 'number' &&
-        line.id >= 2 &&
-        line.params?.threadId === 'codex-thread-1' &&
-        JSON.stringify(line.params?.input).includes('summarize')
-    )
-  ).toBe(true);
-
-  const events = handlers.store.listEvents(sessionId);
-  const requested = events.find((event) => event.type === 'mesh.approval_requested');
-  expect(requested?.payload.provider).toBe('codex');
-  expect(requested?.payload.requestId).toBe('req_provider_1');
-  expect(String(requested?.payload.text)).toContain('curl https://example.com');
-  expect(events.some((event) => event.type === 'tool.approval_requested')).toBe(false);
-
-  const approval = await call(
-    'POST',
-    `/v1/mesh/sessions/${nativeSession.id}/approval?transcriptTargetId=${sessionId}`,
-    {
-      requestId: 'req_provider_1',
-      allow: true,
-      reason: 'approved in test'
-    }
-  );
-  expect(approval.status).toBe(200);
-  await waitFor(() => {
-    const events = handlers.store.listEvents(sessionId);
-    return events.some(
-      (event) =>
-        event.type === 'mesh.approval_resolved' &&
-        event.payload.requestId === 'req_provider_1' &&
-        event.payload.allow === true
-    )
-      ? events
-      : undefined;
-  });
-  const stdinAfterApproval = (await readFile(join(dir, 'mock-codex-stdin.jsonl'), 'utf8'))
-    .trim()
-    .split(/\n+/)
-    .map((line) => JSON.parse(line) as { id?: string; result?: Record<string, unknown> });
-  expect(stdinAfterApproval.some((line) => line.id === 'req_provider_1' && line.result?.decision === 'accept')).toBe(
-    true
-  );
-
-  const stop = await call('POST', `/v1/mesh/sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`);
-  expect(stop.status).toBe(200);
-}
-
-async function runManagedProviderApprovalSuppressedRuntime(
-  call: Call,
-  dir: string,
-  projectDir: string,
-  handlers: ReturnType<typeof buildHandlers>
-): Promise<void> {
-  await configureMockCodexApprovalAgent(call, dir);
-  const sessionId = await createSession(call, projectDir);
-
-  const res = await call('POST', '/v1/mesh/sessions', {
-    transcriptTargetId: sessionId,
-    agentName: 'mock-codex-approval',
-    workingPath: projectDir,
-    launchMode: 'app-server',
-    runtimeRole: 'managed-project-agent'
-  });
-  expect(res.status).toBe(200);
-  const nativeSession = ((await res.json()) as { session: MeshSessionView }).session;
-
-  await waitFor(async () => {
-    const text = await Bun.file(join(dir, 'mock-codex-stdin.jsonl'))
-      .text()
-      .catch(() => '');
-    if (!text.includes('"id":"req_provider_1"') || !text.includes('"decision":"decline"')) return undefined;
-    return true;
-  });
-
-  const events = handlers.store.listEvents(sessionId);
-  expect(events.some((event) => event.type === 'mesh.approval_requested')).toBe(false);
-  expect(events.some((event) => event.type === 'mesh.approval_resolved')).toBe(false);
-  expect(handlers.store.getMeshSession(nativeSession.id)?.runtimeRole).toBe('managed-project-agent');
-
-  const stop = await call('POST', `/v1/mesh/sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`);
-  expect(stop.status).toBe(200);
-}
-
-async function runCodexResumeRuntime(call: Call, dir: string, projectDir: string): Promise<void> {
-  await configureMockCodexApprovalAgent(call, dir);
-  const sessionId = await createSession(call, projectDir);
-
-  const res = await call('POST', '/v1/mesh/sessions', {
-    transcriptTargetId: sessionId,
-    agentName: 'mock-codex-approval',
-    workingPath: projectDir,
-    launchMode: 'app-server',
-    providerSessionRef: 'codex-thread-resume'
-  });
-  expect(res.status).toBe(200);
-  const nativeSession = ((await res.json()) as { session: MeshSessionView }).session;
-  expect(nativeSession.providerSessionRef).toBe('codex-thread-resume');
-
-  await waitFor(() => {
-    const raw = Bun.file(join(dir, 'mock-codex-stdin.jsonl'));
-    return raw.size > 0 ? true : undefined;
-  });
-  const stdinLines = (await readFile(join(dir, 'mock-codex-stdin.jsonl'), 'utf8'))
-    .trim()
-    .split(/\n+/)
-    .map((line) => JSON.parse(line) as { method?: string; params?: Record<string, unknown> });
-  expect(stdinLines.some((line) => line.method === 'thread/start')).toBe(false);
-  expect(stdinLines.find((line) => line.method === 'initialize')?.params?.capabilities).toEqual({
-    experimentalApi: true,
-    requestAttestation: false
-  });
-  expect(
-    stdinLines.some(
-      (line) =>
-        line.method === 'thread/resume' &&
-        line.params?.threadId === 'codex-thread-resume' &&
-        line.params?.cwd === (nativeSession.workingPath as string) &&
-        line.params?.excludeTurns === true &&
-        JSON.stringify(line.params?.initialTurnsPage) ===
-          JSON.stringify({ limit: 20, sortDirection: 'desc', itemsView: 'summary' })
-    )
-  ).toBe(true);
-
-  await call('POST', `/v1/mesh/sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`);
-}
-
-async function runSlowCodexAppServerStartupRuntime(call: Call, dir: string, projectDir: string): Promise<void> {
-  await configureMockSlowCodexAppServerAgent(call, dir);
-  const sessionId = await createSession(call, projectDir);
-
-  const res = await call('POST', '/v1/mesh/sessions', {
-    transcriptTargetId: sessionId,
-    agentName: 'mock-codex-slow-app-server',
-    workingPath: projectDir,
-    launchMode: 'app-server'
-  });
-  expect(res.status).toBe(200);
-  const nativeSession = ((await res.json()) as { session: MeshSessionView }).session;
-  expect(nativeSession.launchMode).toBe('app-server');
-
-  await call('POST', `/v1/mesh/sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`);
-}
-
-async function runCodexOversizedStructuredLineRuntime(
-  call: Call,
-  dir: string,
-  projectDir: string,
-  handlers: ReturnType<typeof buildHandlers>
-): Promise<void> {
-  await configureMockCodexOversizedLineAgent(call, dir);
-  const sessionId = await createSession(call, projectDir);
-
-  const res = await call('POST', '/v1/mesh/sessions', {
-    transcriptTargetId: sessionId,
-    agentName: 'mock-codex-oversized-line',
-    workingPath: projectDir,
-    launchMode: 'app-server'
-  });
-  expect(res.status).toBe(200);
-  const nativeSession = ((await res.json()) as { session: MeshSessionView }).session;
-
-  await waitFor(() => {
-    const row = handlers.store.getMeshSession(nativeSession.id);
-    const events = handlers.store.listEvents(sessionId);
-    return row?.providerSessionRef === 'codex-thread-light' &&
-      events.some((event) => event.type === 'mesh.approval_requested' && event.payload.requestId === 'req_after_huge')
-      ? row
-      : undefined;
-  }, 5_000);
-  const rawFrames = await waitForRawOutput(handlers, sessionId, nativeSession.id, ['req_after_huge']);
-  expect(
-    rawFrames.reduce(
-      (bytes, frame) =>
-        bytes + (typeof frame.data === 'string' ? frame.data.length : JSON.stringify(frame.data).length),
-      0
-    )
-  ).toBeGreaterThan(3 * 1024 * 1024);
-
-  await call('POST', `/v1/mesh/sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`);
-}
-
-async function runAuthRelayRuntime(
-  call: Call,
-  fetchPath: FetchPath,
-  dir: string,
-  handlers: ReturnType<typeof buildHandlers>
-): Promise<void> {
-  await configureMockAuthAgent(call, dir);
-
-  let res = await call('POST', '/v1/mesh/agents/mock-native-auth/auth/start');
-  expect(res.status).toBe(200);
-  const authSession = ((await res.json()) as { session: MeshAgentAuthSessionView }).session;
-  expect(authSession.id.startsWith('ncliauth_')).toBe(true);
-  expect(authSession.provider).toBe('claude-code');
-  expect(authSession.authState).toBe('unknown');
-  expect(await Bun.file(join(dir, 'mesh-agent-auth-processes.json')).exists()).toBe(true);
-
-  expect(authSession.controlToken.length).toBeGreaterThanOrEqual(32);
-  res = await call('GET', `/v1/mesh/auth-sessions/${authSession.id}?controlToken=wrong-token-wrong-token-wrong-token`);
-  expect(res.status).toBe(404);
-
-  let stream = streamMeshAgentAuth(fetchPath, authSession.id, authSession.controlToken, (session) =>
-    session.outputSnapshot.includes('provider.example/login')
-  );
-  await stream.connected;
-  expect((await stream.done).at(-1)?.outputSnapshot).toContain('provider.example/login');
-
-  res = await call('POST', `/v1/mesh/auth-sessions/${authSession.id}/input?controlToken=${authSession.controlToken}`, {
-    input: '1234\n'
-  });
-  expect(res.status).toBe(200);
-  stream = streamMeshAgentAuth(fetchPath, authSession.id, authSession.controlToken, (session) =>
-    session.outputSnapshot.includes('auth-input:1234')
-  );
-  await stream.connected;
-  expect((await stream.done).at(-1)?.outputSnapshot).toContain('auth-input:1234');
-
-  res = await call('POST', `/v1/mesh/auth-sessions/${authSession.id}/resize?controlToken=${authSession.controlToken}`, {
-    cols: 90,
-    rows: 24
-  });
-  expect(res.status).toBe(200);
-
-  res = await call('GET', '/v1/mesh/agents/mock-native-auth/auth/status');
-  expect(res.status).toBe(200);
-  expect(((await res.json()) as { state: string }).state).toBe('authenticated');
-
-  res = await call('GET', '/v1/mesh/agents/mock-native-auth/usage');
-  expect(res.status).toBe(200);
-  expect(await res.json()).toMatchObject({
-    agentName: 'mock-native-auth',
-    provider: 'claude-code',
-    records: []
-  });
-
-  expect(handlers.store.listMeshSessionsForTranscriptTarget('ses_UNKNOWN00000')).toHaveLength(0);
-
-  res = await call('POST', `/v1/mesh/auth-sessions/${authSession.id}/stop?controlToken=${authSession.controlToken}`);
-  expect(res.status).toBe(200);
-  const stopped = await call(
-    'GET',
-    `/v1/mesh/auth-sessions/${authSession.id}?controlToken=${authSession.controlToken}`
-  );
-  expect(((await stopped.json()) as { session: MeshAgentAuthSessionView }).session.state).toBe('stopped');
-  await waitFor(async () =>
-    (await Bun.file(join(dir, 'mesh-agent-auth-processes.json')).exists()) ? undefined : true
-  );
-}
-
-async function runAuthStartReplacesPreviousRuntime(call: Call, dir: string): Promise<void> {
-  await configureMockAuthAgent(call, dir, { loginAuthenticates: false });
-
-  let res = await call('POST', '/v1/mesh/agents/mock-native-auth/auth/start');
-  expect(res.status).toBe(200);
-  const first = ((await res.json()) as { session: MeshAgentAuthSessionView }).session;
-
-  res = await call('POST', '/v1/mesh/agents/mock-native-auth/auth/start');
-  expect(res.status).toBe(200);
-  const second = ((await res.json()) as { session: MeshAgentAuthSessionView }).session;
-
-  expect(second.id).not.toBe(first.id);
-  res = await call('GET', `/v1/mesh/auth-sessions/${first.id}?controlToken=${first.controlToken}`);
-  expect(res.status).toBe(200);
-  expect(((await res.json()) as { session: MeshAgentAuthSessionView }).session.state).toBe('stopped');
-
-  res = await call('GET', `/v1/mesh/auth-sessions/${second.id}?controlToken=${second.controlToken}`);
-  expect(res.status).toBe(200);
-  expect(((await res.json()) as { session: MeshAgentAuthSessionView }).session.state).toBe('running');
-  await call('POST', `/v1/mesh/auth-sessions/${second.id}/stop?controlToken=${second.controlToken}`);
-}
-
-async function runAuthHeartbeatRuntime(call: Call, dir: string): Promise<void> {
-  await configureMockAuthAgent(call, dir, { loginAuthenticates: false });
-
-  let res = await call('POST', '/v1/mesh/agents/mock-native-auth/auth/start');
-  expect(res.status).toBe(200);
-  const authSession = ((await res.json()) as { session: MeshAgentAuthSessionView }).session;
-
-  res = await call(
-    'POST',
-    `/v1/mesh/auth-sessions/${authSession.id}/heartbeat?controlToken=${authSession.controlToken}`
-  );
-  expect(res.status).toBe(200);
-
-  await Bun.sleep(100);
-  res = await call('GET', `/v1/mesh/auth-sessions/${authSession.id}?controlToken=${authSession.controlToken}`);
-  expect(res.status).toBe(200);
-  expect(((await res.json()) as { session: MeshAgentAuthSessionView }).session.state).toBe('running');
-
-  await Bun.sleep(750);
-  res = await call('GET', `/v1/mesh/auth-sessions/${authSession.id}?controlToken=${authSession.controlToken}`);
-  expect(res.status).toBe(200);
-  expect(((await res.json()) as { session: MeshAgentAuthSessionView }).session.state).toBe('stopped');
-}
-
-async function runAuthStartSkipsLoginWhenAlreadyAuthenticatedRuntime(call: Call, dir: string): Promise<void> {
-  await configureMockAuthAgent(call, dir, { initiallyAuthenticated: true });
-
-  const res = await call('POST', '/v1/mesh/agents/mock-native-auth/auth/start');
-  expect(res.status).toBe(200);
-  const authSession = ((await res.json()) as { session: MeshAgentAuthSessionView }).session;
-
-  expect(authSession.id.startsWith('ncliauth_')).toBe(true);
-  expect(authSession.provider).toBe('claude-code');
-  expect(authSession.authState).toBe('authenticated');
-  expect(authSession.state).toBe('exited');
-  expect(authSession.exitCode).toBe(0);
-  expect(authSession.pid).toBe(0);
-  expect(await Bun.file(join(dir, 'mock-native-login-started')).exists()).toBe(false);
-  expect(await Bun.file(join(dir, 'mesh-agent-auth-processes.json')).exists()).toBe(false);
-}
-
-async function runAuthStatusTimeoutRuntime(call: Call, dir: string): Promise<void> {
-  await configureHangingAuthStatusAgent(call, dir);
-
-  const res = await call('GET', '/v1/mesh/agents/mock-hanging-auth-status/auth/status');
-  expect(res.status).toBe(502);
-  expect(((await res.json()) as { code: string }).code).toBe('provider_timeout');
-}
-
-async function runCodexEventPageRuntime(
-  call: Call,
-  dir: string,
-  projectDir: string,
-  handlers: ReturnType<typeof buildHandlers>
-): Promise<void> {
-  await configureMockCodexApprovalAgent(call, dir);
-  const sessionId = await createSession(call, projectDir);
-
-  const res = await call('POST', '/v1/mesh/sessions', {
-    transcriptTargetId: sessionId,
-    agentName: 'mock-codex-approval',
-    workingPath: projectDir,
-    launchMode: 'app-server'
-  });
-  expect(res.status).toBe(200);
-  const nativeSession = ((await res.json()) as { session: MeshSessionView }).session;
-  await waitFor(() => {
-    const row = handlers.store.getMeshSession(nativeSession.id);
-    return row?.providerSessionRef === 'codex-thread-1' ? row : undefined;
-  });
-
-  const page = await call(
-    'GET',
-    `/v1/mesh/sessions/${nativeSession.id}/events/raw?transcriptTargetId=${sessionId}&limit=1`
-  );
-  expect(page.status).toBe(200);
-  const pageBody = (await page.json()) as {
-    coverage: string;
-    records: Array<{ data: unknown }>;
-    nextCursor: string;
-  };
-  expect({
-    coverage: pageBody.coverage,
-    records: pageBody.records.map((record) => record.data),
-    nextCursor: pageBody.nextCursor
-  }).toEqual({
-    coverage: 'exact',
-    records: [{ id: 'turn_1', items: [] }],
-    nextCursor: 'provider:next_cursor'
-  });
-
-  const secondPage = await call(
-    'GET',
-    `/v1/mesh/sessions/${nativeSession.id}/events/raw?transcriptTargetId=${sessionId}&limit=1&before=${encodeURIComponent(pageBody.nextCursor)}`
-  );
-  expect(secondPage.status).toBe(200);
-  expect(((await secondPage.json()) as { nextCursor?: string }).nextCursor).toBe('provider:next_cursor');
-
-  const badCursorPage = await call(
-    'GET',
-    `/v1/mesh/sessions/${nativeSession.id}/events/raw?transcriptTargetId=${sessionId}&limit=1&before=${encodeURIComponent('bogus')}`
-  );
-  expect(badCursorPage.status).toBe(400);
-
-  await call('POST', `/v1/mesh/sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`);
-  const stoppedPage = await call(
-    'GET',
-    `/v1/mesh/sessions/${nativeSession.id}/events/raw?transcriptTargetId=${sessionId}&limit=1&before=${encodeURIComponent(pageBody.nextCursor)}`
-  );
-  expect(stoppedPage.status).toBe(200);
-  const stoppedBody = (await stoppedPage.json()) as {
-    coverage: string;
-    records: Array<{ data: unknown }>;
-    nextCursor?: string;
-  };
-  expect({
-    coverage: stoppedBody.coverage,
-    records: stoppedBody.records.map((record) => record.data),
-    nextCursor: stoppedBody.nextCursor
-  }).toEqual({
-    coverage: 'settled',
-    records: [
-      {
-        type: 'event_msg',
-        payload: {
-          type: 'task_complete',
-          turn_id: 'test-task-001',
-          last_agent_message: 'Codex notification test - this should trigger a notification!',
-          completed_at: 1780568410,
-          duration_ms: 10000
-        },
-        timestamp: '2026-06-04T15:30:10.000Z'
-      }
-    ],
-    nextCursor: 'provider:1'
-  });
-}
-
-async function runSpawnFailureRuntime(
-  call: Call,
-  projectDir: string,
-  handlers: ReturnType<typeof buildHandlers>
-): Promise<void> {
-  await configureMissingBinaryAgent(call);
-  const sessionId = await createSession(call, projectDir);
-
-  const res = await call('POST', '/v1/mesh/sessions', {
-    transcriptTargetId: sessionId,
-    agentName: 'missing-cli',
-    workingPath: projectDir,
-    launchMode: 'json-stream'
-  });
-  expect(res.status).toBeGreaterThanOrEqual(400);
-
-  const failed = await waitFor(() => {
-    return handlers.store
-      .listMeshSessionsForTranscriptTarget(sessionId)
-      .find((candidate) => candidate.state === 'failed');
-  });
-  expect(failed.pid).toBeNull();
-  expect(Date.parse(failed.exitedAt ?? '')).toBeGreaterThan(0);
-  expect(handlers.store.listEvents(sessionId).some((event) => event.type === 'mesh.exited')).toBe(true);
-}
-
-// Windows-skipped: these drive mock provider CLIs that are `#!/usr/bin/env bun` scripts (directly
-// executable only via a Unix shebang), and several exercise PTY mode, which Bun's ConPTY support on
-// Windows cannot capture/relay. The mesh-agent adapter itself spawns a real provider .exe on Windows
-// and is covered by the unit adapter tests; only this mock-driven integration harness is Unix-shaped.
 for (const kind of TRANSPORTS) {
-  describe.skipIf(process.platform === 'win32')(`mesh-agent runtime over ${kind}`, () => {
-    test('starts a provider-owned CLI session and relays IO', async () => {
+  describe.skipIf(process.platform === 'win32')(`mesh-agent session-event runtime over ${kind}`, () => {
+    test('runs a provider event turn and preserves the logical session', async () => {
       const { dir, projectDir, app, handlers } = await setup();
-      const t = serveTransport(kind, app);
+      const transport = serveTransport(kind, app);
+      const call: Call = (method, path, body) => transport.fetch(path, jsonInit(method, body));
       try {
-        await runRuntime((m, p, b) => t.fetch(p, jsonInit(m, b)), projectDir, handlers);
+        const { sessionId, meshSession } = await startSessionEventRuntime(call, dir, projectDir);
+        expect({
+          provider: meshSession.provider,
+          workingPath: meshSession.workingPath,
+          lifecycle: meshSession.lifecycle,
+          activity: meshSession.activity,
+          connection: meshSession.connection
+        }).toEqual({
+          provider: 'claude-code',
+          workingPath: await realpath(projectDir),
+          lifecycle: { state: 'active' },
+          activity: { state: 'idle', pid: null, queuedTurnCount: 0 },
+          connection: { state: 'inactive' }
+        });
+
+        const input = await call('POST', `/v1/mesh/sessions/${meshSession.id}/input?transcriptTargetId=${sessionId}`, {
+          input: 'hello session events'
+        });
+        expect(input.status).toBe(200);
+        const completed = handlers.store.getMeshSession(meshSession.id);
+        expect({
+          providerSessionRef: completed?.providerSessionRef,
+          state: completed?.state,
+          pid: completed?.pid
+        }).toEqual({
+          providerSessionRef: 'mock-session-1',
+          state: 'running',
+          pid: null
+        });
+
+        const stop = await call('POST', `/v1/mesh/sessions/${meshSession.id}/stop?transcriptTargetId=${sessionId}`);
+        expect(stop.status).toBe(200);
+        const stopped = await waitFor(() => {
+          const row = handlers.store.getMeshSession(meshSession.id);
+          return row?.state === 'stopped' ? row : undefined;
+        });
+        expect({ state: stopped.state, pid: stopped.pid, exitCode: stopped.exitCode }).toEqual({
+          state: 'stopped',
+          pid: null,
+          exitCode: null
+        });
       } finally {
-        await t.stop();
-        for (const row of handlers.store.listMeshSessionsForTranscriptTarget('ses_UNKNOWN00000')) {
-          handlers.store.closeMeshSession(row.id, new Date().toISOString(), null, 'stopped');
-        }
+        await transport.stop();
         await rm(dir, { recursive: true, force: true });
       }
     });
 
-    test('routes turn interrupt and steer requests', async () => {
+    test('stops logical MeshAgent sessions when their parent session resets or is deleted', async () => {
       const { dir, projectDir, app, handlers } = await setup();
-      const t = serveTransport(kind, app);
+      const transport = serveTransport(kind, app);
+      const call: Call = (method, path, body) => transport.fetch(path, jsonInit(method, body));
       try {
-        await runInterruptSteerRuntime((m, p, b) => t.fetch(p, jsonInit(m, b)), projectDir, handlers);
-      } finally {
-        await t.stop();
-        await rm(dir, { recursive: true, force: true });
-      }
-    });
-
-    test('stops active MeshAgent sessions when a project session is reset', async () => {
-      const { dir, projectDir, app, handlers } = await setup();
-      const t = serveTransport(kind, app);
-      try {
-        await runSessionResetStopsMeshAgentRuntime((m, p, b) => t.fetch(p, jsonInit(m, b)), projectDir, handlers);
-      } finally {
-        await t.stop();
-        await rm(dir, { recursive: true, force: true });
-      }
-    });
-
-    test(
-      'stops active MeshAgent sessions when a project session is deleted',
-      async () => {
-        const { dir, projectDir, app, handlers } = await setup();
-        const t = serveTransport(kind, app);
-        try {
-          await runSessionDeleteStopsMeshAgentRuntime((m, p, b) => t.fetch(p, jsonInit(m, b)), projectDir, handlers);
-        } finally {
-          await t.stop();
-          await rm(dir, { recursive: true, force: true });
-        }
-      },
-      SESSION_DELETE_TEST_TIMEOUT_MS
-    );
-
-    test('normalizes MeshAgent working paths through realpath', async () => {
-      const { dir, projectDir, app } = await setup();
-      const t = serveTransport(kind, app);
-      try {
-        await runWorkingPathRealpathRuntime((m, p, b) => t.fetch(p, jsonInit(m, b)), dir, projectDir);
-      } finally {
-        await t.stop();
-        await rm(dir, { recursive: true, force: true });
-      }
-    });
-
-    test('rejects direct MeshAgent starts outside the project working path', async () => {
-      const { dir, projectDir, app } = await setup();
-      const t = serveTransport(kind, app);
-      try {
-        await runWorkingPathBoundaryRuntime((m, p, b) => t.fetch(p, jsonInit(m, b)), dir, projectDir);
-      } finally {
-        await t.stop();
-        await rm(dir, { recursive: true, force: true });
-      }
-    });
-
-    test('starts a Claude Code style json-stream session and streams structured output', async () => {
-      const { dir, projectDir, app, handlers } = await setup();
-      const t = serveTransport(kind, app);
-      try {
-        await runJsonStreamRuntime((m, p, b) => t.fetch(p, jsonInit(m, b)), t.fetch, dir, projectDir, handlers);
-      } finally {
-        await t.stop();
-        await rm(dir, { recursive: true, force: true });
-      }
-    });
-
-    test('keeps provider-owned approvals separate from Monad tool approvals', async () => {
-      const { dir, projectDir, app, handlers } = await setup();
-      const t = serveTransport(kind, app);
-      try {
-        await runProviderApprovalRuntime((m, p, b) => t.fetch(p, jsonInit(m, b)), dir, projectDir, handlers);
-      } finally {
-        await t.stop();
-        await rm(dir, { recursive: true, force: true });
-      }
-    });
-
-    test('suppresses provider-owned approvals for managed MeshAgent runtimes', async () => {
-      const { dir, projectDir, app, handlers } = await setup();
-      const t = serveTransport(kind, app);
-      try {
-        await runManagedProviderApprovalSuppressedRuntime(
-          (m, p, b) => t.fetch(p, jsonInit(m, b)),
-          dir,
-          projectDir,
-          handlers
+        const resetRuntime = await startSessionEventRuntime(call, dir, projectDir);
+        const reset = await call('POST', `/v1/sessions/${resetRuntime.sessionId}/reset`);
+        expect(reset.status).toBe(200);
+        await waitFor(() =>
+          handlers.store.getMeshSession(resetRuntime.meshSession.id)?.state === 'stopped' ? true : undefined
         );
+
+        const deletedRuntime = await startSessionEventRuntime(call, dir, projectDir);
+        const deleted = await call('DELETE', `/v1/sessions/${deletedRuntime.sessionId}`);
+        expect(deleted.status).toBe(200);
+        // presence-ok: deleting the parent session must remove its MeshAgent ledger rows.
+        await waitFor(() => (handlers.store.getMeshSession(deletedRuntime.meshSession.id) === null ? true : undefined));
       } finally {
-        await t.stop();
+        await transport.stop();
         await rm(dir, { recursive: true, force: true });
       }
     });
 
-    test('resumes a Codex app-server provider session ref', async () => {
+    test('normalizes and contains MeshAgent working paths', async () => {
       const { dir, projectDir, app } = await setup();
-      const t = serveTransport(kind, app);
+      const transport = serveTransport(kind, app);
+      const call: Call = (method, path, body) => transport.fetch(path, jsonInit(method, body));
       try {
-        await runCodexResumeRuntime((m, p, b) => t.fetch(p, jsonInit(m, b)), dir, projectDir);
+        await configureSessionEventAgent(call, dir);
+        const projectLink = join(dir, 'project-link');
+        await symlink(projectDir, projectLink, 'dir');
+        const sessionId = await createSession(call, projectDir);
+        const normalized = await call('POST', '/v1/mesh/sessions', {
+          transcriptTargetId: sessionId,
+          agentName: 'mock-cli',
+          workingPath: projectLink
+        });
+        expect(normalized.status).toBe(200);
+        const normalizedSession = ((await normalized.json()) as { session: MeshSessionView }).session;
+        expect(normalizedSession.workingPath).toBe(await realpath(projectDir));
+
+        const outside = join(dir, 'outside');
+        await mkdir(outside);
+        const rejected = await call('POST', '/v1/mesh/sessions', {
+          transcriptTargetId: sessionId,
+          agentName: 'mock-cli',
+          workingPath: outside
+        });
+        expect(rejected.status).toBe(400);
+        expect(await rejected.json()).toEqual({
+          error: `workingPath must be within the project working directory: ${projectDir}`,
+          code: 'VALIDATION'
+        });
+        await call('POST', `/v1/mesh/sessions/${normalizedSession.id}/stop?transcriptTargetId=${sessionId}`);
       } finally {
-        await t.stop();
+        await transport.stop();
         await rm(dir, { recursive: true, force: true });
       }
     });
 
-    test('allows slow Codex app-server thread startup during managed runtime cold starts', async () => {
-      const { dir, projectDir, app } = await setup();
-      const t = serveTransport(kind, app);
-      try {
-        await runSlowCodexAppServerStartupRuntime((m, p, b) => t.fetch(p, jsonInit(m, b)), dir, projectDir);
-      } finally {
-        await t.stop();
-        await rm(dir, { recursive: true, force: true });
-      }
-    });
-
-    test('keeps parsing structured app-server events after an oversized provider line', async () => {
-      const { dir, projectDir, app, handlers } = await setup();
-      const t = serveTransport(kind, app);
-      try {
-        await runCodexOversizedStructuredLineRuntime(
-          (m, p, b) => t.fetch(p, jsonInit(m, b)),
-          dir,
-          projectDir,
-          handlers
-        );
-      } finally {
-        await t.stop();
-        await rm(dir, { recursive: true, force: true });
-      }
-    });
-
-    test('loads Codex app-server events through a paged provider request', async () => {
-      const { dir, projectDir, app, handlers } = await setup();
-      const t = serveTransport(kind, app);
-      try {
-        await runCodexEventPageRuntime((m, p, b) => t.fetch(p, jsonInit(m, b)), dir, projectDir, handlers);
-      } finally {
-        await t.stop();
-        await rm(dir, { recursive: true, force: true });
-      }
-    });
-
-    test('relays provider-owned MeshAgent auth flows without project session storage', async () => {
-      const { dir, app, handlers } = await setup();
-      const t = serveTransport(kind, app);
-      try {
-        await runAuthRelayRuntime((m, p, b) => t.fetch(p, jsonInit(m, b)), t.fetch, dir, handlers);
-      } finally {
-        await t.stop();
-        await rm(dir, { recursive: true, force: true });
-      }
-    });
-
-    test('skips provider login when MeshAgent auth status is already authenticated', async () => {
+    test('keeps PTY limited to provider authentication', async () => {
       const { dir, app } = await setup();
-      const t = serveTransport(kind, app);
+      const transport = serveTransport(kind, app);
+      const call: Call = (method, path, body) => transport.fetch(path, jsonInit(method, body));
       try {
-        await runAuthStartSkipsLoginWhenAlreadyAuthenticatedRuntime((m, p, b) => t.fetch(p, jsonInit(m, b)), dir);
+        await configureSessionEventAgent(call, dir);
+        const response = await call('POST', '/v1/mesh/agents/mock-cli/auth/start');
+        expect(response.status).toBe(200);
+        const session = ((await response.json()) as { session: MeshAgentAuthSessionView }).session;
+        expect({
+          provider: session.provider,
+          authState: session.authState,
+          state: session.state,
+          pid: session.pid
+        }).toEqual({
+          provider: 'claude-code',
+          authState: 'authenticated',
+          state: 'exited',
+          pid: 0
+        });
       } finally {
-        await t.stop();
+        await transport.stop();
         await rm(dir, { recursive: true, force: true });
       }
     });
 
-    test('starting an MeshAgent auth connect flow stops the previous connect flow for that agent', async () => {
-      const { dir, app } = await setup();
-      const t = serveTransport(kind, app);
-      try {
-        await runAuthStartReplacesPreviousRuntime((m, p, b) => t.fetch(p, jsonInit(m, b)), dir);
-      } finally {
-        await t.stop();
-        await rm(dir, { recursive: true, force: true });
-      }
-    });
-
-    test('MeshAgent auth connect flows stop when their browser heartbeat expires', async () => {
-      const { dir, app } = await setup({ meshAgentAuthHeartbeatTimeoutMs: 500 });
-      const t = serveTransport(kind, app);
-      try {
-        await runAuthHeartbeatRuntime((m, p, b) => t.fetch(p, jsonInit(m, b)), dir);
-      } finally {
-        await t.stop();
-        await rm(dir, { recursive: true, force: true });
-      }
-    });
-
-    test('returns a provider timeout code when MeshAgent auth status hangs', async () => {
-      const { dir, app } = await setup({ meshAgentAuthStatusTimeoutMs: 100 });
-      const t = serveTransport(kind, app);
-      try {
-        await runAuthStatusTimeoutRuntime((m, p, b) => t.fetch(p, jsonInit(m, b)), dir);
-      } finally {
-        await t.stop();
-        await rm(dir, { recursive: true, force: true });
-      }
-    }, 2_000);
-
-    test('records failed MeshAgent spawns in the lifecycle ledger', async () => {
+    test('records executable resolution failures as failed lifecycle entries', async () => {
       const { dir, projectDir, app, handlers } = await setup();
-      const t = serveTransport(kind, app);
+      const transport = serveTransport(kind, app);
+      const call: Call = (method, path, body) => transport.fetch(path, jsonInit(method, body));
       try {
-        await runSpawnFailureRuntime((m, p, b) => t.fetch(p, jsonInit(m, b)), projectDir, handlers);
+        await configureMissingBinaryAgent(call);
+        const sessionId = await createSession(call, projectDir);
+        const response = await call('POST', '/v1/mesh/sessions', {
+          transcriptTargetId: sessionId,
+          agentName: 'missing-cli',
+          workingPath: projectDir
+        });
+        expect(response.status).toBe(500);
+        const [failed] = handlers.store.listMeshSessionsForTranscriptTarget(sessionId);
+        expect({ state: failed?.state, pid: failed?.pid, hasExitedAt: Boolean(failed?.exitedAt) }).toEqual({
+          state: 'failed',
+          pid: null,
+          hasExitedAt: true
+        });
+        expect(
+          handlers.store
+            .listEvents(sessionId)
+            .filter((event) => event.type === 'mesh.exited')
+            .map((event) => ({ type: event.type, state: event.payload.state }))
+        ).toEqual([{ type: 'mesh.exited', state: 'failed' }]);
       } finally {
-        await t.stop();
+        await transport.stop();
         await rm(dir, { recursive: true, force: true });
       }
     });

@@ -1,16 +1,11 @@
-import type {
-  MeshAgentLaunchMode,
-  NativeAgentMonadCliEntry,
-  NativeAgentRuntimePromptInput,
-  NativeAgentRuntimeSpec
-} from '@monad/protocol';
+import type { NativeAgentMonadCliEntry, NativeAgentRuntimePromptInput, NativeAgentRuntimeSpec } from '@monad/protocol';
 
 import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, lstatSync, mkdirSync, readdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 
 import { definePrompt } from '#/agent/prompt-template.ts';
-import { getMeshAgentProviderAdapter, resolveMeshAgentDefaultLaunchMode } from '#/services/mesh-agent/index.ts';
+import { getMeshAgentProviderAdapter } from '#/services/mesh-agent/index.ts';
 import managedProjectRuntimePromptPath from './prompts/managed-project-runtime.prompt.md' with { type: 'file' };
 import managedProjectRuntimeMcpPromptPath from './prompts/managed-project-runtime-mcp.prompt.md' with { type: 'file' };
 import projectMemoryIndexPath from './prompts/project-memory-index.prompt.md' with { type: 'file' };
@@ -56,16 +51,6 @@ function managedProjectMonadCliEntry(): NativeAgentMonadCliEntry {
 
 function _managedProjectMonadCliCommand(): string {
   return monadCliCommand(managedProjectMonadCliEntry());
-}
-
-export function managedProjectLaunchMode(
-  agent: Pick<NativeAgentRuntimePromptInput, 'provider'> & { defaultLaunchMode?: MeshAgentLaunchMode },
-  requested?: MeshAgentLaunchMode
-): MeshAgentLaunchMode {
-  if (requested && requested !== 'pty') return requested;
-  const managed = getMeshAgentProviderAdapter(agent.provider).managedRuntime;
-  const defaultLaunchMode = agent.defaultLaunchMode ?? resolveMeshAgentDefaultLaunchMode(agent.provider);
-  return managed?.launchMode?.(defaultLaunchMode) ?? requested ?? defaultLaunchMode;
 }
 
 export function cleanupManagedProjectRuntimeToken(workspace: string): void {

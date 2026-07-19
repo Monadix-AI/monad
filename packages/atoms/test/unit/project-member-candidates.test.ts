@@ -13,7 +13,6 @@ test('project member candidates include project templates defined on MeshAgents'
         productIcon: 'codex',
         command: 'codex',
         enabled: true,
-        defaultLaunchMode: 'app-server',
         allowAutopilot: false,
         approvalOwnership: 'provider-owned',
         modelOptions: ['gpt-5.5'],

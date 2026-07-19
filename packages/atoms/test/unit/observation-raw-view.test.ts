@@ -44,10 +44,10 @@ test('a string payload renders verbatim as the preview', () => {
 });
 
 test('a structured payload is serialized to compact JSON for the preview', () => {
-  expect(rawFrameRow(frame(2, 'app-server', { type: 'item', uuid: 'u1' }))).toEqual({
+  expect(rawFrameRow(frame(2, 'stdout', { type: 'item', uuid: 'u1' }))).toEqual({
     identity: 'live:e1:2',
     cursor: 'live:e1:2',
-    stream: 'app-server',
+    stream: 'stdout',
     preview: '{"type":"item","uuid":"u1"}'
   });
 });

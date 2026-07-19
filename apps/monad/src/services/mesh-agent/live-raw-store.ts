@@ -6,9 +6,9 @@ import { mkdir, readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { formatObservationCursor } from '@monad/protocol';
 
-type LiveRawStream = 'app-server' | 'pty' | 'stderr' | 'stdout';
+type LiveRawStream = 'stderr' | 'stdout';
 
-export type LiveRawFrame = {
+type LiveRawFrame = {
   stream: LiveRawStream;
   payload: string;
   observedAt: string;
@@ -17,10 +17,10 @@ export type LiveRawFrame = {
 export type LiveRawRow = LiveRawFrame & { seq: number };
 
 export function liveRawRowsOutput(rows: LiveRawRow[]): string {
-  return rows.map((row) => (row.stream === 'app-server' ? `${row.payload}\n` : row.payload)).join('');
+  return rows.map((row) => row.payload).join('');
 }
 
-export type LiveRawPageRequest = {
+type LiveRawPageRequest = {
   after?: number;
   before?: number;
   limit: number;
@@ -28,17 +28,10 @@ export type LiveRawPageRequest = {
   sortDirection: 'asc' | 'desc';
 };
 
-export type LiveRawPage = {
+type LiveRawPage = {
   rows: LiveRawRow[];
   nextBefore?: number;
 };
-
-export class LiveRawCursorExpiredError extends Error {
-  constructor() {
-    super('live observation epoch is no longer available');
-    this.name = 'LiveRawCursorExpiredError';
-  }
-}
 
 type InsertResult = { lastInsertRowid: number | bigint };
 
@@ -127,15 +120,6 @@ export class LiveRawStore {
 
   cursorBefore(seq: number): ObservationCursor {
     return formatObservationCursor({ kind: 'live', observationEpoch: this.epoch, seq });
-  }
-
-  parseCursor(cursor: string): number {
-    const match = /^live:([^:]+):(\d+)$/.exec(cursor);
-    if (!match) throw new Error('invalid live observation cursor');
-    if (decodeURIComponent(match[1] ?? '') !== this.epoch) {
-      throw new LiveRawCursorExpiredError();
-    }
-    return Number(match[2]);
   }
 
   async closeAndDelete(): Promise<void> {

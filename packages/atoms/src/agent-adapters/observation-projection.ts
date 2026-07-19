@@ -20,7 +20,12 @@ export type {
 };
 
 const TERMINAL_EVENT_TYPES = new Set(['turn/completed', 'result', 'error', 'server_error', 'turn-end']);
-const TOOL_RESULT_EVENT_TYPES = new Set(['tool_result', 'function_call_output', 'item/toolCallOutput']);
+const TOOL_RESULT_EVENT_TYPES = new Set([
+  'tool_result',
+  'function_call_output',
+  'custom_tool_call_output',
+  'item/toolcalloutput'
+]);
 
 function threadStatusIsIdle(raw: unknown): boolean {
   const record = recordValue(raw);
@@ -39,13 +44,11 @@ export function classifyObservationActivity(
   event: MeshAgentObservationEvent
 ): MeshAgentObservationActivity | undefined {
   const type = event.providerEventType?.toLowerCase() ?? '';
-  if (event.providerEventType && TERMINAL_EVENT_TYPES.has(event.providerEventType)) return 'turn-end';
+  if (type && TERMINAL_EVENT_TYPES.has(type)) return 'turn-end';
   if (event.providerEventType === 'thread/status/changed')
     return threadStatusIsIdle(event.provenance.rawEvents[0]) ? 'turn-end' : 'status';
   if (event.role === 'tool') {
-    return event.providerEventType && TOOL_RESULT_EVENT_TYPES.has(event.providerEventType)
-      ? 'tool-result'
-      : 'tool-call';
+    return type && TOOL_RESULT_EVENT_TYPES.has(type) ? 'tool-result' : 'tool-call';
   }
   if (type.includes('reasoning') || type.includes('thinking') || type.includes('plan')) return 'thinking';
   if (event.role === 'user') return 'user';
@@ -53,7 +56,7 @@ export function classifyObservationActivity(
   return 'message';
 }
 
-/** Shared default for `isStreamingFragment`: the app-server / stream-json providers all name partial
+/** Shared default for `isStreamingFragment`: structured-stream providers all name partial
  *  token events with a `*delta`/`*chunk` suffix. Adapters with a different convention override it. */
 export function isStreamingObservationFragment(event: MeshAgentObservationEvent): boolean {
   const type = event.providerEventType?.toLowerCase() ?? '';

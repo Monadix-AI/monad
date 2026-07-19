@@ -20,24 +20,26 @@ export const MIGRATIONS: MigrationMeta[] = [
       "\nCREATE INDEX `idx_experience_state_events_record` ON `experience_state_events` (`atom_pack_id`,`project_id`,`record_key`,`version`);",
       "\nCREATE TABLE `experience_worker_wakeups` (\n\t`atom_pack_id` text NOT NULL,\n\t`experience_id` text NOT NULL,\n\t`project_id` text NOT NULL,\n\t`wake_key` text NOT NULL,\n\t`run_at` text NOT NULL,\n\t`attempt` integer DEFAULT 0 NOT NULL,\n\t`updated_at` text NOT NULL,\n\tPRIMARY KEY(`atom_pack_id`, `experience_id`, `project_id`, `wake_key`)\n);\n",
       "\nCREATE INDEX `idx_experience_worker_wakeups_due` ON `experience_worker_wakeups` (`run_at`);",
+      "\nCREATE TABLE `file_observations` (\n\t`session_id` text NOT NULL,\n\t`path` text NOT NULL,\n\t`hash` text NOT NULL,\n\t`coverage` text NOT NULL,\n\t`observed_at` text NOT NULL,\n\t`tool_call_id` text,\n\tPRIMARY KEY(`session_id`, `path`)\n);\n",
+      "\nCREATE INDEX `idx_file_observations_session` ON `file_observations` (`session_id`);",
+      "\nCREATE TABLE `memory` (\n\t`session_id` text NOT NULL,\n\t`key` text NOT NULL,\n\t`value` text NOT NULL,\n\tPRIMARY KEY(`session_id`, `key`)\n);\n",
       "\nCREATE TABLE `mesh_agent_inbox_items` (\n\t`mesh_session_id` text NOT NULL,\n\t`message_seq` integer NOT NULL,\n\t`delivery_id` text,\n\t`project_id` text,\n\t`member_instance_id` text,\n\t`trigger_message_id` text,\n\t`provider_session_ref` text,\n\t`provider_turn_id` text,\n\t`error_summary` text,\n\t`state` text DEFAULT 'queued' NOT NULL,\n\t`created_at` text NOT NULL,\n\t`delivered_at` text,\n\t`visible_at` text,\n\t`consumed_at` text,\n\t`updated_at` text,\n\tPRIMARY KEY(`mesh_session_id`, `message_seq`)\n);\n",
       "\nCREATE INDEX `idx_mesh_agent_inbox_items_pending` ON `mesh_agent_inbox_items` (`mesh_session_id`,`state`,`message_seq`);",
       "\nCREATE UNIQUE INDEX `idx_mesh_agent_inbox_delivery_id` ON `mesh_agent_inbox_items` (`delivery_id`) WHERE delivery_id IS NOT NULL;",
       "\nCREATE INDEX `idx_mesh_agent_inbox_project_trigger` ON `mesh_agent_inbox_items` (`project_id`,`trigger_message_id`);",
       "\nCREATE INDEX `idx_mesh_agent_inbox_member_state` ON `mesh_agent_inbox_items` (`project_id`,`member_instance_id`,`state`);",
-      "\nCREATE TABLE `mesh_sessions` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`transcript_target_id` text NOT NULL,\n\t`agent_name` text NOT NULL,\n\t`provider` text NOT NULL,\n\t`working_path` text NOT NULL,\n\t`launch_mode` text NOT NULL,\n\t`runtime_role` text DEFAULT 'interactive' NOT NULL,\n\t`agent_runtime_id` text,\n\t`agent_runtime_token_hash` text,\n\t`last_delivered_seq` integer DEFAULT 0 NOT NULL,\n\t`last_visible_seq` integer DEFAULT 0 NOT NULL,\n\t`state` text NOT NULL,\n\t`pid` integer,\n\t`provider_session_ref` text,\n\t`exit_code` integer,\n\t`started_at` text NOT NULL,\n\t`updated_at` text NOT NULL,\n\t`exited_at` text\n);\n",
+      "\nCREATE TABLE `mesh_sessions` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`transcript_target_id` text NOT NULL,\n\t`agent_name` text NOT NULL,\n\t`provider` text NOT NULL,\n\t`working_path` text NOT NULL,\n\t`runtime_role` text DEFAULT 'interactive' NOT NULL,\n\t`agent_runtime_id` text,\n\t`agent_runtime_token_hash` text,\n\t`last_delivered_seq` integer DEFAULT 0 NOT NULL,\n\t`last_visible_seq` integer DEFAULT 0 NOT NULL,\n\t`state` text NOT NULL,\n\t`pid` integer,\n\t`provider_session_ref` text,\n\t`exit_code` integer,\n\t`started_at` text NOT NULL,\n\t`updated_at` text NOT NULL,\n\t`exited_at` text\n);\n",
       "\nCREATE INDEX `idx_mesh_sessions_transcript_target` ON `mesh_sessions` (`transcript_target_id`);",
       "\nCREATE INDEX `idx_mesh_sessions_live` ON `mesh_sessions` (`state`) WHERE state IN ('starting', 'running');",
       "\nCREATE UNIQUE INDEX `idx_mesh_sessions_provider_ref` ON `mesh_sessions` (`transcript_target_id`,`provider`,`provider_session_ref`) WHERE provider_session_ref IS NOT NULL;",
-      "\nCREATE TABLE `file_observations` (\n\t`session_id` text NOT NULL,\n\t`path` text NOT NULL,\n\t`hash` text NOT NULL,\n\t`coverage` text NOT NULL,\n\t`observed_at` text NOT NULL,\n\t`tool_call_id` text,\n\tPRIMARY KEY(`session_id`, `path`)\n);\n",
-      "\nCREATE INDEX `idx_file_observations_session` ON `file_observations` (`session_id`);",
-      "\nCREATE TABLE `memory` (\n\t`session_id` text NOT NULL,\n\t`key` text NOT NULL,\n\t`value` text NOT NULL,\n\tPRIMARY KEY(`session_id`, `key`)\n);\n",
       "\nCREATE TABLE `message_attachments` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`project_id` text NOT NULL,\n\t`path` text NOT NULL,\n\t`name` text NOT NULL,\n\t`mime` text NOT NULL,\n\t`bytes` integer NOT NULL,\n\t`preview` text NOT NULL,\n\t`created_by` text,\n\t`created_at` text NOT NULL\n);\n",
       "\nCREATE INDEX `idx_message_attachments_project` ON `message_attachments` (`project_id`);",
       "\nCREATE TABLE `message_embeddings` (\n\t`message_id` text PRIMARY KEY NOT NULL,\n\t`dim` integer NOT NULL,\n\t`vec` blob NOT NULL,\n\t`model` text\n);\n",
-      "\nCREATE TABLE `messages` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`transcript_target_id` text NOT NULL,\n\t`role` text NOT NULL,\n\t`text` text NOT NULL,\n\t`type` text DEFAULT 'text' NOT NULL,\n\t`data` text,\n\t`stream_status` text DEFAULT 'settled' NOT NULL,\n\t`active` integer DEFAULT 1 NOT NULL,\n\t`include_in_context` integer,\n\t`created_at` text NOT NULL,\n\t`updated_at` text,\n\t`idempotency_key` text,\n\t`command_fingerprint` text\n);\n",
+      "\nCREATE TABLE `message_mutations` (\n\t`transcript_target_id` text NOT NULL,\n\t`idempotency_key` text NOT NULL,\n\t`command_fingerprint` text NOT NULL,\n\t`message_id` text NOT NULL,\n\t`message_revision` integer NOT NULL,\n\t`result_message` text NOT NULL,\n\tPRIMARY KEY(`transcript_target_id`, `idempotency_key`)\n);\n",
+      "\nCREATE TABLE `messages` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`transcript_target_id` text NOT NULL,\n\t`role` text NOT NULL,\n\t`text` text NOT NULL,\n\t`type` text DEFAULT 'text' NOT NULL,\n\t`data` text,\n\t`stream_status` text DEFAULT 'settled' NOT NULL,\n\t`active` integer DEFAULT 1 NOT NULL,\n\t`include_in_context` integer,\n\t`idempotency_key` text,\n\t`command_fingerprint` text,\n\t`created_at` text NOT NULL,\n\t`updated_at` text\n);\n",
       "\nCREATE INDEX `idx_messages_transcript_target` ON `messages` (`transcript_target_id`);",
       "\nCREATE INDEX `idx_messages_active` ON `messages` (`transcript_target_id`,`active`);",
+      "\nCREATE UNIQUE INDEX `idx_messages_target_idempotency` ON `messages` (`transcript_target_id`,`idempotency_key`);",
       "\nCREATE TABLE `native_agent_direct_messages` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`project_id` text NOT NULL,\n\t`mesh_session_id` text NOT NULL,\n\t`from_agent` text,\n\t`peer` text NOT NULL,\n\t`text` text NOT NULL,\n\t`attachment_ids` text,\n\t`created_at` text NOT NULL\n);\n",
       "\nCREATE INDEX `idx_native_agent_direct_messages_session_peer` ON `native_agent_direct_messages` (`mesh_session_id`,`peer`,`created_at`);",
       "\nCREATE INDEX `idx_native_agent_direct_messages_project_pair` ON `native_agent_direct_messages` (`project_id`,`from_agent`,`peer`,`created_at`);",
@@ -48,16 +50,14 @@ export const MIGRATIONS: MigrationMeta[] = [
       "\nCREATE TABLE `tasks` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`session_id` text NOT NULL,\n\t`title` text NOT NULL,\n\t`assignee_agent_id` text,\n\t`depends_on` text DEFAULT '[]' NOT NULL,\n\t`state` text NOT NULL,\n\t`version` integer DEFAULT 0 NOT NULL,\n\t`result` text,\n\t`error` text,\n\t`created_at` text NOT NULL,\n\t`updated_at` text NOT NULL\n);\n",
       "\nCREATE INDEX `idx_tasks_session` ON `tasks` (`session_id`);",
       "\nCREATE TABLE `tool_raw_outputs` (\n\t`transcript_target_id` text NOT NULL,\n\t`tool_call_id` text NOT NULL,\n\t`output` text NOT NULL,\n\t`created_at` text NOT NULL,\n\tPRIMARY KEY(`transcript_target_id`, `tool_call_id`)\n);\n",
+      "\nCREATE TABLE `transcript_message_revisions` (\n\t`transcript_target_id` text PRIMARY KEY NOT NULL,\n\t`revision` integer DEFAULT 0 NOT NULL\n);\n",
       "\nCREATE TABLE `usage_ledger` (\n\t`day` text NOT NULL,\n\t`provider` text NOT NULL,\n\t`model` text NOT NULL,\n\t`category` text DEFAULT 'chat' NOT NULL,\n\t`input_tokens` integer DEFAULT 0 NOT NULL,\n\t`output_tokens` integer DEFAULT 0 NOT NULL,\n\t`cache_read_tokens` integer DEFAULT 0 NOT NULL,\n\t`cache_write_tokens` integer DEFAULT 0 NOT NULL,\n\t`reasoning_tokens` integer DEFAULT 0 NOT NULL,\n\t`cost_usd` real DEFAULT 0 NOT NULL,\n\t`updated_at` text NOT NULL,\n\tPRIMARY KEY(`day`, `provider`, `model`, `category`)\n);\n",
       "\nCREATE TABLE `workplace_projects` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`title` text NOT NULL,\n\t`state` text NOT NULL,\n\t`archived` integer DEFAULT 0 NOT NULL,\n\t`model` text,\n\t`cwd` text,\n\t`origin` text,\n\t`member_templates` text DEFAULT '[]' NOT NULL,\n\t`created_at` text NOT NULL,\n\t`updated_at` text NOT NULL\n);\n",
-      "\nCREATE INDEX `idx_workplace_projects_state` ON `workplace_projects` (`state`,`archived`);",
-      "\nCREATE TABLE `message_mutations` (\n\t`transcript_target_id` text NOT NULL,\n\t`idempotency_key` text NOT NULL,\n\t`command_fingerprint` text NOT NULL,\n\t`message_id` text NOT NULL,\n\t`message_revision` integer NOT NULL,\n\t`result_message` text NOT NULL,\n\tPRIMARY KEY(`transcript_target_id`, `idempotency_key`)\n);\n",
-      "\nCREATE TABLE `transcript_message_revisions` (\n\t`transcript_target_id` text PRIMARY KEY NOT NULL,\n\t`revision` integer DEFAULT 0 NOT NULL\n);\n",
-      "\nCREATE UNIQUE INDEX `idx_messages_target_idempotency` ON `messages` (`transcript_target_id`,`idempotency_key`);"
+      "\nCREATE INDEX `idx_workplace_projects_state` ON `workplace_projects` (`state`,`archived`);"
     ],
     "bps": true,
-    "folderMillis": 1784356322575,
-    "hash": "6901e57614354563689541635d111558e329f530af8ce75c5b230b29f419b48f"
+    "folderMillis": 1784472030662,
+    "hash": "0d59650475487ede5d8baaff5b6502bcc3842d9017ac19241c3ebfc93037ea02"
   },
   {
     "sql": [
@@ -70,9 +70,9 @@ export const MIGRATIONS: MigrationMeta[] = [
       "\nINSERT INTO messages_fts_trigram(messages_fts_trigram) VALUES ('rebuild');\n"
     ],
     "bps": true,
-    "folderMillis": 1784356344140,
+    "folderMillis": 1784472067634,
     "hash": "60e311db225abad53357805d7914bab5e209a2e560ee2484d1e8dd886c4151e5"
   }
 ];
 
-export const LATEST_MIGRATION_TIMESTAMP = 1784356344140;
+export const LATEST_MIGRATION_TIMESTAMP = 1784472067634;

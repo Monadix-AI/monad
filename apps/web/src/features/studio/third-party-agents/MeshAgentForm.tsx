@@ -1,6 +1,5 @@
 import type {
   MeshAgentAdapterSettings,
-  MeshAgentLaunchMode,
   MeshAgentPresetView,
   MeshAgentProjectTemplate,
   MeshAgentProvider,
@@ -15,13 +14,7 @@ import { Button, Input, Label, Select, SelectContent, SelectItem, SelectTrigger,
 import { useState } from 'react';
 
 import { useT } from '#/components/I18nProvider';
-import {
-  canDisableAutopilot,
-  meshAgentLaunchModeOptions,
-  meshAgentSettingDescription,
-  meshAgentSettings,
-  normalizeMeshAgentLaunchMode
-} from './mesh-agent-settings-model';
+import { canDisableAutopilot, meshAgentSettingDescription, meshAgentSettings } from './mesh-agent-settings-model';
 import {
   argsToStr,
   envToStr,
@@ -68,11 +61,6 @@ export function AgentForm({
     )
   );
   const canProxyApprovals = agent ? canDisableAutopilot(agent, preset) : false;
-  const initialLaunchModeOptions = agent ? meshAgentLaunchModeOptions(agent, preset) : ['app-server' as const];
-  const [defaultLaunchMode, setDefaultLaunchMode] = useState<MeshAgentLaunchMode>(
-    normalizeMeshAgentLaunchMode(agent?.defaultLaunchMode ?? 'app-server', initialLaunchModeOptions)
-  );
-  const [appServerTransport, setAppServerTransport] = useState(agent?.appServerTransport ?? '');
   const [adapterSettingsValues, setAdapterSettingsValues] = useState<MeshAgentAdapterSettings>(
     agent?.adapterSettings ?? {}
   );
@@ -80,14 +68,11 @@ export function AgentForm({
     mode === 'settings' && !canProxyApprovals ? true : (agent?.allowAutopilot ?? true)
   );
   const [busy, setBusy] = useState(false);
-  const launchModeOptions = agent
-    ? meshAgentLaunchModeOptions({ ...agent, defaultLaunchMode }, preset)
-    : [defaultLaunchMode];
   const showIdentityFields = mode === 'create';
   const showAdvanced = mode === 'settings';
   const canToggleAutopilot = mode === 'create' || canProxyApprovals;
   const effectiveAllowAutopilot = mode === 'settings' && !canProxyApprovals ? true : allowAutopilot;
-  const adapterSettings = agent ? meshAgentSettings({ ...agent, defaultLaunchMode }, preset) : [];
+  const adapterSettings = agent ? meshAgentSettings(agent, preset) : [];
 
   const submit = async () => {
     if (!name.trim() || !command.trim()) return;
@@ -106,10 +91,6 @@ export function AgentForm({
         env: Object.keys(envRec).length ? envRec : undefined,
         projectTemplates: normalizeProjectTemplates(projectTemplates),
         enabled: agent?.enabled ?? true,
-        defaultLaunchMode,
-        appServerTransport: appServerTransport
-          ? (appServerTransport as MeshAgentView['appServerTransport'])
-          : undefined,
         allowAutopilot: effectiveAllowAutopilot,
         approvalOwnership: 'provider-owned',
         capabilities: agent?.capabilities,
@@ -191,41 +172,15 @@ export function AgentForm({
       {mode === 'settings' ? (
         <AdapterSettingsFields
           adapterSettings={adapterSettingsValues}
-          appServerTransport={appServerTransport}
           canToggleAutopilot={canToggleAutopilot}
           command={command}
-          defaultLaunchMode={defaultLaunchMode}
           effectiveAllowAutopilot={effectiveAllowAutopilot}
           setAdapterSettings={setAdapterSettingsValues}
           setAllowAutopilot={setAllowAutopilot}
-          setAppServerTransport={setAppServerTransport}
           setCommand={setCommand}
-          setDefaultLaunchMode={setDefaultLaunchMode}
           settings={adapterSettings}
         />
-      ) : (
-        <div className="flex flex-col gap-1">
-          <Label className="text-xs">{t('web.meshAgent.launchMode')}</Label>
-          <Select
-            onValueChange={(value) => setDefaultLaunchMode(value as MeshAgentLaunchMode)}
-            value={defaultLaunchMode}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {launchModeOptions.map((launchMode) => (
-                <SelectItem
-                  key={launchMode}
-                  value={launchMode}
-                >
-                  {launchMode}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      )}
+      ) : null}
       <ProjectTemplatesEditor
         modelOptions={strToModelOptions(modelOptions)}
         onChange={setProjectTemplates}
@@ -297,49 +252,34 @@ export function AgentForm({
 
 function AdapterSettingsFields({
   settings,
-  defaultLaunchMode,
-  appServerTransport,
   adapterSettings,
   command,
   effectiveAllowAutopilot,
   canToggleAutopilot,
-  setDefaultLaunchMode,
-  setAppServerTransport,
   setAdapterSettings,
   setAllowAutopilot,
   setCommand
 }: {
   settings: MeshAgentSetting[];
-  defaultLaunchMode: MeshAgentLaunchMode;
-  appServerTransport: string;
   adapterSettings: MeshAgentAdapterSettings;
   command: string;
   effectiveAllowAutopilot: boolean;
   canToggleAutopilot: boolean;
-  setDefaultLaunchMode: (value: MeshAgentLaunchMode) => void;
-  setAppServerTransport: (value: string) => void;
   setAdapterSettings: Dispatch<SetStateAction<MeshAgentAdapterSettings>>;
   setAllowAutopilot: Dispatch<SetStateAction<boolean>>;
   setCommand: (value: string) => void;
 }) {
   const t = useT();
 
-  const visibleSettings = settings.filter(
-    (setting) => setting.key !== 'appServerTransport' || defaultLaunchMode === 'app-server'
-  );
   const stringValue = (key: string): string => {
-    if (key === 'defaultLaunchMode') return defaultLaunchMode;
-    if (key === 'appServerTransport') return appServerTransport;
     if (key === 'command') return command;
     const value = adapterSettings[key];
     if (typeof value === 'string') return value;
     return '';
   };
   const setStringValue = (key: string, value: string) => {
-    if (key === 'defaultLaunchMode') setDefaultLaunchMode(value as MeshAgentLaunchMode);
-    if (key === 'appServerTransport') setAppServerTransport(value);
     if (key === 'command') setCommand(value);
-    if (key !== 'defaultLaunchMode' && key !== 'appServerTransport' && key !== 'command') {
+    if (key !== 'command') {
       setAdapterSettings((current) => {
         const next = { ...current };
         if (value) next[key] = value;
@@ -351,7 +291,7 @@ function AdapterSettingsFields({
 
   return (
     <>
-      {visibleSettings.map((setting) => {
+      {settings.map((setting) => {
         if (setting.kind === 'switch') {
           const checked =
             setting.key === 'allowAutopilot' ? effectiveAllowAutopilot : adapterSettings[setting.key] === true;

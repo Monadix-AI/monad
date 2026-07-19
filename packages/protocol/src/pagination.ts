@@ -6,6 +6,12 @@ import { z } from 'zod';
 
 import { httpUrlSchema } from './url.ts';
 
+export function normalizeQueryStringValue(value: unknown): unknown {
+  return Array.isArray(value) ? value.join(',') : value;
+}
+
+export const queryStringValueSchema = z.preprocess(normalizeQueryStringValue, z.string());
+
 /** Shared query fields for offset-based (page-number) pagination. */
 export const offsetPaginationQuerySchema = z.object({
   limit: z.number().int().positive().optional(),
@@ -26,7 +32,7 @@ export type OffsetPaginationResponse = z.infer<typeof offsetPaginationResponseSc
 /** Shared query fields for cursor-based (infinite-load) pagination. */
 export const cursorPaginationQuerySchema = z.object({
   limit: z.coerce.number().int().positive().optional(),
-  before: z.string().optional()
+  before: queryStringValueSchema.optional()
 });
 export type CursorPaginationQuery = z.infer<typeof cursorPaginationQuerySchema>;
 

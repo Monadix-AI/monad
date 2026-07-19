@@ -1,9 +1,9 @@
 import type { MeshAgentProviderAdapter } from '@monad/sdk-atom';
 
-import { makeAppServerCliAdapter } from '../app-server-jsonrpc.ts';
-import { createAppServerEventSource } from '../event-source.ts';
+import { createProjectedEventSource } from '../event-source.ts';
+import { makeGatewayCliAdapter } from '../legacy/gateway-cli-adapter.ts';
 import { createFrameworkSettingsImport } from '../settings-import/index.ts';
-import { openClawAppServerHooks, requestOpenClawEventPage } from './app-server.ts';
+import { openClawGatewayHooks } from './gateway/index.ts';
 import { openClawObservationProjection } from './observation.ts';
 
 // OpenClaw ships no models-list command; these are the models its docs advertise for `--model`.
@@ -29,13 +29,13 @@ const OPENCLAW_SUPPORTED_MODELS = ['openclaw-default'];
 // Net effect: OpenClaw managed agents do NOT currently support autopilot — `allowAutopilot: true` no
 // longer sends a broken flag (previously could error/no-op unpredictably), but OpenClaw still prompts
 // for approvals it has no channel to resolve while unmanaged. Delegated mode (`allowAutopilot: false`)
-// is unaffected and works today via the real `approval.request`/`approval.respond` app-server channel
-// (see ./app-server.ts) — this gap is specifically the *autopilot* path. No `managedRuntime.env` hook is
+// is unaffected and works today via the real `approval.request`/`approval.respond` gateway channel
+// (see ./gateway) — this gap is specifically the *autopilot* path. No `managedRuntime.env` hook is
 // wired below for this reason — leaving it unset is the correct, safe state until that's resolved.
 
-// Real `gateway` app-server backend (verified live, see openclaw/app-server.ts) — uses `appServerHooks`
+// Real gateway backend (verified live, see openclaw/gateway) — uses provider-owned hooks
 // rather than `protocol` because OpenClaw's wire envelope isn't generic JSON-RPC.
-const baseOpenClawMeshAgentAdapter = makeAppServerCliAdapter({
+const baseOpenClawMeshAgentAdapter = makeGatewayCliAdapter({
   provider: 'openclaw',
   productIcon: 'openclaw',
   label: 'OpenClaw',
@@ -43,7 +43,7 @@ const baseOpenClawMeshAgentAdapter = makeAppServerCliAdapter({
   // `openclaw gateway` alone only prints the subcommand's usage and exits — the real foreground-run
   // command is `gateway run`. `--allow-unconfigured` lets it start without a prior `openclaw onboard`
   // (verified against `openclaw gateway --help`; the daemon otherwise refuses to start a fresh config).
-  appServerSubcommand: ['gateway', 'run', '--allow-unconfigured'],
+  gatewaySubcommand: ['gateway', 'run', '--allow-unconfigured'],
   models: OPENCLAW_SUPPORTED_MODELS,
   installHint: 'Install OpenClaw, then sign in with openclaw models auth login.',
   installUrl: 'https://docs.openclaw.ai',
@@ -59,16 +59,15 @@ const baseOpenClawMeshAgentAdapter = makeAppServerCliAdapter({
     return 'unknown';
   },
   managedRuntime: {
-    launchMode: () => 'app-server',
     usesDeveloperInstructions: true
   },
-  appServerHooks: openClawAppServerHooks,
+  gatewayHooks: openClawGatewayHooks,
   // OpenClaw's real startup line is `listening on port ${port} 🚀` (confirmed from the shipped
   // package's compiled source) — it never matches the daemon's generic `ws://host:port` announce scan,
-  // so a launch would hang until the app-server startup timeout even with a correct wire protocol.
+  // so a launch would hang until the gateway startup timeout even with a correct wire protocol.
   // `--port` is a real, documented flag (`openclaw gateway --help`), so the daemon just assigns the
   // port itself and dials it directly instead of parsing for one.
-  appServerWs: {
+  gatewayWs: {
     usesDaemonAssignedPort: true
   }
 });
@@ -76,16 +75,14 @@ const baseOpenClawMeshAgentAdapter = makeAppServerCliAdapter({
 export const openClawMeshAgentAdapter: MeshAgentProviderAdapter = {
   ...baseOpenClawMeshAgentAdapter,
   observation: openClawObservationProjection,
-  events: createAppServerEventSource({
+  events: createProjectedEventSource({
     provider: 'openclaw',
-    projection: openClawObservationProjection,
-    requestPage: requestOpenClawEventPage
+    projection: openClawObservationProjection
   }),
   settingsImport: createFrameworkSettingsImport('openclaw', 'OpenClaw'),
-  // OpenClaw's managed runtime is app-server, whose JSON-RPC channel projects + resolves approvals —
+  // OpenClaw's managed runtime is its gateway, whose channel projects + resolves approvals —
   // so it can delegate provider approvals to the human. (Hermes shares the factory but has no
-  // app-server backend, so it deliberately doesn't opt in.)
-  supportsApprovalResolution: (launchMode) => launchMode === 'app-server',
+  // persistent gateway backend, so it deliberately doesn't opt in.)
   detect(probes) {
     const preset = baseOpenClawMeshAgentAdapter.detect(probes);
     return {

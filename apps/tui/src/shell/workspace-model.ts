@@ -6,7 +6,6 @@ import type {
   ProjectId,
   SessionId,
   UpdateWorkplaceProjectRequest,
-  WorkplaceProjectMemberSettings,
   WorkplaceProjectMemberTemplate,
   WorkplaceProjectMemberType
 } from '@monad/protocol';
@@ -38,7 +37,6 @@ export interface ProjectMemberCandidate {
   cwd?: string;
   osSandbox?: boolean;
   forwardMcp?: boolean;
-  defaultLaunchMode?: WorkplaceProjectMemberSettings['launchMode'];
   provider?: string;
   productIcon?: string;
 }

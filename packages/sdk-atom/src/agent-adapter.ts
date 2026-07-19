@@ -5,9 +5,7 @@ import type {
   AdapterMigrationPreview,
   AdapterMigrationPreviewRequest,
   AgentObservationEvent,
-  MeshAgentAppServerTransport,
   MeshAgentAuthState,
-  MeshAgentLaunchMode,
   MeshAgentObservationEvent,
   MeshAgentPresetView,
   MeshAgentProductIcon,
@@ -40,43 +38,10 @@ export class MeshAgentError extends Error {
   }
 }
 
-type MeshAgentCapability =
-  | MeshAgentLaunchMode
-  | 'provider-approval'
-  | 'approval-resolution'
-  | 'structured-output'
-  | 'session-resume'
-  | 'rollout-json-fallback';
-
-/** `ws`-transport dial hints a `buildLaunch` can attach to its `MeshAgentLaunchSpec` when the default
- *  "scan the child's stderr for a self-announced `ws://host:port` line" dial strategy doesn't fit the
- *  provider's real gateway (e.g. it prints a differently-shaped announce line, announces on stdout
- *  instead of stderr, serves at a non-root path, or needs query-string auth). */
-interface MeshAgentAppServerWsHints {
-  /** URL path appended after `ws://host:port` (e.g. `/api/ws`). Root (`''`) by default. */
-  path?: string;
-  /** Query-string params merged into the dial URL (e.g. a shared-secret token). */
-  query?: Record<string, string>;
-  /** When set, the daemon dials this EXACT port directly (retrying until the child accepts, or the
-   *  launch timeout elapses) instead of scanning stdout/stderr for a self-announced port — for a
-   *  gateway the daemon itself launched with an explicit `--port` flag (see
-   *  `BuildMeshAgentLaunchOptions.appServerPort`). */
-  port?: number;
-}
-
 export interface MeshAgentLaunchSpec {
   argv: string[];
   cwd: string;
   env?: Record<string, string>;
-  launchMode: MeshAgentLaunchMode;
-  /** Byte channel for `app-server` launches. Absent (or `stdio`) means the daemon owns the child's
-   *  stdin/stdout; `ws`/`unix` mean the child listens and the daemon dials the socket. */
-  appServerTransport?: MeshAgentAppServerTransport;
-  /** `ws`-transport dial hints; absent → the daemon's default self-announced-port scan. */
-  appServerWs?: MeshAgentAppServerWsHints;
-  provider: MeshAgentProvider;
-  approvalOwnership: 'provider-owned';
-  capabilities: MeshAgentCapability[];
 }
 
 export type MeshAgentStartPreflight =
@@ -111,31 +76,15 @@ export type MeshAgentStartPreflight =
       reason: string;
     };
 
-export interface BuildMeshAgentLaunchOptions {
-  workingPath: string;
-  extraWorkingPaths?: string[];
-  launchMode?: MeshAgentLaunchMode;
-  appServerTransport?: MeshAgentAppServerTransport;
-  /** For `appServerTransport: 'unix'`, the AF_UNIX socket path the daemon allocated for the child to
-   *  listen on (`--listen unix://<path>`). Ignored by other transports. */
-  appServerSocketPath?: string;
-  /** For `appServerTransport: 'ws'` when the daemon pre-allocates the loopback port (rather than
-   *  parsing it from the child's announce output) — a `buildLaunch` that uses this must echo it back
-   *  as `MeshAgentLaunchSpec.appServerWs.port` so the daemon knows to skip announce-scanning. */
-  appServerPort?: number;
-  providerSessionRef?: string;
-  systemPromptFile?: string;
-  skipProviderApprovals?: boolean;
-  modelName?: string;
-  modelId?: string;
-  reasoningEffort?: string;
-  speed?: 'standard' | 'fast';
-  mcpConfigArgs?: string[];
-}
-
 export interface MeshAgentSessionRuntimeContext {
   workingPath: string;
+  extraWorkingPaths?: string[];
   providerSessionRef?: string;
+  systemPromptFile?: string;
+  developerInstructions?: string;
+  skipProviderApprovals?: boolean;
+  mcpConfigArgs?: string[];
+  env?: Record<string, string>;
   modelName?: string;
   modelId?: string;
   reasoningEffort?: string;
@@ -235,49 +184,9 @@ export const meshAgentOutputEventSchema = z.discriminatedUnion('type', [
   })
 ]);
 
-/** Transport-neutral outbound frame channel for an `app-server` launch. The daemon owns which
- *  physical transport backs it (the child's stdin pipe for `stdio`, a WebSocket for `ws`, a socket
- *  for `unix`) and hands the adapter this uniform interface — an adapter frames JSON-RPC and calls
- *  `send`; it never learns whether the bytes travel over a pipe or a socket. */
-export interface MeshAgentAppServerConnection {
-  send(frame: string): void;
-  close(): void;
-}
-
-export interface MeshAgentRuntimeHandle {
-  terminal?: {
-    write(input: string): void;
-    resize(cols: number, rows: number): void;
-    close(): void;
-  };
-  /** Raw byte pipe to the child's stdin — the delivery channel for `json-stream` adapters that
-   *  write newline-delimited JSON. `app-server` adapters use `appServer` instead, so the transport
-   *  (pipe vs socket) stays hidden from them. */
-  stdin?: {
-    write(input: string): void;
-    flush?(): void | Promise<void>;
-    end?(): void | Promise<void>;
-  };
-  /** Frame channel for `app-server` sessions, present regardless of the physical transport the
-   *  daemon dialled (stdio/ws/unix). */
-  appServer?: MeshAgentAppServerConnection;
-  launchMode?: MeshAgentLaunchMode;
-  providerSessionRef?: string | null;
-  nextRequestId?(): number;
-  /** Per-session JSON-RPC request→kind ledger. An adapter records what each outbound request id was
-   *  for (e.g. `thread` / `eventPage`) so a later response can be dispatched by id rather than by
-   *  guessing its result shape. Present only for stdio/app-server sessions the host owns. */
-  pendingRequests?: Map<string | number, string>;
-  kill(signal?: NodeJS.Signals): void;
-}
-
 export interface MeshAgentProviderEventContext {
   providerSessionRef: string;
   workingPath: string;
-  limitBytes: number;
-  requestProviderPage?(
-    send: (handle: MeshAgentRuntimeHandle) => string | number
-  ): Promise<{ items: unknown[]; nextCursor?: string }>;
 }
 
 export interface MeshAgentProviderEventPageContext extends MeshAgentProviderEventContext {
@@ -320,28 +229,6 @@ export interface MeshAgentEventSource {
     context: MeshAgentProviderEventContext,
     request: MeshAgentEventPageRequest
   ): Promise<MeshAgentEventPageResult>;
-}
-
-export interface MeshAgentApprovalResolution {
-  requestId: string;
-  allow: boolean;
-  reason?: string;
-  request?: Record<string, unknown>;
-}
-
-export interface MeshAgentInitializeContext {
-  workingPath: string;
-  providerSessionRef?: string;
-  developerInstructions?: string;
-  modelName?: string;
-  modelId?: string;
-  reasoningEffort?: string;
-  speed?: 'standard' | 'fast';
-  /** The agent's operator-configured env map (same one `buildLaunch` passes to the child process).
-   *  An app-server adapter whose gateway takes a shared-secret credential (e.g. a token env var the
-   *  gateway process itself reads) uses this to send the matching credential over the wire — the
-   *  credential is explicit per-agent config, not a Monad-invented ambient env var. */
-  env?: Record<string, string>;
 }
 
 export interface MeshAgentAuthStatusProbe {
@@ -472,8 +359,6 @@ export interface MeshAgentManagedEnvContext {
  *  managed-runtime code stays provider-agnostic and reads intent from the adapter instead of branching
  *  on the provider id. */
 export interface MeshAgentManagedRuntime {
-  /** Launch-mode override for the managed runtime. */
-  launchMode?(defaultMode: MeshAgentLaunchMode): MeshAgentLaunchMode;
   /** Env additions for the managed child. */
   env?(context: MeshAgentManagedEnvContext): Record<string, string>;
   /** CLI args wiring monad's managed MCP server into the provider. */
@@ -530,10 +415,8 @@ export interface AdapterMigration {
 }
 export type MeshAgentSettingsImport = AdapterMigration;
 
-/** The authoring contract for an agent-adapter atom: a native coding-CLI
- *  wrapped as a monad agent. The daemon owns the process/pty/socket lifecycle and calls these hooks;
- *  the adapter only builds launch specs and translates the provider's wire format to/from
- *  `MeshAgentOutputEvent`s. Registered through `AtomPackContext.registerAgentAdapter`. */
+/** The authoring contract for an agent-adapter atom. Mesh session execution is exposed only through
+ *  `createSessionRuntime`; authentication and read-only probes use separate command specs. */
 export interface MeshAgentProviderAdapter {
   /** Environment policy shared by every delivery of this provider. */
   environment?: MeshAgentEnvironmentPolicy;
@@ -566,43 +449,13 @@ export interface MeshAgentProviderAdapter {
   modelOptions?(agent: MeshAgentView): MeshAgentModelOptionsProbe;
   resolveCommand?(command: string, probes?: BinProbes): string | undefined;
   createSessionRuntime?(agent: MeshAgentView, context: MeshAgentSessionRuntimeContext): SessionEventRuntimeDefinition;
-  buildLaunch(agent: MeshAgentView, opts: BuildMeshAgentLaunchOptions): MeshAgentLaunchSpec;
   /** Return the first provider-specific argv token that enables an unsafe/unattended mode. The daemon
    *  owns the `allowAutopilot` decision, while each adapter owns its CLI vocabulary. */
   unsafeArgument?(args: string[]): string | undefined;
-  /** True when this provider's `ws` app-server launches want a daemon-assigned port (see
-   *  `MeshAgentAppServerWsHints.port`) rather than a self-announced one. The daemon uses this to decide
-   *  whether pre-allocating a port before `buildLaunch` runs is worth the syscall — a self-announcing ws
-   *  provider that doesn't set this never reads the allocated port at all. */
-  usesDaemonAssignedAppServerPort?: boolean;
-  /** `cli-oneshot` launch mode only: build the per-turn argv SUFFIX (the directive + any resume
-   *  selector) appended to the launch spec's base argv each time the daemon spawns a fresh process for
-   *  a turn. Absent → the adapter has no one-shot mode. */
-  oneshotTurnArgs?(input: string, opts: { providerSessionRef?: string | null }): string[];
   buildAuthLaunch(agent: MeshAgentView): MeshAgentLaunchSpec;
   buildAuthStatusLaunch(agent: MeshAgentView): MeshAgentLaunchSpec;
   authStatus(agent: MeshAgentView): MeshAgentAuthStatusProbe;
   argumentSupport?(agent: MeshAgentView): MeshAgentArgumentSupportProbe;
   usage?(agent: MeshAgentView): MeshAgentUsageProbe;
   parseAuthStatus(output: string, exitCode: number | null): MeshAgentAuthState;
-  initialize?(handle: MeshAgentRuntimeHandle, context: MeshAgentInitializeContext): void;
-  /** `handle`, when present, gives per-session JSON-RPC context: the request→kind ledger for by-id
-   *  response dispatch and a stdin sink for replying to unhandled server-initiated requests. Adapters
-   *  that don't need it (single-shot stdout parsers) ignore it. */
-  parseOutput(chunk: string, handle?: MeshAgentRuntimeHandle): MeshAgentOutputEvent[];
-  sendInput(handle: MeshAgentRuntimeHandle, input: string): void;
-  /** True when the given launch mode can both project provider approval requests as
-   *  `approval_requested` events AND resolve them via `resolveApproval` (a two-way channel exists).
-   *  The daemon consults this before dropping the skip-approval flag for a managed agent: only a
-   *  resolvable mode may delegate approvals to the human; otherwise it stays full-auto. Absent → the
-   *  adapter has no resolvable approval channel in any mode. */
-  supportsApprovalResolution?(launchMode: MeshAgentLaunchMode): boolean;
-  resolveApproval(handle: MeshAgentRuntimeHandle, resolution: MeshAgentApprovalResolution): void;
-  /** Cancel the in-flight turn without tearing down the session/thread (app-server only). Absent →
-   *  the provider offers no graceful interrupt; the host falls back to stopping the session. */
-  interrupt?(handle: MeshAgentRuntimeHandle): void;
-  /** Inject additional input into the in-flight turn (app-server only). Absent → not supported. */
-  steer?(handle: MeshAgentRuntimeHandle, input: string): void;
-  resize(handle: MeshAgentRuntimeHandle, cols: number, rows: number): void;
-  stop(handle: MeshAgentRuntimeHandle): void;
 }

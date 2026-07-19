@@ -160,6 +160,10 @@ export function useObservationPanel(args: UseObservationPanelArgs): ObservationP
   const [eventsFailed, setEventsFailed] = useState(false);
   const [loadedEventsKey, setLoadedEventsKey] = useState<string | null>(null);
   const [eventNextCursor, setEventsNextCursor] = useState<string | null>(null);
+  // Bumped whenever a page request settles. A bootstrap that arrived while another request was in
+  // flight is refused, and nothing else would ever re-trigger it — the panel would then wait on a
+  // backfill that never runs, hiding the plane behind its loading state forever.
+  const [eventsSettledCount, setEventsSettledCount] = useState(0);
   const eventsLoadGenerationRef = useRef(0);
   const eventsInFlightGenerationRef = useRef<number | null>(null);
   const lastEventRequestCursorRef = useRef<string | null>(null);
@@ -239,8 +243,8 @@ export function useObservationPanel(args: UseObservationPanelArgs): ObservationP
       before: string | null,
       bootstrapKey?: string,
       requestKind: 'bootstrap' | 'older' = bootstrapKey ? 'bootstrap' : 'older'
-    ) => {
-      if (eventsInFlightGenerationRef.current !== null) return;
+    ): boolean => {
+      if (eventsInFlightGenerationRef.current !== null) return false;
       lastEventRequestCursorRef.current = before;
       lastEventRequestKindRef.current = requestKind;
       setEventsLoading(true);
@@ -266,6 +270,7 @@ export function useObservationPanel(args: UseObservationPanelArgs): ObservationP
           })
           .finally(() => {
             if (eventsInFlightGenerationRef.current === generation) eventsInFlightGenerationRef.current = null;
+            setEventsSettledCount((count) => count + 1);
             if (eventsLoadGenerationRef.current !== generation) return;
             if (bootstrapKey) setLoadedEventsKey(bootstrapKey);
             setEventsLoading(false);
@@ -284,21 +289,24 @@ export function useObservationPanel(args: UseObservationPanelArgs): ObservationP
           })
           .finally(() => {
             if (eventsInFlightGenerationRef.current === generation) eventsInFlightGenerationRef.current = null;
+            setEventsSettledCount((count) => count + 1);
             if (eventsLoadGenerationRef.current !== generation) return;
             if (bootstrapKey) setLoadedEventsKey(bootstrapKey);
             setEventsLoading(false);
             setEventsLoadingKind(null);
           });
       }
+      return true;
     },
     [subscription.mode, meshSessionId, transcriptTargetId, convenienceEventsTrigger, rawEventsTrigger]
   );
+  // biome-ignore lint/correctness/useExhaustiveDependencies: eventsSettledCount re-runs a refused bootstrap
   useEffect(() => {
     if (!eventBootstrap) return;
     if (backfilledEventsKeyRef.current === eventBootstrap.key) return;
+    if (!loadEventPage(eventBootstrap.request.before ?? null, eventBootstrap.key)) return;
     backfilledEventsKeyRef.current = eventBootstrap.key;
-    loadEventPage(eventBootstrap.request.before ?? null, eventBootstrap.key);
-  }, [eventBootstrap, loadEventPage]);
+  }, [eventBootstrap, eventsSettledCount, loadEventPage]);
 
   const open = useCallback(() => dispatch({ type: 'panelOpened' }), []);
   const close = useCallback(() => dispatch({ type: 'panelClosed' }), []);

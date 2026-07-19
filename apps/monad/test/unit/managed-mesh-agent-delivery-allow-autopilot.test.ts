@@ -70,8 +70,7 @@ const meshAgents: MeshAgentConfig[] = [
     name: 'codex',
     provider: 'codex',
     command: 'codex',
-    enabled: true,
-    defaultLaunchMode: 'app-server'
+    enabled: true
   } as unknown as MeshAgentConfig
 ];
 
@@ -122,8 +121,8 @@ test('project-message fan-out keeps every member inbox pinned to the original me
         id: agentName === 'gpt' ? 'mesh_gpt000000000' : 'mesh_sonnet000000',
         agentName,
         runtimeRole: 'managed-project-agent',
-        state: 'running',
-        launchMode: 'app-server',
+        lifecycle: { state: 'active' },
+        activity: { state: 'idle', pid: null, queuedTurnCount: 0 },
         lastDeliveredSeq: 0,
         lastVisibleSeq: 0
       }) as unknown as MeshSessionView
@@ -167,8 +166,7 @@ test('project-message fan-out keeps every member inbox pinned to the original me
         name,
         provider: name === 'gpt' ? 'codex' : 'claude-code',
         command: name,
-        enabled: true,
-        defaultLaunchMode: 'app-server'
+        enabled: true
       }) as unknown as MeshAgentConfig
   );
 
@@ -218,8 +216,8 @@ test('a stale unreadable delivery does not suppress the wake for a new readable 
           id: 'mesh_sonnet000000',
           agentName: 'sonnet',
           runtimeRole: 'managed-project-agent',
-          state: 'running',
-          launchMode: 'app-server',
+          lifecycle: { state: 'active' },
+          activity: { state: 'idle', pid: null, queuedTurnCount: 0 },
           lastDeliveredSeq: 344,
           lastVisibleSeq: 341
         } as unknown as MeshSessionView
@@ -251,8 +249,7 @@ test('a stale unreadable delivery does not suppress the wake for a new readable 
         name: 'sonnet',
         provider: 'claude-code',
         command: 'claude',
-        enabled: true,
-        defaultLaunchMode: 'app-server'
+        enabled: true
       } as unknown as MeshAgentConfig
     ],
     text: 'GPT reply',
@@ -264,7 +261,7 @@ test('a stale unreadable delivery does not suppress the wake for a new readable 
     {
       id: 'mesh_sonnet000000',
       input:
-        'New Workplace Project message is available.\nYou are being woken to process the pending project inbox now.\n\nPending message metadata:\nSender kind: mesh-agent\nSender name: gpt\nSender id: gpt\nSender mention token: @[name="gpt" id="mesh-agent:gpt"]\n\nThe message body is in your project inbox. Follow your managed runtime instructions to read it before deciding whether to reply.\n'
+        'New Workplace Project message is available.\nProcess this project message now.\n\nMessage metadata:\nSender kind: mesh-agent\nSender name: gpt\nSender id: gpt\nSender mention token: @[name="gpt" id="mesh-agent:gpt"]\n\nProject message body:\nGPT reply\n'
     }
   ]);
 });

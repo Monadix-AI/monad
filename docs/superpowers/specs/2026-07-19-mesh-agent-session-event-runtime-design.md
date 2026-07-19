@@ -1,7 +1,7 @@
 # MeshAgent Session Event Runtime Design
 
 Date: 2026-07-19  
-Status: reviewed design; Phase 1 additive contracts implemented
+Status: implemented on `main`; legacy daemon hosting removed
 
 ## Summary
 
@@ -37,9 +37,9 @@ PTY is not a MeshAgent session runtime. It remains available only for authentica
 - Move process or socket ownership into atom adapters.
 - Change model-provider contracts or the built-in Monad agent loop.
 
-## Current problems
+## Replaced implementation
 
-The implementation currently makes app-server a cross-layer concept:
+The replaced implementation made app-server a cross-layer concept:
 
 - @monad/protocol defines MeshAgentLaunchMode, MeshAgentAppServerTransport, public launch-mode fields, and supported transport fields.
 - @monad/sdk-atom exposes MeshAgentAppServerConnection, handle.appServer, pendingRequests, and nextRequestId.
@@ -393,7 +393,7 @@ The target protocol removes:
 
 It adds lifecycle, execution activity, and effective capabilities.
 
-The 0.0.3 compatibility release keeps deprecated response aliases and the Mesh session resize route as a no-op compatibility facade after the new fields are available. The 0.0.4 contract removes them and increments the daemon API compatibility version. An older client connecting to 0.0.4 must fail version negotiation with an upgrade-required error before it parses a changed Treaty response; it must not fail later as an unexplained schema error.
+The implementation removes these fields and the Mesh resize route directly. There is no launch-mode compatibility facade: current schemas retain only canonical fields and strip obsolete launch and transport keys when older stored objects are parsed.
 
 The PTY authentication-session resize request and endpoint remain unchanged.
 
@@ -401,135 +401,45 @@ Studio may render provider-specific advanced settings from adapterSettings. A Co
 
 Generic raw observation sources use provider-neutral labels such as provider-channel, stdout, and stderr. Provider provenance may retain names such as codex-app-server.
 
-## Configuration migration
+## Configuration cutover
 
-Existing configuration must not silently change behavior.
+The cutover does not map launch modes or transports to new daemon concepts. The environment and protocol schemas remove those fields, including `remote-control`, and provider adapters choose their runtime definition from provider-owned settings.
 
-The compatibility window is exactly release 0.0.3. Release 0.0.4 removes legacy parsing:
+Codex, Claude Code, Gemini, and Qwen implement `createSessionRuntime` with structured session events. OpenClaw, Hermes, and third-party adapters without that contract remain valid adapter definitions for non-Mesh features, but Mesh session start rejects them until they provide a structured runtime. There is no PTY fallback and the daemon never maps a provider ID to app-server, gateway, framing, or transport behavior.
 
-1. @monad/environment accepts deprecated launch and transport fields without interpreting provider semantics.
-2. After atom adapters register, the daemon invokes an adapter migration hook.
-3. The adapter maps supported legacy launch and transport fields to provider-owned adapterSettings and a canonical structured runtime.
-4. ConfigManager records a migration ID and source checksum, writes a rollback journal, then atomically writes canonical configuration and removes migrated fields.
-5. Re-running the migration with the same ID and checksum is a no-op. A changed source is re-evaluated once and atomically replaces the journal entry.
-6. Unknown, uninstalled, or unresolved third-party providers retain legacy values and receive a clear warning; their entries are not partially migrated.
-7. Successfully migrated adapterSettings remain in the MeshAgent configuration even if the adapter is later uninstalled. The 0.0.3 rollback journal retains the original legacy fragment through the 0.0.4 cutover.
-8. On 0.0.4 startup, any still-unresolved legacy entry is disabled with a named provider and recovery action rather than silently selecting a fallback. Legacy parsing is then removed.
+## Implementation record
 
-remote-control is outside this compatibility window. It is rejected as an invalid launch mode as soon as this design lands and is never passed to an adapter migration hook.
-
-The daemon never maps provider IDs to app-server or gateway settings itself.
-
-All built-in presets receive an explicit mapping before PTY session fallback is removed: Codex selects its structured resident runtime by default, Claude Code, Gemini, and Qwen select their structured event streams, and OpenClaw and Hermes select their structured gateway or resumable per-turn runtime. A third-party PTY-only adapter cannot start a Mesh session in 0.0.4. The localized error names the provider, states that PTY output is not a stable session-event source, and tells the user to update the adapter or disable that MeshAgent.
-
-## Migration sequence
-
-### Phase 1: additive contracts
-
-- Add runtime-plan, driver, channel, state, and capability contracts.
-- Add exact contract and state-transition tests.
-- Keep existing adapters and host behavior operational.
-
-### Phase 2: generic executor
-
-- Extract generic process, channel, deadline, capture, and teardown services.
-- Add a temporary bridge from existing launch specs.
-- Prove equivalent behavior before provider conversion.
-- Keep the bridge internal and delete it before completion.
-
-### Phase 3: reference provider cutover
-
-- Convert Codex resident app-server to a resident session-event runtime.
-- Convert Claude Code structured CLI streaming to the unified runtime.
-- Add Codex exec JSONL and Claude stream-json per-turn conformance fixtures.
-- Confirm both process models project the same normalized turn semantics.
-
-### Phase 4: remaining providers
-
-- Convert OpenClaw and Hermes gateways.
-- Convert Gemini and Qwen structured event streams.
-- Assign every built-in legacy PTY selection a canonical structured-runtime migration.
-- Remove PTY session fallback after those mappings pass conformance.
-- Reject providers without stable structured events or per-turn resume.
-
-### Phase 5a: internal state persistence
-
-- Persist the two-axis state model.
-- Model connection condition and persist bounded turn-queue state and shutdown transitions.
-- Update orphan reconciliation, suspension, restoration, and observation-epoch rotation without changing public response shapes.
-- Backfill existing rows and prove restart behavior before the public cutover.
-
-### Phase 5b: protocol and UI cutover
-
-- Update API schemas, version negotiation, clients, RTK, Studio, Workplace, docs, and i18n.
-- Migrate stored configuration through adapter hooks.
-- Switch controls to effective capabilities.
-- Keep the 0.0.3 compatibility facade and warnings measurable.
-
-### Phase 6: deletion
-
-- Delete compatibility bridges and legacy launch-mode types.
-- Delete app-server-named daemon services and generic handle fields.
-- Delete provider-state WeakMap workarounds.
-- Enforce the final boundary with a repository check.
+- Added the provider-neutral runtime-plan, driver, channel, lifecycle, activity, connection, and capability contracts.
+- Added one generic daemon executor and resource factory; removed the old app-server and CLI-one-shot daemon hosts.
+- Converted Codex, Claude Code, and Gemini to resumable per-turn structured streams and Qwen to a resident structured stream.
+- Removed PTY session fallback, launch-mode selection, Mesh resize, and `remote-control` from protocol, configuration, persistence, Studio, Workplace, and generic runtime state.
+- Kept PTY as a separate provider-authentication surface.
+- Persisted lifecycle and execution activity independently and made startup failures terminal ledger entries.
+- Rejected adapters without `createSessionRuntime` instead of guessing a provider topology.
 
 ## Verification
 
 ### Contracts
 
 - Assert exact lifecycle, execution, and capability shapes.
-- Assert final APIs reject legacy launch and transport fields.
+- Assert final API shapes do not expose legacy launch and transport fields.
 - Require stable session identity, event validation, deterministic turn terminal behavior, and truthful capabilities.
 
-### Runtime matrix
+### Runtime coverage
 
-Exercise:
-
-- resident child stdio;
-- resident WebSocket;
-- resident Unix socket;
-- per-turn structured output;
-- resume across per-turn processes;
-- bounded FIFO turn serialization and overflow;
-- turn-scoped spawn, process, and protocol failure returning to idle;
-- startup timeout;
-- reconnect and reconnect exhaustion;
-- suspension and restoration;
-- daemon-initiated suspend and clean shutdown exits;
-- natural provider termination;
-- explicit stop;
-- unrecoverable host and driver failures;
-- exactly-once teardown.
+The landed tests exercise resident child stdio, per-turn structured output, resume across per-turn processes, turn completion, explicit stop and deletion, startup and executable failures, unexpected resident exit, provider authentication separation, working-directory containment, and matching TCP-loopback and daemon-Unix-socket behavior. WebSocket/Unix provider channels, reconnect, idle suspension, and runtime restoration remain contract extension points; they are not advertised as implemented Mesh behavior.
 
 ### Provider fixtures
 
-Use sanitized real fixtures for:
-
-- Codex app-server initialization, resume, steer, interrupt, approval, and history;
-- Codex exec JSONL streaming and resume;
-- Claude stream-json, terminal result, retry, and resume;
-- OpenClaw challenge and routing;
-- Hermes persistent and ephemeral identity;
-- Gemini and Qwen events and permission controls.
+The provider tests cover Codex exec JSONL resume, Claude stream-json resume, Gemini structured events, and Qwen resident events. OpenClaw and Hermes are deliberately excluded from Mesh runtime conformance until their adapters implement the session-event runtime contract.
 
 ### State transitions
 
-Assert exact transitions:
-
-- starting to active plus running;
-- active plus running to suspended and back;
-- active plus idle to running and back for per-turn;
-- active plus running to active plus idle after a recoverable turn failure;
-- explicit stop to terminal stopped;
-- provider-declared natural end to terminal exited;
-- unexpected process or protocol failure to terminal failed;
-- daemon restart preserves active plus suspended;
-- daemon restart reconciles only genuinely orphaned running executions.
-- clean daemon shutdown preserves resumable sessions and stops non-restorable resident sessions.
+The landed assertions cover starting to active, per-turn active-plus-idle to running and back, explicit stop to terminal stopped, setup and unexpected-process failures to terminal failed, and deletion of terminal state. Suspended/restored and provider-declared natural exit remain distinct contract states but are not synthesized from process exit or null PID.
 
 ### Security and reliability
 
-Verify environment stripping, daemon-resolved executables, argv-only spawn, stdin or post-`--` turn payload delivery, rejection of input in flag position, working-directory scope, daemon-only endpoint allocation, loopback WebSocket binding, owner-only runtime directories, 0600 Unix sockets, symlink rejection, bounded packets, events, queues, and output, secret redaction, raw capture before decoding, protocol validation, slow-consumer disposal, and reconnect bounds.
+The implementation keeps daemon-resolved executables, argv-only spawn, structured stdin or post-`--` turn delivery, working-directory containment, bounded capture, raw capture before decoding, protocol validation, and exactly-once cleanup inside the generic executor. Provider socket allocation, reconnect policy, and restoration must pass their own conformance coverage before any adapter advertises those extension points.
 
 ### Transport parity
 
@@ -537,11 +447,7 @@ Every daemon-facing behavior must match over TCP loopback and the daemon Unix so
 
 ### Boundary check
 
-The final repository check permits app-server only in:
-
-- Codex adapter implementation and generated bindings;
-- provider-specific fixtures and provenance;
-- migration documentation.
+The final repository check permits app-server only in provider-specific adapter implementations, generated bindings, fixtures, provenance, and historical migration documentation.
 
 It rejects app-server vocabulary from generic protocol, daemon runtime-host abstractions, public Mesh APIs, and generic UI.
 

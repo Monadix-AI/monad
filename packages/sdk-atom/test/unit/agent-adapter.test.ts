@@ -19,8 +19,7 @@ test('MeshAgent event source returns raw and convenience views through one page 
   };
   const eventContext: MeshAgentProviderEventContext = {
     providerSessionRef: 'provider-session',
-    workingPath: '/tmp/project',
-    limitBytes: 1024
+    workingPath: '/tmp/project'
   };
 
   expect(await source.readPage?.(eventContext, { view: 'convenience', limit: 20 })).toEqual({
@@ -82,7 +81,6 @@ test('MeshAgent adapters can add a session runtime factory without changing lega
     provider: 'codex',
     command: 'codex',
     enabled: true,
-    defaultLaunchMode: 'pty',
     allowAutopilot: true,
     approvalOwnership: 'provider-owned'
   } satisfies MeshAgentView;

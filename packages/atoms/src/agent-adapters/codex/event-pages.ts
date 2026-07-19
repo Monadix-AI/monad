@@ -4,14 +4,13 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import { readProviderEventFile } from '../event-files.ts';
-import { recordValue } from './events.ts';
+import { recordValue } from './app-server/events.ts';
 
 export function readCodexEventOutput(context: MeshAgentProviderEventContext): string | null {
   return readProviderEventFile({
     roots: [join(homedir(), '.codex', 'sessions')],
     providerSessionRef: context.providerSessionRef,
-    extensions: ['.jsonl'],
-    limitBytes: context.limitBytes
+    extensions: ['.jsonl']
   });
 }
 

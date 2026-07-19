@@ -50,15 +50,11 @@ export function isLoopbackDaemonHost(host: string): boolean {
 
 export function validateDaemonNetworkSecurity(opts: {
   host: string;
-  https?: Partial<NetworkConfig['https']> | null;
   remoteAccess?: Partial<NetworkConfig['remoteAccess']> | null;
 }): void {
   const remoteEnabled = opts.remoteAccess?.enabled === true;
   if (!remoteEnabled && !isLoopbackDaemonHost(opts.host)) {
     throw new Error('network.host must be loopback unless network.remoteAccess.enabled=true');
-  }
-  if (remoteEnabled && opts.https?.enabled === false) {
-    throw new Error('network.https.enabled=false is only allowed when network.remoteAccess.enabled=false');
   }
 }
 
@@ -73,7 +69,7 @@ export function resolveDaemonNetwork(opts: {
   const configHost = configuredHost || DEFAULT_DAEMON_HOST;
   const bindHost =
     envHost || (remoteEnabled && configHost === DEFAULT_DAEMON_HOST ? DEFAULT_REMOTE_DAEMON_HOST : configHost);
-  validateDaemonNetworkSecurity({ host: bindHost, https: network?.https, remoteAccess: network?.remoteAccess });
+  validateDaemonNetworkSecurity({ host: bindHost, remoteAccess: network?.remoteAccess });
   const connectHost = loopbackForBindHost(bindHost);
   const port = numberFromEnv(opts.env?.MONAD_PORT) ?? network?.port ?? DEFAULT_DAEMON_PORT;
   const scheme = network?.https?.enabled === false ? 'http' : 'https';

@@ -41,7 +41,7 @@ test('raw frame preserves provider data verbatim, including a nested object', ()
     origin: 'live' as const,
     cursor: 'live:epoch-1:42' as const,
     providerIdentity: 'evt-9',
-    stream: 'app-server' as const,
+    stream: 'stdout' as const,
     data: { type: 'item/started', payload: { nested: [1, 2, { deep: true }] } },
     observedAt: '2026-07-18T00:00:00.000Z'
   };
@@ -57,6 +57,34 @@ test('raw frame accepts a primitive-string live text frame as data with no extra
     data: 'exact stdout bytes\n'
   };
   expect(meshRawEventSchema.parse(frame)).toEqual(frame);
+});
+
+// A raw frame's payload is the exact provider value; empty-but-present payloads (an empty stdout
+// chunk, a JSON `null`, a numeric `0`) are legitimate and must survive verbatim. Narrowing `data`
+// to a non-empty string to paper over an empty-looking card would silently drop these on the wire.
+test('raw frame preserves empty-but-present data verbatim (empty string, null, zero)', () => {
+  for (const data of ['', null, 0] as const) {
+    const frame = {
+      meshSessionId: SESSION,
+      provider: 'codex' as const,
+      origin: 'live' as const,
+      cursor: 'live:epoch-1:0' as const,
+      data
+    };
+    expect(meshRawEventSchema.parse(frame)).toEqual(frame);
+  }
+});
+
+test('raw events page preserves empty-but-present record data verbatim', () => {
+  const page = {
+    records: [
+      { data: '', cursor: '1' },
+      { data: null, cursor: '2' },
+      { data: 0, cursor: '3' }
+    ],
+    coverage: 'exact' as const
+  };
+  expect(meshRawEventPageSchema.parse(page)).toEqual(page);
 });
 
 test('raw frame rejects a missing data key', () => {

@@ -30,7 +30,7 @@ export type MeshAgentConvenienceObservationResult =
   | { state: 'live'; observationEpoch: string; frames: MeshConvenienceFrame[] }
   | { state: 'unavailable'; reason: string };
 
-export interface MeshAgentObservationResolveContext {
+interface MeshAgentObservationResolveContext {
   live: Map<string, LiveMeshSession>;
   store: MeshAgentHostDeps['store'];
 }
@@ -61,7 +61,7 @@ export class MeshAgentObservationResolver {
    *  frame's `data` is the verbatim provider payload — no projection, merge, or dedupe. */
   observeRaw(id: string, afterSeq?: number): MeshAgentRawObservationResult {
     const live = this.ctx.live.get(id);
-    if (!live?.liveRawStore || live.suspended) {
+    if (!live?.liveRawStore) {
       const row = this.ctx.store.getMeshSession(id);
       return {
         state: 'unavailable',
@@ -176,7 +176,7 @@ export class MeshAgentObservationResolver {
    *  tail of one — see convenience-projection.ts. */
   observeConvenience(id: string, afterSeq?: number): MeshAgentConvenienceObservationResult {
     const live = this.ctx.live.get(id);
-    if (!live?.liveRawStore || live.suspended) {
+    if (!live?.liveRawStore) {
       const row = this.ctx.store.getMeshSession(id);
       return {
         state: 'unavailable',
@@ -226,7 +226,7 @@ export class MeshAgentObservationResolver {
    *  reconcile against control lifecycle events without assuming arrival order. */
   connectionSnapshot(id: string): MeshConnectionSnapshot {
     const live = this.ctx.live.get(id);
-    if (live?.liveRawStore && !live.suspended) {
+    if (live?.liveRawStore) {
       const page = live.liveRawStore.page({
         limit: LIVE_OBSERVATION_PAGE_ROWS,
         maxBytes: MESH_AGENT_OUTPUT_SNAPSHOT_MAX,

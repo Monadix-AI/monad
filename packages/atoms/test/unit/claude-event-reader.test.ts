@@ -5,7 +5,7 @@ import {
   createClaudeSdkHistoryOutputReader
 } from '../../src/agent-adapters/claude-code/index.ts';
 
-test('Claude SDK history keeps the native session start when the transcript exceeds the snapshot limit', async () => {
+test('Claude SDK history keeps the native session start when the transcript is long', async () => {
   const calls: unknown[] = [];
   const reader = createClaudeSdkHistoryOutputReader({
     getSessionMessages: (async (...args: unknown[]) => {
@@ -32,8 +32,7 @@ test('Claude SDK history keeps the native session start when the transcript exce
   expect(
     await reader({
       providerSessionRef: 'claude-session',
-      workingPath: '/tmp/project',
-      limitBytes: 1
+      workingPath: '/tmp/project'
     })
   ).toEqual(
     [
@@ -83,7 +82,6 @@ test('Claude SDK history contains only provider-returned messages', async () => 
     await reader({
       providerSessionRef: 'claude-session',
       workingPath: '/tmp/project',
-      limitBytes: 1024,
       request: { limit: 20, sortDirection: 'desc', itemsView: 'full' }
     })
   ).toEqual({

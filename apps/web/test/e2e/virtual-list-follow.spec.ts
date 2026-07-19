@@ -8,6 +8,7 @@ type HarnessState = {
   renderedCount: number;
   scrollHeight: number;
   scrollTop: number;
+  topLoading: boolean;
   topVisibleRowId: string | null;
   topVisibleRowOffset: number | null;
   topLoadCount: number;
@@ -185,12 +186,80 @@ test('one jump to the loaded top requests one page and keeps the previous first 
     topLoadCount: 1,
     topVisibleRowId: 'row_0'
   });
+
+  // The prepended page pushed the viewport clear of the start zone. Left alone it must not chain a
+  // second request — one jump loads exactly one page.
+  await page.waitForTimeout(300);
+  expect(await state(page).then((value) => value.topLoadCount)).toBe(1);
+
+  // A second explicit jump to the loaded top pages exactly once more, through the same edge path.
+  await page.evaluate(() => window.harness.jumpToLoadedTop());
+  await expect.poll(async () => (await state(page)).topLoadCount).toBe(2);
 });
 
-// Observation-specific: prepended history can MERGE INTO the row already at the viewport top rather
-// than only inserting above it (adjacent tool entries regroup into one `tool-group:*` row). That
-// replaces the top row's key and makes it taller in the same commit — an identity change the generic
-// prepend case never produces, and the shape that breaks a key-pinned scroll anchor.
+test('reaching within the start-edge threshold, not only the exact top, loads a page', async ({ page }) => {
+  await page.goto(`${HARNESS}?topPaging=1`);
+  await page.locator('[role="log"] [data-index]').first().waitFor();
+  await expectSettledAtBottom(page);
+
+  // Scroll up to just inside the start zone but well clear of the exact top. A 1px start threshold
+  // never loads here; the load must begin with headroom so the reader is not stuck scrolling to the
+  // very top before anything happens.
+  await page.evaluate(() => {
+    const scroller = document.querySelector<HTMLElement>('[role="log"]');
+    if (!scroller) return;
+    scroller.scrollTop = 150;
+    scroller.dispatchEvent(new Event('scroll'));
+  });
+  await expect.poll(async () => (await state(page)).topLoadCount).toBe(1);
+});
+
+test('a loaded page does not chain-load again while the reader stays put', async ({ page }) => {
+  await page.goto(`${HARNESS}?topPaging=1`);
+  await page.locator('[role="log"] [data-index]').first().waitFor();
+  await expectSettledAtBottom(page);
+
+  await page.evaluate(() => {
+    const scroller = document.querySelector<HTMLElement>('[role="log"]');
+    if (!scroller) return;
+    scroller.scrollTop = 150;
+    scroller.dispatchEvent(new Event('scroll'));
+  });
+  await expect.poll(async () => (await state(page)).topLoadCount).toBe(1);
+
+  // Prepended older rows push the viewport below the start zone. With no further reader gesture the
+  // start edge must not re-fire — the bug was a runaway load all the way to the oldest history.
+  await page.waitForTimeout(500);
+  expect(await state(page).then((s) => s.topLoadCount)).toBe(1);
+});
+
+test('dragging the scrollbar to the top still loads history after a long hold', async ({ page }) => {
+  await page.goto(`${HARNESS}?topPaging=merge`);
+  await page.locator('[role="log"] [data-index]').first().waitFor();
+  await expectSettledAtBottom(page);
+
+  await page.evaluate(() => {
+    void window.harness.dragScrollbarToTop();
+  });
+
+  await expect.poll(async () => (await state(page)).topLoading).toBe(true);
+  await expect(page.locator('[data-top-loading="true"]')).toHaveText('Loading earlier rows…');
+  await expect.poll(async () => (await state(page)).topLoadCount).toBe(1);
+  await expect.poll(async () => (await state(page)).topLoading).toBe(false);
+
+  const after = await state(page);
+  expect({
+    topLoadCount: after.topLoadCount,
+    topVisibleRowId: after.topVisibleRowId,
+    viewportMovedBelowLoadedTop: after.scrollTop > 0
+  }).toEqual({ topLoadCount: 1, topVisibleRowId: 'row_0', viewportMovedBelowLoadedTop: true });
+
+  await page.waitForTimeout(300);
+  expect(await state(page).then((value) => value.topLoadCount)).toBe(1);
+});
+
+// Observation-specific: prepended history can merge into the row already at the viewport top,
+// making that stable-key row taller in the same commit instead of inserting a separate row above it.
 test('history that merges into the top row keeps the reader in place', async ({ page }) => {
   await openHarness(page);
   // Reaching the top is what triggers loading older history, so that is where the merge lands.
@@ -204,9 +273,8 @@ test('history that merges into the top row keeps the reader in place', async ({ 
   await waitForStableScrollHeight(page);
 
   const after = await state(page);
-  // The old key is gone (it was absorbed), so the anchor cannot have been held by key alone.
-  expect(after.topVisibleRowId).toBe(`tool-group:${mergedInto}`);
-  await expect(page.locator(`[data-row-id="${mergedInto}"]`)).toHaveCount(0);
+  expect(after.topVisibleRowId).toBe(mergedInto);
+  await expect(page.locator(`[data-row-id="${mergedInto}"]`)).toHaveCount(1);
   // The reader still sees the same content at the same place: the merged row's own growth plus the
   // rows inserted above it were absorbed by the scroll position, not shown as a jump.
   expect(Math.abs((after.topVisibleRowOffset ?? 0) - (before.topVisibleRowOffset ?? 0))).toBeLessThanOrEqual(2);

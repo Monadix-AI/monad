@@ -1,4 +1,5 @@
-import type { MeshAgentOutputEvent, MeshAgentRuntimeHandle } from '@monad/sdk-atom';
+import type { MeshAgentOutputEvent } from '@monad/sdk-atom';
+import type { LegacyProviderRuntimeHandle } from '../legacy/runtime.ts';
 
 import { z } from 'zod';
 
@@ -345,7 +346,7 @@ function lineEvents(line: QwenStreamJsonLine, stdin?: QwenStdin): MeshAgentOutpu
 
 /** Parse a Qwen Code stream-json chunk (one or more complete JSONL lines) into MeshAgent output
  *  events. `handle.stdin`, when present, lets the parser auto-decline unsupported control requests. */
-export function parseQwenStreamJson(chunk: string, handle?: MeshAgentRuntimeHandle): MeshAgentOutputEvent[] {
+export function parseQwenStreamJson(chunk: string, handle?: LegacyProviderRuntimeHandle): MeshAgentOutputEvent[] {
   const stdin = handle?.stdin;
   const events: MeshAgentOutputEvent[] = [];
   for (const rawLine of chunk.split(/\r?\n/)) {
@@ -379,7 +380,7 @@ export function hasQwenStreamJsonMessages(raw: string): boolean {
 
 // Qwen's SDK sends `initialize` before the first turn (Query.initialize). We register no hooks or SDK
 // MCP servers, so the payload is minimal; the CLI's reply is a `control_response` the parser ignores.
-export function initializeQwenStreamJson(handle: MeshAgentRuntimeHandle): void {
+export function initializeQwenStreamJson(handle: LegacyProviderRuntimeHandle): void {
   if (handle.launchMode !== 'json-stream' || !handle.stdin) return;
   writeLine(handle.stdin, {
     type: 'control_request',
@@ -389,7 +390,7 @@ export function initializeQwenStreamJson(handle: MeshAgentRuntimeHandle): void {
 }
 
 /** Frame a turn as the SDK's `SDKUserMessage` envelope and write it to the CLI's stream-json stdin. */
-export function sendQwenStreamJsonInput(handle: MeshAgentRuntimeHandle, input: string): void {
+export function sendQwenStreamJsonInput(handle: LegacyProviderRuntimeHandle, input: string): void {
   if (!handle.stdin) throw new Error('MeshAgent session has no stream-json input bridge');
   writeLine(handle.stdin, {
     type: 'user',
@@ -402,7 +403,7 @@ export function sendQwenStreamJsonInput(handle: MeshAgentRuntimeHandle, input: s
 /** Answer a `can_use_tool` permission request over the control plane. `behavior` is the CLI's wire
  *  shape (`allow` echoes the original tool input; `deny` carries a message), not `PermissionApproval`. */
 export function resolveQwenStreamJsonApproval(
-  handle: MeshAgentRuntimeHandle,
+  handle: LegacyProviderRuntimeHandle,
   resolution: { requestId: string; allow: boolean; reason?: string; request?: Record<string, unknown> }
 ): void {
   if (!handle.stdin) throw new Error('MeshAgent session has no stream-json approval bridge');

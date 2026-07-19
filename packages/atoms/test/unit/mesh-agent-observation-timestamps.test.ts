@@ -41,10 +41,20 @@ test('structured observation events preserve provider timestamps when present', 
     }
   });
 
-  expect(meshAgentStreamItems({ id: 'mesh_claude000000', provider: 'claude-code', output })).toMatchObject([
+  expect(
+    meshAgentStreamItems({ id: 'mesh_claude000000', provider: 'claude-code', output }).map(
+      ({ createdAt, providerEventType, text }) => ({ createdAt, providerEventType, text })
+    )
+  ).toEqual([
     {
-      text: 'Timestamped user message',
-      createdAt: '2026-07-05T08:07:54.056Z'
+      createdAt: '2026-07-05T08:07:54.056Z',
+      providerEventType: 'turn-start',
+      text: 'Turn started'
+    },
+    {
+      createdAt: '2026-07-05T08:07:54.056Z',
+      providerEventType: 'user',
+      text: 'Timestamped user message'
     }
   ]);
 });

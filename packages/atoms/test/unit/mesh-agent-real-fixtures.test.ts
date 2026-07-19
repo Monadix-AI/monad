@@ -152,6 +152,7 @@ test('captured Claude records project user, thinking, tool, result, assistant, a
       text
     }))
   ).toEqual([
+    { role: 'system', source: 'claude-code-sdk', providerEventType: 'turn-start', text: 'Turn started' },
     { role: 'user', source: 'claude-code-sdk', providerEventType: 'user', text: '<text:1>' },
     { role: 'agent', source: 'claude-code-sdk', providerEventType: 'thinking', text: '<text:3>' },
     {

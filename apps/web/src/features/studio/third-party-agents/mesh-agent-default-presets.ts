@@ -8,8 +8,6 @@ export const DETECTING_MESH_AGENT_PRESETS: MeshAgentPresetView[] = [
     productIcon: 'codex',
     command: 'codex',
     args: [],
-    defaultLaunchMode: 'pty',
-    supportedLaunchModes: ['pty'],
     installHint: '',
     installUrl: 'https://developers.openai.com/codex/cli',
     installed: false
@@ -21,8 +19,6 @@ export const DETECTING_MESH_AGENT_PRESETS: MeshAgentPresetView[] = [
     productIcon: 'claude-code',
     command: 'claude',
     args: [],
-    defaultLaunchMode: 'pty',
-    supportedLaunchModes: ['pty'],
     installHint: '',
     installUrl: 'https://docs.anthropic.com/en/docs/claude-code/overview',
     installed: false
@@ -34,8 +30,6 @@ export const DETECTING_MESH_AGENT_PRESETS: MeshAgentPresetView[] = [
     productIcon: 'gemini',
     command: 'gemini',
     args: [],
-    defaultLaunchMode: 'pty',
-    supportedLaunchModes: ['pty'],
     installHint: '',
     installUrl: 'https://github.com/google-gemini/gemini-cli',
     installed: false
@@ -47,8 +41,6 @@ export const DETECTING_MESH_AGENT_PRESETS: MeshAgentPresetView[] = [
     productIcon: 'qwen',
     command: 'qwen',
     args: [],
-    defaultLaunchMode: 'pty',
-    supportedLaunchModes: ['pty'],
     installHint: '',
     installUrl: 'https://github.com/QwenLM/qwen-code',
     installed: false
@@ -60,8 +52,6 @@ export const DETECTING_MESH_AGENT_PRESETS: MeshAgentPresetView[] = [
     productIcon: 'openclaw',
     command: 'openclaw',
     args: [],
-    defaultLaunchMode: 'pty',
-    supportedLaunchModes: ['pty'],
     installHint: '',
     installUrl: 'https://github.com/openclaw/openclaw',
     installed: false
@@ -73,8 +63,6 @@ export const DETECTING_MESH_AGENT_PRESETS: MeshAgentPresetView[] = [
     productIcon: 'hermes',
     command: 'hermes',
     args: [],
-    defaultLaunchMode: 'pty',
-    supportedLaunchModes: ['pty'],
     installHint: '',
     installUrl: 'https://github.com/NousResearch/hermes-agent',
     installed: false

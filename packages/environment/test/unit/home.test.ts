@@ -403,7 +403,7 @@ describe('migrateConfig', () => {
 
   test('fills local HTTP fallback defaults when the network block is absent', async () => {
     const cfg = await migrateConfig(CONFIG_V1_FIXTURE);
-    expect(cfg.network.https).toEqual({ enabled: true });
+    expect(cfg.network.https).toEqual({ enabled: false });
     expect(cfg.network.localHttpFallback).toEqual({ enabled: false, port: 47780 });
     expect('allowInsecureHttp' in cfg.network.remoteAccess).toBe(false);
   });
@@ -809,7 +809,7 @@ describe('network.transport', () => {
   test('createDefaultConfig stamps local HTTP fallback disabled on an independent default port', () => {
     const cfg = createDefaultConfig('x');
     expect(cfg.network.host).toBe('127.0.0.1');
-    expect(cfg.network.https).toEqual({ enabled: true });
+    expect(cfg.network.https).toEqual({ enabled: false });
     expect(cfg.network.localHttpFallback).toEqual({ enabled: false, port: 47780 });
     expect('allowInsecureHttp' in cfg.network.remoteAccess).toBe(false);
   });
@@ -817,6 +817,7 @@ describe('network.transport', () => {
   test('resolveDaemonNetwork derives bind/connect URLs from host, protocol, and ports', () => {
     const cfg = createDefaultConfig('x');
     cfg.network.remoteAccess.enabled = true;
+    cfg.network.https.enabled = true;
     cfg.network.host = '192.168.1.20';
     cfg.network.port = 52801;
     cfg.network.localHttpFallback = { enabled: true, port: 52880 };
@@ -836,6 +837,7 @@ describe('network.transport', () => {
   test('resolveDaemonNetwork keeps remote access wildcard bind locally dialable', () => {
     const cfg = createDefaultConfig('x');
     cfg.network.remoteAccess.enabled = true;
+    cfg.network.https.enabled = true;
 
     expect(resolveDaemonNetwork({ network: cfg.network })).toMatchObject({
       bindHost: '0.0.0.0',
@@ -848,6 +850,7 @@ describe('network.transport', () => {
   test('resolveDaemonNetwork honours env host and port overrides without scheme env', () => {
     const cfg = createDefaultConfig('x');
     cfg.network.remoteAccess.enabled = true;
+    cfg.network.https.enabled = true;
     cfg.network.localHttpFallback = { enabled: true, port: 52780 };
 
     expect(
@@ -874,12 +877,17 @@ describe('network.transport', () => {
     );
   });
 
-  test('resolveDaemonNetwork rejects remote access when HTTPS is disabled', () => {
+  test('resolveDaemonNetwork allows explicitly configured remote HTTP', () => {
     const cfg = createDefaultConfig('x');
     cfg.network.remoteAccess.enabled = true;
     cfg.network.https.enabled = false;
 
-    expect(() => resolveDaemonNetwork({ network: cfg.network })).toThrow(/network\.https\.enabled=false/);
+    expect(resolveDaemonNetwork({ network: cfg.network })).toMatchObject({
+      bindHost: '0.0.0.0',
+      scheme: 'http',
+      primaryUrl: 'http://0.0.0.0:52749',
+      localUrl: 'http://127.0.0.1:52749'
+    });
   });
 
   test('resolveDaemonUrl keeps explicit MONAD_URL as the highest-priority escape hatch', () => {
@@ -923,11 +931,11 @@ describe('network.transport', () => {
       expect(conn.baseUrl).toContain('127.0.0.1');
     });
 
-    test('tcp → no unix socket (HTTPS over loopback)', async () => {
+    test('tcp → no unix socket (HTTP over loopback by default)', async () => {
       await setTransport('tcp');
       const conn = await resolveClientConn();
       expect(conn.unixSocket).toBeUndefined();
-      expect(conn.baseUrl).toBe('https://127.0.0.1:52749');
+      expect(conn.baseUrl).toBe('http://127.0.0.1:52749');
     });
 
     test('MONAD_PORT overrides the configured port (per-worktree dev isolation)', async () => {
@@ -940,7 +948,7 @@ describe('network.transport', () => {
 
       Bun.env.MONAD_PORT = '53210';
       const conn = await resolveClientConn();
-      expect(conn.baseUrl).toBe('https://127.0.0.1:53210');
+      expect(conn.baseUrl).toBe('http://127.0.0.1:53210');
     });
 
     test('without MONAD_PORT, falls back to the configured port', async () => {
@@ -953,7 +961,7 @@ describe('network.transport', () => {
 
       delete Bun.env.MONAD_PORT;
       const conn = await resolveClientConn();
-      expect(conn.baseUrl).toBe('https://127.0.0.1:52801');
+      expect(conn.baseUrl).toBe('http://127.0.0.1:52801');
     });
 
     test('tcp with HTTPS disabled returns HTTP over loopback', async () => {

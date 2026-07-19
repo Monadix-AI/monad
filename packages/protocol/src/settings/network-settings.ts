@@ -53,6 +53,7 @@ export const networkSettingsSchema = z.object({
 export type NetworkSettings = z.infer<typeof networkSettingsSchema>;
 
 export const setNetworkSettingsRequestSchema = z.object({
+  confirmInsecureRemoteAccess: z.boolean().optional(),
   host: z.string().min(1).optional(),
   https: z
     .object({

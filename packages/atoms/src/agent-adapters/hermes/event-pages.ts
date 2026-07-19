@@ -312,16 +312,6 @@ async function loadHermesMessages(sessionRef: string): Promise<{ source: string;
   return db ? { source: 'db', messages: db } : null;
 }
 
-function capOutput(lines: string[], limitBytes: number): string {
-  let output = '';
-  for (const line of lines) {
-    const next = output ? `${output}\n${line}` : line;
-    if (Buffer.byteLength(next, 'utf8') > limitBytes) break;
-    output = next;
-  }
-  return output;
-}
-
 export async function hermesEventPage(
   context: MeshAgentProviderEventPageRequestContext
 ): Promise<MeshAgentProviderEventPageContext['page'] | null> {
@@ -337,5 +327,5 @@ export async function hermesEventPage(
 
 export function hermesEventPageOutput(context: MeshAgentProviderEventPageContext): string | null {
   const lines = context.page.items.map((item) => JSON.stringify(item));
-  return capOutput(lines, context.limitBytes) || null;
+  return lines.join('\n') || null;
 }

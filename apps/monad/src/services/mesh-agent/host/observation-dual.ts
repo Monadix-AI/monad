@@ -10,7 +10,7 @@ import type { LiveRawRow } from '#/services/mesh-agent/live-raw-store.ts';
 
 import { formatObservationCursor } from '@monad/protocol';
 
-export interface RawFrameContext {
+interface RawFrameContext {
   meshSessionId: MeshSessionId;
   provider: MeshAgentProvider;
   observationEpoch: string;

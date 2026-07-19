@@ -1,6 +1,6 @@
 import type { ObservationCursor, ObservationPosition } from '@monad/protocol';
 
-import { formatObservationCursor, parseObservationBefore } from '@monad/protocol';
+import { formatObservationCursor } from '@monad/protocol';
 
 // Earlier-event cursors are opaque to clients and adapter-native inside `provider:<token>`. An
 // unprefixed, unknown, or live-plane cursor decodes to `none`: paging restarts from the latest page
@@ -11,8 +11,8 @@ import { formatObservationCursor, parseObservationBefore } from '@monad/protocol
 
 export type EventCursor = Extract<ObservationPosition, { kind: 'provider' }> | { kind: 'none' };
 
-export function decodeEventCursor(before: string | undefined): EventCursor {
-  return parseObservationBefore(before) ?? { kind: 'none' };
+export function eventCursorFromPosition(position: ObservationPosition | undefined): EventCursor {
+  return position?.kind === 'provider' ? position : { kind: 'none' };
 }
 
 export function encodeEventCursor(cursor: string): ObservationCursor {

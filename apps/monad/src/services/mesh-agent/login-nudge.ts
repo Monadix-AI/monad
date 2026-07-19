@@ -6,7 +6,7 @@ import { parseEventPayload } from '@monad/protocol';
 
 import { makeEvent } from '#/services/event-bus.ts';
 
-export interface MeshAgentLoginNudgeDeps {
+interface MeshAgentLoginNudgeDeps {
   bus: EventBus;
   authStatus: (agentName: string) => Promise<MeshAgentAuthStatusResponse>;
 }

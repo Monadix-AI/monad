@@ -80,6 +80,19 @@ function claudeResultText(record: ClaudeResultMessage): string {
   return textValue(record.result, record.response) ?? resultMarkerText(record);
 }
 
+function claudeContentHasText(content: unknown): boolean {
+  if (typeof content === 'string') return content.trim().length > 0;
+  if (!Array.isArray(content)) return false;
+  return content.some(
+    (part) =>
+      part !== null &&
+      typeof part === 'object' &&
+      !Array.isArray(part) &&
+      (part as Record<string, unknown>).type === 'text' &&
+      textValue((part as Record<string, unknown>).text) !== undefined
+  );
+}
+
 function claudeContentEvents(args: {
   id: string;
   content: unknown;
@@ -191,12 +204,13 @@ export function claudeRecordEvents(
   }
   if (isClaudeTranscriptMessage(record)) {
     const message = record.message;
-    const content =
+    const messageRecord =
       message && typeof message === 'object' && !Array.isArray(message)
-        ? (message as unknown as Record<string, unknown>).content
-        : record.content;
-    const createdAt = record.type === 'user' ? providerIsoTimestamp(textValue(record.timestamp)) : undefined;
-    return claudeContentEvents({
+        ? (message as unknown as Record<string, unknown>)
+        : undefined;
+    const content = messageRecord?.content ?? record.content;
+    const createdAt = providerIsoTimestamp(textValue(record.timestamp));
+    const contentEvents = claudeContentEvents({
       id,
       content,
       recordIndex,
@@ -205,6 +219,39 @@ export function claudeRecordEvents(
       raw: record,
       textRole: record.type === 'user' ? 'user' : 'agent'
     });
+    const startsTurn = record.type === 'user' && claudeContentHasText(content);
+    const stopReason = textValue(messageRecord?.stop_reason, record.stop_reason);
+    const isHistoryTranscript = textValue(record.uuid) !== undefined && textValue(record.session_id) === undefined;
+    const endsTurn =
+      isHistoryTranscript &&
+      record.type === 'assistant' &&
+      claudeContentHasText(content) &&
+      (stopReason === 'end_turn' || stopReason === 'stop_sequence');
+    return [
+      ...(startsTurn
+        ? observation({
+            id: `${base}:turn-start`,
+            role: 'system',
+            text: 'Turn started',
+            source: 'claude-code-sdk',
+            providerEventType: 'turn-start',
+            createdAt,
+            raw: record
+          })
+        : []),
+      ...contentEvents,
+      ...(endsTurn
+        ? observation({
+            id: `${base}:turn-end`,
+            role: 'system',
+            text: 'Turn completed',
+            source: 'claude-code-sdk',
+            providerEventType: 'turn-end',
+            createdAt,
+            raw: record
+          })
+        : [])
+    ];
   }
   // The adapter emits `{ type: 'tool_result', ... }` records at runtime (see index.ts), but that
   // variant isn't in the SDKMessage `type` union, so read through the loose Record view rather than

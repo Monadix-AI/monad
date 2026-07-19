@@ -70,7 +70,6 @@ export const BLANK_AGENT: MeshAgentView = {
   args: [],
   modelOptions: [],
   enabled: true,
-  defaultLaunchMode: 'pty',
   allowAutopilot: true,
   approvalOwnership: 'provider-owned'
 };
@@ -85,7 +84,6 @@ export const presetToView = (p: MeshAgentPresetView): MeshAgentView => ({
   modelOptionDisplayNames: p.modelOptionDisplayNames,
   reasoningEfforts: p.reasoningEfforts,
   enabled: true,
-  defaultLaunchMode: p.defaultLaunchMode,
   allowAutopilot: true,
   approvalOwnership: 'provider-owned',
   capabilities: p.capabilities

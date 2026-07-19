@@ -39,30 +39,55 @@ test('project message projection preserves display-only attachment metadata', ()
   ).toEqual([attachment]);
 });
 
-const meshSession = (overrides: Partial<MeshSessionView> = {}): MeshSessionView => ({
-  id: 'mesh_01KWGEMIprD4',
-  sessionId: 'ses_01KWPROJ2tDh',
-  agentName: 'gemini',
-  provider: 'gemini',
-  productIcon: 'gemini',
-  workingPath: '/Users/test/Projects/monad',
-  launchMode: 'pty',
-  approvalOwnership: 'provider-owned',
-  runtimeRole: 'managed-project-agent',
-  agentRuntimeId: 'mesh_01KWGEMIprD4',
-  lastDeliveredSeq: 0,
-  lastVisibleSeq: 0,
-  state: 'running',
-  pid: 1234,
-  providerSessionRef: null,
-  outputSnapshot: '',
-  exitCode: null,
-  startedAt: '2026-06-29T10:00:00.000Z',
-  updatedAt: '2026-06-29T10:00:00.000Z',
-  exitedAt: null,
-  ...overrides,
-  pendingApprovalCount: overrides.pendingApprovalCount ?? 0
-});
+type LegacySessionOverrides = Partial<MeshSessionView> & {
+  state?: 'starting' | 'running' | 'exited' | 'failed' | 'stopped';
+  pid?: number | null;
+  outputSnapshot?: string;
+  exitCode?: number | null;
+  exitedAt?: string | null;
+};
+
+const meshSession = (overrides: LegacySessionOverrides = {}): MeshSessionView => {
+  const { state, pid, outputSnapshot, exitCode, exitedAt, ...current } = overrides;
+  void outputSnapshot;
+  const at = exitedAt ?? '2026-06-29T10:00:00.000Z';
+  return {
+    id: 'mesh_01KWGEMIprD4',
+    sessionId: 'ses_01KWPROJ2tDh',
+    agentName: 'gemini',
+    provider: 'gemini',
+    productIcon: 'gemini',
+    workingPath: '/Users/test/Projects/monad',
+    approvalOwnership: 'provider-owned',
+    runtimeRole: 'managed-project-agent',
+    agentRuntimeId: 'mesh_01KWGEMIprD4',
+    lastDeliveredSeq: 0,
+    lastVisibleSeq: 0,
+    lifecycle:
+      state && state !== 'running' && state !== 'starting'
+        ? { state: 'terminal', termination: { kind: state, at, ...(exitCode != null ? { exitCode } : {}) } }
+        : { state: state === 'starting' ? 'starting' : 'active' },
+    activity:
+      state === 'starting'
+        ? { state: 'starting', pid: pid ?? null, queuedTurnCount: 0 }
+        : { state: 'idle', pid: null, queuedTurnCount: 0 },
+    connection: { state: 'connected' },
+    capabilities: {
+      input: true,
+      steer: false,
+      interrupt: true,
+      approvalResolution: false,
+      providerSessionContinuation: true,
+      runtimeRestoration: true,
+      sessionReopen: true
+    },
+    providerSessionRef: null,
+    startedAt: '2026-06-29T10:00:00.000Z',
+    updatedAt: '2026-06-29T10:00:00.000Z',
+    ...current,
+    pendingApprovalCount: overrides.pendingApprovalCount ?? 0
+  };
+};
 
 const observationFields = (
   items: NonNullable<ReturnType<typeof __workplaceProjectMessageTest.buildMeshAgentStreams>[number]>['items']
@@ -222,7 +247,7 @@ test('runtime startup without a member invitation does not project a join messag
   expect(messages.map((message) => message.text)).toEqual([]);
 });
 
-test('Claude server errors project as agent-scoped system messages', () => {
+test('provider output embedded in a session snapshot does not create chat messages', () => {
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
     meshSessions: [
@@ -247,24 +272,7 @@ test('Claude server errors project as agent-scoped system messages', () => {
     meshAgentDisplayNames: new Map([['pmem_claude_1234', 'Steve']])
   });
 
-  expect(messages.map((message) => [message.id, message.text])).toEqual([
-    ['mesh-session-error:mesh_claudeerror0:mesh_claudeerror0:result', 'encountered an error']
-  ]);
-  expect(messages[0]).toMatchObject({
-    authorId: 'pmem_claude_1234',
-    authorName: 'Steve',
-    kind: 'system',
-    tag: 'Claude',
-    meshSessionId: 'mesh_claudeerror0',
-    systemTone: 'error',
-    systemDetail: 'API Error: overloaded_error. Claude Code is currently overloaded.',
-    agentChip: {
-      id: 'pmem_claude_1234',
-      name: 'Steve',
-      icon: 'claude-code',
-      tag: 'Claude'
-    }
-  });
+  expect(messages).toEqual([]);
 });
 
 test('MeshAgent developer messages are projected only when explicitly enabled', () => {
@@ -798,7 +806,7 @@ test('MeshAgent streams carry their own transcript target for observation/histor
   expect(stream.transcriptTargetId).toBe('ses_01KWOWNER9zQ2');
 });
 
-test('MeshAgent durable running sessions remain observable without marking generation active', () => {
+test('MeshAgent durable sessions expose status without embedding provider output', () => {
   const stream = firstMeshAgentStream(
     __workplaceProjectMessageTest.buildMeshAgentStreams(
       [meshSession({ outputSnapshot: 'previous turn output', state: 'running' })],
@@ -809,9 +817,9 @@ test('MeshAgent durable running sessions remain observable without marking gener
   expect(stream).toMatchObject({
     id: 'mesh_01KWGEMIprD4',
     agentName: 'gemini',
-    output: 'previous turn output',
+    output: '',
     status: 'ok',
-    items: [{ id: 'mesh_01KWGEMIprD4:0', kind: 'assistant-message', text: 'previous turn output' }]
+    items: []
   });
 });
 
@@ -1028,7 +1036,7 @@ test('MeshAgent app-server JSON-RPC output is projected as readable observation 
   ]);
 });
 
-test('MeshAgent follow streams restore persisted terminal snapshots', () => {
+test('MeshAgent follow streams do not restore removed terminal snapshots', () => {
   const stream = firstMeshAgentStream(
     __workplaceProjectMessageTest.buildMeshAgentStreams(
       [meshSession({ outputSnapshot: '\\x1b[38;2;255;193;7mraw terminal output' })],
@@ -1038,14 +1046,8 @@ test('MeshAgent follow streams restore persisted terminal snapshots', () => {
 
   expect(stream).toMatchObject({
     id: 'mesh_01KWGEMIprD4',
-    output: '\\x1b[38;2;255;193;7mraw terminal output',
-    items: [
-      {
-        id: 'mesh_01KWGEMIprD4:0',
-        kind: 'assistant-message',
-        text: '\\x1b[38;2;255;193;7mraw terminal output'
-      }
-    ]
+    output: '',
+    items: []
   });
 });
 
@@ -1343,7 +1345,7 @@ test('MeshAgent presence ignores login phrases inside Claude tool results', () =
   ).toBe('online');
 });
 
-test('MeshAgent presence keeps structured authentication failures', () => {
+test('MeshAgent presence does not infer authentication from removed session output', () => {
   const session = meshSession({
     agentName: 'pmem_claude',
     provider: 'claude-code',
@@ -1362,7 +1364,7 @@ test('MeshAgent presence keeps structured authentication failures', () => {
       meshSessions: [session],
       liveTools: []
     })
-  ).toBe('needs-login');
+  ).toBe('online');
 });
 
 test('MeshAgent project member presence treats lifecycle tools as stand-by availability', () => {
@@ -1443,12 +1445,7 @@ test('MeshAgent project member presence is scoped by managed member instance id'
 });
 
 test('MeshAgent project members default to managed project runtime', () => {
-  expect(
-    __workplaceProjectMessageTest.defaultProjectMemberSettings('mesh-agent', {
-      defaultLaunchMode: 'pty'
-    })
-  ).toEqual({
-    launchMode: 'pty',
+  expect(__workplaceProjectMessageTest.defaultProjectMemberSettings('mesh-agent', {})).toEqual({
     managedProjectAgent: true
   });
 });
@@ -1462,7 +1459,6 @@ test('MeshAgent project members derive template and instance identity from the t
       displayName: 'codex-reviewer',
       settings: {
         managedProjectAgent: true,
-        launchMode: 'app-server',
         modelId: 'gpt-5.5',
         reasoningEffort: 'high',
         speed: 'fast',

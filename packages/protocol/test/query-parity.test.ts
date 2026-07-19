@@ -7,6 +7,7 @@ import { expect, test } from 'bun:test';
 
 import { daemonHttpContract } from '../src/http.ts';
 import {
+  cursorPaginationQuerySchema,
   listMessagesQuerySchema,
   listSessionsQuerySchema,
   listSkillsQuerySchema,
@@ -54,6 +55,17 @@ test('HTTP messages query: boolean coercion matches canonical parse', () => {
     listMessagesQuerySchema.parse({ includeInactive: 'true', limit: 5 })
   );
   expect(q.safeParse({ includeInactive: 'notabool' }).success).toBe(false);
+});
+
+test('cursor pagination query preserves a comma-bearing provider cursor split by the HTTP parser', () => {
+  const cursor = 'provider:{"turnId":"019f741c-70a5-7df2-a5f4-04132750aace","includeAnchor":false}';
+
+  expect(
+    cursorPaginationQuerySchema.parse({
+      limit: '20',
+      before: ['provider:{"turnId":"019f741c-70a5-7df2-a5f4-04132750aace"', '"includeAnchor":false}']
+    })
+  ).toEqual({ limit: 20, before: cursor });
 });
 
 test('HTTP skills query: scope matches canonical typed parse', () => {

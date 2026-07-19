@@ -7,11 +7,15 @@ import type {
   MeshAgentResizeRequest,
   MeshAgentUsageResponse,
   MeshAgentView,
-  MeshSessionView
+  MeshSessionState
 } from '@monad/protocol';
 import type { MeshAgentProcess, MeshAgentTerminal } from '#/services/mesh-agent/runtime-types.ts';
 import type { ResolveAgentEnv } from '#/services/mesh-agent/spawn-support.ts';
-import type { MeshAgentProviderAdapter, MeshAgentStartPreflight } from '#/services/mesh-agent/types.ts';
+import type {
+  MeshAgentLaunchSpec,
+  MeshAgentProviderAdapter,
+  MeshAgentStartPreflight
+} from '#/services/mesh-agent/types.ts';
 
 import { randomBytes } from 'node:crypto';
 import { createLogger } from '@monad/logger';
@@ -40,7 +44,7 @@ import {
 import { appendBounded, collectProbeResult } from '#/services/mesh-agent/probe.ts';
 import { killMeshAgentProcess, readProcessRegistry, writeProcessRegistry } from '#/services/mesh-agent/process.ts';
 import { buildMeshAgentSpawnEnv, requireMeshAgent } from '#/services/mesh-agent/spawn-support.ts';
-import { createStreamingTextDecoder } from '#/services/mesh-agent/stream-decoder.ts';
+import { createStreamingTerminalTextDecoder } from '#/services/mesh-agent/stream-decoder.ts';
 
 export type MeshAgentAuthListener = (session: MeshAgentAuthSessionView) => void;
 
@@ -54,7 +58,7 @@ interface LiveMeshAgentAuthSession {
   adapter: MeshAgentProviderAdapter;
   authState: MeshAgentAuthState;
   outputSnapshot: string;
-  state: MeshSessionView['state'];
+  state: MeshSessionState;
   pid: number;
   startedAtMs: number;
   updatedAtMs: number;
@@ -69,7 +73,7 @@ interface LiveMeshAgentAuthSession {
 /** Just what the auth host reads from the daemon config — a structural subset of MeshAgentHostDeps, so
  *  the host can construct it by passing its full deps object. Auth sessions are in-memory only (no
  *  store, no event bus): a provider login is transient and never persisted. */
-export interface MeshAgentAuthHostDeps {
+interface MeshAgentAuthHostDeps {
   agents: () => Promise<MeshAgentView[]>;
   resolveAgentEnv?: ResolveAgentEnv;
   authProcessRegistryPath?: string;
@@ -129,6 +133,37 @@ export class MeshAgentAuthHost {
     launchEnv?: Record<string, string>
   ): Promise<Record<string, string>> {
     return buildMeshAgentSpawnEnv(this.deps.resolveAgentEnv, adapter, launchEnv);
+  }
+
+  private async runProbe(
+    agent: MeshAgentView,
+    adapter: MeshAgentProviderAdapter,
+    launch: MeshAgentLaunchSpec,
+    event: 'mesh.auth_status_spawn' | 'mesh.usage_spawn'
+  ) {
+    const proc = supervisedSpawn(
+      launch.argv,
+      {
+        cwd: launch.cwd,
+        env: await this.buildSpawnEnv(adapter, launch.env),
+        detached: true,
+        stdin: 'ignore',
+        stdout: 'pipe',
+        stderr: 'pipe'
+      },
+      {
+        ...daemonTrackedSpawnOptions({
+          event,
+          log: this.log,
+          context: { agentName: agent.name, provider: agent.provider },
+          timeout: timeoutWithEscalation(this.authStatusTimeoutMs),
+          kill: (child, signal) => killMeshAgentProcess(child.pid, signal),
+          trackLabel: 'mesh-agent-probe',
+          tracker: daemonChildProcesses
+        })
+      }
+    );
+    return collectProbeResult(proc, this.authStatusTimeoutMs, MAX_OUTPUT_SNAPSHOT);
   }
 
   /** Returns the queued registry write so the initial start path can await durability before
@@ -203,8 +238,7 @@ export class MeshAgentAuthHost {
     const launch = resolveMeshAgentLaunchCommand(adapter, buildMeshAgentAuthLaunch(agent));
     const id = newId('ncliauth');
     const now = new Date().toISOString();
-    const decoder = createStreamingTextDecoder();
-    let pendingCR = false;
+    const decoder = createStreamingTerminalTextDecoder();
     let proc: MeshAgentProcess;
     proc = supervisedSpawn(
       launch.argv,
@@ -221,11 +255,7 @@ export class MeshAgentAuthHost {
           data: (_terminal: MeshAgentTerminal, data: Uint8Array) => {
             const live = this.liveAuth.get(id);
             if (!live) return;
-            let text = decoder.decode(data);
-            if (pendingCR) text = `\r${text}`;
-            pendingCR = text.endsWith('\r');
-            if (pendingCR) text = text.slice(0, -1);
-            text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+            const text = decoder.decode(data);
             if (!text) return;
             live.outputSnapshot = appendBounded(live.outputSnapshot, text, MAX_OUTPUT_SNAPSHOT);
             live.updatedAt = new Date().toISOString();
@@ -277,14 +307,9 @@ export class MeshAgentAuthHost {
     void proc.exited.then((code) => {
       const current = this.liveAuth.get(id);
       if (!current) return;
-      let remainingText = decoder.flush();
-      if (pendingCR) remainingText = `\r${remainingText}`;
-      pendingCR = remainingText.endsWith('\r');
-      if (pendingCR) remainingText = remainingText.slice(0, -1);
-      remainingText = remainingText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+      const remainingText = decoder.flush();
       if (remainingText)
         current.outputSnapshot = appendBounded(current.outputSnapshot, remainingText, MAX_OUTPUT_SNAPSHOT);
-      if (pendingCR) current.outputSnapshot = appendBounded(current.outputSnapshot, '\n', MAX_OUTPUT_SNAPSHOT);
       if (current.state !== 'stopped') current.state = code === 0 ? 'exited' : 'failed';
       current.authState = current.adapter.parseAuthStatus(current.outputSnapshot, code);
       current.exitCode = code;
@@ -385,29 +410,7 @@ export class MeshAgentAuthHost {
       },
       'native cli auth status probe'
     );
-    const proc = supervisedSpawn(
-      launch.argv,
-      {
-        cwd: launch.cwd,
-        env: await this.buildSpawnEnv(adapter, launch.env),
-        detached: true,
-        stdin: 'ignore',
-        stdout: 'pipe',
-        stderr: 'pipe'
-      },
-      {
-        ...daemonTrackedSpawnOptions({
-          event: 'mesh.auth_status_spawn',
-          log: this.log,
-          context: { agentName: agent.name, provider: agent.provider },
-          timeout: timeoutWithEscalation(this.authStatusTimeoutMs),
-          kill: (child, signal) => killMeshAgentProcess(child.pid, signal),
-          trackLabel: 'mesh-agent-probe',
-          tracker: daemonChildProcesses
-        })
-      }
-    );
-    const result = await collectProbeResult(proc, this.authStatusTimeoutMs, MAX_OUTPUT_SNAPSHOT);
+    const result = await this.runProbe(agent, adapter, launch, 'mesh.auth_status_spawn');
     if (result.timedOut) {
       this.log.warn(
         {
@@ -468,29 +471,7 @@ export class MeshAgentAuthHost {
       },
       'native cli usage probe'
     );
-    const proc = supervisedSpawn(
-      launch.argv,
-      {
-        cwd: launch.cwd,
-        env: await this.buildSpawnEnv(adapter, launch.env),
-        detached: true,
-        stdin: 'ignore',
-        stdout: 'pipe',
-        stderr: 'pipe'
-      },
-      {
-        ...daemonTrackedSpawnOptions({
-          event: 'mesh.usage_spawn',
-          log: this.log,
-          context: { agentName: agent.name, provider: agent.provider },
-          timeout: timeoutWithEscalation(this.authStatusTimeoutMs),
-          kill: (child, signal) => killMeshAgentProcess(child.pid, signal),
-          trackLabel: 'mesh-agent-probe',
-          tracker: daemonChildProcesses
-        })
-      }
-    );
-    const result = await collectProbeResult(proc, this.authStatusTimeoutMs, MAX_OUTPUT_SNAPSHOT);
+    const result = await this.runProbe(agent, adapter, launch, 'mesh.usage_spawn');
     if (result.timedOut) {
       this.log.warn(
         {

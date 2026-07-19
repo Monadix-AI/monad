@@ -8,8 +8,10 @@ function json(body: unknown, status = 200) {
   };
 }
 
-async function installRemoteAccessRuntimeMock(page: Page) {
+async function installRemoteAccessRuntimeMock(page: Page, options?: { abortNetworkPut?: boolean }) {
+  let documentRequests = 0;
   let probeCalls = 0;
+  const networkWrites: unknown[] = [];
   const networkRuntime = {
     listeners: [{ scheme: 'https', host: '0.0.0.0', port: 52749 }],
     remoteAccess: { enabled: true, tokenRevision: 3 },
@@ -33,6 +35,7 @@ async function installRemoteAccessRuntimeMock(page: Page) {
   await page.route('**/*', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
+    if (request.resourceType() === 'document') documentRequests += 1;
     if (!(url.pathname.startsWith('/api/') || url.pathname.startsWith('/v1/') || url.pathname === '/health')) {
       return route.continue();
     }
@@ -44,6 +47,13 @@ async function installRemoteAccessRuntimeMock(page: Page) {
       return route.fulfill(json({ status: 'ok', version: '0.1.1', networkRuntime }));
     }
     if (method === 'GET' && path === '/v1/settings/network') return route.fulfill(json(networkSettings));
+    if (method === 'PUT' && path === '/v1/settings/network') {
+      const body = request.postDataJSON();
+      networkWrites.push(body);
+      if (options?.abortNetworkPut) return route.abort('connectionreset');
+      if (body?.https?.enabled === false) networkSettings.https.enabled = false;
+      return route.fulfill(json(networkSettings));
+    }
     if (method === 'POST' && path === '/v1/settings/network/probe') {
       probeCalls += 1;
       return route.fulfill(json({ ok: true, status: 200, latencyMs: 12 }));
@@ -106,31 +116,50 @@ async function installRemoteAccessRuntimeMock(page: Page) {
     return route.fulfill(json({}));
   });
 
-  return { probeCalls: () => probeCalls };
+  return { documentRequests: () => documentRequests, networkWrites: () => networkWrites, probeCalls: () => probeCalls };
 }
 
 test('daemon item shows remote runtime details on hover', async ({ page }) => {
   await installRemoteAccessRuntimeMock(page);
   await page.goto('/');
 
-  await page.getByTestId('daemon-runtime-status').hover();
+  await page.getByTestId('daemon-runtime-status').hover({ force: true });
 
   await expect(page.getByText('Daemon network runtime').first()).toBeVisible();
   await expect(page.getByText('https://0.0.0.0:52749').first()).toBeVisible();
   await expect(page.getByText('Token revision 3').first()).toBeVisible();
 });
 
-test('system settings shows remote URLs and probes them', async ({ page }) => {
+test('connection settings shows the configured HTTPS endpoint and remote token', async ({ page }) => {
+  await installRemoteAccessRuntimeMock(page);
+  await page.goto('/settings/connection');
+
+  await expect(page.getByRole('heading', { name: 'Connection' })).toBeVisible();
+  await expect(page.getByText('https://127.0.0.1:52749').first()).toBeVisible();
+  await expect(page.locator('#local-remote-token')).toHaveValue('secret');
+});
+
+test('connection settings requires explicit confirmation before remote HTTP', async ({ page }) => {
   const api = await installRemoteAccessRuntimeMock(page);
-  await page.goto('/settings/system');
+  await page.goto('/settings/connection');
 
-  await expect(page.getByRole('heading', { name: 'System' })).toBeVisible();
-  await expect(page.getByText('https://172.16.112.210:52749')).toBeVisible();
-  await expect(page.getByText('https://100.64.1.2:52749')).toBeVisible();
-  await expect(page.getByText('Token revision 3')).toBeVisible();
+  page.once('dialog', (dialog) => dialog.dismiss());
+  await page.getByRole('switch', { name: 'HTTPS' }).click();
+  expect(api.networkWrites()).toEqual([]);
 
-  await page.getByRole('button', { name: 'Check' }).first().click();
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.getByRole('switch', { name: 'HTTPS' }).click();
 
-  await expect.poll(api.probeCalls).toBe(1);
-  await expect(page.getByText('12 ms')).toBeVisible();
+  await expect.poll(api.networkWrites).toEqual([{ confirmInsecureRemoteAccess: true, https: { enabled: false } }]);
+});
+
+test('HTTPS disable stays loading and refreshes after the old listener drops the response', async ({ page }) => {
+  const api = await installRemoteAccessRuntimeMock(page, { abortNetworkPut: true });
+  await page.goto('/settings/connection');
+
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.getByRole('switch', { name: 'HTTPS' }).click();
+
+  await expect(page.getByText('Switching to HTTP...')).toBeVisible();
+  await expect.poll(api.documentRequests).toBeGreaterThan(1);
 });

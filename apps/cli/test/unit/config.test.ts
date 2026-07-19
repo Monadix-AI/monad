@@ -11,11 +11,11 @@ import { command } from '../../src/commands/config.ts';
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 /** Build a CommandContext for direct command invocation in tests. */
-function ctx(positionals: string[], client: unknown = null): CommandContext {
+function ctx(positionals: string[], client: unknown = null, yes = false): CommandContext {
   return {
     positionals,
     flags: {},
-    globals: { json: false, quiet: false, verbose: 0, yes: false, color: false },
+    globals: { json: false, quiet: false, verbose: 0, yes, color: false },
     client: client as CommandContext['client']
   };
 }
@@ -84,6 +84,28 @@ test('config set coerces numeric values', async () => {
   await captureOutput(() => command.run(ctx(['set', 'network.port', '8123'])));
   const cfg = await loadConfig(getPaths());
   expect(cfg?.network.port).toBe(8123);
+});
+
+test('config set enables HTTPS by default when remote access is enabled', async () => {
+  await captureOutput(() => command.run(ctx(['set', 'network.remoteAccess.enabled', 'true'])));
+
+  const cfg = await loadConfig(getPaths());
+  expect(cfg?.network).toMatchObject({
+    https: { enabled: true },
+    remoteAccess: { enabled: true, token: expect.any(String) }
+  });
+});
+
+test('config set accepts remote HTTP only after explicit global confirmation', async () => {
+  await captureOutput(() => command.run(ctx(['set', 'network.remoteAccess.enabled', 'true'])));
+  const output = await captureOutput(() => command.run(ctx(['set', 'network.https.enabled', 'false'], null, true)));
+
+  const cfg = await loadConfig(getPaths());
+  expect(cfg?.network).toMatchObject({
+    https: { enabled: false },
+    remoteAccess: { enabled: true }
+  });
+  expect(output).toContain('DANGER: REMOTE HTTP');
 });
 
 test('config set rejects an invalid value (schema validation)', async () => {

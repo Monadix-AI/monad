@@ -25,7 +25,6 @@ const row: MeshSessionRow = {
   agentName: 'codex',
   provider: 'codex' as const,
   workingPath: '/tmp/project',
-  launchMode: 'pty' as const,
   runtimeRole: 'interactive' as const,
   agentRuntimeId: null,
   agentRuntimeTokenHash: null,

@@ -4,7 +4,7 @@ import { daemonChildProcesses } from '#/infra/daemon-child-processes.ts';
 import { cleanupManagedProjectOrphanTokens } from '#/services/mesh-agent/managed-project.ts';
 import { killMeshAgentProcess, readProcessRegistry, writeProcessRegistry } from '#/services/mesh-agent/process.ts';
 
-export interface MeshAgentProcessLifecycleContext {
+interface MeshAgentProcessLifecycleContext {
   store: MeshAgentHostDeps['store'];
   monadHome: MeshAgentHostDeps['monadHome'];
   meshAgentProcessRegistryPath: MeshAgentHostDeps['meshAgentProcessRegistryPath'];
