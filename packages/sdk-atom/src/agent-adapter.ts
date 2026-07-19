@@ -19,6 +19,7 @@ import type {
   MeshRawEventPage
 } from '@monad/protocol';
 import type { BinProbes } from './bin-probes.ts';
+import type { SessionEventRuntimeDefinition } from './mesh-agent-session-runtime.ts';
 
 import { z } from 'zod';
 
@@ -130,6 +131,15 @@ export interface BuildMeshAgentLaunchOptions {
   reasoningEffort?: string;
   speed?: 'standard' | 'fast';
   mcpConfigArgs?: string[];
+}
+
+export interface MeshAgentSessionRuntimeContext {
+  workingPath: string;
+  providerSessionRef?: string;
+  modelName?: string;
+  modelId?: string;
+  reasoningEffort?: string;
+  speed?: 'standard' | 'fast';
 }
 
 export interface MeshAgentOutputEvent {
@@ -555,6 +565,7 @@ export interface MeshAgentProviderAdapter {
   listSupportedModels(agent?: MeshAgentView): string[];
   modelOptions?(agent: MeshAgentView): MeshAgentModelOptionsProbe;
   resolveCommand?(command: string, probes?: BinProbes): string | undefined;
+  createSessionRuntime?(agent: MeshAgentView, context: MeshAgentSessionRuntimeContext): SessionEventRuntimeDefinition;
   buildLaunch(agent: MeshAgentView, opts: BuildMeshAgentLaunchOptions): MeshAgentLaunchSpec;
   /** Return the first provider-specific argv token that enables an unsafe/unattended mode. The daemon
    *  owns the `allowAutopilot` decision, while each adapter owns its CLI vocabulary. */

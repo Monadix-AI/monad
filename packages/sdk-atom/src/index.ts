@@ -70,6 +70,7 @@ import type {
   MeshAgentProviderEventPageContext,
   MeshAgentProviderEventPageRequestContext,
   MeshAgentRuntimeHandle,
+  MeshAgentSessionRuntimeContext,
   MeshAgentSettingsImport,
   MeshAgentStartPreflight,
   MeshAgentUsageProbe
@@ -281,6 +282,7 @@ export type {
   MeshAgentProviderEventPageRequestContext,
   MeshAgentRuntimeHandle,
   MeshAgentSessionEvent,
+  MeshAgentSessionRuntimeContext,
   MeshAgentSettingsImport,
   MeshAgentStartPreflight,
   MeshAgentUsageProbe,
