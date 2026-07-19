@@ -51,7 +51,7 @@ export const codexMeshAgentAdapter: MeshAgentProviderAdapter = {
   }),
   settings: () =>
     meshAgentAdapterSettings({
-      launchModes: ['pty', 'app-server', 'remote-control'],
+      launchModes: ['pty', 'app-server'],
       appServerTransports: [...CODEX_APP_SERVER_TRANSPORTS]
     }),
   settingsImport: createCodexSettingsImport(),
@@ -84,7 +84,7 @@ export const codexMeshAgentAdapter: MeshAgentProviderAdapter = {
       args: [],
       modelOptions: codexMeshAgentAdapter.listSupportedModels(),
       defaultLaunchMode: 'pty',
-      supportedLaunchModes: ['pty', 'app-server', 'remote-control'],
+      supportedLaunchModes: ['pty', 'app-server'],
       supportedAppServerTransports: [...CODEX_APP_SERVER_TRANSPORTS],
       installHint: 'Install Codex CLI or Codex.app, then sign in with codex login.',
       installUrl: 'https://developers.openai.com/codex/cli',

@@ -167,7 +167,6 @@ export function buildCodexLaunch(agent: MeshAgentView, opts: BuildMeshAgentLaunc
       capabilities: [
         'pty',
         'app-server',
-        'remote-control',
         'provider-approval',
         'approval-resolution',
         'structured-output',
@@ -205,7 +204,6 @@ export function buildCodexLaunch(agent: MeshAgentView, opts: BuildMeshAgentLaunc
     capabilities: [
       'pty',
       'app-server',
-      'remote-control',
       'provider-approval',
       'approval-resolution',
       'structured-output',

@@ -115,8 +115,15 @@ test('Codex adapter launches an interactive CLI rooted at the requested working 
 
   expect(launch.argv).toEqual(['codex', '--cd', '/tmp/project', '--no-alt-screen']);
   expect(launch.cwd).toBe('/tmp/project');
-  expect(launch.capabilities).toContain('remote-control');
-  expect(launch.capabilities).toContain('session-resume');
+  expect(launch.capabilities).toEqual([
+    'pty',
+    'app-server',
+    'provider-approval',
+    'approval-resolution',
+    'structured-output',
+    'session-resume',
+    'rollout-json-fallback'
+  ]);
   expect(launch.approvalOwnership).toBe('provider-owned');
 });
 
@@ -716,9 +723,13 @@ test('Codex adapter requires a socket path for the unix transport', () => {
 });
 
 test('Codex preset advertises stdio, ws, and unix app-server transports', () => {
+  const preset = codexMeshAgentAdapter.detect({ which: () => undefined, exists: () => true });
+
+  expect(preset.supportedLaunchModes).toEqual(['pty', 'app-server']);
+  expect(preset.supportedAppServerTransports).toEqual(['stdio', 'ws', 'unix']);
   expect(
-    codexMeshAgentAdapter.detect({ which: () => undefined, exists: () => true }).supportedAppServerTransports
-  ).toEqual(['stdio', 'ws', 'unix']);
+    claudeCodeMeshAgentAdapter.detect({ which: () => undefined, exists: () => true }).supportedLaunchModes
+  ).toEqual(['pty', 'json-stream']);
 });
 
 test('MeshAgent auth launches provider-owned login and status commands', () => {
@@ -1092,7 +1103,13 @@ test('Claude Code adapter launches in the requested cwd and advertises stream-js
 
   expect(launch.argv).toEqual(['claude', '--thinking-display', 'summarized']);
   expect(launch.cwd).toBe('/tmp/project');
-  expect(launch.capabilities).toContain('session-resume');
+  expect(launch.capabilities).toEqual([
+    'pty',
+    'json-stream',
+    'provider-approval',
+    'structured-output',
+    'session-resume'
+  ]);
   expect(launch.approvalOwnership).toBe('provider-owned');
 });
 

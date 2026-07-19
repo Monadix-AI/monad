@@ -46,8 +46,8 @@ The implementation currently makes app-server a cross-layer concept:
 - The daemon launcher has app-server-specific startup waits, socket branches, reconnect state, logs, and teardown paths.
 - HTTP responses, Studio forms, Workplace configuration, docs, and raw observation labels expose app-server vocabulary.
 - Provider protocol state leaks into the generic live-session handle.
-- The pty, json-stream, app-server, remote-control, and cli-oneshot values mix user capability, process lifetime, transport, provider protocol, and controls into one enum.
-- remote-control is advertised by the Codex and Claude Code presets but has no independent host launch path. It is a control-capability label, not a process model, and must not be converted into a third runtime plan.
+- The pty, json-stream, app-server, and cli-oneshot values mix user capability, process lifetime, transport, and provider protocol into one enum.
+- The former remote-control value was advertised by the Codex and Claude Code presets but had no independent host launch path. It is void, removed from the launch-mode schema, presets, settings, and launch capabilities, and must not be converted into a runtime plan or capability.
 
 The current state contract also conflates logical session lifetime with child-process lifetime. That fails for per-turn runtimes: a successful child exit completes one turn, not the MeshAgent session.
 
@@ -137,7 +137,7 @@ A per-turn plan must support provider session resume. A stateless command that c
 
 ProcessLaunchPlan references the executable resolved by the daemon from the validated MeshAgent configuration; an adapter cannot replace it with an arbitrary path. buildTurnLaunch receives no user content. The daemon validates and registers attachments before constructing MeshAgentTurnInput, so adapters receive bounded references rather than arbitrary attachment objects. User text and attachment references flow only through encodeTurnInput, and the daemon accepts only stdin or values placed after an explicit end-of-options separator. A provider that supports neither safe form does not qualify for per-turn hosting.
 
-remote-control has no target-plan equivalent. During migration, adapters map a legacy remote-control selection to their canonical structured runtime and report the concrete controls that runtime implements. An adapter that cannot do so returns an unresolved-migration error rather than manufacturing a runtime mode.
+The removed remote-control value has no target-plan equivalent and no compatibility mapping. Configuration containing it is invalid and must name the affected MeshAgent and require the operator to select a supported structured runtime; the daemon must not silently choose one.
 
 ### Provider driver
 
@@ -409,12 +409,14 @@ The compatibility window is exactly release 0.0.3. Release 0.0.4 removes legacy 
 
 1. @monad/environment accepts deprecated launch and transport fields without interpreting provider semantics.
 2. After atom adapters register, the daemon invokes an adapter migration hook.
-3. The adapter maps legacy fields, including remote-control, to provider-owned adapterSettings and a canonical structured runtime.
+3. The adapter maps supported legacy launch and transport fields to provider-owned adapterSettings and a canonical structured runtime.
 4. ConfigManager records a migration ID and source checksum, writes a rollback journal, then atomically writes canonical configuration and removes migrated fields.
 5. Re-running the migration with the same ID and checksum is a no-op. A changed source is re-evaluated once and atomically replaces the journal entry.
 6. Unknown, uninstalled, or unresolved third-party providers retain legacy values and receive a clear warning; their entries are not partially migrated.
 7. Successfully migrated adapterSettings remain in the MeshAgent configuration even if the adapter is later uninstalled. The 0.0.3 rollback journal retains the original legacy fragment through the 0.0.4 cutover.
 8. On 0.0.4 startup, any still-unresolved legacy entry is disabled with a named provider and recovery action rather than silently selecting a fallback. Legacy parsing is then removed.
+
+remote-control is outside this compatibility window. It is rejected as an invalid launch mode as soon as this design lands and is never passed to an adapter migration hook.
 
 The daemon never maps provider IDs to app-server or gateway settings itself.
 
@@ -446,7 +448,7 @@ All built-in presets receive an explicit mapping before PTY session fallback is 
 
 - Convert OpenClaw and Hermes gateways.
 - Convert Gemini and Qwen structured event streams.
-- Assign every built-in legacy PTY and remote-control selection a canonical structured-runtime migration.
+- Assign every built-in legacy PTY selection a canonical structured-runtime migration.
 - Remove PTY session fallback after those mappings pass conformance.
 - Reject providers without stable structured events or per-turn resume.
 

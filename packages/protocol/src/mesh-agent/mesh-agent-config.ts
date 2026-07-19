@@ -16,7 +16,7 @@ export const meshAgentProductIconSchema: z.ZodType<MeshAgentProductIcon> = z.str
 // (e.g. `hermes -z <prompt>`), captures its stdout as the reply, and the process exits — for providers
 // that have no persistent session/app-server backend. Multi-turn context is kept via the provider's
 // own `--resume`/session selector. All other modes drive ONE long-lived process per session.
-export const meshAgentLaunchModeSchema = z.enum(['pty', 'json-stream', 'app-server', 'remote-control', 'cli-oneshot']);
+export const meshAgentLaunchModeSchema = z.enum(['pty', 'json-stream', 'app-server', 'cli-oneshot']);
 export type MeshAgentLaunchMode = z.infer<typeof meshAgentLaunchModeSchema>;
 
 // Byte channel between the daemon and a provider's app-server. `stdio` (newline-delimited JSON over

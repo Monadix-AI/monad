@@ -9,6 +9,7 @@ import {
   meshAgentApprovalResolutionRequestSchema,
   meshAgentAuthSessionViewSchema,
   meshAgentAuthStatusResponseSchema,
+  meshAgentLaunchModeSchema,
   meshAgentObservationEventSchema,
   meshAgentPresetSchema,
   meshAgentSettingSchema,
@@ -41,6 +42,10 @@ import {
   workplaceProjectMembersExtKey,
   workplaceProjectMembersExtSchema
 } from '../src/mesh-agent/index.ts';
+
+test('MeshAgent launch modes exclude the defunct remote-control mode', () => {
+  expect(meshAgentLaunchModeSchema.options).toEqual(['pty', 'json-stream', 'app-server', 'cli-oneshot']);
+});
 
 test('MeshAgent view requires provider-owned full-capability defaults', () => {
   const parsed = meshAgentViewSchema.parse({

@@ -151,7 +151,7 @@ function buildClaudeLaunch(agent: MeshAgentView, opts: BuildMeshAgentLaunchOptio
     launchMode,
     provider: 'claude-code',
     approvalOwnership: 'provider-owned',
-    capabilities: ['pty', 'json-stream', 'remote-control', 'provider-approval', 'structured-output', 'session-resume']
+    capabilities: ['pty', 'json-stream', 'provider-approval', 'structured-output', 'session-resume']
   };
 }
 
@@ -469,7 +469,7 @@ export const claudeCodeMeshAgentAdapter: MeshAgentProviderAdapter = {
     readOutput: readClaudeHistoryOutput
   }),
   settings: () => [
-    ...meshAgentAdapterSettings({ launchModes: ['pty', 'json-stream', 'remote-control'] }),
+    ...meshAgentAdapterSettings({ launchModes: ['pty', 'json-stream'] }),
     {
       key: 'showThinkingSummary',
       label: 'Show thinking summary',
@@ -509,7 +509,7 @@ export const claudeCodeMeshAgentAdapter: MeshAgentProviderAdapter = {
       args: [],
       modelOptions: claudeCodeMeshAgentAdapter.listSupportedModels(),
       defaultLaunchMode: 'pty',
-      supportedLaunchModes: ['pty', 'json-stream', 'remote-control'],
+      supportedLaunchModes: ['pty', 'json-stream'],
       installHint: 'Install Claude Code, then sign in with claude auth.',
       installUrl: 'https://docs.anthropic.com/en/docs/claude-code/setup',
       installed,
