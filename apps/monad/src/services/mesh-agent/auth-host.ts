@@ -124,8 +124,11 @@ export class MeshAgentAuthHost {
     return requireMeshAgent(this.deps.agents, name);
   }
 
-  private buildSpawnEnv(launchEnv?: Record<string, string>): Promise<Record<string, string>> {
-    return buildMeshAgentSpawnEnv(this.deps.resolveAgentEnv, launchEnv);
+  private buildSpawnEnv(
+    adapter: MeshAgentProviderAdapter,
+    launchEnv?: Record<string, string>
+  ): Promise<Record<string, string>> {
+    return buildMeshAgentSpawnEnv(this.deps.resolveAgentEnv, adapter, launchEnv);
   }
 
   /** Returns the queued registry write so the initial start path can await durability before
@@ -207,7 +210,7 @@ export class MeshAgentAuthHost {
       launch.argv,
       {
         cwd: launch.cwd,
-        env: await this.buildSpawnEnv(launch.env),
+        env: await this.buildSpawnEnv(adapter, launch.env),
         detached: true,
         stdout: 'ignore',
         stderr: 'ignore',
@@ -386,7 +389,7 @@ export class MeshAgentAuthHost {
       launch.argv,
       {
         cwd: launch.cwd,
-        env: await this.buildSpawnEnv(launch.env),
+        env: await this.buildSpawnEnv(adapter, launch.env),
         detached: true,
         stdin: 'ignore',
         stdout: 'pipe',
@@ -469,7 +472,7 @@ export class MeshAgentAuthHost {
       launch.argv,
       {
         cwd: launch.cwd,
-        env: await this.buildSpawnEnv(launch.env),
+        env: await this.buildSpawnEnv(adapter, launch.env),
         detached: true,
         stdin: 'ignore',
         stdout: 'pipe',

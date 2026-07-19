@@ -1,11 +1,13 @@
 import type { MonadAuth } from '@monad/environment';
+import type { MeshAgentEnvironmentPolicy } from '@monad/sdk-atom';
 
 import { tryResolveSecretMap } from '#/config/secrets.ts';
 
-// Markers a nested CLI must not inherit. The CLI refuses to start when it sees its own
-// nested-session guard (which leaks down whenever monad was itself launched from the same
-// session), and monad's own session markers should never reach a child agent.
-const STRIPPED_CHILD_ENV = ['CLAUDECODE', 'CLAUDE_CODE_ENTRYPOINT'] as const;
+// Ambient nested-session markers monad may itself have inherited from the CLI that launched it. A
+// child CLI refuses to start when it sees its own nested-session guard. The leak originates in the
+// daemon's own environment rather than in any provider, so this is a daemon-wide invariant, not
+// adapter-owned policy: no child of any provider may see them, whatever the source.
+const DAEMON_CHILD_ENV_STRIP = ['CLAUDECODE', 'CLAUDE_CODE_ENTRYPOINT'] as const;
 
 // Env keys that hijack a spawned process regardless of value: loader injection (LD_PRELOAD /
 // DYLD_INSERT_LIBRARIES), PATH/loader substitution, and language startup-file vectors. The agent env
@@ -32,19 +34,33 @@ const ENV_INJECT_DENYLIST = new Set([
 ]);
 
 /**
- * Build the child CLI's environment: the daemon env (minus nested-session markers) overlaid with the
- * agent's own env (minus injection vectors). Agent values win for non-denied keys.
+ * The keys no child of this provider may carry: the daemon's own invariants unioned with the
+ * adapter's policy and, when the agent is launched through a specific delivery, that delivery's.
+ * Union only — an adapter or delivery can add keys but can never restore one the daemon forbids.
  */
-export function mergeMeshAgentChildEnv(agentEnv?: Record<string, string>): Record<string, string> {
+export function meshAgentStripKeys(...policies: Array<MeshAgentEnvironmentPolicy | undefined>): Set<string> {
+  const keys = new Set<string>(DAEMON_CHILD_ENV_STRIP);
+  for (const policy of policies) for (const key of policy?.strip ?? []) keys.add(key);
+  return keys;
+}
+
+/**
+ * Build the child CLI's environment. Two policies with different shapes, applied at different points:
+ * `ENV_INJECT_DENYLIST` is a WRITE permission — operator config may not set a loader key, but one
+ * inherited from the daemon still passes through. `stripKeys` is an INVARIANT on the result, so it
+ * runs after every overlay; applying it to the inherited env alone would let the agent's own env put
+ * a stripped key straight back.
+ */
+export function mergeMeshAgentChildEnv(
+  agentEnv?: Record<string, string>,
+  stripKeys: ReadonlySet<string> = meshAgentStripKeys()
+): Record<string, string> {
   const env: Record<string, string> = {};
-  for (const [key, value] of Object.entries(Bun.env)) {
-    if (value !== undefined && !STRIPPED_CHILD_ENV.includes(key as (typeof STRIPPED_CHILD_ENV)[number])) {
-      env[key] = value;
-    }
-  }
+  for (const [key, value] of Object.entries(Bun.env)) if (value !== undefined) env[key] = value;
   for (const [key, value] of Object.entries(agentEnv ?? {})) {
     if (!ENV_INJECT_DENYLIST.has(key.toUpperCase())) env[key] = value;
   }
+  for (const key of stripKeys) delete env[key];
   return env;
 }
 

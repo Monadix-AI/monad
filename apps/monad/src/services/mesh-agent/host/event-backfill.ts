@@ -20,7 +20,7 @@ const log = createLogger('mesh-agent');
 
 export interface ProviderEventViaCliHelpers {
   agents: MeshAgentHostDeps['agents'];
-  buildSpawnEnv(env?: Record<string, string>): Promise<Record<string, string>>;
+  buildSpawnEnv(adapter: MeshAgentProviderAdapter, env?: Record<string, string>): Promise<Record<string, string>>;
   takeStructuredLines(id: string, stream: 'stdout' | 'stderr', chunk: string): string;
   dropStructuredBuffer(id: string): void;
 }
@@ -47,7 +47,7 @@ export async function providerEventPageViaCli(
     })
   );
   if (launch.launchMode !== 'app-server') return null;
-  const spawnEnv = await helpers.buildSpawnEnv(launch.env);
+  const spawnEnv = await helpers.buildSpawnEnv(adapter, launch.env);
   const proc = supervisedSpawn(
     launch.argv,
     { cwd: launch.cwd, env: spawnEnv, detached: true, stdin: 'pipe', stdout: 'pipe', stderr: 'pipe' },

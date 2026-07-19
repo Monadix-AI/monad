@@ -488,7 +488,6 @@ export const claudeCodeMeshAgentAdapter: MeshAgentProviderAdapter = {
     args: ['-y', '@agentclientprotocol/claude-agent-acp@0.49.0'],
     env: { ANTHROPIC_API_KEY: '${env:' + 'ANTHROPIC_API_KEY}' },
     loginDirectories: [join(homedir(), '.claude')],
-    stripEnvironment: ['CLAUDECODE', 'CLAUDE_CODE_ENTRYPOINT'],
     credentialDirectories: [{ path: join(homedir(), '.claude'), env: 'CLAUDE_CONFIG_DIR' }],
     authEnvironmentVariables: ['ANTHROPIC_API_KEY']
   },

@@ -477,6 +477,13 @@ export interface MeshAgentManagedRuntime {
   usesDeveloperInstructions?: boolean;
 }
 
+/** Child-process environment policy. `strip` names keys that must not reach the child whatever their
+ *  source. Policies are unioned, never subtracted: an adapter or delivery can only add to the daemon's
+ *  own invariants, so declaring one can never widen what a child inherits. */
+export interface MeshAgentEnvironmentPolicy {
+  strip?: string[];
+}
+
 /** ACP (Agent Client Protocol) delivery variant — the SAME agent launched as an external ACP
  *  sub-agent (an `npx` wrapper package bridging the agent's own SDK) instead of driven as a native
  *  CLI. Present only on agents that ship an ACP wrapper; the daemon's ACP
@@ -491,8 +498,8 @@ export interface MeshAgentAcpDelivery {
   env?: Record<string, string>;
   /** Provider login roots that make the ACP wrapper usable even when the native binary probe misses. */
   loginDirectories?: string[];
-  /** Provider-owned child-process environment policy. */
-  stripEnvironment?: string[];
+  /** Environment policy applying only to this delivery, unioned with the adapter's own policy. */
+  environment?: MeshAgentEnvironmentPolicy;
   /** Provider credential/config directories that must remain visible inside an OS sandbox. */
   credentialDirectories?: Array<{ path: string; env?: string }>;
   /** API-key environment variables to include in generic authentication recovery guidance. */
@@ -518,6 +525,8 @@ export type MeshAgentSettingsImport = AdapterMigration;
  *  the adapter only builds launch specs and translates the provider's wire format to/from
  *  `MeshAgentOutputEvent`s. Registered through `AtomPackContext.registerAgentAdapter`. */
 export interface MeshAgentProviderAdapter {
+  /** Environment policy shared by every delivery of this provider. */
+  environment?: MeshAgentEnvironmentPolicy;
   /** Provider-specific managed project-agent runtime behavior; absent → generic defaults. */
   managedRuntime?: MeshAgentManagedRuntime;
   /** ACP delivery variant; absent → this agent has no ACP wrapper (MeshAgent delivery only). */

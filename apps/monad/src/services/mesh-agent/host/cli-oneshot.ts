@@ -24,7 +24,7 @@ export interface MeshAgentOneshotRunnerContext {
   store: Pick<Store, 'upsertMeshSession'>;
   events: MeshAgentEventLog;
   outputPipeline: MeshAgentOutputPipeline;
-  buildSpawnEnv(launchEnv?: Record<string, string>): Promise<Record<string, string>>;
+  buildSpawnEnv(adapter: MeshAgentProviderAdapter, launchEnv?: Record<string, string>): Promise<Record<string, string>>;
   trackProcess(pid: number): void;
   untrackProcess(pid: number): void;
   openLiveRawStore(id: string, epoch: string): LiveRawStore;
@@ -130,7 +130,7 @@ export class MeshAgentOneshotRunner {
     // the `monad project post/ask/read` contract and their reply never reaches the project.
     const directive = live.managedPrompt ? `${live.managedPrompt}\n\n---\n\n${input}` : input;
     const turnArgs = turnArgsFn(directive, { providerSessionRef: live.providerSessionRef });
-    const spawnEnv = await this.ctx.buildSpawnEnv(spec.env);
+    const spawnEnv = await this.ctx.buildSpawnEnv(live.adapter, spec.env);
     let proc: MeshAgentProcess;
     try {
       proc = supervisedSpawn(

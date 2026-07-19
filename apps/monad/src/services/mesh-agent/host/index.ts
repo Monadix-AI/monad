@@ -30,7 +30,7 @@ import type {
   MeshAgentConvenienceObservationResult,
   MeshAgentRawObservationResult
 } from '#/services/mesh-agent/host/observation-resolve.ts';
-import type { MeshAgentStartPreflight } from '#/services/mesh-agent/types.ts';
+import type { MeshAgentProviderAdapter, MeshAgentStartPreflight } from '#/services/mesh-agent/types.ts';
 import type { MeshSessionRow } from '#/store/db/index.ts';
 import type { MeshAgentTargetId } from '#/store/db/mesh-sessions.ts';
 
@@ -200,7 +200,7 @@ export class MeshAgentHost {
       store: deps.store,
       events: this.events,
       outputPipeline: this.outputPipeline,
-      buildSpawnEnv: (env) => this.buildSpawnEnv(env),
+      buildSpawnEnv: (adapter, env) => this.buildSpawnEnv(adapter, env),
       trackProcess: (pid) => this.processLifecycle.track(pid),
       untrackProcess: (pid) => this.processLifecycle.untrack(pid),
       openLiveRawStore: (id, epoch) => this.openLiveRawStore(id, epoch)
@@ -215,7 +215,7 @@ export class MeshAgentHost {
       outputPipeline: this.outputPipeline,
       oneshotRunner: this.oneshotRunner,
       requireAgent: (name) => this.requireAgent(name),
-      buildSpawnEnv: (env) => this.buildSpawnEnv(env),
+      buildSpawnEnv: (adapter, env) => this.buildSpawnEnv(adapter, env),
       trackProcess: (pid) => this.processLifecycle.track(pid),
       untrackProcess: (pid) => this.processLifecycle.untrack(pid),
       armIdleSuspend: (live) => this.armIdleSuspend(live),
@@ -247,8 +247,11 @@ export class MeshAgentHost {
     this.managedProjectOutputHandler = handler;
   }
 
-  private buildSpawnEnv(launchEnv?: Record<string, string>): Promise<Record<string, string>> {
-    return buildMeshAgentSpawnEnv(this.deps.resolveAgentEnv, launchEnv);
+  private buildSpawnEnv(
+    adapter: MeshAgentProviderAdapter,
+    launchEnv?: Record<string, string>
+  ): Promise<Record<string, string>> {
+    return buildMeshAgentSpawnEnv(this.deps.resolveAgentEnv, adapter, launchEnv);
   }
 
   private requireAgent(name: string): Promise<MeshAgentView> {
@@ -1042,7 +1045,7 @@ export class MeshAgentHost {
       if (row.launchMode === 'app-server') {
         const bridged = await providerEventPageViaCli(row, adapter, pageRequest, {
           agents: this.deps.agents,
-          buildSpawnEnv: (env) => this.buildSpawnEnv(env),
+          buildSpawnEnv: (adapter, env) => this.buildSpawnEnv(adapter, env),
           takeStructuredLines: (structuredId, stream, chunk) =>
             this.outputPipeline.takeCompleteStructuredLines(structuredId, stream, chunk),
           dropStructuredBuffer: (structuredId) => this.outputPipeline.dropStructuredBuffer(structuredId)

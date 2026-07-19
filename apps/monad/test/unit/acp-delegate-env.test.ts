@@ -21,26 +21,27 @@ const spec = (osSandbox: boolean, name = 'x') => ({
   forwardMcp: false
 });
 
-test('ACP spawn env applies only the selected adapter credential and env policy', () => {
+test('ACP spawn env applies only the selected adapter credential policy', () => {
   const codexHome = join(homedir(), '.codex');
-  const { env, credentialDirs } = adapterSpawnEnv(spec(true, 'codex'), {
-    CLAUDECODE: 'parent-session'
-  });
-  expect(env).toMatchObject({ CODEX_HOME: codexHome, CLAUDECODE: 'parent-session' });
+  const { env, credentialDirs } = adapterSpawnEnv(spec(true, 'codex'), {});
+  expect(env).toMatchObject({ CODEX_HOME: codexHome });
   expect(env.CLAUDE_CONFIG_DIR).toBeUndefined();
   expect(credentialDirs).toEqual([codexHome]);
 });
 
-test('Claude Code adapter strips its nested-session markers regardless of osSandbox', () => {
+// The nested-session markers leak from the daemon's OWN parent session, so they are a daemon-wide
+// invariant rather than the Claude adapter's policy: every provider's child must lose them.
+test.each(['codex', 'claude-code'])('ACP spawn env strips nested-session markers for %s', (name) => {
   for (const osSandbox of [false, true]) {
-    const { env } = adapterSpawnEnv(spec(osSandbox, 'claude-code'), {
+    const { env } = adapterSpawnEnv(spec(osSandbox, name), {
       CLAUDECODE: '1',
       CLAUDE_CODE_ENTRYPOINT: 'cli',
       PATH: '/usr/bin'
     });
-    // PATH is now prepended with node bin dirs (nvm/homebrew) so adapters can find npx regardless of
-    // how the daemon was launched; the original PATH must still be present.
-    expect(typeof env.PATH).toBe('string');
+    expect('CLAUDECODE' in env).toBe(false); // presence-ok: absence is the invariant under test
+    expect('CLAUDE_CODE_ENTRYPOINT' in env).toBe(false); // presence-ok: absence is the invariant under test
+    // PATH is prepended with node bin dirs (nvm/homebrew) so adapters can find npx regardless of how
+    // the daemon was launched; the original PATH must still be present.
     expect(env.PATH ?? '').toMatch(/\/usr\/bin$/);
   }
 });

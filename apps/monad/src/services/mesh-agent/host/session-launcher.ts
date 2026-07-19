@@ -9,7 +9,7 @@ import type {
 import type { LiveMeshSession, MeshAgentHostDeps } from '#/services/mesh-agent/host/host-types.ts';
 import type { LiveRawStore } from '#/services/mesh-agent/live-raw-store.ts';
 import type { MeshAgentProcess, MeshAgentTerminal } from '#/services/mesh-agent/runtime-types.ts';
-import type { MeshAgentLaunchSpec } from '#/services/mesh-agent/types.ts';
+import type { MeshAgentLaunchSpec, MeshAgentProviderAdapter } from '#/services/mesh-agent/types.ts';
 import type { MeshSessionRow } from '#/store/db/index.ts';
 import type { MeshAgentTargetId } from '#/store/db/mesh-sessions.ts';
 
@@ -69,7 +69,7 @@ export interface MeshSessionLauncherContext {
   outputPipeline: MeshAgentOutputPipeline;
   oneshotRunner: MeshAgentOneshotRunner;
   requireAgent(name: string): Promise<MeshAgentView>;
-  buildSpawnEnv(launchEnv?: Record<string, string>): Promise<Record<string, string>>;
+  buildSpawnEnv(adapter: MeshAgentProviderAdapter, launchEnv?: Record<string, string>): Promise<Record<string, string>>;
   trackProcess(pid: number): Promise<void>;
   untrackProcess(pid: number): void;
   armIdleSuspend(live: LiveMeshSession): void;
@@ -280,7 +280,7 @@ export class MeshSessionLauncher {
         startedAt: now
       });
     }
-    let spawnEnv = await this.ctx.buildSpawnEnv(launch.env);
+    let spawnEnv = await this.ctx.buildSpawnEnv(adapter, launch.env);
     const observationEpoch = newId('oep');
     const liveRawStore = this.ctx.openLiveRawStore(id, observationEpoch);
     // ws/unix app-server: codex listens on a socket and speaks the protocol over it, so the daemon
@@ -392,7 +392,7 @@ export class MeshSessionLauncher {
             )
           );
           launch = managed ? { ...launch, env: { ...(launch.env ?? {}), ...managed.env } } : launch;
-          spawnEnv = await this.ctx.buildSpawnEnv(launch.env);
+          spawnEnv = await this.ctx.buildSpawnEnv(adapter, launch.env);
           isAppServerWs = launch.launchMode === 'app-server' && launch.appServerTransport === 'ws';
           isAppServerUnix = launch.launchMode === 'app-server' && launch.appServerTransport === 'unix';
           isAppServerSocket = isAppServerWs || isAppServerUnix;
@@ -683,7 +683,7 @@ export class MeshSessionLauncher {
             )
           );
           launch = managed ? { ...launch, env: { ...(launch.env ?? {}), ...managed.env } } : launch;
-          spawnEnv = await this.ctx.buildSpawnEnv(launch.env);
+          spawnEnv = await this.ctx.buildSpawnEnv(adapter, launch.env);
           isAppServerWs = launch.launchMode === 'app-server' && launch.appServerTransport === 'ws';
           isAppServerUnix = launch.launchMode === 'app-server' && launch.appServerTransport === 'unix';
           isAppServerSocket = isAppServerWs || isAppServerUnix;
