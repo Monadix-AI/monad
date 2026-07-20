@@ -7,10 +7,12 @@ import { createExperienceStateStore, createExperienceWorkerScheduler } from '#/a
 import { ExperienceWorkerRegistry } from '#/atoms/experience-workers.ts';
 import { createStore } from '#/store/db/index.ts';
 
-function seedProject(store: ReturnType<typeof createStore>, projectId = 'prj_a') {
+const projectId = 'prj_aaaaaaaaaaaa';
+
+function seedProject(store: ReturnType<typeof createStore>, id = projectId) {
   const now = '2026-07-14T00:00:00.000Z';
   store.insertWorkplaceProject({
-    id: projectId as never,
+    id: id as never,
     title: 'Project',
     state: 'active',
     archived: false,
@@ -28,7 +30,7 @@ test('compareAndSwap appends one audit event only for the expected version', asy
   try {
     expect(
       await state.compareAndSwap({
-        projectId: 'prj_a',
+        projectId,
         key: 'task/x',
         expectedVersion: null,
         value: { n: 1 },
@@ -37,15 +39,15 @@ test('compareAndSwap appends one audit event only for the expected version', asy
     ).toBe(true);
     expect(
       await state.compareAndSwap({
-        projectId: 'prj_a',
+        projectId,
         key: 'task/x',
         expectedVersion: null,
         value: { n: 2 },
         event: { type: 'duplicate' }
       })
     ).toBe(false);
-    expect(await state.get<{ n: number }>('prj_a', 'task/x')).toMatchObject({ value: { n: 1 }, version: 0 });
-    expect(store.listExperienceStateEvents('pack-a', 'prj_a', 'task/x')).toHaveLength(1);
+    expect(await state.get<{ n: number }>(projectId, 'task/x')).toMatchObject({ value: { n: 1 }, version: 0 });
+    expect(store.listExperienceStateEvents('pack-a', projectId, 'task/x')).toHaveLength(1);
   } finally {
     store.close();
   }
@@ -58,7 +60,7 @@ test('a scheduled wake-up survives reopening the database', async () => {
   seedProject(first);
 
   try {
-    await createExperienceWorkerScheduler(first, 'pack-a', 'board').schedule('prj_a', {
+    await createExperienceWorkerScheduler(first, 'pack-a', 'board').schedule(projectId, {
       key: 'dispatch',
       runAt: '2026-07-14T00:00:00.000Z'
     });
@@ -69,7 +71,7 @@ test('a scheduled wake-up survives reopening the database', async () => {
   const reopened = createStore({ path });
   try {
     expect(reopened.listDueExperienceWorkerWakeups('2026-07-14T00:00:01.000Z')).toEqual([
-      expect.objectContaining({ atomPackId: 'pack-a', projectId: 'prj_a', key: 'dispatch' })
+      expect.objectContaining({ atomPackId: 'pack-a', projectId, key: 'dispatch' })
     ]);
   } finally {
     reopened.close();
@@ -103,19 +105,19 @@ test('worker receives a project-scoped event and a durable wake-up', async () =>
   });
 
   try {
-    await registry.startProjects(['prj_a']);
+    await registry.startProjects([projectId]);
     await registry.publish({
       id: 'evt_1',
-      projectId: 'prj_a',
+      projectId,
       sessionId: 'ses_a',
       type: 'approval_requested',
       payload: {},
       createdAt: '2026-07-14T00:00:00.000Z'
     });
-    await context.workerScheduler.schedule('prj_a', { key: 'dispatch', runAt: '2026-07-14T00:00:00.000Z' });
+    await context.workerScheduler.schedule(projectId, { key: 'dispatch', runAt: '2026-07-14T00:00:00.000Z' });
     await registry.deliverDueWakeups('2026-07-14T00:00:01.000Z');
 
-    expect(seen).toEqual(['start:prj_a', 'event:evt_1', 'wake:dispatch']);
+    expect(seen).toEqual([`start:${projectId}`, 'event:evt_1', 'wake:dispatch']);
     expect(store.listDueExperienceWorkerWakeups('2026-07-14T00:00:01.000Z')).toEqual([]);
   } finally {
     store.close();
@@ -193,11 +195,11 @@ test('same-key wakeups are isolated between sibling experience workers', async (
   }
 
   try {
-    await contextFor('board').workerScheduler.schedule('prj_a', {
+    await contextFor('board').workerScheduler.schedule(projectId, {
       key: 'dispatch',
       runAt: '2026-07-14T00:00:00.000Z'
     });
-    await contextFor('timeline').workerScheduler.schedule('prj_a', {
+    await contextFor('timeline').workerScheduler.schedule(projectId, {
       key: 'dispatch',
       runAt: '2026-07-14T00:00:00.000Z'
     });
