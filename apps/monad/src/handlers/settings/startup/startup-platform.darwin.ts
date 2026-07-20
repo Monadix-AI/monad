@@ -22,10 +22,16 @@ const platform: StartupPlatform = {
   },
   async write(target, context) {
     await mkdir(dirname(target.path), { recursive: true });
-    const app = await writeStartupApp(context);
+    const bundleIdentifier = `ai.monad.${context.identity.slug}.startup`;
+    const app = await writeStartupApp(context, bundleIdentifier);
     await writeFile(
       target.path,
-      renderLaunchAgent([join(app, 'Contents', 'MacOS', 'monad-startup')], context.monadHome, context.logPath),
+      renderLaunchAgent(
+        [join(app, 'Contents', 'MacOS', 'monad-startup')],
+        bundleIdentifier,
+        context.monadHome,
+        context.logPath
+      ),
       { mode: target.mode }
     );
   }
@@ -82,7 +88,10 @@ function spawnRegistrar(registrar: string): StartupRegistrar {
   };
 }
 
-async function writeStartupApp(context: Parameters<StartupPlatform['write']>[1]): Promise<string> {
+async function writeStartupApp(
+  context: Parameters<StartupPlatform['write']>[1],
+  bundleIdentifier: string
+): Promise<string> {
   const app = join(context.monadHome, 'startup', `${context.identity.name}.app`);
   const contents = join(app, 'Contents');
   const macos = join(contents, 'MacOS');
@@ -90,25 +99,29 @@ async function writeStartupApp(context: Parameters<StartupPlatform['write']>[1])
   await mkdir(macos, { recursive: true });
   await mkdir(resources, { recursive: true });
   const iconFile = await installIcon(startupIconPath('darwin', context.command), resources);
-  await writeFile(join(contents, 'Info.plist'), renderInfoPlist(context, iconFile), { mode: 0o644 });
+  await writeFile(join(contents, 'Info.plist'), renderInfoPlist(context, bundleIdentifier, iconFile), { mode: 0o644 });
   const launcher = join(macos, 'monad-startup');
   await writeFile(launcher, renderLauncher(context), { mode: 0o755 });
   await chmod(launcher, 0o755);
   return app;
 }
 
-function renderLaunchAgent(command: string[], monadHome: string, logPath: string): string {
+function renderLaunchAgent(command: string[], bundleIdentifier: string, monadHome: string, logPath: string): string {
   const args = command.map((arg) => `    <string>${escapeXml(arg)}</string>`).join('\n');
   return `<?xml version="1.0" encoding="UTF-8"?>
 <plist version="1.0"><dict><key>Label</key><string>${MACOS_LABEL}</string><key>ProgramArguments</key><array>
 ${args}
-</array><key>EnvironmentVariables</key><dict><key>MONAD_HOME</key><string>${escapeXml(monadHome)}</string></dict><key>RunAtLoad</key><true/><key>StandardOutPath</key><string>${escapeXml(logPath)}</string><key>StandardErrorPath</key><string>${escapeXml(logPath)}</string></dict></plist>
+</array><key>AssociatedBundleIdentifiers</key><array><string>${escapeXml(bundleIdentifier)}</string></array><key>EnvironmentVariables</key><dict><key>MONAD_HOME</key><string>${escapeXml(monadHome)}</string></dict><key>RunAtLoad</key><true/><key>StandardOutPath</key><string>${escapeXml(logPath)}</string><key>StandardErrorPath</key><string>${escapeXml(logPath)}</string></dict></plist>
 `;
 }
 
-function renderInfoPlist(context: Parameters<StartupPlatform['write']>[1], iconFile: string): string {
+function renderInfoPlist(
+  context: Parameters<StartupPlatform['write']>[1],
+  bundleIdentifier: string,
+  iconFile: string
+): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
-<plist version="1.0"><dict><key>CFBundleExecutable</key><string>monad-startup</string><key>CFBundleIconFile</key><string>${escapeXml(iconFile)}</string><key>CFBundleIdentifier</key><string>ai.monad.${context.identity.slug}.startup</string><key>CFBundleName</key><string>${context.identity.name}</string><key>CFBundleDisplayName</key><string>${context.identity.name}</string><key>NSHumanReadableCopyright</key><string>${context.identity.developer}</string></dict></plist>
+<plist version="1.0"><dict><key>CFBundleExecutable</key><string>monad-startup</string><key>CFBundleIconFile</key><string>${escapeXml(iconFile)}</string><key>CFBundleIdentifier</key><string>${escapeXml(bundleIdentifier)}</string><key>CFBundleName</key><string>${context.identity.name}</string><key>CFBundleDisplayName</key><string>${context.identity.name}</string><key>NSHumanReadableCopyright</key><string>${context.identity.developer}</string></dict></plist>
 `;
 }
 

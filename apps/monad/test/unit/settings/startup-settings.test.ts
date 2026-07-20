@@ -7,6 +7,10 @@ import { createStartupSettingsModule, startupSettingsCommands } from '#/handlers
 
 let dir: string;
 
+function plistStringValue(plist: string, key: string): string | undefined {
+  return plist.match(new RegExp(`<key>${key}</key>(?:<array>)?<string>([^<]+)</string>`))?.[1];
+}
+
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), 'monad-startup-settings-'));
 });
@@ -45,6 +49,10 @@ test('macOS startup setting writes and removes a LaunchAgent', async () => {
   expect(plist).toContain('Monad.app/Contents/MacOS/monad-startup');
 
   const appInfo = await readFile(join(dir, '.monad', 'startup', 'Monad.app', 'Contents', 'Info.plist'), 'utf8');
+  expect({
+    associatedBundleId: plistStringValue(plist, 'AssociatedBundleIdentifiers'),
+    appBundleId: plistStringValue(appInfo, 'CFBundleIdentifier')
+  }).toEqual({ associatedBundleId: 'ai.monad.monad.startup', appBundleId: 'ai.monad.monad.startup' });
   expect(appInfo).toContain('<string>Monad</string>');
   expect(appInfo).toContain('<string>Monadix Labs, Inc.</string>');
   expect(appInfo).toContain('MonadIcon');
@@ -77,6 +85,10 @@ test('macOS dev startup setting uses Monad Dev identity', async () => {
   expect(plist).toContain('Monad Dev.app/Contents/MacOS/monad-startup');
 
   const appInfo = await readFile(join(dir, '.monad', 'startup', 'Monad Dev.app', 'Contents', 'Info.plist'), 'utf8');
+  expect({
+    associatedBundleId: plistStringValue(plist, 'AssociatedBundleIdentifiers'),
+    appBundleId: plistStringValue(appInfo, 'CFBundleIdentifier')
+  }).toEqual({ associatedBundleId: 'ai.monad.monad-dev.startup', appBundleId: 'ai.monad.monad-dev.startup' });
   expect(appInfo).toContain('<string>Monad Dev</string>');
   expect(appInfo).toContain('<string>Monadix Labs, Inc.</string>');
 });
