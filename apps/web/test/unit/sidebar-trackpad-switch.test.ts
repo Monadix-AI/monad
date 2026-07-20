@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   createSidebarPagerGesture,
   isSidebarHorizontalWheel,
+  sidebarPageTurnThresholdPx,
   sidebarTrackpadEdgeAccum,
   sidebarTrackpadEdgeOffset
 } from '../../src/features/shell/sidebar-trackpad-switch.ts';
@@ -54,6 +55,73 @@ describe('sidebar pager gesture', () => {
     const fresh = pager.update({ deltaX: 30, now: 32 });
     expect(fresh.kind).toBe('drag');
     expect(fresh.dragPx).toBe(30);
+  });
+
+  test('a noisy momentum bump stays swallowed instead of re-dragging the settled panel', () => {
+    const pager = createSidebarPagerGesture();
+
+    pager.swallowTail(0, 30);
+    expect(pager.update({ deltaX: 24, now: 16 }).kind).toBe('swallowed');
+    expect(pager.update({ deltaX: 28, now: 32 }).kind).toBe('swallowed');
+    expect(pager.update({ deltaX: 20, now: 48 }).kind).toBe('swallowed');
+    expect(pager.update({ deltaX: 22, now: 64 }).kind).toBe('swallowed');
+  });
+
+  test('a reversed delta re-engages from the swallow state', () => {
+    const pager = createSidebarPagerGesture();
+
+    pager.swallowTail(0, 20);
+    const reversed = pager.update({ deltaX: -12, now: 16 });
+    expect(reversed.kind).toBe('drag');
+    expect(reversed.dragPx).toBe(-12);
+  });
+
+  test('a deliberate push after the tail decays re-engages', () => {
+    const pager = createSidebarPagerGesture();
+
+    pager.swallowTail(0, 30);
+    expect(pager.update({ deltaX: 10, now: 16 }).kind).toBe('swallowed');
+    expect(pager.update({ deltaX: 5, now: 32 }).kind).toBe('swallowed');
+    const fresh = pager.update({ deltaX: 40, now: 48 });
+    expect(fresh.kind).toBe('drag');
+    expect(fresh.dragPx).toBe(40);
+  });
+
+  test('an accelerating re-push escapes the swallow within a few events', () => {
+    const pager = createSidebarPagerGesture();
+
+    pager.swallowTail(0, 20);
+    expect(pager.update({ deltaX: 10, now: 16 }).kind).toBe('swallowed');
+    expect(pager.update({ deltaX: 15, now: 32 }).kind).toBe('swallowed');
+    const fresh = pager.update({ deltaX: 25, now: 48 });
+    expect(fresh.kind).toBe('drag');
+    expect(fresh.dragPx).toBe(25);
+  });
+
+  test('a sub-threshold decay keeps panning instead of snapping mid-drag', () => {
+    const pager = createSidebarPagerGesture();
+    const settleThresholdPx = sidebarPageTurnThresholdPx(288);
+
+    pager.update({ deltaX: 30, now: 0, settleThresholdPx });
+    pager.update({ deltaX: 20, now: 16, settleThresholdPx });
+    pager.update({ deltaX: 16, now: 32, settleThresholdPx });
+    pager.update({ deltaX: 13, now: 48, settleThresholdPx });
+    const stillDragging = pager.update({ deltaX: 10, now: 64, settleThresholdPx });
+    expect(stillDragging.kind).toBe('drag');
+    expect(stillDragging.dragPx).toBe(89);
+  });
+
+  test('a decay run settles once the drag crosses the page-turn threshold', () => {
+    const pager = createSidebarPagerGesture();
+    const settleThresholdPx = sidebarPageTurnThresholdPx(288);
+
+    pager.update({ deltaX: 80, now: 0, settleThresholdPx });
+    pager.update({ deltaX: 36, now: 16, settleThresholdPx });
+    pager.update({ deltaX: 30, now: 32, settleThresholdPx });
+    pager.update({ deltaX: 25, now: 48, settleThresholdPx });
+    const settled = pager.update({ deltaX: 20, now: 64, settleThresholdPx });
+    expect(settled.kind).toBe('settle');
+    expect(settled.dragPx).toBe(171);
   });
 
   test('seedPx only applies when a new drag starts', () => {

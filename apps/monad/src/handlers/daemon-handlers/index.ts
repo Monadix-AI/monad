@@ -66,6 +66,7 @@ import { meshAgentConfigToView } from '#/services/mesh-agent/index.ts';
 import { managedProjectRuntimeWorkspace } from '#/services/mesh-agent/managed-project.ts';
 import { resolveMeshAgentManagedServerUrl } from '#/services/mesh-agent/managed-server-url.ts';
 import { createMessageIngress } from '#/services/messages/ingress.ts';
+import { createNativeAgentSessionMembersService } from '#/services/native-agent/session-members.ts';
 import licensesData from '../../../generated/licenses.json';
 import { createInitHandlers } from './handlers-init.ts';
 import {
@@ -346,6 +347,11 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
   const transcriptProjector = createTranscriptProjector({
     messageIngress
   });
+  const nativeAgentSessionMembers = createNativeAgentSessionMembersService({
+    store: deps.store,
+    meshAgentHost,
+    meshAgents: () => deps.configManager.get().cfg.meshAgents
+  });
   meshAgentHost.setManagedProjectOutputHandler(async (output) => {
     await session.completeManagedMeshAgentProviderMessage(output);
   });
@@ -443,6 +449,7 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
       config: deps.configManager
     }),
     _nativeAgentStore: deps.store,
+    _nativeAgentSessionMembers: nativeAgentSessionMembers,
     _nativeAgentAttachmentRoots: (args: { sessionId: string; agentId: string; workingPath?: string | null }) => {
       const nativeSession = args.agentId
         ? deps.store

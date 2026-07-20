@@ -1,12 +1,8 @@
-import { mermaid } from '@streamdown/mermaid';
-import { type Components, Streamdown } from 'streamdown';
-import 'streamdown/styles.css';
-
+import type { Components } from 'streamdown';
 import type { MarkdownProps } from './Markdown.tsx';
 
 import { cn } from '../lib/utils.ts';
-
-const PLUGINS = { mermaid };
+import { MarkdownSurface } from './MarkdownSurface.tsx';
 
 const MARKDOWN_CLASSES = [
   'text-sm leading-6 text-foreground',
@@ -24,9 +20,6 @@ const MARKDOWN_CLASSES = [
   '[&_pre_code]:bg-transparent [&_pre_code]:p-0',
   '[&_blockquote]:my-3 [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground',
   '[&_hr]:my-4 [&_hr]:border-border',
-  '[&_table]:my-3 [&_table]:w-full [&_table]:border-collapse [&_table]:overflow-hidden [&_table]:rounded-md [&_table]:text-sm',
-  '[&_th]:border [&_th]:bg-muted/40 [&_th]:px-2.5 [&_th]:py-1.5 [&_th]:text-left [&_th]:font-medium',
-  '[&_td]:border [&_td]:px-2.5 [&_td]:py-1.5 [&_td]:align-top',
   '[&_img:not([data-inline-favicon])]:my-3 [&_img:not([data-inline-favicon])]:max-h-[42vh] [&_img:not([data-inline-favicon])]:max-w-full [&_img:not([data-inline-favicon])]:rounded-md [&_img:not([data-inline-favicon])]:border [&_img:not([data-inline-favicon])]:object-contain'
 ];
 
@@ -36,8 +29,7 @@ const MARKDOWN_VARIANTS = {
     '[&_h1]:text-base [&_h1]:mb-2',
     '[&_h2]:text-sm [&_h2]:mb-1.5 [&_h2]:mt-3',
     '[&_h3]:text-sm [&_h3]:mb-1 [&_h3]:mt-2.5',
-    '[&_pre]:my-2 [&_pre]:p-2.5',
-    '[&_table]:my-2'
+    '[&_pre]:my-2 [&_pre]:p-2.5'
   ],
   default: []
 } satisfies Record<string, string[]>;
@@ -46,14 +38,13 @@ export type { Components };
 
 export function MarkdownRenderer({ text, className, variant = 'default', streaming, components }: MarkdownProps) {
   return (
-    <Streamdown
+    <MarkdownSurface
       className={cn(MARKDOWN_CLASSES, MARKDOWN_VARIANTS[variant], className)}
       components={components}
       isAnimating={streaming}
       mode={streaming ? 'streaming' : 'static'}
-      plugins={PLUGINS}
     >
       {text}
-    </Streamdown>
+    </MarkdownSurface>
   );
 }

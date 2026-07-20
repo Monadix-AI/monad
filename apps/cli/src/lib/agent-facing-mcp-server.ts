@@ -234,6 +234,11 @@ const tools: ToolDef[] = [
     )
   },
   {
+    name: 'session_members',
+    description: 'List current session members and whether Monad can deliver messages to them.',
+    inputSchema: schema({})
+  },
+  {
     name: 'runtime_info',
     description: 'Show the current managed MeshAgent runtime binding.',
     inputSchema: schema({})
@@ -336,6 +341,9 @@ async function callTool(client: MonadClient, name: string, args: Record<string, 
         { headers }
       )
     );
+  }
+  if (name === 'session_members') {
+    return requireNativeAgentData(name, await nativeAgent.session.members.get({ headers }));
   }
   if (name === 'runtime_info') {
     return requireNativeAgentData(name, await nativeAgent.runtime.info.get({ headers }));

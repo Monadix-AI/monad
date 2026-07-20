@@ -218,7 +218,6 @@ export function ComposerShell({
                 control: (
                   <ReasoningEffortControl
                     compact
-                    defaultLabel={t('web.common.default')}
                     onChange={setEffortDraft}
                     options={composerReasoningEffortOptions(effortOptions, t('web.common.default'))}
                     surface="plain"

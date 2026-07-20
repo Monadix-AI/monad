@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import {
   createMessageMarkdownComponents,
+  MarkdownWithMentions,
   markdownTextWithMentionCapsules,
   messageMarkdownComponents
 } from '../../src/workspace-experiences/chat-room/components/message-row.tsx';
@@ -36,6 +37,52 @@ test('agent message bubbles pass markdown source through unchanged when no stric
   expect(markdownTextWithMentionCapsules(message('Ship **markdown** and `code`.').text)).toBe(
     'Ship **markdown** and `code`.'
   );
+});
+
+test('agent message fenced code uses the shared highlighted code surface', () => {
+  const markup = renderToStaticMarkup(
+    createElement(MarkdownWithMentions, { text: '```ts\nexport const answer = 42;\n```' })
+  );
+
+  expect({
+    codeSlots: [...markup.matchAll(/data-streamdown="([^"]+)"/g)].map((match) => match[1]),
+    sharedSurface: /class="[^"]*monad-markdown-content/.test(markup)
+  }).toEqual({
+    codeSlots: [
+      'code-block',
+      'code-block-header',
+      'code-block-actions',
+      'code-block-download-button',
+      'code-block-copy-button',
+      'code-block-body'
+    ],
+    sharedSurface: true
+  });
+});
+
+test('agent message tables use the shared table surface', () => {
+  const markup = renderToStaticMarkup(
+    createElement(MarkdownWithMentions, { text: '| Item | Severity |\n| --- | --- |\n| daemon | high |' })
+  );
+
+  expect({
+    sharedSurface: /class="[^"]*monad-markdown-content/.test(markup),
+    tableSlots: [...markup.matchAll(/data-streamdown="([^"]+)"/g)].map((match) => match[1])
+  }).toEqual({
+    sharedSurface: true,
+    tableSlots: [
+      'table-wrapper',
+      'table',
+      'table-header',
+      'table-row',
+      'table-header-cell',
+      'table-header-cell',
+      'table-body',
+      'table-row',
+      'table-cell',
+      'table-cell'
+    ]
+  });
 });
 
 test('agent message bubbles rewrite strict mention tokens before markdown rendering', () => {

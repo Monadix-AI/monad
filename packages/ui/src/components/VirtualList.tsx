@@ -45,6 +45,7 @@ export interface VirtualListProps<T> {
 /** Assumed row height until at least one row has been measured. */
 const ESTIMATED_ROW_HEIGHT = 96;
 const START_REACHED_THRESHOLD = 240;
+const START_REARM_THRESHOLD = START_REACHED_THRESHOLD + ESTIMATED_ROW_HEIGHT;
 const END_REACHED_THRESHOLD = 240;
 const AT_END_THRESHOLD = 32;
 const ROW_STYLE_BASE: CSSProperties = {
@@ -214,7 +215,10 @@ export function VirtualList<T>({
         if (atStart && startArmedRef.current && initialEndScrollDoneRef.current) {
           const handled = latestRef.current.onStartReached?.();
           if (handled !== false) startArmedRef.current = false;
-        } else if (!atStart) {
+        } else if (scrollOffset > START_REARM_THRESHOLD) {
+          // Hysteresis: a prepended page first lands at its estimated height and is corrected once
+          // the rows measure. That transient overshoot must not re-arm the start edge, or the
+          // correction re-enters the zone and chains a second, unrequested page load.
           startArmedRef.current = true;
         }
       }
@@ -269,10 +273,16 @@ export function VirtualList<T>({
     scrollEndThreshold: AT_END_THRESHOLD,
     scrollMargin: headerHeight
   });
+  // Mirrors virtual-core's default predicate (above-viewport resizes compensate the scroll offset;
+  // a first estimate→actual measurement compensates even while scrolling backward — without that,
+  // rows entering from above during history scrollback slide the whole list under the reader as
+  // blank gaps and overlapping repaints), plus one extra rule: a row-0 resize near the top must
+  // anchor the prepend boundary.
   virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item, _delta, instance) => {
     const scrollOffset = instance.scrollOffset ?? 0;
     if (item.index === 0 && scrollOffset <= START_REACHED_THRESHOLD) return true;
-    return item.start < scrollOffset && instance.scrollDirection !== 'backward';
+    if (item.start >= scrollOffset) return false;
+    return !instance.itemSizeCache.has(item.key) || instance.scrollDirection !== 'backward';
   };
 
   const totalSize = virtualizer.getTotalSize();

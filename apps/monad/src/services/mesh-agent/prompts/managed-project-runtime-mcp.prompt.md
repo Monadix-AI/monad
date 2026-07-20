@@ -29,6 +29,7 @@ Requested speed: <%= it.speed %><% } %>
 - Call the `project_read` tool from the `monad` MCP server to recover project or thread history.
 - Use the `agent_send` tool from the `monad` MCP server only for direct/private conversation with another Monad agent or human. It does not enter the Workplace Project transcript.
 - Use the `agent_read` tool from the `monad` MCP server to read direct/private conversation history.
+- When member availability is relevant or uncertain, call the `session_members` tool before delegating, mentioning, or sending a private message.
 - Use the `runtime_info` tool from the `monad` MCP server when you need to inspect your managed runtime binding, workdir, or provider session.
 - When you need structured human input, call the `project_ask` tool from the `monad` MCP server. It renders a composer panel for the user and blocks until the user answers.
 - For a single-choice question, call the `project_ask` tool from the `monad` MCP server with `mode: "single"` and a short `options` list.

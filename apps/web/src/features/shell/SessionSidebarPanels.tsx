@@ -91,8 +91,14 @@ export function SessionSidebarPanels({
 }: SessionSidebarPanelsProps) {
   return (
     <>
+      {/* overflow-x-HIDDEN, not auto: the pager owns every scrollLeft write (drag 1:1,
+          snap tween, route sync). With a native scroll container, real trackpad wheel
+          events that are vertical-dominant bypass the pager's wheel handler yet still
+          apply their deltaX natively, silently drifting the panel onto the wrong page
+          (workspace shown while the URL stays on studio). Hidden keeps the box
+          programmatically scrollable and closes that leak. */}
       <motion.div
-        className="flex min-h-0 flex-1 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="flex min-h-0 flex-1 overflow-x-hidden overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         data-sidebar-trackpad-surface="true"
         ref={pager.panelScrollRef}
         style={pager.style}

@@ -69,6 +69,18 @@ export const nativeAgentProjectReadResponseSchema = z.object({
 });
 export type NativeAgentProjectReadResponse = z.infer<typeof nativeAgentProjectReadResponseSchema>;
 
+export const nativeAgentSessionMemberSchema = z.object({
+  id: z.string().min(1),
+  displayName: z.string().min(1),
+  status: z.enum(['online', 'offline'])
+});
+export type NativeAgentSessionMember = z.infer<typeof nativeAgentSessionMemberSchema>;
+
+export const nativeAgentSessionMembersResponseSchema = z.object({
+  members: z.array(nativeAgentSessionMemberSchema)
+});
+export type NativeAgentSessionMembersResponse = z.infer<typeof nativeAgentSessionMembersResponseSchema>;
+
 export const meshAgentInboxDeliveryStateSchema = z.enum(['queued', 'delivered', 'visible', 'consumed']);
 export type MeshAgentInboxDeliveryState = z.infer<typeof meshAgentInboxDeliveryStateSchema>;
 

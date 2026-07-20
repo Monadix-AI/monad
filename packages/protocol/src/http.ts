@@ -40,6 +40,7 @@ import {
   nativeAgentRuntimeInfoResponseSchema,
   nativeAgentSendRequestSchema,
   nativeAgentSendResponseSchema,
+  nativeAgentSessionMembersResponseSchema,
   removeSessionMemberResponseSchema,
   sessionMemberResponseSchema,
   spawnSessionMemberRequestSchema
@@ -591,6 +592,9 @@ export const daemonHttpContract = {
     }),
     runtimeInfo: defineHttpEndpoint({
       response: { 200: nativeAgentRuntimeInfoResponseSchema, 403: httpErrorSchema, 404: httpErrorSchema }
+    }),
+    sessionMembers: defineHttpEndpoint({
+      response: { 200: nativeAgentSessionMembersResponseSchema, 403: httpErrorSchema, 404: httpErrorSchema }
     }),
     // Client-facing wall read (GET /v1/attachments/:id). `?download=1` streams the raw file and
     // bypasses schema validation; 410 = the referenced file no longer exists.

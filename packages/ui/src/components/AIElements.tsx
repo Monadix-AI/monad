@@ -13,20 +13,16 @@ import {
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { useControllableState } from '@radix-ui/react-use-controllable-state';
-import { cjk } from '@streamdown/cjk';
-import { code } from '@streamdown/code';
-import { math } from '@streamdown/math';
-import { mermaid } from '@streamdown/mermaid';
 import { motion } from 'motion/react';
 import { Collapsible as CollapsiblePrimitive } from 'radix-ui';
 import * as React from 'react';
 import { isValidElement, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Streamdown } from 'streamdown';
 
 import { cn } from '../lib/utils';
 import { Badge } from './Badge';
 import { Button } from './Button';
 import { CodeBlock } from './CodeBlock';
+import { MarkdownSurface } from './MarkdownSurface';
 import { MorphChevron } from './MorphChevron';
 import { Tooltip, TooltipContent, TooltipTrigger } from './Tooltip';
 
@@ -40,8 +36,6 @@ type ToolState =
   | 'output-available'
   | 'output-denied'
   | 'output-error';
-
-const streamdownPlugins = { cjk, code, math, mermaid };
 
 function Collapsible({ ...props }: React.ComponentProps<typeof CollapsiblePrimitive.Root>) {
   return (
@@ -203,13 +197,12 @@ export const MessageAction = ({
   return button;
 };
 
-export type MessageResponseProps = ComponentProps<typeof Streamdown>;
+export type MessageResponseProps = ComponentProps<typeof MarkdownSurface>;
 
 export const MessageResponse = memo(
   ({ className, ...props }: MessageResponseProps) => (
-    <Streamdown
+    <MarkdownSurface
       className={cn('size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0', className)}
-      plugins={streamdownPlugins}
       {...props}
     />
   ),
@@ -403,7 +396,7 @@ export const ReasoningContent = memo(({ className, children, ...props }: Reasoni
     )}
     {...props}
   >
-    <Streamdown plugins={streamdownPlugins}>{children}</Streamdown>
+    <MarkdownSurface>{children}</MarkdownSurface>
   </CollapsibleContent>
 ));
 

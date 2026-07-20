@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { codexThreadReadOutput, readCodexEventOutput } from '../../src/agent-adapters/codex/event-pages.ts';
+import { codexObservationProjection } from '../../src/agent-adapters/codex/observation/index.ts';
 import { readProviderEventFile } from '../../src/agent-adapters/event-files.ts';
 import { createOutputEventSource } from '../../src/agent-adapters/event-source.ts';
 
@@ -18,9 +19,14 @@ const codexAppServerTurn = {
   itemsView: 'full',
   status: 'completed',
   error: null,
-  startedAt: 1,
-  completedAt: 2,
+  startedAt: 1_784_000_000,
+  completedAt: 1_784_000_005,
   durationMs: 1000
+};
+const codexAppServerSecondTurn = {
+  ...codexAppServerTurn,
+  id: 'turn_2',
+  items: [{ type: 'agentMessage', id: 'msg_2', text: 'second turn', phase: null, memoryCitation: null }]
 };
 
 afterEach(() => {
@@ -84,34 +90,58 @@ test('codex history prefers translated app-server thread reads over file fallbac
     }
   );
 
-  expect(output).toBe(
-    JSON.stringify({
-      result: {
-        data: [codexAppServerTurn],
-        nextCursor: null,
-        backwardsCursor: null
-      }
-    })
-  );
+  expect(output).toBe(JSON.stringify(codexAppServerTurn));
 });
 
-test('codex thread read history is translated into a turns page output', () => {
+test('codex thread read history is translated into individual event records', () => {
   const output = codexThreadReadOutput({
     thread: {
       id: 'thread-from-app-server',
-      turns: [codexAppServerTurn]
+      turns: [codexAppServerTurn, codexAppServerSecondTurn]
     }
   });
 
-  expect(output).toBe(
-    JSON.stringify({
-      result: {
-        data: [codexAppServerTurn],
-        nextCursor: null,
-        backwardsCursor: null
-      }
+  expect(output).toBe([codexAppServerTurn, codexAppServerSecondTurn].map((turn) => JSON.stringify(turn)).join('\n'));
+});
+
+test('standalone Codex thread turns retain turn boundaries and second-based timestamps', () => {
+  const output = codexThreadReadOutput({
+    thread: {
+      id: 'thread-from-app-server',
+      turns: [codexAppServerTurn, codexAppServerSecondTurn]
+    }
+  });
+  if (!output) throw new Error('expected translated Codex turns');
+  const source = createOutputEventSource({
+    provider: 'codex',
+    projection: codexObservationProjection,
+    readOutput: () => output
+  });
+
+  expect(source.projectLive({ id: 'thread-from-app-server', output, mode: 'events' }).events).toEqual([
+    expect.objectContaining({
+      createdAt: '2026-07-14T03:33:20.000Z',
+      providerEventType: 'turn-start',
+      text: 'Turn started'
+    }),
+    expect.objectContaining({ providerEventType: 'item/agentMessage', text: 'from app-server' }),
+    expect.objectContaining({
+      createdAt: '2026-07-14T03:33:25.000Z',
+      providerEventType: 'turn-end',
+      text: 'Turn completed'
+    }),
+    expect.objectContaining({
+      createdAt: '2026-07-14T03:33:20.000Z',
+      providerEventType: 'turn-start',
+      text: 'Turn started'
+    }),
+    expect.objectContaining({ providerEventType: 'item/agentMessage', text: 'second turn' }),
+    expect.objectContaining({
+      createdAt: '2026-07-14T03:33:25.000Z',
+      providerEventType: 'turn-end',
+      text: 'Turn completed'
     })
-  );
+  ]);
 });
 
 test('line cursors remain stable when the provider file grows between pages', async () => {

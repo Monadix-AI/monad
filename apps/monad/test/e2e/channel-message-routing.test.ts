@@ -464,8 +464,14 @@ for (const kind of TRANSPORTS) {
       const codexInput = await waitForFile(codex.stdinLog, 'roster scoped task');
       const codexArgs = await waitForFile(codex.argsLog, 'developer_instructions=');
       expect(codexArgs).toContain('project_post');
+      expect(codexArgs).toContain(
+        'When member availability is relevant or uncertain, call the `session_members` tool before delegating, mentioning, or sending a private message.'
+      );
       // presence-ok: immutable bridge instructions must not be duplicated into provider user history.
       expect(codexInput).not.toContain('project_post');
+      expect(codexInput).not.toContain(
+        'When member availability is relevant or uncertain, call the `session_members` tool before delegating, mentioning, or sending a private message.'
+      );
       await Bun.sleep(100);
       expect(await readLogIfExists(claude.argsLog)).toBe('');
       expect(await readLogIfExists(claude.stdinLog)).toBe('');

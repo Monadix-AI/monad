@@ -7,7 +7,9 @@ const EDGE_RUBBER_BAND_RESISTANCE_PX = 260;
 const EDGE_ACCUM_CAP_PX = 780;
 const MOMENTUM_DECAY_MAX_DELTA_PX = 40;
 const MOMENTUM_DECAY_RELEASE_EVENTS = 4;
-const FRESH_PUSH_MARGIN_PX = 4;
+const FRESH_PUSH_MARGIN_PX = 12;
+const FRESH_PUSH_GROWTH_RATIO = 1.5;
+export const FRESH_PUSH_REVERSE_MIN_PX = 8;
 
 export function isSidebarHorizontalWheel({ deltaX, deltaY }: { deltaX: number; deltaY: number }): boolean {
   const horizontal = Math.abs(deltaX);
@@ -33,6 +35,10 @@ export function sidebarTrackpadEdgeAccum(offsetPx: number, maxPx: number = DEFAU
   return offsetPx > 0 ? -accumulated : accumulated;
 }
 
+export function sidebarPageTurnThresholdPx(clientWidth: number): number {
+  return (clientWidth || 1) * TRACKPAD_PAGE_TURN_THRESHOLD_RATIO;
+}
+
 export type SidebarPagerUpdate =
   | { dragPx: number; kind: 'drag' }
   | { dragPx: number; kind: 'settle' }
@@ -55,7 +61,7 @@ export function resolveSidebarPagerTarget({
 }): number {
   const width = clientWidth || 1;
   const originPage = Math.round(dragOrigin / width);
-  const threshold = width * TRACKPAD_PAGE_TURN_THRESHOLD_RATIO;
+  const threshold = sidebarPageTurnThresholdPx(width);
   let targetPage: number;
   if (dragPxTotal > threshold) targetPage = originPage + 1;
   else if (dragPxTotal < -threshold) targetPage = originPage - 1;
@@ -72,6 +78,7 @@ export function createSidebarPagerGesture() {
   let lastEventAt = 0;
   let swallowedUntil = 0;
   let swallowedAbsDelta = 0;
+  let swallowedSign = 0;
   let lastAbsDelta = 0;
   let lastSign = 0;
   let decayCount = 0;
@@ -101,13 +108,23 @@ export function createSidebarPagerGesture() {
     return decayCount >= MOMENTUM_DECAY_RELEASE_EVENTS;
   };
 
-  // A momentum tail only ever decays. A delta that grows past what the tail
-  // was last doing means the fingers re-engaged — the swallow state must yield
-  // to it immediately instead of making the user wait out the quiet gap.
+  // A momentum tail only ever decays and never flips direction. Fingers
+  // re-engaging show up as either a reversed delta or a delta clearly above
+  // the decaying envelope — the swallow state must yield to those immediately.
+  // The growth gate is deliberately generous: tail deltas are noisy, and a
+  // small bump past the previous event must NOT re-open the drag (it reads as
+  // the panel shivering at its settled endpoint).
   const isFreshPush = (nextDeltaX: number): boolean => {
     const abs = Math.abs(nextDeltaX);
-    if (abs > swallowedAbsDelta + FRESH_PUSH_MARGIN_PX) return true;
-    swallowedAbsDelta = abs;
+    const sign = Math.sign(nextDeltaX);
+    if (swallowedSign !== 0 && sign !== 0 && sign !== swallowedSign && abs >= FRESH_PUSH_REVERSE_MIN_PX) return true;
+    const growthGate = Math.max(swallowedAbsDelta * FRESH_PUSH_GROWTH_RATIO, swallowedAbsDelta + FRESH_PUSH_MARGIN_PX);
+    if (abs > growthGate) return true;
+    // The envelope only ever ratchets DOWN. Following it up would chase a
+    // deliberate accelerating re-push (each growing event raises the gate ahead
+    // of the next one) and swallow the user's gesture until the quiet gap.
+    swallowedAbsDelta = Math.min(swallowedAbsDelta, abs);
+    if (sign !== 0) swallowedSign = sign;
     return false;
   };
 
@@ -121,12 +138,23 @@ export function createSidebarPagerGesture() {
     swallowTail(now: number, deltaX: number) {
       swallowedUntil = now + STREAM_QUIET_GAP_MS;
       swallowedAbsDelta = Math.abs(deltaX);
+      swallowedSign = Math.sign(deltaX);
       dragging = false;
       dragPx = 0;
       lastEventAt = now;
       resetMomentumTracking();
     },
-    update({ deltaX, now, seedPx = 0 }: { deltaX: number; now: number; seedPx?: number }): SidebarPagerUpdate {
+    update({
+      deltaX,
+      now,
+      seedPx = 0,
+      settleThresholdPx
+    }: {
+      deltaX: number;
+      now: number;
+      seedPx?: number;
+      settleThresholdPx?: number;
+    }): SidebarPagerUpdate {
       const staleStream = now - lastEventAt > STREAM_QUIET_GAP_MS;
       lastEventAt = now;
       if (staleStream) {
@@ -149,7 +177,12 @@ export function createSidebarPagerGesture() {
         resetMomentumTracking();
       }
 
-      if (isMomentumTail(deltaX)) {
+      // A decay run only settles once the drag has clearly committed to a page
+      // turn. Below the threshold the tail keeps panning the panel (it may still
+      // cross the threshold and settle later); a sub-threshold gesture is left
+      // to the caller's release timer, so a finger merely slowing down never
+      // snaps the panel out from under the user mid-drag.
+      if (isMomentumTail(deltaX) && (settleThresholdPx === undefined || Math.abs(dragPx) >= settleThresholdPx)) {
         const total = dragPx;
         this.swallowTail(now, deltaX);
         return { dragPx: total, kind: 'settle' };

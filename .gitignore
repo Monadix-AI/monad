@@ -6,6 +6,7 @@ output
 out
 out.gz
 dist
+storybook-static
 *.tgz
 licenses.json
 

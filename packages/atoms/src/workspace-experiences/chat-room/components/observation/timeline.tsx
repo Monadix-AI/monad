@@ -10,6 +10,8 @@ import { ObservationCardShell, type ObservationCollapseCommand, toolCallSummary 
 import { CodexMcpStartupProgressCard, type CodexMcpStartupUpdate } from './codex-startup-progress.tsx';
 import { CommandToolCard, CommandToolHeader, commandToolView } from './command-card.tsx';
 import { FileReadToolCard, FileReadToolHeader, fileReadToolView } from './file-read-card.tsx';
+import { MonadMcpToolCard, MonadMcpToolHeader } from './monad-mcp-card.tsx';
+import { monadMcpToolView } from './monad-mcp-projection.ts';
 import { observationContractRawEvents } from './provenance.ts';
 
 const THINKING_LABEL_CSS = `
@@ -188,6 +190,21 @@ function ObservationTimelineCard({
     const result = cardToolResult(entry.card);
     const toolEvent = call ?? result;
     if (call && result) {
+      const monadMcp = monadMcpToolView(call, result, entry.contractEvents);
+      if (monadMcp) {
+        return (
+          <ObservationCardShell
+            collapseCommand={collapseCommand}
+            defaultCollapsed
+            header={<MonadMcpToolHeader view={monadMcp} />}
+            raw={raw}
+            timestamp={entry.timestamp}
+            visualRole={monadMcp.isError ? 'error' : 'tool'}
+          >
+            <MonadMcpToolCard view={monadMcp} />
+          </ObservationCardShell>
+        );
+      }
       const fileRead = fileReadToolView(call, result, provider);
       if (fileRead) {
         return (

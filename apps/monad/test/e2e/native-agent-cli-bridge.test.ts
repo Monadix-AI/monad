@@ -161,6 +161,24 @@ for (const kind of TRANSPORTS) {
       expect(await messages(t, sessionId)).toEqual([{ role: 'assistant', text: 'managed reply' }]);
     });
 
+    test('session members reports current-session delivery availability', async () => {
+      const handlers = buildHandlers(mockModel());
+      t = serveTransport(kind, createHttpTransport(handlers));
+      const sessionId = await createSession(t, process.cwd());
+      addSessionMember(handlers, sessionId, 'codex', 'Builder');
+      addSessionMember(handlers, sessionId, 'missing-reviewer', 'Reviewer');
+      createManagedNativeSession(handlers, sessionId);
+
+      const res = await t.fetch('/v1/internal/native-agent/session/members', {
+        headers: bindingHeaders(sessionId)
+      });
+
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({
+        members: [{ id: 'missing-reviewer', displayName: 'Reviewer', status: 'offline' }]
+      });
+    });
+
     test('file attachment post: reference registered, wall stores marker-free preview, web reads the file', async () => {
       const handlers = buildHandlers(mockModel());
       t = serveTransport(kind, createHttpTransport(handlers));

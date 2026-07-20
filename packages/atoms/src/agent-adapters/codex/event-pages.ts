@@ -104,13 +104,7 @@ export function readCodexEventFileOutput(
 export function codexThreadReadOutput(response: CodexThreadReadResponseLike | null): string | null {
   const turns = response?.thread?.turns;
   if (!Array.isArray(turns)) return null;
-  return JSON.stringify({
-    result: {
-      data: turns,
-      nextCursor: null,
-      backwardsCursor: null
-    }
-  });
+  return turns.map((turn) => JSON.stringify(turn)).join('\n');
 }
 
 async function readCodexAppServerThread(

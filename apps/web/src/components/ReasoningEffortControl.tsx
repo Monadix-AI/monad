@@ -106,7 +106,6 @@ export function ReasoningEffortControl({
   options,
   value,
   onChange,
-  defaultLabel,
   className,
   compact = false,
   surface = 'card'
@@ -114,7 +113,6 @@ export function ReasoningEffortControl({
   options: ReasoningEffortOption[];
   value?: string;
   onChange: (value: string | undefined) => void;
-  defaultLabel?: string;
   className?: string;
   compact?: boolean;
   surface?: 'card' | 'plain';
@@ -133,6 +131,7 @@ export function ReasoningEffortControl({
   const previousPreviewIndexRef = useRef(previewIndex);
   const titleDirection = previewIndex >= previousPreviewIndexRef.current ? 1 : -1;
   const previewOption = previewIndex >= 0 ? sliderOptions[previewIndex] : undefined;
+  const defaultLabel = t('web.common.default');
   const title = previewOption?.label ?? (value ? formatEffortLabel(value) : defaultLabel);
   const titleKey = previewOption?.value ?? String(title);
   const boundedPosition = Math.min(Math.max(sliderPosition, 0), maxIndex);

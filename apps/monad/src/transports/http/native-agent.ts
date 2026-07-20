@@ -94,6 +94,14 @@ export function createNativeAgentController(handlers: ReturnType<typeof createDa
       return attachmentReader.read(params.id, url.searchParams.get('download') === '1');
     })
     .get(
+      '/internal/native-agent/session/members',
+      async ({ request }) => {
+        const { binding } = requireManagedBinding(request);
+        return handlers._nativeAgentSessionMembers.list(binding.sessionId, binding.agentId);
+      },
+      { response: contracts.sessionMembers.response }
+    )
+    .get(
       '/internal/native-agent/runtime/info',
       ({ request }) => {
         const { binding, nativeSession } = requireManagedBinding(request);

@@ -450,7 +450,6 @@ export function ProfileCard({
                           <ReasoningEffortControl
                             className="border-0 shadow-none"
                             compact
-                            defaultLabel={t('web.reasoning.effort')}
                             onChange={(level) => {
                               if (level) setRouteReasoningEffort(row.key, level);
                             }}

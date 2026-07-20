@@ -18,6 +18,15 @@ test('agent-facing MCP lists project and direct communication tools', async () =
     method: 'tools/list'
   });
 
+  if (!response || !('result' in response)) throw new Error('expected tools result');
+  const listed = response.result as {
+    tools: Array<{ name: string; description: string; inputSchema: Record<string, unknown> }>;
+  };
+  expect(listed.tools.find((tool) => tool.name === 'session_members')).toEqual({
+    name: 'session_members',
+    description: 'List current session members and whether Monad can deliver messages to them.',
+    inputSchema: { type: 'object', properties: {}, required: [], additionalProperties: false }
+  });
   expect(response).toMatchObject({
     jsonrpc: '2.0',
     id: 1,
@@ -31,6 +40,70 @@ test('agent-facing MCP lists project and direct communication tools', async () =
       ])
     }
   });
+});
+
+test('agent-facing MCP reads current session member availability', async () => {
+  const previous = Bun.env.MONAD_MESH_SESSION_ID;
+  Bun.env.MONAD_MESH_SESSION_ID = 'mesh_current000000';
+  try {
+    const client = {
+      treaty: {
+        v1: {
+          internal: {
+            'native-agent': {
+              session: {
+                members: {
+                  get: async (options: { headers?: Record<string, string> }) => {
+                    expect(options).toEqual({ headers: { 'x-monad-mesh-session-id': 'mesh_current000000' } });
+                    return ok({
+                      members: [
+                        { id: 'builder', displayName: 'Builder', status: 'online' },
+                        { id: 'reviewer', displayName: 'Reviewer', status: 'offline' }
+                      ]
+                    });
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    };
+    const handler = createAgentFacingMcpHandler(client as never);
+
+    const response = await handler.handle({
+      jsonrpc: '2.0',
+      id: 7,
+      method: 'tools/call',
+      params: { name: 'session_members', arguments: {} }
+    });
+
+    expect(response).toEqual({
+      jsonrpc: '2.0',
+      id: 7,
+      result: {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                members: [
+                  { id: 'builder', displayName: 'Builder', status: 'online' },
+                  { id: 'reviewer', displayName: 'Reviewer', status: 'offline' }
+                ]
+              },
+              null,
+              2
+            )
+          }
+        ],
+        isError: false
+      }
+    });
+  } finally {
+    if (previous === undefined) delete Bun.env.MONAD_MESH_SESSION_ID;
+    else Bun.env.MONAD_MESH_SESSION_ID = previous;
+  }
 });
 
 test('agent-facing MCP caches mutating tool results by requestId', async () => {

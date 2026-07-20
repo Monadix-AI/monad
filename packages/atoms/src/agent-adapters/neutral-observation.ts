@@ -70,6 +70,7 @@ function neutralTool(event: MeshAgentObservationEvent, kind: 'tool-call' | 'tool
   const raw = recordValue(event.provenance.rawEvents[0]);
   const params = recordValue(raw?.params);
   const item = recordValue(params?.item) ?? recordValue(raw?.item);
+  const itemResult = recordValue(item?.result);
   const message = recordValue(raw?.message);
   const content = Array.isArray(message?.content) ? message.content : Array.isArray(raw?.content) ? raw.content : [];
   const toolUse = content.find(
@@ -128,10 +129,21 @@ function neutralTool(event: MeshAgentObservationEvent, kind: 'tool-call' | 'tool
       ? { durationMs: item.durationMs }
       : typeof item?.duration_ms === 'number'
         ? { durationMs: item.duration_ms }
-        : {})
+        : typeof itemResult?.durationMs === 'number'
+          ? { durationMs: itemResult.durationMs }
+          : typeof itemResult?.duration_ms === 'number'
+            ? { durationMs: itemResult.duration_ms }
+            : {})
   };
   const input =
-    toolUse?.input ?? item?.input ?? item?.command ?? raw?.input ?? raw?.args ?? raw?.arguments ?? params?.input;
+    toolUse?.input ??
+    item?.input ??
+    item?.arguments ??
+    item?.command ??
+    raw?.input ??
+    raw?.args ??
+    raw?.arguments ??
+    params?.input;
   if (kind === 'tool-call') {
     return input === undefined ? { name, ...metadata } : { name, input, ...metadata };
   }

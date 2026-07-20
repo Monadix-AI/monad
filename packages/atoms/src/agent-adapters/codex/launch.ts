@@ -226,6 +226,7 @@ const CODEX_MANAGED_MCP_APPROVED_TOOLS = [
   'project_inbox_ack',
   'agent_send',
   'agent_read',
+  'session_members',
   'runtime_info'
 ] as const;
 

@@ -62,6 +62,26 @@ test('scrolling back through a real transcript holds the content still', async (
   expect(Math.max(...drifts)).toBeLessThanOrEqual(DRIFT_TOLERANCE_PX);
 });
 
+test('continuous backward scrolling holds the content still while measurements land mid-gesture', async ({ page }) => {
+  await openHarness(page);
+
+  // No settleLayout between steps: the wheel cadence stays inside the virtualizer's
+  // isScrolling window, so rows entering from above get their first estimate→actual
+  // measurement WHILE scrollDirection is still 'backward' — the case where a missing
+  // scroll compensation slides the content under the reader.
+  const drifts: number[] = [];
+  for (let step = 0; step < 12; step += 1) {
+    await page.evaluate(() => window.harness.anchor());
+    await page.locator('[role="log"]').hover();
+    await page.mouse.wheel(0, -400);
+    await page.waitForTimeout(80);
+    const drift = await page.evaluate(() => window.harness.anchorDrift());
+    drifts.push(Math.abs(drift - 400));
+  }
+
+  expect(Math.max(...drifts)).toBeLessThanOrEqual(DRIFT_TOLERANCE_PX);
+});
+
 test('scrolling forward again through a real transcript holds the content still', async ({ page }) => {
   await openHarness(page);
   for (let step = 0; step < 12; step += 1) await wheelBy(page, -400);

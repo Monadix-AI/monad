@@ -128,6 +128,8 @@ const frameClassName = 'min-h-screen bg-background p-8 text-foreground';
 
 const noop = () => {};
 const scrollRows = Array.from({ length: 12 }, (_, index) => `Scrollable row ${index + 1}`);
+const markdownTableFixture =
+  '| Item | Severity |\n| --- | --- |\n| Project message routing | High |\n| Observation cursor recovery | Medium |';
 
 export const CoreControls: Story = {
   render: () => {
@@ -373,10 +375,11 @@ export const SurfacesAndFeedback: Story = {
 
 export const TextAndCode: Story = {
   render: () => (
-    <div className={frameClassName}>
+    <div className={`${frameClassName} dark`}>
       <div className="grid max-w-4xl gap-6">
         <Markdown
-          text={'## Markdown\n\n- Streams **rich** content\n- Supports `inline code`\n\n```ts\nconst ok = true;\n```'}
+          className="workplace-message-markdown !text-current"
+          text={`## Markdown\n\n- Streams **rich** content\n- Supports \`inline code\`\n\n${markdownTableFixture}\n\n\`\`\`ts\nexport const usageRowSchema = z.object({\n  id: z.string(),\n  label: z.string(),\n  percent: z.number(),\n  resetLabel: z.string().optional()\n});\n\`\`\``}
         />
         <div className="text-sm">
           <MentionText text={`Assigned to ${mentionToken({ name: 'Zeke', id: 'user_1' })} for review.`} />
@@ -403,14 +406,16 @@ export const TextAndCode: Story = {
 
 export const MessagesAndTools: Story = {
   render: () => (
-    <div className={frameClassName}>
+    <div className={`${frameClassName} dark`}>
       <div className="grid max-w-3xl gap-4">
         <Message from="user">
           <MessageContent>Show the active sessions and summarize blockers.</MessageContent>
         </Message>
         <Message from="assistant">
           <MessageContent>
-            <MessageResponse>There are **3 active sessions**. One is waiting for approval.</MessageResponse>
+            <MessageResponse>
+              {`Here are the active blockers:\n\n${markdownTableFixture}\n\n\`\`\`ts\nexport const usageRowSchema = z.object({\n  id: z.string(),\n  label: z.string(),\n  percent: z.number(),\n  resetLabel: z.string().optional()\n});\n\`\`\``}
+            </MessageResponse>
           </MessageContent>
           <MessageActions>
             <MessageAction label="Copy">Copy</MessageAction>

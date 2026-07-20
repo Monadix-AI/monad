@@ -1390,7 +1390,7 @@ test('Codex raw response tool call and output pair into one command timeline car
   ).toEqual([
     {
       type: 'tool',
-      command: undefined,
+      command: '{"command":"git status"}',
       output: 'On branch main',
       rawEvents: [
         {

@@ -80,7 +80,9 @@ export type {
   NativeAgentProjectPostRequest,
   NativeAgentProjectPostResponse,
   NativeAgentProjectReadRequest,
-  NativeAgentProjectReadResponse
+  NativeAgentProjectReadResponse,
+  NativeAgentSessionMember,
+  NativeAgentSessionMembersResponse
 } from './mesh-agent-project-messaging.ts';
 export type {
   ManagedProjectRuntimePromptInput,
@@ -237,7 +239,9 @@ export {
   nativeAgentProjectPostRequestSchema,
   nativeAgentProjectPostResponseSchema,
   nativeAgentProjectReadRequestSchema,
-  nativeAgentProjectReadResponseSchema
+  nativeAgentProjectReadResponseSchema,
+  nativeAgentSessionMemberSchema,
+  nativeAgentSessionMembersResponseSchema
 } from './mesh-agent-project-messaging.ts';
 export {
   managedProjectRuntimePromptInputSchema,

@@ -105,6 +105,7 @@ export function codexAppServerBatchRecordEvents(
   recordIndex: number
 ): MeshAgentObservationEvent[] {
   if (!Array.isArray(record.items)) return [];
+  if (isCodexAppServerTurn(record)) return codexAppServerTurnEvents(id, record, recordIndex);
   return record.items.flatMap((item, itemIndex) => {
     if (!item || typeof item !== 'object' || Array.isArray(item)) return [];
     return codexAppServerItemEvents({
@@ -128,44 +129,66 @@ export function codexAppServerTurnsPageRecordEvents(
   return result.data.flatMap((turn, turnIndex) => {
     if (!turn || typeof turn !== 'object' || Array.isArray(turn)) return [];
     const turnRecord = turn as Record<string, unknown>;
-    const items = turnRecord.items;
-    if (!Array.isArray(items)) return [];
-    const turnKey = textValue(turnRecord.id, turnRecord.turnId) ?? String(turnIndex);
-    const startedAt = providerEpochMsTimestamp(numberValue(turnRecord.startedAtMs, turnRecord.createdAtMs));
-    const completedAt = providerEpochMsTimestamp(
-      numberValue(turnRecord.completedAtMs, turnRecord.updatedAtMs, turnRecord.finishedAtMs)
-    );
-    return [
-      ...observation({
-        id: `${id}:json:${recordIndex}:turn:${turnKey}:start`,
-        role: 'system',
-        text: 'Turn started',
-        source: 'codex-app-server',
-        providerEventType: 'turn-start',
-        createdAt: startedAt,
-        raw: turnRecord
-      }),
-      ...items.flatMap((item) => {
-        if (!item || typeof item !== 'object' || Array.isArray(item)) return [];
-        const currentItemIndex = itemOffset;
-        itemOffset += 1;
-        return codexAppServerItemEvents({
-          id,
-          record,
-          item: item as Record<string, unknown>,
-          itemIndex: currentItemIndex,
-          recordIndex
-        });
-      }),
-      ...observation({
-        id: `${id}:json:${recordIndex}:turn:${turnKey}:end`,
-        role: 'system',
-        text: 'Turn completed',
-        source: 'codex-app-server',
-        providerEventType: 'turn-end',
-        createdAt: completedAt,
-        raw: turnRecord
-      })
-    ];
+    const events = codexAppServerTurnEvents(id, turnRecord, recordIndex, itemOffset, String(turnIndex));
+    itemOffset += Array.isArray(turnRecord.items) ? turnRecord.items.length : 0;
+    return events;
   });
+}
+
+function isCodexAppServerTurn(record: Record<string, unknown>): boolean {
+  return typeof record.id === 'string' && typeof record.itemsView === 'string' && typeof record.status === 'string';
+}
+
+function codexAppServerTurnEvents(
+  id: string,
+  turnRecord: Record<string, unknown>,
+  recordIndex: number,
+  itemOffset = 0,
+  fallbackTurnKey = String(recordIndex)
+): MeshAgentObservationEvent[] {
+  const items = turnRecord.items;
+  if (!Array.isArray(items)) return [];
+  const turnKey = textValue(turnRecord.id, turnRecord.turnId) ?? fallbackTurnKey;
+  const startedAt = codexTurnTimestamp(turnRecord, 'started');
+  const completedAt = codexTurnTimestamp(turnRecord, 'completed');
+  return [
+    ...observation({
+      id: `${id}:json:${recordIndex}:turn:${turnKey}:start`,
+      role: 'system',
+      text: 'Turn started',
+      source: 'codex-app-server',
+      providerEventType: 'turn-start',
+      createdAt: startedAt,
+      raw: turnRecord
+    }),
+    ...items.flatMap((item, itemIndex) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) return [];
+      return codexAppServerItemEvents({
+        id,
+        record: turnRecord,
+        item: item as Record<string, unknown>,
+        itemIndex: itemOffset + itemIndex,
+        recordIndex
+      });
+    }),
+    ...observation({
+      id: `${id}:json:${recordIndex}:turn:${turnKey}:end`,
+      role: 'system',
+      text: 'Turn completed',
+      source: 'codex-app-server',
+      providerEventType: 'turn-end',
+      createdAt: completedAt,
+      raw: turnRecord
+    })
+  ];
+}
+
+function codexTurnTimestamp(record: Record<string, unknown>, boundary: 'started' | 'completed'): string | undefined {
+  const legacyMs =
+    boundary === 'started'
+      ? numberValue(record.startedAtMs, record.createdAtMs)
+      : numberValue(record.completedAtMs, record.updatedAtMs, record.finishedAtMs);
+  if (legacyMs !== undefined) return providerEpochMsTimestamp(legacyMs);
+  const seconds = numberValue(boundary === 'started' ? record.startedAt : record.completedAt);
+  return seconds === undefined ? undefined : providerEpochMsTimestamp(seconds * 1000);
 }

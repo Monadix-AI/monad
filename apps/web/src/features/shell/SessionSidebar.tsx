@@ -4,21 +4,11 @@ import type { ArchivedSessionListItem } from '#/features/shell/archived-sessions
 import type { StudioSectionId } from '#/features/studio/sections';
 import type { RemoteDaemonConnection } from '#/lib/daemon-connections';
 import type { WorkspaceSidebarContextValue } from './sidebar/workspace-sidebar-context';
+import type { SidebarPagerSurface } from './sidebar-trackpad-switch';
 
 import { cn } from '@monad/ui';
-import { animate, useMotionValue, useReducedMotion, useTransform } from 'motion/react';
-import {
-  type CSSProperties,
-  type KeyboardEvent as ReactKeyboardEvent,
-  type MouseEvent as ReactMouseEvent,
-  type PointerEvent as ReactPointerEvent,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState
-} from 'react';
+import { useReducedMotion } from 'motion/react';
+import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useT } from '#/components/I18nProvider';
 import { useWorkspaceShellStore } from '#/lib/workspace-shell-store';
@@ -27,13 +17,8 @@ import { SessionSidebarPanels } from './SessionSidebarPanels';
 import { SessionSidebarResizeHandle } from './SessionSidebarResizeHandle';
 import { useSessionSidebarActions } from './session-sidebar-actions';
 import { type ProjectItem, SidebarHeader } from './sidebar';
-import {
-  createSidebarPagerGesture,
-  resolveSidebarPagerTarget,
-  type SidebarPagerSurface,
-  sidebarTrackpadEdgeAccum,
-  sidebarTrackpadEdgeOffset
-} from './sidebar-trackpad-switch';
+import { useSidebarPagerGesture } from './use-sidebar-pager';
+import { useSidebarResize } from './use-sidebar-resize';
 
 interface SidebarWorkspaceConfig {
   archivedSessions: Pick<Session, 'id' | 'projectId' | 'title' | 'updatedAt'>[];
@@ -97,24 +82,7 @@ interface Props {
 const DEFAULT_SIDEBAR_WIDTH = 288;
 const MIN_SIDEBAR_WIDTH = 240;
 const MAX_SIDEBAR_WIDTH = 420;
-const SIDEBAR_WIDTH_STORAGE_KEY = 'monad:web:sidebar-width';
 const AUTO_REVEAL_CLOSE_ANIMATION_MS = 200;
-const TRACKPAD_GESTURE_RELEASE_MS = 96;
-// How long a surface-changing page turn suppresses its own inertia tail. Short enough to
-// stay responsive to a deliberate second swipe, long enough to eat the strong part of the
-// momentum so one flick can't turn two pages (settings -> studio -> workspace).
-const PAGE_TURN_LOCK_MS = 180;
-const TRACKPAD_EDGE_MARGIN_PX = 12;
-const PANEL_SNAP_SCROLL_DURATION_S = 0.16;
-const PANEL_SNAP_SCROLL_EASE = [0.33, 1, 0.68, 1] as const;
-const TRACKPAD_RELEASE_VELOCITY_PX_S = 1200;
-const TRACKPAD_BOUNCE_TRANSLATE_RATIO = 0.3;
-const TRACKPAD_BOUNCE_DEG_PER_PX = 0.09;
-const TRACKPAD_BOUNCE_MAX_DEG = 28;
-
-function clampSidebarWidth(width: number): number {
-  return Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, width));
-}
 
 export function SessionSidebar({ daemon, surfaces, workspace }: Props) {
   const {
@@ -174,8 +142,6 @@ export function SessionSidebar({ daemon, surfaces, workspace }: Props) {
   const toggleSidebarCollapsed = useWorkspaceShellStore((state) => state.toggleSidebarCollapsed);
   const autoCollapseOnPointerLeave = overlay;
   const [menuOpen, setMenuOpen] = useState(false);
-  const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
-  const [resizing, setResizing] = useState(false);
   const [autoRevealClosing, setAutoRevealClosing] = useState(false);
   const [sidebarMotionReady, setSidebarMotionReady] = useState(false);
   const {
@@ -202,56 +168,14 @@ export function SessionSidebar({ daemon, surfaces, workspace }: Props) {
     projects,
     t
   });
-  const currentSidebarSurfaceRef = useRef<SidebarPagerSurface>(
-    showArchived ? 'archived' : showStudio ? 'studio' : 'workspace'
-  );
   const sidebarRef = useRef<HTMLElement | null>(null);
-  const panelScrollRef = useRef<HTMLDivElement | null>(null);
-  const dragStartRef = useRef({ pointerX: 0, width: DEFAULT_SIDEBAR_WIDTH });
-  const pagerGestureRef = useRef(createSidebarPagerGesture());
-  const dragActiveRef = useRef(false);
-  const dragOriginRef = useRef(0);
-  const dragPxRef = useRef(0);
-  // clientWidth/scrollWidth read once per gesture, not per wheel tick: reading them
-  // after a same-tick scrollLeft write forces a synchronous layout (thrash) every
-  // event, which is what was showing up as a slow rAF handler during the scroll.
-  const gestureMetricsRef = useRef({ clientWidth: 0, scrollWidth: 0 });
-  const trackpadFeedbackAnimationRef = useRef<{ stop: () => void } | null>(null);
-  const panelScrollAnimationRef = useRef<{ stop: () => void; target: number } | null>(null);
-  const previousShowSettingsRef = useRef(showSettings);
-  const routeDrivenScrollClearTimerRef = useRef(0);
   const autoRevealCloseTimerRef = useRef(0);
   const resizingRef = useRef(false);
-  const trackpadResetTimerRef = useRef(0);
-  const trackpadFeedbackSampleRef = useRef({ time: 0, x: 0 });
-  const trackpadFeedbackVelocityRef = useRef(0);
-  const trackpadGestureActiveRef = useRef(false);
-  // A single physical wheel gesture must yield at most one surface-changing page turn:
-  // once it has, the momentum tail is swallowed until the fingers lift (a quiet gap),
-  // so inertia can't turn a second page across the surface change it just triggered.
-  const pageTurnConsumedRef = useRef(false);
-  const pageTurnLockTimerRef = useRef(0);
-  const suppressMouseResizeRef = useRef(false);
 
   const prefersReducedMotion = useReducedMotion();
-  const trackpadFeedback = useMotionValue(0);
-  // The edge bounce reuses the snap transition's doorway pose: the pushed
-  // panel swings out behind its hinge edge instead of merely translating.
-  const trackpadBounceX = useTransform(trackpadFeedback, (value) => value * TRACKPAD_BOUNCE_TRANSLATE_RATIO);
-  const trackpadBounceRotateY = useTransform(trackpadFeedback, (value) =>
-    Math.max(-TRACKPAD_BOUNCE_MAX_DEG, Math.min(TRACKPAD_BOUNCE_MAX_DEG, value * TRACKPAD_BOUNCE_DEG_PER_PX))
-  );
-  const trackpadBounceOrigin = useTransform(trackpadFeedback, (value) => (value >= 0 ? '0% 50%' : '100% 50%'));
 
   useEffect(() => {
     setSidebarMotionReady(true);
-  }, []);
-
-  useEffect(() => {
-    const storedWidth = window.localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY);
-    if (!storedWidth) return;
-    const nextWidth = Number.parseInt(storedWidth, 10);
-    if (Number.isFinite(nextWidth)) setSidebarWidth(clampSidebarWidth(nextWidth));
   }, []);
 
   useEffect(() => {
@@ -278,11 +202,6 @@ export function SessionSidebar({ daemon, surfaces, workspace }: Props) {
         : 'workspace';
   const activeSidebarPageIndex = Math.max(0, pagerSurfaces.indexOf(activeSidebarSurface));
 
-  const openMenuAction = (action: () => void) => {
-    setMenuOpen(false);
-    action();
-  };
-
   const onDaemonMenuOpenChange = useCallback(
     (open: boolean) => {
       setMenuOpen(open);
@@ -291,395 +210,19 @@ export function SessionSidebar({ daemon, surfaces, workspace }: Props) {
     [autoCollapseOnPointerLeave, revealSidebar]
   );
 
-  // Synchronous localStorage writes are slow enough to blow the rAF budget when called
-  // every drag frame (Chrome flags it as a "Violation"); persist only once, on release.
-  const applySidebarWidth = useCallback((width: number) => {
-    setSidebarWidth(clampSidebarWidth(width));
+  const openMenuAction = useCallback((action: () => void) => {
+    setMenuOpen(false);
+    action();
   }, []);
 
-  const setMeasuredSidebarWidth = useCallback((width: number) => {
-    const nextWidth = clampSidebarWidth(width);
-    setSidebarWidth(nextWidth);
-    window.localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(nextWidth));
-  }, []);
-
-  const beginResize = useCallback(
-    ({
-      cancelEvent,
-      clientX,
-      moveEvent,
-      upEvent
-    }: {
-      cancelEvent?: 'pointercancel';
-      clientX: number;
-      moveEvent: 'mousemove' | 'pointermove';
-      upEvent: 'mouseup' | 'pointerup';
-    }) => {
-      resizingRef.current = true;
-      dragStartRef.current = { pointerX: clientX, width: sidebarWidth };
-      window.clearTimeout(trackpadResetTimerRef.current);
-      pagerGestureRef.current.reset();
-      trackpadFeedbackAnimationRef.current?.stop();
-      trackpadFeedback.set(0);
-      trackpadFeedbackSampleRef.current = { time: 0, x: 0 };
-      trackpadFeedbackVelocityRef.current = 0;
-      trackpadGestureActiveRef.current = false;
-      dragActiveRef.current = false;
-      dragPxRef.current = 0;
-      setResizing(true);
-
-      const previousCursor = document.body.style.cursor;
-      const previousUserSelect = document.body.style.userSelect;
-      document.body.style.cursor = 'col-resize';
-      document.body.style.userSelect = 'none';
-      document.documentElement.dataset.sidebarResizing = 'true';
-
-      let resizeFrame = 0;
-      let latestClientX = clientX;
-      const onResizeMove = (resizeEvent: MouseEvent | PointerEvent) => {
-        latestClientX = resizeEvent.clientX;
-        if (resizeFrame) return;
-        resizeFrame = window.requestAnimationFrame(() => {
-          resizeFrame = 0;
-          applySidebarWidth(dragStartRef.current.width + latestClientX - dragStartRef.current.pointerX);
-        });
-      };
-      const onResizeEnd = () => {
-        if (resizeFrame) window.cancelAnimationFrame(resizeFrame);
-        resizeFrame = 0;
-        resizingRef.current = false;
-        setResizing(false);
-        document.body.style.cursor = previousCursor;
-        document.body.style.userSelect = previousUserSelect;
-        delete document.documentElement.dataset.sidebarResizing;
-        window.removeEventListener(moveEvent, onResizeMove);
-        window.removeEventListener(upEvent, onResizeEnd);
-        if (cancelEvent) window.removeEventListener(cancelEvent, onResizeEnd);
-        setMeasuredSidebarWidth(dragStartRef.current.width + latestClientX - dragStartRef.current.pointerX);
-      };
-
-      window.addEventListener(moveEvent, onResizeMove);
-      window.addEventListener(upEvent, onResizeEnd);
-      if (cancelEvent) window.addEventListener(cancelEvent, onResizeEnd);
-    },
-    [applySidebarWidth, setMeasuredSidebarWidth, sidebarWidth, trackpadFeedback]
-  );
-
-  const onResizePointerDown = useCallback(
-    (event: ReactPointerEvent<HTMLHRElement>) => {
-      event.preventDefault();
-      event.stopPropagation();
-      suppressMouseResizeRef.current = true;
-      window.setTimeout(() => {
-        suppressMouseResizeRef.current = false;
-      }, 0);
-      beginResize({
-        cancelEvent: 'pointercancel',
-        clientX: event.clientX,
-        moveEvent: 'pointermove',
-        upEvent: 'pointerup'
-      });
-    },
-    [beginResize]
-  );
-
-  const onResizeMouseDown = useCallback(
-    (event: ReactMouseEvent<HTMLHRElement>) => {
-      if (event.button !== 0 || suppressMouseResizeRef.current) return;
-      event.preventDefault();
-      event.stopPropagation();
-      beginResize({ clientX: event.clientX, moveEvent: 'mousemove', upEvent: 'mouseup' });
-    },
-    [beginResize]
-  );
-
-  const onResizeKeyDown = useCallback(
-    (event: ReactKeyboardEvent<HTMLHRElement>) => {
-      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight' && event.key !== 'Home' && event.key !== 'End')
-        return;
-      event.preventDefault();
-      if (event.key === 'Home') setMeasuredSidebarWidth(MIN_SIDEBAR_WIDTH);
-      else if (event.key === 'End') setMeasuredSidebarWidth(MAX_SIDEBAR_WIDTH);
-      else setMeasuredSidebarWidth(sidebarWidth + (event.key === 'ArrowRight' ? 12 : -12));
-    },
-    [setMeasuredSidebarWidth, sidebarWidth]
-  );
-
-  const stopTrackpadFeedbackAnimation = useCallback(() => {
-    trackpadFeedbackAnimationRef.current?.stop();
-    trackpadFeedbackAnimationRef.current = null;
-  }, []);
-
-  const clearTrackpadGesture = useCallback(() => {
-    window.clearTimeout(trackpadResetTimerRef.current);
-    window.clearTimeout(pageTurnLockTimerRef.current);
-    pageTurnConsumedRef.current = false;
-    pagerGestureRef.current.reset();
-    stopTrackpadFeedbackAnimation();
-    trackpadFeedback.set(0);
-    trackpadFeedbackSampleRef.current = { time: 0, x: 0 };
-    trackpadFeedbackVelocityRef.current = 0;
-    trackpadGestureActiveRef.current = false;
-    dragActiveRef.current = false;
-    dragPxRef.current = 0;
-  }, [stopTrackpadFeedbackAnimation, trackpadFeedback]);
-
-  const releaseTrackpadGesture = useCallback(() => {
-    window.clearTimeout(trackpadResetTimerRef.current);
-    trackpadGestureActiveRef.current = false;
-    stopTrackpadFeedbackAnimation();
-    if (prefersReducedMotion || trackpadFeedback.get() === 0) {
-      trackpadFeedback.set(0);
-      return;
-    }
-    trackpadFeedbackAnimationRef.current = animate(trackpadFeedback, 0, {
-      type: 'spring',
-      velocity: trackpadFeedbackVelocityRef.current,
-      stiffness: 520,
-      damping: 34,
-      mass: 0.42
-    });
-  }, [prefersReducedMotion, stopTrackpadFeedbackAnimation, trackpadFeedback]);
-
-  const closeSettingsWithPagerAnimation = useCallback(() => {
-    const host = panelScrollRef.current;
-    if (!host || !showSettings) {
-      onCloseSettings();
-      return;
-    }
-    panelScrollAnimationRef.current?.stop();
-    window.clearTimeout(routeDrivenScrollClearTimerRef.current);
-    const target = 0;
-    let finished = false;
-    const finish = () => {
-      if (finished) return;
-      finished = true;
-      window.clearTimeout(routeDrivenScrollClearTimerRef.current);
-      onCloseSettings();
-    };
-    currentSidebarSurfaceRef.current = settingsReturnSurface;
-    if (prefersReducedMotion || Math.abs(host.scrollLeft - target) <= 1) {
-      host.scrollLeft = target;
-      finish();
-      return;
-    }
-    const closeControls = animate(host.scrollLeft, target, {
-      duration: PANEL_SNAP_SCROLL_DURATION_S,
-      ease: PANEL_SNAP_SCROLL_EASE,
-      onComplete: finish,
-      onUpdate: (value) => {
-        host.scrollLeft = value;
-      }
-    });
-    panelScrollAnimationRef.current = { stop: () => closeControls.stop(), target };
-    routeDrivenScrollClearTimerRef.current = window.setTimeout(finish, PANEL_SNAP_SCROLL_DURATION_S * 1000 + 120);
-  }, [onCloseSettings, prefersReducedMotion, settingsReturnSurface, showSettings]);
-
-  useEffect(() => {
-    currentSidebarSurfaceRef.current = activeSidebarSurface;
-  }, [activeSidebarSurface]);
-
-  // Keep the native scroll position in lockstep with the active sidebar surface, so
-  // menu/shortcut-driven switches slide the panels the same way a swipe does.
-  useLayoutEffect(() => {
-    const host = panelScrollRef.current;
-    if (!host) return;
-    currentSidebarSurfaceRef.current = activeSidebarSurface;
-    const wasShowingSettings = previousShowSettingsRef.current;
-    const enteringSettings = showSettings && !wasShowingSettings;
-    const leavingSettings = !showSettings && wasShowingSettings;
-    previousShowSettingsRef.current = showSettings;
-    if (enteringSettings) host.scrollTo({ behavior: 'instant' as ScrollBehavior, left: 0 });
-    const target = activeSidebarPageIndex * host.clientWidth;
-    if (leavingSettings) {
-      window.clearTimeout(routeDrivenScrollClearTimerRef.current);
-      panelScrollAnimationRef.current?.stop();
-      host.scrollTo({ behavior: 'instant' as ScrollBehavior, left: target });
-      host.dataset.snapReady = 'true';
-      return;
-    }
-    if (Math.abs(host.scrollLeft - target) <= 1) {
-      host.dataset.snapReady = 'true';
-      window.clearTimeout(routeDrivenScrollClearTimerRef.current);
-      return;
-    }
-    // A gesture-driven page turn (finishPageTurn) already has a tween running to this
-    // same target when its own surface-change setState re-renders us here. Restarting a
-    // fresh tween mid-flight resets the ease-out curve and shows as a stutter right at
-    // the settle — let the in-flight animation own the finish instead of pre-empting it.
-    if (panelScrollAnimationRef.current && Math.abs(panelScrollAnimationRef.current.target - target) <= 1) {
-      host.dataset.snapReady = 'true';
-      return;
-    }
-    window.clearTimeout(routeDrivenScrollClearTimerRef.current);
-    panelScrollAnimationRef.current?.stop();
-    if (host.dataset.snapReady !== 'true' || prefersReducedMotion) {
-      host.scrollTo({ behavior: 'instant' as ScrollBehavior, left: target });
-    } else {
-      // Browser smooth scrolling has a fixed, sluggish pace; drive scrollLeft
-      // with a short ease-out tween so programmatic page turns feel crisp.
-      const controls = animate(host.scrollLeft, target, {
-        duration: PANEL_SNAP_SCROLL_DURATION_S,
-        ease: PANEL_SNAP_SCROLL_EASE,
-        onUpdate: (value) => {
-          host.scrollLeft = value;
-        }
-      });
-      panelScrollAnimationRef.current = { stop: () => controls.stop(), target };
-    }
-    host.dataset.snapReady = 'true';
-  }, [activeSidebarPageIndex, activeSidebarSurface, prefersReducedMotion, showSettings]);
-
-  useEffect(
-    () => () => {
-      panelScrollAnimationRef.current?.stop();
-      window.clearTimeout(routeDrivenScrollClearTimerRef.current);
-      window.clearTimeout(autoRevealCloseTimerRef.current);
-    },
-    []
-  );
-
-  useEffect(() => {
-    const host = panelScrollRef.current;
-    if (!host) return;
-
-    // Native scroll-snap is off: the release timing of the browser's snap
-    // animation is not tunable and momentum bleeds into it. The pager owns the
-    // whole horizontal stream — drag writes scrollLeft 1:1, release runs our
-    // own short tween, and the momentum tail is swallowed.
-    const finishPageTurn = (dragPxTotal: number) => {
-      window.clearTimeout(trackpadResetTimerRef.current);
-      dragActiveRef.current = false;
-      dragPxRef.current = 0;
-      // The same gesture already produced a surface-changing turn; ignore the inertia tail
-      // so it can't turn a second page (e.g. settings -> studio -> workspace in one flick).
-      if (pageTurnConsumedRef.current) {
-        releaseTrackpadGesture();
-        return;
-      }
-      const width = gestureMetricsRef.current.clientWidth || host.clientWidth || 1;
-      const targetSurface = resolveSidebarPagerTarget({
-        clientWidth: width,
-        dragOrigin: dragOriginRef.current,
-        dragPxTotal,
-        pageCount: pagerSurfaces.length,
-        scrollLeft: host.scrollLeft
-      });
-      const target = targetSurface * width;
-      const targetSurfaceId = pagerSurfaces[targetSurface] ?? 'workspace';
-      const closesSettings = showSettings && targetSurfaceId !== 'settings';
-      const surfaceChanged = targetSurfaceId !== currentSidebarSurfaceRef.current;
-      if (surfaceChanged) {
-        pageTurnConsumedRef.current = true;
-        window.clearTimeout(pageTurnLockTimerRef.current);
-        pageTurnLockTimerRef.current = window.setTimeout(clearTrackpadGesture, PAGE_TURN_LOCK_MS);
-        currentSidebarSurfaceRef.current = targetSurfaceId;
-        if (!closesSettings) {
-          if (targetSurfaceId === 'settings') onToggleSettings();
-          if (targetSurfaceId === 'studio') onOpenStudio();
-          if (targetSurfaceId === 'archived') onOpenArchived();
-          if (targetSurfaceId === 'workspace') onOpenWorkspace();
-        }
-      }
-      const finishSettingsClose = () => {
-        if (closesSettings) onCloseSettings();
-      };
-      panelScrollAnimationRef.current?.stop();
-      if (Math.abs(host.scrollLeft - target) > 1) {
-        if (prefersReducedMotion) {
-          host.scrollLeft = target;
-          finishSettingsClose();
-        } else {
-          const controls = animate(host.scrollLeft, target, {
-            duration: PANEL_SNAP_SCROLL_DURATION_S,
-            ease: PANEL_SNAP_SCROLL_EASE,
-            onComplete: finishSettingsClose,
-            onUpdate: (value) => {
-              host.scrollLeft = value;
-            }
-          });
-          panelScrollAnimationRef.current = { stop: () => controls.stop(), target };
-        }
-      } else {
-        finishSettingsClose();
-      }
-      releaseTrackpadGesture();
-    };
-
-    const finishFromTimer = () => {
-      pagerGestureRef.current.swallowTail(performance.now(), 0);
-      finishPageTurn(dragPxRef.current);
-    };
-
-    const onWheel = (event: WheelEvent) => {
-      if (resizingRef.current) return;
-      if (Math.abs(event.deltaX) <= Math.abs(event.deltaY)) {
-        if (dragActiveRef.current) {
-          window.clearTimeout(trackpadResetTimerRef.current);
-          trackpadResetTimerRef.current = window.setTimeout(finishFromTimer, TRACKPAD_GESTURE_RELEASE_MS);
-        }
-        return;
-      }
-
-      event.preventDefault();
-      // The gesture already turned its one page — swallow the rest of its inertia tail.
-      // The lock lifts on its own a short beat after the turn (armed in finishPageTurn), so
-      // it never waits out the full multi-second momentum tail.
-      if (pageTurnConsumedRef.current) return;
-      if (!dragActiveRef.current) {
-        gestureMetricsRef.current = { clientWidth: host.clientWidth, scrollWidth: host.scrollWidth };
-      }
-      const edgeMaxPx = gestureMetricsRef.current.clientWidth + TRACKPAD_EDGE_MARGIN_PX;
-      const seedPx = !dragActiveRef.current ? sidebarTrackpadEdgeAccum(trackpadFeedback.get(), edgeMaxPx) : 0;
-      const result = pagerGestureRef.current.update({
-        deltaX: event.deltaX,
-        now: event.timeStamp,
-        seedPx
-      });
-      if (result.kind === 'swallowed') return;
-      if (result.kind === 'settle') {
-        finishPageTurn(result.dragPx);
-        return;
-      }
-
-      if (!dragActiveRef.current) {
-        dragActiveRef.current = true;
-        dragOriginRef.current = host.scrollLeft;
-        panelScrollAnimationRef.current?.stop();
-      }
-      trackpadGestureActiveRef.current = true;
-      dragPxRef.current = result.dragPx;
-      window.clearTimeout(trackpadResetTimerRef.current);
-      stopTrackpadFeedbackAnimation();
-
-      const maxScroll = gestureMetricsRef.current.scrollWidth - gestureMetricsRef.current.clientWidth;
-      const desired = dragOriginRef.current + result.dragPx;
-      const clamped = Math.max(0, Math.min(maxScroll, desired));
-      host.scrollLeft = clamped;
-      const excess = desired - clamped;
-      const nextFeedback = prefersReducedMotion || excess === 0 ? 0 : sidebarTrackpadEdgeOffset(excess, edgeMaxPx);
-      const lastSample = trackpadFeedbackSampleRef.current;
-      const elapsed = event.timeStamp - lastSample.time;
-      if (elapsed > 0 && elapsed < 120) {
-        const velocity = ((nextFeedback - lastSample.x) / elapsed) * 1000;
-        trackpadFeedbackVelocityRef.current = Math.max(
-          -TRACKPAD_RELEASE_VELOCITY_PX_S,
-          Math.min(TRACKPAD_RELEASE_VELOCITY_PX_S, velocity)
-        );
-      } else {
-        trackpadFeedbackVelocityRef.current = 0;
-      }
-      trackpadFeedbackSampleRef.current = { time: event.timeStamp, x: nextFeedback };
-      trackpadFeedback.set(nextFeedback);
-      trackpadResetTimerRef.current = window.setTimeout(finishFromTimer, TRACKPAD_GESTURE_RELEASE_MS);
-    };
-
-    host.addEventListener('wheel', onWheel, { passive: false });
-    return () => {
-      host.removeEventListener('wheel', onWheel);
-    };
-  }, [
-    clearTrackpadGesture,
+  const {
+    cancelGesture: cancelPagerGesture,
+    closeSettingsWithPagerAnimation,
+    panelScrollRef,
+    style: pagerStyle
+  } = useSidebarPagerGesture({
+    activeSidebarPageIndex,
+    activeSidebarSurface,
     onCloseSettings,
     onOpenArchived,
     onOpenStudio,
@@ -687,13 +230,15 @@ export function SessionSidebar({ daemon, surfaces, workspace }: Props) {
     onToggleSettings,
     pagerSurfaces,
     prefersReducedMotion,
-    releaseTrackpadGesture,
-    showSettings,
-    stopTrackpadFeedbackAnimation,
-    trackpadFeedback
-  ]);
+    resizingRef,
+    settingsReturnSurface,
+    showSettings
+  });
 
-  useEffect(() => clearTrackpadGesture, [clearTrackpadGesture]);
+  const { onResizeKeyDown, onResizeMouseDown, onResizePointerDown, resizing, sidebarWidth } = useSidebarResize({
+    cancelPagerGesture,
+    resizingRef
+  });
 
   const activeSidebarWidth = collapsed || overlay ? DEFAULT_SIDEBAR_WIDTH : sidebarWidth;
   const expandedStyle = { width: activeSidebarWidth } satisfies CSSProperties;
@@ -774,19 +319,20 @@ export function SessionSidebar({ daemon, surfaces, workspace }: Props) {
   );
   const archivedPanel = useMemo(() => {
     const projectNames = new Map(visibleProjects.map((project) => [project.id, project.name]));
-    const items = archivedSessions
-      .filter((session) => !pendingUnarchivedSessionIds.has(session.id))
-      .map<ArchivedSessionListItem>((session) => ({
+    const chatSessionItems: ArchivedSessionListItem[] = [];
+    const projectSessionItems: ArchivedSessionListItem[] = [];
+    for (const session of archivedSessions) {
+      if (pendingUnarchivedSessionIds.has(session.id)) continue;
+      const item: ArchivedSessionListItem = {
         id: session.id,
         projectId: session.projectId,
         projectName: session.projectId ? projectNames.get(session.projectId) : undefined,
         title: session.title,
         updatedAt: session.updatedAt
-      }));
-    return {
-      chatSessions: items.filter((session) => !session.projectId),
-      projectSessions: items.filter((session) => session.projectId)
-    };
+      };
+      (session.projectId ? projectSessionItems : chatSessionItems).push(item);
+    }
+    return { chatSessions: chatSessionItems, projectSessions: projectSessionItems };
   }, [archivedSessions, pendingUnarchivedSessionIds, visibleProjects]);
 
   return (
@@ -863,13 +409,7 @@ export function SessionSidebar({ daemon, surfaces, workspace }: Props) {
               }}
               pager={{
                 panelScrollRef,
-                style: {
-                  overscrollBehaviorX: 'contain',
-                  rotateY: trackpadBounceRotateY,
-                  transformOrigin: trackpadBounceOrigin,
-                  transformPerspective: 1100,
-                  x: trackpadBounceX
-                },
+                style: pagerStyle,
                 surfaces: pagerSurfaces
               }}
               settings={{

@@ -1,6 +1,13 @@
 import { expect, test } from 'bun:test';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 
-import { deferredEffortCommit, resolveReasoningEffort } from '../../src/components/ReasoningEffortControl.tsx';
+import {
+  deferredEffortCommit,
+  ReasoningEffortControl,
+  reasoningEffortOption,
+  resolveReasoningEffort
+} from '../../src/components/ReasoningEffortControl.tsx';
 
 test('reasoning effort requires probed options and never invents a default selection', () => {
   expect(resolveReasoningEffort(undefined, 'medium')).toEqual({ efforts: [], value: undefined });
@@ -24,4 +31,16 @@ test('reasoning effort commits only when its popover closes with a changed draft
   expect(deferredEffortCommit(true, 'low', 'high')).toBeNull();
   expect(deferredEffortCommit(false, 'low', 'low')).toBeNull();
   expect(deferredEffortCommit(false, 'low', 'high')).toEqual({ value: 'high' });
+});
+
+test('reasoning effort labels an unset value as Default', () => {
+  const markup = renderToStaticMarkup(
+    createElement(ReasoningEffortControl, {
+      onChange: () => undefined,
+      options: ['low', 'medium', 'high'].map(reasoningEffortOption),
+      value: undefined
+    })
+  );
+
+  expect(markup.replace(/<[^>]+>/g, '')).toBe('EffortDefaultFastSmart');
 });

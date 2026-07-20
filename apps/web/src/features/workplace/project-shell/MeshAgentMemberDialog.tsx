@@ -237,7 +237,6 @@ export function MeshAgentMemberDialog({
                   >
                     <ReasoningEffortControl
                       className="border-0 shadow-none"
-                      defaultLabel={t('web.workplace.reasoningEffort')}
                       onChange={(reasoningEffort) => updateDraft({ reasoningEffort })}
                       options={effortState.efforts.map(reasoningEffortOption)}
                       value={effortState.value}
