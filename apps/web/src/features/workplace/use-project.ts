@@ -33,6 +33,7 @@ import {
 import { meshSessionIdSchema } from '@monad/protocol';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { deriveProjectRouteSessionState } from '#/features/workspace/project-route-session-state';
 import { useAcpAgentSettings } from '#/hooks/use-acp-agent-settings';
 import { useMeshAgentSettings } from '#/hooks/use-mesh-agent-settings';
 import { useTranscriptHistory } from '#/hooks/use-transcript-history';
@@ -96,18 +97,18 @@ export function useProject(
     setSessionOverride(null);
   }, [activeProjectId]);
   const defaultSessionId: SessionId | null = useMemo(() => {
-    if (projectSessions.length === 0) return null;
-    return [...projectSessions].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]?.id ?? null;
+    const activeSessions = projectSessions.filter((session) => !session.archived);
+    if (activeSessions.length === 0) return null;
+    return [...activeSessions].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]?.id ?? null;
   }, [projectSessions]);
-  const routedSessionId =
-    opts.routedSessionId && projectSessions.some((session) => session.id === opts.routedSessionId)
-      ? opts.routedSessionId
-      : null;
-  const activeSessionId: SessionId | null =
-    routedSessionId ??
-    (sessionOverride && projectSessions.some((session) => session.id === sessionOverride)
+  const preferredSessionId =
+    sessionOverride && projectSessions.some((session) => session.id === sessionOverride && !session.archived)
       ? sessionOverride
-      : defaultSessionId);
+      : defaultSessionId;
+  const activeSessionId = deriveProjectRouteSessionState(
+    { activeSessionId: preferredSessionId, projectSessions },
+    opts.routedSessionId ?? null
+  ).activeSessionId;
 
   const switchSession = useMemo(() => (id: SessionId) => setSessionOverride(id), []);
   const closeSession = useMemo(
@@ -120,17 +121,18 @@ export function useProject(
 
   // --- live stream + lazy older history ---
   const stream = useStreamUiItemsQuery(activeSessionId ?? ('ses_' as SessionId), { skip: activeSessionId === null });
-  const streamData = stream.currentData;
+  const streamData = activeSessionId ? stream.currentData : undefined;
   const meshSessionsQ = useListMeshSessionsQuery(activeSessionId ?? ('ses_' as SessionId), {
     skip: activeSessionId === null
   });
-  const meshSessionsData = meshSessionsQ.currentData;
+  const meshSessionsData = activeSessionId ? meshSessionsQ.currentData : undefined;
   const sessionMembersQ = useListSessionMembersQuery(activeSessionId ?? ('ses_' as SessionId), {
     skip: activeSessionId === null
   });
+  const sessionMembersData = activeSessionId ? sessionMembersQ.currentData : undefined;
   const sessionMembers = useMemo(
-    () => (sessionMembersQ.currentData ? sessionMemberSelectors.selectAll(sessionMembersQ.currentData) : []),
-    [sessionMembersQ.currentData]
+    () => (sessionMembersData ? sessionMemberSelectors.selectAll(sessionMembersData) : []),
+    [sessionMembersData]
   );
   const transcript = useTranscriptHistory({
     sessionId: activeSessionId,

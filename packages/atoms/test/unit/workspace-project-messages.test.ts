@@ -91,15 +91,36 @@ const meshSession = (overrides: LegacySessionOverrides = {}): MeshSessionView =>
 
 const observationFields = (
   items: NonNullable<ReturnType<typeof __workplaceProjectMessageTest.buildMeshAgentStreams>[number]>['items']
-) => items.map(({ id, payload }) => ({ id, text: payload.text }));
+) =>
+  items.map(({ id, payload }) => {
+    const event = payload.event ?? payload.call ?? payload.result;
+    const text = event && typeof event === 'object' && 'text' in event ? event.text : undefined;
+    return { id, text };
+  });
 
-function messageCard(id: string, text: string): AgentObservationCard {
+function messageCard(id: string, text: string, provider: string): AgentObservationCard {
+  const contractEvent = {
+    id,
+    role: 'agent',
+    text,
+    source: 'plain-text',
+    provenance: { rawEvents: [text] }
+  };
   return {
     id,
     kind: 'message',
     streaming: false,
-    payload: { text },
-    provenance: { contractEvents: [{ id, text }] }
+    payload: {
+      provider,
+      event: {
+        id,
+        kind: 'assistant-message',
+        streaming: false,
+        text,
+        provenance: { contractEvents: [contractEvent] }
+      }
+    },
+    provenance: { contractEvents: [contractEvent] }
   };
 }
 
@@ -915,7 +936,7 @@ test('MeshAgent streams prefer live activity output over persisted snapshot', ()
     provider: 'gemini',
     tag: 'Gemini',
     output: 'live output',
-    items: [messageCard('mesh_01KWGEMIprD4:0', 'live output')],
+    items: [messageCard('mesh_01KWGEMIprD4:0', 'live output', 'gemini')],
     status: 'running'
   });
 });
@@ -967,7 +988,7 @@ test('MeshAgent live activity streams keep the managed agent identity', () => {
     id: 'mesh_livecodex000',
     agentName: 'codex',
     status: 'running',
-    items: [messageCard('mesh_livecodex000:0', 'thinking about the project message')]
+    items: [messageCard('mesh_livecodex000:0', 'thinking about the project message', 'codex')]
   });
 });
 

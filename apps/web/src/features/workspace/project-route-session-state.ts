@@ -1,6 +1,7 @@
 import type { SessionId } from '@monad/protocol';
 
 type ProjectRouteSession = {
+  archived?: boolean;
   id: SessionId | string;
   title: string;
 };
@@ -19,11 +20,14 @@ export function deriveProjectRouteSessionState(
   project: ProjectRouteSessionSource,
   routedSessionId: SessionId | null
 ): ProjectRouteSessionState {
-  if (!routedSessionId) return { activeSessionId: null, activeSessionTitle: null };
-  const routedSession = project.projectSessions.find((session) => session.id === routedSessionId);
-  if (!routedSession) return { activeSessionId: null, activeSessionTitle: null };
+  const selectedSessionId = routedSessionId ?? project.activeSessionId;
+  if (!selectedSessionId) return { activeSessionId: null, activeSessionTitle: null };
+  const selectedSession = project.projectSessions.find((session) => session.id === selectedSessionId);
+  if (!selectedSession || (!routedSessionId && selectedSession.archived)) {
+    return { activeSessionId: null, activeSessionTitle: null };
+  }
   return {
-    activeSessionId: routedSessionId,
-    activeSessionTitle: routedSession.title
+    activeSessionId: selectedSessionId as SessionId,
+    activeSessionTitle: selectedSession.title
   };
 }
