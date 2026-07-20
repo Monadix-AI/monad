@@ -10,21 +10,33 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 const DEFAULT_SIDEBAR_WIDTH = 288;
 const MIN_SIDEBAR_WIDTH = 240;
 const MAX_SIDEBAR_WIDTH = 420;
+const SIDEBAR_COLLAPSE_OVERSHOOT = 48;
 const SIDEBAR_WIDTH_STORAGE_KEY = 'monad:web:sidebar-width';
+
+const SIDEBAR_COLLAPSE_THRESHOLD_WIDTH = MIN_SIDEBAR_WIDTH - SIDEBAR_COLLAPSE_OVERSHOOT;
 
 function clampSidebarWidth(width: number): number {
   return Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, width));
 }
 
+export function sidebarResizeState(rawWidth: number): { collapsed: boolean; width: number } {
+  return {
+    collapsed: rawWidth <= SIDEBAR_COLLAPSE_THRESHOLD_WIDTH,
+    width: clampSidebarWidth(rawWidth)
+  };
+}
+
 interface UseSidebarResizeParams {
   cancelPagerGesture: () => void;
+  onCollapsedChange: (collapsed: boolean) => void;
   resizingRef: RefObject<boolean>;
 }
 
-export function useSidebarResize({ cancelPagerGesture, resizingRef }: UseSidebarResizeParams) {
+export function useSidebarResize({ cancelPagerGesture, onCollapsedChange, resizingRef }: UseSidebarResizeParams) {
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
   const [resizing, setResizing] = useState(false);
   const dragStartRef = useRef({ pointerX: 0, width: DEFAULT_SIDEBAR_WIDTH });
+  const dragCollapsedRef = useRef(false);
   const suppressMouseResizeRef = useRef(false);
 
   useEffect(() => {
@@ -34,11 +46,18 @@ export function useSidebarResize({ cancelPagerGesture, resizingRef }: UseSidebar
     if (Number.isFinite(nextWidth)) setSidebarWidth(clampSidebarWidth(nextWidth));
   }, []);
 
-  // Synchronous localStorage writes are slow enough to blow the rAF budget when called
-  // every drag frame (Chrome flags it as a "Violation"); persist only once, on release.
-  const applySidebarWidth = useCallback((width: number) => {
-    setSidebarWidth(clampSidebarWidth(width));
-  }, []);
+  const applySidebarResize = useCallback(
+    (rawWidth: number) => {
+      const nextState = sidebarResizeState(rawWidth);
+      setSidebarWidth(nextState.width);
+      if (dragCollapsedRef.current !== nextState.collapsed) {
+        dragCollapsedRef.current = nextState.collapsed;
+        onCollapsedChange(nextState.collapsed);
+      }
+      return nextState;
+    },
+    [onCollapsedChange]
+  );
 
   const setMeasuredSidebarWidth = useCallback((width: number) => {
     const nextWidth = clampSidebarWidth(width);
@@ -60,6 +79,7 @@ export function useSidebarResize({ cancelPagerGesture, resizingRef }: UseSidebar
     }) => {
       resizingRef.current = true;
       dragStartRef.current = { pointerX: clientX, width: sidebarWidth };
+      dragCollapsedRef.current = false;
       cancelPagerGesture();
       setResizing(true);
 
@@ -76,12 +96,15 @@ export function useSidebarResize({ cancelPagerGesture, resizingRef }: UseSidebar
         if (resizeFrame) return;
         resizeFrame = window.requestAnimationFrame(() => {
           resizeFrame = 0;
-          applySidebarWidth(dragStartRef.current.width + latestClientX - dragStartRef.current.pointerX);
+          applySidebarResize(dragStartRef.current.width + latestClientX - dragStartRef.current.pointerX);
         });
       };
       const onResizeEnd = () => {
         if (resizeFrame) window.cancelAnimationFrame(resizeFrame);
         resizeFrame = 0;
+        const finalState = applySidebarResize(
+          dragStartRef.current.width + latestClientX - dragStartRef.current.pointerX
+        );
         resizingRef.current = false;
         setResizing(false);
         document.body.style.cursor = previousCursor;
@@ -90,14 +113,14 @@ export function useSidebarResize({ cancelPagerGesture, resizingRef }: UseSidebar
         window.removeEventListener(moveEvent, onResizeMove);
         window.removeEventListener(upEvent, onResizeEnd);
         if (cancelEvent) window.removeEventListener(cancelEvent, onResizeEnd);
-        setMeasuredSidebarWidth(dragStartRef.current.width + latestClientX - dragStartRef.current.pointerX);
+        if (!finalState.collapsed) setMeasuredSidebarWidth(finalState.width);
       };
 
       window.addEventListener(moveEvent, onResizeMove);
       window.addEventListener(upEvent, onResizeEnd);
       if (cancelEvent) window.addEventListener(cancelEvent, onResizeEnd);
     },
-    [applySidebarWidth, cancelPagerGesture, resizingRef, setMeasuredSidebarWidth, sidebarWidth]
+    [applySidebarResize, cancelPagerGesture, resizingRef, setMeasuredSidebarWidth, sidebarWidth]
   );
 
   const onResizePointerDown = useCallback(

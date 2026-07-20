@@ -235,8 +235,17 @@ export function SessionSidebar({ daemon, surfaces, workspace }: Props) {
     showSettings
   });
 
+  const onResizeCollapsedChange = useCallback(
+    (nextCollapsed: boolean) => {
+      if (nextCollapsed) collapseSidebar();
+      else revealSidebar();
+    },
+    [collapseSidebar, revealSidebar]
+  );
+
   const { onResizeKeyDown, onResizeMouseDown, onResizePointerDown, resizing, sidebarWidth } = useSidebarResize({
     cancelPagerGesture,
+    onCollapsedChange: onResizeCollapsedChange,
     resizingRef
   });
 
