@@ -4,7 +4,14 @@ import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
 import type { OpenAiCompatConfig } from '#/transports/http/openai-compat.ts';
 import type { ResponseObject, ResponsesRequest, StoredResponse } from './types.ts';
 
-import { costSchema, finishReasonSchema, newId, parseEventPayload, tokenUsageSchema } from '@monad/protocol';
+import {
+  costSchema,
+  finishReasonSchema,
+  newId,
+  parseEventPayload,
+  sessionIdSchema,
+  tokenUsageSchema
+} from '@monad/protocol';
 import { Elysia } from 'elysia';
 
 import { handleFunctionToolPath } from './function-tools.ts';
@@ -88,7 +95,12 @@ export function createResponsesApiController(
         }
 
         // Validate previous_response_id before any I/O so we fail fast with a 404.
-        const sessionIdOverride = request.headers.get('x-monad-session-id') as SessionId | null;
+        const rawSessionIdOverride = request.headers.get('x-monad-session-id');
+        const parsedSessionIdOverride = rawSessionIdOverride ? sessionIdSchema.safeParse(rawSessionIdOverride) : null;
+        if (parsedSessionIdOverride && !parsedSessionIdOverride.success) {
+          return errorResponse('x-monad-session-id is invalid');
+        }
+        const sessionIdOverride = parsedSessionIdOverride?.data ?? null;
         if (!sessionIdOverride && body.previous_response_id) {
           if (!storedResponses.has(body.previous_response_id)) {
             return errorResponse(

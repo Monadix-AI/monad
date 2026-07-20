@@ -5,7 +5,14 @@ import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
 import type { ChatCompletionRequest, ChatContent, ChatMessage, EmbeddingRequest } from './openai-compat-schemas.ts';
 
 import { timingSafeEqual } from 'node:crypto';
-import { costSchema, finishReasonSchema, newId, parseEventPayload, tokenUsageSchema } from '@monad/protocol';
+import {
+  costSchema,
+  finishReasonSchema,
+  newId,
+  parseEventPayload,
+  sessionIdSchema,
+  tokenUsageSchema
+} from '@monad/protocol';
 import { Elysia } from 'elysia';
 
 import { definePrompt } from '#/agent/prompt-template.ts';
@@ -382,7 +389,12 @@ export function createOpenAiCompatController(
         }
 
         // Resolve or create session
-        const sessionIdOverride = request.headers.get('x-monad-session-id') as SessionId | null;
+        const rawSessionIdOverride = request.headers.get('x-monad-session-id');
+        const parsedSessionIdOverride = rawSessionIdOverride ? sessionIdSchema.safeParse(rawSessionIdOverride) : null;
+        if (parsedSessionIdOverride && !parsedSessionIdOverride.success) {
+          return oaiErrorResponse('x-monad-session-id is invalid');
+        }
+        const sessionIdOverride = parsedSessionIdOverride?.data ?? null;
         let sessionId: SessionId;
         let isNewSession: boolean;
         const userKey = body.user ? `openai-compat:${body.user}` : null;

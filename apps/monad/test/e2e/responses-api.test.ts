@@ -614,6 +614,29 @@ describe('streaming error sanitization', () => {
 // ── x-monad-session-id override ───────────────────────────────────────────────
 
 describe('x-monad-session-id header override', () => {
+  test('malformed session ids are rejected before handler lookup', async () => {
+    const t = serveTransport('tcp', makeApp());
+    const headers = { 'content-type': 'application/json', ...AUTH, 'x-monad-session-id': 'not-a-session' };
+    try {
+      const [responses, chat] = await Promise.all([
+        t.fetch('/openai/v1/responses', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ model: 'default', input: 'hi' })
+        }),
+        t.fetch('/openai/v1/chat/completions', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ model: 'default', messages: [{ role: 'user', content: 'hi' }] })
+        })
+      ]);
+
+      expect([responses.status, chat.status]).toEqual([400, 400]);
+    } finally {
+      await t.stop();
+    }
+  });
+
   test('two requests sharing a session-id header reuse the same session', async () => {
     const t = serveTransport('tcp', makeApp());
     try {
