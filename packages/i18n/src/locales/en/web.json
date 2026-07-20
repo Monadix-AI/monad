@@ -1510,7 +1510,6 @@
   "web.workplace.messageAgents": "Message agents",
   "web.workplace.composerPlaceholder": "Ask for follow-up changes",
   "web.workplace.chooseAgent": "Choose an agent",
-  "web.workplace.directMessageContent": "View direct message",
   "web.workplace.directMessageSent": "{{from}} sent {{to}} a DM.",
   "web.workplace.askedQuestion": "asked you a question",
   "web.workplace.otherAnswer": "Other answer",

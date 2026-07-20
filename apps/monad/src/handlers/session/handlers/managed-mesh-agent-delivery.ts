@@ -246,8 +246,8 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
                 await meshAgentHost.input(existing.id, {
                   input: meshAgentInputText(notice)
                 });
-                if (deliveredSeq > 0) store.markMeshAgentInboxVisible(existing.id, deliveredSeq);
                 store.markMeshAgentInboxDelivered(existing.id, deliveredSeq);
+                if (deliveredSeq > 0) store.markMeshAgentInboxVisible(existing.id, deliveredSeq);
               } catch (err) {
                 await handleDeliveryFailure(member, err);
               }

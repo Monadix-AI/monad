@@ -102,8 +102,7 @@ test('direct-message artifacts project to system events with current display nam
     orderKey: '2026-07-20T00:00:02.000Z',
     directMessage: {
       fromAgentName: 'Lily',
-      toAgentName: 'Steve',
-      text: 'Please review the attached plan.'
+      toAgentName: 'Steve'
     },
     attachments: undefined
   });

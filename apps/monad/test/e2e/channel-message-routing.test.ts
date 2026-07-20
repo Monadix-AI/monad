@@ -914,7 +914,11 @@ for (const kind of TRANSPORTS) {
         { role: 'assistant', text: 'codex public reply', type: 'text' },
         { role: 'assistant', text: 'codex sent claude a DM.', type: 'mesh_agent_direct_message' }
       ]);
-      expect(recordedMessages.at(-1)?.data).toEqual({ message: directBody.message });
+      // The public session transcript gets the DM's identity/timing envelope only — never the
+      // body, which stays participant-only in native_agent_direct_messages.
+      expect(recordedMessages.at(-1)?.data).toEqual({
+        message: { ...(directBody.message as Record<string, unknown>), text: '' }
+      });
       for (const nativeSession of nativeSessions) {
         await t.fetch(`/v1/mesh/sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`, json('POST'));
       }

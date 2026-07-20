@@ -76,10 +76,11 @@ export interface Message {
   systemDetail?: string;
   systemRaw?: unknown;
   systemActions?: Array<{ actionId: string; payload?: unknown }>;
+  /** A DM's content never leaves the two participants' own provider context — the room only
+   *  ever sees that a DM happened, not what it said. */
   directMessage?: {
     fromAgentName: string;
     toAgentName: string;
-    text: string;
   };
   reasoning?: string;
   streaming?: boolean;

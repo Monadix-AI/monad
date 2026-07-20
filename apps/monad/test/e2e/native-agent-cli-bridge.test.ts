@@ -741,7 +741,9 @@ for (const kind of TRANSPORTS) {
       ).toEqual([
         {
           active: true,
-          data: { message: sentBody.message },
+          // The public session transcript gets the DM's identity/timing envelope only — never
+          // the body, which stays participant-only in native_agent_direct_messages.
+          data: { message: { ...(sentBody.message as Record<string, unknown>), text: '' } },
           role: 'assistant',
           streamStatus: 'settled',
           text: 'Lily sent Steve a DM.',
@@ -770,7 +772,7 @@ for (const kind of TRANSPORTS) {
         handlers.store.listMessages(sessionId).map(({ data, role, text, type }) => ({ data, role, text, type }))
       ).toEqual([
         {
-          data: { message: sentBody.message },
+          data: { message: { ...(sentBody.message as Record<string, unknown>), text: '' } },
           role: 'assistant',
           text: 'Lily sent Steve a DM.',
           type: 'mesh_agent_direct_message'

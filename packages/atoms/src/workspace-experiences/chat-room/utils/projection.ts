@@ -115,8 +115,7 @@ export function messageToView(
         orderKey: item.seq,
         directMessage: {
           fromAgentName,
-          toAgentName,
-          text: directMessage.text
+          toAgentName
         }
       };
     }

@@ -136,30 +136,39 @@ export function updateSession(db: Db, id: string, patch: SessionPatch): Session 
   return getSession(db, id);
 }
 
+/** Delete every row owned by a session, across every table that scopes data by session id —
+ *  the single cascade both `deleteSession` and `deleteWorkplaceProject` (per contained session)
+ *  drive from, so the two paths can't drift out of sync again. Does not delete the `sessions`
+ *  row itself. */
+function deleteSessionOwnedData(sqlite: Database, sid: string): void {
+  sqlite
+    .query(
+      'DELETE FROM message_embeddings WHERE message_id IN (SELECT id FROM messages WHERE transcript_target_id = ?)'
+    )
+    .run(sid);
+  sqlite.query('DELETE FROM tasks WHERE session_id = ?').run(sid);
+  sqlite.query('DELETE FROM memory WHERE session_id = ?').run(sid);
+  sqlite.query('DELETE FROM file_observations WHERE session_id = ?').run(sid);
+  sqlite.query('DELETE FROM messages WHERE transcript_target_id = ?').run(sid);
+  sqlite.query('DELETE FROM events WHERE transcript_target_id = ?').run(sid);
+  sqlite.query('DELETE FROM tool_raw_outputs WHERE transcript_target_id = ?').run(sid);
+  sqlite.query('DELETE FROM acp_delegates WHERE session_id = ?').run(sid);
+  sqlite.query('DELETE FROM channel_conversation_sessions WHERE session_id = ?').run(sid);
+  sqlite.query('DELETE FROM channel_conversations WHERE active_session_id = ?').run(sid);
+  sqlite.query('DELETE FROM native_agent_direct_messages WHERE session_id = ?').run(sid);
+  sqlite.query('DELETE FROM message_attachments WHERE session_id = ?').run(sid);
+  sqlite
+    .query(
+      `DELETE FROM mesh_agent_inbox_items
+       WHERE mesh_session_id IN (SELECT id FROM mesh_sessions WHERE transcript_target_id = ?)`
+    )
+    .run(sid);
+  sqlite.query('DELETE FROM mesh_sessions WHERE transcript_target_id = ?').run(sid);
+}
+
 export function deleteSession(sqlite: Database, id: string): boolean {
   const tx = sqlite.transaction((sid: string) => {
-    sqlite
-      .query(
-        'DELETE FROM message_embeddings WHERE message_id IN (SELECT id FROM messages WHERE transcript_target_id = ?)'
-      )
-      .run(sid);
-    sqlite.query('DELETE FROM tasks WHERE session_id = ?').run(sid);
-    sqlite.query('DELETE FROM memory WHERE session_id = ?').run(sid);
-    sqlite.query('DELETE FROM file_observations WHERE session_id = ?').run(sid);
-    sqlite.query('DELETE FROM messages WHERE transcript_target_id = ?').run(sid);
-    sqlite.query('DELETE FROM events WHERE transcript_target_id = ?').run(sid);
-    sqlite.query('DELETE FROM tool_raw_outputs WHERE transcript_target_id = ?').run(sid);
-    sqlite.query('DELETE FROM acp_delegates WHERE session_id = ?').run(sid);
-    sqlite.query('DELETE FROM channel_conversation_sessions WHERE session_id = ?').run(sid);
-    sqlite.query('DELETE FROM channel_conversations WHERE active_session_id = ?').run(sid);
-    sqlite.query('DELETE FROM native_agent_direct_messages WHERE project_id = ?').run(sid);
-    sqlite
-      .query(
-        `DELETE FROM mesh_agent_inbox_items
-         WHERE mesh_session_id IN (SELECT id FROM mesh_sessions WHERE transcript_target_id = ?)`
-      )
-      .run(sid);
-    sqlite.query('DELETE FROM mesh_sessions WHERE transcript_target_id = ?').run(sid);
+    deleteSessionOwnedData(sqlite, sid);
     return sqlite.query('DELETE FROM sessions WHERE id = ?').run(sid).changes;
   });
   return tx(id) > 0;
@@ -225,23 +234,23 @@ export function updateWorkplaceProject(db: Db, id: string, patch: WorkplaceProje
 
 export function deleteWorkplaceProject(sqlite: Database, id: string): boolean {
   const tx = sqlite.transaction((projectId: string) => {
-    sqlite
-      .query(
-        'DELETE FROM message_embeddings WHERE message_id IN (SELECT id FROM messages WHERE transcript_target_id = ?)'
-      )
-      .run(projectId);
-    sqlite.query('DELETE FROM file_observations WHERE session_id = ?').run(projectId);
-    sqlite.query('DELETE FROM messages WHERE transcript_target_id = ?').run(projectId);
-    sqlite.query('DELETE FROM events WHERE transcript_target_id = ?').run(projectId);
-    sqlite.query('DELETE FROM tool_raw_outputs WHERE transcript_target_id = ?').run(projectId);
-    sqlite.query('DELETE FROM native_agent_direct_messages WHERE project_id = ?').run(projectId);
-    sqlite
-      .query(
-        `DELETE FROM mesh_agent_inbox_items
-         WHERE mesh_session_id IN (SELECT id FROM mesh_sessions WHERE transcript_target_id = ?)`
-      )
-      .run(projectId);
-    sqlite.query('DELETE FROM mesh_sessions WHERE transcript_target_id = ?').run(projectId);
+    // Sessions are owned by the project (`sessions.project_id`), not scoped to it by a shared
+    // transcript id — this function used to delete `WHERE transcript_target_id = projectId` /
+    // `WHERE project_id = projectId` against tables keyed by *session* id, which never matched a
+    // `prj_*` value and left every contained session's messages, events, DMs, and attachments
+    // behind. Delete each owned session (and everything it owns) explicitly instead.
+    const sessionIds = (
+      sqlite.query('SELECT id FROM sessions WHERE project_id = ?').all(projectId) as Array<{
+        id: string;
+      }>
+    ).map((row) => row.id);
+    for (const sid of sessionIds) deleteSessionOwnedData(sqlite, sid);
+    if (sessionIds.length > 0) {
+      sqlite.query(`DELETE FROM sessions WHERE id IN (${sessionIds.map(() => '?').join(',')})`).run(...sessionIds);
+    }
+    sqlite.query('DELETE FROM experience_state WHERE project_id = ?').run(projectId);
+    sqlite.query('DELETE FROM experience_state_events WHERE project_id = ?').run(projectId);
+    sqlite.query('DELETE FROM experience_worker_wakeups WHERE project_id = ?').run(projectId);
     return sqlite.query('DELETE FROM workplace_projects WHERE id = ?').run(projectId).changes;
   });
   return tx(id) > 0;

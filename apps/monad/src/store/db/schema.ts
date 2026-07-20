@@ -341,7 +341,7 @@ export const messageAttachments = sqliteTable(
   'message_attachments',
   {
     id: text('id').primaryKey(),
-    projectId: text('project_id').notNull(),
+    sessionId: text('session_id').notNull(),
     path: text('path').notNull(),
     name: text('name').notNull(),
     mime: text('mime').notNull(),
@@ -350,14 +350,14 @@ export const messageAttachments = sqliteTable(
     createdBy: text('created_by'),
     createdAt: text('created_at').notNull()
   },
-  (table) => [index('idx_message_attachments_project').on(table.projectId)]
+  (table) => [index('idx_message_attachments_session').on(table.sessionId)]
 );
 
 export const nativeAgentDirectMessages = sqliteTable(
   'native_agent_direct_messages',
   {
     id: text('id').primaryKey(),
-    projectId: text('project_id').notNull(),
+    sessionId: text('session_id').notNull(),
     meshSessionId: text('mesh_session_id').notNull(),
     fromAgent: text('from_agent'),
     peer: text('peer').notNull(),
@@ -367,8 +367,8 @@ export const nativeAgentDirectMessages = sqliteTable(
   },
   (table) => [
     index('idx_native_agent_direct_messages_session_peer').on(table.meshSessionId, table.peer, table.createdAt),
-    index('idx_native_agent_direct_messages_project_pair').on(
-      table.projectId,
+    index('idx_native_agent_direct_messages_session_pair').on(
+      table.sessionId,
       table.fromAgent,
       table.peer,
       table.createdAt

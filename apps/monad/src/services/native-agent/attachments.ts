@@ -142,7 +142,7 @@ export function createNativeAgentAttachmentResolver(
     const attachments = store.registerMessageAttachments(
       snapshots.map(({ ref, preview }) => ({
         id: newId('att'),
-        projectId: binding.sessionId,
+        sessionId: binding.sessionId,
         ...ref,
         preview,
         createdBy: binding.agentId,
@@ -159,7 +159,7 @@ export function createNativeAgentAttachmentReader(
   attachmentRoots: NativeAgentAttachmentRoots
 ) {
   async function currentAttachmentPath(
-    attachment: MessageAttachmentRef & { projectId: string; createdBy: string | null }
+    attachment: MessageAttachmentRef & { sessionId: string; createdBy: string | null }
   ): Promise<string> {
     let resolved: string;
     try {
@@ -176,10 +176,10 @@ export function createNativeAgentAttachmentReader(
         'ATTACHMENT_PATH_CHANGED'
       );
     }
-    const session = store.getSession(attachment.projectId as SessionId);
+    const session = store.getSession(attachment.sessionId as SessionId);
     const allowedRootRealpaths = await resolveAllowedRootRealpaths(
       attachmentRoots({
-        sessionId: attachment.projectId as SessionId,
+        sessionId: attachment.sessionId as SessionId,
         agentId: attachment.createdBy ?? '',
         workingPath: session?.cwd
       })
@@ -198,7 +198,7 @@ export function createNativeAgentAttachmentReader(
     async read(id: string, download: boolean): Promise<Response | AttachmentReadResponse> {
       const attachment = store.getMessageAttachment(id);
       if (!attachment) throw new HandlerError('not_found', `attachment not found: ${id}`);
-      const { projectId: _projectId, preview: _preview, createdBy: _createdBy, ...ref } = attachment;
+      const { sessionId: _sessionId, preview: _preview, createdBy: _createdBy, ...ref } = attachment;
       const path = await currentAttachmentPath(attachment);
       const file = Bun.file(path);
       if (download) {

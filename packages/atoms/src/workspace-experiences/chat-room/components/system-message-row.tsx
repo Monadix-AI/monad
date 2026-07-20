@@ -4,7 +4,7 @@ import type { MessageRowLabels } from './message-row.tsx';
 
 import { Mail01Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { ProductIcon, Tooltip, TooltipContent, TooltipTrigger, WorkspaceSystemEventCard } from '@monad/ui';
+import { ProductIcon, WorkspaceSystemEventCard } from '@monad/ui';
 import {
   AgentIdentity,
   AgentInstanceAvatar,
@@ -74,30 +74,12 @@ export function SystemMessageRow({
           <span className="inline-flex min-w-0 items-center gap-2 text-muted-foreground">
             <span className="min-w-0 truncate">{directMessageText}</span>
             {msg.directMessage ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    aria-label={labels?.directMessageContent ?? msg.directMessage.text}
-                    className="workplace-action inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
-                    title={msg.directMessage.text}
-                    type="button"
-                  >
-                    <HugeiconsIcon
-                      aria-hidden="true"
-                      icon={Mail01Icon}
-                      size={14}
-                      strokeWidth={2}
-                    />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent
-                  className="max-w-sm whitespace-pre-wrap break-words text-left text-sm"
-                  side="top"
-                  sideOffset={6}
-                >
-                  {msg.directMessage.text}
-                </TooltipContent>
-              </Tooltip>
+              <HugeiconsIcon
+                aria-hidden="true"
+                icon={Mail01Icon}
+                size={14}
+                strokeWidth={2}
+              />
             ) : null}
             {resolvedActions?.map(({ action, payload }) => (
               <button

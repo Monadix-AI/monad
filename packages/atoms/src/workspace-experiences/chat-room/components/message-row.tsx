@@ -23,7 +23,6 @@ import { resolveLocalFileReference } from '../utils/local-file-reference.ts';
 import { SystemMessageRow, TIME_STYLE } from './system-message-row.tsx';
 
 export type MessageRowLabels = {
-  directMessageContent?: string;
   directMessageSent?: (from: string, to: string) => string;
   observe?: string;
   retry?: string;

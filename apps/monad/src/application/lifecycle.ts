@@ -273,7 +273,8 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     reloadTargets,
     schedule,
     watchers: watchService,
-    channels: channelService
+    channels: channelService,
+    meshAgents: { stopAll: handlers._stopMeshAgents }
   });
 
   // Monadix provider presence: one registration + realtime subscription PER public agent

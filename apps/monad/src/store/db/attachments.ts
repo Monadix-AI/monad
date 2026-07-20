@@ -8,7 +8,7 @@ import type { MessageAttachmentRef } from '@monad/protocol';
 /** Insert shape for the attachment registry — the ref fields plus registry-only metadata. */
 export interface MessageAttachmentInsert {
   id: string;
-  projectId: string;
+  sessionId: string;
   path: string;
   name: string;
   mime: string;
@@ -55,12 +55,12 @@ export function registerMessageAttachment(sqlite: Database, att: MessageAttachme
   sqlite
     .query(
       `INSERT INTO message_attachments
-        (id, project_id, path, name, mime, bytes, preview, created_by, created_at)
-       VALUES ($id, $projectId, $path, $name, $mime, $bytes, $preview, $createdBy, $createdAt)`
+        (id, session_id, path, name, mime, bytes, preview, created_by, created_at)
+       VALUES ($id, $sessionId, $path, $name, $mime, $bytes, $preview, $createdBy, $createdAt)`
     )
     .run({
       $id: att.id,
-      $projectId: att.projectId,
+      $sessionId: att.sessionId,
       $path: att.path,
       $name: att.name,
       $mime: att.mime,
@@ -91,7 +91,7 @@ export function deleteMessageAttachments(sqlite: Database, ids: readonly string[
 }
 
 export type MessageAttachmentDetail = MessageAttachmentRef & {
-  projectId: string;
+  sessionId: string;
   preview: string;
   createdBy: string | null;
 };
@@ -108,7 +108,7 @@ export function getMessageAttachment(sqlite: Database, id: string): MessageAttac
       bytes: row.bytes as number,
       createdAt: row.created_at as string
     }),
-    projectId: row.project_id as string,
+    sessionId: row.session_id as string,
     preview: row.preview as string,
     createdBy: (row.created_by as string | null) ?? null
   };

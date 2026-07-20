@@ -108,7 +108,8 @@ test('generated migrations exactly embed the source Drizzle history', () => {
   expect(journal.entries.map((entry) => entry.tag)).toEqual([
     '0000_initial-schema',
     '0001_message-fts',
-    '0002_inbox-read-state'
+    '0002_inbox-read-state',
+    '0003_rename-attachment-dm-session-columns'
   ]);
   expect(LATEST_MIGRATION_TIMESTAMP).toBe(newest.when);
   expect(MIGRATIONS).toEqual(

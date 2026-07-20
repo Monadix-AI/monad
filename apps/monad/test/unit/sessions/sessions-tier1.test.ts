@@ -164,6 +164,88 @@ test('workplace projects use explicit project storage instead of agent sessions'
   store.close();
 });
 
+test('deleteWorkplaceProject cascades data owned by its sessions and leaves unrelated sessions alone', () => {
+  const store = createStore();
+  const project = fixtureProject();
+  const owned = fixtureSession({ projectId: project.id });
+  const unrelated = fixtureSession();
+  const now = new Date().toISOString();
+
+  store.insertWorkplaceProject(project);
+  store.insertSession(owned);
+  store.insertSession(unrelated);
+  store.insertMessage(newId('msg'), owned.id, 'hi', now, 'user');
+  store.insertMessage(newId('msg'), unrelated.id, 'hi', now, 'user');
+  store.insertTask({
+    id: newId('tsk'),
+    sessionId: owned.id,
+    title: 'project task',
+    assigneeAgentId: null,
+    dependsOn: [],
+    state: 'pending',
+    version: 0,
+    createdAt: now,
+    updatedAt: now
+  });
+  store.registerMessageAttachment({
+    id: newId('att'),
+    sessionId: owned.id,
+    path: '/tmp/project-report.md',
+    name: 'report.md',
+    mime: 'text/markdown',
+    bytes: 10,
+    preview: 'preview',
+    createdAt: now
+  });
+  store.upsertMeshSession({
+    id: 'mesh_cascadeproj00',
+    transcriptTargetId: owned.id,
+    agentName: 'codex',
+    provider: 'codex',
+    workingPath: '/tmp',
+    runtimeRole: 'interactive',
+    agentRuntimeId: null,
+    agentRuntimeTokenHash: null,
+    lastDeliveredSeq: 0,
+    lastVisibleSeq: 0,
+    state: 'running',
+    pid: null,
+    providerSessionRef: null,
+    outputSnapshot: '',
+    exitCode: null,
+    startedAt: now,
+    updatedAt: now,
+    exitedAt: null
+  });
+  store.insertNativeAgentDirectMessage({
+    id: newId('msg'),
+    sessionId: owned.id,
+    meshSessionId: 'mesh_cascadeproj00',
+    fromAgent: 'codex',
+    peer: 'claude',
+    text: 'project-scoped private message',
+    createdAt: now
+  });
+  store.compareAndSwapExperienceState({
+    atomPackId: 'atom_test',
+    projectId: project.id,
+    key: 'ctx:summary',
+    expectedVersion: null,
+    value: { summary: 'project experience state' },
+    event: { kind: 'set' }
+  });
+
+  expect(store.deleteWorkplaceProject(project.id)).toBe(true);
+
+  expect(store.getSession(owned.id)).toBeNull();
+  expect(store.getSession(unrelated.id)?.id).toBe(unrelated.id);
+  expect(store.listMessages(owned.id)).toHaveLength(0);
+  expect(store.listMessages(unrelated.id)).toHaveLength(1);
+  expect(store.listNativeAgentDirectMessages('mesh_cascadeproj00', 'claude')).toHaveLength(0);
+  expect(store.getExperienceState('atom_test', project.id, 'ctx:summary')).toBeNull();
+  store.close();
+});
+
 test('deleteSession cascades session-owned project data', () => {
   const store = createStore();
   const s = fixtureSession();

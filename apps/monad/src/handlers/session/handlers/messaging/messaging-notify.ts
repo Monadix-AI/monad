@@ -75,6 +75,10 @@ export function createMessagingNotifyHandlers(
       if (recipient && to !== fromAgentName) {
         const fromDisplayName = meshAgentProjectMemberDisplayNameForAgent(store, message.sessionId, fromAgentName);
         const toDisplayName = meshAgentProjectMemberDisplayName(recipient);
+        // DM content is participant-only: it lives in native_agent_direct_messages and reaches
+        // only the two participants' own provider context. The public session transcript gets
+        // the identity/timing envelope only — never the body or its attachments.
+        const { text: _text, attachments: _attachments, ...envelope } = message;
         await messageIngress.deliver({
           transcriptTargetId: message.sessionId,
           idempotencyKey: messageIdempotencyKey('native-agent-direct-message', message.id),
@@ -82,7 +86,7 @@ export function createMessagingNotifyHandlers(
           role: 'assistant',
           type: 'mesh_agent_direct_message',
           text: `${fromDisplayName} sent ${toDisplayName} a DM.`,
-          data: { message }
+          data: { message: { ...envelope, text: '' } }
         });
       }
       await deliverDirectMessageToManagedMeshAgentMember({

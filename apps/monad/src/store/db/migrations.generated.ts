@@ -80,7 +80,40 @@ export const MIGRATIONS: MigrationMeta[] = [
     "bps": true,
     "folderMillis": 1784570505472,
     "hash": "d6d37237afb74b93a7e514af1814b2c6c82f0a67ec713a38d4420a896b0674da"
+  },
+  {
+    "sql": [
+      "-- Custom SQL migration file, put your code below! --\n-- `message_attachments.project_id` and `native_agent_direct_messages.project_id` have always held\n-- a session id (transcript_target_id / mesh session's session), never a `prj_*` Workplace Project\n-- id. The column name was wrong from day one, which made every delete path keyed on it silently\n-- match zero rows. Rename to the value the column actually holds.\nALTER TABLE `message_attachments` RENAME COLUMN `project_id` TO `session_id`;\n",
+      "\nDROP INDEX `idx_message_attachments_project`;\n",
+      "\nCREATE INDEX `idx_message_attachments_session` ON `message_attachments` (`session_id`);\n",
+      "\nALTER TABLE `native_agent_direct_messages` RENAME COLUMN `project_id` TO `session_id`;\n",
+      "\nDROP INDEX `idx_native_agent_direct_messages_project_pair`;\n",
+      "\nCREATE INDEX `idx_native_agent_direct_messages_session_pair` ON `native_agent_direct_messages` (`session_id`,`from_agent`,`peer`,`created_at`);\n",
+      "\n\n-- Repair pass — two independent leaks the rename above does not fix by itself:\n--\n-- (A) `deleteWorkplaceProject` never cascaded to the sessions it owns: it deleted rows matching\n--     `transcript_target_id = <prj_id>` / `project_id = <prj_id>`, which never matched anything\n--     scoped by session id, and it never touched the `sessions` table at all. A project delete\n--     left every contained session's messages, events, tool output, DMs, and attachments in\n--     place, with the session still pointing at a `project_id` that no longer resolves.\n--\n-- (B) `deleteSession` used the same mislabeled `project_id` column for direct messages and (once\n--     attachments existed) would have missed attachments too, leaving those two tables' rows\n--     behind for sessions that otherwise deleted cleanly.\n--\n-- Both leave orphaned data now that ownership is named correctly, so purge it in one pass: first\n-- everything owned by a \"zombie\" session (a session whose project was deleted out from under it),\n-- then the zombie sessions themselves, then anything in the two renamed tables that still points\n-- at a session id no longer present at all (case B).\n\nDELETE FROM `message_embeddings`\nWHERE `message_id` IN (\n  SELECT `id` FROM `messages` WHERE `transcript_target_id` IN (\n    SELECT `id` FROM `sessions`\n    WHERE `project_id` IS NOT NULL AND `project_id` NOT IN (SELECT `id` FROM `workplace_projects`)\n  )\n);\n",
+      "\nDELETE FROM `tasks`\nWHERE `session_id` IN (\n  SELECT `id` FROM `sessions`\n  WHERE `project_id` IS NOT NULL AND `project_id` NOT IN (SELECT `id` FROM `workplace_projects`)\n);\n",
+      "\nDELETE FROM `memory`\nWHERE `session_id` IN (\n  SELECT `id` FROM `sessions`\n  WHERE `project_id` IS NOT NULL AND `project_id` NOT IN (SELECT `id` FROM `workplace_projects`)\n);\n",
+      "\nDELETE FROM `file_observations`\nWHERE `session_id` IN (\n  SELECT `id` FROM `sessions`\n  WHERE `project_id` IS NOT NULL AND `project_id` NOT IN (SELECT `id` FROM `workplace_projects`)\n);\n",
+      "\nDELETE FROM `messages`\nWHERE `transcript_target_id` IN (\n  SELECT `id` FROM `sessions`\n  WHERE `project_id` IS NOT NULL AND `project_id` NOT IN (SELECT `id` FROM `workplace_projects`)\n);\n",
+      "\nDELETE FROM `events`\nWHERE `transcript_target_id` IN (\n  SELECT `id` FROM `sessions`\n  WHERE `project_id` IS NOT NULL AND `project_id` NOT IN (SELECT `id` FROM `workplace_projects`)\n);\n",
+      "\nDELETE FROM `tool_raw_outputs`\nWHERE `transcript_target_id` IN (\n  SELECT `id` FROM `sessions`\n  WHERE `project_id` IS NOT NULL AND `project_id` NOT IN (SELECT `id` FROM `workplace_projects`)\n);\n",
+      "\nDELETE FROM `acp_delegates`\nWHERE `session_id` IN (\n  SELECT `id` FROM `sessions`\n  WHERE `project_id` IS NOT NULL AND `project_id` NOT IN (SELECT `id` FROM `workplace_projects`)\n);\n",
+      "\nDELETE FROM `channel_conversation_sessions`\nWHERE `session_id` IN (\n  SELECT `id` FROM `sessions`\n  WHERE `project_id` IS NOT NULL AND `project_id` NOT IN (SELECT `id` FROM `workplace_projects`)\n);\n",
+      "\nDELETE FROM `channel_conversations`\nWHERE `active_session_id` IN (\n  SELECT `id` FROM `sessions`\n  WHERE `project_id` IS NOT NULL AND `project_id` NOT IN (SELECT `id` FROM `workplace_projects`)\n);\n",
+      "\nDELETE FROM `mesh_agent_inbox_items`\nWHERE `mesh_session_id` IN (\n  SELECT `id` FROM `mesh_sessions` WHERE `transcript_target_id` IN (\n    SELECT `id` FROM `sessions`\n    WHERE `project_id` IS NOT NULL AND `project_id` NOT IN (SELECT `id` FROM `workplace_projects`)\n  )\n);\n",
+      "\nDELETE FROM `mesh_sessions`\nWHERE `transcript_target_id` IN (\n  SELECT `id` FROM `sessions`\n  WHERE `project_id` IS NOT NULL AND `project_id` NOT IN (SELECT `id` FROM `workplace_projects`)\n);\n",
+      "\nDELETE FROM `native_agent_direct_messages`\nWHERE `session_id` IN (\n  SELECT `id` FROM `sessions`\n  WHERE `project_id` IS NOT NULL AND `project_id` NOT IN (SELECT `id` FROM `workplace_projects`)\n);\n",
+      "\nDELETE FROM `message_attachments`\nWHERE `session_id` IN (\n  SELECT `id` FROM `sessions`\n  WHERE `project_id` IS NOT NULL AND `project_id` NOT IN (SELECT `id` FROM `workplace_projects`)\n);\n",
+      "\nDELETE FROM `sessions`\nWHERE `project_id` IS NOT NULL AND `project_id` NOT IN (SELECT `id` FROM `workplace_projects`);\n",
+      "\nDELETE FROM `experience_state` WHERE `project_id` NOT IN (SELECT `id` FROM `workplace_projects`);\n",
+      "\nDELETE FROM `experience_state_events` WHERE `project_id` NOT IN (SELECT `id` FROM `workplace_projects`);\n",
+      "\nDELETE FROM `experience_worker_wakeups` WHERE `project_id` NOT IN (SELECT `id` FROM `workplace_projects`);\n",
+      "\n\n-- Case (B): rows in the two renamed tables left behind by an individually-deleted session (the\n-- session row itself is already gone, so these can't be reached by the project-zombie sweep above).\nDELETE FROM `native_agent_direct_messages`\nWHERE `session_id` NOT IN (SELECT `id` FROM `sessions`);\n",
+      "\nDELETE FROM `message_attachments`\nWHERE `session_id` NOT IN (SELECT `id` FROM `sessions`);\n"
+    ],
+    "bps": true,
+    "folderMillis": 1784575466826,
+    "hash": "ab415f7c831c57ea3c966798a812617ee64d958399a56db13534c04f6449553e"
   }
 ];
 
-export const LATEST_MIGRATION_TIMESTAMP = 1784570505472;
+export const LATEST_MIGRATION_TIMESTAMP = 1784575466826;

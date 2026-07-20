@@ -176,7 +176,7 @@ test('MeshAgent inbox delivery and visible cursors update queued item state', ()
 test('message attachments register a file reference snapshot, not content', () => {
   const ref = store.registerMessageAttachment({
     id: 'att_100000000000',
-    projectId: 'ses_project00000',
+    sessionId: 'ses_project00000',
     path: '/tmp/project/report.md',
     name: 'report.md',
     mime: 'text/markdown',
@@ -197,7 +197,7 @@ test('message attachments register a file reference snapshot, not content', () =
   const fetched = store.getMessageAttachment('att_100000000000');
   expect(fetched).toMatchObject({
     id: 'att_100000000000',
-    projectId: 'ses_project00000',
+    sessionId: 'ses_project00000',
     path: '/tmp/project/report.md'
   });
 });
@@ -213,7 +213,7 @@ test('message attachment reader rejects paths that changed after registration', 
     await writeFile(file, 'inside report');
     store.registerMessageAttachment({
       id: 'att_100000000000',
-      projectId: 'ses_project00000',
+      sessionId: 'ses_project00000',
       path: file,
       name: 'report.md',
       mime: 'text/markdown',
@@ -240,7 +240,7 @@ test('native agent direct messages round-trip an attachment reference', () => {
   store.upsertMeshSession({ ...row, id: 'mesh_direct000000' });
   const ref = store.registerMessageAttachment({
     id: 'att_100000000000',
-    projectId: 'ses_project00000',
+    sessionId: 'ses_project00000',
     path: '/tmp/project/report.md',
     name: 'report.md',
     mime: 'text/markdown',
@@ -487,7 +487,7 @@ test('deleteSession cleans up MeshAgent session rows', () => {
   });
   expect(store.listNativeAgentDirectMessages('mesh_100000000000', 'claude')).toHaveLength(1);
 
-  store.deleteWorkplaceProject('ses_project00000');
+  store.deleteSession('ses_project00000');
 
   store.upsertMeshSession(row);
   expect(store.enqueueMeshAgentInboxItem('mesh_100000000000', 1)).toBe(true);

@@ -323,7 +323,7 @@ test('active project-message fan-out returns after queueing without waiting for 
     await fanout;
   }
   await Bun.sleep(0);
-  expect(transitions).toEqual(['input-started', 'fanout-returned', 'input-finished', 'visible:21', 'delivered:21']);
+  expect(transitions).toEqual(['input-started', 'fanout-returned', 'input-finished', 'delivered:21', 'visible:21']);
 });
 
 test('project-message fan-out resumes a pending unauthenticated member after login resolves', async () => {

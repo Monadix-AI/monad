@@ -11,12 +11,12 @@ export function insertNativeAgentDirectMessage(sqlite: Database, row: NativeAgen
   sqlite
     .query(
       `INSERT INTO native_agent_direct_messages
-        (id, project_id, mesh_session_id, from_agent, peer, text, attachment_ids, created_at)
-       VALUES ($id, $projectId, $meshSessionId, $fromAgent, $peer, $text, $attachmentIds, $createdAt)`
+        (id, session_id, mesh_session_id, from_agent, peer, text, attachment_ids, created_at)
+       VALUES ($id, $sessionId, $meshSessionId, $fromAgent, $peer, $text, $attachmentIds, $createdAt)`
     )
     .run({
       $id: row.id,
-      $projectId: row.sessionId,
+      $sessionId: row.sessionId,
       $meshSessionId: row.meshSessionId,
       $fromAgent: row.fromAgent,
       $peer: row.peer,
@@ -36,12 +36,12 @@ export function listNativeAgentDirectMessages(
   if (!session) return [];
   const binds: Record<string, string | number> = {
     $meshSessionId: meshSessionId,
-    $projectId: session.transcriptTargetId,
+    $sessionId: session.transcriptTargetId,
     $self: session.agentName,
     $peer: peer
   };
   const clauses = [
-    'project_id = $projectId',
+    'session_id = $sessionId',
     '((from_agent = $self AND peer = $peer) OR (from_agent = $peer AND peer = $self))'
   ];
   if (opts.before) {
@@ -68,7 +68,7 @@ export function listNativeAgentDirectMessages(
       .filter((ref): ref is MessageAttachmentRef => ref !== undefined);
     return {
       id: row.id as NativeAgentDirectMessage['id'],
-      sessionId: row.project_id as NativeAgentDirectMessage['sessionId'],
+      sessionId: row.session_id as NativeAgentDirectMessage['sessionId'],
       meshSessionId: row.mesh_session_id as string,
       fromAgent: (row.from_agent as string | null) ?? null,
       peer: row.peer as string,

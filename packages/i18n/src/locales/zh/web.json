@@ -1509,7 +1509,6 @@
   "web.workplace.messageAgents": "给 agent 发消息",
   "web.workplace.composerPlaceholder": "请求后续修改",
   "web.workplace.chooseAgent": "选择 agent",
-  "web.workplace.directMessageContent": "查看私信",
   "web.workplace.directMessageSent": "{{from}} 向 {{to}} 发送了一条私信。",
   "web.workplace.askedQuestion": "向你提了一个问题",
   "web.workplace.otherAnswer": "其他回答",

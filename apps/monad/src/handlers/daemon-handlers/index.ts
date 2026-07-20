@@ -112,7 +112,10 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
     authStatusTimeoutMs: deps.meshAgentAuthStatusTimeoutMs
   });
   void meshAgentHost.reconcileOrphanedSessions();
-  process.on('exit', () => meshAgentHost.stopAll());
+  // Stopped explicitly via `_stopMeshAgents` in the graceful-shutdown sequence (transports/shutdown.ts),
+  // before the store lifecycle module closes its DB connection — `stop()` below persists each mesh
+  // session's exit state, so it must run while the store is still open. A `process.on('exit', ...)`
+  // handler here would race the store's own exit handler with no ordering guarantee.
 
   const init = createInitHandlers(paths, mockMode, deps.log);
   const messageIngress = deps.messageIngress ?? createMessageIngress({ store: deps.store, bus: deps.bus });
@@ -479,6 +482,7 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
       store: deps.store,
       config: deps.configManager
     }),
+    _stopMeshAgents: () => meshAgentHost.stopAll(),
     _nativeAgentStore: deps.store,
     _nativeAgentSessionMembers: nativeAgentSessionMembers,
     _nativeAgentAttachmentRoots: (args: { sessionId: string; agentId: string; workingPath?: string | null }) => {

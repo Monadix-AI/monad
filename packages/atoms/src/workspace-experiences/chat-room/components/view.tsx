@@ -193,7 +193,6 @@ export function ChatRoomExperienceView({ runtime }: { runtime: ChatRoomExperienc
         createElement(ChatTranscript, {
           labels: {
             connectInStudio: t('web.workplace.emptyConnectInStudio'),
-            directMessageContent: t('web.workplace.directMessageContent'),
             directMessageSent: (from: string, to: string) => t('web.workplace.directMessageSent', { from, to }),
             emptyDescription: t('web.workplace.emptyChatDescription'),
             emptyTitle: t('web.workplace.emptyChatTitle'),
