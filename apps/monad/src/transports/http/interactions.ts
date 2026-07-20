@@ -10,7 +10,11 @@ import {
 } from '@monad/protocol';
 import { Elysia } from 'elysia';
 
-import { startSseHeartbeat } from '#/transports/http/sessions/sse.ts';
+import {
+  createBoundedSseEncoderSink,
+  createByteBoundedSseStream,
+  startSseHeartbeat
+} from '#/transports/http/sessions/sse.ts';
 
 export function createInteractionsController(service: HostInteractionService, options: { heartbeatMs?: number } = {}) {
   return new Elysia({ tags: ['http-only'] })
@@ -19,13 +23,20 @@ export function createInteractionsController(service: HostInteractionService, op
       const encoder = new TextEncoder();
       let unsubscribe = () => {};
       let stopHeartbeat = () => {};
-      const body = new ReadableStream<Uint8Array>({
+      const body = createByteBoundedSseStream({
         start(controller) {
           stopHeartbeat = startSseHeartbeat(controller, encoder, options.heartbeatMs);
-          const send = (event: unknown) =>
-            controller.enqueue(encoder.encode(`event: interaction\ndata: ${JSON.stringify(event)}\n\n`));
+          const sink = createBoundedSseEncoderSink(
+            controller,
+            (frame: string) => encoder.encode(frame),
+            () => {
+              stopHeartbeat();
+              unsubscribe();
+            }
+          );
+          const send = (event: unknown) => sink(`event: interaction\ndata: ${JSON.stringify(event)}\n\n`);
           const pending = service.listPending();
-          if (pending.length === 0) controller.enqueue(encoder.encode(': connected\n\n'));
+          if (pending.length === 0) sink(': connected\n\n');
           for (const interaction of pending) send({ type: 'upsert', interaction });
           unsubscribe = service.subscribe(send);
         },

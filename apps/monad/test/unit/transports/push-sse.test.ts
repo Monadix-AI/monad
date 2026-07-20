@@ -1,6 +1,10 @@
 import { expect, test } from 'bun:test';
 
-import { createPushSseResponse, startSseHeartbeat } from '#/transports/http/sessions/sse.ts';
+import {
+  createByteBoundedSseStream,
+  createPushSseResponse,
+  startSseHeartbeat
+} from '#/transports/http/sessions/sse.ts';
 
 const encoder = new TextEncoder();
 const encode = (v: { n: number }): Uint8Array => encoder.encode(`event: t\ndata: ${JSON.stringify(v)}\n\n`);
@@ -112,7 +116,7 @@ test('disposes the subscription when the client cancels', async () => {
 test('startSseHeartbeat emits keepalive comments on interval and stops when cancelled', async () => {
   const encoder = new TextEncoder();
   let stop: (() => void) | undefined;
-  const stream = new ReadableStream<Uint8Array>({
+  const stream = createByteBoundedSseStream({
     start(ctrl) {
       stop = startSseHeartbeat(ctrl, encoder, 10);
     },
