@@ -1,4 +1,5 @@
-import type { AgentObservationCard, AgentObservationEvent } from '@monad/protocol';
+import type { AgentObservationEvent } from '@monad/protocol';
+import type { AgentObservationCard } from '../../../../../packages/atoms/src/agent-adapters/observation-cards.ts';
 import type { RawFrameRow } from '../../../../../packages/atoms/src/workspace-experiences/chat-room/components/observation/raw-view.ts';
 
 import { useCallback, useRef, useState } from 'react';

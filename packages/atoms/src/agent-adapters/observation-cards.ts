@@ -1,4 +1,34 @@
-import type { AgentObservationCard, AgentObservationEvent } from '@monad/protocol';
+import type { AgentObservationEvent } from '@monad/protocol';
+
+import { agentObservationProvenanceSchema } from '@monad/protocol';
+import { z } from 'zod';
+
+// The experience layer's view model grouping/pairing neutral `AgentObservationEvent`s into
+// renderable units (a tool call+result pair, a codex MCP startup-progress collapse, …). The daemon
+// never produces or parses this — only `agentObservationCards()` below constructs it — so it lives
+// here rather than in `@monad/protocol` or the third-party `@monad/sdk-atom` authoring contract.
+export const agentObservationCardKindSchema = z.enum([
+  'message',
+  'reasoning',
+  'tool',
+  'turn',
+  'diagnostic',
+  'system',
+  'unknown',
+  'codex-mcp-startup-progress'
+]);
+export type AgentObservationCardKind = z.infer<typeof agentObservationCardKindSchema>;
+
+export const agentObservationCardSchema = z.object({
+  id: z.string().min(1),
+  dedupeKey: z.string().min(1).optional(),
+  kind: agentObservationCardKindSchema,
+  streaming: z.boolean(),
+  payload: z.record(z.string(), z.unknown()),
+  provenance: agentObservationProvenanceSchema,
+  at: z.string().optional()
+});
+export type AgentObservationCard = z.infer<typeof agentObservationCardSchema>;
 
 function eventIdentity(event: AgentObservationEvent): string {
   return event.id;

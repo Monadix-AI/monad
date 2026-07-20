@@ -1,4 +1,4 @@
-import type { AgentObservationCard } from '@monad/protocol';
+import type { AgentObservationCard } from '../../../../agent-adapters/observation-cards.ts';
 import type { MeshAgentStreamView } from '../../../experience/types.ts';
 import type { ObservationItem, ObservationTimelineEntry } from './types.ts';
 

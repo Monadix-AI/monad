@@ -1,4 +1,5 @@
-import type { AgentObservationCard, MeshSessionView } from '@monad/protocol';
+import type { MeshSessionView } from '@monad/protocol';
+import type { AgentObservationCard } from '../../src/agent-adapters/observation-cards.ts';
 import type { Message } from '../../src/workspace-experiences/experience/types.ts';
 
 import { expect, test } from 'bun:test';

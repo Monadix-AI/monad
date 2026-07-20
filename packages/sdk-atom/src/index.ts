@@ -176,7 +176,7 @@ import type {
 } from './sandbox.ts';
 
 import { MeshAgentError, meshAgentOutputEventSchema } from './agent-adapter.ts';
-import { toFallbackAgentObservationEvent } from './agent-observation.ts';
+import { canonicalJson, contentHash, toFallbackAgentObservationEvent } from './agent-observation.ts';
 import { defaultBinProbes, resolveBinary } from './bin-probes.ts';
 import { assertChannelInbound, createChannelTestHarness, defineChannel, parseChannelManifest } from './channel.ts';
 import { defineCommand } from './command.ts';
@@ -354,7 +354,9 @@ export type {
 
 export {
   assertChannelInbound,
+  canonicalJson,
   configureSandboxCredential,
+  contentHash,
   createChannelTestHarness,
   defaultBinProbes,
   defineChannel,

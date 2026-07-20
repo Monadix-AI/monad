@@ -1,6 +1,7 @@
-import type { AgentObservationCard, AgentObservationEvent } from '@monad/protocol';
+import type { AgentObservationEvent } from '@monad/protocol';
 import type { CommandCardView, FileReadCardView } from '@monad/ui';
 import type React from 'react';
+import type { AgentObservationCard } from '../../../../agent-adapters/observation-cards.ts';
 
 export type ObservationItem = AgentObservationEvent;
 

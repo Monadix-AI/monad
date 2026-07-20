@@ -1,4 +1,5 @@
-import type { AgentObservationCard, AgentObservationEvent, MeshAgentObservationEvent } from '@monad/protocol';
+import type { AgentObservationEvent, MeshAgentObservationEvent } from '@monad/protocol';
+import type { AgentObservationCard } from '../../src/agent-adapters/observation-cards.ts';
 import type { ObservationTimelineEntry } from '../../src/workspace-experiences/chat-room/components/observation/types.ts';
 import type { MeshAgentStreamView } from '../../src/workspace-experiences/experience/types.ts';
 

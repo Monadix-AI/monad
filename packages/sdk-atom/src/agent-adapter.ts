@@ -4,7 +4,6 @@ import type {
   AdapterMigrationCandidate,
   AdapterMigrationPreview,
   AdapterMigrationPreviewRequest,
-  AgentObservationCard,
   AgentObservationEvent,
   MeshAgentAuthState,
   MeshAgentObservationEvent,
@@ -13,7 +12,6 @@ import type {
   MeshAgentProvider,
   MeshAgentSetting,
   MeshAgentTurnInput,
-  MeshAgentUsageLimitMeter,
   MeshAgentUsageRecord,
   MeshAgentView,
   MeshRawEventPage
@@ -322,7 +320,6 @@ export type MeshAgentObservationProjector = MeshAgentObservationUsageProjector &
 
 export interface MeshAgentObservationRuntime {
   toAgentObservationEvent(event: MeshAgentObservationEvent): AgentObservationEvent | null;
-  toAgentObservationCards(events: readonly AgentObservationEvent[], provider: string): AgentObservationCard[];
   structuredEvents(args: {
     id: string;
     output?: string;
@@ -330,7 +327,6 @@ export interface MeshAgentObservationRuntime {
     mode?: 'events' | 'live';
   }): MeshAgentObservationEvent[] | undefined;
   eventsAreGenerating(events: readonly MeshAgentObservationEvent[]): boolean;
-  usageLimitMeter(output?: string): MeshAgentUsageLimitMeter | null;
 }
 
 export interface MeshAgentArgumentSupport {

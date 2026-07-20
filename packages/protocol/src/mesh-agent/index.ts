@@ -49,8 +49,6 @@ export type {
   ManagedMeshAgentLifecycleLogEvent,
   MeshAgentObservationEvent,
   MeshAgentObservationRole,
-  MeshAgentUsageLimitMeter,
-  MeshAgentUsageLimitMeterRow,
   NativeAgentTurnPointer
 } from './mesh-agent-observation.ts';
 export type {
@@ -208,8 +206,6 @@ export {
   managedMeshAgentLifecycleLogEventSchema,
   meshAgentObservationEventSchema,
   meshAgentObservationRoleSchema,
-  meshAgentUsageLimitMeterRowSchema,
-  meshAgentUsageLimitMeterSchema,
   nativeAgentTurnPointerSchema
 } from './mesh-agent-observation.ts';
 export {

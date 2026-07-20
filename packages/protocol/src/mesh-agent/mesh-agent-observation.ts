@@ -10,22 +10,6 @@ export {
   meshAgentObservationRoleSchema
 } from './mesh-agent-observation-event.ts';
 
-export const meshAgentUsageLimitMeterRowSchema = z.object({
-  id: z.string(),
-  label: z.string(),
-  percent: z.number(),
-  meterPercent: z.number().optional(),
-  resetLabel: z.string().optional(),
-  valueLabel: z.string().optional()
-});
-export type MeshAgentUsageLimitMeterRow = z.infer<typeof meshAgentUsageLimitMeterRowSchema>;
-
-export const meshAgentUsageLimitMeterSchema = z.object({
-  title: z.string(),
-  rows: z.array(meshAgentUsageLimitMeterRowSchema)
-});
-export type MeshAgentUsageLimitMeter = z.infer<typeof meshAgentUsageLimitMeterSchema>;
-
 export const nativeAgentTurnPointerSchema = z.object({
   providerSessionRef: z.string().nullable().optional(),
   providerTurnId: z.string().nullable().optional()

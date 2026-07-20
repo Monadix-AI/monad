@@ -1,5 +1,4 @@
 import type {
-  AgentObservationCard,
   AgentObservationEvent,
   Event,
   MeshConnectionSnapshot,
@@ -9,6 +8,7 @@ import type {
   MeshRawEventPage,
   SessionId
 } from '@monad/protocol';
+import type { AgentObservationCard } from '../../../../agent-adapters/observation-cards.ts';
 import type { MeshAgentStreamView } from '../../../experience/types.ts';
 import type { ObservationMode } from './panel-state.ts';
 import type { RawFrameRow } from './raw-view.ts';

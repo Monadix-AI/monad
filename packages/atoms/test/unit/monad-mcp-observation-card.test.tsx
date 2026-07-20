@@ -1,4 +1,5 @@
-import type { AgentObservationCard, AgentObservationEvent } from '@monad/protocol';
+import type { AgentObservationEvent } from '@monad/protocol';
+import type { AgentObservationCard } from '../../src/agent-adapters/observation-cards.ts';
 
 import { expect, test } from 'bun:test';
 import React from 'react';

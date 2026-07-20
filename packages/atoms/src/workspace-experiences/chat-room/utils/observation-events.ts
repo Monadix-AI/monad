@@ -1,4 +1,4 @@
-import type { AgentObservationCard } from '@monad/protocol';
+import type { AgentObservationCard } from '../../../agent-adapters/observation-cards.ts';
 
 export function observationEventLoadScope(args: {
   deliveryId?: string;

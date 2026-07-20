@@ -1,10 +1,10 @@
 import type {
-  AgentObservationCard,
   MessageAttachmentRef,
   NativeAgentDeliveryId,
   MessageAttachment as ProtocolMessageAttachment
 } from '@monad/protocol';
 import type { WorkspaceExperienceIcon, WorkspaceExperienceProject } from '@monad/sdk-experience';
+import type { AgentObservationCard } from '../../agent-adapters/observation-cards.ts';
 
 export type { WorkspaceExperienceProductIconId } from '@monad/sdk-experience';
 export type ParticipantKind = 'human' | 'agent';

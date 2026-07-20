@@ -2,8 +2,6 @@ import type {
   AgentObservationEvent,
   MeshAgentObservationEvent,
   MeshAgentProvider,
-  MeshAgentUsageLimitMeter,
-  MeshAgentUsageLimitMeterRow,
   MeshAgentUsageResponse
 } from '@monad/protocol';
 import type {
@@ -11,6 +9,7 @@ import type {
   MeshAgentObservationJsonRecordEntry,
   MeshAgentProviderAdapter
 } from '@monad/sdk-atom';
+import type { MeshAgentUsageLimitMeter, MeshAgentUsageLimitMeterRow } from './types.ts';
 
 import { toAgentObservationEvent } from '../../../agent-adapters/neutral-observation.ts';
 

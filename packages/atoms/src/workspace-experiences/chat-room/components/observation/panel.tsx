@@ -1,7 +1,8 @@
 'use client';
 
-import type { AgentObservationCard, AgentObservationEvent } from '@monad/protocol';
+import type { AgentObservationEvent } from '@monad/protocol';
 import type { CSSProperties, ReactNode, RefObject } from 'react';
+import type { AgentObservationCard } from '../../../../agent-adapters/observation-cards.ts';
 import type { MeshAgentUsageLimitMeter } from '../../../experience/mesh-agent-observation/mesh-agent-observation.ts';
 import type { MeshAgentStreamView, Participant } from '../../../experience/types.ts';
 import type { ObservationCollapseCommand } from './card-shell.tsx';

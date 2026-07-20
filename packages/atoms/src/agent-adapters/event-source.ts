@@ -5,26 +5,9 @@ import type {
   MeshAgentObservationProjector
 } from '@monad/sdk-atom';
 
+import { canonicalJson, contentHash } from '@monad/sdk-atom';
+
 import { jsonRecordEntries, textValue } from './observation-projection.ts';
-
-function canonicalJson(value: unknown): string {
-  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? String(value);
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
-  const record = value as Record<string, unknown>;
-  return `{${Object.keys(record)
-    .sort()
-    .map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`)
-    .join(',')}}`;
-}
-
-function hash(value: string): string {
-  let result = 0x811c9dc5;
-  for (let index = 0; index < value.length; index += 1) {
-    result ^= value.charCodeAt(index);
-    result = Math.imul(result, 0x01000193);
-  }
-  return (result >>> 0).toString(16).padStart(8, '0');
-}
 
 function providerRecordIds(raw: unknown): string[] {
   if (Array.isArray(raw)) return raw.flatMap(providerRecordIds);
@@ -78,11 +61,11 @@ function eventDedupeKey(provider: MeshAgentProvider, event: MeshAgentObservation
     ]
       .filter((value): value is string => typeof value === 'string' && value.length > 0)
       .join(':');
-    const recordIdentity = recordIds.length === 1 ? recordIds[0] : hash(recordIds.join(':'));
+    const recordIdentity = recordIds.length === 1 ? recordIds[0] : contentHash(recordIds.join(':'));
     return `${provider}:${recordIdentity}:${discriminator}`;
   }
   const identity = rawEvents.length === 1 ? rawEvents[0] : rawEvents;
-  return `${provider}:${hash(canonicalJson(identity))}`;
+  return `${provider}:${contentHash(canonicalJson(identity))}`;
 }
 
 function compactEvent(event: MeshAgentObservationEvent): MeshAgentObservationEvent {
