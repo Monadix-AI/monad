@@ -105,7 +105,11 @@ test('generated migrations exactly embed the source Drizzle history', () => {
   const newest = journal.entries.at(-1);
   if (!newest) throw new Error('Drizzle migration journal has no entries');
 
-  expect(journal.entries.map((entry) => entry.tag)).toEqual(['0000_initial-schema', '0001_message-fts']);
+  expect(journal.entries.map((entry) => entry.tag)).toEqual([
+    '0000_initial-schema',
+    '0001_message-fts',
+    '0002_inbox-read-state'
+  ]);
   expect(LATEST_MIGRATION_TIMESTAMP).toBe(newest.when);
   expect(MIGRATIONS).toEqual(
     journal.entries.map((entry) => {

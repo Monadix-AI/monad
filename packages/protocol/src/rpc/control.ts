@@ -215,8 +215,12 @@ export const clarifyRespondRequestSchema = z.object({
 });
 export type ClarifyRespondRequest = z.infer<typeof clarifyRespondRequestSchema>;
 
-/** `ok:false` → request id unknown or already resolved (e.g. timed out). */
-export const clarifyRespondResponseSchema = z.object({ ok: z.boolean() });
+export const clarifyRespondResponseSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('answered'), answer: z.string(), resolvedAt: z.string() }),
+  z.object({ status: z.literal('timed-out'), resolvedAt: z.string() }),
+  z.object({ status: z.literal('cancelled'), resolvedAt: z.string() }),
+  z.object({ status: z.literal('not-found') })
+]);
 export type ClarifyRespondResponse = z.infer<typeof clarifyRespondResponseSchema>;
 
 export const forwardToAcpRequestSchema = z.object({

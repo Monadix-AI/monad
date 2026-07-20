@@ -8,7 +8,8 @@ const approveToolApi = apiSlice.injectEndpoints({
   endpoints: (builder) => ({
     approveTool: builder.mutation<ToolApproveResponse, ToolApproveRequest>({
       queryFn: (body: ToolApproveRequest, api: { extra: unknown }) =>
-        runTreaty(() => clientOf(api).treaty.v1.tools.approve.post(body))
+        runTreaty(() => clientOf(api).treaty.v1.tools.approve.post(body)),
+      invalidatesTags: ['Inbox']
     })
   })
 });

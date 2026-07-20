@@ -58,7 +58,14 @@ import {
 } from './channels.ts';
 import { type CheckpointHandle, startWalCheckpoint, stopWalCheckpoint } from './checkpoint.ts';
 import { configureSqliteConnection } from './connection.ts';
-import { appendEvents, type DanglingInterrupt, findDanglingInterrupts, hasEvent, listEvents } from './events.ts';
+import {
+  appendEvents,
+  type DanglingInterrupt,
+  findDanglingInterrupts,
+  getClarificationResolution,
+  hasEvent,
+  listEvents
+} from './events.ts';
 import {
   compareAndSwapExperienceState,
   type ExperienceStateEventRecord,
@@ -144,6 +151,7 @@ import {
 } from './messages.ts';
 import { hasCurrentMigration, migrate } from './migrations.ts';
 import { insertNativeAgentDirectMessage, listNativeAgentDirectMessages } from './native-agent-messages.ts';
+import { listOperatorInbox, markOperatorInboxRead, operatorInboxSummary } from './operator-inbox.ts';
 import {
   clearEmbeddings,
   messagesMissingEmbedding,
@@ -627,6 +635,10 @@ export class Store {
     return findDanglingInterrupts(this.sqlite);
   }
 
+  getClarificationResolution(requestId: string) {
+    return getClarificationResolution(this.sqlite, requestId);
+  }
+
   /** True when `eventId` is present in the durable event log. Lets callers distinguish a persisted
    *  cursor from an un-persisted live message delta before calling {@link listEvents},
    *  whose missing-cursor fallback would otherwise replay the whole session. */
@@ -793,6 +805,18 @@ export class Store {
 
   listMentionInbox(limit = 100): InboxItem[] {
     return listMentionInbox(this.sqlite, limit);
+  }
+
+  listOperatorInbox(query: import('@monad/protocol').ListInboxQuery = {}) {
+    return listOperatorInbox(this.sqlite, query);
+  }
+
+  operatorInboxSummary() {
+    return operatorInboxSummary(this.sqlite);
+  }
+
+  markOperatorInboxRead(itemKeys: string[], readAt?: string) {
+    return markOperatorInboxRead(this.sqlite, itemKeys, readAt);
   }
 
   countMeshAgentInbox(meshSessionId: string): number {

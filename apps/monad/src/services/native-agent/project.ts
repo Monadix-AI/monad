@@ -168,9 +168,15 @@ export function createNativeAgentProjectCapabilities(
           options: args.body.options,
           mode: args.body.mode,
           allowOther: args.body.allowOther,
-          asker: { id: args.binding.agentId, name: askerName }
+          asker: { id: args.binding.agentId, name: askerName },
+          autoResolutionMs: args.body.autoResolutionMs,
+          origin: {
+            kind: 'managed-project',
+            meshSessionId: args.binding.meshSessionId,
+            agentId: args.binding.agentId
+          }
         },
-        { signal: args.signal, waitForever: true }
+        { signal: args.signal }
       );
       await handlers._transcriptProjector.completeAssistantMessage({
         sessionId: sessionId,

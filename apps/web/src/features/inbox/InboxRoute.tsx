@@ -1,130 +1,286 @@
-import type { ApprovalInboxItem, InboxItem } from '@monad/protocol';
+import type { ApprovalInboxItem, HitlInboxItem, InboxFilter, InboxItem } from '@monad/protocol';
 
-import { useApproveMeshSessionMutation, useApproveToolMutation, useListMentionInboxQuery } from '@monad/client-rtk';
+import {
+  useApproveMeshSessionMutation,
+  useApproveToolMutation,
+  useClarifyRespondMutation,
+  useListInboxQuery,
+  useMarkInboxReadMutation
+} from '@monad/client-rtk';
 import { cn } from '@monad/ui';
 import { MentionText } from '@monad/ui/components/MentionText';
-import { useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useOnInView } from 'react-intersection-observer';
 
 import { useT } from '#/components/I18nProvider';
 import { PanelLoading } from '#/components/PanelLoading';
 import { projectSessionPath } from '#/features/shell/routing/paths';
 import { pushShellUrl } from '#/hooks/use-shell-location';
+import { createInboxExposureTracker } from './exposure';
 
 function itemTarget(item: InboxItem): string {
   const base = item.projectId ? projectSessionPath(item.projectId, item.sessionId) : `/sessions/${item.sessionId}`;
-  if (item.kind !== 'mention') return base;
-  return `${base}?msg=${encodeURIComponent(item.message.id)}`;
+  return item.kind === 'mention' ? `${base}?msg=${encodeURIComponent(item.message.id)}` : base;
 }
 
 function formatInboxTime(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short'
-  }).format(date);
+  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
 }
 
-function approvalPreview(item: ApprovalInboxItem): string {
-  if (item.text) return item.text;
-  if (item.tool) return item.tool;
-  return item.approvalKind === 'mesh-agent' ? 'External agent approval' : 'Tool approval';
+function ExposedInboxItem({
+  item,
+  onSeen,
+  children
+}: {
+  item: InboxItem;
+  onSeen: (key: string) => void;
+  children: React.ReactNode;
+}) {
+  const tracker = useMemo(() => createInboxExposureTracker({ dwellMs: 500, onSeen }), [onSeen]);
+  const observe = useOnInView((inView) => tracker.setVisible(item.itemKey, inView), {
+    threshold: 0.5,
+    trackVisibility: true,
+    delay: 100
+  });
+
+  useEffect(() => {
+    const update = () => tracker.setPageVisible(document.visibilityState === 'visible');
+    update();
+    document.addEventListener('visibilitychange', update);
+    return () => {
+      document.removeEventListener('visibilitychange', update);
+      tracker.dispose();
+    };
+  }, [tracker]);
+
+  return <div ref={observe}>{children}</div>;
 }
 
-function InboxItemRow({
+function ApprovalActions({
   item,
   resolving,
   onResolve
 }: {
-  item: InboxItem;
+  item: ApprovalInboxItem;
   resolving: boolean;
-  onResolve: (item: ApprovalInboxItem, allow: boolean) => void;
+  onResolve: (allow: boolean) => void;
 }) {
   const t = useT();
-  const title = item.projectName ?? item.sessionTitle ?? t('web.inbox.unknownContext');
-  const actor =
-    item.kind === 'mention' ? item.agentName : item.approvalKind === 'mesh-agent' ? item.provider : item.tool;
-  const subtitle = [item.sessionTitle, actor ? `@${actor}` : null].filter(Boolean).join(' · ');
-  const body = (
-    <>
-      <div className="flex min-w-0 items-center justify-between gap-3">
-        <div className="min-w-0">
-          <div className="truncate font-medium text-sm">{title}</div>
-          {subtitle ? <div className="truncate text-muted-foreground text-xs">{subtitle}</div> : null}
-        </div>
-        <time className="shrink-0 text-muted-foreground text-xs">{formatInboxTime(item.createdAt)}</time>
-      </div>
-      <div className="line-clamp-2 text-muted-foreground text-sm leading-relaxed">
-        {item.kind === 'mention' ? <MentionText text={item.message.text} /> : approvalPreview(item)}
-      </div>
-    </>
-  );
-  const className = cn(
-    'group flex w-full flex-col gap-2 rounded-(--radius-md) border border-border/60 bg-card/70 px-4 py-3 text-left transition',
-    'hover:border-border hover:bg-accent/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40'
-  );
-
-  if (item.kind === 'mention') {
-    return (
+  if (item.actionState !== 'needs-response') return null;
+  return (
+    <div className="mt-1 flex items-center justify-end gap-2">
       <button
-        className="flex w-full flex-col gap-3 rounded-(--radius-md) border border-border/60 bg-card px-4 py-4 text-left shadow-[0_1px_2px_rgb(0_0_0/0.035)] transition-colors hover:border-border hover:bg-accent/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-        onClick={() => pushShellUrl(itemTarget(item))}
+        className="rounded-(--radius-sm) border border-destructive/30 px-2.5 py-1.5 text-destructive text-xs hover:bg-destructive/10"
+        disabled={resolving}
+        onClick={() => onResolve(false)}
         type="button"
       >
-        <div className="line-clamp-3 text-[0.9375rem] text-foreground leading-relaxed">
-          <MentionText text={item.message.text} />
-        </div>
-        <div className="flex min-w-0 items-center justify-between gap-3 border-border/50 border-t pt-2.5 text-xs">
-          <div className="min-w-0 truncate text-muted-foreground">
-            <span className="font-medium text-foreground">{actor ?? t('web.inbox.unknownContext')}</span>
-            <span> in {title}</span>
-          </div>
-          <time className="shrink-0 text-muted-foreground">{formatInboxTime(item.createdAt)}</time>
-        </div>
+        {t('web.inbox.reject')}
       </button>
-    );
-  }
+      <button
+        className="rounded-(--radius-sm) bg-primary px-2.5 py-1.5 text-primary-foreground text-xs hover:bg-primary/90"
+        disabled={resolving}
+        onClick={() => onResolve(true)}
+        type="button"
+      >
+        {t('web.inbox.approve')}
+      </button>
+    </div>
+  );
+}
 
+function HitlActions({
+  item,
+  resolving,
+  onAnswer
+}: {
+  item: HitlInboxItem;
+  resolving: boolean;
+  onAnswer: (answer: string) => void;
+}) {
+  const t = useT();
+  const [selected, setSelected] = useState<string[]>([]);
+  const [other, setOther] = useState('');
+  if (item.actionState !== 'needs-response') {
+    return item.answer ? (
+      <div className="rounded-(--radius-sm) bg-muted/60 px-3 py-2 text-sm">{item.answer}</div>
+    ) : null;
+  }
+  const multiple = item.mode === 'multiple';
+  const hasAnswer = selected.length > 0 || other.trim().length > 0;
+  const answer = multiple
+    ? JSON.stringify([...selected, ...(other.trim() ? [other.trim()] : [])])
+    : other.trim() || selected[0] || '';
+  const toggle = (option: string) => {
+    setSelected((current) =>
+      multiple
+        ? current.includes(option)
+          ? current.filter((value) => value !== option)
+          : [...current, option]
+        : [option]
+    );
+    if (!multiple) setOther('');
+  };
   return (
-    <div className={className}>
-      {body}
-      <div className="mt-1 flex items-center justify-end gap-2">
+    <div className="flex flex-col gap-2">
+      {item.options?.length ? (
+        <div className="flex flex-wrap gap-2">
+          {item.options.map((option) => (
+            <button
+              aria-pressed={selected.includes(option)}
+              className={cn(
+                'rounded-full border px-3 py-1.5 text-xs transition',
+                selected.includes(option)
+                  ? 'border-primary bg-primary/10 text-primary'
+                  : 'border-border hover:bg-accent'
+              )}
+              key={option}
+              onClick={() => toggle(option)}
+              type="button"
+            >
+              {option}
+            </button>
+          ))}
+        </div>
+      ) : null}
+      {item.allowOther !== false || !item.options?.length ? (
+        <textarea
+          className="min-h-20 resize-y rounded-(--radius-sm) border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring"
+          onChange={(event) => setOther(event.target.value)}
+          placeholder={t('web.inbox.answerPlaceholder')}
+          value={other}
+        />
+      ) : null}
+      <div className="flex justify-end">
         <button
-          className="rounded-(--radius-sm) px-2.5 py-1.5 text-muted-foreground text-xs hover:bg-accent"
-          onClick={() => pushShellUrl(itemTarget(item))}
+          className="rounded-(--radius-sm) bg-primary px-3 py-1.5 text-primary-foreground text-xs disabled:opacity-50"
+          disabled={resolving || !hasAnswer}
+          onClick={() => onAnswer(answer)}
           type="button"
         >
-          Open session
-        </button>
-        <button
-          className="rounded-(--radius-sm) border border-destructive/30 px-2.5 py-1.5 text-destructive text-xs hover:bg-destructive/10"
-          disabled={resolving}
-          onClick={() => onResolve(item, false)}
-          type="button"
-        >
-          Reject
-        </button>
-        <button
-          className="rounded-(--radius-sm) bg-primary px-2.5 py-1.5 text-primary-foreground text-xs hover:bg-primary/90"
-          disabled={resolving}
-          onClick={() => onResolve(item, true)}
-          type="button"
-        >
-          Approve
+          {t('web.inbox.sendAnswer')}
         </button>
       </div>
     </div>
   );
 }
 
+function InboxItemRow({
+  item,
+  resolving,
+  onResolveApproval,
+  onAnswer
+}: {
+  item: InboxItem;
+  resolving: boolean;
+  onResolveApproval: (item: ApprovalInboxItem, allow: boolean) => void;
+  onAnswer: (item: HitlInboxItem, answer: string) => void;
+}) {
+  const t = useT();
+  const title = item.projectName ?? item.sessionTitle ?? t('web.inbox.unknownContext');
+  const actor =
+    item.kind === 'mention'
+      ? item.agentName
+      : item.kind === 'hitl'
+        ? item.asker?.name
+        : item.approvalKind === 'mesh-agent'
+          ? item.provider
+          : item.tool;
+  const preview =
+    item.kind === 'mention' ? (
+      <MentionText text={item.message.text} />
+    ) : item.kind === 'hitl' ? (
+      item.question
+    ) : (
+      (item.text ?? item.tool ?? t('web.inbox.approvalRequest'))
+    );
+  return (
+    <article
+      className={cn(
+        'relative flex w-full flex-col gap-3 rounded-(--radius-md) border bg-card px-4 py-4 text-left shadow-[0_1px_2px_rgb(0_0_0/0.035)]',
+        item.readAt ? 'border-border/60' : 'border-primary/35'
+      )}
+    >
+      {!item.readAt ? (
+        <>
+          <span className="sr-only">{t('web.inbox.unread')}</span>
+          <span
+            aria-hidden="true"
+            className="absolute top-4 left-1.5 size-1.5 rounded-full bg-primary"
+          />
+        </>
+      ) : null}
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="truncate font-medium text-sm">{title}</div>
+          {actor ? <div className="truncate text-muted-foreground text-xs">@{actor}</div> : null}
+        </div>
+        <time className="shrink-0 text-muted-foreground text-xs">{formatInboxTime(item.createdAt)}</time>
+      </div>
+      <div className="text-[0.9375rem] text-foreground leading-relaxed">{preview}</div>
+      {item.kind === 'approval' ? (
+        <ApprovalActions
+          item={item}
+          onResolve={(allow) => onResolveApproval(item, allow)}
+          resolving={resolving}
+        />
+      ) : null}
+      {item.kind === 'hitl' ? (
+        <HitlActions
+          item={item}
+          onAnswer={(answer) => onAnswer(item, answer)}
+          resolving={resolving}
+        />
+      ) : null}
+      <button
+        className="self-start text-muted-foreground text-xs hover:text-foreground"
+        onClick={() => pushShellUrl(itemTarget(item))}
+        type="button"
+      >
+        {t('web.inbox.openSession')}
+      </button>
+    </article>
+  );
+}
+
+const FILTERS: InboxFilter[] = ['all', 'needs-response', 'unread', 'completed'];
+
 export function InboxRoute() {
   const t = useT();
-  const { data, error, isLoading, isFetching, refetch } = useListMentionInboxQuery({ limit: 100 });
+  const [filter, setFilter] = useState<InboxFilter>('all');
+  const { data, error, isLoading, isFetching, refetch } = useListInboxQuery({ filter, limit: 100 });
   const [approveTool] = useApproveToolMutation();
   const [approveMeshSession] = useApproveMeshSessionMutation();
+  const [clarifyRespond] = useClarifyRespondMutation();
+  const [markRead] = useMarkInboxReadMutation();
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const pendingRead = useRef(new Set<string>());
+  const readTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const items = data?.items ?? [];
+
+  const reportSeen = useCallback(
+    (itemKey: string) => {
+      pendingRead.current.add(itemKey);
+      if (readTimer.current) return;
+      readTimer.current = setTimeout(() => {
+        const itemKeys = [...pendingRead.current];
+        pendingRead.current.clear();
+        readTimer.current = null;
+        if (itemKeys.length) void markRead({ itemKeys });
+      }, 200);
+    },
+    [markRead]
+  );
+
+  useEffect(
+    () => () => {
+      if (readTimer.current) clearTimeout(readTimer.current);
+    },
+    []
+  );
 
   const resolveApproval = async (item: ApprovalInboxItem, allow: boolean) => {
     setResolvingId(item.id);
@@ -145,18 +301,31 @@ export function InboxRoute() {
           scope: 'once',
           ...(allow ? {} : { reason: 'denied from Inbox' })
         }).unwrap();
-        if (!result.ok) throw new Error('The approval is no longer pending.');
+        if (!result.ok) throw new Error(t('web.inbox.noLongerPending'));
       }
       await refetch();
     } catch (cause) {
-      setActionError(cause instanceof Error ? cause.message : 'Unable to resolve approval.');
+      setActionError(cause instanceof Error ? cause.message : t('web.inbox.actionError'));
+    } finally {
+      setResolvingId(null);
+    }
+  };
+
+  const answerHitl = async (item: HitlInboxItem, answer: string) => {
+    setResolvingId(item.id);
+    setActionError(null);
+    try {
+      const result = await clarifyRespond({ requestId: item.requestId, answer }).unwrap();
+      if (result.status !== 'answered') throw new Error(t('web.inbox.noLongerPending'));
+      await refetch();
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : t('web.inbox.actionError'));
     } finally {
       setResolvingId(null);
     }
   };
 
   if (isLoading) return <PanelLoading />;
-
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
       <header className="flex flex-none items-center justify-between border-border/60 border-b px-6 py-4">
@@ -165,7 +334,7 @@ export function InboxRoute() {
           <p className="text-muted-foreground text-sm">{t('web.inbox.subtitle')}</p>
         </div>
         <button
-          className="rounded-(--radius-sm) px-2.5 py-1.5 text-muted-foreground text-sm transition hover:bg-accent hover:text-foreground"
+          className="rounded-(--radius-sm) px-2.5 py-1.5 text-muted-foreground text-sm hover:bg-accent"
           disabled={isFetching}
           onClick={() => void refetch()}
           type="button"
@@ -173,9 +342,25 @@ export function InboxRoute() {
           {isFetching ? t('web.inbox.refreshing') : t('web.refresh')}
         </button>
       </header>
+      <div className="flex flex-none gap-1 border-border/60 border-b px-6 py-2">
+        {FILTERS.map((value) => (
+          <button
+            aria-pressed={filter === value}
+            className={cn(
+              'rounded-full px-3 py-1.5 text-xs',
+              filter === value ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-accent'
+            )}
+            key={value}
+            onClick={() => setFilter(value)}
+            type="button"
+          >
+            {t(`web.inbox.filter.${value}`)}
+          </button>
+        ))}
+      </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
         {actionError ? (
-          <div className="mb-3 rounded-(--radius-md) border border-destructive/30 bg-destructive/10 px-4 py-3 text-destructive text-sm">
+          <div className="mx-auto mb-3 max-w-3xl rounded-(--radius-md) border border-destructive/30 bg-destructive/10 px-4 py-3 text-destructive text-sm">
             {actionError}
           </div>
         ) : null}
@@ -191,12 +376,18 @@ export function InboxRoute() {
         ) : (
           <div className="mx-auto flex w-full max-w-3xl flex-col gap-2">
             {items.map((item) => (
-              <InboxItemRow
+              <ExposedInboxItem
                 item={item}
-                key={item.id}
-                onResolve={(approval, allow) => void resolveApproval(approval, allow)}
-                resolving={resolvingId === item.id}
-              />
+                key={item.itemKey}
+                onSeen={reportSeen}
+              >
+                <InboxItemRow
+                  item={item}
+                  onAnswer={(hitl, answer) => void answerHitl(hitl, answer)}
+                  onResolveApproval={(approval, allow) => void resolveApproval(approval, allow)}
+                  resolving={resolvingId === item.id}
+                />
+              </ExposedInboxItem>
             ))}
           </div>
         )}

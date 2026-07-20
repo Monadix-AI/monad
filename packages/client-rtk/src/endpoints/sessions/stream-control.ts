@@ -22,6 +22,16 @@ const MCP_STATUS_EVENTS: ReadonlySet<Event['type']> = new Set(['mcp.status_updat
   Event['type']
 >);
 
+const INBOX_EVENTS: ReadonlySet<Event['type']> = new Set([
+  'session.message.created',
+  'tool.approval_requested',
+  'tool.approval_resolved',
+  'mesh.approval_requested',
+  'mesh.approval_resolved',
+  'clarify.requested',
+  'clarify.resolved'
+] as const satisfies ReadonlyArray<Event['type']>);
+
 /**
  * Subscribes to the cross-session control stream for the lifetime of the cache entry. There is no
  * data to read — mount it once (e.g. `useStreamControlQuery()`) and it keeps the session list live.
@@ -45,6 +55,9 @@ export const streamControlApi = apiSlice.injectEndpoints({
             }
             if (MCP_STATUS_EVENTS.has(event.type)) {
               dispatch(apiSlice.util.invalidateTags(['McpServers']));
+            }
+            if (INBOX_EVENTS.has(event.type)) {
+              dispatch(apiSlice.util.invalidateTags(['Inbox']));
             }
           });
         } catch {

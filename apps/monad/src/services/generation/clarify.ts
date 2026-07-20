@@ -1,23 +1,33 @@
-// The agent → human question channel. Like oversight (see oversight.ts), this is a
-// server-initiated request the client must answer: the agent calls the `clarify_ask` tool,
-// which blocks on a promise; the daemon emits a `clarify.requested` event; a client answers
-// via the `clarify.respond` RPC, unblocking the tool with the user's free-text reply.
-//
-// It differs from oversight only in shape (a free-text answer, not an allow/deny) and in
-// timeout: a human composing an answer needs longer than a yes/no, and a timeout yields an
-// empty answer (the agent proceeds with what it has) rather than a fail-closed denial.
+// Durable agent -> human questions. A missing autoResolutionMs means that only a human response
+// (or an explicit cancellation) may settle the request; transport disconnects are deliberately
+// ignored because the request remains actionable from Inbox.
 
-import type { ClarifyAsker, ClarifyChoiceMode, Event, EventPayloadInput, TranscriptTargetId } from '@monad/protocol';
+import type {
+  ClarifyAsker,
+  ClarifyChoiceMode,
+  ClarifyRespondResponse,
+  Event,
+  EventPayloadInput,
+  TranscriptTargetId
+} from '@monad/protocol';
 
 import { newId, transcriptTargetIdSchema } from '@monad/protocol';
 
 import { makeEvent } from '#/services/event-bus.ts';
 
 interface Pending {
-  resolve: (answer: string) => void;
+  resolve?: (answer: string) => void;
   timer?: ReturnType<typeof setTimeout>;
-  cleanup?: () => void;
-  sessionId: string;
+  sessionId: TranscriptTargetId;
+  request: ClarifyAskRequest;
+}
+
+export interface RecoveredClarificationAnswer {
+  requestId: string;
+  sessionId: TranscriptTargetId;
+  question: string;
+  answer: string;
+  origin: NonNullable<ClarifyAskRequest['origin']>;
 }
 
 export interface ClarifyAskRequest {
@@ -26,6 +36,8 @@ export interface ClarifyAskRequest {
   mode?: ClarifyChoiceMode;
   allowOther?: boolean;
   asker?: ClarifyAsker;
+  autoResolutionMs?: number;
+  origin?: { kind: 'daemon-agent' } | { kind: 'managed-project'; meshSessionId: string; agentId: string };
 }
 
 export interface ClarifyAskResult {
@@ -34,99 +46,162 @@ export interface ClarifyAskResult {
 }
 
 export interface ClarifyOptions {
-  /** Persist + fan out an event (main.ts injects store.appendEvents + bus.publish). */
   publish: (event: Event) => void;
-  /** Resolve a question with an empty answer after this long. Default 600_000ms (10 min). */
-  timeoutMs?: number;
-  /** Cap on concurrent pending questions — beyond it new asks resolve empty. Default 100. */
+  lookupTerminal?: (requestId: string) => ClarifyRespondResponse | null;
   maxPending?: number;
+  /** Test clock override; it never makes an omitted autoResolutionMs expire. */
+  timeoutMs?: number;
+  /** Unresolved clarify.requested events loaded from the durable event log at startup. */
+  restore?: Event[];
 }
 
 export class ClarifyService {
   private readonly pending = new Map<string, Pending>();
+  private readonly terminals = new Map<string, ClarifyRespondResponse>();
   private readonly publish: (event: Event) => void;
-  private readonly timeoutMs: number;
   private readonly maxPending: number;
+  private readonly timeoutMs?: number;
+  private readonly lookupTerminal?: (requestId: string) => ClarifyRespondResponse | null;
+  private recoveredContinuation?: (answer: RecoveredClarificationAnswer) => Promise<void>;
 
   constructor(opts: ClarifyOptions) {
     this.publish = opts.publish;
-    this.timeoutMs = opts.timeoutMs ?? 600_000;
     this.maxPending = opts.maxPending ?? 100;
+    this.timeoutMs = opts.timeoutMs;
+    this.lookupTerminal = opts.lookupTerminal;
+    for (const event of opts.restore ?? []) {
+      if (event.type !== 'clarify.requested') continue;
+      this.restore(
+        event as Event & {
+          type: 'clarify.requested';
+          payload: EventPayloadInput<'clarify.requested'>;
+        }
+      );
+    }
   }
 
-  /** Ask the user a free-text question; resolves with their answer (or '' on timeout/overflow). */
-  readonly ask = async (sessionId: string, question: string, options?: string[]): Promise<string> =>
-    (await this.askStructured(sessionId, { question, options })).answer;
+  readonly ask = async (sessionId: string, request: ClarifyAskRequest): Promise<string> =>
+    (await this.askStructured(sessionId, request)).answer;
 
-  /** Ask the user a structured question; resolves with their answer (or '' on timeout/overflow).
-   *  `waitForever: true` skips the auto-resolve timer — the promise settles only on a human answer. */
   readonly askStructured = (
     sessionId: string,
     request: ClarifyAskRequest,
-    opts?: { signal?: AbortSignal; waitForever?: boolean }
-  ): Promise<ClarifyAskResult> =>
-    new Promise<ClarifyAskResult>((resolve) => {
-      // Bound the pending registry — a flood of questions must not accumulate unbounded
-      // timers/promises. Over the cap, resolve empty (no entry created) so the agent proceeds.
-      if (this.pending.size >= this.maxPending) {
-        resolve({ requestId: '', answer: '' });
-        return;
-      }
-      const requestId = newId('clarify');
-      const sid = transcriptTargetIdSchema.parse(sessionId);
-      if (opts?.signal?.aborted) {
-        resolve({ requestId, answer: '' });
-        return;
-      }
-      const settle = (answer: string, reason?: string) => {
-        const pending = this.pending.get(requestId);
-        if (!pending) return;
-        if (pending.timer) clearTimeout(pending.timer);
-        pending.cleanup?.();
-        this.pending.delete(requestId);
-        this.emit(sid, 'clarify.resolved', { requestId, answer, ...(reason ? { reason } : {}) });
-        resolve({ requestId, answer });
-      };
-      const timer = opts?.waitForever
-        ? undefined
-        : setTimeout(() => {
-            settle('', 'timeout');
-          }, this.timeoutMs);
-      const onAbort = () => settle('', 'aborted');
-      opts?.signal?.addEventListener('abort', onAbort, { once: true });
-      this.pending.set(requestId, {
-        resolve: (answer) => settle(answer),
-        timer,
-        cleanup: opts?.signal ? () => opts.signal?.removeEventListener('abort', onAbort) : undefined,
-        sessionId: sid
-      });
-      this.emit(sid, 'clarify.requested', {
-        requestId,
-        question: request.question,
-        ...(request.options ? { options: request.options } : {}),
-        ...(request.mode ? { mode: request.mode } : {}),
-        ...(request.allowOther !== undefined ? { allowOther: request.allowOther } : {}),
-        ...(request.asker ? { asker: request.asker } : {})
-      });
-    });
+    _opts?: { signal?: AbortSignal }
+  ): Promise<ClarifyAskResult> => {
+    if (this.pending.size >= this.maxPending) {
+      return Promise.reject(new Error('pending clarification capacity exceeded'));
+    }
+    const requestId = newId('clarify');
+    const sid = transcriptTargetIdSchema.parse(sessionId);
+    const createdAt = new Date();
+    const expiresAt = request.autoResolutionMs
+      ? new Date(createdAt.getTime() + request.autoResolutionMs).toISOString()
+      : undefined;
 
-  /** Resolve a pending question. Returns false if the id is unknown or already resolved. */
-  respond(requestId: string, answer: string): boolean {
-    const p = this.pending.get(requestId);
-    if (!p) return false;
-    p.resolve(answer);
-    return true;
+    return new Promise<ClarifyAskResult>((resolve) => {
+      this.pending.set(requestId, { resolve: (answer) => resolve({ requestId, answer }), request, sessionId: sid });
+      this.armTimer(
+        requestId,
+        request.autoResolutionMs === undefined ? undefined : (this.timeoutMs ?? request.autoResolutionMs)
+      );
+      this.emit(
+        sid,
+        'clarify.requested',
+        {
+          requestId,
+          question: request.question,
+          ...(request.options ? { options: request.options } : {}),
+          ...(request.mode ? { mode: request.mode } : {}),
+          ...(request.allowOther !== undefined ? { allowOther: request.allowOther } : {}),
+          ...(request.asker ? { asker: request.asker } : {}),
+          ...(request.autoResolutionMs ? { autoResolutionMs: request.autoResolutionMs, expiresAt } : {}),
+          origin: request.origin ?? { kind: 'daemon-agent' }
+        },
+        createdAt.toISOString()
+      );
+    });
+  };
+
+  respond(requestId: string, answer: string): ClarifyRespondResponse {
+    const existing = this.terminals.get(requestId) ?? this.lookupTerminal?.(requestId);
+    if (existing) return existing;
+    const pending = this.pending.get(requestId);
+    if (!pending) return { status: 'not-found' };
+    return this.settle(requestId, pending, answer, 'answered');
   }
 
   get pendingCount(): number {
     return this.pending.size;
   }
 
+  setRecoveredContinuation(callback: (answer: RecoveredClarificationAnswer) => Promise<void>): void {
+    this.recoveredContinuation = callback;
+  }
+
+  private restore(event: Event & { type: 'clarify.requested'; payload: EventPayloadInput<'clarify.requested'> }): void {
+    const { requestId, expiresAt } = event.payload;
+    this.pending.set(requestId, {
+      sessionId: event.sessionId,
+      request: {
+        question: event.payload.question,
+        options: event.payload.options,
+        mode: event.payload.mode,
+        allowOther: event.payload.allowOther,
+        asker: event.payload.asker,
+        autoResolutionMs: event.payload.autoResolutionMs,
+        origin: event.payload.origin
+      }
+    });
+    if (expiresAt) this.armTimer(requestId, Math.max(0, Date.parse(expiresAt) - Date.now()));
+  }
+
+  private armTimer(requestId: string, delayMs?: number): void {
+    if (delayMs === undefined) return;
+    const timer = setTimeout(() => {
+      const pending = this.pending.get(requestId);
+      if (pending) this.settle(requestId, pending, '', 'timed-out');
+    }, delayMs);
+    const pending = this.pending.get(requestId);
+    if (pending) pending.timer = timer;
+  }
+
+  private settle(
+    requestId: string,
+    pending: Pending,
+    answer: string,
+    status: 'answered' | 'timed-out' | 'cancelled'
+  ): ClarifyRespondResponse {
+    if (pending.timer) clearTimeout(pending.timer);
+    this.pending.delete(requestId);
+    const resolvedAt = new Date().toISOString();
+    this.emit(pending.sessionId, 'clarify.resolved', {
+      requestId,
+      answer,
+      ...(status === 'timed-out' ? { reason: 'timeout' } : {}),
+      ...(status === 'cancelled' ? { reason: 'cancelled' } : {})
+    });
+    pending.resolve?.(answer);
+    const result: ClarifyRespondResponse =
+      status === 'answered' ? { status, answer, resolvedAt } : { status, resolvedAt };
+    this.terminals.set(requestId, result);
+    if (status === 'answered' && !pending.resolve && this.recoveredContinuation) {
+      void this.recoveredContinuation({
+        requestId,
+        sessionId: pending.sessionId,
+        question: pending.request.question,
+        answer,
+        origin: pending.request.origin ?? { kind: 'daemon-agent' }
+      });
+    }
+    return result;
+  }
+
   private emit<T extends 'clarify.requested' | 'clarify.resolved'>(
     sessionId: TranscriptTargetId,
     type: T,
-    payload: EventPayloadInput<T>
+    payload: EventPayloadInput<T>,
+    at?: string
   ): void {
-    this.publish(makeEvent(sessionId, type, payload));
+    this.publish(makeEvent(sessionId, type, payload, at ? { at } : undefined));
   }
 }

@@ -43,7 +43,8 @@ export const nativeAgentProjectAskRequestSchema = z.object({
   question: z.string().min(1).max(10_000),
   options: z.array(z.string().min(1).max(1_000)).max(10).default([]),
   mode: clarifyChoiceModeSchema.default('single'),
-  allowOther: z.boolean().default(true)
+  allowOther: z.boolean().default(true),
+  autoResolutionMs: z.number().int().min(60_000).max(240_000).optional()
 });
 export type NativeAgentProjectAskRequest = z.infer<typeof nativeAgentProjectAskRequestSchema>;
 

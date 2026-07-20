@@ -72,7 +72,15 @@ export const MIGRATIONS: MigrationMeta[] = [
     "bps": true,
     "folderMillis": 1784472067634,
     "hash": "60e311db225abad53357805d7914bab5e209a2e560ee2484d1e8dd886c4151e5"
+  },
+  {
+    "sql": [
+      "CREATE TABLE `inbox_item_reads` (\n\t`item_key` text PRIMARY KEY NOT NULL,\n\t`read_at` text NOT NULL\n);\n"
+    ],
+    "bps": true,
+    "folderMillis": 1784570505472,
+    "hash": "d6d37237afb74b93a7e514af1814b2c6c82f0a67ec713a38d4420a896b0674da"
   }
 ];
 
-export const LATEST_MIGRATION_TIMESTAMP = 1784472067634;
+export const LATEST_MIGRATION_TIMESTAMP = 1784570505472;

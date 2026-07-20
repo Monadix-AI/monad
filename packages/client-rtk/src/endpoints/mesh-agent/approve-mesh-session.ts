@@ -17,7 +17,8 @@ const approveMeshSessionApi = sessionsApi.injectEndpoints({
           clientOf(api)
             .treaty.v1.mesh.sessions({ id })
             .approval.post({ requestId, allow, reason }, { query: { transcriptTargetId } })
-        )
+        ),
+      invalidatesTags: ['Inbox']
     })
   })
 });

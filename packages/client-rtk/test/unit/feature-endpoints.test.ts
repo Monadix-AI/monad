@@ -48,7 +48,7 @@ function fakeClient(overrides: Record<string, unknown>, calls: Calls): MonadClie
                 | ((req: { requestId: string; answer: string }) => Promise<void>)
                 | undefined;
               if (fn) await fn(body);
-              return ok({ ok: true });
+              return ok({ status: 'answered' as const, answer: body.answer, resolvedAt: '2026-07-21T00:00:00.000Z' });
             }
           }
         },
@@ -135,7 +135,7 @@ test('resetUsage invalidates Usage, forcing the ledger to refetch', async () => 
   expect(calls.usageGet).toBe(2);
 });
 
-test('clarifyRespond delegates the answer and returns ok', async () => {
+test('clarifyRespond delegates the answer and returns the terminal state', async () => {
   let seen: { requestId: string; answer: string } | undefined;
   const calls: Calls = { usageGet: 0, atomsList: 0, workspaceExperiencesList: 0 };
   const store = createMonadStore({
@@ -152,7 +152,7 @@ test('clarifyRespond delegates the answer and returns ok', async () => {
   const res = await store.dispatch(
     clarifyRespondApi.endpoints.clarifyRespond.initiate({ requestId: 'clarify_1', answer: 'yes' })
   );
-  expect('data' in res && res.data?.ok).toBe(true);
+  expect('data' in res && res.data?.status).toBe('answered');
   expect(seen).toEqual({ requestId: 'clarify_1', answer: 'yes' });
 });
 

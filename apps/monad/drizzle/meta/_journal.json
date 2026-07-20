@@ -15,6 +15,13 @@
       "when": 1784472067634,
       "tag": "0001_message-fts",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1784570505472,
+      "tag": "0002_inbox-read-state",
+      "breakpoints": true
     }
   ]
 }

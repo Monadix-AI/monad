@@ -13,9 +13,10 @@ import type {
   ProjectId
 } from '@monad/protocol';
 
-import { meshSessionIdSchema, nativeAgentDeliverySchema, newId, sessionIdSchema } from '@monad/protocol';
+import { nativeAgentDeliverySchema, newId } from '@monad/protocol';
 
 import { getMeshSession, setMeshAgentDeliveredCursor, setMeshAgentVisibleCursor } from './mesh-sessions.ts';
+import { listLegacyMentionInbox } from './operator-inbox.ts';
 import { type MessageRow, rowToMessage } from './row-mappers.ts';
 
 export interface EnqueueMeshAgentInboxOptions {
@@ -196,138 +197,7 @@ export function countMeshAgentInbox(sqlite: Database, meshSessionId: string): nu
 }
 
 export function listMentionInbox(sqlite: Database, limit = 100): InboxItem[] {
-  const mentionRows = sqlite
-    .query(
-      `SELECT m.*,
-              s.id AS _session_id,
-              s.project_id AS _project_id,
-              s.title AS _session_title,
-              p.title AS _project_name,
-              COALESCE(json_extract(sm.data, '$.displayName'), json_extract(sm.data, '$.name')) AS _agent_display_name
-       FROM messages m
-       JOIN sessions s ON s.id = m.transcript_target_id
-       LEFT JOIN workplace_projects p ON p.id = s.project_id
-       LEFT JOIN session_members sm
-         ON sm.session_id = s.id
-        AND sm.member_id = CASE
-          WHEN json_valid(m.data) THEN COALESCE(
-            json_extract(m.data, '$.memberId'),
-            json_extract(m.data, '$.agentId'),
-            json_extract(m.data, '$.agentName')
-          )
-        END
-       WHERE m.role = 'assistant'
-         AND m.active = 1
-         AND instr(m.text, 'id="human"') > 0
-       ORDER BY m.rowid DESC
-       LIMIT ?`
-    )
-    .all(limit) as Array<Record<string, unknown>>;
-
-  const mentions: InboxItem[] = mentionRows.map((row) => {
-    const message = rowToMessage({
-      id: row.id as string,
-      transcriptTargetId: row.transcript_target_id as string,
-      role: row.role as string,
-      text: row.text as string,
-      type: row.type as string,
-      data: (row.data ?? null) as string | null,
-      streamStatus: row.stream_status as string,
-      active: row.active as number,
-      includeInContext: (row.include_in_context ?? null) as number | null,
-      createdAt: row.created_at as string,
-      updatedAt: (row.updated_at ?? null) as string | null
-    } as MessageRow);
-    let agentName = typeof row._agent_display_name === 'string' ? row._agent_display_name : undefined;
-    if (typeof row.data === 'string') {
-      try {
-        const data = JSON.parse(row.data) as { agentName?: unknown };
-        if (!agentName && typeof data.agentName === 'string') agentName = data.agentName;
-      } catch {
-        // Invalid message metadata must not hide an otherwise valid mention.
-      }
-    }
-    return {
-      kind: 'mention',
-      id: message.id,
-      projectId: (row._project_id ?? undefined) as ProjectId | undefined,
-      projectName: (row._project_name ?? undefined) as string | undefined,
-      sessionId: sessionIdSchema.parse(row._session_id),
-      sessionTitle: (row._session_title ?? undefined) as string | undefined,
-      message,
-      ...(agentName ? { agentName } : {}),
-      createdAt: message.createdAt
-    };
-  });
-
-  const approvalRows = sqlite
-    .query(
-      `SELECT e.type, e.payload, e.at,
-              s.id AS _session_id,
-              s.project_id AS _project_id,
-              s.title AS _session_title,
-              p.title AS _project_name
-       FROM events e
-       JOIN sessions s ON s.id = e.transcript_target_id
-       LEFT JOIN workplace_projects p ON p.id = s.project_id
-       WHERE e.type IN ('tool.approval_requested', 'mesh.approval_requested')
-         AND NOT EXISTS (
-           SELECT 1 FROM events r
-           WHERE r.transcript_target_id = e.transcript_target_id
-             AND r.type = CASE e.type
-               WHEN 'tool.approval_requested' THEN 'tool.approval_resolved'
-               ELSE 'mesh.approval_resolved'
-             END
-             AND json_extract(r.payload, '$.requestId') = json_extract(e.payload, '$.requestId')
-         )
-       ORDER BY e.rowid DESC
-       LIMIT ?`
-    )
-    .all(limit) as Array<Record<string, unknown>>;
-
-  const approvals: InboxItem[] = [];
-  for (const row of approvalRows) {
-    let payload: Record<string, unknown>;
-    try {
-      payload = JSON.parse(String(row.payload)) as Record<string, unknown>;
-    } catch {
-      continue;
-    }
-    if (typeof payload.requestId !== 'string') continue;
-    const context = {
-      projectId: (row._project_id ?? undefined) as ProjectId | undefined,
-      projectName: (row._project_name ?? undefined) as string | undefined,
-      sessionId: sessionIdSchema.parse(row._session_id),
-      sessionTitle: (row._session_title ?? undefined) as string | undefined,
-      createdAt: String(row.at)
-    };
-    if (row.type === 'tool.approval_requested') {
-      if (typeof payload.tool !== 'string') continue;
-      approvals.push({
-        kind: 'approval',
-        id: payload.requestId,
-        approvalKind: 'tool',
-        tool: payload.tool,
-        input: payload.input,
-        ...(typeof payload.key === 'string' ? { key: payload.key } : {}),
-        ...context
-      });
-      continue;
-    }
-    if (typeof payload.meshSessionId !== 'string') continue;
-    approvals.push({
-      kind: 'approval',
-      id: payload.requestId,
-      approvalKind: 'mesh-agent',
-      meshSessionId: meshSessionIdSchema.parse(payload.meshSessionId),
-      ...(typeof payload.provider === 'string' ? { provider: payload.provider } : {}),
-      ...(typeof payload.text === 'string' ? { text: payload.text } : {}),
-      input: payload.data,
-      ...context
-    });
-  }
-
-  return [...mentions, ...approvals].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit);
+  return listLegacyMentionInbox(sqlite, limit);
 }
 
 export function getNativeAgentDelivery(

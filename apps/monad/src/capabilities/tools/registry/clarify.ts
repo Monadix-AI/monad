@@ -8,12 +8,25 @@ import { z } from 'zod';
 
 import { toolResult } from '#/capabilities/tools/types.ts';
 
-/** Ask the user a question on a session; resolves with their answer ('' on timeout). */
-export type ClarifyAsk = (sessionId: string, question: string, options?: string[]) => Promise<string>;
+interface ClarifyToolRequest {
+  question: string;
+  options?: string[];
+  autoResolutionMs?: number;
+}
+
+/** Ask the user a question on a session; resolves with their answer ('' on auto-resolution). */
+export type ClarifyAsk = (sessionId: string, request: ClarifyToolRequest) => Promise<string>;
 
 const clarifyInput = z.object({
   question: z.string().min(1).describe('The single clarifying question to ask the user'),
-  options: z.array(z.string()).optional().describe('Optional suggested answers to present as choices')
+  options: z.array(z.string()).optional().describe('Optional suggested answers to present as choices'),
+  autoResolutionMs: z
+    .number()
+    .int()
+    .min(60_000)
+    .max(240_000)
+    .optional()
+    .describe('Optional 1-4 minute wait for useful but non-blocking context. Omit when a human answer is required.')
 });
 type ClarifyInput = z.infer<typeof clarifyInput>;
 
@@ -21,11 +34,11 @@ export function createClarifyTool(ask: ClarifyAsk): Tool<ClarifyInput, { answer:
   return {
     name: 'clarify_ask',
     description:
-      "Ask the user a single clarifying question and wait for their reply. Use when the request is genuinely ambiguous and a wrong guess would be costly — not for routine decisions you can make yourself. Optionally supply `options` to suggest choices. Returns the user's free-text answer (empty if they don't respond in time, in which case proceed with your best judgement).",
+      "Ask the user a single clarifying question and wait for their reply. Omit `autoResolutionMs` when proceeding without a human answer would be unsafe or violate the user's intent. Set it to 60000-240000 only for useful but non-blocking context; expiry returns an empty answer so you can proceed with best judgement.",
     scopes: [{ resource: 'clarify:ask' }],
     inputSchema: clarifyInput,
-    run: async ({ question, options }, ctx) => {
-      const answer = await ask(ctx.sessionId, question, options);
+    run: async ({ question, options, autoResolutionMs }, ctx) => {
+      const answer = await ask(ctx.sessionId, { question, options, autoResolutionMs });
       return toolResult({ answer });
     }
   };

@@ -10,7 +10,7 @@ export function createClarifyController(handlers: ReturnType<typeof createDaemon
     response: contract.response,
     detail: {
       summary: 'Answer a pending clarify question',
-      description: 'Resolves a pending clarify.requested with the user reply. ok:false → unknown/expired request id.'
+      description: 'Resolves a pending clarify.requested with the user reply and returns its terminal state.'
     }
   });
 }
