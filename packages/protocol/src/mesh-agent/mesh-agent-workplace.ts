@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { agentObservationEventSchema } from '../agent-observation.ts';
-import { iso8601Schema, meshSessionIdSchema, sessionIdSchema } from '../ids.ts';
+import { eventIdSchema, iso8601Schema, meshSessionIdSchema, sessionIdSchema } from '../ids.ts';
 import { type MeshAgentProvider, meshAgentNameSchema } from './mesh-agent-config.ts';
 
 export const workplaceProjectMembersExtKey = 'workplaceProjectMembers';
@@ -206,19 +206,29 @@ export type RemoveSessionMemberResponse = z.infer<typeof removeSessionMemberResp
 // own (today, the `monad`-typed member) — its raw source is the session's own domain event log
 // (filtered to the events that member produced) rather than a provider's raw output. It keys on
 // `sessionId`+`memberId` because there is no `mesh_` id to key on.
+//
+// `cursor` is the id of the last domain event folded into this frame (absent when the member has
+// produced no events yet) — the same exclusive-cursor primitive `session.subscribe`'s
+// `afterEventId` already uses (durable log + in-flight round buffer, see
+// `createSessionMemberObservationHandlers`). It is echoed back as the SSE frame's `id:`, so a
+// reconnect resumes via `Last-Event-ID`/`?after=` instead of always replaying the whole session.
 export const sessionMemberUiObservationFrameSchema = z.discriminatedUnion('state', [
   z.object({
     state: z.literal('live'),
+    operation: z.enum(['replace', 'append']),
     sessionId: sessionIdSchema,
     memberId: z.string().min(1),
     events: z.array(agentObservationEventSchema),
+    cursor: eventIdSchema.optional(),
     observedAt: z.string()
   }),
   z.object({
     state: z.literal('events'),
+    operation: z.enum(['replace', 'append']),
     sessionId: sessionIdSchema,
     memberId: z.string().min(1),
     events: z.array(agentObservationEventSchema),
+    cursor: eventIdSchema.optional(),
     observedAt: z.string()
   }),
   z.object({

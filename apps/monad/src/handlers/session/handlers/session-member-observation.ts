@@ -1,4 +1,4 @@
-import type { AgentObservationEvent, SessionId, SessionMemberUiObservationFrame } from '@monad/protocol';
+import type { AgentObservationEvent, Event, SessionId, SessionMemberUiObservationFrame } from '@monad/protocol';
 import type { SessionContext } from '#/handlers/session/context.ts';
 
 import { isMonadAgentDomainEvent, toAgentObservationEvent } from '#/agent/observation.ts';
@@ -20,47 +20,80 @@ export function createSessionMemberObservationHandlers(ctx: SessionContext) {
     return store.getSessionMember(sessionId, memberId)?.type === 'monad';
   }
 
-  // Full point-in-time projection: persisted events plus the active round's unpersisted tail
-  // (canonical message deltas live only in the round cache — see `RoundCache`/
-  // `persistAndRetire` in `handlers/session/context.ts`), merged in emission order. Re-derived on every
-  // call, mirroring `MeshAgentObservationResolver.observeUi`'s "re-derive from the whole snapshot,
-  // never a delta" contract so a consumer always replaces its list wholesale.
-  function projectEvents(sessionId: SessionId): AgentObservationEvent[] {
-    const events: AgentObservationEvent[] = [];
-    for (const event of [...store.listEvents(sessionId), ...cache.since(sessionId)]) {
+  // Mirrors `subscribe()`'s durable/buffered split (messaging-subscribe.ts): a persisted cursor
+  // covers completed rounds since it (the buffer alone would drop every finished round between the
+  // cursor and the active one), a cursor `listEvents` doesn't recognize (an un-persisted, in-flight
+  // event id) falls back to the buffered tail alone, and a fresh subscribe replays everything.
+  function replayEvents(sessionId: SessionId, afterEventId?: string): Event[] {
+    const buffered = cache.since(sessionId, afterEventId);
+    if (afterEventId !== undefined && store.hasEvent(sessionId, afterEventId)) {
+      const durable = store.listEvents(sessionId, afterEventId);
+      const seen = new Set(durable.map((e) => e.id));
+      return [...durable, ...buffered.filter((e) => !seen.has(e.id))];
+    }
+    return buffered.length > 0 ? buffered : store.listEvents(sessionId, afterEventId);
+  }
+
+  function toAgentObservationEvents(events: Event[]): AgentObservationEvent[] {
+    const out: AgentObservationEvent[] = [];
+    for (const event of events) {
       if (!isMonadAgentDomainEvent(event)) continue;
       const mapped = toAgentObservationEvent(event);
-      if (mapped) events.push(mapped);
+      if (mapped) out.push(mapped);
     }
-    return events;
+    return out;
   }
 
   function unavailableFrame(sessionId: SessionId, memberId: string, reason: string): SessionMemberUiObservationFrame {
     return { state: 'unavailable', sessionId, memberId, reason };
   }
 
+  // The replay cursor is the last DOMAIN event folded in, not the last neutral-mapped one: a
+  // system/status event that `toAgentObservationEvent` drops still advances the cursor, so a
+  // resume never re-replays it looking for a mapped event that will never arrive.
+  function liveFrame(
+    sessionId: SessionId,
+    memberId: string,
+    state: 'live' | 'events',
+    operation: 'replace' | 'append',
+    events: Event[]
+  ): SessionMemberUiObservationFrame {
+    const cursor = events.at(-1)?.id;
+    return {
+      state,
+      operation,
+      sessionId,
+      memberId,
+      events: toAgentObservationEvents(events),
+      ...(cursor ? { cursor } : {}),
+      observedAt: new Date().toISOString()
+    };
+  }
+
   function observeMemberUi({
     sessionId,
-    memberId
+    memberId,
+    afterEventId
   }: {
     sessionId: SessionId;
     memberId: string;
+    afterEventId?: string;
   }): SessionMemberUiObservationFrame {
     requireSession(sessionId);
     if (!isObservableMonadMember(sessionId, memberId)) {
       return unavailableFrame(sessionId, memberId, 'observation is only wired for the monad built-in agent member');
     }
-    return {
-      state: aborts.has(sessionId) ? 'live' : 'events',
+    return liveFrame(
       sessionId,
       memberId,
-      events: projectEvents(sessionId),
-      observedAt: new Date().toISOString()
-    };
+      aborts.has(sessionId) ? 'live' : 'events',
+      'replace',
+      replayEvents(sessionId, afterEventId)
+    );
   }
 
   function subscribeMemberUiObservation(
-    { sessionId, memberId }: { sessionId: SessionId; memberId: string },
+    { sessionId, memberId, afterEventId }: { sessionId: SessionId; memberId: string; afterEventId?: string },
     sink: (frame: SessionMemberUiObservationFrame) => void
   ): { dispose: () => void } {
     requireSession(sessionId);
@@ -68,18 +101,18 @@ export function createSessionMemberObservationHandlers(ctx: SessionContext) {
       sink(unavailableFrame(sessionId, memberId, 'observation is only wired for the monad built-in agent member'));
       return { dispose: () => {} };
     }
-    sink({
-      state: aborts.has(sessionId) ? 'live' : 'events',
-      sessionId,
-      memberId,
-      events: projectEvents(sessionId),
-      observedAt: new Date().toISOString()
-    });
+    sink(
+      liveFrame(
+        sessionId,
+        memberId,
+        aborts.has(sessionId) ? 'live' : 'events',
+        'replace',
+        replayEvents(sessionId, afterEventId)
+      )
+    );
     const dispose = bus.subscribe(sessionId, (event) => {
       if (!isMonadAgentDomainEvent(event)) return;
-      const mapped = toAgentObservationEvent(event);
-      if (!mapped) return;
-      sink({ state: 'live', sessionId, memberId, events: [mapped], observedAt: new Date().toISOString() });
+      sink(liveFrame(sessionId, memberId, 'live', 'append', [event]));
     });
     return { dispose };
   }

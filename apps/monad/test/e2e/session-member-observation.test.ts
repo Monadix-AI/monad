@@ -97,7 +97,7 @@ for (const kind of TRANSPORTS) {
       const res = await t.fetch(`/v1/sessions/${sessionId}/members/${memberId}/ui-observation`);
       expect(res.status).toBe(200);
       const frame = (await res.json()) as SessionMemberUiObservationFrame;
-      expect(frame).toMatchObject({ state: 'events', sessionId, memberId, events: [] });
+      expect(frame).toMatchObject({ state: 'events', operation: 'replace', sessionId, memberId, events: [] });
     });
 
     test('GET ui-observation projects the turn as neutral user-message/assistant-message events', async () => {
@@ -112,6 +112,29 @@ for (const kind of TRANSPORTS) {
       expect(eventsOf(frame)).toMatchObject([
         { kind: 'user-message', streaming: false, text: 'hi' },
         { kind: 'assistant-message', streaming: false, text: 'hello back' }
+      ]);
+    });
+
+    test('GET ui-observation resumes from ?after= and carries a cursor forward', async () => {
+      const { sessionId, memberId } = await createProjectSessionWithMonadMember();
+
+      const first = await json('POST', `/v1/sessions/${sessionId}/messages/block`, { text: 'hi' });
+      expect(first.status).toBe(200);
+      const initial = (await (
+        await t.fetch(`/v1/sessions/${sessionId}/members/${memberId}/ui-observation`)
+      ).json()) as SessionMemberUiObservationFrame;
+      expect(initial.state).toBe('events');
+      const cursor = initial.state === 'unavailable' ? undefined : initial.cursor;
+      expect(typeof cursor).toBe('string');
+
+      const second = await json('POST', `/v1/sessions/${sessionId}/messages/block`, { text: 'again' });
+      expect(second.status).toBe(200);
+      const resumed = (await (
+        await t.fetch(`/v1/sessions/${sessionId}/members/${memberId}/ui-observation?after=${cursor}`)
+      ).json()) as SessionMemberUiObservationFrame;
+      expect(eventsOf(resumed)).toMatchObject([
+        { kind: 'user-message', text: 'again' },
+        { kind: 'assistant-message', text: 'hello back' }
       ]);
     });
 
@@ -149,9 +172,35 @@ for (const kind of TRANSPORTS) {
       await json('POST', `/v1/sessions/${sessionId}/messages/block`, { text: 'hi' });
 
       const frames = await framesPromise;
-      expect(frames[0]).toMatchObject({ state: 'events', sessionId, memberId, events: [] });
+      expect(frames[0]).toMatchObject({ state: 'events', operation: 'replace', sessionId, memberId, events: [] });
       const live = frames.find((f) => f.state === 'live' && eventsOf(f).some((e) => e.kind === 'user-message'));
-      expect(live).toMatchObject({ sessionId, memberId, events: [{ kind: 'user-message', text: 'hi' }] });
+      expect(live).toMatchObject({
+        operation: 'append',
+        sessionId,
+        memberId,
+        events: [{ kind: 'user-message', text: 'hi' }]
+      });
+    });
+
+    test('ui-observation-stream resumes from ?after= without replaying already-seen events', async () => {
+      const { sessionId, memberId } = await createProjectSessionWithMonadMember();
+      const sendRes = await json('POST', `/v1/sessions/${sessionId}/messages/block`, { text: 'hi' });
+      expect(sendRes.status).toBe(200);
+
+      const snapshot = (await (
+        await t.fetch(`/v1/sessions/${sessionId}/members/${memberId}/ui-observation`)
+      ).json()) as SessionMemberUiObservationFrame;
+      const cursor = snapshot.state === 'unavailable' ? undefined : snapshot.cursor;
+      expect(typeof cursor).toBe('string');
+
+      const frames = await readFrames(
+        t,
+        `/v1/sessions/${sessionId}/members/${memberId}/ui-observation-stream?after=${cursor}`,
+        () => true,
+        500
+      );
+      expect(frames).toHaveLength(1);
+      expect(frames[0]).toMatchObject({ state: 'events', operation: 'replace', sessionId, memberId, events: [] });
     });
 
     test('ui-observation-stream closes after a single frame for an unknown member', async () => {

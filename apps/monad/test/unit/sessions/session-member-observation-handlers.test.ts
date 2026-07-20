@@ -230,8 +230,119 @@ describe('observeMemberUi', () => {
       cache.append(assistantDeltaEvent(session.id, 'msg_100000000000', 'Hi'));
 
       const frame = handlers.observeMemberUi({ sessionId: session.id, memberId: 'monad' });
-      expect(frame.state).toBe('live');
+      expect(frame).toMatchObject({ state: 'live', operation: 'replace' });
       expect(eventsOf(frame)).toMatchObject([{ kind: 'assistant-message', streaming: true, text: 'Hi' }]);
+    } finally {
+      store.close();
+    }
+  });
+
+  test('cursors the persisted-event resume position and resumes only what came after it', () => {
+    const store = createStore();
+    try {
+      const session = fixtureSession(store);
+      insertMonadMember(store, session.id);
+      const first = userMessageEvent(session.id, 'msg_100000000000', 'hi');
+      const second = assistantMessageEvent(session.id, 'msg_200000000000', 'hello');
+      store.appendEvents([first, second]);
+      const { handlers } = buildHarness(store);
+
+      const full = handlers.observeMemberUi({ sessionId: session.id, memberId: 'monad' });
+      expect(full).toMatchObject({ cursor: second.id });
+
+      const resumed = handlers.observeMemberUi({
+        sessionId: session.id,
+        memberId: 'monad',
+        afterEventId: first.id
+      });
+      expect(resumed).toMatchObject({ state: 'events', operation: 'replace' });
+      expect(eventsOf(resumed).map((e) => e.kind)).toEqual(['assistant-message']);
+      expect(resumed).toMatchObject({ cursor: second.id });
+    } finally {
+      store.close();
+    }
+  });
+
+  test('resuming from an un-persisted (active-round) cursor replays only the buffered tail after it', () => {
+    const store = createStore();
+    try {
+      const session = fixtureSession(store);
+      insertMonadMember(store, session.id);
+      const { handlers, cache, aborts } = buildHarness(store);
+
+      aborts.set(session.id, new AbortController());
+      const delta1 = assistantDeltaEvent(session.id, 'msg_100000000000', 'Hi');
+      const delta2 = assistantDeltaEvent(session.id, 'msg_100000000000', ' there');
+      cache.append(delta1);
+      cache.append(delta2);
+
+      const resumed = handlers.observeMemberUi({ sessionId: session.id, memberId: 'monad', afterEventId: delta1.id });
+      expect(resumed).toMatchObject({ state: 'live', operation: 'replace' });
+      expect(eventsOf(resumed)).toMatchObject([{ text: ' there' }]);
+      expect(resumed).toMatchObject({ cursor: delta2.id });
+    } finally {
+      store.close();
+    }
+  });
+
+  test('a persisted cursor from before the active round replays the completed round plus the buffered tail', () => {
+    const store = createStore();
+    try {
+      const session = fixtureSession(store);
+      insertMonadMember(store, session.id);
+      const missed = userMessageEvent(session.id, 'msg_000000000000', 'earlier');
+      const settled = userMessageEvent(session.id, 'msg_100000000000', 'hi');
+      store.appendEvents([missed, settled]);
+      const { handlers, cache, aborts } = buildHarness(store);
+
+      aborts.set(session.id, new AbortController());
+      const delta = assistantDeltaEvent(session.id, 'msg_200000000000', 'Hi');
+      cache.append(delta);
+
+      const resumed = handlers.observeMemberUi({ sessionId: session.id, memberId: 'monad', afterEventId: missed.id });
+      expect(resumed).toMatchObject({ state: 'live', operation: 'replace' });
+      expect(eventsOf(resumed).map((e) => e.kind)).toEqual(['user-message', 'assistant-message']);
+      expect(resumed).toMatchObject({ cursor: delta.id });
+    } finally {
+      store.close();
+    }
+  });
+
+  test('an unrecognized cursor falls back to the buffered tail when a round is active', () => {
+    const store = createStore();
+    try {
+      const session = fixtureSession(store);
+      insertMonadMember(store, session.id);
+      const settled = userMessageEvent(session.id, 'msg_100000000000', 'hi');
+      store.appendEvents([settled]);
+      const { handlers, cache, aborts } = buildHarness(store);
+
+      aborts.set(session.id, new AbortController());
+      const delta = assistantDeltaEvent(session.id, 'msg_200000000000', 'Hi');
+      cache.append(delta);
+
+      const resumed = handlers.observeMemberUi({
+        sessionId: session.id,
+        memberId: 'monad',
+        afterEventId: 'evt_unknown0000'
+      });
+      expect(resumed).toMatchObject({ state: 'live', operation: 'replace' });
+      expect(eventsOf(resumed).map((e) => e.kind)).toEqual(['assistant-message']);
+      expect(resumed).toMatchObject({ cursor: delta.id });
+    } finally {
+      store.close();
+    }
+  });
+
+  test('omits the cursor when the member has produced no events yet', () => {
+    const store = createStore();
+    try {
+      const session = fixtureSession(store);
+      insertMonadMember(store, session.id);
+      const { handlers } = buildHarness(store);
+
+      const frame = handlers.observeMemberUi({ sessionId: session.id, memberId: 'monad' });
+      expect(frame).not.toHaveProperty('cursor');
     } finally {
       store.close();
     }
@@ -251,10 +362,11 @@ describe('subscribeMemberUiObservation', () => {
         frames.push(frame)
       );
       expect(frames).toHaveLength(1);
+      expect(frames[0]).toMatchObject({ state: 'events', operation: 'replace', events: [] });
 
       bus.publish(userMessageEvent(session.id, 'msg_100000000000', 'hi'));
       expect(frames).toHaveLength(2);
-      expect(frames[1]).toMatchObject({ state: 'live', events: [{ kind: 'user-message' }] });
+      expect(frames[1]).toMatchObject({ state: 'live', operation: 'append', events: [{ kind: 'user-message' }] });
 
       // An event belonging to another member never reaches this subscriber.
       bus.publish(

@@ -55,13 +55,25 @@ function createSessionMemberUiObservationSseResponse(
   handlers: ReturnType<typeof createDaemonHandlers>,
   sessionId: SessionId,
   memberId: string,
+  afterEventId: string | undefined,
   encoder: TextEncoder
 ): Response {
   return createPushSseResponse<SessionMemberUiObservationFrame>({
     encoder,
-    encode: (frame) => encodeSseFrame({ event: 'session_member.ui_observation', data: frame }, encoder),
+    // `frame.cursor` (present on `live`/`events`, absent on `unavailable`) becomes the SSE `id:`, so
+    // a browser's native EventSource reconnect resends it as `Last-Event-ID` — same resume contract
+    // as `/sessions/:id/events`, rather than the previous always-full-resend behavior.
+    encode: (frame) =>
+      encodeSseFrame(
+        {
+          ...(frame.state === 'unavailable' ? {} : { id: frame.cursor }),
+          event: 'session_member.ui_observation',
+          data: frame
+        },
+        encoder
+      ),
     subscribe: (emit) =>
-      handlers.session.subscribeMemberUiObservation({ sessionId, memberId }, (frame) =>
+      handlers.session.subscribeMemberUiObservation({ sessionId, memberId, afterEventId }, (frame) =>
         emit(frame, frame.state === 'unavailable')
       )
   });
@@ -477,9 +489,15 @@ export function createSessionsController(
       )
       .get(
         '/sessions/:id/members/:memberId/ui-observation',
-        async ({ params }) => handlers.session.observeMemberUi({ sessionId: params.id, memberId: params.memberId }),
+        async ({ params, query }) =>
+          handlers.session.observeMemberUi({
+            sessionId: params.id,
+            memberId: params.memberId,
+            afterEventId: query.after
+          }),
         {
           params: sessionMemberParams,
+          query: z.object({ after: eventIdSchema.optional() }),
           response: { 200: sessionMemberUiObservationFrameSchema },
           detail: {
             tags: ['http-only'],
@@ -493,13 +511,24 @@ export function createSessionsController(
       )
       .get(
         '/sessions/:id/members/:memberId/ui-observation-stream',
-        ({ params }) => createSessionMemberUiObservationSseResponse(handlers, params.id, params.memberId, encoder),
+        ({ params, headers, query }) =>
+          createSessionMemberUiObservationSseResponse(
+            handlers,
+            params.id,
+            params.memberId,
+            headers['last-event-id'] ?? query.after,
+            encoder
+          ),
         {
           params: sessionMemberParams,
+          query: z.object({ after: eventIdSchema.optional() }),
+          headers: z.looseObject({ 'last-event-id': eventIdSchema.optional() }),
           detail: {
             tags: ['http-only'],
             summary: 'Stream a session member’s neutral (projected) observation frames',
-            description: 'The session-member counterpart to GET /mesh/sessions/:id/stream/convenience.'
+            description:
+              'The session-member counterpart to GET /mesh/sessions/:id/stream/convenience. ' +
+              'Supports resume via `Last-Event-ID` / `?after=`.'
           }
         }
       )
