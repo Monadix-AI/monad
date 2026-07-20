@@ -125,6 +125,7 @@ export function prepareManagedProjectRuntime(
   args: {
     monadHome: string;
     serverUrl: string;
+    meshSessionId: string;
     baseEnvPath?: string;
     platform?: NodeJS.Platform;
     /** The resolved autopilot outcome for this launch — threaded to `managedRuntime.env` so a provider
@@ -142,7 +143,6 @@ export function prepareManagedProjectRuntime(
     agentName: args.agentName,
     ...(args.displayName ? { displayName: args.displayName } : {}),
     projectId: args.projectId,
-    meshSessionId: args.meshSessionId,
     provider: args.provider,
     workspace,
     ...(args.modelName ? { modelName: args.modelName } : {}),
@@ -152,7 +152,7 @@ export function prepareManagedProjectRuntime(
     ...(args.customPrompt ? { customPrompt: args.customPrompt } : {}),
     monadCliCommand: monadCliCommand(monadCliEntry)
   });
-  const promptFile = join(workspace, 'managed-prompt.md');
+  const promptFile = join(workspace, 'GEMINI.md');
   const tokenFile = join(workspace, '.monad-agent-token');
   const token = randomBytes(32).toString('hex');
   writeFileSync(promptFile, prompt, { mode: 0o600 });

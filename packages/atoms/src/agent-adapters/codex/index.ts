@@ -47,8 +47,7 @@ export const codexMeshAgentAdapter: MeshAgentProviderAdapter = {
   managedRuntime: {
     env: () => ({ ...CODEX_NON_INTERACTIVE_ENV }),
     mcpConfigArgs: (ctx) => codexManagedMcpConfigArgs(ctx.monadCliEntry, ctx.env),
-    usesManagedMcpBridge: true,
-    usesDeveloperInstructions: true
+    usesManagedMcpBridge: true
   },
   detect(probes = defaultBinProbes) {
     const codexBin = resolveBinary('codex', [CODEX_APP_BIN], probes);

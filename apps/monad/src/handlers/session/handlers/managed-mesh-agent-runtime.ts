@@ -83,14 +83,14 @@ export function createManagedMeshAgentRuntime(ctx: SessionContext) {
       modelId,
       reasoningEffort,
       speed,
-      customPrompt
+      customPrompt,
+      initialInput: meshAgentInputText(input)
     };
     try {
       const nativeSession = await meshAgentHost.start({
         ...startArgs,
         providerSessionRef
       });
-      await meshAgentHost.input(nativeSession.id, { input: meshAgentInputText(input) });
       return nativeSession;
     } catch (err) {
       if (!providerSessionRef) throw err;
@@ -118,9 +118,9 @@ export function createManagedMeshAgentRuntime(ctx: SessionContext) {
         })
       );
       persistAndRetire(session.id, round);
-      const nativeSession = await meshAgentHost.start(startArgs);
-      await meshAgentHost.input(nativeSession.id, {
-        input: meshAgentInputText(managedMeshAgentResumeRecoveryNotice(spec.provider, input))
+      const nativeSession = await meshAgentHost.start({
+        ...startArgs,
+        initialInput: meshAgentInputText(managedMeshAgentResumeRecoveryNotice(spec.provider, input))
       });
       return nativeSession;
     }

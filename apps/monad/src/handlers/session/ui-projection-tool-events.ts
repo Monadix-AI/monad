@@ -178,40 +178,9 @@ export function applyToolEvent(m: ProjectionMutations, event: Event): SessionUiE
       const p = parseEventPayload('mesh.approval_resolved', event.payload);
       return [m.remove('approval', p.requestId)];
     }
-    case 'mesh.idle_suspended': {
-      const p = parseEventPayload('mesh.idle_suspended', event.payload);
-      return [
-        {
-          kind: 'upsert',
-          cursor: event.id,
-          item: m.upsert({
-            kind: 'system',
-            id: `mesh-agent-idle-suspended:${p.agentId}:${event.id}`,
-            text: m.t('daemon.session.meshAgentIdleSuspended'),
-            event: p,
-            level: 'info',
-            seq: event.at
-          })
-        }
-      ];
-    }
-    case 'mesh.idle_resumed': {
-      const p = parseEventPayload('mesh.idle_resumed', event.payload);
-      return [
-        {
-          kind: 'upsert',
-          cursor: event.id,
-          item: m.upsert({
-            kind: 'system',
-            id: `mesh-agent-idle-resumed:${p.agentId}:${event.id}`,
-            text: m.t('daemon.session.meshAgentIdleResumed'),
-            event: p,
-            level: 'info',
-            seq: event.at
-          })
-        }
-      ];
-    }
+    case 'mesh.idle_suspended':
+    case 'mesh.idle_resumed':
+      return [];
     case 'mesh.resume_failed': {
       const p = parseEventPayload('mesh.resume_failed', event.payload);
       const label = findMeshAgentProviderAdapter(p.provider)?.label ?? p.provider;

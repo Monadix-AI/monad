@@ -268,6 +268,11 @@ test('managed project runtime writes the prompt file it returns', async () => {
   });
 
   expect(await readFile(prepared.promptFile, 'utf8')).toBe(prepared.prompt);
+  expect(prepared.promptFile).toBe(join(prepared.workspace, 'GEMINI.md'));
+  // presence-ok: ephemeral runtime bindings and join triggers must never enter immutable instructions.
+  expect(prepared.prompt).not.toContain('mesh_prompt000000');
+  expect(prepared.prompt).not.toContain('When this managed project session starts');
+  expect(prepared.prompt).not.toContain('When this managed project session starts, acknowledge');
 });
 
 test('managed project runtime recreates token files with owner-only permissions', async () => {

@@ -17,10 +17,10 @@
 - Modify: `apps/monad/test/unit/mesh-agent-session-event-runtime.test.ts`
 - Modify: `apps/monad/test/unit/managed-mesh-agent-start-race.test.ts`
 
-- [ ] Add exact adapter assertions that Codex uses `developer_instructions` only on new-session launch and always keeps stdin mutable-only; Claude/Qwen use their native append facilities; Gemini uses additive managed context without `GEMINI_SYSTEM_MD`.
-- [ ] Add an executor test proving `open(initialTurn)` does not resolve until the initial turn completes and a later `input` stays mutable-only.
-- [ ] Add a managed runtime test proving one `meshAgentHost.start` call receives immutable instructions and initial input together, including recovery after a failed native resume.
-- [ ] Run `bun run scripts/bun-test.ts packages/atoms/test/unit/mesh-agent-session-event-adapters.test.ts apps/monad/test/unit/mesh-agent-session-event-runtime.test.ts apps/monad/test/unit/managed-mesh-agent-start-race.test.ts --only-failures` and confirm failures are contract mismatches, not fixture errors.
+- [x] Add exact adapter assertions that Codex uses `developer_instructions` only on new-session launch and always keeps stdin mutable-only; Claude/Qwen use their native append facilities; Gemini uses additive managed context without `GEMINI_SYSTEM_MD`.
+- [x] Add an executor test proving `open(initialTurn)` does not resolve until the initial turn completes and a later `input` stays mutable-only.
+- [x] Add a managed runtime test proving one `meshAgentHost.start` call receives immutable instructions and initial input together, including recovery after a failed native resume.
+- [x] Run `bun run scripts/bun-test.ts packages/atoms/test/unit/mesh-agent-session-event-adapters.test.ts apps/monad/test/unit/mesh-agent-session-event-runtime.test.ts apps/monad/test/unit/managed-mesh-agent-start-race.test.ts --only-failures` and confirm failures are contract mismatches, not fixture errors.
 
 ### Task 2: Introduce atomic immutable-plus-initial startup
 
@@ -31,11 +31,11 @@
 - Modify: `apps/monad/src/services/mesh-agent/host/index.ts`
 - Modify: `apps/monad/src/handlers/session/handlers/managed-mesh-agent-runtime.ts`
 
-- [ ] Add `MeshAgentImmutableInstructions` and `MeshAgentSessionStartInput` to the SDK context; remove `systemPromptFile` and `developerInstructions`.
-- [ ] Pass the managed prompt text/file and initial turn into `createSessionRuntime` before adapter construction.
-- [ ] Let the executor deliver `initialTurn` during `open` for resident and per-turn definitions and await its completion.
-- [ ] Change managed start and cold-start recovery to one `meshAgentHost.start` call; retain normal `input` only for later messages.
-- [ ] Run the Task 1 focused tests and make the host/executor contract green.
+- [x] Add `MeshAgentImmutableInstructions` and `MeshAgentSessionStartInput` to the SDK context; remove `systemPromptFile` and `developerInstructions`.
+- [x] Pass the managed prompt text/file and initial turn into `createSessionRuntime` before adapter construction.
+- [x] Let the executor deliver `initialTurn` during `open` for resident and per-turn definitions and await its completion.
+- [x] Change managed start and cold-start recovery to one `meshAgentHost.start` call; retain normal `input` only for later messages.
+- [x] Run the Task 1 focused tests and make the host/executor contract green.
 
 ### Task 3: Map immutable instructions inside Codex, Claude, Gemini, and Qwen adapters
 
@@ -46,11 +46,11 @@
 - Modify: `packages/atoms/src/agent-adapters/qwen/index.ts`
 - Modify: `packages/atoms/src/agent-adapters/legacy/runtime.ts`
 
-- [ ] Encode Codex immutable text as a TOML-safe `developer_instructions` config override only for a new native session; never concatenate it into stdin.
-- [ ] Read Claude and Qwen native append values from `immutableInstructions.file`/`text` inside their adapters.
-- [ ] Expose Gemini immutable instructions as additive managed `GEMINI.md` context through its included managed workspace and remove `GEMINI_SYSTEM_MD` replacement.
-- [ ] Remove obsolete adapter capability flags used by the generic launcher.
-- [ ] Run the Task 1 focused tests and make all provider mappings green.
+- [x] Encode Codex immutable text as a TOML-safe `developer_instructions` config override only for a new native session; never concatenate it into stdin.
+- [x] Read Claude and Qwen native append values from `immutableInstructions.file`/`text` inside their adapters.
+- [x] Expose Gemini immutable instructions as additive managed `GEMINI.md` context through its included managed workspace and remove `GEMINI_SYSTEM_MD` replacement.
+- [x] Remove obsolete adapter capability flags used by the generic launcher.
+- [x] Run the Task 1 focused tests and make all provider mappings green.
 
 ### Task 4: Remove ephemeral/startup behavior from immutable content
 
@@ -61,10 +61,10 @@
 - Modify: `apps/monad/src/services/mesh-agent/prompts/managed-project-runtime.prompt.md`
 - Modify: `apps/monad/test/unit/mesh-agent-managed-project.test.ts`
 
-- [ ] Remove `meshSessionId` from immutable prompt input while retaining `MONAD_MESH_SESSION_ID` as runtime binding data.
-- [ ] Remove the unconditional startup join instruction; the explicit join greeting remains the sole join trigger.
-- [ ] Assert the rendered immutable prompt contains stable identity and bridge rules but no ephemeral Mesh id or unconditional join behavior.
-- [ ] Run `bun run scripts/bun-test.ts apps/monad/test/unit/mesh-agent-managed-project.test.ts --only-failures`.
+- [x] Remove `meshSessionId` from immutable prompt input while retaining `MONAD_MESH_SESSION_ID` as runtime binding data.
+- [x] Remove the unconditional startup join instruction; the explicit join greeting remains the sole join trigger.
+- [x] Assert the rendered immutable prompt contains stable identity and bridge rules but no ephemeral Mesh id or unconditional join behavior.
+- [x] Run `bun run scripts/bun-test.ts apps/monad/test/unit/mesh-agent-managed-project.test.ts --only-failures`.
 
 ### Task 5: Keep ownership lifecycle engineering events out of the transcript
 
@@ -73,18 +73,18 @@
 - Modify: `apps/monad/test/unit/sessions/ui-projection.test.ts`
 - Modify: `packages/atoms/test/unit/workspace-project-messages.test.ts`
 
-- [ ] Add failing projection assertions that `mesh.idle_suspended` and `mesh.idle_resumed` produce no user-visible messages.
-- [ ] Remove transcript projection for those engineering events while preserving event compatibility for existing stored data.
-- [ ] Run the two focused projection test files.
+- [x] Add failing projection assertions that `mesh.idle_suspended` and `mesh.idle_resumed` produce no user-visible messages.
+- [x] Remove transcript projection for those engineering events while preserving event compatibility for existing stored data.
+- [x] Run the two focused projection test files.
 
 ### Task 6: Verify the full affected surface
 
 **Files:**
 - Test: all files above plus managed delivery, forwarding, protocol, SDK boundaries.
 
-- [ ] Run focused tests for adapters, executor, managed start/recovery, managed prompt, UI projection, protocol, and SDK.
-- [ ] Run `bun run lint` once and collect all failures.
-- [ ] Run `bun run typecheck` once and collect all failures.
-- [ ] Run `bun run test` once and collect all failures.
-- [ ] Review the final diff for provider leakage, weak assertions, user-visible lifecycle copy, and unrelated changes.
-- [ ] Commit the implementation with a scoped message.
+- [x] Run focused tests for adapters, executor, managed start/recovery, managed prompt, UI projection, protocol, and SDK.
+- [x] Run `bun run lint` once and collect all failures.
+- [x] Run `bun run typecheck` once and collect all failures.
+- [x] Run `bun run test` once and collect all failures.
+- [x] Review the final diff for provider leakage, weak assertions, user-visible lifecycle copy, and unrelated changes.
+- [x] Commit the implementation with a scoped message.

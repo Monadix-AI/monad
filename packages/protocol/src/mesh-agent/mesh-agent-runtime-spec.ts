@@ -7,7 +7,6 @@ export const nativeAgentRuntimePromptInputSchema = z.object({
   agentName: meshAgentNameSchema,
   displayName: meshAgentNameSchema.optional(),
   projectId: projectIdSchema,
-  meshSessionId: z.string().min(1),
   provider: meshAgentProviderSchema,
   workspace: z.string().min(1),
   modelName: z.string().min(1).optional(),

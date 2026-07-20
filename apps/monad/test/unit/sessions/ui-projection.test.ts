@@ -1672,7 +1672,7 @@ test('mesh.resume_failed system notice renders from the i18n catalog', () => {
   );
 });
 
-test('MeshAgent idle lifecycle notices preserve typed events and render action-only localized copy', () => {
+test('MeshAgent idle lifecycle events remain outside the user transcript', () => {
   const suspendedPayload = {
     agentId: 'pmem_reviewer_1',
     agentName: 'Reviewer',
@@ -1689,69 +1689,17 @@ test('MeshAgent idle lifecycle notices preserve typed events and render action-o
   const en = new SessionUiProjector();
   const suspendedEvent = event('mesh.idle_suspended', suspendedPayload);
   const resumedEvent = event('mesh.idle_resumed', resumedPayload);
-  expect(en.applyEvent(suspendedEvent)).toEqual([
-    {
-      kind: 'upsert',
-      cursor: suspendedEvent.id,
-      item: {
-        kind: 'system',
-        id: `mesh-agent-idle-suspended:pmem_reviewer_1:${suspendedEvent.id}`,
-        text: 'fell asleep.',
-        event: suspendedPayload,
-        level: 'info',
-        seq: suspendedEvent.at
-      }
-    }
-  ]);
-  expect(en.applyEvent(resumedEvent)).toEqual([
-    {
-      kind: 'upsert',
-      cursor: resumedEvent.id,
-      item: {
-        kind: 'system',
-        id: `mesh-agent-idle-resumed:pmem_reviewer_1:${resumedEvent.id}`,
-        text: 'woke up.',
-        event: resumedPayload,
-        level: 'info',
-        seq: resumedEvent.at
-      }
-    }
-  ]);
+  expect(en.applyEvent(suspendedEvent)).toEqual([]);
+  expect(en.applyEvent(resumedEvent)).toEqual([]);
 
   const zh = new SessionUiProjector({ t: createI18n({ locale: 'zh', packs: [] }).t });
   const zhSuspendedEvent = event('mesh.idle_suspended', suspendedPayload);
   const zhResumedEvent = event('mesh.idle_resumed', resumedPayload);
-  expect(zh.applyEvent(zhSuspendedEvent)).toEqual([
-    {
-      kind: 'upsert',
-      cursor: zhSuspendedEvent.id,
-      item: {
-        kind: 'system',
-        id: `mesh-agent-idle-suspended:pmem_reviewer_1:${zhSuspendedEvent.id}`,
-        text: '睡着了。',
-        event: suspendedPayload,
-        level: 'info',
-        seq: zhSuspendedEvent.at
-      }
-    }
-  ]);
-  expect(zh.applyEvent(zhResumedEvent)).toEqual([
-    {
-      kind: 'upsert',
-      cursor: zhResumedEvent.id,
-      item: {
-        kind: 'system',
-        id: `mesh-agent-idle-resumed:pmem_reviewer_1:${zhResumedEvent.id}`,
-        text: '醒来了。',
-        event: resumedPayload,
-        level: 'info',
-        seq: zhResumedEvent.at
-      }
-    }
-  ]);
+  expect(zh.applyEvent(zhSuspendedEvent)).toEqual([]);
+  expect(zh.applyEvent(zhResumedEvent)).toEqual([]);
 });
 
-test('MeshAgent idle lifecycle notices sort by event time instead of random event id', () => {
+test('MeshAgent idle lifecycle events do not accumulate transcript state', () => {
   const projector = new SessionUiProjector();
   const suspendedAt = '2026-07-18T14:00:00.000Z';
   const resumedAt = '2026-07-18T14:01:00.000Z';
@@ -1787,22 +1735,5 @@ test('MeshAgent idle lifecycle notices sort by event time instead of random even
 
   const snapshot = projector.snapshot();
   if (snapshot.kind !== 'snapshot') throw new Error('expected snapshot');
-  expect(
-    snapshot.items.map((item) => ({
-      eventType: item.kind === 'system' ? item.event?.type : undefined,
-      id: item.id,
-      seq: item.seq
-    }))
-  ).toEqual([
-    {
-      eventType: 'idle_suspended',
-      id: 'mesh-agent-idle-suspended:pmem_reviewer_1:evt_zzzzzzzzzzzz',
-      seq: suspendedAt
-    },
-    {
-      eventType: 'idle_resumed',
-      id: 'mesh-agent-idle-resumed:pmem_reviewer_1:evt_000000000000',
-      seq: resumedAt
-    }
-  ]);
+  expect(snapshot.items).toEqual([]);
 });

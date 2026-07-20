@@ -58,9 +58,6 @@ const baseOpenClawMeshAgentAdapter = makeGatewayCliAdapter({
     if (/auth|credential|profile/.test(normalized)) return 'authenticated';
     return 'unknown';
   },
-  managedRuntime: {
-    usesDeveloperInstructions: true
-  },
   gatewayHooks: openClawGatewayHooks,
   // OpenClaw's real startup line is `listening on port ${port} 🚀` (confirmed from the shipped
   // package's compiled source) — it never matches the daemon's generic `ws://host:port` announce scan,

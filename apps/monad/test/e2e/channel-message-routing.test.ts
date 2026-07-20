@@ -462,7 +462,10 @@ for (const kind of TRANSPORTS) {
       expect(send.status).toBe(200);
       expect(await send.json()).toEqual({ accepted: true });
       const codexInput = await waitForFile(codex.stdinLog, 'roster scoped task');
-      expect(codexInput).toContain('project_post');
+      const codexArgs = await waitForFile(codex.argsLog, 'developer_instructions=');
+      expect(codexArgs).toContain('project_post');
+      // presence-ok: immutable bridge instructions must not be duplicated into provider user history.
+      expect(codexInput).not.toContain('project_post');
       await Bun.sleep(100);
       expect(await readLogIfExists(claude.argsLog)).toBe('');
       expect(await readLogIfExists(claude.stdinLog)).toBe('');
@@ -553,7 +556,7 @@ for (const kind of TRANSPORTS) {
       await t.fetch(`/v1/sessions/${sessionId}`, json('PATCH', { cwd: projectDir }));
       await t.fetch(`/v1/channels/${sessionId}/messages`, json('POST', { text: 'start after cwd' }));
 
-      await waitForFile(stdinLog, 'joined');
+      await waitForFile(stdinLog, 'start after cwd');
       const sessions = handlers.store
         .listMeshSessionsForTranscriptTarget(sessionId)
         .filter((candidate) => candidate.runtimeRole === 'managed-project-agent');

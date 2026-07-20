@@ -2,6 +2,9 @@ import type { MeshAgentView } from '@monad/protocol';
 import type { MeshAgentSessionEvent, PerTurnProviderDriver } from '@monad/sdk-atom';
 
 import { describe, expect, test } from 'bun:test';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import { claudeCodeMeshAgentAdapter } from '../../src/agent-adapters/claude-code/index.ts';
 import { codexMeshAgentAdapter } from '../../src/agent-adapters/codex/index.ts';
@@ -100,7 +103,10 @@ describe('Codex per-turn session-event runtime', () => {
     const definition = codexMeshAgentAdapter.createSessionRuntime?.(agent('codex'), {
       workingPath: '/workspace',
       extraWorkingPaths: ['/managed'],
-      developerInstructions: 'Post through the Monad bridge.',
+      startInput: {
+        immutableInstructions: { text: 'Post through the Monad bridge.', file: '/managed/GEMINI.md' },
+        initialTurn: { text: 'hello', attachments: [] }
+      },
       skipProviderApprovals: true,
       mcpConfigArgs: ['-c', 'mcp_servers.monad.command="monad"'],
       env: { MONAD_AGENT_RUNTIME_TOKEN: 'token' }
@@ -115,6 +121,8 @@ describe('Codex per-turn session-event runtime', () => {
       'never',
       '--add-dir',
       '/managed',
+      '-c',
+      'developer_instructions="Post through the Monad bridge."',
       '-c',
       'mcp_servers.monad.command="monad"',
       '-'
@@ -136,7 +144,7 @@ describe('Codex per-turn session-event runtime', () => {
     ]);
     const encoded = definition.plan.encodeTurnInput({ text: 'hello', attachments: [] });
     if (encoded.delivery !== 'stdin') throw new Error('Codex stdin delivery required');
-    expect(new TextDecoder().decode(encoded.bytes)).toBe('Post through the Monad bridge.\n\nhello');
+    expect(new TextDecoder().decode(encoded.bytes)).toBe('hello');
     expect(definition.plan.buildTurnLaunch({}).env).toEqual({ MONAD_AGENT_RUNTIME_TOKEN: 'token' });
   });
 
@@ -159,6 +167,32 @@ describe('Codex per-turn session-event runtime', () => {
 });
 
 describe('Qwen resident session-event runtime', () => {
+  test('appends managed instructions through Qwen native system prompt configuration', () => {
+    const root = mkdtempSync(join(tmpdir(), 'monad-qwen-instructions-'));
+    const promptFile = join(root, 'GEMINI.md');
+    writeFileSync(promptFile, 'Post through Monad.');
+    try {
+      const definition = qwenMeshAgentAdapter.createSessionRuntime?.(agent('qwen'), {
+        workingPath: '/workspace',
+        startInput: {
+          immutableInstructions: { text: 'Post through Monad.', file: promptFile },
+          initialTurn: { text: 'hello', attachments: [] }
+        }
+      });
+      if (definition?.plan.processModel !== 'resident') throw new Error('Qwen resident runtime required');
+      expect(definition.plan.launch.args).toEqual([
+        '--append-system-prompt',
+        'Post through Monad.',
+        '--input-format',
+        'stream-json',
+        '--output-format',
+        'stream-json'
+      ]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   test('owns stream-json framing, session identity, and approval correlation in its driver', async () => {
     const definition = qwenMeshAgentAdapter.createSessionRuntime?.(agent('qwen'), {
       workingPath: '/workspace',
@@ -264,6 +298,35 @@ describe('Gemini per-turn session-event runtime', () => {
       { type: 'agent_message', payload: { text: 'hello', final: true } }
     ]);
   });
+
+  test('loads managed instructions as additive context without replacing Gemini defaults', () => {
+    const root = mkdtempSync(join(tmpdir(), 'monad-gemini-instructions-'));
+    const managedEnv = geminiMeshAgentAdapter.managedRuntime?.env?.({ workspace: root, skipProviderApprovals: true });
+    const settingsFile = join(root, 'gemini-system-settings.json');
+    expect(managedEnv).toEqual({ GEMINI_CLI_SYSTEM_SETTINGS_PATH: settingsFile });
+    expect(JSON.parse(readFileSync(settingsFile, 'utf8'))).toEqual({
+      context: { loadMemoryFromIncludeDirectories: true }
+    });
+    const definition = geminiMeshAgentAdapter.createSessionRuntime?.(agent('gemini'), {
+      workingPath: '/workspace',
+      extraWorkingPaths: [root],
+      startInput: {
+        immutableInstructions: { text: 'Post through Monad.', file: join(root, 'GEMINI.md') },
+        initialTurn: { text: 'hello', attachments: [] }
+      },
+      env: managedEnv
+    });
+    if (definition?.plan.processModel !== 'per-turn') throw new Error('Gemini per-turn runtime required');
+    expect(definition.plan.buildTurnLaunch({})).toEqual({
+      args: ['-p', '', '--include-directories', root, '--output-format', 'stream-json'],
+      cwd: '/workspace',
+      env: { GEMINI_CLI_SYSTEM_SETTINGS_PATH: settingsFile }
+    });
+    const encoded = definition.plan.encodeTurnInput({ text: 'hello', attachments: [] });
+    if (encoded.delivery !== 'stdin') throw new Error('Gemini stdin delivery required');
+    expect(new TextDecoder().decode(encoded.bytes)).toBe('hello');
+    rmSync(root, { recursive: true, force: true });
+  });
 });
 
 describe('Claude Code per-turn session-event runtime', () => {
@@ -339,7 +402,10 @@ describe('Claude Code per-turn session-event runtime', () => {
     const definition = claudeCodeMeshAgentAdapter.createSessionRuntime?.(agent('claude-code'), {
       workingPath: '/workspace',
       extraWorkingPaths: ['/managed'],
-      systemPromptFile: '/managed/prompt.md',
+      startInput: {
+        immutableInstructions: { text: 'Post through Monad.', file: '/managed/GEMINI.md' },
+        initialTurn: { text: 'hello', attachments: [] }
+      },
       skipProviderApprovals: true,
       mcpConfigArgs: ['--mcp-config', '{"mcpServers":{}}'],
       env: { MONAD_AGENT_RUNTIME_TOKEN: 'token' }
@@ -354,7 +420,7 @@ describe('Claude Code per-turn session-event runtime', () => {
       '--verbose',
       '--replay-user-messages',
       '--append-system-prompt-file',
-      '/managed/prompt.md',
+      '/managed/GEMINI.md',
       '--allowedTools',
       'mcp__monad__*',
       '--dangerously-skip-permissions',

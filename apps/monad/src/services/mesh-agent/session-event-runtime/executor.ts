@@ -96,7 +96,7 @@ export class SessionEventRuntimeExecutor {
     };
   }
 
-  async open(): Promise<SessionEventRuntimeSnapshot> {
+  async open(initialTurn?: MeshAgentTurnInput): Promise<SessionEventRuntimeSnapshot> {
     if (this.lifecycle.state !== 'starting') throw new Error('MeshAgent session runtime has already been opened');
     if (this.definition.plan.processModel === 'per-turn') {
       const ready = await this.definition.driver.openSession({
@@ -106,6 +106,7 @@ export class SessionEventRuntimeExecutor {
       this.applyReady(ready);
       this.lifecycle = { state: 'active' };
       this.publishSnapshot();
+      if (initialTurn) await this.input(initialTurn);
       return this.snapshot();
     }
     const { plan, driver } = this.definition;
@@ -149,6 +150,7 @@ export class SessionEventRuntimeExecutor {
       this.publishSnapshot();
       const packets = this.pumpPackets(activation, epoch, residentDriver);
       void this.monitorResident(activation, packets);
+      if (initialTurn) await this.input(initialTurn);
       return this.snapshot();
     } catch (error) {
       abort.abort();

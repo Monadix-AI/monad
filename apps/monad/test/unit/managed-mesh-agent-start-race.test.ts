@@ -9,11 +9,13 @@ import { createManagedMeshAgentDelivery } from '#/handlers/session/handlers/mana
 function buildHarness() {
   const starts: string[] = [];
   const startRefs: (string | undefined)[] = [];
+  const startInputs: string[] = [];
   const inputs: string[] = [];
   const meshAgentHost = {
-    start: async (args: { agentName: string; providerSessionRef?: string }) => {
+    start: async (args: { agentName: string; providerSessionRef?: string; initialInput: string }) => {
       starts.push(args.agentName);
       startRefs.push(args.providerSessionRef);
+      startInputs.push(args.initialInput.trim());
       await Bun.sleep(20);
       return { id: `mesh_${args.agentName}_${starts.length}`, agentName: args.agentName } as MeshSessionView;
     },
@@ -26,7 +28,7 @@ function buildHarness() {
     makeEmit: () => () => {},
     persistAndRetire: () => {}
   } as unknown as SessionContext;
-  return { delivery: createManagedMeshAgentDelivery(ctx), starts, startRefs, inputs, meshAgentHost };
+  return { delivery: createManagedMeshAgentDelivery(ctx), starts, startRefs, startInputs, inputs, meshAgentHost };
 }
 
 const session = { id: 'ses_race00000000', cwd: '/tmp/prj' } as unknown as Session;
@@ -44,7 +46,7 @@ function startArgs(input: string, runtimeAgentName = 'codex') {
 }
 
 test('concurrent starts for the same member share one runtime and deliver each distinct input once', async () => {
-  const { delivery, starts, inputs } = buildHarness();
+  const { delivery, starts, startInputs, inputs } = buildHarness();
   const [a, b, c] = await Promise.all([
     delivery.startManagedMeshAgentRuntimeWithRecovery(startArgs('greeting')),
     delivery.startManagedMeshAgentRuntimeWithRecovery(startArgs('greeting')),
@@ -53,27 +55,28 @@ test('concurrent starts for the same member share one runtime and deliver each d
   expect(starts).toEqual(['codex']);
   expect(a.id).toBe(b.id);
   expect(b.id).toBe(c.id);
-  expect(inputs.filter((text) => text === 'greeting')).toHaveLength(1);
+  expect(startInputs).toEqual(['greeting']);
   expect(inputs.filter((text) => text === 'message B')).toHaveLength(1);
 });
 
 test('different members start independently and a settled start does not dedupe later ones', async () => {
-  const { delivery, starts, inputs } = buildHarness();
+  const { delivery, starts, startInputs, inputs } = buildHarness();
   await Promise.all([
     delivery.startManagedMeshAgentRuntimeWithRecovery(startArgs('hello', 'codex')),
     delivery.startManagedMeshAgentRuntimeWithRecovery(startArgs('hello', 'claude'))
   ]);
   await delivery.startManagedMeshAgentRuntimeWithRecovery(startArgs('hello again', 'codex'));
   expect(starts.sort()).toEqual(['claude', 'codex', 'codex']);
-  expect(inputs.filter((text) => text === 'hello')).toHaveLength(2);
-  expect(inputs.filter((text) => text === 'hello again')).toHaveLength(1);
+  expect(startInputs.sort()).toEqual(['hello', 'hello', 'hello again']);
+  expect(inputs).toEqual([]);
 });
 
 test('resume failure cold-start input restores from shared memory and project inbox', async () => {
-  const { delivery, starts, startRefs, inputs, meshAgentHost } = buildHarness();
-  meshAgentHost.start = async (args: { agentName: string; providerSessionRef?: string }) => {
+  const { delivery, starts, startRefs, startInputs, inputs, meshAgentHost } = buildHarness();
+  meshAgentHost.start = async (args: { agentName: string; providerSessionRef?: string; initialInput: string }) => {
     starts.push(args.agentName);
     startRefs.push(args.providerSessionRef);
+    startInputs.push(args.initialInput.trim());
     if (args.providerSessionRef === 'archived-thread') throw new Error('session archived');
     return { id: `mesh_${args.agentName}_${starts.length}`, agentName: args.agentName } as MeshSessionView;
   };
@@ -84,5 +87,7 @@ test('resume failure cold-start input restores from shared memory and project in
   });
 
   expect(startRefs).toEqual(['archived-thread', undefined]);
-  expect(inputs).toHaveLength(1);
+  expect(startInputs[0]).toBe('recover this project message');
+  expect(startInputs[1]).toContain('recover this project message');
+  expect(inputs).toEqual([]);
 });

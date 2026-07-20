@@ -1,10 +1,10 @@
 import type { MeshAgentView } from '@monad/protocol';
-import type { MeshAgentProviderAdapter, PerTurnProviderDriver } from '@monad/sdk-atom';
+import type { MeshAgentProviderAdapter, MeshAgentSessionStartInput, PerTurnProviderDriver } from '@monad/sdk-atom';
 
 import { expect, test } from 'bun:test';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { builtinAgentAdapters } from '@monad/atoms/agent-adapters';
 
 import { EventBus } from '#/services/event-bus.ts';
@@ -94,6 +94,7 @@ test('MeshAgent host runs only the provider session-event runtime', async () => 
   writeFileSync(script, "console.log('structured-event');");
   const accepted: string[] = [];
   const turns: Array<number | null> = [];
+  let runtimeStartInput: MeshAgentSessionStartInput | undefined;
   const driver: PerTurnProviderDriver = {
     processModel: 'per-turn',
     controls: { approvalResolution: false, steer: false, interrupt: false },
@@ -145,16 +146,19 @@ test('MeshAgent host runs only the provider session-event runtime', async () => 
       parse: () => 'unknown'
     }),
     parseAuthStatus: () => 'unknown',
-    createSessionRuntime: (configured, context) => ({
-      plan: {
-        processModel: 'per-turn',
-        buildTurnLaunch: () => ({ args: configured.args ?? [], cwd: context.workingPath }),
-        encodeTurnInput: () => ({ delivery: 'stdin', bytes: new Uint8Array() }),
-        startup: { timeoutMs: 1_000 },
-        continuation: { strategy: 'provider-session-ref' }
-      },
-      driver
-    })
+    createSessionRuntime: (configured, context) => {
+      runtimeStartInput = context.startInput;
+      return {
+        plan: {
+          processModel: 'per-turn',
+          buildTurnLaunch: () => ({ args: configured.args ?? [], cwd: context.workingPath }),
+          encodeTurnInput: () => ({ delivery: 'stdin', bytes: new Uint8Array() }),
+          startup: { timeoutMs: 1_000 },
+          continuation: { strategy: 'provider-session-ref' }
+        },
+        driver
+      };
+    }
   };
   registerAgentAdapterImpl(adapter);
   const store = createStore();
@@ -175,16 +179,28 @@ test('MeshAgent host runs only the provider session-event runtime', async () => 
       transcriptTargetId: 'ses_01KWRUNTIME0',
       agentName: provider,
       runtimeRole: 'managed-project-agent',
-      workingPath: workdir
+      workingPath: workdir,
+      initialInput: 'initial message'
     });
     expect({ lifecycle: view.lifecycle, activity: view.activity }).toEqual({
       lifecycle: { state: 'active' },
       activity: { state: 'idle', pid: null, queuedTurnCount: 0 }
     });
-    await host.input(view.id, { input: 'hello' });
+    const expectedPromptFile = join(
+      dirname(realpathSync(workdir)),
+      'workplace-agents',
+      'ses_01KWRUNTIME0',
+      provider,
+      'GEMINI.md'
+    );
+    expect(runtimeStartInput).toEqual({
+      immutableInstructions: { file: expectedPromptFile, text: readFileSync(expectedPromptFile, 'utf8') },
+      initialTurn: { text: 'initial message', attachments: [] }
+    });
+    await host.input(view.id, { input: 'later message' });
     expect({ accepted, turns, turnEvents }).toEqual({
-      accepted: ['structured-event'],
-      turns: [0],
+      accepted: ['structured-event', 'structured-event'],
+      turns: [0, 0],
       turnEvents: [{ type: 'mesh.turn_started', payload: { meshSessionId: view.id } }]
     });
     host.stop(view.id);

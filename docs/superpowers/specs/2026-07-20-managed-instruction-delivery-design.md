@@ -130,7 +130,7 @@ Claude Code uses its native appended system-prompt file mechanism. Per-turn CLI 
 
 ### Gemini CLI
 
-Gemini uses its additive hierarchical context mechanism. The managed instruction file is exposed as managed `GEMINI.md` context through the adapter's included workspace, preserving Gemini's built-in system instructions. The adapter no longer sets `GEMINI_SYSTEM_MD`, which is a full replacement.
+Gemini uses its additive hierarchical context mechanism. The managed instruction file is exposed as managed `GEMINI.md` context through the adapter's included workspace, and the adapter supplies a process-local `GEMINI_CLI_SYSTEM_SETTINGS_PATH` that enables `context.loadMemoryFromIncludeDirectories`. This preserves Gemini's built-in system instructions. The adapter no longer sets `GEMINI_SYSTEM_MD`, which is a full replacement.
 
 The adapter does not use `PreCompress` for correctness because it runs before compression and does not prove compression completed. Gemini reloads the additive context for each CLI invocation, so no fallback reinjection state is required.
 

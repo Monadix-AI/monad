@@ -12,6 +12,7 @@ import type {
   MeshAgentProductIcon,
   MeshAgentProvider,
   MeshAgentSetting,
+  MeshAgentTurnInput,
   MeshAgentUsageLimitMeter,
   MeshAgentUsageRecord,
   MeshAgentView,
@@ -81,8 +82,7 @@ export interface MeshAgentSessionRuntimeContext {
   workingPath: string;
   extraWorkingPaths?: string[];
   providerSessionRef?: string;
-  systemPromptFile?: string;
-  developerInstructions?: string;
+  startInput?: MeshAgentSessionStartInput;
   skipProviderApprovals?: boolean;
   mcpConfigArgs?: string[];
   env?: Record<string, string>;
@@ -90,6 +90,16 @@ export interface MeshAgentSessionRuntimeContext {
   modelId?: string;
   reasoningEffort?: string;
   speed?: 'standard' | 'fast';
+}
+
+export interface MeshAgentImmutableInstructions {
+  text: string;
+  file: string;
+}
+
+export interface MeshAgentSessionStartInput {
+  immutableInstructions?: MeshAgentImmutableInstructions;
+  initialTurn: MeshAgentTurnInput;
 }
 
 export interface MeshAgentOutputEvent {
@@ -368,10 +378,6 @@ export interface MeshAgentManagedRuntime {
   /** The provider mounts monad's managed MCP server as its project bridge — drives the MCP prompt
    *  template, the MCP-flavored join greeting, and the MCP tool-usage communication instructions. */
   usesManagedMcpBridge?: boolean;
-  /** The managed prompt is delivered as an appended system-prompt file. */
-  usesSystemPromptFile?: boolean;
-  /** The managed prompt is delivered as developer instructions on session init. */
-  usesDeveloperInstructions?: boolean;
 }
 
 export interface MeshAgentProviderSessionLifecycleContext {

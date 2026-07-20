@@ -414,10 +414,11 @@ function createClaudeSessionRuntime(
   } else if (context.reasoningEffort && !hasFlag(args, '--effort')) {
     args.push('--effort', context.reasoningEffort);
   }
-  if (context.systemPromptFile && !args.includes('--append-system-prompt-file')) {
-    args.push('--append-system-prompt-file', context.systemPromptFile);
+  const immutableInstructions = context.startInput?.immutableInstructions;
+  if (immutableInstructions && !args.includes('--append-system-prompt-file')) {
+    args.push('--append-system-prompt-file', immutableInstructions.file);
   }
-  args = allowManagedBridgeTools(args, !!context.systemPromptFile);
+  args = allowManagedBridgeTools(args, !!immutableInstructions);
   args = withClaudeSkipApprovalArgs(args, !!context.skipProviderApprovals);
   args = [...args, ...claudeExtraWorkingPathArgs(context.extraWorkingPaths)];
   args = [...args, ...(context.mcpConfigArgs ?? [])];
@@ -476,8 +477,7 @@ export const claudeCodeMeshAgentAdapter: MeshAgentProviderAdapter = {
   },
   managedRuntime: {
     mcpConfigArgs: claudeManagedMcpConfigArgs,
-    usesManagedMcpBridge: true,
-    usesSystemPromptFile: true
+    usesManagedMcpBridge: true
   },
   detect(probes = defaultBinProbes) {
     const claudeBin = resolveBinary('claude', [], probes);

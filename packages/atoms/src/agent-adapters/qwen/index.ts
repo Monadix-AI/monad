@@ -122,7 +122,7 @@ function createQwenSessionRuntime(
     extraWorkingPaths: context.extraWorkingPaths,
     launchMode: 'json-stream',
     providerSessionRef: context.providerSessionRef,
-    systemPromptFile: context.systemPromptFile,
+    systemPromptFile: context.startInput?.immutableInstructions?.file,
     skipProviderApprovals: context.skipProviderApprovals,
     modelName: context.modelName,
     modelId: context.modelId
@@ -181,9 +181,6 @@ export const qwenMeshAgentAdapter: MeshAgentProviderAdapter = {
       (arg, index) =>
         arg === '--yolo' || arg === '--approval-mode=yolo' || (arg === '--approval-mode' && args[index + 1] === 'yolo')
     ),
-  managedRuntime: {
-    usesSystemPromptFile: true
-  },
   detect(probes = defaultBinProbes) {
     const qwenBin = resolveBinary('qwen', [], probes);
     const installed = qwenBin !== undefined;

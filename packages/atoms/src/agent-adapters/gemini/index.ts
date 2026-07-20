@@ -7,6 +7,7 @@ import type {
 } from '@monad/sdk-atom';
 import type { LegacyProviderLaunchOptions, LegacyProviderLaunchSpec } from '../legacy/runtime.ts';
 
+import { writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { defaultBinProbes, resolveBinary } from '@monad/sdk-atom';
@@ -31,6 +32,14 @@ import { createGeminiStreamJsonParser, hasGeminiStreamJsonEvents } from './strea
 // probe-able models command.
 const GEMINI_SUPPORTED_MODELS = ['gemini-2.5-pro', 'gemini-2.5-flash'];
 
+function geminiManagedEnv(workspace: string): Record<string, string> {
+  const settingsFile = join(workspace, 'gemini-system-settings.json');
+  writeFileSync(settingsFile, `${JSON.stringify({ context: { loadMemoryFromIncludeDirectories: true } }, null, 2)}\n`, {
+    mode: 0o600
+  });
+  return { GEMINI_CLI_SYSTEM_SETTINGS_PATH: settingsFile };
+}
+
 function withGeminiStreamJsonArgs(args: string[]): string[] {
   const next = [...args];
   if (!hasFlag(next, '-p') && !hasFlag(next, '--prompt')) next.unshift('-p', '');
@@ -50,13 +59,6 @@ function geminiExtraWorkingPathArgs(paths: string[] | undefined): string[] {
   return (paths ?? []).flatMap((path) => ['--include-directories', path]);
 }
 
-function geminiLaunchEnv(
-  agent: MeshAgentView,
-  systemPromptFile: string | undefined
-): Record<string, string> | undefined {
-  return systemPromptFile ? { ...agent.env, GEMINI_SYSTEM_MD: systemPromptFile } : agent.env;
-}
-
 function buildGeminiLaunch(agent: MeshAgentView, opts: LegacyProviderLaunchOptions): LegacyProviderLaunchSpec {
   const launchMode = opts.launchMode ?? 'json-stream';
   let args = [...(agent.args ?? [])];
@@ -73,7 +75,7 @@ function buildGeminiLaunch(agent: MeshAgentView, opts: LegacyProviderLaunchOptio
   return {
     argv: [agent.command, ...launchArgs],
     cwd: opts.workingPath,
-    env: geminiLaunchEnv(agent, opts.systemPromptFile),
+    env: agent.env,
     launchMode,
     provider: 'gemini',
     approvalOwnership: 'provider-owned',
@@ -99,7 +101,6 @@ function createGeminiSessionRuntime(
           extraWorkingPaths: context.extraWorkingPaths,
           launchMode: 'json-stream',
           providerSessionRef,
-          systemPromptFile: context.systemPromptFile,
           skipProviderApprovals: context.skipProviderApprovals,
           modelName: context.modelName,
           modelId: context.modelId
@@ -250,7 +251,7 @@ export const geminiMeshAgentAdapter: MeshAgentProviderAdapter = {
         arg === '--yolo' || arg === '--approval-mode=yolo' || (arg === '--approval-mode' && args[index + 1] === 'yolo')
     ),
   managedRuntime: {
-    usesSystemPromptFile: true
+    env: ({ workspace }) => geminiManagedEnv(workspace)
   },
   detect(probes = defaultBinProbes) {
     const geminiBin = resolveBinary('gemini', [], probes);

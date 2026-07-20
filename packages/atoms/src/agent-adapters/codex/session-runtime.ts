@@ -51,23 +51,24 @@ export function createCodexSessionRuntime(
   context: MeshAgentSessionRuntimeContext
 ): SessionEventRuntimeDefinition {
   const { approvalArgs, execArgs, execGlobalArgs } = codexExecOptions(agent, context);
+  const immutableText = context.startInput?.immutableInstructions?.text;
   return {
     plan: {
       processModel: 'per-turn',
-      buildTurnLaunch: ({ providerSessionRef }) => ({
-        args: providerSessionRef
-          ? [...approvalArgs, 'exec', ...execGlobalArgs, 'resume', ...execArgs, providerSessionRef, '-']
-          : [...approvalArgs, 'exec', ...execGlobalArgs, ...execArgs, '-'],
-        cwd: context.workingPath,
-        ...(context.env || agent.env ? { env: { ...(agent.env ?? {}), ...(context.env ?? {}) } } : {})
-      }),
+      buildTurnLaunch: ({ providerSessionRef }) => {
+        const instructionArgs =
+          !providerSessionRef && immutableText ? ['-c', `developer_instructions=${JSON.stringify(immutableText)}`] : [];
+        return {
+          args: providerSessionRef
+            ? [...approvalArgs, 'exec', ...execGlobalArgs, 'resume', ...execArgs, providerSessionRef, '-']
+            : [...approvalArgs, 'exec', ...execGlobalArgs, ...instructionArgs, ...execArgs, '-'],
+          cwd: context.workingPath,
+          ...(context.env || agent.env ? { env: { ...(agent.env ?? {}), ...(context.env ?? {}) } } : {})
+        };
+      },
       encodeTurnInput: (input) => ({
         delivery: 'stdin',
-        bytes: new TextEncoder().encode(
-          context.developerInstructions
-            ? `${context.developerInstructions}\n\n${codexTurnText(input)}`
-            : codexTurnText(input)
-        )
+        bytes: new TextEncoder().encode(codexTurnText(input))
       }),
       startup: { timeoutMs: 20_000 },
       continuation: { strategy: 'provider-session-ref' }

@@ -329,7 +329,7 @@ test('active project-message fan-out returns after queueing without waiting for 
 test('project-message fan-out resumes a pending unauthenticated member after login resolves', async () => {
   const bus = new EventBus();
   const inputs: Array<{ id: string; input: string }> = [];
-  const starts: Array<{ agentName: string; templateAgentName?: string }> = [];
+  const starts: Array<{ agentName: string; templateAgentName?: string; initialInput: string }> = [];
   let preflightCalls = 0;
   const store = {
     listSessionMembers: () => [
@@ -375,10 +375,11 @@ test('project-message fan-out resumes a pending unauthenticated member after log
             provider: 'claude-code',
             checkedAt: new Date(0).toISOString()
           },
-    start: async (args: { agentName: string; templateAgentName?: string }) => {
+    start: async (args: { agentName: string; templateAgentName?: string; initialInput: string }) => {
       starts.push({
         agentName: args.agentName,
-        templateAgentName: args.templateAgentName
+        templateAgentName: args.templateAgentName,
+        initialInput: args.initialInput
       });
       return {
         id: 'mesh_sonnetretry0',
@@ -436,15 +437,21 @@ test('project-message fan-out resumes a pending unauthenticated member after log
   );
   await new Promise((resolve) => setTimeout(resolve, 0));
 
-  expect(starts).toEqual([{ agentName: 'sonnet', templateAgentName: 'claude-code' }]);
-  expect(inputs).toHaveLength(1);
-  expect(inputs[0]?.input).toContain('initial project task');
+  expect(starts).toEqual([
+    {
+      agentName: 'sonnet',
+      templateAgentName: 'claude-code',
+      initialInput: expect.stringContaining('initial project task')
+    }
+  ]);
+  expect(inputs).toEqual([]);
 });
 
 test('project-message fan-out treats provider auth start failures as login-required and retries after login', async () => {
   const bus = new EventBus();
   const connectionRequired: unknown[] = [];
   const inputs: Array<{ id: string; input: string }> = [];
+  const startInputs: string[] = [];
   let startCalls = 0;
   bus.subscribe('ses_loginthrow0' as never, (event) => {
     if (event.type === 'mesh.connection_required') connectionRequired.push(event.payload);
@@ -483,8 +490,9 @@ test('project-message fan-out treats provider auth start failures as login-requi
       provider: 'claude-code',
       checkedAt: new Date(0).toISOString()
     }),
-    start: async (args: { agentName: string }) => {
+    start: async (args: { agentName: string; initialInput: string }) => {
       startCalls += 1;
+      startInputs.push(args.initialInput);
       if (startCalls === 1) throw new Error('Claude Code is not logged in; please run /login');
       return {
         id: 'mesh_opusretry000',
@@ -550,8 +558,11 @@ test('project-message fan-out treats provider auth start failures as login-requi
   await new Promise((resolve) => setTimeout(resolve, 0));
 
   expect(startCalls).toBe(2);
-  expect(inputs).toHaveLength(1);
-  expect(inputs[0]?.input).toContain('retry after thrown auth failure');
+  expect(startInputs).toEqual([
+    expect.stringContaining('retry after thrown auth failure'),
+    expect.stringContaining('retry after thrown auth failure')
+  ]);
+  expect(inputs).toEqual([]);
 });
 
 test('project-message fan-out emits connection_required when a project member adapter is disabled', async () => {

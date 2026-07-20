@@ -36,6 +36,7 @@ export interface MeshSessionEventRuntimeStartArgs {
   speed?: 'standard' | 'fast';
   customPrompt?: string;
   allowAutopilot?: boolean;
+  initialInput?: string;
 }
 
 interface MeshSessionEventRuntimeLauncherContext {
@@ -93,6 +94,16 @@ export class MeshSessionEventRuntimeLauncher {
           skipProviderApprovals
         })
       : null;
+    if (willBeManaged && args.initialInput === undefined) {
+      throw new Error('managed MeshAgent startup requires initial input');
+    }
+    const startInput =
+      managed && args.initialInput !== undefined
+        ? {
+            immutableInstructions: { text: managed.prompt, file: managed.promptFile },
+            initialTurn: { text: args.initialInput, attachments: [] }
+          }
+        : undefined;
     const now = new Date().toISOString();
     const baseRow: MeshSessionRow = {
       id,
@@ -124,12 +135,7 @@ export class MeshSessionEventRuntimeLauncher {
           workingPath,
           extraWorkingPaths: managed ? [managed.workspace] : undefined,
           providerSessionRef: args.providerSessionRef,
-          systemPromptFile: adapter.managedRuntime?.usesSystemPromptFile
-            ? (managed?.promptFile ?? undefined)
-            : undefined,
-          developerInstructions: adapter.managedRuntime?.usesDeveloperInstructions
-            ? (managed?.prompt ?? undefined)
-            : undefined,
+          startInput,
           skipProviderApprovals,
           mcpConfigArgs: managed?.mcpConfigArgs,
           env: managed?.env,
@@ -277,7 +283,7 @@ export class MeshSessionEventRuntimeLauncher {
     this.ctx.live.set(id, live);
     this.ctx.deps.store.upsertMeshSession(baseRow);
     try {
-      const snapshot = await runtime.open();
+      const snapshot = await runtime.open(startInput?.initialTurn);
       const pid = snapshot.activity.state === 'running' ? snapshot.activity.pid : null;
       const row: MeshSessionRow = {
         ...baseRow,

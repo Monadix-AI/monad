@@ -351,9 +351,8 @@ describe('generic session-event runtime executor', () => {
       onSnapshot: (snapshot) => states.push(`${snapshot.lifecycle.state}:${snapshot.activity.state}`)
     });
 
-    await executor.open();
+    await executor.open({ text: 'first', attachments: [] });
     expect(executor.snapshot()).toMatchObject({ lifecycle: { state: 'active' }, activity: { state: 'idle' } });
-    await executor.input({ text: 'first', attachments: [] });
     await executor.input({ text: 'second', attachments: [] });
 
     expect(refs).toEqual([undefined, 'provider-session-1']);
