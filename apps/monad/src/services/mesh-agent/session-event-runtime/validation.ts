@@ -66,7 +66,7 @@ function validateStartup(value: unknown): void {
 }
 
 function validateDriver(value: unknown, processModel: 'resident' | 'per-turn'): void {
-  const result = z
+  const commonDriverSchema = z
     .object({
       processModel: z.enum(['resident', 'per-turn']),
       openSession: z.function(),
@@ -74,19 +74,19 @@ function validateDriver(value: unknown, processModel: 'resident' | 'per-turn'): 
       dispose: z.function(),
       controls: z.unknown().refine(Boolean)
     })
-    .passthrough()
-    .safeParse(value);
+    .passthrough();
+  const result = commonDriverSchema.safeParse(value);
   if (!result.success) fail('driver is missing required session methods');
   const candidate = result.data;
   if (candidate.processModel !== processModel) fail('driver process model does not match runtime plan');
   if (processModel === 'resident') {
-    if (!z.object({ attachChannel: z.function(), sendTurn: z.function() }).safeParse(candidate).success) {
+    if (!commonDriverSchema.extend({ attachChannel: z.function(), sendTurn: z.function() }).safeParse(value).success) {
       fail('resident driver is missing required methods');
     }
-  } else {
-    if (!z.object({ attachTurnChannel: z.function(), completeTurn: z.function() }).safeParse(candidate).success) {
-      fail('per-turn driver is missing required methods');
-    }
+  } else if (
+    !commonDriverSchema.extend({ attachTurnChannel: z.function(), completeTurn: z.function() }).safeParse(value).success
+  ) {
+    fail('per-turn driver is missing required methods');
   }
 }
 

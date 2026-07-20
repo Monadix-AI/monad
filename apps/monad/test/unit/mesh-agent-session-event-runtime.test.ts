@@ -87,6 +87,22 @@ describe('session-event runtime definition validation', () => {
     expect(validateSessionEventRuntimeDefinition(perTurn)).toBe(perTurn);
   });
 
+  test('accepts driver methods inherited from a provider class prototype', () => {
+    const inheritedDriver = Object.create(driver('per-turn')) as PerTurnProviderDriver;
+    const definition: SessionEventRuntimeDefinition = {
+      plan: {
+        processModel: 'per-turn',
+        buildTurnLaunch: () => ({ args: ['exec', '--json'], cwd: '/workspace' }),
+        encodeTurnInput: ({ text }) => ({ delivery: 'stdin', bytes: new TextEncoder().encode(text) }),
+        startup: { timeoutMs: 10_000 },
+        continuation: { strategy: 'provider-session-ref' }
+      },
+      driver: inheritedDriver
+    };
+
+    expect(validateSessionEventRuntimeDefinition(definition)).toBe(definition);
+  });
+
   test('rejects a mismatched driver and unsafe runtime policy values', () => {
     const mismatched = residentDefinition() as unknown as Record<string, unknown>;
     mismatched.driver = driver('per-turn');
