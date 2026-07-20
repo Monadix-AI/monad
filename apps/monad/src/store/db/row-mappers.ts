@@ -2,9 +2,17 @@
 // I/O — split out of index.ts so the Store class is just query orchestration. Row shapes come from
 // the drizzle schema ($inferSelect); domain shapes come from @monad/protocol.
 
-import type { ChatMessage, MessageType, Session, SessionState, StreamStatus, WorkplaceProject } from '@monad/protocol';
+import type { ChatMessage, Session, WorkplaceProject } from '@monad/protocol';
 
-import { sessionOriginSchema, transcriptTargetIdSchema } from '@monad/protocol';
+import {
+  chatMessageSchema,
+  messageIdSchema,
+  sessionOriginSchema,
+  sessionSchema,
+  streamStatusSchema,
+  transcriptTargetIdSchema,
+  workplaceProjectSchema
+} from '@monad/protocol';
 
 import { messages, sessions, workplaceProjects } from './schema.ts';
 import { parseSessionModelSelection } from './session-model-selection.ts';
@@ -81,12 +89,12 @@ function parseOrigin(raw: string | null): Session['origin'] {
 
 export function rowToSession(row: SessionRow): Session {
   const modelSelection = parseSessionModelSelection(row.model);
-  return {
-    id: row.id as Session['id'],
-    projectId: (row.projectId ?? undefined) as Session['projectId'],
+  return sessionSchema.parse({
+    id: row.id,
+    projectId: row.projectId ?? undefined,
     title: row.title,
-    state: row.state as SessionState,
-    agentIds: JSON.parse(row.agentIds) as Session['agentIds'],
+    state: row.state,
+    agentIds: JSON.parse(row.agentIds),
     archived: row.archived === 1,
     restoreCount: row.restoreCount,
     model: modelSelection.model,
@@ -104,39 +112,38 @@ export function rowToSession(row: SessionRow): Session {
     costUsd: row.costUsd,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt
-  };
+  });
 }
 
 export function rowToWorkplaceProject(row: WorkplaceProjectRow): WorkplaceProject {
-  return {
-    id: row.id as WorkplaceProject['id'],
+  return workplaceProjectSchema.parse({
+    id: row.id,
     title: row.title,
-    state: row.state as SessionState,
+    state: row.state,
     archived: row.archived === 1,
     model: row.model ?? undefined,
     cwd: row.cwd ?? undefined,
     origin: parseOrigin(row.origin),
-    memberTemplates: JSON.parse(row.memberTemplates) as WorkplaceProject['memberTemplates'],
+    memberTemplates: JSON.parse(row.memberTemplates),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt
-  };
+  });
 }
 
 export function rowToMessage(row: MessageRow): ChatMessage {
-  const status = row.streamStatus as StreamStatus;
+  const status = streamStatusSchema.parse(row.streamStatus);
   const sessionId = transcriptTargetIdSchema.parse(row.transcriptTargetId);
-  const messageId = row.id as ChatMessage['id'];
-  const type = row.type as MessageType;
+  const messageId = messageIdSchema.parse(row.id);
   // `source` is not persisted; reconstruct it for live rows so a client can open the message-scoped
   // generation subscription.
   const live = status === 'pending' || status === 'streaming';
-  return {
+  return chatMessageSchema.parse({
     id: messageId,
     sessionId,
-    role: row.role as ChatMessage['role'],
+    role: row.role,
     text: row.text,
-    type,
-    data: row.data != null ? (JSON.parse(row.data) as unknown) : undefined,
+    type: row.type,
+    data: row.data != null ? JSON.parse(row.data) : undefined,
     stream: {
       status,
       source: live ? { transcriptTargetId: sessionId, messageId } : undefined
@@ -145,5 +152,5 @@ export function rowToMessage(row: MessageRow): ChatMessage {
     ...(row.includeInContext != null ? { includeInContext: row.includeInContext === 1 } : {}),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt ?? undefined
-  };
+  });
 }
