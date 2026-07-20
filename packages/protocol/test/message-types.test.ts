@@ -57,6 +57,25 @@ test('branch source messages are UI-only snapshot boundaries with a title', () =
   ).toEqual({ sessionTitle: 'Original session' });
 });
 
+test('mesh agent direct-message events use structured data without entering model context', () => {
+  const descriptor = resolveMessageType('mesh_agent_direct_message');
+
+  expect({
+    type: descriptor.type,
+    fallbacks: descriptor.fallbacks,
+    interactions: descriptor.interactions,
+    includeInContext: descriptor.includeInContext,
+    generative: descriptor.generative
+  }).toEqual({
+    type: 'mesh_agent_direct_message',
+    fallbacks: ['data', 'text'],
+    interactions: undefined,
+    includeInContext: false,
+    generative: undefined
+  });
+  expect(includeInContext({ type: 'mesh_agent_direct_message' })).toBe(false);
+});
+
 test('atom types are namespaced and cannot shadow built-ins', () => {
   const d = registerMessageType('myatompack', {
     type: 'card',

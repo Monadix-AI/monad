@@ -850,14 +850,21 @@ for (const kind of TRANSPORTS) {
       );
       if (direct.status !== 200) throw new Error(await direct.text());
       expect(direct.status).toBe(200);
+      const directBody = (await direct.clone().json()) as { message: unknown };
 
       const directNotice = await waitForFile(claudeStdinLog, 'codex private note');
       expect(directNotice).toContain('New direct/private message from codex is available.');
       expect(directNotice).toContain('Follow your managed runtime instructions for private/direct messages.');
       expect(directNotice).not.toContain('Use the `agent_read` tool');
-      expect(handlers.store.listMessages(sessionId, { latest: true }).filter((message) => message.text)).toHaveLength(
-        2
-      );
+      const recordedMessages = handlers.store
+        .listMessages(sessionId, { latest: true })
+        .filter((message) => message.text);
+      expect(recordedMessages.map(({ role, text, type }) => ({ role, text, type }))).toEqual([
+        { role: 'user', text: 'initial project task', type: 'text' },
+        { role: 'assistant', text: 'codex public reply', type: 'text' },
+        { role: 'assistant', text: 'codex sent claude a DM.', type: 'mesh_agent_direct_message' }
+      ]);
+      expect(recordedMessages.at(-1)?.data).toEqual({ message: directBody.message });
       for (const nativeSession of nativeSessions) {
         await t.fetch(`/v1/mesh/sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`, json('POST'));
       }

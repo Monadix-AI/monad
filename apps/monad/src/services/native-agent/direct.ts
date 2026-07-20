@@ -50,10 +50,8 @@ export function createNativeAgentDirectCapabilities(
         throw err;
       }
       await handlers.session.notifyManagedMeshAgentDirectMessage({
-        sessionId: args.binding.sessionId,
-        fromAgentName: args.binding.agentId,
-        to: args.body.to,
-        text: noticeText
+        message,
+        noticeText
       });
       return { ok: true, direct: true, message };
     },

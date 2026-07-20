@@ -20,6 +20,13 @@ export const nativeAgentDirectMessageSchema = z.object({
 });
 export type NativeAgentDirectMessage = z.infer<typeof nativeAgentDirectMessageSchema>;
 
+export const meshAgentDirectMessageMessageDataSchema = z
+  .object({
+    message: nativeAgentDirectMessageSchema
+  })
+  .strict();
+export type MeshAgentDirectMessageMessageData = z.infer<typeof meshAgentDirectMessageMessageDataSchema>;
+
 // Same inline/attachments split as project post — see nativeAgentProjectPostRequestSchema.
 export const nativeAgentSendRequestSchema = z
   .object({

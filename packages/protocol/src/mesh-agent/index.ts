@@ -20,6 +20,7 @@ export type {
   MeshAgentView
 } from './mesh-agent-config.ts';
 export type {
+  MeshAgentDirectMessageMessageData,
   NativeAgentDirectMessage,
   NativeAgentReadRequest,
   NativeAgentReadResponse,
@@ -175,6 +176,7 @@ export {
   meshAgentViewSchema
 } from './mesh-agent-config.ts';
 export {
+  meshAgentDirectMessageMessageDataSchema,
   nativeAgentDirectMessageSchema,
   nativeAgentReadRequestSchema,
   nativeAgentReadResponseSchema,

@@ -14,6 +14,7 @@ import {
   defaultWorkplaceProjectMemberSettings,
   entityAvatarUrl,
   entityAvatarWriteUrl,
+  meshAgentDirectMessageMessageDataSchema,
   meshAgentLoginRequiredPayloadSchema,
   meshAgentProductDisplayName,
   messageAttachmentSchema,
@@ -89,6 +90,37 @@ export function messageToView(
   human = HUMAN,
   avatarStyle?: AvatarStyle
 ): Message {
+  const directMessageArtifact = item.parts.find(
+    (part) => part.type === 'artifact' && part.messageType === 'mesh_agent_direct_message'
+  );
+  if (directMessageArtifact?.type === 'artifact') {
+    const parsed = meshAgentDirectMessageMessageDataSchema.safeParse(directMessageArtifact.data);
+    const directMessage = parsed.success ? parsed.data.message : undefined;
+    if (directMessage?.fromAgent) {
+      const fromAgentName = meshAgentDisplayNames.get(directMessage.fromAgent) ?? directMessage.fromAgent;
+      const toAgentId = directMessage.peer.startsWith('mesh-agent:')
+        ? directMessage.peer.slice('mesh-agent:'.length)
+        : directMessage.peer;
+      const toAgentName = meshAgentDisplayNames.get(toAgentId) ?? toAgentId;
+      return {
+        id: item.id,
+        authorId: 'monad',
+        authorName: 'Monad',
+        av: avatarForAgent('Monad'),
+        icon: iconForAgent('Monad'),
+        kind: 'system',
+        tag: 'SYS',
+        time,
+        text: directMessageArtifact.text ?? '',
+        orderKey: item.seq,
+        directMessage: {
+          fromAgentName,
+          toAgentName,
+          text: directMessage.text
+        }
+      };
+    }
+  }
   const agent = item.role === 'assistant';
   const rawName = agent ? (item.agentName ?? 'monad') : human.name;
   const displayName = agent
