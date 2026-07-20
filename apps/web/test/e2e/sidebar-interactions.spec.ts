@@ -344,6 +344,17 @@ async function expandAllProjects(page: Page) {
 }
 
 test.describe('workspace sidebar interactions', () => {
+  test('reveals the new project action when the projects section is hovered', async ({ page }) => {
+    await installSidebarMock(page);
+    await page.goto(`/workspace/${PROJECT_ID}`);
+
+    const newProjectButton = page.getByRole('button', { exact: true, name: 'New project' });
+    await newProjectButton.locator('..').hover();
+    await expect(newProjectButton).toHaveCSS('opacity', '1');
+    await newProjectButton.click();
+    await expect(page.getByRole('textbox', { name: 'Project name' })).toBeVisible();
+  });
+
   test('composer queue expands without scrollbars, steers immediately, and cancels without sending', async ({
     page
   }) => {

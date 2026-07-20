@@ -123,6 +123,8 @@ export function serveAssetFromMap(assets: Map<string, EmbeddedAsset>, pathname: 
 
 const RELEASE_STATIC_ROUTES = [
   '/assets/*',
+  '/capability-icons/*',
+  '/model-role-icons/*',
   '/favicon.ico',
   '/favicon.svg',
   '/mochi.webp',

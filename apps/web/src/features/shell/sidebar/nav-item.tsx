@@ -94,7 +94,9 @@ export function SidebarActionVisibilityRules() {
     <style>{`
       [data-sidebar-tree-item="true"][data-sidebar-actions-visible="true"] > .sidebar-item-action,
       [data-sidebar-tree-item="true"][data-sidebar-actions-visible="true"] [data-sidebar-session-actions="true"] > .sidebar-item-action,
-      [data-sidebar-tree-item="true"] > .sidebar-item-action[data-state="open"] {
+      [data-sidebar-tree-item="true"] > .sidebar-item-action[data-state="open"],
+      [data-sidebar-section-item="true"]:hover > .sidebar-item-action,
+      [data-sidebar-section-item="true"]:focus-within > .sidebar-item-action {
         opacity: 1;
         visibility: visible;
       }

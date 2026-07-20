@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { buildAssetMap, serveAssetFromMap } from '#/server/index';
+import { attachWebRoutes, buildAssetMap, serveAssetFromMap } from '#/server/index';
 
 test('declares one ICO favicon in the static web shell', async () => {
   const html = await Bun.file(new URL('../../index.html', import.meta.url)).text();
@@ -100,4 +100,34 @@ test('serves the fallback ico favicon from gzip-embedded release assets', async 
   expect(res.headers.get('cache-control')).toBe('public, max-age=86400');
   expect(res.headers.get('content-encoding')).toBe('gzip');
   expect(res.headers.get('content-type')).toBe('image/x-icon');
+});
+
+test('registers every exported public asset directory in release mode', () => {
+  const routes: string[] = [];
+  const app = {
+    get(route: string) {
+      routes.push(route);
+      return app;
+    }
+  };
+
+  attachWebRoutes(app as unknown as Parameters<typeof attachWebRoutes>[0]);
+
+  expect(routes).toEqual([
+    '/assets/*',
+    '/capability-icons/*',
+    '/model-role-icons/*',
+    '/favicon.ico',
+    '/favicon.svg',
+    '/mochi.webp',
+    '/monad-icon-vector-solid.svg',
+    '/monad-logo-vector-solid.svg',
+    '/',
+    '/init',
+    '/inbox',
+    '/sessions/*',
+    '/workspace/*',
+    '/settings/*',
+    '/studio/*'
+  ]);
 });
