@@ -45,6 +45,7 @@ type SidebarMockState = {
 
 type SidebarMockOptions = {
   createChatSessionGate?: Promise<void>;
+  initialSidebarWidth?: number;
   steerGate?: Promise<void>;
 };
 
@@ -122,13 +123,16 @@ function createSidebarState(): SidebarMockState {
 
 async function installSidebarMock(page: Page, state = createSidebarState(), options: SidebarMockOptions = {}) {
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.addInitScript(() => {
+  await page.addInitScript((initialSidebarWidth) => {
     window.localStorage.clear();
+    if (initialSidebarWidth !== undefined) {
+      window.localStorage.setItem('monad:web:sidebar-width', String(initialSidebarWidth));
+    }
     const style = document.createElement('style');
     style.textContent =
       '[aria-label="Open TanStack Router Devtools"], .tsqd-parent-container { display: none !important; pointer-events: none !important; }';
     document.documentElement.appendChild(style);
-  });
+  }, options.initialSidebarWidth);
   await page.route('**/*', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -344,6 +348,53 @@ async function expandAllProjects(page: Page) {
 }
 
 test.describe('workspace sidebar interactions', () => {
+  test('dragging past the collapse threshold can restore the sidebar before release', async ({ page }) => {
+    await installSidebarMock(page);
+    await page.goto('/');
+    await expect(page.getByTestId('daemon-menu-trigger')).toBeVisible();
+
+    const sidebar = page.locator('aside.panel-nav');
+    const resizeHandle = page.getByRole('separator', { name: 'Resize sidebar' });
+    const handleBox = await resizeHandle.boundingBox();
+    if (!handleBox) throw new Error('Expected the sidebar resize handle to have a bounding box');
+    const startX = handleBox.x + handleBox.width / 2;
+    const startY = handleBox.y + handleBox.height / 2;
+
+    await page.mouse.move(startX, startY);
+    await page.mouse.down();
+    await page.mouse.move(startX - 100, startY);
+    await expect.poll(() => page.evaluate(() => window.localStorage.getItem('monad:sidebarCollapsed'))).toBe('true');
+    await expect(sidebar).toHaveClass(/opacity-0/);
+
+    await page.mouse.move(startX - 80, startY);
+    await expect.poll(() => page.evaluate(() => window.localStorage.getItem('monad:sidebarCollapsed'))).toBe('false');
+    await expect(sidebar).not.toHaveClass(/opacity-0/);
+    await page.mouse.up();
+
+    await expect.poll(() => sidebar.evaluate((element) => Math.round(element.getBoundingClientRect().width))).toBe(240);
+    expect(await page.evaluate(() => window.localStorage.getItem('monad:web:sidebar-width'))).toBe('240');
+  });
+
+  test('drag collapse retains the stored expanded sidebar width', async ({ page }) => {
+    await installSidebarMock(page, createSidebarState(), { initialSidebarWidth: 320 });
+    await page.goto('/');
+    await expect(page.getByTestId('daemon-menu-trigger')).toBeVisible();
+
+    const resizeHandle = page.getByRole('separator', { name: 'Resize sidebar' });
+    const handleBox = await resizeHandle.boundingBox();
+    if (!handleBox) throw new Error('Expected the sidebar resize handle to have a bounding box');
+    const startX = handleBox.x + handleBox.width / 2;
+    const startY = handleBox.y + handleBox.height / 2;
+
+    await page.mouse.move(startX, startY);
+    await page.mouse.down();
+    await page.mouse.move(startX - 140, startY);
+    await expect.poll(() => page.evaluate(() => window.localStorage.getItem('monad:sidebarCollapsed'))).toBe('true');
+    await page.mouse.up();
+
+    expect(await page.evaluate(() => window.localStorage.getItem('monad:web:sidebar-width'))).toBe('320');
+  });
+
   test('reveals the new project action when the projects section is hovered', async ({ page }) => {
     await installSidebarMock(page);
     await page.goto(`/workspace/${PROJECT_ID}`);
