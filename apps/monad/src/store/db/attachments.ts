@@ -42,7 +42,7 @@ function toAttachmentRef(att: {
 export function parseAttachmentIds(idsJson: string | null): string[] {
   if (!idsJson) return [];
   try {
-    const ids = JSON.parse(idsJson) as unknown;
+    const ids = JSON.parse(idsJson);
     return Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : [];
   } catch {
     return [];

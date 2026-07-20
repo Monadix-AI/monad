@@ -14,9 +14,13 @@ import type {
 } from '@monad/protocol';
 
 import { meshSessionIdSchema, nativeAgentDeliverySchema, newId, sessionIdSchema } from '@monad/protocol';
+import { z } from 'zod';
 
 import { getMeshSession, setMeshAgentDeliveredCursor, setMeshAgentVisibleCursor } from './mesh-sessions.ts';
 import { type MessageRow, rowToMessage } from './row-mappers.ts';
+
+const inboxMessageDataSchema = z.object({ agentName: z.unknown().optional() }).passthrough();
+const inboxApprovalPayloadSchema = z.record(z.string(), z.unknown());
 
 export interface EnqueueMeshAgentInboxOptions {
   deliveryId?: NativeAgentDeliveryId;
@@ -241,7 +245,7 @@ export function listMentionInbox(sqlite: Database, limit = 100): InboxItem[] {
     let agentName = typeof row._agent_display_name === 'string' ? row._agent_display_name : undefined;
     if (typeof row.data === 'string') {
       try {
-        const data = JSON.parse(row.data) as { agentName?: unknown };
+        const data = inboxMessageDataSchema.parse(JSON.parse(row.data));
         if (!agentName && typeof data.agentName === 'string') agentName = data.agentName;
       } catch {
         // Invalid message metadata must not hide an otherwise valid mention.
@@ -289,7 +293,7 @@ export function listMentionInbox(sqlite: Database, limit = 100): InboxItem[] {
   for (const row of approvalRows) {
     let payload: Record<string, unknown>;
     try {
-      payload = JSON.parse(String(row.payload)) as Record<string, unknown>;
+      payload = inboxApprovalPayloadSchema.parse(JSON.parse(String(row.payload)));
     } catch {
       continue;
     }

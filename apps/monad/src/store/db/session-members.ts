@@ -4,12 +4,14 @@
 import type { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite';
 
 import { and, eq } from 'drizzle-orm';
+import { z } from 'zod';
 
 import { sessionMembers } from './schema.ts';
 
 type Db = BunSQLiteDatabase<Record<string, never>>;
 
 type SessionMemberRow = typeof sessionMembers.$inferSelect;
+const sessionMemberDataSchema = z.record(z.string(), z.unknown());
 
 // Deliberately in-process-only for now (per conventions.md rule 4): P6a wires the store layer first;
 // this type gains a wire boundary (a zod schema in @monad/protocol) once P6b exposes it over a handler.
@@ -49,7 +51,7 @@ function rowToSessionMember(row: SessionMemberRow): SessionMember {
     templateId: row.templateId ?? null,
     type: row.type,
     meshSessionId: row.meshSessionId ?? null,
-    data: JSON.parse(row.data) as Record<string, unknown>,
+    data: sessionMemberDataSchema.parse(JSON.parse(row.data)),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt
   };

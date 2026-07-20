@@ -7,6 +7,7 @@ import type { ChatMessage, MessageId, MessageType, SessionId, StreamStatus, Tran
 import type { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite';
 
 import { newId, persistedIncludeInContext } from '@monad/protocol';
+import { z } from 'zod';
 
 import { clearFileObservationsIfObservedSince } from './file-observations.ts';
 import { getMessageRevision, type MessageListSnapshot } from './message-mutations.ts';
@@ -14,6 +15,7 @@ import { type MessageRow, rowToMessage, toIntFlag } from './row-mappers.ts';
 import { messages } from './schema.ts';
 
 type Db = BunSQLiteDatabase<Record<string, never>>;
+const summaryValueSchema = z.object({ uptoMessageId: z.unknown().optional() });
 
 export interface ListMessagesOptions {
   limit?: number;
@@ -416,7 +418,7 @@ export function restoreMessages(
     let summaryBoundaryId: string | undefined;
     if (summaryRow) {
       try {
-        const parsed = JSON.parse(summaryRow.value) as { uptoMessageId?: unknown };
+        const parsed = summaryValueSchema.parse(JSON.parse(summaryRow.value));
         if (typeof parsed.uptoMessageId === 'string') summaryBoundaryId = parsed.uptoMessageId;
       } catch {
         summaryBoundaryId = undefined;
