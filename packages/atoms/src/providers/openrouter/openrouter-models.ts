@@ -1,6 +1,7 @@
 import type { ModelInfo, ModelModalities, ProviderCredential, ResolvedProviderConfig } from '@monad/sdk-atom';
 
 import { openAiPrice } from '@monad/protocol';
+import { z } from 'zod';
 
 import { assertOpenRouterKey, openRouterApiOrigin, openRouterModelPageUrl } from './openrouter-http.ts';
 import {
@@ -40,6 +41,10 @@ export interface OpenRouterModelRecord {
     details?: unknown;
   };
 }
+
+const openRouterModelsResponseSchema: z.ZodType<OpenRouterModelsResponse> = z.object({
+  data: z.array(z.object({ id: z.string() }).passthrough()).optional()
+});
 
 export function kindFromArchitecture(
   modality: string | undefined,
@@ -96,9 +101,10 @@ export async function listOpenRouterModels(
     ...EXTRA_MODALITIES.map((mod) => fetch(`${base}/api/v1/models?output_modalities=${mod}`, { headers }))
   ]);
   if (!defaultRes.ok) throw new Error(`OpenRouter /models failed: ${defaultRes.status}`);
-  const safeJson = async (res: Response) => (res.ok ? ((await res.json()) as OpenRouterModelsResponse) : { data: [] });
+  const safeJson = async (res: Response): Promise<OpenRouterModelsResponse> =>
+    res.ok ? openRouterModelsResponseSchema.parse(await res.json()) : { data: [] };
   const [defaultJson, ...extraJsons] = await Promise.all([
-    defaultRes.json() as Promise<OpenRouterModelsResponse>,
+    defaultRes.json().then((value) => openRouterModelsResponseSchema.parse(value)),
     ...extraResponses.map(safeJson)
   ]);
   const rawModels = [...(defaultJson.data ?? [])];

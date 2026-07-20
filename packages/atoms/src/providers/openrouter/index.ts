@@ -3,6 +3,7 @@ import type { UsageLimits } from '@monad/sdk-atom';
 import type { JSONValue } from 'ai';
 
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
+import { z } from 'zod';
 
 import { defineAiSdkProvider } from '../ai-sdk-adapter/index.ts';
 import { PROVIDER_DESCRIPTORS } from '../catalog.ts';
@@ -22,16 +23,30 @@ interface OpenRouterKeyResponse {
   };
 }
 
+const openRouterKeyResponseSchema: z.ZodType<OpenRouterKeyResponse> = z.object({
+  data: z
+    .object({
+      usage: z.unknown().optional(),
+      usage_daily: z.unknown().optional(),
+      usage_weekly: z.unknown().optional(),
+      usage_monthly: z.unknown().optional(),
+      limit: z.unknown().optional(),
+      limit_remaining: z.unknown().optional(),
+      rate_limit: z.object({ requests: z.unknown().optional(), interval: z.string().optional() }).optional()
+    })
+    .optional()
+});
+
 type ProviderMetadata = NonNullable<Awaited<ReturnType<MetadataExtractor['extractMetadata']>>>;
 
 function toJsonValue(value: unknown): JSONValue | undefined {
   if (value === undefined) return undefined;
-  return JSON.parse(JSON.stringify(value)) as JSONValue;
+  return z.json().parse(JSON.parse(JSON.stringify(value)));
 }
 
 function extractOpenRouterMetadata(parsedBody: unknown): ProviderMetadata | undefined {
-  const body = parsedBody as { usage?: unknown } | undefined;
-  const usage = toJsonValue(body?.usage);
+  const body = z.object({ usage: z.unknown().optional() }).safeParse(parsedBody);
+  const usage = toJsonValue(body.success ? body.data.usage : undefined);
   return usage === undefined ? undefined : { openrouter: { usage } };
 }
 
@@ -109,7 +124,7 @@ export const openrouterProviderAtom = defineAiSdkProvider({
         headers: { authorization: `Bearer ${cred.accessToken}` }
       });
       if (!res.ok) return undefined;
-      const json = (await res.json()) as OpenRouterKeyResponse;
+      const json = openRouterKeyResponseSchema.parse(await res.json());
       const d = json.data;
       if (!d) return undefined;
       const finite = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);

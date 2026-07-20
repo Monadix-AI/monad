@@ -1,9 +1,15 @@
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
+import { z } from 'zod';
 
 import { defineAiSdkProvider, renderForCount } from './ai-sdk-adapter/index.ts';
 import { PROVIDER_DESCRIPTORS } from './catalog.ts';
 
 const DEFAULT_BASE = 'https://generativelanguage.googleapis.com/v1beta';
+const googleTokenCountResponseSchema = z.object({ totalTokens: z.unknown().optional() });
+const googleModelsResponseSchema = z.object({
+  models: z.array(z.object({ name: z.string().optional(), displayName: z.string().optional() })).optional(),
+  nextPageToken: z.string().optional()
+});
 
 export const googleProviderAtom = defineAiSdkProvider({
   type: 'google',
@@ -43,7 +49,7 @@ export const googleProviderAtom = defineAiSdkProvider({
         body: JSON.stringify({ contents: [{ parts: [{ text }] }] })
       });
       if (!res.ok) return undefined;
-      const json = (await res.json()) as { totalTokens?: unknown };
+      const json = googleTokenCountResponseSchema.parse(await res.json());
       return typeof json.totalTokens === 'number' && Number.isFinite(json.totalTokens) ? json.totalTokens : undefined;
     } catch {
       return undefined;
@@ -69,10 +75,7 @@ export const googleProviderAtom = defineAiSdkProvider({
         const body = await res.text().catch(() => '');
         throw new Error(`Google models request failed: ${res.status}${body ? ` — ${body.slice(0, 200)}` : ''}`);
       }
-      const json = (await res.json()) as {
-        models?: Array<{ name?: string; displayName?: string }>;
-        nextPageToken?: string;
-      };
+      const json = googleModelsResponseSchema.parse(await res.json());
       models.push(
         ...(json.models ?? []).map((m) => ({ id: (m.name ?? '').replace(/^models\//, ''), label: m.displayName }))
       );

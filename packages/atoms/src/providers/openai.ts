@@ -1,7 +1,10 @@
 import { createOpenAI } from '@ai-sdk/openai';
+import { z } from 'zod';
 
 import { defineAiSdkProvider, renderForCount } from './ai-sdk-adapter/index.ts';
 import { PROVIDER_DESCRIPTORS } from './catalog.ts';
+
+const openAiTokenCountResponseSchema = z.object({ input_tokens: z.unknown().optional() });
 
 const client = (call: {
   credential: { accessToken: string; baseUrl?: string };
@@ -58,7 +61,7 @@ export const openaiProviderAtom = defineAiSdkProvider({
         })
       });
       if (!res.ok) return undefined;
-      const json = (await res.json()) as { input_tokens?: unknown };
+      const json = openAiTokenCountResponseSchema.parse(await res.json());
       return typeof json.input_tokens === 'number' && Number.isFinite(json.input_tokens)
         ? json.input_tokens
         : undefined;

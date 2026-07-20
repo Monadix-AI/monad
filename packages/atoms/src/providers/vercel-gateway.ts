@@ -2,15 +2,12 @@ import type { ModelInfo, ModelModalities } from '@monad/sdk-atom';
 
 import { createGateway } from '@ai-sdk/gateway';
 import { vercelGatewayPrice } from '@monad/protocol';
+import { z } from 'zod';
 
 import { defineAiSdkProvider } from './ai-sdk-adapter/index.ts';
 import { PROVIDER_DESCRIPTORS } from './catalog.ts';
 
 const VERCEL_MODELS_BASE_URL = 'https://ai-gateway.vercel.sh/v1';
-
-interface VercelGatewayModelsResponse {
-  data?: VercelGatewayModelRecord[];
-}
 
 interface VercelGatewayModelRecord {
   id: string;
@@ -21,6 +18,34 @@ interface VercelGatewayModelRecord {
   tags?: unknown;
   pricing?: Parameters<typeof vercelGatewayPrice>[0];
 }
+
+const vercelGatewayModelsResponseSchema = z.object({
+  data: z
+    .array(
+      z.object({
+        id: z.string(),
+        name: z.string().optional(),
+        context_window: z.unknown().optional(),
+        released: z.unknown().optional(),
+        type: z.string().optional(),
+        tags: z.unknown().optional(),
+        pricing: z
+          .object({
+            input: z.unknown().optional(),
+            output: z.unknown().optional(),
+            cachedInputTokens: z.unknown().optional(),
+            cacheCreationInputTokens: z.unknown().optional(),
+            input_cache_read: z.unknown().optional(),
+            input_cache_write: z.unknown().optional(),
+            video_duration_pricing: z.unknown().optional(),
+            video_token_pricing: z.unknown().optional()
+          })
+          .nullable()
+          .optional()
+      })
+    )
+    .optional()
+});
 
 function positiveInteger(value: unknown): number | undefined {
   const n = typeof value === 'string' ? Number.parseInt(value, 10) : typeof value === 'number' ? value : Number.NaN;
@@ -121,7 +146,7 @@ export const vercelGatewayProviderAtom = defineAiSdkProvider({
       headers: cred?.accessToken ? { authorization: `Bearer ${cred.accessToken}` } : undefined
     });
     if (!res.ok) throw new Error(await modelsHttpError(res));
-    const json = (await res.json()) as VercelGatewayModelsResponse;
+    const json = vercelGatewayModelsResponseSchema.parse(await res.json());
     return (json.data ?? []).map((m): ModelInfo => {
       const price = vercelGatewayPrice(m.pricing);
       const contextLimit = positiveInteger(m.context_window);

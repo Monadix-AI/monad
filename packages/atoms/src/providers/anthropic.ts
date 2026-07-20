@@ -1,6 +1,7 @@
 import type { UsageLimits, UsageSnapshot } from '@monad/sdk-atom';
 
 import { createAnthropic } from '@ai-sdk/anthropic';
+import { z } from 'zod';
 
 import { defineAiSdkProvider, renderForCount } from './ai-sdk-adapter/index.ts';
 import { PROVIDER_DESCRIPTORS } from './catalog.ts';
@@ -11,6 +12,28 @@ const THINKING_BUDGET = {
   medium: 8192,
   high: 16384
 };
+
+const anthropicModelsResponseSchema = z.object({
+  data: z.array(z.object({ id: z.string(), display_name: z.string().optional() })).optional(),
+  has_more: z.boolean().optional(),
+  last_id: z.string().nullable().optional()
+});
+const anthropicRateLimitsResponseSchema = z.object({
+  data: z.array(z.object({ name: z.string(), type: z.string(), limit: z.number() })).optional()
+});
+const anthropicUsageResponseSchema = z.object({
+  data: z
+    .array(
+      z.object({
+        input_tokens: z.number(),
+        output_tokens: z.number(),
+        cache_read_input_tokens: z.number().optional(),
+        model: z.string().optional()
+      })
+    )
+    .optional()
+});
+const anthropicTokenCountResponseSchema = z.object({ input_tokens: z.unknown().optional() });
 
 export const anthropicProviderAtom = defineAiSdkProvider({
   type: 'anthropic',
@@ -55,11 +78,7 @@ export const anthropicProviderAtom = defineAiSdkProvider({
         const body = await res.text().catch(() => '');
         throw new Error(`Anthropic models request failed: ${res.status}${body ? ` — ${body.slice(0, 200)}` : ''}`);
       }
-      const json = (await res.json()) as {
-        data?: Array<{ id: string; display_name?: string }>;
-        has_more?: boolean;
-        last_id?: string | null;
-      };
+      const json = anthropicModelsResponseSchema.parse(await res.json());
       models.push(...(json.data ?? []).map((m) => ({ id: m.id, label: m.display_name })));
       if (!json.has_more || !json.last_id) break;
       afterId = json.last_id;
@@ -74,21 +93,13 @@ export const anthropicProviderAtom = defineAiSdkProvider({
       'anthropic-version': '2023-06-01'
     };
 
-    type RateLimitItem = { name: string; type: string; limit: number };
-    type UsageRow = {
-      input_tokens: number;
-      output_tokens: number;
-      cache_read_input_tokens?: number;
-      model?: string;
-    };
-
     async function fetchRateLimits(): Promise<
       Pick<UsageLimits, 'configuredInputTokensPerMinute' | 'configuredOutputTokensPerMinute'>
     > {
       try {
         const res = await fetch(`${base}/v1/organizations/rate_limits`, { headers });
         if (!res.ok) return {};
-        const json = (await res.json()) as { data?: RateLimitItem[] };
+        const json = anthropicRateLimitsResponseSchema.parse(await res.json());
         let inputTpm = 0;
         let outputTpm = 0;
         for (const item of json.data ?? []) {
@@ -117,7 +128,7 @@ export const anthropicProviderAtom = defineAiSdkProvider({
           `?starting_at=${start}&ending_at=${now}&bucket_width=${bucketWidth}&group_by[]=model`;
         const res = await fetch(url, { headers });
         if (!res.ok) return undefined;
-        const json = (await res.json()) as { data?: UsageRow[] };
+        const json = anthropicUsageResponseSchema.parse(await res.json());
         let inputTokens = 0;
         let outputTokens = 0;
         let cacheReadTokens = 0;
@@ -190,7 +201,7 @@ export const anthropicProviderAtom = defineAiSdkProvider({
         })
       });
       if (!res.ok) return undefined;
-      const json = (await res.json()) as { input_tokens?: unknown };
+      const json = anthropicTokenCountResponseSchema.parse(await res.json());
       return typeof json.input_tokens === 'number' && Number.isFinite(json.input_tokens)
         ? json.input_tokens
         : undefined;

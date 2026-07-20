@@ -1,5 +1,7 @@
 import type { OpenRouterModelRecord } from './openrouter-models.ts';
 
+import { z } from 'zod';
+
 import { openRouterDetailsUrl, openRouterModelPageUrl } from './openrouter-http.ts';
 
 export interface OpenRouterPricing {
@@ -25,6 +27,14 @@ export interface OpenRouterModelDetailsResponse {
     }>;
   };
 }
+
+const openRouterModelDetailsResponseSchema: z.ZodType<OpenRouterModelDetailsResponse> = z.object({
+  data: z
+    .object({
+      endpoints: z.array(z.object({ pricing: z.record(z.string(), z.unknown()).optional() })).optional()
+    })
+    .optional()
+});
 
 export function numericPrice(value: unknown): number | undefined {
   const n = typeof value === 'string' ? Number.parseFloat(value) : typeof value === 'number' ? value : Number.NaN;
@@ -75,7 +85,7 @@ export async function fetchEndpointPricing(
   try {
     const res = await fetch(detailsUrl, { headers });
     if (!res.ok) return undefined;
-    const json = (await res.json()) as OpenRouterModelDetailsResponse;
+    const json = openRouterModelDetailsResponseSchema.parse(await res.json());
     endpointPricing = json.data?.endpoints?.find((endpoint) => endpoint.pricing)?.pricing;
   } catch {
     return fetchModelPagePricing(base, model, fetch);
