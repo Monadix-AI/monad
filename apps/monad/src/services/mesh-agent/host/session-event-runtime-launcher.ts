@@ -17,6 +17,7 @@ import { cleanupManagedProjectRuntimeToken, prepareManagedProjectRuntime } from 
 import { resolveMeshAgentManagedServerUrl } from '../managed-server-url.ts';
 import { BunSessionEventRuntimeResourceFactory } from '../session-event-runtime/bun-resource-factory.ts';
 import { SessionEventRuntimeExecutor } from '../session-event-runtime/executor.ts';
+import { createRawStreamDecoders } from '../stream-decoder.ts';
 import { MeshAgentEventLog } from './event-log.ts';
 import { toView } from './host-helpers.ts';
 import { MeshAgentObservationHub } from './observation-hub.ts';
@@ -168,6 +169,7 @@ export class MeshSessionEventRuntimeLauncher {
     const liveRawStore = this.ctx.openLiveRawStore(id, observationEpoch);
     let activationSequence = 0;
     let terminalHandled = false;
+    let rawDecoders = createRawStreamDecoders();
     let runtime: SessionEventRuntimeExecutor;
     const live: LiveMeshSession = {
       id,
@@ -208,12 +210,14 @@ export class MeshSessionEventRuntimeLauncher {
         live.observationEpoch = newId('oep');
         live.liveRawStore = this.ctx.openLiveRawStore(id, live.observationEpoch);
         live.outputSeq = 0;
+        rawDecoders = createRawStreamDecoders();
         return live.observationEpoch;
       },
       captureRaw: async (packet, epoch) => {
         if (epoch !== live.observationEpoch) throw new Error('MeshAgent observation epoch changed during capture');
         const stream = packet.source === 'stderr' ? ('stderr' as const) : ('stdout' as const);
-        const payload = new TextDecoder().decode(packet.bytes);
+        const payload = rawDecoders[stream].decode(packet.bytes);
+        if (payload === '') return;
         live.outputSeq = live.liveRawStore.append({
           stream,
           payload,

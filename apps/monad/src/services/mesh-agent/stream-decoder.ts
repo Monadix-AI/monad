@@ -11,6 +11,14 @@ export function createStreamingTextDecoder(): StreamingTextDecoder {
   };
 }
 
+/** Per-stream streaming decoders for raw provider capture. Packets are sliced at OS pipe
+ *  boundaries, so a multi-byte character can straddle two of them; decoding each packet with a
+ *  fresh TextDecoder turns both halves into U+FFFD. stdout and stderr are independent byte
+ *  streams and must never share decoder state. */
+export function createRawStreamDecoders(): Record<'stdout' | 'stderr', StreamingTextDecoder> {
+  return { stdout: createStreamingTextDecoder(), stderr: createStreamingTextDecoder() };
+}
+
 export function createStreamingTerminalTextDecoder(): StreamingTextDecoder {
   const decoder = createStreamingTextDecoder();
   let pendingCR = false;
