@@ -21,6 +21,34 @@ bun install && bun run dev
 driving multiple agents in parallel, read `docs/engineering/parallel-agents.md` /
 @docs/engineering/parallel-agents.md first.
 
+# Commit messages
+
+When creating a commit, derive its message from the staged diff and use
+`type(scope)!: subject`:
+
+- Choose the smallest stable scope that best explains the change's impact. Prefer a
+  product or feature domain such as `auth`, `chat`, `session`, or `observation` when
+  one behavior spans apps and packages.
+- Use an entry point or engineering subsystem such as `web`, `cli`, `protocol`,
+  `runtime`, `store`, or `config` only when the change is specifically confined to
+  that surface or subsystem.
+- Use one scope. Do not encode touched paths or multiple scopes such as
+  `web:login|monad:login`; split independently meaningful changes into separate
+  commits, or choose their shared feature domain. Omit the scope when no single
+  stable domain dominates.
+- Write the subject as a concise user-visible or system-visible outcome. Put package
+  paths, implementation details, rationale, and migration notes in the body when
+  they matter.
+- Use `!` and a `BREAKING CHANGE:` footer only for an actual incompatible contract or
+  behavior change.
+
+```text
+feat(auth): support passwordless login
+feat(cli): add machine-readable status output
+refactor(protocol): unify session event contracts
+fix(chat): preserve chronological message order
+```
+
 # Testing
 
 Use `bun run test` for the full suite. When targeting a package, directory, or
