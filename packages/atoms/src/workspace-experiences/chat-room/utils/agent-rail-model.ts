@@ -1,4 +1,4 @@
-import type { MeshAgentUsageResponse, NativeAgentDeliveryId } from '@monad/protocol';
+import type { AgentObservationEvent, MeshAgentUsageResponse, NativeAgentDeliveryId } from '@monad/protocol';
 import type { MeshAgentUsageLimitMeter } from '../../experience/mesh-agent-observation/mesh-agent-observation.ts';
 import type { MeshAgentStreamView, Participant } from '../../experience/types.ts';
 
@@ -6,6 +6,7 @@ import {
   meshAgentUsageLimitMeter,
   meshAgentUsageLimitMeterFromResponse
 } from '../../experience/mesh-agent-observation/mesh-agent-observation.ts';
+import { meshAgentObservationActivity } from '../../experience/mesh-agent-presence.ts';
 
 function newestStream(streams: MeshAgentStreamView[]): MeshAgentStreamView | undefined {
   return [...streams].sort((a, b) => {
@@ -65,17 +66,24 @@ export function observedRailAgent(
   );
 }
 
-export function isActiveRailAgent(agent: Participant): boolean {
-  return agent.presence === 'working';
+export function isActiveRailAgent(agent: Participant, observationEvents?: readonly AgentObservationEvent[]): boolean {
+  return observationEvents ? meshAgentObservationActivity(observationEvents).active : agent.presence === 'working';
 }
 
-export function railAgentActivityPhase(agent: Participant): Participant['activityPhase'] {
+export function railAgentActivityPhase(
+  agent: Participant,
+  observationEvents?: readonly AgentObservationEvent[]
+): Participant['activityPhase'] {
+  if (observationEvents) return meshAgentObservationActivity(observationEvents).phase;
   if (agent.presence !== 'working') return undefined;
   return agent.activityPhase ?? 'thinking';
 }
 
-export function shouldAnimateRailAgent(agent: Participant): boolean {
-  return agent.presence === 'working';
+export function shouldAnimateRailAgent(
+  agent: Participant,
+  observationEvents?: readonly AgentObservationEvent[]
+): boolean {
+  return isActiveRailAgent(agent, observationEvents);
 }
 
 export function groupProjectRailAgents(agents: readonly Participant[]): {

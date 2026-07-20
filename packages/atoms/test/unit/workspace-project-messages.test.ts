@@ -1460,7 +1460,7 @@ test('MeshAgent resume failure without a typed event keeps the legacy ID fallbac
   ]);
 });
 
-test('MeshAgent project member presence treats spawned runtime as online until it generates', () => {
+test('MeshAgent project member presence stays idle without a daemon session', () => {
   expect(
     __workplaceProjectMessageTest.meshAgentMemberPresence({
       agentName: 'gemini',
@@ -1468,7 +1468,7 @@ test('MeshAgent project member presence treats spawned runtime as online until i
       meshSessions: [],
       liveTools: []
     })
-  ).toBe('online');
+  ).toBe('idle');
 
   expect(
     __workplaceProjectMessageTest.meshAgentMemberPresence({
@@ -1487,7 +1487,7 @@ test('MeshAgent project member presence treats spawned runtime as online until i
         } as never
       ]
     })
-  ).toBe('online');
+  ).toBe('idle');
 
   expect(
     __workplaceProjectMessageTest.meshAgentMemberPresence({
@@ -1579,7 +1579,7 @@ test('MeshAgent presence does not infer authentication from removed session outp
   ).toBe('online');
 });
 
-test('MeshAgent project member presence treats lifecycle tools as stand-by availability', () => {
+test('MeshAgent project member presence does not treat a lifecycle tool as a daemon session', () => {
   expect(
     __workplaceProjectMessageTest.meshAgentMemberPresence({
       agentName: 'gemini',
@@ -1596,7 +1596,7 @@ test('MeshAgent project member presence treats lifecycle tools as stand-by avail
         } as never
       ]
     })
-  ).toBe('online');
+  ).toBe('idle');
 });
 
 test('MeshAgent project member presence treats streaming managed messages as active generation', () => {
@@ -1643,7 +1643,7 @@ test('MeshAgent project member presence is scoped by managed member instance id'
         } as never
       ]
     })
-  ).toBe('online');
+  ).toBe('idle');
 
   expect(
     __workplaceProjectMessageTest.meshAgentMemberPresence({

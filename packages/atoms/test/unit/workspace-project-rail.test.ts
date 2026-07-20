@@ -1,4 +1,4 @@
-import type { AgentObservationCard, MeshAgentView, MeshSessionView } from '@monad/protocol';
+import type { AgentObservationCard, AgentObservationEvent, MeshAgentView, MeshSessionView } from '@monad/protocol';
 import type { Participant } from '../../src/workspace-experiences/experience/types.ts';
 
 import { expect, test } from 'bun:test';
@@ -8,12 +8,17 @@ import { useChatRoomExperienceStore } from '../../src/workspace-experiences/chat
 import {
   agentObservationStream,
   groupProjectRailAgents,
+  isActiveRailAgent,
   observedRailAgent,
   railAgentActivityPhase,
   shouldAnimateRailAgent,
   sortedProjectRailAgents
 } from '../../src/workspace-experiences/chat-room/utils/agent-rail-model.ts';
 import { __workplaceProjectMessageTest } from '../../src/workspace-experiences/chat-room/utils/projection.ts';
+import {
+  meshAgentMemberActivityPhase,
+  meshAgentMemberPresence
+} from '../../src/workspace-experiences/experience/mesh-agent-presence.ts';
 import { projectMemberParticipants } from '../../src/workspace-experiences/experience/project-projection.ts';
 
 const agent = (name: string, presence: Participant['presence']): Participant => ({
@@ -174,6 +179,126 @@ test('project rail animation follows working presence and falls back to thinking
   expect(shouldAnimateRailAgent(stalePhaseAgent)).toBe(false);
 });
 
+const neutralEvent = (
+  kind: AgentObservationEvent['kind'],
+  overrides: Partial<AgentObservationEvent> = {}
+): AgentObservationEvent => ({
+  id: `event:${kind}`,
+  kind,
+  streaming: false,
+  provenance: { contractEvents: [{ kind }] },
+  ...overrides
+});
+
+test('managed member stays working from the daemon turn snapshot before its first streamed message', () => {
+  const running = meshSession({
+    activity: { state: 'running', pid: 12345, queuedTurnCount: 0 }
+  });
+
+  expect(
+    meshAgentMemberPresence({
+      agentName: running.agentName,
+      enabled: true,
+      meshSessions: [running],
+      liveTools: [
+        {
+          kind: 'tool',
+          id: running.id,
+          tool: 'mesh-agent:codex',
+          input: { agent: running.agentName },
+          output: '\nrunning',
+          status: 'ok',
+          seq: '1'
+        }
+      ]
+    })
+  ).toBe('working');
+});
+
+test('managed member activity follows neutral turn boundaries and tool phases', () => {
+  const session = meshSession();
+  const turn = [
+    neutralEvent('turn-start'),
+    neutralEvent('tool-call', {
+      tool: { name: 'project_inbox_check', input: {} }
+    })
+  ];
+
+  expect(
+    meshAgentMemberPresence({
+      agentName: session.agentName,
+      enabled: true,
+      meshSessions: [session],
+      liveTools: [],
+      observationEvents: turn
+    })
+  ).toBe('working');
+  expect(
+    meshAgentMemberActivityPhase({
+      agentName: session.agentName,
+      meshSessions: [session],
+      liveTools: [],
+      observationEvents: turn
+    })
+  ).toBe('reading');
+
+  const settled = [...turn, neutralEvent('turn-end')];
+  expect(
+    meshAgentMemberPresence({
+      agentName: session.agentName,
+      enabled: true,
+      meshSessions: [session],
+      liveTools: [],
+      observationEvents: settled
+    })
+  ).toBe('idle');
+  expect(
+    meshAgentMemberActivityPhase({
+      agentName: session.agentName,
+      meshSessions: [session],
+      liveTools: [],
+      observationEvents: settled
+    })
+  ).toBeUndefined();
+});
+
+test('managed member activity does not serialize tool input while classifying phases', () => {
+  const session = meshSession();
+  const poisonedInput = {
+    toJSON() {
+      throw new Error('tool input should not be serialized for rail activity');
+    }
+  };
+  const turn = [
+    neutralEvent('turn-start'),
+    neutralEvent('tool-call', {
+      tool: { name: 'project_inbox_check', input: poisonedInput }
+    })
+  ];
+
+  expect(
+    meshAgentMemberActivityPhase({
+      agentName: session.agentName,
+      meshSessions: [session],
+      liveTools: [],
+      observationEvents: turn
+    })
+  ).toBe('reading');
+  expect(isActiveRailAgent(agent('codex', 'idle'), turn)).toBe(true);
+});
+
+test('project rail uses observed turn activity instead of the cached participant presence', () => {
+  const cachedIdle = agent('codex', 'idle');
+  const activeTurn = [neutralEvent('turn-start'), neutralEvent('assistant-message', { text: 'drafting' })];
+
+  expect(isActiveRailAgent(cachedIdle, activeTurn)).toBe(true);
+  expect(railAgentActivityPhase(cachedIdle, activeTurn)).toBe('writing');
+
+  const settledTurn = [...activeTurn, neutralEvent('turn-end')];
+  expect(isActiveRailAgent({ ...cachedIdle, presence: 'working' }, settledTurn)).toBe(false);
+  expect(railAgentActivityPhase({ ...cachedIdle, presence: 'working' }, settledTurn)).toBeUndefined();
+});
+
 test('MeshAgent participant shows thinking while its managed reply is streaming before provider output', () => {
   const participants = __workplaceProjectMessageTest.projectParticipants({
     acpAgents: [],
@@ -208,6 +333,39 @@ test('MeshAgent participant shows thinking while its managed reply is streaming 
   expect(
     participants.map((participant) => [participant.name, participant.presence, participant.activityPhase])
   ).toEqual([['Codex Reviewer', 'working', 'thinking']]);
+});
+
+test('managed member without a daemon CLI session is idle', () => {
+  const participants = __workplaceProjectMessageTest.projectParticipants({
+    acpAgents: [],
+    avatarStyle: undefined,
+    liveTools: [],
+    meshAgents: [
+      {
+        name: 'codex',
+        provider: 'codex',
+        productIcon: 'codex',
+        command: 'codex',
+        enabled: true
+      } as MeshAgentView
+    ],
+    meshAgentAvatarSeeds: new Map(),
+    meshSessions: [],
+    projectMembers: [
+      {
+        id: 'mesh-agent:pmem_codex_idle',
+        type: 'mesh-agent',
+        name: 'codex',
+        templateName: 'codex',
+        instanceId: 'pmem_codex_idle',
+        displayName: 'Codex Reviewer'
+      }
+    ]
+  });
+
+  expect(participants.map((participant) => [participant.name, participant.presence])).toEqual([
+    ['Codex Reviewer', 'idle']
+  ]);
 });
 
 test('project rail sorts members by display name without status grouping', () => {
@@ -285,10 +443,7 @@ test('MeshAgent activity phase reads the running tool output, not a flat tooling
   ).toBe('writing');
 });
 
-test('a settled live tool clears working/phase even while the session snapshot still reads generating', () => {
-  // The sessions list only refetches at turn boundaries, so its snapshot stays "generating" after a
-  // managed agent's turn ends. The live tool card (ui-stream) flips to non-running at turn end and must
-  // win — otherwise the avatar is stuck on 'working' forever.
+test('a neutral turn-end clears working even while the session snapshot still reads generating', () => {
   const generatingSnapshot = meshSession({
     activity: { state: 'running', pid: 12345, queuedTurnCount: 0 },
     outputSnapshot: [
@@ -296,7 +451,7 @@ test('a settled live tool clears working/phase even while the session snapshot s
       '{"method":"item/agentMessage/delta","params":{"delta":"Working"}}'
     ].join('\n')
   });
-  const settledTool = {
+  const longLivedTool = {
     kind: 'tool' as const,
     id: 'mesh_codexrunning',
     tool: 'mesh-agent:codex',
@@ -305,7 +460,6 @@ test('a settled live tool clears working/phase even while the session snapshot s
     seq: '9'
   };
 
-  // Snapshot alone (no live tool) → still generating (the frozen-snapshot case we must override).
   expect(__workplaceProjectMessageTest.meshSessionIsGenerating(generatingSnapshot)).toBe(true);
 
   expect(
@@ -313,26 +467,18 @@ test('a settled live tool clears working/phase even while the session snapshot s
       agentName: 'pmem_codex_active',
       enabled: true,
       meshSessions: [generatingSnapshot],
-      liveTools: [settledTool]
+      liveTools: [longLivedTool],
+      observationEvents: [neutralEvent('turn-start'), neutralEvent('turn-end')]
     })
-  ).toBe('online');
+  ).toBe('idle');
   expect(
     __workplaceProjectMessageTest.meshAgentMemberActivityPhase({
       agentName: 'pmem_codex_active',
       meshSessions: [generatingSnapshot],
-      liveTools: [settledTool]
+      liveTools: [longLivedTool],
+      observationEvents: [neutralEvent('turn-start'), neutralEvent('turn-end')]
     })
   ).toBeUndefined();
-
-  // ...but while the live tool is still running, working/phase hold.
-  expect(
-    __workplaceProjectMessageTest.meshAgentMemberPresence({
-      agentName: 'pmem_codex_active',
-      enabled: true,
-      meshSessions: [generatingSnapshot],
-      liveTools: [{ ...settledTool, status: 'running' as const }]
-    })
-  ).toBe('working');
 });
 
 test('a live managed runtime wins over a newer terminal sibling while its turn is active', () => {

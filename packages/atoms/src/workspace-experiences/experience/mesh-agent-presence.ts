@@ -1,4 +1,10 @@
-import type { MeshAgentObservationEvent, MeshAgentProvider, MeshSessionView, UIItem } from '@monad/protocol';
+import type {
+  AgentObservationEvent,
+  MeshAgentObservationEvent,
+  MeshAgentProvider,
+  MeshSessionView,
+  UIItem
+} from '@monad/protocol';
 
 import {
   classifyMeshAgentActivity,
@@ -67,6 +73,41 @@ export function meshAgentFacingCommandPhase(
   return undefined;
 }
 
+function meshAgentObservationToolPhase(event: AgentObservationEvent): WorkspaceExperienceAgentActivityPhase {
+  const byToolName = meshAgentFacingCommandPhase(event.tool?.name);
+  if (byToolName) return byToolName;
+  const byText = meshAgentFacingCommandPhase(event.text);
+  return byText ?? 'tooling';
+}
+
+export function meshAgentObservationActivity(events: readonly AgentObservationEvent[]): {
+  active: boolean;
+  phase?: WorkspaceExperienceAgentActivityPhase;
+} {
+  let active = false;
+  let phase: WorkspaceExperienceAgentActivityPhase | undefined;
+  for (const event of events) {
+    if (event.kind === 'turn-start') {
+      active = true;
+      phase = 'thinking';
+      continue;
+    }
+    if (event.kind === 'turn-end') {
+      active = false;
+      phase = undefined;
+      continue;
+    }
+    if (!active) continue;
+    if (event.kind === 'reasoning') phase = 'thinking';
+    else if (event.kind === 'assistant-message') phase = 'writing';
+    else if (event.kind === 'user-message') phase = 'reading';
+    else if (event.kind === 'tool-call' || event.kind === 'tool-result') {
+      phase = meshAgentObservationToolPhase(event);
+    }
+  }
+  return active ? { active, phase: phase ?? 'thinking' } : { active };
+}
+
 function newestMeshSession(sessions: MeshSessionView[]): MeshSessionView | undefined {
   return [...sessions].sort((a, b) => {
     const aLive = a.lifecycle.state !== 'terminal';
@@ -128,17 +169,16 @@ function matchingLiveMeshAgentTool(
   });
 }
 
-// The session snapshot (from the MeshAgent sessions list) only refetches at turn boundaries, so it
-// stays "generating" after a managed agent's turn settles. The live tool card's `status` — pushed
-// per-token over the ui-stream and flipped to non-'running' the moment a turn ends — is authoritative
-// when present; only fall back to the snapshot when the agent has no live tool.
+// A long-lived MeshAgent tool card can be `ok` while its daemon session is in a turn, so only
+// `running` is useful as an early positive signal. Neutral observation turn boundaries are the
+// authoritative source once the Chat experience subscription is ready.
 export function meshAgentIsGenerating(
   agentName: string,
   liveTools: readonly Extract<UIItem, { kind: 'tool' }>[],
   latest: MeshSessionView | undefined
 ): boolean {
   const liveTool = matchingLiveMeshAgentTool(agentName, liveTools);
-  if (liveTool) return liveTool.status === 'running';
+  if (liveTool?.status === 'running') return true;
   return latest ? meshSessionIsGenerating(latest) : false;
 }
 
@@ -147,14 +187,17 @@ export function meshAgentMemberPresence({
   agentName,
   enabled,
   meshSessions,
-  liveTools
+  liveTools,
+  observationEvents
 }: {
   activeAgentNames?: ReadonlySet<string>;
   agentName: string;
   enabled: boolean;
   meshSessions: MeshSessionView[];
   liveTools: readonly Extract<UIItem, { kind: 'tool' }>[];
+  observationEvents?: readonly AgentObservationEvent[];
 }): WorkspaceExperiencePresence {
+  if (observationEvents) return meshAgentObservationActivity(observationEvents).active ? 'working' : 'idle';
   const liveTool = matchingLiveMeshAgentTool(agentName, liveTools);
   if (liveTool?.status === 'running') {
     if (
@@ -168,7 +211,7 @@ export function meshAgentMemberPresence({
   }
   if (activeAgentNames?.has(agentName)) return 'working';
   const latest = newestMeshSession(meshSessions.filter((session) => session.agentName === agentName));
-  if (!latest) return enabled ? 'online' : 'idle';
+  if (!latest) return 'idle';
   if ((latest.pendingApprovalCount ?? 0) > 0) return 'working';
   if (meshAgentIsGenerating(agentName, liveTools, latest)) return 'working';
   if (latest.lifecycle.state === 'starting') return 'working';
@@ -182,12 +225,15 @@ export function meshAgentMemberPresence({
 export function meshAgentMemberActivityPhase({
   agentName,
   liveTools,
-  meshSessions
+  meshSessions,
+  observationEvents
 }: {
   agentName: string;
   liveTools: readonly Extract<UIItem, { kind: 'tool' }>[];
   meshSessions: MeshSessionView[];
+  observationEvents?: readonly AgentObservationEvent[];
 }): WorkspaceExperienceAgentActivityPhase | undefined {
+  if (observationEvents) return meshAgentObservationActivity(observationEvents).phase;
   const runningTool = liveTools.find((item) => {
     if (!item.tool.startsWith('mesh-agent:')) return false;
     const inputAgent = (item.input as { agent?: unknown } | undefined)?.agent;

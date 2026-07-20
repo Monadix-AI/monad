@@ -1,4 +1,4 @@
-import type { MeshAgentUsageResponse, SessionId } from '@monad/protocol';
+import type { AgentObservationEvent, MeshAgentUsageResponse, SessionId } from '@monad/protocol';
 import type {
   CSSProperties,
   KeyboardEvent as ReactKeyboardEvent,
@@ -67,6 +67,7 @@ import {
 import { FilePreviewPanel } from './file-preview-panel.tsx';
 import { DualObservationPanel } from './observation/dual-observation-panel.tsx';
 import { MeshAgentObservationPanel } from './observation/panel.tsx';
+import { RailAgentActivity } from './rail-agent-activity.tsx';
 
 const RAIL_WIDTH_STORAGE_KEY = 'monad.workplace.agentRail.width';
 const DEFAULT_RAIL_WIDTH = 296;
@@ -571,6 +572,7 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
   );
   const closeFilePreview = useCallback(() => closeFilePreviewForSession(uiKey), [closeFilePreviewForSession, uiKey]);
   const agents = sortedProjectRailAgents(room.railAgents);
+  const observationHooks = room.dualObservationHooks ?? DEFAULT_DUAL_OBSERVATION_HOOKS;
   const observedStream = agentObservationStream(observation, room.meshAgentStreams);
   const observedMeshSessionId = observation?.meshSessionId ?? observedStream?.id;
   // Scope observation/events requests to the transcript the agent session actually belongs to —
@@ -794,16 +796,29 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
     [observeProjectAgent, room.projectId, uiKey]
   );
 
-  const renderAgent = (agent: Participant) => {
+  const renderAgent = (agent: Participant, observationEvents?: readonly AgentObservationEvent[]) => {
     const productIcon = resolveProductIcon(agent);
-    const active = isActiveRailAgent(agent);
-    const shouldAnimate = shouldAnimateRailAgent(agent);
-    const activityPhase = railAgentActivityPhase(agent);
+    const active = isActiveRailAgent(agent, observationEvents);
+    const shouldAnimate = shouldAnimateRailAgent(agent, observationEvents);
+    const activityPhase = railAgentActivityPhase(agent, observationEvents);
+    const observedPresence = observationEvents
+      ? active
+        ? 'working'
+        : agent.presence === 'needs-login' || agent.presence === 'failed' || agent.presence === 'stopped'
+          ? agent.presence
+          : 'idle'
+      : agent.presence;
+    const displayAgent =
+      observedPresence === agent.presence && activityPhase === agent.activityPhase
+        ? agent
+        : { ...agent, presence: observedPresence, activityPhase };
     const phase = activityPhase ? agentActivityPhaseMeta(activityPhase) : undefined;
     const PhaseIcon = phase?.icon;
-    const statusLabel = phase?.label ?? agentPresenceLabel(agent);
+    const statusLabel = phase?.label ?? agentPresenceLabel(displayAgent);
     const idleStatusIcon =
-      !phase && (agent.presence === 'idle' || agent.presence === 'online') ? stableIdleIcon(agent) : undefined;
+      !phase && (displayAgent.presence === 'idle' || displayAgent.presence === 'online')
+        ? stableIdleIcon(displayAgent)
+        : undefined;
     const IdleStatusIcon = idleStatusIcon?.icon;
     const fastMode = agent.metadata?.speed === 'fast';
     const metadataRows = agentMetadataRows(agent);
@@ -847,7 +862,7 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
         data-selected={observedAgent?.id === agent.id}
         key={agent.id}
         onClick={() => observeAgent(agent)}
-        style={{ '--agent-presence-color': presenceColor(agent.presence) } as CSSProperties}
+        style={{ '--agent-presence-color': presenceColor(displayAgent.presence) } as CSSProperties}
         type="button"
       >
         <span
@@ -855,7 +870,7 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
           data-active={shouldAnimate ? 'true' : undefined}
         >
           <AgentInstanceAvatar
-            agent={agent}
+            agent={displayAgent}
             bordered={active}
             size={42}
           />
@@ -976,7 +991,7 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
           agent={observedAgent}
           agentName={observedAgent?.name ?? observation.agentName ?? 'Agent'}
           connectionSignal={observedStream?.status}
-          hooks={room.dualObservationHooks ?? DEFAULT_DUAL_OBSERVATION_HOOKS}
+          hooks={observationHooks}
           icon={observedAgent?.icon ?? observedEventsStream?.icon}
           meshSessionId={observedMeshSessionId}
           onBack={closeRailObservation}
@@ -1037,7 +1052,15 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
               {t('web.workplace.noStandByAgents')}
             </div>
           ) : null}
-          {agents.map(renderAgent)}
+          {agents.map((agent) => (
+            <RailAgentActivity
+              agent={agent}
+              hooks={observationHooks}
+              key={agent.id}
+              render={renderAgent}
+              stream={agentObservationStream({ agentId: agent.id, agentName: agent.name }, room.meshAgentStreams)}
+            />
+          ))}
         </div>
       )}
     </div>
