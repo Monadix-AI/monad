@@ -1,7 +1,7 @@
 # Managed MeshAgent Instruction Delivery Design
 
 Date: 2026-07-20
-Status: proposed
+Status: approved
 
 ## Summary
 
@@ -30,6 +30,7 @@ Compaction and reinjection are adapter implementation details. They are not SDK 
 - Preserve managed instructions through provider-native compaction using the best mechanism available to each adapter.
 - Preserve the existing cold-start recovery behavior when a native provider session cannot be resumed.
 - Provide equivalent behavior for Codex, Claude Code, Gemini CLI, and Qwen Code.
+- Keep valid native-session reacquisition invisible to the project transcript.
 
 ## Non-goals
 
@@ -39,6 +40,8 @@ Compaction and reinjection are adapter implementation details. They are not SDK 
 - Expose instruction delivery or compaction state in the UI.
 - Install or modify provider-global hook configuration from generic runtime code.
 - Infer a universal compaction lifecycle across providers.
+- Treat per-turn process exit as Monad releasing native-session ownership.
+- Restore the removed idle ownership-release timer in this change.
 
 ## Current problem
 
@@ -86,6 +89,8 @@ The exact final type placement may follow existing SDK ownership, but the semant
 
 An unmanaged MeshAgent may still start without an initial turn. A managed-project cold start or resume always supplies `startInput`, including immutable instructions and the triggering mutable turn.
 
+The immutable instructions contain stable project and member identity only. `meshSessionId` is an ephemeral Monad runtime binding and is supplied through `MONAD_MESH_SESSION_ID` and `runtime_info`; it is not rendered into the immutable prompt.
+
 ## Adapter-owned delivery
 
 An adapter implements one of two internal strategies. These strategies are not represented by a shared enum or capability flag.
@@ -96,7 +101,7 @@ When the provider supports developer instructions, system instructions, or an eq
 
 The immutable value is never copied into a user message. The adapter does not need to observe compaction because the provider's native instruction mechanism owns persistence across context compression.
 
-For a per-turn CLI provider, the adapter may pass the same native instruction option again when launching a process that resumes the provider session. This configures the new CLI process and must not add a repeated user-history item.
+For a per-turn CLI provider, the adapter may pass the same native instruction option again when launching a process that resumes the provider session only when the provider requires process-local configuration. This must configure the native instruction channel and must not add a repeated user-history item.
 
 ### User-message fallback strategy
 
@@ -125,9 +130,9 @@ Claude Code uses its native appended system-prompt file mechanism. Per-turn CLI 
 
 ### Gemini CLI
 
-Gemini uses a native system-instruction mechanism. The adapter does not use `PreCompress` for correctness because it is asynchronous and does not prove compression completed.
+Gemini uses its additive hierarchical context mechanism. The managed instruction file is exposed as managed `GEMINI.md` context through the adapter's included workspace, preserving Gemini's built-in system instructions. The adapter no longer sets `GEMINI_SYSTEM_MD`, which is a full replacement.
 
-The chosen mechanism must preserve Gemini's built-in agent instructions. If `GEMINI_SYSTEM_MD` is a full replacement, the adapter must compose the provider default with Monad instructions or use an additive native mechanism rather than silently discarding the default.
+The adapter does not use `PreCompress` for correctness because it runs before compression and does not prove compression completed. Gemini reloads the additive context for each CLI invocation, so no fallback reinjection state is required.
 
 ### Qwen Code
 
@@ -148,9 +153,23 @@ For a valid native provider session resume:
 3. a native-instruction adapter configures its native channel as required;
 4. a fallback adapter does not treat resume itself as a reason to append immutable instructions.
 
+Resume is an engineering lifecycle transition, not a project message. It must not trigger the explicit join greeting, synthesize an asleep/awake timeline item, or tell the model that it "rejoined". The triggering project message remains the only mutable input.
+
 When resume fails because the native session was deleted or cannot be read, the existing recovery path creates a new native session. The daemon again calls startup with immutable instructions and the recovery turn together. Because no `providerSessionRef` is present, the adapter treats it as a new native session and supplies immutable instructions again.
 
 Moving the first mutable turn into the startup contract also removes the current split `start` followed by `input` lifecycle for managed cold starts. The generic host can fail the whole startup operation if initial delivery fails instead of briefly exposing an active native session that has not received its first turn.
+
+## Native-session ownership lifecycle
+
+The lifecycle terms have a narrow meaning:
+
+- `awake`: Monad owns a live logical CLI-session binding and can deliver to it;
+- `asleep`: Monad has released that binding while retaining enough provider identity to reacquire the same native session;
+- `wake`: Monad reacquires the same native session and delivers the pending mutable input.
+
+These terms do not describe individual turns or the lifetime of a per-turn child process. A per-turn process exiting while the logical binding remains owned is still `awake`.
+
+The current session-event runtime refactor retains logical ownership after a per-turn process exits, and no longer executes the earlier host idle-release timer. Restoring timed ownership release/reacquisition is a separate host-lifecycle change because it requires a restartable runtime factory and durable binding semantics. This instruction-delivery change nevertheless makes existing resume paths invisible: a valid `providerSessionRef` resume receives no startup prompt in user history and no join greeting. If the provider session is missing or unreadable, cold-start recovery creates a genuinely new native session, supplies immutable instructions again, and sends the recovery notice.
 
 ## Internal adapter structure
 
@@ -181,6 +200,9 @@ SDK and host tests assert the generic boundary:
 - subsequent input contains only mutable content;
 - the generic launcher no longer branches on `usesSystemPromptFile` or `usesDeveloperInstructions`;
 - resume recovery invokes a new atomic startup and therefore supplies immutable instructions again.
+- valid resume sends only the triggering mutable input and does not send the join greeting;
+- immutable prompt fixtures do not contain `meshSessionId` or an unconditional startup-join rule;
+- idle lifecycle events do not project into user-visible transcript items.
 
 Adapter tests assert provider-owned behavior:
 
