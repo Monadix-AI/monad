@@ -78,6 +78,9 @@ export function WorkspaceTreeItem({
   const actionsVisible = pointerWithin || focusedWithin || menuOpen;
   const shortcutVisible = sessionShortcut?.visible === true && !actionsVisible;
   const overlayVisible = (actionsVisible || shortcutVisible) && !editing;
+  const sessionSurfaceClass = active
+    ? '[--sidebar-session-surface:var(--sidebar-selected)] hover:[--sidebar-session-surface:var(--sidebar-selected-hover)]'
+    : '[--sidebar-session-surface:transparent] hover:[--sidebar-session-surface:var(--sidebar-accent)]';
 
   useEffect(() => {
     if (!sidebarSession || !overlayVisible) {
@@ -137,7 +140,7 @@ export function WorkspaceTreeItem({
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: wrapper tracks hover/focus state for an absolutely positioned sibling overlay; the actual row control remains the child link/button.
     <div
-      className={sidebarItemContainerClass({ active, className: 'gap-0.5' })}
+      className={sidebarItemContainerClass({ active, className: cn('gap-0.5', sessionSurfaceClass) })}
       data-sidebar-actions-visible={actionsVisible ? 'true' : undefined}
       data-sidebar-tree-item="true"
       onBlur={(event) => {
@@ -228,11 +231,11 @@ export function WorkspaceTreeItem({
           >
             <div
               aria-hidden="true"
-              className="w-6 shrink-0 rounded-l-(--radius-md) bg-linear-to-r from-transparent to-sidebar-accent"
+              className="w-6 shrink-0 rounded-l-(--radius-md) bg-linear-to-r from-transparent to-[var(--sidebar-session-surface)]"
               data-sidebar-session-end-overlay-fade="true"
             />
             <div
-              className="flex items-center gap-0.5 rounded-r-(--radius-md) bg-sidebar-accent"
+              className="flex items-center gap-0.5 rounded-r-(--radius-md) bg-[var(--sidebar-session-surface)]"
               data-sidebar-session-actions="true"
             >
               {shortcutVisible && sessionShortcut ? (

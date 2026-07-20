@@ -501,6 +501,21 @@ test.describe('workspace sidebar interactions', () => {
     const actions = row.locator('[data-sidebar-session-actions]');
 
     await expect(viewport).toBeVisible();
+    await page.mouse.move(800, 400);
+    await link.focus();
+    await expect(endOverlay).toBeVisible();
+    const restingSurfaces = await row.evaluate((element) => {
+      const fade = element.querySelector<HTMLElement>('[data-sidebar-session-end-overlay-fade]');
+      const actionSurface = element.querySelector<HTMLElement>('[data-sidebar-session-actions]');
+      if (!fade || !actionSurface) throw new Error('Expected the session end overlay surfaces');
+      return {
+        action: getComputedStyle(actionSurface).backgroundColor,
+        fade: getComputedStyle(fade).backgroundImage,
+        row: getComputedStyle(element).backgroundColor
+      };
+    });
+    expect(restingSurfaces.action).toBe(restingSurfaces.row);
+    expect(restingSurfaces.fade).toContain(restingSurfaces.row);
     expect(await endOverlay.evaluate((element) => getComputedStyle(element).position)).toBe('absolute');
     expect(await actions.evaluate((element) => getComputedStyle(element).position)).not.toBe('absolute');
     await expect
