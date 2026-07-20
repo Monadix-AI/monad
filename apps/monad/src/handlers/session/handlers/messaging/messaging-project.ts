@@ -75,6 +75,7 @@ export function createSendProjectMessageHandler(ctx: SessionContext, deps: SendP
     const session = requireSession(sessionId);
     const cfg = ctx.deps.configManager?.get().cfg;
     const acpAgents = (cfg?.acpAgents ?? []).filter((agent: AcpAgentConfig) => agent.enabled !== false);
+    const configuredMeshAgents = cfg?.meshAgents ?? [];
     const meshAgents = (cfg?.meshAgents ?? []).filter((agent: MeshAgentConfig) => agent.enabled !== false);
     const isWorkplaceProject = isWorkplaceProjectTarget(session);
     const projectMembers = isWorkplaceProject ? workplaceProjectMembers(store, session.id) : [];
@@ -186,7 +187,7 @@ export function createSendProjectMessageHandler(ctx: SessionContext, deps: SendP
         await Promise.all([
           deliverProjectMessageToManagedMeshAgentMembers({
             session,
-            meshAgents,
+            meshAgents: configuredMeshAgents,
             text: messageTextWithAttachments(route.text, attachments),
             sender: humanSender
           }),
@@ -212,7 +213,7 @@ export function createSendProjectMessageHandler(ctx: SessionContext, deps: SendP
       if (!route.direct && route.generate === false) {
         await deliverProjectMessageToManagedMeshAgentMembers({
           session,
-          meshAgents,
+          meshAgents: configuredMeshAgents,
           text: messageTextWithAttachments(route.text, attachments),
           sender: { kind: 'human', name: cfg?.user.displayName ?? 'User', id: 'human' }
         });

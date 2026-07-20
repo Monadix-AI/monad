@@ -62,10 +62,10 @@ describe('Codex per-turn session-event runtime', () => {
     expect(definition.plan.buildTurnLaunch({ providerSessionRef: 'thread-1' })).toEqual({
       args: [
         'exec',
-        'resume',
         '--json',
         '--color',
         'never',
+        'resume',
         '--model',
         'gpt-5.4',
         '-c',
@@ -117,6 +117,21 @@ describe('Codex per-turn session-event runtime', () => {
       '/managed',
       '-c',
       'mcp_servers.monad.command="monad"',
+      '-'
+    ]);
+    expect(definition.plan.buildTurnLaunch({ providerSessionRef: 'thread-1' }).args).toEqual([
+      '--ask-for-approval',
+      'never',
+      'exec',
+      '--json',
+      '--color',
+      'never',
+      '--add-dir',
+      '/managed',
+      'resume',
+      '-c',
+      'mcp_servers.monad.command="monad"',
+      'thread-1',
       '-'
     ]);
     const encoded = definition.plan.encodeTurnInput({ text: 'hello', attachments: [] });
@@ -252,6 +267,21 @@ describe('Gemini per-turn session-event runtime', () => {
 });
 
 describe('Claude Code per-turn session-event runtime', () => {
+  test('uses the Claude auth login subcommand for provider-owned login', () => {
+    const launch = claudeCodeMeshAgentAdapter.buildAuthLaunch(agent('claude-code'));
+    expect({ argv: launch.argv, cwd: typeof launch.cwd, env: launch.env }).toEqual({
+      argv: ['claude', 'auth', 'login'],
+      cwd: 'string',
+      env: undefined
+    });
+    expect(launch as unknown as Record<string, unknown>).toMatchObject({
+      launchMode: 'pty',
+      provider: 'claude-code',
+      approvalOwnership: 'provider-owned',
+      capabilities: ['pty', 'provider-approval']
+    });
+  });
+
   test('builds stream-json launches and resumes the provider session', () => {
     const definition = claudeCodeMeshAgentAdapter.createSessionRuntime?.(agent('claude-code'), {
       workingPath: '/workspace',

@@ -20,7 +20,13 @@ import {
 } from '../../src/workspace-experiences/chat-room/components/observation/timeline-merge.ts';
 
 function event(id: string, text: string, streaming = false): AgentObservationEvent {
-  return { id, kind: 'assistant-message', streaming, text, provenance: { contractEvents: [{ id }] } };
+  return {
+    id,
+    kind: 'assistant-message',
+    streaming,
+    text,
+    provenance: { contractEvents: [{ id }] }
+  };
 }
 
 const patch = (cursor: ObservationCursor, ...operations: MeshConvenienceOperation[]): MeshConvenienceFrame => ({

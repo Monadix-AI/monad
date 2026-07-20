@@ -1,6 +1,6 @@
 'use client';
 
-import type { AgentObservationEvent } from '@monad/protocol';
+import type { AgentObservationCard, AgentObservationEvent } from '@monad/protocol';
 import type { CSSProperties, ReactNode, RefObject } from 'react';
 import type { MeshAgentUsageLimitMeter } from '../../../experience/mesh-agent-observation/mesh-agent-observation.ts';
 import type { MeshAgentStreamView, Participant } from '../../../experience/types.ts';
@@ -47,11 +47,10 @@ type ObservationBoundaryHandle = Pick<VirtualListHandle, 'scrollToTop' | 'scroll
 export function jumpSummaryToLoadedTop(
   scroller: { scrollTop: number },
   startArmed: { current: boolean },
-  loadOlder: () => void
+  loadOlder: () => unknown
 ): void {
-  startArmed.current = false;
   scroller.scrollTop = 0;
-  loadOlder();
+  if (loadOlder() !== false) startArmed.current = false;
 }
 
 type SummaryObservationTurn = {
@@ -61,6 +60,11 @@ type SummaryObservationTurn = {
   summaryText?: string;
   rows: ObservationTimelineRow[];
 };
+
+function eventFromCard(card: AgentObservationCard): AgentObservationEvent | undefined {
+  const event = card.payload.event ?? card.payload.call ?? card.payload.result;
+  return event && typeof event === 'object' && !Array.isArray(event) ? (event as AgentObservationEvent) : undefined;
+}
 
 const observationAvatarRingCss = `
 @keyframes workplace-observation-avatar-breathe {
@@ -335,7 +339,10 @@ export function MeshAgentObservationPanel({
   }, [streamId]);
 
   const loadOlderObservationEvent = useCallback(() => {
-    if (canLoadOlderEvents && !loadingOlderEvents) onLoadOlderEvents?.();
+    if (loadingOlderEvents) return false;
+    if (!canLoadOlderEvents) return false;
+    onLoadOlderEvents?.();
+    return true;
   }, [canLoadOlderEvents, loadingOlderEvents, onLoadOlderEvents]);
 
   const firstSummaryTurnId = summaryTurns[0]?.id;
@@ -343,12 +350,18 @@ export function MeshAgentObservationPanel({
     const scroller = summaryListRef.current;
     if (!scroller) return;
     const previous = summaryLayoutRef.current;
+    if (renderMode === 'summary' && previous.streamId !== streamId) {
+      summaryStartArmedRef.current = true;
+      scroller.scrollTop = scroller.scrollHeight;
+      summaryLayoutRef.current = { firstKey: firstSummaryTurnId ?? null, height: scroller.scrollHeight, streamId };
+      return;
+    }
     if (previous.streamId === streamId && previous.firstKey && firstSummaryTurnId !== previous.firstKey) {
       summaryStartArmedRef.current = false;
       scroller.scrollTop += scroller.scrollHeight - previous.height;
     }
     summaryLayoutRef.current = { firstKey: firstSummaryTurnId ?? null, height: scroller.scrollHeight, streamId };
-  }, [firstSummaryTurnId, streamId]);
+  }, [firstSummaryTurnId, renderMode, streamId]);
 
   const renderObservationRow = useCallback(
     (row: ObservationTimelineRow) => (
@@ -623,8 +636,7 @@ export function MeshAgentObservationPanel({
             onScroll={(event) => {
               const atStart = event.currentTarget.scrollTop <= 240;
               if (atStart && summaryStartArmedRef.current) {
-                summaryStartArmedRef.current = false;
-                loadOlderObservationEvent();
+                if (loadOlderObservationEvent() !== false) summaryStartArmedRef.current = false;
               } else if (!atStart) {
                 summaryStartArmedRef.current = true;
               }
@@ -945,29 +957,34 @@ function headerIconButtonStyle(active: boolean, disabled = false): CSSProperties
   };
 }
 
-function summaryObservationTurns(items: readonly AgentObservationEvent[], provider: string): SummaryObservationTurn[] {
-  const groups: AgentObservationEvent[][] = [];
-  let current: AgentObservationEvent[] = [];
+function summaryObservationTurns(cards: readonly AgentObservationCard[], provider: string): SummaryObservationTurn[] {
+  const groups: AgentObservationCard[][] = [];
+  let current: AgentObservationCard[] = [];
   const flush = () => {
     if (current.length > 0) groups.push(current);
     current = [];
   };
 
-  for (const item of items) {
-    if (item.kind === 'turn-start' && current.length > 0) flush();
-    current.push(item);
-    if (item.kind === 'turn-end') flush();
+  for (const card of cards) {
+    const event = eventFromCard(card);
+    if (event?.kind === 'turn-start' && current.length > 0) flush();
+    current.push(card);
+    if (event?.kind === 'turn-end') flush();
   }
   flush();
 
   return groups.map((group, index) => {
-    const done = group.at(-1)?.kind === 'turn-end';
+    const events = group.map(eventFromCard).filter((event): event is AgentObservationEvent => event !== undefined);
+    const done = events.at(-1)?.kind === 'turn-end';
     const startMs = firstTimestampMs(group) ?? Date.now();
     const endMs = done ? (lastTimestampMs(group) ?? startMs) : Date.now();
-    const summaryText = [...group]
+    const summaryText = [...events]
       .reverse()
       .find((event) => event.kind === 'assistant-message' && event.text?.trim())?.text;
-    const detailItems = group.filter((event) => event.kind !== 'turn-start' && event.kind !== 'turn-end');
+    const detailItems = group.filter((card) => {
+      const event = eventFromCard(card);
+      return event?.kind !== 'turn-start' && event?.kind !== 'turn-end';
+    });
     const rows = observationTimelineRows(observationTimelineEntries(detailItems, provider));
     return {
       id: `compact-turn:${group[0]?.id ?? index}`,
@@ -979,17 +996,18 @@ function summaryObservationTurns(items: readonly AgentObservationEvent[], provid
   });
 }
 
-function firstTimestampMs(items: readonly AgentObservationEvent[]): number | undefined {
+function firstTimestampMs(items: readonly AgentObservationCard[]): number | undefined {
   for (const item of items) {
-    const ms = timestampMs(item.at);
+    const ms = timestampMs(eventFromCard(item)?.at ?? item.at);
     if (ms !== undefined) return ms;
   }
   return undefined;
 }
 
-function lastTimestampMs(items: readonly AgentObservationEvent[]): number | undefined {
+function lastTimestampMs(items: readonly AgentObservationCard[]): number | undefined {
   for (let index = items.length - 1; index >= 0; index -= 1) {
-    const ms = timestampMs(items[index]?.at);
+    const item = items[index];
+    const ms = item ? timestampMs(eventFromCard(item)?.at ?? item.at) : undefined;
     if (ms !== undefined) return ms;
   }
   return undefined;

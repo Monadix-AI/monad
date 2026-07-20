@@ -188,7 +188,10 @@ function captureModel(requests: ModelRequest[], replies: string[]): ModelRouter 
     },
     async complete(req) {
       requests.push(req);
-      return { text: replies.shift() ?? 'unexpected assistant', finishReason: 'stop' };
+      return {
+        text: replies.shift() ?? 'unexpected assistant',
+        finishReason: 'stop'
+      };
     }
   };
 }
@@ -207,7 +210,10 @@ function managedBindingHeaders(sessionId: string, meshSessionId: string, agentId
 async function configureMockMeshAgent(
   t: TransportHandle,
   root: string,
-  opts: { agentName?: string; authState?: 'authenticated' | 'unauthenticated' | 'unknown' } = {}
+  opts: {
+    agentName?: string;
+    authState?: 'authenticated' | 'unauthenticated' | 'unknown';
+  } = {}
 ): Promise<{ argsLog: string; envLog: string; stdinLog: string }> {
   const agentName = opts.agentName ?? 'codex';
   const script = join(root, `mock-mesh-agent-${agentName}.js`);
@@ -390,8 +396,12 @@ for (const kind of TRANSPORTS) {
     test('inviting a managed MeshAgent project member starts only that member runtime', async () => {
       const projectDir = join(dir, 'project-add-member');
       await mkdir(projectDir, { recursive: true });
-      const codex = await configureMockMeshAgent(t, dir, { agentName: 'codex' });
-      const claude = await configureMockMeshAgent(t, dir, { agentName: 'claude-code' });
+      const codex = await configureMockMeshAgent(t, dir, {
+        agentName: 'codex'
+      });
+      const claude = await configureMockMeshAgent(t, dir, {
+        agentName: 'claude-code'
+      });
       const projectId = await createWorkplaceProject(t, projectDir);
       const sessionId = await createProjectSession(t, projectId, projectDir);
       const uiStartedP = t.sse(`/v1/sessions/${sessionId}/ui-stream`, {
@@ -437,8 +447,12 @@ for (const kind of TRANSPORTS) {
     test('project messages wake only MeshAgent members in the project roster', async () => {
       const projectDir = join(dir, 'project-roster-only');
       await mkdir(projectDir, { recursive: true });
-      const codex = await configureMockMeshAgent(t, dir, { agentName: 'codex' });
-      const claude = await configureMockMeshAgent(t, dir, { agentName: 'claude-code' });
+      const codex = await configureMockMeshAgent(t, dir, {
+        agentName: 'codex'
+      });
+      const claude = await configureMockMeshAgent(t, dir, {
+        agentName: 'claude-code'
+      });
       const projectId = await createWorkplaceProject(t, projectDir);
       const sessionId = await createProjectSession(t, projectId, projectDir);
       await setMemberTemplates(t, projectId, [meshAgentTemplate('codex', 'codex', {})]);
@@ -457,7 +471,9 @@ for (const kind of TRANSPORTS) {
     test('project sessions inherit the Workplace Project cwd for managed MeshAgent fanout', async () => {
       const projectDir = join(dir, 'project-inherited-cwd');
       await mkdir(projectDir, { recursive: true });
-      const { stdinLog } = await configureMockMeshAgent(t, dir, { agentName: 'codex' });
+      const { stdinLog } = await configureMockMeshAgent(t, dir, {
+        agentName: 'codex'
+      });
       const projectId = await createWorkplaceProject(t, projectDir);
       const project = await _getWorkplaceProject(t, projectId);
       const sessionId = await createProjectSession(t, projectId);
@@ -483,7 +499,9 @@ for (const kind of TRANSPORTS) {
     test('one MeshAgent template can be invited as isolated managed project agents', async () => {
       const projectDir = join(dir, 'project-template-instances');
       await mkdir(projectDir, { recursive: true });
-      const { stdinLog } = await configureMockMeshAgent(t, dir, { agentName: 'codex' });
+      const { stdinLog } = await configureMockMeshAgent(t, dir, {
+        agentName: 'codex'
+      });
       const projectId = await createWorkplaceProject(t, projectDir);
       const sessionId = await createProjectSession(t, projectId, projectDir);
       await setMemberTemplates(t, projectId, [
@@ -520,7 +538,9 @@ for (const kind of TRANSPORTS) {
     test('managed MeshAgent project member starts when cwd is set after member add', async () => {
       const projectDir = join(dir, 'project-member-late-cwd');
       await mkdir(projectDir, { recursive: true });
-      const { stdinLog } = await configureMockMeshAgent(t, dir, { agentName: 'codex' });
+      const { stdinLog } = await configureMockMeshAgent(t, dir, {
+        agentName: 'codex'
+      });
       const projectId = await createWorkplaceProject(t);
       const sessionId = await createProjectSession(t, projectId);
       await setMemberTemplates(t, projectId, [
@@ -547,7 +567,9 @@ for (const kind of TRANSPORTS) {
     test('renaming a managed MeshAgent project member does not change its runtime identity', async () => {
       const projectDir = join(dir, 'project-member-rename');
       await mkdir(projectDir, { recursive: true });
-      const { stdinLog } = await configureMockMeshAgent(t, dir, { agentName: 'codex' });
+      const { stdinLog } = await configureMockMeshAgent(t, dir, {
+        agentName: 'codex'
+      });
       const projectId = await createWorkplaceProject(t, projectDir);
       const sessionId = await createProjectSession(t, projectId, projectDir);
       await setMemberTemplates(t, projectId, [
@@ -687,7 +709,9 @@ for (const kind of TRANSPORTS) {
     test('managed MeshAgent project member resumes a stored provider session ref', async () => {
       const projectDir = join(dir, 'project');
       await mkdir(projectDir, { recursive: true });
-      const { argsLog } = await configureMockMeshAgent(t, dir, { agentName: 'claude' });
+      const { argsLog } = await configureMockMeshAgent(t, dir, {
+        agentName: 'claude'
+      });
       const projectId = await createWorkplaceProject(t, projectDir);
       const sessionId = await createProjectSession(t, projectId, projectDir);
       handlers.store.upsertMeshSession({
@@ -728,7 +752,9 @@ for (const kind of TRANSPORTS) {
     test('managed MeshAgent project member requires Studio reconnect when provider auth is unauthenticated', async () => {
       const projectDir = join(dir, 'project');
       await mkdir(projectDir, { recursive: true });
-      const { stdinLog } = await configureMockMeshAgent(t, dir, { authState: 'unauthenticated' });
+      const { stdinLog } = await configureMockMeshAgent(t, dir, {
+        authState: 'unauthenticated'
+      });
       const projectId = await createWorkplaceProject(t, projectDir);
       const sessionId = await createProjectSession(t, projectId, projectDir);
       await setMemberTemplates(t, projectId, [meshAgentTemplate('codex', 'codex', { managedProjectAgent: true })]);
@@ -759,7 +785,9 @@ for (const kind of TRANSPORTS) {
     test('managed MeshAgent project post fans out to other managed MeshAgent members', async () => {
       const projectDir = join(dir, 'project');
       await mkdir(projectDir, { recursive: true });
-      const { stdinLog: codexStdinLog } = await configureMockMeshAgent(t, dir, { agentName: 'codex' });
+      const { stdinLog: codexStdinLog } = await configureMockMeshAgent(t, dir, {
+        agentName: 'codex'
+      });
       const { stdinLog: claudeStdinLog } = await configureMockMeshAgent(t, dir, { agentName: 'claude' });
       const projectId = await createWorkplaceProject(t, projectDir);
       const sessionId = await createProjectSession(t, projectId, projectDir);
@@ -779,7 +807,10 @@ for (const kind of TRANSPORTS) {
       const codexSession = nativeSessions.find((candidate) => candidate.agentName === 'codex');
       expect(typeof codexSession?.id).toBe('string');
       if (!codexSession) throw new Error('codex managed MeshAgent session was not started');
-      handlers.store.upsertMeshSession({ ...codexSession, agentRuntimeTokenHash: tokenHash() });
+      handlers.store.upsertMeshSession({
+        ...codexSession,
+        agentRuntimeTokenHash: tokenHash()
+      });
 
       const post = await t.fetch(
         '/v1/internal/native-agent/project/post',
@@ -832,6 +863,95 @@ for (const kind of TRANSPORTS) {
       }
     });
 
+    test('project fan-out shows transient login cards for each unauthenticated managed member', async () => {
+      const projectDir = join(dir, 'project');
+      await mkdir(projectDir, { recursive: true });
+      const { stdinLog: codexStdinLog } = await configureMockMeshAgent(t, dir, {
+        agentName: 'codex'
+      });
+      const { stdinLog: claudeStdinLog } = await configureMockMeshAgent(t, dir, {
+        agentName: 'claude-code',
+        authState: 'unauthenticated'
+      });
+      const projectId = await createWorkplaceProject(t, projectDir);
+      const sessionId = await createProjectSession(t, projectId, projectDir);
+      await setMemberTemplates(t, projectId, [
+        meshAgentTemplate('pmem_codex', 'codex', { managedProjectAgent: true }, 'Codex'),
+        meshAgentTemplate('pmem_claude_opus', 'claude-code', { managedProjectAgent: true, modelId: 'opus' }, 'Opus'),
+        meshAgentTemplate(
+          'pmem_claude_sonnet',
+          'claude-code',
+          { managedProjectAgent: true, modelId: 'sonnet' },
+          'Sonnet'
+        )
+      ]);
+      await inviteMember(t, sessionId, 'pmem_codex');
+      await inviteMember(t, sessionId, 'pmem_claude_opus');
+      await inviteMember(t, sessionId, 'pmem_claude_sonnet');
+      const loginCardIds = new Set<string>();
+      const loginCardsP = t.sse(`/v1/sessions/${sessionId}/ui-stream`, {
+        until: (event) => {
+          const uiEvent = event as unknown as SessionUiEvent;
+          if (
+            uiEvent.kind === 'upsert' &&
+            uiEvent.item.kind === 'custom' &&
+            uiEvent.item.name === 'mesh.login_required'
+          ) {
+            loginCardIds.add(uiEvent.item.id);
+          }
+          return (
+            loginCardIds.has('mesh-agent-login-required:pmem_claude_opus') &&
+            loginCardIds.has('mesh-agent-login-required:pmem_claude_sonnet')
+          );
+        },
+        timeoutMs: 3000
+      });
+
+      const send = await t.fetch(`/v1/channels/${sessionId}/messages`, json('POST', { text: 'initial project task' }));
+      expect(send.status).toBe(200);
+      await waitForFile(codexStdinLog, 'initial project task');
+
+      const loginEvents = (await loginCardsP) as unknown as SessionUiEvent[];
+      const loginItems = loginEvents.flatMap((event) =>
+        event.kind === 'upsert' && event.item.kind === 'custom' && event.item.name === 'mesh.login_required'
+          ? [event.item]
+          : []
+      );
+      const loginItemById = new Map(loginItems.map((item) => [item.id, item]));
+      const sortedLoginItems = [...loginItemById.values()].toSorted((a, b) => a.id.localeCompare(b.id));
+      expect(sortedLoginItems.map((item) => item.id)).toEqual([
+        'mesh-agent-login-required:pmem_claude_opus',
+        'mesh-agent-login-required:pmem_claude_sonnet'
+      ]);
+      expect(sortedLoginItems.map((item) => item.data)).toEqual([
+        expect.objectContaining({
+          agentName: 'pmem_claude_opus',
+          provider: 'claude-code'
+        }),
+        expect.objectContaining({
+          agentName: 'pmem_claude_sonnet',
+          provider: 'claude-code'
+        })
+      ]);
+      const snapshotEvents = await t.sse(`/v1/sessions/${sessionId}/ui-stream`, {
+        until: (event) => (event as unknown as SessionUiEvent).kind === 'snapshot',
+        timeoutMs: 3000
+      });
+      const snapshot = (snapshotEvents as unknown as SessionUiEvent[]).find((event) => event.kind === 'snapshot');
+      const snapshotLoginItems =
+        snapshot?.kind === 'snapshot'
+          ? snapshot.items.filter((item) => item.kind === 'custom' && item.name === 'mesh.login_required')
+          : [];
+      expect(snapshotLoginItems.map((item) => item.id).toSorted()).toEqual([
+        'mesh-agent-login-required:pmem_claude_opus',
+        'mesh-agent-login-required:pmem_claude_sonnet'
+      ]);
+      expect(await readLogIfExists(claudeStdinLog)).toBe('');
+      expect((await listMessages(t, sessionId)).map((message) => [message.role, message.text])).toEqual([
+        ['user', 'initial project task']
+      ]);
+    });
+
     test('MeshAgent mention forwards input to the provider-owned CLI session through the channel route', async () => {
       const projectDir = join(dir, 'project');
       await mkdir(projectDir, { recursive: true });
@@ -848,7 +968,9 @@ for (const kind of TRANSPORTS) {
       });
       const send = await t.fetch(
         `/v1/channels/${sessionId}/messages`,
-        json('POST', { text: '@[name="codex" id="mesh-agent:codex"] inspect repo' })
+        json('POST', {
+          text: '@[name="codex" id="mesh-agent:codex"] inspect repo'
+        })
       );
       if (send.status !== 200) throw new Error(await send.text());
       expect(send.status).toBe(200);
@@ -866,10 +988,78 @@ for (const kind of TRANSPORTS) {
       await t.fetch(`/v1/mesh/sessions/${nativeSessionId}/stop?transcriptTargetId=${sessionId}`, json('POST'));
     });
 
+    test('project member id mention forwards only to that managed MeshAgent member', async () => {
+      const projectDir = join(dir, 'project');
+      await mkdir(projectDir, { recursive: true });
+      const { stdinLog } = await configureMockMeshAgent(t, dir);
+      const projectId = await createWorkplaceProject(t, projectDir);
+      const sessionId = await createProjectSession(t, projectId, projectDir);
+      await setMemberTemplates(t, projectId, [
+        meshAgentTemplate('pmem_codex_reviewer', 'codex', { managedProjectAgent: true }, 'Reviewer'),
+        meshAgentTemplate('pmem_codex_tester', 'codex', { managedProjectAgent: true }, 'Tester')
+      ]);
+      await inviteMember(t, sessionId, 'pmem_codex_reviewer');
+      await inviteMember(t, sessionId, 'pmem_codex_tester');
+      const initialSessionsRes = await t.fetch(`/v1/mesh/sessions?transcriptTargetId=${sessionId}`);
+      expect(initialSessionsRes.status).toBe(200);
+      const initialSessions = (await initialSessionsRes.json()) as {
+        sessions: Array<{ id: string }>;
+      };
+      for (const nativeSession of initialSessions.sessions) {
+        await t.fetch(`/v1/mesh/sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`, json('POST'));
+      }
+
+      const eventsP = t.sse(`/v1/sessions/${sessionId}/events`, {
+        until: (event) =>
+          event.type === 'mesh.started' && (event.payload as { agentName?: unknown }).agentName === 'pmem_codex_tester',
+        timeoutMs: 3000
+      });
+      const send = await t.fetch(
+        `/v1/channels/${sessionId}/messages`,
+        json('POST', {
+          text: '@[name="Tester" id="pmem_codex_tester"] coordinate now'
+        })
+      );
+      if (send.status !== 200) throw new Error(await send.text());
+      expect(await send.json()).toEqual({ accepted: true });
+
+      expect(await waitForFile(stdinLog, 'coordinate now')).toContain('coordinate now');
+      await eventsP;
+      let sessions: Array<{
+        id: string;
+        agentName: string;
+        lifecycle: { state: string };
+      }> = [];
+      for (let i = 0; i < 20; i++) {
+        const listed = await t.fetch(`/v1/mesh/sessions?transcriptTargetId=${sessionId}`);
+        expect(listed.status).toBe(200);
+        const body = (await listed.json()) as {
+          sessions: Array<{
+            id: string;
+            agentName: string;
+            lifecycle: { state: string };
+          }>;
+        };
+        sessions = body.sessions;
+        if (sessions.some((nativeSession) => nativeSession.lifecycle.state === 'active')) break;
+        await Bun.sleep(25);
+      }
+      expect(
+        sessions
+          .filter((nativeSession) => nativeSession.lifecycle.state === 'active')
+          .map((nativeSession) => nativeSession.agentName)
+      ).toEqual(['pmem_codex_tester']);
+      for (const nativeSession of sessions) {
+        await t.fetch(`/v1/mesh/sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`, json('POST'));
+      }
+    });
+
     test('MeshAgent mention requires Studio reconnect when provider auth status is unauthenticated', async () => {
       const projectDir = join(dir, 'project');
       await mkdir(projectDir, { recursive: true });
-      const { stdinLog } = await configureMockMeshAgent(t, dir, { authState: 'unauthenticated' });
+      const { stdinLog } = await configureMockMeshAgent(t, dir, {
+        authState: 'unauthenticated'
+      });
       const projectId = await createWorkplaceProject(t, projectDir);
       const sessionId = await createProjectSession(t, projectId, projectDir);
       await setMemberTemplates(t, projectId, [meshAgentTemplate('codex', 'codex', { managedProjectAgent: false })]);
@@ -881,7 +1071,9 @@ for (const kind of TRANSPORTS) {
       });
       const send = await t.fetch(
         `/v1/channels/${sessionId}/messages`,
-        json('POST', { text: '@[name="codex" id="mesh-agent:codex"] inspect repo' })
+        json('POST', {
+          text: '@[name="codex" id="mesh-agent:codex"] inspect repo'
+        })
       );
       if (send.status !== 200) throw new Error(await send.text());
       expect(send.status).toBe(200);
@@ -903,7 +1095,9 @@ for (const kind of TRANSPORTS) {
     test('MeshAgent mention requires Studio check when provider readiness is unknown', async () => {
       const projectDir = join(dir, 'project');
       await mkdir(projectDir, { recursive: true });
-      const { stdinLog } = await configureMockMeshAgent(t, dir, { authState: 'unknown' });
+      const { stdinLog } = await configureMockMeshAgent(t, dir, {
+        authState: 'unknown'
+      });
       const projectId = await createWorkplaceProject(t, projectDir);
       const sessionId = await createProjectSession(t, projectId, projectDir);
       await setMemberTemplates(t, projectId, [meshAgentTemplate('codex', 'codex', { managedProjectAgent: false })]);
@@ -911,7 +1105,9 @@ for (const kind of TRANSPORTS) {
 
       const send = await t.fetch(
         `/v1/channels/${sessionId}/messages`,
-        json('POST', { text: '@[name="codex" id="mesh-agent:codex"] inspect repo' })
+        json('POST', {
+          text: '@[name="codex" id="mesh-agent:codex"] inspect repo'
+        })
       );
       if (send.status !== 200) throw new Error(await send.text());
       expect(await send.json()).toEqual({ accepted: true });
@@ -931,7 +1127,9 @@ for (const kind of TRANSPORTS) {
       await inviteMember(t, sessionId, 'codex');
       const send = await t.fetch(
         `/v1/channels/${sessionId}/messages`,
-        json('POST', { text: '@[name="codex" id="mesh-agent:codex"] inspect repo' })
+        json('POST', {
+          text: '@[name="codex" id="mesh-agent:codex"] inspect repo'
+        })
       );
       expect(send.status).toBe(200);
       expect(await send.json()).toEqual({ accepted: true });

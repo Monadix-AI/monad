@@ -4,35 +4,15 @@ import { expect, test } from 'bun:test';
 import { meshRawEventPageSchema } from '@monad/protocol';
 
 import { builtinAgentAdapters } from '../../src/agent-adapters/index.ts';
+import {
+  sanitizeObservationRecords,
+  unsanitizedSemanticStrings
+} from '../../src/agent-adapters/observation-sanitize.ts';
 
 interface RealObservationFixture {
   provider: MeshAgentProvider;
   page: MeshRawEventPage;
 }
-
-const structuralStringKeys = new Set([
-  'coverage',
-  'event',
-  'kind',
-  'level',
-  'method',
-  'name',
-  'op',
-  'origin',
-  'overageStatus',
-  'overage_status',
-  'phase',
-  'provider',
-  'rateLimitType',
-  'rate_limit_type',
-  'role',
-  'state',
-  'status',
-  'stop_reason',
-  'stream',
-  'subtype',
-  'type'
-]);
 
 async function fixture(provider: 'codex' | 'claude-code'): Promise<RealObservationFixture> {
   const raw = (await Bun.file(
@@ -42,21 +22,6 @@ async function fixture(provider: 'codex' | 'claude-code'): Promise<RealObservati
     provider: raw.provider as MeshAgentProvider,
     page: meshRawEventPageSchema.parse(raw.page)
   };
-}
-
-function unsafeSemanticStrings(value: unknown, key = '', path = '$'): string[] {
-  if (typeof value === 'string') {
-    if (structuralStringKeys.has(key)) return [];
-    if (/^<(?:id|path|secret|text):\d+>$/.test(value)) return [];
-    if (/^2000-01-01T00:00:00\.\d{3}Z$/.test(value)) return [];
-    return [`${path}=${value}`];
-  }
-  if (Array.isArray(value))
-    return value.flatMap((item, index) => unsafeSemanticStrings(item, key, `${path}[${index}]`));
-  if (value === null || typeof value !== 'object') return [];
-  return Object.entries(value).flatMap(([childKey, child]) =>
-    unsafeSemanticStrings(child, childKey, `${path}.${childKey}`)
-  );
 }
 
 function project(provider: 'codex' | 'claude-code', records: unknown[]) {
@@ -77,12 +42,23 @@ test('captured Codex and Claude raw-history fixtures are protocol-valid and cont
       provider: item.provider,
       coverage: item.page.coverage,
       records: item.page.records.length,
-      unsafe: unsafeSemanticStrings(item)
+      unsafe: unsanitizedSemanticStrings(item)
     }))
   ).toEqual([
     { provider: 'codex', coverage: 'settled', records: 24, unsafe: [] },
     { provider: 'claude-code', coverage: 'settled', records: 24, unsafe: [] }
   ]);
+});
+
+test('the shipped sanitizer reproduces every committed fixture unchanged', async () => {
+  const fixtures = await Promise.all([fixture('codex'), fixture('claude-code')]);
+
+  // The capture tap sanitizes with this same function before writing, so a fixture that does not
+  // survive a re-run is one the tap could not have produced — the convention would have drifted
+  // away from its only implementation.
+  expect(fixtures.map((item) => sanitizeObservationRecords(item.page.records))).toEqual(
+    fixtures.map((item) => item.page.records)
+  );
 });
 
 test('captured Codex response items project reasoning and custom tool boundaries', async () => {

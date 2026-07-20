@@ -14,12 +14,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ShellLink } from '#/components/ShellLink';
-import {
-  SIDEBAR_ITEM_LABEL_CLASS,
-  SIDEBAR_SHORTCUT_BADGE_OVERLAY_CLASS,
-  sidebarIconButtonClass,
-  sidebarItemContainerClass
-} from './nav-item';
+import { SIDEBAR_ITEM_LABEL_CLASS, sidebarIconButtonClass, sidebarItemContainerClass } from './nav-item';
 import { SidebarSessionTitle } from './sidebar-session-title';
 
 export type TreeItemMenuAction = {
@@ -51,6 +46,7 @@ export function WorkspaceTreeItem({
   onOpen,
   onRename,
   sidebarSession,
+  sessionShortcut,
   title = label,
   trailingActions
 }: {
@@ -69,23 +65,33 @@ export function WorkspaceTreeItem({
   onOpen: () => void;
   onRename?: (title: string) => void | Promise<void>;
   sidebarSession?: boolean;
+  sessionShortcut?: { modifierLabel: string; value: number; visible: boolean };
   title?: string;
   trailingActions?: ReactNode;
 }) {
   const [editing, setEditing] = useState(false);
+  const [focusedWithin, setFocusedWithin] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const sessionActionsRef = useRef<HTMLDivElement | null>(null);
-  const [sessionActionWidth, setSessionActionWidth] = useState(0);
+  const [pointerWithin, setPointerWithin] = useState(false);
+  const sessionEndOverlayRef = useRef<HTMLDivElement | null>(null);
+  const [sessionEndOverlayWidth, setSessionEndOverlayWidth] = useState(0);
+  const actionsVisible = pointerWithin || focusedWithin || menuOpen;
+  const shortcutVisible = sessionShortcut?.visible === true && !actionsVisible;
+  const overlayVisible = (actionsVisible || shortcutVisible) && !editing;
 
   useEffect(() => {
-    const element = sessionActionsRef.current;
-    if (!sidebarSession || !element) return;
-    const updateWidth = () => setSessionActionWidth(element.getBoundingClientRect().width);
+    if (!sidebarSession || !overlayVisible) {
+      setSessionEndOverlayWidth((current) => (current === 0 ? current : 0));
+      return;
+    }
+    const element = sessionEndOverlayRef.current;
+    if (!element) return;
+    const updateWidth = () => setSessionEndOverlayWidth(element.getBoundingClientRect().width);
     updateWidth();
     const observer = new ResizeObserver(updateWidth);
     observer.observe(element);
     return () => observer.disconnect();
-  }, [sidebarSession]);
+  }, [overlayVisible, sidebarSession]);
 
   const startEditing = useCallback(() => {
     if (!onRename) return;
@@ -129,9 +135,17 @@ export function WorkspaceTreeItem({
   );
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: wrapper tracks hover/focus state for an absolutely positioned sibling overlay; the actual row control remains the child link/button.
     <div
       className={sidebarItemContainerClass({ active, className: 'gap-0.5' })}
+      data-sidebar-actions-visible={actionsVisible ? 'true' : undefined}
       data-sidebar-tree-item="true"
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setFocusedWithin(false);
+      }}
+      onFocus={() => setFocusedWithin(true)}
+      onPointerEnter={() => setPointerWithin(true)}
+      onPointerLeave={() => setPointerWithin(false)}
     >
       {href ? (
         <ShellLink
@@ -162,7 +176,7 @@ export function WorkspaceTreeItem({
             >
               {sidebarSession ? (
                 <SidebarSessionTitle
-                  actionWidth={sessionActionWidth}
+                  actionWidth={overlayVisible ? sessionEndOverlayWidth : 0}
                   disabled={editing || menuOpen}
                   label={label}
                 />
@@ -171,7 +185,6 @@ export function WorkspaceTreeItem({
               )}
             </SidebarEditableTitle>
           </span>
-          {sidebarSession ? <SidebarSessionShortcutChip /> : null}
         </ShellLink>
       ) : (
         <button
@@ -195,7 +208,7 @@ export function WorkspaceTreeItem({
             >
               {sidebarSession ? (
                 <SidebarSessionTitle
-                  actionWidth={sessionActionWidth}
+                  actionWidth={overlayVisible ? sessionEndOverlayWidth : 0}
                   disabled={editing || menuOpen}
                   label={label}
                 />
@@ -204,20 +217,35 @@ export function WorkspaceTreeItem({
               )}
             </SidebarEditableTitle>
           </span>
-          {sidebarSession ? <SidebarSessionShortcutChip /> : null}
         </button>
       )}
       {sidebarSession ? (
-        <div
-          className={cn(
-            'pointer-events-none absolute inset-y-0 right-1 z-10 flex items-center gap-0.5 [@media_(hover:none),_(pointer:coarse)]:pointer-events-auto',
-            editing && 'hidden'
-          )}
-          data-sidebar-session-actions="true"
-          ref={sessionActionsRef}
-        >
-          {rowActions}
-        </div>
+        overlayVisible ? (
+          <div
+            className="pointer-events-none absolute inset-y-0 right-1 z-10 flex items-stretch [@media_(hover:none),_(pointer:coarse)]:pointer-events-auto"
+            data-sidebar-session-end-overlay="true"
+            ref={sessionEndOverlayRef}
+          >
+            <div
+              aria-hidden="true"
+              className="w-6 shrink-0 rounded-l-(--radius-md) bg-linear-to-r from-transparent to-sidebar-accent"
+              data-sidebar-session-end-overlay-fade="true"
+            />
+            <div
+              className="flex items-center gap-0.5 rounded-r-(--radius-md) bg-sidebar-accent"
+              data-sidebar-session-actions="true"
+            >
+              {shortcutVisible && sessionShortcut ? (
+                <SidebarSessionShortcutChip
+                  modifierLabel={sessionShortcut.modifierLabel}
+                  value={sessionShortcut.value}
+                />
+              ) : (
+                rowActions
+              )}
+            </div>
+          </div>
+        ) : null
       ) : (
         rowActions
       )}
@@ -225,14 +253,22 @@ export function WorkspaceTreeItem({
   );
 }
 
-export function SidebarSessionShortcutChip() {
+export function SidebarSessionShortcutChip({
+  modifierLabel = '',
+  value = ''
+}: {
+  modifierLabel?: string;
+  value?: number | string;
+}) {
   return (
     <ShortcutChip
       aria-hidden="true"
-      className={cn(SIDEBAR_SHORTCUT_BADGE_OVERLAY_CLASS, 'transition-opacity')}
+      className="pointer-events-none"
       data-sidebar-shortcut-chip="true"
-      hidden
-    />
+    >
+      {modifierLabel}
+      {value}
+    </ShortcutChip>
   );
 }
 

@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react';
 import type { Message, MessageAttachment } from '../../experience/types.ts';
+import type { WorkspaceExperienceHostAction } from '../../host-context.tsx';
 
 import { TerminalIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
@@ -356,12 +357,14 @@ function MessageBubbleContent({
 }
 
 export const MessageRow = memo(function MessageRow({
+  actions,
   msg,
   Attachment,
   labels,
   onAgentClick,
   onOpenAttachment
 }: {
+  actions?: readonly WorkspaceExperienceHostAction[];
   msg: Message;
   Attachment?: MessageAttachmentComponent;
   labels?: MessageRowLabels;
@@ -371,6 +374,7 @@ export const MessageRow = memo(function MessageRow({
   if (msg.kind === 'system' || msg.kind === 'developer') {
     return (
       <SystemMessageRow
+        actions={actions}
         msg={msg}
         onAgentClick={onAgentClick}
       />

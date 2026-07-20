@@ -15,6 +15,7 @@ import { useCallback, useMemo } from 'react';
 
 import { projectSessionPath } from '#/features/shell/routing/paths';
 import { SIDEBAR_INDENTED_ITEM_ROW_CLASS, SIDEBAR_ITEM_ROW_CLASS, SidebarIconActionButton } from './nav-item';
+import { useSidebarSessionShortcutValue } from './sidebar-shortcut-context';
 import { useWorkspaceSidebar } from './workspace-sidebar-context';
 import { type TreeItemMenuAction, WorkspaceTreeItem } from './workspace-tree-item';
 
@@ -158,6 +159,7 @@ export function ProjectSessionTreeRow({
     () => actions.openProjectSession(projectId, session.id),
     [actions, projectId, session.id]
   );
+  const shortcutValue = useSidebarSessionShortcutValue();
   const renameSession = useCallback((title: string) => actions.renameSession(session.id, title), [actions, session.id]);
   const sessionMenuActions = useMemo<TreeItemMenuAction[]>(
     () => [
@@ -208,6 +210,15 @@ export function ProjectSessionTreeRow({
       menuLabel={t('web.sidebar.itemMenu')}
       onOpen={openSession}
       onRename={renameSession}
+      sessionShortcut={
+        shortcutValue && meta.shortcutModifierLabel
+          ? {
+              modifierLabel: meta.shortcutModifierLabel,
+              value: shortcutValue,
+              visible: meta.showShortcutBadges === true
+            }
+          : undefined
+      }
       sidebarSession
       title={session.title}
     />
@@ -237,6 +248,7 @@ export function PinnedSessionTreeRow({
     onProjectSessionOpened(projectId);
     actions.openProjectSession(projectId, session.id);
   }, [actions, onProjectSessionOpened, projectId, session.id]);
+  const shortcutValue = useSidebarSessionShortcutValue();
   const renameSession = useCallback((title: string) => actions.renameSession(session.id, title), [actions, session.id]);
   const sessionMenuActions = useMemo<TreeItemMenuAction[]>(
     () => [
@@ -286,6 +298,15 @@ export function PinnedSessionTreeRow({
       menuLabel={t('web.sidebar.itemMenu')}
       onOpen={openSession}
       onRename={renameSession}
+      sessionShortcut={
+        shortcutValue && meta.shortcutModifierLabel
+          ? {
+              modifierLabel: meta.shortcutModifierLabel,
+              value: shortcutValue,
+              visible: meta.showShortcutBadges === true
+            }
+          : undefined
+      }
       sidebarSession
       title={`${projectName}: ${session.title}`}
     />

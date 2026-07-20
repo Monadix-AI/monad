@@ -6,6 +6,13 @@ import { createContext, useContext } from 'react';
 export type { WorkspaceExperienceStudioSection };
 export type VoiceModelState = 'checking' | 'configured' | 'missing' | 'failed';
 
+export interface WorkspaceExperienceHostAction {
+  id: string;
+  label: string;
+  disabled?: boolean;
+  run: (payload: unknown) => void | Promise<void>;
+}
+
 /** Ambient host capabilities a built-in workspace experience reads from context instead of receiving as
  *  renderer props or reaching for a module-global client. The React counterpart of the third-party
  *  event-bridge `WorkspaceExperienceHostApi` (@monad/protocol) — `requestProjectDialog` reuses the same
@@ -16,6 +23,7 @@ export type VoiceModelState = 'checking' | 'configured' | 'missing' | 'failed';
  *  render inside the web app's Redux `<Provider>`), not a `fetch` escape hatch on this object. */
 export interface WorkspaceExperienceHost {
   voiceModelState?: VoiceModelState;
+  actions?: readonly WorkspaceExperienceHostAction[];
   /** Imperative Studio navigation (replaces the old meshAgentsHref link + openModelSettings). */
   openStudio: (section?: WorkspaceExperienceStudioSection) => void;
   requestProjectDialog: (request: WorkspaceExperienceProjectDialogRequest) => void;

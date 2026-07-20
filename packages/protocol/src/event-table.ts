@@ -46,9 +46,13 @@ export const sessionRestoredPayloadSchema = z.object({
   newHeadMessageId: messageIdSchema.nullable()
 });
 
-const transcriptEventIdentitySchema = z.object({ transcriptTargetId: transcriptTargetIdSchema });
+const transcriptEventIdentitySchema = z.object({
+  transcriptTargetId: transcriptTargetIdSchema
+});
 
-const messageEventIdentitySchema = transcriptEventIdentitySchema.extend({ producer: messageProducerSchema });
+const messageEventIdentitySchema = transcriptEventIdentitySchema.extend({
+  producer: messageProducerSchema
+});
 
 const messageRevisionSchema = z.number().int().nonnegative();
 
@@ -249,6 +253,7 @@ export const meshSessionConnectionClosedPayloadSchema = meshAgentConnectionIdent
 export const meshAgentConnectionRequiredPayloadSchema = z.object({
   meshSessionId: z.string().optional(),
   agentName: z.string(),
+  authAgentName: z.string().optional(),
   provider: meshAgentProviderSchema,
   code: z.string().optional(),
   reason: z.string(),
@@ -302,6 +307,7 @@ export const meshAgentTurnSettledPayloadSchema = z.object({
 export const meshAgentLoginRequiredPayloadSchema = z.object({
   meshSessionId: z.string().optional(),
   agentName: z.string(),
+  authAgentName: z.string().optional(),
   provider: meshAgentProviderSchema,
   reason: z.string()
 });
@@ -406,7 +412,9 @@ export const EVENT_DEFINITIONS = {
 } as const satisfies Record<EventType, EventDefinition>;
 
 type EventDefinitions = typeof EVENT_DEFINITIONS;
-type EventTable = { [T in keyof EventDefinitions]: EventDefinitions[T]['schema'] };
+type EventTable = {
+  [T in keyof EventDefinitions]: EventDefinitions[T]['schema'];
+};
 
 export const EVENT_TABLE = Object.fromEntries(
   Object.entries(EVENT_DEFINITIONS).map(([type, definition]) => [type, definition.schema])

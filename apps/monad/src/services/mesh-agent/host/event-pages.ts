@@ -142,7 +142,7 @@ export class MeshAgentEventPages {
       requestedCursor.kind === 'none'
         ? formatObservationCursor({ kind: 'provider', token: '' })
         : formatObservationCursor(requestedCursor),
-      events.map((event) => ({ op: 'upsert', event }))
+      events.map((event) => ({ op: 'upsert' as const, event }))
     );
     return {
       frames: patch ? [patch] : [],

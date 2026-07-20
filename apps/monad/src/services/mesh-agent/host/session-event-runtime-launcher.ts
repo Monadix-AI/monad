@@ -3,6 +3,7 @@ import type { MeshAgentView, MeshSessionView, ProjectId } from '@monad/protocol'
 import type { MeshAgentOutputEvent, MeshAgentProviderAdapter } from '#/services/mesh-agent/types.ts';
 import type { MeshSessionRow } from '#/store/db/index.ts';
 import type { MeshAgentTargetId } from '#/store/db/mesh-sessions.ts';
+import type { MeshFixtureTap } from '../fixture-tap.ts';
 import type { LiveRawStore } from '../live-raw-store.ts';
 import type { LiveMeshSession, MeshAgentHostDeps } from './host-types.ts';
 
@@ -49,6 +50,7 @@ interface MeshSessionEventRuntimeLauncherContext {
   trackProcess(pid: number): Promise<void>;
   untrackProcess(pid: number): void;
   openLiveRawStore(id: string, epoch: string): LiveRawStore;
+  fixtureTap?: MeshFixtureTap;
 }
 
 export class MeshSessionEventRuntimeLauncher {
@@ -195,6 +197,7 @@ export class MeshSessionEventRuntimeLauncher {
       }),
       createObservationEpoch: () => {
         if (activationSequence++ === 0) return live.observationEpoch;
+        void this.ctx.fixtureTap?.flush(id, live.observationEpoch);
         void live.liveRawStore.closeAndDelete();
         live.observationEpoch = newId('oep');
         live.liveRawStore = this.ctx.openLiveRawStore(id, live.observationEpoch);
@@ -203,11 +206,21 @@ export class MeshSessionEventRuntimeLauncher {
       },
       captureRaw: async (packet, epoch) => {
         if (epoch !== live.observationEpoch) throw new Error('MeshAgent observation epoch changed during capture');
+        const stream = packet.source === 'stderr' ? ('stderr' as const) : ('stdout' as const);
+        const payload = new TextDecoder().decode(packet.bytes);
         live.outputSeq = live.liveRawStore.append({
-          stream: packet.source === 'stderr' ? 'stderr' : 'stdout',
-          payload: new TextDecoder().decode(packet.bytes),
+          stream,
+          payload,
           observedAt: packet.receivedAt
         }).seq;
+        this.ctx.fixtureTap?.record({
+          provider: adapter.provider,
+          meshSessionId: id,
+          observationEpoch: epoch,
+          stream,
+          payload,
+          observedAt: packet.receivedAt
+        });
         this.ctx.observation.publish(id);
       },
       consumeEvent: async (event) => {
@@ -249,6 +262,7 @@ export class MeshSessionEventRuntimeLauncher {
         if (terminal && terminal.kind !== 'stopped' && !terminalHandled) {
           terminalHandled = true;
           this.ctx.live.delete(id);
+          void this.ctx.fixtureTap?.flush(id, live.observationEpoch);
           void live.liveRawStore.closeAndDelete();
           if (managed) cleanupManagedProjectRuntimeToken(managed.workspace);
           this.ctx.events.emit(args.transcriptTargetId, 'mesh.exited', {

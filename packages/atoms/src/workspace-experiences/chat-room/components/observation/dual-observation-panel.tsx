@@ -89,6 +89,7 @@ export function DualObservationPanel(props: DualObservationPanelProps): React.Re
         </div>
       }
       icon={icon}
+      key={meshSessionId}
       loadingOlderEvents={controller.loadingOlderEvents}
       observationLoading={controller.loading}
       observationUnavailable={Boolean(controller.unavailableReason)}

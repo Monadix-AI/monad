@@ -28,10 +28,10 @@ export interface VirtualListProps<T> {
   controlRef?: Ref<VirtualListHandle>;
   /** Fired when the viewport crosses into/out of the bottom — drive a "jump to latest" affordance. */
   onAtBottomChange?: (atBottom: boolean) => void;
-  /** Fired when the user scrolls near the top — load older rows here. */
-  onStartReached?: () => void;
+  /** Fired when the user scrolls near the top — load older rows here. Return false when no load started. */
+  onStartReached?: () => unknown;
   /** Fired when the user scrolls near the bottom — load newer rows here (history-mode paging). */
-  onEndReached?: () => void;
+  onEndReached?: () => unknown;
   /** Fired when the virtualized viewport range changes. */
   onRangeChange?: (range: { endIndex: number; startIndex: number }) => void;
   /** ARIA role for the scroll region (e.g. "log" for a chat transcript). */
@@ -79,6 +79,69 @@ export function overscanRowCount(overscanPx: number, estimatedRowHeight = ESTIMA
   return Math.max(1, Math.ceil(overscanPx / estimatedRowHeight));
 }
 
+function MeasuredVirtualRow({
+  children,
+  index,
+  measureElement,
+  style
+}: {
+  children: ReactNode;
+  index: number;
+  measureElement: (node: HTMLDivElement | null) => void;
+  style: CSSProperties;
+}): React.ReactElement {
+  const rowRef = useRef<HTMLDivElement | null>(null);
+  const frameRef = useRef<number | null>(null);
+
+  const cancelPendingMeasurement = useCallback(() => {
+    if (frameRef.current === null) return;
+    cancelAnimationFrame(frameRef.current);
+    frameRef.current = null;
+  }, []);
+
+  const scheduleMeasurement = useCallback(() => {
+    const node = rowRef.current;
+    if (!node) return;
+    cancelPendingMeasurement();
+    frameRef.current = requestAnimationFrame(() => {
+      frameRef.current = null;
+      if (rowRef.current) measureElement(rowRef.current);
+    });
+  }, [cancelPendingMeasurement, measureElement]);
+
+  const setRowRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      rowRef.current = node;
+      measureElement(node);
+    },
+    [measureElement]
+  );
+
+  useLayoutEffect(() => {
+    scheduleMeasurement();
+  });
+
+  useLayoutEffect(() => {
+    const node = rowRef.current;
+    if (!node || typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(scheduleMeasurement);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [scheduleMeasurement]);
+
+  useLayoutEffect(() => cancelPendingMeasurement, [cancelPendingMeasurement]);
+
+  return (
+    <div
+      data-index={index}
+      ref={setRowRef}
+      style={style}
+    >
+      {children}
+    </div>
+  );
+}
+
 /**
  * Generic windowed list over @tanstack/react-virtual.
  *
@@ -115,8 +178,9 @@ export function VirtualList<T>({
 
   const lastRangeRef = useRef<{ endIndex: number; startIndex: number } | null>(null);
   const lastAtEndRef = useRef<boolean | null>(null);
-  const startArmedRef = useRef(true);
+  const startArmedRef = useRef(!stickToBottom);
   const endArmedRef = useRef(true);
+  const initialEndScrollDoneRef = useRef(!stickToBottom);
   const previousLastKeyRef = useRef<string | null>(null);
   const latestRef = useRef({ getKey, items, onAtBottomChange, onEndReached, onRangeChange, onStartReached });
   latestRef.current = { getKey, items, onAtBottomChange, onEndReached, onRangeChange, onStartReached };
@@ -139,13 +203,20 @@ export function VirtualList<T>({
     (instance: VirtualizerBoundaryState, metrics?: ScrollBoundaryMetrics) => {
       emitRange(instance.range);
 
-      const scrollOffset = Math.max(metrics?.scrollTop ?? instance.scrollOffset ?? 0, 0);
-      const atStart = scrollOffset <= START_REACHED_THRESHOLD;
-      if (atStart && startArmedRef.current) {
-        startArmedRef.current = false;
-        latestRef.current.onStartReached?.();
-      } else if (!atStart) {
-        startArmedRef.current = true;
+      const knownScrollOffset = metrics?.scrollTop;
+      if (knownScrollOffset !== null && knownScrollOffset !== undefined) {
+        const scrollOffset = Math.max(knownScrollOffset, 0);
+        const atStart = scrollOffset <= START_REACHED_THRESHOLD;
+        if (!initialEndScrollDoneRef.current) {
+          if (stickToBottom && atStart) return;
+          initialEndScrollDoneRef.current = true;
+        }
+        if (atStart && startArmedRef.current && initialEndScrollDoneRef.current) {
+          const handled = latestRef.current.onStartReached?.();
+          if (handled !== false) startArmedRef.current = false;
+        } else if (!atStart) {
+          startArmedRef.current = true;
+        }
       }
 
       const distanceFromEnd = metrics
@@ -153,8 +224,8 @@ export function VirtualList<T>({
         : instance.getDistanceFromEnd();
       const atEndEdge = distanceFromEnd <= END_REACHED_THRESHOLD;
       if (atEndEdge && endArmedRef.current) {
-        endArmedRef.current = false;
-        latestRef.current.onEndReached?.();
+        const handled = latestRef.current.onEndReached?.();
+        if (handled !== false) endArmedRef.current = false;
       } else if (!atEndEdge) {
         endArmedRef.current = true;
       }
@@ -165,7 +236,7 @@ export function VirtualList<T>({
         latestRef.current.onAtBottomChange?.(atEnd);
       }
     },
-    [emitRange]
+    [emitRange, stickToBottom]
   );
 
   const keyOfIndex = useCallback((index: number): string => {
@@ -236,10 +307,22 @@ export function VirtualList<T>({
     if (shouldFollowCommittedAppend) virtualizer.scrollToEnd();
   }, [lastItemKey, shouldFollowCommittedAppend, virtualizer]);
 
+  useLayoutEffect(() => {
+    if (!scrollerReady) return;
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+    evaluateBoundaries(virtualizer, {
+      clientHeight: scroller.clientHeight,
+      scrollHeight: scroller.scrollHeight,
+      scrollTop: scroller.scrollTop
+    });
+  });
+
   useImperativeHandle(
     controlRef,
     () => ({
       scrollToTop: (behavior = 'auto') => {
+        initialEndScrollDoneRef.current = true;
         startArmedRef.current = true;
         virtualizer.scrollToOffset(0, { behavior });
         requestAnimationFrame(() => {
@@ -291,14 +374,14 @@ export function VirtualList<T>({
             const content = item === undefined && hasFooter ? footer : item === undefined ? null : renderItem(item);
             if (content === null) return null;
             return (
-              <div
-                data-index={virtualRow.index}
+              <MeasuredVirtualRow
+                index={virtualRow.index}
                 key={virtualRow.key}
-                ref={virtualizer.measureElement}
+                measureElement={virtualizer.measureElement}
                 style={{ ...ROW_STYLE_BASE, transform: `translateY(${virtualRow.start - headerHeight}px)` }}
               >
                 {content}
-              </div>
+              </MeasuredVirtualRow>
             );
           })}
       </div>

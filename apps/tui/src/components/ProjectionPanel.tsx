@@ -102,9 +102,7 @@ export function ProjectionPanel({ active, sessionId }: { active: boolean; sessio
       ) : null}
       {events.slice(-18).map((event) => (
         <Box key={event.id}>
-          <Text color={'kind' in event && event.kind === 'reasoning' ? TUI_THEME.dim : TUI_THEME.accent}>
-            {renderEvent(event)}
-          </Text>
+          <Text color={event.kind === 'reasoning' ? TUI_THEME.dim : TUI_THEME.accent}>{renderEvent(event)}</Text>
         </Box>
       ))}
       {historyQuery.isFetching ? <Text color={TUI_THEME.dim}>{t('cli.tui.projection.historyLoading')}</Text> : null}
@@ -115,8 +113,9 @@ export function ProjectionPanel({ active, sessionId }: { active: boolean; sessio
 }
 
 function renderEvent(event: AgentObservationEvent): string {
-  if (event.kind === 'tool-call') return `├ ${event.tool?.name ?? 'tool'} ${stringify(event.tool?.input)}`;
-  if (event.kind === 'tool-result') return `└ ${event.tool?.name ?? 'result'} ${stringify(event.tool?.output)}`;
+  if (event.kind === 'tool-call' || event.kind === 'tool-result') {
+    return `├ ${event.tool?.name ?? 'tool'} ${stringify(event.tool?.output ?? event.tool?.input)}`;
+  }
   return `${event.streaming ? '…' : '·'} ${event.text ?? event.reason ?? event.kind}`;
 }
 

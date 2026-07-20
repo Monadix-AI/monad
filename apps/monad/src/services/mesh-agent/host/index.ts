@@ -1,4 +1,5 @@
 import type {
+  Event,
   ListMeshAgentRuntimesQuery,
   ListMeshAgentRuntimesResponse,
   ListMeshSessionsResponse,
@@ -15,7 +16,8 @@ import type {
   MeshEventPageRequest,
   MeshRawEvent,
   MeshRawEventPage,
-  MeshSessionView
+  MeshSessionView,
+  SessionId
 } from '@monad/protocol';
 import type { MeshAgentEventPageRequest, MeshAgentProjectionPage } from '@monad/sdk-atom';
 import type {
@@ -37,6 +39,7 @@ import { createLogger } from '@monad/logger';
 
 import { MeshAgentAuthHost, type MeshAgentAuthListener } from '#/services/mesh-agent/auth-host.ts';
 import { MeshAgentError } from '#/services/mesh-agent/errors.ts';
+import { MeshFixtureTap } from '#/services/mesh-agent/fixture-tap.ts';
 import { MeshAgentEventLog } from '#/services/mesh-agent/host/event-log.ts';
 import { MeshAgentEventPages } from '#/services/mesh-agent/host/event-pages.ts';
 import { toView } from '#/services/mesh-agent/host/host-helpers.ts';
@@ -48,6 +51,7 @@ import { MeshAgentOutputPipeline } from '#/services/mesh-agent/host/output-pipel
 import { MeshAgentProcessLifecycle } from '#/services/mesh-agent/host/process-lifecycle.ts';
 import { disposeLiveCapture } from '#/services/mesh-agent/host/runtime-teardown.ts';
 import { MeshSessionEventRuntimeLauncher } from '#/services/mesh-agent/host/session-event-runtime-launcher.ts';
+import { getMeshAgentProviderAdapter } from '#/services/mesh-agent/index.ts';
 import { cleanupStaleLiveRawStores, LiveRawStore } from '#/services/mesh-agent/live-raw-store.ts';
 import { MeshAgentLoginNudge } from '#/services/mesh-agent/login-nudge.ts';
 import {
@@ -100,8 +104,14 @@ export class MeshAgentHost {
   private readonly eventPages: MeshAgentEventPages;
   private readonly liveRawStoreDirectory: string;
   private readonly liveRawStoreCleanup: Promise<Error | undefined>;
+  private readonly fixtureTap?: MeshFixtureTap;
 
   constructor(private readonly deps: MeshAgentHostDeps) {
+    if (deps.developerMode)
+      this.fixtureTap = new MeshFixtureTap(
+        deps.meshFixtureCaptureDirectory ?? join(deps.monadHome ?? tmpdir(), 'fixtures', 'mesh-observation'),
+        this.log
+      );
     this.liveRawStoreDirectory =
       deps.meshAgentLiveStoreDirectory ?? join(tmpdir(), `monad-mesh-agent-live-${process.pid}`);
     this.liveRawStoreCleanup = cleanupStaleLiveRawStores(this.liveRawStoreDirectory)
@@ -152,7 +162,8 @@ export class MeshAgentHost {
       buildSpawnEnv: (adapter, env) => this.buildSpawnEnv(adapter, env),
       trackProcess: (pid) => this.processLifecycle.track(pid),
       untrackProcess: (pid) => this.processLifecycle.untrack(pid),
-      openLiveRawStore: (id, epoch) => this.openLiveRawStore(id, epoch)
+      openLiveRawStore: (id, epoch) => this.openLiveRawStore(id, epoch),
+      ...(this.fixtureTap ? { fixtureTap: this.fixtureTap } : {})
     });
     this.observationResolver = new MeshAgentObservationResolver({
       live: this.live,
@@ -200,6 +211,40 @@ export class MeshAgentHost {
 
   private emitConnectionClosed(live: LiveMeshSession, reason: 'exited' | 'failed' | 'stopped' | 'disconnected'): void {
     this.observationEpoch.emitConnectionClosed(live, reason);
+  }
+
+  private async applyProviderSessionLifecycle(
+    transcriptTargetId: MeshAgentTargetId,
+    action: 'archive' | 'delete'
+  ): Promise<void> {
+    await Promise.all(
+      this.deps.store.listMeshSessionsForTranscriptTarget(transcriptTargetId).map(async (row) => {
+        if (!row.providerSessionRef) return;
+        const adapter = getMeshAgentProviderAdapter(row.provider);
+        const hook = action === 'archive' ? adapter.archiveSession : adapter.deleteSession;
+        if (!hook) return;
+        try {
+          await hook({
+            meshSessionId: row.id,
+            transcriptTargetId: row.transcriptTargetId,
+            agentName: row.agentName,
+            providerSessionRef: row.providerSessionRef,
+            workingPath: row.workingPath
+          });
+        } catch (error) {
+          this.log.warn(
+            {
+              event: 'mesh.provider_session_lifecycle_failed',
+              action,
+              meshSessionId: row.id,
+              provider: row.provider,
+              err: error instanceof Error ? { message: error.message } : String(error)
+            },
+            'provider session lifecycle hook failed'
+          );
+        }
+      })
+    );
   }
 
   reconcileOrphanedSessions(): Promise<number> {
@@ -394,6 +439,14 @@ export class MeshAgentHost {
     }
   }
 
+  archiveSession(sessionId: MeshAgentTargetId): Promise<void> {
+    return this.applyProviderSessionLifecycle(sessionId, 'archive');
+  }
+
+  deleteSession(sessionId: MeshAgentTargetId): Promise<void> {
+    return this.applyProviderSessionLifecycle(sessionId, 'delete');
+  }
+
   stopAll(): void {
     this.disposeLoginNudge();
     for (const id of [...this.live.keys()]) {
@@ -473,5 +526,9 @@ export class MeshAgentHost {
 
   preflight(agentName: string): Promise<MeshAgentStartPreflight> {
     return this.authHost.preflight(agentName);
+  }
+
+  pendingLoginRequiredEvents(sessionId: SessionId): Event[] {
+    return this.loginNudge.pendingLoginRequiredEvents(sessionId);
   }
 }

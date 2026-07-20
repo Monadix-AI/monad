@@ -42,6 +42,7 @@ declare global {
     harness: {
       appendRow: () => void;
       dragScrollbarToTop: (holdMs?: number) => Promise<void>;
+      enableTopPagingCursor: () => void;
       /** Remember where a given row sits in the viewport, to measure later drift against. */
       anchor: () => { id: string | null; offset: number | null };
       /** How far the anchored row has moved in the viewport since `anchor()` — non-zero is a jump. */
@@ -79,10 +80,12 @@ function Harness(): React.ReactElement {
   const [topLoading, setTopLoading] = useState(false);
   const anchorRef = useRef<{ id: string; offset: number; scrollTop: number } | null>(null);
   const topPagingMode = new URLSearchParams(window.location.search).get('topPaging');
-  const topPaging = topPagingMode === '1' || topPagingMode === 'merge';
+  const [topCanLoad, setTopCanLoad] = useState(topPagingMode !== 'deferred');
+  const topPaging = topPagingMode === '1' || topPagingMode === 'merge' || topPagingMode === 'deferred';
 
   const loadOlderAtTop = useCallback(() => {
-    if (!topPaging || topLoadingRef.current || topLoadCountRef.current >= 5) return;
+    if (!topPaging || !topCanLoad) return false;
+    if (topLoadingRef.current || topLoadCountRef.current >= 5) return true;
     topLoadingRef.current = true;
     setTopLoading(true);
     window.setTimeout(() => {
@@ -102,7 +105,8 @@ function Harness(): React.ReactElement {
       topLoadingRef.current = false;
       setTopLoading(false);
     }, 150);
-  }, [topPaging, topPagingMode]);
+    return true;
+  }, [topCanLoad, topPaging, topPagingMode]);
 
   const renderItem = useCallback(
     (row: Row) => (
@@ -159,6 +163,7 @@ function Harness(): React.ReactElement {
       await new Promise((resolve) => setTimeout(resolve, holdMs));
       scroller.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
     },
+    enableTopPagingCursor: () => setTopCanLoad(true),
     growLastRow: (times = 1) =>
       setRows((previous) => {
         const last = previous.at(-1);

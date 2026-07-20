@@ -209,7 +209,13 @@ export function listMentionInbox(sqlite: Database, limit = 100): InboxItem[] {
        LEFT JOIN workplace_projects p ON p.id = s.project_id
        LEFT JOIN session_members sm
          ON sm.session_id = s.id
-        AND sm.member_id = CASE WHEN json_valid(m.data) THEN json_extract(m.data, '$.agentName') END
+        AND sm.member_id = CASE
+          WHEN json_valid(m.data) THEN COALESCE(
+            json_extract(m.data, '$.memberId'),
+            json_extract(m.data, '$.agentId'),
+            json_extract(m.data, '$.agentName')
+          )
+        END
        WHERE m.role = 'assistant'
          AND m.active = 1
          AND instr(m.text, 'id="human"') > 0

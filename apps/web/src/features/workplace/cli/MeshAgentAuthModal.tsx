@@ -4,10 +4,11 @@ import {
   useGetMeshAgentAuthQuery,
   useHeartbeatMeshAgentAuthMutation,
   useInputMeshAgentAuthMutation,
+  useStartMeshAgentAuthMutation,
   useStopMeshAgentAuthMutation
 } from '@monad/client-rtk';
 import { isProductIconId } from '@monad/ui';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useT } from '#/components/I18nProvider';
 import { CliTerminalModal } from './CliTerminalModal';
@@ -17,6 +18,11 @@ function meshAgentAuthSessionForView(
   session: MeshAgentAuthSessionView | undefined
 ): MeshAgentAuthSessionView | undefined {
   return session?.id === sessionId ? session : undefined;
+}
+
+function authSessionMissing(error: unknown): boolean {
+  const text = error instanceof Error ? error.message : JSON.stringify(error);
+  return text.includes('404') || text.includes('not found');
 }
 
 export function MeshAgentAuthModal({
@@ -33,12 +39,15 @@ export function MeshAgentAuthModal({
   onClose: () => void;
 }): React.ReactElement {
   const t = useT();
-  const { data } = useGetMeshAgentAuthQuery({ id: sessionId, controlToken });
+  const [activeAuthSession, setActiveAuthSession] = useState({ id: sessionId, controlToken });
+  const { data, error: getAuthError } = useGetMeshAgentAuthQuery(activeAuthSession);
+  const [startAuth] = useStartMeshAgentAuthMutation();
   const [heartbeatAuth] = useHeartbeatMeshAgentAuthMutation();
   const [inputAuth] = useInputMeshAgentAuthMutation();
   const [stopAuth] = useStopMeshAgentAuthMutation();
   const [authPersistenceError, setAuthPersistenceError] = useState<string | null>(null);
-  const session = meshAgentAuthSessionForView(sessionId, data);
+  const restartingAuth = useRef(false);
+  const session = meshAgentAuthSessionForView(activeAuthSession.id, data);
   const output = session?.outputSnapshot ?? '';
   const visibleOutput = authPersistenceError ? `${output}\n\n${authPersistenceError}` : output;
   const isLive = session ? session.state === 'starting' || session.state === 'running' : true;
@@ -47,17 +56,41 @@ export function MeshAgentAuthModal({
   const persistingAuthenticated = useRef(false);
 
   useEffect(() => {
+    setActiveAuthSession({ id: sessionId, controlToken });
+  }, [controlToken, sessionId]);
+
+  const restartMissingAuthSession = useCallback(async () => {
+    if (restartingAuth.current) return;
+    restartingAuth.current = true;
+    try {
+      const next = await startAuth(agentName).unwrap();
+      setAuthPersistenceError(null);
+      setActiveAuthSession({ id: next.id, controlToken: next.controlToken });
+    } finally {
+      restartingAuth.current = false;
+    }
+  }, [agentName, startAuth]);
+
+  useEffect(() => {
+    if (getAuthError && authSessionMissing(getAuthError)) void restartMissingAuthSession();
+  }, [getAuthError, restartMissingAuthSession]);
+
+  useEffect(() => {
     if (!isLive) return;
-    void heartbeatAuth({ id: sessionId, controlToken })
+    void heartbeatAuth(activeAuthSession)
       .unwrap()
-      .catch(() => {});
+      .catch((error) => {
+        if (authSessionMissing(error)) void restartMissingAuthSession();
+      });
     const timer = window.setInterval(() => {
-      void heartbeatAuth({ id: sessionId, controlToken })
+      void heartbeatAuth(activeAuthSession)
         .unwrap()
-        .catch(() => {});
+        .catch((error) => {
+          if (authSessionMissing(error)) void restartMissingAuthSession();
+        });
     }, 5_000);
     return () => window.clearInterval(timer);
-  }, [controlToken, heartbeatAuth, isLive, sessionId]);
+  }, [activeAuthSession, heartbeatAuth, isLive, restartMissingAuthSession]);
 
   useEffect(() => {
     if (session?.authState !== 'authenticated' || persistedAuthenticated.current || persistingAuthenticated.current)
@@ -83,13 +116,18 @@ export function MeshAgentAuthModal({
       eyebrow={t('web.meshAgent.connectTitle')}
       footerLabel={t('web.meshAgent.connectTerminalHint')}
       icon={isProductIconId(session?.productIcon) ? session.productIcon : undefined}
-      id={sessionId}
+      id={activeAuthSession.id}
       onClose={onClose}
       onInput={(input) => {
-        if (isLive) void inputAuth({ id: sessionId, controlToken, input }).unwrap();
+        if (isLive)
+          void inputAuth({ ...activeAuthSession, input })
+            .unwrap()
+            .catch((error) => {
+              if (authSessionMissing(error)) void restartMissingAuthSession();
+            });
       }}
       onStop={() => {
-        void stopAuth({ id: sessionId, controlToken }).unwrap();
+        void stopAuth(activeAuthSession).unwrap();
         onClose();
       }}
       output={visibleOutput}

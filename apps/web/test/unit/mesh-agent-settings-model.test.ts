@@ -7,6 +7,7 @@ import {
   meshAgentSettingDescription,
   meshAgentSettings
 } from '../../src/features/studio/third-party-agents/mesh-agent-settings-model';
+import { meshAgentAuthProbeNamesToRefresh } from '../../src/hooks/use-mesh-agent-settings';
 
 const agent: MeshAgentView = {
   name: 'codex',
@@ -71,4 +72,32 @@ test('MeshAgent autopilot description explains an unavailable approval proxy', (
       { canToggleAutopilot: false }
     )
   ).toBe('approvalProxyUnavailable');
+});
+
+test('MeshAgent auth refresh after saving an agent probes only that agent', () => {
+  expect(
+    meshAgentAuthProbeNamesToRefresh({
+      names: ['claude-code', 'codex'],
+      cachedAt: new Map([
+        ['claude-code', 1],
+        ['codex', 1]
+      ]),
+      now: 2,
+      targetedNames: ['codex']
+    })
+  ).toEqual(['codex']);
+});
+
+test('MeshAgent manual refresh still probes every configured installed agent', () => {
+  expect(
+    meshAgentAuthProbeNamesToRefresh({
+      names: ['claude-code', 'codex'],
+      cachedAt: new Map([
+        ['claude-code', 1],
+        ['codex', 1]
+      ]),
+      now: 2,
+      forceAll: true
+    })
+  ).toEqual(['claude-code', 'codex']);
 });

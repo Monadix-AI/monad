@@ -14,7 +14,11 @@ import {
   codexAppServerBatchRecordEvents,
   codexAppServerTurnsPageRecordEvents
 } from './observation-app-server-items.ts';
-import { codexAppServerRecordEvents } from './observation-app-server-notification.ts';
+import {
+  codexAppServerRecordEvents,
+  codexLiveAppServerRecordEvents,
+  isCodexLiveAppServerRecord
+} from './observation-app-server-notification.ts';
 import { codexExecRecordEvents } from './observation-exec.ts';
 import { codexLogRecordEvents, isCodexLogRecord } from './observation-log.ts';
 import { codexObservationMessageGroupAdapter } from './observation-message-group.ts';
@@ -87,6 +91,11 @@ export const codexObservationProjection = {
       supports: isCodexObservationNotification,
       parse: ({ id, record, recordIndex }) =>
         isCodexObservationNotification(record) ? codexAppServerRecordEvents(id, record, recordIndex) : []
+    },
+    {
+      supports: isCodexLiveAppServerRecord,
+      parse: ({ id, record, recordIndex }) =>
+        isCodexLiveAppServerRecord(record) ? codexLiveAppServerRecordEvents(id, record, recordIndex) : []
     },
     { parse: ({ id, record, recordIndex }) => codexAppServerBatchRecordEvents(id, record, recordIndex) },
     { parse: ({ id, record, recordIndex }) => codexAppServerTurnsPageRecordEvents(id, record, recordIndex) },

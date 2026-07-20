@@ -68,6 +68,7 @@ export function createManagedMeshAgentJoin(ctx: SessionContext) {
         if (preflight.state === 'not_authenticated' || preflight.state === 'unknown') {
           emitLifecycle(session.id, 'mesh.connection_required', {
             agentName: runtimeAgentName,
+            authAgentName: templateAgentName,
             provider: spec.provider,
             code: 'provider_connection_required',
             reason: preflight.reason,

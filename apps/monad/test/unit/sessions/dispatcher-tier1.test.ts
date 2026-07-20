@@ -1,9 +1,11 @@
 import type { SessionId } from '@monad/protocol';
+import type { MeshAgentProviderSessionLifecycleContext } from '@monad/sdk-atom';
 
 import { expect, test } from 'bun:test';
 import { newId } from '@monad/protocol';
 
 import { HandlerError } from '#/handlers/handler-error.ts';
+import { getMeshAgentProviderAdapter } from '#/services/mesh-agent/index.ts';
 import { createStore } from '#/store/db/index.ts';
 import { buildHandlers, mockModel } from '../../helpers.ts';
 
@@ -100,6 +102,77 @@ test('sessionDelete hides queued project sessions from project lists', async () 
     sessionId
   ]);
   store.close();
+});
+
+test('project session archive and delete apply provider lifecycle hooks when available', async () => {
+  const store = createStore();
+  const d = buildHandlers(mockModel(['hi']), undefined, { store, sessionDeleteGraceMs: 1 });
+  const adapter = getMeshAgentProviderAdapter('codex');
+  const originalArchiveSession = adapter.archiveSession;
+  const originalDeleteSession = adapter.deleteSession;
+  const archiveCalls: MeshAgentProviderSessionLifecycleContext[] = [];
+  const deleteCalls: MeshAgentProviderSessionLifecycleContext[] = [];
+  adapter.archiveSession = async (context) => {
+    archiveCalls.push(context);
+  };
+  adapter.deleteSession = async (context) => {
+    deleteCalls.push(context);
+  };
+
+  try {
+    const { projectId } = await d.session.createProject({ title: 'p' });
+    const { sessionId } = await d.session.createProjectSession({ projectId, title: 'project session' });
+    const now = '2026-07-20T00:00:00.000Z';
+    store.upsertMeshSession({
+      id: 'mesh_lifecycle000',
+      transcriptTargetId: sessionId,
+      agentName: 'pmem_codex',
+      provider: 'codex',
+      workingPath: '/tmp/project',
+      runtimeRole: 'managed-project-agent',
+      agentRuntimeId: null,
+      agentRuntimeTokenHash: null,
+      lastDeliveredSeq: 0,
+      lastVisibleSeq: 0,
+      state: 'running',
+      pid: null,
+      providerSessionRef: 'thread_codex_123',
+      outputSnapshot: '',
+      exitCode: null,
+      startedAt: now,
+      updatedAt: now,
+      exitedAt: null
+    });
+
+    await d.session.update({ id: sessionId, archived: true });
+    await d.session.update({ id: sessionId, archived: true });
+    expect(archiveCalls).toEqual([
+      {
+        meshSessionId: 'mesh_lifecycle000',
+        transcriptTargetId: sessionId,
+        agentName: 'pmem_codex',
+        providerSessionRef: 'thread_codex_123',
+        workingPath: '/tmp/project'
+      }
+    ]);
+
+    await d.session.delete({ id: sessionId });
+    expect(deleteCalls).toEqual([]);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(deleteCalls).toEqual([
+      {
+        meshSessionId: 'mesh_lifecycle000',
+        transcriptTargetId: sessionId,
+        agentName: 'pmem_codex',
+        providerSessionRef: 'thread_codex_123',
+        workingPath: '/tmp/project'
+      }
+    ]);
+  } finally {
+    adapter.archiveSession = originalArchiveSession;
+    adapter.deleteSession = originalDeleteSession;
+    store.close();
+  }
 });
 
 test('createProjectSession clones the project member templates into live session members', async () => {

@@ -8,6 +8,8 @@ const CONTROL_ROOM_SESSION_PREFIX = 'Control Room: ';
 const WORKPLACE_SESSION_PREFIX = 'Workplace: ';
 
 export type MeshAgentProjectMemberShape = {
+  memberId: string;
+  templateId?: string;
   type: string;
   name: string;
   templateName?: string;
@@ -26,6 +28,15 @@ export interface ManagedMeshAgentProjectMember {
     WorkplaceProjectMemberSettings,
     'managedProjectAgent' | 'allowAutopilot' | 'modelName' | 'modelId' | 'reasoningEffort' | 'speed' | 'customPrompt'
   >;
+}
+
+export interface UnavailableManagedMeshAgentProjectMember {
+  runtimeAgentName: string;
+  templateAgentName: string;
+  displayName: string;
+  provider: MeshAgentConfig['provider'];
+  code: 'provider_disabled' | 'provider_unavailable';
+  reason: string;
 }
 
 export function isChannelStructuredSession(session: Pick<Session, 'origin' | 'title'>): boolean {
@@ -61,6 +72,8 @@ export function workplaceProjectMembers(store: Store, sessionId: SessionId): Mes
       settings?: WorkplaceProjectMemberSettings;
     };
     return {
+      memberId: m.memberId,
+      ...(m.templateId ? { templateId: m.templateId } : {}),
       type: m.type,
       name: data.name ?? m.memberId,
       ...(data.templateName ? { templateName: data.templateName } : {}),
@@ -76,26 +89,33 @@ export function meshAgentProjectMemberTemplateName(member: MeshAgentProjectMembe
 }
 
 export function meshAgentProjectMemberRuntimeName(member: MeshAgentProjectMemberShape): string {
-  return member.type === 'mesh-agent' ? (member.instanceId ?? member.name) : member.name;
+  return member.type === 'mesh-agent' ? (member.instanceId ?? member.memberId) : member.memberId;
 }
 
 export function meshAgentProjectMemberDisplayName(member: MeshAgentProjectMemberShape): string {
   return member.type === 'mesh-agent' ? (member.displayName ?? member.name) : member.name;
 }
 
+function matchesMeshAgentProjectMember(member: MeshAgentProjectMemberShape, memberOrTemplateId: string): boolean {
+  if (member.memberId === memberOrTemplateId) return true;
+  if (member.instanceId === memberOrTemplateId) return true;
+  if (member.templateId === memberOrTemplateId) return true;
+  return (
+    meshAgentProjectMemberRuntimeName(member) === memberOrTemplateId ||
+    meshAgentProjectMemberTemplateName(member) === memberOrTemplateId
+  );
+}
+
 export function meshAgentProjectMemberSettings(
   store: Store,
   sessionId: SessionId,
-  agentName: string
+  memberOrTemplateId: string
 ): Pick<
   WorkplaceProjectMemberSettings,
   'managedProjectAgent' | 'allowAutopilot' | 'modelName' | 'modelId' | 'reasoningEffort' | 'speed' | 'customPrompt'
 > {
   const member = workplaceProjectMembers(store, sessionId).find(
-    (candidate) =>
-      candidate.type === 'mesh-agent' &&
-      (meshAgentProjectMemberRuntimeName(candidate) === agentName ||
-        meshAgentProjectMemberTemplateName(candidate) === agentName)
+    (candidate) => candidate.type === 'mesh-agent' && matchesMeshAgentProjectMember(candidate, memberOrTemplateId)
   );
   if (member?.settings) {
     return {
@@ -114,27 +134,21 @@ export function meshAgentProjectMemberSettings(
 export function meshAgentProjectMemberDisplayNameForAgent(
   store: Store,
   sessionId: SessionId,
-  agentName: string
+  memberOrTemplateId: string
 ): string {
   const member = workplaceProjectMembers(store, sessionId).find(
-    (candidate) =>
-      candidate.type === 'mesh-agent' &&
-      (meshAgentProjectMemberRuntimeName(candidate) === agentName ||
-        meshAgentProjectMemberTemplateName(candidate) === agentName)
+    (candidate) => candidate.type === 'mesh-agent' && matchesMeshAgentProjectMember(candidate, memberOrTemplateId)
   );
-  return member ? meshAgentProjectMemberDisplayName(member) : agentName;
+  return member ? meshAgentProjectMemberDisplayName(member) : memberOrTemplateId;
 }
 
 export function meshAgentProjectMemberConfiguredDisplayNameForAgent(
   store: Store,
   sessionId: SessionId,
-  agentName: string
+  memberOrTemplateId: string
 ): string | undefined {
   return workplaceProjectMembers(store, sessionId).find(
-    (candidate) =>
-      candidate.type === 'mesh-agent' &&
-      (meshAgentProjectMemberRuntimeName(candidate) === agentName ||
-        meshAgentProjectMemberTemplateName(candidate) === agentName)
+    (candidate) => candidate.type === 'mesh-agent' && matchesMeshAgentProjectMember(candidate, memberOrTemplateId)
   )?.displayName;
 }
 
@@ -144,18 +158,23 @@ export function managedMeshAgentProjectMembers(
   meshAgents: readonly MeshAgentConfig[]
 ): ManagedMeshAgentProjectMember[] {
   const members = workplaceProjectMembers(store, sessionId);
-  const configured = new Map(meshAgents.map((agent) => [agent.name, agent]));
+  const configuredByName = new Map(meshAgents.map((agent) => [agent.name, agent]));
+  const configuredByTemplateId = new Map(
+    meshAgents.flatMap((agent) => (agent.projectTemplates ?? []).map((template) => [template.id, agent] as const))
+  );
   return members
     .filter((member) => member.type === 'mesh-agent' && member.settings?.managedProjectAgent !== false)
     .flatMap((member) => {
       const templateAgentName = meshAgentProjectMemberTemplateName(member);
-      const spec = configured.get(templateAgentName);
-      if (!spec) return [];
+      const spec =
+        (member.templateId ? configuredByTemplateId.get(member.templateId) : undefined) ??
+        configuredByName.get(templateAgentName);
+      if (!spec || spec.enabled === false) return [];
       return [
         {
           spec,
           runtimeAgentName: meshAgentProjectMemberRuntimeName(member),
-          templateAgentName,
+          templateAgentName: spec.name,
           displayName: meshAgentProjectMemberDisplayName(member),
           configuredDisplayName: member.displayName,
           settings: {
@@ -169,6 +188,49 @@ export function managedMeshAgentProjectMembers(
             ...(member.settings?.speed ? { speed: member.settings.speed } : {}),
             ...(member.settings?.customPrompt ? { customPrompt: member.settings.customPrompt } : {})
           }
+        }
+      ];
+    });
+}
+
+export function unavailableManagedMeshAgentProjectMembers(
+  store: Store,
+  sessionId: SessionId,
+  meshAgents: readonly MeshAgentConfig[]
+): UnavailableManagedMeshAgentProjectMember[] {
+  const members = workplaceProjectMembers(store, sessionId);
+  const configuredByName = new Map(meshAgents.map((agent) => [agent.name, agent]));
+  const configuredByTemplateId = new Map(
+    meshAgents.flatMap((agent) => (agent.projectTemplates ?? []).map((template) => [template.id, agent] as const))
+  );
+  return members
+    .filter((member) => member.type === 'mesh-agent' && member.settings?.managedProjectAgent !== false)
+    .flatMap((member): UnavailableManagedMeshAgentProjectMember[] => {
+      const templateAgentName = meshAgentProjectMemberTemplateName(member);
+      const spec =
+        (member.templateId ? configuredByTemplateId.get(member.templateId) : undefined) ??
+        configuredByName.get(templateAgentName);
+      if (!spec) {
+        return [
+          {
+            runtimeAgentName: meshAgentProjectMemberRuntimeName(member),
+            templateAgentName,
+            displayName: meshAgentProjectMemberDisplayName(member),
+            provider: templateAgentName as MeshAgentConfig['provider'],
+            code: 'provider_unavailable' as const,
+            reason: `MeshAgent adapter "${templateAgentName}" is not configured. Reconnect it in Studio before using it in this project.`
+          }
+        ];
+      }
+      if (spec.enabled !== false) return [];
+      return [
+        {
+          runtimeAgentName: meshAgentProjectMemberRuntimeName(member),
+          templateAgentName: spec.name,
+          displayName: meshAgentProjectMemberDisplayName(member),
+          provider: spec.provider,
+          code: 'provider_disabled' as const,
+          reason: `MeshAgent adapter "${spec.name}" is disabled. Enable it in Studio before using it in this project.`
         }
       ];
     });

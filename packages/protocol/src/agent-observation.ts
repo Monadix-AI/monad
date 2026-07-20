@@ -75,6 +75,29 @@ export const agentObservationEventSchema = z.object({
 });
 export type AgentObservationEvent = z.infer<typeof agentObservationEventSchema>;
 
+export const agentObservationCardKindSchema = z.enum([
+  'message',
+  'reasoning',
+  'tool',
+  'turn',
+  'diagnostic',
+  'system',
+  'unknown',
+  'codex-mcp-startup-progress'
+]);
+export type AgentObservationCardKind = z.infer<typeof agentObservationCardKindSchema>;
+
+export const agentObservationCardSchema = z.object({
+  id: z.string().min(1),
+  dedupeKey: z.string().min(1).optional(),
+  kind: agentObservationCardKindSchema,
+  streaming: z.boolean(),
+  payload: z.record(z.string(), z.unknown()),
+  provenance: agentObservationProvenanceSchema,
+  at: z.string().optional()
+});
+export type AgentObservationCard = z.infer<typeof agentObservationCardSchema>;
+
 // Token / rate-limit usage for a turn. A SEPARATE frame from the event stream — usage is not an
 // observation `kind`; it updates out-of-band as the provider reports it.
 export const agentObservationUsageLimitSchema = z.object({

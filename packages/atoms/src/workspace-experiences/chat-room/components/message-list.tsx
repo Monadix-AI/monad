@@ -1,4 +1,5 @@
 import type { Message, MessageAttachment, TypingIndicator } from '../../experience/types.ts';
+import type { WorkspaceExperienceHostAction } from '../../host-context.tsx';
 import type { MessageRowLabels } from './message-row.tsx';
 
 import { ArrowDown01Icon } from '@hugeicons/core-free-icons';
@@ -75,6 +76,7 @@ export function shouldJumpToOwnMessage(
 
 export type ChatMessageListRoom = {
   activeSessionId: string | null;
+  actions?: readonly WorkspaceExperienceHostAction[];
   loadOlder: () => void;
   messages: Message[];
   openAgentCard?: (id: string) => void;
@@ -148,6 +150,7 @@ export function ChatMessageList({
       >
         <MessageRow
           Attachment={AttachmentChip}
+          actions={room.actions}
           labels={labels}
           msg={msg}
           onAgentClick={room.openAgentCard}
@@ -155,7 +158,7 @@ export function ChatMessageList({
         />
       </div>
     ),
-    [labels, onOpenAttachment, room.openAgentCard]
+    [labels, onOpenAttachment, room.actions, room.openAgentCard]
   );
   useLayoutEffect(() => {
     if (!shouldJumpToOwnMessage(lastMessageKey, jumpedMessageKeyRef.current, lastMessage?.localStatus)) return;

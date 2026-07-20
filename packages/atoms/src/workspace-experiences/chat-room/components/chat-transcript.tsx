@@ -41,6 +41,7 @@ export function ChatTranscript({
   labels: ChatTranscriptLabels;
 }): React.ReactElement {
   const host = useWorkspaceExperienceHost();
+  const listRoom = host.actions ? { ...room, actions: host.actions } : room;
 
   if (room.messages.length === 0) {
     if (!room.ready) {
@@ -214,7 +215,7 @@ export function ChatTranscript({
     <Suspense fallback={<MessageListSkeleton />}>
       <ChatMessageList
         labels={labels}
-        room={room}
+        room={listRoom}
       />
     </Suspense>
   );

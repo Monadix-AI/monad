@@ -14,11 +14,13 @@ import {
   defaultWorkplaceProjectMemberSettings,
   entityAvatarUrl,
   entityAvatarWriteUrl,
+  meshAgentLoginRequiredPayloadSchema,
   meshAgentProductDisplayName,
   messageAttachmentSchema,
   renameMeshAgentProjectMemberDisplayName
 } from '@monad/protocol';
 
+import { agentObservationCards } from '../../../agent-adapters/observation-cards.ts';
 import { meshAgentNeutralStreamItems } from '../../experience/mesh-agent-observation/mesh-agent-observation.ts';
 import {
   meshAgentFacingCommandPhase,
@@ -27,7 +29,14 @@ import {
   meshSessionIsGenerating
 } from '../../experience/mesh-agent-presence.ts';
 import { parseProjectMembers, productIcon } from '../../experience/project-members.ts';
-import { avatarForAgent, fmtTime, HUMAN, iconForAgent, meshAgentTag } from '../../experience/project-projection.ts';
+import {
+  avatarForAgent,
+  fmtTime,
+  HUMAN,
+  iconForAgent,
+  meshAgentTag,
+  projectParticipants
+} from '../../experience/project-projection.ts';
 
 const MESH_AGENT_FOLLOW_TEXT = 'CLI stream available';
 
@@ -198,6 +207,52 @@ function projectMemberJoinMessageView(
   };
 }
 
+function meshAgentLoginRequiredMessage(
+  item: Extract<UIItem, { kind: 'custom' }>,
+  projectMembers: readonly ProjectMember[],
+  meshAgentDisplayNames: Map<string, string>,
+  meshAgentTags = new Map<string, string>(),
+  meshAgentIcons = new Map<string, Message['icon']>(),
+  meshAgentAvatarSeeds = new Map<string, string>(),
+  avatarStyle?: AvatarStyle
+): Message | null {
+  if (item.name !== 'mesh.login_required') return null;
+  const parsed = meshAgentLoginRequiredPayloadSchema.safeParse(item.data);
+  if (!parsed.success) return null;
+  const payload = parsed.data;
+  const displayName = meshAgentDisplayNames.get(payload.agentName) ?? payload.agentName;
+  return {
+    id: item.id,
+    ...meshAgentSystemActorView({
+      actorId: payload.agentName,
+      actorName: displayName,
+      projectMembers,
+      meshAgentDisplayNames,
+      meshAgentAvatarSeeds,
+      meshAgentIcons,
+      meshAgentTags,
+      avatarStyle
+    }),
+    kind: 'system',
+    tag: meshAgentTags.get(payload.agentName) ?? meshAgentTag(payload.provider),
+    time: '',
+    text: 'request sign in.',
+    systemActions: [
+      {
+        actionId: 'mesh-agent.sign-in',
+        payload: {
+          agentName: payload.authAgentName ?? payload.agentName,
+          projectMemberId: payload.agentName,
+          provider: payload.provider
+        }
+      }
+    ],
+    systemTone: 'error',
+    systemRaw: item.data,
+    orderKey: item.seq
+  };
+}
+
 function meshSessionDeveloperMessage(session: MeshSessionView): Message {
   return meshSessionDeveloperMessageView(session, session.agentName);
 }
@@ -260,6 +315,11 @@ function keepManagedMeshAgentRepliesAfterJoin(messages: Map<string, Message>): v
   }
 }
 
+function managedMeshAgentEchoKey(message: Message): string | undefined {
+  if (message.kind !== 'agent' || !message.deliveryId) return undefined;
+  return `delivery:${message.deliveryId}`;
+}
+
 function currentMeshSessionsByAgent(sessions: MeshSessionView[]): MeshSessionView[] {
   const current = new Map<string, MeshSessionView>();
   for (const session of [...sessions].sort((a, b) => {
@@ -277,7 +337,7 @@ function meshAgentStreamFromSession(
   templateAgentNames = new Map<string, string>(),
   agentAliases = new Map<string, string[]>()
 ): MeshAgentStreamView {
-  const items: ReturnType<typeof meshAgentNeutralStreamItems> = [];
+  const items: MeshAgentStreamView['items'] = [];
   return {
     id: session.id,
     transcriptTargetId: session.sessionId,
@@ -305,7 +365,10 @@ function meshAgentStreamFromActivity(
   if (!row.tool.startsWith('mesh-agent:')) return undefined;
   const provider = row.tool.slice('mesh-agent:'.length);
   const agentName = row.agentName ?? row.detail ?? provider;
-  const items = meshAgentNeutralStreamItems({ id: row.id, provider, output: row.output });
+  const items = agentObservationCards(
+    meshAgentNeutralStreamItems({ id: row.id, provider, output: row.output }),
+    provider
+  );
   return {
     id: row.id,
     agentName,
@@ -415,6 +478,9 @@ export function buildProjectMessages({
       avatarStyle
     );
   for (const view of persistedMessages) byId.set(view.id, view);
+  const persistedEchoKeys = new Set(
+    persistedMessages.map(managedMeshAgentEchoKey).filter((key): key is string => key !== undefined)
+  );
   for (const member of projectMembers) {
     if (member.type !== 'mesh-agent' || !member.joinedAt) continue;
     const displayName = meshAgentDisplayNames.get(member.id) ?? member.displayName ?? member.name;
@@ -444,6 +510,19 @@ export function buildProjectMessages({
     }
   }
   for (const item of liveItems) {
+    if (item.kind === 'custom') {
+      const message = meshAgentLoginRequiredMessage(
+        item,
+        projectMembers,
+        meshAgentDisplayNames,
+        meshAgentTags,
+        meshAgentIcons,
+        meshAgentAvatarSeeds,
+        avatarStyle
+      );
+      if (message) byId.set(item.id, message);
+      continue;
+    }
     if (item.kind === 'system') {
       if (item.event) {
         byId.set(item.id, {
@@ -488,7 +567,11 @@ export function buildProjectMessages({
     if (isManagedMeshAgentReasoningOnlyMessage(item)) continue;
     const text = displayTextFromMessage(item);
     const reasoning = item.role === 'assistant' ? reasoningFromParts(item.parts) : undefined;
-    if (text || reasoning || item.status !== 'streaming') byId.set(item.id, toView(item));
+    if (text || reasoning || item.status !== 'streaming') {
+      const view = toView(item);
+      const echoKey = managedMeshAgentEchoKey(view);
+      if (!echoKey || !persistedEchoKeys.has(echoKey)) byId.set(item.id, view);
+    }
   }
   const streamingAgentNames = new Set(
     [...byId.values()]
@@ -552,8 +635,10 @@ export const __workplaceProjectMessageTest = {
   meshAgentMemberPresence,
   meshAgentMemberActivityPhase,
   meshAgentFacingCommandPhase,
+  projectParticipants,
   meshAgentProductDisplayName,
   meshSessionIsGenerating,
+  meshAgentLoginRequiredMessage,
   projectMemberJoinMessageView,
   meshSessionDeveloperMessage,
   parseProjectMembers,

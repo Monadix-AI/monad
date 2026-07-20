@@ -23,6 +23,30 @@ function cachedAuthStatesFor(names: string[]): Record<string, MeshAgentAuthState
   );
 }
 
+export function meshAgentAuthProbeNamesToRefresh({
+  names,
+  cachedAt,
+  now,
+  targetedNames,
+  forceAll,
+  ttlMs = AUTH_STATUS_CACHE_TTL_MS
+}: {
+  names: readonly string[];
+  cachedAt: ReadonlyMap<string, number>;
+  now: number;
+  targetedNames?: readonly string[];
+  forceAll?: boolean;
+  ttlMs?: number;
+}): string[] {
+  const allowed = new Set(names);
+  if (targetedNames) return [...new Set(targetedNames)].filter((name) => allowed.has(name)).sort();
+  if (forceAll) return [...names].sort();
+  return names.filter((name) => {
+    const updatedAt = cachedAt.get(name);
+    return updatedAt === undefined || now - updatedAt > ttlMs;
+  });
+}
+
 export interface MeshAgentSettingsStore {
   agents: MeshAgentView[];
   presets: MeshAgentPresetView[];
@@ -44,7 +68,7 @@ export function useMeshAgentSettings(): MeshAgentSettingsStore {
   const [authStates, setAuthStates] = useState<Record<string, MeshAgentAuthState>>(() =>
     cachedAuthStatesFor([...meshAgentAuthStatusCache.keys()])
   );
-  const [authRefreshSeq, setAuthRefreshSeq] = useState(0);
+  const [authRefresh, setAuthRefresh] = useState<{ seq: number; names?: string[]; forceAll?: boolean }>({ seq: 0 });
   const agents = useMemo(
     () => meshAgentSelectors.selectAll(agentsQ.data ?? meshAgentAdapter.getInitialState()),
     [agentsQ.data]
@@ -67,13 +91,13 @@ export function useMeshAgentSettings(): MeshAgentSettingsStore {
     }
     const now = Date.now();
     const cachedStates = cachedAuthStatesFor(names);
-    const namesToProbe =
-      authRefreshSeq > 0
-        ? names
-        : names.filter((name) => {
-            const cached = meshAgentAuthStatusCache.get(name);
-            return !cached || now - cached.updatedAt > AUTH_STATUS_CACHE_TTL_MS;
-          });
+    const namesToProbe = meshAgentAuthProbeNamesToRefresh({
+      names,
+      cachedAt: new Map([...meshAgentAuthStatusCache].map(([name, cached]) => [name, cached.updatedAt])),
+      now,
+      targetedNames: authRefresh.names,
+      forceAll: authRefresh.forceAll
+    });
     setAuthStates(cachedStates);
     if (namesToProbe.length === 0) return;
 
@@ -96,18 +120,19 @@ export function useMeshAgentSettings(): MeshAgentSettingsStore {
     return () => {
       cancelled = true;
     };
-  }, [authProbeNames, authRefreshSeq, getAuthStatus]);
+  }, [authProbeNames, authRefresh, getAuthStatus]);
 
   const saveAgent = useCallback(
     async (a: MeshAgentView) => {
       await upsert(a).unwrap();
-      setAuthRefreshSeq((seq) => seq + 1);
+      setAuthRefresh(({ seq }) => ({ seq: seq + 1, names: [a.name] }));
     },
     [upsert]
   );
   const removeAgent = useCallback(
     async (name: string) => {
       await del(name).unwrap();
+      meshAgentAuthStatusCache.delete(name);
     },
     [del]
   );
@@ -130,7 +155,7 @@ export function useMeshAgentSettings(): MeshAgentSettingsStore {
     refetch: () => {
       void agentsQ.refetch();
       void presetsQ.refetch();
-      setAuthRefreshSeq((seq) => seq + 1);
+      setAuthRefresh(({ seq }) => ({ seq: seq + 1, forceAll: true }));
     }
   };
 }

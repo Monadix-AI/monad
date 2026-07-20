@@ -6,6 +6,7 @@ import {
   collapseAnsweredCommandMessages,
   compactDividerItems,
   groupToolCalls,
+  isTransientAttentionUiItem,
   messageTextFromParts,
   type ViewItem,
   viewItemFromUi,
@@ -99,7 +100,10 @@ export function buildViewMessages({
   visibleLiveItems: UIItem[];
 }): ViewItem[] {
   const items = new Map<string, ViewItem>();
-  const sources = transcriptMode === 'history' ? [visibleHistory] : [visibleHistory, visibleLiveItems];
+  const sources =
+    transcriptMode === 'history'
+      ? [visibleHistory, visibleLiveItems.filter(isTransientAttentionUiItem)]
+      : [visibleHistory, visibleLiveItems];
   for (const source of sources) {
     for (const item of source) {
       const key = viewItemKey(item);

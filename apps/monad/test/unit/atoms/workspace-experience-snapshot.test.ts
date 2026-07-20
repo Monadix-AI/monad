@@ -1,14 +1,26 @@
 import type { RegisteredWorkspaceExperience } from '../../../src/handlers/atom-pack/atom-pack-registry.ts';
 
-import { expect, test } from 'bun:test';
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { afterEach, expect, test } from 'bun:test';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { createWorkspaceExperienceSnapshot } from '../../../src/handlers/atom-pack/atom-pack-content.ts';
 
-test('workspace experience snapshot resolves serviceable pack-relative web component entries', async () => {
+const created: string[] = [];
+
+async function packRoot(): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), 'monad-workspace-experience-'));
+  created.push(dir);
+  return dir;
+}
+
+afterEach(async () => {
+  await Promise.all(created.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+});
+
+test('workspace experience snapshot resolves serviceable pack-relative web component entries', async () => {
+  const dir = await packRoot();
   await mkdir(join(dir, 'canvas-pack', 'dist'), { recursive: true });
   await writeFile(join(dir, 'canvas-pack', 'dist', 'canvas.js'), 'export {};');
 
@@ -37,7 +49,7 @@ test('workspace experience snapshot resolves serviceable pack-relative web compo
 });
 
 test('workspace experience snapshot warns and skips unserviceable web component entries', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'monad-workspace-experience-'));
+  const dir = await packRoot();
 
   const experiences: RegisteredWorkspaceExperience[] = [
     {

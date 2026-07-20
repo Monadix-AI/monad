@@ -74,6 +74,7 @@ import {
   createOversightHandlers,
   createSystemHandlers
 } from './handlers-oversight.ts';
+import { meshFixtureCaptureDirectory } from './mesh-agent-paths.ts';
 
 export { HandlerError } from '#/handlers/handler-error.ts';
 
@@ -100,6 +101,8 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
       return deps.configManager.get().cfg.meshAgents.map(meshAgentConfigToView);
     },
     resolveAgentEnv: async (env) => resolveMeshAgentEnv(env, deps.configManager.get().auth ?? undefined),
+    developerMode: deps.configManager.get().cfg.developerMode,
+    meshFixtureCaptureDirectory: meshFixtureCaptureDirectory(paths),
     meshAgentProcessRegistryPath: `${paths.runtime}/mesh-agent-processes.json`,
     meshAgentLiveStoreDirectory: `${paths.runtime}/mesh-agent-live-observation`,
     authProcessRegistryPath: `${paths.runtime}/mesh-agent-auth-processes.json`,

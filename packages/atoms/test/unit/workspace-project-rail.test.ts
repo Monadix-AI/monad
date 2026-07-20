@@ -1,4 +1,4 @@
-import type { MeshSessionView } from '@monad/protocol';
+import type { AgentObservationCard, MeshAgentView, MeshSessionView } from '@monad/protocol';
 import type { Participant } from '../../src/workspace-experiences/experience/types.ts';
 
 import { expect, test } from 'bun:test';
@@ -24,6 +24,16 @@ const agent = (name: string, presence: Participant['presence']): Participant => 
   tag: 'CLI',
   presence
 });
+
+function messageCard(id: string, text: string): AgentObservationCard {
+  return {
+    id,
+    kind: 'message',
+    streaming: false,
+    payload: { text },
+    provenance: { contractEvents: [{ id, text }] }
+  };
+}
 
 type LegacySessionOverrides = Partial<MeshSessionView> & {
   state?: 'starting' | 'running' | 'exited' | 'failed' | 'stopped';
@@ -151,16 +161,53 @@ test('project rail groups only actively generating agents as active', () => {
   expect(groups.standBy.map((item) => item.name)).toEqual(['codex', 'gemini', 'qwen', 'needs-auth']);
 });
 
-test('project rail animation requires an explicit activity phase', () => {
-  const staleWorkingAgent = agent('claude', 'working');
+test('project rail animation follows working presence and falls back to thinking', () => {
+  const workingAgent = agent('claude', 'working');
   const thinkingAgent = { ...agent('codex', 'working'), activityPhase: 'thinking' as const };
-  const idleAgent = agent('gemini', 'online');
+  const stalePhaseAgent = { ...agent('gemini', 'online'), activityPhase: 'tooling' as const };
 
-  expect(railAgentActivityPhase(staleWorkingAgent)).toBeUndefined();
-  expect(shouldAnimateRailAgent(staleWorkingAgent)).toBe(false);
+  expect(railAgentActivityPhase(workingAgent)).toBe('thinking');
+  expect(shouldAnimateRailAgent(workingAgent)).toBe(true);
   expect(railAgentActivityPhase(thinkingAgent)).toBe('thinking');
   expect(shouldAnimateRailAgent(thinkingAgent)).toBe(true);
-  expect(shouldAnimateRailAgent(idleAgent)).toBe(false);
+  expect(railAgentActivityPhase(stalePhaseAgent)).toBeUndefined();
+  expect(shouldAnimateRailAgent(stalePhaseAgent)).toBe(false);
+});
+
+test('MeshAgent participant shows thinking while its managed reply is streaming before provider output', () => {
+  const participants = __workplaceProjectMessageTest.projectParticipants({
+    acpAgents: [],
+    activeMeshAgentNames: new Set(['pmem_codex_active']),
+    avatarStyle: undefined,
+    liveTools: [],
+    meshAgentActivityOverrides: {},
+    meshAgents: [
+      {
+        name: 'codex',
+        provider: 'codex',
+        productIcon: 'codex',
+        command: 'codex',
+        enabled: true
+      } as MeshAgentView
+    ],
+    meshAgentAvatarSeeds: new Map(),
+    meshSessions: [],
+    projectMembers: [
+      {
+        id: 'mesh-agent:pmem_codex_active',
+        type: 'mesh-agent',
+        name: 'codex',
+        templateName: 'codex',
+        instanceId: 'pmem_codex_active',
+        displayName: 'Codex Reviewer'
+      }
+    ],
+    runningDelegations: new Set()
+  });
+
+  expect(
+    participants.map((participant) => [participant.name, participant.presence, participant.activityPhase])
+  ).toEqual([['Codex Reviewer', 'working', 'thinking']]);
 });
 
 test('project rail sorts members by display name without status grouping', () => {
@@ -566,15 +613,7 @@ test('agent observation selects the currently running MeshAgent stream by instan
       tag: 'Codex',
       status: 'running' as const,
       output: 'thinking',
-      items: [
-        {
-          id: 'item_1',
-          kind: 'assistant-message' as const,
-          streaming: false,
-          text: 'Thinking',
-          provenance: { contractEvents: [{ id: 'source_1' }] }
-        }
-      ]
+      items: [messageCard('item_1', 'Thinking')]
     },
     {
       id: 'mesh_otherproject',
@@ -641,15 +680,7 @@ test('agent observation matches MeshAgent stream aliases for template-backed pro
       tag: 'Codex',
       status: 'running' as const,
       output: 'projected activity',
-      items: [
-        {
-          id: 'item_1',
-          kind: 'assistant-message' as const,
-          streaming: false,
-          text: 'Projected activity',
-          provenance: { contractEvents: [{ id: 'source_1' }] }
-        }
-      ]
+      items: [messageCard('item_1', 'Projected activity')]
     }
   ];
 

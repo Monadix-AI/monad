@@ -157,8 +157,8 @@ test('convenience ready anchors before its separately delivered bootstrap patch'
             op: 'upsert',
             event: {
               id: 'projected',
-              kind: 'assistant-message',
               streaming: false,
+              kind: 'assistant-message',
               text: 'one\ntwo',
               provenance: {
                 contractEvents: [
@@ -246,8 +246,8 @@ test('convenience projection advances one retained projector with only newly com
             op: 'upsert',
             event: {
               id: 'projected',
-              kind: 'assistant-message',
               streaming: false,
+              kind: 'assistant-message',
               text: 'one\ntwo',
               provenance: {
                 contractEvents: [

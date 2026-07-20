@@ -167,7 +167,7 @@ test("raw list wires VirtualList to stay end-anchored so prepend/scrollToTop sha
       loadCalls += 1;
     }
   });
-  whileLoading.onStartReached();
+  expect(whileLoading.onStartReached()).toBe(false);
   expect(loadCalls).toBe(1);
 
   const noMoreEvents = rawVirtualListControlProps({
@@ -178,7 +178,7 @@ test("raw list wires VirtualList to stay end-anchored so prepend/scrollToTop sha
       loadCalls += 1;
     }
   });
-  noMoreEvents.onStartReached();
+  expect(noMoreEvents.onStartReached()).toBe(false);
   expect(loadCalls).toBe(1);
 });
 

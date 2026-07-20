@@ -10,6 +10,7 @@ import { memo, useMemo } from 'react';
 
 import { ChatSessionList } from './chat-session-list';
 import { SidebarActionVisibilityRules, SidebarIconActionButton, SidebarNavItem } from './nav-item';
+import { SidebarShortcutAllocatorProvider } from './sidebar-shortcut-context';
 import { SidebarItemSkeletonList } from './sidebar-skeleton';
 import { useWorkspaceSidebarTreeState } from './use-workspace-sidebar-tree-state';
 import { PinnedSessionList, ProjectList } from './workspace-project-list';
@@ -74,68 +75,70 @@ const WorkspaceSectionList = memo(function WorkspaceSectionList() {
         </div>
       </div>
       <div className="sidebar-scroll-area min-h-0 flex-1 overflow-y-auto">
-        <div className="flex flex-col gap-0.5 px-2.5 pb-4">
-          {pinnedSessions.length > 0 ? (
-            <WorkspaceSection
-              collapsed={collapsedSections.pinned}
-              onToggle={() => toggleSection('pinned')}
-              title={meta.t('web.sidebar.pinned')}
-            >
-              <PinnedSessionList
-                onProjectSessionOpened={expandProject}
-                sessions={pinnedSessions}
-              />
-            </WorkspaceSection>
-          ) : null}
-          <WorkspaceSection
-            action={
-              <>
-                {projectIds.length > 0 ? (
-                  <SidebarIconActionButton
-                    icon={allProjectsExpanded ? ListCollapse : ListTreeIcon}
-                    label={
-                      allProjectsExpanded
-                        ? meta.t('web.sidebar.collapseAllProjects')
-                        : meta.t('web.sidebar.expandAllProjects')
-                    }
-                    onClick={toggleAllProjectsExpanded}
-                  />
-                ) : null}
-                <SidebarIconActionButton
-                  icon={FolderAddIcon}
-                  label={meta.t('web.workplace.newProject')}
-                  onClick={actions.createProject}
+        <SidebarShortcutAllocatorProvider>
+          <div className="flex flex-col gap-0.5 px-2.5 pb-4">
+            {pinnedSessions.length > 0 ? (
+              <WorkspaceSection
+                collapsed={collapsedSections.pinned}
+                onToggle={() => toggleSection('pinned')}
+                title={meta.t('web.sidebar.pinned')}
+              >
+                <PinnedSessionList
+                  onProjectSessionOpened={expandProject}
+                  sessions={pinnedSessions}
                 />
-              </>
-            }
-            collapsed={collapsedSections.projects}
-            onToggle={() => toggleSection('projects')}
-            title={meta.t('web.sidebar.projects')}
-          >
-            {state.loading ? (
-              <SidebarItemSkeletonList />
-            ) : (
-              <ProjectList
-                expandedProjectIds={expandedProjectIds}
-                onToggleProjectExpanded={toggleProjectExpanded}
-              />
-            )}
-          </WorkspaceSection>
-          <WorkspaceSection
-            action={
-              <SidebarIconActionButton
-                icon={ChatAdd01Icon}
-                label={meta.t('web.sidebar.newChatSession')}
-                onClick={actions.createChatSession}
-              />
-            }
-            collapsed={collapsedSections.chats}
-            onToggle={() => toggleSection('chats')}
-            title={meta.t('web.sidebar.chats')}
-          >
-            {state.loading ? <SidebarItemSkeletonList count={3} /> : <ChatSessionList />}
-          </WorkspaceSection>
-        </div>
+              </WorkspaceSection>
+            ) : null}
+            <WorkspaceSection
+              action={
+                <>
+                  {projectIds.length > 0 ? (
+                    <SidebarIconActionButton
+                      icon={allProjectsExpanded ? ListCollapse : ListTreeIcon}
+                      label={
+                        allProjectsExpanded
+                          ? meta.t('web.sidebar.collapseAllProjects')
+                          : meta.t('web.sidebar.expandAllProjects')
+                      }
+                      onClick={toggleAllProjectsExpanded}
+                    />
+                  ) : null}
+                  <SidebarIconActionButton
+                    icon={FolderAddIcon}
+                    label={meta.t('web.workplace.newProject')}
+                    onClick={actions.createProject}
+                  />
+                </>
+              }
+              collapsed={collapsedSections.projects}
+              onToggle={() => toggleSection('projects')}
+              title={meta.t('web.sidebar.projects')}
+            >
+              {state.loading ? (
+                <SidebarItemSkeletonList />
+              ) : (
+                <ProjectList
+                  expandedProjectIds={expandedProjectIds}
+                  onToggleProjectExpanded={toggleProjectExpanded}
+                />
+              )}
+            </WorkspaceSection>
+            <WorkspaceSection
+              action={
+                <SidebarIconActionButton
+                  icon={ChatAdd01Icon}
+                  label={meta.t('web.sidebar.newChatSession')}
+                  onClick={actions.createChatSession}
+                />
+              }
+              collapsed={collapsedSections.chats}
+              onToggle={() => toggleSection('chats')}
+              title={meta.t('web.sidebar.chats')}
+            >
+              {state.loading ? <SidebarItemSkeletonList count={3} /> : <ChatSessionList />}
+            </WorkspaceSection>
+          </div>
+        </SidebarShortcutAllocatorProvider>
       </div>
     </div>
   );

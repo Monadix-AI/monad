@@ -5,13 +5,12 @@ import { cn, ShortcutChip, Tooltip, TooltipContent, TooltipTrigger } from '@mona
 
 import { ShellLink } from '#/components/ShellLink';
 
-export const SIDEBAR_SHORTCUT_BADGE_OVERLAY_CLASS =
-  'pointer-events-none absolute top-1/2 right-1.5 -mt-px -translate-y-1/2';
 const SIDEBAR_ITEM_HEIGHT_CLASS = 'min-h-8';
 const SIDEBAR_ITEM_PADDING_CLASS = 'px-2 py-1.5';
 export const SIDEBAR_ITEM_LABEL_CLASS = 'min-w-0 flex-1 truncate';
 export const SIDEBAR_ITEM_ROW_CLASS = `${SIDEBAR_ITEM_HEIGHT_CLASS} ${SIDEBAR_ITEM_PADDING_CLASS}`;
 export const SIDEBAR_INDENTED_ITEM_ROW_CLASS = `${SIDEBAR_ITEM_HEIGHT_CLASS} py-1.5 pr-2 pl-5`;
+const SIDEBAR_SHORTCUT_BADGE_OVERLAY_CLASS = 'pointer-events-none absolute inset-y-0 right-1 z-10 flex items-center';
 const SIDEBAR_ITEM_TEXT_CLASS = 'text-foreground hover:text-foreground';
 export const SIDEBAR_SECONDARY_TEXT_CLASS = 'text-muted-foreground/75 hover:text-muted-foreground';
 export const SIDEBAR_SECTION_TITLE_CLASS = `px-2 pb-1 font-normal ${SIDEBAR_SECONDARY_TEXT_CLASS} text-ui leading-control`;
@@ -93,22 +92,20 @@ export function SidebarIconActionButton({
 export function SidebarActionVisibilityRules() {
   return (
     <style>{`
-      [data-sidebar-tree-item="true"]:hover > .sidebar-item-action,
-      [data-sidebar-tree-item="true"]:hover [data-sidebar-session-actions="true"] > .sidebar-item-action,
-      [data-sidebar-tree-item="true"]:focus-within > .sidebar-item-action,
-      [data-sidebar-tree-item="true"]:focus-within [data-sidebar-session-actions="true"] > .sidebar-item-action,
+      [data-sidebar-tree-item="true"][data-sidebar-actions-visible="true"] > .sidebar-item-action,
+      [data-sidebar-tree-item="true"][data-sidebar-actions-visible="true"] [data-sidebar-session-actions="true"] > .sidebar-item-action,
       [data-sidebar-tree-item="true"] > .sidebar-item-action[data-state="open"] {
         opacity: 1;
+        visibility: visible;
       }
       [data-sidebar-tree-item="true"] [data-sidebar-session-actions="true"] > .sidebar-item-action[data-state="open"] {
         opacity: 1;
       }
-      [data-sidebar-tree-item="true"]:hover > [data-sidebar-session-actions="true"],
-      [data-sidebar-tree-item="true"]:focus-within > [data-sidebar-session-actions="true"] {
+      [data-sidebar-tree-item="true"][data-sidebar-actions-visible="true"] > [data-sidebar-session-end-overlay="true"] {
         pointer-events: auto;
       }
-      [data-sidebar-tree-item="true"]:hover [data-sidebar-shortcut-chip="true"] {
-        opacity: 0;
+      [data-sidebar-session-end-overlay="true"] {
+        opacity: 1;
       }
     `}</style>
   );

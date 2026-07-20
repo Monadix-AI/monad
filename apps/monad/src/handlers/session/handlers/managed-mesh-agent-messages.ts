@@ -52,6 +52,7 @@ export function createManagedMeshAgentMessages(ctx: SessionContext) {
       type: 'text',
       text: '',
       data: {
+        memberId: agentName,
         agentName,
         agentDisplayName,
         meshSessionId,
@@ -108,6 +109,7 @@ export function createManagedMeshAgentMessages(ctx: SessionContext) {
         : undefined) ??
       meshAgentProjectMemberDisplayNameForAgent(store, sessionId, agentName);
     const data = {
+      memberId: agentName,
       agentName,
       ...(typeof resolvedAgentDisplayName === 'string' && resolvedAgentDisplayName
         ? { agentDisplayName: resolvedAgentDisplayName }

@@ -39,6 +39,8 @@
     "./agent-adapters": "./src/agent-adapters/index.ts",
     "./agent-adapters/argument-support": "./src/agent-adapters/argument-support.ts",
     "./agent-adapters/jsonrpc": "./src/agent-adapters/jsonrpc.ts",
+    "./agent-adapters/observation-fixture": "./src/agent-adapters/observation-fixture.ts",
+    "./agent-adapters/observation-sanitize": "./src/agent-adapters/observation-sanitize.ts",
     "./agent-adapters/openclaw/device-identity": "./src/agent-adapters/openclaw/device-identity.ts",
     "./agent-adapters/pty": "./src/agent-adapters/pty.ts",
     "./mesh-agent-observation": "./src/workspace-experiences/experience/mesh-agent-observation/mesh-agent-observation.ts",

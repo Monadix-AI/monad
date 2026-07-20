@@ -197,7 +197,10 @@ test('an older page whose positional id differs joins the live row it duplicates
 });
 
 test('older page events with their own dedupe keys prepend ahead of the live rows', () => {
-  const live: AgentObservationEvent = { ...observationEvent('mesh:json:0:message', 'newer'), dedupeKey: 'codex:newer' };
+  const live: AgentObservationEvent = {
+    ...observationEvent('mesh:json:0:message', 'newer'),
+    dedupeKey: 'codex:newer'
+  };
   const older: AgentObservationEvent = {
     ...observationEvent('mesh@oep:9:json:0:message', 'older'),
     dedupeKey: 'codex:older'
@@ -274,7 +277,15 @@ test('convenience stream view exposes folded events and a running status while c
     tag: 'Agent',
     status: 'running',
     output: '',
-    items: [observationEvent('o1', 'hi')]
+    items: [
+      {
+        id: 'o1',
+        kind: 'message',
+        streaming: false,
+        payload: { provider: 'codex', event: observationEvent('o1', 'hi') },
+        provenance: { contractEvents: [{ raw: 'o1' }] }
+      }
+    ]
   });
 });
 

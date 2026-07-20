@@ -1,7 +1,9 @@
-import type { ComponentProps } from 'react';
+import type { ComponentProps, SyntheticEvent } from 'react';
 
 import { Avatar, workspaceMono as mono, workspaceSans as sans } from '@monad/ui/components/AgentAvatar';
+import { useCallback, useEffect, useRef } from 'react';
 
+import { acquireGlobalKeyboardInput } from '#/lib/global-keyboard-input-capture';
 import { CliTerminalOutput } from './CliTerminalOutput';
 
 export type CliTerminalModalStatus = 'running' | 'ok' | 'error';
@@ -89,14 +91,32 @@ export function CliTerminalModal({
   onStop?: () => void;
   stopLabel?: string;
 }): React.ReactElement {
+  const modalRef = useRef<HTMLDivElement | null>(null);
   const quit = () => {
     if (onStop) onStop();
     else onClose();
   };
+  const stopModalEvent = (event: SyntheticEvent) => event.stopPropagation();
+  const stopClipboardEvent = useCallback((event: SyntheticEvent) => event.stopPropagation(), []);
+
+  useEffect(() => {
+    const modal = modalRef.current;
+    if (!modal) return;
+    return acquireGlobalKeyboardInput(modal);
+  }, []);
 
   return (
     <div
       aria-modal="true"
+      onBeforeInput={stopModalEvent}
+      onCopy={stopClipboardEvent}
+      onCut={stopClipboardEvent}
+      onInput={stopModalEvent}
+      onKeyDown={stopModalEvent}
+      onKeyPress={stopModalEvent}
+      onKeyUp={stopModalEvent}
+      onPaste={stopClipboardEvent}
+      ref={modalRef}
       role="dialog"
       style={{
         position: 'fixed',

@@ -1,8 +1,10 @@
+import type { AgentObservationCard, AgentObservationEvent } from '@monad/protocol';
 import type { RawFrameRow } from '../../../../../packages/atoms/src/workspace-experiences/chat-room/components/observation/raw-view.ts';
 
 import { useCallback, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
+import { agentObservationCards } from '../../../../../packages/atoms/src/agent-adapters/observation-cards.ts';
 import { MeshAgentObservationPanel } from '../../../../../packages/atoms/src/workspace-experiences/chat-room/components/observation/panel.tsx';
 import {
   RawObservationList,
@@ -30,11 +32,40 @@ function makeRow(index: number): RawFrameRow {
   };
 }
 
+function observationEvent(id: string, kind: AgentObservationEvent['kind'], text?: string): AgentObservationEvent {
+  return {
+    id,
+    kind,
+    streaming: false,
+    ...(text ? { text } : {}),
+    provenance: { contractEvents: [{ id, kind, text }] }
+  };
+}
+
+function makeTurnEvents(agentKey: string, turn: number): AgentObservationEvent[] {
+  const body = `${agentKey} turn ${turn} ${LOREM.repeat(turn % 3 === 0 ? 10 : 4)}`;
+  return [
+    observationEvent(`${agentKey}:turn-${turn}:start`, 'turn-start'),
+    observationEvent(`${agentKey}:turn-${turn}:user`, 'user-message', `User request ${turn}`),
+    observationEvent(`${agentKey}:turn-${turn}:assistant`, 'assistant-message', body),
+    observationEvent(`${agentKey}:turn-${turn}:end`, 'turn-end')
+  ];
+}
+
+function makeObservationItems(agentKey: string, count = 18): AgentObservationCard[] {
+  return agentObservationCards(
+    Array.from({ length: count }, (_, index) => makeTurnEvents(agentKey, index)).flat(),
+    'codex'
+  );
+}
+
 declare global {
   interface Window {
     observationHarness: {
+      agent: (agentKey: 'agent-a' | 'agent-b') => void;
       prependReset: () => void;
       state: () => {
+        distanceFromBottom: number;
         loadCount: number;
         loadedTopRowOffset: number | null;
         loadingHeader: boolean;
@@ -48,7 +79,9 @@ declare global {
 }
 
 function Harness(): React.ReactElement {
+  const mode = new URLSearchParams(window.location.search).get('mode');
   const [rows, setRows] = useState<RawFrameRow[]>(() => Array.from({ length: 24 }, (_, index) => makeRow(index)));
+  const [agentKey, setAgentKey] = useState<'agent-a' | 'agent-b'>('agent-a');
   const [loadingOlder, setLoadingOlder] = useState(false);
   const rawRef = useRef<RawObservationListHandle>(null);
   const loadCountRef = useRef(0);
@@ -75,6 +108,7 @@ function Harness(): React.ReactElement {
   }, []);
 
   window.observationHarness = {
+    agent: setAgentKey,
     prependReset: () => {
       loadCountRef.current = 0;
     },
@@ -89,6 +123,9 @@ function Harness(): React.ReactElement {
           )
         : undefined;
       return {
+        distanceFromBottom: scroller
+          ? Math.round(scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight)
+          : -1,
         loadCount: loadCountRef.current,
         loadedTopRowOffset: loadedTopRow ? Math.round(loadedTopRow.getBoundingClientRect().top - viewportTop) : null,
         loadingHeader: !!document.querySelector('[data-events-state="loading"]'),
@@ -99,6 +136,30 @@ function Harness(): React.ReactElement {
       };
     }
   };
+
+  if (mode === 'turn') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+        <MeshAgentObservationPanel
+          agentName={agentKey === 'agent-a' ? 'Agent A' : 'Agent B'}
+          canLoadOlderEvents={loadCountRef.current < 5}
+          defaultRenderMode="summary"
+          eventsActive
+          loadingOlderEvents={loadingOlder}
+          onLoadOlderEvents={onLoadOlderEvents}
+          stream={{
+            id: agentKey,
+            agentName: agentKey === 'agent-a' ? 'Agent A' : 'Agent B',
+            provider: 'codex',
+            tag: 'Agent',
+            status: 'ok',
+            output: '',
+            items: makeObservationItems(agentKey)
+          }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>

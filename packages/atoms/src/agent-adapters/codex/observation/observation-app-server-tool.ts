@@ -51,6 +51,7 @@ export function hasCodexAppServerToolOutput(item: Record<string, unknown>): bool
     item.result !== undefined ||
     item.content !== undefined ||
     item.aggregatedOutput !== undefined ||
+    item.aggregated_output !== undefined ||
     item.error !== undefined
   );
 }
@@ -106,10 +107,24 @@ export function codexAppServerToolResultObservation(args: {
       args.item.content,
       args.item.message,
       args.item.error,
-      args.item.aggregatedOutput
+      args.item.aggregatedOutput,
+      args.item.aggregated_output
     ) ??
-    codexMcpContentText(args.item.result ?? args.item.output ?? args.item.content ?? args.item.aggregatedOutput) ??
-    compactJson(args.item.output ?? args.item.result ?? args.item.content ?? args.item.aggregatedOutput ?? args.item);
+    codexMcpContentText(
+      args.item.result ??
+        args.item.output ??
+        args.item.content ??
+        args.item.aggregatedOutput ??
+        args.item.aggregated_output
+    ) ??
+    compactJson(
+      args.item.output ??
+        args.item.result ??
+        args.item.content ??
+        args.item.aggregatedOutput ??
+        args.item.aggregated_output ??
+        args.item
+    );
   return observation({
     id: `${args.id}:json:${recordKey}${args.itemIndex === undefined ? '' : `:${args.itemIndex}`}:tool-result`,
     role: 'tool',

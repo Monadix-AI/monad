@@ -9,7 +9,10 @@ const createdAt = '2026-07-18T14:00:00.000Z';
 const updatedAt = '2026-07-18T14:01:00.000Z';
 const laterAt = '2026-07-18T14:02:00.000Z';
 
-function message(transcriptTargetId: TranscriptTargetId, overrides: Partial<ChatMessage> = {}): ChatMessage {
+function message<T extends TranscriptTargetId>(
+  transcriptTargetId: T,
+  overrides: Partial<Omit<ChatMessage, 'sessionId'>> = {}
+): ChatMessage & { sessionId: T } {
   const id = overrides.id ?? newId('msg');
   return {
     id,
@@ -180,4 +183,50 @@ test('duplicate idempotency keys replay the original snapshot without advancing 
   );
   expect(store.getMessageRevision(target)).toBe(1);
   store.close();
+});
+
+test('managed mesh streaming messages match by stable member id instead of agent display name', () => {
+  const store = createStore();
+  const target = newId('ses');
+  const streaming = message(target, {
+    id: newId('msg'),
+    text: '',
+    data: {
+      source: 'managed-mesh-agent',
+      meshSessionId: 'mesh_memberid0000',
+      memberId: 'pmem_reviewer0000',
+      agentName: 'Renamed reviewer'
+    },
+    stream: { status: 'streaming', source: { transcriptTargetId: target, messageId: newId('msg') } }
+  });
+
+  try {
+    expect(
+      store.createMessage({
+        message: streaming,
+        idempotencyKey: 'idem_stream_memberid',
+        fingerprint: 'stream:memberid:v1'
+      })
+    ).toEqual({ message: streaming, messageRevision: 1, changed: true });
+    expect(store.findManagedMeshAgentStreamingMessage(target, 'mesh_memberid0000', 'pmem_reviewer0000')).toBe(
+      streaming.id
+    );
+    expect(
+      store.retireManagedMeshAgentStreamingMessage(
+        target,
+        streaming.id,
+        'mesh_memberid0000',
+        'pmem_reviewer0000',
+        laterAt
+      )
+    ).toBe(true);
+    expect(store.getMessage(target, streaming.id)).toEqual({
+      ...streaming,
+      stream: { status: 'complete', source: undefined },
+      active: false,
+      updatedAt: laterAt
+    });
+  } finally {
+    store.close();
+  }
 });

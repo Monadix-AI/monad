@@ -48,7 +48,7 @@ export function MeshAgentLoginCard({ item }: { item: MeshAgentLoginViewItem }) {
   const onLogin = async () => {
     setStartError(null);
     try {
-      const session = await startAuth(item.agentName).unwrap();
+      const session = await startAuth(item.authAgentName ?? item.agentName).unwrap();
       setAuthSession({ id: session.id, controlToken: session.controlToken });
     } catch (error) {
       setStartError(error instanceof Error ? error.message : String(error));
@@ -65,7 +65,7 @@ export function MeshAgentLoginCard({ item }: { item: MeshAgentLoginViewItem }) {
       />
       {authSession ? (
         <MeshAgentAuthModal
-          agentName={item.agentName}
+          agentName={item.authAgentName ?? item.agentName}
           controlToken={authSession.controlToken}
           onAuthenticated={() => setAuthSession(null)}
           onClose={() => setAuthSession(null)}

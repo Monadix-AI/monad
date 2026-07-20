@@ -12,8 +12,13 @@ import { messageGenerationEventSchema, parseEventPayload } from '@monad/protocol
 
 import { parseDurableSummary } from '#/agent/history.ts';
 import { HandlerError } from '#/handlers/handler-error.ts';
-import { isChannelStructuredSession } from '#/handlers/session/handlers/messaging-members.ts';
+import {
+  isChannelStructuredSession,
+  managedMeshAgentProjectMembers,
+  unavailableManagedMeshAgentProjectMembers
+} from '#/handlers/session/handlers/messaging-members.ts';
 import { SessionUiProjector } from '#/handlers/session/ui-projection.ts';
+import { makeEvent } from '#/services/event-bus.ts';
 
 const MESSAGE_GENERATION_BUFFER_LIMIT = 256;
 const MESSAGE_GENERATION_MESSAGE_LIMIT = 256;
@@ -162,7 +167,24 @@ export function createSubscribeHandlers(ctx: SessionContext) {
               s.startedAt >= oldestTs
           )
       );
-      next.hydrateMeshAgentLoginEvents(store.listEvents(sessionId));
+      next.hydrateMeshAgentLoginEvents([
+        ...store.listEvents(sessionId),
+        ...(ctx.deps.meshAgentHost?.pendingLoginRequiredEvents(sessionId) ?? []),
+        ...unavailableManagedMeshAgentProjectMembers(
+          store,
+          sessionId,
+          ctx.deps.configManager?.get().cfg.meshAgents ?? []
+        ).map((member) =>
+          makeEvent(sessionId, 'mesh.connection_required', {
+            agentName: member.runtimeAgentName,
+            authAgentName: member.templateAgentName,
+            provider: member.provider,
+            code: member.code,
+            reason: member.reason,
+            reconnectIn: 'studio'
+          })
+        )
+      ]);
       return { projector: next, hasMore: recent.length === LIVE_SNAPSHOT_LIMIT };
     };
     let { projector, hasMore } = hydrateProjector();
@@ -186,6 +208,21 @@ export function createSubscribeHandlers(ctx: SessionContext) {
       }
       for (const uiEvent of projector.applyEvent(event)) sink(uiEvent);
     });
+    for (const member of managedMeshAgentProjectMembers(
+      store,
+      sessionId,
+      ctx.deps.configManager?.get().cfg.meshAgents ?? []
+    )) {
+      bus.publish(
+        makeEvent(sessionId, 'mesh.connection_required', {
+          agentName: member.runtimeAgentName,
+          authAgentName: member.templateAgentName,
+          provider: member.spec.provider,
+          reason: `Reconnect ${member.templateAgentName} in Studio before using it in this project.`,
+          reconnectIn: 'studio'
+        })
+      );
+    }
     return { subscribed: true as const, dispose };
   }
 

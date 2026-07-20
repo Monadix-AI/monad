@@ -506,23 +506,23 @@ export class Store {
     return getMessage(this.sqlite, transcriptTargetId, messageId);
   }
 
-  snapshotAgentDisplayName(transcriptTargetId: string, agentName: string, agentDisplayName: string): number {
-    return snapshotAgentDisplayName(this.sqlite, transcriptTargetId, agentName, agentDisplayName);
+  snapshotAgentDisplayName(transcriptTargetId: string, memberOrAgentId: string, agentDisplayName: string): number {
+    return snapshotAgentDisplayName(this.sqlite, transcriptTargetId, memberOrAgentId, agentDisplayName);
   }
 
   findManagedMeshAgentStreamingMessage(
     transcriptTargetId: string,
     meshSessionId: string,
-    agentName: string
+    memberOrAgentId: string
   ): string | null {
-    return findManagedMeshAgentStreamingMessage(this.sqlite, transcriptTargetId, meshSessionId, agentName);
+    return findManagedMeshAgentStreamingMessage(this.sqlite, transcriptTargetId, meshSessionId, memberOrAgentId);
   }
 
   retireManagedMeshAgentStreamingMessage(
     transcriptTargetId: string,
     messageId: string,
     meshSessionId: string,
-    agentName: string,
+    memberOrAgentId: string,
     updatedAt = new Date().toISOString()
   ): boolean {
     return retireManagedMeshAgentStreamingMessage(
@@ -530,7 +530,7 @@ export class Store {
       transcriptTargetId,
       messageId,
       meshSessionId,
-      agentName,
+      memberOrAgentId,
       updatedAt
     );
   }

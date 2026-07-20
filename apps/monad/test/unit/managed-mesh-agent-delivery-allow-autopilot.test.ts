@@ -1,11 +1,12 @@
 import type { MeshAgentConfig } from '@monad/environment';
-import type { MeshSessionView, Session } from '@monad/protocol';
+import type { Event, MeshSessionView, Session } from '@monad/protocol';
 import type { SessionContext } from '#/handlers/session/context.ts';
 
 import { expect, test } from 'bun:test';
 import { builtinAgentAdapters } from '@monad/atoms/agent-adapters';
 
 import { createManagedMeshAgentDelivery } from '#/handlers/session/handlers/managed-mesh-agent-delivery.ts';
+import { EventBus, makeEvent } from '#/services/event-bus.ts';
 import { registerAgentAdapterImpl } from '#/services/mesh-agent/index.ts';
 
 // Notice-building (e.g. `usesMcpProjectBridge`) reads the adapter registry, so it must be populated
@@ -26,8 +27,14 @@ function buildHarness() {
   const startCalls: Array<{ agentName: string; allowAutopilot?: boolean }> = [];
   const meshAgentHost = {
     start: async (args: { agentName: string; allowAutopilot?: boolean }) => {
-      startCalls.push({ agentName: args.agentName, allowAutopilot: args.allowAutopilot });
-      return { id: 'mesh_codex0000000', agentName: args.agentName } as unknown as MeshSessionView;
+      startCalls.push({
+        agentName: args.agentName,
+        allowAutopilot: args.allowAutopilot
+      });
+      return {
+        id: 'mesh_codex0000000',
+        agentName: args.agentName
+      } as unknown as MeshSessionView;
     },
     input: () => {},
     list: () => ({ sessions: [] }),
@@ -47,7 +54,10 @@ function buildHarness() {
         templateId: null,
         type: 'mesh-agent',
         meshSessionId: null,
-        data: { name: 'codex', settings: { managedProjectAgent: true, allowAutopilot: false } },
+        data: {
+          name: 'codex',
+          settings: { managedProjectAgent: true, allowAutopilot: false }
+        },
         createdAt: '',
         updatedAt: ''
       }
@@ -85,7 +95,11 @@ function sessionWithDelegatedCodexMember(): Session {
 test('project-message delivery threads a delegated member allowAutopilot to host.start', async () => {
   const { delivery, startCalls } = buildHarness();
   const session = sessionWithDelegatedCodexMember();
-  await delivery.deliverProjectMessageToManagedMeshAgentMembers({ session, meshAgents, text: 'hi' });
+  await delivery.deliverProjectMessageToManagedMeshAgentMembers({
+    session,
+    meshAgents,
+    text: 'hi'
+  });
   expect(startCalls).toEqual([{ agentName: 'codex', allowAutopilot: false }]);
 });
 
@@ -104,14 +118,22 @@ test('direct-message delivery threads a delegated member allowAutopilot to host.
 
 test('project-message fan-out keeps every member inbox pinned to the original message', async () => {
   let maxMessageSeq = 340;
-  const enqueued: Array<{ meshSessionId: string; messageSeq: number; triggerMessageId?: string }> = [];
+  const enqueued: Array<{
+    meshSessionId: string;
+    messageSeq: number;
+    triggerMessageId?: string;
+  }> = [];
   const members = ['gpt', 'sonnet'].map((name) => ({
     sessionId: 'ses_fanout000000',
     memberId: name,
     templateId: null,
     type: 'mesh-agent',
     meshSessionId: name === 'gpt' ? 'mesh_gpt000000000' : 'mesh_sonnet000000',
-    data: { name, displayName: name.toUpperCase(), settings: { managedProjectAgent: true } },
+    data: {
+      name,
+      displayName: name.toUpperCase(),
+      settings: { managedProjectAgent: true }
+    },
     createdAt: '',
     updatedAt: ''
   }));
@@ -133,7 +155,11 @@ test('project-message fan-out keeps every member inbox pinned to the original me
     messageIdForSeq: () => 'msg_sonnet_thinking',
     messageSeq: (_sessionId: string, messageId: string) => (messageId === 'msg_opus_original' ? 338 : 0),
     enqueueMeshAgentInboxItem: (meshSessionId: string, messageSeq: number, metadata: { triggerMessageId?: string }) => {
-      enqueued.push({ meshSessionId, messageSeq, triggerMessageId: metadata.triggerMessageId });
+      enqueued.push({
+        meshSessionId,
+        messageSeq,
+        triggerMessageId: metadata.triggerMessageId
+      });
       return true;
     },
     markMeshAgentInboxDelivered: () => {},
@@ -153,7 +179,9 @@ test('project-message fan-out keeps every member inbox pinned to the original me
     messageIngress: {
       begin: () => {
         maxMessageSeq += 1;
-        return Promise.resolve({ id: maxMessageSeq === 339 ? 'msg_gpt_thinking' : 'msg_sonnet_thinking' });
+        return Promise.resolve({
+          id: maxMessageSeq === 339 ? 'msg_gpt_thinking' : 'msg_sonnet_thinking'
+        });
       },
       deliver: rejectUnexpectedDeliveryError
     },
@@ -182,8 +210,372 @@ test('project-message fan-out keeps every member inbox pinned to the original me
   });
 
   expect(enqueued).toEqual([
-    { meshSessionId: 'mesh_gpt000000000', messageSeq: 338, triggerMessageId: 'msg_opus_original' },
-    { meshSessionId: 'mesh_sonnet000000', messageSeq: 338, triggerMessageId: 'msg_opus_original' }
+    {
+      meshSessionId: 'mesh_gpt000000000',
+      messageSeq: 338,
+      triggerMessageId: 'msg_opus_original'
+    },
+    {
+      meshSessionId: 'mesh_sonnet000000',
+      messageSeq: 338,
+      triggerMessageId: 'msg_opus_original'
+    }
+  ]);
+});
+
+test('project-message fan-out resumes a pending unauthenticated member after login resolves', async () => {
+  const bus = new EventBus();
+  const inputs: Array<{ id: string; input: string }> = [];
+  const starts: Array<{ agentName: string; templateAgentName?: string }> = [];
+  let preflightCalls = 0;
+  const store = {
+    listSessionMembers: () => [
+      {
+        sessionId: 'ses_loginretry00',
+        memberId: 'sonnet',
+        templateId: null,
+        type: 'mesh-agent',
+        meshSessionId: null,
+        data: {
+          name: 'claude-code',
+          instanceId: 'sonnet',
+          settings: { managedProjectAgent: true }
+        },
+        createdAt: '',
+        updatedAt: ''
+      }
+    ],
+    maxMessageSeq: () => 12,
+    messageSeq: (_sessionId: string, messageId: string) => (messageId === 'msg_userlogin000' ? 12 : 0),
+    messageIdForSeq: () => 'msg_userlogin000',
+    enqueueMeshAgentInboxItem: () => true,
+    markMeshAgentInboxDelivered: () => {},
+    markMeshAgentInboxVisible: () => {},
+    findManagedMeshAgentStreamingMessage: () => undefined,
+    insertMessage: () => {}
+  };
+  const meshAgentHost = {
+    list: () => ({ sessions: [] }),
+    preflight: async () =>
+      preflightCalls++ === 0
+        ? {
+            state: 'not_authenticated' as const,
+            agentName: 'claude-code',
+            provider: 'claude-code',
+            checkedAt: new Date(0).toISOString(),
+            action: 'reconnect_in_studio' as const,
+            reason: 'Reconnect claude-code in Studio before using it in this project.'
+          }
+        : {
+            state: 'ready' as const,
+            agentName: 'claude-code',
+            provider: 'claude-code',
+            checkedAt: new Date(0).toISOString()
+          },
+    start: async (args: { agentName: string; templateAgentName?: string }) => {
+      starts.push({
+        agentName: args.agentName,
+        templateAgentName: args.templateAgentName
+      });
+      return {
+        id: 'mesh_sonnetretry0',
+        agentName: args.agentName,
+        runtimeRole: 'managed-project-agent',
+        lifecycle: { state: 'active' },
+        activity: { state: 'idle', pid: null, queuedTurnCount: 0 },
+        lastDeliveredSeq: 0,
+        lastVisibleSeq: 0
+      } as unknown as MeshSessionView;
+    },
+    input: async (id: string, payload: { input: string }) => {
+      inputs.push({ id, input: payload.input });
+    }
+  };
+  const ctx = {
+    deps: { store, log: undefined, meshAgentHost, bus },
+    messageIngress: {
+      begin: () => Promise.resolve({ id: 'msg_thinking0001' }),
+      deliver: rejectUnexpectedDeliveryError
+    },
+    makeEmit: (round: Event[]) => (event: Event) => {
+      round.push(event);
+      bus.publish(event);
+    },
+    persistAndRetire: () => {}
+  } as unknown as SessionContext;
+
+  await createManagedMeshAgentDelivery(ctx).deliverProjectMessageToManagedMeshAgentMembers({
+    session: {
+      id: 'ses_loginretry00',
+      cwd: '/tmp/prj',
+      projectId: 'prj_loginretry00',
+      origin: { client: 'workplace' }
+    } as unknown as Session,
+    meshAgents: [
+      {
+        name: 'claude-code',
+        provider: 'claude-code',
+        command: 'claude',
+        enabled: true
+      } as unknown as MeshAgentConfig
+    ],
+    text: 'initial project task',
+    triggerMessageId: 'msg_userlogin000'
+  });
+
+  expect(starts).toEqual([]);
+  expect(inputs).toEqual([]);
+  bus.publish(
+    makeEvent('ses_loginretry00' as never, 'mesh.login_resolved', {
+      agentName: 'sonnet',
+      provider: 'claude-code'
+    })
+  );
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  expect(starts).toEqual([{ agentName: 'sonnet', templateAgentName: 'claude-code' }]);
+  expect(inputs).toHaveLength(1);
+  expect(inputs[0]?.input).toContain('initial project task');
+});
+
+test('project-message fan-out treats provider auth start failures as login-required and retries after login', async () => {
+  const bus = new EventBus();
+  const connectionRequired: unknown[] = [];
+  const inputs: Array<{ id: string; input: string }> = [];
+  let startCalls = 0;
+  bus.subscribe('ses_loginthrow0' as never, (event) => {
+    if (event.type === 'mesh.connection_required') connectionRequired.push(event.payload);
+  });
+  const store = {
+    listSessionMembers: () => [
+      {
+        sessionId: 'ses_loginthrow0',
+        memberId: 'opus',
+        templateId: null,
+        type: 'mesh-agent',
+        meshSessionId: null,
+        data: {
+          name: 'claude-code',
+          instanceId: 'opus',
+          settings: { managedProjectAgent: true }
+        },
+        createdAt: '',
+        updatedAt: ''
+      }
+    ],
+    maxMessageSeq: () => 15,
+    messageSeq: (_sessionId: string, messageId: string) => (messageId === 'msg_userthrow00' ? 15 : 0),
+    messageIdForSeq: () => 'msg_userthrow00',
+    enqueueMeshAgentInboxItem: () => true,
+    markMeshAgentInboxDelivered: () => {},
+    markMeshAgentInboxVisible: () => {},
+    findManagedMeshAgentStreamingMessage: () => undefined,
+    insertMessage: () => {}
+  };
+  const meshAgentHost = {
+    list: () => ({ sessions: [] }),
+    preflight: async () => ({
+      state: 'ready' as const,
+      agentName: 'claude-code',
+      provider: 'claude-code',
+      checkedAt: new Date(0).toISOString()
+    }),
+    start: async (args: { agentName: string }) => {
+      startCalls += 1;
+      if (startCalls === 1) throw new Error('Claude Code is not logged in; please run /login');
+      return {
+        id: 'mesh_opusretry000',
+        agentName: args.agentName,
+        runtimeRole: 'managed-project-agent',
+        lifecycle: { state: 'active' },
+        activity: { state: 'idle', pid: null, queuedTurnCount: 0 },
+        lastDeliveredSeq: 0,
+        lastVisibleSeq: 0
+      } as unknown as MeshSessionView;
+    },
+    input: async (id: string, payload: { input: string }) => {
+      inputs.push({ id, input: payload.input });
+    }
+  };
+  const ctx = {
+    deps: { store, log: undefined, meshAgentHost, bus },
+    messageIngress: {
+      begin: () => Promise.resolve({ id: 'msg_throwthink0' }),
+      deliver: rejectUnexpectedDeliveryError
+    },
+    makeEmit: (round: Event[]) => (event: Event) => {
+      round.push(event);
+      bus.publish(event);
+    },
+    persistAndRetire: () => {}
+  } as unknown as SessionContext;
+
+  await createManagedMeshAgentDelivery(ctx).deliverProjectMessageToManagedMeshAgentMembers({
+    session: {
+      id: 'ses_loginthrow0',
+      cwd: '/tmp/prj',
+      projectId: 'prj_loginthrow0',
+      origin: { client: 'workplace' }
+    } as unknown as Session,
+    meshAgents: [
+      {
+        name: 'claude-code',
+        provider: 'claude-code',
+        command: 'claude',
+        enabled: true
+      } as unknown as MeshAgentConfig
+    ],
+    text: 'retry after thrown auth failure',
+    triggerMessageId: 'msg_userthrow00'
+  });
+
+  expect(connectionRequired).toEqual([
+    expect.objectContaining({
+      agentName: 'opus',
+      authAgentName: 'claude-code',
+      provider: 'claude-code',
+      code: 'provider_connection_required'
+    })
+  ]);
+  expect(inputs).toEqual([]);
+  bus.publish(
+    makeEvent('ses_loginthrow0' as never, 'mesh.login_resolved', {
+      agentName: 'opus',
+      provider: 'claude-code'
+    })
+  );
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  expect(startCalls).toBe(2);
+  expect(inputs).toHaveLength(1);
+  expect(inputs[0]?.input).toContain('retry after thrown auth failure');
+});
+
+test('project-message fan-out emits connection_required when a project member adapter is disabled', async () => {
+  const emitted: Event[] = [];
+  const store = {
+    listSessionMembers: () => [
+      {
+        sessionId: 'ses_disabled0000',
+        memberId: 'pmem_claude_opus',
+        templateId: null,
+        type: 'mesh-agent',
+        meshSessionId: null,
+        data: {
+          name: 'claude-code',
+          instanceId: 'pmem_claude_opus',
+          displayName: 'Opus',
+          settings: { managedProjectAgent: true }
+        },
+        createdAt: '',
+        updatedAt: ''
+      }
+    ]
+  };
+  const ctx = {
+    deps: { store, log: undefined },
+    messageIngress: {
+      begin: () => Promise.resolve({ id: 'msg_unused0000' }),
+      deliver: rejectUnexpectedDeliveryError
+    },
+    makeEmit: (round: Event[]) => (event: Event) => {
+      round.push(event);
+      emitted.push(event);
+    },
+    persistAndRetire: () => {}
+  } as unknown as SessionContext;
+
+  await createManagedMeshAgentDelivery(ctx).deliverProjectMessageToManagedMeshAgentMembers({
+    session: {
+      id: 'ses_disabled0000',
+      cwd: '/tmp/prj',
+      origin: { client: 'workplace' }
+    } as unknown as Session,
+    meshAgents: [
+      {
+        name: 'claude-code',
+        provider: 'claude-code',
+        command: 'claude',
+        enabled: false
+      } as unknown as MeshAgentConfig
+    ],
+    text: 'wake disabled claude'
+  });
+
+  expect(emitted.map((event) => [event.type, event.payload])).toEqual([
+    [
+      'mesh.connection_required',
+      {
+        agentName: 'pmem_claude_opus',
+        authAgentName: 'claude-code',
+        provider: 'claude-code',
+        code: 'provider_disabled',
+        reason: 'MeshAgent adapter "claude-code" is disabled. Enable it in Studio before using it in this project.',
+        reconnectIn: 'studio'
+      }
+    ]
+  ]);
+});
+
+test('direct managed MeshAgent delivery emits connection_required when the project member adapter is missing', async () => {
+  const emitted: Event[] = [];
+  const store = {
+    listSessionMembers: () => [
+      {
+        sessionId: 'ses_missing00000',
+        memberId: 'pmem_claude_sonnet',
+        templateId: null,
+        type: 'mesh-agent',
+        meshSessionId: null,
+        data: {
+          name: 'claude-code',
+          instanceId: 'pmem_claude_sonnet',
+          displayName: 'Sonnet',
+          settings: { managedProjectAgent: true }
+        },
+        createdAt: '',
+        updatedAt: ''
+      }
+    ]
+  };
+  const ctx = {
+    deps: { store, log: undefined },
+    messageIngress: {
+      begin: () => Promise.resolve({ id: 'msg_unused0001' }),
+      deliver: rejectUnexpectedDeliveryError
+    },
+    makeEmit: (round: Event[]) => (event: Event) => {
+      round.push(event);
+      emitted.push(event);
+    },
+    persistAndRetire: () => {}
+  } as unknown as SessionContext;
+
+  await createManagedMeshAgentDelivery(ctx).deliverDirectMessageToManagedMeshAgentMember({
+    session: {
+      id: 'ses_missing00000',
+      cwd: '/tmp/prj',
+      origin: { client: 'workplace' }
+    } as unknown as Session,
+    meshAgents: [],
+    fromAgentName: 'monad',
+    to: 'pmem_claude_sonnet',
+    text: 'direct wake'
+  });
+
+  expect(emitted.map((event) => [event.type, event.payload])).toEqual([
+    [
+      'mesh.connection_required',
+      {
+        agentName: 'pmem_claude_sonnet',
+        authAgentName: 'claude-code',
+        provider: 'claude-code',
+        code: 'provider_unavailable',
+        reason:
+          'MeshAgent adapter "claude-code" is not configured. Reconnect it in Studio before using it in this project.',
+        reconnectIn: 'studio'
+      }
+    ]
   ]);
 });
 
@@ -197,7 +589,11 @@ test('a stale unreadable delivery does not suppress the wake for a new readable 
         templateId: null,
         type: 'mesh-agent',
         meshSessionId: 'mesh_sonnet000000',
-        data: { name: 'sonnet', displayName: 'Sonnet', settings: { managedProjectAgent: true } },
+        data: {
+          name: 'sonnet',
+          displayName: 'Sonnet',
+          settings: { managedProjectAgent: true }
+        },
         createdAt: '',
         updatedAt: ''
       }

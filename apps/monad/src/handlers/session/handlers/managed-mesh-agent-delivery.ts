@@ -1,6 +1,10 @@
 import type { MeshAgentConfig } from '@monad/environment';
 import type { Event, ManagedMeshAgentLifecycleLogEvent, MessageId, Session, SessionId } from '@monad/protocol';
 import type { SessionContext } from '#/handlers/session/context.ts';
+import type {
+  ManagedMeshAgentProjectMember,
+  UnavailableManagedMeshAgentProjectMember
+} from '#/handlers/session/handlers/messaging-members.ts';
 import type { ManagedMeshAgentProjectMessageSender } from '#/handlers/session/handlers/messaging-notices.ts';
 
 import { newId } from '@monad/protocol';
@@ -8,7 +12,10 @@ import { newId } from '@monad/protocol';
 import { extractError } from '#/agent/index.ts';
 import { createManagedMeshAgentMessages } from '#/handlers/session/handlers/managed-mesh-agent-messages.ts';
 import { createManagedMeshAgentRuntime } from '#/handlers/session/handlers/managed-mesh-agent-runtime.ts';
-import { managedMeshAgentProjectMembers } from '#/handlers/session/handlers/messaging-members.ts';
+import {
+  managedMeshAgentProjectMembers,
+  unavailableManagedMeshAgentProjectMembers
+} from '#/handlers/session/handlers/messaging-members.ts';
 import {
   managedMeshAgentDirectNotice,
   managedMeshAgentInboxNotice,
@@ -22,9 +29,16 @@ const MANAGED_MESH_AGENT_DELIVERY_ERROR_EVENT =
 const MANAGED_MESH_AGENT_DIRECT_DELIVERY_ERROR_EVENT =
   'project.managed_mesh.direct_delivery_error' satisfies ManagedMeshAgentLifecycleLogEvent;
 
+function isMeshAgentAuthenticationError(code: string | undefined, message: string): boolean {
+  const haystack = `${code ?? ''} ${message}`;
+  return /\b(provider_connection_required|not_authenticated|unauthenticated|authentication_failed|unauthorized)\b|not[\s_-]?logged[\s_-]?in|login[\s_-]?required|authentication[\s_-]?required|please run\s+\/login|token[\s_-]?expired/i.test(
+    haystack
+  );
+}
+
 export function createManagedMeshAgentDelivery(ctx: SessionContext) {
   const {
-    deps: { store, log, meshAgentHost },
+    deps: { store, log, meshAgentHost, bus },
     makeEmit,
     persistAndRetire,
     messageIngress
@@ -33,6 +47,47 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
   const { managedMeshSessionsForAgent, startManagedMeshAgentRuntimeWithRecovery } = createManagedMeshAgentRuntime(ctx);
   const { emitManagedMeshAgentThinking, completeManagedMeshAgentThinking, retireManagedMeshAgentThinking } =
     createManagedMeshAgentMessages(ctx);
+  const pendingProjectDeliveries = new Map<
+    string,
+    {
+      session: Session;
+      meshAgents: readonly MeshAgentConfig[];
+      text: string;
+      sender?: ManagedMeshAgentProjectMessageSender;
+      triggerMessageId?: MessageId;
+      agentName: string;
+    }
+  >();
+  const pendingDirectDeliveries = new Map<
+    string,
+    {
+      session: Session;
+      meshAgents: readonly MeshAgentConfig[];
+      fromAgentName: string;
+      to: string;
+      text: string;
+      agentName: string;
+    }
+  >();
+
+  bus?.subscribeAll((event) => {
+    if (event.type !== 'mesh.login_resolved') return;
+    const agentName = typeof event.payload.agentName === 'string' ? event.payload.agentName : undefined;
+    if (!agentName) return;
+    for (const [key, pending] of [...pendingProjectDeliveries]) {
+      if (pending.agentName !== agentName) continue;
+      pendingProjectDeliveries.delete(key);
+      void deliverProjectMessageToManagedMeshAgentMembers({
+        ...pending,
+        onlyAgentName: agentName
+      });
+    }
+    for (const [key, pending] of [...pendingDirectDeliveries]) {
+      if (pending.agentName !== agentName) continue;
+      pendingDirectDeliveries.delete(key);
+      void deliverDirectMessageToManagedMeshAgentMember(pending);
+    }
+  });
 
   async function recordManagedMeshAgentProjectDeliveryError(
     sessionId: SessionId,
@@ -57,7 +112,8 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
     text,
     sender,
     triggerMessageId,
-    exceptAgentName
+    exceptAgentName,
+    onlyAgentName
   }: {
     session: Session;
     meshAgents: readonly MeshAgentConfig[];
@@ -65,9 +121,10 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
     sender?: ManagedMeshAgentProjectMessageSender;
     triggerMessageId?: MessageId;
     exceptAgentName?: string;
+    onlyAgentName?: string;
   }): Promise<void> {
     const managedMembers = managedMeshAgentProjectMembers(store, session.id, meshAgents);
-    if (managedMembers.length === 0) return;
+    const unavailableMembers = unavailableManagedMeshAgentProjectMembers(store, session.id, meshAgents);
     const resolvedSender =
       sender?.kind === 'mesh-agent'
         ? {
@@ -77,6 +134,26 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
               sender.name
           }
         : sender;
+    const emitUnavailableConnectionRequired = (member: UnavailableManagedMeshAgentProjectMember) => {
+      const round: Event[] = [];
+      makeEmit(round)(
+        makeEvent(session.id as SessionId, 'mesh.connection_required', {
+          agentName: member.runtimeAgentName,
+          authAgentName: member.templateAgentName,
+          provider: member.provider,
+          code: member.code,
+          reason: member.reason,
+          reconnectIn: 'studio'
+        })
+      );
+      persistAndRetire(session.id, round);
+    };
+    for (const member of unavailableMembers) {
+      if (onlyAgentName && member.runtimeAgentName !== onlyAgentName) continue;
+      if (member.runtimeAgentName === exceptAgentName) continue;
+      emitUnavailableConnectionRequired(member);
+    }
+    if (managedMembers.length === 0) return;
     if (!meshAgentHost || !session.cwd) return;
     const deliveredSeq = triggerMessageId
       ? store.messageSeq(session.id, triggerMessageId)
@@ -84,91 +161,117 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
     const resolvedTriggerMessageId =
       triggerMessageId ??
       (deliveredSeq > 0 ? (store.messageIdForSeq(session.id as SessionId, deliveredSeq) ?? undefined) : undefined);
-    for (const member of managedMembers) {
-      const { spec, runtimeAgentName, templateAgentName, displayName, configuredDisplayName, settings } = member;
-      if (runtimeAgentName === exceptAgentName) continue;
-      try {
-        const notice = managedMeshAgentInboxNotice(member, text, resolvedSender);
-        const deliveryId = deliveredSeq > 0 ? newId('deliv') : undefined;
-        const managedSessions = managedMeshSessionsForAgent(session.id, runtimeAgentName);
-        const existing = managedSessions.find((candidate) => candidate.lifecycle.state === 'active');
-        if (existing) {
+    const retryPending = (member: ManagedMeshAgentProjectMember) => {
+      const key = `${session.id}:project:${member.runtimeAgentName}:${resolvedTriggerMessageId ?? deliveredSeq}:${text}`;
+      pendingProjectDeliveries.set(key, {
+        session,
+        meshAgents,
+        text,
+        ...(resolvedSender ? { sender: resolvedSender } : {}),
+        ...(resolvedTriggerMessageId ? { triggerMessageId: resolvedTriggerMessageId } : {}),
+        agentName: member.runtimeAgentName
+      });
+    };
+    const emitConnectionRequired = (member: ManagedMeshAgentProjectMember, reason: string) => {
+      const round: Event[] = [];
+      makeEmit(round)(
+        makeEvent(session.id as SessionId, 'mesh.connection_required', {
+          agentName: member.runtimeAgentName,
+          authAgentName: member.templateAgentName,
+          provider: member.spec.provider,
+          code: 'provider_connection_required',
+          reason,
+          reconnectIn: 'studio'
+        })
+      );
+      persistAndRetire(session.id, round);
+    };
+    await Promise.all(
+      managedMembers.map(async (member) => {
+        const { spec, runtimeAgentName, templateAgentName, displayName, configuredDisplayName, settings } = member;
+        if (onlyAgentName && runtimeAgentName !== onlyAgentName) return;
+        if (runtimeAgentName === exceptAgentName) return;
+        try {
+          const notice = managedMeshAgentInboxNotice(member, text, resolvedSender);
+          const deliveryId = deliveredSeq > 0 ? newId('deliv') : undefined;
+          const managedSessions = managedMeshSessionsForAgent(session.id, runtimeAgentName);
+          const existing = managedSessions.find((candidate) => candidate.lifecycle.state === 'active');
+          if (existing) {
+            if (deliveredSeq > 0) {
+              store.enqueueMeshAgentInboxItem(existing.id, deliveredSeq, {
+                deliveryId,
+                ...(session.projectId ? { projectId: session.projectId } : {}),
+                memberInstanceId: runtimeAgentName,
+                triggerMessageId: resolvedTriggerMessageId,
+                providerSessionRef: existing.providerSessionRef ?? null
+              });
+            }
+            await emitManagedMeshAgentThinking(session.id, existing.id, runtimeAgentName, deliveryId, displayName);
+            await meshAgentHost.input(existing.id, {
+              input: meshAgentInputText(notice)
+            });
+            if (deliveredSeq > 0) store.markMeshAgentInboxVisible(existing.id, deliveredSeq);
+            store.markMeshAgentInboxDelivered(existing.id, deliveredSeq);
+            return;
+          }
+          const resumeCandidate = managedSessions.find((candidate) => candidate.providerSessionRef);
+          const resumeFrom = resumeCandidate?.providerSessionRef;
+          const preflight = await meshAgentHost.preflight(templateAgentName);
+          if (preflight.state !== 'ready') {
+            if (preflight.state === 'not_authenticated' || preflight.state === 'unknown') {
+              emitConnectionRequired(member, preflight.reason);
+              if (preflight.state === 'not_authenticated') retryPending(member);
+            }
+            return;
+          }
+          if (resumeCandidate && resumeFrom) store.clearMeshSessionRef(resumeCandidate.id);
+          const nativeSession = await startManagedMeshAgentRuntimeWithRecovery({
+            session,
+            spec,
+            runtimeAgentName,
+            templateAgentName,
+            displayName: configuredDisplayName,
+            reasoningEffort: settings.reasoningEffort,
+            modelId: settings.modelId ?? settings.modelName,
+            speed: settings.speed,
+            customPrompt: settings.customPrompt,
+            allowAutopilot: settings.allowAutopilot,
+            providerSessionRef: resumeFrom ?? undefined,
+            input: notice
+          });
           if (deliveredSeq > 0) {
-            store.enqueueMeshAgentInboxItem(existing.id, deliveredSeq, {
+            store.enqueueMeshAgentInboxItem(nativeSession.id, deliveredSeq, {
               deliveryId,
               ...(session.projectId ? { projectId: session.projectId } : {}),
               memberInstanceId: runtimeAgentName,
               triggerMessageId: resolvedTriggerMessageId,
-              providerSessionRef: existing.providerSessionRef ?? null
+              providerSessionRef: nativeSession.providerSessionRef ?? null
             });
           }
-          await emitManagedMeshAgentThinking(session.id, existing.id, runtimeAgentName, deliveryId, displayName);
-          await meshAgentHost.input(existing.id, { input: meshAgentInputText(notice) });
-          if (deliveredSeq > 0) store.markMeshAgentInboxVisible(existing.id, deliveredSeq);
-          store.markMeshAgentInboxDelivered(existing.id, deliveredSeq);
-          continue;
-        }
-        const resumeCandidate = managedSessions.find((candidate) => candidate.providerSessionRef);
-        const resumeFrom = resumeCandidate?.providerSessionRef;
-        const preflight = await meshAgentHost.preflight(templateAgentName);
-        if (preflight.state !== 'ready') {
-          const round: Event[] = [];
-          if (preflight.state === 'not_authenticated' || preflight.state === 'unknown') {
-            makeEmit(round)(
-              makeEvent(session.id as SessionId, 'mesh.connection_required', {
-                agentName: runtimeAgentName,
-                provider: spec.provider,
-                code: 'provider_connection_required',
-                reason: preflight.reason,
-                reconnectIn: 'studio'
-              })
-            );
-            persistAndRetire(session.id, round);
+          store.markMeshAgentInboxDelivered(nativeSession.id, deliveredSeq);
+          store.markMeshAgentInboxVisible(nativeSession.id, deliveredSeq);
+          await emitManagedMeshAgentThinking(session.id, nativeSession.id, runtimeAgentName, deliveryId, displayName);
+        } catch (err) {
+          const { code, message } = extractError(err);
+          if (isMeshAgentAuthenticationError(code, message)) {
+            emitConnectionRequired(member, message);
+            retryPending(member);
+            return;
           }
-          continue;
+          await recordManagedMeshAgentProjectDeliveryError(session.id, runtimeAgentName, message);
+          log?.debug(
+            {
+              sessionId: session.id,
+              event: MANAGED_MESH_AGENT_DELIVERY_ERROR_EVENT,
+              agentName: runtimeAgentName,
+              code,
+              message
+            },
+            'managed native cli project delivery failed'
+          );
         }
-        if (resumeCandidate && resumeFrom) store.clearMeshSessionRef(resumeCandidate.id);
-        const nativeSession = await startManagedMeshAgentRuntimeWithRecovery({
-          session,
-          spec,
-          runtimeAgentName,
-          templateAgentName,
-          displayName: configuredDisplayName,
-          reasoningEffort: settings.reasoningEffort,
-          modelId: settings.modelId ?? settings.modelName,
-          speed: settings.speed,
-          customPrompt: settings.customPrompt,
-          allowAutopilot: settings.allowAutopilot,
-          providerSessionRef: resumeFrom ?? undefined,
-          input: notice
-        });
-        if (deliveredSeq > 0) {
-          store.enqueueMeshAgentInboxItem(nativeSession.id, deliveredSeq, {
-            deliveryId,
-            ...(session.projectId ? { projectId: session.projectId } : {}),
-            memberInstanceId: runtimeAgentName,
-            triggerMessageId: resolvedTriggerMessageId,
-            providerSessionRef: nativeSession.providerSessionRef ?? null
-          });
-        }
-        store.markMeshAgentInboxDelivered(nativeSession.id, deliveredSeq);
-        store.markMeshAgentInboxVisible(nativeSession.id, deliveredSeq);
-        await emitManagedMeshAgentThinking(session.id, nativeSession.id, runtimeAgentName, deliveryId, displayName);
-      } catch (err) {
-        const { code, message } = extractError(err);
-        await recordManagedMeshAgentProjectDeliveryError(session.id, runtimeAgentName, message);
-        log?.debug(
-          {
-            sessionId: session.id,
-            event: MANAGED_MESH_AGENT_DELIVERY_ERROR_EVENT,
-            agentName: runtimeAgentName,
-            code,
-            message
-          },
-          'managed native cli project delivery failed'
-        );
-      }
-    }
+      })
+    );
   }
 
   async function deliverDirectMessageToManagedMeshAgentMember({
@@ -189,33 +292,73 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
     const member = managedMeshAgentProjectMembers(store, session.id, meshAgents).find(
       (candidate) => candidate.runtimeAgentName === targetName
     );
-    if (!member) return;
+    if (!member) {
+      const unavailable = unavailableManagedMeshAgentProjectMembers(store, session.id, meshAgents).find(
+        (candidate) => candidate.runtimeAgentName === targetName
+      );
+      if (unavailable) {
+        const round: Event[] = [];
+        makeEmit(round)(
+          makeEvent(session.id as SessionId, 'mesh.connection_required', {
+            agentName: unavailable.runtimeAgentName,
+            authAgentName: unavailable.templateAgentName,
+            provider: unavailable.provider,
+            code: unavailable.code,
+            reason: unavailable.reason,
+            reconnectIn: 'studio'
+          })
+        );
+        persistAndRetire(session.id, round);
+      }
+      return;
+    }
     const { spec, runtimeAgentName, templateAgentName, configuredDisplayName, settings } = member;
     if (!meshAgentHost || !session.cwd) return;
+    const retryPending = () => {
+      pendingDirectDeliveries.set(`${session.id}:direct:${runtimeAgentName}:${fromAgentName}:${text}`, {
+        session,
+        meshAgents,
+        fromAgentName,
+        to: runtimeAgentName,
+        text,
+        agentName: runtimeAgentName
+      });
+    };
+    const emitConnectionRequired = (reason: string) => {
+      const round: Event[] = [];
+      makeEmit(round)(
+        makeEvent(session.id as SessionId, 'mesh.connection_required', {
+          agentName: runtimeAgentName,
+          authAgentName: templateAgentName,
+          provider: spec.provider,
+          code: 'provider_connection_required',
+          reason,
+          reconnectIn: 'studio'
+        })
+      );
+      persistAndRetire(session.id, round);
+    };
     try {
-      const notice = managedMeshAgentDirectNotice({ member, fromAgentName, text });
+      const notice = managedMeshAgentDirectNotice({
+        member,
+        fromAgentName,
+        text
+      });
       const managedSessions = managedMeshSessionsForAgent(session.id, runtimeAgentName);
       const existing = managedSessions.find((candidate) => candidate.lifecycle.state === 'active');
       if (existing) {
-        await meshAgentHost.input(existing.id, { input: meshAgentInputText(notice) });
+        await meshAgentHost.input(existing.id, {
+          input: meshAgentInputText(notice)
+        });
         return;
       }
       const resumeCandidate = managedSessions.find((candidate) => candidate.providerSessionRef);
       const resumeFrom = resumeCandidate?.providerSessionRef;
       const preflight = await meshAgentHost.preflight(templateAgentName);
       if (preflight.state !== 'ready') {
-        const round: Event[] = [];
         if (preflight.state === 'not_authenticated' || preflight.state === 'unknown') {
-          makeEmit(round)(
-            makeEvent(session.id as SessionId, 'mesh.connection_required', {
-              agentName: runtimeAgentName,
-              provider: spec.provider,
-              code: 'provider_connection_required',
-              reason: preflight.reason,
-              reconnectIn: 'studio'
-            })
-          );
-          persistAndRetire(session.id, round);
+          emitConnectionRequired(preflight.reason);
+          if (preflight.state === 'not_authenticated') retryPending();
         }
         return;
       }
@@ -236,6 +379,11 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
       });
     } catch (err) {
       const { code, message } = extractError(err);
+      if (isMeshAgentAuthenticationError(code, message)) {
+        emitConnectionRequired(message);
+        retryPending();
+        return;
+      }
       log?.debug(
         {
           sessionId: session.id,

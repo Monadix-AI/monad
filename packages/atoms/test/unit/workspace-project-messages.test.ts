@@ -1,4 +1,4 @@
-import type { MeshSessionView } from '@monad/protocol';
+import type { AgentObservationCard, MeshSessionView } from '@monad/protocol';
 import type { Message } from '../../src/workspace-experiences/experience/types.ts';
 
 import { expect, test } from 'bun:test';
@@ -91,7 +91,17 @@ const meshSession = (overrides: LegacySessionOverrides = {}): MeshSessionView =>
 
 const observationFields = (
   items: NonNullable<ReturnType<typeof __workplaceProjectMessageTest.buildMeshAgentStreams>[number]>['items']
-) => items.map(({ id, text }) => ({ id, text }));
+) => items.map(({ id, payload }) => ({ id, text: payload.text }));
+
+function messageCard(id: string, text: string): AgentObservationCard {
+  return {
+    id,
+    kind: 'message',
+    streaming: false,
+    payload: { text },
+    provenance: { contractEvents: [{ id, text }] }
+  };
+}
 
 function firstMeshAgentStream(streams: ReturnType<typeof __workplaceProjectMessageTest.buildMeshAgentStreams>) {
   const stream = streams[0];
@@ -133,6 +143,76 @@ test('MeshAgent member invitations project to durable chat messages', () => {
     },
     streaming: false,
     orderKey: '2026-06-29T10:00:00.000Z'
+  });
+});
+
+test('MeshAgent login-required custom items project to chat system messages', () => {
+  const messages = __workplaceProjectMessageTest.buildProjectMessages({
+    persistedMessages: [],
+    projectMembers: [
+      {
+        id: 'pmem_claude-code_f2654d392ff2',
+        type: 'mesh-agent',
+        name: 'claude-code',
+        instanceId: 'pmem_claude-code_f2654d392ff2',
+        displayName: 'Opus',
+        joinedAt: '2026-07-20T05:26:38.637Z'
+      }
+    ],
+    meshSessions: [],
+    liveItems: [
+      {
+        kind: 'custom',
+        id: 'mesh-agent-login-required:pmem_claude-code_f2654d392ff2',
+        name: 'mesh.login_required',
+        status: 'error',
+        data: {
+          agentName: 'pmem_claude-code_f2654d392ff2',
+          authAgentName: 'claude-code',
+          provider: 'claude-code',
+          reason: 'Reconnect claude-code in Studio before using it in this project.'
+        },
+        seq: 'evt_loginRequired'
+      }
+    ],
+    liveTools: [],
+    meshAgentDisplayNames: new Map([['pmem_claude-code_f2654d392ff2', 'Opus']]),
+    meshAgentIcons: new Map([['pmem_claude-code_f2654d392ff2', 'claude-code']]),
+    meshAgentTags: new Map([['pmem_claude-code_f2654d392ff2', 'Claude']])
+  });
+
+  expect(messages.map((message) => ({ id: message.id, kind: message.kind, text: message.text }))).toEqual([
+    {
+      id: 'project-member-joined:pmem_claude-code_f2654d392ff2',
+      kind: 'system',
+      text: 'joined the project'
+    },
+    {
+      id: 'mesh-agent-login-required:pmem_claude-code_f2654d392ff2',
+      kind: 'system',
+      text: 'request sign in.'
+    }
+  ]);
+  expect(messages[1]).toMatchObject({
+    authorId: 'pmem_claude-code_f2654d392ff2',
+    authorName: 'Opus',
+    agentChip: {
+      id: 'pmem_claude-code_f2654d392ff2',
+      name: 'Opus',
+      icon: 'claude-code',
+      tag: 'Claude'
+    },
+    systemActions: [
+      {
+        actionId: 'mesh-agent.sign-in',
+        payload: {
+          agentName: 'claude-code',
+          projectMemberId: 'pmem_claude-code_f2654d392ff2',
+          provider: 'claude-code'
+        }
+      }
+    ],
+    systemTone: 'error'
   });
 });
 
@@ -600,6 +680,48 @@ test('managed MeshAgent finished replies retain delivery observation pointers', 
   });
 });
 
+test('managed MeshAgent persisted replies replace matching live echoes', () => {
+  const messages = __workplaceProjectMessageTest.buildProjectMessages({
+    persistedMessages: [
+      {
+        id: 'msg_persistedreply',
+        authorId: 'pmem_codex_abcd1234',
+        authorName: 'GPT 5.6 SOL',
+        av: 'GP',
+        icon: 'codex',
+        kind: 'agent',
+        tag: 'Codex',
+        time: '',
+        text: '收到，这条你处理，我不碰共享工作树、不提交。',
+        meshSessionId: 'mesh_codexruntime',
+        deliveryId: 'deliv_01KWEBDErrBa',
+        orderKey: '2026-07-20T03:00:00.000Z'
+      }
+    ],
+    meshSessions: [],
+    liveItems: [
+      {
+        kind: 'message',
+        id: 'msg_livereplyecho',
+        role: 'assistant',
+        agentName: 'pmem_codex_abcd1234',
+        agentDisplayName: 'GPT 5.6 SOL',
+        source: 'managed-mesh-agent',
+        meshSessionId: 'mesh_codexruntime',
+        deliveryId: 'deliv_01KWEBDErrBa',
+        parts: [{ type: 'text', text: '收到，这条你处理，我不碰共享工作树、不提交。' }],
+        status: 'done',
+        seq: '2026-07-20T03:00:00.000Z'
+      }
+    ],
+    liveTools: []
+  });
+
+  expect(messages.map(({ id, text }) => [id, text])).toEqual([
+    ['msg_persistedreply', '收到，这条你处理，我不碰共享工作树、不提交。']
+  ]);
+});
+
 test('managed MeshAgent spawn does not project a join or thinking placeholder', () => {
   const messages = __workplaceProjectMessageTest.buildProjectMessages({
     persistedMessages: [],
@@ -793,7 +915,7 @@ test('MeshAgent streams prefer live activity output over persisted snapshot', ()
     provider: 'gemini',
     tag: 'Gemini',
     output: 'live output',
-    items: [{ id: 'mesh_01KWGEMIprD4:0', kind: 'assistant-message', text: 'live output' }],
+    items: [messageCard('mesh_01KWGEMIprD4:0', 'live output')],
     status: 'running'
   });
 });
@@ -845,7 +967,7 @@ test('MeshAgent live activity streams keep the managed agent identity', () => {
     id: 'mesh_livecodex000',
     agentName: 'codex',
     status: 'running',
-    items: [{ id: 'mesh_livecodex000:0', kind: 'assistant-message', text: 'thinking about the project message' }]
+    items: [messageCard('mesh_livecodex000:0', 'thinking about the project message')]
   });
 });
 

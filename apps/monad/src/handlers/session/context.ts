@@ -61,7 +61,18 @@ export interface SessionDeps {
   /** Per-session fs sandbox roots from the bound Studio agent's `sandbox` override (global ceiling
    * applied). Returns undefined when there's no override → the caller inherits the daemon default. */
   agentSandboxRoots?: (sessionId: SessionId) => string[] | undefined;
-  meshAgentHost?: Pick<MeshAgentHost, 'preflight' | 'input' | 'list' | 'start' | 'stop' | 'stopSession'>;
+  meshAgentHost?: Pick<
+    MeshAgentHost,
+    | 'preflight'
+    | 'input'
+    | 'list'
+    | 'start'
+    | 'stop'
+    | 'stopSession'
+    | 'archiveSession'
+    | 'deleteSession'
+    | 'pendingLoginRequiredEvents'
+  >;
   messageIngress?: MessageIngress;
 }
 

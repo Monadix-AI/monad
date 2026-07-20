@@ -466,6 +466,8 @@ export interface TransportHandle {
 }
 
 /** Mount an already-built HTTP app on the given transport and return a uniform client. */
+let transportSequence = 0;
+
 export function serveTransport(kind: TransportKind, app: ReturnType<typeof createHttpTransport>): TransportHandle {
   if (kind === 'tcp') {
     const live = app.listen({ hostname: '127.0.0.1', port: 0 }) as unknown as LiveApp;
@@ -478,8 +480,10 @@ export function serveTransport(kind: TransportKind, app: ReturnType<typeof creat
       stop: async () => live.server.stop(true)
     };
   }
-  // Keep the path short — macOS caps unix socket paths around 104 bytes.
-  const sock = join(tmpdir(), `monad-tr-${process.pid}-${Date.now()}.sock`);
+  // Keep the path short — macOS caps unix socket paths around 104 bytes. A monotonic counter rather
+  // than a timestamp: two transports created inside the same millisecond would otherwise collide on
+  // one socket path and the second bind would fail.
+  const sock = join(tmpdir(), `monad-tr-${process.pid}-${transportSequence++}.sock`);
   // idleTimeout matches production's Unix-socket bind (apps/monad/src/transports/lifecycle.ts) and
   // Elysia's own Bun adapter default for the TCP listener above — otherwise a legitimately slow
   // request (e.g. the 20s MeshAgent auth-status probe) hits Bun.serve's 10s default here without

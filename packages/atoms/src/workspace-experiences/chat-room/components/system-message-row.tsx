@@ -1,4 +1,5 @@
 import type { Message } from '../../experience/types.ts';
+import type { WorkspaceExperienceHostAction } from '../../host-context.tsx';
 
 import { ProductIcon, WorkspaceSystemEventCard } from '@monad/ui';
 import {
@@ -12,14 +13,22 @@ import {
 export const TIME_STYLE: React.CSSProperties = { fontFamily: mono, fontSize: 11, color: 'var(--muted-foreground)' };
 
 export function SystemMessageRow({
+  actions,
   msg,
   onAgentClick
 }: {
+  actions?: readonly WorkspaceExperienceHostAction[];
   msg: Message;
   onAgentClick?: (id: string) => void;
 }): React.ReactElement {
   const developer = msg.kind === 'developer' || msg.developerOnly === true;
   const agentProductIcon = msg.agentChip ? resolveProductIcon(msg.agentChip) : null;
+  const resolvedActions = msg.systemActions
+    ?.map((actionRef) => {
+      const action = actions?.find((candidate) => candidate.id === actionRef.actionId);
+      return action ? { action, payload: actionRef.payload } : null;
+    })
+    .filter((entry): entry is { action: WorkspaceExperienceHostAction; payload: unknown } => entry !== null);
   return (
     <WorkspaceSystemEventCard
       actor={
@@ -52,7 +61,24 @@ export function SystemMessageRow({
         ) : undefined
       }
       badge={developer ? <TagChip tag="DEV" /> : undefined}
-      body={msg.text ? <span className="min-w-0 truncate text-muted-foreground">{msg.text}</span> : undefined}
+      body={
+        msg.text ? (
+          <span className="inline-flex min-w-0 items-center gap-2 text-muted-foreground">
+            <span className="min-w-0 truncate">{msg.text}</span>
+            {resolvedActions?.map(({ action, payload }) => (
+              <button
+                className="workplace-action inline-flex h-7 shrink-0 items-center justify-center rounded-md border border-border bg-card px-2.5 font-semibold text-foreground text-xs hover:bg-accent"
+                disabled={action.disabled}
+                key={action.id}
+                onClick={() => void action.run(payload)}
+                type="button"
+              >
+                {action.label}
+              </button>
+            ))}
+          </span>
+        ) : undefined
+      }
       fanout={
         msg.fanoutAgents?.length ? (
           <span className="inline-flex min-w-0 items-center gap-1.5 text-foreground">

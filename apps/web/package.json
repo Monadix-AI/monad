@@ -17,7 +17,6 @@
     "@monad/ui": "workspace:*",
     "@monad/utils": "workspace:*",
     "@tanstack/hotkeys": "0.8.0",
-    "@tanstack/react-hotkeys": "^0.10.0",
     "@tanstack/react-router": "^1.170.18",
     "@tanstack/react-router-devtools": "^1.167.0",
     "@xyflow/react": "^12.11.2",

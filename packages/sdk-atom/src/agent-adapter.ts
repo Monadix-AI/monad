@@ -4,6 +4,7 @@ import type {
   AdapterMigrationCandidate,
   AdapterMigrationPreview,
   AdapterMigrationPreviewRequest,
+  AgentObservationCard,
   AgentObservationEvent,
   MeshAgentAuthState,
   MeshAgentObservationEvent,
@@ -311,6 +312,7 @@ export type MeshAgentObservationProjector = MeshAgentObservationUsageProjector &
 
 export interface MeshAgentObservationRuntime {
   toAgentObservationEvent(event: MeshAgentObservationEvent): AgentObservationEvent | null;
+  toAgentObservationCards(events: readonly AgentObservationEvent[], provider: string): AgentObservationCard[];
   structuredEvents(args: {
     id: string;
     output?: string;
@@ -370,6 +372,14 @@ export interface MeshAgentManagedRuntime {
   usesSystemPromptFile?: boolean;
   /** The managed prompt is delivered as developer instructions on session init. */
   usesDeveloperInstructions?: boolean;
+}
+
+export interface MeshAgentProviderSessionLifecycleContext {
+  meshSessionId: string;
+  transcriptTargetId: string;
+  agentName: string;
+  providerSessionRef: string;
+  workingPath: string;
 }
 
 /** Child-process environment policy. `strip` names keys that must not reach the child whatever their
@@ -449,6 +459,8 @@ export interface MeshAgentProviderAdapter {
   modelOptions?(agent: MeshAgentView): MeshAgentModelOptionsProbe;
   resolveCommand?(command: string, probes?: BinProbes): string | undefined;
   createSessionRuntime?(agent: MeshAgentView, context: MeshAgentSessionRuntimeContext): SessionEventRuntimeDefinition;
+  archiveSession?(context: MeshAgentProviderSessionLifecycleContext): void | Promise<void>;
+  deleteSession?(context: MeshAgentProviderSessionLifecycleContext): void | Promise<void>;
   /** Return the first provider-specific argv token that enables an unsafe/unattended mode. The daemon
    *  owns the `allowAutopilot` decision, while each adapter owns its CLI vocabulary. */
   unsafeArgument?(args: string[]): string | undefined;

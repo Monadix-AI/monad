@@ -4,7 +4,7 @@ import type { RawDisplayMode, RawFrameRow } from './raw-view.ts';
 import { workspaceMono as mono, workspaceSans as sans } from '@monad/ui/components/AgentAvatar';
 import { CodeBlock } from '@monad/ui/components/CodeBlock';
 import { VirtualList, type VirtualListHandle } from '@monad/ui/components/VirtualList';
-import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef } from 'react';
+import { useCallback, useImperativeHandle, useLayoutEffect, useMemo, useRef } from 'react';
 
 import { rawDisplayEntries } from './raw-view.ts';
 
@@ -29,7 +29,7 @@ const rawCardKey = (card: RawDisplayCard): string => card.row.identity;
 export interface RawVirtualListControlProps {
   getKey: (card: RawDisplayCard) => string;
   items: RawDisplayCard[];
-  onStartReached: () => void;
+  onStartReached: () => boolean;
   stickToBottom: true;
 }
 
@@ -52,7 +52,10 @@ export function rawVirtualListControlProps(args: {
     getKey: rawCardKey,
     items: args.cards,
     onStartReached: () => {
-      if (args.canLoadOlderEvents && !args.loadingOlderEvents) args.onLoadOlderEvents?.();
+      if (args.loadingOlderEvents) return false;
+      if (!args.canLoadOlderEvents) return false;
+      args.onLoadOlderEvents?.();
+      return true;
     },
     stickToBottom: true
   };
@@ -188,7 +191,6 @@ export function RawObservationList({
   const listRef = useRef<VirtualListHandle>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const pageAnchorRef = useRef<{ identity: string; offset: number } | null>(null);
-  const previousLoadingOlderRef = useRef(loadingOlderEvents);
   const cards = useMemo<RawDisplayCard[]>(
     () => rows.map((row) => ({ row, text: rawDisplayEntries(row.preview, displayMode).join('\n') })),
     [displayMode, rows]
@@ -207,44 +209,32 @@ export function RawObservationList({
     },
     [rawScroller]
   );
-  const loadedStartOffset = useCallback((): number | null => {
-    const scroller = rawScroller();
-    const row = scroller?.querySelector<HTMLElement>('[data-index="0"]');
-    if (!scroller || !row) return 35;
-    return row.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
-  }, [rawScroller]);
 
   const loadOlderFromStart = useCallback(() => {
-    const firstIdentity = rows[0]?.identity;
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        const offset = firstIdentity ? (rawRowOffset(firstIdentity) ?? loadedStartOffset()) : null;
-        if (firstIdentity && offset !== null) pageAnchorRef.current = { identity: firstIdentity, offset };
-        onLoadOlderEvents?.();
-      });
-    });
-  }, [loadedStartOffset, onLoadOlderEvents, rawRowOffset, rows]);
-
-  useEffect(() => {
-    if (loadingOlderEvents && !previousLoadingOlderRef.current) {
-      const first = rows[0];
-      const offset = first ? (rawRowOffset(first.identity) ?? loadedStartOffset()) : null;
-      if (first && offset !== null) pageAnchorRef.current = { identity: first.identity, offset };
-    }
-    previousLoadingOlderRef.current = loadingOlderEvents;
-  }, [loadedStartOffset, loadingOlderEvents, rawRowOffset, rows]);
+    const first = rows[0];
+    const offset = first ? rawRowOffset(first.identity) : null;
+    if (first && offset !== null) pageAnchorRef.current = { identity: first.identity, offset };
+    onLoadOlderEvents?.();
+  }, [onLoadOlderEvents, rawRowOffset, rows]);
 
   const firstRowIdentity = rows[0]?.identity ?? null;
   useLayoutEffect(() => {
     const anchor = pageAnchorRef.current;
     if (!anchor || firstRowIdentity === anchor.identity) return;
-    window.setTimeout(() => {
+    let attempts = 0;
+    const restoreAnchor = () => {
       const scroller = rawScroller();
       const offset = rawRowOffset(anchor.identity);
-      if (!scroller || offset === null) return;
-      scroller.scrollTop += offset - anchor.offset;
-    }, 80);
-    pageAnchorRef.current = null;
+      if (scroller && offset !== null) {
+        scroller.scrollTop += offset - anchor.offset;
+        pageAnchorRef.current = null;
+        return;
+      }
+      attempts += 1;
+      if (attempts < 30) requestAnimationFrame(restoreAnchor);
+      else pageAnchorRef.current = null;
+    };
+    restoreAnchor();
   }, [firstRowIdentity, rawRowOffset, rawScroller]);
 
   useImperativeHandle(

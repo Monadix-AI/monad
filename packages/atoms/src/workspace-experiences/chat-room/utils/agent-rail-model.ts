@@ -70,11 +70,12 @@ export function isActiveRailAgent(agent: Participant): boolean {
 }
 
 export function railAgentActivityPhase(agent: Participant): Participant['activityPhase'] {
-  return agent.activityPhase;
+  if (agent.presence !== 'working') return undefined;
+  return agent.activityPhase ?? 'thinking';
 }
 
 export function shouldAnimateRailAgent(agent: Participant): boolean {
-  return railAgentActivityPhase(agent) !== undefined;
+  return agent.presence === 'working';
 }
 
 export function groupProjectRailAgents(agents: readonly Participant[]): {

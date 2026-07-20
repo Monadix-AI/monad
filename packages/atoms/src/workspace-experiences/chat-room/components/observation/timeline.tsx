@@ -1,25 +1,15 @@
+import type { AgentObservationCard } from '@monad/protocol';
 import type { MeshAgentStreamView } from '../../../experience/types.ts';
-import type { ObservationItem, ObservationTimelineEntry, PublicObservationCard } from './types.ts';
+import type { ObservationItem, ObservationTimelineEntry } from './types.ts';
 
 import { DefaultObservationToolPair, ObservationMeta, ObservationText } from '@monad/ui';
-import { workspaceMono as mono } from '@monad/ui/components/AgentAvatar';
-import { MorphChevron } from '@monad/ui/components/MorphChevron';
-import { memo, useEffect, useState } from 'react';
+import { memo } from 'react';
 
-import {
-  privateObservationCard,
-  projectPublicObservationItem,
-  projectPublicObservationPair,
-  renderPrivateObservationCard
-} from './adapters.ts';
+import { renderPrivateObservationCard } from './adapters.ts';
 import { ObservationCardShell, type ObservationCollapseCommand, toolCallSummary } from './card-shell.tsx';
-import {
-  CodexMcpStartupProgressCard,
-  codexMcpStartupUpdate,
-  collapseCodexMcpStartupUpdates
-} from './codex-startup-progress.tsx';
-import { CommandToolCard, CommandToolHeader } from './command-card.tsx';
-import { FileReadToolCard, FileReadToolHeader } from './file-read-card.tsx';
+import { CodexMcpStartupProgressCard, type CodexMcpStartupUpdate } from './codex-startup-progress.tsx';
+import { CommandToolCard, CommandToolHeader, commandToolView } from './command-card.tsx';
+import { FileReadToolCard, FileReadToolHeader, fileReadToolView } from './file-read-card.tsx';
 import { observationContractRawEvents } from './provenance.ts';
 
 const THINKING_LABEL_CSS = `
@@ -70,39 +60,49 @@ export type ObservationTimelineRow = {
   entries: ObservationTimelineEntry[];
 };
 
-function observationItemIdentity(item: ObservationItem): string {
-  return item.dedupeKey ?? item.id;
+function observationCardIdentity(card: AgentObservationCard): string {
+  return card.dedupeKey ?? card.id;
 }
 
-function sameObservationItem(left: ObservationItem, right: ObservationItem): boolean {
+function cardEvent(card: AgentObservationCard): ObservationItem | undefined {
+  const event = card.payload.event;
+  return event && typeof event === 'object' && !Array.isArray(event) ? (event as ObservationItem) : undefined;
+}
+
+function cardToolCall(card: AgentObservationCard): ObservationItem | undefined {
+  const event = card.payload.call;
+  return event && typeof event === 'object' && !Array.isArray(event) ? (event as ObservationItem) : undefined;
+}
+
+function cardToolResult(card: AgentObservationCard): ObservationItem | undefined {
+  const event = card.payload.result;
+  return event && typeof event === 'object' && !Array.isArray(event) ? (event as ObservationItem) : undefined;
+}
+
+function sameObservationItem(left: AgentObservationCard, right: AgentObservationCard): boolean {
   if (
     left.id !== right.id ||
     left.dedupeKey !== right.dedupeKey ||
     left.kind !== right.kind ||
     left.streaming !== right.streaming ||
-    left.text !== right.text ||
-    left.reason !== right.reason ||
     left.at !== right.at
   )
     return false;
-  return (
-    JSON.stringify([left.tool, left.diagnostic, left.provenance]) ===
-    JSON.stringify([right.tool, right.diagnostic, right.provenance])
-  );
+  return JSON.stringify([left.payload, left.provenance]) === JSON.stringify([right.payload, right.provenance]);
 }
 
 export function reconcileObservationItems(
-  previous: readonly ObservationItem[],
-  next: readonly ObservationItem[]
-): ObservationItem[] {
-  if (previous.length === 0) return next as ObservationItem[];
+  previous: readonly AgentObservationCard[],
+  next: readonly AgentObservationCard[]
+): AgentObservationCard[] {
+  if (previous.length === 0) return next as AgentObservationCard[];
   const sharedLength = Math.min(previous.length, next.length);
   const reconciled = [...next];
   let changed = previous.length !== next.length;
   for (let index = 0; index < sharedLength; index += 1) {
     const previousItem = previous[index];
     const nextItem = next[index];
-    if (!previousItem || !nextItem || observationItemIdentity(previousItem) !== observationItemIdentity(nextItem)) {
+    if (!previousItem || !nextItem || observationCardIdentity(previousItem) !== observationCardIdentity(nextItem)) {
       changed = true;
       continue;
     }
@@ -113,131 +113,34 @@ export function reconcileObservationItems(
     }
     reconciled[index] = previousItem;
   }
-  if (!changed && reconciled.every((item, index) => item === previous[index])) return previous as ObservationItem[];
+  if (!changed && reconciled.every((item, index) => item === previous[index]))
+    return previous as AgentObservationCard[];
   return reconciled;
 }
 
 export function observationTimelineEntries(
   items: readonly MeshAgentStreamView['items'][number][],
-  provider: string,
+  _provider: string,
   active = false
 ): ObservationTimelineEntry[] {
-  const entries: ObservationTimelineEntry[] = [];
-  const resultIndexByCallIndex = toolPairResultIndexes(items);
-  const pairedResultIndexes = new Set(resultIndexByCallIndex.values());
-  for (let index = 0; index < items.length; index += 1) {
-    const item = items[index];
-    if (pairedResultIndexes.has(index)) continue;
-    const startupUpdate = item ? codexMcpStartupUpdate(item) : null;
-    if (item && startupUpdate) {
-      const startupItems = [item];
-      const updates = [startupUpdate];
-      while (true) {
-        const candidate = items[index + 1];
-        if (!candidate) break;
-        const candidateUpdate = codexMcpStartupUpdate(candidate);
-        if (!candidateUpdate) break;
-        startupItems.push(candidate);
-        updates.push(candidateUpdate);
-        index += 1;
-      }
-      const latest = startupItems.at(-1) ?? item;
-      entries.push({
-        id: `codex-mcp-startup:${observationItemIdentity(item)}`,
-        kind: 'public',
-        card: { type: 'codex-mcp-startup-progress', updates: collapseCodexMcpStartupUpdates(updates) },
-        timestamp: observationTimestampLabel(latest),
-        contractEvents: startupItems.flatMap((startupItem) => startupItem.provenance.contractEvents)
-      });
-      continue;
-    }
-    const resultIndex = resultIndexByCallIndex.get(index);
-    const result = resultIndex === undefined ? undefined : items[resultIndex];
-    if (item && result && isToolCallEvent(item) && isToolResultEvent(result)) {
-      const itemId = observationItemIdentity(item);
-      entries.push({
-        id: itemId,
-        kind: 'public',
-        card: projectPublicObservationPair(item, result, provider) ?? { type: 'tool-pair', call: item, result },
-        timestamp: observationTimestampLabel(result),
-        contractEvents: [...item.provenance.contractEvents, ...result.provenance.contractEvents]
-      });
-      continue;
-    }
-    if (!item) continue;
-    const itemId = observationItemIdentity(item);
-    const timelineItem =
-      item.kind === 'reasoning' ? { ...item, streaming: active && index === items.length - 1 && item.streaming } : item;
-    const publicCard = projectPublicObservationItem(timelineItem, provider);
-    if (publicCard) {
-      entries.push({
-        id: itemId,
-        kind: 'public',
-        card: publicCard,
-        timestamp: observationTimestampLabel(timelineItem),
-        contractEvents: timelineItem.provenance.contractEvents
-      });
-      continue;
-    }
-    const privateCard = privateObservationCard(timelineItem);
-    if (privateCard) {
-      entries.push({
-        id: itemId,
-        kind: 'private',
-        card: privateCard,
-        timestamp: observationTimestampLabel(timelineItem),
-        contractEvents: timelineItem.provenance.contractEvents
-      });
-      continue;
-    }
-    entries.push({
-      id: itemId,
+  const cards = items;
+  return cards.map((card, index) => {
+    const event = cardEvent(card) ?? cardToolCall(card) ?? cardToolResult(card);
+    const timestampEvent = cardToolResult(card) ?? event;
+    const streaming =
+      card.kind === 'reasoning' && event ? active && index === cards.length - 1 && card.streaming : card.streaming;
+    return {
+      id: observationCardIdentity(card),
       kind: 'public',
-      card: { type: 'message', role: timelineItem.kind === 'user-message' ? 'user' : 'agent', item: timelineItem },
-      timestamp: observationTimestampLabel(timelineItem),
-      contractEvents: timelineItem.provenance.contractEvents
-    });
-  }
-  return entries;
-}
-
-function toolPairResultIndexes(items: readonly MeshAgentStreamView['items'][number][]): Map<number, number> {
-  const resultIndexesByCallId = new Map<string, number[]>();
-  for (let index = 0; index < items.length; index += 1) {
-    const item = items[index];
-    const callId = item && isToolResultEvent(item) ? item.tool?.callId : undefined;
-    if (!callId) continue;
-    const indexes = resultIndexesByCallId.get(callId) ?? [];
-    indexes.push(index);
-    resultIndexesByCallId.set(callId, indexes);
-  }
-
-  const resultIndexByCallIndex = new Map<number, number>();
-  const pairedResultIndexes = new Set<number>();
-  for (let index = 0; index < items.length; index += 1) {
-    const item = items[index];
-    if (!item || !isToolCallEvent(item) || !item.tool?.callId) continue;
-    const resultIndex = resultIndexesByCallId
-      .get(item.tool.callId)
-      ?.find((candidateIndex) => !pairedResultIndexes.has(candidateIndex));
-    if (resultIndex === undefined) continue;
-    resultIndexByCallIndex.set(index, resultIndex);
-    pairedResultIndexes.add(resultIndex);
-  }
-
-  for (let index = 0; index < items.length - 1; index += 1) {
-    if (resultIndexByCallIndex.has(index)) continue;
-    const call = items[index];
-    const result = items[index + 1];
-    if (!call || !result || !isToolCallEvent(call) || !isToolResultEvent(result)) continue;
-    if (pairedResultIndexes.has(index + 1)) continue;
-    const callId = call.tool?.callId;
-    const resultId = result.tool?.callId;
-    if (callId && resultId && callId !== resultId) continue;
-    resultIndexByCallIndex.set(index, index + 1);
-    pairedResultIndexes.add(index + 1);
-  }
-  return resultIndexByCallIndex;
+      card: streaming === card.streaming ? card : { ...card, streaming },
+      timestamp: timestampEvent
+        ? observationTimestampLabel(timestampEvent)
+        : card.at
+          ? formatObservationTime(timestampMsFromIso(card.at) ?? 0)
+          : undefined,
+      contractEvents: card.provenance.contractEvents
+    };
+  });
 }
 
 function visualRoleFromKind(kind: ObservationItem['kind']): 'user' | 'agent' | 'tool' | 'system' {
@@ -280,7 +183,44 @@ function ObservationTimelineCard({
       );
     }
   }
-  if (entry.kind === 'public' && entry.card.type === 'tool-pair') {
+  if (entry.kind === 'public' && entry.card.kind === 'tool') {
+    const call = cardToolCall(entry.card);
+    const result = cardToolResult(entry.card);
+    const toolEvent = call ?? result;
+    if (call && result) {
+      const fileRead = fileReadToolView(call, result, provider);
+      if (fileRead) {
+        return (
+          <ObservationCardShell
+            collapseCommand={collapseCommand}
+            defaultCollapsed
+            header={<FileReadToolHeader view={fileRead} />}
+            raw={raw}
+            timestamp={entry.timestamp}
+            visualRole="tool"
+          >
+            <FileReadToolCard view={fileRead} />
+          </ObservationCardShell>
+        );
+      }
+    }
+    if (toolEvent) {
+      const command = commandToolView(call ?? toolEvent, result ?? toolEvent, provider);
+      if (command) {
+        return (
+          <ObservationCardShell
+            collapseCommand={collapseCommand}
+            defaultCollapsed
+            header={<CommandToolHeader view={command} />}
+            raw={raw}
+            timestamp={entry.timestamp}
+            visualRole="tool"
+          >
+            <CommandToolCard view={command} />
+          </ObservationCardShell>
+        );
+      }
+    }
     return (
       <ObservationCardShell
         collapseCommand={collapseCommand}
@@ -291,7 +231,7 @@ function ObservationTimelineCard({
             label="tool call"
             showSource={false}
             source={provider}
-            title={toolPairName(entry.card.call)}
+            title={toolEvent ? toolPairName(toolEvent) : 'tool'}
           />
         }
         raw={raw}
@@ -299,45 +239,18 @@ function ObservationTimelineCard({
         visualRole="tool"
       >
         <DefaultObservationToolPair
-          callText={toolCallSummary(entry.card.call.text ?? '')}
-          callTool={entry.card.call.tool?.name}
+          callText={toolCallSummary(call?.text ?? '')}
+          callTool={call?.tool?.name}
           provider={provider}
-          resultText={entry.card.result.text ?? ''}
-          resultTool={entry.card.result.tool?.name}
+          resultText={result?.text ?? ''}
+          resultTool={result?.tool?.name}
         />
       </ObservationCardShell>
     );
   }
-  if (entry.kind === 'public' && entry.card.type === 'command-tool') {
-    return (
-      <ObservationCardShell
-        collapseCommand={collapseCommand}
-        defaultCollapsed
-        header={<CommandToolHeader view={entry.card.view} />}
-        raw={raw}
-        timestamp={entry.timestamp}
-        visualRole="tool"
-      >
-        <CommandToolCard view={entry.card.view} />
-      </ObservationCardShell>
-    );
-  }
-  if (entry.kind === 'public' && entry.card.type === 'file-read-tool') {
-    return (
-      <ObservationCardShell
-        collapseCommand={collapseCommand}
-        defaultCollapsed
-        header={<FileReadToolHeader view={entry.card.view} />}
-        raw={raw}
-        timestamp={entry.timestamp}
-        visualRole="tool"
-      >
-        <FileReadToolCard view={entry.card.view} />
-      </ObservationCardShell>
-    );
-  }
-  if (entry.kind === 'public' && entry.card.type === 'diagnostic' && entry.card.item.diagnostic) {
-    const diagnostic = entry.card.item.diagnostic;
+  const entryEvent = entry.kind === 'public' ? cardEvent(entry.card) : undefined;
+  if (entry.kind === 'public' && entry.card.kind === 'diagnostic' && entryEvent?.diagnostic) {
+    const diagnostic = entryEvent.diagnostic;
     return (
       <ObservationCardShell
         collapseCommand={collapseCommand}
@@ -364,7 +277,10 @@ function ObservationTimelineCard({
       </ObservationCardShell>
     );
   }
-  if (entry.kind === 'public' && entry.card.type === 'codex-mcp-startup-progress') {
+  if (entry.kind === 'public' && entry.card.kind === 'codex-mcp-startup-progress') {
+    const updates = (
+      Array.isArray(entry.card.payload.updates) ? entry.card.payload.updates : []
+    ) as CodexMcpStartupUpdate[];
     return (
       <ObservationCardShell
         collapseCommand={collapseCommand}
@@ -380,12 +296,12 @@ function ObservationTimelineCard({
         timestamp={entry.timestamp}
         visualRole="system"
       >
-        <CodexMcpStartupProgressCard updates={entry.card.updates} />
+        <CodexMcpStartupProgressCard updates={updates} />
       </ObservationCardShell>
     );
   }
-  if (entry.kind === 'public' && entry.card.type === 'thinking') {
-    const thinkingStreaming = isStreamingThinkingObservation(entry.card.item);
+  if (entry.kind === 'public' && entry.card.kind === 'reasoning' && entryEvent) {
+    const thinkingStreaming = entry.card.streaming;
     return (
       <ObservationCardShell
         collapseCommand={collapseCommand}
@@ -411,7 +327,7 @@ function ObservationTimelineCard({
         <ObservationText
           contained
           observationRole="agent"
-          text={entry.card.item.text ?? ''}
+          text={entryEvent.text ?? ''}
         />
       </ObservationCardShell>
     );
@@ -426,12 +342,12 @@ function ObservationTimelineCard({
       />
     );
   }
-  if (entry.card.type === 'message') {
+  if (entry.kind === 'public' && entryEvent) {
     return (
       <GenericObservationCard
         collapseCommand={collapseCommand}
         entry={entry}
-        item={entry.card.item}
+        item={entryEvent}
         provider={provider}
       />
     );
@@ -499,39 +415,21 @@ function GenericObservationCard({
 }
 
 export function observationTimelineRows(entries: ObservationTimelineEntry[]): ObservationTimelineRow[] {
-  const rows: ObservationTimelineRow[] = [];
-  for (let index = 0; index < entries.length; index += 1) {
-    const entry = entries[index];
-    if (!entry) continue;
-    if (!isToolEntry(entry)) {
-      rows.push({ id: entry.id, entries: [entry] });
-      continue;
-    }
-    const toolEntries = [entry];
-    while (true) {
-      const next = entries[index + 1];
-      if (!isToolEntry(next)) break;
-      toolEntries.push(next);
-      index += 1;
-    }
-    rows.push({ id: `tool-group:${toolEntries.at(-1)?.id ?? entry.id}`, entries: toolEntries });
-  }
-  return rows;
+  return entries.map((entry) => ({ id: entry.id, entries: [entry] }));
 }
 
 function sameObservationEntrySource(left: ObservationTimelineEntry, right: ObservationTimelineEntry): boolean {
-  if (left.id !== right.id || left.kind !== right.kind || left.card.type !== right.card.type) return false;
+  if (left.id !== right.id || left.kind !== right.kind) return false;
   if (left.kind === 'private' && right.kind === 'private') return left.card.item === right.card.item;
   if (left.kind !== 'public' || right.kind !== 'public') return false;
-  if (left.card.type === 'tool-pair' && right.card.type === 'tool-pair')
-    return left.card.call === right.card.call && left.card.result === right.card.result;
-  if (
-    (left.card.type === 'message' && right.card.type === 'message') ||
-    (left.card.type === 'thinking' && right.card.type === 'thinking') ||
-    (left.card.type === 'diagnostic' && right.card.type === 'diagnostic')
-  )
-    return left.card.item === right.card.item;
-  return left.contractEvents === right.contractEvents;
+  return (
+    left.card === right.card ||
+    (left.card.id === right.card.id &&
+      left.card.kind === right.card.kind &&
+      left.card.streaming === right.card.streaming &&
+      JSON.stringify([left.card.payload, left.card.provenance]) ===
+        JSON.stringify([right.card.payload, right.card.provenance]))
+  );
 }
 
 export function reconcileObservationTimelineRows(
@@ -565,14 +463,6 @@ function ObservationTimelineRowViewImpl({
   provider: string;
 }): React.ReactElement | null {
   const first = row.entries[0];
-  if (row.entries.length > 1 && isToolEntry(first))
-    return (
-      <ToolCallGroup
-        collapseCommand={collapseCommand}
-        entries={row.entries as ToolTimelineEntry[]}
-        provider={provider}
-      />
-    );
   return first ? (
     <ObservationTimelineCard
       collapseCommand={collapseCommand}
@@ -607,63 +497,6 @@ function _ObservationTimelineCards({
   );
 }
 
-type ToolObservationCard = Extract<PublicObservationCard, { type: 'command-tool' | 'file-read-tool' | 'tool-pair' }>;
-type ToolTimelineEntry = ObservationTimelineEntry & { kind: 'public'; card: ToolObservationCard };
-
-function ToolCallGroup({
-  collapseCommand,
-  entries,
-  provider
-}: {
-  collapseCommand?: ObservationCollapseCommand;
-  entries: ToolTimelineEntry[];
-  provider: string;
-}): React.ReactElement {
-  const [collapsed, setCollapsed] = useState(collapseCommand?.collapsed ?? true);
-  const commandCollapsed = collapseCommand?.collapsed;
-  useEffect(() => {
-    if (commandCollapsed === undefined) return;
-    setCollapsed(commandCollapsed);
-  }, [commandCollapsed]);
-  return (
-    <section style={toolGroupStyle}>
-      <button
-        className="workplace-action"
-        onClick={() => setCollapsed((value) => !value)}
-        style={toolGroupHeaderStyle}
-        type="button"
-      >
-        <MorphChevron
-          expanded={!collapsed}
-          size={13}
-          strokeWidth={2}
-        />
-        <span>{entries.length} tool calls</span>
-      </button>
-      {!collapsed ? (
-        <div style={toolGroupBodyStyle}>
-          {entries.map((entry) => (
-            <ObservationTimelineCard
-              collapseCommand={collapseCommand}
-              entry={entry}
-              key={entry.id}
-              provider={provider}
-            />
-          ))}
-        </div>
-      ) : null}
-    </section>
-  );
-}
-
-function isToolEntry(entry: ObservationTimelineEntry | undefined): entry is ToolTimelineEntry {
-  return (
-    !!entry &&
-    entry.kind === 'public' &&
-    (entry.card.type === 'command-tool' || entry.card.type === 'file-read-tool' || entry.card.type === 'tool-pair')
-  );
-}
-
 function toolPairName(item: ObservationItem): string {
   if (item.tool?.name) return item.tool.name;
   const textName = /^Tool call\s+([^\s]+)/.exec((item.text ?? '').trim())?.[1];
@@ -671,21 +504,9 @@ function toolPairName(item: ObservationItem): string {
   return 'tool';
 }
 
-function isToolCallEvent(item: ObservationItem): boolean {
-  return item.kind === 'tool-call';
-}
-
-function isToolResultEvent(item: ObservationItem): boolean {
-  return item.kind === 'tool-result';
-}
-
 function observationTimestampLabel(item: ObservationItem): string | undefined {
   const timestamp = timestampMsFromIso(item.at);
   return timestamp === undefined ? undefined : formatObservationTime(timestamp);
-}
-
-function isStreamingThinkingObservation(item: ObservationItem): boolean {
-  return item.kind === 'reasoning' && item.streaming;
 }
 
 function formatObservationTime(timestamp: number): string {
@@ -702,31 +523,3 @@ function timestampMsFromIso(value: string | undefined): number | undefined {
   const timestamp = Date.parse(value);
   return Number.isNaN(timestamp) ? undefined : timestamp;
 }
-
-const toolGroupStyle: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 8,
-  minWidth: 0
-};
-
-const toolGroupHeaderStyle: React.CSSProperties = {
-  alignSelf: 'flex-start',
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: 6,
-  border: '1px solid color-mix(in srgb, #f59e0b 34%, var(--border))',
-  borderRadius: 999,
-  background: 'color-mix(in srgb, #f59e0b 8%, transparent)',
-  color: 'var(--muted-foreground)',
-  fontFamily: mono,
-  fontSize: 11,
-  padding: '3px 8px'
-};
-
-const toolGroupBodyStyle: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 8,
-  minWidth: 0
-};

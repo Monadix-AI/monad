@@ -40,6 +40,7 @@ import {
 } from '@monad/ui/components/AgentAvatar';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { agentObservationCards } from '../../../agent-adapters/observation-cards.ts';
 import { workspaceExperienceT } from '../../i18n.ts';
 import { projectSessionUiKey, useChatRoomExperienceStore } from '../store.ts';
 import {
@@ -631,10 +632,11 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
     usage
   });
   const observedAgent = observedRailAgent(observation, observedStream, room.railAgents);
+  const observedProvider = observedStream?.provider;
 
   const loadEventPage = useCallback(
     (before?: string | null) => {
-      if (!observedMeshSessionId || !observedTranscriptTargetId || !before) return;
+      if (!observedMeshSessionId || !observedTranscriptTargetId || !before || !observedProvider) return;
       const generation = eventsLoadGenerationRef.current;
       setEventsPages((current) => beginObservationEventLoad(current, before));
       void findOlderEventPage({
@@ -647,10 +649,13 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
             request: { before: observationCursorSchema.parse(cursor), limit: 20 }
           }).unwrap();
           return {
-            items: response.frames.flatMap((frame) =>
-              frame.kind === 'patch'
-                ? frame.operations.flatMap((operation) => (operation.op === 'upsert' ? [operation.event] : []))
-                : []
+            items: agentObservationCards(
+              response.frames.flatMap((frame) =>
+                frame.kind === 'patch'
+                  ? frame.operations.flatMap((operation) => (operation.op === 'upsert' ? [operation.event] : []))
+                  : []
+              ),
+              observedProvider
             ),
             nextCursor: response.nextCursor ?? undefined
           };
@@ -669,7 +674,7 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
         }
       );
     },
-    [observedMeshSessionId, observedTranscriptTargetId, triggerMeshAgentEvents]
+    [observedMeshSessionId, observedProvider, observedTranscriptTargetId, triggerMeshAgentEvents]
   );
 
   const showEvents = useCallback(() => {

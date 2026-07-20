@@ -44,6 +44,7 @@ test('managed thinking messages persist and emit the author display name snapsho
       type: 'text',
       text: '',
       data: {
+        memberId: 'pmem_claude_fable',
         agentName: 'pmem_claude_fable',
         agentDisplayName: 'Fable',
         meshSessionId: 'mesh_snapshot0000',

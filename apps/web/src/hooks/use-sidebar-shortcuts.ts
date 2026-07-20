@@ -1,7 +1,7 @@
 import { matchesKeyboardEvent } from '@tanstack/hotkeys';
-import { useKeyHold } from '@tanstack/react-hotkeys';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
+import { isGlobalKeyboardInputCaptured } from '#/lib/global-keyboard-input-capture';
 import { isApplePlatform } from '#/lib/keyboard';
 import { useWorkspaceShellStore } from '#/lib/workspace-shell-store';
 
@@ -12,6 +12,7 @@ interface UseSidebarShortcutsArgs {
   showSettings: boolean;
   toggleSettings: () => void;
   revealSidebar?: () => void;
+  globalKeyboardInputCaptured?: () => boolean;
 }
 
 export const settingsHotkey = 'Mod+,' as const;
@@ -56,39 +57,6 @@ export function activateVisibleSidebarSession(
   return true;
 }
 
-export function syncVisibleSidebarSessionShortcutBadges(
-  modifierLabel: string | null,
-  root: Pick<Document, 'querySelectorAll'> = document
-): void {
-  const rows = Array.from(root.querySelectorAll<HTMLElement>(sidebarSessionSelector));
-  const shortcuts = new Map(
-    modifierLabel
-      ? visibleSidebarSessionRows(root)
-          .slice(0, sidebarNumberHotkeys.length)
-          .map((row, index) => [row, String(index + 1)] as const)
-      : []
-  );
-
-  for (const row of rows) {
-    const shortcut = shortcuts.get(row);
-    if (shortcut) {
-      if (row.dataset.sidebarShortcut !== shortcut) row.dataset.sidebarShortcut = shortcut;
-      if (row.dataset.sidebarShortcutModifier !== modifierLabel) {
-        row.dataset.sidebarShortcutModifier = modifierLabel ?? '';
-      }
-    } else {
-      if (row.dataset.sidebarShortcut !== undefined) delete row.dataset.sidebarShortcut;
-      if (row.dataset.sidebarShortcutModifier !== undefined) delete row.dataset.sidebarShortcutModifier;
-    }
-    const chip = row.querySelector?.<HTMLElement>('[data-sidebar-shortcut-chip="true"]');
-    if (chip) {
-      const text = shortcut ? `${modifierLabel}${shortcut}` : '';
-      if (chip.hidden === Boolean(shortcut)) chip.hidden = !shortcut;
-      if (chip.textContent !== text) chip.textContent = text;
-    }
-  }
-}
-
 function matchesNewChatHotkey(event: KeyboardEvent, applePlatform: boolean) {
   const hasModifier = applePlatform ? event.metaKey : event.ctrlKey;
   return hasModifier && !event.altKey && !event.shiftKey && (event.key === '`' || event.code === 'Backquote');
@@ -107,10 +75,12 @@ export function createSidebarShortcutHandler({
   showSettings,
   toggleSettings,
   revealSidebar,
-  applePlatform
+  applePlatform,
+  globalKeyboardInputCaptured = isGlobalKeyboardInputCaptured
 }: UseSidebarShortcutsArgs & { applePlatform: boolean }) {
   const platform = applePlatform ? 'mac' : 'windows';
   return (event: KeyboardEvent) => {
+    if (globalKeyboardInputCaptured()) return;
     if (event.isComposing) return;
 
     if (matchesKeyboardEvent(event, settingsHotkey, platform)) {
@@ -156,7 +126,7 @@ export function useSidebarShortcuts({
 }: UseSidebarShortcutsArgs) {
   const applePlatform = useMemo(() => isApplePlatform(), []);
   const shortcutModifierLabel = applePlatform ? '⌘' : 'Ctrl';
-  const showSidebarShortcutBadges = useKeyHold(applePlatform ? 'Meta' : 'Control');
+  const [showSidebarShortcutBadges, setShowSidebarShortcutBadges] = useState(false);
   const revealSidebar = useWorkspaceShellStore((state) => state.revealSidebar);
 
   const shortcutHandler = useMemo(
@@ -189,17 +159,28 @@ export function useSidebarShortcuts({
 
   useEffect(() => {
     if (typeof document === 'undefined') return;
-    const syncBadges = () =>
-      syncVisibleSidebarSessionShortcutBadges(showSidebarShortcutBadges ? shortcutModifierLabel : null);
-    syncBadges();
-    if (!showSidebarShortcutBadges || typeof MutationObserver === 'undefined') return;
-    const observer = new MutationObserver(syncBadges);
-    observer.observe(document.body, { attributeFilter: ['inert'], attributes: true, childList: true, subtree: true });
-    return () => {
-      observer.disconnect();
-      syncVisibleSidebarSessionShortcutBadges(null);
+    const modifierKey = applePlatform ? 'Meta' : 'Control';
+    const hasPrimaryModifier = (event: KeyboardEvent) => (applePlatform ? event.metaKey : event.ctrlKey);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (isGlobalKeyboardInputCaptured()) return;
+      if (event.key === modifierKey || hasPrimaryModifier(event)) setShowSidebarShortcutBadges(true);
     };
-  }, [shortcutModifierLabel, showSidebarShortcutBadges]);
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (event.key === modifierKey || !hasPrimaryModifier(event)) setShowSidebarShortcutBadges(false);
+    };
+    const hide = () => setShowSidebarShortcutBadges(false);
+
+    window.addEventListener('keydown', onKeyDown, sidebarShortcutListenerOptions);
+    window.addEventListener('keyup', onKeyUp, sidebarShortcutListenerOptions);
+    window.addEventListener('blur', hide);
+    document.addEventListener('visibilitychange', hide);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown, sidebarShortcutListenerOptions);
+      window.removeEventListener('keyup', onKeyUp, sidebarShortcutListenerOptions);
+      window.removeEventListener('blur', hide);
+      document.removeEventListener('visibilitychange', hide);
+    };
+  }, [applePlatform]);
 
   return { shortcutModifierLabel, showSidebarShortcutBadges };
 }

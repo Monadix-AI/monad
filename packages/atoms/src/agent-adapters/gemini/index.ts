@@ -18,6 +18,7 @@ import { createOutputEventSource } from '../event-source.ts';
 import { SessionEventJsonlDriver } from '../session-event-jsonl-driver.ts';
 import { meshAgentAdapterSettings } from '../settings.ts';
 import { createBasicSettingsImport } from '../settings-import/index.ts';
+import { archiveGeminiSession, deleteGeminiSession } from './lifecycle.ts';
 import { geminiObservationProjection } from './observation.ts';
 import { createGeminiStreamJsonParser, hasGeminiStreamJsonEvents } from './stream-json.ts';
 
@@ -281,6 +282,8 @@ export const geminiMeshAgentAdapter: MeshAgentProviderAdapter = {
   listSupportedModels(agent) {
     return agent?.modelOptions?.length ? agent.modelOptions : GEMINI_SUPPORTED_MODELS;
   },
+  archiveSession: archiveGeminiSession,
+  deleteSession: deleteGeminiSession,
   createSessionRuntime: createGeminiSessionRuntime,
   buildAuthLaunch(agent) {
     return buildGeminiAuthLaunch(agent, []);

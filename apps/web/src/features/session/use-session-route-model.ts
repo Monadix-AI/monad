@@ -16,7 +16,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import { useT } from '#/components/I18nProvider';
-import { type ViewItem, viewItemKey } from '#/features/session/chat-view-items';
+import { isTransientAttentionUiItem, type ViewItem, viewItemKey } from '#/features/session/chat-view-items';
 import {
   buildCommandMenuItems,
   type SessionCommandMenuItem,
@@ -172,7 +172,8 @@ export function useSessionRouteModel({
   );
   const liveItems = streamData?.items ?? EMPTY_UI_ITEMS;
   const visibleLiveItems = useMemo(
-    () => liveItems.filter((item) => !hiddenViewItemKeys.has(viewItemKey(item) ?? '')),
+    () =>
+      liveItems.filter((item) => isTransientAttentionUiItem(item) || !hiddenViewItemKeys.has(viewItemKey(item) ?? '')),
     [liveItems, hiddenViewItemKeys]
   );
   useContextNotices(visibleLiveItems);

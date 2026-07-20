@@ -277,18 +277,22 @@ export function getMessage(sqlite: Database, transcriptTargetId: string, message
 export function snapshotAgentDisplayName(
   sqlite: Database,
   transcriptTargetId: string,
-  agentName: string,
+  memberOrAgentId: string,
   agentDisplayName: string
 ): number {
   const binds = {
     $target: transcriptTargetId,
-    $agentName: agentName,
+    $memberOrAgentId: memberOrAgentId,
     $agentDisplayName: agentDisplayName
   };
   const predicate = `transcript_target_id = $target
     AND role = 'assistant'
     AND json_valid(data)
-    AND json_extract(data, '$.agentName') = $agentName
+    AND (
+      json_extract(data, '$.memberId') = $memberOrAgentId
+      OR json_extract(data, '$.agentId') = $memberOrAgentId
+      OR json_extract(data, '$.agentName') = $memberOrAgentId
+    )
     AND json_type(data, '$.agentDisplayName') IS NULL`;
   const row = sqlite.query(`SELECT COUNT(*) AS count FROM messages WHERE ${predicate}`).get(binds) as {
     count: number;
@@ -305,7 +309,7 @@ export function findManagedMeshAgentStreamingMessage(
   sqlite: Database,
   transcriptTargetId: string,
   meshSessionId: string,
-  agentName: string
+  memberOrAgentId: string
 ): string | null {
   const row = sqlite
     .query(
@@ -316,11 +320,15 @@ export function findManagedMeshAgentStreamingMessage(
          AND stream_status IN ('pending', 'streaming')
          AND json_extract(data, '$.source') = 'managed-mesh-agent'
          AND json_extract(data, '$.meshSessionId') = $meshSessionId
-         AND json_extract(data, '$.agentName') = $agentName
+         AND (
+           json_extract(data, '$.memberId') = $memberOrAgentId
+           OR json_extract(data, '$.agentId') = $memberOrAgentId
+           OR json_extract(data, '$.agentName') = $memberOrAgentId
+         )
        ORDER BY rowid DESC
        LIMIT 1`
     )
-    .get({ $target: transcriptTargetId, $meshSessionId: meshSessionId, $agentName: agentName }) as {
+    .get({ $target: transcriptTargetId, $meshSessionId: meshSessionId, $memberOrAgentId: memberOrAgentId }) as {
     id: string;
   } | null;
   return row?.id ?? null;
@@ -331,10 +339,10 @@ export function retireManagedMeshAgentStreamingMessage(
   transcriptTargetId: string,
   messageId: string,
   meshSessionId: string,
-  agentName: string,
+  memberOrAgentId: string,
   updatedAt = new Date().toISOString()
 ): boolean {
-  const result = sqlite
+  const row = sqlite
     .query(
       `UPDATE messages
        SET active = 0, stream_status = 'complete', updated_at = $updatedAt
@@ -345,16 +353,21 @@ export function retireManagedMeshAgentStreamingMessage(
          AND stream_status IN ('pending', 'streaming')
          AND json_extract(data, '$.source') = 'managed-mesh-agent'
          AND json_extract(data, '$.meshSessionId') = $meshSessionId
-         AND json_extract(data, '$.agentName') = $agentName`
+         AND (
+           json_extract(data, '$.memberId') = $memberOrAgentId
+           OR json_extract(data, '$.agentId') = $memberOrAgentId
+           OR json_extract(data, '$.agentName') = $memberOrAgentId
+         )
+       RETURNING id`
     )
-    .run({
+    .get({
       $updatedAt: updatedAt,
       $id: messageId,
       $target: transcriptTargetId,
       $meshSessionId: meshSessionId,
-      $agentName: agentName
-    });
-  return result.changes === 1;
+      $memberOrAgentId: memberOrAgentId
+    }) as { id: string } | null;
+  return !!row;
 }
 
 /** Global lookup of a LIVE message's text by id (no session needed). Used to trace a graph edge

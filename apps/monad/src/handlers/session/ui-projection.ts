@@ -312,7 +312,7 @@ export class SessionUiProjector {
       const isLoginEvent =
         event.type === 'mesh.login_required' ||
         event.type === 'mesh.login_resolved' ||
-        (event.type === 'mesh.connection_required' && event.payload.code === 'authentication_failed');
+        event.type === 'mesh.connection_required';
       if (isLoginEvent) this.applyEvent(event);
     }
   }

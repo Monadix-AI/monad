@@ -16,6 +16,7 @@ export interface ObservationPanelState {
 export type ObservationPanelEvent =
   | { type: 'panelOpened' }
   | { type: 'panelClosed' }
+  | { type: 'scopeReset' }
   | { type: 'connectionSnapshot'; snapshot: MeshConnectionSnapshot }
   | { type: 'connectionOpened'; epoch: string; revision: number }
   | { type: 'connectionClosed'; epoch: string }
@@ -38,6 +39,8 @@ export function observationPanelReducer(
       return { ...state, panelOpen: true };
     case 'panelClosed':
       return { ...state, panelOpen: false };
+    case 'scopeReset':
+      return { ...initialObservationPanelState, panelOpen: state.panelOpen };
     case 'modeSelected':
       return { ...state, mode: event.mode };
     case 'connectionSnapshot': {

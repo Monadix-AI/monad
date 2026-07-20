@@ -81,7 +81,7 @@ function targetMention(
 ): ChannelTargetMention | undefined {
   const acpName = mention.id.startsWith('acp:') ? mention.id.slice(4) : undefined;
   if (acpName && acpAgentNames.includes(acpName)) return { id: mention.id, name: mention.name, agentName: acpName };
-  const meshAgentName = mention.id.startsWith('mesh-agent:') ? mention.id.slice('mesh-agent:'.length) : undefined;
+  const meshAgentName = mention.id.startsWith('mesh-agent:') ? mention.id.slice('mesh-agent:'.length) : mention.id;
   if (meshAgentName && meshAgentNames.includes(meshAgentName)) {
     return { id: mention.id, name: mention.name, meshAgentName: meshAgentName };
   }

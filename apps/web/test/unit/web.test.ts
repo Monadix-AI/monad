@@ -2,7 +2,7 @@ import { afterAll, beforeAll, expect, test } from 'bun:test';
 
 import { loopbackTlsOptions } from '#/lib/loopback-tls';
 import { proxyResponseBody } from '#/lib/proxy-stream';
-import { proxyDevWebRequest, resolveDevWebProxyUrl, startWeb } from '../../server/index.ts';
+import { attachWebRoutes, proxyDevWebRequest, resolveDevWebProxyUrl, startWeb } from '../../server/index.ts';
 
 // The web server serves the embedded SPA and proxies /api/* to the daemon (replacing
 // the old Next route handler). Exercise the proxy against a fake provider.
@@ -85,6 +85,59 @@ test('standalone web bridges same-origin WebSocket control stream to the daemon'
   proxy.stop(true);
   upstream.stop(true);
   expect(reply).toBe('daemon:ping');
+});
+
+test('attached release web routes leave daemon API paths to the daemon app', () => {
+  const routes: string[] = [];
+  const app = {
+    get(route: string) {
+      routes.push(route);
+      return app;
+    },
+    ws() {
+      throw new Error('release attach should not register a websocket proxy');
+    }
+  };
+
+  attachWebRoutes(app as unknown as Parameters<typeof attachWebRoutes>[0]);
+
+  expect(routes).toContain('/workspace/*');
+  expect(routes).toContain('/assets/*');
+  expect(routes).not.toContain('/*');
+  expect(routes.some((route) => route === '/v1/*' || route.startsWith('/v1/'))).toBe(false);
+});
+
+test('attached dev web proxy routes leave daemon websocket paths to the daemon app', () => {
+  const prevNodeEnv = Bun.env.NODE_ENV;
+  const prevWebPort = Bun.env.WEB_PORT;
+  Bun.env.NODE_ENV = 'development';
+  Bun.env.WEB_PORT = '3000';
+  const getRoutes: string[] = [];
+  const wsRoutes: string[] = [];
+  const app = {
+    get(route: string) {
+      getRoutes.push(route);
+      return app;
+    },
+    ws(route: string) {
+      wsRoutes.push(route);
+      return app;
+    }
+  };
+
+  try {
+    attachWebRoutes(app as unknown as Parameters<typeof attachWebRoutes>[0]);
+  } finally {
+    if (prevNodeEnv === undefined) delete Bun.env.NODE_ENV;
+    else Bun.env.NODE_ENV = prevNodeEnv;
+    if (prevWebPort === undefined) delete Bun.env.WEB_PORT;
+    else Bun.env.WEB_PORT = prevWebPort;
+  }
+
+  expect(getRoutes).toContain('/workspace/*');
+  expect(getRoutes).not.toContain('/*');
+  expect(wsRoutes).toEqual([]);
+  expect(wsRoutes.some((route) => route === '/v1/*' || route.startsWith('/v1/'))).toBe(false);
 });
 
 test('standalone web preserves WebSocket subprotocols for Vite HMR', async () => {

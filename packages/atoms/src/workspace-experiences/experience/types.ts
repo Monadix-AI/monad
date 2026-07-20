@@ -1,5 +1,5 @@
 import type {
-  AgentObservationEvent,
+  AgentObservationCard,
   MessageAttachmentRef,
   NativeAgentDeliveryId,
   MessageAttachment as ProtocolMessageAttachment
@@ -75,6 +75,7 @@ export interface Message {
   systemTone?: 'error';
   systemDetail?: string;
   systemRaw?: unknown;
+  systemActions?: Array<{ actionId: string; payload?: unknown }>;
   reasoning?: string;
   streaming?: boolean;
   orderKey?: string;
@@ -139,7 +140,7 @@ export interface MeshAgentStreamView {
   workingPath?: string;
   observedAt?: string;
   output: string;
-  items: AgentObservationEvent[];
+  items: AgentObservationCard[];
 }
 
 export interface ApprovalView {

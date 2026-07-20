@@ -88,6 +88,32 @@ test('a row growing outside React (image load, font swap) still keeps the bottom
   expect(after.scrollHeight).toBeGreaterThan(before.scrollHeight);
 });
 
+test('a mounted row growing outside React remeasures before the next row is positioned', async ({ page }) => {
+  await openHarness(page);
+
+  const layout = await page.evaluate(async () => {
+    const rows = [...document.querySelectorAll<HTMLElement>('[role="log"] [data-index]')];
+    const target = rows.find((row, index) => index < rows.length - 1 && row.querySelector('[data-row-id]'));
+    if (!target) throw new Error('expected a rendered virtual row with a following row');
+    const targetIndex = Number(target.dataset.index);
+    const next = rows.find((row) => Number(row.dataset.index) === targetIndex + 1);
+    if (!next) throw new Error('expected the following virtual row to be rendered');
+    const spacer = document.createElement('div');
+    spacer.style.height = '420px';
+    target.querySelector('[data-row-id]')?.append(spacer);
+    for (let frame = 0; frame < 4; frame += 1) await new Promise((resolve) => requestAnimationFrame(resolve));
+    const updatedTarget = document.querySelector<HTMLElement>(`[role="log"] [data-index="${targetIndex}"]`);
+    const updatedNext = document.querySelector<HTMLElement>(`[role="log"] [data-index="${targetIndex + 1}"]`);
+    if (!updatedTarget || !updatedNext) throw new Error('expected adjacent virtual rows to remain rendered');
+    return {
+      nextTop: Math.round(updatedNext.getBoundingClientRect().top),
+      targetBottom: Math.round(updatedTarget.getBoundingClientRect().bottom)
+    };
+  });
+
+  expect(layout.nextTop).toBeGreaterThanOrEqual(layout.targetBottom - 1);
+});
+
 test('appended rows are followed while the reader sits at the bottom', async ({ page }) => {
   await openHarness(page);
 
@@ -256,6 +282,26 @@ test('dragging the scrollbar to the top still loads history after a long hold', 
 
   await page.waitForTimeout(300);
   expect(await state(page).then((value) => value.topLoadCount)).toBe(1);
+});
+
+test('a top edge that was reached before the history cursor was ready loads once the cursor arrives', async ({
+  page
+}) => {
+  await page.goto(`${HARNESS}?topPaging=deferred`);
+  await page.locator('[role="log"] [data-index]').first().waitFor();
+  await expectSettledAtBottom(page);
+
+  await page.evaluate(() => {
+    const scroller = document.querySelector<HTMLElement>('[role="log"]');
+    if (!scroller) return;
+    scroller.scrollTop = 0;
+    scroller.dispatchEvent(new Event('scroll'));
+  });
+  expect(await state(page).then((value) => value.topLoadCount)).toBe(0);
+
+  await page.evaluate(() => window.harness.enableTopPagingCursor());
+  await expect.poll(async () => (await state(page)).topLoading).toBe(true);
+  await expect.poll(async () => (await state(page)).topLoadCount).toBe(1);
 });
 
 // Observation-specific: prepended history can merge into the row already at the viewport top,

@@ -485,10 +485,16 @@ test.describe('workspace sidebar interactions', () => {
     const row = link.locator('xpath=..');
     const viewport = row.locator('[data-sidebar-session-title-viewport]');
     const track = row.locator('[data-sidebar-session-title-track]');
+    const endOverlay = row.locator('[data-sidebar-session-end-overlay]');
+    const endOverlayFade = row.locator('[data-sidebar-session-end-overlay-fade]');
     const actions = row.locator('[data-sidebar-session-actions]');
 
     await expect(viewport).toBeVisible();
-    expect(await actions.evaluate((element) => getComputedStyle(element).position)).toBe('absolute');
+    expect(await endOverlay.evaluate((element) => getComputedStyle(element).position)).toBe('absolute');
+    expect(await actions.evaluate((element) => getComputedStyle(element).position)).not.toBe('absolute');
+    await expect
+      .poll(() => endOverlayFade.evaluate((element) => Math.round(element.getBoundingClientRect().width)))
+      .toBe(24);
     const widths = await row.evaluate((element) => {
       const rowWidth = element.getBoundingClientRect().width;
       const linkWidth = element.querySelector('a')?.getBoundingClientRect().width ?? 0;
@@ -513,6 +519,7 @@ test.describe('workspace sidebar interactions', () => {
     await row.hover();
     const menuButton = row.getByRole('button', { name: 'Item actions' });
     await expect.poll(() => menuButton.evaluate((element) => getComputedStyle(element).opacity)).toBe('1');
+    await expect.poll(() => endOverlay.evaluate((element) => getComputedStyle(element).opacity)).toBe('1');
     await menuButton.click();
     await expect(page.getByRole('menuitem', { name: 'Rename session' })).toBeVisible();
   });

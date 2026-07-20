@@ -2,6 +2,7 @@ import type { ProjectId } from '@monad/protocol';
 
 import { expect, test } from 'bun:test';
 import { monadPowerPack } from '@monad/monad-power-pack';
+import { newId } from '@monad/protocol';
 import { loadManifestAtomPack } from '@monad/sdk-atom';
 
 import { AtomPackRegistry } from '#/handlers/atom-pack/index.ts';
@@ -9,9 +10,11 @@ import { createStore } from '#/store/db/index.ts';
 import { createHttpTransport } from '#/transports/http.ts';
 import { buildHandlers, mockModel, serveTransport } from '../helpers.ts';
 
-const projectId = 'prj_kanbanproj1' as ProjectId;
-
 async function harness() {
+  // A fresh project per harness: the power pack's experience workers run on real timers and are not
+  // cancelled when a test closes its store, so a stray wake-up from an earlier test must not be able
+  // to address the project the current test is asserting on.
+  const projectId = newId('prj') as ProjectId;
   const registry = new AtomPackRegistry();
   const permissions = monadPowerPack.manifest.permissions ?? [];
   await loadManifestAtomPack(monadPowerPack, {
@@ -59,11 +62,11 @@ async function harness() {
     const response = await live.fetch(`${apiBase}/tasks?projectId=${projectId}`);
     return (await response.json()) as { tasks: Array<Record<string, unknown>> };
   };
-  return { live, store, post, list };
+  return { live, store, post, list, projectId };
 }
 
 test('two Kanban tasks use two project sessions in one shared Experience', async () => {
-  const { live, store, post, list } = await harness();
+  const { live, store, post, list, projectId } = await harness();
   try {
     const first = await post('/tasks/create', { projectId, title: 'A', idempotencyKey: 'A' });
     const second = await post('/tasks/create', { projectId, title: 'B', idempotencyKey: 'B' });
@@ -78,7 +81,7 @@ test('two Kanban tasks use two project sessions in one shared Experience', async
 });
 
 test('proposal approval runs autopilot and acceptance return requeues execution', async () => {
-  const { live, store, post, list } = await harness();
+  const { live, store, post, list, projectId } = await harness();
   try {
     const created = await post('/tasks/create', { projectId, title: 'A', idempotencyKey: 'A' });
     const taskId = String(created.task.id);

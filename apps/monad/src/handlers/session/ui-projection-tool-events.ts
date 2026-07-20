@@ -127,6 +127,7 @@ export function applyToolEvent(m: ProjectionMutations, event: Event): SessionUiE
               data: {
                 ...(p.meshSessionId ? { meshSessionId: p.meshSessionId } : {}),
                 agentName: p.agentName,
+                ...(p.authAgentName ? { authAgentName: p.authAgentName } : {}),
                 provider: p.provider,
                 reason: p.reason
               },

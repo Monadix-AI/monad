@@ -10,6 +10,7 @@ import { codexMeshAgentAdapter } from './codex/index.ts';
 import { geminiMeshAgentAdapter } from './gemini/index.ts';
 import { hermesMeshAgentAdapter } from './hermes/index.ts';
 import { toAgentObservationEvent } from './neutral-observation.ts';
+import { agentObservationCards } from './observation-cards.ts';
 import { openClawMeshAgentAdapter } from './openclaw/index.ts';
 import { qwenMeshAgentAdapter } from './qwen/index.ts';
 
@@ -28,6 +29,7 @@ const adapters: MeshAgentProviderAdapter[] = [
 for (const adapter of adapters) {
   adapter.observationRuntime = {
     toAgentObservationEvent: (event) => toAgentObservationEvent(event, adapter.observation),
+    toAgentObservationCards: (events, provider) => agentObservationCards(events, provider),
     structuredEvents: (args) => meshAgentStructuredEvents({ ...args, provider: adapter.provider, adapter }),
     eventsAreGenerating: (events) => meshAgentEventsAreGenerating(events, { provider: adapter.provider, adapter }),
     usageLimitMeter: (output) => meshAgentUsageLimitMeter({ output, provider: adapter.provider, adapter })

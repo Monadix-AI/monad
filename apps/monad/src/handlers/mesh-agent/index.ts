@@ -84,6 +84,9 @@ export function createMeshAgentModule({ host, store, config }: MeshAgentDeps) {
     if (error instanceof Error && error.message.includes('MeshAgent session is not running')) {
       throw new HandlerError('conflict', error.message, 'MESH_SESSION_NOT_RUNNING');
     }
+    if (error instanceof Error && error.message.includes('MeshAgent not found or disabled')) {
+      throw new HandlerError('not_found', error.message, 'MESH_AGENT_NOT_FOUND');
+    }
     throw error;
   }
 
@@ -310,7 +313,11 @@ export function createMeshAgentModule({ host, store, config }: MeshAgentDeps) {
 
     async startAuth({ agentName }: { agentName: string }): Promise<StartMeshAgentAuthResponse> {
       await requireConfig();
-      return { session: await host.startAuth(agentName) };
+      try {
+        return { session: await host.startAuth(agentName) };
+      } catch (error) {
+        mapMeshAgentError(error);
+      }
     },
 
     getAuth({ id, controlToken }: { id: string; controlToken: string }): GetMeshAgentAuthSessionResponse {

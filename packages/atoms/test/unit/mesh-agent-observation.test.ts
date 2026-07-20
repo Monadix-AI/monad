@@ -1,4 +1,4 @@
-import type { AgentObservationEvent, MeshAgentObservationEvent } from '@monad/protocol';
+import type { AgentObservationCard, AgentObservationEvent, MeshAgentObservationEvent } from '@monad/protocol';
 import type { ObservationTimelineEntry } from '../../src/workspace-experiences/chat-room/components/observation/types.ts';
 import type { MeshAgentStreamView } from '../../src/workspace-experiences/experience/types.ts';
 
@@ -8,6 +8,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import { builtinAgentAdapters } from '../../src/agent-adapters/index.ts';
 import { toAgentObservationEvent } from '../../src/agent-adapters/neutral-observation.ts';
+import { agentObservationCards } from '../../src/agent-adapters/observation-cards.ts';
 import { rawJsonText } from '../../src/workspace-experiences/chat-room/components/observation/card-shell.tsx';
 import {
   jumpSummaryToLoadedTop,
@@ -75,6 +76,89 @@ test('Codex live and history records project the same turn boundaries', () => {
       { at: '2026-07-14T03:33:50.000Z', kind: 'turn-end', reason: 'completed' }
     ]
   });
+});
+
+test('Codex live dotted app-server events project as structured observation cards', () => {
+  const events = meshAgentNeutralStreamItems({
+    id: 'mesh_codex_live',
+    provider: 'codex',
+    mode: 'live',
+    output: [
+      JSON.stringify({ type: 'thread.started', thread_id: 'thread_1' }),
+      JSON.stringify({ type: 'turn.started', turn_id: 'turn_1' }),
+      JSON.stringify({
+        type: 'item.started',
+        item: {
+          id: 'item_tool',
+          type: 'command_execution',
+          command: 'bun test packages/atoms/test/unit/mesh-agent-observation.test.ts',
+          status: 'in_progress'
+        }
+      }),
+      JSON.stringify({
+        type: 'item.completed',
+        item: {
+          id: 'item_tool',
+          type: 'command_execution',
+          command: 'bun test packages/atoms/test/unit/mesh-agent-observation.test.ts',
+          aggregated_output: 'ok',
+          exit_code: 0,
+          status: 'completed'
+        }
+      }),
+      JSON.stringify({
+        type: 'item.completed',
+        item: {
+          id: 'item_message',
+          type: 'agent_message',
+          text: 'Live projection is fixed.'
+        }
+      })
+    ].join('\n')
+  });
+
+  expect(
+    events.map(({ kind, provenance, text, tool }) => {
+      const contractEvent = provenance.contractEvents[0] as { providerEventType?: string } | undefined;
+      return {
+        kind,
+        providerEventType: contractEvent?.providerEventType,
+        text,
+        tool
+      };
+    })
+  ).toEqual([
+    { kind: 'system', providerEventType: 'thread/started', text: 'Thread started', tool: undefined },
+    { kind: 'turn-start', providerEventType: 'turn/started', text: 'turn/started', tool: undefined },
+    {
+      kind: 'tool-call',
+      providerEventType: 'function_call',
+      text: 'Tool call command_execution bun test packages/atoms/test/unit/mesh-agent-observation.test.ts',
+      tool: {
+        input: 'bun test packages/atoms/test/unit/mesh-agent-observation.test.ts',
+        name: 'command_execution',
+        status: 'in_progress'
+      }
+    },
+    {
+      kind: 'tool-result',
+      providerEventType: 'function_call_output',
+      text: 'ok',
+      tool: {
+        exitCode: 0,
+        input: 'bun test packages/atoms/test/unit/mesh-agent-observation.test.ts',
+        name: 'command_execution',
+        output: 'ok',
+        status: 'completed'
+      }
+    },
+    {
+      kind: 'assistant-message',
+      providerEventType: 'agent_message',
+      text: 'Live projection is fixed.',
+      tool: undefined
+    }
+  ]);
 });
 
 test('Claude history starts on text prompts, not tool results, and ends on the settled assistant message', () => {
@@ -170,13 +254,57 @@ test('Claude live output ends once from result instead of also ending on its ass
   ]);
 });
 
-// The timeline renders neutral AgentObservationEvent[]; these tests build legacy events (via
+const cardsFromNeutral = (items: readonly AgentObservationEvent[], provider: string): AgentObservationCard[] =>
+  agentObservationCards(items, provider);
+
+const cardsFromEvents = (provider: string, ...events: AgentObservationEvent[]): AgentObservationCard[] =>
+  cardsFromNeutral(events, provider);
+
+const cardEventPayload = (card: AgentObservationCard): AgentObservationEvent | undefined => {
+  const event = card.payload.event ?? card.payload.call ?? card.payload.result;
+  return event && typeof event === 'object' && !Array.isArray(event) ? (event as AgentObservationEvent) : undefined;
+};
+
+const cardToolCallPayload = (card: AgentObservationCard): AgentObservationEvent | undefined => {
+  const event = card.payload.call;
+  return event && typeof event === 'object' && !Array.isArray(event) ? (event as AgentObservationEvent) : undefined;
+};
+
+const cardToolResultPayload = (card: AgentObservationCard): AgentObservationEvent | undefined => {
+  const event = card.payload.result;
+  return event && typeof event === 'object' && !Array.isArray(event) ? (event as AgentObservationEvent) : undefined;
+};
+
+const cardFromEvent = (event: AgentObservationEvent, provider = 'codex'): AgentObservationCard => {
+  const card = cardsFromNeutral([event], provider)[0];
+  if (!card) {
+    throw new Error('Expected event to project to a card');
+  }
+  return card;
+};
+
+const messageCard = (id: string, text: string, streaming = false, provider = 'codex'): AgentObservationCard =>
+  cardFromEvent(
+    {
+      id,
+      kind: 'assistant-message',
+      streaming,
+      text,
+      provenance: { contractEvents: [{ id, text }] }
+    },
+    provider
+  );
+
+// The timeline renders adapter-owned AgentObservationCard[]; these tests build legacy events (via
 // meshAgentStreamItems), so convert them the same way the daemon's ui plane does before rendering.
 const renderTimeline = (items: MeshAgentObservationEvent[], provider = 'codex') =>
   observationTimelineEntries(
-    items
-      .map((event) => toAgentObservationEvent(event))
-      .filter((event): event is AgentObservationEvent => event !== null),
+    cardsFromNeutral(
+      items
+        .map((event) => toAgentObservationEvent(event))
+        .filter((event): event is AgentObservationEvent => event !== null),
+      provider
+    ),
     provider
   );
 
@@ -376,7 +504,8 @@ test('MeshAgent observation projects thinking records from all adapters', () => 
       providerEventType: expected.type,
       text: expected.text
     });
-    expect(renderTimeline(item ? [item] : [])[0]?.card.type).toBe('thinking');
+    const [entry] = renderTimeline(item ? [item] : []);
+    expect(entry?.kind === 'public' ? entry.card.kind : entry?.kind).toBe('reasoning');
   }
 });
 
@@ -460,24 +589,27 @@ test('thinking timeline rows use dedupe identity and keep each run raw', () => {
   const firstRaw = [{ type: 'system', subtype: 'thinking_tokens', estimated_tokens: 25, uuid: 'think-a' }];
   const secondRaw = [{ type: 'system', subtype: 'thinking_tokens', estimated_tokens: 80, uuid: 'think-b' }];
   const entries = observationTimelineEntries(
-    [
-      {
-        id: 'mesh_claude:thinking-tokens',
-        dedupeKey: 'claude-code:think-a:agent:thinking_tokens_delta',
-        kind: 'reasoning',
-        streaming: true,
-        text: 'Thinking… · 25 tokens',
-        provenance: { contractEvents: firstRaw }
-      },
-      {
-        id: 'mesh_claude:thinking-tokens',
-        dedupeKey: 'claude-code:think-b:agent:thinking_tokens_delta',
-        kind: 'reasoning',
-        streaming: true,
-        text: 'Thinking… · 80 tokens',
-        provenance: { contractEvents: secondRaw }
-      }
-    ],
+    cardsFromNeutral(
+      [
+        {
+          id: 'mesh_claude:thinking-tokens',
+          dedupeKey: 'claude-code:think-a:agent:thinking_tokens_delta',
+          kind: 'reasoning',
+          streaming: true,
+          text: 'Thinking… · 25 tokens',
+          provenance: { contractEvents: firstRaw }
+        },
+        {
+          id: 'mesh_claude:thinking-tokens',
+          dedupeKey: 'claude-code:think-b:agent:thinking_tokens_delta',
+          kind: 'reasoning',
+          streaming: true,
+          text: 'Thinking… · 80 tokens',
+          provenance: { contractEvents: secondRaw }
+        }
+      ],
+      'claude-code'
+    ),
     'claude-code'
   );
 
@@ -490,13 +622,16 @@ test('thinking timeline rows use dedupe identity and keep each run raw', () => {
 });
 
 test('thinking shimmer is limited to the latest reasoning item of a running stream', () => {
-  const reasoning = {
-    id: 'thinking_1',
-    kind: 'reasoning' as const,
-    streaming: true,
-    text: 'Thinking… · 151 tokens',
-    provenance: { contractEvents: [{ type: 'system', subtype: 'thinking_tokens', estimated_tokens: 151 }] }
-  };
+  const reasoning = cardFromEvent(
+    {
+      id: 'thinking_1',
+      kind: 'reasoning',
+      streaming: true,
+      text: 'Thinking… · 151 tokens',
+      provenance: { contractEvents: [{ type: 'system', subtype: 'thinking_tokens', estimated_tokens: 151 }] }
+    },
+    'claude-code'
+  );
   const render = (items: MeshAgentStreamView['items'], active: boolean) => {
     const row = observationTimelineRows(observationTimelineEntries(items, 'claude-code', active))[0];
     if (!row) throw new Error('Expected a thinking timeline row');
@@ -508,13 +643,16 @@ test('thinking shimmer is limited to the latest reasoning item of a running stre
     render(
       [
         reasoning,
-        {
-          id: 'answer_1',
-          kind: 'assistant-message',
-          streaming: false,
-          text: 'Done',
-          provenance: { contractEvents: [{ type: 'assistant', text: 'Done' }] }
-        }
+        cardFromEvent(
+          {
+            id: 'answer_1',
+            kind: 'assistant-message',
+            streaming: false,
+            text: 'Done',
+            provenance: { contractEvents: [{ type: 'assistant', text: 'Done' }] }
+          },
+          'claude-code'
+        )
       ],
       true
     )
@@ -576,7 +714,7 @@ test('Codex WARN and ERROR logs project to diagnostic cards without ending the t
     }
   ]);
 
-  const markup = observationTimelineRows(observationTimelineEntries(items, 'codex'))
+  const markup = observationTimelineRows(observationTimelineEntries(cardsFromNeutral(items, 'codex'), 'codex'))
     .map((row) => renderToStaticMarkup(React.createElement(ObservationTimelineRowView, { provider: 'codex', row })))
     .join('');
   expect(markup).toContain('border-destructive/45');
@@ -863,17 +1001,21 @@ test('Codex app-server observation renders user message lifecycle as a shared me
   ].join('\n');
   const entries = renderTimeline(meshAgentStreamItems({ id: 'mesh_codex0000000', provider: 'codex', output }));
 
-  expect(entries).toMatchObject([
+  expect(
+    entries.map((entry) =>
+      entry.kind === 'public'
+        ? {
+            kind: entry.card.kind,
+            role: cardEventPayload(entry.card)?.kind === 'user-message' ? 'user' : 'agent',
+            text: cardEventPayload(entry.card)?.text
+          }
+        : { kind: entry.kind }
+    )
+  ).toEqual([
     {
-      card: {
-        item: {
-          kind: 'user-message',
-          text: 'You have just joined this Workplace Project.\nUse project_post for the public status message.'
-        },
-        role: 'user',
-        type: 'message'
-      },
-      kind: 'public'
+      kind: 'message',
+      role: 'user',
+      text: 'You have just joined this Workplace Project.\nUse project_post for the public status message.'
     }
   ]);
 });
@@ -935,16 +1077,18 @@ test('chat timeline groups consecutive Codex MCP startup statuses and keeps each
     at: `2026-07-18T10:00:0${index}.000Z`
   }));
 
-  const entries = observationTimelineEntries(items, 'codex');
+  const entries = observationTimelineEntries(cardsFromNeutral(items, 'codex'), 'codex');
   expect(entries).toMatchObject([
     {
       kind: 'public',
       card: {
-        type: 'codex-mcp-startup-progress',
-        updates: [
-          { name: 'codex-security', status: 'ready' },
-          { name: 'node_repl', status: 'ready' }
-        ]
+        kind: 'codex-mcp-startup-progress',
+        payload: {
+          updates: [
+            { name: 'codex-security', status: 'ready' },
+            { name: 'node_repl', status: 'ready' }
+          ]
+        }
       },
       timestamp: '10:00:02'
     }
@@ -970,22 +1114,31 @@ test('chat timeline recognizes Codex MCP startup raw records after legacy system
 
   expect(
     observationTimelineEntries(
-      [
-        {
-          id: 'legacy-startup',
-          kind: 'system',
-          streaming: false,
-          text: 'codex_apps ready',
-          provenance: { contractEvents: [raw] }
-        }
-      ],
+      cardsFromNeutral(
+        [
+          {
+            id: 'legacy-startup',
+            kind: 'system',
+            streaming: false,
+            text: 'codex_apps ready',
+            provenance: { contractEvents: [raw] }
+          }
+        ],
+        'mesh-agent'
+      ),
       'mesh-agent'
     )
   ).toEqual([
     {
       id: 'codex-mcp-startup:legacy-startup',
       kind: 'public',
-      card: { type: 'codex-mcp-startup-progress', updates: [{ name: 'codex_apps', status: 'ready' }] },
+      card: {
+        id: 'codex-mcp-startup:legacy-startup',
+        kind: 'codex-mcp-startup-progress',
+        streaming: false,
+        payload: { updates: [{ name: 'codex_apps', status: 'ready' }] },
+        provenance: { contractEvents: [raw] }
+      },
       contractEvents: [raw]
     }
   ]);
@@ -1000,29 +1153,32 @@ test('chat timeline splits Codex startup groups and renders progress copy with e
     provenance: { contractEvents: [{ method: 'mcpServer/startupStatus/updated', params }] }
   });
   const entries = observationTimelineEntries(
-    [
-      startup('first', { name: 'codex-security', status: 'failed', error: 'timeout' }),
-      {
-        id: 'message',
-        kind: 'assistant-message',
-        streaming: false,
-        text: 'Continuing.',
-        provenance: { contractEvents: [{ type: 'assistant', text: 'Continuing.' }] }
-      },
-      startup('second', {})
-    ],
+    cardsFromNeutral(
+      [
+        startup('first', { name: 'codex-security', status: 'failed', error: 'timeout' }),
+        {
+          id: 'message',
+          kind: 'assistant-message',
+          streaming: false,
+          text: 'Continuing.',
+          provenance: { contractEvents: [{ type: 'assistant', text: 'Continuing.' }] }
+        },
+        startup('second', {})
+      ],
+      'codex'
+    ),
     'codex'
   );
   const rows = observationTimelineRows(entries);
 
-  expect(entries.map((entry) => (entry.kind === 'public' ? entry.card.type : entry.kind))).toEqual([
+  expect(entries.map((entry) => (entry.kind === 'public' ? entry.card.kind : entry.kind))).toEqual([
     'codex-mcp-startup-progress',
     'message',
     'codex-mcp-startup-progress'
   ]);
   expect(
     rows
-      .filter((row) => row.entries[0]?.kind === 'public' && row.entries[0].card.type === 'codex-mcp-startup-progress')
+      .filter((row) => row.entries[0]?.kind === 'public' && row.entries[0].card.kind === 'codex-mcp-startup-progress')
       .map((row) => renderToStaticMarkup(React.createElement(ObservationTimelineRowView, { provider: 'codex', row })))
       .join('\n')
   ).toContain('Startup progress');
@@ -1216,25 +1372,25 @@ test('Codex raw response tool call and output pair into one command timeline car
   ].join('\n');
 
   const entries = observationTimelineEntries(
-    meshAgentNeutralStreamItems({ id: 'mesh_codex0000000', provider: 'codex', output }),
+    cardsFromNeutral(meshAgentNeutralStreamItems({ id: 'mesh_codex0000000', provider: 'codex', output }), 'codex'),
     'codex'
   );
 
   expect(
     entries.map((entry) =>
-      entry.kind === 'public' && entry.card.type === 'command-tool'
+      entry.kind === 'public' && entry.card.kind === 'tool'
         ? {
-            type: entry.card.type,
-            command: entry.card.view.command,
-            output: entry.card.view.output,
+            type: entry.card.kind,
+            command: cardToolCallPayload(entry.card)?.tool?.input,
+            output: cardToolResultPayload(entry.card)?.tool?.output,
             rawEvents: observationContractRawEvents(entry.contractEvents)
           }
         : { type: entry.kind }
     )
   ).toEqual([
     {
-      type: 'command-tool',
-      command: '{\n  "command": "git status"\n}',
+      type: 'tool',
+      command: undefined,
       output: 'On branch main',
       rawEvents: [
         {
@@ -1410,10 +1566,10 @@ test('Codex app-server observation projects completed MCP tool calls with argume
 
   expect(
     renderTimeline(items).map((entry) => ({
-      type: entry.card?.type,
+      type: entry.kind === 'public' ? entry.card.kind : entry.card.type,
       rawEvents: observationContractRawEvents(entry.contractEvents)
     }))
-  ).toEqual([{ type: 'command-tool', rawEvents: [raw] }]);
+  ).toEqual([{ type: 'tool', rawEvents: [raw] }]);
 });
 
 test('Codex app-server observation projects turns page responses', () => {
@@ -1463,12 +1619,12 @@ test('Codex app-server observation projects turns page responses', () => {
     { role: 'agent', type: 'item/agentMessage', text: 'The settings form owns this surface.' },
     { role: 'system', type: 'turn-end', text: 'Turn completed' }
   ]);
-  expect(renderTimeline(items).map((entry) => entry.card?.type)).toEqual([
+  expect(renderTimeline(items).map((entry) => (entry.kind === 'public' ? entry.card.kind : entry.card.type))).toEqual([
+    'turn',
     'message',
+    'tool',
     'message',
-    'command-tool',
-    'message',
-    'message'
+    'turn'
   ]);
 });
 
@@ -1690,7 +1846,10 @@ test('observation panel shows a token usage meter entry when Codex reports token
         tag: 'Codex',
         status: 'running',
         output,
-        items: meshAgentNeutralStreamItems({ id: 'mesh_codex0000000', provider: 'codex', output })
+        items: cardsFromNeutral(
+          meshAgentNeutralStreamItems({ id: 'mesh_codex0000000', provider: 'codex', output }),
+          'codex'
+        )
       },
       // The panel renders whatever meter it's given (server-normalized in production); it no longer
       // re-derives one from `stream.output` itself.
@@ -1715,7 +1874,10 @@ test('observation panel shows a usage limits entry when the stream has limit dat
         tag: 'Codex',
         status: 'running',
         output,
-        items: meshAgentNeutralStreamItems({ id: 'mesh_codex0000000', provider: 'codex', output })
+        items: cardsFromNeutral(
+          meshAgentNeutralStreamItems({ id: 'mesh_codex0000000', provider: 'codex', output }),
+          'codex'
+        )
       },
       usageMeter
     })
@@ -1738,7 +1900,10 @@ test('observation panel renders bootstrap loading outside the observation timeli
         tag: 'Codex',
         status: 'ok',
         output: staleOutput,
-        items: meshAgentNeutralStreamItems({ id: 'mesh_codex0000000', provider: 'codex', output: staleOutput })
+        items: cardsFromNeutral(
+          meshAgentNeutralStreamItems({ id: 'mesh_codex0000000', provider: 'codex', output: staleOutput }),
+          'codex'
+        )
       }
     })
   );
@@ -1782,15 +1947,7 @@ test('observation panel exposes a retry action after an earlier-events page fail
         tag: 'Codex',
         status: 'ok',
         output: 'Current activity',
-        items: [
-          {
-            id: 'evt_current',
-            kind: 'assistant-message',
-            streaming: false,
-            text: 'Current activity',
-            provenance: { contractEvents: [{ id: 'source_current' }] }
-          }
-        ]
+        items: [messageCard('evt_current', 'Current activity')]
       }
     })
   );
@@ -1812,15 +1969,7 @@ test('observation panel renders show events as the first list placeholder when a
         tag: 'Codex',
         status: 'ok',
         output: 'Agent output',
-        items: [
-          {
-            id: 'evt_100000000000',
-            kind: 'assistant-message',
-            streaming: false,
-            text: 'Agent output',
-            provenance: { contractEvents: [{ id: 'source_1' }] }
-          }
-        ]
+        items: [messageCard('evt_100000000000', 'Agent output')]
       }
     })
   );
@@ -1836,15 +1985,7 @@ test('observation events header keeps a fixed footprint throughout the active ev
     tag: 'Codex',
     status: 'ok',
     output: 'Current activity',
-    items: [
-      {
-        id: 'evt_100000000000',
-        kind: 'assistant-message',
-        streaming: false,
-        text: 'Current activity',
-        provenance: { contractEvents: [{ id: 'source_1' }] }
-      }
-    ]
+    items: [messageCard('evt_100000000000', 'Current activity')]
   } satisfies MeshAgentStreamView;
   const renderEventsState = (props: {
     canLoadOlderEvents?: boolean;
@@ -1889,7 +2030,8 @@ test('observation panel summary mode folds turn details and shows only the final
         tag: 'Codex',
         status: 'ok',
         output: '',
-        items: [
+        items: cardsFromEvents(
+          'codex',
           {
             id: 'evt_1',
             kind: 'turn-start',
@@ -1929,7 +2071,7 @@ test('observation panel summary mode folds turn details and shows only the final
             at: '2026-07-15T00:01:12.000Z',
             provenance: { contractEvents: [{ id: 'source_5' }] }
           }
-        ]
+        )
       }
     })
   );
@@ -1952,7 +2094,8 @@ test('observation panel accepts a controlled render mode command', () => {
         tag: 'Codex',
         status: 'running',
         output: '',
-        items: [
+        items: cardsFromEvents(
+          'codex',
           {
             id: 'evt_1',
             kind: 'turn-start',
@@ -1968,7 +2111,7 @@ test('observation panel accepts a controlled render mode command', () => {
             at: '2026-07-15T00:00:05.000Z',
             provenance: { contractEvents: [{ id: 'source_2' }] }
           }
-        ]
+        )
       }
     })
   );
@@ -1991,15 +2134,7 @@ test('observation header uses content semantics and never exposes runtime stop',
         tag: 'Codex',
         status: 'running',
         output: '',
-        items: [
-          {
-            id: 'evt_1',
-            kind: 'assistant-message',
-            streaming: false,
-            text: 'Working',
-            provenance: { contractEvents: [{ id: 'source_1' }] }
-          }
-        ]
+        items: [messageCard('evt_1', 'Working')]
       }
     })
   );
@@ -2030,17 +2165,17 @@ test('Claude Code observation projects transcript user events as user message ca
 
   expect(
     entries.map((entry) =>
-      entry.kind === 'public' && entry.card.type === 'message'
+      entry.kind === 'public' && entry.card.kind === 'message'
         ? {
-            kind: entry.card.item.kind,
-            role: entry.card.role,
-            text: entry.card.item.text,
-            type: entry.card.type
+            kind: cardEventPayload(entry.card)?.kind,
+            role: cardEventPayload(entry.card)?.kind === 'user-message' ? 'user' : 'agent',
+            text: cardEventPayload(entry.card)?.text,
+            type: entry.card.kind
           }
-        : { kind: entry.kind, type: entry.card.type }
+        : { kind: entry.kind, type: entry.kind === 'public' ? entry.card.kind : entry.card.type }
     )
   ).toEqual([
-    { kind: 'turn-start', role: 'agent', text: 'Turn started', type: 'message' },
+    { kind: 'public', type: 'turn' },
     {
       kind: 'user-message',
       role: 'user',
@@ -2076,19 +2211,24 @@ test('Codex app-server observation renders a standalone commandExecution result 
     }
   ]);
 
-  expect(entries).toMatchObject([
+  expect(
+    entries.map((entry) =>
+      entry.kind === 'public'
+        ? {
+            kind: entry.card.kind,
+            input: cardEventPayload(entry.card)?.tool?.input,
+            output: cardEventPayload(entry.card)?.tool?.output,
+            status: cardEventPayload(entry.card)?.tool?.status,
+            timestamp: entry.timestamp
+          }
+        : { kind: entry.kind }
+    )
+  ).toEqual([
     {
-      card: {
-        type: 'command-tool',
-        view: {
-          command: 'monad project read | tail -100',
-          cwd: '/tmp/project-agent',
-          output: '{"messages":[{"text":"ok"}]}',
-          status: 'completed',
-          type: 'commandExecution'
-        }
-      },
-      kind: 'public',
+      kind: 'tool',
+      input: 'monad project read | tail -100',
+      output: '{"messages":[{"text":"ok"}]}',
+      status: 'completed',
       timestamp: '06:28:03'
     }
   ]);
@@ -2146,8 +2286,8 @@ test('observation card projection maps Codex and Claude command tools to the sha
     }
   ]);
 
-  expect(codexEntries).toMatchObject([{ kind: 'public', card: { type: 'command-tool' } }]);
-  expect(claudeEntries).toMatchObject([{ kind: 'public', card: { type: 'command-tool' } }]);
+  expect(codexEntries.map((entry) => (entry.kind === 'public' ? entry.card.kind : entry.kind))).toEqual(['tool']);
+  expect(claudeEntries.map((entry) => (entry.kind === 'public' ? entry.card.kind : entry.kind))).toEqual(['tool']);
 });
 
 test('Claude Code observation pairs nested SDK tool result with its call', () => {
@@ -2180,27 +2320,23 @@ test('Claude Code observation pairs nested SDK tool result with its call', () =>
     { kind: 'tool-result', name: 'tool' }
   ]);
 
-  const entries = observationTimelineEntries(items, 'claude-code');
+  const entries = observationTimelineEntries(cardsFromNeutral(items, 'claude-code'), 'claude-code');
   expect(
     entries.map((entry) =>
-      entry.kind === 'public' && entry.card.type === 'command-tool'
+      entry.kind === 'public' && entry.card.kind === 'tool'
         ? {
-            type: entry.card.type,
-            command: entry.card.view.command,
-            commandLanguage: entry.card.view.commandLanguage,
-            output: entry.card.view.output,
-            outputLanguage: entry.card.view.outputLanguage,
+            type: entry.card.kind,
+            command: cardToolCallPayload(entry.card)?.tool?.input,
+            output: cardToolResultPayload(entry.card)?.tool?.output,
             rawEvents: observationContractRawEvents(entry.contractEvents)
           }
         : { type: entry.kind }
     )
   ).toEqual([
     {
-      type: 'command-tool',
-      command,
-      commandLanguage: 'bash',
+      type: 'tool',
+      command: { command },
       output: result,
-      outputLanguage: 'bash',
       rawEvents: [callRecord, resultRecord]
     }
   ]);
@@ -2242,25 +2378,25 @@ test('Claude Code observation pairs a tool result across intervening events by c
     { kind: 'tool-result', callId, status: 'completed' }
   ]);
   expect(
-    observationTimelineEntries(items, 'claude-code').map((entry) =>
-      entry.kind === 'public' && entry.card.type === 'command-tool'
+    observationTimelineEntries(cardsFromNeutral(items, 'claude-code'), 'claude-code').map((entry) =>
+      entry.kind === 'public' && entry.card.kind === 'tool'
         ? {
             id: entry.id,
-            type: entry.card.type,
-            command: entry.card.view.command,
-            output: entry.card.view.output,
-            status: entry.card.view.status,
+            type: entry.card.kind,
+            command: cardToolCallPayload(entry.card)?.tool?.input,
+            output: cardToolResultPayload(entry.card)?.tool?.output,
+            status: cardToolResultPayload(entry.card)?.tool?.status,
             rawEvents: observationContractRawEvents(entry.contractEvents)
           }
-        : entry.kind === 'public' && entry.card.type === 'message'
-          ? { id: entry.id, type: entry.card.item.kind, text: entry.card.item.text }
+        : entry.kind === 'public' && entry.card.kind === 'system'
+          ? { id: entry.id, type: cardEventPayload(entry.card)?.kind, text: cardEventPayload(entry.card)?.text }
           : { id: entry.id, type: entry.kind }
     )
   ).toEqual([
     {
       id: 'mesh_claude000000:json:0:tool:0',
-      type: 'command-tool',
-      command: 'cat example.ts',
+      type: 'tool',
+      command: { command: 'cat example.ts' },
       output,
       status: 'completed',
       rawEvents: [callRecord, resultRecord]
@@ -2301,36 +2437,42 @@ test('Claude Code marks a tool result failed only when the provider sets is_erro
   });
 
   expect(
-    observationTimelineEntries(items, 'claude-code').map((entry) =>
-      entry.kind === 'public' && entry.card.type === 'command-tool'
-        ? { type: entry.card.type, output: entry.card.view.output, status: entry.card.view.status }
+    observationTimelineEntries(cardsFromNeutral(items, 'claude-code'), 'claude-code').map((entry) =>
+      entry.kind === 'public' && entry.card.kind === 'tool'
+        ? {
+            type: entry.card.kind,
+            output: cardToolResultPayload(entry.card)?.tool?.output,
+            status: cardToolResultPayload(entry.card)?.tool?.status
+          }
         : { type: entry.kind }
     )
-  ).toEqual([{ type: 'command-tool', output: 'provider rejected execution', status: 'failed' }]);
+  ).toEqual([{ type: 'tool', output: 'provider rejected execution', status: 'failed' }]);
 });
 
 test('an unpaired tool call does not render its call summary as output', () => {
   const entries = observationTimelineEntries(
-    [
-      {
-        id: 'call-only',
-        kind: 'tool-call',
-        streaming: false,
-        text: 'Tool call Read {"file_path":"/tmp/example.ts"}',
-        tool: { name: 'Read', callId: 'toolu_call_only', input: { file_path: '/tmp/example.ts' } },
-        provenance: { contractEvents: [{ type: 'tool_use' }] }
-      }
-    ],
+    cardsFromEvents('claude-code', {
+      id: 'call-only',
+      kind: 'tool-call',
+      streaming: false,
+      text: 'Tool call Read {"file_path":"/tmp/example.ts"}',
+      tool: { name: 'Read', callId: 'toolu_call_only', input: { file_path: '/tmp/example.ts' } },
+      provenance: { contractEvents: [{ type: 'tool_use' }] }
+    }),
     'claude-code'
   );
 
   expect(
     entries.map((entry) =>
-      entry.kind === 'public' && entry.card.type === 'command-tool'
-        ? { type: entry.card.type, output: entry.card.view.output, status: entry.card.view.status }
+      entry.kind === 'public' && entry.card.kind === 'tool'
+        ? {
+            type: entry.card.kind,
+            output: cardToolResultPayload(entry.card)?.tool?.output,
+            status: cardToolResultPayload(entry.card)?.tool?.status
+          }
         : { type: entry.kind }
     )
-  ).toEqual([{ type: 'command-tool', output: undefined, status: undefined }]);
+  ).toEqual([{ type: 'tool', output: undefined, status: undefined }]);
 });
 
 test('observation card projection maps generic tool pairs to the shared command card', () => {
@@ -2353,7 +2495,7 @@ test('observation card projection maps generic tool pairs to the shared command 
     }
   ]);
 
-  expect(entries).toMatchObject([{ kind: 'public', card: { type: 'command-tool' } }]);
+  expect(entries.map((entry) => (entry.kind === 'public' ? entry.card.kind : entry.kind))).toEqual(['tool']);
 });
 
 test('observation timeline rows keep consecutive tool cards grouped for virtual rendering', () => {
@@ -2406,22 +2548,19 @@ test('observation timeline rows keep consecutive tool cards grouped for virtual 
     }
   ]);
 
-  expect(observationTimelineRows(entries).map((row) => row.entries.length)).toEqual([1, 2, 1]);
+  expect(observationTimelineRows(entries).map((row) => row.entries.length)).toEqual([1, 1, 1, 1]);
 });
 
-test('prepending adjacent tools preserves the existing tool group key', () => {
+test('prepending adjacent tools preserves stable card row ids', () => {
   const toolEntry = (id: string): ObservationTimelineEntry => ({
     id,
     kind: 'public',
     card: {
-      type: 'command-tool',
-      view: {
-        command: id,
-        commandLanguage: 'shell',
-        provider: 'claude-code',
-        status: 'completed',
-        type: 'Bash'
-      }
+      id,
+      kind: 'tool',
+      streaming: false,
+      payload: { provider: 'claude-code' },
+      provenance: { contractEvents: [{ id }] }
     },
     contractEvents: [{ id }]
   });
@@ -2433,18 +2572,21 @@ test('prepending adjacent tools preserves the existing tool group key', () => {
   ]);
 
   expect({ current: current[0]?.id, prepended: prepended[0]?.id }).toEqual({
-    current: 'tool-group:call-latest',
-    prepended: 'tool-group:call-latest'
+    current: 'call-newer',
+    prepended: 'call-oldest'
   });
 });
 
-test('a single tool already uses its stable group key before older adjacent tools arrive', () => {
+test('a single tool uses its stable card id before older adjacent tools arrive', () => {
   const toolEntry = (id: string): ObservationTimelineEntry => ({
     id,
     kind: 'public',
     card: {
-      type: 'command-tool',
-      view: { command: id, commandLanguage: 'shell', provider: 'claude-code', status: 'completed', type: 'Bash' }
+      id,
+      kind: 'tool',
+      streaming: false,
+      payload: { provider: 'claude-code' },
+      provenance: { contractEvents: [{ id }] }
     },
     contractEvents: [{ id }]
   });
@@ -2452,19 +2594,13 @@ test('a single tool already uses its stable group key before older adjacent tool
   const prepended = observationTimelineRows([toolEntry('call-older'), toolEntry('call-latest')]);
 
   expect({ prepended: prepended[0]?.id, single: single[0]?.id }).toEqual({
-    prepended: 'tool-group:call-latest',
-    single: 'tool-group:call-latest'
+    prepended: 'call-older',
+    single: 'call-latest'
   });
 });
 
 test('full observation frames retain unchanged item references and replace only the streaming tail', () => {
-  const item = (id: string, text: string, streaming = false): AgentObservationEvent => ({
-    id,
-    kind: 'assistant-message',
-    streaming,
-    text,
-    provenance: { contractEvents: [{ id, text }] }
-  });
+  const item = (id: string, text: string, streaming = false): AgentObservationCard => messageCard(id, text, streaming);
   const previous = [item('events', 'settled'), item('tail', 'Hello', true)];
   const repeated = reconcileObservationItems(previous, [item('events', 'settled'), item('tail', 'Hello', true)]);
   const updated = reconcileObservationItems(repeated, [item('events', 'settled'), item('tail', 'Hello world', true)]);
@@ -2475,7 +2611,7 @@ test('full observation frames retain unchanged item references and replace only 
     repeatedTail: repeated[1] === previous[1],
     updatedEvents: updated[0] === previous[0],
     updatedTail: updated[1] === previous[1],
-    updatedText: updated[1]?.text
+    updatedText: updated[1] ? cardEventPayload(updated[1])?.text : undefined
   }).toEqual({
     repeatedArray: true,
     repeatedEvents: true,
@@ -2490,17 +2626,7 @@ test('timeline reconciliation preserves historical rows while a streaming tail g
   const entry = (id: string, text: string): ObservationTimelineEntry => ({
     id,
     kind: 'public',
-    card: {
-      type: 'message',
-      role: 'agent',
-      item: {
-        id,
-        kind: 'assistant-message',
-        streaming: id === 'tail',
-        text,
-        provenance: { contractEvents: [{ id, text }] }
-      }
-    },
+    card: messageCard(id, text, id === 'tail'),
     contractEvents: [{ id, text }]
   });
   const events = entry('events', 'settled');
@@ -2512,8 +2638,8 @@ test('timeline reconciliation preserves historical rows while a streaming tail g
     eventsReused: reconciled[0] === previous[0],
     tailReused: reconciled[1] === previous[1],
     tailText:
-      reconciled[1]?.entries[0]?.kind === 'public' && reconciled[1].entries[0].card.type === 'message'
-        ? reconciled[1].entries[0].card.item.text
+      reconciled[1]?.entries[0]?.kind === 'public' && reconciled[1].entries[0].card.kind === 'message'
+        ? cardEventPayload(reconciled[1].entries[0].card)?.text
         : undefined
   }).toEqual({ eventsReused: true, tailReused: false, tailText: 'Hello world' });
 });
@@ -2530,7 +2656,7 @@ test('timeline reconciliation appends a settled row without replacing existing m
     return {
       id,
       kind: 'public',
-      card: { type: 'message', role: 'agent', item },
+      card: cardFromEvent(item),
       contractEvents: item.provenance.contractEvents
     };
   };
@@ -2567,19 +2693,9 @@ test('observation card projection normalizes JSON-like generic tool output', () 
     }
   ]);
 
-  expect(entries).toMatchObject([
-    {
-      kind: 'public',
-      card: {
-        type: 'command-tool',
-        view: {
-          commandLanguage: 'json',
-          output: '{\n  "ok": true\n}',
-          outputLanguage: 'json'
-        }
-      }
-    }
-  ]);
+  expect(
+    entries.map((entry) => (entry.kind === 'public' ? cardToolResultPayload(entry.card)?.tool?.output : undefined))
+  ).toEqual(['\n"{\\"ok\\":true}"\n']);
 });
 
 test('observation card projection maps standalone Codex function call output to the shared command card', () => {
@@ -2620,19 +2736,20 @@ test('observation card projection maps standalone Codex function call output to 
     }
   ]);
 
-  expect(entries).toMatchObject([
-    {
-      kind: 'public',
-      card: {
-        type: 'command-tool',
-        view: {
-          output:
-            '{\n  "content": [\n    {\n      "type": "text",\n      "text": "{\\"items\\":[{\\"message\\":{\\"role\\":\\"assistant\\",\\"text\\":\\"ok\\"}}],\\"seq\\":102}"\n    }\n  ]\n}',
-          outputLanguage: 'json',
-          type: 'tool-result'
+  expect(
+    entries.map((entry) => (entry.kind === 'public' ? cardEventPayload(entry.card)?.tool?.output : undefined))
+  ).toEqual([
+    JSON.stringify({
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({
+            items: [{ message: { role: 'assistant', text: 'ok' } }],
+            seq: 102
+          })
         }
-      }
-    }
+      ]
+    })
   ]);
 });
 
@@ -2667,17 +2784,19 @@ test('Claude Code Read tool result renders as a file read card', () => {
   ] as const;
   const entries = renderTimeline(items as never);
 
-  expect(entries).toMatchObject([
+  expect(
+    entries.map((entry) =>
+      entry.kind === 'public'
+        ? {
+            input: cardToolCallPayload(entry.card)?.tool?.input,
+            output: cardToolResultPayload(entry.card)?.tool?.output
+          }
+        : undefined
+    )
+  ).toEqual([
     {
-      kind: 'public',
-      card: {
-        type: 'file-read-tool',
-        view: {
-          content: 'export function Example() { return <div />; }',
-          path: '/tmp/example.tsx',
-          type: 'Read'
-        }
-      }
+      input: { file_path: '/tmp/example.tsx' },
+      output: 'export function Example() { return <div />; }'
     }
   ]);
 });

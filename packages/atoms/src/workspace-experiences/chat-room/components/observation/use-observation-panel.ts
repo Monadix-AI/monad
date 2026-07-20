@@ -1,4 +1,5 @@
 import type {
+  AgentObservationCard,
   AgentObservationEvent,
   Event,
   MeshConnectionSnapshot,
@@ -15,6 +16,7 @@ import type { RawFrameRow } from './raw-view.ts';
 import { observationCursorSchema } from '@monad/protocol';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 
+import { agentObservationCards } from '../../../../agent-adapters/observation-cards.ts';
 import {
   connectionControlAction,
   convenienceEventsRequest,
@@ -93,6 +95,7 @@ export interface ObservationPanelController {
   connected: boolean;
   epoch: string | null;
   events: AgentObservationEvent[];
+  cards: AgentObservationCard[];
   rawRows: RawFrameRow[];
   loading: boolean;
   canLoadOlderEvents: boolean;
@@ -112,6 +115,12 @@ export function useObservationPanel(args: UseObservationPanelArgs): ObservationP
     panelOpen: true
   });
   const subscription = observationSubscription(state);
+  const panelScopeKey = `${meshSessionId}:${transcriptTargetId}`;
+
+  useEffect(() => {
+    if (!panelScopeKey) return;
+    dispatch({ type: 'scopeReset' });
+  }, [panelScopeKey]);
 
   const connection = hooks.useConnection(
     { id: meshSessionId, transcriptTargetId },
@@ -316,6 +325,7 @@ export function useObservationPanel(args: UseObservationPanelArgs): ObservationP
     (rawActive && rawStream.currentData?.fatalError === true) ||
     (convenienceActive && convenienceStream.currentData?.fatalError === true);
   const events = useMemo(() => (streamFatal ? [] : timeline.events), [streamFatal, timeline.events]);
+  const cards = useMemo(() => agentObservationCards(events, args.provider), [args.provider, events]);
   const waitingForConvenienceReady =
     convenienceActive && !streamFatal && !timeline.unavailableReason && timeline.epoch !== subscription.epoch;
   const waitingForEvents = Boolean(eventBootstrap && loadedEventsKey !== eventBootstrap.key);
@@ -344,6 +354,7 @@ export function useObservationPanel(args: UseObservationPanelArgs): ObservationP
     connected: state.connected,
     epoch: state.epoch,
     events,
+    cards,
     rawRows: streamFatal ? [] : rawRows,
     loading,
     canLoadOlderEvents: eventNextCursor !== null && !eventsFailed,

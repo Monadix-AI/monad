@@ -23,11 +23,13 @@ import { canTransition } from '#/agent/index.ts';
 import { clearProcessesForSession, disposeSandboxSession, processControlTool } from '#/capabilities/tools';
 import { HandlerError } from '#/handlers/handler-error.ts';
 import { createManagedMeshAgentJoin } from '#/handlers/session/handlers/managed-mesh-agent-join.ts';
+import { unavailableManagedMeshAgentProjectMembers } from '#/handlers/session/handlers/messaging-members.ts';
 import { createSessionMemberObservationHandlers } from '#/handlers/session/handlers/session-member-observation.ts';
 import { createSessionMemberRoster } from '#/handlers/session/handlers/session-member-roster.ts';
 import { createSessionMembersHandlers } from '#/handlers/session/handlers/session-members.ts';
 import { SessionUiProjector } from '#/handlers/session/ui-projection.ts';
 import { clearAcpDelegatesForSession } from '#/services/delegation/acp-delegate.ts';
+import { makeEvent } from '#/services/event-bus.ts';
 import { createProjectLifecycleHandlers } from './lifecycle-projects.ts';
 import { createWorkspaceHandlers, resolveWorkspaceDir } from './lifecycle-workspace.ts';
 
@@ -121,6 +123,7 @@ export function createLifecycleHandlers(ctx: SessionContext) {
     disposeRuntime(id);
     clearProcessesForSession(id);
     clearAcpDelegatesForSession(id); // kill any reused external ACP adapters held for this session
+    if (session.projectId) await ctx.deps.meshAgentHost?.deleteSession(id);
     ctx.deps.meshAgentHost?.stopSession(id);
     oversight?.cancelSession(id, 'session_deleted');
     delegation?.cancelSession(id, 'session_deleted');
@@ -295,6 +298,9 @@ export function createLifecycleHandlers(ctx: SessionContext) {
       });
       if (!session) throw new HandlerError('internal', 'update failed');
       if (resolvedCwd !== undefined) await applyWorkspaceRuntime(id, resolvedCwd ?? undefined);
+      if (current.projectId && archived === true && current.archived !== true) {
+        await ctx.deps.meshAgentHost?.archiveSession(id);
+      }
       emitLifecycle(id, 'session.updated', {
         title,
         state,
@@ -432,7 +438,26 @@ export function createLifecycleHandlers(ctx: SessionContext) {
         oldest !== undefined && store.listMessages(id, { before: oldest, includeInactive, limit: 1 }).length > 0;
       const hasNewer =
         newest !== undefined && store.listMessages(id, { after: newest, includeInactive, limit: 1 }).length > 0;
-      if (!hasNewer) projector.hydrateMeshAgentLoginEvents(store.listEvents(id));
+      if (!hasNewer) {
+        projector.hydrateMeshAgentLoginEvents([
+          ...store.listEvents(id),
+          ...(ctx.deps.meshAgentHost?.pendingLoginRequiredEvents(id) ?? []),
+          ...unavailableManagedMeshAgentProjectMembers(
+            store,
+            id,
+            ctx.deps.configManager?.get().cfg.meshAgents ?? []
+          ).map((member) =>
+            makeEvent(id, 'mesh.connection_required', {
+              agentName: member.runtimeAgentName,
+              authAgentName: member.templateAgentName,
+              provider: member.provider,
+              code: member.code,
+              reason: member.reason,
+              reconnectIn: 'studio'
+            })
+          )
+        ]);
+      }
       const snapshot = projector.snapshot();
       const items = snapshot.kind === 'snapshot' ? snapshot.items : [];
       return {

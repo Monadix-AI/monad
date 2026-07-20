@@ -3,7 +3,8 @@ import type { CSSProperties } from 'react';
 
 import { useEffect, useRef } from 'react';
 
-import { useT } from '#/components/I18nProvider';
+import { terminalClipboardText } from './terminal-clipboard';
+import { terminalOutputSyncPlan } from './terminal-output-sync';
 
 const TERMINAL_THEME: ITheme = {
   background: '#0b0f14',
@@ -45,12 +46,12 @@ export function CliTerminalOutput({
   resetKey,
   style
 }: CliTerminalOutputProps): React.ReactElement {
-  const t = useT();
   const hostRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<import('ghostty-web').Terminal | null>(null);
   const fitRef = useRef<import('ghostty-web').FitAddon | null>(null);
   const observerRef = useRef<ResizeObserver | null>(null);
   const inputDisposableRef = useRef<{ dispose: () => void } | null>(null);
+  const pasteDisposableRef = useRef<{ dispose: () => void } | null>(null);
   const writtenOutputRef = useRef('');
   const outputRef = useRef(output);
   const onInputRef = useRef(onInput);
@@ -68,6 +69,8 @@ export function CliTerminalOutput({
     observerRef.current = null;
     inputDisposableRef.current?.dispose();
     inputDisposableRef.current = null;
+    pasteDisposableRef.current?.dispose();
+    pasteDisposableRef.current = null;
     terminalRef.current?.dispose();
     terminalRef.current = null;
     fitRef.current = null;
@@ -92,6 +95,21 @@ export function CliTerminalOutput({
       const fitAddon = new FitAddon();
       terminal.loadAddon(fitAddon);
       terminal.open(hostRef.current);
+      (terminal as { focus?: () => void }).focus?.();
+      const pasteTarget = hostRef.current.querySelector('textarea') ?? hostRef.current;
+      pasteTarget.focus();
+      const handlePaste = (event: Event) => {
+        if (!(event instanceof ClipboardEvent)) return;
+        const text = terminalClipboardText(event.clipboardData);
+        if (!text) return;
+        event.preventDefault();
+        event.stopPropagation();
+        (terminal as { paste?: (text: string) => void }).paste?.(text) ?? onInputRef.current?.(text);
+      };
+      pasteTarget.addEventListener('paste', handlePaste, { capture: true });
+      pasteDisposableRef.current = {
+        dispose: () => pasteTarget.removeEventListener('paste', handlePaste, { capture: true })
+      };
       inputDisposableRef.current = terminal.onData((input) => onInputRef.current?.(input));
       terminalRef.current = terminal;
       fitRef.current = fitAddon;
@@ -122,6 +140,8 @@ export function CliTerminalOutput({
       observerRef.current = null;
       inputDisposableRef.current?.dispose();
       inputDisposableRef.current = null;
+      pasteDisposableRef.current?.dispose();
+      pasteDisposableRef.current = null;
       terminalRef.current?.dispose();
       terminalRef.current = null;
       fitRef.current = null;
@@ -132,16 +152,15 @@ export function CliTerminalOutput({
   useEffect(() => {
     const terminal = terminalRef.current;
     if (!terminal) return;
-    const previous = writtenOutputRef.current;
-    if (output.startsWith(previous)) {
-      const delta = output.slice(previous.length);
-      if (delta) terminal.write(delta);
-    } else {
+    const plan = terminalOutputSyncPlan(writtenOutputRef.current, output);
+    if (plan.kind === 'replay') {
       terminal.reset();
       terminal.write('\x1b[3J\x1b[2J\x1b[H');
-      if (output) terminal.write(output);
+      if (plan.text) terminal.write(plan.text);
+    } else if (plan.kind === 'append') {
+      terminal.write(plan.text);
     }
-    writtenOutputRef.current = output;
+    writtenOutputRef.current = plan.writtenOutput;
   }, [output]);
 
   return (
@@ -151,6 +170,8 @@ export function CliTerminalOutput({
         minHeight,
         maxHeight,
         overflow: 'hidden',
+        boxSizing: 'border-box',
+        padding: 8,
         border: `1px solid ${'var(--border)'}`,
         borderRadius: 8,
         background: TERMINAL_THEME.background,
@@ -158,20 +179,18 @@ export function CliTerminalOutput({
       }}
     >
       <div
-        aria-label={t('web.workplace.cliOutput')}
         ref={hostRef}
-        role="log"
-        style={{ height: '100%', minHeight }}
+        style={{ height: '100%', minHeight: Math.max(0, minHeight - 16) }}
       />
       {output ? null : (
         <div
           aria-hidden="true"
           style={{
             position: 'absolute',
-            inset: 0,
+            inset: 8,
             display: 'flex',
             alignItems: 'flex-start',
-            padding: '9px 10px',
+            padding: '1px 2px',
             color: '#9aa4b5',
             fontFamily: 'var(--font-mono), ui-monospace, monospace',
             fontSize: 11,

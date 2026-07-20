@@ -1,4 +1,3 @@
-import type { MeshAgentConfig } from '@monad/environment';
 import type { MessageAttachmentRef, MessageId, SessionId } from '@monad/protocol';
 import type { SessionContext } from '#/handlers/session/context.ts';
 import type { createManagedMeshAgentDelivery } from '#/handlers/session/handlers/managed-mesh-agent-delivery.ts';
@@ -33,9 +32,7 @@ export function createMessagingNotifyHandlers(
       exceptAgentName?: string;
     }) {
       const session = requireSession(sessionId);
-      const meshAgents = (ctx.deps.configManager?.get().cfg.meshAgents ?? []).filter(
-        (agent: MeshAgentConfig) => agent.enabled !== false
-      );
+      const meshAgents = ctx.deps.configManager?.get().cfg.meshAgents ?? [];
       await deliverProjectMessageToManagedMeshAgentMembers({
         session,
         meshAgents,
@@ -59,9 +56,7 @@ export function createMessagingNotifyHandlers(
       text: string;
     }) {
       const session = requireSession(sessionId);
-      const meshAgents = (ctx.deps.configManager?.get().cfg.meshAgents ?? []).filter(
-        (agent: MeshAgentConfig) => agent.enabled !== false
-      );
+      const meshAgents = ctx.deps.configManager?.get().cfg.meshAgents ?? [];
       await deliverDirectMessageToManagedMeshAgentMember({ session, meshAgents, fromAgentName, to, text });
       return { accepted: true as const };
     },

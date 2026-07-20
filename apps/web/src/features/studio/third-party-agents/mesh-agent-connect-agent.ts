@@ -24,6 +24,5 @@ export async function connectMeshAgent(
     throw error;
   }
   const persisted = session.authState === 'authenticated';
-  if (!persisted) await deps.removeAgent(agent.name);
   return { session, persisted };
 }

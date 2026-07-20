@@ -1,16 +1,27 @@
 import type { MeshAgentObservationProjector } from '@monad/sdk-atom';
 
 import { afterEach, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { codexThreadReadOutput, readCodexEventOutput } from '../../src/agent-adapters/codex/event-pages.ts';
 import { readProviderEventFile } from '../../src/agent-adapters/event-files.ts';
 import { createOutputEventSource } from '../../src/agent-adapters/event-source.ts';
 
 const directories: string[] = [];
 const projection = { recordProjectors: [] } as unknown as MeshAgentObservationProjector;
 const context = { providerSessionRef: 'session-lines', workingPath: '/tmp/project' };
+const codexAppServerTurn = {
+  id: 'turn_1',
+  items: [{ type: 'agentMessage', id: 'msg_1', text: 'from app-server', phase: null, memoryCitation: null }],
+  itemsView: 'full',
+  status: 'completed',
+  error: null,
+  startedAt: 1,
+  completedAt: 2,
+  durationMs: 1000
+};
 
 afterEach(() => {
   for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true });
@@ -32,6 +43,75 @@ test('provider event history is not truncated by a byte snapshot limit', () => {
       extensions: ['.jsonl']
     })
   ).toBe(records.map((record) => JSON.stringify(record)).join('\n'));
+});
+
+test('codex history reads from the configured archived sessions home', async () => {
+  const codexHome = mkdtempSync(join(tmpdir(), 'monad-codex-home-'));
+  directories.push(codexHome);
+  const archiveDirectory = join(codexHome, 'archived_sessions');
+  mkdirSync(archiveDirectory);
+  const output = JSON.stringify({ type: 'session_meta', payload: { id: 'thread-custom' } });
+  writeFileSync(join(archiveDirectory, 'rollout-thread-custom.jsonl'), output);
+
+  expect(
+    await readCodexEventOutput(
+      { providerSessionRef: 'thread-custom', workingPath: '/tmp/project' },
+      { env: { CODEX_HOME: codexHome }, threadRead: async () => null }
+    )
+  ).toBe(output);
+});
+
+test('codex history prefers translated app-server thread reads over file fallback', async () => {
+  const codexHome = mkdtempSync(join(tmpdir(), 'monad-codex-home-'));
+  directories.push(codexHome);
+  const archiveDirectory = join(codexHome, 'archived_sessions');
+  mkdirSync(archiveDirectory);
+  writeFileSync(
+    join(archiveDirectory, 'rollout-thread-app-server.jsonl'),
+    JSON.stringify({ type: 'session_meta', payload: { id: 'thread-app-server' } })
+  );
+
+  const output = await readCodexEventOutput(
+    { providerSessionRef: 'thread-app-server', workingPath: '/tmp/project' },
+    {
+      env: { CODEX_HOME: codexHome },
+      threadRead: async () => ({
+        thread: {
+          id: 'thread-app-server',
+          turns: [codexAppServerTurn]
+        }
+      })
+    }
+  );
+
+  expect(output).toBe(
+    JSON.stringify({
+      result: {
+        data: [codexAppServerTurn],
+        nextCursor: null,
+        backwardsCursor: null
+      }
+    })
+  );
+});
+
+test('codex thread read history is translated into a turns page output', () => {
+  const output = codexThreadReadOutput({
+    thread: {
+      id: 'thread-from-app-server',
+      turns: [codexAppServerTurn]
+    }
+  });
+
+  expect(output).toBe(
+    JSON.stringify({
+      result: {
+        data: [codexAppServerTurn],
+        nextCursor: null,
+        backwardsCursor: null
+      }
+    })
+  );
 });
 
 test('line cursors remain stable when the provider file grows between pages', async () => {

@@ -14,9 +14,10 @@ function codexTurnText(input: MeshAgentTurnInput): string {
 function codexExecOptions(
   agent: MeshAgentView,
   context: MeshAgentSessionRuntimeContext
-): { approvalArgs: string[]; execArgs: string[] } {
+): { approvalArgs: string[]; execArgs: string[]; execGlobalArgs: string[] } {
   const approvalArgs: string[] = [];
   const args: string[] = [];
+  const execGlobalArgs = ['--json', '--color', 'never'];
   const configuredArgs = agent.args ?? [];
   for (let index = 0; index < configuredArgs.length; index += 1) {
     const argument = configuredArgs[index];
@@ -39,24 +40,24 @@ function codexExecOptions(
   if (context.reasoningEffort && !args.some((argument) => argument.startsWith('model_reasoning_effort'))) {
     args.push('-c', `model_reasoning_effort="${context.reasoningEffort}"`);
   }
-  for (const path of context.extraWorkingPaths ?? []) args.push('--add-dir', path);
+  for (const path of context.extraWorkingPaths ?? []) execGlobalArgs.push('--add-dir', path);
   if (context.skipProviderApprovals && approvalArgs.length === 0) approvalArgs.push('--ask-for-approval', 'never');
   args.push(...(context.mcpConfigArgs ?? []));
-  return { approvalArgs, execArgs: args };
+  return { approvalArgs, execArgs: args, execGlobalArgs };
 }
 
 export function createCodexSessionRuntime(
   agent: MeshAgentView,
   context: MeshAgentSessionRuntimeContext
 ): SessionEventRuntimeDefinition {
-  const { approvalArgs, execArgs } = codexExecOptions(agent, context);
+  const { approvalArgs, execArgs, execGlobalArgs } = codexExecOptions(agent, context);
   return {
     plan: {
       processModel: 'per-turn',
       buildTurnLaunch: ({ providerSessionRef }) => ({
         args: providerSessionRef
-          ? [...approvalArgs, 'exec', 'resume', '--json', '--color', 'never', ...execArgs, providerSessionRef, '-']
-          : [...approvalArgs, 'exec', '--json', '--color', 'never', ...execArgs, '-'],
+          ? [...approvalArgs, 'exec', ...execGlobalArgs, 'resume', ...execArgs, providerSessionRef, '-']
+          : [...approvalArgs, 'exec', ...execGlobalArgs, ...execArgs, '-'],
         cwd: context.workingPath,
         ...(context.env || agent.env ? { env: { ...(agent.env ?? {}), ...(context.env ?? {}) } } : {})
       }),

@@ -30,6 +30,7 @@ export function MeshAgentsSettings({ embedded = false }: { onClose: () => void; 
     controlToken: string;
     agentName: string;
     agent: MeshAgentView;
+    temporary: boolean;
   } | null>(null);
   const [connectingAgentName, setConnectingAgentName] = useState<string | null>(null);
   const [startAuth] = useStartMeshAgentAuthMutation();
@@ -39,6 +40,7 @@ export function MeshAgentsSettings({ embedded = false }: { onClose: () => void; 
     runConnect(async () => {
       setAuthSession(null);
       setConnectingAgentName(agent.name);
+      const temporary = !agents.some((entry) => entry.name === agent.name);
       try {
         const { session, persisted } = await connectMeshAgent(agent, {
           saveAgent,
@@ -46,12 +48,23 @@ export function MeshAgentsSettings({ embedded = false }: { onClose: () => void; 
           startAuth: (agentName) => startAuth(agentName).unwrap()
         });
         if (!persisted) {
-          setAuthSession({ id: session.id, controlToken: session.controlToken, agentName: agent.name, agent });
+          setAuthSession({
+            id: session.id,
+            controlToken: session.controlToken,
+            agentName: agent.name,
+            agent,
+            temporary
+          });
         }
       } finally {
         setConnectingAgentName(null);
       }
     });
+  const closeAuthSession = () => {
+    const session = authSession;
+    setAuthSession(null);
+    if (session?.temporary) void removeAgent(session.agentName);
+  };
   const openInstallPage = (preset: MeshAgentPresetView) => {
     window.open(preset.installUrl, '_blank', 'noopener,noreferrer');
   };
@@ -151,7 +164,7 @@ export function MeshAgentsSettings({ embedded = false }: { onClose: () => void; 
             await saveAgent(authSession.agent);
             setAuthSession(null);
           }}
-          onClose={() => setAuthSession(null)}
+          onClose={closeAuthSession}
           sessionId={authSession.id}
         />
       ) : null}

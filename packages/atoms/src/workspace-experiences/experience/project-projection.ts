@@ -181,7 +181,8 @@ export function projectParticipants(args: {
           agentName: stableAgentName,
           liveTools,
           meshSessions: args.meshSessions
-        });
+        }) ??
+        (activeMeshAgentNames.has(stableAgentName) ? 'thinking' : undefined);
       return {
         id: member.id,
         av: initials(displayName),

@@ -1,11 +1,14 @@
 import type { Event, SessionId, SessionUiEvent } from '@monad/protocol';
 
 import { expect, test } from 'bun:test';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { newId } from '@monad/protocol';
 
 import { RoundCache } from '#/services/round-cache.ts';
 import { buildMockModel } from '../../fixtures/mock-model.ts';
-import { buildHandlers } from '../../helpers.ts';
+import { buildHandlers, makeTestPaths, stubModelDeps } from '../../helpers.ts';
 
 function evt(sessionId: SessionId, type: Event['type'], payload: Record<string, unknown>): Event {
   return { id: newId('evt'), sessionId, type, actorAgentId: null, payload, at: new Date().toISOString() };
@@ -204,6 +207,63 @@ test('subscribeUi keeps managed MeshAgent joins after newer transcript messages'
   );
 
   handlers.store.close();
+});
+
+test('subscribeUi re-probes managed project member login state after transient cards are lost', async () => {
+  const base = await mkdtemp(join(tmpdir(), 'monad-subscribe-login-'));
+  const modelDeps = stubModelDeps();
+  modelDeps.paths = makeTestPaths(base);
+  const handlers = buildHandlers(buildMockModel().text(['x']).build(), modelDeps);
+  await handlers.meshAgentSettings.upsertMeshAgent({
+    agent: {
+      name: 'claude-code',
+      provider: 'claude-code',
+      command: 'claude',
+      enabled: true,
+      allowAutopilot: true,
+      approvalOwnership: 'provider-owned'
+    }
+  });
+  const { projectId } = await handlers.session.createProject({
+    title: 'project',
+    cwd: process.cwd(),
+    origin: { surface: 'web', client: 'workplace', transport: 'http', writableBy: ['http'], branchableBy: ['http'] }
+  });
+  const { sessionId } = await handlers.session.createProjectSession({ projectId, title: 'project session' });
+  const now = '2026-07-20T00:00:00.000Z';
+  handlers.store.insertSessionMember({
+    sessionId,
+    memberId: 'pmem_claude-code_f2654d392ff2',
+    type: 'mesh-agent',
+    data: {
+      name: 'claude-code',
+      instanceId: 'pmem_claude-code_f2654d392ff2',
+      displayName: 'Opus',
+      settings: { managedProjectAgent: true }
+    },
+    createdAt: now,
+    updatedAt: now
+  });
+  const probes: Event[] = [];
+  const disposeEvents = handlers.bus.subscribe(sessionId, (event) => {
+    if (event.type === 'mesh.connection_required') probes.push(event);
+  });
+
+  const { dispose } = await handlers.session.subscribeUi({ sessionId }, () => {});
+  dispose();
+  disposeEvents();
+
+  expect(probes.map((event) => event.payload)).toEqual([
+    {
+      agentName: 'pmem_claude-code_f2654d392ff2',
+      authAgentName: 'claude-code',
+      provider: 'claude-code',
+      reason: 'Reconnect claude-code in Studio before using it in this project.',
+      reconnectIn: 'studio'
+    }
+  ]);
+  handlers.store.close();
+  await rm(base, { force: true, recursive: true });
 });
 
 test('subscribeUi replaces the live snapshot when another client restores the session', async () => {

@@ -37,6 +37,7 @@ export interface MeshAgentLoginViewItem {
   kind: 'mesh_agent_login';
   id: string;
   agentName: string;
+  authAgentName?: string;
   provider: string;
   reason: string;
   seq: string;
@@ -67,6 +68,10 @@ export const isMeshAgentLoginItem = (m: ViewItem): m is MeshAgentLoginViewItem =
 
 export const isSummaryTranscriptTurnItem = (m: ViewItem): m is SummaryTranscriptTurnViewItem =>
   'kind' in m && m.kind === 'summary_transcript_turn';
+
+export function isTransientAttentionUiItem(item: UIItem): boolean {
+  return item.kind === 'custom' && item.name === 'mesh.login_required';
+}
 
 export function branchSnapshotItems(items: ViewItem[], expanded: boolean): ViewItem[] {
   if (expanded) return items;
@@ -201,7 +206,7 @@ function toolFromUi(item: Extract<UIItem, { kind: 'tool' }>): ToolItem {
 }
 
 export function viewItemKey(item: UIItem): string | null {
-  if (item.kind === 'custom' && item.name === 'mesh.login_required') return `custom:${item.id}`;
+  if (isTransientAttentionUiItem(item)) return `custom:${item.id}`;
   if (item.kind !== 'message' && item.kind !== 'tool' && item.kind !== 'memory_summary') return null;
   return `${item.kind}:${item.id}`;
 }
@@ -213,6 +218,7 @@ function meshAgentLoginFromUi(item: Extract<UIItem, { kind: 'custom' }>): MeshAg
     kind: 'mesh_agent_login',
     id: item.id,
     agentName: payload.data.agentName,
+    authAgentName: payload.data.authAgentName,
     provider: payload.data.provider,
     reason: payload.data.reason,
     seq: item.seq
@@ -220,7 +226,7 @@ function meshAgentLoginFromUi(item: Extract<UIItem, { kind: 'custom' }>): MeshAg
 }
 
 export function viewItemFromUi(item: UIItem): ViewItem | null {
-  if (item.kind === 'custom' && item.name === 'mesh.login_required') return meshAgentLoginFromUi(item);
+  if (isTransientAttentionUiItem(item) && item.kind === 'custom') return meshAgentLoginFromUi(item);
   if (item.kind === 'message') {
     const sourcePart = item.parts.find(
       (part): part is Extract<UIPart, { type: 'artifact' }> =>

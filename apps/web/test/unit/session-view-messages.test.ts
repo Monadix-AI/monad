@@ -1,10 +1,11 @@
-import type { UIMessageItem } from '@monad/protocol';
+import type { UIItem, UIMessageItem } from '@monad/protocol';
 
 import { expect, test } from 'bun:test';
 
 import {
   branchSnapshotItems,
   isBranchSourceItem,
+  isTransientAttentionUiItem,
   summaryTranscriptTurns
 } from '../../src/features/session/chat-view-items.ts';
 import { buildViewMessages } from '../../src/features/session/session-view.ts';
@@ -38,6 +39,22 @@ function directive(id: string, role: UIMessageItem['role'], text: string): UIMes
   };
 }
 
+function loginRequired(id: string, agentName = 'pmem_claude-code_f2654d392ff2'): UIItem {
+  return {
+    kind: 'custom',
+    id: `mesh-agent-login-required:${id}`,
+    name: 'mesh.login_required',
+    status: 'error',
+    seq: `mesh-agent-login-required:${id}`,
+    data: {
+      agentName,
+      authAgentName: 'claude-code',
+      provider: 'claude-code',
+      reason: 'Reconnect claude-code in Studio before using it in this project.'
+    }
+  };
+}
+
 test('optimistic user messages render immediately while detached from the live tail', () => {
   const items = buildViewMessages({
     commandPending: null,
@@ -48,6 +65,44 @@ test('optimistic user messages render immediately while detached from the live t
   });
 
   expect(items.map((item) => item.id)).toEqual(['msg_older', 'local-1']);
+});
+
+test('login-required cards stay visible while detached from the live tail', () => {
+  const items = buildViewMessages({
+    commandPending: null,
+    optimistic: [],
+    transcriptMode: 'history',
+    visibleHistory: [message('msg_older', 'assistant', 'older')],
+    visibleLiveItems: [message('msg_live_tail', 'assistant', 'newer'), loginRequired('pmem_claude-code_f2654d392ff2')]
+  });
+
+  expect(items).toEqual([
+    {
+      id: 'msg_older',
+      role: 'assistant',
+      text: 'older',
+      error: false,
+      streaming: false,
+      seq: 'msg_older',
+      type: undefined,
+      data: undefined,
+      reasoning: undefined
+    },
+    {
+      kind: 'mesh_agent_login',
+      id: 'mesh-agent-login-required:pmem_claude-code_f2654d392ff2',
+      agentName: 'pmem_claude-code_f2654d392ff2',
+      authAgentName: 'claude-code',
+      provider: 'claude-code',
+      reason: 'Reconnect claude-code in Studio before using it in this project.',
+      seq: 'mesh-agent-login-required:pmem_claude-code_f2654d392ff2'
+    }
+  ]);
+});
+
+test('login-required cards are transient attention items', () => {
+  expect(isTransientAttentionUiItem(loginRequired('pmem_claude-code_da4d33333c9d'))).toBe(true);
+  expect(isTransientAttentionUiItem(message('msg_user', 'user', 'hello'))).toBe(false);
 });
 
 test('server user echoes consume duplicate optimistic messages one at a time', () => {

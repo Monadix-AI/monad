@@ -1,4 +1,4 @@
-import type { AgentObservationEvent } from '@monad/protocol';
+import type { AgentObservationCard } from '@monad/protocol';
 
 export function observationEventLoadScope(args: {
   deliveryId?: string;
@@ -11,9 +11,9 @@ export function observationEventLoadScope(args: {
 }
 
 export function prependObservationEvents(
-  pageItems: AgentObservationEvent[],
-  currentItems: AgentObservationEvent[]
-): AgentObservationEvent[] {
+  pageItems: AgentObservationCard[],
+  currentItems: AgentObservationCard[]
+): AgentObservationCard[] {
   const seen = new Set<string>();
   return [...pageItems, ...currentItems].filter((item) => {
     const identity = item.dedupeKey ?? item.id;
@@ -24,7 +24,7 @@ export function prependObservationEvents(
 }
 
 export interface ObservationEventPage {
-  items: AgentObservationEvent[];
+  items: AgentObservationCard[];
   nextCursor?: string;
 }
 
@@ -44,7 +44,7 @@ export function observationEventPresentation(args: {
 
 export async function findOlderEventPage(args: {
   before?: string;
-  currentItems: AgentObservationEvent[];
+  currentItems: AgentObservationCard[];
   load: (before?: string) => Promise<ObservationEventPage>;
 }): Promise<ObservationEventPage> {
   let before = args.before;

@@ -4,6 +4,7 @@ import { openUrl, resolveClientConn } from '@monad/environment';
 import { setLogLevel } from '@monad/logger';
 import { MONAD_VERSION } from '@monad/protocol';
 
+import { resolveEntrypointSubcommand } from './lib/entrypoint-role.ts';
 import { resolveUpWebUrl } from './lib/web-url.ts';
 
 // Silence pino output for the CLI's own commands — they render their own human output and must not
@@ -11,12 +12,13 @@ import { resolveUpWebUrl } from './lib/web-url.ts';
 // default level (info) and manages routing itself in configureDaemonLogging(). The hidden supervisor
 // keeps the CLI level silent and writes explicit lifecycle records to daemon.log. Must run before any
 // logger is created — all subsystem imports below are dynamic, so nothing has materialised yet.
-if (process.argv[2] !== 'daemon') {
+const subcommand = resolveEntrypointSubcommand(process.argv, process.execPath);
+if (subcommand !== 'daemon') {
   setLogLevel(process.argv.includes('--debug') ? 'debug' : 'silent');
 }
 
 async function dispatch(): Promise<void> {
-  const sub = process.argv[2];
+  const sub = subcommand;
 
   if (sub === '-V' || sub === '--version') {
     process.stdout.write(`${MONAD_VERSION}\n`);

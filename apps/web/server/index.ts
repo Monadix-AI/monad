@@ -121,6 +121,17 @@ export function serveAssetFromMap(assets: Map<string, EmbeddedAsset>, pathname: 
   return new Response('Not found', { status: 404 });
 }
 
+const RELEASE_STATIC_ROUTES = [
+  '/assets/*',
+  '/favicon.ico',
+  '/favicon.svg',
+  '/mochi.webp',
+  '/monad-icon-vector-solid.svg',
+  '/monad-logo-vector-solid.svg'
+] as const;
+
+const RELEASE_SPA_ROUTES = ['/', '/init', '/inbox', '/sessions/*', '/workspace/*', '/settings/*', '/studio/*'] as const;
+
 function serveAsset(pathname: string): Response {
   return serveAssetFromMap(ASSETS, pathname);
 }
@@ -179,43 +190,21 @@ function bridgeWebSocketToTarget(
  */
 export function attachWebRoutes(app: App): void {
   if (resolveDevWebProxyUrl('http://127.0.0.1/')) {
-    const wsData = new WeakMap<WebSocketBridge, WebSocketProxyData>();
-    app.ws('/*', {
-      open(ws: WebSocketBridge) {
-        const target = resolveDevWebProxyUrl(ws.data?.request?.url ?? 'http://127.0.0.1/', Bun.env, 'ws');
-        if (!target) {
-          ws.close();
-          return;
-        }
-        wsData.set(
-          ws,
-          bridgeWebSocketToTarget(ws, target, {
-            pending: [],
-            protocol: ws.data?.request?.headers.get('sec-websocket-protocol') ?? undefined,
-            target
-          })
-        );
-      },
-      message(ws: WebSocketBridge, message: string | ArrayBuffer | Uint8Array) {
-        const data = wsData.get(ws);
-        const upstream = data?.upstream;
-        if (!data || !upstream || !sendWhenOpen(upstream, message))
-          data?.pending.push(normalizeWebSocketMessage(message));
-      },
-      close(ws: WebSocketBridge) {
-        const data = wsData.get(ws);
-        data?.upstream?.close();
-        wsData.delete(ws);
-      }
-    });
-    app.get('/*', async ({ request }) => {
-      const target = resolveDevWebProxyUrl(request.url);
-      return target ? proxyDevWebRequest(request, target) : new Response('Not found', { status: 404 });
-    });
+    for (const route of RELEASE_SPA_ROUTES) {
+      app.get(route, async ({ request }) => {
+        const target = resolveDevWebProxyUrl(request.url);
+        return target ? proxyDevWebRequest(request, target) : new Response('Not found', { status: 404 });
+      });
+    }
     return;
   }
 
-  app.get('/*', ({ path }) => serveAsset(path));
+  for (const route of RELEASE_STATIC_ROUTES) {
+    app.get(route, ({ path }) => serveAsset(path));
+  }
+  for (const route of RELEASE_SPA_ROUTES) {
+    app.get(route, ({ path }) => serveAsset(path));
+  }
 }
 
 function daemonUrlFromMesh(raw: string): string {

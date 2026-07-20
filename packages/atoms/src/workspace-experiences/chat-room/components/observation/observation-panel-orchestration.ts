@@ -12,6 +12,7 @@ import type { ObservationPanelEvent } from './panel-state.ts';
 
 import { meshSessionConnectionClosedPayloadSchema, meshSessionConnectionOpenedPayloadSchema } from '@monad/protocol';
 
+import { agentObservationCards } from '../../../../agent-adapters/observation-cards.ts';
 import { type RawFrameRow, rawFrameRow } from './raw-view.ts';
 import { emptyObservationTimeline, mergeConvenienceFrames, type ObservationTimeline } from './timeline-merge.ts';
 
@@ -152,6 +153,7 @@ export function convenienceStreamView(
   events: AgentObservationEvent[],
   connected: boolean
 ): MeshAgentStreamView {
+  const cards = agentObservationCards(events, base.provider);
   return {
     id: base.id,
     ...(base.transcriptTargetId ? { transcriptTargetId: base.transcriptTargetId } : {}),
@@ -161,6 +163,6 @@ export function convenienceStreamView(
     ...(base.icon ? { icon: base.icon } : {}),
     status: connected ? 'running' : 'ok',
     output: '',
-    items: events
+    items: cards
   };
 }

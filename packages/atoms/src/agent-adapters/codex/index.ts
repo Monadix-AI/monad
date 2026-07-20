@@ -18,6 +18,7 @@ import {
   parseCodexArgumentSupport,
   parseCodexModelOptions
 } from './launch.ts';
+import { archiveCodexSession, deleteCodexSession } from './lifecycle.ts';
 import { codexObservationProjection } from './observation/index.ts';
 import { createCodexSessionRuntime } from './session-runtime.ts';
 
@@ -80,6 +81,8 @@ export const codexMeshAgentAdapter: MeshAgentProviderAdapter = {
   listSupportedModels(agent) {
     return agent?.modelOptions?.length ? agent.modelOptions : CODEX_SUPPORTED_MODELS;
   },
+  archiveSession: archiveCodexSession,
+  deleteSession: deleteCodexSession,
   modelOptions(agent) {
     return {
       launch: buildCodexAuthLaunch(agent, ['debug', 'models', '--bundled']),

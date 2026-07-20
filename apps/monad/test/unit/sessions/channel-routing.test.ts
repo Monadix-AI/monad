@@ -74,6 +74,22 @@ test('channel routing sends a single MeshAgent mention directly to that MeshAgen
   });
 });
 
+test('channel routing sends a project member id mention directly to that MeshAgent', () => {
+  expect(
+    routeChannelMessage({
+      text: '@[name="GPT 5.6 SOL" id="pmem_codex_9552476e00d6"] coordinate',
+      acpAgentNames,
+      meshAgentNames: ['pmem_claude-code_f2654d392ff2', 'pmem_codex_9552476e00d6']
+    })
+  ).toEqual({
+    kind: 'forward-mesh-agent',
+    agentName: 'pmem_codex_9552476e00d6',
+    text: 'coordinate',
+    displayText: '@[name="GPT 5.6 SOL" id="pmem_codex_9552476e00d6"] coordinate',
+    direct: true
+  });
+});
+
 test('channel routing records multiple mentions without implicit host routing', () => {
   expect(
     routeChannelMessage({

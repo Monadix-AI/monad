@@ -89,6 +89,7 @@ function neutralTool(event: MeshAgentObservationEvent, kind: 'tool-call' | 'tool
       item?.tool,
       item?.name,
       item?.type === 'commandExecution' ? item.type : undefined,
+      item?.type === 'command_execution' ? item.type : undefined,
       raw?.name,
       raw?.tool,
       raw?.tool_name,
@@ -118,8 +119,16 @@ function neutralTool(event: MeshAgentObservationEvent, kind: 'tool-call' | 'tool
     ...(callId ? { callId } : {}),
     ...(textValue(item?.cwd) ? { cwd: textValue(item?.cwd) } : {}),
     ...((explicitStatus ?? claudeResultStatus) ? { status: explicitStatus ?? claudeResultStatus } : {}),
-    ...(typeof item?.exitCode === 'number' ? { exitCode: item.exitCode } : {}),
-    ...(typeof item?.durationMs === 'number' ? { durationMs: item.durationMs } : {})
+    ...(typeof item?.exitCode === 'number'
+      ? { exitCode: item.exitCode }
+      : typeof item?.exit_code === 'number'
+        ? { exitCode: item.exit_code }
+        : {}),
+    ...(typeof item?.durationMs === 'number'
+      ? { durationMs: item.durationMs }
+      : typeof item?.duration_ms === 'number'
+        ? { durationMs: item.duration_ms }
+        : {})
   };
   const input =
     toolUse?.input ?? item?.input ?? item?.command ?? raw?.input ?? raw?.args ?? raw?.arguments ?? params?.input;
@@ -128,6 +137,7 @@ function neutralTool(event: MeshAgentObservationEvent, kind: 'tool-call' | 'tool
   }
   const output =
     item?.aggregatedOutput ??
+    item?.aggregated_output ??
     item?.output ??
     item?.result ??
     raw?.output ??

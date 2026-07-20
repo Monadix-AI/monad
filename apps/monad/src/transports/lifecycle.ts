@@ -212,11 +212,16 @@ export function createDaemonTcpRuntime(opts: {
     });
   const listenHttp =
     opts.listenHttp ??
-    ((app, listener) =>
-      Bun.serve({
-        ...buildDaemonTcpListenOptions({ host: listener.host, port: listener.port }),
-        fetch: (req: Request) => app.handle(req)
-      } as Parameters<typeof Bun.serve>[0]));
+    ((app, listener) => {
+      const live = app.listen(
+        buildDaemonTcpListenOptions({
+          host: listener.host,
+          port: listener.port
+        }) as Parameters<typeof app.listen>[0]
+      ) as unknown as { server?: TcpServer };
+      if (!live.server) throw new Error('monad: HTTP listener did not expose a server handle');
+      return live.server;
+    });
 
   let config = opts.initial;
   let listeners = planTcpListeners(config);

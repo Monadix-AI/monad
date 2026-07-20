@@ -31,7 +31,7 @@ const authSession = (authState: MeshAgentAuthSessionView['authState']): MeshAgen
   exitedAt: '2026-07-01T00:00:00.000Z'
 });
 
-test('MeshAgent connect removes the temporary agent when auth is not authenticated', async () => {
+test('MeshAgent connect keeps the temporary agent while auth is running', async () => {
   const saved: MeshAgentView[] = [];
   const removed: string[] = [];
 
@@ -47,7 +47,7 @@ test('MeshAgent connect removes the temporary agent when auth is not authenticat
 
   expect(result.persisted).toBe(false);
   expect(saved).toEqual([agent]);
-  expect(removed).toEqual([agent.name]);
+  expect(removed).toEqual([]);
 });
 
 test('MeshAgent connect saves an agent after authenticated auth', async () => {

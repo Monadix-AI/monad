@@ -211,3 +211,39 @@ export function codexAppServerRecordEvents(
   }
   return [];
 }
+
+const CODEX_LIVE_APP_SERVER_EVENT_METHODS = new Map([
+  ['thread.started', 'thread/started'],
+  ['turn.started', 'turn/started'],
+  ['turn.completed', 'turn/completed'],
+  ['thread.status.changed', 'thread/status/changed'],
+  ['item.started', 'item/started'],
+  ['item.completed', 'item/completed'],
+  ['item.agentMessage.delta', 'item/agentMessage/delta'],
+  ['item.reasoning.summaryTextDelta', 'item/reasoning/summaryTextDelta'],
+  ['item.reasoning.textDelta', 'item/reasoning/textDelta'],
+  ['item.plan.delta', 'item/plan/delta'],
+  ['item.commandExecution.outputDelta', 'item/commandExecution/outputDelta'],
+  ['command.exec.outputDelta', 'command/exec/outputDelta'],
+  ['process.outputDelta', 'process/outputDelta'],
+  ['item.fileChange.outputDelta', 'item/fileChange/outputDelta'],
+  ['item.mcpToolCall.progress', 'item/mcpToolCall/progress'],
+  ['turn.diff.updated', 'turn/diff/updated']
+]);
+
+export function isCodexLiveAppServerRecord(record: Record<string, unknown>): boolean {
+  const type = textValue(record.type);
+  return type ? CODEX_LIVE_APP_SERVER_EVENT_METHODS.has(type) : false;
+}
+
+export function codexLiveAppServerRecordEvents(
+  id: string,
+  record: Record<string, unknown>,
+  recordIndex: number
+): MeshAgentObservationEvent[] {
+  const type = textValue(record.type);
+  const method = type ? CODEX_LIVE_APP_SERVER_EVENT_METHODS.get(type) : undefined;
+  if (!method) return [];
+  const { type: _type, ...params } = record;
+  return codexAppServerRecordEvents(id, { method, params }, recordIndex);
+}

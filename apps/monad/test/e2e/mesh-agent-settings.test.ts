@@ -233,6 +233,38 @@ async function runNotFound(call: Call): Promise<void> {
   expect(res.status).toBe(404);
 }
 
+async function runAuthStatusNotFound(call: Call): Promise<void> {
+  let res = await call('GET', '/v1/mesh/agents/does-not-exist/auth/status');
+  expect(res.status).toBe(404);
+  expect((await res.json()) as { code: string; error: string }).toEqual({
+    error: 'MeshAgent not found or disabled: does-not-exist',
+    code: 'MESH_AGENT_NOT_FOUND'
+  });
+
+  res = await call('POST', '/v1/mesh/agents/does-not-exist/auth/start');
+  expect(res.status).toBe(404);
+  expect((await res.json()) as { code: string; error: string }).toEqual({
+    error: 'MeshAgent not found or disabled: does-not-exist',
+    code: 'MESH_AGENT_NOT_FOUND'
+  });
+
+  await call('PUT', '/v1/mesh/agents/codex', { agent: agentView() });
+  await call('POST', '/v1/mesh/agents/codex/disable');
+  res = await call('GET', '/v1/mesh/agents/codex/auth/status');
+  expect(res.status).toBe(404);
+  expect((await res.json()) as { code: string; error: string }).toEqual({
+    error: 'MeshAgent not found or disabled: codex',
+    code: 'MESH_AGENT_NOT_FOUND'
+  });
+
+  res = await call('POST', '/v1/mesh/agents/codex/auth/start');
+  expect(res.status).toBe(404);
+  expect((await res.json()) as { code: string; error: string }).toEqual({
+    error: 'MeshAgent not found or disabled: codex',
+    code: 'MESH_AGENT_NOT_FOUND'
+  });
+}
+
 async function runPresets(call: Call): Promise<void> {
   const res = await call('GET', '/v1/mesh/agents/presets');
   expect(res.status).toBe(200);
@@ -310,6 +342,17 @@ for (const kind of TRANSPORTS) {
       const t = serveTransport(kind, app);
       try {
         await runNotFound((m, p, b) => t.fetch(p, jsonInit(m, b)));
+      } finally {
+        await t.stop();
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+
+    test('auth status returns 404 for unknown or disabled agents', async () => {
+      const { dir, app } = await setup();
+      const t = serveTransport(kind, app);
+      try {
+        await runAuthStatusNotFound((m, p, b) => t.fetch(p, jsonInit(m, b)));
       } finally {
         await t.stop();
         await rm(dir, { recursive: true, force: true });

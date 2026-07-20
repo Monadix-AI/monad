@@ -18,6 +18,7 @@ import { readProviderEventFile } from '../event-files.ts';
 import { createOutputEventSource } from '../event-source.ts';
 import { meshAgentAdapterSettings } from '../settings.ts';
 import { createBasicSettingsImport } from '../settings-import/index.ts';
+import { archiveQwenSession, deleteQwenSession } from './lifecycle.ts';
 import { qwenObservationProjection } from './observation.ts';
 import { QwenSessionEventDriver } from './session-runtime.ts';
 import { hasQwenStreamJsonMessages } from './stream-json.ts';
@@ -216,6 +217,8 @@ export const qwenMeshAgentAdapter: MeshAgentProviderAdapter = {
     const configured = readQwenConfiguredModels();
     return configured.length > 0 ? configured : QWEN_SUPPORTED_MODELS;
   },
+  archiveSession: archiveQwenSession,
+  deleteSession: deleteQwenSession,
   createSessionRuntime: createQwenSessionRuntime,
   buildAuthLaunch(agent) {
     return buildQwenAuthLaunch(agent, []);

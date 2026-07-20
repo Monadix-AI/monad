@@ -1,4 +1,4 @@
-import type { AgentObservationEvent } from '@monad/protocol';
+import type { AgentObservationCard } from '@monad/protocol';
 
 import { expect, test } from 'bun:test';
 
@@ -14,13 +14,13 @@ import {
   prependObservationEvents
 } from '../../src/workspace-experiences/chat-room/utils/observation-events.ts';
 
-function event(id: string, dedupeKey = id): AgentObservationEvent {
+function event(id: string, dedupeKey = id): AgentObservationCard {
   return {
     id,
     dedupeKey,
-    kind: 'assistant-message',
+    kind: 'message',
     streaming: false,
-    text: id,
+    payload: { text: id },
     provenance: { contractEvents: [{ id }] }
   };
 }

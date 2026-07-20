@@ -3,6 +3,7 @@ import { expect, type Page, test } from '@playwright/test';
 const HARNESS = '/test/e2e/fixtures/observation-panel.html';
 
 type ObservationState = {
+  distanceFromBottom: number;
   loadCount: number;
   loadedTopRowOffset: number | null;
   loadingHeader: boolean;
@@ -98,4 +99,33 @@ test('a fast scrollbar jump to the loaded top starts loading without a second nu
 
   await expect.poll(async () => (await state(page)).loadingHeader).toBe(true);
   await expect.poll(async () => (await state(page)).loadCount).toBe(1);
+});
+
+test('turn mode opens pinned to the latest turn and its top button can page older history', async ({ page }) => {
+  await page.goto(`${HARNESS}?mode=turn`);
+  await page.locator('[data-observation-turn-mode="summary"]').first().waitFor();
+
+  await expect.poll(async () => (await state(page)).distanceFromBottom).toBe(0);
+
+  await page.getByRole('button', { name: 'Scroll to top' }).click();
+  await expect.poll(async () => (await state(page)).loadingHeader).toBe(true);
+  await expect.poll(async () => (await state(page)).loadCount).toBe(1);
+});
+
+test('switching observed agents resets turn-mode scroll to the latest turn', async ({ page }) => {
+  await page.goto(`${HARNESS}?mode=turn`);
+  await page.locator('[data-observation-turn-mode="summary"]').first().waitFor();
+  await expect.poll(async () => (await state(page)).distanceFromBottom).toBe(0);
+
+  await page.evaluate(() => {
+    const scroller = document.querySelector<HTMLElement>('[role="log"]');
+    if (!scroller) return;
+    scroller.scrollTop = Math.max(0, scroller.scrollHeight / 2 - scroller.clientHeight / 2);
+    scroller.dispatchEvent(new Event('scroll'));
+  });
+  expect(await state(page).then((s) => s.distanceFromBottom)).toBeGreaterThan(0);
+
+  await page.evaluate(() => window.observationHarness.agent('agent-b'));
+  await expect(page.locator('[role="log"]')).toContainText('agent-b turn');
+  await expect.poll(async () => (await state(page)).distanceFromBottom).toBe(0);
 });

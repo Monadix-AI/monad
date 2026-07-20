@@ -90,3 +90,67 @@ test('managed project members keep resolved and configured display names distinc
     store.close();
   }
 });
+
+test('managed project members resolve mesh config from template id instead of member name', () => {
+  const store = createStore();
+  const now = new Date().toISOString();
+  const session = {
+    id: 'ses_membertemplate01' as SessionId,
+    title: 'Workplace: Test',
+    state: 'active',
+    agentIds: [],
+    archived: false,
+    restoreCount: 0,
+    usage: {
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      reasoningTokens: 0
+    },
+    costUsd: 0,
+    cwd: process.cwd(),
+    createdAt: now,
+    updatedAt: now
+  } satisfies Session;
+  const claude = {
+    name: 'claude-code',
+    provider: 'claude-code',
+    command: 'claude',
+    enabled: true,
+    allowAutopilot: true,
+    approvalOwnership: 'provider-owned',
+    projectTemplates: [{ id: 'tpl_claude_reviewer', displayName: 'Claude Reviewer' }]
+  } satisfies MeshAgentConfig;
+  store.insertSession(session);
+  store.insertSessionMember({
+    sessionId: session.id,
+    memberId: 'pmem_claude_reviewer',
+    templateId: 'tpl_claude_reviewer',
+    type: 'mesh-agent',
+    data: {
+      name: 'Renamed reviewer',
+      displayName: 'Reviewer',
+      instanceId: 'pmem_claude_reviewer',
+      settings: { managedProjectAgent: true }
+    },
+    createdAt: now,
+    updatedAt: now
+  });
+
+  try {
+    expect(managedMeshAgentProjectMembers(store, session.id, [claude])).toEqual([
+      {
+        spec: claude,
+        runtimeAgentName: 'pmem_claude_reviewer',
+        templateAgentName: 'claude-code',
+        displayName: 'Reviewer',
+        configuredDisplayName: 'Reviewer',
+        settings: { managedProjectAgent: true }
+      }
+    ]);
+  } finally {
+    store.close();
+  }
+});

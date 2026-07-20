@@ -55,6 +55,9 @@ export interface MeshAgentHostDeps {
   resolveAgentEnv?: (env?: Record<string, string>) => Promise<Record<string, string> | undefined>;
   meshAgentProcessRegistryPath?: string;
   meshAgentLiveStoreDirectory?: string;
+  /** Developer mode installs the unredacted live fixture-capture tap. Never set outside developer mode. */
+  developerMode?: boolean;
+  meshFixtureCaptureDirectory?: string;
   authProcessRegistryPath?: string;
   authHeartbeatTimeoutMs?: number;
   authStatusTimeoutMs?: number;

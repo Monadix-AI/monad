@@ -9,22 +9,19 @@ import {
   settingsHotkey,
   sidebarNumberHotkeys,
   sidebarShortcutListenerOptions,
-  syncVisibleSidebarSessionShortcutBadges,
   visibleSidebarSessionRows
 } from '../../src/hooks/use-sidebar-shortcuts.ts';
 
 function fakeRow(testId: string, inert = false) {
   let clicked = 0;
-  const chip = { hidden: true, textContent: '' } as HTMLElement;
   const row = {
     click: () => {
       clicked += 1;
     },
     closest: (selector: string) => (selector === '[inert]' && inert ? {} : null),
-    dataset: { testId },
-    querySelector: (selector: string) => (selector === '[data-sidebar-shortcut-chip="true"]' ? chip : null)
+    dataset: { testId }
   } as unknown as HTMLElement;
-  return { chip, clicked: () => clicked, row };
+  return { clicked: () => clicked, row };
 }
 
 function fakeRoot(rows: HTMLElement[]) {
@@ -128,94 +125,6 @@ test('visible session activation clicks only an existing target', () => {
   expect(second.clicked()).toBe(1);
 });
 
-test('session shortcut badges number only the first nine visible rows and clear stale values', () => {
-  const items = Array.from({ length: 11 }, (_, index) => fakeRow(`row-${index}`, index === 1));
-  const rows = items.map((item) => item.row);
-  rows[1].dataset.sidebarShortcut = '8';
-  rows[10].dataset.sidebarShortcut = '9';
-
-  syncVisibleSidebarSessionShortcutBadges('⌘', fakeRoot(rows));
-
-  expect(rows.map((row) => row.dataset.sidebarShortcut ?? null)).toEqual([
-    '1',
-    null,
-    '2',
-    '3',
-    '4',
-    '5',
-    '6',
-    '7',
-    '8',
-    '9',
-    null
-  ]);
-  expect(rows.map((row) => row.dataset.sidebarShortcutModifier ?? null)).toEqual([
-    '⌘',
-    null,
-    '⌘',
-    '⌘',
-    '⌘',
-    '⌘',
-    '⌘',
-    '⌘',
-    '⌘',
-    '⌘',
-    null
-  ]);
-  expect(items.map((item) => (item.chip.hidden ? null : item.chip.textContent))).toEqual([
-    '⌘1',
-    null,
-    '⌘2',
-    '⌘3',
-    '⌘4',
-    '⌘5',
-    '⌘6',
-    '⌘7',
-    '⌘8',
-    '⌘9',
-    null
-  ]);
-
-  syncVisibleSidebarSessionShortcutBadges(null, fakeRoot(rows));
-  expect(items.every((item) => item.chip.hidden && item.chip.textContent === '')).toBe(true);
-});
-
-test('session shortcut badge sync does not rewrite unchanged chip content', () => {
-  let hidden = true;
-  let textContent = '';
-  let writes = 0;
-  const chip = {
-    get hidden() {
-      return hidden;
-    },
-    set hidden(value: boolean) {
-      hidden = value;
-      writes += 1;
-    },
-    get textContent() {
-      return textContent;
-    },
-    set textContent(value: string) {
-      textContent = value;
-      writes += 1;
-    }
-  } as HTMLElement;
-  const row = {
-    closest: () => null,
-    dataset: {},
-    querySelector: () => chip
-  } as unknown as HTMLElement;
-  const root = fakeRoot([row]);
-
-  syncVisibleSidebarSessionShortcutBadges('⌘', root);
-  writes = 0;
-  syncVisibleSidebarSessionShortcutBadges('⌘', root);
-
-  expect(writes).toBe(0);
-  expect(hidden).toBe(false);
-  expect(textContent).toBe('⌘1');
-});
-
 test('workspace session shortcuts build nine ordered activators', () => {
   const calls: number[] = [];
   const actions = createVisibleSidebarSessionShortcutActions((index) => {
@@ -231,6 +140,27 @@ test('workspace session shortcuts build nine ordered activators', () => {
 
 test('sidebar shortcuts stay on a capture listener', () => {
   expect(sidebarShortcutListenerOptions.capture).toBe(true);
+});
+
+test('sidebar shortcuts ignore keyboard events while global keyboard input is captured', () => {
+  const calls: string[] = [];
+  const shortcut = shortcutEvent({ key: '1', code: 'Digit1', metaKey: true });
+  const handler = createSidebarShortcutHandler({
+    applePlatform: true,
+    globalKeyboardInputCaptured: () => true,
+    revealSidebar: () => calls.push('reveal'),
+    showSettings: false,
+    sidebarShortcutActions: [() => calls.push('one')],
+    toggleSettings: () => calls.push('settings')
+  });
+
+  handler(shortcut.event);
+
+  expect({ calls, prevented: shortcut.prevented(), stopped: shortcut.stopped() }).toEqual({
+    calls: [],
+    prevented: 0,
+    stopped: 0
+  });
 });
 
 for (const platform of platforms) {

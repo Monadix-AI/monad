@@ -38,6 +38,7 @@ import { createOutputEventSource } from '../event-source.ts';
 import { SessionEventJsonlDriver } from '../session-event-jsonl-driver.ts';
 import { meshAgentAdapterSettings } from '../settings.ts';
 import { createClaudeCodeSettingsImport } from '../settings-import/index.ts';
+import { archiveClaudeCodeSession, deleteClaudeCodeSession } from './lifecycle.ts';
 import { claudeCodeObservationProjection } from './observation.ts';
 
 // `claude --help` documents `--model` as accepting tier aliases (each resolves to that tier's latest
@@ -508,6 +509,8 @@ export const claudeCodeMeshAgentAdapter: MeshAgentProviderAdapter = {
   listSupportedModels(agent) {
     return agent?.modelOptions?.length ? agent.modelOptions : CLAUDE_CODE_SUPPORTED_MODELS;
   },
+  archiveSession: archiveClaudeCodeSession,
+  deleteSession: deleteClaudeCodeSession,
   modelOptions(agent) {
     return {
       launch: buildClaudeAuthLaunch(agent, ['--help']),
