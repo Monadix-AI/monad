@@ -1,11 +1,16 @@
 // Pure translation between monad's event/prompt model and ACP wire types.
 // Kept side-effect-free so it can be unit-tested without a live connection.
 
-import type { ContentBlock, PlanEntry, SessionUpdate, StopReason, ToolKind } from '@agentclientprotocol/sdk';
+import type { ContentBlock, SessionUpdate, StopReason, ToolKind } from '@agentclientprotocol/sdk';
 import type { Event, FinishReason, TokenUsage } from '@monad/protocol';
 import type { ImageAttachment } from '#/agent/index.ts';
 
 import { finishReasonSchema, parseEventPayload, tokenUsageSchema } from '@monad/protocol';
+import { z } from 'zod';
+
+const planResultSchema = z.object({
+  todos: z.array(z.object({ content: z.string(), status: z.enum(['pending', 'in_progress', 'completed']) }))
+});
 
 export function canonicalTerminalMetadata(data: unknown): { finishReason?: FinishReason; usage?: TokenUsage } {
   if (!data || typeof data !== 'object') return {};
@@ -94,8 +99,7 @@ export function eventToPlanUpdate(event: Event): SessionUpdate | null {
   const { tool, ok, result } = parseEventPayload('tool.result', event.payload);
   if (tool !== 'todo_write' || !ok) return null;
   try {
-    const parsed = JSON.parse(result) as { todos?: Array<{ content: string; status: PlanEntry['status'] }> };
-    if (!Array.isArray(parsed.todos)) return null;
+    const parsed = planResultSchema.parse(JSON.parse(result));
     return {
       sessionUpdate: 'plan',
       entries: parsed.todos.map((t) => ({ content: t.content, priority: 'medium' as const, status: t.status }))

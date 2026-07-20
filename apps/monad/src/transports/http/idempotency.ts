@@ -1,11 +1,13 @@
 import { createHash } from 'node:crypto';
 import { createLogger } from '@monad/logger';
+import { z } from 'zod';
 
 import { HANDLER_ERROR_MAP, HandlerError } from '#/handlers/handler-error.ts';
 
 const IDEMPOTENCY_KEY_PATTERN = /^idem_[0-9A-Za-z]{12}$/;
 const DEFAULT_IDEMPOTENCY_TTL_MS = 5 * 60 * 1000;
 const log = createLogger('transport:http:idempotency');
+const responseHeadersSchema = z.record(z.string(), z.string());
 
 interface HttpIdempotencyRecord {
   key: string;
@@ -162,7 +164,7 @@ function replay(record: {
     );
   }
   const headers = new Headers(
-    record.responseHeaders ? (JSON.parse(record.responseHeaders) as Record<string, string>) : {}
+    record.responseHeaders ? responseHeadersSchema.parse(JSON.parse(record.responseHeaders)) : {}
   );
   headers.set('idempotent-replayed', 'true');
   return new Response(record.responseBody ?? '', { headers, status: record.responseStatus });
