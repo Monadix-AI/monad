@@ -12,17 +12,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useT } from '#/components/I18nProvider';
 import { CliTerminalModal } from './CliTerminalModal';
+import { meshAgentAuthErrorMessage, meshAgentAuthSessionMissing } from './mesh-agent-auth-errors';
 
 function meshAgentAuthSessionForView(
   sessionId: string,
   session: MeshAgentAuthSessionView | undefined
 ): MeshAgentAuthSessionView | undefined {
   return session?.id === sessionId ? session : undefined;
-}
-
-function authSessionMissing(error: unknown): boolean {
-  const text = error instanceof Error ? error.message : JSON.stringify(error);
-  return text.includes('404') || text.includes('not found');
 }
 
 export function MeshAgentAuthModal({
@@ -47,6 +43,9 @@ export function MeshAgentAuthModal({
   const [stopAuth] = useStopMeshAgentAuthMutation();
   const [authPersistenceError, setAuthPersistenceError] = useState<string | null>(null);
   const restartingAuth = useRef(false);
+  /** Set once the modal unmounts: the caller drops the temporary agent on close, so a request that
+   *  was already in flight must not restart a login for an agent that no longer exists. */
+  const closed = useRef(false);
   const session = meshAgentAuthSessionForView(activeAuthSession.id, data);
   const output = session?.outputSnapshot ?? '';
   const visibleOutput = authPersistenceError ? `${output}\n\n${authPersistenceError}` : output;
@@ -59,20 +58,31 @@ export function MeshAgentAuthModal({
     setActiveAuthSession({ id: sessionId, controlToken });
   }, [controlToken, sessionId]);
 
+  useEffect(() => {
+    closed.current = false;
+    return () => {
+      closed.current = true;
+    };
+  }, []);
+
   const restartMissingAuthSession = useCallback(async () => {
-    if (restartingAuth.current) return;
+    if (restartingAuth.current || closed.current) return;
     restartingAuth.current = true;
     try {
       const next = await startAuth(agentName).unwrap();
+      if (closed.current) return;
       setAuthPersistenceError(null);
       setActiveAuthSession({ id: next.id, controlToken: next.controlToken });
+    } catch (error) {
+      if (closed.current) return;
+      setAuthPersistenceError(meshAgentAuthErrorMessage(error));
     } finally {
       restartingAuth.current = false;
     }
   }, [agentName, startAuth]);
 
   useEffect(() => {
-    if (getAuthError && authSessionMissing(getAuthError)) void restartMissingAuthSession();
+    if (getAuthError && meshAgentAuthSessionMissing(getAuthError)) void restartMissingAuthSession();
   }, [getAuthError, restartMissingAuthSession]);
 
   useEffect(() => {
@@ -80,13 +90,13 @@ export function MeshAgentAuthModal({
     void heartbeatAuth(activeAuthSession)
       .unwrap()
       .catch((error) => {
-        if (authSessionMissing(error)) void restartMissingAuthSession();
+        if (meshAgentAuthSessionMissing(error)) void restartMissingAuthSession();
       });
     const timer = window.setInterval(() => {
       void heartbeatAuth(activeAuthSession)
         .unwrap()
         .catch((error) => {
-          if (authSessionMissing(error)) void restartMissingAuthSession();
+          if (meshAgentAuthSessionMissing(error)) void restartMissingAuthSession();
         });
     }, 5_000);
     return () => window.clearInterval(timer);
@@ -123,11 +133,13 @@ export function MeshAgentAuthModal({
           void inputAuth({ ...activeAuthSession, input })
             .unwrap()
             .catch((error) => {
-              if (authSessionMissing(error)) void restartMissingAuthSession();
+              if (meshAgentAuthSessionMissing(error)) void restartMissingAuthSession();
             });
       }}
       onStop={() => {
-        void stopAuth(activeAuthSession).unwrap();
+        void stopAuth(activeAuthSession)
+          .unwrap()
+          .catch(() => {});
         onClose();
       }}
       output={visibleOutput}
