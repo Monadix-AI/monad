@@ -5,7 +5,8 @@
     "msvm": "src/cli.ts"
   },
   "dependencies": {
-    "@monad/sdk-atom": "workspace:*"
+    "@monad/sdk-atom": "workspace:*",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/bun": "^1.3.14"
