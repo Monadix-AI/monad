@@ -40,8 +40,11 @@ function outputRecordIdentities(entries: MeshAgentObservationJsonRecordEntry[]):
   });
 }
 
-function projectedEventPart(id: string): string | undefined {
-  return /:json:\d+:(.+)$/.exec(id)?.[1];
+function projectedEventPart(id: string, recordIdentity: string): string | undefined {
+  const jsonPart = /:json:\d+:(.+)$/.exec(id)?.[1];
+  if (jsonPart) return jsonPart;
+  const prefix = `${recordIdentity}:`;
+  return id.startsWith(prefix) ? id.slice(prefix.length) : undefined;
 }
 
 function eventDedupeKey(provider: MeshAgentProvider, event: MeshAgentObservationEvent): string {
@@ -53,15 +56,15 @@ function eventDedupeKey(provider: MeshAgentProvider, event: MeshAgentObservation
       firstRaw && !Array.isArray(firstRaw) && typeof firstRaw === 'object'
         ? (firstRaw as Record<string, unknown>).type
         : undefined;
+    const recordIdentity = recordIds.length === 1 ? (recordIds[0] ?? '') : contentHash(recordIds.join(':'));
     const discriminator = [
       typeof rawType === 'string' ? rawType : undefined,
       event.role,
       event.providerEventType,
-      projectedEventPart(event.id)
+      projectedEventPart(event.id, recordIdentity)
     ]
       .filter((value): value is string => typeof value === 'string' && value.length > 0)
       .join(':');
-    const recordIdentity = recordIds.length === 1 ? recordIds[0] : contentHash(recordIds.join(':'));
     return `${provider}:${recordIdentity}:${discriminator}`;
   }
   const identity = rawEvents.length === 1 ? rawEvents[0] : rawEvents;

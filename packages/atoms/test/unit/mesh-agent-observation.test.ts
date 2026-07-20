@@ -255,6 +255,49 @@ test('Claude live output ends once from result instead of also ending on its ass
   ]);
 });
 
+test('Claude live and history projection ids are based on provider UUIDs', () => {
+  const message = {
+    type: 'assistant',
+    uuid: 'assistant_uuid_1',
+    message: {
+      role: 'assistant',
+      content: [{ type: 'text', text: 'Projection identity follows Claude.' }]
+    }
+  };
+  const live = meshAgentStreamItems({
+    id: 'mesh_claude_live',
+    provider: 'claude-code',
+    mode: 'live',
+    output: JSON.stringify({ ...message, session_id: 'session_1' })
+  });
+  const history = meshAgentStreamItems({
+    id: 'mesh_claude_history',
+    provider: 'claude-code',
+    mode: 'events',
+    output: JSON.stringify(message)
+  });
+
+  expect({
+    live: live.map(({ id, providerEventType, text }) => ({ id, providerEventType, text })),
+    history: history.map(({ id, providerEventType, text }) => ({ id, providerEventType, text }))
+  }).toEqual({
+    live: [
+      {
+        id: 'assistant_uuid_1:message:0',
+        providerEventType: 'assistant',
+        text: 'Projection identity follows Claude.'
+      }
+    ],
+    history: [
+      {
+        id: 'assistant_uuid_1:message:0',
+        providerEventType: 'assistant',
+        text: 'Projection identity follows Claude.'
+      }
+    ]
+  });
+});
+
 const cardsFromNeutral = (items: readonly AgentObservationEvent[], provider: string): AgentObservationCard[] =>
   agentObservationCards(items, provider);
 
@@ -577,7 +620,7 @@ test('Claude Code observation keeps the latest thinking token estimate in one re
 
   expect(items.map(neutralSnapshot)).toEqual([
     {
-      id: 'mesh_claude000000:thinking-tokens',
+      id: 'thinking_1:thinking-tokens',
       kind: 'reasoning',
       streaming: true,
       text: 'Thinking… · 151 tokens',

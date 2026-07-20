@@ -187,7 +187,7 @@ test('Claude event source keeps only the latest cumulative thinking token estima
     }).events
   ).toMatchObject([
     {
-      id: 'mesh_claude000000:thinking-tokens',
+      id: 'thinking_0:thinking-tokens',
       providerEventType: 'thinking_tokens_delta',
       text: 'Thinking… · 1120 tokens',
       provenance: { rawEvents: records }
