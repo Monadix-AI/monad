@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   type Event,
+  includeInContext,
   nativeAgentRuntimeInfoResponseSchema,
   type ProjectId,
   parseEventPayload,
@@ -673,6 +674,8 @@ for (const kind of TRANSPORTS) {
       const handlers = buildHandlers(mockModel());
       t = serveTransport(kind, createHttpTransport(handlers));
       const sessionId = await createSession(t);
+      addSessionMember(handlers, sessionId, 'codex', 'Lily');
+      addSessionMember(handlers, sessionId, 'claude', 'Steve');
       createManagedNativeSession(handlers, sessionId, 'mesh_codex0000000', 'codex');
       createManagedNativeSession(handlers, sessionId, 'mesh_claude000000', 'claude');
 
@@ -691,7 +694,55 @@ for (const kind of TRANSPORTS) {
       expect(
         ((await readByClaude.json()) as { messages: Array<{ fromAgent: string; peer: string; text: string }> }).messages
       ).toMatchObject([{ fromAgent: 'codex', peer: 'claude', text: 'private handoff' }]);
-      expect(await messages(t, sessionId)).toEqual([]);
+      const sentBody = (await sent.clone().json()) as { message: unknown };
+      const recordedMessages = handlers.store.listMessages(sessionId);
+      expect(
+        recordedMessages.map(({ active, data, role, stream, text, type }) => ({
+          active,
+          data,
+          role,
+          streamStatus: stream.status,
+          text,
+          type
+        }))
+      ).toEqual([
+        {
+          active: true,
+          data: { message: sentBody.message },
+          role: 'assistant',
+          streamStatus: 'settled',
+          text: 'Lily sent Steve a DM.',
+          type: 'mesh_agent_direct_message'
+        }
+      ]);
+      expect(recordedMessages.map(includeInContext)).toEqual([false]);
+    });
+
+    test('agent-to-agent send records the event while the recipient runtime is offline', async () => {
+      const handlers = buildHandlers(mockModel());
+      t = serveTransport(kind, createHttpTransport(handlers));
+      const sessionId = await createSession(t);
+      addSessionMember(handlers, sessionId, 'codex', 'Lily');
+      addSessionMember(handlers, sessionId, 'claude', 'Steve');
+      createManagedNativeSession(handlers, sessionId, 'mesh_codex0000000', 'codex');
+
+      const sent = await t.fetch(
+        '/v1/internal/native-agent/agent/send',
+        json({ to: 'claude', text: 'offline handoff' }, bindingHeaders(sessionId, 'mesh_codex0000000', 'codex'))
+      );
+
+      expect(sent.status).toBe(200);
+      const sentBody = (await sent.clone().json()) as { message: unknown };
+      expect(
+        handlers.store.listMessages(sessionId).map(({ data, role, text, type }) => ({ data, role, text, type }))
+      ).toEqual([
+        {
+          data: { message: sentBody.message },
+          role: 'assistant',
+          text: 'Lily sent Steve a DM.',
+          type: 'mesh_agent_direct_message'
+        }
+      ]);
     });
 
     test('project read can return a single project thread', async () => {

@@ -9,6 +9,7 @@ import {
   meshAgentApprovalResolutionRequestSchema,
   meshAgentAuthSessionViewSchema,
   meshAgentAuthStatusResponseSchema,
+  meshAgentDirectMessageMessageDataSchema,
   meshAgentObservationEventSchema,
   meshAgentPresetSchema,
   meshAgentSettingSchema,
@@ -740,6 +741,33 @@ test('native agent direct message schemas stay separate from project transcript'
   expect(message.sessionId).toBe('ses_PROJECT00000');
   expect('projectSessionId' in message).toBe(false);
   expect(message.peer).toBe('human');
+});
+
+test('mesh agent direct-message message data preserves the complete structured direct message', () => {
+  const data = {
+    message: {
+      id: 'msg_DIRECTEVENT0' as const,
+      sessionId: 'ses_PROJECT00000' as const,
+      meshSessionId: 'mesh_100000000000',
+      fromAgent: 'codex',
+      peer: 'claude',
+      text: 'review the attached plan',
+      attachments: [
+        {
+          id: 'att_01ABC0000000' as const,
+          path: '/tmp/project/plan.md',
+          name: 'plan.md',
+          mime: 'text/markdown',
+          bytes: 321,
+          createdAt: '2026-07-20T00:00:00.000Z'
+        }
+      ],
+      createdAt: '2026-07-20T00:00:01.000Z'
+    }
+  };
+
+  expect(meshAgentDirectMessageMessageDataSchema.parse(data)).toEqual(data);
+  expect(meshAgentDirectMessageMessageDataSchema.safeParse({ ...data, unexpected: true }).success).toBe(false);
 });
 
 test('messages carry file attachment references; the inline cap stays as the fallback guard', () => {

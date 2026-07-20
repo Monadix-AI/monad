@@ -76,6 +76,11 @@ export interface Message {
   systemDetail?: string;
   systemRaw?: unknown;
   systemActions?: Array<{ actionId: string; payload?: unknown }>;
+  directMessage?: {
+    fromAgentName: string;
+    toAgentName: string;
+    text: string;
+  };
   reasoning?: string;
   streaming?: boolean;
   orderKey?: string;

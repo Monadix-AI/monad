@@ -1,7 +1,16 @@
-import type { MessageAttachmentRef, MessageId, SessionId } from '@monad/protocol';
+import type { MessageAttachmentRef, MessageId, NativeAgentDirectMessage, SessionId } from '@monad/protocol';
 import type { SessionContext } from '#/handlers/session/context.ts';
 import type { createManagedMeshAgentDelivery } from '#/handlers/session/handlers/managed-mesh-agent-delivery.ts';
 import type { ManagedMeshAgentProjectMessageSender } from '#/handlers/session/handlers/messaging-notices.ts';
+
+import {
+  meshAgentProjectMemberDisplayName,
+  meshAgentProjectMemberDisplayNameForAgent,
+  meshAgentProjectMemberRuntimeName,
+  workplaceProjectMembers
+} from '#/handlers/session/handlers/messaging-members.ts';
+import { normalizeManagedMeshAgentDirectTarget } from '#/handlers/session/handlers/messaging-notices.ts';
+import { messageIdempotencyKey } from '#/services/messages/ingress.ts';
 
 /** Wraps the managed-mesh-agent delivery primitives with the project-config lookups the
  *  session handlers need (loading enabled agents, resolving the transcript target). */
@@ -9,7 +18,11 @@ export function createMessagingNotifyHandlers(
   ctx: SessionContext,
   managedMeshAgentDelivery: ReturnType<typeof createManagedMeshAgentDelivery>
 ) {
-  const { requireSession } = ctx;
+  const {
+    deps: { store },
+    messageIngress,
+    requireSession
+  } = ctx;
   const {
     completeManagedMeshAgentThinking,
     retireManagedMeshAgentThinking,
@@ -45,19 +58,40 @@ export function createMessagingNotifyHandlers(
     },
 
     async notifyManagedMeshAgentDirectMessage({
-      sessionId,
-      fromAgentName,
-      to,
-      text
+      message,
+      noticeText
     }: {
-      sessionId: SessionId;
-      fromAgentName: string;
-      to: string;
-      text: string;
+      message: NativeAgentDirectMessage;
+      noticeText: string;
     }) {
-      const session = requireSession(sessionId);
+      const session = requireSession(message.sessionId);
       const meshAgents = ctx.deps.configManager?.get().cfg.meshAgents ?? [];
-      await deliverDirectMessageToManagedMeshAgentMember({ session, meshAgents, fromAgentName, to, text });
+      const fromAgentName = message.fromAgent;
+      if (!fromAgentName) return { accepted: true as const };
+      const to = normalizeManagedMeshAgentDirectTarget(message.peer);
+      const recipient = workplaceProjectMembers(store, message.sessionId).find(
+        (member) => member.type === 'mesh-agent' && meshAgentProjectMemberRuntimeName(member) === to
+      );
+      if (recipient && to !== fromAgentName) {
+        const fromDisplayName = meshAgentProjectMemberDisplayNameForAgent(store, message.sessionId, fromAgentName);
+        const toDisplayName = meshAgentProjectMemberDisplayName(recipient);
+        await messageIngress.deliver({
+          transcriptTargetId: message.sessionId,
+          idempotencyKey: messageIdempotencyKey('native-agent-direct-message', message.id),
+          producer: { kind: 'system', subsystem: 'managed-mesh-agent' },
+          role: 'assistant',
+          type: 'mesh_agent_direct_message',
+          text: `${fromDisplayName} sent ${toDisplayName} a DM.`,
+          data: { message }
+        });
+      }
+      await deliverDirectMessageToManagedMeshAgentMember({
+        session,
+        meshAgents,
+        fromAgentName,
+        to,
+        text: noticeText
+      });
       return { accepted: true as const };
     },
 

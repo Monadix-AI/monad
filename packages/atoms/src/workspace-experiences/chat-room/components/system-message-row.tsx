@@ -1,7 +1,10 @@
 import type { Message } from '../../experience/types.ts';
 import type { WorkspaceExperienceHostAction } from '../../host-context.tsx';
+import type { MessageRowLabels } from './message-row.tsx';
 
-import { ProductIcon, WorkspaceSystemEventCard } from '@monad/ui';
+import { Mail01Icon } from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
+import { ProductIcon, Tooltip, TooltipContent, TooltipTrigger, WorkspaceSystemEventCard } from '@monad/ui';
 import {
   AgentIdentity,
   AgentInstanceAvatar,
@@ -14,14 +17,19 @@ export const TIME_STYLE: React.CSSProperties = { fontFamily: mono, fontSize: 11,
 
 export function SystemMessageRow({
   actions,
+  labels,
   msg,
   onAgentClick
 }: {
   actions?: readonly WorkspaceExperienceHostAction[];
+  labels?: MessageRowLabels;
   msg: Message;
   onAgentClick?: (id: string) => void;
 }): React.ReactElement {
   const developer = msg.kind === 'developer' || msg.developerOnly === true;
+  const directMessageText = msg.directMessage
+    ? (labels?.directMessageSent?.(msg.directMessage.fromAgentName, msg.directMessage.toAgentName) ?? msg.text)
+    : msg.text;
   const agentProductIcon = msg.agentChip ? resolveProductIcon(msg.agentChip) : null;
   const resolvedActions = msg.systemActions
     ?.map((actionRef) => {
@@ -62,9 +70,35 @@ export function SystemMessageRow({
       }
       badge={developer ? <TagChip tag="DEV" /> : undefined}
       body={
-        msg.text ? (
+        directMessageText ? (
           <span className="inline-flex min-w-0 items-center gap-2 text-muted-foreground">
-            <span className="min-w-0 truncate">{msg.text}</span>
+            <span className="min-w-0 truncate">{directMessageText}</span>
+            {msg.directMessage ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    aria-label={labels?.directMessageContent ?? msg.directMessage.text}
+                    className="workplace-action inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+                    title={msg.directMessage.text}
+                    type="button"
+                  >
+                    <HugeiconsIcon
+                      aria-hidden="true"
+                      icon={Mail01Icon}
+                      size={14}
+                      strokeWidth={2}
+                    />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent
+                  className="max-w-sm whitespace-pre-wrap break-words text-left text-sm"
+                  side="top"
+                  sideOffset={6}
+                >
+                  {msg.directMessage.text}
+                </TooltipContent>
+              </Tooltip>
+            ) : null}
             {resolvedActions?.map(({ action, payload }) => (
               <button
                 className="workplace-action inline-flex h-7 shrink-0 items-center justify-center rounded-md border border-border bg-card px-2.5 font-semibold text-foreground text-xs hover:bg-accent"

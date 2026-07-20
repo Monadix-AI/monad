@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { meshAgentDirectMessageMessageDataSchema } from './mesh-agent/mesh-agent-direct-messaging.ts';
 import { httpUrlSchema } from './url.ts';
 
 export { isHttpUrl } from './url.ts';
@@ -74,6 +75,12 @@ export const BUILTIN_MESSAGE_TYPES: Record<string, MessageTypeDescriptor> = Obje
   branch_source: {
     type: 'branch_source',
     dataSchema: branchSourceSchema,
+    fallbacks: ['data', 'text'],
+    includeInContext: false
+  },
+  mesh_agent_direct_message: {
+    type: 'mesh_agent_direct_message',
+    dataSchema: meshAgentDirectMessageMessageDataSchema,
     fallbacks: ['data', 'text'],
     includeInContext: false
   },

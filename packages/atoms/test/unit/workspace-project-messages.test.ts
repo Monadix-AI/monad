@@ -39,6 +39,75 @@ test('project message projection preserves display-only attachment metadata', ()
   ).toEqual([attachment]);
 });
 
+test('direct-message artifacts project to system events with current display names and text-only detail', () => {
+  const projected = messageToView(
+    {
+      kind: 'message',
+      id: 'msg_DM_EVENT0000',
+      role: 'assistant',
+      parts: [
+        {
+          type: 'artifact',
+          messageType: 'mesh_agent_direct_message',
+          text: 'codex sent claude a DM.',
+          data: {
+            message: {
+              id: 'msg_DIRECT000000',
+              sessionId: 'ses_PROJECT00000',
+              meshSessionId: 'mesh_100000000000',
+              fromAgent: 'codex',
+              peer: 'mesh-agent:claude',
+              text: 'Please review the attached plan.',
+              attachments: [
+                {
+                  id: 'att_01ABC0000000',
+                  path: '/tmp/project/plan.md',
+                  name: 'plan.md',
+                  mime: 'text/markdown',
+                  bytes: 321,
+                  createdAt: '2026-07-20T00:00:00.000Z'
+                }
+              ],
+              createdAt: '2026-07-20T00:00:01.000Z'
+            }
+          }
+        }
+      ],
+      status: 'done',
+      seq: '2026-07-20T00:00:02.000Z'
+    },
+    '10:30',
+    new Map(),
+    new Map(),
+    new Map([
+      ['codex', 'Lily'],
+      ['claude', 'Steve']
+    ])
+  );
+
+  expect({
+    id: projected.id,
+    kind: projected.kind,
+    text: projected.text,
+    time: projected.time,
+    orderKey: projected.orderKey,
+    directMessage: projected.directMessage,
+    attachments: projected.attachments
+  }).toEqual({
+    id: 'msg_DM_EVENT0000',
+    kind: 'system',
+    text: 'codex sent claude a DM.',
+    time: '10:30',
+    orderKey: '2026-07-20T00:00:02.000Z',
+    directMessage: {
+      fromAgentName: 'Lily',
+      toAgentName: 'Steve',
+      text: 'Please review the attached plan.'
+    },
+    attachments: undefined
+  });
+});
+
 type LegacySessionOverrides = Partial<MeshSessionView> & {
   state?: 'starting' | 'running' | 'exited' | 'failed' | 'stopped';
   pid?: number | null;
