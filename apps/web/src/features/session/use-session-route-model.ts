@@ -317,30 +317,15 @@ export function useSessionRouteModel({
   );
   const deepLinkMsg = useShellSearchParam('msg');
   const openAtMessage = transcript.openAtMessage;
-  const pendingScrollKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!deepLinkMsg || currentId === null) return;
     openAtMessage(deepLinkMsg as MessageId);
-    pendingScrollKeyRef.current = deepLinkMsg;
   }, [deepLinkMsg, currentId, openAtMessage]);
 
-  useEffect(() => {
-    const key = pendingScrollKeyRef.current;
-    if (!key) return;
-    if (viewMessages.some((m) => m.id === key)) {
-      pendingScrollKeyRef.current = null;
-      const scroll = () => transcriptRef.current?.scrollToKey(key, { align: 'center' });
-      scroll();
-      requestAnimationFrame(() => {
-        scroll();
-        requestAnimationFrame(() => {
-          scroll();
-          removeShellSearchParam('msg', key);
-        });
-      });
-    }
-  }, [viewMessages]);
+  const handleHighlightedMessageResolved = useCallback((messageId: string) => {
+    removeShellSearchParam('msg', messageId);
+  }, []);
 
   const applyItem = useCallback(
     (item: SessionCommandMenuItem) => {
@@ -460,6 +445,7 @@ export function useSessionRouteModel({
               onBranch: handleBranch,
               onClarifyAnswer: (requestId, answer) => void clarifyRespond({ requestId, answer }),
               onEndReached: transcript.loadNewer,
+              onHighlightedMessageResolved: handleHighlightedMessageResolved,
               onRestore: handleRestore,
               onScrollToBottom: scrollToBottom,
               onStartReached: transcript.loadOlder,
@@ -517,6 +503,7 @@ export function useSessionRouteModel({
       approveTool,
       cancelQueuedMessages,
       handleBranch,
+      handleHighlightedMessageResolved,
       clarifyRespond,
       removeQueuedMessage,
       applyItem,

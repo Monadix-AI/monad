@@ -19,8 +19,10 @@ import {
   isMeshAgentLoginItem,
   isSummaryTranscriptTurnItem,
   isToolItem,
+  renderedViewItemKeyForTarget,
   type SummaryTranscriptTurnViewItem,
-  summaryTranscriptTurns
+  summaryTranscriptTurns,
+  viewItemContainsTargetId
 } from './chat-view-items';
 import { MemorySummaryDivider } from './MemorySummaryDivider';
 import { MeshAgentLoginCard } from './MeshAgentLoginCard';
@@ -53,6 +55,8 @@ export function SessionTranscript({ model }: { model: SessionTranscriptModel }) 
   const [visibleRange, setVisibleRange] = useState<{ endIndex: number; startIndex: number } | null>(null);
   const [outlineTop, setOutlineTop] = useState('50%');
   const [expandedBranchSessionId, setExpandedBranchSessionId] = useState<SessionId | null>(null);
+  const [activeHighlightedMessageId, setActiveHighlightedMessageId] = useState<string | null>(null);
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const branchHistoryExpanded = expandedBranchSessionId === identity.currentSessionId;
   const visibleMessages = useMemo(
     () => branchSnapshotItems(model.viewMessages, branchHistoryExpanded),
@@ -76,6 +80,7 @@ export function SessionTranscript({ model }: { model: SessionTranscriptModel }) 
     () => activeMessageOutlineIds(outlineItems, visibleRange, renderedMessages.length),
     [outlineItems, renderedMessages.length, visibleRange]
   );
+  const highlightedMessageId = model.highlightedMessageId ?? activeHighlightedMessageId;
 
   useEffect(() => {
     const shell = shellRef.current;
@@ -94,6 +99,46 @@ export function SessionTranscript({ model }: { model: SessionTranscriptModel }) 
       observer.disconnect();
     };
   }, []);
+
+  useEffect(() => {
+    return () => {
+      if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!model.highlightedMessageId) return;
+    setActiveHighlightedMessageId(model.highlightedMessageId);
+  }, [model.highlightedMessageId]);
+
+  useEffect(() => {
+    const targetId = model.highlightedMessageId;
+    if (!targetId) return;
+    const renderedKey = renderedViewItemKeyForTarget(renderedMessages, targetId);
+    if (!renderedKey) return;
+
+    let firstFrame = 0;
+    let secondFrame = 0;
+    const scroll = () => model.transcriptRef.current?.scrollToKey(renderedKey, { align: 'center' });
+    scroll();
+    firstFrame = requestAnimationFrame(() => {
+      scroll();
+      secondFrame = requestAnimationFrame(() => {
+        scroll();
+        model.onHighlightedMessageResolved?.(targetId);
+        if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+        highlightTimerRef.current = setTimeout(() => {
+          setActiveHighlightedMessageId((current) => (current === targetId ? null : current));
+          highlightTimerRef.current = null;
+        }, 1400);
+      });
+    });
+    return () => {
+      cancelAnimationFrame(firstFrame);
+      cancelAnimationFrame(secondFrame);
+    };
+  }, [model.highlightedMessageId, model.onHighlightedMessageResolved, model.transcriptRef, renderedMessages]);
+
   const footer = useMemo(
     () =>
       pendingActionCount > 0 ? (
@@ -145,7 +190,7 @@ export function SessionTranscript({ model }: { model: SessionTranscriptModel }) 
         className={cn(
           'session-content-column',
           'pb-5',
-          message.id === model.highlightedMessageId && 'message-deep-link-target'
+          highlightedMessageId && viewItemContainsTargetId(message, highlightedMessageId) && 'message-deep-link-target'
         )}
         data-message-id={message.id}
       >
@@ -200,10 +245,10 @@ export function SessionTranscript({ model }: { model: SessionTranscriptModel }) 
       identity.assistantLabel,
       identity.currentSessionId,
       branchHistoryExpanded,
-      model.highlightedMessageId,
       model.onBranch,
       model.onRestore,
-      t
+      t,
+      highlightedMessageId
     ]
   );
 
@@ -239,7 +284,7 @@ export function SessionTranscript({ model }: { model: SessionTranscriptModel }) 
         onStartReached={model.onStartReached}
         renderItem={renderItem}
         role="log"
-        stickToBottom={!model.highlightedMessageId}
+        stickToBottom={!highlightedMessageId}
         style={{ height: '100%' }}
       />
       {!atBottom &&

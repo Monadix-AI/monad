@@ -54,6 +54,7 @@ export interface SessionTranscriptModel {
   onBranch: (messageId: string) => void;
   onClarifyAnswer: (requestId: string, answer: string) => void;
   onEndReached: () => void;
+  onHighlightedMessageResolved?: (messageId: string) => void;
   onRestore: (messageId: string, text: string) => Promise<boolean>;
   onScrollToBottom: (behavior?: 'smooth' | 'auto') => void;
   onStartReached: () => void;

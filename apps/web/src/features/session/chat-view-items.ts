@@ -315,6 +315,15 @@ export function summaryTranscriptTurns(items: ViewItem[]): ViewItem[] {
   return turns;
 }
 
+export function viewItemContainsTargetId(item: ViewItem, targetId: string): boolean {
+  if (item.id === targetId) return true;
+  return isSummaryTranscriptTurnItem(item) && item.details.some((detail) => viewItemContainsTargetId(detail, targetId));
+}
+
+export function renderedViewItemKeyForTarget(items: ViewItem[], targetId: string): string | null {
+  return items.find((item) => viewItemContainsTargetId(item, targetId))?.id ?? null;
+}
+
 function itemIsUserMessage(item: ViewItem): item is Msg {
   return 'role' in item && item.role === 'user';
 }

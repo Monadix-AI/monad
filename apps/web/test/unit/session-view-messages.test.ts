@@ -6,6 +6,7 @@ import {
   branchSnapshotItems,
   isBranchSourceItem,
   isTransientAttentionUiItem,
+  renderedViewItemKeyForTarget,
   summaryTranscriptTurns
 } from '../../src/features/session/chat-view-items.ts';
 import { buildViewMessages } from '../../src/features/session/session-view.ts';
@@ -341,6 +342,26 @@ test('summary transcript turns keep user and final assistant messages expanded',
     },
     expect.objectContaining({ id: 'a2', role: 'assistant', text: 'final answer' })
   ]);
+});
+
+test('summary transcript target lookup returns the rendered turn key for collapsed details', () => {
+  const items = buildViewMessages({
+    commandPending: null,
+    optimistic: [],
+    transcriptMode: 'live',
+    visibleHistory: [],
+    visibleLiveItems: [
+      message('u1', 'user', 'run it', '2026-07-15T00:00:00.000Z'),
+      message('a1', 'assistant', 'draft', '2026-07-15T00:00:30.000Z'),
+      message('a2', 'assistant', 'final answer', '2026-07-15T00:01:12.000Z')
+    ]
+  });
+  const rendered = summaryTranscriptTurns(items);
+
+  expect(renderedViewItemKeyForTarget(rendered, 'u1')).toBe('u1');
+  expect(renderedViewItemKeyForTarget(rendered, 'a1')).toBe('summary-turn:a1');
+  expect(renderedViewItemKeyForTarget(rendered, 'a2')).toBe('a2');
+  expect(renderedViewItemKeyForTarget(rendered, 'missing')).toBeNull();
 });
 
 test('summary transcript directives do not replace the final assistant message', () => {
