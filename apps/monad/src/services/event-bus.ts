@@ -1,27 +1,36 @@
-import type { Event, EventType, TranscriptTargetId } from '@monad/protocol';
+import type { Event, EventPayloadInput, EventType, TranscriptTargetId } from '@monad/protocol';
 
 import { EventEmitter } from 'node:events';
-import { eventDefinition, newId } from '@monad/protocol';
+import { eventDefinition, newId, parseEvent } from '@monad/protocol';
 
 export type EventSink = (event: Event) => void;
 
-/** Single constructor for the wire Event envelope — every daemon-emitted event goes through here.
- *  `payload` is `object` (not `Event['payload']`) so typed payload shapes without an index
- *  signature pass without a call-site cast; the wire schema validates the record shape anyway. */
-export function makeEvent(
+const validatedEvents = new WeakSet<Event>();
+
+function validateEvent(event: Event): Event {
+  if (validatedEvents.has(event)) return event;
+  const parsed = parseEvent(event);
+  validatedEvents.add(parsed);
+  return parsed;
+}
+
+/** Single constructor for the wire Event envelope — every daemon-emitted event goes through here. */
+export function makeEvent<T extends EventType>(
   sessionId: TranscriptTargetId,
-  type: EventType,
-  payload: object,
+  type: T,
+  payload: EventPayloadInput<T>,
   opts?: Pick<Partial<Event>, 'actorAgentId' | 'at'>
 ): Event {
-  return {
+  const event = parseEvent({
     id: newId('evt'),
     sessionId,
     type,
     actorAgentId: opts?.actorAgentId ?? null,
-    payload: payload as Event['payload'],
+    payload,
     at: opts?.at ?? new Date().toISOString()
-  };
+  });
+  validatedEvents.add(event);
+  return event;
 }
 
 /**
@@ -72,13 +81,14 @@ export class EventBus {
   }
 
   publish(event: Event): void {
-    this.emit(sessionTopic(event.sessionId), event);
-    this.emit(ALL_TOPIC, event);
+    const validated = validateEvent(event);
+    this.emit(sessionTopic(validated.sessionId), validated);
+    this.emit(ALL_TOPIC, validated);
     // List-level events also reach control subscribers. A sink subscribed to both
     // the session and control topics receives the event twice — clients dedupe by
     // `event.id` (events are idempotent by id).
-    const delivery = eventDefinition(event.type).delivery;
-    if (delivery === 'control' || delivery === 'both') this.emit(CONTROL_TOPIC, event);
+    const delivery = eventDefinition(validated.type).delivery;
+    if (delivery === 'control' || delivery === 'both') this.emit(CONTROL_TOPIC, validated);
   }
 
   private subscribeTopic(topic: Topic, sink: EventSink): () => void {

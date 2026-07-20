@@ -2,28 +2,109 @@ import type { Event, EventType, SessionId } from '@monad/protocol';
 
 import { expect, test } from 'bun:test';
 
-import { EventBus } from '#/services/event-bus.ts';
+import { EventBus, makeEvent } from '#/services/event-bus.ts';
 
 let counter = 0;
-const ev = (type: EventType, sessionId: string): Event => ({
-  id: `evt_${(counter++).toString().padStart(26, '0')}` as Event['id'],
-  sessionId: sessionId as SessionId,
-  type,
-  actorAgentId: null,
-  payload: { title: 't' },
-  at: '2026-06-12T00:00:00.000Z' as Event['at']
-});
+const ev = (type: EventType, sessionId: string): Event => {
+  const target = sessionId as SessionId;
+  const at = `2026-06-12T00:00:${(counter++).toString().padStart(2, '0')}.000Z`;
+  switch (type) {
+    case 'session.created':
+      return makeEvent(target, type, { title: 't' }, { at });
+    case 'session.updated':
+      return makeEvent(target, type, { title: 't' }, { at });
+    case 'session.run.completed':
+      return makeEvent(target, type, { transcriptTargetId: target }, { at });
+    case 'task.completed':
+      return makeEvent(target, type, { taskId: 'task-1' }, { at });
+    case 'tool.called':
+      return makeEvent(target, type, { toolCallId: 'call-1', tool: 'read', input: {} }, { at });
+    case 'tool.approval_requested':
+      return makeEvent(target, type, { requestId: 'request-1', tool: 'write', input: {} }, { at });
+    case 'mesh.started':
+      return makeEvent(
+        target,
+        type,
+        {
+          meshSessionId: 'mesh_100000000000',
+          agentName: 'reviewer',
+          provider: 'codex',
+          workingPath: '/tmp/project',
+          pid: 42
+        },
+        { at }
+      );
+    case 'mesh.turn_settled':
+      return makeEvent(target, type, { meshSessionId: 'mesh_100000000000' }, { at });
+    case 'mesh.exited':
+      return makeEvent(target, type, { meshSessionId: 'mesh_100000000000', exitCode: 0, state: 'exited' }, { at });
+    case 'mesh.session.connection.opened':
+      return makeEvent(
+        target,
+        type,
+        { meshSessionId: 'mesh_100000000000', provider: 'codex', observationEpoch: 'epoch-1' },
+        { at }
+      );
+    case 'mesh.session.connection.closed':
+      return makeEvent(
+        target,
+        type,
+        {
+          meshSessionId: 'mesh_100000000000',
+          provider: 'codex',
+          observationEpoch: 'epoch-1',
+          reason: 'disconnected'
+        },
+        { at }
+      );
+    default:
+      throw new Error(`unsupported test event: ${type}`);
+  }
+};
 
-const deltaEvent = (sessionId: string): Event => ({
-  ...ev('session.message.delta.appended', sessionId),
-  payload: {
+const deltaEvent = (sessionId: string): Event =>
+  makeEvent(sessionId as SessionId, 'session.message.delta.appended', {
     transcriptTargetId: sessionId,
     producer: { kind: 'agent', agentId: 'agt_100000000000' },
     messageId: 'msg_100000000000',
     channel: 'answer',
     index: 0,
     delta: 'x'
-  }
+  });
+
+test('makeEvent rejects an invalid payload before publication', () => {
+  expect(() =>
+    makeEvent('ses_100000000000' as SessionId, 'mesh.resume_failed', {
+      agentName: 'reviewer',
+      provider: 'claude-code',
+      providerSessionRef: 'thread-42',
+      message: 'resume failed',
+      fallback: 'cold-start'
+    } as never)
+  ).toThrow('Invalid input: expected string, received undefined');
+});
+
+test('EventBus rejects an Event assertion that bypasses makeEvent', () => {
+  const bus = new EventBus();
+  const seen: Event[] = [];
+  bus.subscribe('ses_100000000000' as SessionId, (event) => seen.push(event));
+  const invalid = {
+    id: 'evt_100000000000',
+    sessionId: 'ses_100000000000',
+    type: 'mesh.resume_failed',
+    actorAgentId: null,
+    payload: {
+      agentName: 'reviewer',
+      provider: 'claude-code',
+      providerSessionRef: 'thread-42',
+      message: 'resume failed',
+      fallback: 'cold-start'
+    },
+    at: '2026-07-20T00:00:00.000Z'
+  } as Event;
+
+  expect(() => bus.publish(invalid)).toThrow('Invalid input: expected string, received undefined');
+  expect(seen).toEqual([]);
 });
 
 test('control subscriber sees list-level events from sessions it never subscribed to', () => {
@@ -54,9 +135,9 @@ test('mesh-agent connection lifecycle reaches session and control subscribers as
   const bus = new EventBus();
   const session: Event[] = [];
   const control: Event[] = [];
-  const opened = ev('mesh.session.connection.opened', 'ses_connection0000');
-  const closed = ev('mesh.session.connection.closed', 'ses_connection0000');
-  bus.subscribe('ses_connection0000' as SessionId, (event) => session.push(event));
+  const opened = ev('mesh.session.connection.opened', 'ses_connect00000');
+  const closed = ev('mesh.session.connection.closed', 'ses_connect00000');
+  bus.subscribe('ses_connect00000' as SessionId, (event) => session.push(event));
   bus.subscribeControl((event) => control.push(event));
 
   bus.publish(opened);

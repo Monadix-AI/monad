@@ -26,7 +26,8 @@ export class MeshAgentOutputPipeline {
     transcriptTargetId: MeshAgentTargetId,
     id: string,
     adapter: MeshAgentProviderAdapter,
-    event: MeshAgentOutputEvent
+    event: MeshAgentOutputEvent,
+    authAgentName: string
   ): void {
     if (event.type === 'agent_message') {
       // A managed provider's own message is diagnostic output — observable through the mesh_agent
@@ -65,6 +66,7 @@ export class MeshAgentOutputPipeline {
       this.ctx.events.emit(transcriptTargetId, 'mesh.connection_required', {
         meshSessionId: id,
         agentName: live?.agentName ?? adapter.provider,
+        authAgentName,
         provider: adapter.provider,
         code:
           typeof event.payload.code === 'string' && event.payload.code.length > 0

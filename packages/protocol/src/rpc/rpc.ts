@@ -1,7 +1,17 @@
-import type { Event } from '../domain.ts';
-import type { TranscriptTargetId } from '../ids.ts';
-import type { InteractionEvent } from '../interaction.ts';
-import type { MessageGenerationFrame } from './control.ts';
+import type { EventNotification } from './control.ts';
+
+import { z } from 'zod';
+
+export const jsonRpcIdSchema = z.union([z.string(), z.number(), z.null()]);
+
+export const jsonRpcRequestEnvelopeSchema = z.object({
+  jsonrpc: z.literal('2.0'),
+  id: jsonRpcIdSchema.optional(),
+  method: z.string(),
+  params: z.unknown().optional()
+});
+
+export const jsonRpcRequestIdEnvelopeSchema = z.object({ id: jsonRpcIdSchema.optional() });
 
 export interface JsonRpcRequest {
   jsonrpc: '2.0';
@@ -18,22 +28,7 @@ export interface JsonRpcResponse {
 }
 
 /** Server-push notification — no `id` field (fire-and-forget). */
-export type JsonRpcNotification =
-  | {
-      jsonrpc: '2.0';
-      method: 'sessions.event';
-      params: { sessionId: TranscriptTargetId; event: Event };
-    }
-  | {
-      jsonrpc: '2.0';
-      method: 'interactions.event';
-      params: { event: InteractionEvent };
-    }
-  | {
-      jsonrpc: '2.0';
-      method: 'session.messageGeneration.event';
-      params: { sessionId: TranscriptTargetId; messageId: string; frame: MessageGenerationFrame };
-    };
+export type JsonRpcNotification = EventNotification;
 
 export interface JsonRpcError {
   code: number;

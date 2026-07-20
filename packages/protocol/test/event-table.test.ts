@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import { z } from 'zod';
 
 import { eventTypeSchema } from '../src/domain.ts';
-import { EVENT_DEFINITIONS, EVENT_TABLE, eventDefinition, parseEventPayload } from '../src/event-table.ts';
+import { EVENT_DEFINITIONS, EVENT_TABLE, eventDefinition, eventSchema, parseEventPayload } from '../src/event-table.ts';
 
 test('removed message and raw-output event names are rejected', () => {
   const removed = [
@@ -31,6 +31,26 @@ test('every EVENT_TABLE entry is a ZodType', () => {
   for (const [type, schema] of Object.entries(EVENT_TABLE)) {
     expect(schema instanceof z.ZodType, `${type} is not a ZodType`).toBe(true);
   }
+});
+
+test('event schema rejects a payload that violates its event type contract', () => {
+  const parsed = eventSchema.safeParse({
+    id: 'evt_100000000000',
+    sessionId: 'ses_100000000000',
+    type: 'mesh.resume_failed',
+    actorAgentId: null,
+    payload: {
+      agentName: 'reviewer',
+      provider: 'claude-code',
+      providerSessionRef: 'thread-42',
+      message: 'resume failed',
+      fallback: 'cold-start'
+    },
+    at: '2026-07-20T00:00:00.000Z'
+  });
+
+  expect(parsed.success).toBe(false);
+  expect(parsed.error?.issues.map((issue) => issue.path)).toEqual([['payload', 'code']]);
 });
 
 test('MeshAgent connection required events carry provider reconnect guidance', () => {

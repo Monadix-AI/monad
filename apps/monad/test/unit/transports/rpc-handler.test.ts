@@ -61,6 +61,16 @@ test('bad envelope (missing method) → INVALID_REQUEST', async () => {
   expect(out).toEqual([{ jsonrpc: '2.0', id: 7, error: RPC_ERRORS.INVALID_REQUEST }]);
 });
 
+test('non-object JSON → INVALID_REQUEST instead of escaping the boundary', async () => {
+  const { out } = await call('null');
+  expect(out).toEqual([{ jsonrpc: '2.0', id: null, error: RPC_ERRORS.INVALID_REQUEST }]);
+});
+
+test('bad envelope with an invalid id → INVALID_REQUEST with null id', async () => {
+  const { out } = await call(JSON.stringify({ jsonrpc: '2.0', id: { injected: true } }));
+  expect(out).toEqual([{ jsonrpc: '2.0', id: null, error: RPC_ERRORS.INVALID_REQUEST }]);
+});
+
 test('unknown method → METHOD_NOT_FOUND', async () => {
   const { out } = await call(rpc('sessions.frobnicate'));
   expect(out).toEqual([{ jsonrpc: '2.0', id: 1, error: RPC_ERRORS.METHOD_NOT_FOUND }]);

@@ -10,7 +10,7 @@ import {
   agentSchema,
   agentVisibilitySchema,
   chatMessageSchema,
-  eventSchema,
+  eventEnvelopeSchema,
   modelRolesSchema,
   monadixAgentSettingsSchema,
   sandboxModeSchema,
@@ -23,11 +23,13 @@ import {
   sessionTransportSchema
 } from '../domain.ts';
 import {
+  eventSchema,
   sessionMessageCompletedPayloadSchema,
   sessionMessageDeltaAppendedPayloadSchema,
   sessionMessageFailedPayloadSchema
 } from '../event-table.ts';
-import { agentIdSchema, eventIdSchema, messageIdSchema, sessionIdSchema } from '../ids.ts';
+import { agentIdSchema, eventIdSchema, messageIdSchema, sessionIdSchema, transcriptTargetIdSchema } from '../ids.ts';
+import { interactionEventSchema } from '../interaction.ts';
 import {
   cursorPaginationQuerySchema,
   cursorPaginationResponseSchema,
@@ -417,18 +419,18 @@ export const listMessagesResponseSchema = cursorPaginationResponseSchema.extend(
 });
 export type ListMessagesResponse = z.infer<typeof listMessagesResponseSchema>;
 
-const messageGenerationDeltaEventSchema = eventSchema.extend({
+const messageGenerationDeltaEventSchema = eventEnvelopeSchema.extend({
   type: z.literal('session.message.delta.appended'),
   payload: sessionMessageDeltaAppendedPayloadSchema
 });
 
 export const messageGenerationEventSchema = z.discriminatedUnion('type', [
   messageGenerationDeltaEventSchema,
-  eventSchema.extend({
+  eventEnvelopeSchema.extend({
     type: z.literal('session.message.completed'),
     payload: sessionMessageCompletedPayloadSchema
   }),
-  eventSchema.extend({
+  eventEnvelopeSchema.extend({
     type: z.literal('session.message.failed'),
     payload: sessionMessageFailedPayloadSchema
   })
@@ -459,6 +461,29 @@ export const messageGenerationFrameSchema = z.discriminatedUnion('kind', [
   messageGenerationEventFrameSchema
 ]);
 export type MessageGenerationFrame = z.infer<typeof messageGenerationFrameSchema>;
+
+export const eventNotificationSchema = z.discriminatedUnion('method', [
+  z.object({
+    jsonrpc: z.literal('2.0'),
+    method: z.literal('sessions.event'),
+    params: z.object({ sessionId: transcriptTargetIdSchema, event: eventSchema })
+  }),
+  z.object({
+    jsonrpc: z.literal('2.0'),
+    method: z.literal('interactions.event'),
+    params: z.object({ event: interactionEventSchema })
+  }),
+  z.object({
+    jsonrpc: z.literal('2.0'),
+    method: z.literal('session.messageGeneration.event'),
+    params: z.object({
+      sessionId: transcriptTargetIdSchema,
+      messageId: messageIdSchema,
+      frame: messageGenerationFrameSchema
+    })
+  })
+]);
+export type EventNotification = z.infer<typeof eventNotificationSchema>;
 
 export const branchSessionRequestSchema = z.object({
   title: z.string().max(SESSION_TITLE_MAX).optional(),

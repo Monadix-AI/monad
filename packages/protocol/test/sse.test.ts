@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { eventSchema } from '../src/domain.ts';
+import { eventSchema } from '../src/event-table.ts';
 import {
   parseTypedSseFrame,
   readTypedSseStream,
@@ -51,6 +51,22 @@ test('parseTypedSseFrame: heartbeat / [DONE] → empty', () => {
 test('parseTypedSseFrame: malformed JSON and schema-invalid → invalid (never throws)', () => {
   expect(parseTypedSseFrame('data: {not json', eventSchema).kind).toBe('invalid');
   expect(parseTypedSseFrame('data: {"id":"nope"}', eventSchema).kind).toBe('invalid');
+  expect(
+    parseTypedSseFrame(
+      `data: ${JSON.stringify({
+        ...event,
+        type: 'mesh.resume_failed',
+        payload: {
+          agentName: 'reviewer',
+          provider: 'claude-code',
+          providerSessionRef: 'thread-42',
+          message: 'resume failed',
+          fallback: 'cold-start'
+        }
+      })}`,
+      eventSchema
+    ).kind
+  ).toBe('invalid');
 });
 
 test('readTypedSseStream: decodes events across chunk boundaries and returns last id', async () => {

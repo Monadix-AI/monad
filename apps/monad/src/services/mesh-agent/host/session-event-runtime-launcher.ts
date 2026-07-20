@@ -239,7 +239,13 @@ export class MeshSessionEventRuntimeLauncher {
           this.ctx.deps.store.updateMeshSessionRef(id, event.payload.providerSessionRef);
           return;
         }
-        this.ctx.outputPipeline.structuredEvent(args.transcriptTargetId, id, adapter, event as MeshAgentOutputEvent);
+        this.ctx.outputPipeline.structuredEvent(
+          args.transcriptTargetId,
+          id,
+          adapter,
+          event as MeshAgentOutputEvent,
+          agent.name
+        );
       },
       onSnapshot: (snapshot) => {
         const updatedAt = new Date().toISOString();

@@ -12,8 +12,9 @@
 
 import { z } from 'zod';
 
+import { approvalScopeSchema } from './approvals.ts';
 import { clarifyAskerSchema, clarifyChoiceModeSchema } from './clarify.ts';
-import { chatMessageSchema, type EventType } from './domain.ts';
+import { chatMessageSchema, type Event, type EventType, eventEnvelopeSchema } from './domain.ts';
 import { agentIdSchema, meshSessionIdSchema, messageIdSchema, transcriptTargetIdSchema } from './ids.ts';
 import { mcpServerStatusSchema } from './mcp-server.ts';
 import { memoryScopeSchema } from './memory.ts';
@@ -35,7 +36,8 @@ export const sessionUpdatedPayloadSchema = z.object({
   title: z.string().optional(),
   state: z.string().optional(),
   archived: z.boolean().optional(),
-  reset: z.boolean().optional()
+  reset: z.boolean().optional(),
+  updatedAt: z.string().optional()
 });
 
 export const sessionDeletedPayloadSchema = z.object({});
@@ -149,7 +151,8 @@ export const toolApprovalResolvedPayloadSchema = z.object({
   requestId: requestIdSchema,
   tool: z.string(),
   allow: z.boolean(),
-  reason: z.string().optional()
+  reason: z.string().optional(),
+  scope: approvalScopeSchema.optional()
 });
 
 export const clarifyRequestedPayloadSchema = z.object({
@@ -425,11 +428,25 @@ export const EVENT_TABLE = Object.fromEntries(
   Object.entries(EVENT_DEFINITIONS).map(([type, definition]) => [type, definition.schema])
 ) as EventTable;
 
+export const eventSchema = eventEnvelopeSchema.transform((event, ctx): Event => {
+  const payload = EVENT_TABLE[event.type].safeParse(event.payload);
+  if (!payload.success) {
+    for (const issue of payload.error.issues) ctx.addIssue({ ...issue, path: ['payload', ...issue.path] });
+    return z.NEVER;
+  }
+  return { ...event, payload: payload.data };
+});
+
 export function eventDefinition<T extends EventType>(type: T): EventDefinitions[T] {
   return EVENT_DEFINITIONS[type];
 }
 
 export type EventPayload<T extends EventType> = z.infer<EventDefinitions[T]['schema']>;
+export type EventPayloadInput<T extends EventType> = z.input<EventDefinitions[T]['schema']>;
+
+export function parseEvent(input: unknown): Event {
+  return eventSchema.parse(input);
+}
 
 /**
  * Parse and validate the raw `payload` of an event. Returns a typed payload on

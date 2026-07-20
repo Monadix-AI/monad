@@ -4,9 +4,12 @@
 import type { Database } from 'bun:sqlite';
 import type { Event } from '@monad/protocol';
 
+import { parseEvent } from '@monad/protocol';
+
 /** Idempotent on id (INSERT OR IGNORE). */
 export function appendEvents(sqlite: Database, batch: Event[]): void {
   if (batch.length === 0) return;
+  const events = batch.map(parseEvent);
   const insert = sqlite.query(
     'INSERT OR IGNORE INTO events (id, transcript_target_id, type, actor_agent_id, task_id, payload, at) VALUES ($id, $transcriptTargetId, $type, $actorAgentId, $taskId, $payload, $at)'
   );
@@ -23,7 +26,7 @@ export function appendEvents(sqlite: Database, batch: Event[]): void {
       });
     }
   });
-  tx(batch);
+  tx(events);
 }
 
 export interface DanglingInterrupt {
@@ -112,13 +115,15 @@ export function listEvents(sqlite: Database, sessionId: string, afterEventId?: s
     payload: string;
     at: string;
   }>;
-  return rows.map((r) => ({
-    id: r.id as Event['id'],
-    sessionId: r.transcript_target_id as Event['sessionId'],
-    type: r.type as Event['type'],
-    actorAgentId: r.actor_agent_id as Event['actorAgentId'],
-    taskId: (r.task_id ?? undefined) as Event['taskId'],
-    payload: JSON.parse(r.payload) as Event['payload'],
-    at: r.at
-  }));
+  return rows.map((r) =>
+    parseEvent({
+      id: r.id,
+      sessionId: r.transcript_target_id,
+      type: r.type,
+      actorAgentId: r.actor_agent_id,
+      ...(r.task_id ? { taskId: r.task_id } : {}),
+      payload: JSON.parse(r.payload),
+      at: r.at
+    })
+  );
 }

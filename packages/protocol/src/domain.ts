@@ -409,7 +409,7 @@ export const eventTypeSchema = z.enum([
 ]);
 export type EventType = z.infer<typeof eventTypeSchema>;
 
-export const eventSchema = z.object({
+export const eventEnvelopeSchema = z.object({
   id: eventIdSchema,
   sessionId: transcriptTargetIdSchema,
   type: eventTypeSchema,
@@ -418,7 +418,7 @@ export const eventSchema = z.object({
   payload: z.record(z.string(), z.unknown()),
   at: iso8601Schema
 });
-export type Event = z.infer<typeof eventSchema>;
+export type Event = z.infer<typeof eventEnvelopeSchema>;
 
 // Typed event payloads are schema-first: defined as Zod schemas in event-table.ts and
 // re-exported here as `z.infer` types for backward compatibility. Runtime parse via

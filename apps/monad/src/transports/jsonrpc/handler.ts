@@ -3,7 +3,13 @@ import type { ConnectionState } from '#/transports/jsonrpc/connection.ts';
 import type { Push, RpcContext } from '#/transports/jsonrpc/methods.ts';
 
 import { createLogger, formatTransportCall } from '@monad/logger';
-import { isRpcMethod, RPC_ERRORS, RPC_METHOD_PARAMS } from '@monad/protocol';
+import {
+  isRpcMethod,
+  jsonRpcRequestEnvelopeSchema,
+  jsonRpcRequestIdEnvelopeSchema,
+  RPC_ERRORS,
+  RPC_METHOD_PARAMS
+} from '@monad/protocol';
 
 import { createDaemonHandlers, HandlerError } from '#/handlers/daemon-handlers/index.ts';
 import { HANDLER_ERROR_MAP } from '#/handlers/handler-error.ts';
@@ -40,27 +46,30 @@ export async function handleRpcMessage(
   transport = 'rpc',
   options: { interactions?: HostInteractionService } = {}
 ): Promise<void> {
-  let req: { jsonrpc?: unknown; id?: unknown; method?: unknown; params?: unknown };
+  let json: unknown;
 
   try {
-    req = JSON.parse(raw) as typeof req;
+    json = JSON.parse(raw);
   } catch {
     push({ jsonrpc: '2.0', id: null, error: RPC_ERRORS.PARSE_ERROR });
     return;
   }
 
-  if (req.jsonrpc !== '2.0' || typeof req.method !== 'string') {
+  const envelope = jsonRpcRequestEnvelopeSchema.safeParse(json);
+  if (!envelope.success) {
+    const idEnvelope = jsonRpcRequestIdEnvelopeSchema.safeParse(json);
     push({
       jsonrpc: '2.0',
-      id: (req.id as string | number | null | undefined) ?? null,
+      id: idEnvelope.success ? (idEnvelope.data.id ?? null) : null,
       error: RPC_ERRORS.INVALID_REQUEST
     });
     return;
   }
+  const req = envelope.data;
 
   // JSON-RPC 2.0 notification: id absent → dispatch and return, no reply.
   const isNotification = req.id == null;
-  const id = req.id as string | number;
+  const id = req.id ?? null;
   const method = req.method;
 
   // Per-connection rate limit (browser-facing WS only). Reject cheaply before any

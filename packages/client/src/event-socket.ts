@@ -2,9 +2,9 @@
 // stream markers, and host interaction notifications. Per-session generation is streamed over SSE
 // (see docs/internals/realtime-channels.md), and all other request/response goes over REST.
 
-import type { Event, InteractionEvent, JsonRpcNotification, RpcMethod, RpcParams } from '@monad/protocol';
+import type { Event, InteractionEvent, RpcMethod, RpcParams } from '@monad/protocol';
 
-import { eventSchema, interactionEventSchema } from '@monad/protocol';
+import { eventNotificationSchema } from '@monad/protocol';
 
 export type EventHandler = (event: Event) => void;
 export type InteractionEventHandler = (event: InteractionEvent) => void;
@@ -74,23 +74,21 @@ export class EventSocket {
   }
 
   private onMessage(ev: MessageEvent): void {
-    let msg: Partial<JsonRpcNotification>;
+    let raw: unknown;
     try {
-      msg = JSON.parse(String(ev.data)) as Partial<JsonRpcNotification>;
+      raw = JSON.parse(String(ev.data));
     } catch {
       return; // malformed frame — never throw out of the socket message handler
     }
-    if (msg.method === 'sessions.event' && msg.params) {
-      // Validate at the boundary rather than casting — drop anything that isn't a well-formed Event.
-      const parsed = eventSchema.safeParse((msg.params as { event?: unknown }).event);
-      if (!parsed.success) return;
-      for (const handler of this.controlHandlers) handler(parsed.data);
+    const parsed = eventNotificationSchema.safeParse(raw);
+    if (!parsed.success) return;
+    const msg = parsed.data;
+    if (msg.method === 'sessions.event') {
+      for (const handler of this.controlHandlers) handler(msg.params.event);
       return;
     }
-    if (msg.method === 'interactions.event' && msg.params) {
-      const parsed = interactionEventSchema.safeParse((msg.params as { event?: unknown }).event);
-      if (!parsed.success) return;
-      for (const handler of this.interactionHandlers) handler(parsed.data);
+    if (msg.method === 'interactions.event') {
+      for (const handler of this.interactionHandlers) handler(msg.params.event);
     }
   }
 

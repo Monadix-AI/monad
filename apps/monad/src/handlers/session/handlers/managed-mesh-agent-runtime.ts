@@ -94,7 +94,8 @@ export function createManagedMeshAgentRuntime(ctx: SessionContext) {
       return nativeSession;
     } catch (err) {
       if (!providerSessionRef) throw err;
-      const { code, message } = extractError(err);
+      const { code: extractedCode, message } = extractError(err);
+      const code = extractedCode ?? 'resume_failed';
       log?.debug(
         {
           sessionId: session.id,

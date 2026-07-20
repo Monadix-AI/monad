@@ -4,7 +4,7 @@
 import type { Event } from '@monad/protocol';
 
 import { afterAll, beforeAll, expect, test } from 'bun:test';
-import { parseEventPayload } from '@monad/protocol';
+import { createSessionResponseSchema, eventSchema, parseEventPayload } from '@monad/protocol';
 
 import { listen, mockModel } from '../helpers.ts';
 
@@ -21,7 +21,7 @@ async function createSession(): Promise<string> {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ title: 'streamable' })
   });
-  return ((await res.json()) as { sessionId: string }).sessionId;
+  return createSessionResponseSchema.parse(await res.json()).sessionId;
 }
 
 test('POST /messages with Accept: text/event-stream streams the round inline then closes', async () => {
@@ -49,7 +49,7 @@ test('POST /messages with Accept: text/event-stream streams the round inline the
         .slice(0, sep)
         .split('\n')
         .find((l) => l.startsWith('data: '));
-      if (dataLine) events.push(JSON.parse(dataLine.slice(6)) as Event);
+      if (dataLine) events.push(eventSchema.parse(JSON.parse(dataLine.slice(6))));
       buf = buf.slice(sep + 2);
       sep = buf.indexOf('\n\n');
     }

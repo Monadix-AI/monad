@@ -1,3 +1,4 @@
+import type { Database } from 'bun:sqlite';
 import type { Event, SessionId } from '@monad/protocol';
 
 import { expect, test } from 'bun:test';
@@ -54,6 +55,49 @@ test('appendEvents is idempotent on id (INSERT OR IGNORE)', () => {
   store.appendEvents([a]);
   store.appendEvents([a]); // replay of same id must not duplicate
   expect(store.listEvents(sessionId)).toHaveLength(1);
+  store.close();
+});
+
+test('appendEvents rejects a payload that violates its event type contract', () => {
+  const store = createStore();
+  const sessionId = newId('ses') as SessionId;
+  const invalid = evt(sessionId, 'mesh.resume_failed', {
+    agentName: 'reviewer',
+    provider: 'claude-code',
+    providerSessionRef: 'thread-42',
+    message: 'resume failed',
+    fallback: 'cold-start'
+  });
+
+  expect(() => store.appendEvents([invalid])).toThrow('Invalid input: expected string, received undefined');
+  expect(store.listEvents(sessionId)).toEqual([]);
+  store.close();
+});
+
+test('listEvents rejects a persisted payload that violates its event type contract', () => {
+  const store = createStore();
+  const sqlite = (store as unknown as { sqlite: Database }).sqlite;
+  const sessionId = newId('ses') as SessionId;
+  sqlite
+    .query(
+      'INSERT INTO events (id, transcript_target_id, type, actor_agent_id, payload, at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)'
+    )
+    .run(
+      newId('evt'),
+      sessionId,
+      'mesh.resume_failed',
+      null,
+      JSON.stringify({
+        agentName: 'reviewer',
+        provider: 'claude-code',
+        providerSessionRef: 'thread-42',
+        message: 'resume failed',
+        fallback: 'cold-start'
+      }),
+      '2026-07-20T00:00:00.000Z'
+    );
+
+  expect(() => store.listEvents(sessionId)).toThrow('Invalid input: expected string, received undefined');
   store.close();
 });
 

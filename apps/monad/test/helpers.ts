@@ -28,7 +28,7 @@ import { BUILTIN_COMMANDS } from '@monad/atoms/commands/builtins';
 import { builtinModelProviders } from '@monad/atoms/providers/registry';
 import { createDefaultConfig, emptyAuth, saveAll, saveAuth } from '@monad/environment';
 import { enMessages as i18nMessages } from '@monad/i18n/messages';
-import { ModelProviderType, newId } from '@monad/protocol';
+import { eventSchema, ModelProviderType, newId } from '@monad/protocol';
 
 import { createAgent, ModelProviderRegistry } from '#/agent/index.ts';
 import { createClarifyTool } from '#/capabilities/tools/registry/clarify.ts';
@@ -542,7 +542,7 @@ export async function readSSE(
         buf = buf.slice(sep + 2);
         const dataLine = frame.split('\n').find((l) => l.startsWith('data: '));
         if (dataLine) {
-          const event = JSON.parse(dataLine.slice(6)) as Event;
+          const event = eventSchema.parse(JSON.parse(dataLine.slice(6)));
           seen.push(event);
           if (opts.until(event)) {
             controller.abort();

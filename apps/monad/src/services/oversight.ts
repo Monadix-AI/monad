@@ -2,10 +2,10 @@
 // the client must answer. We model it as an out-of-band event + an inbound RPC rather
 // than full reverse-RPC over WS (see transport notes).
 
-import type { ApprovalScope, Event, SessionId } from '@monad/protocol';
+import type { ApprovalScope, Event, EventPayloadInput, SessionId } from '@monad/protocol';
 import type { ToolGate, ToolGateOutcome, ToolGateRequest } from '#/capabilities/tools/types.ts';
 
-import { newId, resourceApprovalPayloadSchema } from '@monad/protocol';
+import { newId, resourceApprovalPayloadSchema, sessionIdSchema } from '@monad/protocol';
 
 import { HostEscapePersistError, type PolicyEngine } from '#/agent/approvals/engine.ts';
 import { makeEvent } from '#/services/event-bus.ts';
@@ -76,7 +76,7 @@ export class OversightService {
         return;
       }
       const requestId = newId('gate');
-      const sessionId = req.sessionId as SessionId;
+      const sessionId = sessionIdSchema.parse(req.sessionId);
       const timer = setTimeout(() => {
         if (this.pending.delete(requestId)) {
           this.emit(sessionId, 'tool.approval_resolved', {
@@ -199,10 +199,10 @@ export class OversightService {
     });
   }
 
-  private emit(
+  private emit<T extends 'tool.approval_requested' | 'tool.approval_resolved'>(
     sessionId: SessionId,
-    type: 'tool.approval_requested' | 'tool.approval_resolved',
-    payload: Record<string, unknown>
+    type: T,
+    payload: EventPayloadInput<T>
   ): void {
     this.publish(makeEvent(sessionId, type, payload));
   }

@@ -7,9 +7,9 @@
 // timeout: a human composing an answer needs longer than a yes/no, and a timeout yields an
 // empty answer (the agent proceeds with what it has) rather than a fail-closed denial.
 
-import type { ClarifyAsker, ClarifyChoiceMode, Event, SessionId } from '@monad/protocol';
+import type { ClarifyAsker, ClarifyChoiceMode, Event, EventPayloadInput, TranscriptTargetId } from '@monad/protocol';
 
-import { newId } from '@monad/protocol';
+import { newId, transcriptTargetIdSchema } from '@monad/protocol';
 
 import { makeEvent } from '#/services/event-bus.ts';
 
@@ -73,7 +73,7 @@ export class ClarifyService {
         return;
       }
       const requestId = newId('clarify');
-      const sid = sessionId;
+      const sid = transcriptTargetIdSchema.parse(sessionId);
       if (opts?.signal?.aborted) {
         resolve({ requestId, answer: '' });
         return;
@@ -122,13 +122,11 @@ export class ClarifyService {
     return this.pending.size;
   }
 
-  private emit(
-    sessionId: string,
-    type: 'clarify.requested' | 'clarify.resolved',
-    payload: Record<string, unknown>
+  private emit<T extends 'clarify.requested' | 'clarify.resolved'>(
+    sessionId: TranscriptTargetId,
+    type: T,
+    payload: EventPayloadInput<T>
   ): void {
-    // TODO(track-b): clarify can be asked from a project-wide fan-out turn (a `prj_` id), so
-    // `sessionId` here is not always a real SessionId — see context.ts's SessionOrProject note.
-    this.publish(makeEvent(sessionId as SessionId, type, payload));
+    this.publish(makeEvent(sessionId, type, payload));
   }
 }
