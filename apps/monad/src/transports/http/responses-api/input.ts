@@ -1,19 +1,15 @@
 import type { ModelMessage } from '@monad/sdk-atom';
-import type {
-  EasyInputMessage,
-  FunctionTool,
-  ResponseFunctionToolCall,
-  ResponseInput,
-  ResponseInputItem,
-  ResponseInputText,
-  ResponseOutputMessage,
-  ResponseOutputText,
-  ResponseUsage
-} from 'openai/resources/responses/responses';
-import type { ResponsesRequest } from './types.ts';
+import type { ResponseOutputMessage, ResponseOutputText, ResponseUsage } from 'openai/resources/responses/responses';
+import type { ResponsesFunctionTool, ResponsesInput, ResponsesRequest } from './types.ts';
 
 import { definePrompt } from '#/agent/prompt-template.ts';
 import ambientContextPath from './ambient-context.prompt.md' with { type: 'file' };
+import {
+  responseFunctionCallInputSchema,
+  responseFunctionCallOutputInputSchema,
+  responseFunctionToolSchema,
+  responseMessageInputSchema
+} from './types.ts';
 
 const AMBIENT_CONTEXT_PROMPT = await definePrompt<{
   jsonOnly: boolean;
@@ -21,17 +17,18 @@ const AMBIENT_CONTEXT_PROMPT = await definePrompt<{
   temperature?: number;
 }>({ id: 'responses-api.ambient-context', sourcePath: ambientContextPath, allowEmpty: true });
 
-export function extractInputText(input: string | ResponseInput): string {
+export function extractInputText(input: ResponsesInput): string {
   if (typeof input === 'string') return input;
   const parts: string[] = [];
   for (const item of input) {
-    if (!('role' in item) || !('content' in item)) continue;
-    const msg = item as EasyInputMessage;
+    const parsed = responseMessageInputSchema.safeParse(item);
+    if (!parsed.success) continue;
+    const msg = parsed.data;
     const text =
       typeof msg.content === 'string'
         ? msg.content
-        : (msg.content as ResponseInputText[])
-            .filter((p): p is ResponseInputText => p.type === 'input_text')
+        : msg.content
+            .filter((part) => part.type === 'input_text' && typeof part.text === 'string')
             .map((p) => p.text)
             .join('\n');
     if (msg.role === 'system') {
@@ -89,9 +86,12 @@ export function computeOutputText(output: ResponseOutputMessage[]): string {
 // ── function tool helpers ─────────────────────────────────────────────────────
 
 /** Extract client-provided FunctionTool definitions from the request (filters out built-in types). */
-export function extractFunctionTools(tools: ResponsesRequest['tools']): FunctionTool[] {
+export function extractFunctionTools(tools: ResponsesRequest['tools']): ResponsesFunctionTool[] {
   if (!tools) return [];
-  return tools.filter((t): t is FunctionTool => t.type === 'function');
+  return tools.flatMap((tool) => {
+    const parsed = responseFunctionToolSchema.safeParse(tool);
+    return parsed.success ? [parsed.data] : [];
+  });
 }
 
 /**
@@ -100,7 +100,7 @@ export function extractFunctionTools(tools: ResponsesRequest['tools']): Function
  * `system` is prepended as the first message when present.
  */
 export function buildMessagesFromInput(
-  input: string | ResponseInput,
+  input: ResponsesInput,
   system?: string | null,
   prevMessages?: ModelMessage[]
 ): ModelMessage[] {
@@ -117,11 +117,13 @@ export function buildMessagesFromInput(
 
   for (const item of input) {
     if (!item || typeof item !== 'object') continue;
-    const type = (item as { type?: string }).type;
+    const type = item.type;
 
     // function_call_output: tool result from the client
     if (type === 'function_call_output') {
-      const fc = item as ResponseInputItem.FunctionCallOutput;
+      const parsed = responseFunctionCallOutputInputSchema.safeParse(item);
+      if (!parsed.success) continue;
+      const fc = parsed.data;
       messages.push({
         role: 'tool',
         content: [{ type: 'tool-result', toolCallId: fc.call_id, toolName: '', output: String(fc.output ?? '') }]
@@ -131,7 +133,9 @@ export function buildMessagesFromInput(
 
     // function_call (assistant requesting a tool): comes back in continuation input
     if (type === 'function_call') {
-      const fc = item as ResponseFunctionToolCall;
+      const parsed = responseFunctionCallInputSchema.safeParse(item);
+      if (!parsed.success) continue;
+      const fc = parsed.data;
       messages.push({
         role: 'assistant',
         content: [
@@ -153,13 +157,14 @@ export function buildMessagesFromInput(
     }
 
     // Standard message (user / assistant / system)
-    if ('role' in item && 'content' in item) {
-      const msg = item as EasyInputMessage;
+    const parsed = responseMessageInputSchema.safeParse(item);
+    if (parsed.success) {
+      const msg = parsed.data;
       const text =
         typeof msg.content === 'string'
           ? msg.content
-          : (msg.content as ResponseInputText[])
-              .filter((p): p is ResponseInputText => p.type === 'input_text')
+          : msg.content
+              .filter((part) => part.type === 'input_text' && typeof part.text === 'string')
               .map((p) => p.text)
               .join('\n');
       const role = msg.role === 'system' ? 'system' : msg.role === 'assistant' ? 'assistant' : 'user';

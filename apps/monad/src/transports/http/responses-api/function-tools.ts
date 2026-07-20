@@ -1,13 +1,12 @@
 import type { AgentId, SessionId } from '@monad/protocol';
 import type { ModelMessage } from '@monad/sdk-atom';
 import type {
-  FunctionTool,
   Response as OAIResponse,
   ResponseFunctionToolCall,
   ResponseOutputMessage
 } from 'openai/resources/responses/responses';
 import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
-import type { ResponseObject, ResponsesRequest, StoredResponse } from './types.ts';
+import type { ResponseObject, ResponsesFunctionTool, ResponsesRequest, StoredResponse } from './types.ts';
 
 import { newId } from '@monad/protocol';
 
@@ -25,7 +24,7 @@ export async function handleFunctionToolPath(
   storedResponses: Map<string, StoredResponse>,
   body: ResponsesRequest,
   agentId: AgentId | undefined,
-  functionTools: FunctionTool[]
+  functionTools: ResponsesFunctionTool[]
 ): Promise<Response> {
   const prevEntry = body.previous_response_id ? storedResponses.get(body.previous_response_id) : undefined;
   if (body.previous_response_id && !prevEntry) {

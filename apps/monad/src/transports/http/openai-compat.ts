@@ -1,14 +1,8 @@
 import type { AgentId, SessionId } from '@monad/protocol';
-import type {
-  ChatCompletion,
-  ChatCompletionChunk,
-  ChatCompletionContentPartText,
-  ChatCompletionCreateParamsBase,
-  ChatCompletionMessageParam
-} from 'openai/resources/chat/completions';
+import type { ChatCompletion, ChatCompletionChunk } from 'openai/resources/chat/completions';
 import type { CompletionUsage } from 'openai/resources/completions';
-import type { EmbeddingCreateParams } from 'openai/resources/embeddings';
 import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
+import type { ChatCompletionRequest, ChatContent, ChatMessage, EmbeddingRequest } from './openai-compat-schemas.ts';
 
 import { timingSafeEqual } from 'node:crypto';
 import { costSchema, finishReasonSchema, newId, parseEventPayload, tokenUsageSchema } from '@monad/protocol';
@@ -20,6 +14,7 @@ import { buildSessionOrigin } from '#/handlers/session/origin.ts';
 import { isInboundDelegationSession } from '#/services/inbound-approval.ts';
 import { SSE_RESPONSE_HEADERS } from '#/transports/http/sessions/sse.ts';
 import openAiCompatAmbientContextPath from './openai-compat-ambient-context.prompt.md' with { type: 'file' };
+import { chatCompletionRequestSchema, chatTextPartSchema, embeddingRequestSchema } from './openai-compat-schemas.ts';
 
 // ── OpenAI wire types ─────────────────────────────────────────────────────────
 // All openai SDK imports are type-only — erased at bundle time.
@@ -92,15 +87,17 @@ function checkToken(request: Request, token: string): boolean {
   return timingSafeEqual(pa, pb) && a.length === b.length;
 }
 
-// Wide content type covers the union of all ChatCompletionMessageParam.content variants.
-type AnyContent = string | null | Array<{ type: string }> | undefined;
+// Wide content type covers the message content variants accepted by this compatibility surface.
+type AnyContent = ChatContent | undefined;
 
 function extractText(content: AnyContent): string {
   if (!content) return '';
   if (typeof content === 'string') return content;
   return content
-    .filter((p): p is ChatCompletionContentPartText => p.type === 'text')
-    .map((p) => p.text)
+    .flatMap((part) => {
+      const parsed = chatTextPartSchema.safeParse(part);
+      return parsed.success ? [parsed.data.text] : [];
+    })
     .join('\n');
 }
 
@@ -156,19 +153,17 @@ function terminalMetadata(data: unknown) {
   };
 }
 
-function packContext(messages: ChatCompletionMessageParam[]): string {
+function packContext(messages: ChatMessage[]): string {
   const system = messages.find((m) => m.role === 'system');
   const last = messages[messages.length - 1];
   const history = messages.slice(0, -1).filter((m) => m.role !== 'system');
   const parts: string[] = [];
   if (system) parts.push(`<system>\n${extractText(system.content)}\n</system>`);
   if (history.length > 0) {
-    const lines = history.map(
-      (m) => `${m.role === 'user' ? 'Human' : 'Assistant'}: ${extractText((m as { content?: AnyContent }).content)}`
-    );
+    const lines = history.map((m) => `${m.role === 'user' ? 'Human' : 'Assistant'}: ${extractText(m.content)}`);
     parts.push(`<conversation_history>\n${lines.join('\n')}\n</conversation_history>`);
   }
-  parts.push(extractText((last as { content?: AnyContent } | undefined)?.content));
+  parts.push(extractText(last?.content));
   return parts.join('\n\n');
 }
 
@@ -179,7 +174,7 @@ const OPENAI_COMPAT_AMBIENT_CONTEXT_PROMPT = await definePrompt<{
   temperature?: number;
 }>({ id: 'openai-compat.ambient-context', sourcePath: openAiCompatAmbientContextPath, allowEmpty: true });
 
-function buildAmbientContext(body: ChatCompletionCreateParamsBase): string | undefined {
+function buildAmbientContext(body: ChatCompletionRequest): string | undefined {
   const stops = body.stop ? (Array.isArray(body.stop) ? body.stop : [body.stop]).filter(Boolean) : [];
   const rendered = OPENAI_COMPAT_AMBIENT_CONTEXT_PROMPT.render({
     jsonOnly: body.response_format?.type === 'json_object',
@@ -312,19 +307,14 @@ export function createOpenAiCompatController(
         const block = await guard(request);
         if (block) return block;
 
-        let body: EmbeddingCreateParams;
+        let body: EmbeddingRequest;
         try {
-          body = (await request.json()) as EmbeddingCreateParams;
+          body = embeddingRequestSchema.parse(await request.json());
         } catch {
           return oaiErrorResponse('Invalid JSON in request body');
         }
-        if (!body.input) return oaiErrorResponse('input is required');
 
-        const texts: string[] =
-          typeof body.input === 'string'
-            ? [body.input]
-            : (body.input as unknown[]).filter((x): x is string => typeof x === 'string');
-        if (texts.length === 0) return oaiErrorResponse('input must be a non-empty string or array');
+        const texts = typeof body.input === 'string' ? [body.input] : body.input;
 
         try {
           const result = await handlers.embeddings.embed(texts);
@@ -346,16 +336,13 @@ export function createOpenAiCompatController(
         const block = await guard(request);
         if (block) return block;
 
-        let body: ChatCompletionCreateParamsBase;
+        let body: ChatCompletionRequest;
         try {
-          body = (await request.json()) as ChatCompletionCreateParamsBase;
+          body = chatCompletionRequestSchema.parse(await request.json());
         } catch {
           return oaiErrorResponse('Invalid JSON in request body');
         }
 
-        if (!body.model || typeof body.model !== 'string') return oaiErrorResponse('model is required');
-        if (!Array.isArray(body.messages) || body.messages.length === 0)
-          return oaiErrorResponse('messages must be a non-empty array');
         const lastMsg = body.messages[body.messages.length - 1];
         if (lastMsg?.role !== 'user') return oaiErrorResponse('last message must have role "user"');
         if (body.n !== undefined && body.n !== 1) {
@@ -454,9 +441,9 @@ export function createOpenAiCompatController(
           const systemChanged = currentSystemText !== undefined && currentSystemText !== prevSystem;
           if (systemChanged && currentSystemText !== undefined) {
             if (userKey && userSessionData.has(userKey)) userSystemPrompts.set(userKey, currentSystemText);
-            text = `[Updated system instructions]\n${currentSystemText}\n\n${extractText((lastMsg as { content?: AnyContent }).content)}`;
+            text = `[Updated system instructions]\n${currentSystemText}\n\n${extractText(lastMsg?.content)}`;
           } else {
-            text = extractText((lastMsg as { content?: AnyContent }).content);
+            text = extractText(lastMsg?.content);
           }
         }
 

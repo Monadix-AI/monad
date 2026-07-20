@@ -153,6 +153,41 @@ describe('validation errors', () => {
     }
   });
 
+  test('wrong-typed Responses fields → 400 before dispatch', async () => {
+    const t = serveTransport('tcp', makeApp());
+    try {
+      const res = await t.fetch('/openai/v1/responses', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...AUTH },
+        body: JSON.stringify({ model: 'default', input: 'hi', stream: 'yes' })
+      });
+      expect(res.status).toBe(400);
+    } finally {
+      await t.stop();
+    }
+  });
+
+  test('non-object OpenAI compatibility bodies → 400 before field access', async () => {
+    const t = serveTransport('tcp', makeApp());
+    try {
+      const [chat, embeddings] = await Promise.all([
+        t.fetch('/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', ...AUTH },
+          body: 'null'
+        }),
+        t.fetch('/openai/v1/embeddings', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', ...AUTH },
+          body: 'null'
+        })
+      ]);
+      expect([chat.status, embeddings.status]).toEqual([400, 400]);
+    } finally {
+      await t.stop();
+    }
+  });
+
   test('unknown previous_response_id → 404', async () => {
     const t = serveTransport('tcp', makeApp());
     try {

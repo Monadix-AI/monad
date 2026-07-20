@@ -20,6 +20,7 @@ import {
   SESSION_ORIGIN
 } from './shared.ts';
 import { buildStreamingResponse } from './streaming.ts';
+import { responsesRequestSchema } from './types.ts';
 
 function terminalMetadata(data: unknown) {
   const value = typeof data === 'object' && data !== null ? (data as Record<string, unknown>) : {};
@@ -81,13 +82,10 @@ export function createResponsesApiController(
 
         let body: ResponsesRequest;
         try {
-          body = (await request.json()) as ResponsesRequest;
+          body = responsesRequestSchema.parse(await request.json());
         } catch {
           return errorResponse('Invalid JSON in request body');
         }
-
-        if (!body.model || typeof body.model !== 'string') return errorResponse('model is required');
-        if (body.input == null) return errorResponse('input is required');
 
         // Validate previous_response_id before any I/O so we fail fast with a 404.
         const sessionIdOverride = request.headers.get('x-monad-session-id') as SessionId | null;
