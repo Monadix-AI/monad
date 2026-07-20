@@ -550,3 +550,24 @@ test('Bun session-event resources expose child stdio as ordered packets and a fr
     rmSync(cwd, { recursive: true, force: true });
   }
 });
+
+test('Bun session-event resources fail closed when unread packets exceed the byte budget', async () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'monad-session-event-runtime-bounded-'));
+  const factory = new BunSessionEventRuntimeResourceFactory({
+    buildEnv: async (env) => ({ ...env }),
+    maxQueuedPacketBytes: 4
+  });
+  try {
+    const activation = await factory.start({
+      launch: { argv: [process.execPath, '-e', "await Bun.write(Bun.stdout, 'overflow')"], cwd },
+      channel: { kind: 'child-stdio' },
+      startupTimeoutMs: 1_000,
+      observationEpoch: 'epoch-bounded',
+      signal: new AbortController().signal
+    });
+    await expect(activation.packets()[Symbol.asyncIterator]().next()).rejects.toThrow('packet queue byte limit');
+    await activation.close();
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});

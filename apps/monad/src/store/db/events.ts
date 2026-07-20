@@ -82,8 +82,12 @@ export function findDanglingInterrupts(sqlite: Database): DanglingInterrupt[] {
 /** True when `eventId` is present in the durable event log. Lets callers distinguish a persisted
  *  cursor from an un-persisted live message delta before calling {@link listEvents},
  *  whose missing-cursor fallback would otherwise replay the whole session. */
-export function hasEvent(sqlite: Database, eventId: string): boolean {
-  return sqlite.query('SELECT 1 FROM events WHERE id = ? LIMIT 1').get(eventId) !== null;
+export function hasEvent(sqlite: Database, transcriptTargetId: string, eventId: string): boolean {
+  return (
+    sqlite
+      .query('SELECT 1 FROM events WHERE transcript_target_id = ?1 AND id = ?2 LIMIT 1')
+      .get(transcriptTargetId, eventId) !== null
+  );
 }
 
 /** Exclusive cursor; falls back to the whole session if `afterEventId` is not in the log. */
@@ -93,7 +97,10 @@ export function listEvents(sqlite: Database, sessionId: string, afterEventId?: s
       `SELECT id, transcript_target_id, type, actor_agent_id, task_id, payload, at
        FROM events
        WHERE transcript_target_id = $transcriptTargetId
-         AND rowid > COALESCE((SELECT rowid FROM events WHERE id = $after), -1)
+         AND rowid > COALESCE(
+           (SELECT rowid FROM events WHERE transcript_target_id = $transcriptTargetId AND id = $after),
+           -1
+         )
        ORDER BY rowid ASC`
     )
     .all({ $transcriptTargetId: sessionId, $after: afterEventId ?? null }) as Array<{

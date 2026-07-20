@@ -26,11 +26,24 @@ export function encodeSseFrame(frame: { id?: string; event: string; data: unknow
  * past a backlog cap we drop the consumer instead of buffering forever — events are persisted,
  * so it reconnects and resumes from its last event id with no loss.
  *
- * `desiredSize` is the default (count) queue's headroom: it starts at the highWaterMark and goes
- * negative as we over-enqueue, so `< -MAX_SSE_BACKLOG` means the consumer is ~that many events
- * behind. `onDrop` releases the upstream subscription when we cut a consumer loose.
+ * `desiredSize` is measured in encoded bytes by {@link sseByteQueuingStrategy}. `onDrop` releases the
+ * upstream subscription when we cut a consumer loose.
  */
-const MAX_SSE_BACKLOG = 1024;
+export const SSE_MAX_QUEUED_BYTES = 4 * 1024 * 1024;
+export const sseByteQueuingStrategy = {
+  highWaterMark: SSE_MAX_QUEUED_BYTES,
+  size: (chunk: Uint8Array | undefined) => chunk?.byteLength ?? 0
+} satisfies QueuingStrategy<Uint8Array>;
+
+interface SseUnderlyingSource {
+  start?(controller: ReadableStreamDefaultController<Uint8Array>): void | Promise<void>;
+  pull?(controller: ReadableStreamDefaultController<Uint8Array>): void | Promise<void>;
+  cancel?(reason?: unknown): void | Promise<void>;
+}
+
+export function createByteBoundedSseStream(source: SseUnderlyingSource): ReadableStream<Uint8Array> {
+  return new ReadableStream<Uint8Array>(source, sseByteQueuingStrategy);
+}
 
 export function createBoundedSseSink(
   ctrl: ReadableStreamDefaultController<Uint8Array>,
@@ -48,8 +61,8 @@ export function createBoundedSseEncoderSink<T>(
   let dropped = false;
   return (value: T) => {
     if (dropped) return; // the sink keeps firing after we cut the consumer loose; ignore
-    ctrl.enqueue(encode(value));
-    if (ctrl.desiredSize !== null && ctrl.desiredSize < -MAX_SSE_BACKLOG) {
+    const chunk = encode(value);
+    if (ctrl.desiredSize !== null && chunk.byteLength > ctrl.desiredSize) {
       dropped = true;
       onDrop();
       try {
@@ -57,7 +70,9 @@ export function createBoundedSseEncoderSink<T>(
       } catch {
         // already closed/errored — nothing to do
       }
+      return;
     }
+    ctrl.enqueue(chunk);
   };
 }
 
@@ -79,6 +94,7 @@ export function startSseHeartbeat(
   const frame = encoder.encode(': keepalive\n\n');
   const timer = setInterval(() => {
     try {
+      if (ctrl.desiredSize !== null && frame.byteLength > ctrl.desiredSize) return;
       ctrl.enqueue(frame);
     } catch {
       clearInterval(timer); // stream already closed/errored — stop
@@ -124,36 +140,39 @@ export function createPushSseResponse<T>(params: {
     }
   });
 
-  const stream = new ReadableStream<Uint8Array>({
-    start(ctrl) {
-      stopHeartbeat = startSseHeartbeat(ctrl, encoder);
-      close = () => {
-        stopHeartbeat?.();
-        try {
-          ctrl.close();
-        } catch {
-          // already closed/errored by the bounded sink — nothing to do
+  const stream = new ReadableStream<Uint8Array>(
+    {
+      start(ctrl) {
+        stopHeartbeat = startSseHeartbeat(ctrl, encoder);
+        close = () => {
+          stopHeartbeat?.();
+          try {
+            ctrl.close();
+          } catch {
+            // already closed/errored by the bounded sink — nothing to do
+          }
+        };
+        sink = createBoundedSseEncoderSink<T>(ctrl, encode, () => {
+          stopHeartbeat?.();
+          subscription.dispose();
+        });
+        for (const item of pending.splice(0)) {
+          sink(item.value);
+          if (item.done) {
+            finish();
+            return;
+          }
         }
-      };
-      sink = createBoundedSseEncoderSink<T>(ctrl, encode, () => {
+      },
+      cancel() {
         stopHeartbeat?.();
+        sink = undefined;
+        close = undefined;
         subscription.dispose();
-      });
-      for (const item of pending.splice(0)) {
-        sink(item.value);
-        if (item.done) {
-          finish();
-          return;
-        }
+        finished = true;
       }
     },
-    cancel() {
-      stopHeartbeat?.();
-      sink = undefined;
-      close = undefined;
-      subscription.dispose();
-      finished = true;
-    }
-  });
+    sseByteQueuingStrategy
+  );
   return createSseResponse(stream);
 }

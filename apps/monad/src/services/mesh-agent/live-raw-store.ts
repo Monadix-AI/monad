@@ -4,7 +4,7 @@ import { Database } from 'bun:sqlite';
 import { mkdirSync } from 'node:fs';
 import { mkdir, readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
-import { formatObservationCursor } from '@monad/protocol';
+import { formatObservationCursor, MESH_AGENT_OUTPUT_SNAPSHOT_MAX } from '@monad/protocol';
 
 type LiveRawStream = 'stderr' | 'stdout';
 
@@ -90,6 +90,9 @@ export class LiveRawStore {
 
   append(frame: LiveRawFrame): LiveRawRow {
     this.assertOpen();
+    if (Buffer.byteLength(frame.payload) > MESH_AGENT_OUTPUT_SNAPSHOT_MAX) {
+      throw new Error('raw frame exceeds storage byte limit');
+    }
     const result = this.insertStatement.run(frame.stream, frame.payload, frame.observedAt);
     return { seq: Number(result.lastInsertRowid), ...frame };
   }
@@ -151,7 +154,8 @@ function takeBoundedRows(
   let bytes = 0;
   for (const row of source) {
     const rowBytes = Buffer.byteLength(row.payload);
-    if (rows.length >= limit || (rows.length > 0 && bytes + rowBytes > maxBytes)) {
+    if (rowBytes > maxBytes) throw new Error('raw frame exceeds page byte limit');
+    if (rows.length >= limit || bytes + rowBytes > maxBytes) {
       return { rows, hasMore: true };
     }
     rows.push(row);

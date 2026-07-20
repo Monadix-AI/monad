@@ -119,7 +119,7 @@ export function createSubscribeHandlers(ctx: SessionContext) {
   ) {
     const buffered = cache.since(sessionId, afterEventId);
     let replay: Event[];
-    if (afterEventId !== undefined && store.hasEvent(afterEventId)) {
+    if (afterEventId !== undefined && store.hasEvent(sessionId, afterEventId)) {
       // Reconnect from a persisted cursor: durable events after it cover COMPLETED rounds the client
       // missed while disconnected, while `buffered` holds only the in-flight (un-persisted) round.
       // Using `buffered` alone would drop every finished round between the cursor and the active one.

@@ -7,11 +7,16 @@ import type {
 } from './types.ts';
 
 import { killMeshAgentProcess } from '#/services/mesh-agent/process.ts';
+import {
+  SESSION_EVENT_MAX_PACKET_BYTES,
+  SESSION_EVENT_MAX_QUEUED_BYTES
+} from '#/services/mesh-agent/session-event-runtime/event-sink.ts';
 
 interface BunSessionEventRuntimeResourceFactoryOptions {
   buildEnv(env?: Record<string, string>): Promise<Record<string, string>>;
   onSpawn?(pid: number): Promise<void>;
   onExit?(pid: number): void;
+  maxQueuedPacketBytes?: number;
 }
 
 type ByteReadResult = { done: boolean; value?: Uint8Array };
@@ -24,7 +29,15 @@ class PacketQueue {
   }> = [];
   private wait?: () => void;
   private activeReaders = 0;
+  private queuedBytes = 0;
   private closed = false;
+  private failure?: Error;
+  private cancellation?: Promise<void>;
+
+  constructor(
+    private readonly maxQueuedBytes = SESSION_EVENT_MAX_QUEUED_BYTES,
+    private readonly maxPacketBytes = SESSION_EVENT_MAX_PACKET_BYTES
+  ) {}
 
   add(stream: ReadableStream<Uint8Array> | undefined, source: 'stdout' | 'stderr'): void {
     if (!stream) return;
@@ -36,8 +49,10 @@ class PacketQueue {
 
   async *packets(): AsyncIterable<SessionEventPacket> {
     while (!this.closed && (this.activeReaders > 0 || this.queued.length > 0)) {
+      if (this.failure) throw this.failure;
       const packet = this.queued.shift();
       if (packet) {
+        this.queuedBytes -= packet.bytes.byteLength;
         yield packet;
         continue;
       }
@@ -45,13 +60,17 @@ class PacketQueue {
         this.wait = resolve;
       });
     }
+    if (this.failure) throw this.failure;
   }
 
   async close(): Promise<void> {
-    if (this.closed) return;
-    this.closed = true;
-    await Promise.all(this.readers.map((reader) => reader.cancel().catch(() => undefined)));
-    this.wake();
+    if (!this.closed) {
+      this.closed = true;
+      this.queued.length = 0;
+      this.queuedBytes = 0;
+      this.wake();
+    }
+    await this.cancelReaders();
   }
 
   private async read(reader: { read(): Promise<ByteReadResult> }, source: 'stdout' | 'stderr'): Promise<void> {
@@ -60,7 +79,17 @@ class PacketQueue {
         const { done, value } = await reader.read();
         if (done) break;
         if (value && value.byteLength > 0) {
-          this.queued.push({ bytes: value.slice(), source, receivedAt: new Date().toISOString() });
+          if (value.byteLength > this.maxPacketBytes) {
+            this.fail(new Error('session-event packet exceeded its byte limit'));
+            break;
+          }
+          if (this.queuedBytes + value.byteLength > this.maxQueuedBytes) {
+            this.fail(new Error('session-event packet queue byte limit exceeded'));
+            break;
+          }
+          const bytes = value.slice();
+          this.queued.push({ bytes, source, receivedAt: new Date().toISOString() });
+          this.queuedBytes += bytes.byteLength;
           this.wake();
         }
       }
@@ -68,6 +97,23 @@ class PacketQueue {
       this.activeReaders -= 1;
       this.wake();
     }
+  }
+
+  private fail(error: Error): void {
+    if (this.failure) return;
+    this.failure = error;
+    this.closed = true;
+    this.queued.length = 0;
+    this.queuedBytes = 0;
+    void this.cancelReaders();
+    this.wake();
+  }
+
+  private cancelReaders(): Promise<void> {
+    this.cancellation ??= Promise.all(this.readers.map((reader) => reader.cancel().catch(() => undefined))).then(
+      () => undefined
+    );
+    return this.cancellation;
   }
 
   private wake(): void {
@@ -94,7 +140,7 @@ export class BunSessionEventRuntimeResourceFactory implements SessionEventRuntim
       stdout: 'pipe',
       stderr: 'pipe'
     }) as MeshAgentProcess;
-    const packets = new PacketQueue();
+    const packets = new PacketQueue(this.options.maxQueuedPacketBytes);
     packets.add(proc.stdout, 'stdout');
     packets.add(proc.stderr, 'stderr');
     await this.options.onSpawn?.(proc.pid);

@@ -57,13 +57,19 @@ test('appendEvents is idempotent on id (INSERT OR IGNORE)', () => {
   store.close();
 });
 
-test('hasEvent distinguishes persisted ids from un-persisted ones', () => {
+test('event cursors are valid only inside their transcript', () => {
   const store = createStore();
   const sessionId = newId('ses') as SessionId;
-  const a = completedEvent(sessionId, 'one');
-  store.appendEvents([a]);
-  expect(store.hasEvent(a.id)).toBe(true);
-  expect(store.hasEvent(newId('evt'))).toBe(false);
+  const otherSessionId = newId('ses') as SessionId;
+  const first = completedEvent(sessionId, 'one');
+  const foreign = completedEvent(otherSessionId, 'foreign');
+  const second = completedEvent(sessionId, 'two');
+  store.appendEvents([first, foreign, second]);
+
+  expect(store.hasEvent(sessionId, first.id)).toBe(true);
+  expect(store.hasEvent(sessionId, foreign.id)).toBe(false);
+  expect(store.hasEvent(sessionId, newId('evt'))).toBe(false);
+  expect(store.listEvents(sessionId, foreign.id).map((event) => event.id)).toEqual([first.id, second.id]);
   store.close();
 });
 

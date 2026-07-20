@@ -14,6 +14,7 @@ import { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
 import {
   createBoundedSseEncoderSink,
   createBoundedSseSink,
+  createByteBoundedSseStream,
   createSseResponse,
   encodeSseFrame,
   startSseHeartbeat
@@ -33,7 +34,7 @@ export function createSessionMessageSseResponse(params: {
 }): Response {
   const { handlers, sessionId, text, continueFromHistory, ambientContext, encoder } = params;
 
-  const stream = new ReadableStream<Uint8Array>({
+  const stream = createByteBoundedSseStream({
     async start(ctrl) {
       const stopHeartbeat = startSseHeartbeat(ctrl, encoder);
       const sink = createBoundedSseSink(ctrl, encoder, () => void handlers.session.abort({ id: sessionId }));
@@ -70,7 +71,7 @@ export async function createSessionEventsSseResponse(params: {
   let stopHeartbeat: (() => void) | undefined;
   let cancelled = false;
 
-  const stream = new ReadableStream<Uint8Array>({
+  const stream = createByteBoundedSseStream({
     async start(ctrl) {
       stopHeartbeat = startSseHeartbeat(ctrl, encoder);
       // onDrop fires only after a backlog builds, by which point subscribe() has returned and
@@ -125,7 +126,7 @@ export async function createSessionUiEventsSseResponse(params: {
   if (cancelled) dispose();
   else disposeRef = dispose;
 
-  const stream = new ReadableStream<Uint8Array>({
+  const stream = createByteBoundedSseStream({
     async start(ctrl) {
       if (cancelled) {
         try {
@@ -193,7 +194,7 @@ export async function createSessionMessageGenerationSseResponse(params: {
   if (cancelled) dispose();
   else disposeRef = dispose;
 
-  const stream = new ReadableStream<Uint8Array>({
+  const stream = createByteBoundedSseStream({
     start(ctrl) {
       stopHeartbeat = startSseHeartbeat(ctrl, encoder);
       const close = (): void => {
@@ -247,7 +248,7 @@ export function createSessionLogsSseResponse(params: { sessionId: SessionId; enc
   let disposeRef: (() => void) | undefined;
   let stopHeartbeat: (() => void) | undefined;
 
-  const stream = new ReadableStream<Uint8Array>({
+  const stream = createByteBoundedSseStream({
     start(ctrl) {
       ctrl.enqueue(encoder.encode(': connected\n\n'));
       stopHeartbeat = startSseHeartbeat(ctrl, encoder);

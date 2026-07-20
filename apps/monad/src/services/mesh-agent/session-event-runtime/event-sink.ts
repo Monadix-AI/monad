@@ -1,10 +1,11 @@
 import type { MeshAgentEventSink, MeshAgentSessionEvent, SessionEventPacket } from '@monad/sdk-atom';
 
+import { MESH_AGENT_OUTPUT_SNAPSHOT_MAX } from '@monad/protocol';
 import { meshAgentOutputEventSchema } from '@monad/sdk-atom';
 
-const DEFAULT_MAX_PACKET_BYTES = 1024 * 1024;
+export const SESSION_EVENT_MAX_PACKET_BYTES = MESH_AGENT_OUTPUT_SNAPSHOT_MAX;
+export const SESSION_EVENT_MAX_QUEUED_BYTES = 4 * 1024 * 1024;
 const DEFAULT_MAX_EVENTS_PER_PACKET = 256;
-const DEFAULT_MAX_QUEUED_BYTES = 4 * 1024 * 1024;
 
 interface BoundedSessionEventIngressOptions {
   consume(event: MeshAgentSessionEvent): Promise<void>;
@@ -63,9 +64,9 @@ export class BoundedSessionEventIngress {
   constructor(options: BoundedSessionEventIngressOptions) {
     this.consume = options.consume;
     this.onCancel = options.onCancel;
-    this.maxPacketBytes = options.maxPacketBytes ?? DEFAULT_MAX_PACKET_BYTES;
+    this.maxPacketBytes = options.maxPacketBytes ?? SESSION_EVENT_MAX_PACKET_BYTES;
     this.maxEventsPerPacket = options.maxEventsPerPacket ?? DEFAULT_MAX_EVENTS_PER_PACKET;
-    this.maxQueuedBytes = options.maxQueuedBytes ?? DEFAULT_MAX_QUEUED_BYTES;
+    this.maxQueuedBytes = options.maxQueuedBytes ?? SESSION_EVENT_MAX_QUEUED_BYTES;
   }
 
   ingest(packet: SessionEventPacket, accept: DriverAccept): Promise<void> {

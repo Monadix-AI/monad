@@ -29,6 +29,7 @@ import { z } from 'zod';
 
 import {
   createBoundedSseEncoderSink,
+  createByteBoundedSseStream,
   createPushSseResponse,
   createSseResponse,
   encodeSseFrame,
@@ -89,7 +90,7 @@ function createMeshAgentRawObservationSseResponse(
   let stopHeartbeat: (() => void) | undefined;
   let disposeHub: () => void = () => {};
   let closed = false;
-  const stream = new ReadableStream<Uint8Array>({
+  const stream = createByteBoundedSseStream({
     start(ctrl) {
       stopHeartbeat = startSseHeartbeat(ctrl, encoder);
       const close = (): void => {

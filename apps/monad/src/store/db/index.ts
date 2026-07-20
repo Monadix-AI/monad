@@ -630,8 +630,8 @@ export class Store {
   /** True when `eventId` is present in the durable event log. Lets callers distinguish a persisted
    *  cursor from an un-persisted live message delta before calling {@link listEvents},
    *  whose missing-cursor fallback would otherwise replay the whole session. */
-  hasEvent(eventId: string): boolean {
-    return hasEvent(this.sqlite, eventId);
+  hasEvent(transcriptTargetId: string, eventId: string): boolean {
+    return hasEvent(this.sqlite, transcriptTargetId, eventId);
   }
 
   /** Exclusive cursor; falls back to the whole session if `afterEventId` is not in the log. */

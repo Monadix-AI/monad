@@ -83,7 +83,9 @@ export class MeshAgentObservationHub {
     }
     listeners.add(listener);
     const current = this.ctx.getLive(id);
-    if ((afterSeq ?? live.outputSeq) < (current?.outputSeq ?? 0)) this.publish(id);
+    if ((afterSeq ?? live.outputSeq) < (current?.outputSeq ?? 0) && current?.liveRawStore) {
+      listener({ state: 'live', observationEpoch: current.observationEpoch, seq: current.outputSeq }, false);
+    }
     return {
       live: true,
       dispose: () => {

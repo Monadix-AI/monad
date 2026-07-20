@@ -307,6 +307,43 @@ test('HTTP message stream frames snapshot and terminal with canonical SSE ids th
   handlers.store.close();
 });
 
+test('HTTP message stream retains many small frames below the byte budget', async () => {
+  const handlers = buildHandlers(buildMockModel().text(['unused']).build());
+  const { sessionId } = await handlers.session.create({ title: 'sse small frames' });
+  const messageId = newId('msg');
+  const message = pendingMessage(sessionId, messageId);
+  handlers.store.createMessage({ message, idempotencyKey: newId('idem'), fingerprint: 'test:sse-small-frames' });
+  const response = await createSessionMessageGenerationSseResponse({
+    handlers,
+    sessionId,
+    messageId,
+    encoder: new TextEncoder()
+  });
+  const deltas = Array.from({ length: 512 }, (_, index) =>
+    makeEvent(sessionId, 'session.message.delta.appended', {
+      transcriptTargetId: sessionId,
+      producer,
+      messageId,
+      channel: 'answer',
+      index,
+      delta: 'x'
+    })
+  );
+  for (const delta of deltas) handlers.bus.publish(delta);
+  const terminal = makeEvent(sessionId, 'session.message.completed', {
+    transcriptTargetId: sessionId,
+    producer,
+    message: { ...message, text: 'x'.repeat(deltas.length), stream: { status: 'complete' } },
+    messageRevision: 2
+  });
+  handlers.bus.publish(terminal);
+
+  const body = await response.text();
+  const receivedIds = [...body.matchAll(/^id: (.+)$/gm)].map((match) => match[1]);
+  expect(receivedIds).toEqual([...deltas.map((delta) => delta.id), terminal.id]);
+  handlers.store.close();
+});
+
 test('HTTP message stream closes after an authoritative terminal snapshot', async () => {
   const handlers = buildHandlers(buildMockModel().text(['unused']).build());
   const { sessionId } = await handlers.session.create({ title: 'settled snapshot' });

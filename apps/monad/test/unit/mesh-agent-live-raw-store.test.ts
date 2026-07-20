@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test';
 import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { MESH_AGENT_OUTPUT_SNAPSHOT_MAX } from '@monad/protocol';
 
 import { cleanupStaleLiveRawStores, LiveRawStore } from '#/services/mesh-agent/live-raw-store.ts';
 
@@ -104,21 +105,34 @@ test('live raw store returns the same cursor page on repeated reads', async () =
   });
 });
 
-test('live raw store bounds pages by encoded payload bytes without dropping an oversized frame', async () => {
+test('live raw store rejects a page whose first frame exceeds its byte budget', async () => {
   await withTempDirectory(async (directory) => {
     const store = LiveRawStore.open({ directory, sessionId: 'mesh_test', epoch: 'oep_bytes' });
     store.append({ stream: 'stdout', payload: 'é', observedAt: '2026-07-18T01:00:01.000Z' });
     store.append({ stream: 'stdout', payload: 'two', observedAt: '2026-07-18T01:00:02.000Z' });
     store.append({ stream: 'stdout', payload: 'oversized', observedAt: '2026-07-18T01:00:03.000Z' });
 
-    expect(store.page({ limit: 10, maxBytes: 4, sortDirection: 'desc' })).toEqual({
-      rows: [{ seq: 3, stream: 'stdout', payload: 'oversized', observedAt: '2026-07-18T01:00:03.000Z' }],
-      nextBefore: 3
-    });
+    expect(() => store.page({ limit: 10, maxBytes: 4, sortDirection: 'desc' })).toThrow(
+      'raw frame exceeds page byte limit'
+    );
     expect(store.page({ before: 3, limit: 10, maxBytes: 4, sortDirection: 'desc' })).toEqual({
       rows: [{ seq: 2, stream: 'stdout', payload: 'two', observedAt: '2026-07-18T01:00:02.000Z' }],
       nextBefore: 2
     });
+    await store.closeAndDelete();
+  });
+});
+
+test('live raw store rejects frames larger than the observation byte budget', async () => {
+  await withTempDirectory(async (directory) => {
+    const store = LiveRawStore.open({ directory, sessionId: 'mesh_test', epoch: 'oep_frame_bytes' });
+    expect(() =>
+      store.append({
+        stream: 'stdout',
+        payload: 'x'.repeat(MESH_AGENT_OUTPUT_SNAPSHOT_MAX + 1),
+        observedAt: '2026-07-18T01:00:01.000Z'
+      })
+    ).toThrow('raw frame exceeds storage byte limit');
     await store.closeAndDelete();
   });
 });
