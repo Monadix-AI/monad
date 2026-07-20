@@ -1,6 +1,7 @@
 import type {
   ApprovalMutationResponse,
   ApprovalScope,
+  ClarifyRespondResponse,
   ListApprovalsResponse,
   PickDirectoryResponse,
   SystemUpgradeStatus
@@ -69,8 +70,8 @@ export function createOversightHandlers(oversight: OversightService) {
 export function createClarifyHandlers(clarify: ClarifyService) {
   return {
     askStructured: clarify.askStructured,
-    async respond({ requestId, answer }: { requestId: string; answer: string }): Promise<{ ok: boolean }> {
-      return { ok: clarify.respond(requestId, answer) };
+    async respond({ requestId, answer }: { requestId: string; answer: string }): Promise<ClarifyRespondResponse> {
+      return clarify.respond(requestId, answer);
     }
   };
 }

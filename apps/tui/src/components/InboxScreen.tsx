@@ -120,7 +120,11 @@ export function InboxScreen({
 function InboxRow({ item, selected }: { item: InboxItem; selected: boolean }) {
   const context = item.projectName ?? item.sessionTitle ?? item.sessionId;
   const preview =
-    item.kind === 'mention' ? item.message.text : (item.text ?? item.tool ?? item.provider ?? item.approvalKind);
+    item.kind === 'mention'
+      ? item.message.text
+      : item.kind === 'hitl'
+        ? item.question
+        : (item.text ?? item.tool ?? item.provider ?? item.approvalKind);
   return (
     <Text color={selected ? TUI_THEME.accent : undefined}>
       {selected ? '› ' : '  '}[{item.kind}] {context} · {preview}

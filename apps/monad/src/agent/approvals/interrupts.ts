@@ -33,24 +33,15 @@ export async function createInterruptServices(deps: {
     originOf: (id) => store.getSession(id)?.agentIds[0] ?? null
   });
 
-  const danglingTombstones = store.findDanglingInterrupts().flatMap((d): Event[] => {
+  const danglingInterrupts = store.findDanglingInterrupts();
+  const danglingTombstones = danglingInterrupts.flatMap((d): Event[] => {
     const now = new Date().toISOString();
-    if (d.type === 'approval') {
-      if (!d.tool) return [];
-      return [
-        makeEvent(
-          d.sessionId as SessionId,
-          'tool.approval_resolved',
-          { requestId: d.requestId, tool: d.tool, allow: false, reason: 'daemon_restarted' },
-          { at: now }
-        )
-      ];
-    }
+    if (d.type !== 'approval' || !d.tool) return [];
     return [
       makeEvent(
         d.sessionId as SessionId,
-        'clarify.resolved',
-        { requestId: d.requestId, answer: '', reason: 'daemon_restarted' },
+        'tool.approval_resolved',
+        { requestId: d.requestId, tool: d.tool, allow: false, reason: 'daemon_restarted' },
         { at: now }
       )
     ];
@@ -60,11 +51,25 @@ export async function createInterruptServices(deps: {
     for (const t of danglingTombstones) bus.publish(t);
   }
 
+  const restoredClarifications = danglingInterrupts.flatMap((dangling) => {
+    if (dangling.type !== 'clarify') return [];
+    return store
+      .listEvents(dangling.sessionId)
+      .filter(
+        (event) =>
+          event.type === 'clarify.requested' &&
+          (event.payload as { requestId?: string }).requestId === dangling.requestId
+      )
+      .slice(-1);
+  });
+
   const clarify = new ClarifyService({
     publish: (event) => {
       store.appendEvents([event]);
       bus.publish(event);
-    }
+    },
+    lookupTerminal: (requestId) => store.getClarificationResolution(requestId),
+    restore: restoredClarifications
   });
 
   return {

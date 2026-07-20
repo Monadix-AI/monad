@@ -9,7 +9,8 @@ export const clarifyRespondApi = apiSlice.injectEndpoints({
   endpoints: (builder) => ({
     clarifyRespond: builder.mutation<ClarifyRespondResponse, ClarifyRespondRequest>({
       queryFn: (body: ClarifyRespondRequest, api: { extra: unknown }) =>
-        runTreaty(() => clientOf(api).treaty.v1.clarifications.respond.post(body))
+        runTreaty(() => clientOf(api).treaty.v1.clarifications.respond.post(body)),
+      invalidatesTags: ['Inbox']
     })
   })
 });

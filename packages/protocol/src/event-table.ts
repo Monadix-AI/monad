@@ -161,7 +161,19 @@ export const clarifyRequestedPayloadSchema = z.object({
   options: z.array(z.string()).optional(),
   mode: clarifyChoiceModeSchema.optional(),
   allowOther: z.boolean().optional(),
-  asker: clarifyAskerSchema.optional()
+  asker: clarifyAskerSchema.optional(),
+  autoResolutionMs: z.number().int().min(60_000).max(240_000).optional(),
+  expiresAt: z.string().optional(),
+  origin: z
+    .discriminatedUnion('kind', [
+      z.object({ kind: z.literal('daemon-agent') }),
+      z.object({
+        kind: z.literal('managed-project'),
+        meshSessionId: z.string(),
+        agentId: z.string()
+      })
+    ])
+    .optional()
 });
 
 export const clarifyResolvedPayloadSchema = z.object({

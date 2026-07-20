@@ -403,3 +403,8 @@ export const meshAgentInboxItems = sqliteTable(
     index('idx_mesh_agent_inbox_member_state').on(table.projectId, table.memberInstanceId, table.state)
   ]
 );
+
+export const inboxItemReads = sqliteTable('inbox_item_reads', {
+  itemKey: text('item_key').primaryKey(),
+  readAt: text('read_at').notNull()
+});

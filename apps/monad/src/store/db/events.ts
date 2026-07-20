@@ -2,7 +2,7 @@
 // index.ts — every function takes the raw bun:sqlite handle. Events are idempotent by id.
 
 import type { Database } from 'bun:sqlite';
-import type { Event } from '@monad/protocol';
+import type { ClarifyRespondResponse, Event } from '@monad/protocol';
 
 import { parseEvent } from '@monad/protocol';
 
@@ -80,6 +80,23 @@ export function findDanglingInterrupts(sqlite: Database): DanglingInterrupt[] {
       .filter((r): r is typeof r & { request_id: string } => r.request_id !== null)
       .map((r) => ({ type: 'clarify' as const, requestId: r.request_id, sessionId: r.transcript_target_id }))
   ];
+}
+
+export function getClarificationResolution(sqlite: Database, requestId: string): ClarifyRespondResponse | null {
+  const row = sqlite
+    .query(
+      `SELECT payload, at FROM events
+       WHERE type = 'clarify.resolved'
+         AND json_extract(payload, '$.requestId') = ?
+       ORDER BY rowid DESC LIMIT 1`
+    )
+    .get(requestId) as { payload: string; at: string } | null;
+  if (!row) return null;
+  const payload = JSON.parse(row.payload) as { answer?: unknown; reason?: unknown };
+  if (payload.reason === 'timeout') return { status: 'timed-out', resolvedAt: row.at };
+  if (payload.reason === 'cancelled' || payload.reason === 'aborted')
+    return { status: 'cancelled', resolvedAt: row.at };
+  return { status: 'answered', answer: typeof payload.answer === 'string' ? payload.answer : '', resolvedAt: row.at };
 }
 
 /** True when `eventId` is present in the durable event log. Lets callers distinguish a persisted

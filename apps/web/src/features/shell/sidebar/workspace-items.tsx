@@ -6,10 +6,12 @@ import {
   ListTreeIcon,
   Search01Icon
 } from '@hugeicons/core-free-icons';
+import { useGetInboxSummaryQuery } from '@monad/client-rtk';
 import { memo, useMemo } from 'react';
 
 import { ChatSessionList } from './chat-session-list';
 import { SidebarActionVisibilityRules, SidebarIconActionButton, SidebarNavItem } from './nav-item';
+import { SidebarSessionTitle } from './sidebar-session-title';
 import { SidebarShortcutAllocatorProvider } from './sidebar-shortcut-context';
 import { SidebarItemSkeletonList } from './sidebar-skeleton';
 import { useWorkspaceSidebarTreeState } from './use-workspace-sidebar-tree-state';
@@ -23,6 +25,10 @@ import {
 
 const WorkspaceSectionList = memo(function WorkspaceSectionList() {
   const { actions, meta, state } = useWorkspaceSidebar();
+  const { data: inboxSummary } = useGetInboxSummaryQuery(undefined, {
+    pollingInterval: 5_000,
+    skipPollingIfUnfocused: true
+  });
   const pinnedSessions = useMemo(
     () =>
       state.projects.flatMap((project) =>
@@ -64,7 +70,24 @@ const WorkspaceSectionList = memo(function WorkspaceSectionList() {
             onClick={actions.openInbox}
             shortcutModifierLabel={meta.shortcutModifierLabel}
             shortcutValue={meta.showShortcutBadges ? 'I' : undefined}
-          />
+          >
+            {inboxSummary?.needsResponseCount ? (
+              <span
+                className="mt-0.5 block max-w-28 rounded-full bg-destructive/12 px-2 py-0.5 font-medium text-[10px] text-destructive"
+                title={`${meta.t('web.inbox.needResponse')} · ${inboxSummary.needsResponseCount}`}
+              >
+                <SidebarSessionTitle
+                  actionWidth={0}
+                  disabled={false}
+                  label={`${meta.t('web.inbox.needResponse')} · ${inboxSummary.needsResponseCount}`}
+                />
+              </span>
+            ) : inboxSummary?.unreadCount ? (
+              <span className="mt-0.5 block text-[10px] text-muted-foreground">
+                {meta.t('web.inbox.unread')} · {inboxSummary.unreadCount}
+              </span>
+            ) : null}
+          </SidebarNavItem>
           <SidebarNavItem
             icon={Search01Icon}
             label={meta.t('web.sidebar.searchSessions')}

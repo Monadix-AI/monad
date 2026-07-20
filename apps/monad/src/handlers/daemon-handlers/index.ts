@@ -14,6 +14,7 @@ import type {
   ListSkillsResponse,
   OkResponse,
   SearchSkillsResponse,
+  SessionId,
   SkillDetail,
   SkillMarketplaceSource,
   SkillSortMode,
@@ -65,7 +66,7 @@ import { MeshAgentHost } from '#/services/mesh-agent/host/index.ts';
 import { meshAgentConfigToView } from '#/services/mesh-agent/index.ts';
 import { managedProjectRuntimeWorkspace } from '#/services/mesh-agent/managed-project.ts';
 import { resolveMeshAgentManagedServerUrl } from '#/services/mesh-agent/managed-server-url.ts';
-import { createMessageIngress } from '#/services/messages/ingress.ts';
+import { createMessageIngress, messageIdempotencyKey } from '#/services/messages/ingress.ts';
 import { createNativeAgentSessionMembersService } from '#/services/native-agent/session-members.ts';
 import licensesData from '../../../generated/licenses.json';
 import { createInitHandlers } from './handlers-init.ts';
@@ -285,6 +286,36 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
     }
   };
   const session = createSessionModule({ ...deps, meshAgentHost, messageIngress });
+  deps.clarify.setRecoveredContinuation(async (recovery) => {
+    try {
+      const text = `Human response to "${recovery.question}": ${recovery.answer}`;
+      const message = await messageIngress.deliver({
+        transcriptTargetId: recovery.sessionId,
+        idempotencyKey: messageIdempotencyKey('clarify-recovery', recovery.sessionId, recovery.requestId),
+        producer: { kind: 'user' },
+        role: 'user',
+        type: 'text',
+        text,
+        data: { source: 'clarify-recovery', requestId: recovery.requestId }
+      });
+      if (recovery.origin.kind === 'managed-project') {
+        await session.notifyManagedMeshAgentProjectMembers({
+          sessionId: recovery.sessionId as SessionId,
+          text,
+          sender: { kind: 'human', name: 'Human' },
+          triggerMessageId: message.id
+        });
+        return;
+      }
+      await session.send({
+        sessionId: recovery.sessionId as SessionId,
+        text: '',
+        continueFromHistory: true
+      });
+    } catch (error) {
+      deps.log.warn({ error, requestId: recovery.requestId }, 'failed to continue a restored clarification');
+    }
+  });
   const experienceCapabilities = {
     state: {
       forPack: (atomPackId: string) => createExperienceStateStore(deps.store, atomPackId)

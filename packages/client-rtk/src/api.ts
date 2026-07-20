@@ -63,7 +63,13 @@ import { useSendChannelMessageMutation } from './endpoints/channels/index.ts';
 import { commandsApi, useLazyListCommandsQuery, useListCommandsQuery } from './endpoints/commands/index.ts';
 import { useOpenDraftAttachmentMutation } from './endpoints/draft-attachments/index.ts';
 import { graphApi, useGetGraphQuery } from './endpoints/graph/index.ts';
-import { inboxApi, useListMentionInboxQuery } from './endpoints/inbox/index.ts';
+import {
+  inboxApi,
+  useGetInboxSummaryQuery,
+  useListInboxQuery,
+  useListMentionInboxQuery,
+  useMarkInboxReadMutation
+} from './endpoints/inbox/index.ts';
 import { indexerApi, useGetIndexerStatusQuery } from './endpoints/indexer/get-indexer-status.ts';
 import { useInitStatusQuery, useSetInitHomeMutation } from './endpoints/init/index.ts';
 import { lawsApi, useGetLawsQuery } from './endpoints/laws/index.ts';
@@ -404,6 +410,7 @@ export {
   useGetGraphQuery,
   useGetHealthQuery,
   useGetHooksQuery,
+  useGetInboxSummaryQuery,
   useGetIndexerStatusQuery,
   useGetLawsQuery,
   useGetLocaleQuery,
@@ -466,6 +473,7 @@ export {
   useListChannelsQuery,
   useListCommandsQuery,
   useListCredentialsQuery,
+  useListInboxQuery,
   useListInstalledMcpQuery,
   useListInstalledSkillsQuery,
   useListLicensesQuery,
@@ -490,6 +498,7 @@ export {
   useListSkillsQuery,
   useListWorkplaceProjectsQuery,
   useListWorkspaceExperiencesQuery,
+  useMarkInboxReadMutation,
   useOpenCapabilityInventoryLocationMutation,
   useOpenDraftAttachmentMutation,
   useOpenStartupSettingsMutation,

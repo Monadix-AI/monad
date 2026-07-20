@@ -17,7 +17,15 @@ import { commandsListQuerySchema, commandsListResponseSchema } from './command.t
 import { computerPresetResponseSchema, setComputerPresetRequestSchema } from './computer-preset.ts';
 import { getGraphResponseSchema } from './graph.ts';
 import { agentIdSchema, projectIdSchema, sessionIdSchema } from './ids.ts';
-import { listMentionInboxQuerySchema, listMentionInboxResponseSchema } from './inbox.ts';
+import {
+  inboxSummarySchema,
+  listInboxQuerySchema,
+  listInboxResponseSchema,
+  listMentionInboxQuerySchema,
+  listMentionInboxResponseSchema,
+  markInboxReadRequestSchema,
+  markInboxReadResponseSchema
+} from './inbox.ts';
 import { getLicensesResponseSchema } from './licenses.ts';
 import { getMem0DataResponseSchema } from './mem0-data.ts';
 import { getLawsResponseSchema } from './memory.ts';
@@ -353,6 +361,17 @@ export const daemonHttpContract = {
     }
   },
   inbox: {
+    items: defineHttpEndpoint({
+      query: coercifyQuery(listInboxQuerySchema),
+      response: { 200: listInboxResponseSchema }
+    }),
+    summary: defineHttpEndpoint({
+      response: { 200: inboxSummarySchema }
+    }),
+    read: defineHttpEndpoint({
+      body: markInboxReadRequestSchema,
+      response: { 200: markInboxReadResponseSchema }
+    }),
     mentions: defineHttpEndpoint({
       query: coercifyQuery(listMentionInboxQuerySchema),
       response: { 200: listMentionInboxResponseSchema }
