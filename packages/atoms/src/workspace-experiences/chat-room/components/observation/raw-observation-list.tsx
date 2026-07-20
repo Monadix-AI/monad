@@ -1,10 +1,14 @@
 import type { Ref } from 'react';
 import type { RawDisplayMode, RawFrameRow } from './raw-view.ts';
 
+import { CheckIcon, Copy01Icon } from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react';
 import { workspaceMono as mono, workspaceSans as sans } from '@monad/ui/components/AgentAvatar';
+import { Button } from '@monad/ui/components/Button';
 import { CodeBlock } from '@monad/ui/components/CodeBlock';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui/components/Tooltip';
 import { VirtualList, type VirtualListHandle } from '@monad/ui/components/VirtualList';
-import { useCallback, useImperativeHandle, useLayoutEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { rawDisplayEntries } from './raw-view.ts';
 
@@ -25,6 +29,58 @@ export interface RawDisplayCard {
 }
 
 const rawCardKey = (card: RawDisplayCard): string => card.row.identity;
+
+function RawObservationCopyButton({ text }: { text: string }): React.ReactElement {
+  const [copied, setCopied] = useState(false);
+  const timeoutRef = useRef<number>(0);
+  const label = copied ? 'Copied' : 'Copy raw event';
+
+  const copy = useCallback(async () => {
+    if (typeof navigator === 'undefined' || typeof navigator.clipboard?.writeText !== 'function') return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      window.clearTimeout(timeoutRef.current);
+      timeoutRef.current = window.setTimeout(() => setCopied(false), 1600);
+    } catch {
+      setCopied(false);
+    }
+  }, [text]);
+
+  useEffect(
+    () => () => {
+      window.clearTimeout(timeoutRef.current);
+    },
+    []
+  );
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          aria-label={label}
+          className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground"
+          data-observation-raw-copy={copied ? 'copied' : 'idle'}
+          onClick={(event) => {
+            event.stopPropagation();
+            void copy();
+          }}
+          size="icon-sm"
+          title={label}
+          type="button"
+          variant="ghost"
+        >
+          <HugeiconsIcon
+            aria-hidden="true"
+            icon={copied ? CheckIcon : Copy01Icon}
+            size={13}
+          />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  );
+}
 
 export interface RawVirtualListControlProps {
   getKey: (card: RawDisplayCard) => string;
@@ -105,20 +161,32 @@ export function RawObservationCard({
         >
           {STREAM_LABEL[row.stream]}
         </span>
-        <span
+        <div
           style={{
-            color: 'var(--muted-foreground)',
-            fontFamily: mono,
-            fontSize: 10,
-            minWidth: 0,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap'
+            alignItems: 'center',
+            display: 'flex',
+            flex: '1 1 auto',
+            gap: 6,
+            justifyContent: 'flex-end',
+            minWidth: 0
           }}
-          title={row.identity}
         >
-          {row.identity}
-        </span>
+          <span
+            style={{
+              color: 'var(--muted-foreground)',
+              fontFamily: mono,
+              fontSize: 10,
+              minWidth: 0,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap'
+            }}
+            title={row.identity}
+          >
+            {row.identity}
+          </span>
+          <RawObservationCopyButton text={text} />
+        </div>
       </div>
       {displayMode === 'parsed' ? (
         <div

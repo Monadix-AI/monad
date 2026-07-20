@@ -40,8 +40,8 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
-    "@monad/tsconfig": "workspace:*",
     "@monad/monad-power-pack": "workspace:*",
+    "@monad/tsconfig": "workspace:*",
     "drizzle-kit": "0.31.10",
     "openai": "^6.48.0"
   },

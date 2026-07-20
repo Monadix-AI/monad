@@ -70,6 +70,21 @@ test('raw card renders its preview in a directly visible preformatted body keyed
   expect(markup).toContain('background:var(--background)');
 });
 
+test('raw card exposes a per-frame copy action without changing the visible raw preview', () => {
+  const row: RawFrameRow = {
+    identity: 'copy-row',
+    cursor: 'provider:copy-row',
+    stream: 'stdout',
+    preview: '{"copy":true}'
+  };
+  const markup = renderToStaticMarkup(createElement(RawObservationCard, { row, text: rawCardText(row.preview) }));
+
+  expect({
+    copyAction: /<button[^>]*aria-label="Copy raw event"[^>]*data-observation-raw-copy="idle"/.test(markup),
+    preview: /<pre[^>]*data-observation-raw-preview="copy-row"[^>]*>(.*?)<\/pre>/.exec(markup)?.[1]
+  }).toEqual({ copyAction: true, preview: '{&quot;copy&quot;:true}' });
+});
+
 test('raw card lines mode keeps long records on one line with horizontal scrolling', () => {
   const row: RawFrameRow = {
     identity: 'line-scroll',

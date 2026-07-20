@@ -8,6 +8,7 @@ import { ExperienceWorkerRegistry } from '#/atoms/experience-workers.ts';
 import { createStore } from '#/store/db/index.ts';
 
 const projectId = 'prj_aaaaaaaaaaaa';
+const missingProjectId = 'prj_missing00000';
 
 function seedProject(store: ReturnType<typeof createStore>, id = projectId) {
   const now = '2026-07-14T00:00:00.000Z';
@@ -147,7 +148,7 @@ test('events for one session are delivered in order without overlapping', async 
   });
   const event = (id: string) => ({
     id,
-    projectId: 'prj_a',
+    projectId,
     sessionId: 'ses_a',
     type: 'agent.message',
     payload: {},
@@ -216,9 +217,9 @@ test('state and scheduler reject an unknown project', async () => {
   const scheduler = createExperienceWorkerScheduler(store, 'pack-a', 'board');
 
   try {
-    await expect(state.get('prj_missing', 'task/a')).rejects.toThrow('project not found');
+    await expect(state.get(missingProjectId, 'task/a')).rejects.toThrow('project not found');
     await expect(
-      scheduler.schedule('prj_missing', { key: 'dispatch', runAt: '2026-07-14T00:00:00.000Z' })
+      scheduler.schedule(missingProjectId, { key: 'dispatch', runAt: '2026-07-14T00:00:00.000Z' })
     ).rejects.toThrow('project not found');
   } finally {
     store.close();

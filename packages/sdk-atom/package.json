@@ -6,9 +6,9 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@monad/tsconfig": "workspace:*",
     "@monad/i18n": "workspace:*",
-    "@monad/sdk-experience": "workspace:*"
+    "@monad/sdk-experience": "workspace:*",
+    "@monad/tsconfig": "workspace:*"
   },
   "exports": {
     ".": "./src/index.ts",
