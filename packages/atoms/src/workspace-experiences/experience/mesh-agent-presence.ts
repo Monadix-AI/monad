@@ -82,17 +82,21 @@ function meshAgentObservationToolPhase(event: AgentObservationEvent): WorkspaceE
 
 export function meshAgentObservationActivity(events: readonly AgentObservationEvent[]): {
   active: boolean;
+  hasTurnBoundary: boolean;
   phase?: WorkspaceExperienceAgentActivityPhase;
 } {
   let active = false;
+  let hasTurnBoundary = false;
   let phase: WorkspaceExperienceAgentActivityPhase | undefined;
   for (const event of events) {
     if (event.kind === 'turn-start') {
+      hasTurnBoundary = true;
       active = true;
       phase = 'thinking';
       continue;
     }
     if (event.kind === 'turn-end') {
+      hasTurnBoundary = true;
       active = false;
       phase = undefined;
       continue;
@@ -105,7 +109,7 @@ export function meshAgentObservationActivity(events: readonly AgentObservationEv
       phase = meshAgentObservationToolPhase(event);
     }
   }
-  return active ? { active, phase: phase ?? 'thinking' } : { active };
+  return active ? { active, hasTurnBoundary, phase: phase ?? 'thinking' } : { active, hasTurnBoundary };
 }
 
 function newestMeshSession(sessions: MeshSessionView[]): MeshSessionView | undefined {
@@ -197,7 +201,10 @@ export function meshAgentMemberPresence({
   liveTools: readonly Extract<UIItem, { kind: 'tool' }>[];
   observationEvents?: readonly AgentObservationEvent[];
 }): WorkspaceExperiencePresence {
-  if (observationEvents) return meshAgentObservationActivity(observationEvents).active ? 'working' : 'idle';
+  if (observationEvents) {
+    const observation = meshAgentObservationActivity(observationEvents);
+    if (observation.hasTurnBoundary) return observation.active ? 'working' : 'idle';
+  }
   const liveTool = matchingLiveMeshAgentTool(agentName, liveTools);
   if (liveTool?.status === 'running') {
     if (
@@ -233,7 +240,10 @@ export function meshAgentMemberActivityPhase({
   meshSessions: MeshSessionView[];
   observationEvents?: readonly AgentObservationEvent[];
 }): WorkspaceExperienceAgentActivityPhase | undefined {
-  if (observationEvents) return meshAgentObservationActivity(observationEvents).phase;
+  if (observationEvents) {
+    const observation = meshAgentObservationActivity(observationEvents);
+    if (observation.hasTurnBoundary) return observation.phase;
+  }
   const runningTool = liveTools.find((item) => {
     if (!item.tool.startsWith('mesh-agent:')) return false;
     const inputAgent = (item.input as { agent?: unknown } | undefined)?.agent;

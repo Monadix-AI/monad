@@ -55,3 +55,36 @@ test('managed thinking messages persist and emit the author display name snapsho
     }
   ]);
 });
+
+test('project post completes its room message without settling the provider turn', async () => {
+  const persisted: Array<Array<{ sessionId: string; type: string; payload: unknown }>> = [];
+  const ctx = {
+    deps: {
+      store: {
+        findManagedMeshAgentStreamingMessage: () => undefined
+      }
+    },
+    messageIngress: {
+      deliver: () => Promise.resolve({ id: 'msg_project_post' })
+    },
+    makeEmit:
+      (round: Array<{ sessionId: string; type: string; payload: unknown }>) =>
+      (event: { sessionId: string; type: string; payload: unknown }) =>
+        round.push(event),
+    persistAndRetire: (_sessionId: string, round: Array<{ sessionId: string; type: string; payload: unknown }>) =>
+      persisted.push(round)
+  } as unknown as SessionContext;
+
+  const result = await createManagedMeshAgentMessages(ctx).completeManagedMeshAgentThinking({
+    sessionId: 'ses_projectpost1',
+    meshSessionId: 'mesh_projectpost1',
+    agentName: 'pmem_codex_writer',
+    agentDisplayName: 'Writer',
+    text: 'Checkpoint posted while provider continues.'
+  });
+
+  expect({ result, events: persisted.flat() }).toEqual({
+    result: { messageId: 'msg_project_post' },
+    events: []
+  });
+});

@@ -145,7 +145,8 @@ export function createMessagingNotifyHandlers(
         agentName,
         text,
         source: 'mesh-agent-provider',
-        error
+        error,
+        settleTurn: true
       });
       return { messageId: completed.messageId };
     }

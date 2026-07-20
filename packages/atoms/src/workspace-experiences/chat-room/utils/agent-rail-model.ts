@@ -67,14 +67,21 @@ export function observedRailAgent(
 }
 
 export function isActiveRailAgent(agent: Participant, observationEvents?: readonly AgentObservationEvent[]): boolean {
-  return observationEvents ? meshAgentObservationActivity(observationEvents).active : agent.presence === 'working';
+  if (observationEvents) {
+    const observation = meshAgentObservationActivity(observationEvents);
+    if (observation.hasTurnBoundary) return observation.active;
+  }
+  return agent.presence === 'working';
 }
 
 export function railAgentActivityPhase(
   agent: Participant,
   observationEvents?: readonly AgentObservationEvent[]
 ): Participant['activityPhase'] {
-  if (observationEvents) return meshAgentObservationActivity(observationEvents).phase;
+  if (observationEvents) {
+    const observation = meshAgentObservationActivity(observationEvents);
+    if (observation.hasTurnBoundary) return observation.phase;
+  }
   if (agent.presence !== 'working') return undefined;
   return agent.activityPhase ?? 'thinking';
 }

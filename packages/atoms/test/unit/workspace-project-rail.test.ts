@@ -216,6 +216,36 @@ test('managed member stays working from the daemon turn snapshot before its firs
   ).toBe('working');
 });
 
+test('empty observation epoch falls back to the generating runtime until a turn boundary arrives', () => {
+  const running = meshSession({
+    activity: { state: 'running', pid: 12345, queuedTurnCount: 0 }
+  });
+  const args = {
+    agentName: running.agentName,
+    enabled: true,
+    meshSessions: [running],
+    liveTools: [],
+    observationEvents: []
+  };
+
+  expect({
+    presence: meshAgentMemberPresence(args),
+    phase: meshAgentMemberActivityPhase(args)
+  }).toEqual({
+    presence: 'working',
+    phase: 'thinking'
+  });
+
+  const projectedAgent = { ...agent('codex', 'working'), activityPhase: 'thinking' as const };
+  expect({
+    active: isActiveRailAgent(projectedAgent, []),
+    phase: railAgentActivityPhase(projectedAgent, [])
+  }).toEqual({
+    active: true,
+    phase: 'thinking'
+  });
+});
+
 test('managed member activity follows neutral turn boundaries and tool phases', () => {
   const session = meshSession();
   const turn = [

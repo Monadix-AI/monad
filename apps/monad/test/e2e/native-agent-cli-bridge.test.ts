@@ -151,14 +151,21 @@ for (const kind of TRANSPORTS) {
       t = serveTransport(kind, createHttpTransport(handlers));
       const sessionId = await createSession(t);
       createManagedNativeSession(handlers, sessionId);
+      const turnEvents: Event[] = [];
+      const disposeEvents = handlers.bus.subscribe(sessionId, (event) => {
+        if (event.type === 'mesh.turn_settled') turnEvents.push(event);
+      });
 
       const res = await t.fetch(
         '/v1/internal/native-agent/project/post',
         json({ sessionId, text: 'managed reply' }, bindingHeaders(sessionId))
       );
+      disposeEvents();
 
       expect(res.status).toBe(200);
       expect(await messages(t, sessionId)).toEqual([{ role: 'assistant', text: 'managed reply' }]);
+      // presence-ok: a room post must not claim that the provider turn has ended.
+      expect(turnEvents).toEqual([]);
     });
 
     test('session members reports current-session delivery availability', async () => {
@@ -636,6 +643,10 @@ for (const kind of TRANSPORTS) {
       handlers.store.enqueueMeshAgentInboxItem('mesh_test00000000', handlers.store.maxMessageSeq(sessionId));
       handlers.store.markMeshAgentInboxDelivered('mesh_test00000000', handlers.store.maxMessageSeq(sessionId));
       handlers.store.markMeshAgentInboxConsumed('mesh_test00000000', handlers.store.maxMessageSeq(sessionId));
+      const turnEvents: Event[] = [];
+      const disposeEvents = handlers.bus.subscribe(sessionId, (event) => {
+        if (event.type === 'mesh.turn_settled') turnEvents.push(event);
+      });
 
       await handlers.session.completeManagedMeshAgentProviderMessage({
         sessionId,
@@ -644,9 +655,13 @@ for (const kind of TRANSPORTS) {
         text: 'No action needed.',
         post: false
       });
+      disposeEvents();
 
       expect(await messages(t, sessionId)).toEqual([{ role: 'user', text: 'hi' }]);
       expect(handlers.store.findManagedMeshAgentStreamingMessage(sessionId, 'mesh_test00000000', 'codex')).toBeNull();
+      expect(turnEvents.map(({ type, payload }) => ({ type, payload }))).toEqual([
+        { type: 'mesh.turn_settled', payload: { meshSessionId: 'mesh_test00000000' } }
+      ]);
     });
 
     test('agent send stays out of the Workplace Project transcript', async () => {

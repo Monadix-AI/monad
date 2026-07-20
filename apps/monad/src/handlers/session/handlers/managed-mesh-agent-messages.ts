@@ -83,7 +83,8 @@ export function createManagedMeshAgentMessages(ctx: SessionContext) {
     threadId,
     attachments,
     source = 'managed-mesh-agent',
-    error = false
+    error = false,
+    settleTurn = false
   }: {
     sessionId: SessionId;
     meshSessionId: string;
@@ -94,6 +95,7 @@ export function createManagedMeshAgentMessages(ctx: SessionContext) {
     attachments?: MessageAttachmentRef[];
     source?: 'managed-mesh-agent' | 'mesh-agent-provider';
     error?: boolean;
+    settleTurn?: boolean;
   }): Promise<{ messageId: MessageId }> {
     const pending = pendingManagedMeshAgentWakeMessages.get(meshSessionId);
     const pendingMessageId =
@@ -151,15 +153,17 @@ export function createManagedMeshAgentMessages(ctx: SessionContext) {
           data,
           includeInContext: true
         });
-    const round: Event[] = [];
-    const emit = makeEmit(round);
-    emit(
-      makeEvent(sessionId as SessionId, 'mesh.turn_settled', {
-        meshSessionId,
-        ...(error ? { error: true } : {})
-      })
-    );
-    persistAndRetire(sessionId, round);
+    if (settleTurn) {
+      const round: Event[] = [];
+      const emit = makeEmit(round);
+      emit(
+        makeEvent(sessionId as SessionId, 'mesh.turn_settled', {
+          meshSessionId,
+          ...(error ? { error: true } : {})
+        })
+      );
+      persistAndRetire(sessionId, round);
+    }
     return { messageId: completed.id };
   }
 
