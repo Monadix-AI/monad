@@ -11,6 +11,7 @@ import type { ChannelAdapter, ChannelCapabilities, ChannelContext, SentMessage }
 
 import { createDecipheriv } from 'node:crypto';
 import { defineChannel } from '@monad/sdk-atom';
+import { z } from 'zod';
 
 import { timingSafeEqual } from './_http-inbound.ts';
 
@@ -111,7 +112,9 @@ export function createWecomAdapter(ctx: ChannelContext): ChannelAdapter {
     const res = await fetch(`https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid=${corpId}&corpsecret=${corpSecret}`, {
       signal: ctx.signal
     });
-    const json = (await res.json()) as { access_token?: string; expires_in?: number; errmsg?: string };
+    const json = z
+      .object({ access_token: z.string().optional(), expires_in: z.number().optional(), errmsg: z.string().optional() })
+      .parse(await res.json());
     if (!json.access_token) throw new Error(`wecom token failed: ${json.errmsg ?? res.status}`);
     cached = { token: json.access_token, exp: Date.now() + (json.expires_in ?? 7200) * 1000 - 60_000 };
     return cached.token;
@@ -177,7 +180,9 @@ export function createWecomAdapter(ctx: ChannelContext): ChannelAdapter {
         body: JSON.stringify({ touser: chatId, msgtype: 'text', agentid: Number(agentId), text: { content } }),
         signal: ctx.signal
       });
-      const json = (await res.json().catch(() => ({}))) as { errcode?: number; errmsg?: string; msgid?: string };
+      const json = z
+        .object({ errcode: z.number().optional(), errmsg: z.string().optional(), msgid: z.string().optional() })
+        .parse(await res.json().catch(() => ({})));
       if (json.errcode) throw new Error(`wecom send failed: ${json.errmsg}`);
       return { ref: json.msgid ?? `wc-${Date.now()}`, chatId };
     }

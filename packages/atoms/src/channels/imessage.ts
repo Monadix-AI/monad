@@ -134,7 +134,9 @@ export function createImessageAdapter(ctx: ChannelContext): ChannelAdapter {
         body: JSON.stringify({ chatGuid: chatId, message: content, method: 'private-api' }),
         signal: ctx.signal
       });
-      const json = (await res.json().catch(() => ({}))) as { data?: { guid?: string } };
+      const json = z
+        .object({ data: z.object({ guid: z.string().optional() }).optional() })
+        .parse(await res.json().catch(() => ({})));
       if (!res.ok) throw new Error(`imessage send failed: ${res.status}`);
       return { ref: json.data?.guid ?? `bb-${Date.now()}`, chatId };
     }

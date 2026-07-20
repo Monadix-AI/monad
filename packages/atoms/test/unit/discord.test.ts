@@ -1,9 +1,32 @@
 // Inbound normalization conformance for the Discord adapter. Channel/renderer-level behaviour is
 // exercised in apps/monad against a mock adapter; here we pin the payload→ChannelInbound rules.
 
+import type { ChannelContext } from '@monad/sdk-atom';
+
 import { expect, test } from 'bun:test';
 
-import { normalizeDiscordMessage } from '../../src/channels/discord.ts';
+import { createDiscordAdapter, normalizeDiscordMessage } from '../../src/channels/discord.ts';
+
+function fakeContext(): ChannelContext {
+  return {
+    config: { type: 'discord', options: {} } as ChannelContext['config'],
+    log: () => {},
+    onMessage: () => {},
+    secrets: { token: 'test-token' },
+    signal: new AbortController().signal
+  } as ChannelContext;
+}
+
+test('D0: malformed Discord REST responses are rejected at the channel boundary', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = Object.assign(async () => Response.json({ id: 42 }), { preconnect: originalFetch.preconnect });
+  try {
+    const adapter = createDiscordAdapter(fakeContext());
+    await expect(adapter.send('channel', 'hello')).rejects.toThrow();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
 
 test('D1: a DM (no guild_id) → chatType dm; guild → group', () => {
   expect(normalizeDiscordMessage({ id: '1', channel_id: 'c', author: { id: 'u' }, content: 'hi' }).chatType).toBe('dm');

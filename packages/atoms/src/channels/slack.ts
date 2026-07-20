@@ -7,6 +7,7 @@ import type { ChannelInbound } from '@monad/protocol';
 import type { ChannelAdapter, ChannelCapabilities, ChannelContext, SendOptions, SentMessage } from '@monad/sdk-atom';
 
 import { defineChannel } from '@monad/sdk-atom';
+import { z } from 'zod';
 
 const WEB_API = 'https://slack.com/api';
 const MAX_BACKOFF_MS = 30_000;
@@ -79,7 +80,12 @@ export function createSlackAdapter(ctx: ChannelContext): ChannelAdapter {
   let ws: WebSocket | undefined;
   let backoff = 1000;
 
-  async function web<T = Record<string, unknown>>(method: string, body: unknown, useAppToken = false): Promise<T> {
+  async function web<T>(
+    method: string,
+    body: unknown,
+    schema: { parse(input: unknown): T },
+    useAppToken = false
+  ): Promise<T> {
     const res = await fetch(`${WEB_API}/${method}`, {
       method: 'POST',
       headers: {
@@ -89,9 +95,10 @@ export function createSlackAdapter(ctx: ChannelContext): ChannelAdapter {
       body: JSON.stringify(body),
       signal: ctx.signal
     });
-    const json = (await res.json()) as { ok: boolean; error?: string } & T;
-    if (!json.ok) throw new Error(`slack ${method} failed: ${json.error ?? res.status}`);
-    return json;
+    const json = await res.json();
+    const envelope = z.object({ ok: z.boolean(), error: z.string().optional() }).parse(json);
+    if (!envelope.ok) throw new Error(`slack ${method} failed: ${envelope.error ?? res.status}`);
+    return schema.parse(json);
   }
 
   function ack(envelopeId: string): void {
@@ -125,7 +132,7 @@ export function createSlackAdapter(ctx: ChannelContext): ChannelAdapter {
   async function openSocket(): Promise<void> {
     if (ctx.signal.aborted) return;
     try {
-      const { url } = await web<{ url: string }>('apps.connections.open', {}, true);
+      const { url } = await web('apps.connections.open', {}, z.object({ url: z.string() }), true);
       ws = new WebSocket(url);
       ws.onmessage = (ev: MessageEvent) => handle(typeof ev.data === 'string' ? ev.data : '');
       ws.onerror = () => ctx.log('warn', 'slack socket error');
@@ -150,7 +157,7 @@ export function createSlackAdapter(ctx: ChannelContext): ChannelAdapter {
     async connect() {
       if (!appToken)
         throw new Error('slack: missing app-level token (set credential extra.appToken to an xapp-… token)');
-      const auth = await web<{ user_id: string }>('auth.test', {});
+      const auth = await web('auth.test', {}, z.object({ user_id: z.string() }));
       selfUserId = auth.user_id;
       void openSocket();
     },
@@ -160,22 +167,30 @@ export function createSlackAdapter(ctx: ChannelContext): ChannelAdapter {
     },
 
     async send(chatId: string, content: string, opts?: SendOptions): Promise<SentMessage> {
-      const res = await web<{ ts: string }>('chat.postMessage', {
-        channel: chatId,
-        text: content,
-        thread_ts: opts?.threadId
-      });
+      const res = await web(
+        'chat.postMessage',
+        {
+          channel: chatId,
+          text: content,
+          thread_ts: opts?.threadId
+        },
+        z.object({ ts: z.string() })
+      );
       return { ref: res.ts, chatId, threadId: opts?.threadId };
     },
 
     async editMessage(msg: SentMessage, content: string) {
-      await web('chat.update', { channel: msg.chatId, ts: msg.ref, text: content });
+      await web('chat.update', { channel: msg.chatId, ts: msg.ref, text: content }, z.object({}).passthrough());
     },
 
     async react(target, emoji) {
       const name = EMOJI_NAMES[emoji] ?? (/^[a-z0-9_+-]+$/.test(emoji) ? emoji : undefined);
       if (!name) return;
-      await web('reactions.add', { channel: target.chatId, timestamp: target.messageId, name });
+      await web(
+        'reactions.add',
+        { channel: target.chatId, timestamp: target.messageId, name },
+        z.object({}).passthrough()
+      );
     }
   };
 }

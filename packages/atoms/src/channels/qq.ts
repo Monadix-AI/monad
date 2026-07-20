@@ -11,6 +11,7 @@ import type { ChannelInbound } from '@monad/protocol';
 import type { ChannelAdapter, ChannelCapabilities, ChannelContext, SentMessage } from '@monad/sdk-atom';
 
 import { defineChannel } from '@monad/sdk-atom';
+import { z } from 'zod';
 
 const MAX_BACKOFF_MS = 30_000;
 // GUILDS(1<<0) | DIRECT_MESSAGE(1<<12) | GROUP_AND_C2C_EVENT(1<<25) | PUBLIC_GUILD_MESSAGES(1<<30).
@@ -131,7 +132,13 @@ export function createQQAdapter(ctx: ChannelContext): ChannelAdapter {
       body: JSON.stringify({ appId, clientSecret }),
       signal: ctx.signal
     });
-    const json = (await res.json()) as { access_token?: string; expires_in?: number | string; message?: string };
+    const json = z
+      .object({
+        access_token: z.string().optional(),
+        expires_in: z.union([z.number(), z.string()]).optional(),
+        message: z.string().optional()
+      })
+      .parse(await res.json());
     if (!json.access_token) throw new Error(`qq app token failed: ${json.message ?? res.status}`);
     appToken = { token: json.access_token, exp: Date.now() + Number(json.expires_in ?? 7200) * 1000 - 60_000 };
     return appToken.token;
@@ -192,7 +199,7 @@ export function createQQAdapter(ctx: ChannelContext): ChannelAdapter {
         headers: { authorization: `Bot ${appId}.${token}` },
         signal: ctx.signal
       });
-      const { url } = (await res.json()) as { url?: string };
+      const { url } = z.object({ url: z.string().optional() }).parse(await res.json());
       ws = new WebSocket(url ?? 'wss://api.sgroup.qq.com/websocket');
       ws.onmessage = (ev: MessageEvent) => handle(typeof ev.data === 'string' ? ev.data : '');
       ws.onerror = () => ctx.log('warn', 'qq gateway socket error');

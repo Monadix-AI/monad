@@ -99,7 +99,9 @@ export function createFeishuAdapter(ctx: ChannelContext): ChannelAdapter {
       body: JSON.stringify({ app_id: appId, app_secret: appSecret }),
       signal: ctx.signal
     });
-    const json = (await res.json()) as { tenant_access_token?: string; expire?: number; msg?: string };
+    const json = z
+      .object({ tenant_access_token: z.string().optional(), expire: z.number().optional(), msg: z.string().optional() })
+      .parse(await res.json());
     if (!json.tenant_access_token) throw new Error(`feishu token failed: ${json.msg ?? res.status}`);
     cached = { token: json.tenant_access_token, exp: Date.now() + (json.expire ?? 7200) * 1000 - 60_000 };
     return cached.token;
@@ -163,7 +165,9 @@ export function createFeishuAdapter(ctx: ChannelContext): ChannelAdapter {
         body: JSON.stringify({ receive_id: chatId, msg_type: 'text', content: JSON.stringify({ text: content }) }),
         signal: ctx.signal
       });
-      const json = (await res.json().catch(() => ({}))) as { data?: { message_id?: string }; msg?: string };
+      const json = z
+        .object({ data: z.object({ message_id: z.string().optional() }).optional(), msg: z.string().optional() })
+        .parse(await res.json().catch(() => ({})));
       if (!res.ok) throw new Error(`feishu send failed: ${json.msg ?? res.status}`);
       return { ref: json.data?.message_id ?? `fs-${Date.now()}`, chatId };
     }

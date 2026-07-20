@@ -9,6 +9,7 @@ import type { ChannelAdapter, ChannelCapabilities, ChannelContext, SendOptions, 
 import type { RESTPatchAPIChannelMessageJSONBody, RESTPostAPIChannelMessageJSONBody } from 'discord-api-types/rest/v10';
 
 import { defineChannel } from '@monad/sdk-atom';
+import { z } from 'zod';
 
 const API = 'https://discord.com/api/v10';
 const GATEWAY = 'wss://gateway.discord.gg/?v=10&encoding=json';
@@ -28,15 +29,35 @@ const DISCORD_CAPABILITIES: ChannelCapabilities = {
   outboundMirror: true
 };
 
-interface DiscordMessage {
-  id: string;
-  channel_id: string;
-  guild_id?: string;
-  author?: { id: string; username?: string; global_name?: string; bot?: boolean };
-  content?: string;
-  mentions?: Array<{ id: string }>;
-  referenced_message?: { id?: string; author?: { id: string } } | null;
-}
+const discordUserSchema = z.object({
+  id: z.string(),
+  username: z.string().optional(),
+  global_name: z.string().optional(),
+  bot: z.boolean().optional()
+});
+const discordMessageSchema = z.object({
+  id: z.string(),
+  channel_id: z.string(),
+  guild_id: z.string().optional(),
+  author: discordUserSchema.optional(),
+  content: z.string().optional(),
+  mentions: z.array(z.object({ id: z.string() })).optional(),
+  referenced_message: z
+    .object({ id: z.string().optional(), author: z.object({ id: z.string() }).optional() })
+    .nullable()
+    .optional()
+});
+const discordGatewayPayloadSchema = z.object({
+  op: z.number(),
+  d: z.unknown().optional(),
+  s: z.number().nullable().optional(),
+  t: z.string().optional()
+});
+const discordHelloSchema = z.object({ heartbeat_interval: z.number() });
+const discordReadySchema = z.object({ user: z.object({ id: z.string() }) });
+const discordRestMessageSchema = z.object({ id: z.string() });
+
+type DiscordMessage = z.infer<typeof discordMessageSchema>;
 
 /**
  * Pure normalization of a Discord MESSAGE_CREATE payload → ChannelInbound. Exported for tests.
@@ -81,7 +102,7 @@ export function createDiscordAdapter(ctx: ChannelContext): ChannelAdapter {
   let acked = true;
   let backoff = 1000;
 
-  async function rest<T = unknown>(method: string, path: string, body?: unknown): Promise<T | undefined> {
+  async function rest<T>(method: string, path: string, schema: z.ZodType<T>, body?: unknown): Promise<T> {
     const res = await fetch(`${API}${path}`, {
       method,
       headers: { authorization: `Bot ${token}`, 'content-type': 'application/json' },
@@ -92,7 +113,19 @@ export function createDiscordAdapter(ctx: ChannelContext): ChannelAdapter {
       const detail = await res.text().catch(() => '');
       throw new Error(`discord ${method} ${path} failed: ${res.status} ${detail}`.trim());
     }
-    return res.status === 204 ? undefined : ((await res.json()) as T);
+    return schema.parse(await res.json());
+  }
+
+  async function restNoContent(method: string, path: string): Promise<void> {
+    const res = await fetch(`${API}${path}`, {
+      method,
+      headers: { authorization: `Bot ${token}`, 'content-type': 'application/json' },
+      signal: ctx.signal
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => '');
+      throw new Error(`discord ${method} ${path} failed: ${res.status} ${detail}`.trim());
+    }
   }
 
   function stopHeartbeat(): void {
@@ -129,17 +162,22 @@ export function createDiscordAdapter(ctx: ChannelContext): ChannelAdapter {
   }
 
   function handle(raw: string): void {
-    let payload: { op: number; d?: unknown; s?: number | null; t?: string };
+    let json: unknown;
     try {
-      payload = JSON.parse(raw);
+      json = JSON.parse(raw);
     } catch {
       return;
     }
+    const parsed = discordGatewayPayloadSchema.safeParse(json);
+    if (!parsed.success) return;
+    const payload = parsed.data;
     if (typeof payload.s === 'number') seq = payload.s;
     switch (payload.op) {
       case 10: {
         // Hello: begin heartbeating, then identify.
-        const interval = (payload.d as { heartbeat_interval: number }).heartbeat_interval;
+        const hello = discordHelloSchema.safeParse(payload.d);
+        if (!hello.success) return;
+        const interval = hello.data.heartbeat_interval;
         startHeartbeat(interval);
         identify();
         break;
@@ -150,10 +188,14 @@ export function createDiscordAdapter(ctx: ChannelContext): ChannelAdapter {
       case 0: {
         // Dispatch.
         if (payload.t === 'READY') {
-          selfId = (payload.d as { user: { id: string } }).user.id;
+          const ready = discordReadySchema.safeParse(payload.d);
+          if (!ready.success) return;
+          selfId = ready.data.user.id;
           backoff = 1000; // a clean session resets the reconnect backoff
         } else if (payload.t === 'MESSAGE_CREATE') {
-          ctx.onMessage(normalizeDiscordMessage(payload.d as DiscordMessage, selfId));
+          const message = discordMessageSchema.safeParse(payload.d);
+          if (!message.success) return;
+          ctx.onMessage(normalizeDiscordMessage(message.data, selfId));
         }
         break;
       }
@@ -187,8 +229,8 @@ export function createDiscordAdapter(ctx: ChannelContext): ChannelAdapter {
 
     async connect() {
       // Verify the token up front so connect() rejects on a bad credential.
-      const me = await rest<{ id: string }>('GET', '/users/@me');
-      selfId = me?.id;
+      const me = await rest('GET', '/users/@me', discordRestMessageSchema);
+      selfId = me.id;
       openGateway();
     },
 
@@ -198,26 +240,26 @@ export function createDiscordAdapter(ctx: ChannelContext): ChannelAdapter {
     },
 
     async send(chatId: string, content: string, opts?: SendOptions): Promise<SentMessage> {
-      const msg = await rest<{ id: string }>('POST', `/channels/${chatId}/messages`, {
+      const msg = await rest('POST', `/channels/${chatId}/messages`, discordRestMessageSchema, {
         content,
         message_reference: opts?.replyTo ? { message_id: opts.replyTo, fail_if_not_exists: false } : undefined
       } satisfies RESTPostAPIChannelMessageJSONBody);
-      return { ref: msg?.id ?? '', chatId };
+      return { ref: msg.id, chatId };
     },
 
     async editMessage(msg: SentMessage, content: string) {
-      await rest('PATCH', `/channels/${msg.chatId}/messages/${msg.ref}`, {
+      await rest('PATCH', `/channels/${msg.chatId}/messages/${msg.ref}`, discordRestMessageSchema, {
         content
       } satisfies RESTPatchAPIChannelMessageJSONBody);
     },
 
     async startTyping(chatId: string) {
-      await rest('POST', `/channels/${chatId}/typing`);
+      await restNoContent('POST', `/channels/${chatId}/typing`);
     },
 
     async react(target, emoji) {
       // Unicode emoji must be URL-encoded; custom emoji ("name:id") are passed through.
-      await rest(
+      await restNoContent(
         'PUT',
         `/channels/${target.chatId}/messages/${target.messageId}/reactions/${encodeURIComponent(emoji)}/@me`
       );

@@ -1,9 +1,33 @@
 // Inbound normalization conformance: each case pins a specific rule (text XOR caption,
 // command parsing, isSelf guard, etc.). Channel/renderer-level tests live in apps/monad.
 
+import type { ChannelContext } from '@monad/sdk-atom';
+
 import { expect, test } from 'bun:test';
 
-import { normalizeTelegramMessage } from '../../src/channels/telegram.ts';
+import { createTelegramAdapter, normalizeTelegramMessage } from '../../src/channels/telegram.ts';
+
+function fakeContext(): ChannelContext {
+  return {
+    config: { type: 'telegram', options: {} } as ChannelContext['config'],
+    log: () => {},
+    onMessage: () => {},
+    secrets: { token: 'test-token' },
+    signal: new AbortController().signal
+  } as ChannelContext;
+}
+
+test('A0: malformed Telegram responses are rejected at the channel boundary', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = Object.assign(async () => Response.json({ ok: true, result: { id: 'not-a-number' } }), {
+    preconnect: originalFetch.preconnect
+  });
+  try {
+    await expect(createTelegramAdapter(fakeContext()).connect()).rejects.toThrow();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
 
 test('A1: text wins over caption; caption used when no text; media-only → kind media', () => {
   expect(normalizeTelegramMessage({ message_id: 1, chat: { id: 5, type: 'private' }, text: 'hi' }).text).toBe('hi');

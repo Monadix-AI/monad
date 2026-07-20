@@ -133,7 +133,9 @@ export function createWhatsappAdapter(ctx: ChannelContext): ChannelAdapter {
         body: JSON.stringify({ messaging_product: 'whatsapp', to: chatId, type: 'text', text: { body: content } }),
         signal: ctx.signal
       });
-      const json = (await res.json().catch(() => ({}))) as { messages?: Array<{ id: string }> };
+      const json = z
+        .object({ messages: z.array(z.object({ id: z.string() })).optional() })
+        .parse(await res.json().catch(() => ({})));
       if (!res.ok) throw new Error(`whatsapp send failed: ${res.status}`);
       return { ref: json.messages?.[0]?.id ?? `wa-${Date.now()}`, chatId };
     }

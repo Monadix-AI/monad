@@ -9,6 +9,7 @@ import type { ChannelInbound } from '@monad/protocol';
 import type { ChannelAdapter, ChannelCapabilities, ChannelContext, SentMessage } from '@monad/sdk-atom';
 
 import { defineChannel } from '@monad/sdk-atom';
+import { z } from 'zod';
 
 import { hmacSha1Base64, serveHttpInbound, timingSafeEqual } from './_http-inbound.ts';
 
@@ -101,7 +102,7 @@ export function createTwilioAdapter(ctx: ChannelContext): ChannelAdapter {
         body: new URLSearchParams({ To: chatId, From: from, Body: content }).toString(),
         signal: ctx.signal
       });
-      const json = (await res.json().catch(() => ({}))) as { sid?: string };
+      const json = z.object({ sid: z.string().optional() }).parse(await res.json().catch(() => ({})));
       if (!res.ok) throw new Error(`twilio send failed: ${res.status}`);
       return { ref: json.sid ?? `tw-${Date.now()}`, chatId };
     }

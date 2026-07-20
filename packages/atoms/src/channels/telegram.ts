@@ -7,6 +7,7 @@ import type { ChannelInbound } from '@monad/protocol';
 import type { ChannelAdapter, ChannelCapabilities, ChannelContext, SendOptions, SentMessage } from '@monad/sdk-atom';
 
 import { defineChannel } from '@monad/sdk-atom';
+import { z } from 'zod';
 
 const POLL_TIMEOUT_SEC = 30;
 const TELEGRAM_CAPABILITIES: ChannelCapabilities = {
@@ -31,6 +32,23 @@ interface TgMessage {
   message_thread_id?: number;
   entities?: Array<{ type: string; offset: number; length: number }>;
 }
+
+const telegramUserSchema = z.object({
+  id: z.number(),
+  first_name: z.string().optional(),
+  username: z.string().optional(),
+  is_bot: z.boolean().optional()
+});
+const telegramMessageSchema: z.ZodType<TgMessage> = z.object({
+  message_id: z.number(),
+  from: telegramUserSchema.optional(),
+  chat: z.object({ id: z.number(), type: z.string() }),
+  text: z.string().optional(),
+  caption: z.string().optional(),
+  reply_to_message: z.object({ message_id: z.number(), from: z.object({ id: z.number() }).optional() }).optional(),
+  message_thread_id: z.number().optional(),
+  entities: z.array(z.object({ type: z.string(), offset: z.number(), length: z.number() })).optional()
+});
 
 /**
  * Pure normalization of a Telegram message → ChannelInbound. Exported for conformance tests.
@@ -87,33 +105,38 @@ export function createTelegramAdapter(ctx: ChannelContext): ChannelAdapter {
 
   const api = (method: string): string => `${baseUrl}/bot${token}/${method}`;
 
-  async function call<T = { result: unknown }>(method: string, body?: unknown): Promise<T> {
+  async function call<T>(method: string, schema: { parse(input: unknown): T }, body?: unknown): Promise<T> {
     const res = await fetch(api(method), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: body ? JSON.stringify(body) : undefined,
       signal: ctx.signal
     });
-    const json = (await res.json()) as { ok: boolean; description?: string } & T;
-    if (!json.ok) throw new Error(`telegram ${method} failed: ${json.description ?? res.status}`);
-    return json;
+    const json = await res.json();
+    const envelope = z.object({ ok: z.boolean(), description: z.string().optional() }).parse(json);
+    if (!envelope.ok) throw new Error(`telegram ${method} failed: ${envelope.description ?? res.status}`);
+    return schema.parse(json);
   }
-
-  const normalize = (m: TgMessage): ChannelInbound => normalizeTelegramMessage(m, selfId, selfUsername);
 
   async function poll(): Promise<void> {
     let backoff = 1000;
     while (!ctx.signal.aborted) {
       try {
-        const res = await call<{ result: Array<{ update_id: number; message?: TgMessage }> }>('getUpdates', {
-          offset,
-          timeout: optTimeout,
-          allowed_updates: ['message']
-        });
+        const res = await call(
+          'getUpdates',
+          z.object({
+            result: z.array(z.object({ update_id: z.number(), message: telegramMessageSchema.optional() }))
+          }),
+          {
+            offset,
+            timeout: optTimeout,
+            allowed_updates: ['message']
+          }
+        );
         backoff = 1000;
         for (const u of res.result) {
           offset = u.update_id + 1;
-          if (u.message) ctx.onMessage(normalize(u.message));
+          if (u.message) ctx.onMessage(normalizeTelegramMessage(u.message, selfId, selfUsername));
         }
       } catch (err) {
         if (ctx.signal.aborted) return;
@@ -138,7 +161,10 @@ export function createTelegramAdapter(ctx: ChannelContext): ChannelAdapter {
     capabilities: TELEGRAM_CAPABILITIES,
 
     async connect() {
-      const me = await call<{ result: { id: number; username?: string } }>('getMe');
+      const me = await call(
+        'getMe',
+        z.object({ result: z.object({ id: z.number(), username: z.string().optional() }) })
+      );
       selfId = String(me.result.id);
       selfUsername = me.result.username;
       // Detached receive loop — connect() returns once the token is verified.
@@ -150,7 +176,7 @@ export function createTelegramAdapter(ctx: ChannelContext): ChannelAdapter {
     },
 
     async send(chatId: string, content: string, opts?: SendOptions): Promise<SentMessage> {
-      const res = await call<{ result: { message_id: number } }>('sendMessage', {
+      const res = await call('sendMessage', z.object({ result: z.object({ message_id: z.number() }) }), {
         chat_id: chatId,
         text: content,
         reply_parameters: opts?.replyTo ? { message_id: Number(opts.replyTo) } : undefined,
@@ -160,7 +186,7 @@ export function createTelegramAdapter(ctx: ChannelContext): ChannelAdapter {
     },
 
     async editMessage(msg: SentMessage, content: string) {
-      await call('editMessageText', {
+      await call('editMessageText', z.object({}).passthrough(), {
         chat_id: msg.chatId,
         message_id: Number(msg.ref),
         text: content
@@ -168,18 +194,18 @@ export function createTelegramAdapter(ctx: ChannelContext): ChannelAdapter {
     },
 
     async startTyping(chatId: string) {
-      await call('sendChatAction', {
+      await call('sendChatAction', z.object({}).passthrough(), {
         chat_id: chatId,
         action: 'typing'
       } satisfies Opts<never>['sendChatAction']);
     },
 
     async setCommands(commands) {
-      await call('setMyCommands', { commands } satisfies Opts<never>['setMyCommands']);
+      await call('setMyCommands', z.object({}).passthrough(), { commands } satisfies Opts<never>['setMyCommands']);
     },
 
     async react(target, emoji) {
-      await call('setMessageReaction', {
+      await call('setMessageReaction', z.object({}).passthrough(), {
         chat_id: target.chatId,
         message_id: Number(target.messageId),
         reaction: [{ type: 'emoji', emoji }]

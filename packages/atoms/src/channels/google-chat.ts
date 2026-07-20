@@ -116,7 +116,13 @@ async function mintToken(
     body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion: jwt }).toString(),
     signal
   });
-  const json = (await res.json()) as { access_token?: string; expires_in?: number; error_description?: string };
+  const json = z
+    .object({
+      access_token: z.string().optional(),
+      expires_in: z.number().optional(),
+      error_description: z.string().optional()
+    })
+    .parse(await res.json());
   if (!json.access_token) throw new Error(`gchat token failed: ${json.error_description ?? res.status}`);
   return { token: json.access_token, exp: Date.now() + (json.expires_in ?? 3600) * 1000 - 60_000 };
 }
@@ -196,7 +202,7 @@ export function createGoogleChatAdapter(ctx: ChannelContext): ChannelAdapter {
         body: JSON.stringify({ text: content }),
         signal: ctx.signal
       });
-      const json = (await res.json().catch(() => ({}))) as { name?: string };
+      const json = z.object({ name: z.string().optional() }).parse(await res.json().catch(() => ({})));
       if (!res.ok) throw new Error(`gchat send failed: ${res.status}`);
       return { ref: json.name ?? `gc-${Date.now()}`, chatId };
     }

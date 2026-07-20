@@ -103,7 +103,13 @@ export function createTeamsAdapter(ctx: ChannelContext): ChannelAdapter {
       }).toString(),
       signal: ctx.signal
     });
-    const json = (await res.json()) as { access_token?: string; expires_in?: number; error_description?: string };
+    const json = z
+      .object({
+        access_token: z.string().optional(),
+        expires_in: z.number().optional(),
+        error_description: z.string().optional()
+      })
+      .parse(await res.json());
     if (!json.access_token) throw new Error(`teams token failed: ${json.error_description ?? res.status}`);
     cached = { token: json.access_token, exp: Date.now() + (json.expires_in ?? 3600) * 1000 - 60_000 };
     return cached.token;
@@ -157,7 +163,7 @@ export function createTeamsAdapter(ctx: ChannelContext): ChannelAdapter {
         body: JSON.stringify({ type: 'message', text: content } satisfies Pick<Activity, 'type' | 'text'>),
         signal: ctx.signal
       });
-      const json = (await res.json().catch(() => ({}))) as { id?: string };
+      const json = z.object({ id: z.string().optional() }).parse(await res.json().catch(() => ({})));
       if (!res.ok) throw new Error(`teams send failed: ${res.status}`);
       return { ref: json.id ?? `tm-${Date.now()}`, chatId };
     }
