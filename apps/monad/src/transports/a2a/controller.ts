@@ -3,10 +3,12 @@ import type { Agent } from '@monad/protocol';
 import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
 
 import { DefaultRequestHandler, InMemoryTaskStore } from '@a2a-js/sdk/server';
+import { agentIdSchema, jsonRpcRequestEnvelopeSchema } from '@monad/protocol';
 import { Elysia } from 'elysia';
 
 import { buildAgentCard } from './agent-card.ts';
 import { createA2aExecutor } from './executor.ts';
+import { messageSendParamsSchema, taskIdParamsSchema, taskQueryParamsSchema } from './schemas.ts';
 import { baseUrlOf } from './util.ts';
 
 type Handlers = ReturnType<typeof createDaemonHandlers>;
@@ -27,6 +29,7 @@ type JsonRpcId = JsonRpcEnvelope['id'];
 type ParsedRpcRequest =
   | { kind: 'supported'; request: A2aRpcRequest }
   | { kind: 'unsupported'; envelope: JsonRpcEnvelope }
+  | { kind: 'invalid_params'; id: JsonRpcId }
   | { kind: 'invalid'; id: JsonRpcId };
 
 function rpcError(id: JsonRpcId, code: number, message: string): Response {
@@ -37,39 +40,44 @@ function sseFrame(id: JsonRpcId, result: unknown): string {
   return `data: ${JSON.stringify({ jsonrpc: '2.0', id, result })}\n\n`;
 }
 
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
 function parseRpcRequest(body: unknown): ParsedRpcRequest {
-  if (!isObject(body) || body.jsonrpc !== '2.0' || typeof body.method !== 'string') {
+  const parsedEnvelope = jsonRpcRequestEnvelopeSchema.safeParse(body);
+  if (!parsedEnvelope.success) {
     return { kind: 'invalid', id: null };
   }
-  const id = typeof body.id === 'string' || typeof body.id === 'number' || body.id === null ? body.id : null;
+  const bodyEnvelope = parsedEnvelope.data;
   const envelope: JsonRpcEnvelope = {
     jsonrpc: '2.0',
-    id,
-    method: body.method,
-    params: body.params
+    id: bodyEnvelope.id ?? null,
+    method: bodyEnvelope.method,
+    params: bodyEnvelope.params
   };
-  if (!isObject(envelope.params)) return { kind: 'unsupported', envelope };
   switch (envelope.method) {
     case 'message/send':
-    case 'message/stream':
+    case 'message/stream': {
+      const params = messageSendParamsSchema.safeParse(envelope.params);
+      if (!params.success) return { kind: 'invalid_params', id: envelope.id };
       return {
         kind: 'supported',
-        request: { ...envelope, method: envelope.method, params: envelope.params as unknown as MessageSendParams }
+        request: { ...envelope, method: envelope.method, params: params.data }
       };
-    case 'tasks/get':
+    }
+    case 'tasks/get': {
+      const params = taskQueryParamsSchema.safeParse(envelope.params);
+      if (!params.success) return { kind: 'invalid_params', id: envelope.id };
       return {
         kind: 'supported',
-        request: { ...envelope, method: envelope.method, params: envelope.params as unknown as TaskQueryParams }
+        request: { ...envelope, method: envelope.method, params: params.data }
       };
-    case 'tasks/cancel':
+    }
+    case 'tasks/cancel': {
+      const params = taskIdParamsSchema.safeParse(envelope.params);
+      if (!params.success) return { kind: 'invalid_params', id: envelope.id };
       return {
         kind: 'supported',
-        request: { ...envelope, method: envelope.method, params: envelope.params as unknown as TaskIdParams }
+        request: { ...envelope, method: envelope.method, params: params.data }
       };
+    }
     default:
       return { kind: 'unsupported', envelope };
   }
@@ -85,7 +93,7 @@ export function createA2aController(handlers: Handlers) {
 
   async function enabledAgent(agentId: string): Promise<Agent | null> {
     try {
-      const { agent } = await handlers.agent.getAgent({ agentId: agentId as Agent['id'] });
+      const { agent } = await handlers.agent.getAgent({ agentId: agentIdSchema.parse(agentId) });
       return agent.a2a?.enabled ? agent : null;
     } catch {
       return null;
@@ -156,6 +164,9 @@ export function createA2aController(handlers: Handlers) {
         }
         if (parsed.kind === 'unsupported') {
           return rpcError(parsed.envelope.id, -32601, `method not found: ${parsed.envelope.method}`);
+        }
+        if (parsed.kind === 'invalid_params') {
+          return rpcError(parsed.id, -32602, 'invalid params');
         }
         return dispatch(handlerFor(agent, baseUrlOf(request)), parsed.request);
       },

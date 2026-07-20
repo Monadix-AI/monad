@@ -135,6 +135,27 @@ for (const kind of TRANSPORTS) {
       }
     });
 
+    test('invalid method params are rejected at the A2A JSON-RPC boundary', async () => {
+      const { dir, app } = await setup();
+      const t = serveTransport(kind, app);
+      try {
+        const agent = await createAgent(t, 'Validation Bot', true);
+        const res = await t.fetch(
+          `/a2a/agents/${agent.id}`,
+          json('POST', { jsonrpc: '2.0', id: 9, method: 'message/send', params: {} })
+        );
+
+        expect(await res.json()).toEqual({
+          jsonrpc: '2.0',
+          id: 9,
+          error: { code: -32602, message: 'invalid params' }
+        });
+      } finally {
+        await t.stop();
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+
     test('unknown agent 404s on the A2A surface', async () => {
       const { dir, app } = await setup();
       const t = serveTransport(kind, app);
