@@ -5,15 +5,19 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { getPaths } from '@monad/environment';
 import { MONAD_VERSION } from '@monad/protocol';
+import { z } from 'zod';
 
 import { t } from '../lib/i18n.ts';
 import { bold, dim, green, json, out, yellow } from '../lib/output.ts';
 
 const RELEASE_REPOSITORY = 'Monadix-AI/monad';
 
-interface ReleaseInfo {
-  tag_name: string;
-}
+const releaseInfoSchema = z.object({
+  tag_name: z.string(),
+  prerelease: z.boolean().optional(),
+  body: z.string().optional()
+});
+const releaseListSchema = z.array(releaseInfoSchema.partial({ tag_name: true }));
 
 interface ResolvedRelease {
   tag: string;
@@ -69,12 +73,12 @@ async function fetchLatestRelease(channel: string, deps: ResolvedUpgradeCommandD
     if (channel === 'stable') {
       const res = await deps.fetch(`${deps.releaseApiBaseUrl}/releases/latest`, { headers });
       if (!res.ok) return fetchStableReleaseFromRedirect(deps);
-      const data = (await res.json()) as ReleaseInfo;
+      const data = releaseInfoSchema.parse(await res.json());
       return data.tag_name ? { tag: data.tag_name, version: normalizeReleaseVersion(data.tag_name) } : null;
     }
     const res = await deps.fetch(`${deps.releaseApiBaseUrl}/releases?per_page=50`, { headers });
     if (!res.ok) return null;
-    const releases = (await res.json()) as Array<{ tag_name?: string; prerelease?: boolean }>;
+    const releases = releaseListSchema.parse(await res.json());
     for (const rel of releases) {
       if (channel === 'beta' && rel.prerelease && rel.tag_name) {
         return { tag: rel.tag_name, version: normalizeReleaseVersion(rel.tag_name) };
@@ -128,12 +132,12 @@ async function fetchReleaseNotes(channel: string, deps: ResolvedUpgradeCommandDe
     if (channel === 'stable') {
       const res = await deps.fetch(`${deps.releaseApiBaseUrl}/releases/latest`, { headers });
       if (!res.ok) return null;
-      const data = (await res.json()) as { body?: string };
+      const data = releaseInfoSchema.partial().parse(await res.json());
       return data.body ?? null;
     }
     const res = await deps.fetch(`${deps.releaseApiBaseUrl}/releases?per_page=10`, { headers });
     if (!res.ok) return null;
-    const releases = (await res.json()) as Array<{ tag_name?: string; prerelease?: boolean; body?: string }>;
+    const releases = releaseListSchema.parse(await res.json());
     for (const rel of releases) {
       if (channel === 'beta' && rel.prerelease) return rel.body ?? null;
       if (channel === 'nightly' && rel.tag_name?.includes('nightly')) return rel.body ?? null;

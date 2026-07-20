@@ -1,9 +1,12 @@
 import type { InstallAtomPackResponse, UploadAtomPackQuery } from '@monad/protocol';
 
+import { httpErrorSchema, installAtomPackResponseSchema } from '@monad/protocol';
+
 import { clientOf } from '../../endpoint-helpers.ts';
 import { listAtomPacksApi } from './list-atom-packs.ts';
 
 type UploadAtomPackArg = { filename: string; body: BodyInit; consent?: boolean; contentType?: string };
+const errorResponseSchema = httpErrorSchema.partial().nullable();
 
 const uploadAtomPackApi = listAtomPacksApi.injectEndpoints({
   overrideExisting: true,
@@ -18,10 +21,10 @@ const uploadAtomPackApi = listAtomPacksApi.injectEndpoints({
           body: body.body
         });
         if (!res.ok) {
-          const parsed = (await res.json().catch(() => null)) as { error?: string; code?: string } | null;
+          const parsed = errorResponseSchema.parse(await res.json().catch(() => null));
           return { error: { status: res.status, code: parsed?.code, message: parsed?.error ?? res.statusText } };
         }
-        return { data: (await res.json()) as InstallAtomPackResponse };
+        return { data: installAtomPackResponseSchema.parse(await res.json()) };
       },
       invalidatesTags: (result) => (result?.needsConsent ? [] : ['Atoms', 'SlashCommands'])
     })

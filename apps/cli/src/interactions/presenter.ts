@@ -7,6 +7,7 @@ import type {
 } from '@monad/protocol';
 
 import { createInterface } from 'node:readline';
+import { z } from 'zod';
 
 export interface InteractionPromptIO {
   text(label: string): Promise<string>;
@@ -140,7 +141,7 @@ export async function answerInteraction(
     body: JSON.stringify({ presenterId, capabilities: CLI_CAPABILITIES })
   });
   if (!claim.ok) throw new Error(`failed to claim interaction (${claim.status})`);
-  const { leaseToken } = (await claim.json()) as { leaseToken: string };
+  const { leaseToken } = z.object({ leaseToken: z.string().min(1) }).parse(await claim.json());
   const renewTimer = setInterval(
     () =>
       void client.fetch(`/v1/interactions/${encodeURIComponent(interaction.id)}/renew`, {

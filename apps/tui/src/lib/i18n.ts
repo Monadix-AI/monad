@@ -4,9 +4,12 @@ import type { I18n, LocalePack, MessageId, TParams, Translate } from '../../../.
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { getPaths, loadAll } from '@monad/environment';
+import { z } from 'zod';
 
 import { createI18n, defaultLocaleName, loadLocalePacksFromDir } from '../../../../packages/i18n/src/index.ts';
 import { BUILTIN_LOCALES_DIR } from '../../../../packages/i18n/src/locale-dir.ts';
+
+const installRecordSchema = z.object({ enabled: z.boolean().optional() });
 
 let active: I18n = createI18n({ locale: 'en', packs: [] });
 
@@ -46,7 +49,7 @@ async function loadDropInLocalePacks(packsDir: string): Promise<LocalePack[]> {
     if (!e.isDirectory()) continue;
     const packDir = join(packsDir, e.name);
     try {
-      const record = JSON.parse(await Bun.file(join(packDir, '.install.json')).text()) as { enabled?: boolean };
+      const record = installRecordSchema.parse(JSON.parse(await Bun.file(join(packDir, '.install.json')).text()));
       if (record.enabled === false) continue;
     } catch {
       // Missing install record is treated as enabled.

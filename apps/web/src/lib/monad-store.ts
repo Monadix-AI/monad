@@ -1,4 +1,5 @@
 import { createMonadStore, createMonadTreatyClient, type MonadApiError } from '@monad/client-rtk';
+import { z } from 'zod';
 
 import { toast } from '#/components/ToastProvider';
 import { REMOTE_TOKEN_KEY, REMOTE_URL_KEY } from './daemon-connections';
@@ -10,6 +11,8 @@ export interface MonadConnectionConfig {
   token?: string;
   wsBaseUrl?: string;
 }
+
+const healthVersionSchema = z.object({ version: z.string().optional() });
 
 declare const __MONAD_WEB_PORT__: string | undefined;
 
@@ -122,7 +125,7 @@ export function watchUpgradeRestartAndReload(args: {
     try {
       const res = await fetch(`${args.baseUrl}/health`, { cache: 'no-store' });
       if (!res.ok) return;
-      const health = (await res.json()) as { version?: string };
+      const health = healthVersionSchema.parse(await res.json());
       const upgraded = targetVersion
         ? health.version === targetVersion
         : health.version && health.version !== currentVersion;

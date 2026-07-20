@@ -1,4 +1,4 @@
-import { MONAD_VERSION } from '@monad/protocol';
+import { getHealthResponseSchema, MONAD_VERSION } from '@monad/protocol';
 
 export const CLIENT_VERSION: string = MONAD_VERSION;
 
@@ -80,7 +80,7 @@ export async function checkDaemonVersion(baseUrl: string, token?: string): Promi
         reason: `health check returned ${res.status}`
       };
     }
-    const body = (await res.json()) as { version?: unknown };
+    const body = getHealthResponseSchema.parse(await res.json());
     if (typeof body.version !== 'string') {
       return {
         compatible: false,

@@ -7,9 +7,11 @@ import type {
   PendingInteraction
 } from '@monad/protocol';
 
+import { pendingInteractionSchema } from '@monad/protocol';
 import { Box, Text, useInput } from 'ink';
 import TextInput from 'ink-text-input';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { z } from 'zod';
 
 import { TUI_GLYPHS, TUI_THEME } from '../components/theme.ts';
 
@@ -19,6 +21,7 @@ const TUI_CAPABILITIES: InteractionPresenterCapabilities = {
   supportsSecretInput: true,
   supportsBackgroundQueue: true
 };
+const claimedInteractionSchema = z.object({ interaction: pendingInteractionSchema, leaseToken: z.string().min(1) });
 
 type ClaimedInteraction = { interaction: PendingInteraction; leaseToken: string };
 type CancellationReason = 'close' | 'escape' | 'timeout' | 'disconnect' | 'unavailable';
@@ -88,7 +91,7 @@ export function useTuiInteractionPresenter(client: MonadClient) {
           body: JSON.stringify({ presenterId: presenterId.current, capabilities: TUI_CAPABILITIES })
         });
         if (!claimResponse.ok || disposed) return;
-        const claimed = (await claimResponse.json()) as ClaimedInteraction;
+        const claimed: ClaimedInteraction = claimedInteractionSchema.parse(await claimResponse.json());
         activeRef.current = claimed;
         setActive(claimed);
         setValues(initialValues(candidate));

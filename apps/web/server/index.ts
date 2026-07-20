@@ -7,14 +7,17 @@ import type { ServerWebSocket } from 'bun';
 
 import { readFileSync } from 'node:fs';
 import { extname } from 'node:path';
+import { networkConfigSchema } from '@monad/environment';
 import { resolveDaemonUrl } from '@monad/environment/network-endpoints';
 import { getPaths } from '@monad/environment/paths';
 import { createLogger } from '@monad/logger';
+import { z } from 'zod';
 
 import { loopbackTlsOptions } from '../src/lib/loopback-tls';
 import { proxyResponseBody } from '../src/lib/proxy-stream';
 
 const logger = createLogger('monad-web');
+const meshConfigSchema = z.object({ network: networkConfigSchema.unwrap().partial().optional() });
 
 type EmbeddedAsset = {
   blob: Blob;
@@ -210,7 +213,7 @@ export function attachWebRoutes(app: App): void {
 }
 
 function daemonUrlFromMesh(raw: string): string {
-  const network = (JSON.parse(raw) as { network?: Parameters<typeof resolveDaemonUrl>[0]['network'] })?.network;
+  const network = meshConfigSchema.parse(JSON.parse(raw)).network;
   return resolveDaemonUrl({ network, env: Bun.env });
 }
 

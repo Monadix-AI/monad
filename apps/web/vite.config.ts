@@ -1,12 +1,15 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { networkConfigSchema } from '@monad/environment';
 import { tanstackRouter } from '@tanstack/router-plugin/vite';
 import react from '@vitejs/plugin-react';
 import { createLogger, defineConfig } from 'vite';
+import { z } from 'zod';
 
 const REPO_ROOT = resolve(import.meta.dirname, '../..');
 const APP_ROOT = import.meta.dirname;
 const REPO_ENV_PATH = resolve(REPO_ROOT, '.env.local');
+const meshConfigSchema = z.object({ network: networkConfigSchema.unwrap().partial().optional() });
 
 function parsePort(value: string | undefined): number | undefined {
   if (!value) return undefined;
@@ -44,7 +47,7 @@ export function readDaemonEndpoint(
     if (!existsSync(configPath)) continue;
     try {
       const raw = readFileSync(configPath, 'utf-8');
-      const network = (JSON.parse(raw) as { network?: { https?: { enabled?: boolean }; port?: number } })?.network;
+      const network = meshConfigSchema.parse(JSON.parse(raw)).network;
       if (network?.https?.enabled === false) scheme = 'http';
       const port = envPort ?? network?.port;
       if (port) return { port: String(port), scheme };

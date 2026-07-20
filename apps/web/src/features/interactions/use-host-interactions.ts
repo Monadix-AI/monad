@@ -1,6 +1,8 @@
 import type { InteractionEvent, InteractionPresenterCapabilities, PendingInteraction } from '@monad/protocol';
 
+import { pendingInteractionSchema } from '@monad/protocol';
 import { useEffect, useRef, useState } from 'react';
+import { z } from 'zod';
 
 import { useMonadRuntime } from '#/lib/monad-runtime-context';
 
@@ -15,6 +17,8 @@ export interface ClaimedHostInteraction {
   interaction: PendingInteraction;
   leaseToken: string;
 }
+
+const claimedHostInteractionSchema = z.object({ interaction: pendingInteractionSchema, leaseToken: z.string().min(1) });
 
 type CancellationReason = 'close' | 'escape' | 'timeout' | 'disconnect' | 'unavailable';
 
@@ -54,7 +58,7 @@ export function useHostInteractions() {
           body: JSON.stringify({ presenterId: presenterId.current, capabilities: WEB_CAPABILITIES })
         });
         if (!claimed.ok || disposed) return;
-        const value = (await claimed.json()) as ClaimedHostInteraction;
+        const value = claimedHostInteractionSchema.parse(await claimed.json());
         activeRef.current = value;
         setActive(value);
       } catch {

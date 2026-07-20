@@ -4,6 +4,7 @@ import { Alert01Icon, Copy01Icon, GlobeIcon, RotateLeft01Icon, Shield01Icon } fr
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Button, Input, Label, ScrollArea, Switch } from '@monad/ui';
 import { useState } from 'react';
+import { z } from 'zod';
 
 import { useT } from '#/components/I18nProvider';
 import { useNetworkSettings } from '#/hooks/use-network-settings';
@@ -11,6 +12,15 @@ import { REMOTE_URL_KEY } from '#/lib/monad-store';
 import { SECRET_INPUT_PASSWORD_MANAGER_PROPS } from '#/lib/secret-input-props';
 import { localHttpFallbackState, localHttpFallbackUrl } from './network-endpoints';
 import { isExpectedSchemeDisconnect, schemeTargetUrl } from './network-scheme-transition';
+
+const healthNetworkRuntimeSchema = z.object({
+  networkRuntime: z
+    .object({
+      listeners: z.array(z.object({ scheme: z.string(), port: z.number() })).optional(),
+      lastError: z.object({ message: z.string().optional() }).optional()
+    })
+    .optional()
+});
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -46,12 +56,7 @@ async function waitForHttpsReady(settings: NetworkSettings, target: URL): Promis
     try {
       const res = await fetch(healthUrl.toString(), { cache: 'no-store' });
       if (res.ok) {
-        const health = (await res.json()) as {
-          networkRuntime?: {
-            listeners?: { scheme: string; port: number }[];
-            lastError?: { message?: string };
-          };
-        };
+        const health = healthNetworkRuntimeSchema.parse(await res.json());
         const hasHttps = health.networkRuntime?.listeners?.some(
           (listener) => listener.scheme === 'https' && listener.port === targetPort
         );

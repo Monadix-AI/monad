@@ -1,9 +1,12 @@
 import type { InstallSkillResponse, UploadSkillQuery } from '@monad/protocol';
 
+import { httpErrorSchema, installSkillResponseSchema } from '@monad/protocol';
+
 import { clientOf } from '../../endpoint-helpers.ts';
 import { listInstalledSkillsApi } from './list-installed-skills.ts';
 
 type UploadSkillArg = { filename: string; body: BodyInit; overwrite?: boolean; contentType?: string };
+const errorResponseSchema = httpErrorSchema.partial().nullable();
 
 const uploadSkillApi = listInstalledSkillsApi.injectEndpoints({
   overrideExisting: true,
@@ -20,10 +23,10 @@ const uploadSkillApi = listInstalledSkillsApi.injectEndpoints({
           body: body.body
         });
         if (!res.ok) {
-          const parsed = (await res.json().catch(() => null)) as { error?: string; code?: string } | null;
+          const parsed = errorResponseSchema.parse(await res.json().catch(() => null));
           return { error: { status: res.status, code: parsed?.code, message: parsed?.error ?? res.statusText } };
         }
-        return { data: (await res.json()) as InstallSkillResponse };
+        return { data: installSkillResponseSchema.parse(await res.json()) };
       },
       invalidatesTags: ['InstalledSkills', 'Skills', 'SlashCommands']
     })

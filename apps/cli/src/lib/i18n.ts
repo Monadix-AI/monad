@@ -11,6 +11,9 @@ import { join } from 'node:path';
 import { getPaths, loadAll } from '@monad/environment';
 import { createI18n, defaultLocaleName, loadLocalePacksFromDir } from '@monad/i18n';
 import { BUILTIN_LOCALES_DIR } from '@monad/i18n/locale-dir';
+import { z } from 'zod';
+
+const installRecordSchema = z.object({ enabled: z.boolean().optional() });
 
 let active: I18n = createI18n({ locale: 'en', packs: [] });
 
@@ -53,7 +56,7 @@ async function loadDropInLocalePacks(packsDir: string): Promise<LocalePack[]> {
     if (!e.isDirectory()) continue;
     const packDir = join(packsDir, e.name);
     try {
-      const record = JSON.parse(await Bun.file(join(packDir, '.install.json')).text()) as { enabled?: boolean };
+      const record = installRecordSchema.parse(JSON.parse(await Bun.file(join(packDir, '.install.json')).text()));
       if (record.enabled === false) continue;
     } catch {
       /* no install record → treat as enabled */

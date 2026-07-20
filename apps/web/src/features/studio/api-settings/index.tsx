@@ -2,6 +2,7 @@ import { Copy01Icon, LoaderPinwheelIcon, Refresh01Icon, SendToMobileIcon } from 
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Button, cn, Input, Label, Skeleton, Switch, Textarea } from '@monad/ui';
 import { useEffect, useRef, useState } from 'react';
+import { z } from 'zod';
 
 import { type TFn, useT } from '#/components/I18nProvider';
 import { PanelShell, PanelShellBody } from '#/components/ui/panel-shell';
@@ -10,6 +11,11 @@ import { useAsyncAction } from '#/hooks/use-async-action';
 import { useOpenaiCompatSettings } from '#/hooks/use-openai-compat-settings';
 import { useMonadRuntime } from '#/lib/monad-runtime-context';
 import { SECRET_INPUT_PASSWORD_MANAGER_PROPS } from '#/lib/secret-input-props';
+
+const chatCompletionSchema = z.object({
+  choices: z.array(z.object({ message: z.object({ content: z.string().optional() }).optional() })).optional()
+});
+const chatErrorSchema = z.object({ error: z.object({ message: z.string().optional() }).optional() });
 
 function OpenaiCompatSettingsSkeleton() {
   return (
@@ -234,11 +240,11 @@ function TestPanel({ baseUrl, token, t }: { baseUrl: string; token: string; t: T
       });
 
       if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+        const body = chatErrorSchema.parse(await res.json().catch(() => ({})));
         throw new Error(body.error?.message ?? `HTTP ${res.status}`);
       }
 
-      const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+      const data = chatCompletionSchema.parse(await res.json());
       const output = data.choices?.[0]?.message?.content ?? '(empty response)';
       setResult({ input: prompt, output });
       setInput('');

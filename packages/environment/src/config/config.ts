@@ -107,7 +107,7 @@ const httpsSchema = z.object({
   enabled: z.boolean().default(false)
 });
 
-const networkConfigSchema = z
+export const networkConfigSchema = z
   .object({
     port: z.number().int().min(1).max(65535).default(47749),
     host: z.string().min(1).default('127.0.0.1'),

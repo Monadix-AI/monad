@@ -2,11 +2,15 @@ import { LoaderPinwheelIcon, PlayIcon, SquareIcon } from '@hugeicons/core-free-i
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Button, cn, Skeleton } from '@monad/ui';
 import { useCallback, useEffect, useState } from 'react';
+import { z } from 'zod';
 
 import { useT } from '#/components/I18nProvider';
 import { useAsyncAction } from '#/hooks/use-async-action';
 import { useMonadRuntime } from '#/lib/monad-runtime-context';
 import moAtlasManifest from '../../../../mo/assets/atlas.json' with { type: 'json' };
+
+const moStatusSchema = z.object({ running: z.boolean() });
+const errorResponseSchema = z.object({ error: z.string().optional() }).nullable();
 
 const MO_ATLAS = {
   cols: moAtlasManifest.columns,
@@ -142,7 +146,7 @@ export function MoSettings() {
   const refreshStatus = useCallback(async () => {
     const res = await fetch(`${daemonBaseUrl}/v1/mo/status`);
     if (!res.ok) throw new Error(`status ${res.status}`);
-    const body = (await res.json()) as { running: boolean };
+    const body = moStatusSchema.parse(await res.json());
     setRunning(body.running);
   }, [daemonBaseUrl]);
 
@@ -156,7 +160,7 @@ export function MoSettings() {
   const post = async (path: string) => {
     const res = await fetch(`${daemonBaseUrl}${path}`, { method: 'POST' });
     if (!res.ok) {
-      const body = (await res.json().catch(() => null)) as { error?: string } | null;
+      const body = errorResponseSchema.parse(await res.json().catch(() => null));
       throw new Error(body?.error ?? `request failed (${res.status})`);
     }
     await refreshStatus();

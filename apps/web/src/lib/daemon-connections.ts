@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 export interface RemoteDaemonConnection {
   id: string;
   label: string;
@@ -18,6 +20,15 @@ export const REMOTE_URL_KEY = 'monad:remoteUrl';
 export const REMOTE_TOKEN_KEY = 'monad:remoteToken';
 
 const DAEMON_CONNECTIONS_KEY = 'monad:daemonConnections';
+const remoteDaemonConnectionsSchema = z.array(
+  z.object({
+    id: z.string(),
+    label: z.string(),
+    lastConnectedAt: z.string(),
+    url: z.string(),
+    version: z.string().optional()
+  })
+);
 
 function storage(): Storage | null {
   return typeof window === 'undefined' ? null : window.localStorage;
@@ -89,15 +100,7 @@ export function readRemoteDaemonConnections(): RemoteDaemonConnection[] {
   if (!raw) return [];
 
   try {
-    const parsed = JSON.parse(raw) as RemoteDaemonConnection[];
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (connection) =>
-        typeof connection?.id === 'string' &&
-        typeof connection.label === 'string' &&
-        typeof connection.url === 'string' &&
-        typeof connection.lastConnectedAt === 'string'
-    );
+    return remoteDaemonConnectionsSchema.parse(JSON.parse(raw));
   } catch {
     return [];
   }

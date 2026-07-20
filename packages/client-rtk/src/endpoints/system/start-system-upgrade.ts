@@ -1,5 +1,7 @@
 import type { SystemUpgradeStatus } from '@monad/protocol';
 
+import { systemUpgradeStatusSchema } from '@monad/protocol';
+
 import { apiSlice } from '../../api-slice.ts';
 import { clientOf, toError } from '../../endpoint-helpers.ts';
 
@@ -12,7 +14,7 @@ const startSystemUpgradeApi = apiSlice.injectEndpoints({
           const response = await clientOf(api).fetch('/v1/system/upgrade', { method: 'POST' });
           if (!response.ok)
             return { error: toError({ status: response.status, value: await response.json().catch(() => ({})) }) };
-          return { data: (await response.json()) as SystemUpgradeStatus };
+          return { data: systemUpgradeStatusSchema.parse(await response.json()) };
         } catch (err) {
           return { error: toError(err) };
         }

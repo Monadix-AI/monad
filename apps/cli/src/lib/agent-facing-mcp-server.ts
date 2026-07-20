@@ -1,5 +1,7 @@
 import type { MonadClient } from '@monad/client';
 
+import { jsonRpcRequestEnvelopeSchema } from '@monad/protocol';
+
 type JsonRpcId = string | number | null;
 
 type JsonRpcRequest = {
@@ -430,7 +432,7 @@ export async function serveAgentFacingMcpStdio(client: MonadClient): Promise<voi
       if (!line) continue;
       let request: JsonRpcRequest;
       try {
-        request = JSON.parse(line) as JsonRpcRequest;
+        request = jsonRpcRequestEnvelopeSchema.parse(JSON.parse(line));
       } catch {
         await Bun.write(
           Bun.stdout,
