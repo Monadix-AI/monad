@@ -12,6 +12,7 @@ import type { ChannelInbound } from '@monad/protocol';
 import type { ChannelAdapter, ChannelCapabilities, ChannelContext, SendOptions, SentMessage } from '@monad/sdk-atom';
 
 import { defineChannel } from '@monad/sdk-atom';
+import { z } from 'zod';
 
 import { timingSafeEqual } from './_http-inbound.ts';
 
@@ -26,38 +27,36 @@ const WEBHOOK_CAPABILITIES: ChannelCapabilities = {
   outboundMirror: true
 };
 
-interface WebhookPayload {
-  chatId?: unknown;
-  userId?: unknown;
-  text?: unknown;
-  messageId?: unknown;
-  senderDisplay?: unknown;
-  chatType?: unknown;
-  threadId?: unknown;
-}
+const optionalStringSchema = z.string().optional().catch(undefined);
+const webhookPayloadSchema = z.object({
+  chatId: z.string().min(1),
+  userId: z.string().min(1),
+  text: optionalStringSchema,
+  messageId: optionalStringSchema,
+  senderDisplay: optionalStringSchema,
+  chatType: z.enum(['group', 'channel', 'dm']).optional().catch(undefined),
+  threadId: optionalStringSchema
+});
 
 /** Validate + normalize an untrusted webhook body → ChannelInbound. Throws on a missing chatId/userId.
  *  Exported for tests. A leading `/` marks a command, matching the other channels. */
-export function normalizeWebhookPayload(body: WebhookPayload, seq: number): ChannelInbound {
-  const chatId = typeof body.chatId === 'string' ? body.chatId : undefined;
-  const userId = typeof body.userId === 'string' ? body.userId : undefined;
-  if (!chatId || !userId) throw new Error('webhook payload requires string chatId and userId');
-  const text = typeof body.text === 'string' ? body.text : '';
+export function normalizeWebhookPayload(input: unknown, seq: number): ChannelInbound {
+  const body = webhookPayloadSchema.parse(input);
+  const text = body.text ?? '';
   const isCommand = text.startsWith('/');
   const [head, ...args] = isCommand ? text.trim().split(/\s+/) : [];
   const command = head ? head.slice(1).toLowerCase() : undefined;
-  const chatType =
-    body.chatType === 'group' || body.chatType === 'channel' || body.chatType === 'dm' ? body.chatType : 'dm';
+  const chatType = body.chatType ?? 'dm';
   return {
-    chatId,
-    userId,
-    threadId: typeof body.threadId === 'string' ? body.threadId : undefined,
+    chatId: body.chatId,
+    userId: body.userId,
+    threadId: body.threadId,
     text,
     kind: isCommand ? 'command' : text ? 'text' : 'media',
     command,
     commandArgs: args,
-    nativeMessageId: typeof body.messageId === 'string' ? body.messageId : `wh-${seq}`,
-    senderDisplay: typeof body.senderDisplay === 'string' ? body.senderDisplay : undefined,
+    nativeMessageId: body.messageId ?? `wh-${seq}`,
+    senderDisplay: body.senderDisplay,
     chatType,
     isSelf: false,
     media: [],
@@ -85,9 +84,9 @@ export function createWebhookAdapter(ctx: ChannelContext): ChannelAdapter {
           if (req.method !== 'POST' || url.pathname !== path) return new Response('not found', { status: 404 });
           const provided = req.headers.get('x-monad-secret') ?? url.searchParams.get('secret') ?? '';
           if (!secret || !timingSafeEqual(provided, secret)) return new Response('unauthorized', { status: 401 });
-          let body: WebhookPayload;
+          let body: unknown;
           try {
-            body = (await req.json()) as WebhookPayload;
+            body = await req.json();
           } catch {
             return new Response('bad json', { status: 400 });
           }
