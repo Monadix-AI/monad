@@ -1096,6 +1096,43 @@ test('settles a running MeshAgent tool item on turn_settled', () => {
   });
 });
 
+test('reactivates a settled MeshAgent tool item when a new turn starts', () => {
+  const projector = new SessionUiProjector();
+  const meshSessionId = 'mesh_250000000000';
+  projector.applyEvent(
+    event('mesh.started', {
+      meshSessionId,
+      agentName: 'claude-code',
+      provider: 'claude-code',
+      workingPath: '/Users/test/Projects/monad',
+      pid: 123
+    })
+  );
+  projector.applyEvent(event('mesh.turn_settled', { meshSessionId }));
+
+  const started = projector.applyEvent(event('mesh.turn_started', { meshSessionId }));
+
+  expect(started).toEqual([
+    {
+      kind: 'upsert',
+      cursor: expect.any(String),
+      item: {
+        kind: 'tool',
+        id: meshSessionId,
+        tool: 'mesh-agent:claude-code',
+        input: {
+          agent: 'claude-code',
+          provider: 'claude-code',
+          workingPath: '/Users/test/Projects/monad',
+          approvalOwnership: 'provider-owned'
+        },
+        status: 'running',
+        seq: expect.any(String)
+      }
+    }
+  ]);
+});
+
 test('turn_settled with error marks the tool item errored', () => {
   const projector = new SessionUiProjector();
   const meshSessionId = 'mesh_300000000000';

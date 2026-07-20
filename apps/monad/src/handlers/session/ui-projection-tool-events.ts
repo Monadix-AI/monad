@@ -229,6 +229,17 @@ export function applyToolEvent(m: ProjectionMutations, event: Event): SessionUiE
         }
       ];
     }
+    case 'mesh.turn_started': {
+      const p = parseEventPayload('mesh.turn_started', event.payload);
+      const existing = m.items.get(itemKey('tool', p.meshSessionId));
+      if (existing?.kind !== 'tool' || existing.status === 'running') return [];
+      const next: Extract<UIItem, { kind: 'tool' }> = {
+        ...existing,
+        status: 'running',
+        seq: existing.seq
+      };
+      return [{ kind: 'upsert', cursor: event.id, item: m.upsert(next) }];
+    }
     case 'mesh.turn_settled': {
       const p = parseEventPayload('mesh.turn_settled', event.payload);
       const existing = m.items.get(itemKey('tool', p.meshSessionId));

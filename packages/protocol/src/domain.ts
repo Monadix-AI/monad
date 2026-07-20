@@ -397,6 +397,7 @@ export const eventTypeSchema = z.enum([
   'mesh.idle_resumed',
   'mesh.idle_suspended',
   'mesh.exited',
+  'mesh.turn_started',
   'mesh.turn_settled',
   'mesh.session.connection.opened',
   'mesh.session.connection.closed',

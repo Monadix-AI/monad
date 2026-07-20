@@ -304,6 +304,10 @@ export const meshAgentTurnSettledPayloadSchema = z.object({
   error: z.boolean().optional()
 });
 
+export const meshAgentTurnStartedPayloadSchema = z.object({
+  meshSessionId: z.string()
+});
+
 export const meshAgentLoginRequiredPayloadSchema = z.object({
   meshSessionId: z.string().optional(),
   agentName: z.string(),
@@ -404,6 +408,7 @@ export const EVENT_DEFINITIONS = {
   'mesh.idle_resumed': defineEvent(meshAgentIdleResumedPayloadSchema, 'generation', 'durable'),
   'mesh.resume_failed': defineEvent(meshAgentResumeFailedPayloadSchema, 'generation', 'durable'),
   'mesh.exited': defineEvent(meshAgentExitedPayloadSchema, 'both', 'durable'),
+  'mesh.turn_started': defineEvent(meshAgentTurnStartedPayloadSchema, 'generation', 'transient'),
   'mesh.turn_settled': defineEvent(meshAgentTurnSettledPayloadSchema, 'generation', 'transient'),
   'mesh.session.connection.opened': defineEvent(meshSessionConnectionOpenedPayloadSchema, 'control', 'transient'),
   'mesh.session.connection.closed': defineEvent(meshSessionConnectionClosedPayloadSchema, 'control', 'transient'),

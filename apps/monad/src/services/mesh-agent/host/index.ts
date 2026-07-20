@@ -287,7 +287,17 @@ export class MeshAgentHost {
       'native cli input'
     );
     if (!live.sessionEventRuntime) throw new Error(`MeshAgent session runtime is unavailable: ${id}`);
-    await live.sessionEventRuntime.input({ text: req.input, attachments: [] });
+    if (live.runtimeRole === 'managed-project-agent') {
+      this.events.publish(live.transcriptTargetId, 'mesh.turn_started', { meshSessionId: id });
+    }
+    try {
+      await live.sessionEventRuntime.input({ text: req.input, attachments: [] });
+    } catch (error) {
+      if (live.runtimeRole === 'managed-project-agent') {
+        this.events.publish(live.transcriptTargetId, 'mesh.turn_settled', { meshSessionId: id, error: true });
+      }
+      throw error;
+    }
   }
 
   /** Cancel the in-flight turn while keeping the session/thread alive. If the provider adapter offers

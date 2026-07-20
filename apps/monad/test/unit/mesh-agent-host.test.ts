@@ -158,15 +158,23 @@ test('MeshAgent host runs only the provider session-event runtime', async () => 
   };
   registerAgentAdapterImpl(adapter);
   const store = createStore();
+  const bus = new EventBus();
+  const turnEvents: Array<{ type: string; payload: unknown }> = [];
+  const dispose = bus.subscribe('ses_01KWRUNTIME0', (event) => {
+    if (event.type === 'mesh.turn_started') {
+      turnEvents.push({ type: event.type, payload: event.payload });
+    }
+  });
   const host = new MeshAgentHost({
     store,
-    bus: new EventBus(),
+    bus,
     agents: async () => [agent(provider, process.execPath, [script])]
   });
   try {
     const view = await host.start({
       transcriptTargetId: 'ses_01KWRUNTIME0',
       agentName: provider,
+      runtimeRole: 'managed-project-agent',
       workingPath: workdir
     });
     expect({ lifecycle: view.lifecycle, activity: view.activity }).toEqual({
@@ -174,10 +182,15 @@ test('MeshAgent host runs only the provider session-event runtime', async () => 
       activity: { state: 'idle', pid: null, queuedTurnCount: 0 }
     });
     await host.input(view.id, { input: 'hello' });
-    expect({ accepted, turns }).toEqual({ accepted: ['structured-event'], turns: [0] });
+    expect({ accepted, turns, turnEvents }).toEqual({
+      accepted: ['structured-event'],
+      turns: [0],
+      turnEvents: [{ type: 'mesh.turn_started', payload: { meshSessionId: view.id } }]
+    });
     host.stop(view.id);
     expect(store.getMeshSession(view.id)?.state).toBe('stopped');
   } finally {
+    dispose();
     host.stopAll();
     unregisterAgentAdapterImpl(provider);
     rmSync(workdir, { recursive: true, force: true });

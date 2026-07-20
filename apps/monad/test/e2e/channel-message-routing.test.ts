@@ -679,11 +679,48 @@ for (const kind of TRANSPORTS) {
       expect(first.status).toBe(200);
       await waitForFile(stdinLog, 'first project task');
 
+      let activeSession: { id: string } | undefined;
+      for (let attempt = 0; attempt < 120; attempt++) {
+        const listed = await t.fetch(`/v1/mesh/sessions?transcriptTargetId=${sessionId}`);
+        expect(listed.status).toBe(200);
+        const sessions = (
+          (await listed.json()) as {
+            sessions: Array<{ id: string; lifecycle: { state: string }; activity: { state: string } }>;
+          }
+        ).sessions;
+        activeSession = sessions.find(
+          (session) => session.lifecycle.state === 'active' && session.activity.state === 'idle'
+        );
+        if (activeSession) break;
+        await Bun.sleep(25);
+      }
+      if (!activeSession) throw new Error('managed MeshAgent did not settle before its second turn');
+      const secondTurnStarted = t.sse(`/v1/sessions/${sessionId}/ui-stream`, {
+        until: (event) => {
+          const uiEvent = event as unknown as SessionUiEvent;
+          return (
+            uiEvent.kind === 'upsert' &&
+            uiEvent.item.kind === 'tool' &&
+            uiEvent.item.id === activeSession.id &&
+            uiEvent.item.status === 'running'
+          );
+        },
+        timeoutMs: 3000
+      });
+
       const second = await t.fetch(
         `/v1/channels/${sessionId}/messages`,
         json('POST', { text: 'second secret busy task' })
       );
       expect(second.status).toBe(200);
+      const secondTurnEvents = (await secondTurnStarted) as unknown as SessionUiEvent[];
+      expect(
+        secondTurnEvents.flatMap((event) =>
+          event.kind === 'upsert' && event.item.kind === 'tool' && event.item.id === activeSession.id
+            ? [{ id: event.item.id, status: event.item.status }]
+            : []
+        )
+      ).toEqual([{ id: activeSession.id, status: 'running' }]);
       const input = await waitForFile(stdinLog, 'second secret busy task');
       expect(input).toContain('first project task');
       expect(input).toContain('second secret busy task');

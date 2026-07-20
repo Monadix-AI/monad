@@ -43,6 +43,7 @@ const SSE_GENERATION_EMITS: readonly EventType[] = [
   'mesh.idle_suspended',
   'mesh.resume_failed',
   'mesh.exited',
+  'mesh.turn_started',
   'mesh.turn_settled',
   'mesh.login_required',
   'mesh.login_resolved'
