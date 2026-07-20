@@ -186,6 +186,40 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
       );
       persistAndRetire(session.id, round);
     };
+    const handleDeliveryFailure = async (member: ManagedMeshAgentProjectMember, err: unknown): Promise<void> => {
+      const { code, message } = extractError(err);
+      if (isMeshAgentAuthenticationError(code, message)) {
+        emitConnectionRequired(member, message);
+        retryPending(member);
+        return;
+      }
+      try {
+        await recordManagedMeshAgentProjectDeliveryError(session.id, member.runtimeAgentName, message);
+      } catch (recordError) {
+        log?.error(
+          {
+            sessionId: session.id,
+            event: MANAGED_MESH_AGENT_DELIVERY_ERROR_EVENT,
+            agentName: member.runtimeAgentName,
+            code,
+            message,
+            recordError: extractError(recordError).message
+          },
+          'managed native cli project delivery error could not be recorded'
+        );
+        return;
+      }
+      log?.debug(
+        {
+          sessionId: session.id,
+          event: MANAGED_MESH_AGENT_DELIVERY_ERROR_EVENT,
+          agentName: member.runtimeAgentName,
+          code,
+          message
+        },
+        'managed native cli project delivery failed'
+      );
+    };
     await Promise.all(
       managedMembers.map(async (member) => {
         const { spec, runtimeAgentName, templateAgentName, displayName, configuredDisplayName, settings } = member;
@@ -207,11 +241,17 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
               });
             }
             await emitManagedMeshAgentThinking(session.id, existing.id, runtimeAgentName, deliveryId, displayName);
-            await meshAgentHost.input(existing.id, {
-              input: meshAgentInputText(notice)
-            });
-            if (deliveredSeq > 0) store.markMeshAgentInboxVisible(existing.id, deliveredSeq);
-            store.markMeshAgentInboxDelivered(existing.id, deliveredSeq);
+            void (async () => {
+              try {
+                await meshAgentHost.input(existing.id, {
+                  input: meshAgentInputText(notice)
+                });
+                if (deliveredSeq > 0) store.markMeshAgentInboxVisible(existing.id, deliveredSeq);
+                store.markMeshAgentInboxDelivered(existing.id, deliveredSeq);
+              } catch (err) {
+                await handleDeliveryFailure(member, err);
+              }
+            })();
             return;
           }
           const resumeCandidate = managedSessions.find((candidate) => candidate.providerSessionRef);
@@ -252,23 +292,7 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
           store.markMeshAgentInboxVisible(nativeSession.id, deliveredSeq);
           await emitManagedMeshAgentThinking(session.id, nativeSession.id, runtimeAgentName, deliveryId, displayName);
         } catch (err) {
-          const { code, message } = extractError(err);
-          if (isMeshAgentAuthenticationError(code, message)) {
-            emitConnectionRequired(member, message);
-            retryPending(member);
-            return;
-          }
-          await recordManagedMeshAgentProjectDeliveryError(session.id, runtimeAgentName, message);
-          log?.debug(
-            {
-              sessionId: session.id,
-              event: MANAGED_MESH_AGENT_DELIVERY_ERROR_EVENT,
-              agentName: runtimeAgentName,
-              code,
-              message
-            },
-            'managed native cli project delivery failed'
-          );
+          await handleDeliveryFailure(member, err);
         }
       })
     );

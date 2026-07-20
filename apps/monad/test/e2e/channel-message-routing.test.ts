@@ -700,7 +700,11 @@ for (const kind of TRANSPORTS) {
 
       const [nativeSession] = handlers.store.listMeshSessionsForTranscriptTarget(sessionId);
       if (nativeSession) {
-        expect(handlers.store.listMeshAgentInbox(nativeSession.id)).toEqual([]);
+        const settledInbox = await waitForValue(() => {
+          const items = handlers.store.listMeshAgentInbox(nativeSession.id);
+          return items.length === 0 ? items : undefined;
+        }, 'per-turn managed MeshAgent inbox consumption');
+        expect(settledInbox).toEqual([]);
       }
       if (nativeSession)
         await t.fetch(`/v1/mesh/sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`, json('POST'));

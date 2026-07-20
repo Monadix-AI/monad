@@ -162,6 +162,60 @@ test('agent-facing MCP includes daemon error detail in tool failures', async () 
   }
 });
 
+test('agent-facing MCP caches failed mutating tool results by requestId', async () => {
+  const stderr = spyOn(process.stderr, 'write').mockImplementation(() => true);
+  let calls = 0;
+  try {
+    const client = {
+      treaty: {
+        v1: {
+          internal: {
+            'native-agent': {
+              project: {
+                post: {
+                  post: async () => {
+                    calls++;
+                    return err(503, { error: 'The operation timed out.' });
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    };
+    const handler = createAgentFacingMcpHandler(client as never);
+    const request = {
+      jsonrpc: '2.0' as const,
+      id: 7,
+      method: 'tools/call',
+      params: {
+        name: 'project_post',
+        arguments: { requestId: 'join-ack-timeout', text: 'joined' }
+      }
+    };
+
+    const first = await handler.handle(request);
+    const retry = await handler.handle({ ...request, id: 8 });
+    if (!first || !('result' in first)) throw new Error('expected first tool error result');
+    if (!retry || !('result' in retry)) throw new Error('expected retried tool error result');
+
+    expect({ calls, first: first.result, retry: retry.result }).toEqual({
+      calls: 1,
+      first: {
+        content: [{ type: 'text', text: 'project_post request failed: 503 The operation timed out.' }],
+        isError: true
+      },
+      retry: {
+        content: [{ type: 'text', text: 'project_post request failed: 503 The operation timed out.' }],
+        isError: true
+      }
+    });
+  } finally {
+    stderr.mockRestore();
+  }
+});
+
 test('agent-facing MCP includes daemon error code from nested treaty error bodies', async () => {
   const stderr = spyOn(process.stderr, 'write').mockImplementation(() => true);
   try {

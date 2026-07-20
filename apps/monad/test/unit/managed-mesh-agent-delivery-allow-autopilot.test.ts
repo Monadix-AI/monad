@@ -223,6 +223,109 @@ test('project-message fan-out keeps every member inbox pinned to the original me
   ]);
 });
 
+test('active project-message fan-out returns after queueing without waiting for the recipient turn', async () => {
+  let resolveInputStarted!: () => void;
+  let resolveInputCompletion!: () => void;
+  const inputStarted = new Promise<void>((resolve) => {
+    resolveInputStarted = resolve;
+  });
+  const inputCompletion = new Promise<void>((resolve) => {
+    resolveInputCompletion = resolve;
+  });
+  const transitions: string[] = [];
+  const store = {
+    listSessionMembers: () => [
+      {
+        sessionId: 'ses_nonblocking00',
+        memberId: 'sonnet',
+        templateId: null,
+        type: 'mesh-agent',
+        meshSessionId: 'mesh_sonnet000000',
+        data: {
+          name: 'sonnet',
+          displayName: 'Sonnet',
+          settings: { managedProjectAgent: true }
+        },
+        createdAt: '',
+        updatedAt: ''
+      }
+    ],
+    messageSeq: () => 21,
+    enqueueMeshAgentInboxItem: () => true,
+    markMeshAgentInboxVisible: (_meshSessionId: string, seq: number) => {
+      transitions.push(`visible:${seq}`);
+    },
+    markMeshAgentInboxDelivered: (_meshSessionId: string, seq: number) => {
+      transitions.push(`delivered:${seq}`);
+    },
+    findManagedMeshAgentStreamingMessage: () => undefined
+  };
+  const meshAgentHost = {
+    list: () => ({
+      sessions: [
+        {
+          id: 'mesh_sonnet000000',
+          agentName: 'sonnet',
+          runtimeRole: 'managed-project-agent',
+          lifecycle: { state: 'active' },
+          activity: { state: 'running', pid: 123, queuedTurnCount: 0 },
+          lastDeliveredSeq: 20,
+          lastVisibleSeq: 20
+        } as unknown as MeshSessionView
+      ]
+    }),
+    input: async () => {
+      transitions.push('input-started');
+      resolveInputStarted();
+      await inputCompletion;
+      transitions.push('input-finished');
+    },
+    preflight: async () => ({ state: 'ready' as const })
+  };
+  const ctx = {
+    deps: { store, log: undefined, meshAgentHost },
+    messageIngress: {
+      begin: () => Promise.resolve({ id: 'msg_sonnet_thinking' }),
+      deliver: rejectUnexpectedDeliveryError
+    },
+    makeEmit: () => () => {},
+    persistAndRetire: () => {}
+  } as unknown as SessionContext;
+
+  const fanout = createManagedMeshAgentDelivery(ctx)
+    .deliverProjectMessageToManagedMeshAgentMembers({
+      session: {
+        id: 'ses_nonblocking00',
+        cwd: '/tmp/prj',
+        origin: { client: 'workplace' }
+      } as unknown as Session,
+      meshAgents: [
+        {
+          name: 'sonnet',
+          provider: 'claude-code',
+          command: 'claude',
+          enabled: true
+        } as unknown as MeshAgentConfig
+      ],
+      text: 'queued reply',
+      triggerMessageId: 'msg_trigger000000'
+    })
+    .then(() => {
+      transitions.push('fanout-returned');
+    });
+
+  await inputStarted;
+  await Bun.sleep(0);
+  try {
+    expect(transitions).toEqual(['input-started', 'fanout-returned']);
+  } finally {
+    resolveInputCompletion();
+    await fanout;
+  }
+  await Bun.sleep(0);
+  expect(transitions).toEqual(['input-started', 'fanout-returned', 'input-finished', 'visible:21', 'delivered:21']);
+});
+
 test('project-message fan-out resumes a pending unauthenticated member after login resolves', async () => {
   const bus = new EventBus();
   const inputs: Array<{ id: string; input: string }> = [];

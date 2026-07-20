@@ -371,7 +371,8 @@ export function createAgentFacingMcpHandler(client: MonadClient) {
       return key ? remember(key, result) : result;
     } catch (error) {
       logNativeAgentMcpError(name, error);
-      throw error;
+      const result = toolError(error);
+      return key ? remember(key, result) : result;
     }
   };
 
