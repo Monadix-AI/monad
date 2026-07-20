@@ -41,7 +41,7 @@ jobs:
           test ! -f artifacts/sandbox-vm-linux-kvm.tail || mv artifacts/sandbox-vm-linux-kvm.tail artifacts/sandbox-vm-linux-kvm.log
       - name: Upload bounded failure diagnostics
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sandbox-vm-linux-kvm-${{ github.run_id }}
           path: artifacts/sandbox-vm-linux-kvm.log
@@ -75,7 +75,7 @@ jobs:
           test ! -f artifacts/sandbox-vm-macos-vfkit.tail || mv artifacts/sandbox-vm-macos-vfkit.tail artifacts/sandbox-vm-macos-vfkit.log
       - name: Upload bounded failure diagnostics
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sandbox-vm-macos-vfkit-${{ github.run_id }}
           path: artifacts/sandbox-vm-macos-vfkit.log
@@ -116,7 +116,7 @@ jobs:
           }
       - name: Upload bounded failure diagnostics
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sandbox-vm-windows-hyperv-${{ github.run_id }}
           path: artifacts/sandbox-vm-windows-hyperv.log
