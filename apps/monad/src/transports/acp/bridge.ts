@@ -6,7 +6,7 @@
 // We deliberately do NOT depend on @monad/client here: that package targets the DOM and the daemon
 // compiles against Bun-only libs, and pulling it in would create a monad→client→monad cycle. The
 // client surface the bridge needs is tiny (a handful of REST calls + one SSE consumer), so we build
-// it directly on Bun's fetch and validate streamed events with the protocol schema.
+// it directly on Bun's fetch and validate every response with the protocol schema.
 //
 // Phase 1 (non-delegated): a turn runs on the daemon host with the daemon's own sandbox. The
 // permission + clarify round-trips already work cross-process because the daemon folds those
@@ -19,7 +19,27 @@ import type { EventSink } from '#/handlers/session/index.ts';
 import type { AcpHandlers } from '#/transports/acp/connection.ts';
 
 import { createLogger } from '@monad/logger';
-import { eventSchema, readTypedSseStream } from '@monad/protocol';
+import {
+  abortSessionResponseSchema,
+  branchSessionResponseSchema,
+  clarifyRespondResponseSchema,
+  commandsListResponseSchema,
+  createSessionResponseSchema,
+  delegationAckResponseSchema,
+  deleteSessionResponseSchema,
+  eventSchema,
+  getDefaultProfileResponseSchema,
+  getSessionResponseSchema,
+  listMessagesResponseSchema,
+  listModelsResponseSchema,
+  listProfilesResponseSchema,
+  listProvidersResponseSchema,
+  listSessionsResponseSchema,
+  okResponseSchema,
+  readTypedSseStream,
+  restoreSessionResponseSchema,
+  toolApproveResponseSchema
+} from '@monad/protocol';
 
 const log = createLogger('transport:acp:bridge');
 
@@ -63,9 +83,7 @@ function buildQuery(params: Record<string, unknown>): string {
 
 /**
  * Build an {@link AcpHandlers} backed by the daemon at `opts.baseUrl`/`opts.unixSocket`. The object
- * is type-checked against the real handler surface (AcpHandlers is a `Pick` of it); parsed JSON is
- * cast to each method's declared return at this wire boundary — daemon and bridge derive the same
- * shapes from @monad/protocol, so the runtime values match.
+ * is type-checked against the real handler surface (AcpHandlers is a `Pick` of it).
  */
 export function createBridgeHandlers(opts: BridgeOptions): { handlers: AcpHandlers } {
   const base = opts.baseUrl.replace(/\/$/, '');
@@ -92,7 +110,12 @@ export function createBridgeHandlers(opts: BridgeOptions): { handlers: AcpHandle
     return `${tcpBase}${url.slice(base.length)}`;
   }
 
-  async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  async function request<T>(
+    method: string,
+    path: string,
+    schema: { parse(input: unknown): T },
+    body?: unknown
+  ): Promise<T> {
     const init: FetchInit = {
       method,
       headers: { ...authHeaders, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) },
@@ -103,13 +126,15 @@ export function createBridgeHandlers(opts: BridgeOptions): { handlers: AcpHandle
       const detail = await res.text().catch(() => '');
       throw new Error(`daemon ${method} ${path} failed (${res.status})${detail ? `: ${detail}` : ''}`);
     }
-    return (await res.json()) as T;
+    return schema.parse(await res.json());
   }
 
-  const get = <T>(path: string) => request<T>('GET', path);
-  const post = <T>(path: string, body?: unknown) => request<T>('POST', path, body);
-  const put = <T>(path: string, body?: unknown) => request<T>('PUT', path, body);
-  const del = <T>(path: string) => request<T>('DELETE', path);
+  const get = <T>(path: string, schema: { parse(input: unknown): T }) => request('GET', path, schema);
+  const post = <T>(path: string, schema: { parse(input: unknown): T }, body?: unknown) =>
+    request('POST', path, schema, body);
+  const put = <T>(path: string, schema: { parse(input: unknown): T }, body?: unknown) =>
+    request('PUT', path, schema, body);
+  const del = <T>(path: string, schema: { parse(input: unknown): T }) => request('DELETE', path, schema);
 
   /** Run a turn over the daemon's inline-SSE path and replay each event into the ACP sink. The
    * daemon folds out-of-band oversight/clarify events into this same stream, so the adapter's sink
@@ -136,41 +161,48 @@ export function createBridgeHandlers(opts: BridgeOptions): { handlers: AcpHandle
 
   const handlers: AcpHandlers = {
     session: {
-      create: (args) => post('/v1/sessions', { ...args, origin: allowHttpTransport(args.origin) }),
-      get: ({ id }) => get(`/v1/sessions/${id}`),
+      create: (args) =>
+        post('/v1/sessions', createSessionResponseSchema, { ...args, origin: allowHttpTransport(args.origin) }),
+      get: ({ id }) => get(`/v1/sessions/${id}`, getSessionResponseSchema),
       branch: ({ id, title, atMessageId, origin }) =>
-        post(`/v1/sessions/${id}/branch`, { title, atMessageId, origin: allowHttpTransport(origin) }),
-      list: (params = {}) => get(`/v1/sessions${buildQuery(params)}`),
+        post(`/v1/sessions/${id}/branch`, branchSessionResponseSchema, {
+          title,
+          atMessageId,
+          origin: allowHttpTransport(origin)
+        }),
+      list: (params = {}) => get(`/v1/sessions${buildQuery(params)}`, listSessionsResponseSchema),
       messages: ({ id, limit, before, includeInactive }) =>
-        get(`/v1/sessions/${id}/messages${buildQuery({ limit, before, includeInactive })}`),
-      delete: ({ id }) => del(`/v1/sessions/${id}`),
-      abort: ({ id }) => post(`/v1/sessions/${id}/abort`),
-      restore: ({ id, toMessageId }) => post(`/v1/sessions/${id}/restore`, { toMessageId }),
+        get(`/v1/sessions/${id}/messages${buildQuery({ limit, before, includeInactive })}`, listMessagesResponseSchema),
+      delete: ({ id }) => del(`/v1/sessions/${id}`, deleteSessionResponseSchema),
+      abort: ({ id }) => post(`/v1/sessions/${id}/abort`, abortSessionResponseSchema),
+      restore: ({ id, toMessageId }) =>
+        post(`/v1/sessions/${id}/restore`, restoreSessionResponseSchema, { toMessageId }),
       configureRuntime: ({ id, sandboxRoots, mcpServers, delegate }) =>
-        put(`/v1/sessions/${id}/runtime`, { sandboxRoots, mcpServers, delegate }),
+        put(`/v1/sessions/${id}/runtime`, okResponseSchema, { sandboxRoots, mcpServers, delegate }),
       sendInline: async ({ sessionId, text }, sink: EventSink, runOpts) => {
         await streamTurn(sessionId, text, runOpts?.ambientContext, sink);
       }
     },
     commands: {
-      list: () => get('/v1/commands')
+      list: () => get('/v1/commands', commandsListResponseSchema)
     },
     oversight: {
-      approve: (body) => post('/v1/tools/approve', body)
+      approve: (body) => post('/v1/tools/approve', toolApproveResponseSchema, body)
     },
     clarify: {
-      respond: (body) => post('/v1/clarifications/respond', body)
+      respond: (body) => post('/v1/clarifications/respond', clarifyRespondResponseSchema, body)
     },
     delegation: {
-      respond: (body) => post('/v1/delegation/respond', body),
-      output: (body) => post('/v1/delegation/output', body)
+      respond: (body) => post('/v1/delegation/respond', delegationAckResponseSchema, body),
+      output: (body) => post('/v1/delegation/output', delegationAckResponseSchema, body)
     },
     model: {
-      listProviders: () => get('/v1/settings/model/providers'),
-      listModels: ({ providerId }: { providerId: string }) => get(`/v1/settings/model/providers/${providerId}/models`),
-      listProfiles: () => get('/v1/settings/model/profiles'),
-      getDefaultProfile: () => get('/v1/settings/model/default'),
-      setDefaultProfile: (body: { alias: string }) => put('/v1/settings/model/default', body)
+      listProviders: () => get('/v1/settings/model/providers', listProvidersResponseSchema),
+      listModels: ({ providerId }: { providerId: string }) =>
+        get(`/v1/settings/model/providers/${providerId}/models`, listModelsResponseSchema),
+      listProfiles: () => get('/v1/settings/model/profiles', listProfilesResponseSchema),
+      getDefaultProfile: () => get('/v1/settings/model/default', getDefaultProfileResponseSchema),
+      setDefaultProfile: (body: { alias: string }) => put('/v1/settings/model/default', okResponseSchema, body)
     }
   };
 

@@ -322,3 +322,17 @@ test('bridge: session/delete removes the session from the daemon', async () => {
     await daemon.stop();
   }
 });
+
+test('bridge: rejects a daemon JSON response that violates the endpoint contract', async () => {
+  const server = Bun.serve({
+    port: 0,
+    fetch: () => Response.json({ commands: 42 })
+  });
+  const { handlers } = createBridgeHandlers({ baseUrl: `http://127.0.0.1:${server.port}` });
+
+  try {
+    await expect(handlers.commands.list()).rejects.toThrow();
+  } finally {
+    server.stop(true);
+  }
+});
