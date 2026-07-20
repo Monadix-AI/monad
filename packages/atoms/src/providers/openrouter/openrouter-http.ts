@@ -31,6 +31,7 @@ export async function fetchOpenRouterJson<T>(
   call: OpenRouterProviderCall,
   path: string,
   body: Record<string, unknown>,
+  schema: { parse(input: unknown): T },
   method = 'POST'
 ): Promise<T> {
   const fetch = call.fetch ?? globalThis.fetch;
@@ -40,7 +41,7 @@ export async function fetchOpenRouterJson<T>(
     body: JSON.stringify(body)
   });
   if (!res.ok) throw new Error(`OpenRouter ${path} failed: ${res.status} ${await res.text().catch(() => '')}`);
-  return (await res.json()) as T;
+  return schema.parse(await res.json());
 }
 
 export function usageFromOpenRouter(usage: OpenRouterUsage | undefined) {

@@ -10,6 +10,7 @@ import type {
 } from '@monad/sdk-atom';
 
 import { Buffer } from 'node:buffer';
+import { z } from 'zod';
 
 import {
   fetchOpenRouterJson,
@@ -45,6 +46,51 @@ export interface OpenRouterVideoResponse {
   output?: unknown;
   error?: { message?: unknown };
 }
+
+const openRouterUsageSchema = z.object({
+  input_tokens: z.unknown().optional(),
+  output_tokens: z.unknown().optional(),
+  total_tokens: z.unknown().optional()
+});
+const openRouterTranscriptionResponseSchema: z.ZodType<OpenRouterTranscriptionResponse> = z.object({
+  text: z.unknown().optional(),
+  segments: z
+    .array(
+      z.object({
+        text: z.unknown().optional(),
+        start: z.unknown().optional(),
+        end: z.unknown().optional(),
+        start_second: z.unknown().optional(),
+        end_second: z.unknown().optional()
+      })
+    )
+    .optional(),
+  language: z.unknown().optional(),
+  duration: z.unknown().optional(),
+  duration_in_seconds: z.unknown().optional(),
+  usage: openRouterUsageSchema.optional()
+});
+const openRouterRerankResponseSchema: z.ZodType<OpenRouterRerankResponse> = z.object({
+  results: z
+    .array(
+      z.object({
+        index: z.unknown().optional(),
+        relevance_score: z.unknown().optional(),
+        score: z.unknown().optional()
+      })
+    )
+    .optional(),
+  usage: openRouterUsageSchema.optional()
+});
+const openRouterVideoResponseSchema: z.ZodType<OpenRouterVideoResponse> = z.object({
+  id: z.unknown().optional(),
+  status: z.unknown().optional(),
+  video: z.unknown().optional(),
+  video_url: z.unknown().optional(),
+  url: z.unknown().optional(),
+  output: z.unknown().optional(),
+  error: z.object({ message: z.unknown().optional() }).optional()
+});
 
 function audioFormat(mediaType: string | undefined): string | undefined {
   if (!mediaType) return undefined;
@@ -85,11 +131,16 @@ export async function openRouterSpeech(call: SpeechCall): Promise<SpeechResult> 
 }
 
 export async function openRouterTranscribe(call: TranscriptionCall): Promise<TranscriptionResult> {
-  const json = await fetchOpenRouterJson<OpenRouterTranscriptionResponse>(call, '/audio/transcriptions', {
-    model: call.modelId,
-    input_audio: audioPayload(call.audio, call.mediaType),
-    ...(call.language ? { language: call.language } : {})
-  });
+  const json = await fetchOpenRouterJson(
+    call,
+    '/audio/transcriptions',
+    {
+      model: call.modelId,
+      input_audio: audioPayload(call.audio, call.mediaType),
+      ...(call.language ? { language: call.language } : {})
+    },
+    openRouterTranscriptionResponseSchema
+  );
   const text = typeof json.text === 'string' ? json.text : '';
   const segments = Array.isArray(json.segments)
     ? json.segments.flatMap((segment) => {
@@ -112,12 +163,17 @@ export async function openRouterTranscribe(call: TranscriptionCall): Promise<Tra
 }
 
 export async function openRouterRerank(call: RerankCall): Promise<RerankResult> {
-  const json = await fetchOpenRouterJson<OpenRouterRerankResponse>(call, '/rerank', {
-    model: call.modelId,
-    query: call.query,
-    documents: call.documents,
-    ...(call.topN ? { top_n: call.topN } : {})
-  });
+  const json = await fetchOpenRouterJson(
+    call,
+    '/rerank',
+    {
+      model: call.modelId,
+      query: call.query,
+      documents: call.documents,
+      ...(call.topN ? { top_n: call.topN } : {})
+    },
+    openRouterRerankResponseSchema
+  );
   const ranking = (json.results ?? []).flatMap((item) => {
     const index = finiteNumber(item.index);
     const score = finiteNumber(item.relevance_score) ?? finiteNumber(item.score);
@@ -132,18 +188,23 @@ export async function openRouterRerank(call: RerankCall): Promise<RerankResult> 
 }
 
 export async function openRouterVideo(call: VideoCall): Promise<VideoResult> {
-  const create = await fetchOpenRouterJson<OpenRouterVideoResponse>(call, '/videos', {
-    model: call.modelId,
-    prompt: call.prompt,
-    ...(call.image
-      ? { image: call.image instanceof Uint8Array ? bytesToBase64(call.image) : call.image.toString() }
-      : {}),
-    ...(call.aspectRatio ? { aspect_ratio: call.aspectRatio } : {}),
-    ...(call.resolution ? { resolution: call.resolution } : {}),
-    ...(call.duration ? { duration: call.duration } : {}),
-    ...(call.fps ? { fps: call.fps } : {}),
-    ...(call.n ? { n: call.n } : {})
-  });
+  const create = await fetchOpenRouterJson(
+    call,
+    '/videos',
+    {
+      model: call.modelId,
+      prompt: call.prompt,
+      ...(call.image
+        ? { image: call.image instanceof Uint8Array ? bytesToBase64(call.image) : call.image.toString() }
+        : {}),
+      ...(call.aspectRatio ? { aspect_ratio: call.aspectRatio } : {}),
+      ...(call.resolution ? { resolution: call.resolution } : {}),
+      ...(call.duration ? { duration: call.duration } : {}),
+      ...(call.fps ? { fps: call.fps } : {}),
+      ...(call.n ? { n: call.n } : {})
+    },
+    openRouterVideoResponseSchema
+  );
   const directUrl = firstString(create.video_url, create.video, create.url, create.output);
   if (directUrl) return downloadVideo(call, directUrl);
   const id = typeof create.id === 'string' ? create.id : undefined;
@@ -164,7 +225,7 @@ async function pollOpenRouterVideo(call: OpenRouterProviderCall, id: string): Pr
       signal: call.signal
     });
     if (!res.ok) throw new Error(`OpenRouter /videos/${id} failed: ${res.status} ${await res.text().catch(() => '')}`);
-    const json = (await res.json()) as OpenRouterVideoResponse;
+    const json = openRouterVideoResponseSchema.parse(await res.json());
     if (json.error?.message) throw new Error(String(json.error.message));
     if (json.status === 'completed' || json.status === 'succeeded') return json;
     await Bun.sleep(1000);

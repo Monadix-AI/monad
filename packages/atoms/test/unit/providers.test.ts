@@ -330,6 +330,23 @@ test('OpenRouter native non-text endpoints map monad calls to REST payloads', as
   });
 });
 
+test('OpenRouter rejects a non-object JSON response at the provider boundary', async () => {
+  const openrouter = builtinModelProviders.find((provider) => provider.type === 'openrouter');
+  if (!openrouter?.rerank) throw new Error('openrouter provider missing rerank');
+  const fetch = fakeFetch(() => Response.json([]));
+
+  await expect(
+    openrouter.rerank({
+      provider: { id: 'or', type: 'openrouter' },
+      credential: CRED,
+      fetch,
+      modelId: 'cohere/rerank',
+      query: 'capital',
+      documents: ['Paris']
+    })
+  ).rejects.toThrow();
+});
+
 test('OpenRouter listModels rejects invalid credentials even when public models are readable', async () => {
   const openrouter = builtinModelProviders.find((p) => p.type === 'openrouter');
   if (!openrouter?.listModels) throw new Error('openrouter provider missing');
