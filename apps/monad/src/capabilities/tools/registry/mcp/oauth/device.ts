@@ -2,10 +2,21 @@
 // redirect is unreachable: show a short user_code + verification URL, then poll the token endpoint
 // until the operator authorizes on any device.
 
+import { z } from 'zod';
+
 import { type FetchImpl, McpOAuthError } from './shared.ts';
 import { type OAuthTokens, parseTokenResponse } from './tokens.ts';
 
 const DEVICE_CODE_GRANT = 'urn:ietf:params:oauth:grant-type:device_code';
+const deviceAuthorizationResponseSchema = z.object({
+  device_code: z.string().optional(),
+  user_code: z.string().optional(),
+  verification_uri: z.string().optional(),
+  verification_uri_complete: z.string().optional(),
+  expires_in: z.number().optional(),
+  interval: z.number().optional()
+});
+const tokenResponseRecordSchema = z.record(z.string(), z.unknown());
 
 export interface DeviceAuthorization {
   deviceCode: string;
@@ -29,14 +40,7 @@ export async function startDeviceAuthorization(
     body: new URLSearchParams(form).toString()
   });
   if (!res.ok) throw new McpOAuthError(`device authorization request failed: ${res.status}`);
-  const b = (await res.json()) as {
-    device_code?: string;
-    user_code?: string;
-    verification_uri?: string;
-    verification_uri_complete?: string;
-    expires_in?: number;
-    interval?: number;
-  };
+  const b = deviceAuthorizationResponseSchema.parse(await res.json());
   if (!b.device_code || !b.user_code || !b.verification_uri) {
     throw new McpOAuthError('incomplete device authorization response');
   }
@@ -84,7 +88,7 @@ export async function pollDeviceToken(
         resource: params.resource
       }).toString()
     });
-    const body = (await res.json()) as Record<string, unknown>;
+    const body = tokenResponseRecordSchema.parse(await res.json());
     if (res.ok) return parseTokenResponse(body, now());
     const error = typeof body.error === 'string' ? body.error : `http_${res.status}`;
     if (error === 'authorization_pending') continue;

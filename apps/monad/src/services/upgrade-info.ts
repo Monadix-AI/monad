@@ -2,8 +2,11 @@ import type { MonadPaths } from '@monad/environment';
 
 import { join } from 'node:path';
 import { MONAD_VERSION } from '@monad/protocol';
+import { z } from 'zod';
 
 const RELEASE_REPOSITORY = 'Monadix-AI/monad';
+const latestReleaseSchema = z.object({ tag_name: z.string().optional() });
+const upgradeInfoSchema = z.object({ latestVersion: z.string(), latestVersionCheckedAt: z.string() });
 
 export interface UpgradeInfo {
   latestVersion: string;
@@ -22,7 +25,7 @@ export async function createUpgradeInfoMonitor(paths: MonadPaths): Promise<{
         headers: { 'User-Agent': `monad-daemon/${MONAD_VERSION}` }
       });
       if (res.ok) {
-        const data = (await res.json()) as { tag_name?: string };
+        const data = latestReleaseSchema.parse(await res.json());
         if (data.tag_name) {
           upgradeInfo = {
             latestVersion: data.tag_name.replace(/^v/, ''),
@@ -42,7 +45,7 @@ export async function createUpgradeInfoMonitor(paths: MonadPaths): Promise<{
 
   try {
     const cached = await Bun.file(upgradeInfoCachePath).text();
-    upgradeInfo = JSON.parse(cached) as UpgradeInfo;
+    upgradeInfo = upgradeInfoSchema.parse(JSON.parse(cached));
   } catch {
     /* no prior cache or malformed */
   }

@@ -1,10 +1,7 @@
-import type {
-  MeshAgentProcessLaunchPlan,
-  MeshAgentProviderDriver,
-  SessionEventRuntimeDefinition
-} from '@monad/sdk-atom';
+import type { MeshAgentProcessLaunchPlan, SessionEventRuntimeDefinition } from '@monad/sdk-atom';
 
 import { isAbsolute } from 'node:path';
+import { z } from 'zod';
 
 const MAX_STARTUP_TIMEOUT_MS = 300_000;
 const MAX_IDLE_TIMEOUT_MS = 86_400_000;
@@ -69,23 +66,27 @@ function validateStartup(value: unknown): void {
 }
 
 function validateDriver(value: unknown, processModel: 'resident' | 'per-turn'): void {
-  const candidate = object(value, 'driver') as unknown as MeshAgentProviderDriver;
-  const methods = candidate as unknown as Record<string, unknown>;
+  const result = z
+    .object({
+      processModel: z.enum(['resident', 'per-turn']),
+      openSession: z.function(),
+      accept: z.function(),
+      dispose: z.function(),
+      controls: z.unknown().refine(Boolean)
+    })
+    .passthrough()
+    .safeParse(value);
+  if (!result.success) fail('driver is missing required session methods');
+  const candidate = result.data;
   if (candidate.processModel !== processModel) fail('driver process model does not match runtime plan');
-  if (
-    typeof candidate.openSession !== 'function' ||
-    typeof candidate.accept !== 'function' ||
-    typeof candidate.dispose !== 'function' ||
-    !candidate.controls
-  ) {
-    fail('driver is missing required session methods');
-  }
   if (processModel === 'resident') {
-    if (typeof methods.attachChannel !== 'function' || typeof methods.sendTurn !== 'function') {
+    if (!z.object({ attachChannel: z.function(), sendTurn: z.function() }).safeParse(candidate).success) {
       fail('resident driver is missing required methods');
     }
-  } else if (typeof methods.attachTurnChannel !== 'function' || typeof methods.completeTurn !== 'function') {
-    fail('per-turn driver is missing required methods');
+  } else {
+    if (!z.object({ attachTurnChannel: z.function(), completeTurn: z.function() }).safeParse(candidate).success) {
+      fail('per-turn driver is missing required methods');
+    }
   }
 }
 

@@ -1,27 +1,34 @@
 import type { McpRegistryAdapter, McpRegistryEntry } from '../adapter.ts';
 
 import { createLogger } from '@monad/logger';
+import { z } from 'zod';
 
 const log = createLogger('marketplace');
 const BASE = 'https://registry.modelcontextprotocol.io/v0/servers';
 
-interface OfficialServer {
-  server: {
-    name: string;
-    description?: string;
-    packages?: Array<{
-      registryType: string;
-      identifier: string;
-      version?: string;
-      runtimeHint?: string;
-      environmentVariables?: Array<{ name: string; isRequired?: boolean }>;
-    }>;
-  };
-}
-
-interface OfficialResponse {
-  servers: OfficialServer[];
-}
+const officialResponseSchema = z.object({
+  servers: z.array(
+    z.object({
+      server: z.object({
+        name: z.string(),
+        description: z.string().optional(),
+        packages: z
+          .array(
+            z.object({
+              registryType: z.string(),
+              identifier: z.string(),
+              version: z.string().optional(),
+              runtimeHint: z.string().optional(),
+              environmentVariables: z
+                .array(z.object({ name: z.string(), isRequired: z.boolean().optional() }))
+                .optional()
+            })
+          )
+          .optional()
+      })
+    })
+  )
+});
 
 export class OfficialMcpAdapter implements McpRegistryAdapter {
   readonly id = 'official-mcp';
@@ -29,14 +36,14 @@ export class OfficialMcpAdapter implements McpRegistryAdapter {
   async search(query: string, opts?: { limit?: number }): Promise<McpRegistryEntry[]> {
     const limit = opts?.limit ?? 20;
     const url = `${BASE}?search=${encodeURIComponent(query)}&limit=${limit}`;
-    let data: OfficialResponse;
+    let data: z.infer<typeof officialResponseSchema>;
     try {
       const res = await fetch(url);
       if (!res.ok) {
         log.warn(`official-mcp registry returned ${res.status}`);
         return [];
       }
-      data = (await res.json()) as OfficialResponse;
+      data = officialResponseSchema.parse(await res.json());
     } catch (err) {
       log.warn({ err }, 'official-mcp registry fetch failed');
       return [];

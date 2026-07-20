@@ -34,6 +34,12 @@ const ENTRY_DEFAULT = 'dist/atom-pack.js';
 const GITHUB_FILE_ATOM_MAX_BYTES = 5 * 1024 * 1024;
 const GITHUB_FILE_ATOM_TOTAL_MAX_BYTES = 25 * 1024 * 1024;
 const GITHUB_FILE_ATOM_MAX_COUNT = 200;
+const githubTreeResponseSchema = z.object({
+  tree: z.array(z.object({ path: z.string().optional(), type: z.string().optional() })).optional()
+});
+const npmMetadataSchema = z.object({
+  versions: z.record(z.string(), z.object({ dist: z.object({ tarball: z.string().optional() }).optional() })).optional()
+});
 
 /** Scan a flat file map (path → bytes) for file-based atoms under a given path prefix. */
 function scanFileMap(files: Map<string, Uint8Array>, prefix: string): FileAtoms {
@@ -181,7 +187,7 @@ async function fetchGithub(
       }
     });
     if (treeRes.ok) {
-      const tree = (await treeRes.json()) as { tree?: { path?: string; type?: string }[] };
+      const tree = githubTreeResponseSchema.parse(await treeRes.json());
       const fakeMap = new Map<string, Uint8Array>();
       const files = new Map<string, Uint8Array>();
       let fileAtomCount = 0;
@@ -238,7 +244,7 @@ async function fetchNpm(
     headers: auth
   });
   if (!metaRes.ok) throw new InstallError(`npm metadata ${source.name} failed: ${metaRes.status}`);
-  const meta = (await metaRes.json()) as { versions?: Record<string, { dist?: { tarball?: string } }> };
+  const meta = npmMetadataSchema.parse(await metaRes.json());
   const tarUrl = meta.versions?.[source.version]?.dist?.tarball;
   if (!tarUrl) throw new InstallError(`npm: ${source.name}@${source.version} not found`);
 

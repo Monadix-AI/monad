@@ -4,7 +4,19 @@
 
 import type { Logger } from '@monad/logger';
 
+import { z } from 'zod';
+
 import { project2d } from './pca2d.ts';
+
+const qdrantScrollResponseSchema = z.object({
+  result: z
+    .object({
+      points: z
+        .array(z.object({ id: z.union([z.string(), z.number()]), vector: z.array(z.number()).optional() }))
+        .optional()
+    })
+    .optional()
+});
 
 export interface Mem0Data {
   available: boolean; // mem0 is the active backend (and reachable)
@@ -38,7 +50,7 @@ export async function fetchQdrantVectors(url: string, collection: string): Promi
     signal: AbortSignal.timeout(3000)
   });
   if (!res.ok) throw new Error(`qdrant scroll ${res.status}`);
-  const body = (await res.json()) as { result?: { points?: { id: string | number; vector?: number[] }[] } };
+  const body = qdrantScrollResponseSchema.parse(await res.json());
   const out = new Map<string, number[]>();
   for (const p of body.result?.points ?? []) if (Array.isArray(p.vector)) out.set(String(p.id), p.vector);
   return out;

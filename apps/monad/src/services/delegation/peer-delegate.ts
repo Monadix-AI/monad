@@ -42,9 +42,17 @@ const delegateInput = z.object({
 });
 type DelegateInput = z.infer<typeof delegateInput>;
 
-interface OAIStreamChunk {
-  choices?: { delta?: { content?: string }; finish_reason?: string | null }[];
-}
+const oaiStreamChunkSchema = z.object({
+  choices: z
+    .array(
+      z.object({
+        delta: z.object({ content: z.string().optional() }).optional(),
+        finish_reason: z.string().nullable().optional()
+      })
+    )
+    .optional()
+});
+const peerErrorSchema = z.object({ error: z.object({ message: z.string().optional() }).optional() });
 
 /** Drive one peer chat-completion to completion over SSE, surfacing partial text via reportProgress. */
 async function runPeerDelegation(
@@ -71,7 +79,7 @@ async function runPeerDelegation(
     // Never surface the bearer; lift the peer's OpenAI-style error message when present.
     let detail = `HTTP ${res.status}`;
     try {
-      const body = (await res.json()) as { error?: { message?: string } };
+      const body = peerErrorSchema.parse(await res.json());
       if (body.error?.message) detail = `${detail}: ${body.error.message}`;
     } catch {
       // non-JSON body — keep the status line
@@ -97,9 +105,9 @@ async function runPeerDelegation(
         if (!dataLine) continue;
         const payload = dataLine.slice(5).trim();
         if (payload === '[DONE]') continue;
-        let chunk: OAIStreamChunk;
+        let chunk: z.infer<typeof oaiStreamChunkSchema>;
         try {
-          chunk = JSON.parse(payload) as OAIStreamChunk;
+          chunk = oaiStreamChunkSchema.parse(JSON.parse(payload));
         } catch {
           continue;
         }

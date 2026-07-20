@@ -86,7 +86,7 @@ export function toolCallSummary(text: string): string {
   const [, tool, rawInput] = match;
   if (!tool || rawInput === undefined) return text;
   try {
-    const parsed = JSON.parse(rawInput) as unknown;
+    const parsed = z.json().parse(JSON.parse(rawInput));
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
       const command = (parsed as Record<string, unknown>).command;
       const description = (parsed as Record<string, unknown>).description;
@@ -107,3 +107,5 @@ function rawRecordText(raw: unknown): string {
     return String(raw);
   }
 }
+
+import { z } from 'zod';

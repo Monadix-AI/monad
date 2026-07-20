@@ -734,7 +734,7 @@ test('setInitHome: posts home config and invalidates InitStatus tag', async () =
 test('workplace projects: list/create/update/delete use the typed treaty project routes', async () => {
   const calls: unknown[] = [];
   const project = {
-    id: 'ses_project00000',
+    id: 'prj_project00000',
     title: 'Workplace: alpha',
     state: 'active',
     archived: false,

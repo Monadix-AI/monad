@@ -135,6 +135,15 @@ export const networkConfigSchema = z
     localHttpFallback: { enabled: false, port: DEFAULT_LOCAL_HTTP_FALLBACK_PORT }
   }));
 
+export const networkConfigOverrideSchema = z.object({
+  port: z.number().int().min(1).max(65535).optional(),
+  host: z.string().min(1).optional(),
+  transport: z.enum(['tcp', 'uds']).optional(),
+  https: httpsSchema.optional(),
+  remoteAccess: z.object({ enabled: z.boolean(), token: z.string().nullable() }).optional(),
+  localHttpFallback: localHttpFallbackSchema.optional()
+});
+
 const observabilityConfigSchema = z
   .object({
     // OTLP HTTP endpoint for traces + metrics. Leave empty to disable.

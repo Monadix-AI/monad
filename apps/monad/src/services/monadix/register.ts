@@ -3,7 +3,11 @@
 // (auth.json mcpOAuth["monadix"]) authorizes it — one login serves both consume and provide. Native
 // framework 'monad' routes dispatch over the realtime transport (no gateway/public URL).
 
+import { z } from 'zod';
+
 export const MONADIX_DEFAULT_API_BASE = 'https://api.monadix.ai';
+const realtimeConfigSchema = z.object({ supabaseUrl: z.string(), supabaseAnonKey: z.string() });
+const registerProviderResponseSchema = z.object({ provider: z.object({ id: z.string() }) });
 
 /** Read a non-OK response body and throw a uniform error. Shared by the Monadix HTTP calls. */
 export async function monadixHttpError(res: Response, what: string): Promise<never> {
@@ -27,9 +31,7 @@ export async function fetchRealtimeConfig(
   try {
     const res = await fetchImpl(`${apiBase}/realtime/config`);
     if (!res.ok) return null;
-    const json = (await res.json()) as Partial<RealtimeConfig>;
-    if (!json.supabaseUrl || !json.supabaseAnonKey) return null;
-    return { supabaseUrl: json.supabaseUrl, supabaseAnonKey: json.supabaseAnonKey };
+    return realtimeConfigSchema.parse(await res.json());
   } catch {
     return null;
   }
@@ -62,10 +64,7 @@ export async function registerMonadixProvider(deps: RegisterProviderDeps): Promi
     })
   });
   if (!res.ok) await monadixHttpError(res, 'monadix provider register failed');
-  const json = (await res.json()) as { provider?: { id?: string } };
-  const providerId = json.provider?.id;
-  if (!providerId) throw new Error('monadix provider register: response missing provider.id');
-  return providerId;
+  return registerProviderResponseSchema.parse(await res.json()).provider.id;
 }
 
 /** Deregister a provider (best-effort). A 404 means it's already gone, which is fine. */

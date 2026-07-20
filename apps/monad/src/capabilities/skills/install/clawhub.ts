@@ -5,6 +5,7 @@ import { mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DEFAULT_SKILL_MARKETPLACE_SOURCE, type SkillUpdate, skillMarketplaceSourceMeta } from '@monad/protocol';
+import { z } from 'zod';
 
 import { ClawHubSkillSource, parseSkillRef } from '#/capabilities/skills/index.ts';
 import { assertStagingCompatibility } from '#/capabilities/skills/install/compat.ts';
@@ -12,14 +13,17 @@ import { warningModelRequestFailed, warningsToStrings } from '#/capabilities/ski
 import { scanSkillFiles } from '#/capabilities/skills/install/scan.ts';
 import { installSkillFromDir } from '#/store/home/skills.ts';
 
-interface ClawHubSkillRecord {
-  [key: string]: unknown;
-  source: string;
-  sourceKind: 'clawhub';
-  slug: string;
-  version?: string;
-  installedAt: string;
-}
+const clawHubSkillRecordSchema = z
+  .object({
+    source: z.string(),
+    sourceKind: z.literal('clawhub'),
+    slug: z.string(),
+    version: z.string().optional(),
+    installedAt: z.string()
+  })
+  .catchall(z.unknown());
+const lockSchema = z.record(z.string(), z.unknown());
+type ClawHubSkillRecord = z.infer<typeof clawHubSkillRecordSchema>;
 
 const DEFAULT_SKILL_INSTALL_SOURCE_PREFIX =
   skillMarketplaceSourceMeta(DEFAULT_SKILL_MARKETPLACE_SOURCE).installSourcePrefix ?? 'clawhub:';
@@ -99,7 +103,7 @@ export async function installClawHubSkill(spec: string, deps: ClawHubInstallDeps
 export async function upsertSkillsLock(lockPath: string, name: string, entry: Record<string, unknown>): Promise<void> {
   let lock: Record<string, unknown> = {};
   try {
-    lock = JSON.parse(await Bun.file(lockPath).text()) as Record<string, unknown>;
+    lock = lockSchema.parse(JSON.parse(await Bun.file(lockPath).text()));
   } catch {
     // file doesn't exist yet — start fresh
   }
@@ -114,9 +118,7 @@ export async function upsertSkillsLock(lockPath: string, name: string, entry: Re
 export async function checkClawHubSkillUpdate(skillsDir: string, name: string): Promise<SkillUpdate | null> {
   let rec: ClawHubSkillRecord;
   try {
-    const raw = JSON.parse(await Bun.file(join(skillsDir, name, '.install.json')).text());
-    if (raw.sourceKind !== 'clawhub') return null;
-    rec = raw as ClawHubSkillRecord;
+    rec = clawHubSkillRecordSchema.parse(JSON.parse(await Bun.file(join(skillsDir, name, '.install.json')).text()));
   } catch {
     return null;
   }
@@ -132,7 +134,7 @@ export async function checkClawHubSkillUpdate(skillsDir: string, name: string): 
 export async function removeFromSkillsLock(lockPath: string, name: string): Promise<void> {
   let lock: Record<string, unknown>;
   try {
-    lock = JSON.parse(await Bun.file(lockPath).text()) as Record<string, unknown>;
+    lock = lockSchema.parse(JSON.parse(await Bun.file(lockPath).text()));
   } catch {
     return;
   }

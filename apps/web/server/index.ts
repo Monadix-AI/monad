@@ -7,7 +7,7 @@ import type { ServerWebSocket } from 'bun';
 
 import { readFileSync } from 'node:fs';
 import { extname } from 'node:path';
-import { networkConfigSchema } from '@monad/environment';
+import { networkConfigOverrideSchema } from '@monad/environment';
 import { resolveDaemonUrl } from '@monad/environment/network-endpoints';
 import { getPaths } from '@monad/environment/paths';
 import { createLogger } from '@monad/logger';
@@ -17,7 +17,7 @@ import { loopbackTlsOptions } from '../src/lib/loopback-tls';
 import { proxyResponseBody } from '../src/lib/proxy-stream';
 
 const logger = createLogger('monad-web');
-const meshConfigSchema = z.object({ network: networkConfigSchema.unwrap().partial().optional() });
+const meshConfigSchema = z.object({ network: networkConfigOverrideSchema.optional() });
 
 type EmbeddedAsset = {
   blob: Blob;

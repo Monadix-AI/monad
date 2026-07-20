@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { Copy01Icon, SourceCodeIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { useId } from 'react';
+import { z } from 'zod';
 
 import { cn } from '../lib/utils';
 import { Button } from './Button';
@@ -37,7 +38,7 @@ export function rawEventRecordsText(records: readonly RawEventRecord[]): string 
 
 export function formattedRawEventRecordText(text: string): string {
   try {
-    return JSON.stringify(JSON.parse(text) as unknown, null, 2);
+    return JSON.stringify(z.json().parse(JSON.parse(text)), null, 2);
   } catch {
     return text;
   }

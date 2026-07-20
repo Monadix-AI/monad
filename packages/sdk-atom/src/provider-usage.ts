@@ -4,7 +4,10 @@
 // read these, so the key paths can't silently drift between the two. Pure + ai-sdk-free: the
 // metadata is treated as a plain nested record.
 
+import { z } from 'zod';
+
 type MetadataShape = Record<string, unknown> | undefined;
+const providerMetadataSchema = z.record(z.string(), z.unknown());
 
 function finite(v: unknown): number | undefined {
   return typeof v === 'number' && Number.isFinite(v) ? v : undefined;
@@ -29,7 +32,7 @@ export function extractProviderCost(meta: MetadataShape): number | undefined {
  *  Returns {} on malformed input. */
 export function usageFromProviderMetadataJson(json: string): { costUsd?: number; cacheWriteTokens?: number } {
   try {
-    const meta = JSON.parse(json) as Record<string, unknown>;
+    const meta = providerMetadataSchema.parse(JSON.parse(json));
     return { costUsd: extractProviderCost(meta), cacheWriteTokens: extractCacheWrite(meta) };
   } catch {
     return {};

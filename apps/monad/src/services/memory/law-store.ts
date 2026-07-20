@@ -4,6 +4,7 @@
 // incremental support reconciliation to get wrong — each /infer-laws run replaces a scope's laws.
 
 import { Database } from 'bun:sqlite';
+import { z } from 'zod';
 
 const LAW_DDL = `
 CREATE TABLE IF NOT EXISTS graph_law (
@@ -128,7 +129,7 @@ export class LawStore {
     id: r.id,
     scope: r.scope,
     statement: r.statement,
-    support: JSON.parse(r.support) as string[],
+    support: z.array(z.string()).parse(JSON.parse(r.support)),
     confidence: r.confidence,
     updatedAt: r.updated_at,
     contradictedBy: r.contradicted_by ?? null

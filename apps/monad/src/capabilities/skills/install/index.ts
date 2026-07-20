@@ -217,7 +217,7 @@ export async function checkSkillUpdate(
 ): Promise<SkillUpdateStatus | null> {
   let rec: SkillInstallRecord;
   try {
-    rec = JSON.parse(await Bun.file(join(skillsDir, name, '.install.json')).text()) as SkillInstallRecord;
+    rec = skillInstallRecordSchema.parse(JSON.parse(await Bun.file(join(skillsDir, name, '.install.json')).text()));
   } catch {
     return null;
   }

@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
+import { z } from 'zod';
 
 import { SENTINEL_PREFIX } from './credential-sentinel.ts';
 
@@ -66,6 +67,15 @@ interface RegexWorkerFailure {
   error: CredentialMaterializationError;
 }
 
+const materializationErrorSchema = z.enum(CredentialMaterializationError);
+const regexWorkerResultSchema = z.discriminatedUnion('ok', [
+  z.object({
+    ok: z.literal(true),
+    captures: z.array(z.object({ start: z.number(), end: z.number(), value: z.string() }))
+  }),
+  z.object({ ok: z.literal(false), error: materializationErrorSchema })
+]);
+
 function sentinel(): string {
   return SENTINEL_PREFIX + randomUUID();
 }
@@ -85,7 +95,7 @@ function extractCaptures(input: string, pattern: string): RegexWorkerSuccess | R
     return { ok: false, error: CredentialMaterializationError.INVALID_REGEX };
   }
   try {
-    return JSON.parse(result.stdout) as RegexWorkerSuccess | RegexWorkerFailure;
+    return regexWorkerResultSchema.parse(JSON.parse(result.stdout));
   } catch {
     return { ok: false, error: CredentialMaterializationError.INVALID_REGEX };
   }

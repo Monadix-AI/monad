@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { roleExecPath } from '@monad/environment';
+import { z } from 'zod';
 
 interface DaemonChildProcessEntry {
   pid: number;
@@ -127,21 +128,16 @@ export async function runDaemonChildSupervisorFromArgv(argv: string[] = process.
   return true;
 }
 
-function isLiveEntry(value: unknown): value is DaemonChildProcessEntry {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    typeof (value as { pid?: unknown }).pid === 'number' &&
-    typeof (value as { label?: unknown }).label === 'string'
-  );
-}
+const daemonChildProcessEntrySchema = z.object({ pid: z.number(), label: z.string() });
 
 function readPersistedEntries(path: string | undefined): DaemonChildProcessEntry[] {
   if (!path || !existsSync(path)) return [];
   try {
-    const parsed = JSON.parse(readFileSync(path, 'utf8')) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(isLiveEntry);
+    const parsed = z.array(z.unknown()).parse(JSON.parse(readFileSync(path, 'utf8')));
+    return parsed.flatMap((entry) => {
+      const result = daemonChildProcessEntrySchema.safeParse(entry);
+      return result.success ? [result.data] : [];
+    });
   } catch {
     return [];
   }

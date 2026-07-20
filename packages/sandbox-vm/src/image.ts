@@ -12,6 +12,7 @@
 import { chmodSync, existsSync } from 'node:fs';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { z } from 'zod';
 
 import { vmDir } from './toolchain.ts';
 import { sha256OfFile } from './util.ts';
@@ -60,22 +61,27 @@ async function fetchWithRetry(url: string, fetchImpl: typeof fetch): Promise<Res
   throw lastError;
 }
 
-type StreamJson = {
-  architectures?: Record<
-    string,
-    {
-      artifacts?: Record<
-        string,
-        {
-          formats?: Record<
-            string,
-            Record<string, { location: string; signature?: string; sha256?: string; 'uncompressed-sha256'?: string }>
-          >;
-        }
-      >;
-    }
-  >;
-};
+const streamArtifactSchema = z.object({
+  location: z.string(),
+  signature: z.string().optional(),
+  sha256: z.string().optional(),
+  'uncompressed-sha256': z.string().optional()
+});
+const streamJsonSchema = z.object({
+  architectures: z
+    .record(
+      z.string(),
+      z.object({
+        artifacts: z
+          .record(
+            z.string(),
+            z.object({ formats: z.record(z.string(), z.record(z.string(), streamArtifactSchema)).optional() })
+          )
+          .optional()
+      })
+    )
+    .optional()
+});
 
 /** Resolve the disk artifact for a target from the CoreOS stream metadata. */
 export async function resolveImageArtifact(
@@ -84,7 +90,7 @@ export async function resolveImageArtifact(
 ): Promise<ImageArtifact> {
   const res = await fetchWithRetry(STREAM_URL, fetchImpl);
   if (!res.ok) throw new Error(`vm image: stream metadata fetch failed ${res.status}`);
-  const stream = (await res.json()) as StreamJson;
+  const stream = streamJsonSchema.parse(await res.json());
   const fmt = stream.architectures?.[target.arch]?.artifacts?.[target.platform]?.formats?.[target.format];
   const disk = fmt?.disk;
   if (!disk?.location || !disk.sha256) {

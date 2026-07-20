@@ -2,11 +2,18 @@ import type { SkillMarketplaceSource, SkillSortMode } from '@monad/protocol';
 import type { ResolvedSkillContent, SkillDetail, SkillRef, SkillSearchResult, SkillSource } from '../source.ts';
 
 import { createLogger } from '@monad/logger';
+import { z } from 'zod';
 
 import { HandlerError } from '#/handlers/handler-error.ts';
 
 const log = createLogger('marketplace');
 const TTL_MS = 5 * 60 * 1000;
+const skillsLlmDetailSchema = z.object({
+  name: z.string().optional(),
+  description: z.string().optional(),
+  codeRepository: z.string().optional(),
+  url: z.string().optional()
+});
 
 interface MarketplaceRecord {
   id: string;
@@ -264,12 +271,7 @@ function parseSkillsLlmDetail(html: string, slug: string): SkillDetail {
   } | null = null;
   if (match?.[1]) {
     try {
-      data = JSON.parse(match[1]) as {
-        name?: string;
-        description?: string;
-        codeRepository?: string;
-        url?: string;
-      };
+      data = skillsLlmDetailSchema.parse(JSON.parse(match[1]));
     } catch (err) {
       log.warn({ err, slug }, 'skillsllm ld+json parse failed');
       data = null;

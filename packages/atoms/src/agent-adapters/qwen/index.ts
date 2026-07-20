@@ -28,7 +28,7 @@ const QWEN_SUPPORTED_MODELS = ['qwen3-coder-plus', 'qwen3-coder-flash'];
 function readQwenConfiguredModels(): string[] {
   try {
     const raw = readFileSync(join(homedir(), '.qwen', 'settings.json'), 'utf8');
-    const parsed = JSON.parse(raw) as unknown;
+    const parsed = z.json().parse(JSON.parse(raw));
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return [];
     const providers = (parsed as Record<string, unknown>).modelProviders;
     if (!providers || typeof providers !== 'object' || Array.isArray(providers)) return [];
@@ -242,3 +242,5 @@ export const qwenMeshAgentAdapter: MeshAgentProviderAdapter = {
     return 'unknown';
   }
 };
+
+import { z } from 'zod';

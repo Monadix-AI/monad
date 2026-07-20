@@ -3,7 +3,7 @@ import type { MeshAgentAuthState } from '@monad/protocol';
 /** Parse one JSON object literal; `undefined` for non-objects, arrays, or parse errors. */
 export function parseJsonObject(value: string): Record<string, unknown> | undefined {
   try {
-    const parsed = JSON.parse(value) as unknown;
+    const parsed = z.json().parse(JSON.parse(value));
     return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
       ? (parsed as Record<string, unknown>)
       : undefined;
@@ -56,3 +56,5 @@ export function parseStructuredAuthState(output: string): MeshAgentAuthState | u
   }
   return undefined;
 }
+
+import { z } from 'zod';

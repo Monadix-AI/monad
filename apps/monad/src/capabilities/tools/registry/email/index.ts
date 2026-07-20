@@ -127,7 +127,7 @@ export function resendBackend(apiKey: string, fetchImpl: typeof fetch = fetch): 
       if (!res.ok) {
         throw new EmailError(`resend send failed: ${res.status} ${await res.text().catch(() => '')}`.trim());
       }
-      const data = (await res.json().catch(() => ({}))) as { id?: string };
+      const data = z.object({ id: z.string().optional() }).parse(await res.json().catch(() => ({})));
       return { id: data.id, backend: 'resend' };
     }
   };

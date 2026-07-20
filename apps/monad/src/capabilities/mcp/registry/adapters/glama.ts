@@ -1,21 +1,22 @@
 import type { McpRegistryAdapter, McpRegistryEntry } from '../adapter.ts';
 
 import { createLogger } from '@monad/logger';
+import { z } from 'zod';
 
 const log = createLogger('marketplace');
 const BASE = 'https://glama.ai/api/mcp/v1/servers';
 
-interface GlamaServer {
-  id?: string;
-  name: string;
-  description?: string;
-  repository?: { url?: string };
-  environmentVariablesJsonSchema?: { properties?: Record<string, unknown> };
-}
-
-interface GlamaResponse {
-  servers: GlamaServer[];
-}
+const glamaResponseSchema = z.object({
+  servers: z.array(
+    z.object({
+      id: z.string().optional(),
+      name: z.string(),
+      description: z.string().optional(),
+      repository: z.object({ url: z.string().optional() }).optional(),
+      environmentVariablesJsonSchema: z.object({ properties: z.record(z.string(), z.unknown()).optional() }).optional()
+    })
+  )
+});
 
 export class GlamaMcpAdapter implements McpRegistryAdapter {
   readonly id = 'glama';
@@ -23,14 +24,14 @@ export class GlamaMcpAdapter implements McpRegistryAdapter {
   async search(query: string, opts?: { limit?: number }): Promise<McpRegistryEntry[]> {
     const limit = opts?.limit ?? 20;
     const url = `${BASE}?q=${encodeURIComponent(query)}&limit=${limit}`;
-    let data: GlamaResponse;
+    let data: z.infer<typeof glamaResponseSchema>;
     try {
       const res = await fetch(url);
       if (!res.ok) {
         log.warn(`glama registry returned ${res.status}`);
         return [];
       }
-      data = (await res.json()) as GlamaResponse;
+      data = glamaResponseSchema.parse(await res.json());
     } catch (err) {
       log.warn({ err }, 'glama registry fetch failed');
       return [];

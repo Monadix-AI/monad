@@ -16,6 +16,7 @@ import type { Firmware } from '../toolchain.ts';
 import { copyFile, mkdir, rm } from 'node:fs/promises';
 import { connect } from 'node:net';
 import { dirname, join } from 'node:path';
+import { z } from 'zod';
 
 import { drainDiagnosticStream } from '../runtime/diagnostic-tail.ts';
 import { type VmBaselineDriver, type VmHandle, type VmSpec } from './vfkit.ts';
@@ -145,6 +146,13 @@ interface QmpResponse {
   data?: Record<string, unknown>;
 }
 
+const qmpResponseSchema: z.ZodType<QmpResponse> = z.object({
+  return: z.unknown().optional(),
+  error: z.object({ class: z.string().optional(), desc: z.string().optional() }).optional(),
+  event: z.string().optional(),
+  data: z.record(z.string(), z.unknown()).optional()
+});
+
 export class QmpClient {
   private readonly socket: ReturnType<typeof connect>;
   private buffer = '';
@@ -165,7 +173,7 @@ export class QmpClient {
           const line = this.buffer.slice(0, newline).trim();
           this.buffer = this.buffer.slice(newline + 1);
           if (!line) continue;
-          const message = JSON.parse(line) as QmpResponse;
+          const message = qmpResponseSchema.parse(JSON.parse(line));
           const waiter = this.waiters.shift();
           if (waiter) waiter.resolve(message);
           else this.messages.push(message);

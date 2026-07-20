@@ -1,5 +1,7 @@
 import type { ProjectId, UpdateWorkplaceProjectRequest, WorkplaceProject } from '@monad/protocol';
 
+import { updateWorkplaceProjectResponseSchema } from '@monad/protocol';
+
 import { apiSlice } from '../../api-slice.ts';
 import { clientOf, runTreaty } from '../../endpoint-helpers.ts';
 
@@ -10,7 +12,7 @@ const updateWorkplaceProjectApi = apiSlice.injectEndpoints({
       queryFn: ({ id, ...body }, api: { extra: unknown }) =>
         runTreaty(
           () => clientOf(api).treaty.v1.workplace.projects({ id }).patch(body),
-          (raw) => raw.project as unknown as WorkplaceProject
+          (raw) => updateWorkplaceProjectResponseSchema.parse(raw).project
         ),
       invalidatesTags: ['Sessions']
     })

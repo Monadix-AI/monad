@@ -5,6 +5,10 @@ import type {
   ObservationRole
 } from '../observation-projection.ts';
 
+import { z } from 'zod';
+
+const looseRecordSchema = z.record(z.string(), z.unknown());
+
 import {
   classifyObservationActivity,
   isStreamingObservationFragment,
@@ -158,7 +162,7 @@ export function qwenRecordEvents(
     const message = record.message;
     const content =
       message && typeof message === 'object' && !Array.isArray(message)
-        ? (message as unknown as Record<string, unknown>).content
+        ? looseRecordSchema.parse(message).content
         : record.content;
     return qwenContentEvents({
       id,
@@ -182,7 +186,7 @@ export function qwenRecordEvents(
   if (isQwenStreamEventMessage(record)) {
     const event = record.event;
     if (!event || typeof event !== 'object' || Array.isArray(event)) return [];
-    const e = event as unknown as Record<string, unknown>;
+    const e = looseRecordSchema.parse(event);
     const delta = e.delta;
     if (e.type === 'content_block_delta' && delta && typeof delta === 'object' && !Array.isArray(delta)) {
       const d = delta as Record<string, unknown>;

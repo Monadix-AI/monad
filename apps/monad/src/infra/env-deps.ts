@@ -9,6 +9,7 @@ import type { DownloadProgress } from '#/services/download.ts';
 import { existsSync } from 'node:fs';
 import { chmod, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
+import { z } from 'zod';
 
 import { untar } from '#/atoms/install/untar.ts';
 import { parseChecksums, selectReleaseAsset } from '#/capabilities/mcp/install/binary.ts';
@@ -16,6 +17,11 @@ import { downloadBytes } from '#/services/download.ts';
 
 type EnvDepResult = 'found' | 'installed' | 'failed' | 'skipped';
 type EnvDepsDownloadProgress = DownloadProgress & { dependency: 'node' | 'uv'; artifact: string };
+const nodeIndexSchema = z.array(z.object({ version: z.string(), lts: z.union([z.string(), z.literal(false)]) }));
+const uvReleaseSchema = z.object({
+  tag_name: z.string(),
+  assets: z.array(z.object({ name: z.string(), browser_download_url: z.string() }))
+});
 
 // ─── Node.js ─────────────────────────────────────────────────────────────────
 
@@ -40,7 +46,7 @@ async function resolveNodeVersion(): Promise<string> {
     headers: { 'User-Agent': 'monad' }
   });
   if (!res.ok) throw new Error(`nodejs.org index fetch failed: ${res.status}`);
-  const index = (await res.json()) as Array<{ version: string; lts: string | false }>;
+  const index = nodeIndexSchema.parse(await res.json());
   const lts = index.find((e) => e.lts !== false);
   if (!lts) throw new Error('no LTS version found in nodejs.org index');
   return lts.version; // e.g. "v22.13.1"
@@ -133,10 +139,7 @@ async function ensureUv(
     headers
   });
   if (!relRes.ok) throw new Error(`uv latest release fetch failed: ${relRes.status}`);
-  const release = (await relRes.json()) as {
-    tag_name: string;
-    assets: { name: string; browser_download_url: string }[];
-  };
+  const release = uvReleaseSchema.parse(await relRes.json());
   const tag = release.tag_name;
   const assets = release.assets ?? [];
 

@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { networkConfigSchema } from '@monad/environment';
+import { networkConfigOverrideSchema } from '@monad/environment';
 import { tanstackRouter } from '@tanstack/router-plugin/vite';
 import react from '@vitejs/plugin-react';
 import { createLogger, defineConfig } from 'vite';
@@ -9,7 +9,7 @@ import { z } from 'zod';
 const REPO_ROOT = resolve(import.meta.dirname, '../..');
 const APP_ROOT = import.meta.dirname;
 const REPO_ENV_PATH = resolve(REPO_ROOT, '.env.local');
-const meshConfigSchema = z.object({ network: networkConfigSchema.unwrap().partial().optional() });
+const meshConfigSchema = z.object({ network: networkConfigOverrideSchema.optional() });
 
 function parsePort(value: string | undefined): number | undefined {
   if (!value) return undefined;

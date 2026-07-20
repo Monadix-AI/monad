@@ -14,6 +14,8 @@ import type {
 import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
 import type { NativeAgentAttachmentResolver } from './attachments.ts';
 
+import { z } from 'zod';
+
 import { definePrompt } from '#/agent/prompt-template.ts';
 import { HandlerError } from '#/handlers/handler-error.ts';
 import { meshAgentProjectMemberDisplayNameForAgent } from '#/handlers/session/handlers/messaging-members.ts';
@@ -54,8 +56,8 @@ function managedMeshAgentDisplayName(
 
 function readableAnswer(answer: string): string {
   try {
-    const parsed = JSON.parse(answer) as unknown;
-    if (Array.isArray(parsed) && parsed.every((item) => typeof item === 'string')) return parsed.join(', ');
+    const parsed = z.union([z.string(), z.array(z.string())]).parse(JSON.parse(answer));
+    if (Array.isArray(parsed)) return parsed.join(', ');
     if (typeof parsed === 'string') return parsed;
   } catch {
     return answer;

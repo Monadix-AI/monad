@@ -49,7 +49,7 @@ function toolCallTextInput(text: string | undefined): string | undefined {
 
 function structuredTextFromJson(value: string): string {
   try {
-    return JSON.stringify(JSON.parse(value) as unknown, null, 2);
+    return JSON.stringify(z.json().parse(JSON.parse(value)), null, 2);
   } catch {
     return value;
   }
@@ -73,10 +73,12 @@ function jsonCodeText(text: string): string | null {
   const trimmed = text.trim();
   if (!trimmed) return null;
   try {
-    const parsed = JSON.parse(trimmed) as unknown;
+    const parsed = z.json().parse(JSON.parse(trimmed));
     if (typeof parsed === 'string') return jsonCodeText(parsed);
     return JSON.stringify(parsed, null, 2);
   } catch {
     return null;
   }
 }
+
+import { z } from 'zod';

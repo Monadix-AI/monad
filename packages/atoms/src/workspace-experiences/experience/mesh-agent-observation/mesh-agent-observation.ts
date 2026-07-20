@@ -67,7 +67,7 @@ function observation(args: {
 
 function parseJsonObject(value: string): Record<string, unknown> | undefined {
   try {
-    const parsed = JSON.parse(value) as unknown;
+    const parsed = z.json().parse(JSON.parse(value));
     return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
       ? (parsed as Record<string, unknown>)
       : undefined;
@@ -487,3 +487,5 @@ export function meshAgentUsageLimitMeterFromResponse(
   });
   return rows.length > 0 ? { title: 'Usage remaining', rows } : null;
 }
+
+import { z } from 'zod';

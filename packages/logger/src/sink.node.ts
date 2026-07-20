@@ -10,6 +10,7 @@ import { appendFileSync, mkdirSync } from 'node:fs';
 import { appendFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import pino from 'pino';
+import { z } from 'zod';
 
 import { emitDeveloperRecord, hasDeveloperRecordSubscribers } from './developer.ts';
 import { getLogFile, getLoggerConfig, getLoggerConfigVersion, getLogLevel, getLogStderr } from './level.ts';
@@ -50,6 +51,10 @@ const REDACT_PATHS = [
   '*.cookie'
 ];
 const redact = { paths: REDACT_PATHS, censor: '[redacted]' };
+const rawLogRecordSchema = z.record(z.string(), z.unknown());
+const loggerRecordSchema: z.ZodType<LoggerRecord> = z
+  .object({ level: z.number(), time: z.number(), msg: z.string().optional() })
+  .catchall(z.unknown());
 
 let developerLogDir: string | null = null;
 
@@ -60,7 +65,7 @@ const developerStream: pino.DestinationStream = {
     if (!developerLogDir && !hasDeveloperRecordSubscribers()) return;
     let record: Record<string, unknown>;
     try {
-      record = JSON.parse(line) as Record<string, unknown>;
+      record = rawLogRecordSchema.parse(JSON.parse(line));
     } catch {
       return;
     }
@@ -264,7 +269,7 @@ function customDestinationStream(destination: CustomLogDestination): pino.Destin
     write(line: string) {
       let record: LoggerRecord;
       try {
-        record = JSON.parse(line) as LoggerRecord;
+        record = loggerRecordSchema.parse(JSON.parse(line));
       } catch {
         return;
       }

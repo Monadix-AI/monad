@@ -24,6 +24,7 @@ import type { Mem0Resolution } from '#/services/memory/resolve-mem0.ts';
 import type { Store } from '#/store/db/index.ts';
 
 import { join } from 'node:path';
+import { z } from 'zod';
 
 import { type MemoryTurn, sanitizeFact } from '#/agent/index.ts';
 import { definePrompt } from '#/agent/prompt-template.ts';
@@ -109,9 +110,8 @@ function parseFactArray(text: string): string[] | null {
   const end = text.lastIndexOf(']');
   if (start < 0 || end <= start) return null;
   try {
-    const parsed = JSON.parse(text.slice(start, end + 1)) as unknown;
-    if (!Array.isArray(parsed)) return null;
-    return parsed.filter((x): x is string => typeof x === 'string' && x.trim().length > 0);
+    const parsed = z.array(z.string()).parse(JSON.parse(text.slice(start, end + 1)));
+    return parsed.filter((x) => x.trim().length > 0);
   } catch {
     return null;
   }

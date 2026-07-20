@@ -2,51 +2,50 @@ import type { SkillSortMode } from '@monad/protocol';
 import type { ResolvedSkillContent, SkillDetail, SkillRef, SkillSearchResult, SkillSource } from '../source.ts';
 
 import { createLogger } from '@monad/logger';
+import { z } from 'zod';
 
 import { HandlerError } from '#/handlers/handler-error.ts';
 
 const log = createLogger('marketplace');
 const BASE = 'https://clawhub.ai/api/v1';
 
-interface ClawHubSearchResult {
-  score: number;
-  slug: string;
-  displayName: string;
-  summary: string;
-  version?: string;
-  downloads?: number;
-  updatedAt?: number;
-  ownerHandle?: string;
-}
-
-interface ClawHubSearchResponse {
-  results: ClawHubSearchResult[];
-}
-
-interface ClawHubListResult {
-  slug: string;
-  displayName: string;
-  summary: string;
-  tags?: { latest?: string };
-  stats?: { downloads?: number; stars?: number };
-  updatedAt?: number;
-  createdAt?: number;
-}
-
-interface ClawHubListResponse {
-  items: ClawHubListResult[];
-}
-
-interface ClawHubSkillResponse {
-  skill: {
-    slug: string;
-    displayName: string;
-    summary?: string;
-    description: string;
-    version?: string;
-    downloads?: number;
-  };
-}
+const clawHubSearchResponseSchema = z.object({
+  results: z.array(
+    z.object({
+      score: z.number(),
+      slug: z.string(),
+      displayName: z.string(),
+      summary: z.string(),
+      version: z.string().optional(),
+      downloads: z.number().optional(),
+      updatedAt: z.number().optional(),
+      ownerHandle: z.string().optional()
+    })
+  )
+});
+const clawHubListResponseSchema = z.object({
+  items: z.array(
+    z.object({
+      slug: z.string(),
+      displayName: z.string(),
+      summary: z.string(),
+      tags: z.object({ latest: z.string().optional() }).optional(),
+      stats: z.object({ downloads: z.number().optional(), stars: z.number().optional() }).optional(),
+      updatedAt: z.number().optional(),
+      createdAt: z.number().optional()
+    })
+  )
+});
+const clawHubSkillResponseSchema = z.object({
+  skill: z.object({
+    slug: z.string(),
+    displayName: z.string(),
+    summary: z.string().optional(),
+    description: z.string(),
+    version: z.string().optional(),
+    downloads: z.number().optional()
+  })
+});
 
 export class ClawHubSkillSource implements SkillSource {
   readonly id: 'clawhub' = 'clawhub';
@@ -58,11 +57,11 @@ export class ClawHubSkillSource implements SkillSource {
   async resolve(ref: SkillRef): Promise<ResolvedSkillContent> {
     const slug = ref.name ?? ref.raw;
     const url = `${BASE}/skills/${encodeURIComponent(slug)}`;
-    let data: ClawHubSkillResponse;
+    let data: z.infer<typeof clawHubSkillResponseSchema>;
     try {
       const res = await fetch(url);
       if (!res.ok) throw new Error(`ClawHub returned ${res.status} for skill "${slug}"`);
-      data = (await res.json()) as ClawHubSkillResponse;
+      data = clawHubSkillResponseSchema.parse(await res.json());
     } catch (err) {
       log.warn({ slug, err }, 'clawhub skill resolve failed');
       throw err;
@@ -83,13 +82,13 @@ export class ClawHubSkillSource implements SkillSource {
   async browse(sort: SkillSortMode): Promise<SkillSearchResult[]> {
     // Only 'trending' is a valid server-side sort; top/new are sorted client-side.
     const params = new URLSearchParams(sort === 'trending' ? { sort: 'trending' } : {});
-    let data: ClawHubListResponse;
+    let data: z.infer<typeof clawHubListResponseSchema>;
     try {
       const res = await fetch(`${BASE}/skills?${params}`);
       if (!res.ok) {
         throw new Error(`ClawHub returned ${res.status}`);
       }
-      data = (await res.json()) as ClawHubListResponse;
+      data = clawHubListResponseSchema.parse(await res.json());
     } catch (err) {
       log.warn({ err }, 'clawhub browse failed');
       throw new HandlerError(
@@ -120,13 +119,13 @@ export class ClawHubSkillSource implements SkillSource {
   async search(query: string, sort?: SkillSortMode): Promise<SkillSearchResult[]> {
     const params = new URLSearchParams({ q: query });
     if (sort) params.set('sort', sort);
-    let data: ClawHubSearchResponse;
+    let data: z.infer<typeof clawHubSearchResponseSchema>;
     try {
       const res = await fetch(`${BASE}/search?${params}`);
       if (!res.ok) {
         throw new Error(`ClawHub returned ${res.status}`);
       }
-      data = (await res.json()) as ClawHubSearchResponse;
+      data = clawHubSearchResponseSchema.parse(await res.json());
     } catch (err) {
       log.warn({ err }, 'clawhub search failed');
       throw new HandlerError(
@@ -148,11 +147,11 @@ export class ClawHubSkillSource implements SkillSource {
 
   async fetchDetail(slug: string): Promise<SkillDetail> {
     const url = `${BASE}/skills/${encodeURIComponent(slug)}`;
-    let data: ClawHubSkillResponse;
+    let data: z.infer<typeof clawHubSkillResponseSchema>;
     try {
       const res = await fetch(url);
       if (!res.ok) throw new Error(`ClawHub returned ${res.status} for skill "${slug}"`);
-      data = (await res.json()) as ClawHubSkillResponse;
+      data = clawHubSkillResponseSchema.parse(await res.json());
     } catch (err) {
       log.warn({ slug, err }, 'clawhub fetchDetail failed');
       throw err;

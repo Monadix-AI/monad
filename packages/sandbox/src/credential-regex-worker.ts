@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 export interface RegexWorkerRequest {
   input: string;
   pattern: string;
@@ -5,13 +7,20 @@ export interface RegexWorkerRequest {
   deadlineMs: number;
 }
 
+const regexWorkerRequestSchema = z.object({
+  input: z.string(),
+  pattern: z.string(),
+  maxCaptures: z.number().int().nonnegative(),
+  deadlineMs: z.number().int().nonnegative()
+});
+
 export type RegexWorkerResult =
   | { ok: true; captures: Array<{ start: number; end: number; value: string }> }
   | { ok: false; error: 'INVALID_REGEX' | 'REGEX_TIMEOUT' | 'NO_MATCH' | 'EMPTY_CAPTURE' | 'TOO_MANY_CAPTURES' };
 
 let request: RegexWorkerRequest;
 try {
-  request = (await Bun.stdin.json()) as RegexWorkerRequest;
+  request = regexWorkerRequestSchema.parse(await Bun.stdin.json());
 } catch {
   process.stdout.write(JSON.stringify({ ok: false, error: 'INVALID_REGEX' } satisfies RegexWorkerResult));
   process.exit(0);

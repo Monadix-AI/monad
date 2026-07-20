@@ -9,6 +9,10 @@ import type {
 import type { MeshAgentObservationEvent, MeshAgentUsageRecord } from '@monad/protocol';
 import type { MeshAgentObservationProjector, ObservationRole } from '../observation-projection.ts';
 
+import { z } from 'zod';
+
+const looseRecordSchema = z.record(z.string(), z.unknown());
+
 import {
   classifyObservationActivity,
   isStreamingObservationFragment,
@@ -219,9 +223,7 @@ export function claudeRecordEvents(
   if (isClaudeTranscriptMessage(record)) {
     const message = record.message;
     const messageRecord =
-      message && typeof message === 'object' && !Array.isArray(message)
-        ? (message as unknown as Record<string, unknown>)
-        : undefined;
+      message && typeof message === 'object' && !Array.isArray(message) ? looseRecordSchema.parse(message) : undefined;
     const content = messageRecord?.content ?? record.content;
     const createdAt = providerIsoTimestamp(textValue(record.timestamp));
     const contentEvents = claudeContentEvents({
@@ -285,7 +287,7 @@ export function claudeRecordEvents(
   if (isClaudeStreamEventMessage(record)) {
     const event = record.event;
     if (!event || typeof event !== 'object' || Array.isArray(event)) return [];
-    const e = event as unknown as Record<string, unknown>;
+    const e = looseRecordSchema.parse(event);
     const delta = e.delta;
     if (e.type === 'content_block_delta' && delta && typeof delta === 'object' && !Array.isArray(delta)) {
       const d = delta as Record<string, unknown>;

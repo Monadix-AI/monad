@@ -1,5 +1,6 @@
 import { mkdir, readFile, stat, unlink, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
+import { z } from 'zod';
 
 type MeshAgentKillFn = (pid: number, signal: NodeJS.Signals) => void;
 type MeshAgentTreeKillFn = (pid: number) => void;
@@ -59,15 +60,8 @@ export function killMeshAgentProcess(
 export async function readProcessRegistry(path: string | undefined): Promise<number[]> {
   if (!path) return [];
   try {
-    const parsed = JSON.parse(await readFile(path, 'utf8')) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .map((entry) =>
-        entry && typeof entry === 'object' && typeof (entry as { pid?: unknown }).pid === 'number'
-          ? (entry as { pid: number }).pid
-          : undefined
-      )
-      .filter((pid): pid is number => typeof pid === 'number');
+    const parsed = z.array(z.object({ pid: z.number() }).passthrough()).parse(JSON.parse(await readFile(path, 'utf8')));
+    return parsed.map((entry) => entry.pid);
   } catch {
     return [];
   }

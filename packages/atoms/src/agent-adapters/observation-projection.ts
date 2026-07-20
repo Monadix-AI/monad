@@ -133,7 +133,7 @@ export function thinkingObservation(args: {
 
 function parseJsonObject(value: string): Record<string, unknown> | undefined {
   try {
-    const parsed = JSON.parse(value) as unknown;
+    const parsed = z.json().parse(JSON.parse(value));
     return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
       ? (parsed as Record<string, unknown>)
       : undefined;
@@ -311,3 +311,5 @@ export function contentEvents(args: {
     return [];
   });
 }
+
+import { z } from 'zod';

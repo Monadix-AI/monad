@@ -41,7 +41,7 @@ function parseJson(value: unknown): unknown {
   const trimmed = value.trim();
   if (!trimmed || (!trimmed.startsWith('{') && !trimmed.startsWith('['))) return value;
   try {
-    return JSON.parse(trimmed) as unknown;
+    return z.json().parse(JSON.parse(trimmed));
   } catch {
     return value;
   }
@@ -151,7 +151,7 @@ function parseExportSessions(output: string): JsonRecord[] {
     .filter((line) => line.startsWith('{'))
     .flatMap((line) => {
       try {
-        const parsed = JSON.parse(line) as unknown;
+        const parsed = z.json().parse(JSON.parse(line));
         const record = recordValue(parsed);
         return record ? [record] : [];
       } catch {
@@ -329,3 +329,5 @@ export function hermesEventPageOutput(context: MeshAgentProviderEventPageContext
   const lines = context.page.items.map((item) => JSON.stringify(item));
   return lines.join('\n') || null;
 }
+
+import { z } from 'zod';

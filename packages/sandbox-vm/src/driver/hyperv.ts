@@ -20,6 +20,7 @@
 
 import { readdir } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
+import { z } from 'zod';
 
 import { DiagnosticTail } from '../runtime/diagnostic-tail.ts';
 import { type VmBaselineDriver, type VmHandle, type VmSpec } from './vfkit.ts';
@@ -63,7 +64,7 @@ async function helperRun(helper: string, args: string[]): Promise<Record<string,
     throw new Error(`winvm-helper ${args[0]}: ${err.trim() || out.trim() || 'failed'}`);
   }
   try {
-    return JSON.parse(out.trim()) as Record<string, unknown>;
+    return z.record(z.string(), z.unknown()).parse(JSON.parse(out.trim()));
   } catch {
     throw new Error(`winvm-helper ${args[0]}: unparseable output: ${out.trim()}`);
   }

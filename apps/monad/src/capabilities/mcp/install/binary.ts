@@ -10,6 +10,7 @@
 
 import { chmod, mkdir } from 'node:fs/promises';
 import { basename, join } from 'node:path';
+import { z } from 'zod';
 
 import { untar } from '#/atoms/install/untar.ts';
 import { unzip } from '#/capabilities/mcp/install/unzip.ts';
@@ -197,6 +198,10 @@ export async function installMcpBinary(
 
 export type ReleaseAssetDownloadProgress = DownloadProgress & { assetName: string };
 
+const githubReleaseSchema = z.object({
+  assets: z.array(z.object({ name: z.string(), browser_download_url: z.string() })).optional()
+});
+
 /** Real fetcher: resolve the release by tag, pick the platform/arch asset, download its bytes. */
 export function createReleaseAssetFetcher(
   opts: { githubToken?: string; onDownloadProgress?: (progress: ReleaseAssetDownloadProgress) => void } = {}
@@ -213,7 +218,7 @@ export function createReleaseAssetFetcher(
       throw new McpBinaryInstallError(
         `github release ${source.owner}/${source.repo}@${source.tag} failed: ${relRes.status}`
       );
-    const release = (await relRes.json()) as { assets?: { name: string; browser_download_url: string }[] };
+    const release = githubReleaseSchema.parse(await relRes.json());
     const assets = release.assets ?? [];
     const chosen = selectReleaseAsset(
       assets.map((a) => a.name),

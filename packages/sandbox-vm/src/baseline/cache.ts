@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { chmodSync, existsSync } from 'node:fs';
 import { lstat, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve } from 'node:path';
+import { z } from 'zod';
 
 import { sha256OfFile } from '../util.ts';
 
@@ -11,6 +12,8 @@ const FORMAT = 'monad-vm-baseline';
 const SCHEMA_VERSION = 1;
 const MANIFEST = 'manifest.json';
 const OWNER = '.cache-owner.json';
+const ownerTokenSchema = z.object({ token: z.unknown().optional() });
+const ownerPidSchema = z.object({ pid: z.unknown().optional() });
 
 export interface BaselineManifestInput {
   identity: string;
@@ -90,6 +93,40 @@ function safeArtifactName(root: string, name: string): boolean {
   return fromRoot.length > 0 && !fromRoot.startsWith('..') && !isAbsolute(fromRoot);
 }
 
+const baselineManifestSchema: z.ZodType<BaselineManifest> = z
+  .object({
+    format: z.literal(FORMAT),
+    schemaVersion: z.literal(SCHEMA_VERSION),
+    identity: z.string(),
+    reuseDigest: z.string(),
+    driver: z.object({ kind: z.string(), version: z.string(), toolchain: z.string(), arch: z.string() }).strict(),
+    guest: z
+      .object({
+        agent: z.string(),
+        observer: z.string(),
+        protocol: z.number().int(),
+        ignition: z.string(),
+        mountPlan: z.string()
+      })
+      .strict(),
+    topology: z.object({ cpus: z.number().int(), memoryMiB: z.number().int(), digest: z.string() }).strict(),
+    bootEpoch: z.string(),
+    createdAt: z.number().int(),
+    artifacts: z
+      .array(
+        z
+          .object({
+            name: z.string().refine((name) => safeArtifactName('/baseline', name)),
+            byteSize: z.number().int().nonnegative(),
+            digest: z.string()
+          })
+          .strict()
+      )
+      .min(1)
+      .max(16)
+  })
+  .strict();
+
 function parseManifest(value: unknown): BaselineManifest | undefined {
   const root = object(value);
   if (
@@ -151,7 +188,7 @@ function parseManifest(value: unknown): BaselineManifest | undefined {
       return undefined;
     }
   }
-  return root as unknown as BaselineManifest;
+  return baselineManifestSchema.parse(root);
 }
 
 export class BaselineCache {
@@ -194,7 +231,7 @@ export class BaselineCache {
         if (released) return;
         released = true;
         try {
-          const owner = JSON.parse(await readFile(join(path, 'owner.json'), 'utf8')) as { token?: unknown };
+          const owner = ownerTokenSchema.parse(JSON.parse(await readFile(join(path, 'owner.json'), 'utf8')));
           if (owner.token === token) await rm(path, { recursive: true, force: true });
         } catch {
           // A missing or replaced lease is not ours to remove.
@@ -306,7 +343,7 @@ export class BaselineCache {
         released = true;
         this.restoreLeases.delete(identity);
         try {
-          const owner = JSON.parse(await readFile(join(lock, 'owner.json'), 'utf8')) as { token?: unknown };
+          const owner = ownerTokenSchema.parse(JSON.parse(await readFile(join(lock, 'owner.json'), 'utf8')));
           if (owner.token === token) await rm(lock, { recursive: true, force: true });
         } catch {
           // A missing or replaced lease is not ours to remove.
@@ -370,7 +407,7 @@ function pidAlive(pid: number): boolean {
 
 async function staleOwnedPath(path: string, ownerName: string): Promise<boolean> {
   try {
-    const owner = JSON.parse(await readFile(join(path, ownerName), 'utf8')) as { pid?: unknown };
+    const owner = ownerPidSchema.parse(JSON.parse(await readFile(join(path, ownerName), 'utf8')));
     return typeof owner.pid !== 'number' || !pidAlive(owner.pid);
   } catch {
     try {

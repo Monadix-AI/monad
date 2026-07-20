@@ -11,6 +11,17 @@ import { createApprovalFetch } from './net.ts';
 
 const DEFAULT_COUNT = 10;
 const MAX_COUNT = 20;
+const braveSearchResponseSchema = z.object({
+  web: z
+    .object({
+      results: z
+        .array(
+          z.object({ title: z.string().optional(), url: z.string().optional(), description: z.string().optional() })
+        )
+        .optional()
+    })
+    .optional()
+});
 
 export interface WebSearchResult {
   title: string;
@@ -43,9 +54,7 @@ export function createBraveProvider(apiKey: string): SearchProvider {
       url.searchParams.set('count', String(count));
       const res = await fetchImpl(url, { headers: { accept: 'application/json', 'x-subscription-token': apiKey } });
       if (!res.ok) throw new WebSearchError(`brave search failed: ${res.status}`);
-      const body = (await res.json()) as {
-        web?: { results?: Array<{ title?: string; url?: string; description?: string }> };
-      };
+      const body = braveSearchResponseSchema.parse(await res.json());
       return (body.web?.results ?? []).slice(0, count).map((r) => ({
         title: r.title ?? '',
         url: r.url ?? '',

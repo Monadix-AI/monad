@@ -7,6 +7,8 @@
 import type { Tool, ToolContext, ToolInputSchema } from '#/capabilities/tools/types.ts';
 import type { ToolModule } from './contract.ts';
 
+import { z } from 'zod';
+
 import { toolResult } from '#/capabilities/tools/types.ts';
 
 /** Minimal key/value backend (the daemon wires this to @monad/store's session memory). */
@@ -16,13 +18,13 @@ export interface NoteStore {
 }
 
 const NOTES_KEY = 'agent:notes';
+const notesSchema = z.record(z.string(), z.string());
 
 function readNotes(store: NoteStore, sessionId: string): Record<string, string> {
   const raw = store.get(sessionId, NOTES_KEY);
   if (!raw) return {};
   try {
-    const v = JSON.parse(raw) as unknown;
-    return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, string>) : {};
+    return notesSchema.parse(JSON.parse(raw));
   } catch {
     return {};
   }

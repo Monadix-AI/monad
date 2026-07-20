@@ -20,11 +20,11 @@ export function rawDisplayEntries(data: unknown, mode: RawDisplayMode): string[]
   const trimmed = data.trim();
   if (!trimmed) return [data];
   try {
-    return [JSON.stringify(JSON.parse(trimmed) as unknown, null, 2)];
+    return [JSON.stringify(z.json().parse(JSON.parse(trimmed)), null, 2)];
   } catch {
     const lines = trimmed.split(/\r?\n/);
     try {
-      return lines.map((line) => JSON.stringify(JSON.parse(line) as unknown, null, 2));
+      return lines.map((line) => JSON.stringify(z.json().parse(JSON.parse(line)), null, 2));
     } catch {
       return [data];
     }
@@ -47,3 +47,5 @@ export function rawFrameRow(frame: MeshRawEvent): RawFrameRow {
 export function rawFrameRows(frames: MeshRawEvent[]): RawFrameRow[] {
   return frames.map(rawFrameRow);
 }
+
+import { z } from 'zod';

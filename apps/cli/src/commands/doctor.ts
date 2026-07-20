@@ -3,7 +3,7 @@ import type { CommandDef } from './types.ts';
 import { rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { certExpiry, certFingerprint, getPaths, loadConfig, resolveClientConn } from '@monad/environment';
-import { MONAD_VERSION } from '@monad/protocol';
+import { getHealthResponseSchema, MONAD_VERSION } from '@monad/protocol';
 
 import { dim, green, json, out, red, yellow } from '../lib/output.ts';
 import { CliError, EXIT } from './types.ts';
@@ -51,7 +51,7 @@ export const command: CommandDef = {
     let healthData: { version?: string; latestVersion?: string } | null = null;
     try {
       const { data } = await client.treaty.health.get();
-      healthData = data as unknown as { version?: string; latestVersion?: string } | null;
+      healthData = data === null ? null : getHealthResponseSchema.parse(data);
       daemonVersion = healthData?.version;
     } catch {
       /* unreachable */

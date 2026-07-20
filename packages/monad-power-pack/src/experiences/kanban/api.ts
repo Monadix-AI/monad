@@ -13,7 +13,7 @@ import { KanbanStore } from './store.ts';
 type Json = Record<string, unknown>;
 
 async function body(request: Request): Promise<Json> {
-  const value = (await request.json()) as unknown;
+  const value = z.json().parse(await request.json());
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('JSON object required');
   return value as Json;
 }
@@ -210,3 +210,5 @@ export const kanbanApi: WorkspaceExperienceApi = {
     { method: 'POST', path: '/acceptance/decide', handle: decideAcceptance }
   ]
 };
+
+import { z } from 'zod';

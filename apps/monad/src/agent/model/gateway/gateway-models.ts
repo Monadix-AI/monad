@@ -2,6 +2,19 @@ import type { ModelInfo, ProviderCredential, ResolvedProviderConfig } from '@mon
 import type { ModelProviderRegistry } from '../provider.ts';
 
 import { openAiPrice } from '@monad/protocol';
+import { z } from 'zod';
+
+const providerModelsResponseSchema = z.object({
+  data: z
+    .array(
+      z.object({
+        id: z.string(),
+        name: z.string().optional(),
+        pricing: z.record(z.string(), z.unknown()).nullable().optional()
+      })
+    )
+    .optional()
+});
 
 // A successful authenticated list proves the credential works without spending any generation
 // tokens — the preferred connection test. Delegates to the provider's own listModels; providers
@@ -19,9 +32,7 @@ export async function fetchProviderModels(
   if (!base) throw new Error(`cannot list models: provider "${provider.id}" (${provider.type}) has no base url`);
   const res = await fetchImpl(`${base}/models`, { headers: { authorization: `Bearer ${cred.accessToken}` } });
   if (!res.ok) throw new Error(await modelsHttpError(res));
-  const json = (await res.json()) as {
-    data?: Array<{ id: string; name?: string; pricing?: Parameters<typeof openAiPrice>[0] }>;
-  };
+  const json = providerModelsResponseSchema.parse(await res.json());
   return (json.data ?? []).map((m) => {
     const price = openAiPrice(m.pricing);
     return price ? { id: m.id, label: m.name, price } : { id: m.id, label: m.name };

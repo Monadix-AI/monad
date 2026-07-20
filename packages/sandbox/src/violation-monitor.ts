@@ -6,6 +6,10 @@
 import type { SandboxViolation } from '@monad/sdk-atom';
 import type { Subprocess } from 'bun';
 
+import { z } from 'zod';
+
+const logEventSchema = z.object({ eventMessage: z.unknown().optional() });
+
 export interface ViolationMonitor {
   stop(): void;
 }
@@ -43,7 +47,7 @@ function messageOf(line: string): string {
   const trimmed = line.trim();
   if (!trimmed.startsWith('{')) return trimmed;
   try {
-    const obj = JSON.parse(trimmed) as { eventMessage?: unknown };
+    const obj = logEventSchema.parse(JSON.parse(trimmed));
     return typeof obj.eventMessage === 'string' ? obj.eventMessage : '';
   } catch {
     return '';

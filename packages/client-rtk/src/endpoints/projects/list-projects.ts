@@ -1,5 +1,6 @@
 import type { ListWorkplaceProjectsQuery, ListWorkplaceProjectsResponse, WorkplaceProject } from '@monad/protocol';
 
+import { listWorkplaceProjectsResponseSchema } from '@monad/protocol';
 import { createEntityAdapter } from '@reduxjs/toolkit';
 
 import { apiSlice, type NormalizedPaginateResponse } from '../../api-slice.ts';
@@ -23,10 +24,10 @@ export const listWorkplaceProjectsApi = apiSlice.injectEndpoints({
         return runTreaty(
           () => clientOf(api).treaty.v1.workplace.projects.get({ query: { archived, state, limit, offset } }),
           (raw) => {
-            const projects = raw.projects as unknown as WorkplaceProject[];
+            const parsed = listWorkplaceProjectsResponseSchema.parse(raw);
             return {
-              ...raw,
-              projects: workplaceProjectAdapter.setAll(workplaceProjectAdapter.getInitialState(), projects)
+              ...parsed,
+              projects: workplaceProjectAdapter.setAll(workplaceProjectAdapter.getInitialState(), parsed.projects)
             } as ListWorkplaceProjectsResult;
           }
         );

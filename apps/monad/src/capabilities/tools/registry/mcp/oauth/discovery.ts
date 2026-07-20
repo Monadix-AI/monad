@@ -3,7 +3,20 @@
 // The interactive flow's discovery + DCR run on the MCP SDK; these helpers remain for the device
 // flow (RFC 8628), which the SDK does not implement.
 
+import { z } from 'zod';
+
 import { type FetchImpl, McpOAuthError } from './shared.ts';
+
+const protectedResourceMetadataSchema = z.object({
+  authorization_servers: z.array(z.string()).optional(),
+  resource: z.string().optional()
+});
+const authServerMetadataSchema = z.object({
+  authorization_endpoint: z.string().optional(),
+  token_endpoint: z.string().optional(),
+  registration_endpoint: z.string().optional(),
+  device_authorization_endpoint: z.string().optional()
+});
 
 export interface AuthServerMetadata {
   authorizationEndpoint: string;
@@ -38,7 +51,7 @@ export async function discoverProtectedResource(
 ): Promise<{ authorizationServers: string[]; resource?: string }> {
   const res = await fetchImpl(resourceMetadataUrl, { headers: { accept: 'application/json' } });
   if (!res.ok) throw new McpOAuthError(`protected resource metadata fetch failed: ${res.status}`);
-  const body = (await res.json()) as { authorization_servers?: string[]; resource?: string };
+  const body = protectedResourceMetadataSchema.parse(await res.json());
   const authorizationServers = body.authorization_servers ?? [];
   if (authorizationServers.length === 0) throw new McpOAuthError('no authorization_servers in resource metadata');
   return { authorizationServers, resource: body.resource };
@@ -51,12 +64,7 @@ export async function discoverAuthServer(issuer: string, fetchImpl: FetchImpl = 
   for (const url of candidates) {
     const res = await fetchImpl(url, { headers: { accept: 'application/json' } }).catch(() => null);
     if (!res?.ok) continue;
-    const m = (await res.json()) as {
-      authorization_endpoint?: string;
-      token_endpoint?: string;
-      registration_endpoint?: string;
-      device_authorization_endpoint?: string;
-    };
+    const m = authServerMetadataSchema.parse(await res.json());
     if (m.authorization_endpoint && m.token_endpoint) {
       return {
         authorizationEndpoint: m.authorization_endpoint,

@@ -4,6 +4,9 @@ import type { ModelContext } from '#/handlers/settings/model/context.ts';
 
 import { mkdir, rename } from 'node:fs/promises';
 import { dirname } from 'node:path';
+import { providerSchema } from '@monad/environment';
+import { modelInfoSchema } from '@monad/protocol';
+import { z } from 'zod';
 
 import { listProviderModels } from '#/agent/index.ts';
 import { HandlerError } from '#/handlers/handler-error.ts';
@@ -27,6 +30,20 @@ interface ProviderModelCacheEntry {
 interface ProviderModelCacheFile {
   providers: Record<string, ProviderModelCacheEntry>;
 }
+
+const providerModelCacheFileSchema: z.ZodType<ProviderModelCacheFile> = z.object({
+  providers: z.record(
+    z.string(),
+    z.object({
+      providerType: providerSchema.shape.type,
+      baseUrl: z.string().optional(),
+      credentialId: z.string(),
+      extra: z.record(z.string(), z.string()).optional(),
+      updatedAt: z.string(),
+      models: z.array(modelInfoSchema)
+    })
+  )
+});
 
 export function createProvidersHandlers(ctx: ModelContext) {
   const refreshing = new Set<string>();
@@ -159,10 +176,7 @@ export function createProvidersHandlers(ctx: ModelContext) {
 
 async function readProviderModelCache(path: string): Promise<ProviderModelCacheFile> {
   try {
-    const parsed = (await Bun.file(path).json()) as ProviderModelCacheFile;
-    return parsed && typeof parsed === 'object' && parsed.providers && typeof parsed.providers === 'object'
-      ? parsed
-      : { providers: {} };
+    return providerModelCacheFileSchema.parse(await Bun.file(path).json());
   } catch (err) {
     if (isMissingFile(err)) return { providers: {} };
     return { providers: {} };

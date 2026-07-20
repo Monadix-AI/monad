@@ -6,6 +6,7 @@ import type { Store } from '#/store/db/index.ts';
 
 import { createHash } from 'node:crypto';
 import { ID_BODY_LENGTH } from '@monad/protocol';
+import { z } from 'zod';
 
 const MAX_OBSERVATION_TEXT = 512;
 
@@ -116,7 +117,7 @@ export function createProjectSessionOperations(input: {
       const key = `experience:message:${requestId}`;
       const existing = store.getMemory(sessionId, key);
       if (existing) {
-        const state = (JSON.parse(existing) as { state?: string }).state;
+        const state = z.object({ state: z.string().optional() }).parse(JSON.parse(existing)).state;
         if (state === 'scheduled' || state === 'completed') return;
       }
       store.setMemory(sessionId, key, JSON.stringify({ state: 'scheduled' }));

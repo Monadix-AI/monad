@@ -1,10 +1,13 @@
 import type { ModelResult, ModelRouter } from '#/agent/model/index.ts';
 
+import { z } from 'zod';
+
 import { definePrompt } from '#/agent/prompt-template.ts';
 import reviewSystemPath from './prompts/skill-install-review-system.prompt.md' with { type: 'file' };
 import reviewUserPath from './prompts/skill-install-review-user.prompt.md' with { type: 'file' };
 
 const MAX_REVIEW_CHARS = 48_000;
+const reviewResultSchema = z.object({ reason: z.unknown().optional(), risky: z.unknown().optional() });
 const REVIEW_SYSTEM_PROMPT = await definePrompt({ id: 'skill-install-review.system', sourcePath: reviewSystemPath });
 const REVIEW_USER_PROMPT = await definePrompt<{ body: string; skills: string[]; source: string }>({
   id: 'skill-install-review.user',
@@ -85,7 +88,7 @@ function parseReviewResult(text: string): { reason?: string; risky: boolean } | 
   const trimmed = text.trim();
   const json = trimmed.match(/\{[\s\S]*\}/)?.[0] ?? trimmed;
   try {
-    const parsed = JSON.parse(json) as { reason?: unknown; risky?: unknown };
+    const parsed = reviewResultSchema.parse(JSON.parse(json));
     if (typeof parsed.risky !== 'boolean') return null;
     return {
       risky: parsed.risky,
