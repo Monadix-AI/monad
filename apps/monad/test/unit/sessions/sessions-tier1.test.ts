@@ -194,7 +194,7 @@ test('deleteSession cascades session-owned project data', () => {
       sessionId: s.id,
       type: 'session.created',
       actorAgentId: null,
-      payload: {},
+      payload: { title: s.title },
       at: new Date().toISOString()
     }
   ]);
@@ -216,7 +216,7 @@ test('clearMessages removes messages + events but keeps the session', () => {
       sessionId: s.id,
       type: 'session.created',
       actorAgentId: null,
-      payload: {},
+      payload: { title: s.title },
       at: new Date().toISOString()
     }
   ]);
@@ -237,7 +237,7 @@ test('clearMessages removes Workplace Project transcript data and keeps the proj
       sessionId: project.id as unknown as SessionId,
       type: 'session.created',
       actorAgentId: null,
-      payload: {},
+      payload: { title: project.title },
       at: new Date().toISOString()
     }
   ]);

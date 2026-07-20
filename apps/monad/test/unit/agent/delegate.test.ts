@@ -28,7 +28,7 @@ function scriptedModel(steps: Step[]): ModelRouter {
   };
 }
 
-const ctx: ToolContext = { sessionId: 'sess_test', sandboxRoots: undefined, log: () => {} };
+const ctx: ToolContext = { sessionId: 'ses_test00000000', sandboxRoots: undefined, log: () => {} };
 
 test('delegate returns the sub-agent final answer', async () => {
   const tool = createDelegateTool({ model: scriptedModel(['sub final answer']), tools: [], defaultModel: 'mock' });

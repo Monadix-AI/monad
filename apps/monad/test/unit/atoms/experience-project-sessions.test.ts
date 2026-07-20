@@ -5,8 +5,8 @@ import { expect, test } from 'bun:test';
 import { createProjectSessionOperations } from '#/atoms/experience-project-sessions.ts';
 import { createStore } from '#/store/db/index.ts';
 
-const projectId = 'prj_a' as ProjectId;
-const sessionId = 'ses_a' as SessionId;
+const projectId = 'prj_100000000000' as ProjectId;
+const sessionId = 'ses_100000000000' as SessionId;
 
 function fixture() {
   const store = createStore();
@@ -51,7 +51,7 @@ test('listObservations returns a neutral summary without raw tool payload values
   const { store, operations } = fixture();
   store.appendEvents([
     {
-      id: 'evt_tool' as Event['id'],
+      id: 'evt_100000000000' as Event['id'],
       sessionId,
       type: 'tool.called',
       actorAgentId: null,

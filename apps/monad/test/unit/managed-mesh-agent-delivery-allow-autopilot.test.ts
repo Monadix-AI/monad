@@ -453,13 +453,13 @@ test('project-message fan-out treats provider auth start failures as login-requi
   const inputs: Array<{ id: string; input: string }> = [];
   const startInputs: string[] = [];
   let startCalls = 0;
-  bus.subscribe('ses_loginthrow0' as never, (event) => {
+  bus.subscribe('ses_loginthrow00' as never, (event) => {
     if (event.type === 'mesh.connection_required') connectionRequired.push(event.payload);
   });
   const store = {
     listSessionMembers: () => [
       {
-        sessionId: 'ses_loginthrow0',
+        sessionId: 'ses_loginthrow00',
         memberId: 'opus',
         templateId: null,
         type: 'mesh-agent',
@@ -474,8 +474,8 @@ test('project-message fan-out treats provider auth start failures as login-requi
       }
     ],
     maxMessageSeq: () => 15,
-    messageSeq: (_sessionId: string, messageId: string) => (messageId === 'msg_userthrow00' ? 15 : 0),
-    messageIdForSeq: () => 'msg_userthrow00',
+    messageSeq: (_sessionId: string, messageId: string) => (messageId === 'msg_userthrow000' ? 15 : 0),
+    messageIdForSeq: () => 'msg_userthrow000',
     enqueueMeshAgentInboxItem: () => true,
     markMeshAgentInboxDelivered: () => {},
     markMeshAgentInboxVisible: () => {},
@@ -511,7 +511,7 @@ test('project-message fan-out treats provider auth start failures as login-requi
   const ctx = {
     deps: { store, log: undefined, meshAgentHost, bus },
     messageIngress: {
-      begin: () => Promise.resolve({ id: 'msg_throwthink0' }),
+      begin: () => Promise.resolve({ id: 'msg_throwthink00' }),
       deliver: rejectUnexpectedDeliveryError
     },
     makeEmit: (round: Event[]) => (event: Event) => {
@@ -523,9 +523,9 @@ test('project-message fan-out treats provider auth start failures as login-requi
 
   await createManagedMeshAgentDelivery(ctx).deliverProjectMessageToManagedMeshAgentMembers({
     session: {
-      id: 'ses_loginthrow0',
+      id: 'ses_loginthrow00',
       cwd: '/tmp/prj',
-      projectId: 'prj_loginthrow0',
+      projectId: 'prj_loginthrow00',
       origin: { client: 'workplace' }
     } as unknown as Session,
     meshAgents: [
@@ -537,7 +537,7 @@ test('project-message fan-out treats provider auth start failures as login-requi
       } as unknown as MeshAgentConfig
     ],
     text: 'retry after thrown auth failure',
-    triggerMessageId: 'msg_userthrow00'
+    triggerMessageId: 'msg_userthrow000'
   });
 
   expect(connectionRequired).toEqual([
@@ -550,7 +550,7 @@ test('project-message fan-out treats provider auth start failures as login-requi
   ]);
   expect(inputs).toEqual([]);
   bus.publish(
-    makeEvent('ses_loginthrow0' as never, 'mesh.login_resolved', {
+    makeEvent('ses_loginthrow00' as never, 'mesh.login_resolved', {
       agentName: 'opus',
       provider: 'claude-code'
     })

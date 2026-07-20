@@ -139,7 +139,9 @@ test('subscribeUi reconnect with an un-persisted cursor does not full-replay the
   handlers.store.insertMessage(newId('msg'), sessionId, 'hi', now, 'user');
   // A durable tool.called with NO backing message row: hydration (message-based) omits it, but a
   // buggy full-replay of the event log would surface it as a ghost tool card.
-  handlers.store.appendEvents([evt(sessionId, 'tool.called', { toolCallId: 'call_ghost', tool: 'shell_exec' })]);
+  handlers.store.appendEvents([
+    evt(sessionId, 'tool.called', { toolCallId: 'call_ghost', tool: 'shell_exec', input: {} })
+  ]);
 
   // Reconnect: no active round buffered, cursor is an un-persisted generation event id.
   let snap: SessionUiEvent | undefined;

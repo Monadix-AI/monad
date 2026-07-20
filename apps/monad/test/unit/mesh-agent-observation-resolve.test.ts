@@ -156,6 +156,7 @@ test('convenience ready anchors before its separately delivered bootstrap patch'
           {
             op: 'upsert',
             event: {
+              dedupeKey: 'plain-text:eb5a4353:agent',
               id: 'projected',
               streaming: false,
               kind: 'assistant-message',
@@ -245,6 +246,7 @@ test('convenience projection advances one retained projector with only newly com
           {
             op: 'upsert',
             event: {
+              dedupeKey: 'plain-text:eb5a4353:agent',
               id: 'projected',
               streaming: false,
               kind: 'assistant-message',

@@ -100,7 +100,7 @@ test('toolFilter hides a tool from execution (model gets unknown-tool)', async (
     tools: [fileWriteTool as Tool, fileGlobTool as Tool],
     toolFilter: (n) => n !== 'fs_glob'
   });
-  await loop.runBlock('ses_1' as SessionId, 'list files');
+  await loop.runBlock('ses_filter000000' as SessionId, 'list files');
   const result = events.find((e) => e.type === 'tool.result');
   expect(result?.payload).toMatchObject({ tool: 'fs_glob', ok: false });
   expect(String((result?.payload as { result: string } | undefined)?.result)).toContain('unknown tool');

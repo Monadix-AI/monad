@@ -93,7 +93,7 @@ test('delegate resolves its subagent toolset live — runs a tool installed afte
     }
   });
 
-  const ctx: ToolContext = { sessionId: 'sess_test', sandboxRoots: undefined, log: () => {} };
+  const ctx: ToolContext = { sessionId: 'ses_test00000000', sandboxRoots: undefined, log: () => {} };
   const out = await tool.run({ instruction: 'use it' }, ctx);
   expect(ran).toBe(true);
   expect(out.metadata.text).toBe('done');
