@@ -306,7 +306,7 @@ if (import.meta.main) {
           ? { ...err.toJSON(), exitCode: code }
           : { error: message || 'unknown error', exitCode: code };
       process.stderr.write(`${JSON.stringify(frame)}\n`);
-    } else if (message) {
+    } else if (message && !(err instanceof CliError && err.reported)) {
       process.stderr.write(`${message}\n`);
     }
     process.exit(code);

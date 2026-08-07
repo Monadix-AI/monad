@@ -18,7 +18,7 @@ export const command: CommandDef = {
     if (health === null) {
       json({ status: 'down' });
       out(yellow(t('cli.daemon.notRunning')));
-      throw new CliError(t('cli.daemon.notRunning'), EXIT.DAEMON);
+      throw new CliError(t('cli.daemon.notRunning'), EXIT.DAEMON, { reported: true });
     }
 
     const h = health as {

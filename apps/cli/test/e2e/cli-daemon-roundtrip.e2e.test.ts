@@ -33,10 +33,11 @@ interface CliResult {
   exitCode: number;
 }
 
-async function cli(args: string[], stdin?: string): Promise<CliResult> {
-  const proc = Bun.spawn([process.execPath, CLI_ENTRY, ...args, '--port', String(port), '--no-input'], {
+async function cli(args: string[], stdin?: string, overridePort?: number): Promise<CliResult> {
+  const target = overridePort ?? port;
+  const proc = Bun.spawn([process.execPath, CLI_ENTRY, ...args, '--port', String(target), '--no-input'], {
     cwd: REPO_ROOT,
-    env: { ...process.env, MONAD_HOME: home, MONAD_PORT: String(port), NO_COLOR: '1' },
+    env: { ...process.env, MONAD_HOME: home, MONAD_PORT: String(target), NO_COLOR: '1' },
     stdin: stdin === undefined ? 'ignore' : new TextEncoder().encode(stdin),
     stdout: 'pipe',
     stderr: 'pipe'
@@ -186,6 +187,35 @@ test('a missing session exits 2 and reports the daemon status in the error frame
   expect(frame).toMatchObject({ status: 404, exitCode: 2 });
   expect(typeof frame.error).toBe('string');
 });
+
+// `monad status` reports a result, not a diagnostic: it belongs on stdout once (cli-design.md §4).
+// Writing it to stdout *and* stderr made `monad status 2>&1` print the line twice.
+
+test('status writes its human result line once, on stdout only', async () => {
+  const result = await cli(['status']);
+
+  expect(result.exitCode).toBe(0);
+  expect(result.stdout.split('\n').filter((line) => line.includes('●'))).toHaveLength(1);
+  expect(result.stderr).toBe('');
+});
+
+test('status --json emits only the JSON payload on stdout', async () => {
+  const result = await cli(['status', '--json']);
+
+  expect(result.exitCode).toBe(0);
+  const lines = result.stdout.trim().split('\n').filter(Boolean);
+  expect(lines).toHaveLength(1);
+  expect(JSON.parse(lines[0] ?? '{}')).toMatchObject({ status: 'ok' });
+});
+
+test('status against a down daemon reports the line once, on stdout, and exits EXIT.DAEMON', async () => {
+  const dead = await freePort();
+  const result = await cli(['status'], undefined, dead);
+
+  expect(result.exitCode).toBe(4);
+  expect(result.stdout.split('\n').filter((line) => line.includes('●'))).toHaveLength(1);
+  expect(result.stderr).toBe('');
+}, 30_000);
 
 test('watch stops on the requested event instead of hanging', async () => {
   const { sessionId } = await cliJson<{ sessionId: string }>(['session', 'new', 'watched']);
