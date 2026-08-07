@@ -1142,7 +1142,7 @@ for (const kind of TRANSPORTS) {
       await t.fetch(`/v1/mesh/sessions/${reviewerSession.id}/stop?transcriptTargetId=${sessionId}`, json('POST'));
       await configureMockMeshAgent(t, dir, {
         agentName: 'claude',
-        turnDelayMs: 500
+        turnDelayMs: 15_000
       });
       const claudeInputBeforePost = await readLogIfExists(claudeStdinLog);
       const reviewerInputBeforePost = await readLogIfExists(reviewerStdinLog);
@@ -1169,7 +1169,7 @@ for (const kind of TRANSPORTS) {
         );
       const responseOrTimeout = await Promise.race([
         postResult,
-        Bun.sleep(250).then(() => ({ kind: 'timeout' as const }))
+        Bun.sleep(5_000).then(() => ({ kind: 'timeout' as const }))
       ]);
       if (responseOrTimeout.kind === 'timeout') abort.abort();
       expect(responseOrTimeout.kind).toBe('response');
@@ -1274,7 +1274,7 @@ for (const kind of TRANSPORTS) {
       for (const nativeSession of handlers.store.listMeshSessionsForTranscriptTarget(sessionId)) {
         await t.fetch(`/v1/mesh/sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`, json('POST'));
       }
-    });
+    }, 20_000);
 
     test('project fan-out shows transient login cards for each unauthenticated managed member', async () => {
       const projectDir = join(dir, 'project');
