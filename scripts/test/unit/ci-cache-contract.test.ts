@@ -11,8 +11,13 @@ interface WorkflowStep {
 }
 
 interface WorkflowJob {
+  if?: string;
+  needs?: string | string[];
+  outputs?: Record<string, string>;
   secrets?: 'inherit' | Record<string, string>;
   steps?: WorkflowStep[];
+  uses?: string;
+  with?: Record<string, unknown>;
 }
 
 interface Workflow {
@@ -127,5 +132,53 @@ test('release validation receives only the Turbo remote cache secret', async () 
     },
     forwardedToCi: 'inherit',
     passedToRelease: { TURBO_TOKEN: '$'.concat('{{ secrets.TURBO_TOKEN }}') }
+  });
+});
+
+test('stable releases publish only a fully validated pending manifest version', async () => {
+  const releasePlease = Bun.YAML.parse(await Bun.file(join(workflowsDir, 'release-please.yml')).text()) as Workflow;
+  const release = Bun.YAML.parse(await Bun.file(join(workflowsDir, 'release.yml')).text()) as Workflow;
+  const upload = release.jobs?.publish?.steps?.find((step) => step.name === 'Upload release assets');
+
+  expect({
+    stateOutputs: releasePlease.jobs?.['release-state']?.outputs,
+    releasePlease: {
+      if: releasePlease.jobs?.['release-please']?.if,
+      needs: releasePlease.jobs?.['release-please']?.needs,
+      skipGithubRelease: releasePlease.jobs?.['release-please']?.steps?.[0]?.with?.['skip-github-release']
+    },
+    releaseAssets: {
+      if: releasePlease.jobs?.['release-assets']?.if,
+      needs: releasePlease.jobs?.['release-assets']?.needs,
+      with: releasePlease.jobs?.['release-assets']?.with
+    },
+    upload: {
+      draft: upload?.with?.draft,
+      targetCommitish: upload?.with?.target_commitish
+    }
+  }).toEqual({
+    stateOutputs: {
+      pending: '$'.concat('{{ steps.release.outputs.pending }}'),
+      sha: '$'.concat('{{ steps.release.outputs.sha }}'),
+      tag: '$'.concat('{{ steps.release.outputs.tag }}')
+    },
+    releasePlease: {
+      if: "needs.release-state.outputs.pending != 'true'",
+      needs: 'release-state',
+      skipGithubRelease: true
+    },
+    releaseAssets: {
+      if: "needs.release-state.outputs.pending == 'true'",
+      needs: 'release-state',
+      with: {
+        make_latest: true,
+        sha: '$'.concat('{{ needs.release-state.outputs.sha }}'),
+        tag: '$'.concat('{{ needs.release-state.outputs.tag }}')
+      }
+    },
+    upload: {
+      draft: true,
+      targetCommitish: '$'.concat('{{ inputs.sha || inputs.tag }}')
+    }
   });
 });

@@ -1,13 +1,11 @@
 name: Release
 
-# Called by release-please once it has created the release as a DRAFT. Builds every binary
-# target, verifies the installers against them, uploads the assets, and only then takes the
-# release out of draft.
+# Builds every binary target and verifies the installers before creating a draft release.
+# Every job checks out the same immutable SHA; the publish job points the release at that SHA.
 #
-# The draft is load-bearing, not cosmetic: publishing is what creates the git tag and, for
-# stable releases, moves the `latest` pointer. `install.sh` resolves the latest tag and downloads
-# `releases/download/<tag>/monad-<version>-<platform>.tar.gz`. Publishing first would leave a
-# ~30-minute window where every `curl … | bash` resolves a tag whose assets do not exist yet.
+# The draft is created only after CI, builds, and install tests pass. Publishing is what creates
+# the git tag and, for stable releases, moves the `latest` pointer. `install.sh` therefore cannot
+# resolve a release until every required asset has been uploaded.
 on:
   workflow_call:
     inputs:
@@ -277,6 +275,7 @@ jobs:
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
           tag_name: ${{ inputs.tag }}
+          target_commitish: ${{ inputs.sha || inputs.tag }}
           # Keep the release a draft while the assets land; the next step publishes it.
           draft: true
           files: |
