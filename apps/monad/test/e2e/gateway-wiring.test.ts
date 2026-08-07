@@ -8,7 +8,7 @@ import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { emptyAuth, initMonadHome, loadAuth, loadConfig, saveAll } from '@monad/environment';
+import { emptyAuth, initMonadHome, loadAuth, loadConfig, loadSnapshot, saveAll } from '@monad/environment';
 import { enMessages as i18nMessages } from '@monad/i18n/messages';
 import { ModelProviderType, newId } from '@monad/protocol';
 
@@ -192,8 +192,8 @@ test('a block turn routes through the gateway to the configured provider', async
   const credential = await (async () => {
     const deadline = Date.now() + 10_000;
     while (Date.now() < deadline) {
-      const stored = await loadConfig(paths);
-      const candidate = stored?.model.providers.find((provider) => provider.id === 'stub')?.credentials[0];
+      const stored = await loadSnapshot(paths);
+      const candidate = stored?.cfg.model.providers.find((provider) => provider.id === 'stub')?.credentials[0];
       if (candidate?.lastStatus === 'ok' && candidate.requestCount > 0) return candidate;
       await Bun.sleep(50);
     }
