@@ -25,16 +25,20 @@ export function channelOperatorContext(c: ChannelInstanceConfig): string {
   return `<channel_context>\n${operatorGuidance}${channelStructuredResponseHint()}\n</channel_context>`;
 }
 
-export function routeInbound(cfg: MonadConfig, c: ChannelInstanceConfig, m: ChannelInbound): ChannelRoute | null {
+export function routeInbound(
+  cfg: MonadConfig,
+  c: ChannelInstanceConfig,
+  m: ChannelInbound,
+  groupMentionPolicy = false
+): ChannelRoute | null {
   if (m.kind === 'command') return { kind: 'default' };
   const chatType = m.chatType ?? 'dm';
   const mentions = mentionedAgents(m.text, cfg.agent.agents);
   if ((chatType === 'group' || chatType === 'channel') && cfg.agent.agents.length > 0) {
-    if (mentions.length === 0) return null;
     const [agent] = mentions;
-    return agent ? { kind: 'agent_direct', agentId: agent.id, agentName: agent.name } : null;
+    if (agent) return { kind: 'agent_direct', agentId: agent.id, agentName: agent.name };
   }
-  if ((c.groupPolicy?.requireMention ?? true) && !addressedToBot(m)) return null;
+  if (groupMentionPolicy && (c.groupPolicy?.requireMention ?? true) && !addressedToBot(m)) return null;
   return { kind: 'default' };
 }
 

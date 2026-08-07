@@ -177,6 +177,7 @@ export class ChannelService {
       this.deps.log[level](redacted);
     };
 
+    let statusPublished = false;
     const adapter = factory({
       // Narrow atom-pack-visible config — host concerns (mapping/credential) are withheld.
       config: {
@@ -189,6 +190,7 @@ export class ChannelService {
       signal: abort.signal,
       stateDir: this.stateDir(c.id),
       onStatus: (status) => {
+        statusPublished = true;
         inst.phase = status.phase;
         inst.connected = status.phase === 'connected';
         inst.pairingQr = status.pairingQr;
@@ -210,7 +212,7 @@ export class ChannelService {
 
     try {
       await adapter.connect();
-      if (inst.phase === 'connecting' && factory.connectionMode !== 'pairing') {
+      if (!statusPublished && inst.phase === 'connecting' && factory.connectionMode !== 'pairing') {
         inst.connected = true;
         inst.phase = 'connected';
         inst.lastError = undefined;
@@ -226,8 +228,13 @@ export class ChannelService {
       const bundle = this.deps.commands;
       const cmds = bundle.registry
         .list(bundle.skills(), this.deps.t)
-        .filter((s) => s.type === 'action' && s.source === 'builtin' && s.enabled && /^[a-z0-9_]+$/.test(s.id))
-        .map((s) => ({ command: s.id, description: s.description }));
+        .filter((s) => s.type === 'action' && s.source === 'builtin' && s.enabled)
+        .map((s) => ({
+          command: s.id,
+          description: s.description,
+          ...(s.args ? { args: s.args } : {}),
+          ...(s.subcommands ? { subcommands: s.subcommands } : {})
+        }));
       void adapter
         .setCommands(cmds)
         .catch((err) => this.deps.log.warn(`channel "${c.id}": setCommands failed: ${errMsg(err)}`));
@@ -314,7 +321,6 @@ export class ChannelService {
     for (const key of this.pendingProjects.keys()) {
       if (key.startsWith(pendingPrefix)) this.pendingProjects.delete(key);
     }
-
     // Unsubscribe all outbound mirrors belonging to this channel.
     for (const [sid, entry] of this.sessionMirrors) {
       if (entry.channelId === id) {
@@ -330,7 +336,7 @@ export class ChannelService {
     if (inst.seen.has(m.nativeMessageId)) return; // long-poll redelivery
     rememberSeen(inst.seen, m.nativeMessageId);
 
-    const route = routeInbound(this.cfg, c, m);
+    const route = routeInbound(this.cfg, c, m, inst.adapter?.capabilities.groupMentionPolicy === true);
     if (!route) return;
 
     if (!rateOk(inst, m.userId)) {
@@ -385,8 +391,7 @@ export class ChannelService {
       const sessionId = activeSession.id as SessionId;
       this.deps.store.touchConversation(c.id, key);
       this.registerMirror(c.id, key, sessionId, inst.adapter);
-      if (!this.deps.session.sendProjectMessage) throw new Error('channel Project messaging is unavailable');
-      await this.deps.session.sendProjectMessage({ sessionId, text: m.text });
+      await this.sendProjectMessage(inst, m, sessionId);
       return;
     }
     if (pendingProject) {
@@ -399,8 +404,7 @@ export class ChannelService {
       );
       this.clearPendingProject(c, key);
       this.registerMirror(c.id, key, sessionId, inst.adapter);
-      if (!this.deps.session.sendProjectMessage) throw new Error('channel Project messaging is unavailable');
-      await this.deps.session.sendProjectMessage({ sessionId, text: m.text });
+      await this.sendProjectMessage(inst, m, sessionId);
       return;
     }
     if (projectSessionRequired) {
@@ -441,6 +445,14 @@ export class ChannelService {
     }
     const displayText = finalMessageText ? channelDisplayText(finalMessageText) : undefined;
     return displayText;
+  }
+
+  private async sendProjectMessage(inst: Instance, m: ChannelInbound, sessionId: SessionId): Promise<void> {
+    if (!this.deps.session.sendProjectMessage) throw new Error('channel Project messaging is unavailable');
+    await this.deps.session.sendProjectMessage({ sessionId, text: m.text });
+    if (this.deps.store.listSessionMembers(sessionId).length === 0) {
+      await inst.adapter?.send(m.chatId, this.channelT('channel.projectSessionNoMembers'), { threadId: m.threadId });
+    }
   }
 
   private commandHost(): CommandHost {
@@ -576,15 +588,15 @@ export class ChannelService {
     return sessionId;
   }
 
-  private pendingProjectKey(c: ChannelInstanceConfig, key: string): string {
-    return `${c.id}\0${key}`;
-  }
-
   private getPendingProject(
     c: ChannelInstanceConfig,
     key: string
   ): { projectId: ProjectId; title: string } | undefined {
     return this.pendingProjects.get(this.pendingProjectKey(c, key));
+  }
+
+  private pendingProjectKey(c: ChannelInstanceConfig, key: string): string {
+    return `${c.id}\0${key}`;
   }
 
   private clearPendingProject(c: ChannelInstanceConfig, key: string): void {

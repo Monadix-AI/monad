@@ -14,6 +14,8 @@ async function installStudioIaApiMock(
   page: Page,
   requests: Array<{ body?: unknown; method: string; path: string }> = []
 ) {
+  let newlySavedPairingId: string | undefined;
+  let newlySavedPairingStatusReads = 0;
   await page.route(API_ROUTE_PATTERN, async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -108,6 +110,7 @@ async function installStudioIaApiMock(
     }
     if (method === 'GET' && path === '/v1/settings/channels/status') {
       requests.push({ method, path });
+      if (newlySavedPairingId) newlySavedPairingStatusReads += 1;
       return route.fulfill(
         json({
           statuses: [
@@ -129,6 +132,19 @@ async function installStudioIaApiMock(
               hasToken: true,
               activeConversations: 2
             },
+            ...(newlySavedPairingId
+              ? [
+                  {
+                    id: newlySavedPairingId,
+                    type: 'whatsapp',
+                    enabled: true,
+                    connected: newlySavedPairingStatusReads >= 2,
+                    phase: newlySavedPairingStatusReads >= 2 ? 'connected' : 'pairing',
+                    hasToken: false,
+                    activeConversations: 0
+                  }
+                ]
+              : []),
             {
               id: 'chn_mocklegacy',
               type: 'legacy-chat',
@@ -151,7 +167,12 @@ async function installStudioIaApiMock(
       return route.fulfill(json({ ok: true }));
     }
     if (method === 'PUT' && /^\/v1\/settings\/channels\/[^/]+$/.test(path)) {
-      requests.push({ body: request.postDataJSON(), method, path });
+      const body = request.postDataJSON() as { channel?: { id?: string; label?: string; type?: string } };
+      requests.push({ body, method, path });
+      if (body.channel?.type === 'whatsapp' && body.channel.label === 'Support inbox' && body.channel.id) {
+        newlySavedPairingId = body.channel.id;
+        newlySavedPairingStatusReads = 0;
+      }
       return route.fulfill(json({ ok: true }));
     }
     if (method === 'GET' && path === '/v1/atoms/wa/update') {
@@ -500,7 +521,9 @@ test.describe('Studio IA', () => {
 
     expect(requests.filter((request) => request.path === '/v1/settings/channels/status')).toHaveLength(1);
     await page.waitForTimeout(2300);
-    expect(requests.filter((request) => request.path === '/v1/settings/channels/status')).toHaveLength(1);
+    expect(requests.filter((request) => request.path === '/v1/settings/channels/status').length).toBeGreaterThanOrEqual(
+      3
+    );
 
     await page.getByRole('button', { name: 'Collapse all', exact: true }).click();
     await expect(adapter.getByRole('button', { name: 'WhatsApp inbox chn_mockwhatsapp' })).toBeHidden();
@@ -573,9 +596,7 @@ test.describe('Studio IA', () => {
         }
       });
     expect(requests.some((request) => request.path.endsWith('/credential'))).toBe(false);
-    const pairingDialog = page.getByRole('dialog', { name: 'Edit connection' });
-    await expect(pairingDialog.getByText('Starting WhatsApp and waiting for a new QR code…')).toBeVisible();
-    await pairingDialog.getByRole('button', { name: 'Close', exact: true }).last().click();
+    await expect(page.getByRole('dialog', { name: 'Edit connection' })).toBeHidden();
 
     await adapter.locator('button[aria-expanded="true"]').click();
     // behavior-ok: collapsing an adapter hides its connection controls while keeping the adapter row available.

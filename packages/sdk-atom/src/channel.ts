@@ -15,7 +15,9 @@ import type {
   ChannelInbound,
   ChannelManifest,
   ChannelSetupGuide,
-  ChannelType
+  ChannelType,
+  CommandArg,
+  CommandSubcommand
 } from '@monad/protocol';
 
 import { channelInboundSchema, channelManifestSchema } from '@monad/protocol';
@@ -52,6 +54,15 @@ export interface SendOptions {
   threadId?: string;
   /** Free-form adapter hints (parse mode, silent, …). Never secrets. */
   metadata?: Record<string, unknown>;
+}
+
+/** Platform-neutral command metadata pushed to adapters with a native command surface. The adapter
+ * maps this discovery shape onto the platform's registration API; execution remains host-owned. */
+export interface ChannelNativeCommand {
+  command: string;
+  description: string;
+  args?: CommandArg[];
+  subcommands?: CommandSubcommand[];
 }
 
 export type ChannelLog = (level: 'info' | 'warn' | 'error', msg: string, fields?: Record<string, unknown>) => void;
@@ -100,7 +111,7 @@ export interface ChannelAdapter {
   startTyping?(chatId: string, threadId?: string): Promise<void>;
   /** Push the slash-command list to the platform's native command menu (optional).
    *  Called once after connect() with all registered host commands. Failures are non-fatal. */
-  setCommands?(commands: Array<{ command: string; description: string }>): Promise<void>;
+  setCommands?(commands: ChannelNativeCommand[]): Promise<void>;
   /** React to a message with an emoji (optional; gated by capabilities.reactions). Used to
    *  acknowledge a host command (e.g. ✅) — feedback even when the command has no text reply. */
   react?(target: { chatId: string; messageId: string }, emoji: string): Promise<void>;

@@ -19,6 +19,17 @@ describe('installedChannelOptions', () => {
                 id: 'slack',
                 name: 'Slack',
                 channel: {
+                  capabilities: {
+                    edit: true,
+                    typing: false,
+                    threads: true,
+                    maxMessageChars: 4000,
+                    markdown: false,
+                    reactions: true,
+                    nativeCommands: true,
+                    outboundMirror: true,
+                    groupMentionPolicy: true
+                  },
                   connectionMode: 'pairing',
                   icon: { title: 'Slack', hex: '4A154B', path: 'M0 0h24v24H0z' },
                   setup: {
@@ -73,6 +84,17 @@ describe('installedChannelOptions', () => {
         packId: 'monad-builtins',
         label: 'Slack',
         description: undefined,
+        capabilities: {
+          edit: true,
+          typing: false,
+          threads: true,
+          maxMessageChars: 4000,
+          markdown: false,
+          reactions: true,
+          nativeCommands: true,
+          outboundMirror: true,
+          groupMentionPolicy: true
+        },
         connectionMode: 'pairing',
         icon: { title: 'Slack', hex: '4A154B', path: 'M0 0h24v24H0z' },
         setup: {

@@ -5,6 +5,7 @@
 import { z } from 'zod';
 
 import {
+  channelCapabilitiesSchema,
   channelConnectionModeSchema,
   channelEnvVarSchema,
   channelIconSchema,
@@ -101,6 +102,7 @@ export const atomDescriptorSchema = z.object({
   icon: channelIconSchema.optional(),
   channel: z
     .object({
+      capabilities: channelCapabilitiesSchema.optional(),
       envVars: z.array(channelEnvVarSchema).default([]),
       icon: channelIconSchema.optional(),
       setup: channelSetupGuideSchema.optional(),

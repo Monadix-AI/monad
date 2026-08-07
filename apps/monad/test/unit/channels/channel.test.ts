@@ -1,7 +1,14 @@
 import type { ChannelInstanceConfig, MonadAuth, MonadConfig } from '@monad/environment';
 import type { Translate } from '@monad/i18n';
 import type { ChannelInbound, Event, MessageId, ProjectId, SessionId } from '@monad/protocol';
-import type { ChannelAdapter, ChannelAdapterFactory, ChannelContext, SentMessage } from '@monad/sdk-atom';
+import type {
+  ChannelAdapter,
+  ChannelAdapterFactory,
+  ChannelContext,
+  ChannelRuntimeStatus,
+  SendOptions,
+  SentMessage
+} from '@monad/sdk-atom';
 import type { CommandBundle } from '#/handlers/commands/index.ts';
 
 import { expect, test } from 'bun:test';
@@ -124,9 +131,11 @@ function messageEvent(text: string): Event {
 function makeCapturingAdapter(edit: boolean): {
   adapter: ChannelAdapter;
   sends: string[];
+  sendOptions: Array<SendOptions | undefined>;
   edits: string[];
 } {
   const sends: string[] = [];
+  const sendOptions: Array<SendOptions | undefined> = [];
   const edits: string[] = [];
   const adapter: ChannelAdapter = {
     type: 'telegram',
@@ -142,15 +151,16 @@ function makeCapturingAdapter(edit: boolean): {
     },
     async connect() {},
     async disconnect() {},
-    async send(_chatId, content): Promise<SentMessage> {
+    async send(_chatId, content, options): Promise<SentMessage> {
       sends.push(content);
+      sendOptions.push(options);
       return { ref: String(sends.length), chatId: _chatId };
     },
     async editMessage(_msg, content) {
       edits.push(content);
     }
   };
-  return { adapter, sends, edits };
+  return { adapter, sends, sendOptions, edits };
 }
 
 test('renderer (buffered): emits one message per completed assistant message', async () => {
@@ -161,6 +171,24 @@ test('renderer (buffered): emits one message per completed assistant message', a
   r.consume(messageEvent('hello world'));
   await r.finalize();
   expect(sends).toEqual(['hello world']);
+});
+
+test('renderer: every chunk keeps an opaque native reply target private', async () => {
+  const { adapter, sendOptions } = makeCapturingAdapter(false);
+  adapter.capabilities.maxMessageChars = 6;
+  const r = createRenderer({
+    adapter,
+    chatId: 'c1',
+    replyTo: 'interaction:123',
+    log: () => {},
+    t
+  });
+  r.consume(messageEvent('hello world'));
+  await r.finalize();
+  expect(sendOptions).toEqual([
+    { threadId: undefined, replyTo: 'interaction:123' },
+    { threadId: undefined, replyTo: 'interaction:123' }
+  ]);
 });
 
 test('renderer consumes canonical lifecycle without duplicating repeated deltas', async () => {
@@ -388,7 +416,9 @@ async function makeHarness(
   agents: MonadConfig['agent']['agents'] = [],
   sendInline: HarnessSendInline = async ({ text }, sink) => {
     sink(messageEvent(`reply: ${text}`));
-  }
+  },
+  connectStatus?: ChannelRuntimeStatus,
+  groupMentionPolicy = true
 ): Promise<Harness> {
   const store = createStore();
   const sends: Harness['sends'] = [];
@@ -409,9 +439,12 @@ async function makeHarness(
       markdown: false,
       reactions: true,
       nativeCommands: false,
-      outboundMirror: false
+      outboundMirror: false,
+      groupMentionPolicy
     },
-    async connect() {},
+    async connect() {
+      if (connectStatus) captured?.onStatus?.(connectStatus);
+    },
     async disconnect() {},
     async send(chatId, content) {
       sends.push({ chatId, content });
@@ -676,6 +709,9 @@ test('channel: /project switches Telegram messages to a reusable Project Session
     { projectId: secondProjectId, title: 'Test: Launch' }
   ]);
   expect(h.projectMessages.map((entry) => entry.text)).toEqual(['prepare the launch']);
+  expect(h.sends.at(-1)?.content).toBe(
+    'Your message was added to the Project Session, but it has no members, so no one can reply. Add a member in Monad, then send another message.'
+  );
 
   const chatSessionCreates = h.creates.length;
   h.ctx.onMessage(
@@ -1008,6 +1044,13 @@ test('channel: status snapshot never leaks token material', async () => {
   const h = await makeHarness(channelConfig({ credential: { token: 'super-secret-token' } }));
   const [status] = h.service.statusSnapshot();
   expect(status?.hasToken).toBe(true);
+});
+
+test('channel: an adapter-owned connecting phase is not promoted before transport readiness', async () => {
+  const h = await makeHarness(channelConfig(), testCommandBundle(), [], undefined, { phase: 'connecting' });
+  expect(h.service.statusSnapshot()[0]).toMatchObject({ connected: false, phase: 'connecting' });
+  h.ctx.onStatus?.({ phase: 'connected' });
+  expect(h.service.statusSnapshot()[0]).toMatchObject({ connected: true, phase: 'connected' });
 });
 
 test('channel: a pairing adapter starts without a token and reports its QR state', async () => {
@@ -1445,6 +1488,13 @@ test('group gate: requireMention=false answers every group message', async () =>
   expect(h.creates.length).toBe(1);
 });
 
+test('group gate: adapters without mention-policy support do not gate group messages', async () => {
+  const h = await makeHarness(channelConfig(), undefined, undefined, undefined, undefined, false);
+  h.ctx.onMessage(inbound({ chatId: 'g', userId: 'u', text: 'chatter', chatType: 'group' }));
+  await h.flush();
+  expect(h.creates.length).toBe(1);
+});
+
 test('group gate: DMs are always answered regardless of mention', async () => {
   const h = await makeHarness(channelConfig());
   h.ctx.onMessage(inbound({ chatId: 'c', userId: 'u', text: 'hi', chatType: 'dm' }));
@@ -1452,11 +1502,11 @@ test('group gate: DMs are always answered regardless of mention', async () => {
   expect(h.creates.length).toBe(1);
 });
 
-test('group gate: configured agent channels require an agent mention', async () => {
+test('group gate: a bot mention uses the default route while an Agent mention targets that Agent', async () => {
   const coder = testAgent('agt_CODER0000000', 'Coder');
   const h = await makeHarness(
     channelConfig({
-      groupPolicy: { requireMention: false }
+      groupPolicy: { requireMention: true }
     }),
     testCommandBundle(),
     [coder]
@@ -1464,10 +1514,15 @@ test('group gate: configured agent channels require an agent mention', async () 
   h.ctx.onMessage(inbound({ chatId: 'g', userId: 'u', text: 'plain chatter', chatType: 'group' }));
   await h.flush();
 
-  h.ctx.onMessage(inbound({ chatId: 'g', userId: 'u', text: '@coder please inspect this', chatType: 'group' }));
+  h.ctx.onMessage(inbound({ chatId: 'g', userId: 'u', text: '@bot hi', chatType: 'group', mentionedSelf: true }));
   await h.flush();
   expect(h.creates).toHaveLength(1);
-  expect(h.creates[0]?.agentId).toBe(coder.id);
+  expect(h.creates[0]?.agentId).toBe('agt_CHANNELDEFLT');
+
+  h.ctx.onMessage(inbound({ chatId: 'g', userId: 'u', text: '@coder please inspect this', chatType: 'group' }));
+  await h.flush();
+  expect(h.creates).toHaveLength(2);
+  expect(h.creates[1]?.agentId).toBe(coder.id);
 });
 
 test('group gate: multiple agent mentions route to the first mentioned agent', async () => {

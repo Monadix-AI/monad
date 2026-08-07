@@ -5,6 +5,7 @@
   "channel.connectedWelcome": "Monad 已连接。\n\n请发送 /project list，再发送 /project use <编号> 选择 Project，之后即可在这里继续对话。",
   "channel.error": "无法完成操作：{label}",
   "channel.rateLimited": "消息发送过快。请稍后再发送。",
+  "channel.projectSessionNoMembers": "消息已添加到 Project Session，但该 Session 没有任何 member，因此不会有人回复。请先在 Monad 中添加 member，再发送新消息。",
   "channel.projectSessionPending": "使用 /switch <编号> 选择已有 session，或直接发送消息创建并自动绑定新的 Project Session。",
   "channel.projectSessionRequired": "此 channel 尚未连接 Project Session。请先使用 /project list 查看可用 Project，再使用 /project use <序号或名称> 完成连接。"
 }

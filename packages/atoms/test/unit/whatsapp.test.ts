@@ -1,9 +1,12 @@
+import type { WASocket } from '@whiskeysockets/baileys';
+
 import { expect, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import {
+  markWhatsappCompanionOffline,
   normalizeWhatsappSocketMessage,
   normalizeWhatsappWebMessage,
   sendWhatsappWelcomeOnce
@@ -117,4 +120,15 @@ test('WA5: sends the connected welcome once per persisted channel state', async 
   } finally {
     await rm(stateDir, { recursive: true, force: true });
   }
+});
+
+test('WA6: marks the linked device unavailable so other active clients do not suppress message delivery', async () => {
+  const presences: string[] = [];
+  const socket = {
+    sendPresenceUpdate: async (presence) => {
+      presences.push(presence);
+    }
+  } satisfies Pick<WASocket, 'sendPresenceUpdate'>;
+  await markWhatsappCompanionOffline(socket);
+  expect(presences).toEqual(['unavailable']);
 });

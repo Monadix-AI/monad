@@ -15,16 +15,21 @@ export const channelSetupGuides = {
     steps: [
       'Create an application in the Discord Developer Portal and add a bot user.',
       'Enable Message Content Intent, then copy the bot token.',
-      'Invite the bot to your server, paste the token below, and switch the connection on.'
+      'Generate an install link with the bot and applications.commands scopes. Grant View Channels, Send Messages, Read Message History, and Add Reactions, then invite the bot to your server.',
+      'Paste the token below and switch the connection on. Monad registers its slash commands automatically after Discord connects; you do not need to create them individually.'
     ],
     docsUrl: 'https://discord.com/developers/docs/quick-start/getting-started'
   },
   slack: {
     summary: 'Use a Slack app in Socket Mode with both a bot token and an app-level token.',
     steps: [
-      'Create a Slack app, add the required bot scopes, and install it to your workspace.',
+      'Create a Slack app and add these Bot Token Scopes: chat:write, reactions:write, channels:history, groups:history, im:history, and mpim:history.',
+      'Enable Event Subscriptions and subscribe to these bot events: message.channels, message.groups, message.im, and message.mpim.',
       'Enable Socket Mode and create an app-level token with connections:write.',
-      'Paste the xoxb bot token and xapp app token below, then switch the connection on.'
+      'Under Slash Commands, create each Monad command you want to expose (for example /project, /sessions, /switch, and /help); Socket Mode delivers them without a Request URL.',
+      'Install or reinstall the app after changing scopes, invite the bot to each channel where it should work, and enable the App Home Messages tab if you want to direct-message it.',
+      'Paste the xoxb bot token and xapp app token below, then switch the connection on.',
+      'If a slash command is not registered, send it as a normal message by putting one space before the slash (for example " /project list"). Slack removes that escape space before Monad handles the message.'
     ],
     docsUrl: 'https://api.slack.com/start/quickstart'
   },

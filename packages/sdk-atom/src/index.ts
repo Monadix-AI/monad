@@ -90,6 +90,8 @@ import type {
   ChannelDefinition,
   ChannelHarnessOptions,
   ChannelLog,
+  ChannelNativeCommand,
+  ChannelRuntimeStatus,
   ChannelTestHarness,
   SendOptions,
   SentMessage
@@ -220,6 +222,8 @@ export type {
   ChannelInbound,
   ChannelLog,
   ChannelManifest,
+  ChannelNativeCommand,
+  ChannelRuntimeStatus,
   ChannelTestHarness,
   ChannelType,
   CommandArg,
