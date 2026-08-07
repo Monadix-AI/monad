@@ -36,10 +36,12 @@ function isSourceCliInvocation(): boolean {
   return process.argv.some((arg) => arg.endsWith('/apps/cli/src/bin.ts') || arg.endsWith('/apps/cli/src/main.ts'));
 }
 
-async function isDaemonReachable(): Promise<boolean> {
-  const { baseUrl } = await resolveClientConn();
-  const fetcher = makeLoopbackHttpsFetcher(baseUrl) ?? fetch;
+export async function isDaemonReachable(
+  resolveConnection: typeof resolveClientConn = resolveClientConn
+): Promise<boolean> {
   try {
+    const { baseUrl } = await resolveConnection();
+    const fetcher = makeLoopbackHttpsFetcher(baseUrl) ?? fetch;
     const res = await fetcher(`${baseUrl}/health`, { signal: AbortSignal.timeout(1000) });
     return res.ok;
   } catch {

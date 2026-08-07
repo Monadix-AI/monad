@@ -1,6 +1,14 @@
 import { expect, test } from 'bun:test';
 
-import { relayDaemonOutput, resolveDaemonPresentation } from '../../src/lib/daemon.ts';
+import { isDaemonReachable, relayDaemonOutput, resolveDaemonPresentation } from '../../src/lib/daemon.ts';
+
+test('daemon reachability treats a partially written first-run config as not ready', async () => {
+  const reachable = await isDaemonReachable(async () => {
+    throw new Error('monad: agents.json is missing at /home/user/.monad/configs/agents.json.');
+  });
+
+  expect(reachable).toBe(false);
+});
 
 test('silent daemon lifecycle disables standalone status and startup relay presentation', () => {
   expect({
