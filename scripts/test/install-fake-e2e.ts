@@ -50,6 +50,7 @@ async function makePackage(version: string): Promise<string> {
   await mkdir(join(packagePath, 'bin'), { recursive: true });
   await mkdir(join(packagePath, 'assets'), { recursive: true });
   await Bun.write(join(packagePath, 'assets', 'favicon.ico'), 'fake ico\n');
+  await Bun.write(join(packagePath, 'assets', 'monad-icon-1024.png'), 'fake png\n');
   await Bun.write(join(packagePath, 'assets', 'monad-icon-vector-solid.svg'), '<svg></svg>\n');
   if (process.platform === 'win32') {
     await Bun.write(executable, `fake monad ${version}`);

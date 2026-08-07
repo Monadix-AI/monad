@@ -153,7 +153,9 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
   });
   process.on('exit', disposeMcpStatusStream);
 
-  const upgradeInfo = await createUpgradeInfoMonitor(paths);
+  const upgradeInfo = await createUpgradeInfoMonitor(paths, {
+    settingsUrl: new URL('/settings/system', endpoint.localUrl).toString()
+  });
 
   const handlers = createDaemonHandlers({
     store,

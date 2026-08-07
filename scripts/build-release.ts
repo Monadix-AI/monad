@@ -30,6 +30,7 @@ import monadPkg from '../apps/monad/package.json' with { type: 'json' };
 import { generateMigrationAssets } from '../apps/monad/scripts/generate-migration-assets.ts';
 import rootPkg from '../package.json' with { type: 'json' };
 import { MONAD_PROCESS_ROLES } from '../packages/environment/src/process-name.ts';
+import { buildMacOSNotificationApp } from './lib/macos-notification-app.ts';
 import { createPlatformModulePlugin } from './lib/platform-modules.ts';
 import { optionalPeerExternals } from './lib/release-optional-peers.ts';
 import { releasePlatformModuleRules } from './lib/release-platform-modules.ts';
@@ -177,6 +178,12 @@ try {
       join(assetsDir, 'monad-icon-vector-solid.svg')
     );
     copyFileSync(join(ROOT, 'apps/web/public/favicon.ico'), join(assetsDir, 'favicon.ico'));
+    copyFileSync(join(ROOT, 'apps/web/public/monad-icon-1024.png'), join(assetsDir, 'monad-icon-1024.png'));
+
+    if (t.os === 'darwin') {
+      await buildMacOSNotificationApp({ root: ROOT, artifactDir, arch: t.arch });
+      log('  ✓ native Monad notification app');
+    }
 
     const isWindows = t.os === 'windows';
     const binName = isWindows ? 'monad.exe' : 'monad';
@@ -231,6 +238,28 @@ try {
       } else {
         log(`  ✓ sandbox launcher / AppContainer (${cc})`);
       }
+
+      // Assign the stable Monad AppUserModelID to the installed Start Menu shortcut. Windows desktop
+      // toasts require a shortcut carrying the same ID passed to CreateToastNotifier.
+      const aumidSrc = join(ROOT, 'apps/monad/native/windows-shortcut-aumid/main.c');
+      const aumidOut = join(binDir, 'monad-shortcut-aumid.exe');
+      const aumidFlags = [
+        '-O2',
+        '-s',
+        ...staticFlag,
+        '-municode',
+        '-o',
+        aumidOut,
+        aumidSrc,
+        '-lole32',
+        '-luuid',
+        '-lpropsys'
+      ];
+      const rAumid = await $`${cc} ${aumidFlags}`.nothrow().quiet();
+      if (rAumid.exitCode !== 0) {
+        throw new Error(`${artifact} AppUserModelID helper failed to compile with ${cc}`);
+      }
+      log(`  ✓ Windows AppUserModelID helper (${cc})`);
     }
 
     log(`Compiling ${artifact} (bun-${triple(t)})…`);
