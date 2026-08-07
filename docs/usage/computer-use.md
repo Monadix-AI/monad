@@ -2,6 +2,7 @@
 title: "Computer Use & Browser Use"
 description: "Configure approval-gated computer use through MCP servers while containing access to the real host machine."
 sidebarTitle: "Computer Use"
+keywords: ["computer use", "browser use", "GUI automation", "Playwright MCP", "approval-gated automation"]
 ---
 Monad lets the agent *see and operate a GUI* through off-the-shelf MCP servers — Monad
 ships no automation server of its own, it connects existing ones and applies its gate,

@@ -2,6 +2,7 @@
 title: "Sandbox Backends"
 description: "Sandbox policy and sandbox backend are independent. Policy controls filesystem access, confinement, network access, allowed domains, and host execution. The."
 sidebarTitle: "Sandbox Backends"
+keywords: ["agent sandbox", "Seatbelt", "Landlock", "AppContainer", "egress filtering", "sandbox policy"]
 ---
 Sandbox policy and sandbox backend are independent. Policy controls filesystem access, confinement, network access, allowed domains, and host execution. The backend is the launcher that applies that policy to newly spawned processes.
 

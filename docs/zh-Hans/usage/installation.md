@@ -1,7 +1,10 @@
 ---
 title: "安装或移除 Monad"
 description: "在 macOS、Linux 或 Windows 上安装 Monad，并安全地升级、回滚或移除。"
+keywords: ["安装 Monad", "macOS Linux Windows 安装", "卸载", "升级", "单个二进制"]
 ---
+Monad 在 macOS、Linux 和 Windows 上安装为单个二进制，并作为一个本地守护进程运行。发行版安装器会校验下载、把 `monad` 加入 `PATH`、启动守护进程并打开 Web 界面。
+
 本指南涵盖系统要求、发行版安装器、手动安装、升级和移除。安装后按[开始使用](/zh-Hans/getting-started)连接模型并运行第一个会话。
 
 ## 检查系统要求

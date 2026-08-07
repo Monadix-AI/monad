@@ -4,7 +4,15 @@ import { resolve } from 'node:path';
 
 const root = resolve(import.meta.dir, '../../..');
 
-const surfaces = ['README.md', 'README.zh-CN.md', 'docs/index.md', 'docs/guides/faq.md', 'docs/zh-Hans/guides/faq.md'];
+const surfaces = [
+  'README.md',
+  'README.zh-CN.md',
+  'docs/index.md',
+  'docs/guides/faq.md',
+  'docs/usage/model-providers.md',
+  'docs/zh-Hans/guides/faq.md',
+  'docs/zh-Hans/usage/model-providers.md'
+];
 
 const providerClaim = /(\d+)\s*(?:built-in provider types|built-in types)|内置 (\d+) 种提供方类型|(\d+) 种内置类型/;
 const channelClaim = /(\d+)\s*(?:channel adapters|adapters, including)|(\d+) 个渠道适配器|(\d+) 个适配器/;

@@ -4,6 +4,10 @@ sidebarTitle: "Data and Network"
 description: "Understand what Monad stores locally, which configured actions use the network, and how data is deleted."
 keywords: ["Monad privacy", "local-first", "telemetry", "data storage", "network access"]
 ---
+Monad stores its state on your own machine and sends no telemetry, analytics, crash reports,
+or usage pings. Requests to the model providers you configure do leave the machine, because
+that is where inference happens.
+
 What Monad stores, and what leaves your machine. Every claim here is a statement about the
 current code — if you find a discrepancy, that is a bug worth reporting.
 

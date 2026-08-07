@@ -151,6 +151,22 @@ company's cloud, attached to that company's suite, on its terms.
 **When you want a runtime.** When governed must not mean surrendered. Monad keeps approvals,
 sandbox, and audit on your machine, under your policy, with no telemetry.
 
+## When another tool is the better choice
+
+A comparison is only useful if it says where the other side wins. Pick something else when:
+
+- **You are shipping an agent product to customers.** An agent serving platform gives you
+  autoscaling, multi-tenancy, and a deployment story. Monad runs one team on one machine.
+- **You want to express agent logic as code.** A framework is the right authoring tool.
+  Reach for Monad when those agents need to be operated, not just run.
+- **The collaboration crosses organizations.** Peer federation covers daemons one operator
+  owns. Independent trust and billing between different owners is Monadix's job, not the
+  local runtime's.
+- **The workload needs a scheduler.** Monad has no distributed scheduling and no universal
+  task schema. A fleet-scale pipeline belongs on infrastructure built for it.
+- **You need a stable API today.** Monad Mesh is alpha and Monad Agent Runtime is
+  experimental; interfaces can change between releases.
+
 ## Comparison table
 
 | | Agents live in it | One daemon on your machine | OS sandbox, approval gate, audit | Multi-agent teams | Provider-neutral | Replaceable clients |

@@ -1,7 +1,12 @@
 ---
 title: "Troubleshooting"
 description: "Diagnose daemon, provider, session, approval, MCP, channel, sandbox, and upgrade problems."
+keywords: ["Monad not starting", "daemon unreachable", "agent errors", "fix Monad", "common problems"]
 ---
+Most Monad problems come from one of a few places: the daemon is not running, no model
+credential is configured, a session or approval is stuck, an MCP server or channel failed to
+connect, or the sandbox blocked a tool.
+
 Start here when something does not work. Each entry names the symptom, the usual cause,
 and the command that confirms it.
 

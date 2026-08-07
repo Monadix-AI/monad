@@ -1,6 +1,7 @@
 ---
 title: "Channels"
 description: "Connect Telegram, Slack, Discord, and other messaging platforms to Monad."
+keywords: ["Telegram bot", "Slack bot", "Discord bot", "messaging agent", "chat channel", "WhatsApp agent"]
 ---
 A channel connects an IM platform (Telegram, Slack, Discord, …) to your Monad agent.
 The platform's bot account becomes a front door: messages sent to the bot are routed

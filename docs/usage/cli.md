@@ -1,6 +1,7 @@
 ---
 title: "CLI Reference"
 description: "Use the Monad CLI to operate the daemon, sessions, projects, models, channels, approvals, extensions, and automation."
+keywords: ["monad CLI", "command reference", "agent CLI", "scriptable agent", "daemon commands"]
 ---
 The `monad` command is a thin client over the local daemon: it starts the daemon when needed, talks to it over the configured transport, and exposes every shipped operation in a scriptable form.
 

@@ -2,6 +2,7 @@
 title: "Operate Monad"
 sidebarTitle: "Overview"
 description: "Operational guides for sessions, clients, model providers, extensions, security, and maintenance."
+keywords: ["Monad guides", "operate agents", "agent operations", "daemon management"]
 ---
 Start with [getting started](/getting-started)（简体中文：[开始使用 Monad](/zh-Hans/getting-started)）. These guides treat Monad as a daemon-first agent team runtime. Monad Mesh owns the team; agent runtimes — first-party or external — do the work under that authority.
 

@@ -2,6 +2,7 @@
 title: "Agent Runtime Credentials"
 description: "Agent Runtime Credentials let generated agent code use a secret without placing the secret value in the model context. They are only for Code Act, shell."
 sidebarTitle: "Credentials"
+keywords: ["agent credentials", "secret management", "Code Act", "protected execution", "API key handling"]
 ---
 Agent Runtime Credentials let generated agent code use a secret without placing the
 secret value in the model context. They are only for Code Act, shell scripts, and

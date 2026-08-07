@@ -12,9 +12,9 @@ Use Monad's bundled agent runtime when you want the simplest setup, Monad-native
 
 ## Third-party agent
 
-Use a third-party agent when a provider-native coding runtime such as Codex or Claude Code should execute inside a durable Monad session. The provider keeps its model loop, authentication, provider session, and provider-specific behavior. Monad provides project membership, session binding, observation, collaboration, and recovery.
+Use a third-party agent when a provider-native runtime such as Codex or Claude Code should execute inside a durable Monad session. The provider keeps its model loop, authentication, provider session, and provider-specific behavior. Monad provides project membership, session binding, observation, collaboration, and recovery.
 
-Choose this for repository work that benefits from a provider's native coding harness.
+Choose this when the work benefits from a provider's native harness — its own tools, prompts, and session behavior.
 
 ## Agent Client Protocol
 
@@ -34,7 +34,7 @@ Use peer federation to delegate work between Monad daemons owned by the same ope
 | Need | Choose |
 |---|---|
 | Fastest path to a working mesh member | Monad Agent Runtime |
-| Provider-native coding behavior | Third-party agent |
+| Provider-native execution behavior | Third-party agent |
 | Editor integration or protocol delegation | ACP |
 | Another operator-owned machine | Peer federation |
 | Independent organizations and trust domains | Monadix, not local peer federation |

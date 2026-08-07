@@ -1,6 +1,7 @@
 ---
 title: "理解 Monad 的架构"
 description: "理解 Monad 守护进程、Agent 团队运行时、客户端与执行引擎之间的架构边界。"
+keywords: ["Monad 架构", "守护进程架构", "开发者文档", "扩展 Monad"]
 ---
 English: [Architecture overview](/zh-Hans/internals/index)
 

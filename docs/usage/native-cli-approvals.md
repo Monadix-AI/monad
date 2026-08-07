@@ -2,6 +2,7 @@
 title: "Native CLI Agent Approvals"
 description: "Understand how Monad relays provider-native CLI approvals and chooses safe unattended behavior for third-party agents."
 sidebarTitle: "Native CLI Approvals"
+keywords: ["approval relay", "third-party agent approvals", "unattended agents", "Codex approvals", "Claude Code approvals"]
 ---
 Native CLI providers decide when a tool call requires approval. Monad does not apply
 its own approval policy to a third-party agent; it can only relay a provider-owned request when

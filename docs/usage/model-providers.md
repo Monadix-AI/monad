@@ -4,6 +4,10 @@ sidebarTitle: "Model Providers"
 description: "Connect model providers, store credentials, test access, and choose Monad's default model profile."
 keywords: ["model providers", "OpenRouter", "Azure OpenAI", "Amazon Bedrock", "Ollama", "model profiles"]
 ---
+A model provider is one place Monad can send an inference request. Monad ships 24 built-in
+provider types — 8 with a dedicated SDK and 16 presets over the bundled OpenAI-compatible
+adapter — and any provider can also arrive as an Atom Pack.
+
 How to connect Monad to a model provider: pick a provider, add a credential, choose a
 default model. This is the user-facing companion to
 [model-providers.md](/internals/infra/model-providers), which explains the provider
