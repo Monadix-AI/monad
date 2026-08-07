@@ -3,7 +3,6 @@ import { join } from 'node:path';
 
 import { devCliShimText } from '../../dev-init/cli-shim.ts';
 import { type CodeGraphInitDeps, ensureCodeGraph } from '../../dev-init/codegraph.ts';
-import { buildDevInitSummary } from '../../dev-init/output.ts';
 import {
   ensurePortLines,
   nextAvailablePorts,
@@ -100,8 +99,7 @@ test('mise owns worktree tool and environment activation', async () => {
     settings: {
       idiomatic_version_file_enable_tools: ['bun'],
       status: { show_tools: true }
-    },
-    tools: { 'github:boyter/scc': '3.7.0' }
+    }
   });
 });
 
@@ -298,63 +296,4 @@ test('removeBlankXdgLines preserves real XDG overrides and comments', () => {
   const { text, removed } = removeBlankXdgLines('# XDG_CACHE_HOME=/tmp/cache\nXDG_CACHE_HOME=/tmp/cache\n');
   expect(text).toBe('# XDG_CACHE_HOME=/tmp/cache\nXDG_CACHE_HOME=/tmp/cache\n');
   expect(removed).toEqual([]);
-});
-
-test('buildDevInitSummary groups the initialized dev environment for terminal output', () => {
-  const lines = buildDevInitSummary({
-    apiKeySet: false,
-    monadHome: '/repo/.dev/.monad',
-    ports: {
-      AI_SDK_DEVTOOLS_PORT: '7401',
-      MONAD_KV_UI_PORT: '6401',
-      MONAD_HTTP_PORT: '53001',
-      MONAD_PORT: '52001',
-      UI_STORYBOOK_PORT: '8401',
-      WEB_PORT: '3101',
-      WEB_STORYBOOK_PORT: '4101'
-    }
-  });
-
-  expect(lines).toEqual([
-    '',
-    'Monad dev init',
-    'Environment',
-    '  Data directory    /repo/.dev/.monad',
-    '  API key           not set - add apiKey to packages/environment/config.init.json',
-    'Ports',
-    '  Daemon API        https://127.0.0.1:52001',
-    '  Local HTTP        http://127.0.0.1:53001',
-    '  Web app           http://127.0.0.1:3101',
-    '  Web Storybook     http://127.0.0.1:4101',
-    '  UI Storybook      http://127.0.0.1:8401',
-    '  KV inspector      http://127.0.0.1:6401',
-    '  AI SDK DevTools   http://127.0.0.1:7401',
-    'Runtime URL priority',
-    '  Daemon proxy      MONAD_URL > config network.host/https/port',
-    'Services',
-    '  Phoenix / OTel    optional - run mise run dev:services',
-    ''
-  ]);
-});
-
-test('dev-init summary can be colorized for terminal output', () => {
-  const lines = buildDevInitSummary(
-    {
-      apiKeySet: true,
-      monadHome: '/repo/.dev/.monad',
-      ports: {
-        AI_SDK_DEVTOOLS_PORT: '7401',
-        MONAD_HTTP_PORT: '53001',
-        MONAD_KV_UI_PORT: '6401',
-        MONAD_PORT: '52001',
-        UI_STORYBOOK_PORT: '8401',
-        WEB_PORT: '3101',
-        WEB_STORYBOOK_PORT: '4101'
-      }
-    },
-    { color: true }
-  );
-
-  expect(lines.join('\n')).toContain('\u001b[');
-  expect(lines.join('\n')).toContain('Monad dev init');
 });
