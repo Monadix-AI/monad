@@ -17,8 +17,10 @@ const LOREM =
 
 function makeRow(index: number): Row {
   // Every fifth row is an order of magnitude taller than the rest, so estimate-vs-measured gaps are
-  // the norm rather than the edge case.
-  return { id: `row_${index}`, text: `#${index} ${LOREM.repeat(index % 5 === 0 ? 40 : 2)}` };
+  // the norm rather than the edge case. `smallRows=1` suppresses the tall rows so a handful of rows
+  // genuinely underfills the viewport (the no-overflow paging case).
+  const small = new URLSearchParams(window.location.search).get('smallRows') === '1';
+  return { id: `row_${index}`, text: `#${index} ${LOREM.repeat(!small && index % 5 === 0 ? 40 : 2)}` };
 }
 
 /**
@@ -137,6 +139,16 @@ function Harness(): React.ReactElement {
     setTopLoading(true);
     window.setTimeout(() => {
       topLoadCountRef.current += 1;
+      // Mirrors a page fetch that started (the edge disarmed) but failed: the attempt counts, no
+      // rows arrive, and the reader is left parked at the loaded top.
+      if (
+        new URLSearchParams(window.location.search).get('failFirstTopLoad') === '1' &&
+        topLoadCountRef.current === 1
+      ) {
+        topLoadingRef.current = false;
+        setTopLoading(false);
+        return;
+      }
       setRows((previous) => {
         if (topPagingMode === 'merge') {
           const [firstRow, ...rest] = previous;

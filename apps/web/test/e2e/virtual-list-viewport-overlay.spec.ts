@@ -41,3 +41,28 @@ test('viewport overlay stays fixed without changing the scrollable content heigh
     scrolledUp: true
   });
 });
+
+test('with content that underfills the viewport the overlay pins to the viewport bottom, not the content end', async ({
+  page
+}) => {
+  await page.goto(`${HARNESS}?rows=2&smallRows=1`);
+  const scroller = page.locator('[role="log"]');
+  await scroller.locator('[data-index]').first().waitFor();
+  await page.evaluate(() => window.harness.setViewportOverlay(true));
+  const overlay = scroller.locator('[data-viewport-overlay]');
+
+  const geometry = await overlay.evaluate((element) => {
+    const scrollerRect = (element.closest('[role="log"]') as HTMLElement).getBoundingClientRect();
+    const rows = [...document.querySelectorAll<HTMLElement>('[role="log"] [data-row-id]')];
+    const lastRowBottom = Math.max(...rows.map((row) => row.getBoundingClientRect().bottom));
+    const rect = element.getBoundingClientRect();
+    return {
+      overlayBottomAtViewportBottom: Math.round(scrollerRect.bottom - rect.bottom),
+      overlayClearOfContent: rect.bottom - lastRowBottom
+    };
+  });
+
+  // Anchored to the scroller's bottom edge (not floating at the content end mid-viewport).
+  expect(geometry.overlayBottomAtViewportBottom).toBe(0);
+  expect(geometry.overlayClearOfContent).toBeGreaterThan(100);
+});

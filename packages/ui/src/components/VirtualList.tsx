@@ -80,6 +80,9 @@ const NATIVE_SCROLL_END_THRESHOLD = 2;
 // to cover data that lands after the first layout, short enough that a reader who takes over is
 // never fought for more than a moment.
 const SETTLE_WINDOW_MS = 3000;
+// Keys that move the viewport toward the top; pressing one at the loaded top is a request for older
+// rows exactly like a wheel-up there.
+const KEYBOARD_SCROLL_UP_KEYS = new Set(['ArrowUp', 'PageUp', 'Home']);
 const ROW_STYLE_BASE: CSSProperties = {
   boxSizing: 'border-box',
   left: 0,
@@ -318,6 +321,30 @@ export function VirtualList<T>({
       }
     },
     [emitRange, settleAtBottomOnLoad, stickToBottom]
+  );
+
+  // Re-arm the start edge for a reader who is already parked at the loaded top, where no scroll
+  // event can ever fire again: a retry after a page load that returned nothing, or a transcript
+  // whose rows do not fill the viewport. Input-agnostic on purpose — wheel, touch and keyboard all
+  // route here, so no input method is left without a way to ask for older history.
+  //
+  // Gated on the opening convergence being over (or on content that cannot scroll at all):
+  // during the first frames of a bottom-pinned list the offset legitimately sits at 0, and arming
+  // there would fire a page load — and abandon the settle pin — before the list ever reached its
+  // newest message.
+  const armStartEdgeAtTop = useCallback(
+    (el: HTMLDivElement) => {
+      if (el.scrollTop > START_REACHED_THRESHOLD) return;
+      if (!initialEndScrollDoneRef.current && el.scrollHeight > el.clientHeight) return;
+      initialEndScrollDoneRef.current = true;
+      startArmedRef.current = true;
+      evaluateBoundaries(virtualizerRef.current as unknown as VirtualizerBoundaryState, {
+        clientHeight: el.clientHeight,
+        scrollHeight: el.scrollHeight,
+        scrollTop: el.scrollTop
+      });
+    },
+    [evaluateBoundaries]
   );
 
   // The footer key must be STABLE across appends: a key that embeds the last item's key remounts
@@ -591,9 +618,16 @@ export function VirtualList<T>({
   );
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: `role` is caller-supplied (e.g. "log") and always interactive here; biome can't verify a prop value statically.
     <div
       aria-live={ariaLive}
       className={className}
+      // Touch and keyboard reach the loaded top without ever emitting a wheel event, and at a
+      // clamped scrollTop they emit no scroll event either — so they get the same start-edge
+      // arming the wheel path uses, or older history would be unreachable on those inputs.
+      onKeyDown={(event) => {
+        if (KEYBOARD_SCROLL_UP_KEYS.has(event.key)) armStartEdgeAtTop(event.currentTarget);
+      }}
       onScroll={(event) => {
         // A scrollbar drag or keyboard scroll toward the top is the reader taking over, exactly
         // like the wheel/touch handlers below, but it emits no wheel or touch event — only this
@@ -639,6 +673,7 @@ export function VirtualList<T>({
           scrollTop
         });
       }}
+      onTouchEnd={(event) => armStartEdgeAtTop(event.currentTarget)}
       // Deliberately NO onTouchMove detach: a touch pan emits scroll events, so an upward drag
       // detaches through the same cumulative path as a scrollbar drag. Detaching on the touch
       // gesture itself would fire on horizontal pans over nested scrollers, taps with slight
@@ -671,8 +706,9 @@ export function VirtualList<T>({
           return;
         }
         if (deltaY < 0) {
-          // Nothing to scroll — the gesture carries no reading intent, and with no scroll events
-          // possible the sticky detach could never clear before the list first overflows.
+          armStartEdgeAtTop(el);
+          // Nothing left to scroll — with no scroll events possible the sticky detach could never
+          // clear before the list first overflows, so skip the detach accounting.
           if (el.scrollHeight <= el.clientHeight) return;
           wheelUpTravelRef.current -= deltaY;
           if (wheelUpTravelRef.current > UP_SCROLL_INTENT_EPSILON) releaseEndFollow();
@@ -680,9 +716,25 @@ export function VirtualList<T>({
       }}
       ref={scrollerRef}
       role={role}
-      style={{ height: '100%', overflowAnchor: 'none', overflowY: 'auto', ...style }}
+      // Flex column so the overlay wrapper's margin-top:auto can pin it to the viewport bottom
+      // when the content underfills the scroller — sticky bottom:0 alone only clamps an element
+      // against LEAVING the viewport; with short content its static position is right after the
+      // rows, which painted the overlay gradient mid-screen.
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        overflowAnchor: 'none',
+        overflowY: 'auto',
+        ...style
+      }}
     >
-      <div ref={headerRef}>{header}</div>
+      <div
+        ref={headerRef}
+        style={{ flex: 'none' }}
+      >
+        {header}
+      </div>
       {/* directDomUpdates owns the sizer height and each row's transform; React must not write
           either (the doubled writes race). Rows hand their node straight to measureElement: it
           measures synchronously at commit (pre-paint) and its internal ResizeObserver tracks
@@ -690,7 +742,7 @@ export function VirtualList<T>({
           so the commit-time effect below re-applies positions to cover it. */}
       <div
         ref={virtualizer.containerRef}
-        style={{ position: 'relative', width: '100%' }}
+        style={{ flex: 'none', position: 'relative', width: '100%' }}
       >
         {scrollerReady &&
           virtualItems.map((virtualRow) => {
@@ -714,7 +766,7 @@ export function VirtualList<T>({
         // pointerEvents none on the wrapper: the overlay floats over the scroll surface (and, on
         // macOS, under the element's own overlay scrollbar) — it must never intercept the reader's
         // scrolling or clicks regardless of what the consumer passes.
-        <div style={{ bottom: 0, height: 0, pointerEvents: 'none', position: 'sticky', zIndex: 1 }}>
+        <div style={{ bottom: 0, height: 0, marginTop: 'auto', pointerEvents: 'none', position: 'sticky', zIndex: 1 }}>
           <div style={{ bottom: 0, left: 0, position: 'absolute', right: 0 }}>{viewportOverlay}</div>
         </div>
       ) : null}
