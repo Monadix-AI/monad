@@ -40,6 +40,7 @@ $ForceInstall = $args -contains '--force'
 $SkipVerify  = $ForceInstall -or $env:MONAD_SKIP_VERIFY -eq '1'
 $NoPathMod   = $env:MONAD_NO_PATH_MODIFY -eq '1'
 $BinExplicit = [bool]$env:MONAD_BIN_DIR
+$MonadAppUserModelId = 'ai.monad.app'
 
 # PortableGit provides bash + full MSYS2 coreutils (ls/grep/awk/…) for shell_exec.
 # Pin a specific release for reproducibility; update when a new Git for Windows ships.
@@ -119,6 +120,16 @@ function New-MonadShortcut([string]$Path, [string]$Target, [string]$IconPath) {
     $shortcut.IconLocation = $IconPath
   }
   $shortcut.Save()
+
+  $aumidHelper = Join-Path $InstallDir 'bin\monad-shortcut-aumid.exe'
+  if (Test-Path -LiteralPath $aumidHelper) {
+    & $aumidHelper $Path $MonadAppUserModelId
+    if ($LASTEXITCODE -ne 0) {
+      Warn "Could not assign the Monad AppUserModelID to $Path; Windows update notifications may be unavailable."
+    }
+  } else {
+    Warn 'The AppUserModelID helper is missing; Windows update notifications may be unavailable.'
+  }
 }
 
 function Install-AppLaunchers([string]$MonadExe) {

@@ -81,3 +81,62 @@ test('upgrade info monitor ignores malformed cache and empty release payloads', 
   await Bun.sleep(20);
   expect(monitor.getUpgradeInfo()).toBeNull();
 });
+
+test('upgrade info monitor notifies once for a newer release and persists the notified version', async () => {
+  globalThis.fetch = (async () => response({ tag_name: 'v9.9.9' })) as unknown as typeof fetch;
+  const notifications: Array<{ latestVersion: string; currentVersion: string }> = [];
+
+  const monitor = await createUpgradeInfoMonitor(paths, {
+    notifyUpdateAvailable: async (latestVersion, currentVersion) => {
+      notifications.push({ latestVersion, currentVersion });
+      return true;
+    }
+  });
+  await waitFor(async () => {
+    const cached = await Bun.file(join(paths.cache, 'upgrade-info.json'))
+      .json()
+      .catch(() => null);
+    return cached?.lastNotifiedVersion === '9.9.9';
+  });
+
+  expect(monitor.getUpgradeInfo()?.latestVersion).toBe('9.9.9');
+  expect(notifications).toEqual([{ latestVersion: '9.9.9', currentVersion: expect.any(String) }]);
+});
+
+test('upgrade info monitor does not repeat a persisted release notification after restart', async () => {
+  await writeFile(
+    join(paths.cache, 'upgrade-info.json'),
+    JSON.stringify({
+      latestVersion: '9.9.9',
+      latestVersionCheckedAt: '2026-01-01T00:00:00.000Z',
+      lastNotifiedVersion: '9.9.9'
+    })
+  );
+  globalThis.fetch = (async () => response({ tag_name: 'v9.9.9' })) as unknown as typeof fetch;
+  let notificationCount = 0;
+
+  await createUpgradeInfoMonitor(paths, {
+    notifyUpdateAvailable: async () => {
+      notificationCount += 1;
+      return true;
+    }
+  });
+  await Bun.sleep(20);
+
+  expect(notificationCount).toBe(0);
+});
+
+test('upgrade info monitor does not notify for an older release', async () => {
+  globalThis.fetch = (async () => response({ tag_name: 'v0.0.0' })) as unknown as typeof fetch;
+  let notificationCount = 0;
+
+  await createUpgradeInfoMonitor(paths, {
+    notifyUpdateAvailable: async () => {
+      notificationCount += 1;
+      return true;
+    }
+  });
+  await Bun.sleep(20);
+
+  expect(notificationCount).toBe(0);
+});
