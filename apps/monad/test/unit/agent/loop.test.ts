@@ -359,7 +359,7 @@ test('a later assistant segment remains unlinked after a user steer', async () =
       close: () => {
         if (!steerPending) return [];
         steerPending = false;
-        return ['Use the revised direction.'];
+        return [{ text: 'Use the revised direction.' }];
       },
       reopen: () => {},
       take: () => []

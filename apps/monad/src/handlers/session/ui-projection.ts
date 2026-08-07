@@ -316,6 +316,7 @@ export class SessionUiProjector {
         ...(message.role === 'assistant' && deliveryIdFromData(message.data)
           ? { deliveryId: deliveryIdFromData(message.data) }
           : {}),
+        ...(message.metadata?.origin ? { origin: message.metadata.origin } : {}),
         parts: partsFromMessage(message, this.opts),
         ...(message.replyToMessageId ? { replyToMessageId: message.replyToMessageId } : {}),
         replyable: isReplyableMessage(message),

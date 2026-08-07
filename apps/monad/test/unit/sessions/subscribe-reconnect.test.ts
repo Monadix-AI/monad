@@ -205,7 +205,7 @@ test('subscribeUi degrades an expired encoded cursor to a fresh authoritative sn
 test('subscribeUi snapshots include every user-message outline entry beyond the paginated live window', async () => {
   const handlers = buildHandlers(buildMockModel().text(['x']).build());
   const { sessionId } = await handlers.session.create({ title: 'complete outline' });
-  const userMessages: Array<{ id: `msg_${string}`; text: string }> = [];
+  const userMessages: Array<{ id: `msg_${string}`; text: string; at: string }> = [];
   for (let index = 0; index < 42; index++) {
     const userId = newId('msg');
     const assistantId = newId('msg');
@@ -213,7 +213,7 @@ test('subscribeUi snapshots include every user-message outline entry beyond the 
     const text = `Question ${index + 1}`;
     handlers.store.insertMessage(userId, sessionId, text, createdAt, 'user');
     handlers.store.insertMessage(assistantId, sessionId, `Answer ${index + 1}`, createdAt, 'assistant');
-    userMessages.push({ id: userId, text });
+    userMessages.push({ id: userId, text, at: createdAt });
   }
 
   let snapshot: Extract<SessionUiEvent, { kind: 'snapshot' }> | undefined;

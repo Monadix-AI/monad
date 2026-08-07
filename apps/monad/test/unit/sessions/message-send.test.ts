@@ -206,3 +206,42 @@ test('inline send propagates a pre-header client abort to the subsequently creat
     modelSawAbortedSignal: true
   });
 });
+
+test('an unnamed write records only its bare transport — provenance is never guessed from the session', async () => {
+  const handlers = buildHandlers(mockModel(['ok']));
+  const webOrigin = { surface: 'web' as const, client: 'monad-web', transport: 'http' as const };
+
+  // A web-typed message carries no per-request identity, so it is stamped with the bare
+  // transport — never the session's own origin, and never a peer surface like TUI/openai-compat
+  // that also writes over http.
+  const { sessionId: webSessionId } = await handlers.session.create({ origin: webOrigin, title: 'web origin' });
+  await handlers.session.send({ generate: false, sessionId: webSessionId, text: 'typed on web' });
+  const webMessage = (await handlers.session.messages({ id: webSessionId })).messages[0];
+  expect(webMessage?.metadata).toEqual({ origin: { transport: 'http' } });
+
+  // A generated (agent-loop) turn writes its user row through the loop path — same bare stamp.
+  await handlers.session.generate({ sessionId: webSessionId, text: 'generate turn' });
+  const generatedUser = (await handlers.session.messages({ id: webSessionId })).messages.filter(
+    (message) => message.role === 'user'
+  );
+  expect(generatedUser.map((message) => message.metadata)).toEqual([
+    { origin: { transport: 'http' } },
+    { origin: { transport: 'http' } }
+  ]);
+
+  // An http write into a channel-born session must NOT inherit the channel identity either.
+  const channelOrigin = {
+    surface: 'im' as const,
+    client: 'telegram',
+    instanceId: 'tg-main',
+    transport: 'channel' as const
+  };
+  const { sessionId: channelSessionId } = await handlers.session.create({ origin: channelOrigin, title: 'tg origin' });
+  await handlers.session.send({
+    generate: false,
+    sessionId: channelSessionId,
+    text: 'web reply into telegram session'
+  });
+  const channelSessionMessage = (await handlers.session.messages({ id: channelSessionId })).messages[0];
+  expect(channelSessionMessage?.metadata).toEqual({ origin: { transport: 'http' } });
+});

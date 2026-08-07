@@ -111,6 +111,9 @@ export function normalizeSlackSlashCommand(payload: SlackSlashCommand, envelopeI
     nativeMessageId: replyTarget,
     replyTo: replyTarget,
     senderDisplay: payload.user_name,
+    // Slack sends the readable channel name on slash commands only; message events carry the id.
+    chatTitle:
+      payload.channel_name && payload.channel_name !== 'directmessage' ? `#${payload.channel_name}` : undefined,
     chatType: payload.channel_name === 'directmessage' || payload.channel_id.startsWith('D') ? 'dm' : 'channel',
     mentionedSelf: true,
     isSelf: false,

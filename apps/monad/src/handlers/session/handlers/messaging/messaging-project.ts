@@ -1,6 +1,7 @@
 import type { AcpAgentConfig, MeshAgentConfig } from '@monad/environment';
 import type {
   MessageId,
+  MessageOrigin,
   SendMessageAttachment,
   SendMessageRequest,
   SendMessageResponse,
@@ -30,7 +31,11 @@ import {
 } from '#/handlers/session/handlers/messaging-members.ts';
 
 type SendHandler = (
-  args: { sessionId: SessionId; onComplete?: (text: string) => void | Promise<void> } & SendMessageRequest
+  args: {
+    sessionId: SessionId;
+    onComplete?: (text: string) => void | Promise<void>;
+    origin?: MessageOrigin;
+  } & SendMessageRequest
 ) => Promise<SendMessageResponse>;
 
 export interface SendProjectMessageDeps {
@@ -67,12 +72,14 @@ export function createSendProjectMessageHandler(ctx: SessionContext, deps: SendP
     sessionId,
     text,
     attachments,
-    replyToMessageId
+    replyToMessageId,
+    origin
   }: {
     sessionId: SessionId;
     text: string;
     attachments?: SendMessageAttachment[];
     replyToMessageId?: MessageId;
+    origin?: MessageOrigin;
   }) {
     const routeSeedText = text.trim() || (attachments?.length ? 'Shared attachments.' : '');
     const session = requireSession(sessionId);
@@ -170,7 +177,14 @@ export function createSendProjectMessageHandler(ctx: SessionContext, deps: SendP
         : undefined;
     if (route.kind === 'send') {
       if (isPublicProjectFanout) {
-        const result = await send({ sessionId, text: route.text, attachments, generate: false, replyToMessageId });
+        const result = await send({
+          sessionId,
+          text: route.text,
+          attachments,
+          generate: false,
+          replyToMessageId,
+          origin
+        });
         const humanSender = { kind: 'human' as const, name: cfg?.user.displayName ?? 'User', id: 'human' };
         await Promise.all([
           deliverProjectMessageToManagedMeshAgentMembers({
@@ -197,7 +211,8 @@ export function createSendProjectMessageHandler(ctx: SessionContext, deps: SendP
         replyToMessageId,
         generate: routeGenerate,
         ambientContext,
-        onComplete: dispatchStructuredNext
+        onComplete: dispatchStructuredNext,
+        origin
       });
       if (!route.direct && route.generate === false) {
         await deliverProjectMessageToManagedMeshAgentMembers({
@@ -235,9 +250,13 @@ export function createSendProjectMessageHandler(ctx: SessionContext, deps: SendP
     sessionId,
     text,
     attachments,
-    replyToMessageId
-  }: { sessionId: SessionId } & Pick<SendMessageRequest, 'attachments' | 'replyToMessageId' | 'text'>) {
-    return sendProjectMessage({ sessionId, text, attachments, replyToMessageId });
+    replyToMessageId,
+    origin
+  }: { sessionId: SessionId; origin?: MessageOrigin } & Pick<
+    SendMessageRequest,
+    'attachments' | 'replyToMessageId' | 'text'
+  >) {
+    return sendProjectMessage({ sessionId, text, attachments, replyToMessageId, origin });
   }
 
   return { sendProjectMessage, sendChannelMessage };

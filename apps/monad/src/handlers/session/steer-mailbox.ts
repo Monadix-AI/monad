@@ -1,24 +1,24 @@
-import type { PendingSteerSource } from '#/agent/index.ts';
+import type { PendingSteer, PendingSteerSource } from '#/agent/index.ts';
 
 export class SessionSteerMailbox implements PendingSteerSource {
   private accepting = true;
-  private pending: string[] = [];
+  private pending: PendingSteer[] = [];
 
-  enqueue(text: string): boolean {
-    return this.enqueueMany([text]);
+  enqueue(message: PendingSteer): boolean {
+    return this.enqueueMany([message]);
   }
 
-  enqueueMany(messages: string[]): boolean {
+  enqueueMany(messages: readonly PendingSteer[]): boolean {
     if (!this.accepting) return false;
     this.pending.push(...messages);
     return true;
   }
 
-  take(): string[] {
+  take(): PendingSteer[] {
     return this.pending.splice(0);
   }
 
-  close(): string[] {
+  close(): PendingSteer[] {
     this.accepting = false;
     return this.take();
   }

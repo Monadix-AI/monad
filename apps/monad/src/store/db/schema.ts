@@ -340,6 +340,7 @@ export const messages = sqliteTable(
     streamStatus: text('stream_status').notNull().default('settled'),
     active: integer('active').notNull().default(1),
     includeInContext: integer('include_in_context'),
+    metadata: text('metadata'),
     idempotencyKey: text('idempotency_key'),
     commandFingerprint: text('command_fingerprint'),
     createdAt: text('created_at').notNull(),

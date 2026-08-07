@@ -111,3 +111,50 @@ test('session send accepts a steer batch as separate user messages before one mo
   ]);
   handlers.store.close();
 });
+
+test('a steered message keeps the ingress origin of the request that queued it', async () => {
+  let releaseFirstStream!: () => void;
+  let markFirstStreamStarted!: () => void;
+  const firstStreamStarted = new Promise<void>((resolve) => {
+    markFirstStreamStarted = resolve;
+  });
+  const releaseFirst = new Promise<void>((resolve) => {
+    releaseFirstStream = resolve;
+  });
+  let streamCount = 0;
+  const model: ModelRouter = {
+    async *stream() {
+      streamCount++;
+      if (streamCount === 1) {
+        markFirstStreamStarted();
+        await releaseFirst;
+        yield { type: 'text' as const, token: 'first answer' };
+        return;
+      }
+      yield { type: 'text' as const, token: 'steered answer' };
+    },
+    async complete(): Promise<ModelResult> {
+      return { text: 'unused', finishReason: 'stop' };
+    }
+  };
+  const handlers = buildHandlers(model);
+  const { sessionId } = await handlers.session.create({ title: 'steer origin test' });
+  const origin = { transport: 'channel' as const, surface: 'im' as const, client: 'telegram', senderId: 'U1' };
+
+  await handlers.session.send({ sessionId, text: 'initial request' });
+  await firstStreamStarted;
+  await handlers.session.send({ sessionId, text: 'from telegram mid-run', steer: true, origin });
+  releaseFirstStream();
+
+  for (let attempt = 0; attempt < 50; attempt++) {
+    const steered = handlers.store
+      .listMessages(sessionId)
+      .find((message) => message.role === 'user' && message.text === 'from telegram mid-run');
+    if (steered) {
+      expect(steered.metadata).toEqual({ origin });
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error('steered message never persisted');
+});

@@ -9,6 +9,7 @@ import type {
   ChannelInbound,
   ChannelStatus,
   ChannelType,
+  MessageOrigin,
   ProjectId,
   SessionId
 } from '@monad/protocol';
@@ -437,7 +438,11 @@ export class ChannelService {
             if (message.role === 'assistant') finalMessageText = message.text;
           }
         },
-        { transport: 'channel', ambientContext: channelOperatorContext(c) }
+        {
+          transport: 'channel',
+          ambientContext: channelOperatorContext(c),
+          origin: channelMessageOrigin(c, m)
+        }
       );
       await renderer.finalize();
     } finally {
@@ -449,7 +454,11 @@ export class ChannelService {
 
   private async sendProjectMessage(inst: Instance, m: ChannelInbound, sessionId: SessionId): Promise<void> {
     if (!this.deps.session.sendProjectMessage) throw new Error('channel Project messaging is unavailable');
-    await this.deps.session.sendProjectMessage({ sessionId, text: m.text });
+    await this.deps.session.sendProjectMessage({
+      sessionId,
+      text: m.text,
+      origin: channelMessageOrigin(inst.config, m)
+    });
     if (this.deps.store.listSessionMembers(sessionId).length === 0) {
       await inst.adapter?.send(m.chatId, this.channelT('channel.projectSessionNoMembers'), { threadId: m.threadId });
     }
@@ -602,6 +611,21 @@ export class ChannelService {
   private clearPendingProject(c: ChannelInstanceConfig, key: string): void {
     this.pendingProjects.delete(this.pendingProjectKey(c, key));
   }
+}
+
+/** Per-message ingress provenance for one inbound channel write: the session-origin identity this
+ *  same file stamps at session creation, plus the conversation and sender the ADAPTER reported.
+ *  Only the adapter knows its platform's human names, so it supplies the values; every label a
+ *  reader sees is rendered by the core from these structured fields. */
+function channelMessageOrigin(c: ChannelInstanceConfig, m: ChannelInbound): MessageOrigin {
+  return {
+    ...buildOperationSource({ transport: 'channel', surface: 'im', client: c.type, instanceId: c.id }),
+    ...(m.userId ? { senderId: m.userId } : {}),
+    ...(m.senderDisplay ? { senderDisplay: m.senderDisplay } : {}),
+    ...(m.chatTitle ? { chatTitle: m.chatTitle } : {}),
+    ...(m.chatType ? { chatType: m.chatType } : {}),
+    ...(m.threadId ? { threadId: m.threadId } : {})
+  };
 }
 
 export { sweepIdleBuckets } from '#/channels/helpers.ts';

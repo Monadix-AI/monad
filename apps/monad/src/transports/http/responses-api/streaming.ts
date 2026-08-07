@@ -8,7 +8,7 @@ import { costSchema, finishReasonSchema, parseEventPayload, tokenUsageSchema } f
 import { HandlerError } from '#/handlers/handler-error.ts';
 import { SSE_RESPONSE_HEADERS } from '#/transports/http/sessions/sse.ts';
 import { buildUsage, computeOutputText } from './input.ts';
-import { CORS_HEADERS, MAX_STORED_RESPONSES, MAX_STREAMING_BACKLOG, sseFrame } from './shared.ts';
+import { CORS_HEADERS, MAX_STORED_RESPONSES, MAX_STREAMING_BACKLOG, SESSION_ORIGIN, sseFrame } from './shared.ts';
 
 function terminalMetadata(data: unknown) {
   const value = typeof data === 'object' && data !== null ? (data as Record<string, unknown>) : {};
@@ -253,7 +253,7 @@ export function buildStreamingResponse(params: {
               } catch {}
             }
           },
-          { transport: 'http', ambientContext }
+          { transport: 'http', ambientContext, origin: SESSION_ORIGIN }
         );
       } catch (err) {
         try {

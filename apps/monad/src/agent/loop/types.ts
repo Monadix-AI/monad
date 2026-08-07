@@ -4,6 +4,7 @@ import type {
   GenerationParams,
   Hooks,
   MessageId,
+  MessageOrigin,
   MessageStream,
   MessageType,
   ModelPrice,
@@ -21,7 +22,7 @@ import type { PromptReplayCache } from './replay.ts';
 /** A chat message as the loop sees it: a minimal persisted row view derived from @monad/protocol. */
 export type ChatMessage = Pick<
   WireChatMessage,
-  'role' | 'text' | 'createdAt' | 'data' | 'replyToMessageId' | 'includeInContext'
+  'role' | 'text' | 'createdAt' | 'data' | 'replyToMessageId' | 'includeInContext' | 'metadata'
 > & {
   id: string;
   sessionId: WireChatMessage['sessionId'];
@@ -55,14 +56,23 @@ interface MessageRepoPublishOptions {
   fanout?: (event: Event) => void | Promise<void>;
 }
 
+/** One queued steer plus the provenance of the write that queued it — a steer arrives on its own
+ *  request, so its origin cannot be inferred from the turn already running. */
+export interface PendingSteer {
+  text: string;
+  origin?: MessageOrigin;
+}
+
 export interface PendingSteerSource {
-  close(): string[];
+  close(): PendingSteer[];
   reopen(): void;
-  take(): string[];
+  take(): PendingSteer[];
 }
 
 export interface TurnRunOptions {
   replyToMessageId?: MessageId;
+  /** Ingress provenance stamped onto the turn's user row (metadata.origin). */
+  origin?: MessageOrigin;
   /** Signals only after the canonical user row has committed, before model work begins. */
   onInputCommitted?: () => void;
 }

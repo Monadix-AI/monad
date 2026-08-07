@@ -3,6 +3,7 @@ import type { StrictTranslateForNamespace } from '@monad/i18n';
 import type {
   AgentId,
   ChannelType,
+  MessageOrigin,
   OperationSource,
   ProjectId,
   SendMessageResponse,
@@ -24,11 +25,15 @@ export interface SessionGateway {
     title: string;
     origin?: OperationSource;
   }): Promise<{ sessionId: SessionId }>;
-  sendProjectMessage?(args: { sessionId: SessionId; text: string }): Promise<SendMessageResponse>;
+  sendProjectMessage?(args: {
+    sessionId: SessionId;
+    text: string;
+    origin?: MessageOrigin;
+  }): Promise<SendMessageResponse>;
   sendInline(
     args: { sessionId: SessionId; text: string },
     sink: EventSink,
-    runOpts?: { transport?: SessionTransport; ambientContext?: string }
+    runOpts?: { transport?: SessionTransport; ambientContext?: string; origin?: MessageOrigin }
   ): Promise<void>;
   /** Clear a session's history (for /reset over a channel). Optional: tests omit the command path. */
   reset?(args: { id: SessionId }): Promise<{ clearedCount: number }>;

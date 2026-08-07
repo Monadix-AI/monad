@@ -1,4 +1,12 @@
-import type { ChatMessage, Event, MessageId, SendMessageRequest, SessionId, SessionTransport } from '@monad/protocol';
+import type {
+  ChatMessage,
+  Event,
+  MessageId,
+  MessageOrigin,
+  SendMessageRequest,
+  SessionId,
+  SessionTransport
+} from '@monad/protocol';
 import type { ImageAttachment } from '#/agent/index.ts';
 import type { Tool, ToolBackends } from '#/capabilities/tools/types.ts';
 import type { CommandBundle, LifecycleOps } from '#/handlers/commands/index.ts';
@@ -50,6 +58,19 @@ function composeFilter(a?: ToolFilter, b?: ToolFilter): ToolFilter | undefined {
   if (!a) return b;
   if (!b) return a;
   return (name) => a(name) && b(name);
+}
+
+/**
+ * Ingress provenance for one message write. A caller that knows WHO it is (channel dispatch, ACP,
+ * openai-compat, a2a) declares it; everyone else records the bare transport.
+ *
+ * Deliberately no fallback to the session's own origin: the transport alone does not identify a
+ * client — web, TUI, openai-compat and a2a all write over `http` — so borrowing the session
+ * creator's identity would stamp a web reply into an api-born session as "sent from openai-compat".
+ * An unnamed write is recorded as unnamed; provenance is never guessed.
+ */
+function messageOriginFor(transport: SessionTransport, override?: MessageOrigin): MessageOrigin {
+  return override ?? { transport };
 }
 
 function completedAssistantText(event: Event): string | null {
@@ -175,8 +196,14 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
     continueFromHistory,
     ambientContext,
     replyToMessageId,
-    onComplete
-  }: { sessionId: SessionId; onComplete?: (text: string) => void | Promise<void> } & SendMessageRequest) {
+    onComplete,
+    origin
+  }: {
+    sessionId: SessionId;
+    onComplete?: (text: string) => void | Promise<void>;
+    /** Explicit ingress provenance (channel-routed project sends); absent derives from 'http'. */
+    origin?: MessageOrigin;
+  } & SendMessageRequest) {
     let effectiveText = messageTextWithAttachments(text, attachments);
     const modelAttachments = imageAttachments(attachments);
     const session = requireSession(sessionId);
@@ -186,12 +213,19 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
     if (steerMessages && !steer) throw new HandlerError('invalid', 'steerMessages requires steer mode');
     if (steerMessages && effectiveText) throw new HandlerError('invalid', 'steer batch cannot include text');
     const requestedSteers = steerMessages ?? (effectiveText ? [effectiveText] : []);
+    const steerOrigin = messageOriginFor('http', origin);
     if (steer && requestedSteers.length === 0) throw new HandlerError('invalid', 'steer requires a message');
     if (steer && (continueFromHistory || generate === false || attachments?.length)) {
       throw new HandlerError('invalid', 'steer accepts text only and cannot continue history');
     }
     touchSession(sessionId);
-    if (steer && enqueueSteers(sessionId, requestedSteers)) {
+    if (
+      steer &&
+      enqueueSteers(
+        sessionId,
+        requestedSteers.map((text) => ({ text, origin: steerOrigin }))
+      )
+    ) {
       return { accepted: true as const };
     }
     if (steer) {
@@ -242,7 +276,8 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
         type: 'text',
         text: presentation?.text ?? effectiveText,
         ...(replyToMessageId === undefined ? {} : { replyToMessageId }),
-        ...(presentation?.data ? { data: presentation.data } : {})
+        ...(presentation?.data ? { data: presentation.data } : {}),
+        metadata: { origin: messageOriginFor('http', origin) }
       });
       const messageId = message.id;
       log?.debug(
@@ -273,7 +308,8 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
     const run = continueFromHistory
       ? loop.runStreamFromHistory(sessionId as SessionId, signal)
       : loop.runStream(sessionId as SessionId, effectiveText, signal, modelAttachments, presentation, {
-          replyToMessageId
+          replyToMessageId,
+          origin: messageOriginFor('http', origin)
         });
     const execution = run
       .then(async () => {
@@ -354,6 +390,8 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
         sandboxRoots?: string[];
         onReady?: () => void;
         signal?: AbortSignal;
+        /** Explicit ingress provenance for the turn's user row (channel dispatch supplies sender detail). */
+        origin?: MessageOrigin;
       }
     ) {
       let effectiveText = messageTextWithAttachments(text, attachments);
@@ -468,6 +506,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
               presentation,
               {
                 replyToMessageId,
+                origin: messageOriginFor(runOpts?.transport ?? 'http', runOpts?.origin),
                 onInputCommitted: runOpts?.onReady
               }
             );
@@ -516,7 +555,10 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
       });
       const execution = (async () => {
         try {
-          const msg = await loop.runBlock(sessionId as SessionId, text, undefined, signal, { replyToMessageId });
+          const msg = await loop.runBlock(sessionId as SessionId, text, undefined, signal, {
+            replyToMessageId,
+            origin: messageOriginFor('http')
+          });
           log?.debug({ sessionId, event: 'session.generate.complete', text: msg.text }, 'session generate complete');
           const message: ChatMessage = {
             id: msg.id as ChatMessage['id'],

@@ -529,7 +529,7 @@ export function createOpenAiCompatController(
                       } catch {}
                     }
                   },
-                  { transport: 'http', ambientContext }
+                  { transport: 'http', ambientContext, origin: SESSION_ORIGIN }
                 );
               } catch (err) {
                 try {
@@ -584,7 +584,7 @@ export function createOpenAiCompatController(
                 failureText = message.text;
               }
             },
-            { transport: 'http', ambientContext }
+            { transport: 'http', ambientContext, origin: SESSION_ORIGIN }
           );
         } catch (err) {
           return handlerErrorToOai(err);
