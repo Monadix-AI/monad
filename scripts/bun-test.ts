@@ -2,6 +2,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative, resolve } from 'node:path';
 
+import { mapWithConcurrency } from './lib/map-with-concurrency.ts';
 import { type FailedTestFile, groupFailedCases, parseFailedCases } from './lib/test-failure-rerun.ts';
 
 /**
@@ -75,6 +76,7 @@ const coverage =
   process.env.MONAD_TEST_COVERAGE === '1' ? ['--coverage', '--coverage-reporter=text', '--coverage-reporter=lcov'] : [];
 const rerunLimit = 10;
 const autoShardCap = 8;
+const windowsShardConcurrency = 2;
 const inputArgs = process.argv.slice(2);
 const shardArg = inputArgs.find((arg) => arg.startsWith('--monad-shards='));
 const shardValue = shardArg?.slice('--monad-shards='.length);
@@ -168,13 +170,8 @@ async function runNativeShards(count: number): Promise<{ exitCode: number; junit
     return { code, shardJunitPath };
   };
   const indexes = Array.from({ length: count }, (_, index) => index);
-  const results =
-    process.platform === 'win32'
-      ? await indexes.reduce<Promise<Awaited<ReturnType<typeof runShard>>[]>>(
-          async (pending, index) => [...(await pending), await runShard(index)],
-          Promise.resolve([])
-        )
-      : await Promise.all(indexes.map(runShard));
+  const concurrency = process.platform === 'win32' ? windowsShardConcurrency : count;
+  const results = await mapWithConcurrency(indexes, concurrency, runShard);
   return {
     exitCode: results.find(({ code }) => code !== 0)?.code ?? 0,
     junitReports: results.map(({ shardJunitPath }) => shardJunitPath).filter(existsSync)
