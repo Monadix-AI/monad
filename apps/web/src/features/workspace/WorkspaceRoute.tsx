@@ -52,11 +52,8 @@ export function WorkspaceRoute({
   activeProjectId,
   activeProjectSessionId,
   activeProjectSurface = 'workplace',
-  agents,
   projects,
   onProjectDeleted,
-  onOpenSettings,
-  onOpenStudio,
   voiceModelState = 'checking'
 }: WorkspaceRouteProps) {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
@@ -192,9 +189,6 @@ export function WorkspaceRoute({
   return (
     <WorkspaceHome
       activeProjectId={activeProjectId}
-      agents={agents}
-      onOpenSettings={onOpenSettings}
-      onOpenStudio={onOpenStudio}
       projects={projects}
     />
   );

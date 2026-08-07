@@ -1,22 +1,30 @@
-import type { Agent, AgentId, ProjectId, SendMessageAttachment, SessionId } from '@monad/protocol';
+import type { ProjectId, SendMessageAttachment, SessionId } from '@monad/protocol';
 
-import { BotIcon, CheckIcon, Folder01Icon, LoaderPinwheelIcon, PlusSignIcon } from '@hugeicons/core-free-icons';
+import { Cancel01Icon, CheckIcon, Folder01Icon, PlusSignIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
   createIdempotencyKey,
   useCreateProjectSessionMutation,
   useCreateSessionMutation,
+  useCreateWorkplaceProjectMutation,
   useSendMessageMutation,
   useSendProjectMessageMutation
 } from '@monad/client-rtk';
 import { newId } from '@monad/protocol';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@monad/ui';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from '@monad/ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useT } from '#/components/I18nProvider';
 import { ComposerShell } from '#/features/session/ComposerShell';
 import { enqueueInitialUserMessageForSession, useSessionUiStore } from '#/features/session/session-ui-store';
 import { messageAttachmentsFromSend, useComposerAttachments } from '#/features/session/use-composer-attachments';
+import { NewProjectDialog } from '#/features/shell/NewProjectDialog';
 import { projectSessionPath } from '#/features/shell/routing/paths';
 import { pushShellUrl, replaceShellUrl } from '#/hooks/use-shell-location';
 import { useWorkspaceShellStore } from '#/lib/workspace-shell-store';
@@ -29,20 +37,17 @@ import {
 } from './workspace-home-model';
 
 type HomeProject = { id: string; name: string; sessions?: { id: SessionId }[] };
-type TargetMode = 'agent' | 'project';
 
 interface WorkspaceHomeProps {
-  agents: Agent[];
   projects: HomeProject[];
   activeProjectId: string | null;
-  onOpenSettings: () => void;
-  onOpenStudio: () => void;
 }
 
-export function WorkspaceHome({ agents, projects, activeProjectId, onOpenStudio }: WorkspaceHomeProps) {
+export function WorkspaceHome({ projects, activeProjectId }: WorkspaceHomeProps) {
   const t = useT();
   const [createSession] = useCreateSessionMutation();
   const [createProjectSession] = useCreateProjectSessionMutation();
+  const [createWorkplaceProject] = useCreateWorkplaceProjectMutation();
   const [sendMessage] = useSendMessageMutation();
   const [sendProjectMessage] = useSendProjectMessageMutation();
   const clearComposerInput = useSessionUiStore((state) => state.clearComposerInput);
@@ -52,9 +57,9 @@ export function WorkspaceHome({ agents, projects, activeProjectId, onOpenStudio 
   const newChatPrefill = useWorkspaceShellStore((state) => state.newChatPrefill);
   const setNewChatPrefill = useWorkspaceShellStore((state) => state.setNewChatPrefill);
   const [intent, setIntent] = useState('');
-  const [targetMode, setTargetMode] = useState<TargetMode>('agent');
-  const [selectedAgentId, setSelectedAgentId] = useState<AgentId | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(activeProjectId);
+  const [createdProject, setCreatedProject] = useState<HomeProject | null>(null);
+  const [newProjectDialogOpen, setNewProjectDialogOpen] = useState(false);
   const [launching, setLaunching] = useState(false);
   const [launchError, setLaunchError] = useState<string | null>(null);
   const launchingRef = useRef(false);
@@ -67,38 +72,45 @@ export function WorkspaceHome({ agents, projects, activeProjectId, onOpenStudio 
     removeAttachment,
     sendableAttachments: composerAttachments
   } = useComposerAttachments('workspace-home');
-  const selectedProject = useMemo(
-    () => projects.find((project) => project.id === selectedProjectId) ?? null,
-    [projects, selectedProjectId]
+  const projectOptions = useMemo(
+    () =>
+      createdProject && !projects.some((project) => project.id === createdProject.id)
+        ? [...projects, createdProject]
+        : projects,
+    [createdProject, projects]
   );
-  const selectedAgent = selectedAgentId ? (agents.find((agent) => agent.id === selectedAgentId) ?? null) : null;
+  const selectedProject = useMemo(
+    () => projectOptions.find((project) => project.id === selectedProjectId) ?? null,
+    [projectOptions, selectedProjectId]
+  );
+  const targetMode = selectedProject ? 'project' : 'agent';
   const launchTarget = resolveWorkspaceLaunchTarget({
     mode: targetMode,
     selectedAgentSessionId: null,
     selectedProjectId: selectedProject?.id ?? null
   });
-  const selectedTargetLabel =
-    targetMode === 'project'
-      ? (selectedProject?.name ?? t('web.workspace.chooseProject'))
-      : (selectedAgent?.name ?? t('web.workspace.defaultAgent'));
-  const actionLabel = targetMode === 'project' ? t('web.workspace.build') : t('web.workspace.chat');
+  const selectedTargetLabel = selectedProject?.name ?? t('web.workspace.noProjectShort');
 
   useEffect(() => {
     if (!newChatPrefill) return;
     if (newChatPrefill.mode === 'project') {
-      setTargetMode('project');
       setSelectedProjectId(newChatPrefill.projectId);
-      setSelectedAgentId(null);
     } else {
-      setTargetMode('agent');
-      setSelectedAgentId(null);
+      setSelectedProjectId(null);
     }
     setNewChatPrefill(null);
   }, [newChatPrefill, setNewChatPrefill]);
 
-  const selectMode = (mode: TargetMode): void => {
-    setTargetMode(mode);
+  useEffect(() => {
+    if (createdProject && projects.some((project) => project.id === createdProject.id)) setCreatedProject(null);
+  }, [createdProject, projects]);
+
+  const createProject = async (args: { cwd?: string; name: string }): Promise<void> => {
+    const projectId = await createWorkplaceProject({ cwd: args.cwd, title: args.name }).unwrap();
+    setCreatedProject({ id: projectId, name: args.name });
+    setSelectedProjectId(projectId);
     setLaunchError(null);
+    setNewProjectDialogOpen(false);
   };
 
   const startDraftChatSession = (draft: string, attachments: SendMessageAttachment[]): void => {
@@ -112,7 +124,6 @@ export function WorkspaceHome({ agents, projects, activeProjectId, onOpenStudio 
       id: tempSessionId,
       title,
       text: draft,
-      ...(selectedAgentId ? { agentId: selectedAgentId } : {}),
       createIdempotencyKey: createIdempotencyKeyValue,
       sendIdempotencyKey: sendIdempotencyKeyValue,
       status: 'creating',
@@ -236,31 +247,18 @@ export function WorkspaceHome({ agents, projects, activeProjectId, onOpenStudio 
             id="workspace-intent-title"
           >
             <span>{t('web.workspace.iWantTo')}</span>
-            <ActionDropdown
+            <span>{t('web.workspace.build')}</span>
+            <span>{t('web.workspace.inInline')}</span>
+            <ProjectDropdown
               disabled={launching}
-              onSelect={selectMode}
-              t={t}
-              targetMode={targetMode}
-              value={actionLabel}
-            />
-            <span>{t('web.workspace.withInline')}</span>
-            <TargetDropdown
-              agents={agents}
-              disabled={launching}
-              onOpenStudio={onOpenStudio}
-              onSelectAgent={(agentId) => {
-                setSelectedAgentId(agentId);
-                setLaunchError(null);
-              }}
+              onCreateProject={() => setNewProjectDialogOpen(true)}
               onSelectProject={(projectId) => {
                 setSelectedProjectId(projectId);
                 setLaunchError(null);
               }}
-              projects={projects}
-              selectedAgentId={selectedAgentId}
+              projects={projectOptions}
               selectedProjectId={selectedProject?.id ?? null}
               t={t}
-              targetMode={targetMode}
               value={selectedTargetLabel}
             />
           </h1>
@@ -297,30 +295,6 @@ export function WorkspaceHome({ agents, projects, activeProjectId, onOpenStudio 
             />
           </div>
 
-          <div
-            aria-live="polite"
-            className="workspace-home-state-line"
-          >
-            {launching ? (
-              <>
-                <HugeiconsIcon
-                  aria-hidden
-                  className="size-3.5 animate-spin motion-reduce:animate-none"
-                  icon={LoaderPinwheelIcon}
-                />
-                {t('web.workspace.launching')}
-              </>
-            ) : (
-              <>
-                <HugeiconsIcon
-                  aria-hidden
-                  className="size-3.5"
-                  icon={CheckIcon}
-                />
-                {selectedTargetLabel}
-              </>
-            )}
-          </div>
           {launchError ? (
             <p
               className="workspace-home-error"
@@ -331,83 +305,29 @@ export function WorkspaceHome({ agents, projects, activeProjectId, onOpenStudio 
           ) : null}
         </section>
       </div>
+      <NewProjectDialog
+        onClose={() => setNewProjectDialogOpen(false)}
+        onCreate={(args) => void createProject(args)}
+        open={newProjectDialogOpen}
+      />
     </main>
   );
 }
 
-function ActionDropdown({
+function ProjectDropdown({
   disabled,
-  onSelect,
-  targetMode,
-  t,
-  value
-}: {
-  disabled: boolean;
-  onSelect: (mode: TargetMode) => void;
-  targetMode: TargetMode;
-  t: ReturnType<typeof useT>;
-  value: string;
-}) {
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          className="workspace-home-token"
-          disabled={disabled}
-          type="button"
-        >
-          {value}
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="center"
-        className="min-w-40"
-      >
-        <DropdownMenuItem
-          aria-checked={targetMode === 'agent'}
-          onSelect={() => onSelect('agent')}
-          role="menuitemradio"
-        >
-          <HugeiconsIcon icon={BotIcon} />
-          <span>{t('web.workspace.chat')}</span>
-          {targetMode === 'agent' ? <HugeiconsIcon icon={CheckIcon} /> : null}
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          aria-checked={targetMode === 'project'}
-          onSelect={() => onSelect('project')}
-          role="menuitemradio"
-        >
-          <HugeiconsIcon icon={Folder01Icon} />
-          <span>{t('web.workspace.build')}</span>
-          {targetMode === 'project' ? <HugeiconsIcon icon={CheckIcon} /> : null}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
-function TargetDropdown({
-  agents,
-  disabled,
-  onOpenStudio,
-  onSelectAgent,
+  onCreateProject,
   onSelectProject,
   projects,
-  selectedAgentId,
   selectedProjectId,
-  targetMode,
   t,
   value
 }: {
-  agents: Agent[];
   disabled: boolean;
-  onOpenStudio: () => void;
-  onSelectAgent: (agentId: AgentId | null) => void;
-  onSelectProject: (projectId: string) => void;
+  onCreateProject: () => void;
+  onSelectProject: (projectId: string | null) => void;
   projects: HomeProject[];
-  selectedAgentId: AgentId | null;
   selectedProjectId: string | null;
-  targetMode: TargetMode;
   t: ReturnType<typeof useT>;
   value: string;
 }) {
@@ -426,60 +346,41 @@ function TargetDropdown({
         align="center"
         className="w-72"
       >
-        {targetMode === 'agent' ? (
-          <>
-            <WorkspaceOptionItem
-              description={t('web.workspace.defaultAgentHint')}
-              icon={PlusSignIcon}
-              onSelect={() => onSelectAgent(null)}
-              selected={!selectedAgentId}
-              title={t('web.workspace.defaultAgent')}
-            />
-            {agents.map((agent) => (
-              <WorkspaceOptionItem
-                description={t('web.workspace.agentOptionHint')}
-                icon={BotIcon}
-                key={agent.id}
-                onSelect={() => onSelectAgent(agent.id)}
-                selected={selectedAgentId === agent.id}
-                title={agent.name}
-              />
-            ))}
-          </>
-        ) : projects.length > 0 ? (
-          projects.map((project) => (
-            <WorkspaceOptionItem
-              description={t('web.workspace.existingProject')}
-              icon={Folder01Icon}
-              key={project.id}
-              onSelect={() => onSelectProject(project.id)}
-              selected={selectedProjectId === project.id}
-              title={project.name}
-            />
-          ))
-        ) : (
-          <DropdownMenuItem onSelect={onOpenStudio}>
-            <HugeiconsIcon icon={Folder01Icon} />
-            <span className="min-w-0 flex-1">
-              <span className="block truncate">{t('web.workplace.noProjects')}</span>
-              <span className="block truncate text-muted-foreground text-xs">{t('web.workspace.noProjectsHint')}</span>
-            </span>
-          </DropdownMenuItem>
-        )}
+        {projects.map((project) => (
+          <WorkspaceOptionItem
+            icon={Folder01Icon}
+            key={project.id}
+            onSelect={() => onSelectProject(project.id)}
+            selected={selectedProjectId === project.id}
+            title={project.name}
+          />
+        ))}
+        {projects.length > 0 ? <DropdownMenuSeparator /> : null}
+        <DropdownMenuItem onSelect={onCreateProject}>
+          <HugeiconsIcon icon={PlusSignIcon} />
+          <span className="min-w-0 flex-1 truncate">{t('web.workplace.newProject')}</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          aria-checked={!selectedProjectId}
+          onSelect={() => onSelectProject(null)}
+          role="menuitemradio"
+        >
+          <HugeiconsIcon icon={Cancel01Icon} />
+          <span className="min-w-0 flex-1 truncate">{t('web.workspace.noProject')}</span>
+          {!selectedProjectId ? <HugeiconsIcon icon={CheckIcon} /> : null}
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
 }
 
 function WorkspaceOptionItem({
-  description,
   icon,
   onSelect,
   selected,
   title
 }: {
-  description: string;
-  icon: typeof BotIcon;
+  icon: typeof Folder01Icon;
   onSelect: () => void;
   selected: boolean;
   title: string;
@@ -491,10 +392,7 @@ function WorkspaceOptionItem({
       role="menuitemradio"
     >
       <HugeiconsIcon icon={icon} />
-      <span className="min-w-0 flex-1">
-        <span className="block truncate">{title}</span>
-        <span className="block truncate text-muted-foreground text-xs">{description}</span>
-      </span>
+      <span className="min-w-0 flex-1 truncate">{title}</span>
       {selected ? <HugeiconsIcon icon={CheckIcon} /> : null}
     </DropdownMenuItem>
   );
