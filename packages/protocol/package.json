@@ -1,6 +1,6 @@
 {
   "name": "@monad/protocol",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "dependencies": {
     "zod": "^4.4.3"
   },
