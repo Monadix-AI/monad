@@ -55,7 +55,7 @@ mise install
 Then, without doing anything else first:
 
 ```sh
-bun install        # link binaries + run postinstall (sets up .env.local with this worktree's ports)
+bun install        # link binaries + run postinstall (sets up ports and the Turbo remote-cache binding)
 bun run dev        # starts daemon + web on this worktree's ports
 ```
 
@@ -270,6 +270,8 @@ Read this when `bun run dev` fails or you need to find/verify this worktree's po
    - creates/migrates `.env.local` (sets `MONAD_HOME=<worktree>/.dev/.monad`),
    - **assigns this worktree its own ports** (derived from the checkout path) and writes
      them into `.env.local` if absent — it never clobbers a value you set by hand,
+   - copies the main worktree's Turbo `teamId` into the gitignored `.turbo/config.json`
+     when available; authentication remains in Turbo's machine-level login,
    - regenerates the `./.dev/bin` CLI shims with this worktree's absolute paths.
 2. **At dev time**, Bun loads `.env.local` and `bun run dev` starts the repository's
    generated-artifact and persistent development tasks through `turbo watch`.
