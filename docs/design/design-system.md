@@ -82,11 +82,16 @@ rgb(var(--borderColor-secondary) / 0.15)
 | `--border` | `rgb(var(--borderColor-secondary) / 0.1)` |
 | `--input` | `rgb(var(--borderColor-secondary) / 0.14)` |
 | `--ring` | `rgb(var(--outlineColor-focus-ring))` |
-| `--sidebar` | `rgb(var(--backgroundColor-surface))` |
+| `--sidebar` | `rgb(246 246 246)` light / `rgb(33 33 33)` dark |
 | `--destructive` / `--success` / `--warning` / `--info` | fixed status colors, not derived from a raw token |
 
 `--chart-1` … `--chart-5` and the `--sidebar-*` family follow the same pattern; read
 `packages/ui/src/styles.css` for the complete list.
+
+The sidebar uses an app-chrome palette independent of content surfaces: foreground is
+`rgb(26 28 31)` in light mode and white in dark mode; secondary text is 70% foreground,
+selected rows are 5%, and hover states and borders are 8%. Keep brand purple for focus,
+links, and semantic status instead of persistent navigation chrome.
 
 ## Surfaces
 
@@ -111,7 +116,7 @@ fully opaque.
 
 Use the existing app font stack:
 
-- `--font-sans`: the platform system stack (`-apple-system-body`, `system-ui`, `Segoe UI`, …) for UI text.
+- `--font-sans`: the platform system stack (`-apple-system`, `BlinkMacSystemFont`, `Segoe UI`, …) for UI text.
 - `--font-display` / `--font-heading`: currently aliases of `--font-sans` — headings differ by size and weight, not family.
 - `--font-mono`: the system mono stack (`ui-monospace`, `SF Mono`, `Menlo`, `Consolas`, …) for labels, telemetry, code, and compact metadata.
 
@@ -173,12 +178,14 @@ Reference row/toolbar tokens:
 | `--spacing-panel` | `0.75rem` (`12px`) |
 | `--spacing-toolbar` | `1rem` (`16px`) |
 | `--height-token-nav-row` | `29px` |
+| `--height-token-sidebar-row` | `28px` |
 | `--height-toolbar` | `46px` |
 | `--height-toolbar-sm` | `36px` |
 | `--height-toolbar-pane` | `40px` |
 | `--leading-control` / `--leading-row` | `18px` / `21px` |
 
 Use these as upper bounds for ordinary chrome. If a sidebar item needs two lines, keep the row at `px-2`/`py-1.5` or `px-3`/`py-2`; do not turn sidebar navigation into card-like rows.
+Adjacent sidebar rows use a `1px` gap, producing a `29px` center-to-center rhythm.
 
 #### Buttons And Controls
 

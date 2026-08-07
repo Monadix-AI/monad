@@ -1,4 +1,4 @@
-const SHELL_HEADER_HEIGHT = 52;
+const SHELL_HEADER_HEIGHT = 48;
 
 export function SidebarHeader(_props: {
   collapsed: boolean;

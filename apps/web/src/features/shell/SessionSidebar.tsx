@@ -26,6 +26,7 @@ import { SessionSidebarResizeHandle } from './SessionSidebarResizeHandle';
 import { useSessionSidebarActions } from './session-sidebar-actions';
 import { type ProjectItem, SidebarHeader } from './sidebar';
 import { useConsumeActiveSessionAttention } from './sidebar/use-consume-active-session-attention';
+import { DEFAULT_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH } from './sidebar-layout';
 import { useSidebarPagerGesture } from './use-sidebar-pager';
 import { useSidebarResize } from './use-sidebar-resize';
 
@@ -98,9 +99,6 @@ interface Props {
   workspace: SidebarWorkspaceConfig;
 }
 
-const DEFAULT_SIDEBAR_WIDTH = 288;
-const MIN_SIDEBAR_WIDTH = 240;
-const MAX_SIDEBAR_WIDTH = 420;
 const AUTO_REVEAL_CLOSE_ANIMATION_MS = 200;
 
 export function SessionSidebar({ daemon, responsive, surfaces, workspace }: Props) {
@@ -402,7 +400,7 @@ export function SessionSidebar({ daemon, responsive, surfaces, workspace }: Prop
     <>
       <aside
         className={cn(
-          'panel-nav sidebar-no-hover-transition group/sidebar flex h-full min-h-0 flex-col overflow-hidden text-foreground',
+          'panel-nav sidebar-no-hover-transition group/sidebar flex h-full min-h-0 flex-col overflow-hidden font-sans text-foreground',
           responsive.narrow && 'absolute inset-y-0 left-0 z-30 shadow-xl',
           !responsive.narrow && (effectiveCollapsed || effectiveOverlay) && 'panel-nav-overlay',
           resizing

@@ -8,7 +8,8 @@ describe('sidebar resize state', () => {
     [192, true, 240],
     [193, false, 240],
     [240, false, 240],
-    [500, false, 420]
+    [500, false, 500],
+    [600, false, 520]
   ])('maps raw width %i to collapsed=%s and width=%i', (rawWidth, collapsed, width) => {
     expect(sidebarResizeState(rawWidth)).toEqual({ collapsed, width });
   });
