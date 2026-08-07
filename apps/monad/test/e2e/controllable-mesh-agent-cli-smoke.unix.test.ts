@@ -147,7 +147,7 @@ async function configureAgent(call: Call, name: string, script: string): Promise
 }
 
 for (const kind of TRANSPORTS) {
-  describe.skipIf(process.platform === 'win32')(`controllable mesh-agent CLI over ${kind}`, () => {
+  describe(`controllable mesh-agent CLI over ${kind}`, () => {
     test('non-zero provider exit is reflected as a failed turn, not a clean stop', async () => {
       const { dir, projectDir, app, handlers } = await setup();
       const transport = serveTransport(kind, app);

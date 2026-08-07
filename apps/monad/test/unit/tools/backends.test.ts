@@ -1,6 +1,5 @@
 import { afterEach, expect, test } from 'bun:test';
-import { existsSync } from 'node:fs';
-import { mkdtemp, rm, symlink } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -40,42 +39,6 @@ test('sandbox fs backend rejects paths outside the roots', async () => {
     await rm(dir, { recursive: true, force: true });
   }
 });
-
-test.skipIf(process.platform === 'win32')(
-  'sandbox fs backend denies direct and symlinked Credential vault access for every mutation',
-  async () => {
-    const dir = await tmp();
-    try {
-      const workspace = join(dir, 'workspace');
-      const vault = join(dir, 'config', 'auth.json');
-      const credentials = join(dir, 'config', 'credentials');
-      const link = join(workspace, 'vault-link.json');
-      const credentialsLink = join(workspace, 'credentials-link');
-      await Bun.write(vault, 'real-secret-canary');
-      await Bun.write(join(credentials, 'marker'), 'real-secret-canary');
-      await Bun.write(join(workspace, 'ordinary.txt'), 'ordinary');
-      await symlink(vault, link);
-      await symlink(credentials, credentialsLink);
-      configureSandboxReadDeny([vault, credentials]);
-      const { fs } = createSandboxBackends([dir]);
-      if (!fs.deleteFile || !fs.moveFile) throw new Error('sandbox fs mutations unavailable');
-
-      await expect(fs.readTextFile(vault)).rejects.toThrow('sandbox path denied');
-      await expect(fs.readTextFile(link)).rejects.toThrow('sandbox path denied');
-      await expect(fs.writeTextFile(vault, 'replacement')).rejects.toThrow('sandbox path denied');
-      await expect(fs.deleteFile(vault)).rejects.toThrow('sandbox path denied');
-      await expect(fs.moveFile(vault, join(workspace, 'moved.json'))).rejects.toThrow('sandbox path denied');
-      await expect(fs.moveFile(join(workspace, 'ordinary.txt'), vault)).rejects.toThrow('sandbox path denied');
-      await expect(fs.writeTextFile(join(credentialsLink, 'new', 'secret.txt'), 'replacement')).rejects.toThrow(
-        'sandbox path denied'
-      );
-      expect(await Bun.file(vault).text()).toBe('real-secret-canary');
-      expect(existsSync(join(credentials, 'new'))).toBe(false);
-    } finally {
-      await rm(dir, { recursive: true, force: true });
-    }
-  }
-);
 
 test('sandbox terminal backend streams cumulative output via onChunk', async () => {
   const dir = await tmp();

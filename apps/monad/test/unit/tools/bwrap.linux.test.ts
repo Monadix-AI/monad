@@ -43,6 +43,17 @@ test('a write inside the writable root succeeds', async () => {
   expect(existsSync(join(root, 'ok.txt'))).toBe(true);
 });
 
+test('bwrap launcher prepends its binary and separates the wrapped argv', () => {
+  const result = bwrapLauncher.wrap?.(['echo', 'hi'], { writableRoots: ['/work'], net: 'none' }) ?? [];
+  const separator = result.indexOf('--');
+  expect({ binary: result[0], separator, argv: result.slice(separator + 1) }).toEqual({
+    binary: expect.stringMatching(/bwrap/),
+    separator: expect.any(Number),
+    argv: ['echo', 'hi']
+  });
+  expect(separator).toBeGreaterThan(0);
+});
+
 test('a write outside the writable root is blocked', async () => {
   const root = await tmp();
   const outside = await tmp();

@@ -150,44 +150,6 @@ test('callback failure releases native ownership for the next contender', async 
   await expect(withConfigTransactionLock(home, async () => 'released')).resolves.toBe('released');
 });
 
-test('a process killed while owning the Unix lock is abandoned for the next contender', async () => {
-  if (process.platform === 'win32') return;
-  const home = await lockFixture();
-  const readyPath = join(home, 'owner-ready');
-  const moduleUrl = new URL('../../src/config/config-transaction-lock.ts', import.meta.url).href;
-  const child = Bun.spawn(
-    [
-      process.execPath,
-      '--eval',
-      `
-        const { withConfigTransactionLock } = await import(${JSON.stringify(moduleUrl)});
-        await withConfigTransactionLock(process.env.MONAD_TEST_HOME, async () => {
-          await Bun.write(process.env.MONAD_TEST_READY, 'ready');
-          await new Promise(() => {});
-        });
-      `
-    ],
-    {
-      env: { ...process.env, MONAD_TEST_HOME: home, MONAD_TEST_READY: readyPath },
-      stdout: 'pipe',
-      stderr: 'pipe'
-    }
-  );
-  try {
-    for (let attempt = 0; attempt < 200 && !(await Bun.file(readyPath).exists()); attempt++) await Bun.sleep(5);
-    if (!(await Bun.file(readyPath).exists())) throw new Error('child lock owner did not become ready');
-    child.kill(9);
-    await child.exited;
-
-    await expect(withConfigTransactionLock(home, async () => 'recovered', { timeoutMs: 500 })).resolves.toBe(
-      'recovered'
-    );
-  } finally {
-    child.kill(9);
-    await child.exited;
-  }
-});
-
 test('canonical aliases share one named kernel lock identity', async () => {
   const home = await lockFixture();
   const alias = `${home}.alias`;

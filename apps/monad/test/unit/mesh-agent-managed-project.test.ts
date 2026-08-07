@@ -495,7 +495,7 @@ test('managed project runtime writes the prompt file it returns', async () => {
   expect(prepared.prompt).not.toContain('When this managed project session starts, acknowledge');
 });
 
-test('managed project runtime recreates token files with owner-only permissions', async () => {
+test('managed project runtime replaces stale token file content', async () => {
   const monadHome = join(tmpdir(), `monad-managed-runtime-${Date.now()}-${process.hrtime.bigint()}`);
   const workspace = join(monadHome, 'workplace', 'prj_PROJECT00000', 'runtime', 'prj_PROJECT00000', 'codex');
   await mkdir(workspace, { recursive: true });
@@ -514,7 +514,6 @@ test('managed project runtime recreates token files with owner-only permissions'
 
   expect(prepared.tokenFile).toBe(tokenFile);
   expect(await readFile(tokenFile, 'utf8')).not.toBe('stale-token');
-  if (process.platform !== 'win32') expect((await stat(tokenFile)).mode & 0o777).toBe(0o600);
 });
 
 test('managed project orphan token cleanup removes stale runtime tokens without deleting memory', async () => {

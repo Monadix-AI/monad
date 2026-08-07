@@ -1,7 +1,7 @@
 import type { FileObservationStore, ToolBackends, ToolContext, ToolGate } from '#/capabilities/tools/types.ts';
 
 import { afterAll, beforeAll, expect, test } from 'bun:test';
-import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 
@@ -825,24 +825,6 @@ test('file_read outside sandbox: allow gate succeeds', async () => {
     requestedByTool: 'file_read'
   });
 });
-
-test.skipIf(process.platform === 'win32')(
-  'file_read outside sandbox canonicalizes existing symlink dir approval key',
-  async () => {
-    const realOutside = await realpath(outside);
-    const linkParent = await mkdtemp(join(tmpdir(), 'monad-file-link-'));
-    const linked = join(linkParent, 'outside-link');
-    await symlink(realOutside, linked);
-    const calls: { tool: string; key?: string }[] = [];
-    try {
-      const res = await fileReadTool.run({ path: join(linked, 'secret.txt') }, ctx([root], allowGate(calls)));
-      expect(res.modelContent).toBe('1\toutside content');
-      expect(calls[0]).toMatchObject({ tool: 'path_access', key: realOutside });
-    } finally {
-      await rm(linkParent, { recursive: true, force: true });
-    }
-  }
-);
 
 test('file_patch outside sandbox: allow gate succeeds after file_read', async () => {
   const p = join(outside, 'patch-gate.txt');

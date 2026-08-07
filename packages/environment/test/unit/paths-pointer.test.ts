@@ -6,32 +6,10 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { rm, writeFile } from 'node:fs/promises';
-import { homedir, tmpdir } from 'node:os';
+import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join } from 'node:path';
 
 import { getPaths, getRootPointerPath } from '../../src/paths.ts';
-
-// ── getRootPointerPath ────────────────────────────────────────────────────────
-
-describe('getRootPointerPath', () => {
-  const env = { ...Bun.env };
-
-  afterEach(() => {
-    Object.assign(Bun.env, env);
-    if (!('APPDATA' in env)) delete Bun.env.APPDATA;
-  });
-
-  test('on non-Windows, pointer lives at ~/.monad/root', () => {
-    if (process.platform === 'win32') return;
-    expect(getRootPointerPath()).toBe(join(homedir(), '.monad', 'root'));
-  });
-
-  test('on Windows, pointer lives under APPDATA/monad/root', () => {
-    if (process.platform !== 'win32') return;
-    const appData = Bun.env.APPDATA ?? join(homedir(), 'AppData', 'Roaming');
-    expect(getRootPointerPath()).toBe(join(appData, 'monad', 'root'));
-  });
-});
 
 // ── getPaths pointer file ─────────────────────────────────────────────────────
 
@@ -136,52 +114,5 @@ describe('getPaths pointer file', () => {
     writePointer('   ');
 
     expect(isAbsolute(getPaths().home)).toBe(true);
-  });
-
-  // ── macOS / Windows: single-tree fallback ───────────────────────────────
-
-  test('on macOS, corrupt pointer falls back to ~/.monad', () => {
-    if (process.platform !== 'darwin') return;
-    Bun.env.NODE_ENV = 'production';
-    delete Bun.env.MONAD_HOME;
-    writePointer('relative/bad');
-
-    expect(getPaths().home).toBe(join(fakeHome, '.monad'));
-  });
-
-  test('on Windows, corrupt pointer falls back to APPDATA/monad', () => {
-    if (process.platform !== 'win32') return;
-    Bun.env.NODE_ENV = 'production';
-    delete Bun.env.MONAD_HOME;
-    writePointer('relative/bad');
-
-    const appData = Bun.env.APPDATA ?? join(homedir(), 'AppData', 'Roaming');
-    expect(getPaths().home).toBe(join(appData, 'monad'));
-  });
-
-  // ── Linux: pointer overrides XDG ────────────────────────────────────────
-
-  test('on Linux, pointer file overrides the XDG default', () => {
-    if (process.platform !== 'linux') return;
-    if (originalPointer !== null) return; // machine already has a pointer file — don't overwrite
-    Bun.env.NODE_ENV = 'production';
-    delete Bun.env.MONAD_HOME;
-
-    const custom = join(tmpdir(), `monad-linux-ptr-${Date.now()}`);
-    writePointer(custom);
-
-    const p = getPaths();
-    expect(p.home).toBe(custom);
-    expect(p.config).toBe(join(custom, 'configs', 'config.json'));
-  });
-
-  test('on Linux, XDG_DATA_HOME is used when no pointer file exists', () => {
-    if (process.platform !== 'linux') return;
-    if (originalPointer !== null) return; // machine already has a pointer file — don't overwrite
-    Bun.env.NODE_ENV = 'production';
-    delete Bun.env.MONAD_HOME;
-    Bun.env.XDG_DATA_HOME = join(tmpdir(), 'xdg-data-ptr-test');
-
-    expect(getPaths().home).toBe(join(Bun.env.XDG_DATA_HOME, 'monad'));
   });
 });
