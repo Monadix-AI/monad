@@ -5,6 +5,7 @@
   "channel.connectedWelcome": "Monad is connected.\n\nSend /project list, then /project use <number> to choose a Project and start chatting here.",
   "channel.error": "Cannot complete the action: {label}",
   "channel.rateLimited": "Messages are arriving too quickly. Wait before sending another message.",
+  "channel.projectSessionNoMembers": "Your message was added to the Project Session, but it has no members, so no one can reply. Add a member in Monad, then send another message.",
   "channel.projectSessionPending": "Choose a session with /switch <number>, or send a message to create and bind a new Project Session.",
   "channel.projectSessionRequired": "This channel is not connected to a Project Session. Use /project list to view available Projects, then /project use <number or name> to connect one."
 }

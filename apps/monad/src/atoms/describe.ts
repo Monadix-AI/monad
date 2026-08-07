@@ -2,6 +2,7 @@ import type { AtomDescriptor, AtomKind } from '@monad/protocol';
 import type { AtomPackContext, ManifestAtomPack } from '@monad/sdk-atom';
 
 import {
+  channelCapabilitiesSchema,
   channelConnectionModeSchema,
   channelEnvVarSchema,
   channelIconSchema,
@@ -36,6 +37,10 @@ function toDescriptor(kind: AtomKind, atom: unknown): AtomDescriptor {
   const channel =
     kind === 'channel'
       ? {
+          ...(() => {
+            const capabilities = channelCapabilitiesSchema.safeParse(o.capabilities);
+            return capabilities.success ? { capabilities: capabilities.data } : {};
+          })(),
           envVars: Array.isArray(o.envVars)
             ? o.envVars.flatMap((envVar) => {
                 const parsed = channelEnvVarSchema.safeParse(envVar);

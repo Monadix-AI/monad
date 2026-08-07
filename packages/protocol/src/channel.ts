@@ -42,7 +42,9 @@ export const channelCapabilitiesSchema = z.object({
   markdown: z.boolean(),
   reactions: z.boolean().default(false), // can react to a message (e.g. ✅ to acknowledge a command)
   nativeCommands: z.boolean().default(false), // platform has a native command menu (push via setCommands)
-  outboundMirror: z.boolean().default(false) // mirror agent replies from any client back to this channel
+  outboundMirror: z.boolean().default(false), // mirror agent replies from any client back to this channel
+  /** Adapter can distinguish addressed vs ambient group messages via ChannelInbound.mentionedSelf. */
+  groupMentionPolicy: z.boolean().optional()
 });
 export type ChannelCapabilities = z.infer<typeof channelCapabilitiesSchema>;
 

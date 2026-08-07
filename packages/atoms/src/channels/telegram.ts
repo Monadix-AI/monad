@@ -21,7 +21,8 @@ const TELEGRAM_CAPABILITIES: ChannelCapabilities = {
   markdown: false,
   reactions: true,
   nativeCommands: true,
-  outboundMirror: true
+  outboundMirror: true,
+  groupMentionPolicy: true
 };
 const MAX_BACKOFF_MS = 30_000;
 
@@ -202,7 +203,12 @@ export function createTelegramAdapter(ctx: ChannelContext): ChannelAdapter {
     },
 
     async setCommands(commands) {
-      await call('setMyCommands', z.object({}).passthrough(), { commands } satisfies Opts<never>['setMyCommands']);
+      const telegramCommands = commands
+        .filter(({ command }) => /^[a-z0-9_]{1,32}$/.test(command))
+        .map(({ command, description }) => ({ command, description }));
+      await call('setMyCommands', z.object({}).passthrough(), {
+        commands: telegramCommands
+      } satisfies Opts<never>['setMyCommands']);
     },
 
     async react(target, emoji) {

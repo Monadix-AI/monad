@@ -12,7 +12,7 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react';
 import { newId } from '@monad/protocol';
 import { Button, Confirm, cn, Input, Label, Textarea } from '@monad/ui';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { useT } from '#/components/I18nProvider';
 import {
@@ -81,6 +81,10 @@ export function ChannelConnectionDialog({
   const [newConnectionId] = useState(() => newId('chn'));
   const connectionId = effectiveConnection?.id ?? newConnectionId;
   const status = statusById.get(connectionId);
+
+  useEffect(() => {
+    if (pairing && savedConnection && status?.phase === 'connected') onClose();
+  }, [onClose, pairing, savedConnection, status?.phase]);
 
   const submit = async () => {
     const trimmedLabel = label.trim();
@@ -274,14 +278,16 @@ export function ChannelConnectionDialog({
           ) : null}
 
           <section className="grid gap-3">
-            <label className="flex items-center gap-2 text-muted-foreground text-xs">
-              <input
-                checked={requireMention}
-                onChange={(event) => setRequireMention(event.target.checked)}
-                type="checkbox"
-              />
-              {t('web.ch.requireMention')}
-            </label>
+            {adapter.capabilities?.groupMentionPolicy ? (
+              <label className="flex items-center gap-2 text-muted-foreground text-xs">
+                <input
+                  checked={requireMention}
+                  onChange={(event) => setRequireMention(event.target.checked)}
+                  type="checkbox"
+                />
+                {t('web.ch.requireMention')}
+              </label>
+            ) : null}
             <div className="grid gap-1.5">
               <Label htmlFor="channel-connection-hint">{t('web.ch.agentHint')}</Label>
               <Textarea

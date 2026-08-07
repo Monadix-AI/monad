@@ -24,6 +24,8 @@ export interface RendererOptions {
   adapter: ChannelAdapter;
   chatId: string;
   threadId?: string;
+  /** Opaque platform reply/interaction target retained across every emitted message. */
+  replyTo?: string;
   log: ChannelLog;
   /** Active-locale translator for the notices this renderer emits (approval / error). */
   t: StrictTranslateForNamespace<'channel'>;
@@ -56,6 +58,7 @@ export function createRenderer({
   adapter,
   chatId,
   threadId,
+  replyTo,
   log,
   t,
   renderMode = 'detail'
@@ -82,7 +85,7 @@ export function createRenderer({
   const sendNew = (text: string): void => {
     for (const part of splitForLimit(text, maxChars)) {
       enqueue(async () => {
-        await adapter.send(chatId, part, { threadId });
+        await adapter.send(chatId, part, { threadId, ...(replyTo ? { replyTo } : {}) });
       });
     }
   };
@@ -100,7 +103,10 @@ export function createRenderer({
       lastEditAt = Date.now();
       const initial = buf;
       enqueue(async () => {
-        handle = await adapter.send(chatId, initial || '…', { threadId });
+        handle = await adapter.send(chatId, initial || '…', {
+          threadId,
+          ...(replyTo ? { replyTo } : {})
+        });
       });
       return;
     }

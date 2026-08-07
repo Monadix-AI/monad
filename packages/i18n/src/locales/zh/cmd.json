@@ -8,7 +8,7 @@
   "cmd.project.empty": "没有可用的活跃 Project。",
   "cmd.project.list": "Project：\n{list}\n\n使用 /project use <编号> 切换。",
   "cmd.project.current": "当前 Project：{title}。",
-  "cmd.project.none": "当前会话正在使用默认 Agent。",
+  "cmd.project.none": "当前会话尚未连接到 Project。",
   "cmd.project.use.usage": "用法：/project use <编号|project ID>",
   "cmd.project.use.empty": "已选择 Project {title}。当前没有 session，发送消息即可创建并自动绑定新 session。",
   "cmd.project.use.sessions": "已选择 Project {title}。\n\nSession：\n{list}\n\n使用 /switch <编号> 绑定已有 session，或直接发送消息创建并自动绑定新 session。",

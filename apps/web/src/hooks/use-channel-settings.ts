@@ -27,7 +27,10 @@ export interface ChannelSettingsStore {
 
 export function useChannelSettings(): ChannelSettingsStore {
   const channelsQ = useListChannelsQuery(undefined);
-  const statusQ = useChannelStatusQuery(undefined);
+  // Pairing adapters publish their QR asynchronously after the pair mutation has already returned.
+  // Keep this settings surface live so a transient `connecting` snapshot advances to `pairing`
+  // without making the operator close/reopen the dialog.
+  const statusQ = useChannelStatusQuery(undefined, { pollingInterval: 1000, skipPollingIfUnfocused: true });
   const [upsert] = useUpsertChannelMutation();
   const [del] = useDeleteChannelMutation();
   const [setCred] = useSetChannelCredentialMutation();

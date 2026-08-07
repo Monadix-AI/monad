@@ -29,7 +29,8 @@ const QQ_CAPABILITIES: ChannelCapabilities = {
   markdown: false,
   reactions: false,
   nativeCommands: false,
-  outboundMirror: true
+  outboundMirror: true,
+  groupMentionPolicy: true
 };
 
 type QQSurface = 'guild' | 'dm' | 'group' | 'c2c';

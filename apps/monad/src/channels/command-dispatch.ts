@@ -117,6 +117,7 @@ export async function runCommand(
       adapter: inst.adapter,
       chatId: m.chatId,
       threadId: m.threadId,
+      replyTo: m.replyTo,
       log: (level, msg) => host.deps.log[level](`[${c.id}] ${msg}`),
       t: host.channelT,
       renderMode: host.getRenderMode(c.id, key)
@@ -130,7 +131,7 @@ export async function runCommand(
     );
     await renderer.finalize();
   } else if (result.message) {
-    await inst.adapter.send(m.chatId, result.message, { threadId: m.threadId });
+    await inst.adapter.send(m.chatId, result.message, { threadId: m.threadId, replyTo: m.replyTo });
   }
 
   // IM-native receipt: a ✅ on the command message — feedback even when the reply has no text

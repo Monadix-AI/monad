@@ -22,7 +22,8 @@ const SIGNAL_CAPABILITIES: ChannelCapabilities = {
   markdown: false,
   reactions: false,
   nativeCommands: false,
-  outboundMirror: true
+  outboundMirror: true,
+  groupMentionPolicy: true
 };
 
 const signalEnvelopeSchema = z.looseObject({

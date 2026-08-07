@@ -8,7 +8,7 @@
   "cmd.project.empty": "No active Projects are available.",
   "cmd.project.list": "Projects:\n{list}\n\nSwitch with /project use <number>.",
   "cmd.project.current": "Current Project: {title}.",
-  "cmd.project.none": "This conversation is using the default Agent.",
+  "cmd.project.none": "This conversation is not connected to a Project.",
   "cmd.project.use.usage": "Usage: /project use <number|project-id>",
   "cmd.project.use.empty": "Selected Project {title}. It has no sessions yet. Send a message to create and bind a new session.",
   "cmd.project.use.sessions": "Selected Project {title}.\n\nSessions:\n{list}\n\nUse /switch <number> to bind a session, or send a message to create and bind a new one.",

@@ -27,7 +27,8 @@ const WHATSAPP_CAPABILITIES: ChannelCapabilities = {
   markdown: false,
   reactions: false,
   nativeCommands: false,
-  outboundMirror: true
+  outboundMirror: true,
+  groupMentionPolicy: true
 };
 
 interface WhatsappWebMessage {
@@ -111,6 +112,13 @@ export async function sendWhatsappWelcomeOnce(args: {
   return true;
 }
 
+/** Keep this linked device passive so WhatsApp continues delivering new-message notifications even
+ * when the phone or another desktop client is active. `markOnlineOnConnect: false` only avoids
+ * announcing this socket as online; Baileys still recommends an explicit unavailable presence. */
+export async function markWhatsappCompanionOffline(socket: Pick<WASocket, 'sendPresenceUpdate'>): Promise<void> {
+  await socket.sendPresenceUpdate('unavailable');
+}
+
 function disconnectCode(error: unknown): number | undefined {
   if (!error || typeof error !== 'object') return undefined;
   const output = 'output' in error ? (error.output as { statusCode?: unknown } | undefined) : undefined;
@@ -173,7 +181,9 @@ export function createWhatsappAdapter(ctx: ChannelContext): ChannelAdapter {
       auth: state,
       browser: Browsers.macOS('Monad'),
       logger,
-      markOnlineOnConnect: false
+      markOnlineOnConnect: false,
+      shouldSyncHistoryMessage: () => false,
+      syncFullHistory: false
     });
     socket = next;
     next.ev.on('creds.update', saveCreds);
@@ -205,6 +215,12 @@ export function createWhatsappAdapter(ctx: ChannelContext): ChannelAdapter {
       if (update.qr) void publishQr(update.qr, currentGeneration);
       if (update.connection === 'open') {
         open = true;
+        void markWhatsappCompanionOffline(next).catch((error) =>
+          ctx.log(
+            'warn',
+            `whatsapp: failed to mark linked device offline: ${error instanceof Error ? error.message : String(error)}`
+          )
+        );
         ctx.onStatus?.({ phase: 'connected' });
         const selfJid = jidNormalizedUser(next.user?.phoneNumber ?? next.user?.id);
         if (selfJid) sendWelcome(selfJid);

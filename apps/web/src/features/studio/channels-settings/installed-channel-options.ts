@@ -1,5 +1,6 @@
 import type {
   AtomConflict,
+  ChannelCapabilities,
   ChannelConnectionMode,
   ChannelEnvVar,
   ChannelIcon,
@@ -9,6 +10,7 @@ import type {
 
 export interface InstalledChannelOption {
   available?: boolean;
+  capabilities?: ChannelCapabilities;
   description?: string;
   envVars: ChannelEnvVar[];
   icon?: ChannelIcon;
@@ -40,6 +42,7 @@ export function installedChannelOptions(
         packId: pack.name,
         label: atom.name ?? atom.id,
         description: atom.description,
+        ...(atom.channel?.capabilities ? { capabilities: atom.channel.capabilities } : {}),
         envVars: atom.channel?.envVars ?? [],
         connectionMode: atom.channel?.connectionMode ?? 'credential',
         ...(atom.channel?.icon ? { icon: atom.channel.icon } : {}),

@@ -28,7 +28,8 @@ const TEAMS_CAPABILITIES: ChannelCapabilities = {
   markdown: true,
   reactions: false,
   nativeCommands: false,
-  outboundMirror: true
+  outboundMirror: true,
+  groupMentionPolicy: true
 };
 
 const teamsActivitySchema = z.looseObject({
