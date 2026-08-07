@@ -9,6 +9,7 @@ export type TFn = StrictTranslateForNamespace<'web'>;
 type RichTranslate = (key: WebMessageId, values?: Record<string, string | number>) => string;
 
 const I18nContext = createContext<TFn>(createI18n({ locale: 'en', packs: [] }).t as TFn);
+const LocaleContext = createContext<string>('en');
 
 export function I18nProvider({ children }: { children: React.ReactNode }) {
   const { data: active } = useGetLocaleQuery();
@@ -27,11 +28,19 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
     document.documentElement.lang = locale;
   }, [locale]);
 
-  return <I18nContext.Provider value={t}>{children}</I18nContext.Provider>;
+  return (
+    <LocaleContext.Provider value={locale}>
+      <I18nContext.Provider value={t}>{children}</I18nContext.Provider>
+    </LocaleContext.Provider>
+  );
 }
 
 export function useT(): TFn {
   return useContext(I18nContext);
+}
+
+export function useLocale(): string {
+  return useContext(LocaleContext);
 }
 
 export function I18nTrans({

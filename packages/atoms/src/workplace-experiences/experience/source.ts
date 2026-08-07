@@ -1,5 +1,6 @@
 import type {
   AvatarStyle,
+  ChannelIcon,
   ComposerSendShortcut,
   MeshSessionView,
   MessageId,
@@ -34,6 +35,9 @@ export interface ProjectExperienceCanvasSource {
     meshAgentTags: Map<string, string>;
     meshAgentDisplayNames: Map<string, string>;
     meshAgentIcons?: Map<string, Message['icon']>;
+    /** Brand marks for the channel types the host has installed, keyed by channel type. Supplied by
+     *  the host because only it can read the installed atom packs. */
+    channelIcons?: ReadonlyMap<string, ChannelIcon>;
     avatarStyle?: AvatarStyle;
     showDeveloperOnlyMessages: boolean;
   };

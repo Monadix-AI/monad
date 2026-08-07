@@ -1,4 +1,5 @@
 import type {
+  ChannelIcon,
   ContextUsagePayload,
   MessageId,
   NativeAgentDeliveryId,
@@ -69,6 +70,8 @@ export interface ChatRoomCanvas {
   jumpToLive: () => void;
   transcriptMode: 'history' | 'live';
   messageOutline: readonly UIMessageOutlineItem[];
+  /** Brand marks by channel type, for rendering a message's delivery origin. */
+  channelIcons?: ReadonlyMap<string, ChannelIcon>;
   openAtMessage?: (messageId: MessageId, options?: { targetVisible?: boolean }) => Promise<boolean>;
   replyTargets: ReadonlyMap<string, Message | null>;
   openAgentCard?: (id: string) => void;
@@ -255,6 +258,7 @@ export function toChatRoomCanvas(
     jumpToLive: c.jumpToLive,
     transcriptMode: c.transcriptMode,
     messageOutline: c.messageOutline ?? [],
+    ...(source.channelIcons ? { channelIcons: source.channelIcons } : {}),
     openAtMessage: c.openAtMessage,
     replyTargets,
     followMeshSession: actions?.followMeshSession,

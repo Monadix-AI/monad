@@ -8,21 +8,23 @@ import {
   sessionMessageOutlineItems
 } from '../../src/features/session/session-message-outline';
 
+const formatTime = (iso: string | undefined) => (iso ? `at:${iso}` : 'Time unavailable');
+
 test('sessionMessageOutlineItems indexes only user messages against all rendered rows', () => {
   const items = [
-    { id: 'u1', role: 'user', text: '  First\n question ' },
+    { id: 'u1', role: 'user', text: '  First\n question ', seq: '2026-08-07T09:00:00Z' },
     { id: 'tool1', kind: 'tool', tool: 'read', input: {}, status: 'done' },
     { id: 'a1', role: 'assistant', text: 'Answer' },
     { id: 'u2', role: 'user', text: '' }
   ] as ViewItem[];
 
-  expect(sessionMessageOutlineItems(items, (number) => `Message ${number}`, 'Time unavailable')).toEqual([
+  expect(sessionMessageOutlineItems(items, (number) => `Message ${number}`, formatTime)).toEqual([
     {
       id: 'u1',
       index: 0,
       label: 'First question',
       preview: '  First\n question ',
-      time: 'Time unavailable'
+      time: 'at:2026-08-07T09:00:00Z'
     },
     {
       id: 'u2',
@@ -41,21 +43,21 @@ test('completeSessionMessageOutlineItems keeps unloaded user messages navigable 
       { id: 'msg_optimistic', role: 'user', text: 'Pending question' }
     ] as ViewItem[],
     (number) => `Message ${number}`,
-    'Time unavailable'
+    formatTime
   );
 
   expect(
     completeSessionMessageOutlineItems(
       [
-        { id: 'msg_user_1', text: 'First' },
+        { id: 'msg_user_1', text: 'First', at: '2026-08-07T09:00:00Z' },
         { id: 'msg_user_2', text: 'Second' }
       ],
       rendered,
       (number) => `Message ${number}`,
-      'Time unavailable'
+      formatTime
     )
   ).toEqual([
-    { id: 'msg_user_1', index: 0, label: 'First', preview: 'First', time: 'Time unavailable' },
+    { id: 'msg_user_1', index: 0, label: 'First', preview: 'First', time: 'at:2026-08-07T09:00:00Z' },
     { id: 'msg_user_2', index: 1, label: 'Second', preview: 'Second', time: 'Time unavailable' },
     {
       id: 'msg_optimistic',

@@ -1,6 +1,7 @@
 import type {
   ApprovalScope,
   MessageAttachmentRef,
+  MessageOrigin,
   NativeAgentDeliveryId,
   MessageAttachment as ProtocolMessageAttachment,
   UIQuestionPresentation
@@ -59,6 +60,8 @@ export interface Message {
   text: string;
   replyToMessageId?: string;
   replyable?: boolean;
+  /** Ingress provenance of the write that carried this message (channel client, platform sender). */
+  origin?: MessageOrigin;
   question?: UIQuestionPresentation;
   agentChip?: {
     id: string;

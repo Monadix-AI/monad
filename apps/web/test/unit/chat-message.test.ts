@@ -337,3 +337,36 @@ test('user message tokens distinguish skill and command behavior', () => {
     { id: 'global:deploy', kind: 'skill', label: 'Deploy' }
   ]);
 });
+
+test('a settled user message shows its date-aware timestamp in the hover actions', () => {
+  const now = new Date();
+  const seq = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 9, 30).toISOString();
+  const markup = renderToStaticMarkup(
+    createElement(Message, {
+      assistantLabel: 'Assistant',
+      msg: { id: 'msg_time', role: 'user', seq, text: 'hello' }
+    })
+  );
+  const expected = new Date(seq).toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' });
+  expect(markup).toContain(expected);
+});
+
+test('a user message renders the sent-from channel badge only when the session origin provides one', () => {
+  const render = (sentFrom?: ChatMessageModule.MessageSentFrom) =>
+    renderToStaticMarkup(
+      createElement(Message, {
+        assistantLabel: 'Assistant',
+        msg: { id: 'msg_badge', role: 'user', text: 'hi from telegram' },
+        sentFrom
+      })
+    );
+
+  const withBadge = render({
+    label: 'Telegram',
+    details: [{ label: 'Conversation', value: 'Dev Team' }]
+  });
+  // The badge itself is the channel mark; its accessible name carries the source.
+  expect(withBadge).toContain('Sent from Telegram');
+  // behavior-ok: rendering without a resolved origin omits the badge entirely
+  expect(render()).not.toContain('Sent from');
+});

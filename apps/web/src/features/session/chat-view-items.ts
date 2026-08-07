@@ -212,6 +212,7 @@ function messageFromUi(item: UIMessageItem): Msg {
     replyable: item.replyable,
     streaming: item.status === 'streaming',
     seq: item.seq,
+    ...(item.origin ? { origin: item.origin } : {}),
     type: artifact?.messageType,
     data: artifact?.data
   };

@@ -172,6 +172,7 @@ export function messageToView(
     text: displayTextFromMessage(item),
     ...(item.replyToMessageId ? { replyToMessageId: item.replyToMessageId } : {}),
     replyable: item.replyable,
+    ...(item.origin ? { origin: item.origin } : {}),
     ...(item.question ? { question: item.question } : {}),
     orderKey: item.seq,
     ...(item.meshSessionId ? { meshSessionId: item.meshSessionId } : {}),

@@ -73,8 +73,8 @@ test('the snapshot outline remains complete while live user-message upserts and 
   }).toEqual({
     outline: [
       { id: 'msg_user_1', text: 'First' },
-      { id: 'msg_user_buffered', text: 'Buffered' },
-      { id: 'msg_user_3', text: 'Third' }
+      { id: 'msg_user_buffered', text: 'Buffered', at: '3' },
+      { id: 'msg_user_3', text: 'Third', at: '3' }
     ],
     renderedIds: ['msg_user_buffered', 'msg_user_3']
   });
@@ -255,4 +255,23 @@ test('canonical message change retention is bounded and reports an unobserved fl
       (change) => change.kind === 'upsert' && change.item.id === `msg_${MAX_CANONICAL_MESSAGE_CHANGES}`
     )
   }).toEqual({ dropped: 1, firstRetainedRevision: 2, length: MAX_CANONICAL_MESSAGE_CHANGES, newest: true });
+});
+
+test('a live-upserted user message carries its timestamp into the outline immediately, not only after a snapshot', () => {
+  const draft = streamState();
+  const index = buildIndex(draft.items);
+  applyUiEvent(draft, snapshot([]), index);
+  applyUiEvent(
+    draft,
+    upsert(
+      item('message', 'msg_live', {
+        parts: [{ type: 'text', text: 'Live message' }],
+        role: 'user',
+        seq: '2026-08-08T01:00:00.000Z'
+      })
+    ),
+    index
+  );
+
+  expect(draft.messageOutline).toEqual([{ id: 'msg_live', text: 'Live message', at: '2026-08-08T01:00:00.000Z' }]);
 });

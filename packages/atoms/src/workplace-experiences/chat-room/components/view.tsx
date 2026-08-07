@@ -267,6 +267,15 @@ export function ChatRoomExperienceView({ runtime }: { runtime: ChatRoomExperienc
             reply: t('web.chat.reply'),
             replyUnavailable: t('web.chat.replyUnavailable'),
             retry: t('web.workplace.retryMessage'),
+            sentFrom: t('web.chat.sentFrom'),
+            originConversation: t('web.chat.originConversation'),
+            originDirectMessage: t('web.chat.originDirectMessage'),
+            originGroup: t('web.chat.originGroup'),
+            originChannel: t('web.chat.originChannel'),
+            originSender: t('web.chat.originSender'),
+            originThread: t('web.chat.originThread'),
+            originInstance: t('web.chat.originInstance'),
+            originVersion: t('web.chat.originVersion'),
             spawnAgentMember: t('web.workplace.emptySpawnAgentMember'),
             systemMessage: t('web.workplace.systemMessage'),
             systemMessageDetails: t('web.workplace.systemMessageDetails'),
@@ -290,7 +299,11 @@ export function ChatRoomExperienceView({ runtime }: { runtime: ChatRoomExperienc
         },
         createElement(
           'div',
-          { className: cn('pointer-events-auto') },
+          {
+            className: cn('pointer-events-auto'),
+            // Same centered content column as the transcript rows (message-list caps at 800px too).
+            style: { boxSizing: 'border-box', margin: '0 auto', maxWidth: 800, padding: '0 16px', width: '100%' }
+          },
           createElement(Composer, { droppedFiles, room: composer })
         )
       ),

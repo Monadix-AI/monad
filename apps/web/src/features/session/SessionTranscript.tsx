@@ -3,13 +3,15 @@ import type { ViewItem } from './chat-view-items';
 
 import { ArrowDown01Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
+import { atomPackSelectors, useListAtomPacksQuery } from '@monad/client-rtk';
 import { Button, cn, MorphChevron, Skeleton } from '@monad/ui';
 import { activeMessageOutlineIds, MessageOutline } from '@monad/ui/components/MessageOutline';
 import { VirtualList } from '@monad/ui/components/VirtualList';
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { useT } from '#/components/I18nProvider';
-import { Message, type Msg } from './ChatMessage';
+import { useLocale, useT } from '#/components/I18nProvider';
+import { installedChannelOptions } from '#/features/studio/channels-settings/installed-channel-options';
+import { Message, type MessageSentFrom, type Msg } from './ChatMessage';
 import {
   branchSnapshotItems,
   isBranchSourceItem,
@@ -26,6 +28,8 @@ import {
 import { MemorySummaryDivider } from './MemorySummaryDivider';
 import { MeshAgentLoginCard } from './MeshAgentLoginCard';
 import { MessageBody } from './MessageBody';
+import { messageSentFrom } from './message-sent-from';
+import { formatMessageTimestamp } from './message-time';
 import { useSessionContext } from './session-context';
 import { completeSessionMessageOutlineItems, sessionMessageOutlineItems } from './session-message-outline';
 import { sessionReplyPreviewTargetId } from './session-reply-preview';
@@ -106,14 +110,20 @@ export function SessionTranscript({ model }: { model: SessionTranscriptModel }) 
     [identity.isReadOnly, model.onReply]
   );
   const pendingActionCount = model.pendingApprovals.length + model.pendingClarifications.length;
+  const locale = useLocale();
+  const formatOutlineTime = useCallback(
+    (iso: string | undefined) =>
+      formatMessageTimestamp(iso, locale, { yesterday: t('web.chat.yesterday') }) ?? t('web.chat.timeUnavailable'),
+    [locale, t]
+  );
   const renderedOutlineItems = useMemo(
     () =>
       sessionMessageOutlineItems(
         renderedMessages,
         (number) => t('web.chat.messageNumber', { number }),
-        t('web.chat.timeUnavailable')
+        formatOutlineTime
       ),
-    [renderedMessages, t]
+    [formatOutlineTime, renderedMessages, t]
   );
   const outlineItems = useMemo(
     () =>
@@ -121,15 +131,48 @@ export function SessionTranscript({ model }: { model: SessionTranscriptModel }) 
         model.messageOutline,
         renderedOutlineItems,
         (number) => t('web.chat.messageNumber', { number }),
-        t('web.chat.timeUnavailable')
+        formatOutlineTime
       ),
-    [model.messageOutline, renderedOutlineItems, t]
+    [formatOutlineTime, model.messageOutline, renderedOutlineItems, t]
   );
   const activeOutlineIds = useMemo(
     () => activeMessageOutlineIds(renderedOutlineItems, visibleRange, renderedMessages.length),
     [renderedOutlineItems, renderedMessages.length, visibleRange]
   );
   const highlightedMessageId = model.highlightedMessageId ?? activeHighlightedMessageId;
+  const atomPacksQuery = useListAtomPacksQuery();
+  const channelOptions = useMemo(
+    () =>
+      atomPacksQuery.data
+        ? installedChannelOptions(
+            atomPackSelectors.selectAll(atomPacksQuery.data.atomPacks),
+            atomPacksQuery.data.conflicts
+          )
+        : undefined,
+    [atomPacksQuery.data]
+  );
+  // Resolved per distinct origin, not per message: the transcript re-renders on every streamed
+  // token, and a freshly-built badge object each time would break memo(Message)'s prop compare for
+  // every visible user row. Messages from one conversation share one origin, so the cache is tiny.
+  const sentFromFor = useMemo(() => {
+    const labels = {
+      conversation: t('web.chat.originConversation'),
+      directMessage: t('web.chat.originDirectMessage'),
+      group: t('web.chat.originGroup'),
+      channel: t('web.chat.originChannel'),
+      sender: t('web.chat.originSender'),
+      thread: t('web.chat.originThread'),
+      instance: t('web.chat.originInstance'),
+      version: t('web.chat.originVersion')
+    };
+    const cache = new Map<string, MessageSentFrom | undefined>();
+    return (message: Msg): MessageSentFrom | undefined => {
+      if (message.role !== 'user' || !message.origin) return undefined;
+      const key = JSON.stringify(message.origin);
+      if (!cache.has(key)) cache.set(key, messageSentFrom(message.origin, channelOptions, labels));
+      return cache.get(key);
+    };
+  }, [channelOptions, t]);
 
   useEffect(() => {
     const shell = shellRef.current;
@@ -253,6 +296,7 @@ export function SessionTranscript({ model }: { model: SessionTranscriptModel }) 
             onReply={onReply}
             onRestore={model.onRestore}
             replyTargetFor={replyTargetFor}
+            sentFromFor={sentFromFor}
             sessionId={identity.currentSessionId}
           />
         ) : (
@@ -268,6 +312,7 @@ export function SessionTranscript({ model }: { model: SessionTranscriptModel }) 
             onReply={onReply}
             onRestore={model.onRestore}
             replyTarget={replyTargetFor(message)}
+            sentFrom={sentFromFor(message)}
           />
         )}
       </div>
@@ -281,6 +326,7 @@ export function SessionTranscript({ model }: { model: SessionTranscriptModel }) 
       onReply,
       model.onRestore,
       replyTargetFor,
+      sentFromFor,
       t,
       highlightedMessageId
     ]
@@ -398,6 +444,7 @@ export function SummaryTranscriptTurn({
   onReply,
   onRestore,
   replyTargetFor,
+  sentFromFor,
   sessionId
 }: {
   assistantLabel: string;
@@ -409,6 +456,7 @@ export function SummaryTranscriptTurn({
   replyTargetFor?: (
     message: import('./ChatMessage').Msg
   ) => (import('./ChatMessage').Msg & { label?: string }) | null | undefined;
+  sentFromFor?: (message: import('./ChatMessage').Msg) => import('./ChatMessage').MessageSentFrom | undefined;
   sessionId: SessionId;
 }) {
   const running = item.status === 'running';
@@ -468,6 +516,7 @@ export function SummaryTranscriptTurn({
               onReply={onReply}
               onRestore={onRestore}
               replyTarget={replyTargetFor?.(detail)}
+              sentFrom={sentFromFor?.(detail)}
             />
           )
         )}

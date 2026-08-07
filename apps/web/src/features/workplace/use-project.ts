@@ -15,6 +15,7 @@ import type {
 
 import { useProjectExperienceProjection } from '@monad/atoms/workplace-experiences';
 import {
+  atomPackSelectors,
   meshSessionSelectors,
   profileSelectors,
   projectSessionSelectors,
@@ -22,6 +23,7 @@ import {
   useDeleteSessionMutation,
   useGetAppearanceQuery,
   useGetProfileSettingsQuery,
+  useListAtomPacksQuery,
   useListInvitableMeshAgentsQuery,
   useListMeshSessionsQuery,
   useListProfilesQuery,
@@ -35,6 +37,7 @@ import {
 } from '@monad/client-rtk';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { installedChannelOptions } from '#/features/studio/channels-settings/installed-channel-options';
 import { deriveProjectRouteSessionState } from '#/features/workspace/project-route-session-state';
 import { useAcpAgentSettings } from '#/hooks/use-acp-agent-settings';
 import { useMeshAgentSettings } from '#/hooks/use-mesh-agent-settings';
@@ -183,6 +186,17 @@ export function useProject(
     userDisplayName: userProfile?.displayName,
     workplaceProjects
   });
+  // Channel brand marks for message-origin badges: only the host can read installed atom packs, so
+  // it resolves them once and hands the map to the experience.
+  const atomPacksQuery = useListAtomPacksQuery();
+  const channelIcons = useMemo(() => {
+    if (!atomPacksQuery.data) return undefined;
+    const options = installedChannelOptions(
+      atomPackSelectors.selectAll(atomPacksQuery.data.atomPacks),
+      atomPacksQuery.data.conflicts
+    );
+    return new Map(options.flatMap((option) => (option.icon ? [[option.type, option.icon] as const] : [])));
+  }, [atomPacksQuery.data]);
   const {
     approvals,
     availableProjectMembers,
@@ -277,6 +291,7 @@ export function useProject(
         meshAgentTags,
         meshAgentDisplayNames,
         meshAgentIcons,
+        channelIcons,
         showDeveloperOnlyMessages: DEV_SYSTEM_MESSAGES_IN_STREAM_ENABLED && showDevSystemMessagesInStream
       },
       workdir: { path: currentProject?.cwd },
@@ -336,6 +351,7 @@ export function useProject(
       meshAgentTags,
       meshAgentDisplayNames,
       meshAgentIcons,
+      channelIcons,
       showDevSystemMessagesInStream,
       currentProject?.cwd,
       sendDirective,
