@@ -4,7 +4,7 @@ import { afterAll, beforeAll, expect, test } from 'bun:test';
 
 if (process.platform === 'win32') process.exit(0);
 
-import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -65,4 +65,33 @@ test('file_write still follows an in-sandbox symlink (target stays inside roots)
   await fileReadTool.run({ path: link }, c);
   await fileWriteTool.run({ path: link, content: 'updated' }, c);
   expect(await Bun.file(realFile).text()).toBe('updated');
+});
+
+test('file_read outside sandbox canonicalizes an existing symlink directory approval key', async () => {
+  const outside = await mkdtemp(join(tmpdir(), 'monad-fs-unix-outside-'));
+  const linkParent = await mkdtemp(join(tmpdir(), 'monad-fs-unix-link-'));
+  const realOutside = await realpath(outside);
+  const linked = join(linkParent, 'outside-link');
+  await writeFile(join(realOutside, 'secret.txt'), 'outside content');
+  await symlink(realOutside, linked);
+  const calls: Array<{ tool: string; key?: string }> = [];
+  const approvedContext: ToolContext = {
+    ...ctx([root]),
+    gate: async (request) => {
+      calls.push({ tool: request.tool, key: request.key });
+      return { allow: true };
+    }
+  };
+  try {
+    const result = await fileReadTool.run({ path: join(linked, 'secret.txt') }, approvedContext);
+    expect({ content: result.modelContent, calls }).toEqual({
+      content: '1\toutside content',
+      calls: [{ tool: 'path_access', key: realOutside }]
+    });
+  } finally {
+    await Promise.all([
+      rm(outside, { recursive: true, force: true }),
+      rm(linkParent, { recursive: true, force: true })
+    ]);
+  }
 });

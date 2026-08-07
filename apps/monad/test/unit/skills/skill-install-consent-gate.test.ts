@@ -15,12 +15,11 @@ import { join } from 'node:path';
 
 import { installGitSkill } from '#/capabilities/skills/install/git.ts';
 
-const sh = (cmd: string, cwd: string) =>
-  new Promise<void>((res, rej) => {
-    const p = spawn('bash', ['-c', cmd], { cwd, stdio: 'ignore' });
-    p.on('exit', (code) => (code === 0 ? res() : rej(new Error(`${cmd} -> ${code}`))));
-    p.on('error', rej);
-  });
+async function git(args: string[], cwd: string): Promise<void> {
+  const process = Bun.spawn(['git', ...args], { cwd, stdout: 'ignore', stderr: 'ignore' });
+  const exitCode = await process.exited;
+  if (exitCode !== 0) throw new Error(`git ${args.join(' ')} -> ${exitCode}`);
+}
 
 let port: number;
 let serveRoot: string;
@@ -95,9 +94,12 @@ async function startGitDaemon(): Promise<{ daemon: ChildProcess; port: number }>
 async function makeRepo(name: string, body: string) {
   const repo = join(serveRoot, `${name}.git`);
   await mkdir(repo, { recursive: true });
-  await sh('git init -q . && git config user.email t@t && git config user.name t', repo);
+  await git(['init', '-q', '.'], repo);
+  await git(['config', 'user.email', 't@t'], repo);
+  await git(['config', 'user.name', 't'], repo);
   await writeFile(join(repo, 'SKILL.md'), `---\nname: ${name}\ndescription: A ${name} skill.\n---\n${body}\n`);
-  await sh('git add -A && git commit -qm init', repo);
+  await git(['add', '-A'], repo);
+  await git(['commit', '-qm', 'init'], repo);
 }
 
 beforeAll(async () => {

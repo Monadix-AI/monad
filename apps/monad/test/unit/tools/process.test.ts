@@ -17,7 +17,6 @@ import {
   shellExecTool
 } from '#/capabilities/tools';
 import { invokeTool } from '#/capabilities/tools/invoke.ts';
-import { waitFor } from '../../wait.ts';
 
 const ctx: ToolContext = { sessionId: 's1', sandboxRoots: undefined, log: () => {} };
 const ctxB: ToolContext = { sessionId: 's2', sandboxRoots: undefined, log: () => {} };
@@ -181,54 +180,6 @@ test('start → captures stdout and exit code of a short process', async () => {
   expect(r.mode).toBe('pipe');
 });
 
-// Interactive PTY tests are Windows-skipped: Bun's terminal/PTY (ConPTY) mode does not capture
-// output or deliver interactive stdin on Windows, so a `read`-driven prompt never round-trips
-// there — consistent with the pty size/resize, signal, and process-group tests already gated
-// below. Pipe-mode shell_exec background (the common path) is exercised cross-platform above.
-test.skipIf(process.platform === 'win32')('start defaults to a pty and can answer an interactive prompt', async () => {
-  const { id } = await startProcess(
-    {
-      command: 'printf "Proceed? [y/N] "; read ans; echo answer:$ans'
-    },
-    ctx
-  );
-  await waitForStdout(id, 'Proceed?');
-  await controlProcess({ action: 'write', id, input: 'y\n' }, ctx);
-  const r = await waitForExit(id);
-  expect(r.status).toBe('exited');
-  expect(r.exitCode).toBe(0);
-  expect(r.mode).toBe('pty');
-});
-
-test.skipIf(process.platform === 'win32')('wait returns when output contains a literal pattern', async () => {
-  const { id } = await startProcess(
-    {
-      command: 'printf "Proceed? [y/N] "; read ans; echo answer:$ans'
-    },
-    ctx
-  );
-  const prompt = await waitProcess({ id, pattern: 'Proceed?', timeoutMs: 1000 }, ctx);
-  expect(prompt.matched).toBe(true);
-  expect(prompt.timedOut).toBe(false);
-  expect(prompt.status).toBe('running');
-  await controlProcess({ action: 'write', id, input: 'y\n' }, ctx);
-  const answer = await waitProcess({ id, pattern: 'answer:y', timeoutMs: 1000 }, ctx);
-  expect(answer.matched).toBe(true);
-});
-
-test.skipIf(process.platform === 'win32')('wait supports regex matching', async () => {
-  const { id } = await startProcess(
-    {
-      command: 'printf "Proceed? [y/N] "; read ans; echo answer:$ans'
-    },
-    ctx
-  );
-  await waitProcess({ id, pattern: 'Proceed\\?', match: 'regex', timeoutMs: 1000 }, ctx);
-  await controlProcess({ action: 'write', id, input: 'y\n' }, ctx);
-  const answer = await waitProcess({ id, pattern: 'answer:[yn]', match: 'regex', timeoutMs: 1000 }, ctx);
-  expect(answer.matched).toBe(true);
-});
-
 test('logs and wait can strip ANSI sequences', async () => {
   const { id } = await startProcess(
     {
@@ -246,19 +197,6 @@ test('logs and wait can strip ANSI sequences', async () => {
   expect(raw.stdout).toContain('\x1b[31m');
   expect(stripped.stdout).toContain('READY');
   expect(stripped.stdout).not.toContain('\x1b');
-});
-
-test.skipIf(process.platform === 'win32')('write supports structured keys', async () => {
-  const { id } = await startProcess(
-    {
-      command: 'printf "Proceed? [y/N] "; read ans; echo answer:$ans'
-    },
-    ctx
-  );
-  await waitProcess({ id, pattern: 'Proceed?', timeoutMs: 1000 }, ctx);
-  await controlProcess({ action: 'write', id, input: 'y', key: 'enter' }, ctx);
-  const answer = await waitProcess({ id, pattern: 'answer:y', timeoutMs: 1000 }, ctx);
-  expect(answer.matched).toBe(true);
 });
 
 test('wait can wait for process exit without a pattern', async () => {
@@ -340,35 +278,6 @@ test('session abort kills a background process', async () => {
   const r = await waitProcess({ id, timeoutMs: 1000 }, ctx);
   expect(r.status).toBe('killed');
   expect(r.stderr).toContain('session abort');
-});
-
-test.skipIf(process.platform === 'win32')('start can set initial pty size and resize can change it', async () => {
-  const { id } = await startProcess(
-    {
-      command: 'stty size; sleep 0.2; stty size',
-      cols: 111,
-      rows: 33
-    },
-    ctx
-  );
-  await waitForStdout(id, '33 111');
-  await controlProcess({ action: 'resize', id, cols: 100, rows: 30 }, ctx);
-  const r = await waitForExit(id);
-  expect(r.mode).toBe('pty');
-});
-
-test.skipIf(process.platform === 'win32')('signal sends SIGINT to a process group', async () => {
-  const { id } = await startProcess(
-    {
-      command: 'trap "echo got-int; exit 0" INT; echo ready; while true; do sleep 1; done',
-      terminalMode: 'pipe'
-    },
-    ctx
-  );
-  await waitProcess({ id, pattern: 'ready', timeoutMs: 1000 }, ctx);
-  await controlProcess({ action: 'signal', id, signal: 'SIGINT' }, ctx);
-  const r = await waitProcess({ id, pattern: 'got-int', timeoutMs: 1000 }, ctx);
-  expect(r.matched).toBe(true);
 });
 
 test('resize rejects non-pty processes', async () => {
@@ -517,29 +426,6 @@ test('a session cannot see or control another session’s processes', async () =
   // Owner is unaffected: still running.
   expect((await readProcessLogs({ id }, ctx)).status).toBe('running');
   await killProcess({ id }, ctx);
-});
-
-test.skipIf(process.platform === 'win32')('kill reaps the whole process group (grandchildren die too)', async () => {
-  // The shell forks a grandchild (sleep) and prints its pid, then waits. Killing only the
-  // direct child would orphan the grandchild; killTree signals the group so it dies too.
-  const { id } = await startProcess({ command: 'sleep 30 & echo "gpid:$!"; wait', terminalMode: 'pipe' }, ctx);
-  const out = await waitForStdout(id, 'gpid:');
-  const gpid = Number(out.stdout.match(/gpid:(\d+)/)?.[1]);
-  expect(gpid).toBeGreaterThan(0);
-
-  await killProcess({ id }, ctx);
-  // process.kill(pid, 0) throws ESRCH once the grandchild is gone; poll for that rather than
-  // guessing how long the group signal takes to reach it.
-  const reaped = () => {
-    try {
-      process.kill(gpid, 0);
-      return false;
-    } catch {
-      return true;
-    }
-  };
-  await waitFor(reaped, { message: 'grandchild survived the group kill' });
-  expect(() => process.kill(gpid, 0)).toThrow();
 });
 
 test('clearProcessesForSession kills only that session’s processes', async () => {

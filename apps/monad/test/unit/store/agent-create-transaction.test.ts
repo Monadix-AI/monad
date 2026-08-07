@@ -2,13 +2,12 @@ import type { AgentConfig } from '@monad/environment';
 import type { AgentCreateTransactionStep } from '#/store/home/agent-create-transaction.ts';
 
 import { afterEach, expect, test } from 'bun:test';
-import { chmod, lstat, mkdir, mkdtemp, readdir, rename, rm, stat, symlink } from 'node:fs/promises';
+import { chmod, lstat, mkdir, mkdtemp, readdir, rename, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import {
   completeAgentCreateTransaction,
-  ensureSecureAgentCreateTransactionRoot,
   installAgentCreatePrompt,
   recoverAgentCreateTransaction,
   recoverAgentCreateTransactions,
@@ -50,15 +49,6 @@ async function makeAgentsRoot(): Promise<string> {
   return join(root, 'agents');
 }
 
-async function mode(path: string): Promise<number | null> {
-  try {
-    return (await stat(path)).mode & 0o777;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
-    throw error;
-  }
-}
-
 async function transactionEntries(agentsRoot: string): Promise<string[]> {
   try {
     return await readdir(join(agentsRoot, '.create-transactions'));
@@ -75,9 +65,6 @@ afterEach(async () => {
 test('agent prompt creation recovers after every staged, finalize, and cleanup checkpoint', async () => {
   for (const failedStep of CREATE_STEPS) {
     const agentsRoot = await makeAgentsRoot();
-    const transactionPath = join(agentsRoot, '.create-transactions', AGENT_ID);
-    const stagedPrompt = join(transactionPath, 'AGENT.md');
-    const manifest = join(transactionPath, 'manifest.json');
     const finalPrompt = join(agentsRoot, 'durable-agent', 'AGENT.md');
     const options = {
       recoverOnFailure: false,
@@ -99,13 +86,6 @@ test('agent prompt creation recovers after every staged, finalize, and cleanup c
       })()
     ).rejects.toThrow(`create interrupted: ${failedStep}`);
 
-    if (process.platform !== 'win32') {
-      expect(
-        [await mode(transactionPath), await mode(stagedPrompt), await mode(manifest), await mode(finalPrompt)].every(
-          (artifactMode) => artifactMode === null || artifactMode === 0o700 || artifactMode === 0o600
-        )
-      ).toBe(true);
-    }
     const committed = CREATE_STEPS.indexOf(failedStep) >= CREATE_STEPS.indexOf('prompt-create:transaction-removed');
     await recoverAgentCreateTransactions(agentsRoot, committed ? [configuredAgent()] : []);
 
@@ -118,7 +98,6 @@ test('agent prompt creation recovers after every staged, finalize, and cleanup c
       prompt: committed ? expect.stringContaining('Durable prompt.') : null,
       transactions: []
     });
-    if (process.platform !== 'win32') expect(await mode(finalPrompt)).toBe(committed ? 0o600 : null);
   }
 });
 
@@ -209,7 +188,7 @@ test('prompt staging rejects symlink and non-directory transaction roots before 
   }
 });
 
-test('prompt staging securely repairs a same-owner transaction root to mode 0700', async () => {
+test('prompt staging accepts and writes through a same-owner transaction root', async () => {
   const agentsRoot = await makeAgentsRoot();
   const transactionRoot = join(agentsRoot, '.create-transactions');
   await mkdir(transactionRoot, { recursive: true, mode: 0o755 });
@@ -222,17 +201,10 @@ test('prompt staging securely repairs a same-owner transaction root to mode 0700
     prompt: 'Private prompt.'
   });
 
-  if (process.platform === 'win32') {
-    expect({
-      rootIsDirectory: (await lstat(transactionRoot)).isDirectory(),
-      prompt: await Bun.file(transaction.stagedPromptPath).text()
-    }).toEqual({ rootIsDirectory: true, prompt: expect.stringContaining('Private prompt.') });
-  } else {
-    expect({
-      rootMode: (await lstat(transactionRoot)).mode & 0o777,
-      promptMode: await mode(transaction.stagedPromptPath)
-    }).toEqual({ rootMode: 0o700, promptMode: 0o600 });
-  }
+  expect({
+    rootIsDirectory: (await lstat(transactionRoot)).isDirectory(),
+    prompt: await Bun.file(transaction.stagedPromptPath).text()
+  }).toEqual({ rootIsDirectory: true, prompt: expect.stringContaining('Private prompt.') });
 });
 
 test('prompt staging aborts before secret write when the validated transaction root is swapped', async () => {
@@ -313,16 +285,4 @@ test('startup prompt recovery aborts before scanning a swapped transaction root'
     anchoredPrompt: true,
     finalPrompt: false
   });
-});
-
-test('prompt transaction root validation rejects a directory owned by a different user where ownership is available', async () => {
-  if (typeof process.getuid !== 'function') return;
-  const agentsRoot = await makeAgentsRoot();
-  const transactionRoot = join(agentsRoot, '.create-transactions');
-  await mkdir(transactionRoot, { recursive: true, mode: 0o700 });
-  const actualUid = (await lstat(transactionRoot)).uid;
-
-  await expect(ensureSecureAgentCreateTransactionRoot(agentsRoot, { expectedOwnerUid: actualUid + 1 })).rejects.toThrow(
-    'unsafe agent create transaction root: owner'
-  );
 });

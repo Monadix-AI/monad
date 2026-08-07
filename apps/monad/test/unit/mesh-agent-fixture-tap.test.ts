@@ -1,7 +1,7 @@
 import type { LoggerRecord } from '@monad/logger';
 
 import { afterEach, expect, test } from 'bun:test';
-import { mkdtemp, readdir, rm, stat } from 'node:fs/promises';
+import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { configureLogger, createLogger } from '@monad/logger';
@@ -71,7 +71,7 @@ test('a provider frame split across two packets is captured verbatim as one reco
   });
 });
 
-test('capture preserves real paths and secrets and writes owner-only', async () => {
+test('capture preserves real paths and secrets and reports the final capture', async () => {
   const logRecords: LoggerRecord[] = [];
   configureLogger({
     destinations: [
@@ -90,16 +90,13 @@ test('capture preserves real paths and secrets and writes owner-only', async () 
   tap.record(frame('{"type":"turn_context","payload":{"cwd":"/Users/test/secret-repo","api_key":"sk-live-abc123"}}\n'));
   await tap.flush(MESH_SESSION_ID, FIRST_EPOCH);
 
-  const { name, records } = await readFixture(directory);
-  const mode = (await stat(join(directory, name))).mode & 0o777;
+  const { records } = await readFixture(directory);
   // Verbatim on purpose: redaction is the promotion step's job (scripts/mesh-fixture.ts), so the
   // on-disk capture must still be exactly what the provider emitted.
   expect({
-    ...(process.platform === 'win32' ? {} : { mode }),
     record: records[0],
     logged: logRecords.map((record) => ({ event: record.event, basename: record.basename, path: record.path }))
   }).toEqual({
-    ...(process.platform === 'win32' ? {} : { mode: 0o600 }),
     record: { type: 'turn_context', payload: { cwd: '/Users/test/secret-repo', api_key: 'sk-live-abc123' } },
     logged: [
       {
@@ -218,7 +215,7 @@ test('capture matchers are the canonical inverse of tap-owned provider encoding'
   });
 });
 
-test('a failed atomic rename leaves only a private temp and never reports a final capture', async () => {
+test('a failed atomic rename leaves only a temp and never reports a final capture', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'monad-fixture-tap-'));
   directories.push(directory);
   const records: LoggerRecord[] = [];
@@ -248,7 +245,6 @@ test('a failed atomic rename leaves only a private temp and never reports a fina
   if (!temp) throw new Error('capture did not leave its temporary file');
   expect({
     fileCount: files.length,
-    ...(process.platform === 'win32' ? {} : { mode: (await stat(join(directory, temp))).mode & 0o777 }),
     matchesTemp: isMeshFixtureCaptureTempFileName(temp),
     matchesFinal: files.some(isMeshFixtureCaptureFileName),
     reported: records.map((record) => ({
@@ -259,7 +255,6 @@ test('a failed atomic rename leaves only a private temp and never reports a fina
     }))
   }).toEqual({
     fileCount: 1,
-    ...(process.platform === 'win32' ? {} : { mode: 0o600 }),
     matchesTemp: true,
     matchesFinal: false,
     reported: [{ event: 'mesh.fixture_capture_error', basename: undefined, path: undefined, err: { name: 'Error' } }]

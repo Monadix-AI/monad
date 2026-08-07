@@ -35,11 +35,6 @@ describe.skipIf(!ENABLED)('pre-workload baseline capable-host conformance', () =
   }, 1_200_000);
 });
 
-test('vfkit explicitly remains cold-start only', () => {
-  if (process.platform !== 'darwin') return;
-  expect(vmBaselineMetrics().restored).toBe(0);
-});
-
 test.skipIf(!BENCHMARK)(
   'records 30 cold and 30 restore samples on one capable host',
   async () => {

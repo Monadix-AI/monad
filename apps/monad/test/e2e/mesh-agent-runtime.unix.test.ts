@@ -135,7 +135,7 @@ async function configureMissingBinaryAgent(call: Call): Promise<void> {
 }
 
 for (const kind of TRANSPORTS) {
-  describe.skipIf(process.platform === 'win32')(`mesh-agent session-event runtime over ${kind}`, () => {
+  describe(`mesh-agent session-event runtime over ${kind}`, () => {
     test('runs a provider event turn and preserves the logical session', async () => {
       const { dir, projectDir, app, handlers } = await setup();
       const transport = serveTransport(kind, app);

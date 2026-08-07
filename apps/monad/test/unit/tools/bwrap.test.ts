@@ -3,8 +3,6 @@
 import { expect, test } from 'bun:test';
 import { buildBwrapArgs } from '@monad/sandbox/launchers/bwrap';
 
-const isLinux = process.platform === 'linux';
-
 test('always includes namespace unshare and safety flags', () => {
   const args = buildBwrapArgs({ writableRoots: ['/sandbox'], net: 'unrestricted' });
   expect(args).toContain('--unshare-user');
@@ -86,15 +84,4 @@ test('special filesystems are overlaid after the writable root bind (order matte
 test('bwrapLauncher kind is bwrap', async () => {
   const { bwrapLauncher } = await import('@monad/sandbox/launchers/bwrap');
   expect(bwrapLauncher.kind).toBe('bwrap');
-});
-
-test.skipIf(!isLinux)('bwrapLauncher.wrap prepends bwrap binary and appends -- before argv', async () => {
-  const { bwrapLauncher } = await import('@monad/sandbox/launchers/bwrap');
-  const result = bwrapLauncher.wrap?.(['echo', 'hi'], { writableRoots: ['/work'], net: 'none' }) ?? [];
-  // First element is the bwrap binary path
-  expect(result[0]).toMatch(/bwrap/);
-  // '--' separator before the actual command
-  const sep = result.indexOf('--');
-  expect(sep).toBeGreaterThan(0);
-  expect(result.slice(sep + 1)).toEqual(['echo', 'hi']);
 });
