@@ -168,13 +168,13 @@ test(
         data: () => {}
       }
     });
-    // isAllowed would (wrongly) approve on the suffix if it were ever reached — proves the rejection
-    // happens at host-validation time, not because the allowlist itself denied it.
+    // isAllowed deliberately approves every host if reached — proves rejection happens at
+    // host-validation time, not because the injected policy callback denied it.
     const proxy = startEgressProxy({
       policy: { allowedDomains: ['allowed.com'] },
-      isAllowed: (host) => {
+      isAllowed: () => {
         isAllowedCalls++;
-        return host.endsWith('allowed.com');
+        return true;
       }
     });
     cleanups.push(

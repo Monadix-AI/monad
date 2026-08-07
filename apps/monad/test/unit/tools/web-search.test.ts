@@ -63,6 +63,18 @@ test('parseDuckDuckGoHtml decodes redirect URLs and strips tags', () => {
   expect(r[1]?.url).toBe('https://foo.test/b');
 });
 
+test('parseDuckDuckGoHtml does not reintroduce encoded HTML during entity decoding', () => {
+  const [result] = parseDuckDuckGoHtml(`
+    <a class="result__a" href="https://example.com">&amp;lt;script&amp;gt;alert(1)&amp;lt;/script&amp;gt;</a>
+    <a class="result__snippet">&lt;img src=x onerror=alert(1)&gt;safe</a>
+  `);
+  expect(result).toEqual({
+    title: '&lt;script&gt;alert(1)&lt;/script&gt;',
+    url: 'https://example.com',
+    snippet: 'safe'
+  });
+});
+
 test('duckDuckGo provider returns parsed results and is always configured', async () => {
   expect(duckDuckGoProvider.isConfigured()).toBe(true);
   const r = await duckDuckGoProvider.search('q', 10, htmlFetch(DDG_HTML));

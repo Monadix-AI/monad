@@ -42,6 +42,13 @@ test('extractReadable decodes entities', () => {
   expect(text).toContain("a < b && c 'd' ❤");
 });
 
+test('extractReadable does not reintroduce encoded HTML during entity decoding', () => {
+  const result = extractReadable(
+    '<main><h1>&amp;lt;script&amp;gt;title&amp;lt;/script&amp;gt;</h1><p>&lt;img src=x onerror=alert(1)&gt;safe</p></main>'
+  );
+  expect(result).toEqual({ title: '', text: '# &lt;script&gt;title&lt;/script&gt;\n\nsafe' });
+});
+
 test('web_extract enforces the net SSRF guard (loopback/metadata blocked)', async () => {
   // web_extract is model-driven, so it goes through the same SSRF guards as net_fetch:
   // loopback and the cloud-metadata address are rejected before any fetch.

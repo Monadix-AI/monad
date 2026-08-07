@@ -7,6 +7,7 @@ import type { Tool, ToolContext } from '../types.ts';
 import { z } from 'zod';
 
 import { toolResult } from '../types.ts';
+import { htmlToPlainText } from './html-text.ts';
 import { createApprovalFetch } from './net.ts';
 
 const DEFAULT_COUNT = 10;
@@ -65,15 +66,7 @@ export function createBraveProvider(apiKey: string): SearchProvider {
 }
 
 function stripTags(html: string): string {
-  return html
-    .replace(/<[^>]+>/g, '')
-    .replace(/&amp;/g, '&')
-    .replace(/&#x27;/g, "'")
-    .replace(/&#x2F;/g, '/')
-    .replace(/&quot;/g, '"')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .trim();
+  return htmlToPlainText(html).trim();
 }
 
 // DDG result links are redirects like `//duckduckgo.com/l/?uddg=<encoded-target>&rut=…`
