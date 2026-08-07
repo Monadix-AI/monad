@@ -61,30 +61,64 @@ async function cliJson<T>(args: string[]): Promise<T> {
   return JSON.parse(last) as T;
 }
 
+/**
+ * A reserved port is only a hint: parallel suites reserve the same way, so another process can
+ * take it before the daemon binds. Treat an early daemon exit as a lost race and retry on a
+ * fresh port rather than burning the whole deadline on a process that is already dead.
+ */
+async function startDaemon(): Promise<void> {
+  for (let attempt = 1; ; attempt++) {
+    port = await freePort();
+    const proc = Bun.spawn([process.execPath, DAEMON_ENTRY, '--mock-model'], {
+      cwd: REPO_ROOT,
+      env: { ...process.env, MONAD_HOME: home, MONAD_PORT: String(port), NODE_ENV: 'test' },
+      stdout: 'pipe',
+      stderr: 'pipe'
+    });
+    daemon = proc;
+    // Drain incrementally: `new Response(stream).text()` only settles when the daemon exits, which
+    // is exactly the case a boot-timeout report cannot wait for.
+    const output: string[] = [];
+    const drain = async (stream: ReadableStream<Uint8Array>): Promise<void> => {
+      const decoder = new TextDecoder();
+      for await (const chunk of stream) output.push(decoder.decode(chunk, { stream: true }));
+    };
+    void drain(proc.stdout as ReadableStream<Uint8Array>).catch(() => {});
+    void drain(proc.stderr as ReadableStream<Uint8Array>).catch(() => {});
+
+    // The daemon boots in ~2s alone, but its cold transpile/JIT is CPU-bound: sharing the machine
+    // with the rest of `bun run test` has pushed it past 30s. Budget for a saturated host.
+    const deadline = Date.now() + 120_000;
+    for (;;) {
+      try {
+        const health = await fetch(`http://127.0.0.1:${port}/health`);
+        if (health.ok) return;
+      } catch {
+        /* not listening yet */
+      }
+      if (proc.exitCode !== null || proc.signalCode !== null) break;
+      if (Date.now() > deadline) {
+        proc.kill();
+        await proc.exited;
+        throw new Error(`daemon did not become reachable on port ${port}\n${output.join('')}`);
+      }
+      await Bun.sleep(200);
+    }
+
+    await proc.exited;
+    daemon = undefined;
+    if (attempt >= 3) {
+      throw new Error(`daemon exited ${proc.exitCode} before listening on port ${port}\n${output.join('')}`);
+    }
+  }
+}
+
 beforeAll(async () => {
   home = await mkdtemp(join(tmpdir(), 'monad-cli-e2e-'));
-  port = await freePort();
   // `--mock-model` swaps in the deterministic model AND reports the home as initialized, so the
   // session commands' init gate passes without seeding a provider credential.
-  daemon = Bun.spawn([process.execPath, DAEMON_ENTRY, '--mock-model'], {
-    cwd: REPO_ROOT,
-    env: { ...process.env, MONAD_HOME: home, MONAD_PORT: String(port), NODE_ENV: 'test' },
-    stdout: 'pipe',
-    stderr: 'pipe'
-  });
-
-  const deadline = Date.now() + 30_000;
-  for (;;) {
-    if (Date.now() > deadline) throw new Error('daemon did not become reachable');
-    try {
-      const health = await fetch(`http://127.0.0.1:${port}/health`);
-      if (health.ok) break;
-    } catch {
-      /* not listening yet */
-    }
-    await Bun.sleep(200);
-  }
-}, 45_000);
+  await startDaemon();
+}, 150_000);
 
 afterAll(async () => {
   daemon?.kill();
