@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { channelChatTypeSchema } from './channel.ts';
 import {
   agentIdSchema,
   eventIdSchema,
@@ -193,6 +194,36 @@ export const operationSourceSchema = z.object({
 });
 export type OperationSource = z.infer<typeof operationSourceSchema>;
 
+/**
+ * Per-message ingress provenance, captured at delivery. Unlike the session's immutable
+ * `operationSource`, a message's origin describes the write that carried IT — a web reply typed
+ * into a Telegram-born session records `http`, not the session's `channel`. Only `transport` is
+ * always knowable; surface/client details are borrowed from the session origin when the write
+ * arrived over the same transport, or supplied by the channel dispatch itself.
+ */
+export const messageOriginSchema = operationSourceSchema
+  .partial()
+  .required({ transport: true })
+  .extend({
+    /** Platform-side sender id for channel-delivered messages (e.g. the Telegram user id). */
+    senderId: z.string().min(1).optional(),
+    /** Sender's display name on the source platform, as the adapter reported it. */
+    senderDisplay: z.string().min(1).optional(),
+    /** Human-readable conversation name ("#general", "Dev Team"); absent when the adapter has none. */
+    chatTitle: z.string().min(1).optional(),
+    /** Shape of the source conversation — a reader distinguishes a DM from a public channel. */
+    chatType: channelChatTypeSchema.optional(),
+    /** Platform thread/topic the message landed in, when the channel supports threads. */
+    threadId: z.string().min(1).optional()
+  });
+export type MessageOrigin = z.infer<typeof messageOriginSchema>;
+
+/** Open envelope for durable per-message annotations; `origin` is its first citizen. */
+export const messageMetadataSchema = z.object({
+  origin: messageOriginSchema.optional()
+});
+export type MessageMetadata = z.infer<typeof messageMetadataSchema>;
+
 export const tokenUsageSchema = z.object({
   inputTokens: z.number().optional(),
   outputTokens: z.number().optional(),
@@ -301,6 +332,8 @@ export const chatMessageSchema = z.object({
   // for `type` (see resolveMessageType). false ⇒ excluded from the prompt, token stats, and summary.
   // Orthogonal to `active` (which hides everything regardless).
   includeInContext: z.boolean().optional(),
+  /** Durable annotations stamped at delivery (ingress origin, …); absent on legacy rows. */
+  metadata: messageMetadataSchema.optional(),
   createdAt: iso8601Schema,
   updatedAt: iso8601Schema.optional() // updated on stream completion / edit
 });

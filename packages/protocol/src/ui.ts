@@ -1,9 +1,16 @@
 import { z } from 'zod';
 
 import { clarifyAskerSchema, clarifyChoiceModeSchema, clarifyFormSchema, urlElicitationSchema } from './clarify.ts';
+import { messageOriginSchema } from './domain.ts';
 import { eventCursorSchema } from './event-cursor.ts';
 import { contextUsagePayloadSchema } from './event-table.ts';
-import { eventIdSchema, meshSessionIdSchema, messageIdSchema, nativeAgentDeliveryIdSchema } from './ids.ts';
+import {
+  eventIdSchema,
+  iso8601Schema,
+  meshSessionIdSchema,
+  messageIdSchema,
+  nativeAgentDeliveryIdSchema
+} from './ids.ts';
 import { meshAgentSystemEventSchema } from './mesh-agent/index.ts';
 import { nativeAgentProjectQuestionSchema } from './mesh-agent/mesh-agent-project-messaging.ts';
 import { resourceApprovalDisplaySchema } from './resource-approval.ts';
@@ -67,6 +74,8 @@ export const uiMessageItemSchema = z.object({
   meshSessionId: meshSessionIdSchema.optional(),
   deliveryId: nativeAgentDeliveryIdSchema.optional(),
   parts: z.array(uiPartSchema),
+  /** Ingress provenance of the write that carried this message (metadata.origin passthrough). */
+  origin: messageOriginSchema.optional(),
   replyToMessageId: messageIdSchema.optional(),
   replyable: z.boolean().default(false),
   question: uiQuestionPresentationSchema.optional(),
@@ -77,7 +86,8 @@ export type UIMessageItem = z.infer<typeof uiMessageItemSchema>;
 
 export const uiMessageOutlineItemSchema = z.object({
   id: z.string(),
-  text: z.string()
+  text: z.string(),
+  at: iso8601Schema.optional()
 });
 export type UIMessageOutlineItem = z.infer<typeof uiMessageOutlineItemSchema>;
 

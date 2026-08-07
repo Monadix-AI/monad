@@ -178,6 +178,10 @@ export const channelInboundSchema = z.object({
   nativeMessageId: z.string(), // dedupe / echo correlation
   replyTo: z.string().optional(),
   senderDisplay: z.string().optional(),
+  /** Human-readable conversation name the adapter knows ("#general", "Dev Team"). Provenance only:
+   *  the core never routes on it, it is snapshotted onto the message so a reader can tell WHERE a
+   *  message came from without knowing platform ids. */
+  chatTitle: z.string().optional(),
   chatType: channelChatTypeSchema.optional(), // dm/group/channel — undefined ⇒ treated as 'dm'
   mentionedSelf: z.boolean().optional(), // bot was @mentioned (or replied-to) — gates group responses
   isSelf: z.boolean().default(false), // bot's own message → dropped

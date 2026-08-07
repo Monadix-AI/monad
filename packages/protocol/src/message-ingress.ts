@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { messageRoleSchema, messageTypeSchema } from './domain.ts';
+import { messageMetadataSchema, messageRoleSchema, messageTypeSchema } from './domain.ts';
 import {
   agentIdSchema,
   idempotencyKeySchema,
@@ -45,7 +45,8 @@ const createMessageFields = {
   text: z.string(),
   data: z.unknown().optional(),
   replyToMessageId: messageIdSchema.optional(),
-  includeInContext: z.boolean().optional()
+  includeInContext: z.boolean().optional(),
+  metadata: messageMetadataSchema.optional()
 };
 
 export const deliverMessageCommandSchema = durableMessageCommandSchema.extend(createMessageFields);
