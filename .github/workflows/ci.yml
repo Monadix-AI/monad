@@ -90,12 +90,14 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Test unit
+      - name: Test workspace unit
         env:
           MONAD_TEST_COVERAGE: ${{ runner.os == 'Linux' && '1' || '0' }}
-        run: |
-          bun scripts/quiet-run.ts bunx --bun turbo run test --force --output-logs=errors-only
-          bun scripts/bun-test.ts scripts/test/unit/ --only-failures
+        run: bun scripts/quiet-run.ts bunx --bun turbo run test --force --output-logs=errors-only
+
+      - name: Test script unit
+        if: ${{ !cancelled() }}
+        run: bun scripts/bun-test.ts scripts/test/unit/ --only-failures
 
       - name: Report coverage
         if: runner.os == 'Linux' && !cancelled()

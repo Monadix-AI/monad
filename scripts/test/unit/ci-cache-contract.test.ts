@@ -3,6 +3,7 @@ import { readdir } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 
 interface WorkflowStep {
+  if?: string;
   name?: string;
   run?: string;
   uses?: string;
@@ -84,6 +85,28 @@ test('CI executes platform-sensitive test tasks instead of replaying remote resu
     { forced: true, job: 'unit' },
     { forced: true, job: 'hermetic-e2e' },
     { forced: true, job: 'web-e2e' }
+  ]);
+});
+
+test('CI preserves failures while running both unit test scopes', async () => {
+  const workflow = Bun.YAML.parse(await Bun.file(join(workflowsDir, 'ci.yml')).text()) as Workflow;
+  const steps = workflow.jobs?.unit?.steps ?? [];
+
+  expect(
+    steps
+      .filter((step) => step.name?.startsWith('Test '))
+      .map((step) => ({ condition: step.if ?? null, name: step.name, run: step.run }))
+  ).toEqual([
+    {
+      condition: null,
+      name: 'Test workspace unit',
+      run: 'bun scripts/quiet-run.ts bunx --bun turbo run test --force --output-logs=errors-only'
+    },
+    {
+      condition: '$'.concat('{{ !cancelled() }}'),
+      name: 'Test script unit',
+      run: 'bun scripts/bun-test.ts scripts/test/unit/ --only-failures'
+    }
   ]);
 });
 
