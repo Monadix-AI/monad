@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.2.0](https://github.com/Monadix-AI/monad/compare/v0.1.0...v0.2.0) (2026-08-07)
+
+
+### Features
+
+* **channels:** add native commands and harden private replies ([9303834](https://github.com/Monadix-AI/monad/commit/93038346378eebbb7cf3f75bc2373938b67cfda4))
+* **daemon:** notify when updates are available ([e8f1ce6](https://github.com/Monadix-AI/monad/commit/e8f1ce601192ad39f4fe3da07cc9ec727e344106))
+* **web:** polish sidebar visual style ([f48dd84](https://github.com/Monadix-AI/monad/commit/f48dd84fbb5d0bc158d85e4f12066c3eeeee7d73))
+
+
+### Bug Fixes
+
+* **chat:** smooth transcript scrolling near the edges ([d42f3a1](https://github.com/Monadix-AI/monad/commit/d42f3a1d033768a32cde2476d9cbf5c425c719b1))
+* **ci:** speed up Windows test execution ([6239e35](https://github.com/Monadix-AI/monad/commit/6239e3537e9a0ac8b5bdbdeeecd3b5d65742baa3))
+* **ci:** stabilize managed agent response timing ([09ad11c](https://github.com/Monadix-AI/monad/commit/09ad11ccda97161ac7b0a45986e11d6a9fe17a39))
+* **ci:** stabilize Windows test paths and config reads ([e4abff1](https://github.com/Monadix-AI/monad/commit/e4abff197c4a41852852f9dbbf3255b5f463fdcc))
+* **ci:** stabilize Windows test paths and config reads ([fe508de](https://github.com/Monadix-AI/monad/commit/fe508de298dc0e248e1ab2860fb25489f8a77f1d))
+* **cli:** write the status result once, to stdout ([28862fe](https://github.com/Monadix-AI/monad/commit/28862fee7531e3ddc1544ec51f5f2d1e6d1eb820))
+* **dev:** link worktrees to Turbo remote cache ([c547758](https://github.com/Monadix-AI/monad/commit/c54775846bb6180a597abc2a8c0b0fbcda67b7e7))
+* **release:** publish only validated pending versions ([fd9de00](https://github.com/Monadix-AI/monad/commit/fd9de003bc13783da59afd5572bac89de0d1fb48))
+
+
+### Documentation
+
+* make pages self-contained and extend Simplified Chinese coverage ([e841acc](https://github.com/Monadix-AI/monad/commit/e841acc7a6306805b89af77c350b9f7ea18ec3a1))
+
 ## [0.1.0](https://github.com/Monadix-AI/monad/compare/v0.0.1...v0.1.0) (2026-08-07)
 
 
