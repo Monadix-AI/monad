@@ -4,6 +4,8 @@ sidebarTitle: "发行与升级"
 description: "选择 Monad 发行通道，安全升级或回滚，并理解客户端与守护进程兼容性。"
 keywords: ["Monad 升级", "stable", "beta", "nightly", "版本兼容"]
 ---
+Monad 把守护进程、CLI 和 Web 界面作为同一个带版本号的构建一起发布，分三条通道：默认的 `stable`、预发布的 `beta`，以及跟随 `main` 最新提交的 `nightly`。
+
 本指南说明应该运行哪个构建、如何切换发行通道，以及可以依赖的兼容性边界。
 
 ## 发行通道

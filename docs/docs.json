@@ -161,12 +161,17 @@
               "zh-Hans/getting-started",
               "zh-Hans/usage/installation",
               "zh-Hans/product",
-              "zh-Hans/concepts"
+              "zh-Hans/concepts",
+              "zh-Hans/usage/index"
             ]
           },
           {
             "group": "Monad Mesh：Agent 团队运行时",
-            "pages": ["zh-Hans/usage/mesh-agents"]
+            "pages": [
+              "zh-Hans/guides/from-one-agent-to-team",
+              "zh-Hans/guides/choosing-runtime",
+              "zh-Hans/usage/mesh-agents"
+            ]
           },
           {
             "group": "Monad Agent Runtime：第一方 Agent",
@@ -179,14 +184,22 @@
           },
           {
             "group": "运行守护进程",
-            "pages": ["zh-Hans/usage/sessions", "zh-Hans/usage/cli", "zh-Hans/usage/tui", "zh-Hans/usage/channels"]
+            "pages": [
+              "zh-Hans/usage/sessions",
+              "zh-Hans/usage/cli",
+              "zh-Hans/usage/tui",
+              "zh-Hans/usage/channels",
+              "zh-Hans/guides/remote-access"
+            ]
           },
           {
             "group": "运行与维护",
             "pages": [
               "zh-Hans/usage/releases",
               "zh-Hans/usage/privacy",
+              "zh-Hans/guides/comparison",
               "zh-Hans/guides/alternatives",
+              "zh-Hans/guides/use-cases",
               "zh-Hans/guides/faq",
               "zh-Hans/usage/troubleshooting"
             ]

@@ -2,7 +2,11 @@
 title: "Releases, Channels, and Upgrading"
 description: "Choose a Monad release channel, upgrade or roll back safely, and understand client-daemon compatibility."
 sidebarTitle: "Releases and Upgrading"
+keywords: ["release channels", "stable beta nightly", "upgrade Monad", "version compatibility"]
 ---
+Monad publishes the daemon, CLI, and Web UI together as one versioned build, on three
+channels: `stable` by default, `beta` for prereleases, and `nightly` for the tip of `main`.
+
 Which build to run, how to move between channels, and what compatibility you can expect.
 The contributor-facing side of this — how releases are cut — is in
 [CONTRIBUTING.md](https://github.com/Monadix-AI/monad/blob/main/CONTRIBUTING.md#branching--releases).

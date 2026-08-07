@@ -1,7 +1,12 @@
 ---
 title: "Install or Remove Monad"
 description: "Install Monad on macOS, Linux, or Windows; upgrade, roll back, or remove it safely."
+keywords: ["install Monad", "macOS Linux Windows install", "uninstall", "upgrade", "single binary"]
 ---
+Monad installs as a single binary on macOS, Linux, and Windows and runs as one local daemon.
+The release installer verifies the download, adds `monad` to your `PATH`, starts the daemon,
+and opens the Web UI.
+
 This guide covers system requirements, the release installer, manual installation, upgrades, and removal. Use [getting started](/getting-started) after installation to connect a model and run your first session.
 
 ## Check system requirements

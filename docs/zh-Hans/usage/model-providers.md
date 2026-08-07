@@ -4,6 +4,8 @@ sidebarTitle: "模型服务商"
 description: "连接模型服务商、保存凭据、测试访问，并选择 Monad 的默认模型配置。"
 keywords: ["模型服务商", "OpenRouter", "Azure OpenAI", "Amazon Bedrock", "Ollama", "模型配置"]
 ---
+模型服务商是 Monad 可以发送推理请求的一个去处。Monad 内置 24 种提供方类型——8 种使用专用 SDK，16 种是基于内置 OpenAI 兼容适配器的预设——此外任何服务商都可以通过 Atom Pack 接入。
+
 本指南说明如何选择模型服务商、添加凭据和默认模型。服务商目录、两类策略和 OpenAI 兼容长尾服务商的实现见[模型服务商内部设计](/internals/infra/model-providers)。
 
 ## 你需要什么

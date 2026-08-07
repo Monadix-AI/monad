@@ -6,6 +6,10 @@ keywords: ["Monad sessions", "agent approvals", "branch session", "restore sessi
 ---
 import { LocalRuntimeData } from '/snippets/local-runtime-data.mdx';
 
+A Monad session is one durable work thread: its messages, events, approvals, and execution
+state live in the daemon and survive client closure and daemon restart. A project groups
+sessions, members, and a workspace root around longer-running work.
+
 How to work with Monad's core objects day to day: create and continue sessions,
 branch and rewind them, answer approval requests, and choose which agent handles a
 conversation. For one-paragraph definitions of each concept, see

@@ -18,8 +18,8 @@
   <a href="#install-monad">Install</a> ·
   <a href="#the-runtime-behind-the-team">Runtime</a> ·
   <a href="#agent-runtimes-in-the-mesh">Agent runtimes</a> ·
+  <a href="#common-questions">FAQ</a> ·
   <a href="https://docs.monadix.ai/guides/alternatives">Comparison</a> ·
-  <a href="https://docs.monadix.ai/guides/faq">FAQ</a> ·
   <a href="https://docs.monadix.ai">Documentation</a> ·
   <a href="README.zh-CN.md">简体中文</a>
 </p>
@@ -179,6 +179,38 @@ Documentation has two audiences:
 | **Developers and contributors** | Read the [developer documentation](docs/index.md#developer-facing-documentation) and [contribution guide](CONTRIBUTING.md) |
 
 Use [product concepts](docs/concepts.md) for shared vocabulary and [troubleshooting](docs/usage/troubleshooting.md) when the runtime does not behave as expected.
+
+## Common questions
+
+**What is Monad?** An open-source agent team runtime from Monadix. One long-lived local
+daemon owns the identity, capabilities, permissions, memory, sessions, collaboration state,
+approvals, and audit history of your agents, and keeps them when clients close, when the
+daemon restarts, and when you swap the runtime backing a member.
+
+**How is it different from an agent framework such as LangGraph or CrewAI?** A framework is
+a library inside your process that expresses agent logic. Monad is a process that outlives
+your script: it owns credentials, gates tool calls behind human approval, confines child
+processes in an OS sandbox, and keeps an audit trail. Framework-built agents can join a
+Monad team over the Agent Client Protocol.
+
+**Can Claude Code, Codex, or Gemini CLI join a Monad team?** Yes. A member can be backed by
+a third-party agent provider, an ACP agent, a peer daemon you own, or Monad Agent Runtime.
+A member backed by a third-party runtime keeps that runtime's own execution and permission
+model; Monad records its activity and proxies approval prompts where the provider exposes
+them.
+
+**Does Monad send my code or data to the cloud?** Monad sends no telemetry, analytics, crash
+reports, or usage pings, and stores its state on your machine. Requests to the model
+providers you configure still leave the machine, because that is where inference happens.
+
+**Do I need Kubernetes, a message broker, or a database server?** No. Monad is a runtime,
+not a platform you deploy: one binary and one process on your own machine.
+
+**Is it production-ready?** Monad Mesh is in alpha and Monad Agent Runtime is experimental —
+see [Roadmap](#roadmap) for what that means per area.
+
+More answers are in the [FAQ](https://docs.monadix.ai/guides/faq), and the tool-by-tool
+comparison is in [how Monad compares](https://docs.monadix.ai/guides/alternatives).
 
 ## Community and security
 

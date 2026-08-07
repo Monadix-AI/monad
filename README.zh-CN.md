@@ -18,7 +18,7 @@
   <a href="#快速开始">快速开始</a> ·
   <a href="#agent-团队背后的运行时">团队运行时</a> ·
   <a href="#mesh-中的-agent-运行时">Agent 运行时</a> ·
-  <a href="https://docs.monadix.ai/zh-Hans/guides/faq">常见问题</a> ·
+  <a href="#常见问题">常见问题</a> ·
   <a href="https://docs.monadix.ai">文档</a> ·
   <a href="README.md">English</a>
 </p>
@@ -177,6 +177,22 @@ Workplace Experience 位于 Web 客户端内部。它可以针对编码、研究
 | **开发者与贡献者** | 阅读[开发者文档](docs/zh-Hans/index.md#面向开发者的文档)和[贡献指南](CONTRIBUTING.md) |
 
 共享术语见[产品概念](docs/concepts.md)。运行时行为异常时，查阅[故障排查](docs/usage/troubleshooting.md)。
+
+## 常见问题
+
+**Monad 是什么？** Monadix 推出的开源 Agent 团队运行时。一个长期运行的本地守护进程持有 Agent 的身份、能力、权限、记忆、会话、协作状态、审批和审计历史，并在客户端关闭、守护进程重启、成员底层运行时更换之后继续保有这些状态。
+
+**它和 LangGraph、CrewAI 这类 Agent 框架有什么区别？** 框架是运行在你进程内的库，用来表达 Agent 逻辑。Monad 是比你的脚本活得更久的进程：它持有凭据、把工具调用挡在人工审批之后、用操作系统级沙箱约束子进程，并保留审计记录。框架构建的 Agent 可以通过 Agent Client Protocol 加入 Monad 团队。
+
+**Claude Code、Codex、Gemini CLI 能加入 Monad 团队吗？** 可以。成员可以由第三方 Agent 服务商、ACP Agent、你自己拥有的对等守护进程，或 Monad Agent Runtime 承载。由第三方运行时承载的成员沿用该运行时自己的执行与权限模型；Monad 记录它的活动，并在服务商暴露审批的前提下代理审批提示。
+
+**Monad 会把我的代码或数据传到云端吗？** Monad 不发送任何遥测、分析、崩溃报告或使用统计，状态存放在你自己的设备上。发往你所配置的模型服务商的请求仍会离开设备，因为推理发生在那里。
+
+**需要 Kubernetes、消息队列或数据库服务器吗？** 不需要。Monad 是运行时，不是需要部署的平台：你自己设备上的一个二进制、一个进程。
+
+**可以用于生产环境了吗？** Monad Mesh 处于 alpha，Monad Agent Runtime 仍是实验阶段 —— 各部分的具体含义见[路线图](#路线图)。
+
+更多解答见[常见问题](https://docs.monadix.ai/zh-Hans/guides/faq)，逐项对比见[与其他 Agent 工具的对比](https://docs.monadix.ai/zh-Hans/guides/alternatives)。
 
 ## 社区与安全
 

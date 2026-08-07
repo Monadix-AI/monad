@@ -97,6 +97,24 @@ Only if you turn it on. Monad binds local interfaces by default. Remote access i
 opt-in, requires a bearer token for every non-loopback request, and should sit behind TLS —
 a reverse proxy, SSH tunnel, or VPN. See [remote access](/guides/remote-access).
 
+## When should I not use Monad?
+
+Monad is the wrong tool in four cases. It is not a hosting platform: if you are shipping an
+agent-powered product to your customers, you want a serving platform with autoscaling and
+multi-tenancy, not a single-machine daemon. It is not an authoring framework: if what you
+need is a way to express agent logic as a graph inside your own application, use a framework
+and, if it helps later, attach it to Monad over ACP. It does not do cross-owner
+collaboration: peer federation delegates between daemons **you** own, and work spanning
+different owners with independent trust and billing belongs to Monadix. And it does not
+schedule work across a fleet — there is no distributed scheduler and no universal task
+schema, so a cluster-scale workload is out of scope.
+
+Two more limits worth knowing before you commit. Monad Mesh is alpha and Monad Agent Runtime
+is experimental, so the API can change between releases. And `net: 'filtered'` egress control
+is enforced at the application layer on every platform: a child process that opens a raw
+socket bypasses the domain allowlist everywhere except macOS. See
+[sandbox backends](/usage/sandbox-backends) for what each platform actually enforces.
+
 ## Is Monad ready for production?
 
 Monad Mesh, the agent team runtime, is in alpha: team ownership, session bindings, policy,
