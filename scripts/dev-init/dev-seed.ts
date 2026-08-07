@@ -1,42 +1,6 @@
 import { join } from 'node:path';
 
-/**
- * Find the main worktree's config.init.json by checking git worktrees.
- * Returns the path to the main worktree's seed file, or null if not found.
- */
-async function findMainSeedPath(root: string): Promise<string | null> {
-  try {
-    const worktreesOutput = await Bun.$`git worktree list --porcelain`
-      .quiet()
-      .text()
-      .then((t) => t.trim())
-      .catch(() => '');
-
-    if (!worktreesOutput) return null;
-
-    // porcelain format: blank-line-separated stanzas; each stanza has:
-    //   worktree <path>
-    //   HEAD <sha>
-    //   branch refs/heads/<name>   (or "detached")
-    let currentPath = '';
-    for (const line of worktreesOutput.split('\n')) {
-      if (line.startsWith('worktree ')) {
-        currentPath = line.slice('worktree '.length).trim();
-      } else if (line.startsWith('branch ')) {
-        const branch = line.slice('branch '.length).trim();
-        if (branch === 'refs/heads/main' && currentPath && currentPath !== root) {
-          const mainSeed = join(currentPath, 'packages', 'environment', 'config.init.json');
-          if (await Bun.file(mainSeed).exists()) {
-            return mainSeed;
-          }
-        }
-      }
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
+import { findMainWorktreePath } from './worktree';
 
 /**
  * Scaffold packages/environment/config.init.json (dev seed) if missing — copying the main worktree's
@@ -53,8 +17,9 @@ async function scaffoldConfigInitDevSeed(
 
   if (!(await Bun.file(seedPath).exists())) {
     // Try to copy from main worktree first
-    const mainSeed = await findMainSeedPath(root);
-    if (mainSeed) {
+    const mainWorktree = await findMainWorktreePath(root);
+    const mainSeed = mainWorktree ? join(mainWorktree, 'packages', 'environment', 'config.init.json') : null;
+    if (mainSeed && (await Bun.file(mainSeed).exists())) {
       try {
         await Bun.write(seedPath, await Bun.file(mainSeed).text());
         log('config.init.json copied from main worktree');

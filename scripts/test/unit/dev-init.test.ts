@@ -13,6 +13,8 @@ import {
   replacePortLines,
   worktreePorts
 } from '../../dev-init/ports.ts';
+import { syncTurboRemoteCache } from '../../dev-init/turbo-cache.ts';
+import { findMainWorktreePath } from '../../dev-init/worktree.ts';
 
 test('devCliShimText forwards POSIX arguments to the worktree CLI entry point', () => {
   expect(devCliShimText('/repo with space', 'darwin')).toBe(
@@ -100,6 +102,77 @@ test('mise owns worktree tool and environment activation', async () => {
       status: { show_tools: true }
     },
     tools: { 'github:boyter/scc': '3.7.0' }
+  });
+});
+
+test('findMainWorktreePath selects the checkout attached to main', async () => {
+  const roots: string[] = [];
+  const result = await findMainWorktreePath('/repo-feature', {
+    listWorktrees: async (root) => {
+      roots.push(root);
+      return `worktree /repo
+HEAD abc
+branch refs/heads/main
+
+worktree /repo-feature
+HEAD def
+branch refs/heads/codex/feature
+`;
+    }
+  });
+
+  expect({ result, roots }).toEqual({ result: '/repo', roots: ['/repo-feature'] });
+});
+
+test('syncTurboRemoteCache copies only the main worktree team binding', async () => {
+  const writes: Array<{ path: string; text: string }> = [];
+  const logs: string[] = [];
+  const warnings: string[] = [];
+  const result = await syncTurboRemoteCache('/repo-feature', logs.push.bind(logs), warnings.push.bind(warnings), {
+    fileExists: async (path) => path === join('/repo', '.turbo', 'config.json'),
+    findMainWorktree: async () => '/repo',
+    readText: async () => '{"teamId":"team_123","token":"must-not-copy"}',
+    writeText: async (path, text) => {
+      writes.push({ path, text });
+    }
+  });
+
+  expect({ logs, result, warnings, writes }).toEqual({
+    logs: ['Turbo remote cache linked from main worktree'],
+    result: 'copied',
+    warnings: [],
+    writes: [{ path: join('/repo-feature', '.turbo', 'config.json'), text: '{\n  "teamId": "team_123"\n}\n' }]
+  });
+});
+
+test('syncTurboRemoteCache preserves an existing worktree binding', async () => {
+  const calls: string[] = [];
+  const result = await syncTurboRemoteCache(
+    '/repo-feature',
+    () => {},
+    () => {},
+    {
+      fileExists: async (path) => {
+        calls.push(`exists:${path}`);
+        return true;
+      },
+      findMainWorktree: async () => {
+        calls.push('find-main');
+        return '/repo';
+      },
+      readText: async () => {
+        calls.push('read');
+        return '{}';
+      },
+      writeText: async () => {
+        calls.push('write');
+      }
+    }
+  );
+
+  expect({ calls, result }).toEqual({
+    calls: [`exists:${join('/repo-feature', '.turbo', 'config.json')}`],
+    result: 'existing'
   });
 });
 

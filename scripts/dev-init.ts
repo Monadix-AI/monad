@@ -17,10 +17,11 @@
  *   3. Creates the MONAD_HOME directory if it doesn't exist.
  *   4. Scaffolds packages/environment/config.init.json from config.init.json.template (dev seed) if missing,
  *      and warns if its apiKey is empty.
- *   5. Installs a worktree-local `monad` CLI shim under .dev/bin.
- *   6. Initializes a worktree-local CodeGraph index when the CLI is available.
- *   7. Regenerates artifacts through the Turbo task graph unless `--skip-generate` is set.
- *   8. Prints a connection summary (daemon URL, data dir).
+ *   5. Copies the main worktree's Turbo remote-cache binding when this worktree is not linked.
+ *   6. Installs a worktree-local `monad` CLI shim under .dev/bin.
+ *   7. Initializes a worktree-local CodeGraph index when the CLI is available.
+ *   8. Regenerates artifacts through the Turbo task graph unless `--skip-generate` is set.
+ *   9. Prints a connection summary (daemon URL, data dir).
  *
  * The initialization body runs only when executed directly (import.meta.main).
  */
@@ -34,6 +35,7 @@ import { scaffoldDevSeed } from './dev-init/dev-seed';
 import { parseEnvFile, shouldSkipDevInit } from './dev-init/env';
 import { buildDevInitSummary, shouldColorOutput } from './dev-init/output';
 import { ensurePortLines, removeBlankXdgLines, type WorktreePorts, worktreePorts } from './dev-init/ports';
+import { syncTurboRemoteCache } from './dev-init/turbo-cache';
 
 async function main(): Promise<void> {
   if (shouldSkipDevInit()) {
@@ -119,12 +121,16 @@ async function main(): Promise<void> {
 
   const apiKey = await scaffoldDevSeed(root, log, warn);
 
-  // ── 4. Worktree-local CLI ──────────────────────────────────────────────────────
+  // ── 4. Turbo remote cache ───────────────────────────────────────────────────────
+
+  await syncTurboRemoteCache(root, log, warn);
+
+  // ── 5. Worktree-local CLI ──────────────────────────────────────────────────────
 
   const cliShimPath = await installDevCliShim(root);
   log(`CLI shim ready        ${cliShimPath}`);
 
-  // ── 5. CodeGraph ──────────────────────────────────────────────────────────────
+  // ── 6. CodeGraph ──────────────────────────────────────────────────────────────
 
   const codeGraph = await ensureCodeGraph(root);
   if (codeGraph.status === 'ready') {
@@ -137,7 +143,7 @@ async function main(): Promise<void> {
     warn(`CodeGraph initialization failed (${codeGraph.detail}) — run \`codegraph init .\``);
   }
 
-  // ── 6. Generated artifacts ────────────────────────────────────────────────────
+  // ── 7. Generated artifacts ────────────────────────────────────────────────────
 
   if (Bun.argv.includes('--skip-generate')) {
     log('generated artifacts deferred  bun run generate');
@@ -145,7 +151,7 @@ async function main(): Promise<void> {
     await Bun.$`bun run generate`.cwd(root);
   }
 
-  // ── 7. Initialization summary ─────────────────────────────────────────────────
+  // ── 8. Initialization summary ─────────────────────────────────────────────────
 
   const resolvedPorts: WorktreePorts = {
     AI_SDK_DEVTOOLS_PORT:
