@@ -42,7 +42,8 @@ function rpcCaller(ws: WebSocket) {
   ws.addEventListener('message', (ev: MessageEvent) => {
     const msg = JSON.parse(String(ev.data)) as RpcResponse;
     if (msg.id === undefined) return;
-    pending.get(msg.id)?.(msg);
+    const resolve = pending.get(msg.id);
+    resolve?.(msg);
     pending.delete(msg.id);
   });
   return (method: string, params: unknown): Promise<RpcResponse> => {

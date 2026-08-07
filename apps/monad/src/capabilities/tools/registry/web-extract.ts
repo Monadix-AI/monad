@@ -8,24 +8,11 @@ import { httpUrlSchema } from '@monad/protocol';
 import { z } from 'zod';
 
 import { toolResult } from '../types.ts';
+import { htmlToPlainText, stripHtmlMarkup } from './html-text.ts';
 import { fetchTextSafe } from './net.ts';
 
-function decodeEntities(s: string): string {
-  return s
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;|&#x27;/gi, "'")
-    .replace(/&#(\d+);/g, (_m, n: string) => String.fromCharCode(Number(n)))
-    .replace(/&#x([0-9a-f]+);/gi, (_m, n: string) => String.fromCharCode(Number.parseInt(n, 16)));
-}
-
 function stripTags(html: string): string {
-  return decodeEntities(html.replace(/<[^>]+>/g, ' '))
-    .replace(/\s+/g, ' ')
-    .trim();
+  return stripHtmlMarkup(html, ' ').replace(/\s+/g, ' ').trim();
 }
 
 function removeBlock(html: string, tag: string): string {
@@ -38,7 +25,11 @@ function removeBlock(html: string, tag: string): string {
  */
 export function extractReadable(html: string): { title: string; text: string } {
   const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-  const title = titleMatch ? stripTags(titleMatch[1] ?? '') : '';
+  const title = titleMatch
+    ? htmlToPlainText(titleMatch[1] ?? '', ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+    : '';
 
   let body = html.replace(/<!--[\s\S]*?-->/g, ' ');
   for (const tag of ['script', 'style', 'noscript', 'svg', 'head', 'nav', 'header', 'footer', 'aside', 'form']) {
@@ -59,7 +50,7 @@ export function extractReadable(html: string): { title: string; text: string } {
   content = content.replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, (_m, inner: string) => `\n- ${stripTags(inner)}`);
   content = content.replace(/<\/(p|div|section|tr|ul|ol|blockquote)>/gi, '\n').replace(/<br\s*\/?>/gi, '\n');
 
-  const text = decodeEntities(content.replace(/<[^>]+>/g, ''))
+  const text = htmlToPlainText(content)
     .split('\n')
     .map((line) => line.replace(/[ \t]+/g, ' ').trim())
     .join('\n')

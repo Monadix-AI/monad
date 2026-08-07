@@ -253,7 +253,7 @@ test('is idempotent — already-evicted rounds are not re-evicted or double-mark
   const twice = engine.prepare(once, ctx(600));
   expect(twice).toBe(once); // second pass finds nothing new → same reference
   for (const o of outputs(twice).filter((o) => o.startsWith(EVICTED_MARKER))) {
-    expect(o.match(new RegExp(EVICTED_MARKER.replace(/[[\]]/g, '\\$&'), 'g')) ?? []).toHaveLength(1);
+    expect(o.split(EVICTED_MARKER)).toHaveLength(2);
   }
 });
 

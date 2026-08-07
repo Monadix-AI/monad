@@ -15,6 +15,19 @@ import { discoverChannelAdapters } from '#/channels/discover.ts';
 
 let atomsDir: string;
 
+const CHANNEL_FIXTURE_BUNDLE = new TextEncoder().encode(`
+const cap={edit:false,typing:false,threads:false,maxMessageChars:1000,markdown:false};
+const channel={type:'whatsapp',name:'X',capabilities:cap,create:()=>({type:'whatsapp',capabilities:cap,connect:async()=>{},disconnect:async()=>{},send:async(c)=>({ref:'1',chatId:c})})};
+export default {manifest:{name:'wa',version:'1.0.0',sdkVersion:'0',atoms:['channel']},register(ctx){ctx.registerChannel(channel);}};`);
+const EVAL_CHANNEL_FIXTURE_BUNDLE = new TextEncoder().encode(`
+eval("1+1");
+const cap={edit:false,typing:false,threads:false,maxMessageChars:1000,markdown:false};
+const channel={type:'whatsapp',name:'X',capabilities:cap,create:()=>({type:'whatsapp',capabilities:cap,connect:async()=>{},disconnect:async()=>{},send:async(c)=>({ref:'1',chatId:c})})};
+export default {manifest:{name:'wa',version:'1.0.0',sdkVersion:'0',atoms:['channel']},register(ctx){ctx.registerChannel(channel);}};`);
+const SKILL_FIXTURE_BUNDLE = new TextEncoder().encode(
+  `export default {manifest:{name:'power',version:'1.0.0',sdkVersion:'0',atoms:['skill']},register(){}};`
+);
+
 beforeEach(async () => {
   atomsDir = join(tmpdir(), `monad-install-${process.pid}-${Date.now()}-${process.hrtime.bigint()}`);
   await mkdir(atomsDir, { recursive: true });
@@ -32,12 +45,12 @@ function staged(opts: {
   integrity?: string;
   bundleExtra?: string;
 }): StagedAtomPack {
-  const t = JSON.stringify(opts.type);
-  const monadVersion = opts.monadVersion ? `,monadVersion:${JSON.stringify(opts.monadVersion)}` : '';
-  const bundle = new TextEncoder().encode(`${opts.bundleExtra ?? ''}
-const cap={edit:false,typing:false,threads:false,maxMessageChars:1000,markdown:false};
-const channel={type:${t},name:'X',capabilities:cap,create:()=>({type:${t},capabilities:cap,connect:async()=>{},disconnect:async()=>{},send:async(c)=>({ref:'1',chatId:c})})};
-export default {manifest:{name:${JSON.stringify(opts.name)},version:'1.0.0',sdkVersion:${JSON.stringify(opts.sdkVersion ?? '0')},atoms:${JSON.stringify(opts.atoms)}${monadVersion}},register(ctx){ctx.registerChannel(channel);}};`);
+  if (opts.bundleExtra && opts.bundleExtra !== 'eval("1+1");') throw new Error('unknown staged bundle variant');
+  const bundle = opts.atoms.includes('skill')
+    ? SKILL_FIXTURE_BUNDLE
+    : opts.bundleExtra
+      ? EVAL_CHANNEL_FIXTURE_BUNDLE
+      : CHANNEL_FIXTURE_BUNDLE;
   return {
     manifestRaw: {
       name: opts.name,

@@ -6,19 +6,34 @@ import {
   useSidebarSessionShortcutValue
 } from '../../src/features/shell/sidebar/sidebar-shortcut-context';
 
-function ShortcutProbe({ rowKey }: { rowKey: string }) {
-  return <span>{useSidebarSessionShortcutValue(rowKey)}</span>;
+function ShortcutProbe({ observed, rowKey }: { observed: number[]; rowKey: string }) {
+  const shortcut = useSidebarSessionShortcutValue(rowKey);
+  if (shortcut !== undefined) observed.push(shortcut);
+  return null;
 }
 
 test('replayed renders reuse a row shortcut without consuming the next number', () => {
-  const markup = renderToStaticMarkup(
+  const observed: number[] = [];
+  renderToStaticMarkup(
     <SidebarShortcutAllocatorProvider>
-      <ShortcutProbe rowKey="chat:first" />
-      <ShortcutProbe rowKey="chat:first" />
-      <ShortcutProbe rowKey="chat:second" />
-      <ShortcutProbe rowKey="chat:second" />
+      <ShortcutProbe
+        observed={observed}
+        rowKey="chat:first"
+      />
+      <ShortcutProbe
+        observed={observed}
+        rowKey="chat:first"
+      />
+      <ShortcutProbe
+        observed={observed}
+        rowKey="chat:second"
+      />
+      <ShortcutProbe
+        observed={observed}
+        rowKey="chat:second"
+      />
     </SidebarShortcutAllocatorProvider>
   );
 
-  expect(markup.replaceAll(/<[^>]+>/g, '')).toBe('1122');
+  expect(observed).toEqual([1, 1, 2, 2]);
 });

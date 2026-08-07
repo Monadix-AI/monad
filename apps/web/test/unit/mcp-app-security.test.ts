@@ -7,6 +7,21 @@ import {
   sandboxedMcpAppHtml
 } from '../../src/features/session/ToolStepView';
 
+function nestedMcpAppHtml(proxyHtml: string): string {
+  const prefix = 'app.srcdoc=';
+  const suffix = ';addEventListener';
+  const start = proxyHtml.indexOf(prefix);
+  const end = proxyHtml.lastIndexOf(suffix);
+  if (start === -1 || end === -1) throw new Error('missing nested MCP App source');
+  return JSON.parse(proxyHtml.slice(start + prefix.length, end));
+}
+
+function contentSecurityPolicy(html: string): string {
+  const policy = html.match(/Content-Security-Policy" content="([^"]+)"/)?.[1];
+  if (!policy) throw new Error('missing MCP App content security policy');
+  return policy;
+}
+
 test('web search links allow only HTTP origins', () => {
   expect({
     https: safeWebSearchUrl('https://example.com/path'),
@@ -63,17 +78,9 @@ test('MCP App sandbox uses a proxy frame and admits only declared HTTPS origins'
     resourceDomains: ['https://cdn.example.com']
   });
 
-  expect({
-    nestedSandbox: html.includes('<iframe id="app" sandbox="allow-scripts"'),
-    declaredConnect: html.includes('connect-src https://api.example.com'),
-    declaredResource: html.includes('https://cdn.example.com'),
-    rejectsInsecure: !html.includes('insecure.example.com')
-  }).toEqual({
-    nestedSandbox: true,
-    declaredConnect: true,
-    declaredResource: true,
-    rejectsInsecure: true
-  });
+  expect(contentSecurityPolicy(nestedMcpAppHtml(html))).toBe(
+    'default-src &apos;none&apos;; base-uri &apos;none&apos;; connect-src https://api.example.com; form-action &apos;none&apos;; img-src data: blob: https://cdn.example.com; media-src blob: https://cdn.example.com; font-src data: https://cdn.example.com; style-src &apos;unsafe-inline&apos; https://cdn.example.com; script-src &apos;unsafe-inline&apos; https://cdn.example.com; frame-src &apos;none&apos;'
+  );
 });
 
 test('MCP App sandbox grants only permissions declared by the resource', () => {

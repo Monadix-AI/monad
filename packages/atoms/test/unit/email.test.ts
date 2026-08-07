@@ -19,6 +19,7 @@ test('EM1: header parse unfolds continuations + lowercases keys', () => {
 test('EM2: parseAddress extracts bare address', () => {
   expect(parseAddress('Alice <alice@example.com>')).toBe('alice@example.com');
   expect(parseAddress('bob@example.com')).toBe('bob@example.com');
+  expect(parseAddress('<script>Attacker</script> <attacker@example.com>')).toBe('attacker@example.com');
 });
 
 test('EM3: transfer-encoding decode (base64 + quoted-printable)', () => {
@@ -54,6 +55,16 @@ test('EM5: emailToInbound — sender is chat + user (dm), command parse', () => 
     command: 'new',
     commandArgs: ['topic'],
     nativeMessageId: '<m1>'
+  });
+});
+
+test('EM5b: emailToInbound uses the final mailbox as identity and preserves the display text', () => {
+  const ev = emailToInbound('From: <script>Attacker</script> <attacker@example.com>\r\n\r\nhello');
+  expect(ev).toMatchObject({
+    chatId: 'attacker@example.com',
+    userId: 'attacker@example.com',
+    senderDisplay: '<script>Attacker</script>',
+    text: 'hello'
   });
 });
 

@@ -81,9 +81,18 @@ export function extractTextBody(rfc822: string): string {
   return decodeTransferEncoding(body, headers['content-transfer-encoding'] ?? '').trim();
 }
 
+function parseMailbox(headerValue: string): { address: string; display?: string } {
+  const value = headerValue.trim();
+  const addressStart = value.endsWith('>') ? value.lastIndexOf('<') : -1;
+  if (addressStart === -1) return { address: value, display: value || undefined };
+  const address = value.slice(addressStart + 1, -1).trim();
+  const display = value.slice(0, addressStart).trim();
+  return { address, display: display || undefined };
+}
+
 /** Bare email address out of a `Name <a@b>` header value. Exported for tests. */
 export function parseAddress(headerValue: string): string {
-  return (headerValue.match(/<([^>]+)>/)?.[1] ?? headerValue).trim();
+  return parseMailbox(headerValue).address;
 }
 
 /** Build a ChannelInbound from a fetched RFC822 message. The sender address is both user and (1:1)
@@ -91,7 +100,8 @@ export function parseAddress(headerValue: string): string {
 export function emailToInbound(rfc822: string): ChannelInbound | null {
   const sep = rfc822.search(/\r?\n\r?\n/);
   const headers = parseEmailHeaders(sep === -1 ? rfc822 : rfc822.slice(0, sep));
-  const from = parseAddress(headers.from ?? '');
+  const mailbox = parseMailbox(headers.from ?? '');
+  const from = mailbox.address;
   if (!from) return null;
   const text = extractTextBody(rfc822);
   const isCommand = text.startsWith('/');
@@ -104,7 +114,7 @@ export function emailToInbound(rfc822: string): ChannelInbound | null {
     command: head ? head.slice(1).toLowerCase() : undefined,
     commandArgs: args,
     nativeMessageId: headers['message-id'] ?? `email-${Date.now()}`,
-    senderDisplay: headers.from?.replace(/<[^>]+>/, '').trim() || undefined,
+    senderDisplay: mailbox.display,
     chatType: 'dm',
     isSelf: false,
     media: [],
