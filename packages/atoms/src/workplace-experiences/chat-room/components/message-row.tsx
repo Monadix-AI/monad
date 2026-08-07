@@ -1,10 +1,18 @@
+import type { ChannelIcon } from '@monad/protocol';
+import type { ChannelOriginDetail, ChannelOriginLabels } from '@monad/ui';
 import type { ComponentType } from 'react';
 import type { Message, MessageAttachment } from '../../experience/types.ts';
 import type { WorkplaceExperienceHostAction } from '../../host-context.tsx';
 
 import { MessageCircleReplyIcon, TerminalIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { FaviconLink, WorkspaceMessageCard } from '@monad/ui';
+import {
+  ChannelOriginBadge,
+  channelOriginDetails,
+  FaviconLink,
+  showsChannelOrigin,
+  WorkspaceMessageCard
+} from '@monad/ui';
 import {
   AgentIdentity,
   AgentInstanceAvatar,
@@ -33,6 +41,15 @@ export type MessageRowLabels = {
   reply?: string;
   replyUnavailable?: string;
   retry?: string;
+  sentFrom?: string;
+  originConversation?: string;
+  originDirectMessage?: string;
+  originGroup?: string;
+  originChannel?: string;
+  originSender?: string;
+  originThread?: string;
+  originInstance?: string;
+  originVersion?: string;
   waitingForResponse?: string;
   working?: string;
 };
@@ -247,7 +264,46 @@ function messageAgentBadge(msg: Message): React.ReactNode {
   );
 }
 
-function MessageHeader({ align, msg }: { align: 'left' | 'right'; msg: Message }): React.ReactElement {
+/** A human message's delivery provenance, resolved for the origin badge. Null when the message was
+ *  written here in the web app (no provenance worth surfacing). */
+function messageSentFrom(
+  msg: Message,
+  channelIcons: ReadonlyMap<string, ChannelIcon> | undefined,
+  labels?: MessageRowLabels
+): { details: ChannelOriginDetail[]; icon?: ChannelIcon; name: string } | null {
+  const origin = msg.origin;
+  if (msg.kind !== 'human' || !showsChannelOrigin(origin)) return null;
+  const name = origin.client as string;
+  const icon = channelIcons?.get(name);
+  return {
+    details: channelOriginDetails(origin, originLabels(labels)),
+    ...(icon ? { icon } : {}),
+    name
+  };
+}
+
+function originLabels(labels?: MessageRowLabels): ChannelOriginLabels {
+  return {
+    conversation: labels?.originConversation ?? '',
+    directMessage: labels?.originDirectMessage ?? '',
+    group: labels?.originGroup ?? '',
+    channel: labels?.originChannel ?? '',
+    sender: labels?.originSender ?? '',
+    thread: labels?.originThread ?? '',
+    instance: labels?.originInstance ?? '',
+    version: labels?.originVersion ?? ''
+  };
+}
+
+function MessageHeader({
+  align,
+  labels,
+  msg
+}: {
+  align: 'left' | 'right';
+  labels?: MessageRowLabels;
+  msg: Message;
+}): React.ReactElement {
   const showTag = msg.kind === 'agent' || msg.tag !== 'User';
   const productIcon = resolveProductIcon({ icon: msg.icon, tag: msg.tag, name: msg.authorName });
   return (
@@ -367,6 +423,7 @@ function MessageBubbleContent({
 
 export const MessageRow = memo(function MessageRow({
   actions,
+  channelIcons,
   msg,
   Attachment,
   labels,
@@ -377,6 +434,7 @@ export const MessageRow = memo(function MessageRow({
   replyTarget
 }: {
   actions?: readonly WorkplaceExperienceHostAction[];
+  channelIcons?: ReadonlyMap<string, ChannelIcon>;
   msg: Message;
   Attachment?: MessageAttachmentComponent;
   labels?: MessageRowLabels;
@@ -401,6 +459,7 @@ export const MessageRow = memo(function MessageRow({
   const failed = msg.localStatus === 'failed';
   const sending = msg.localStatus === 'sending';
   const canReply = Boolean(msg.replyable && !msg.streaming && !msg.localStatus && onReply);
+  const sentFrom = messageSentFrom(msg, channelIcons, labels);
   const avatar = agent ? (
     <AgentInstanceAvatar
       agent={{ av: msg.av, avatarUrl: msg.avatarUrl, icon: msg.icon, name: msg.authorName }}
@@ -454,6 +513,7 @@ export const MessageRow = memo(function MessageRow({
         header={
           <MessageHeader
             align={agent ? 'left' : 'right'}
+            labels={labels}
             msg={msg}
           />
         }
@@ -473,27 +533,45 @@ export const MessageRow = memo(function MessageRow({
         sending={sending}
         tone={agent ? 'agent' : 'human'}
       />
-      {canReply ? (
-        <button
-          aria-label={labels?.reply}
-          className="workplace-action flex h-6 items-center gap-1 rounded-md px-1.5 font-mono text-[11px] text-muted-foreground opacity-0 transition-colors hover:bg-accent hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100 [@media_(hover:none),_(pointer:coarse)]:opacity-100"
-          onClick={() => onReply?.(msg)}
+      {canReply || sentFrom ? (
+        <div
           style={{
+            alignItems: 'center',
+            display: 'flex',
+            gap: 6,
+            justifyContent: agent ? 'flex-start' : 'flex-end',
             marginTop: -12,
             marginBottom: 4,
-            marginLeft: agent ? 44 : 'auto',
-            marginRight: agent ? undefined : 44
+            paddingLeft: agent ? 44 : 0,
+            paddingRight: agent ? 0 : 44
           }}
-          title={labels?.reply}
-          type="button"
         >
-          <HugeiconsIcon
-            aria-hidden="true"
-            icon={MessageCircleReplyIcon}
-            size={13}
-          />
-          {labels?.reply}
-        </button>
+          {canReply ? (
+            <button
+              aria-label={labels?.reply}
+              className="workplace-action flex h-6 items-center gap-1 rounded-md px-1.5 font-mono text-[11px] text-muted-foreground opacity-0 transition-colors hover:bg-accent hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100 [@media_(hover:none),_(pointer:coarse)]:opacity-100"
+              onClick={() => onReply?.(msg)}
+              title={labels?.reply}
+              type="button"
+            >
+              <HugeiconsIcon
+                aria-hidden="true"
+                icon={MessageCircleReplyIcon}
+                size={13}
+              />
+              {labels?.reply}
+            </button>
+          ) : null}
+          {sentFrom ? (
+            <ChannelOriginBadge
+              ariaLabel={`${labels?.sentFrom ?? ''} ${sentFrom.name}`.trim()}
+              className="opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100 [@media_(hover:none),_(pointer:coarse)]:opacity-100"
+              details={sentFrom.details}
+              icon={sentFrom.icon}
+              name={sentFrom.name}
+            />
+          ) : null}
+        </div>
       ) : null}
     </div>
   );

@@ -48,7 +48,10 @@ function reconcileMessageOutline(draft: SessionUiStreamState, item: UIMessageIte
     if (existing >= 0) draft.messageOutline.splice(existing, 1);
     return;
   }
-  const next = { id: item.id, text: outlineText(item) };
+  // `seq` IS the message's ISO creation time, so a live upsert can supply the same `at` the
+  // snapshot carries — without it every message sent during a session reads "time unavailable"
+  // in the outline until the next reconnect, and an upsert would erase an entry's existing time.
+  const next = { id: item.id, text: outlineText(item), ...(item.seq ? { at: item.seq } : {}) };
   if (existing >= 0) draft.messageOutline[existing] = next;
   else draft.messageOutline.push(next);
 }

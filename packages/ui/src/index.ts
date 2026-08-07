@@ -19,6 +19,8 @@ import type {
 } from './components/AIElements';
 import type { ApprovalResourceCardProps } from './components/ApprovalResourceCard';
 import type { AttachmentCardProps } from './components/AttachmentCard';
+import type { BrandGlyphIcon } from './components/BrandGlyph';
+import type { ChannelOriginDetail, ChannelOriginLabels, ChannelOriginView } from './components/ChannelOriginBadge';
 import type { CommandCardView } from './components/CommandCard';
 import type {
   ComposerAccessMode,
@@ -119,9 +121,11 @@ import {
 import { ApprovalResourceCard } from './components/ApprovalResourceCard';
 import { AttachmentCard } from './components/AttachmentCard';
 import { Badge, badgeVariants } from './components/Badge';
+import { BrandGlyph } from './components/BrandGlyph';
 import { Button, buttonVariants } from './components/Button';
 import { ButtonGroup, ButtonGroupText } from './components/ButtonGroup';
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from './components/Card';
+import { ChannelOriginBadge, channelOriginDetails, showsChannelOrigin } from './components/ChannelOriginBadge';
 import { ChatInputChrome } from './components/ChatInput';
 import { CodeBlock, CodeInline } from './components/CodeBlock';
 import { CommandCard, CommandCardHeader } from './components/CommandCard';
@@ -241,6 +245,10 @@ import { cn } from './lib/utils';
 export type {
   ApprovalResourceCardProps,
   AttachmentCardProps,
+  BrandGlyphIcon,
+  ChannelOriginDetail,
+  ChannelOriginLabels,
+  ChannelOriginView,
   CodeLanguage,
   CommandCardView,
   ComposerAccessMode,
@@ -338,6 +346,7 @@ export {
   AttachmentCard,
   activeMessageOutlineIds,
   Badge,
+  BrandGlyph,
   Button,
   ButtonGroup,
   ButtonGroupText,
@@ -350,6 +359,7 @@ export {
   CardFooter,
   CardHeader,
   CardTitle,
+  ChannelOriginBadge,
   ChatInputChrome,
   CodeBlock,
   CodeInline,
@@ -372,6 +382,7 @@ export {
   ComposerVoiceButton,
   ComposerVoiceUnavailableContent,
   Confirm,
+  channelOriginDetails,
   cn,
   composerApprovalSheetKeyAction,
   composerAttachmentRows,
@@ -462,6 +473,7 @@ export {
   Spinner,
   Switch,
   shouldSubmitComposerKey,
+  showsChannelOrigin,
   Tabs,
   TabsContent,
   TabsList,

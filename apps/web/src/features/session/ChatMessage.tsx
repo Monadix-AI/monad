@@ -1,4 +1,5 @@
-import type { CommandItem } from '@monad/protocol';
+import type { ChannelIcon, CommandItem, MessageOrigin } from '@monad/protocol';
+import type { ChannelOriginDetail } from '@monad/ui';
 import type { MessageAttachmentView } from './message-attachment-view';
 
 import {
@@ -15,6 +16,7 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
   Button,
+  ChannelOriginBadge,
   ComposerAttachmentStrip,
   cn,
   Message as ElementsMessage,
@@ -28,11 +30,12 @@ import {
   ReasoningTrigger,
   Textarea
 } from '@monad/ui';
-import { memo, useCallback, useEffect, useReducer, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 
-import { useT } from '#/components/I18nProvider';
+import { useLocale, useT } from '#/components/I18nProvider';
 import { MessageBody } from './MessageBody';
 import { MessageReplyPreview } from './MessageReplyPreview';
+import { formatMessageTimestamp } from './message-time';
 
 export interface Msg {
   attachments?: MessageAttachmentView[];
@@ -44,6 +47,8 @@ export interface Msg {
   label?: string;
   error?: boolean;
   seq?: string;
+  /** Ingress provenance of the write that carried this message (absent on legacy rows). */
+  origin?: MessageOrigin;
   serverEchoOrdinal?: number;
   replyToMessageId?: string;
   replyable?: boolean;
@@ -52,6 +57,13 @@ export interface Msg {
   streaming?: boolean;
   type?: string;
   data?: unknown;
+}
+
+/** Where a user message came from — rendered as the source channel's mark with a hover popover. */
+export interface MessageSentFrom {
+  label: string;
+  icon?: ChannelIcon;
+  details: ChannelOriginDetail[];
 }
 
 function MessageAttachments({ attachments }: { attachments: readonly MessageAttachmentView[] }) {
@@ -191,7 +203,8 @@ export const Message = memo(function Message({
   replyTarget,
   onRestore,
   commands,
-  onSkillPreview
+  onSkillPreview,
+  sentFrom
 }: {
   msg: Msg;
   commands?: CommandItem[];
@@ -202,9 +215,17 @@ export const Message = memo(function Message({
   replyTarget?: (Msg & { label?: string }) | null;
   onRestore?: (messageId: string, text: string) => Promise<boolean>;
   onSkillPreview?: (id: string) => void;
+  sentFrom?: MessageSentFrom;
 }) {
   const t = useT();
+  const locale = useLocale();
   const isUser = msg.role === 'user';
+  // Constant for the message's lifetime; recomputing per streamed token would re-parse the same ISO
+  // string on every frame of the active message.
+  const timeLabel = useMemo(
+    () => formatMessageTimestamp(msg.seq, locale, { yesterday: t('web.chat.yesterday') }),
+    [locale, msg.seq, t]
+  );
   const label = msg.label ?? assistantLabel;
   const [copied, setCopied] = useState(false);
   const [rewindEditor, dispatchRewindEditor] = useReducer(rewindEditorReducer, { draft: '', mode: 'idle' });
@@ -391,6 +412,11 @@ export const Message = memo(function Message({
             isUser && 'justify-end'
           )}
         >
+          {timeLabel ? (
+            <span className="self-center whitespace-nowrap px-1 font-mono text-[10px] text-muted-foreground/70">
+              {timeLabel}
+            </span>
+          ) : null}
           {canReply ? (
             <MessageAction
               className="size-6"
@@ -456,6 +482,15 @@ export const Message = memo(function Message({
               />
             </MessageAction>
           )}
+          {isUser && sentFrom ? (
+            <ChannelOriginBadge
+              ariaLabel={`${t('web.chat.sentFrom')} ${sentFrom.label}`}
+              className="ml-0.5 self-center"
+              details={sentFrom.details}
+              icon={sentFrom.icon}
+              name={sentFrom.label}
+            />
+          ) : null}
         </MessageActions>
       )}
     </ElementsMessage>

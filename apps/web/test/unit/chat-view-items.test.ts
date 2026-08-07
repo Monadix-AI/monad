@@ -112,3 +112,10 @@ test('persisted image attachments project to the daemon download preview', () =>
     ]
   });
 });
+
+test('a message item projects its persisted origin onto the transcript view model', () => {
+  const origin = { transport: 'channel' as const, surface: 'im' as const, client: 'telegram', senderId: 'user-42' };
+  const item = viewItemFromUi({ ...message('user', 'hi'), origin });
+  if (!item || !('role' in item)) throw new Error('expected message view item');
+  expect(item.origin).toEqual(origin);
+});

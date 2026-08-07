@@ -1,4 +1,4 @@
-import type { MessageId, UIMessageOutlineItem } from '@monad/protocol';
+import type { ChannelIcon, MessageId, UIMessageOutlineItem } from '@monad/protocol';
 import type { Message, MessageAttachment, TypingIndicator } from '../../experience/types.ts';
 import type { WorkplaceExperienceHostAction } from '../../host-context.tsx';
 import type { MessageRowLabels } from './message-row.tsx';
@@ -18,7 +18,16 @@ import { TypingRow } from './transcript-skeleton.tsx';
 
 const HEADER_SPACER = <div style={{ height: 24 }} />;
 const COMPOSER_CLEARANCE = 'calc(var(--chat-room-composer-clearance, 132px) + 24px)';
-const MESSAGE_ROW_WRAP_STYLE = { boxSizing: 'border-box', padding: '0 16px', width: '100%' } satisfies CSSProperties;
+// Shared content column: rows and the composer cap at the same width and center together, matching
+// the plain-chat `session-content-column` (800px). The column shrinks freely below the cap.
+const CONTENT_COLUMN_MAX_WIDTH = 800;
+const MESSAGE_ROW_WRAP_STYLE = {
+  boxSizing: 'border-box',
+  margin: '0 auto',
+  maxWidth: CONTENT_COLUMN_MAX_WIDTH,
+  padding: '0 16px',
+  width: '100%'
+} satisfies CSSProperties;
 const messageRenderKey = (m: Message): string => m.renderKey ?? m.id;
 
 const MESSAGE_CHROME_HEIGHT = 72;
@@ -122,6 +131,8 @@ export function shouldJumpToOwnMessage(
 export type ChatMessageListRoom = {
   activeSessionId: string | null;
   actions?: readonly WorkplaceExperienceHostAction[];
+  /** Brand marks by channel type, for a message's delivery-origin badge. */
+  channelIcons?: ReadonlyMap<string, ChannelIcon>;
   jumpToLive: () => void;
   /** Load newer rows; returns false when no load started so the scroll edge stays armed. */
   loadNewer: () => boolean;
@@ -273,6 +284,7 @@ export function ChatMessageList({
           <MessageRow
             Attachment={AttachmentChip}
             actions={room.actions}
+            channelIcons={room.channelIcons}
             labels={labels}
             msg={msg}
             onAgentClick={room.openAgentCard}
@@ -289,6 +301,7 @@ export function ChatMessageList({
     [
       highlightedMessageId,
       labels,
+      room.channelIcons,
       messagesById,
       onOpenAttachment,
       previousMessageIds,
