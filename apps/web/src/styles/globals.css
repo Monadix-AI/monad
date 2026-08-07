@@ -957,26 +957,6 @@
     --chat-input-border: color-mix(in srgb, var(--foreground) 14%, transparent);
     --chat-input-surface: color-mix(in srgb, var(--card) 88%, transparent);
     position: relative;
-    transition: transform 160ms var(--workspace-home-ease);
-  }
-
-  .workspace-home-composer:focus-within {
-    transform: translateY(-1px);
-  }
-
-  .workspace-home-state-line {
-    display: flex;
-    gap: 6px;
-    align-items: center;
-    justify-content: center;
-    min-height: 28px;
-    margin-top: 12px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--muted-foreground);
-    white-space: nowrap;
   }
 
   .workspace-home-bridge {
@@ -1189,7 +1169,6 @@
   @media (prefers-reduced-motion: reduce) {
     .workspace-home-background::after,
     .workspace-home-content,
-    .workspace-home-composer,
     .workspace-home-mode-button,
     .workspace-home-target,
     .workspace-home-target-icon,
@@ -1198,7 +1177,6 @@
     }
 
     .workspace-home-shell[data-launching="true"] .workspace-home-content,
-    .workspace-home-composer:focus-within,
     .workspace-home-mode-button:active:not(:disabled),
     .workspace-home-target:active:not(:disabled) {
       transform: none;
