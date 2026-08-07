@@ -32,8 +32,8 @@ function runtimeSource(overrides: RuntimeSourceOverrides = {}): ProjectExperienc
     participants: [participant('monad', 'agent')],
     projectMembers: [],
     availableProjectMembers: [],
-    loadOlder: () => {},
-    loadNewer: () => {},
+    loadOlder: () => false,
+    loadNewer: () => false,
     jumpToLive: () => {},
     transcriptMode: 'live',
     source: {
@@ -140,7 +140,10 @@ test('toChatRoomCanvas keeps detached history contiguous while retaining live co
   const canvas = toChatRoomCanvas(
     runtimeSource({
       jumpToLive: () => calls.push('jumpToLive'),
-      loadNewer: () => calls.push('loadNewer'),
+      loadNewer: () => {
+        calls.push('loadNewer');
+        return true;
+      },
       transcriptMode: 'history',
       source: { transcriptItems: [historySystem, historyMessage], liveItems: [liveMessage, liveSystem] }
     })
@@ -230,8 +233,14 @@ test('createProjectExperienceRuntime: publishes an empty activity graph when liv
 test('createProjectExperienceRuntime: exposes project data and controlled communication actions', () => {
   const calls: string[] = [];
   const source = runtimeSource({
-    loadOlder: () => calls.push('loadOlder'),
-    loadNewer: () => calls.push('loadNewer'),
+    loadOlder: () => {
+      calls.push('loadOlder');
+      return true;
+    },
+    loadNewer: () => {
+      calls.push('loadNewer');
+      return true;
+    },
     jumpToLive: () => calls.push('jumpToLive'),
     sendDirective: async (directive) => {
       calls.push(`send:${typeof directive === 'string' ? directive : directive.text}`);

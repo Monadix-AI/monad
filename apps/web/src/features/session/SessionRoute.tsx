@@ -126,11 +126,14 @@ function SessionConversationLayout({
           style={bodyStyle}
         >
           {transcript}
+          {/* Pointer events re-enable on the composer column itself, not this full-width strip:
+              the strip overlaps the transcript scroller's scrollbar lane, and a full-width
+              pointer-events-auto child would swallow scrollbar drags near the bottom. */}
           <div
             className="pointer-events-none absolute inset-x-0 bottom-0 z-20 pt-12"
             ref={composerRef}
           >
-            <div className="pointer-events-auto">{composer}</div>
+            {composer}
           </div>
         </div>
         {inspector}

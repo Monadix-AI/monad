@@ -74,7 +74,7 @@ export function SessionComposerRegion({
 
   if (identity.isArchived) {
     return (
-      <div className="session-content-column flex min-h-[112px] items-center justify-center py-3">
+      <div className="session-content-column pointer-events-auto flex min-h-[112px] items-center justify-center py-3">
         <Button
           aria-busy={identity.isUnarchiving}
           className="gap-1.5"
@@ -94,7 +94,7 @@ export function SessionComposerRegion({
   }
 
   return (
-    <div className="session-content-column pt-2 pb-3">
+    <div className="session-content-column pointer-events-auto pt-2 pb-3">
       {identity.isReadOnly ? (
         <div className="flex items-center justify-center gap-2 py-2 text-muted-foreground text-sm">
           <span className="rounded border bg-muted px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide">

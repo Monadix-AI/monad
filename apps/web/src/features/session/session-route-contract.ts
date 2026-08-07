@@ -75,13 +75,15 @@ export interface SessionTranscriptModel {
   onApproval: (approval: PendingApproval, allow: boolean, scope: ApprovalScope, reason?: string) => void;
   onBranch: (messageId: string) => void;
   onClarifyAnswer: (requestId: string, response: Omit<ClarifyRespondRequest, 'requestId'>) => void;
-  onEndReached: () => void;
+  /** Load newer rows; returns false when no load started so the scroll edge stays armed. */
+  onEndReached: () => boolean;
   onHighlightedMessageResolved?: (messageId: string) => void;
   onOpenMessage: (messageId: string) => void;
   onReply: (messageId: string) => void;
   onRestore: (messageId: string, text: string) => Promise<boolean>;
   onScrollToBottom: (behavior?: 'smooth' | 'auto') => void;
-  onStartReached: () => void;
+  /** Load older rows; returns false when no load started so the scroll edge stays armed. */
+  onStartReached: () => boolean;
   pendingApprovals: PendingApproval[];
   pendingClarifications: PendingClarification[];
   transcriptRef: RefObject<VirtualListHandle | null>;

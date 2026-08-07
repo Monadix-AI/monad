@@ -38,8 +38,10 @@ export interface TranscriptHistory {
       window (merge with the live stream downstream); in `history` mode this IS the whole view. */
   items: UIItem[];
   mode: TranscriptMode;
-  loadOlder: () => void;
-  loadNewer: () => void;
+  /** Start an older-page fetch. Returns false when no load started (scroll edges stay armed). */
+  loadOlder: () => boolean;
+  /** Start a newer-page fetch. Returns false when no load started (scroll edges stay armed). */
+  loadNewer: () => boolean;
   /** Open an inclusive window centred on a message (deep-link / search-to-message). */
   openAtMessage: (messageId: MessageId, options?: OpenAtMessageOptions) => Promise<boolean>;
   /** Lookup-only reply targets. `null` means resolution completed but the target is unavailable. */
@@ -599,9 +601,9 @@ export function useTranscriptHistory({
   }, [mode, streamOldestCursor, streamHasMore]);
 
   const loadOlder = useCallback(() => {
-    if (sessionId === null || fetching.current || !canOlder.current) return;
+    if (sessionId === null || fetching.current || !canOlder.current) return false;
     const before = olderCursor.current as MessageId | undefined;
-    if (!before) return;
+    if (!before) return false;
     fetching.current = true;
     const pageToken = pageRequestGuard.current.begin();
     fetchWindow({ sessionId: sessionId, before })
@@ -627,12 +629,13 @@ export function useTranscriptHistory({
       .finally(() => {
         releasePageFetchLock(pageRequestGuard.current, fetching, pageToken);
       });
+    return true;
   }, [sessionId, streamReplacementRevision, fetchWindow]);
 
   const loadNewer = useCallback(() => {
-    if (sessionId === null || mode !== 'history' || fetching.current || !canNewer.current) return;
+    if (sessionId === null || mode !== 'history' || fetching.current || !canNewer.current) return false;
     const after = newerCursor.current as MessageId | undefined;
-    if (!after) return;
+    if (!after) return false;
     fetching.current = true;
     const pageToken = pageRequestGuard.current.begin();
     fetchWindow({ sessionId: sessionId, after })
@@ -662,6 +665,7 @@ export function useTranscriptHistory({
       .finally(() => {
         releasePageFetchLock(pageRequestGuard.current, fetching, pageToken);
       });
+    return true;
   }, [sessionId, mode, streamReplacementRevision, fetchWindow]);
 
   const openAtMessage = useCallback(
