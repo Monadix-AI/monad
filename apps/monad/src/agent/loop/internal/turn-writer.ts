@@ -1,4 +1,4 @@
-import type { EventType, FinishReason, Hooks, MessageId, SessionId, TokenUsage } from '@monad/protocol';
+import type { EventType, FinishReason, Hooks, MessageId, MessageOrigin, SessionId, TokenUsage } from '@monad/protocol';
 import type { Tool } from '#/capabilities/tools/types.ts';
 import type { PersistedModelInputOverride } from '../replay.ts';
 import type { AgentLoopDeps, ChatMessage } from '../types.ts';
@@ -60,6 +60,7 @@ export class TurnWriter {
       active: true,
       ...(message.replyToMessageId === undefined ? {} : { replyToMessageId: message.replyToMessageId }),
       ...(message.includeInContext === undefined ? {} : { includeInContext: message.includeInContext }),
+      ...(message.metadata === undefined ? {} : { metadata: message.metadata }),
       createdAt: message.createdAt
     };
   }
@@ -134,7 +135,8 @@ export class TurnWriter {
     userText: string,
     modelInput?: PersistedModelInputOverride,
     presentation?: { data?: Record<string, unknown>; text: string },
-    replyToMessageId?: MessageId
+    replyToMessageId?: MessageId,
+    origin?: MessageOrigin
   ): Promise<{ assistantMessageId: `msg_${string}`; userMessageId: MessageId }> {
     const userMessageId = newId('msg');
     const userMessage: ChatMessage = {
@@ -143,6 +145,7 @@ export class TurnWriter {
       role: 'user',
       text: presentation?.text ?? userText,
       ...(replyToMessageId === undefined ? {} : { replyToMessageId }),
+      ...(origin === undefined ? {} : { metadata: { origin } }),
       data:
         modelInput || presentation?.data
           ? {

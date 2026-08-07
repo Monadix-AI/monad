@@ -337,7 +337,7 @@ test('inserts steer messages after every parallel tool finishes and before the n
   const seenPrompts: ModelMessage[][] = [];
   let modelStep = 0;
   let reopenCount = 0;
-  const pendingSteers = ['adjust the answer'];
+  const pendingSteers = [{ text: 'adjust the answer' }];
   const model: ModelRouter = {
     async *stream(req) {
       seenPrompts.push(req.messages.slice());
@@ -400,7 +400,7 @@ test('inserts steer messages after every parallel tool finishes and before the n
 test('accepts a steer submitted during the budget-limited final generation', async () => {
   const events: Event[] = [];
   const messages = new InMemoryMessageRepo();
-  const pendingSteers: string[] = [];
+  const pendingSteers: { text: string }[] = [];
   const seenPrompts: ModelMessage[][] = [];
   let modelStep = 0;
   const model: ModelRouter = {
@@ -416,7 +416,7 @@ test('accepts a steer submitted during the budget-limited final generation', asy
       }
       if (modelStep === 2) {
         yield { type: 'text' as const, token: 'first final' };
-        pendingSteers.push('change the final answer');
+        pendingSteers.push({ text: 'change the final answer' });
         return;
       }
       yield { type: 'text' as const, token: 'changed final' };

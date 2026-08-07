@@ -23,10 +23,10 @@ export function createMonadixTaskRunner(deps: {
 }): (task: { taskId: string; prompt: string }) => Promise<string> {
   const taskSessions = new Map<string, SessionId>();
 
+  const origin = buildOperationSource({ transport: 'http', surface: 'api', client: 'monadix' });
   return async ({ taskId, prompt }) => {
     let sessionId = taskSessions.get(taskId);
     if (!sessionId) {
-      const origin = buildOperationSource({ transport: 'http', surface: 'api', client: 'monadix' });
       const created = await deps.handlers.session.create({
         title: 'Monadix task',
         agentId: deps.agentId as AgentId | undefined,
@@ -37,7 +37,7 @@ export function createMonadixTaskRunner(deps: {
     }
 
     const { finalText, streamed, errorMessage } = await collectInlineTurn((sink) =>
-      deps.handlers.session.sendInline({ sessionId, text: prompt }, sink, { transport: 'http' })
+      deps.handlers.session.sendInline({ sessionId, text: prompt }, sink, { transport: 'http', origin })
     );
     if (errorMessage) throw new Error(errorMessage);
     return finalText || streamed;

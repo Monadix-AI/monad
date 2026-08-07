@@ -229,9 +229,9 @@ export function createMessage(sqlite: Database, input: CreateMessageInput): Mess
       .query(
         `INSERT INTO messages
          (id, transcript_target_id, role, text, type, data, reply_to_message_id, stream_status, active, include_in_context,
-          idempotency_key, command_fingerprint, created_at, updated_at)
+          metadata, idempotency_key, command_fingerprint, created_at, updated_at)
          VALUES ($id, $target, $role, $text, $type, $data, $replyToMessageId, $status, $active, $includeInContext,
-          $idempotencyKey, $fingerprint, $createdAt, $updatedAt)`
+          $metadata, $idempotencyKey, $fingerprint, $createdAt, $updatedAt)`
       )
       .run({
         $id: message.id,
@@ -244,6 +244,7 @@ export function createMessage(sqlite: Database, input: CreateMessageInput): Mess
         $status: message.stream.status,
         $active: message.active ? 1 : 0,
         $includeInContext: message.includeInContext === undefined ? null : message.includeInContext ? 1 : 0,
+        $metadata: message.metadata === undefined ? null : JSON.stringify(message.metadata),
         $idempotencyKey: input.idempotencyKey,
         $fingerprint: input.fingerprint,
         $createdAt: message.createdAt,

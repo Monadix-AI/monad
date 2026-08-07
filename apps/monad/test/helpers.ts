@@ -343,7 +343,8 @@ export function buildHandlers(
           includeInContext: m.includeInContext,
           replyToMessageId: m.replyToMessageId,
           streamStatus: m.stream?.status ?? 'settled',
-          type: m.type
+          type: m.type,
+          ...(m.metadata === undefined ? {} : { metadata: m.metadata })
         })
     },
     fileObservations: {

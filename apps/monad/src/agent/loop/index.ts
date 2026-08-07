@@ -24,6 +24,7 @@ export type {
   ImageAttachment,
   LoadedSkill,
   MessageRepo,
+  PendingSteer,
   PendingSteerSource,
   ToolSearchConfig,
   TurnRunOptions
@@ -133,7 +134,8 @@ export class AgentLoop {
         userText,
         modelInput,
         presentation,
-        options?.replyToMessageId
+        options?.replyToMessageId,
+        options?.origin
       );
       options?.onInputCommitted?.();
       await this.writer.finishTurn(sessionId, turn.assistantMessageId, turn.userMessageId, submit.reason);
@@ -152,7 +154,8 @@ export class AgentLoop {
         userText,
         modelInput,
         presentation,
-        options?.replyToMessageId
+        options?.replyToMessageId,
+        options?.origin
       );
       options?.onInputCommitted?.();
       this.toolGrant.activateSkill(ex.skill.name);
@@ -179,7 +182,14 @@ export class AgentLoop {
       : presentation
         ? ({ modelInput: { kind: 'attachments', text: userText } } satisfies PersistedModelInputOverride)
         : undefined;
-    const turn = await this.writer.beginTurn(sessionId, userText, modelInput, presentation, options?.replyToMessageId);
+    const turn = await this.writer.beginTurn(
+      sessionId,
+      userText,
+      modelInput,
+      presentation,
+      options?.replyToMessageId,
+      options?.origin
+    );
     options?.onInputCommitted?.();
 
     await this.runAssistantStream(sessionId, turn.assistantMessageId, turn.userMessageId, signal);
@@ -278,7 +288,14 @@ export class AgentLoop {
     this.prompt.resetSkillExpansion();
     const submit = await this.hookOrchestrator.userPromptSubmit(sessionId, userText);
     if (submit.blocked) {
-      const turn = await this.writer.beginTurn(sessionId, userText, undefined, undefined, options?.replyToMessageId);
+      const turn = await this.writer.beginTurn(
+        sessionId,
+        userText,
+        undefined,
+        undefined,
+        options?.replyToMessageId,
+        options?.origin
+      );
       return this.writer.finishTurn(sessionId, turn.assistantMessageId, turn.userMessageId, submit.reason);
     }
     userText = submit.text;
@@ -286,7 +303,14 @@ export class AgentLoop {
     // only its result.
     const ex = resolveExplicitSkill(this.deps.skills ?? [], userText);
     if (ex?.skill.fork && this.deps.runFork) {
-      const turn = await this.writer.beginTurn(sessionId, userText, undefined, undefined, options?.replyToMessageId);
+      const turn = await this.writer.beginTurn(
+        sessionId,
+        userText,
+        undefined,
+        undefined,
+        options?.replyToMessageId,
+        options?.origin
+      );
       this.toolGrant.activateSkill(ex.skill.name);
       try {
         const result = await this.deps.runFork(
@@ -303,7 +327,14 @@ export class AgentLoop {
     }
 
     const modelInput = ex ? skillModelInput(ex.skill.name, this.applyNonForkSkill(ex)) : undefined;
-    const turn = await this.writer.beginTurn(sessionId, userText, modelInput, undefined, options?.replyToMessageId);
+    const turn = await this.writer.beginTurn(
+      sessionId,
+      userText,
+      modelInput,
+      undefined,
+      options?.replyToMessageId,
+      options?.origin
+    );
 
     try {
       if (this.availableTools.length > 0) {
@@ -603,10 +634,11 @@ export class AgentLoop {
     let turn: { assistantMessageId: `msg_${string}`; userMessageId: MessageId } | undefined;
     let insertedPreceding = false;
     const acceptedTexts: string[] = [];
-    for (const rawText of pending) {
+    for (const steer of pending) {
+      const rawText = steer.text;
       const submit = await this.hookOrchestrator.userPromptSubmit(sessionId, rawText);
       if (submit.blocked) {
-        const turn = await this.writer.beginTurn(sessionId, rawText);
+        const turn = await this.writer.beginTurn(sessionId, rawText, undefined, undefined, undefined, steer.origin);
         await this.writer.finishTurn(sessionId, turn.assistantMessageId, turn.userMessageId, submit.reason);
         continue;
       }
@@ -614,7 +646,7 @@ export class AgentLoop {
         messages.push(preceding);
         insertedPreceding = true;
       }
-      turn = await this.writer.beginTurn(sessionId, submit.text);
+      turn = await this.writer.beginTurn(sessionId, submit.text, undefined, undefined, undefined, steer.origin);
       acceptedTexts.push(submit.text);
     }
     if (acceptedTexts.length > 0) messages.push({ role: 'user', content: acceptedTexts.join('\n\n') });

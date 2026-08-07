@@ -1,7 +1,7 @@
 import type { MonadPaths } from '@monad/environment';
 import type { Logger } from '@monad/logger';
 import type { Event, EventType, Hooks, ProjectId, Session, SessionId, SessionMcpServer } from '@monad/protocol';
-import type { Agent, LoadedSkill } from '#/agent/index.ts';
+import type { Agent, LoadedSkill, PendingSteer } from '#/agent/index.ts';
 import type { McpConnection } from '#/capabilities/tools';
 import type { Tool, ToolBackends } from '#/capabilities/tools/types.ts';
 import type { ConfigAccess } from '#/config/manager.ts';
@@ -122,7 +122,7 @@ export interface SessionContext {
     opts?: { projectId?: ProjectId }
   ): void;
   beginRun(sessionId: SessionId): { round: Event[]; signal: AbortSignal };
-  enqueueSteers(sessionId: SessionId, messages: string[]): boolean;
+  enqueueSteers(sessionId: SessionId, messages: readonly PendingSteer[]): boolean;
   trackRun<T>(sessionId: SessionId, signal: AbortSignal, run: Promise<T>): Promise<T>;
   waitForRun(sessionId: SessionId): Promise<void>;
 }
@@ -223,7 +223,7 @@ export function createSessionContext(deps: SessionDeps): SessionContext {
     await activeRuns.get(sessionId);
   }
 
-  function enqueueSteers(sessionId: SessionId, messages: string[]): boolean {
+  function enqueueSteers(sessionId: SessionId, messages: readonly PendingSteer[]): boolean {
     if (!activeRuns.has(sessionId)) return false;
     return steers.get(sessionId)?.enqueueMany(messages) ?? false;
   }

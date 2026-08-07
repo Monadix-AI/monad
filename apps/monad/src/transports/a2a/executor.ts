@@ -58,6 +58,8 @@ function statusUpdate(reqCtx: RequestContext, state: TaskState, text = ''): Task
  *  (creating one on first contact so a multi-turn A2A conversation continues the same session),
  *  runs the turn through `session.sendInline`, and republishes the loop's token/message/error
  *  events as A2A task status-updates. Text-only for v1. */
+const A2A_ORIGIN = buildOperationSource({ transport: 'http', surface: 'api', client: 'a2a' });
+
 export function createA2aExecutor(agentId: AgentId, handlers: Handlers): AgentExecutor {
   const contextSessions = new Map<string, SessionId>();
   const taskSessions = new Map<string, SessionId>();
@@ -66,8 +68,7 @@ export function createA2aExecutor(agentId: AgentId, handlers: Handlers): AgentEx
   async function resolveSession(contextId: string): Promise<SessionId> {
     const existing = contextSessions.get(contextId);
     if (existing) return existing;
-    const origin = buildOperationSource({ transport: 'http', surface: 'api', client: 'a2a' });
-    const { sessionId } = await handlers.session.create({ title: 'A2A session', agentId, origin });
+    const { sessionId } = await handlers.session.create({ title: 'A2A session', agentId, origin: A2A_ORIGIN });
     contextSessions.set(contextId, sessionId as SessionId);
     return sessionId as SessionId;
   }
@@ -97,7 +98,7 @@ export function createA2aExecutor(agentId: AgentId, handlers: Handlers): AgentEx
       let result: InlineTurnResult = { finalText: '', streamed: '' };
       try {
         result = await collectInlineTurn(
-          (sink) => handlers.session.sendInline({ sessionId, text }, sink, { transport: 'http' }),
+          (sink) => handlers.session.sendInline({ sessionId, text }, sink, { transport: 'http', origin: A2A_ORIGIN }),
           (streamed) =>
             eventBus.publish(AgentEvent.statusUpdate(statusUpdate(reqCtx, TaskState.TASK_STATE_WORKING, streamed)))
         );

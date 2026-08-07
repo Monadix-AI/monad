@@ -707,3 +707,36 @@ test('a durable event append failure rolls back the message mutation atomically'
   expect(store.getMessageRevision(target)).toBe(0);
   store.close();
 });
+
+test('a delivered message persists its metadata.origin and reads it back verbatim', async () => {
+  const { store, service } = ingress();
+  const target = newId('prj');
+  const origin = {
+    transport: 'channel' as const,
+    surface: 'im' as const,
+    client: 'telegram',
+    instanceId: 'tg-main',
+    senderId: 'user-42'
+  };
+  const delivered = await service.deliver({
+    transcriptTargetId: target,
+    idempotencyKey: newId('idem'),
+    producer,
+    role: 'user',
+    type: 'text',
+    text: 'from telegram',
+    metadata: { origin }
+  });
+  expect(delivered.metadata).toEqual({ origin });
+  expect(store.getMessage(target, delivered.id)).toEqual({
+    id: delivered.id,
+    sessionId: target,
+    role: 'user',
+    text: 'from telegram',
+    type: 'text',
+    stream: { status: 'settled' },
+    active: true,
+    metadata: { origin },
+    createdAt: delivered.createdAt
+  });
+});

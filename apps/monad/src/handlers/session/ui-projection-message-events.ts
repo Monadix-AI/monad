@@ -73,6 +73,11 @@ function applyCanonicalMessage(
         },
         existing
       ),
+      ...(message.metadata?.origin
+        ? { origin: message.metadata.origin }
+        : existing?.origin
+          ? { origin: existing.origin }
+          : {}),
       parts: partsFromMessage(message, m.opts),
       ...(message.replyToMessageId
         ? { replyToMessageId: message.replyToMessageId }
@@ -138,6 +143,7 @@ export function applyMessageEvent(m: ProjectionMutations, event: Event): Session
             ...(existing?.agentName ? { agentName: existing.agentName } : {}),
             ...(existing?.agentDisplayName ? { agentDisplayName: existing.agentDisplayName } : {}),
             ...(existing?.source ? { source: existing.source } : {}),
+            ...(existing?.origin ? { origin: existing.origin } : {}),
             ...m.messageObservationPointers({}, existing),
             parts,
             ...(existing?.replyToMessageId ? { replyToMessageId: existing.replyToMessageId } : {}),
@@ -182,6 +188,7 @@ export function applyMessageEvent(m: ProjectionMutations, event: Event): Session
           ...(existing?.agentName ? { agentName: existing.agentName } : {}),
           ...(existing?.agentDisplayName ? { agentDisplayName: existing.agentDisplayName } : {}),
           ...(existing?.source ? { source: existing.source } : {}),
+          ...(existing?.origin ? { origin: existing.origin } : {}),
           ...m.messageObservationPointers({}, existing),
           parts,
           ...(existing?.replyToMessageId ? { replyToMessageId: existing.replyToMessageId } : {}),

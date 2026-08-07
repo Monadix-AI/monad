@@ -238,7 +238,7 @@ export function createResponsesApiController(
                 failureText = message.text;
               }
             },
-            { transport: 'http', ambientContext }
+            { transport: 'http', ambientContext, origin: SESSION_ORIGIN }
           );
         } catch (err) {
           return handlerErrorToResponse(err);

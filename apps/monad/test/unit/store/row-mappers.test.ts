@@ -1,6 +1,8 @@
 import { expect, test } from 'bun:test';
 
 import {
+  type MessageRow,
+  rowToMessage,
   rowToSession,
   rowToWorkplaceProject,
   type SessionRow,
@@ -53,4 +55,51 @@ test('rowToSession rejects a persisted agentIds value that is not an id array', 
 
 test('rowToWorkplaceProject rejects a persisted memberTemplates value that is not an array', () => {
   expect(() => rowToWorkplaceProject(projectRow)).toThrow();
+});
+
+test('rowToMessage degrades a malformed metadata cell to no origin instead of throwing', () => {
+  const messageRow: MessageRow = {
+    id: 'msg_100000000000',
+    transcriptTargetId: 'ses_100000000000',
+    role: 'user',
+    text: 'hello',
+    type: 'text',
+    data: null,
+    replyToMessageId: null,
+    streamStatus: 'settled',
+    active: 1,
+    includeInContext: null,
+    metadata: '{not valid json',
+    idempotencyKey: null,
+    commandFingerprint: null,
+    createdAt: now,
+    updatedAt: null
+  };
+
+  const message = rowToMessage(messageRow);
+  expect(message.metadata).toBeUndefined();
+});
+
+test('rowToMessage carries a well-formed metadata.origin through unchanged', () => {
+  const origin = { transport: 'channel' as const, surface: 'im' as const, client: 'slack', senderId: 'U1' };
+  const messageRow: MessageRow = {
+    id: 'msg_100000000001',
+    transcriptTargetId: 'ses_100000000000',
+    role: 'user',
+    text: 'hello',
+    type: 'text',
+    data: null,
+    replyToMessageId: null,
+    streamStatus: 'settled',
+    active: 1,
+    includeInContext: null,
+    metadata: JSON.stringify({ origin }),
+    idempotencyKey: null,
+    commandFingerprint: null,
+    createdAt: now,
+    updatedAt: null
+  };
+
+  const message = rowToMessage(messageRow);
+  expect(message.metadata).toEqual({ origin });
 });

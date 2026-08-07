@@ -417,6 +417,7 @@ export function createAgentExecutionService(deps: AgentDeps): AgentExecutionServ
               },
               active: true,
               ...(m.includeInContext === undefined ? {} : { includeInContext: m.includeInContext }),
+              ...(m.metadata === undefined ? {} : { metadata: m.metadata }),
               createdAt: m.createdAt
             },
             idempotencyKey: messageIdempotencyKey('agent-loop', 'append', m.sessionId, m.id),
@@ -444,6 +445,7 @@ export function createAgentExecutionService(deps: AgentDeps): AgentExecutionServ
               },
               active: true,
               ...(m.includeInContext === undefined ? {} : { includeInContext: m.includeInContext }),
+              ...(m.metadata === undefined ? {} : { metadata: m.metadata }),
               createdAt: m.createdAt
             },
             idempotencyKey: messageIdempotencyKey('agent-loop', 'open', m.sessionId, m.id),

@@ -29,7 +29,7 @@ const MAX_BACKOFF_MS = 30_000;
 interface TgMessage {
   message_id: number;
   from?: { id: number; first_name?: string; username?: string; is_bot?: boolean };
-  chat: { id: number; type: string };
+  chat: { id: number; type: string; title?: string; username?: string; first_name?: string };
   text?: string;
   caption?: string;
   reply_to_message?: { message_id: number; from?: { id: number } };
@@ -46,7 +46,13 @@ const telegramUserSchema = z.object({
 const telegramMessageSchema: z.ZodType<TgMessage> = z.object({
   message_id: z.number(),
   from: telegramUserSchema.optional(),
-  chat: z.object({ id: z.number(), type: z.string() }),
+  chat: z.object({
+    id: z.number(),
+    type: z.string(),
+    title: z.string().optional(),
+    username: z.string().optional(),
+    first_name: z.string().optional()
+  }),
   text: z.string().optional(),
   caption: z.string().optional(),
   reply_to_message: z.object({ message_id: z.number(), from: z.object({ id: z.number() }).optional() }).optional(),
@@ -88,6 +94,8 @@ export function normalizeTelegramMessage(m: TgMessage, selfId?: string, selfUser
     nativeMessageId: String(m.message_id),
     replyTo: m.reply_to_message ? String(m.reply_to_message.message_id) : undefined,
     senderDisplay: m.from?.username ?? m.from?.first_name,
+    // Groups/channels carry a title; a private chat is named by the peer itself.
+    chatTitle: m.chat.title ?? m.chat.username ?? m.chat.first_name,
     chatType,
     mentionedSelf: repliedToSelf || mentionsSelf,
     isSelf: selfId !== undefined && String(m.from?.id) === selfId,

@@ -117,18 +117,26 @@ export class MonadAcpAgent {
     logAcpCall('authenticate');
   }
 
-  async newSession(params: NewSessionRequest): Promise<NewSessionResponse> {
-    const t0 = performance.now();
-    // Multi-agent: a monad-aware client can pick which configured agent runs the session via
-    // `_meta.monad.agentId`; otherwise the daemon's default agent is used.
-    const agentId = monadMeta(params._meta)?.agentId as AgentId | undefined;
-    const origin = buildOperationSource({
+  /** Identity of the connected editor, as reported at `initialize`. */
+  private editorOrigin() {
+    return buildOperationSource({
       transport: 'acp',
       surface: 'editor',
       client: this.clientInfo?.name ?? 'acp',
       clientVersion: this.clientInfo?.version
     });
-    const { sessionId } = await this.handlers.session.create({ title: 'ACP session', agentId, origin });
+  }
+
+  async newSession(params: NewSessionRequest): Promise<NewSessionResponse> {
+    const t0 = performance.now();
+    // Multi-agent: a monad-aware client can pick which configured agent runs the session via
+    // `_meta.monad.agentId`; otherwise the daemon's default agent is used.
+    const agentId = monadMeta(params._meta)?.agentId as AgentId | undefined;
+    const { sessionId } = await this.handlers.session.create({
+      title: 'ACP session',
+      agentId,
+      origin: this.editorOrigin()
+    });
     const sid = sessionId as SessionId;
     await this.registerSession(sid, params.cwd, params.mcpServers, params.additionalDirectories);
     // Guard: if the connection closed while session setup was in-flight, the abort handler may
@@ -151,13 +159,10 @@ export class MonadAcpAgent {
    * (ACP has no fork-point); the new session inherits the same delegation decision. */
   async unstable_forkSession(params: ForkSessionRequest): Promise<ForkSessionResponse> {
     const t0 = performance.now();
-    const origin = buildOperationSource({
-      transport: 'acp',
-      surface: 'editor',
-      client: this.clientInfo?.name ?? 'acp',
-      clientVersion: this.clientInfo?.version
+    const { sessionId } = await this.handlers.session.branch({
+      id: params.sessionId as SessionId,
+      origin: this.editorOrigin()
     });
-    const { sessionId } = await this.handlers.session.branch({ id: params.sessionId as SessionId, origin });
     const sid = sessionId as SessionId;
     await this.registerSession(sid, params.cwd, params.mcpServers, params.additionalDirectories);
     if (this.conn.signal.aborted) {
@@ -400,6 +405,8 @@ export class MonadAcpAgent {
     try {
       await this.handlers.session.sendInline({ sessionId, text }, sink, {
         transport: 'acp',
+        // The editor identity from `initialize` — the only place that knows which client is writing.
+        origin: this.editorOrigin(),
         backends: session?.backends,
         toolFilter: session?.toolFilter,
         attachments: attachments.length ? attachments : undefined,

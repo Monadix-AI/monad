@@ -1957,3 +1957,25 @@ test('projects memory.suggestion as a custom item carrying scope + facts', () =>
     facts: ['User prefers dark mode']
   });
 });
+
+test('message metadata.origin flows into hydrated and live-projected message items', () => {
+  const origin = {
+    transport: 'channel' as const,
+    surface: 'im' as const,
+    client: 'telegram',
+    instanceId: 'tg-main',
+    senderId: 'user-42'
+  };
+  const hydrated = new SessionUiProjector();
+  hydrated.hydrateMessages([{ ...liveMessage(newId('msg'), 'user', 'from telegram'), metadata: { origin } }]);
+  const hydratedSnapshot = hydrated.snapshot();
+  if (hydratedSnapshot.kind !== 'snapshot') throw new Error('expected snapshot');
+  expect(hydratedSnapshot.items.map((item) => (item.kind === 'message' ? item.origin : null))).toEqual([origin]);
+
+  const live = new SessionUiProjector();
+  const message: ChatMessage = { ...liveMessage(newId('msg'), 'user', 'live from telegram'), metadata: { origin } };
+  const events = live.applyEvent(created(message));
+  const upsert = events[0];
+  if (upsert?.kind !== 'upsert' || upsert.item.kind !== 'message') throw new Error('expected message upsert');
+  expect(upsert.item.origin).toEqual(origin);
+});

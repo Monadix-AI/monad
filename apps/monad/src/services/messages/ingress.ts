@@ -179,6 +179,7 @@ export function createMessageIngress(deps: MessageIngressDeps): MessageIngress {
       active: true,
       ...(command.replyToMessageId === undefined ? {} : { replyToMessageId: command.replyToMessageId }),
       ...(command.includeInContext === undefined ? {} : { includeInContext: command.includeInContext }),
+      ...(command.metadata === undefined ? {} : { metadata: command.metadata }),
       createdAt: now()
     };
     return postCommit(

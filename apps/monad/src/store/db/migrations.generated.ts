@@ -120,7 +120,15 @@ export const MIGRATIONS: MigrationMeta[] = [
     "bps": true,
     "folderMillis": 1785948742333,
     "hash": "c993b5b3294626e5784f5c7302c88dc679716bb02fc4938aa5eed56d8e6e3a20"
+  },
+  {
+    "sql": [
+      "ALTER TABLE `messages` ADD `metadata` text;"
+    ],
+    "bps": true,
+    "folderMillis": 1786119163357,
+    "hash": "1fca332b5d8c2480060e469717854d9781766819bf0fd066a3a0fc79d2851955"
   }
 ];
 
-export const LATEST_MIGRATION_TIMESTAMP = 1785948742333;
+export const LATEST_MIGRATION_TIMESTAMP = 1786119163357;

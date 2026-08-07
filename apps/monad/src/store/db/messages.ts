@@ -55,6 +55,7 @@ function decodeMessageRow(row: Record<string, unknown>): ChatMessage {
     streamStatus: row.stream_status as string,
     active: row.active as number,
     includeInContext: (row.include_in_context ?? null) as number | null,
+    metadata: (row.metadata ?? null) as string | null,
     createdAt: row.created_at as string,
     updatedAt: (row.updated_at ?? null) as string | null
   } as MessageRow);
@@ -73,6 +74,7 @@ export function insertMessage(
     replyToMessageId?: MessageId;
     streamStatus?: StreamStatus;
     includeInContext?: boolean;
+    metadata?: ChatMessage['metadata'];
   } = {}
 ): void {
   db.insert(messages)
@@ -86,6 +88,7 @@ export function insertMessage(
       replyToMessageId: opts.replyToMessageId ?? null,
       streamStatus: opts.streamStatus ?? 'settled',
       includeInContext: toIntFlag(persistedIncludeInContext(opts.type ?? 'text', opts.includeInContext)),
+      metadata: opts.metadata !== undefined ? JSON.stringify(opts.metadata) : null,
       createdAt
     })
     .run();
@@ -109,7 +112,8 @@ export function cloneMessages(
         ...(replyToMessageId === undefined ? {} : { replyToMessageId }),
         includeInContext: message.includeInContext,
         streamStatus: message.stream.status,
-        type: message.type
+        type: message.type,
+        ...(message.metadata === undefined ? {} : { metadata: message.metadata })
       });
       if (message.updatedAt) {
         sqlite.query('UPDATE messages SET updated_at = ? WHERE id = ?').run(message.updatedAt, id);
@@ -279,7 +283,7 @@ export function listMessages(
 export function listUserMessageOutline(sqlite: Database, transcriptTargetId: string): UIMessageOutlineItem[] {
   return sqlite
     .query(
-      "SELECT id, text FROM messages WHERE transcript_target_id = $target AND active = 1 AND role = 'user' ORDER BY rowid ASC"
+      "SELECT id, text, created_at as at FROM messages WHERE transcript_target_id = $target AND active = 1 AND role = 'user' ORDER BY rowid ASC"
     )
     .all({ $target: transcriptTargetId }) as UIMessageOutlineItem[];
 }

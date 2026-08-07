@@ -132,6 +132,18 @@ export function rowToWorkplaceProject(row: WorkplaceProjectRow): WorkplaceProjec
   });
 }
 
+/** Durable annotations are additive: one unreadable cell must degrade that message's provenance,
+ *  never make the whole transcript unlistable. `data` is deliberately NOT guarded this way — it
+ *  carries load-bearing payloads (tool calls, cards) where silence would hide a real corruption. */
+function parsedMetadata(raw: string | null): { metadata: unknown } | undefined {
+  if (raw == null) return undefined;
+  try {
+    return { metadata: JSON.parse(raw) };
+  } catch {
+    return undefined;
+  }
+}
+
 export function rowToMessage(row: MessageRow): ChatMessage {
   const status = streamStatusSchema.parse(row.streamStatus);
   const sessionId = transcriptTargetIdSchema.parse(row.transcriptTargetId);
@@ -153,6 +165,7 @@ export function rowToMessage(row: MessageRow): ChatMessage {
     },
     active: row.active === 1,
     ...(row.includeInContext != null ? { includeInContext: row.includeInContext === 1 } : {}),
+    ...(parsedMetadata(row.metadata) ?? {}),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt ?? undefined
   });
