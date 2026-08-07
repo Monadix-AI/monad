@@ -13,7 +13,10 @@ function hostView(calls: string[]): ProjectExperienceView {
         addProjectMember: async () => {
           calls.push('addProjectMember');
         },
-        loadOlder: () => calls.push('loadOlder'),
+        loadOlder: () => {
+          calls.push('loadOlder');
+          return true;
+        },
         pauseAll: () => calls.push('pauseAll'),
         removeProjectMember: async () => {
           calls.push('removeProjectMember');

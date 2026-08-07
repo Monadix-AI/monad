@@ -122,7 +122,8 @@ export interface WorkplaceExperienceSnapshot {
 }
 
 export interface WorkplaceExperienceActions {
-  loadOlder: () => void;
+  /** Load older rows; returns false when no load started so the scroll edge stays armed. */
+  loadOlder: () => boolean;
   sendDirective: (directive: string | { attachments?: SendMessageAttachment[]; text: string }) => Promise<void> | void;
   resolveApproval: (requestId: string, decision: WorkplaceApprovalDecision) => void;
   pauseAll: () => void;

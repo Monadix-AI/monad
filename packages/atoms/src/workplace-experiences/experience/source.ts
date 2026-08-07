@@ -39,8 +39,10 @@ export interface ProjectExperienceCanvasSource {
   };
   modelProfiles: ProfileView[];
   sendShortcut?: ComposerSendShortcut;
-  loadOlder: () => void;
-  loadNewer: () => void;
+  /** Load older rows; returns false when no load started so the scroll edge stays armed. */
+  loadOlder: () => boolean;
+  /** Load newer rows; returns false when no load started so the scroll edge stays armed. */
+  loadNewer: () => boolean;
   jumpToLive: () => void;
   transcriptMode: 'history' | 'live';
   messageOutline?: readonly UIMessageOutlineItem[];

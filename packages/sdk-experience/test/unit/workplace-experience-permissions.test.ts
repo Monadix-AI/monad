@@ -15,7 +15,10 @@ function recordingActions(calls: string[]): WorkplaceExperienceActions {
     addProjectMember: async (type, name) => {
       calls.push(`addProjectMember:${type}:${name}`);
     },
-    loadOlder: () => calls.push('loadOlder'),
+    loadOlder: () => {
+      calls.push('loadOlder');
+      return true;
+    },
     openProjectSession: (sessionId) => calls.push(`openProjectSession:${sessionId}`),
     pauseAll: () => calls.push('pauseAll'),
     removeProjectMember: async (id) => {

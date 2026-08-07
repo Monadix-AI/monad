@@ -123,8 +123,10 @@ export type ChatMessageListRoom = {
   activeSessionId: string | null;
   actions?: readonly WorkplaceExperienceHostAction[];
   jumpToLive: () => void;
-  loadNewer: () => void;
-  loadOlder: () => void;
+  /** Load newer rows; returns false when no load started so the scroll edge stays armed. */
+  loadNewer: () => boolean;
+  /** Load older rows; returns false when no load started so the scroll edge stays armed. */
+  loadOlder: () => boolean;
   messageOutline: readonly UIMessageOutlineItem[];
   messages: Message[];
   onReply?: (message: Message) => void;
@@ -347,6 +349,11 @@ export function ChatMessageList({
         getKey={messageRenderKey}
         header={HEADER_SPACER}
         items={room.messages}
+        // Remount per session: the list instance holds scroll state (sticky detach, settle-on-load,
+        // paging arms) that describes ONE transcript. switchSession swaps room.messages in this
+        // same mounted component, and a detach carried over from the previous session would leave
+        // the new one's live tail unfollowed with no gesture to clear it.
+        key={uiKey}
         onAtBottomChange={setAtBottom}
         onEndReached={room.transcriptMode === 'history' ? room.loadNewer : undefined}
         onRangeChange={setVisibleRange}
@@ -356,6 +363,16 @@ export function ChatMessageList({
         settleAtBottomOnLoad
         stickToBottom
         style={{ boxSizing: 'border-box', flex: 1, overflowX: 'hidden' }}
+        viewportOverlay={
+          <div
+            style={{
+              background:
+                'linear-gradient(to top, rgb(var(--backgroundColor-primary) / 1) 0%, rgb(var(--backgroundColor-primary) / 1) calc(100% - 64px), rgb(var(--backgroundColor-primary) / 0) 100%)',
+              height: 'var(--chat-room-composer-clearance, 132px)',
+              pointerEvents: 'none'
+            }}
+          />
+        }
       />
       {atBottom && room.transcriptMode === 'live' ? null : (
         <button
@@ -363,7 +380,10 @@ export function ChatMessageList({
           className="workplace-action"
           onClick={() => {
             if (room.transcriptMode === 'history') room.jumpToLive();
-            else listRef.current?.scrollToBottom('smooth');
+            // Always drive the list too, even leaving history mode: jumpToLive only swaps the item
+            // window, and the shrink-clamp that lands the viewport at the new bottom is upward —
+            // invisible to the re-attach path. scrollToBottom is what re-arms following.
+            listRef.current?.scrollToBottom('smooth');
           }}
           style={{
             position: 'absolute',

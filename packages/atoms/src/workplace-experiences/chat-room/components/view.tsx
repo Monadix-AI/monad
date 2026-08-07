@@ -280,14 +280,19 @@ export function ChatRoomExperienceView({ runtime }: { runtime: ChatRoomExperienc
       createElement(
         'div',
         {
-          className: cn('absolute right-0 bottom-0 left-0 z-20 pt-12'),
-          ref: composerRef,
-          style: {
-            background:
-              'linear-gradient(to top, rgb(var(--backgroundColor-primary) / 1) 0%, rgb(var(--backgroundColor-primary) / 1) calc(100% - 64px), rgb(var(--backgroundColor-primary) / 0) 100%)'
-          }
+          // The fade behind the composer lives INSIDE the transcript scroller (its viewportOverlay):
+          // painted there, the scroller's own overlay scrollbar renders on top of it. A background
+          // here would sit above the scroller element and swallow the scrollbar thumb. Pointer
+          // events stay off on this full-width strip for the same reason — only the composer itself
+          // may catch clicks, never the scrollbar lane beside it.
+          className: cn('pointer-events-none absolute right-0 bottom-0 left-0 z-20 pt-12'),
+          ref: composerRef
         },
-        createElement(Composer, { droppedFiles, room: composer })
+        createElement(
+          'div',
+          { className: cn('pointer-events-auto') },
+          createElement(Composer, { droppedFiles, room: composer })
+        )
       ),
       dropActive
         ? createElement(
