@@ -195,7 +195,9 @@ test('friendly aliases resolve to the right command', () => {
 });
 
 test('every alias documented in cli-design.md resolves to a registered command', async () => {
-  const doc = await Bun.file(new URL('../../../../docs/internal/development/cli-design.md', import.meta.url)).text();
+  const doc = (
+    await Bun.file(new URL('../../../../docs/internal/development/cli-design.md', import.meta.url)).text()
+  ).replaceAll('\r\n', '\n');
   const fromHeader = doc.slice(doc.indexOf('| Alias | Canonical | Why |'));
   const table = fromHeader.slice(0, fromHeader.indexOf('\n\n'));
   const aliases = [...table.matchAll(/^\| `?(?:monad )?([a-z]+)`?(?: \/ `([a-z]+)`)?/gm)]

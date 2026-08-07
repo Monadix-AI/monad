@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { join } from 'node:path';
 
 import { devCliShimText } from '../../dev-init/cli-shim.ts';
 import { type CodeGraphInitDeps, ensureCodeGraph } from '../../dev-init/codegraph.ts';
@@ -59,7 +60,10 @@ test('ensureCodeGraph leaves an existing worktree index untouched', async () => 
     }
   });
 
-  expect({ calls, result }).toEqual({ calls: ['directory:/repo/.codegraph'], result: { status: 'ready' } });
+  expect({ calls, result }).toEqual({
+    calls: [`directory:${join('/repo', '.codegraph')}`],
+    result: { status: 'ready' }
+  });
 });
 
 test('ensureCodeGraph reports an unavailable CLI without attempting initialization', async () => {
