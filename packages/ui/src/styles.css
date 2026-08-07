@@ -80,17 +80,18 @@
   --chart-3: rgb(255 177 238);
   --chart-4: rgb(11 217 114);
   --chart-5: rgb(255 199 169);
-  --sidebar: rgb(var(--backgroundColor-surface));
-  --sidebar-foreground: rgb(var(--textColor-primary));
+  --sidebar: rgb(246 246 246);
+  --sidebar-foreground: rgb(26 28 31);
+  --sidebar-muted-foreground: color-mix(in oklab, var(--sidebar-foreground) 70%, transparent);
   --sidebar-primary: rgb(var(--backgroundColor-surface-inverse));
   --sidebar-primary-foreground: rgb(var(--textColor-inverse-primary));
-  --sidebar-accent: color-mix(in srgb, rgb(var(--backgroundColor-state-menu-hover)) 72%, var(--sidebar) 28%);
-  --sidebar-accent-foreground: rgb(var(--textColor-primary));
-  --sidebar-selected: rgb(var(--backgroundColor-state-menu-hover));
-  --sidebar-selected-foreground: rgb(var(--textColor-primary));
+  --sidebar-accent: color-mix(in oklab, var(--sidebar-foreground) 8%, transparent);
+  --sidebar-accent-foreground: var(--sidebar-foreground);
+  --sidebar-selected: color-mix(in oklab, var(--sidebar-foreground) 5%, transparent);
+  --sidebar-selected-foreground: var(--sidebar-foreground);
   --sidebar-selected-hover: var(--sidebar-accent);
-  --sidebar-selected-hover-foreground: rgb(var(--textColor-primary));
-  --sidebar-border: rgb(var(--borderColor-secondary) / 0.1);
+  --sidebar-selected-hover-foreground: var(--sidebar-foreground);
+  --sidebar-border: color-mix(in oklab, var(--sidebar-foreground) 8%, transparent);
   --sidebar-ring: rgb(var(--outlineColor-focus-ring));
   --radius: 0.5rem;
 
@@ -205,17 +206,18 @@
   --chart-3: rgb(255 177 238);
   --chart-4: rgb(11 217 114);
   --chart-5: rgb(255 199 169);
-  --sidebar: rgb(var(--backgroundColor-surface));
-  --sidebar-foreground: rgb(var(--textColor-primary));
+  --sidebar: rgb(33 33 33);
+  --sidebar-foreground: rgb(255 255 255);
+  --sidebar-muted-foreground: color-mix(in oklab, var(--sidebar-foreground) 70%, transparent);
   --sidebar-primary: rgb(var(--backgroundColor-surface-inverse));
   --sidebar-primary-foreground: rgb(var(--textColor-inverse-primary));
-  --sidebar-accent: color-mix(in srgb, rgb(var(--backgroundColor-state-hover) / 0.2) 64%, var(--sidebar) 36%);
-  --sidebar-accent-foreground: rgb(var(--textColor-primary));
-  --sidebar-selected: rgb(var(--backgroundColor-state-hover) / 0.2);
-  --sidebar-selected-foreground: rgb(var(--textColor-primary));
+  --sidebar-accent: color-mix(in oklab, var(--sidebar-foreground) 8%, transparent);
+  --sidebar-accent-foreground: var(--sidebar-foreground);
+  --sidebar-selected: color-mix(in oklab, var(--sidebar-foreground) 5%, transparent);
+  --sidebar-selected-foreground: var(--sidebar-foreground);
   --sidebar-selected-hover: var(--sidebar-accent);
-  --sidebar-selected-hover-foreground: rgb(var(--textColor-primary));
-  --sidebar-border: rgb(var(--borderColor-secondary) / 0.15);
+  --sidebar-selected-hover-foreground: var(--sidebar-foreground);
+  --sidebar-border: color-mix(in oklab, var(--sidebar-foreground) 8%, transparent);
   --sidebar-ring: rgb(var(--outlineColor-focus-ring));
 
   --accent-blue: var(--link);
@@ -234,8 +236,7 @@
 
 @theme inline {
   --font-sans:
-    "-apple-system-body", "ui-sans-serif", "-apple-system", "system-ui", "Segoe UI", "Helvetica", "Apple Color Emoji",
-    "Arial", "sans-serif", "Segoe UI Emoji", "Segoe UI Symbol";
+    -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
   --font-display: var(--font-sans);
   --font-heading: var(--font-display);
   --font-mono: "ui-monospace", "SFMono-Regular", "SF Mono", "Menlo", "Consolas", "Liberation Mono", "monospace";
@@ -271,6 +272,7 @@
   --height-toolbar-sm: 36px;
   --height-toolbar-pane: 40px;
   --height-token-nav-row: 29px;
+  --height-token-sidebar-row: 28px;
   --height-token-button-composer: 28px;
   --height-token-button-composer-sm: 28px;
 
@@ -304,6 +306,7 @@
   --color-chart-5: var(--chart-5);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-muted-foreground: var(--sidebar-muted-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
   --color-sidebar-accent: var(--sidebar-accent);
@@ -431,7 +434,11 @@
   }
 
   .panel-nav {
+    --foreground: var(--sidebar-foreground);
+    --muted-foreground: var(--sidebar-muted-foreground);
     position: relative;
+    font-weight: 400;
+    color: var(--sidebar-foreground);
     background: var(--sidebar);
     border-right: 1px solid var(--sidebar-border);
   }

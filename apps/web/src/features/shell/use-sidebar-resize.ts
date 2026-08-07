@@ -7,9 +7,8 @@ import type {
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-const DEFAULT_SIDEBAR_WIDTH = 288;
-const MIN_SIDEBAR_WIDTH = 240;
-const MAX_SIDEBAR_WIDTH = 420;
+import { DEFAULT_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH } from './sidebar-layout';
+
 const SIDEBAR_COLLAPSE_OVERSHOOT = 48;
 const SIDEBAR_WIDTH_STORAGE_KEY = 'monad:web:sidebar-width';
 

@@ -271,7 +271,7 @@ export function DaemonMenu({
               data-testid="daemon-menu-trigger"
               type="button"
             >
-              <div className="rounded-full border border-border/80 bg-background/60 p-1.5">
+              <div className="flex size-6 shrink-0 items-center justify-center rounded-(--radius-md) border border-border/80 bg-background/60">
                 <HugeiconsIcon
                   className="size-4"
                   icon={ServerStack01Icon}
@@ -307,12 +307,12 @@ export function DaemonMenu({
                 </Tooltip>
               ) : null}
               {showConnectionLabel ? (
-                <span className="min-w-0 flex-1 font-normal leading-tight">
+                <span className="min-w-0 flex-1 leading-tight">
                   <span className="block truncate text-ui">{activeConnection.label}</span>
                   <span className="block truncate text-muted-foreground text-xs">{activeConnectionMeta}</span>
                 </span>
               ) : (
-                <span className="min-w-0 flex-1 font-normal text-ui leading-control">{t('web.daemon.label')}</span>
+                <span className="min-w-0 flex-1 text-ui leading-row">{t('web.daemon.label')}</span>
               )}
             </button>
           </DropdownMenuTrigger>

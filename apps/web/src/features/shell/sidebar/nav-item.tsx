@@ -7,14 +7,14 @@ import { Children } from 'react';
 import { ShellLink } from '#/components/ShellLink';
 import { SidebarItemEndcap } from './sidebar-item-endcap';
 
-const SIDEBAR_ITEM_HEIGHT_CLASS = 'min-h-8';
-const SIDEBAR_ITEM_PADDING_CLASS = 'px-2 py-1.5';
+const SIDEBAR_ITEM_HEIGHT_CLASS = 'h-token-sidebar-row';
+const SIDEBAR_ITEM_PADDING_CLASS = 'px-row-x';
 export const SIDEBAR_ITEM_LABEL_CLASS = 'min-w-0 flex-1 truncate';
 export const SIDEBAR_ITEM_ROW_CLASS = `${SIDEBAR_ITEM_HEIGHT_CLASS} ${SIDEBAR_ITEM_PADDING_CLASS}`;
-export const SIDEBAR_INDENTED_ITEM_ROW_CLASS = `${SIDEBAR_ITEM_HEIGHT_CLASS} py-1.5 pr-2 pl-5`;
+export const SIDEBAR_INDENTED_ITEM_ROW_CLASS = `${SIDEBAR_ITEM_HEIGHT_CLASS} pr-row-x pl-5`;
 const SIDEBAR_ITEM_TEXT_CLASS = 'text-foreground hover:text-foreground';
 export const SIDEBAR_SECONDARY_TEXT_CLASS = 'text-muted-foreground/75 hover:text-muted-foreground';
-export const SIDEBAR_SECTION_TITLE_CLASS = `px-2 pb-1 font-normal ${SIDEBAR_SECONDARY_TEXT_CLASS} text-ui leading-control`;
+export const SIDEBAR_SECTION_TITLE_CLASS = `px-row-x pb-1 font-normal ${SIDEBAR_SECONDARY_TEXT_CLASS} text-[13px] leading-control`;
 
 export function sidebarItemSurfaceClass({
   active,
@@ -36,7 +36,7 @@ export function sidebarItemSurfaceClass({
 // classes via cn(); this keeps the tinted surface tokens in exactly one place.
 export function sidebarItemStateClass({ active, disabled }: { active?: boolean; disabled?: boolean } = {}): string {
   return cn(
-    'font-normal text-ui leading-control transition hover:bg-sidebar-accent',
+    'font-normal text-[13px] leading-control transition hover:bg-sidebar-accent',
     SIDEBAR_ITEM_TEXT_CLASS,
     active && 'bg-sidebar-selected hover:bg-sidebar-selected-hover',
     disabled && 'cursor-not-allowed text-muted-foreground hover:bg-transparent hover:text-muted-foreground'
@@ -64,7 +64,7 @@ export function sidebarItemContainerClass({
 // Hover-revealed icon action buttons inside sidebar rows. Touch devices keep them visible.
 export function sidebarIconButtonClass({ active }: { active?: boolean } = {}): string {
   return cn(
-    'sidebar-item-action pointer-events-auto flex size-5.5 shrink-0 items-center justify-center rounded-(--radius-sm) text-muted-foreground opacity-0 transition hover:bg-sidebar-accent hover:text-foreground [@media_(hover:none),_(pointer:coarse)]:opacity-100',
+    'sidebar-item-action pointer-events-auto flex size-6 shrink-0 items-center justify-center rounded-(--radius-md) text-muted-foreground opacity-0 transition hover:bg-sidebar-accent hover:text-foreground [@media_(hover:none),_(pointer:coarse)]:opacity-100',
     active && 'text-foreground'
   );
 }
@@ -147,7 +147,7 @@ function SidebarShortcutBadge({ modifierLabel, value }: { modifierLabel: string;
 export function SidebarNavSection({ children }: { children: ReactNode }) {
   return (
     <div className="mt-2 px-2 py-1.5 first:mt-0">
-      <div className="flex flex-col gap-0.5">{children}</div>
+      <div className="flex flex-col gap-px">{children}</div>
     </div>
   );
 }
@@ -191,15 +191,15 @@ export function SidebarNavItem({
     'group/item',
     sidebarItemContainerClass({
       active,
-      className: cn(SIDEBAR_ITEM_ROW_CLASS, 'gap-2'),
+      className: cn(SIDEBAR_ITEM_ROW_CLASS, 'gap-1.5'),
       disabled
     })
   );
   const content = (
     <>
-      <div className="rounded-full border border-transparent bg-transparent p-1.5">
+      <div className="flex size-5 shrink-0 items-center justify-center">
         <HugeiconsIcon
-          className="size-4"
+          className="size-3.5"
           icon={Icon}
         />
       </div>

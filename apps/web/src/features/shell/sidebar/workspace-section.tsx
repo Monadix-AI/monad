@@ -20,10 +20,10 @@ export function WorkspaceSection({
   title: string;
 }) {
   return (
-    <section className="mt-2 flex flex-col gap-0.5 first:mt-0">
+    <section className="mt-2 flex flex-col gap-px first:mt-0">
       <div
         className={cn(
-          'relative flex min-h-7 items-center gap-1 overflow-hidden rounded-(--radius-sm) bg-[var(--sidebar-item-surface)]',
+          'relative flex h-token-sidebar-row items-center gap-1 overflow-hidden rounded-(--radius-md) bg-[var(--sidebar-item-surface)]',
           sidebarItemSurfaceClass({ interactive: false })
         )}
         data-sidebar-section-item="true"
@@ -33,7 +33,7 @@ export function WorkspaceSection({
           aria-expanded={!collapsed}
           className={cn(
             SIDEBAR_SECTION_TITLE_CLASS,
-            'flex min-h-7 min-w-0 flex-1 items-center gap-1.5 rounded-(--radius-sm) transition hover:text-muted-foreground'
+            'flex h-token-sidebar-row min-w-0 flex-1 items-center gap-1.5 rounded-(--radius-md) transition hover:text-muted-foreground'
           )}
           onClick={onToggle}
           title={title}
@@ -48,7 +48,7 @@ export function WorkspaceSection({
         {action ? <SidebarItemEndcap>{action}</SidebarItemEndcap> : null}
       </div>
       <CollapsiblePresence collapsed={collapsed}>
-        <div className="flex flex-col gap-0.5">{children}</div>
+        <div className="flex flex-col gap-px">{children}</div>
       </CollapsiblePresence>
     </section>
   );

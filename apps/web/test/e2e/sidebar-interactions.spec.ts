@@ -485,7 +485,7 @@ test.describe('workspace sidebar interactions', () => {
           scrollLeft: Math.round(element.scrollLeft)
         }))
       )
-      .toEqual({ clientWidth: 288, scrollLeft: 288 });
+      .toEqual({ clientWidth: 275, scrollLeft: 275 });
   });
 
   test('drag collapse retains the stored expanded sidebar width', async ({ page }) => {

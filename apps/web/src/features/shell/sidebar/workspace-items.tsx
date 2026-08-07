@@ -70,7 +70,7 @@ const WorkspaceSectionList = memo(function WorkspaceSectionList() {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <SidebarActionVisibilityRules />
-      <div className="flex-none px-2.5 pb-2">
+      <div className="flex-none px-2 pb-2">
         <SidebarNavItem
           href="/"
           icon={ChatAdd01Icon}
@@ -79,7 +79,7 @@ const WorkspaceSectionList = memo(function WorkspaceSectionList() {
           shortcutModifierLabel={meta.shortcutModifierLabel}
           shortcutValue={meta.showShortcutBadges ? '`' : undefined}
         />
-        <div className="mt-0.5 flex flex-col gap-0.5">
+        <div className="flex flex-col gap-px">
           <SidebarNavItem
             active={state.inboxActive}
             href="/inbox"
@@ -114,7 +114,7 @@ const WorkspaceSectionList = memo(function WorkspaceSectionList() {
       </div>
       <div className="sidebar-scroll-area min-h-0 flex-1 overflow-y-auto">
         <SidebarShortcutAllocatorProvider>
-          <div className="flex flex-col gap-0.5 px-2.5 pb-4">
+          <div className="flex flex-col gap-px px-2 pb-4">
             {pinnedSessions.length > 0 ? (
               <WorkspaceSection
                 collapsed={collapsedSections.pinned}

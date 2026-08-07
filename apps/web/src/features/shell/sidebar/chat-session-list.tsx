@@ -21,7 +21,7 @@ export function ChatSessionList() {
   const lessTargetCount = getPreviewLessTargetCount(chatSessions, activeChatSessionId);
 
   return (
-    <div className="flex flex-col gap-0.5">
+    <div className="flex flex-col gap-px">
       {chatSessions.length === 0 ? (
         <p className="px-2 py-1.5 text-muted-foreground text-xs">{meta.t('web.sidebar.noSessions')}</p>
       ) : null}
