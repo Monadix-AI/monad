@@ -81,10 +81,14 @@ export const EXIT = { OK: 0, ERROR: 1, USAGE: 2, CONFIG: 3, DAEMON: 4 } as const
 /** Error carrying a process exit code. Thrown by commands; mapped to process.exit in the entry. */
 export class CliError extends Error {
   readonly code: number;
-  constructor(message: string, code: number = EXIT.ERROR) {
+  /** The command already wrote this outcome to stdout as its result; the entry point must not
+   *  echo the same line to stderr. The message still feeds the `--json` error frame. */
+  readonly reported: boolean;
+  constructor(message: string, code: number = EXIT.ERROR, opts?: { reported?: boolean }) {
     super(message);
     this.name = 'CliError';
     this.code = code;
+    this.reported = opts?.reported ?? false;
   }
 }
 
