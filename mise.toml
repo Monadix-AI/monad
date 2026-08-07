@@ -7,9 +7,6 @@ idiomatic_version_file_enable_tools = ["bun"]
 [settings.status]
 show_tools = true
 
-[tools]
-"github:boyter/scc" = "3.7.0"
-
 [env]
 _.file = ".env.local"
 _.path = [".dev/bin"]
@@ -106,11 +103,6 @@ run = "bun run scripts/dev-init.ts"
 description = "Generate gitignored personal agent-rule overlays"
 raw = true
 run = "bun run scripts/sync-agents-local.ts"
-
-[tasks."metrics:loc"]
-description = "Record today's TypeScript LOC snapshot without rewriting earlier history"
-raw = true
-run = "bun run scripts/loc-snapshot.ts"
 
 [tasks.storybook]
 description = "Run every workspace Storybook"
