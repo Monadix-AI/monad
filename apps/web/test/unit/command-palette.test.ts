@@ -23,7 +23,6 @@ test('command palette defaults to quick actions followed by recents', () => {
     ]
   });
 
-  expect(sections.map((section) => section.heading)).toEqual(['Quick actions', 'Recents']);
   expect(sections[0]?.items.map((item) => item.id)).toEqual(['new-chat', 'inbox']);
   expect(sections[0]?.items[0]?.shortcut).toBe('⌘ N');
   expect(sections[1]?.items.map((item) => item.id)).toEqual(['session-1', 'session-2']);

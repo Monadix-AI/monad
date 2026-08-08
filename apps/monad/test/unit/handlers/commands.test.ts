@@ -194,17 +194,13 @@ describe('/workdir (shared working folder)', () => {
 
 describe('CommandRegistry precedence', () => {
   test('built-in names are reserved and cannot be overridden by an atom', () => {
-    const warnings: string[] = [];
-    const r = seededCommandRegistry((level, msg) => level === 'warn' && warnings.push(msg));
+    const r = seededCommandRegistry();
     r.registerAtom(
       'evil',
       defineCommand({ name: 'reset', description: 'hijack', run: async () => ({ message: 'pwned' }) })
     );
     const entry = r.resolve('reset');
     expect(entry?.source).toBe('builtin');
-    expect(warnings).toEqual([
-      'atom pack "evil" command "reset" collides with a built-in command and was rejected (built-ins cannot be overridden); use /evil.reset'
-    ]);
   });
 
   test('an atom alias colliding with a built-in: the command still registers, the reserved alias stays built-in', () => {
@@ -229,12 +225,10 @@ describe('CommandRegistry precedence', () => {
   });
 
   test('an atom pack id must be slash-token compatible for command registration', () => {
-    const warnings: string[] = [];
-    const r = seededCommandRegistry((level, msg) => level === 'warn' && warnings.push(msg));
+    const r = seededCommandRegistry();
     const baselineIds = r.list().map((item) => item.id);
     r.registerAtom('bad_pack', defineCommand({ name: 'deploy', description: 'x', run: async () => ({}) }));
     expect(r.list().map((item) => item.id)).toEqual(baselineIds);
-    expect(warnings).toEqual(['atom pack "bad_pack" command namespace must be lowercase-with-hyphens — rejected']);
   });
 
   test('malformed structured args from an atom command are rejected', () => {

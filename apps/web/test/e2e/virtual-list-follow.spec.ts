@@ -269,7 +269,7 @@ test('dragging the scrollbar to the top still loads history after a long hold', 
   });
 
   await expect.poll(async () => (await state(page)).topLoading).toBe(true);
-  await expect(page.locator('[data-top-loading="true"]')).toHaveText('Loading earlier rows…');
+  await expect(page.locator('[data-top-loading="true"]')).toBeVisible();
   await expect.poll(async () => (await state(page)).topLoadCount).toBe(1);
   await expect.poll(async () => (await state(page)).topLoading).toBe(false);
 

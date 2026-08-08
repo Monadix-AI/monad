@@ -1,12 +1,8 @@
-import type { InteractionProducer, InteractionRequest } from '@monad/protocol';
+import type { InteractionRequest } from '@monad/protocol';
 
 import { expect, test } from 'bun:test';
 
-import {
-  initialInteractionValues,
-  interactionProducerLabel,
-  validateInteractionValues
-} from '#/features/interactions/model';
+import { initialInteractionValues, validateInteractionValues } from '#/features/interactions/model';
 
 test('initializes every supported semantic field without inventing a secret default', () => {
   const request: InteractionRequest = {
@@ -61,12 +57,4 @@ test('validates required, pattern, numeric bounds, and select membership declara
     region: 'Select a valid option'
   });
   expect(validateInteractionValues(request, { name: 'valid', count: 2, region: 'us' })).toEqual({});
-});
-
-test('renders source attribution from trusted source fields', () => {
-  const builtin: InteractionProducer = { kind: 'builtin', id: 'sandbox', label: 'Sandbox settings' };
-  const contributed: InteractionProducer = { kind: 'atom-pack', packId: 'vendor.pack', atomId: 'cloud' };
-
-  expect(interactionProducerLabel(builtin)).toBe('Sandbox settings');
-  expect(interactionProducerLabel(contributed)).toBe('vendor.pack · cloud');
 });

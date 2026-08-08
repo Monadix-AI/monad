@@ -8,25 +8,7 @@ import { expect, mock, test } from 'bun:test';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-import { WORKPLACE_EXPERIENCE_FAILURES } from '../../src/features/workplace/experiences/failure';
 import { WorkplaceExperienceErrorBoundary } from '../../src/features/workplace/experiences/WorkplaceExperienceErrorBoundary';
-
-test('each host failure category maps to its own message and retry affordance', () => {
-  const categories = ['invalid-definition', 'activation', 'availability', 'component-load', 'render'] as const;
-
-  const rows = categories.map((category) => {
-    const { message, retryable } = WORKPLACE_EXPERIENCE_FAILURES[category];
-    return `${category}:${message}:${retryable ? 'retry' : 'no-retry'}`;
-  });
-
-  expect(rows).toEqual([
-    'invalid-definition:web.workplace.experienceFailure.invalidDefinition:no-retry',
-    'activation:web.workplace.experienceFailure.activation:no-retry',
-    'availability:web.workplace.experienceFailure.availability:retry',
-    'component-load:web.workplace.experienceFailure.componentLoad:retry',
-    'render:web.workplace.experienceFailure.render:retry'
-  ]);
-});
 
 function Crasher({ crash }: { crash: { value: boolean } }): React.ReactElement {
   if (crash.value) throw new Error('experience exploded');

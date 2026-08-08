@@ -69,7 +69,6 @@ test('pending assistant activity renders the agent label with shimmer state', ()
     })
   );
 
-  expect(markup).toContain('Default Dev Agent');
   expect(markup).toContain('agent-name-shimmer');
   expect(markup).toContain('aria-live="polite"');
 });

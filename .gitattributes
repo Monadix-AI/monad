@@ -1,0 +1,3 @@
+apps/monad/drizzle/*.sql text eol=lf
+apps/monad/drizzle/meta/*.json text eol=lf
+apps/monad/src/store/db/migrations.generated.ts text eol=lf

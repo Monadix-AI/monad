@@ -1339,6 +1339,11 @@ for (const kind of TRANSPORTS) {
           : [];
       expect(snapshotLoginAgents).toEqual([opus.id, sonnet.id].toSorted());
       expect(await readLogIfExists(claudeStdinLog)).toBe('');
+      await waitFor(
+        async () =>
+          (await listMessages(t, sessionId)).every((message) => message.role !== 'assistant' || message.text !== ''),
+        { message: 'authenticated member placeholder did not settle' }
+      );
       expect((await listMessages(t, sessionId)).map((message) => [message.role, message.text])).toEqual([
         ['user', 'initial project task']
       ]);
