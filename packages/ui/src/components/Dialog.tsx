@@ -7,22 +7,27 @@ import { Dialog as DialogPrimitive } from 'radix-ui';
 
 import { cn } from '../lib/utils';
 import { Button } from './Button';
+import {
+  dialogBodyClassName,
+  dialogDescriptionClassName,
+  dialogFooterClassName,
+  dialogHeaderClassName,
+  dialogSurfaceClassName,
+  dialogTitleClassName
+} from './dialog-styles';
 
-const dialogContentVariants = cva(
-  'glass-surface data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 flex max-h-[min(42rem,calc(100dvh-2rem))] w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] flex-col gap-0 overflow-hidden p-0 outline-none duration-200 data-[state=closed]:animate-out data-[state=open]:animate-in',
-  {
-    defaultVariants: { size: 'md' },
-    variants: {
-      size: {
-        sm: 'sm:max-w-md',
-        md: 'sm:max-w-lg',
-        lg: 'sm:max-w-xl',
-        xl: 'sm:max-w-3xl',
-        wide: 'sm:max-w-5xl'
-      }
+const dialogContentVariants = cva(dialogSurfaceClassName, {
+  defaultVariants: { size: 'md' },
+  variants: {
+    size: {
+      sm: 'sm:max-w-md',
+      md: 'sm:max-w-lg',
+      lg: 'sm:max-w-xl',
+      xl: 'sm:max-w-3xl',
+      wide: 'sm:max-w-5xl'
     }
   }
-);
+});
 
 function Dialog({ ...props }: React.ComponentProps<typeof DialogPrimitive.Root>) {
   return (
@@ -117,7 +122,7 @@ function DialogContent({
 function DialogHeader({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
-      className={cn('flex shrink-0 flex-col gap-1.5 px-5 pt-5 pr-12 pb-4 text-left', className)}
+      className={cn(dialogHeaderClassName, 'pr-14', className)}
       data-slot="dialog-header"
       {...props}
     />
@@ -127,7 +132,7 @@ function DialogHeader({ className, ...props }: React.ComponentProps<'div'>) {
 function DialogBody({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
-      className={cn('min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4', className)}
+      className={cn(dialogBodyClassName, className)}
       data-slot="dialog-body"
       {...props}
     />
@@ -146,10 +151,7 @@ function DialogFooter({
 }) {
   return (
     <div
-      className={cn(
-        'flex shrink-0 flex-col-reverse gap-2 border-border/70 border-t bg-muted/15 px-5 py-4 sm:flex-row sm:justify-end',
-        className
-      )}
+      className={cn(dialogFooterClassName, className)}
       data-slot="dialog-footer"
       {...props}
     >
@@ -166,7 +168,7 @@ function DialogFooter({
 function DialogTitle({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Title>) {
   return (
     <DialogPrimitive.Title
-      className={cn('font-semibold text-lg leading-none', className)}
+      className={cn(dialogTitleClassName, className)}
       data-slot="dialog-title"
       {...props}
     />
@@ -176,7 +178,7 @@ function DialogTitle({ className, ...props }: React.ComponentProps<typeof Dialog
 function DialogDescription({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Description>) {
   return (
     <DialogPrimitive.Description
-      className={cn('text-muted-foreground text-sm', className)}
+      className={cn(dialogDescriptionClassName, className)}
       data-slot="dialog-description"
       {...props}
     />

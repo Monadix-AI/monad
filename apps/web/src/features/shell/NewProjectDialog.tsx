@@ -136,7 +136,7 @@ export function NewProjectDialog({ open, onClose, onCreate }: NewProjectDialogPr
             <Button
               onClick={close}
               type="button"
-              variant="ghost"
+              variant="outline"
             >
               {t('web.common.cancel')}
             </Button>

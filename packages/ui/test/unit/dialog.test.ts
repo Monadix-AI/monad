@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 
 import { dialogContentVariants } from '../../src/components/Dialog';
+import { dialogFooterClassName } from '../../src/components/dialog-styles';
 
 test('dialog size configuration keeps one structured shell and maps every width explicitly', () => {
   const sizes = ['sm', 'md', 'lg', 'xl', 'wide'] as const;
@@ -18,4 +19,15 @@ test('dialog size configuration keeps one structured shell and maps every width 
       tokens.filter((token) => ['flex', 'flex-col', 'gap-0', 'overflow-hidden', 'p-0'].includes(token))
     )
   ).toEqual(sizes.map(() => ['flex', 'flex-col', 'gap-0', 'overflow-hidden', 'p-0']));
+  expect(classNames.every((tokens) => tokens.includes('rounded-2xl'))).toBe(true);
+});
+
+test('dialog footer sizes buttons by element so Radix asChild slot replacement cannot bypass it', () => {
+  const classes = dialogFooterClassName.split(' ');
+
+  expect(classes).toContain('[&_button]:h-[44px]');
+  expect(classes).toContain('sm:[&_button]:h-[36px]');
+  expect(classes).toContain('[&_button]:min-w-[80px]');
+  expect(classes).toContain('[&_button]:px-4');
+  expect(classes.some((className) => className.includes('data-slot=button'))).toBe(false);
 });

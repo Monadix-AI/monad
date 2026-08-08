@@ -178,6 +178,13 @@ export const WebActions: Story = {
       <TooltipProvider>
         <div className={frameClassName}>
           <div className="grid max-w-xl gap-6">
+            <div className="flex flex-wrap gap-2">
+              <Button>Primary</Button>
+              <Button variant="success">Success</Button>
+              <Button variant="warning">Warning</Button>
+              <Button variant="info">Information</Button>
+              <Button variant="destructive">Destructive</Button>
+            </div>
             <div className="relative rounded-md border bg-card p-4">
               <div className="font-medium text-sm">Hover action row</div>
               <p className="text-muted-foreground text-sm">Actions fade in over dense workspace rows.</p>
