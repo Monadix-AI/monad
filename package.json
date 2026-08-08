@@ -1,7 +1,7 @@
 {
   "name": "monad",
   "description": "Local, single-user daemon for running agentic sessions, with a CLI and web UI.",
-  "version": "0.2.0",
+  "version": "0.1.1",
   "author": "Monadix Labs, Inc.",
   "bugs": {
     "url": "https://github.com/Monadix-AI/monad/issues"
@@ -49,7 +49,7 @@
     "dev": "bun run generate && turbo watch generate //#dev:open-storybooks @monad/monad#start:dev @monad/monad#devtools @monad/web#start:dev @monad/ui#storybook @monad/web#storybook",
     "dev:open-storybooks": "wait-on http-get://127.0.0.1:${WEB_STORYBOOK_PORT:-6006} http-get://127.0.0.1:${UI_STORYBOOK_PORT:-6007} && open-cli http://127.0.0.1:${WEB_STORYBOOK_PORT:-6006} http://127.0.0.1:${UI_STORYBOOK_PORT:-6007}",
     "generate": "turbo run generate",
-    "lint": "bun scripts/quiet-run.ts biome check --write",
+    "lint": "bun scripts/quiet-run.ts biome check --write --error-on-warnings",
     "postinstall": "bun run scripts/dev-init.ts --skip-generate",
     "test": "bun scripts/quiet-run.ts bun run test:raw",
     "test:e2e": "bun scripts/quiet-run.ts bun run test:e2e:raw",

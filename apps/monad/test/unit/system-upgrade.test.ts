@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join, relative, sep } from 'node:path';
 import { MONAD_VERSION } from '@monad/protocol';
 
 import { createSystemUpgradeModule } from '#/handlers/system-upgrade.ts';
@@ -21,6 +21,10 @@ function sha256(bytes: Uint8Array): string {
   const hasher = new Bun.CryptoHasher('sha256');
   hasher.update(bytes);
   return hasher.digest('hex');
+}
+
+function relativeCachePath(cacheDir: string, path: string | undefined): string | undefined {
+  return path === undefined ? undefined : relative(cacheDir, path).split(sep).join('/');
 }
 
 function createFetch(): typeof fetch {
@@ -95,7 +99,7 @@ test('system upgrade prepares a cached artifact when status is requested with a 
       error: null
     });
     const prepared = Array.from(new Bun.Glob('prepare-*/*').scanSync(cacheDir));
-    expect(prepared.map((path) => path.replace(/^prepare-[^/]+\//, '')).sort()).toEqual([
+    expect(prepared.map((path) => basename(path)).sort()).toEqual([
       'install.sh',
       'install.sh.sha256',
       'monad-9.9.9-darwin-arm64.tar.gz',
@@ -219,21 +223,21 @@ test('system upgrade can detach the cached installer from the daemon process', a
     await Bun.sleep(0);
 
     expect(spawnArgv?.[0]).toBe('bash');
-    expect(spawnArgv?.[1]).toMatch(new RegExp(`^${cacheDir}/prepare-[^/]+/install\\.sh$`));
+    expect(relativeCachePath(cacheDir, spawnArgv?.[1])).toMatch(/^prepare-[^/]+\/install\.sh$/);
     expect(spawnArgv?.slice(2)).toEqual(['--version', '9.9.9']);
     expect(spawnOptions).toMatchObject({
       detached: true,
       env: {
         MONAD_NO_OPEN: '1',
-        MONAD_TARBALL: expect.stringMatching(
-          new RegExp(`^${cacheDir}/prepare-[^/]+/monad-9\\.9\\.9-darwin-arm64\\.tar\\.gz$`)
-        ),
         MONAD_VERSION: '9.9.9'
       },
       stderr: 'ignore',
       stdin: 'ignore',
       stdout: 'ignore'
     });
+    expect(relativeCachePath(cacheDir, spawnOptions?.env?.MONAD_TARBALL)).toMatch(
+      /^prepare-[^/]+\/monad-9\.9\.9-darwin-arm64\.tar\.gz$/
+    );
     expect(unrefCalled).toBe(true);
     expect(upgrade.getStatus()).toMatchObject({
       stage: 'restarting',

@@ -38,7 +38,7 @@ run = "bunx --bun rulesync generate --check"
 description = "Run the read-only Biome gate"
 depends = ["quality:database-drift"]
 raw = true
-run = "bunx --bun biome check ."
+run = "bunx --bun biome check --error-on-warnings ."
 
 [tasks."quality:i18n"]
 description = "Verify i18n catalogs, generated types, and Paraglide compilation"

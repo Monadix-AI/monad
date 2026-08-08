@@ -4,7 +4,7 @@ const syncpackStaged = (files) => {
 };
 
 export default {
-  '*': 'biome check --write --unsafe --files-ignore-unknown=true --no-errors-on-unmatched',
+  '*': 'biome check --write --unsafe --error-on-warnings --files-ignore-unknown=true --no-errors-on-unmatched',
   '*.{ts,tsx}': () => 'turbo run typecheck --filter=[HEAD] --output-logs=errors-only',
   '**/package.json': syncpackStaged
 };
