@@ -297,7 +297,6 @@ function originLabels(labels?: MessageRowLabels): ChannelOriginLabels {
 
 function MessageHeader({
   align,
-  labels,
   msg
 }: {
   align: 'left' | 'right';
