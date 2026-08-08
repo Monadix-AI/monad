@@ -599,12 +599,11 @@ main() {
 
   if [ "${NO_DAEMON}" != "1" ]; then
     step "Starting Monad"
-    # Bare `monad` (→ `monad up`) seeds the home on boot, relays the ready banner, and opens the
-    # browser for setup. The old daemon was already stopped above, so this starts cleanly. Keeping
-    # start/browser in monad means a hand-run `monad` behaves identically to install. Logs land in
-    # ${init_home}/logs/daemon.log.
+    # Repeat the stop through the freshly installed CLI before starting. The pre-extract stop is
+    # best-effort; if it raced a slow shutdown, bare `monad` would reuse the still-reachable old
+    # daemon and leave the Web UI on the previous version.
     printf "\n"
-    if ! MONAD_HOME="$init_home" "${bin_dir}/monad"; then
+    if ! MONAD_HOME="$init_home" "${bin_dir}/monad" restart; then
       warn "Daemon did not start cleanly — check ${init_home}/logs/daemon.log"
     fi
     if ! echo ":$PATH:" | grep -q ":${bin_dir}:"; then
