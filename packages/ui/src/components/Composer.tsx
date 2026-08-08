@@ -14,6 +14,7 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { Fragment, forwardRef, useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import { cn } from '../lib/utils';
+import { Button } from './Button';
 import { ChatInputChrome } from './ChatInput';
 import { ComposerContextUsagePanel } from './composer/context-usage-panel';
 import {
@@ -1394,28 +1395,21 @@ export const ComposerSubmitButton = forwardRef<HTMLButtonElement, ComposerSubmit
     const enabled = canSend || canStop;
     const interactive = enabled && !disabled;
     return (
-      <button
+      <Button
         {...props}
         aria-label={ariaLabel}
-        className="workplace-action shared-composer-submit"
+        className="shared-composer-submit rounded-full"
         disabled={disabled}
         onClick={onClick}
         ref={ref}
+        size="icon-xl"
         style={{
           flex: 'none',
-          width: 36,
-          height: 36,
-          border: 'none',
-          borderRadius: '50%',
-          background: interactive ? 'var(--primary)' : 'rgb(var(--backgroundColor-state-enabled) / 0.48)',
-          color: interactive ? 'var(--primary-foreground)' : 'var(--muted-foreground)',
           cursor: interactive ? 'pointer' : 'not-allowed',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
           ...style
         }}
         type="button"
+        variant={interactive ? 'default' : 'secondary'}
       >
         {canStop ? (
           <HugeiconsIcon
@@ -1429,7 +1423,7 @@ export const ComposerSubmitButton = forwardRef<HTMLButtonElement, ComposerSubmit
             size={17}
           />
         )}
-      </button>
+      </Button>
     );
   }
 );

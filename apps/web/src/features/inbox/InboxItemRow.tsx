@@ -196,14 +196,14 @@ function HitlActions({
             {t('web.common.back')}
           </button>
         ) : null}
-        <button
-          className="rounded-(--radius-sm) bg-primary px-3 py-1.5 text-primary-foreground text-xs disabled:opacity-50"
+        <Button
           disabled={resolving || !hasAnswer}
           onClick={submit}
+          size="sm"
           type="button"
         >
           {questionIndex === questions.length - 1 ? t('web.inbox.sendAnswer') : t('web.common.next')}
-        </button>
+        </Button>
       </div>
     </div>
   );

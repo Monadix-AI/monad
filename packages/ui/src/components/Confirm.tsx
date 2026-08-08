@@ -13,6 +13,7 @@ import {
   AlertDialogTitle
 } from './AlertDialog';
 import { Button } from './Button';
+import { dialogBodyClassName } from './dialog-styles';
 import { Spinner } from './Spinner';
 
 export interface ConfirmProps {
@@ -84,7 +85,7 @@ function Confirm({
           {description ? <AlertDialogDescription>{description}</AlertDialogDescription> : null}
         </AlertDialogHeader>
         {children || error ? (
-          <div className="min-h-0 overflow-y-auto overscroll-contain px-5 py-4">
+          <div className={dialogBodyClassName}>
             {children}
             {error ? (
               <div

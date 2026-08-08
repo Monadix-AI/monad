@@ -181,7 +181,7 @@ export function CredentialDialog({
         <DialogFooter>
           <Button
             onClick={onClose}
-            variant="ghost"
+            variant="outline"
           >
             {t('web.common.cancel')}
           </Button>
