@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { groupFailedCases, parseFailedCases } from '../../lib/test-failure-rerun.ts';
+import { githubFailureAnnotations, groupFailedCases, parseFailedCases } from '../../lib/test-failure-rerun.ts';
 
 test('groups unique failed JUnit cases by file and matches nested test names by suffix', () => {
   const xml = `
@@ -36,4 +36,12 @@ test('falls back to a whole-file rerun when JUnit does not expose a test name', 
       { file: 'test/a.test.ts', name: '(unnamed)' }
     ])
   ).toEqual([{ file: 'test/a.test.ts', names: ['named failure', '(unnamed)'] }]);
+});
+
+test('formats failed files as GitHub annotations with workflow-command escaping', () => {
+  expect(
+    githubFailureAnnotations([
+      { file: 'test/windows,path:test.ts', names: ['fails 100%\nwith details'], pattern: 'fails' }
+    ])
+  ).toEqual(['::error file=test/windows%2Cpath%3Atest.ts,title=Failed Bun tests::fails 100%25%0Awith details']);
 });

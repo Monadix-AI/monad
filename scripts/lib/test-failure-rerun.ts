@@ -42,6 +42,14 @@ export function groupFailedCases(cases: FailedTestCase[]): FailedTestFile[] {
   });
 }
 
+export function githubFailureAnnotations(files: FailedTestFile[]): string[] {
+  return files.map(({ file, names }) => {
+    const annotationFile = escapeWorkflowProperty(file);
+    const message = escapeWorkflowData(names.join('; '));
+    return `::error file=${annotationFile},title=Failed Bun tests::${message}`;
+  });
+}
+
 function decodeXml(value: string): string {
   return value
     .replaceAll('&quot;', '"')
@@ -53,4 +61,12 @@ function decodeXml(value: string): string {
 
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function escapeWorkflowData(value: string): string {
+  return value.replaceAll('%', '%25').replaceAll('\r', '%0D').replaceAll('\n', '%0A');
+}
+
+function escapeWorkflowProperty(value: string): string {
+  return escapeWorkflowData(value).replaceAll(':', '%3A').replaceAll(',', '%2C');
 }
