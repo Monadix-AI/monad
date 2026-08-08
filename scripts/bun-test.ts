@@ -3,7 +3,12 @@ import { tmpdir } from 'node:os';
 import { join, relative, resolve } from 'node:path';
 
 import { mapWithConcurrency } from './lib/map-with-concurrency.ts';
-import { type FailedTestFile, groupFailedCases, parseFailedCases } from './lib/test-failure-rerun.ts';
+import {
+  type FailedTestFile,
+  githubFailureAnnotations,
+  groupFailedCases,
+  parseFailedCases
+} from './lib/test-failure-rerun.ts';
 
 /**
  * Platform-aware test runner. Passes through all arguments to `bun test` and
@@ -111,6 +116,9 @@ const { exitCode, junitReports } =
 
 if (exitCode !== 0 && junitReports.length > 0) {
   const failed = groupFailedCases(junitReports.flatMap((path) => parseFailedCases(readFileSync(path, 'utf8'))));
+  if (process.env.GITHUB_ACTIONS === 'true') {
+    for (const annotation of githubFailureAnnotations(failed)) process.stderr.write(`${annotation}\n`);
+  }
   const selected = failed.slice(0, rerunLimit);
   if (selected.length > 0) {
     process.stderr.write('\n[monad-test] Re-running failed files with logger output enabled\n');

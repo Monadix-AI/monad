@@ -54,6 +54,7 @@
     "PORT",
 
     // Written by the coverage summary step; provided by the Actions runner.
+    "GITHUB_ACTIONS",
     "GITHUB_STEP_SUMMARY",
 
     // 3rd-party tooling paths.
