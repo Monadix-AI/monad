@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.1.2](https://github.com/Monadix-AI/monad/compare/v0.1.1...v0.1.2) (2026-08-08)
+
+
+### Bug Fixes
+
+* **cli:** use the installed daemon command ([6b4ef3b](https://github.com/Monadix-AI/monad/commit/6b4ef3b9e426b194db79b323f712f56121ef6976))
+* **upgrade:** restart daemon with installed binary ([25273f0](https://github.com/Monadix-AI/monad/commit/25273f0ab0d42a5b77f188c941cb5c1a9925ef23))
+
+
+### Documentation
+
+* **install:** document wget fallback ([d707187](https://github.com/Monadix-AI/monad/commit/d7071873ddf44239d08133907466b6d64880a686))
+
 ## [0.1.1](https://github.com/Monadix-AI/monad/compare/v0.1.0...v0.1.1) (2026-08-07)
 
 
