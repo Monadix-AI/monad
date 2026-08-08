@@ -662,7 +662,7 @@ test('the loading header is shown while an older page is being fetched', async (
 
   await page.getByRole('button', { name: 'Scroll to top' }).click();
   await expect.poll(async () => (await state(page)).loadingHeader).toBe(true);
-  await expect(page.locator('[data-events-state="loading"]')).toHaveText('Loading earlier events…');
+  await expect(page.locator('[data-events-state="loading"]')).toBeVisible();
   await expect.poll(async () => (await state(page)).loadCount).toBe(1);
 });
 

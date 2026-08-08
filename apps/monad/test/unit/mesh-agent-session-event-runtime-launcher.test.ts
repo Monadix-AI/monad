@@ -60,6 +60,7 @@ test('session-event launcher derives provider approval behavior from runtime rol
     productIcon: 'codex',
     label: 'Approval Mode Test',
     executionCapabilities: { autopilot: true, fastMode: true },
+    managedRuntime: { usesManagedMcpBridge: true },
     events,
     detect: () => ({
       id: provider,

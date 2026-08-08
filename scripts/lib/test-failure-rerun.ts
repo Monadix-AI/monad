@@ -9,6 +9,10 @@ export interface FailedTestFile {
   pattern?: string;
 }
 
+export function testRunExitCode(processExitCode: number, failedFileCount: number): number {
+  return processExitCode !== 0 ? processExitCode : failedFileCount > 0 ? 1 : 0;
+}
+
 export function parseFailedCases(xml: string): FailedTestCase[] {
   const failed: FailedTestCase[] = [];
   for (const match of xml.matchAll(/<testcase\b([^>]*[^/])>([\s\S]*?)<\/testcase>/g)) {

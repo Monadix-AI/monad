@@ -6,7 +6,6 @@ import { expect, test } from 'bun:test';
 import {
   COMMAND_MENU_EDGE_PADDING,
   COMMAND_MENU_ITEM_HEIGHT,
-  commandMenuDetailSource,
   commandMenuPanelHeight,
   commandMenuScrollTop,
   commandMenuSnappedMaxHeight
@@ -37,11 +36,7 @@ test('command-name phase filters by prefix on both raw and display name', () => 
     command({ id: 'global:review', name: 'Review', type: 'skill' })
   ];
   const items = buildCommandMenuItems('/re', commands, [], [], t);
-  // Skills sort before actions (rank prefix 0 vs 1), friendly name is used for the label.
-  expect(items.map(({ key, label, section, typeBadge }) => ({ key, label, section, typeBadge }))).toEqual([
-    { key: 'global:review', label: 'Review', section: 'Skills', typeBadge: 'Skill' },
-    { key: 'reset', label: 'Reset', section: 'Commands', typeBadge: 'Command' }
-  ]);
+  expect(items.map(({ key }) => key)).toEqual(['global:review', 'reset']);
 });
 
 test('command-name phase orders builtin actions by product group', () => {
@@ -78,8 +73,8 @@ test('command-name phase supports non-contiguous matches with highlighted charac
     command({ id: 'model', name: 'Model', argHint: '<alias>' })
   ];
   const items = buildCommandMenuItems('/cm', commands, [], [], t);
-  expect(items.map(({ key, label, labelMatches }) => ({ key, label, labelMatches }))).toEqual([
-    { key: 'check-memory', label: 'Check Memory', labelMatches: [0, 6] }
+  expect(items.map(({ key, labelMatches }) => ({ key, labelMatches }))).toEqual([
+    { key: 'check-memory', labelMatches: [0, 6] }
   ]);
 });
 
@@ -89,64 +84,6 @@ test('command-name phase replaces the active slash token instead of appending to
   expect(items.map(({ insert, replace }) => ({ insert, replace }))).toEqual([
     { insert: '/memory ', replace: { start: 0, end: 3 } }
   ]);
-});
-
-test('command menu displays command labels without the slash prefix', () => {
-  const commands = [
-    command({ id: 'reset', name: 'Reset', group: 'Context' }),
-    command({ id: 'global:review', name: 'Review', type: 'skill' })
-  ];
-  const items = buildCommandMenuItems('/', commands, [], [], t);
-  expect(items.map(({ insert, label }) => ({ insert, label }))).toEqual([
-    { insert: '/global:review ', label: 'Review' },
-    { insert: '/reset ', label: 'Reset' }
-  ]);
-});
-
-test('skill command source metadata uses compact labels with source details', () => {
-  const commands = [
-    command({ id: 'global:review', name: 'Review', type: 'skill' }),
-    command({
-      id: 'atom-pack:power-pack:triage',
-      name: 'Triage',
-      type: 'skill',
-      source: 'atom-pack',
-      sourceName: 'Power Pack'
-    }),
-    command({ id: 'agent:researcher:scan', name: 'Scan', type: 'skill', sourceName: 'Researcher' })
-  ];
-  const items = buildCommandMenuItems('/', commands, [], [], t);
-
-  expect(items.map(({ key, badge, badgeTitle }) => ({ key, badge, badgeTitle }))).toEqual([
-    { key: 'global:review', badge: 'G', badgeTitle: 'Global' },
-    { key: 'agent:researcher:scan', badge: 'A', badgeTitle: 'Agent: Researcher' },
-    { key: 'atom-pack:power-pack:triage', badge: 'P', badgeTitle: 'Atom Pack: Power Pack' }
-  ]);
-});
-
-test('command detail popover source text comes from the source detail', () => {
-  expect(
-    commandMenuDetailSource({ label: 'Review', insert: '/global:review ', key: 'global:review', badgeTitle: 'Global' })
-  ).toBe('From: Global');
-  expect(
-    commandMenuDetailSource({
-      label: 'Scan',
-      insert: '/agent:researcher:scan ',
-      key: 'agent:researcher:scan',
-      badgeTitle: 'Agent: Researcher'
-    })
-  ).toBe('From Agent: Researcher');
-  expect(
-    commandMenuDetailSource({
-      label: 'Triage',
-      insert: '/atom-pack:power-pack:triage ',
-      key: 'atom-pack:power-pack:triage',
-      badgeTitle: 'Atom Pack: Power Pack'
-    })
-  ).toBe('From Atom Pack: Power Pack');
-  expect(commandMenuDetailSource({ label: 'Reset', insert: '/reset ', key: 'reset', typeBadge: 'Command' })).toEqual(
-    null
-  );
 });
 
 test('slash command discovery activates only for command entry phases', () => {

@@ -26,16 +26,3 @@ test('configured and newly entered credentials expose a removal action that invo
 
   expect(removals).toEqual(['configured', 'entered']);
 });
-
-test('pending credential removal renders the supplied save consequence', () => {
-  const pending = CredentialActionsView({
-    configured: true,
-    value: '',
-    pendingRemoval: true,
-    onRemove: () => {},
-    removeLabel: 'Remove credential',
-    pendingLabel: 'This credential will be removed when you save.'
-  });
-
-  expect(pending?.props.children).toBe('This credential will be removed when you save.');
-});

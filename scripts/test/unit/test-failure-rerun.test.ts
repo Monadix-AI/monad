@@ -1,6 +1,15 @@
 import { expect, test } from 'bun:test';
 
-import { githubFailureAnnotations, groupFailedCases, parseFailedCases } from '../../lib/test-failure-rerun.ts';
+import {
+  githubFailureAnnotations,
+  groupFailedCases,
+  parseFailedCases,
+  testRunExitCode
+} from '../../lib/test-failure-rerun.ts';
+
+test('JUnit failures make the wrapper fail even when Bun reports a zero process exit', () => {
+  expect([testRunExitCode(0, 1), testRunExitCode(2, 0), testRunExitCode(0, 0)]).toEqual([1, 2, 0]);
+});
 
 test('groups unique failed JUnit cases by file and matches nested test names by suffix', () => {
   const xml = `

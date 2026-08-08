@@ -305,6 +305,7 @@ test('MeshAgent host runs only the provider session-event runtime', async () => 
     icon: { title: 'Session Event Test', path: 'M4 4h16v16H4z' },
     productIcon: 'codex',
     label: 'Session Event Test',
+    managedRuntime: { usesManagedMcpBridge: true },
     events,
     detect: () => ({
       id: provider,

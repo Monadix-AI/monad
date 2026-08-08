@@ -7,7 +7,8 @@ import {
   type FailedTestFile,
   githubFailureAnnotations,
   groupFailedCases,
-  parseFailedCases
+  parseFailedCases,
+  testRunExitCode
 } from './lib/test-failure-rerun.ts';
 
 /**
@@ -113,9 +114,10 @@ const loudEnv = loud ? { MONAD_TEST_DEBUG: '1' } : {};
 
 const { exitCode, junitReports } =
   shardCount > 1 && !loud && ownsReporter ? await runNativeShards(shardCount) : await runTests();
+const failed = groupFailedCases(junitReports.flatMap((path) => parseFailedCases(readFileSync(path, 'utf8'))));
+const effectiveExitCode = testRunExitCode(exitCode, failed.length);
 
-if (exitCode !== 0 && junitReports.length > 0) {
-  const failed = groupFailedCases(junitReports.flatMap((path) => parseFailedCases(readFileSync(path, 'utf8'))));
+if (failed.length > 0) {
   if (process.env.GITHUB_ACTIONS === 'true') {
     for (const annotation of githubFailureAnnotations(failed)) process.stderr.write(`${annotation}\n`);
   }
@@ -134,7 +136,7 @@ if (exitCode !== 0 && junitReports.length > 0) {
 }
 
 if (tempDir) rmSync(tempDir, { recursive: true, force: true });
-process.exit(exitCode);
+process.exit(effectiveExitCode);
 
 async function runTests(): Promise<{ exitCode: number; junitReports: string[] }> {
   const proc = Bun.spawn(['bun', 'test', ...args, ...coverage, ...ignore, ...reporter], {

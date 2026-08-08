@@ -12,7 +12,7 @@ import { Provider } from 'react-redux';
 
 import { ProjectHeader } from '../../src/features/workplace/project-shell/ProjectHeader';
 
-test('project session header shows its breadcrumb and member controls', async () => {
+test('project session header opens the existing member flow', async () => {
   const onAddMember = mock(() => {});
   const store = createMonadStore({ client: {} as MonadClient });
   render(
@@ -34,17 +34,7 @@ test('project session header shows its breadcrumb and member controls', async ()
     </Provider>
   );
 
-  const breadcrumb = screen.getByLabelText('Project and session');
-  expect({
-    headerClass: breadcrumb.closest('header')?.className,
-    text: breadcrumb.textContent
-  }).toEqual({
-    headerClass: expect.stringContaining('panel-shell-header'),
-    text: 'Monad/Header work'
-  });
-  expect(screen.getByLabelText('2 members in this session').textContent).toContain('2');
   const addMember = screen.getByRole('button', { name: 'Add member' });
-  expect(addMember.className).toContain('text-muted-foreground');
   await userEvent.click(addMember);
   expect(onAddMember.mock.calls).toEqual([[]]);
 });

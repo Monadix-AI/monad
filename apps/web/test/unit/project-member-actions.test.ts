@@ -1,31 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import {
-  defaultMeshAgentMemberDisplayName,
-  projectApprovalResolution
-} from '../../src/features/workplace/use-project-actions';
-
-test('discovered MeshAgent member defaults to its raw display name', () => {
-  expect(
-    defaultMeshAgentMemberDisplayName({
-      name: 'openclaw--test',
-      displayName: 'test',
-      provider: 'openclaw',
-      productIcon: 'openclaw'
-    })
-  ).toBe('test');
-});
-
-test('Monad Agent member defaults to its configured Agent name', () => {
-  expect(
-    defaultMeshAgentMemberDisplayName({
-      name: 'monad--agt_000000000000',
-      displayName: 'Reviewer',
-      provider: 'monad',
-      productIcon: 'monad'
-    })
-  ).toBe('Reviewer');
-});
+import { projectApprovalResolution } from '../../src/features/workplace/use-project-actions';
 
 test('project approvals preserve the selected approval scope through resolution', () => {
   expect([

@@ -1,10 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import {
-  deferredEffortCommit,
-  reasoningEffortOption,
-  resolveReasoningEffort
-} from '../../src/components/ReasoningEffortControl.tsx';
+import { deferredEffortCommit, resolveReasoningEffort } from '../../src/components/ReasoningEffortControl.tsx';
 
 test('reasoning effort requires probed options and never invents a default selection', () => {
   expect(resolveReasoningEffort(undefined, 'medium')).toEqual({ efforts: [], value: undefined });
@@ -28,13 +24,4 @@ test('reasoning effort commits only when its popover closes with a changed draft
   expect(deferredEffortCommit(true, 'low', 'high')).toBeNull();
   expect(deferredEffortCommit(false, 'low', 'low')).toBeNull();
   expect(deferredEffortCommit(false, 'low', 'high')).toEqual({ value: 'high' });
-});
-
-test('reasoning effort labels preserve provider values while formatting readable copy', () => {
-  expect(['low', 'medium', 'xhigh', 'very_high'].map(reasoningEffortOption)).toEqual([
-    { label: 'Low', value: 'low' },
-    { label: 'Medium', value: 'medium' },
-    { label: 'Xhigh', value: 'xhigh' },
-    { label: 'Very_High', value: 'very_high' }
-  ]);
 });

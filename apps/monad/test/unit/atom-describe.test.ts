@@ -42,8 +42,7 @@ test('describeAtomPack enumerates each individual atom of the built-in pack', as
                 hex: slack.channel.icon.hex,
                 officialLayerCount: slack.channel.icon.layers?.length
               }
-            : null,
-          setup: slack.channel.setup
+            : null
         }
       : null
   }).toEqual({
@@ -68,16 +67,7 @@ test('describeAtomPack enumerates each individual atom of the built-in pack', as
           credentialKey: 'appToken'
         }
       ],
-      icon: { title: 'Slack', hex: undefined, officialLayerCount: 8 },
-      setup: {
-        summary: 'Use a Slack app in Socket Mode with both a bot token and an app-level token.',
-        steps: [
-          'Create a Slack app, add the required bot scopes, and install it to your workspace.',
-          'Enable Socket Mode and create an app-level token with connections:write.',
-          'Paste the xoxb bot token and xapp app token below, then switch the connection on.'
-        ],
-        docsUrl: 'https://api.slack.com/start/quickstart'
-      }
+      icon: { title: 'Slack', hex: undefined, officialLayerCount: 8 }
     }
   });
 

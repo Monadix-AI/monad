@@ -148,6 +148,7 @@ function buildManagedHost(opts: {
     icon: { title: 'Ownership Test', path: 'M4 4h16v16H4z' },
     productIcon: 'codex',
     label: 'Ownership Test',
+    managedRuntime: { usesManagedMcpBridge: true },
     events,
     detect: () => ({
       id: provider,
@@ -468,6 +469,7 @@ function buildResidentTerminalHost(): {
     icon: { title: 'Launcher Ownership Test', path: 'M4 4h16v16H4z' },
     productIcon: 'codex',
     label: 'Resident Terminal Test',
+    managedRuntime: { usesManagedMcpBridge: true },
     events,
     detect: () => ({
       id: provider,

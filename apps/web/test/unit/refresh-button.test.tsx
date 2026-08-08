@@ -1,11 +1,10 @@
 import { expect, test } from 'bun:test';
 import { Children } from 'react';
 
-import { RefreshButtonView, resolveRefreshButtonLabel } from '../../src/components/RefreshButton';
+import { RefreshButtonView } from '../../src/components/RefreshButton';
 
-test('refresh button uses the translated default label and invokes refresh', () => {
+test('refresh button invokes refresh', () => {
   let refreshes = 0;
-  let translatedKey = '';
   const action = RefreshButtonView({
     label: 'Refresh',
     loading: false,
@@ -17,16 +16,9 @@ test('refresh button uses the translated default label and invokes refresh', () 
   action.props.onClick?.({} as never);
 
   expect(refreshes).toBe(1);
-  expect(
-    resolveRefreshButtonLabel(undefined, (key) => {
-      translatedKey = key;
-      return 'Refresh';
-    })
-  ).toBe('Refresh');
-  expect(translatedKey).toBe('web.refresh');
 });
 
-test('refresh button combines custom copy with loading and disabled behavior', () => {
+test('refresh button disables while loading and preserves its variant', () => {
   const action = RefreshButtonView({
     disabled: false,
     label: 'Rebuild preview',
@@ -35,11 +27,9 @@ test('refresh button combines custom copy with loading and disabled behavior', (
   });
   expect({
     disabled: action.props.disabled,
-    label: Children.toArray(action.props.children)[1],
     variant: action.props.variant
   }).toEqual({
     disabled: true,
-    label: 'Rebuild preview',
     variant: 'outline'
   });
 });

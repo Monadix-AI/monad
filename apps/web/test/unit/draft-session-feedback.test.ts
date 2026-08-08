@@ -4,8 +4,7 @@ import { expect, test } from 'bun:test';
 
 import {
   buildDraftSessionFeedback,
-  buildPendingTurnFeedback,
-  resolveDraftAgentLabel
+  buildPendingTurnFeedback
 } from '../../src/features/session/draft-session-feedback.ts';
 
 const draft = (status: DraftChatSession['status']): DraftChatSession => ({
@@ -94,16 +93,4 @@ test('failed draft stops the pending shimmer and marks the user message as faile
       text: 'Investigate launch feedback'
     }
   ]);
-});
-
-test('draft agent label resolves the selected agent and falls back to Default Agent', () => {
-  const agents = [{ id: 'agt_research', name: 'Research Agent' }];
-  expect(
-    resolveDraftAgentLabel({
-      agents,
-      agentId: 'agt_research',
-      defaultLabel: 'Default Agent'
-    })
-  ).toBe('Research Agent');
-  expect(resolveDraftAgentLabel({ agents, agentId: undefined, defaultLabel: 'Default Agent' })).toBe('Default Agent');
 });

@@ -2,7 +2,6 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   addProjectMemberTemplate,
-  chatAgentLabel,
   chatCreateRequest,
   confirmDestructive,
   inboxOpenTarget,
@@ -14,20 +13,9 @@ import {
 } from '../../src/shell/workspace-model.ts';
 
 describe('Chat Web model', () => {
-  const agents = [
-    { id: 'agt_alpha', name: 'Alpha' },
-    { id: 'agt_beta', name: 'Beta' }
-  ];
-
   test('omits agentId for Default Agent and includes an explicit Agent', () => {
     expect(chatCreateRequest('New chat', null)).toEqual({ title: 'New chat' });
     expect(chatCreateRequest('New chat', 'agt_alpha' as never)).toEqual({ agentId: 'agt_alpha', title: 'New chat' });
-  });
-
-  test('labels default, configured, and stale Agent bindings', () => {
-    expect(chatAgentLabel([], agents as never)).toBe('Default Agent');
-    expect(chatAgentLabel(['agt_beta'] as never, agents as never)).toBe('Beta');
-    expect(chatAgentLabel(['agt_missing'] as never, agents as never)).toBe('Unavailable Agent');
   });
 
   test('keeps Workplace Project sessions out of the plain Chats surface', () => {

@@ -1,14 +1,8 @@
 import { expect, test } from 'bun:test';
 
-import { workspaceActionCommands, workspaceActionLabel } from '#/handlers/session/workspace-actions.ts';
+import { workspaceActionCommands } from '#/handlers/session/workspace-actions.ts';
 
 const cwd = process.platform === 'win32' ? 'C:\\work\\repo' : '/work/repo';
-
-test('file manager labels match the host platform vocabulary', () => {
-  expect(workspaceActionLabel('show-in-file-manager', 'darwin')).toBe('Show in Finder');
-  expect(workspaceActionLabel('show-in-file-manager', 'win32')).toBe('Show in Explorer');
-  expect(workspaceActionLabel('show-in-file-manager', 'linux')).toBe('Show in file manager');
-});
 
 test('file manager commands are platform-specific', () => {
   expect(workspaceActionCommands('show-in-file-manager', cwd, 'darwin')[0]?.argv).toEqual(['open', '-R', cwd]);

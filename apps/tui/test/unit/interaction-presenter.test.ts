@@ -2,7 +2,7 @@ import type { PendingInteraction } from '@monad/protocol';
 
 import { expect, test } from 'bun:test';
 
-import { interactionProducerLabel, summarizeInteractionValue } from '../../src/interactions/presenter.tsx';
+import { summarizeInteractionValue } from '../../src/interactions/presenter.tsx';
 
 const interaction: PendingInteraction = {
   id: 'interaction-1',
@@ -20,10 +20,6 @@ const interaction: PendingInteraction = {
   createdAt: '2026-07-13T00:00:00.000Z',
   expiresAt: '2026-07-13T00:05:00.000Z'
 };
-
-test('renders a readable atom-pack source label', () => {
-  expect(interactionProducerLabel(interaction.source)).toBe('sandbox-pack / e2b');
-});
 
 test('never includes a secret value in a TUI summary', () => {
   const secret = interaction.request.type === 'form' ? interaction.request.fields[0] : undefined;

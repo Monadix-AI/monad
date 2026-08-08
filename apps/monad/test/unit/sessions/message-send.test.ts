@@ -92,6 +92,7 @@ test('normal, inline, and blocking slash commands preserve the sender-selected r
 
 test('reply relations are rejected consistently before steer and history-continuation routing', async () => {
   const results: Array<{ path: string; result: Awaited<ReturnType<typeof controlPathResult>> }> = [];
+  const handlers = buildHandlers(mockModel(['done']));
 
   for (const path of [
     'idle-steer',
@@ -101,7 +102,6 @@ test('reply relations are rejected consistently before steer and history-continu
     'block-steer',
     'block-history'
   ] as const) {
-    const handlers = buildHandlers(mockModel(['done']));
     const { sessionId } = await handlers.session.create({ title: path });
     await handlers.session.send({ generate: false, sessionId, text: 'original' });
     const original = (await handlers.session.messages({ id: sessionId })).messages[0];
