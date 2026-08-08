@@ -26,7 +26,7 @@ const claimedInteractionSchema = z.object({ interaction: pendingInteractionSchem
 type ClaimedInteraction = { interaction: PendingInteraction; leaseToken: string };
 type CancellationReason = 'close' | 'escape' | 'timeout' | 'disconnect' | 'unavailable';
 
-export function interactionProducerLabel(producer: InteractionProducer): string {
+function interactionProducerLabel(producer: InteractionProducer): string {
   return producer.kind === 'builtin' ? (producer.label ?? producer.id) : `${producer.packId} / ${producer.atomId}`;
 }
 

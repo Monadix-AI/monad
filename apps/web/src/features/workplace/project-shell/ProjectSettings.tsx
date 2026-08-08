@@ -25,8 +25,6 @@ import { ProjectWorkdirSettings } from './ProjectWorkdirSettings';
 
 type ProjectMember = ProjectController['projectMembers'][number];
 
-export { projectMemberRemoveLabelKey } from './ProjectMembersSection';
-
 export function ProjectSettings({
   room,
   onDeleted,

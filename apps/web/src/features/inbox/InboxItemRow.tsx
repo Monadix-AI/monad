@@ -23,7 +23,7 @@ function formatInboxTime(value: string): string {
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
 }
 
-export function inboxApprovalAction(item: ApprovalInboxItem, fallback: string): string {
+function inboxApprovalAction(item: ApprovalInboxItem, fallback: string): string {
   if (typeof item.input === 'object' && item.input !== null) {
     const tool = (item.input as { tool?: unknown }).tool;
     if (typeof tool === 'string' && tool) return tool;

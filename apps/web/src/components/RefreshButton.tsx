@@ -26,10 +26,7 @@ export function RefreshButton({ label, ...props }: RefreshButtonProps) {
   );
 }
 
-export function resolveRefreshButtonLabel(
-  label: string | undefined,
-  translate: (key: 'web.refresh') => string
-): string {
+function resolveRefreshButtonLabel(label: string | undefined, translate: (key: 'web.refresh') => string): string {
   return label ?? translate('web.refresh');
 }
 

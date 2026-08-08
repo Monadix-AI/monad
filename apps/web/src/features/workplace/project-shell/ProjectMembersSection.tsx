@@ -21,7 +21,7 @@ import { ProjectMembersListSkeleton } from './ProjectSettingsListSkeletons';
 type ProjectMember = ProjectController['projectMembers'][number];
 type ProjectParticipant = ProjectController['projectParticipants'][number];
 
-export function projectMemberRemoveLabelKey(
+function projectMemberRemoveLabelKey(
   type: ProjectMember['type']
 ): 'web.workplace.removeAcpMember' | 'web.workplace.removeCliMember' {
   return type === 'acp' ? 'web.workplace.removeAcpMember' : 'web.workplace.removeCliMember';
