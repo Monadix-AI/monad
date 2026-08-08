@@ -1,10 +1,7 @@
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { mapWithConcurrency } from '../../../scripts/lib/map-with-concurrency.ts';
-
 const runner = join(import.meta.dir, '../../../scripts/bun-test.ts');
-const windowsTestConcurrency = 2;
 
 if (process.platform !== 'win32') {
   const proc = Bun.spawn(['bun', runner, 'test/unit/', '--only-failures'], {
@@ -38,15 +35,17 @@ for (let index = 0; index < rootFiles.length; index += 10) {
   groups.push(rootFiles.slice(index, index + 10));
 }
 
-const results = await mapWithConcurrency(groups, windowsTestConcurrency, async (group) => {
+let exitCode = 0;
+for (const group of groups) {
   const proc = Bun.spawn(['bun', runner, ...group, '--only-failures'], {
     stdin: 'inherit',
     stdout: 'inherit',
     stderr: 'inherit'
   });
-  return await proc.exited;
-});
-process.exit(results.find((code) => code !== 0) ?? 0);
+  const code = await proc.exited;
+  if (code !== 0) exitCode = code;
+}
+process.exit(exitCode);
 
 function isApplicableWindowsTest(name: string): boolean {
   if (!/\.test\.[cm]?[jt]sx?$/.test(name)) return false;
