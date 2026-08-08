@@ -59,6 +59,7 @@ async function makePackage(version: string): Promise<string> {
       executable,
       `#!/usr/bin/env bash
 set -euo pipefail
+[ -z "\${MONAD_FAKE_COMMAND_LOG:-}" ] || printf '%s\n' "$*" >>"$MONAD_FAKE_COMMAND_LOG"
 case "\${1:-}" in
   --version) echo "monad ${version}" ;;
   --help|-h) printf 'monad ${version}\\nUsage: monad [command]\\n' ;;
@@ -209,7 +210,21 @@ await assertLauncher();
 if ((await Bun.file(sentinel).text()) !== 'keep') fail('home data was wiped during upgrade');
 ok('upgrade replaced the binary and preserved home');
 
-step('Flow 3: force clears the install directory and skips verification');
+if (process.platform !== 'win32') {
+  step('Flow 3: upgrade restarts through the newly installed CLI');
+  const commandLog = join(testDir, 'monad-command.log');
+  const restartEnv = installerEnv(third);
+  delete restartEnv.MONAD_NO_DAEMON;
+  restartEnv.MONAD_FAKE_COMMAND_LOG = commandLog;
+  await run(installerCommand(['--no-verify', '--no-path-modify']), { env: restartEnv });
+  const commands = (await Bun.file(commandLog).text()).trim().split('\n');
+  if (commands.slice(-2).join('\n') !== 'stop\nrestart') {
+    fail(`upgrade did not stop and restart the daemon: ${commands.join(', ')}`);
+  }
+  ok('upgrade stopped the old daemon and restarted through the new binary');
+}
+
+step('Flow 4: force clears the install directory and skips verification');
 const staleFile = join(installDir, 'stale', 'removed.txt');
 await mkdir(join(installDir, 'stale'), { recursive: true });
 await Bun.write(staleFile, 'remove');
@@ -238,7 +253,7 @@ if (await Bun.file(staleFile).exists()) fail('force install left stale content b
 if ((await Bun.file(sentinel).text()) !== 'keep') fail('force install wiped a separate monad home');
 ok('force install replaced the full install tree and bypassed checksum download');
 
-step('Flow 4: explicit bin dir skips PATH writes');
+step('Flow 5: explicit bin dir skips PATH writes');
 if (process.platform === 'win32') {
   const { output } = await run([
     'powershell',
@@ -259,7 +274,7 @@ if (process.platform === 'win32') {
 }
 ok('PATH configuration was not modified');
 
-step('Flow 5: invalid input fails before install');
+step('Flow 6: invalid input fails before install');
 if (process.platform === 'win32') {
   const missing = join(packageDir, 'missing.tar.gz');
   const result = await run(installerCommand(), { allowFailure: true, env: installerEnv(missing) });
