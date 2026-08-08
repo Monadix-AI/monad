@@ -31,13 +31,20 @@ On macOS or Linux:
 curl -fsSL https://release.monadix.ai/monad/install.sh | bash
 ```
 
+If `curl` is unavailable, use:
+
+```bash
+wget -qO- https://release.monadix.ai/monad/install.sh | bash
+```
+
 On Windows PowerShell 5.1 or later:
 
 ```powershell
 irm https://release.monadix.ai/monad/install.ps1 | iex
 ```
 
-Run `monad` to start or update the daemon and open the Web UI.
+The macOS and Linux installer starts the daemon and opens the Web UI. The Windows installer
+initializes Monad; run `monad up` afterwards to start the daemon and open the Web UI.
 
 ### Force a clean reinstall
 
@@ -47,6 +54,12 @@ On macOS or Linux, pass installer arguments after `bash -s --`:
 
 ```bash
 curl -fsSL https://release.monadix.ai/monad/install.sh | bash -s -- --force
+```
+
+Without `curl`:
+
+```bash
+wget -qO- https://release.monadix.ai/monad/install.sh | bash -s -- --force
 ```
 
 On Windows, download the script before passing `--force`:
@@ -73,6 +86,13 @@ curl -fSLO "${release_url}/${asset}.tar.gz.sha256"
 shasum -a 256 -c "${asset}.tar.gz.sha256"
 tar -xzf "${asset}.tar.gz"
 "./${asset}/bin/monad" --help
+```
+
+Without `curl`, download the archive and checksum with:
+
+```bash
+wget -q "${release_url}/${asset}.tar.gz"
+wget -q "${release_url}/${asset}.tar.gz.sha256"
 ```
 
 Use `sha256sum -c` on Linux when `shasum` is unavailable. On Windows, compare the archive with its checksum by running `Get-FileHash -Algorithm SHA256`, then extract it with `tar`.

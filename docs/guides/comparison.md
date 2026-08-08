@@ -26,8 +26,8 @@ its history, and its bindings stay put.
 
 **One daemon, not a platform to deploy.** Monad installs as a single binary and runs as
 one long-lived process bound to loopback. There is no cluster, message server, gateway, or
-object store to stand up before the first agent runs; `curl | bash`, then `monad`. It is a
-runtime for the machine you already work on.
+object store to stand up before the first agent runs; the macOS/Linux installer starts Monad for
+you. It is a runtime for the machine you already work on.
 
 **Governance sits under the agent, not beside it.** For work Monad Agent Runtime executes,
 approvals gate tool calls before they run and fail closed when nobody can answer. Tool

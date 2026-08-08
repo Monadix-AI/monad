@@ -62,17 +62,22 @@ Monad 默认把自身状态保存在你的设备上，并且只监听本机接�
 
 ```bash
 curl -fsSL https://release.monadix.ai/monad/install.sh | bash
-monad
+```
+
+如果没有 `curl`，可改用 `wget`：
+
+```bash
+wget -qO- https://release.monadix.ai/monad/install.sh | bash
 ```
 
 在 Windows PowerShell 5.1 或更高版本中安装 Monad：
 
 ```powershell
 irm https://release.monadix.ai/monad/install.ps1 | iex
-monad
 ```
 
-安装程序会校验发行包、把 `monad` 加入 `PATH`、启动守护进程并打开 Web UI。
+macOS 和 Linux 安装器会校验发行包、把 `monad` 加入 `PATH`、启动守护进程并打开 Web UI。
+Windows 安装器只初始化 Monad；随后运行 `monad up` 启动守护进程并打开 Web UI。
 
 ### 手动安装
 
@@ -90,6 +95,13 @@ curl -fSLO "${release_url}/${asset}.tar.gz.sha256"
 shasum -a 256 -c "${asset}.tar.gz.sha256"
 tar -xzf "${asset}.tar.gz"
 "./${asset}/bin/monad" --help
+```
+
+没有 `curl` 时，可用以下命令下载同样的两个文件：
+
+```bash
+wget -q "${release_url}/${asset}.tar.gz"
+wget -q "${release_url}/${asset}.tar.gz.sha256"
 ```
 
 发行包是自包含的，运行时不需要 Bun 或 Node.js。Linux 同时提供 glibc 与 musl 版本。
