@@ -63,17 +63,23 @@ Install Monad on macOS or Linux:
 
 ```bash
 curl -fsSL https://release.monadix.ai/monad/install.sh | bash
-monad
+```
+
+If `curl` is unavailable, use `wget` instead:
+
+```bash
+wget -qO- https://release.monadix.ai/monad/install.sh | bash
 ```
 
 Install Monad from PowerShell 5.1 or later on Windows:
 
 ```powershell
 irm https://release.monadix.ai/monad/install.ps1 | iex
-monad
 ```
 
-The installer verifies the release, adds `monad` to your `PATH`, starts the daemon, and opens the Web UI.
+The macOS and Linux installer verifies the release, adds `monad` to your `PATH`, starts the
+daemon, and opens the Web UI. The Windows installer initializes Monad; then run `monad up` to
+start the daemon and open the Web UI.
 
 ### Manual installation
 
@@ -91,6 +97,13 @@ curl -fSLO "${release_url}/${asset}.tar.gz.sha256"
 shasum -a 256 -c "${asset}.tar.gz.sha256"
 tar -xzf "${asset}.tar.gz"
 "./${asset}/bin/monad" --help
+```
+
+Without `curl`, download the same two files with:
+
+```bash
+wget -q "${release_url}/${asset}.tar.gz"
+wget -q "${release_url}/${asset}.tar.gz.sha256"
 ```
 
 Release archives are self-contained. Bun and Node.js are not required at runtime. Linux releases include glibc and musl variants.

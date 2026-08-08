@@ -29,13 +29,20 @@ macOS 或 Linux：
 curl -fsSL https://release.monadix.ai/monad/install.sh | bash
 ```
 
+如果没有 `curl`，可运行：
+
+```bash
+wget -qO- https://release.monadix.ai/monad/install.sh | bash
+```
+
 Windows PowerShell 5.1 或更高版本：
 
 ```powershell
 irm https://release.monadix.ai/monad/install.ps1 | iex
 ```
 
-运行 `monad` 即可启动或更新守护进程并打开 Web UI。
+macOS 和 Linux 安装器会启动守护进程并打开 Web UI。Windows 安装器只初始化 Monad；
+随后运行 `monad up` 启动守护进程并打开 Web UI。
 
 ### 强制全新安装
 
@@ -45,6 +52,12 @@ macOS 或 Linux 需要在 `bash -s --` 后传入安装器参数：
 
 ```bash
 curl -fsSL https://release.monadix.ai/monad/install.sh | bash -s -- --force
+```
+
+没有 `curl` 时：
+
+```bash
+wget -qO- https://release.monadix.ai/monad/install.sh | bash -s -- --force
 ```
 
 Windows 需要先下载安装脚本，再传入 `--force`：
@@ -71,6 +84,13 @@ curl -fSLO "${release_url}/${asset}.tar.gz.sha256"
 shasum -a 256 -c "${asset}.tar.gz.sha256"
 tar -xzf "${asset}.tar.gz"
 "./${asset}/bin/monad" --help
+```
+
+没有 `curl` 时，可用以下命令下载压缩包和校验文件：
+
+```bash
+wget -q "${release_url}/${asset}.tar.gz"
+wget -q "${release_url}/${asset}.tar.gz.sha256"
 ```
 
 Linux 没有 `shasum` 时使用 `sha256sum -c`。Windows 可用 `Get-FileHash -Algorithm SHA256` 比对校验和，再用 `tar` 解压。Debian、Ubuntu、Fedora 等 glibc 发行版使用常规 `linux-arch` 构建；Alpine 等 musl 发行版使用 `linux-arch-musl`。

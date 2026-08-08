@@ -22,6 +22,8 @@ Monad 把守护进程、CLI 和 Web 界面作为同一个带版本号的构建�
 curl -fsSL https://release.monadix.ai/monad/install.sh | bash -s -- --channel beta
 ```
 
+没有 `curl` 时，可运行 `wget -qO- https://release.monadix.ai/monad/install.sh | bash -s -- --channel beta`。
+
 已有安装可切换通道：
 
 ```bash

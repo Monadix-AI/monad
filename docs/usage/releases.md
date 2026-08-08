@@ -28,6 +28,8 @@ Install a specific channel:
 curl -fsSL https://release.monadix.ai/monad/install.sh | bash -s -- --channel beta
 ```
 
+Without `curl`, use `wget -qO- https://release.monadix.ai/monad/install.sh | bash -s -- --channel beta`.
+
 Switch an existing install:
 
 ```bash
