@@ -36,6 +36,7 @@ import { useLocale, useT } from '#/components/I18nProvider';
 import { MessageBody } from './MessageBody';
 import { MessageReplyPreview } from './MessageReplyPreview';
 import { formatMessageTimestamp } from './message-time';
+import { nextReasoningFollowState } from './reasoning-follow';
 
 export interface Msg {
   attachments?: MessageAttachmentView[];
@@ -83,12 +84,6 @@ function MessageAttachments({ attachments }: { attachments: readonly MessageAtta
       }}
     />
   );
-}
-
-type ReasoningFollowEvent = 'content-appended' | 'user-scroll';
-
-function nextReasoningFollowState(following: boolean, event: ReasoningFollowEvent): boolean {
-  return event === 'user-scroll' ? false : following;
 }
 
 const REASONING_SCROLL_KEYS = new Set(['ArrowDown', 'ArrowUp', 'End', 'Home', 'PageDown', 'PageUp', ' ']);

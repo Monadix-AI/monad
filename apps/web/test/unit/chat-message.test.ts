@@ -1,8 +1,9 @@
+import type { MessageSentFrom } from '../../src/features/session/ChatMessage.tsx';
+
 import { expect, test } from 'bun:test';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import * as ChatMessageModule from '../../src/features/session/ChatMessage.tsx';
 import {
   Message,
   rewindEditorReducer,
@@ -10,6 +11,7 @@ import {
 } from '../../src/features/session/ChatMessage.tsx';
 import { MessageBody, userMessageTokens } from '../../src/features/session/MessageBody.tsx';
 import { MessageReplyPreview } from '../../src/features/session/MessageReplyPreview.tsx';
+import { nextReasoningFollowState } from '../../src/features/session/reasoning-follow.ts';
 import { sessionReplyHandler } from '../../src/features/session/SessionTranscript.tsx';
 import { resolveSessionComposerReplyTarget } from '../../src/features/session/session-route-contract.ts';
 
@@ -298,16 +300,10 @@ test('rewind editor keeps the transcript unchanged until an edited message is su
 });
 
 test('reasoning follows appended content until the user scrolls', () => {
-  const nextState = (
-    ChatMessageModule as typeof ChatMessageModule & {
-      nextReasoningFollowState?: (following: boolean, event: 'content-appended' | 'user-scroll') => boolean;
-    }
-  ).nextReasoningFollowState;
-
-  expect(nextState?.(true, 'content-appended')).toBe(true);
-  expect(nextState?.(true, 'user-scroll')).toBe(false);
-  expect(nextState?.(false, 'content-appended')).toBe(false);
-  expect(nextState?.(false, 'user-scroll')).toBe(false);
+  expect(nextReasoningFollowState(true, 'content-appended')).toBe(true);
+  expect(nextReasoningFollowState(true, 'user-scroll')).toBe(false);
+  expect(nextReasoningFollowState(false, 'content-appended')).toBe(false);
+  expect(nextReasoningFollowState(false, 'user-scroll')).toBe(false);
 });
 
 test('user message tokens distinguish skill and command behavior', () => {
@@ -352,7 +348,7 @@ test('a settled user message shows its date-aware timestamp in the hover actions
 });
 
 test('a user message renders the sent-from channel badge only when the session origin provides one', () => {
-  const render = (sentFrom?: ChatMessageModule.MessageSentFrom) =>
+  const render = (sentFrom?: MessageSentFrom) =>
     renderToStaticMarkup(
       createElement(Message, {
         assistantLabel: 'Assistant',
