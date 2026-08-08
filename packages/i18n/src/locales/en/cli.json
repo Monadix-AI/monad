@@ -230,7 +230,7 @@
   "cli.daemon.reason": "Reason",
   "cli.daemon.details": "Details",
   "cli.daemon.nextStep": "Next step",
-  "cli.daemon.fixConfig": "Fix config.json and run `monad-dev start` again.",
+  "cli.daemon.fixConfig": "Fix config.json and run `monad start` again.",
   "cli.daemon.invalidConfig": "Invalid config",
   "cli.daemon.notReady": "● daemon did not become ready in time",
   "cli.win.env": "Windows environment",
