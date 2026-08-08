@@ -69,9 +69,9 @@ export function meshAgentPresetCardState({
     preset.installed && connectedAgent && statusAuth !== 'unauthenticated' && statusAuth !== 'unknown'
   );
   return {
-    isConnected: isMonad || hasAuthenticatedConnection,
+    isConnected: hasAuthenticatedConnection,
     canDisconnect: !isMonad && hasAuthenticatedConnection,
-    settingsAgent: isMonad ? (connectedAgent ?? presetToView(preset)) : connectedAgent
+    settingsAgent: connectedAgent
   };
 }
 
