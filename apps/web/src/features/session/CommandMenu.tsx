@@ -322,7 +322,7 @@ export function commandMenuSnappedMaxHeight(availableHeight: number): number {
   return commandMenuPanelHeight(visibleItems);
 }
 
-export function commandMenuDetailSource(item: SessionCommandMenuItem): string | null {
+function commandMenuDetailSource(item: SessionCommandMenuItem): string | null {
   if (!item.badgeTitle) return null;
   if (item.badgeTitle === 'Global') return 'From: Global';
   if (item.badgeTitle.startsWith('Agent:')) return `From ${item.badgeTitle}`;

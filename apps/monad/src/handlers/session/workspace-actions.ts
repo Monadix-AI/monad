@@ -13,7 +13,7 @@ export interface WorkspaceActionCommand {
 
 const DRAFT_ATTACHMENT_PREFIX = 'monad-draft-attachment-';
 
-export function workspaceActionLabel(action: WorkspaceAction, platform: NodeJS.Platform = process.platform): string {
+function workspaceActionLabel(action: WorkspaceAction, platform: NodeJS.Platform = process.platform): string {
   if (action === 'open-terminal') return 'Open in terminal';
   if (platform === 'darwin') return 'Show in Finder';
   if (platform === 'win32') return 'Show in Explorer';

@@ -53,7 +53,7 @@ type AddProjectMemberOptions = {
   customPrompt?: string;
 };
 
-export function defaultMeshAgentMemberDisplayName(
+function defaultMeshAgentMemberDisplayName(
   agent: Pick<InvitableMeshAgent, 'displayName' | 'name' | 'productIcon' | 'provider'>
 ): string {
   return agent.displayName ?? meshAgentProductDisplayName(agent.productIcon, agent.provider, agent.name);
