@@ -110,9 +110,8 @@ export function InitWizard({ homePath }: { homePath?: string }) {
           };
         })
       );
-      // Only seed providers that already carry a credential. This drops the seeded sample
-      // placeholder (no credentials) so it can't be pre-selected and carried into a "complete"
-      // init that computeInitStatus then rejects as missing a provider/credential.
+      // Only seed providers that already carry a credential so incomplete providers cannot be
+      // pre-selected and carried into an init that computeInitStatus rejects.
       const drafts: DraftProvider[] = loaded.filter((p) => p.keys.length > 0);
       if (drafts.length > 0) setProviders(drafts);
 

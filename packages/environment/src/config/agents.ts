@@ -143,9 +143,6 @@ export type SandboxConfig = z.infer<typeof sandboxConfigSchema>;
 
 const providerTypeSchema = z.enum(PROTOCOL_KNOWN_PROVIDER_TYPES);
 
-export const DEFAULT_SAMPLE_PROVIDER_ID = 'sample-openai-compatible';
-export const DEFAULT_SAMPLE_PROFILE_ALIAS = 'sample-compatible';
-
 export const providerCredentialSchema = z.object({
   id: z.string(),
   label: z.string(),

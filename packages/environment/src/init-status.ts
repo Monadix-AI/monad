@@ -3,7 +3,7 @@ import type { MonadPaths } from './paths.ts';
 
 import { existsSync } from 'node:fs';
 
-import { DEFAULT_SAMPLE_PROVIDER_ID, loadAll, type MonadAuth, type MonadConfig } from './config/index.ts';
+import { loadAll, type MonadAuth, type MonadConfig } from './config/index.ts';
 
 export interface InitStatus {
   initialized: boolean;
@@ -14,9 +14,8 @@ export interface InitStatus {
 /**
  * Derive initialization status from config + auth state.
  *
- * "Initialized" means a real (non-sample) provider has been configured with
- * at least one credential, and a default profile pointing to it exists.
- * The seeded sample provider (no credentials) does not count.
+ * "Initialized" means a provider has been configured with at least one credential,
+ * and a default profile pointing to it exists.
  */
 export function computeInitStatus(cfg: MonadConfig, _auth: MonadAuth | null): InitStatus {
   const missing: InitMissingItem[] = [];
@@ -30,26 +29,9 @@ export function computeInitStatus(cfg: MonadConfig, _auth: MonadAuth | null): In
   }
 
   const provider = cfg.model.providers.find((p) => p.id === profile.routes.chat.provider);
-  if (!provider || provider.id === DEFAULT_SAMPLE_PROVIDER_ID) {
+  if (!provider) {
     missing.push('provider', 'credential');
-    const replacementProfile =
-      profile.alias === 'default' ? undefined : cfg.model.profiles.find((candidate) => candidate.alias === 'default');
-    const replacementProvider = replacementProfile
-      ? cfg.model.providers.find((p) => p.id === replacementProfile.routes.chat.provider)
-      : undefined;
-    const targetProfile = replacementProvider ? replacementProfile : profile;
-    const targetProvider = replacementProvider ?? provider;
-    if (targetProvider && targetProvider.id !== DEFAULT_SAMPLE_PROVIDER_ID && targetProfile) {
-      missingProviderCredentials.push({
-        providerId: targetProvider.id,
-        providerLabel: targetProvider.label,
-        profileAlias: targetProfile.alias,
-        route: 'chat'
-      });
-    }
-    return missingProviderCredentials.length
-      ? { initialized: false, missing, missingProviderCredentials }
-      : { initialized: false, missing };
+    return { initialized: false, missing };
   }
 
   const creds = provider.credentials;

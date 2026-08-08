@@ -2,8 +2,6 @@ import type { MonadAuth, MonadConfig } from '@monad/environment';
 import type { SetSkillsSettingsRequest, SkillsSettingsResponse } from '@monad/protocol';
 import type { ConfigAccess } from '#/config/manager.ts';
 
-import { DEFAULT_SAMPLE_PROVIDER_ID } from '@monad/environment';
-
 function resolveUsableInstallReviewModel(cfg: MonadConfig, _auth: MonadAuth | null): string | null {
   const profiles = [
     ...cfg.model.profiles.filter((p) => p.alias === 'default'),
@@ -11,7 +9,7 @@ function resolveUsableInstallReviewModel(cfg: MonadConfig, _auth: MonadAuth | nu
   ];
   for (const profile of profiles) {
     const provider = cfg.model.providers.find((p) => p.id === profile.routes.chat.provider);
-    if (!provider || provider.id === DEFAULT_SAMPLE_PROVIDER_ID) continue;
+    if (!provider) continue;
     if (provider.credentials.some((credential) => credential.authType !== 'admin_api_key')) {
       return profile.alias;
     }

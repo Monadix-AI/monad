@@ -64,7 +64,7 @@ case "\${1:-}" in
   --help|-h) printf 'monad ${version}\\nUsage: monad [command]\\n' ;;
   init)
     mkdir -p "\${MONAD_HOME}"
-    test -f "\${MONAD_HOME}/config.json" || printf '{"model":{"providers":[{"id":"sample-openai-compatible"}]}}\\n' >"\${MONAD_HOME}/config.json"
+    test -f "\${MONAD_HOME}/config.json" || printf '{"model":{"providers":[],"profiles":[]}}\\n' >"\${MONAD_HOME}/config.json"
     ;;
   stop) exit 0 ;;
   *) echo "monad fake ${version}" ;;

@@ -8,7 +8,6 @@ import {
   DEFAULT_AVATAR_STYLE,
   DEFAULT_COMPOSER_SETTINGS,
   httpUrlSchema,
-  ModelProviderType,
   KNOWN_PROVIDER_TYPES as PROTOCOL_KNOWN_PROVIDER_TYPES,
   userAvatarDataUrlSchema
 } from '@monad/protocol';
@@ -27,12 +26,7 @@ export type { ModelProviderType } from '@monad/protocol';
 
 export { PROTOCOL_KNOWN_PROVIDER_TYPES as KNOWN_PROVIDER_TYPES };
 
-import {
-  DEFAULT_SAMPLE_PROFILE_ALIAS,
-  DEFAULT_SAMPLE_PROVIDER_ID,
-  monadAgentsConfigSchema,
-  setAgentsSchemaRuntimeDir
-} from './agents.ts';
+import { monadAgentsConfigSchema, setAgentsSchemaRuntimeDir } from './agents.ts';
 import { setAuthSchemaRuntimeDir } from './auth.ts';
 import { monadMeshConfigSchema, setMeshSchemaRuntimeDir } from './mesh.ts';
 import { runtimeSchemaUrl, sourceSchemaUrl, toMonadJsonSchema } from './schema-json.ts';
@@ -274,23 +268,8 @@ export function createDefaultConfig(displayName: string): MonadConfig {
     appearance: { avatarStyle: DEFAULT_AVATAR_STYLE, composer: DEFAULT_COMPOSER_SETTINGS },
     model: {
       default: '',
-      providers: [
-        {
-          id: DEFAULT_SAMPLE_PROVIDER_ID,
-          label: 'Sample OpenAI-Compatible Provider',
-          type: ModelProviderType.OpenAICompatible,
-          baseUrl: 'https://api.example.com/v1',
-          credentials: []
-        }
-      ],
-      profiles: [
-        {
-          alias: DEFAULT_SAMPLE_PROFILE_ALIAS,
-          routes: { chat: { provider: DEFAULT_SAMPLE_PROVIDER_ID, modelId: 'example-model' } },
-          params: { temperature: 0.7 },
-          fallbacks: []
-        }
-      ],
+      providers: [],
+      profiles: [],
       roles: {},
       tierOverrides: {},
       kinds: {}

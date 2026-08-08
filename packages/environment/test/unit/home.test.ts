@@ -290,36 +290,6 @@ describe('computeInitStatus', () => {
     });
   });
 
-  test('reports replacement default profile provider when legacy sample profile is still selected', () => {
-    const cfg = createDefaultConfig('test-user');
-    cfg.model.default = 'sample-compatible';
-    cfg.model.providers.push({
-      id: 'openrouter',
-      label: 'OpenRouter',
-      type: ModelProviderType.OpenRouter,
-      credentials: []
-    });
-    cfg.model.profiles.push({
-      alias: 'default',
-      routes: { chat: { provider: 'openrouter', modelId: 'openrouter/free' } },
-      params: {},
-      fallbacks: []
-    });
-
-    expect(computeInitStatus(cfg, null)).toEqual({
-      initialized: false,
-      missing: ['provider', 'credential'],
-      missingProviderCredentials: [
-        {
-          providerId: 'openrouter',
-          providerLabel: 'OpenRouter',
-          profileAlias: 'default',
-          route: 'chat'
-        }
-      ]
-    });
-  });
-
   test('uses the configured default profile alias instead of requiring alias "default"', () => {
     const cfg = createDefaultConfig('test-user');
     cfg.model.default = 'writer';
@@ -519,24 +489,11 @@ describe('loadConfig', () => {
     const cfg = await loadAll(paths);
     expect(cfg?.version).toBe(1);
     expect(cfg?.developerMode).toBe(false);
-    expect(cfg?.model.providers).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          id: 'sample-openai-compatible',
-          type: 'openai-compatible',
-          baseUrl: 'https://api.example.com/v1'
-        })
-      ])
-    );
-    expect(cfg?.model.profiles).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          alias: 'sample-compatible',
-          routes: { chat: { provider: 'sample-openai-compatible', modelId: 'example-model' } }
-        })
-      ])
-    );
-    expect(cfg?.model.default).toBe('');
+    expect({
+      defaultAlias: cfg?.model.default,
+      profiles: cfg?.model.profiles,
+      providers: cfg?.model.providers
+    }).toEqual({ defaultAlias: '', profiles: [], providers: [] });
   });
 
   test('release configuration defaults Developer Mode off', () => {

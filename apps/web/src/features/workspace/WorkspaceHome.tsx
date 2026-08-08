@@ -1,17 +1,24 @@
 import type { ProjectId, SendMessageAttachment, SessionId } from '@monad/protocol';
 
-import { Cancel01Icon, CheckIcon, Folder01Icon, PlusSignIcon } from '@hugeicons/core-free-icons';
+import { Cancel01Icon, CheckIcon, CpuIcon, Folder01Icon, PlusSignIcon, TerminalIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
   createIdempotencyKey,
+  meshAgentAdapter,
+  meshAgentSelectors,
+  profileAdapter,
+  profileSelectors,
   useCreateProjectSessionMutation,
   useCreateSessionMutation,
   useCreateWorkplaceProjectMutation,
+  useListMeshAgentsQuery,
+  useListProfilesQuery,
   useSendMessageMutation,
   useSendProjectMessageMutation
 } from '@monad/client-rtk';
 import { newId } from '@monad/protocol';
 import {
+  cn,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -21,6 +28,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useT } from '#/components/I18nProvider';
+import { ShellLink } from '#/components/ShellLink';
 import { ComposerShell } from '#/features/session/ComposerShell';
 import { enqueueInitialUserMessageForSession, useSessionUiStore } from '#/features/session/session-ui-store';
 import { messageAttachmentsFromSend, useComposerAttachments } from '#/features/session/use-composer-attachments';
@@ -33,7 +41,8 @@ import {
   resolveWorkspaceLaunchTarget,
   workspaceDraftCanLaunch,
   workspaceLaunchErrorMessage,
-  workspaceSessionTitleFromDraft
+  workspaceSessionTitleFromDraft,
+  workspaceSetupActions
 } from './workspace-home-model';
 
 type HomeProject = { id: string; name: string; sessions?: { id: SessionId }[] };
@@ -50,6 +59,8 @@ export function WorkspaceHome({ projects, activeProjectId }: WorkspaceHomeProps)
   const [createWorkplaceProject] = useCreateWorkplaceProjectMutation();
   const [sendMessage] = useSendMessageMutation();
   const [sendProjectMessage] = useSendProjectMessageMutation();
+  const profilesQuery = useListProfilesQuery();
+  const meshAgentsQuery = useListMeshAgentsQuery();
   const clearComposerInput = useSessionUiStore((state) => state.clearComposerInput);
   const addDraftChatSession = useWorkspaceShellStore((state) => state.addDraftChatSession);
   const failDraftChatSession = useWorkspaceShellStore((state) => state.failDraftChatSession);
@@ -90,6 +101,26 @@ export function WorkspaceHome({ projects, activeProjectId }: WorkspaceHomeProps)
     selectedProjectId: selectedProject?.id ?? null
   });
   const selectedTargetLabel = selectedProject?.name ?? t('web.workspace.noProjectShort');
+  const profiles = useMemo(
+    () => profileSelectors.selectAll(profilesQuery.data?.profiles ?? profileAdapter.getInitialState()),
+    [profilesQuery.data?.profiles]
+  );
+  const meshAgents = useMemo(
+    () => meshAgentSelectors.selectAll(meshAgentsQuery.data ?? meshAgentAdapter.getInitialState()),
+    [meshAgentsQuery.data]
+  );
+  const setupActions = useMemo(
+    () =>
+      profilesQuery.isSuccess && meshAgentsQuery.isSuccess
+        ? workspaceSetupActions({
+            meshAgentConnected: meshAgents.some((agent) => agent.enabled),
+            profileConfigured: profiles.some(
+              (profile) => profile.alias === (profilesQuery.data.defaultAlias || 'default')
+            )
+          })
+        : [],
+    [meshAgents, meshAgentsQuery.isSuccess, profiles, profilesQuery.data, profilesQuery.isSuccess]
+  );
 
   useEffect(() => {
     if (!newChatPrefill) return;
@@ -294,6 +325,33 @@ export function WorkspaceHome({ projects, activeProjectId }: WorkspaceHomeProps)
               value={intent}
             />
           </div>
+
+          {setupActions.length > 0 ? (
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              {setupActions.map((action) => {
+                const profileAction = action.id === 'profile';
+                return (
+                  <ShellLink
+                    className="group flex min-h-32 flex-col rounded-[1.35rem] border border-border/80 bg-card/80 px-5 py-4 shadow-sm transition-[border-color,background-color,transform,box-shadow] hover:-translate-y-0.5 hover:border-foreground/20 hover:bg-card hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                    href={action.href}
+                    key={action.id}
+                  >
+                    <HugeiconsIcon
+                      aria-hidden="true"
+                      className={cn(
+                        'size-5',
+                        profileAction ? 'text-blue-600 dark:text-blue-400' : 'text-emerald-600 dark:text-emerald-400'
+                      )}
+                      icon={profileAction ? CpuIcon : TerminalIcon}
+                    />
+                    <span className="mt-auto max-w-56 pt-8 font-medium text-foreground text-lg leading-snug tracking-tight">
+                      {t(profileAction ? 'web.workspace.setupProfileAction' : 'web.workspace.connectMeshAgentAction')}
+                    </span>
+                  </ShellLink>
+                );
+              })}
+            </div>
+          ) : null}
 
           {launchError ? (
             <p

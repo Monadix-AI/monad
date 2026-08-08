@@ -3,7 +3,8 @@ import { describe, expect, test } from 'bun:test';
 import {
   resolveWorkspaceLaunchTarget,
   workspaceLaunchErrorMessage,
-  workspaceSessionTitleFromDraft
+  workspaceSessionTitleFromDraft,
+  workspaceSetupActions
 } from '../../src/features/workspace/workspace-home-model.ts';
 
 describe('resolveWorkspaceLaunchTarget', () => {
@@ -45,6 +46,25 @@ describe('resolveWorkspaceLaunchTarget', () => {
         selectedProjectId: null
       })
     ).toBeNull();
+  });
+});
+
+describe('workspaceSetupActions', () => {
+  test('routes each missing setup requirement to its Studio section', () => {
+    expect({
+      bothMissing: workspaceSetupActions({ meshAgentConnected: false, profileConfigured: false }),
+      meshMissing: workspaceSetupActions({ meshAgentConnected: false, profileConfigured: true }),
+      profileMissing: workspaceSetupActions({ meshAgentConnected: true, profileConfigured: false }),
+      ready: workspaceSetupActions({ meshAgentConnected: true, profileConfigured: true })
+    }).toEqual({
+      bothMissing: [
+        { href: '/studio/models', id: 'profile' },
+        { href: '/studio/meshAgents', id: 'mesh-agent' }
+      ],
+      meshMissing: [{ href: '/studio/meshAgents', id: 'mesh-agent' }],
+      profileMissing: [{ href: '/studio/models', id: 'profile' }],
+      ready: []
+    });
   });
 });
 

@@ -898,6 +898,8 @@
   "web.workspace.openStudio": "Open Studio",
   "web.workspace.startNewChat": "Start",
   "web.workspace.newAgentSession": "New direct session",
+  "web.workspace.setupProfileAction": "Set up a model profile",
+  "web.workspace.connectMeshAgentAction": "Connect a Mesh agent provider",
   "web.workplace.projectsLabel": "Multi-agent",
   "web.workplace.projectsTitle": "Projects",
   "web.workplace.experience.chat": "Project session",

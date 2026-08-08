@@ -8,10 +8,27 @@ import type {
 } from '@monad/protocol';
 import type { DraftChatSession } from '#/lib/workspace-shell-store';
 
+import { studioPath } from '#/features/shell/routing/paths';
+
 export type WorkspaceLaunchTarget =
   | { kind: 'new-agent' }
   | { kind: 'existing-agent'; sessionId: string }
   | { kind: 'project'; projectId: string };
+
+export type WorkspaceSetupAction = {
+  href: string;
+  id: 'profile' | 'mesh-agent';
+};
+
+export function workspaceSetupActions(input: {
+  meshAgentConnected: boolean;
+  profileConfigured: boolean;
+}): WorkspaceSetupAction[] {
+  return [
+    ...(input.profileConfigured ? [] : [{ href: studioPath('models'), id: 'profile' as const }]),
+    ...(input.meshAgentConnected ? [] : [{ href: studioPath('meshAgents'), id: 'mesh-agent' as const }])
+  ];
+}
 
 export function resolveWorkspaceLaunchTarget(input: {
   mode: 'agent' | 'project';

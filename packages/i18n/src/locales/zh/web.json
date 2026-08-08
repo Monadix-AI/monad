@@ -1218,6 +1218,8 @@
   "web.workspace.openStudio": "打开 Studio",
   "web.workspace.startNewChat": "开始",
   "web.workspace.newAgentSession": "新建直接 session",
+  "web.workspace.setupProfileAction": "设置模型 Profile",
+  "web.workspace.connectMeshAgentAction": "连接 Mesh Agent provider",
   "web.workplace.projectsLabel": "多 agent",
   "web.workplace.projectsTitle": "项目",
   "web.workplace.experience.chat": "Project session",

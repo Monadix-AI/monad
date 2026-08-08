@@ -1,7 +1,6 @@
 import type { MonadAuth, MonadConfig } from '@monad/environment';
 
 import { join } from 'node:path';
-import { DEFAULT_SAMPLE_PROVIDER_ID } from '@monad/environment';
 import { DEFAULT_SKILL_MARKETPLACE_SOURCE, skillMarketplaceSourceMeta } from '@monad/protocol';
 
 import { type SkillInstallRecord, skillInstallRecordSchema } from '#/capabilities/skills/install/index.ts';
@@ -33,7 +32,7 @@ export function resolveUsableInstallReviewModel(cfg: MonadConfig, _auth: MonadAu
   ];
   for (const profile of profiles) {
     const provider = cfg.model.providers.find((p) => p.id === profile.routes.chat.provider);
-    if (!provider || provider.id === DEFAULT_SAMPLE_PROVIDER_ID) continue;
+    if (!provider) continue;
     if (provider.credentials.some((credential) => credential.authType !== 'admin_api_key')) {
       return profile.alias;
     }
