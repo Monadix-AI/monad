@@ -29,7 +29,6 @@ import {
 } from '#/capabilities/tools';
 import { HandlerError } from '#/handlers/handler-error.ts';
 import { createManagedMeshAgentJoin } from '#/handlers/session/handlers/managed-mesh-agent-join.ts';
-import { mintTemplateSessionMember } from '#/handlers/session/handlers/session-member-roster.ts';
 import { createSessionMembersHandlers } from '#/handlers/session/handlers/session-members.ts';
 import { assertSessionWriteAuthority } from '#/handlers/session/transport-authority.ts';
 import { SessionUiProjector } from '#/handlers/session/ui-projection.ts';
@@ -273,15 +272,13 @@ export function createLifecycleHandlers(ctx: SessionContext) {
       title,
       origin,
       cwd,
-      id,
-      memberPolicy = 'inherit-project'
+      id
     }: {
       projectId: ProjectId;
       title: string;
       origin?: OperationSource;
       cwd?: string;
       id?: SessionId;
-      memberPolicy?: 'inherit-project' | 'empty';
     }) {
       const project = store.getWorkplaceProject(projectId);
       if (!project) {
@@ -290,12 +287,6 @@ export function createLifecycleHandlers(ctx: SessionContext) {
       const cwdInput = cwd?.trim() ? cwd : project.cwd;
       const resolvedCwd = cwdInput ? resolveWorkspaceDir(cwdInput, undefined) : undefined;
       const session = await agent.sessions.createForProject(projectId, title, origin, resolvedCwd, id);
-      const memberCreatedAt = session.createdAt;
-      const inheritedMembers =
-        memberPolicy === 'empty' || project.autoInviteProjectMembers === false ? [] : project.memberTemplates;
-      for (const template of inheritedMembers) {
-        mintTemplateSessionMember(store, session, template, memberCreatedAt);
-      }
       await sessionSandbox?.ensure(session.id);
       if (session.cwd) await applyWorkspaceRuntime(session.id, session.cwd);
       log.info({ sessionId: session.id, projectId, ...originLog(origin) }, 'project session created');

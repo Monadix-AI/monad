@@ -77,8 +77,7 @@ test('project settings changes the experience shared by the project sessions', a
   expect(onModeChange.mock.calls).toEqual([['kanban']]);
 });
 
-test('project settings toggles automatic member invites for new sessions', async () => {
-  const updateProjectAutoInviteMembers = mock((_checked: boolean) => Promise.resolve());
+test('project settings has no automatic member invite option', () => {
   render(
     <ProjectSettings
       room={
@@ -94,14 +93,12 @@ test('project settings toggles automatic member invites for new sessions', async
           ready: true,
           refreshMeshAgentCatalog: () => {},
           removeProjectMember: () => Promise.resolve(),
-          source: { project: { title: 'Invite setting', autoInviteProjectMembers: true } },
-          updateProjectAutoInviteMembers,
+          source: { project: { title: 'Manual member setting' } },
           workdir: { path: undefined }
         } as never
       }
     />
   );
 
-  await userEvent.click(screen.getByRole('switch', { name: 'Add project members to new sessions' }));
-  expect(updateProjectAutoInviteMembers.mock.calls).toEqual([[false]]);
+  expect(screen.queryByRole('switch', { name: 'Add project members to new sessions' })).toBeNull();
 });

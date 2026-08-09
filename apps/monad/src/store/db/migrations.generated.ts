@@ -128,7 +128,15 @@ export const MIGRATIONS: MigrationMeta[] = [
     "bps": true,
     "folderMillis": 1786119163357,
     "hash": "1fca332b5d8c2480060e469717854d9781766819bf0fd066a3a0fc79d2851955"
+  },
+  {
+    "sql": [
+      "ALTER TABLE `workplace_projects` DROP COLUMN `auto_invite_project_members`;"
+    ],
+    "bps": true,
+    "folderMillis": 1786214180921,
+    "hash": "189ba62436f8c1404d6ff968a887fceb33179199377de1327d585d60e5260738"
   }
 ];
 
-export const LATEST_MIGRATION_TIMESTAMP = 1786119163357;
+export const LATEST_MIGRATION_TIMESTAMP = 1786214180921;

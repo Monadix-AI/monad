@@ -327,7 +327,7 @@ test('project deletion preserves storage when child runtime teardown fails', asy
   }
 });
 
-test('createProjectSession clones the project member templates into live session members', async () => {
+test('createProjectSession requires project members to be invited manually', async () => {
   const store = createStore();
   const d = buildHandlers(mockModel(['hi']), undefined, { store });
   const { projectId } = await d.session.createProject({ title: 'p' });
@@ -346,48 +346,13 @@ test('createProjectSession clones the project member templates into live session
 
   const { sessionId } = await d.session.createProjectSession({ projectId, title: 'project session' });
 
-  expect(
-    store.listSessionMembers(sessionId).map((member) => ({
-      memberIdIsDistinct: member.memberId !== member.templateId,
-      templateId: member.templateId,
-      type: member.type,
-      data: member.data
-    }))
-  ).toEqual([
-    {
-      memberIdIsDistinct: true,
-      templateId: 'pmem_codex',
-      type: 'mesh-agent',
-      data: {
-        name: 'codex',
-        displayName: 'Lily',
-        settings: { managedProjectAgent: true }
-      }
-    }
-  ]);
+  expect(store.listSessionMembers(sessionId)).toEqual([]);
+  await d.session.inviteSessionMember({ sessionId, templateId: 'pmem_codex' });
+  expect(store.listSessionMembers(sessionId).map((member) => member.templateId)).toEqual(['pmem_codex']);
   store.close();
 });
 
-test('createProjectSession starts empty when automatic project-member invites are disabled', async () => {
-  const store = createStore();
-  const d = buildHandlers(mockModel(['hi']), undefined, { store });
-  const { projectId } = await d.session.createProject({ title: 'manual sessions' });
-  const updated = await d.session.updateProject({
-    id: projectId,
-    autoInviteProjectMembers: false,
-    memberTemplates: [{ id: 'pmem_codex', type: 'mesh-agent', name: 'codex', displayName: 'Reviewer' }]
-  });
-
-  const { sessionId } = await d.session.createProjectSession({ projectId, title: 'empty session' });
-
-  expect({
-    autoInviteProjectMembers: updated.project.autoInviteProjectMembers,
-    members: store.listSessionMembers(sessionId)
-  }).toEqual({ autoInviteProjectMembers: false, members: [] });
-  store.close();
-});
-
-test('an empty-policy project session keeps its roster when project members change', async () => {
+test('a manually populated project session keeps its roster when project members change', async () => {
   const store = createStore();
   const d = buildHandlers(mockModel(['hi']), undefined, { store });
   const { projectId } = await d.session.createProject({ title: 'manual roster' });
@@ -400,13 +365,7 @@ test('an empty-policy project session keeps its roster when project members chan
   };
   await d.session.updateProject({ id: projectId, memberTemplates: [fable] });
 
-  const { sessionId } = await (
-    d.session.createProjectSession as (input: {
-      projectId: typeof projectId;
-      title: string;
-      memberPolicy: 'empty';
-    }) => Promise<{ sessionId: SessionId }>
-  )({ projectId, title: 'Kanban task', memberPolicy: 'empty' });
+  const { sessionId } = await d.session.createProjectSession({ projectId, title: 'Kanban task' });
   expect(store.listSessionMembers(sessionId)).toEqual([]);
 
   await d.session.inviteSessionMember({ sessionId, templateId: fable.id });
@@ -462,6 +421,10 @@ test('project member updates leave every existing session roster unchanged', asy
   const { sessionId: activeId } = await d.session.createProjectSession({ projectId, title: 'active' });
   const { sessionId: completedId } = await d.session.createProjectSession({ projectId, title: 'completed' });
   const { sessionId: archivedId } = await d.session.createProjectSession({ projectId, title: 'archived' });
+  for (const sessionId of [activeId, completedId, archivedId]) {
+    await d.session.inviteSessionMember({ sessionId, templateId: fable.id });
+    await d.session.inviteSessionMember({ sessionId, templateId: gpt.id });
+  }
   await d.session.update({ id: completedId, state: 'completed' });
   await d.session.update({ id: archivedId, archived: true });
   const now = new Date().toISOString();

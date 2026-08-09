@@ -238,7 +238,6 @@ export function useProject(
     removeProjectMember,
     updateProjectMemberSettings,
     updateProjectMemberIdentity,
-    updateProjectAutoInviteMembers,
     sendMeshAgentInput,
     stopMeshAgent
   } = useProjectActions({
@@ -306,7 +305,6 @@ export function useProject(
       removeProjectMember,
       updateProjectMemberSettings,
       updateProjectMemberIdentity,
-      updateProjectAutoInviteMembers,
       sendMeshAgentInput,
       stopMeshAgent,
       refreshMeshAgentCatalog,
@@ -363,7 +361,6 @@ export function useProject(
       removeProjectMember,
       updateProjectMemberSettings,
       updateProjectMemberIdentity,
-      updateProjectAutoInviteMembers,
       sendMeshAgentInput,
       stopMeshAgent,
       refreshMeshAgentCatalog

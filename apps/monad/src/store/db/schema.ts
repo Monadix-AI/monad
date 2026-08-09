@@ -67,7 +67,6 @@ export const workplaceProjects = sqliteTable(
     cwd: text('cwd'),
     origin: text('origin'),
     memberTemplates: text('member_templates').notNull().default('[]'),
-    autoInviteProjectMembers: integer('auto_invite_project_members').notNull().default(1),
     sortRank: integer('sort_rank').notNull().default(0),
     createdAt: text('created_at').notNull(),
     updatedAt: text('updated_at').notNull()

@@ -1,0 +1,1 @@
+ALTER TABLE `workplace_projects` DROP COLUMN `auto_invite_project_members`;

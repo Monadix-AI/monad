@@ -116,7 +116,8 @@ test('generated migrations exactly embed the source Drizzle history', () => {
   expect(journal.entries.map((entry) => entry.tag)).toEqual([
     '0000_initial-schema',
     '0001_manual-data',
-    '0002_boring_true_believers'
+    '0002_boring_true_believers',
+    '0003_safe_arclight'
   ]);
   expect(LATEST_MIGRATION_TIMESTAMP).toBe(newest.when);
   expect(MIGRATIONS).toEqual(
@@ -403,19 +404,25 @@ test('initial schema applies current defaults', () => {
   });
 });
 
-test('manual migration adds the auto-invite default to the generated project schema', () => {
+test('latest migration removes the legacy auto-invite project setting without losing projects', () => {
   const sqlite = new Database(':memory:');
   applyMigration(sqlite, 0);
   applyMigration(sqlite, 1);
 
   sqlite.exec(`
     INSERT INTO workplace_projects (id, title, state, created_at, updated_at)
-    VALUES ('project-auto-invite', 'Auto invite', 'active', '2026-08-06T00:00:00.000Z', '2026-08-06T00:00:00.000Z');
+    VALUES ('project-manual-members', 'Manual members', 'active', '2026-08-06T00:00:00.000Z', '2026-08-06T00:00:00.000Z');
   `);
+  applyMigration(sqlite, 2);
+  applyMigration(sqlite, 3);
 
-  expect(
-    sqlite.prepare('SELECT auto_invite_project_members FROM workplace_projects WHERE id = ?').get('project-auto-invite')
-  ).toEqual({ auto_invite_project_members: 1 });
+  const columns = (sqlite.prepare('PRAGMA table_info(workplace_projects)').all() as { name: string }[]).map(
+    (row) => row.name
+  );
+  expect(columns).not.toContain('auto_invite_project_members');
+  expect(sqlite.prepare('SELECT title FROM workplace_projects WHERE id = ?').get('project-manual-members')).toEqual({
+    title: 'Manual members'
+  });
 });
 
 test('runtime migrator applies the custom FTS migration and stays idempotent', () => {

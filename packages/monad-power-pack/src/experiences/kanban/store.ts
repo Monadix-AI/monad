@@ -85,8 +85,7 @@ export class KanbanStore {
     if (!sessionId) {
       const created = await this.context.projectSessions.create(input.projectId, {
         title: input.title,
-        idempotencyKey: `kanban:create:${taskId}`,
-        memberPolicy: 'empty'
+        idempotencyKey: `kanban:create:${taskId}`
       });
       const bound: ProvisionRecord = { ...provision.value, sessionId: created.id };
       await this.context.experienceState.compareAndSwap({

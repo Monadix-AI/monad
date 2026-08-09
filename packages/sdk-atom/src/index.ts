@@ -471,7 +471,6 @@ export interface ProjectSessionOperations {
       title: string;
       cwd?: string;
       idempotencyKey: string;
-      memberPolicy?: 'inherit-project' | 'empty';
     }
   ): Promise<{ id: string }>;
   sendMessage(sessionId: string, input: { text: string; idempotencyKey: string }): Promise<void>;

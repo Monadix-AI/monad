@@ -976,8 +976,6 @@
   "web.workplace.currentMembers": "Current members",
   "web.workplace.projectMembersTitle": "Project members",
   "web.workplace.projectMembersDescription": "A reusable roster for this project. Existing sessions keep their own member list.",
-  "web.workplace.autoInviteProjectMembersTitle": "Add project members to new sessions",
-  "web.workplace.autoInviteProjectMembersDescription": "When enabled, every new session starts with a fresh instance of each project member.",
   "web.workplace.projectSessionBreadcrumb": "Project and session",
   "web.workplace.sessionMemberCount_one": "{count} member in this session",
   "web.workplace.sessionMemberCount_other": "{count} members in this session",
