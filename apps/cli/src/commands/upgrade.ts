@@ -396,7 +396,7 @@ async function pruneBackups(keep: number): Promise<void> {
     const sorted = withMtime.sort((a, b) => b.mtime - a.mtime);
     const toDelete = sorted.slice(keep);
     for (const f of toDelete) await rm(join(backupDir, f.name)).catch(() => {});
-    out(green(t('cli.upgrade.pruned', { deleted: toDelete.length, kept: Math.min(files.length, keep) })));
+    out(green(t('cli.upgrade.pruned', { count: toDelete.length, kept: Math.min(files.length, keep) })));
   } catch {
     out(yellow(t('cli.upgrade.noBackup')));
   }

@@ -93,6 +93,8 @@ export function observation(args: {
   source: ObservationSource;
   providerEventType?: string;
   diagnostic?: AgentObservationDiagnostic;
+  durationMs?: number;
+  hasContent?: boolean;
   createdAt?: string;
   raw?: unknown;
   rawEvents?: unknown[];
@@ -108,6 +110,8 @@ export function observation(args: {
     source: args.source,
     providerEventType: args.providerEventType,
     diagnostic: args.diagnostic,
+    durationMs: args.durationMs,
+    hasContent: args.hasContent,
     createdAt: args.createdAt,
     provenance: { rawEvents: args.rawEvents ?? [args.raw] }
   });
@@ -119,14 +123,18 @@ export function thinkingObservation(args: {
   text?: string;
   source: ObservationSource;
   providerEventType?: string;
+  durationMs?: number;
   createdAt?: string;
   raw?: unknown;
+  rawEvents?: unknown[];
   preserveWhitespace?: boolean;
 }): MeshAgentObservationEvent[] {
+  const hasContent = !!args.text?.trim();
   return observation({
     ...args,
     role: 'agent',
-    text: args.text ?? 'Thinking…',
+    text: hasContent ? args.text : 'Thinking…',
+    ...(hasContent ? {} : { hasContent: false }),
     providerEventType: args.providerEventType ?? 'thinking'
   });
 }

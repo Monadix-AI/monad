@@ -269,12 +269,12 @@ function patchSummary(output: FileMutationBatchResult): string {
   const delta = `${output.summary.added} added, ${output.summary.removed} removed`;
   const failed = output.failed > 0 ? `, ${output.failed} failed` : '';
   const warningCount = output.files.filter((file) => file.status === 'ok' && file.warning).length;
-  const warnings = warningCount > 0 ? `, ${warningCount} warning${warningCount === 1 ? '' : 's'}` : '';
+  const warnings = warningCount > 0 ? `, warnings=${warningCount}` : '';
   const warning =
     output.failed > 0 && output.succeeded > 0
       ? ' Some files were already modified; inspect per-file errors before retrying.'
       : '';
-  return `Patched ${output.succeeded}/${output.files.length} file${output.files.length === 1 ? '' : 's'} (${delta}${failed}${warnings}).${warning}`;
+  return `Patched files=${output.succeeded}/${output.files.length} (${delta}${failed}${warnings}).${warning}`;
 }
 
 function mutationError(op: PatchOp, err: unknown): FileMutationError {

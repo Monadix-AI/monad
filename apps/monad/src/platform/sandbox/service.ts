@@ -131,7 +131,7 @@ export async function createSandbox(
         ...(mitm ? caTrustEnv(mitm.caCertPath) : {})
       });
       logger.info(
-        `monad: egress filtered via local proxy :${proxy.port} (${cfg.sandbox.allowedDomains.length} domain(s) allowed)` +
+        `monad: egress filtered via local proxy :${proxy.port} (allowedDomains=${cfg.sandbox.allowedDomains.length})` +
           (mitm ? ' — TLS termination on' : '')
       );
     } else {

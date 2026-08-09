@@ -121,6 +121,6 @@ export async function checkContradictionsForScopes(deps: CheckContradictionsDeps
     deps.mark(s.scope, new Map(hits.map((h) => [h.lawId, h.factContent])));
     flagged += hits.length;
   }
-  deps.log.info(`contradict: flagged ${flagged} law(s)`);
+  deps.log.info(`contradict: flaggedLaws=${flagged}`);
   return { flagged };
 }

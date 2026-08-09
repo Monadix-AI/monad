@@ -223,7 +223,8 @@ export class CodexAppServerDriver implements ResidentProviderDriver {
         ...((this.context.modelId ?? this.context.modelName)
           ? { model: this.context.modelId ?? this.context.modelName }
           : {}),
-        ...(this.context.reasoningEffort ? { effort: this.context.reasoningEffort } : {})
+        ...(this.context.reasoningEffort ? { effort: this.context.reasoningEffort } : {}),
+        summary: 'auto'
       },
       'turn'
     );

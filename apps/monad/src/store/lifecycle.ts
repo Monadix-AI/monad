@@ -88,7 +88,7 @@ export async function createDataLayer(options: DataLayerOptions): Promise<DataLa
 
   const store = createStore({ path: paths.db });
   const orphaned = store.failOrphanedStreamingMessages(new Date().toISOString());
-  if (orphaned > 0) logger.warn(`monad: failed ${orphaned} interrupted in-flight message(s) from a previous run`);
+  if (orphaned > 0) logger.warn(`monad: failed interrupted in-flight messages=${orphaned} from a previous run`);
 
   const report = await checkAndRepair(paths, store);
   if (report.auth === 'repaired') {

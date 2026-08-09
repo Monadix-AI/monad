@@ -42,6 +42,7 @@ async function readOne(path: string): Promise<SendMessageAttachment> {
 export async function resolveAttachments(value: unknown): Promise<SendMessageAttachment[] | undefined> {
   const paths = flagPaths(value);
   if (paths.length === 0) return undefined;
-  if (paths.length > MESSAGE_ATTACHMENT_MAX) throw usageError(t('cli.attach.tooMany', { max: MESSAGE_ATTACHMENT_MAX }));
+  if (paths.length > MESSAGE_ATTACHMENT_MAX)
+    throw usageError(t('cli.attach.tooMany', { count: MESSAGE_ATTACHMENT_MAX }));
   return Promise.all(paths.map(readOne));
 }

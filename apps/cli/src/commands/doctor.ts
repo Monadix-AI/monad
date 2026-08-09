@@ -99,8 +99,7 @@ export const command: CommandDef = {
         checks.push({
           name: 'model',
           ok: configured > 0,
-          detail:
-            configured > 0 ? `${configured} profile(s)` : 'no model profile — run `monad init` or `monad model set`'
+          detail: configured > 0 ? `profiles=${configured}` : 'no model profile — run `monad init` or `monad model set`'
         });
         checks.push({
           name: 'agent',
@@ -144,18 +143,22 @@ export const command: CommandDef = {
       try {
         const [expiry, fp] = await Promise.all([certExpiry(certPath), certFingerprint(certPath)]);
         const daysLeft = Math.floor((new Date(expiry).getTime() - Date.now()) / 86_400_000);
+        const relativeExpiry = new Intl.RelativeTimeFormat(undefined, { numeric: 'always', style: 'short' }).format(
+          daysLeft,
+          'day'
+        );
         if (daysLeft < 0) {
           checks.push({
             name: 'tls',
             ok: false,
-            detail: `certificate expired ${-daysLeft}d ago (${fp.slice(0, 16)}…)`
+            detail: `certificate ${relativeExpiry} (${fp.slice(0, 16)}…)`
           });
         } else if (daysLeft < 30) {
           checks.push({
             name: 'tls',
             ok: false,
             warn: true,
-            detail: `certificate expires in ${daysLeft}d — run \`monad remote tls renew\``
+            detail: `certificate expires ${relativeExpiry} — run \`monad remote tls renew\``
           });
         } else {
           checks.push({ name: 'tls', ok: true, detail: `valid ${daysLeft}d  ${fp.slice(0, 16)}…` });

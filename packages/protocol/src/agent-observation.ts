@@ -67,6 +67,8 @@ export const agentObservationEventSchema = z.object({
   streaming: z.boolean(),
   // Raw model text — never pre-formatted for a specific surface.
   text: z.string().optional(),
+  durationMs: z.number().nonnegative().optional(),
+  hasContent: z.boolean().optional(),
   tool: agentObservationToolSchema.optional(),
   diagnostic: agentObservationDiagnosticSchema.optional(),
   reason: agentObservationTurnEndReasonSchema.optional(),

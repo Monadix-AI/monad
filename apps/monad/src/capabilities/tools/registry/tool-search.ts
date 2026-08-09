@@ -100,7 +100,7 @@ export function createToolSearchTool(deps: ToolSearchDeps): Tool<{ query: string
       });
 
       return toolResult(
-        `Found ${matched.length} tool(s):\n\n${sections.join('\n\n---\n\n')}\n\nUse tool_call with the exact tool name and args to execute.`
+        `Found tools=${matched.length}:\n\n${sections.join('\n\n---\n\n')}\n\nUse tool_call with the exact tool name and args to execute.`
       );
     }
   };

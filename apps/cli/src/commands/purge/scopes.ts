@@ -61,7 +61,7 @@ export async function purgeSessions(keepLast: number, yes: boolean): Promise<voi
         .prepare('DELETE FROM sessions WHERE id NOT IN (SELECT id FROM sessions ORDER BY created_at DESC LIMIT ?)')
         .run(keepLast);
       json({ purged: 'sessions', keptLast: keepLast, deleted: deleted.changes, backupDir });
-      out(green(t('cli.purgeCmd.sessions.deletedN', { n: deleted.changes })));
+      out(green(t('cli.purgeCmd.sessions.deletedN', { count: deleted.changes })));
     } finally {
       db.close();
     }

@@ -175,9 +175,7 @@ export async function connectMcpServers(
       if (spec.transport === 'http') seenHttp.add(normalizeMcpUrl(spec.url));
       connections.set(spec.name, { spec, conn });
       status.set(spec.name, { state: 'ready' });
-      logger.info(
-        `monad: MCP server "${spec.name}" connected (${conn.tools.length} tool${conn.tools.length === 1 ? '' : 's'})`
-      );
+      logger.info(`monad: MCP server "${spec.name}" connected (tools=${conn.tools.length})`);
     } catch (err) {
       status.set(spec.name, { state: 'failed', error: err instanceof Error ? err.message : String(err) });
       logger.warn(
@@ -246,9 +244,7 @@ export async function reloadConfigMcpServers(
       }
       next.set(name, { spec, conn });
       status.set(name, { state: 'ready' });
-      logger.info(
-        `monad: MCP server "${name}" connected (${conn.tools.length} tool${conn.tools.length === 1 ? '' : 's'})`
-      );
+      logger.info(`monad: MCP server "${name}" connected (tools=${conn.tools.length})`);
     } catch (err) {
       status.set(name, { state: 'failed', error: err instanceof Error ? err.message : String(err) });
       logger.warn(`monad: MCP server "${name}" failed to connect: ${err instanceof Error ? err.message : String(err)}`);
@@ -302,9 +298,7 @@ export async function reconnectOneMcpServer(
     }
     next.set(name, { spec, conn });
     status.set(name, { state: 'ready' });
-    logger.info(
-      `monad: MCP server "${name}" reconnected (${conn.tools.length} tool${conn.tools.length === 1 ? '' : 's'})`
-    );
+    logger.info(`monad: MCP server "${name}" reconnected (tools=${conn.tools.length})`);
   } catch (err) {
     status.set(name, { state: 'failed', error: err instanceof Error ? err.message : String(err) });
     logger.warn(`monad: MCP server "${name}" failed to reconnect: ${err instanceof Error ? err.message : String(err)}`);
@@ -545,9 +539,7 @@ export async function connectFileMcpServers(
         }
         if (spec.url) seenHttp.add(normalizeMcpUrl(spec.url));
         connections.push(conn);
-        logger.info(
-          `monad: file MCP "${name}" (${source}) connected — ${conn.tools.length} tool${conn.tools.length === 1 ? '' : 's'}`
-        );
+        logger.info(`monad: file MCP "${name}" (${source}) connected — tools=${conn.tools.length}`);
       } catch (err) {
         logger.warn(
           `monad: file MCP "${name}" (${source}) failed: ${err instanceof Error ? err.message : String(err)}`

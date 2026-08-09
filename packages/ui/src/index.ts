@@ -240,6 +240,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './comp
 import { UnifiedDiff } from './components/UnifiedDiff';
 import { inferCodeLanguage, parseUnifiedDiff } from './components/unified-diff-model';
 import { WorkspaceMessageCard, WorkspaceSystemEventCard } from './components/WorkspaceMessageCard';
+import { formatMessageTimestamp } from './lib/message-time';
 import { cn } from './lib/utils';
 
 export type {
@@ -423,6 +424,7 @@ export {
   faviconMarkdownComponents,
   fileIconName,
   fileNameFromHref,
+  formatMessageTimestamp,
   hideFailedFavicon,
   ImageZoom,
   Input,

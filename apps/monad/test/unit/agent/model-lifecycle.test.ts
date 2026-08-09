@@ -112,7 +112,7 @@ test('model subsystem cleanup is idempotent', () => {
 
 test('embedding model change warning reports vectors produced by the previous model', () => {
   expect(createEmbeddingModelChangeWarning('openai:old', 'openai:new', 12)).toBe(
-    'monad: embedding model changed (openai:old → openai:new); 12 existing embedding(s) are stale. ' +
+    'monad: embedding model changed (openai:old → openai:new); staleEmbeddings=12. ' +
       'Re-index from model settings (or POST /v1/settings/model/embeddings/reindex).'
   );
 });

@@ -7,7 +7,8 @@ import {
   providerEpochMsTimestamp,
   rawTextValue,
   recordValue,
-  textValue
+  textValue,
+  thinkingObservation
 } from '../../observation-projection.ts';
 import {
   codexAppServerToolCallObservation,
@@ -18,7 +19,7 @@ import {
 
 type CodexMessageGroup = {
   key: string;
-  kind: 'agent' | 'user';
+  kind: 'agent' | 'reasoning' | 'user';
   raw: Record<string, unknown>[];
   rawLines: string[];
   fragments: string[];
@@ -56,6 +57,13 @@ export function codexItemText(item: Record<string, unknown> | undefined): string
   if (!item) return undefined;
   const direct = rawTextValue(item.text);
   if (direct !== undefined) return direct;
+  if (item.type === 'reasoning' || item.type === 'thinking') {
+    for (const value of [item.summary, item.content]) {
+      if (!Array.isArray(value)) continue;
+      const text = value.filter((part): part is string => typeof part === 'string').join('\n\n');
+      if (text) return text;
+    }
+  }
   const content = item.content;
   if (typeof content === 'string') return content;
   if (!Array.isArray(content)) return undefined;
@@ -77,7 +85,14 @@ function codexObservationGroup(
   const item = recordValue(params.item);
   if (method === 'item/started' || method === 'item/completed') {
     const itemType = textValue(item?.type);
-    const kind = itemType === 'agentMessage' ? 'agent' : itemType === 'userMessage' ? 'user' : undefined;
+    const kind =
+      itemType === 'agentMessage'
+        ? 'agent'
+        : itemType === 'userMessage'
+          ? 'user'
+          : itemType === 'reasoning'
+            ? 'reasoning'
+            : undefined;
     const itemId = textValue(item?.id);
     if (!itemId) return undefined;
     if (!kind && item && isCodexAppServerToolLikeItem(item)) {
@@ -95,6 +110,14 @@ function codexObservationGroup(
     return {
       key: [textValue(params.threadId), textValue(params.turnId), itemId].filter(Boolean).join(':'),
       kind: 'agent'
+    };
+  }
+  if (method === 'item/reasoning/summaryTextDelta' || method === 'item/reasoning/textDelta') {
+    const itemId = textValue(params.itemId);
+    if (!itemId) return undefined;
+    return {
+      key: [textValue(params.threadId), textValue(params.turnId), itemId].filter(Boolean).join(':'),
+      kind: 'reasoning'
     };
   }
   if (CODEX_TOOL_DELTA_METHODS.has(method)) {
@@ -118,10 +141,15 @@ function codexMessageLifecycleText(record: Record<string, unknown>): {
   const method = textValue(record.method);
   const params = recordValue(record.params);
   if (!method || !params) return {};
-  if (method === 'item/agentMessage/delta') return { fragment: rawTextValue(params.delta, params.text) };
+  if (
+    method === 'item/agentMessage/delta' ||
+    method === 'item/reasoning/summaryTextDelta' ||
+    method === 'item/reasoning/textDelta'
+  )
+    return { fragment: rawTextValue(params.delta, params.text) };
   const item = recordValue(params.item);
   const itemType = textValue(item?.type);
-  if (itemType !== 'agentMessage' && itemType !== 'userMessage') return {};
+  if (itemType !== 'agentMessage' && itemType !== 'reasoning' && itemType !== 'userMessage') return {};
   const text = codexItemText(item);
   if (method === 'item/started')
     return { startedAt: providerEpochMsTimestamp(numberValue(params.startedAtMs)), startedText: text };
@@ -172,6 +200,23 @@ function codexToolGroupAppend(group: CodexToolGroup, entry: MeshAgentObservation
 
 function codexMessageGroupEvent(id: string, group: CodexMessageGroup): MeshAgentObservationEvent[] {
   const text = group.completedText ?? group.startedText ?? group.fragments.join('');
+  if (group.kind === 'reasoning') {
+    const startedAtMs = group.startedAt ? Date.parse(group.startedAt) : Number.NaN;
+    const completedAtMs = group.completedAt ? Date.parse(group.completedAt) : Number.NaN;
+    const durationMs =
+      Number.isFinite(startedAtMs) && Number.isFinite(completedAtMs) && completedAtMs >= startedAtMs
+        ? completedAtMs - startedAtMs
+        : undefined;
+    return thinkingObservation({
+      id: `${id}:json:${group.key}:reasoning`,
+      text,
+      source: 'codex-app-server',
+      providerEventType: 'item/reasoning/delta',
+      durationMs,
+      createdAt: group.completedAt ?? group.startedAt,
+      rawEvents: group.raw
+    });
+  }
   return observation({
     id: `${id}:json:${group.key}:${group.kind}-message`,
     role: group.kind,

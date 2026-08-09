@@ -69,7 +69,7 @@ export function createSessionSandboxService(opts: {
     async sweep(activeSessionIds) {
       if (!enabled) return 0;
       const removed = await sweepOrphanSandboxes(baseDir, activeSessionIds);
-      if (removed > 0) opts.log?.(`reclaimed ${removed} orphan session sandbox root(s)`);
+      if (removed > 0) opts.log?.(`reclaimed orphan session sandbox roots=${removed}`);
       return removed;
     }
   };

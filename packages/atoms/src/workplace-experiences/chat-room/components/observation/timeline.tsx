@@ -115,21 +115,17 @@ export function observationTimelineEntries(
   _provider: string,
   active = false
 ): ObservationTimelineEntry[] {
-  const cards = items;
+  const cards = items.filter((card) => card.kind !== 'system' && card.kind !== 'unknown');
   return cards.map((card, index) => {
     const event = cardEvent(card) ?? cardToolCall(card) ?? cardToolResult(card);
-    const timestampEvent = cardToolResult(card) ?? event;
+    const timestampEvent = event?.kind === 'assistant-message' ? event : undefined;
     const streaming =
       card.kind === 'reasoning' && event ? active && index === cards.length - 1 && card.streaming : card.streaming;
     return {
       id: observationCardIdentity(card),
       kind: 'public',
       card: streaming === card.streaming ? card : { ...card, streaming },
-      timestamp: timestampEvent
-        ? observationTimestampLabel(timestampEvent)
-        : card.at
-          ? formatObservationTime(timestampMsFromIso(card.at) ?? 0)
-          : undefined,
+      timestamp: timestampEvent?.at,
       contractEvents: card.provenance.contractEvents
     };
   });
@@ -331,6 +327,12 @@ function ObservationTimelineCard({
     return (
       <ObservationMessageCard
         messageRole="reasoning"
+        reasoning={{
+          durationMs: entryEvent.durationMs,
+          hasContent: entryEvent.hasContent,
+          streaming: entry.card.streaming,
+          text: entryEvent.text ?? ''
+        }}
         streaming={entry.card.streaming}
         text={entryEvent.text ?? ''}
         timestamp={entry.timestamp}
@@ -502,6 +504,8 @@ function ObservationTimelineRowViewImpl({
         <ObservationMessageCard
           messageRole="agent"
           reasoning={{
+            durationMs: reasoningEvent.durationMs,
+            hasContent: reasoningEvent.hasContent,
             streaming: first.card.streaming,
             text: reasoningEvent.text ?? ''
           }}
@@ -547,24 +551,4 @@ function toolPairName(item: ObservationItem): string {
   const textName = /^Tool call\s+([^\s]+)/.exec((item.text ?? '').trim())?.[1];
   if (textName) return textName;
   return 'tool';
-}
-
-function observationTimestampLabel(item: ObservationItem): string | undefined {
-  const timestamp = timestampMsFromIso(item.at);
-  return timestamp === undefined ? undefined : formatObservationTime(timestamp);
-}
-
-function formatObservationTime(timestamp: number): string {
-  return new Intl.DateTimeFormat(undefined, {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false
-  }).format(new Date(timestamp));
-}
-
-function timestampMsFromIso(value: string | undefined): number | undefined {
-  if (!value) return undefined;
-  const timestamp = Date.parse(value);
-  return Number.isNaN(timestamp) ? undefined : timestamp;
 }

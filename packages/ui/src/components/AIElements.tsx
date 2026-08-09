@@ -220,7 +220,7 @@ export type ReasoningLabels = {
 const defaultReasoningLabels: Required<ReasoningLabels> = {
   thinking: 'Thinking...',
   thoughtFew: 'Thought for a few seconds',
-  thoughtSeconds: (seconds) => `Thought for ${seconds} seconds`
+  thoughtSeconds: (seconds) => `Thought for ${seconds}s`
 };
 
 interface ReasoningContextValue {
@@ -336,6 +336,7 @@ export const Reasoning = memo(
 );
 
 export type ReasoningTriggerProps = ComponentProps<typeof CollapsibleTrigger> & {
+  hideChevron?: boolean;
   labels?: ReasoningLabels;
   getThinkingMessage?: (isStreaming: boolean, duration?: number) => ReactNode;
 };
@@ -352,7 +353,7 @@ function defaultThinkingMessage(labels: ReasoningLabels | undefined, isStreaming
 }
 
 export const ReasoningTrigger = memo(
-  ({ className, children, labels, getThinkingMessage, ...props }: ReasoningTriggerProps) => {
+  ({ className, children, hideChevron = false, labels, getThinkingMessage, ...props }: ReasoningTriggerProps) => {
     const { isStreaming, isOpen, duration } = useReasoning();
 
     return (
@@ -372,10 +373,12 @@ export const ReasoningTrigger = memo(
             {getThinkingMessage
               ? getThinkingMessage(isStreaming, duration)
               : defaultThinkingMessage(labels, isStreaming, duration)}
-            <MorphChevron
-              className="size-4"
-              expanded={isOpen}
-            />
+            {hideChevron ? null : (
+              <MorphChevron
+                className="size-4"
+                expanded={isOpen}
+              />
+            )}
           </>
         )}
       </CollapsibleTrigger>

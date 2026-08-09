@@ -52,6 +52,9 @@ function isCodexIntermediateHistoryRecord(record: Record<string, unknown>, compl
   if (!method) return false;
   const itemId = codexHistoryItemId(record);
   if (!itemId || !completedItemIds.has(itemId)) return false;
+  const params = recordValue(record.params);
+  const item = recordValue(params?.item);
+  if (textValue(item?.type) === 'reasoning' || method.includes('/reasoning/')) return false;
   return (
     method === 'item/started' || method.endsWith('/delta') || method.endsWith('Delta') || method.endsWith('/progress')
   );

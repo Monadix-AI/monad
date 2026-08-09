@@ -156,6 +156,6 @@ export async function inferLawsForScopes(deps: InferLawsDeps): Promise<InferResu
     total += laws.length;
   }
 
-  deps.log.info(`laws: inferred for ${processed} scope(s), ${total} law(s) total, ${skipped} unchanged`);
+  deps.log.info(`laws: processedScopes=${processed}, totalLaws=${total}, unchanged=${skipped}`);
   return { scopesProcessed: processed, laws: total, skipped };
 }

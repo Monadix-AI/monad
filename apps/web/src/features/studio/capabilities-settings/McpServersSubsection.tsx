@@ -299,7 +299,7 @@ function McpServerCard({
         </Badge>
         <div className="ml-auto flex items-center gap-2 text-muted-foreground text-xs">
           <span>{statusLabel}</span>
-          {status?.state === 'ready' ? <span>{t('web.mcp.toolCount', { n: status.toolCount })}</span> : null}
+          {status?.state === 'ready' ? <span>{t('web.mcp.toolCount', { count: status.toolCount })}</span> : null}
         </div>
       </button>
 

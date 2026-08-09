@@ -190,7 +190,7 @@ export async function installSkill(spec: string, deps: InstallSkillDeps): Promis
 
     deps.log?.(
       'info',
-      `installed skill(s) ${installed.join(', ') || 'none'} from ${spec} @ ${staged.commit.slice(0, 7)}`
+      `installed skills=${installed.join(', ') || 'none'} from ${spec} @ ${staged.commit.slice(0, 7)}`
     );
     return { skills: installed, commit: staged.commit, warnings, installed: installed.length > 0 };
   } finally {

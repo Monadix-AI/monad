@@ -68,7 +68,7 @@ export function normalizeMcpResult(raw: CallToolResult): McpToolResult {
       truncated = true;
     }
   }
-  const joined = texts.length ? texts.join('\n') : images.length ? `(returned ${images.length} image(s))` : '';
+  const joined = texts.length ? texts.join('\n') : images.length ? `(returned images=${images.length})` : '';
   const bounded = truncateUtf8(joined, MAX_TEXT_BYTES);
   truncated ||= bounded.truncated;
   if (truncated) log.warn({ blocks: raw.content.length }, 'mcp result exceeded bounded output limits');

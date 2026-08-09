@@ -2,6 +2,7 @@ import type { MeshAgentObservationEvent } from '@monad/protocol';
 import type { ObservationSource } from '../../observation-projection.ts';
 
 import { observation, textValue, thinkingObservation } from '../../observation-projection.ts';
+import { codexItemText } from './observation-message-group.ts';
 
 export type CodexObservationResponseItem = Record<string, unknown> & { type: string };
 
@@ -49,7 +50,7 @@ function codexResponseMessageContentEvents(args: {
     if (item.type === 'reasoning' || item.type === 'thinking') {
       return thinkingObservation({
         id: `${args.id}:json:${args.recordIndex}:thinking:${partIndex}`,
-        text: textValue(item.text, item.content, item.summary),
+        text: codexItemText(item),
         source: args.source,
         providerEventType: String(item.type),
         createdAt: args.createdAt,
@@ -107,7 +108,7 @@ export function codexResponseItem(
   if (item.type === 'reasoning' || item.type === 'thinking') {
     return thinkingObservation({
       id: `${id}:json:${recordIndex}:thinking`,
-      text: textValue(item.text, item.content, item.summary),
+      text: codexItemText(item),
       source,
       providerEventType: String(item.type),
       createdAt,

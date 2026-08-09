@@ -112,8 +112,7 @@ export function SessionTranscript({ model }: { model: SessionTranscriptModel }) 
   const pendingActionCount = model.pendingApprovals.length + model.pendingClarifications.length;
   const locale = useLocale();
   const formatOutlineTime = useCallback(
-    (iso: string | undefined) =>
-      formatMessageTimestamp(iso, locale, { yesterday: t('web.chat.yesterday') }) ?? t('web.chat.timeUnavailable'),
+    (iso: string | undefined) => formatMessageTimestamp(iso, locale) ?? t('web.chat.timeUnavailable'),
     [locale, t]
   );
   const renderedOutlineItems = useMemo(
