@@ -31,7 +31,14 @@ export interface ManagedMeshAgentProjectMember {
   configuredDisplayName?: string;
   settings: Pick<
     WorkplaceProjectMemberSettings,
-    'managedProjectAgent' | 'allowAutopilot' | 'modelName' | 'modelId' | 'reasoningEffort' | 'speed' | 'customPrompt'
+    | 'cwd'
+    | 'managedProjectAgent'
+    | 'allowAutopilot'
+    | 'modelName'
+    | 'modelId'
+    | 'reasoningEffort'
+    | 'speed'
+    | 'customPrompt'
   >;
 }
 
@@ -153,6 +160,7 @@ export function canonicalDirectMembers(
       configuredDisplayName: member.displayName,
       settings: {
         managedProjectAgent: true,
+        ...(member.workingDirectoryOverride ? { cwd: member.workingDirectoryOverride } : {}),
         ...(member.launchOverrides.allowAutopilot !== undefined
           ? { allowAutopilot: member.launchOverrides.allowAutopilot }
           : {}),
@@ -280,7 +288,14 @@ export function meshAgentProjectMemberSettings(
   memberOrTemplateId: string
 ): Pick<
   WorkplaceProjectMemberSettings,
-  'managedProjectAgent' | 'allowAutopilot' | 'modelName' | 'modelId' | 'reasoningEffort' | 'speed' | 'customPrompt'
+  | 'cwd'
+  | 'managedProjectAgent'
+  | 'allowAutopilot'
+  | 'modelName'
+  | 'modelId'
+  | 'reasoningEffort'
+  | 'speed'
+  | 'customPrompt'
 > {
   const member = workplaceProjectMembers(store, sessionId).find(
     (candidate) => candidate.type === 'mesh-agent' && matchesMeshAgentProjectMember(candidate, memberOrTemplateId)
@@ -288,6 +303,7 @@ export function meshAgentProjectMemberSettings(
   if (member?.settings) {
     return {
       managedProjectAgent: member.settings.managedProjectAgent !== false,
+      ...(member.settings.cwd?.trim() ? { cwd: member.settings.cwd.trim() } : {}),
       ...(member.settings.allowAutopilot !== undefined ? { allowAutopilot: member.settings.allowAutopilot } : {}),
       ...(member.settings.modelName ? { modelName: member.settings.modelName } : {}),
       ...(member.settings.modelId ? { modelId: member.settings.modelId } : {}),
@@ -343,6 +359,7 @@ export function managedMeshAgentProjectMembers(
           configuredDisplayName: member.displayName,
           settings: {
             managedProjectAgent: true,
+            ...(member.settings?.cwd?.trim() ? { cwd: member.settings.cwd.trim() } : {}),
             ...(member.settings?.allowAutopilot !== undefined
               ? { allowAutopilot: member.settings.allowAutopilot }
               : {}),

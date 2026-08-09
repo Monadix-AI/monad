@@ -46,7 +46,12 @@ function boundMember(
   store: ReturnType<typeof createStore>,
   sessionId: SessionId,
   memberId: string,
-  opts: { profileId: string; displayName: string; lifecycle?: 'active' | 'left' }
+  opts: {
+    profileId: string;
+    displayName: string;
+    lifecycle?: 'active' | 'left';
+    workingDirectoryOverride?: string;
+  }
 ): void {
   const now = new Date().toISOString();
   store.insertProjectMember({
@@ -57,7 +62,7 @@ function boundMember(
     displayName: opts.displayName,
     customPrompt: null,
     launchOverrides: {},
-    workingDirectoryOverride: null,
+    workingDirectoryOverride: opts.workingDirectoryOverride ?? null,
     lifecycle: 'enabled',
     createdAt: now,
     updatedAt: now
@@ -162,7 +167,7 @@ test('managed project members keep resolved and configured display names distinc
       name: 'codex',
       displayName: 'Reviewer',
       instanceId: 'pmem_codex_reviewer',
-      settings: { managedProjectAgent: true }
+      settings: { managedProjectAgent: true, cwd: '/tmp/reviewer' }
     },
     createdAt: now,
     updatedAt: now
@@ -186,7 +191,7 @@ test('managed project members keep resolved and configured display names distinc
         templateAgentName: 'codex',
         displayName: 'Reviewer',
         configuredDisplayName: 'Reviewer',
-        settings: { managedProjectAgent: true }
+        settings: { managedProjectAgent: true, cwd: '/tmp/reviewer' }
       }
     ]);
   } finally {
@@ -452,7 +457,11 @@ test('canonicalDirectMembers classifies a spec-backed member as a startable avai
   const sessionId = 'ses_dmtarget0009' as SessionId;
   try {
     boundSession(store, sessionId);
-    boundMember(store, sessionId, 'pmem_claude_rev1', { profileId: 'claude-code', displayName: 'Reviewer' });
+    boundMember(store, sessionId, 'pmem_claude_rev1', {
+      profileId: 'claude-code',
+      displayName: 'Reviewer',
+      workingDirectoryOverride: '/tmp/reviewer'
+    });
     boundMember(store, sessionId, 'pmem_noconfig001', { profileId: 'unconfigured', displayName: 'Nobody' });
 
     const { available, unavailable } = canonicalDirectMembers(store, sessionId, [claudeReviewer]);
@@ -461,10 +470,17 @@ test('canonicalDirectMembers classifies a spec-backed member as a startable avai
         pmid: member.projectMemberId,
         template: member.templateAgentName,
         spec: member.spec.name,
-        runtime: member.runtimeAgentName
+        runtime: member.runtimeAgentName,
+        cwd: member.settings.cwd
       }))
     ).toEqual([
-      { pmid: 'pmem_claude_rev1', template: 'claude-code', spec: 'claude-code', runtime: 'pmem_claude_rev1' }
+      {
+        pmid: 'pmem_claude_rev1',
+        template: 'claude-code',
+        spec: 'claude-code',
+        runtime: 'pmem_claude_rev1',
+        cwd: '/tmp/reviewer'
+      }
     ]);
     // The spec-less member is UNAVAILABLE (connection-required), never silently dropped.
     expect(unavailable.map((member) => ({ pmid: member.projectMemberId, code: member.code }))).toEqual([

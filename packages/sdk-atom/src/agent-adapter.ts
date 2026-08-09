@@ -222,6 +222,7 @@ export interface MeshAgentProviderEventContext {
   providerSessionRef: string;
   workingPath: string;
   env?: Readonly<Record<string, string>>;
+  managedRuntimeWorkspace?: string;
 }
 
 export interface MeshAgentProviderEventPageContext extends MeshAgentProviderEventContext {
@@ -259,11 +260,12 @@ export interface MeshAgentEventSource {
   projectLive(args: {
     id: string;
     output: string;
+    observedAt?: string;
     mode?: 'live' | 'events';
     providerSessionRef?: string;
   }): MeshAgentProjectionPage;
   createLiveProjector?(args: { id: string; providerSessionRef?: string }): {
-    advance(delta: string): MeshAgentProjectionPage;
+    advance(delta: string, observedAt?: string): MeshAgentProjectionPage;
   };
   readPage?(
     context: MeshAgentProviderEventContext,
@@ -310,6 +312,7 @@ export interface MeshAgentSessionUsageSource {
 export type MeshAgentObservationJsonRecordEntry = {
   record: Record<string, unknown>;
   raw: string;
+  observedAt?: string;
 };
 
 export type MeshAgentObservationMessageGroupProjector = {
@@ -406,6 +409,11 @@ export interface MeshAgentManagedEnvContext {
    *  autopilot toggle has no CLI-flag equivalent writes its own
    *  config/state files here and points the child at them via env vars, rather than an argv flag. */
   workspace: string;
+  /** The provider process working directory. This can differ from `workspace`, which is private
+   *  managed runtime state rather than the user's project cwd. */
+  workingPath: string;
+  /** Immutable managed-agent instructions prepared by the daemon for native system-prompt injection. */
+  immutableInstructions: MeshAgentImmutableInstructions;
   /** The resolved `allowAutopilot` outcome for this launch: true → the provider should run unattended
    *  (skip its own approval prompts); false → it should prompt as normal so the daemon's approval
    *  channel (where supported) can project and resolve those requests. */

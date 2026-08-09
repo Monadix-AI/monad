@@ -6,24 +6,59 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { antigravityMeshAgentAdapter } from '../../src/agent-adapters/antigravity/index.ts';
 import { claudeCodeMeshAgentAdapter } from '../../src/agent-adapters/claude-code/index.ts';
 import { codexMeshAgentAdapter } from '../../src/agent-adapters/codex/index.ts';
 import { geminiMeshAgentAdapter } from '../../src/agent-adapters/gemini/index.ts';
 import { monadMeshAgentAdapter } from '../../src/agent-adapters/monad/index.ts';
 import { qwenMeshAgentAdapter } from '../../src/agent-adapters/qwen/index.ts';
 
-function agent(provider: 'codex' | 'claude-code' | 'gemini' | 'qwen'): MeshAgentView {
+function agent(provider: 'antigravity' | 'codex' | 'claude-code' | 'gemini' | 'qwen'): MeshAgentView {
   return {
     name: provider,
     provider,
     productIcon: provider,
-    command: provider === 'claude-code' ? 'claude' : provider,
+    command: provider === 'claude-code' ? 'claude' : provider === 'antigravity' ? 'agy' : provider,
     args: [],
     enabled: true,
     allowAutopilot: false,
     approvalOwnership: 'provider-owned'
   };
 }
+
+test('Antigravity applies the effective working path to every turn launch', () => {
+  const definition = antigravityMeshAgentAdapter.createSessionRuntime?.(agent('antigravity'), {
+    workingPath: '/workspace'
+  });
+  if (definition?.plan.processModel !== 'per-turn') throw new Error('Antigravity per-turn runtime required');
+
+  expect(definition.plan.buildTurnLaunch({}).cwd).toBe('/workspace');
+});
+
+test('Antigravity selects the managed custom agent without folding instructions into user input', () => {
+  const definition = antigravityMeshAgentAdapter.createSessionRuntime?.(agent('antigravity'), {
+    workingPath: '/workspace',
+    extraWorkingPaths: ['/managed'],
+    startInput: {
+      immutableInstructions: { text: 'Managed Antigravity instructions', file: '/managed/GEMINI.md' },
+      initialTurn: { text: 'hello', attachments: [] }
+    }
+  });
+  if (definition?.plan.processModel !== 'per-turn') throw new Error('Antigravity per-turn runtime required');
+
+  expect(definition.plan.buildTurnLaunch({}).args).toEqual([
+    '--output-format',
+    'stream-json',
+    '--agent',
+    'monad-managed',
+    '--add-dir',
+    '/managed'
+  ]);
+  expect(definition.plan.encodeTurnInput?.({ text: 'hello', attachments: [] })).toEqual({
+    delivery: 'argv-tail',
+    values: ['--print', 'hello']
+  });
+});
 
 async function collectResident(driver: ResidentProviderDriver, chunks: string[]): Promise<MeshAgentSessionEvent[]> {
   const events: MeshAgentSessionEvent[] = [];
@@ -943,7 +978,12 @@ describe('Gemini resident ACP session-event runtime', () => {
 
   test('loads managed instructions as additive context without replacing Gemini defaults', () => {
     const root = mkdtempSync(join(tmpdir(), 'monad-gemini-instructions-'));
-    const managedEnv = geminiMeshAgentAdapter.managedRuntime?.env?.({ workspace: root, skipProviderApprovals: true });
+    const managedEnv = geminiMeshAgentAdapter.managedRuntime?.env?.({
+      workspace: root,
+      workingPath: '/workspace',
+      immutableInstructions: { text: 'Managed Gemini instructions', file: join(root, 'GEMINI.md') },
+      skipProviderApprovals: true
+    });
     const settingsFile = join(root, 'gemini-system-settings.json');
     expect(managedEnv).toEqual({ GEMINI_CLI_SYSTEM_SETTINGS_PATH: settingsFile });
     expect(JSON.parse(readFileSync(settingsFile, 'utf8'))).toEqual({
@@ -995,6 +1035,7 @@ describe('Claude Code resident session-event runtime', () => {
         '--output-format',
         'stream-json',
         '--verbose',
+        '--include-partial-messages',
         '--replay-user-messages',
         '--model',
         'sonnet',
@@ -1033,6 +1074,7 @@ describe('Claude Code resident session-event runtime', () => {
       '--output-format',
       'stream-json',
       '--verbose',
+      '--include-partial-messages',
       '--replay-user-messages',
       '--settings',
       '{"fastMode":true}',
@@ -1163,6 +1205,7 @@ describe('Claude Code resident session-event runtime', () => {
       '--output-format',
       'stream-json',
       '--verbose',
+      '--include-partial-messages',
       '--replay-user-messages',
       '--append-system-prompt-file',
       '/managed/GEMINI.md',

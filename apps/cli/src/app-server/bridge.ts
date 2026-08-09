@@ -27,7 +27,7 @@ import { createMonadAppServerConnection, type MonadAppServerClient } from './con
 
 export function createMonadAppServerHttpClient(client: MonadClient): MonadAppServerClient {
   return {
-    async openSession({ agentId, cwd, providerSessionRef, mcpServers }): Promise<SessionId> {
+    async openSession({ agentId, cwd, providerSessionRef, immutableInstructions, mcpServers }): Promise<SessionId> {
       let sessionId: SessionId;
       if (providerSessionRef) {
         const data = getSessionResponseSchema.parse(
@@ -49,11 +49,14 @@ export function createMonadAppServerHttpClient(client: MonadClient): MonadAppSer
           )
         ).sessionId;
       }
-      if (mcpServers?.length) {
+      if (mcpServers?.length || immutableInstructions) {
         requireTreatyData(
-          await client.treaty.v1
-            .sessions({ id: sessionId })
-            .runtime.put({ mcpServers: mcpServers.map((server) => ({ ...server, transport: 'stdio' as const })) })
+          await client.treaty.v1.sessions({ id: sessionId }).runtime.put({
+            ...(mcpServers?.length
+              ? { mcpServers: mcpServers.map((server) => ({ ...server, transport: 'stdio' as const })) }
+              : {}),
+            ...(immutableInstructions ? { immutableInstructions } : {})
+          })
         );
       }
       return sessionId;

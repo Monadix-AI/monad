@@ -2,13 +2,38 @@ import type { MeshAgentObservationEvent } from '@monad/protocol';
 import type { ObservationSource } from '../../observation-projection.ts';
 
 import { observation, textValue, thinkingObservation } from '../../observation-projection.ts';
-import { codexItemText } from './observation-message-group.ts';
+import { codexItemSummaries, codexItemText } from './observation-message-group.ts';
 
 export type CodexObservationResponseItem = Record<string, unknown> & { type: string };
 
 export function isCodexObservationResponseItem(item: unknown): item is CodexObservationResponseItem {
   return (
     !!item && typeof item === 'object' && !Array.isArray(item) && typeof (item as { type?: unknown }).type === 'string'
+  );
+}
+
+function codexReasoningItemEvents(args: {
+  id: string;
+  item: Record<string, unknown>;
+  source: ObservationSource;
+  providerEventType: string;
+  createdAt?: string;
+  raw: unknown;
+}): MeshAgentObservationEvent[] {
+  const summaries = codexItemSummaries(args.item);
+  const projectedSummaries: (string | undefined)[] = summaries.length > 0 ? summaries : [undefined];
+  const text = codexItemText(args.item);
+  const multiple = projectedSummaries.length > 1;
+  return projectedSummaries.flatMap((summary, index) =>
+    thinkingObservation({
+      id: `${args.id}${multiple ? `:summary:${index}` : ''}`,
+      text: index === projectedSummaries.length - 1 ? text : undefined,
+      summary,
+      source: args.source,
+      providerEventType: args.providerEventType,
+      createdAt: args.createdAt,
+      raw: args.raw
+    })
   );
 }
 
@@ -48,9 +73,9 @@ function codexResponseMessageContentEvents(args: {
       });
     }
     if (item.type === 'reasoning' || item.type === 'thinking') {
-      return thinkingObservation({
+      return codexReasoningItemEvents({
         id: `${args.id}:json:${args.recordIndex}:thinking:${partIndex}`,
-        text: codexItemText(item),
+        item,
         source: args.source,
         providerEventType: String(item.type),
         createdAt: args.createdAt,
@@ -106,9 +131,9 @@ export function codexResponseItem(
     });
   }
   if (item.type === 'reasoning' || item.type === 'thinking') {
-    return thinkingObservation({
+    return codexReasoningItemEvents({
       id: `${id}:json:${recordIndex}:thinking`,
-      text: codexItemText(item),
+      item,
       source,
       providerEventType: String(item.type),
       createdAt,

@@ -153,8 +153,9 @@ test('MeshAgent session usage is rebuilt by the adapter for every request', asyn
   }
 });
 
-test('MeshAgent session usage returns no data when the adapter does not implement the existing interface', async () => {
+test('MeshAgent session usage returns no data before the provider session reference is available', async () => {
   const provider = `session-usage-absent-${Date.now()}`;
+  let reads = 0;
   const adapter: MeshAgentProviderAdapter = {
     provider,
     icon: { title: 'Session Usage Absent', path: 'M4 4h16v16H4z' },
@@ -180,7 +181,13 @@ test('MeshAgent session usage returns no data when the adapter does not implemen
       launch: { argv: [configured.command], cwd: testCwd },
       parse: () => 'unknown'
     }),
-    parseAuthStatus: () => 'unknown'
+    parseAuthStatus: () => 'unknown',
+    sessionUsage: {
+      read: async () => {
+        reads += 1;
+        return { total: 1, input: 1, output: 0 };
+      }
+    }
   };
   registerAgentAdapterImpl(adapter);
   const store = createStore();
@@ -210,7 +217,8 @@ test('MeshAgent session usage returns no data when the adapter does not implemen
     agents: async () => [agent(provider)]
   });
   try {
-    expect(await host.sessionUsage('mesh_usageabsent01')).toBeNull();
+    const usage = await host.sessionUsage('mesh_usageabsent01');
+    expect({ reads, usage }).toEqual({ reads: 0, usage: null });
   } finally {
     host.stopAll();
     unregisterAgentAdapterImpl(provider);

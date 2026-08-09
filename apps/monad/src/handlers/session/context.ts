@@ -45,7 +45,7 @@ export interface SessionDeps {
   /** Per-session ephemeral sandbox roots (sandbox mode 'ephemeral'). Absent → no per-session root. */
   sessionSandbox?: SessionSandboxService;
   /** Config file paths — used to resolve agents on session create. */
-  paths?: Pick<MonadPaths, 'config' | 'agentsConfig' | 'mesh'> & Partial<Pick<MonadPaths, 'cache'>>;
+  paths?: Pick<MonadPaths, 'config' | 'agentsConfig' | 'mesh'> & Partial<Pick<MonadPaths, 'cache' | 'home'>>;
   configManager?: ConfigAccess;
   /** Slash-command backend (registry + model/compact/skill hooks). Absent → commands disabled. */
   commands?: CommandBundle;
@@ -86,6 +86,8 @@ export interface SessionDeps {
 /** Execution config applied to every turn of a session, set out-of-band (the ACP bridge pushes the
  * editor's sandbox roots + session-scoped MCP tools via `configureRuntime`). Absent → daemon defaults. */
 interface SessionRuntime {
+  /** Session-scoped instructions composed into the model's system message on every turn. */
+  immutableInstructions?: string;
   /** Replaces the daemon's configured sandbox roots for this session (e.g. the editor's cwd). */
   sandboxRoots?: string[];
   /** Session-scoped tools (e.g. client-provided MCP servers) added to the loop for this session. */

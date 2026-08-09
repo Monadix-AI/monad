@@ -93,20 +93,30 @@ function neutralTool(event: MeshAgentObservationEvent, kind: 'tool-call' | 'tool
       !Array.isArray(part) &&
       (part as Record<string, unknown>).type === 'tool_result'
   ) as Record<string, unknown> | undefined;
+  const declaredName = textValue(
+    toolUse?.name,
+    item?.tool,
+    item?.name,
+    raw?.name,
+    raw?.tool,
+    raw?.toolName,
+    raw?.tool_name,
+    params?.name,
+    params?.tool,
+    sourcePayload?.tool
+  );
+  const projectedName = /^Tool call\s+(.+?)(?=\s+(?:\{|\[|"|-?\d|true\b|false\b|null\b)|$)/.exec(
+    (event.text ?? '').trim()
+  )?.[1];
   const name =
+    (declaredName?.toLowerCase() === 'tool' ? undefined : declaredName) ??
     textValue(
-      toolUse?.name,
-      item?.tool,
-      item?.name,
       item?.type === 'commandExecution' ? item.type : undefined,
-      item?.type === 'command_execution' ? item.type : undefined,
-      raw?.name,
-      raw?.tool,
-      raw?.tool_name,
-      params?.name,
-      params?.tool,
-      sourcePayload?.tool
-    ) ?? 'tool';
+      item?.type === 'command_execution' ? item.type : undefined
+    ) ??
+    projectedName ??
+    declaredName ??
+    'tool';
   const callId = textValue(
     toolUse?.id,
     toolResult?.tool_use_id,
@@ -114,7 +124,9 @@ function neutralTool(event: MeshAgentObservationEvent, kind: 'tool-call' | 'tool
     item?.callId,
     item?.call_id,
     raw?.callId,
+    raw?.toolCallId,
     raw?.call_id,
+    raw?.tool_call_id,
     raw?.tool_use_id,
     // Both delivery windows must yield the same id, or a call read back from a history page won't
     // pair with the result that arrived live.
@@ -142,10 +154,18 @@ function neutralTool(event: MeshAgentObservationEvent, kind: 'tool-call' | 'tool
         ? 'failed'
         : 'completed'
       : undefined;
+  const openClawResultStatus =
+    kind === 'tool-result' && typeof raw?.toolCallId === 'string'
+      ? raw.isError === true
+        ? 'failed'
+        : 'completed'
+      : undefined;
   const metadata = {
     ...(callId ? { callId } : {}),
     ...(textValue(item?.cwd) ? { cwd: textValue(item?.cwd) } : {}),
-    ...((explicitStatus ?? claudeResultStatus) ? { status: explicitStatus ?? claudeResultStatus } : {}),
+    ...((explicitStatus ?? claudeResultStatus ?? openClawResultStatus)
+      ? { status: explicitStatus ?? claudeResultStatus ?? openClawResultStatus }
+      : {}),
     ...(typeof item?.exitCode === 'number'
       ? { exitCode: item.exitCode }
       : typeof item?.exit_code === 'number'
@@ -165,6 +185,7 @@ function neutralTool(event: MeshAgentObservationEvent, kind: 'tool-call' | 'tool
     toolUse?.input ??
     item?.input ??
     item?.arguments ??
+    item?.action ??
     item?.command ??
     raw?.input ??
     raw?.args ??
@@ -179,6 +200,7 @@ function neutralTool(event: MeshAgentObservationEvent, kind: 'tool-call' | 'tool
     item?.aggregated_output ??
     item?.output ??
     item?.result ??
+    item?.results ??
     raw?.output ??
     raw?.result ??
     raw?.content ??
@@ -235,6 +257,7 @@ export function toAgentObservationEvent(
   if (event.diagnostic !== undefined) event_.diagnostic = event.diagnostic;
   if (event.durationMs !== undefined) event_.durationMs = event.durationMs;
   if (event.hasContent !== undefined) event_.hasContent = event.hasContent;
+  if (event.summary !== undefined) event_.summary = event.summary;
   if (event.createdAt !== undefined) event_.at = event.createdAt;
 
   if (kind === 'tool-call' || kind === 'tool-result') {

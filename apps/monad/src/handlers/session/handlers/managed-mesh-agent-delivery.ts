@@ -177,7 +177,7 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
       emitUnavailableConnectionRequired(member);
     }
     if (managedMembers.length === 0) return;
-    if (!meshAgentHost || !session.cwd) return;
+    if (!meshAgentHost) return;
     const retryPending = (member: ManagedMeshAgentProjectMember) => {
       const key = `${session.id}:project:${member.runtimeAgentName}:${resolvedTriggerMessageId ?? deliveredSeq}:${text}`;
       pendingProjectDeliveries.set(key, {
@@ -391,6 +391,7 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
                 runtimeAgentName,
                 templateAgentName,
                 displayName: configuredDisplayName,
+                workingDirectoryOverride: settings.cwd,
                 reasoningEffort: settings.reasoningEffort,
                 modelId: settings.modelId ?? settings.modelName,
                 speed: settings.speed,
@@ -399,6 +400,13 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
                 providerSessionRef: resumeFrom ?? undefined,
                 input: batch?.prompt ?? notice
               });
+              await emitManagedMeshAgentThinking(
+                session.id,
+                nativeSession.id,
+                member.projectMemberId,
+                activeDeliveryId,
+                displayName
+              );
               batch?.accept();
               await writeBatchDirectReceipts(batch);
               if (activeDeliveryId) {
@@ -444,15 +452,6 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
             return;
           }
           await admission.completion;
-          if (nativeSession) {
-            await emitManagedMeshAgentThinking(
-              session.id,
-              nativeSession.id,
-              member.projectMemberId,
-              activeDeliveryId,
-              displayName
-            );
-          }
         } catch (err) {
           batch?.release();
           await handleDeliveryFailure(member, err);
@@ -521,7 +520,7 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
     const existing = managedSessions.find((candidate) => candidate.lifecycle.state === 'active');
     const resumeCandidate = managedSessions.find((candidate) => candidate.providerSessionRef);
     const { spec, runtimeAgentName, templateAgentName, configuredDisplayName, settings } = member;
-    if (!meshAgentHost || !session.cwd) return;
+    if (!meshAgentHost) return;
     const retryPending = () => {
       pendingDirectDeliveries.set(`${session.id}:direct:${message.id}`, {
         session,
@@ -667,6 +666,7 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
             runtimeAgentName,
             templateAgentName,
             displayName: configuredDisplayName,
+            workingDirectoryOverride: settings.cwd,
             reasoningEffort: settings.reasoningEffort,
             modelId: settings.modelId ?? settings.modelName,
             speed: settings.speed,

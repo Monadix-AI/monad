@@ -200,6 +200,7 @@ export function createForwardMeshAgentHandler(
               runtimeAgentName,
               templateAgentName,
               displayName: meshAgentProjectMemberConfiguredDisplayNameForAgent(store, sessionId, runtimeAgentName),
+              workingDirectoryOverride: memberSettings.cwd,
               reasoningEffort: memberSettings.reasoningEffort,
               modelId: memberSettings.modelId ?? memberSettings.modelName,
               speed: memberSettings.speed,

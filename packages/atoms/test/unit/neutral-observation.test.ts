@@ -51,6 +51,26 @@ test('a tool result decodes an output payload', () => {
   expect(neutral).toMatchObject({ kind: 'tool-result', tool: { name: 'bash', output: 'ok' } });
 });
 
+test('a Hermes tool result preserves its snake-case call id for pairing', () => {
+  const output = "Tool 'monad' does not exist.";
+  const neutral = toAgentObservationEvent(
+    event({
+      role: 'tool',
+      providerEventType: 'tool_result',
+      text: output,
+      provenance: {
+        rawEvents: [{ tool_call_id: 'chatcmpl-tool-1', tool_name: null, content: output }]
+      }
+    })
+  );
+
+  expect(neutral).toMatchObject({
+    kind: 'tool-result',
+    text: output,
+    tool: { name: 'tool', callId: 'chatcmpl-tool-1', output }
+  });
+});
+
 test('a terminal record becomes turn-end and derives its reason from the provider raw', () => {
   expect(toAgentObservationEvent(event({ providerEventType: 'turn/completed', role: 'system' }))).toMatchObject({
     kind: 'turn-end',

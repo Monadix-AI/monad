@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { channelIconSchema } from '../channel.ts';
 import {
   meshAgentCapabilitiesSchema,
   meshAgentNameSchema,
@@ -14,6 +15,7 @@ export const invitableMeshAgentSchema = z
     displayName: z.string().min(1).optional(),
     provider: meshAgentProviderSchema,
     productIcon: meshAgentProductIconSchema.optional(),
+    icon: channelIconSchema.optional(),
     enabled: z.boolean(),
     allowAutopilot: z.boolean().default(true),
     capabilities: meshAgentCapabilitiesSchema.optional(),

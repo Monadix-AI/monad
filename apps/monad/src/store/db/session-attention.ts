@@ -195,13 +195,34 @@ export function consumeSessionAttention(
   const consume = sqlite.transaction(() => {
     const rows = sqlite
       .query(
-        `SELECT item_key FROM session_attention_items
-         WHERE session_id = ? AND kind = 'unread' AND item_key IN (${placeholders})
-         ORDER BY occurred_at ASC, item_key ASC`
+        `SELECT attention.item_key,
+                CASE
+                  WHEN attention.source_type = 'message' AND EXISTS (
+                    SELECT 1 FROM messages message
+                    WHERE message.id = attention.source_id
+                      AND message.transcript_target_id = attention.session_id
+                      AND message.role = 'assistant'
+                      AND message.active = 1
+                      AND instr(message.text, 'id="human"') > 0
+                  ) THEN 'mention:' || attention.source_id
+                  ELSE NULL
+                END AS inbox_item_key
+         FROM session_attention_items attention
+         WHERE attention.session_id = ?
+           AND attention.kind = 'unread'
+           AND attention.item_key IN (${placeholders})
+         ORDER BY attention.occurred_at ASC, attention.item_key ASC`
       )
-      .all(sessionId, ...itemKeys) as Array<{ item_key: string }>;
+      .all(sessionId, ...itemKeys) as Array<{ item_key: string; inbox_item_key: string | null }>;
     const consumedItemKeys = rows.map((row) => row.item_key);
     if (consumedItemKeys.length === 0) return { consumedItemKeys };
+    const markInboxRead = sqlite.query(
+      `INSERT INTO inbox_item_reads (item_key, read_at) VALUES (?, ?)
+       ON CONFLICT(item_key) DO UPDATE SET read_at = MIN(inbox_item_reads.read_at, excluded.read_at)`
+    );
+    for (const row of rows) {
+      if (row.inbox_item_key) markInboxRead.run(row.inbox_item_key, at);
+    }
     const consumedPlaceholders = consumedItemKeys.map(() => '?').join(', ');
     sqlite
       .query(

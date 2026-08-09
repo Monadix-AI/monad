@@ -134,8 +134,15 @@ test('reads one claimed recovery batch in unified room and direct ingress order'
   const sqlite = sqliteOf(store);
   try {
     sqlite.exec(`
-      INSERT INTO messages (id, transcript_target_id, role, text, created_at)
-      VALUES ('msg_batch0000001', 'ses_batch0000001', 'user', 'room update', '2026-07-21T00:00:01.000Z');
+      INSERT INTO messages (id, transcript_target_id, role, text, data, created_at)
+      VALUES (
+        'msg_batch0000001',
+        'ses_batch0000001',
+        'user',
+        'room update',
+        '{"humanDisplayName":"Zeke"}',
+        '2026-07-21T00:00:01.000Z'
+      );
       INSERT INTO native_agent_direct_messages
         (id, session_id, mesh_session_id, from_agent, peer, text, created_at)
       VALUES
@@ -172,7 +179,7 @@ test('reads one claimed recovery batch in unified room and direct ingress order'
         createdAt: '2026-07-21T00:00:01.000Z',
         messageSeq,
         messageId: 'msg_batch0000001',
-        sender: { kind: 'human', name: 'Human' }
+        sender: { kind: 'human', name: 'Zeke', id: 'human' }
       },
       {
         ingressSeq: 2,

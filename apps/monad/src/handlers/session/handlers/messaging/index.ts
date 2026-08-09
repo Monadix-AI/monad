@@ -195,11 +195,13 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
     steerMessages,
     continueFromHistory,
     ambientContext,
+    humanDisplayName,
     replyToMessageId,
     onComplete,
     origin
   }: {
     sessionId: SessionId;
+    humanDisplayName?: string;
     onComplete?: (text: string) => void | Promise<void>;
     /** Explicit ingress provenance (channel-routed project sends); absent derives from 'http'. */
     origin?: MessageOrigin;
@@ -268,6 +270,10 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
       ? { data: { attachments: presentedAttachments }, text: text.trim() }
       : undefined;
     if (generate === false) {
+      const messageData =
+        presentation?.data || humanDisplayName
+          ? { ...presentation?.data, ...(humanDisplayName ? { humanDisplayName } : {}) }
+          : undefined;
       const message = await messageIngress.deliver({
         transcriptTargetId: sessionId,
         idempotencyKey: newId('idem'),
@@ -276,7 +282,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
         type: 'text',
         text: presentation?.text ?? effectiveText,
         ...(replyToMessageId === undefined ? {} : { replyToMessageId }),
-        ...(presentation?.data ? { data: presentation.data } : {}),
+        ...(messageData ? { data: messageData } : {}),
         metadata: { origin: messageOriginFor('http', origin) }
       });
       const messageId = message.id;
@@ -457,6 +463,7 @@ export function createMessagingHandlers(ctx: SessionContext, cmd?: MessagingComm
           steers: steers.get(sessionId),
           sandboxRoots,
           defaultCwd: session.cwd,
+          instructions: rt?.immutableInstructions,
           modelOverride: session.model,
           generationParams: session.reasoningEffort ? { reasoningEffort: session.reasoningEffort } : undefined,
           linkAssistantReplies: session.projectId !== null && session.projectId !== undefined,

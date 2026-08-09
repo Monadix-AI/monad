@@ -69,6 +69,7 @@ export const agentObservationEventSchema = z.object({
   text: z.string().optional(),
   durationMs: z.number().nonnegative().optional(),
   hasContent: z.boolean().optional(),
+  summary: z.string().min(1).optional(),
   tool: agentObservationToolSchema.optional(),
   diagnostic: agentObservationDiagnosticSchema.optional(),
   reason: agentObservationTurnEndReasonSchema.optional(),

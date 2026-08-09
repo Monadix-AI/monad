@@ -182,12 +182,8 @@ export function createMessagingNotifyHandlers(
       post?: boolean;
     }) {
       if (!post && !error) {
-        const pendingMessageId = ctx.deps.store.findManagedMeshAgentStreamingMessage(sessionId, meshSessionId);
-        if (!pendingMessageId) return { messageId: null };
-        if (!text.trim()) {
-          const messageId = await retireManagedMeshAgentThinking(sessionId, meshSessionId, projectMemberId);
-          return { messageId };
-        }
+        const messageId = await retireManagedMeshAgentThinking(sessionId, meshSessionId, projectMemberId);
+        return { messageId };
       }
       const completed = await completeManagedMeshAgentThinking({
         sessionId,

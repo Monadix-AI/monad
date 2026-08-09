@@ -22,6 +22,10 @@ import { enabledInvitableMeshAgentConfigs } from '#/services/mesh-agent/invitabl
 type ProjectMemberTemplate = WorkplaceProject['memberTemplates'][number];
 type MemberStore = SessionContext['deps']['store'];
 
+function workingDirectoryOverride(settings?: WorkplaceProjectMemberSettings): string | null {
+  return settings?.cwd?.trim() || null;
+}
+
 // launchOverrides is the member's settings with cwd/customPrompt explicitly removed — they have their
 // own dedicated ProjectMember fields. The omit is done here, not left to a downstream Zod strip, so the
 // projection is a property of this code, not a parser side effect.
@@ -56,7 +60,7 @@ export function buildProjectSessionMember(input: {
     displayName,
     customPrompt: settings?.customPrompt ?? null,
     launchOverrides: toLaunchOverrides(settings),
-    workingDirectoryOverride: settings?.cwd ?? null,
+    workingDirectoryOverride: workingDirectoryOverride(settings),
     lifecycle: 'enabled',
     createdAt: now,
     updatedAt: now
@@ -102,7 +106,7 @@ function templateMemberProjection(template: ProjectMemberTemplate): TemplateMemb
     type: template.type,
     displayName: template.displayName ?? template.name,
     customPrompt: template.settings?.customPrompt ?? null,
-    workingDirectoryOverride: template.settings?.cwd ?? null,
+    workingDirectoryOverride: workingDirectoryOverride(template.settings),
     launchOverrides: toLaunchOverrides(template.settings)
   };
 }
@@ -196,7 +200,7 @@ export function leaveSessionMember(ctx: SessionContext, sessionId: SessionId, me
 
 export function createSessionMemberRoster(ctx: SessionContext, deps: SessionMemberRosterDeps) {
   const {
-    deps: { store, paths }
+    deps: { store, paths, log }
   } = ctx;
 
   async function spawnIfManaged(session: Session, memberId: string): Promise<void> {
@@ -224,8 +228,15 @@ export function createSessionMemberRoster(ctx: SessionContext, deps: SessionMemb
     const existing = store.getSessionMemberByTemplate(session.id, template.id);
     if (existing) return existing;
     const minted = mintTemplateSessionMember(store, session, template, new Date().toISOString());
-    await spawnIfManaged(session, minted.memberId);
-    return store.getSessionMember(session.id, minted.memberId) ?? minted;
+    // The durable member + binding is the invite completion boundary. Runtime preflight/start can take
+    // seconds and must not hold the HTTP response or make the Settings action appear inert.
+    void spawnIfManaged(session, minted.memberId).catch((error) => {
+      log?.warn(
+        { sessionId: session.id, memberId: minted.memberId, err: error },
+        'managed session member background start failed'
+      );
+    });
+    return minted;
   }
 
   return { addProjectSessionMemberBinding };

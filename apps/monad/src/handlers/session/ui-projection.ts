@@ -87,6 +87,7 @@ export class SessionUiProjector {
       setMessage: (item) => this.setMessage(item),
       setCustom: (args) => this.setCustom(args),
       findMessage: (id) => this.findMessage(id),
+      nextMessageSeq: (candidate, messageId) => this.nextMessageSeq(candidate, messageId),
       messageObservationPointers: (payload, existing) => this.messageObservationPointers(payload, existing),
       clearItems: () => this.clearItems()
     };
@@ -141,6 +142,18 @@ export class SessionUiProjector {
   private findMessage(id: string): UIMessageItem | undefined {
     const item = this.items.get(itemKey('message', id));
     return item?.kind === 'message' ? item : undefined;
+  }
+
+  private nextMessageSeq(candidate: string, messageId: string): string {
+    const candidateMs = Date.parse(candidate);
+    if (Number.isNaN(candidateMs)) return candidate;
+    let latestMs = Number.NEGATIVE_INFINITY;
+    for (const item of this.items.values()) {
+      if (item.kind !== 'message' || item.id === messageId) continue;
+      const itemMs = Date.parse(item.seq);
+      if (!Number.isNaN(itemMs)) latestMs = Math.max(latestMs, itemMs);
+    }
+    return new Date(Math.max(candidateMs, latestMs + 1)).toISOString();
   }
 
   private messageObservationPointers(
@@ -297,6 +310,8 @@ export class SessionUiProjector {
         continue;
       }
       const question = questionPresentationFromMessage(message);
+      const status = statusFromMessage(message);
+      const source = sourceFromData(message.data);
       this.upsert({
         kind: 'message',
         id: message.id,
@@ -307,9 +322,7 @@ export class SessionUiProjector {
         ...(message.role === 'assistant' && agentDisplayNameFromData(message.data)
           ? { agentDisplayName: agentDisplayNameFromData(message.data) }
           : {}),
-        ...(message.role === 'assistant' && sourceFromData(message.data)
-          ? { source: sourceFromData(message.data) }
-          : {}),
+        ...(message.role === 'assistant' && source ? { source } : {}),
         ...(message.role === 'assistant' && meshSessionIdFromData(message.data)
           ? { meshSessionId: meshSessionIdFromData(message.data) }
           : {}),
@@ -321,8 +334,11 @@ export class SessionUiProjector {
         ...(message.replyToMessageId ? { replyToMessageId: message.replyToMessageId } : {}),
         replyable: isReplyableMessage(message),
         ...(question ? { question } : {}),
-        status: statusFromMessage(message),
-        seq: message.createdAt
+        status,
+        seq:
+          message.role === 'assistant' && source && (status === 'done' || status === 'error')
+            ? (message.updatedAt ?? message.createdAt)
+            : message.createdAt
       });
       if (message.id === memorySummary?.uptoMessageId) insertSummary();
     }

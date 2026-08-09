@@ -126,6 +126,7 @@ export class MeshSessionEventRuntimeLauncher {
           projectId: args.projectId ?? (args.transcriptTargetId as ProjectId),
           sessionId: args.transcriptTargetId,
           meshSessionId: id,
+          workingPath,
           provider: agent.provider,
           modelName: args.modelName,
           modelId: args.modelId,

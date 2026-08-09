@@ -107,11 +107,14 @@ test('invitable public projection excludes runtime configuration and provider di
     settings: [{ key: 'profile', label: 'Profile', kind: 'text' }]
   };
 
-  expect(toInvitableMeshAgent(view, 'configured-mesh-agent')).toEqual({
+  expect(
+    toInvitableMeshAgent(view, 'configured-mesh-agent', { title: 'Codex adapter', path: 'M1 1h22v22H1z' })
+  ).toEqual({
     name: 'codex',
     displayName: 'Reviewer',
     provider: 'codex',
     productIcon: 'codex',
+    icon: { title: 'Codex adapter', path: 'M1 1h22v22H1z' },
     enabled: true,
     allowAutopilot: false,
     modelOptions: ['gpt-5.5'],

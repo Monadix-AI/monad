@@ -33,6 +33,14 @@ function textFromContent(content: unknown): string | undefined {
   return text.trim() ? text : undefined;
 }
 
+function recordContent(content: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(content)) return [];
+  return content.flatMap((part) => {
+    const item = recordValue(part);
+    return item ? [item] : [];
+  });
+}
+
 function roleFromOpenClawMessage(record: Record<string, unknown>): ObservationRole {
   const role = textValue(record.role)?.toLowerCase();
   if (role === 'user') return 'user';
@@ -86,16 +94,36 @@ export function openClawRecordEvents(
   }
   const providerMessage = recordValue(record.message) ?? record;
   if (typeof providerMessage.role !== 'string') return [];
-  const reasoningText = Array.isArray(providerMessage.content)
-    ? providerMessage.content
-        .map((part) => {
-          const item = recordValue(part);
-          return item?.type === 'reasoning' || item?.type === 'thinking'
-            ? (textValue(item.text, item.thinking) ?? '')
-            : '';
-        })
-        .join('')
-    : undefined;
+  const content = recordContent(providerMessage.content);
+  const providerRole = providerMessage.role.toLowerCase();
+  if (providerRole === 'toolresult' || providerRole === 'tool_result') {
+    return observation({
+      id: `${id}:json:${recordIndex}:tool-result`,
+      role: 'tool',
+      text: textFromContent(providerMessage.content) ?? textValue(providerMessage.text),
+      source: 'unknown',
+      providerEventType: 'tool_result',
+      raw: providerMessage
+    });
+  }
+  const reasoningText = content
+    .map((item) =>
+      item.type === 'reasoning' || item.type === 'thinking' ? (textValue(item.text, item.thinking) ?? '') : ''
+    )
+    .join('');
+  const toolCalls = content.flatMap((item, partIndex) => {
+    if (item.type !== 'toolCall' && item.type !== 'tool_call') return [];
+    const name = textValue(item.name) ?? 'tool';
+    const input = item.arguments ?? item.input;
+    return observation({
+      id: `${id}:json:${recordIndex}:tool-call:${partIndex}`,
+      role: 'tool',
+      text: `Tool call ${name}${input === undefined ? '' : ` ${JSON.stringify(input)}`}`,
+      source: 'unknown',
+      providerEventType: 'tool_call',
+      raw: item
+    });
+  });
   const reasoning = observation({
     id: `${id}:json:${recordIndex}:reasoning`,
     role: 'agent',
@@ -112,7 +140,7 @@ export function openClawRecordEvents(
     providerEventType: 'message',
     raw: record
   });
-  return [...reasoning, ...message];
+  return [...reasoning, ...toolCalls, ...message];
 }
 
 function openClawMessageGroup(

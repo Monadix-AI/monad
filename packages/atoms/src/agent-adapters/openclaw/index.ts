@@ -5,6 +5,7 @@ import type {
   SessionEventRuntimeDefinition
 } from '@monad/sdk-atom';
 
+import { writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
@@ -37,6 +38,7 @@ export function openClawManagedMcpEnv(
   const sourceConfig = context.agentEnv?.OPENCLAW_CONFIG_PATH ?? join(stateDir, 'openclaw.json');
   const managedConfig = join(context.workspace, '.openclaw-managed.json');
   copyManagedConfigFile(sourceConfig, managedConfig, '{}\n');
+  writeFileSync(join(context.workspace, 'AGENTS.md'), context.immutableInstructions.text, { mode: 0o600 });
   const env: Record<string, string> = {
     ...(context.agentEnv ?? {}),
     OPENCLAW_STATE_DIR: stateDir,
@@ -153,6 +155,9 @@ function createOpenClawSessionRuntime(
       providerSessionRef: context.providerSessionRef,
       initialize: {
         workingPath: context.workingPath,
+        ...(context.startInput?.immutableInstructions
+          ? { systemPromptWorkspace: context.env?.MONAD_RUNTIME_WORKSPACE }
+          : {}),
         env: runtimeEnv,
         adapterSettings: agent.adapterSettings
       }

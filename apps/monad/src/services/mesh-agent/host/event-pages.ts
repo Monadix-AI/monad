@@ -24,7 +24,7 @@ import {
 } from '#/services/mesh-agent/host/event-cursor.ts';
 import { conveniencePatchFrame } from '#/services/mesh-agent/host/observation-dual.ts';
 import { getMeshAgentProviderAdapter } from '#/services/mesh-agent/index.ts';
-import { liveRawRowsOutput } from '#/services/mesh-agent/live-raw-store.ts';
+import { managedProjectRuntimeWorkspaces } from '#/services/mesh-agent/managed-project.ts';
 
 // An adapter projector numbers its events by their position in the output IT was handed, so a page
 // projected from an older live-store window restarts that numbering at 0 and its event ids collide
@@ -41,6 +41,7 @@ function providerEventPageRequest(req: MeshAgentEventPageRequest, cursor: EventC
 
 interface MeshAgentEventPagesContext {
   live: Map<string, LiveMeshSession>;
+  monadHome?: string;
   resolveAgentEnv?: (agentName: string) => Promise<Record<string, string> | undefined>;
   store: Store;
 }
@@ -49,15 +50,31 @@ export class MeshAgentEventPages {
   constructor(private readonly context: MeshAgentEventPagesContext) {}
 
   private async providerContext(args: {
+    meshSessionId: string;
     agentName: string;
     providerSessionRef: string;
     workingPath: string;
   }): Promise<MeshAgentProviderEventContext> {
     const env = await this.context.resolveAgentEnv?.(args.agentName);
+    const row = this.context.store.getMeshSession(args.meshSessionId);
+    const session = row ? this.context.store.getSession(row.transcriptTargetId) : null;
+    const managedRuntimeWorkspace =
+      this.context.monadHome &&
+      row?.runtimeRole === 'managed-project-agent' &&
+      row.projectMemberId &&
+      session?.projectId
+        ? managedProjectRuntimeWorkspaces({
+            monadHome: this.context.monadHome,
+            projectId: session.projectId,
+            sessionId: row.transcriptTargetId,
+            agentId: row.projectMemberId
+          }).runtime
+        : undefined;
     return {
       providerSessionRef: args.providerSessionRef,
       workingPath: args.workingPath,
-      ...(env ? { env } : {})
+      ...(env ? { env } : {}),
+      ...(managedRuntimeWorkspace ? { managedRuntimeWorkspace } : {})
     };
   }
 
@@ -92,6 +109,7 @@ export class MeshAgentEventPages {
       if (live.adapter.events.readPage && providerSessionRef && workingPath) {
         const result = await live.adapter.events.readPage(
           await this.providerContext({
+            meshSessionId: id,
             agentName: live.agentName,
             providerSessionRef,
             workingPath
@@ -123,6 +141,7 @@ export class MeshAgentEventPages {
       const local = await adapter.events
         .readPage?.(
           await this.providerContext({
+            meshSessionId: id,
             agentName: row.agentName,
             providerSessionRef: row.providerSessionRef,
             workingPath: row.workingPath
@@ -190,13 +209,24 @@ export class MeshAgentEventPages {
         limit: req.limit,
         sortDirection: 'desc'
       });
-      const output = liveRawRowsOutput(page.rows);
-      return {
-        events: live.adapter.events.projectLive({
+      const projector = live.adapter.events.createLiveProjector?.({
+        id: livePageProjectionId(id, beforePosition.observationEpoch, beforePosition.seq),
+        ...(live.providerSessionRef ? { providerSessionRef: live.providerSessionRef } : {})
+      });
+      let projection: MeshAgentProjectionPage = { events: [] };
+      if (projector) {
+        for (const row of page.rows) projection = projector.advance(row.payload, row.observedAt);
+      } else {
+        const output = page.rows.map((row) => row.payload).join('');
+        projection = live.adapter.events.projectLive({
           id: livePageProjectionId(id, beforePosition.observationEpoch, beforePosition.seq),
           output,
-          mode: 'events'
-        }).events,
+          mode: 'events',
+          ...(page.rows.at(-1)?.observedAt ? { observedAt: page.rows.at(-1)?.observedAt } : {})
+        });
+      }
+      return {
+        events: projection.events,
         ...(page.nextBefore !== undefined
           ? { nextCursor: liveRawStore.cursorBefore(page.nextBefore) }
           : live.providerSessionRef
@@ -211,6 +241,7 @@ export class MeshAgentEventPages {
     if (live.adapter.events.readPage && providerSessionRef && workingPath) {
       const result = await live.adapter.events.readPage(
         await this.providerContext({
+          meshSessionId: id,
           agentName: live.agentName,
           providerSessionRef,
           workingPath
@@ -244,6 +275,7 @@ export class MeshAgentEventPages {
       const local = await adapter.events
         .readPage?.(
           await this.providerContext({
+            meshSessionId: id,
             agentName: row.agentName,
             providerSessionRef: row.providerSessionRef,
             workingPath: row.workingPath

@@ -404,6 +404,9 @@ test('managed project runtime writes MCP configuration for Qwen and Antigravity'
       }
     }
   });
+  expect(await readFile(join(antigravity.workspace, '.agents', 'agents', 'monad-managed', 'agent.md'), 'utf8')).toBe(
+    `---\nname: monad-managed\ndescription: Monad managed runtime instructions\n---\n\n${antigravity.prompt}\n`
+  );
   for (const prepared of [qwen, antigravity]) {
     expect(prepared.prompt).toContain('Use only tools from the `monad` MCP server');
     expect(prepared.prompt).not.toContain('monad project');

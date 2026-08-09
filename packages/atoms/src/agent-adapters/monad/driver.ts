@@ -153,7 +153,8 @@ export class MonadSessionEventDriver implements ResidentProviderDriver {
     private readonly agentId: string,
     private readonly workingPath: string,
     private readonly providerSessionRef?: string,
-    private readonly managedMcpServer?: NativeAgentManagedMcpServer
+    private readonly managedMcpServer?: NativeAgentManagedMcpServer,
+    private readonly immutableInstructions?: string
   ) {}
 
   async openSession() {
@@ -171,6 +172,7 @@ export class MonadSessionEventDriver implements ResidentProviderDriver {
           agentId: this.agentId,
           cwd: this.workingPath,
           ...(context.providerSessionRef ? { providerSessionRef: context.providerSessionRef } : {}),
+          ...(this.immutableInstructions ? { immutableInstructions: this.immutableInstructions } : {}),
           ...(this.managedMcpServer ? { mcpServers: [this.managedMcpServer] } : {})
         })
       )

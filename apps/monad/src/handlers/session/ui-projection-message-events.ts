@@ -49,6 +49,12 @@ function applyCanonicalMessage(
   const meshSessionId = meshSessionIdFromData(message.data);
   const deliveryId = deliveryIdFromData(message.data);
   const question = questionPresentationFromMessage(message);
+  const status = failed ? 'error' : statusFromMessage(message);
+  const isNewlyPublished =
+    source !== undefined &&
+    (status === 'done' || status === 'error') &&
+    existing?.status !== 'done' &&
+    existing?.status !== 'error';
   m.rawStreamingText.delete(message.id);
   m.streamingDeltaIndex.delete(`${message.id}:content`);
   m.streamingDeltaIndex.delete(`${message.id}:reasoning`);
@@ -86,11 +92,8 @@ function applyCanonicalMessage(
           : {}),
       replyable: isReplyableMessage(message),
       ...(question ? { question } : existing?.question ? { question: existing.question } : {}),
-      status: failed ? 'error' : statusFromMessage(message),
-      seq:
-        event.type === 'session.message.completed' && source === 'managed-mesh-agent'
-          ? event.at
-          : (existing?.seq ?? message.createdAt ?? event.at)
+      status,
+      seq: isNewlyPublished ? m.nextMessageSeq(event.at, message.id) : (existing?.seq ?? message.createdAt ?? event.at)
     })
   ];
 }

@@ -40,6 +40,7 @@ function toolCallEvents(id: string, record: Record<string, unknown>, recordIndex
     const fn = item.function && typeof item.function === 'object' ? (item.function as Record<string, unknown>) : {};
     const name = textValue(item.name, item.tool_name, fn.name) ?? 'tool';
     const args = item.input ?? item.args ?? item.arguments ?? fn.arguments;
+    const callId = textValue(item.id, item.call_id, item.tool_call_id);
     const argsText = args === undefined ? '' : ` ${compactJson(args) ?? String(args)}`;
     return observation({
       id: `${id}:json:${recordIndex}:tool-call:${callIndex}`,
@@ -47,7 +48,7 @@ function toolCallEvents(id: string, record: Record<string, unknown>, recordIndex
       text: `Tool call ${name}${argsText}`,
       source: 'unknown',
       providerEventType: 'tool_call',
-      raw: record
+      rawEvents: [{ ...item, name, arguments: args, tool_call_id: callId }, record]
     });
   });
 }

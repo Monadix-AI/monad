@@ -1,4 +1,5 @@
-Provider session resume failed. Monad started a fresh managed project runtime.
-Follow your managed runtime instructions to restore context before replying.
+Managed project session resume failed. A new session started with new messages.
 
 <%= it.notice %>
+
+Follow your managed runtime instructions to restore context before replying.

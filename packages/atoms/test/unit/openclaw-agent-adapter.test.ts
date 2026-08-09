@@ -8,8 +8,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { toAgentObservationEvent } from '../../src/agent-adapters/neutral-observation.ts';
+import { agentObservationCards } from '../../src/agent-adapters/observation-cards.ts';
 import { openClawInitialize, parseOpenClawFrame } from '../../src/agent-adapters/openclaw/gateway/index.ts';
 import { openClawManagedMcpEnv, openClawMeshAgentAdapter } from '../../src/agent-adapters/openclaw/index.ts';
+import { monadMcpToolView } from '../../src/workplace-experiences/chat-room/components/observation/monad-mcp-projection.ts';
 
 const agent = {
   name: 'openclaw',
@@ -33,6 +35,8 @@ test('OpenClaw managed runtime injects Monad MCP through an isolated config file
   const env = openClawManagedMcpEnv(
     {
       workspace,
+      workingPath: '/project',
+      immutableInstructions: { text: 'Managed OpenClaw instructions', file: join(workspace, 'GEMINI.md') },
       skipProviderApprovals: true,
       agentCommand: 'openclaw',
       agentEnv: { OPENCLAW_STATE_DIR: stateDir, OPENCLAW_CONFIG_PATH: sourceConfig },
@@ -52,6 +56,7 @@ test('OpenClaw managed runtime injects Monad MCP through an isolated config file
   const managedConfig = env.OPENCLAW_CONFIG_PATH;
   if (!managedConfig) throw new Error('OpenClaw managed config required');
   expect(readFileSync(managedConfig, 'utf8')).toBe('{"agents":{"defaults":{"model":"test"}}}\n');
+  expect(readFileSync(join(workspace, 'AGENTS.md'), 'utf8')).toBe('Managed OpenClaw instructions');
   expect(commands).toEqual([
     {
       argv: [
@@ -111,13 +116,67 @@ test('OpenClaw gateway creates the exact discovered provider agent session', () 
     adapterSettings: { agentId: 'prd_expert' }
   });
   parseOpenClawFrame({ type: 'event', event: 'connect.challenge', payload: { nonce: 'nonce' } }, handle);
-  const connect = JSON.parse(sent[0] as string) as { id: string };
+  const connect = JSON.parse(sent[0] as string) as { id: string; params: { scopes: string[] } };
+  expect(connect.params.scopes).toEqual(['operator.read', 'operator.write']);
   parseOpenClawFrame({ type: 'res', id: connect.id, ok: true, payload: {} }, handle);
 
-  expect(JSON.parse(sent[1] as string)).toMatchObject({
-    method: 'sessions.create',
-    params: { agentId: 'prd_expert' }
+  const sessionCreate = JSON.parse(sent[1] as string) as { method: string; params: Record<string, unknown> };
+  expect(sessionCreate.method).toBe('sessions.create');
+  expect(sessionCreate.params).toEqual({ agentId: 'prd_expert' });
+});
+
+test('OpenClaw patches a managed session to load AGENTS.md as system context while preserving cwd', () => {
+  const sent: string[] = [];
+  let nextId = 0;
+  const handle: GatewayRuntimeHandle = {
+    gateway: {
+      send: (frame) => {
+        sent.push(frame);
+      },
+      close: () => {}
+    },
+    nextRequestId: () => nextId++,
+    pendingRequests: new Map()
+  };
+
+  openClawInitialize(handle, {
+    workingPath: '/tmp/project',
+    systemPromptWorkspace: '/tmp/managed-prompt',
+    adapterSettings: { agentId: 'prd_expert' }
   });
+  parseOpenClawFrame({ type: 'event', event: 'connect.challenge', payload: { nonce: 'nonce' } }, handle);
+  expect(JSON.parse(sent[0] as string)).toMatchObject({
+    method: 'connect',
+    params: { scopes: ['operator.read', 'operator.write', 'operator.admin'] }
+  });
+  parseOpenClawFrame({ type: 'res', id: '0', ok: true, payload: {} }, handle);
+  const sessionCreate = JSON.parse(sent[1] as string) as {
+    method: string;
+    params: { agentId: string; key: string };
+  };
+  expect(sessionCreate).toMatchObject({ method: 'sessions.create', params: { agentId: 'prd_expert' } });
+  expect(sessionCreate.params.key).toMatch(/^subagent:monad-[0-9a-f-]{36}$/);
+  const providerSessionRef = `agent:prd_expert:${sessionCreate.params.key}`;
+
+  expect(parseOpenClawFrame({ type: 'res', id: '1', ok: true, payload: { key: providerSessionRef } }, handle)).toEqual(
+    []
+  );
+  expect(JSON.parse(sent[2] as string)).toEqual({
+    type: 'req',
+    id: '2',
+    method: 'sessions.patch',
+    params: {
+      key: providerSessionRef,
+      spawnedWorkspaceDir: '/tmp/managed-prompt',
+      spawnedCwd: '/tmp/project'
+    }
+  });
+  expect(parseOpenClawFrame({ type: 'res', id: '2', ok: true, payload: { ok: true } }, handle)).toEqual([
+    {
+      type: 'session_ref',
+      payload: { providerSessionRef, responseId: '2' }
+    }
+  ]);
 });
 
 test('OpenClaw retries a transient startup rejection on the connected gateway', async () => {
@@ -441,4 +500,92 @@ test('OpenClaw history maps user, reasoning blocks, and assistant text separatel
     { kind: 'reasoning', text: 'Inspect the batch.' },
     { kind: 'assistant-message', text: 'Done.' }
   ]);
+});
+
+test('OpenClaw history pairs Monad tool calls and results into the semantic chat card', () => {
+  const input = { text: 'Joined as monad CLI agent', requestId: 'idem_openclaw_join' };
+  const output = { ok: true, message: { id: 'msg_openclaw_join', text: input.text } };
+  const projected = openClawMeshAgentAdapter.events.projectLive({
+    id: 'stored-openclaw-tools',
+    mode: 'events',
+    output: [
+      JSON.stringify({
+        type: 'message',
+        id: 'assistant-tool-call',
+        message: {
+          role: 'assistant',
+          content: [
+            { type: 'thinking', thinking: 'Post the join status.' },
+            {
+              type: 'toolCall',
+              id: 'call-openclaw-project-post',
+              name: 'monad__project_post',
+              arguments: input
+            }
+          ]
+        }
+      }),
+      JSON.stringify({
+        type: 'message',
+        id: 'tool-result',
+        message: {
+          role: 'toolResult',
+          toolCallId: 'call-openclaw-project-post',
+          toolName: 'monad__project_post',
+          content: [{ type: 'text', text: JSON.stringify(output) }],
+          details: { mcpServer: 'monad', mcpTool: 'project_post' },
+          isError: false
+        }
+      })
+    ].join('\n')
+  });
+  const events = projected.events.flatMap((event) => {
+    const neutral = toAgentObservationEvent(event, openClawMeshAgentAdapter.observation);
+    return neutral ? [neutral] : [];
+  });
+  const card = agentObservationCards(events, 'openclaw').find((candidate) => candidate.kind === 'tool');
+  if (!card) throw new Error('OpenClaw Monad tool card required');
+  const call = card.payload.call;
+  if (!call || typeof call !== 'object') throw new Error('OpenClaw Monad tool call required');
+
+  expect({
+    events: events.map(({ kind, tool }) => ({ kind, tool })),
+    view: monadMcpToolView(
+      call as Parameters<typeof monadMcpToolView>[0],
+      card.payload.result as Parameters<typeof monadMcpToolView>[1],
+      card.provenance.contractEvents
+    )
+  }).toEqual({
+    events: [
+      { kind: 'reasoning', tool: undefined },
+      {
+        kind: 'tool-call',
+        tool: {
+          name: 'monad__project_post',
+          input,
+          callId: 'call-openclaw-project-post'
+        }
+      },
+      {
+        kind: 'tool-result',
+        tool: {
+          name: 'monad__project_post',
+          output: [{ type: 'text', text: JSON.stringify(output) }],
+          callId: 'call-openclaw-project-post',
+          status: 'completed'
+        }
+      }
+    ],
+    view: {
+      toolName: 'project_post',
+      callId: 'call-openclaw-project-post',
+      status: 'completed',
+      input,
+      output: [{ type: 'text', text: JSON.stringify(output) }],
+      isError: false,
+      action: 'project-post',
+      text: input.text,
+      attachments: []
+    }
+  });
 });

@@ -18,6 +18,7 @@ import { codexItemText } from './observation-message-group.ts';
 import { codexResponseItem, isCodexObservationResponseItem } from './observation-response-item.ts';
 
 function codexAppServerItemEvents(args: {
+  createdAt?: string;
   id: string;
   record: unknown;
   item: Record<string, unknown>;
@@ -26,9 +27,10 @@ function codexAppServerItemEvents(args: {
 }): MeshAgentObservationEvent[] {
   const type = textValue(args.item.type);
   const itemIndex = args.itemIndex === undefined ? '' : `:${args.itemIndex}`;
-  const createdAt = providerEpochMsTimestamp(
-    numberValue(args.item.completedAtMs, args.item.startedAtMs, args.item.createdAtMs, args.item.updatedAtMs)
-  );
+  const createdAt =
+    providerEpochMsTimestamp(
+      numberValue(args.item.completedAtMs, args.item.startedAtMs, args.item.createdAtMs, args.item.updatedAtMs)
+    ) ?? args.createdAt;
   if (type === 'agentMessage' || type === 'userMessage') {
     return observation({
       id: `${args.id}:json:${args.recordIndex}${itemIndex}:${type}`,
@@ -166,6 +168,12 @@ function codexAppServerTurnEvents(
     ...items.flatMap((item, itemIndex) => {
       if (!item || typeof item !== 'object' || Array.isArray(item)) return [];
       return codexAppServerItemEvents({
+        createdAt:
+          textValue((item as Record<string, unknown>).type) === 'userMessage'
+            ? startedAt
+            : textValue((item as Record<string, unknown>).type) === 'agentMessage'
+              ? (completedAt ?? startedAt)
+              : undefined,
         id,
         record: turnRecord,
         item: item as Record<string, unknown>,

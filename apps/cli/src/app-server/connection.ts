@@ -31,6 +31,7 @@ export interface MonadAppServerClient {
     agentId: AgentId;
     cwd: string;
     providerSessionRef?: SessionId;
+    immutableInstructions?: string;
     mcpServers?: NativeAgentManagedMcpServer[];
   }): Promise<SessionId>;
   subscribeEvents(
@@ -114,6 +115,9 @@ export function createMonadAppServerConnection({ client, write }: MonadAppServer
           agentId: request.params.agentId,
           cwd: request.params.cwd,
           ...(request.params.providerSessionRef ? { providerSessionRef: request.params.providerSessionRef } : {}),
+          ...(request.params.immutableInstructions
+            ? { immutableInstructions: request.params.immutableInstructions }
+            : {}),
           ...(request.params.mcpServers ? { mcpServers: request.params.mcpServers } : {})
         });
         activeSessionId = sessionId;

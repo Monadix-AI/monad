@@ -3,6 +3,9 @@ import type { Event, MeshSessionId, MeshSessionView, Session, SessionId } from '
 import type { SessionContext } from '#/handlers/session/context.ts';
 
 import { expect, test } from 'bun:test';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { builtinAgentAdapters } from '@monad/atoms/agent-adapters';
 
 import { createManagedMeshAgentDelivery } from '#/handlers/session/handlers/managed-mesh-agent-delivery.ts';
@@ -25,14 +28,17 @@ async function rejectUnexpectedDeliveryError(command: { text: string }): Promise
 // path silently dropped it, so a member with `allowAutopilot: false` (delegated approvals) would
 // start in full autopilot when a direct message (not a project message) cold-started its session.
 function buildHarness() {
+  const monadHome = mkdtempSync(join(tmpdir(), 'monad-managed-delivery-'));
   const startCalls: Array<{ agentName: string; allowAutopilot?: boolean }> = [];
+  const workingPaths: string[] = [];
   const lifecycleCalls: Array<{ kind: 'queue' | 'start' | 'settle'; deliveryId: string }> = [];
   const meshAgentHost = {
-    start: async (args: { agentName: string; allowAutopilot?: boolean }) => {
+    start: async (args: { agentName: string; allowAutopilot?: boolean; workingPath: string }) => {
       startCalls.push({
         agentName: args.agentName,
         allowAutopilot: args.allowAutopilot
       });
+      workingPaths.push(args.workingPath);
       return {
         id: 'mesh_codex0000000',
         agentName: args.agentName
@@ -85,7 +91,7 @@ function buildHarness() {
         : null
   };
   const ctx = {
-    deps: { store, log: undefined, meshAgentHost },
+    deps: { store, hookCwd: '/tmp/default-workspace', log: undefined, meshAgentHost, paths: { home: monadHome } },
     managedAgentSessions: {
       queue: ({ deliveryId }: { deliveryId: string }) => lifecycleCalls.push({ kind: 'queue', deliveryId }),
       startTurn: ({ deliveryId }: { deliveryId: string }) => lifecycleCalls.push({ kind: 'start', deliveryId }),
@@ -98,7 +104,7 @@ function buildHarness() {
     makeEmit: () => () => {},
     persistAndRetire: () => {}
   } as unknown as SessionContext;
-  return { delivery: createManagedMeshAgentDelivery(ctx), lifecycleCalls, startCalls };
+  return { delivery: createManagedMeshAgentDelivery(ctx), lifecycleCalls, monadHome, startCalls, workingPaths };
 }
 
 const meshAgents: MeshAgentConfig[] = [
@@ -128,6 +134,20 @@ test('project-message delivery threads a delegated member allowAutopilot to host
     text: 'hi'
   });
   expect(startCalls).toEqual([{ agentName: 'codex', allowAutopilot: false }]);
+});
+
+test('project-message delivery starts a managed member from the project shared workspace when session cwd is unset', async () => {
+  const { delivery, monadHome, startCalls, workingPaths } = buildHarness();
+  await delivery.deliverProjectMessageToManagedMeshAgentMembers({
+    session: { ...sessionWithDelegatedCodexMember(), cwd: undefined } as unknown as Session,
+    meshAgents,
+    text: 'hi'
+  });
+
+  expect({ startCalls, workingPaths }).toEqual({
+    startCalls: [{ agentName: 'codex', allowAutopilot: false }],
+    workingPaths: [join(monadHome, 'workplace', 'prj_delegated00', 'shared')]
+  });
 });
 
 test('project-message runtime failures stay on the MeshSession contract instead of persisting chat errors', async () => {
@@ -208,6 +228,35 @@ test('direct-message delivery threads a delegated member allowAutopilot to host.
     { kind: 'start', deliveryId: 'deliv_test00000000' },
     { kind: 'settle', deliveryId: 'deliv_test00000000' }
   ]);
+});
+
+test('direct-message delivery starts a managed member from the project shared workspace when session cwd is unset', async () => {
+  const { delivery, lifecycleCalls, monadHome, startCalls, workingPaths } = buildHarness();
+  const session = { ...sessionWithDelegatedCodexMember(), cwd: undefined } as unknown as Session;
+  await delivery.deliverDirectMessageToManagedMeshAgentMember({
+    session,
+    meshAgents,
+    message: {
+      id: 'msg_directnocwd1',
+      sessionId: session.id,
+      meshSessionId: 'mesh_sender00001',
+      fromAgent: 'monad',
+      peer: 'codex',
+      text: 'hi',
+      createdAt: '2026-07-21T00:00:00.000Z'
+    },
+    noticeText: 'hi'
+  });
+
+  expect({ lifecycleCalls, startCalls, workingPaths }).toEqual({
+    lifecycleCalls: [
+      { kind: 'queue', deliveryId: 'deliv_test00000000' },
+      { kind: 'start', deliveryId: 'deliv_test00000000' },
+      { kind: 'settle', deliveryId: 'deliv_test00000000' }
+    ],
+    startCalls: [{ agentName: 'codex', allowAutopilot: false }],
+    workingPaths: [join(monadHome, 'workplace', 'prj_delegated00', 'shared')]
+  });
 });
 
 test('direct delivery to a provider-available canonical member cold-starts a runtime, takes ownership, and delivers the DM', async () => {

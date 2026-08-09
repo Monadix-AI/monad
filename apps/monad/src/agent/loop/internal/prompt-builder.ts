@@ -142,6 +142,17 @@ export class PromptBuilder {
     return typeof this.deps.instructions === 'function' ? this.deps.instructions(sessionId) : this.deps.instructions;
   }
 
+  private additionalInstructions(sessionId?: SessionId): string | undefined {
+    return typeof this.deps.additionalInstructions === 'function'
+      ? this.deps.additionalInstructions(sessionId)
+      : this.deps.additionalInstructions;
+  }
+
+  private withAdditionalInstructions(baseSystem: string, sessionId?: SessionId): string {
+    const additionalInstructions = this.additionalInstructions(sessionId);
+    return additionalInstructions ? `${baseSystem}\n\n${additionalInstructions}` : baseSystem;
+  }
+
   private userPromptSlots(sessionId?: SessionId) {
     const resolved =
       typeof this.deps.promptSlots === 'function' ? this.deps.promptSlots(sessionId) : this.deps.promptSlots;
@@ -168,7 +179,7 @@ export class PromptBuilder {
     }
     // NB: ambientContext is intentionally NOT a system slot — it changes every turn and would bust
     // the prompt-cache breakpoint on the system message. It rides the last user message instead.
-    const system = renderAgentSystemPrompt({
+    const baseSystem = renderAgentSystemPrompt({
       instructions: this.systemInstructions(sessionId),
       slots: {
         ...this.userPromptSlots(sessionId),
@@ -181,6 +192,7 @@ export class PromptBuilder {
       skills: withTools ? (this.deps.skills ?? []) : [],
       toolNames: withTools ? this.availableTools().map((t) => t.name) : []
     });
+    const system = this.withAdditionalInstructions(baseSystem, sessionId);
     // Spread `replayed` into a fresh array: the turn appends tool steps to the result, and the
     // cached array must stay immutable for the next turn (and for cross-turn token-cache reuse).
     const systemMsg: ModelMessage = { role: 'system', content: system };
@@ -308,15 +320,18 @@ export class PromptBuilder {
     builder.add(
       'systemPrompt',
       'System prompt',
-      renderAgentSystemPrompt({
-        instructions: this.systemInstructions(sessionId),
-        slots: {
-          ...this.userPromptSlots(sessionId),
-          credentials: this.credentialManifest(sessionId)
-        },
-        skills: withTools ? (this.deps.skills ?? []) : [],
-        toolNames: withTools ? this.availableTools().map((t) => t.name) : []
-      })
+      this.withAdditionalInstructions(
+        renderAgentSystemPrompt({
+          instructions: this.systemInstructions(sessionId),
+          slots: {
+            ...this.userPromptSlots(sessionId),
+            credentials: this.credentialManifest(sessionId)
+          },
+          skills: withTools ? (this.deps.skills ?? []) : [],
+          toolNames: withTools ? this.availableTools().map((t) => t.name) : []
+        }),
+        sessionId
+      )
     );
     if (withTools) {
       for (const spec of this.toolSpecs()) builder.add('systemTools', spec.name, JSON.stringify(spec));

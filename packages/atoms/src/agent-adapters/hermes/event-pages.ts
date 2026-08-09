@@ -10,16 +10,18 @@ type JsonRecord = Record<string, unknown>;
 
 const EVENT_SOURCE = Symbol.for('monad.hermes.eventSource');
 
-function envValue(name: string): string | undefined {
-  return Bun.env[name]?.trim() || undefined;
+type HermesEnvironment = Readonly<Record<string, string | undefined>>;
+
+function envValue(name: string, env?: HermesEnvironment): string | undefined {
+  return env?.[name]?.trim() || Bun.env[name]?.trim() || undefined;
 }
 
-function hermesHome(): string {
-  return envValue('HERMES_HOME') || join(homedir(), '.hermes');
+function hermesHome(env?: HermesEnvironment): string {
+  return envValue('HERMES_HOME', env) || join(homedir(), '.hermes');
 }
 
-function stateDbPath(): string {
-  return join(hermesHome(), 'state.db');
+function stateDbPath(env?: HermesEnvironment): string {
+  return join(hermesHome(env), 'state.db');
 }
 
 function stringValue(value: unknown): string | undefined {
@@ -74,26 +76,26 @@ function sliceMessages(messages: JsonRecord[], args: { limit: number; offset: nu
   };
 }
 
-function apiBaseCandidates(): string[] {
+function apiBaseCandidates(env?: HermesEnvironment): string[] {
   const explicit = [
-    envValue('HERMES_API_BASE_URL'),
-    envValue('HERMES_DASHBOARD_BASE_URL'),
-    envValue('HERMES_BASE_URL')
+    envValue('HERMES_API_BASE_URL', env),
+    envValue('HERMES_DASHBOARD_BASE_URL', env),
+    envValue('HERMES_BASE_URL', env)
   ].filter((value): value is string => !!value);
   if (explicit.length > 0) return explicit;
   return [...explicit, 'http://127.0.0.1:9119'];
 }
 
-function apiHeaders(): Record<string, string> | undefined {
-  const token = envValue('HERMES_DASHBOARD_SESSION_TOKEN') ?? envValue('HERMES_API_TOKEN');
+function apiHeaders(env?: HermesEnvironment): Record<string, string> | undefined {
+  const token = envValue('HERMES_DASHBOARD_SESSION_TOKEN', env) ?? envValue('HERMES_API_TOKEN', env);
   return token ? { Authorization: `Bearer ${token}` } : undefined;
 }
 
-async function fetchJsonWithTimeout(url: string): Promise<unknown> {
+async function fetchJsonWithTimeout(url: string, env?: HermesEnvironment): Promise<unknown> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 750);
   try {
-    const response = await fetch(url, { headers: apiHeaders(), signal: controller.signal });
+    const response = await fetch(url, { headers: apiHeaders(env), signal: controller.signal });
     if (!response.ok) return undefined;
     return await response.json();
   } catch {
@@ -103,10 +105,10 @@ async function fetchJsonWithTimeout(url: string): Promise<unknown> {
   }
 }
 
-async function messagesViaApi(sessionRef: string): Promise<JsonRecord[] | undefined> {
-  for (const base of apiBaseCandidates()) {
+async function messagesViaApi(sessionRef: string, env?: HermesEnvironment): Promise<JsonRecord[] | undefined> {
+  for (const base of apiBaseCandidates(env)) {
     const url = `${base.replace(/\/+$/, '')}/api/sessions/${encodeURIComponent(sessionRef)}/messages`;
-    const payload = recordValue(await fetchJsonWithTimeout(url));
+    const payload = recordValue(await fetchJsonWithTimeout(url, env));
     const rawMessages = Array.isArray(payload?.messages)
       ? payload.messages
       : Array.isArray(payload?.data)
@@ -117,7 +119,7 @@ async function messagesViaApi(sessionRef: string): Promise<JsonRecord[] | undefi
   return undefined;
 }
 
-async function runHermesExport(args: string[]): Promise<string | undefined> {
+async function runHermesExport(args: string[], env?: HermesEnvironment): Promise<string | undefined> {
   let proc: ReturnType<typeof Bun.spawn> | undefined;
   let timer: Timer | undefined;
   const timeout = new Promise<undefined>((resolve) => {
@@ -131,7 +133,7 @@ async function runHermesExport(args: string[]): Promise<string | undefined> {
       stdout: 'pipe',
       stderr: 'ignore',
       stdin: 'ignore',
-      env: Bun.env
+      env: { ...Bun.env, ...env }
     });
     const output = await Promise.race([new Response(proc.stdout as ReadableStream<Uint8Array>).text(), timeout]);
     const exit = await proc.exited;
@@ -201,13 +203,13 @@ function exportSessionWithResumeMessages(sessions: JsonRecord[], sessionRef: str
   return messages.map((item) => normalizeMessageRecord(recordValue(item) ?? {}));
 }
 
-async function messagesViaExport(sessionRef: string): Promise<JsonRecord[] | undefined> {
-  const direct = await runHermesExport(['--session-id', sessionRef]);
+async function messagesViaExport(sessionRef: string, env?: HermesEnvironment): Promise<JsonRecord[] | undefined> {
+  const direct = await runHermesExport(['--session-id', sessionRef], env);
   const directSessions = direct ? parseExportSessions(direct) : [];
   const directMessages = exportSessionWithResumeMessages(directSessions, sessionRef);
   if (directMessages && directMessages.length > 0) return directMessages;
 
-  const all = await runHermesExport([]);
+  const all = await runHermesExport([], env);
   const allSessions = all ? parseExportSessions(all) : [];
   return exportSessionWithResumeMessages(allSessions, sessionRef);
 }
@@ -280,8 +282,8 @@ function resolveResumeSessionId(db: Database, sessionId: string): string {
   return best ?? sessionId;
 }
 
-function messagesViaDb(sessionRef: string): JsonRecord[] | undefined {
-  const dbPath = stateDbPath();
+function messagesViaDb(sessionRef: string, env?: HermesEnvironment): JsonRecord[] | undefined {
+  const dbPath = stateDbPath(env);
   if (!existsSync(dbPath)) return undefined;
   const db = new Database(dbPath, { readonly: true, strict: true });
   try {
@@ -303,19 +305,26 @@ function messagesViaDb(sessionRef: string): JsonRecord[] | undefined {
   }
 }
 
-async function loadHermesMessages(sessionRef: string): Promise<{ source: string; messages: JsonRecord[] } | null> {
-  const api = await messagesViaApi(sessionRef);
+async function loadHermesMessages(
+  sessionRef: string,
+  env?: HermesEnvironment
+): Promise<{ source: string; messages: JsonRecord[] } | null> {
+  const api = await messagesViaApi(sessionRef, env);
   if (api) return { source: 'api', messages: api };
-  const exported = await messagesViaExport(sessionRef);
+  const exported = await messagesViaExport(sessionRef, env);
   if (exported) return { source: 'export', messages: exported };
-  const db = messagesViaDb(sessionRef);
+  const db = messagesViaDb(sessionRef, env);
   return db ? { source: 'db', messages: db } : null;
 }
 
 export async function hermesEventPage(
   context: MeshAgentProviderEventPageRequestContext
 ): Promise<MeshAgentProviderEventPageContext['page'] | null> {
-  const loaded = await loadHermesMessages(context.providerSessionRef);
+  const env =
+    context.managedRuntimeWorkspace && !context.env?.HERMES_HOME
+      ? { ...context.env, HERMES_HOME: join(context.managedRuntimeWorkspace, '.hermes-managed') }
+      : context.env;
+  const loaded = await loadHermesMessages(context.providerSessionRef, env);
   if (!loaded) return null;
   const page = sliceMessages(loaded.messages, {
     limit: context.request.limit,

@@ -858,7 +858,7 @@ for (const kind of TRANSPORTS) {
       expect(wall).toEqual(['codex: looks good', 'claude: I agree']);
     });
 
-    test('replies posted out of fan-out order keep their stable thinking-placeholder order', async () => {
+    test('replies posted out of fan-out order settle in completion order', async () => {
       const handlers = buildHandlers(mockModel());
       t = serveTransport(kind, createHttpTransport(handlers));
       const sessionId = await createSession(t);
@@ -908,8 +908,8 @@ for (const kind of TRANSPORTS) {
       );
       expect(codexPost.status).toBe(200);
 
-      // The canonical terminal update keeps the placeholder's message id and creation timestamp, so a
-      // late viewer sees the same stable order as the live wall instead of messages jumping on settle.
+      // Completed replies are re-stamped when their placeholders settle, so a late viewer sees the
+      // same completion order as the live project wall.
       const events = await t.sse(`/v1/sessions/${sessionId}/ui-stream`, {
         until: (e) => (e as unknown as SessionUiEvent).kind === 'snapshot',
         timeoutMs: 3000
@@ -922,7 +922,7 @@ for (const kind of TRANSPORTS) {
         .sort((a, b) => (a.kind === 'message' && b.kind === 'message' ? a.seq.localeCompare(b.seq) : 0))
         .map((i) => (i.kind === 'message' ? i.parts.find((p) => p.type === 'text') : undefined))
         .map((p) => (p?.type === 'text' ? p.text : undefined));
-      expect(wall).toEqual(['plan the split', 'codex: that split matches mine', 'claude: here is the split']);
+      expect(wall).toEqual(['plan the split', 'claude: here is the split', 'codex: that split matches mine']);
     });
 
     test('project post is streamed live even without a pending wake placeholder', async () => {
@@ -1137,7 +1137,7 @@ for (const kind of TRANSPORTS) {
       });
     });
 
-    test('provider completion settles the managed MeshAgent thinking placeholder with its reply', async () => {
+    test('provider completion without a project post retires the managed MeshAgent thinking placeholder', async () => {
       const handlers = buildHandlers(mockModel());
       t = serveTransport(kind, createHttpTransport(handlers));
       const sessionId = await createSession(t);
@@ -1170,10 +1170,7 @@ for (const kind of TRANSPORTS) {
       });
       disposeEvents();
 
-      expect(await messages(t, sessionId)).toEqual([
-        { role: 'user', text: 'hi' },
-        { role: 'assistant', text: 'No action needed.' }
-      ]);
+      expect(await messages(t, sessionId)).toEqual([{ role: 'user', text: 'hi' }]);
       expect(handlers.store.findManagedMeshAgentStreamingMessage(sessionId, 'mesh_test00000000')).toBeNull();
       expect(turnEvents.map(({ type, payload }) => ({ type, payload }))).toEqual([
         { type: 'mesh.turn_settled', payload: { meshSessionId: 'mesh_test00000000' } }

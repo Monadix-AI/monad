@@ -1,4 +1,4 @@
-New Workplace Project message is available.
+New managed project message is available.
 Review this room broadcast now.
 A broadcast wake does not require a public reply. Reply only if you can add concrete task value; otherwise take no public action.
 

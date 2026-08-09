@@ -1,11 +1,13 @@
 import type { MeshAgentView } from '@monad/protocol';
 import type { MeshAgentSessionEvent } from '@monad/sdk-atom';
 
+import { Database } from 'bun:sqlite';
 import { expect, test } from 'bun:test';
-import { lstatSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { hermesEventPage } from '../../src/agent-adapters/hermes/event-pages.ts';
 import { hermesManagedMcpEnv, hermesMeshAgentAdapter } from '../../src/agent-adapters/hermes/index.ts';
 import { toAgentObservationEvent } from '../../src/agent-adapters/neutral-observation.ts';
 
@@ -41,54 +43,72 @@ test('Hermes managed runtime injects Monad MCP through an isolated profile home'
   const workspace = join(root, 'workspace');
   mkdirSync(sourceHome, { recursive: true });
   mkdirSync(workspace, { recursive: true });
-  writeFileSync(join(sourceHome, 'config.yaml'), 'model:\n  provider: test\n', { mode: 0o600 });
+  writeFileSync(
+    join(sourceHome, 'config.yaml'),
+    'model:\n  provider: test\nmcp_servers:\n  existing:\n    url: https://example.com/mcp\n',
+    { mode: 0o600 }
+  );
   writeFileSync(join(sourceHome, '.env'), 'TEST_KEY=value\n', { mode: 0o600 });
   mkdirSync(join(sourceHome, 'sessions'));
   const commands: unknown[] = [];
-
-  const env = hermesManagedMcpEnv(
-    {
-      workspace,
-      skipProviderApprovals: true,
-      agentCommand: 'hermes',
-      agentEnv: { HERMES_HOME: sourceHome },
-      mcpServer: {
-        name: 'monad',
-        command: 'monad',
-        args: ['native-agent', 'mcp-server'],
-        env: { MONAD_MESH_SESSION_ID: 'mesh_1234567890ab' }
-      }
-    },
-    (command) => {
-      commands.push(command);
-      return { exitCode: 0, stderr: '' };
+  const context = {
+    workspace,
+    workingPath: '/project',
+    immutableInstructions: { text: 'Managed Hermes instructions', file: join(workspace, 'GEMINI.md') },
+    skipProviderApprovals: true,
+    agentCommand: 'hermes',
+    agentEnv: { HERMES_HOME: sourceHome },
+    mcpServer: {
+      name: 'monad',
+      command: 'monad',
+      args: ['native-agent', 'mcp-server'],
+      env: { MONAD_MESH_SESSION_ID: 'mesh_1234567890ab' }
     }
-  );
+  };
+  const run = (command: unknown) => {
+    commands.push(command);
+    return { exitCode: 0, stderr: '' };
+  };
+
+  const env = hermesManagedMcpEnv(context, run);
 
   const managedHome = env.HERMES_HOME;
   if (!managedHome) throw new Error('Hermes managed home required');
-  expect(readFileSync(join(managedHome, 'config.yaml'), 'utf8')).toBe('model:\n  provider: test\n');
+  expect(Bun.YAML.parse(readFileSync(join(managedHome, 'config.yaml'), 'utf8'))).toEqual({
+    model: { provider: 'test' },
+    mcp_servers: {
+      existing: { url: 'https://example.com/mcp' },
+      monad: {
+        command: 'monad',
+        args: ['native-agent', 'mcp-server'],
+        env: { MONAD_MESH_SESSION_ID: 'mesh_1234567890ab' },
+        enabled: true
+      }
+    }
+  });
   expect(readFileSync(join(managedHome, '.env'), 'utf8')).toBe('TEST_KEY=value\n');
   expect(lstatSync(join(managedHome, 'sessions')).isSymbolicLink()).toBe(true);
   expect(commands).toEqual([
     {
-      argv: [
-        'hermes',
-        'mcp',
-        'add',
-        'monad',
-        '--command',
-        'monad',
-        '--env',
-        'MONAD_MESH_SESSION_ID=mesh_1234567890ab',
-        '--args',
-        'native-agent',
-        'mcp-server'
-      ],
+      argv: ['hermes', 'config', 'set', 'agent.system_prompt', 'Managed Hermes instructions'],
       cwd: workspace,
       env: { HERMES_HOME: managedHome }
     }
   ]);
+
+  writeFileSync(join(managedHome, 'state.db'), 'managed provider session history');
+  writeFileSync(join(sourceHome, 'state.db'), 'source profile state');
+  hermesManagedMcpEnv(context, run);
+  expect(readFileSync(join(managedHome, 'state.db'), 'utf8')).toBe('managed provider session history');
+
+  expect(() =>
+    hermesManagedMcpEnv(context, (command) => {
+      const commandHome = command.env.HERMES_HOME;
+      if (!commandHome) throw new Error('Expected managed Hermes home');
+      writeFileSync(join(commandHome, 'config.yaml'), 'agent:\n  system_prompt: overwritten\n');
+      return { exitCode: 0, stderr: '' };
+    })
+  ).toThrow("Hermes managed MCP configuration failed: server 'monad' was not persisted");
 });
 
 test('Hermes discovers default and named profiles with exact profile homes', () => {
@@ -395,6 +415,132 @@ test('Hermes history maps user, reasoning, and assistant content separately', ()
     { kind: 'reasoning', text: 'Check the inbox.' },
     { kind: 'assistant-message', text: 'Done.' }
   ]);
+});
+
+test('Hermes history preserves matching tool call ids for card pairing', () => {
+  const events = hermesMeshAgentAdapter.events.projectLive({
+    id: 'stored-hermes-tools',
+    mode: 'events',
+    output: [
+      JSON.stringify({
+        id: 1,
+        role: 'assistant',
+        content: '',
+        tool_calls: [
+          {
+            id: 'terminal_1',
+            type: 'function',
+            function: { name: 'terminal', arguments: '{"command":"pwd"}' }
+          }
+        ]
+      }),
+      JSON.stringify({
+        id: 2,
+        role: 'tool',
+        content: '/project',
+        tool_call_id: 'terminal_1',
+        tool_name: 'terminal'
+      })
+    ].join('\n')
+  }).events;
+
+  expect(
+    events.map((event) => {
+      const neutral = toAgentObservationEvent(event, hermesMeshAgentAdapter.observation);
+      return neutral?.kind === 'tool-call' || neutral?.kind === 'tool-result'
+        ? { kind: neutral.kind, tool: neutral.tool }
+        : null;
+    })
+  ).toEqual([
+    {
+      kind: 'tool-call',
+      tool: { name: 'terminal', callId: 'terminal_1', input: '{"command":"pwd"}' }
+    },
+    {
+      kind: 'tool-result',
+      tool: { name: 'terminal', callId: 'terminal_1', output: '/project' }
+    }
+  ]);
+});
+
+test('Hermes history backfill reads the managed profile home from provider context', async () => {
+  const runtimeWorkspace = mkdtempSync(join(tmpdir(), 'hermes-history-'));
+  const home = join(runtimeWorkspace, '.hermes-managed');
+  mkdirSync(home, { recursive: true });
+  const db = new Database(join(home, 'state.db'));
+  try {
+    db.run(`
+      CREATE TABLE sessions (
+        id TEXT PRIMARY KEY,
+        session_key TEXT,
+        parent_session_id TEXT,
+        end_reason TEXT,
+        model_config TEXT,
+        source TEXT,
+        started_at REAL
+      )
+    `);
+    db.run(`
+      CREATE TABLE messages (
+        id INTEGER PRIMARY KEY,
+        session_id TEXT,
+        role TEXT,
+        content TEXT,
+        tool_call_id TEXT,
+        tool_calls TEXT,
+        tool_name TEXT,
+        timestamp REAL,
+        reasoning TEXT,
+        reasoning_content TEXT,
+        active INTEGER
+      )
+    `);
+    db.run('INSERT INTO sessions (id, end_reason, model_config, source, started_at) VALUES (?, ?, ?, ?, ?)', [
+      'managed-session',
+      'completed',
+      '{}',
+      'monad',
+      1
+    ]);
+    db.run(
+      'INSERT INTO messages (id, session_id, role, content, timestamp, reasoning_content, active) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [1, 'managed-session', 'assistant', 'Ready.', 2, 'Checked managed history.', 1]
+    );
+  } finally {
+    db.close();
+  }
+
+  try {
+    const page = await hermesEventPage({
+      providerSessionRef: 'managed-session',
+      workingPath: '/project',
+      managedRuntimeWorkspace: runtimeWorkspace,
+      env: {
+        HERMES_API_BASE_URL: 'http://127.0.0.1:1',
+        PATH: '/nonexistent'
+      },
+      request: { limit: 50, sortDirection: 'desc', itemsView: 'full' }
+    });
+    expect({ items: page?.items, nextCursor: page?.nextCursor }).toEqual({
+      items: [
+        {
+          id: 1,
+          session_id: 'managed-session',
+          role: 'assistant',
+          content: 'Ready.',
+          tool_call_id: null,
+          tool_calls: null,
+          tool_name: null,
+          timestamp: 2,
+          reasoning: null,
+          reasoning_content: 'Checked managed history.'
+        }
+      ],
+      nextCursor: undefined
+    });
+  } finally {
+    rmSync(runtimeWorkspace, { recursive: true, force: true });
+  }
 });
 
 test('Hermes gives the reasoning and message events of one record distinct dedupe keys', () => {

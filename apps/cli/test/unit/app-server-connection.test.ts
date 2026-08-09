@@ -32,7 +32,12 @@ class FakeClient implements MonadAppServerClient {
   eventHandler?: (value: Event) => void;
   errorHandler?: (error: { kind: 'fatal' | 'transient'; cause?: unknown; status?: number }) => void;
 
-  async openSession(input: { agentId: AgentId; cwd: string; providerSessionRef?: SessionId }): Promise<SessionId> {
+  async openSession(input: {
+    agentId: AgentId;
+    cwd: string;
+    providerSessionRef?: SessionId;
+    immutableInstructions?: string;
+  }): Promise<SessionId> {
     this.calls.push(['openSession', input]);
     return input.providerSessionRef ?? sessionId;
   }
@@ -98,6 +103,7 @@ test('Monad app-server connection maps a full session lifecycle and stream in or
       agentId: 'agt_1234567890ab',
       cwd: '/workspace',
       afterEventId: 'evt_000000000001',
+      immutableInstructions: 'Managed Monad instructions',
       mcpServers: [
         {
           name: 'monad',
@@ -138,6 +144,7 @@ test('Monad app-server connection maps a full session lifecycle and stream in or
       {
         agentId: 'agt_1234567890ab',
         cwd: '/workspace',
+        immutableInstructions: 'Managed Monad instructions',
         mcpServers: [
           {
             name: 'monad',

@@ -27,6 +27,7 @@ export interface ProjectionMutations {
   setMessage(item: UIMessageItem): SessionUiEvent;
   setCustom(args: SetCustomArgs): SessionUiEvent;
   findMessage(id: string): UIMessageItem | undefined;
+  nextMessageSeq(candidate: string, messageId: string): string;
   messageObservationPointers(
     payload: { meshSessionId?: MeshSessionId; deliveryId?: `deliv_${string}` },
     existing?: UIMessageItem

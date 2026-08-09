@@ -1315,6 +1315,45 @@ test('managed MeshAgent completion moves live order to completion time', () => {
   ]);
 });
 
+test('concurrent managed member replies keep publication order across live updates and hydration', () => {
+  const starts = ['2026-06-24T00:00:01.000Z', '2026-06-24T00:00:02.000Z', '2026-06-24T00:00:03.000Z'];
+  const replies = [
+    liveMessage('msg_FANOUTA00000', 'assistant', '', { agentName: 'a', source: 'mesh-agent-provider' }, starts[0]),
+    liveMessage('msg_FANOUTB00000', 'assistant', '', { agentName: 'b', source: 'mesh-agent-provider' }, starts[1]),
+    liveMessage('msg_FANOUTC00000', 'assistant', '', { agentName: 'c', source: 'mesh-agent-provider' }, starts[2])
+  ];
+  const [replyA, replyB, replyC] = replies;
+  if (!replyA || !replyB || !replyC) throw new Error('expected three fanout replies');
+
+  const live = new SessionUiProjector();
+  for (const reply of replies) live.applyEvent(created(reply));
+  live.applyEvent(completed({ ...replyA, text: 'A' }, agentProducer, '2026-06-24T00:00:09.000Z'));
+  live.applyEvent(completed({ ...replyC, text: 'C' }, agentProducer, '2026-06-24T00:00:10.000Z'));
+  live.applyEvent(completed({ ...replyB, text: 'B' }, agentProducer, '2026-06-24T00:00:10.000Z'));
+
+  const liveSnapshot = live.snapshot();
+  if (liveSnapshot.kind !== 'snapshot') throw new Error('expected snapshot');
+  const livePublicationOrder = liveSnapshot.items
+    .filter((item): item is Extract<UIItem, { kind: 'message' }> => item.kind === 'message')
+    .toSorted((a, b) => a.seq.localeCompare(b.seq))
+    .map((item) => item.id);
+  expect(livePublicationOrder).toEqual([replyA.id, replyC.id, replyB.id]);
+
+  const hydrated = new SessionUiProjector();
+  hydrated.hydrateMessages([
+    { ...replyA, text: 'A', stream: { status: 'complete' }, updatedAt: '2026-06-24T00:00:09.000Z' },
+    { ...replyB, text: 'B', stream: { status: 'complete' }, updatedAt: '2026-06-24T00:00:11.000Z' },
+    { ...replyC, text: 'C', stream: { status: 'complete' }, updatedAt: '2026-06-24T00:00:10.000Z' }
+  ]);
+  const hydratedSnapshot = hydrated.snapshot();
+  if (hydratedSnapshot.kind !== 'snapshot') throw new Error('expected snapshot');
+  const hydratedPublicationOrder = hydratedSnapshot.items
+    .filter((item): item is Extract<UIItem, { kind: 'message' }> => item.kind === 'message')
+    .toSorted((a, b) => a.seq.localeCompare(b.seq))
+    .map((item) => item.id);
+  expect(hydratedPublicationOrder).toEqual([replyA.id, replyC.id, replyB.id]);
+});
+
 test('managed MeshAgent message projections retain delivery observation pointers', () => {
   const deliveryId = newId('deliv');
   const live = new SessionUiProjector();

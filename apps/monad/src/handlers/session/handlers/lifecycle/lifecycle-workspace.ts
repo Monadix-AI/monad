@@ -124,10 +124,20 @@ export function createWorkspaceHandlers(ctx: SessionContext) {
     // The connected MCP servers spawn on the daemon host — acceptable because the bridge only ever
     // targets the LOCAL daemon (launch.ts), so the local editor remains the trust boundary; their
     // tools are high-risk by construction and still route through the oversight gate per call.
-    async configureRuntime({ id, sandboxRoots, mcpServers, delegate }: { id: SessionId } & ConfigureRuntimeRequest) {
+    async configureRuntime({
+      id,
+      sandboxRoots,
+      mcpServers,
+      delegate,
+      immutableInstructions
+    }: { id: SessionId } & ConfigureRuntimeRequest) {
       requireSession(id);
       const previous = runtime.get(id);
-      const hasRuntimeInput = sandboxRoots !== undefined || mcpServers !== undefined || delegate !== undefined;
+      const hasRuntimeInput =
+        sandboxRoots !== undefined ||
+        mcpServers !== undefined ||
+        delegate !== undefined ||
+        immutableInstructions !== undefined;
       disposeRuntime(id); // close any prior session MCP connections before reconfiguring
       const conns: McpConnection[] = [];
       const tools: Tool[] = [];
@@ -158,6 +168,7 @@ export function createWorkspaceHandlers(ctx: SessionContext) {
         toolFilter = isDelegableTool;
       }
       runtime.set(id, {
+        immutableInstructions,
         sandboxRoots,
         extraTools: tools.length ? tools : undefined,
         mcpServers: mcpServers?.length ? mcpServers : undefined,

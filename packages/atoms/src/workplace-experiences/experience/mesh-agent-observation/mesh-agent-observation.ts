@@ -143,13 +143,18 @@ function recordEvents(
   adapterObservation: MeshAgentProviderAdapter['observation'] | undefined,
   record: Record<string, unknown>,
   recordIndex: number
-): MeshAgentObservationEvent[] {
-  const out =
+): { events: MeshAgentObservationEvent[]; handled: boolean } {
+  let matched = false;
+  const events =
     adapterObservation?.recordProjectors.flatMap((recordProjector) => {
       if (recordProjector.supports && !recordProjector.supports(record)) return [];
-      return recordProjector.parse({ id, provider, record, recordIndex });
+      const projected = recordProjector.parse({ id, provider, record, recordIndex });
+      if (recordProjector.supports || projected.length > 0) matched = true;
+      return projected;
     }) ?? [];
-  return out.length > 0 ? out : unknownJsonRpcError(id, record, recordIndex);
+  if (matched) return { events, handled: true };
+  const errors = unknownJsonRpcError(id, record, recordIndex);
+  return { events: errors, handled: errors.length > 0 };
 }
 
 function parsedJsonEvents(args: {
@@ -176,10 +181,10 @@ function parsedJsonEvents(args: {
       group.projector.append(group.state, entry);
       return;
     }
-    const events = recordEvents(args.id, args.provider, args.adapterObservation, entry.record, index);
+    const projection = recordEvents(args.id, args.provider, args.adapterObservation, entry.record, index);
     timeline.push({
       kind: 'events',
-      events: events.length > 0 ? events : rawJsonObservation(args.id, entry.raw, entry.record, index)
+      events: projection.handled ? projection.events : rawJsonObservation(args.id, entry.raw, entry.record, index)
     });
   });
   return timeline.flatMap((entry) => {
@@ -279,7 +284,7 @@ function meshAgentObservationEvents(args: {
         parsedJsonEvents({ id: args.id, provider: args.provider, adapterObservation, entries: projectionEntries }),
         adapterObservation
       )
-    );
+    ).map((event) => (event.createdAt || !args.observedAt ? event : { ...event, createdAt: args.observedAt }));
   }
   if (
     adapterObservation &&
@@ -311,6 +316,7 @@ export function meshAgentStreamItems(args: {
       role: part.startsWith('tool:') ? ('tool' as const) : ('agent' as const),
       text: part,
       source: 'plain-text' as const,
+      ...(args.observedAt ? { createdAt: args.observedAt } : {}),
       provenance: { rawEvents: [part] }
     }));
 }

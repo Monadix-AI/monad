@@ -81,13 +81,20 @@ export function writeManagedMcpConfigFile(
   );
 }
 
-export function mirrorManagedConfigHome(source: string, target: string, configName: string, emptyConfig: string): void {
-  rmSync(target, { recursive: true, force: true });
+export function mirrorManagedConfigHome(
+  source: string,
+  target: string,
+  configName: string,
+  emptyConfig: string,
+  options: { preserveExisting?: boolean } = {}
+): void {
+  if (!options.preserveExisting) rmSync(target, { recursive: true, force: true });
   mkdirSync(target, { recursive: true });
   if (existsSync(source)) {
     for (const entry of readdirSync(source, { withFileTypes: true })) {
       const sourcePath = join(source, entry.name);
       const targetPath = join(target, entry.name);
+      if (options.preserveExisting && existsSync(targetPath)) continue;
       if (entry.name === configName) {
         copyFileSync(sourcePath, targetPath);
         continue;

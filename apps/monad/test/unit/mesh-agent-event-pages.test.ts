@@ -2,6 +2,7 @@ import type { LiveMeshSession } from '#/services/mesh-agent/host/host-types.ts';
 import type { MeshAgentProviderAdapter } from '#/services/mesh-agent/types.ts';
 
 import { afterAll, beforeAll, expect, test } from 'bun:test';
+import { join } from 'node:path';
 
 import { MeshAgentEventPages } from '#/services/mesh-agent/host/event-pages.ts';
 import { registerAgentAdapterImpl, unregisterAgentAdapterImpl } from '#/services/mesh-agent/index.ts';
@@ -175,4 +176,59 @@ test('provider event pages receive the resolved agent environment', async () => 
       env: { OPENCLAW_STATE_DIR: '/tmp/openclaw-state' }
     }
   ]);
+});
+
+test('stopped managed session event pages receive their deterministic runtime workspace', async () => {
+  const contexts: unknown[] = [];
+  const provider = 'managed-event-pages-fixture';
+  const managedAdapter = {
+    ...adapter,
+    provider,
+    events: {
+      ...adapter.events,
+      readPage: async (context: unknown) => {
+        contexts.push(context);
+        return { state: 'available' as const, view: 'convenience' as const, events: [] };
+      }
+    }
+  } as MeshAgentProviderAdapter;
+  registerAgentAdapterImpl(managedAdapter);
+  try {
+    const pages = new MeshAgentEventPages({
+      live: new Map(),
+      monadHome: '/tmp/monad-home',
+      store: {
+        getMeshSession: () => ({
+          id: 'mesh_managed',
+          transcriptTargetId: 'ses_managed',
+          agentName: 'pmem_managed',
+          projectMemberId: 'pmem_managed',
+          provider,
+          workingPath: '/project',
+          runtimeRole: 'managed-project-agent',
+          providerSessionRef: 'provider-session'
+        }),
+        getSession: () => ({ projectId: 'prj_managed' })
+      }
+    } as never);
+
+    await pages.convenienceEventsPage('mesh_managed', { limit: 20 });
+
+    expect(contexts).toEqual([
+      {
+        providerSessionRef: 'provider-session',
+        workingPath: '/project',
+        managedRuntimeWorkspace: join(
+          '/tmp/monad-home',
+          'workplace',
+          'prj_managed',
+          'runtime',
+          'ses_managed',
+          'pmem_managed'
+        )
+      }
+    ]);
+  } finally {
+    unregisterAgentAdapterImpl(provider as never);
+  }
 });

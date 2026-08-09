@@ -13,6 +13,7 @@ import { expect, test } from 'bun:test';
 import { newId } from '@monad/protocol';
 
 import { HandlerError } from '#/handlers/handler-error.ts';
+import { createSessionMemberRoster } from '#/handlers/session/handlers/session-member-roster.ts';
 import { createSessionMembersHandlers } from '#/handlers/session/handlers/session-members.ts';
 import { createStore } from '#/store/db/index.ts';
 
@@ -174,6 +175,122 @@ test('inviteSessionMember creates a session_members row from a project memberTem
       }
     });
     expect(store.listSessionMembers(session.id)).toHaveLength(1);
+  } finally {
+    store.close();
+  }
+});
+
+test('template invite returns after the durable binding without waiting for the managed runtime start', async () => {
+  const store = createStore();
+  let finishRuntimeStart: (() => void) | undefined;
+  try {
+    const project = fixtureProject(store, { memberTemplates: [codexTemplate] });
+    const session = fixtureSession(store, { projectId: project.id });
+    let runtimeStarted = false;
+    let runtimeSettled = false;
+    const runtimeStartGate = new Promise<void>((resolve) => {
+      finishRuntimeStart = resolve;
+    });
+    const ctx = {
+      deps: {
+        store,
+        paths: {},
+        configManager: {
+          get: () => ({
+            cfg: {
+              agent: { agents: [] },
+              meshAgents: [
+                {
+                  name: 'codex',
+                  displayName: 'Codex',
+                  provider: 'codex',
+                  command: 'codex',
+                  enabled: true,
+                  allowAutopilot: true,
+                  approvalOwnership: 'provider-owned'
+                }
+              ]
+            }
+          })
+        }
+      }
+    } as unknown as SessionContext;
+    const roster = createSessionMemberRoster(ctx, {
+      spawnManagedSessionMember: async () => {
+        runtimeStarted = true;
+        await runtimeStartGate;
+        runtimeSettled = true;
+        return { started: true, nativeSessionId: 'mesh_background' };
+      }
+    });
+
+    let inviteSettled = false;
+    const invite = roster.addProjectSessionMemberBinding(session, codexTemplate).then((member) => {
+      inviteSettled = true;
+      return member;
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    const invited = await invite;
+
+    expect({
+      inviteSettled,
+      runtimeSettled,
+      runtimeStarted,
+      stored: store.getSessionMember(session.id, invited.memberId)
+    }).toEqual({
+      inviteSettled: true,
+      runtimeSettled: false,
+      runtimeStarted: true,
+      stored: invited
+    });
+
+    finishRuntimeStart?.();
+    await runtimeStartGate;
+    await Bun.sleep(0);
+    const startedMember = store.getSessionMember(session.id, invited.memberId);
+    if (!startedMember) throw new Error('expected background-started session member');
+
+    expect({ runtimeSettled, startedMember }).toEqual({
+      runtimeSettled: true,
+      startedMember: {
+        ...invited,
+        meshSessionId: 'mesh_background',
+        updatedAt: startedMember.updatedAt
+      }
+    });
+  } finally {
+    finishRuntimeStart?.();
+    store.close();
+  }
+});
+
+test('inviteSessionMember treats a blank template working directory as no override', async () => {
+  const store = createStore();
+  try {
+    const template: WorkplaceProjectMemberTemplate = {
+      ...codexTemplate,
+      settings: { cwd: '   ' }
+    };
+    const project = fixtureProject(store, { memberTemplates: [template] });
+    const session = fixtureSession(store, { projectId: project.id });
+    const { handlers } = buildHarness(store);
+
+    const result = await handlers.inviteSessionMember({ sessionId: session.id, templateId: template.id });
+
+    expect(result.member).toEqual({
+      id: result.member.id,
+      projectId: project.id,
+      profileId: template.id,
+      type: 'mesh-agent',
+      displayName: 'Codex',
+      customPrompt: null,
+      launchOverrides: {},
+      workingDirectoryOverride: null,
+      lifecycle: 'enabled',
+      createdAt: result.member.createdAt,
+      updatedAt: result.member.updatedAt
+    });
   } finally {
     store.close();
   }

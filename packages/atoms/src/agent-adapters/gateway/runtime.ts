@@ -12,6 +12,7 @@ export interface GatewayRuntimeHandle {
 
 export interface GatewayInitializeContext {
   workingPath: string;
+  systemPromptWorkspace?: string;
   providerSessionRef?: string;
   modelName?: string;
   modelId?: string;

@@ -1,5 +1,5 @@
 import type { MeshAgentConfig, MonadConfig } from '@monad/environment';
-import type { InvitableMeshAgent, MeshAgentView, NativeAgentMonadCliEntry } from '@monad/protocol';
+import type { ChannelIcon, InvitableMeshAgent, MeshAgentView, NativeAgentMonadCliEntry } from '@monad/protocol';
 
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -74,12 +74,17 @@ export function resolveInvitableMeshAgentConfig(
   return enabledInvitableMeshAgentConfigs(cfg, cliEntry).find((agent) => agent.name === name);
 }
 
-export function toInvitableMeshAgent(view: MeshAgentView, source: InvitableMeshAgent['source']): InvitableMeshAgent {
+export function toInvitableMeshAgent(
+  view: MeshAgentView,
+  source: InvitableMeshAgent['source'],
+  icon?: ChannelIcon
+): InvitableMeshAgent {
   return {
     name: view.name,
     ...(view.displayName ? { displayName: view.displayName } : {}),
     provider: view.provider,
     ...(view.productIcon ? { productIcon: view.productIcon } : {}),
+    ...(icon ? { icon } : {}),
     enabled: view.enabled,
     allowAutopilot: view.allowAutopilot,
     ...(view.capabilities ? { capabilities: view.capabilities } : {}),
