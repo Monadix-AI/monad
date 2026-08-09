@@ -35,6 +35,74 @@ test('tool activities stay collapsed until their summary is opened', async ({ pa
 
   await expect(commandCard).toHaveAttribute('open', '');
   await expect(commandCard.getByText('1 match in card-shell.tsx', { exact: true })).toBeVisible();
+  const commandRow = commandCard.locator('xpath=ancestor::*[@data-index][1]');
+  const commandRowIndex = Number(await commandRow.getAttribute('data-index'));
+  const nextRow = page.locator(`[role="log"] [data-index="${commandRowIndex + 1}"]`);
+  const layout = await Promise.all([
+    commandRow.evaluate((row) => row.getBoundingClientRect().bottom),
+    nextRow.evaluate((row) => row.getBoundingClientRect().top)
+  ]);
+  expect(layout[1]).toBeGreaterThanOrEqual(layout[0] - 1);
+});
+
+test('Monad output metadata uses the full row with horizontal fields', async ({ page }) => {
+  await page.goto(`${HARNESS}?mode=monad-output`);
+
+  const output = page.locator('[data-slot="monad-mcp-output"]');
+  const outputContent = page.locator('[data-slot="monad-mcp-output-content"]');
+  const fields = page.locator('[data-slot="monad-mcp-output-field"]');
+  const firstField = fields.first();
+  const secondField = fields.nth(1);
+  const runtimeGroup = page.locator('[data-slot="monad-mcp-output-group"]').first();
+  const runtimeField = runtimeGroup.locator('[data-slot="monad-mcp-output-field"]').first();
+  const fieldLabel = firstField.locator('[data-slot="monad-mcp-output-field-label"]');
+  const fieldValue = firstField.locator('[data-slot="monad-mcp-output-field-value"]');
+  const [outputBox, contentBox, firstFieldBox, secondFieldBox, runtimeFieldBox, fieldLabelBox, fieldValueBox] =
+    await Promise.all([
+      output.boundingBox(),
+      outputContent.boundingBox(),
+      firstField.boundingBox(),
+      secondField.boundingBox(),
+      runtimeField.boundingBox(),
+      fieldLabel.boundingBox(),
+      fieldValue.boundingBox()
+    ]);
+  if (
+    !outputBox ||
+    !contentBox ||
+    !firstFieldBox ||
+    !secondFieldBox ||
+    !runtimeFieldBox ||
+    !fieldLabelBox ||
+    !fieldValueBox
+  )
+    throw new Error('Missing Monad output layout');
+
+  expect(Math.abs(contentBox.x - outputBox.x)).toBeLessThan(1);
+  expect(Math.abs(contentBox.width - outputBox.width)).toBeLessThan(1);
+  expect(Math.abs(secondFieldBox.y - firstFieldBox.y)).toBeLessThan(4);
+  expect(secondFieldBox.x).toBeGreaterThan(firstFieldBox.x + firstFieldBox.width - 1);
+  expect(Math.abs(runtimeFieldBox.x - firstFieldBox.x)).toBeLessThan(1);
+  expect(fieldValueBox.x).toBeGreaterThan(fieldLabelBox.x + fieldLabelBox.width);
+  expect(Math.abs(fieldValueBox.y - fieldLabelBox.y)).toBeLessThan(4);
+});
+
+test('Monad project message body spans the row below its metadata', async ({ page }) => {
+  await page.goto(`${HARNESS}?mode=monad-message-body`);
+
+  const output = page.locator('[data-slot="monad-mcp-output"]');
+  const body = page.locator('[data-slot="monad-mcp-output-body"]');
+  const fields = page.locator('[data-slot="monad-mcp-output-field"]');
+  const [outputBox, bodyBox, lastFieldBox] = await Promise.all([
+    output.boundingBox(),
+    body.boundingBox(),
+    fields.last().boundingBox()
+  ]);
+  if (!outputBox || !bodyBox || !lastFieldBox) throw new Error('Missing Monad message body layout');
+
+  expect(Math.abs(bodyBox.x - outputBox.x)).toBeLessThan(1);
+  expect(Math.abs(bodyBox.width - outputBox.width)).toBeLessThan(1);
+  expect(bodyBox.y).toBeGreaterThanOrEqual(lastFieldBox.y + lastFieldBox.height - 1);
 });
 
 type FixtureExpectation = {
@@ -74,6 +142,20 @@ type FixturePageSet = {
   pages: FixturePage[];
   splitTurnIndex: number;
 };
+
+function fixtureMarkerData(provider: FixtureProvider, markerIdentity: string): Record<string, unknown> {
+  if (provider === 'codex') {
+    return {
+      type: 'item.completed',
+      item: { id: markerIdentity, type: 'agent_message', text: markerIdentity }
+    };
+  }
+  return {
+    type: 'assistant',
+    message: { role: 'assistant', content: [{ type: 'text', text: markerIdentity }] },
+    uuid: markerIdentity
+  };
+}
 
 function fixturePages(provider: FixtureProvider): FixturePageSet {
   const fixture = fixtureByProvider[provider];
@@ -147,7 +229,7 @@ function fixturePages(provider: FixtureProvider): FixturePageSet {
           fixtureRecord,
           {
             cursor: `provider:${markerIdentity}`,
-            data: { type: markerIdentity },
+            data: fixtureMarkerData(provider, markerIdentity),
             providerIdentity: markerIdentity
           }
         ];
@@ -727,7 +809,8 @@ test('Codex session context usage opens from the circular progress control and c
   await trigger.click();
   const details = page.getByRole('dialog', { name: 'Session usage' });
   await expect(details).toBeVisible();
-  await expect(details).toContainText('72.7K / 258.4K (28%)');
+  await expect(details).toContainText('72.7K / 258.4K');
+  await expect(details).toContainText('28%');
   await expect(details).toContainText('597,658');
   await expect(details).toContainText('2,768');
   await expect(details).toContainText('600,426');
@@ -737,7 +820,7 @@ test('Codex session context usage opens from the circular progress control and c
   await page.keyboard.press('Escape');
   await expect(details).toHaveCount(0);
   await trigger.click();
-  await page.getByText('Fixture Agent').first().click();
+  await page.getByRole('tab', { name: 'Activity' }).click();
   await expect(details).toHaveCount(0);
 });
 

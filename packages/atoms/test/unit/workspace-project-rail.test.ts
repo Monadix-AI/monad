@@ -518,7 +518,8 @@ test('Monad participant uses the same discovered MeshAgent metadata path as ever
         type: 'mesh-agent',
         name: 'monad--agt_eAmWnO0FDkBJ',
         templateName: 'monad--agt_eAmWnO0FDkBJ',
-        instanceId: 'monad:agt_eAmWnO0FDkBJ'
+        instanceId: 'monad:agt_eAmWnO0FDkBJ',
+        displayName: 'monad--agt_eAmWnO0FDkBJ'
       }
     ]
   });
@@ -548,7 +549,8 @@ test('Monad message metadata uses the same MeshAgent metadata path as every prov
         type: 'mesh-agent',
         name: 'monad--agt_eAmWnO0FDkBJ',
         templateName: 'monad--agt_eAmWnO0FDkBJ',
-        instanceId: 'monad:agt_eAmWnO0FDkBJ'
+        instanceId: 'monad:agt_eAmWnO0FDkBJ',
+        displayName: 'monad--agt_eAmWnO0FDkBJ'
       }
     ]
   });

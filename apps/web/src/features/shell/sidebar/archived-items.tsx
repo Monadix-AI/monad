@@ -85,7 +85,7 @@ export function ArchivedSidebarItems({
       </SidebarNavSection>
       <div className="border-sidebar-border border-y px-3 py-2">
         <input
-          className="h-8 w-full rounded-(--radius-md) bg-background px-2.5 text-sm shadow-[inset_0_0_0_1px_var(--input)] outline-none placeholder:text-muted-foreground focus:shadow-[inset_0_0_0_1px_rgb(var(--backgroundColor-accent)/0.48),0_0_0_2px_rgb(var(--backgroundColor-accent)/0.08)]"
+          className="h-8 w-full rounded-md bg-background px-2.5 text-sm shadow-[inset_0_0_0_1px_var(--input)] outline-none placeholder:text-muted-foreground focus:shadow-[inset_0_0_0_1px_rgb(var(--backgroundColor-accent)/0.48),0_0_0_2px_rgb(var(--backgroundColor-accent)/0.08)]"
           onChange={(event) => setQuery(event.currentTarget.value)}
           placeholder="Search archived sessions..."
           value={query}

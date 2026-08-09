@@ -44,7 +44,9 @@ function MemberSettings({ member, room }: { member: ProjectMember; room: Project
         <span style={label}>{t('web.workplace.cwdOverride')}</span>
         <input
           defaultValue={settings.cwd ?? ''}
-          onBlur={(event) => void room.updateProjectMemberSettings(member.id, { cwd: event.target.value.trim() })}
+          onBlur={(event) =>
+            void room.updateProjectMemberSettings(member.id, { cwd: event.target.value.trim() || undefined })
+          }
           placeholder={room.workdir.path ?? t('web.workplace.absolutePathPlaceholder')}
           style={field}
         />

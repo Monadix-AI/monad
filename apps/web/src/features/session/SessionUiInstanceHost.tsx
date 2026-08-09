@@ -2,7 +2,7 @@ import type { WorkspaceRouteProps } from '#/features/workspace/WorkspaceRoute';
 import type { SessionRouteModel } from './session-route-contract';
 
 import { removeChatRoomSessionUiState } from '@monad/atoms/workplace-experiences/session-ui-store';
-import { Activity, lazy, type ReactNode, Suspense, useEffect, useMemo, useState } from 'react';
+import { lazy, memo, type ReactNode, Suspense, useEffect, useMemo, useState } from 'react';
 
 import { PanelLoading } from '#/components/PanelLoading';
 import { WorkspaceRoute } from '#/features/workspace/WorkspaceRoute';
@@ -28,6 +28,28 @@ export type SessionUiSurface =
       props: WorkspaceRouteProps;
       sessionId: string;
     };
+
+const SessionUiInstancePane = memo(function SessionUiInstancePane({
+  surface,
+  visible
+}: {
+  surface: SessionUiSurface;
+  visible: boolean;
+}) {
+  return (
+    <div
+      aria-hidden={!visible}
+      className="absolute inset-0 flex min-h-0 min-w-0 flex-col overflow-hidden"
+      data-session-ui-instance={surface.key}
+      inert={visible ? undefined : true}
+      style={{ pointerEvents: visible ? undefined : 'none', visibility: visible ? 'visible' : 'hidden' }}
+    >
+      <Suspense fallback={visible ? <PanelLoading /> : null}>
+        {surface.kind === 'chat' ? <SessionRoute model={surface.model} /> : <WorkspaceRoute {...surface.props} />}
+      </Suspense>
+    </div>
+  );
+});
 
 function sameEntries(
   left: SessionUiInstance<SessionUiSurface>[],
@@ -58,6 +80,10 @@ export function SessionUiInstanceHost({
       value: active
     });
   }, [active, activeSessionIds, storedEntries]);
+  const mountedEntries = useMemo(
+    () => [...renderedEntries].sort((left, right) => left.key.localeCompare(right.key)),
+    [renderedEntries]
+  );
 
   useEffect(() => {
     for (const entry of storedEntries) {
@@ -69,26 +95,18 @@ export function SessionUiInstanceHost({
   }, [renderedEntries, storedEntries]);
 
   return (
-    <>
-      {renderedEntries.map((entry) => {
+    <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      {mountedEntries.map((entry) => {
         const visible = entry.key === active?.key;
         return (
-          <Activity
+          <SessionUiInstancePane
             key={entry.key}
-            mode={visible ? 'visible' : 'hidden'}
-            name={entry.key}
-          >
-            <Suspense fallback={visible ? <PanelLoading /> : null}>
-              {entry.value.kind === 'chat' ? (
-                <SessionRoute model={entry.value.model} />
-              ) : (
-                <WorkspaceRoute {...entry.value.props} />
-              )}
-            </Suspense>
-          </Activity>
+            surface={entry.value}
+            visible={visible}
+          />
         );
       })}
       {active ? null : children}
-    </>
+    </div>
   );
 }

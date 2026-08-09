@@ -10,6 +10,7 @@ import {
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { ObservationCard } from '@monad/ui';
+import { requestVirtualListRowMeasurement } from '@monad/ui/components/VirtualList';
 
 export function ObservationCardShell({
   children,
@@ -34,43 +35,73 @@ export function ObservationCardShell({
 }
 
 type ObservationToolKind = 'command' | 'file' | 'mcp' | 'tool';
+export type ObservationToolStatus = 'error' | 'running' | 'success';
+
+export function ObservationToolStatusIndicator({
+  status
+}: {
+  status?: ObservationToolStatus;
+}): React.ReactElement | null {
+  if (!status) return null;
+  return (
+    <span
+      aria-hidden="true"
+      className={
+        status === 'error'
+          ? 'size-1.5 shrink-0 rounded-full bg-destructive'
+          : status === 'running'
+            ? 'size-1.5 shrink-0 rounded-full bg-accent-blue motion-safe:animate-pulse'
+            : 'size-1.5 shrink-0 rounded-full bg-success'
+      }
+      data-slot="observation-tool-status"
+      data-status={status}
+    />
+  );
+}
 
 export function ObservationToolCardShell({
   children,
   error = false,
   header,
   kind,
+  status,
   timestamp
 }: {
   children: React.ReactNode;
   error?: boolean;
   header: React.ReactNode;
   kind: ObservationToolKind;
+  status?: ObservationToolStatus;
   timestamp?: string;
 }): React.ReactElement {
+  const resolvedStatus = error ? 'error' : status;
   return (
     <details
       className="group/tool rounded-md open:bg-secondary/15"
       data-slot="observation-tool-card"
-      data-visual-role={error ? 'error' : 'tool'}
+      data-tool-kind={kind}
+      data-visual-role={resolvedStatus === 'error' ? 'error' : 'tool'}
+      onToggle={(event) => requestVirtualListRowMeasurement(event.currentTarget)}
     >
-      <summary className="flex min-h-8 w-full min-w-0 cursor-pointer list-none items-center gap-2 rounded-md px-1.5 py-1 text-left text-muted-foreground transition-colors hover:bg-secondary/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/35 [&::-webkit-details-marker]:hidden">
+      <summary className="flex min-h-6 w-full min-w-0 cursor-pointer list-none items-center gap-2 rounded-md px-1.5 py-0 text-left font-sans text-muted-foreground text-sm leading-5 transition-colors hover:bg-secondary/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/35 [&::-webkit-details-marker]:hidden">
         <HugeiconsIcon
           aria-hidden="true"
-          className={error ? 'shrink-0 text-destructive' : 'shrink-0 text-muted-foreground/80'}
+          className="shrink-0 text-muted-foreground/80"
           icon={observationToolIcon(kind)}
           size={16}
         />
-        <div className="min-w-0 flex-1">{header}</div>
-        {timestamp ? (
-          <time className="shrink-0 font-mono text-[10px] text-muted-foreground/70">{timestamp}</time>
-        ) : null}
+        <div className="min-w-0 flex-[0_1_auto]">{header}</div>
+        <ObservationToolStatusIndicator status={resolvedStatus} />
         <HugeiconsIcon
           aria-hidden="true"
           className="shrink-0 -rotate-90 transition-transform duration-150 group-open/tool:rotate-0"
+          data-slot="disclosure-chevron"
           icon={ArrowDown01Icon}
           size={14}
         />
+        {timestamp ? (
+          <time className="ml-auto shrink-0 font-mono text-[10px] text-muted-foreground/70">{timestamp}</time>
+        ) : null}
       </summary>
       <div className="ml-3 border-border/50 border-l py-2 pr-2 pl-5">{children}</div>
     </details>

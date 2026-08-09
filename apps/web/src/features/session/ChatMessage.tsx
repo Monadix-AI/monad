@@ -111,11 +111,13 @@ const ReasoningBubble = memo(function ReasoningBubble({ text, streaming }: { tex
 
   return (
     <Reasoning
-      className="mb-1 w-full px-1"
+      className="mb-0 w-full"
       defaultOpen={false}
       isStreaming={streaming}
     >
       <ReasoningTrigger
+        className="min-h-7 w-fit max-w-full justify-start gap-2 p-0.5 font-sans text-[0.95rem] leading-6"
+        iconClassName="size-4 shrink-0"
         labels={{
           thinking: t('web.reasoning.thinking'),
           thoughtFew: t('web.reasoning.thoughtFew'),
@@ -294,7 +296,7 @@ export const Message = memo(function Message({
       ) : null}
       {!msg.pending &&
         (msg.error ? (
-          <MessageContent className="w-full overflow-visible rounded-(--radius-lg) border border-destructive/25 bg-destructive/[0.06] px-4 py-3 text-foreground">
+          <MessageContent className="w-full overflow-visible rounded-lg border border-destructive/25 bg-destructive/6 px-4 py-3 text-foreground">
             <div className="flex items-start gap-3">
               <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md bg-destructive/10 text-destructive">
                 <HugeiconsIcon
@@ -320,14 +322,14 @@ export const Message = memo(function Message({
             className={cn(
               'wrap-break-word text-[0.95rem] leading-7',
               isUser
-                ? 'rounded-(--radius-xl) rounded-br-(--radius-xs) border border-primary/16 bg-accent px-4 py-3 text-foreground shadow-xs'
+                ? 'rounded-xl rounded-br-xs border border-primary/16 bg-accent px-4 py-3 text-foreground shadow-xs'
                 : 'w-full overflow-visible rounded-none bg-transparent px-1 py-0 text-foreground',
               msg.type &&
                 msg.type !== 'text' &&
                 msg.type !== 'markdown' &&
                 !rendersMarkdownDirective &&
                 !isUser &&
-                'rounded-(--radius-lg) border border-border/75 bg-card px-4 py-3 shadow-xs',
+                'rounded-lg border border-border/75 bg-card px-4 py-3 shadow-xs',
               isEditing && 'w-[min(70vw,42rem)] min-w-64'
             )}
           >
@@ -400,11 +402,11 @@ export const Message = memo(function Message({
       {!msg.pending && (msg.text || msg.attachments?.length) && !isEditing && (
         <MessageActions
           className={cn(
-            'message-actions opacity-0 focus-within:opacity-100 group-hover:opacity-100 [@media_(hover:none),_(pointer:coarse)]:opacity-100',
+            'message-actions opacity-0 transition-none focus-within:opacity-100 group-hover:opacity-100 [&_*]:transition-none [@media_(hover:none),(pointer:coarse)]:opacity-100',
             isUser && 'justify-end'
           )}
         >
-          {timeLabel ? (
+          {isUser && timeLabel ? (
             <span className="self-center whitespace-nowrap px-1 font-mono text-[10px] text-muted-foreground/70">
               {timeLabel}
             </span>
@@ -482,6 +484,11 @@ export const Message = memo(function Message({
               icon={sentFrom.icon}
               name={sentFrom.label}
             />
+          ) : null}
+          {!isUser && timeLabel ? (
+            <span className="self-center whitespace-nowrap px-1 font-mono text-[10px] text-muted-foreground/70">
+              {timeLabel}
+            </span>
           ) : null}
         </MessageActions>
       )}

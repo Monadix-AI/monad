@@ -128,7 +128,7 @@ export function CliTerminalModal({
       open
     >
       <DialogContent
-        className="h-[min(740px,calc(100dvh-64px))] min-h-[min(500px,calc(100dvh-32px))] border-0 bg-[#101620] text-[#f0f5ff] shadow-[0_22px_64px_rgb(0_0_0/0.4),inset_0_1px_0_rgb(255_255_255/0.07)]"
+        className="z-80 h-[min(740px,calc(100dvh-64px))] min-h-[min(500px,calc(100dvh-32px))] border-0 bg-[#101620] text-[#f0f5ff] shadow-[0_22px_64px_rgb(0_0_0/0.4),inset_0_1px_0_rgb(255_255_255/0.07)]"
         onBeforeInput={stopModalEvent}
         onCopy={stopClipboardEvent}
         onCut={stopClipboardEvent}
@@ -189,7 +189,7 @@ export function CliTerminalModal({
             style={{ flex: 1, height: '100%', minHeight: 0, border: 0, borderRadius: 8 }}
           />
         </DialogBody>
-        <DialogFooter className="items-center border-white/10 bg-white/[0.03] px-5 py-3 sm:justify-end">
+        <DialogFooter className="items-center border-white/10 bg-white/3 px-5 py-3 sm:justify-end">
           <p className="mr-auto text-[#aeb9ca] text-xs">{footerLabel}</p>
           <Button
             className="border-white/10 bg-[#202838] text-[#f0f5ff] hover:bg-[#2a3446] hover:text-white"

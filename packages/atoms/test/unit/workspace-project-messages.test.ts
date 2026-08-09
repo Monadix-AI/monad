@@ -20,6 +20,31 @@ configureMeshAgentObservationAdapterResolver((provider) =>
   builtinAgentAdapters.find((adapter) => adapter.provider === provider)
 );
 
+test('live project messages retain their sequence timestamp for hover metadata', () => {
+  const seq = '2026-08-09T04:25:00.000Z';
+  const [message] = __workplaceProjectMessageTest.buildProjectMessages({
+    liveItems: [
+      {
+        id: 'msg_LIVE_TIME000000',
+        kind: 'message',
+        parts: [{ type: 'text', text: 'Live message' }],
+        replyable: true,
+        role: 'assistant',
+        seq,
+        status: 'done'
+      }
+    ],
+    liveTools: [],
+    meshSessions: [],
+    persistedMessages: []
+  });
+
+  expect(message).toMatchObject({
+    id: 'msg_LIVE_TIME000000',
+    time: new Date(seq).toTimeString().slice(0, 5)
+  });
+});
+
 test('Monad messages generate an avatar with the active style like other built-in agents', () => {
   const projected = messageToView(
     {
@@ -1919,6 +1944,47 @@ test('MeshAgent assistant messages keep provider icon when display name is custo
     icon: 'codex',
     tag: 'Codex'
   });
+});
+
+test('Monad assistant messages replace an internal embedded name with the configured agent name', () => {
+  const messages = __workplaceProjectMessageTest.buildProjectMessages({
+    persistedMessages: [],
+    meshSessions: [],
+    liveItems: [
+      {
+        id: 'msg_monad_reply',
+        kind: 'message',
+        role: 'assistant',
+        agentName: 'pmem_monad_instance',
+        agentDisplayName: 'monad--agt_eAmWnO0FDkBJ',
+        source: 'managed-mesh-agent',
+        parts: [{ type: 'text', text: 'Ready' }],
+        status: 'complete',
+        seq: '002'
+      }
+    ] as never,
+    liveTools: [],
+    meshAgentDisplayNames: new Map([['pmem_monad_instance', 'Default Dev Agent']]),
+    meshAgentIcons: new Map([['pmem_monad_instance', 'monad']]),
+    meshAgentTags: new Map([['pmem_monad_instance', 'Monad']])
+  });
+
+  expect(messages).toEqual([
+    {
+      id: 'msg_monad_reply',
+      authorId: 'pmem_monad_instance',
+      authorName: 'Default Dev Agent',
+      av: 'DD',
+      icon: 'monad',
+      avatarUrl: __workplaceProjectMessageTest.entityAvatarUrl('mesh-agent:Default Dev Agent'),
+      kind: 'agent',
+      tag: 'Monad',
+      time: '00:00',
+      text: 'Ready',
+      orderKey: '002',
+      streaming: false
+    }
+  ]);
 });
 
 test('workplace messages sort oldest first', () => {

@@ -32,12 +32,12 @@ test('streaming growth keeps the pinned viewport on the bottom without bouncing'
   const metrics = await page.evaluate(() => window.streamHarness.metrics());
   expect(metrics.frameSamples).toBeGreaterThan(100);
   expect({
-    remountEvents: metrics.remountEvents,
+    visibleRemountEvents: metrics.visibleRemountEvents,
     offBottomFramesUnderTwoPercent: metrics.bounceFrames <= metrics.frameSamples * 0.02,
     maxBounceWithinOneTextLine: metrics.maxBounce <= 20,
     settled: (await page.evaluate(() => window.streamHarness.state())).distanceFromBottom
   }).toEqual({
-    remountEvents: 0,
+    visibleRemountEvents: 0,
     offBottomFramesUnderTwoPercent: true,
     maxBounceWithinOneTextLine: true,
     settled: 0

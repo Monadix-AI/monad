@@ -91,6 +91,11 @@ const ROW_STYLE_BASE: CSSProperties = {
   top: 0,
   width: '100%'
 };
+const ROW_MEASURE_EVENT = 'monad:virtual-list-row-measure';
+
+export function requestVirtualListRowMeasurement(element: Element): void {
+  element.dispatchEvent(new Event(ROW_MEASURE_EVENT, { bubbles: true }));
+}
 
 type VirtualizerBoundaryState = {
   getDistanceFromEnd: () => number;
@@ -445,6 +450,18 @@ export function VirtualList<T>({
     }
   });
   virtualizerRef.current = virtualizer;
+  useLayoutEffect(() => {
+    const scroller = scrollerRef.current;
+    if (!scrollerReady || !scroller) return;
+    const measureRequestedRow = (event: Event) => {
+      if (!(event.target instanceof Element)) return;
+      const row = event.target.closest<HTMLElement>('[data-index]');
+      if (!row) return;
+      virtualizer.measureElement(row);
+    };
+    scroller.addEventListener(ROW_MEASURE_EVENT, measureRequestedRow);
+    return () => scroller.removeEventListener(ROW_MEASURE_EVENT, measureRequestedRow);
+  }, [scrollerReady, virtualizer]);
   // Core's default predicate plus one extra rule: a row-0 resize while the reader holds the
   // loaded top must still anchor the prepend boundary (dragging the scrollbar to the exact top
   // leaves scrollOffset at 0, where the default sees nothing above the viewport to compensate).

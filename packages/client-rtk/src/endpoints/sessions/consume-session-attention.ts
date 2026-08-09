@@ -25,7 +25,7 @@ const consumeSessionAttentionApi = apiSlice.injectEndpoints({
           },
           (raw) => consumeSessionAttentionResponseSchema.parse(raw)
         ),
-      invalidatesTags: ['SessionAttention']
+      invalidatesTags: ['SessionAttention', 'Inbox']
     })
   })
 });

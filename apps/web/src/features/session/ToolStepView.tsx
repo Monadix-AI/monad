@@ -552,10 +552,12 @@ function groupStatus(steps: ToolItem[]): ToolItem['status'] {
 }
 
 const TOOL_EVENT_HEADER_CLASS =
-  'min-h-8 w-fit max-w-full justify-start gap-2 p-1 text-base leading-5 transition-colors hover:text-foreground focus-visible:text-foreground [&>div]:min-w-0 [&>div]:overflow-hidden [&>div>svg]:size-5 [&>div>svg]:shrink-0 [&>div>svg]:text-current [&>div>span]:min-w-0 [&>div>span]:truncate [&>div>span]:font-normal [&>div>span]:text-base [&>svg]:shrink-0';
+  'min-h-7 w-fit max-w-full justify-start gap-2 p-0.5 text-[0.95rem] text-muted-foreground leading-6 [&>div]:min-w-0 [&>div]:overflow-hidden [&>div>svg]:size-4 [&>div>svg]:shrink-0 [&>div>span]:min-w-0 [&>div>span]:truncate [&>div>span]:font-normal [&>div>span]:text-[0.95rem] [&>svg]:shrink-0';
 
-function toolEventTone(status: ToolItem['status']): string {
-  return status === 'error' ? 'text-destructive' : status === 'running' ? 'text-accent-blue' : 'text-muted-foreground';
+export function toolEventIconTone(status: ToolItem['status']): string {
+  if (status === 'error') return '[&>div>svg]:text-destructive';
+  if (status === 'running') return '[&>div>svg]:text-accent-blue';
+  return '[&>div>svg]:text-success';
 }
 
 export const ToolStepView = memo(function ToolStepView({
@@ -603,13 +605,17 @@ function SingleToolView({ step, sessionId }: { step: ToolItem; sessionId?: Sessi
 
   return (
     <Tool
-      className={cn('mb-1 w-full self-start rounded-none border-0 text-base', toolEventTone(step.status))}
+      className="mb-0 w-full self-start rounded-none border-0 text-base text-muted-foreground"
       defaultOpen={step.status !== 'ok'}
       {...(isSkill ? { 'data-slot': 'skill-tool-event' } : {})}
     >
       <ToolHeader
         aria-label={isSkill && statusLabel ? `${title} · ${statusLabel}` : title}
-        className={cn(TOOL_EVENT_HEADER_CLASS, step.status === 'running' && '[&>div>svg]:motion-safe:animate-pulse')}
+        className={cn(
+          TOOL_EVENT_HEADER_CLASS,
+          toolEventIconTone(step.status),
+          step.status === 'running' && '[&>div>svg]:motion-safe:animate-pulse'
+        )}
         icon={isSkill ? PackageIcon : undefined}
         showStatus={false}
         state={toolState(step.status)}
@@ -706,11 +712,11 @@ function ToolGroupView({ step, sessionId }: { step: ToolGroupItem; sessionId?: S
 
   return (
     <Tool
-      className={cn('mb-1 w-full self-start rounded-none border-0 text-base', toolEventTone(status))}
+      className="mb-0 w-full self-start rounded-none border-0 text-base text-muted-foreground"
       defaultOpen={status !== 'ok'}
     >
       <ToolHeader
-        className={TOOL_EVENT_HEADER_CLASS}
+        className={cn(TOOL_EVENT_HEADER_CLASS, toolEventIconTone(status))}
         showStatus={false}
         state={toolState(status)}
         title={t('web.tools.concurrentCalls', { count: step.steps.length })}

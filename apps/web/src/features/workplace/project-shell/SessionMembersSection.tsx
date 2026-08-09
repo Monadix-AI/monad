@@ -1,6 +1,6 @@
 import type { SessionId } from '@monad/protocol';
 import type { ProjectController } from '../use-project';
-import type { MeshAgentMemberDialogState } from './mesh-agent-member-dialog-model';
+import type { MeshAgentDraft, MeshAgentMemberDialogState } from './mesh-agent-member-dialog-model';
 
 import { MinusSignIcon, PlusSignIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
@@ -26,6 +26,7 @@ import { useT } from '#/components/I18nProvider';
 import { isResolvedEmptyList } from '#/lib/async-list-state';
 import { MeshAgentMemberDialog } from './MeshAgentMemberDialog';
 import { ProjectAddMemberSection } from './ProjectAddMemberSection';
+import { ProjectMembersListSkeleton } from './ProjectSettingsListSkeletons';
 
 type ProjectMember = ProjectController['projectMembers'][number];
 type AvailableProjectMember = ProjectController['availableProjectMembers'][number];
@@ -42,6 +43,10 @@ export function directSessionMemberCandidates(candidates: readonly AvailableProj
   return candidates.filter((candidate) => candidate.type === 'mesh-agent');
 }
 
+export function directSessionMemberDraft(candidate: AvailableProjectMember): MeshAgentDraft {
+  return { displayName: candidate.label };
+}
+
 export function sessionMemberAvatar(args: {
   avatarStyle: ProjectController['source']['avatarStyle'];
   candidate?: AvailableProjectMember;
@@ -49,12 +54,29 @@ export function sessionMemberAvatar(args: {
   participant?: ProjectParticipant;
   projectId: string;
 }): MemberAvatar {
-  if (args.participant) return args.participant;
   return {
+    ...args.participant,
     avatarUrl: entityAvatarUrl(meshAgentProjectMemberAvatarSeed(args.projectId, args.displayName), args.avatarStyle),
-    icon: args.candidate?.icon,
+    icon: args.participant?.icon ?? args.candidate?.icon,
     name: args.displayName
   };
+}
+
+export function sessionProjectMemberDisplayName(args: {
+  candidate?: AvailableProjectMember;
+  fallbackName: string;
+  template?: ProjectMember;
+}): string {
+  return args.template?.displayName ?? args.candidate?.label ?? args.fallbackName;
+}
+
+export function shouldDeferSessionMemberRoster(args: {
+  activeSessionId: SessionId | null;
+  hasCurrentData: boolean;
+  isFetching: boolean;
+  isLoading: boolean;
+}): boolean {
+  return args.activeSessionId !== null && !args.hasCurrentData && (args.isLoading || args.isFetching);
 }
 
 function MemberRow({
@@ -159,10 +181,16 @@ export function SessionMembersSection({
   templates: ProjectMember[];
 }): React.ReactElement {
   const t = useT();
-  const { data, isLoading } = useListSessionMembersQuery(activeSessionId ?? ('ses_' as SessionId), {
+  const { currentData, isFetching, isLoading } = useListSessionMembersQuery(activeSessionId ?? ('ses_' as SessionId), {
     skip: activeSessionId === null
   });
-  const members = data?.ids.map((id) => data.entities[id]).filter((member) => member !== undefined) ?? [];
+  const members = currentData?.ids.map((id) => currentData.entities[id]).filter((member) => member !== undefined) ?? [];
+  const rosterPending = shouldDeferSessionMemberRoster({
+    activeSessionId,
+    hasCurrentData: currentData !== undefined,
+    isFetching,
+    isLoading
+  });
   const [inviteSessionMember, inviteState] = useInviteSessionMemberMutation();
   const [spawnSessionMember] = useSpawnSessionMemberMutation();
   const [removeSessionMember] = useRemoveSessionMemberMutation();
@@ -171,6 +199,7 @@ export function SessionMembersSection({
   const invitedTemplateIds = new Set(members.map((member) => member.member.profileId));
   const availableTemplates = templates.filter((template) => !invitedTemplateIds.has(template.id));
   const meshAgentCandidates = directSessionMemberCandidates(availableProjectMembers);
+  const templateById = new Map(templates.map((template) => [template.id, template]));
   const participantById = new Map(room.projectParticipants.map((participant) => [participant.id, participant]));
   const candidateByName = new Map(meshAgentCandidates.map((candidate) => [candidate.name, candidate]));
 
@@ -189,35 +218,44 @@ export function SessionMembersSection({
       ) : (
         <>
           <div style={{ border: `1px solid ${'var(--border)'}`, borderRadius: boxR, background: 'var(--card)' }}>
-            {isResolvedEmptyList({ isLoading, itemCount: members.length }) ? (
+            {rosterPending ? <ProjectMembersListSkeleton /> : null}
+            {isResolvedEmptyList({ isLoading: rosterPending, itemCount: members.length }) ? (
               <p style={{ margin: 0, padding: 12, fontFamily: sans, fontSize: 13, color: 'var(--muted-foreground)' }}>
                 {t('web.workplace.noSessionMembersHint')}
               </p>
             ) : null}
-            {members.map((member, index) => {
-              const participant = participantById.get(member.member.profileId);
-              const displayName = participant?.name ?? member.member.displayName;
-              const avatar = sessionMemberAvatar({
-                avatarStyle: room.source.avatarStyle,
-                candidate: candidateByName.get(member.member.profileId),
-                displayName,
-                participant,
-                projectId: room.activeProjectId ?? room.projectId
-              });
-              return (
-                <MemberRow
-                  avatar={avatar}
-                  index={index}
-                  key={member.member.id}
-                  onRemove={() =>
-                    removeSessionMember({ sessionId: activeSessionId, memberId: member.member.id }).unwrap()
-                  }
-                />
-              );
-            })}
+            {!rosterPending
+              ? members.map((member, index) => {
+                  const template = templateById.get(member.member.profileId);
+                  const candidate = template ? candidateByName.get(template.templateName ?? template.name) : undefined;
+                  const participant = participantById.get(member.member.id);
+                  const displayName = sessionProjectMemberDisplayName({
+                    candidate,
+                    fallbackName: member.member.displayName,
+                    template
+                  });
+                  const avatar = sessionMemberAvatar({
+                    avatarStyle: room.source.avatarStyle,
+                    candidate,
+                    displayName,
+                    participant,
+                    projectId: room.activeProjectId ?? room.projectId
+                  });
+                  return (
+                    <MemberRow
+                      avatar={avatar}
+                      index={index}
+                      key={member.member.id}
+                      onRemove={() =>
+                        removeSessionMember({ sessionId: activeSessionId, memberId: member.member.id }).unwrap()
+                      }
+                    />
+                  );
+                })
+              : null}
           </div>
 
-          {availableTemplates.length > 0 ? (
+          {!rosterPending && availableTemplates.length > 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div style={{ ...sectionLabel, color: 'var(--muted-foreground)' }}>
                 {t('web.workplace.projectMembersTitle')}
@@ -225,8 +263,15 @@ export function SessionMembersSection({
               <div style={{ border: `1px solid ${'var(--border)'}`, borderRadius: boxR, background: 'var(--card)' }}>
                 {availableTemplates.map((template, index) => {
                   const participant = participantById.get(template.id);
-                  const name = participant?.name ?? template.displayName ?? template.name;
-                  const icon = candidateByName.get(template.templateName ?? template.name)?.icon;
+                  const candidate = candidateByName.get(template.templateName ?? template.name);
+                  const name = sessionProjectMemberDisplayName({ candidate, fallbackName: template.name, template });
+                  const avatar = sessionMemberAvatar({
+                    avatarStyle: room.source.avatarStyle,
+                    candidate,
+                    displayName: name,
+                    participant,
+                    projectId: room.activeProjectId ?? room.projectId
+                  });
                   return (
                     <div
                       key={template.id}
@@ -240,13 +285,13 @@ export function SessionMembersSection({
                       }}
                     >
                       <AgentInstanceAvatar
-                        agent={participant ?? { icon, name }}
+                        agent={avatar}
                         bare
                         size={30}
                       />
                       <div style={{ minWidth: 0 }}>
                         <AgentIdentity
-                          icon={icon}
+                          icon={avatar.icon}
                           name={name}
                           nameStyle={{ fontFamily: sans, fontSize: 14, fontWeight: 600 }}
                         />
@@ -296,7 +341,7 @@ export function SessionMembersSection({
             <ProjectAddMemberSection
               candidates={meshAgentCandidates}
               loading={room.membersLoading}
-              onAdd={(candidate) => setMeshAgentInvite({ candidate, draft: {} })}
+              onAdd={(candidate) => setMeshAgentInvite({ candidate, draft: directSessionMemberDraft(candidate) })}
             />
           </div>
           <MeshAgentMemberDialog

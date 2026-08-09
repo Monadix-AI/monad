@@ -430,7 +430,22 @@ async function installStudioIaApiMock(
               records: [{ name: '5h tokens', current: 21000, max: 100000, resetAt: '2026-07-03T05:00:00.000Z' }]
             }
           ],
-          sessionUsage: []
+          sessionUsage: [
+            {
+              meshSessionId: 'mesh_studioia0001',
+              sessionId: 'ses_studioia0001',
+              sessionTitle: 'Builder session',
+              projectId: 'prj_studioia0001',
+              projectMemberId: 'pmem_studioia0001',
+              agentName: 'pmem_studioia0001',
+              agentDisplayName: 'Builder',
+              provider: 'codex',
+              checkedAt: '2026-07-03T00:00:00.000Z',
+              total: 110000,
+              input: 80000,
+              output: 30000
+            }
+          ]
         })
       );
     }
@@ -501,7 +516,7 @@ test.describe('Studio IA', () => {
     await expect(page.getByRole('heading', { name: 'Overview', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Details', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'By provider' })).toBeVisible();
-    await expect(page.getByText('5h tokens')).toBeVisible();
+    await expect(page.getByText('110.0K').first()).toBeVisible();
   });
 
   test('configures every installed channel adapter from the System Channels tab', async ({ page }) => {
@@ -643,7 +658,7 @@ test.describe('Studio IA', () => {
     await page.reload();
     await expect(page).toHaveURL(/\/studio\/agents\/agt_mock00000000\/sessions\/project$/);
 
-    await page.getByRole('button', { name: 'Memory', exact: true }).click();
+    await page.getByRole('tab', { name: 'Memory', exact: true }).click();
     await expect(page).toHaveURL(/\/studio\/agents\/agt_mock00000000\/memory\/facts$/);
     await expect(page.getByRole('button', { name: 'Facts', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Graph', exact: true })).toBeVisible();

@@ -298,7 +298,7 @@ export function MeshAgentObservationPanel({
 
   const renderObservationItem = useCallback(
     (item: ObservationTurnTimelineItem) => (
-      <div style={{ boxSizing: 'border-box', padding: '0 14px 10px', width: '100%' }}>
+      <div style={{ boxSizing: 'border-box', padding: '0 14px 2px', width: '100%' }}>
         <ObservationTimelineRowView
           provider={timelineProvider}
           row={item.row}
@@ -386,13 +386,7 @@ export function MeshAgentObservationPanel({
             size={30}
           />
         </span>
-        {sessionUsageMeter ? (
-          <ObservationSessionUsageControl
-            key={streamId ?? 'session-usage'}
-            meter={sessionUsageMeter}
-          />
-        ) : null}
-        <div style={{ minWidth: 0, maxWidth: '100%', overflow: 'hidden', flex: 1 }}>
+        <div style={{ minWidth: 0, maxWidth: '100%', overflow: 'hidden', flex: '0 1 auto' }}>
           <div
             style={{
               display: 'flex',
@@ -418,6 +412,13 @@ export function MeshAgentObservationPanel({
             />
           </div>
         </div>
+        {sessionUsageMeter ? (
+          <ObservationSessionUsageControl
+            key={streamId ?? 'session-usage'}
+            meter={sessionUsageMeter}
+          />
+        ) : null}
+        <div style={{ flex: 1, minWidth: 0 }} />
         {usageMeter ? (
           <button
             aria-expanded={usageOpen}

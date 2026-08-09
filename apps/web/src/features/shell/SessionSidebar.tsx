@@ -206,6 +206,8 @@ export function SessionSidebar({ daemon, responsive, surfaces, workspace }: Prop
   } = useSessionSidebarActions({
     activeProjectId,
     chatSessions,
+    onCreateChatSession,
+    onCreateProjectSession,
     onOpenProject,
     onOpenWorkspace,
     projects,

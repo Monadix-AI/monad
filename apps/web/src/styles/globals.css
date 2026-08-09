@@ -2,6 +2,9 @@
 @import "tw-animate-css";
 @import "@monad/ui/styles.css";
 
+/* Workplace experience components live outside apps/web and must be scanned explicitly. */
+@source "../../../../packages/atoms/src";
+
 /* Allow Tailwind to detect utility classes used by streamdown (monorepo: hoisted to root node_modules). */
 @source "../../../node_modules/streamdown/dist/*.js";
 @source "../../../node_modules/@streamdown/mermaid/dist/*.js";
@@ -1181,10 +1184,6 @@
     .workspace-home-target:active:not(:disabled) {
       transform: none;
     }
-  }
-
-  .message-actions {
-    transition: opacity 160ms ease;
   }
 
   .composer-editor-input {

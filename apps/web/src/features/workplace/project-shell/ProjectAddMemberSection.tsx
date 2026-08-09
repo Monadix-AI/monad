@@ -7,6 +7,7 @@ import { Button } from '@monad/ui';
 import { AgentInstanceAvatar, workspaceMono as mono, workspaceSans as sans } from '@monad/ui/components/AgentAvatar';
 import { useState } from 'react';
 
+import { BrandIcon } from '#/components/BrandIcon';
 import { useT } from '#/components/I18nProvider';
 import {
   Dialog,
@@ -30,10 +31,10 @@ export type AvailableProjectMember = ProjectController['availableProjectMembers'
 export type ProjectMemberProviderGroup = {
   candidates: AvailableProjectMember[];
   enabled: boolean;
-  icon?: AvailableProjectMember['icon'];
   id: string;
   interaction: 'direct-add' | 'select-existing' | 'spawn-new';
   label: string;
+  providerIcon?: AvailableProjectMember['providerIcon'];
   type: AvailableProjectMember['type'];
 };
 
@@ -59,18 +60,19 @@ export function groupProjectMemberProviders(
     if (existing) {
       existing.candidates.push(candidate);
       existing.enabled ||= candidate.enabled;
+      existing.providerIcon ??= candidate.providerIcon;
       continue;
     }
     groups.set(id, {
       candidates: [candidate],
       enabled: candidate.enabled,
-      icon: candidate.icon,
       id,
       interaction: projectMemberProviderInteraction(candidate),
       label:
         candidate.type === 'mesh-agent'
           ? meshAgentProductDisplayName(candidate.icon, candidate.provider, candidate.provider ?? candidate.name)
           : candidate.label,
+      providerIcon: candidate.providerIcon,
       type: candidate.type
     });
   }
@@ -111,11 +113,18 @@ function ProviderRow({
       className="project-provider-row"
       style={{ borderTop: index === 0 ? 'none' : `1px solid ${'var(--border)'}` }}
     >
-      <AgentInstanceAvatar
-        agent={{ icon: group.icon, name: group.label }}
-        bare
-        size={34}
-      />
+      {group.providerIcon ? (
+        <BrandIcon
+          className="size-7"
+          icon={group.providerIcon}
+        />
+      ) : (
+        <AgentInstanceAvatar
+          agent={{ name: group.label }}
+          bare
+          size={34}
+        />
+      )}
       <div style={{ minWidth: 0 }}>
         <div
           style={{

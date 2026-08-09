@@ -8,7 +8,7 @@ import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { listProjectExperiences, toProjectExperienceDefinitions } from '#/features/workplace/experiences/registry';
 import { Workplace } from '#/features/workplace/Workplace';
 import { useWorkspaceShellStore } from '#/lib/workspace-shell-store';
-import { deriveProjectRouteSessionState } from './project-route-session-state';
+import { deriveProjectRouteSessionState, resolveVisibleProjectSessionId } from './project-route-session-state';
 import { useProjectViewMode } from './use-project-view-mode';
 import { WorkspaceHome } from './WorkspaceHome';
 
@@ -81,7 +81,11 @@ export function WorkspaceRoute({
         activeProjectSessionId
       )
     : { activeSessionId: null, activeSessionTitle: null };
-  const visibleActiveSessionId = routedProjectSessionState.activeSessionId ?? (activeSessionId as SessionId | null);
+  const visibleActiveSessionId = resolveVisibleProjectSessionId({
+    controllerSessionId: activeSessionId as SessionId | null,
+    routedSessionId: activeProjectSessionId,
+    routedSessionState: routedProjectSessionState
+  });
   const updateActiveProjectRouteState = useCallback(
     (project: ProjectController) => {
       const next = deriveProjectRouteSessionState(project, activeProjectSessionId);

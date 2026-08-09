@@ -40,6 +40,11 @@ import { ToolStepView } from './ToolStepView';
 const sessionMessageKey = (message: ViewItem): string => message.id;
 const COMPOSER_CLEARANCE = 'calc(var(--session-composer-clearance, 132px) + 24px)';
 
+export function isCompactSessionEvent(message: ViewItem): boolean {
+  if (isToolItem(message)) return true;
+  return 'role' in message && message.role === 'assistant' && !!message.reasoning && !message.text;
+}
+
 export function sessionReplyHandler(
   isReadOnly: boolean,
   onReply: (messageId: string) => void
@@ -252,7 +257,7 @@ export function SessionTranscript({ model }: { model: SessionTranscriptModel }) 
       <div
         className={cn(
           'session-content-column',
-          'pb-5',
+          isCompactSessionEvent(message) ? 'pb-1' : 'pb-5',
           highlightedMessageId && viewItemContainsTargetId(message, highlightedMessageId) && 'message-deep-link-target'
         )}
         data-message-id={message.id}

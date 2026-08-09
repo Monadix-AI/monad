@@ -1,6 +1,7 @@
 import type { MessageSentFrom } from '../../src/features/session/ChatMessage.tsx';
 
 import { expect, test } from 'bun:test';
+import { Tool, ToolHeader } from '@monad/ui';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
@@ -11,9 +12,11 @@ import {
 } from '../../src/features/session/ChatMessage.tsx';
 import { MessageBody, userMessageTokens } from '../../src/features/session/MessageBody.tsx';
 import { MessageReplyPreview } from '../../src/features/session/MessageReplyPreview.tsx';
+import { formatMessageTimestamp } from '../../src/features/session/message-time.ts';
 import { nextReasoningFollowState } from '../../src/features/session/reasoning-follow.ts';
 import { sessionReplyHandler } from '../../src/features/session/SessionTranscript.tsx';
 import { resolveSessionComposerReplyTarget } from '../../src/features/session/session-route-contract.ts';
+import { toolEventIconTone } from '../../src/features/session/ToolStepView.tsx';
 
 test('help directive replies render through markdown instead of the compact directive divider', () => {
   expect(
@@ -53,7 +56,77 @@ test('reasoning is collapsed by default while the assistant message is streaming
     })
   );
 
-  expect(markup).not.toContain('Internal reasoning details');
+  expect({
+    body: markup.includes('Internal reasoning details'),
+    chevron: markup.includes('data-slot="disclosure-chevron"'),
+    icon: markup.includes('size-4 shrink-0'),
+    titleAlignment: markup.includes('min-h-7 w-fit max-w-full justify-start gap-2 p-0.5'),
+    toolTitleTypography: markup.includes('font-sans text-[0.95rem] leading-6')
+  }).toEqual({ body: false, chevron: true, icon: true, titleAlignment: true, toolTitleTypography: true });
+});
+
+test('user and agent messages reveal their timestamp below the content on hover', () => {
+  const timestamp = '2026-08-09T04:25:00.000Z';
+  const timestampLabel = formatMessageTimestamp(timestamp, 'en');
+  const markup = (role: 'assistant' | 'user') =>
+    renderToStaticMarkup(
+      createElement(Message, {
+        assistantLabel: 'Assistant',
+        msg: { id: `msg_${role}`, role, seq: timestamp, text: `${role} message` }
+      })
+    );
+  const assistant = markup('assistant');
+  const user = markup('user');
+
+  expect(
+    [assistant, user].map((message, index) => ({
+      actionOrder: (() => {
+        const actions = message.slice(message.indexOf('message-actions'));
+        const actionIndex = actions.indexOf('<button');
+        const timestampIndex = actions.indexOf(timestampLabel ?? '');
+        return index === 0 ? actionIndex < timestampIndex : timestampIndex < actionIndex;
+      })(),
+      afterContent: message.lastIndexOf('font-mono text-[10px]') > message.indexOf('message'),
+      hoverReveal: message.includes('group-hover:opacity-100'),
+      immediateReveal: message.includes('transition-none') && !message.includes('transition-opacity'),
+      timestamp: !!timestampLabel && message.includes(timestampLabel)
+    }))
+  ).toEqual([
+    { actionOrder: true, afterContent: true, hoverReveal: true, immediateReveal: true, timestamp: true },
+    { actionOrder: true, afterContent: true, hoverReveal: true, immediateReveal: true, timestamp: true }
+  ]);
+});
+
+test('tool event status colors apply only to the icon', () => {
+  expect({
+    error: toolEventIconTone('error'),
+    running: toolEventIconTone('running'),
+    success: toolEventIconTone('ok')
+  }).toEqual({
+    error: '[&>div>svg]:text-destructive',
+    running: '[&>div>svg]:text-accent-blue',
+    success: '[&>div>svg]:text-success'
+  });
+});
+
+test('tool disclosure chevron uses the shared style immediately after its title', () => {
+  const markup = renderToStaticMarkup(
+    createElement(
+      Tool,
+      { defaultOpen: false },
+      createElement(ToolHeader, {
+        showStatus: false,
+        state: 'output-available',
+        title: 'ToolSearch',
+        type: 'tool-search'
+      })
+    )
+  );
+
+  expect({
+    afterTitle: markup.indexOf('data-slot="disclosure-chevron"') > markup.indexOf('ToolSearch'),
+    sharedChevron: markup.includes('data-slot="disclosure-chevron"') && markup.includes('-rotate-90')
+  }).toEqual({ afterTitle: true, sharedChevron: true });
 });
 
 test('pending assistant activity renders the agent label with shimmer state', () => {
@@ -111,7 +184,7 @@ test('user message attachments render exact file metadata below the message body
   );
 
   expect({
-    composerCard: markup.includes('h-14 w-[168px]'),
+    composerCard: markup.includes('h-14 w-42'),
     fileKind: markup.includes('data-file-icon="bundle.zip"'),
     name: markup.includes('bundle.zip'),
     size: markup.includes('2.0 KB'),

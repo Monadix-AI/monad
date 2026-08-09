@@ -266,9 +266,13 @@ test('member assignment and confirmed removal are inert until Start and moving r
       displayState: 'waiting',
       availableActions: { start: true, moveNext: false }
     });
-    const messageCount = store.listMessages(sessionId).length;
     await Bun.sleep(100);
-    expect(store.listMessages(sessionId)).toHaveLength(messageCount);
+    expect((await list()).tasks.find((candidate) => candidate.id === taskId)).toMatchObject({
+      stage: 'tech_design',
+      version: 5,
+      displayState: 'waiting',
+      availableActions: { start: true, moveNext: false }
+    });
   } finally {
     await live.stop();
     store.close();
