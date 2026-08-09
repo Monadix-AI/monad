@@ -70,7 +70,7 @@ const WorkspaceSectionList = memo(function WorkspaceSectionList() {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <SidebarActionVisibilityRules />
-      <div className="flex-none px-2 pb-2">
+      <div className="flex flex-none flex-col gap-px px-2 pb-2">
         <SidebarNavItem
           href="/"
           icon={ChatAdd01Icon}
