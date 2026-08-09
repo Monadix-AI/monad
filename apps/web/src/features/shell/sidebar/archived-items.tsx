@@ -91,7 +91,7 @@ export function ArchivedSidebarItems({
         />
       </div>
       <div className="sidebar-scroll-area min-h-0 flex-1 overflow-y-auto">
-        <div className="flex flex-col gap-0.5 px-2.5 py-3">
+        <div className="flex flex-col gap-px px-2.5 py-3">
           {showLoading ? <p className="px-2 py-2 text-muted-foreground text-xs">{t('web.common.loading')}</p> : null}
           {!showLoading && visibleProjectSessions.length === 0 && visibleChatSessions.length === 0 ? (
             <p className="px-2 py-2 text-muted-foreground text-xs">No archived sessions.</p>
@@ -168,7 +168,7 @@ function ArchivedBucketList({
         return (
           <div key={bucket.id}>
             <div className="px-2 pb-1 text-[10px] text-muted-foreground leading-4">{bucket.label}</div>
-            <div className="flex flex-col gap-0.5">
+            <div className="flex flex-col gap-px">
               {visibleItems.map((item) => (
                 <ArchivedSessionRow
                   item={item}

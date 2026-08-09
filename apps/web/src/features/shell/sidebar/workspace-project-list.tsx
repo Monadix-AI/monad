@@ -143,7 +143,7 @@ export const ProjectList = memo(function ProjectList({
               <CollapsiblePresence collapsed={!expanded}>
                 <div
                   aria-label={project.name}
-                  className="mt-0.5 flex flex-col gap-0.5 pb-1"
+                  className="mt-px flex flex-col gap-px pb-1"
                   role="tree"
                 >
                   {visibleSessions.length === 0 ? (

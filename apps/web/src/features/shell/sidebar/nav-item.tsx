@@ -9,6 +9,7 @@ import { SidebarItemEndcap } from './sidebar-item-endcap';
 
 const SIDEBAR_ITEM_HEIGHT_CLASS = 'h-token-sidebar-row';
 const SIDEBAR_ITEM_PADDING_CLASS = 'px-row-x';
+const SIDEBAR_NAV_ITEM_ROW_CLASS = 'h-10 px-row-x';
 export const SIDEBAR_ITEM_LABEL_CLASS = 'min-w-0 flex-1 truncate';
 export const SIDEBAR_ITEM_ROW_CLASS = `${SIDEBAR_ITEM_HEIGHT_CLASS} ${SIDEBAR_ITEM_PADDING_CLASS}`;
 export const SIDEBAR_INDENTED_ITEM_ROW_CLASS = `${SIDEBAR_ITEM_HEIGHT_CLASS} pr-row-x pl-5`;
@@ -191,7 +192,7 @@ export function SidebarNavItem({
     'group/item',
     sidebarItemContainerClass({
       active,
-      className: cn(SIDEBAR_ITEM_ROW_CLASS, 'gap-1.5'),
+      className: cn(SIDEBAR_NAV_ITEM_ROW_CLASS, 'gap-1.5'),
       disabled
     })
   );
