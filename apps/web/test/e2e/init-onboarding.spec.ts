@@ -137,7 +137,6 @@ async function installInitOnboardingApiMock(
             state: 'active',
             archived: false,
             memberTemplates: body.memberTemplates,
-            autoInviteProjectMembers: body.autoInviteProjectMembers,
             createdAt: now,
             updatedAt: now
           }
@@ -184,7 +183,7 @@ test.describe('init onboarding', () => {
     await expect(page).toHaveURL(/\/$/);
   });
 
-  test('/init binds a CLI and creates a project with that CLI as an auto-invited member', async ({ page }) => {
+  test('/init binds a CLI and adds it to the project member catalog', async ({ page }) => {
     let createBody: unknown;
     let updateBody: unknown;
     await installInitOnboardingApiMock(page, {
@@ -218,8 +217,7 @@ test.describe('init onboarding', () => {
           displayName: 'Codex',
           settings: { managedProjectAgent: true }
         }
-      ],
-      autoInviteProjectMembers: true
+      ]
     });
   });
 

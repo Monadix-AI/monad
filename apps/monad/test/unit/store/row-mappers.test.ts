@@ -43,7 +43,6 @@ const projectRow: WorkplaceProjectRow = {
   cwd: null,
   origin: null,
   memberTemplates: '{}',
-  autoInviteProjectMembers: 1,
   sortRank: 0,
   createdAt: now,
   updatedAt: now

@@ -123,10 +123,8 @@ export function ProjectSettings({
             path={room.workdir.path}
           />
           <ProjectMembersSection
-            autoInviteProjectMembers={room.source.project?.autoInviteProjectMembers !== false}
             loading={room.membersLoading}
             members={room.projectMembers}
-            onAutoInviteChange={(checked) => void room.updateProjectAutoInviteMembers(checked)}
             onOpenSettings={(member) => {
               if (openMeshAgentMemberSettings(member)) return;
               setMemberSettings(member);

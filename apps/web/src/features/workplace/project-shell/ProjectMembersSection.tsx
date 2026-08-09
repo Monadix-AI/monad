@@ -14,7 +14,6 @@ import {
 
 import { useT } from '#/components/I18nProvider';
 import { RefreshButton } from '#/components/RefreshButton';
-import { SwitchSetting } from '#/components/ui/switch-setting';
 import { isResolvedEmptyList } from '#/lib/async-list-state';
 import { ProjectMembersListSkeleton } from './ProjectSettingsListSkeletons';
 
@@ -28,23 +27,19 @@ function projectMemberRemoveLabelKey(
 }
 
 export function ProjectMembersSection({
-  autoInviteProjectMembers,
   loading,
   members,
   onOpenSettings,
   onRemove,
   onRefresh,
-  onAutoInviteChange,
   participants,
   refreshing
 }: {
-  autoInviteProjectMembers: boolean;
   loading: boolean;
   members: ProjectController['projectMembers'];
   onOpenSettings: (member: ProjectMember) => void;
   onRemove: (memberId: string) => void;
   onRefresh: () => void;
-  onAutoInviteChange: (checked: boolean) => void;
   participants: ProjectController['projectParticipants'];
   refreshing: boolean;
 }): React.ReactElement {
@@ -103,13 +98,6 @@ export function ProjectMembersSection({
           </span>
         </div>
       </div>
-      <SwitchSetting
-        checked={autoInviteProjectMembers}
-        className="rounded-lg border bg-card p-3"
-        description={t('web.workplace.autoInviteProjectMembersDescription')}
-        onCheckedChange={onAutoInviteChange}
-        title={t('web.workplace.autoInviteProjectMembersTitle')}
-      />
       <div style={{ border: `1px solid ${'var(--border)'}`, borderRadius: boxR, background: 'var(--card)' }}>
         {loading ? <ProjectMembersListSkeleton /> : null}
         {empty ? (

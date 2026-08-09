@@ -126,7 +126,6 @@ export function rowToWorkplaceProject(row: WorkplaceProjectRow): WorkplaceProjec
     cwd: row.cwd ?? undefined,
     origin: parseOrigin(row.origin),
     memberTemplates: JSON.parse(row.memberTemplates),
-    autoInviteProjectMembers: row.autoInviteProjectMembers === 1,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt
   });

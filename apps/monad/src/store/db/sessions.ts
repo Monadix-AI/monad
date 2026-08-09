@@ -45,7 +45,6 @@ export interface WorkplaceProjectPatch {
   cwd?: string | null;
   origin?: WorkplaceProject['origin'] | null;
   memberTemplates?: WorkplaceProject['memberTemplates'];
-  autoInviteProjectMembers?: boolean;
 }
 
 export function insertSession(db: Db, s: Session): void {
@@ -226,7 +225,6 @@ export function insertWorkplaceProject(db: Db, project: WorkplaceProject): void 
       cwd: project.cwd ?? null,
       origin: project.origin ? JSON.stringify(project.origin) : null,
       memberTemplates: JSON.stringify(project.memberTemplates),
-      autoInviteProjectMembers: project.autoInviteProjectMembers === false ? 0 : 1,
       sortRank: Number(
         db
           .select({ rank: sql<number>`COALESCE(MIN(${workplaceProjects.sortRank}), 1) - 1` })
@@ -277,9 +275,6 @@ export function updateWorkplaceProject(db: Db, id: string, patch: WorkplaceProje
   if (patch.cwd !== undefined) sets.cwd = patch.cwd;
   if (patch.origin !== undefined) sets.origin = patch.origin ? JSON.stringify(patch.origin) : null;
   if (patch.memberTemplates !== undefined) sets.memberTemplates = JSON.stringify(patch.memberTemplates);
-  if (patch.autoInviteProjectMembers !== undefined) {
-    sets.autoInviteProjectMembers = patch.autoInviteProjectMembers ? 1 : 0;
-  }
   if (patch.archived === false) {
     sets.sortRank = Number(
       db

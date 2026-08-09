@@ -18,8 +18,7 @@ test('project cwd belongs to the creation contract only', () => {
     'archived',
     'model',
     'origin',
-    'memberTemplates',
-    'autoInviteProjectMembers'
+    'memberTemplates'
   ]);
   expect(updateWorkplaceProjectRequestSchema.parse({ title: 'Renamed', cwd: '/tmp/other' })).toEqual({
     title: 'Renamed'

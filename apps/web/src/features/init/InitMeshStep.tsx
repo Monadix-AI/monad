@@ -109,8 +109,7 @@ export function InitMeshStep({
             displayName,
             settings: defaultWorkplaceProjectMemberSettings('mesh-agent', agent)
           }
-        ],
-        autoInviteProjectMembers: true
+        ]
       }).unwrap();
       window.location.assign(projectPath(projectId));
     } catch (error) {

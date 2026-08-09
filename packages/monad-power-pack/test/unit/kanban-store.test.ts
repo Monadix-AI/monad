@@ -64,8 +64,7 @@ test('createTask is idempotent and binds exactly one project session', async () 
   expect(createInputs).toEqual([
     {
       title: 'A',
-      idempotencyKey: expect.stringMatching(/^kanban:create:/),
-      memberPolicy: 'empty'
+      idempotencyKey: expect.stringMatching(/^kanban:create:/)
     }
   ]);
   expect(await store.listTasks('prj_a')).toEqual([first]);

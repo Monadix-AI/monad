@@ -266,14 +266,6 @@ export function useProjectActions(args: {
     [projectMembers, updateProjectMembers]
   );
 
-  const updateProjectAutoInviteMembers = useCallback(
-    async (autoInviteProjectMembers: boolean) => {
-      if (!currentProject) return;
-      await updateWorkplaceProject({ id: currentProject.id, autoInviteProjectMembers }).unwrap();
-    },
-    [currentProject, updateWorkplaceProject]
-  );
-
   const updateProjectMemberSettings = useCallback(
     async (id: string, patch: WorkplaceProjectMemberSettings) => {
       await updateProjectMembers(
@@ -327,7 +319,6 @@ export function useProjectActions(args: {
     removeProjectMember,
     updateProjectMemberSettings,
     updateProjectMemberIdentity,
-    updateProjectAutoInviteMembers,
     sendMeshAgentInput,
     stopMeshAgent
   };

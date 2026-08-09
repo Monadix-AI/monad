@@ -141,8 +141,7 @@ export function createProjectSessionOperations(input: {
         projectId: projectId as ProjectId,
         title: request.title,
         cwd: request.cwd,
-        id,
-        memberPolicy: request.memberPolicy
+        id
       });
       return { id: result.sessionId };
     },

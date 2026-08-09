@@ -115,7 +115,7 @@ for (const kind of TRANSPORTS) {
       }).toEqual({ project: 404, first: 404, second: 404, unrelated: 200 });
     });
 
-    test('project member updates leave the active session roster unchanged', async () => {
+    test('project member updates leave a manually populated session roster unchanged', async () => {
       const { projectId } = (await (await json('POST', '/v1/workplace/projects', { title: 'member sync' })).json()) as {
         projectId: string;
       };
@@ -133,6 +133,7 @@ for (const kind of TRANSPORTS) {
       const { sessionId } = (await (
         await json('POST', `/v1/projects/${projectId}/sessions`, { title: 'active session' })
       ).json()) as { sessionId: SessionId };
+      expect((await json('POST', `/v1/sessions/${sessionId}/members`, { templateId: 'pmem_fable' })).status).toBe(201);
 
       const update = await json('PATCH', `/v1/workplace/projects/${projectId}`, {
         memberTemplates: [
@@ -190,14 +191,13 @@ for (const kind of TRANSPORTS) {
       });
     });
 
-    test('automatic project-member invites can be disabled for newly created sessions', async () => {
+    test('new sessions start empty and require project members to be invited manually', async () => {
       const { projectId } = (await (
         await json('POST', '/v1/workplace/projects', { title: 'manual roster' })
       ).json()) as {
         projectId: string;
       };
-      const update = await json('PATCH', `/v1/workplace/projects/${projectId}`, {
-        autoInviteProjectMembers: false,
+      await json('PATCH', `/v1/workplace/projects/${projectId}`, {
         memberTemplates: [{ id: 'pmem_codex', type: 'mesh-agent', name: 'codex', displayName: 'Reviewer' }]
       });
       const { sessionId } = (await (
@@ -207,11 +207,7 @@ for (const kind of TRANSPORTS) {
         await (await t.fetch(`/v1/sessions/${sessionId}/members`)).json()
       );
 
-      expect({
-        autoInviteProjectMembers: ((await update.json()) as { project: { autoInviteProjectMembers: boolean } }).project
-          .autoInviteProjectMembers,
-        members: members.members
-      }).toEqual({ autoInviteProjectMembers: false, members: [] });
+      expect(members.members).toEqual([]);
     });
 
     test('creating a session for an unknown project 404s', async () => {

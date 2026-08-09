@@ -32,7 +32,6 @@ function projectView(project: WorkplaceProject): WorkplaceProject {
     ...(project.cwd ? { cwd: project.cwd } : {}),
     ...(project.origin ? { origin: project.origin } : {}),
     memberTemplates: project.memberTemplates,
-    autoInviteProjectMembers: project.autoInviteProjectMembers !== false,
     createdAt: project.createdAt,
     updatedAt: project.updatedAt
   };
@@ -103,7 +102,6 @@ export function createProjectLifecycleHandlers(
         ...(resolvedCwd ? { cwd: resolvedCwd } : {}),
         ...(origin ? { origin } : {}),
         memberTemplates: [],
-        autoInviteProjectMembers: true,
         createdAt: now,
         updatedAt: now
       };
@@ -120,8 +118,7 @@ export function createProjectLifecycleHandlers(
       archived,
       origin,
       model,
-      memberTemplates,
-      autoInviteProjectMembers
+      memberTemplates
     }: { id: ProjectId } & UpdateWorkplaceProjectRequest) {
       const current = requireProject(id);
       if (state !== undefined && !canTransition(current.state, state)) {
@@ -133,8 +130,7 @@ export function createProjectLifecycleHandlers(
         archived,
         model,
         origin,
-        memberTemplates,
-        autoInviteProjectMembers
+        memberTemplates
       });
       if (!project) throw new HandlerError('internal', 'update project failed');
       return { project: projectView(project) };

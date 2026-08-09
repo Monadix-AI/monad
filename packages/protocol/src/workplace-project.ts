@@ -16,7 +16,6 @@ export const workplaceProjectSchema = z.object({
   // Project-level preset catalog: configuration a session may invite from, never itself running
   // anything. Distinct from a session's live member bindings.
   memberTemplates: workplaceProjectMemberTemplatesSchema.default([]),
-  autoInviteProjectMembers: z.boolean().optional(),
   createdAt: z.string(),
   updatedAt: z.string()
 });
@@ -79,8 +78,7 @@ export const updateWorkplaceProjectRequestSchema = z.object({
   archived: z.boolean().optional(),
   model: z.string().nullable().optional(),
   origin: operationSourceSchema.nullable().optional(),
-  memberTemplates: workplaceProjectMemberTemplatesSchema.optional(),
-  autoInviteProjectMembers: z.boolean().optional()
+  memberTemplates: workplaceProjectMemberTemplatesSchema.optional()
 });
 export type UpdateWorkplaceProjectRequest = z.infer<typeof updateWorkplaceProjectRequestSchema>;
 

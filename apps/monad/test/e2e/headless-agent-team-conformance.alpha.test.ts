@@ -328,11 +328,10 @@ for (const kind of TRANSPORTS) {
         ).status
       ).toBe(200);
       const sessionId = await createProjectSession(projectId, 'A');
-      const members = listSessionMembersResponseSchema.parse(
-        await (await t.fetch(`/v1/sessions/${sessionId}/members`)).json()
-      );
-      const memberId = members.members[0]?.member.id;
-      if (!memberId) throw new Error('expected an auto-invited member');
+      const invited = (await (
+        await json('POST', `/v1/sessions/${sessionId}/members`, { templateId: 'tmpl-codex' })
+      ).json()) as { member: { id: string } };
+      const memberId = invited.member.id;
       const before = await bindMember(sessionId, memberId);
       expect(stripTimestamps(before.member)).toEqual({
         id: memberId,

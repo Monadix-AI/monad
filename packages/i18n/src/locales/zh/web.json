@@ -1296,8 +1296,6 @@
   "web.workplace.currentMembers": "当前成员",
   "web.workplace.projectMembersTitle": "Project 成员",
   "web.workplace.projectMembersDescription": "当前 project 可复用的成员列表；已有 session 会保留各自的成员。",
-  "web.workplace.autoInviteProjectMembersTitle": "新建 session 时加入 Project 成员",
-  "web.workplace.autoInviteProjectMembersDescription": "开启后，每个新 session 都会为各 Project 成员创建独立实例并加入。",
   "web.workplace.projectSessionBreadcrumb": "Project 和 session",
   "web.workplace.sessionMemberCount_other": "当前 session 有 {count} 个成员",
   "web.workplace.agentProvidersTitle": "Agent Providers",

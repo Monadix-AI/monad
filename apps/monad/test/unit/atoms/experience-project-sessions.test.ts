@@ -53,22 +53,20 @@ function fixture(generate: () => Promise<void> = async () => {}) {
   return { store, operations, generated: () => generated, createRequests };
 }
 
-test('empty member policy is forwarded to daemon project-session creation', async () => {
+test('experience-created project sessions use the manual-roster daemon contract', async () => {
   const { store, operations, createRequests } = fixture();
 
   try {
     await operations.create(projectId, {
       title: 'Manual roster',
-      idempotencyKey: 'pack-a:create-a',
-      memberPolicy: 'empty'
-    } as Parameters<typeof operations.create>[1]);
+      idempotencyKey: 'pack-a:create-a'
+    });
     expect(createRequests).toEqual([
       {
         projectId,
         title: 'Manual roster',
         cwd: undefined,
-        id: expect.stringMatching(/^ses_/),
-        memberPolicy: 'empty'
+        id: expect.stringMatching(/^ses_/)
       }
     ]);
   } finally {
