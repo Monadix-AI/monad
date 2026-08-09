@@ -1557,41 +1557,6 @@ test('typed lifecycle event falls back to its actor name and generated identity'
   ]);
 });
 
-test('MeshAgent resume failure without a typed event keeps the legacy ID fallback', () => {
-  const avatarUrl = __workplaceProjectMessageTest.entityAvatarUrl('mesh-agent-resume:codex');
-  const messages = __workplaceProjectMessageTest.buildProjectMessages({
-    persistedMessages: [],
-    meshSessions: [],
-    liveItems: [
-      {
-        kind: 'system',
-        id: 'mesh-agent-resume-failed:codex',
-        text: 'Codex resume failed for provider session codex-thread-stale; cold started a new runtime.',
-        level: 'warn',
-        seq: 'evt_resumefailed'
-      }
-    ],
-    liveTools: [],
-    showDeveloperOnlyMessages: false
-  });
-
-  expect(messages).toEqual([
-    {
-      id: 'mesh-agent-resume-failed:codex',
-      authorId: 'codex',
-      authorName: 'codex',
-      av: 'C',
-      icon: undefined,
-      avatarUrl,
-      kind: 'system',
-      tag: 'CLI',
-      time: '',
-      text: 'Codex resume failed for provider session codex-thread-stale; cold started a new runtime.',
-      orderKey: 'evt_resumefailed'
-    }
-  ]);
-});
-
 test('MeshAgent project member presence stays idle without a daemon session', () => {
   expect(
     __workplaceProjectMessageTest.meshAgentMemberPresence({

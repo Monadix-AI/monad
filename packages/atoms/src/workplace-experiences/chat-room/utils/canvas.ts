@@ -120,6 +120,7 @@ export function toChatRoomCanvas(
           kind: 'system' as const,
           id: notice.id,
           text: notice.text,
+          event: notice.event,
           level: notice.tone === 'warning' ? ('warn' as const) : notice.tone,
           seq: notice.observedAt
         }))

@@ -72,6 +72,32 @@ test('the inline sign-in action runs the existing host action with its projected
   expect(received).toEqual(loginPayload);
 });
 
+test('the lifecycle actor avatar opens the projected agent', () => {
+  let openedAgentId: string | undefined;
+  const card = SystemMessageRow({
+    msg: {
+      ...loginMessage,
+      id: 'mesh-agent-idle-suspended:pmem_claude-code_f2654d392ff2',
+      text: 'fell asleep.',
+      agentChip: {
+        id: 'pmem_claude-code_f2654d392ff2',
+        name: 'Opus',
+        avatarUrl: '/avatars/opus.svg',
+        tag: 'Claude'
+      }
+    },
+    onAgentClick: (id) => {
+      openedAgentId = id;
+    }
+  });
+  const actorButton = findButton((card.props as { actor?: ReactNode }).actor);
+  if (!actorButton?.props.onClick) throw new Error('expected an interactive lifecycle actor');
+
+  actorButton.props.onClick();
+
+  expect(openedAgentId).toBe('pmem_claude-code_f2654d392ff2');
+});
+
 test('reply actions flow below the message card and align with its content', () => {
   const message: Message = {
     id: 'msg_AGENT_REPLYABLE0000',

@@ -210,21 +210,36 @@ function meshAgentSystemActorView({
   meshAgentTags: Map<string, string>;
   avatarStyle?: AvatarStyle;
 }): Pick<Message, 'authorId' | 'authorName' | 'av' | 'icon' | 'avatarUrl' | 'tag' | 'agentChip'> {
-  const member = projectMembers.find((candidate) => candidate.type === 'mesh-agent' && candidate.id === actorId);
-  const displayName = meshAgentDisplayNames.get(actorId) ?? member?.displayName ?? actorName ?? actorId;
+  const member = projectMembers.find(
+    (candidate) => candidate.type === 'mesh-agent' && (candidate.id === actorId || candidate.name === actorId)
+  );
+  const canonicalActorId = member?.id ?? actorId;
+  const displayName =
+    meshAgentDisplayNames.get(canonicalActorId) ??
+    meshAgentDisplayNames.get(actorId) ??
+    member?.displayName ??
+    actorName ??
+    actorId;
   const avatarUrl = meshAgentAvatarUrl(displayName, meshAgentAvatarSeeds, avatarStyle);
   const icon =
-    meshAgentIcons.get(actorId) ?? (member ? meshAgentIcons.get(member.name) : undefined) ?? iconForAgent(displayName);
-  const tag = meshAgentTags.get(actorId) ?? (member ? meshAgentTags.get(member.name) : undefined) ?? 'CLI';
+    meshAgentIcons.get(canonicalActorId) ??
+    meshAgentIcons.get(actorId) ??
+    (member ? meshAgentIcons.get(member.name) : undefined) ??
+    iconForAgent(displayName);
+  const tag =
+    meshAgentTags.get(canonicalActorId) ??
+    meshAgentTags.get(actorId) ??
+    (member ? meshAgentTags.get(member.name) : undefined) ??
+    'CLI';
   return {
-    authorId: actorId,
+    authorId: canonicalActorId,
     authorName: displayName,
     av: avatarForAgent(displayName),
     icon,
     avatarUrl,
     tag,
     agentChip: {
-      id: actorId,
+      id: canonicalActorId,
       name: displayName,
       icon,
       avatarUrl,
@@ -519,21 +534,6 @@ function acpAgentNameFromTool(item: Extract<UIItem, { kind: 'tool' }>): string |
   return name || undefined;
 }
 
-function meshAgentSystemAgentName(id: string): string | undefined {
-  for (const prefix of [
-    'mesh-agent-connection-required:',
-    'mesh-agent-resume-failed:',
-    'mesh-agent-idle-resumed:',
-    'mesh-agent-idle-suspended:',
-    'mesh-agent-exited:',
-    'mesh-agent-failed:',
-    'mesh-agent-stopped:'
-  ]) {
-    if (id.startsWith(prefix)) return id.slice(prefix.length).split(':')[0];
-  }
-  return undefined;
-}
-
 export function acpProgressText(output: string | undefined): string {
   const text = output?.trim() ?? '';
   if (!text || text === 'waiting for response...') return '';
@@ -667,23 +667,16 @@ export function buildProjectMessages({
         });
         continue;
       }
-      const meshAgentLifecycleAgent = meshAgentSystemAgentName(item.id);
-      const authorName = meshAgentLifecycleAgent
-        ? (meshAgentDisplayNames.get(meshAgentLifecycleAgent) ?? meshAgentLifecycleAgent)
-        : 'Monad';
+      const authorName = 'Monad';
       byId.set(item.id, {
         id: item.id,
-        authorId: meshAgentLifecycleAgent ?? authorName,
+        authorId: authorName,
         authorName,
         av: avatarForAgent(authorName),
-        icon: meshAgentLifecycleAgent ? meshAgentIcons.get(meshAgentLifecycleAgent) : iconForAgent(authorName),
-        avatarUrl: meshAgentLifecycleAgent
-          ? meshAgentAvatarSeeds.has(authorName)
-            ? meshAgentAvatarUrl(authorName, meshAgentAvatarSeeds, avatarStyle)
-            : entityAvatarUrl(`mesh-agent-resume:${authorName}`, avatarStyle)
-          : undefined,
+        icon: iconForAgent(authorName),
+        avatarUrl: undefined,
+        tag: 'SYS',
         kind: 'system',
-        tag: meshAgentLifecycleAgent ? (meshAgentTags.get(meshAgentLifecycleAgent) ?? 'CLI') : 'SYS',
         time: '',
         text: item.text,
         ...(item.level === 'error' ? { systemTone: 'error' as const } : {}),

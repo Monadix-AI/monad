@@ -3,7 +3,8 @@ import type {
   MeshAgentLoginRequirement,
   MeshAgentPendingApproval,
   MeshAgentStateEvent,
-  MeshAgentStateSession
+  MeshAgentStateSession,
+  MeshAgentSystemEvent
 } from '@monad/protocol';
 
 import { meshAgentLoginRequirementId, meshAgentPendingApprovalSchema, parseEventPayload } from '@monad/protocol';
@@ -13,6 +14,7 @@ import { workplaceExperienceT } from '../i18n.ts';
 export interface MeshAgentLifecycleNotice {
   id: string;
   agentName: string;
+  event: MeshAgentSystemEvent;
   kind: 'connection-required' | 'exited' | 'failed' | 'idle-resumed' | 'idle-suspended' | 'resume-failed' | 'stopped';
   meshSessionId?: string;
   observedAt: string;
@@ -151,6 +153,7 @@ export function meshAgentLifecycleNotices(state: MeshAgentExperienceState): Mesh
         {
           id: `mesh-agent-idle-suspended:${payload.agentId}:${event.id}`,
           agentName: payload.agentName,
+          event: payload,
           kind: 'idle-suspended',
           meshSessionId: payload.payload.meshSessionId,
           observedAt: event.at,
@@ -165,6 +168,7 @@ export function meshAgentLifecycleNotices(state: MeshAgentExperienceState): Mesh
         {
           id: `mesh-agent-idle-resumed:${payload.agentId}:${event.id}`,
           agentName: payload.agentName,
+          event: payload,
           kind: 'idle-resumed',
           meshSessionId: payload.payload.meshSessionId,
           observedAt: event.at,
@@ -179,6 +183,12 @@ export function meshAgentLifecycleNotices(state: MeshAgentExperienceState): Mesh
         {
           id: `mesh-agent-resume-failed:${payload.agentName}:${event.id}`,
           agentName: payload.agentName,
+          event: {
+            agentId: payload.agentName,
+            agentName: payload.agentName,
+            type: 'resume_failed',
+            payload: { provider: payload.provider, providerSessionRef: payload.providerSessionRef }
+          },
           kind: 'resume-failed',
           observedAt: event.at,
           text: t('web.meshAgent.lifecycle.resumeFailed', {
@@ -195,6 +205,12 @@ export function meshAgentLifecycleNotices(state: MeshAgentExperienceState): Mesh
         {
           id: `mesh-agent-connection-required:${payload.agentName}:${event.id}`,
           agentName: payload.agentName,
+          event: {
+            agentId: payload.agentName,
+            agentName: payload.agentName,
+            type: 'connection_required',
+            payload: { ...(payload.meshSessionId ? { meshSessionId: payload.meshSessionId } : {}) }
+          },
           kind: 'connection-required',
           ...(payload.meshSessionId ? { meshSessionId: payload.meshSessionId } : {}),
           observedAt: event.at,
@@ -225,6 +241,12 @@ export function meshAgentLifecycleNotices(state: MeshAgentExperienceState): Mesh
         {
           id: `mesh-agent-${payload.state}:${agentName}:${event.id}`,
           agentName,
+          event: {
+            agentId: agentName,
+            agentName,
+            type: payload.state,
+            payload: { meshSessionId: payload.meshSessionId, exitCode: payload.exitCode }
+          },
           kind: payload.state,
           meshSessionId: payload.meshSessionId,
           observedAt: event.at,
