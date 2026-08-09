@@ -400,13 +400,6 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
                 providerSessionRef: resumeFrom ?? undefined,
                 input: batch?.prompt ?? notice
               });
-              await emitManagedMeshAgentThinking(
-                session.id,
-                nativeSession.id,
-                member.projectMemberId,
-                activeDeliveryId,
-                displayName
-              );
               batch?.accept();
               await writeBatchDirectReceipts(batch);
               if (activeDeliveryId) {
@@ -452,6 +445,15 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
             return;
           }
           await admission.completion;
+          if (nativeSession) {
+            await emitManagedMeshAgentThinking(
+              session.id,
+              nativeSession.id,
+              member.projectMemberId,
+              activeDeliveryId,
+              displayName
+            );
+          }
         } catch (err) {
           batch?.release();
           await handleDeliveryFailure(member, err);

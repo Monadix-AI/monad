@@ -4,6 +4,7 @@ import type { SessionContext } from '#/handlers/session/context.ts';
 import type { MeshAgentTargetId } from '#/store/db/mesh-sessions.ts';
 
 import { mkdirSync } from 'node:fs';
+import { isAbsolute } from 'node:path';
 
 import { extractError } from '#/agent/index.ts';
 import { HandlerError } from '#/handlers/handler-error.ts';
@@ -86,7 +87,11 @@ export function createManagedMeshAgentRuntime(ctx: SessionContext) {
     const currentSession = ctx.requireSession(session.id);
     if (!currentSession.projectId)
       throw new HandlerError('invalid', `MeshAgent "${spec.name}" requires a project binding`);
-    const configuredWorkingPath = workingDirectoryOverride?.trim() || currentSession.cwd;
+    const normalizedWorkingDirectoryOverride = workingDirectoryOverride?.trim();
+    if (normalizedWorkingDirectoryOverride && !isAbsolute(normalizedWorkingDirectoryOverride)) {
+      throw new HandlerError('invalid', `MeshAgent "${spec.name}" working directory override must be absolute`);
+    }
+    const configuredWorkingPath = normalizedWorkingDirectoryOverride || currentSession.cwd;
     const workingPath =
       configuredWorkingPath ??
       (paths?.home
