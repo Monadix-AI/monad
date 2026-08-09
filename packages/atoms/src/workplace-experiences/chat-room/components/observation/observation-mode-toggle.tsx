@@ -23,7 +23,6 @@ export function ObservationModeToggle({
       aria-label="Observation view"
       role="tablist"
       style={{
-        border: '1px solid var(--border)',
         borderRadius: 999,
         background: 'var(--secondary)',
         display: 'inline-flex',
@@ -64,7 +63,6 @@ export function RawDisplayModeToggle({
       aria-label="Raw display"
       role="tablist"
       style={{
-        border: '1px solid var(--border)',
         borderRadius: 999,
         background: 'var(--secondary)',
         display: 'inline-flex',

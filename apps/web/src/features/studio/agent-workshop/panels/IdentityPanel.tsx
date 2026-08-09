@@ -36,7 +36,7 @@ export function IdentityPanel(props: IdentityPanelProps) {
         </div>
         <div
           aria-label={t('web.studio.agentEditor.identity.files')}
-          className="flex gap-1 border-b"
+          className="flex gap-1"
           role="tablist"
         >
           {FILES.map((file) => (
@@ -44,8 +44,8 @@ export function IdentityPanel(props: IdentityPanelProps) {
               aria-controls={`instruction-panel-${file}`}
               aria-selected={activeFile === file}
               className={cn(
-                'min-h-9 border-transparent border-b-2 px-3 font-mono text-xs',
-                activeFile === file ? 'border-foreground text-foreground' : 'text-muted-foreground'
+                'min-h-9 rounded-md px-3 font-mono text-xs transition-colors',
+                activeFile === file ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:bg-accent'
               )}
               key={file}
               onClick={() => setActiveFile(file)}

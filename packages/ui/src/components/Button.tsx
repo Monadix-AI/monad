@@ -6,7 +6,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '../lib/utils';
 
 const buttonVariants = cva(
-  'inline-flex shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-md border border-transparent font-medium text-sm leading-control transition-[background-color,border-color,color,box-shadow,opacity] duration-150 ease-out outline-none disabled:pointer-events-none disabled:opacity-50 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/35 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*=size-])]:size-4',
+  'inline-flex shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-md font-medium text-sm leading-control transition-[background-color,color,box-shadow,opacity] duration-150 ease-out outline-none disabled:pointer-events-none disabled:opacity-50 focus-visible:ring-[3px] focus-visible:ring-ring/35 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*=size-])]:size-4',
   {
     variants: {
       variant: {
@@ -19,8 +19,8 @@ const buttonVariants = cva(
         warning:
           'bg-warning/20 text-[var(--warning-foreground)] hover:bg-warning/28 active:bg-warning/36 focus-visible:ring-warning/30 dark:bg-warning/15 dark:hover:bg-warning/22 dark:active:bg-warning/28',
         info: 'bg-info/12 text-[var(--info-foreground)] hover:bg-info/18 active:bg-info/24 focus-visible:ring-info/25 dark:bg-info/15 dark:hover:bg-info/22 dark:active:bg-info/28',
-        outline: 'border-border bg-background text-foreground hover:bg-muted hover:text-foreground',
-        secondary: 'border-border bg-secondary text-secondary-foreground hover:bg-accent hover:text-accent-foreground',
+        outline: 'bg-background text-foreground hover:bg-muted hover:text-foreground',
+        secondary: 'bg-secondary text-secondary-foreground hover:bg-accent hover:text-accent-foreground',
         ghost: 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
         link: 'text-link underline-offset-4 hover:underline'
       },

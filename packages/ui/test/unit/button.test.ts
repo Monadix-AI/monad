@@ -19,3 +19,24 @@ test('colored button variants use saturated text on a translucent semantic backg
 test('extra-large icon buttons preserve a true 36px control size', () => {
   expect(buttonVariants({ size: 'icon-xl' }).split(' ')).toContain('size-[36px]');
 });
+
+test('button variants use borderless styling with visible keyboard focus', () => {
+  const variants = [
+    'default',
+    'destructive',
+    'success',
+    'warning',
+    'info',
+    'outline',
+    'secondary',
+    'ghost',
+    'link'
+  ] as const;
+
+  for (const variant of variants) {
+    const classes = buttonVariants({ variant }).split(' ');
+    expect(classes.filter((className) => className.startsWith('border'))).toEqual([]);
+    expect(classes).toContain('focus-visible:ring-[3px]');
+    expect(classes).toContain('focus-visible:ring-ring/35');
+  }
+});
