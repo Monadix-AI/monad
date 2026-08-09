@@ -14,6 +14,7 @@ import type { ApprovalView, Participant, Project } from './types.ts';
 
 import { useMemo } from 'react';
 
+import { mergeMeshAgentSessions } from './mesh-agent-sessions.ts';
 import { foldMeshAgentExperienceState } from './mesh-agent-state.ts';
 import { parseProjectMembers, resolveExperienceProjectMembers } from './project-members.ts';
 import {
@@ -102,7 +103,10 @@ export function useWorkspaceProjectProjection(args: {
     [args.meshAgentState]
   );
   const meshSessions = useMemo(
-    () => (meshAgentState ? [...meshAgentState.sessions.values()] : args.meshSessions),
+    () =>
+      meshAgentState
+        ? mergeMeshAgentSessions(args.meshSessions, [...meshAgentState.sessions.values()])
+        : args.meshSessions,
     [args.meshSessions, meshAgentState]
   );
   const projectionTools = useMemo(
