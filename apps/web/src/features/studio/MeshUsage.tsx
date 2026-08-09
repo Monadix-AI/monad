@@ -1,22 +1,22 @@
-import type { ChannelIcon, MeshAgentUsageResponse } from '@monad/protocol';
+import type { ChannelIcon } from '@monad/protocol';
 
 import { LoaderPinwheelIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import {
-  useGetMeshUsageOverviewQuery,
-  useListMeshAgentPresetsQuery,
-  useListWorkplaceProjectsQuery,
-  workplaceProjectAdapter,
-  workplaceProjectSelectors
-} from '@monad/client-rtk';
-import { Card, cn, Skeleton } from '@monad/ui';
+import { useGetMeshUsageOverviewQuery, useListMeshAgentPresetsQuery } from '@monad/client-rtk';
+import { Card, cn, ProductIcon, Skeleton } from '@monad/ui';
 import { useMemo, useState } from 'react';
 
 import { BrandIcon } from '#/components/BrandIcon';
 import { useT } from '#/components/I18nProvider';
-import { buildMeshUsageView, type MeshUsageProviderGroup, type MeshUsageTotals } from './mesh-usage-data';
+import {
+  buildMeshUsageView,
+  type MeshUsageProviderGroup,
+  type MeshUsageRankedItem,
+  type MeshUsageSessionGroup,
+  type MeshUsageTotals
+} from './mesh-usage-data';
 
-type DetailDimension = 'provider' | 'project';
+type DetailDimension = 'provider' | 'session';
 const SUMMARY_SKELETON_KEYS = ['providers', 'agents', 'projects', 'sessions', 'tokens'] as const;
 
 function fmtTokens(value: number): string {
@@ -46,62 +46,43 @@ function UsageTotals({ totals }: { totals: MeshUsageTotals }) {
   );
 }
 
-function ProviderRecords({ snapshots }: { snapshots: MeshAgentUsageResponse[] }) {
+function UsageRanking({ items, title }: { items: MeshUsageRankedItem[]; title: string }) {
   const t = useT();
   return (
     <div className="flex flex-col gap-2 border-t pt-3">
-      <p className="font-medium text-muted-foreground text-xs">{t('web.studio.meshUsageRealtimeProvider')}</p>
-      {snapshots.map((snapshot) => (
+      <p className="font-medium text-muted-foreground text-xs">{title}</p>
+      {items.map((item, index) => (
         <div
-          className="rounded-lg border bg-background p-3"
-          key={`${snapshot.provider}:${snapshot.agentName}`}
+          className="flex items-center gap-3 rounded-lg bg-muted/45 px-3 py-2.5"
+          key={item.id}
         >
-          <div className="flex items-center justify-between gap-3">
-            <p className="truncate font-medium text-sm">{snapshot.agentName}</p>
-            <p className="shrink-0 text-[11px] text-muted-foreground">
-              {t('web.studio.meshUsageUpdated')} {new Date(snapshot.checkedAt).toLocaleTimeString()}
+          <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-muted font-medium text-xs tabular-nums">
+            {index + 1}
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex min-w-0 items-center gap-2">
+              <p className="min-w-0 truncate font-medium text-sm">{item.name}</p>
+              {item.provider ? (
+                <ProductIcon
+                  background="none"
+                  product={item.provider}
+                  size={14}
+                />
+              ) : null}
+            </div>
+            <p className="mt-0.5 truncate text-[11px] text-muted-foreground tabular-nums">
+              {t('web.studio.usageInputTokens')} {fmtTokens(item.input)} · {t('web.studio.usageOutputTokens')}{' '}
+              {fmtTokens(item.output)}
             </p>
           </div>
-          {snapshot.records.length === 0 ? (
-            <p className="mt-2 text-muted-foreground text-xs">{t('web.studio.meshUsageNoProviderData')}</p>
-          ) : (
-            <div className="mt-3 grid gap-3">
-              {snapshot.records.map((record) => {
-                const pct = record.max ? Math.min(100, Math.round((record.current / record.max) * 100)) : null;
-                return (
-                  <div key={record.name}>
-                    <div className="flex items-center justify-between gap-3 text-xs">
-                      <span className="min-w-0 truncate">{record.name}</span>
-                      <span className="shrink-0 text-muted-foreground tabular-nums">
-                        {fmtTokens(record.current)}
-                        {record.max ? ` / ${fmtTokens(record.max)}` : ''}
-                      </span>
-                    </div>
-                    {pct !== null && (
-                      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
-                        <div
-                          className="h-full rounded-full bg-[color-mix(in_srgb,var(--info)_72%,var(--primary))]"
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                    )}
-                    {record.resetAt && (
-                      <p className="mt-1 text-[11px] text-muted-foreground">
-                        {t('web.studio.meshUsageResets')}: {new Date(record.resetAt).toLocaleString()}
-                      </p>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          <span className="shrink-0 font-semibold text-sm tabular-nums">{fmtTokens(item.total)}</span>
         </div>
       ))}
     </div>
   );
 }
 
-function ProviderCard({ group, icon }: { group: MeshUsageProviderGroup; icon?: ChannelIcon }) {
+function ProviderCard({ group, icon, name }: { group: MeshUsageProviderGroup; icon?: ChannelIcon; name: string }) {
   const t = useT();
   return (
     <Card className="flex min-w-0 flex-col gap-3 p-4">
@@ -115,15 +96,37 @@ function ProviderCard({ group, icon }: { group: MeshUsageProviderGroup; icon?: C
           ) : null}
         </span>
         <div className="min-w-0 flex-1">
-          <h3 className="truncate font-medium text-sm">{group.provider}</h3>
+          <h3 className="truncate font-medium text-sm">{name}</h3>
           <p className="mt-1 text-muted-foreground text-xs">
-            {group.agentNames.length} {t('web.studio.meshUsageConnectedAgents')} · {group.projectIds.length}{' '}
+            {group.agentCount} {t('web.studio.meshUsageConnectedAgents')} · {group.projectIds.length}{' '}
             {t('web.studio.meshUsageProjects')} · {group.sessionCount} {t('web.studio.meshUsageSessions')}
           </p>
         </div>
       </div>
       <UsageTotals totals={group} />
-      <ProviderRecords snapshots={group.providerUsage} />
+      <UsageRanking
+        items={group.topSessions}
+        title={t('web.studio.meshUsageTopSessions')}
+      />
+    </Card>
+  );
+}
+
+function SessionCard({ group }: { group: MeshUsageSessionGroup }) {
+  const t = useT();
+  return (
+    <Card className="flex min-w-0 flex-col gap-3 p-4">
+      <div>
+        <h3 className="truncate font-medium text-sm">{group.sessionTitle}</h3>
+        <p className="mt-1 text-muted-foreground text-xs">
+          {group.providerNames.join(', ')} · {group.agentCount} {t('web.studio.meshUsageConnectedAgents')}
+        </p>
+      </div>
+      <UsageTotals totals={group} />
+      <UsageRanking
+        items={group.topAgents}
+        title={t('web.studio.meshUsageTopAgentMembers')}
+      />
     </Card>
   );
 }
@@ -158,11 +161,6 @@ export function MeshUsage() {
     refetchOnFocus: true
   });
   const presetsQuery = useListMeshAgentPresetsQuery();
-  const projectsQuery = useListWorkplaceProjectsQuery(undefined);
-  const projects = workplaceProjectSelectors.selectAll(
-    projectsQuery.data?.projects ?? workplaceProjectAdapter.getInitialState()
-  );
-  const projectTitles = useMemo(() => new Map(projects.map((project) => [project.id, project.title])), [projects]);
   const usageData = usageQuery.data;
   const view = useMemo(() => (usageData ? buildMeshUsageView(usageData) : null), [usageData]);
   const iconsByProvider = useMemo(
@@ -172,6 +170,10 @@ export function MeshUsage() {
           preset.icon ? [[preset.provider, preset.icon]] : []
         )
       ),
+    [presetsQuery.data]
+  );
+  const namesByProvider = useMemo(
+    () => new Map((presetsQuery.data ?? []).map((preset) => [preset.provider, preset.label])),
     [presetsQuery.data]
   );
 
@@ -223,7 +225,7 @@ export function MeshUsage() {
             <p className="mt-1 text-muted-foreground text-sm">{t('web.studio.meshUsageDesc')}</p>
           </div>
           <div className="flex rounded-lg bg-muted p-1">
-            {(['provider', 'project'] as const).map((item) => (
+            {(['provider', 'session'] as const).map((item) => (
               <button
                 aria-pressed={dimension === item}
                 className={cn(
@@ -234,7 +236,7 @@ export function MeshUsage() {
                 onClick={() => setDimension(item)}
                 type="button"
               >
-                {item === 'provider' ? t('web.studio.meshUsageByProvider') : t('web.studio.meshUsageByProject')}
+                {item === 'provider' ? t('web.studio.meshUsageByProvider') : t('web.studio.meshUsageBySession')}
               </button>
             ))}
           </div>
@@ -250,31 +252,20 @@ export function MeshUsage() {
                     group={group}
                     icon={iconsByProvider.get(group.provider)}
                     key={group.provider}
+                    name={namesByProvider.get(group.provider) ?? group.provider}
                   />
                 ))}
               </div>
             )
-          ) : view.projects.length === 0 ? (
+          ) : view.sessionGroups.length === 0 ? (
             <p className="px-1 py-2 text-muted-foreground text-sm">{t('web.studio.meshUsageNoSessions')}</p>
           ) : (
             <div className="grid gap-3 xl:grid-cols-2">
-              {view.projects.map((group) => (
-                <Card
-                  className="flex min-w-0 flex-col gap-3 p-4"
-                  key={group.projectId}
-                >
-                  <div>
-                    <h3 className="truncate font-medium text-sm">
-                      {projectTitles.get(group.projectId) ?? group.projectId}
-                    </h3>
-                    <p className="mt-1 text-muted-foreground text-xs">
-                      {group.providerNames.join(', ')} · {group.agentNames.length}{' '}
-                      {t('web.studio.meshUsageConnectedAgents')} · {group.sessionCount}{' '}
-                      {t('web.studio.meshUsageSessions')}
-                    </p>
-                  </div>
-                  <UsageTotals totals={group} />
-                </Card>
+              {view.sessionGroups.map((group) => (
+                <SessionCard
+                  group={group}
+                  key={group.sessionId}
+                />
               ))}
             </div>
           )}

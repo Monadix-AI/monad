@@ -65,8 +65,11 @@ export type MeshAgentSessionUsageResponse = z.infer<typeof meshAgentSessionUsage
 export const meshSessionUsageSnapshotSchema = z.object({
   meshSessionId: meshSessionIdSchema,
   sessionId: sessionIdSchema,
+  sessionTitle: z.string().min(1),
   projectId: projectIdSchema.nullable(),
+  projectMemberId: projectMemberIdSchema.nullable(),
   agentName: meshAgentNameSchema,
+  agentDisplayName: z.string().min(1),
   provider: meshAgentProviderSchema,
   checkedAt: z.string(),
   total: z.number().finite().nonnegative(),
