@@ -7,7 +7,7 @@
     "@monad/sdk-atom": "workspace:*",
     "@monad/ui": "workspace:*",
     "@xyflow/react": "^12.11.2",
-    "e2b": "^2.38.0",
+    "e2b": "^2.38.2",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "zod": "^4.4.3"
@@ -24,9 +24,9 @@
   "module": "src/index.ts",
   "private": true,
   "scripts": {
-    "build:kanban": "bun build src/experiences/kanban/client.tsx --outfile src/experiences/kanban.js --target browser --format esm --production",
-    "build:atom-pack:kanban": "bun build src/experiences/kanban/client.tsx --outfile dist/experiences/kanban.js --target browser --format esm --production",
     "build:atom-pack": "bun run build:atom-pack:kanban && bun build src/index.ts --outfile dist/atom-pack.js --target bun --format esm --production",
+    "build:atom-pack:kanban": "bun build src/experiences/kanban/client.tsx --outfile dist/experiences/kanban.js --target browser --format esm --production",
+    "build:kanban": "bun build src/experiences/kanban/client.tsx --outfile src/experiences/kanban.js --target browser --format esm --production",
     "test": "bun ../../scripts/quiet-run.ts bun ../../scripts/bun-test.ts test/unit/ --only-failures",
     "typecheck": "bun ../../scripts/quiet-run.ts bun run typecheck:raw",
     "typecheck:raw": "tsc --noEmit && tsc -p tsconfig.client.json --noEmit"
