@@ -146,8 +146,18 @@ export function messageToView(
   }
   const agent = item.role === 'assistant';
   const rawName = agent ? (item.agentName ?? 'monad') : human.name;
+  const embeddedDisplayName = item.agentDisplayName;
+  const internalManagedDisplayName =
+    !embeddedDisplayName || embeddedDisplayName === rawName || embeddedDisplayName.startsWith('monad--agt_');
+  const managedDisplayName =
+    item.source === 'managed-mesh-agent' && internalManagedDisplayName ? meshAgentDisplayNames.get(rawName) : undefined;
   const displayName = agent
-    ? (item.agentDisplayName ?? (rawName === 'monad' ? 'Monad' : (meshAgentDisplayNames.get(rawName) ?? rawName)))
+    ? (managedDisplayName ??
+      (embeddedDisplayName && embeddedDisplayName !== rawName
+        ? embeddedDisplayName
+        : rawName === 'monad'
+          ? 'Monad'
+          : (meshAgentDisplayNames.get(rawName) ?? embeddedDisplayName ?? rawName)))
     : rawName;
   const icon = agent ? (meshAgentIcons.get(rawName) ?? iconForAgent(displayName)) : undefined;
   const reasoning = agent ? reasoningFromParts(item.parts) : undefined;
@@ -580,7 +590,7 @@ export function buildProjectMessages({
   const toView = (item: UIMessageItem) =>
     messageToView(
       item,
-      byId.get(item.id)?.time ?? '',
+      byId.get(item.id)?.time || fmtTime(item.seq),
       meshAgentAvatarSeeds,
       meshAgentTags,
       meshAgentDisplayNames,

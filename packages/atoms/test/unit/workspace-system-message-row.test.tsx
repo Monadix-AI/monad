@@ -4,6 +4,7 @@ import type { WorkplaceExperienceHostAction } from '../../src/workplace-experien
 
 import { expect, test } from 'bun:test';
 import { Children, isValidElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 
 import { MessageRow } from '../../src/workplace-experiences/chat-room/components/message-row.tsx';
 import { SystemMessageRow } from '../../src/workplace-experiences/chat-room/components/system-message-row.tsx';
@@ -122,6 +123,40 @@ test('reply actions flow below the message card and align with its content', () 
   if (!replyButton?.props.onClick) throw new Error('expected an interactive reply action');
 
   replyButton.props.onClick();
+  const markup = renderToStaticMarkup(row);
 
-  expect(repliedTo).toEqual(message);
+  expect({
+    actionBeforeAgentTime: markup.indexOf('Reply') < markup.indexOf('10:31'),
+    repliedTo,
+    timeAfterMessage: markup.indexOf('10:31') > markup.indexOf('Ready for review.'),
+    timeImmediate: !markup.includes('transition-opacity') && !markup.includes('transition-colors'),
+    timeOnHover: markup.includes('group-hover:opacity-100')
+  }).toEqual({
+    actionBeforeAgentTime: true,
+    repliedTo: message,
+    timeAfterMessage: true,
+    timeImmediate: true,
+    timeOnHover: true
+  });
+});
+
+test('human message timestamps appear before hover actions', () => {
+  const row = renderMessageRow({
+    labels: { reply: 'Reply' },
+    msg: {
+      id: 'msg_HUMAN_TIME_ORDER',
+      authorId: 'user',
+      authorName: 'User',
+      av: 'US',
+      kind: 'human',
+      replyable: true,
+      tag: 'User',
+      time: '10:32',
+      text: 'Please review.'
+    },
+    onReply: () => {}
+  });
+  const markup = renderToStaticMarkup(row);
+
+  expect(markup.indexOf('10:32')).toBeLessThan(markup.indexOf('Reply'));
 });

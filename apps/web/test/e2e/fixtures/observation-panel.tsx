@@ -23,16 +23,12 @@ import { builtinMeshAgentObservationAdapters } from '../../../../../packages/ato
 import { agentObservationCards } from '../../../../../packages/atoms/src/agent-adapters/observation-cards.ts';
 import { configureBuiltinMeshAgentObservationAdapters } from '../../../../../packages/atoms/src/mesh-agent-observation-setup.ts';
 import { AgentTasksRail } from '../../../../../packages/atoms/src/workplace-experiences/chat-room/components/agent-tasks-rail.tsx';
+import { MonadMcpOutput } from '../../../../../packages/atoms/src/workplace-experiences/chat-room/components/observation/monad-mcp-output.tsx';
 import { MeshAgentObservationPanel } from '../../../../../packages/atoms/src/workplace-experiences/chat-room/components/observation/panel.tsx';
 import {
   RawObservationList,
   type RawObservationListHandle
 } from '../../../../../packages/atoms/src/workplace-experiences/chat-room/components/observation/raw-observation-list.tsx';
-import {
-  ObservationTimelineRowView,
-  observationTimelineEntries,
-  observationTimelineRows
-} from '../../../../../packages/atoms/src/workplace-experiences/chat-room/components/observation/timeline.tsx';
 import {
   projectSessionUiKey,
   useChatRoomExperienceStore
@@ -178,19 +174,93 @@ function ToolActivityFixture(): React.ReactElement {
       provenance: { contractEvents: [{ id: 'raw-generic-result' }] }
     }
   ];
-  const rows = observationTimelineRows(observationTimelineEntries(agentObservationCards(events, 'codex'), 'codex'));
+  const items = agentObservationCards(events, 'codex');
   return (
     <TooltipProvider>
-      <div className="mx-auto grid min-h-screen max-w-3xl content-center gap-1 bg-background p-8">
-        {rows.map((row) => (
-          <ObservationTimelineRowView
-            key={row.id}
-            provider="codex"
-            row={row}
-          />
-        ))}
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+        <MeshAgentObservationPanel
+          agentName="Tool Activity"
+          eventsActive
+          stream={{
+            id: 'tool-activity',
+            agentName: 'Tool Activity',
+            provider: 'codex',
+            tag: 'Agent',
+            status: 'ok',
+            output: '',
+            items
+          }}
+        />
       </div>
     </TooltipProvider>
+  );
+}
+
+function MonadOutputLayoutFixture(): React.ReactElement {
+  return (
+    <div className="w-180 p-8">
+      <MonadMcpOutput
+        completedLabel="Completed"
+        emptyLabel="No details"
+        falseLabel="No"
+        inProgressLabel="In progress"
+        output={{
+          projectMemberId: 'pmem_xs41Tns4dcDb',
+          sessionId: 'ses_9AqAd2FwdKK5',
+          meshSessionId: 'mesh_oQhToS1rQuUw',
+          runtime: {
+            id: 'mesh_oQhToS1rQuUw',
+            sessionId: 'ses_9AqAd2FwdKK5',
+            agentName: 'pmem_xs41Tns4dcDb',
+            provider: 'codex',
+            productIcon: 'codex',
+            workingPath: '/Users/zeke/Projects/monad',
+            approvalOwnership: 'provider-owned',
+            runtimeRole: 'managed-project-agent',
+            lifecycle: { state: 'active' },
+            capabilities: {
+              input: false,
+              steer: false,
+              interrupt: false,
+              approvalResolution: false
+            }
+          },
+          provider: 'codex',
+          workingPath: '/Users/zeke/Projects/monad'
+        }}
+        pendingLabel="Pending"
+        planEmptyLabel="No todos yet"
+        toolName="runtime_info"
+        trueLabel="Yes"
+      />
+    </div>
+  );
+}
+
+function MonadMessageBodyLayoutFixture(): React.ReactElement {
+  return (
+    <div className="w-180 p-8">
+      <MonadMcpOutput
+        completedLabel="Completed"
+        emptyLabel="No details"
+        falseLabel="No"
+        inProgressLabel="In progress"
+        output={{
+          messages: [
+            {
+              text: 'Review the release notes before publishing.',
+              messageId: 'message_44',
+              createdAt: '2026-08-09T12:00:00.000Z',
+              sender: { kind: 'human', name: 'Zeke' }
+            }
+          ]
+        }}
+        pendingLabel="Pending"
+        planEmptyLabel="No todos yet"
+        toolName="project_read"
+        trueLabel="Yes"
+      />
+    </div>
   );
 }
 
@@ -457,6 +527,8 @@ function Harness(): React.ReactElement {
       />
     );
   if (mode === 'tool') return <ToolActivityFixture />;
+  if (mode === 'monad-output') return <MonadOutputLayoutFixture />;
+  if (mode === 'monad-message-body') return <MonadMessageBodyLayoutFixture />;
 
   if (mode === 'turn') {
     return (

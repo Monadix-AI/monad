@@ -11,10 +11,15 @@ const MONAD_MCP_TOOL_NAMES = [
   'agent_send',
   'agent_read',
   'session_members',
-  'runtime_info'
+  'runtime_info',
+  'project_plan_list',
+  'project_plan_add',
+  'project_plan_update',
+  'project_plan_delete'
 ] as const;
 
 const CLAUDE_MONAD_MCP_PREFIX = 'mcp__monad__';
+const HERMES_MONAD_MCP_PREFIX = 'mcp_monad_';
 const MONAD_AGENT_MCP_PREFIX = 'monad__';
 
 export type MonadMcpToolName = (typeof MONAD_MCP_TOOL_NAMES)[number];
@@ -73,7 +78,11 @@ export type MonadMcpToolView =
       limit?: number;
     })
   | (MonadMcpToolBase & { action: 'session-members' })
-  | (MonadMcpToolBase & { action: 'runtime-info' });
+  | (MonadMcpToolBase & { action: 'runtime-info' })
+  | (MonadMcpToolBase & { action: 'project-plan-list' })
+  | (MonadMcpToolBase & { action: 'project-plan-add' })
+  | (MonadMcpToolBase & { action: 'project-plan-update' })
+  | (MonadMcpToolBase & { action: 'project-plan-delete' });
 
 export function monadMcpToolView(
   call: AgentObservationEvent,
@@ -81,13 +90,14 @@ export function monadMcpToolView(
   contractEvents: readonly unknown[]
 ): MonadMcpToolView | null {
   const rawEvents = observationContractRawEvents(contractEvents);
-  const toolName = monadMcpToolName(call, result, rawEvents);
+  const wrappedCall = wrappedMonadMcpCall(call.tool?.name, call.tool?.input);
+  const toolName = wrappedCall?.toolName ?? monadMcpToolName(call, result, rawEvents);
   if (!toolName) return null;
 
-  const input = call.tool?.input;
-  const record = recordValue(input);
+  const record = inputRecordValue(wrappedCall?.input ?? call.tool?.input);
   if (!record) return null;
-  const output = result?.tool?.output ?? result?.text;
+  const input = record;
+  const output = monadMcpOutput(result?.tool?.output ?? result?.text);
   const status = result?.tool?.status ?? call.tool?.status;
   const durationMs = result?.tool?.durationMs ?? call.tool?.durationMs;
   const callId = call.tool?.callId ?? result?.tool?.callId;
@@ -153,7 +163,28 @@ export function monadMcpToolView(
       return { ...base, action: 'session-members' };
     case 'runtime_info':
       return { ...base, action: 'runtime-info' };
+    case 'project_plan_list':
+      return { ...base, action: 'project-plan-list' };
+    case 'project_plan_add':
+      return { ...base, action: 'project-plan-add' };
+    case 'project_plan_update':
+      return { ...base, action: 'project-plan-update' };
+    case 'project_plan_delete':
+      return { ...base, action: 'project-plan-delete' };
   }
+}
+
+function wrappedMonadMcpCall(
+  name: string | undefined,
+  input: unknown
+): { toolName: MonadMcpToolName; input: Record<string, unknown> } | undefined {
+  if (name !== 'monad') return undefined;
+  const envelope = inputRecordValue(input);
+  if (!envelope) return undefined;
+  const toolName = envelope.tool ?? envelope.toolName;
+  if (typeof toolName !== 'string' || !isMonadMcpToolName(toolName)) return undefined;
+  const nestedInput = inputRecordValue(envelope.arguments ?? envelope.input ?? envelope.args);
+  return { toolName, input: nestedInput ?? {} };
 }
 
 function monadMcpToolName(
@@ -171,12 +202,24 @@ function monadMcpToolName(
 }
 
 function prefixedMonadMcpToolName(name: string): MonadMcpToolName | undefined {
-  for (const prefix of [CLAUDE_MONAD_MCP_PREFIX, MONAD_AGENT_MCP_PREFIX]) {
+  for (const prefix of [CLAUDE_MONAD_MCP_PREFIX, HERMES_MONAD_MCP_PREFIX, MONAD_AGENT_MCP_PREFIX]) {
     if (!name.startsWith(prefix)) continue;
     const candidate = name.slice(prefix.length);
     if (isMonadMcpToolName(candidate)) return candidate;
   }
   return undefined;
+}
+
+function monadMcpOutput(value: unknown): unknown {
+  if (typeof value !== 'string') return value;
+  const match = /^<untrusted_tool_result\b[^>]*>\s*[\s\S]*?\n\s*\n([\s\S]*?)\s*<\/untrusted_tool_result>\s*$/.exec(
+    value
+  );
+  if (!match) return value;
+  const payload = jsonValue(match[1]?.trim());
+  const record = recordValue(payload);
+  if (!record || !Object.hasOwn(record, 'result')) return payload;
+  return jsonValue(record.result) ?? record.result;
 }
 
 function isMonadMcpToolName(value: string): value is MonadMcpToolName {
@@ -268,6 +311,26 @@ function optionalMode(value: unknown): { mode?: 'single' | 'multiple' } {
 
 function recordValue(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined;
+}
+
+function inputRecordValue(value: unknown): Record<string, unknown> | undefined {
+  const record = recordValue(value);
+  if (record) return record;
+  if (typeof value !== 'string') return undefined;
+  try {
+    return recordValue(JSON.parse(value));
+  } catch {
+    return undefined;
+  }
+}
+
+function jsonValue(value: unknown): unknown {
+  if (typeof value !== 'string') return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
 }
 
 function optionalString<Key extends string>(key: Key, value: unknown): Partial<Record<Key, string>> {

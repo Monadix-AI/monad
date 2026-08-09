@@ -92,7 +92,7 @@ test('Codex fileChange projects exact files and diff totals from app-server prov
     card: { kind: card.kind, streaming: card.streaming },
     view: codexFileChangeView(card.provenance.contractEvents)
   }).toEqual({
-    event: { kind: 'tool-call', name: 'tool' },
+    event: { kind: 'tool-call', name: 'fileChange' },
     card: { kind: 'tool', streaming: false },
     view: {
       additions: 6,

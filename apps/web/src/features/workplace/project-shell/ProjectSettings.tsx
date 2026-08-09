@@ -48,7 +48,6 @@ export function ProjectSettings({
   const [memberSettings, setMemberSettings] = useState<ProjectMember | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [meshAgentInvite, setMeshAgentInvite] = useState<MeshAgentMemberDialogState | null>(null);
-  const projectParticipants = room.projectParticipants;
 
   const openMeshAgentMemberSettings = useCallback(
     (member: ProjectMember) => {
@@ -123,6 +122,8 @@ export function ProjectSettings({
             path={room.workdir.path}
           />
           <ProjectMembersSection
+            avatarStyle={room.source.avatarStyle}
+            candidates={room.availableProjectMembers}
             loading={room.membersLoading}
             members={room.projectMembers}
             onOpenSettings={(member) => {
@@ -130,8 +131,8 @@ export function ProjectSettings({
               setMemberSettings(member);
             }}
             onRefresh={room.refreshMeshAgentCatalog}
-            onRemove={(memberId) => void room.removeProjectMember(memberId)}
-            participants={projectParticipants}
+            onRemove={room.removeProjectMember}
+            projectId={room.projectId}
             refreshing={room.membersRefreshing}
           />
 

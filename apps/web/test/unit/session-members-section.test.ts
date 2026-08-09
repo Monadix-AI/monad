@@ -3,7 +3,10 @@ import { entityAvatarUrl, meshAgentProjectMemberAvatarSeed } from '@monad/protoc
 
 import {
   directSessionMemberCandidates,
-  sessionMemberAvatar
+  directSessionMemberDraft,
+  sessionMemberAvatar,
+  sessionProjectMemberDisplayName,
+  shouldDeferSessionMemberRoster
 } from '../../src/features/workplace/project-shell/SessionMembersSection';
 
 test('direct session members expose provider-spawn candidates only', () => {
@@ -17,7 +20,18 @@ test('direct session members expose provider-spawn candidates only', () => {
   ]);
 });
 
-test('session project members reuse the project participant avatar', () => {
+test('direct Monad session members persist the configured agent name instead of the internal profile id', () => {
+  expect(
+    directSessionMemberDraft({
+      id: 'mesh-agent:monad--agt_eAmWnO0FDkBJ',
+      type: 'mesh-agent',
+      name: 'monad--agt_eAmWnO0FDkBJ',
+      label: 'Default Dev Agent'
+    } as never)
+  ).toEqual({ displayName: 'Default Dev Agent' });
+});
+
+test('session project members preserve participant state with the project-scoped avatar', () => {
   const participant = {
     av: 'RE',
     avatarUrl: '/avatars/researcher.svg',
@@ -30,17 +44,24 @@ test('session project members reuse the project participant avatar', () => {
     tag: 'Codex'
   } as never;
 
-  expect(
-    sessionMemberAvatar({
-      avatarStyle: 'bottts',
-      displayName: 'Wrong fallback',
-      participant,
-      projectId: 'prj_100000000000'
-    })
-  ).toEqual(participant);
+  const projectId = 'prj_100000000000';
+  const displayName = 'Researcher';
+  const expected = {
+    av: 'RE',
+    avatarUrl: entityAvatarUrl(meshAgentProjectMemberAvatarSeed(projectId, displayName), 'bottts'),
+    icon: 'codex',
+    id: 'pmem_researcher',
+    kind: 'agent',
+    name: displayName,
+    presence: 'online',
+    role: 'CLI',
+    tag: 'Codex'
+  } as const;
+
+  expect(sessionMemberAvatar({ avatarStyle: 'bottts', displayName, participant, projectId })).toEqual(expected);
 });
 
-test('direct session members derive a session-only avatar from their configured name', () => {
+test('project members derive the same project-scoped avatar outside a session participant', () => {
   const projectId = 'prj_100000000000';
   const displayName = 'Session reviewer';
 
@@ -56,4 +77,29 @@ test('direct session members derive a session-only avatar from their configured 
     icon: 'codex',
     name: displayName
   });
+});
+
+test('Monad project members resolve their configured agent name instead of their internal id', () => {
+  expect(
+    sessionProjectMemberDisplayName({
+      candidate: { label: 'Default Dev Agent' } as never,
+      fallbackName: 'monad--agt_eAmWnO0FDkBJ',
+      template: { name: 'monad--agt_eAmWnO0FDkBJ' } as never
+    })
+  ).toBe('Default Dev Agent');
+});
+
+test('a newly selected session defers its roster until data for that session arrives', () => {
+  const activeSessionId = 'ses_new000000000' as never;
+
+  expect([
+    shouldDeferSessionMemberRoster({ activeSessionId, hasCurrentData: false, isFetching: true, isLoading: false }),
+    shouldDeferSessionMemberRoster({ activeSessionId, hasCurrentData: true, isFetching: true, isLoading: false }),
+    shouldDeferSessionMemberRoster({
+      activeSessionId: null,
+      hasCurrentData: false,
+      isFetching: false,
+      isLoading: false
+    })
+  ]).toEqual([true, false, false]);
 });

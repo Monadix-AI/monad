@@ -2,6 +2,7 @@ import type { MotionProps } from 'motion/react';
 import type { ComponentProps, CSSProperties, ElementType, HTMLAttributes, JSX, ReactNode } from 'react';
 
 import {
+  ArrowDown01Icon,
   BrainIcon,
   CancelCircleIcon,
   CheckmarkCircle02Icon,
@@ -23,7 +24,6 @@ import { Badge } from './Badge';
 import { Button } from './Button';
 import { CodeBlock } from './CodeBlock';
 import { MarkdownSurface } from './MarkdownSurface';
-import { MorphChevron } from './MorphChevron';
 import { Tooltip, TooltipContent, TooltipTrigger } from './Tooltip';
 
 type MotionHTMLProps = MotionProps & Record<string, unknown>;
@@ -91,7 +91,7 @@ const ShimmerComponent = ({ children, as: Component = 'p', className, duration =
     <MotionComponent
       animate={{ backgroundPosition: '0% center' }}
       className={cn(
-        'relative inline-block bg-[length:250%_100%,auto] bg-clip-text text-transparent',
+        'relative inline-block bg-size-[250%_100%,auto] bg-clip-text text-transparent',
         '[--bg:linear-gradient(90deg,#0000_calc(50%-var(--spread)),var(--color-background),#0000_calc(50%+var(--spread)))] [background-repeat:no-repeat,padding-box]',
         className
       )}
@@ -337,6 +337,7 @@ export const Reasoning = memo(
 
 export type ReasoningTriggerProps = ComponentProps<typeof CollapsibleTrigger> & {
   hideChevron?: boolean;
+  iconClassName?: string;
   labels?: ReasoningLabels;
   getThinkingMessage?: (isStreaming: boolean, duration?: number) => ReactNode;
 };
@@ -353,7 +354,15 @@ function defaultThinkingMessage(labels: ReasoningLabels | undefined, isStreaming
 }
 
 export const ReasoningTrigger = memo(
-  ({ className, children, hideChevron = false, labels, getThinkingMessage, ...props }: ReasoningTriggerProps) => {
+  ({
+    className,
+    children,
+    hideChevron = false,
+    iconClassName,
+    labels,
+    getThinkingMessage,
+    ...props
+  }: ReasoningTriggerProps) => {
     const { isStreaming, isOpen, duration } = useReasoning();
 
     return (
@@ -367,16 +376,17 @@ export const ReasoningTrigger = memo(
         {children ?? (
           <>
             <HugeiconsIcon
-              className="size-4"
+              className={cn('size-4', iconClassName)}
               icon={BrainIcon}
             />
             {getThinkingMessage
               ? getThinkingMessage(isStreaming, duration)
               : defaultThinkingMessage(labels, isStreaming, duration)}
             {hideChevron ? null : (
-              <MorphChevron
-                className="size-4"
-                expanded={isOpen}
+              <HugeiconsIcon
+                className={cn('size-4 shrink-0 transition-transform duration-150', !isOpen && '-rotate-90')}
+                data-slot="disclosure-chevron"
+                icon={ArrowDown01Icon}
               />
             )}
           </>
@@ -545,7 +555,7 @@ export const ToolHeader = ({
 
   return (
     <CollapsibleTrigger
-      className={cn('group/trigger flex w-full items-center justify-between gap-4 p-3', className)}
+      className={cn('group/trigger flex w-full items-center gap-2 p-3', className)}
       {...props}
     >
       <div className="flex items-center gap-2">
@@ -555,11 +565,12 @@ export const ToolHeader = ({
         />
         <span className="font-medium text-sm">{title ?? derivedName}</span>
         {showStatus ? getStatusBadge(state, statusLabels) : null}
+        <HugeiconsIcon
+          className={cn('size-4 text-current transition-transform duration-150', !isOpen && '-rotate-90')}
+          data-slot="disclosure-chevron"
+          icon={ArrowDown01Icon}
+        />
       </div>
-      <MorphChevron
-        className="size-4 text-current"
-        expanded={isOpen}
-      />
     </CollapsibleTrigger>
   );
 };

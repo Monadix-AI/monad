@@ -69,6 +69,14 @@ export function meshAgentApprovalName(provider: MeshAgentProvider | string | und
   return 'CLI approval';
 }
 
+function meshAgentMemberDisplayName(
+  member: Pick<ProjectMember, 'displayName' | 'name'>,
+  agent: Pick<InvitableMeshAgent, 'displayName'> | undefined
+): string {
+  if (member.displayName && member.displayName !== member.name) return member.displayName;
+  return agent?.displayName ?? member.displayName ?? member.name;
+}
+
 export function iconForAgent(name: string): Participant['icon'] | undefined {
   if (name === 'monad' || name === 'Monad') return 'monad';
   return undefined;
@@ -141,7 +149,7 @@ export function projectParticipants(args: {
     if (member.type === 'mesh-agent') {
       const templateName = member.templateName ?? member.name;
       const agent = args.meshAgents.find((candidate) => candidate.name === templateName);
-      const displayName = member.displayName ?? agent?.displayName ?? member.name;
+      const displayName = meshAgentMemberDisplayName(member, agent);
       const stableAgentName = workplaceProjectMemberStableId(member);
       const presence =
         loginRequiredAgentNames.has(stableAgentName) ||
@@ -228,6 +236,7 @@ export function projectMemberCandidates(args: {
       autopilot: agent.capabilities?.autopilot === true,
       fastMode: agent.capabilities?.fastMode === true
     },
+    providerIcon: agent.icon,
     icon: productIcon(agent.productIcon)
   }));
   return [
@@ -354,7 +363,7 @@ export function projectMeshAgentMetadataMaps(args: {
     if (member.type !== 'mesh-agent') continue;
     const templateName = member.templateName ?? member.name;
     const agent = args.meshAgents.find((candidate) => candidate.name === templateName);
-    const displayName = member.displayName ?? agent?.displayName ?? member.name;
+    const displayName = meshAgentMemberDisplayName(member, agent);
     const stableId = workplaceProjectMemberStableId(member);
     const icon = productIcon(agent?.productIcon);
     const tag = meshAgentTag(agent?.provider);

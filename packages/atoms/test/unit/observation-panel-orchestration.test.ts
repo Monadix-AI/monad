@@ -227,6 +227,86 @@ test('an older page whose positional id differs joins the live row it duplicates
   expect(foldConvenienceEvents(current, frames).events).toEqual([live]);
 });
 
+test('a settled provider turn present in history and live is rendered once despite different event identities', () => {
+  const historical = [
+    { ...observationEvent('history-start', 'Turn started'), kind: 'turn-start' as const },
+    { ...observationEvent('history-user', 'same prompt'), kind: 'user-message' as const },
+    observationEvent('history-final', 'same answer')
+  ];
+  const live = [
+    { ...observationEvent('live-start', 'turn/started'), kind: 'turn-start' as const },
+    { ...observationEvent('live-user', 'same prompt'), kind: 'user-message' as const },
+    {
+      ...observationEvent('live-tool', 'Tool call commandExecution'),
+      kind: 'tool-call' as const,
+      tool: { name: 'commandExecution', callId: 'exec-1' }
+    },
+    { ...observationEvent('live-delta', 'same answer'), streaming: true },
+    observationEvent('live-final', 'same answer'),
+    { ...observationEvent('live-end', 'turn/completed'), kind: 'turn-end' as const, reason: 'completed' as const }
+  ];
+  const current = { ...emptyObservationTimeline, events: live };
+  const frames: MeshConvenienceFrame[] = [
+    {
+      kind: 'patch',
+      cursor: 'provider:turn-1',
+      operations: historical.map((event) => ({ op: 'upsert' as const, event }))
+    }
+  ];
+
+  expect(foldConvenienceEvents(current, frames).events).toEqual(historical);
+});
+
+test('a settled provider tail without turn markers is rendered once across history and live', () => {
+  const historical = [
+    { ...observationEvent('history-user-1', 'first prompt'), kind: 'user-message' as const },
+    observationEvent('history-final-1', 'first answer'),
+    { ...observationEvent('history-user-2', 'same prompt'), kind: 'user-message' as const },
+    observationEvent('history-final-2', 'same answer')
+  ];
+  const live = [
+    { ...observationEvent('live-user-1', 'first prompt'), kind: 'user-message' as const },
+    observationEvent('live-final-1', 'first answer'),
+    { ...observationEvent('live-user-2', 'same prompt'), kind: 'user-message' as const },
+    observationEvent('live-final-2', 'same answer')
+  ];
+  const frames: MeshConvenienceFrame[] = [
+    {
+      kind: 'patch',
+      cursor: 'provider:turn-1',
+      operations: historical.map((event) => ({ op: 'upsert' as const, event }))
+    }
+  ];
+
+  expect(foldConvenienceEvents({ ...emptyObservationTimeline, events: live }, frames).events).toEqual(historical);
+});
+
+test('an unfinished live turn with repeated text remains after settled history', () => {
+  const historical = [
+    { ...observationEvent('history-start', 'Turn started'), kind: 'turn-start' as const },
+    { ...observationEvent('history-user', 'same prompt'), kind: 'user-message' as const },
+    observationEvent('history-final', 'same answer'),
+    { ...observationEvent('history-end', 'Turn completed'), kind: 'turn-end' as const, reason: 'completed' as const }
+  ];
+  const live = [
+    { ...observationEvent('live-start', 'turn/started'), kind: 'turn-start' as const },
+    { ...observationEvent('live-user', 'same prompt'), kind: 'user-message' as const },
+    { ...observationEvent('live-progress', 'same answer'), streaming: true }
+  ];
+  const frames: MeshConvenienceFrame[] = [
+    {
+      kind: 'patch',
+      cursor: 'provider:turn-1',
+      operations: historical.map((event) => ({ op: 'upsert' as const, event }))
+    }
+  ];
+
+  expect(foldConvenienceEvents({ ...emptyObservationTimeline, events: live }, frames).events).toEqual([
+    ...historical,
+    ...live
+  ]);
+});
+
 test('convenience history preserves a tool call and result that share a provider record dedupe key', () => {
   const call: AgentObservationEvent = {
     ...observationEvent('mesh:json:item_1:tool-call', 'Tool call command_execution'),
@@ -361,6 +441,14 @@ test('wake reconnect keeps the previous plane only until its replacement settles
       current: replacement,
       retained: previous,
       replacementPending: true,
+      unavailable: false
+    })
+  ).toEqual(previous);
+  expect(
+    observationVisiblePlane({
+      current: replacement,
+      retained: previous,
+      replacementPending: false,
       unavailable: false
     })
   ).toEqual(replacement);

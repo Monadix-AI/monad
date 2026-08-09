@@ -5,6 +5,7 @@ import type { ObservationItem, ObservationTimelineEntry } from './types.ts';
 import { DefaultObservationToolPair, ObservationMeta, ObservationText } from '@monad/ui';
 import { memo } from 'react';
 
+import { codexItemSummary } from '../../../../agent-adapters/codex/observation/observation-message-group.ts';
 import { renderPrivateObservationCard } from './adapters.ts';
 import { ObservationCardShell, ObservationToolCardShell, toolCallSummary } from './card-shell.tsx';
 import { CodexFileChangeCard, codexFileChangeView } from './codex-file-change-card.tsx';
@@ -60,6 +61,17 @@ function cardToolCall(card: AgentObservationCard): ObservationItem | undefined {
 function cardToolResult(card: AgentObservationCard): ObservationItem | undefined {
   const event = card.payload.result;
   return event && typeof event === 'object' && !Array.isArray(event) ? (event as ObservationItem) : undefined;
+}
+
+function reasoningSummary(entry: ObservationTimelineEntry, event: ObservationItem): string | undefined {
+  if (event.summary) return event.summary;
+  return observationContractRawEvents(entry.contractEvents)
+    .map((raw) =>
+      raw && typeof raw === 'object' && !Array.isArray(raw)
+        ? codexItemSummary(raw as Record<string, unknown>)
+        : undefined
+    )
+    .find((summary) => summary !== undefined);
 }
 
 function sameObservationItem(left: AgentObservationCard, right: AgentObservationCard): boolean {
@@ -118,14 +130,14 @@ export function observationTimelineEntries(
   const cards = items.filter((card) => card.kind !== 'system' && card.kind !== 'unknown');
   return cards.map((card, index) => {
     const event = cardEvent(card) ?? cardToolCall(card) ?? cardToolResult(card);
-    const timestampEvent = event?.kind === 'assistant-message' ? event : undefined;
+    const timestampEvent = event?.kind === 'assistant-message' || event?.kind === 'user-message' ? event : undefined;
     const streaming =
       card.kind === 'reasoning' && event ? active && index === cards.length - 1 && card.streaming : card.streaming;
     return {
       id: observationCardIdentity(card),
       kind: 'public',
       card: streaming === card.streaming ? card : { ...card, streaming },
-      timestamp: timestampEvent?.at,
+      timestamp: timestampEvent ? (timestampEvent.at ?? card.at) : undefined,
       contractEvents: card.provenance.contractEvents
     };
   });
@@ -136,6 +148,23 @@ function visualRoleFromKind(kind: ObservationItem['kind']): 'user' | 'agent' | '
   if (kind === 'tool-call' || kind === 'tool-result') return 'tool';
   if (kind === 'context-compaction' || kind === 'system' || kind === 'unknown') return 'system';
   return 'agent';
+}
+
+export function observationToolVisualStatus({
+  completed,
+  error,
+  status
+}: {
+  completed: boolean;
+  error?: boolean;
+  status?: string;
+}): 'error' | 'running' | 'success' | undefined {
+  const normalized = status?.trim().toLowerCase();
+  if (error || normalized === 'error' || normalized === 'failed') return 'error';
+  if (normalized === 'running' || normalized === 'pending' || normalized === 'in_progress') return 'running';
+  if (completed || normalized === 'completed' || normalized === 'success' || normalized === 'succeeded')
+    return 'success';
+  return undefined;
 }
 
 function ObservationTimelineCard({
@@ -194,6 +223,11 @@ function ObservationTimelineCard({
               />
             }
             kind="mcp"
+            status={observationToolVisualStatus({
+              completed: !!result,
+              error: monadMcp.isError,
+              status: monadMcp.status
+            })}
             timestamp={entry.timestamp}
           >
             <MonadMcpToolCard view={monadMcp} />
@@ -213,6 +247,7 @@ function ObservationTimelineCard({
               />
             }
             kind="file"
+            status="success"
             timestamp={entry.timestamp}
           >
             <FileReadToolCard view={fileRead} />
@@ -237,6 +272,14 @@ function ObservationTimelineCard({
               />
             }
             kind="command"
+            status={observationToolVisualStatus({
+              completed: !!result,
+              error:
+                command.exitCode !== undefined
+                  ? command.exitCode !== 0
+                  : command.status === 'failed' || command.status === 'error',
+              status: command.status
+            })}
             timestamp={entry.timestamp}
           >
             <CommandToolCard
@@ -260,6 +303,10 @@ function ObservationTimelineCard({
           />
         }
         kind="tool"
+        status={observationToolVisualStatus({
+          completed: !!result,
+          status: toolEvent?.tool?.status
+        })}
         timestamp={entry.timestamp}
       >
         <DefaultObservationToolPair
@@ -330,6 +377,7 @@ function ObservationTimelineCard({
         reasoning={{
           durationMs: entryEvent.durationMs,
           hasContent: entryEvent.hasContent,
+          summary: reasoningSummary(entry, entryEvent),
           streaming: entry.card.streaming,
           text: entryEvent.text ?? ''
         }}
@@ -413,6 +461,10 @@ function GenericObservationCard({
       <ObservationToolCardShell
         header={header}
         kind="tool"
+        status={observationToolVisualStatus({
+          completed: item.kind === 'tool-result',
+          status: item.tool?.status
+        })}
         timestamp={entry.timestamp}
       >
         <ObservationText
@@ -506,6 +558,7 @@ function ObservationTimelineRowViewImpl({
           reasoning={{
             durationMs: reasoningEvent.durationMs,
             hasContent: reasoningEvent.hasContent,
+            summary: reasoningSummary(first, reasoningEvent),
             streaming: first.card.streaming,
             text: reasoningEvent.text ?? ''
           }}

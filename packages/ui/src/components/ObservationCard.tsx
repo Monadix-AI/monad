@@ -79,7 +79,7 @@ export function ObservationMeta({
     <div
       className={cn(
         'flex flex-wrap items-center gap-1.5 font-mono text-[10px] uppercase leading-tight',
-        quiet && 'min-w-0 flex-nowrap gap-1.5 font-sans text-[13px] normal-case leading-5',
+        quiet && 'min-w-0 flex-nowrap gap-1.5 font-sans text-muted-foreground text-sm normal-case leading-5',
         !compact && 'mb-2',
         className
       )}
@@ -104,7 +104,10 @@ export function ObservationMeta({
       ) : null}
       {title ? (
         <span
-          className={cn('font-semibold text-foreground normal-case', quiet && 'min-w-0 shrink-0 font-normal')}
+          className={cn(
+            'font-semibold text-foreground normal-case',
+            quiet && 'min-w-0 shrink-0 font-normal text-muted-foreground'
+          )}
           data-slot="observation-meta-title"
         >
           {title}
@@ -135,7 +138,7 @@ export function ObservationText({
   return (
     <div
       className={cn(
-        'wrap-anywhere whitespace-pre-wrap break-words leading-relaxed',
+        'wrap-break-word whitespace-pre-wrap leading-relaxed',
         observationRole === 'system' ? 'text-muted-foreground' : 'text-foreground',
         observationRole === 'tool' ? 'font-mono text-[11px]' : 'text-[13px]',
         compact && 'text-xs',

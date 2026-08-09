@@ -21,6 +21,8 @@ interface UseSessionSidebarActionsParams {
     attentionState?: SessionAttentionState | null;
     unreadItemKeys?: string[];
   })[];
+  onCreateChatSession: () => void;
+  onCreateProjectSession: (projectId: string) => void;
   onOpenProject: (id: string) => void;
   onOpenWorkspace: () => void;
   projects: ProjectItem[];
@@ -30,6 +32,8 @@ interface UseSessionSidebarActionsParams {
 export function useSessionSidebarActions({
   activeProjectId,
   chatSessions,
+  onCreateChatSession,
+  onCreateProjectSession,
   onOpenProject,
   onOpenWorkspace,
   projects,
@@ -42,6 +46,8 @@ export function useSessionSidebarActions({
   });
   const sessionActions = useSidebarSessionActions({
     chatSessions,
+    onCreateChatSession,
+    onCreateProjectSession,
     onOpenWorkspace,
     projects,
     t
@@ -134,11 +140,15 @@ function useProjectSidebarActions({
 
 function useSidebarSessionActions({
   chatSessions,
+  onCreateChatSession,
+  onCreateProjectSession,
   onOpenWorkspace,
   projects,
   t
 }: {
   chatSessions: Pick<Session, 'id' | 'projectId' | 'title'>[];
+  onCreateChatSession: () => void;
+  onCreateProjectSession: (projectId: string) => void;
   onOpenWorkspace: () => void;
   projects: ProjectItem[];
   t: TFunction;
@@ -168,11 +178,17 @@ function useSidebarSessionActions({
 
   const queueSessionDelete = useCallback(
     ({ afterDelete, sessionId, title }: { afterDelete?: () => void; sessionId: SessionId; title: string }) => {
+      let afterDeleteCalled = false;
+      const runAfterDelete = () => {
+        if (afterDeleteCalled) return;
+        afterDeleteCalled = true;
+        afterDelete?.();
+      };
       revealPendingSessionDelete(sessionId);
       setPendingDeletedSessionIds((current) => new Set(current).add(sessionId));
       void deleteSession(sessionId)
         .unwrap()
-        .then(() => afterDelete?.())
+        .then(runAfterDelete)
         .catch(() => revealPendingSessionDelete(sessionId));
       toast.undo(t('web.sidebar.sessionDeleteQueued', { name: title }), {
         action: {
@@ -190,7 +206,7 @@ function useSidebarSessionActions({
           void deleteSession(sessionId)
             .unwrap()
             .catch(() => undefined);
-          afterDelete?.();
+          runAfterDelete();
         },
         onPause: () => {
           void undoDeleteSession(sessionId)
@@ -208,24 +224,24 @@ function useSidebarSessionActions({
         projects.find((project) => project.id === projectId)?.sessions.find((session) => session.id === sessionId)
           ?.title ?? t('web.sidebar.session');
       queueSessionDelete({
-        afterDelete: onOpenWorkspace,
+        afterDelete: () => onCreateProjectSession(projectId),
         sessionId,
         title
       });
     },
-    [onOpenWorkspace, projects, queueSessionDelete, t]
+    [onCreateProjectSession, projects, queueSessionDelete, t]
   );
 
   const deleteChatSession = useCallback(
     (sessionId: SessionId) => {
       const title = chatSessions.find((session) => session.id === sessionId)?.title ?? t('web.sidebar.session');
       queueSessionDelete({
-        afterDelete: onOpenWorkspace,
+        afterDelete: onCreateChatSession,
         sessionId,
         title
       });
     },
-    [chatSessions, onOpenWorkspace, queueSessionDelete, t]
+    [chatSessions, onCreateChatSession, queueSessionDelete, t]
   );
 
   const deleteArchivedSession = useCallback(

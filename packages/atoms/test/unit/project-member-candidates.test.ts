@@ -11,6 +11,7 @@ test('project member candidates expose one configurable candidate per MeshAgent 
         name: 'codex',
         provider: 'codex',
         productIcon: 'codex',
+        icon: { title: 'Adapter Codex', path: 'M2 2h20v20H2z' },
         enabled: true,
         allowAutopilot: false,
         capabilities: {
@@ -43,7 +44,8 @@ test('project member candidates expose one configurable candidate per MeshAgent 
       modelOptionDisplayNames: { 'gpt-5.5': 'GPT-5.5' },
       speedsByModel: { 'gpt-5.5': ['fast'] },
       reasoningEfforts: ['medium', 'high'],
-      executionCapabilities: { autopilot: true, fastMode: true }
+      executionCapabilities: { autopilot: true, fastMode: true },
+      providerIcon: { title: 'Adapter Codex', path: 'M2 2h20v20H2z' }
     })
   );
 });

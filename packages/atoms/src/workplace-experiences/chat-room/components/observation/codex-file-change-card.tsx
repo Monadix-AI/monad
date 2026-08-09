@@ -4,6 +4,7 @@ import { FileIcon, UnifiedDiff } from '@monad/ui';
 import { useState } from 'react';
 
 import { workplaceExperienceT } from '../../../i18n.ts';
+import { type ObservationToolStatus, ObservationToolStatusIndicator } from './card-shell.tsx';
 import { observationContractRawEvents } from './provenance.ts';
 
 const INITIAL_FILE_COUNT = 3;
@@ -70,6 +71,7 @@ export function CodexFileChangeCard({
   const [showAll, setShowAll] = useState(false);
   const visibleFiles = showAll ? view.files : view.files.slice(0, INITIAL_FILE_COUNT);
   const hiddenCount = view.files.length - visibleFiles.length;
+  const status = fileChangeStatus(view.status);
   return (
     <article
       className="w-full min-w-0 max-w-full overflow-hidden rounded-xl border border-border bg-card"
@@ -84,8 +86,9 @@ export function CodexFileChangeCard({
           />
         </span>
         <div className="min-w-0 flex-1">
-          <div className="font-semibold text-foreground text-sm">
-            {t('web.workplace.fileChange.editedFiles', { count: view.files.length })}
+          <div className="flex items-center gap-1.5 font-semibold text-foreground text-sm">
+            <span>{t('web.workplace.fileChange.editedFiles', { count: view.files.length })}</span>
+            <ObservationToolStatusIndicator status={status} />
           </div>
           <FileChangeStats
             additions={view.additions}
@@ -121,6 +124,13 @@ export function CodexFileChangeCard({
       ) : null}
     </article>
   );
+}
+
+function fileChangeStatus(status: string | undefined): ObservationToolStatus {
+  const normalized = status?.trim().toLowerCase();
+  if (normalized === 'error' || normalized === 'failed') return 'error';
+  if (normalized === 'running' || normalized === 'pending' || normalized === 'in_progress') return 'running';
+  return 'success';
 }
 
 function CodexFileChangeRow({ file }: { file: CodexFileChange }): React.ReactElement {

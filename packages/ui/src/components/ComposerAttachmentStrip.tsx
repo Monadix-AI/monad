@@ -117,7 +117,7 @@ export function ComposerAttachmentStrip({
             {onRemove && labels.remove ? (
               <button
                 aria-label={labels.remove(attachment.name)}
-                className="absolute top-1.5 right-1.5 inline-flex size-[22px] items-center justify-center rounded-full border-0 bg-transparent p-0 text-muted-foreground hover:bg-muted"
+                className="absolute top-1.5 right-1.5 inline-flex size-5.5 items-center justify-center rounded-full border-0 bg-transparent p-0 text-muted-foreground hover:bg-muted"
                 onClick={() => onRemove(attachment.id)}
                 type="button"
               >

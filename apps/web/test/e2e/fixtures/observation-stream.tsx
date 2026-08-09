@@ -100,6 +100,7 @@ declare global {
         maxBounce: number;
         frameSamples: number;
         remountEvents: number;
+        visibleRemountEvents: number;
         tick: number;
         rowCount: number;
       };
@@ -230,6 +231,7 @@ function Harness(): React.ReactElement {
       },
       metrics: () => ({
         ...metrics,
+        visibleRemountEvents: metrics.remountDetails.filter((detail) => detail.visible).length,
         tick: currentTick,
         rowCount: document.querySelectorAll('[role="log"] [data-index]').length
       }),

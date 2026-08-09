@@ -22,7 +22,7 @@ export function CommandCard({ quiet = false, view }: { quiet?: boolean; view: Co
       className={
         quiet
           ? 'max-w-full overflow-hidden rounded-md border border-border/60 bg-secondary/20'
-          : 'max-w-full overflow-hidden rounded-lg border border-warning/40 bg-warning/[0.06]'
+          : 'max-w-full overflow-hidden rounded-lg border border-warning/40 bg-warning/6'
       }
     >
       {view.command ? (
@@ -61,9 +61,7 @@ export function CommandCardHeader({ quiet = false, view }: { quiet?: boolean; vi
         {view.command && showsCommandSummary(view.type) ? (
           <span className="min-w-0 truncate text-muted-foreground">{singleLine(view.command)}</span>
         ) : null}
-        <span className={failed ? 'shrink-0 text-destructive' : 'shrink-0 text-muted-foreground'}>
-          {commandStatusLabel(view)}
-        </span>
+        <span className="sr-only">{commandStatusLabel(view)}</span>
         {view.durationMs !== undefined ? (
           <span className="shrink-0 text-muted-foreground">{formatDurationMs(view.durationMs)}</span>
         ) : null}
@@ -120,13 +118,13 @@ function CommandCodeSection({
             ? 'flex min-w-0 flex-col gap-1.5 p-2.5'
             : 'flex min-w-0 flex-col gap-1.5 border-border/60 border-t p-2.5'
           : label === 'input'
-            ? 'flex min-w-0 flex-col gap-1.5 bg-foreground/[0.05] p-2.5'
-            : 'flex min-w-0 flex-col gap-1.5 border-border/70 border-t bg-warning/[0.05] p-2.5'
+            ? 'flex min-w-0 flex-col gap-1.5 bg-foreground/5 p-2.5'
+            : 'flex min-w-0 flex-col gap-1.5 border-border/70 border-t bg-warning/5 p-2.5'
       }
     >
       <div className="font-bold font-mono text-[10px] text-foreground uppercase">{label}</div>
       <CodeBlock
-        className="rounded-md border-0 bg-transparent text-[11px] [&>div::-webkit-scrollbar]:hidden [&>div]:max-h-72 [&>div]:overflow-auto [&>div]:[scrollbar-width:none] [&_pre]:p-0"
+        className="[&>div]:scrollbar-none rounded-md border-0 bg-transparent text-[11px] [&>div::-webkit-scrollbar]:hidden [&>div]:max-h-72 [&>div]:overflow-auto [&_pre]:p-0"
         code={code}
         language={language}
       />

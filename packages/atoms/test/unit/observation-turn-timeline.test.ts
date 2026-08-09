@@ -37,6 +37,26 @@ test('explicit turn boundaries stay structural and do not create timeline rows',
   expect(items.map(itemShape)).toEqual([{ rowId: 'turn-1-user' }, { rowId: 'turn-1-assistant' }]);
 });
 
+test('turn timestamps fill missing user and assistant message times only', () => {
+  const start = { ...event('turn-time-start', 'turn-start'), at: '2026-08-09T04:38:54.000Z' };
+  const end = { ...event('turn-time-end', 'turn-end'), at: '2026-08-09T04:39:22.000Z' };
+  const items = project([
+    start,
+    event('turn-time-user', 'user-message', 'question'),
+    event('turn-time-reasoning', 'reasoning', 'thinking'),
+    event('turn-time-tool', 'tool-call', 'tool'),
+    event('turn-time-assistant', 'assistant-message', 'answer'),
+    end
+  ]);
+
+  expect(items.map((item) => ({ id: item.id, timestamp: item.row.entries[0]?.timestamp }))).toEqual([
+    { id: 'turn-time-user', timestamp: start.at },
+    { id: 'turn-time-reasoning', timestamp: undefined },
+    { id: 'turn-time-tool', timestamp: undefined },
+    { id: 'turn-time-assistant', timestamp: end.at }
+  ]);
+});
+
 test('a later turn start separates an orphan from the final turn', () => {
   const items = project([
     event('turn-1-start', 'turn-start'),

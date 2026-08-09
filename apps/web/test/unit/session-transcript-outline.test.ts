@@ -2,13 +2,24 @@ import type { ViewItem } from '../../src/features/session/chat-view-items';
 
 import { expect, test } from 'bun:test';
 
-import { sessionTranscriptHeaderState } from '../../src/features/session/SessionTranscript.tsx';
+import { isCompactSessionEvent, sessionTranscriptHeaderState } from '../../src/features/session/SessionTranscript.tsx';
 import {
   completeSessionMessageOutlineItems,
   sessionMessageOutlineItems
 } from '../../src/features/session/session-message-outline';
 
 const formatTime = (iso: string | undefined) => (iso ? `at:${iso}` : 'Time unavailable');
+
+test('reasoning-only and tool rows use the compact event rhythm', () => {
+  expect(
+    [
+      { id: 'reasoning', reasoning: 'Thinking', role: 'assistant', text: '' },
+      { id: 'tool', kind: 'tool', status: 'ok', tool: 'read' },
+      { id: 'answer', role: 'assistant', text: 'Done' },
+      { id: 'user', role: 'user', text: 'Question' }
+    ].map((item) => isCompactSessionEvent(item as ViewItem))
+  ).toEqual([true, true, false, false]);
+});
 
 test('sessionMessageOutlineItems indexes only user messages against all rendered rows', () => {
   const items = [

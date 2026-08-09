@@ -9,7 +9,8 @@ import { ObservationMessageCard } from '../../src/workplace-experiences/chat-roo
 import {
   ObservationTimelineRowView,
   observationTimelineEntries,
-  observationTimelineRows
+  observationTimelineRows,
+  observationToolVisualStatus
 } from '../../src/workplace-experiences/chat-room/components/observation/timeline.tsx';
 
 const raw = { id: 'raw-event' };
@@ -96,6 +97,7 @@ test('observation user messages keep their bubble while agent messages render as
       return {
         avatar: markup.includes('width:34px;height:34px'),
         bubble: markup.includes('border-foreground bg-foreground text-background'),
+        compactSpacing: !markup.includes('mb-4'),
         inlineCodeBorderless: markup.includes('border: 0;\n    border-radius: 7px;'),
         inlineCodeClonesDecoration: markup.includes('box-decoration-break: clone;'),
         inlineCodeKeepsWords: markup.includes('overflow-wrap: break-word;') && markup.includes('word-break: normal;'),
@@ -105,6 +107,7 @@ test('observation user messages keep their bubble while agent messages render as
         text: markup.includes(`${role} text`),
         timestamp: markup.includes(timestampLabel),
         timestampAfterText: markup.indexOf(timestampLabel) > markup.indexOf(`${role} text`),
+        timestampImmediate: !markup.includes('transition-opacity'),
         timestampOnHover: markup.includes('group-hover/observation-message:opacity-100')
       };
     })
@@ -112,6 +115,7 @@ test('observation user messages keep their bubble while agent messages render as
     {
       avatar: false,
       bubble: true,
+      compactSpacing: false,
       inlineCodeBorderless: false,
       inlineCodeClonesDecoration: false,
       inlineCodeKeepsWords: false,
@@ -119,13 +123,15 @@ test('observation user messages keep their bubble while agent messages render as
       providerLabel: false,
       smallText: true,
       text: true,
-      timestamp: false,
-      timestampAfterText: false,
-      timestampOnHover: false
+      timestamp: true,
+      timestampAfterText: true,
+      timestampImmediate: true,
+      timestampOnHover: true
     },
     {
       avatar: false,
       bubble: false,
+      compactSpacing: true,
       inlineCodeBorderless: true,
       inlineCodeClonesDecoration: true,
       inlineCodeKeepsWords: true,
@@ -135,44 +141,143 @@ test('observation user messages keep their bubble while agent messages render as
       text: true,
       timestamp: true,
       timestampAfterText: true,
+      timestampImmediate: true,
       timestampOnHover: true
     }
   ]);
 });
 
+test('observation tool state maps to icon-only semantic colors', () => {
+  expect({
+    error: observationToolVisualStatus({ completed: true, error: true, status: 'completed' }),
+    pending: observationToolVisualStatus({ completed: false, status: 'pending' }),
+    running: observationToolVisualStatus({ completed: false, status: 'running' }),
+    success: observationToolVisualStatus({ completed: true })
+  }).toEqual({ error: 'error', pending: 'running', running: 'running', success: 'success' });
+});
+
 test('observation reasoning uses the shared collapsed reasoning component', () => {
+  const timestamp = new Date().toISOString();
+  const timestampLabel = new Intl.DateTimeFormat('en', { hour: '2-digit', minute: '2-digit' }).format(
+    new Date(timestamp)
+  );
   const markup = renderToStaticMarkup(
     <ObservationMessageCard
       messageRole="reasoning"
       streaming={false}
       text="Inspect the render path."
-      timestamp="12:34:56"
+      timestamp={timestamp}
     />
   );
 
   expect({
+    alignedTitle: markup.includes('min-h-6') && markup.includes('px-1.5 py-0'),
     collapseTrigger: markup.includes('aria-expanded'),
     content: markup.includes('Inspect the render path.'),
     label: markup.includes('Thought for a few seconds'),
     plain: markup.includes('data-message-presentation="plain"'),
-    timestamp: markup.includes('12:34:56')
+    timestamp: markup.includes(timestampLabel),
+    toolTitleTypography: markup.includes('font-sans text-muted-foreground text-sm leading-5')
   }).toEqual({
+    alignedTitle: true,
     collapseTrigger: true,
     content: false,
     label: true,
     plain: true,
-    timestamp: false
+    timestamp: true,
+    toolTitleTypography: true
   });
 });
 
+test('observation reasoning uses the Codex summary as its collapsed title', () => {
+  const markup = renderToStaticMarkup(
+    <ObservationMessageCard
+      messageRole="reasoning"
+      reasoning={{
+        durationMs: 2400,
+        hasContent: false,
+        streaming: false,
+        summary: 'Checking the event projection with a title that is too long to fit in the observation panel',
+        text: 'Thinking…'
+      }}
+      streaming={false}
+      text="Thinking…"
+    />
+  );
+
+  expect({
+    body: markup.includes('Thinking…'),
+    disabled: markup.includes('disabled=""'),
+    durationFallback: markup.includes('Thought for'),
+    summary: markup.includes('Checking the event projection'),
+    truncates: markup.includes('min-w-0 truncate') && markup.includes('overflow-hidden')
+  }).toEqual({ body: false, disabled: true, durationFallback: false, summary: true, truncates: true });
+});
+
+test('observation reasoning recovers a Codex summary from raw provenance for existing events', () => {
+  const contractEvent = {
+    provenance: {
+      rawEvents: [
+        {
+          type: 'reasoning',
+          id: 'item-reasoning-summary',
+          summary: ['**Planning shared memory read**', '**Executing the project lookup**'],
+          content: []
+        }
+      ]
+    }
+  };
+  const event: AgentObservationEvent = {
+    hasContent: false,
+    id: 'event-reasoning-summary',
+    kind: 'reasoning',
+    provenance: { contractEvents: [contractEvent] },
+    streaming: false,
+    text: 'Thinking…'
+  };
+  const card: AgentObservationCard = {
+    id: event.id,
+    kind: 'reasoning',
+    payload: { event },
+    provenance: event.provenance,
+    streaming: false
+  };
+  const markup = renderToStaticMarkup(
+    <ObservationTimelineRowView
+      provider="codex"
+      row={{
+        id: card.id,
+        entries: [
+          {
+            card,
+            contractEvents: event.provenance.contractEvents,
+            id: card.id,
+            kind: 'public'
+          }
+        ]
+      }}
+    />
+  );
+
+  expect({
+    fallback: markup.includes('Thought for'),
+    markdownMarkers: markup.includes('**'),
+    summary: markup.includes('Planning shared memory read · Executing the project lookup')
+  }).toEqual({ fallback: false, markdownMarkers: false, summary: true });
+});
+
 test('empty observation reasoning shows its measured duration without an expandable body', () => {
+  const timestamp = new Date().toISOString();
+  const timestampLabel = new Intl.DateTimeFormat('en', { hour: '2-digit', minute: '2-digit' }).format(
+    new Date(timestamp)
+  );
   const markup = renderToStaticMarkup(
     <ObservationMessageCard
       messageRole="reasoning"
       reasoning={{ durationMs: 796, hasContent: false, streaming: false, text: 'Thinking…' }}
       streaming={false}
       text="Thinking…"
-      timestamp="12:34:56"
+      timestamp={timestamp}
     />
   );
 
@@ -180,8 +285,8 @@ test('empty observation reasoning shows its measured duration without an expanda
     body: markup.includes('Thinking…'),
     disabled: markup.includes('disabled=""'),
     duration: markup.includes('Thought for 1 second'),
-    timestamp: markup.includes('12:34:56')
-  }).toEqual({ body: false, disabled: true, duration: true, timestamp: false });
+    timestamp: markup.includes(timestampLabel)
+  }).toEqual({ body: false, disabled: true, duration: true, timestamp: true });
 });
 
 test('observation agent timestamps distinguish today, yesterday, and earlier dates', () => {
@@ -321,7 +426,7 @@ test('observation timeline omits unrecognized system messages while keeping reco
   ).toEqual(['context-compaction', 'diagnostic']);
 });
 
-test('observation timeline keeps timestamps only for assistant messages across providers', () => {
+test('observation timeline keeps timestamps only for user and assistant messages', () => {
   const kinds = ['assistant-message', 'user-message', 'reasoning', 'context-compaction'] as const;
   const cards: AgentObservationCard[] = kinds.map((kind) => {
     const event: AgentObservationEvent = {
@@ -343,10 +448,31 @@ test('observation timeline keeps timestamps only for assistant messages across p
 
   expect(observationTimelineEntries(cards, 'any').map((entry) => entry.timestamp !== undefined)).toEqual([
     true,
-    false,
+    true,
     false,
     false
   ]);
+});
+
+test('observation assistant messages fall back to the card timestamp', () => {
+  const card: AgentObservationCard = {
+    at: '2026-08-09T00:38:09.125Z',
+    id: 'timestamp-card-fallback',
+    kind: 'message',
+    payload: {
+      event: {
+        id: 'timestamp-card-fallback',
+        kind: 'assistant-message',
+        provenance: { contractEvents: [{ provider: 'any' }] },
+        streaming: false,
+        text: 'Completed response'
+      }
+    },
+    provenance: { contractEvents: [{ provider: 'any' }] },
+    streaming: false
+  };
+
+  expect(observationTimelineEntries([card], 'any')[0]?.timestamp).toBe('2026-08-09T00:38:09.125Z');
 });
 
 test('observation timeline groups only reasoning and responses from the same provider event', () => {

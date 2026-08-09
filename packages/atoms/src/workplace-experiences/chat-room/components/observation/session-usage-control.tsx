@@ -27,20 +27,25 @@ function UsageRow({
   return (
     <div
       style={{
-        alignItems: 'center',
-        borderTop: emphasis ? '1px solid color-mix(in srgb, var(--border, #e5e7eb) 72%, transparent)' : undefined,
+        alignItems: emphasis ? 'center' : 'flex-start',
+        background: emphasis ? 'transparent' : 'color-mix(in srgb, var(--secondary, #f3f4f6) 58%, transparent)',
+        borderRadius: 8,
         display: 'flex',
+        flexDirection: emphasis ? 'row' : 'column',
         fontSize: 12,
-        gap: 12,
+        gap: emphasis ? 12 : 3,
+        gridColumn: emphasis ? '1 / -1' : undefined,
         justifyContent: 'space-between',
         marginTop: emphasis ? 2 : undefined,
-        paddingTop: emphasis ? 10 : undefined
+        padding: emphasis ? '9px 2px 0' : '8px 9px'
       }}
     >
       <span
         style={{
           color: emphasis ? 'var(--foreground, #111827)' : 'var(--muted-foreground, #6b7280)',
-          fontWeight: emphasis ? 650 : 400
+          fontSize: emphasis ? 12 : 10,
+          fontWeight: emphasis ? 650 : 500,
+          letterSpacing: emphasis ? undefined : '0.01em'
         }}
       >
         {label}
@@ -50,7 +55,9 @@ function UsageRow({
           color: 'var(--foreground, #111827)',
           fontFamily: `${mono}, ui-monospace, monospace`,
           fontVariantNumeric: 'tabular-nums',
-          fontWeight: emphasis ? 650 : 400
+          fontSize: emphasis ? 12 : 14,
+          fontWeight: emphasis ? 650 : 600,
+          lineHeight: 1.15
         }}
       >
         {value.toLocaleString()}
@@ -111,11 +118,11 @@ export function ObservationSessionUsageControl({ meter }: { meter: ObservationSe
           style={{
             background: 'var(--popover, var(--background, #fff))',
             border: '1px solid color-mix(in srgb, var(--border, #e5e7eb) 82%, transparent)',
-            borderRadius: 14,
-            boxShadow: '0 14px 32px color-mix(in srgb, black 16%, transparent)',
+            borderRadius: 12,
+            boxShadow: '0 14px 34px color-mix(in srgb, black 14%, transparent)',
             boxSizing: 'border-box',
             fontFamily: `${sans}, ui-sans-serif, system-ui, sans-serif`,
-            padding: 14,
+            padding: 12,
             pointerEvents: 'auto',
             position: 'fixed',
             left: popoverPosition.left,
@@ -124,10 +131,10 @@ export function ObservationSessionUsageControl({ meter }: { meter: ObservationSe
             zIndex: 8
           }}
         >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
             <div
               style={{
-                alignItems: 'baseline',
+                alignItems: 'center',
                 display: 'flex',
                 gap: 12,
                 justifyContent: 'space-between'
@@ -138,15 +145,29 @@ export function ObservationSessionUsageControl({ meter }: { meter: ObservationSe
               </span>
               <span
                 style={{
-                  color: 'var(--muted-foreground, #6b7280)',
+                  background: 'color-mix(in srgb, var(--primary, #2563eb) 10%, transparent)',
+                  borderRadius: 999,
+                  color: 'var(--primary, #2563eb)',
                   fontFamily: `${mono}, ui-monospace, monospace`,
-                  fontSize: 12,
-                  fontVariantNumeric: 'tabular-nums'
+                  fontSize: 11,
+                  fontVariantNumeric: 'tabular-nums',
+                  fontWeight: 600,
+                  padding: '2px 7px'
                 }}
               >
-                {compactNumber(meter.contextUsed)} / {compactNumber(meter.contextWindow)} ({meter.contextPercent}%)
+                {meter.contextPercent}%
               </span>
             </div>
+            <span
+              style={{
+                color: 'var(--muted-foreground, #6b7280)',
+                fontFamily: `${mono}, ui-monospace, monospace`,
+                fontSize: 11,
+                fontVariantNumeric: 'tabular-nums'
+              }}
+            >
+              {compactNumber(meter.contextUsed)} / {compactNumber(meter.contextWindow)}
+            </span>
             <div
               aria-label={`${t('web.workplace.contextWindow')} ${meter.contextPercent}%`}
               aria-valuemax={100}
@@ -174,12 +195,10 @@ export function ObservationSessionUsageControl({ meter }: { meter: ObservationSe
           </div>
           <div
             style={{
-              borderTop: '1px solid var(--border, #e5e7eb)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 8,
-              marginTop: 12,
-              paddingTop: 12
+              display: 'grid',
+              gap: 6,
+              gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
+              marginTop: 10
             }}
           >
             <UsageRow
@@ -212,6 +231,7 @@ export function ObservationSessionUsageControl({ meter }: { meter: ObservationSe
       ) : null}
       <button
         aria-expanded={open}
+        aria-haspopup="dialog"
         aria-label={t('web.workplace.showSessionUsage')}
         className="workplace-action"
         data-observation-session-usage-trigger=""
@@ -224,13 +244,13 @@ export function ObservationSessionUsageControl({ meter }: { meter: ObservationSe
           border: `1px solid ${
             open ? 'var(--primary, #2563eb)' : 'color-mix(in srgb, var(--border, #e5e7eb) 82%, transparent)'
           }`,
-          borderRadius: 9,
+          borderRadius: 999,
           color: 'var(--primary, #2563eb)',
           display: 'inline-flex',
-          height: 30,
+          gap: 4,
+          height: 28,
           justifyContent: 'center',
-          padding: 0,
-          width: 30
+          padding: '0 7px 0 5px'
         }}
         title={t('web.workplace.sessionUsage')}
         type="button"
@@ -240,10 +260,10 @@ export function ObservationSessionUsageControl({ meter }: { meter: ObservationSe
           aria-valuemax={100}
           aria-valuemin={0}
           aria-valuenow={meter.contextMeterPercent}
-          height="22"
+          height="18"
           role="progressbar"
           viewBox="0 0 24 24"
-          width="22"
+          width="18"
         >
           <circle
             cx="12"
@@ -266,6 +286,18 @@ export function ObservationSessionUsageControl({ meter }: { meter: ObservationSe
             transform="rotate(-90 12 12)"
           />
         </svg>
+        <span
+          aria-hidden="true"
+          style={{
+            fontFamily: `${mono}, ui-monospace, monospace`,
+            fontSize: 10,
+            fontVariantNumeric: 'tabular-nums',
+            fontWeight: 600,
+            lineHeight: 1
+          }}
+        >
+          {meter.contextPercent}%
+        </span>
       </button>
     </div>
   );

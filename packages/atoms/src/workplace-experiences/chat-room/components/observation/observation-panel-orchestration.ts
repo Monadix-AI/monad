@@ -77,14 +77,79 @@ function observationJoinKey(event: AgentObservationEvent): string {
   return event.dedupeKey ? `${event.dedupeKey}:${event.kind}` : event.id;
 }
 
+interface CompletedObservationTurn {
+  start: number;
+  end: number;
+  signature: string;
+}
+
+function completedObservationTurns(events: AgentObservationEvent[], settledTail: boolean): CompletedObservationTurn[] {
+  const turns: CompletedObservationTurn[] = [];
+  let start: number | undefined;
+  const append = (end: number) => {
+    if (start === undefined) return;
+    const turn = events.slice(start, end + 1);
+    const userText = turn.filter((item) => item.kind === 'user-message').map((item) => item.text ?? '');
+    const assistantText = turn.filter((item) => item.kind === 'assistant-message').at(-1)?.text;
+    if (userText.length > 0 && assistantText) {
+      turns.push({ start, end, signature: JSON.stringify([userText, assistantText]) });
+    }
+  };
+  for (const [index, event] of events.entries()) {
+    if (event.kind === 'turn-start') start = index;
+    else if (event.kind === 'user-message') {
+      if (start === undefined) start = index;
+      else {
+        const precedingAssistant = events
+          .slice(start, index)
+          .findLast((candidate) => candidate.kind === 'assistant-message');
+        if (precedingAssistant && !precedingAssistant.streaming) {
+          append(index - 1);
+          start = index;
+        }
+      }
+    }
+    if (event.kind !== 'turn-end' || start === undefined) continue;
+    append(index);
+    start = undefined;
+  }
+  const tailAssistant =
+    start === undefined ? undefined : events.slice(start).findLast((event) => event.kind === 'assistant-message');
+  if (settledTail && start !== undefined && tailAssistant && !tailAssistant.streaming) append(events.length - 1);
+  return turns;
+}
+
+function withoutSettledTurnOverlap(
+  earlier: AgentObservationEvent[],
+  current: AgentObservationEvent[]
+): AgentObservationEvent[] {
+  const earlierTurns = completedObservationTurns(earlier, true);
+  const currentTurns = completedObservationTurns(current, true);
+  const limit = Math.min(earlierTurns.length, currentTurns.length);
+  for (let count = limit; count > 0; count -= 1) {
+    const earlierStart = earlierTurns.length - count;
+    const matches = Array.from(
+      { length: count },
+      (_, index) => earlierTurns[earlierStart + index]?.signature === currentTurns[index]?.signature
+    ).every(Boolean);
+    if (!matches) continue;
+    const first = currentTurns[0];
+    const last = currentTurns[count - 1];
+    if (!first || !last) return current;
+    return [...current.slice(0, first.start), ...current.slice(last.end + 1)];
+  }
+  return current;
+}
+
 export function foldConvenienceEvents(
   timeline: ObservationTimeline,
   earlierFrames: MeshConvenienceFrame[]
 ): ObservationTimeline {
   const earlier = mergeConvenienceFrames(emptyObservationTimeline, earlierFrames);
-  const currentByKey = new Map(timeline.events.map((event) => [observationJoinKey(event), event]));
+  const currentEvents = withoutSettledTurnOverlap(earlier.events, timeline.events);
+  const currentByKey = new Map(currentEvents.map((event) => [observationJoinKey(event), event]));
   const seen = new Set<string>();
-  const events = [...earlier.events, ...timeline.events]
+  const events = [...earlier.events, ...currentEvents]
     .map((event) => currentByKey.get(observationJoinKey(event)) ?? event)
     .filter((event) => {
       const key = observationJoinKey(event);
@@ -151,7 +216,6 @@ export function observationVisiblePlane<T>(args: {
   replacementPending: boolean;
   unavailable: boolean;
 }): T[] {
-  if (args.current.length > 0) return args.current;
   if (args.replacementPending && !args.unavailable) return args.retained;
   return args.current;
 }

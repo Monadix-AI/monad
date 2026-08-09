@@ -8,19 +8,14 @@ export function useConsumeActiveSessionAttention(sessionId: SessionId | null, it
   const pendingRef = useRef('');
 
   useEffect(() => {
-    const consumeVisible = () => {
-      if (!sessionId || itemKeys.length === 0 || document.visibilityState !== 'visible') return;
-      const signature = `${sessionId}:${itemKeys.join('\u0000')}`;
-      if (pendingRef.current === signature) return;
-      pendingRef.current = signature;
-      void consume({ sessionId, itemKeys: [...itemKeys], cause: 'visible' })
-        .unwrap()
-        .catch(() => {
-          if (pendingRef.current === signature) pendingRef.current = '';
-        });
-    };
-    consumeVisible();
-    document.addEventListener('visibilitychange', consumeVisible);
-    return () => document.removeEventListener('visibilitychange', consumeVisible);
+    if (!sessionId || itemKeys.length === 0) return;
+    const signature = `${sessionId}:${itemKeys.join('\u0000')}`;
+    if (pendingRef.current === signature) return;
+    pendingRef.current = signature;
+    void consume({ sessionId, itemKeys: [...itemKeys], cause: 'open' })
+      .unwrap()
+      .catch(() => {
+        if (pendingRef.current === signature) pendingRef.current = '';
+      });
   }, [consume, itemKeys, sessionId]);
 }

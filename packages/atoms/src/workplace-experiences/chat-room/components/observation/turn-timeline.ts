@@ -8,6 +8,8 @@ export type ObservationTurnTimelineItem = { id: string; row: ObservationTimeline
 
 type ObservationTurnGroup = {
   body: AgentObservationCard[];
+  completedAt?: string;
+  startedAt?: string;
 };
 
 function eventFromCard(card: AgentObservationCard): AgentObservationEvent | undefined {
@@ -26,6 +28,20 @@ function activityItems(
   }));
 }
 
+function cardsWithTurnMessageTimestamps(group: ObservationTurnGroup): AgentObservationCard[] {
+  return group.body.map((card) => {
+    const event = eventFromCard(card);
+    if (!event || event.at || card.at) return card;
+    const at =
+      event.kind === 'user-message'
+        ? group.startedAt
+        : event.kind === 'assistant-message'
+          ? (group.completedAt ?? group.startedAt)
+          : undefined;
+    return at ? { ...card, at } : card;
+  });
+}
+
 export function observationTurnTimelineItems(
   cards: readonly AgentObservationCard[],
   provider: string,
@@ -41,7 +57,7 @@ export function observationTurnTimelineItems(
   };
   const flushTurn = () => {
     if (!current) return;
-    items.push(...activityItems(current.body, provider, active));
+    items.push(...activityItems(cardsWithTurnMessageTimestamps(current), provider, active));
     current = undefined;
   };
 
@@ -50,10 +66,11 @@ export function observationTurnTimelineItems(
     if (kind === 'turn-start') {
       flushUngrouped();
       flushTurn();
-      current = { body: [] };
+      current = { body: [], startedAt: eventFromCard(card)?.at };
       continue;
     }
     if (kind === 'turn-end') {
+      if (current) current.completedAt = eventFromCard(card)?.at;
       flushTurn();
       continue;
     }

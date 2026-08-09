@@ -16,6 +16,19 @@ export type ProjectRouteSessionState = {
   activeSessionTitle: string | null;
 };
 
+export function resolveVisibleProjectSessionId({
+  controllerSessionId,
+  routedSessionId,
+  routedSessionState
+}: {
+  controllerSessionId: SessionId | null;
+  routedSessionId: SessionId | null;
+  routedSessionState: ProjectRouteSessionState;
+}): SessionId | null {
+  if (routedSessionId) return routedSessionState.activeSessionId;
+  return routedSessionState.activeSessionId ?? controllerSessionId;
+}
+
 export function deriveProjectRouteSessionState(
   project: ProjectRouteSessionSource,
   routedSessionId: SessionId | null
