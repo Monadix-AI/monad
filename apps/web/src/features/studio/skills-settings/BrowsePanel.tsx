@@ -591,9 +591,8 @@ export function BrowsePanel({
             <button
               aria-selected={source === option.source}
               className={cn(
-                'inline-flex h-8 shrink-0 items-center gap-2 rounded-md border border-transparent px-2.5 font-medium text-muted-foreground text-xs transition-[background-color,border-color,color] duration-150 ease-out hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                source === option.source &&
-                  'border-border/70 bg-background/80 text-foreground shadow-sm hover:bg-background/80'
+                'inline-flex h-8 shrink-0 items-center gap-2 rounded-md px-2.5 font-medium text-muted-foreground text-xs transition-[background-color,color,box-shadow] duration-150 ease-out hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                source === option.source && 'bg-background/80 text-foreground shadow-sm hover:bg-background/80'
               )}
               key={option.source}
               onClick={() => handleSourceChange(option.source)}
@@ -644,7 +643,7 @@ export function BrowsePanel({
           {supportsCuratedSorts ? (
             <div
               aria-label={t('web.skills.sort')}
-              className="inline-flex min-w-0 items-center gap-0.5 self-start rounded-md border border-border/70 bg-muted/20 p-0.5 lg:self-auto"
+              className="inline-flex min-w-0 items-center gap-0.5 self-start rounded-md bg-muted/20 p-0.5 lg:self-auto"
               role="tablist"
             >
               {MARKETPLACE_SORT_TABS.map((tab) => (

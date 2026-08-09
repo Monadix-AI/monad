@@ -109,25 +109,32 @@ export function AgentDetails({ agentId, subpath }: { agentId: AgentId; subpath: 
             </Badge>
           </section>
 
-          <div className="flex border-b">
+          <div
+            className="flex gap-1"
+            role="tablist"
+          >
             <button
+              aria-selected={route.primary === 'sessions'}
               className={
                 route.primary === 'sessions'
-                  ? 'border-primary border-b-2 px-4 py-2 font-medium text-sm'
-                  : 'border-transparent border-b-2 px-4 py-2 text-muted-foreground text-sm'
+                  ? 'rounded-md bg-secondary px-4 py-2 font-medium text-sm'
+                  : 'rounded-md px-4 py-2 text-muted-foreground text-sm hover:bg-accent'
               }
               onClick={() => replaceShellUrl(studioDetailPath('agents', agentId, 'sessions', selectedKind))}
+              role="tab"
               type="button"
             >
               {t('web.studio.agentDetails.sessions')}
             </button>
             <button
+              aria-selected={route.primary === 'memory'}
               className={
                 route.primary === 'memory'
-                  ? 'border-primary border-b-2 px-4 py-2 font-medium text-sm'
-                  : 'border-transparent border-b-2 px-4 py-2 text-muted-foreground text-sm'
+                  ? 'rounded-md bg-secondary px-4 py-2 font-medium text-sm'
+                  : 'rounded-md px-4 py-2 text-muted-foreground text-sm hover:bg-accent'
               }
               onClick={() => replaceShellUrl(studioDetailPath('agents', agentId, 'memory', 'facts'))}
+              role="tab"
               type="button"
             >
               {t('web.studio.agentDetails.memory')}

@@ -386,6 +386,27 @@
     color: var(--link);
   }
 
+  :where(
+    button,
+    input[type="button"],
+    input[type="reset"],
+    input[type="submit"],
+    [role="button"],
+    [role="tab"],
+    [data-slot="button"],
+    [data-slot="tabs-trigger"]
+  ) {
+    /* biome-ignore lint/complexity/noImportantStyles: The borderless control invariant must override legacy inline borders. */
+    border: 0 !important;
+  }
+
+  :where([role="tablist"], [data-slot="tabs-list"]) {
+    padding: 2px;
+    /* biome-ignore lint/complexity/noImportantStyles: Tab groups retain their boundary even when legacy classes reset it. */
+    border: 1px solid var(--border) !important;
+    border-radius: var(--radius-lg);
+  }
+
   ::selection {
     background: var(--accent-blue-soft);
   }
