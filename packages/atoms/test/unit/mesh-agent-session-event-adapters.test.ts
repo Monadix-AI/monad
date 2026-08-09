@@ -255,7 +255,8 @@ describe('Codex resident app-server runtime', () => {
           clientUserMessageId: 'monad-1',
           input: [{ type: 'text', text: 'first', text_elements: [] }],
           model: 'gpt-5.4',
-          effort: 'high'
+          effort: 'high',
+          summary: 'auto'
         }
       },
       {
@@ -276,7 +277,8 @@ describe('Codex resident app-server runtime', () => {
           clientUserMessageId: 'monad-3',
           input: [{ type: 'text', text: 'next task', text_elements: [] }],
           model: 'gpt-5.4',
-          effort: 'high'
+          effort: 'high',
+          summary: 'auto'
         }
       }
     ]);

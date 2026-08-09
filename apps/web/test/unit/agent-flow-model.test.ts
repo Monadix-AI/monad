@@ -108,7 +108,7 @@ test('summarizes instruction files, model overrides, memory, and channels', () =
     })
   ).toEqual({
     identity: ['Name: Default Dev Agent', 'Instructions: AGENT.md'],
-    models: ['Profile: balanced', 'Role overrides: 1', 'Limits: Max turns 8'],
+    models: ['Profile: balanced', 'Role override: 1', 'Limits: Max turns 8'],
     tools: ['Policy: inherit workspace', 'MCPs: 2 inherited'],
     skills: ['Policy: inherit workspace'],
     memory: ['Memory: available', 'Facts: 4'],

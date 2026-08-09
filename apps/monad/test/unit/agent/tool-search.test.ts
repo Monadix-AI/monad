@@ -129,7 +129,7 @@ test('respects topK limit', async () => {
 
   const result = await runSearch(tool, { query: 'all tools' });
   // Only 2 tools should appear
-  expect(result).toContain('Found 2 tool(s)');
+  expect(result).toContain('Found tools=2');
   expect(result).not.toContain('## tool_c');
 });
 

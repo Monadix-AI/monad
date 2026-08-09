@@ -87,7 +87,7 @@ export function ProviderCard({
           </span>
           {modelCount > 0 && (
             <span className="shrink-0 text-muted-foreground text-xs">
-              {t('web.model.modelCount', { count: modelCount.toLocaleString() })}
+              {t('web.model.modelCount', { count: modelCount })}
             </span>
           )}
           {detail.isLoadingModels && modelCount === 0 && (

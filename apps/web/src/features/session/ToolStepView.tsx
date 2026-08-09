@@ -1433,6 +1433,7 @@ function AnsiText({ segments }: { segments: AnsiSegment[] }) {
 }
 
 function MultiFileDiffOutputBlock({ display }: { display: MultiDiffDisplay }) {
+  const t = useT();
   const [expanded, setExpanded] = useState(false);
   const summary =
     display.summary ??
@@ -1461,9 +1462,11 @@ function MultiFileDiffOutputBlock({ display }: { display: MultiDiffDisplay }) {
           icon={TextIcon}
         />
         <span className="min-w-0 truncate font-medium">
-          {summary.succeeded}/{summary.total} files changed
+          {t('web.workplace.fileChange.changedSummary', { count: summary.total, succeeded: summary.succeeded })}
           {summary.failed > 0 ? `, ${summary.failed} failed` : ''}
-          {(summary.warnings ?? 0) > 0 ? `, ${summary.warnings} warning${summary.warnings === 1 ? '' : 's'}` : ''}
+          {(summary.warnings ?? 0) > 0
+            ? `, ${t('web.workplace.fileChange.warnings', { count: summary.warnings ?? 0 })}`
+            : ''}
         </span>
         <span className="ml-auto shrink-0 font-mono text-[11px]">
           <span className="text-emerald-500">+{summary.added}</span>
@@ -1502,7 +1505,7 @@ function MultiFileDiffOutputBlock({ display }: { display: MultiDiffDisplay }) {
           onClick={() => setExpanded(true)}
           type="button"
         >
-          Show {hiddenCount} more file{hiddenCount === 1 ? '' : 's'}
+          {t('web.workplace.fileChange.showMore', { count: hiddenCount })}
         </button>
       )}
       {expanded && display.files.length > 4 && (
@@ -1511,7 +1514,7 @@ function MultiFileDiffOutputBlock({ display }: { display: MultiDiffDisplay }) {
           onClick={() => setExpanded(false)}
           type="button"
         >
-          Show fewer files
+          {t('web.workplace.fileChange.showFewer')}
         </button>
       )}
     </div>

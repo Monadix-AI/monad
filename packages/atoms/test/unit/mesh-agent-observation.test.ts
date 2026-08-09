@@ -402,8 +402,130 @@ test('Codex app-server observation renders reasoning and diff streams', () => {
 
   const items = meshAgentStreamItems({ id: 'mesh_codex0000000', provider: 'codex', output });
   expect(items.map((item) => ({ role: item.role, type: item.providerEventType, text: item.text }))).toEqual([
-    { role: 'agent', type: 'item/reasoning/summaryTextDelta', text: 'Considering the plan.' },
+    { role: 'agent', type: 'item/reasoning/delta', text: 'Considering the plan.' },
     { role: 'tool', type: 'turn/diff/updated', text: '--- a\n+++ b\n' }
+  ]);
+});
+
+test('Codex app-server observation preserves empty reasoning lifecycle duration without inventing content', () => {
+  const started = {
+    method: 'item/started',
+    params: {
+      item: {
+        type: 'reasoning',
+        id: 'rs_07e1f6db02b0e58e016a77f17068bc8191a8b4d524888cfcba',
+        summary: [],
+        content: []
+      },
+      threadId: '019fe486-f89f-7920-ac20-dfca5e27a2e8',
+      turnId: '019fe486-fa58-7790-8b84-377260e325cd',
+      startedAtMs: 1_786_245_488_329
+    },
+    emittedAtMs: 1_786_245_488_329
+  };
+  const completed = {
+    method: 'item/completed',
+    params: {
+      item: {
+        type: 'reasoning',
+        id: 'rs_07e1f6db02b0e58e016a77f17068bc8191a8b4d524888cfcba',
+        summary: [],
+        content: []
+      },
+      threadId: '019fe486-f89f-7920-ac20-dfca5e27a2e8',
+      turnId: '019fe486-fa58-7790-8b84-377260e325cd',
+      completedAtMs: 1_786_245_489_125
+    },
+    emittedAtMs: 1_786_245_489_125
+  };
+
+  expect(
+    meshAgentNeutralStreamItems({
+      id: 'mesh_codex0000000',
+      provider: 'codex',
+      output: [started, completed].map((record) => JSON.stringify(record)).join('\n')
+    }).map(({ at, durationMs, hasContent, kind, text }) => ({ at, durationMs, hasContent, kind, text }))
+  ).toEqual([
+    {
+      at: '2026-08-09T03:18:09.125Z',
+      durationMs: 796,
+      hasContent: false,
+      kind: 'reasoning',
+      text: 'Thinking…'
+    }
+  ]);
+
+  const adapter = builtinAgentAdapters.find((candidate) => candidate.provider === 'codex');
+  if (!adapter?.events) throw new Error('Expected Codex observation adapter');
+  const projector = adapter.events.createLiveProjector?.({ id: 'mesh_codex0000000' });
+  if (!projector) throw new Error('Expected Codex live observation projector');
+  const [liveStarted] = projector.advance(`${JSON.stringify(started)}\n`).events;
+  const [liveCompleted] = projector.advance(`${JSON.stringify(completed)}\n`).events;
+  if (!liveStarted || !liveCompleted) throw new Error('Expected the Codex reasoning lifecycle to remain projected');
+
+  expect({
+    completed: {
+      durationMs: liveCompleted.durationMs,
+      hasContent: liveCompleted.hasContent,
+      id: liveCompleted.id,
+      type: liveCompleted.providerEventType
+    },
+    started: {
+      durationMs: liveStarted.durationMs,
+      hasContent: liveStarted.hasContent,
+      id: liveStarted.id,
+      type: liveStarted.providerEventType
+    }
+  }).toEqual({
+    completed: {
+      durationMs: 796,
+      hasContent: false,
+      id: liveStarted.id,
+      type: 'item/reasoning/delta'
+    },
+    started: {
+      durationMs: undefined,
+      hasContent: false,
+      id: liveStarted.id,
+      type: 'item/reasoning/delta'
+    }
+  });
+});
+
+test('Codex app-server observation renders the completed reasoning summary when deltas are absent', () => {
+  const summaryItem = {
+    type: 'reasoning',
+    id: 'reasoning-1',
+    summary: ['Inspecting the project.', 'Checking the tests.'],
+    content: ['Raw reasoning fallback.']
+  };
+  const contentItem = {
+    type: 'reasoning',
+    id: 'reasoning-2',
+    summary: [],
+    content: ['Raw reasoning fallback.']
+  };
+  const lifecycle = (item: typeof summaryItem) =>
+    [
+      JSON.stringify({
+        method: 'item/started',
+        params: { threadId: 'thread-1', turnId: 'turn-1', item: { ...item, summary: [], content: [] } }
+      }),
+      JSON.stringify({
+        method: 'item/completed',
+        params: { threadId: 'thread-1', turnId: 'turn-1', item }
+      })
+    ].join('\n');
+
+  expect(
+    [summaryItem, contentItem].map((item) =>
+      meshAgentNeutralStreamItems({ id: 'mesh_codex0000000', provider: 'codex', output: lifecycle(item) }).map(
+        ({ kind, text }) => ({ kind, text })
+      )
+    )
+  ).toEqual([
+    [{ kind: 'reasoning', text: 'Inspecting the project.\n\nChecking the tests.' }],
+    [{ kind: 'reasoning', text: 'Raw reasoning fallback.' }]
   ]);
 });
 
@@ -994,8 +1116,7 @@ test('chat timeline groups consecutive Codex MCP startup statuses and keeps each
             { name: 'node_repl', status: 'ready' }
           ]
         }
-      },
-      timestamp: '10:00:02'
+      }
     }
   ]);
   expect(observationContractRawEvents(entries[0]?.contractEvents ?? [])).toEqual([
@@ -2016,7 +2137,7 @@ test('Codex app-server observation renders a standalone commandExecution result 
       input: 'git status --short',
       output: '{"messages":[{"text":"ok"}]}',
       status: 'completed',
-      timestamp: '06:28:03'
+      timestamp: undefined
     }
   ]);
 });
@@ -2189,11 +2310,6 @@ test('Claude Code observation pairs a tool result across intervening events by c
       output,
       status: 'completed',
       rawEvents: [callRecord, resultRecord]
-    },
-    {
-      id: 'mesh_claude000000:json:1:system',
-      type: 'system',
-      text: 'task_progress'
     }
   ]);
 });

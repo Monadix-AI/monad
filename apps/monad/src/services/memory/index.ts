@@ -251,7 +251,7 @@ export function createMemoryService(deps: MemoryServiceDeps): MemoryService {
       if (safe.length === 0 && facts.length > 0) return { scope: label, before: facts.length, after: facts.length };
       memoryDir.replaceFacts(scope, safe);
       deps.consolidationState?.set(`l1:${label}`, fingerprint(safe.map(factId)));
-      deps.log.info(`memory: consolidate(${label}) ${facts.length} → ${safe.length} fact(s)`);
+      deps.log.info(`memory: consolidate(${label}) facts=${facts.length} → safeFacts=${safe.length}`);
       return { scope: label, before: facts.length, after: safe.length };
     } catch (err) {
       deps.log.warn(`memory: consolidate(${label}) failed: ${String(err)}`);

@@ -5,6 +5,7 @@ import type { TFunction } from './types';
 import { ArrowLeft01Icon, Delete02Icon, FileArchiveIcon } from '@hugeicons/core-free-icons';
 import { useMemo, useState } from 'react';
 
+import { useLocale } from '#/components/I18nProvider';
 import { archivedSessionBuckets, visibleArchivedBucketItems } from '#/features/shell/archived-sessions';
 import { projectSessionPath } from '#/features/shell/routing/paths';
 import { useServerSessionSearch } from '#/features/shell/session-server-search';
@@ -157,8 +158,9 @@ function ArchivedBucketList({
   onUnarchiveSession: (sessionId: SessionId) => void;
   t: TFunction;
 }) {
+  const locale = useLocale();
   const [earlierVisibleCount, setEarlierVisibleCount] = useState(EARLIER_INITIAL_COUNT);
-  const buckets = archivedSessionBuckets(items);
+  const buckets = archivedSessionBuckets(items, new Date(), locale, t('web.sidebar.earlier'));
 
   return (
     <div className="flex flex-col gap-1">

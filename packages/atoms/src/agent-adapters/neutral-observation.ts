@@ -233,6 +233,8 @@ export function toAgentObservationEvent(
     provenance: { contractEvents: [event] }
   };
   if (event.diagnostic !== undefined) event_.diagnostic = event.diagnostic;
+  if (event.durationMs !== undefined) event_.durationMs = event.durationMs;
+  if (event.hasContent !== undefined) event_.hasContent = event.hasContent;
   if (event.createdAt !== undefined) event_.at = event.createdAt;
 
   if (kind === 'tool-call' || kind === 'tool-result') {

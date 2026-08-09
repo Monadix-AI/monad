@@ -15,7 +15,19 @@ test('archived sessions group into today yesterday and earlier', () => {
   );
 
   expect(buckets.map((bucket) => bucket.id)).toEqual(['today', 'yesterday', 'earlier']);
+  expect(buckets.map((bucket) => bucket.label)).toEqual(['today', 'yesterday', 'Earlier']);
   expect(buckets.map((bucket) => bucket.items.map((item) => item.id))).toEqual([['today'], ['yesterday'], ['earlier']]);
+});
+
+test('archived session relative bucket labels follow the requested locale', () => {
+  const buckets = archivedSessionBuckets(
+    [{ id: 'yesterday', title: 'Yesterday', updatedAt: '2026-07-14T03:00:00.000Z' }],
+    now,
+    'zh',
+    '更早'
+  );
+
+  expect(buckets.map((bucket) => bucket.label)).toEqual(['昨天']);
 });
 
 test('only the earlier bucket is capped by more count', () => {

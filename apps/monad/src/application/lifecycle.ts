@@ -215,7 +215,7 @@ export async function startDaemon(opts?: { beforeListen?: (app: App) => void }):
     getWorkplaceExperiences: () => [...registry.workplaceExperiences.values()],
     reindexEmbeddings: () => {
       const cleared = store.clearEmbeddings();
-      logger.info(`monad: cleared ${cleared} embedding(s) for re-index with the current embedding model`);
+      logger.info(`monad: cleared embeddings=${cleared} for re-index with the current embedding model`);
       embeddingIndexer.kick();
     },
     indexerStatus: () => embeddingIndexer.status(),

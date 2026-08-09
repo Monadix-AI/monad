@@ -19,6 +19,12 @@ export interface AgentInstructionDraft {
 
 type FlowTranslate = (key: string, params?: Record<string, string | number>) => string;
 
+const englishPluralRules = new Intl.PluralRules('en');
+
+function englishCountLabel(count: number, one: string, other: string): string {
+  return englishPluralRules.select(count) === 'one' ? one : other;
+}
+
 export interface AgentFlowInput {
   a2aEnabled: boolean;
   atomsAllow: string[];
@@ -181,9 +187,12 @@ export function agentFlowSummaries(
     models: [
       copy(translate, 'web.studio.agentEditor.summary.profile', `Profile: ${profile}`, { profile }),
       roleOverrides
-        ? copy(translate, 'web.studio.agentEditor.summary.roleOverrides', `Role overrides: ${roleOverrides}`, {
-            count: roleOverrides
-          })
+        ? copy(
+            translate,
+            'web.studio.agentEditor.summary.roleOverrides',
+            `${englishCountLabel(roleOverrides, 'Role override', 'Role overrides')}: ${roleOverrides}`,
+            { count: roleOverrides }
+          )
         : copy(translate, 'web.studio.agentEditor.summary.noRoleOverrides', 'Role overrides: none'),
       ...(limits ? [limits] : [])
     ],
@@ -193,12 +202,15 @@ export function agentFlowSummaries(
         : copy(
             translate,
             'web.studio.agentEditor.summary.selectedTools',
-            `Policy: ${input.atomsAllow.length} selected ${input.atomsAllow.length === 1 ? 'tool' : 'tools'}`,
+            `Policy: ${input.atomsAllow.length} selected ${englishCountLabel(input.atomsAllow.length, 'tool', 'tools')}`,
             { count: input.atomsAllow.length }
           ),
-      copy(translate, 'web.studio.agentEditor.summary.inheritedMcps', `MCPs: ${input.mcpCount} inherited`, {
-        count: input.mcpCount
-      })
+      copy(
+        translate,
+        'web.studio.agentEditor.summary.inheritedMcps',
+        `${englishCountLabel(input.mcpCount, 'MCP', 'MCPs')}: ${input.mcpCount} inherited`,
+        { count: input.mcpCount }
+      )
     ],
     skills: [
       input.skillsMode === 'inherit'
@@ -206,7 +218,7 @@ export function agentFlowSummaries(
         : copy(
             translate,
             'web.studio.agentEditor.summary.selectedSkills',
-            `Policy: ${input.skillsAllow.length} selected`,
+            `Policy: ${input.skillsAllow.length} ${englishCountLabel(input.skillsAllow.length, 'Skill', 'Skills')} selected`,
             { count: input.skillsAllow.length }
           )
     ],
@@ -214,9 +226,12 @@ export function agentFlowSummaries(
       input.memory.available
         ? copy(translate, 'web.studio.agentEditor.summary.memoryAvailable', 'Memory: available')
         : copy(translate, 'web.studio.agentEditor.summary.memoryUnavailable', 'Memory: unavailable'),
-      copy(translate, 'web.studio.agentEditor.summary.facts', `Facts: ${input.memory.factCount}`, {
-        count: input.memory.factCount
-      })
+      copy(
+        translate,
+        'web.studio.agentEditor.summary.facts',
+        `${englishCountLabel(input.memory.factCount, 'Fact', 'Facts')}: ${input.memory.factCount}`,
+        { count: input.memory.factCount }
+      )
     ],
     sandbox: [
       copy(

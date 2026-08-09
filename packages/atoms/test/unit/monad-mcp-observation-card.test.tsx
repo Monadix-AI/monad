@@ -266,7 +266,7 @@ test('projects Monad agent-facing MCP events through the semantic timeline', () 
     },
     timeline: [
       {
-        text: 'Post to project Thread: thread_1 Failed 15:42:17 Message Share the current status. Thread thread_1 Result tool "monad__project_post" denied by gate: approval request timed out',
+        text: 'Post to project Thread: thread_1 Failed Message Share the current status. Thread thread_1 Result tool "monad__project_post" denied by gate: approval request timed out',
         visualRole: 'error'
       }
     ]

@@ -48,7 +48,7 @@ test('a later turn start separates an orphan from the final turn', () => {
   expect(items.map(itemShape)).toEqual([{ rowId: 'turn-1-assistant' }, { rowId: 'turn-2-assistant' }]);
 });
 
-test('ungrouped activity stays visible while unmatched turn ends stay structural', () => {
+test('unknown system activity stays hidden while unmatched turn ends stay structural', () => {
   const items = project([
     event('before', 'system', 'before'),
     event('orphan-end', 'turn-end'),
@@ -58,7 +58,7 @@ test('ungrouped activity stays visible while unmatched turn ends stay structural
     event('after', 'system', 'after')
   ]);
 
-  expect(items.map(itemShape)).toEqual([{ rowId: 'before' }, { rowId: 'inside' }, { rowId: 'after' }]);
+  expect(items.map(itemShape)).toEqual([{ rowId: 'inside' }]);
 });
 
 test('consecutive starts do not create empty timeline rows', () => {

@@ -228,7 +228,7 @@ async function waitForMessages(t: TransportHandle, sessionId: string, count: num
       messages = await listMessages(t, sessionId);
       return messages.length >= count;
     },
-    { intervalMs: 5, message: `session never reached ${count} message(s)` }
+    { intervalMs: 5, message: `session never reached messages=${count}` }
   );
   return messages;
 }
@@ -242,7 +242,7 @@ async function waitForTextMessages(t: TransportHandle, sessionId: string, count:
       messages = (await listMessages(t, sessionId)).filter(({ text }) => text);
       return messages.length >= count;
     },
-    { intervalMs: 5, message: `session never reached ${count} text message(s)` }
+    { intervalMs: 5, message: `session never reached textMessages=${count}` }
   );
   return messages;
 }

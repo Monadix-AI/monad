@@ -540,13 +540,33 @@ describe('dispatchCommand', () => {
     );
     expect(calls.at(-1)).toBe('shortcut:3');
     expect(translations.calls).toEqual([
+      { key: 'cmd.consolidate.factScopes', params: { count: 1 } },
+      { key: 'cmd.consolidate.entities', params: { count: 2 } },
+      { key: 'cmd.consolidate.relations', params: { count: 3 } },
+      { key: 'cmd.consolidate.laws', params: { count: 4 } },
       {
         key: 'cmd.consolidate.done',
-        params: { level: '2', scopes: '1', nodes: '2', edges: '3', laws: '4' }
+        params: {
+          level: '2',
+          scopeSummary: 'cmd.consolidate.factScopes',
+          entitySummary: 'cmd.consolidate.entities',
+          relationSummary: 'cmd.consolidate.relations',
+          lawSummary: 'cmd.consolidate.laws'
+        }
       },
+      { key: 'cmd.consolidate.factScopes', params: { count: 0 } },
+      { key: 'cmd.consolidate.entities', params: { count: 0 } },
+      { key: 'cmd.consolidate.relations', params: { count: 0 } },
+      { key: 'cmd.consolidate.laws', params: { count: 0 } },
       {
         key: 'cmd.consolidate.done',
-        params: { level: '3', scopes: '0', nodes: '0', edges: '0', laws: '0' }
+        params: {
+          level: '3',
+          scopeSummary: 'cmd.consolidate.factScopes',
+          entitySummary: 'cmd.consolidate.entities',
+          relationSummary: 'cmd.consolidate.relations',
+          lawSummary: 'cmd.consolidate.laws'
+        }
       }
     ]);
   });

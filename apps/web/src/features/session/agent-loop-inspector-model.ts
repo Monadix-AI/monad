@@ -162,7 +162,7 @@ const EN_INSPECTOR: Record<string, string> = {
   'web.inspector.node.contextMeta': '{{count}} buckets',
   'web.inspector.node.model': 'Model',
   'web.inspector.node.modelEmpty': 'Reasoning loop and model response.',
-  'web.inspector.node.modelTools': '{{count}} tool step(s) requested',
+  'web.inspector.node.modelTools': 'tool steps={{count}}',
   'web.inspector.node.output': 'Output',
   'web.inspector.node.outputEmpty': 'Final assistant output appears here.',
   'web.inspector.node.reasoningEmpty': 'No reasoning stream observed for this turn.',
@@ -174,7 +174,7 @@ const EN_INSPECTOR: Record<string, string> = {
   'web.inspector.node.tool': 'Tool',
   'web.inspector.node.turn': 'User turn',
   'web.inspector.node.turnEmpty': 'Waiting for a prompt.',
-  'web.inspector.segmentMeta': '{{count}} segment(s)',
+  'web.inspector.segmentMeta': 'segments={{count}}',
   'web.inspector.optionsMeta': '{{count}} options'
 };
 

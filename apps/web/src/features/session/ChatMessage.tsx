@@ -119,7 +119,7 @@ const ReasoningBubble = memo(function ReasoningBubble({ text, streaming }: { tex
         labels={{
           thinking: t('web.reasoning.thinking'),
           thoughtFew: t('web.reasoning.thoughtFew'),
-          thoughtSeconds: (seconds) => t('web.reasoning.thoughtSeconds', { seconds })
+          thoughtSeconds: (seconds) => t('web.reasoning.thoughtSeconds', { count: seconds })
         }}
       />
       <ReasoningContent
@@ -217,10 +217,7 @@ export const Message = memo(function Message({
   const isUser = msg.role === 'user';
   // Constant for the message's lifetime; recomputing per streamed token would re-parse the same ISO
   // string on every frame of the active message.
-  const timeLabel = useMemo(
-    () => formatMessageTimestamp(msg.seq, locale, { yesterday: t('web.chat.yesterday') }),
-    [locale, msg.seq, t]
-  );
+  const timeLabel = useMemo(() => formatMessageTimestamp(msg.seq, locale), [locale, msg.seq]);
   const label = msg.label ?? assistantLabel;
   const [copied, setCopied] = useState(false);
   const [rewindEditor, dispatchRewindEditor] = useReducer(rewindEditorReducer, { draft: '', mode: 'idle' });

@@ -67,7 +67,7 @@ export function scanSkillFiles(files: Map<string, Uint8Array>): string[] {
   if (execFiles.length > 0) {
     const shown = execFiles.slice(0, 5).join(', ');
     warnings.add(
-      `bundles executable script(s): ${shown}${execFiles.length > 5 ? ` (+${execFiles.length - 5} more)` : ''}`
+      `bundles executable scripts: ${shown}${execFiles.length > 5 ? ` (+${execFiles.length - 5} more)` : ''}`
     );
   }
   return [...warnings];

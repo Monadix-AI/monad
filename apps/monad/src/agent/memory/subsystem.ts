@@ -402,7 +402,7 @@ export function createMemorySubsystem(deps: MemorySubsystemDeps): MemorySubsyste
         try {
           const result = await runConsolidate({ agentId });
           graphLog.info(
-            `auto-consolidate(${agentId}): L${result.level}, ${result.l1Scopes} scope(s), +${result.nodes}/${result.edges} graph, ${result.laws} law(s)`
+            `auto-consolidate(${agentId}): L${result.level}, scopes=${result.l1Scopes}, graph=+${result.nodes}/${result.edges}, laws=${result.laws}`
           );
         } catch (error) {
           graphLog.warn(`auto-consolidate(${agentId}) failed: ${String(error)}`);

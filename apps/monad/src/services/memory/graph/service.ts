@@ -159,7 +159,7 @@ export async function consolidateGraph(deps: GraphConsolidateDeps): Promise<Grap
   const { prunedEdges } = deps.store.reconcile(deps.isAlive);
 
   deps.log.info(
-    `graph: consolidated ${extracted}/${scanned} session(s) → +${nodes} node(s), +${edges} edge(s); reconcile pruned ${prunedEdges}`
+    `graph: sessions=${extracted}/${scanned} → nodes=+${nodes}, edges=+${edges}; reconcile prunedEdges=${prunedEdges}`
   );
   return { sessionsScanned: scanned, sessionsExtracted: extracted, nodes, edges, prunedEdges };
 }

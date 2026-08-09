@@ -16,12 +16,15 @@ export interface ArchivedSessionBucket {
 
 export function archivedSessionBuckets(
   items: ArchivedSessionListItem[],
-  now: Date = new Date()
+  now: Date = new Date(),
+  locale = 'en',
+  earlierLabel = 'Earlier'
 ): ArchivedSessionBucket[] {
+  const relative = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
   const buckets: ArchivedSessionBucket[] = [
-    { id: 'today', items: [], label: 'Today' },
-    { id: 'yesterday', items: [], label: 'Yesterday' },
-    { id: 'earlier', items: [], label: 'Earlier' }
+    { id: 'today', items: [], label: relative.format(0, 'day') },
+    { id: 'yesterday', items: [], label: relative.format(-1, 'day') },
+    { id: 'earlier', items: [], label: earlierLabel }
   ];
   const todayKey = localDateKey(now);
   const yesterday = new Date(now);

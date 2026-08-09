@@ -21,7 +21,7 @@ test('reports the complete advisory set in rule order', () => {
     'pipes a download straight into a shell (curl|wget … | sh)',
     '"mal" pre-declares allowedTools: shell code_execute',
     'references credential files or secret env vars',
-    'bundles executable script(s): mal/setup.sh'
+    'bundles executable scripts: mal/setup.sh'
   ]);
 });
 

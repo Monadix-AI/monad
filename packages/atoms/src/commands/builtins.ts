@@ -166,10 +166,10 @@ async function runConsolidate(ctx: Parameters<CommandDefinition['run']>[0], args
   return {
     message: ctx.t('cmd.consolidate.done', {
       level: String(r.level),
-      scopes: String(r.l1Scopes),
-      nodes: String(r.nodes),
-      edges: String(r.edges),
-      laws: String(r.laws)
+      scopeSummary: ctx.t('cmd.consolidate.factScopes', { count: r.l1Scopes }),
+      entitySummary: ctx.t('cmd.consolidate.entities', { count: r.nodes }),
+      relationSummary: ctx.t('cmd.consolidate.relations', { count: r.edges }),
+      lawSummary: ctx.t('cmd.consolidate.laws', { count: r.laws })
     })
   };
 }
@@ -211,7 +211,7 @@ const whyCommandAtom = defineCommand({
 
 async function runCheckMemory(ctx: Parameters<CommandDefinition['run']>[0]) {
   const { flagged } = await ctx.checkMemory();
-  return { message: ctx.t('cmd.checkMemory.done', { flagged: String(flagged) }) };
+  return { message: ctx.t('cmd.checkMemory.done', { count: flagged }) };
 }
 
 const checkMemoryCommandAtom = defineCommand({

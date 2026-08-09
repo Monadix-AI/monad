@@ -35,7 +35,7 @@ export type StartModelSubsystem = (options: ModelSubsystemOptions) => Promise<Mo
 
 export function createEmbeddingModelChangeWarning(previous: string, next: string, stale: number): string {
   return (
-    `monad: embedding model changed (${previous} → ${next}); ${stale} existing embedding(s) are stale. ` +
+    `monad: embedding model changed (${previous} → ${next}); staleEmbeddings=${stale}. ` +
     'Re-index from model settings (or POST /v1/settings/model/embeddings/reindex).'
   );
 }

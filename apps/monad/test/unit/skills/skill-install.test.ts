@@ -91,7 +91,7 @@ test('surfaces content-scan flags (bundled script) in the consent prompt', async
       return false;
     }
   });
-  expect(info?.warnings).toEqual(['bundles executable script(s): install.sh']);
+  expect(info?.warnings).toEqual(['bundles executable scripts: install.sh']);
 });
 
 test('surfaces install review warnings in the consent prompt before writing files', async () => {
