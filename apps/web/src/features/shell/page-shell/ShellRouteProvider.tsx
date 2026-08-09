@@ -87,7 +87,7 @@ export function ShellRouteProvider({ children }: { children: ReactNode }) {
 
   const sidebarCollapsed = useWorkspaceShellStore((state: WorkspaceShellState) => state.sidebarCollapsed);
   const sidebarAutoReveal = useWorkspaceShellStore((state: WorkspaceShellState) => state.sidebarAutoReveal);
-  const setNewChatPrefill = useWorkspaceShellStore((state: WorkspaceShellState) => state.setNewChatPrefill);
+  const setNewSessionProjectId = useWorkspaceShellStore((state: WorkspaceShellState) => state.setNewSessionProjectId);
   const narrowSidebarViewport = useIsNarrowSidebarViewport();
   const [narrowSidebarOpen, setNarrowSidebarOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
@@ -176,10 +176,10 @@ export function ShellRouteProvider({ children }: { children: ReactNode }) {
 
   const handlePrepareProjectSession = useCallback(
     (projectId: string) => {
-      setNewChatPrefill({ mode: 'project', projectId });
+      setNewSessionProjectId(projectId);
       resetWorkspaceUrl();
     },
-    [resetWorkspaceUrl, setNewChatPrefill]
+    [resetWorkspaceUrl, setNewSessionProjectId]
   );
 
   const openArchivedSidebar = useCallback(() => {

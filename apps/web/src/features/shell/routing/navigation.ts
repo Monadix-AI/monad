@@ -118,7 +118,7 @@ export function useAppShellNavigation({
   const rememberMonadSession = useWorkspaceShellStore((state: WorkspaceShellState) => state.rememberMonadSession);
   const openWorkspaceSurface = useWorkspaceShellStore((state: WorkspaceShellState) => state.openWorkspace);
   const openMonadChatSurface = useWorkspaceShellStore((state: WorkspaceShellState) => state.openMonadChat);
-  const setNewChatPrefill = useWorkspaceShellStore((state: WorkspaceShellState) => state.setNewChatPrefill);
+  const setNewSessionProjectId = useWorkspaceShellStore((state: WorkspaceShellState) => state.setNewSessionProjectId);
   const draftChatSessions = useWorkspaceShellStore((state: WorkspaceShellState) => state.draftChatSessions);
   const draftChatSessionIds = useMemo(
     () => new Set(draftChatSessions.map((session) => session.id)),
@@ -299,9 +299,9 @@ export function useAppShellNavigation({
   ]);
 
   const handleNewMonadChat = useCallback(() => {
-    setNewChatPrefill({ mode: 'agent' });
+    setNewSessionProjectId(null);
     resetWorkspaceUrl();
-  }, [resetWorkspaceUrl, setNewChatPrefill]);
+  }, [resetWorkspaceUrl, setNewSessionProjectId]);
   const handleOpenMonadChat = useCallback(() => {
     void openMonadChat();
   }, [openMonadChat]);
