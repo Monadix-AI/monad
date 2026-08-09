@@ -186,12 +186,7 @@ export function WorkspaceRoute({
     );
   }
 
-  return (
-    <WorkspaceHome
-      activeProjectId={activeProjectId}
-      projects={projects}
-    />
-  );
+  return <WorkspaceHome projects={projects} />;
 }
 
 const CachedProjectWorkplace = memo(function CachedProjectWorkplace({

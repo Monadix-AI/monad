@@ -812,6 +812,17 @@ test.describe('workspace sidebar interactions', () => {
 
   test('routes create-session entry points through the New Chat home prefill', async ({ page }) => {
     await installSidebarMock(page);
+    await page.goto('/');
+    await expect(page.getByRole('main').locator('[data-target-mode="agent"]')).toBeVisible();
+    await expandAllProjects(page);
+
+    const homeProjectRow = projectRow(page);
+    await homeProjectRow.hover();
+    await homeProjectRow.getByRole('button', { name: 'New project session' }).click({ force: true });
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByRole('main').locator('[data-target-mode="project"]')).toBeVisible();
+    await expect(page.getByRole('main').getByRole('button', { exact: true, name: 'Sidebar Project' })).toBeVisible();
+
     await page.goto(`/workspace/${PROJECT_ID}`);
     await expandAllProjects(page);
     await expect(page.getByRole('link', { name: 'Project Session 1' })).toBeVisible();

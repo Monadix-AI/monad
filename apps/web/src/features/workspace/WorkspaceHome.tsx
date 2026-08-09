@@ -49,10 +49,9 @@ type HomeProject = { id: string; name: string; sessions?: { id: SessionId }[] };
 
 interface WorkspaceHomeProps {
   projects: HomeProject[];
-  activeProjectId: string | null;
 }
 
-export function WorkspaceHome({ projects, activeProjectId }: WorkspaceHomeProps) {
+export function WorkspaceHome({ projects }: WorkspaceHomeProps) {
   const t = useT();
   const [createSession] = useCreateSessionMutation();
   const [createProjectSession] = useCreateProjectSessionMutation();
@@ -65,10 +64,9 @@ export function WorkspaceHome({ projects, activeProjectId }: WorkspaceHomeProps)
   const addDraftChatSession = useWorkspaceShellStore((state) => state.addDraftChatSession);
   const failDraftChatSession = useWorkspaceShellStore((state) => state.failDraftChatSession);
   const removeDraftChatSession = useWorkspaceShellStore((state) => state.removeDraftChatSession);
-  const newChatPrefill = useWorkspaceShellStore((state) => state.newChatPrefill);
-  const setNewChatPrefill = useWorkspaceShellStore((state) => state.setNewChatPrefill);
+  const newSessionProjectId = useWorkspaceShellStore((state) => state.newSessionProjectId);
+  const setNewSessionProjectId = useWorkspaceShellStore((state) => state.setNewSessionProjectId);
   const [intent, setIntent] = useState('');
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(activeProjectId);
   const [createdProject, setCreatedProject] = useState<HomeProject | null>(null);
   const [newProjectDialogOpen, setNewProjectDialogOpen] = useState(false);
   const [launching, setLaunching] = useState(false);
@@ -91,8 +89,8 @@ export function WorkspaceHome({ projects, activeProjectId }: WorkspaceHomeProps)
     [createdProject, projects]
   );
   const selectedProject = useMemo(
-    () => projectOptions.find((project) => project.id === selectedProjectId) ?? null,
-    [projectOptions, selectedProjectId]
+    () => projectOptions.find((project) => project.id === newSessionProjectId) ?? null,
+    [newSessionProjectId, projectOptions]
   );
   const targetMode = selectedProject ? 'project' : 'agent';
   const launchTarget = resolveWorkspaceLaunchTarget({
@@ -123,23 +121,13 @@ export function WorkspaceHome({ projects, activeProjectId }: WorkspaceHomeProps)
   );
 
   useEffect(() => {
-    if (!newChatPrefill) return;
-    if (newChatPrefill.mode === 'project') {
-      setSelectedProjectId(newChatPrefill.projectId);
-    } else {
-      setSelectedProjectId(null);
-    }
-    setNewChatPrefill(null);
-  }, [newChatPrefill, setNewChatPrefill]);
-
-  useEffect(() => {
     if (createdProject && projects.some((project) => project.id === createdProject.id)) setCreatedProject(null);
   }, [createdProject, projects]);
 
   const createProject = async (args: { cwd?: string; name: string }): Promise<void> => {
     const projectId = await createWorkplaceProject({ cwd: args.cwd, title: args.name }).unwrap();
     setCreatedProject({ id: projectId, name: args.name });
-    setSelectedProjectId(projectId);
+    setNewSessionProjectId(projectId);
     setLaunchError(null);
     setNewProjectDialogOpen(false);
   };
@@ -284,7 +272,7 @@ export function WorkspaceHome({ projects, activeProjectId }: WorkspaceHomeProps)
               disabled={launching}
               onCreateProject={() => setNewProjectDialogOpen(true)}
               onSelectProject={(projectId) => {
-                setSelectedProjectId(projectId);
+                setNewSessionProjectId(projectId);
                 setLaunchError(null);
               }}
               projects={projectOptions}

@@ -13,13 +13,6 @@ type ActiveProjectSessionState = {
   projectId: string;
 };
 
-type NewChatPrefill =
-  | { mode: 'agent' }
-  | {
-      mode: 'project';
-      projectId: string;
-    };
-
 export interface DraftChatSession {
   agentId?: AgentId;
   attachments: SendMessageAttachment[];
@@ -91,7 +84,7 @@ export interface WorkspaceShellState {
   sidebarAutoReveal: boolean;
   pinnedSessionIds: string[];
   draftChatSessions: DraftChatSession[];
-  newChatPrefill: NewChatPrefill | null;
+  newSessionProjectId: string | null;
   newProjectOpen: boolean;
   rightPanelOpen: boolean;
   rightPanelView: RightPanelView;
@@ -112,7 +105,7 @@ export interface WorkspaceShellState {
   failDraftChatSession: (sessionId: SessionId, message: string) => void;
   removeDraftChatSession: (sessionId: SessionId) => void;
   reconcileDraftChatSessions: (serverSessionIds: readonly SessionId[]) => void;
-  setNewChatPrefill: (prefill: NewChatPrefill | null) => void;
+  setNewSessionProjectId: (projectId: string | null) => void;
   setNewProjectOpen: (open: boolean) => void;
   openRightPanel: () => void;
   closeRightPanel: () => void;
@@ -130,7 +123,7 @@ export const useWorkspaceShellStore = create<WorkspaceShellState>()((set) => ({
   sidebarAutoReveal: false,
   pinnedSessionIds: readStoredPinnedSessionIds(),
   draftChatSessions: [],
-  newChatPrefill: null,
+  newSessionProjectId: null,
   newProjectOpen: false,
   rightPanelOpen: false,
   rightPanelView: 'inspector',
@@ -198,7 +191,7 @@ export const useWorkspaceShellStore = create<WorkspaceShellState>()((set) => ({
       return draftChatSessions.length === state.draftChatSessions.length ? state : { draftChatSessions };
     });
   },
-  setNewChatPrefill: (prefill) => set({ newChatPrefill: prefill }),
+  setNewSessionProjectId: (projectId) => set({ newSessionProjectId: projectId }),
   setNewProjectOpen: (open) => set({ newProjectOpen: open }),
   openRightPanel: () => set({ rightPanelOpen: true }),
   closeRightPanel: () => set({ rightPanelOpen: false }),

@@ -101,6 +101,18 @@ test('active project session holds reverse-sync data only (no callbacks) and cle
   expect(useWorkspaceShellStore.getState().activeProjectSession).toBeNull();
 });
 
+test('new session project selection remains in the shell store until another target replaces it', () => {
+  useWorkspaceShellStore.getState().setNewSessionProjectId('prj_SELECTED0000');
+
+  expect(useWorkspaceShellStore.getState().newSessionProjectId).toBe('prj_SELECTED0000');
+
+  useWorkspaceShellStore.getState().openWorkspace();
+  expect(useWorkspaceShellStore.getState().newSessionProjectId).toBe('prj_SELECTED0000');
+
+  useWorkspaceShellStore.getState().setNewSessionProjectId(null);
+  expect(useWorkspaceShellStore.getState().newSessionProjectId).toBeNull();
+});
+
 test('draft chat sessions remain until the server session list confirms the same id', () => {
   const createdAt = '2026-07-28T10:00:00.000Z';
   useWorkspaceShellStore.setState({
